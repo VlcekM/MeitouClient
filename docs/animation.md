@@ -263,6 +263,15 @@ no stat (**Verified** by probe: `chair`, `chair-fixed`, `sit on floor (no chair)
 chairs (`sitting chair` is a still pose); mods that animate the seat clip show it (#634: Immersive non-combat animations sets `sitting chair` to `play speed` 0.7).
 Meitou: `AnimationSystem.OperateRateOf` (`CharacterCold.OperateStat`); a seated NPC's seat is taken as one without a stat (engine choice).
 
+### Head turning
+
+**Verified** (decompile of `kenshi_x64.exe` 1.0.68, done on the `liveliness` branch: `Character::lookatPosition` `@ 1405c9e70` -> `AnimationClassHuman` slot 23
+`@ 1405b8430`): the game turns a head by playing the ANIMATION **`head turning`** on its own layer, held (play rate 0) at time **(a + pi/2) / pi x 0.07**
+(`DAT_1416c0efc`), a the horizontal angle between the body's facing (sin yaw, 0, cos yaw) and the way to the point, negated when (facing x way).y > 0; only within
++-90 degrees (outside, the layer is removed). The clip is 0.0667 s, 3 keys (one side, neutral, the other; about +61 / -69 degrees of head yaw on the female rig). Animals have no
+such clip. Meitou draws it only in photo mode's Look at camera (`PhotoPoses.LookingAt`, any other head layer replaced, the time held just short of the clip's end); the clip has no vertical axis, so photo mode adds a pitch of `Bip01 Neck` / `Bip01 Head` about the model-space axis through the sides (`CharacterInstance.HeadPitch`); the
+game's own callers (talk tasks, town stalkers, alarm investigation) are not drawn yet.
+
 ### Clips that stop movement
 
 **Verified** (`AnimationClass::isCurrentlyIncapableOfWaypointMovemode` `@ 14051c870`, from `CharMovement::update`): while the current action clip has ANIMATION `disables movement`

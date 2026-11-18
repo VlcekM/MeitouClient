@@ -134,6 +134,8 @@ static class SettingHints
         "Bloom" => "Let bright light glow softly into its surroundings, as in the eye.",
         WorldFrame.DepthOfFieldSwitch => "Blur what is out of focus, as a lens does, in the free and cinematic cameras.",
         WorldFrame.CameraEffectsSwitch => "Use the depth of field in the strategy camera too.",
+        WorldFrame.VignetteSwitch => "Darken the picture towards its corners, as a camera lens does, in every camera.",
+        WorldFrame.FilmGrainSwitch => "Lay a fine film grain over the picture, in every camera.",
         "Clouds" => "Render clouds with volume and depth.",
         "Cloud shadows" => "Let clouds cast shadows across land and water.",
         "Cloud shadows in fog" => "Fade cloud shadows in fog, so foggy places stay lit.",

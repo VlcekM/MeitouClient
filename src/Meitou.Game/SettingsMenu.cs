@@ -636,7 +636,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             "Haze" or "Night air" or "Night sky" or "Clouds" or "Cloud shadows" or "Cloud shadows in fog" or "Fog"
                 or WorldFrame.WetWorldSwitch => "Sky & weather",
             "Tone map and grade" or "Night grading" or "Dithering" => "Colour",
-            "Heat haze" or WorldFrame.BloomSwitch or WorldFrame.DepthOfFieldSwitch or WorldFrame.CameraEffectsSwitch => "Post FX",
+            "Heat haze" or WorldFrame.BloomSwitch or WorldFrame.DepthOfFieldSwitch or WorldFrame.CameraEffectsSwitch or WorldFrame.VignetteSwitch
+                or WorldFrame.FilmGrainSwitch => "Post FX",
             "Skin" or "Character levels" or "Advanced materials" or "Blood on weapons and gear" or "Blood cells" or "Blood on surfaces"
                 or "Bolt tracers" or WorldFrame.MaterialHairSwitch or WorldFrame.MaterialClothSwitch or WorldFrame.MaterialSkinSwitch
                 or WorldFrame.MaterialEyesSwitch or WorldFrame.MaterialMetalSwitch or WorldFrame.MaterialBeadsSwitch => "Characters",
@@ -663,7 +664,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         if (S("Haze") || label == WorldFrame.HazeDistanceSlider || label == WorldFrame.CloudHeightSlider || WorldFrame.ParticleSliders.Contains(label))
             return "Sky & weather";
         if (S("Tone map") || S("Hybrid") || S("Grading") || S("Night grading")) return "Colour";
-        if (S("Bloom") || S("Depth of field") || S("Heat haze")) return "Post FX";
+        if (S("Bloom") || S("Depth of field") || S("Heat haze") || S("Vignette") || S("Film grain")) return "Post FX";
         if (label == WorldFrame.CharacterDistanceSlider) return "Characters";
 
         return "Objects";   // object, landmark and town distances, object LOD
@@ -836,6 +837,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             WorldFrame.NightGradeStrengthSlider => SwitchOn("Night grading"),
             WorldFrame.BloomStrengthSlider => SwitchOn(WorldFrame.BloomSwitch),
             WorldFrame.DofApertureSlider or WorldFrame.CameraEffectsSwitch => SwitchOn(WorldFrame.DepthOfFieldSwitch),
+            WorldFrame.VignetteStrengthSlider => SwitchOn(WorldFrame.VignetteSwitch),
+            WorldFrame.GrainStrengthSlider => SwitchOn(WorldFrame.FilmGrainSwitch),
             _ => true,
         };
     }

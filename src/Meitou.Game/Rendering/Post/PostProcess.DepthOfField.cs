@@ -339,7 +339,8 @@ public sealed unsafe partial class PostProcess
         if (!(Options.PhotoDepthOfField ?? Options.DepthOfField) || !CameraEffectsLive) return scene;
 
         EnsureDepthOfField(scene);
-        float maxCoc = MathF.Min(MathF.Max(scene.Height * PostOptions.DofMaxCocShare, 2), PostOptions.DofMaxCocPixels);
+        float maxCoc = MathF.Min(MathF.Max(scene.Height * PostOptions.DofMaxCocShare, 2),
+            PostOptions.DofMaxCocPixels * MathF.Max(Options.PictureScale, 1));
 
         var focus = FocusNow(scene);
         var prepare = _dofPrepare ??= new DofPreparePass(Gpu);

@@ -25,7 +25,11 @@ quota500 is Verified from constructor, not inferred from current ash density.
 ## Simulation and rendering
 
 CPU emission/ages/forces/curves/size/rotation/colour/observers mirror decoded inputs; unsupported
-plugin behaviour remains a limit. Billboards/material alpha/additive/cutout/depth and weather
+plugin behaviour remains a limit.
+**Verified plugin** (`ParticleEmitter::_calculateRequestedParticles`, `_notifyStart`, decompile): an emitter with `force_emission true`
+throws the value of its `emission_rate` as a particle count once, at its first step after the system starts, then nothing (a
+`duration` or `repeat_delay` that enables it again does not repeat the burst; the quota still caps it). Used by Dustkick01, WadingFoam,
+kenshi_sparks and the lightning beams; `ParticleSimulation.Requested` does this. Billboards/material alpha/additive/cutout/depth and weather
 wrapping differ from opaque world shading. Original particles are not fogged like opaque meshes.
 A material whose fragment program defines `CLIP_INTERIOR` is cut inside open buildings (**Verified**, installed `basic.hlsl`;
 [interior cut](../render-interior-cut.md)).

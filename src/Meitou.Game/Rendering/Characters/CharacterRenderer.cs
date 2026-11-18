@@ -504,7 +504,11 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         /// <c>Repose</c>: posed this frame (else its last palette is held); the others: the weapon drawn, that weapon the crossbow, the back melee
         /// weapon (as <see cref="AssetPart.ShowsWith"/> takes them).
         /// </summary>
-        public bool Repose, WeaponDrawn, RangedDrawn, BackDrawn;
+        public bool Repose, WeaponDrawn, RangedDrawn, BackDrawn, WeaponsHidden;
+        /// <summary>
+        /// The head's pitch in radians (<see cref="CharacterInstance.HeadPitch"/>).
+        /// </summary>
+        public float HeadPitch;
         /// <summary>
         /// The blood of its first 8 body parts, a byte each (<see cref="CharacterInstance.Blood"/>).
         /// </summary>
@@ -610,7 +614,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         /// <summary>
         /// The weapon state of the last update (see <see cref="Live.Repose"/>), and whether it is drawn in the world.
         /// </summary>
-        public bool WeaponDrawn, RangedDrawn, BackDrawn, InWorld;
+        public bool WeaponDrawn, RangedDrawn, BackDrawn, WeaponsHidden, InWorld;
         /// <summary>
         /// Each stuck bolt's transform in its bone's frame, fixed the first time it was drawn (by bolt id).
         /// </summary>
@@ -1342,6 +1346,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         l.World = WorldOf(in inst, asset, scale);
         (l.Anchor, l.Scale) = (inst.World is null ? inst.Anchor : null, scale);
         (l.WeaponDrawn, l.RangedDrawn, l.BackDrawn, l.Shots, l.Bolts) = (inst.WeaponDrawn, inst.RangedDrawn, inst.BackDrawn, inst.Shots, inst.Bolts);
+        (l.WeaponsHidden, l.HeadPitch) = (inst.WeaponsHidden, inst.HeadPitch);
         (l.Mouth, l.BoneMeshes) = (inst.Mouth, inst.BoneMeshes);
         l.Centre = centre;
         l.Radius = asset.Radius * scale;
@@ -1397,7 +1402,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
 
         bool newAsset = !ReferenceEquals(state.Asset, asset);
         (state.Asset, state.WeaponDrawn, state.RangedDrawn, state.BackDrawn) = (asset, inst.WeaponDrawn, inst.RangedDrawn, inst.BackDrawn);
-        (state.InWorld, state.Centre, state.Radius) = (!far, l.Centre, l.Radius);
+        (state.InWorld, state.Centre, state.Radius, state.WeaponsHidden) = (!far, l.Centre, l.Radius, inst.WeaponsHidden);
         state.PreviousWorld = state.HasWorld ? state.World : l.World;
         (state.World, state.HasWorld) = (l.World, true);
         if (far)
@@ -1616,7 +1621,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         state.Attach.CopyTo(state.PreviousAttach, 0);
 
         var scratch = rig.Rent();
-        scratch.Pose(asset.Shape, _layers.AsSpan(l.LayerStart, l.LayerCount), state.Bones, l.Bones);
+        scratch.Pose(asset.Shape, _layers.AsSpan(l.LayerStart, l.LayerCount), state.Bones, l.Bones, (l.HeadPitch * 0.4f, l.HeadPitch * 0.6f));
         foreach (var part in asset.Parts)
             if (part.AttachIndex >= 0) state.Attach[part.AttachIndex] = scratch.TagTransform(part.Bone, part.Offset);
         foreach (var lamp in asset.Lamps) state.Attach[lamp.AttachIndex] = lamp.Offset * scratch.BoneTransform(lamp.Bone);

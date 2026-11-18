@@ -68,6 +68,10 @@ internal sealed class AssetPart
     /// </summary>
     public WeaponShown Shown;
     /// <summary>
+    /// A weapon or crossbow part (<see cref="AttachSlot.Weapon"/>): photo mode can hide every one (<see cref="CharacterInstance.WeaponsHidden"/>).
+    /// </summary>
+    public bool IsWeapon;
+    /// <summary>
     /// When it shows by the bolts loaded in its crossbow (<see cref="CharacterPart.ShownShots"/>).
     /// </summary>
     public int ShownShots;
@@ -77,10 +81,12 @@ internal sealed class AssetPart
     public bool Muzzle;
     /// <summary>
     /// Whether the part shows with a weapon drawn (<paramref name="weaponDrawn"/>), that weapon being the crossbow (<paramref name="ranged"/>) or the
-    /// back melee weapon (<paramref name="back"/>, else the hip one), with <paramref name="shots"/> bolts loaded in the crossbow.
+    /// back melee weapon (<paramref name="back"/>, else the hip one), with <paramref name="shots"/> bolts loaded in the crossbow; never a weapon part
+    /// with <paramref name="weaponsHidden"/>.
     /// </summary>
     public bool ShowsWith(bool weaponDrawn, bool ranged, int shots = 1,
-        bool back = false) => (ShownShots == 0 || (ShownShots < 0 ? shots <= 0 : shots >= ShownShots)) && Shown switch
+        bool back = false, bool weaponsHidden = false) => !(weaponsHidden && IsWeapon)
+        && (ShownShots == 0 || (ShownShots < 0 ? shots <= 0 : shots >= ShownShots)) && Shown switch
     {
         WeaponShown.Drawn => weaponDrawn && !ranged && !back,
         WeaponShown.Sheathed => !(weaponDrawn && !ranged && !back),
@@ -1788,6 +1794,7 @@ internal sealed class CharacterContent : IDisposable
                 BoundsCentre = loaded.Centre,
                 BoundsRadius = loaded.Radius,
                 Shown = part.Shown,
+                IsWeapon = part.Slot == AttachSlot.Weapon,
                 ShownShots = part.ShownShots,
                 Muzzle = part is { Field: "live ammo", ShownShots: 1, Shown: WeaponShown.RangedDrawn },
                 HideSide = part.HideSide,

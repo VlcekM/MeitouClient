@@ -249,7 +249,7 @@ sealed class LookPresets(SettingsMenu menu)
         "Shadows" or "Indirect light" or "Indoor GI" or "Ambient occlusion" or "Light shafts" or "Planetshine" => "Light",
         "Haze" or "Night air" or "Night sky" or "Clouds" or "Cloud shadows" or "Cloud shadows in fog" or "Heat haze" or "Fog" => "Sky",
         "Tone map and grade" or "Night grading" or "Dithering" or WorldFrame.BloomSwitch
-            or WorldFrame.DepthOfFieldSwitch or WorldFrame.CameraEffectsSwitch => "Colour",
+            or WorldFrame.DepthOfFieldSwitch or WorldFrame.CameraEffectsSwitch or WorldFrame.VignetteSwitch or WorldFrame.FilmGrainSwitch => "Colour",
         "Water" => "Water",
         "Skin" => "Skin",
         "Draw distances" or "Foliage ranges" or "Far impostors" => "Distances",
@@ -269,7 +269,8 @@ sealed class LookPresets(SettingsMenu menu)
 
         if (S("Haze") || S("Heat haze")) return "Sky";
 
-        if (S("Tone map") || S("Hybrid") || S("Grading") || S("Night grading") || S("Bloom") || S("Depth of field")) return "Colour";
+        if (S("Tone map") || S("Hybrid") || S("Grading") || S("Night grading") || S("Bloom") || S("Depth of field") || S("Vignette")
+            || S("Film grain")) return "Colour";
 
         if (label.Contains("clarity", StringComparison.Ordinal) || label.Contains("see-through", StringComparison.Ordinal))
             return "Water";
@@ -329,6 +330,7 @@ sealed class LookPresets(SettingsMenu menu)
             or "Distant towns (zones)" or "Object LOD distance x" or "Foliage LOD distance x (lod Meitou)" or WorldFrame.TerrainErrorSlider
             or WorldFrame.GrassDensitySlider or "Impostor distance (F7 Meitou)" or "Large impostor distance (F7 Meitou)"
             or "Ground displacement distance (m)" or WorldFrame.MaterialDistanceSlider or "Character draw distance" or WorldFrame.GroundReliefQualitySlider
+            or WorldFrame.VignetteSwitch or WorldFrame.FilmGrainSwitch or WorldFrame.VignetteStrengthSlider or WorldFrame.GrainStrengthSlider
             => "Low impact",
         "Far impostors" or "Foliage levels" or "Character levels" or "Weather particles" or "Shadows" => "Faster with Meitou",
         _ when label == WorldFrame.ParticleSliders[0] || label == WorldFrame.ParticleSliders[1] => "Low impact",

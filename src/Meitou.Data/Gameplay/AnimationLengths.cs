@@ -226,4 +226,9 @@ public sealed class AnimationLengths
     /// The clip's length; 1 s for a clip not known.
     /// </summary>
     public float Of(string clip) => _lengths.TryGetValue(clip, out float l) && l > 0 ? l : 1;
+
+    /// <summary>
+    /// How many keys the clip's <c>Bip01</c> track has (0: none or unknown): 1 or 2 equal ones make a still pose.
+    /// </summary>
+    public int RootKeys(string clip) => _roots.TryGetValue(clip, out var r) ? r.Times.Length : 0;
 }

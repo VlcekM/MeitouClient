@@ -67,6 +67,16 @@ internal sealed class WorldGpu : IDisposable
     public MarkerRenderer? Markers;
 
     /// <summary>
+    /// The movement marker, the stealth arrows and the rotation ring are left out of the world (photo mode: a picture is of the scene).
+    /// </summary>
+    public bool MarkersHidden;
+
+    /// <summary>
+    /// Photo mode's own lamps this frame (<c>PhotoLights</c>), drawn with the moving lamps; empty outside it.
+    /// </summary>
+    public IReadOnlyList<WorldLight> PhotoLights = [];
+
+    /// <summary>
     /// The blood decals on the ground (null in the viewer, or with the game's <c>Blood</c> setting off; docs/game/blood-decals.md).
     /// </summary>
     public TerrainDecalRenderer? Decals;

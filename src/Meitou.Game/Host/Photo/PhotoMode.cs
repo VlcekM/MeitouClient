@@ -4,6 +4,7 @@ using Meitou.Game.DevTools;
 using Meitou.Game.Host.Cameras;
 using Meitou.Game.Host.Input;
 using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Post;
 using Meitou.Simulation;
 
 namespace Meitou.Game.Host.Photo;
@@ -145,6 +146,26 @@ sealed class PhotoMode
     float _exposureStops;
 
     /// <summary>
+    /// The most stops the exposure compensation goes either way.
+    /// </summary>
+    const float MaxStops = 5;
+
+    /// <summary>
+    /// The picture's size: an index into <see cref="PictureSizes"/>.
+    /// </summary>
+    int _pictureSize;
+
+    /// <summary>
+    /// What the drawn size is multiplied by for a picture: the screen's, then the world drawn again two and three times larger.
+    /// </summary>
+    static readonly int[] PictureSizes = [1, 2, 3];
+
+    /// <summary>
+    /// The longest side a larger picture is drawn at, in pixels (its targets stay within video memory; a larger factor is cut down to it).
+    /// </summary>
+    const int MaxPictureSide = 8192;
+
+    /// <summary>
     /// The field of view the game had on entering, which <see cref="Reset"/> returns to.
     /// </summary>
     float _entryFieldOfView = 50 * MathF.PI / 180;
@@ -163,6 +184,17 @@ sealed class PhotoMode
     /// The file a picture is being saved to (null when none is).
     /// </summary>
     string? _pending;
+
+    /// <summary>
+    /// Frames still to draw, with the saving indicator over them, before the picture's own frame is requested (the larger sizes draw the world again
+    /// several times inside that one frame, which holds the window: the indicator must be on screen before it starts).
+    /// </summary>
+    int _shotDelay;
+
+    /// <summary>
+    /// How many frames the indicator is drawn before the picture's own frame.
+    /// </summary>
+    const int ShotDelayFrames = 3;
 
     /// <summary>
     /// The picture being saved keeps the panel and grid (the control channel's <c>photo shot --ui</c>, for checking them).
@@ -185,11 +217,73 @@ sealed class PhotoMode
     public PhotoPanel Panel { get; }
 
     /// <summary>
+    /// The characters' poses, places and visibility (the Pose tab).
+    /// </summary>
+    public PhotoPoses Poses { get; }
+
+    /// <summary>
+    /// The transform gizmo over the chosen light or character.
+    /// </summary>
+    public PhotoGizmo Gizmo { get; } = new();
+
+    /// <summary>
+    /// What the gizmo acts on now: the chosen light on the Light tab, the chosen character on the Pose tab; null elsewhere or with the panel hidden.
+    /// </summary>
+    public GizmoSubject? GizmoSubject => !Active || !PanelShown ? null
+        : Panel.Group == LightGroup ? Lights.GizmoSubject()
+        : Panel.Group == PoseGroup ? Poses.GizmoSubject()
+        : null;
+
+    /// <summary>
+    /// Marks tied to places in the world are drawn over the picture (a light's mark, a gizmo). Frame generation is held off meanwhile: its
+    /// generated frames lay the last real frame's interface over a moved picture, so the marks bounced a frame behind what they stand on while
+    /// the camera moved (**Observed** with DLSS frame generation).
+    /// </summary>
+    public bool WorldMarksShown => Active && PanelShown && (GizmoSubject is not null || Lights.AnyMarked);
+
+    /// <summary>
+    /// The mode's own lights (the Light tab).
+    /// </summary>
+    public PhotoLights Lights { get; } = new();
+
+    /// <summary>
+    /// The filter's look, how much of it applies, and the saturation, contrast, temperature and tint on top (the Look tab).
+    /// </summary>
+    FilterLook _filter;
+
+    /// <summary>
+    /// How much of the filter's look applies, 0 to 1.
+    /// </summary>
+    float _filterStrength = 1;
+
+    /// <summary>
+    /// The filter's saturation and contrast factors (1 unchanged).
+    /// </summary>
+    float _saturation = 1, _contrast = 1;
+
+    /// <summary>
+    /// The filter's temperature and tint, -1 to 1 (0 unchanged).
+    /// </summary>
+    float _temperature, _tint;
+
+    /// <summary>
+    /// Real seconds that went by in the mode while the simulation stood paused: added to the game's motion clock, the hanging gear's swing
+    /// (<c>GearSway</c>, which steps by that clock) goes on while a character is moved or posed on a paused simulation.
+    /// </summary>
+    public double MotionSeconds { get; private set; }
+
+    /// <summary>
+    /// The last <see cref="Apply"/>'s <see cref="System.Diagnostics.Stopwatch"/> time: the playing poses move on by the real time since.
+    /// </summary>
+    long _applied;
+
+    /// <summary>
     /// The mode for <paramref name="host"/>, with its settings and panel built.
     /// </summary>
     public PhotoMode(GameHost host)
     {
         _host = host;
+        Poses = new PhotoPoses(host);
         Params = BuildParams();
         Panel = new PhotoPanel(this);
     }
@@ -219,6 +313,16 @@ sealed class PhotoMode
     internal const string PictureGroup = "Composition";
 
     /// <summary>
+    /// The panel's Pose tab.
+    /// </summary>
+    internal const string PoseGroup = "Pose";
+
+    /// <summary>
+    /// The panel's Look tab.
+    /// </summary>
+    internal const string LookGroup = "Look";
+
+    /// <summary>
     /// The panel's Time tab.
     /// </summary>
     internal const string TimeGroup = "Time";
@@ -231,7 +335,20 @@ sealed class PhotoMode
     /// <summary>
     /// The panel's tabs, in order: each setting's <see cref="Param.Group"/> is one of them.
     /// </summary>
-    internal static readonly string[] Groups = [CameraGroup, FocusGroup, LightGroup, PictureGroup, TimeGroup, PresetGroup];
+    internal static readonly string[] Groups = [CameraGroup, FocusGroup, LightGroup, LookGroup, PictureGroup, PoseGroup, TimeGroup, PresetGroup];
+
+    /// <summary>
+    /// The Look tab's settings that are the graphics settings' own (Post FX's vignette and film grain): the tab is a shortcut to them, so a change
+    /// there is the setting's and stays after the mode; presets, Reset and leaving leave them alone.
+    /// </summary>
+    internal static readonly string[] Shortcuts = ["vignette", "vignettestrength", "grain", "grainstrength"];
+
+    /// <summary>
+    /// Whether a setting belongs to the mode's remembered settings and presets: not the scene's own (the Pose tab, the lights), not the graphics
+    /// settings' (<see cref="Shortcuts"/>), not the simulation's state.
+    /// </summary>
+    static bool Kept(Param p) => p.Name != "live" && p.Group != PoseGroup && !p.Name.StartsWith("light", StringComparison.Ordinal)
+        && !Shortcuts.Contains(p.Name);
 
     /// <summary>
     /// One setting of the mode: a slider between <see cref="Min"/> and <see cref="Max"/> (<see cref="Log"/>: by the ratio), or the named
@@ -264,9 +381,12 @@ sealed class PhotoMode
         _host.Session.Camera.Free.Roll = 0;
         (_dof, _autoFocus, _focusMetres, _aperture, _exposureStops) = (_entryDof, true, 10, _entryAperture, 0);
         UseGameTime();
-        (Grid, Frame) = (PhotoGrid.Thirds, PhotoFrame.Off);
+        (Grid, Frame, _pictureSize) = (PhotoGrid.Thirds, PhotoFrame.Off, 0);
         (_dialogue, _gameSpeed, _sharpZone, _focusSpot) = (false, 1, 0, new Vector2(0.5f));
+        (_filter, _filterStrength, _saturation, _contrast, _temperature, _tint) = (FilterLook.None, 1, 1, 1, 0, 0);
+        Lights.Clear();
         _controls.FlySpeed = 300;
+        Poses.Clear();
         SetLive(0);
     }
 
@@ -289,8 +409,8 @@ sealed class PhotoMode
             v => $"f/{v:0.0#}", Log: true, Group: FocusGroup),
         new("sharpzone", "Sharp zone", 0, 30, () => _sharpZone, v => _sharpZone = Math.Clamp(MathF.Round(v * 10) / 10, 0, 30), v => $"{v:0.0} m",
             Group: FocusGroup),
-        new("exposure", "Exposure", -3, 3, () => _exposureStops, v => _exposureStops = Math.Clamp(MathF.Round(v * 10) / 10, -3, 3),
-            v => $"{v:+0.0;-0.0;0.0} EV", Group: LightGroup),
+        new("exposure", "Exposure", -MaxStops, MaxStops, () => _exposureStops,
+            v => _exposureStops = Math.Clamp(MathF.Round(v * 10) / 10, -MaxStops, MaxStops), v => $"{v:+0.0;-0.0;0.0} EV", Group: LightGroup),
         new("hour", "Time of day", 0, 24 - 1 / 60f, () => _host.PhotoHour ?? (float)_host.Session.Clock.HourOfDay,
             v => _host.PhotoHour = Math.Clamp(MathF.Round(v * 60) / 60, 0, 24 - 1 / 60f), WorldFrame.TimeText, Group: LightGroup),
         new("grid", "Grid", 0, 4, () => (float)Grid, v => Grid = (PhotoGrid)Math.Clamp((int)MathF.Round(v), 0, 4), v => Grid.ToString(),
@@ -299,12 +419,127 @@ sealed class PhotoMode
             Choices: ["off", "2.39:1", "16:9", "4:3", "1:1", "4:5"], Group: PictureGroup),
         new("dialogue", "Dialogue", 0, 1, () => _dialogue ? 1 : 0, v => _dialogue = v >= 0.5f, v => v >= 0.5f ? "shown" : "hidden",
             Choices: ["hidden", "shown"], Group: PictureGroup),
+        new("size", "Picture size", 0, PictureSizes.Length - 1, () => _pictureSize,
+            v => _pictureSize = Math.Clamp((int)MathF.Round(v), 0, PictureSizes.Length - 1), v => PictureSizes[_pictureSize].ToString(),
+            Choices: ["screen", "x2", "x3"], Group: PictureGroup),
         new("speed", "Fly speed", 0.5f, 3000, () => _controls.FlySpeed / 10, v => _controls.FlySpeed = Math.Clamp(v * 10, PhotoControls.MinSpeed,
             PhotoControls.MaxSpeed), v => $"{v:0.#} m/s", Log: true, Group: CameraGroup),
-        new("live", "Simulation", 0, 1, () => _host.Session.Simulation.IsPaused ? 0 : 1, SetLive, v => v >= 0.5f ? "running" : "paused",
-            Choices: ["paused", "running"], Group: TimeGroup),
+        new("live", "Simulation", 0, 1, () => Running ? 1 : 0, SetLive, v => v >= 0.5f ? "running" : "paused", Choices: ["paused", "running"],
+            Group: TimeGroup),
         new("gamespeed", "Game speed", MinGameSpeed, MaxGameSpeed, () => _gameSpeed, SetGameSpeed, v => $"x{v:0.##}", Log: true, Group: TimeGroup),
+        .. PoseParams(),
+        .. LightParams(),
+        .. LookParams(),
     ];
+
+    /// <summary>
+    /// The Light tab's settings of the chosen light (<see cref="PhotoLights"/>): on or off, placed or carried with the camera, point or spot, its
+    /// colour temperature, power, reach and a spot's cone.
+    /// </summary>
+    Param[] LightParams()
+    {
+        bool Lit() => Lights.On;
+        return
+        [
+            new("lighton", "Light", 0, 1, () => Lights.On ? 1 : 0, v => Lights.On = v >= 0.5f, v => v >= 0.5f ? "on" : "off", Choices: ["off", "on"],
+                Group: LightGroup),
+            new("lightmode", "Stays", 0, 1, () => Lights.Carried ? 1 : 0, v => Lights.Carried = v >= 0.5f, v => "", Choices: ["where placed", "with camera"],
+                Enabled: Lit, Group: LightGroup),
+            new("lighttype", "Kind", 0, 1, () => Lights.Spot ? 1 : 0, v => Lights.Spot = v >= 0.5f, v => "", Choices: ["point", "spot"], Enabled: Lit,
+                Group: LightGroup),
+            new("lightcolour", "Colour", 1500, 12000, () => Lights.Kelvin, v => Lights.Kelvin = MathF.Round(v / 50) * 50, v => $"{v:0} K", Log: true,
+                Enabled: Lit, Group: LightGroup),
+            new("lightpower", "Brightness", 0.05f, 20, () => Lights.Brightness, v => Lights.Brightness = MathF.Round(v * 100) / 100, v => $"{v:0.##}",
+                Log: true, Enabled: Lit, Group: LightGroup),
+            new("lightreach", "Reach", 1, 100, () => Lights.Reach / 10, v => Lights.Reach = MathF.Round(v * 10), v => $"{v:0.#} m", Log: true,
+                Enabled: Lit, Group: LightGroup),
+            new("lightcone", "Cone", 5, 150, () => Lights.Cone, v => Lights.Cone = MathF.Round(v), v => $"{v:0} deg", Enabled: () => Lit() && Lights.Spot,
+                Group: LightGroup),
+        ];
+    }
+
+    /// <summary>
+    /// The Look tab's settings: the filter (a look, how much of it, then saturation, contrast, temperature and tint), and the shortcuts to the graphics
+    /// settings' vignette and film grain (<see cref="Shortcuts"/>).
+    /// </summary>
+    Param[] LookParams()
+    {
+        var post = _host.WorldOptions.Post;
+        static float Hundredth(float v) => MathF.Round(v * 100) / 100;
+        return
+        [
+            new("filter", "Filter", 0, 8, () => (float)_filter, v => _filter = (FilterLook)Math.Clamp((int)MathF.Round(v), 0, 8), v => "",
+                Choices: ["none", "black & white", "noir", "sepia", "warm", "cool", "faded", "vivid", "bleach"], Group: LookGroup),
+            new("filterstrength", "Filter strength", 0, 1, () => _filterStrength, v => _filterStrength = Hundredth(Math.Clamp(v, 0, 1)),
+                v => $"{v * 100:0} %", Enabled: () => _filter != FilterLook.None, Group: LookGroup),
+            new("saturation", "Saturation", 0, 2, () => _saturation, v => _saturation = Hundredth(Math.Clamp(v, 0, 2)), v => $"x{v:0.00}",
+                Group: LookGroup),
+            new("contrast", "Contrast", 0.5f, 1.5f, () => _contrast, v => _contrast = Hundredth(Math.Clamp(v, 0.5f, 1.5f)), v => $"x{v:0.00}",
+                Group: LookGroup),
+            new("temperature", "Temperature", -1, 1, () => _temperature, v => _temperature = Hundredth(Math.Clamp(v, -1, 1)),
+                v => v > 0 ? $"warmer {v * 100:0}" : v < 0 ? $"cooler {-v * 100:0}" : "neutral", Group: LookGroup),
+            new("tint", "Tint", -1, 1, () => _tint, v => _tint = Hundredth(Math.Clamp(v, -1, 1)),
+                v => v > 0 ? $"magenta {v * 100:0}" : v < 0 ? $"green {-v * 100:0}" : "neutral", Group: LookGroup),
+            new("vignette", "Vignette", 0, 1, () => post.Vignette ? 1 : 0, v => post.Vignette = v >= 0.5f, v => "", Choices: ["off", "on"],
+                Group: LookGroup),
+            new("vignettestrength", "Vignette strength", 0, 1, () => post.VignetteStrength, v => post.VignetteStrength = MathF.Round(v * 20) / 20,
+                v => $"{v:0.00}", Enabled: () => post.Vignette, Group: LookGroup),
+            new("grain", "Film grain", 0, 1, () => post.FilmGrain ? 1 : 0, v => post.FilmGrain = v >= 0.5f, v => "", Choices: ["off", "on"],
+                Group: LookGroup),
+            new("grainstrength", "Grain strength", 0, 1, () => post.GrainStrength, v => post.GrainStrength = MathF.Round(v * 20) / 20,
+                v => $"{v:0.00}", Enabled: () => post.FilmGrain, Group: LookGroup),
+        ];
+    }
+
+    /// <summary>
+    /// Places the chosen light where the camera stands, pointing where it looks, and turns it on.
+    /// </summary>
+    public void PlaceLight()
+    {
+        Lights.PlaceAt(_host.Camera.Eye, _host.Camera.Forward);
+        Say($"{Lights.ChosenName} placed here");
+    }
+
+    /// <summary>
+    /// The Pose tab's settings, on the chosen character (none acts without one; the pose's own only with a pose): the moment of the pose, whether
+    /// it plays and how fast, the moves from its place (metres along its own facing), its turn, its weapon, and whether it and the others are drawn.
+    /// </summary>
+    Param[] PoseParams()
+    {
+        bool Chosen() => Poses.Selected is not null;
+        bool Posed() => Poses.Pose is not null;
+        return
+        [
+            new("posetime", "Pose moment", 0, 1, () => Poses.PoseTime.Time / Poses.PoseTime.Length, v => Poses.SetPoseTime(v * Poses.PoseTime.Length),
+                v => $"{v * Poses.PoseTime.Length:0.00} s", Enabled: Posed, Group: PoseGroup),
+            new("playback", "Playback", 0, 1, () => Poses.Playing ? 1 : 0, v => Poses.Playing = v >= 0.5f, v => v >= 0.5f ? "playing" : "held",
+                Choices: ["held", "playing"], Enabled: Posed, Group: PoseGroup),
+            new("posespeed", "Pose speed", 0.1f, 2, () => Poses.Speed, v => Poses.Speed = Math.Clamp(MathF.Round(v * 100) / 100, 0.1f, 2),
+                v => $"x{v:0.##}", Log: true, Enabled: () => Posed() && Poses.Playing, Group: PoseGroup),
+            new("forward", "Forward", -PhotoPoses.MoveRange / 10, PhotoPoses.MoveRange / 10, () => Poses.Forward / 10,
+                v => Poses.Forward = MathF.Round(v * 100) / 10, v => $"{v:+0.0;-0.0;0.0} m", Enabled: Chosen, Group: PoseGroup),
+            new("side", "Sideways", -PhotoPoses.MoveRange / 10, PhotoPoses.MoveRange / 10, () => Poses.Side / 10,
+                v => Poses.Side = MathF.Round(v * 100) / 10, v => $"{v:+0.0;-0.0;0.0} m", Enabled: Chosen, Group: PoseGroup),
+            new("height", "Height", PhotoPoses.LiftDown / 10, PhotoPoses.LiftUp / 10, () => Poses.Lift / 10,
+                v => Poses.Lift = MathF.Round(v * 100) / 10, v => $"{v:+0.00;-0.00;0.00} m", Enabled: Chosen, Group: PoseGroup),
+            new("turn", "Turn", -180, 180, () => Poses.TurnDegrees, v => Poses.TurnDegrees = MathF.Round(v), v => $"{v:+0;-0;0} deg", Enabled: Chosen,
+                Group: PoseGroup),
+            new("look", "Look at camera", 0, 1, () => Poses.Look ? 1 : 0, v => Poses.Look = v >= 0.5f, v => "", Choices: ["off", "head"],
+                Enabled: () => Chosen() && Poses.SelectedIsPerson, Group: PoseGroup),
+            new("weapon", "Weapon", 0, 3, () => Poses.Weapon, v => Poses.Weapon = Math.Clamp((int)MathF.Round(v), 0, 3), v => "",
+                Choices: ["own", "sheathed", "drawn", "hidden"], Enabled: Chosen, Group: PoseGroup),
+            new("hidden", "Character", 0, 1, () => Poses.Hidden ? 1 : 0, v => Poses.Hidden = v >= 0.5f, v => v >= 0.5f ? "hidden" : "shown",
+                Choices: ["shown", "hidden"], Enabled: Chosen, Group: PoseGroup),
+            new("others", "Others", 0, 1, () => Poses.OthersHidden ? 1 : 0, v => Poses.OthersHidden = v >= 0.5f, v => v >= 0.5f ? "hidden" : "shown",
+                Choices: ["shown", "hidden"], Group: PoseGroup),
+        ];
+    }
+
+    /// <summary>
+    /// The mode lets the simulation run: its own speed, not <see cref="Meitou.Simulation.Session.SimulationClock.IsPaused"/>, which also holds the
+    /// game's requested pause.
+    /// </summary>
+    bool Running => _host.Session.Simulation.Speed > 0;
 
     /// <summary>
     /// Lets the simulation run (so a pose can be chosen) or pauses it again.
@@ -324,8 +559,7 @@ sealed class PhotoMode
         float speed = Math.Clamp(MathF.Round(value * 100) / 100, MinGameSpeed, MaxGameSpeed);
         _gameSpeed = MathF.Abs(speed - 1) <= 0.05f ? 1 : speed;
 
-        var clock = _host.Session.Simulation;
-        if (!clock.IsPaused) clock.SetSpeed(_gameSpeed);
+        if (Running) _host.Session.Simulation.SetSpeed(_gameSpeed);
     }
 
     #endregion
@@ -372,6 +606,8 @@ sealed class PhotoMode
     public void Leave()
     {
         if (!Active) return;
+
+        Typing = null;
 
         Remember();   // before the lens and the clock go back
         var clock = _host.Session.Simulation;
@@ -421,10 +657,19 @@ sealed class PhotoMode
         (_host.Camera.Roll, _host.Camera.FocusDistance, _host.Camera.Aperture) = (0, null, null);
         (_host.PhotoHour, _host.PhotoLook) = (null, false);
         _host.Player.SpeechBubbles.Hidden = false;
+        _host.Gpu.MarkersHidden = false;
+        (options.PhotoFilter, options.VignetteAspect, _host.Gpu.PhotoLights) = (null, 0, []);
+        Poses.Clear();
+        Lights.Clear();
+        Gizmo.Release();
 
         Active = false;
+        Typing = null;
         _pending = null;
+        _shotDelay = 0;
         _shotWithGuides = false;
+        _applied = 0;
+        MotionSeconds = 0;
     }
 
     #endregion
@@ -438,6 +683,17 @@ sealed class PhotoMode
     {
         if (!Active) return;
 
+        long now = System.Diagnostics.Stopwatch.GetTimestamp();
+        if (_applied != 0)
+        {
+            float elapsed = MathF.Min((float)System.Diagnostics.Stopwatch.GetElapsedTime(_applied, now).TotalSeconds, 0.25f);
+            Poses.Advance(elapsed);
+            if (!Running) MotionSeconds += elapsed;
+        }
+
+        _applied = now;
+        StepShot();
+
         var camera = _host.Camera;
         var options = _host.WorldOptions.Post;
         camera.Roll = _host.Session.Camera.Free.Roll;
@@ -448,10 +704,14 @@ sealed class PhotoMode
         options.LensSharpZone = _sharpZone * 10;
         options.LensFocusSpot = _focusSpot;
         options.CinematicView = true;
+        options.PhotoFilter = ColourFilter.Of(_filter, _filterStrength, _saturation, _temperature, _tint, _contrast);
+        options.VignetteAspect = PhotoGuides.Aspect(Frame);
+        _host.Gpu.PhotoLights = Lights.Drawn(camera.Eye, camera.Forward);
         _host.PhotoLook = true;
         _host.Player.SpeechBubbles.Hidden = !_dialogue;
         _controls.LookScale = MathF.Tan(camera.FieldOfView * 0.5f) / MathF.Tan(25 * MathF.PI / 180);
         _host.AgentChannel.InterfaceHidden = true;
+        _host.Gpu.MarkersHidden = true;
     }
 
     #endregion
@@ -480,6 +740,18 @@ sealed class PhotoMode
             return true;
         }
 
+        if (Typing is not null)
+        {
+            EntryKey(key, escape);
+            return true;
+        }
+
+        if (Poses.ListOpen)
+        {
+            Poses.ListKey(key, escape);
+            return true;
+        }
+
         if (toggle || escape) Leave();
         else if (bindings.Get(InputAction.ToggleInterface).Contains(Binding.Of(key))) PanelShown = !PanelShown;
         else if (key == Key.Enter || bindings.Get(InputAction.Screenshot).Contains(Binding.Of(key))) TakePicture();
@@ -487,18 +759,55 @@ sealed class PhotoMode
         else if (key == Key.V) _host.Session.Camera.Free.Roll = 0;
         else if (key is Key.Tab or Key.H) PanelShown = !PanelShown;
         else if (key == Key.G) Grid = (PhotoGrid)(((int)Grid + 1) % 5);
-        else if (bindings.Get(InputAction.Pause).Contains(Binding.Of(key))) SetLive(_host.Session.Simulation.IsPaused ? 1 : 0);
+        else if (bindings.Get(InputAction.Pause).Contains(Binding.Of(key))) SetLive(Running ? 0 : 1);
         else if (FliesCamera(key)) _host.Session.Input.SetKey(key, true);
         return true;
     }
 
     /// <summary>
-    /// The wheel over the picture: the lens, 8 % a notch (away from the user zooms in), or the fly speed with Ctrl.
+    /// The wheel over the picture: the lens, 8 % a notch (away from the user zooms in), or the fly speed with Alt (Ctrl is the slow modifier).
     /// </summary>
     public void Wheel(float notches, bool speed)
     {
         if (speed) _controls.FlySpeed = Math.Clamp(_controls.FlySpeed * MathF.Pow(1.2f, notches), PhotoControls.MinSpeed, PhotoControls.MaxSpeed);
         else _host.Camera.FieldOfView = Math.Clamp(_host.Camera.FieldOfView * MathF.Pow(0.92f, notches), 10 * MathF.PI / 180, 100 * MathF.PI / 180);
+    }
+
+    /// <summary>
+    /// A left press on the picture at <paramref name="pixel"/> of a <paramref name="size"/> picture: on the Pose tab it chooses the character there
+    /// (or starts dragging the chosen one), on the Light tab the light whose mark is there; a gizmo handle within a few pixels comes first. A plain left
+    /// click never sets the focus point on any tab: with Ctrl held (<paramref name="ctrl"/>) the lens focuses there (<see cref="FocusAt"/>).
+    /// </summary>
+    public void PicturePress(Vector2 pixel, Vector2 size, bool ctrl = false)
+    {
+        // A click beside the open pose list closes it.
+        if (Poses.ListOpen)
+        {
+            Poses.ToggleList();
+            return;
+        }
+
+        // A transform handle within a few pixels wins over any character or light mark.
+        if (Gizmo.Press(_host.Player, GizmoSubject, pixel))
+        {
+            Say(Gizmo.Active is GizmoHandle.Yaw or GizmoHandle.Pitch ? "Turning" : "Moving");
+            return;
+        }
+
+        // On the Light tab a press on a light's mark chooses that light, or starts moving the chosen one.
+        if (Panel.Group == LightGroup && PanelShown && Lights.Press(_host.Player, pixel))
+        {
+            Say(Lights.Dragging ? $"Moving {Lights.ChosenName}" : Lights.ChosenName);
+            return;
+        }
+
+        if (Panel.Group == PoseGroup && PanelShown && Poses.Press(pixel))
+        {
+            Say(Poses.Dragging ? $"Moving {Poses.SelectedName}" : Poses.SelectedName);
+            return;
+        }
+
+        if (ctrl) FocusAt(new Vector2(pixel.X / Math.Max(size.X, 1), pixel.Y / Math.Max(size.Y, 1)));
     }
 
     /// <summary>
@@ -586,9 +895,115 @@ sealed class PhotoMode
         (_namingIndex, _namingFresh) = (index, true);
         Naming = index < 0 ? FreeName() : _store.Presets[index].Name;
 
-        // The camera stops while the keys type.
+        StopFlying();
+    }
+
+    /// <summary>
+    /// The slider whose value is being typed (the panel shows the text in place of the value), null when none is.
+    /// </summary>
+    internal Param? Typing { get; private set; }
+
+    /// <summary>
+    /// The value text being typed for <see cref="Typing"/>.
+    /// </summary>
+    public string Entry { get; private set; } = "";
+
+    /// <summary>
+    /// The value being typed is still the one it began with (the first character typed replaces it: the field shows it selected).
+    /// </summary>
+    public bool EntryFresh => Typing is not null && _namingFresh;
+
+    /// <summary>
+    /// The most characters a typed value holds.
+    /// </summary>
+    const int EntryLength = 10;
+
+    /// <summary>
+    /// Starts typing a precise value for slider <paramref name="p"/>: the field starts with the current value in the slider's own units (the first
+    /// character typed replaces it), Enter applies it as the slider would take it (clamped to its range and rounded by its own setter), Esc drops it.
+    /// </summary>
+    internal void BeginEntry(Param p)
+    {
+        if (p.Choices is not null) return;
+
+        Typing = p;
+        Entry = p.Name == "hour" ? $"{(int)p.Get()}:{(int)MathF.Round(p.Get() % 1 * 60):00}" : p.Get().ToString("0.###", CultureInfo.InvariantCulture);
+        _namingFresh = true;
+        StopFlying();
+    }
+
+    /// <summary>
+    /// Drops the value being typed.
+    /// </summary>
+    public void CancelEntry() => Typing = null;
+
+    /// <summary>
+    /// Applies the typed value to the slider: a number (a decimal comma too), or hours and minutes as <c>13:30</c> for the time of day; clamped to the
+    /// slider's range. Text that is no number leaves the slider as it is.
+    /// </summary>
+    void CommitEntry()
+    {
+        if (Typing is not { } p) return;
+
+        Typing = null;
+        if (!TryParseEntry(Entry, out float value))
+        {
+            Say($"'{Entry}' is no value for {p.Label}");
+            return;
+        }
+
+        p.Set(Math.Clamp(value, p.Min, p.Max));
+        Say($"{p.Label} {ValueText(p)}");
+    }
+
+    /// <summary>
+    /// A typed value: a number, or <c>h:mm</c>.
+    /// </summary>
+    static bool TryParseEntry(string text, out float value)
+    {
+        text = text.Trim().Replace(',', '.');
+        int colon = text.IndexOf(':');
+        if (colon < 0) return float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value) && float.IsFinite(value);
+
+        bool ok = float.TryParse(text[..colon], NumberStyles.Float, CultureInfo.InvariantCulture, out float hours)
+            & float.TryParse(text[(colon + 1)..], NumberStyles.Float, CultureInfo.InvariantCulture, out float minutes);
+        value = hours + minutes / 60;
+        return ok && float.IsFinite(value);
+    }
+
+    /// <summary>
+    /// A key while a value is typed: Enter applies it, Esc drops it, Backspace takes a character back.
+    /// </summary>
+    void EntryKey(Key key, bool escape)
+    {
+        if (key == Key.Enter) CommitEntry();
+        else if (escape || key == Key.Escape) CancelEntry();
+        else if (key == Key.Backspace) Entry = _namingFresh || Entry.Length == 0 ? "" : Entry[..^1];
+        _namingFresh = false;
+    }
+
+    /// <summary>
+    /// The camera stops while the keys type (a preset's name, the pose list's filter).
+    /// </summary>
+    void StopFlying()
+    {
         foreach (var key in Enum.GetValues<Key>())
             if (FliesCamera(key)) _host.Session.Input.SetKey(key, false);
+    }
+
+    /// <summary>
+    /// Opens the pose list for the chosen character (its filter then takes the keys), or closes it.
+    /// </summary>
+    public void TogglePoseList()
+    {
+        if (Poses.Selected is null)
+        {
+            Say("Choose a character first: click one, or use the arrows");
+            return;
+        }
+
+        Poses.ToggleList();
+        if (Poses.ListOpen) StopFlying();
     }
 
     /// <summary>
@@ -596,6 +1011,22 @@ sealed class PhotoMode
     /// </summary>
     public bool TextInput(char c)
     {
+        if (Active && Poses.ListOpen)
+        {
+            Poses.Type(c);
+            return true;
+        }
+
+        if (Active && Typing is not null)
+        {
+            if (!char.IsAsciiDigit(c) && c is not ('.' or ',' or '-' or '+' or ':')) return true;
+
+            if (_namingFresh) Entry = "";
+            _namingFresh = false;
+            if (Entry.Length < EntryLength) Entry += c;
+            return true;
+        }
+
         if (!Active || Naming is null) return false;
         if (char.IsControl(c)) return true;
 
@@ -629,7 +1060,7 @@ sealed class PhotoMode
     /// </summary>
     public void OpenGallery()
     {
-        string folder = Path.GetDirectoryName(DefaultPath())!;
+        string folder = PicturesFolder();
         try
         {
             Directory.CreateDirectory(folder);
@@ -697,7 +1128,7 @@ sealed class PhotoMode
         var values = new Dictionary<string, float>();
         foreach (var p in Params)
         {
-            if (p.Name == "live" || !preset && NotRemembered.Contains(p.Name)) continue;
+            if (!Kept(p) || !preset && NotRemembered.Contains(p.Name)) continue;
             if (p.Name == "hour" && _host.PhotoHour is null) continue;
             values[p.Name] = p.Get();
         }
@@ -713,7 +1144,7 @@ sealed class PhotoMode
     {
         // The focus mode last: setting a focus distance turns the autofocus off.
         foreach (var p in Params)
-            if (p.Name is not ("live" or "focusmode") && values.TryGetValue(p.Name, out float v)) p.Set(v);
+            if (p.Name != "focusmode" && Kept(p) && values.TryGetValue(p.Name, out float v)) p.Set(v);
         if (values.TryGetValue("focusmode", out float auto)) _autoFocus = auto >= 0.5f;
 
         if (preset && !values.ContainsKey("hour")) UseGameTime();
@@ -823,6 +1254,8 @@ sealed class PhotoMode
     /// </summary>
     public string? TakePicture(string? file = null, bool withGuides = false, bool answerControl = false)
     {
+        // A picture the loop dropped (no frame could be drawn: ControlShotFailed) no longer holds the next one back.
+        if (_pending is not null && _host.AgentChannel.ShotPath != _pending) (_pending, _shotWithGuides) = (null, false);
         if (!Active || _pending is not null) return null;
 
         string path = file is null ? DefaultPath() : Path.GetFullPath(file);
@@ -840,8 +1273,32 @@ sealed class PhotoMode
         _shotWithGuides = withGuides;
         _host.AgentChannel.ShotPath = path;
         _host.AgentChannel.ShotWaitId = answerControl ? _host.AgentChannel.CurrentControlId : null;
-        _host.ScreenshotRequested = true;
+        _shotDelay = ShotDelayFrames;
         return path;
+    }
+
+    /// <summary>
+    /// A picture is being saved, from the request until it is written: the panel shows the saving indicator (never in the saved picture itself).
+    /// </summary>
+    public bool Busy => Active && _pending is not null;
+
+    /// <summary>
+    /// The picture's size in pixels as it will be saved at a <paramref name="width"/> x <paramref name="height"/> display (before the frame's crop).
+    /// </summary>
+    public (int Width, int Height) PictureSize(int width, int height)
+    {
+        float scale = PictureScale(width, height);
+        return ((int)MathF.Round(width * scale), (int)MathF.Round(height * scale));
+    }
+
+    /// <summary>
+    /// Counts the frames the saving indicator has been drawn; the last one requests the picture's frame.
+    /// </summary>
+    void StepShot()
+    {
+        if (_pending is null || _shotDelay <= 0) return;
+
+        if (--_shotDelay == 0) _host.ScreenshotRequested = true;
     }
 
     /// <summary>
@@ -850,15 +1307,48 @@ sealed class PhotoMode
     public bool GuidesDrawn(bool saving) => !saving || _shotWithGuides;
 
     /// <summary>
-    /// The picture was written: says where.
+    /// A picture is asked of this frame (<see cref="TakePicture"/>): the loop saves it (<see cref="GameLoop"/>'s <c>SavePhoto</c>).
     /// </summary>
-    public void PictureSaved(string path)
+    public bool Saving => Active && _pending is not null;
+
+    /// <summary>
+    /// How many times larger than the drawn <paramref name="width"/> x <paramref name="height"/> the picture is drawn: the Picture size, cut down so
+    /// its longest side stays within <see cref="MaxPictureSide"/> (1: the frame as drawn). A picture with the panel and grid is the frame's.
+    /// </summary>
+    public float PictureScale(int width, int height)
+    {
+        if (_shotWithGuides) return 1;
+
+        int factor = PictureSizes[_pictureSize];
+        return factor <= 1 ? 1 : MathF.Max(1, MathF.Min(factor, MaxPictureSide / (float)Math.Max(Math.Max(width, height), 1)));
+    }
+
+    /// <summary>
+    /// The part of a <paramref name="width"/> x <paramref name="height"/> picture (RGBA8 rows from the top) the frame keeps, as its own picture: a
+    /// 4:5 or 2.39 frame is saved at its shape, without the bars. With the panel and grid kept the whole picture is (the bars show where it cuts).
+    /// </summary>
+    public (byte[] Pixels, int Width, int Height) Cropped(byte[] pixels, int width, int height)
+    {
+        var window = PhotoGuides.Window(_shotWithGuides ? PhotoFrame.Off : Frame, width, height);
+        int left = (int)window.X, top = (int)window.Y, w = (int)window.Z - left, h = (int)window.W - top;
+        if (w == width && h == height) return (pixels, width, height);
+
+        var kept = new byte[w * h * 4];
+        for (int row = 0; row < h; row++) pixels.AsSpan(((top + row) * width + left) * 4, w * 4).CopyTo(kept.AsSpan(row * w * 4));
+        return (kept, w, h);
+    }
+
+    /// <summary>
+    /// The picture was written (or could not be): says where, or that it failed.
+    /// </summary>
+    public void PictureSaved(string path, bool saved = true)
     {
         if (_pending is null) return;
 
         _pending = null;
+        _shotDelay = 0;
         _shotWithGuides = false;
-        Say($"Saved {path}");
+        Say(saved ? $"Saved {path}" : $"Cannot save {path}");
     }
 
     /// <summary>
@@ -871,13 +1361,26 @@ sealed class PhotoMode
     }
 
     /// <summary>
-    /// Where a picture goes when no file is named: the Pictures folder's Meitou folder, named by the local time.
+    /// The folder pictures go to when no file is named: the Pictures folder's Meitou folder.
     /// </summary>
-    static string DefaultPath()
+    static string PicturesFolder()
     {
         string pictures = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
         if (pictures.Length == 0) pictures = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Pictures");
-        return Path.Combine(pictures, "Meitou", $"Meitou {DateTime.Now:yyyy-MM-dd HH-mm-ss}.png");
+        return Path.Combine(pictures, "Meitou");
+    }
+
+    /// <summary>
+    /// Where a picture goes when no file is named: <see cref="PicturesFolder"/>, named by the local time; a second picture within the same second
+    /// takes " (2)", " (3)"... rather than replacing the first.
+    /// </summary>
+    static string DefaultPath()
+    {
+        string folder = PicturesFolder();
+        string stamp = $"Meitou {DateTime.Now:yyyy-MM-dd HH-mm-ss}";
+        string path = Path.Combine(folder, stamp + ".png");
+        for (int n = 2; File.Exists(path); n++) path = Path.Combine(folder, $"{stamp} ({n}).png");
+        return path;
     }
 
     #endregion
@@ -958,6 +1461,26 @@ sealed class PhotoMode
             case "preset":
                 PresetCommand(args, con);
                 break;
+            case "pose":
+                PoseCommand(args, con);
+                break;
+
+            // The chosen light: placed at the eye, another chosen, or pressed and dragged between two pixels as the pointer would (its mark).
+            case "light":
+                LightCommand(args, con);
+                break;
+
+            // The panel's tab, for checking it in a picture (photo shot --ui).
+            case "tab" when args.Count > 1 && Groups.FirstOrDefault(g => g.Equals(args[1], StringComparison.OrdinalIgnoreCase)) is { } tab:
+                Panel.Group = tab;
+                con.Print($"tab {tab}");
+                break;
+
+            // A slider's typed value, as a double click on it: photo entry <name> begins, then photo type <text>, photo key Enter.
+            case "entry" when args.Count > 1 && Params.FirstOrDefault(p => p.Name.Equals(args[1], StringComparison.OrdinalIgnoreCase)) is { } slider:
+                BeginEntry(slider);
+                con.Print($"entering {slider.Name}: {Entry}");
+                break;
             case "shot":
                 ShotCommand(args, con);
                 break;
@@ -968,17 +1491,114 @@ sealed class PhotoMode
             // Characters as the keyboard types them (a preset's name).
             case "type":
                 foreach (char c in string.Join(' ', args.Skip(1))) TextInput(c);
-                con.Print(Naming is null ? "no name is being typed" : $"naming: {Naming}");
+                con.Print(Typing is not null ? $"entry: {Entry}" : Naming is null ? "no name is being typed" : $"naming: {Naming}");
+                break;
+
+            // A left press at a pixel of the picture and its release, as the mouse does (the Ctrl modifier optional): photo click <x> <y> [ctrl].
+            case "click" when args.Count > 2 && float.TryParse(args[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float px)
+                && float.TryParse(args[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float py):
+                var size = new Vector2(_host.WorldOptions.Width, _host.WorldOptions.Height);
+                PicturePress(new Vector2(px, py), size, ctrl: args.Count > 3);
+                Poses.Release();
+                con.Print(FormattableString.Invariant($"focus spot {_focusSpot.X:0.###} {_focusSpot.Y:0.###}, character {Poses.SelectedName}"));
+                break;
+
+            // A gizmo handle dragged by pixels, as the mouse would: photo gizmo <x|y|z|yaw|pitch> <dx> <dy> (pressed on the handle, moved, released).
+            case "gizmo":
+                GizmoCommand(args, con);
+                break;
+
+            // The pointer put at a pixel (the hover looks of the panel and the gizmo): photo hover <x> <y>.
+            case "hover" when args.Count > 2 && float.TryParse(args[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float hx)
+                && float.TryParse(args[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float hy):
+                Panel.MouseMove(new Vector2(hx, hy));
+                con.Print("pointer moved");
                 break;
             case "gallery":
                 OpenGallery();
-                con.Print(Path.GetDirectoryName(DefaultPath())!);
+                con.Print(PicturesFolder());
                 break;
             default:
                 con.Error("usage: photo on|off|toggle | get | reset | set <name> <value> | cam <x> <y> <z> <yawDeg> <pitchDeg> | panel on|off"
-                    + " | shot [file] [--ui] | key <name> [up] | preset ... | type <text> | gallery");
+                    + " | shot [file] [--ui] | key <name> [up] | preset ... | pose ... | light ... | tab <name> | entry <name>"
+                    + " | click <x> <y> [ctrl] | gizmo <handle> <dx> <dy> | hover <x> <y> | type <text> | gallery");
                 break;
         }
+    }
+
+    /// <summary>
+    /// <c>photo gizmo &lt;x|y|z|yaw|pitch&gt; &lt;dx&gt; &lt;dy&gt;</c>: presses the handle, drags it by that many pixels, releases it.
+    /// </summary>
+    void GizmoCommand(IReadOnlyList<string> args, DevConsole con)
+    {
+        var parsed = args.Count == 4 && Enum.TryParse(args[1], true, out GizmoHandle handle) && handle != GizmoHandle.None;
+        float dx = 0, dy = 0;
+        parsed = parsed && float.TryParse(args[2], NumberStyles.Float, CultureInfo.InvariantCulture, out dx)
+            && float.TryParse(args[3], NumberStyles.Float, CultureInfo.InvariantCulture, out dy);
+        if (!parsed)
+        {
+            con.Error("usage: photo gizmo <x|y|z|yaw|pitch> <dx> <dy> (on the Light or Pose tab, panel shown)");
+            return;
+        }
+
+        var which = Enum.Parse<GizmoHandle>(args[1], true);
+        var subject = GizmoSubject;
+        Gizmo.Layout(_host.Player, subject, new Vector2(-1000));
+        if (Gizmo.Anchor(which) is not { } at)
+        {
+            con.Error("no such handle here");
+            return;
+        }
+
+        if (!Gizmo.Press(_host.Player, subject, at))
+        {
+            con.Error("the handle cannot be taken (hidden or edge-on)");
+            return;
+        }
+
+        Gizmo.Drag(_host.Player, at + new Vector2(dx, dy));
+        Gizmo.Release();
+        con.Print(Describe());
+    }
+
+    /// <summary>
+    /// <c>photo light place</c>, <c>photo light next</c>, <c>photo light drag &lt;x0&gt; &lt;y0&gt; &lt;x1&gt; &lt;y1&gt;</c> (pixels: a press at the first,
+    /// a move to the second, a release, as on the Light tab).
+    /// </summary>
+    void LightCommand(IReadOnlyList<string> args, DevConsole con)
+    {
+        string sub = args.Count > 1 ? args[1] : "";
+        if (sub == "place") PlaceLight();
+        else if (sub == "next") Lights.Step(1);
+        else if (sub == "where") { }
+        else if (sub == "drag" && args.Count == 6)
+        {
+            var n = new float[4];
+            for (int i = 0; i < 4; i++)
+                if (!float.TryParse(args[i + 2], NumberStyles.Float, CultureInfo.InvariantCulture, out n[i]))
+                {
+                    con.Error("photo light drag: four numbers");
+                    return;
+                }
+
+            bool taken = Lights.Press(_host.Player, new Vector2(n[0], n[1])) && (Lights.Dragging || Lights.Press(_host.Player, new Vector2(n[0], n[1])));
+            Lights.Drag(_host.Player, new Vector2(n[2], n[3]));
+            Lights.Release();
+            if (!taken)
+            {
+                con.Error("photo light drag: no mark there");
+                return;
+            }
+        }
+        else
+        {
+            con.Error("usage: photo light place | next | where | drag <x0> <y0> <x1> <y1>");
+            return;
+        }
+
+        con.Print(Lights.MarkOf(_host.Player) is { } at
+            ? FormattableString.Invariant($"{Lights.ChosenName}, mark at {at.X:0} {at.Y:0}")
+            : Lights.ChosenName);
     }
 
     /// <summary>
@@ -1045,6 +1665,63 @@ sealed class PhotoMode
         }
 
         return float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out number) && float.IsFinite(number);
+    }
+
+    /// <summary>
+    /// <c>photo pose next | prev | at &lt;x&gt; &lt;y&gt; | anim &lt;record|own&gt; | list [filter] | reset | clear</c>: chooses a character (the next
+    /// in view, or the one at a pixel), sets its pose, lists the poses it can take, drops its changes or everyone's. The rest is <c>photo set</c>'s
+    /// Pose settings.
+    /// </summary>
+    void PoseCommand(IReadOnlyList<string> args, DevConsole con)
+    {
+        string verb = args.Count > 1 ? args[1].ToLowerInvariant() : "";
+        string rest = string.Join(' ', args.Skip(2));
+        switch (verb)
+        {
+            case "next" or "prev":
+                Poses.Step(verb == "next" ? 1 : -1);
+                break;
+            case "at" when args.Count == 4 && float.TryParse(args[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float x)
+                && float.TryParse(args[3], NumberStyles.Float, CultureInfo.InvariantCulture, out float y):
+                Poses.Select(Poses.At(new Vector2(x, y)));
+                break;
+            case "anim" when Poses.Selected is null:
+                con.Error("no character chosen (photo pose next)");
+                return;
+            case "anim":
+                string? record = rest.Equals("own", StringComparison.OrdinalIgnoreCase) ? null
+                    : Poses.PoseNames().FirstOrDefault(n => n.Equals(rest, StringComparison.OrdinalIgnoreCase));
+                if (record is null && !rest.Equals("own", StringComparison.OrdinalIgnoreCase))
+                {
+                    con.Error($"'{rest}' is no pose this character has (photo pose list)");
+                    return;
+                }
+
+                Poses.SetPose(record);
+                break;
+            case "open":
+                TogglePoseList();
+                con.Print($"list {(Poses.ListOpen ? "open" : "closed")}, filter '{Poses.Filter}', {Poses.Shown.Count - 1} shown, highlight {Poses.Highlight}");
+                return;
+            case "list":
+                var names = Poses.PoseNames().Where(n => n.Contains(rest, StringComparison.OrdinalIgnoreCase)).ToList();
+                con.Print($"{names.Count} poses: {string.Join(", ", names.Take(60))}{(names.Count > 60 ? ", ..." : "")}");
+                return;
+            case "reset":
+                Poses.ResetSelected();
+                break;
+            case "clear":
+                Poses.Clear();
+                break;
+            default:
+                con.Error("usage: photo pose next | prev | at <x> <y> | anim <record|own> | list [filter] | open | reset | clear");
+                return;
+        }
+
+        var at = Poses.SelectedCharacter?.Position ?? default;
+        string pose = Poses.Pose ?? PhotoPoses.OwnAnimation;
+        con.Print(FormattableString.Invariant(
+            $"character {Poses.SelectedName} at {at.X:0} {at.Y:0} {at.Z:0}, pose {pose} ({Poses.PoseTime.Length:0.###} s, {Poses.RootKeys} root keys)"));
     }
 
     /// <summary>

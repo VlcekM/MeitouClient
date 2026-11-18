@@ -102,6 +102,8 @@ sealed class FeatureGrouping(SettingsMenu menu)
         // Post FX
         new(WorldFrame.BloomSwitch, WorldFrame.BloomSwitch, [WorldFrame.BloomStrengthSlider]),
         new(WorldFrame.DepthOfFieldSwitch, WorldFrame.DepthOfFieldSwitch, [WorldFrame.DofApertureSlider, WorldFrame.CameraEffectsSwitch]),
+        new(WorldFrame.VignetteSwitch, WorldFrame.VignetteSwitch, [WorldFrame.VignetteStrengthSlider]),
+        new(WorldFrame.FilmGrainSwitch, WorldFrame.FilmGrainSwitch, [WorldFrame.GrainStrengthSlider]),
         new("Heat haze", "Heat haze", ["Heat haze strength (1 = game)"]),
     ];
 

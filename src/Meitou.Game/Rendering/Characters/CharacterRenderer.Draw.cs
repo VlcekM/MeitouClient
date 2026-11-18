@@ -643,13 +643,14 @@ internal sealed unsafe partial class CharacterRenderer
     }
 
     /// <summary>
-    /// Whether <paramref name="part"/> shows with the character's weapons as drawn now (the preview studio's drawn weapon counts too).
+    /// Whether <paramref name="part"/> shows with the character's weapons as drawn now (the preview studio's drawn weapon counts too, photo mode's
+    /// hidden weapons too).
     /// </summary>
     static bool ShowsNow(AssetPart part, in Live l)
     {
         bool drawn = l.WeaponDrawn || PreviewStudio.DrawnWeapon != 0;
         bool back = l.BackDrawn || PreviewStudio.DrawnWeapon == 2;
-        return part.ShowsWith(drawn, l.RangedDrawn, l.Shots, back);
+        return part.ShowsWith(drawn, l.RangedDrawn, l.Shots, back, l.WeaponsHidden);
     }
 
     /// <summary>

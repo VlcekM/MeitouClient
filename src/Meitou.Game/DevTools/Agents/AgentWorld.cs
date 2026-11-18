@@ -264,6 +264,11 @@ sealed class AgentWorld(GameHost host)
         Add("terrain-height", "terrain-height <x> <z> [radius step]", "terrain height at X Z; with a radius and step, the min, "
             + "max and spread over the square around it (to find flat ground)", ControlTerrainHeight);
 
+        Add("ground-at", "ground-at <x> <z>", "the biome index, overlay channel, GroundType, building floor and dust slot (system, min speed, "
+            + "chance) under a point; read-only", ControlGroundAt);
+        Add("dust-stats", "dust-stats [reset | on | off]", "the dry ground's dust kicks: fired, refused by the full pool, instances alive in the "
+            + "pool; reset zeroes the counters, on / off switches the kicks", ControlDustStats);
+
         Add("doors", "doors [building key]", "list the door fixtures (id, position, motion, lock) of one building instance, "
             + "or the count over every building when none is given", ControlDoors);
 
@@ -1037,6 +1042,40 @@ sealed class AgentWorld(GameHost host)
             }
         }
         con.Print($"height {host.Gpu.Terrain.HeightAt(hx, hz):F2} min {lo:F2} max {hi:F2} spread {hi - lo:F2}");
+    }
+
+    /// <summary>
+    /// The <c>ground-at</c> command (usage and help at its registration in <see cref="RegisterControlWorldCommands"/>).
+    /// </summary>
+    void ControlGroundAt(IReadOnlyList<string> args, DevConsole con)
+    {
+        if (!Loaded(con)) return;
+        if (args.Count != 2 || !Num(args[0], out float x) || !Num(args[1], out float z) || host.Sound.Ground is not { } ground)
+        {
+            con.Error("usage: ground-at <x> <z> (once the ground lookups have started)");
+            return;
+        }
+
+        uint? biome = ground.BiomeAt(x, z);
+        string biomeText = biome is { } b ? $"0x{b:X6}" : "?";
+        var feet = new System.Numerics.Vector3(x, host.Gpu.Terrain.HeightAt(x, z), z);
+        string slot = host.DryGround.SlotAt(ground, x, z) is { } s ? $"{s.System} speed>={s.MinSpeed:0} chance {s.Chance:0.##}" : "none";
+        con.Print($"({x:0},{z:0}) biome {biomeText} channel {ground.ChannelAt(x, z)} type {ground.At(x, z)} "
+            + $"floor {host.Sound.Characters.FloorSurface(feet)} dust {slot}");
+    }
+
+    /// <summary>
+    /// The <c>dust-stats</c> command (usage and help at its registration in <see cref="RegisterControlWorldCommands"/>).
+    /// </summary>
+    void ControlDustStats(IReadOnlyList<string> args, DevConsole con)
+    {
+        var dust = host.DryGround;
+        string mode = args.Count > 0 ? args[0] : "";
+        if (mode == "on") dust.Enabled = true;
+        if (mode == "off") dust.Enabled = false;
+
+        con.Print($"dust {(dust.Enabled ? "on" : "off")} kicks {dust.Kicks} refused {dust.Refused} pool {dust.Alive}");
+        if (mode == "reset") (dust.Kicks, dust.Refused) = (0, 0);
     }
 
     /// <summary>

@@ -318,7 +318,7 @@ sealed class CharacterAudio(GameHost host)
     /// (<see cref="Meitou.Game.Audio.CharacterSounds.Floor"/>, docs/audio.md "Surface"): the building's <c>interior material</c> when the character
     /// stands inside a building's indoor hull, else its <c>exterior material</c>.
     /// </summary>
-    int FloorSurface(Vector3 feet)
+    internal int FloorSurface(Vector3 feet)
     {
         if (host.ActiveObjects is not { } objects) return -1;
 
@@ -429,7 +429,7 @@ sealed class CharacterAudio(GameHost host)
     /// <summary>
     /// The definition of the character's layer playing the ANIMATION record called <paramref name="clip"/>; -1 when none does.
     /// </summary>
-    static int LayerOf(CharacterSnapshot c, string clip)
+    internal static int LayerOf(CharacterSnapshot c, string clip)
     {
         for (int k = 0; k < c.Animations.Count; k++)
             if (c.Animations[k].Name == clip) return c.Animations[k].Definition;
