@@ -35,11 +35,10 @@ sealed class FeedbackSettings
     public bool Log { get; set; }
 
     /// <summary>
-    /// Attach the action and dialogue logs, log_actions.txt and log_dialogue.txt (default off, like the action log; they hold what characters did
-    /// and said, and their headers leave out the command line, which can name the player's user folder). Renamed from GameLogs, which defaulted on,
-    /// so older files start off.
+    /// Attach the action and dialogue logs, log_actions.txt and log_dialogue.txt (default on: they hold what characters did and said, and their
+    /// headers leave out the command line, which can name the player's user folder).
     /// </summary>
-    public bool AttachGameLogs { get; set; }
+    public bool GameLogs { get; set; } = true;
 
     /// <summary>
     /// Send <see cref="DiscordName"/> with the report (default on), so it can be followed up on Discord.
@@ -305,7 +304,7 @@ sealed class FeedbackPanel(PlayerInterface player)
         string? discord = FeedbackPrefs.Discord && FeedbackPrefs.DiscordName.Trim() is { Length: > 0 } tag ? tag : null;
         return new(title, body,
             FeedbackPrefs.Screenshot && _feedbackHasShot, FeedbackPrefs.Navmesh && _feedbackHasNav, FeedbackPrefs.Save && _feedbackSaveMissing is null,
-            FeedbackPrefs.Log, FeedbackPrefs.AttachGameLogs, discord);
+            FeedbackPrefs.Log, FeedbackPrefs.GameLogs, discord);
     }
 
     /// <summary>
@@ -382,7 +381,7 @@ sealed class FeedbackPanel(PlayerInterface player)
         Tick(FeedbackNavTick, FeedbackPrefs.Navmesh && _feedbackHasNav);
         Tick(FeedbackSaveTick, FeedbackPrefs.Save && _feedbackSaveMissing is null);
         Tick(FeedbackLogTick, FeedbackPrefs.Log);
-        Tick(FeedbackGameLogsTick, FeedbackPrefs.AttachGameLogs);
+        Tick(FeedbackGameLogsTick, FeedbackPrefs.GameLogs);
         Tick(FeedbackDiscordTick, FeedbackPrefs.Discord);
         if (!FeedbackPrefs.Discord) b.Disabled.Add(FeedbackDiscordBox);
     }
@@ -398,7 +397,7 @@ sealed class FeedbackPanel(PlayerInterface player)
         else if (e.Widget == FeedbackNavTick) FeedbackPrefs.Navmesh = !FeedbackPrefs.Navmesh;
         else if (e.Widget == FeedbackSaveTick) FeedbackPrefs.Save = !FeedbackPrefs.Save;
         else if (e.Widget == FeedbackLogTick) FeedbackPrefs.Log = !FeedbackPrefs.Log;
-        else if (e.Widget == FeedbackGameLogsTick) FeedbackPrefs.AttachGameLogs = !FeedbackPrefs.AttachGameLogs;
+        else if (e.Widget == FeedbackGameLogsTick) FeedbackPrefs.GameLogs = !FeedbackPrefs.GameLogs;
         else if (e.Widget == FeedbackDiscordTick) FeedbackPrefs.Discord = !FeedbackPrefs.Discord;
         else if (e.Widget == FeedbackDiscordBox && e.Action == "text") FeedbackPrefs.DiscordName = e.Text;
         else if (e.Widget == "SendButton" && !FeedbackSending && FeedbackValues().Title.Length > 0) SendFeedbackOrAsk();

@@ -25,7 +25,7 @@ The game's FEEDBACK button (top right in both UI modes, title included; the Inte
 default on) hides it during play except with the Esc menu open; `FeedbackPanel`, `FeedbackCapture`,
 `FeedbackSender.cs`) opens a modal form: title (required, 100 chars), text (5000), and ticks for a screenshot, a navmesh screenshot, a save, log.txt (it
 shows folder names; off by default), the action and dialogue logs (log_actions.txt and log_dialogue.txt, [simulation](simulation.md#action-log);
-off by default, `attachGameLogs`), and the player's Discord name (64 chars, ticked by default). The ticks and the name are kept in meitou.user.json
+on by default), and the player's Discord name (64 chars, ticked by default). The ticks and the name are kept in meitou.user.json
 (`feedback`) and saved on each send. The screenshot is the frame after the press, drawn without the game menu and what it opens, the form, the settings
 panel, debug overlays and pointer; PNG (rows filtered), scaled to at most 2560 × 1440 and then by 0.75 until under 4.5 MB: GitHub's image proxy refuses images over 5 MB (**Verified** on a feedback issue: a 7.7 MB screenshot showed "Content length exceeded"; that 1440p frame is 5.6 MB filtered, 3.3 MB at 1080p), so the service links a picture over 5,000,000 bytes (from older games) instead of embedding it. The save is made only when Send is pressed (only
 in a game), into a temporary folder, zipped and deleted after; over 95 MB zipped it is refused before anything is sent. The logs ticked go as the
