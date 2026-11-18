@@ -423,6 +423,8 @@ static partial class WorldFrame
         HeatHazeStrengthSlider = "Heat haze strength (1 = game)",
         BloomStrengthSlider = "Bloom strength (0 = game)",
         DofApertureSlider = "Depth of field aperture (f-number)",
+        VignetteStrengthSlider = "Vignette strength",
+        GrainStrengthSlider = "Film grain strength",
         NightGradeStrengthSlider = "Night grading strength (0 = game)",
         ShaftStrengthSlider = "Light shafts strength",
         ShaftAirSlider = "Light shafts air (0 = none)",
@@ -434,6 +436,8 @@ static partial class WorldFrame
     public const string
         BloomSwitch = "Bloom",
         DepthOfFieldSwitch = "Depth of field",
+        VignetteSwitch = "Vignette",
+        FilmGrainSwitch = "Film grain",
         CameraEffectsSwitch = "Camera effects in the strategy camera",
         // The ground relief's Faithful / Meitou switches (Enhancements "parallax", "displace"), by name.
         GroundParallaxSwitch = "Ground parallax",
@@ -1039,6 +1043,8 @@ static partial class WorldFrame
             Faithful: 1, Meitou: Enhancements.MeitouHeatHazeStrength));
         sliders.Add(new Slider(BloomStrengthSlider, 0, 0.25f, () => options.BloomStrength, v => options.BloomStrength = MathF.Round(v * 200) / 200,
             "0.000", Faithful: 0));
+        sliders.Add(new Slider(VignetteStrengthSlider, 0, 1, () => options.VignetteStrength, v => options.VignetteStrength = Round20(v), "0.00"));
+        sliders.Add(new Slider(GrainStrengthSlider, 0, 1, () => options.GrainStrength, v => options.GrainStrength = Round20(v), "0.00"));
         sliders.Add(new Slider(DofApertureSlider, 0.25f, 22, () => options.DofAperture, v => options.DofAperture = MathF.Round(v * 20) / 20, "0.00",
             Logarithmic: true));
         sliders.Add(new Slider(NightGradeStrengthSlider, 0, 1, () => options.NightGradeStrength, v => options.NightGradeStrength = Round20(v),

@@ -520,21 +520,34 @@ sealed class AgentChannel(GameHost host)
     /// <summary>
     /// The frame asked for by <c>screenshot</c> is on screen: saves it to the requested file and reports.
     /// </summary>
-    internal void SaveControlShot(GpuContext context, GpuTexture picture, int width, int height, bool topDown)
+    internal bool SaveControlShot(GpuContext context, GpuTexture picture, int width, int height, bool topDown) =>
+        SaveControlShot(path =>
+        {
+            FramebufferCapture.SavePng(context, picture, path, width, height, topDown);
+            return (width, height);
+        });
+
+    /// <summary>
+    /// The picture asked for by <c>screenshot</c> (or photo mode's) is ready: <paramref name="write"/> saves it to the requested file and gives the
+    /// size it saved; the waiting client hears. False when it failed.
+    /// </summary>
+    internal bool SaveControlShot(Func<string, (int Width, int Height)> write)
     {
         string path = ShotPath!;
         string? id = ShotWaitId;
         ShotPath = ShotWaitId = null;
         try
         {
-            FramebufferCapture.SavePng(context, picture, path, width, height, topDown);
+            var (width, height) = write(path);
             Console.WriteLine($"saved     {path}");
             if (id is not null) ControlWrite(id, true, $"saved {path} {width}x{height}");
             if (_autoShotAsked) host.DevConsoleHost.ControlQuit = true;
+            return true;
         }
         catch (Exception e)   // a failed capture (GPU read-back, encoder) must answer too, not leave the client waiting
         {
             ControlShotFailed(e.Message, id);
+            return false;
         }
     }
 

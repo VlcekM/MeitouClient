@@ -57,7 +57,8 @@ sealed class PhotoPresets
     public List<Preset> Presets { get; private set; } = [];
 
     /// <summary>
-    /// Reads the file; a missing one leaves the settings as they are, an unreadable one is reported.
+    /// Reads the file; a missing one leaves the settings as they are. An unreadable one is reported and moved aside (to <c>photo-mode.json.bad</c>), so
+    /// the next save does not replace the presets it may still hold.
     /// </summary>
     public void Load()
     {
@@ -68,14 +69,27 @@ sealed class PhotoPresets
             var saved = JsonSerializer.Deserialize<Saved>(System.IO.File.ReadAllText(File));
             (Last, Presets) = (saved?.Last ?? [], saved?.Presets ?? []);
         }
-        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
+        catch (JsonException e)
+        {
+            Console.WriteLine($"photo     cannot read {File}: {e.Message}; kept as {File}.bad");
+            try
+            {
+                System.IO.File.Move(File, File + ".bad", overwrite: true);
+            }
+            catch (Exception moved) when (moved is IOException or UnauthorizedAccessException)
+            {
+                Console.WriteLine($"photo     cannot move {File} aside: {moved.Message}");
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             Console.WriteLine($"photo     cannot read {File}: {e.Message}");
         }
     }
 
     /// <summary>
-    /// Writes the file (indented), making its folder; a failure is reported.
+    /// Writes the file (indented), making its folder: into a file beside it that then takes its place, so a crash mid-write leaves the last whole
+    /// file. A failure is reported.
     /// </summary>
     public void Save()
     {
@@ -83,7 +97,9 @@ sealed class PhotoPresets
         {
             Directory.CreateDirectory(Path.GetDirectoryName(File)!);
             var json = JsonSerializer.Serialize(new Saved { Last = Last, Presets = Presets }, new JsonSerializerOptions { WriteIndented = true });
-            System.IO.File.WriteAllText(File, json);
+            string written = File + ".new";
+            System.IO.File.WriteAllText(written, json);
+            System.IO.File.Move(written, File, overwrite: true);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

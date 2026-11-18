@@ -670,6 +670,12 @@ sealed partial class GameHost
         }
         if (c.Id == Sandbox.SandboxHero && Sandbox.SandboxPicker?.Pose() is { } forced)
             poses = forced;   // the sandbox drop-down loops a picked clip on the hero
+        // Photo mode's Pose tab: drawn elsewhere, turned, in another pose or hidden (the simulation keeps it as it is).
+        bool hidden = inBar is null && Interiors.HiddenIndoors.Contains(c.Id);
+        Host.Photo.PhotoPoses.PosedLook photoLook = default;
+        bool photoPosed = inBar is null && posed && Photo is { Active: true } photo
+            && photo.Poses.Drawn(c, ref position, ref yaw, ref poses, ref hidden, out photoLook);
+        if (photoPosed && c.Carry is null) rotation = Leaning(c, yaw);
         // The editor shows the character as it is dressed; elsewhere the Hide hats setting may leave its hat out.
         Data.Characters.CharacterAppearance? hatless = null;
         var worn = editing is null ? HatLooks.WorldLook(c, out hatless) : c.Appearance!;
@@ -677,13 +683,15 @@ sealed partial class GameHost
         var look = Player.CharacterEditor.Previews.EditorPreview(c.Id, c.Appearance) ?? held;
         if (editing is null) Decapitation.CutHead(c, look);
         var glide = Player.CharacterEditor.Previews.EditorBlend(c.Id);   // after the preview, which may just have swapped the look
-        var bones = !posed ? null
+        // A posed character plays its pose, not its ragdoll.
+        var bones = !posed || photoPosed && Photo!.Poses.HasPose(c.Id) ? null
             : Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha, ref Slot(ref _ragdollsBySlot, c.Id.Slot),
             ref Slot(ref _spareRagdollsBySlot, c.Id.Slot));
-        bool hidden = inBar is null && Interiors.HiddenIndoors.Contains(c.Id);
-        bool fullRated = editing is not null || _fullRate.Contains(c.Id)
+        bool fullRated = editing is not null || _fullRate.Contains(c.Id) || photoPosed && !hidden
             || c.Id == Sandbox.SandboxHero && Sandbox.SandboxPicker?.Current is not null;
         var instance = Drawn(c, look, position, yaw, poses, rotation, bones, hidden, fullRated) with { Anchor = AnchorOf(before, c, alpha) };
+        if (photoLook.Weapon is { } weaponDrawn) instance = instance with { WeaponDrawn = weaponDrawn };
+        if (photoLook.NoWeapon || photoLook.HeadPitch != 0) instance = instance with { WeaponsHidden = photoLook.NoWeapon, HeadPitch = photoLook.HeadPitch };
         if (glide is { } mixed) instance = instance with { BlendFrom = mixed.From, Blend = mixed.Blend };
         list.Add(instance);
         if (hatless is not null) HatLooks.ListHidden(list.Items, in instance, hatless);

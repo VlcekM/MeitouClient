@@ -335,6 +335,39 @@ public sealed class PostOptions
     public static float HdrPeakFor(float peakNits, float paperNits) => MathF.Pow(MathF.Max(peakNits / paperNits, 1), 1 / 2.2f);
 
     /// <summary>
+    /// The Meitou <c>vignette</c> switch (docs/render-post.md "Vignette and film grain"), off by default even in the Meitou look; photo mode's
+    /// Look tab sets this same switch.
+    /// </summary>
+    public bool Vignette;
+
+    /// <summary>
+    /// How much the vignette darkens the picture's corners, 0 to 1 (kept while the switch is off).
+    /// </summary>
+    public float VignetteStrength = 0.35f;
+
+    /// <summary>
+    /// The width over the height of the part of the picture the vignette darkens towards the edges of: photo mode's frame (the bars cut the
+    /// rest); 0 the whole picture. Set per frame by photo mode.
+    /// </summary>
+    public float VignetteAspect;
+
+    /// <summary>
+    /// The Meitou <c>grain</c> switch (docs/render-post.md "Vignette and film grain"), off by default even in the Meitou look; photo mode's
+    /// Look tab sets this same switch.
+    /// </summary>
+    public bool FilmGrain;
+
+    /// <summary>
+    /// The film grain's strength, 0 to 1 (kept while the switch is off).
+    /// </summary>
+    public float GrainStrength = 0.3f;
+
+    /// <summary>
+    /// Photo mode's colour filter, after the grade (docs/viewer.md "Photo mode"); null outside the mode or with no filter.
+    /// </summary>
+    public ColourFilter? PhotoFilter;
+
+    /// <summary>
     /// The Meitou <c>dof</c> switch (docs/render-post.md "Depth of field"), off by default even in the Meitou look.
     /// </summary>
     public bool DepthOfField;
@@ -422,6 +455,12 @@ public sealed class PostOptions
     /// Photo mode's depth of field: on or off whatever <see cref="DepthOfField"/> says; null outside it.
     /// </summary>
     public bool? PhotoDepthOfField;
+
+    /// <summary>
+    /// How many times larger than the window the picture being drawn is (photo mode's Picture size; 1 otherwise): the depth of field's largest CoC
+    /// in pixels (<see cref="DofMaxCocPixels"/>) grows with it, so a larger picture blurs as the window does.
+    /// </summary>
+    public float PictureScale = 1;
 
     /// <summary>
     /// The exposure the passes apply: <see cref="Exposure"/> with photo mode's compensation.

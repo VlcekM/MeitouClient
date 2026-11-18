@@ -447,6 +447,16 @@ public static class Enhancements
                 + "and the distance, for the free and cinematic cameras (the cinema's keys can set focus and aperture; docs/render-post.md \"Depth "
                 + "of field\")",
             optional: true),
+        new("vignette", WorldFrame.VignetteSwitch, "off", "darker corners",
+            () => post.Vignette, v => post.Vignette = v,
+            "the game's picture is as bright at its corners as at its centre; Meitou can darken it towards the corners as a camera lens does, by the "
+                + "Vignette strength, in every camera (photo mode's Look tab is this same switch; docs/render-post.md \"Vignette and film grain\")",
+            optional: true),
+        new("grain", WorldFrame.FilmGrainSwitch, "off", "grain",
+            () => post.FilmGrain, v => post.FilmGrain = v,
+            "the game's picture is clean; Meitou can lay a fine film grain over it, new each frame and strongest in the mid-tones, by the Film grain "
+                + "strength, in every camera (photo mode's Look tab is this same switch; docs/render-post.md \"Vignette and film grain\")",
+            optional: true),
         new("gtao", "Ground-truth occlusion", "SSAO", "GTAO",
             () => post.Gtao, v => post.Gtao = v,
             "the Ambient occlusion switch's method (it needs that switch on): Meitou's SSAO is a cheap estimate; GTAO searches each pixel's "

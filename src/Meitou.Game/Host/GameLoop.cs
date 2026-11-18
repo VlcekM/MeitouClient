@@ -1174,9 +1174,9 @@ sealed class GameLoop(GameHost host)
             if (host.Covered || PanelLive() && _panel?.Scroll(wheel.Y) == true) return;
             if (_photo.Active)
             {
-                // Over the panel the wheel steps the setting under it; over the picture it zooms, or sets the fly speed with Ctrl.
+                // Over the panel the wheel steps the setting under it; over the picture it zooms, or sets the fly speed with Alt.
                 if (!_photo.Panel.Wheel(Pixels(_orbitAnchor ?? m.Position), wheel.Y))
-                    _photo.Wheel(wheel.Y, Held(SilkKey.ControlLeft, SilkKey.ControlRight));
+                    _photo.Wheel(wheel.Y, Held(SilkKey.AltLeft, SilkKey.AltRight));
                 return;
             }
 
@@ -1260,9 +1260,9 @@ sealed class GameLoop(GameHost host)
 
         if (physical == EngineButton.Left)
         {
-            // A click on the picture is where the lens focuses.
+            // A click on the picture is where the lens focuses, or on the Pose tab the character it chooses or drags.
             var size = FramebufferSizeNow();
-            _photo.FocusAt(new Vector2(at.X / Math.Max(size.X, 1), at.Y / Math.Max(size.Y, 1)));
+            _photo.PicturePress(at, new Vector2(size.X, size.Y), Held(SilkKey.ControlLeft, SilkKey.ControlRight));
             return;
         }
 
@@ -1277,6 +1277,12 @@ sealed class GameLoop(GameHost host)
         if (_photo.Active)
         {
             _photo.Panel.MouseUp();
+            if (physical == EngineButton.Left)
+            {
+                _photo.Poses.Release();
+                _photo.Lights.Release();
+                _photo.Gizmo.Release();
+            }
             if (physical is { } photoButton) host.Session.Input.SetMouseButton(photoButton, false);
             return;
         }
@@ -1315,7 +1321,13 @@ sealed class GameLoop(GameHost host)
             _lastMouse = p;
             return;
         }
-        if (_cinema.MouseMove(Pixels(p)) || _photo.Active && !host.OrbitHeld() && _photo.Panel.MouseMove(Pixels(p)))
+        // Photo mode's Pose tab: the chosen character follows the pointer over the ground while it is dragged.
+        if (_photo.Active && _photo.Poses.Dragging) _photo.Poses.Drag(Pixels(p));
+        if (_photo.Active && _photo.Lights.Dragging) _photo.Lights.Drag(host.Player, Pixels(p));
+        if (_photo.Active && _photo.Gizmo.Dragging) _photo.Gizmo.Drag(host.Player, Pixels(p));
+        if (_cinema.MouseMove(Pixels(p))
+            || _photo.Active && !host.OrbitHeld()
+                && (_photo.Poses.Dragging || _photo.Lights.Dragging || _photo.Gizmo.Dragging || _photo.Panel.MouseMove(Pixels(p))))
         {
             _lastMouse = p;
             return;
@@ -1674,6 +1686,10 @@ sealed class GameLoop(GameHost host)
         else
             host.Gpu.HoverKeys = outlining && pointerWorld && host.Player.PointerPanel.HoverTarget is { } hover
                 ? [(host.DrawKey(hover.Id), hover.Colour)] : [];
+        // Photo mode's Pose tab outlines the chosen character (never in a saved picture).
+        if (_photo.Active && _photo.PanelShown && _photo.Panel.Group == PhotoMode.PoseGroup && _photo.Poses.Selected is { } chosen
+                && !host.ScreenshotRequested && takeFile is null)
+            host.Gpu.HoverKeys = [(host.DrawKey(chosen), PhotoPanel.ChosenOutline)];
         host.Gpu.OutlinedBuildings = outlines && host.Config.BuildingOutline
             ? host.Player.BuildingSelection.OutlinedBuildings(hover: pointerWorld) : [];
     }
@@ -1768,7 +1784,8 @@ sealed class GameLoop(GameHost host)
             _frameGen = FrameGenerationSetup.CreateFrameGenerator(_display);
         }
         bool frameGenWanted = _frameGenerationLoaded != FrameGenerationMethod.Off
-            && !host.Covered && !host.TitleHidesWorld && !host.ScreenshotRequested && !host.FeedbackCapture.FeedbackShotRequested && takeFile is null;
+            && !host.Covered && !host.TitleHidesWorld && !host.ScreenshotRequested && !host.FeedbackCapture.FeedbackShotRequested && takeFile is null
+            && !_photo.WorldMarksShown;   // photo mode's marks and gizmos follow the real frames only (PhotoMode.WorldMarksShown)
         _frameGen?.BeginFrame(frameGenWanted, size.X, size.Y);
         host.Gpu.Post!.FrameGen = _frameGen;
         // The interface draws into a transparent layer of its own, laid over the backbuffer just before the present.
@@ -2051,10 +2068,13 @@ sealed class GameLoop(GameHost host)
             FramebufferCapture.SavePng(_display.Context, picture, takeFile, size.X, size.Y, topDown: topDown);
             _cinema.FrameDone();
         }
-        else if (shot && host.AgentChannel.ShotPath is { } shotPath)
+        else if (shot && host.AgentChannel.ShotPath is { } photoPath && _photo.Saving)
+        {
+            _photo.PictureSaved(photoPath, host.AgentChannel.SaveControlShot(file => SavePhoto(file, size, picture, topDown)));
+        }
+        else if (shot && host.AgentChannel.ShotPath is not null)
         {
             host.AgentChannel.SaveControlShot(_display.Context, picture, size.X, size.Y, topDown: topDown);
-            host.Photo?.PictureSaved(shotPath);
         }
         else if (shot && GameScreenshots.Multiplier(host.Install.Root) is >= 2 and var multiplier)
             SaveSupersampled(_display.Context, multiplier, size.X, size.Y);
@@ -2212,6 +2232,60 @@ sealed class GameLoop(GameHost host)
         if (dir is not null) Directory.CreateDirectory(dir);
         Data.Textures.PngWriter.Write(file, n * width, n * height, picture);
         Console.WriteLine($"saved     {file} ({n * width} x {n * height}, multiplier {n})");
+    }
+
+    /// <summary>
+    /// Photo mode's picture into <paramref name="file"/>: the frame as drawn, or the world drawn again larger by the Picture size
+    /// (<see cref="PhotoMode.PictureScale"/>, <see cref="DrawLarger"/>); then the frame's shape cut out of it (<see cref="PhotoMode.Cropped"/>). The
+    /// size saved.
+    /// </summary>
+    (int Width, int Height) SavePhoto(string file, Vector2D<int> size, GpuTexture picture, bool topDown)
+    {
+        float scale = _photo.PictureScale(size.X, size.Y);
+        var (pixels, width, height) = scale > 1
+            ? DrawLarger(_display.Context, (int)MathF.Round(size.X * scale), (int)MathF.Round(size.Y * scale), scale)
+            : (FramebufferCapture.ReadPicture(_display.Context, picture, size.X, size.Y, topDown), size.X, size.Y);
+        var (kept, w, h) = _photo.Cropped(pixels, width, height);
+        var dir = Path.GetDirectoryName(Path.GetFullPath(file));
+        if (dir is not null) Directory.CreateDirectory(dir);
+        Data.Textures.PngWriter.Write(file, w, h, kept);
+        return (w, h);
+    }
+
+    /// <summary>
+    /// The world alone (no interface) drawn once more as a whole view at <paramref name="width"/> x <paramref name="height"/>, as RGBA8 rows from the
+    /// top: the lens, depth of field and every camera effect as in the window (unlike the tiled shot, whose tiles are no whole view), the depth of
+    /// field's largest blur grown by <paramref name="scale"/> (<see cref="PostOptions.PictureScale"/>). The temporal history is dropped and warmed up
+    /// again, the exposure of the live view pinned, as for the tiled shot.
+    /// </summary>
+    (byte[] Pixels, int Width, int Height) DrawLarger(GpuContext context, int width, int height, float scale)
+    {
+        var post = host.Gpu.Post!;
+        int warm = post.WarmupFrames;
+        var (adapted, _) = post.ReadExposure();
+        if (!float.IsNaN(adapted)) post.HoldExposure(adapted, warm + 3);
+        var live = post.Target;
+        using var target = context.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height,
+            Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.Sampled, Name: "photo picture"));
+        post.Target = target;
+        post.Options.PictureScale = scale;
+        try
+        {
+            post.ResetHistory();
+            for (int i = 0; i <= warm; i++)
+            {
+                host.DrawWorld(width, height);
+                context.EndFrame();   // headless frames: the window's own frame was presented already
+            }
+            context.Finish();
+            return (FramebufferCapture.ReadPicture(context, target, width, height), width, height);
+        }
+        finally
+        {
+            post.Options.PictureScale = 1;
+            post.Target = live;
+            post.ResetHistory();
+        }
     }
 
     /// <summary>

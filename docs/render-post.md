@@ -363,7 +363,7 @@ gather, near gather (premultiplied), full-size composite: far field by the full-
 
 The CoC is a thin lens's, not a slider's radius (KenshiNative's). A full-frame sensor, 24 mm high (`ThinLens`), and the camera's vertical field of view give the focal length f;
 with f-number N and focus s, the disc's diameter on the sensor at depth z is `f^2 / (N (s - f)) * |z - s| / z`, the sky at infinity, in half-size pixels at most 1.5 % of the
-height and 24. 10 world units are a metre (see "Fog" above). Radius at infinity at 1080p and f/1, half-size pixels:
+height and 24 (times `PostOptions.PictureScale` in a photo-mode picture drawn larger than the window). 10 world units are a metre (see "Fog" above). Radius at infinity at 1080p and f/1, half-size pixels:
 
 | lens | focus 5 m | focus 20 m |
 |---|---|---|
@@ -378,6 +378,19 @@ Focus and aperture come from the key the cinema holds (`Focus`, `Aperture`, [vie
 (3 % of its height each way), eased from the last frame's in log distance over 0.15 s (snapped after half a second without a frame); the prepare and composite passes
 compute the lens from it. On sky alone it falls back to the camera target's distance. The target's distance alone focused behind a close face (the head's bone), **Observed**. A sharp zone (`PostOptions.LensSharpZone`, photo mode's Sharp zone, world units each side of the focus) is taken out of the distance from the focus before the CoC: what lies in it is wholly sharp. The far gather weighs each sample by one over its own disc's area (its light is spread over that disc); weighed alike, a blurred figure before a more blurred background kept a sharp outline (**Observed** in play). A 5 x 5 binomial (`DofFarFilter`, step a quarter texel in focus to one texel from a CoC of 4, taps weighed by their blur) then removes the grain the gather's few taps leave. Water writes no depth, so it takes the CoC of what lies under it. Particles take the surface's behind them.
 The depth is jittered: the composite shifts its tap by the jitter, and an edge may still shimmer a render pixel.
+
+## Vignette and film grain
+
+Optional Meitou switches `vignette` and `grain` (Post FX tab, off in every look; `PostOptions.Vignette`, `VignetteStrength` 0.35, `FilmGrain`, `GrainStrength` 0.3);
+the game has neither. Photo mode's Look tab shows these same settings (no second copy: a change there is the setting's and is saved with it). In the composite, after the
+grade and photo mode's filter, before the dither, in every camera of a whole scene view (not a tiled screenshot's tile, not over the title):
+
+- **Vignette:** the colour times `1 - strength x smoothstep(0.2, 1, r)`, r the distance from the window's centre over the distance to its corner. The window is the
+  picture, or photo mode's frame (`VignetteAspect`), so a cropped picture keeps its vignette.
+- **Grain:** a value noise of the interleaved gradient noise, cells of 1.5 pixels (times `PictureScale` in a larger photo), a new offset each frame, added with amplitude
+  `0.2 x strength x (0.3 + 2.8 l (1 - l))`, l the pixel's luminance: strongest in the mid-tones.
+
+**Observed** (`t_desert_gold`, photo mode): the corners darken at strength 0.8; the grain shows over sepia and noir pictures.
 
 ## SMAA
 

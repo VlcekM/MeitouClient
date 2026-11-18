@@ -623,6 +623,7 @@ static partial class WorldFrame
             lamps.Moving.Clear();
             if (lamps.DebugCarried is { } debugCarried) lamps.Moving.Add(debugCarried);
             gpu.Characters?.CollectLamps(lamps.Moving);   // the lanterns characters carry, where this update posed them
+            lamps.Moving.AddRange(gpu.PhotoLights);       // photo mode's own lights
         }
 
         // With the lamps traced the rays stop their light at the walls: the room's hull would only trim the wall round a door into a dark polygon.
@@ -1517,7 +1518,7 @@ static partial class WorldFrame
             (camera.ClipNear, camera.ViewDistance, camera.Projection(aspect, camera.ClipNear, camera.ViewDistance));
 
         // The movement marker and stealth arrows, in their materials' colours, like the game's debug_marker.
-        if (gpu.Markers is { Active: true } marker && f.ParticleNear > 0 && post.Target is { } picture)
+        if (gpu.Markers is { Active: true } marker && !gpu.MarkersHidden && f.ParticleNear > 0 && post.Target is { } picture)
         {
             marker.Record(picture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight,
                 f.RelativeRotation * SceneProjection().Projection, camera, f.Sun);

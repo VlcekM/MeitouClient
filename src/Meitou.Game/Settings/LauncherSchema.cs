@@ -148,6 +148,8 @@ static class LauncherSchema
         Graphics(WorldFrame.NightGradeStrengthSlider, 0, 1, 0.05f, NightGrade.MeitouStrength) with { Format = "0.00" },
         Graphics(WorldFrame.BloomStrengthSlider, 0, 0.25f, 0.005f, new PostOptions().BloomStrength) with { Format = "0.000" },
         Graphics(WorldFrame.DofApertureSlider, 0.25f, 22, 0.05f, new PostOptions().DofAperture) with { Logarithmic = true, Format = "0.00" },
+        Graphics(WorldFrame.VignetteStrengthSlider, 0, 1, 0.05f, new PostOptions().VignetteStrength) with { Format = "0.00" },
+        Graphics(WorldFrame.GrainStrengthSlider, 0, 1, 0.05f, new PostOptions().GrainStrength) with { Format = "0.00" },
     ];
 
     /// <summary>

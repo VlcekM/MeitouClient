@@ -109,7 +109,7 @@ internal sealed partial class CharacterRenderer
         float best = float.PositiveInfinity;
         foreach (var part in asset.Parts)
         {
-            if (!part.ShowsWith(s.WeaponDrawn, s.RangedDrawn, back: s.BackDrawn) || part.PickBoxes.Length == 0)
+            if (!part.ShowsWith(s.WeaponDrawn, s.RangedDrawn, back: s.BackDrawn, weaponsHidden: s.WeaponsHidden) || part.PickBoxes.Length == 0)
                 continue;
             if (!part.Shared && (part.AttachIndex < 0 || part.AttachIndex >= s.Attach.Length)) continue;
             var model = part.Shared ? s.World : s.Attach[part.AttachIndex] * s.World;

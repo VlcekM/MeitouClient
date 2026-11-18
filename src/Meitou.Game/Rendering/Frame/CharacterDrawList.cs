@@ -31,6 +31,17 @@ public readonly record struct CharacterInstance(long Key, CharacterAppearance Ap
     public bool WeaponDrawn { get; init; }
 
     /// <summary>
+    /// No weapon or crossbow part is drawn, in hand or stowed (photo mode's Weapon: hidden).
+    /// </summary>
+    public bool WeaponsHidden { get; init; }
+
+    /// <summary>
+    /// The head's pitch in radians, positive looking up: the neck and head bones turn about the character's sides' axis on top of the poses (photo
+    /// mode's Look at camera; the head turning clip only turns sideways).
+    /// </summary>
+    public float HeadPitch { get; init; }
+
+    /// <summary>
     /// The weapon in hand is the crossbow: its in-hand parts (<see cref="WeaponShown.RangedDrawn"/>) show, the melee weapon's sheathed ones.
     /// </summary>
     public bool RangedDrawn { get; init; }
