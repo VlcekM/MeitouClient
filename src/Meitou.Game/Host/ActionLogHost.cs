@@ -4,8 +4,8 @@ namespace Meitou.Game.Host;
 
 /// <summary>
 /// The host's side of the action log (<see cref="ActionLog"/>; docs/launch-options.md <c>--action-log</c>, the F10 "Action log" row): the log the
-/// session's worlds are told of, and its file, log_actions.txt beside log.txt (kept like log.txt, <see cref="GameLog"/>), opened when the
-/// log is first switched on. Also the dialogue log's file, log_dialogue.txt.
+/// session's worlds are told of, and its file, log_actions.txt beside log.txt (kept like log.txt, written off the tick: <see cref="QueuedLog"/>),
+/// opened when the log is first switched on. Also the dialogue log's file, log_dialogue.txt, written the same way.
 /// </summary>
 sealed class ActionLogHost : IDisposable
 {
@@ -48,7 +48,7 @@ sealed class ActionLogHost : IDisposable
     void Open()
     {
         if (Log.Writer is not null) return;
-        Log.Writer = GameLog.Open("log_actions.txt");
+        Log.Writer = QueuedLog.Open("log_actions.txt");
         Console.WriteLine(Log.Writer is null
             ? "actions   log_actions.txt could not be opened (another game has it, or the folder is read-only)"
             : "actions   writing log_actions.txt");
@@ -62,7 +62,7 @@ sealed class ActionLogHost : IDisposable
         if (lines.Count == 0 || _dialogueFailed) return;
         if (_dialogue is null)
         {
-            _dialogue = GameLog.Open("log_dialogue.txt");
+            _dialogue = QueuedLog.Open("log_dialogue.txt");
             _dialogueFailed = _dialogue is null;
             Console.WriteLine(_dialogueFailed
                 ? "dialogue  log_dialogue.txt could not be opened (another game has it, or the folder is read-only)"
