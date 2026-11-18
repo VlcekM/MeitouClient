@@ -417,11 +417,16 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
-    /// The panel's view of a building's doors (null for no building, or one without fixtures).
+    /// The panel's view of a building's doors, or of a selected container fixture's emptiness (null for no building, or one without fixtures).
     /// </summary>
     internal BuildingDetail? DetailOf(string? instance, int faction)
     {
-        if (instance is null || !_byBuilding.TryGetValue(instance, out var list)) return null;
+        if (instance is null) return null;
+
+        // A container is selected by its fixture id, which is no building's key unless the container is a level building of its own.
+        bool empty = Find(instance) is { Contents.Items.Count: 0 };
+        if (!_byBuilding.TryGetValue(instance, out var list)) return empty ? new BuildingDetail(instance, []) { Empty = true } : null;
+
         var doorList = list.Where(f => f.Kind == FixtureKind.Door).OrderBy(f => f.DoorIndex)
             .Select(f
                     => new DoorDetail(f.Motion is DoorMotion.Open or DoorMotion.Opening, f.Lock is { EffectivelyLocked: true }, f.Lock?.Level ?? 0,
@@ -430,6 +435,7 @@ public sealed partial class FixtureRegistry
         {
             SalePrice = SalePrice(instance, faction),
             ResidentsPublic = PublicDayOf(instance),
+            Empty = empty,
         };
     }
 

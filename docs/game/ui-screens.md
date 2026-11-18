@@ -744,7 +744,7 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
   owner faction, `Town:` The Hub, `Workers:` 0/1, `Efficiency:` 0%, `Max efficiency:` 100%, Condition. Meitou (`BuildingSelection.PickFurnitureAt`):
   beds, containers and cages by their fixtures, seats by their seat spots, everything else of a town building's interior layout but nodes
   (`TownBuilding.Pieces`: tables, shelves, lamps, locks, dummies, workstations) by its own collision; the panel has the name, owner, the town of the
-  house it stands in and Condition, without the lock rows, `[EMPTY]` only when Meitou holds the container's inventory (a machine); a training dummy adds `Training:`. In a town
+  house it stands in and Condition, without the lock rows, `[EMPTY]` when the container's inventory (a machine's, or a town container fixture's) holds no items; a training dummy adds `Training:`. In a town
   or not (the town guard above), furniture and level buildings of
   the original's UseableStuff, StorageBuilding and LightBuilding add section 6 as above (`UseableLines`): Workers, Efficiency / Max efficiency or a
   dummy's `Max Skill Level:`, and a consumer's `Power:` granted/draw (a layout object's on its house's town frame). So a town safe (`General storage`, function 13, BUILDING `max operators` −1,

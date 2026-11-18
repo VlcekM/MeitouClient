@@ -518,6 +518,11 @@ public sealed record BuildingDetail(string Instance, IReadOnlyList<DoorDetail> D
     /// The selected bed's own panel data (null: no bed selected).
     /// </summary>
     public BedDetail? Bed { get; init; }
+
+    /// <summary>
+    /// Whether the selected container's inventory holds no items (the panel's <c>[EMPTY]</c>).
+    /// </summary>
+    public bool Empty { get; init; }
 }
 
 /// <summary>

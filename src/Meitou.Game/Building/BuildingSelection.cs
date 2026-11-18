@@ -458,7 +458,7 @@ sealed class BuildingSelection(PlayerInterface player)
         var inspected = player.Session.CurrentSnapshot.InspectedRichness is { } ir && ir.Instance == focus.Instance
             ? ir : (Simulation.Production.RichnessView?)null;
         if ((focus.Town ?? site?.TownName ?? detail?.Bed?.Town ?? inspected?.TownName) is { Length: > 0 } town) state.Add(new("Town:", town));
-        Useable.AddEmptyLine(focus, site?.Record ?? focus.Record, state);
+        Useable.AddEmptyLine(focus, site?.Record ?? focus.Record, detail, state);
         Useable.AddStateLine(site?.Record ?? focus.Record, state);
         if (own && player.Session.CurrentSnapshot.InspectedTurret is { } turret && turret.Instance == focus.Instance)
             AddHeightLines(turret, state);
