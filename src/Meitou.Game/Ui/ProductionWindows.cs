@@ -681,7 +681,12 @@ sealed class ProductionWindows(PlayerInterface player)
     /// </summary>
     void AddSlot(List<UiControl> controls, MachineSnapshot m, string name, MachineSlotView view, int code)
     {
-        if (SizeSection(controls, name) is not var (b, clip)) return;
+        if (SizeSection(controls, name) is not var (section, clip)) return;
+
+        // The item sits at the section's top left at its own footprint (a bench's sections can be larger).
+        var b = view.ItemWidth > 0
+            ? new UiRect(section.X, section.Y, view.ItemWidth * player.InventoryCell, view.ItemHeight * player.InventoryCellHeight)
+            : section;
 
         // An idle bench section has no ghost and is disabled while empty (FUN_1402bb470, setEnabled through FUN_14014ea30).
         if (view is { Idle: true, Count: <= 0 }) DisableSection(controls, name);

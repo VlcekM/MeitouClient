@@ -178,9 +178,9 @@ public sealed partial class ProductionSystem
         m.Output?.Recipe.Item == record || m.Data.Craft?.Options.Any(o => o.Item == record) == true;
 
     /// <summary>
-    /// Whether a bench is held by its first craft's store (<see cref="CraftStep"/>'s output full).
+    /// Whether a bench's output takes no more of its first craft (<see cref="OutputFull"/>).
     /// </summary>
-    static bool CraftFull(CraftState state) => state.Queue.Count > 0 && Held(state, state.Queue[0].Option) >= state.Queue[0].Option.Store;
+    static bool CraftFull(CraftState state) => state.Queue.Count > 0 && OutputFull(state, state.Queue[0].Option);
 
     /// <summary>
     /// Moves a bench's finished items that <paramref name="takes"/> into the inventory, the instances themselves so a crafted piece keeps its

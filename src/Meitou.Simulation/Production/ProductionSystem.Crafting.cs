@@ -77,6 +77,18 @@ public sealed partial class ProductionSystem
     static int Held(CraftState state, CraftOption option) => state.Done.Where(d => d.Record == option.Item).Sum(d => d.Quantity);
 
     /// <summary>
+    /// Whether the bench's output takes no more of this option: the option's store is held, or the output holds an item and no stack of the option's
+    /// item with room. <b>Observed</b> with the harness (cooking stove, Dried Gristle Flaps, stackable 1): one finished item makes it "Output full" and
+    /// the cook stops until it is taken (<c>FUN_1402bcac0</c> adds the item only while the <c>out</c> section holds less than its minimum stack, 1).
+    /// </summary>
+    internal static bool OutputFull(CraftState state, CraftOption option)
+    {
+        if (Held(state, option) >= option.Store) return true;
+
+        return state.Done.Count > 0 && !state.Done.Any(d => d.Record == option.Item && d.Quantity < d.StackLimit);
+    }
+
+    /// <summary>
     /// Sets the input sections for the first craft (<b>Observed</b>, <c>CraftingBuilding::vfunc_182</c> "setProductionItem"): section k takes
     /// ingredient k at its per-item amount; sections it does not use draw nothing. Done when the first craft changes (queued, cancelled, finished).
     /// Items of another kind in a section fall on the ground (engine choice; the original hands them back to the bench). Each section's level moves
@@ -156,7 +168,7 @@ public sealed partial class ProductionSystem
         }
 
         var job = state.Queue[0];
-        if (Held(state, job.Option) >= job.Option.Store)
+        if (OutputFull(state, job.Option))
         {
             m.Status = 1;
             return false;

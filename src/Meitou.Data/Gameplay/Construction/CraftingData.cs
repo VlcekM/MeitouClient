@@ -111,6 +111,22 @@ public sealed record CraftBench
     public int OutputHeight { get; init; } = 1;
 
     /// <summary>
+    /// Whether the input sections start with the first record's items and take each item's footprint (every record draws the same items); otherwise
+    /// they start with none and are <see cref="InputWidth"/> x <see cref="InputHeight"/>.
+    /// </summary>
+    public bool PresetInputs { get; init; } = true;
+
+    /// <summary>
+    /// The width in cells of a bench's input sections when not <see cref="PresetInputs"/>: the widest footprint of all the items its records draw.
+    /// </summary>
+    public int InputWidth { get; init; } = 1;
+
+    /// <summary>
+    /// The height in cells of the input sections, as <see cref="InputWidth"/>.
+    /// </summary>
+    public int InputHeight { get; init; } = 1;
+
+    /// <summary>
     /// The bench of BUILDING_FUNCTIONALITY <paramref name="function"/>, null when its <c>function</c> is not <see cref="CraftingFunction"/>: every
     /// listed record the database has, a weapon bench's models crossed with the <see cref="PlayerWeapons"/> weapon types, and the tech level.
     /// </summary>
@@ -141,22 +157,28 @@ public sealed record CraftBench
                         options.Add(new CraftOption(CraftKind.Weapon, type.TargetStringId, m.TargetStringId, m.Values.Value0, 1));
         }
         int tech = function.GetInt("tech level");
-        var (width, height) = OutputFootprint(db, function);
+        bool overrides = function.GetBool("overrides ingredients");
+        var made = Made(db, function);
+        var (width, height) = Footprint(made);
+        var inputs = InputSections(db, function, made, overrides);
         return new CraftBench
         {
             Options = options,
             TechLevel = tech > 0 ? tech : 100,
-            OverridesIngredients = function.GetBool("overrides ingredients"),
+            OverridesIngredients = overrides,
             OutputWidth = width,
-            OutputHeight = height
+            OutputHeight = height,
+            PresetInputs = inputs.Preset,
+            InputWidth = inputs.Width,
+            InputHeight = inputs.Height,
         };
     }
 
     /// <summary>
-    /// The largest footprint width and height, each on its own, of the records in <paramref name="function"/>'s crafts lists; a bench with
-    /// <c>weapon crafts</c> counts every WEAPON of the database, not only the ones it can make.
+    /// The records of <paramref name="function"/>'s crafts lists; a bench with <c>weapon crafts</c> counts every WEAPON of the database, not only the
+    /// ones it can make.
     /// </summary>
-    static (int Width, int Height) OutputFootprint(GameDatabase db, GameRecord function)
+    static List<GameRecord> Made(GameDatabase db, GameRecord function)
     {
         string[] lists = ["item crafts", "armour crafts", "crossbow crafts", "backpack crafts", "robotics crafts"];
         var made = lists
@@ -164,16 +186,62 @@ public sealed record CraftBench
             .Select(r => db.Find(r.TargetStringId))
             .OfType<GameRecord>();
         if (function.GetReferences("weapon crafts").Count > 0) made = made.Concat(db.OfType(FcsRecordType.Weapon));
+        return [.. made];
+    }
 
+    /// <summary>
+    /// The largest footprint width and height, each on its own, of <paramref name="records"/>; at least 1 x 1.
+    /// </summary>
+    static (int Width, int Height) Footprint(IEnumerable<GameRecord> records)
+    {
         int width = 1, height = 1;
 
-        foreach (var record in made)
+        foreach (var record in records)
         {
             width = Math.Max(width, record.GetInt("inventory footprint width"));
             height = Math.Max(height, record.GetInt("inventory footprint height"));
         }
 
         return (width, height);
+    }
+
+    /// <summary>
+    /// The input sections (<b>Verified</b>, the bench constructor <c>FUN_1402b9aa0</c>): each made record draws its <c>ingredients</c>, or the bench's
+    /// <c>consumes</c> when it has none or the bench overrides them. The bench has min(largest count, 2) sections (at least 1); they start with the
+    /// first record's items only when every record draws that many and all draw the same ones; otherwise every section is as large as the largest
+    /// footprint (width and height each on its own) of all the drawn items.
+    /// </summary>
+    static (bool Preset, int Width, int Height) InputSections(GameDatabase db, GameRecord function, List<GameRecord> made, bool overrides)
+    {
+        var drawn = new HashSet<string>(StringComparer.Ordinal);
+        int most = 0, least = 10;
+        bool consumes = false;
+
+        foreach (var record in made)
+        {
+            var ingredients = record.GetReferences("ingredients");
+            if (ingredients.Count < 1 || overrides)
+            {
+                consumes = true;
+                continue;
+            }
+
+            foreach (var i in ingredients) drawn.Add(i.TargetStringId);
+            most = Math.Max(most, ingredients.Count);
+            least = Math.Min(least, ingredients.Count);
+        }
+
+        if (consumes)
+        {
+            var list = function.GetReferences("consumes");
+            foreach (var c in list) drawn.Add(c.TargetStringId);
+            most = Math.Max(most, list.Count);
+            least = Math.Min(least, list.Count);
+        }
+
+        int sections = Math.Max(1, Math.Min(most, 2));
+        var (width, height) = Footprint(drawn.Select(db.Find).OfType<GameRecord>());
+        return (least == sections && drawn.Count == sections, width, height);
     }
 
     /// <summary>

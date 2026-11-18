@@ -721,6 +721,13 @@ Function 10, `CraftingBuilding` (**Observed** unless noted).
   ingredients` or no ingredients, the bench's `consumes` at v1/100. Material cost (item vfunc 102): a weapon's
   `material cost`, else 1. Armour: each section at `total coverage`/100; Fabrics (`584-gamedata.base`, hard-coded,
   **Verified** bytes) at that x `fabrics amount`.
+- **Input sections** (**Verified**, constructor `FUN_1402b9aa0`): each made record draws its `ingredients`, or the bench's `consumes` when it has
+  none or the bench overrides them; min(largest count, 2) sections (at least 1), stacking minimum 5. Only when every record draws that many and all
+  the same items do the sections start with the first record's items at their footprints; otherwise they start empty, each as large as the largest
+  footprint of all drawn items (**Observed**, harness: the cooking stove's two are 5 x 5, Water's). Meitou: `CraftBench.PresetInputs`, `InputWidth`.
+- **Output full** (`FUN_1402bcac0`; **Observed**, harness, cooking stove making Dried Gristle Flaps, stackable 1): the finished item goes into `out`
+  (stacking minimum 1, mult 1) only while it holds less than 1; one item there sets status 1, "Output full", and the cook leaves until it is taken.
+  Meitou (`ProductionSystem.OutputFull`): full once the output holds an item and no stack of the craft's item with room, or the craft's store.
 - **Unused sections** (**Verified**, `FUN_1402bb470`): a section past the bound craft's inputs gets no item and is disabled (`InventorySection::setEnabled`,
   which refuses items) while it is empty; the window shows it as `-` ([Selected building](ui-screens.md#selected-building)). Meitou: `InputSlot.Idle`.
 - **Partial levels** (**Verified**, `FUN_1402bb470`, `FUN_1402b8440`): the bench keeps a map item -> level (+0x520). A recipe switch first stores every
