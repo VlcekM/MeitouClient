@@ -1459,7 +1459,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// </summary>
     void SetBinding(InputAction action, Binding binding)
     {
-        if (RefusedBinding(action, binding) is { } refusal)
+        if (RefusedBinding(action, binding, Bindings.ModAction(action) is not null) is { } refusal)
         {
             Notice = refusal;
             return;
@@ -1496,15 +1496,17 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
-    /// Why <paramref name="binding"/> cannot go to <paramref name="action"/>, or null: the reserved keys, and a mouse button for a build map action
-    /// (build mode takes only keys there; its buttons place and clear).
+    /// Why <paramref name="binding"/> cannot go to <paramref name="action"/>, or null: the reserved keys, for a code mod's action
+    /// (<paramref name="modAction"/>) also the keys the game keeps (Insert reaches this page on the Metal host, which has no console key), and a
+    /// mouse button for a build map action (build mode takes only keys there; its buttons place and clear).
     /// </summary>
-    static string? RefusedBinding(InputAction action, Binding binding)
+    static string? RefusedBinding(InputAction action, Binding binding, bool modAction)
     {
         if (binding.IsMouse && InputBindings.IsBuildMap(action)) return "Build keys take a key, not a mouse button. Choose a key, or Esc to cancel.";
         if (binding.IsMouse) return null;
 
-        return InputBindings.Reserved(binding) ? "That key is reserved. Choose another key, or Esc to cancel." : null;
+        bool reserved = InputBindings.Reserved(binding) || (modAction && InputBindings.HostKey(binding));
+        return reserved ? "That key is reserved. Choose another key, or Esc to cancel." : null;
     }
 
     /// <summary>

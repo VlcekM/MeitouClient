@@ -118,13 +118,14 @@ public sealed record ModKeyContext(WorldSnapshot Snapshot, IReadOnlyList<Charact
 sealed class ModKeyBindings(IReadOnlyList<ModKeyAction> actions)
 {
     /// <summary>
-    /// Each action's keys as laid at the start or by Restore defaults, in the saved form: an action still at them is not rewritten in the save.
-    /// </summary>
-    readonly Dictionary<InputAction, string> _start = [];
-    /// <summary>
-    /// Each action's saved entry as read at the start (none after Restore defaults): what an action still at its start's keys is saved as.
+    /// Each action's saved entry as read at the start (none after Restore defaults): what an action the player has not touched since is saved as.
     /// </summary>
     readonly Dictionary<InputAction, string> _entries = [];
+    /// <summary>
+    /// The actions whose keys were set since the start or Restore defaults (the Controls page: a rebinding, Delete, a key taken for another
+    /// action): saved as they are now.
+    /// </summary>
+    readonly HashSet<InputAction> _touched = [];
 
     /// <summary>
     /// The actions, in load order.
@@ -162,7 +163,7 @@ sealed class ModKeyBindings(IReadOnlyList<ModKeyAction> actions)
         for (int i = 0; i < actions.Count; i++)
             if (texts[i] is null) Lay(bindings, actions[i], actions[i].Defaults, "default", problems);
 
-        Remember(bindings, texts);
+        Remember(texts);
         return problems;
     }
 
@@ -175,7 +176,7 @@ sealed class ModKeyBindings(IReadOnlyList<ModKeyAction> actions)
         foreach (var action in actions) bindings.Set(action.Action);
         foreach (var action in actions) Lay(bindings, action, action.Defaults, "default", problems);
 
-        Remember(bindings, null);
+        Remember(null);
         return problems;
     }
 
@@ -198,19 +199,21 @@ sealed class ModKeyBindings(IReadOnlyList<ModKeyAction> actions)
     }
 
     /// <summary>
-    /// Keeps each action's keys now as its start's (<see cref="_start"/>) and its saved entry, from <paramref name="texts"/> in action order (null:
-    /// none).
+    /// Keeps each action's saved entry, from <paramref name="texts"/> in action order (null: none), and forgets what was touched: the keys laid now
+    /// are the start's.
     /// </summary>
-    void Remember(InputBindings bindings, List<string?>? texts)
+    void Remember(List<string?>? texts)
     {
-        _start.Clear();
+        _touched.Clear();
         _entries.Clear();
         for (int i = 0; i < actions.Count; i++)
-        {
-            _start[actions[i].Action] = InputBindings.Text(bindings.Get(actions[i].Action));
             if (texts?[i] is { } text) _entries[actions[i].Action] = text;
-        }
     }
+
+    /// <summary>
+    /// Notes that <paramref name="action"/>'s keys were set (<see cref="InputBindings.Set"/>).
+    /// </summary>
+    public void Touch(InputAction action) => _touched.Add(action);
 
     /// <summary>
     /// The saved text of <paramref name="action"/>; null when none was saved.
@@ -233,9 +236,10 @@ sealed class ModKeyBindings(IReadOnlyList<ModKeyAction> actions)
     }
 
     /// <summary>
-    /// <paramref name="saved"/> (copied) with the running mods' actions as they are now. An action at its start's keys gets back the entry it had
-    /// at the start (none stays none; Restore defaults leaves none); another is saved as text (empty: unbound), or dropped when it equals the mod's
-    /// defaults. A running mod's entries for actions it no longer has are dropped; other mods' are kept. Null when nothing is left.
+    /// <paramref name="saved"/> (copied) with the running mods' actions as they are now. An action the player has not touched since the start gets
+    /// back the entry it had then (none stays none; Restore defaults leaves none); a touched one is saved as text (empty: unbound), or dropped when its
+    /// keys are the mod's defaults (in any order). A running mod's entries for actions it no longer has are dropped while it still has an action;
+    /// other mods' are kept. Null when nothing is left.
     /// </summary>
     public Dictionary<string, Dictionary<string, string>>? Changes(InputBindings bindings, Dictionary<string, Dictionary<string, string>>? saved)
     {
@@ -246,12 +250,12 @@ sealed class ModKeyBindings(IReadOnlyList<ModKeyAction> actions)
             string now = InputBindings.Text(bindings.Get(action.Action));
             if (!result.TryGetValue(action.Owner, out var mine)) result[action.Owner] = mine = [];
 
-            if (now == _start.GetValueOrDefault(action.Action, ""))
+            if (!_touched.Contains(action.Action))
             {
                 if (_entries.TryGetValue(action.Action, out var entry)) mine[action.Name] = entry;
                 else mine.Remove(action.Name);
             }
-            else if (now == InputBindings.Text(action.Defaults.Distinct())) mine.Remove(action.Name);
+            else if (bindings.Get(action.Action).ToHashSet().SetEquals(action.Defaults)) mine.Remove(action.Name);
             else mine[action.Name] = now;
         }
         foreach (var (mod, mine) in result.ToList())

@@ -545,25 +545,29 @@ holds refuses the second mod.
   not touch the world; it returns the status line, and a throw shows as the status.
 - **Key actions:** `AddKeyAction(name, label, pressed, defaults)` (`ModKeyAction`, `src/Meitou.Game/Host/Input`) adds an action the player binds
   like the game's: a row `label [mod name]` on the settings' Controls page after the game's rows, in load order, rebound there as theirs are
-  (a key taken from another action, the game's or a mod's, leaves it, with the same notice; Delete unbinds). At start the game's bindings
-  are laid first (the player's saved ones included), then each mod action's saved keys, in load order, then the `defaults` (keys `Key.G`,
-  buttons `MouseButton.Button4`) of the actions with nothing saved, in load order; a key another action holds by then is left out with a log
-  line, so neither a default nor a returning mod takes a key the player chose. Escape, F6, Alt, Ctrl and Shift as defaults refuse the mod;
-  Insert (the console), Delete and Backspace (the page's unbind keys) are left out with a log line. Restore defaults lays every action's
-  defaults again. The player's changes are kept in `meitou.user.json` beside the game's (`modBindings`: mod id, `name`, keys as in
-  `bindings`; an empty value unbinds): an action at the keys it started with keeps the entry it had then (none stays none), a changed one is
-  written, or dropped when it equals the mod's defaults, Restore defaults drops them, a running mod's entries for actions it no longer has are
-  dropped, a mod not running keeps its entries, and `modBindings` is not written while it is empty. A key a mod's action took from a game
-  action stays off that game action after the mod is removed, as the game's own saved bindings say. A press reaches it only when the game
-  view gets the key: not while a text field, the console, the settings, the inspector or the interior editor has the keys, nor over the title
-  or a loading cover; it does arrive under a window without text input, with the F10 menu open while it takes no text, in the character
-  editor, and for the mouse's extra buttons in photo mode, as the game's own actions do; a numpad key bound to one is not the cinema camera's.
+  (a key taken from another action, the game's or a mod's, leaves it, with the same notice; Delete or Backspace unbinds). At start the game's
+  bindings are laid first (the player's saved ones included), then each mod action's saved keys, in load order, then the `defaults` (keys
+  `Key.G`, buttons `MouseButton.Button4`) of the actions with nothing saved, in load order; a key another action holds by then is left out with
+  a log line, so neither a default nor a returning mod takes a key the player chose. Escape, F6, Alt, Ctrl and Shift as defaults refuse the
+  mod; Insert (the console on the Vulkan host), Delete and Backspace (the page's unbind keys) are left out with a log line, and the page
+  refuses them for a mod's action as reserved. Restore defaults lays every action's defaults again, logging those left out. The player's
+  changes are kept in `meitou.user.json` beside the game's (`modBindings`: mod id, `name`, keys as in `bindings`; an empty value unbinds): an
+  action whose keys were not set on the page since the start keeps the entry it had then (none stays none, even when a saved key was left
+  out); one set there (rebound, unbound, or its key taken for another action) is written as its keys, or dropped when they are the mod's
+  defaults in any order; Restore defaults drops them; a running mod's entries for actions it no longer has are dropped while it still has a
+  key action (a mod updated to have none keeps them); a mod not running keeps its entries; and `modBindings` is not written while it is empty.
+  A key a mod's action took from a game action stays off that game action after the mod is removed, as the game's own saved bindings say. A
+  press reaches it only when the game view gets the key: not while a text field, the console, the settings, the inspector or the interior
+  editor has the keys, nor over the title or a loading cover; it does arrive under a window without text input, with the F10 menu open while
+  it takes no text, in the character editor, and for the mouse's extra buttons in photo mode, as the game's own actions do; a numpad key bound
+  to one is not the cinema camera's. On the Metal host F7, F8, F11, F12 and Print Screen are the view's own keys and never reach an action.
   Once per press, also while paused, `pressed(ModKeyContext)` (the `Snapshot` on screen, `Selected`, `Tick`, `Enqueue`) runs on the host
   thread at the control tick, so it must not touch the world, must not block, and queues commands for gameplay; `action.Held` is its state at
   the last control tick, for host-thread readers. A throw is logged with the mod id and the name and that action gets no more presses.
-  `name` (1 to 48 letters, digits, `_ . -`, unique within the mod) keys the saved keys; a bad name or a label over 48 characters or on more
-  than one line refuses the mod. The actions are numbered `InputAction` from `InputBindings.FirstModAction` (1000) in load order, for this
-  session only. Without key actions the bindings, the page and `meitou.user.json` are the game's. Engine API, not in the original.
+  `name` (1 to 48 letters, digits, `_ . -`, unique within the mod) keys the saved keys; a bad name, or a label that is empty or blank, over 48
+  characters or on more than one line, refuses the mod. The actions are numbered `InputAction` from `InputBindings.FirstModAction` (1000) in
+  load order, for this session only. Without key actions the bindings, the page and `meitou.user.json` are the game's. Engine API, not in the
+  original.
 - **Squad AI tab options:** in `Register`, `registration.AddSquadAiOptions(context => options)` adds tick buttons to the squad overview's AI
   tab, after the game's own and above Follow Formation; the tab's lines shrink to fit. The source runs on the host thread on every layout pass
   while the tab is open, so it must be cheap; a tick may be in flight, so it must not touch the world. It gets `UiSquadAiContext` (the

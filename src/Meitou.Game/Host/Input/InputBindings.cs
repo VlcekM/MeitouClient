@@ -465,7 +465,11 @@ public sealed class InputBindings
     /// <summary>
     /// Replaces an action's bindings (none unbinds it).
     /// </summary>
-    public void Set(InputAction action, params Binding[] bindings) => _map[action] = bindings;
+    public void Set(InputAction action, params Binding[] bindings)
+    {
+        _map[action] = bindings;
+        if (action >= FirstModAction) _mod?.Touch(action);
+    }
 
     /// <summary>
     /// Every action: the game's in order, then the code mods' (<see cref="FirstModAction"/> and up).
@@ -550,7 +554,7 @@ public sealed class InputBindings
     {
         SetEngineDefaults();
         OverlayGameControls();
-        _mod?.Reset(this);
+        foreach (var problem in _mod?.Reset(this) ?? []) Console.WriteLine($"mods      key action: {problem}");
     }
 
     /// <summary>
