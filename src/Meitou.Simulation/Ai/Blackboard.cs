@@ -295,8 +295,9 @@ public sealed class Blackboard
     /// <summary>
     /// The contract is a campaign's phase package (<c>AiSystem.InstallPhasePackage</c>): it ends by its class's finished test, as the original ends
     /// every override (<c>FUN_140272570</c> asks the override's +0x68 on each visit, <b>Verified</b>), so a retreat outlives its campaign until its
-    /// own test passes; <see cref="ContractEnd"/> is read only by the contract classes and <c>Contract_Timed</c> (<see cref="PackageClasses.OfOverride"/>).
-    /// A contract dialogue or a code mod started ends at its hours whatever its class (engine choice). Saved as
+    /// own test passes. No war or retreat class's finished test reads <see cref="ContractEnd"/>; of the finished tests checked, the contract classes'
+    /// do (<c>Contract_Timed</c> among them, <see cref="PackageClasses.OfOverride"/>) and the campaign's defence's. A contract dialogue or a code mod
+    /// started ends at its hours whatever its class (engine choice). Saved as
     /// <see cref="Saving.AiSave.PhaseKey"/>; hashed only while set.
     /// </summary>
     public bool PhaseContract { get; private set; }
@@ -460,6 +461,11 @@ public sealed class Blackboard
     /// through on the way is a stop too. Not saved, like the trader's other state.
     /// </summary>
     public CampaignTown TraderLeft { get; set; } = CampaignTown.None;
+    /// <summary>
+    /// A war assault package (20, 32) marked the members "ordered" on a package step (<c>AiSystem.StepWar</c>); the first step after it stops
+    /// running clears the marks. Not saved (nor are the marks); hashed only while set.
+    /// </summary>
+    public bool MarksOrdered { get; set; }
     /// <summary>
     /// A bar package started while its town was not loaded, so it holds no table yet and takes one once the town is loaded (the original's start
     /// needs the town's zone loaded and is run again by the target query until then, docs/game/ai-tasks.md "Hang-around-bar package"). Not saved:
@@ -846,6 +852,7 @@ public sealed class Blackboard
 
         // The package classes' own state, only once one has run (worlds without them hash as before).
         if (BarWaits) hasher.Add(0x62617277);
+        if (MarksOrdered) hasher.Add(0x4F726472);
         if (!Destination.IsNone)
         {
             hasher.Add(Destination.Site);

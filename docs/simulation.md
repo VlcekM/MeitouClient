@@ -543,8 +543,8 @@ the player has one and stands in it; requests (victory/loss chains, ally help) c
 - **Loaded**: campaign squads run a blackboard (the phase package, [platoon blackboards](#ai)), but their members keep engine minds and the campaign
   march moves them, as goal 215 is not acted out by the AI. Column (engine stand-in for goal 215, [campaigns](game/factions-squads-towns.md#campaigns)):
   the leader's trail is laid each look and follower i heads for its point i × slots × 150 / N back, also off screen, and the leader for the target
-  town's centre; in the original a follower's squad leader walks to the leader platoon's position, off screen to the target town, and the leader to
-  the town's waypoint point;
+  town's centre; in the original the leader walks to the town's waypoint point and, off screen, the followers head for the target town
+  ([campaigns](game/factions-squads-towns.md#campaigns));
   loaded followers jog, the leader marching out keeps its `travel speed loaded` (WALK walk, JOG run mode, RUN and GROUPED free, NO_SPEED_CHANGE
   as it was) while every intact platoon is within 6000, else it waits within 8294.4 of the target or walks. They fight through the normal aggro;
   arrival, timers and the 20 % rule run. **Observed** (headless, Dust Bandits, 4 squads of 49 at `raidSizeMult` 4, camera on the leader): the
@@ -1372,8 +1372,8 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   to the nearest (to the leader) NPC of the town's faction or an ally within the town's radius; none found, the finder `FUN_1408ca950` returns 0 (**Verified**: the goal is unwanted) and nothing is handed over until the next sweep. Each of its slaves then leaves for a "Wandering Squad" of its own, owned by the town's faction, caged in the nearest free cage of
   that faction or an ally (engine: the original's handover is a dialogue for event 39).
 - **Get in the cage** (172, a Slave AI Goal): a slave not held walks to the nearest free cage of its owner's faction in the 3x3 zone cells round it, in any town, and gets in.
-- **Packages** (`PackageClass` 8 to 11, rules in `AiSystem.Captives.cs` as the facts): cannibal retreat (1, 25), cannibals at home (27), prisoner gathering (10, 24), slave shipping (11,
-  28); the cannibal patrol (4) does not start while the town's cages
+- **Packages** (`PackageClass` 8 to 11, rules in `AiSystem.Captives.cs` as the facts): cannibal retreat (1, 25; it ends when the leader's status town is of the squad's faction, and for a squad whose
+  members are all dead, engine choice), cannibals at home (27), prisoner gathering (10, 24), slave shipping (11, 28); the cannibal patrol (4) does not start while the town's cages
   are full. A squad's slaves are its live slave members in slave state 1 (engine reading of the platoon's slave list).
 - **Capture** (167, `CaptiveSystem.Capture.cs`; facts: [slave work, shout and capture](game/ai-tasks.md#slave-work-shout-and-capture)): started by a standing (posture 0) capturer with one working arm (the lift needs the left); the nearest (3D) downed, uncarried, uncaged character on its sensed list that is
   not of the capturer's side (engine reading of the sensed-class masks; the entries not tagged ally, then whoever within sight the capped block lacks that passes `SightMap.Sees`: `CharacterFacts.Perceives`, shared with the medic finder; so none in another building unless either stands on top; 168's carry the same, its mask excluding imprisoned instead of ally), no slave (state 1), not law enforcement, trader or diplomat and not shackled. The capturer walks to it, strips the `hip` and
@@ -1915,7 +1915,7 @@ off screen only come back where their schedule puts them ([off-screen tier](#off
 (`AiSystem.Packages.cs`) the wandering trader (16), passing-by assault (29), occupation (30) and refugee (22: a slave-led squad of fewer than 3 flees to the nearest other town of its faction, a broken one joins a healthy squad there, `SquadManagement.Merge`) as decoded, and the campaign classes
 (war 19, 20, 32 and the defence 31; only a campaign gives them in the data) with their finished tests ([ai](game/ai.md#package-classes)); they start only as a
 campaign's override (engine choice: the original's can-start is always true, so a template slot listing one would start it; none does in the data). The war
-classes finish once their platoon is out of its campaign, and the war assault (20, 32) marks every member "ordered" on the package cadence whoever moves the squad
+classes finish once their platoon is out of its campaign, and the war assault (20, 32) marks every member "ordered" on the package cadence whoever moves the squad, and the first step after it stops running clears the marks
 (`AiSystem.StepWar`, so a blow at one books no Assault, [economy](game/economy.md)); the defence's start sets its mission town but not its target town, and the war
 classes' start (mission town, the leader platoon as a follower's mission target, jobs 5 / 6) is not set: the campaign march moves those squads (engine stand-in).
 - **Current town** (`Blackboard.InTown`, on the package cadence before the choice): nearest town by X/Z, placed towns by `TownData.Radius`, player towns by their

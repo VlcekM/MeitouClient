@@ -933,7 +933,10 @@ public sealed partial class AiSystem
     /// <summary>
     /// The war classes' update on the package cadence, whoever moves the squad: a war assault (20, 32) marks every member "ordered"
     /// (<see cref="CharacterCold.Ordered"/>; <c>FUN_14028a4e0</c>, <b>Verified</b>: each update, no other condition), so a blow at one books no
-    /// Assault; the campaign's defence without a mission town runs its start again (its update <c>FUN_140291410</c>, <b>Verified</b>).
+    /// Assault, and the first step after it stops running (ended, replaced or swapped) clears the marks of the squad's members
+    /// (<see cref="Blackboard.MarksOrdered"/>; engine stand-in for the original's clear at each task end, <c>FUN_1405c91c0</c>, which lets the mark
+    /// lapse soon after the package stops renewing it); the campaign's defence without a mission town runs its start again (its update
+    /// <c>FUN_140291410</c>, <b>Verified</b>).
     /// </summary>
     void StepWar(World world, Squad squad, Blackboard board)
     {
@@ -941,22 +944,27 @@ public sealed partial class AiSystem
         {
             case PackageClass.WarAssault:
             case PackageClass.WarAssaultCannibal:
-                MarkOrdered(world, squad);
-                break;
+                SetOrdered(world, squad, true);
+                board.MarksOrdered = true;
+                return;
             case PackageClass.CampaignDefend when board.ContractTown.IsNone:
                 CampaignDefendStart(world, squad, board);
                 break;
         }
+
+        if (!board.MarksOrdered) return;
+        SetOrdered(world, squad, false);
+        board.MarksOrdered = false;
     }
 
     /// <summary>
-    /// Sets the "ordered" status of every member of <paramref name="squad"/>.
+    /// Sets or clears the "ordered" status of every member of <paramref name="squad"/>.
     /// </summary>
-    static void MarkOrdered(World world, Squad squad)
+    static void SetOrdered(World world, Squad squad, bool on)
     {
         var table = world.Characters;
         foreach (var m in squad.Members)
-            if (table.TryResolveNext(m, out int s)) table.Cold(s)!.Ordered = true;
+            if (table.TryResolveNext(m, out int s)) table.Cold(s)!.Ordered = on;
     }
 
     #endregion

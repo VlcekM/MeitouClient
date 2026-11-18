@@ -915,10 +915,11 @@ campaign is not hostile, or that is not active (slot 70); a redirected request d
 - Packages: phase 0 `pt1 AI`, 1 `pt2 AI`, 2 `retreat AI`; the leader platoon uses `... leader`, others `... others` (else the leader's).
   Installed (`FUN_140272570`, **Verified**) at the platoon's next AI update: when the phase's package differs from the blackboard's override
   (+0x210) the old one is torn down (dialogue event 30 on the leader) and the new one built by its `signal func` (0 → 33 Contract_Timed),
-  timed for 24 h and run ahead of the template's packages until its finished test passes (WarBase: the platoon is out of the campaign). The 24 h
-  (+0x218) is read only by the finished tests of the contract classes (`Contract_Timed` `FUN_140286e10`, `Contract_DefendPlayerBase` `FUN_140289720`,
+  timed for 24 h and run ahead of the template's packages until its finished test passes (WarBase: the platoon is out of the campaign). Of the finished
+  tests, the contract classes' read the 24 h (+0x218) (`Contract_Timed` `FUN_140286e10`, `Contract_DefendPlayerBase` `FUN_140289720`,
   `Campaign_DefendPlayerBase` `FUN_14028a760`); no war or retreat class reads it, so once the campaign no longer gives the package (removed, or the
-  platoon unmapped) the override stays until its own test passes and a retreat outlives the campaign (**Verified**, `FUN_140272570`). Retreat and refresh
+  platoon unmapped) the override stays until its own test passes and a retreat outlives the campaign (**Verified**, `FUN_140272570` and each war,
+  retreat and defence class's finished test; the Faction tab's "Expires in" reads the same time). Retreat and refresh
   (5) is finished once the platoon is intact (`FUN_1402871e0`, **Verified**), so an intact platoon in phase 2 has it installed and ended in the same
   walk on every visit, each time with event 30, and runs its template's packages (as the walk above runs it).
   Classes by `signal func` (**Verified**): 19 Package_WarBase (pt1 "Military Assemble leader/forces"; activate sets job 5 TRAVEL_TARGET
@@ -952,7 +953,6 @@ campaign is not hostile, or that is not active (slot 70); a redirected request d
   Loaded (`GatherAndMove`, **Verified**): each run the leader's trail gains its position when over 150 from the newest point (seeded with slots + 1
   points within ±100; slots 5, or N + 1 past N platoons) and drops its oldest while longer than N; follower i's point is i × slots × 150 / N back
   along it, measured from the leader platoon's own position, the last segment extended past the oldest point (`FUN_1409d5990`, `FUN_1409d6070`).
-  The point is computed every run, but no on-screen act-out walks to it (**Observed**, below).
   Task 215 TRAVEL_TO_TARGET_PACKAGE ("Mission formation", `Task_TravelToMissionTarget_ArmyFormation`, vtable `0x1416be120`; **Verified** by disassembly of
   its TaskData registration and of `FUN_140349e70`): desire a constant 1.0 (AI slot 57), no target finder, flags 0x61, list A 131 `atPackageTarget`,
   list B !26. Only the Leader roles of the pt1 packages list it, so in each platoon its squad leader runs it and the members follow their squad
@@ -967,10 +967,9 @@ campaign is not hostile, or that is not active (slot 70); a redirected request d
   The campaign leader's package target is the campaign's town, so it walks to the town's waypoint point (Town vfunc 0x38, `FUN_140927120`, cached
   on a timer): for a town with gates 200 outward through its first gate or wall with an interior (vfunc 0x290 with 200, `TownExit`), else 3 × (A − B)
   beyond the first door of the building `FUN_1409b2ab0` finds at the town's position, else the town's position. A follower platoon's mission target is
-  the leader platoon's own hand (`FUN_1409d5020`), which resolves, so its squad leader walks to the leader platoon's position (Platoon vfunc 0x38 →
-  +0x48, refreshed from its active squad) and the trail point beside the hand is not used (**Observed**: `FUN_140284510` resolves kind 0x22 through
-  the platoon list and refuses a platoon for kind 1; that a platoon's own hand has kind 0x22, the platoon's object type, is the reading the formation
-  code relies on, as it lays the trail only when that hand resolves). Meitou (`PopulationCampaigns.StepCampaignLoaded`, engine stand-in until 215 is
+  the leader platoon's own hand with a zero point (`FUN_1409d5020`), which the war class's mission-target slot pairs with its trail point
+  (`FUN_14028fb10`); the hand resolver (`FUN_140284510`) finds a kind-0x22 hand through the platoon list and refuses a platoon for kind 1
+  (**Verified**). Meitou (`PopulationCampaigns.StepCampaignLoaded`, engine stand-in until 215 is
   acted out by the AI): the leader walks to the town's centre, followers to their trail points, both off screen and loaded (`MoveCampaigns`; its trail point is measured from the trail's newest point and stops at
   its oldest); a
   follower's squad leader takes the campaign leader's speed mode inside 100, capped by `CharacterCold.PaceCap` = the campaign leader's velocity now,

@@ -3662,8 +3662,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             PackageClass.PassingAssault => _system.AssaultCanStart(_world, _squad, board),
             PackageClass.Refugee => RefugeeCanStart(_world, _squad),
 
-            // The war classes and the campaign's defence start only as a campaign's override (engine choice, Meitou's rule before they were built; the
-            // original's can-start is always true, FUN_140287690 and FUN_140286e00, which matters only to a template slot listing one: none in the data).
+            // The war classes and the campaign's defence start only as a campaign's override (engine choice, Meitou's rule before they were built;
+            // the original's can-start is always true, FUN_140287690 and FUN_140286e00, which matters only to a template slot listing one: none in
+            // the data).
             _ => false,
         };
 

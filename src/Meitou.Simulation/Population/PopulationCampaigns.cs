@@ -1486,9 +1486,9 @@ public sealed partial class PopulationSystem : IStateHashed
 
     /// <summary>
     /// Whether a loaded platoon of a cannibal assault carries enough to retreat (<c>FUN_14028fdf0</c>, <b>Verified</b>; it first runs the war
-    /// assault's update, the "ordered" marks, which the AI's package step gives, <c>AiSystem.StepWar</c>): each platoon counts its own carriers and keeps its own stamp of the first one, cleared
-    /// while nobody (or no loaded squad) carries; any platoon with three carriers, or more than <see cref="CannibalCarryHours"/> since its first,
-    /// ends the campaign's assault.
+    /// assault's update, the "ordered" marks, which the AI's package step gives, <c>AiSystem.StepWar</c>): each platoon counts its own carriers
+    /// and keeps its own stamp of the first one, cleared while nobody (or no loaded squad) carries; any platoon with three carriers, or more than
+    /// <see cref="CannibalCarryHours"/> since its first, ends the campaign's assault.
     /// </summary>
     bool CannibalsLoaded(World world, CampaignInstance inst, double now)
     {
@@ -1820,8 +1820,10 @@ public sealed partial class PopulationSystem : IStateHashed
     /// </summary>
     internal bool HostileAgainstPlayer(World world)
     {
+        if (_wars is null) return false;   // no war manager made yet (the AI can ask before the population's first check)
+
         int player = PlayerFactionOf(world);
-        foreach (var m in _wars!)
+        foreach (var m in _wars)
         {
             foreach (var a in m.Actives)
                 if (a.Phase != 2 && a.Enemy == player && CampaignOf(a.CampaignId) is { IsHostile: true }) return true;
