@@ -101,10 +101,27 @@ public static class CollisionPaths
     }
 
     /// <summary>
-    /// The enabled mods' rebinds, by the resource index they were read with (<see cref="GameResources.For"/> makes a new one when <c>mods.cfg</c>
-    /// changes), so the collision lookups read them once instead of once per file.
+    /// The enabled mods' rebinds and each XML's rebound file, by the resource index they were read with (<see cref="GameResources.For"/> makes a
+    /// new one when <c>mods.cfg</c> changes), so the collision lookups read the rebinds once and work out each file's rebind once.
     /// </summary>
-    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<OgreScriptResources, ReKenshiRebinds> RebindsByIndex = new();
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<OgreScriptResources, ReboundFiles> RebindsByIndex = new();
+
+    /// <summary>
+    /// One resource index's rebinds and the files worked out so far (null: hidden).
+    /// </summary>
+    sealed class ReboundFiles(ReKenshiRebinds rebinds)
+    {
+        /// <summary>
+        /// The enabled mods' rebinds.
+        /// </summary>
+        public ReKenshiRebinds Rebinds { get; } = rebinds;
+
+        /// <summary>
+        /// Each XML found and the file read for it; null (not made) when no mod rebinds a file.
+        /// </summary>
+        public System.Collections.Concurrent.ConcurrentDictionary<string, string?>? Files { get; } =
+            rebinds.IsEmpty ? null : new(StringComparer.Ordinal);
+    }
 
     /// <summary>
     /// The XML the game opens through Ogre when no cooked file of its name exists, or the file an enabled mod rebinds it to
@@ -112,15 +129,18 @@ public static class CollisionPaths
     /// </summary>
     static string? Rebound(GameInstall install, OgreScriptResources resources, string xml)
     {
-        if (!RebindsByIndex.TryGetValue(resources, out var rebinds))
+        if (!RebindsByIndex.TryGetValue(resources, out var rebound))
         {
-            rebinds = ReKenshiRebinds.For(install);
-            RebindsByIndex.AddOrUpdate(resources, rebinds);
+            rebound = new ReboundFiles(ReKenshiRebinds.For(install));
+            RebindsByIndex.AddOrUpdate(resources, rebound);
         }
-        if (rebinds.IsEmpty) return xml;
+        if (rebound.Files is not { } files) return xml;
+        if (files.TryGetValue(xml, out var known)) return known;
 
-        string target = rebinds.Redirect(xml);
-        return ReferenceEquals(target, xml) || File.Exists(target) ? target : null;
+        string target = rebound.Rebinds.Redirect(xml);
+        string? result = ReferenceEquals(target, xml) || File.Exists(target) ? target : null;
+        files.TryAdd(xml, result);
+        return result;
     }
 
     /// <summary>
