@@ -2001,8 +2001,10 @@ public sealed partial class FixtureRegistry
 
         if (releaserFaction >= 0 && crimes is not null && crimes.Factions.Books(releaserFaction) && c.Bounties is { } ledger)
         {
-            if (ledger.BookedFor(crimes.Factions.Relations, releaserFaction) is { } a) CrimeSystem.ClearBounty(world, s, c, ledger, a);
-            if (cage is not null && ledger.BookedFor(crimes.Factions.Relations, cage.Owner) is { } b) CrimeSystem.ClearBounty(world, s, c, ledger, b);
+            if (ledger.BookedFor(crimes.Factions.Relations, releaserFaction) is { } a)
+                CrimeSystem.ClearBounty(world, s, c, ledger, a);
+            if (cage is not null && ledger.BookedFor(crimes.Factions.Relations, cage.Owner) is { } b)
+                CrimeSystem.ClearBounty(world, s, c, ledger, b);
         }
 
         Clear(c);

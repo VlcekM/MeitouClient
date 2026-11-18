@@ -343,7 +343,8 @@ public sealed partial class DialogueSystem
     /// </summary>
     void ClearBounties(World world, CharacterCold mc, CharacterId target, int wanted, CharacterCold tc, Crime.BountyLedger ledger)
     {
-        if (ledger.BookedFor(_data.Relations, mc.Faction) is { } entry) Crime.CrimeSystem.ClearBounty(world, wanted, tc, ledger, entry);
+        if (ledger.BookedFor(_data.Relations, mc.Faction) is { } entry)
+            Crime.CrimeSystem.ClearBounty(world, wanted, tc, ledger, entry);
         if (Position(world, target) is { } at && TownAt(at) is >= 0 and var town && town < _data.SiteFactions.Count
             && ledger.BookedFor(_data.Relations, _data.SiteFactions[town]) is { } local)
             Crime.CrimeSystem.ClearBounty(world, wanted, tc, ledger, local);

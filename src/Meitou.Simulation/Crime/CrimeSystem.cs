@@ -141,9 +141,12 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             if (viaWrapper) c.Freed = false;
             return true;
         }
-        if (c.Pending is { } replaced) Lapsed(world, culprit, replaced);
+        var replaced = c.Pending;
         c.Pending = new PendingCrime { Code = code, VictimFaction = victimFaction, Victim = victim, VictimHolder = victimHolder, Timer = timer };
         if (viaWrapper) c.Freed = false;
+
+        // the crime of another code it replaced ended, told once the new one is set
+        if (replaced is not null) Lapsed(world, culprit, replaced);
         Note(world, CrimeEventKind.Pending, culprit, code, victimFaction, 0, CharacterId.None);
         return true;
     }
