@@ -219,9 +219,18 @@ public sealed unsafe partial class TerrainDecalRenderer
                     if (n.y < 0.8) discard;
                     fade = 1.0 - smoothstep(0.2, 0.4, height);
                 }
+                else if (n.y > 0.8)
+                {
+                    // A splash on a floor: the centre keeps the victim's height, so on a sloped floor it lands up to 1.5 below the floor or 2.2 above
+                    // it. Tested as a wall, a centre a little above the floor cut a hard disc (radius 20 × its height) and one under it drew nothing.
+                    float above = -rel.y;
+                    if (above < -1.5) discard;
+                    float reach = max(vShape.x, vShape.y);
+                    fade = 1.0 - smoothstep(max(0.5 * reach, 2.5), max(reach, 3.5), above);
+                }
                 else
                 {
-                    // A splash: any surface that faces the mark, within the mark's half size of it along the surface's normal.
+                    // A splash on a wall: any surface that faces the mark, within the mark's half size of it along the surface's normal.
                     if (dot(n, -rel) < 0.05 * dist) discard;
                     float reach = max(vShape.x, vShape.y);
                     fade = 1.0 - smoothstep(0.5 * reach, reach, abs(dot(rel, n)));
