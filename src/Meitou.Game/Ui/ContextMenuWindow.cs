@@ -351,7 +351,8 @@ sealed class ContextMenuWindow(PlayerInterface player)
     /// <see cref="FollowOrder.Guard"/>), its inventory opened beside the selection's (26, labelled Trade for the player's own), and picked up (225),
     /// standing too when it carries no one (<c>FUN_1407a6bc0</c>, <b>Observed</b>). A selected one crawling by choice gets Stand Up (28, the
     /// selection's order). A member of a squad the player does not lead (<see cref="PlayerInterface.Independent"/>, Meitou only) keeps its own
-    /// inventory and carries on standing: it is picked up only while down and gets no Trade.
+    /// inventory and carries on standing: it is picked up only while down and gets no free Trade (26); a standing one keeping a shop a code mod
+    /// gave its squad (<see cref="CharacterSnapshot.IsTrader"/>) gets the paid Trade first.
     /// </summary>
     void OwnCharacterVerbs(List<(string, Action)> verbs, CharacterSnapshot target, IReadOnlyList<CharacterId> selection, bool down)
     {
@@ -365,6 +366,11 @@ sealed class ContextMenuWindow(PlayerInterface player)
 
             return;
         }
+
+        // A member of an independent squad keeping a shop a code mod gave it (Meitou only): the paid Trade, sent by the selected standing character
+        // nearest it, as an NPC trader's.
+        if (independent && target.IsTrader && !down && NearestSelected(target.Position, player.Selected().Where(c => !c.Down)) is { } customer)
+            verbs.Add(("Trade", () => player.Say(new Simulation.Trading.OpenTrade(customer.Id, id) { Tick = player.Session.World.Tick })));
 
         // Bodyguard (45): follows and defends the target; with Shift it is the Bodyguard job (SquadPanel). Not for a down one, carried or not
         // (docs/game/ui-input.md "Context menu verbs").

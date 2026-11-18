@@ -124,7 +124,8 @@ character: within `HeldItems.GiveRange` 1000 of its window's owner, `StealRange`
   (`TradeSystem.TakeBags`; engine choice: the goods then stay in the squad's stock, as a trader squad's, whose pack animals get no load of their own). A
   housed squad without a shop trades from its home's stock containers through a building shop's window for that trade (none without containers).
 - Meitou (the right-click Trade verb, engine): a member of a shop squad, or of a homeless squad whose template has `vendors` (a Caravan), whose record sets `is trader` or whose
-  dialogue reaches a Trade line (`DialogueSet.Trades`, conditions not checked). A trader held in a cage or on a pole offers no Trade (engine choice, #641); an open trade stays open when its trader is caged, as the original's ([closing a trade](#trading-range)).
+  dialogue reaches a Trade line (`DialogueSet.Trades`, conditions not checked); and every member of an independent squad of the player's
+  faction that a code mod gave a shop ([player shops](../simulation.md#player-shops-meitou-only), Meitou only). A trader held in a cage or on a pole offers no Trade (engine choice, #641); an open trade stays open when its trader is caged, as the original's ([closing a trade](#trading-range)).
 - A shop squad can have several traders: Flotsam Village's armoury (50348-rebirth.mod, 3 Flotsam Ninja + 3 Flotsam Refugee) has three same-named Flotsam Refugee traders, since the
   refugee's dialogue package reaches Trade under `IS_A_TRADER` and `IN_MY_BUILDING` only (**Verified**: the original's METARU save holds the same 6 members, and the dialogue data; #180).
 - The context menu's pick-up verb tests "not a trader" with `FUN_1405cff70` itself (`FUN_140796f80`, **Verified**), so any member of a trader squad counts, guards included. Meitou: `World.VerbFactsOf` reads the squad template's `is trader`.
@@ -772,7 +773,7 @@ Roll convention: a `rand()` draw in [0, 1) against the chance p; the thief gets 
   it (`FUN_140792830`) or the owner's faction `fundamental type` is 8 (Bandit) or 9 (Adventurer); 1.1 when the trader's faction is not allied to the owner's (`FUN_1406b2630`) and the owner's
   home town (vfunc 0x98, `Ownerships::_homeTown` +0x30) is not the town the trader is in (vfunc 0x78, `getCurrentTownLocation`). Otherwise p = lerp(thievery/100, 0.4, 1.25), x0.5 when the
   owner's faction is the trader's, x0.5 again when the owner is in the trader's platoon (`C` only).
-  Meitou (`TradeSystem.FenceOdds`): the owner is `ItemInstance.Owner` with the squad it was in when robbed (`OwnerSquad`, standing for `C`/`CS`), set where taking from a character is a
+  Meitou (`TradeSystem.FenceOdds`, the player-faction trader of a code mod's [player shop](../simulation.md#player-shops-meitou-only) included): the owner is `ItemInstance.Owner` with the squad it was in when robbed (`OwnerSquad`, standing for `C`/`CS`), set where taking from a character is a
   theft (`CarrySystem`, `HeldItems`). A theft of a building's goods (an item of its container, a loose item of its slot) names the building's owner too: the original's
   `ownedby` is the bar's barman, the first member of the squad living there (**Observed**, plain game, The Hub's bar: the barrel's item had a null `ownedby` before the theft and the barman's
   handle after it, "Stolen from: Barman"; the bar's loose items name him before any theft). Meitou
@@ -796,7 +797,7 @@ Roll convention: a `rand()` draw in [0, 1) against the chance p; the thief gets 
   (`FUN_140713d20`, none while that resident is down) or a give (`FUN_140712490`) and code 10 on a drag out of the window (`FUN_140715560`); out of a character's window the right click sets Looting 10 instead when the owner is down and the loot permission fails, and the drag 3 then; and picking an item up from the ground (`FUN_14034f340`, **Observed**) while standing inside a building when the item's owner (a character, `ownedby`) is of another, real faction: against the faction of the
   building the picker stands in, no roll, thievery XP 20 (generic entry with amount 20) once the item is in the bag. Meitou: the steal roll (`CrimeSystem.Steal`) and `StolePickUp`.
 - **Smuggling check** (`FUN_140794e80(trader, out, item)`, **Observed**; Meitou builds the refusal and event 8, `TradeSystem.Smuggling`, and the held item's prompt in `PlayerInterface.AddFencePrompt`, not the smuggler's answer): for a trader of a non-player faction with a town, the item is illegal when the culture of the **town's faction**
-  (`Faction+0x90`, not the town's own culture) lists it. A trader that does not buy illegal goods (`+0xed` clear) refuses an illegal item: result 0, shown as "Attempted smuggling!" (code 0xf), with event 8 unless the item is the trader's own
+  (`Faction+0x90`, not the town's own culture) lists it (Meitou: `TradeSystem.IsIllegal`, so never at a player shop). A trader that does not buy illegal goods (`+0xed` clear) refuses an illegal item: result 0, shown as "Attempted smuggling!" (code 0xf), with event 8 unless the item is the trader's own
   stolen property; a legal item passes (1). A smuggler (`+0xed` set) answers 2 for a legal item and 1 for an illegal one (the answer 2 is read by no caller seen; "Smugglers only buy illegal goods." is code 0xe).
   "What is that a uniform? I don't want that!" (code 0x10) is posted by a function not found.
 

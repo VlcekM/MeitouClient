@@ -15,7 +15,8 @@ namespace Meitou.Simulation.Saving;
 /// <c>[]</c> when sold out, and always for a building shop, whose goods are saved with its containers) and <c>meitou shop fills</c>
 /// (<see cref="Shop.Fills"/>, the next fill's roll key). The purse is the platoon's <c>money</c>. A save without <c>meitou shop</c> (the original's)
 /// keeps a building shop as filled, its goods in its containers, until its <c>inventory refresh time</c>; a squad shop there gets a fresh fill. An older Meitou save kept a building shop's stock under the key with its containers empty: read, it goes to the containers
-/// (<see cref="ShopView.Adopt"/>).
+/// (<see cref="ShopView.Adopt"/>). A player squad's shop a code mod gave it (<see cref="SetSquadShop"/>) is saved on its player platoon under
+/// Meitou keys only (<see cref="WritePlayer"/>); its purse is the squad's own (<see cref="ModSquadSave"/>).
 /// </summary>
 internal static class ShopSave
 {
@@ -23,6 +24,10 @@ internal static class ShopSave
     /// The PLATOON keys: the original's restock time, and Meitou's stock and fill key.
     /// </summary>
     public const string RefreshKey = "inventory refresh time", StockKey = "meitou shop", FillsKey = "meitou shop fills";
+    /// <summary>
+    /// A player platoon's further shop keys: the next restock in absolute game hours, the mod that gave the shop and its template.
+    /// </summary>
+    public const string PlayerRestockKey = "meitou shop restock", OwnerKey = "meitou shop owner", TemplateKey = "meitou shop template";
     /// <summary>
     /// The rows of the grid an older save's building shop stock is read into (its packed stock was at most a few hundred rows high).
     /// </summary>
@@ -89,6 +94,59 @@ internal static class ShopSave
     {
         double hours = Math.Clamp(platoon.Floats.GetValueOrDefault(RefreshKey) - world.GameHours, 0, template.VendorsRefreshTime);
         shop.NextRestockTick = world.Tick + (long)Math.Ceiling(hours / BodySystem.HoursPerTick);
+    }
+
+    /// <summary>
+    /// Writes a player squad's shop over its platoon's Meitou keys (the stock as <see cref="Write"/> writes a squad shop's, the fill count, the
+    /// restock time, the owner and template while named); a squad without one loses them, so a vanilla platoon's record is left as it was.
+    /// </summary>
+    public static void WritePlayer(FcsRecord platoon, Squad squad, World world)
+    {
+        if (squad.Shop is not { } shop)
+        {
+            platoon.Strings.Remove(StockKey);
+            platoon.Ints.Remove(FillsKey);
+            platoon.Floats.Remove(PlayerRestockKey);
+            platoon.Strings.Remove(OwnerKey);
+            platoon.Strings.Remove(TemplateKey);
+            return;
+        }
+
+        platoon.Strings[StockKey] = ContainerSave.Write(shop.Stock) ?? "[]";
+        platoon.Ints[FillsKey] = shop.Fills;
+        platoon.Floats[PlayerRestockKey] = (float)(world.GameHours + (shop.NextRestockTick - world.Tick) * BodySystem.HoursPerTick);
+        WriteName(platoon, OwnerKey, squad.ShopOwner);
+        WriteName(platoon, TemplateKey, squad.ShopTemplate);
+    }
+
+    /// <summary>
+    /// Sets the string <paramref name="key"/> to <paramref name="value"/>, or removes it for none.
+    /// </summary>
+    static void WriteName(FcsRecord platoon, string key, string? value)
+    {
+        if (value is not null) platoon.Strings[key] = value;
+        else platoon.Strings.Remove(key);
+    }
+
+    /// <summary>
+    /// The shop a Meitou save holds for a loaded player squad (<see cref="WritePlayer"/>), its owner and template noted on the squad; null without
+    /// one. As <see cref="Trading.TradeSystem"/> makes it: a squad shop with the template's terms, its restock at most one refresh away.
+    /// </summary>
+    public static Shop? ReadPlayer(World world, Squad squad, FcsRecord platoon, PopulationData data)
+    {
+        if (!platoon.Strings.TryGetValue(StockKey, out var text)) return null;
+
+        squad.ShopOwner = platoon.Strings.GetValueOrDefault(OwnerKey) is { Length: > 0 } owner ? owner : null;
+        squad.ShopTemplate = platoon.Strings.GetValueOrDefault(TemplateKey) is { Length: > 0 } id ? id : null;
+        var template = squad.ShopTemplate is { } named ? TradeSystem.TemplateRecord(data, named) : null;
+        var shop = new Shop { Terms = TradeSystem.TermsOf(squad, template), Fills = platoon.Ints.GetValueOrDefault(FillsKey) };
+        ContainerSave.Read(text, shop.Stock, data.Items);
+
+        double hours = Math.Max(platoon.Floats.GetValueOrDefault(PlayerRestockKey) - world.GameHours, 0);
+        if (template is { HasShop: true }) hours = Math.Min(hours, template.VendorsRefreshTime);
+
+        shop.NextRestockTick = world.Tick + (long)Math.Ceiling(hours / BodySystem.HoursPerTick);
+        return shop;
     }
 
     /// <summary>

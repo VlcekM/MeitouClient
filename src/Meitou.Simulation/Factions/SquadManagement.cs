@@ -263,7 +263,7 @@ public static class SquadManagement
     /// Whether a command naming the mod <paramref name="named"/> may change a squad setting <paramref name="owner"/> holds: one no mod holds, a
     /// command naming no mod, or the holder itself. Another mod's setting is left alone, so mods marking the same squad never undo each other's.
     /// </summary>
-    static bool MayChange(string? owner, string? named) => owner is null || named is not { Length: > 0 } || named == owner;
+    internal static bool MayChange(string? owner, string? named) => owner is null || named is not { Length: > 0 } || named == owner;
 
     /// <summary>
     /// Sets or clears <see cref="Squad.Uncounted"/> on a squad of the player's faction, noting the mod that set it.

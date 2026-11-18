@@ -137,7 +137,8 @@ public sealed class Squad
     /// </summary>
     public long Money { get; set; }
     /// <summary>
-    /// The squad's shop, when it is a trader (<see cref="Trading.TradeSystem"/>); null otherwise.
+    /// The squad's shop, when it is a trader (<see cref="Trading.TradeSystem"/>), or a squad of the player's faction a code mod gave one
+    /// (<see cref="Trading.SetSquadShop"/>); null otherwise.
     /// </summary>
     public Trading.Shop? Shop { get; set; }
     /// <summary>
@@ -225,6 +226,17 @@ public sealed class Squad
     /// (<see cref="SquadManagement.DropUnownedDormant"/>). Saved, hashed while set.
     /// </summary>
     public string? DormantOwner { get; set; }
+    /// <summary>
+    /// The code mod that gave this player squad its shop (<see cref="Trading.SetSquadShop"/>, its manifest id); null: none named, or no shop. A load
+    /// without that mod running ends the shop (<see cref="Trading.TradeSystem.DropUnownedShops"/>). Meitou only; saved, hashed while set.
+    /// </summary>
+    public string? ShopOwner { get; set; }
+    /// <summary>
+    /// The SQUAD_TEMPLATE a code mod named for this player squad's shop (<see cref="Trading.SetSquadShop"/>): its trade terms, and its fills and
+    /// restocks when it is a trader's with vendor lists; null: none (terms of no template, stock the mod's own). Meitou only; saved, hashed while
+    /// set.
+    /// </summary>
+    public string? ShopTemplate { get; set; }
     /// <summary>
     /// The package it ran when it left the world (a kept or saved squad's), until the AI attaches a blackboard: an occupation goes on
     /// (<see cref="Ai.AiSystem"/>).
@@ -426,6 +438,8 @@ public sealed class SquadRegistry
             if (s.PurseOwner is { } purseOwner) hasher.Add(Rng.StableHash(purseOwner));
             if (s.Dormant) hasher.Add(0x446F726D);
             if (s.DormantOwner is { } dormantOwner) hasher.Add(Rng.StableHash(dormantOwner));
+            if (s.ShopOwner is { } shopOwner) hasher.Add(0x53686F70 ^ Rng.StableHash(shopOwner));
+            if (s.ShopTemplate is { } shopTemplate) hasher.Add(Rng.StableHash(shopTemplate));
             hasher.Add(s.Members.Count);
             foreach (var m in s.Members)
             {

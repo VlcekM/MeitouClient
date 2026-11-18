@@ -399,8 +399,22 @@ holds refuses the second mod.
 - **Squad purses** (`Meitou.Simulation.Factions`): `SetSquadPurse(squadId, own, Owner: context.Id)` gives a squad of the player's faction its own
   purse (`Squad.OwnPurse`, its `Squad.Money`): its members pay an NPC-style purchase (a shopper buying from a building's stock) from it
   instead of the player's money, and a shop the squad owns keeps its takings in it, so a shopkeeper keeps its own earnings. The trade window
-  still uses the player's money. Ending it pours what is left into the player's money. Saved with the squad; a load without the owner mod
-  running ends it the same way, with a notice. Engine API, not in the original.
+  pays from the player's money (into and out of this purse when the squad keeps a player shop, below). Ending it pours what is left into the
+  player's money. Saved with the squad; a load without the owner mod running ends it the same way, with a notice. Engine API, not in the
+  original.
+- **Player shopkeepers** (`Meitou.Simulation.Trading`, [rules](simulation.md#player-shops-meitou-only)): `SetSquadShop(squadId, on, Template,
+  Owner: context.Id)` gives a squad of the player's faction a shop the player's characters trade with in the ordinary trade window, as with an
+  NPC trader: while the squad is independent (`SetSquadAutonomy(..., Independent: true)`) every member offers Trade in its right-click menu and
+  trades on a quick right click. Put the shopkeeper in a squad of its own to have one keeper. The shop trades against the squad's own purse,
+  which the command gives it (empty) when it has none: the player pays into it and is paid from it at the ordinary prices, so trading with the
+  faction's own shop makes and loses no money, and no fill or restock sets the purse. Fund it, if the mod wants the shop to buy, by setting
+  `Squad.Money` once `Squad.Shop` is set. `Template` names a SQUAD_TEMPLATE for the terms (`buy mult`, buys stolen and illegal goods); when it is
+  a trader's with vendor lists the stock is filled now and restocked every `vendors refresh time` hours, else the stock is the mod's own: add
+  items to `Squad.Shop.Stock` (`Inventory.Add`, items from `context.Population.Items.Create`) in a serial phase, one tick after the command.
+  NPC shoppers do not buy there (they buy only from shop buildings' containers; the player's shop counters are that route). A second `on` for
+  a squad that has a shop only notes the owner; end it first to change the template. Off, or a load without the owner mod running (with a
+  notice), closes the shop and puts its goods into the members' inventories where they fit; the purse stays. Saved with the squad; several
+  mods each keep their own shopkeepers, and one mod's shop is left alone by another's command. Engine API, not in the original.
 - **Off-screen squads:** squads the player does not lead (`SetSquadAutonomy(..., Independent: true)`) are stepped as NPCs are when far from the
   camera and the led characters ([far cadence](simulation.md#far-cadence)), so a town's residents cost what NPCs cost. `SetSquadDormant(squadId,
   on, Owner: context.Id)` (`Meitou.Simulation.Factions`) puts a squad of the player's faction to sleep: its members ask for no zones round them,

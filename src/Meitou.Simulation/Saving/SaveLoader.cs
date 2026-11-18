@@ -507,6 +507,7 @@ public static class SaveLoader
         };
         AutonomySave.Read(platoon.Record, squad);
         ModSquadSave.Read(platoon.Record, squad);
+        squad.Shop = ShopSave.ReadPlayer(world, squad, platoon.Record, data);
         ModTagSave.Read(platoon.Record, squad.ModTags);
 
         foreach (var sc in platoon.Characters)

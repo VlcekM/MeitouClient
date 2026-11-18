@@ -1861,6 +1861,27 @@ unit, kept through stack splits); moving them back in the same open trade costs 
 (their coins join); they top up plain stacks only when no free cell is left, losing the receipt for those units. Closing or replacing the trade voids every receipt, moved items'
 too; stacks it kept apart stay apart. Receipts are in the state hash but not saved, so a save made mid-trade reloads without them, with a different hash.
 
+### Player shops (Meitou only)
+
+The original never gives a squad of the player's faction a shop. A code mod does (`SetSquadShop`, [modding](modding.md#registration-surface)): the
+squad gets a squad shop (never a building shop) and, when it has none, its own purse (`Squad.OwnPurse`, empty). While the squad is independent
+and keeps that purse (`TradeSystem.PlayerShopOpen`) every living, uncaged member publishes `IsTrader` (`TradeSystem.KeepsPlayerShop`): the
+own-character menu offers the paid Trade (`OpenTrade`) and the quick right click on a standing one trades, as with a trader with no line to say.
+The trade is the ordinary one: prices by the shop's terms (`TermsOf` of the named SQUAD_TEMPLATE, or of none: buy mult 1; a player squad has
+no town, so no culture price or market factor), buy-back, the reach and the window. Money moves only between the player's money and the
+squad's purse, at those prices, so trading with the faction's own shop neither makes nor loses money for the faction; no fill or restock
+sets the purse (a trader's fill sets its purse, `RefillSquad`). The squad's own members never
+trade with it (`Parties`, `TradeWith`, `Sellers`). A sale is never caught as fencing and no item is illegal there: the original's fence
+chance is 1 for a trader of the player's faction and its smuggling check reads only a trader of another faction
+([fencing](game/economy.md#fencing-stealing-and-smuggling)). A template that is a trader's with vendor lists fills the stock when the shop is
+made and restocks it every `vendors refresh time` hours (`StockPlayerShop`); the restock replaces the stock as a trader's does, but for its
+unique items. NPC shoppers never buy from it: they buy only from containers in a shop building, never from a trader's carried stock
+([NPC purchases](game/economy.md#npc-purchases)); the shop counters the player builds in a public building of the player's are that route,
+and pay the player's money. Ending the shop (the command off, or a load without its mod: `TradeSystem.DropUnownedShops`, with a notice) closes
+a trade with it and puts its goods into its living members' inventories where they fit (the rest, and money items a fill made, are lost);
+the purse stays until `SetSquadPurse` ends it. Saved on the player platoon ([save](formats/save.md#player-platoons-meitou-mapping)); hashed
+with the squad (the shop, its owner and template).
+
 ## Dialogue
 
 `DialogueSystem` (game facts: [dialogue](game/dialogue.md)). The context menu's Talk To (only when a dry run of the line pick, dice and memo put back, finds something to say) sends `TalkOrder`: the
@@ -1972,7 +1993,8 @@ Meitou only (the original's AI plans for no player squad; asked for as the RE_Ke
   autonomy; refused for the last squad the player leads): the player does not lead it. Its members stay the player's faction (counted by
   `max faction size`) but cannot be selected (`SelectCommand` skips them, the selection's upkeep drops them), so they take no orders from the
   interface, and a click on one inspects it as another faction's (the snapshot's `IndependentSquads`); its right-click menu keeps the own
-  characters' Bodyguard, Follow and medic rows but offers Pick Up only while it is down and no Trade or inventory row. Only the menu holds the
+  characters' Bodyguard, Follow and medic rows but offers Pick Up only while it is down and no inventory row (nor the free Trade, 26; a member of
+  a squad keeping a [player shop](#player-shops-meitou-only) offers the paid Trade). Only the menu holds the
   inventory back: it is an own character's (`CarrySystem.CanBeOpened`), so an `OpenLootOrder` opens it beside the selection's and items move
   and are worn as between own characters, and a held item dropped on a member in the world is given to it (`HeldItems.Give`); it has
   no squad tab, is not on the squads screen or Tab, the squad commands (move, rename, reorder, remove) refuse it, and it does not count against `max squads`
