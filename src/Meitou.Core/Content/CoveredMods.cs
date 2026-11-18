@@ -48,9 +48,16 @@ public static class CoveredMods
     public static readonly BuiltInMod XpPort = new(null, "player-only-xp", "Squad XP in the Advanced settings", []);
 
     /// <summary>
+    /// ikahurula's data mod "Swamp Turtle FIX" (workshop 2237731365, matched against its 2020-09-24 update): it gives the Swamp Turtle the
+    /// elephant creature weapon, whose moves the Swamp turtle attacks fix gives it.
+    /// </summary>
+    public static readonly BuiltInMod SwampTurtleFix =
+        new("Swamp Turtle FIX", null, "Swamp turtle attacks on the Fixes page", [new(2237731365, 1600962568)]);
+
+    /// <summary>
     /// The mods Meitou has built in.
     /// </summary>
-    public static IReadOnlyList<BuiltInMod> BuiltIn { get; } = [RekenshiXp, XpPort];
+    public static IReadOnlyList<BuiltInMod> BuiltIn { get; } = [RekenshiXp, XpPort, SwampTurtleFix];
 
     /// <summary>
     /// The RE_Kenshi mods with a suggested code mod: Emkej's "Loot-Scoot-Execute" (workshop 3675700748, matched against its 2026-04-26 update,

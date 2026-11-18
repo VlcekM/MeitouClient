@@ -35,6 +35,7 @@ static class BuiltInMods
         new(CoveredMods.RekenshiXp, XpTaken, (config, mod, _) => config.SquadXp = Clamped(RekenshiXp(mod.Folder) ?? DefaultXpMod)),
         // The port uses the plugin's file over its own saved setting when the plugin is installed.
         new(CoveredMods.XpPort, XpTaken, (config, _, onDisk) => config.SquadXp = Clamped(PortXp(config, onDisk))),
+        new(CoveredMods.SwampTurtleFix, "Swamp turtle attacks on the Fixes page is on", (config, _, _) => config.FixAnimalMoves = true),
     ];
 
     /// <summary>
@@ -51,7 +52,7 @@ static class BuiltInMods
 
             covered.Adopt(config, mod, onDisk);
             config.AdoptedMods.Add(mod.Name);
-            Console.WriteLine($"mods      {mod.Name} is built into Meitou: Squad XP {config.SquadXp}");
+            Console.WriteLine($"mods      {mod.Name} is built into Meitou: {covered.Taken}");
             notices.Add($"{mod.Name} is built into Meitou now: {covered.Taken}.");
         }
 

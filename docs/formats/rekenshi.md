@@ -24,6 +24,7 @@ disabled), so the feature never applies twice, and a save made while it ran does
 | --- | --- | --- | --- |
 | Player-Only XP x10 (xXDarkrusoXx, `Player XP Only x10 RE`, workshop 3679678086) | Squad XP | its 2026-11-07 update | `xp_multiplier` of its `plugin/player_xp_boost.ini`, else 10 (**Observed**: the key and path are strings in its `PlayerXpBoost.dll`; the original game writes the file on its first run). Per-skill `stat_<SKILL>` lines are not kept |
 | Its code-mod port (`player-only-xp`) | Squad XP | any version (by its id) | the plugin's file when the plugin is installed (the port shares it), else its saved `Multiplier`, else 10. Per-skill settings are not kept |
+| Swamp Turtle FIX (ikahurula, data mod, workshop 2237731365) | Swamp turtle attacks (Fixes) | its 2020-09-24 update | the fix is switched on. Its data still loads: it sets the Swamp Turtle's `weapon` to `_elephant type` (and its unread `attack type`), so its turtles use the elephant moves and that weapon's damage and reach ([animals](../game/animals.md) "Natural weapon") |
 
 Superseded (suggested) mods: the RE_Kenshi plugin still loads only its data, and the launcher suggests a code mod on the Steam workshop that does the
 same (one option; other ports may exist). Nothing is taken in.
