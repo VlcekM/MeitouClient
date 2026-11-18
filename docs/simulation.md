@@ -2115,15 +2115,22 @@ enemy (`numEnemies`, `SenseBlock.Enemies`), so guards man the turrets only while
 
 Engine API for code mods, not in the original ([modding](modding.md), "NPC goals"). `NpcGoals` (one per world, built in `World`'s constructor by
 `AiSystem.BindModGoals` from `SimulationExtensions.GoalTypes` and the `INpcGoalOwner` systems; null when no mod claimed a type, and then none of
-the paths below runs) holds each registered type from 1000 up. A type outside `TaskBehaviours` has `AiBehaviour.None`, whose desire is 0;
-for a registered type `AiSystem.Desire` asks the mod instead (`ModDesire`: 0 for a player character's mind), and the default profile (desire
-"special", no commitment, crowd 1) leaves the score desire x weight with the continuity. With no TaskData row the goal is its own one-step
-plan (`TryPlan`), never kept as a stepped plan. `Act` gives it `AiBehaviour.Mod`: the character stands and `AiMind.ModGoalAsk` asks the serial
-step, which after the captive jobs (`SendRequests`) calls `INpcGoal.Start` in slot order for each asker the AI still holds; a start sets
-`AiMind.ModGoalStarted` (hashed while set; cleared by the next think that holds the character). While it is set and the mod keeps the character
-engaged, `Preempts` lets the combat goals take over a goal below the urgent tier (as an interruptible duty), and `ActivityText` names the goal by
-its AI_TASK record. Faults: a desire's fault at tick T stops the goal from T + 1 (the threads of T still ask it, so the cut does not depend on
-the thread count); a start's stops it at once; both are logged once and hashed (`AiSystem.Hash`).
+the paths below runs) holds each registered type from 1000 up with the index of the system that registered it. A type outside `TaskBehaviours`
+has `AiBehaviour.None`, whose desire is 0; for a registered type `AiSystem.Desire` asks the mod instead (`ModDesire`: 0 for a player character's
+mind, for a goal whose system is stopped, and for the type the mod last refused to start for that character until `AiMind.ModGoalRefusedUntil`),
+and the default profile (desire "special", no commitment, crowd 1) leaves the score desire x weight with the continuity. With no TaskData row the
+goal is its own one-step plan (`TryPlan`), never kept as a stepped plan. `Act` gives it `AiBehaviour.Mod`: the character stands on row 14 (not the
+goal's number, which the mod may use as its own row and handler) and `AiMind.ModGoalAsk` asks the serial step, which after the captive jobs
+(`SendRequests`, `NpcGoals.Step`) first drops the goals of systems the world stopped (their characters on the mod's task are released and stood
+still, with no handler) and then calls `INpcGoal.Start` in slot order for each asker the AI still holds. A start sets `AiMind.ModGoalStarted` and
+`ModGoalTick`; a refusal sets `ModGoalRefused` for 4 x `ThinkEveryTicks` ticks and `Replan`. `AiSystem.OnModTask` tells the mod's act-out from
+another hold: the running provenance is a goal's, of a row from 1000 up, started at or after `ModGoalTick`, and runs the task. With it,
+`ActivityText` names the goal by its AI_TASK record, and `Preempts` lets the combat goals take over a goal below the urgent tier while the
+character walks on that task carrying nothing (as a captive job's walk; not while it stands, which a conversation's or trade's hold does not
+change). The first think that holds the character again ends the goal (goal and plan cleared, so no continuity). Faults: a desire's fault at tick
+T stops asking the desire from T + 1 (the threads of T still ask it, so the cut does not depend on the thread count) and its starts from T; a
+start's fault stops both at once; each is logged once, gives a notice through the world's mod fault notices and is hashed (`AiSystem.Hash`). The
+minds' new fields are hashed only while set.
 
 ## New-game difficulty
 

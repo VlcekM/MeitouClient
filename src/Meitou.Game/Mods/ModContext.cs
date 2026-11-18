@@ -309,10 +309,11 @@ public sealed class ModContext
     }
 
     /// <summary>
-    /// An NPC goal type of the mod's own (docs/modding.md "NPC goals"): a task type number (<see cref="SimulationExtensions.FirstModCode"/> and up, so
-    /// never a game task) that AI_TASK records of a data mod name in AI packages; NPCs whose running package lists it weigh it in the AI's chooser by
-    /// the desire of the goal one of the mod's systems registers (<see cref="Meitou.Simulation.Ai.INpcGoalOwner"/>), and the mod acts it out. Log lines name
-    /// it <paramref name="name"/>. One mod per type; without the mod the goal stays inert.
+    /// An NPC goal type of the mod's own (docs/modding.md "NPC goals"): a task type number (<see cref="SimulationExtensions.FirstModCode"/> and up,
+    /// so never a game task) that AI_TASK records of a data mod name in AI packages; NPCs whose running package lists it weigh it in the AI's chooser
+    /// by the desire of the goal one of the mod's systems registers (<see cref="Meitou.Simulation.Ai.INpcGoalOwner"/>), and the mod acts it out. Log
+    /// lines and notices name it <paramref name="name"/>. One mod per number, whether claimed as a goal or a job type (a mod may claim one number as
+    /// both); without the mod the goal stays inert.
     /// </summary>
     public void AddGoalType(Data.Gameplay.Ai.TaskType type, string name)
     {

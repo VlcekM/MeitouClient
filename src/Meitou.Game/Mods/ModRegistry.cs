@@ -269,7 +269,8 @@ sealed class ModRegistry
     }
 
     /// <summary>
-    /// Throws when job type <paramref name="type"/> is below the mods' range or another mod (or this one) holds it already.
+    /// Throws when job type <paramref name="type"/> is below the mods' range, another mod (or this one) holds it already as a job type, or another
+    /// mod holds it as an NPC goal type (one task type number has one owning mod; that mod may claim it as both).
     /// </summary>
     public void CheckJobTypeFree(Data.Gameplay.Ai.TaskType type, ModRegistrations pending, string mod)
     {
@@ -280,12 +281,15 @@ sealed class ModRegistry
         }
         if (_jobTypeOwners.TryGetValue(type, out var owner))
             throw new InvalidOperationException($"Job type {type} is taken by mod '{owner}'.");
+        if (_goalTypeOwners.TryGetValue(type, out var goalOwner) && goalOwner != mod)
+            throw new InvalidOperationException($"Task type {type} is taken by mod '{goalOwner}' as an NPC goal type.");
         if (pending.JobTypes.ContainsKey(type))
             throw new InvalidOperationException($"Job type {type} is registered twice by mod '{mod}'.");
     }
 
     /// <summary>
-    /// Throws when NPC goal type <paramref name="type"/> is below the mods' range or another mod (or this one) holds it already.
+    /// Throws when NPC goal type <paramref name="type"/> is below the mods' range, another mod (or this one) holds it already as a goal type, or
+    /// another mod holds it as a job type (one task type number has one owning mod; that mod may claim it as both).
     /// </summary>
     public void CheckGoalTypeFree(Data.Gameplay.Ai.TaskType type, ModRegistrations pending, string mod)
     {
@@ -296,6 +300,8 @@ sealed class ModRegistry
         }
         if (_goalTypeOwners.TryGetValue(type, out var owner))
             throw new InvalidOperationException($"Goal type {type} is taken by mod '{owner}'.");
+        if (_jobTypeOwners.TryGetValue(type, out var jobOwner) && jobOwner != mod)
+            throw new InvalidOperationException($"Task type {type} is taken by mod '{jobOwner}' as a job type.");
         if (pending.GoalTypes.ContainsKey(type))
             throw new InvalidOperationException($"Goal type {type} is registered twice by mod '{mod}'.");
     }

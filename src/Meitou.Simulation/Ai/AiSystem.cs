@@ -206,6 +206,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     NpcGoals? _modGoals;
 
     /// <summary>
+    /// Thinks a character weighs a mod's goal at 0 after the mod refused to start it (<see cref="AiMind.ModGoalRefused"/>).
+    /// </summary>
+    const int ModGoalBackoffThinks = 4;
+
+    /// <summary>
     /// Asks the world's <see cref="INpcGoalOwner"/> systems for their goals, once when the world is made (<see cref="World"/>'s constructor); nothing
     /// is built when no mod claimed a goal type.
     /// </summary>
@@ -281,7 +286,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
             if (Holds(n, cold))
             {
-                if (mind.ModGoalStarted) mind.ModGoalStarted = false;   // the mod let it go: its goal is weighed afresh
+                if (mind.ModGoalStarted) EndModGoal(mind);   // the mod let it go: its act-out is over
                 if (mind.Engine)
                 {
                     // Its own fight, with nothing but its combat goals and Self preservation to weigh: none wanted ends the fight, and the engine's
@@ -400,7 +405,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return Restrict.None;
 
         if (cold.InCombat) return cold.Gunning is null && cold.Carrying.IsNone ? Restrict.Self : Restrict.None;
-        if (cold.Engaged) return InterruptibleDuty(n, cold) || InterruptibleModGoal(mind) ? Restrict.Combat : Restrict.Self;
+        if (cold.Engaged) return InterruptibleDuty(n, cold) || InterruptibleModGoal(n, cold, mind) ? Restrict.Combat : Restrict.Self;
         if (mind.Engine && EngineRoutine(n, cold)) return Restrict.Combat;
 
         // Fixing Legs' own treatment: the original's chooser weighs every goal on each update, and while the urgent goal is wanted only an urgent
@@ -442,10 +447,33 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// A code mod's goal below the urgent tier whose act-out the mod started (<see cref="AiMind.ModGoalStarted"/>): the combat goals, a tier above it,
-    /// may take the character over as they take over the engine's own priority-2 duties; the fight's start ends the mod's task through its handler.
+    /// A code mod's goal below the urgent tier on the walk its act-out started, carrying nothing (as a captive job's walk): the combat goals, a tier
+    /// above it, may take the character over as they take over the engine's own priority-2 duties; the fight's start ends the mod's task through its
+    /// handler. Not while it stands: another system's hold (a conversation, a trade) keeps a standing character's task as it was, so only the walk
+    /// tells the mod's act-out from such a hold.
     /// </summary>
-    static bool InterruptibleModGoal(AiMind mind) => mind is { ModGoalStarted: true, Goal.Task.Priority: < TaskPriority.Urgent };
+    static bool InterruptibleModGoal(in CharacterHot n, CharacterCold cold, AiMind mind) =>
+        mind.Goal is { Task.Priority: < TaskPriority.Urgent } && n.Task == (byte)CharacterTask.GoTo && cold.Carrying.IsNone
+        && OnModTask(n, cold, mind);
+
+    /// <summary>
+    /// Whether the character's task now is the act-out a mod's goal started (<see cref="AiMind.ModGoalStarted"/>): its provenance is a goal's
+    /// (<see cref="TaskSource.Goal"/>), of a row from 1000 up, started at or after the start (<see cref="AiMind.ModGoalTick"/>), and runs the task.
+    /// </summary>
+    internal static bool OnModTask(in CharacterHot n, CharacterCold cold, AiMind mind) =>
+        mind.ModGoalStarted && cold.Running is { Source: TaskSource.Goal } run && (int)run.Row >= SimulationExtensions.FirstModCode
+        && run.Tick >= mind.ModGoalTick && run.Runs((CharacterTask)n.Task);
+
+    /// <summary>
+    /// The mod let the character go (the AI holds it again): its act-out is over, so the goal ends with it (as a planned goal ends with its last
+    /// step) and the next choice weighs it afresh, without continuity.
+    /// </summary>
+    static void EndModGoal(AiMind mind)
+    {
+        mind.ModGoalStarted = false;
+        mind.Goal = null;
+        mind.Plan.Clear();
+    }
 
     /// <summary>
     /// The engine's routine of an <see cref="AiMind.Engine"/> mind, which a fight its combat goals start interrupts: standing, wandering, following
@@ -471,7 +499,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// step, whichever of Self preservation, a goal 35 or a broken squad started it, rather than its walk's "Moving"; "Stumbling" (147) for a stagger
     /// outside a fight (<see cref="CharacterCold.StumbleTaskUntil"/>); the captive goal's name on its job (<see cref="TakeCaptiveGoal"/>: "Eat
     /// body"); "Fixing Legs" on its own Fixing Legs treatment (<see cref="TreatsOwnLegs"/>); a code mod's goal by its AI_TASK record's name
-    /// while the AI holds the character and while the mod's act-out keeps it engaged (<see cref="AiMind.ModGoalStarted"/>); null for the rest
+    /// while the AI holds the character and while it is engaged on the act-out the mod started (<see cref="OnModTask"/>); null for the rest
     /// (the HUD then names the movement task).
     /// </summary>
     public static string? ActivityText(in CharacterHot n, CharacterCold cold, long tick = 0) =>
@@ -479,7 +507,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         : cold is { Fleeing: true, IsPlayer: false, Medical.Incapacitated: not true } ? TaskBehaviours.Text(TaskType.RunAway)
         : cold is { Engaged: true, InCombat: false, Ai: { Behaviour: AiBehaviour.Captive, Goal: { } job } } ? TaskBehaviours.Text(job.Task.Type)
         : cold.Ai is not null && TreatsOwnLegs(n, cold) ? TaskBehaviours.Text(TaskType.HealMyLegs)
-        : cold is { Engaged: true, InCombat: false, Ai: { ModGoalStarted: true, Goal: { } modGoal } } ? GoalText(modGoal)
+        : cold is { Engaged: true, InCombat: false, Ai: { ModGoalStarted: true, Goal: { } modGoal } modMind } && OnModTask(n, cold, modMind)
+            ? GoalText(modGoal)
         : cold.Ai is { Goal: { } goal } && Holds(n, cold) ? GoalText(goal) : null;
 
     /// <summary>
@@ -533,13 +562,44 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             && world.Squads.Find(cold.SlaveMaster) is { Ai: { } master } && master.Roles[(int)AiRole.Slave] is { Count: > 0 } list ? list : null;
 
     /// <summary>
-    /// The role list a member takes (docs/game/ai.md "Goal loading"): the squad leader the leader's, else by its squad role.
+    /// The role list a member takes (docs/game/ai.md "Goal loading"): the squad leader the leader's, else by its squad role. Public for code mods.
     /// </summary>
-    internal static AiRole RoleOf(Squad squad, CharacterId id, CharacterCold cold) =>
+    public static AiRole RoleOf(Squad squad, CharacterId id, CharacterCold cold) =>
         squad.Leader == id || cold.Role == (int)SquadRole.Leader ? AiRole.Leader
         : cold.Role == (int)SquadRole.Squad2 ? AiRole.Squad2
         : cold.Role == (int)SquadRole.Slave ? AiRole.Slave
         : AiRole.Squad;
+
+    /// <summary>
+    /// Whether the goal lists the chooser weighs for the character at <paramref name="slot"/> now (its role's list of its squad's running package,
+    /// or the slave list of the squad it obeys, or an engine mind's combat goals; and its race's <c>AI Goals</c>) hold <paramref name="type"/> in the
+    /// hour's window. False without a mind. For code mods (docs/modding.md "NPC goals"): whether a goal of theirs is still listed for a character
+    /// they act it out for (unlike <see cref="ListsGoal"/>, the hour's window counts). Serial phases, or the character's own partition.
+    /// </summary>
+    public static bool WeighsGoal(World world, int slot, TaskType type)
+    {
+        if (world.Characters.Cold(slot) is not { Ai: { Squad: var squad } mind } cold) return false;
+
+        var roles = mind.Engine ? mind.EngineGoals
+            : ObeyedRoles(world, squad, cold) ?? squad.Ai?.Roles[(int)RoleOf(squad, world.Characters.IdOf(slot), cold)];
+        int hour = world.Hour;
+        return Lists(roles, type, hour) || Lists(mind.RaceGoals, type, hour);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="goals"/> hold <paramref name="type"/> in <paramref name="hour"/>'s window.
+    /// </summary>
+    static bool Lists(IReadOnlyList<AiGoal>? goals, TaskType type, int hour)
+    {
+        if (goals is null) return false;
+
+        for (int k = 0; k < goals.Count; k++)
+        {
+            if (goals[k].Task.Type == type && goals[k].InWindow(hour)) return true;
+        }
+
+        return false;
+    }
 
     #endregion
 
@@ -767,7 +827,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// How much the character wants a goal: its type's desire (<see cref="TaskProfiles"/>; a type with a desire function of its own, 1), times what
     /// the goal's target finder found (docs/game/ai-tasks.md "Town goals", Observed: 0 when it found nothing). Going home is 0.5 while away from the
-    /// home town and 0 in it (docs/game/perception.md 7.2, Observed); a goal the engine cannot act out is 0, but a code mod's (<see cref="ModDesire"/>).
+    /// home town and 0 in it (docs/game/perception.md 7.2, Observed); a goal the engine cannot act out is 0, but a code mod's
+    /// (<see cref="ModDesire"/>).
     /// </summary>
     float Desire(World world, AiBehaviour behaviour, TaskType type, TaskProfile profile, Squad squad, Blackboard board, AiMind mind,
         CharacterId self, TaskTargetType targeting)
@@ -790,10 +851,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// A code mod's goal's desire (<see cref="INpcGoal.Desire"/>, the whole desire: its type has the default profile, no commitment and no crowding);
-    /// 0 for a type no mod registered and for a player character's mind (an autonomous squad's: its goals stay the engine's).
+    /// 0 for a type no mod registered, for a player character's mind (an autonomous squad's: its goals stay the engine's), and for the type whose
+    /// start the mod refused, until its back-off ends (<see cref="AiMind.ModGoalRefused"/>).
     /// </summary>
     static float ModDesire(NpcGoals goals, World world, TaskType type, Squad squad, AiMind mind, CharacterId self, TaskTargetType targeting) =>
-        mind.Player ? 0 : goals.Desire(world, new NpcGoalAsk(self.Slot, self, squad, type, targeting));
+        mind.Player || mind.ModGoalRefused == type && world.Tick < mind.ModGoalRefusedUntil
+            ? 0
+            : goals.Desire(world, new NpcGoalAsk(self.Slot, self, squad, type, targeting));
 
     /// <summary>
     /// What a goal's target finder found, by its behaviour (0 when it found nothing, or when the goal is not wanted now): the factor on its type's
@@ -1936,7 +2000,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 break;
             case AiBehaviour.Mod:
                 // A code mod's goal: it stands while the serial step asks the mod to start the act-out (NpcGoals.SendStarts).
-                Become(world, slot, CharacterTask.Idle);
+                StandForModGoal(world, slot);
                 _modGoals!.Ask(mind);
                 break;
             case AiBehaviour.Fight:
@@ -2669,6 +2733,17 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
+    /// The stand while a mod's goal waits for its start: idle on row 14 Idleness, not on the goal's row, so the mod's task handler for a row of that
+    /// number is never ended for a stand it did not start. Kept when it already stands so.
+    /// </summary>
+    static void StandForModGoal(World world, int slot)
+    {
+        if (world.Characters.Next[slot].Task == (byte)CharacterTask.Idle && world.Characters.Cold(slot)!.Running is { Row: TaskType.Idle }) return;
+
+        TaskStart.StartOwn(world, slot, new TaskRequest(CharacterTask.Idle, TaskType.Idle, TaskSource.Goal));
+    }
+
+    /// <summary>
     /// Switches to a standing task (wander, follow, idle, rest), dropping a walk in progress; nothing when it is doing it already. A goal's start on
     /// the character's own slot (<see cref="TaskStart.StartOwn"/>: the think runs in parallel), as the row of the goal it acts out.
     /// </summary>
@@ -2918,8 +2993,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// The requests the thinks left with a flag (placing, beds, shopping, assaults, fights, treatments, leaving fights), the captive jobs and the code
-    /// mods' goals, in that order; the systems they need are looked up once.
+    /// The requests the thinks left with a flag (placing, beds, shopping, assaults, fights, treatments, leaving fights), the captive jobs and the
+    /// code mods' goals, in that order; the systems they need are looked up once.
     /// </summary>
     void SendRequests(World world)
     {
@@ -2937,7 +3012,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (Interlocked.Exchange(ref _treating, 0) != 0) (_firstAid ??= world.SystemOf<FirstAid.FirstAidSystem>())?.SendGoalTreatments(world);
 
         SendCaptiveJobs(world);
-        _modGoals?.SendStarts(world);
+        _modGoals?.Step(world, world.Every(Settings.ThinkEveryTicks) * ModGoalBackoffThinks);
         if (Interlocked.Exchange(ref _leaving, 0) != 0) LeaveFights(world);
     }
 
