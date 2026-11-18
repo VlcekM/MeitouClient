@@ -570,7 +570,9 @@ rock) makes output only while someone operates it.
 - yield (slot 120 via offset `0x46c`): 1 without `world resource mining`; else the resource at the position
   ([resources](#resources)), at least 0.1 for a natural site; for any other building 0 becomes 0.5 when it is not the player's (**Verified**, `FUN_14029c670`: the natural branch takes `FUN_140a12ff0` and the 0.1 floor, the other `FUN_140a13540` and the 0.5 rule).
 - health x powerSat (slot 109, `FUN_140296e00`, **Verified**): health the [construction state](#construction-state)'s progress / target capped at 1; powerSat
-  the granted share of the demand, 1 with no demand. Meitou: `Machine.Health`, 1 for rocks and a target of 0.
+  the granted share of the demand, 1 with no demand. The demand (slot 163, `FUN_140299630`) does not ask the power switch; switching off (slot 99,
+  `FUN_1402973f0`, **Verified**) zeroes the grant and leaves the town's frame, so a switched-off consumer works at 0, an unattended Well II
+  included (#962). Meitou: `Machine.Health`, 1 for rocks and a target of 0; `ProductionSystem.Satisfaction`.
 - upgrade = the research `production mult` of the building ([research](#research)), default 1. The upgrade lookup (`production mult`,
   `power increase`, `power capacity increase`) answers only for the player's buildings (owner with the player pointer +0x250, `FUN_140546dd0`);
   any other gets the default 1, 0, 0 (**Verified**, `FUN_14082ec70`).
@@ -1214,8 +1216,10 @@ it with them. Meitou: `MachineData.Accepts` (AI) and `TakesByHand` (player).
   on a storage 124 "Hauling to" (several targets allowed); an automatic machine (152) adds 152 plus 124 on it. The first job in a
   character's list that can run wins; operating is skipped while the machine's output is full or its inputs are empty (row 87's !63 and !62 unmet at the job's root,
   [perma-jobs](ai-tasks.md#perma-jobs)), so a character moves down its list and returns when the machine can work again.
-- **Unknown:** how the original picks the storage (nearest, same town, a range), when an operator leaves a
-  machine to haul, where a 124 job takes its items from, and whether 152 / 124 on an automatic machine ever empty its output
+- **Storage pick** (**Verified**, `FUN_14059acd0`, also called by the 242 ditch finder `FUN_1405a59a0`): the candidates are the current town's
+  buildings (the nearest-allies query, mask `0x4002436`) with a StorageBuilding cast, complete, of the character's faction, whose slot `0x4a0`
+  takes the item; the nearest to the character by squared 3D distance wins, within the AI's range-mode bound (ROAM_FAR 4.246733e7).
+- **Unknown:** when an operator leaves a machine to haul, where a 124 job takes its items from, and whether 152 / 124 on an automatic machine ever empty its output
   (152's goal is only "no empty inputs", !62).
 
 ## House sales

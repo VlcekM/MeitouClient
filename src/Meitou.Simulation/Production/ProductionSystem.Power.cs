@@ -828,8 +828,7 @@ public sealed partial class ProductionSystem
             {
                 // A farm wants its whole draw whoever works it and whether or not it is switched on (FarmBuilding slot 163, FUN_1400df330:
                 // |power output + increase|).
-                float share = m.Data.Farm is null && m.Data.PowerOperators > 0 ? (float)m.LastOperators / m.Data.PowerOperators : 1;
-                m.Demand = (m.Data.Farm is not null || m.PowerOn) && m.Active ? MathF.Abs(Rated(world, m)) * share : 0;
+                m.Demand = m.Data.Farm is not null || m.PowerOn ? Wanted(world, m) : 0;
                 demandTotal += m.Demand;
                 consumers.Add(m);
             }
@@ -863,7 +862,7 @@ public sealed partial class ProductionSystem
 
         foreach (var m in grid)
         {
-            if (m.Data.IsConsumer) m.Power = m.Demand > 0 ? m.Granted / m.Demand : 1;
+            if (m.Data.IsConsumer) m.Power = Satisfaction(world, m);
             else if (m.Data.IsGenerator)
             {
                 // The load (GeneratorBuilding::vfunc_167): output / rated x (charging + consumer demand) / all generators' output, at most 1.
@@ -873,6 +872,29 @@ public sealed partial class ProductionSystem
         }
 
         _townPower[town] = new(generated, demandTotal, charged, drained, 0, 0);
+    }
+
+    /// <summary>
+    /// A consumer's draw (slot 163, <c>FUN_140299630</c>, <b>Verified</b>): |rated| x its operator share while it is active (slot 164), the switch
+    /// not asked; a farm's whoever works it.
+    /// </summary>
+    float Wanted(World world, Machine m)
+    {
+        if (!m.Active) return 0;
+
+        float share = m.Data.Farm is null && m.Data.PowerOperators > 0 ? (float)m.LastOperators / m.Data.PowerOperators : 1;
+        return MathF.Abs(Rated(world, m)) * share;
+    }
+
+    /// <summary>
+    /// A consumer's power share (slot 109, <c>FUN_140296e00</c>): granted / its draw, 1 with no draw. Switching a machine off (slot 99,
+    /// <c>FUN_1402973f0</c>, <b>Verified</b>) zeroes its grant and takes it off its town's frame but leaves its draw, so a switched-off machine gets
+    /// 0 and an unattended one (a Well II) stops producing (#962).
+    /// </summary>
+    float Satisfaction(World world, Machine m)
+    {
+        float wanted = m.Demand > 0 ? m.Demand : Wanted(world, m);
+        return wanted > 0 ? m.Granted / wanted : 1;
     }
 
     /// <summary>
