@@ -1544,6 +1544,7 @@ sealed class ProductionWindows(PlayerInterface player)
         b.Lists["CraftingStationsList"] = [.. stations.Select(s => new UiListItem(s.Site, StationName(s)))];
         b.SelectedItems["CraftingStationsList"] = stations.FindIndex(s => s.Site == _craftStation);
         bool repeat = stations.FirstOrDefault(s => s.Site == _craftStation)?.Craft?.Repeat == true;
+        if (_craftStation is not null) b.Disabled.Remove("QueueRepeat");
         b.Actions["QueueRepeat"] = "QueueRepeat";
         b.Properties["QueueRepeat"] = new Dictionary<string, string>
         {
