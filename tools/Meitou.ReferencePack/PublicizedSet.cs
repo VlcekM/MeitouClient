@@ -1,5 +1,7 @@
 using AsmResolver.DotNet;
+using AsmResolver.DotNet.Code.Cil;
 using AsmResolver.DotNet.Signatures;
+using AsmResolver.PE.DotNet.Cil;
 using BepInEx.AssemblyPublicizer;
 
 namespace Meitou.ReferencePack;
@@ -7,13 +9,15 @@ namespace Meitou.ReferencePack;
 /// <summary>
 /// The publicized reference assemblies of the reference pack (docs/modding.md "Reference pack"): copies of the game's assemblies in which every
 /// type and member is public, so a code mod compiles against internals it reaches at run time through IgnoresAccessChecksTo. The copies are
-/// compile-time only: no method body, no resource, and the [ReferenceAssembly] mark that makes the runtime refuse to load them.
+/// compile-time only: every method body replaced by a throw, no resource, and the [ReferenceAssembly] mark that makes the runtime refuse to load
+/// them.
 /// </summary>
 internal static class PublicizedSet
 {
     /// <summary>
     /// The publicizer's settings: all types, methods and fields; compiler-generated members (backing fields, closures) left as they are, as
-    /// they would clash with the members they serve; bodies stripped; no attribute recording the original access, which nothing reads.
+    /// they would clash with the members they serve; bodies stripped (except on interfaces, which the publicizer skips:
+    /// <see cref="StripInterfaceBodies"/>); no attribute recording the original access, which nothing reads.
     /// </summary>
     static readonly AssemblyPublicizerOptions Options = new()
     {
@@ -46,6 +50,7 @@ internal static class PublicizedSet
         var module = assembly.ManifestModule ?? throw new InvalidDataException($"{source} has no manifest module");
 
         AssemblyPublicizer.Publicize(assembly, Options);
+        StripInterfaceBodies(module);
 
         // Embedded resources (UI textures, shader sources) serve only the running game.
         module.Resources.Clear();
@@ -53,6 +58,25 @@ internal static class PublicizedSet
 
         module.Write(target);
         Console.WriteLine($"publicized {Path.GetFileName(source)} -> {target}");
+    }
+
+    /// <summary>
+    /// Replaces the body of every interface method that has one (default implementations) with a throw, as the compiler's reference assemblies
+    /// do: the publicizer strips no interface. The method keeps a body, so it stays a default implementation.
+    /// </summary>
+    static void StripInterfaceBodies(ModuleDefinition module)
+    {
+        var methods = module.GetAllTypes()
+            .Where(t => t.IsInterface)
+            .SelectMany(t => t.Methods)
+            .Where(m => m.HasMethodBody);
+
+        foreach (var method in methods)
+        {
+            var body = method.CilMethodBody = new CilMethodBody(method);
+            body.Instructions.Add(CilOpCodes.Ldnull);
+            body.Instructions.Add(CilOpCodes.Throw);
+        }
     }
 
     /// <summary>
