@@ -253,6 +253,18 @@ holds refuses the second mod.
   and gameplay changes go through commands.
   One that throws is disabled for that world and the fault enters the state hash. Without an observer nothing is built. Engine API, not in
   the original.
+- **Crimes:** a registered system implementing `ICrimeObserver` (`Meitou.Simulation.Crime`) receives `CrimeNoted(World, in CrimeEvent)` for
+  each thing the crime rules do ([rules](simulation.md#crimes-and-bounties)), by `CrimeEventKind`: `Pending`, a crime set on a culprit (every
+  code the game sets, among them the assaults it notices: an unprovoked attack order, an NPC's landed blow or aimed bolt, a stealth knock-out
+  swing, a hit between the police and another); `Witnessed`, the first witness to react; `Booked`, the bounty raised; `Expired`, a bounty
+  run out. Each once: a crime already pending with the same code is only refreshed and not reported again, and an assault by a culprit with
+  another crime pending only raises that crime's timer. The event names the tick, the culprit, the `CrimeCode`, the faction (the
+  victim's, the witness's, the booking faction's or the expired entry's), the bounty in all for a booking or an expiry, the witness, and the
+  pending crime's victim and its faction (none and -1 for an expiry). Observers run serially in system order once the crime system has made the
+  change, inside the step that made it (the combat commit, the crime and sight sweeps, task starts, the carry and lock steps); they may read the
+  world and change their own state, and gameplay changes go through commands. One that throws is disabled for that world and the fault enters
+  the state hash. Without an observer no event is built. `CrimeSystem.BookingsOf(tick)` still lists the tick's bookings that had a witness (the
+  arrest system's trigger). Engine API, not in the original.
 - **Items used up:** a registered system implementing `IItemUseObserver` receives `ItemUsedUp(World, in ItemUsed)` inside the step that
   used an item, once the item has changed: the tick, the `ItemUseKind`, the item record's string id, the user (none for a machine, a
   research order or an upgrade pulling from the building's own stock), the building it went into or came from (a construction, machine or

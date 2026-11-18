@@ -445,11 +445,23 @@ public enum CrimeEventKind
 }
 
 /// <summary>
-/// One crime log line: the tick, what happened, the culprit, the crime code, the faction, the amount and the witness (<see cref="CharacterId.None"/>
-/// for none).
+/// One crime log line (and a crime observer's report, <see cref="ICrimeObserver"/>): the tick, what happened, the culprit, the crime code, the
+/// faction (the victim's for <see cref="CrimeEventKind.Pending"/>, the witness's for <see cref="CrimeEventKind.Witnessed"/>, the booking
+/// faction's for <see cref="CrimeEventKind.Booked"/>, the expired entry's for <see cref="CrimeEventKind.Expired"/>), the amount (the bounty in
+/// all, for a booking or an expiry) and the witness (<see cref="CharacterId.None"/> for none).
 /// </summary>
 public readonly record struct CrimeEvent(long Tick, CrimeEventKind Kind, CharacterId Culprit, CrimeCode Code, int Faction,
-    int Amount, CharacterId Witness);
+    int Amount, CharacterId Witness)
+{
+    /// <summary>
+    /// The pending crime's victim (<see cref="CharacterId.None"/> for none, and for an expiry).
+    /// </summary>
+    public CharacterId Victim { get; init; } = CharacterId.None;
+    /// <summary>
+    /// The faction the pending crime was against (-1 for an expiry).
+    /// </summary>
+    public int VictimFaction { get; init; } = -1;
+}
 
 /// <summary>
 /// What the crime rules need to know of the factions: who books bounties and whose goods are free.

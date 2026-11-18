@@ -915,11 +915,23 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         BountyBook.Lines(c, tick, tickSeconds, local);
 
     /// <summary>
-    /// Adds an event to <see cref="Log"/> (with <see cref="CrimeSettings.RecordLog"/>).
+    /// Adds an event to <see cref="Log"/> (with <see cref="CrimeSettings.RecordLog"/>) and passes it to the crime observers
+    /// (<see cref="ICrimeObserver"/>), once the change it reports is made; neither builds the event without a log or an observer.
     /// </summary>
     internal void Note(World world, CrimeEventKind kind, int culprit, CrimeCode code, int faction, int amount, CharacterId witness)
     {
-        if (Settings.RecordLog) _log.Add(new CrimeEvent(world.Tick, kind, world.Characters.IdOf(culprit), code, faction, amount, witness));
+        if (Settings.RecordLog || world.CrimeObservers.Active)
+        {
+            var pending = kind == CrimeEventKind.Expired ? null : world.Characters.Cold(culprit)?.Pending;
+            var crime = new CrimeEvent(world.Tick, kind, world.Characters.IdOf(culprit), code, faction, amount, witness)
+            {
+                Victim = pending?.Victim ?? CharacterId.None,
+                VictimFaction = pending?.VictimFaction ?? -1,
+            };
+            if (Settings.RecordLog) _log.Add(crime);
+            world.CrimeObservers.Observe(world, crime);
+        }
+
         world.Events.Line(world, "crime", CrimeLine(world, kind, culprit, code, faction, amount, witness));
     }
 
