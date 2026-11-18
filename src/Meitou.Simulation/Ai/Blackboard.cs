@@ -423,7 +423,7 @@ public sealed class Blackboard
     /// <summary>
     /// A bar package started while its town was not loaded, so it holds no table yet and takes one once the town is loaded (the original's start
     /// needs the town's zone loaded and is run again by the target query until then, docs/game/ai-tasks.md "Hang-around-bar package"). Not saved:
-    /// a loaded squad that waited keeps no table until its package next starts.
+    /// the package starts again at a load and works the wait out afresh.
     /// </summary>
     public bool BarWaits { get; set; }
 

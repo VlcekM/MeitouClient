@@ -101,6 +101,8 @@ the 166 player buildings whose BUILDING the data lacks, as the original does ([p
 
 **Platoon mission town** (Meitou key `meitou mission town` on a roaming or stored platoon record: the TOWN id of the town its package was taking it to when it left the world, absent: none; read back as `Platoon.Target`, which a TRAVEL_TARGET stand-in heads for).
 
+**Roaming mark** (Meitou key `meitou roams`, a bool on a platoon record, absent on a town's own platoon): the platoon roamed when Meitou saved it, and the load makes it a roaming platoon again whatever `currentPackage` says (`SaveLoader.Travels`). A loaded platoon's `currentPackage` is the package it runs, which for a caravan stopped in a town is a bar package whose off-screen job is to stay home; without the mark the load would take such a platoon for its base town's own squad. A save of the original has no mark and is classified by the engine rule as before.
+
 **Building record** (Meitou keys on a registered town building's GAMESTATE_BUILDING, [locks](../game/locks.md#building-record)): int `meitou designation`, string `meitou template` (the last assigned SQUAD_TEMPLATE id, absent: none) and the stored public byte as `is public day`; a state without them is a building with no record yet.
 
 **Town-house repair** (Meitou): the original zone instance's GAMESTATE_BUILDING stores `destroyed`, `is complete`,

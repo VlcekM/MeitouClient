@@ -3259,7 +3259,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             // A slave obeying its master takes the master's Slave list with a full mind (MindAndCrowd), not its own squad's routine.
             if (board is not null && ObeyedRoles(world, squad, cold) is not null) continue;
 
-            if (cold.Ai is { Engine: false }) cold.Ai = null;
+            if (cold.Ai is { Engine: false } full)
+            {
+                ToRoutine(world, squad, s, cold, full);
+                cold.Ai = null;
+            }
+
             if (cold.Ai is null || !ReferenceEquals(cold.Ai.Squad, squad))
             {
                 var p = table.Next[s].Position;
@@ -3277,6 +3282,33 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             cold.Ai.EngineGoals = package is null ? [] : CombatGoalsOf(package, RoleOf(squad, squad.Members[k], cold));
             if (squad.DebugAggro && AttackEnemiesGoal() is { } attack) cold.Ai.EngineGoals = [.. cold.Ai.EngineGoals, attack];
         }
+    }
+
+    /// <summary>
+    /// A member's full mind gives way to an engine one (a campaign drafted its loaded platoon, a code mod holds it): what the full mind had it
+    /// doing ends, so a sleeper gets up, one sitting at a table stands and a walk to a shop stops, and a member other than the leader follows
+    /// its leader again, as one made under the population does; the leader stands for the population to move. Else each would stay where its
+    /// package left it while the population marches the leader off (engine choice: the original has one kind of mind, and the campaign's
+    /// package gives every member its goals at once). One in the fight its own goal started fights on and follows after it; a fight, a
+    /// flight, a carry or a knock-out the mind does not hold is left alone.
+    /// </summary>
+    static void ToRoutine(World world, Squad squad, int s, CharacterCold cold, AiMind mind)
+    {
+        var table = world.Characters;
+        var id = table.IdOf(s);
+        bool follows = id != squad.Leader && table.TryResolveNext(squad.Leader, out _);
+        if (!Holds(table.Next[s], cold)) return;
+
+        if (cold.InCombat)
+        {
+            if (follows && cold.Running is { } fight) cold.Running = fight with { Resume = CharacterTask.Follow };
+            return;
+        }
+
+        if (cold.InSomething == Locks.HeldState.Bed) world.Fixtures.LeaveBed(world, id);
+        var task = (CharacterTask)table.Next[s].Task;
+        if (follows) TaskStart.Become(world, s, CharacterTask.Follow, TaskType.FollowSquadleader, TaskSource.Goal);
+        else if (task != CharacterTask.Idle) TaskStart.End(world, s, TaskEnd.Stopped);
     }
 
     /// <summary>
@@ -3377,8 +3409,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// Whether the population, not the squad's blackboard, moves a loaded platoon's squad: a campaign's (<see cref="Platoon.Campaign"/>: the
     /// campaign march stands for the war package classes, which are not built) and one a code mod holds (<see cref="Platoon.Held"/>). Every other
     /// loaded platoon acts out its package's goals with full minds, as in the original (<see cref="PlatoonOf"/>). The test does not depend on
-    /// where the squad stands, so walking into or out of a town never changes its kind of mind; a campaign drafting or releasing a loaded platoon
-    /// and a mod's hold do, and the minds are made again then (<see cref="EngineMinds"/>, <see cref="GiveMind"/>).
+    /// where the squad stands, so a free platoon walking into or out of a town never changes its kind of mind; a campaign drafting or releasing
+    /// a loaded platoon and a mod's hold or release do, and the minds are made again then (<see cref="EngineMinds"/>, <see cref="ToRoutine"/>,
+    /// <see cref="GiveMind"/>). A campaign's or a held squad whose own package travels still takes full minds while it does
+    /// (<see cref="BoardMoves"/>).
     /// </summary>
     internal static bool PopulationRuns(Platoon platoon) => platoon.Campaign is not null || platoon.Held;
 

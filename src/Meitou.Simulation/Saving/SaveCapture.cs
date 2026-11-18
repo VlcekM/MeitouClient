@@ -286,6 +286,13 @@ public static partial class SaveCapture
     public const string MissionTownKey = "meitou mission town";
 
     /// <summary>
+    /// Marks a platoon that roamed when it was saved (Meitou key, a bool, absent on a town's own platoon): the load makes it a roaming one
+    /// again whatever package it ran (<see cref="SaveLoader.Travels"/>), since the package a loaded platoon runs, a bar's while it is stopped
+    /// in a town, says nothing of where it belongs.
+    /// </summary>
+    public const string RoamsKey = "meitou roams";
+
+    /// <summary>
     /// What a capture collects for the squads' memories: the handle every character written got, and the platoon records to put each squad's memory
     /// on once all are written.
     /// </summary>
@@ -1610,6 +1617,8 @@ public static partial class SaveCapture
             record.Bools["intact"] = intact;
 
             if (package is not null) record.Strings["currentPackage"] = package;
+            if (roaming) record.Bools[RoamsKey] = true;
+            else record.Bools.Remove(RoamsKey);
             if (missionTown >= 0 && missionTown != town && missionTown < _data.Sites.Count)
                 record.Strings[MissionTownKey] = _data.Sites[missionTown].Town.Id;
             else record.Strings.Remove(MissionTownKey);
@@ -1817,7 +1826,8 @@ public static partial class SaveCapture
 
     /// <summary>
     /// The roaming platoons' positions and AI packages (<c>currentPackage</c>, docs/formats/save.md PLATOON) into their PLATOON records: the
-    /// package its squad's blackboard runs while it is loaded (<see cref="LoadedPackage"/>), else the one it unloaded with. A characterless one (a
+    /// package its squad's blackboard runs while it is loaded (<see cref="LoadedPackage"/>), else the one it unloaded with, and the mark that it
+    /// roams (<see cref="RoamsKey"/>). A characterless one (a
     /// stand-in the game had not made) that has left the world loses its record, as a despawned save platoon does.
     /// </summary>
     static void WriteRoaming(SaveBuilder builder, World world, LoadedSave loaded)
@@ -1835,6 +1845,7 @@ public static partial class SaveCapture
 
             var at = platoon.Position;
             platoon.Position = new Vector3(p.Position.X, at.Y, p.Position.Y);
+            platoon.Record.Bools[RoamsKey] = true;
             // One the game has not made yet has run no package (FUN_140372ef0 writes the active platoon's).
             bool unmade = platoon.Record.Bools.GetValueOrDefault("never been activated");
             if (!unmade && (LoadedPackage(world, p) ?? p.Package) is { } package) platoon.Record.Strings["currentPackage"] = package;

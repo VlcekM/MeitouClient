@@ -132,8 +132,10 @@ public sealed partial class AiSystem
     {
         PlacedTown? best = null;
         float bestD = float.MaxValue;
-        foreach (var site in data.Sites)
+        var sites = data.Sites;
+        for (int i = 0; i < sites.Count; i++)   // indexed: the shoppers' think asks this in the parallel step
         {
+            var site = sites[i];
             if (site.Town.Type is TownType.NestMarker or TownType.Null) continue;
             if (faction >= 0 && (site.Index >= data.SiteFactions.Count || data.SiteFactions[site.Index] != faction)) continue;
 
@@ -151,8 +153,10 @@ public sealed partial class AiSystem
     {
         PlacedTown? best = null;
         float bestD = float.MaxValue;
-        foreach (var town in world.Buildings.Towns)
+        var towns = world.Buildings.Towns;
+        for (int i = 0; i < towns.Count; i++)
         {
+            var town = towns[i];
             float d = Vector2.DistanceSquared(at, Flat(town.Position));
             if (d < bestD) (best, bestD) = (new PlacedTown(CampaignTown.OfPlayer(town.Number), Flat(town.Position), town.Radius), d);
         }

@@ -422,7 +422,7 @@ holds refuses the second mod.
   stand-in's travel (not saved: find it by its tag and hold again after a load; it still unloads, and despawns as any platoon but a mod's
   spawn). `PopulationSystem.SendPlatoon` sends a held platoon's stand-in off screen toward a point or a living character (by the roads, at the
   stand-in travel speed, stopping within the roam arrival radius; null stops it; not saved, cleared when the hold ends); once loaded the mod
-  walks its members. The `EndContract(squadId)` command ends a running contract as its hours running out would (a `StartContract` of the
+  walks its members. A hold on a platoon that is in the world changes its members' minds on the next package step: they stop acting out their package (a sleeper gets up, one sitting stands, the followers follow their leader again and the leader stands) and keep only its combat goals, and releasing the hold gives the full minds back. A held squad whose package itself travels (a wandering trader's, a mission's) is still walked by that package while it has somewhere to go. The `EndContract(squadId)` command ends a running contract as its hours running out would (a `StartContract` of the
   same package after it starts it afresh; the game ignores a start of the contract already running), and `StartContract { AnyRange = true }`
   lets the contract's assault take its target wherever it is, not only within the manoeuvre mode's reach (about 6517 units for ROAM_FAR;
   saved with the contract). **Verified** by `ModHookTests` (synthetic world): a held stand-in, travel to a point, the contract's end and restart,
