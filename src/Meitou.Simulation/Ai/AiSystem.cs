@@ -3332,11 +3332,19 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         foreach (var role in board.Roles)
         {
             foreach (var goal in role)
-                if (TaskBehaviours.Of(goal.Task.Type) == AiBehaviour.Travel) return true;
+                if (Travels(goal.Task.Type)) return true;
         }
 
         return false;
     }
+
+    /// <summary>
+    /// Whether a goal walks its squad to the mission town: a travel goal, or 192 Delivering slaves, the shipping package's leader goal (a captive
+    /// job). Under the population's trip the slavers had engine minds, so the leader walked the trip alone while the rest neither followed nor
+    /// carried its knocked-out captives, which then escaped far from it (#904).
+    /// </summary>
+    static bool Travels(TaskType type) =>
+        TaskBehaviours.Of(type) == AiBehaviour.Travel || type == TaskType.GoToSomewhereForDeliveringSlaves;
 
     /// <summary>
     /// Whether the squad is the player's: of the player's faction, or with a player character among its members.

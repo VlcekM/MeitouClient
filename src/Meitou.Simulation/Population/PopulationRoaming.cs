@@ -749,8 +749,8 @@ public sealed partial class PopulationSystem
         if (p.Held) return;   // a code mod runs it (HoldPlatoon)
 
         // A package that travels (the trader, the shipping classes) moves the squad itself: no trip order meanwhile, and the trip starts afresh when
-        // it gives way.
-        if (squad.Ai is { } board && AiSystem.BoardMoves(board))
+        // it gives way. So does a leader obeying its master, which follows it (its Slave list, job 187).
+        if (squad.Ai is { } board && AiSystem.BoardMoves(board) || LeaderObeys(world, squad))
         {
             (p.Target, p.WaitLeft, p.Point) = (-1, 0, null);
             return;
@@ -798,6 +798,14 @@ public sealed partial class PopulationSystem
             }
         }
     }
+
+    /// <summary>
+    /// Whether the squad's leader obeys a master squad (<see cref="AiSystem.ObeyedRoles"/>): a captive split off into a squad of its own follows its
+    /// slaver, so a trip ordered on it walked it off until it escaped far from its owner (#904).
+    /// </summary>
+    static bool LeaderObeys(World world, Squad squad) =>
+        world.Characters.TryResolveNext(squad.Leader, out int s) && world.Characters.Cold(s) is { } leader
+        && AiSystem.ObeyedRoles(world, squad, leader) is not null;
 
     /// <summary>
     /// At the goal the squad mills about in the town (or round the point) it came to.
