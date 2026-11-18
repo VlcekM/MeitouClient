@@ -265,7 +265,9 @@ public sealed partial class PopulationSystem : IStateHashed
     /// </summary>
     public const double RollEveryHours = 6;
     /// <summary>
-    /// Spawn radius of a campaign squad round its town or leader (<b>Verified</b>, 700).
+    /// Spawn radius of a campaign squad round its town's centre or its leader (engine stand-in: the original's 700, <c>FUN_1409c4150</c>,
+    /// <b>Verified</b>, is the distance outward through the drafting town's first gate, and a squad drafted once there is a leader is made at the
+    /// leader platoon's position; docs/game/factions-squads-towns.md "Campaigns").
     /// </summary>
     public const float CampaignSpawnRadius = 700;
     /// <summary>

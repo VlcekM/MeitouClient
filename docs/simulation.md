@@ -540,9 +540,11 @@ the player has one and stands in it; requests (victory/loss chains, ally help) c
   and the others to it at the `travel speed unloaded` speeds (serial, outside the parallel movers). With `OffscreenFights` (Meitou) campaign
   stand-ins fight like other travellers and a squad lost there leaves the list the 20 % rule counts (**Verified**, `FUN_1409c70f0`: the denominator is the platoons still registered). The fight timer is armed only in phase 1 of an assault's first 4 h, after the players' hold test passes (`FUN_1409c70f0` returns first), and reset at every phase change; phase 0's early end tests only the campaign's own target town. Faithful: an unloaded assault wins at 4 h. Engine choice: a
   campaign with no platoon left is defeated. End effects: the messages and the trigger roll or the 40-96 h retry; nothing else changes.
-- **Loaded**: campaign squads are platoons the AI does not run, so the campaign drives them; the phase's package is what the next population
-  look does with `Phase` (the original installs it at the next AI update). Column (`GatherAndMove` as the original): the leader's trail is
-  laid each look and follower i heads for its point i × slots × 150 / N back (engine choice for the Unknown: the trail point, also off screen);
+- **Loaded**: campaign squads run a blackboard (the phase package, [platoon blackboards](#ai)), but their members keep engine minds and the campaign
+  march moves them, as goal 215 is not acted out by the AI. Column (engine stand-in for goal 215, [campaigns](game/factions-squads-towns.md#campaigns)):
+  the leader's trail is laid each look and follower i heads for its point i × slots × 150 / N back, also off screen, and the leader for the target
+  town's centre; in the original a follower's squad leader walks to the leader platoon's position, off screen to the target town, and the leader to
+  the town's waypoint point;
   loaded followers jog, the leader marching out keeps its `travel speed loaded` (WALK walk, JOG run mode, RUN and GROUPED free, NO_SPEED_CHANGE
   as it was) while every intact platoon is within 6000, else it waits within 8294.4 of the target or walks. They fight through the normal aggro;
   arrival, timers and the 20 % rule run. **Observed** (headless, Dust Bandits, 4 squads of 49 at `raidSizeMult` 4, camera on the leader): the
