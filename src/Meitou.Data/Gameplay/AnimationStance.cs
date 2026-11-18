@@ -20,6 +20,12 @@ public readonly record struct HandHold(WeaponKinds Weapon)
     /// polearms; docs/game/combat.md).
     /// </summary>
     public static HandHold OfCategory(int skillCategory) => new(Combat.WeaponCategories.AnimationKind(skillCategory));
+
+    /// <summary>
+    /// The hold the clips are chosen for from a drawn-weapon state: the state without its <see cref="WeaponKinds.MeleeMark"/>, so a melee weapon of
+    /// no skill class plays the <c>1 handed</c> clips as the crossbow does.
+    /// </summary>
+    public static HandHold OfDrawn(WeaponKinds drawn) => new(drawn & ~WeaponKinds.MeleeMark);
 }
 
 /// <summary>

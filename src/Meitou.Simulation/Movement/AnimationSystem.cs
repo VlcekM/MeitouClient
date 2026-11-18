@@ -2031,7 +2031,7 @@ public sealed class AnimationSystem(
         // The crawl records are prone; no standing clip (stumbles included) fits a crawler. Crouched is never together with prone (FUN_14051dda0).
         var stance = new AnimationStance
         {
-            Right = new HandHold(cold.DrawnWeapon),
+            Right = HandHold.OfDrawn(cold.DrawnWeapon),
             Combat = cold.InCombat,
             Stealth = (cold.Orders & CharacterOrders.Sneak) != 0,
             CarryingLeft = !cold.Carrying.IsNone,
