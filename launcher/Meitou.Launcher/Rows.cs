@@ -180,11 +180,11 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
         + "nothing more to install";
 
     /// <summary>
-    /// The note for <see cref="BuiltIn"/>: the Meitou setting the feature became, and for a code mod that it is not run; null when not built in.
+    /// The note for <see cref="BuiltIn"/>: the Meitou setting the feature became, and that the mod is not run (a plugin's DLLs never are, a code
+    /// mod is skipped); null when not built in.
     /// </summary>
     string? CoveredNote => BuiltIn is not { } built ? null
-        : Loc.Format(LauncherText.Translate(Mod.HasCode ? "Built into Meitou: {1}; this mod is not run" : "Built into Meitou: {1}"),
-            LauncherText.Translate(built.Setting));
+        : Loc.Format(LauncherText.Translate("Built into Meitou: {1}; this mod is not run"), LauncherText.Translate(built.Setting));
 
     /// <summary>
     /// The note for <see cref="Suggestion"/>: the suggested code mod, and whether the list holds it; null when none is suggested.

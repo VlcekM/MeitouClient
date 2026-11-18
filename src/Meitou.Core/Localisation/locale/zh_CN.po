@@ -215,9 +215,6 @@ msgstr "此模组没有官方的 MeitouClient 版本，因此由 MeitouClient �
 msgid "RE_Kenshi plugin: its DLLs are ignored in Meitou"
 msgstr "RE_Kenshi 插件：Meitou 会忽略它的 DLL"
 
-msgid "Built into Meitou: {1}"
-msgstr "已内置于 Meitou：{1}"
-
 msgid "Built into Meitou: {1}; this mod is not run"
 msgstr "已内置于 Meitou：{1}；此模组不会运行"
 

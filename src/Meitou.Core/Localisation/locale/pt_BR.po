@@ -210,9 +210,6 @@ msgstr "Este mod não tem versão oficial para o MeitouClient, então a equipe d
 msgid "RE_Kenshi plugin: its DLLs are ignored in Meitou"
 msgstr "Plugin RE_Kenshi: as DLLs são ignoradas pelo Meitou"
 
-msgid "Built into Meitou: {1}"
-msgstr "Integrado ao Meitou: {1}"
-
 msgid "Built into Meitou: {1}; this mod is not run"
 msgstr "Integrado ao Meitou: {1}; este mod não é executado"
 
