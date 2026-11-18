@@ -103,6 +103,8 @@ public sealed class CombatDatabase
     public static CombatDatabase From(GameDatabase db)
     {
         var weapons = db.OfType(FcsRecordType.Weapon).Select(WeaponData.From).ToList();
+        var techniques = db.OfType(FcsRecordType.CombatTechnique).Select(CombatTechnique.From).ToList();
+        WeaponClassNames.Apply(weapons, techniques);
         var manufacturers = db.OfType(FcsRecordType.WeaponManufacturer).Select(WeaponManufacturer.From).ToList();
         var materials = db.OfType(FcsRecordType.MaterialSpecsWeapon).Select(Combat.WeaponMaterial.From).ToList();
         var armours = db.OfType(FcsRecordType.Armour).Select(ArmourData.From).ToList();
@@ -110,7 +112,7 @@ public sealed class CombatDatabase
         var result = new CombatDatabase
         {
             Constants = CombatConstants.FromDatabase(db),
-            Techniques = [.. db.OfType(FcsRecordType.CombatTechnique).Select(CombatTechnique.From)],
+            Techniques = techniques,
             Weapons = weapons,
             Manufacturers = manufacturers,
             WeaponMaterials = materials,

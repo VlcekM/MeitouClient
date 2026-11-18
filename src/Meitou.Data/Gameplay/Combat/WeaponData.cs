@@ -216,6 +216,22 @@ public sealed record WeaponData
     public string? ModSkill { get; init; }
 
     /// <summary>
+    /// <c>meitou class</c> (Meitou only, not a field of the game's editor): the name of a weapon class of the data's own
+    /// (<see cref="WeaponClassNames"/>); null when absent or empty.
+    /// </summary>
+    public string? ModClass { get; init; }
+
+    /// <summary>
+    /// The category number of its <see cref="ModClass"/> (<see cref="WeaponClassNames.Apply"/>); null for a weapon that names none.
+    /// </summary>
+    public int? ClassCategory { get; init; }
+
+    /// <summary>
+    /// The category its techniques are picked by: its class's number when it names one, else its <see cref="SkillCategory"/>.
+    /// </summary>
+    public int TechniqueCategory => ClassCategory ?? SkillCategory;
+
+    /// <summary>
     /// Whether the weapon is a fist rather than a held weapon.
     /// </summary>
     public bool IsUnarmed => SkillCategory == (int)WeaponCategory.Unarmed;
@@ -253,6 +269,7 @@ public sealed record WeaponData
             RaceDamage = r.GetReferences("race damage").ToDictionary(x => x.TargetStringId, x => x.Values.Value0),
             Value = RecordReading.Int(r, "value", 0),
             ModSkill = r.Strings.GetValueOrDefault("meitou skill") is { Length: > 0 } skill ? skill : null,
+            ModClass = r.Strings.GetValueOrDefault("meitou class") is { Length: > 0 } weaponClass ? weaponClass : null,
         };
     }
 }

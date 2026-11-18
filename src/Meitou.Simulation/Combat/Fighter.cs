@@ -100,17 +100,17 @@ public sealed class Fighter
     public bool IsAnimal { get; init; }
 
     /// <summary>
-    /// The creature kind its techniques are picked by (COMBAT_TECHNIQUE <c>animal</c>): its natural weapon's <c>skill category</c> (9 to 20), 0 for a
-    /// person (docs/game/animals.md).
+    /// The creature kind its techniques are picked by (COMBAT_TECHNIQUE <c>animal</c>): its natural weapon's <c>skill category</c> (9 to 20; a
+    /// data-named class's number for a weapon of one, <see cref="WeaponData.TechniqueCategory"/>), 0 for a person (docs/game/animals.md).
     /// </summary>
-    public int AnimalCategory => IsAnimal && Weapon is { } w ? w.Data.SkillCategory : 0;
+    public int AnimalCategory => IsAnimal && Weapon is { } w ? w.Data.TechniqueCategory : 0;
 
     /// <summary>
     /// The weapon category a technique's <c>animal</c> value is compared with (<see cref="TechniqueChooser.Fits"/>): the weapon's <c>skill
-    /// category</c>, 5 (unarmed) for fists. The martial arts techniques have <c>animal</c> 5, the creature ones 9 to 20, the weapon ones 0
-    /// (docs/game/animals.md).
+    /// category</c> (its data-named class's number for a weapon of one, <see cref="WeaponData.TechniqueCategory"/>), 5 (unarmed) for fists. The
+    /// martial arts techniques have <c>animal</c> 5, the creature ones 9 to 20, the weapon ones 0 (docs/game/animals.md).
     /// </summary>
-    public int TechniqueCategory => Weapon?.Data.SkillCategory ?? (int)WeaponCategory.Unarmed;
+    public int TechniqueCategory => Weapon?.Data.TechniqueCategory ?? (int)WeaponCategory.Unarmed;
 
     /// <summary>
     /// Whether its natural weapon was drawn from its manufacturer's <c>weapon types</c> (an animal that names no weapon, the Swamp Turtle;

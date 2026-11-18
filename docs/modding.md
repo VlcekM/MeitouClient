@@ -450,6 +450,13 @@ holds refuses the second mod.
   Melee Defence as for any weapon. A character's level starts at the skill's `Start` until the mod sets it, NPCs' too. A name no running mod
   added (the mod removed) leaves the category's skill, as the original game, which loads the field as any other, does. To enter the field in
   the construction set, add the line `meitou skill: "" "A code mod's skill this weapon uses"` under `[WEAPON]` in the install's `fcs.def`.
+  A class with attacks of its own needs no code: WEAPON and COMBAT_TECHNIQUE `meitou class` (Meitou only, any text, case ignored) put the
+  weapons and techniques of one name in a class, whose weapons pick their attacks, blocks and dodges from its techniques alone, as a creature's
+  weapon does from its own (`WeaponClassNames`; the class's number is internal, from 1000000 up). With none fitting, a person falls back to the
+  unarmed techniques, as with any weapon, for attacks only: a class with no blocks or dodges of its own neither blocks nor dodges. The technique's clip is found by name as any person's
+  technique's. Everything else (skill, stance, two-arm rule, the Current Skill line) follows the weapon's `skill category`, its override and
+  `meitou skill`. Leave the techniques' weapon flags off: the original game, and Meitou without the class, read the weapon as its `skill
+  category` and the techniques fit no weapon then. Editor lines: `meitou class: "" "Weapon class"` under `[WEAPON]` and `[COMBAT_TECHNIQUE]`.
 - **Bone anchors:** `CharacterCold.DrawAnchor = new DrawAnchor(carrier, bone, offset, rotation)` draws a character on another's named bone
   as the renderer poses the carrier in the drawn frame (a rider on a mount; the rule and its limits:
   [character-renderer](character-renderer.md#bone-anchors-meitou-engine-choice)); null removes it. Set it in the tick from the mod's own

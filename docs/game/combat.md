@@ -55,6 +55,8 @@ in the damage packet, the attack rating and the defence rating alike; a door bas
 list unless `is block` or `is dodge` (then the defence list), in data order. Each keeps a per-category table:
 `katanas` 0, `sabre` 1, `blunt` 2, `heavy weapons` 3, `hackers` 4, `unarmed` 5, `bow` 6, `polearm` 8; with
 `animal` > 8 only that category. `1 handed` is not read here (only by `FUN_1405ba280`). `power N` is stored ×0.01.
+Meitou: a technique and the weapons with the same `meitou class` (not editor fields) form a class with a category number of its own, which the
+technique takes in place of `animal` ([modding](../modding.md), "Weapon types").
 
 ### Attack technique choice
 
