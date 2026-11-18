@@ -29,7 +29,7 @@ A class library matching the release's runtime: `net10.0` for legacy macOS, `net
 `Meitou.Data.dll` and `0Harmony.dll`, all with `Private="false"`: the game supplies them. Releases after v0.17.1 ship these four Meitou
 assemblies, not the earlier eleven, and most namespaces follow folders (`Meitou.Simulation.Population`, `Meitou.Game.Rendering.Terrain`):
 a code mod built against v0.17.1 or earlier must be rebuilt. The references come from a release folder or, without a game install, from
-the release's [reference pack](#reference-pack).
+the release's [reference package](#reference-package).
 
 ```csharp
 public sealed class MyMod : IMod
@@ -45,36 +45,40 @@ public sealed class MyMod : IMod
 
 Folder: `mods/MyMod/MyMod.mod` (the data mod, may be empty of records), `meitou.json`, `MyMod.dll`.
 
-### Reference pack
+### Reference package
 
-Every release and nightly carries `Meitou-<version>-refs.zip` (`tools/scripts/package-references.ps1`; `release.yml` and `nightly.yml` attach it
-after publishing, and a release goes out without it when it fails to build), one zip for every platform. For `net11.0` (standard builds) and
-`net10.0` (legacy macOS builds), its `ref/` folder holds the compiler's reference assemblies of the four Meitou assemblies (their public API; the
-internals two of them keep for the game's tools and tests stay out of a mod's reach) beside the game's own builds of its other managed libraries
-(`0Harmony`, Bepu, DotRecast, Silk.NET and the rest), which the compiler needs for any member typed in one of them. The Meitou assemblies carry
-the release's version like the game's: .NET binds a mod only to an assembly of at least the version it was compiled against, so a mod built
-against a nightly's pack (stamped with the next version) may not load on the previous full release. The game never loads these copies: the Meitou
-ones are reference assemblies .NET refuses to run, and the libraries are always taken from the game ([Loading](#loading)). The Metal backend's
-types (macOS builds only) are not in the pack.
+Every full release pushes `Meitou.References` to nuget.org, versioned as the release (`tools/scripts/package-references.ps1`; `release.yml`
+pushes it after publishing through nuget.org's trusted publishing, and a release goes out without it when it fails to build; nightlies
+push none). A mod's project references it and needs nothing else:
 
-- `Meitou.Mod.targets`, imported anywhere in a mod's project (`<Import Project="<pack>/Meitou.Mod.targets" />`), references every assembly
-  of the set for the mod's `TargetFramework`, with `Private="false"`. A project with its own references to a game folder can point them at
-  `net11.0/ref/` instead; it then also needs a reference to each library whose types it uses.
+```xml
+<PackageReference Include="Meitou.References" Version="<game version>" />
+```
+
+For `net11.0` (standard builds) and `net10.0` (legacy macOS builds), its `assemblies/<framework>/ref/` folder holds the compiler's reference
+assemblies of the four Meitou assemblies (their public API; the internals two of them keep for the game's tools and tests stay out of a
+mod's reach) beside the game's own builds of its other managed libraries (`0Harmony`, Bepu, DotRecast, Silk.NET and the rest), which the
+compiler needs for any member typed in one of them. The Meitou assemblies carry the release's version like the game's: .NET binds a mod
+only to an assembly of at least the version it was compiled against, so a mod does not load on a release older than the package it was built against.
+The game never loads these copies: the Meitou ones are reference assemblies .NET refuses to run, and the libraries are always taken from
+the game ([Loading](#loading)). The Metal backend's types (macOS builds only) are not in the package.
+
+- NuGet imports the package's `build/Meitou.References.targets` into the project, which references every assembly of the set for the
+  mod's `TargetFramework`, with `Private="false"`. The assemblies are not under the package's `lib/` or `ref/`, which NuGet would reference
+  by itself; another `TargetFramework` (`net9.0`, `net11.0-windows`) is an error naming the two.
 - `publicized/` beside `ref/` holds the four Meitou assemblies with every type and member public (compiler-generated members and explicit
   interface implementations left as they are), method bodies replaced by a throw and resources dropped, made by `tools/Meitou.ReferencePack` with
   BepInEx.AssemblyPublicizer (MIT, on AsmResolver, MIT); the targets take its libraries from `ref/`. `<MeitouPublicized>true</MeitouPublicized>`,
   set anywhere in the project, makes the targets reference this set and compile in `Meitou.IgnoresAccessChecksTo.cs`, which declares
   `IgnoresAccessChecksTo` for the four Meitou assemblies in the mod's own assembly: .NET then lets the mod reach their non-public members.
-  Without it, a call into one throws `MethodAccessException` or `FieldAccessException`, and a type overriding one fails to load
-  (`TypeLoadException`). A mod that already declares the attribute itself (a publicizer package does) leaves `MeitouPublicized` unset.
+  A mod that already declares the attribute itself (a publicizer package does) leaves `MeitouPublicized` unset.
 - Internals change between releases without notice: a mod using them should name its `gameVersion` in `meitou.json`.
-- `THIRD_PARTY_NOTICES.md` and `licenses/` carry the libraries' licences.
-- **Observed** (2026-11-17, win-x64): three existing code mods compile unchanged against `net11.0/ref/`; a `net11.0` and a `net10.0` mod
-  reading `VulkanDevice.Vk` (a Silk.NET type) compile through the targets with the Import placed before `TargetFramework`, and no pack
-  file is copied to their output; loading a Meitou file of the pack throws `BadImageFormatException`. A mod calling an internal static of
-  `Meitou.Simulation`, an internal and a private static of `Meitou.Data` and an internal type, compiled against `publicized/`, runs in its
-  own load context against the real assemblies, and its Harmony patch lands on an internal method; without the attribute the same call
-  throws `MethodAccessException`.
+- `THIRD_PARTY_NOTICES.md` and `licenses/` in the package carry the libraries' licences.
+- **Observed** (2026-11-18, win-x64, a package built locally and restored from a folder feed): a `net11.0` and a `net10.0` mod implementing
+  `IMod`, calling `ModContext.Harmony` and reading `VulkanDevice.Vk` (a Silk.NET type) compile with the `PackageReference` alone, and no
+  package file is copied to their output; loading a Meitou file of the package throws `BadImageFormatException`. A mod calling an internal
+  static of `Meitou.Data` and naming an internal type of `Meitou.Simulation` compiles only with `MeitouPublicized`, and the call then runs
+  against the real `net11.0` assemblies.
 
 ## Discovery
 
@@ -526,7 +530,7 @@ difference it runs the game without mods: if that differs too, the fault is the 
 - The manifest's `apiVersion` must lie in `ModApi.MinimumVersion` (1) to `ModApi.Version` (2); otherwise the mod is refused at load with a
   message. 2 added `version`, `dependencies`, `loadAfter`, `incompatible`, `gameVersion`, `ModContext.Dependency<T>` and
   `IModDependents`; an API 1 mod loads unchanged. `gameVersion` ties a mod to the engine releases it was built against.
-- Harmony patches non-public members; compiling against them takes the [reference pack](#reference-pack)'s publicized set, or a
+- Harmony patches non-public members; compiling against them takes the [reference package](#reference-package)'s publicized set, or a
   publicizer package (BepInEx.AssemblyPublicizer.MSBuild with `Publicize="true"`) on a release folder's assemblies. Compatibility is per game
   version ([Why this shape](#why-this-shape)): public names change too, as after v0.17.1, and internals change without notice.
 

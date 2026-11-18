@@ -1,13 +1,14 @@
-# Builds the reference pack code mods compile against (docs/modding.md "Reference pack"): Meitou-<version>-refs.zip, one top folder holding, for
-# net11.0 (standard builds) and net10.0 (legacy macOS builds), ref/: the compiler's reference assemblies of MeitouClient, Meitou.Simulation,
-# Meitou.Core and Meitou.Data beside the game's own builds of its other managed libraries (0Harmony, Bepu, DotRecast, Silk.NET and the rest,
-# which the compiler needs for any member typed in them), and publicized/: the same four with every type and member public and bodies
-# stripped (tools/Meitou.ReferencePack), whose libraries the targets take from ref/; plus Meitou.Mod.targets, which a mod imports, the access
-# attribute file a publicized mod compiles in, and the licences. The Meitou assemblies carry the release's version, as package-release.ps1
-# stamps the game's, so a mod built against the pack binds to that release.
-# Nothing here touches the game's own build or zips: the four projects build separately under -Work.
+# Builds Meitou.References, the NuGet package code mods compile against (docs/modding.md "Reference package"): Meitou.References.<version>.nupkg.
+# Under assemblies/ it holds, for net11.0 (standard builds) and net10.0 (legacy macOS builds), ref/: the compiler's reference assemblies of
+# MeitouClient, Meitou.Simulation, Meitou.Core and Meitou.Data beside the game's own builds of its other managed libraries (0Harmony, Bepu,
+# DotRecast, Silk.NET and the rest, which the compiler needs for any member typed in them), and publicized/: the same four with every type and
+# member public and bodies stripped (tools/Meitou.ReferencePack), whose libraries the targets take from ref/. build/ holds
+# Meitou.References.targets, which NuGet imports into the mod's project, and the access attribute file a publicized mod compiles in; beside
+# them lie the readme, the icon and the licences. The Meitou assemblies carry the release's version, as package-release.ps1 stamps the
+# game's, so a mod built against the package binds to that release.
+# Nothing here touches the game's own build or zips: the four projects build separately under -Work, where the package is staged too.
 #   pwsh -File tools/scripts/package-references.ps1 -Version 0.21.0 [-Output out] [-Work <scratch folder>] [-Frameworks net11.0,net10.0]
-# (Runs on PowerShell 7 and Windows PowerShell 5.1: the zip is written entry by entry with forward slashes.)
+# (Runs on PowerShell 7 and Windows PowerShell 5.1.)
 param(
     [Parameter(Mandatory = $true)] [string] $Version,
     [string] $Output = "out",
@@ -15,7 +16,6 @@ param(
     [string[]] $Frameworks = @("net11.0", "net10.0")
 )
 $ErrorActionPreference = "Stop"
-Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 
 $root = Resolve-Path (Join-Path $PSScriptRoot "../..")
 $packFiles = Join-Path $root "tools/reference-pack"
@@ -24,9 +24,9 @@ $assemblies = @("MeitouClient", "Meitou.Simulation", "Meitou.Core", "Meitou.Data
 $numeric = if ($Version -match '^\d+(\.\d+){1,3}') { $Matches[0] } else { "0.0.0" }
 $parsed = [Version]$numeric
 $expected = New-Object Version $parsed.Major, $parsed.Minor, ([Math]::Max($parsed.Build, 0)), ([Math]::Max($parsed.Revision, 0))
-$name = "Meitou-$Version-refs"
 New-Item -ItemType Directory -Force $Output, $Work | Out-Null
-$stage = Join-Path (Resolve-Path $Output).Path $name
+# The package's files, laid out as in the package (tools/reference-pack/Meitou.References.csproj packs the folder as it is).
+$stage = Join-Path (Resolve-Path $Work).Path "package"
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force $stage | Out-Null
 
@@ -73,7 +73,7 @@ function Copy-Libraries([string] $bin, [string] $dir) {
     }
 }
 
-# publicized/: the built Meitou assemblies run through the publicizer; Meitou.Mod.targets takes the libraries for this set from ref/.
+# publicized/: the built Meitou assemblies run through the publicizer; Meitou.References.targets takes the libraries for this set from ref/.
 function Write-PublicizedSet([string] $bin, [string] $dir) {
     $built = $assemblies | ForEach-Object { Join-Path $bin "$_.dll" }
     dotnet run --project (Join-Path $root "tools/Meitou.ReferencePack/Meitou.ReferencePack.csproj") -c Release -- $dir @built | Out-Host
@@ -91,57 +91,32 @@ function Test-Versions([string] $dir) {
 foreach ($framework in $Frameworks) {
     $artifacts = Build-Framework $framework
     $bin = Get-GameBin $artifacts
-    $refDir = Join-Path $stage "$framework/ref"
+    $refDir = Join-Path $stage "assemblies/$framework/ref"
     Write-ReferenceSet $artifacts $bin $refDir
     Test-Versions $refDir
-    $pubDir = Join-Path $stage "$framework/publicized"
+    $pubDir = Join-Path $stage "assemblies/$framework/publicized"
     Write-PublicizedSet $bin $pubDir
     Test-Versions $pubDir
 }
 
-# The targets file, Meitou's licence, the notices covering every library in the pack, and the Apache-2.0 text Bepu's licence asks to accompany it.
-Copy-Item (Join-Path $packFiles "Meitou.Mod.targets"), (Join-Path $packFiles "Meitou.IgnoresAccessChecksTo.cs") $stage
-Copy-Item (Join-Path $root "LICENSE"), (Join-Path $root "THIRD_PARTY_NOTICES.md") $stage
+# build/: the targets file NuGet imports and the access attribute file. Beside them the readme and icon the package page shows, Meitou's
+# licence, the notices covering every library in the package, and the Apache-2.0 text Bepu's licence asks to accompany it.
+$build = Join-Path $stage "build"
+New-Item -ItemType Directory -Force $build | Out-Null
+Copy-Item (Join-Path $packFiles "Meitou.References.targets"), (Join-Path $packFiles "Meitou.IgnoresAccessChecksTo.cs") $build
+Copy-Item (Join-Path $packFiles "README.md"), (Join-Path $root "THIRD_PARTY_NOTICES.md") $stage
+Copy-Item (Join-Path $root "LICENSE") (Join-Path $stage "LICENSE.txt")
+Copy-Item (Join-Path $root "assets/branding/meitou-128.png") (Join-Path $stage "icon.png")
 Copy-Item (Join-Path $packFiles "licenses") $stage -Recurse
-$title = "Meitou $Version reference pack"
-$readme = @"
-$title
-$('=' * $title.Length)
 
-Compile code mods for Meitou $Version without a game install. The game supplies the real assemblies when it loads a mod and never loads
-these copies: the four Meitou assemblies here are compile-only reference assemblies that .NET refuses to run, and the other DLLs are the
-game's own builds of its libraries, which the game always takes from its own folder. The guide: docs/modding.md "Reference pack" in
-https://github.com/VlcekM/MeitouClient.
-
-net11.0/   standard builds (Windows, Linux, macOS)
-net10.0/   legacy macOS builds
-  ref/          MeitouClient.dll, Meitou.Simulation.dll, Meitou.Core.dll, Meitou.Data.dll (the public API), 0Harmony.dll and the game's other
-                libraries (Bepu, DotRecast, Silk.NET, ...), needed for any member typed in them
-  publicized/   the four Meitou assemblies with every type and member public, for mods that reach internals (the libraries come from ref/)
-
-Use
----
-In the mod's .csproj:
-    <Import Project="path/to/$name/Meitou.Mod.targets" />
-For the publicized set, also set <MeitouPublicized>true</MeitouPublicized> anywhere in the project: the mod then compiles in
-Meitou.IgnoresAccessChecksTo.cs, which lets it reach those members at run time. Internals change between releases without notice.
-A mod built against a nightly's pack carries the nightly's version and may not load on the previous full release.
-
-Licences
---------
-The Meitou assemblies are built from MeitouClient's source (GPL-3.0-or-later, LICENSE). The other libraries are under their own licences,
-listed in THIRD_PARTY_NOTICES.md; licenses/Apache-2.0.txt is the text for BepuPhysics and BepuUtilities.
-"@
-Set-Content -Path (Join-Path $stage "README.txt") -Value $readme -Encoding UTF8
-
-# The zip: one top folder, entries with forward slashes on every PowerShell.
-$zipPath = Join-Path (Resolve-Path $Output).Path "$name.zip"
-if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
-$zip = [IO.Compression.ZipFile]::Open($zipPath, [IO.Compression.ZipArchiveMode]::Create)
-try {
-    foreach ($file in Get-ChildItem $stage -Recurse -File) {
-        $entry = "$name/" + $file.FullName.Substring($stage.Length + 1).Replace('\', '/')
-        [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $file.FullName, $entry, [IO.Compression.CompressionLevel]::Optimal) | Out-Null
-    }
-} finally { $zip.Dispose() }
-Write-Host "references $zipPath"
+# The package: its version is the release's, in full (NuGet writes it normalized into the file name).
+$packWork = Join-Path $Work "pack"
+if (Test-Path $packWork) { Remove-Item $packWork -Recurse -Force }
+$out = (Resolve-Path $Output).Path
+Remove-Item (Join-Path $out "Meitou.References.*.nupkg") -Force -ErrorAction SilentlyContinue
+dotnet pack (Join-Path $packFiles "Meitou.References.csproj") -c Release --artifacts-path $packWork -o $out `
+    -p:MeitouReferencesStage=$stage -p:PackageVersion=$Version | Out-Host
+if ($LASTEXITCODE -ne 0) { throw "dotnet pack failed" }
+$package = Get-ChildItem $out -Filter "Meitou.References.*.nupkg" | Select-Object -First 1
+if ($null -eq $package) { throw "no package was written to $out" }
+Write-Host "references $($package.FullName)"

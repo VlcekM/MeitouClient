@@ -1,0 +1,32 @@
+<Project>
+
+  <!-- Meitou.References, the NuGet package code mods compile against (docs/modding.md "Reference package"). NuGet imports this file into a
+       project that references the package, which then gets references to the five assemblies the game supplies at run time (MeitouClient,
+       Meitou.Simulation, Meitou.Core, Meitou.Data, 0Harmony) for its TargetFramework (net11.0 for the standard builds, net10.0 for the
+       legacy macOS ones), none copied to the mod's output. The game's other libraries (Bepu, DotRecast, Silk.NET and the rest) are
+       referenced the same way, so a member typed in one compiles too.
+       MeitouPublicized=true takes the publicized set instead, where every type and member is public, and compiles in
+       Meitou.IgnoresAccessChecksTo.cs, which lets the mod reach those members at run time.
+       The assemblies lie under assemblies/, not lib/ or ref/, which NuGet would reference by itself whatever MeitouPublicized says.
+       The paths use only MSBuild's own MSBuildThisFileDirectory and the mod's TargetFramework, and every choice is an item condition: items
+       are evaluated after every property, so MeitouPublicized may sit anywhere in the project or its Directory.Build.props. -->
+
+  <ItemGroup Condition="'$(MeitouPublicized)' != 'true'">
+    <!-- Every assembly of the set, named by path: the four Meitou assemblies, 0Harmony and the game's libraries. -->
+    <Reference Include="$(MSBuildThisFileDirectory)../assemblies/$(TargetFramework)/ref/*.dll" Private="false" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(MeitouPublicized)' == 'true'">
+    <!-- The four publicized Meitou assemblies, and every other assembly from ref/ (0Harmony and the game's libraries). -->
+    <Reference Include="$(MSBuildThisFileDirectory)../assemblies/$(TargetFramework)/publicized/*.dll" Private="false" />
+    <Reference Include="$(MSBuildThisFileDirectory)../assemblies/$(TargetFramework)/ref/*.dll"
+               Exclude="$(MSBuildThisFileDirectory)../assemblies/$(TargetFramework)/ref/Meitou*.dll" Private="false" />
+    <Compile Include="$(MSBuildThisFileDirectory)Meitou.IgnoresAccessChecksTo.cs" Link="Meitou.IgnoresAccessChecksTo.cs" Visible="false" />
+  </ItemGroup>
+
+  <Target Name="MeitouCheckReferences" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(MSBuildThisFileDirectory)../assemblies/$(TargetFramework)/ref/MeitouClient.dll')"
+           Text="Meitou.References has no '$(TargetFramework)' set. Target net11.0 (standard builds) or net10.0 (legacy macOS builds)." />
+  </Target>
+
+</Project>

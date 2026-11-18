@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Packs Meitou.References, the NuGet package code mods compile against (docs/modding.md "Reference package"), from the folder
+       tools/scripts/package-references.ps1 staged (MeitouReferencesStage), laid out as the package. Nothing is compiled, and the project is
+       not in the solution. The package has no lib/ or ref/ assembly, which NuGet would reference by itself: NuGet imports its
+       build/Meitou.References.targets into the mod's project, and that file references the set for the mod's TargetFramework. -->
+  <PropertyGroup>
+    <PackageId>Meitou.References</PackageId>
+    <Authors>MeitouClient contributors</Authors>
+    <Description>Reference assemblies of MeitouClient, the open reimplementation of the Kenshi engine: what a code mod compiles against, without a game install. The package version is the game release.</Description>
+    <PackageProjectUrl>https://github.com/VlcekM/MeitouClient</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/VlcekM/MeitouClient</RepositoryUrl>
+    <PackageTags>meitou kenshi modding</PackageTags>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- Compile-time only: a project that references it does not pass it on to its own package. -->
+    <DevelopmentDependency>true</DevelopmentDependency>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <!-- NU5100 (an assembly outside lib/): the assemblies are under assemblies/ on purpose, referenced by the targets file. -->
+    <NoWarn>$(NoWarn);NU5100</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(MeitouReferencesStage)' != ''">
+    <None Include="$(MeitouReferencesStage)/**" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <Target Name="MeitouCheckStage" BeforeTargets="GenerateNuspec">
+    <Error Condition="!Exists('$(MeitouReferencesStage)/build/Meitou.References.targets')"
+           Text="No staged package at MeitouReferencesStage ('$(MeitouReferencesStage)'): run tools/scripts/package-references.ps1." />
+  </Target>
+
+</Project>

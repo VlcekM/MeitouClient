@@ -7,7 +7,7 @@ using BepInEx.AssemblyPublicizer;
 namespace Meitou.ReferencePack;
 
 /// <summary>
-/// The publicized reference assemblies of the reference pack (docs/modding.md "Reference pack"): copies of the game's assemblies in which every
+/// The publicized reference assemblies of Meitou.References (docs/modding.md "Reference package"): copies of the game's assemblies in which every
 /// type and member is public, so a code mod compiles against internals it reaches at run time through IgnoresAccessChecksTo. The copies are
 /// compile-time only: every method body replaced by a throw, no resource, and the [ReferenceAssembly] mark that makes the runtime refuse to load
 /// them.
