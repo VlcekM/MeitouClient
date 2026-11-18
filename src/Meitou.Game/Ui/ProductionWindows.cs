@@ -543,7 +543,8 @@ sealed class ProductionWindows(PlayerInterface player)
     }
 
     /// <summary>
-    /// The building window's output: its stock and bar (a farm's ripeness), a bench's current craft, or the column hidden.
+    /// The building window's output: its stock and bar, a bench's current craft, or the column hidden. A farm's bar is the plant being harvested
+    /// (ProductionBuilding slot 179 <c>FUN_140298810</c>: the output entry's progress, which <c>FUN_1400e59e0</c> works), so 0 while it grows.
     /// </summary>
     static void BindOutput(MachineSnapshot m, UiBindings b)
     {
@@ -552,7 +553,7 @@ sealed class ProductionWindows(PlayerInterface player)
             string count = output.Count.ToString(CultureInfo.InvariantCulture);
             string capacity = output.Capacity.ToString(CultureInfo.InvariantCulture);
             b.Text["OutputText"] = $"{output.Name}\n{count}/{capacity}";
-            b.Progress["OutputProgressBar"] = m.Farm is { } farm ? farm.Ripeness : output.Fill;
+            b.Progress["OutputProgressBar"] = m.Farm is { } farm ? farm.HarvestProgress : output.Fill;
         }
         else if (m.Craft is { } done)
         {

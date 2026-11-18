@@ -1403,11 +1403,6 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     }
 
     /// <summary>
-    /// How ripe a farm is, 0..1 over its growth (the HUD's figure): the growth while growing, 1 once ripe.
-    /// </summary>
-    public static float Ripeness(FarmState f) => Math.Clamp(f.Growth, 0, 1);
-
-    /// <summary>
     /// The water draw (<b>Observed</b>, <c>FUN_1400df4c0</c>): each input needs <c>amount</c>; one below it takes an item from its section, or the
     /// draw fails (its level 0).
     /// </summary>

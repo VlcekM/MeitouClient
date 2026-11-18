@@ -929,6 +929,12 @@ name; otherwise ghost none, `OutputText` `-`, bar 0 and `CraftingName` `#afa68b`
 `CraftingName` (so it shows only until the first update) and `OutputTitleText` the translated "Output" upper-cased.
 Meitou (`ProductionWindows`): these texts and ghosts for crafting benches; a section holds only its ingredient, so "Invalid item!" never shows; the output ghost is the queue front's item (its record and model); a section the bound craft takes nothing from (`InputSlot.Idle`) shows `-`, no status, bar 0 and no ghost, drawn disabled while empty, and takes no item (#951).
 
+Production window bars (**Verified**, ProductionBuilding slot 179 `FUN_140298810`, also FarmBuilding's slot 179; setter `FUN_14014dd60`, x 100 (`DAT_141683250`) rounded):
+each `InputNProgressBar` is input N's level, `OutputProgressBar` the current output entry's progress (+0x448), 0 without one. On a farm that entry is
+the plant being harvested: its progress is the harvest progress `FUN_1400e59e0` adds to, reset to 0 per plant and at replanting (`FUN_1400e48e0`),
+kept while the output is full; the farm tick does not touch it, so the bar is empty while the crop grows and fills once per plant. Operating
+a machine draws no floating bar over the worker (`Task_OperateMachine` is not a `ProgressBarTask`). Meitou: `FarmView.HarvestProgress` (#981).
+
 Inventory opening geometry (**Verified**, `FUN_1406e4960`; constants `DAT_141696c74` = 0.05 and `DAT_14167e8d8` = 0.5): independent character
 windows start at the integer margin `0.05 × min(screen width, screen height)`, after other inventory windows on that row. A full row advances by
 twice the margin, trying up to five rows. A linked target starts immediately at its partner's right edge and top; each character's bag precedes

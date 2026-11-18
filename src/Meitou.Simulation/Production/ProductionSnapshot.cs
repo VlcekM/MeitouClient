@@ -12,10 +12,11 @@ public readonly record struct MachineSlotView(string Item, string Name, int Coun
     bool Idle = false, int ItemWidth = 0, int ItemHeight = 0);
 
 /// <summary>
-/// A farm as the host shows it (docs/simulation.md "Production").
+/// A farm as the host shows it (docs/simulation.md "Production"); <c>HarvestProgress</c> is the plant being harvested, 0..1 (the building window's
+/// output bar).
 /// </summary>
 public readonly record struct FarmView(float Growth, float Death, int Harvested, int Plants, FarmStatus Status, float Fertility, float CropMatch,
-    float Ripeness)
+    float HarvestProgress)
 {
     /// <summary>
     /// Each plant's growth (a copy; -10 harvested): what its crop mesh is drawn at.
@@ -361,7 +362,8 @@ public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<M
         InventoryView? storage = m.Storage is { } s ? new InventoryView(s.Width, s.Height, 0, 0,
             Array.AsReadOnly(s.Items.Select((item, index) => InventoryItemView.Of(index, item) with { Section = "main" }).ToArray())) : null;
         FarmView? farm = m.Farm is { } f && m.Data.Farm is { } fd
-            ? new FarmView(f.Growth, f.Death, f.Harvested, f.Plants.Length, f.Status, m.Yield, m.CropMatch, ProductionSystem.Ripeness(f))
+            ? new FarmView(f.Growth, f.Death, f.Harvested, f.Plants.Length, f.Status, m.Yield, m.CropMatch,
+                Math.Clamp(f.HarvestProgress, 0, 1))
             {
                 PlantGrowth = [.. f.Plants],
                 Data = fd,
