@@ -41,9 +41,9 @@ public sealed class CrossbowInstance(CrossbowData data, float quality, CrossbowS
     public int NumShots => Math.Max(Data.NumShots, 1);
 
     /// <summary>
-    /// No <c>ammo</c> reference and no Meitou ammunition list: the crossbow never runs dry.
+    /// No <c>ammo</c> reference and no Meitou ammunition list: the crossbow never runs dry (<see cref="CrossbowData.InfiniteAmmo"/>).
     /// </summary>
-    public bool InfiniteAmmo => Data.AmmoCount == 0;
+    public bool InfiniteAmmo => Data.InfiniteAmmo;
 
     /// <summary>
     /// The gun of a CROSSBOW at quality fraction <paramref name="q"/> with the CONSTANTS <c>bow damage 1/99</c> and the global damage multiplier

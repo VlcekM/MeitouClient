@@ -769,7 +769,7 @@ line and the sight ray (`SightRay`) count it as blocked; a flying bolt passes it
 A crossbow reload paused by the fight's end or a switch to melee resumes where it stopped (as the original's controller timer,
 [combat.md](game/combat.md#turrets) fire gate); in a fight without a target the controller stays on (state 3) and the reload counts on.
 Bolts and the line of fire hit each character's click hull, an axis-aligned box from the race's `hull size` (`CombatSystem.HullHalf`); the line of fire and the closing
-ray follow the original's tests ([combat.md](game/combat.md#line-of-fire-and-the-hit-shape)). Engine bounds: the line of fire looks the crossbow's `range` on (at
+ray follow the original's tests ([combat.md](game/combat.md#line-of-fire-and-the-hit-shape)). Engine bounds: the line of fire looks the loaded ammunition's range on (the crossbow's `range` for base data; at
 least to the aim point), the closing ray `RangedTuning.RayReach` (2000); the original's rays are unbounded. Not modelled: the aim clip's blend before the steady time
 counts, the near-camera gate on aiming, and the controller's own target choice (Meitou's crossbowmen choose as fighters do, every second).
 Ranged state is hashed when used. Weapon/turret research: [combat.md](game/combat.md). A data mod's ammunition lists and per-ammunition bolt

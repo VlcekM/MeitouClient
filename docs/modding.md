@@ -663,19 +663,20 @@ holds refuses the second mod.
 - **Ammunition** (data; engine extension, not in the original): one kind per gun needs nothing new: a CROSSBOW loads the ITEM its `ammo` names (only
   the first entry is read), so a mod's gun naming its own cartridge loads only that and no base crossbow loads it. CROSSBOW reference list `meitou
   ammo` adds more kinds after `ammo`, in the order the gun prefers them (with `ammo` empty, the list alone; a crossbow with neither has infinite
-  ammunition); an entry that is not an ITEM record is left out with a warning in the log. A reload loads the first kind the shooter carries (its
-  sections, then its backpack; the list's order wins) and takes its bolt; the `num shots` it loads keep that kind until spent, also through a swap
-  to another crossbow. ITEM floats `meitou damage mult` and `meitou bleed mult` (default 1, 0 to 100), `meitou range mult` (default 1, 0 to 10),
-  `meitou speed mult` (default 1, 0.1 to 10) and the file `meitou live ammo` change a bolt of that item, with any crossbow whose list holds it (its
-  `ammo` included): its pierce damage; the crossbow's range and shot speed times the kind's, for the bolt's flight and for the shooter's range test,
-  line of fire and aim lead; the bleed multiplier of its hit (the original's 2 times it), before code mods' hit filters; and its mesh in flight and
-  stuck in a body or the ground (the bolts drawn loaded on the crossbow keep its own `live ammo`). A value that is not finite reads 1 and one
-  outside its bounds the nearest bound, each with a warning in the log. The tooltip's "Ammunition type:" names every kind; it and the ammunition's
-  tooltip show neither the kinds' numbers nor which kind is loaded, and the player cannot choose one but by what it carries. An NPC made with such a
-  crossbow gets one stack of `ammo` (else the list's first ITEM) unless it holds a kind of the list. Turrets are not affected. Loaded bolts are not
-  saved, as before. Without these fields the ranged fight, its state hash and NPC kits are as before. The construction set does not offer the fields
-  (its `fcs.def` declares none of them): write the records with `FcsWriter` (`src/Meitou.Data/Fcs`). A gun should still name its first kind in
-  `ammo`, the field the original game reads.
+  ammunition); an entry that is missing (a dependency mod not enabled) or not an ITEM record is left out with a warning in the log, and a crossbow
+  with no `ammo` whose list leaves nothing loads nothing (with a warning), never turning infinite. A reload loads the first kind the shooter carries
+  (its sections, then its backpack; the list's order wins) and takes its bolt; the `num shots` it loads keep that kind until spent, also through a
+  swap to another crossbow. ITEM floats `meitou damage mult` and `meitou bleed mult` (default 1, 0 to 100), `meitou range mult` (default 1, 0.1 to
+  10), `meitou speed mult` (default 1, 0.1 to 10) and the file `meitou live ammo` change a bolt of that item, with any crossbow whose list holds it
+  (its `ammo` included): its pierce damage; the crossbow's range and shot speed times the kind's, for the bolt's flight and for the shooter's range
+  test, line of fire and aim lead; the bleed multiplier of its hit (the original's 2 times it), before code mods' hit filters; and its mesh in
+  flight and stuck in a body or the ground (the bolts drawn loaded on the crossbow keep its own `live ammo`). A value that is not finite reads 1 and
+  one outside its bounds the nearest bound, each with a warning in the log. The tooltip's "Ammunition type:" names every kind; it and the
+  ammunition's tooltip show neither the kinds' numbers nor which kind is loaded, and the player cannot choose one but by what it carries. An NPC
+  made with such a crossbow gets one stack of `ammo` (else the list's first ITEM) unless it holds a kind of the list. Turrets are not affected.
+  Loaded bolts are not saved, as before. Without these fields the ranged fight, its state hash and NPC kits are as before. The construction set does
+  not offer the fields (its `fcs.def` declares none of them): write the records with `FcsWriter` (`src/Meitou.Data/Fcs`). A gun should still name
+  its first kind in `ammo`, the field the original game reads.
 - **Stat modifiers:** `cold.Stats.Modifiers.Set(key, stat, amount)` / `Remove(key, stat)` / `RemoveAll(key)` (`StatModifiers`) add a temporary
   amount to a character's stat (a drug's +10 strength, a sickness's -5 dexterity) under the mod's own key. Every gameplay read of the stat
   (`CharacterStats` indexer, `Strength`...) adds it before the injury, hunger, gear and animal-age multipliers, and the stats window shows it;

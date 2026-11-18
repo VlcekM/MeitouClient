@@ -342,16 +342,14 @@ public sealed class ItemFactory(GameDatabase db, GameConstants constants, Func<M
     /// An <b>engine choice</b>: a character whose loadout rolled a crossbow gets one item of the crossbow's <c>ammo</c> (one stack of bolts: 10 to 40
     /// shots by the record's <c>charges</c>) unless its record's list already gave it some. Only 3 of the 40 base-game CHARACTER records with
     /// crossbows list bolts; how the original equips NPC crossbowmen with ammunition is <b>Unknown</b> (docs/simulation.md "Combat", ranged).
-    /// Meitou: a crossbow whose <c>ammo</c> is empty gives the first of its <c>meitou ammo</c> list when that is an ITEM, and any kind of that list
-    /// the character already holds counts as some (docs/modding.md "Ammunition").
+    /// Meitou: a crossbow whose <c>ammo</c> is empty gives the first ITEM of its <c>meitou ammo</c> list, and any ITEM of that list the character
+    /// already holds counts as some (docs/modding.md "Ammunition"); entries that are missing or not ITEM records are passed over, as the crossbow does.
     /// </summary>
     void AddAmmo(Inventory inventory, GameRecord crossbow)
     {
         var refs = crossbow.GetReferences("ammo");
         var extra = crossbow.GetReferences(Data.Gameplay.Combat.CrossbowData.ExtraAmmoList);
-        string ammo = refs.Count > 0 ? refs[0].TargetStringId
-            : extra.Count > 0 && Db.Find(extra[0].TargetStringId) is { Type: FcsRecordType.Item } ? extra[0].TargetStringId
-            : "";
+        string ammo = refs.Count > 0 ? refs[0].TargetStringId : FirstItem(extra);
         if (ammo.Length == 0) return;
 
         foreach (var i in inventory.All())
@@ -360,15 +358,31 @@ public sealed class ItemFactory(GameDatabase db, GameConstants constants, Func<M
     }
 
     /// <summary>
-    /// Whether <paramref name="list"/> names <paramref name="record"/>.
+    /// Whether <paramref name="list"/> names <paramref name="record"/> and it is an ITEM record (a kind the crossbow loads).
     /// </summary>
-    static bool Accepts(IReadOnlyList<GameReference> list, string record)
+    bool Accepts(IReadOnlyList<GameReference> list, string record)
     {
         foreach (var r in list)
-            if (r.TargetStringId == record) return true;
+            if (r.TargetStringId == record) return IsItem(record);
 
         return false;
     }
+
+    /// <summary>
+    /// The first entry of <paramref name="list"/> that is an ITEM record; empty when none is.
+    /// </summary>
+    string FirstItem(IReadOnlyList<GameReference> list)
+    {
+        foreach (var r in list)
+            if (IsItem(r.TargetStringId)) return r.TargetStringId;
+
+        return "";
+    }
+
+    /// <summary>
+    /// Whether <paramref name="id"/> names an ITEM record.
+    /// </summary>
+    bool IsItem(string id) => Db.Find(id) is { Type: FcsRecordType.Item };
 
     /// <summary>
     /// A loadout weapon in its section and row; when another weapon already holds those cells (a two-row crossbow fills the back), in the hip when

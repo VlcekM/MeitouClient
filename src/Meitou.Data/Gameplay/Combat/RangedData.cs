@@ -228,14 +228,20 @@ public sealed record CrossbowData
     /// <summary>
     /// Meitou (docs/modding.md "Ammunition"): every ammunition the crossbow loads, in the order it prefers them (<see cref="AmmoId"/> first, then the
     /// <c>meitou ammo</c> list), each with its ITEM's Meitou fields. Null when the crossbow loads only <see cref="AmmoId"/> and that ITEM has no
-    /// Meitou field: every base-game crossbow, which then reads exactly as without this list.
+    /// Meitou field: every base-game crossbow, which then reads exactly as without this list. Empty when the crossbow has only a <c>meitou ammo</c>
+    /// list and none of its entries is usable: it then loads nothing (it is not infinite).
     /// </summary>
     public IReadOnlyList<AmmoData>? Ammo { get; init; }
 
     /// <summary>
-    /// How many kinds of ammunition the crossbow loads: 0 for infinite ammunition.
+    /// How many kinds of ammunition the crossbow loads: 0 for infinite ammunition or a list with nothing usable.
     /// </summary>
     public int AmmoCount => Ammo?.Count ?? (AmmoId.Length > 0 ? 1 : 0);
+
+    /// <summary>
+    /// Neither <c>ammo</c> nor a <c>meitou ammo</c> list: the crossbow never runs dry (fcs.def: "if nothing here then magic infinite ammo").
+    /// </summary>
+    public bool InfiniteAmmo => Ammo is null && AmmoId.Length == 0;
 
     /// <summary>
     /// The string id of the ammunition the crossbow prefers <paramref name="k"/>-th (0 first), <paramref name="k"/> below <see cref="AmmoCount"/>.
@@ -345,7 +351,8 @@ public sealed record CrossbowData
     /// The crossbow with its <see cref="Ammo"/> list resolved: <c>ammo</c>'s first entry, then the <see cref="ExtraAmmoList"/> entries of
     /// <paramref name="record"/> not already listed that <paramref name="find"/> knows as ITEM records (another entry is left out with a warning in
     /// the log), each with <paramref name="kind"/>'s Meitou fields (a default <see cref="AmmoData"/> for an ITEM without them). The crossbow itself
-    /// when it loads only <see cref="AmmoId"/> and that ITEM has no Meitou field, or when nothing is left to list.
+    /// when it loads only <see cref="AmmoId"/> and that ITEM has no Meitou field. A crossbow with no <c>ammo</c> whose list leaves nothing (a missing
+    /// dependency mod's items) gets an empty list and a warning: it loads nothing, rather than turning infinite.
     /// </summary>
     public CrossbowData WithAmmo(GameRecord record, Func<string, GameRecord?> find, Func<GameRecord, AmmoData?> kind)
     {
@@ -362,14 +369,16 @@ public sealed record CrossbowData
 
             if (find(id) is not { Type: FcsRecordType.Item } item)
             {
-                Console.WriteLine($"warning   crossbow '{Name}' ({StringId}) {ExtraAmmoList}: '{id}' is not an ITEM record; left out");
+                Console.WriteLine($"warning   crossbow '{Name}' ({StringId}) {ExtraAmmoList}: '{id}' is missing or not an ITEM record; left out");
                 continue;
             }
 
             list.Add(kind(item) ?? new AmmoData { StringId = id });
         }
 
-        return list.Count == 0 ? this : this with { Ammo = list };
+        if (list.Count == 0) Console.WriteLine($"warning   crossbow '{Name}' ({StringId}): no usable ammunition; it loads none");
+
+        return this with { Ammo = list };
     }
 }
 
@@ -392,7 +401,8 @@ public sealed record AmmoData
 
     /// <summary>
     /// <c>meitou range mult</c>: times the crossbow's range for a bolt of this kind: the distance it flies before its nose drops, and the distance the
-    /// shooter fires from and checks its line of fire over (default 1, 0 to <see cref="MaxFlightMult"/>).
+    /// shooter fires from and checks its line of fire over (default 1, <see cref="MinRangeMult"/> to <see cref="MaxFlightMult"/>: at 0 the shooter
+    /// would never be in range and never fire).
     /// </summary>
     public float RangeMult { get; init; } = 1;
 
@@ -429,6 +439,11 @@ public sealed record AmmoData
     public const float MinSpeedMult = 0.1f;
 
     /// <summary>
+    /// The smallest range multiplier.
+    /// </summary>
+    public const float MinRangeMult = 0.1f;
+
+    /// <summary>
     /// The Meitou number fields' names, in the order of the properties.
     /// </summary>
     static readonly string[] Fields = ["meitou damage mult", "meitou range mult", "meitou speed mult", "meitou bleed mult"];
@@ -446,7 +461,7 @@ public sealed record AmmoData
         {
             StringId = r.StringId,
             DamageMult = Mult(r, Fields[0], 0, MaxDamageMult),
-            RangeMult = Mult(r, Fields[1], 0, MaxFlightMult),
+            RangeMult = Mult(r, Fields[1], MinRangeMult, MaxFlightMult),
             SpeedMult = Mult(r, Fields[2], MinSpeedMult, MaxFlightMult),
             BleedMult = Mult(r, Fields[3], 0, MaxDamageMult),
             LiveAmmoMesh = mesh,
