@@ -354,7 +354,7 @@ public sealed partial class CarrySystem
     }
 
     /// <summary>
-    /// A hit: the target is knocked out for the put-down time its toughness and the attacker's assassination give, and stands still.
+    /// A hit: the target is knocked out for the put-down time its toughness and the attacker's assassination give, and stands still; one in a bed lies on in it.
     /// </summary>
     void KnockOutTarget(CharacterTable table, int t, CharacterCold cold, CharacterCold target)
     {
@@ -369,6 +369,9 @@ public sealed partial class CarrySystem
             float assassination = (cold.Stats?[StatsEnumerated.Assassination] ?? 0)
                 * (cold.Medical?.StatMultiplier(StatsEnumerated.Assassination) ?? 1);
             medical.KnockOut(medical.PutDownKoSeconds(ctx, assassination * 0.01f));
+
+            // The hit only sets the KO time (FUN_14034cd80, Verified): a sleeper stays in its bed, as it would not if its Sleep task ended (#994).
+            if (target.InSomething == Locks.HeldState.Bed) return;
             TaskStart.Stand(table, t);
             table.Next[t].Velocity = Vector3.Zero;
         }

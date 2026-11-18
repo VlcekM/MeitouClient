@@ -837,7 +837,7 @@ Order 228 "Stealth KO" (verb list `FUN_14079b2d0`), `Task_StealthKO` (vtable slo
   100 x (X + K) / 2K, K = 30 for X >= 0 else 15 (disassembly: the hidden third argument is +K). Unclamped. 0 when the
   target's sense entry of the attacker has its +0x38 flag (it sees the attacker); x0.5 when it only hears the attacker (+0x39 heard, **Verified**). Also 0 when the target is fighting, has an entry for the attacker and the attacker is not unseen (Character +0xe8 ≠ 1).
 - Roll uniform 0..100; lands when chance > roll. Hit: floating "*Thunk*", target KO time `FUN_140644980` with
-  assassination x 0.01 (the put-down KO formula, [carry-loot](carry-loot.md)). Both set the pending Assault crime (code 5, `FUN_140852c80`, against
+  assassination x 0.01 (the put-down KO formula, [carry-loot](carry-loot.md)); nothing else of the target changes, so a sleeper stays in its bed (+0x2f8), knocked out, to be looted or kidnapped there (**Verified**, `FUN_14034cd80`; Meitou keeps its Sleep task, #994). Both set the pending Assault crime (code 5, `FUN_140852c80`, against
   the target's faction, no other condition) and float the text in a ScreenLabel over the attacker ([floaters](ui-screens.md#8-damage-floaters), font index 1, shown
   whatever the floaters option says): "*Thunk*" colour (0.4, 0.8, 0.4, 0.9), "Failed!" (0.7, 0.4, 0.4, 0.7); **Verified**.
   Miss, in order (**Verified**): the target says event 56 ASSASSINATION_FAILED at the attacker (`FUN_140685660` over `FUN_140684990`); it notices the attacker
