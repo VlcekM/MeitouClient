@@ -563,7 +563,7 @@ Talk menu's dry run is picking.
 | 73 TOWN_LEVEL_CURRENT_LOCATION / 74 PLAYERS_BEST_TOWN_LEVEL | Me's current building (Character slot 15 `+0x78`) has a town (Building slot 77) whose faction is the player's: its `+0x388` ([plevel](factions-squads-towns.md)); otherwise false whatever the value (73) / the highest `+0x388` over the player faction's towns (`FUN_140928cc0`), −1 with none (74) | Num3 |
 | 75 IN_A_PLAYER_TOWN | S's [status town](carry-loot.md#the-status-town) (`+0x88`, through Character slot 14) is set and its faction is the player's (`+0x250`), whatever the town's type: so a player outpost counts, and so does a town out to 1.5 x its radius once entered (**Verified**, case 0x4b of `FUN_140676950`). Meitou `DialogueSystem.InPlayerTown`, the status town as for DC 31 | Bool |
 | 76 TARGET_CHARACTER_EXISTS | there is a subject | Bool |
-| 77 IS_RECRUITABLE | false at a player head cap , for a quantity ≥ 25 , for law, trader, diplomat; military → !B; others B | Bool |
+| 77 IS_RECRUITABLE | no while the player faction holds CONSTANTS `max faction size` characters (`DAT_142133f50`, summed over its squads), for S of combat level ≥ 25 (`FUN_140885050`: the mean of max(martial arts, melee attack), max(dodge, melee defence), max(dexterity, strength), the stored CharStats values) or of class law, military, trader or diplomat; yes otherwise (**Verified**, decompile of case 0x4d) | Bool |
 | 78 HAS_AI_CONTRACT | Me's AI's contract slot (`FUN_140507070` `+0x210`) is set | Bool |
 
 ## Effects
@@ -690,7 +690,7 @@ bubble (`FUN_140725f30`) uses Kenshi_StandardFont_Large or _Medium, sits 4 units
 
 ## Unknowns
 
-T_WHOLE_SQUAD fan-out; how a childless closing line is shown in a player conversation; `isDialogDelivered`; DA 44-46; the KO event mask; the interjector pick rule; DC 77's cap and quantity; DA 15's lists, 58's field; the speech timer's unit; the unnamed short-term tags 1 and 5 (in the grudge mask).
+T_WHOLE_SQUAD fan-out; how a childless closing line is shown in a player conversation; `isDialogDelivered`; DA 44-46; the KO event mask; the interjector pick rule; DA 15's lists, 58's field; the speech timer's unit; the unnamed short-term tags 1 and 5 (in the grudge mask).
 
 ## Meitou design
 

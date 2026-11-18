@@ -54,7 +54,8 @@ public sealed partial class DialogueSystem
             18 or 20 or 50 or 52 or 53 or 54 or 55 or 78 => SpeakerSquadCondition(world, dc, me, mc, subjectId, s),
             27 or 28 or 29 or 30 or 41 or 42 or 44 or 45 or 71 or 79 => BodyCondition(dc, s),
             11 or 16 or 17 or 31 or 49 or 57 or 58 or 60 or 68 or 70 or 73 or 74 or 75 => PlaceCondition(world, dc, me, mc, other, subjectId, sF),
-            59 or 61 or 62 or 64 or 65 or 77 => KindCondition(dc, mc, s, meF),
+            59 or 61 or 62 or 64 or 65 => KindCondition(dc, mc, s, meF),
+            77 => Bool(dc, IsRecruitable(world, s)),
             _ => Bool(dc, false),
         };
     }
@@ -284,12 +285,10 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// The conditions on what S is: a slave (owned by the speaker's faction), shackled, of the speaker's race group, not of the law, trader,
-    /// diplomat or military classes.
+    /// The conditions on what S is: a slave (owned by the speaker's faction), shackled, of the speaker's race group.
     /// </summary>
     bool KindCondition(DialogueCondition dc, CharacterCold mc, CharacterCold s, int meF)
     {
-        bool b = dc.Value > 0;
         switch (dc.Condition)
         {
             case 59: return Bool(dc, s.SlaveState is 1 or 2);
@@ -300,11 +299,39 @@ public sealed partial class DialogueSystem
             case 65: return Bool(dc,
                 s.Race is not null && mc.Race is not null
                 && _dialogue.RaceGroupOf(s.Race.StringId)?.Group == _dialogue.RaceGroupOf(mc.Race.StringId)?.Group);
-            case 77:
-                return s.NpcClass is FundamentalType.LawEnforcement or FundamentalType.Trader or FundamentalType.Diplomat or FundamentalType.Military
-                    ? !b : b;
             default: return Bool(dc, false);
         }
+    }
+
+    /// <summary>
+    /// The combat level at which DC 77 calls a character not recruitable (<c>DAT_1416ad4b0</c>, 25.0).
+    /// </summary>
+    const float RecruitableLevelLimit = 25;
+
+    /// <summary>
+    /// DC 77 IS_RECRUITABLE (<c>FUN_140676950</c> case 0x4d, <b>Verified</b> decompile): no while the player's faction holds CONSTANTS
+    /// <c>max faction size</c> characters, for a subject of combat level 25 or more (<see cref="CombatLevel"/>) or of the law, military, trader or
+    /// diplomat classes; yes otherwise.
+    /// </summary>
+    bool IsRecruitable(World world, CharacterCold s)
+    {
+        if (Factions.SquadManagement.CappedHeads(world) >= _data.Bodies.Constants.MaxFactionSize) return false;
+        if (s.Stats is { } stats && CombatLevel(stats) >= RecruitableLevelLimit) return false;
+
+        return s.NpcClass is not (FundamentalType.LawEnforcement or FundamentalType.Military or FundamentalType.Trader or FundamentalType.Diplomat);
+    }
+
+    /// <summary>
+    /// A character's combat level (<c>FUN_140885050</c>, <b>Verified</b> decompile): the mean of the better of martial arts and melee attack, of
+    /// dodge and melee defence, and of dexterity and strength, as stored.
+    /// </summary>
+    static float CombatLevel(CharacterStats stats)
+    {
+        float attack = Math.Max(stats.Stored(StatsEnumerated.MartialArts), stats.Stored(StatsEnumerated.MeleeAttack));
+        float defence = Math.Max(stats.Stored(StatsEnumerated.Dodge), stats.Stored(StatsEnumerated.MeleeDefence));
+        float body = Math.Max(stats.Stored(StatsEnumerated.Dexterity), stats.Stored(StatsEnumerated.Strength));
+
+        return (attack + defence + body) / 3;
     }
 
     /// <summary>

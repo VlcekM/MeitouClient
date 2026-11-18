@@ -709,7 +709,9 @@ holding the slaver, the customer, the character list and val0.
   its own faction (it does not join the player); event 51 BOUGHT_ME_FROM_SLAVERY at it with the customer as target; its cage unlocked; slave state 0; it leaves its cage or
   restraint; AI reset; its locked shackles unlocked (still worn); its squad remembers the customer with tag 3 FREED_ME; task 133 GET_OUT_OF_CAGE_LEGIT (queue cleared; the
   hold is already cleared, so it does nothing: [locks](locks.md#cages-and-beds)); relations toward the
-  player's faction: the slaver's +1, its own +4. Then the total is taken from the player faction's money (refused without deduction when it has less; the result is ignored);
+  player's faction: the slaver's +1, its own +4. Event 51 is the data's: a bought Scorchlander gets Dialogue.mod's `Bought from slavery sundemon`, whose
+  DC 77 line ("You're freeing me?... Thanks!") joins it to the player at once (DA 18) when it is recruitable, else it runs off or stays free (**Observed**,
+  line walk over the base data, issue #1015). Then the total is taken from the player faction's money (refused without deduction when it has less; the result is ignored);
   nothing is paid to the slaver.
 - The window's gate (`FUN_1407281c0`) makes such a shortfall unreachable: confirm is enabled only with a row ticked and the total within the buyer's money (the slaver's when
   selling, the player's when buying).
