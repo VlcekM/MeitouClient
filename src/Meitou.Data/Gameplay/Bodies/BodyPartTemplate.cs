@@ -120,6 +120,13 @@ public sealed record BodyPartTemplate
     public int PainThreshold { get; init; }
 
     /// <summary>
+    /// Whether <see cref="Type"/> is one of the four the original knows (torso, leg, arm, head; its part-order table <c>0x1416fc42c</c> has an entry
+    /// for each, docs/game/character-stats.md "Part order"). A part of another number (a tail) is Meitou-only: none of the four types' roles, and
+    /// Meitou treats it as an extra limb (its limb state saved apart, whatever made it a stump).
+    /// </summary>
+    public bool HasBaseType => Type is BodyPartType.Torso or BodyPartType.Leg or BodyPartType.Arm or BodyPartType.Head;
+
+    /// <summary>
     /// The side of the part from its <c>collapse part</c> bits.
     /// </summary>
     public BodySide Side => CollapsePart is 4 or 0x20 ? BodySide.Left : CollapsePart is 2 or 0x10 ? BodySide.Right : BodySide.None;
@@ -127,7 +134,7 @@ public sealed record BodyPartTemplate
     /// <summary>
     /// The part's place in the original's medical part list (<c>FUN_14064e410</c>, <b>Verified</b> by decompilation; docs/game/character-stats.md
     /// "Part order"): a table by type (head 0, torso 10, arm 20, leg 30) plus 1 for a right part (<c>collapse part</c> 2 or 0x10), sorted ascending.
-    /// Other types (none in the data) go last (engine choice: the original reads past its table).
+    /// Other types (none in the data) go last (engine choice; the original's table has entries for the four types only).
     /// </summary>
     public int MedicalOrder => Type switch
     {

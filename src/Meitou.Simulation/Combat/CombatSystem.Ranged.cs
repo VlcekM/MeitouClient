@@ -376,10 +376,19 @@ public sealed partial class CombatSystem : IProjectileSource
     }
 
     /// <summary>
-    /// The drawn-weapon kind of the fighter's melee weapon; none unarmed.
+    /// The drawn-weapon kind of the fighter's melee weapon; none unarmed. A person's WEAPON of no skill class (a <c>skill category</c> of 6 too)
+    /// animates as <c>1 handed</c>, the crossbow's kind, so it carries <see cref="WeaponKinds.MeleeMark"/> too and every "is the crossbow drawn"
+    /// test answers no for it, as the original's, which ask the item in hand whether it is a crossbow (docs/game/combat.md "Arms"). No base weapon
+    /// a person can hold is of that kind (only the creatures' natural weapons are). An animal's natural weapon keeps the plain kind, which those
+    /// tests read as a drawn crossbow, as before.
     /// </summary>
-    internal static WeaponKinds MeleeDrawn(Fighter f) =>
-        f.Weapon is { } w && !f.Unarmed ? HandHold.OfCategory(w.Data.AnimationCategory).Weapon : WeaponKinds.None;
+    internal static WeaponKinds MeleeDrawn(Fighter f)
+    {
+        if (f.Weapon is not { } w || f.Unarmed) return WeaponKinds.None;
+
+        var kind = HandHold.OfCategory(w.Data.AnimationCategory).Weapon;
+        return kind == WeaponKinds.OneHanded && !f.IsAnimal ? kind | WeaponKinds.MeleeMark : kind;
+    }
 
     /// <summary>
     /// Chooses crossbow or melee for a fighting character that carries a crossbow (the planner's desires, docs/game/combat.md "Fight lifecycle and

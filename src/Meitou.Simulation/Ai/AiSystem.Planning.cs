@@ -178,8 +178,9 @@ public sealed partial class AiSystem
             // and its only list B entry (!47, not carrying) is what Holds already requires of a character the AI runs. So are the combat goals
             // (engine choice): the desire already holds the finder's pick (and for the protect goals row 13's attacker), and the fight is the combat
             // system's. And the Medic goal: its desire holds the patient finder's score, and the treatment is the first aid system's. And the leader
-            // rescue (142: its finder and its done state, the leader down, are the desire's; the lift is the carry system's). And a captive goal: its
-            // desire holds what the job start found, and the job is the captive system's.
+            // rescue (142: its finder and its done state, the leader down, are the desire's; the lift is the carry system's), and the rescue to a bed
+            // (148: its desire and finder are kept by the carry system's sweep, which lifts the body). And a captive goal: its desire holds what the
+            // job start found, and the job is the captive system's.
             if (EngineActs(type))
             {
                 _mind.Plan.Clear();
@@ -243,10 +244,10 @@ public sealed partial class AiSystem
 
         /// <summary>
         /// Whether goal <paramref name="type"/> is its own plan, acted out by an engine system (the assault, the combat goals, Medic, the leader
-        /// rescue, the captive goals: <see cref="TryPlan"/>).
+        /// rescue, the rescue to a bed, the captive goals: <see cref="TryPlan"/>).
         /// </summary>
         static bool EngineActs(TaskType type) => TaskBehaviours.Of(type) is AiBehaviour.Assault or AiBehaviour.Fight or AiBehaviour.Medic
-            or AiBehaviour.RescueLeader or AiBehaviour.Captive;
+            or AiBehaviour.RescueLeader or AiBehaviour.RescueToBed or AiBehaviour.Captive;
 
         /// <summary>
         /// Whether a goal's plan is the planner's, run step by step (<see cref="PlanSteps"/>): not one of the plans of its own (<see cref="TryPlan"/>:

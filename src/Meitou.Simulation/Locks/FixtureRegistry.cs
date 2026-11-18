@@ -1685,6 +1685,34 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
+    /// <see cref="FindBed"/> for a carrier: a character that is not the player's and whose squad has no town takes only beds of its own faction or
+    /// an ally's within <see cref="BedSearchRange"/> (<see cref="OutOfTownlessReach"/>, the limit of the AI's sleep search,
+    /// <c>AiSystem.SpareBed</c>), and never one of the player's (engine choice: a roaming squad does not fill the player's beds with its wounded).
+    /// Any other character searches as <see cref="FindBed"/> does (a squad with a town keeps to its town's beds, which no player bed is).
+    /// </summary>
+    public Fixture? FindBedInReach(World world, int slot, FactionRelations relations, Func<Fixture, bool>? skip = null)
+    {
+        if (world.Characters.Cold(slot) is not { } c || c.IsPlayer || world.Squads.Find(c.SquadId) is not { Town: < 0 })
+            return FindBed(world, slot, relations, skip);
+
+        var p = world.Characters.Next[slot].Position;
+        var at = new Vector2(p.X, p.Z);
+        int player = world.Player.Faction;
+        return FindBed(world, slot, relations,
+            f => skip?.Invoke(f) == true || f.Owner >= 0 && f.Owner == player || OutOfTownlessReach(at, c.Faction, relations, f));
+    }
+
+    /// <summary>
+    /// Whether a squad with no town leaves bed <paramref name="f"/> out of its bed search: farther than <see cref="BedSearchRange"/> from
+    /// <paramref name="at"/>, or of a faction that is neither <paramref name="faction"/> nor its ally. It stands in for the original's last step, the
+    /// allied BF_BED buildings in the zones around the character (engine choice for the range).
+    /// </summary>
+    public static bool OutOfTownlessReach(Vector2 at, int faction, FactionRelations relations, Fixture f) =>
+        Vector2.DistanceSquared(at, new Vector2(f.Position.X, f.Position.Z)) > BedSearchRange * BedSearchRange
+        || f.Owner != faction
+            && !(f.Owner >= 0 && relations.Contains(f.Owner) && relations.Contains(faction) && relations.IsAlly(f.Owner, faction));
+
+    /// <summary>
     /// The bed search of a character that is not the player's (the other half of <c>FUN_1408cfe00</c>, docs/game/locks.md "Beds", <b>Observed</b>):
     /// the first free bed (the give-up list stands in as <see cref="Reachable"/>) of its squad's home building; with none there, those of the town's
     /// "designated" buildings of two kinds nearest it, then any BF_BED building near it. The original takes the first in its building list's order (a

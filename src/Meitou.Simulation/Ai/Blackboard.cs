@@ -824,6 +824,55 @@ public enum FleeAsk : byte
 }
 
 /// <summary>
+/// Where goal 148 Find and rescue if there's beds stood for a character whose goal lists hold it, at the carry system's last rescue beat
+/// (<see cref="AiMind.BedRescueNote"/>): a debugging aid the action log writes (docs/simulation.md "Action log").
+/// </summary>
+public enum BedRescueNote : byte
+{
+    /// <summary>
+    /// Not looked at: its goal lists do not hold 148, or no beat ran yet.
+    /// </summary>
+    None = 0,
+    /// <summary>
+    /// Not eligible: on Hold, carrying, or it is not able to lift (no usable left arm, or the row is not in its repertoire).
+    /// </summary>
+    CannotLift = 1,
+    /// <summary>
+    /// Not eligible: nobody in the world is knocked out.
+    /// </summary>
+    NobodyDown = 2,
+    /// <summary>
+    /// Not eligible: no downed ally its finder takes (own or allied faction, sensed or in sight, not given up; none while its squad fights).
+    /// </summary>
+    NoBody = 3,
+    /// <summary>
+    /// Not eligible: a downed ally, but the bed search finds no bed for it.
+    /// </summary>
+    NoBed = 4,
+    /// <summary>
+    /// Wanted, not chosen: its think chose another goal.
+    /// </summary>
+    NotChosen = 5,
+    /// <summary>
+    /// Chosen, but not free to lift now (not idle, wandering or following, or the AI does not hold it: a talk, a trade, an arrest).
+    /// </summary>
+    NotFree = 6,
+    /// <summary>
+    /// Chosen and free, but the lift would not start.
+    /// </summary>
+    Refused = 7,
+    /// <summary>
+    /// The lift started (row 148).
+    /// </summary>
+    Lifting = 8,
+    /// <summary>
+    /// Not eligible: the downed ally found is one goal 106 would not lay in a bed (a grudge tag, a bounty owed to a police-like rescuer, not regarded
+    /// as friendly).
+    /// </summary>
+    NoPutIn = 9,
+}
+
+/// <summary>
 /// What the AI decided for one character (<see cref="CharacterCold.Ai"/>): the goal it acts out, where its post and bed are, the fight it asks for.
 /// </summary>
 public sealed class AiMind
@@ -1191,6 +1240,19 @@ public sealed class AiMind
     public float RescueWant { get; set; }
 
     /// <summary>
+    /// The factor of goal 148 Find and rescue if there's beds (<see cref="AiBehaviour.RescueToBed"/>): 1 while its desire holds (not on Hold,
+    /// carrying nothing, a bed found), the character is able to lift (an arm, its repertoire) and the rescue finder finds a downed ally, else 0.
+    /// Kept by the carry system's serial sweep for a character whose goal lists hold 148 (the think reads it). Not saved; hashed while set.
+    /// </summary>
+    public float BedRescueWant { get; set; }
+
+    /// <summary>
+    /// Where goal 148 stood at the last rescue beat (a debugging aid for the action log; written by the carry system's serial sweep, read only by the
+    /// log, so it changes nothing in the world). Not saved, not hashed.
+    /// </summary>
+    public BedRescueNote BedRescueNote { get; set; }
+
+    /// <summary>
     /// The tick the last fight the serial step started for it begins (<see cref="CharacterCold.Running"/>'s <c>Tick</c> of that fight; 0: none yet):
     /// while it runs, the fight is the AI's own, a plan step of its combat goal, and the character thinks in it (<see cref="AiSystem.Holds"/>).
     /// </summary>
@@ -1301,6 +1363,12 @@ public sealed class AiMind
         {
             hasher.Add(MedicPatient);
             hasher.Add(MedicScore);
+        }
+
+        if (BedRescueWant != 0)
+        {
+            hasher.Add(0x42526573);   // "BRes"
+            hasher.Add(BedRescueWant);
         }
 
         if (CaptiveOffers.Count > 0)

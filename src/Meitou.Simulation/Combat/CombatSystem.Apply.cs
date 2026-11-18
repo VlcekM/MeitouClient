@@ -277,11 +277,8 @@ public sealed partial class CombatSystem
                     table.LimbsChanged.Enqueue((v, medical.Parts[ev.Part].Template.LimbSlot, true));
 
                     // LOST_LEG / LOST_ARM
-                    world.Defer(new Dialogue.DialogueEvent(table.IdOf(v), CharacterId.None,
-                        medical.Parts[ev.Part].Template.LimbSlot is 2 or 3 ? 70 : 71)
-                    {
-                        Tick = world.Tick + 1,
-                    });
+                    if (Data.Gameplay.Dialogue.DialogueEvents.LostLimb(medical.Parts[ev.Part].Template) is { } cry)
+                        world.Defer(new Dialogue.DialogueEvent(table.IdOf(v), CharacterId.None, cry) { Tick = world.Tick + 1 });
                     break;
             }
         }

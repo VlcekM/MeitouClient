@@ -300,7 +300,13 @@ to Jobs; the saved `chase mode` flag is that switch (**Verified**, [perma-jobs](
   ([Biome banner](#biome-banner)).
 - Medical panel (the body parts it shows are in [character-stats.md](character-stats.md#hunger-blood-and-parts)): nine `LifeBar1`..`LifeBar9` widgets in the layout but the code looks up `LifeBar10`, giving the
   MyGUI.log warning "Widget with name 'LifeBar10' not found. [Kenshi_MainPanel.layout]" (**Verified**: log line
-  and `Kenshi_MainPanel.layout`, which has LifeBar1..9 only). Life-bar skins in `data/gui/skins` (**Verified**):
+  and `Kenshi_MainPanel.layout`, which has LifeBar1..9 only). The front skin `Kenshi_HealthPanelTopSkin` (`Kenshi_UI.png` 240,755, 350x325) paints the
+  frame over the rows: nine transparent windows at the layout's row places with opaque bars between them, so anything drawn between those places lies
+  partly under a painted bar (**Observed**: the texture's alpha, and a 2026-11-18 screenshot of ten squeezed rows whose names were cut by bars at the
+  layout's pitch). Meitou: code mods' meters add copies of `LifeBar9` ([modding](../modding.md#registration-surface)). A character with more rows than
+  the bars (Blood or Oil, each part, Hunger, meter readings; a race of more parts, none in the base game) shows them a bar's worth at a time on the
+  bars (the layout's nine places without meters): the wheel over the panel moves the run a row a step, and `^` / `v` before the top / bottom row's
+  arrows mark rows hidden above / below. Life-bar skins in `data/gui/skins` (**Verified**):
   `Kenshi_LifeBarSkin`, `...HurtSkin`, `...HealedSkin`, `...StunnedSkin`, `...CrushedSkin`, `...RobotSkin`,
   `...SplintSkin`; each `LifeBarN` holds the layers `LifeBarNGrey` (Stunned skin), `...Red` (Hurt), `...Yellow` (Healed), `...White` (Splint),
   `...Green` (current), `...Crushed`, `...Robot` (**Verified**, layout).

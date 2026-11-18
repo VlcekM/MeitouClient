@@ -386,7 +386,8 @@ internal static class SavedCharacters
 
         if (race is not null && sc.Medical is not null)
         {
-            medical = MedicalState.ReadSave(race, sc.Medical.Floats, sc.Medical.Bools, sc.Medical.Strings, id => PartOf(id, data.Db, parts));
+            medical = MedicalState.ReadSave(race, sc.Medical.Floats, sc.Medical.Bools, sc.Medical.Strings, id => PartOf(id, data.Db, parts),
+                sc.Medical.Ints);
             SavedLimbs.Apply(medical, sc.Platoon.File, sc.Medical, data.Items);
         }
 

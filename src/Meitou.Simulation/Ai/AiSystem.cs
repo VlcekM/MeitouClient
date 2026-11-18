@@ -451,8 +451,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 or AiBehaviour.ToTown or AiBehaviour.Travel or AiBehaviour.Work or AiBehaviour.Investigate
                 or AiBehaviour.PatrolTown,
             CharacterTask.Rest => mind.Behaviour is AiBehaviour.Sleep or AiBehaviour.Sit or AiBehaviour.Relax,
-            // In the bed it went to (or lying in one when loaded, before its first think).
-            CharacterTask.Sleep => cold.InSomething == Locks.HeldState.Bed && (mind.Behaviour == AiBehaviour.Sleep || mind.Goal is null),
+            // In the bed it went to (or lying in one when loaded, before its first think, or laid in by a carrier while it was down: no task of
+            // its own keeps it there, and its goal of before then is stale), its think lets it lie on or gets it out (Act).
+            CharacterTask.Sleep => cold.InSomething == Locks.HeldState.Bed
+                && (mind.Behaviour == AiBehaviour.Sleep || mind.Goal is null || cold.Running?.Runs(CharacterTask.Sleep) != true),
             _ => false,
         };
     }
@@ -772,6 +774,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             AiBehaviour.Investigate => AlarmOf(world, self.Slot, type, board) is null ? 0 : 1,
             // The assault's finder factor: 1 while a member of the mission target's squad passes its tests, else 0 (FUN_140793eb0).
             AiBehaviour.RescueLeader => mind.RescueWant,
+            // Find and rescue if there's beds: its desire and its finder's factor, both kept by the carry system's serial sweep.
+            AiBehaviour.RescueToBed => mind.BedRescueWant,
             // Crouching is wanted always (it holds the pose while it runs); standing up (its effects !24 !25 !26) only while crouched.
             AiBehaviour.Crouch => type == TaskType.Crouch || world.Characters.Cold(self.Slot) is { Crouched: true } ? 1 : 0,
             AiBehaviour.Assault => targeting == TaskTargetType.SquadMission && !AssaultTargetFor(world, self.Slot, board).IsNone ? 1 : 0,
@@ -1826,9 +1830,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 ActSeated(world, slot, mind, board, type);
                 break;
             case AiBehaviour.RescueLeader:
+            case AiBehaviour.RescueToBed:
             case AiBehaviour.Crouch:
-                // RescueLeader: the carry system's sweep lifts the leader (CarrySystem.Rescue); until then it stands. Crouch: it stands where it is;
-                // the animation system plays the clip and sets the stance.
+                // RescueLeader and RescueToBed: the carry system's sweep lifts the leader or the body (CarrySystem.Rescue); until then it stands.
+                // Crouch: it stands where it is; the animation system plays the clip and sets the stance.
                 Become(world, slot, CharacterTask.Idle);
                 break;
             case AiBehaviour.Turret:
@@ -2349,13 +2354,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (world.Characters.Cold(slot) is not { } self) return null;
         if (mind.Squad.Town >= 0) return world.Fixtures.FindBed(world, slot, data.Relations);
         var at = Flat(world.Characters.Next[slot].Position);
-        float r2 = Locks.FixtureRegistry.BedSearchRange * Locks.FixtureRegistry.BedSearchRange;
         var relations = data.Relations;
-        return world.Fixtures.FindBed(world, slot, relations, f =>
-            Vector2.DistanceSquared(at, Flat(f.Position)) > r2
-            || f.Owner != self.Faction
-                && !(f.Owner >= 0 && relations.Contains(f.Owner) && relations.Contains(self.Faction)
-                    && relations.IsAlly(f.Owner, self.Faction)));
+        return world.Fixtures.FindBed(world, slot, relations, f => Locks.FixtureRegistry.OutOfTownlessReach(at, self.Faction, relations, f));
     }
 
     /// <summary>

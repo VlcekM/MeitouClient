@@ -1009,6 +1009,18 @@ weapon at the moment an arm changes (the change's mask bit 2 with the left byte 
 in progress ends when the weapon goes (`CombatSystem.Act`, step 1). **Drawing is not timed**: equipping (`FUN_140346c30`, the Equipping weapon task 6 / 264, planned before Attacking 227, whose list needs
 `hasWeaponEquipped`) sets the weapon in hand at once through Character vfunc 0x3d8 (the hip/back mesh refresh `FUN_1405cbf90`) with no wait for a clip, so a fighter never swings sheathed. Meitou: `Engage`
 and `StartAttack` set `DrawnWeapon` to the weapon of the hand before a swing, and `CharacterAssembly.RefreshEquipment` and the arms' change update a weapon already drawn (a weapon picked up or lost in a fight left it stale).
+`DrawnWeapon` holds the animation kind the clips are matched with: a crossbow is `1 handed`, and so is a melee weapon animating as no skill class
+(category 6, 7, 9 and up, or an override to one). **Verified** (disassembly): the original asks the item in hand (Character `+0x2f8` vfunc `0x3c0`)
+whether it is a crossbow, through Item vfunc `0x2d8`, which returns null for a WEAPON (`FUN_1408a52c0`) and the item itself for a CROSSBOW
+(`FUN_1408aa180`); planner conditions 5 and 156 (`FUN_140596a30`, `FUN_140596a70`) and the HUD's display mode (`FUN_1408840d0`, mode 2) read it so,
+and the display mode's fists test reads the category (CharStats `+0x1f0` = 5). So a WEAPON of any category, 6 and 7 included, is never the drawn
+crossbow, while its current weapon type is its `skill category`. Meitou marks a person's such weapon apart (`WeaponKinds.MeleeMark`,
+`CombatSystem.MeleeDrawn`): the crossbow tests (those three, the in-hand crossbow meshes, the Hold exemption) answer as for a melee weapon, and
+`CombatSystem.HandCategory` answers the weapon's `skill category` (no Current Skill label for 6 or 7). No base weapon a person can hold animates as
+no skill class: of the 48 WEAPON records of the base data and its three bundled mods only the 12 creature weapons (categories 9 to 20) do, and
+nothing but ANIMAL_CHARACTER `weapon` and one unreferenced manufacturer names them (**Observed**, a scan of the four files). An animal's natural
+weapon of a creature category keeps the plain kind, so those tests read it as a crossbow; the Swamp Turtle's, drawn from a manufacturer,
+is a person's weapon of a skill class, whose kind is not the crossbow's.
 
 ### Unknowns of the ranged path
 

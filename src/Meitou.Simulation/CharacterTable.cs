@@ -315,7 +315,9 @@ public sealed class CharacterCold
     public CharacterAnimation? Animation { get; set; }
 
     /// <summary>
-    /// The kind of weapon drawn in the right hand (None while sheathed): the stance animations are chosen for.
+    /// The kind of weapon drawn in the right hand (None while sheathed): the stance animations are chosen for
+    /// (<see cref="Data.Gameplay.HandHold.OfDrawn"/>); a drawn crossbow is plain <c>1 handed</c>, a person's melee weapon of no skill class
+    /// <c>1 handed</c> with <see cref="Data.Gameplay.WeaponKinds.MeleeMark"/>.
     /// </summary>
     public Data.Gameplay.WeaponKinds DrawnWeapon { get; set; }
 

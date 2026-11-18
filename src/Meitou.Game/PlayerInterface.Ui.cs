@@ -1307,6 +1307,7 @@ sealed partial class PlayerInterface
         if (FactionWindow.FactionWheel(p, steps)) return true;
         if (Production.ResearchWheel(p, steps)) return true;
         if (Production.CraftWheel(p, steps)) return true;
+        if (!FaithfulScreens.Contains(p) && HudPanels.MedicalWheel(p, steps)) return true;
         return CharacterEditor.EditorWheel(p, steps) || FaithfulScreens.Wheel(p, steps);
     }
 

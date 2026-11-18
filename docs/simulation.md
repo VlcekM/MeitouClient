@@ -848,6 +848,29 @@ main grid, grid size from its `inventory w` / `inventory h`; **Observed** in the
 a Pack Beast, an Iron Spider and a Bonedog of the player's squad). The player's own animal's window ends above the grid
 ([animals](game/animals.md#death-items)). It also runs the stealth knock-out
 (`StealthKo` task, reusing `CarryTarget`/`LiftTime`): [combat](game/combat.md#stealth-knock-out).
+- **NPC rescue to a bed** (goal 148 Find and rescue if there's beds, facts: [carry-loot 3.2](game/carry-loot.md#32-goals-and-their-target-finders)):
+  on the `AutoEveryTicks` beat, after the rescue jobs and the leader rescue, an NPC the AI runs (not an engine mind, not a player character) whose
+  goal lists hold 148 keeps the goal's factor for its think (`CarrySystem.RescueToBeds`, `AiMind.BedRescueWant`, hashed while set): 1 while it is not
+  on Hold, carries nothing, the rescue finder (`FindRescue`) finds a downed ally and the bed search a bed for it, else 0. The bed search is the
+  carrier's (`BedSystem.FindForCarrier`): it leaves out beds other carriers are on their way to, and a squad with no town takes only its own or an
+  ally's beds within `BedSearchRange`, as its sleep search does, and none of the player's (engine choice). The think weighs 148 at that factor times
+  its package weight as any goal (`AiBehaviour.RescueToBed`, its own plan) and stands while it is chosen; the sweep then lifts the body as row 148
+  (`TaskSource.Goal`) once the AI holds the character (not in a talk, a trade or an arrest), unless someone lifts it already. The carrier's goals then
+  take the body on ([town duties](#town-duties)): with 106 listed it lays it in a bed. Engine choices: the factor and the lift wait for the beat (up
+  to 15 ticks); the finder runs only while anyone is down, and before the bed search (the same result); a character not able to lift at all
+  (`CarrySystem.CouldLift`: no usable left arm, or the row not in its repertoire) does not want the goal, while a fight, a crouch or lying down only
+  delay the lift (`CarrySystem.Free`, `CanCarry`), so a resident asleep in its bed wants it too, as the original's desire tests only Hold and
+  carrying: once 148 outscores its sleep goal (the resident package's 239 scores 1 x 1 x1.25 = 1.25 against 148's 1.0 while it commits, and at most
+  0.05 once its commitment has passed, [ai-tasks](game/ai-tasks.md) "Desire and commitment") its think gets it out of bed and the next beat lifts; a
+  body goal 106 would not lay in a bed (a grudge tag, a bounty owed to a police-like rescuer, not regarded as friendly; `BedSystem.WouldPutIn`) is not
+  lifted; a walk to the body that has not reached it in 60 game seconds (`CarrySettings.RescueWalkSeconds`) is given up and that rescuer leaves the
+  body alone for 2 game hours (`RescueRefuseHours`, hashed while set), as the town duties' lifts do; a body that dies while the rescuer walks to it
+  ends the walk, so this goal lifts no body that is already dead when the lift clip starts (one that comes round ends it as any lift's); a body this
+  goal lifted that no carried-body goal takes on (no bed found after the lift: another rescuer reserved the last one, or sleepers filled them; or a
+  package without 106) is put down at the carrier's next look and left to that rescuer for those 2 hours (`RefuseRescue`). Which carries this applies
+  to is read from what the world holds, not remembered (`CarrySystem.RescuedBy148`: an NPC the AI runs whose goal lists hold 148, carrying a body of
+  its own or an allied faction that is not its squad leader), so it holds after a load too. The leader rescue (142) takes the same ability test, hold
+  test and walk give-up, but not the put-down: its carrier keeps the leader.
 - **NPC looting** (`CarrySystem.Scavenge.cs`, facts: [carry-loot 3.3](game/carry-loot.md#33-npc-looting)): every `AutoEveryTicks` on its slot's turn (slot mod the period, so the looks spread over the ticks, as the original's AI updates run 8 characters a frame in turn, [game loop](game/game-loop.md#the-character-update-budget)), an NPC the AI runs whose package lists goal 177 for its role
   in the hour (`PopulationSystem.GoalDuty`) loots the nearest dead body (not of its faction), else downed living one of a non-allied faction, within 100 and reachable (no shut gate route between, no building without an open door around it unless the looter is in it, `CarrySystem.Reachable`): the player's only with
   `PlayerState.BanditsLoot` (CAMERA `bl`, default on), only whom `shouldIScrewThisGuyOver` allows (classes, love/hate tags), not one its squad tagged short-term 6
@@ -1017,7 +1040,12 @@ unload, hashed only once non-empty. Facts: [locks](game/locks.md), [economy 11.5
   sleeper loaded lying in that bed (#684: else its follow job got it up); 3 short walks give the bed up (`MarkUnreachable`). In a bed the task is `CharacterTask.Sleep` (held still, the
   bed's clip, `Sleeping` on the HUD); any other task gets it up (`GetUp`; a knock-out or death in bed keeps it there). The player's bed search `FindBed`
   follows the original's weights over beds within `BedSearchRange` 3953 (engine, for the town). Job 106 (in the list with the rescue job; the decision step's, `BedSystem.PutInJob`): a carrier of
-  a friendly, non-hostile body with no grudge tag against it, and no bounty owed to a police-like carrier, lays it in the searched bed. Lifting a sleeper takes it out. Engine difference: no power test. The rescue job (148) and the one-shot Rescue start a lift only while the bed search finds the rescuer a bed (`CarrySystem.MayRescue`).
+  a friendly, non-hostile body with no grudge tag against it, and no bounty owed to a police-like carrier, lays it in the searched bed. An NPC
+  carrier's goal 106 is ranked with its other carried-body goals ([town duties](#town-duties)), with the same desire and search. Lifting a sleeper
+  takes it out. The bed search tests no power, nor does the original's place test (**Observed**, [locks](game/locks.md#beds)). An unpowered bed
+  refuses the sleeper or the carrier at the bed (`BedSystem.HasPower`); a bed that refuses an NPC carrier (power or rent) counts for its faction as
+  one it cannot get to (`FixtureRegistry.MarkUnreachable`, 24 game hours), so the next search moves on (engine choice). The rescue job (148) and the
+  one-shot Rescue start a lift only while the bed search finds the rescuer a bed (`CarrySystem.MayRescue`).
   Saves: `HeldSave` (a player-built bed also writes the original's `in what` = its building's handle; read back through `Bind`); a loaded sleeper's task is Sleep,
   and `Bind` puts it at its lie spot still sleeping (a standing task would get it up).
 
@@ -1026,7 +1054,11 @@ unload, hashed only once non-empty. Facts: [locks](game/locks.md), [economy 11.5
   home they go to the bed `AiSystem.SpareBed` finds ([locks](game/locks.md)); with none the goal is not wanted (desire 0).
   One already in a bed keeps it: the goal's target is where it lies, so its plan is 98 alone and it stays in; the goal takes its
   sleep as its own (provenance 153/239, so the plan step 98 is its order, as the original's `Task_UseBed`), also for one loaded
-  in bed or laid in by the walk's end. A goal of any other behaviour gets them out (`LeaveBed`, in the think).
+  in bed or laid in by the walk's end. A goal of any other behaviour gets them out (`LeaveBed`, in the think). A character a carrier laid in a bed (a
+  put-in, the player's or an NPC's goal 106) is the AI's once it comes round, as no task of its own keeps it there and the goal it had before it went
+  down is stale (`AiSystem.Holds`, engine choice): its think lets it lie on or gets it out, as any sleeper's. This includes a member of an autonomous
+  player squad ([autonomous player squads](#autonomous-player-squads)) that the player laid in a bed to heal: its AI takes it when it wakes and gets
+  it out unless it chooses to sleep. One the player ordered to sleep, or on the injured-sleep job, stays, as that task keeps it there.
   `CharacterCold.InSomething`/`InWhat` name the fixture; an imprisoned character is skipped by AI, movement (held still),
   aggro, answering, `CombatSystem.Engage` as attacker (it can still be attacked) and carrying. Sentence: `SentenceStart`
   (`World.GameHours`) + `SentenceLength`; served when start + length <= now; no bounty with the cage owner: none (served).
@@ -1230,15 +1262,45 @@ Duties are priority-2 goals (**Observed**: `FUN_140510ef0` tries orders, jobs, u
 - **273 Remove Intruder**: a free member standing in its home town, the town its occupation holds or a town of its faction lifts the nearest knocked-out character in that town's
   walls (`amInsideTownWalls` > 0: its [gate code](game/pathfinding.md#gate-codes) is a walled region, so an unwalled town removes none; where the codes are unknown, the built-up area: a
   placed town's radius, a player town's farthest building from its centre), not carried or caged (a body in a bed is lifted, `FUN_14099c250`), not of its faction or an ally.
-  A body that dies on the way is caged only with **281** listed (else let go); one being thrown out is carried on (none of 274's task slots 2, 3, 5, 6, 7 tests death, **Verified** by decompile). Any free member carrying a body it holds no errand for (a kidnapper's or arrester's victim that died: they end their errand without letting go when 281 is listed; a carry a save restored) with 281 (any body) or 112 (a living one) in its package takes it to a cage or throws it out the same way (`LookCarriers`, **Verified** `FUN_1405a1140` and `FUN_1405a13a0`: no dead test; an animal's cage desire is 0, so it is thrown out; issue 783: guards held knocked-out skimmers forever); with neither it keeps the body. **Observed** (#314 save): a Sho-Battai police guard loaded carrying a raider cages it.
+  A body that dies on the way is caged only with **281** listed (else let go); one being thrown out is carried on (none of 274's task slots 2, 3, 5,
+  6, 7 tests death, **Verified** by decompile). Any free member carrying a body it holds no errand for (a kidnapper's or arrester's victim that died:
+  they end their errand without letting go when 281 is listed; a carry a save restored) with 281 (any body), 112 (a living one) or 106 (a body it
+  would lay in a bed) in its package takes it to a cage, lays it in a bed or throws it out the same way (`LookCarriers`, **Verified** `FUN_1405a1140`
+  and `FUN_1405a13a0`: no dead test; an animal's cage desire is 0, so it is thrown out; issue 783: guards held knocked-out skimmers forever); with
+  none of them it keeps the body. **Observed** (#314 save): a Sho-Battai police guard loaded carrying a raider cages it.
   Carrying it, the disposal goals are ranked as the goal chooser ranks them (`TownDutySystem.RankDisposals`, **Verified** `FUN_14050df10`): a higher tier first (an urgent cage before 274), then desire x package weight, of equal scores the later-listed goal; the first that starts wins. Cage: with **112** (a living body) or **281** (any body) listed and the carried-body desire above 0 (`CageDesire`: 0 for an animal or one the carrier regards as friendly, 0.1 outside a town, 1.4 police with a bounty-free slave, 0.5 dead, 2.0 alive; [ai-tasks](game/ai-tasks.md)), the best free cage in that town (the occupied town's cages are usable), where it is locked up with the usual put-in sentence (108 `Task_PutInSomething`
-  sets none without a bounty, [economy 11.5](game/economy.md#115-bail-and-sentence); not `Kidnapped`, **Verified** `FUN_140358670`). Throw out: with **274** listed (desire 2.0 unless the carrier regards the body as friendly), to the town's exit point (`TownExit`: 200 outward from the first gate outside the walls or wall with an interior, the same for every carrier; no walkability test, **Verified** `FUN_140927120`), put down. With neither, put down. A body put down short of its goal is left alone for 2 game hours.
+  sets none without a bounty, [economy 11.5](game/economy.md#115-bail-and-sentence); not `Kidnapped`, **Verified** `FUN_140358670`). Throw out: with
+  **274** listed (desire 2.0 unless the carrier regards the body as friendly), to the town's exit point (`TownExit`: 200 outward from the first gate
+  outside the walls or wall with an interior, the same for every carrier; no walkability test, **Verified** `FUN_140927120`), put down. Bed: with
+  **106** listed and its desire above 0 (`BedSystem.PutInDesire`: 2.0 for a body the carrier regards as friendly, no animal, of a faction not hostile
+  to its own, with no grudge tag against it and no bounty owed to a police-like carrier, [carry-loot
+  3.2](game/carry-loot.md#32-goals-and-their-target-finders)), the bed the bed search finds for the carrier (`BedSystem.FindForCarrier`: no bed
+  another carrier is on its way to; a squad with no town only its own or an ally's within `BedSearchRange`, never the player's), where the bed system
+  walks it and lays the body in as the player's put-in does (`BedSystem.PutIn`, row 106, `TaskSource.Goal`); the errand (`TownDutyKind.Bed`) holds the
+  carrier while the walk runs, starts it again with a fresh search after a fight or a stop, at most 4 restarts (5 walks), then lets the carrier keep
+  the body for the next look; a body that dies on the way is carried on (106's desire, its friendly test and row 99's list B test no death). 106 is
+  weighed only for a carrier whose body no errand's plan holds (`LookCarriers`): after an errand's own lift (273, 223, 138 / 137) the goal that lifted
+  goes on, as the original runs a goal's plan task by task and chooses again only when it ends ([ai-tasks](game/ai-tasks.md), "The plan's lifecycle",
+  **Verified**), so a corpse lifted for the disposal goes on to it while that errand lasts, waiting while the disposal is busy (below). A carrier left
+  with a corpse and no errand weighs 106 with the others and, with a bed found, lays a friendly corpse in it (for the police packages 1.5 x 2.0
+  against the disposal's 2 x 1.0): a carry restored from a save (no errand is saved), a walk to the disposal that failed (the machine noted
+  unreachable), a 148 or 142 carrier whose body died on the shoulder (a dead leader under "Retreat and refresh" or "campaign victory occupy town",
+  which list 106). That follows the original's chooser by the decompiled desire when it chooses afresh. With none of them, put down. A body put down
+  short of its goal is left alone for 2 game hours.
   A lift whose walk to the body takes over 60 game seconds is given up the same way (engine choice: a body the carrier cannot reach would hold it forever).
 - **223 Remove Home Intruder** (checked before 273): a free member of a squad with a home building lifts the nearest knocked-out, carriable character inside that building
   (`SightMap.BuildingOf`), not carried, caged or in a bed, not of its faction or an ally; within its sight stands in for the sensed list. With **224** listed it carries it to the point past the
   home's first door (`AiSystem.LeavePoint`, the same point as Leave Building's) and puts it down; without 224, or with no door known, it goes on as a 273 body (engine choice: the original's
   carrier keeps it). A body that dies on the way is still carried out. Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs".
-- **138 Find corpses / 137 Corpse disposal** (`TownDutySystem.LiftsCorpse`, finders in `CorpseDisposal`): a free member listing 138 (not on Hold), or 137 while a disposal is found, lifts the corpse 138's finder gives (a dead non-robot body in a cage of its faction in reach, else the nearest dead uncarried body in sight). The body is then ranked like any carried one (137 for a dead body: 1.0 x disposal found x weight); 137 walks it to the disposal and feeds it in (removed with its items, the machine's label floats up). With no disposal goal the carrier keeps it. Disposals: the player's function-11 machines, the registered towns' placed function-11 buildings and their interiors' (`TownBuilding.Disposals`); chosen by the cage finder's rules (town reach, `canIUseThisBuilding`, weight x100 own / home, x1e-5 police in a private building), skipping one whose operator places other errands hold or whose walk failed (20 s). **Verified** desires and finders: [ai-tasks](game/ai-tasks.md#perma-jobs).
+- **138 Find corpses / 137 Corpse disposal** (`TownDutySystem.LiftsCorpse`, finders in `CorpseDisposal`): a free member listing 138 (not on Hold), or
+  137 while a disposal is found, lifts the corpse 138's finder gives (a dead non-robot body in a cage of its faction in reach, else the nearest dead
+  uncarried body in sight). The body is then ranked like any carried one (137 for a dead body: 1.0 x disposal found x weight; 106 is not weighed
+  here); when 137 is listed in the hour and the only disposals in reach are busy (their operator places held by other errands), the member keeps the
+  body under its lift errand and tries again on each look turn, as the original's 137 plan holds its machine (`TownDutySystem.WaitsForDisposal`); 137
+  walks it to the disposal and feeds it in (removed with its items, the machine's label floats up). With no disposal goal the carrier keeps it.
+  Disposals: the player's function-11 machines, the registered towns' placed function-11 buildings and their interiors' (`TownBuilding.Disposals`);
+  chosen by the cage finder's rules (town reach, `canIUseThisBuilding`, weight x100 own / home, x1e-5 police in a private building), skipping one
+  whose operator places other errands hold or whose walk failed (20 s). **Verified** desires and finders: [ai-tasks](game/ai-tasks.md#perma-jobs).
 - **243 Getting food**: a member holding no food walks to the nearest store with food in the town (a player town's complete storage, else an unlocked container) and takes one item.
   Meitou's NPCs are fed by their hunger floor, so the food is not eaten.
 - **158 / 283 Shooing** (`AI::findStrangersInMyBuilding`; 283 only while the home is private): the first character in the squad's home building that is neither allied nor an
@@ -2153,8 +2215,12 @@ beside log.txt, so a log sent with a report has it at hand, kept like log.txt (`
 (`CharacterCold.Running`) changed gets a line: the task left, why (`TaskStart.End`'s reason,
 else replaced, or ended by its own system), the task taken up and the start's source, row, job, target and site. Squad follows the player's
 characters and adds the decision step's trace of that tick (it turns `DecisionSystem.Tracing` on); everyone adds every NPC and animal (in a town,
-about 650 lines a minute). It only reads the world. Its lines, like log_dialogue.txt's, only join a queue that a thread of its own writes to
-the file (`QueuedLog`), so the tick never waits on the disk; as the game ends on an exception, the queue is written at once.
+about 650 lines a minute), and for each NPC whose goal lists hold 148 a line whenever where that goal stands changes at a rescue beat
+(`AiMind.BedRescueNote`, set by `CarrySystem.RescueToBeds`, neither saved nor hashed): "rescue 148, not eligible: ..." (not able to lift, nobody is
+down, no downed ally its finder takes, the ally found is one it would not lay in a bed, no bed for it), "wanted, not chosen: its goal is ...",
+"chosen, not free to lift: task ...", "chosen, the lift would not start" or "chosen, lifting". It only reads the world. Its lines, like
+log_dialogue.txt's, only join a queue that a thread of its own writes to the file (`QueuedLog`), so the tick never waits on the disk; as the game ends
+on an exception, the queue is written at once.
 
 ## Town house purchases
 

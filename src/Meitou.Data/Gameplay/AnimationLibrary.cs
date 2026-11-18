@@ -76,6 +76,11 @@ public enum WeaponKinds : ushort
     /// Every kind.
     /// </summary>
     All = 255,
+    /// <summary>
+    /// Not a record flag: the drawn-weapon state's mark beside <see cref="OneHanded"/> on a person's melee weapon of no skill class (Meitou,
+    /// <see cref="HandHold.OfDrawn"/>), so the state tells it from a drawn crossbow, which is plain <see cref="OneHanded"/>.
+    /// </summary>
+    MeleeMark = 0x8000,
 }
 
 /// <summary>

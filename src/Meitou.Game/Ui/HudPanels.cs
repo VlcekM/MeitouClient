@@ -627,6 +627,7 @@ sealed class HudPanels(PlayerInterface player)
     /// </summary>
     void AddMedicalText(List<UiControl> controls, float sidePixels)
     {
+        _medicalPanelRect = _medicalHiddenRows > 0 ? controls.FirstOrDefault(c => c.Name == "MedicalPanel_Back")?.Bounds : null;
         foreach (var (bar, name, arrows) in _medicalRows)
         {
             // The names made once per row: inside the predicates they were a new string for every control compared, every frame.
@@ -673,6 +674,26 @@ sealed class HudPanels(PlayerInterface player)
     readonly List<(string Bar, string Name, string Arrows)> _medicalRows = [];
 
     /// <summary>
+    /// The first of a character's medical rows the panel shows when it has more rows than bars (<see cref="ScrolledRows"/>); 0 otherwise.
+    /// </summary>
+    int _medicalFirstRow;
+
+    /// <summary>
+    /// The rows the panel could not show this frame (0 when every row fits, as for every base-game race): the wheel scrolls the panel only then.
+    /// </summary>
+    int _medicalHiddenRows;
+
+    /// <summary>
+    /// The character whose rows <see cref="_medicalFirstRow"/> scrolls; another lead starts at its first row.
+    /// </summary>
+    CharacterId _medicalScrolled;
+
+    /// <summary>
+    /// Where the medical bars sit on screen while rows are hidden (<see cref="MedicalWheel"/>); null otherwise.
+    /// </summary>
+    UiRect? _medicalPanelRect;
+
+    /// <summary>
     /// A bar's fraction in steps of 1/1024, about half a pixel of a bar on a 4K panel: hunger and blood creep every tick, and an unrounded fraction
     /// made the HUD's bindings new each tick, so its cached layout (<see cref="PlayerInterface.ArrangeHud"/>) was made again for a change no one can
     /// see.
@@ -693,8 +714,9 @@ sealed class HudPanels(PlayerInterface player)
         if (buildingRows is null && lead?.Body is { } body) AddCharacterRows(rows, lead, body);
 
         int bars = MedicalBars();
-        for (int i = 1; i <= bars; i++) BindMedicalBar(b, i, rows);
-        MedicalPanelRows.Spread(player.FaithfulHud, b, Math.Min(rows.Count, bars));
+        var shown = ScrolledRows(rows, bars, buildingRows is null ? lead?.Id : null);
+        for (int i = 1; i <= bars; i++) BindMedicalBar(b, i, shown);
+        MedicalPanelRows.Spread(player.FaithfulHud, b, Math.Min(shown.Count, bars));
 
         if (buildingRows is null && lead?.Body is not null)
         {
@@ -720,6 +742,44 @@ sealed class HudPanels(PlayerInterface player)
         string last = $"LifeBar{bars}";
         if (player.FaithfulHud.Find(last) is null) player.FaithfulHud = MedicalPanelRows.WithBars(player.FaithfulHud, bars);
         return player.FaithfulHud.Find(last) is null ? MedicalPanelRows.LayoutBars : bars;
+    }
+
+    /// <summary>
+    /// The rows the panel's <paramref name="bars"/> show: all of them when they fit; for a character with more (a race of more body parts than the
+    /// layout's rows hold), a run of <paramref name="bars"/> from <see cref="_medicalFirstRow"/>, which the wheel over the panel moves
+    /// (<see cref="MedicalWheel"/>), with <c>^</c> in the top row's arrows while rows are hidden above and <c>v</c> in the bottom row's while rows are
+    /// hidden below. The bars stay on the layout's rows: the front skin (<c>Kenshi_HealthPanelTopSkin</c>) paints its nine windows and the bars
+    /// between them, so a row placed anywhere else lies under a painted bar. A building's rows are never scrolled.
+    /// </summary>
+    List<PlayerInterface.MedicalRow> ScrolledRows(List<PlayerInterface.MedicalRow> rows, int bars, CharacterId? who)
+    {
+        _medicalHiddenRows = who is not null ? Math.Max(0, rows.Count - bars) : 0;
+        if (_medicalHiddenRows == 0 || who is not { } character)
+        {
+            _medicalFirstRow = 0;
+            return rows;
+        }
+
+        if (character != _medicalScrolled) _medicalFirstRow = 0;
+        _medicalScrolled = character;
+        _medicalFirstRow = Math.Clamp(_medicalFirstRow, 0, _medicalHiddenRows);
+
+        var shown = rows.GetRange(_medicalFirstRow, bars);
+        if (_medicalFirstRow > 0) shown[0] = shown[0] with { Arrows = "^ " + shown[0].Arrows };
+        if (_medicalFirstRow < _medicalHiddenRows) shown[^1] = shown[^1] with { Arrows = "v " + shown[^1].Arrows };
+        return shown;
+    }
+
+    /// <summary>
+    /// The wheel over the medical bars while a character's rows do not all fit: a row a step (up shows earlier rows); false elsewhere, and always
+    /// when every row fits.
+    /// </summary>
+    internal bool MedicalWheel(Vector2 p, float steps)
+    {
+        if (_medicalHiddenRows == 0 || _medicalPanelRect is not { } rect || !rect.Contains(p.X, p.Y) || steps == 0) return false;
+
+        _medicalFirstRow = Math.Clamp(_medicalFirstRow - Math.Sign(steps), 0, _medicalHiddenRows);
+        return true;
     }
 
     /// <summary>

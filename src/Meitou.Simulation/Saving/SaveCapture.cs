@@ -984,7 +984,7 @@ public static partial class SaveCapture
 
         if (medical is not null && sc.Medical is { } mr)
         {
-            medical.WriteSave(mr.Floats, mr.Bools, mr.Strings);
+            medical.WriteSave(mr.Floats, mr.Bools, mr.Strings, mr.Ints);
             if (sc.Platoon.File is { } file) SavedLimbs.Write(medical, file, mr);
         }
     }
