@@ -3,6 +3,18 @@
 What changed in each release, newest first. The release workflow copies the section of the version it builds into the GitHub release
 notes and refuses to release a version without one: add a `## vX.Y.Z` section with one `- ` line per change before running it.
 
+## v0.22.1
+
+- RE_Kenshi ports are no longer shipped with the game: they are workshop mods kept up by their maintainers, and the launcher offers the ones Meitou endorses. Proving Grounds players: subscribe to [Meitou] Proving Grounds by roscatoday (launcher v1.15.0 does it in one click)
+- Photo mode: pose, light and look tabs, a transform gizmo, colour filters, vignette and film grain, cropped and larger pictures, hidden weapons; also on Metal (no depth of field yet)
+- Footstep dust on dry ground
+- Worn plate is as metallic as its painted gloss says; a Polished armour switch brings back the shiny look
+- Town patrollers no longer pick or bash a shut building's door on their round, so guards stop fighting them as burglars (#974)
+- A mod building whose part mesh is outside the install's data gets its clickable hull, so mod farms can be clicked
+- Cut-outs in heavy fog are no longer drawn in 2 and 4 pixel steps
+- Metal: the console, tools and screenshots work
+- Feedback issues with a load order too long to link list the mods that fit and a page with every workshop link
+
 ## v0.22.0
 
 - Graphics: lighting checked against a path-traced reference; traced lamps and character light at a fraction of the cost, faster loads, quality tiers and measured impact labels; more Metal improvements
