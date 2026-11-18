@@ -417,6 +417,11 @@ public sealed partial class World : IDisposable
     /// </summary>
     public bool PrisonPoseFix { get; set; } = true;
     /// <summary>
+    /// An animal in a cage or on a pole plays its standing idles, or its lying clip while down (Fixes settings, Meitou); off, it is left as a still
+    /// frame as the game does (docs/game/locks.md "Cages and beds").
+    /// </summary>
+    public bool CagedAnimalFix { get; set; } = true;
+    /// <summary>
     /// Guards' smuggling search and starving looters' food take reach into bags carried in the inventory grid (Fixes settings, Meitou); off, only
     /// the grid and the worn backpack, as the game does (docs/game/dialogue.md "Conditions", docs/game/carry-loot.md "NPC looting").
     /// </summary>

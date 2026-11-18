@@ -797,6 +797,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             systems: systems, walkability: walkability);
         host.Session.World.BenchFacingFix = host.Config.FixBenchFacing;
         host.Session.World.PrisonPoseFix = host.Config.FixPrisonPose;
+        host.Session.World.CagedAnimalFix = host.Config.FixCagedAnimals;
         host.Session.World.BagSearchFix = host.Config.FixBagSearch;
         host.Session.World.TakeIntoBackpack = host.Config.TakeIntoBackpack;
         host.Session.World.ActionLog = host.ActionLogs.Log;
@@ -1333,6 +1334,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             },
             BenchFacingChanged = on => host.Session.World.BenchFacingFix = on,
             PrisonPoseChanged = on => host.Session.World.PrisonPoseFix = on,
+            CagedAnimalsChanged = on => host.Session.World.CagedAnimalFix = on,
             BagSearchChanged = on => host.Session.World.BagSearchFix = on,
             TakeIntoBackpackChanged = on => host.Session.World.TakeIntoBackpack = on,
             TutorialsChanged = on => { if (host.Saves.Tutorials is { } t) t.Enabled = on; },

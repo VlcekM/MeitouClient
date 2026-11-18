@@ -441,6 +441,11 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     public Action<bool>? PrisonPoseChanged { get; init; }
 
     /// <summary>
+    /// Applies the caged animal fix (<see cref="UserConfig.FixCagedAnimals"/>).
+    /// </summary>
+    public Action<bool>? CagedAnimalsChanged { get; init; }
+
+    /// <summary>
     /// Applies the bag search fix (<see cref="UserConfig.FixBagSearch"/>).
     /// </summary>
     public Action<bool>? BagSearchChanged { get; init; }
@@ -1557,6 +1562,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         BenchFacingChanged?.Invoke(true);
         Config.FixPrisonPose = true;
         PrisonPoseChanged?.Invoke(true);
+        Config.FixCagedAnimals = true;
+        CagedAnimalsChanged?.Invoke(true);
         Config.FixBagSearch = true;
         BagSearchChanged?.Invoke(true);
         Config.FixHeadTurnBack = false;

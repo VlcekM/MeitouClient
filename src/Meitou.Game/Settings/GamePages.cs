@@ -583,6 +583,11 @@ sealed class GamePages(SettingsMenu menu)
             + "In the game it clutches its wounds there instead.",
             Toggle: new("Prisoners hold still", () => menu.Config.FixPrisonPose,
                 v => { menu.Config.FixPrisonPose = v; menu.PrisonPoseChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
+        result.Add(new("Caged animals idle",
+            "An animal in a cage or on a pole breathes, looks around and lies down when knocked out. "
+            + "In the game it stands frozen there, since the cage's poses are for people only.",
+            Toggle: new("Caged animals idle", () => menu.Config.FixCagedAnimals,
+                v => { menu.Config.FixCagedAnimals = v; menu.CagedAnimalsChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
         result.Add(new("Walls inside buildings",
             "Seen into a building your characters are in, parts of other buildings that run through it are left out, such as the Hub's town wall "
             + "in the Shinobi Thieves tower. The game's world places them there and draws them inside the room.",

@@ -554,6 +554,7 @@ public sealed class AnimationSystem(
         var wantedLower = s_lowerScratch ??= [];
         var wantedUpper = s_upperScratch ??= [];
         _prisonPoseFix = world.PrisonPoseFix;   // every partition writes the same value
+        _cagedAnimalFix = world.CagedAnimalFix;
         for (int i = part.Start; i < part.End; i++)
         {
             if (!prev[i].Alive || prev[i].Dormant || !world.Steps(i)) continue;
@@ -1767,14 +1768,18 @@ public sealed class AnimationSystem(
         a.Rate = 1 / size;
         bool carried = !cold.CarriedBy.IsNone;
         bool down = cold.Medical?.Incapacitated ?? false;
+        bool caged = cold.InSomething == Locks.HeldState.Imprisoned;
+
         // Held in a cage or on a pole, an animal is left as it is: the original shows a still frame there, no idle and no fall
-        // (docs/game/locks.md "Cages and beds").
-        if (cold.InSomething == Locks.HeldState.Imprisoned) return Vector2.Zero;
-        if (HoldsForRagdoll(a, down, carried, ragdoll)) return Vector2.Zero;
-        if (down && !a.WasDown && !carried && !ragdoll.Has) StartAction(a, plan.Fall, false);
-        if (carried || !down) a.Action = -1;   // the fall is an animal's only one-shot clip
+        // (docs/game/locks.md "Cages and beds"). With the fix it stands in its idles, or lies down at once while down (the fixture refuses the
+        // ragdoll).
+        if (caged && !_cagedAnimalFix) return Vector2.Zero;
+        if (!caged && HoldsForRagdoll(a, down, carried, ragdoll)) return Vector2.Zero;
+        if (down && !a.WasDown && !carried && !ragdoll.Has && !caged) StartAction(a, plan.Fall, false);
+        if (carried || !down || caged) a.Action = -1;   // the fall is an animal's only one-shot clip
         a.WasDown = down;
-        int technique = down ? -1 : fight.Technique;
+        if (caged) speed = 0;
+        int technique = down || caged ? -1 : fight.Technique;
         if (a.Action >= 0)
         {
             var d = Library.Definitions[a.Action];
@@ -1834,6 +1839,11 @@ public sealed class AnimationSystem(
     /// The world's <see cref="World.PrisonPoseFix"/>, read each tick (true for an <see cref="Update"/> outside a world: tests, the title battle).
     /// </summary>
     bool _prisonPoseFix = true;
+
+    /// <summary>
+    /// The world's <see cref="World.CagedAnimalFix"/>, read each tick (true for an <see cref="Update"/> outside a world).
+    /// </summary>
+    bool _cagedAnimalFix = true;
 
     /// <summary>
     /// The breathing overlay every standing human plays (<c>breathing noarms</c>: spine, neck and head only; <b>Verified</b>,

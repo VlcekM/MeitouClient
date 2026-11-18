@@ -482,6 +482,10 @@ sealed class UserConfig
     /// </summary>
     public bool FixPrisonPose { get; set; } = true;
     /// <summary>
+    /// An animal in a cage or on a pole plays its idles (Fixes settings; off: a still frame, as the game does; docs/game/locks.md "Cages and beds").
+    /// </summary>
+    public bool FixCagedAnimals { get; set; } = true;
+    /// <summary>
     /// Guards' smuggling search and starving looters' food take reach into bags carried in the inventory grid (Fixes settings; off: only the grid
     /// and the worn backpack, as the game does; docs/game/dialogue.md "Conditions").
     /// </summary>

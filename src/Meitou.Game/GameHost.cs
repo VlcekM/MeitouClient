@@ -649,6 +649,7 @@ sealed partial class GameHost(
 
         Session.World.BenchFacingFix = Config.FixBenchFacing;
         Session.World.PrisonPoseFix = Config.FixPrisonPose;
+        Session.World.CagedAnimalFix = Config.FixCagedAnimals;
         Session.World.BagSearchFix = Config.FixBagSearch;
         Session.World.TakeIntoBackpack = Config.TakeIntoBackpack;
         Session.World.ActionLog = ActionLogs.Log;

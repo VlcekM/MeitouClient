@@ -152,6 +152,7 @@ public sealed class WorldSession : IDisposable
         next.Floaters = World.Floaters;   // the host keeps drawing the floaters across the swap
         next.BenchFacingFix = World.BenchFacingFix;
         next.PrisonPoseFix = World.PrisonPoseFix;
+        next.CagedAnimalFix = World.CagedAnimalFix;
         next.BagSearchFix = World.BagSearchFix;
         next.TakeIntoBackpack = World.TakeIntoBackpack;
         next.ActionLog = World.ActionLog;
