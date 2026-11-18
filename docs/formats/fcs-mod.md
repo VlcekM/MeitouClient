@@ -219,6 +219,14 @@ Verified by the round-trip: bools are always 0/1, no record repeats a key within
 reference list name, and the `byteSize` values in rebirth.mod equal the real record sizes (the writer
 recomputes them and the output is identical).
 
+## Fields Meitou adds
+
+Records may store fields fcs.def does not declare; the game ignores them. Meitou reads ARMOUR `metalness` (float, 0 to 1, -1 none: how
+much of the item's bare-metal parts is metal; [character renderer "Metal"](../character-renderer.md)). The editor lists such a stored field
+under `misc` and keeps it, but sets only declared ones (its Set Field Value needs a declared default), so a modder adds
+`metalness: -1.0 "Meitou: metal of the bare parts, 0 to 1; -1 none"` under `[ARMOUR]` in the editor's fcs.def; new armour made in the mod
+then stores -1. **Verified** in the decompiled editor (`ObjectPropertyBox.addGridItem`, `SetFieldValue.bOk_Click`, `Item.setMissingValues`).
+
 ## Schema: `fcs.def` (Verified by `FcsSchema` parsing the whole file)
 
 `Meitou.Data.Fcs.FcsSchema` parses it. Text, one section per record type:

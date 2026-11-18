@@ -225,8 +225,8 @@ internal sealed class PartMaterial
     public bool Strands;
 
     /// <summary>
-    /// The cloth sheen of the <c>chars2</c> switch (<see cref="ClothSheen"/>): x a worn item's; a body's vest layers in x, y, z. Sent in the record's
-    /// <c>DiffuseChannel</c>, which only hair reads.
+    /// The cloth sheen of the <c>chars2</c> switch (<see cref="ClothSheen"/>): x a worn item's; a body's vest layers in x, y, z. w a worn plate's
+    /// own metalness (<see cref="ArmourMetal"/>), -1 for none. Sent in the record's <c>DiffuseChannel</c>, which only hair reads.
     /// </summary>
     public Vector4 Sheen;
 
@@ -326,7 +326,7 @@ internal sealed class PartMaterial
     /// </summary>
     public bool MetalMap;
     /// <summary>
-    /// A worn item of chain or plate (<see cref="CharacterShaders.ArmourMetal"/>).
+    /// A worn item of chain or plate, or an armour with a metalness of its own (<see cref="CharacterShaders.ArmourMetal"/>).
     /// </summary>
     public bool ArmourMetal;
     /// <summary>
@@ -2143,6 +2143,13 @@ internal sealed class CharacterContent : IDisposable
         item.Type != FcsRecordType.Armour ? 0 : item.GetInt("material type") switch { 0 => 1, 1 => 0.35f, _ => 0 };
 
     /// <summary>
+    /// An ARMOUR's own <c>metalness</c> float (a Meitou field, no vanilla record has it): how much of its bare-metal parts is metal, 0 to 1; -1
+    /// for none, which leaves it to the estimate (docs/character-renderer.md "Metal").
+    /// </summary>
+    static float OwnMetalness(GameRecord item) =>
+        item.Type == FcsRecordType.Armour && item.GetFloat("metalness", -1) is >= 0 and var v ? Math.Min(v, 1) : -1;
+
+    /// <summary>
     /// A weapon's <c>sheath</c> mesh, or its sheathed <c>mesh</c> when the record has a <c>sheath</c> (that mesh is the weapon in its scabbard).
     /// </summary>
     static bool IsScabbard(CharacterPart part) =>
@@ -2231,7 +2238,11 @@ internal sealed class CharacterContent : IDisposable
         bool worn = part.Mode == AttachMode.SharedSkeleton;
         m.Worn = worn;
         if (worn) m.Sheen.X = ClothSheen(item);
-        m.ArmourMetal = worn && item.Type == FcsRecordType.Armour && item.GetInt("material type") >= 2;
+
+        // Chain and plate are estimated as metal, and so is any armour with a metalness of its own.
+        float ownMetal = OwnMetalness(item);
+        m.ArmourMetal = worn && item.Type == FcsRecordType.Armour && (item.GetInt("material type") >= 2 || ownMetal >= 0);
+        m.Sheen.W = m.ArmourMetal ? ownMetal : -1;
         m.LimbMetal = item.Type == FcsRecordType.LimbReplacement;
 
         var spec = ClothingSpec(c, part, item);

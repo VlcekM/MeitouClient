@@ -227,7 +227,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
 
     /// <summary>
     /// Which parts of the <c>chars2</c> shading are on (the settings' rows under Advanced materials): 1 hair highlights, 2 cloth sheen, 4 skin,
-    /// 8 eyes, 16 metal, 32 water beads. A change redraws the portraits.
+    /// 8 eyes, 16 metal, 32 water beads, 64 polished armour. A change redraws the portraits.
     /// </summary>
     public int SurfaceParts
     {
@@ -241,9 +241,11 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     }
 
     /// <summary>
-    /// The <see cref="SurfaceParts"/> bits: hair highlights, cloth sheen, skin, eyes, metal, water beads, and all of them.
+    /// The <see cref="SurfaceParts"/> bits: hair highlights, cloth sheen, skin, eyes, metal, water beads, polished armour (worn plate shines
+    /// wherever gloss is painted, not as much as it says), and the ones on at start (all but polished armour).
     /// </summary>
-    public const int SurfaceHair = 1, SurfaceCloth = 2, SurfaceSkin = 4, SurfaceEyes = 8, SurfaceMetal = 16, SurfaceBeads = 32, SurfaceAll = 63;
+    public const int SurfaceHair = 1, SurfaceCloth = 2, SurfaceSkin = 4, SurfaceEyes = 8, SurfaceMetal = 16, SurfaceBeads = 32, SurfacePolished = 64,
+        SurfaceAll = 63;
 
     /// <summary>
     /// Backing field of <see cref="SurfaceParts"/>.

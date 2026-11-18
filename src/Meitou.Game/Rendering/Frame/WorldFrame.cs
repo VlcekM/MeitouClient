@@ -326,7 +326,8 @@ static partial class WorldFrame
     /// The parts of Advanced materials (<c>chars2</c>), plain on / off rows under it.
     /// </summary>
     public const string MaterialHairSwitch = "Hair highlights", MaterialClothSwitch = "Cloth sheen", MaterialSkinSwitch = "Skin sheen and glow",
-        MaterialEyesSwitch = "Eye catchlights", MaterialMetalSwitch = "Metal on characters", MaterialBeadsSwitch = "Water beads";
+        MaterialEyesSwitch = "Eye catchlights", MaterialMetalSwitch = "Metal on characters", MaterialPolishSwitch = "Polished armour",
+        MaterialBeadsSwitch = "Water beads";
 
     /// <summary>
     /// Grass keeps its cover at a distance (<c>FoliageRenderer.GrassFarCover</c>), a plain on / off row.
@@ -1145,7 +1146,8 @@ static partial class WorldFrame
         {
             (MaterialHairSwitch, Characters.CharacterRenderer.SurfaceHair), (MaterialClothSwitch, Characters.CharacterRenderer.SurfaceCloth),
             (MaterialSkinSwitch, Characters.CharacterRenderer.SurfaceSkin), (MaterialEyesSwitch, Characters.CharacterRenderer.SurfaceEyes),
-            (MaterialMetalSwitch, Characters.CharacterRenderer.SurfaceMetal), (MaterialBeadsSwitch, Characters.CharacterRenderer.SurfaceBeads),
+            (MaterialMetalSwitch, Characters.CharacterRenderer.SurfaceMetal), (MaterialPolishSwitch, Characters.CharacterRenderer.SurfacePolished),
+            (MaterialBeadsSwitch, Characters.CharacterRenderer.SurfaceBeads),
         };
         foreach (var (label, bit) in parts)
         {

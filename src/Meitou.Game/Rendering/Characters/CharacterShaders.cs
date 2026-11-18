@@ -714,7 +714,8 @@ static class CharacterShaders
             // Lit as the world's other meshes are (Shaders.MeshFragment): the game's deferred lighting with the game's sky, else the simple model.
             vec3 v = normalize(view.eye - vWorld);
             gloss = clamp(gloss, 0.0, 1.0);
-            if ((surfaceParts & 16u) != 0u) metal = surfaceMetal(metal, albedo, gloss, m.shading, flag(f, {{Mechanical}}u), (flag(f, 16384u) && !flag(f, {{ArmourMetalFlag}}u) && !flag(f, {{LimbMetal}}u)) || flag(f, {{ScabbardFlag}}u) || flag(f, {{MetalMapFlag}}u), flag(f, {{MetalMapFlag}}u), wornGlossMap, heldGlossMap);
+            float wornMetal = flag(f, {{ArmourMetalFlag}}u) ? m.diffuseChannel.w : -1.0;   // a worn plate's own metalness (PartMaterial.Sheen), -1 for none
+            if ((surfaceParts & 16u) != 0u) metal = surfaceMetal(metal, albedo, gloss, m.shading, flag(f, {{Mechanical}}u), (flag(f, 16384u) && !flag(f, {{ArmourMetalFlag}}u) && !flag(f, {{LimbMetal}}u)) || flag(f, {{ScabbardFlag}}u) || flag(f, {{MetalMapFlag}}u), flag(f, {{MetalMapFlag}}u), wornGlossMap, heldGlossMap, wornMetal);
             PROBE_BARE
             if (gearCover > 0.0)   // blood on a blade or plate is no metal: wet, then dry
             {

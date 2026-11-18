@@ -640,7 +640,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
                 or WorldFrame.FilmGrainSwitch => "Post FX",
             "Skin" or "Character levels" or "Advanced materials" or "Blood on weapons and gear" or "Blood cells" or "Blood on surfaces"
                 or "Bolt tracers" or WorldFrame.MaterialHairSwitch or WorldFrame.MaterialClothSwitch or WorldFrame.MaterialSkinSwitch
-                or WorldFrame.MaterialEyesSwitch or WorldFrame.MaterialMetalSwitch or WorldFrame.MaterialBeadsSwitch => "Characters",
+                or WorldFrame.MaterialEyesSwitch or WorldFrame.MaterialMetalSwitch or WorldFrame.MaterialPolishSwitch
+                or WorldFrame.MaterialBeadsSwitch => "Characters",
             "Item icons" or "Portrait and editor sun" or "Character editor bar" => "Interface",
             _ => "Objects",   // Draw distances, Mesh welding, Metal on buildings, Glass bottles
         };
@@ -834,6 +835,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
                 or WorldFrame.ImpostorBudgetSlider => SwitchOn("Far impostors"),
             WorldFrame.MaterialHairSwitch or WorldFrame.MaterialClothSwitch or WorldFrame.MaterialSkinSwitch or WorldFrame.MaterialEyesSwitch
                 or WorldFrame.MaterialMetalSwitch or WorldFrame.MaterialBeadsSwitch => SwitchOn("Advanced materials"),
+            WorldFrame.MaterialPolishSwitch => SwitchOn("Advanced materials") && SwitchOn(WorldFrame.MaterialMetalSwitch),
             WorldFrame.NightGradeStrengthSlider => SwitchOn("Night grading"),
             WorldFrame.BloomStrengthSlider => SwitchOn(WorldFrame.BloomSwitch),
             WorldFrame.DofApertureSlider or WorldFrame.CameraEffectsSwitch => SwitchOn(WorldFrame.DepthOfFieldSwitch),
