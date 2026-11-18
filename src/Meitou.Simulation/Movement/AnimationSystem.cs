@@ -122,7 +122,8 @@ public sealed class CharacterAnimation
     public bool WasCrawling;
 
     /// <summary>
-    /// The body's playback factor F = 2 - H (H the skeleton's movement scale; docs/animation.md "Movement"); 0 until the first tick sets it.
+    /// The body's playback factor F = 2 - H (H the skeleton's movement scale; docs/animation.md "Movement"), 0 until a person's first tick sets
+    /// it; an animal's is 1 / its live size, rewritten every tick as the original's <c>FUN_14052bad0</c> reads slot 0x390 at each pick.
     /// </summary>
     public float Rate;
 
@@ -1755,14 +1756,15 @@ public sealed class AnimationSystem(
     /// an <b>engine reading</b>); standing (in a fight too), one of its idles; a creature technique the combat system plays, over everything; down,
     /// its <c>gotosleep</c> once, then <c>sleep</c> (or the fall's last frame held); no hit reactions (no animal record has <c>stumbles</c>) and no
     /// getting up (none exists: it fades back to standing). Standing in a job's clip (a spider eating a body), its own clip of that name.
-    /// Root motion of an attack is scaled by the size.
+    /// Root motion of an attack is scaled by the size. F follows the live size, so an animal that ages (or is set by <c>animalage</c>) plays
+    /// slower as it grows.
     /// </summary>
     Vector2 UpdateAnimal(CharacterAnimation a, CharacterCold cold, AnimalPlan plan, float speed, float dt, ulong seed, ulong key, long tick,
         List<(int Index, float Weight)> wanted, in CombatView fight, RagdollView ragdoll, CharacterTask task)
     {
         float size = cold.Medical?.ScaleK ?? 1;
         if (!(size > 0.01f)) size = 1;
-        if (a.Rate == 0) a.Rate = 1 / size;
+        a.Rate = 1 / size;
         bool carried = !cold.CarriedBy.IsNone;
         bool down = cold.Medical?.Incapacitated ?? false;
         // Held in a cage or on a pole, an animal is left as it is: the original shows a still frame there, no idle and no fall
