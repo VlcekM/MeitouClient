@@ -474,7 +474,8 @@ public sealed class CharacterSnapshot
     /// </summary>
     public bool IsPlayer { get; internal set; }
     /// <summary>
-    /// A member of a squad with a shop (right click trades).
+    /// A member of a squad with a shop (right click trades), or of an independent player squad with a shop a code mod gave it while it is awake
+    /// and not fighting (<see cref="Trading.TradeSystem.KeepsFactionShop"/>).
     /// </summary>
     public bool IsTrader { get; internal set; }
     /// <summary>

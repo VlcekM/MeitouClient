@@ -224,7 +224,10 @@ public static class SquadManagement
                     world.Post("You must have at least one squad.");
                     return;
                 }
-                EndPurse(world, doomed);   // a purse a code mod gave it goes back to the player's money
+                // A shop a code mod gave it leaves its goods on the ground where it was made (it has no members); a purse goes to the player's money.
+                if (Trading.TradeSystem.GiveBack(world, doomed) is > 0 and var dropped)
+                    world.Post(Loc.Tr("{1} item stack(s) of a closed shop were left on the ground.", dropped));
+                EndPurse(world, doomed);
                 world.Squads.Remove(doomed.Id);
                 world.SystemOf<PopulationSystem>()?.ForgetSquad(doomed.Id);
                 Renumber(PlayerSquads(world));
@@ -263,7 +266,7 @@ public static class SquadManagement
     /// Whether a command naming the mod <paramref name="named"/> may change a squad setting <paramref name="owner"/> holds: one no mod holds, a
     /// command naming no mod, or the holder itself. Another mod's setting is left alone, so mods marking the same squad never undo each other's.
     /// </summary>
-    static bool MayChange(string? owner, string? named) => owner is null || named is not { Length: > 0 } || named == owner;
+    internal static bool MayChange(string? owner, string? named) => owner is null || named is not { Length: > 0 } || named == owner;
 
     /// <summary>
     /// Sets or clears <see cref="Squad.Uncounted"/> on a squad of the player's faction, noting the mod that set it.

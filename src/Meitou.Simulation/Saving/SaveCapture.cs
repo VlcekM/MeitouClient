@@ -732,6 +732,7 @@ public static partial class SaveCapture
         NoteMemory(platoon.Record, MemoryOf(world)?.Snapshot(squad.Id));
         AutonomySave.Write(platoon.Record, squad);
         ModSquadSave.Write(platoon.Record, squad);
+        ShopSave.WritePlayer(platoon.Record, squad, world);
         ModTagSave.Write(platoon.Record, squad.ModTags);
         if (index >= 0)
         {

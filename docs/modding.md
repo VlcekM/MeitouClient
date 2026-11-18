@@ -510,8 +510,30 @@ holds refuses the second mod.
 - **Squad purses** (`Meitou.Simulation.Factions`): `SetSquadPurse(squadId, own, Owner: context.Id)` gives a squad of the player's faction its own
   purse (`Squad.OwnPurse`, its `Squad.Money`): its members pay an NPC-style purchase (a shopper buying from a building's stock) from it
   instead of the player's money, and a shop the squad owns keeps its takings in it, so a shopkeeper keeps its own earnings. The trade window
-  still uses the player's money. Ending it pours what is left into the player's money. Saved with the squad; a load without the owner mod
-  running ends it the same way, with a notice. Engine API, not in the original.
+  pays from the player's money (into and out of this purse when the squad keeps a faction shop, below). Ending it pours what is left into the
+  player's money. Saved with the squad; a load without the owner mod running ends it the same way, with a notice. Engine API, not in the
+  original.
+- **Shopkeepers of the player's faction** (`Meitou.Simulation.Trading`, engine rules: [simulation](simulation.md#shopkeepers-of-the-players-faction-meitou-only)):
+  `SetSquadShop(squadId, on, Template, Owner: context.Id)` gives a squad of the player's faction a shop (a faction shop) the player's characters
+  trade with in the ordinary trade window, as with an NPC trader. It trades while the squad is independent (`SetSquadAutonomy(...,
+  Independent: true)`) and keeps its own purse: then every member that is awake and not fighting offers Trade in its right-click menu and trades
+  on a quick right click. Put the keeper in a squad of its own to have one keeper.
+  - Money: the shop's money is the squad's own purse, never the player's. The player pays into it and is paid from it at the ordinary prices,
+    so trades with the faction's own shop make and lose no money for the faction; no fill or restock sets the purse. The command gives a squad
+    without a purse one, empty and owned by no mod, so it stays with the squad when the mod is missing at a load; a purse the mod gave itself
+    with `SetSquadPurse(..., Owner)` follows that command's rule. Fund the shop, if it should buy, by setting `Squad.Money` once `Squad.Shop` is
+    set (that money is the mod's to give).
+  - Stock: `Template` is the string id of a SQUAD_TEMPLATE for the terms (`buy mult`, buys stolen and illegal goods); an id that names none
+    refuses the command (a log line, no shop). When the template is a trader's with vendor lists the stock is filled at once and restocked every
+    `vendors refresh time` hours while a member lives: those goods are made from nothing, as an NPC trader's, and a restock replaces the stock,
+    so goods the player sold to the shop are gone after it. Without a template the stock is the mod's: add items to `Squad.Shop.Stock`
+    (`Inventory.Add`, items from `context.Population.Items.Create`) in a serial phase, one tick after the command.
+  - NPC shoppers do not buy there (they buy only from shop buildings' containers; the player's shop counters are that route).
+  - A second `on` for a squad that has a shop only notes the owner and gives back a purse that was ended; end the shop first to change the
+    template. Off, a load without the owner mod running (with a notice) or the player removing the emptied squad ends the shop: its goods go to
+    the members, and what does not fit onto the ground (nothing is lost); the purse stays.
+  - Several mods each keep their own shopkeepers: a command naming another mod than the shop's owner is ignored (one naming no mod can change
+    any shop, as for the other squad settings). Saved with the squad. Engine API, not in the original.
 - **Off-screen squads:** squads the player does not lead (`SetSquadAutonomy(..., Independent: true)`) are stepped as NPCs are when far from the
   camera and the led characters ([far cadence](simulation.md#far-cadence)), so a town's residents cost what NPCs cost. `SetSquadDormant(squadId,
   on, Owner: context.Id)` (`Meitou.Simulation.Factions`) puts a squad of the player's faction to sleep: its members ask for no zones round them,

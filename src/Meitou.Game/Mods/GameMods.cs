@@ -241,7 +241,8 @@ sealed class GameMods(GameHost host)
     /// <summary>
     /// The squads of the world just loaded that a code mod made autonomous or kept out of the faction size count, when that mod is not running now
     /// (not installed, refused or failed to start), go back to the player (<see cref="Simulation.Ai.SquadAutonomy.DropUnowned"/>) and count again
-    /// (<see cref="Simulation.Factions.SquadManagement.DropUnownedUncounted"/>), each with a notice; between ticks, before the first.
+    /// (<see cref="Simulation.Factions.SquadManagement.DropUnownedUncounted"/>), and lose the shops, purses and sleep it gave them, each with a
+    /// notice; between ticks, before the first.
     /// </summary>
     internal void DropUnownedAutonomy(World world)
     {
@@ -254,12 +255,23 @@ sealed class GameMods(GameHost host)
         int counted = Simulation.Factions.SquadManagement.DropUnownedUncounted(world, running.Contains);
         if (counted > 0) Notice($"{counted} squad(s) a mod that is not loaded kept out of your faction size count are counted again.");
 
+        int shops = Simulation.Trading.TradeSystem.DropUnownedShops(world, running.Contains, out int grounded);
+        if (shops > 0) Notice(ShopsClosed(shops, grounded));
+
         int purses = Simulation.Factions.SquadManagement.DropUnownedPurses(world, running.Contains);
         if (purses > 0) Notice($"{purses} squad purse(s) of a mod that is not loaded went into your money.");
 
         int woken = Simulation.Factions.SquadManagement.DropUnownedDormant(world, running.Contains);
         if (woken > 0) Notice($"{woken} squad(s) a mod that is not loaded put to sleep are awake again.");
     }
+
+    /// <summary>
+    /// The notice for the shops closed at a load: their goods went to the squads' members, and what did not fit onto the ground.
+    /// </summary>
+    static string ShopsClosed(int shops, int dropped) => dropped == 0
+        ? $"{shops} shop(s) a mod that is not loaded gave your squads are closed; their goods went to the squads' members."
+        : $"{shops} shop(s) a mod that is not loaded gave your squads are closed; their goods went to the squads' members where they fit, "
+            + $"and {dropped} stack(s) lie on the ground by the squads.";
 
     /// <summary>
     /// Shows a line about the mods to the player and in the console.
