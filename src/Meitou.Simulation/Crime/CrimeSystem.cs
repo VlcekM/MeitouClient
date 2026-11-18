@@ -141,6 +141,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             if (viaWrapper) c.Freed = false;
             return true;
         }
+        if (c.Pending is { } replaced) Lapsed(world, culprit, replaced);
         c.Pending = new PendingCrime { Code = code, VictimFaction = victimFaction, Victim = victim, VictimHolder = victimHolder, Timer = timer };
         if (viaWrapper) c.Freed = false;
         Note(world, CrimeEventKind.Pending, culprit, code, victimFaction, 0, CharacterId.None);
@@ -325,7 +326,11 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             if (c.Pending is { } p)
             {
                 // Check, then subtract (FUN_1405cbb80 tail): cleared on the first call after the timer reached 0.
-                if (p.Timer <= 0) c.Pending = null;
+                if (p.Timer <= 0)
+                {
+                    c.Pending = null;
+                    Lapsed(world, s, p);
+                }
                 else p.Timer -= seconds;
             }
             // A carried or imprisoned suspect is not looked at (the game's witness function): a prisoner's crime runs out and its bounty shows.
@@ -915,24 +920,66 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         BountyBook.Lines(c, tick, tickSeconds, local);
 
     /// <summary>
-    /// Adds an event to <see cref="Log"/> (with <see cref="CrimeSettings.RecordLog"/>) and passes it to the crime observers
-    /// (<see cref="ICrimeObserver"/>), once the change it reports is made; neither builds the event without a log or an observer.
+    /// Records a pending, witnessed, booked or expired crime: <see cref="Report"/> (with the culprit's pending crime, none for an expiry), then the
+    /// world event log's line.
     /// </summary>
     internal void Note(World world, CrimeEventKind kind, int culprit, CrimeCode code, int faction, int amount, CharacterId witness)
     {
-        if (Settings.RecordLog || world.CrimeObservers.Active)
-        {
-            var pending = kind == CrimeEventKind.Expired ? null : world.Characters.Cold(culprit)?.Pending;
-            var crime = new CrimeEvent(world.Tick, kind, world.Characters.IdOf(culprit), code, faction, amount, witness)
-            {
-                Victim = pending?.Victim ?? CharacterId.None,
-                VictimFaction = pending?.VictimFaction ?? -1,
-            };
-            if (Settings.RecordLog) _log.Add(crime);
-            world.CrimeObservers.Observe(world, crime);
-        }
-
+        var pending = kind == CrimeEventKind.Expired ? null : world.Characters.Cold(culprit)?.Pending;
+        Report(world, kind, culprit, code, faction, amount, witness, pending);
         world.Events.Line(world, "crime", CrimeLine(world, kind, culprit, code, faction, amount, witness));
+    }
+
+    /// <summary>
+    /// Adds an event to <see cref="Log"/> (with <see cref="CrimeSettings.RecordLog"/>) and passes it to the crime observers
+    /// (<see cref="ICrimeObserver"/>), once the change it reports is made, with <paramref name="pending"/>'s victim; neither builds the event
+    /// without a log or an observer.
+    /// </summary>
+    void Report(World world, CrimeEventKind kind, int culprit, CrimeCode code, int faction, int amount, CharacterId witness, PendingCrime? pending)
+    {
+        if (!Settings.RecordLog && !world.CrimeObservers.Active) return;
+
+        var crime = new CrimeEvent(world.Tick, kind, world.Characters.IdOf(culprit), code, faction, amount, witness)
+        {
+            Victim = pending?.Victim ?? CharacterId.None,
+            VictimFaction = pending?.VictimFaction ?? -1,
+            VictimHolder = pending?.VictimHolder,
+        };
+        if (Settings.RecordLog) _log.Add(crime);
+        world.CrimeObservers.Observe(world, crime);
+    }
+
+    /// <summary>
+    /// Reports <paramref name="ended"/>, the pending crime the culprit no longer has (<see cref="CrimeEventKind.Lapsed"/>); no event log line, as
+    /// lapses are routine.
+    /// </summary>
+    void Lapsed(World world, int culprit, PendingCrime ended) =>
+        Report(world, CrimeEventKind.Lapsed, culprit, ended.Code, ended.VictimFaction, 0, CharacterId.None, ended);
+
+    /// <summary>
+    /// Drops the pending crime of the character in <paramref name="slot"/> (a change of side: recruited, bought free, dismissed, stored off screen)
+    /// and reports it (<see cref="CrimeEventKind.Lapsed"/>); nothing without one. Serial phases.
+    /// </summary>
+    internal static void DropPending(World world, int slot, CharacterCold c)
+    {
+        if (c.Pending is not { } ended) return;
+
+        c.Pending = null;
+        world.SystemOf<CrimeSystem>()?.Lapsed(world, slot, ended);
+    }
+
+    /// <summary>
+    /// Removes <paramref name="entry"/> from the ledger of the character in <paramref name="slot"/> other than by expiry (a fine, a bail, a release,
+    /// dialogue, the debug menu), the ledger going once empty, and reports it (<see cref="CrimeEventKind.Cleared"/>, with the entry's faction and
+    /// amount). Serial phases.
+    /// </summary>
+    internal static void ClearBounty(World world, int slot, CharacterCold c, BountyLedger ledger, BountyEntry entry)
+    {
+        ledger.Remove(entry);
+        if (ledger.Count == 0 && ReferenceEquals(c.Bounties, ledger)) c.Bounties = null;
+
+        world.SystemOf<CrimeSystem>()?.Report(world, CrimeEventKind.Cleared, slot, CrimeCode.None, entry.Faction, entry.Amount, CharacterId.None,
+            null);
     }
 
     /// <summary>

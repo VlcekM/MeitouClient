@@ -284,14 +284,8 @@ public sealed partial class DialogueSystem
         switch (effect.Action)
         {
             case DialogueActions.AssignBounty when tc is not null && mc is not null && effect.Value > 0 && _data.Relations.Contains(mc.Faction):
-                {
-                    // FUN_140853e20 (Verified): marks the pending crime booked, then adds the amount to the speaker's faction's booking entry
-                    // (none kept without one).
-                    if (tc.Pending is { } pending) pending.Booked = true;
-                    if (Crime.CrimeFactions.BookingKey(_data.Relations, mc.Faction) is var key and >= 0)
-                        (tc.Bounties ??= new Crime.BountyLedger()).Get(key, _data.Factions[key].Name).Amount += effect.Value;
-                    break;
-                }
+                AssignBounty(world, effect.Value, me, mc, target, tc);
+                break;
             // Without an amount only a speaker whose CHARACTER has `assigns bounties` books the target's pending crime
             // (Character::canAssignBounties, Verified).
             case DialogueActions.AssignBounty when tc is not null && mc is not null && effect.Value <= 0 && Arrests is { } booker
@@ -318,15 +312,42 @@ public sealed partial class DialogueSystem
             case DialogueActions.EnslaveTargetsCarriedPerson when tc is { Carrying.IsNone: false }:
                 takeOver = enslave = true;
                 break;
-            case DialogueActions.ClearBounty when tc?.Bounties is { } ledger && mc is not null:
-                if (ledger.BookedFor(_data.Relations, mc.Faction) is { } entry) ledger.Remove(entry);
-                if (Position(world, target) is { } at && TownAt(at) is >= 0 and var town && town < _data.SiteFactions.Count
-                    && ledger.BookedFor(_data.Relations, _data.SiteFactions[town]) is { } local)
-                    ledger.Remove(local);
-                if (ledger.Count == 0) tc.Bounties = null;
-                tc.Recognition = 0;
+            case DialogueActions.ClearBounty when tc?.Bounties is { } ledger && mc is not null
+                && world.Characters.TryResolveNext(target, out int wanted):
+                ClearBounties(world, mc, target, wanted, tc, ledger);
                 break;
         }
+    }
+
+    /// <summary>
+    /// <c>DA_ASSIGN_BOUNTY</c> with an amount (<c>FUN_140853e20</c>, <b>Verified</b>): marks the target's pending crime booked, then adds the amount
+    /// to the speaker's faction's booking entry (none kept without one), reported as a booking with the speaker as the witness
+    /// (<see cref="Crime.CrimeEventKind.Booked"/>).
+    /// </summary>
+    void AssignBounty(World world, int amount, CharacterId me, CharacterCold mc, CharacterId target, CharacterCold tc)
+    {
+        if (tc.Pending is { } pending) pending.Booked = true;
+        if (Crime.CrimeFactions.BookingKey(_data.Relations, mc.Faction) is not (var key and >= 0)) return;
+
+        var entry = (tc.Bounties ??= new Crime.BountyLedger()).Get(key, _data.Factions[key].Name);
+        entry.Amount += amount;
+        if (!world.Characters.TryResolveNext(target, out int culprit)) return;
+
+        var code = tc.Pending?.Code ?? Crime.CrimeCode.None;
+        world.SystemOf<Crime.CrimeSystem>()?.Note(world, Crime.CrimeEventKind.Booked, culprit, code, key, entry.Amount, me);
+    }
+
+    /// <summary>
+    /// <c>DA_CLEAR_BOUNTY</c>: the target's entries of the speaker's faction and of the town it stands in go (each reported as cleared,
+    /// <see cref="Crime.CrimeEventKind.Cleared"/>), and its recognition.
+    /// </summary>
+    void ClearBounties(World world, CharacterCold mc, CharacterId target, int wanted, CharacterCold tc, Crime.BountyLedger ledger)
+    {
+        if (ledger.BookedFor(_data.Relations, mc.Faction) is { } entry) Crime.CrimeSystem.ClearBounty(world, wanted, tc, ledger, entry);
+        if (Position(world, target) is { } at && TownAt(at) is >= 0 and var town && town < _data.SiteFactions.Count
+            && ledger.BookedFor(_data.Relations, _data.SiteFactions[town]) is { } local)
+            Crime.CrimeSystem.ClearBounty(world, wanted, tc, ledger, local);
+        tc.Recognition = 0;
     }
 
     /// <summary>

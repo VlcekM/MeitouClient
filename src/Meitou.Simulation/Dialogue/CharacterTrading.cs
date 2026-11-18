@@ -381,7 +381,7 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
         c.Ai = null;
         c.Engaged = false;
         c.Fleeing = false;
-        c.Pending = null;
+        Crime.CrimeSystem.DropPending(world, slot, c);
         c.OrderQueue.Clear();
         TaskStart.Stand(table, slot);
         if (Locks.LockSystem.WornShackles(c)?.Lock is { } l) l.Locked = false;

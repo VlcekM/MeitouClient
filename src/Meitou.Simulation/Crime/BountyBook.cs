@@ -85,6 +85,7 @@ sealed class BountyBook
             double elapsed = (world.Tick - e.RaisedTick) * hoursPerTick;
             if (elapsed >= 0 && elapsed <= CrimeTable.LifetimeHours(e.Amount)) continue;
             ledger.Remove(e);
+            if (ledger.Count == 0) c.Bounties = null;
             ticks--;
             crimes.Note(world, CrimeEventKind.Expired, slot, CrimeCode.None, e.Faction, e.Amount, CharacterId.None);
             if (c.IsPlayer) world.Post(Loc.Tr("{1} is no longer wanted by {2}", c.Name, e.FactionName));
