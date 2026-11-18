@@ -100,6 +100,8 @@ static class GiShaders
         // outside lit the foot of a room's walls orange, and the sky the top of them blue.
         float giKept = 1.0;
         float giTrust() { return smoothstep(0.05, 0.25, giKept); }
+        // How much of the last lookup the cascade holds by its probes' places alone (its window and height), whatever their validity.
+        float giPlaced = 0.0;
         vec4 giCascade(int c, vec3 p, vec3 n, vec3 v, float push)
         {
             vec4 g0 = uGiGrid[c * 2], g1 = uGiGrid[c * 2 + 1];
@@ -107,6 +109,7 @@ static class GiShaders
             vec3 q = p + (n * 0.2 + v * 0.8) * (0.3 * min(s, sy)) + n * (push * min(s, sy));
             vec2 cell = (q.xz - g0.xy) / s;
             float edge = min(min(cell.x, cell.y), min(float(GI_N - 1) - cell.x, float(GI_N - 1) - cell.y));
+            giPlaced = 0.0;
             if (edge <= 0.0) return vec4(0.0);
             ivec2 i0 = ivec2(floor(cell));
             vec2 f = cell - vec2(i0);
@@ -164,22 +167,34 @@ static class GiShaders
                 }
             }
             giKept = total / max(plain, 1e-5);
-            return total > 1e-5 ? vec4(sum / total, clamp(edge, 0.0, 1.0) * coverage) : vec4(0.0);
+            giPlaced = clamp(edge, 0.0, 1.0) * coverage;
+            return total > 1e-5 ? vec4(sum / total, giPlaced) : vec4(0.0);
         }
         // The probes' irradiance at a surface (p: world position, n: its normal, v: towards the eye): rgb, a the share to take (0: none cover it).
-        vec4 giIrradiance(vec3 p, vec3 n, vec3 v)
+        // room: the point is lit as an interior.
+        vec4 giIrradiance(vec3 p, vec3 n, vec3 v, bool room)
         {
             vec4 a = giCascade(0, p, n, v, 0.0);
+            float placed = giPlaced;
             // A room grid's probes in the walls, floor and furniture are invalid: next to them the point can have none valid round it, and the coarse
             // cascade would paint the corner dark. Look again a cell into the room before falling back.
             if (a.a <= 0.0) a = giCascade(0, p, n, v, 1.0);
             if (a.a >= 1.0) return a;
+            // A room's point inside the room grid (32 across; the outdoor near grid is 128, GiProbes) whose probes all stand in the walls and the floor takes
+            // nothing of the coarse cascade, whose probes stand outside in the sky's light: the foot of a tower's wall read a pale band of it at night with
+            // the probes alone. It keeps the room's fill (giSurfaceIrradiance); the hybrid cache gives such a point its own light.
+            if (room && a.a <= 0.0 && placed >= 1.0 && uGiGrid[0].z < 64.0)
+            {
+                giKept = 0.0;
+                return vec4(0.0, 0.0, 0.0, 1.0);
+            }
             float keptA = giKept;
             vec4 b = giCascade(1, p, n, v, 0.0);
             float wa = a.a, wb = b.a * (1.0 - a.a), t = wa + wb;
             giKept = t > 0.0 ? (keptA * wa + giKept * wb) / t : 0.0;
             return t > 0.0 ? vec4((a.rgb * wa + b.rgb * wb) / t, t) : vec4(0.0);
         }
+        vec4 giIrradiance(vec3 p, vec3 n, vec3 v) { return giIrradiance(p, n, v, false); }
 
         // How much of a fragment's ambient the probes give (the rest is the sky's): the valid probes' share outdoors, where the sky is what
         // the missing ones would have seen. Indoors a point's invalid probes are the ones in the walls, the floor and the furniture, and the
@@ -190,22 +205,25 @@ static class GiShaders
         // Presentation only: never feed this back into the probe solver.
         // Indoors the light is at least a share of the game's ambient luminance (uGiParams.w - 1, GiProbes.InteriorGain; capped at
         // InteriorFloorCap), more where the GI is brighter: a net under what the probes leave black (a slab under hidden floors), not the
-        // room's light. Its colour turns from the ambient's to the GI's as the GI rises from 0.1 to 0.25 of the floor.
+        // room's light. The GI keeps its colour and the floor adds only what it lacks, in the ambient's hue: a floor that took the GI's hue whole once
+        // the GI reached a quarter of it painted a faint bounce of a lamp's pool over a room's walls in orange blotches, at the floor's strength.
         // uGiParams.w <= 1 leaves the GI as it is; 2 and above is the whole of the game's ambient.
         const float InteriorFloorCap = 0.6;
-        vec3 giSurfaceIrradiance(vec3 irradiance, vec3 sky, bool interior)
+        vec3 giFill(vec3 light, vec3 sky, float share)
         {
-            float share = clamp(uGiParams.w - 1.0, 0.0, 1.0);
-            if (interior) irradiance *= giTrust();
-            if (!interior || share <= 0.0) return irradiance;
+            if (share <= 0.0) return light;
             const vec3 lum = vec3(0.2126, 0.7152, 0.0722);
-            float value = max(dot(irradiance, lum), 1e-6), ambient = max(dot(sky, lum), 1e-6);
+            float value = dot(light, lum), ambient = max(dot(sky, lum), 1e-6);
             // The floor is capped: by day the sky's ambient is several times the night's and lit shut rooms evenly, in the sky's colour. Past the cap its hue
             // goes grey as the cap bites (the night's ambient is under it: unchanged).
             float wanted = ambient * share, floorValue = min(wanted, InteriorFloorCap);
             vec3 skyHue = mix(sky / ambient, vec3(1.0), 1.0 - floorValue / wanted);
-            vec3 hue = mix(skyHue, irradiance / value, smoothstep(0.1, 0.25, value / floorValue));
-            return hue * max(value, floorValue);
+            return light + skyHue * max(floorValue - value, 0.0);
+        }
+        vec3 giSurfaceIrradiance(vec3 irradiance, vec3 sky, bool interior)
+        {
+            if (!interior) return irradiance;
+            return giFill(irradiance * giTrust(), sky, clamp(uGiParams.w - 1.0, 0.0, 1.0));
         }
 
         """;
@@ -354,7 +372,7 @@ static class GiShaders
                     sun = {{F(MathF.PI * (1 - Meitou.Data.World.KenshiLighting.DielectricSpecular))}} * nl * sunLight.rgb * amHit.a * 2.0;
                 if (sun.r + sun.g + sun.b > 0.0) sun *= SUN_MOVER_SHADOW(hit, n, l);
             }
-            vec4 bounce = giIrradiance(hit, n, -dir);
+            vec4 bounce = giIrradiance(hit, n, -dir, HIT_INTERIOR);
             // The share the probes do not cover is the sky's ambient outdoors. A hit on an interior takes what probes it has in full, and nothing where it has
             // none: a room's dense grid is short and its coarse probes sit in the walls, and the sky's ambient on the upper walls lit the whole room with it, cold.
             vec3 ambient = mix(skyIrradiance(n) * {{F(1 - Meitou.Data.World.KenshiLighting.DielectricSpecular)}} * amHit.rgb * env, HIT_INTERIOR ? bounce.rgb * giTrust() : bounce.rgb, HIT_INTERIOR ? 1.0 : bounce.a);
@@ -1109,17 +1127,8 @@ static class GiShaders
         // The rooms' fill light (GiProbes.InteriorGain), as giSurfaceIrradiance gives it to a room's surfaces: what a ray brings a character's pixel from the
         // room, or from past it, is at least that; a ray a character stops brings none, so the fill is occluded like the rest. Without it a character
         // stood black in a room the fill lit (its ambient is the gathered light, which knew nothing of the fill). sky: the sky's ambient at the pixel.
-        vec3 gatherFill(vec3 light, vec3 sky)
-        {
-            float share = gatherFillShare;
-            if (!gatherIndoors || share <= 0.0) return light;
-            const vec3 lum = vec3(0.2126, 0.7152, 0.0722);
-            float value = max(dot(light, lum), 1e-6), ambient = max(dot(sky, lum), 1e-6);
-            float wanted = ambient * share, floorValue = min(wanted, 0.6);   // giSurfaceIrradiance's InteriorFloorCap
-            vec3 skyHue = mix(sky / ambient, vec3(1.0), 1.0 - floorValue / wanted);
-            vec3 hue = mix(skyHue, light / value, smoothstep(0.1, 0.25, value / floorValue));
-            return hue * max(value, floorValue);
-        }
+        vec3 giFill(vec3 light, vec3 sky, float share);
+        vec3 gatherFill(vec3 light, vec3 sky) { return gatherIndoors ? giFill(light, sky, gatherFillShare) : light; }
         #define HIT_INTERIOR ((g.interior & 1u) != 0u || gatherIndoors)
         {{TraceShared}}
 

@@ -214,7 +214,7 @@ sealed unsafe class CharacterOcclusionPass : IDisposable
             vec3 ambient = atmoIrradiance(n) * {{(1 - Meitou.Data.World.KenshiLighting.DielectricSpecular).ToString("0.0###", System.Globalization.CultureInfo.InvariantCulture)}} * atmoAmbientMapAt(p).rgb * uAtmoLight.w;
             if (uGiParams.x > 0.5 && (!interior || uGiParams.w > 0.5))
             {
-                vec4 gi = giIrradiance(p, n, normalize(uGiEye - p));
+                vec4 gi = giIrradiance(p, n, normalize(uGiEye - p), interior);
                 gi.rgb = giSurfaceIrradiance(gi.rgb, ambient, interior);
                 ambient = mix(ambient, gi.rgb, giWeight(gi.a, interior));
             }

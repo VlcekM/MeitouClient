@@ -153,8 +153,8 @@ static partial class GiResolveShaders
             vec3 p = positionAt(px, z);
             vec3 n = giOctDir(vec2(surface.xy) / 65535.0 * 2.0 - 1.0);
             vec3 v = normalize(uGiEye - p);
-            vec4 gi = giIrradiance(p, n, v);
             bool interior = (surface.w & 512u) != 0u;
+            vec4 gi = giIrradiance(p, n, v, interior);
             float share = giWeight(gi.a, interior);
             vec3 sky = atmoIrradiance(n) * {{F(1 - KenshiLighting.DielectricSpecular)}} * atmoAmbientMapAt(p).rgb * uAtmoLight.w;
             gi.rgb = giSurfaceIrradiance(gi.rgb, sky, interior);
@@ -167,7 +167,7 @@ static partial class GiResolveShaders
     /// <summary>
     /// The line of <see cref="Resolve"/> that reads the probes, after which the cache's light is taken.
     /// </summary>
-    const string ProbesRead = "vec4 gi = giIrradiance(p, n, v);";
+    const string ProbesRead = "vec4 gi = giIrradiance(p, n, v, interior);";
 
     /// <summary>
     /// The last of <see cref="Resolve"/>'s uniforms, after which the cache's sampler goes.
