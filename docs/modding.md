@@ -504,13 +504,16 @@ holds refuses the second mod.
 - **Building panel buttons:** in `Register`, `registration.AddBuildingActions(context => buttons)` adds button lines to the panel of a selected
   building, placed piece or piece of furniture, after the game's own stats lines (Open/Close, Security, Open to public), one line each, in
   registration order (mods in load order), so several mods share the panel; lines past the panel's height are cut off, so keep to a few. The
-  source runs on the host thread whenever the panel is laid out (each tick while a building is selected), so it must be cheap; a tick may be in
-  flight, so it must not touch the world. It gets `UiBuildingContext`: `Building` (`UiSelectedBuilding`: `Instance`, the key the simulation
+  source runs on the host thread whenever the panel is arranged, which while a building is selected can be every frame (each tick, each mouse
+  move, at least 20 times a second), so it must be cheap and read only its context; a tick may be in flight, so it must not touch the world. It gets `UiBuildingContext`: `Building` (`UiSelectedBuilding`: `Instance`, the key the simulation
   knows it by and `world.Player.InspectedBuilding` holds; `Record`, its record's string id or null; `SiteId`, the player's building id or null;
   the panel's `Name`; `Owned`, whether the player's faction owns it, as the game's own buttons show), the `Snapshot` on screen, `Tick` read
-  when asked, and `Enqueue`. It returns `UiBuildingAction`s (caption, tooltip or null, press); return none to add nothing for that building. A
-  press plays the panel's click and runs only while the building it was shown for is still selected; it changes the world only by queueing
-  commands, which the mod's system applies in its serial `Inputs` step (`Instance` names the building). A source that throws, or returns a
+  when asked, and `Enqueue`. It returns `UiBuildingAction`s (caption, tooltip or null, press); return none to add nothing for that building.
+  Captions and tooltips go through the translation catalog, as the game's own (a text the catalog lacks shows as given). A press plays the
+  panel's click and runs only while the building it was shown for is still selected and still exists (the game's own buttons' check); it changes
+  the world only by queueing commands, which the mod's system applies in its serial `Inputs` step (`Instance` names the building). By then the
+  building may be gone, sold or dismantled (a press in the same frame as the game's Dismantle), so the system checks that `Instance` still exists
+  and still qualifies before acting. A source that throws, or returns a
   button without a caption or press, is logged once and dropped for the session; a press that throws is logged. Without a source the panel
   is as before. Engine API, not in the original.
 - **Settings:** `AddSettings(object)`, once per mod: the object's public get/set properties marked

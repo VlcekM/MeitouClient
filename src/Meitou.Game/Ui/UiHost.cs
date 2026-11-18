@@ -935,9 +935,9 @@ public sealed class UiRegistration : IDisposable
 
     /// <summary>
     /// Adds buttons to the panel of a selected building or placed piece, after the game's own lines (docs/modding.md "Building panel buttons"):
-    /// <paramref name="actions"/> runs on the host's thread whenever the panel is laid out, so it must be cheap, and while a tick may be in flight, so
-    /// it must not touch the world; it reads the context, and a pressed button changes the world through commands
-    /// (<see cref="UiBuildingContext.Enqueue"/>).
+    /// <paramref name="actions"/> runs on the host's thread whenever the panel is arranged, which can be every frame, so it must be cheap, and while
+    /// a tick may be in flight, so it must not touch the world; it reads the context, and a pressed button changes the world through commands
+    /// (<see cref="UiBuildingContext.Enqueue"/>), which must check that the building still exists when they apply.
     /// </summary>
     public void AddBuildingActions(Func<UiBuildingContext, IEnumerable<UiBuildingAction>> actions)
     {

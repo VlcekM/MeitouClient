@@ -58,12 +58,13 @@ sealed class BuildingModButtons(PlayerInterface player)
     }
 
     /// <summary>
-    /// A press of the mod button <paramref name="argument"/> (its index): runs it with the click sound while its building is still the one selected.
+    /// A press of the mod button <paramref name="argument"/> (its index): runs it with the click sound while its building is still the one selected
+    /// and still exists, by the check the game's own panel buttons make (<see cref="BuildingSelection.BuildingFocus"/>).
     /// </summary>
     internal void Press(string argument)
     {
         if (!int.TryParse(argument, NumberStyles.Integer, CultureInfo.InvariantCulture, out int k) || (uint)k >= (uint)_shown.Count) return;
-        if (player.BuildingSelection.Selected?.Instance != _shownFor) return;
+        if (player.BuildingSelection.BuildingFocus()?.Instance != _shownFor) return;
 
         player.InterfaceSounds.Sound("General_Click");
         _shown[k].Press();
