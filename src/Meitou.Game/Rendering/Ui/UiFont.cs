@@ -233,7 +233,7 @@ internal sealed unsafe class UiFont : IDisposable
                 LineHeight = ppem * 1.25f;
                 Baseline = (LineHeight - (_face.Ascender - _face.Descender) * em) / 2 + _face.Ascender * em;
             }
-            _kerningScale = _faithful ? 0 : ppem / Math.Max(1, _face.UnitsPerEm);
+            _kerningScale = Snapped ? 0 : ppem / Math.Max(1, _face.UnitsPerEm);
         }
         Side = ppem * _oversample <= 48 ? 512 : ppem * _oversample <= 96 ? 1024 : MaxSide;
         _pixels = new byte[Side * Side];
@@ -321,9 +321,10 @@ internal sealed unsafe class UiFont : IDisposable
     }
 
     /// <summary>
-    /// The kerning between two code points in output pixels (none in Faithful mode: MyGUI 3.2 does not kern).
+    /// The kerning between two code points in output pixels; none for snapped glyphs (MyGUI 3.2 does not kern, and a fractional kern rounded per
+    /// glyph makes the gaps uneven).
     /// </summary>
-    public float Kern(int left, int right) => _faithful ? 0 : _face.KerningUnits(left, right) * _kerningScale;
+    public float Kern(int left, int right) => Snapped ? 0 : _face.KerningUnits(left, right) * _kerningScale;
 
     /// <summary>
     /// The glyph of <paramref name="codePoint"/>: a tab's advance, nothing for control characters (and in Meitou mode zero-width marks), else the
@@ -385,8 +386,9 @@ internal sealed unsafe class UiFont : IDisposable
             if (LoadGlyph(index) != FT_Error.FT_Err_Ok) return default;
             var slot = _face.Face->glyph;
 
-            // MyGUI advances by the hinted advance; Meitou by the unhinted one (light hinting leaves it alone), both in output pixels.
-            advance = _faithful ? slot->advance.x / 64f
+            // Snapped glyphs (MyGUI, and Meitou's snapped fonts) advance by the hinted whole-pixel advance, so every gap rounds alike; free
+            // Meitou glyphs by the unhinted one; both in output pixels.
+            advance = Snapped ? slot->advance.x / 64f
                 : (slot->linearHoriAdvance != 0 ? slot->linearHoriAdvance / 65536f : slot->advance.x / 64f) / _oversample;
             ref var bitmap = ref slot->bitmap;
             width = (int)bitmap.width;
