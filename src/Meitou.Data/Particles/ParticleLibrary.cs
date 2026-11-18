@@ -39,17 +39,20 @@ public enum ParticleBlend
 /// What a particle needs of an Ogre <c>.material</c> from <c>data/particles/materials</c> (docs/formats/particle-universe.md): the texture, the
 /// blend, the depth flags and the shading the vertex and fragment programs give. The shipped particle shaders (basic.hlsl) output <c>texture · colour
 /// · vertexColour</c>; the "Ambient" vertex programs scale the particle colour by <c>clamp(5 sunY + 0.2, 0.1, 1)</c>; there is no fog term (Verified
-/// in the shader source). The interior-mask clip is not reproduced.
+/// in the shader source). <see cref="ClipInterior"/>: the fragment program defines <c>CLIP_INTERIOR</c> (basic.hlsl's clip against the interior mask,
+/// docs/render-interior-cut.md).
 /// </summary>
 public sealed record ParticleMaterial(
-    string Name, string? Texture, ParticleBlend Blend, bool DepthCheck, bool DepthWrite, bool Ambient, Vector4 ColourScale, bool Clamp)
+    string Name, string? Texture, ParticleBlend Blend, bool DepthCheck, bool DepthWrite, bool Ambient, Vector4 ColourScale, bool Clamp,
+    bool ClipInterior = false)
 {
     /// <summary>
     /// The particle view of <paramref name="m"/>'s first pass: the blend its <c>scene_blend</c> factors name, the first texture unit with a texture
     /// and no <c>content_type</c>, the fragment program's <c>colour</c> parameter (else 1), clamped unless the address mode is <c>wrap</c>, and
-    /// ambient when the vertex program's name holds "Ambient". A material with no pass is alpha-blended, untextured, depth-checked and clamped.
+    /// ambient when the vertex program's name holds "Ambient", clipped inside buildings when the fragment program (or one it delegates to) in
+    /// <paramref name="programs"/> defines <c>CLIP_INTERIOR</c>. A material with no pass is alpha-blended, untextured, depth-checked and clamped.
     /// </summary>
-    public static ParticleMaterial From(OgreMaterial m)
+    public static ParticleMaterial From(OgreMaterial m, IReadOnlyDictionary<string, OgreGpuProgram>? programs = null)
     {
         var pass = m.Techniques.FirstOrDefault()?.Passes.FirstOrDefault();
         if (pass is null)
@@ -70,8 +73,20 @@ public sealed record ParticleMaterial(
                     && float.TryParse(p.Args[5], System.Globalization.CultureInfo.InvariantCulture, out float a))
                     colour = new Vector4(r, g, b, a);
         bool clamp = unit?.AddressMode is not { Count: > 0 } mode || mode[0] != "wrap";
-        return new ParticleMaterial(m.Name, unit?.Texture, kind, pass.DepthCheck, pass.DepthWrite,
-            pass.VertexProgram?.Name.Contains("Ambient", StringComparison.Ordinal) == true, colour, clamp);
+        bool ambient = pass.VertexProgram?.Name.Contains("Ambient", StringComparison.Ordinal) == true;
+        bool clip = pass.FragmentProgram is { } clipped && programs is not null && ClipsInterior(clipped.Name, programs);
+        return new ParticleMaterial(m.Name, unit?.Texture, kind, pass.DepthCheck, pass.DepthWrite, ambient, colour, clamp, clip);
+    }
+
+    /// <summary>
+    /// Whether the program <paramref name="name"/>, or a program a unified one delegates to, defines <c>CLIP_INTERIOR</c>
+    /// (<c>Basic_Texture_Clipped_FP_HLSL</c> in forward/basic.program).
+    /// </summary>
+    static bool ClipsInterior(string name, IReadOnlyDictionary<string, OgreGpuProgram> programs)
+    {
+        if (!programs.TryGetValue(name, out var program)) return false;
+        if (program.PreprocessorDefines.Contains("CLIP_INTERIOR")) return true;
+        return program.Delegates.Any(d => d != name && programs.TryGetValue(d, out var p) && p.PreprocessorDefines.Contains("CLIP_INTERIOR"));
     }
 }
 
@@ -134,7 +149,7 @@ public sealed class ParticleLibrary
         var library = new ParticleLibrary { Directory = resources.Root };
         foreach (var file in resources.ScriptFiles("*.pu"))
             library.AddScript(File.ReadAllText(file, System.Text.Encoding.Latin1), Path.GetRelativePath(resources.Root, file));
-        foreach (var (name, material) in materials.Materials) library.Materials[name] = ParticleMaterial.From(material);
+        foreach (var (name, material) in materials.Materials) library.Materials[name] = ParticleMaterial.From(material, materials.Programs);
         foreach (var d in materials.Diagnostics.Where(d => d.Code == OgreScriptError.Fatal))
             library.Errors.Add(d.ToString());
         return library;
@@ -156,7 +171,7 @@ public sealed class ParticleLibrary
             var ogre = new OgreMaterialLibrary();
             foreach (var file in System.IO.Directory.EnumerateFiles(materials, "*.material").OrderBy(f => f, StringComparer.Ordinal))
                 ogre.AddScript(File.ReadAllText(file, System.Text.Encoding.Latin1), Path.GetFileName(file));
-            foreach (var (name, material) in ogre.Materials) library.Materials[name] = ParticleMaterial.From(material);
+            foreach (var (name, material) in ogre.Materials) library.Materials[name] = ParticleMaterial.From(material, ogre.Programs);
             foreach (var d in ogre.Diagnostics.Where(d => d.Code == OgreScriptError.Fatal))
                 library.Errors.Add(d.ToString());
         }

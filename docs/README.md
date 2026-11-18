@@ -35,7 +35,7 @@ Not built, by design: the original's in-game level editor and fog editor (`Kensh
 - [render-distance-benchmark](render-distance-benchmark.md)
 - [render-foliage](render-foliage.md)
 - [render-gi](render-gi.md)
-- [render-interior-cut](render-interior-cut.md): terrain, foliage and map features cut inside buildings
+- [render-interior-cut](render-interior-cut.md): terrain, foliage, map features and particles cut inside buildings
 - [render-lights](render-lights.md)
 - [render-objects](render-objects.md)
 - [render-post](render-post.md)

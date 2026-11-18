@@ -27,6 +27,8 @@ quota500 is Verified from constructor, not inferred from current ash density.
 CPU emission/ages/forces/curves/size/rotation/colour/observers mirror decoded inputs; unsupported
 plugin behaviour remains a limit. Billboards/material alpha/additive/cutout/depth and weather
 wrapping differ from opaque world shading. Original particles are not fogged like opaque meshes.
+A material whose fragment program defines `CLIP_INTERIOR` is cut inside open buildings (**Verified**, installed `basic.hlsl`;
+[interior cut](../render-interior-cut.md)).
 CAMERA effects use one unit, camera-ahead cube and respawn/wrap geometry; GLOBAL sphere and
 GLOBAL_POINT rings are different. Coordinate basis and previous camera movement must match wraps.
 

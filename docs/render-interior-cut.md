@@ -1,7 +1,7 @@
 # Interior cut
 
 What lies inside a building's interior mask is not drawn, so a room dug into a hillside shows its floor and no grass
-grows through a bar's floorboards. `InteriorMaskRenderer`; consumers: terrain, foliage, map features.
+grows through a bar's floorboards. `InteriorMaskRenderer`; consumers: terrain, foliage, map features, particles.
 
 ## Original
 
@@ -12,7 +12,9 @@ grows through a bar's floorboards. `InteriorMaskRenderer`; consumers: terrain, f
   not sample it.
 - **Verified** readers (installed `data/materials`): `terrain.material`/`terrainfp4.hlsl` (patches, always);
   `foliage.material` `Grass` (`grass_fs`, always; the `Foliage` material there is commented out); `objects.hlsl` and
-  `triplanar.hlsl` under `CLIP_INTERIOR` (0x200); `mapfeature.material` `Feature_Terrain_DX11` (`interiorClip` unit).
+  `triplanar.hlsl` under `CLIP_INTERIOR` (0x200); `mapfeature.material` `Feature_Terrain_DX11` (`interiorClip` unit);
+  `forward/basic.hlsl` under `CLIP_INTERIOR` (`Basic_Texture_Clipped_FP_HLSL` in `basic.program`, the same rule), the fragment program of 41
+  of the installed particle materials (every rain, `Kenshi_rain_basic` etc., and dust, ash and drifting-foliage sprites; counted, merged data).
 - **Verified (decompiled)**: map features always get CLIP_INTERIOR ([runtime-materials](formats/runtime-materials.md)),
   and so do foliage leaves (FUN_1406d1380 copies the `leaves *` fields and calls FUN_140843920 with mode 4, FOLIAGE).
   Building parts and items do not. **Observed**: the foliage meshes' own materials also come from FUN_140843920
@@ -42,6 +44,8 @@ grows through a bar's floorboards. `InteriorMaskRenderer`; consumers: terrain, f
   - foliage meshes: the full colour and prepass programs (already discarding) cut while the view has it on; the GPU cull
     gives a fully visible instance over a box the fade 1.5 (drawn whole), which lays it out with the dithered ones;
   - grass: always cut in the main near view (its cut-out already discards);
+  - particles: materials whose fragment program defines `CLIP_INTERIOR` (`ParticleMaterial.ClipInterior`), the game's rule alone (no
+    under-floor reach), in the colour, low-resolution and reactive-mask draws (`ParticleRenderer.SetInteriorCut`);
   - TERRAIN-mode features and rocks (the terrain's mesh path): placements over a box are drawn with the meshes' full
     colour program with `TerrainConstants.interiorCut` on (features and CPU-culled rocks in their own list; GPU-culled
     rocks get the fade 1.5 too and are drawn by the fading draw).

@@ -845,6 +845,14 @@ public sealed class OgreGpuProgram(OgreScriptObject source)
     public IReadOnlyList<string> Delegates => [.. Source.Properties.Where(p => p.Name == "delegate" && p.Values.Count == 1).Select(p => p.Args[0])];
 
     /// <summary>
+    /// The names <c>preprocessor_defines</c> sets (comma or space separated, a <c>NAME=value</c> by its name); empty when it has none.
+    /// </summary>
+    public IReadOnlyList<string> PreprocessorDefines => Source.Property("preprocessor_defines")?.Args
+        .SelectMany(a => a.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        .Select(d => d.Split('=')[0])
+        .ToArray() ?? [];
+
+    /// <summary>
     /// The last <c>default_params</c> block; null when the program has none.
     /// </summary>
     public OgreScriptObject? DefaultParams => Source.Objects("default_params").LastOrDefault();
