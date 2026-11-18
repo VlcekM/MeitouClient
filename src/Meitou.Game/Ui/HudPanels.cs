@@ -673,6 +673,17 @@ sealed class HudPanels(PlayerInterface player)
     readonly List<(string Bar, string Name, string Arrows)> _medicalRows = [];
 
     /// <summary>
+    /// The HUD layout <see cref="MedicalBars"/> last made room in for more than the layout's nine rows (null before it has): its rows stay bound,
+    /// hidden while empty, for a later character with fewer.
+    /// </summary>
+    MyGuiLayout? _grownHud;
+
+    /// <summary>
+    /// The rows <see cref="_grownHud"/> was given room for.
+    /// </summary>
+    int _grownBars;
+
+    /// <summary>
     /// A bar's fraction in steps of 1/1024, about half a pixel of a bar on a 4K panel: hunger and blood creep every tick, and an unrounded fraction
     /// made the HUD's bindings new each tick, so its cached layout (<see cref="PlayerInterface.ArrangeHud"/>) was made again for a change no one can
     /// see.
@@ -692,7 +703,7 @@ sealed class HudPanels(PlayerInterface player)
 
         if (buildingRows is null && lead?.Body is { } body) AddCharacterRows(rows, lead, body);
 
-        int bars = MedicalBars();
+        int bars = MedicalBars(buildingRows is null ? rows.Count : 0);
         for (int i = 1; i <= bars; i++) BindMedicalBar(b, i, rows);
         MedicalPanelRows.Spread(player.FaithfulHud, b, Math.Min(rows.Count, bars));
 
@@ -709,17 +720,33 @@ sealed class HudPanels(PlayerInterface player)
     }
 
     /// <summary>
-    /// The panel's rows: the layout's nine and one more for each code mod's meter, added to the HUD layout when it lacks them (the mods register
-    /// after the interface is loaded).
+    /// The panel's rows to bind: the layout's nine, one more for each code mod's meter, and as many as <paramref name="characterRows"/> (a character
+    /// whose race has eight or more body parts), added to the HUD layout when it lacks them (the mods register after the interface is loaded; the
+    /// body is known only when it is shown); at least the rows the layout was given earlier, so those hide when empty. A human, an animal and every
+    /// base-game race fit nine rows with their meters, so the count is the layout's nine plus the meters, as without bodies of more parts.
     /// </summary>
-    int MedicalBars()
+    int MedicalBars(int characterRows)
     {
-        int bars = MedicalPanelRows.LayoutBars + Simulation.Bodies.ModMeters.All.Count;
-        if (bars == MedicalPanelRows.LayoutBars) return bars;
+        int grown = ReferenceEquals(_grownHud, player.FaithfulHud) ? _grownBars : 0;
+        int bars = Math.Max(MedicalPanelRows.LayoutBars + Simulation.Bodies.ModMeters.All.Count, characterRows);
+        if (bars == MedicalPanelRows.LayoutBars) return Math.Max(bars, grown);
 
         string last = $"LifeBar{bars}";
         if (player.FaithfulHud.Find(last) is null) player.FaithfulHud = MedicalPanelRows.WithBars(player.FaithfulHud, bars);
-        return player.FaithfulHud.Find(last) is null ? MedicalPanelRows.LayoutBars : bars;
+        if (player.FaithfulHud.Find(last) is null) return Math.Max(MedicalPanelRows.LayoutBars, grown);
+
+        RememberGrown(bars);
+        return Math.Max(bars, grown);
+    }
+
+    /// <summary>
+    /// Notes that the HUD layout now has room for <paramref name="bars"/> rows (<see cref="_grownHud"/>).
+    /// </summary>
+    void RememberGrown(int bars)
+    {
+        if (!ReferenceEquals(_grownHud, player.FaithfulHud)) _grownBars = 0;
+        _grownHud = player.FaithfulHud;
+        _grownBars = Math.Max(_grownBars, bars);
     }
 
     /// <summary>
