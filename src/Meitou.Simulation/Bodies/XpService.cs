@@ -34,8 +34,9 @@ public enum XpEvent
 
 /// <summary>
 /// The XP sources: what raises which stat and by how much (docs/game/character-stats.md "Levelling (XP)"). Other systems call these with the
-/// character's <see cref="CharacterStats"/> and race; each ends in <see cref="CharacterStats.Gain"/>. The service holds only constants and options,
-/// so one instance serves every character on every thread.
+/// character's <see cref="CharacterStats"/> and race; each ends in <see cref="CharacterStats.Gain"/> (first aid and mass combat add straight), which
+/// asks the code mods' experience filters with the entry's <see cref="ExperienceSource"/>. The service holds only constants and options, so one
+/// instance serves every character on every thread.
 /// <para>Time units: the continuous gains take <c>dtSeconds</c>, the game-speed-scaled frame time of game-loop.md (the original's third time
 /// value); the medical code uses game hours. The per-event gains take no time.</para>
 /// </summary>
@@ -70,26 +71,28 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
 
     /// <summary>
     /// The generic continuous entry (<c>FUN_1408c6430</c>): the stat rises by the core gain of <c>0.02 x dt x exp gain multiplier x amount x
-    /// race[stat]</c>.
+    /// race[stat]</c>, from <paramref name="source"/>.
     /// </summary>
-    public float Continuous(CharacterStats stats, RaceData race, StatsEnumerated stat, float dtSeconds, float amount) =>
-        stats.Gain(stat, ContinuousRate * dtSeconds * constants.ExpGainMultiplier * amount * race.StatMultiplier(stat));
+    public float Continuous(CharacterStats stats, RaceData race, StatsEnumerated stat, float dtSeconds, float amount, ExperienceSource source) =>
+        stats.Gain(stat, ContinuousRate * dtSeconds * constants.ExpGainMultiplier * amount * race.StatMultiplier(stat), CharacterStats.XpCap, source);
 
     /// <summary>
     /// The continuous entry with a cap (<c>FUN_1408c64f0</c>, <b>Verified</b> by decompile; the training dummy's): nothing once the stat is at the
-    /// cap, else the same gain with the core curve ((cap - stat) / cap)^2, so the stat only creeps towards the cap and never reaches it.
+    /// cap, else the same gain with the core curve ((cap - stat) / cap)^2, so the stat only creeps towards the cap and never reaches it. Its
+    /// source is <see cref="ExperienceSource.Training"/>.
     /// </summary>
     public float Capped(CharacterStats stats, RaceData race, StatsEnumerated stat, float dtSeconds, float amount, float cap) =>
         stats.Stored(stat) < cap
-            ? stats.Gain(stat, ContinuousRate * dtSeconds * constants.ExpGainMultiplier * amount * race.StatMultiplier(stat), cap)
+            ? stats.Gain(stat, ContinuousRate * dtSeconds * constants.ExpGainMultiplier * amount * race.StatMultiplier(stat), cap,
+                ExperienceSource.Training)
             : stats.Stored(stat);
 
     /// <summary>
     /// A per-event gain: the core gain of <c>0.075 x factor x race[stat]</c> (<paramref name="factor"/> carries the event's coefficient and the
-    /// skill-difference factor).
+    /// skill-difference factor), from <paramref name="source"/>.
     /// </summary>
-    public float PerEvent(CharacterStats stats, RaceData race, StatsEnumerated stat, float factor) =>
-        stats.Gain(stat, EventUnit * factor * race.StatMultiplier(stat));
+    public float PerEvent(CharacterStats stats, RaceData race, StatsEnumerated stat, float factor, ExperienceSource source) =>
+        stats.Gain(stat, EventUnit * factor * race.StatMultiplier(stat), CharacterStats.XpCap, source);
 
     /// <summary>
     /// The weapon-weight factor for strength XP (<c>FUN_1408838e0</c>): <c>min strength xp mult</c> + clamp((weapon weight - strength x injury
@@ -146,35 +149,44 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
         // race factor (the race's STAT_WEAPONS entry, map[20], scales the skill inside the difference instead); dexterity gets the attack's
         // difference.
         if (attackCoef > 0)
-            stats.Gain(attackStat,
+            CombatGain(stats, attackStat,
                 EventUnit * g * attackCoef * SkillDifferenceFactor(stats.Stored(attackStat), opponentSkill)
                 * race.StatMultiplier(StatsEnumerated.MeleeAttack));
         if (weaponCoef > 0 && weaponStat != StatsEnumerated.None)
-            stats.Gain(weaponStat, EventUnit * g * weaponCoef
+            CombatGain(stats, weaponStat, EventUnit * g * weaponCoef
                 * SkillDifferenceFactor(stats.Stored(weaponStat) * race.StatMultiplier(StatsEnumerated.Weapons), opponentSkill));
         if (dexterityCoef > 0)
-            PerEvent(stats, race, StatsEnumerated.Dexterity, g * dexterityCoef * SkillDifferenceFactor(stats.Stored(attackStat), opponentSkill));
+        {
+            PerEvent(stats, race, StatsEnumerated.Dexterity, g * dexterityCoef * SkillDifferenceFactor(stats.Stored(attackStat), opponentSkill),
+                ExperienceSource.Combat);
+        }
         if (defenceCoef > 0)
         {
             // Event 2 puts the race entry (map[19]) into the difference, event 4 into the gain.
             if (ev == XpEvent.Defended)
-                stats.Gain(StatsEnumerated.MeleeDefence, EventUnit * g * defenceCoef
+                CombatGain(stats, StatsEnumerated.MeleeDefence, EventUnit * g * defenceCoef
                     * SkillDifferenceFactor(stats.Stored(StatsEnumerated.MeleeDefence) * race.StatMultiplier(StatsEnumerated.MeleeDefence), opponentSkill));
             else
                 PerEvent(stats, race, StatsEnumerated.MeleeDefence,
-                    g * defenceCoef * SkillDifferenceFactor(stats.Stored(StatsEnumerated.MeleeDefence), opponentSkill));
+                    g * defenceCoef * SkillDifferenceFactor(stats.Stored(StatsEnumerated.MeleeDefence), opponentSkill), ExperienceSource.Combat);
         }
 
         // Strength tail of every event: core(0.075 x 0.55 x 2 x xp rate strength x race[1]), scaled per event and by the weight factor.
-        stats.Gain(StatsEnumerated.Strength,
+        CombatGain(stats, StatsEnumerated.Strength,
             0.075f * 0.55f * 2 * constants.XpRateStrength * race.StatMultiplier(StatsEnumerated.Strength) * strengthScale * strengthFactor * g);
         if (ev == XpEvent.HitTaken)
         {
             // Verified (FUN_1408c6980 event 4): toughness x CharStats +0x34 (the stat scale) against the packet's four terms, x xp rate toughness.
-            stats.Gain(StatsEnumerated.Toughness, EventUnit * g * constants.XpRateToughness
+            CombatGain(stats, StatsEnumerated.Toughness, EventUnit * g * constants.XpRateToughness
                 * SkillDifferenceFactor(stats.Stored(StatsEnumerated.Toughness) * stats.Scale, damageTaken) * race.StatMultiplier(StatsEnumerated.Toughness));
         }
     }
+
+    /// <summary>
+    /// One core gain of a combat event (<see cref="ExperienceSource.Combat"/>).
+    /// </summary>
+    static void CombatGain(CharacterStats stats, StatsEnumerated stat, float amount) =>
+        stats.Gain(stat, amount, CharacterStats.XpCap, ExperienceSource.Combat);
 
     /// <summary>
     /// Toughness from a martial artist's own punch (<c>FUN_1408c68e0</c>, called only from <c>MedicalSystem::punchSomething</c>): 0.075 x k x <c>xp
@@ -184,14 +196,15 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     {
         float k = material == 1 ? 0.25f : material == 5 ? 0.5f : 0.05f;
         return stats.Gain(StatsEnumerated.Toughness,
-            0.075f * k * constants.XpRateToughness * race.StatMultiplier(StatsEnumerated.Toughness) * options.GlobalDamageMultiplier);
+            0.075f * k * constants.XpRateToughness * race.StatMultiplier(StatsEnumerated.Toughness) * options.GlobalDamageMultiplier,
+            CharacterStats.XpCap, ExperienceSource.Injury);
     }
 
     /// <summary>
     /// Toughness from losing a limb (<c>FUN_14064edc0</c>): the generic entry with dt 1 and amount 300, a large one-off gain.
     /// </summary>
     public float ToughnessFromLimbLoss(CharacterStats stats, RaceData race) =>
-        Continuous(stats, race, StatsEnumerated.Toughness, 1, 300);
+        Continuous(stats, race, StatsEnumerated.Toughness, 1, 300, ExperienceSource.Injury);
 
     /// <summary>
     /// Strength from carrying (<c>FUN_1408c60c0</c>, called by the movement tick): amount = (1 - e)^2 capped at 0.5, <paramref name="doubled"/> while
@@ -199,7 +212,7 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     /// 1ce4a16), times <c>xp rate strength from walking</c>, through the continuous entry.
     /// </summary>
     public float StrengthFromCarrying(CharacterStats stats, RaceData race, float encumbranceFactor, float dtSeconds, bool doubled) =>
-        Continuous(stats, race, StatsEnumerated.Strength, dtSeconds, StrengthCarryRate(encumbranceFactor, doubled));
+        Continuous(stats, race, StatsEnumerated.Strength, dtSeconds, StrengthCarryRate(encumbranceFactor, doubled), ExperienceSource.Movement);
 
     /// <summary>
     /// The amount <see cref="StrengthFromCarrying"/> feeds the continuous entry, which the information panel shows as "Strength XP:"
@@ -224,14 +237,14 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     public float AthleticsFromRunning(CharacterStats stats, RaceData race, float encumbranceFactor, float speed, float runValue, float dtSeconds)
     {
         float amount = AthleticsRate(encumbranceFactor, speed, runValue) * constants.XpRateAthletics;
-        return Continuous(stats, race, StatsEnumerated.Athletics, dtSeconds, amount);
+        return Continuous(stats, race, StatsEnumerated.Athletics, dtSeconds, amount, ExperienceSource.Movement);
     }
 
     /// <summary>
     /// Swimming (stat 23) gains 5, or 10 when carrying, while in water (through the continuous entry).
     /// </summary>
     public float SwimmingInWater(CharacterStats stats, RaceData race, bool carrying, float dtSeconds) =>
-        Continuous(stats, race, StatsEnumerated.Swimming, dtSeconds, carrying ? 10 : 5);
+        Continuous(stats, race, StatsEnumerated.Swimming, dtSeconds, carrying ? 10 : 5, ExperienceSource.Movement);
 
     /// <summary>
     /// Stealth while sneaking (<c>FUN_1408c65a0</c>, from the sneaker's sense update): the continuous entry with amount 0.2 when no hostile NPC is
@@ -240,7 +253,7 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     /// <see cref="HearingCheck"/>.
     /// </summary>
     public float Sneaking(CharacterStats stats, RaceData race, StealthExposure exposure, float dtSeconds, bool moving = true) =>
-        Continuous(stats, race, StatsEnumerated.Stealth, dtSeconds, SneakRate(exposure) * (moving ? 1 : NotMovingFactor));
+        Continuous(stats, race, StatsEnumerated.Stealth, dtSeconds, SneakRate(exposure) * (moving ? 1 : NotMovingFactor), ExperienceSource.Stealth);
 
     /// <summary>
     /// The factor on the sneak rate while the sneaker is not moving (<c>FUN_1408c65a0</c>, double <c>DAT_14168a318</c> = 0.1, <b>Verified</b>).
@@ -268,19 +281,21 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     /// <summary>
     /// Stealth from the hearing checks: the generic entry with dt 1 (<c>DAT_14167c308</c>) and the summed amounts.
     /// </summary>
-    public float HearingCheck(CharacterStats stats, RaceData race, float amount) => Continuous(stats, race, StatsEnumerated.Stealth, 1, amount);
+    public float HearingCheck(CharacterStats stats, RaceData race, float amount) =>
+        Continuous(stats, race, StatsEnumerated.Stealth, 1, amount, ExperienceSource.Stealth);
 
     /// <summary>
     /// Lockpicking (<c>FUN_1408c62e0</c>): 1.2 x race[37] on success, 0.24 x on failure, straight into the core curve.
     /// </summary>
     public float Lockpicking(CharacterStats stats, RaceData race, bool success) =>
-        stats.Gain(StatsEnumerated.Lockpicking, (success ? 1.2f : 0.24f) * race.StatMultiplier(StatsEnumerated.Lockpicking));
+        stats.Gain(StatsEnumerated.Lockpicking, (success ? 1.2f : 0.24f) * race.StatMultiplier(StatsEnumerated.Lockpicking), CharacterStats.XpCap,
+            ExperienceSource.Lockpicking);
 
     /// <summary>
     /// Engineering (<c>FUN_1408c6250</c>): <c>0.02 x dt x 0.75 x race[5] x 0.75</c>, i.e. the continuous entry with amount 0.75.
     /// </summary>
     public float Engineering(CharacterStats stats, RaceData race, float dtSeconds) =>
-        Continuous(stats, race, StatsEnumerated.Engineering, dtSeconds, 0.75f);
+        Continuous(stats, race, StatsEnumerated.Engineering, dtSeconds, 0.75f, ExperienceSource.Building);
 
     /// <summary>
     /// Medic (<c>FUN_1408c6130</c>, <b>Verified</b> decompile): <c>dt / T x exp gain multiplier x race[stat]</c> added straight to the stat (no core
@@ -298,7 +313,7 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
 
         float rate = stats.XpRate > 1 && skill >= MedicRateLimit ? 1 : stats.XpRate;
         float gain = dtSeconds * rate / secondsPerPoint * constants.ExpGainMultiplier * medicRace.StatMultiplier(patientRace.HealStat);
-        return stats[stat] = skill + gain;
+        return stats[stat] = skill + stats.FilterStraight(stat, gain, ExperienceSource.FirstAid);
     }
 
     /// <summary>
@@ -308,14 +323,16 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     /// <c>CombatSystem.MassCombatEffect</c>.
     /// </summary>
     public float MassCombat(CharacterStats stats) =>
-        stats[StatsEnumerated.MassCombat] = stats.Stored(StatsEnumerated.MassCombat) + constants.ExpGainMultiplier * 0.05f * stats.XpRate;
+        stats[StatsEnumerated.MassCombat] = stats.Stored(StatsEnumerated.MassCombat)
+            + stats.FilterStraight(StatsEnumerated.MassCombat, constants.ExpGainMultiplier * 0.05f * stats.XpRate, ExperienceSource.Combat);
 
     /// <summary>
     /// Toughness when a hit knocks the character out (<c>FUN_1408c6720</c>, from the part damage <c>FUN_14064f300</c>, <b>Verified</b> decompile):
     /// the core gain of 0.075 (exp gain multiplier x 0.1) x race[toughness].
     /// </summary>
     public float ToughnessFromKnockOut(CharacterStats stats, RaceData race) =>
-        stats.Gain(StatsEnumerated.Toughness, EventUnit * race.StatMultiplier(StatsEnumerated.Toughness));
+        stats.Gain(StatsEnumerated.Toughness, EventUnit * race.StatMultiplier(StatsEnumerated.Toughness), CharacterStats.XpCap,
+            ExperienceSource.Injury);
 
     /// <summary>
     /// The Toughness XP multiplier f (the HUD's, <c>FUN_1408c6780</c>): 1, or 2 with the left arm crippled, plus 2 for the right arm, 2 while the
@@ -333,5 +350,5 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     /// (<paramref name="enemies"/> + 10) x race[toughness], f = <see cref="ToughnessFactor"/>.
     /// </summary>
     public float ToughnessFromGettingUp(CharacterStats stats, RaceData race, MedicalState medical, int enemies) =>
-        PerEvent(stats, race, StatsEnumerated.Toughness, ToughnessFactor(medical) * (enemies + 10));
+        PerEvent(stats, race, StatsEnumerated.Toughness, ToughnessFactor(medical) * (enemies + 10), ExperienceSource.Injury);
 }

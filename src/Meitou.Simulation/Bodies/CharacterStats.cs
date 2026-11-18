@@ -40,6 +40,16 @@ public sealed class CharacterStats
     ActiveStatusEffects? _effects;
 
     /// <summary>
+    /// The world whose experience filters this character's gains pass (<see cref="BindExperience"/>); null while no filter is registered.
+    /// </summary>
+    World? _xpWorld;
+
+    /// <summary>
+    /// The character these stats belong to in <see cref="_xpWorld"/>.
+    /// </summary>
+    CharacterId _xpOwner = CharacterId.None;
+
+    /// <summary>
     /// What this character's XP gains are multiplied by (Advanced settings "Squad XP" and "Others' XP", <see cref="BodyOptions.SquadXp"/>; Meitou
     /// only, the game has 1). <see cref="BodySystem"/> sets it on every body step from the character's side; not saved.
     /// </summary>
@@ -211,12 +221,48 @@ public sealed class CharacterStats
     /// stays NaN: in game the XP entries (<c>xpStat_eventBased</c>, <c>xpGeneral</c>) never reach the core's reset to 20 for one (<b>Verified</b> in
     /// game, issue #3).
     /// </summary>
-    public float Gain(StatsEnumerated stat, float amount, float cap = XpCap)
+    public float Gain(StatsEnumerated stat, float amount, float cap = XpCap) => Gain(stat, amount, cap, ExperienceSource.Other);
+
+    /// <summary>
+    /// <see cref="Gain(StatsEnumerated, float, float)"/> for one of the game's own gains, which the code mods' experience filters see as
+    /// <paramref name="source"/>.
+    /// </summary>
+    internal float Gain(StatsEnumerated stat, float amount, float cap, ExperienceSource source)
     {
         var s = StatsInfo.StorageOf(stat);
         if (s == StatsEnumerated.None) return 0;
-        if (float.IsNaN(_values[(int)s])) return _values[(int)s];
-        return _values[(int)s] = CoreGain(_values[(int)s], Rated(_values[(int)s], amount, cap), cap);
+        float value = _values[(int)s];
+        if (float.IsNaN(value)) return value;
+        return _values[(int)s] = CoreGain(value, Filtered(stat, value, Rated(value, amount, cap), cap, source), cap);
+    }
+
+    /// <summary>
+    /// Binds these stats to <paramref name="world"/>'s experience filters as <paramref name="owner"/>'s (<see cref="ExperienceFilters.Bind"/>).
+    /// </summary>
+    internal void BindExperience(World world, CharacterId owner) => (_xpWorld, _xpOwner) = (world, owner);
+
+    /// <summary>
+    /// A core gain's amount after the code mods' experience filters (<see cref="IExperienceFilter"/>), held as <see cref="Rated"/> holds the
+    /// rate: to the core's limit, and with no raise for a stat at or past the gain's cap. Only an amount the core would add is asked; the amount
+    /// itself without a filter, or for stats not bound to the character they belong to (one moved to another slot since the tick began).
+    /// </summary>
+    float Filtered(StatsEnumerated stat, float value, float amount, float cap, ExperienceSource source)
+    {
+        if (_xpWorld is null || !(amount > 0 && amount <= MaxCoreGain)) return amount;
+
+        float filtered = FilterStraight(stat, amount, source);
+        return value >= cap ? MathF.Min(filtered, amount) : MathF.Min(filtered, MaxCoreGain);
+    }
+
+    /// <summary>
+    /// An amount the game adds to a stat straight, past the core curve (first aid, mass combat), after the code mods' experience filters; the
+    /// amount itself without a filter, for one not above 0, or for stats not bound to the character they belong to.
+    /// </summary>
+    internal float FilterStraight(StatsEnumerated stat, float amount, ExperienceSource source)
+    {
+        if (_xpWorld is not { } world || !(amount > 0) || world.Characters.Cold(_xpOwner.Slot)?.Stats != this) return amount;
+
+        return world.ExperienceFilters.Pass(world, _xpOwner, stat, amount, source);
     }
 
     /// <summary>

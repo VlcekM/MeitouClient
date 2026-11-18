@@ -544,8 +544,8 @@ public sealed partial class CombatSystem : IProjectileSource
         }
 
         s.ReloadLeft -= dt;
-        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Crossbows, dt, RangedFormulas.CrossbowXp);
-        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Dexterity, dt, RangedFormulas.DexterityReloadXp);
+        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Crossbows, dt, RangedFormulas.CrossbowXp, ExperienceSource.Ranged);
+        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Dexterity, dt, RangedFormulas.DexterityReloadXp, ExperienceSource.Ranged);
         if (s.ReloadLeft > 0) return;
 
         s.ReloadLeft = 0;
@@ -617,8 +617,8 @@ public sealed partial class CombatSystem : IProjectileSource
     {
         var x = cold.Fighter!.Crossbow!;
         s.RangedState = (byte)RangedStates.Aiming;
-        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Perception, dt, RangedFormulas.PerceptionXp);
-        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Crossbows, dt, RangedFormulas.CrossbowXp);
+        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Perception, dt, RangedFormulas.PerceptionXp, ExperienceSource.Ranged);
+        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Crossbows, dt, RangedFormulas.CrossbowXp, ExperienceSource.Ranged);
         if (s.Steady > 0)
         {
             s.Steady -= dt;
@@ -874,7 +874,8 @@ public sealed partial class CombatSystem : IProjectileSource
         var state = table.Previous;
         if (p.Shooter >= state.Length || !state[p.Shooter].Alive || state[p.Shooter].Generation != p.ShooterGeneration) return;
 
-        if (table.Cold(p.Shooter) is { Stats: { } stats, Race: { } race }) _xp.Continuous(stats, race, StatsEnumerated.FriendlyFire, 1, amount);
+        if (table.Cold(p.Shooter) is { Stats: { } stats, Race: { } race })
+            _xp.Continuous(stats, race, StatsEnumerated.FriendlyFire, 1, amount, ExperienceSource.Ranged);
     }
 
     #endregion

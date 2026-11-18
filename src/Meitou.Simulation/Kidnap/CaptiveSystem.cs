@@ -1870,7 +1870,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         // Observed). Engine choice: "awake" for the
         // original's unnamed conscious test (vfunc 0x358).
         if (cc.Stats is { } stats && !medical.Incapacitated)
-            _xp.Continuous(stats, cc.Race!, StatsEnumerated.Toughness, dt, EatToughnessXp);
+            _xp.Continuous(stats, cc.Race!, StatsEnumerated.Toughness, dt, EatToughnessXp, ExperienceSource.Injury);
 
         float rate = MedicalState.EatRate(cc.Stats?.Toughness ?? 0, cc.Stats?.Scale ?? 1);
         bool vampiric = table.TryResolveNext(j.Worker, out int w) && table.Cold(w)?.Race is { Vampiric: true };

@@ -123,7 +123,8 @@ public sealed partial class CombatSystem
                 GainCombatXp(ac, dc, XpEvent.GlancingHit, null);
                 var dodgeStats = dc.Stats;
                 _xp.PerEvent(dodgeStats, dc.Race, StatsEnumerated.Dodge,
-                    0.25f * _xp.SkillDifferenceFactor(dodgeStats[StatsEnumerated.Dodge], Eff(ac, StatsEnumerated.MeleeAttack)));
+                    0.25f * _xp.SkillDifferenceFactor(dodgeStats[StatsEnumerated.Dodge], Eff(ac, StatsEnumerated.MeleeAttack)),
+                    ExperienceSource.Combat);
                 Punch(world, a, ac, dc, tech, blow, 0);
                 Record(now, a, d, blow, outcome, -1, default, false, false);
                 return;

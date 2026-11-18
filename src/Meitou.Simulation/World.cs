@@ -249,6 +249,7 @@ public sealed partial class World : IDisposable
             GoodsTakenObservers.Register(this._systems[k], k);
             RelationObservers.Register(this._systems[k], k);
             DeathObservers.Register(this._systems[k], k);
+            ExperienceFilters.Register(this._systems[k], k);
         }
         foreach (var owner in this._systems.OfType<ITaskOwner>()) owner.RegisterTasks(Tasks);
         foreach (var owner in this._systems.OfType<IDecisionOwner>()) owner.RegisterSources(Decisions);
@@ -438,6 +439,10 @@ public sealed partial class World : IDisposable
     /// The systems told of deaths (<see cref="Bodies.ICharacterDeathObserver"/>).
     /// </summary>
     internal Bodies.DeathObservers DeathObservers { get; } = new();
+    /// <summary>
+    /// The systems filtering experience gains (<see cref="Bodies.IExperienceFilter"/>).
+    /// </summary>
+    internal Bodies.ExperienceFilters ExperienceFilters { get; } = new();
     /// <summary>
     /// The camera the host last passed (<see cref="CameraViewCommand"/>); null: none, nothing is tested against a screen.
     /// </summary>
@@ -655,6 +660,7 @@ public sealed partial class World : IDisposable
         GoodsTakenObservers.Register(system, _systems.Count - 1);
         RelationObservers.Register(system, _systems.Count - 1);
         DeathObservers.Register(system, _systems.Count - 1);
+        ExperienceFilters.Register(system, _systems.Count - 1);
         if (system is IDecisionOwner owner) owner.RegisterSources(Decisions);
         if (DecidesAfter(system)) _decideAfter = _systems.Count - 1;
     }
@@ -730,6 +736,7 @@ public sealed partial class World : IDisposable
         prof?.Begin(_systems.Count);
         table.BeginTick();
         ModFaults.Settle();
+        ExperienceFilters.Bind(this);   // whose stats are whose this tick, for the experience filters (nothing without one)
 
         // 1. Inputs (serial).
         RunInputs(table, prof);
@@ -1184,6 +1191,7 @@ public sealed partial class World : IDisposable
         GoodsTakenObservers.HashFaults(ref h);
         RelationObservers.HashFaults(ref h);
         DeathObservers.HashFaults(ref h);
+        ExperienceFilters.HashFaults(ref h);
         ModFaults.HashFaults(ref h);
         return h.Value;
     }

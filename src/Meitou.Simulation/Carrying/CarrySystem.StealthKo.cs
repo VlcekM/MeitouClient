@@ -337,7 +337,8 @@ public sealed partial class CarrySystem
         if (!noXp && cold.Stats is { } stats && cold.Race is { } race)
         {
             float f = target.IsImprisoned ? 0.07f : Asleep(table, t) ? 0.5f : 1;
-            (_xp ??= new XpService(Constants, _bodyOptions)).Continuous(stats, race, StatsEnumerated.Assassination, 1, f * (success ? 100 : 300));
+            (_xp ??= new XpService(Constants, _bodyOptions))
+                .Continuous(stats, race, StatsEnumerated.Assassination, 1, f * (success ? 100 : 300), ExperienceSource.Assassination);
         }
 
         if (success) KnockOutTarget(table, t, cold, target);

@@ -419,7 +419,7 @@ public sealed partial class CrimeSystem
             }
         }
         if (p < 0.98f && !c.IsImprisoned && (c.Pending?.Timer ?? 0) < 10 && c.Stats is { } stats && c.Race is { } race)
-            Xp?.Continuous(stats, race, StatsEnumerated.Thieving, 1, caught ? CaughtXp : StealXp);
+            Xp?.Continuous(stats, race, StatsEnumerated.Thieving, 1, caught ? CaughtXp : StealXp, ExperienceSource.Thievery);
         return caught;
     }
 
@@ -431,7 +431,7 @@ public sealed partial class CrimeSystem
     {
         if (world.Characters.Cold(thief) is not { } c || owner < 0 || owner == c.Faction) return;
         SetPending(world, thief, CrimeCode.Theft, owner, CharacterId.None, MinTimer);
-        if (c.Stats is { } stats && c.Race is { } race) Xp?.Continuous(stats, race, StatsEnumerated.Thieving, 1, PickUpXp);
+        if (c.Stats is { } stats && c.Race is { } race) Xp?.Continuous(stats, race, StatsEnumerated.Thieving, 1, PickUpXp, ExperienceSource.Thievery);
     }
 }
 
