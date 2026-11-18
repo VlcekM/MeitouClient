@@ -1628,6 +1628,11 @@ public sealed class CharacterTable
     internal int LastingCount => _lasting?.Count ?? 0;
 
     /// <summary>
+    /// A save is under way (set by its capture, cleared when the next tick begins): no lasting id may be given (<see cref="LastingIds.GetOrGive"/>).
+    /// </summary>
+    internal bool SaveHold { get; set; }
+
+    /// <summary>
     /// Where in a tick the table is: spawns and removals in the wrong phase throw.
     /// </summary>
     internal TablePhase Phase
@@ -1652,6 +1657,7 @@ public sealed class CharacterTable
     internal void BeginTick()
     {
         Ticks++;
+        SaveHold = false;
         Array.Copy(_previous, _next, _highWater);
         _inTick = true;
     }

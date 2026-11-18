@@ -462,18 +462,25 @@ holds refuses the second mod.
   ([save](formats/save.md#mod-data)), captured between ticks with the save and restored right after `SaveLoader.Load`, before the first
   tick. `Read` runs only when the save has data for the system. Vanilla save files stay byte-exact. Data kept per character is keyed by the
   characters' lasting ids (Character ids, below), not by `CharacterId`, which is new for every world.
-- **Character ids:** `world.LastingIds.Of(character)` gives a character a `LastingId` (a non-zero 64-bit value) the first time any mod asks and
-  returns the same one after: it stays with the character for life, across saves and loads, squad moves, recruiting, being taken captive and
+- **Character ids:** `world.LastingIds.GetOrGive(character)` gives a character a `LastingId` (a non-zero 64-bit value) the first time any mod asks
+  and returns the same one after: it stays with the character for life, across saves and loads, squad moves, recruiting, being taken captive and
   renames, and while an NPC's platoon leaves the world and comes back, where `CharacterId` is new for every world. All mods share the one id, so
-  each keys its own data by it (written in its `IModSaveData`). `world.LastingIds.Find(id)` is the character in the world now, dead or alive, else
-  none (never given in this line of saves, its squad off screen, removed); `CharacterCold.LastingId` and `CharacterSnapshot.LastingId` read it
-  without giving one (none until asked), the snapshot's for interface sources. Ids are given between ticks or in a serial phase (a throw in a
-  parallel one) and are deterministic: the high half is chosen once from the world seed and the game hours, the low half counts up, and both are
-  kept with the save, so no two characters of one game's line of saves share one; two saves branched from one may give the same id to different
-  characters made after the branch. Saved in `meitou-mods/character-ids.json` ([save](formats/save.md#character-ids)); after a load a player
-  character has its id when `IModSaveData.Read` and `IWorldReady` run, an NPC when its platoon is made. A character the save does not write (one
-  removed) loses its id, which is never given again. An import starts with none. Until a mod asks (or a save with ids loads) nothing is held, hashed
-  or written; then the ids enter the state hash. Engine API, not in the original.
+  each keys its own data by it. `world.LastingIds.Find(id)` is the character in the world now, dead or alive, else none (never given in this line of
+  saves, its squad off screen, or gone for good); `world.LastingIds.KeptIds()` lists the ids of every character the game still keeps, dead or alive
+  (in the world, in a squad stored off screen, in a loaded save's record still kept), so an id a mod holds that is not among them belongs to a
+  character gone for good (killed and removed, its platoon despawned or wiped out) and its data may be dropped; it scans the world, so call it now
+  and then (after a load, once a game day), not per character per tick. `CharacterCold.LastingId` and `CharacterSnapshot.LastingId` read the id
+  without giving one (none until asked), the snapshot's for interface sources. `GetOrGive` runs on the thread that ticks the world, between ticks or
+  in a serial phase; it throws in a parallel phase and during a save, from the capture until the next tick (which covers `IModSaveData.Write`),
+  whether or not the character has an id, so saving never changes the world's ids or loses one. A mod therefore gives the id when it first stores
+  data for a character and reads `CharacterCold.LastingId` in its `Write` (a throw there is logged and that mod's data is not written). Ids are
+  deterministic: the high half is chosen once from the world seed and the game hours, the low half counts up, and both are kept with the save, so no
+  two characters of one game's line of saves share one. Two saves branched from one may give the same id to different characters made after the
+  branch, and nothing tells branches apart, so a mod that keeps data outside the save (one file across saves) cannot rely on ids there. Saved in
+  `meitou-mods/character-ids.json` ([save](formats/save.md#character-ids)); after a load a player character has its id when `IModSaveData.Read` and
+  `IWorldReady` run, an NPC when its platoon is made. A character the save does not write loses its id, which is never given again. An import starts
+  with none. Until a mod asks (or a save with ids loads) nothing is held, hashed or written; then the ids enter the state hash. Engine API, not in
+  the original.
 - **Interface:** `AddUi(IUiExtension)`: namespaced styles, controls, actions, overrides and slot contributions (`UiSlots`), registered
   with each new interface (`ConfigurePlayerInterface`, Vulkan and Metal). A picture from the mod's folder is an image node:
   `new UiNode(id, UiNodeKind.Image) { Image = Path.Combine(context.Folder, "face.png") }`; a CHARACTER record's portrait is

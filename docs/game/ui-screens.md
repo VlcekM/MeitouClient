@@ -251,7 +251,9 @@ The camera keeps a fixed Y yaw axis.
 - Saving writes it back (`FUN_1406280a0`).
 
 So each character keeps one random angle for life. Most come out three-quarter, some nearly frontal; none are profiles. **Observed**:
-the user's base-game save atlas shows a near-frontal face.
+the user's base-game save atlas shows a near-frontal face. Serials are not unique: **Observed** (2026-11-17, a census of 11 saves read with
+`SaveGame`), in a base-game save of 1296 characters 58 share their serial with another (1266 distinct values), while no two characters of any of
+the saves share a handle.
 
 **States** (**Verified**, `FUN_140414dc0` sets the flags, `FUN_140415150` applies them to the `Kenshi_PortraitCharacter` cell). The cell has
 `BackgroundImage`, `BackImage`, `PortraitImage`, `FrontImage`, `NameText` and the `BorderPanel` button. The image set is

@@ -72,9 +72,9 @@ public static class SaveLoader
             throw new InvalidOperationException("A save is loaded into a world that has not started and has no characters.");
 
         RestoreSeed(world, save);
-        RestoreLastingIds(world, save);
         var camera = save.Camera;
         var loaded = new LoadedSave { Source = save, Clock = new SaveClock(camera.Day, camera.Hour, camera.Minute) };
+        RestoreLastingIds(world, save, loaded);
 
         // The world's clock is the save's from the start: the first tick (run before the host sets it) makes the zones' saved platoons, whose
         // absolute hours (a shop's next restock) are read against it.
@@ -125,14 +125,14 @@ public static class SaveLoader
 
     /// <summary>
     /// The lasting ids code mods gave the save's characters (docs/modding.md "Character ids"), before any character is made: each is given as its
-    /// character is made. A save without the file (the original's, or one where no mod asked) gives none.
+    /// character is made. A save without the file (the original's, or one where no mod asked) gives none; an unreadable file gives none, with a note.
     /// </summary>
-    static void RestoreLastingIds(World world, SaveGame save)
+    static void RestoreLastingIds(World world, SaveGame save, LoadedSave loaded)
     {
         if (save.LastingIds is null) return;
 
-        var contents = SaveLastingIds.Read(save.LastingIds);
-        world.LastingIds.Load(contents with { Entries = SaveLastingIds.Rebind(contents.Entries, save) });
+        if (SaveLastingIds.Read(save.LastingIds) is { } contents) world.LastingIds.Load(contents, save);
+        else loaded.Notes.Add($"{SaveFolder.LastingIdsName} could not be read; the characters have no lasting ids.");
     }
 
     /// <summary>

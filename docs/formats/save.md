@@ -200,16 +200,17 @@ Meitou only (optional "Blood on weapons and gear", [blood-decals.md](../game/blo
 
 Meitou only ([modding](../modding.md#registration-surface) "Character ids"): `meitou-mods/character-ids.json`, written with the other files
 (`SaveLastingIds`, `SaveGame.LastingIds`) only once a code mod asked for a character's id or the loaded save had the file; not a field of any
-original file. UTF-8 JSON `{ "format": 1, "prefix": p, "next": n, "characters": [ { "hand": [type, C, CS, I, S], "id", "record", "name", "portrait"
-} ] }`: `hand` the character's handle in this save, `id` its lasting id, `prefix` the high half of new ids, `next` the counter their low half
-continues from, and the character's record string id, name and portrait serial (`portrait_serial`, else the handle's `S`) as written. The capture
-writes each character with an id under the handle it just wrote it with (a character that changed squads has a new handle), then the loaded file's
-entries whose characters the save keeps unchanged (an NPC platoon never made, a dead player character kept as read); an entry whose handle the save
-no longer holds is dropped, and an id or handle appears once. On load, an entry whose handle no character has takes the handle of the one character
-with its record, name and portrait serial, when exactly one such character has no entry and no other such entry wants it; otherwise it is dropped.
-The match needs all three because portrait serials repeat within a save while handles do not: **Observed** (2026-11-17, a census of 11 saves): in a
-base-game save of 1296 characters, 58 share their serial with another and 4 share record, name and serial; no two characters of any of the saves
-share a handle. Missing, unreadable or another format reads as no ids.
+original file. UTF-8 JSON `{ "format": 1, "prefix": p, "next": n, "characters": [ { "hand": [type, C, CS, I, S], "id", "record" } ] }`: `hand` the
+character's handle in this save, `id` its lasting id, `record` the string id of the CHARACTER record it was made from, `prefix` the high half of new
+ids and `next` the counter their low half continues from. The capture writes each character with an id under the handle it just wrote it with (a
+character that changed squads has a new handle), then the loaded file's entries whose characters the save keeps unchanged with the same record (an
+NPC platoon never made, a dead player character kept as read); an entry whose handle the save no longer holds is dropped, an id or handle appears
+once, and the prefix and counter are always written. On load an entry is taken only when its handle names a character of the save made from its
+record, and the counter goes past every id in the file. A missing file reads as no ids; a file that is not JSON of this format reads as none with a
+load note, and a malformed entry or one repeating a handle or id is dropped alone. **Observed** (2026-11-17, win-x64, a scratch program on
+`Meitou.Data`): a save read, five entries added, written with `SaveGame.Write` and read back gives the same entries, prefix and counter, each handle
+naming a character of the reloaded save; a hand-made file with a non-object entry, a text handle part, a repeated id, a repeated handle and an id of
+0 keeps only its two good entries.
 
 ### Save requests (`FUN_14047c310`)
 
