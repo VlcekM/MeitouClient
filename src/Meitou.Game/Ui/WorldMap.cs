@@ -329,6 +329,11 @@ sealed class WorldMap(PlayerInterface player)
     readonly Dictionary<string, bool> _knownGroups = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// A code mod marker's image file to whether it exists (<see cref="KnownImage"/>'s cache; made on the first image marker).
+    /// </summary>
+    Dictionary<string, bool>? _knownImages;
+
+    /// <summary>
     /// Mod to how many of its map markers this frame has named so far (<see cref="AddModMarkers"/>).
     /// </summary>
     readonly Dictionary<string, int> _modMarkerCounts = new(StringComparer.Ordinal);
@@ -481,19 +486,29 @@ sealed class WorldMap(PlayerInterface player)
     }
 
     /// <summary>
-    /// A map marker of <paramref name="group"/>, tinted and turned, with a place's tooltip; skipped when it lies outside the viewport.
+    /// Whether a code mod marker's image file exists, checked once per path (a file added while the game runs is not seen).
     /// </summary>
-    void AddMarker(ref MapFrame frame, string name, string group, UiRect box, Vector4 colour, float angle = 0, string? tooltip = null)
+    bool KnownImage(string path)
+    {
+        _knownImages ??= new(StringComparer.Ordinal);
+        if (_knownImages.TryGetValue(path, out bool known)) return known;
+
+        return _knownImages[path] = Path.IsPathFullyQualified(path) && File.Exists(path);
+    }
+
+    /// <summary>
+    /// A map marker of <paramref name="group"/> (or the image file <paramref name="image"/>, a code mod's), tinted and turned, with a place's
+    /// tooltip; skipped when it lies outside the viewport.
+    /// </summary>
+    void AddMarker(ref MapFrame frame, string name, string group, UiRect box, Vector4 colour, float angle = 0, string? tooltip = null,
+        string? image = null)
     {
         if (box.Intersect(_mapViewport).Width <= 0 || box.Intersect(_mapViewport).Height <= 0) return;
 
-        var props = new Dictionary<string, string>
-        {
-            ["ImageResource"] = "Kenshi_MapMarkers",
-            ["ImageGroup"] = group,
-            ["ImageName"] = group,
-            ["Colour"] = FormattableString.Invariant($"{colour.X} {colour.Y} {colour.Z} {colour.W}")
-        };
+        var props = image is null
+            ? new Dictionary<string, string> { ["ImageResource"] = "Kenshi_MapMarkers", ["ImageGroup"] = group, ["ImageName"] = group }
+            : new Dictionary<string, string> { ["ImageTexture"] = Rendering.Ui.UiPainter.IconTexture(image) };
+        props["Colour"] = FormattableString.Invariant($"{colour.X} {colour.Y} {colour.Z} {colour.W}");
         if (angle != 0) props["ImageAngle"] = angle.ToString(CultureInfo.InvariantCulture);
 
         // Type 4, a map place (the original's "hand" payload, FUN_140922e60): rows of the data, a tab between a row's label and value.
@@ -620,14 +635,14 @@ sealed class WorldMap(PlayerInterface player)
 
     /// <summary>
     /// The code mods' markers (<see cref="UiRegistration.AddMapMarkers"/>), from the zoom level each asks, centred on its point, sized by its group's
-    /// image and the zoom as a place's is, with its label from zoom level 1. A marker's control is named by its mod and its place in that mod's
-    /// list.
+    /// image (32 pixels square for an image file without a group) and the zoom as a place's is, drawn from its image file when it names one, with
+    /// its label from zoom level 1. A marker's control is named by its mod and its place in that mod's list.
     /// </summary>
     void AddModMarkers(ref MapFrame frame, WorldSnapshot snapshot)
     {
         if (!player.HasModMapMarkers) return;
 
-        var markers = player.ModMapMarkers(new UiMapContext(snapshot, frame.Level), KnownGroup);
+        var markers = player.ModMapMarkers(new UiMapContext(snapshot, frame.Level), KnownGroup, KnownImage);
 
         // Counted per mod, not per run of a mod's markers: a mod's sources need not sit together in registration order.
         _modMarkerCounts.Clear();
@@ -639,10 +654,11 @@ sealed class WorldMap(PlayerInterface player)
             if (frame.Level < m.FromLevel) continue;
 
             string name = $"map-mod-{owner}-{k}";
-            var size = GroupSize(m.Group) * frame.Ui * (frame.Level == 0 ? 0.5f : 0.85f) * m.Scale;
+            var picture = string.IsNullOrEmpty(m.Group) ? new Vector2(32) : GroupSize(m.Group);
+            var size = picture * frame.Ui * (frame.Level == 0 ? 0.5f : 0.85f) * m.Scale;
             var centre = MapScreen(ref frame, new(m.At.X, 0, m.At.Y));
             var box = new UiRect(centre.X - size.X / 2, centre.Y - size.Y / 2, size.X, size.Y);
-            AddMarker(ref frame, name, m.Group, box, m.Colour, tooltip: m.Tooltip);
+            AddMarker(ref frame, name, m.Group, box, m.Colour, tooltip: m.Tooltip, image: m.Image);
             if (frame.Level > 0 && !string.IsNullOrEmpty(m.Label))
                 AddLabel(ref frame, name + "-label", m.Label, new(centre.X, box.Y + box.Height + MathF.Round(3.2f * frame.Ui)), m.Colour);
         }

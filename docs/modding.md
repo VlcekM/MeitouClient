@@ -471,8 +471,13 @@ holds refuses the second mod.
   exact), a tint, an optional label (shown from zoom level 1) and tooltip (rows split by new lines, a tab between a row's label and value,
   as a place's), the least zoom level it shows at and a size against the group's image. They are drawn after the towns, camps and outposts
   and before the tracked squads and the player's characters, centred on their point and sized as a place's are. A mod keeps its markers
-  itself (in its `IModSaveData` to keep them across a load). A source that throws or gives a marker with a group the marker set lacks, a
-  point, tint or size not finite, a size not above 0 or a zoom level outside 0 to 2 is logged once and dropped.
+  itself (in its `IModSaveData` to keep them across a load). A marker may draw a picture of its own instead: `Image` (an init property, set
+  as `new UiMapMarker(...) { Image = Path.Combine(context.Folder, "camp.png") }`) names an image file by full path (PNG, DDS or another format
+  the game reads), drawn tinted as a group's is and sized as `Group`'s image when `Group` names one of the set, else as 32 by 32 pixels (`Group`
+  empty), times the size; it shows once read (a frame or two after it first appears). Several mods may each use their own files at once. A
+  source that throws or gives a marker with a group the marker set lacks (with an image: a file that does not exist, checked once per path, or
+  a group neither empty nor in the set), a point, tint or size not finite, a size not above 0 or a zoom level outside 0 to 2 is logged once
+  and dropped.
 - **Right-click menu rows:** in `Register`, `registration.AddCharacterMenuVerbs(context => rows)` adds rows to a character's right-click menu
   after the game's own. The source runs on the host thread whenever the game asks for the menu, which includes every frame a character is under
   the cursor (whether it offers a menu decides what a right click there does), so it must be cheap; a tick may be in flight, so it must not

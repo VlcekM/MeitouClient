@@ -14,7 +14,15 @@ public sealed record UiDiagnostic(string Extension, string Operation, Exception 
 /// shows at (0, the whole map, to 2) and its size against the group's image.
 /// </summary>
 public sealed record UiMapMarker(System.Numerics.Vector2 At, string Group, System.Numerics.Vector4 Colour, string? Label = null,
-    string? Tooltip = null, int FromLevel = 0, float Scale = 1);
+    string? Tooltip = null, int FromLevel = 0, float Scale = 1)
+{
+    /// <summary>
+    /// An image file drawn in place of the group's picture (the full path of a file the game can read, a PNG or DDS from the mod's folder:
+    /// <c>Path.Combine(context.Folder, "camp.png")</c>), tinted by <see cref="Colour"/>; null draws the group. It takes the group's size when
+    /// <see cref="Group"/> names one of the set (empty: none), else 32 by 32 pixels, times <see cref="Scale"/>.
+    /// </summary>
+    public string? Image { get; init; }
+}
 
 /// <summary>
 /// What an extension's map markers get: the snapshot the map is drawn from and its zoom level (0, the whole map, to 2).
@@ -449,11 +457,13 @@ public sealed class UiHost
 
     /// <summary>
     /// The markers the extensions add to the world map, with their owners, in registration order (a copy of the sources is walked, so a source may
-    /// register or dispose). A source that throws, or gives a marker whose group <paramref name="knownGroup"/> does not know, with a point, tint or
-    /// size not finite, a size not above 0 or a zoom level outside 0 to 2, is reported once as a <see cref="Diagnostic"/> and dropped (it is asked
-    /// every frame the map is shown).
+    /// register or dispose). A source that throws, or gives a marker whose group <paramref name="knownGroup"/> does not know (with an image: whose
+    /// image file <paramref name="knownImage"/> does not know, or whose group is neither empty nor known; without <paramref name="knownImage"/> no
+    /// image is known), with a point, tint or size not finite, a size not above 0 or a zoom level outside 0 to 2, is reported once as a
+    /// <see cref="Diagnostic"/> and dropped (it is asked every frame the map is shown).
     /// </summary>
-    public IReadOnlyList<(string Owner, UiMapMarker Marker)> MapMarkers(UiMapContext context, Func<string, bool> knownGroup)
+    public IReadOnlyList<(string Owner, UiMapMarker Marker)> MapMarkers(UiMapContext context, Func<string, bool> knownGroup,
+        Func<string, bool>? knownImage = null)
     {
         var markers = new List<(string Owner, UiMapMarker Marker)>();
         foreach (var entry in _mapMarkers.ToArray())
@@ -461,9 +471,12 @@ public sealed class UiHost
             try
             {
                 var added = entry.Markers(context).ToList();
-                int bad = added.FindIndex(m => !ValidMarker(m, knownGroup));
+                int bad = added.FindIndex(m => !ValidMarker(m, knownGroup, knownImage));
                 if (bad >= 0)
-                    throw new InvalidOperationException($"A map marker needs a known group, a finite point and tint, and a size: {added[bad]}.");
+                {
+                    throw new InvalidOperationException(
+                        $"A map marker needs a known group or image file, a finite point and tint, and a size: {added[bad]}.");
+                }
 
                 markers.AddRange(added.Select(m => (entry.Owner, m)));
             }
@@ -478,13 +491,25 @@ public sealed class UiHost
     }
 
     /// <summary>
-    /// Whether a map marker names a group <paramref name="knownGroup"/> knows and has a finite point and tint, a finite size above 0 and a zoom
-    /// level from 0 to 2.
+    /// Whether a map marker names a picture that is known (<see cref="KnownPicture"/>) and has a finite point and tint, a finite size above 0 and
+    /// a zoom level from 0 to 2.
     /// </summary>
-    static bool ValidMarker(UiMapMarker? m, Func<string, bool> knownGroup) =>
-        m is not null && !string.IsNullOrWhiteSpace(m.Group) && knownGroup(m.Group) && float.IsFinite(m.At.X) && float.IsFinite(m.At.Y)
+    static bool ValidMarker(UiMapMarker? m, Func<string, bool> knownGroup, Func<string, bool>? knownImage) =>
+        m is not null && KnownPicture(m, knownGroup, knownImage) && float.IsFinite(m.At.X) && float.IsFinite(m.At.Y)
         && float.IsFinite(m.Colour.X + m.Colour.Y + m.Colour.Z + m.Colour.W)
         && float.IsFinite(m.Scale) && m.Scale > 0 && m.FromLevel is >= 0 and <= 2;
+
+    /// <summary>
+    /// Whether a marker's picture is known: without an image its group (not blank) is known to <paramref name="knownGroup"/>; with one, the file is
+    /// known to <paramref name="knownImage"/> and the group, which then only sizes it, is empty or known.
+    /// </summary>
+    static bool KnownPicture(UiMapMarker m, Func<string, bool> knownGroup, Func<string, bool>? knownImage)
+    {
+        if (m.Image is null) return !string.IsNullOrWhiteSpace(m.Group) && knownGroup(m.Group);
+
+        bool groupFits = string.IsNullOrEmpty(m.Group) || knownGroup(m.Group);
+        return groupFits && knownImage is not null && !string.IsNullOrWhiteSpace(m.Image) && knownImage(m.Image);
+    }
 
     /// <summary>
     /// Whether any extension adds squad AI tab options (<see cref="SquadAiOptions"/>).

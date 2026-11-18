@@ -264,10 +264,12 @@ sealed partial class PlayerInterface
     internal bool HasModMapMarkers => _uiHost.HasMapMarkers;
 
     /// <summary>
-    /// The markers the UI extensions add to the world map (<see cref="UiHost.MapMarkers"/>), each group checked by <paramref name="knownGroup"/>.
+    /// The markers the UI extensions add to the world map (<see cref="UiHost.MapMarkers"/>), each group checked by <paramref name="knownGroup"/> and
+    /// each image file by <paramref name="knownImage"/>.
     /// </summary>
-    internal IReadOnlyList<(string Owner, UiMapMarker Marker)> ModMapMarkers(UiMapContext context, Func<string, bool> knownGroup) =>
-        _uiHost.MapMarkers(context, knownGroup);
+    internal IReadOnlyList<(string Owner, UiMapMarker Marker)> ModMapMarkers(UiMapContext context, Func<string, bool> knownGroup,
+        Func<string, bool> knownImage) =>
+        _uiHost.MapMarkers(context, knownGroup, knownImage);
 
     /// <summary>
     /// The rows the interface extensions add to <paramref name="target"/>'s right-click menu (<see cref="UiHost.CharacterMenuVerbs"/>); none
