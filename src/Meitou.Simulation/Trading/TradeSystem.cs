@@ -815,8 +815,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         if (world.Tick < squad.NextHomeFillTick) return;
 
         // While the home's interior is shown the refill waits without moving its time, as the original's restock (FUN_1404ff5e0). The first fill,
-        // with the specials, is the squad factory's when the squad is made (FUN_140583a10): a squad a save gave back had it before that save.
-        bool first = squad.NextHomeFillTick == 0 && !squad.Restored;
+        // with the specials, is the squad factory's when the squad is made (FUN_140583a10): a squad a save gave back comes with its time at 1
+        // (SavedPopulation), having had it before that save.
+        bool first = squad.NextHomeFillTick == 0;
         if (!first && squad.HomeInteriorShown) return;
 
         squad.NextHomeFillTick = world.Tick + (long)(template.VendorsRefreshTime / BodySystem.HoursPerTick);

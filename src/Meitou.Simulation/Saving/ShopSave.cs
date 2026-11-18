@@ -51,7 +51,7 @@ internal static class ShopSave
         if (TradeSystem.TemplateRecord(data, squad.TemplateId) is not { HasShop: true } template) return Unfilled(text, squad, data);
 
         var terms = TradeSystem.TermsOf(squad, template);
-        var shop = HomeShop(squad, template, terms) ?? new Shop { Terms = terms };
+        var shop = HomeShop(squad, terms) ?? new Shop { Terms = terms };
         ReadStock(text, shop, data);
         shop.Fills = platoon.Ints.GetValueOrDefault(FillsKey);
         SetRestock(world, platoon, shop, template);
@@ -68,7 +68,7 @@ internal static class ShopSave
     {
         if (!platoon.Floats.ContainsKey(RefreshKey)) return null;
         if (TradeSystem.TemplateRecord(data, squad.TemplateId) is not { HasShop: true } template) return null;
-        if (HomeShop(squad, template, TradeSystem.TermsOf(squad, template)) is not { } shop) return null;
+        if (HomeShop(squad, TradeSystem.TermsOf(squad, template)) is not { } shop) return null;
 
         shop.Fills = 1;
         SetRestock(world, platoon, shop, template);
@@ -76,11 +76,10 @@ internal static class ShopSave
     }
 
     /// <summary>
-    /// The building shop the trade system makes for the squad: a housed trader making no prisoner or slave squads has one when its home has stock
-    /// containers; null otherwise.
+    /// The building shop the trade system makes for the squad (<see cref="TradeSystem"/> <c>MakeShop</c>): a housed trader has one when its home has
+    /// stock containers, whether or not it makes prisoner or slave squads (docs/game/economy.md); null otherwise.
     /// </summary>
-    static Shop? HomeShop(Squad squad, SquadTemplate template, Trader terms) =>
-        squad.HomeBuilding is { } home && template.Prisoners.Count == 0 && template.Slaves.Count == 0 ? Shop.ForBuilding(home, terms) : null;
+    static Shop? HomeShop(Squad squad, Trader terms) => squad.HomeBuilding is { } home ? Shop.ForBuilding(home, terms) : null;
 
     /// <summary>
     /// The next restock from the PLATOON's <c>inventory refresh time</c>, at most one refresh away (engine choice: older Meitou saves pushed it out
