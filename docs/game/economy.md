@@ -706,12 +706,14 @@ holding the slaver, the customer, the character list and val0.
 - **Buying** (42, title "Buying Slaves", confirm "Buy"): every character in the slaver's owned set that is a slave (state 1) and not dead; no radius, cage or count limit
   (the set is per owner object, **Inferred**). Panels: Strength, Dexterity, Toughness, Melee Attack, Melee Defence | Labouring, Farming, Cooking, Engineering, Medic (stat
   values). Confirm (`FUN_1406add20`), each ticked character not dead: its price added to the total; no longer owned; split from a squad of more than one into a new squad of
-  its own faction (it does not join the player); event 51 BOUGHT_ME_FROM_SLAVERY at it with the customer as target; its cage unlocked; slave state 0; it leaves its cage or
+  the old platoon's template (`FUN_1405ce4e0` -> `FUN_1407f4420` with the platoon's `+0x108`, **Verified** decompile; as DA 28) with a copy of its memory (it does not join the player); event 51 BOUGHT_ME_FROM_SLAVERY at it with the customer as target; its cage unlocked; slave state 0; it leaves its cage or
   restraint; AI reset; its locked shackles unlocked (still worn); its squad remembers the customer with tag 3 FREED_ME; task 133 GET_OUT_OF_CAGE_LEGIT (queue cleared; the
   hold is already cleared, so it does nothing: [locks](locks.md#cages-and-beds)); relations toward the
   player's faction: the slaver's +1, its own +4. Event 51 is the data's: a bought Scorchlander gets Dialogue.mod's `Bought from slavery sundemon`, whose
   DC 77 line ("You're freeing me?... Thanks!") joins it to the player at once (DA 18) when it is recruitable, else it runs off or stays free (**Observed**,
-  line walk over the base data, issue #1015). Then the total is taken from the player faction's money (refused without deduction when it has less; the result is ignored);
+  line walk over the base data, issue #1015). The other races' root (`Tough bought from slavery`, Dialogue.mod 54741) needs the buyer within talking range
+  (DC 16, 260), so a slave bought from a pen far from the slaver says nothing and its new squad's AI goes on: for the base pens' "slaves 3-7" template, package
+  "Slave only squad" (172 finds no cage without an owner; rebirth.mod's 127 Go Home (Run away)) (**Observed**, issue #1017). Then the total is taken from the player faction's money (refused without deduction when it has less; the result is ignored);
   nothing is paid to the slaver.
 - The window's gate (`FUN_1407281c0`) makes such a shortfall unreachable: confirm is enabled only with a row ticked and the total within the buyer's money (the slaver's when
   selling, the player's when buying).

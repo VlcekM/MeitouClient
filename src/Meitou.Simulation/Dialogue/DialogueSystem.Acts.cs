@@ -291,7 +291,7 @@ public sealed partial class DialogueSystem
     /// free..." line leaves it to its own lists. The new squad is made from the old one's template (<c>FUN_1407f4420</c>, <b>Verified</b>). Engine: the
     /// new NPC squad keeps the old one's home radius, no town, and the AI makes it a fresh mind.
     /// </summary>
-    void Separate(World world, CharacterId who)
+    internal void Separate(World world, CharacterId who)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(who, out int s) || table.Cold(s) is not { SquadId: >= 0 } c || world.Squads.Find(c.SquadId) is not { } old

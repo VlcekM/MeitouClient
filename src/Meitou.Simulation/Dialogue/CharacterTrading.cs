@@ -363,18 +363,18 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
     }
 
     /// <summary>
-    /// One slave bought free (<c>FUN_1406add20</c>): no longer owned; out of a squad of others into a new squad of its own faction (it does not join
-    /// the player); its cage unlocked and left; slave state 0; its AI reset; its worn shackles unlocked (still worn); event 51 at it with the player
-    /// character as the target; relations toward the player's faction: the slaver's +1, its own +4. Engine choices: the new squad of a non-player
-    /// faction is of the "Wandering Squad" template (the original's is <b>Unknown</b>); event 51 fires after it is out of its cage (the original
-    /// fires it first; Meitou's events need a free speaker). The task 133 the confirm gives (queue cleared) finds the hold already cleared and does
+    /// One slave bought free (<c>FUN_1406add20</c>): no longer owned; out of a squad of others into a new squad of the old one's template
+    /// (<c>FUN_1405ce4e0</c>, <see cref="DialogueSystem.Separate"/>; it does not join the player); its cage unlocked and left; slave state 0; its AI
+    /// reset; its worn shackles unlocked (still worn); event 51 at it with the player character as the target; relations toward the player's faction:
+    /// the slaver's +1, its own +4. Engine choice: event 51 fires after it is out of its cage (the original fires it first; Meitou's events need a
+    /// free speaker). The task 133 the confirm gives (queue cleared) finds the hold already cleared and does
     /// nothing (<see cref="Locks.FixtureRegistry.GetOutLegit"/>), so the bought one stands at the cage's exit spot and its own AI goes on.
     /// </summary>
     void BuyFree(World world, int slot, CharacterCold c, CharacterCold slaver, CharacterId player)
     {
         var table = world.Characters;
         var id = table.IdOf(slot);
-        if (world.Squads.Find(c.SquadId) is { Members.Count: > 1 }) SplitOff(world, slot, c);
+        system.Separate(world, id);
         if (c.IsImprisoned) world.Fixtures.Release(world, id);
         Locks.FixtureRegistry.ClearSlave(world, c);
         c.Freed = true;   // status +0xea = 1 (FUN_1406add20, Verified)
@@ -470,40 +470,5 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
     {
         if (world.Player.Faction < 0 || faction == world.Player.Faction || !data.Relations.Contains(faction)) return;
         system.ChangeRelation(world, faction, world.Player.Faction, amount, new(RelationCauseType.Trade, actor));
-    }
-
-    /// <summary>
-    /// The character leaves its squad for a new one of its own faction: a player squad (<see cref="SquadManagement.NewSquad"/>), else a "Wandering
-    /// Squad" it leads.
-    /// </summary>
-    void SplitOff(World world, int slot, CharacterCold c)
-    {
-        var table = world.Characters;
-        var id = table.IdOf(slot);
-        var at = table.Next[slot].Position;
-        DialogueSystem.Leave(world, id, c);
-        Squad squad;
-        if (world.Player.Faction >= 0 && c.Faction == world.Player.Faction)
-            squad = SquadManagement.NewSquad(world, data.Db, at, data.Factions[world.Player.Faction].Name is { Length: > 0 } f ? f : "Nameless");
-        else
-        {
-            var template = data.Db.Find(SquadManagement.DismissTemplate);
-            squad = new Squad
-            {
-                Id = world.Squads.NextId(),
-                TemplateId = template?.StringId ?? SquadManagement.DismissTemplate,
-                Name = template?.Name ?? "",
-                Faction = c.Faction,
-                Position = at,
-                HomeCentre = new Vector2(at.X, at.Z),
-                HomeRadius = 100,
-                SpawnSize = 1,
-            };
-            world.Squads.Add(squad);
-        }
-        c.SquadId = squad.Id;
-        c.Role = (int)SquadRole.Leader;
-        squad.Members.Add(id);
-        squad.Leader = id;
     }
 }

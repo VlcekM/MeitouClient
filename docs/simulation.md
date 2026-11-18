@@ -1208,8 +1208,8 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
   slaver's squad, is caged in a cage of that squad's home building (a shop's stock: Sho-Battai's is owned by the town's faction, not the slavers'), or is owned by the
   slaver's faction within 300 units of it; a faction-wide list offered other towns' and caravans' slaves and an enslaved shop guard lying in the street (#425); the selling
   buyer's money is the slaver's squad purse (`Squad.Money`, a trader's shop money); the confirm re-checks the window's gate (a row ticked, total within the buyer's money) and
-  does nothing otherwise; a slave bought free out of a squad of others leads a new "Wandering Squad" (`SquadManagement.DismissTemplate`, as a dismissed character) of its faction, or a new player squad for
-  one of the player's; event 51 fires after it is out of its cage; the window closes when the slaver or the customer is no longer awake. It is neither saved nor hashed.
+  does nothing otherwise; a slave bought free out of a squad of others leads a new squad of the old one's template with a copy of its memory (`DialogueSystem.Separate`, as DA 28), or a new player
+  squad for one of the player's; event 51 fires after it is out of its cage; the window closes when the slaver or the customer is no longer awake. It is neither saved nor hashed.
 - A bought slave stands at its cage's exit spot, its order queue cleared (the task 133 the original gives finds the hold already cleared:
   [locks](game/locks.md#cages-and-beds)). DA 48 opens the same window for animals ([buying animals](game/animals.md#buying-animals)). A sold character obeys the slaver's squad (187, [below](#captives)) and is chained: `Character::setChainedMode` (`FUN_14032e590`,
 **Verified** by decompile) puts the ARMOUR `SHACKLES` (boots) on one wearing no locked shackles, `SHACKLES-BODY` when its boots section is disabled (Meitou: the race's `no shoes`),
