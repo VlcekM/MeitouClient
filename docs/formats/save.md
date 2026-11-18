@@ -586,13 +586,13 @@ has an override world state (its lists are then replaced) or `0-buildinglist` ho
   farm, a producer such as the Rain Collector, a battery bank: its machine reads that inventory), and not for a building the level editor places
   (one placed again would take the save's items twice). A save writes the container's items into that entry's inventory (a new
   `<n>-zone<X>.<Y>-INGAME` listed first when it had none, the record removed when it holds nothing) and drops the key, leaving an inventory whose
-  items are as they were read as it is. A bought house's generated entries (`<n>-zone<X>.<Y>-INGAME`) go with their inventories and states,
+  items are as they were read as it is. A bought house's generated entries (`<n>-zone<X>.<Y>-INGAME`: its furniture's GAMESTATE_BUILDINGs and its loose-item groups' ITEM_PLACEMENT_GROUPs) go with their inventories and states, its own state gets an empty `interior layout name` and keeps only the `internalbuildings` handles of what still stands inside it, numbered again from 0,
   the player's own buildings and level buildings inside it staying, and so do its Meitou container and interior lock keys, and its layout objects'
   town machines go at the purchase: the original's purchase destroys the interior's furniture with its items
   ([selected building](../game/ui-screens.md#selected-building)), and its save of a house bought there holds none of the old interior's objects
   (**Observed**: Squin's Longhouse `21-rebirth-INGAME` holds 55 objects of its `Residential` layout in ShopCounterStart (a new game of the same start), among them 2 Ceiling Lamps,
   3 Electrical Torch Posts, a Bread Oven and a Water Tank; in ShopCounterSold, bought there, it holds only the player's own Shop Counter, its
-  `interior layout name` is empty and one `internalbuildings` handle is left); a stale entry or key would be read back at every load and dropped
+  `interior layout name` is empty, one `internalbuildings` handle is left, and the 20 loose-item groups inside it are gone); a stale entry or key would be read back at every load and dropped
   on the ground by the bought-house emptying. **Observed** (headless, TESTSKELETON, plain game): the chest loads its 10 stacks (none before), a capture
   with nothing changed writes the entry's inventory with the same records, one Damaged Book taken writes that stack's record with quantity 1, and
   the reloaded save shows it.
