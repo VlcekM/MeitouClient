@@ -5,7 +5,7 @@ namespace Meitou.Data.Characters;
 /// <summary>
 /// The skeleton files a character's skeleton takes extra animations from (docs/animation.md, "Animation files"): the ANIMATION_FILE records of its
 /// race's <c>animation files</c>, then of its own record's, latest-created first, each giving its <c>male animation</c> or <c>female animation</c>. A
-/// clip is looked for in the body's own skeleton first, then in these in order; a file named twice is linked once.
+/// clip is looked for in these in order, then in the body's own skeleton; a file named twice is linked once.
 /// </summary>
 public static class AnimationFiles
 {

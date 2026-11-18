@@ -13,7 +13,7 @@ namespace Meitou.Data.Gameplay;
 public sealed class AnimationLengths
 {
     /// <summary>
-    /// Clip lengths in seconds by name (ignoring case); the first skeleton to name a clip wins.
+    /// Clip lengths in seconds by name (ignoring case); the first skeleton to name a clip wins, the linked animation files being read first.
     /// </summary>
     readonly Dictionary<string, float> _lengths = new(StringComparer.OrdinalIgnoreCase);
 
@@ -36,18 +36,34 @@ public sealed class AnimationLengths
     /// The clips of every <c>*_skeleton.skeleton</c> under <c>data/character/meshes</c> (the first file to name a clip wins); with
     /// <paramref name="db"/> also the clips of the skeleton each ANIMAL_CHARACTER's race's body mesh links (<see cref="For"/>), read in parallel, one
     /// table per skeleton file. With <paramref name="find"/> (a bare file name to its full path, as the game's resource groups find it) the clips of
-    /// the ANIMATION_FILE skeletons follow, in link order (<see cref="AnimationFiles"/>).
+    /// the ANIMATION_FILE skeletons come before them, in link order (<see cref="AnimationFiles"/>): a body plays a linked file's clip in place of
+    /// its skeleton's own of that name (docs/animation.md, "Animation files"). A base skeleton an ANIMATION_FILE names (the base game's
+    /// <c>base animations</c>, which no race links) keeps its place among the base skeletons.
     /// </summary>
     public static AnimationLengths Load(string installRoot, GameDatabase? db = null, Func<string, string?>? find = null)
     {
         var result = new AnimationLengths();
-        var dir = Path.Combine(installRoot, "data", "character", "meshes");
-        if (Directory.Exists(dir))
-            foreach (var file in Directory.EnumerateFiles(dir, "*_skeleton.skeleton", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
-                result.AddSkeleton(file);
-        if (db is not null && find is not null) result.AddLinked(AnimationFiles.All(db), find);
+        var own = BaseSkeletons(installRoot);
+        if (db is not null && find is not null)
+        {
+            var names = own.Select(Path.GetFileName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            result.AddLinked([.. AnimationFiles.All(db).Where(f => !names.Contains(AnimationFiles.BareName(f)))], find);
+        }
+
+        foreach (var file in own) result.AddSkeleton(file);
         if (db is not null) result.LoadAnimals(installRoot, db, find);
         return result;
+    }
+
+    /// <summary>
+    /// The base game's humanoid skeleton files (<c>*_skeleton.skeleton</c> under <c>data/character/meshes</c>), by path.
+    /// </summary>
+    static List<string> BaseSkeletons(string installRoot)
+    {
+        var dir = Path.Combine(installRoot, "data", "character", "meshes");
+        if (!Directory.Exists(dir)) return [];
+
+        return [.. Directory.EnumerateFiles(dir, "*_skeleton.skeleton", SearchOption.AllDirectories).Order(StringComparer.Ordinal)];
     }
 
     /// <summary>
@@ -104,7 +120,7 @@ public sealed class AnimationLengths
 
     /// <summary>
     /// Per race of an ANIMAL_CHARACTER: the race's <c>male mesh</c> (animal races name the same mesh for both), the skeleton that mesh links (read
-    /// from the mesh file; looked for beside it, then anywhere under <c>data</c>), and that skeleton's clips, then with <paramref name="find"/> those
+    /// from the mesh file; looked for beside it, then anywhere under <c>data</c>), and that skeleton's clips, after with <paramref name="find"/> those
     /// of the race's animation files (an animal is male: <c>male animation</c>). Races sharing a skeleton and animation files share their table.
     /// </summary>
     void LoadAnimals(string installRoot, GameDatabase db, Func<string, string?>? find)
@@ -125,8 +141,8 @@ public sealed class AnimationLengths
         Parallel.ForEach(keyOf.Values.OfType<(string File, string[] Linked)>().DistinctBy(Key, StringComparer.OrdinalIgnoreCase), k =>
         {
             var table = new AnimationLengths();
+            table.AddLinked(k.Linked, f => f);   // a linked file's clip replaces the skeleton's own of that name
             table.AddSkeleton(k.File);
-            table.AddLinked(k.Linked, f => f);
             tables[Key(k)] = table;
         });
         foreach (var race in races)

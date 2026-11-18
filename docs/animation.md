@@ -143,12 +143,17 @@ gathers the ANIMATION_FILE records of the race's `animation files`, then of the 
 highest first (`qsort`, comparator `@ 14052ba90`; ties are in no defined order), and for each takes `female animation` or
 `male animation` by the appearance's sex, cuts it to the bare file name, and when the resource exists calls
 `OldSkeletonInstance::addLinkedSkeletonAnimationSource(name, -1)` (a negative scale is Kenshi's per-instance link, at scale 1).
-Kenshi's `Skeleton::_getAnimationImpl` looks a clip up in the skeleton's own animations first, then in the linked sources in
-link order (first found wins); tracks apply by bone handle, and a name already linked is not linked again.
+**Verified** (disassembly of `OgreMain_x64.dll`'s exports): `OldSkeletonInstance::_getAnimationImpl`, when the instance has links, runs
+`Skeleton::_getAnimationImpl` on the instance itself first, whose own animation map stays empty (`createAnimation`, `addAnimation`,
+`getNumAnimations` go to the shared skeleton), so the clip comes from the instance's linked sources in link order (first found wins);
+only a name none of them has is asked of the shared skeleton (its own animations, then its links). A linked file's clip therefore
+replaces the body skeleton's clip of the same name (Immersive non-combat animations: `sitting chair`, `sitting idle`, `sleepinbed`,
+`sleeponfloor`). Tracks apply by bone handle, and a name already linked is not linked again.
 The base game uses none (one ANIMATION_FILE, `base animations`, that no race names); mods add theirs to every race: in a
 large modded install 355 of 573 ANIMATION clips exist only in linked files (**Observed**). Meitou: `AnimationFiles`,
-`CharacterRigs.Rig(name, appearance)`; `AnimationLengths` adds every ANIMATION_FILE's clips after the base skeletons in the same
-order (it knows clips by name only). Tie order: list order (engine choice). With `preprocess` set, the startup preprocessing
+`CharacterRigs.Rig(name, appearance)` (`SkeletonRig.Clip`: linked files, then the own skeleton); `AnimationLengths` reads every
+ANIMATION_FILE's clips before the base skeletons in the same order (it knows clips by name only, so a race linking another file of
+that clip name gets the first file's length). Tie order: list order (engine choice). With `preprocess` set, the startup preprocessing
 (below) also runs over the file's skeletons (`@ 140871f00`).
 
 **Observed** (workshop items 3148075501 `Many_Races_Animation_Patch.mod` and 3380056396 `CBT Many Animations to Multiple Species.mod`,
@@ -260,7 +265,8 @@ with a leg down (engine reading of dazedOrAlert), else the idle clip, at the rec
 functionality's `animation` (`stonemine` when it names none) at rate R × the record's `play speed`, R = 0.55 + (2 − 0.55) × 0.01 × its level in the
 functionality's `stat used` (the stat getter `FUN_140884ac0`, with its multipliers; 0 for stat 0), at most 1.5. Seats and training dummies run the same task; a chair has
 no stat (**Verified** by probe: `chair`, `chair-fixed`, `sit on floor (no chair)` `stat used` 0), so a sitter plays its clip at 0.55 × `play speed`. Base data hides it on
-chairs (`sitting chair` is a still pose); mods that animate the seat clip show it (#634: Immersive non-combat animations sets `sitting chair` to `play speed` 0.7).
+chairs (`sitting chair` is two near-equal keys 0.033 s apart at `play speed` 0.01); mods that animate the seat clip show it (#634: Immersive non-combat animations sets
+`sitting chair` to `play speed` 0.7 and links files with a `sitting chair` of 3.3 to 4.3 s, which replaces the base clip, [Animation files](#animation-files)).
 Meitou: `AnimationSystem.OperateRateOf` (`CharacterCold.OperateStat`); a seated NPC's seat is taken as one without a stat (engine choice).
 
 ### Head turning

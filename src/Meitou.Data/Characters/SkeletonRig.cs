@@ -215,7 +215,8 @@ public sealed class SkeletonRig
     public readonly Vector3 SideAxis = Vector3.UnitX;
 
     /// <summary>
-    /// The skeletons the instance links (docs/animation.md, "Animation files"), read when a clip is first looked for past the own ones.
+    /// The skeletons the instance links (docs/animation.md, "Animation files"), in link order: a clip is looked for in them before the
+    /// skeleton's own. Each is read when a lookup first reaches it.
     /// </summary>
     readonly IReadOnlyList<Lazy<OgreSkeleton?>> _linked;
 
@@ -233,8 +234,8 @@ public sealed class SkeletonRig
     /// <summary>
     /// A rig of <paramref name="skeleton"/>: its bones by handle, the parents-first order and the binding pose.
     /// </summary>
-    /// <param name="linked">The linked animation sources in link order: a clip the skeleton lacks is taken from the first that has it, its tracks
-    /// applied by bone handle.</param>
+    /// <param name="linked">The linked animation sources in link order: a clip is taken from the first that has it, its tracks applied by bone
+    /// handle, and from the skeleton itself only when none does.</param>
     public SkeletonRig(OgreSkeleton skeleton, IReadOnlyList<Lazy<OgreSkeleton?>>? linked = null)
     {
         Skeleton = skeleton;
@@ -305,15 +306,26 @@ public sealed class SkeletonRig
     public int? Handle(string name) => _handles.TryGetValue(name, out var h) ? h : null;
 
     /// <summary>
-    /// The animation called <paramref name="name"/> as arrays, the skeleton's own else the first linked source's (null: none has it).
+    /// The animation called <paramref name="name"/> as arrays: the first linked source's that has it, else the skeleton's own (null: none has
+    /// it). A mod's animation file so replaces a base clip of the same name (docs/animation.md, "Animation files").
     /// </summary>
     public AnimationClip? Clip(string name)
     {
         if (_clips.TryGetValue(name, out var cached)) return cached;
-        var animation = Find(Skeleton, name);
-        for (int i = 0; animation is null && i < _linked.Count; i++)
-            if (_linked[i].Value is { } source) animation = Find(source, name);
+
+        var animation = FindLinked(name) ?? Find(Skeleton, name);
         return _clips[name] = animation is null ? null : Compile(animation);
+    }
+
+    /// <summary>
+    /// The animation called <paramref name="name"/> of the first linked source that has it, or null.
+    /// </summary>
+    OgreAnimation? FindLinked(string name)
+    {
+        foreach (var linked in _linked)
+            if (linked.Value is { } source && Find(source, name) is { } animation) return animation;
+
+        return null;
     }
 
     /// <summary>
