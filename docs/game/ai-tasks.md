@@ -1416,7 +1416,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   - **Observed** (KH 1.0.65, four runs of one Hub save from 10:20): the Hub's five bar squads (Mercenary guild, two Drifters recruit squads,
     Bar thugs, Hound Pacifier) all relax at the Storm House's tables for 3 hours, while seven `hub squatters` squads (package `Squatters`,
     signal 17, no 214 goal) block none of them. Meitou: a bar-class package takes a table at its start only when a goal of it is 214
-    (`AiSystem.Rules.AsksForTable`; engine reading of the lazy start), so a package without one holds none and keeps its home.
+    (`AiSystem.Rules.AsksForTable`; engine reading of the lazy start), so a package without one holds none and keeps its home. A squad away from its town whose bar town's zone is not loaded takes no table at the start and takes one on the package cadence once the zone is loaded (`Blackboard.BarWaits`, `AiSystem.Rules.RetryTable`), as the start above needs the zone: until then no member relaxes, so a caravan stopped far from its home's bar shops and strolls where it stands instead of setting off for that bar (a town's own squad is only in the world with its town; the wait is not saved).
   - The table search (`FUN_140292de0`, **Verified** by disassembly) asks the town (vfunc 0x2c8, `FUN_1409fc540`) for its furniture through a filter
     (vfunc 5 `FUN_1408ca670`). It keeps a piece:
     - of the package's town, and of a faction not hostile to the platoon's (`FUN_1406b26d0`);

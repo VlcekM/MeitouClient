@@ -2905,6 +2905,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         board.Update(_rules, world.GameHours);
         if (platoon?.Campaign is null) StepPackage(world, squad, board);   // a campaign's squad has its war targets from the campaign
+        if (board.BarWaits) _rules.RetryTable(board);
 
         // A contract that ended: its leader says the package's contract end talk to the employer (event 30, FUN_14026a110).
         if (board.TakeEnded() is { Package.ContractEndTalk: { } talk, Target: var employer } && !squad.Leader.IsNone)
@@ -3685,10 +3686,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 case PackageClass.Bar:
                 case PackageClass.BarOutdoors:
                     if (!AsksForTable(package)) break;
-                    if (BarTown(board) is >= 0 and var town
-                        && _system.PickTable(_world, town, _squad, outdoors: kind == PackageClass.BarOutdoors) is var (bar, table))
-                        (board.Home, board.BarTable) = (bar, table);
-                    else if (kind == PackageClass.BarOutdoors) board.Home = null;
+
+                    // A squad away from its town whose bar town is not loaded takes no table yet: the original's start needs the town's zone
+                    // loaded and is run again by the target query until it is (docs/game/ai-tasks.md "Hang-around-bar package", Verified).
+                    if (!_squad.TownOwn && BarTown(board) is >= 0 and var far && !_system.SiteLoaded(_world, far)) board.BarWaits = true;
+                    else TakeTable(board, kind);
                     break;
                 case PackageClass.CannibalRetreat:
                 case PackageClass.SlaverShipping:
@@ -3713,6 +3715,35 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
 
         /// <summary>
+        /// The table of a bar package that starts: one of the bar town's (<see cref="BarTown"/>, <see cref="PickTable"/>); the outdoor kind
+        /// without one has no bar.
+        /// </summary>
+        void TakeTable(Blackboard board, PackageClass kind)
+        {
+            if (BarTown(board) is >= 0 and var town
+                && _system.PickTable(_world, town, _squad, outdoors: kind == PackageClass.BarOutdoors) is var (bar, table))
+                (board.Home, board.BarTable) = (bar, table);
+            else if (kind == PackageClass.BarOutdoors) board.Home = null;
+        }
+
+        /// <summary>
+        /// A bar package that started while its town was not loaded (<see cref="Blackboard.BarWaits"/>) takes its table once the town is, on the
+        /// package cadence.
+        /// </summary>
+        public void RetryTable(Blackboard board)
+        {
+            if (board.Current is not { } package || PackageClasses.Of(package.Signal) is not (PackageClass.Bar or PackageClass.BarOutdoors))
+            {
+                board.BarWaits = false;
+                return;
+            }
+
+            if (BarTown(board) is >= 0 and var town && !_system.SiteLoaded(_world, town)) return;
+            board.BarWaits = false;
+            TakeTable(board, PackageClasses.Of(package.Signal));
+        }
+
+        /// <summary>
         /// Whether a goal of <paramref name="package"/> asks for the package's target (214 Relaxing). The original's bar package takes its table when
         /// the target is first asked for (docs/game/ai-tasks.md "Hang-around-bar package"), so one without such a goal, the Hub's Squatters, holds none.
         /// </summary>
@@ -3727,6 +3758,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return false;
         }
     }
+
+    /// <summary>
+    /// Whether the zone of placed town <paramref name="site"/> is loaded (true where the world tracks no zones, as in a synthetic world).
+    /// </summary>
+    bool SiteLoaded(World world, int site) => world.ActiveZones is not { } active || active.Contains(data.Sites[site].Zone);
 
     /// <summary>
     /// The table a squad starting a bar package reserves (the original's <c>Package_HangAroundBar</c> start, docs/game/ai-tasks.md "Town goals"): the

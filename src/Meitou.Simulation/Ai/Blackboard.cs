@@ -420,6 +420,12 @@ public sealed class Blackboard
     /// through on the way is a stop too. Not saved, like the trader's other state.
     /// </summary>
     public CampaignTown TraderLeft { get; set; } = CampaignTown.None;
+    /// <summary>
+    /// A bar package started while its town was not loaded, so it holds no table yet and takes one once the town is loaded (the original's start
+    /// needs the town's zone loaded and is run again by the target query until then, docs/game/ai-tasks.md "Hang-around-bar package"). Not saved:
+    /// a loaded squad that waited keeps no table until its package next starts.
+    /// </summary>
+    public bool BarWaits { get; set; }
 
     /// <summary>
     /// The passing-by assault (<c>Package_PassingByTownAssault</c>): the game hour it started (+0xb8), the faction it attacks (+0x100, the town's),
@@ -579,6 +585,7 @@ public sealed class Blackboard
         RouteIndex = 0;
         Home = OwnHome;
         BarTable = -1;
+        BarWaits = false;
         MissionTown = -1;
         Destination = CampaignTown.None;
         RefugeeBroken = false;
@@ -774,6 +781,7 @@ public sealed class Blackboard
         if (MissionTown >= 0) hasher.Add(MissionTown + 0x4D69);
 
         // The package classes' own state, only once one has run (worlds without them hash as before).
+        if (BarWaits) hasher.Add(0x62617277);
         if (!Destination.IsNone)
         {
             hasher.Add(Destination.Site);
