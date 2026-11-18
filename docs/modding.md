@@ -378,7 +378,11 @@ holds refuses the second mod.
   an unknown tone or stacking, a null list or description, or a modifier on a stat without storage, on a storage another of its modifiers names
   (Medic, HiveMedic and Vet share one), or whose amount, or amount times `MaxStacks`, is not finite. With no effect registered the tick step does
   nothing, and a save without effect keys makes, saves and hashes nothing. Engine API, not in the original.
-- **Commands:** a mod's own `SimCommand` types, queued with `Enqueue` and handled in its system's `Inputs`.
+- **Commands:** a mod's own `SimCommand` types, queued with `Enqueue` and handled in its system's `Inputs`. Every system's `Inputs` gets every due
+  command (`World.RunInputs`), so a system picks its own by type. A type is its load context's: each mod loads its assemblies into its own context
+  ([loading](#loading)), so another mod's command type, even from a copy of the same DLL in another mod folder, is a different type and does not
+  match. A mod whose commands another mod's system should handle shares the type through a [dependency](modding-dependencies.md); otherwise each
+  mod handles its own commands in a system of its own.
 - **Player squads on AI packages** (`Meitou.Simulation.Ai`, [rules](simulation.md#autonomous-player-squads)): `SetSquadAutonomy(squadId, on)` lets
   the AI run a player's squad; then `ChangeAi(squadId, packageId)` and `StartContract(squadId, packageId, hours)` give it packages as dialogue's
   `change AI` / `AI contract` give an NPC squad's (both are ignored for a player squad that is not autonomous), and
