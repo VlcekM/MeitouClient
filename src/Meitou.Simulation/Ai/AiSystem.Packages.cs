@@ -165,6 +165,12 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
+    /// The centre (X/Z) of campaign town <paramref name="t"/>, and its radius; null when it is not (or no longer) there.
+    /// </summary>
+    internal static (Vector2 Centre, float Radius)? TownCircle(PopulationData data, World world, CampaignTown t) =>
+        TownPlace(data, world, t) is { } place ? (place.Centre, place.Radius) : null;
+
+    /// <summary>
     /// Where campaign town <paramref name="t"/> stands: a town site's position and radius, or a player town's; null when it is not (or no
     /// longer) there.
     /// </summary>

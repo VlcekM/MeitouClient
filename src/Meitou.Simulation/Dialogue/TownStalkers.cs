@@ -43,7 +43,7 @@ sealed class TownStalkers(DialogueSystem system, PopulationData data)
         public bool Harassed { get; set; }
 
         /// <summary>
-        /// Its town has no gate: it only stays.
+        /// Its town has no gate: in town it follows without harassing.
         /// </summary>
         public bool NoGate { get; set; }
     }
@@ -64,11 +64,12 @@ sealed class TownStalkers(DialogueSystem system, PopulationData data)
     public void Add(CharacterId who, CharacterId target) => _stalkers[who] = new Stalk(target);
 
     /// <summary>
-    /// DA_THUG_HUNTER (17, order 165 <c>Task_TownStalker</c>, docs/game/dialogue.md): in a town, the stalker waits <see cref="StalkPastGate"/>
-    /// outside the town's first gate (on the line from the town centre through it), facing its victim, while the victim is no farther from the centre
-    /// than that point; with no gate it just stays. Once the victim is farther out, or anywhere outside a town, it follows it and, once, when it is
-    /// not talking, sends it event 26. It is done when, after that, neither is talking. Engine choices: re-aimed every 15 ticks; the first gate is
-    /// the town's first gate door in fixture order; the gate-code test on the gate's outside is not made.
+    /// DA_THUG_HUNTER (17, order 165 <c>Task_TownStalker</c>, docs/game/dialogue.md): while the stalker has a status town, it waits
+    /// <see cref="StalkPastGate"/> outside that town's first gate (on the line from the town centre through it), facing its victim, while the victim
+    /// has a status town and is no farther from that town's centre than the waypoint; in a town with no gate it follows the victim without
+    /// harassing it. Otherwise it follows the victim and, once, when it is not talking, sends it event 26. It is done when, after that, neither is
+    /// talking. Engine choices: re-aimed every 15 ticks; the first gate is the town's first gate door in fixture order (a player town's: the first
+    /// within its radius); the gate-code test on the gate's outside is not made.
     /// </summary>
     public void StepStalkers(World world)
     {
@@ -77,23 +78,14 @@ sealed class TownStalkers(DialogueSystem system, PopulationData data)
     }
 
     /// <summary>
-    /// One stalker's tick of <see cref="StepStalkers"/>: done when either is gone or, after the harassment, neither talks; in a town with a gate it
-    /// waits past the gate while the victim is nearer the centre; else it follows and harasses.
+    /// One stalker's tick of <see cref="StepStalkers"/>: done when either is gone or, after the harassment, neither talks; in its status town it
+    /// waits past the gate or, with no gate, follows; else it follows and harasses.
     /// </summary>
     void Step(World world, CharacterId who, Stalk stalk)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(who, out int s) || !DialogueSystem.Awake(table, s) || !table.TryResolveNext(stalk.Target, out int t)
-            || !DialogueSystem.Awake(table, t))
-        {
-            _stalkers.Remove(who);
-            DialogueSystem.Release(world, who);
-            return;
-        }
-
-        bool talking = system.Talking(who);
-        bool victimTalking = system.Talking(stalk.Target);
-        if (stalk.Harassed && !talking && !victimTalking)
+            || !DialogueSystem.Awake(table, t) || Finished(who, stalk))
         {
             _stalkers.Remove(who);
             DialogueSystem.Release(world, who);
@@ -102,62 +94,124 @@ sealed class TownStalkers(DialogueSystem system, PopulationData data)
 
         table.Cold(s)!.Engaged = true;   // the order holds it, not the AI
         if (table.Cold(s)!.InCombat) return;   // its walks would end the fight it is in (a new task drops the fight task)
-        ref var sn = ref table.Next[s];
-        var victim = new Vector2(table.Next[t].Position.X, table.Next[t].Position.Z);
-        int site = AiSystem.TownAt(data, world, sn.Position).Site;
-        if (site >= 0 && !stalk.NoGate)
-        {
-            if (WaitsPastGate(world, s, t, stalk, site, victim)) return;
-        }
-        else if (site >= 0) return;   // no gate: it only stays
 
-        // Outside: follow and harass.
-        if (!stalk.Harassed && !talking)
-        {
-            world.Defer(new DialogueEvent(who, stalk.Target, Harassment) { Tick = world.Tick + 1 });
-            stalk.Harassed = true;
-        }
-        if (world.Tick % 15 == 0 && Vector2.Distance(new Vector2(sn.Position.X, sn.Position.Z), victim) > DialogueSystem.TalkReach)
-            TaskStart.Walk(world, s, victim, SpeedMode.Walk, TaskType.TownStalker, TaskSource.Npc);
+        var town = table.Cold(s)!.StatusTown;
+        if (!town.IsNone && InTown(world, s, t, stalk, town)) return;
+
+        Harass(world, who, stalk);
+        Follow(world, s, t);
     }
 
     /// <summary>
-    /// In its town (<paramref name="site"/>), the stalker <paramref name="s"/> waits at its waypoint past the gate, facing the victim
-    /// <paramref name="t"/>, while the victim is no farther from the centre than the waypoint; picks the waypoint first, or finds no gate. False when
-    /// the victim is farther out: it follows.
+    /// Whether the stalker <paramref name="who"/> has harassed its victim and neither of them talks any more.
     /// </summary>
-    bool WaitsPastGate(World world, int s, int t, Stalk stalk, int site, Vector2 victim)
+    bool Finished(CharacterId who, Stalk stalk) => stalk.Harassed && !system.Talking(who) && !system.Talking(stalk.Target);
+
+    /// <summary>
+    /// The stalker <paramref name="s"/> in its status town <paramref name="town"/> (<c>FUN_140340360</c>): picks the waypoint past the town's gate
+    /// once; with no gate it follows the victim <paramref name="t"/>; it waits at the waypoint while the victim stands within it. False when the
+    /// victim has no status town or is farther from its town's centre than the waypoint: then it follows and harasses.
+    /// </summary>
+    bool InTown(World world, int s, int t, Stalk stalk, CampaignTown town)
+    {
+        if (stalk.Waypoint is null && !stalk.NoGate) PickWaypoint(world, stalk, town);
+        if (stalk.NoGate)
+        {
+            Follow(world, s, t);
+            return true;
+        }
+
+        if (!VictimWithin(world, t, stalk.Waypoint!.Value)) return false;
+
+        WaitAt(world, s, t, stalk.Waypoint.Value);
+        return true;
+    }
+
+    /// <summary>
+    /// The point <see cref="StalkPastGate"/> outside the first gate of <paramref name="town"/>, on the line from its centre; or no gate.
+    /// </summary>
+    void PickWaypoint(World world, Stalk stalk, CampaignTown town)
+    {
+        if (AiSystem.TownCircle(data, world, town) is not { } circle || FirstGate(world, town, circle) is not { } g)
+        {
+            stalk.NoGate = true;
+            return;
+        }
+
+        var outward = g - circle.Centre;
+        stalk.Waypoint = g + (outward.LengthSquared() > 1e-6f ? Vector2.Normalize(outward) : Vector2.UnitX) * StalkPastGate;
+    }
+
+    /// <summary>
+    /// Where the first gate door of <paramref name="town"/> stands (X/Z): a town site's registered gate, a player town's first within its radius.
+    /// </summary>
+    static Vector2? FirstGate(World world, CampaignTown town, (Vector2 Centre, float Radius) circle)
+    {
+        foreach (var f in world.Fixtures.All)
+        {
+            if (f.Kind != Locks.FixtureKind.Door || !f.IsGate) continue;
+
+            var at = new Vector2(f.Position.X, f.Position.Z);
+            bool ofTown = town.Site >= 0 ? f.Site == town.Site : Vector2.Distance(at, circle.Centre) <= circle.Radius;
+            if (ofTown) return at;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Whether the victim <paramref name="t"/> has a status town and stands no farther from its centre than <paramref name="waypoint"/>.
+    /// </summary>
+    bool VictimWithin(World world, int t, Vector2 waypoint)
+    {
+        var table = world.Characters;
+        if (AiSystem.TownCircle(data, world, table.Cold(t)!.StatusTown) is not { } circle) return false;
+
+        var victim = new Vector2(table.Next[t].Position.X, table.Next[t].Position.Z);
+        return Vector2.Distance(victim, circle.Centre) <= Vector2.Distance(waypoint, circle.Centre);
+    }
+
+    /// <summary>
+    /// The stalker <paramref name="s"/> walks to <paramref name="waypoint"/> and, standing there, faces its victim <paramref name="t"/>.
+    /// </summary>
+    static void WaitAt(World world, int s, int t, Vector2 waypoint)
     {
         var table = world.Characters;
         ref var sn = ref table.Next[s];
-        var centre = new Vector2(data.Sites[site].Position.X, data.Sites[site].Position.Z);
-        if (stalk.Waypoint is null)
+        bool away = Vector2.Distance(new Vector2(sn.Position.X, sn.Position.Z), waypoint) > DialogueSystem.TalkReach;
+        bool notHeading = sn.Task != (byte)CharacterTask.GoTo || Vector2.Distance(sn.Goal, waypoint) > DialogueSystem.TalkReach;
+        if (world.Tick % 15 == 0 && away && notHeading)
         {
-            var gate = world.Fixtures.All.FirstOrDefault(f => f.Kind == Locks.FixtureKind.Door && f.IsGate && f.Site == site);
-            if (gate is null)
-            {
-                stalk.NoGate = true;
-                return true;
-            }
-            var g = new Vector2(gate.Position.X, gate.Position.Z);
-            var outward = g - centre;
-            stalk.Waypoint = g + (outward.LengthSquared() > 1e-6f ? Vector2.Normalize(outward) : Vector2.UnitX) * StalkPastGate;
+            TaskStart.Walk(world, s, waypoint, SpeedMode.Walk, TaskType.TownStalker, TaskSource.Npc);
+            return;
         }
+        if (sn.Task == (byte)CharacterTask.GoTo) return;
 
-        var w = stalk.Waypoint.Value;
-        if (!(Vector2.Distance(victim, centre) <= Vector2.Distance(w, centre))) return false;
+        var to = table.Next[t].Position - sn.Position;
+        if (to.X * to.X + to.Z * to.Z > 1e-4f) sn.Yaw = MathF.Atan2(to.X, to.Z);
+    }
 
-        if (world.Tick % 15 == 0 && Vector2.Distance(new Vector2(sn.Position.X, sn.Position.Z), w) > DialogueSystem.TalkReach
-            && (sn.Task != (byte)CharacterTask.GoTo || Vector2.Distance(sn.Goal, w) > DialogueSystem.TalkReach))
-        {
-            TaskStart.Walk(world, s, w, SpeedMode.Walk, TaskType.TownStalker, TaskSource.Npc);
-        }
-        else if (sn.Task != (byte)CharacterTask.GoTo)
-        {
-            var to = table.Next[t].Position - sn.Position;
-            if (to.X * to.X + to.Z * to.Z > 1e-4f) sn.Yaw = MathF.Atan2(to.X, to.Z);
-        }
-        return true;
+    /// <summary>
+    /// Once, when the stalker <paramref name="who"/> is not talking, it sends its victim event 26 (<c>FUN_14033bd60</c>).
+    /// </summary>
+    void Harass(World world, CharacterId who, Stalk stalk)
+    {
+        if (stalk.Harassed || system.Talking(who)) return;
+
+        world.Defer(new DialogueEvent(who, stalk.Target, Harassment) { Tick = world.Tick + 1 });
+        stalk.Harassed = true;
+    }
+
+    /// <summary>
+    /// The stalker <paramref name="s"/> walks after its victim <paramref name="t"/> while out of talk reach (<c>FUN_14033b350</c>).
+    /// </summary>
+    static void Follow(World world, int s, int t)
+    {
+        var table = world.Characters;
+        var at = new Vector2(table.Next[s].Position.X, table.Next[s].Position.Z);
+        var victim = new Vector2(table.Next[t].Position.X, table.Next[t].Position.Z);
+        if (world.Tick % 15 == 0 && Vector2.Distance(at, victim) > DialogueSystem.TalkReach)
+            TaskStart.Walk(world, s, victim, SpeedMode.Walk, TaskType.TownStalker, TaskSource.Npc);
     }
 
     /// <summary>
