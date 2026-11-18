@@ -62,6 +62,10 @@ sealed class Voice : IDisposable
     /// </summary>
     bool _ended, _final;
     /// <summary>
+    /// The source has given samples since its last rewind: a clip that gives none ends, where it would rewind without end on the audio thread.
+    /// </summary>
+    bool _readThisPlay;
+    /// <summary>
     /// The gains the last block ended at, per side: the next block ramps from them.
     /// </summary>
     float _lastLeft, _lastRight;
@@ -282,7 +286,8 @@ sealed class Voice : IDisposable
     }
 
     /// <summary>
-    /// Keeps the last decoded frame (for interpolation) and decodes more after it, looping at the end. False when the clip is done.
+    /// Keeps the last decoded frame (for interpolation) and decodes more after it, looping at the end. False when the clip is done, as is one
+    /// whose play gives no sample.
     /// </summary>
     bool Refill()
     {
@@ -297,6 +302,7 @@ sealed class Voice : IDisposable
             int n = ReadSamples(_decoded, _decodedFrames * channels, _decoded.Length - _decodedFrames * channels);
             if (n > 0)
             {
+                _readThisPlay = true;
                 int got = n / channels;
                 if (_toSkip > 0)
                 {
@@ -318,13 +324,14 @@ sealed class Voice : IDisposable
                 }
                 continue;
             }
-            if (_playsLeft == 1)
+            if (_playsLeft == 1 || !_readThisPlay)
             {
                 _final = true;
                 break;
             }
             if (_playsLeft > 1) _playsLeft--;
             Rewind();
+            _readThisPlay = false;
         }
         // At the end the clip fades into silence over its last frame, so a clip that follows it sample for sample leaves no gap.
         return _position + 1 < _decodedFrames || (_final && _position < _decodedFrames);
