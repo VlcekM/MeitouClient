@@ -2,6 +2,7 @@ using System.Reflection;
 using HarmonyLib;
 using Meitou.Content;
 using Meitou.Data;
+using Meitou.Data.Fcs;
 using Meitou.Game.Ui;
 using Meitou.Simulation;
 using Meitou.Simulation.Population;
@@ -85,9 +86,26 @@ public sealed class ModHost
     /// The load pass: which mods loaded and why the others were refused, for the dependency checks.
     /// </summary>
     readonly CodeModPass _pass = new();
+    /// <summary>
+    /// The mods whose code <see cref="Prepare"/> loaded ahead of their <see cref="IMod.Initialize"/>, with their place in the load order, in order; a
+    /// mod whose data phase throws leaves it. Empty for a host made by <see cref="Load"/>.
+    /// </summary>
+    readonly List<(LoadedMod Mod, int Index)> _prepared = [];
+    /// <summary>
+    /// The pass of <see cref="Prepare"/>: the mods whose code loaded, for the dependency checks made before any mod is initialized.
+    /// </summary>
+    readonly CodeModPass _preparedPass = new();
+    /// <summary>
+    /// The enabled and disabled code mods <see cref="Prepare"/> was given, as the dependency checks read them.
+    /// </summary>
+    IReadOnlyList<CodeModEntry> _entries = [];
+    /// <summary>
+    /// The running Meitou <see cref="Prepare"/> was given, for <c>gameVersion</c> ranges.
+    /// </summary>
+    CodeModVersion? _gameVersion;
 
     /// <summary>
-    /// Made only by <see cref="Load"/>.
+    /// Made only by <see cref="Load"/> and <see cref="Prepare"/>.
     /// </summary>
     ModHost() { }
 
@@ -220,11 +238,221 @@ public sealed class ModHost
     public static ModHost Load(ModHostOptions options)
     {
         var host = new ModHost();
-        var entries = options.Enabled.Select(m => CodeModDependencies.ReadEntry(m, enabled: true))
-            .Concat((options.Disabled ?? []).Select(m => CodeModDependencies.ReadEntry(m, enabled: false)))
-            .ToList();
+        var entries = Entries(options.Enabled, options.Disabled);
         for (int i = 0; i < options.Enabled.Count; i++) host.TryLoad(options.Enabled[i], options, entries, i);
         return host;
+    }
+
+    /// <summary>
+    /// The dependency checks' view of the enabled code mods, in order, then the disabled ones.
+    /// </summary>
+    static List<CodeModEntry> Entries(IReadOnlyList<ModInfo> enabled, IReadOnlyList<ModInfo>? disabled) =>
+    [
+        .. enabled.Select(m => CodeModDependencies.ReadEntry(m, enabled: true)),
+        .. (disabled ?? []).Select(m => CodeModDependencies.ReadEntry(m, enabled: false)),
+    ];
+
+    /// <summary>
+    /// The first half of <see cref="Load"/> for a session with a data phase (docs/modding.md "Data phase"): checks and loads the code of the enabled
+    /// mods, in order, and makes their entry instances, without initializing them; then <see cref="EditData"/> and <see cref="Start"/>. A refusal
+    /// here is the same log line, notice and reason as in <see cref="Load"/>. Never throws for a mod's fault.
+    /// </summary>
+    public static ModHost Prepare(IReadOnlyList<ModInfo> enabled, IReadOnlyList<ModInfo>? disabled = null, CodeModVersion? gameVersion = null)
+    {
+        var host = new ModHost { _entries = Entries(enabled, disabled), _gameVersion = gameVersion };
+        for (int i = 0; i < enabled.Count; i++) host.TryPrepare(enabled[i], i);
+        return host;
+    }
+
+    /// <summary>
+    /// Loads one mod's code ahead of its initialization (<see cref="Prepare"/>); a failure refuses it with a log line and a notice.
+    /// </summary>
+    void TryPrepare(ModInfo info, int index)
+    {
+        try
+        {
+            var mod = Prepare(info, _entries, index, _gameVersion, _preparedPass, [.. _prepared.Select(p => p.Mod)]);
+            _prepared.Add((mod, index));
+            _preparedPass.Loaded(info.Name, mod.Manifest);
+        }
+        catch (ModLoadException e)
+        {
+            RefuseEarly(info.Name, e.Message);
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"mod       {info.Name}: {e}");
+            RefuseEarly(info.Name, $"failed to start: {e.GetBaseException().Message}");
+        }
+    }
+
+    /// <summary>
+    /// Leaves a mod out before the initializations (<see cref="Refuse"/>), its reason in both passes.
+    /// </summary>
+    void RefuseEarly(string mod, string reason)
+    {
+        Refuse(mod, reason);
+        _preparedPass.Refused(mod, reason);
+    }
+
+    /// <summary>
+    /// The data phase (docs/modding.md "Data phase"): each prepared mod named in <paramref name="phased"/> (the mods <see cref="ModDataScan"/> found
+    /// declaring <see cref="IModDataPhase"/>, by name), in load order, edits <paramref name="data"/>; its queued changes are checked whole and then
+    /// merged when it returns, so the next mod reads them. One that throws or queues a change that cannot be merged has none of its changes merged
+    /// and is refused; a mod with a required dependency that was refused or skipped here, directly or through others, is skipped (its own
+    /// dependency check then refuses it at <see cref="Start"/>). Never throws for a mod's fault. On the thread reading the data, before anything is
+    /// built from it.
+    /// </summary>
+    public void EditData(GameDatabase data, IReadOnlySet<string> phased)
+    {
+        var lost = new HashSet<LoadedMod>();
+        foreach (var (mod, index) in _prepared.ToList())
+        {
+            if (LostDependency(mod, lost) is { } gone)
+            {
+                lost.Add(mod);
+                if (phased.Contains(mod.Info.Name))
+                    Console.Error.WriteLine($"mod       {mod.Manifest.Id}: data phase skipped: its dependency '{gone.Manifest.Id}' was left out");
+                continue;
+            }
+            if (!phased.Contains(mod.Info.Name))
+            {
+                if (mod.Instance is IModDataPhase) NoteUnscannedDataPhase(mod);
+                continue;
+            }
+            if (mod.Instance is not IModDataPhase editor) continue;
+
+            if (!TryEditData(mod, index, editor, data)) lost.Add(mod);
+        }
+    }
+
+    /// <summary>
+    /// The log line for a mod whose entry is an <see cref="IModDataPhase"/> the metadata scan did not find (a base class in another assembly, or
+    /// metadata the scan cannot read), whose <see cref="IModDataPhase.EditData"/> therefore never runs.
+    /// </summary>
+    internal static void NoteUnscannedDataPhase(LoadedMod mod) =>
+        Console.Error.WriteLine($"mod       {mod.Manifest.Id}: implements IModDataPhase, but not on its entry type or a base class in the same "
+            + "assembly, so its EditData does not run (declare IModDataPhase on the entry type)");
+
+    /// <summary>
+    /// The first required dependency of <paramref name="mod"/> in <paramref name="lost"/> (refused or skipped in this data phase), or null.
+    /// </summary>
+    static LoadedMod? LostDependency(LoadedMod mod, HashSet<LoadedMod> lost)
+    {
+        foreach (var dependency in mod.Dependencies)
+            if (lost.Contains(dependency) && IsRequired(mod, dependency)) return dependency;
+
+        return null;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="mod"/>'s manifest requires <paramref name="dependency"/> (not <c>optional</c>).
+    /// </summary>
+    static bool IsRequired(LoadedMod mod, LoadedMod dependency) =>
+        mod.Manifest.DependsOn.FirstOrDefault(d => d.Id == dependency.Manifest.Id) is { Optional: false };
+
+    /// <summary>
+    /// Runs one mod's <see cref="IModDataPhase.EditData"/>, checks its changes and merges them; false when the mod was refused (a throw, or a change
+    /// that cannot be merged), with none of its changes merged.
+    /// </summary>
+    bool TryEditData(LoadedMod mod, int index, IModDataPhase editor, GameDatabase data)
+    {
+        var context = new ModDataContext(mod, data);
+        List<FcsRecord> changes = [];
+        string? failure;
+        try
+        {
+            editor.EditData(context);
+            context.Open = false;
+
+            // Copied before the check, so a mod's thread still writing to the records it queued cannot change them between check and merge.
+            changes = ModDataChanges.Snapshot(context.Changes);
+            failure = ModDataChanges.Problem(changes) is { } problem ? $"a game data change it made cannot be applied: {problem}" : null;
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"mod       {mod.Info.Name}: {e}");
+            failure = $"failed to change the game data: {e.GetBaseException().Message}";
+        }
+        finally
+        {
+            context.Open = false;
+        }
+
+        if (failure is null && TryApplyChanges(context, changes, data)) return true;
+
+        _prepared.Remove((mod, index));
+        Refuse(mod.Info.Name, failure ?? "its game data changes failed to apply");
+        return false;
+    }
+
+    /// <summary>
+    /// A data phase's checked changes (<paramref name="changes"/>, the copy of the mod's queue) into <paramref name="data"/>, in order, as made by
+    /// the mod's own data file, and their fingerprint into <see cref="GameDatabase.CodeEdits"/>. False when the merge threw, which the check before
+    /// it rules out; the changes merged before the throw then stay (a merge cannot be undone in place), and the line says so.
+    /// </summary>
+    static bool TryApplyChanges(ModDataContext context, List<FcsRecord> changes, GameDatabase data)
+    {
+        if (changes.Count == 0) return true;
+
+        try
+        {
+            foreach (var change in changes) data.Change(change, context.FileName);
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"mod       {context.Id}: data phase changes failed part way and are partly applied: {e}");
+            return false;
+        }
+
+        data.CodeEdits.Add(ModDataChanges.Fingerprint(context.Id, changes));
+        Console.WriteLine($"mod       {context.Id}: data phase changed {changes.Count} record(s)");
+        return true;
+    }
+
+    /// <summary>
+    /// The second half of <see cref="Load"/> after <see cref="Prepare"/>: initializes the prepared mods in load order, each checked again against the
+    /// mods initialized before it (a dependency that failed to initialize refuses it, as in <see cref="Load"/>). <paramref name="options"/> gives the
+    /// data, population, world and settings; its mod lists are not read (<see cref="Prepare"/>'s are). Never throws for a mod's fault.
+    /// </summary>
+    public void Start(ModHostOptions options)
+    {
+        foreach (var (mod, index) in _prepared) TryStart(mod, index, options);
+    }
+
+    /// <summary>
+    /// Initializes one prepared mod; a failure refuses it with a log line and a notice.
+    /// </summary>
+    void TryStart(LoadedMod mod, int index, ModHostOptions options)
+    {
+        try
+        {
+            if (CodeModChecks.Problems(mod.Manifest, index, _entries, _pass, _gameVersion) is [var problem, ..])
+                throw new ModLoadException(problem);
+            DropUnstartedDependencies(mod);
+            Initialize(mod, options);
+            Started(mod);
+        }
+        catch (ModLoadException e)
+        {
+            Refuse(mod.Info.Name, e.Message);
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"mod       {mod.Info.Name}: {e}");
+            Refuse(mod.Info.Name, $"failed to start: {e.GetBaseException().Message}");
+        }
+    }
+
+    /// <summary>
+    /// Takes the optional dependencies that loaded their code but did not initialize out of <paramref name="mod"/>'s, each with the log line of
+    /// <see cref="LoadedDependencies"/>; the mod's assemblies stay bound to what those exported.
+    /// </summary>
+    void DropUnstartedDependencies(LoadedMod mod)
+    {
+        foreach (var gone in mod.Dependencies.Where(d => !_mods.Contains(d)))
+            Console.WriteLine($"mod       {mod.Manifest.Id}: optional dependency '{gone.Manifest.Id}' did not load; going on without it");
+        mod.Dependencies = [.. mod.Dependencies.Where(_mods.Contains)];
     }
 
     /// <summary>
@@ -235,12 +463,9 @@ public sealed class ModHost
         LoadedMod? mod = null;
         try
         {
-            mod = Prepare(info, entries, index, options.GameVersion);
+            mod = Prepare(info, entries, index, options.GameVersion, _pass, _mods);
             Initialize(mod, options);
-            _mods.Add(mod);
-            _pass.Loaded(info.Name, mod.Manifest);
-            string assemblies = string.Join(", ", mod.Assemblies.Select(a => a.GetName().Name));
-            Console.WriteLine($"mod       {mod.Manifest.Id}: loaded from {info.Name} ({assemblies})");
+            Started(mod);
         }
         catch (ModLoadException e)
         {
@@ -254,6 +479,17 @@ public sealed class ModHost
     }
 
     /// <summary>
+    /// Counts an initialized mod as loaded, with its log line.
+    /// </summary>
+    void Started(LoadedMod mod)
+    {
+        _mods.Add(mod);
+        _pass.Loaded(mod.Info.Name, mod.Manifest);
+        string assemblies = string.Join(", ", mod.Assemblies.Select(a => a.GetName().Name));
+        Console.WriteLine($"mod       {mod.Manifest.Id}: loaded from {mod.Info.Name} ({assemblies})");
+    }
+
+    /// <summary>
     /// Leaves a mod out: a log line, a notice, and its reason for the dependency checks.
     /// </summary>
     void Refuse(string mod, string reason)
@@ -264,9 +500,11 @@ public sealed class ModHost
     }
 
     /// <summary>
-    /// The manifest checks, the assemblies and the entry instance.
+    /// The manifest checks against <paramref name="pass"/>, the assemblies with the exports of the <paramref name="loaded"/> mods it depends on, and
+    /// the entry instance.
     /// </summary>
-    LoadedMod Prepare(ModInfo info, IReadOnlyList<CodeModEntry> entries, int index, CodeModVersion? gameVersion)
+    static LoadedMod Prepare(ModInfo info, IReadOnlyList<CodeModEntry> entries, int index, CodeModVersion? gameVersion, CodeModPass pass,
+        IReadOnlyList<LoadedMod> loaded)
     {
         CodeModManifest manifest;
         try
@@ -277,10 +515,10 @@ public sealed class ModHost
         {
             throw new ModLoadException($"bad {ModList.CodeManifestFile}: {e.Message}");
         }
-        if (CodeModChecks.Problems(manifest, index, entries, _pass, gameVersion) is [var problem, ..])
+        if (CodeModChecks.Problems(manifest, index, entries, pass, gameVersion) is [var problem, ..])
             throw new ModLoadException(problem);
         var mod = new LoadedMod(info, manifest);
-        mod.Dependencies = LoadedDependencies(manifest);
+        mod.Dependencies = LoadedDependencies(manifest, loaded);
         var imports = Imports(mod.Dependencies);
         mod.Assemblies = LoadAssemblies(info, manifest, imports);
         mod.Exports = Exported(mod.Assemblies, imports);
@@ -292,12 +530,12 @@ public sealed class ModHost
     /// The loaded mods this one depends on, in manifest order (docs/modding-dependencies.md "Rules"). The shared checks have already refused it for a
     /// required one that is not loaded; an optional one that is absent or did not load is left out.
     /// </summary>
-    List<LoadedMod> LoadedDependencies(CodeModManifest manifest)
+    static List<LoadedMod> LoadedDependencies(CodeModManifest manifest, IReadOnlyList<LoadedMod> loaded)
     {
         var resolved = new List<LoadedMod>();
         foreach (var dependency in manifest.DependsOn)
         {
-            if (_mods.FirstOrDefault(m => m.Manifest.Id == dependency.Id) is { } loaded) resolved.Add(loaded);
+            if (loaded.FirstOrDefault(m => m.Manifest.Id == dependency.Id) is { } found) resolved.Add(found);
             else Console.WriteLine($"mod       {manifest.Id}: optional dependency '{dependency.Id}' did not load; going on without it");
         }
         return resolved;

@@ -47,9 +47,15 @@ sealed class GameMods(GameHost host)
     /// </summary>
     internal void StartWarmup()
     {
-        if (ModHost.EnabledCodeMods(host.Install).Count > 0) _warmupAfterMods = true;
+        if (CodeMods().Enabled.Count > 0) _warmupAfterMods = true;
         else JitWarmup.Start();
     }
+
+    /// <summary>
+    /// The code mods on disk (<see cref="ModHost.CodeMods(Content.GameInstall)"/>): the data phase's reading when the session has one, so the
+    /// folders are scanned once.
+    /// </summary>
+    (List<Content.ModInfo> Enabled, List<Content.ModInfo> Disabled) CodeMods() => host.DataPhase?.CodeMods() ?? ModHost.CodeMods(host.Install);
 
     /// <summary>
     /// Starts the JIT warm-up held back for the code mods, once they are initialized.
@@ -62,7 +68,8 @@ sealed class GameMods(GameHost host)
     }
 
     /// <summary>
-    /// Loads the enabled code mods and runs their initialization; on the boot worker.
+    /// Loads the enabled code mods and runs their initialization; on the boot worker. Mods whose code the data phase loaded already
+    /// (<see cref="ModDataPhase"/>) are initialized from there.
     /// </summary>
     internal void StartMods(Data.GameDatabase db, PopulationData data)
     {
@@ -70,16 +77,62 @@ sealed class GameMods(GameHost host)
         _builtInNotices = BuiltInMods.Adopt(host.Config, host.Install);
         (data.BodyOptions.SquadXp, data.BodyOptions.OthersXp) = (host.Config.SquadXp, host.Config.OthersXp);
 
-        var (enabled, disabled) = ModHost.CodeMods(host.Install);
+        if (host.DataPhase?.Mods is { } prepared)
+        {
+            StartPrepared(prepared, host.DataPhase.Enabled, db, data);
+            return;
+        }
+
+        var (enabled, disabled) = CodeMods();
         BuiltInMods.SkipCovered(enabled, disabled);
         if (enabled.Count == 0) return;
-        Console.WriteLine($"mods      {enabled.Count} code mod(s) enabled; Harmony {ModHost.HarmonyVersion}, code-mod API {ModApi.Version}");
-        Mods = ModHost.Load(new ModHostOptions(enabled, db, data, () => host.Session?.World,
-            id => host.Config.ModSettings.TryGetValue(id, out var saved) ? saved : null, RunningVersion(), disabled));
+        LogEnabled(enabled.Count);
+        Mods = ModHost.Load(Options(enabled, db, data, disabled));
 
-        // A value the mod sets itself (ModSetting.Set, Reset) is kept as the page's are; the page's own change is kept twice, the same value.
-        foreach (var group in Mods.Settings) group.Changed += host.Config.KeepModSetting;
+        // No mod was found with a data phase, so an entry that is one anyway has it where the scan cannot see it.
+        foreach (var mod in Mods.Mods.Where(m => m.Instance is IModDataPhase)) ModHost.NoteUnscannedDataPhase(mod);
+
+        KeepModSettings(Mods);
     }
+
+    /// <summary>
+    /// Initializes the mods the data phase loaded (<see cref="ModHost.Start"/>).
+    /// </summary>
+    void StartPrepared(ModHost prepared, IReadOnlyList<Content.ModInfo> enabled, Data.GameDatabase db, PopulationData data)
+    {
+        if (enabled.Count == 0) return;
+        LogEnabled(enabled.Count);
+        prepared.Start(Options(enabled, db, data));
+        Mods = prepared;
+        KeepModSettings(prepared);
+    }
+
+    /// <summary>
+    /// Keeps a value a mod sets itself (ModSetting.Set, Reset) as the page's are, on either start path; the page's own change is kept twice, the
+    /// same value.
+    /// </summary>
+    void KeepModSettings(ModHost mods)
+    {
+        foreach (var group in mods.Settings) group.Changed += host.Config.KeepModSetting;
+    }
+
+    /// <summary>
+    /// The log line naming how many code mods start.
+    /// </summary>
+    static void LogEnabled(int count) =>
+        Console.WriteLine($"mods      {count} code mod(s) enabled; Harmony {ModHost.HarmonyVersion}, code-mod API {ModApi.Version}");
+
+    /// <summary>
+    /// What the mods are loaded or initialized with: the data, the population, the running world and the player's saved settings.
+    /// </summary>
+    ModHostOptions Options(IReadOnlyList<Content.ModInfo> enabled, Data.GameDatabase db, PopulationData data,
+        IReadOnlyList<Content.ModInfo>? disabled = null) =>
+        new(enabled, db, data, () => host.Session?.World, SavedSettings, RunningVersion(), disabled);
+
+    /// <summary>
+    /// The player's saved settings of a mod by its id, or null.
+    /// </summary>
+    IReadOnlyDictionary<string, string>? SavedSettings(string id) => host.Config.ModSettings.TryGetValue(id, out var saved) ? saved : null;
 
     /// <summary>
     /// The mods' interface extensions and their load notices, for a new interface.
@@ -127,7 +180,7 @@ sealed class GameMods(GameHost host)
     /// This build's nearest game tag (<c>v*</c>, Meitou.Game.csproj) as a version for <c>gameVersion</c> ranges; null for a build without one (no git
     /// history), which passes every range.
     /// </summary>
-    static Content.CodeModVersion? RunningVersion() =>
+    internal static Content.CodeModVersion? RunningVersion() =>
         Content.CodeModVersion.TryParse(BuildVersion.Tag.TrimStart('v'), out var version) ? version : null;
 
     /// <summary>

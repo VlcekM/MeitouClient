@@ -15,6 +15,20 @@ public interface IMod
 }
 
 /// <summary>
+/// A code mod's data phase (docs/modding.md "Data phase"), implemented by its entry type (or a base class in the same assembly) beside
+/// <see cref="IMod"/>: <see cref="EditData"/> runs once per session as the game data is read, in <c>mods.cfg</c> order, before anything is built from
+/// the records and before any mod's <see cref="IMod.Initialize"/>.
+/// </summary>
+public interface IModDataPhase
+{
+    /// <summary>
+    /// Changes the merged game data through <paramref name="context"/>; the changes are applied when it returns. A throw discards this mod's changes
+    /// and disables the mod for the session (its <see cref="IMod.Initialize"/> is not called).
+    /// </summary>
+    void EditData(ModDataContext context);
+}
+
+/// <summary>
 /// State of a mod's system that goes into a save (docs/modding.md "Registration surface"): a system made by a factory registered with
 /// <see cref="ModContext.AddSystem"/> that implements this is written into the save's sidecar file for its mod under the system's name, and read back
 /// into the new world's system on load. Both run between ticks on the thread that ticks the world.

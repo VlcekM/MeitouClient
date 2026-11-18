@@ -34,7 +34,8 @@ internal sealed class NavContentHash
     }
 
     /// <summary>
-    /// The game-data files in load order (record contents: buildings, layouts' parts, foliage, map features).
+    /// The game-data files in load order (record contents: buildings, layouts' parts, foliage, map features), then the fingerprints of what code
+    /// changed in the records after them (<see cref="GameDatabase.CodeEdits"/>).
     /// </summary>
     void AddDataFiles(GameInstall install, GameDatabase db)
     {
@@ -44,6 +45,10 @@ internal sealed class NavContentHash
             Stamp(LoadOrder.BaseFiles.Contains(name) ? Path.Combine(install.DataDirectory, name)
                 : mods.TryGetValue(Path.GetFileNameWithoutExtension(name), out var mod) ? mod : name);
         }
+
+        // What code changed in the records after the files (a code mod's data phase); none without one, so the hash is as before.
+        foreach (var edit in db.CodeEdits)
+            Add(edit);
     }
 
     /// <summary>

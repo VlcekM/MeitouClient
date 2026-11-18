@@ -632,7 +632,7 @@ areas. A* checks portal clearance (radius per wall end, default radius 4), water
 `ZoneGate` holds population until ready. Collision and world placement rules:
 [collision.md](formats/collision.md), [pathfinding.md](game/pathfinding.md).
 Cache key: the zone's building hash (id, position with height, full rotation, destroyed, layout names of the buildings near it), the build settings and a content hash (`NavContentHash`, by name, size and write time: the data
-files in load order, `seeds.def`, the height, blend, biome, map feature and overlay maps, every zone, level and interiors file of every
+files in load order, a fingerprint of each code mod's record changes in the [data phase](modding.md#data-phase), `seeds.def`, the height, blend, biome, map feature and overlay maps, every zone, level and interiors file of every
 level layer, every collision file a record names (collision and boundary fields, any `.xml`) as the install resolves it (missing ones too), and the DotRecast version), so a mod
 update that changes any of them builds the meshes again. The cache holds the zone's own pruning; the kept set of every loaded
 zone is resolved again whenever one is published or unloaded (the border rule toward unloaded sides, the neighbours' kept edges, `KeepAt` points;

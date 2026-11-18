@@ -87,6 +87,11 @@ sealed partial class GameHost(
     /// </summary>
     public IDisposable? Splash { get; init; }
 
+    /// <summary>
+    /// How the session's game data was read, with the code mods' data phase (docs/modding.md "Data phase"); null: read without one.
+    /// </summary>
+    internal Meitou.Modding.ModDataPhase? DataPhase { get; init; }
+
     #endregion
 
     #region Features
