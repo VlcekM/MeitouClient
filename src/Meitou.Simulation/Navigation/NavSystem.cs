@@ -184,6 +184,24 @@ public sealed class NavSystem : IDisposable
     }
 
     /// <summary>
+    /// Several buildings at once (<see cref="AddRuntimeBuilding"/>), with one rebuild of each loaded zone they reach; the task completes when all of
+    /// those are live again (a tool's load that wants the save's buildings in before its first tick).
+    /// </summary>
+    public Task AddRuntimeBuildings(IReadOnlyCollection<BuildingPlacement> placements)
+    {
+        foreach (var placement in placements) Runtime.Add(placement);
+        var rebuilds = placements
+            .SelectMany(p => NavRuntimeBuildings.ZonesReached(p.Position))
+            .Distinct()
+            .Where(zone => Walkability.World.Find(zone) is not null)
+            .Select(zone => (Task)_service.Rebuild(zone))
+            .ToList();
+
+        UpdatePlayerRoute();
+        return Task.WhenAll(rebuilds);
+    }
+
+    /// <summary>
     /// <see cref="LevelTownRange"/>'s value once read.
     /// </summary>
     float? _levelTownRange;

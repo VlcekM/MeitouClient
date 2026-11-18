@@ -1,6 +1,7 @@
 using System.Numerics;
 using Meitou.Content;
 using Meitou.Data;
+using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.Save;
 using Meitou.Data.World;
 using Meitou.Simulation;
@@ -117,6 +118,7 @@ sealed class ProbeWorld : IDisposable
         var streamer = stream && nav is not null ? new ProbeZoneStreamer(nav, zones) : null;
         var buildings = nav is null ? null : Collision(install, db, levels, height, nav, SavedStart(save));
         var (world, loaded) = MakeWorld(data, walk, save, seed, streamer, buildings);
+        if (nav is not null) AddPlayerSites(db, world, nav);
         if (nav is not null) GiveGateCodes(world, nav);
         return new ProbeWorld
         {
@@ -158,6 +160,50 @@ sealed class ProbeWorld : IDisposable
         }
 
         return geometry;
+    }
+
+    /// <summary>
+    /// The save's sites in the navmesh, as the game's host puts them there (<c>BuildingSync.AddToNavmesh</c>: <c>path mode</c> not 0, and complete,
+    /// a repair or without a <c>build threshold</c>), once the loaded zones they reach are built again.
+    /// </summary>
+    static void AddPlayerSites(GameDatabase db, World world, NavSystem nav)
+    {
+        var build = BuildingBuildData.LoadAll(db)
+            .GroupBy(b => b.Id, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        var placements = world.Buildings.All
+            .Where(site => InNavmesh(site, build))
+            .Select(site => SitePlacement(site, world.Player.Faction))
+            .ToList();
+        nav.AddRuntimeBuildings(placements).Wait();
+    }
+
+    /// <summary>
+    /// Whether the game's host puts a site in the navmesh (<c>BuildingSync.AddToNavmesh</c>).
+    /// </summary>
+    static bool InNavmesh(Meitou.Simulation.Construction.BuildSite site, Dictionary<string, BuildingBuildData> build)
+    {
+        if (!build.TryGetValue(site.Record, out var data) || data.PathMode == 0) return false;
+        return site.LevelPlacement is not null || site.Complete || data.BuildThreshold == 0;
+    }
+
+    /// <summary>
+    /// A site's navmesh placement as the game's host makes it (<c>BuildingSync.Placement</c>).
+    /// </summary>
+    static BuildingPlacement SitePlacement(Meitou.Simulation.Construction.BuildSite site, int playerFaction)
+    {
+        bool mine = site.Owner == playerFaction;
+        if (site.LevelPlacement is { } level)
+            return level with { Key = site.Id, WorldY = site.Position.Y, DestroyedOverride = site.Destroyed, PlayerOwned = mine };
+
+        var zone = WorldLayout.ZoneOf(site.Position.X, site.Position.Z);
+        return new(zone, site.Id, site.Record, site.Position, site.Rotation, null, site.Position.Y)
+        {
+            Key = site.Id,
+            Contained = site.Parent is not null,
+            ContainerId = site.Parent,
+            PlayerOwned = mine,
+        };
     }
 
     /// <summary>

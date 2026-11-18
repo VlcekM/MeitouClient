@@ -140,7 +140,7 @@ static class SaveProbe
             case ("mine", >= 4): MineRock(probe, a[0], Point(a, 1), a.Count > 4 ? int.Parse(a[4]) : 10); return true;
             case ("research", _): Research(probe); return true;
             case ("nests", _): Nests(probe); return true;
-            case ("heights", >= 2) when probe.Nav is not null: Heights(probe, float.Parse(a[0]), float.Parse(a[1])); return true;
+            case ("heights", >= 2) when probe.Nav is not null: HeightsAt(probe, a); return true;
             case ("path", >= 3) when probe.Nav is not null: PathTo(probe, a); return true;
             case ("walk", >= 1) when probe.Nav is not null: Walk(probe, a); return true;
             case ("ray", >= 6) when probe.Nav is not null: Ray(probe, Point(a, 0), Point(a, 3)); return true;
@@ -1519,6 +1519,18 @@ static class SaveProbe
     }
 
     /// <summary>
+    /// <c>heights x z [x z...]</c>: <see cref="Heights"/> at each point, after the point when there are several.
+    /// </summary>
+    static void HeightsAt(ProbeWorld probe, List<string> a)
+    {
+        for (int k = 0; k + 1 < a.Count; k += 2)
+        {
+            if (a.Count > 2) Console.Write($"{a[k]} {a[k + 1]}: ");
+            Heights(probe, float.Parse(a[k]), float.Parse(a[k + 1]));
+        }
+    }
+
+    /// <summary>
     /// The terrain height and every navmesh floor height at a world point.
     /// </summary>
     static void Heights(ProbeWorld probe, float x, float z)
@@ -1530,7 +1542,8 @@ static class SaveProbe
 
     /// <summary>
     /// <c>path [x y z] x y z</c>: the path a human walker gets, as the game asks it, from the leader (or the first point when six numbers are given)
-    /// to a point: whether one was found, where its provisional part starts, its points and how far its end is from the goal. Needs <c>--nav</c>.
+    /// to a point: whether one was found, where its provisional part starts, its points and how far its end is from the goal; one that stops short of
+    /// it, with the polygon chain a search without clearance takes there and the widest walker each step lets by. Needs <c>--nav</c>.
     /// </summary>
     static void PathTo(ProbeWorld probe, List<string> a)
     {
@@ -1542,6 +1555,9 @@ static class SaveProbe
         Console.WriteLine($"path {from:F1} -> {to:F1}: found={path.Found} exact={exact} points={path.Points.Count}");
         foreach (var p in path.Points) Console.WriteLine($"  {p:F1}");
         if (path.Points.Count > 0) Console.WriteLine($"  end {Vector3.Distance(path.Points[^1], to):F1} from the goal");
+
+        bool arrived = path.Points.Count > 0 && Vector3.Distance(path.Points[^1], to) <= 2;
+        if (!arrived) NavmeshTool.DescribeNoPath(probe.Nav.Walkability.World, from, to, verbose: true);
     }
 
     /// <summary>
@@ -1935,7 +1951,7 @@ static class SaveProbe
               hire <name|-|#platoon> <jump|walk> <dx> [rounds] [interval] [save folder]
                                        a squad near the leader hired as bodyguards, the player sent dx along X: the hired platoon each round
               places <radius> [step]   the place test over the walkable surface round the leader (needs --nav): outdoor-mesh points it puts indoors, and the reverse
-              path [x y z] <x y z>     the path a walker gets from the leader (or a point) to a point (needs --nav): points, end, provisional part
+              path [x y z] <x y z>     the path a walker gets from the leader (or a point) to a point (needs --nav): points, end, provisional part; short of it, the polygon chain
               walk <name> [x y z] [rounds]  a character walks (to a point, at its height): position, goal, goal height, walk end (needs --nav)
               ray <x y z> <x y z>      the sight ray between two points (needs --nav): where it first hits the terrain or a building
               sightlines <x y z> <radius> [step] [spread]  walkable points whose spot-meter ray reaches the spot (or each spot within spread), with places
@@ -1952,7 +1968,7 @@ static class SaveProbe
               platoons <radius>        the save's platoons near the leader: faction, template, file, characters, base and home town
               research                 the research state and each bench's rate factors
               resave                   re-write the buildings into the save and list ids held by two zones
-              heights <x> <z>          terrain and navmesh heights at a point (needs --nav)
+              heights <x> <z>...       terrain and navmesh heights at each point (needs --nav)
               layout <building key> [buy [save folder]]  a town building (zone:instance id): layout names now, ruin state, its interior layout's
                                        objects and the camp round it; buy: the player buys it and the camp is listed again; a save folder: its
                                        rebuild finished, the world is saved there (needs --nav)

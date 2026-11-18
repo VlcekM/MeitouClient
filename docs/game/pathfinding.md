@@ -457,6 +457,11 @@ door leaves sit 5..14 inside the interior hull, so the hull-carved exterior got 
 When the door's exterior polygons are all pruned yet touch a kept polygon, the interior's door polygons link to those and the carry keeps them. **Observed**
 (zone 38.29, `meitou-tools navmesh --verbose`, issue #436): the Waystation bar, L-House `3-rebirth-INGAME`, has a 14.4 doorway whose kept landing meets
 the door polygons over edges of 8.9 and 5.7, under the narrow-portal 9, so the bar was an island; now a path from the street reaches its floor.
+After such a join the doorway's open edges also join the kept exterior polygons they face (the next case), since the pruned door polygons can be a
+sliver. **Observed** (issue #998, `meitou-tools probe path` with the save's buildings): a player's Storm House (`3384-TwoStorey.mod`) tilted ~8° on a
+slope; its doorway's 14-long outer edge met the door's exterior triangle over 2.8 (widest walker radius 1.25) and the stair's top polygon beside it was
+left unjoined, so the house was sealed both ways while the original walks in and out (Kenshi harness, the same save). Of the 29 zones this doc names only
+21.42 `805-rebirth-INGAME` gains such joins (3); the Waystation's are unchanged.
 When neither joins, the interior polygons connected to the door polygons within 32 units of them join the exterior polygons their open
 edges face: a raised sill reached by steps (~47..52°) that cross the hull, whose lower part is the exterior's (cut at the hull: Y351 for
 `29-rebirth-INGAME`, door Y365..380; Y418 for `27-`, door Y430..441) and upper part the interior's, meeting on the hull's edge.

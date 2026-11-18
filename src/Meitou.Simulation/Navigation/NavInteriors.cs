@@ -322,15 +322,17 @@ internal static class NavInteriors
             // A landing whose edge along the doorway is split into pieces shorter than a portal: the seed flood stops there, so the door's own
             // exterior polygons are pruned and the kept landing's edges toward them are not open (Observed: the Waystation's L-House
             // 38.29:3-rebirth-INGAME, a 14.4 doorway met by edges of 8.9 and 5.7). Joined, the carry keeps them.
-            if (Link(openInside, OpenEdges(cutOff), $"{doorId} (door behind a narrow edge)") > 0) return;
+            int behind = Link(openInside, OpenEdges(cutOff), $"{doorId} (door behind a narrow edge)");
 
             // A door leaf set back inside the interior hull paints nothing outside it (the exterior is carved to the hull): the doorway's interior
-            // polygons meet the exterior's ground along the hull's edge (Observed: the L-House 13-rebirth-INGAME, zone 18.35).
+            // polygons meet the exterior's ground along the hull's edge (Observed: the L-House 13-rebirth-INGAME, zone 18.35). Also after a join
+            // behind a narrow edge: the door's cut-off exterior polygons can be a sliver past which the doorway's edge meets the ground itself
+            // (Observed, issue #998: a player's Storm House tilted on a slope, whose 14-long doorway edge met a door triangle under 3 wide).
             var (lo, hi) = Bounds(inside);
             lo -= new Vector2(JoinDistance);
             hi += new Vector2(JoinDistance);
             var near = Near(lo, hi);
-            if (Link(openInside, OpenEdges(near), $"{doorId} (doorway edge)") > 0) return;
+            if (Link(openInside, OpenEdges(near), $"{doorId} (doorway edge)") + behind > 0) return;
 
             // A raised sill reached by steps that cross the hull: the steps' upper part is the interior's (joined to the door polygons), the lower
             // part the exterior's, and the two meet on the hull's edge below the door (Observed: 29- and 27-rebirth-INGAME, zone 18.35). So the
