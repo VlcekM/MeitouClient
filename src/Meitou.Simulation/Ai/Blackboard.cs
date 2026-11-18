@@ -415,6 +415,11 @@ public sealed class Blackboard
     /// spent before the command, or in another town, does not count toward the stay (engine API, not in the original).
     /// </summary>
     public bool VisitArrivalPending { get; set; }
+    /// <summary>
+    /// The town the trader last left (+0xb0, set when it drops its town): any other town it is in counts as arriving, so a town it only passes
+    /// through on the way is a stop too. Not saved, like the trader's other state.
+    /// </summary>
+    public CampaignTown TraderLeft { get; set; } = CampaignTown.None;
 
     /// <summary>
     /// The passing-by assault (<c>Package_PassingByTownAssault</c>): the game hour it started (+0xb8), the faction it attacks (+0x100, the town's),
@@ -782,6 +787,11 @@ public sealed class Blackboard
             hasher.Add(InTown.Site);
             hasher.Add(InTown.PlayerTown);
             hasher.Add(InTownSince);
+            if (!TraderLeft.IsNone)
+            {
+                hasher.Add(TraderLeft.Site);
+                hasher.Add(TraderLeft.PlayerTown);
+            }
         }
 
         // Only a code mod's visit sets it, so a world without one hashes as before.

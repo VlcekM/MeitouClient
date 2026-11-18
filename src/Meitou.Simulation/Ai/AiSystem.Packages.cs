@@ -363,10 +363,12 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// The trader's update (vtable +0x48): without a town it starts over; in its town the state goes 0 → 1 → 2 (2 is finished, so the next slot, its
-    /// bar package, takes over), and when it is ready to leave there it drops the town (<c>FUN_140288bd0</c>) to draw a new one next time. A
-    /// <see cref="VisitTown"/> stay starts its clock at the first step in the town (<see cref="Blackboard.VisitArrivalPending"/>). The
-    /// original also leaves 0.2 h after a flag of its leader is set (Character +0x648 → +0x70, meaning <b>Unknown</b>): not built.
+    /// The trader's update (vtable +0x48, <c>FUN_140288c30</c>, <b>Verified</b>): without a town it starts over; in any town other than the one it
+    /// last left (<see cref="Blackboard.TraderLeft"/>), not only the one it set out for, the state goes 0 → 1 → 2 (2 is finished, so the next slot,
+    /// its bar package, takes over), and when it is ready to leave there it drops the town (<c>FUN_140288bd0</c>: that town becomes the last left)
+    /// to draw a new one next time. A <see cref="VisitTown"/> stops only at its town, and its stay starts its clock at the first step there
+    /// (<see cref="Blackboard.VisitArrivalPending"/>). The original also leaves 0.2 h after a flag of its leader is set (Character +0x648 → +0x70,
+    /// meaning <b>Unknown</b>): not built.
     /// </summary>
     void StepTrader(World world, Squad squad, Blackboard board)
     {
@@ -376,15 +378,28 @@ public sealed partial class AiSystem
             return;
         }
 
-        if (board.InTown.IsNone || board.InTown != board.Destination) return;
-        if (board.VisitArrivalPending)
-        {
-            board.InTownSince = world.GameHours;
-            board.VisitArrivalPending = false;
-        }
+        if (!TraderArrived(world, board)) return;
 
         board.TraderState = board.TraderState == 0 ? 1 : 2;
-        if (ReadyToLeave(world, board)) board.Destination = CampaignTown.None;
+        if (!ReadyToLeave(world, board)) return;
+
+        board.TraderLeft = board.InTown;
+        board.Destination = CampaignTown.None;
+    }
+
+    /// <summary>
+    /// Whether this step counts as being in a town to stop at: any town but the one last left; a <see cref="VisitTown"/> only its own town, where
+    /// the first step starts the stay's clock.
+    /// </summary>
+    static bool TraderArrived(World world, Blackboard board)
+    {
+        if (board.InTown.IsNone) return false;
+        if (!board.VisitArrivalPending) return board.InTown != board.TraderLeft;
+        if (board.InTown != board.Destination) return false;
+
+        board.InTownSince = world.GameHours;
+        board.VisitArrivalPending = false;
+        return true;
     }
 
     #endregion

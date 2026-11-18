@@ -2785,7 +2785,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// A <see cref="VisitTown"/>: the trader's next town is the player town and its stay the given hours, from state 0 (on the way), the stay's clock
-    /// waiting for its arrival.
+    /// waiting for its arrival. The town it last left is forgotten, so a visit back to it is a stop too.
     /// </summary>
     static void Visit(World world, VisitTown visit)
     {
@@ -2795,6 +2795,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         board.Destination = CampaignTown.OfPlayer(visit.PlayerTown);
         board.TraderWait = Math.Max(0, visit.Hours);
         board.TraderState = 0;
+        board.TraderLeft = CampaignTown.None;
         board.VisitArrivalPending = true;
     }
 

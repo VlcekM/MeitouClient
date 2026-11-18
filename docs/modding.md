@@ -413,8 +413,8 @@ holds refuses the second mod.
   uniform marks; written as a new member at the next save), leading it when it has no leader, and returns false, changing nothing, for
   another squad or character or at the same caps; a squad kept out of the faction size count (`SetSquadUncounted`) has only the squad cap
   for both; the `VisitTown` command sends a squad running a wandering trader package to a
-  player town for a stay of N hours, counted from its first step there after the command (it leaves a town that is not public at once, as any
-  trader); `BedSystem.PlayerBedRent` prices the player's indoor beds for other factions: set, an NPC must afford it from its squad purse and
+  player town for a stay of N hours, counted from its first step there after the command (on the way it stops at no other town; it leaves a
+  town that is not public at once, as any trader); `BedSystem.PlayerBedRent` prices the player's indoor beds for other factions: set, an NPC must afford it from its squad purse and
   pays the player once it lies in the bed, and a visitor in a player town picks the nearest bed it can afford before the NPC bed search (null
   keeps the original: NPCs never pay). Non-finite delays, hours, points and radii are refused. **Verified** by `ModHookTests` (synthetic
   world): the spawn ring, purse and refusals, a never-loaded spawn kept and reloaded with its tag, and the campaign queue.
