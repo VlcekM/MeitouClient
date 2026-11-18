@@ -161,23 +161,18 @@ sealed class DevConsoleHost(GameHost host)
     }
 
     /// <summary>
-    /// Draws the console over the top of the screen: the scrollback, the input line with its caret.
+    /// Draws the console over the top of the screen: the scrollback, the input line with its caret. <paramref name="scale"/> is the
+    /// framebuffer's pixels per point (2 on a Retina display), <paramref name="pass"/> the overlay pass that collects the draw (null: drawn at once).
     /// </summary>
-    internal void DrawConsole(DebugOverlay o, int width, int height)
+    internal void DrawConsole(DebugOverlay o, int width, int height, float scale = 1, DebugOverlay.OverlayPass? pass = null)
     {
-        float pad = 10, lineH = o.LineHeight;
+        float pad = 10 * scale, lineH = o.LineHeight * scale;
         int rows = Math.Max(4, (int)(height * 0.42f / lineH));
         float panelH = (rows + 1) * lineH + 3 * pad;
         o.Rect(0, 0, width, panelH, new Vector4(0.03f, 0.04f, 0.06f, 0.88f));
-        o.Rect(0, panelH, width, panelH + 2, new Vector4(0.25f, 0.4f, 0.65f, 1));
-        // Visual lines, newest last: each entry wrapped to the panel's width, the continuation indented.
-        var visual = new List<(string Text, DevConsole.Kind Kind)>();
-        foreach (var line in DevConsole.Lines)
-        {
-            string prefix = line.Kind == DevConsole.Kind.Input ? "> " : "";
-            var wrapped = o.WrapText(prefix + line.Text, width - 2 * pad);
-            for (int i = 0; i < wrapped.Count; i++) visual.Add((i == 0 ? wrapped[i] : "  " + wrapped[i], line.Kind));
-        }
+        o.Rect(0, panelH, width, panelH + 2 * scale, new Vector4(0.25f, 0.4f, 0.65f, 1));
+
+        var visual = ConsoleVisualLines(o, width - 2 * pad, scale);
         int maxScroll = Math.Max(0, visual.Count - rows);
         DevConsole.Scroll = Math.Min(DevConsole.Scroll, maxScroll);
         int last = visual.Count - DevConsole.Scroll;
@@ -190,20 +185,47 @@ sealed class DevConsoleHost(GameHost host)
                 DevConsole.Kind.Error => new Vector4(1f, 0.45f, 0.4f, 1),
                 _ => DebugOverlay.TextColour,
             };
-            o.Text(visual[i].Text, pad, y, colour);
+            o.TextScaled(visual[i].Text, pad, y, colour, scale);
         }
         if (DevConsole.Scroll > 0)
-            o.Text($"[{DevConsole.Scroll} more below: PageDown]", width - pad - o.CharWidth * 28, pad, new Vector4(0.7f, 0.75f, 0.8f, 1));
-        float inputY = pad * 2 + rows * lineH;
-        o.Rect(pad / 2, inputY - 2, width - pad / 2, inputY + lineH + 2, new Vector4(0.12f, 0.16f, 0.24f, 0.9f));
+        {
+            o.TextScaled($"[{DevConsole.Scroll} more below: PageDown]", width - pad - o.CharWidth * scale * 28, pad,
+                new Vector4(0.7f, 0.75f, 0.8f, 1), scale);
+        }
+
+        DrawConsoleInput(o, width, pad + pad + rows * lineH, scale);
+        o.Flush(width, height, null, pass);
+    }
+
+    /// <summary>
+    /// The scrollback's visual lines, newest last: each entry wrapped to <paramref name="width"/> pixels, the continuation indented.
+    /// </summary>
+    List<(string Text, DevConsole.Kind Kind)> ConsoleVisualLines(DebugOverlay o, float width, float scale)
+    {
+        var visual = new List<(string Text, DevConsole.Kind Kind)>();
+        foreach (var line in DevConsole.Lines)
+        {
+            string prefix = line.Kind == DevConsole.Kind.Input ? "> " : "";
+            var wrapped = o.WrapText(prefix + line.Text, width, scale);
+            for (int i = 0; i < wrapped.Count; i++) visual.Add((i == 0 ? wrapped[i] : "  " + wrapped[i], line.Kind));
+        }
+        return visual;
+    }
+
+    /// <summary>
+    /// The input line at <paramref name="inputY"/>: the typed text and the blinking caret.
+    /// </summary>
+    void DrawConsoleInput(DebugOverlay o, int width, float inputY, float scale)
+    {
+        float pad = 10 * scale, lineH = o.LineHeight * scale;
+        o.Rect(pad / 2, inputY - 2 * scale, width - pad / 2, inputY + lineH + 2 * scale, new Vector4(0.12f, 0.16f, 0.24f, 0.9f));
         string prompt = "> ";
-        o.Text(prompt + DevConsole.Input, pad, inputY, DebugOverlay.TextColour);
+        o.TextScaled(prompt + DevConsole.Input, pad, inputY, DebugOverlay.TextColour, scale);
         if (Stopwatch.GetTimestamp() / (Stopwatch.Frequency / 2) % 2 == 0)
         {
-            float caretX = pad + (prompt.Length + DevConsole.Caret) * o.CharWidth;
-            o.Rect(caretX, inputY, caretX + 2, inputY + lineH, DebugOverlay.TextColour);
+            float caretX = pad + (prompt.Length + DevConsole.Caret) * o.CharWidth * scale;
+            o.Rect(caretX, inputY, caretX + 2 * scale, inputY + lineH, DebugOverlay.TextColour);
         }
-        o.Flush(width, height);
     }
 
     // ---- commands

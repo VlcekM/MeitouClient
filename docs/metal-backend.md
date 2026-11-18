@@ -505,7 +505,13 @@ particles (the low-resolution targets are shared; the near-plane close pass is s
 the hover outline, move marker and navmesh debug overlay (Shift+F11).
 `MetalGameLoop` (`Host/MetalGameLoop.cs`) is now a playable loop: WASD/arrows, Q/E, wheel and middle-drag
 move the strategy camera; edge scrolling, left click/box select, right-click move orders and the HUD keys work;
-F7 hides the interface, F8 saves a screenshot, Ctrl+/ writes one frame's Metal capture (`.gputrace`), F11 lists the frame, F12 the fps line, Alt+Enter toggles full screen. Full screen on macOS is native (`NSWindow toggleFullScreen:`, the window
+Ctrl+/ writes one frame's Metal capture (`.gputrace`), Alt+Enter toggles full screen. The view keys are the Controls page's bindings, as on Vulkan:
+`ToggleInterface` (F7) hides the interface, `Screenshot` (F8, Print Screen) saves the picture as `_screens/screenshot_<n>.png`
+([ui-input](game/ui-input.md) "Screenshots"), `ToggleStats` (F11) lists the frame, `CycleProfiler` (F12) shows the frame-rate lines (the profiler
+chart waits for Metal timestamps), `ToggleFps` (unbound; Ctrl+F9) the fps counter. Insert or Ctrl+` opens the dev console ([ui-input](game/ui-input.md)
+"Dev console"), and the F10 menu's Tools rows open the pick & collision inspector's menu (its hulls drawn by the shared frame) and the interior
+editor. The agent control channel (`--control-dir`, `--exec`, `--screenshot-after`, `screenshot`, `state`, `hud`) is polled each frame; its `mouse`
+and `click` need the window's pointer path and are not done. Full screen on macOS is native (`NSWindow toggleFullScreen:`, the window
 has `FullScreenPrimary`): a Space of its own, so Cmd+Tab and Ctrl+Left/Right switch away, and AppKit hides the menu bar and Dock
 (**Observed** working, 2026-11-12, Apple M6, macOS 27.2).
 **Start (Observed 2026-11-12, Apple M6, macOS 27.2, from the run's log):** as on Vulkan, the world is read on a worker
@@ -524,7 +530,12 @@ lower), with vsync a whole number of refreshes nearest 30 (60 Hz: 30, 120 Hz: 30
 Stills and `--play-bench` keep their normal pacing. The frontend shell is in: the staged Meitou title (or the faithful title image), New Game with the
 start chooser, save/load slots and confirmations, the in-game Esc menu, the loading screen and sky transitions, and the
 audio system (main theme, interface sounds, ambience, music and world emitters, with the saved volume sliders).
-Still missing: the pointer sprite, the free camera and the cinema camera.
+Photo mode (P, [viewer](viewer.md#photo-mode)) runs on the shared `PhotoMode`, wired in `MetalGameLoop`'s `Photo mode` region and its
+key, pointer, wheel, frame, overlay-pass and picture hooks; its panel and guides draw into the overlay's one pass. Not drawn on Metal: the
+depth of field (the Metal chain has none), so the Focus tab's rows change nothing; the ambient animation (water, clouds) keeps the real
+clock, so it does not stop with the paused simulation.
+Still missing: the pointer sprite, the free camera and the cinema camera, the control channel's `mouse` and `click`, and
+the tiled screenshot of `screens.cfg`'s `multiplier`.
 
 **Current Metal mode (2026-10-22).** Terrain textures, water, foliage, terrain shadows and cloud shadows are on.
 Turn any of them off for diagnosis with `MEITOU_METAL_FOLIAGE=0`, `_WATER=0`, `_SHADOWS=0`, `_CLOUD_SHADOWS=0` or
