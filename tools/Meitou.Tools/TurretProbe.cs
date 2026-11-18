@@ -95,7 +95,8 @@ static class TurretProbe
                 : "-";
             int enemies = Meitou.Simulation.Bodies.CharacterFacts.Senses(probe.World, s)?.Enemies ?? -1;
             Console.WriteLine($"    {probe.Who(s)} behaviour={c.Ai?.Behaviour} goal={c.Ai?.Goal?.Task.Type} fight={c.Ai?.FightGoal} "
-                + $"combat={c.InCombat} enemies={enemies} claim={claim} gunning={c.Gunning ?? "-"}");
+                + $"combat={c.InCombat} enemies={enemies} slave={c.SlaveState} master={c.SlaveMaster} down={c.Medical?.Incapacitated} "
+                + $"claim={claim} gunning={c.Gunning ?? "-"}");
         }
     }
 

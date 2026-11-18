@@ -33,6 +33,13 @@ sealed class TownPlaceClaims(PopulationData data)
     /// </summary>
     static Vector2 Flat(Vector3 p) => new(p.X, p.Z);
 
+    /// <summary>
+    /// The list a member plans with, as its think's: its master squad's Slave AI Goals when it obeys one (<see cref="AiSystem.ObeyedRoles"/>), else
+    /// its role's. So an enslaved member claims no place its plan never uses.
+    /// </summary>
+    static IReadOnlyList<AiGoal> RolesOf(World world, Blackboard board, Squad squad, CharacterId id, CharacterCold cold) =>
+        AiSystem.ObeyedRoles(world, squad, cold) ?? board.Roles[(int)AiSystem.RoleOf(squad, id, cold)];
+
     #endregion
 
     #region Turrets
@@ -61,7 +68,7 @@ sealed class TownPlaceClaims(PopulationData data)
             {
                 var id = squad.Members[k];
                 if (!world.Characters.TryResolveNext(id, out int s) || world.Characters.Cold(s) is not { } cold || cold.Ai is not { } mind) continue;
-                if (board.TurretClaims.ContainsKey(s) || !TurretGoal(board, squad, id, cold, hour, out bool homeOnly)) continue;
+                if (board.TurretClaims.ContainsKey(s) || !TurretGoal(RolesOf(world, board, squad, id, cold), hour, out bool homeOnly)) continue;
                 if (pass == 0 ? !homeOnly : homeOnly) continue;
                 int best = -1;
                 float bestD = float.MaxValue;
@@ -85,13 +92,12 @@ sealed class TownPlaceClaims(PopulationData data)
     }
 
     /// <summary>
-    /// Whether the member's role list has a turret goal open at <paramref name="hour"/>, and whether it is only the home building's (222): that one
-    /// may only man a turret mounted on its home. Its role list only (not its race's goals): a race goal without the town's turret data names no
-    /// turret.
+    /// Whether the member's list (<see cref="RolesOf"/>) has a turret goal open at <paramref name="hour"/>, and whether it is only the home
+    /// building's (222): that one may only man a turret mounted on its home. That list only (not its race's goals): a race goal without the town's
+    /// turret data names no turret.
     /// </summary>
-    static bool TurretGoal(Blackboard board, Squad squad, CharacterId id, CharacterCold cold, int hour, out bool homeOnly)
+    static bool TurretGoal(IReadOnlyList<AiGoal> roles, int hour, out bool homeOnly)
     {
-        var roles = board.Roles[(int)AiSystem.RoleOf(squad, id, cold)];
         bool home = false, town = false;
         for (int k = 0; k < roles.Count; k++)
         {
@@ -173,7 +179,7 @@ sealed class TownPlaceClaims(PopulationData data)
         {
             var id = squad.Members[k];
             if (!world.Characters.TryResolveNext(id, out int s) || world.Characters.Cold(s) is not { } cold || cold.Ai is null) continue;
-            var roles = board.Roles[(int)AiSystem.RoleOf(squad, id, cold)];
+            var roles = RolesOf(world, board, squad, id, cold);
             bool relaxes = false, sits = false;
             for (int g = 0; g < roles.Count; g++)
             {
@@ -364,7 +370,7 @@ sealed class TownPlaceClaims(PopulationData data)
         {
             var id = squad.Members[k];
             if (!world.Characters.TryResolveNext(id, out int s) || world.Characters.Cold(s) is not { } cold || cold.Ai is null) continue;
-            var roles = board.Roles[(int)AiSystem.RoleOf(squad, id, cold)];
+            var roles = RolesOf(world, board, squad, id, cold);
             bool sits = false, around = false;
             for (int g = 0; g < roles.Count; g++)
             {

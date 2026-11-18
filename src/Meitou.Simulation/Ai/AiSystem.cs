@@ -460,12 +460,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// Job 187 Obedient Slave (<c>FUN_14050e5b0</c>, docs/game/ai-tasks.md "Obedient Slave"): a slave (state 1) not sneaking, owned by another squad,
-    /// takes that squad's <c>Slave AI Goals</c> instead of its own lists. Null: it plans with its own squad's (a slave in its owner's squad already
-    /// takes the Slave role there; one whose job a split took, <see cref="CharacterCold.ObedienceLost"/>).
+    /// Job 187 Obedient Slave (<c>FUN_14050e5b0</c>, docs/game/ai-tasks.md "Obedient Slave"): a slave (state 1) not sneaking takes its owner
+    /// squad's <c>Slave AI Goals</c> instead of its own lists, whatever its squad role: a guard enslaved by its own squad stops guarding (#991).
+    /// Null: it plans with its own squad's (no master squad, an empty Slave list, or a job a split took,
+    /// <see cref="CharacterCold.ObedienceLost"/>).
     /// </summary>
     internal static IReadOnlyList<AiGoal>? ObeyedRoles(World world, Squad squad, CharacterCold cold) =>
-        cold.SlaveState == 1 && !cold.ObedienceLost && cold.SlaveMaster >= 0 && cold.SlaveMaster != squad.Id && (cold.Orders & CharacterOrders.Sneak) == 0
+        cold.SlaveState == 1 && !cold.ObedienceLost && cold.SlaveMaster >= 0 && (cold.Orders & CharacterOrders.Sneak) == 0
             && world.Squads.Find(cold.SlaveMaster) is { Ai: { } master } && master.Roles[(int)AiRole.Slave] is { Count: > 0 } list ? list : null;
 
     /// <summary>

@@ -724,7 +724,7 @@ Meitou: [simulation, captives](../simulation.md#captives).
     already returned for a looker in any slave state but 0. A character in state 0 holds no job 187 (only a change to 1, chaining or processing adds it, after clearing the list; every
     change away from 1 removes it), so the test is false there and the job exempts no slave ([escaping slave spotted](#slave-work-shout-and-capture) below).
   - The status tooltip tells the player: "Your character will have a permanent job assigned called [Obedient slave]. While this is active he will automatically work for his master."
-  - **Meitou**: the AI's slaves (a slave member of its owner's squad in the Slave role; one in another squad takes the Slave list of the squad it obeys, `CharacterCold.SlaveMaster`: the owner squad of
+  - **Meitou**: the AI's slaves take the Slave list of the squad they obey, their own squad included whatever their squad role there (a guard enslaved by its own squad drops its guard goals and its turret, seat and sitting claims, #991), `CharacterCold.SlaveMaster`: the owner squad of
     the squad factory's slaves, the slaver who bought or processed it, the arresting guard's squad, the receiver of a delivery) run it through the AI ([ai](ai.md#goal-loading)). A **player character** gets the job in
     its list (`ObedientSlave`, step 3 of the decision step): the gate as above; the best goal of the master squad's Slave list in its hour, eligible in its repertoire (`TaskStart.Eligible`: caged,
     only 172 and 14), by desire x finder x weight x crowd (the row's `TaskProfile.Crowd` to the power of its own squad board's entries on the goal; x1.25 the one running, a tie
