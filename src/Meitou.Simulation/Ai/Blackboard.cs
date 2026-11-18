@@ -1300,6 +1300,18 @@ public sealed class AiMind
     public bool CaptiveAsk { get; set; }
 
     /// <summary>
+    /// The think chose a code mod's goal (<see cref="AiBehaviour.Mod"/>): the serial step of the same tick asks the mod to start it
+    /// (<see cref="NpcGoals"/>) and clears it (not hashed).
+    /// </summary>
+    public bool ModGoalAsk { get; set; }
+
+    /// <summary>
+    /// The mod started its goal's act-out for this character (<see cref="INpcGoal.Start"/> answered true) and the AI has not held the character since:
+    /// while it stays engaged, a fight may take over a goal below the urgent tier and the HUD names the goal. Hashed while set.
+    /// </summary>
+    public bool ModGoalStarted { get; set; }
+
+    /// <summary>
     /// The desire kept for the captive goal <paramref name="type"/> (<see cref="CaptiveOffers"/>); 0 without one.
     /// </summary>
     public float CaptiveDesire(TaskType type)
@@ -1502,6 +1514,7 @@ public sealed class AiMind
         }
 
         if (FightFrom != 0) hasher.Add(FightFrom);
+        if (ModGoalStarted) hasher.Add(0x4D6F6447);   // "ModG": only once a mod's goal started
         if (Replan) hasher.Add(0x5265706C);
         if (LookAbout != Crime.CrimeSystem.FirstLookAboutSeconds) hasher.Add(LookAbout);
         if (NextBuyTick != 0) hasher.Add(NextBuyTick);

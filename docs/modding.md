@@ -277,7 +277,7 @@ holds refuses the second mod.
   the mod's own from 1000 up). To run before a character idles, register at step 6 with a key below Idleness (`2000 + TaskType.Idle`).
   Every player character is asked, so a source checks that the character is one of its own squads'. Several mods can each add sources.
   `RegisterJob(type, source)` is the other kind: one contributor per job type, for the types a mod claimed with `AddJobType`. NPCs do not
-  go through this step; their AI packages run them.
+  go through this step; their AI packages run them (a mod's goals for them: NPC goals, below).
 - **Task handlers** (`Meitou.Simulation.Ai`, [task starts](simulation.md#task-starts)): a registered system implementing `ITaskOwner` gets
   `RegisterTasks(TaskHandlers)` once when the world is made, in system order, and registers an `ITaskHandler` (`Start`, `End`, `Done`) per
   `CharacterTask`, per row (`Register(TaskType, handler)`, a mod's row from 1000 up) or per row on a site (`RegisterOnSite`). One handler per
@@ -463,7 +463,28 @@ holds refuses the second mod.
   (`SquadRole`). It takes members the AI holds as above, walks them with its own row (`TaskStart.Walk(world, slot, point, mode, row,
   TaskSource.Goal)`, `TaskStart.Become` to stand), optionally with a task handler of that row, publishes its targets as goal claims, releases
   them when done, and keeps its state in `IModSaveData`. Such a duty does not weigh against the package's other goals (weight, tier, hours):
-  the mod decides when to take a member.
+  the mod decides when to take a member; NPC goals (below) let the chooser decide.
+- **NPC goals** (`Meitou.Simulation.Ai`, [rules](simulation.md#mod-goals)): `AddGoalType(type, name)` claims a task type number from 1000 up for
+  NPCs (one mod per type; `name` is for log lines), as `AddJobType` does for jobs (the two are claimed apart). A registered system implementing
+  `INpcGoalOwner` gets `RegisterGoals(NpcGoals)` once when the world is made (in system order, only when some mod claimed a goal type) and calls
+  `Register(type, goal)` for a type its mod claimed; a type not claimed, another mod's or registered twice throws, and a throw drops that system's
+  goals with a log line. An NPC whose running package (or race's `AI Goals`) lists an AI_TASK of that `enum` then weighs it in the AI's chooser
+  beside the package's other goals: by the record's tier (`classification`) and hours, the package's weight and the running goal's continuity
+  (x1.25); the mod's type has no commitment or crowding. `INpcGoal.Desire(world, in NpcGoalAsk)` (slot, id, squad, type, `targeting`) is the whole
+  desire: asked in the parallel think on the asker's own partition, it must be a cheap, deterministic, pure read (the character's own slot and
+  cold state, `Previous` for others, the squad's blackboard, the mod's state that only its serial steps change; randomness through `Rng.Hash` with
+  the mod's purpose; scratch lists `[ThreadStatic]`); work out costly answers in the mod's own serial step and keep them in its hashed state. The
+  winner stands while `Start(world, in NpcGoalAsk)` is called in the AI's serial step of the same tick, in slot order, for a character the AI
+  still holds: it engages the character (`Engaged = true`) and starts its task with a row of its own from 1000 up (`TaskStart.Walk`, `Become`;
+  `TaskSource.Goal`), and answers true; false starts nothing and the next think chooses again. A started goal stays the mind's goal: the HUD's Goal
+  line shows the AI_TASK record's name (also while the AI holds it), and below the urgent tier the combat goals may take the character over, a
+  fight whose start ends the mod's task (its row handler's `End`, `Replaced`) while `Engaged` stays set: the mod then releases or waits for the
+  fight's end. The mod clears its own `Engaged` and sets `Replan` when done, and the goal is weighed afresh; a package change does not stop an
+  act-out started, so the mod checks the goal is still listed (`GoalDuty`). Player characters (an autonomous squad's) and the members of a squad
+  the population moves (engine minds) never weigh it. A `Desire` that throws or answers a number that is not finite, or a `Start` that throws, is
+  logged once with the mod id and the goal type, the goal is never asked again in that world (a desire fault from the next tick: the rest of its
+  tick still asks it), and the fault enters the state hash. Nothing is saved: minds choose again after a load, so the mod takes its characters back
+  in `IWorldReady`. Without the code mod the goal is inert again. With no goal type claimed nothing is built. Engine API, not in the original.
 
 ## Data mods
 

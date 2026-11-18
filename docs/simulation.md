@@ -2111,6 +2111,20 @@ state's `mounted` handle). Claim order and gunner spot are engine choices. The g
 no enemy is sensed (list A `isNoEnemiesInVicinity`, [combat.md](game/combat.md#turrets)): false while the character's senses count an
 enemy (`numEnemies`, `SenseBlock.Enemies`), so guards man the turrets only while enemies come. A guard at its turret fires it ([Ranged](#ranged)).
 
+### Mod goals
+
+Engine API for code mods, not in the original ([modding](modding.md), "NPC goals"). `NpcGoals` (one per world, built in `World`'s constructor by
+`AiSystem.BindModGoals` from `SimulationExtensions.GoalTypes` and the `INpcGoalOwner` systems; null when no mod claimed a type, and then none of
+the paths below runs) holds each registered type from 1000 up. A type outside `TaskBehaviours` has `AiBehaviour.None`, whose desire is 0;
+for a registered type `AiSystem.Desire` asks the mod instead (`ModDesire`: 0 for a player character's mind), and the default profile (desire
+"special", no commitment, crowd 1) leaves the score desire x weight with the continuity. With no TaskData row the goal is its own one-step
+plan (`TryPlan`), never kept as a stepped plan. `Act` gives it `AiBehaviour.Mod`: the character stands and `AiMind.ModGoalAsk` asks the serial
+step, which after the captive jobs (`SendRequests`) calls `INpcGoal.Start` in slot order for each asker the AI still holds; a start sets
+`AiMind.ModGoalStarted` (hashed while set; cleared by the next think that holds the character). While it is set and the mod keeps the character
+engaged, `Preempts` lets the combat goals take over a goal below the urgent tier (as an interruptible duty), and `ActivityText` names the goal by
+its AI_TASK record. Faults: a desire's fault at tick T stops the goal from T + 1 (the threads of T still ask it, so the cut does not depend on
+the thread count); a start's stops it at once; both are logged once and hashed (`AiSystem.Hash`).
+
 ## New-game difficulty
 
 `NewGameSettings` in the game host binds seven numeric options to each new world: body hunger/death/damage,

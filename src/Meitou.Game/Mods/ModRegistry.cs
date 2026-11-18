@@ -60,6 +60,10 @@ sealed class ModRegistrations
     /// </summary>
     public Dictionary<Data.Gameplay.Ai.TaskType, string> JobTypes { get; } = [];
     /// <summary>
+    /// The mod's own NPC goal types and their names.
+    /// </summary>
+    public Dictionary<Data.Gameplay.Ai.TaskType, string> GoalTypes { get; } = [];
+    /// <summary>
     /// The equipment slots, in registration order.
     /// </summary>
     public List<ModSlot> Slots { get; } = [];
@@ -158,6 +162,10 @@ sealed class ModRegistry
     /// </summary>
     readonly Dictionary<Data.Gameplay.Ai.TaskType, string> _jobTypeOwners = [];
     /// <summary>
+    /// The owner of each mod NPC goal type.
+    /// </summary>
+    readonly Dictionary<Data.Gameplay.Ai.TaskType, string> _goalTypeOwners = [];
+    /// <summary>
     /// The mod and name each world's mod system was made under (weakly held, gone with the world).
     /// </summary>
     readonly ConditionalWeakTable<ITickSystem, ModSystemTag> _made = new();
@@ -233,6 +241,11 @@ sealed class ModRegistry
             _jobTypeOwners[type] = mod;
             Simulation.JobTypes[type] = name;
         }
+        foreach (var (type, name) in r.GoalTypes)
+        {
+            _goalTypeOwners[type] = mod;
+            Simulation.GoalTypes[type] = new ModGoalType(mod, name);
+        }
         foreach (var slot in r.Slots) ModSlots.Add(slot);
         foreach (var rule in r.WearRules) Data.Gameplay.WearRules.Add(mod, rule);
         foreach (var meter in r.Meters) ModMeters.Add(meter);
@@ -269,6 +282,22 @@ sealed class ModRegistry
             throw new InvalidOperationException($"Job type {type} is taken by mod '{owner}'.");
         if (pending.JobTypes.ContainsKey(type))
             throw new InvalidOperationException($"Job type {type} is registered twice by mod '{mod}'.");
+    }
+
+    /// <summary>
+    /// Throws when NPC goal type <paramref name="type"/> is below the mods' range or another mod (or this one) holds it already.
+    /// </summary>
+    public void CheckGoalTypeFree(Data.Gameplay.Ai.TaskType type, ModRegistrations pending, string mod)
+    {
+        if ((int)type < SimulationExtensions.FirstModCode)
+        {
+            string reason = $"Mod goal types start at {SimulationExtensions.FirstModCode}; lower numbers are the game's tasks.";
+            throw new ArgumentOutOfRangeException(nameof(type), type, reason);
+        }
+        if (_goalTypeOwners.TryGetValue(type, out var owner))
+            throw new InvalidOperationException($"Goal type {type} is taken by mod '{owner}'.");
+        if (pending.GoalTypes.ContainsKey(type))
+            throw new InvalidOperationException($"Goal type {type} is registered twice by mod '{mod}'.");
     }
 
     /// <summary>
