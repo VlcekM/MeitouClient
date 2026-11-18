@@ -497,6 +497,18 @@ holds refuses the second mod.
   press. The option's state is the mod's own: a press queues a command, its system applies it in a serial step and saves it (`IModSaveData`),
   and the system publishes the value (a volatile field, set again after a load) for the source to read. A source that throws, or returns an
   option without a caption or press, is logged once and dropped for the session; a press that throws is logged.
+- **Building panel buttons:** in `Register`, `registration.AddBuildingActions(context => buttons)` adds button lines to the panel of a selected
+  building, placed piece or piece of furniture, after the game's own stats lines (Open/Close, Security, Open to public), one line each, in
+  registration order (mods in load order), so several mods share the panel; lines past the panel's height are cut off, so keep to a few. The
+  source runs on the host thread whenever the panel is laid out (each tick while a building is selected), so it must be cheap; a tick may be in
+  flight, so it must not touch the world. It gets `UiBuildingContext`: `Building` (`UiSelectedBuilding`: `Instance`, the key the simulation
+  knows it by and `world.Player.InspectedBuilding` holds; `Record`, its record's string id or null; `SiteId`, the player's building id or null;
+  the panel's `Name`; `Owned`, whether the player's faction owns it, as the game's own buttons show), the `Snapshot` on screen, `Tick` read
+  when asked, and `Enqueue`. It returns `UiBuildingAction`s (caption, tooltip or null, press); return none to add nothing for that building. A
+  press plays the panel's click and runs only while the building it was shown for is still selected; it changes the world only by queueing
+  commands, which the mod's system applies in its serial `Inputs` step (`Instance` names the building). A source that throws, or returns a
+  button without a caption or press, is logged once and dropped for the session; a press that throws is logged. Without a source the panel
+  is as before. Engine API, not in the original.
 - **Settings:** `AddSettings(object)`, once per mod: the object's public get/set properties marked
   `[Setting(label, Hint, Min, Max, Step, Options, SubGroup, VisibleWhen)]` (`ModSettings.cs`) become one group, in declaration order (a
   sub-group's settings together at its first one's place), under the mod's row on the Settings screen's Mods page

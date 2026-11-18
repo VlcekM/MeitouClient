@@ -568,6 +568,10 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         /// </summary>
         public float? Fill { get; init; }
 
+        /// <summary>
+        /// The argument a button line's action gets (null: none).
+        /// </summary>
+        public string? Argument { get; init; }
 
         /// <summary>
         /// The line's tooltip user strings (the HUD's Fixed tooltip), null for none; a text tooltip wins over rows.
@@ -630,7 +634,8 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
 
                 // Kenshi_Button2 is a template (kenshi_templates.xml) whose root widget has the Kenshi_Button1Skin skin.
                 controls.Add(new($"{panel}-button-{i}", "Button", button with { Y = button.Y + 1, Height = button.Height - 2 },
-                    Loc.Tr(lines[i].Value), action, "Kenshi_Button1Skin", true, buttonProperties, Vector4.Zero, Clip: host.Clip));
+                    Loc.Tr(lines[i].Value), action, "Kenshi_Button1Skin", true, buttonProperties, Vector4.Zero, Argument: lines[i].Argument ?? "",
+                    Clip: host.Clip));
                 if (lines[i].Label.Length == 0) continue;
             }
             var columns = new[]

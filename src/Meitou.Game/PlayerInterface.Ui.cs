@@ -254,6 +254,18 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>
+    /// Whether any UI extension adds buttons to the building panel.
+    /// </summary>
+    internal bool HasModBuildingActions => _uiHost.HasBuildingActions;
+
+    /// <summary>
+    /// The buttons the interface extensions add to the panel of <paramref name="building"/> (<see cref="UiHost.BuildingActions"/>), given the snapshot
+    /// the panel is laid out from.
+    /// </summary>
+    internal IReadOnlyList<UiBuildingAction> ModBuildingActions(UiSelectedBuilding building, WorldSnapshot snapshot) =>
+        _uiHost.BuildingActions(new UiBuildingContext(building, snapshot, () => Session.World.Tick, Say));
+
+    /// <summary>
     /// Future code-mod loader entry point; disposal removes the extension's owned registrations.
     /// </summary>
     public IDisposable RegisterUiExtension(IUiExtension extension) => _uiHost.Register(extension);
@@ -839,6 +851,7 @@ sealed partial class PlayerInterface
         else if (action == "medic") Say(new Simulation.FirstAid.MedicJobCommand(SelectedIds(), SlowModifier) { Tick = Session.World.Tick });
         else if (action == "rescue") Say(new Simulation.Carrying.RescueJobCommand(SelectedIds(), SlowModifier) { Tick = Session.World.Tick });
         else if (action == "prospect") Prospecting.ProspectAction();
+        else if (action == BuildingModButtons.Action) BuildingSelection.ModButtons.Press(argument);
         else if (action.StartsWith("building-", StringComparison.Ordinal) || action.StartsWith("machine-", StringComparison.Ordinal))
             BuildingSelection.BuildingAction(action);
         else if (action == "tutorial") TutorialWindow.TutorialAction(argument);

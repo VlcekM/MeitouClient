@@ -69,6 +69,50 @@ public sealed class UiSquadAiContext(Simulation.WorldSnapshot snapshot, Func<lon
 }
 
 /// <summary>
+/// A button an extension adds to the selected building's panel (<see cref="UiRegistration.AddBuildingActions"/>): its caption, its tooltip (null:
+/// none) and what pressing it does (on the host's thread; it changes the world only by queueing commands).
+/// </summary>
+public sealed record UiBuildingAction(string Caption, string? Tooltip, Action Press);
+
+/// <summary>
+/// What an extension's building panel buttons get: the selected building or placed piece, the snapshot the panel is laid out from, the tick read
+/// when asked, and the command queue, through which a press changes the world.
+/// </summary>
+public sealed class UiBuildingContext(UiSelectedBuilding building, Simulation.WorldSnapshot snapshot, Func<long> tick,
+    Action<Simulation.SimCommand> enqueue)
+{
+    /// <summary>
+    /// The building or piece the panel shows.
+    /// </summary>
+    public UiSelectedBuilding Building { get; } = building;
+
+    /// <summary>
+    /// The snapshot the panel is laid out from (the one on screen).
+    /// </summary>
+    public Simulation.WorldSnapshot Snapshot { get; } = snapshot;
+
+    /// <summary>
+    /// The world's tick now, for a command's <see cref="Simulation.SimCommand.Tick"/>.
+    /// </summary>
+    public long Tick => tick();
+
+    /// <summary>
+    /// Queues a command for the world.
+    /// </summary>
+    public void Enqueue(Simulation.SimCommand command) => enqueue(command);
+}
+
+/// <summary>
+/// The building a click selected, as its panel shows it: <paramref name="Instance"/> is the key the simulation knows it by (a player-built
+/// building's or placed piece's id, a town building's placement key, a piece of furniture's id;
+/// <see cref="Simulation.Player.PlayerState.InspectedBuilding"/> holds the same), <paramref name="Record"/> its BUILDING or item record's string id
+/// (null when unknown), <paramref name="SiteId"/> the player's building id (also a rock's or a town machine's site) or null, <paramref name="Name"/>
+/// the panel's name, and <paramref name="Owned"/> whether the player's faction owns it (its own building, or a town building it bought), which is
+/// when the panel shows the game's own buttons.
+/// </summary>
+public sealed record UiSelectedBuilding(string Instance, string? Record, string? SiteId, string Name, bool Owned);
+
+/// <summary>
 /// What an action handler gets: the frame's data and the control's argument.
 /// </summary>
 public sealed record UiActionContext(UiFrameContext Frame, string Argument);
@@ -223,6 +267,11 @@ public sealed class UiHost
     readonly List<(string Owner, Func<UiSquadAiContext, IEnumerable<UiSquadAiOption>> Options)> _squadAiOptions = [];
 
     /// <summary>
+    /// The building panel button sources, with their owners, in registration order.
+    /// </summary>
+    readonly List<(string Owner, Func<UiBuildingContext, IEnumerable<UiBuildingAction>> Actions)> _buildingActions = [];
+
+    /// <summary>
     /// The contributions: owner, slot, mode (null: every mode), order and factory.
     /// </summary>
     readonly List<(string Owner, string Slot, UiMode? Mode, int Order, Func<UiFrameContext, UiNode> Factory)> _contributions = [];
@@ -248,8 +297,8 @@ public sealed class UiHost
     UiFrameContext? _frame;
 
     /// <summary>
-    /// An extension failed (a contribution's build, an action, a map marker source, a right-click menu row source or a row's action, or a squad
-    /// AI option source or press).
+    /// An extension failed (a contribution's build, an action, a map marker source, a right-click menu row source or a row's action, a squad
+    /// AI option source or press, or a building panel button source or press).
     /// </summary>
     public event Action<UiDiagnostic>? Diagnostic;
 
@@ -341,6 +390,12 @@ public sealed class UiHost
         _squadAiOptions.Add((owner, options));
 
     /// <summary>
+    /// Adds a building panel button source for <paramref name="owner"/>.
+    /// </summary>
+    internal void AddBuildingActions(string owner, Func<UiBuildingContext, IEnumerable<UiBuildingAction>> actions) =>
+        _buildingActions.Add((owner, actions));
+
+    /// <summary>
     /// Adds a contribution to <paramref name="slot"/> for <paramref name="owner"/>.
     /// </summary>
     internal void Contribute(string owner, string slot, UiMode? mode, int order, Func<UiFrameContext, UiNode> factory) =>
@@ -362,6 +417,7 @@ public sealed class UiHost
     internal void Remove(string owner)
     {
         _squadAiOptions.RemoveAll(o => o.Owner == owner);
+        _buildingActions.RemoveAll(a => a.Owner == owner);
         foreach (string id in _styles.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) _styles.Remove(id);
         foreach (string id in _controls.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) _controls.Remove(id);
         foreach (string id in _actions.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) _actions.Remove(id);
@@ -532,7 +588,11 @@ public sealed class UiHost
                 if (added.Any(o => o is null || string.IsNullOrWhiteSpace(o.Caption) || o.Press is null))
                     throw new InvalidOperationException("A squad AI option needs a caption and a press.");
 
-                options.AddRange(added.Select(o => o with { Tooltip = o.Tooltip ?? "", Press = GuardedPress(entry.Owner, o) }));
+                options.AddRange(added.Select(o => o with
+                {
+                    Tooltip = o.Tooltip ?? "",
+                    Press = GuardedPress(entry.Owner, $"squad AI option {o.Caption}", o.Press),
+                }));
             }
             catch (Exception e)
             {
@@ -545,20 +605,53 @@ public sealed class UiHost
     }
 
     /// <summary>
-    /// An option's press that reports a throw as a <see cref="Diagnostic"/> instead of passing it on to the input, and does nothing once its
-    /// extension is removed.
+    /// Whether any extension adds building panel buttons (<see cref="BuildingActions"/>).
     /// </summary>
-    Action GuardedPress(string owner, UiSquadAiOption option) => () =>
+    public bool HasBuildingActions => _buildingActions.Count > 0;
+
+    /// <summary>
+    /// The buttons the extensions add to the selected building's panel, in registration order (a copy of the sources is walked, so a source may
+    /// register or dispose). A source that throws, or names a button without a caption or press, is reported once as a <see cref="Diagnostic"/>
+    /// and dropped (it is asked whenever the panel is laid out). A press that throws is reported each time.
+    /// </summary>
+    public IReadOnlyList<UiBuildingAction> BuildingActions(UiBuildingContext context)
+    {
+        var actions = new List<UiBuildingAction>();
+        foreach (var entry in _buildingActions.ToArray())
+        {
+            try
+            {
+                var added = entry.Actions(context).ToList();
+                if (added.Any(a => a is null || string.IsNullOrWhiteSpace(a.Caption) || a.Press is null))
+                    throw new InvalidOperationException("A building panel button needs a caption and a press.");
+
+                actions.AddRange(added.Select(a => a with { Press = GuardedPress(entry.Owner, $"building panel button {a.Caption}", a.Press) }));
+            }
+            catch (Exception e)
+            {
+                _buildingActions.Remove(entry);
+                Diagnostic?.Invoke(new UiDiagnostic(entry.Owner, "building panel buttons (dropped)", e));
+            }
+        }
+
+        return actions;
+    }
+
+    /// <summary>
+    /// An extension's press that reports a throw as a <see cref="Diagnostic"/> (<paramref name="what"/> names it) instead of passing it on to the
+    /// input, and does nothing once its extension is removed.
+    /// </summary>
+    Action GuardedPress(string owner, string what, Action press) => () =>
     {
         if (!_extensions.Contains(owner)) return;
 
         try
         {
-            option.Press();
+            press();
         }
         catch (Exception e)
         {
-            Diagnostic?.Invoke(new UiDiagnostic(owner, $"squad AI option {option.Caption}", e));
+            Diagnostic?.Invoke(new UiDiagnostic(owner, what, e));
         }
     };
 
@@ -809,6 +902,19 @@ public sealed class UiRegistration : IDisposable
         Check();
         ArgumentNullException.ThrowIfNull(options);
         _host.AddSquadAiOptions(Id, options);
+    }
+
+    /// <summary>
+    /// Adds buttons to the panel of a selected building or placed piece, after the game's own lines (docs/modding.md "Building panel buttons"):
+    /// <paramref name="actions"/> runs on the host's thread whenever the panel is laid out, so it must be cheap, and while a tick may be in flight, so
+    /// it must not touch the world; it reads the context, and a pressed button changes the world through commands
+    /// (<see cref="UiBuildingContext.Enqueue"/>).
+    /// </summary>
+    public void AddBuildingActions(Func<UiBuildingContext, IEnumerable<UiBuildingAction>> actions)
+    {
+        Check();
+        ArgumentNullException.ThrowIfNull(actions);
+        _host.AddBuildingActions(Id, actions);
     }
 
     /// <summary>
