@@ -1052,16 +1052,17 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     }
 
     /// <summary>
-    /// Whether a Fixing Legs treatment (<see cref="TreatOwnLegs"/>) ends now. Its legs work again: the goal's desire is 0, so the original's
-    /// chooser, run on every AI update, takes another goal whose plan replaces the task (<b>Observed</b>, from the chooser and the desire). Or row
-    /// 269's list B no longer holds: the plan step ends a running step whose list B fails (<c>FUN_14050d970</c>, row 269 has no <c>+0x16</c>,
-    /// <b>Verified</b> upstream): no first aid kit of its own (23; a squad mate's kit in reach does not count), an immediate threat on itself (39),
-    /// deep water (139) or a weapon drawn (157); the arms (38) are <see cref="ArmsOut"/>'s. The next think chooses again.
+    /// Whether a Fixing Legs treatment (<see cref="TreatOwnLegs"/>) ends before the treatment's own end (nothing left to close or bandage,
+    /// <see cref="Apply"/>): row 269's list B no longer holds, as the plan step ends a running step whose list B fails (<c>FUN_14050d970</c>, row 269
+    /// has no <c>+0x16</c>, <b>Verified</b> upstream): no first aid kit of its own (23; a squad mate's kit in reach does not count), an immediate
+    /// threat on itself (39), deep water (139) or a weapon drawn (157); the arms (38) are <see cref="ArmsOut"/>'s. The leg holding again does not
+    /// end it: in the original the character keeps bandaging until the leg is fully bandaged and stands only then (<b>Observed</b>, original 1.0.68,
+    /// docs/game/ai-tasks.md "Medic jobs", Fixing Legs). The next think chooses again.
     /// </summary>
     static bool OwnLegsStepEnds(World world, CharacterCold cold, int i, int t)
     {
         if (t != i || cold.Running is not { Task: CharacterTask.Treat, Row: TaskType.HealMyLegs }) return false;
-        if (cold.Medical is { LegsMessedUp: false } || !HoldsKit(cold, ItemInfo.FirstAidKitFunction)) return true;
+        if (!HoldsKit(cold, ItemInfo.FirstAidKitFunction)) return true;
         if (cold is { WaterState: 3, InSomething: HeldState.None } || cold.DrawnWeapon != WeaponKinds.None) return true;
 
         return RowStates.Holds(world, i, StateType.IsAggressionTowardsMe, default) == true;

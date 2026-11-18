@@ -385,7 +385,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (mind.Engine && EngineRoutine(n, cold)) return Restrict.Combat;
 
         // Fixing Legs' own treatment: the original's chooser weighs every goal on each update, and while the urgent goal is wanted only an urgent
-        // goal can outscore it; once the legs work its desire is 0 and the treatment ends (FirstAidSystem.OwnLegsStepEnds).
+        // goal can outscore it; once the legs work the treatment still runs until the leg is fully bandaged (Observed in the original), and only
+        // an urgent goal that plans takes over.
         if (TreatsOwnLegs(n, cold)) return Restrict.Urgent;
 
         return n.Task == (byte)CharacterTask.Treat || InterruptibleDuty(n, cold) ? Restrict.Combat : Restrict.Self;
