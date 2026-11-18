@@ -29,8 +29,8 @@ namespace Meitou.Game;
 /// The animations' ground effects in the water (docs/audio.md "Ground effect"): an ANIMATION_EVENT with <c>ground effect</c> set fires, at its time in
 /// the clip, the BIOMES record's <c>water effects</c> entry for the bone's depth and the character's speed at the water surface, as the original does.
 /// With the <c>contactfoam</c> switch a foot that lands in the water also splashes the wave field (a crown, rings and foam), and one in water too
-/// shallow to cover its ankle bone throws the shallow splash the game leaves out there. Display only. The dry ground's dust (the biome's
-/// <c>ground effects</c>) is not done.
+/// shallow to cover its ankle bone throws the shallow splash the game leaves out there. On dry ground it fires the biome's <c>ground effects</c>
+/// (the dust kicks, <see cref="Effects.DryGroundEffects"/>). A machine's ground events ride on the clip its operator works with. Display only.
 /// </summary>
 sealed partial class GameHost
 {
@@ -66,6 +66,17 @@ sealed partial class GameHost
     /// Whether each animation definition carries any event (ground or sound): only the heaviest such clip fires.
     /// </summary>
     bool[]? _definitionAnyEvents;
+
+    /// <summary>
+    /// Each BUILDING_FUNCTIONALITY's ground events (its <c>animation events</c>, the farms' <c>Impact Farm</c>), in time order, by string id; a
+    /// functionality without any is left out.
+    /// </summary>
+    Dictionary<string, GroundEvent[]> _workGround = [];
+
+    /// <summary>
+    /// A clip's ground events with a machine's put on it, by functionality and animation definition.
+    /// </summary>
+    readonly Dictionary<(string Functionality, int Definition), GroundEvent[]> _mergedGround = [];
 
     /// <summary>
     /// Each biome's water effects, by its 24-bit index.
@@ -114,9 +125,9 @@ sealed partial class GameHost
     sealed class Splasher
     {
         /// <summary>
-        /// Each clip's cursor and the splash frame it was last updated in.
+        /// Each clip's cursor, the splash frame it was last updated in and the events it walks (a machine's added change them).
         /// </summary>
-        public readonly List<(int Definition, AnimationEventCursor Cursor, int Frame)> Cursors = [];
+        public readonly List<(int Definition, AnimationEventCursor Cursor, int Frame, GroundEvent[] Events)> Cursors = [];
 
         /// <summary>
         /// The splash frame the character was last seen in.
@@ -142,10 +153,14 @@ sealed partial class GameHost
         }
 
         _splashFrame++;
+        DryGround.Advance();
         PrepareSplashFrustum();
         IndexPrevious();
         var eye = Camera.Eye;
-        float alpha = Session.SimulationAlpha, tick = Session.World.TickSeconds;
+
+        // The speed is the distance between the two snapshots over the time between them: a frame can follow more than one tick.
+        long ticks = Math.Max(Session.CurrentSnapshot.Tick - Session.PreviousSnapshot.Tick, 1);
+        float alpha = Session.SimulationAlpha, tick = Session.World.TickSeconds * ticks;
         foreach (var c in Session.CurrentSnapshot.Characters) SplashCharacter(particles, characters, library, c, eye, alpha, tick);
 
         if (_splashFrame % 256 == 0)
@@ -186,44 +201,83 @@ sealed partial class GameHost
         ref var s = ref CollectionsMarshal.GetValueRefOrAddDefault(_splashers, key, out _);
         s ??= new Splasher();
         s.Frame = _splashFrame;
-        int dominant = DominantEventClip(c);
+        int worked = WorkedDefinition(c);
+        int dominant = DominantEventClip(c, worked);
         for (int k = 0; k < c.Animations.Count; k++)
         {
             var layer = c.Animations[k];
-            if ((uint)layer.Definition >= (uint)_definitionGround!.Length || _definitionGround[layer.Definition] is not { } events) continue;
+            if (ClipGround(c, layer.Definition, worked) is not { } events) continue;
 
             int at = s.Cursors.FindIndex(x => x.Definition == layer.Definition);
             if (at < 0)
             {
-                s.Cursors.Add((layer.Definition, default, 0));
+                s.Cursors.Add((layer.Definition, default, 0, events));
                 at = s.Cursors.Count - 1;
             }
 
             var cursor = s.Cursors[at].Cursor;
+            if (!ReferenceEquals(s.Cursors[at].Events, events)) cursor.Rebase(events);
+
             float fraction = Math.Clamp(Audio.GameSound.ClipFraction(layer, library.Definitions[layer.Definition].Loop), 0, 1);
             cursor.Update(events, fraction, k == dominant, ev => GroundEffect(particles, characters, key, ev, position, speed));
-            s.Cursors[at] = (layer.Definition, cursor, _splashFrame);
+            s.Cursors[at] = (layer.Definition, cursor, _splashFrame, events);
         }
 
         s.Cursors.RemoveAll(x => x.Frame != _splashFrame);
     }
 
     /// <summary>
-    /// The index of the character's heaviest clip that carries events, or -1: only it fires them (FUN_1405b5c30), the same cursor as the sounds'
-    /// (FUN_140064690: one list, each event its own fire).
+    /// The index of the character's heaviest clip that carries events (the <paramref name="worked"/> clip does, with its machine's), or -1: only it
+    /// fires them (FUN_1405b5c30), the same cursor as the sounds' (FUN_140064690: one list, each event its own fire).
     /// </summary>
-    int DominantEventClip(CharacterSnapshot c)
+    int DominantEventClip(CharacterSnapshot c, int worked)
     {
         int dominant = -1;
         for (int k = 0; k < c.Animations.Count; k++)
         {
             int d = c.Animations[k].Definition;
-            if ((uint)d < (uint)_definitionAnyEvents!.Length && _definitionAnyEvents[d]
-                && (dominant < 0 || c.Animations[k].Weight > c.Animations[dominant].Weight))
-                dominant = k;
+            bool events = d == worked || (uint)d < (uint)_definitionAnyEvents!.Length && _definitionAnyEvents[d];
+            if (events && (dominant < 0 || c.Animations[k].Weight > c.Animations[dominant].Weight)) dominant = k;
         }
 
         return dominant;
+    }
+
+    /// <summary>
+    /// The definition of the clip a working character's machine adds its ground events to (<c>Task_OperateMachine</c>, <c>FUN_140065280</c>: the
+    /// snapshot's <see cref="WorkEvents"/>); -1 when it works no machine with any, or plays no such clip.
+    /// </summary>
+    int WorkedDefinition(CharacterSnapshot c) =>
+        c.WorkEvents is { } work && _workGround.ContainsKey(work.Functionality) ? CharacterAudio.LayerOf(c, work.Clip) : -1;
+
+    /// <summary>
+    /// The ground events a clip fires: its record's, with the machine's put on the <paramref name="worked"/> clip; null for none.
+    /// </summary>
+    GroundEvent[]? ClipGround(CharacterSnapshot c, int definition, int worked)
+    {
+        if ((uint)definition >= (uint)_definitionGround!.Length) return null;
+
+        var events = _definitionGround[definition];
+        if (definition != worked) return events;
+
+        string functionality = c.WorkEvents!.Value.Functionality;
+        if (_mergedGround.TryGetValue((functionality, definition), out var merged)) return merged;
+
+        var list = new List<GroundEvent>(events ?? []);
+        foreach (var ev in _workGround[functionality]) InsertGround(list, ev);
+        return _mergedGround[(functionality, definition)] = [.. list];
+    }
+
+    /// <summary>
+    /// A sorted insert that skips the same event at the same time (FUN_140064870).
+    /// </summary>
+    static void InsertGround(List<GroundEvent> list, GroundEvent ev)
+    {
+        if (list.Any(x => x.Record == ev.Record && x.Fraction == ev.Fraction)) return;
+
+        int at = 0;
+        for (; at < list.Count && list[at].Fraction <= ev.Fraction; at++) { }
+        list.Insert(at, ev);
     }
 
     /// <summary>
@@ -238,17 +292,21 @@ sealed partial class GameHost
         if (!float.IsFinite(point.X) || !float.IsFinite(point.Y) || !float.IsFinite(point.Z)) return;
         if (ev.Bone.Length > 0 && PuddleSplash(particles, point, speed)) return;
 
+        // Above the water the game's dry half (dust); with contactfoam a foot over wet ground takes the shallow splash instead.
+        float depth = WorldWater.Height - point.Y;
+        bool foam = WaterContact.Enabled && ev.Bone.Length > 0 && depth <= SplashDeepest && WetGroundUnder(point);
+        if (depth < 0 && !foam)
+        {
+            DryKick(particles, point, ev.Bone.Length > 0, position, speed);
+            return;
+        }
+
         var surface = point with { Y = WorldWater.Height };
         if (!InSplashFrustum(surface)) return;
 
-        float depth = WorldWater.Height - point.Y;
         string? fired = depth >= 0 ? WaterEffectAt(point, depth, speed) : null;
         if (fired is not null) particles.Burst(fired, surface, Quaternion.Identity, SplashEmitSeconds);
-        if (!WaterContact.Enabled || ev.Bone.Length == 0 || depth > SplashDeepest) return;
-
-        // Dry, or a floor above the water.
-        float ground = Gpu.Terrain.HeightAt(point.X, point.Z);
-        if (!float.IsFinite(ground) || ground > WorldWater.Height - WetGround || point.Y - ground > 4) return;
+        if (!foam) return;
 
         float strength = Math.Clamp(speed / 50, 0.5f, 1) * Math.Clamp(1 - depth / SplashDeepest, 0.3f, 1);
         Gpu.Water?.Ripples?.AddSplash(new Vector2(point.X, point.Z), strength);
@@ -256,6 +314,25 @@ sealed partial class GameHost
         // Water too shallow to reach the ankle bone: the game shows nothing; the biome's shallowest splash.
         if (fired is null && WaterEffectAt(point, 0, speed) is { } shallow)
             particles.Burst(shallow, surface, Quaternion.Identity, SplashEmitSeconds);
+    }
+
+    /// <summary>
+    /// The terrain under a foot lies under the water (by <see cref="WetGround"/>) within 4 units below it: not dry ground, nor a floor above the water.
+    /// </summary>
+    bool WetGroundUnder(Vector3 point)
+    {
+        float ground = Gpu.Terrain.HeightAt(point.X, point.Z);
+        return float.IsFinite(ground) && ground <= WorldWater.Height - WetGround && point.Y - ground <= 4;
+    }
+
+    /// <summary>
+    /// A ground event above the water: the biome's dust kick there (<see cref="Effects.DryGroundEffects.Pick"/>), only inside the widened frustum
+    /// (<c>FUN_140a08c00</c>).
+    /// </summary>
+    void DryKick(ParticleRenderer particles, Vector3 point, bool bone, Vector3 position, float speed)
+    {
+        if (DryGround.Pick(point, bone, position, speed) is { } kick && InSplashFrustum(kick.At))
+            DryGround.Fire(particles, kick.System, kick.At);
     }
 
     /// <summary>
@@ -348,6 +425,9 @@ sealed partial class GameHost
         (_definitionGround, _definitionAnyEvents) = (ground, any);
 
         var systems = LoadWaterEffects(db);
+        systems.UnionWith(DryGround.Load(db));
+        _workGround = LoadWorkGround(db);
+        _mergedGround.Clear();
         particles.PrepareBursts([.. systems]);
         int clips = ground.Count(g => g is not null);
         var described = _waterEffects!.Values
@@ -369,16 +449,32 @@ sealed partial class GameHost
         {
             if (db.Find(reference.TargetStringId) is not { Type: FcsRecordType.AnimationEvent } def || !def.GetBool("ground effect")) continue;
 
-            var ev = new GroundEvent(def.StringId, def.GetString("bone"), reference.Values.Value0 * 0.01f);
-            list ??= [];
-
-            // A sorted insert that skips the same event at the same time (FUN_140064870).
-            int at = 0;
-            for (; at < list.Count && list[at].Fraction <= ev.Fraction; at++) { }
-            if (!list.Any(x => x.Record == ev.Record && x.Fraction == ev.Fraction)) list.Insert(at, ev);
+            InsertGround(list ??= [], new GroundEvent(def.StringId, def.GetString("bone"), reference.Values.Value0 * 0.01f));
         }
 
         return list;
+    }
+
+    /// <summary>
+    /// Each BUILDING_FUNCTIONALITY's ground events: the ANIMATION_EVENTs with <c>ground effect</c> among its <c>animation events</c> (value x 0.01 the
+    /// time in the operator's clip), in time order; functionalities without any are left out.
+    /// </summary>
+    static Dictionary<string, GroundEvent[]> LoadWorkGround(GameDatabase db)
+    {
+        var work = new Dictionary<string, GroundEvent[]>(StringComparer.Ordinal);
+        foreach (var record in db.OfType(FcsRecordType.BuildingFunctionality))
+        {
+            var list = new List<GroundEvent>();
+            foreach (var reference in record.GetReferences("animation events"))
+            {
+                if (db.Find(reference.TargetStringId) is not { Type: FcsRecordType.AnimationEvent } def || !def.GetBool("ground effect")) continue;
+                InsertGround(list, new GroundEvent(def.StringId, def.GetString("bone"), reference.Values.Value0 * 0.01f));
+            }
+
+            if (list.Count > 0) work.TryAdd(record.StringId, [.. list]);
+        }
+
+        return work;
     }
 
     /// <summary>

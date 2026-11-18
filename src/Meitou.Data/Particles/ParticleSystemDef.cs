@@ -287,7 +287,7 @@ public sealed class PuEmitterDef
     /// </summary>
     public bool AutoDirection { get; init; }
     /// <summary>
-    /// <c>force_emission</c> as the script sets it; the simulation does not read it.
+    /// <c>force_emission</c> as the script sets it: the emitter throws its rate as one burst (<c>ParticleSimulation.Requested</c>).
     /// </summary>
     public bool ForceEmission { get; init; }
     /// <summary>

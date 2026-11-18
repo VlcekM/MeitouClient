@@ -144,6 +144,8 @@ c help                                # one usage line per command; `c help <nam
 | `task` | `task <text>` |
 | `vram` | `vram` (debug: device-local memory in use and the budget, MB) |
 | `terrain-height` | `terrain-height <x> <z> [radius step]` |
+| `ground-at` | `ground-at <x> <z>` (biome, overlay channel, GroundType, building floor and dust slot under a point; read-only) |
+| `dust-stats` | `dust-stats [reset \| on \| off]` (dry ground dust kicks: fired, refused by the full pool, pool use) |
 | `town` | `town <number\|name>` |
 | `towns` | `towns` |
 | `tp` | `tp <x> <z> \| tp <town name or number>` |

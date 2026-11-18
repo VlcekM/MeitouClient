@@ -164,6 +164,10 @@ public sealed class ParticleSimulation
         /// Seconds since the emitter started; its rate is read at this time.
         /// </summary>
         public float Age;
+        /// <summary>
+        /// A <c>force_emission</c> emitter has thrown its one burst.
+        /// </summary>
+        public bool Forced;
     }
 
     /// <summary>
@@ -384,11 +388,29 @@ public sealed class ParticleSimulation
             st.Age += dt;
             if (!Working(def, st, dt)) continue;
             float rate = def.Rate.Evaluate(st.Age, _random) * env.EmissionScale;
-            st.Accumulator += Math.Max(rate, 0) * dt;
-            int n = (int)st.Accumulator;
-            st.Accumulator -= n;
+            int n = Requested(def, st, Math.Max(rate, 0), dt);
             for (; n > 0 && t.Count < t.Capacity; n--) Spawn(t, e, def, env);
         }
+    }
+
+    /// <summary>
+    /// The particles an emitter asks for this step (the plugin's <c>ParticleEmitter::_calculateRequestedParticles</c>, <b>Verified</b>, decompile):
+    /// the rate times the step with the fraction carried over; a <c>force_emission</c> emitter throws the rate as a count once, at its first working
+    /// step, then nothing (docs/formats/particle-universe.md).
+    /// </summary>
+    static int Requested(PuEmitterDef def, EmitterState st, float rate, float dt)
+    {
+        if (def.ForceEmission)
+        {
+            int burst = st.Forced ? 0 : (int)rate;
+            st.Forced = true;
+            return burst;
+        }
+
+        st.Accumulator += rate * dt;
+        int n = (int)st.Accumulator;
+        st.Accumulator -= n;
+        return n;
     }
 
     /// <summary>

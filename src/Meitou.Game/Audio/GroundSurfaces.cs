@@ -110,34 +110,64 @@ public sealed class GroundSurfaces
     /// </summary>
     public (int Type, string? Texture) LayerAt(float x, float z)
     {
-        _biomeMap ??= Task.Run(() => TryLoad(() => FoliageBiomeMap.Open(_install)));
-        int tx = (int)MathF.Floor((x + WorldLayout.HalfWorldSize) / (FoliageOverlay.TilePixels * FoliageOverlay.PixelSize));
-        int tz = (int)MathF.Floor((z + WorldLayout.HalfWorldSize) / (FoliageOverlay.TilePixels * FoliageOverlay.PixelSize));
-        tx = Math.Clamp(tx, 0, TerrainMaps.OverlayTiles - 1);
-        tz = Math.Clamp(tz, 0, TerrainMaps.OverlayTiles - 1);
-        Tile tile;
-        lock (_gate)
-        {
-            if (!_tiles.TryGetValue((tx, tz), out tile!))
-            {
-                if (_tiles.Count >= MaxTiles) _tiles.Remove(_tiles.MinBy(t => t.Value.Used).Key);
-                _tiles[(tx, tz)] = tile = new Tile { Pixels = Task.Run(() => TryLoad(() => ReadTile(tx, tz))) };
-            }
-            tile.Used = ++_clock;
-        }
-        if (!tile.Pixels.IsCompleted || !_biomeMap.IsCompleted) return (-1, null);
+        int channel = ChannelAt(x, z);
+        if (channel < 0) return (-1, null);
+
         // A map that cannot be read leaves the original's answer for "no overlay": 2 (concrete)
         // (FUN_140a16e50 returns 2 when FUN_140a16c90 finds none).
-        if (tile.Pixels.Result is not { } pixels || _biomeMap.Result is not { } map) return (Concrete, null);
+        if (channel == NoMap) return (Concrete, null);
+
+        uint biome = _biomeMap!.Result!.At(x, z);
+        return _biomes.TryGetValue(biome, out var types) ? (types[channel], _textures[biome][channel]) : (Sand, null);
+    }
+
+    /// <summary>
+    /// <see cref="ChannelAt"/>'s answer when the overlay tile or the biome map cannot be read (the original then gives concrete and no ground
+    /// effect).
+    /// </summary>
+    public const int NoMap = 99;
+
+    /// <summary>
+    /// The overlay channel at a world point (<c>FUN_140a16c90</c>): 4 road (A above <see cref="Threshold"/>), 3 dirt (B), 2 grass (G, or R), else 0;
+    /// the index into a biome's five ground types and its ground-effect slots. -1 while the maps load, <see cref="NoMap"/> when one cannot be read.
+    /// </summary>
+    public int ChannelAt(float x, float z)
+    {
+        _biomeMap ??= Task.Run(() => TryLoad(() => FoliageBiomeMap.Open(_install)));
+        var tile = TileAt(x, z, out int tx, out int tz);
+        if (!tile.Pixels.IsCompleted || !_biomeMap.IsCompleted) return -1;
+        if (tile.Pixels.Result is not { } pixels || _biomeMap.Result is null) return NoMap;
 
         float x0 = tx * FoliageOverlay.TilePixels * FoliageOverlay.PixelSize - WorldLayout.HalfWorldSize;
         float z0 = tz * FoliageOverlay.TilePixels * FoliageOverlay.PixelSize - WorldLayout.HalfWorldSize;
         int i = Math.Clamp((int)((x - x0) / FoliageOverlay.PixelSize), 0, FoliageOverlay.TilePixels - 1);
         int j = Math.Clamp((int)((z - z0) / FoliageOverlay.PixelSize), 0, FoliageOverlay.TilePixels - 1);
         int o = (j * FoliageOverlay.TilePixels + i) * 4;
-        int channel = pixels[o + 3] > Threshold ? 4 : pixels[o + 2] > Threshold ? 3 : pixels[o + 1] > Threshold ? 2 : pixels[o] > Threshold ? 2 : 0;
-        uint biome = map.At(x, z);
-        return _biomes.TryGetValue(biome, out var types) ? (types[channel], _textures[biome][channel]) : (Sand, null);
+        return pixels[o + 3] > Threshold ? 4 : pixels[o + 2] > Threshold ? 3 : pixels[o + 1] > Threshold ? 2 : pixels[o] > Threshold ? 2 : 0;
+    }
+
+    /// <summary>
+    /// The overlay tile under a world point, loading on a worker from its first use (the least recently used one goes past
+    /// <see cref="MaxTiles"/>), with its column and row.
+    /// </summary>
+    Tile TileAt(float x, float z, out int tx, out int tz)
+    {
+        tx = (int)MathF.Floor((x + WorldLayout.HalfWorldSize) / (FoliageOverlay.TilePixels * FoliageOverlay.PixelSize));
+        tz = (int)MathF.Floor((z + WorldLayout.HalfWorldSize) / (FoliageOverlay.TilePixels * FoliageOverlay.PixelSize));
+        tx = Math.Clamp(tx, 0, TerrainMaps.OverlayTiles - 1);
+        tz = Math.Clamp(tz, 0, TerrainMaps.OverlayTiles - 1);
+        lock (_gate)
+        {
+            if (!_tiles.TryGetValue((tx, tz), out var tile))
+            {
+                if (_tiles.Count >= MaxTiles) _tiles.Remove(_tiles.MinBy(t => t.Value.Used).Key);
+                var (cx, cz) = (tx, tz);   // out parameters cannot be captured
+                _tiles[(tx, tz)] = tile = new Tile { Pixels = Task.Run(() => TryLoad(() => ReadTile(cx, cz))) };
+            }
+
+            tile.Used = ++_clock;
+            return tile;
+        }
     }
 
     /// <summary>

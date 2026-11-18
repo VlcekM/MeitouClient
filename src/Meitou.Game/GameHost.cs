@@ -178,6 +178,10 @@ sealed partial class GameHost(
     /// The corpse flies.
     /// </summary>
     internal CorpseFlies CorpseFlies = null!;
+    /// <summary>
+    /// The animations' dust kicks on dry ground.
+    /// </summary>
+    internal DryGroundEffects DryGround = null!;
 
     /// <summary>
     /// The character editor's host side.
@@ -261,6 +265,7 @@ sealed partial class GameHost(
         Debris = new(this);
         Decapitation = new(this);
         CorpseFlies = new(this);
+        DryGround = new(this);
 
         CharacterEditor = new(this);
         LevelEditorHost = new(this);
