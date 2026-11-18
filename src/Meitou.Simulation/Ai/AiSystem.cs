@@ -1141,9 +1141,18 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
+    /// The running contract's mission town (the override's +0x8 hand): a retreat's or a shipping's own (<see cref="Blackboard.MissionTown"/>, set by
+    /// its start), else the contract classes' (<see cref="Blackboard.ContractTown"/>, none without one).
+    /// </summary>
+    static CampaignTown ContractMissionTown(Blackboard board) =>
+        board.MissionTown >= 0 ? CampaignTown.OfSite(board.MissionTown) : board.ContractTown;
+
+    /// <summary>
     /// The area order of 36 Patrolling town (<c>Task_PatrolTown</c> through <c>FUN_1405c6b30</c>, docs/game/ai-tasks.md "Town goals",
-    /// <b>Verified</b>): the squad's town hand (<c>FUN_140269cd0</c>: a running contract's mission town, <see cref="Blackboard.ContractTown"/>, even
-    /// none; else its mission town, else its home town) at a scatter of half the town's radius,
+    /// <b>Verified</b>): the squad's town hand (<c>FUN_140269cd0</c>: a running contract's mission town, even none: the contract classes'
+    /// <see cref="Blackboard.ContractTown"/>, a retreat's or a shipping's <see cref="Blackboard.MissionTown"/> when a campaign gives it as its phase
+    /// package, so a retreating raider patrols its home town and walks there; else its mission town, else its home town) at a scatter of half the
+    /// town's radius,
     /// at least 500; a nest squad's town is its nest (the original's <c>Nest</c> is a town: #771, Meitou had its members random-walk kilometres
     /// away); with none, the character's own position at 1250. The centre's height is the town's (a nest's, which Meitou keeps flat, the
     /// character's).
@@ -1151,7 +1160,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     (Vector3 Centre, float Scatter) PatrolArea(World world, Squad? squad, Blackboard board, Vector3 from)
     {
         var town = board.Contract is not null
-            ? board.ContractTown
+            ? ContractMissionTown(board)
             : board.Destination.IsNone
                 ? board.HomeTown
                 : board.Destination;
