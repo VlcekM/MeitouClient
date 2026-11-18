@@ -192,7 +192,7 @@ public static class ModList
     {
         var text = new StringBuilder();
         foreach (var line in lines) text.Append(line).Append("\r\n");
-        File.WriteAllText(path, text.ToString(), GameNameEncoding.Encoding);
+        AtomicFile.WriteAllText(path, text.ToString(), GameNameEncoding.Encoding);
     }
 
     /// <summary>

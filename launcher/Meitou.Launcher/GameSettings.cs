@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Meitou.Content;
 
 namespace Meitou.Launcher;
 
@@ -159,10 +160,17 @@ sealed class GameSettings
         _root["version"] ??= version;
         Directory.CreateDirectory(LauncherConfig.DataDirectory);
 
-        // The tree writes itself (no type resolver), so this works trimmed.
-        using var file = File.Create(FilePath);
+        AtomicFile.Write(FilePath, WriteTree);
+        return true;
+    }
+
+    /// <summary>
+    /// Writes the tree to <paramref name="path"/>. It writes itself (no type resolver), so this works trimmed.
+    /// </summary>
+    void WriteTree(string path)
+    {
+        using var file = File.Create(path);
         using var writer = new Utf8JsonWriter(file, new JsonWriterOptions { Indented = true });
         _root.WriteTo(writer);
-        return true;
     }
 }

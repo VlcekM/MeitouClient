@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
+using Meitou.Content;
 
 namespace Meitou.Settings;
 
@@ -149,7 +150,7 @@ public static class LookPresetFile
     {
         Directory.CreateDirectory(folder);
         string file = Path.Combine(folder, FileName(look.Name));
-        File.WriteAllText(file, Write(look));
+        AtomicFile.WriteAllText(file, Write(look));
         return file;
     }
 }
