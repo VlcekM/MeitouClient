@@ -917,7 +917,7 @@ campaign is not hostile, or that is not active (slot 70); a redirected request d
   (+0x210) the old one is torn down (dialogue event 30 on the leader) and the new one built by its `signal func` (0 → 33 Contract_Timed),
   timed for 24 h and run ahead of the template's packages until its finished test passes (WarBase: the platoon is out of the campaign). Of the finished
   tests, the contract classes' read the 24 h (+0x218) (`Contract_Timed` `FUN_140286e10`, `Contract_DefendPlayerBase` `FUN_140289720`,
-  `Campaign_DefendPlayerBase` `FUN_14028a760`); no war or retreat class reads it, so once the campaign no longer gives the package (removed, or the
+  `Campaign_DefendPlayerBase` `FUN_14028a760`); no war or retreat class's finished test reads it, so once the campaign no longer gives the package (removed, or the
   platoon unmapped) the override stays until its own test passes and a retreat outlives the campaign (**Verified**, `FUN_140272570` and each war,
   retreat and defence class's finished test; the Faction tab's "Expires in" reads the same time). Retreat and refresh
   (5) is finished once the platoon is intact (`FUN_1402871e0`, **Verified**), so an intact platoon in phase 2 has it installed and ended in the same

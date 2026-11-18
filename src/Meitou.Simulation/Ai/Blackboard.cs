@@ -99,8 +99,8 @@ public enum PackageClass : byte
     /// </summary>
     WarAssaultCannibal = 18,
     /// <summary>
-    /// <c>Campaign_DefendPlayerBase</c> (31, an ally's defence of the player's town): <c>Contract_DefendPlayerBase</c> (15) but for its finished test,
-    /// which after the contract hours waits while a hostile campaign runs (docs/game/ai.md "Package classes", Verified by code).
+    /// <c>Campaign_DefendPlayerBase</c> (31, an ally's defence of the player's town): <c>Contract_DefendPlayerBase</c> (15) but for its finished
+    /// test, which after the contract hours waits while a hostile campaign runs (docs/game/ai.md "Package classes", Verified by code).
     /// </summary>
     CampaignDefend = 19,
 }
@@ -740,7 +740,9 @@ public sealed class Blackboard
     /// save named none, or a character that is not in the world) for <paramref name="employer"/> (none: the target). As the original's load
     /// (<c>FUN_140272c20</c>), the package starts first, then the saved state replaces what the start set: the blackboard's target town
     /// <paramref name="targetTown"/> (<see cref="Destination"/>) when the save names one, and the package's mission town <paramref name="town"/>
-    /// (<see cref="ContractTown"/>; none when the save names none). <paramref name="phase"/>: see <see cref="PhaseContract"/>.
+    /// (<see cref="ContractTown"/>; none when the save names none; for a class whose start set its own <see cref="MissionTown"/>, a retreat or a
+    /// shipping, the saved town replaces that when it names a placed town, and an unnamed one keeps what the start chose).
+    /// <paramref name="phase"/>: see <see cref="PhaseContract"/>.
     /// </summary>
     public void ResumeContract(AiPackage package, double end, IPackageRules? rules = null, CharacterId? target = null, bool anyRange = false,
         CharacterId? employer = null, CampaignTown? town = null, CampaignTown? targetTown = null, bool phase = false)
@@ -753,7 +755,10 @@ public sealed class Blackboard
         MissionAnyRange = anyRange && !MissionTarget.IsNone;
         Start(package, -1, rules);
         if (targetTown is { IsNone: false } saved) Destination = saved;
-        if (town is { } mission) ContractTown = mission;
+        if (town is not { } mission) return;
+
+        if (MissionTown < 0) ContractTown = mission;
+        else if (mission.Site >= 0) (MissionTown, Destination) = (mission.Site, targetTown is { IsNone: false } kept ? kept : mission);
     }
 
     /// <summary>
@@ -774,6 +779,13 @@ public sealed class Blackboard
     /// squad's town for its town goals (<c>FUN_140269cd0</c>). None without one. Saved with the contract (<see cref="Saving.AiSave"/>); not hashed.
     /// </summary>
     public Population.CampaignTown ContractTown { get; set; } = Population.CampaignTown.None;
+
+    /// <summary>
+    /// The running contract's mission town (the override's own +0x8 hand, which the original saves as <c>mission town</c>): a retreat's or a
+    /// shipping's (<see cref="MissionTown"/>, set by its start), else the contract classes' (<see cref="ContractTown"/>, none without one).
+    /// </summary>
+    public Population.CampaignTown ContractMissionTown =>
+        MissionTown >= 0 ? Population.CampaignTown.OfSite(MissionTown) : ContractTown;
 
     /// <summary>
     /// Whom the running contract works for (the package's <c>mission employer</c>, <c>FUN_140285ba0</c> writes the dialogue target into it and the

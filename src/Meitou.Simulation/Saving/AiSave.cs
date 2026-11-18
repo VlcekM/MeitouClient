@@ -104,6 +104,15 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
     public bool Phase { get; init; }
 
     /// <summary>
+    /// Whether a contract of package signal <paramref name="signal"/> is loaded as a campaign's phase package even without
+    /// <see cref="PhaseKey"/>: the classes only a campaign runs as an override in the base data (the retreats 1 and 25, the war classes 19, 20 and 32,
+    /// the defence 31; no dialogue <c>AI contract</c> names one, by record dump), so a save the original wrote while such a retreat outlived its
+    /// campaign keeps it until its own test passes, as the original does (every override there ends by its class's test). A contract of one of
+    /// these signals that a code mod started is then judged by its class after a load (engine choice).
+    /// </summary>
+    static bool CampaignOnly(int signal) => signal is 1 or 25 or 19 or 20 or 32 or 31;
+
+    /// <summary>
     /// What <paramref name="board"/> holds of it; null when it runs neither.
     /// </summary>
     public static AiSave? Of(Blackboard? board)
@@ -115,7 +124,7 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
         {
             Target = b.MissionTarget,
             Employer = b.MissionEmployer,
-            MissionTown = contract ? b.ContractTown : CampaignTown.None,
+            MissionTown = contract ? b.ContractMissionTown : CampaignTown.None,
             TargetTown = contract ? b.Destination : CampaignTown.None,
             TargetIsTown = b.Contract?.Signal is AiSystem.DefendBaseSignal or AiSystem.CampaignDefendSignal,
             AnyRange = b.MissionAnyRange,
@@ -218,6 +227,6 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
         var employer = Employer.IsNone ? characterOf?.Invoke(EmployerHand) ?? CharacterId.None : Employer;
         var town = MissionTown.IsNone ? townOf?.Invoke(MissionTownHand) ?? CampaignTown.None : MissionTown;
         var targetTown = TargetTown.IsNone ? townOf?.Invoke(TargetTownHand) ?? CampaignTown.None : TargetTown;
-        board.ResumeContract(contract, ContractEnd, rules, target, AnyRange, employer, town, targetTown, Phase);
+        board.ResumeContract(contract, ContractEnd, rules, target, AnyRange, employer, town, targetTown, Phase || CampaignOnly(contract.Signal));
     }
 }

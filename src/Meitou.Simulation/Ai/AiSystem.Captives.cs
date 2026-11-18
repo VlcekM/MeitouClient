@@ -47,14 +47,18 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// Whether the squad leader's current town (its status town, the original's status <c>+0x88</c>, <see cref="CharacterCold.StatusTown"/>, as
-    /// its next update writes it: <see cref="StatusTownAt"/>) is a town of the squad's faction; false with no leader or no town. The test of
-    /// <c>CannibalRetreatFromRaid</c>'s start and finish, and the town the retreat's own Go Home Town goal reads, so the two agree at a town's edge.
+    /// Whether the squad's effective leader's current town (its status town, the original's status <c>+0x88</c>,
+    /// <see cref="CharacterCold.StatusTown"/>, as its next update writes it: <see cref="StatusTownAt"/>) is a town of the squad's faction; false
+    /// with no leader or no town. The leader is the one the original's platoon getter <c>FUN_14079aea0</c> gives a loaded platoon,
+    /// <c>getSquadLeader</c> <c>FUN_140792b90</c> (<see cref="PopulationSystem.EffectiveLeader"/>: the leader while it stands, else a member that
+    /// does; the stored leader without a population). The test of <c>CannibalRetreatFromRaid</c>'s start and finish, and the town the retreat's own
+    /// Go Home Town goal reads, so the two agree at a town's edge.
     /// </summary>
     bool LeaderInOwnTown(World world, Squad squad)
     {
         var table = world.Characters;
-        if (squad.Faction < 0 || !table.TryResolveNext(squad.Leader, out int s) || table.Cold(s) is not { } leader) return false;
+        var lead = world.SystemOf<PopulationSystem>()?.EffectiveLeader(world, squad) ?? squad.Leader;
+        if (squad.Faction < 0 || !table.TryResolveNext(lead, out int s) || table.Cold(s) is not { } leader) return false;
 
         var town = StatusTownAt(data, world, table.Next[s].Position, leader.StatusTown);
         return !town.IsNone && town.Owner(world, data) == squad.Faction;
@@ -116,9 +120,9 @@ public sealed partial class AiSystem
     /// </summary>
     internal bool CaptiveCanStart(World world, Squad squad, Blackboard board, AiPackage package, PackageClass kind) => kind switch
     {
-        // CannibalRetreatFromRaid slot 12 (FUN_140288630): not while the leader is in a town of its faction (status +0x88); then when a member
-        // carries someone.
-        PackageClass.CannibalRetreat => world.Characters.IsAlive(squad.Leader) && !LeaderInOwnTown(world, squad) && AnyCarrying(world, squad),
+        // CannibalRetreatFromRaid slot 12 (FUN_140288630, Verified): not while the effective leader is in a town of its faction (status +0x88);
+        // then when a member carries someone. No test of the leader's life.
+        PackageClass.CannibalRetreat => !LeaderInOwnTown(world, squad) && AnyCarrying(world, squad),
 
         // Package_CannibalsAtHome slot 12 (FUN_140291ef0): in its home town, or in a town of a faction not hostile to it that has a bar (town vfunc
         // 0x2d0 with BD_BAR).
@@ -139,10 +143,10 @@ public sealed partial class AiSystem
     /// </summary>
     internal bool CaptiveFinished(World world, Squad squad, Blackboard board, AiPackage package, PackageClass kind) => kind switch
     {
-        // Slot 13 (FUN_140288740, Verified by disassembly): the squad leader's current town is of the platoon's faction; no distance, home or time
-        // test, and false without a town (its scan of the members for a carrier cannot change that). Engine choice: a squad whose members are all
-        // dead (the only one Meitou leaves led by a corpse, SquadRegistry.Refresh) finishes it.
-        PackageClass.CannibalRetreat => LeaderInOwnTown(world, squad) || !world.Characters.IsAlive(squad.Leader),
+        // Slot 13 (FUN_140288740, Verified by disassembly): the effective leader's current town is of the platoon's faction; no distance, home,
+        // time or life test, and false without a leader or a town (its scan of the members for a carrier cannot change that). So a wiped raid
+        // keeps its retreat, as the original does.
+        PackageClass.CannibalRetreat => LeaderInOwnTown(world, squad),
         PackageClass.CannibalsAtHome => !CaptiveCanStart(world, squad, board, package, kind),
 
         // Slot 13 (FUN_140288a00): more slaves than 3 x the squad's members, or nothing left to gather.
