@@ -321,7 +321,7 @@ static class HudTips
         if (p.Constants is { } constants)
         {
             float carryStrength = p.Eff(StatsEnumerated.Strength, StatUse.Hunger | StatUse.Limbs | StatUse.DamageState | StatUse.LimbItems);
-            int carryWeight = (int)(carryStrength + constants.EncumbranceBase);
+            int carryWeight = (int)CarryModified(carryStrength + constants.EncumbranceBase, p.Stats);
             strengthTip.Add((Loc.Tr("Max carry weight:"), Loc.Tr("{1,num}%", carryWeight)));
         }
         if (p.Hc is { } c) strengthTip.Add((Loc.Tr("Blunt weapon damage:"), Int(c.Blunt)));
@@ -417,6 +417,13 @@ static class HudTips
     static float Lerp(float t, float a, float b) => (b - a) * t + a;
 
     /// <summary>
+    /// A "Max carry weight" readout's capacity with the character's code mod carry modifiers (<see cref="CarryModifiers.Apply"/>), as
+    /// <see cref="Encumbrance.WindowCapacity"/> applies them.
+    /// </summary>
+    static float CarryModified(float capacity, CharacterStats? stats) =>
+        stats?.CarryModifiersOrNull is { } modifiers ? modifiers.Apply(capacity) : capacity;
+
+    /// <summary>
     /// The Strength and Toughness readouts of <see cref="StatsWindow"/>.
     /// </summary>
     static Dictionary<StatsEnumerated, IReadOnlyList<StatReadout>> AttributeReadouts(
@@ -428,7 +435,7 @@ static class HudTips
         {
             float strengthTotal = stats[StatsEnumerated.Strength] * stats.Scale
                 * med.StatMultiplier(StatsEnumerated.Strength, StatUse.Hunger | StatUse.Limbs | StatUse.DamageState | StatUse.LimbItems, factors);
-            int carryKg = (int)(strengthTotal + constants.EncumbranceBase);
+            int carryKg = (int)CarryModified(strengthTotal + constants.EncumbranceBase, stats);
             strength.Add(new("Max carry weight:", Loc.Tr("{1,num} kg", carryKg)));
         }
         if (cold.Extended is { } x) strength.Add(new("Strength XP rate (walking):", Loc.Tr("{1,num}%", (int)(x.StrengthXp * 100))));

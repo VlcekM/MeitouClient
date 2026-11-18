@@ -520,6 +520,17 @@ holds refuses the second mod.
   saved. It enters the state hash once one is set, and is not persisted: keep it in the mod's `IModSaveData` and set it again after a load.
   Medic, HiveMedic and Vet share one storage. Change it from the mod's system outside the parallel phases. The body's look reads the stored value;
   a new body (a race change at character creation) starts without modifiers. **Verified** by `StatsTests` (reads, save, gain, hash).
+- **Carry capacity:** `cold.Stats.CarryModifiers.Set(key, term, amount)` / `Remove(key, term)` / `RemoveAll(key)` (`CarryModifiers`,
+  `src/Meitou.Simulation/Bodies`) change a character's carrying capacity under the mod's own key, for race traits and gear (a frame pack's +20 kg)
+  without touching strength, which also drives damage, blood and training. `CarryTerm.Scale` amounts add a fraction of the game's capacity
+  (0.25: a quarter more), `CarryTerm.Kilograms` amounts add kilograms; the capacity becomes the game's own times (1 + the scales) plus the
+  kilograms, never below 0. The game's own is `carry weight mult` x strength x its injury multiplier + `encumbrance base`
+  ([stats](game/character-stats.md), "Encumbrance and carrying"), so the modifiers act after strength and its injuries. Every reader takes them: the
+  encumbrance factor (run speed, hunger, the strength and athletics training it drives, combat), the inventory window's maximum and burden
+  word, and the "Max carry weight" lines of the HUD and the stats window. Several mods each keep their own keys; amounts add up. It enters the
+  state hash once one is set, and is not saved: keep it in the mod's `IModSaveData` (or work it out again from worn gear) and set it again
+  after a load, for example in `IWorldReady`. Change it from the mod's system outside the parallel phases. A new body starts without
+  modifiers. Engine API, not in the original.
 - **Status effects:** `AddStatusEffect(new StatusEffect(id, name) { Description, Tone, Stacking, MaxStacks, Modifiers })` (`StatusEffects`,
   `src/Meitou.Simulation/Bodies`) adds a named effect (a poison, a drug, a blessing) the mod's systems put on a character with `effect.Apply(world,
   character, hours, stacks)` (positive infinity: until removed) and take off with `Remove(world, character)`; `On(world, character)` or `On(stats)`

@@ -51,6 +51,11 @@ public sealed class CharacterStats
     CharacterId _xpOwner = CharacterId.None;
 
     /// <summary>
+    /// The code mods' carrying capacity modifiers, made on first use (<see cref="CarryModifiers"/>).
+    /// </summary>
+    CarryModifiers? _carryModifiers;
+
+    /// <summary>
     /// What this character's XP gains are multiplied by (Advanced settings "Squad XP" and "Others' XP", <see cref="BodyOptions.SquadXp"/>; Meitou
     /// only, the game has 1). <see cref="BodySystem"/> sets it on every body step from the character's side; not saved.
     /// </summary>
@@ -111,6 +116,16 @@ public sealed class CharacterStats
     /// The status effects, made on first use.
     /// </summary>
     internal ActiveStatusEffects Effects => _effects ??= new();
+
+    /// <summary>
+    /// The code mods' amounts on this character's carrying capacity (docs/modding.md "Carry capacity"), made on first use.
+    /// </summary>
+    public CarryModifiers CarryModifiers => _carryModifiers ??= new();
+
+    /// <summary>
+    /// The carrying capacity modifiers if any were ever made (the capacity's readers and the state hash).
+    /// </summary>
+    internal CarryModifiers? CarryModifiersOrNull => _carryModifiers;
 
     /// <summary>
     /// A storage's value with its modifiers.

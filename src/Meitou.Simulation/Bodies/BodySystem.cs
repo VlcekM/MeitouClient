@@ -293,12 +293,13 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         medical.Light = world.Sight.Light(i);
 
         // The load: inventory weight without a living owner's death items, plus carry person weight, against the strength the injuries leave
-        // (character-stats.md "Encumbrance and carrying").
+        // (character-stats.md "Encumbrance and carrying"), with code mods' carry modifiers.
         float load = cold.Inventory?.ContentWeight(world.Player.Held, skipDeath: !medical.Dead) ?? 0;
         bool carrying = !cold.Carrying.IsNone;
+        var carry = stats.CarryModifiersOrNull;
         float encumbrance = load <= 0 && !carrying
             ? 1
-            : Encumbrance.Factor(Constants, load, carrying, stats.Strength, medical.StatMultiplier(StatsEnumerated.Strength));
+            : Encumbrance.Factor(Constants, load, carrying, stats.Strength, medical.StatMultiplier(StatsEnumerated.Strength), carry);
         var ctx = ContextOf(world, i, cold, medical, race, stats, in n, encumbrance);
         cold.MedicalBudgetSeconds = 0;
 
