@@ -646,7 +646,7 @@ A race's body is its `combat anatomy` list, read whole (`RaceData.From`), so a d
 
 - Any number of parts, of the nine base records or its own LOCATIONAL_DAMAGE records, each with its hit weight and base HP; the parts are hit,
   armoured (by `part coverage`, which names parts by record), healed and saved one by one (`sid<k>`, [save](../formats/save.md)). The medical panel
-  shows every part ([ui-screens](ui-screens.md)); blood shows on the body for the first eight parts only ([blood-decals](blood-decals.md)).
+  shows every part, scrolling when they outnumber its bars ([ui-screens](ui-screens.md)); blood shows on the body for the first eight parts only ([blood-decals](blood-decals.md)).
 - Fewer parts work as the No-Head MkII skeleton's six do: with no arm part the stat multipliers' arm term is 1, with no torso part the torso term,
   with no head the head term (`MedicalState.ComputeAggregates`).
 - Animals list their own anatomy: 15 of the 53 base races, all animals, list Left and Right Foreleg (ARM parts) in place of arms; other animals

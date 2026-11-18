@@ -3,10 +3,10 @@ using Meitou.Data.Ui;
 namespace Meitou.Game.Ui;
 
 /// <summary>
-/// The medical panel's rows past the layout's nine (docs/modding.md "Medical meters", a race of more body parts): <c>Kenshi_MainPanel.layout</c>
-/// has <c>LifeBar1</c> to <c>LifeBar9</c> only (docs/game/ui-screens.md), which a human's Blood, seven parts and Hunger fill. More bars are copies
-/// of the ninth row's three widgets (the bar in <c>MedicalPanel_Back</c>, its <c>Value</c> and <c>Tooltip</c> in <c>MedicalPanel_Front</c>), and
-/// more than nine rows share the nine rows' height.
+/// The medical panel's rows past the layout's nine (docs/modding.md "Medical meters"): <c>Kenshi_MainPanel.layout</c> has <c>LifeBar1</c> to
+/// <c>LifeBar9</c> only (docs/game/ui-screens.md), which a human's Blood, seven parts and Hunger fill. More bars are copies of the ninth row's three
+/// widgets (the bar in <c>MedicalPanel_Back</c>, its <c>Value</c> and <c>Tooltip</c> in <c>MedicalPanel_Front</c>), and more than nine rows share the
+/// nine rows' height.
 /// </summary>
 static class MedicalPanelRows
 {
