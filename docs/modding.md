@@ -428,11 +428,28 @@ holds refuses the second mod.
   with its whole level, and a click shows the description pane with the mod's lines and the next-level bar. The mod's systems read
   `skill.Level(stats)` (`Start`, default 1, until set), `Set` it, or `Gain(stats, amount)` on the game's curve (`CharacterStats.CoreGain`, no
   race multiplier) in the tick: a character's own in its partition of a parallel phase, another's only outside the parallel phases; the
-  game's own actions never train it. Levels live in
+  game's own actions train it only through a weapon that names it (Weapon types, below). Once added it has a stat number
+  (`skill.Stat`, `ModSkills.FirstStat` 1000 up in registration order, so it follows the load order: keep the id, never the number), under which
+  `CharacterStats`' indexer, `Stored` and `Gain` read, set and train it; stat modifiers do not apply to it. Levels live in
   `CharacterStats.ModSkills`, enter the state hash once one is set, and are saved in the character's STATS record
   ([save](formats/save.md#compatibility-exceptions)). A column holds 18 lines; past its 14 the rows share its height (room for 11, 8, 10 and 5
   mod skills). A bad id (1 to 48 letters, digits, `_`, `.`, `-`), an id another skill has (case-insensitive), a label over 32 characters or a
   full column refuses the mod. Not shown in the HUD's stat lines.
+- **Weapon types:** data alone already makes a new weapon that borrows a class's behaviour: WEAPON `skill category` picks the skill it trains and uses and its attacks, blocks and dodges, and `skill category animation
+  override` the class whose stance, guard and idle clips it plays (a rapier training Sabres and standing like a katana; nine base weapons do this);
+  `length` sets its reach (a technique strikes from `attack distance` + half the length), `cut`, `blunt` and `pierce damage multiplier` its
+  damage split, beside its bleed, armour penetration, indoors, weight and kind and race multipliers; new COMBAT_TECHNIQUE records with a class's
+  flags give that class new attacks, their clips found by name in the ANIMATION_FILEs races link ([animation](animation.md#animation-files));
+  a RACE's `fists lv1` names the WEAPON its fists are (still Martial Arts); and a firearm is a CROSSBOW record with its own meshes, `ammo`
+  item, `reload anim`, `num shots` and pierce damage (it trains Crossbows and is named a crossbow). A weapon of its own skill takes a code mod:
+  WEAPON `meitou skill` (Meitou only) names a skill added with `AddSkill` by its id, and the weapon then uses and trains that skill wherever a
+  weapon uses its category's: the blow's damage, the techniques' `min skill` and `max skill`, executions and door bashing, the HUD's Current
+  Skill line (the skill's label) and damage figure, and the experience of hits, glancing hits and blocks (the race's weapons entry as for any
+  weapon skill), with no injury multiplier, as the game's weapon skills in those reads; the item tooltip's class line is the label and
+  "class". Its attacks, stance and two-arm rule still follow its `skill category` and override, and attack and defence are Melee Attack and
+  Melee Defence as for any weapon. A character's level starts at the skill's `Start` until the mod sets it, NPCs' too. A name no running mod
+  added (the mod removed) leaves the category's skill, as the original game, which loads the field as any other, does. To enter the field in
+  the construction set, add the line `meitou skill: "" "A code mod's skill this weapon uses"` under `[WEAPON]` in the install's `fcs.def`.
 - **Bone anchors:** `CharacterCold.DrawAnchor = new DrawAnchor(carrier, bone, offset, rotation)` draws a character on another's named bone
   as the renderer poses the carrier in the drawn frame (a rider on a mount; the rule and its limits:
   [character-renderer](character-renderer.md#bone-anchors-meitou-engine-choice)); null removes it. Set it in the tick from the mod's own

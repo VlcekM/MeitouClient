@@ -134,6 +134,17 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
+    /// The code mod's skill the melee weapon in hand uses (<see cref="WeaponInstance.Skill"/>, WEAPON <c>meitou skill</c>); null with nothing drawn,
+    /// a crossbow drawn or a weapon of a stock skill.
+    /// </summary>
+    internal static ModSkill? HandModSkill(CharacterCold cold)
+    {
+        if (cold.DrawnWeapon == WeaponKinds.None || cold.DrawnWeapon == BowKind) return null;
+
+        return cold.Fighter?.Weapon is { } weapon ? ModSkills.Of(weapon.Skill) : null;
+    }
+
+    /// <summary>
     /// The weight <c>calculateWeaponWeightXPMult</c> (<c>FUN_1408838e0</c>) is given: the drawn weapon's item weight (<c>CharStats::setWeapon</c>,
     /// Item slot 74, <c>+0x120</c>), for a crossbow its <c>weight kg</c> x <c>weapon inventory weight mult</c>.
     /// </summary>

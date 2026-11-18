@@ -1,6 +1,7 @@
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Gameplay.Combat;
+using Meitou.Simulation.Bodies;
 
 namespace Meitou.Simulation.Combat;
 
@@ -58,9 +59,10 @@ public sealed class WeaponInstance(WeaponData data, WeaponStats stats)
 
     /// <summary>
     /// The skill the weapon's category uses (<c>FUN_140897f30</c>, <b>Observed</b>): katanas, sabres, hackers, heavy weapons, blunt, polearms;
-    /// martial arts for fists and creature attacks.
+    /// martial arts for fists and creature attacks. A weapon whose <see cref="WeaponData.ModSkill"/> names a code mod's skill uses that skill's
+    /// number (<see cref="ModSkill.Stat"/>) instead; one naming no added skill keeps its category's.
     /// </summary>
-    public StatsEnumerated Skill { get; } = SkillOf(data.SkillCategory);
+    public StatsEnumerated Skill { get; } = SkillOf(data);
 
     /// <summary>
     /// The weapon kind the animations and techniques are matched with.
@@ -78,6 +80,12 @@ public sealed class WeaponInstance(WeaponData data, WeaponStats stats)
     public static WeaponInstance Create(float quality, WeaponData data, WeaponManufacturer? manufacturer, WeaponMaterial? material,
         CombatConstants constants) =>
         new(data, WeaponStats.Compute(quality, data, manufacturer ?? WeaponManufacturer.Neutral, material ?? WeaponMaterial.None, constants));
+
+    /// <summary>
+    /// The skill a weapon record uses: the code mod's skill it names (<see cref="WeaponData.ModSkill"/>) once a mod added it, else its category's.
+    /// </summary>
+    public static StatsEnumerated SkillOf(WeaponData data) =>
+        data.ModSkill is { } id && ModSkills.Find(id) is { } skill ? skill.Stat : SkillOf(data.SkillCategory);
 
     /// <summary>
     /// The skill of weapon category <paramref name="category"/> (martial arts for any other).

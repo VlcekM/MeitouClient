@@ -1312,13 +1312,20 @@ sealed class TooltipRuntime(PlayerInterface player)
     }
 
     /// <summary>
+    /// The class line of a weapon naming a code mod's skill (WEAPON <c>meitou skill</c>, Meitou only): the skill's label as the mod gave it; null for
+    /// any other weapon, which takes its category's line.
+    /// </summary>
+    static string? ModSkillClass(WeaponData weapon) =>
+        weapon.ModSkill is { } id && Simulation.Bodies.ModSkills.Find(id) is { } skill ? skill.Label + " class" : null;
+
+    /// <summary>
     /// A weapon's class, damage, multipliers, bonuses and weight (<see cref="WeaponStats"/>).
     /// </summary>
     void AddWeaponRows(List<TooltipLine> lines, ItemTip t, WeaponData weapon, CombatDatabase combat)
     {
         var maker = combat.Manufacturer(t.Company) ?? WeaponManufacturer.Neutral;
         var stats = WeaponStats.Compute(t.Level * 0.01f, weapon, maker, combat.WeaponMaterial(t.Material) ?? WeaponMaterial.None, combat.Constants);
-        string? className = weapon.SkillCategory switch
+        string? className = ModSkillClass(weapon) ?? weapon.SkillCategory switch
         {
             (int)WeaponCategory.Katanas => "Katana class",
             (int)WeaponCategory.Sabres => "Sabre class",

@@ -73,18 +73,28 @@ public sealed class CharacterStats
     /// <summary>
     /// The value of a stat: the stored value plus the <see cref="Modifiers"/> (0 for a number without storage); <see cref="StatsEnumerated.HiveMedic"/>
     /// and <see cref="StatsEnumerated.Vet"/> read <see cref="StatsEnumerated.Medic"/>. Setting writes the stored value; a number without storage does
-    /// nothing. Code that trains or keeps a stat reads <see cref="Stored"/>, so a modifier is never baked in.
+    /// nothing. Code that trains or keeps a stat reads <see cref="Stored"/>, so a modifier is never baked in. A code mod's skill's number
+    /// (<see cref="ModSkill.Stat"/>) reads and writes its level (no modifiers), so a weapon that names the skill uses it as any weapon skill.
     /// </summary>
     public float this[StatsEnumerated stat]
     {
-        get => StatsInfo.StorageOf(stat) is var s && s != StatsEnumerated.None ? Value(s) : 0;
-        set { if (StatsInfo.StorageOf(stat) is var s && s != StatsEnumerated.None) _values[(int)s] = value; }
+        get => StatsInfo.StorageOf(stat) is var s && s != StatsEnumerated.None ? Value(s) : ModLevel(stat);
+        set
+        {
+            if (StatsInfo.StorageOf(stat) is var s && s != StatsEnumerated.None) _values[(int)s] = value;
+            else Bodies.ModSkills.Of(stat)?.Set(this, value);
+        }
     }
 
     /// <summary>
-    /// The stored (trained) value of a stat, without the <see cref="Modifiers"/> (0 for a number without storage).
+    /// The stored (trained) value of a stat, without the <see cref="Modifiers"/> (0 for a number without storage; a mod skill's level for its number).
     /// </summary>
-    public float Stored(StatsEnumerated stat) => StatsInfo.StorageOf(stat) is var s && s != StatsEnumerated.None ? _values[(int)s] : 0;
+    public float Stored(StatsEnumerated stat) => StatsInfo.StorageOf(stat) is var s && s != StatsEnumerated.None ? _values[(int)s] : ModLevel(stat);
+
+    /// <summary>
+    /// The level of the code mod's skill numbered <paramref name="stat"/>; 0 for any number that is not one (every number without mods).
+    /// </summary>
+    float ModLevel(StatsEnumerated stat) => Bodies.ModSkills.Of(stat) is { } skill ? skill.Level(this) : 0;
 
     /// <summary>
     /// The code mods' temporary amounts on this character's stats (docs/modding.md "Stat modifiers"), made on first use.
@@ -235,7 +245,7 @@ public sealed class CharacterStats
     /// <summary>
     /// Trains a stat by <paramref name="amount"/> through the core curve; returns the new value. A stat without storage is left alone. A NaN stat
     /// stays NaN: in game the XP entries (<c>xpStat_eventBased</c>, <c>xpGeneral</c>) never reach the core's reset to 20 for one (<b>Verified</b> in
-    /// game, issue #3).
+    /// game, issue #3). A code mod's skill's number trains that skill on the same curve (<see cref="ModSkill.Gain(CharacterStats, float)"/>).
     /// </summary>
     public float Gain(StatsEnumerated stat, float amount, float cap = XpCap) => Gain(stat, amount, cap, ExperienceSource.Other);
 
@@ -246,7 +256,7 @@ public sealed class CharacterStats
     internal float Gain(StatsEnumerated stat, float amount, float cap, ExperienceSource source)
     {
         var s = StatsInfo.StorageOf(stat);
-        if (s == StatsEnumerated.None) return 0;
+        if (s == StatsEnumerated.None) return Bodies.ModSkills.Of(stat)?.Gain(this, amount, cap) ?? 0;
         float value = _values[(int)s];
         if (float.IsNaN(value)) return value;
         return _values[(int)s] = CoreGain(value, Filtered(stat, value, Rated(value, amount, cap), cap, source), cap);

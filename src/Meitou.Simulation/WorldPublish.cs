@@ -1055,16 +1055,19 @@ public sealed partial class World
             // only writer besides the constructor, so this display state lives on the character; each character is published by one worker, so the
             // write does not race.
             cold.LastWeaponCategory = Combat.CombatSystem.HandCategory(cold);
-            var (label, skill) = cold.LastWeaponCategory switch
-            {
-                3 => ("Heavy:", StatsEnumerated.HeavyWeapons),
-                0 => ("Katana:", StatsEnumerated.Katanas),
-                4 => ("Hacker:", StatsEnumerated.Hackers),
-                1 => ("Sabre:", StatsEnumerated.Sabres),
-                5 => ("Martial Arts:", StatsEnumerated.MartialArts),
-                8 => ("Polearm:", StatsEnumerated.Polearms),
-                _ => ((string?)null, StatsEnumerated.None),
-            };
+            // A weapon naming a code mod's skill is labelled by that skill (Meitou; the original has none).
+            var (label, skill) = Combat.CombatSystem.HandModSkill(cold) is { } mod
+                ? (mod.Label + ":", mod.Stat)
+                : cold.LastWeaponCategory switch
+                {
+                    3 => ("Heavy:", StatsEnumerated.HeavyWeapons),
+                    0 => ("Katana:", StatsEnumerated.Katanas),
+                    4 => ("Hacker:", StatsEnumerated.Hackers),
+                    1 => ("Sabre:", StatsEnumerated.Sabres),
+                    5 => ("Martial Arts:", StatsEnumerated.MartialArts),
+                    8 => ("Polearm:", StatsEnumerated.Polearms),
+                    _ => ((string?)null, StatsEnumerated.None),
+                };
             if (label is not null)
                 return new(skill, label, (int)stats[skill]) { Damage = combat.HudDamage(this, id.Slot, cold) };
         }

@@ -1,3 +1,5 @@
+using Meitou.Data.Gameplay.Bodies;
+
 namespace Meitou.Simulation.Bodies;
 
 /// <summary>
@@ -60,6 +62,13 @@ public sealed record ModSkill(string Id, string Label, SkillColumn Column)
     public float Start { get; init; } = 1;
 
     /// <summary>
+    /// The stat number the skill answers to once added (<see cref="ModSkills.FirstStat"/> up, in registration order;
+    /// <see cref="StatsEnumerated.None"/> before): <see cref="CharacterStats"/>' indexer, <c>Stored</c> and <c>Gain</c> read and train the skill under it, and a weapon naming the
+    /// skill (WEAPON <c>meitou skill</c>) uses it as its skill. Not saved: it follows the mods' load order, so keep the id, not the number.
+    /// </summary>
+    public StatsEnumerated Stat { get; internal set; }
+
+    /// <summary>
     /// <paramref name="stats"/>' level in the skill.
     /// </summary>
     public float Level(CharacterStats stats) => stats.ModSkillsOrNull?.Get(Id) ?? Start;
@@ -75,12 +84,17 @@ public sealed record ModSkill(string Id, string Label, SkillColumn Column)
     /// returns the new level. A NaN level stays NaN, as a vanilla stat's does. The character's XP rate applies as to a vanilla stat
     /// (<see cref="CharacterStats.XpRate"/>).
     /// </summary>
-    public float Gain(CharacterStats stats, float amount)
+    public float Gain(CharacterStats stats, float amount) => Gain(stats, amount, CharacterStats.XpCap);
+
+    /// <summary>
+    /// <see cref="Gain(CharacterStats, float)"/> with the curve's cap (<see cref="CharacterStats.Gain"/> passes its own).
+    /// </summary>
+    internal float Gain(CharacterStats stats, float amount, float cap)
     {
         float level = Level(stats);
         if (float.IsNaN(level)) return level;
 
-        float next = CharacterStats.CoreGain(level, stats.Rated(level, amount, CharacterStats.XpCap));
+        float next = CharacterStats.CoreGain(level, stats.Rated(level, amount, cap), cap);
         Set(stats, next);
         return next;
     }
@@ -92,6 +106,11 @@ public sealed record ModSkill(string Id, string Label, SkillColumn Column)
 /// </summary>
 public static class ModSkills
 {
+    /// <summary>
+    /// The stat number of the first skill added (<see cref="ModSkill.Stat"/>), past every number the game or its data uses (0 to 38).
+    /// </summary>
+    public const int FirstStat = 1000;
+
     /// <summary>
     /// The skills in registration order.
     /// </summary>
@@ -124,7 +143,26 @@ public static class ModSkills
     public static void Add(ModSkill skill)
     {
         if (Refusal(skill, []) is { } refusal) throw new ArgumentException(refusal, nameof(skill));
+
+        skill.Stat = (StatsEnumerated)(FirstStat + Skills.Count);
         Skills.Add(skill);
+    }
+
+    /// <summary>
+    /// The skill whose <see cref="ModSkill.Stat"/> is <paramref name="stat"/>; null for any other number (every number below
+    /// <see cref="FirstStat"/>, and every number without mods).
+    /// </summary>
+    public static ModSkill? Of(StatsEnumerated stat) =>
+        (uint)((int)stat - FirstStat) < (uint)Skills.Count ? Skills[(int)stat - FirstStat] : null;
+
+    /// <summary>
+    /// The skill with id <paramref name="id"/> (case-insensitive, as ids are unique); null when no mod added one.
+    /// </summary>
+    public static ModSkill? Find(string id)
+    {
+        foreach (var skill in Skills)
+            if (string.Equals(skill.Id, id, StringComparison.OrdinalIgnoreCase)) return skill;
+        return null;
     }
 
     /// <summary>

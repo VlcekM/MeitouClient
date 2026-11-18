@@ -210,6 +210,12 @@ public sealed record WeaponData
     public int Value { get; init; }
 
     /// <summary>
+    /// <c>meitou skill</c> (Meitou only, not a field of the game's editor): the id of a code mod's skill (docs/modding.md "Skills") the weapon uses
+    /// and trains in place of its category's; null when absent or empty.
+    /// </summary>
+    public string? ModSkill { get; init; }
+
+    /// <summary>
     /// Whether the weapon is a fist rather than a held weapon.
     /// </summary>
     public bool IsUnarmed => SkillCategory == (int)WeaponCategory.Unarmed;
@@ -246,6 +252,7 @@ public sealed record WeaponData
             RobotDamageMult = RecordReading.Float(r, "robot damage mult", 1),
             RaceDamage = r.GetReferences("race damage").ToDictionary(x => x.TargetStringId, x => x.Values.Value0),
             Value = RecordReading.Int(r, "value", 0),
+            ModSkill = r.Strings.GetValueOrDefault("meitou skill") is { Length: > 0 } skill ? skill : null,
         };
     }
 }
