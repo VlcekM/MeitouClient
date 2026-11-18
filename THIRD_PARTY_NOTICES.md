@@ -134,6 +134,9 @@ Used as packages (not copied into this repository); each is distributed under it
 | NVorbis 0.10.5 | `src/Meitou.Data`, `src/Meitou.Game/Audio`, `launcher/Meitou.Launcher` (news video sound) | MIT |
 | Silk.NET.OpenAL.Soft.Native 1.23.1 (ships OpenAL Soft: `soft_oal.dll`, `libopenal.so`, `libopenal.dylib`) | `src/Meitou.Game/Audio`, `launcher/Meitou.Launcher` (news video sound; a separate library, loaded at run time) | LGPL-2.1-or-later (OpenAL Soft) |
 | Lib.Harmony 3.0.0-rc.7 (ships `0Harmony.dll` with MonoMod and Mono.Cecil merged in; notices under [Harmony](#harmony)) | `src/Meitou.Game` (Mods/; code mods patch the game through it) | MIT |
+| BepuPhysics, BepuUtilities 2.4.0 | `src/Meitou.Simulation` (ragdoll physics); also in the code-mod reference pack, with the licence text in its `licenses/Apache-2.0.txt` | Apache-2.0 |
+| Microsoft.Extensions.DependencyModel 9.0.9, Microsoft.DotNet.PlatformAbstractions 3.1.6 | `src/Meitou.Game`, via Silk.NET.Core | MIT |
+| BepInEx.AssemblyPublicizer 0.4.3 (with AsmResolver, AsmResolver.DotNet, .PE, .PE.File 5.5.1) | `tools/Meitou.ReferencePack` (makes the publicized set of the code-mod reference pack for each release and nightly; not shipped) | MIT |
 
 The DDS reader and decoder (`src/Meitou.Data/Textures/`) are written from Microsoft's public DDS and
 block-compression documentation; no code is taken from other implementations.
