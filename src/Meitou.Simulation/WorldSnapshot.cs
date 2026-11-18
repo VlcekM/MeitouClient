@@ -652,6 +652,14 @@ public sealed class CharacterSnapshot
     /// </summary>
     public float Scale { get; internal set; } = 1;
     /// <summary>
+    /// A standing person's name tag height (<c>hull size Y</c> 17 plus 5, see <see cref="TagHeight"/>).
+    /// </summary>
+    public const float PersonTagHeight = 22;
+    /// <summary>
+    /// How far above the feet its name tag, task bar and speech bubble stand (<see cref="Combat.CombatSystem.NameTagHeight"/>).
+    /// </summary>
+    public float TagHeight { get; internal set; } = PersonTagHeight;
+    /// <summary>
     /// How many times farther than the draw distance D the body is drawn: 7 for a gigantic race (<c>FUN_140539020</c>, Verified), else 1.
     /// </summary>
     public float DrawDistanceScale { get; internal set; } = 1;

@@ -89,6 +89,9 @@ and stealth x 5). Each looker keeps a meter per target (`SensoryData::SpottingPe
   panel's right in colour (0.942, 0.806, 0.341) (**Verified**, `Kenshi_CharacterNamePanel.layout`). The tag state is set alongside: 3 seen, 2 almost seen, 1 hidden.
   A name longer than the layout's text box shows whole, "[Drifter-cannibal escapee]" for one (**Observed**). Meitou widens it, the text box stretching and
   the icons keeping its edges by the layout's aligns (`Stretch`, `Left`, `Right`).
+  Anchor (**Observed**, `FUN_1406e9340`, called when the tag is made and from the posture setter `CharacterAnimal` slot 110 on a change to or from
+  upright): the character's position plus (0, hull × slot 0x390 size × `characterHeight` + 5, 0), hull = the race's `hull size Y`, or `hull size Z`
+  while the prone state (slot 0x368) is not 0; no bone, so it does not bob (people 22, bonedogs 20 × size). Meitou puts a sleeper's over its drawn head.
 - Stealth XP: see [character-stats](character-stats.md#levelling-xp).
 
 Meitou: `AggroSystem` keeps one meter per looker and sneaker for every awake NPC of another faction (one that picks no fights

@@ -208,6 +208,21 @@ public sealed partial class CombatSystem : IProjectileSource
     }
 
     /// <summary>
+    /// How far above the feet a character's name tag stands (<c>FUN_1406e9340</c>, docs/game/perception.md): the race's <c>hull size Y</c>, or
+    /// <c>hull size Z</c> while it is not upright, times the size factor (slot 0x390) and the look's height, plus 5. Fixed between posture changes, so
+    /// the tag does not follow the run's bob.
+    /// </summary>
+    internal static float NameTagHeight(CharacterCold c)
+    {
+        if (c.Race is not { } race) return CharacterSnapshot.PersonTagHeight;
+
+        float hull = Lying(c) ? race.HullZ : race.HullY;
+        float height = c.Appearance is { } look ? CharacterShape.MovementScaleOf(look) : 1;
+
+        return hull * (c.Medical?.ScaleK ?? 1) * height + 5;
+    }
+
+    /// <summary>
     /// Where a segment from <paramref name="from"/> along <paramref name="seg"/> first enters a click hull standing on <paramref name="feet"/> (an
     /// axis-aligned box of half size <paramref name="half"/>, its bottom at the feet), as a fraction of the segment in [0, 1].
     /// </summary>
