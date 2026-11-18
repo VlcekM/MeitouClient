@@ -1157,7 +1157,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     }
 
     /// <summary>
-    /// The menus' save, load, new game, feedback, options and exit, and the title when nothing chose the world.
+    /// The menus' save, load, import, new game, feedback, options and exit, and the title when nothing chose the world.
     /// </summary>
     void ConnectScreenActions()
     {
@@ -1170,6 +1170,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             {
                 if (e.Action == "save") host.Saves.SaveRequestedFolder = SaveCatalog.Folder(QuickSave.DefaultRoot, e.Text);
                 else if (e.Action == "load") host.Saves.LoadRequestedFolder = e.Text;
+                else if (e.Action == "import") host.Saves.ImportRequested = (e.Text, _hud.Frontend.ImportFlags);
                 else if (e.Action == "new-game") host.NewGame.NewGameRequested = e.Text;
                 else if (e.Action.StartsWith("feedback-", StringComparison.Ordinal)) host.FeedbackCapture.FeedbackAction(e);
                 else if (e.Action == "main-menu") host.NewGame.MainMenuRequested = true;
@@ -1802,6 +1803,14 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             return;
         }
         if (MenuKey(key, ctrl)) return;
+        // With the interface hidden (F7) Esc brings it back with the game menu open, as the Vulkan host does.
+        if (key == SilkKey.Escape && _hud is { UiVisible: false })
+        {
+            host.AgentChannel.InterfaceHidden = false;
+            _hud.UiVisible = true;
+            _hud.UiKey(EngineKey.Escape);
+            return;
+        }
         if (ViewKey(key)) return;
         if (CameraCodeKey(keyboard, key, ctrl)) return;
         if (TourKey(key)) return;
@@ -1813,6 +1822,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         if (_hud is not null) _hud.GameHotkeys.Key(mapped, _shiftDown);
         host.Sandbox.SandboxKey(mapped);
         if (host.Duel.IsDuel && mapped == EngineKey.Backspace) host.Duel.DuelRestartRequested = true;
+        if (host.Battle.IsBattle && mapped == EngineKey.Backspace) host.Battle.BattleRestartRequested = true;
     }
 
     /// <summary>
@@ -1892,7 +1902,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         }
         if (key == SilkKey.F7 && _hud is not null)
         {
-            _hud.UiVisible = !_hud.UiVisible;
+            host.AgentChannel.InterfaceHidden = !host.AgentChannel.InterfaceHidden;
+            Console.WriteLine(host.AgentChannel.InterfaceHidden ? "interface hidden (F7 shows it)" : "interface shown");
             return true;
         }
         return false;
@@ -2580,6 +2591,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// </summary>
     bool AdvanceWorld(double dt)
     {
+        // F7 and the agent channel's `hud hide` hide the interface, as on Vulkan; --no-population has none to show.
+        if (_hud is not null) _hud.UiVisible = !host.AgentChannel.InterfaceHidden && !host.GameOptions.NoPopulation;
         AdvanceSession(dt);
         FollowWithCamera(dt);
         _bench.Lap(3);
