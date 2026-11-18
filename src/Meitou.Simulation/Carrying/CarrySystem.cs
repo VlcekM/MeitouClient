@@ -21,7 +21,7 @@ namespace Meitou.Simulation.Carrying;
 /// <item><b>The link</b>: <see cref="CharacterCold.Carrying"/> on the carrier and <see cref="CharacterCold.CarriedBy"/> on the body, set and cleared
 /// together, in serial phases only. The body is always on the left shoulder (the original's side setter, <b>Verified</b>), so a carrier needs a
 /// usable left arm. The body keeps the carrier's position (the renderer is told the bone, <see cref="AttachBone"/>), weighs <c>carry person
-/// weight</c> in the carrier's load (<see cref="BodySystem"/>) and lifts a carrier's speed mode from walk to run
+/// weight</c> in the carrier's load (<see cref="BodySystem"/>) and lifts an NPC carrier's speed mode from walk to jog
 /// (<see cref="MovementSystem"/>).</item>
 /// <item><b>Pick up</b> (<see cref="CharacterTask.PickUp"/>): the walk to the body (the first aid pattern), then the <c>shoulder lift left</c> clip:
 /// attached at 0.4 of it, done at 0.95. <b>Put down</b> (<see cref="CharacterTask.PutDown"/>): the clip backwards, let go below 0.2; a body the

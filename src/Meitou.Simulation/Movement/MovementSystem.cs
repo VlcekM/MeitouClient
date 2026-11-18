@@ -1854,7 +1854,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     }
 
     /// <summary>
-    /// The speed a path walker wants: its mode's cap (a carrier's walk raised to a run, a squad's force speed raising it) or a follower's own speed,
+    /// The speed a path walker wants: its mode's cap (an NPC carrier's walk raised to a jog, a squad's force speed raising it) or a follower's own speed,
     /// within its top speed (the mover's S, which carries the sneaking cap and the water state, <see cref="Bodies.TopSpeedDelay"/>), then capped in
     /// its footwork, by its group and by a campaign's pace; a crawler's speed is part of S.
     /// </summary>
@@ -1862,9 +1862,9 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     {
         byte mode = cold.ModeOverride ?? n.Mode;
 
-        // A carrier in walk mode is raised to run mode (the original's speed selector, Observed; docs/game/carry-loot.md "Speed and
-        // weight").
-        if (mode == SpeedMode.Walk && !cold.Carrying.IsNone) mode = SpeedMode.Run;
+        // An NPC carrier in walk mode is raised to jog; a player's carrier keeps the mode it was given (#995; docs/game/pathfinding.md
+        // "Force speed").
+        if (mode == SpeedMode.Walk && !cold.Carrying.IsNone && !cold.IsPlayer) mode = SpeedMode.Run;
 
         // Its squad template's force speed 0..2 replaces the AI's mode (FUN_140332390 never lowers an explicit task mode, so only a raise
         // is applied; docs/game/pathfinding.md "Force speed").
