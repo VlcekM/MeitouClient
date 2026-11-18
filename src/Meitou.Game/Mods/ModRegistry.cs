@@ -269,7 +269,11 @@ sealed class ModRegistry
         Ui.AddRange(r.Ui);
         foreach (var (extension, folder) in r.UiFolders) UiFolders[extension] = folder;
         DebugCommands.AddRange(r.DebugCommands);
-        foreach (var state in r.WorldStates) _worldStates[state.Record] = state;
+        foreach (var state in r.WorldStates)
+        {
+            _worldStates[state.Record] = state;
+            global::Meitou.Simulation.Factions.ModWorldStates.Claim(state);
+        }
         foreach (var action in r.KeyActions)
         {
             action.Action = Game.Host.Input.InputBindings.FirstModAction + KeyActions.Count;

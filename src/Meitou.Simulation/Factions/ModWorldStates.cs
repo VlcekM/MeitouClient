@@ -26,13 +26,15 @@ public sealed class ModWorldState
     public string Record { get; }
 
     /// <summary>
-    /// The value the mod set in <paramref name="world"/>; null while it has set none (the record's conditions answer).
+    /// The value the mod set in <paramref name="world"/>; null while it has set none (the record's conditions answer). Like <see cref="Set"/>, for the
+    /// tick's serial phases: interface code (a key press, a menu source) reads a copy the mod's system publishes.
     /// </summary>
     public bool? Value(World world) => world.ModStatesOrNull?.Get(Record);
 
     /// <summary>
     /// Sets the state's answer in <paramref name="world"/>; from the mod's system in a serial phase (or <see cref="IWorldReady"/>), never a parallel
-    /// one. Readers see it from the population's next refresh of the world states (that tick's slow-world step at the latest).
+    /// one. Readers see it from the population's next refresh of the world states: that tick's slow-world step when the setting system runs before
+    /// the population's, else the next tick's. A decision already made (a nest laid, a town replaced, a squad spawned) stays.
     /// </summary>
     public void Set(World world, bool value) => world.ModStates.Set(Record, value);
 
@@ -49,9 +51,29 @@ public sealed class ModWorldState
 public sealed class ModWorldStates
 {
     /// <summary>
+    /// The claimed states by record id, filled at startup as the mods' registrations are committed and never changed while a world runs.
+    /// </summary>
+    static readonly Dictionary<string, ModWorldState> Claims = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// The values by record id.
     /// </summary>
     readonly SortedDictionary<string, bool> _values = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Records <paramref name="state"/> as its record's claim (the mod host does, once the mod's registration is committed; it checks the owner).
+    /// </summary>
+    public static void Claim(ModWorldState state) => Claims[state.Record] = state;
+
+    /// <summary>
+    /// Whether a mod claimed <paramref name="record"/>.
+    /// </summary>
+    public static bool IsClaimed(string record) => Claims.ContainsKey(record);
+
+    /// <summary>
+    /// Forgets every claim (tests).
+    /// </summary>
+    internal static void ClearClaims() => Claims.Clear();
 
     /// <summary>
     /// How many states have a value.
@@ -72,10 +94,16 @@ public sealed class ModWorldStates
     public bool? Get(string record) => _values.TryGetValue(record, out bool value) ? value : null;
 
     /// <summary>
-    /// Sets <paramref name="record"/>'s value.
+    /// Sets <paramref name="record"/>'s value; throws for a record no mod claimed (its value would be lost at the next save and load).
     /// </summary>
     public void Set(string record, bool value)
     {
+        if (!IsClaimed(record))
+        {
+            throw new InvalidOperationException(
+                $"World state '{record}' is claimed by no mod (ModContext.AddWorldState), so its value would not be saved.");
+        }
+
         if (_values.TryGetValue(record, out bool old) && old == value) return;
         _values[record] = value;
         Version++;

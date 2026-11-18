@@ -187,7 +187,8 @@ save's other files into the working folder and moved with them. Layout, little-e
 version (int32 1), entry count (int32), then per entry the system name (7-bit length-prefixed UTF-8, as .NET `BinaryWriter`), the data
 length (int32) and the mod's bytes. A mod that claimed world states ([modding](../modding.md), "World states") also gets the file, with a last
 entry `meitou world states`: format (int32 1), count (int32), then per value the WORLD_EVENT_STATE string id (as `BinaryWriter`) and the value
-(byte 0 or 1), in string id order. A loaded save keeps the files of mods not loaded now, and a save made from it writes them again.
+(byte 0 or 1), in string id order; such a file also keeps the loaded save's entries that no system of the mod wrote this time. A loaded
+save keeps the files of mods not loaded now, and a save made from it writes them again.
 An import (`SaveImport.Filter`) builds a new save without them, so mods start fresh there.
 `meitou-mods/environment.json` (not a sidecar: only `.dat` names are) records the code mods the save was made with: UTF-8 JSON
 `{ "format": 1, "gameVersion": "<Meitou tag>", "mods": [{ "id", "version"?, "name" }] }`, mods in load order

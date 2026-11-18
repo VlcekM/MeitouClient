@@ -677,7 +677,8 @@ public sealed class ModHost
     /// <summary>
     /// The save data of the world's mod systems (<see cref="IModSaveData"/>) and of the mods' world states (<see cref="ModWorldStateSave"/>, after the
     /// systems' entries, only for a mod that claimed a state) into <paramref name="files"/>, one file per mod by id; between ticks. A mod with neither,
-    /// or whose write fails, keeps the file it had (a save made without the mod keeps the mod's data too).
+    /// or whose write fails, keeps the file it had (a save made without the mod keeps the mod's data too); a mod with claimed states also keeps the
+    /// entries of its file that no system wrote now (a system its factory left out of this world).
     /// </summary>
     public void CaptureSaveData(World world, IDictionary<string, byte[]> files)
     {
@@ -688,7 +689,10 @@ public sealed class ModHost
             {
                 var entries = systems[mod].Select(s => (s.Tag.Name, Written(s.System))).ToList();
                 if (OwnedWorldStates(mod) is { } owned)
+                {
+                    KeepEarlierEntries(files, mod, entries);
                     entries.Add((ModWorldStateSave.EntryName, ModWorldStateSave.Write(ModWorldStateSave.ValuesOf(world, owned))));
+                }
                 files[mod] = ModSaveFile.Write(entries);
             }
             catch (Exception e)
@@ -722,6 +726,28 @@ public sealed class ModHost
                 Console.Error.WriteLine($"mod       {mod}: save data not read: {e}");
             }
         }
+    }
+
+    /// <summary>
+    /// Adds to <paramref name="entries"/> the entries of <paramref name="mod"/>'s file in <paramref name="files"/> (the loaded save's) that are not
+    /// written now, in the file's order; the world states' entry is written anew. An unreadable file adds nothing, with a log line.
+    /// </summary>
+    static void KeepEarlierEntries(IDictionary<string, byte[]> files, string mod, List<(string Name, byte[] Data)> entries)
+    {
+        if (!files.TryGetValue(mod, out var file)) return;
+
+        Dictionary<string, byte[]> earlier;
+        try
+        {
+            earlier = ModSaveFile.Read(file);
+        }
+        catch (InvalidDataException e)
+        {
+            Console.Error.WriteLine($"mod       {mod}: earlier save data not kept: {e.Message}");
+            return;
+        }
+        foreach (var (name, data) in earlier)
+            if (name != ModWorldStateSave.EntryName && !entries.Any(e => e.Name == name)) entries.Add((name, data));
     }
 
     /// <summary>

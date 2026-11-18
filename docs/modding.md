@@ -363,18 +363,26 @@ holds refuses the second mod.
   for interface previews). An effect gets `DialogueAct` (world, speaker, target, effect) in a serial step. An unregistered code
   computes "no" / does nothing, as an unknown vanilla code.
 - **World states:** `AddWorldState(record)` claims a WORLD_EVENT_STATE of the merged data (`ModWorldState`, `src/Meitou.Simulation/Factions`; a
-  record of another type, or one another mod claimed, refuses the mod). The mod's system sets its answer in a world with `state.Set(world,
-  bool)` in a serial phase (or `IWorldReady`), drops it with `Clear(world)` and reads it with `Value(world)` (null: none set). While a value is
-  set, every reader of the state gets it in place of the record's conditions: dialogue lines' world states, SQUAD_TEMPLATE and spawn-list `world
-  state` gates (`SpawnPlatoon` too), TOWN `override town` candidates, FACTION_CAMPAIGN triggers and nests ([world states](game/factions-squads-towns.md#relations-and-world-states)),
-  from the population's next refresh of the states (its slow-world step of that tick at the latest). Without a value, and wherever the mod does
-  not run (refused, removed, or the original game reading the same data), the record answers by its conditions as the original does: a record
-  without conditions holds, and one with a contradiction (`NPC is` and `NPC is NOT` the same CHARACTER at the same state) never does, which is
-  how a data author makes a state that stays off without the code. Several states combine as the readers' lists already AND their entries.
-  Values live in `World.ModStates` (made at the first), enter the state hash while any is set, and are saved in the mod's sidecar under the entry
-  `meitou world states` ([save](formats/save.md#mod-data)), which no mod system may be named, and restored before `IWorldReady`; a value of a
-  state the mod no longer claims is dropped at the load. Without claimed states nothing is made, hashed or saved. Engine API, not in the
-  original. A dialogue line can also test a mod's own value directly through a condition code (`AddDialogueCondition`).
+  record of another type, or one another mod claimed, refuses the mod). The base game's own states may be claimed: while the mod has a value set,
+  the original's content that tests the state (its dialogue, squads, town overrides, campaigns, nests) follows the mod, and without a value or
+  without the mod it follows the story again. The mod's system sets its answer in a world with `state.Set(world, bool)` in a serial phase (or
+  `IWorldReady`), drops it with `Clear(world)` and reads it with `Value(world)` (null: none set), also only in the tick's serial phases (interface
+  code reads a copy the system publishes); a value on a state no mod claimed is refused (`ModWorldStates.Set` throws), since it would not be
+  saved. While a value is set, every reader of the state gets it in place of the record's conditions: dialogue lines' world states,
+  SQUAD_TEMPLATE and spawn-list `world state` gates (`SpawnPlatoon` too), TOWN `override town` candidates, FACTION_CAMPAIGN triggers and nests
+  ([world states](game/factions-squads-towns.md#relations-and-world-states)), from the population's next refresh of the states: that tick's
+  slow-world step when the setting system runs before the population's, otherwise the next tick's (`SystemAnchor.End` is after it). It
+  changes decisions made from then on; one already made stays: a nest laid out (nests are laid once per world),
+  a town already replaced by an override, a squad already spawned, and a new game's starting squads, planned before `IWorldReady`.
+  Without a value, and wherever the mod does not run (refused, removed, or the original game reading the same data), the record answers by its
+  conditions as the original does: a record without conditions holds, and one with a contradiction (`NPC is` and `NPC is NOT` the same
+  CHARACTER at the same state) never does, which is how a data author makes a state that stays off without the code. Several states combine as
+  the readers' lists already AND their entries. Values live in `World.ModStates` (made at the first), enter the state hash while any is set,
+  and are saved in the mod's sidecar under the entry `meitou world states` ([save](formats/save.md#mod-data)), which no mod system may be
+  named; at a load they are restored after the mod systems' `IModSaveData.Read` (which sees none yet) and before `IWorldReady`, and a value of
+  a state the mod no longer claims is dropped. A mod with claimed states whose system was left out of a world keeps that system's earlier entry
+  in the sidecar. Without claimed states nothing is made, hashed or saved. Engine API, not in the original. A dialogue line can also test a
+  mod's own value directly through a condition code (`AddDialogueCondition`).
 - **Record types:** `AddRecordType(type, name)` claims a number (not a vanilla `itemType`); `Records(type)` lists the merged records.
 - **Equipment slots:** `AddEquipmentSlot(new ModSlot(section, fcsSlot, width, height, x, y))` (`ModSlots`, `src/Meitou.Simulation/Items`) adds
   an inventory section that takes the ARMOUR and ITEM records whose FCS `slot` is `fcsSlot`, so the items stay a data mod. `fcsSlot` is 4, 10
