@@ -103,6 +103,14 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
         Vector2.Distance(Flat(walker), Flat(item)) <= PickUpReach && MathF.Abs(walker.Y - item.Y) < PickUpHeight;
 
     /// <summary>
+    /// Whether the walker's walk to the item has ended at its goal (<see cref="WalkEnd.Finished"/>, a goal within <see cref="PickUpReach"/> of the
+    /// item): the original's <c>isAtLocation</c> also holds once the mover is done, whatever the height, so an item on a high shelf is taken from the
+    /// floor below it (#990).
+    /// </summary>
+    static bool WalkedTo(in CharacterHot n, CharacterCold c, Vector3 item) =>
+        n.Task != (byte)CharacterTask.GoTo && c.WalkEnd == WalkEnd.Finished && Vector2.Distance(n.Goal, Flat(item)) <= PickUpReach;
+
+    /// <summary>
     /// The player's animals take a pick-up order on a loose item into their bags (the Advanced setting "Animals pick up items", off by default).
     /// The original's row 3 registers animals and its pick-up puts any item but a limb into the inventory (docs/game/character-stats.md "Mouth"),
     /// so off is a Meitou choice; a limb for an animal's mouth is always taken.
@@ -205,7 +213,7 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
                 c.PickingUpItem = null;
                 continue;
             }
-            if (!InReach(next[s].Position, item.Position))
+            if (!InReach(next[s].Position, item.Position) && !WalkedTo(next[s], c, item.Position))
             {
                 if (next[s].Task != (byte)CharacterTask.GoTo || Vector2.Distance(next[s].Goal, Flat(item.Position)) > PickUpReach)
                     c.PickingUpItem = null;
