@@ -110,6 +110,17 @@ sealed class ModSystemFaults
     };
 
     /// <summary>
+    /// Whether system <paramref name="index"/> was stopped after a fault. Changes only at a serial step (<see cref="Settle"/>), so a parallel phase
+    /// reads one answer on every thread.
+    /// </summary>
+    public bool IsStopped(int index) => (uint)index < (uint)_states.Length && Volatile.Read(ref _states[index]) == Stopped;
+
+    /// <summary>
+    /// Queues a notice for the player about another mod fault (a mod's NPC goal, <see cref="Ai.NpcGoals"/>); the host shows it once.
+    /// </summary>
+    public void Notify(string notice) => _notices.Enqueue(notice);
+
+    /// <summary>
     /// The next notice for the player about a mod system that stopped, if any; the host shows it once.
     /// </summary>
     public bool TryTakeNotice(out string notice) => _notices.TryDequeue(out notice!);

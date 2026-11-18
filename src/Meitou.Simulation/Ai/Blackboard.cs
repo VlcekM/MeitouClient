@@ -1300,6 +1300,73 @@ public sealed class AiMind
     public bool CaptiveAsk { get; set; }
 
     /// <summary>
+    /// The think chose a code mod's goal (<see cref="AiBehaviour.Mod"/>): the serial step of the same tick asks the mod to start it
+    /// (<see cref="NpcGoals"/>) and clears it (not hashed).
+    /// </summary>
+    public bool ModGoalAsk { get; internal set; }
+
+    /// <summary>
+    /// The mod started its goal's act-out for this character (<see cref="INpcGoal.Start"/> answered true) and has not let it go: the AI's serial step
+    /// ends it once the character is no longer engaged or another mod's act-out runs it (<see cref="NpcGoals"/>' record), and so does the next think
+    /// that holds the character. <see cref="ModGoalRow"/> and <see cref="ModGoalTick"/> are the provenance the start left running. Hashed while set.
+    /// </summary>
+    public bool ModGoalStarted { get; internal set; }
+
+    /// <summary>
+    /// The row of the task the mod's start left running (<see cref="ModGoalStarted"/>): only a task of this row started at or after
+    /// <see cref="ModGoalTick"/> counts as the act-out (<see cref="AiSystem.OnModTask"/>).
+    /// </summary>
+    public TaskType ModGoalRow { get; internal set; }
+
+    /// <summary>
+    /// The start tick of the task the mod's start left running (<see cref="ModGoalStarted"/>).
+    /// </summary>
+    public long ModGoalTick { get; internal set; }
+
+    /// <summary>
+    /// The mod goal types whose <see cref="INpcGoal.Start"/> answered false for this character, each weighed at 0 until its tick (exclusive), so a
+    /// goal the mod will not start does not hold the character standing; null when none. An entry goes at the first think after its tick, and the
+    /// list with its last entry. Hashed while set.
+    /// </summary>
+    public List<(TaskType Type, long Until)>? ModGoalBackoff { get; internal set; }
+
+    /// <summary>
+    /// Whether goal <paramref name="type"/> is backed off at <paramref name="tick"/> (<see cref="ModGoalBackoff"/>).
+    /// </summary>
+    internal bool BackedOff(TaskType type, long tick)
+    {
+        if (ModGoalBackoff is not { } list) return false;
+
+        foreach (var (t, until) in list)
+        {
+            if (t == type) return tick < until;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Backs goal <paramref name="type"/> off until <paramref name="until"/>, replacing an earlier entry of the type.
+    /// </summary>
+    internal void BackOff(TaskType type, long until)
+    {
+        var list = ModGoalBackoff ??= [];
+        list.RemoveAll(e => e.Type == type);
+        list.Add((type, until));
+    }
+
+    /// <summary>
+    /// Drops the back-offs that ended by <paramref name="tick"/>, and the list once empty (the think, on its own mind).
+    /// </summary>
+    internal void PruneBackoff(long tick)
+    {
+        if (ModGoalBackoff is not { } list) return;
+
+        list.RemoveAll(e => e.Until <= tick);
+        if (list.Count == 0) ModGoalBackoff = null;
+    }
+
+    /// <summary>
     /// The desire kept for the captive goal <paramref name="type"/> (<see cref="CaptiveOffers"/>); 0 without one.
     /// </summary>
     public float CaptiveDesire(TaskType type)
@@ -1502,6 +1569,23 @@ public sealed class AiMind
         }
 
         if (FightFrom != 0) hasher.Add(FightFrom);
+        if (ModGoalStarted)
+        {
+            hasher.Add(0x4D6F6447);   // "ModG": only while a mod's goal runs
+            hasher.Add((int)ModGoalRow);
+            hasher.Add(ModGoalTick);
+        }
+
+        if (ModGoalBackoff is { } backoff)
+        {
+            hasher.Add(0x4D6F6452);   // "ModR": only while a refused mod goal is backed off
+            foreach (var (t, until) in backoff)
+            {
+                hasher.Add((int)t);
+                hasher.Add(until);
+            }
+        }
+
         if (Replan) hasher.Add(0x5265706C);
         if (LookAbout != Crime.CrimeSystem.FirstLookAboutSeconds) hasher.Add(LookAbout);
         if (NextBuyTick != 0) hasher.Add(NextBuyTick);

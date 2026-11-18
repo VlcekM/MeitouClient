@@ -249,8 +249,13 @@ public sealed partial class World : IDisposable
             GoodsTakenObservers.Register(this._systems[k], k);
             RelationObservers.Register(this._systems[k], k);
         }
-        foreach (var owner in this._systems.OfType<ITaskOwner>()) owner.RegisterTasks(Tasks);
+        foreach (var owner in this._systems.OfType<ITaskOwner>())
+        {
+            if (SimulationExtensions.FactoryOf((ITickSystem)owner) is { } made) Tasks.RegisterMod(owner, made.Owner, ClaimedTasks());
+            else owner.RegisterTasks(Tasks);
+        }
         foreach (var owner in this._systems.OfType<IDecisionOwner>()) owner.RegisterSources(Decisions);
+        for (int k = 0; k < this._systems.Count; k++) if (this._systems[k] is Ai.AiSystem ai) ai.BindModGoals(this._systems);
         for (int k = 0; k < this._systems.Count; k++) if (DecidesAfter(this._systems[k])) _decideAfter = k;
 
         Characters = characters ?? new CharacterTable();
@@ -258,6 +263,21 @@ public sealed partial class World : IDisposable
         _pool = new WorkerPool(settings.Threads);
         _buffers = new EffectBuffer[Math.Max(1, settings.Threads * settings.PartitionsPerThread)];
         for (int i = 0; i < _buffers.Length; i++) _buffers[i] = new EffectBuffer();
+    }
+
+    /// <summary>
+    /// The task numbers the code mods claimed (job and NPC goal types) and the mod of each, from the extensions the AI or player system was given;
+    /// null without them.
+    /// </summary>
+    IReadOnlyDictionary<Data.Gameplay.Ai.TaskType, string>? ClaimedTasks()
+    {
+        foreach (var system in _systems)
+        {
+            if (system is Ai.AiSystem { Extensions: { } fromAi }) return fromAi.TaskOwners;
+            if (system is Player.PlayerSystem { Extensions: { } fromPlayer }) return fromPlayer.TaskOwners;
+        }
+
+        return null;
     }
 
     /// <summary>

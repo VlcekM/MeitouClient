@@ -154,6 +154,11 @@ public enum AiBehaviour : byte
     /// starts it on the character itself.
     /// </summary>
     HealLegs = 27,
+    /// <summary>
+    /// A code mod's goal (a type from 1000 up that a mod registered, <see cref="NpcGoals"/>; never in <see cref="TaskBehaviours"/>' table): it stands
+    /// while the serial step asks the mod to start it (<see cref="AiMind.ModGoalAsk"/>, <see cref="INpcGoal.Start"/>).
+    /// </summary>
+    Mod = 28,
 }
 
 /// <summary>

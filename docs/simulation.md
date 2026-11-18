@@ -2140,6 +2140,33 @@ state's `mounted` handle). Claim order and gunner spot are engine choices. The g
 no enemy is sensed (list A `isNoEnemiesInVicinity`, [combat.md](game/combat.md#turrets)): false while the character's senses count an
 enemy (`numEnemies`, `SenseBlock.Enemies`), so guards man the turrets only while enemies come. A guard at its turret fires it ([Ranged](#ranged)).
 
+### Mod goals
+
+Engine API for code mods, not in the original ([modding](modding.md), "NPC goals"). `NpcGoals` (one per world, built in `World`'s constructor by
+`AiSystem.BindModGoals` from `SimulationExtensions.GoalTypes` and the `INpcGoalOwner` systems; null when no mod claimed a type, and then none of
+the paths below runs) holds each registered type from 1000 up with the index of the system that registered it. A type outside `TaskBehaviours`
+has `AiBehaviour.None`, whose desire is 0; for a registered type `AiSystem.Desire` asks the mod instead (`ModDesire`: 0 for a player character's
+mind, for a goal whose system is stopped, and for a type the mod refused to start for that character, until its back-off ends,
+`AiMind.ModGoalBackoff`), and the default profile (desire "special", no commitment, crowd 1) leaves the score desire x weight with the continuity.
+With no TaskData row the goal is its own one-step plan (`TryPlan`), never kept as a stepped plan. `Act` gives it `AiBehaviour.Mod`: the character
+stands on row 14 (not the goal's number, which the mod may use as its own row and handler) and `AiMind.ModGoalAsk` asks the serial step
+(`SendRequests`, after the captive jobs: `NpcGoals.Step`). The step first drops the goals of systems the world stopped and marks their records
+orphaned, then sweeps the records (`NpcGoals` keeps one per started character, by slot, hashed: the goal and the row and start tick of the task
+`Start` left running): a record ends when its character is gone or dead, no longer engaged, or runs another row from 1000 up with
+`TaskSource.Goal` started since, and its goal then ends on the mind it was started on; an orphaned record waits out a fight, an open conversation
+or a trade, then releases the character (not engaged; a walk on the act-out stood still with no handler) while its provenance is the act-out's,
+a fight's since or none. Last, `INpcGoal.Start` is called in slot order for each asker the AI still holds (one skipped replans): a start records
+the character and sets `AiMind.ModGoalStarted`, `ModGoalRow` and `ModGoalTick`; a refusal backs that type off for four think periods
+(`world.Every(ThinkEveryTicks)` x 4) and replans. `AiSystem.OnModTask` tells the act-out from another hold: the provenance is a goal's, of that row
+(from 1000 up), started at or after that tick. With it, `ActivityText` names the goal by its AI_TASK record while the character walks or stands
+on it, and `Preempts` lets the combat goals take over a goal below the urgent tier while the character walks on the act-out's walk carrying
+nothing (as a captive job's walk; not while it stands, which a conversation's or trade's hold does not change). The first think that holds the
+character again also ends the goal (goal and plan cleared, so no continuity) and drops the ended back-offs. Faults: a desire's fault at tick T stops
+asking the desire from T + 1 (the threads of T still ask it, so the cut does not depend on the thread count) and its starts from T; a start's
+fault stops both at once; each is logged once, gives a notice through the world's mod fault notices and is hashed (`AiSystem.Hash`). The minds'
+new fields are hashed only while in use (a started goal, a back-off not yet dropped). Task rows from 1000 up have one owning mod
+(`TaskHandlers.RegisterMod`, against `SimulationExtensions.TaskOwners`).
+
 ## New-game difficulty
 
 `NewGameSettings` in the game host binds seven numeric options to each new world: body hunger/death/damage,
