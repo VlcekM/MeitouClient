@@ -295,68 +295,100 @@ public sealed class ModHost
     }
 
     /// <summary>
-    /// The data phase (docs/modding.md "Data phase"): each prepared mod whose entry implements <see cref="IModData"/>, in load order, edits
-    /// <paramref name="data"/>; its queued changes are applied when it returns, so the next mod reads them. One that throws, or whose required
-    /// dependency's data phase threw, has no changes applied and is left out of <see cref="Start"/>. On the thread reading the data, before anything
-    /// is built from it.
+    /// The data phase (docs/modding.md "Data phase"): each prepared mod named in <paramref name="phased"/> (the mods <see cref="ModDataScan"/> found
+    /// declaring <see cref="IModDataPhase"/>, by name), in load order, edits <paramref name="data"/>; its queued changes are checked whole and then
+    /// merged when it returns, so the next mod reads them. One that throws or queues a change that cannot be merged has none of its changes merged
+    /// and is refused; a mod with a required dependency that was refused or skipped here, directly or through others, is skipped (its own
+    /// dependency check then refuses it at <see cref="Start"/>). Never throws for a mod's fault. On the thread reading the data, before anything is
+    /// built from it.
     /// </summary>
-    public void EditData(GameDatabase data)
+    public void EditData(GameDatabase data, IReadOnlySet<string> phased)
     {
+        var lost = new HashSet<LoadedMod>();
         foreach (var (mod, index) in _prepared.ToList())
         {
-            if (mod.Instance is not IModData editor) continue;
-            if (LostRequiredDependency(mod)) continue;
+            if (LostDependency(mod, lost) is { } gone)
+            {
+                lost.Add(mod);
+                if (phased.Contains(mod.Info.Name))
+                    Console.Error.WriteLine($"mod       {mod.Manifest.Id}: data phase skipped: its dependency '{gone.Manifest.Id}' was left out");
+                continue;
+            }
+            if (!phased.Contains(mod.Info.Name) || mod.Instance is not IModDataPhase editor) continue;
 
-            TryEditData(mod, index, editor, data);
+            if (!TryEditData(mod, index, editor, data)) lost.Add(mod);
         }
     }
 
     /// <summary>
-    /// Whether a required dependency of <paramref name="mod"/> was left out since it was prepared: its data phase is skipped (with a log line), and
-    /// <see cref="Start"/> refuses it by the dependency rules.
+    /// The first required dependency of <paramref name="mod"/> in <paramref name="lost"/> (refused or skipped in this data phase), or null.
     /// </summary>
-    bool LostRequiredDependency(LoadedMod mod)
+    static LoadedMod? LostDependency(LoadedMod mod, HashSet<LoadedMod> lost)
     {
-        var lost = mod.Dependencies.FirstOrDefault(d => !_prepared.Any(p => p.Mod == d)
-            && !mod.Manifest.DependsOn.First(r => r.Id == d.Manifest.Id).Optional);
-        if (lost is null) return false;
+        foreach (var dependency in mod.Dependencies)
+            if (lost.Contains(dependency) && IsRequired(mod, dependency)) return dependency;
 
-        Console.Error.WriteLine($"mod       {mod.Manifest.Id}: data phase skipped: its dependency '{lost.Manifest.Id}' was left out");
-        return true;
+        return null;
     }
 
     /// <summary>
-    /// Runs one mod's <see cref="IModData.EditData"/> and applies its changes; a throw refuses the mod with its changes discarded.
+    /// Whether <paramref name="mod"/>'s manifest requires <paramref name="dependency"/> (not <c>optional</c>).
     /// </summary>
-    void TryEditData(LoadedMod mod, int index, IModData editor, GameDatabase data)
+    static bool IsRequired(LoadedMod mod, LoadedMod dependency) =>
+        mod.Manifest.DependsOn.FirstOrDefault(d => d.Id == dependency.Manifest.Id) is { Optional: false };
+
+    /// <summary>
+    /// Runs one mod's <see cref="IModDataPhase.EditData"/>, checks its changes and merges them; false when the mod was refused (a throw, or a change
+    /// that cannot be merged), with none of its changes merged.
+    /// </summary>
+    bool TryEditData(LoadedMod mod, int index, IModDataPhase editor, GameDatabase data)
     {
         var context = new ModDataContext(mod, data);
+        string? failure;
         try
         {
             editor.EditData(context);
+            failure = ModDataChanges.Problem(context.Changes) is { } problem ? $"a game data change it made cannot be applied: {problem}" : null;
         }
         catch (Exception e)
         {
             Console.Error.WriteLine($"mod       {mod.Info.Name}: {e}");
-            _prepared.Remove((mod, index));
-            Refuse(mod.Info.Name, $"failed to change the game data: {e.GetBaseException().Message}");
-            return;
+            failure = $"failed to change the game data: {e.GetBaseException().Message}";
+        }
+        finally
+        {
+            context.Open = false;
         }
 
-        ApplyChanges(context, data);
+        if (failure is null && TryApplyChanges(context, data)) return true;
+
+        _prepared.Remove((mod, index));
+        Refuse(mod.Info.Name, failure ?? "its game data changes failed to apply");
+        return false;
     }
 
     /// <summary>
-    /// A data phase's queued changes into <paramref name="data"/>, in order, as made by the mod's own data file; the mod's assemblies join
-    /// <see cref="GameDatabase.CodeEdits"/> when it changed anything.
+    /// A data phase's checked changes into <paramref name="data"/>, in order, as made by the mod's own data file, and their fingerprint into
+    /// <see cref="GameDatabase.CodeEdits"/>. False when the merge threw, which the check before it rules out; the changes merged before the throw
+    /// then stay (a merge cannot be undone in place), and the line says so.
     /// </summary>
-    static void ApplyChanges(ModDataContext context, GameDatabase data)
+    static bool TryApplyChanges(ModDataContext context, GameDatabase data)
     {
-        if (context.Changes.Count == 0) return;
+        if (context.Changes.Count == 0) return true;
 
-        foreach (var change in context.Changes) data.Change(change, context.FileName);
-        data.CodeEdits.AddRange(context.Manifest.Assemblies.Select(a => Path.Combine(context.CodeFolder, a)));
+        try
+        {
+            foreach (var change in context.Changes) data.Change(change, context.FileName);
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"mod       {context.Id}: data phase changes failed part way and are partly applied: {e}");
+            return false;
+        }
+
+        data.CodeEdits.Add(ModDataChanges.Fingerprint(context.Id, context.Changes));
         Console.WriteLine($"mod       {context.Id}: data phase changed {context.Changes.Count} record(s)");
+        return true;
     }
 
     /// <summary>

@@ -19,7 +19,7 @@ public interface IMod
 /// <see cref="IMod"/>: <see cref="EditData"/> runs once per session as the game data is read, in <c>mods.cfg</c> order, before anything is built from
 /// the records and before any mod's <see cref="IMod.Initialize"/>.
 /// </summary>
-public interface IModData
+public interface IModDataPhase
 {
     /// <summary>
     /// Changes the merged game data through <paramref name="context"/>; the changes are applied when it returns. A throw discards this mod's changes

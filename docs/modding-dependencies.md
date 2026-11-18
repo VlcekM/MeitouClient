@@ -83,8 +83,10 @@ dependent.
 - The loader cannot undo what a dependent did through a framework's API: a framework that takes registrations keys them by the caller's
   id and implements `IModDependents` to drop them.
 - In a session with a [data phase](modding.md#data-phase) every mod's code loads before any `Initialize`, and each mod is checked again
-  against the mods initialized before it, so these rules refuse the same mods. A mod whose `EditData` throws is refused before any
-  `Initialize`; its dependents' `EditData` is skipped when it is a required dependency.
+  against the mods initialized before it, so a dependency that fails to initialize refuses its dependents as above. Two mods with one id, or
+  two incompatible ones, differ: the later is refused once the earlier's code loaded, even if the earlier then fails to initialize. A mod
+  whose `EditData` throws is refused before any `Initialize`, and every mod requiring it, directly or through others, skips its `EditData`
+  and is refused. Merged data changes are not undone when a mod is refused later.
 
 ## Assembly resolution
 

@@ -135,23 +135,38 @@ is the consent, as in RimWorld: the game loads every enabled code mod's code, wi
 
 ### Data phase
 
-- An entry type that also implements `IModData` (directly, or through a base class in the same assembly) gets
+- An entry type that implements `IModDataPhase`, directly or through a base class (generic or not) defined in the same assembly, gets
   `EditData(ModDataContext)` once per session while the game data is read: after every data file and translation is merged
   (`GameDatabase.Load`) and before the loader's own passes (wall masters, gear blueprints, docs/formats/fcs-mod.md), so before anything is
-  built from the records, in `mods.cfg` order and before any mod's `Initialize`. One thread; nothing else reads the data yet.
+  built from the records, in `mods.cfg` order and before any mod's `Initialize`. One thread; nothing else reads the data yet. Which mods have
+  one is read from the assemblies' metadata (no code run); a base class in another assembly (a framework's) does not give a mod a data phase,
+  and only the mods found that way are called, whatever other mods are enabled.
 - `ModDataContext`: `Id`, `Name`, `Folder`, `CodeFolder`, `Manifest`, `Log`/`LogError`, the merged `Data` to read (the files, translations
   and the earlier mods' changes), and changes in the form of a `.mod` file's records: `Edit(id)` (a change of a loaded record, returned to
-  fill), `Add(id, type, name)`, `Remove(id)` and `Apply(FcsRecord)`. They are queued and merged when `EditData` returns, in order, by the
-  rules of a data file listed after every loaded one ([fcs-mod](formats/fcs-mod.md#merging)), counted as made by the mod's own `.mod` file
-  (`ModifiedBy`, problems in `Issues`), which is not listed again in `GameDatabase.Files`. A throw discards the mod's changes and leaves the
-  mod out for the session (a notice, as a refused mod); a mod whose required dependency was left out there is skipped and refused.
-  `Harmony` is not offered: patch in `Initialize`.
-- Without any enabled code mod whose entry declares `IModData` (read from the assemblies' metadata, no code run), nothing changes: the data
-  loads as before and mods load in `BootSimulation` as described above. With one, every enabled code mod's assemblies load and its entry
-  type is made while the data is read; `Initialize` keeps its order and place, each mod checked again against the mods initialized before it
-  (an optional dependency that failed to initialize is dropped from `Dependency`, though the mod's assemblies stay bound to its exports).
-- `GameDatabase.CodeEdits` lists the assemblies of each mod that changed records; the navmesh cache key stamps them
+  fill), `Add(id, type, name)`, `Remove(id)` and `Apply(FcsRecord)`, allowed only during `EditData` (later they throw). They are queued; when
+  `EditData` returns they are checked whole (an id on each, no null name, value, reference target or instance), then merged in order by the
+  record rules of a data file listed after every loaded one ([fcs-mod](formats/fcs-mod.md#merging); the loader's byte rules for reading a
+  file do not apply), counted as made by the mod's own `.mod` file (`ModifiedBy`, problems in `Issues`), which is not listed again in
+  `GameDatabase.Files`. Writing to `Data` directly is unsupported: it is not checked, counted or in the navmesh key. Not offered: `Harmony`
+  (patch in `Initialize`), saved settings and `Dependency<T>` (a framework cannot serve its dependents here).
+- A throw in `EditData`, or a change that fails the check, merges none of the mod's changes and leaves the mod out for the session (a notice,
+  as a refused mod). A mod whose required dependency was left out or skipped there, directly or through others, is skipped and then refused.
+  Changes are never undone: when a mod (or a dependency) is refused later, in `Initialize` or its checks, its merged changes stay for the
+  session.
+- Merged after the translations: a record a mod adds or renames is not translated, not even by its own translation file. The gear
+  blueprints (`<id>.TECH.1`) and wall masters are made after the phase, so they cannot be changed in it; an `<id>.TECH.1` a mod adds is kept
+  in place of the blueprint.
+- Without any enabled code mod whose entry declares `IModDataPhase`, nothing changes: the data loads as before and mods load in
+  `BootSimulation` as described above. With one, every enabled code mod's assemblies load and its entry type is constructed while the data is
+  read, before the scene, renderer and population exist (an entry constructor must not need them), including a mod refused later.
+  `Initialize` keeps its order and place, each mod checked again against the mods initialized before it, so a dependency that fails to
+  initialize refuses its dependents as without a data phase (an optional one that failed is dropped from `Dependency`, though the mod's
+  assemblies stay bound to its exports). One difference: of two mods with one id, or two incompatible ones, the later is refused once the
+  earlier's code loaded, even if the earlier then fails to initialize.
+- `GameDatabase.CodeEdits` holds a fingerprint of each mod's merged changes; the navmesh cache key takes them
   ([simulation](simulation.md#navmesh)) as it stamps the data files.
+- The game's own runs read the data with the phase; `--no-population` runs it but no `Initialize` (no population is made), and
+  `--data-check`, the launcher and the developer tools read the data files without it.
 - Built from the records before `Initialize` (so only the data phase reaches them): the start's place and the scene's objects, the
   renderer's tables, the level data's building swaps, ruins and layouts, the navmesh, the population's towns, factions, relations and
   biome groups, the town buildings, sight and resource rocks, rigs and animations. Made on first use after `Initialize`
@@ -555,7 +570,7 @@ difference it runs the game without mods: if that differs too, the fault is the 
 - The manifest's `apiVersion` must lie in `ModApi.MinimumVersion` (1) to `ModApi.Version` (2); otherwise the mod is refused at load with a
   message. 2 added `version`, `dependencies`, `loadAfter`, `incompatible`, `gameVersion`, `ModContext.Dependency<T>` and
   `IModDependents`; an API 1 mod loads unchanged. `gameVersion` ties a mod to the engine releases it was built against. The
-  [data phase](#data-phase) (`IModData`) adds no manifest key; a mod using it names the releases that have it in `gameVersion`.
+  [data phase](#data-phase) (`IModDataPhase`) adds no manifest key; a mod using it names the releases that have it in `gameVersion`.
 - Harmony patches non-public members; compiling against them takes the [reference package](#reference-package)'s publicized set, or a
   publicizer package (BepInEx.AssemblyPublicizer.MSBuild with `Publicize="true"`) on a release folder's assemblies. Compatibility is per game
   version ([Why this shape](#why-this-shape)): public names change too, as after v0.17.1, and internals change without notice.

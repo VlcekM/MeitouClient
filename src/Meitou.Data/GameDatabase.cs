@@ -68,7 +68,7 @@ public sealed class GameDatabase
     public List<string> Translations { get; } = [];
 
     /// <summary>
-    /// The files of the code that changed records after the data files (<see cref="Change"/>: a code mod's assemblies, docs/modding.md "Data
+    /// A fingerprint of each set of changes code merged after the data files (<see cref="Change"/>: a code mod's data phase, docs/modding.md "Data
     /// phase"), in order, for the caches keyed on what the records were made from; empty when no code changed them.
     /// </summary>
     public List<string> CodeEdits { get; } = [];

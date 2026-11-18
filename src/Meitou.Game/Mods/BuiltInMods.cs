@@ -67,13 +67,18 @@ static class BuiltInMods
     /// </summary>
     public static void SkipCovered(List<ModInfo> enabled, List<ModInfo> disabled)
     {
-        foreach (var mod in enabled.Where(m => CoveredOf(m) is { Mod.CodeId: not null }).ToList())
+        foreach (var mod in enabled.Where(IsCovered).ToList())
         {
             Console.WriteLine($"mods      {mod.Name} not run: built into Meitou");
             enabled.Remove(mod);
             disabled.Add(mod);
         }
     }
+
+    /// <summary>
+    /// Whether <see cref="SkipCovered"/> leaves <paramref name="mod"/> out (a code mod whose feature Meitou has built in); no log line.
+    /// </summary>
+    public static bool IsCovered(ModInfo mod) => CoveredOf(mod) is { Mod.CodeId: not null };
 
     /// <summary>
     /// <paramref name="saved"/> without the covered code mods, so a save made while one ran does not report it gone.
