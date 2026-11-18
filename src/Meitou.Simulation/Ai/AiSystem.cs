@@ -1063,7 +1063,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// The town goal 118 shops in, with its places, its key in the shopping list (<see cref="ShoppingList.KeyOf"/>) and whether its random pick
     /// runs (<see cref="RandomShopping"/>). The original's goal takes the shopper's status town and finds nothing without one
     /// (<c>FUN_1409997f0</c> reads status <c>+0x88</c> and returns 0 when it is empty, <b>Verified</b>, disassembly;
-    /// <see cref="CharacterCold.StatusTown"/>, worked out here for a character the status pass has not reached yet). So a shopper shops where it
+    /// <see cref="CharacterCold.StatusTown"/>; a character that holds none has it worked out from where it stands, as the status pass does on
+    /// entering a town, so one the pass has not reached yet shops too). So a shopper shops where it
     /// stands, never in a town it is away from: at an outpost's shops (<see cref="TownPlaceIndex.OutpostShops"/>) with no random pick (a town of
     /// the player's faction), in a placed town at that town's. A shopper of the player's faction (an autonomous squad) is left out: the original
     /// plans no goals for the player's squads, and its buying in an outpost would only move the player's goods between the player's own counter
@@ -2952,7 +2953,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         bool moved = own && cold.Ai is { } brought && !ReferenceEquals(brought.Squad, squad);
 
         // Every character has goals in the original, and a slave's are its master's Slave list (ObeyedRoles), whoever moves its own squad: a
-        // captive of a roaming squad the population moves would otherwise stand where it was enslaved, its engine mind on that squad's trip (#904).
+        // captive of a squad the population moves (a campaign's, a held one) would otherwise stand where it was enslaved, on an engine mind (#904).
         bool obeys = populationMoves && ObeyedRoles(world, squad, cold) is not null;
         if ((!populationMoves || obeys) && (moved || cold.Ai is null or { Engine: true })) GiveMind(world, squad, board, k, s, own);
 
@@ -2965,14 +2966,16 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// Member <paramref name="k"/> (slot <paramref name="s"/>) gets a mind of the squad's package. A leader the population had walking its trip
-    /// (an engine mind's routine, <see cref="EngineRoutine"/>) is stopped first: the trip is the engine's stand-in for the package that moved it,
-    /// and in the original the package that takes over (a contract started on the way) gives the leader its own goals at once.
+    /// (an engine mind's routine, <see cref="EngineRoutine"/>, or the walk a platoon is given as it comes into the world, before it has a mind) is
+    /// stopped first: the trip is the engine's stand-in for the package that moved it, and in the original the package that takes over (a
+    /// contract started on the way, or simply the package of a platoon that loaded) gives the leader its own goals at once.
     /// </summary>
     void GiveMind(World world, Squad squad, Blackboard board, int k, int s, bool own)
     {
         var table = world.Characters;
         var cold = table.Cold(s)!;
-        if (cold.Ai is { Engine: true } && OnTrip(table.Next[s], cold)) TaskStart.End(world, s, TaskEnd.Stopped);
+        if ((cold.Ai is { Engine: true } || cold.Ai is null && squad.PlatoonId >= 0) && OnTrip(table.Next[s], cold))
+            TaskStart.End(world, s, TaskEnd.Stopped);
 
         var p = table.Next[s].Position;
         cold.Ai = new AiMind
@@ -3373,8 +3376,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// Whether the population, not the squad's blackboard, moves a loaded platoon's squad: a campaign's (<see cref="Platoon.Campaign"/>: the
     /// campaign march stands for the war package classes, which are not built) and one a code mod holds (<see cref="Platoon.Held"/>). Every other
-    /// loaded platoon acts out its package's goals with full minds, as in the original (<see cref="PlatoonOf"/>). The test never changes while
-    /// the squad walks, so a squad cannot flip between the two kinds of mind on its way.
+    /// loaded platoon acts out its package's goals with full minds, as in the original (<see cref="PlatoonOf"/>). The test does not depend on
+    /// where the squad stands, so walking into or out of a town never changes its kind of mind; a campaign drafting or releasing a loaded platoon
+    /// and a mod's hold do, and the minds are made again then (<see cref="EngineMinds"/>, <see cref="GiveMind"/>).
     /// </summary>
     internal static bool PopulationRuns(Platoon platoon) => platoon.Campaign is not null || platoon.Held;
 

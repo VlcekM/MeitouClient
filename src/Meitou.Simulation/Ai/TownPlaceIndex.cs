@@ -166,7 +166,7 @@ sealed class TownPlaceIndex(PopulationData data)
     /// The shops of each outpost (<see cref="OutpostShops"/>), their sites noted in <paramref name="seen"/>: the original's shop test passes a
     /// building of the player's faction with an interior, a function 9 piece in it and public, no residents needed (<c>FUN_1409986e0</c>,
     /// <b>Observed</b>, disassembly), and its list finder takes the shops of the shopper's status town, an outpost when it stands in one
-    /// (<c>FUN_1409997f0</c>, <b>Observed</b>, disassembly). So a complete, standing building the player built in an outpost, set public, with a shop counter the player built
+    /// (<c>FUN_1409997f0</c>, <b>Verified</b>, disassembly). So a complete, standing building the player built in an outpost, set public, with a shop counter the player built
     /// inside (which gives it the interior), is a shop of that outpost; it sells what its counters hold.
     /// </summary>
     void AddOutpostShops(World world, AiSystem ai, HashSet<string> seen)

@@ -177,7 +177,7 @@ A slave's Slave role list runs through the Obedient Slave job (187): [role lists
     every member of its squad is added to the target's squad (squad vfunc 0x10), a target running the same package id forgets its own mission target, and the platoon is removed from its faction
     (`FUN_1406ba9d0`). A target that no longer resolves is cleared.
   - Finished (`FUN_140288f80`): the leader's current town (`+0x1a0 → +0x88`) is the mission town (**Observed**: the second argument of the handle compare `FUN_140594440` is not in the decompile).
-  Meitou (`AiSystem.Packages.cs`, exercised by a throwaway test, not kept): as decoded for AI-run squads (a squad of a roaming platoon is not AI-run), counting living members for both counts, searching the AI-run squads of the
+  Meitou (`AiSystem.Packages.cs`, exercised by a throwaway test, not kept): as decoded for AI-run squads, counting living members for both counts, searching the AI-run squads of the
   faction in the same grid cell; the merge is `SquadManagement.Merge`. Not built: the destroyed-home half (Meitou towns are never destroyed), persistence.
 - **Campaign_DefendPlayerBase** (31): start: the player town nearest its platoon (`FUN_140927f10`) as mission town; finished when its employer turned on it (+0xa8) or the
   blackboard's contract time (+0x218) has passed; sees the town faction as allies (memory 3); its end posts "Contract with {faction} has ended." / "has been
