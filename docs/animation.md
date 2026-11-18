@@ -258,6 +258,12 @@ record's `play speed`); an action in progress (`gotobed`) runs by the normal rul
 rate 1.0; else `Character+0x51c` (`MedicalSystem::dazedOrAlert`, KenshiLib name **Observed**) at or under 0.05, or a leg-collapse state, gives `+0x418` at rate 0.025, at or under 0.2 `+0x418` at 0.5, else `+0x408` at 0.5; a running `stand 1` action is dropped first.
 Meitou: a sleeper plays `CharacterCold.OperateClip` as a held clip at that flat 0.1 (`AnimationSystem.BedRate`; #634: a mod's `sleepinbed` `play speed` 0.2 does not speed it up); a prisoner (`CharacterCold.CageClips`) plays the KO clip while down, the dazed clip
 with a leg down (engine reading of dazedOrAlert), else the idle clip, at the records' play speeds.
+**Movement scale in a bed** (**Verified**, decompiled `FUN_14052bb10`, run on entering and leaving a bed `FUN_14032e2f0` / `FUN_140345620` and by the body shape `FUN_14052e6c0`):
+the skeleton's movement scale (Kenshi's `OldSkeletonInstance::setMovementScale`, which `Skeleton::setAnimationState` passes to every track as the translations' scale) is 1.0 (`DAT_14167c308`)
+while `Character+0x2f8` is 1 (a bed), else the body shape's H (`+0x184`) unless the character's vfunc `0x70` object has its byte `+0xb8` set (then 1.0 as well).
+So the bed clip's `Bip01` side offset (`sleepinbed` and Cuddling.mod's `newsleep` about 11.7) is not stretched by a tall character's legs. Meitou: `CharacterInstance.UnitMovement` (set from `InBed`), `SkeletonRig.PoseDerived`.
+**Translations kept** (**Verified**, Kenshi's OgreMain `OldNodeAnimationTrack::applyToNode` and `Animation::apply`): a layer whose definition has `relocates` (`+0x88`, layer `+0x68`) gets
+`AnimationState::setDisableTranslation`, which zeroes X and Z of every track's translation (Y kept); the bed clips have `relocates` false, so their offset applies.
 
 ### At a machine or on a seat
 

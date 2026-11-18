@@ -733,7 +733,7 @@ static class AtmosphereShaders
                     #endif
             if (useGi)
             {
-                vec4 gi = giIrradiance(world, n, v);
+                vec4 gi = giIrradiance(world, n, v, giInterior);
                 gi.rgb = giSurfaceIrradiance(gi.rgb, envDiffuse, giInterior);
                 gi.a = giWeight(gi.a, giInterior);
                 float sky = dot(envDiffuse, vec3(0.2126, 0.7152, 0.0722));

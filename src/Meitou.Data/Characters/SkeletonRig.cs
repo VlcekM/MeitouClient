@@ -461,12 +461,13 @@ public sealed class PoseScratch
     /// <summary>
     /// Poses the skeleton with <paramref name="layers"/> (empty: the binding pose) and the body shape <paramref name="shape"/> (null: neutral);
     /// writes each bone's skin matrix into <paramref name="skin"/> (<see cref="SkeletonRig.BoneCount"/> entries, System.Numerics row-vector form,
-    /// the memory a GLSL <c>mat4</c> reads as its column-vector form).
+    /// the memory a GLSL <c>mat4</c> reads as its column-vector form). <paramref name="unitMovement"/>: the tracks' translations at scale 1, not the
+    /// shape's movement scale (<see cref="PoseDerived"/>).
     /// </summary>
     public void Pose(BodyShapeData? shape, ReadOnlySpan<ActiveLayer> layers, Span<Matrix4x4> skin, BonePose? overrides = null,
-        (float Neck, float Head) pitch = default)
+        (float Neck, float Head) pitch = default, bool unitMovement = false)
     {
-        PoseDerived(shape, layers, overrides, pitch);
+        PoseDerived(shape, layers, overrides, pitch, unitMovement);
         for (int h = 0; h < _rig.BoneCount; h++) skin[h] = Offset(h);
     }
 
@@ -489,13 +490,15 @@ public sealed class PoseScratch
 
     /// <summary>
     /// Poses the derived transforms; <paramref name="overrides"/> (null: none) replaces the model-space rotations of some bones afterwards, and their
-    /// children follow.
+    /// children follow. <paramref name="unitMovement"/>: the translations at scale 1 whatever the shape's movement scale (the original sets the
+    /// skeleton's to 1 while the character lies in a bed, <c>FUN_14052bb10</c>, docs/animation.md "In a bed or a cage").
     /// </summary>
-    public void PoseDerived(BodyShapeData? shape, ReadOnlySpan<ActiveLayer> layers, BonePose? overrides = null, (float Neck, float Head) pitch = default)
+    public void PoseDerived(BodyShapeData? shape, ReadOnlySpan<ActiveLayer> layers, BonePose? overrides = null, (float Neck, float Head) pitch = default,
+        bool unitMovement = false)
     {
         int count = _rig.BoneCount;
         BindLocal(count);
-        float movement = shape?.MovementScale ?? 1;
+        float movement = unitMovement ? 1 : shape?.MovementScale ?? 1;
         BlendLayers(layers, count, movement);
         Derive(shape, overrides, pitch);
     }

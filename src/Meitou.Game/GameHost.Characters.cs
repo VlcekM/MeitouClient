@@ -689,7 +689,8 @@ sealed partial class GameHost
             ref Slot(ref _spareRagdollsBySlot, c.Id.Slot));
         bool fullRated = editing is not null || _fullRate.Contains(c.Id) || photoPosed && !hidden
             || c.Id == Sandbox.SandboxHero && Sandbox.SandboxPicker?.Current is not null;
-        var instance = Drawn(c, look, position, yaw, poses, rotation, bones, hidden, fullRated) with { Anchor = AnchorOf(before, c, alpha) };
+        var instance = Drawn(c, look, position, yaw, poses, rotation, bones, hidden, fullRated)
+            with { Anchor = AnchorOf(before, c, alpha), UnitMovement = c.InBed };
         if (photoLook.Weapon is { } weaponDrawn) instance = instance with { WeaponDrawn = weaponDrawn };
         if (photoLook.NoWeapon || photoLook.HeadPitch != 0) instance = instance with { WeaponsHidden = photoLook.NoWeapon, HeadPitch = photoLook.HeadPitch };
         if (glide is { } mixed) instance = instance with { BlendFrom = mixed.From, Blend = mixed.Blend };

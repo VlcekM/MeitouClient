@@ -42,6 +42,12 @@ public readonly record struct CharacterInstance(long Key, CharacterAppearance Ap
     public float HeadPitch { get; init; }
 
     /// <summary>
+    /// The clips' translations at scale 1 instead of the body shape's movement scale: the original's while the character lies in a bed
+    /// (<c>FUN_14052bb10</c>, docs/animation.md "In a bed or a cage").
+    /// </summary>
+    public bool UnitMovement { get; init; }
+
+    /// <summary>
     /// The weapon in hand is the crossbow: its in-hand parts (<see cref="WeaponShown.RangedDrawn"/>) show, the melee weapon's sheathed ones.
     /// </summary>
     public bool RangedDrawn { get; init; }

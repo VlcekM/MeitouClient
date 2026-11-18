@@ -434,7 +434,7 @@ public static class WorldObjectLayout
     }
 
     /// <summary>
-    /// The building's position marker (<c>getPositionMarker</c> of a building with fewer than two use nodes, FUN_14054b850; <b>Verified</b>,
+    /// The building's position marker when it has no use node (one with use nodes has node 0's, docs/game/locks.md "Lie spot"; <b>Verified</b>,
     /// FUN_14055f6e0:376-425): a part with a mesh flagged <c>is for position marker</c> sets it to the building's position plus its orientation
     /// applied to the part's offset times the building's scale (the mesh itself is not offset); the last such part wins. Null when the placement
     /// spawns none (the marker is then the building's position).

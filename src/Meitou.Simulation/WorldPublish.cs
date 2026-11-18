@@ -429,7 +429,7 @@ public sealed partial class World
         s.Lean = cold is { InSomething: Locks.HeldState.Bed, InWhat: { } lainIn } && Fixtures.Find(lainIn) is { } bed
             ? Locks.FixtureRegistry.LeanOf(bed)
             : null;
-        s.Position = DrawnPosition(cold, state[i].Position, s.Lean);
+        s.Position = DrawnPosition(cold, state[i].Position);
         s.Yaw = state[i].Yaw;
         s.Animations = cold?.Animation is { } anim && _animations is not null
             ? _animations.Publish(anim, s.Layers)
@@ -660,12 +660,6 @@ public sealed partial class World
     #region Character views
 
     /// <summary>
-    /// How far a sleeper is drawn above its lie spot (engine choice, docs/game/locks.md "Beds"): the bed clips hold <c>Bip01</c> about level with the
-    /// mattress top (<c>sleepinbed</c> 6.7 on <c>Bed</c>'s 7.36, <c>sleeponfloor</c> 1.46 on <c>Camp Bed</c>'s 1.73), so the body sank into it.
-    /// </summary>
-    const float BedLift = 1.5f;
-
-    /// <summary>
     /// The equipment slots a closed section of the inventory can be (<see cref="ClosedSlotsOf"/>).
     /// </summary>
     static readonly string[] ClosableSlots = ["head", "shirt", "boots"];
@@ -679,12 +673,11 @@ public sealed partial class World
     /// Where a character is drawn: a character on the water, which the simulation keeps on the navmesh's flat surface, is lowered to what it stands
     /// on (<see cref="IWalkability.WaterBed"/>: a sunken floor, else the seabed) or, swimming, to <see cref="Bodies.Speed.WadingHeight"/> (the same
     /// surface test as <see cref="MovementSystem"/>'s water state: within <see cref="Bodies.Speed.WaterSlack"/> of the water level). Not a carried or
-    /// a downed body. One lying in a bed is raised by <see cref="BedLift"/>, along the up axis of a bed that leans (<paramref name="lean"/>).
+    /// a downed body, nor one lying in a bed: it lies at its lie spot as the original draws it (docs/game/locks.md "Lie spot").
     /// </summary>
-    Vector3 DrawnPosition(CharacterCold? cold, Vector3 at, Quaternion? lean)
+    Vector3 DrawnPosition(CharacterCold? cold, Vector3 at)
     {
-        if (cold?.InSomething == Locks.HeldState.Bed)
-            return lean is { } leaning ? at + Vector3.Transform(Vector3.UnitY, leaning) * BedLift : at with { Y = at.Y + BedLift };
+        if (cold?.InSomething == Locks.HeldState.Bed) return at;
 
         if (cold is not { Race: { } race, Medical: not { Incapacitated: true } } || !cold.CarriedBy.IsNone
             || at.Y > Data.World.WorldWater.Height + Speed.WaterSlack)
