@@ -140,20 +140,26 @@ is the consent, as in RimWorld: the game loads every enabled code mod's code, wi
   (`GameDatabase.Load`) and before the loader's own passes (wall masters, gear blueprints, docs/formats/fcs-mod.md), so before anything is
   built from the records, in `mods.cfg` order and before any mod's `Initialize`. One thread; nothing else reads the data yet. Which mods have
   one is read from the assemblies' metadata (no code run); a base class in another assembly (a framework's) does not give a mod a data phase,
-  and only the mods found that way are called, whatever other mods are enabled.
+  and only the mods found that way are called, whatever other mods are enabled. A loaded entry that is an `IModDataPhase` the scan did not
+  find gets a log line saying its `EditData` does not run.
 - `ModDataContext`: `Id`, `Name`, `Folder`, `CodeFolder`, `Manifest`, `Log`/`LogError`, the merged `Data` to read (the files, translations
   and the earlier mods' changes), and changes in the form of a `.mod` file's records: `Edit(id)` (a change of a loaded record, returned to
   fill), `Add(id, type, name)`, `Remove(id)` and `Apply(FcsRecord)`, allowed only during `EditData` (later they throw). They are queued; when
-  `EditData` returns they are checked whole (an id on each, no null name, value, reference target or instance), then merged in order by the
+  `EditData` returns they are copied and checked whole (an id on each, no null name, value, reference target or instance), then merged in
+  order by the
   record rules of a data file listed after every loaded one ([fcs-mod](formats/fcs-mod.md#merging); the loader's byte rules for reading a
   file do not apply), counted as made by the mod's own `.mod` file (`ModifiedBy`, problems in `Issues`), which is not listed again in
   `GameDatabase.Files`. Writing to `Data` directly is unsupported: it is not checked, counted or in the navmesh key. Not offered: `Harmony`
-  (patch in `Initialize`), saved settings and `Dependency<T>` (a framework cannot serve its dependents here).
+  (patch in `Initialize`), saved settings and `Dependency<T>` (a framework cannot serve its dependents here). `Edit` and `Remove` take only a
+  record loaded before the mod: change a record the mod adds on the object `Add` returned, and check `Data.Find` before changing one an
+  earlier mod may have removed.
 - A throw in `EditData`, or a change that fails the check, merges none of the mod's changes and leaves the mod out for the session (a notice,
   as a refused mod). A mod whose required dependency was left out or skipped there, directly or through others, is skipped and then refused.
   Changes are never undone: when a mod (or a dependency) is refused later, in `Initialize` or its checks, its merged changes stay for the
   session.
-- Merged after the translations: a record a mod adds or renames is not translated, not even by its own translation file. The gear
+- Merged after the translations: a record a mod adds or renames is not translated, not even by its own translation file, and a rename sets
+  the shown name only: on a record a translation renamed, the name the engine finds records by (`BaseName`, which it uses for the records it
+  finds by a fixed id or name) keeps its earlier value, as when a mod's data file renames a record the core translation renamed. The gear
   blueprints (`<id>.TECH.1`) and wall masters are made after the phase, so they cannot be changed in it; an `<id>.TECH.1` a mod adds is kept
   in place of the blueprint.
 - Without any enabled code mod whose entry declares `IModDataPhase`, nothing changes: the data loads as before and mods load in
@@ -163,9 +169,11 @@ is the consent, as in RimWorld: the game loads every enabled code mod's code, wi
   initialize refuses its dependents as without a data phase (an optional one that failed is dropped from `Dependency`, though the mod's
   assemblies stay bound to its exports). One difference: of two mods with one id, or two incompatible ones, the later is refused once the
   earlier's code loaded, even if the earlier then fails to initialize.
-- `GameDatabase.CodeEdits` holds a fingerprint of each mod's merged changes; the navmesh cache key takes them
-  ([simulation](simulation.md#navmesh)) as it stamps the data files.
-- The game's own runs read the data with the phase; `--no-population` runs it but no `Initialize` (no population is made), and
+- `GameDatabase.CodeEdits` holds a fingerprint of each mod's merged changes (the same on every machine and in every language for the same
+  changes); the navmesh cache key takes them ([simulation](simulation.md#navmesh)) as it stamps the data files, so a mod whose changes differ
+  from one start to the next rebuilds the navmesh at every start.
+- The game's own runs read the data with the phase; `--no-population` runs it but no `Initialize` (no population is made),
+  `--list-starts` runs it before listing the starts, and
   `--data-check`, the launcher and the developer tools read the data files without it.
 - Built from the records before `Initialize` (so only the data phase reaches them): the start's place and the scene's objects, the
   renderer's tables, the level data's building swaps, ruins and layouts, the navmesh, the population's towns, factions, relations and

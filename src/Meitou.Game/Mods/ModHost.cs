@@ -2,6 +2,7 @@ using System.Reflection;
 using HarmonyLib;
 using Meitou.Content;
 using Meitou.Data;
+using Meitou.Data.Fcs;
 using Meitou.Game.Ui;
 using Meitou.Simulation;
 using Meitou.Simulation.Population;
@@ -314,11 +315,24 @@ public sealed class ModHost
                     Console.Error.WriteLine($"mod       {mod.Manifest.Id}: data phase skipped: its dependency '{gone.Manifest.Id}' was left out");
                 continue;
             }
-            if (!phased.Contains(mod.Info.Name) || mod.Instance is not IModDataPhase editor) continue;
+            if (!phased.Contains(mod.Info.Name))
+            {
+                if (mod.Instance is IModDataPhase) NoteUnscannedDataPhase(mod);
+                continue;
+            }
+            if (mod.Instance is not IModDataPhase editor) continue;
 
             if (!TryEditData(mod, index, editor, data)) lost.Add(mod);
         }
     }
+
+    /// <summary>
+    /// The log line for a mod whose entry is an <see cref="IModDataPhase"/> the metadata scan did not find (a base class in another assembly, or
+    /// metadata the scan cannot read), whose <see cref="IModDataPhase.EditData"/> therefore never runs.
+    /// </summary>
+    internal static void NoteUnscannedDataPhase(LoadedMod mod) =>
+        Console.Error.WriteLine($"mod       {mod.Manifest.Id}: implements IModDataPhase, but not on its entry type or a base class in the same "
+            + "assembly, so its EditData does not run (declare IModDataPhase on the entry type)");
 
     /// <summary>
     /// The first required dependency of <paramref name="mod"/> in <paramref name="lost"/> (refused or skipped in this data phase), or null.
@@ -344,11 +358,16 @@ public sealed class ModHost
     bool TryEditData(LoadedMod mod, int index, IModDataPhase editor, GameDatabase data)
     {
         var context = new ModDataContext(mod, data);
+        List<FcsRecord> changes = [];
         string? failure;
         try
         {
             editor.EditData(context);
-            failure = ModDataChanges.Problem(context.Changes) is { } problem ? $"a game data change it made cannot be applied: {problem}" : null;
+            context.Open = false;
+
+            // Copied before the check, so a mod's thread still writing to the records it queued cannot change them between check and merge.
+            changes = ModDataChanges.Snapshot(context.Changes);
+            failure = ModDataChanges.Problem(changes) is { } problem ? $"a game data change it made cannot be applied: {problem}" : null;
         }
         catch (Exception e)
         {
@@ -360,7 +379,7 @@ public sealed class ModHost
             context.Open = false;
         }
 
-        if (failure is null && TryApplyChanges(context, data)) return true;
+        if (failure is null && TryApplyChanges(context, changes, data)) return true;
 
         _prepared.Remove((mod, index));
         Refuse(mod.Info.Name, failure ?? "its game data changes failed to apply");
@@ -368,17 +387,17 @@ public sealed class ModHost
     }
 
     /// <summary>
-    /// A data phase's checked changes into <paramref name="data"/>, in order, as made by the mod's own data file, and their fingerprint into
-    /// <see cref="GameDatabase.CodeEdits"/>. False when the merge threw, which the check before it rules out; the changes merged before the throw
-    /// then stay (a merge cannot be undone in place), and the line says so.
+    /// A data phase's checked changes (<paramref name="changes"/>, the copy of the mod's queue) into <paramref name="data"/>, in order, as made by
+    /// the mod's own data file, and their fingerprint into <see cref="GameDatabase.CodeEdits"/>. False when the merge threw, which the check before
+    /// it rules out; the changes merged before the throw then stay (a merge cannot be undone in place), and the line says so.
     /// </summary>
-    static bool TryApplyChanges(ModDataContext context, GameDatabase data)
+    static bool TryApplyChanges(ModDataContext context, List<FcsRecord> changes, GameDatabase data)
     {
-        if (context.Changes.Count == 0) return true;
+        if (changes.Count == 0) return true;
 
         try
         {
-            foreach (var change in context.Changes) data.Change(change, context.FileName);
+            foreach (var change in changes) data.Change(change, context.FileName);
         }
         catch (Exception e)
         {
@@ -386,8 +405,8 @@ public sealed class ModHost
             return false;
         }
 
-        data.CodeEdits.Add(ModDataChanges.Fingerprint(context.Id, context.Changes));
-        Console.WriteLine($"mod       {context.Id}: data phase changed {context.Changes.Count} record(s)");
+        data.CodeEdits.Add(ModDataChanges.Fingerprint(context.Id, changes));
+        Console.WriteLine($"mod       {context.Id}: data phase changed {changes.Count} record(s)");
         return true;
     }
 
