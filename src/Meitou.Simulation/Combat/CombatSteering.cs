@@ -167,7 +167,8 @@ public static class CombatSteering
         || !c.CarriedBy.IsNone || h.Task == (byte)CharacterTask.Rest && c.Ai?.SitClip is not null;
 
     /// <summary>
-    /// A character's steering radius (<c>getRadius</c>): its footprint x its size.
+    /// A character's steering radius (<c>getRadius</c>): its footprint x its size. Also its nav agent's radius (<c>+0x70</c>), which its path
+    /// requests and the wall sweep use (docs/game/pathfinding.md "Walls").
     /// </summary>
     public static float Radius(CharacterCold? c) => CombatTuning.Footprint(c) * (c?.Medical?.ScaleK ?? 1);
 

@@ -476,7 +476,7 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         var next = table.Next;
         var water = WaterCost.Of(cold.WaterFactor);
         var path = world.Walkability is IAgentWalkability agent
-            ? agent.FindPath(next[i].Position, prev[t].Position, cold.FootprintRadius, water, cold.RoadPreference)
+            ? agent.FindPath(next[i].Position, prev[t].Position, CombatSteering.Radius(cold), water, cold.RoadPreference)
             : world.Walkability.FindPath(next[i].Position, prev[t].Position);
 
         return path.Points.Count > 0 && !EndsShort(path.Points[^1], prev[t].Position, cold, table.Cold(t), endReach);

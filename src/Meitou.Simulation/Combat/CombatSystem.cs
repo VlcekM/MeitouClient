@@ -823,7 +823,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
             float step = MathF.Min(speed * dts, gap - stand);
 
             // Through the nav agent, as root motion: a wall stops the body's circle and it slides along it (docs/game/pathfinding.md "Walls").
-            var moved = world.Walkability.Slide(prev[i].Position, dir * step, CombatTuning.Footprint(cold));
+            var moved = world.Walkability.Slide(prev[i].Position, dir * step, CombatSteering.Radius(cold));
             float x = prev[i].Position.X + moved.X, z = prev[i].Position.Z + moved.Y;
             if (world.Walkability.IsWalkable(x, z, prev[i].Position.Y))
             {

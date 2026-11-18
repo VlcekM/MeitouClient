@@ -128,6 +128,11 @@ Every move of the nav agent, the animation-driven one (root motion, mode 3) incl
 - **Verified** (disassembly of `FUN_140147fd0`): the sweep's radius is the agent's `+0x70` (passed in XMM3 to `FUN_1401445d0`; the gather range is `+0x70` + 6). `FUN_1401476f0`, the only body test in this
   step, yields a push-out direction and strength from characters overlapping the agent (nothing when none do); it does not cut the move short, and the original has no separate "end point must have a surface" test:
   the sweep alone keeps the agent on the mesh.
+- **Verified** (disassembly of `FUN_140661f90`, `FUN_1401468a0`, `FUN_140145cf0`): the agent's `+0x70` is the character's `pathfind footprint radius`
+  (copied to `+0x364`) x its size (vfunc 0x390, as in the animal building test) x 0.1 (Havok units), set when its movement is made; a path request
+  copies it as its radius. So a small animal (a Bonedog pup: footprint 10 x its size, 0.35..0.85 by age) passes stairs and doorways an adult of its race does not.
+  Meitou: path requests (`MovementSystem`, `Fighting`) and the sweep take `CombatSteering.Radius` (footprint x `ScaleK`); **Observed** (#1006, `probe walk`):
+  a Bonedog pup ordered to a shack's floor 1 stopped on floor 0 with the unscaled radius and climbs the stair with it.
 - Meitou root motion (`AnimationSystem.Relocate`): after the slide, an end point with no stand-on surface (`IsWalkable(x, z, y)`: off the mesh, a drop or step beyond `StandRise`/`StandDrop`) keeps the
   farthest walkable part of the step (bisection) instead of dropping all of it; when no part has one but the ground is within `StandRise`, the step is made (the sweep saw no wall, and the original has no such test), and a body already standing where no surface is (pushed onto a mesh edge or into a hole) is not refused at all
   (**Observed**, siwa-test6: characters stood for 10+ ticks with every root step refused; `root-log`: 21 refusals over three fights fell to 1). Standing bodies no longer cut a root step short: the original only pushes
@@ -141,7 +146,7 @@ Every move of the nav agent, the animation-driven one (root motion, mode 3) incl
   knocked out at tick ~1,260 (**Observed**).
 - Meitou: `IWalkability.Slide` (`NavmeshWalkability.Slide`) for root motion (`AnimationSystem.Relocate`) and the combat approach step (`CombatSystem`): the walls are the edges that lead
   nowhere (no neighbour or tile link, not a zone-border edge the next zone links or that borders an unloaded zone, not into a closed door), within `SnapRange` (16) of the walker's height (engine choice: the mesh's own error on stairs);
-  the radius is RACE `pathfind footprint radius`. Before, only the end point was tested, and with the 2-unit edge tolerance a step could cross a thin wall (Observed: on the Hub's
+  the radius is the agent's (footprint x size, above). Before, only the end point was tested, and with the 2-unit edge tolerance a step could cross a thin wall (Observed: on the Hub's
   navmesh about 3% of 1-unit random moves crossed a wall edge, none with the sweep).
 
 ### Water states
@@ -1049,7 +1054,6 @@ Shark's Makeshift Gate 0, every other door -1, so the first side is the inside.
 
 ## Unknowns
 
-- Whether the path request converts the footprint radius to Havok units.
 - The full avoidance parameters (the repulsion's absolute magnitude); how movement caps a follower's desired speed by its speed mode.
 - Whether face data values other than 3, 4, 5 and the gate nibble exist; how building construction and destruction
   update faces (path mode switches at runtime).

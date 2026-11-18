@@ -662,7 +662,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             float nearY = cold.GoalHeightAt == next[i].Goal && !float.IsNaN(cold.GoalHeight) ? cold.GoalHeight : next[i].Position.Y;
             var splice = SpliceTarget(next[i], cold);
             var to = splice ?? new Vector3(next[i].Goal.X, world.Walkability.GroundHeight(next[i].Goal.X, next[i].Goal.Y, nearY), next[i].Goal.Y);
-            cold.PathRequest = Paths.Submit(new CharacterId(i, next[i].Generation), next[i].Position, to, cold.FootprintRadius,
+            cold.PathRequest = Paths.Submit(new CharacterId(i, next[i].Generation), next[i].Position, to, CombatSteering.Radius(cold),
                 WaterCost.Of(cold.WaterFactor), cold.RoadPreference);
             if (splice is null) cold.SplicePath = null;
             else cold.SpliceRequest = cold.LastSplice = cold.PathRequest;

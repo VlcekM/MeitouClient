@@ -823,7 +823,7 @@ public sealed class AnimationSystem(
     {
         float sin = MathF.Sin(c.Yaw), cos = MathF.Cos(c.Yaw);
         var step = new Vector2(root.X * cos + root.Y * sin, -root.X * sin + root.Y * cos);
-        var block = new BodyBlock { Step = step, Radius = CombatTuning.Footprint(world.Characters.Cold(self)) };
+        var block = new BodyBlock { Step = step, Radius = CombatSteering.Radius(world.Characters.Cold(self)) };
 
         // The walls stop it as they stop the original's agent, which this move goes through: its circle slides along the first wall it meets
         // (docs/game/pathfinding.md "Walls").
@@ -895,7 +895,7 @@ public sealed class AnimationSystem(
         }
 
         var pos = table.Previous[slot].Position;
-        float radius = CombatTuning.Footprint(table.Cold(slot));
+        float radius = CombatSteering.Radius(table.Cold(slot));
         var walk = world.Walkability;
         if (at is { } where) pos = new Vector3(where.X, walk.TryStand(where.X, where.Y, pos.Y, out float ay) ? ay : pos.Y, where.Y);
 
@@ -942,7 +942,7 @@ public sealed class AnimationSystem(
             return lines;
         }
 
-        float footprint = CombatTuning.Footprint(table.Cold(slot));
+        float footprint = CombatSteering.Radius(table.Cold(slot));
         var walk = world.Walkability;
         float y0 = table.Previous[slot].Position.Y;
         var tally = new RootScanTally();
