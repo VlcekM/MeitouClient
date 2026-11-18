@@ -599,7 +599,11 @@ has an override world state (its lists are then replaced) or `0-buildinglist` ho
 - A bought house's own state: a save writes its `residents` link empty (C 0, TYPE 11) and keeps its `residents template` and `squad template`
   (**Observed**: in ShopCounterStart the Longhouse's link names its Shek squad, C 26 TYPE 34; in ShopCounterSold, bought there, it is empty and the
   templates are unchanged; none of the 1104 player-owned building states of ShopCounterSold, Vanilla729Plain and GreatAdventure140Plain has a
-  link). Meitou never reads the link back (residents come from the platoons' `homebuilding`).
+  link). Meitou never reads the link back (residents come from the platoons' `homebuilding`). Each door i's `owner faction ID<i>` is written as
+  the house's owner, the player's faction (**Observed**: in five original saves, ShopCounterStart, ShopCounterSold, Vanilla729Plain,
+  GreatAdventure140Plain and ZooOriginal, all 466 door owner keys equal their building's `owner faction ID`, the bought Longhouse's door the
+  player's); Meitou reads only the building's own `owner faction ID`. That the old link or door owner made the original's guards shoo the player
+  out of a house bought in MeitouClient (a game check of a save without these two writes) is an inference, not tested.
 - `1-itemlist` (**Observed**, METARU: 285 items in its zone files): INSTANCE_COLLECTION, name "0", flags 0; entries numbered "1", "2", ... with no states, the item's position and a
   full (physics-settled) quaternion, target an ITEM record (type 4, name "0", flags 0) of the same file, id `<n>-zone<X>.<Y>-INGAME` of the zone it was made in (an item
   moved to another zone keeps it). A container's ITEM has one instance ("1") naming an INVENTORY_STATE (type 41, name "0") whose instances name an INVENTORY_ITEM_STATE per item in it (`section` `backpack_content`, `in inventory` true), all with ids of the same form, as a carried container's contents (**Observed**: a Small Backpack holding two first aid kits that the original 1.0.68 saved on the ground). Its keys are INVENTORY_ITEM_STATE's with `in inventory` false and `section` "": `base data sid`, `material sid`, `company sid`,
