@@ -569,6 +569,7 @@ public sealed partial class World
         s.HostileToPlayer = cold is not null && CharacterFacts.HostileToPlayer(population?.Relations, Player.Faction, cold.Faction, fightsPlayer);
         s.Shackled = cold?.Inventory is { } worn && WearsLocked(worn);
         s.PortraitSerial = cold?.PortraitSerial ?? 0;
+        s.LastingId = cold?.LastingId ?? LastingId.None;
         s.ShacklesLocked = shown && Locks.LockSystem.WornShackles(cold) is not null;
         s.CanBeShackled = shown && cold is { IsPlayer: false } && Locks.LockSystem.CanBeShackled(cold, true);
         s.CarriesShackles = selected && Locks.LockSystem.CarriedShackles(cold) is not null;
@@ -806,7 +807,8 @@ public sealed partial class World
     /// <summary>
     /// The inventory window's view: Total Weight is the carried weight (<see cref="Bodies.Encumbrance.CarriedWeight"/>, a carried person included
     /// and a living holder's death items left out, as the original's panel <c>FUN_1405d4260</c>, docs/game/ui-screens.md), the maximum from the
-    /// holder's strength times the stats multiplier (an animal's age) and the burden factor from its strength.
+    /// holder's strength times the stats multiplier (an animal's age) and the burden factor from its strength; both with code mods' carry
+    /// modifiers.
     /// </summary>
     InventoryView InventoryViewOf(CharacterCold cold, Items.Inventory grid, PopulationData? population, GameConstants? constants,
         Func<Items.ItemInstance, float?>? steal)
@@ -815,12 +817,15 @@ public sealed partial class World
         bool carrying = !cold.Carrying.IsNone;
         float strengthMult = cold.Medical?.StatMultiplier(StatsEnumerated.Strength) ?? 1;
         var stats = constants is null ? null : cold.Stats;
+        var carry = stats?.CarryModifiersOrNull;
         return new InventoryView(grid.Width, grid.Height, grid.Backpack?.Contents?.Width ?? 0, grid.Backpack?.Contents?.Height ?? 0,
             ItemsOf(grid, cold.Faction, population, steal))
         {
             TotalWeight = constants is null ? items : Encumbrance.CarriedWeight(constants, items, carrying),
-            CarryCapacity = stats is null ? null : Encumbrance.WindowCapacity(constants!, stats.Strength * stats.Scale, strengthMult),
-            Burden = stats is null || items <= 0 && !carrying ? 1 : Encumbrance.Factor(constants!, items, carrying, stats.Strength, strengthMult),
+            CarryCapacity = stats is null ? null : Encumbrance.WindowCapacity(constants!, stats.Strength * stats.Scale, strengthMult, carry),
+            Burden = stats is null || items <= 0 && !carrying
+                ? 1
+                : Encumbrance.Factor(constants!, items, carrying, stats.Strength, strengthMult, carry),
         };
     }
 
@@ -1044,16 +1049,19 @@ public sealed partial class World
             // only writer besides the constructor, so this display state lives on the character; each character is published by one worker, so the
             // write does not race.
             cold.LastWeaponCategory = Combat.CombatSystem.HandCategory(cold);
-            var (label, skill) = cold.LastWeaponCategory switch
-            {
-                3 => ("Heavy:", StatsEnumerated.HeavyWeapons),
-                0 => ("Katana:", StatsEnumerated.Katanas),
-                4 => ("Hacker:", StatsEnumerated.Hackers),
-                1 => ("Sabre:", StatsEnumerated.Sabres),
-                5 => ("Martial Arts:", StatsEnumerated.MartialArts),
-                8 => ("Polearm:", StatsEnumerated.Polearms),
-                _ => ((string?)null, StatsEnumerated.None),
-            };
+            // A weapon naming a code mod's skill is labelled by that skill (Meitou; the original has none).
+            var (label, skill) = Combat.CombatSystem.HandModSkill(cold) is { } mod
+                ? (mod.Label + ":", cold.Fighter!.Weapon!.Skill)
+                : cold.LastWeaponCategory switch
+                {
+                    3 => ("Heavy:", StatsEnumerated.HeavyWeapons),
+                    0 => ("Katana:", StatsEnumerated.Katanas),
+                    4 => ("Hacker:", StatsEnumerated.Hackers),
+                    1 => ("Sabre:", StatsEnumerated.Sabres),
+                    5 => ("Martial Arts:", StatsEnumerated.MartialArts),
+                    8 => ("Polearm:", StatsEnumerated.Polearms),
+                    _ => ((string?)null, StatsEnumerated.None),
+                };
             if (label is not null)
                 return new(skill, label, (int)stats[skill]) { Damage = combat.HudDamage(this, id.Slot, cold) };
         }

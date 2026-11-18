@@ -153,7 +153,7 @@ public sealed partial class DialogueSystem
         mc.Ai = null;
         mc.Engaged = false;
         mc.Fleeing = false;
-        mc.Pending = null;
+        Crime.CrimeSystem.DropPending(world, slot, mc);
         mc.Jobs.Clear();   // an NPC's list, if any, does not carry over
         // a recruit's clothes are no longer a faction's uniform (dialogue.md "Recruiting")
         if (mc.Inventory is { } kit)

@@ -112,6 +112,9 @@ public static partial class SaveCapture
         // The item on the mouse is not saved: it goes back into its window first (docs/game/ui-screens.md section 6 "Holding an item").
         world.ReturnHeldItem();
 
+        // From here to the next tick (the mods' save data included) no lasting id is given: one given now would miss the ids file written below.
+        world.LastingIds.HoldForSave();
+
         var builder = prepared ?? PrepareBase(data, loaded, options);
         var game = builder.Game;
         s_memoryPass = new MemoryPass();
@@ -140,6 +143,7 @@ public static partial class SaveCapture
         WriteWild(builder, world, data, options, clock, buildings, races, campItems);
 
         options.HandlesWritten?.Invoke(s_memoryPass?.Handles ?? []);
+        game.LastingIds = world.LastingIds.Write(game, s_memoryPass?.ColdHandles ?? []);
         WriteMemories();
         game.UpdateDerived();
         return game;

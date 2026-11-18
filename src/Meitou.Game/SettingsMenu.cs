@@ -1104,6 +1104,11 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     internal static string ActionLabel(InputAction action) => Regex.Replace(action.ToString(), "(?<=[a-z0-9])(?=[A-Z])|(?<=[a-z])(?=[0-9])", " ");
 
     /// <summary>
+    /// An action's name in the notices: a code mod's action's caption (docs/modding.md "Key actions"), else <see cref="ActionLabel"/>.
+    /// </summary>
+    internal string Label(InputAction action) => Bindings.ModAction(action)?.Caption ?? ActionLabel(action);
+
+    /// <summary>
     /// A page's all-Faithful / all-Meitou switch over its Faithful / Meitou <paramref name="toggles"/> and the <paramref name="sliders"/> with both
     /// marks; it reads 1 when all are Meitou, 0 when all are Faithful, -1 when they are mixed.
     /// </summary>
@@ -1455,7 +1460,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// </summary>
     void SetBinding(InputAction action, Binding binding)
     {
-        if (RefusedBinding(action, binding) is { } refusal)
+        if (RefusedBinding(action, binding, Bindings.ModAction(action) is not null) is { } refusal)
         {
             Notice = refusal;
             return;
@@ -1464,7 +1469,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         // Rotate item acts only over an inventory item, so it shares its control with whatever acts elsewhere (the camera's orbit by default).
         // The build map is a key map of its own (docs/game/ui-input.md section 4): its keys are taken only from its actions, and the reverse.
         bool shared = action == InputAction.RotateItem;
-        var conflicts = InputBindings.SameMap(action)
+        var conflicts = Bindings.Actions
+            .Where(a => InputBindings.IsBuildMap(a) == InputBindings.IsBuildMap(action))
             .Where(a => a != action && a != InputAction.RotateItem && !shared && Bindings.Get(a).Contains(binding))
             .ToArray();
 
@@ -1476,7 +1482,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             Bindings.Set(other, [.. Bindings.Get(other).Where(b => b != binding), previous]);
             Bindings.Set(action, binding);
             Rebinding = null;
-            Notice = $"{ActionLabel(action)} bound to {binding}; {ActionLabel(other)} moved to {previous}.";
+            Notice = $"{Label(action)} bound to {binding}; {Label(other)} moved to {previous}.";
             return;
         }
 
@@ -1486,23 +1492,22 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Bindings.Set(action, binding);
         Rebinding = null;
         Notice = conflicts.Length == 0
-            ? $"{ActionLabel(action)} bound to {binding}."
-            : $"{ActionLabel(action)} bound to {binding}, taken from {string.Join(", ", conflicts.Select(ActionLabel))}.";
+            ? $"{Label(action)} bound to {binding}."
+            : $"{Label(action)} bound to {binding}, taken from {string.Join(", ", conflicts.Select(Label))}.";
     }
 
     /// <summary>
-    /// Why <paramref name="binding"/> cannot go to <paramref name="action"/>, or null: the reserved keys, and a mouse button for a build map action
-    /// (build mode takes only keys there; its buttons place and clear).
+    /// Why <paramref name="binding"/> cannot go to <paramref name="action"/>, or null: the reserved keys, for a code mod's action
+    /// (<paramref name="modAction"/>) also the keys the game keeps (Insert reaches this page on the Metal host, which has no console key), and a
+    /// mouse button for a build map action (build mode takes only keys there; its buttons place and clear).
     /// </summary>
-    static string? RefusedBinding(InputAction action, Binding binding)
+    static string? RefusedBinding(InputAction action, Binding binding, bool modAction)
     {
         if (binding.IsMouse && InputBindings.IsBuildMap(action)) return "Build keys take a key, not a mouse button. Choose a key, or Esc to cancel.";
         if (binding.IsMouse) return null;
 
-        return binding.Key is Key.Escape or Key.F6 or Key.LeftAlt or Key.RightAlt or Key.LeftControl or Key.RightControl or Key.LeftShift
-            or Key.RightShift
-            ? "That key is reserved. Choose another key, or Esc to cancel."
-            : null;
+        bool reserved = InputBindings.Reserved(binding) || (modAction && InputBindings.HostKey(binding));
+        return reserved ? "That key is reserved. Choose another key, or Esc to cancel." : null;
     }
 
     /// <summary>
@@ -1805,7 +1810,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         {
             string prompt = Notice.Length > 0
                 ? Notice
-                : $"{ActionLabel(binding)}: press a key or mouse button.\nDelete clears the binding. Esc cancels.";
+                : $"{Label(binding)}: press a key or mouse button.\nDelete clears the binding. Esc cancels.";
             Canvas.DrawMessage("Assign a control", prompt, () => Rebinding = null);
         }
 

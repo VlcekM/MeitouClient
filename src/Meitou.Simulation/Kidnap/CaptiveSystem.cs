@@ -1870,7 +1870,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         // Observed). Engine choice: "awake" for the
         // original's unnamed conscious test (vfunc 0x358).
         if (cc.Stats is { } stats && !medical.Incapacitated)
-            _xp.Continuous(stats, cc.Race!, StatsEnumerated.Toughness, dt, EatToughnessXp);
+            _xp.Continuous(stats, cc.Race!, StatsEnumerated.Toughness, dt, EatToughnessXp, ExperienceSource.Injury);
 
         float rate = MedicalState.EatRate(cc.Stats?.Toughness ?? 0, cc.Stats?.Scale ?? 1);
         bool vampiric = table.TryResolveNext(j.Worker, out int w) && table.Cold(w)?.Race is { Vampiric: true };
@@ -1880,6 +1880,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         if (medical.PlayingDead) medical.StandUp(Orders.Has(cc, CharacterOrders.Sneak));
         bool eaten = medical.BeingEaten(rate, dt, ctx, data.BodyOptions.Dismemberment != Dismemberment.Never, events, vampiric);
         ApplyBodyEvents(world, j.Captive, c, medical, events, limbDrops: false);
+        if (!wasDead) DeathObservers.Report(world, c, j.Worker, DeathSite.Eaten);   // the eater's bite killed it
 
         // "{1} has been eaten alive." for the player's own (FUN_140856bc0: of the player's faction, or of a squad that is).
         if (eaten && (cc.IsPlayer || world.Player.Faction >= 0 && cc.Faction == world.Player.Faction))

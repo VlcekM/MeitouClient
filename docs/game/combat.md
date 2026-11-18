@@ -17,7 +17,8 @@ hit code (whole-.text scan of reads at +0x248: only the armour and UI users): th
 (cut, blunt, pierce, stun 0) is then x the weapon's `human`/`animal`/`robot damage mult` (target robot race flag first, then the animal slot, then the human slot; 1 for a non-character
 target), x its `race damage` percent x 0.01 for the target's race, and, last, x the wearer's gear `damage output mult` (the whole packet, only when it is above 0 and not 1;
 the weapon skill itself is not scaled by it). Bleed multiplier (item `bleed mult`) and `armour penetration` ride along unscaled.
-Quality q = item level x 0.01 (`FUN_1400d3090`).
+Quality q = item level x 0.01 (`FUN_1400d3090`). Meitou: a WEAPON's `meitou skill` (not an editor field) names a code mod's skill that
+takes the category's skill's place in all of the above and in the weapon's experience ([modding](../modding.md), "Weapon types").
 
 Unarmed (stat-set category 5, the FISTS item for a person): rating R = lerp(e,0.2,1) x (martial arts raw + (int)(`unarmed bonus` with the [indoors](#indoors) modifier - dust penalty)) x slot 0x398
 (`FUN_140884e00` with its flag set, e the encumbrance factor; slot 0x398 is 1 for a person, `FUN_1405e5990`). Every combat caller sets the flag (the packet, the attack rating
@@ -54,6 +55,8 @@ in the damage packet, the attack rating and the defence rating alike; a door bas
 list unless `is block` or `is dodge` (then the defence list), in data order. Each keeps a per-category table:
 `katanas` 0, `sabre` 1, `blunt` 2, `heavy weapons` 3, `hackers` 4, `unarmed` 5, `bow` 6, `polearm` 8; with
 `animal` > 8 only that category. `1 handed` is not read here (only by `FUN_1405ba280`). `power N` is stored ×0.01.
+Meitou: a technique and the weapons with the same `meitou class` (not editor fields) form a class with a category number of its own, which the
+technique takes in place of `animal` ([modding](../modding.md), "Weapon types").
 
 ### Attack technique choice
 
@@ -64,6 +67,13 @@ list unless `is block` or `is dodge` (then the defence list), in data order. Eac
 - Pass: category = weapon's (5 for fists), skill = stored category level. If empty and not an animal: category 5 at
   `FUN_140884e00` = lerp(e, 0.2, 1) × (martial arts + CharStats +0x2c bonus − injury term) × slot 0x398. If still The injury term is the dust-storm attack penalty `FUN_140643a30` (int(`+0x14c` x K) while `+0x148` is 1); the attack chooser's unarmed passes (`FUN_140888030`:69, :78) ask with the flag set too, so its unarmed skill loses it (Meitou `CombatSystem.Act` `UnarmedSkill`).
   empty: that again, accepting hurt limbs. e = encumbrance factor (CharStats +0x190, 1 unburdened).
+- **Verified** (disassembly of `FUN_140888030`): the first pass takes the current weapon type (CharStats `+0x1f0`);
+  each unarmed pass runs only when the pass before found no technique and the character's vfunc `0x248` answers null
+  (the not-an-animal test), so an armed person throws martial-arts moves whenever no weapon attack fits. In the base
+  data that never comes from distance: each of the six classes has "heavy downcut v2" (`attack distance` 25), beyond
+  every unarmed attack ("ma jump knee", 13, at most), its attacks have no skill or burden limit, its standing ones
+  strike with the weapon (`limb` 4), and "ground attack L" and "R" serve the prone (**Observed**, a scan of the four
+  files).
 - Filter: category table; `min skill` ≤ skill ≤ `max skill`; (1 − e)·100 ≤ `max encumbrance`; `is prone` = posture ≠ 0 (always, **Verified** in the disassembly of
   `FUN_1408876d0`: the decompile prints the burden test and the prone test as `<` or `==` and prone, but the code rejects on burden above the maximum, then on a prone mismatch);
   limb factor f > 0, and f ≥ 1 except in the last pass.

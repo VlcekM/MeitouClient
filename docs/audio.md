@@ -622,7 +622,8 @@ bank's event, node or recording with a game bank's id replaces the game's. Their
 the rest of its bank kept, a bank that cannot be read is left out whole, an entry that is no path loses that bank alone, and the game's
 sound goes on. **Observed** with FSE-ShoddyMuskets (Workshop 3090308700): its bank is found through `$(modroot)`,
 its 9 PCM recordings decode, and the 9 events it adds are the names its ANIMATION_EVENT records post (`Musket1` to `Musket5`,
-`MusketDouble`, `MusketFinish1` to `3`), which [animation events](#characters-footsteps-combat-voices) play.
+`MusketDouble`, `MusketFinish1` to `3`), which [animation events](#characters-footsteps-combat-voices) play. A code mod plays any loaded
+event by name with `PostSound` ([modding](modding.md), "Sounds").
 
 ### Not done
 

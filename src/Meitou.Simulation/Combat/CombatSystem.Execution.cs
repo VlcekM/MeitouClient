@@ -99,7 +99,7 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// The execution's sound, blood, ragdoll throw, death record and the observers' hit feed.
+    /// The execution's sound, blood, ragdoll throw, death record, the observers' hit feed and a death's report (<see cref="DeathObservers"/>).
     /// </summary>
     void ReportExecution(World world, int a, int d, CharacterCold ac, CharacterCold dc, int blow, int part, HitDamage damage, ArmourAbsorbed absorbed,
         bool death, bool wasIncapacitated)
@@ -114,6 +114,7 @@ public sealed partial class CombatSystem
         if (dc.Medical!.Incapacitated) Sound(world, SoundKind.Down, d, a, prev[d].Position, fatal: death);
         if (death && world.Uniques.RecordOf(table.IdOf(d)) is { } unique) world.Uniques.Died(unique, ac.IsPlayer, dc.Faction);
         if (part >= 0) ObserveExecution(world, a, d, blow, part, damage, absorbed, -toAttacker, wasIncapacitated);
+        if (death) DeathObservers.Report(world, d, table.IdOf(a), DeathSite.Execution);
     }
 
     /// <summary>

@@ -137,6 +137,10 @@ public sealed class ModHost
     /// Every mod's debug menu commands, in load order.
     /// </summary>
     public IReadOnlyList<ModDebugCommand> DebugCommands => _registry.DebugCommands;
+    /// <summary>
+    /// Every mod's key actions, in load order.
+    /// </summary>
+    public IReadOnlyList<Game.Host.Input.ModKeyAction> KeyActions => _registry.KeyActions;
 
     /// <summary>
     /// A mod registered a combat hit feed: the host then gives each world a <see cref="World.CombatHitFeed"/> and drains it every frame.
@@ -672,43 +676,147 @@ public sealed class ModHost
 
     /// <summary>
     /// The save data of the world's mod systems (<see cref="IModSaveData"/>) into <paramref name="files"/>, one file per mod by id; between ticks. A
-    /// mod without such systems, or whose write fails, keeps the file it had (a save made without the mod keeps the mod's data too).
+    /// mod without such systems, or whose write fails, keeps the file it had (a save made without the mod keeps the mod's data too). A mod that
+    /// claimed world states gets the same entries, then its states' entry (<see cref="ModWorldStateSave"/>): where it would keep its file, the file's
+    /// entries of systems it still registers are kept instead, so a removed or renamed system's data is not carried on.
     /// </summary>
     public void CaptureSaveData(World world, IDictionary<string, byte[]> files)
     {
-        foreach (var group in SaveableSystems(world).GroupBy(s => s.Tag.ModId))
+        var systems = SaveableSystems(world).ToLookup(s => s.Tag.ModId);
+        foreach (var mod in SavingMods(systems))
         {
-            try
+            var entries = SystemEntries(mod, systems[mod]);
+            if (OwnedWorldStates(mod) is { } owned)
             {
-                files[group.Key] = ModSaveFile.Write([.. group.Select(s => (s.Tag.Name, Written(s.System)))]);
+                entries = entries is { Count: > 0 } ? entries : EarlierEntries(files, mod);
+                entries.Add((ModWorldStateSave.EntryName, ModWorldStateSave.Write(ModWorldStateSave.ValuesOf(world, owned))));
             }
-            catch (Exception e)
-            {
-                Console.Error.WriteLine($"mod       {group.Key}: save data not written: {e}");
-            }
+            if (entries is not null) files[mod] = ModSaveFile.Write(entries);
         }
     }
 
     /// <summary>
-    /// Hands each mod system of a world just loaded its saved data; between ticks, before the first. A system without data stays as made.
+    /// The entries of <paramref name="mod"/>'s saveable systems in this world, in system order; null, with a log line, when one's write throws.
+    /// </summary>
+    static List<(string Name, byte[] Data)>? SystemEntries(string mod, IEnumerable<(IModSaveData System, ModSystemTag Tag)> systems)
+    {
+        try
+        {
+            return systems.Select(s => (s.Tag.Name, Written(s.System))).ToList();
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"mod       {mod}: save data not written: {e}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Hands each mod system of a world just loaded its saved data, and each mod's world states their saved values; between ticks, before the first.
+    /// A system without data stays as made, a state without a value answers from its record. A fault in a mod's systems' data does not stop its
+    /// states' values, nor the other way round.
     /// </summary>
     public void RestoreSaveData(World world, IReadOnlyDictionary<string, byte[]> files)
     {
-        foreach (var group in SaveableSystems(world).GroupBy(s => s.Tag.ModId))
+        var systems = SaveableSystems(world).ToLookup(s => s.Tag.ModId);
+        foreach (var mod in SavingMods(systems))
         {
-            if (!files.TryGetValue(group.Key, out var file)) continue;
+            if (!files.TryGetValue(mod, out var file)) continue;
+            Dictionary<string, byte[]> entries;
             try
             {
-                var entries = ModSaveFile.Read(file);
-                foreach (var (system, tag) in group)
-                    if (entries.TryGetValue(tag.Name, out var data))
-                        system.Read(new MemoryStream(data, writable: false));
+                entries = ModSaveFile.Read(file);
             }
             catch (Exception e)
             {
-                Console.Error.WriteLine($"mod       {group.Key}: save data not read: {e}");
+                Console.Error.WriteLine($"mod       {mod}: save data not read: {e}");
+                continue;
             }
+            RestoreSystems(mod, systems[mod], entries);
+            if (OwnedWorldStates(mod) is { } owned) RestoreWorldStates(mod, world, owned, entries);
         }
+    }
+
+    /// <summary>
+    /// Hands <paramref name="mod"/>'s systems their entries; a throwing <see cref="IModSaveData.Read"/> stops that mod's systems' restore, logged.
+    /// </summary>
+    static void RestoreSystems(string mod, IEnumerable<(IModSaveData System, ModSystemTag Tag)> systems, Dictionary<string, byte[]> entries)
+    {
+        try
+        {
+            foreach (var (system, tag) in systems)
+                if (entries.TryGetValue(tag.Name, out var data))
+                    system.Read(new MemoryStream(data, writable: false));
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"mod       {mod}: save data not read: {e}");
+        }
+    }
+
+    /// <summary>
+    /// Sets <paramref name="mod"/>'s world state values from its states' entry, if the file has one; a bad entry is logged and sets nothing more.
+    /// </summary>
+    static void RestoreWorldStates(string mod, World world, IReadOnlyDictionary<string, Simulation.Factions.ModWorldState> owned,
+        Dictionary<string, byte[]> entries)
+    {
+        if (!entries.TryGetValue(ModWorldStateSave.EntryName, out var states)) return;
+        try
+        {
+            ModWorldStateSave.Read(states, world, owned);
+        }
+        catch (InvalidDataException e)
+        {
+            Console.Error.WriteLine($"mod       {mod}: world states not read: {e.Message}");
+        }
+    }
+
+    /// <summary>
+    /// The entries of <paramref name="mod"/>'s file in <paramref name="files"/> (the loaded save's) for the systems the mod still registers, in the
+    /// file's order: what a mod whose systems are all out of this world (or whose write failed) keeps. Empty for no file or an unreadable one
+    /// (logged).
+    /// </summary>
+    List<(string Name, byte[] Data)> EarlierEntries(IDictionary<string, byte[]> files, string mod)
+    {
+        if (!files.TryGetValue(mod, out var file)) return [];
+
+        Dictionary<string, byte[]> earlier;
+        try
+        {
+            earlier = ModSaveFile.Read(file);
+        }
+        catch (InvalidDataException e)
+        {
+            Console.Error.WriteLine($"mod       {mod}: earlier save data not kept: {e.Message}");
+            return [];
+        }
+        var registered = _registry.Simulation.Systems
+            .Where(f => f.Owner == mod)
+            .Select(f => f.Name)
+            .ToHashSet(StringComparer.Ordinal);
+        return [.. earlier.Where(e => registered.Contains(e.Key)).Select(e => (e.Key, e.Value))];
+    }
+
+    /// <summary>
+    /// The mods with save data: those with saveable systems, in system order, then those that claimed world states, in load order.
+    /// </summary>
+    IEnumerable<string> SavingMods(ILookup<string, (IModSaveData System, ModSystemTag Tag)> systems) =>
+        systems
+            .Select(g => g.Key)
+            .Concat(_mods.Select(m => m.Manifest.Id).Where(id => OwnedWorldStates(id) is not null))
+            .Distinct();
+
+    /// <summary>
+    /// The WORLD_EVENT_STATEs <paramref name="mod"/> claimed, by record id; null for none.
+    /// </summary>
+    IReadOnlyDictionary<string, Simulation.Factions.ModWorldState>? OwnedWorldStates(string mod)
+    {
+        if (_registry.WorldStates.Count == 0) return null;
+
+        var owned = _registry.WorldStates
+            .Where(s => s.Owner == mod)
+            .ToDictionary(s => s.Record, StringComparer.Ordinal);
+        return owned.Count == 0 ? null : owned;
     }
 
     /// <summary>
@@ -738,14 +846,20 @@ public sealed class ModHost
     /// <summary>
     /// Registers the mods' interface extensions with a new interface; one that throws is logged and skipped.
     /// </summary>
-    public List<IDisposable> RegisterUi(Func<IUiExtension, IDisposable> register)
+    public List<IDisposable> RegisterUi(Func<IUiExtension, IDisposable> register) => RegisterUi((extension, _) => register(extension));
+
+    /// <summary>
+    /// Registers the mods' interface extensions with a new interface, each with its mod's folder (null when unknown); one that throws is logged and
+    /// skipped.
+    /// </summary>
+    public List<IDisposable> RegisterUi(Func<IUiExtension, string?, IDisposable> register)
     {
         var registrations = new List<IDisposable>();
         foreach (var extension in _registry.Ui)
         {
             try
             {
-                registrations.Add(register(extension));
+                registrations.Add(register(extension, _registry.UiFolders.GetValueOrDefault(extension)));
             }
             catch (Exception e)
             {

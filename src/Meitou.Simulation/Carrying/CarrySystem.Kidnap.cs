@@ -83,8 +83,10 @@ public sealed partial class CarrySystem
         // FUN_14034ffa0).
         void Train(float amount)
         {
-            if (cold.Stats is { } stats && cold.Race is { } race)
-                (_xp ??= new XpService(Constants, _bodyOptions)).Continuous(stats, race, StatsEnumerated.Assassination, 1, amount);
+            if (cold.Stats is not { } stats || cold.Race is not { } race) return;
+
+            var xp = _xp ??= new XpService(Constants, _bodyOptions);
+            xp.Continuous(stats, race, StatsEnumerated.Assassination, 1, amount, ExperienceSource.Assassination);
         }
         if (success)
         {

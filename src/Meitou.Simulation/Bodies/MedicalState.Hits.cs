@@ -459,6 +459,7 @@ public sealed partial class MedicalState
     {
         if (Dead) return;
         Dead = true;
+        DeathUnreported = true;
         Cause = cause;
         events?.Add(new MedicalEvent(MedicalEventKind.Died, Cause: cause));
     }

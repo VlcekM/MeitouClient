@@ -177,6 +177,7 @@ is on. Every such key is read back and saved again, so a save keeps the effects 
   zone/zone.<X>.<Y>.zone     one file per loaded zone          (13 files, 2 KB - 1.4 MB)
   meitou-mods/<id>.dat       Meitou only: code-mod state       (see Mod data)
   meitou-mods/environment.json  Meitou only: code mods in use  (see Mod data)
+  meitou-mods/character-ids.json  Meitou only: characters' lasting ids  (see Character ids)
 ```
 
 ### Mod data
@@ -184,7 +185,11 @@ is on. Every such key is read back and saved again, so a save keeps the effects 
 Meitou only ([modding](../modding.md)): each code mod with saveable systems gets `meitou-mods/<manifest id>.dat`, written with the
 save's other files into the working folder and moved with them. Layout, little-endian: magic `MTMD` (uint32 `0x444D544D`), format
 version (int32 1), entry count (int32), then per entry the system name (7-bit length-prefixed UTF-8, as .NET `BinaryWriter`), the data
-length (int32) and the mod's bytes. A loaded save keeps the files of mods not loaded now, and a save made from it writes them again.
+length (int32) and the mod's bytes. A mod that claimed world states ([modding](../modding.md), "World states") also gets the file, with a last
+entry `meitou world states`: format (int32 1), count (int32), then per value the WORLD_EVENT_STATE string id (as `BinaryWriter`) and the value
+(byte 0 or 1), in string id order. The entries before it are what a mod without claims would get (the present systems'), except that
+where such a mod would keep its file (no saveable system in the world, or a failed write) the file's entries of systems the mod still
+registers are kept. A loaded save keeps the files of mods not loaded now, and a save made from it writes them again.
 An import (`SaveImport.Filter`) builds a new save without them, so mods start fresh there.
 `meitou-mods/environment.json` (not a sidecar: only `.dat` names are) records the code mods the save was made with: UTF-8 JSON
 `{ "format": 1, "gameVersion": "<Meitou tag>", "mods": [{ "id", "version"?, "name" }] }`, mods in load order
@@ -194,6 +199,22 @@ An import (`SaveImport.Filter`) builds a new save without them, so mods start fr
 ### Weapon blood
 
 Meitou only (optional "Blood on weapons and gear", [blood-decals.md](../game/blood-decals.md#on-weapons-and-gear-meitou)): `meitou-weapon-blood.json` at the save folder's root, written with the other files (`SaveWeaponBlood`, `SaveGame.WeaponBlood`), kept by a clone, not a field of any original file. UTF-8 JSON `{ "format": 1, "weapons": [ { "hand": [type, C, CS, I, S], "amount", "wet", "colour": [r, g, b], "back" } ] }`: `hand` is the character's save handle (the identity that survives a load), `amount` 0..1, `wet` 0..1, `colour` the victim's blood (0..1). Missing, unreadable or another format reads as no entries. **Observed** (2026-11-12, a scratch save written and read back, win-x64).
+
+### Character ids
+
+Meitou only ([modding](../modding.md#registration-surface) "Character ids"): `meitou-mods/character-ids.json`, written with the other files
+(`SaveLastingIds`, `SaveGame.LastingIds`) only once a code mod asked for a character's id or the loaded save had the file; not a field of any
+original file. UTF-8 JSON `{ "format": 1, "prefix": p, "next": n, "characters": [ { "hand": [type, C, CS, I, S], "id", "record" } ] }`: `hand` the
+character's handle in this save, `id` its lasting id, `record` the string id of the CHARACTER record it was made from, `prefix` the high half of new
+ids and `next` the counter their low half continues from. The capture writes each character with an id under the handle it just wrote it with (a
+character that changed squads has a new handle), then the loaded file's entries whose characters the save keeps unchanged with the same record (an
+NPC platoon never made, a dead player character kept as read); an entry whose handle the save no longer holds is dropped, an id or handle appears
+once, and the prefix and counter are always written. On load an entry is taken only when its handle names a character of the save made from its
+record, and the counter goes past every id in the file. A missing file reads as no ids; a file that is not JSON of this format reads as none with a
+load note, and a malformed entry or one repeating a handle or id is dropped alone. **Observed** (2026-11-17, win-x64, a scratch program on
+`Meitou.Data`): a save read, five entries added, written with `SaveGame.Write` and read back gives the same entries, prefix and counter, each handle
+naming a character of the reloaded save; a hand-made file with a non-object entry, a text handle part, a repeated id, a repeated handle and an id of
+0 keeps only its two good entries.
 
 ### Save requests (`FUN_14047c310`)
 

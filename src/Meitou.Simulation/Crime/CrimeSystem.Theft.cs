@@ -21,6 +21,6 @@ public sealed partial class CrimeSystem
     {
         if (Xp is not { } xp || world.Characters.Cold(slot) is not { Stats: { } stats, Race: { } race }) return;
 
-        xp.Continuous(stats, race, StatsEnumerated.Thieving, 1, amount);
+        xp.Continuous(stats, race, StatsEnumerated.Thieving, 1, amount, ExperienceSource.Thievery);
     }
 }

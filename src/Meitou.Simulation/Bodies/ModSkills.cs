@@ -1,3 +1,8 @@
+using Meitou.Data;
+using Meitou.Data.Fcs;
+using Meitou.Data.Gameplay.Bodies;
+using Meitou.Data.Gameplay.Combat;
+
 namespace Meitou.Simulation.Bodies;
 
 /// <summary>
@@ -60,6 +65,14 @@ public sealed record ModSkill(string Id, string Label, SkillColumn Column)
     public float Start { get; init; } = 1;
 
     /// <summary>
+    /// The stat number the skill answers to once added (<see cref="ModSkills.FirstStat"/> up, in registration order;
+    /// <see cref="StatsEnumerated.None"/> before, and for a copy): <see cref="CharacterStats"/>' indexer, <c>Stored</c> and <c>Gain</c> read
+    /// and train the skill under it, and a weapon naming the skill (WEAPON <c>meitou skill</c>) uses it as its skill. Not saved: it follows the
+    /// mods' load order, so keep the id, not the number. Computed, so it takes no part in the record's equality.
+    /// </summary>
+    public StatsEnumerated Stat => ModSkills.StatOf(this);
+
+    /// <summary>
     /// <paramref name="stats"/>' level in the skill.
     /// </summary>
     public float Level(CharacterStats stats) => stats.ModSkillsOrNull?.Get(Id) ?? Start;
@@ -75,12 +88,17 @@ public sealed record ModSkill(string Id, string Label, SkillColumn Column)
     /// returns the new level. A NaN level stays NaN, as a vanilla stat's does. The character's XP rate applies as to a vanilla stat
     /// (<see cref="CharacterStats.XpRate"/>).
     /// </summary>
-    public float Gain(CharacterStats stats, float amount)
+    public float Gain(CharacterStats stats, float amount) => Gain(stats, amount, CharacterStats.XpCap);
+
+    /// <summary>
+    /// <see cref="Gain(CharacterStats, float)"/> with the curve's cap (<see cref="CharacterStats.Gain"/> passes its own).
+    /// </summary>
+    internal float Gain(CharacterStats stats, float amount, float cap)
     {
         float level = Level(stats);
         if (float.IsNaN(level)) return level;
 
-        float next = CharacterStats.CoreGain(level, stats.Rated(level, amount, CharacterStats.XpCap));
+        float next = CharacterStats.CoreGain(level, stats.Rated(level, amount, cap), cap);
         Set(stats, next);
         return next;
     }
@@ -92,6 +110,11 @@ public sealed record ModSkill(string Id, string Label, SkillColumn Column)
 /// </summary>
 public static class ModSkills
 {
+    /// <summary>
+    /// The stat number of the first skill added (<see cref="ModSkill.Stat"/>), past every number the game or its data uses (0 to 38).
+    /// </summary>
+    public const int FirstStat = 1000;
+
     /// <summary>
     /// The skills in registration order.
     /// </summary>
@@ -124,7 +147,60 @@ public static class ModSkills
     public static void Add(ModSkill skill)
     {
         if (Refusal(skill, []) is { } refusal) throw new ArgumentException(refusal, nameof(skill));
+
         Skills.Add(skill);
+    }
+
+    /// <summary>
+    /// The stat number of <paramref name="skill"/> (this very instance) once added; <see cref="StatsEnumerated.None"/> otherwise.
+    /// </summary>
+    public static StatsEnumerated StatOf(ModSkill skill)
+    {
+        for (int i = 0; i < Skills.Count; i++)
+            if (ReferenceEquals(Skills[i], skill)) return (StatsEnumerated)(FirstStat + i);
+        return StatsEnumerated.None;
+    }
+
+    /// <summary>
+    /// The skill whose <see cref="ModSkill.Stat"/> is <paramref name="stat"/>; null for any other number (every number below
+    /// <see cref="FirstStat"/>, and every number without mods).
+    /// </summary>
+    public static ModSkill? Of(StatsEnumerated stat) =>
+        (uint)((int)stat - FirstStat) < (uint)Skills.Count ? Skills[(int)stat - FirstStat] : null;
+
+    /// <summary>
+    /// The skill with id <paramref name="id"/> (case-insensitive, as ids are unique); null when no mod added one.
+    /// </summary>
+    public static ModSkill? Find(string id)
+    {
+        foreach (var skill in Skills)
+            if (string.Equals(skill.Id, id, StringComparison.OrdinalIgnoreCase)) return skill;
+        return null;
+    }
+
+    /// <summary>
+    /// One log line per skill id that a WEAPON's <c>meitou skill</c> of <paramref name="db"/> names and no running code mod added (docs/modding.md
+    /// "Weapon types"): usually a misspelled id or a removed mod; such weapons use their category's skill. Run once, after the code mods added
+    /// their skills. Nothing is made when every named id is added.
+    /// </summary>
+    public static void WarnUnknown(GameDatabase db)
+    {
+        Dictionary<string, (string First, int Count)>? unknown = null;
+        foreach (var record in db.OfType(FcsRecordType.Weapon))
+        {
+            if (WeaponData.ModSkillOf(record) is not { } id || Find(id) is not null) continue;
+
+            unknown ??= new(StringComparer.OrdinalIgnoreCase);
+            unknown[id] = unknown.TryGetValue(id, out var seen) ? (seen.First, seen.Count + 1) : (record.StringId, 1);
+        }
+
+        if (unknown is null) return;
+
+        foreach (var (id, (first, count)) in unknown)
+        {
+            string weapons = count == 1 ? $"{first} uses its" : $"{first} and {count - 1} more use their";
+            Console.WriteLine($"warning   weapon skill '{id}' (meitou skill): no running code mod adds it, so {weapons} category's skill");
+        }
     }
 
     /// <summary>

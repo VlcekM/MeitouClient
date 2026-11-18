@@ -651,7 +651,7 @@ public static class SquadManagement
         cold.Ai = null;
         cold.Engaged = false;
         cold.Fleeing = false;
-        cold.Pending = null;
+        Crime.CrimeSystem.DropPending(world, slot, cold);
         cold.Jobs.Clear();
         cold.Save = null;   // no longer in the player's platoon file
         table.Next[slot].Mode = SpeedMode.Walk;

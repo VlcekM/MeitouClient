@@ -88,9 +88,21 @@ sealed class ModRegistrations
     /// </summary>
     public List<IUiExtension> Ui { get; } = [];
     /// <summary>
+    /// The folder of the mod each interface extension belongs to (its map marker images are files under it).
+    /// </summary>
+    public Dictionary<IUiExtension, string> UiFolders { get; } = new(ReferenceEqualityComparer.Instance);
+    /// <summary>
     /// The debug menu's commands.
     /// </summary>
     public List<ModDebugCommand> DebugCommands { get; } = [];
+    /// <summary>
+    /// The key actions.
+    /// </summary>
+    public List<Game.Host.Input.ModKeyAction> KeyActions { get; } = [];
+    /// <summary>
+    /// The world states the mod claimed.
+    /// </summary>
+    public List<Simulation.Factions.ModWorldState> WorldStates { get; } = [];
     /// <summary>
     /// The combat hit feeds.
     /// </summary>
@@ -170,6 +182,10 @@ sealed class ModRegistry
     /// </summary>
     readonly Dictionary<Data.Gameplay.Ai.TaskType, string> _goalTypeOwners = [];
     /// <summary>
+    /// The world states mods claimed, by WORLD_EVENT_STATE string id.
+    /// </summary>
+    readonly Dictionary<string, Simulation.Factions.ModWorldState> _worldStates = new(StringComparer.Ordinal);
+    /// <summary>
     /// The mod and name each world's mod system was made under (weakly held, gone with the world).
     /// </summary>
     readonly ConditionalWeakTable<ITickSystem, ModSystemTag> _made = new();
@@ -183,9 +199,17 @@ sealed class ModRegistry
     /// </summary>
     public List<IUiExtension> Ui { get; } = [];
     /// <summary>
+    /// The folder of the mod each interface extension belongs to.
+    /// </summary>
+    public Dictionary<IUiExtension, string> UiFolders { get; } = new(ReferenceEqualityComparer.Instance);
+    /// <summary>
     /// Every mod's debug menu commands, in load order.
     /// </summary>
     public List<ModDebugCommand> DebugCommands { get; } = [];
+    /// <summary>
+    /// Every mod's key actions, in load order, numbered from <see cref="Game.Host.Input.InputBindings.FirstModAction"/>.
+    /// </summary>
+    public List<Game.Host.Input.ModKeyAction> KeyActions { get; } = [];
     /// <summary>
     /// Every mod's combat hit feeds, in load order.
     /// </summary>
@@ -258,10 +282,37 @@ sealed class ModRegistry
         foreach (var skill in r.Skills) ModSkills.Add(skill);
         foreach (var (effect, modifiers) in r.StatusEffects) StatusEffects.Add(effect, modifiers);
         Ui.AddRange(r.Ui);
+        foreach (var (extension, folder) in r.UiFolders) UiFolders[extension] = folder;
         DebugCommands.AddRange(r.DebugCommands);
+        foreach (var state in r.WorldStates)
+        {
+            _worldStates[state.Record] = state;
+            global::Meitou.Simulation.Factions.ModWorldStates.Claim(state);
+        }
+        foreach (var action in r.KeyActions)
+        {
+            action.Action = Game.Host.Input.InputBindings.FirstModAction + KeyActions.Count;
+            KeyActions.Add(action);
+        }
         HitFeeds.AddRange(r.HitFeeds);
         FactionLists.AddRange(r.FactionLists);
         if (r.Settings is not null) Settings.Add(r.Settings);
+    }
+
+    /// <summary>
+    /// The world states mods claimed.
+    /// </summary>
+    public IReadOnlyCollection<Simulation.Factions.ModWorldState> WorldStates => _worldStates.Values;
+
+    /// <summary>
+    /// Throws when another mod (or this one) claimed the world state <paramref name="record"/> already.
+    /// </summary>
+    public void CheckWorldStateFree(string record, ModRegistrations pending, string mod)
+    {
+        if (_worldStates.TryGetValue(record, out var owner))
+            throw new InvalidOperationException($"World state '{record}' is claimed by mod '{owner.Owner}'.");
+        if (pending.WorldStates.Any(s => s.Record == record))
+            throw new InvalidOperationException($"World state '{record}' is claimed twice by mod '{mod}'.");
     }
 
     /// <summary>

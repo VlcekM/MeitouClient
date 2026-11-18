@@ -467,7 +467,7 @@ public sealed partial class CombatSystem : IProjectileSource
     /// </summary>
     static bool CanShoot(in CombatSlot s, CharacterCold cold, CrossbowInstance x)
     {
-        bool hasAmmo = x.InfiniteAmmo || Ammunition.Find(cold.Inventory, x.Data.AmmoId) is not null;
+        bool hasAmmo = x.InfiniteAmmo || Ammunition.FirstCarried(cold.Inventory, x.Data) >= 0;
         return (s.Loaded > 0 || hasAmmo) && cold.Medical is not { BothArmsWork: false }
             && cold.Medical is not { Prone: true } && cold.WaterState != 3;
     }
@@ -503,7 +503,8 @@ public sealed partial class CombatSystem : IProjectileSource
         var x = cold.Fighter!.Crossbow!;
         var barrel = Barrel(prev[i]);
         float h = RangedFormulas.HeightFactor(barrel.Y, prev[t].Position.Y);
-        bool inRange = RangedFormulas.InRange(Vector3.DistanceSquared(prev[i].Position, prev[t].Position), x.Stats.Range, h);
+        var (range, _) = Flight(x, s.LoadedKind);
+        bool inRange = RangedFormulas.InRange(Vector3.DistanceSquared(prev[i].Position, prev[t].Position), range, h);
         if (s.RangedState == (byte)RangedStates.Closing)
         {
             Close(world, i, t, ref s, barrel, inRange, dt);
@@ -531,7 +532,7 @@ public sealed partial class CombatSystem : IProjectileSource
         s.RangedState = (byte)RangedStates.Reloading;
         if (s.ReloadLeft <= 0)
         {
-            if (!x.InfiniteAmmo && Ammunition.Find(cold.Inventory, x.Data.AmmoId) is null)
+            if (!x.InfiniteAmmo && Ammunition.FirstCarried(cold.Inventory, x.Data) < 0)
             {
                 s.Dry = true;
                 return;
@@ -544,17 +545,38 @@ public sealed partial class CombatSystem : IProjectileSource
         }
 
         s.ReloadLeft -= dt;
-        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Crossbows, dt, RangedFormulas.CrossbowXp);
-        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Dexterity, dt, RangedFormulas.DexterityReloadXp);
+        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Crossbows, dt, RangedFormulas.CrossbowXp, ExperienceSource.Ranged);
+        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Dexterity, dt, RangedFormulas.DexterityReloadXp, ExperienceSource.Ranged);
         if (s.ReloadLeft > 0) return;
 
         s.ReloadLeft = 0;
         s.Loaded = x.NumShots;
+        s.LoadedKind = LoadedKind(cold, x);
         cold.CrossbowShots = s.Loaded;
         s.Steady = RangedFormulas.SteadyAim;
         s.RangedState = (byte)RangedStates.Aiming;
         if (!x.InfiniteAmmo) effects.Emit(i, i, ReloadEffect);
     }
+
+    /// <summary>
+    /// Meitou (docs/modding.md "Ammunition"): the ammunition a finished reload loads from a crossbow with a list: the first kind carried, in the
+    /// crossbow's order; the first when none is left (the reload still loads, as before the list). Null for a crossbow without a list (every
+    /// base-game one), without a search.
+    /// </summary>
+    static AmmoData? LoadedKind(CharacterCold cold, CrossbowInstance x)
+    {
+        if (x.Data.Ammo is null) return null;
+
+        int k = x.Data.AmmoCount > 1 ? Ammunition.FirstCarried(cold.Inventory, x.Data) : 0;
+        return x.Data.KindAt(Math.Max(k, 0));
+    }
+
+    /// <summary>
+    /// The range and shot speed the shooter and its bolts use: the crossbow's, times the loaded ammunition's multipliers when it has one
+    /// (docs/modding.md "Ammunition").
+    /// </summary>
+    static (float Range, float Speed) Flight(CrossbowInstance x, AmmoData? kind) =>
+        kind is null ? (x.Stats.Range, x.Stats.ShotSpeed) : (x.Stats.Range * kind.RangeMult, x.Stats.ShotSpeed * kind.SpeedMult);
 
     /// <summary>
     /// The controller's state 1: walking towards the target, the closing timer from 0 (<c>FUN_140438c70</c> clears it only on entering the state).
@@ -617,16 +639,17 @@ public sealed partial class CombatSystem : IProjectileSource
     {
         var x = cold.Fighter!.Crossbow!;
         s.RangedState = (byte)RangedStates.Aiming;
-        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Perception, dt, RangedFormulas.PerceptionXp);
-        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Crossbows, dt, RangedFormulas.CrossbowXp);
+        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Perception, dt, RangedFormulas.PerceptionXp, ExperienceSource.Ranged);
+        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Crossbows, dt, RangedFormulas.CrossbowXp, ExperienceSource.Ranged);
         if (s.Steady > 0)
         {
             s.Steady -= dt;
             if (s.Steady > 0) return;
         }
 
-        var aim = AimPoint(barrel, world.Characters.Previous[t], world.Characters.Cold(t), x.Stats.ShotSpeed);
-        switch (LineOfFire(world, i, t, barrel, aim, cold.Faction, x.Stats.Range))
+        var (range, speed) = Flight(x, s.LoadedKind);
+        var aim = AimPoint(barrel, world.Characters.Previous[t], world.Characters.Cold(t), speed);
+        switch (LineOfFire(world, i, t, barrel, aim, cold.Faction, range))
         {
             case 0:
                 StartClosing(ref s);
@@ -648,16 +671,19 @@ public sealed partial class CombatSystem : IProjectileSource
     #region Shots and reloads
 
     /// <summary>
-    /// A finished reload: one bolt is taken from the shooter's inventory; observers hear it (<see cref="Items.ItemUseKind.Ammunition"/>).
+    /// A finished reload: one bolt of the kind loaded (<see cref="CombatSlot.LoadedKind"/>, else the crossbow's <c>ammo</c>) is taken from the
+    /// shooter's inventory; observers hear it (<see cref="Items.ItemUseKind.Ammunition"/>).
     /// </summary>
     void ApplyReload(World world, in Effect e)
     {
         var cold = world.Characters.Cold(e.Source);
         if (cold?.Fighter?.Crossbow is not { } x) return;
-        if (!Ammunition.UseOne(cold.Inventory, x.Data.AmmoId, out bool unitGone)) return;
+
+        string ammo = _write[e.Source].LoadedKind?.StringId ?? x.Data.AmmoId;
+        if (!Ammunition.UseOne(cold.Inventory, ammo, out bool unitGone)) return;
 
         var shooter = world.Characters.IdOf(e.Source);
-        Items.ItemUseObservers.Report(world, Items.ItemUseKind.Ammunition, x.Data.AmmoId, shooter, null, 1, unitGone);
+        Items.ItemUseObservers.Report(world, Items.ItemUseKind.Ammunition, ammo, shooter, null, 1, unitGone);
     }
 
     /// <summary>
@@ -673,8 +699,11 @@ public sealed partial class CombatSystem : IProjectileSource
         var ac = table.Cold(a);
         if (ac?.Fighter?.Crossbow is not { } x || ac.Stats is null || ac.Medical is null || !prev[t].Alive) return;
 
+        // Meitou: the loaded ammunition (this tick's slot, the shot's own); null for a base-game crossbow.
+        var ammo = _write[a].LoadedKind;
+        var (_, leadSpeed) = Flight(x, ammo);
         var barrel = Barrel(prev[a]);
-        var aim = AimPoint(barrel, prev[t], table.Cold(t), x.Stats.ShotSpeed);
+        var aim = AimPoint(barrel, prev[t], table.Cold(t), leadSpeed);
         var to = aim - barrel;
         if (to.LengthSquared() < 1e-6f) return;
 
@@ -688,6 +717,13 @@ public sealed partial class CombatSystem : IProjectileSource
         float w = Rng.Float(Rng.Hash(world.Seed, key, RngPurpose.Ranged, counter + 2));
         var dir = RangedFormulas.Deviate(Vector3.Normalize(to), u * deviation, spin);
         var (damage, range, speed) = RangedFormulas.Bolt(x.Stats, h, w);
+        if (ammo is not null)
+        {
+            damage *= ammo.DamageMult;
+            range *= ammo.RangeMult;
+            speed *= ammo.SpeedMult;
+        }
+
         _projectiles.Add(new Projectile
         {
             Id = _projectiles.NextId(),
@@ -705,7 +741,8 @@ public sealed partial class CombatSystem : IProjectileSource
             Damage = damage,
             Avoidance = RangedFormulas.FriendlyAvoidance(Eff(ac, StatsEnumerated.FriendlyFire)),
             Passed = -1,
-            Mesh = x.Data.LiveAmmoMesh,
+            Mesh = ammo is { LiveAmmoMesh.Length: > 0 } ? ammo.LiveAmmoMesh : x.Data.LiveAmmoMesh,
+            Ammo = ammo,
         });
         ShotAt(world, t, ac.Faction);
         Sound(world, SoundKind.Shot, a, -1, prev[a].Position);
@@ -746,7 +783,7 @@ public sealed partial class CombatSystem : IProjectileSource
     /// direction 6 (the part by its <c>hit</c> weight alone), armour and toughness, the global damage multiplier applied once more there
     /// (<b>Observed</b>, so bolts scale with its square). No block, no dodge. The victim takes "hit taken" XP; the shooter gains none for a hit. A
     /// heavy hit staggers as a melee one does. False, nothing done, when a code mod's hit filter cancels it (<see cref="ICombatHitFilter"/>): the
-    /// bolt flies on past the victim.
+    /// bolt flies on past the victim. Meitou: a bolt of a listed ammunition (<see cref="Projectile.Ammo"/>) scales the bleed by its multiplier.
     /// </summary>
     internal bool BoltHit(World world, in Projectile p, int v, bool intended)
     {
@@ -755,7 +792,9 @@ public sealed partial class CombatSystem : IProjectileSource
         var dc = table.Cold(v);
         if (dc is null || dc.Medical is null || dc.Race is null) return true;
 
-        var packet = new DamagePacket(0, 0, p.Damage, 0, RangedFormulas.BoltBleed, 0);
+        var packet = p.Ammo is { } ammo
+            ? new DamagePacket(0, 0, p.Damage, 0, RangedFormulas.BoltBleed * ammo.BleedMult, 0)
+            : new DamagePacket(0, 0, p.Damage, 0, RangedFormulas.BoltBleed, 0);
         var shooter = new CharacterId(p.Shooter, p.ShooterGeneration);
         if (!world.CombatHitFilters.Pass(world, CombatHitSource.Projectile, shooter, table.IdOf(v), p.Id, -1, intended, ref packet)) return false;
 
@@ -809,6 +848,7 @@ public sealed partial class CombatSystem : IProjectileSource
                 -1, false, intended, wasAlive, wasIncapacitated));
         }
 
+        if (death) DeathObservers.Report(world, v, shooter, DeathSite.Bolt);
         return true;
     }
 
@@ -873,7 +913,8 @@ public sealed partial class CombatSystem : IProjectileSource
         var state = table.Previous;
         if (p.Shooter >= state.Length || !state[p.Shooter].Alive || state[p.Shooter].Generation != p.ShooterGeneration) return;
 
-        if (table.Cold(p.Shooter) is { Stats: { } stats, Race: { } race }) _xp.Continuous(stats, race, StatsEnumerated.FriendlyFire, 1, amount);
+        if (table.Cold(p.Shooter) is { Stats: { } stats, Race: { } race })
+            _xp.Continuous(stats, race, StatsEnumerated.FriendlyFire, 1, amount, ExperienceSource.Ranged);
     }
 
     #endregion

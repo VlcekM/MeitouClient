@@ -122,6 +122,12 @@ public sealed partial class SaveGame
     public byte[]? WeaponBlood { get; set; }
 
     /// <summary>
+    /// The bytes of <c>meitou-mods/character-ids.json</c> (the lasting ids code mods gave characters, <see cref="SaveLastingIds"/>); null when the
+    /// save has none (no mod asked for one).
+    /// </summary>
+    public byte[]? LastingIds { get; set; }
+
+    /// <summary>
     /// What does not fit the format's own rules (a platoon file that is missing, a zone file the CAMERA list does not name...); loading goes on.
     /// </summary>
     public List<string> Problems { get; } = [];
@@ -165,6 +171,7 @@ public sealed partial class SaveGame
         if (folder.Exists(SaveFolder.ModEnvironmentName)) game.ModEnvironment = folder.ReadAllBytes(SaveFolder.ModEnvironmentName);
         foreach (var (zone, name) in folder.LevelEditFiles) game.LevelEdits[zone] = folder.ReadAllBytes(name);
         if (folder.Exists(SaveFolder.WeaponBloodName)) game.WeaponBlood = folder.ReadAllBytes(SaveFolder.WeaponBloodName);
+        if (folder.Exists(SaveFolder.LastingIdsName)) game.LastingIds = folder.ReadAllBytes(SaveFolder.LastingIdsName);
         game.Reindex();
         game.CheckZoneFiles();
         return game;
@@ -293,6 +300,7 @@ public sealed partial class SaveGame
         copy.ModEnvironment = ModEnvironment?.ToArray();
         foreach (var (zone, bytes) in LevelEdits) copy.LevelEdits[zone] = bytes.ToArray();
         copy.WeaponBlood = WeaponBlood?.ToArray();
+        copy.LastingIds = LastingIds?.ToArray();
         copy.Reindex();
         copy.Problems.AddRange(Problems);
         return copy;

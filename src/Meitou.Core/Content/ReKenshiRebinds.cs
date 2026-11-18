@@ -57,6 +57,11 @@ public sealed class ReKenshiRebinds
         For(install).Redirect(GameFiles.Resolve(Path.Combine(install.DataDirectory, relativePath)));
 
     /// <summary>
+    /// Whether no enabled mod rebinds any file: <see cref="Redirect"/> then returns every path as it is.
+    /// </summary>
+    public bool IsEmpty => _targets.Count == 0;
+
+    /// <summary>
     /// <paramref name="path"/> (a file the game would open) or the file an enabled mod rebinds it to; a hidden file becomes a path where nothing is.
     /// </summary>
     public string Redirect(string path)
@@ -82,6 +87,9 @@ public sealed class ReKenshiRebinds
                 // A target no path can be (a NUL in it) costs RE_Kenshi that one file, and here that one rebind.
                 if (rebinds.Target(to, enabled) is { } target) rebinds._targets[Key(from)] = target;
                 else Console.Error.WriteLine($"mods      {mod.Name}: RE_Kenshi rebind of {from} to {to} names no file; skipped");
+
+                // A hidden file the game needs (an interface layout) stops what needs it with only the file's name: this line names the mod.
+                if (to == Hide) Console.WriteLine($"mods      {mod.Name}: RE_Kenshi.json hides {from}");
             }
         }
 

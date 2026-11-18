@@ -98,11 +98,29 @@ public sealed class CombatDatabase
     public CrossbowData? Crossbow(string stringId) => _crossbowsById.GetValueOrDefault(stringId);
 
     /// <summary>
+    /// Every CROSSBOW of <paramref name="db"/> with its ammunition list resolved (<see cref="CrossbowData.WithAmmo"/>); each ammunition ITEM's Meitou
+    /// fields are read once, so a warning about one is logged once.
+    /// </summary>
+    static List<CrossbowData> ReadCrossbows(GameDatabase db)
+    {
+        var kinds = new Dictionary<string, AmmoData?>(StringComparer.Ordinal);
+        AmmoData? Kind(GameRecord item)
+        {
+            if (!kinds.TryGetValue(item.StringId, out var kind)) kinds[item.StringId] = kind = AmmoData.From(item);
+            return kind;
+        }
+
+        return [.. db.OfType(FcsRecordType.Crossbow).Select(r => CrossbowData.From(r).WithAmmo(r, db.Find, Kind))];
+    }
+
+    /// <summary>
     /// Reads every combat record of <paramref name="db"/> once and indexes the item kinds by string id.
     /// </summary>
     public static CombatDatabase From(GameDatabase db)
     {
         var weapons = db.OfType(FcsRecordType.Weapon).Select(WeaponData.From).ToList();
+        var techniques = db.OfType(FcsRecordType.CombatTechnique).Select(CombatTechnique.From).ToList();
+        WeaponClassNames.Apply(weapons, techniques);
         var manufacturers = db.OfType(FcsRecordType.WeaponManufacturer).Select(WeaponManufacturer.From).ToList();
         var materials = db.OfType(FcsRecordType.MaterialSpecsWeapon).Select(Combat.WeaponMaterial.From).ToList();
         var armours = db.OfType(FcsRecordType.Armour).Select(ArmourData.From).ToList();
@@ -110,12 +128,12 @@ public sealed class CombatDatabase
         var result = new CombatDatabase
         {
             Constants = CombatConstants.FromDatabase(db),
-            Techniques = [.. db.OfType(FcsRecordType.CombatTechnique).Select(CombatTechnique.From)],
+            Techniques = techniques,
             Weapons = weapons,
             Manufacturers = manufacturers,
             WeaponMaterials = materials,
             Armours = armours,
-            Crossbows = [.. db.OfType(FcsRecordType.Crossbow).Select(CrossbowData.From)],
+            Crossbows = ReadCrossbows(db),
             Guns = [.. db.OfType(FcsRecordType.GunData).Select(GunData.From)],
         };
 

@@ -1,3 +1,4 @@
+using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay.Bodies;
 
 namespace Meitou.Data.Gameplay.Combat;
@@ -219,9 +220,45 @@ public sealed record CrossbowData
     public int AccuracyPerfectSkill { get; init; }
 
     /// <summary>
-    /// The string id of the <c>ammo</c> ITEM; empty means infinite ammunition (fcs.def: "if nothing here then magic infinite ammo").
+    /// The string id of the <c>ammo</c> ITEM; empty means infinite ammunition (fcs.def: "if nothing here then magic infinite ammo") unless
+    /// <see cref="Ammo"/> lists some.
     /// </summary>
     public string AmmoId { get; init; } = "";
+
+    /// <summary>
+    /// Meitou (docs/modding.md "Ammunition"): every ammunition the crossbow loads, in the order it prefers them (<see cref="AmmoId"/> first, then the
+    /// <c>meitou ammo</c> list), each with its ITEM's Meitou fields. Null when the crossbow loads only <see cref="AmmoId"/> and that ITEM has no
+    /// Meitou field: every base-game crossbow, which then reads exactly as without this list. Empty when the crossbow has only a <c>meitou ammo</c>
+    /// list and none of its entries is usable: it then loads nothing (it is not infinite).
+    /// </summary>
+    public IReadOnlyList<AmmoData>? Ammo { get; init; }
+
+    /// <summary>
+    /// How many kinds of ammunition the crossbow loads: 0 for infinite ammunition or a list with nothing usable.
+    /// </summary>
+    public int AmmoCount => Ammo?.Count ?? (AmmoId.Length > 0 ? 1 : 0);
+
+    /// <summary>
+    /// Neither <c>ammo</c> nor a <c>meitou ammo</c> list: the crossbow never runs dry (fcs.def: "if nothing here then magic infinite ammo").
+    /// </summary>
+    public bool InfiniteAmmo => Ammo is null && AmmoId.Length == 0;
+
+    /// <summary>
+    /// The string id of the ammunition the crossbow prefers <paramref name="k"/>-th (0 first), <paramref name="k"/> below <see cref="AmmoCount"/>.
+    /// </summary>
+    public string AmmoAt(int k) => Ammo is { } ammo ? ammo[k].StringId : AmmoId;
+
+    /// <summary>
+    /// The <paramref name="k"/>-th ammunition with its Meitou fields; null when the crossbow has no <see cref="Ammo"/> list (it fires the original's
+    /// bolt).
+    /// </summary>
+    public AmmoData? KindAt(int k) => Ammo is { } ammo && (uint)k < (uint)ammo.Count ? ammo[k] : null;
+
+    /// <summary>
+    /// The name of the CROSSBOW reference list a data mod fills with more ammunition the crossbow loads: a Meitou field, not one of the CROSSBOW
+    /// fields of the install's <c>fcs.def</c>.
+    /// </summary>
+    public const string ExtraAmmoList = "meitou ammo";
 
     /// <summary>
     /// The string id of the <c>reload anim</c> ANIMATION record; empty when the record names none.
@@ -309,6 +346,150 @@ public sealed record CrossbowData
         ReloadAnimId = FirstReference(r, "reload anim"),
         LiveAmmoMesh = r.GetPath("live ammo"),
     };
+
+    /// <summary>
+    /// The crossbow with its <see cref="Ammo"/> list resolved: <c>ammo</c>'s first entry, then the <see cref="ExtraAmmoList"/> entries of
+    /// <paramref name="record"/> not already listed that <paramref name="find"/> knows as ITEM records (another entry is left out with a warning in
+    /// the log), each with <paramref name="kind"/>'s Meitou fields (a default <see cref="AmmoData"/> for an ITEM without them). The crossbow itself
+    /// when it loads only <see cref="AmmoId"/> and that ITEM has no Meitou field. A crossbow with no <c>ammo</c> whose list leaves nothing (a missing
+    /// dependency mod's items) gets an empty list and a warning: it loads nothing, rather than turning infinite.
+    /// </summary>
+    public CrossbowData WithAmmo(GameRecord record, Func<string, GameRecord?> find, Func<GameRecord, AmmoData?> kind)
+    {
+        var extra = record.GetReferences(ExtraAmmoList);
+        AmmoData? first = AmmoId.Length > 0 && find(AmmoId) is { } ammoRecord ? kind(ammoRecord) : null;
+        if (extra.Count == 0 && first is null) return this;
+
+        var list = new List<AmmoData>();
+        if (AmmoId.Length > 0) list.Add(first ?? new AmmoData { StringId = AmmoId });
+        foreach (var r in extra)
+        {
+            string id = r.TargetStringId;
+            if (id.Length == 0 || list.Exists(a => a.StringId == id)) continue;
+
+            if (find(id) is not { Type: FcsRecordType.Item } item)
+            {
+                Console.WriteLine($"warning   crossbow '{Name}' ({StringId}) {ExtraAmmoList}: '{id}' is missing or not an ITEM record; left out");
+                continue;
+            }
+
+            list.Add(kind(item) ?? new AmmoData { StringId = id });
+        }
+
+        if (list.Count == 0) Console.WriteLine($"warning   crossbow '{Name}' ({StringId}): no usable ammunition; it loads none");
+
+        return this with { Ammo = list };
+    }
+}
+
+/// <summary>
+/// The Meitou fields of an ammunition ITEM (docs/modding.md "Ammunition"): what a bolt of it changes against the crossbow's own bolt. Each field is
+/// read only when the record has it; none is one of the ITEM fields of the install's <c>fcs.def</c>. A crossbow whose ammunition has none of them
+/// fires the original's bolt.
+/// </summary>
+public sealed record AmmoData
+{
+    /// <summary>
+    /// The ITEM's string id.
+    /// </summary>
+    public required string StringId { get; init; }
+
+    /// <summary>
+    /// <c>meitou damage mult</c>: times the bolt's pierce damage (default 1, 0 to <see cref="MaxDamageMult"/>).
+    /// </summary>
+    public float DamageMult { get; init; } = 1;
+
+    /// <summary>
+    /// <c>meitou range mult</c>: times the crossbow's range for a bolt of this kind: the distance it flies before its nose drops, and the distance the
+    /// shooter fires from and checks its line of fire over (default 1, <see cref="MinRangeMult"/> to <see cref="MaxFlightMult"/>: at 0 the shooter
+    /// would never be in range and never fire).
+    /// </summary>
+    public float RangeMult { get; init; } = 1;
+
+    /// <summary>
+    /// <c>meitou speed mult</c>: times the crossbow's shot speed for a bolt of this kind, in flight and in the aim's lead (default 1,
+    /// <see cref="MinSpeedMult"/> to <see cref="MaxFlightMult"/>: a bolt of speed 0 would never move nor be removed).
+    /// </summary>
+    public float SpeedMult { get; init; } = 1;
+
+    /// <summary>
+    /// <c>meitou bleed mult</c>: times the bolt's bleed multiplier, the original's constant 2 (default 1, 0 to <see cref="MaxDamageMult"/>).
+    /// </summary>
+    public float BleedMult { get; init; } = 1;
+
+    /// <summary>
+    /// <c>meitou live ammo</c>: the mesh of the bolt in flight and stuck in a body or the ground, instead of the crossbow's <c>live ammo</c>; empty
+    /// keeps it.
+    /// </summary>
+    public string LiveAmmoMesh { get; init; } = "";
+
+    /// <summary>
+    /// The largest damage and bleed multiplier.
+    /// </summary>
+    public const float MaxDamageMult = 100;
+
+    /// <summary>
+    /// The largest range and speed multiplier: a bolt's flight is tested along its whole step each tick, so its cost grows with both.
+    /// </summary>
+    public const float MaxFlightMult = 10;
+
+    /// <summary>
+    /// The smallest speed multiplier.
+    /// </summary>
+    public const float MinSpeedMult = 0.1f;
+
+    /// <summary>
+    /// The smallest range multiplier.
+    /// </summary>
+    public const float MinRangeMult = 0.1f;
+
+    /// <summary>
+    /// The Meitou number fields' names, in the order of the properties.
+    /// </summary>
+    static readonly string[] Fields = ["meitou damage mult", "meitou range mult", "meitou speed mult", "meitou bleed mult"];
+
+    /// <summary>
+    /// Reads an ITEM's Meitou ammunition fields; null when it has none of them. A value that is not finite reads as 1 and one outside its bounds as
+    /// the nearest bound, each with a warning in the log.
+    /// </summary>
+    public static AmmoData? From(GameRecord r)
+    {
+        string mesh = r.GetPath("meitou live ammo");
+        if (mesh.Length == 0 && !HasField(r)) return null;
+
+        return new AmmoData
+        {
+            StringId = r.StringId,
+            DamageMult = Mult(r, Fields[0], 0, MaxDamageMult),
+            RangeMult = Mult(r, Fields[1], MinRangeMult, MaxFlightMult),
+            SpeedMult = Mult(r, Fields[2], MinSpeedMult, MaxFlightMult),
+            BleedMult = Mult(r, Fields[3], 0, MaxDamageMult),
+            LiveAmmoMesh = mesh,
+        };
+    }
+
+    /// <summary>
+    /// Whether the record has one of the number <see cref="Fields"/> (as a float or an int).
+    /// </summary>
+    static bool HasField(GameRecord r)
+    {
+        foreach (string f in Fields)
+            if (r.Floats.ContainsKey(f) || r.Ints.ContainsKey(f)) return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// A multiplier field: 1 when absent or not finite, else clamped to [<paramref name="min"/>, <paramref name="max"/>]; a changed value is logged.
+    /// </summary>
+    static float Mult(GameRecord r, string key, float min, float max)
+    {
+        float v = RecordReading.Float(r, key, 1);
+        float read = float.IsFinite(v) ? Math.Clamp(v, min, max) : 1;
+        if (read != v) Console.WriteLine($"warning   ammunition '{r.Name}' ({r.StringId}) {key}: {v} read as {read} (bounds {min} to {max})");
+
+        return read;
+    }
 }
 
 /// <summary>

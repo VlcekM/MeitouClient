@@ -84,9 +84,9 @@ public static class CollisionPaths
 
     /// <summary>
     /// The collision file a record's path names, as docs/formats/collision.md "File lookup" describes the game opening a building part's
-    /// (<c>xml collision</c>, <c>destroyed collision</c>): by its bare name, the XML beside a cooked <c>.bin</c> of that name first, else the XML of
-    /// that name (the last enabled mod holding it wins); a file outside the resource folders by <see cref="Resolve"/>. Every file the collision
-    /// cache reads goes this way. Null when none is found.
+    /// (<c>xml collision</c>, <c>destroyed collision</c>): by its bare name, the XML beside a cooked <c>.bin</c> of that name first, else the XML
+    /// of that name (the last enabled mod holding it wins, or an enabled mod's rebind of it); a file outside the resource folders by
+    /// <see cref="Resolve"/>. Every file the collision cache reads goes this way. Null when none is found.
     /// </summary>
     public static string? ResolveCollision(GameInstall install, string recordPath)
     {
@@ -95,9 +95,52 @@ public static class CollisionPaths
 
         string name = Path.GetFileName(recordPath.Replace('\\', '/'));
         if (CookedSource(resources, name) is { } cooked) return cooked;
-        if (resources.Find(name, DefaultGroup) is { } byName && File.Exists(byName)) return byName;
+        if (resources.Find(name, DefaultGroup) is { } byName && File.Exists(byName)) return Rebound(install, resources, byName);
 
         return Resolve(install, recordPath);
+    }
+
+    /// <summary>
+    /// The enabled mods' rebinds and each XML's rebound file, by the resource index they were read with (<see cref="GameResources.For"/> makes a
+    /// new one when <c>mods.cfg</c> changes), so the collision lookups read the rebinds once and work out each file's rebind once.
+    /// </summary>
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<OgreScriptResources, ReboundFiles> RebindsByIndex = new();
+
+    /// <summary>
+    /// One resource index's rebinds and the files worked out so far (null: hidden).
+    /// </summary>
+    sealed class ReboundFiles(ReKenshiRebinds rebinds)
+    {
+        /// <summary>
+        /// The enabled mods' rebinds.
+        /// </summary>
+        public ReKenshiRebinds Rebinds { get; } = rebinds;
+
+        /// <summary>
+        /// Each XML found and the file read for it; null (not made) when no mod rebinds a file.
+        /// </summary>
+        public System.Collections.Concurrent.ConcurrentDictionary<string, string?>? Files { get; } =
+            rebinds.IsEmpty ? null : new(StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// The XML the game opens through Ogre when no cooked file of its name exists, or the file an enabled mod rebinds it to
+    /// (<see cref="ReKenshiRebinds"/>); null for a rebind to no file (<c>HIDE</c>). Without any rebind, the path itself.
+    /// </summary>
+    static string? Rebound(GameInstall install, OgreScriptResources resources, string xml)
+    {
+        if (!RebindsByIndex.TryGetValue(resources, out var rebound))
+        {
+            rebound = new ReboundFiles(ReKenshiRebinds.For(install));
+            RebindsByIndex.AddOrUpdate(resources, rebound);
+        }
+        if (rebound.Files is not { } files) return xml;
+        if (files.TryGetValue(xml, out var known)) return known;
+
+        string target = rebound.Rebinds.Redirect(xml);
+        string? result = ReferenceEquals(target, xml) || File.Exists(target) ? target : null;
+        files.TryAdd(xml, result);
+        return result;
     }
 
     /// <summary>

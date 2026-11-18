@@ -228,6 +228,7 @@ public sealed partial class World : IDisposable
         Settings = settings;
         GameHours = settings.StartHours;
         Walkability = walkability;
+        LastingIds = new LastingIds(this);
         this._systems = [.. systems ?? []];
         foreach (var system in this._systems) ModFaults.Add(system);
         for (int k = 0; k < this._systems.Count; k++) _phases.Add(new SystemPhases(this, this._systems[k], k));
@@ -248,6 +249,9 @@ public sealed partial class World : IDisposable
             ItemUseObservers.Register(this._systems[k], k);
             GoodsTakenObservers.Register(this._systems[k], k);
             RelationObservers.Register(this._systems[k], k);
+            DeathObservers.Register(this._systems[k], k);
+            ExperienceFilters.Register(this._systems[k], k);
+            CrimeObservers.Register(this._systems[k], k);
         }
         foreach (var owner in this._systems.OfType<ITaskOwner>())
         {
@@ -259,6 +263,7 @@ public sealed partial class World : IDisposable
         for (int k = 0; k < this._systems.Count; k++) if (DecidesAfter(this._systems[k])) _decideAfter = k;
 
         Characters = characters ?? new CharacterTable();
+        WatchCharacters();
         Grid = new SpatialGrid(settings.GridCellSize);
         _pool = new WorkerPool(settings.Threads);
         _buffers = new EffectBuffer[Math.Max(1, settings.Threads * settings.PartitionsPerThread)];
@@ -454,6 +459,18 @@ public sealed partial class World : IDisposable
     /// </summary>
     internal RelationObservers RelationObservers { get; } = new();
     /// <summary>
+    /// The systems told of deaths (<see cref="Bodies.ICharacterDeathObserver"/>).
+    /// </summary>
+    internal Bodies.DeathObservers DeathObservers { get; } = new();
+    /// <summary>
+    /// The systems filtering experience gains (<see cref="Bodies.IExperienceFilter"/>).
+    /// </summary>
+    internal Bodies.ExperienceFilters ExperienceFilters { get; } = new();
+    /// <summary>
+    /// The systems told of crimes (<see cref="Crime.ICrimeObserver"/>).
+    /// </summary>
+    internal Crime.CrimeObservers CrimeObservers { get; } = new();
+    /// <summary>
     /// The camera the host last passed (<see cref="CameraViewCommand"/>); null: none, nothing is tested against a screen.
     /// </summary>
     public CameraViewCommand? View { get; internal set; }
@@ -470,6 +487,19 @@ public sealed partial class World : IDisposable
     /// The unique (story) characters made, dead or captured (docs/game/factions-squads-towns.md "Unique characters").
     /// </summary>
     public UniqueCharacters Uniques { get; } = new();
+    /// <summary>
+    /// The characters' lasting ids, which code mods key their data per character by (docs/modding.md "Character ids").
+    /// </summary>
+    public LastingIds LastingIds { get; }
+    /// <summary>
+    /// The values code mods set on their world states (docs/modding.md "World states"), to read; null until the first, so a world without one is the
+    /// game's. Values are set only through the claimed <see cref="ModWorldState"/> handles.
+    /// </summary>
+    public ModWorldStates? ModStatesOrNull { get; private set; }
+    /// <summary>
+    /// The code mods' world state values, made on first use (<see cref="ModWorldState.Set"/>).
+    /// </summary>
+    internal ModWorldStates ModStates => ModStatesOrNull ??= new();
     /// <summary>
     /// The player-built buildings and construction sites, in creation order (docs/simulation.md "Buildings").
     /// </summary>
@@ -669,8 +699,31 @@ public sealed partial class World : IDisposable
         ItemUseObservers.Register(system, _systems.Count - 1);
         GoodsTakenObservers.Register(system, _systems.Count - 1);
         RelationObservers.Register(system, _systems.Count - 1);
+        DeathObservers.Register(system, _systems.Count - 1);
+        ExperienceFilters.Register(system, _systems.Count - 1);
+        CrimeObservers.Register(system, _systems.Count - 1);
         if (system is IDecisionOwner owner) owner.RegisterSources(Decisions);
         if (DecidesAfter(system)) _decideAfter = _systems.Count - 1;
+        WatchCharacters();
+    }
+
+    /// <summary>
+    /// Sets the table's watch on characters entering and leaving it (<see cref="CharacterWatch"/>) once a death observer or an experience filter
+    /// needs it, binding the stats of the characters already in it for the filters; none otherwise.
+    /// </summary>
+    void WatchCharacters()
+    {
+        // A table handed over from another world drops that world's watch and its stats' bindings to it, so nothing reports to it or keeps it.
+        if (Characters.Watch is { } foreign && !foreign.Of(this))
+        {
+            Characters.Watch = null;
+            Bodies.ExperienceFilters.UnbindAll(this);
+        }
+
+        if (!DeathObservers.Active && !ExperienceFilters.Active) return;
+
+        Characters.Watch ??= new CharacterWatch(this);
+        if (ExperienceFilters.Active) Bodies.ExperienceFilters.BindAll(this);
     }
 
     /// <summary>
@@ -757,8 +810,10 @@ public sealed partial class World : IDisposable
         // 6. Commit (serial): the effects in an order the partitioning cannot change.
         Commit(table, prof);
 
-        // 7. Slow world (serial), then the code mods' status effects lose a tick (nothing without registered effects).
+        // 7. Slow world (serial), then the deaths of the commit and the slow world that no site reported, then the code mods' status effects
+        // lose a tick (nothing without registered effects).
         RunSlowWorld(prof);
+        DeathObservers.Sweep(this);
         Bodies.StatusEffects.Step(this);
 
         // 8. Publish.
@@ -856,6 +911,7 @@ public sealed partial class World : IDisposable
     {
         table.Phase = TablePhase.Commit;
         ModFaults.Settle();   // a mod system that threw in a parallel phase stops here, before its effects of the tick are applied
+        DeathObservers.Sweep(this);   // the deaths of the parallel phases (and of the inputs), before the blows of the commit
 
         _effects.Clear();
         for (int i = 0; i < _partitions.Length; i++) _effects.AddRange(_buffers[i].Items);
@@ -1186,6 +1242,8 @@ public sealed partial class World : IDisposable
         if (ItemSlots.Count > 0) ItemSlots.Hash(ref h);   // only once a town with item slots registered
         if (Machines.Count > 0) Machines.Hash(ref h);   // only once the player has a working building
         if (Research.Changed) Research.Hash(ref h);   // only once research changed in play
+        if (LastingIds.Any) LastingIds.Hash(ref h);   // only once a mod asked for a character id or a save held some
+        if (ModStatesOrNull is { Count: > 0 } modStates) modStates.Hash(ref h);   // only while a code mod's world state has a value
         foreach (var s in _systems) if (s is IStateHashed hashed) hashed.Hash(ref h);
 
         HashCombatHitObserverFaults(ref h);
@@ -1194,6 +1252,9 @@ public sealed partial class World : IDisposable
         ItemUseObservers.HashFaults(ref h);
         GoodsTakenObservers.HashFaults(ref h);
         RelationObservers.HashFaults(ref h);
+        DeathObservers.HashFaults(ref h);
+        ExperienceFilters.HashFaults(ref h);
+        CrimeObservers.HashFaults(ref h);
         ModFaults.HashFaults(ref h);
         return h.Value;
     }
@@ -1201,5 +1262,14 @@ public sealed partial class World : IDisposable
     /// <summary>
     /// Stops the worker pool.
     /// </summary>
-    public void Dispose() => _pool.Dispose();
+    public void Dispose()
+    {
+        _pool.Dispose();
+
+        // a stats object kept past the world (by a mod, say) must not keep the world alive through its experience binding
+        if (Characters.Watch?.Of(this) != true) return;
+
+        Bodies.ExperienceFilters.UnbindAll(this);
+        Characters.Watch = null;
+    }
 }

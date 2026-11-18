@@ -199,8 +199,8 @@ public sealed partial class CombatSystem
         float h = RangedFormulas.HeightFactor(at.Y, prev[target].Position.Y);
         if (!RangedFormulas.InRange(Vector3.DistanceSquared(at, prev[target].Position), gun.Range, h)) return;
 
-        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Perception, dt, RangedFormulas.PerceptionXp);
-        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Turrets, dt, TurretFormulas.TurretXp);
+        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Perception, dt, RangedFormulas.PerceptionXp, ExperienceSource.Turret);
+        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Turrets, dt, TurretFormulas.TurretXp, ExperienceSource.Turret);
 
         // The fire decision (FUN_140437ad0): aimed within a degree, then the steady time, then the line along the barrel.
         if (t.Worst > TurretFormulas.AimedDegrees) return;
@@ -247,8 +247,8 @@ public sealed partial class CombatSystem
             t.Steady = RangedFormulas.SteadyAim;
         }
 
-        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Turrets, dt, TurretFormulas.TurretXp);
-        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Dexterity, dt, RangedFormulas.DexterityReloadXp);
+        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Turrets, dt, TurretFormulas.TurretXp, ExperienceSource.Turret);
+        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Dexterity, dt, RangedFormulas.DexterityReloadXp, ExperienceSource.Turret);
         return false;
     }
 

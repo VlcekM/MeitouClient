@@ -144,6 +144,45 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// Plays a named sound event on a character, from any thread (docs/modding.md "Sounds"): <see cref="World.PostSound(string, CharacterId,
+    /// string?, string?)"/> on the running world; nothing before the first world or without audio.
+    /// </summary>
+    public void PostSound(string eventName, CharacterId on, string? switchGroup = null, string? switchValue = null)
+    {
+        CheckSound(eventName, default);
+        _world()?.PostSound(eventName, on, switchGroup, switchValue);
+    }
+
+    /// <summary>
+    /// Plays a named sound event at a world point, from any thread: <see cref="World.PostSound(string, System.Numerics.Vector3, string?,
+    /// string?)"/> on the running world; nothing before the first world or without audio.
+    /// </summary>
+    public void PostSound(string eventName, System.Numerics.Vector3 at, string? switchGroup = null, string? switchValue = null)
+    {
+        CheckSound(eventName, at);
+        _world()?.PostSound(eventName, at, switchGroup, switchValue);
+    }
+
+    /// <summary>
+    /// Plays a named sound event on the interface, from any thread: <see cref="World.PostInterfaceSound"/> on the running world; nothing before the
+    /// first world or without audio.
+    /// </summary>
+    public void PostInterfaceSound(string eventName, string? switchGroup = null, string? switchValue = null)
+    {
+        CheckSound(eventName, default);
+        _world()?.PostInterfaceSound(eventName, switchGroup, switchValue);
+    }
+
+    /// <summary>
+    /// Throws, as the world's calls do, for an empty event name or a point that is not finite, also before the first world.
+    /// </summary>
+    static void CheckSound(string eventName, System.Numerics.Vector3 at)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(eventName);
+        if (!float.IsFinite(at.X + at.Y + at.Z)) throw new ArgumentOutOfRangeException(nameof(at), at, "A sound's point must be finite.");
+    }
+
+    /// <summary>
     /// A line in the game's log (log.txt), prefixed with the mod id.
     /// </summary>
     public void Log(string message) => Console.WriteLine($"mod       {Id}: {message}");
@@ -164,6 +203,7 @@ public sealed class ModContext
         ArgumentNullException.ThrowIfNull(factory);
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("A system needs a name.", nameof(name));
         if (Pending.Systems.Any(s => s.Name == name)) throw new ArgumentException($"The mod already has a system named '{name}'.", nameof(name));
+        if (name == ModWorldStateSave.EntryName) throw new ArgumentException($"'{name}' is the game's name in the mod's save data.", nameof(name));
         Pending.Systems.Add(new SystemFactory(Id, name, anchor, factory));
     }
 
@@ -359,6 +399,7 @@ public sealed class ModContext
         CheckOpen();
         ArgumentNullException.ThrowIfNull(extension);
         Pending.Ui.Add(extension);
+        Pending.UiFolders[extension] = Folder;
     }
 
     /// <summary>
@@ -397,6 +438,47 @@ public sealed class ModContext
         if (string.IsNullOrWhiteSpace(label))
             throw new ArgumentException("A debug command needs a label.", nameof(label));
         Pending.DebugCommands.Add(new ModDebugCommand(Id, label, hasField, run));
+    }
+
+    /// <summary>
+    /// Claims the WORLD_EVENT_STATE <paramref name="record"/> (docs/modding.md "World states"): while the mod has set a value on it in a world
+    /// (<see cref="Simulation.Factions.ModWorldState.Set"/>, in a serial phase), every data record that tests the state reads that value; until then,
+    /// and without the mod, its own conditions answer. The values are saved in the mod's save data. A record that is no WORLD_EVENT_STATE, or one
+    /// another mod claimed, refuses the mod.
+    /// </summary>
+    public Simulation.Factions.ModWorldState AddWorldState(string record)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(record);
+        if (Data.Find(record) is not { Type: global::Meitou.Data.Fcs.FcsRecordType.WorldEventState })
+            throw new ArgumentException($"'{record}' is not a WORLD_EVENT_STATE of the loaded data.", nameof(record));
+        _registry.CheckWorldStateFree(record, Pending, Id);
+
+        var state = new Simulation.Factions.ModWorldState(Id, record);
+        Pending.WorldStates.Add(state);
+        return state;
+    }
+
+    /// <summary>
+    /// A key action (docs/modding.md "Key actions"): a row named <paramref name="label"/> on the settings' Controls page after the game's, bound to
+    /// those of <paramref name="defaults"/> that no other action holds, rebindable and saved as the game's are (under <paramref name="name"/>, unique
+    /// within the mod). Each press in the game view runs <paramref name="pressed"/> on the host's thread while a tick may be in flight: it must not
+    /// touch the world, only read the context and queue commands. A throw is logged and the action gets no more presses.
+    /// </summary>
+    public Game.Host.Input.ModKeyAction AddKeyAction(string name, string label, Action<Game.Host.Input.ModKeyContext> pressed,
+        params Game.Host.Input.Binding[] defaults)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(label);
+        ArgumentNullException.ThrowIfNull(pressed);
+        ArgumentNullException.ThrowIfNull(defaults);
+        if (Game.Host.Input.ModKeyAction.Refusal(name, label, defaults, Pending.KeyActions) is { } refusal)
+            throw new ArgumentException(refusal, nameof(name));
+
+        var action = new Game.Host.Input.ModKeyAction(Id, Name, name, label, pressed, [.. defaults]);
+        Pending.KeyActions.Add(action);
+        return action;
     }
 
     /// <summary>

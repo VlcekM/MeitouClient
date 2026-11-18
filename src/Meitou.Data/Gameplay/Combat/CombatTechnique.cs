@@ -77,9 +77,16 @@ public sealed record CombatTechnique
     public WeaponKinds Kinds { get; init; }
 
     /// <summary>
-    /// <c>animal</c>: 0 for a person's technique, else the creature's weapon category (9 to 20).
+    /// <c>animal</c>: 0 for a person's technique, else the creature's weapon category (9 to 20); for a technique of a data-named weapon class
+    /// (<see cref="ModClass"/>) that class's number (<see cref="WeaponClassNames.Apply"/>), which only the class's weapons have.
     /// </summary>
     public int Animal { get; init; }
+
+    /// <summary>
+    /// <c>meitou class</c> (Meitou only, not a field of the game's editor): the weapon class the technique belongs to alone
+    /// (<see cref="WeaponClassNames"/>), trimmed; null when absent or blank.
+    /// </summary>
+    public string? ModClass { get; init; }
 
     /// <summary>
     /// <c>num techniques</c>: the number of blows, any count (the reader <c>FUN_1406684c0</c> loops index 1, 2, ... while it is above the index,
@@ -283,6 +290,7 @@ public sealed record CombatTechnique
             UseRightArm = r.GetBool("use R arm"),
             Kinds = kinds,
             Animal = RecordReading.Int(r, "animal", 0),
+            ModClass = WeaponData.Text(r, "meitou class"),
             Blows = Math.Max(blowCount, 0),
             MoreBlows = [.. Enumerable.Range(3, Math.Max(blowCount - 2, 0)).Select(n => ReadBlow(r, n))],
             AttackDirection1 = RecordReading.Int(r, "attack direction 1", 0),

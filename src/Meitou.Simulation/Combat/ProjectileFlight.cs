@@ -58,7 +58,13 @@ struct Projectile
     public string Mesh;
 
     /// <summary>
-    /// Adds the bolt's simulated fields to the state hash.
+    /// Meitou: the ammunition it was loaded from when its crossbow has an ammunition list (its bleed multiplier at the hit; an entry without Meitou
+    /// fields multiplies by 1); null for every base-game crossbow's bolt and every turret's harpoon.
+    /// </summary>
+    public Meitou.Data.Gameplay.Combat.AmmoData? Ammo;
+
+    /// <summary>
+    /// Adds the bolt's simulated fields to the state hash (the ammunition only when it has Meitou fields, so base-game bolts hash as before).
     /// </summary>
     internal readonly void Hash(ref StateHasher h)
     {
@@ -75,6 +81,7 @@ struct Projectile
         h.Add(Avoidance);
         h.Add(Stuck);
         h.Add(Passed);
+        if (Ammo is not null) h.Add(Rng.StableHash(Ammo.StringId));
     }
 }
 

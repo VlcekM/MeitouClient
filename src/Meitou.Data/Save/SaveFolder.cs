@@ -52,6 +52,12 @@ public sealed partial class SaveFolder
     public const string WeaponBloodName = "meitou-weapon-blood.json";
 
     /// <summary>
+    /// The lasting ids code mods gave characters (docs/formats/save.md "Character ids", <see cref="SaveLastingIds"/>); not a sidecar, its extension
+    /// keeps it out of <see cref="ModDataFiles"/>. The original ignores it.
+    /// </summary>
+    public const string LastingIdsName = ModDataDirectory + "/character-ids.json";
+
+    /// <summary>
     /// Meitou's own folder of the level editor's session edits (docs/game/level-editor.md "In the game save"); the original ignores it.
     /// </summary>
     public const string LevelEditsDirectory = "meitou-level-edits";

@@ -141,7 +141,8 @@ indices track creation/last update but their full uses unknown.
 **Verified** FcsSchemaTests.Record_type_names_match_fcs_def_against_base_game checks78 used types;
 record census/runner-up matching statistics are not additional format rules. fcs.def declares
 sections/field defaults/types/ranges/enums/category headings; undeclared saved keys may still be
-valid. Infer kind from schema declaration, not an item's display name. Schema details follow.
+valid, and the editor keeps them ([below](#editor-and-undeclared-fields)). Infer kind from schema
+declaration, not an item's display name. Schema details follow.
 
 ## File
 
@@ -268,6 +269,15 @@ Leader AI Goals: AI_TASK (0, 24,0) "...val0 and val1 is start and finish time...
 - Enum names refer to `fcs_enums.def` (`enum Name { A, B=5, ... }`; not parsed yet). The editor
   also has many enums built in (e.g. `DialogConditionEnum`, `DialogActionEnum`) that aren't in the
   .def files; the dialogue ones are in [dialogue](../game/dialogue.md#enums).
+
+### Editor and undeclared fields
+
+**Verified** (editor decompile: `GameData.Item.load`, `Item.save`, the `Cleanup` window): the editor
+does not filter a record's fields by `fcs.def` when it loads a file; every key read goes into the
+record's table (only the tag filter of the older file types applies), and saving writes back
+every key of the active mod's table. So a field `fcs.def` does not declare survives a load and a
+save in the editor. The Cleanup window's "Remove deprecated fields" deletes, among the values the
+active mod set, the fields `fcs.def` does not define on records whose type it defines.
 
 ## Item categories
 

@@ -41,9 +41,9 @@ public sealed class CrossbowInstance(CrossbowData data, float quality, CrossbowS
     public int NumShots => Math.Max(Data.NumShots, 1);
 
     /// <summary>
-    /// No <c>ammo</c> reference: the crossbow never runs dry.
+    /// No <c>ammo</c> reference and no Meitou ammunition list: the crossbow never runs dry (<see cref="CrossbowData.InfiniteAmmo"/>).
     /// </summary>
-    public bool InfiniteAmmo => Data.AmmoId.Length == 0;
+    public bool InfiniteAmmo => Data.InfiniteAmmo;
 
     /// <summary>
     /// The gun of a CROSSBOW at quality fraction <paramref name="q"/> with the CONSTANTS <c>bow damage 1/99</c> and the global damage multiplier
@@ -296,6 +296,19 @@ public static class Ammunition
                 if (i.Record == ammoId) return i;
 
         return null;
+    }
+
+    /// <summary>
+    /// The place in <paramref name="crossbow"/>'s ammunition list (<see cref="CrossbowData.AmmoAt"/>) of the first kind <paramref name="inventory"/>
+    /// holds, in the crossbow's order of preference; -1 when it holds none. A crossbow of one kind asks <see cref="Find"/> once, as before the list.
+    /// </summary>
+    public static int FirstCarried(Inventory? inventory, CrossbowData crossbow)
+    {
+        int count = crossbow.AmmoCount;
+        for (int k = 0; k < count; k++)
+            if (Find(inventory, crossbow.AmmoAt(k)) is not null) return k;
+
+        return -1;
     }
 
     /// <summary>

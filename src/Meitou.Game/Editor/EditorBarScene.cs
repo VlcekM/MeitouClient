@@ -162,7 +162,9 @@ sealed class EditorBarScene(GameHost host, CharacterEditorHost editor)
         if (EditorBar.Above(world, shown.Position, host.Scene.GroundAt) is not { } bar
                 || db.Find(bar.Placement.BuildingId) is not { } record)
         {
+            // A data set without the bar's records (a conversion that removes them) shows the editor's stage alone.
             _editorBarMissing = true;
+            Console.WriteLine("editor    no bar behind the character editor: its building record or Bar layout is not in the data");
             return null;
         }
         EditorBar = bar;

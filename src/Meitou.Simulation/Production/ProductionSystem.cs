@@ -1211,7 +1211,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     {
         if (stat <= 0) return;
         cold.UseSkill((StatsEnumerated)stat, world.Tick);
-        if (cold.Stats is { } stats && cold.Race is { } race) _xp.Continuous(stats, race, (StatsEnumerated)stat, dt, OperateXp(stat));
+        if (cold.Stats is { } stats && cold.Race is { } race)
+            _xp.Continuous(stats, race, (StatsEnumerated)stat, dt, OperateXp(stat), ExperienceSource.Work);
     }
 
     /// <summary>

@@ -30,12 +30,32 @@ public static class Encumbrance
         c.CarryWeightMult * strength * strengthInjuryMultiplier + c.EncumbranceBase;
 
     /// <summary>
+    /// <see cref="Capacity(GameConstants, float, float)"/> with a code mod's <paramref name="modifiers"/> (<see cref="CharacterStats.CarryModifiers"/>,
+    /// null: none) applied to the whole of C.
+    /// </summary>
+    public static float Capacity(GameConstants c, float strength, float strengthInjuryMultiplier, CarryModifiers? modifiers)
+    {
+        float capacity = Capacity(c, strength, strengthInjuryMultiplier);
+        return modifiers is null ? capacity : modifiers.Apply(capacity);
+    }
+
+    /// <summary>
     /// The maximum the inventory window prints (<b>Observed</b>, docs/game/ui-screens.md "Total Weight"): the strength (times the stats
     /// multiplier, which is an animal's age, and its injury multiplier) plus <c>encumbrance base</c>, truncated. It has no <c>carry weight mult</c>:
-    /// that only enters the capacity of the encumbrance factor (<see cref="Capacity"/>).
+    /// that only enters the capacity of the encumbrance factor (<see cref="Capacity(GameConstants, float, float)"/>).
     /// </summary>
     public static float WindowCapacity(GameConstants c, float strength, float strengthInjuryMultiplier = 1) =>
         MathF.Floor(strength * strengthInjuryMultiplier + c.EncumbranceBase);
+
+    /// <summary>
+    /// <see cref="WindowCapacity(GameConstants, float, float)"/> with a code mod's <paramref name="modifiers"/> (null: none) applied before the
+    /// truncation.
+    /// </summary>
+    public static float WindowCapacity(GameConstants c, float strength, float strengthInjuryMultiplier, CarryModifiers? modifiers)
+    {
+        float capacity = strength * strengthInjuryMultiplier + c.EncumbranceBase;
+        return MathF.Floor(modifiers is null ? capacity : modifiers.Apply(capacity));
+    }
 
     /// <summary>
     /// The encumbrance factor e = clamp((C - 0.05 W) / (0.95 W), 0, 1): 1 while W &lt;= C, about 0.47 at W = 2C, 0 at W = 20C. It multiplies run
@@ -52,4 +72,11 @@ public static class Encumbrance
     /// </summary>
     public static float Factor(GameConstants c, float inventoryWeight, bool carryingPerson, float strength, float strengthInjuryMultiplier = 1) =>
         Factor(CarriedWeight(c, inventoryWeight, carryingPerson), Capacity(c, strength, strengthInjuryMultiplier));
+
+    /// <summary>
+    /// The factor of a character with a code mod's carry <paramref name="modifiers"/> (null: none) on its capacity.
+    /// </summary>
+    public static float Factor(GameConstants c, float inventoryWeight, bool carryingPerson, float strength, float strengthInjuryMultiplier,
+        CarryModifiers? modifiers) =>
+        Factor(CarriedWeight(c, inventoryWeight, carryingPerson), Capacity(c, strength, strengthInjuryMultiplier, modifiers));
 }

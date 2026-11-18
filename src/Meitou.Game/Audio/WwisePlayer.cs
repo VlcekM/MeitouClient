@@ -292,6 +292,10 @@ public sealed partial class WwisePlayer : IDisposable
     /// </summary>
     readonly List<SoundInstance> _sounds = [];
     /// <summary>
+    /// The length of <see cref="_pending"/> from which a new wait first drops the expired ones.
+    /// </summary>
+    const int PendingPruneAt = 64;
+    /// <summary>
     /// Events whose bank is still loading: when they were posted, on which object, and until when they are retried.
     /// </summary>
     readonly List<(double At, uint EventId, ulong Object, double Expires)> _pending = [];
@@ -472,8 +476,11 @@ public sealed partial class WwisePlayer : IDisposable
     {
         if (!_objects.TryGetValue(eventId, out var o) || o is not WwiseEvent e)
         {
-            // Its bank is still loading: try again when a bank arrives, for a while.
-            if (_time < expires) _pending.Add((_time, eventId, gameObject, expires));
+            // Its bank is still loading: try again when a bank arrives, for a while. Expired waits are pruned once the list grows, so a name no
+            // bank has (a code mod's misspelt event, posted every tick) cannot grow it past what ten seconds of posting adds.
+            if (_time >= expires) return;
+            if (_pending.Count >= PendingPruneAt) _pending.RemoveAll(p => _time >= p.Expires);
+            _pending.Add((_time, eventId, gameObject, expires));
             return;
         }
         foreach (var actionId in e.Actions)

@@ -719,6 +719,13 @@ sealed class UserConfig
     /// </summary>
     public Dictionary<string, string> Bindings { get; set; } = [];
     /// <summary>
+    /// The code mods' key actions whose keys differ from their defaults (docs/modding.md "Key actions"): mod id to action name to comma-separated
+    /// keys, as <see cref="Bindings"/>; an empty value unbinds. Null, and not written, until a mod's action is rebound; a mod not running keeps its
+    /// entries.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, Dictionary<string, string>>? ModBindings { get; set; }
+    /// <summary>
     /// The Meitou skin per race, where chosen against the default (RACE string id to on or off; Graphics > Skin): <c>CharacterRenderer.SkinRaces</c>.
     /// </summary>
     public Dictionary<string, bool> SkinRaces { get; set; } = [];

@@ -33,6 +33,11 @@ sealed class BuildingSelection(PlayerInterface player)
     internal UseableLines Useable { get; } = new(player);
 
     /// <summary>
+    /// The code mods' buttons on the panel.
+    /// </summary>
+    internal BuildingModButtons ModButtons { get; } = new(player);
+
+    /// <summary>
     /// A left click on the ground ends the building's selection (Advanced settings "Click away deselects"); false: it stays, as in the game.
     /// </summary>
     public bool DeselectBuildings { get; set; } = true;

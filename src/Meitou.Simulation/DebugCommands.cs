@@ -1170,14 +1170,14 @@ static class DebugCheats
     static int ClearBounties(World world, DebugClearBounties clear)
     {
         int removed = 0;
-        foreach (var c in BountyTargets(world, clear.Characters))
+        foreach (var (slot, c) in BountyTargets(world, clear.Characters))
         {
             if (c.Bounties is not { } ledger) continue;
             for (int k = ledger.Count - 1; k >= 0; k--)
             {
                 var e = ledger.Entries[k];
                 if (clear.Faction is { } only && e.Faction != only) continue;
-                ledger.Remove(e);
+                Crime.CrimeSystem.ClearBounty(world, slot, c, ledger, e);
                 removed++;
             }
 
@@ -1192,18 +1192,18 @@ static class DebugCheats
     /// <summary>
     /// The characters <paramref name="ids"/> names, else every player character.
     /// </summary>
-    static IEnumerable<CharacterCold> BountyTargets(World world, IReadOnlyList<CharacterId> ids)
+    static IEnumerable<(int Slot, CharacterCold Cold)> BountyTargets(World world, IReadOnlyList<CharacterId> ids)
     {
         var table = world.Characters;
         if (ids.Count > 0)
         {
             foreach (var id in ids)
-                if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { } c) yield return c;
+                if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { } c) yield return (slot, c);
             yield break;
         }
 
         for (int s = 0; s < table.HighWater; s++)
-            if (table.Next[s].Alive && table.Cold(s) is { IsPlayer: true } c) yield return c;
+            if (table.Next[s].Alive && table.Cold(s) is { IsPlayer: true } c) yield return (s, c);
     }
 
     /// <summary>

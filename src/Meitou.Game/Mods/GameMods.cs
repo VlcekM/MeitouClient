@@ -77,12 +77,18 @@ sealed class GameMods(GameHost host)
         _builtInNotices = BuiltInMods.Adopt(host.Config, host.Install);
         (data.BodyOptions.SquadXp, data.BodyOptions.OthersXp) = (host.Config.SquadXp, host.Config.OthersXp);
 
-        if (host.DataPhase?.Mods is { } prepared)
-        {
-            StartPrepared(prepared, host.DataPhase.Enabled, db, data);
-            return;
-        }
+        if (host.DataPhase?.Mods is { } prepared) StartPrepared(prepared, host.DataPhase.Enabled, db, data);
+        else LoadMods(db, data);
 
+        // Every skill is added now: a weapon naming one that is not uses its category's, which the log says once (docs/modding.md "Weapon types").
+        Simulation.Bodies.ModSkills.WarnUnknown(db);
+    }
+
+    /// <summary>
+    /// Loads and initializes the enabled code mods when no data phase loaded their code (<see cref="StartPrepared"/> starts those).
+    /// </summary>
+    void LoadMods(Data.GameDatabase db, PopulationData data)
+    {
         var (enabled, disabled) = CodeMods();
         BuiltInMods.SkipCovered(enabled, disabled);
         if (enabled.Count == 0) return;
@@ -141,7 +147,7 @@ sealed class GameMods(GameHost host)
     {
         foreach (var notice in _builtInNotices) ui.Notice(notice);
         if (Mods is null) return;
-        Mods.RegisterUi(ui.RegisterUiExtension);
+        Mods.RegisterUi((extension, folder) => ui.RegisterUiExtension(extension, folder));
         if (Mods.ArrangesFactionList) ui.FactionWindow.ArrangeList = Mods.ArrangeFactionList;
         foreach (var notice in Mods.Notices) ui.Notice(notice, true);
     }
@@ -280,6 +286,33 @@ sealed class GameMods(GameHost host)
     {
         Console.WriteLine($"mods      {line}");
         host.Player.Notice(line, true);
+    }
+
+    /// <summary>
+    /// The mods' key actions, in load order (none without code mods), for the bindings (<see cref="GameHost.UseSavedBindings"/>).
+    /// </summary>
+    internal IReadOnlyList<Game.Host.Input.ModKeyAction> KeyActions => Mods?.KeyActions ?? [];
+
+    /// <summary>
+    /// Once a control tick on the host's thread: each mod key action's held state, and its press for each one pressed this tick (docs/modding.md
+    /// "Key actions"), with the snapshot on screen, the selection and the command queue; none over the title or a loading cover.
+    /// </summary>
+    internal void PressKeyActions(Game.Host.Input.ActionState actions)
+    {
+        var keyActions = KeyActions;
+        if (keyActions.Count == 0) return;
+
+        bool playing = host.Player is { TitleOpen: false } && !host.Covered;
+        Game.Host.Input.ModKeyContext? context = null;
+        foreach (var action in keyActions)
+        {
+            action.Held = playing && actions.Held(action.Action);
+            if (!playing || !actions.Pressed(action.Action)) continue;
+
+            context ??= new Game.Host.Input.ModKeyContext(host.Session.CurrentSnapshot, host.Player.SelectedIds(), host.Session.World.Tick,
+                host.Session.World.Commands.Enqueue);
+            action.Press(context);
+        }
     }
 
     /// <summary>

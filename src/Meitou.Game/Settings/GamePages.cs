@@ -394,7 +394,7 @@ sealed class GamePages(SettingsMenu menu)
     }
 
     /// <summary>
-    /// The Controls page: the camera's speeds and mouse, then one row per bindable action.
+    /// The Controls page: the camera's speeds and mouse, then one row per bindable action, the code mods' last.
     /// </summary>
     internal void ControlsRows(List<SettingsMenu.Entry> result)
     {
@@ -431,6 +431,10 @@ sealed class GamePages(SettingsMenu menu)
             Toggle: new("Loot into backpack", () => menu.Config.TakeIntoBackpack, SetTakeIntoBackpack, OnOff: true)));
         foreach (var action in Enum.GetValues<InputAction>().Where(a => a != InputAction.Quit && a != InputAction.ToggleFps))
             result.Add(new(SettingsMenu.ActionLabel(action), SettingHints.BindingHint(action), Binding: action));
+
+        // The code mods' key actions follow the game's, in load order (docs/modding.md "Key actions").
+        foreach (var mod in menu.Bindings.ModActions)
+            result.Add(new(mod.Caption, Loc.Tr("A key of the mod {1}: {2}.", mod.OwnerName, mod.Label), Binding: mod.Action));
     }
 
     /// <summary>

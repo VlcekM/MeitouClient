@@ -71,6 +71,12 @@ Bit meanings from the define names the code adds (FUN_140841a50, **Verified (dec
 | 0x100 | `INTERIOR` | | yes |
 | 0x200 | `CLIP_INTERIOR` | | yes |
 
+### Which MATERIAL_SPEC a building part uses
+
+**Verified (decompiled)** `FUN_14054cd30`: the part's first `material`; else the building's base material (the BUILDING's first `material`,
+else its town's TOWN `material`, default `742-gamedata.base`); else `360-gamedata.base`. A MATERIAL_SPEC with its own `material` list is a
+collection and one entry is picked by val0 weight. Meitou: `WorldObjectLayout.FallbackPartMaterial`, `DefaultTownMaterial`.
+
 ### Callers: which template and which flags
 
 "Has vertex colours" below means the mesh's first submesh's vertex declaration (or the shared one) has a

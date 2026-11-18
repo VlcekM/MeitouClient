@@ -347,22 +347,29 @@ public sealed class ActionState
     /// </summary>
     static readonly int Count = Enum.GetValues<InputAction>().Length;
     /// <summary>
-    /// Each action is held at this tick.
+    /// Each action is held at this tick: the game's by number, then the mods' (<see cref="Index"/>).
     /// </summary>
-    readonly bool[] _held = new bool[Count];
+    readonly bool[] _held;
     /// <summary>
     /// Each action went down this tick.
     /// </summary>
-    readonly bool[] _pressed = new bool[Count];
+    readonly bool[] _pressed;
     /// <summary>
     /// Each action went up this tick.
     /// </summary>
-    readonly bool[] _released = new bool[Count];
+    readonly bool[] _released;
 
     /// <summary>
-    /// An empty state for <paramref name="input"/>'s tick (<see cref="InputBindings.Resolve"/> fills it).
+    /// An empty state for <paramref name="input"/>'s tick with room for <paramref name="modActions"/> mod actions (<see cref="InputBindings.Resolve"/>
+    /// fills it).
     /// </summary>
-    internal ActionState(TickInput input) => Input = input;
+    internal ActionState(TickInput input, int modActions = 0)
+    {
+        Input = input;
+        _held = new bool[Count + modActions];
+        _pressed = new bool[Count + modActions];
+        _released = new bool[Count + modActions];
+    }
 
     /// <summary>
     /// The raw input of the tick.
@@ -380,25 +387,31 @@ public sealed class ActionState
     /// <summary>
     /// Whether any binding of the action is down.
     /// </summary>
-    public bool Held(InputAction a) => _held[(int)a];
+    public bool Held(InputAction a) => Index(a) is var i && i < _held.Length && _held[i];
     /// <summary>
     /// Went down this tick: true in exactly one tick per press.
     /// </summary>
-    public bool Pressed(InputAction a) => _pressed[(int)a];
+    public bool Pressed(InputAction a) => Index(a) is var i && i < _pressed.Length && _pressed[i];
     /// <summary>
     /// Went up this tick (and no other key bound to it is still down).
     /// </summary>
-    public bool Released(InputAction a) => _released[(int)a];
+    public bool Released(InputAction a) => Index(a) is var i && i < _released.Length && _released[i];
 
     /// <summary>
     /// Sets an action's three states.
     /// </summary>
     internal void Set(InputAction a, bool isHeld, bool isPressed, bool isReleased)
     {
-        _held[(int)a] = isHeld;
-        _pressed[(int)a] = isPressed;
-        _released[(int)a] = isReleased;
+        int i = Index(a);
+        _held[i] = isHeld;
+        _pressed[i] = isPressed;
+        _released[i] = isReleased;
     }
+
+    /// <summary>
+    /// An action's place in the arrays: a game action's number, a mod action's after the game's (<see cref="InputBindings.FirstModAction"/>).
+    /// </summary>
+    static int Index(InputAction a) => a < InputBindings.FirstModAction ? (int)a : Count + (a - InputBindings.FirstModAction);
 
     /// <summary>
     /// A state with nothing held, for ticks driven without a host.
@@ -417,6 +430,11 @@ public sealed class ActionState
 public sealed class InputBindings
 {
     /// <summary>
+    /// The first code mods' action number (docs/modding.md "Key actions"): theirs follow the game's from here, in load order.
+    /// </summary>
+    public const InputAction FirstModAction = (InputAction)1000;
+
+    /// <summary>
     /// Each action's bindings.
     /// </summary>
     readonly Dictionary<InputAction, Binding[]> _map = [];
@@ -429,6 +447,10 @@ public sealed class InputBindings
     /// </summary>
     static readonly (InputAction Action, Binding Alias)[] MeitouAliases =
         [(InputAction.Medic, Key.H), (InputAction.Rescue, Key.J), (InputAction.Highlight, Key.RightAlt)];
+    /// <summary>
+    /// The code mods' key actions and their defaults; null without any, so the bindings are the game's alone.
+    /// </summary>
+    ModKeyBindings? _mod;
 
     /// <summary>
     /// Starts with the default bindings.
@@ -443,7 +465,80 @@ public sealed class InputBindings
     /// <summary>
     /// Replaces an action's bindings (none unbinds it).
     /// </summary>
-    public void Set(InputAction action, params Binding[] bindings) => _map[action] = bindings;
+    public void Set(InputAction action, params Binding[] bindings)
+    {
+        _map[action] = bindings;
+        if (action >= FirstModAction) _mod?.Touch(action);
+    }
+
+    /// <summary>
+    /// Every action: the game's in order, then the code mods' (<see cref="FirstModAction"/> and up).
+    /// </summary>
+    public IEnumerable<InputAction> Actions => _mod is null ? Enum.GetValues<InputAction>() : Enum.GetValues<InputAction>().Concat(_mod.Numbers);
+
+    /// <summary>
+    /// The code mod's key action numbered <paramref name="action"/>; null for a game action.
+    /// </summary>
+    public ModKeyAction? ModAction(InputAction action) => _mod?.Find(action);
+
+    /// <summary>
+    /// The code mods' key actions, in load order (none without mods).
+    /// </summary>
+    public IReadOnlyList<ModKeyAction> ModActions => _mod?.Actions ?? [];
+
+    /// <summary>
+    /// Whether the settings keep <paramref name="binding"/> for themselves (Escape cancels a rebinding, F6 is the cinema's, the modifiers modify): no
+    /// action may take it there, and no code mod's action asks for it.
+    /// </summary>
+    public static bool Reserved(Binding binding) =>
+        !binding.IsMouse
+            && binding.Key is Key.Escape or Key.F6 or Key.LeftAlt or Key.RightAlt or Key.LeftControl or Key.RightControl or Key.LeftShift
+                or Key.RightShift;
+
+    /// <summary>
+    /// Whether the game takes <paramref name="binding"/> before the bindings see it, or the Controls page keeps it: Insert opens the console, Delete
+    /// and Backspace unbind a row there (Backspace also restarts a duel or battle). A code mod's action never gets one by default or from a saved
+    /// entry. (The numpad divide key, the squad tour's, has no <see cref="Key"/>, so no binding can name it.)
+    /// </summary>
+    public static bool HostKey(Binding binding) => !binding.IsMouse && binding.Key is Key.Insert or Key.Delete or Key.Backspace;
+
+    /// <summary>
+    /// The action of <paramref name="except"/>'s key map (the build map or the general one, <see cref="IsBuildMap"/>) that holds
+    /// <paramref name="binding"/>, other than <paramref name="except"/>; null when none. A key of the other map is no conflict, as on the Controls
+    /// page.
+    /// </summary>
+    internal InputAction? Holder(Binding binding, InputAction except)
+    {
+        foreach (var (action, list) in _map)
+            if (action != except && IsBuildMap(action) == IsBuildMap(except) && list.Contains(binding)) return action;
+        return null;
+    }
+
+    /// <summary>
+    /// Adds the code mods' key actions after the game's bindings are set (the install's and the player's): first the player's saved keys
+    /// (<paramref name="saved"/>: mod id to action name to bindings, as <see cref="Apply"/> reads them), then, for the actions without a saved
+    /// entry, the default keys no other action holds. Nothing happens without actions. Returns the skipped entries and the keys left out.
+    /// </summary>
+    public IReadOnlyList<string> UseModActions(IReadOnlyList<ModKeyAction> actions, IReadOnlyDictionary<string, Dictionary<string, string>>? saved)
+    {
+        if (actions.Count == 0) return [];
+
+        _mod = new ModKeyBindings(actions);
+        return _mod.Start(this, saved);
+    }
+
+    /// <summary>
+    /// <paramref name="saved"/> with the running mods' key actions as they are now (<see cref="ModKeyBindings.Changes"/>: an action the player did
+    /// not change keeps its entry as it was); the entries of mods not running stay. Returns <paramref name="saved"/> itself without mod actions, and
+    /// null when nothing is left to keep.
+    /// </summary>
+    public Dictionary<string, Dictionary<string, string>>? ModChanges(Dictionary<string, Dictionary<string, string>>? saved) =>
+        _mod is null ? saved : _mod.Changes(this, saved);
+
+    /// <summary>
+    /// Whether a code mod's key action has <paramref name="key"/>.
+    /// </summary>
+    public bool IsModBound(Key key) => _mod is not null && _mod.Actions.Any(a => Get(a.Action).Contains(Binding.Of(key)));
 
     /// <summary>
     /// Takes the install's <c>controls.cfg</c> bindings as the defaults of the actions they name, and resets to the defaults.
@@ -461,6 +556,7 @@ public sealed class InputBindings
     {
         SetEngineDefaults();
         OverlayGameControls();
+        foreach (var problem in _mod?.Reset(this) ?? []) Console.WriteLine($"mods      key action: {problem}");
     }
 
     /// <summary>
@@ -637,25 +733,39 @@ public sealed class InputBindings
     /// Every action's bindings as strings in the form <see cref="Apply"/> reads.
     /// </summary>
     Dictionary<string, string> ToStrings() =>
-        _map.ToDictionary(p => p.Key.ToString(), p => string.Join(",", p.Value.Select(b => b.ToString())));
+        _map
+            .Where(p => p.Key < FirstModAction)
+            .ToDictionary(p => p.Key.ToString(), p => Text(p.Value));
+
+    /// <summary>
+    /// Bindings as one string in the form <see cref="Apply"/> reads.
+    /// </summary>
+    internal static string Text(IEnumerable<Binding> bindings) => string.Join(",", bindings.Select(b => b.ToString()));
 
     /// <summary>
     /// Resolves one tick's input into actions.
     /// </summary>
     public ActionState Resolve(TickInput input)
     {
-        var state = new ActionState(input);
-        foreach (var action in Enum.GetValues<InputAction>())
-        {
-            bool held = false, pressed = false, released = false;
-            foreach (var b in Get(action))
-            {
-                held |= input.IsDown(b);
-                pressed |= input.WasPressed(b);
-                released |= input.WasReleased(b);
-            }
-            state.Set(action, held, pressed, released && !held);
-        }
+        var state = new ActionState(input, _mod?.Actions.Count ?? 0);
+        foreach (var action in Enum.GetValues<InputAction>()) ResolveOne(state, input, action);
+        if (_mod is not null)
+            foreach (var action in _mod.Actions) ResolveOne(state, input, action.Action);
         return state;
+    }
+
+    /// <summary>
+    /// One action's held, pressed and released from its bindings.
+    /// </summary>
+    void ResolveOne(ActionState state, TickInput input, InputAction action)
+    {
+        bool held = false, pressed = false, released = false;
+        foreach (var b in Get(action))
+        {
+            held |= input.IsDown(b);
+            pressed |= input.WasPressed(b);
+            released |= input.WasReleased(b);
+        }
+        state.Set(action, held, pressed, released && !held);
     }
 }

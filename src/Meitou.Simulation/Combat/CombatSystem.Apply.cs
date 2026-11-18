@@ -123,7 +123,8 @@ public sealed partial class CombatSystem
                 GainCombatXp(ac, dc, XpEvent.GlancingHit, null);
                 var dodgeStats = dc.Stats;
                 _xp.PerEvent(dodgeStats, dc.Race, StatsEnumerated.Dodge,
-                    0.25f * _xp.SkillDifferenceFactor(dodgeStats[StatsEnumerated.Dodge], Eff(ac, StatsEnumerated.MeleeAttack)));
+                    0.25f * _xp.SkillDifferenceFactor(dodgeStats[StatsEnumerated.Dodge], Eff(ac, StatsEnumerated.MeleeAttack)),
+                    ExperienceSource.Combat);
                 Punch(world, a, ac, dc, tech, blow, 0);
                 Record(now, a, d, blow, outcome, -1, default, false, false);
                 return;
@@ -173,7 +174,7 @@ public sealed partial class CombatSystem
     /// <summary>
     /// A blow that hits (<see cref="ApplyBlow"/> checked both fighters, their stats, bodies and races): its packet (<see cref="BlowPacket"/>, as the
     /// hit filters left it) through armour and the body, the medical events, the defender down or staggered, XP, sounds, blood, the knock-down,
-    /// crimes and relations, the record and the hit observers.
+    /// crimes and relations, the record, the hit observers and a death's report (<see cref="DeathObservers"/>).
     /// </summary>
     void LandBlow(World world, in Effect e, ref CombatSlot aSlot, ref CombatSlot dSlot, CharacterCold ac, CharacterCold dc, CombatTechnique tech,
         int direction, DamagePacket packet)
@@ -228,6 +229,8 @@ public sealed partial class CombatSystem
                 damage, absorbed, prev[d].Position, new(-toAttacker.X, 0, -toAttacker.Y), prev[d].Yaw,
                 direction, tech.LowStrike, intended, wasAlive, wasIncapacitated));
         }
+
+        if (death) DeathObservers.Report(world, d, table.IdOf(a), DeathSite.Melee);
     }
 
     /// <summary>

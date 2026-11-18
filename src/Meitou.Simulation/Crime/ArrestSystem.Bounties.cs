@@ -256,10 +256,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         var prisoner = table.IdOf(p);
         world.Player.Money -= price;
         if (pc.Bounties is { } ledger && ledger.BookedFor(Crimes.Factions.Relations, cage.Owner) is { } entry)
-        {
-            ledger.Remove(entry);
-            if (ledger.Count == 0) pc.Bounties = null;
-        }
+            CrimeSystem.ClearBounty(world, p, pc, ledger, entry);
         world.Post(Loc.Tr("{1} paid a bail of c.{2} for {3}", table.Cold(payer)!.Name, price, pc.Name));
         world.Fixtures.SetLocked(cage, false);
         FixtureRegistry.ClearSlave(world, pc);   // bail frees a slave (FUN_1406ae170)

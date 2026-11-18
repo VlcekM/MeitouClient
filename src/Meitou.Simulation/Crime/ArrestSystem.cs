@@ -1090,8 +1090,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         if (world.Player.Money > a.Fine && tc.Bounties is { } ledger && ledger.BookedFor(Crimes.Factions.Relations, a.Faction) is { } entry)
         {
             world.Player.Money -= a.Fine;
-            ledger.Remove(entry);
-            if (ledger.Count == 0) tc.Bounties = null;
+            CrimeSystem.ClearBounty(world, t, tc, ledger, entry);
             tc.Recognition = 0;
             world.Post(Loc.Tr("{1} paid a fine of c.{2} to {3}; the bounty is cleared", tc.Name, a.Fine, entry.FactionName));
             return End(world, a, ArrestEventKind.Paid);

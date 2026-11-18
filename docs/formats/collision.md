@@ -35,8 +35,8 @@ without one does it open the XML by bare name through Ogre (`openResource`, ever
 file of the same name replaces the base game's, the last enabled mod holding it winning ([overview](overview.md#resource-lookup-and-mod-overrides)),
 except where a cooked file of the name exists: the base game ships cooked files beside many XMLs, and those win over a mod's XML unless the
 mod ships its own cooked file. Meitou (`CollisionPaths.ResolveCollision`, for every file the collision cache reads and for door frames) reads
-the XML beside the unscaled cooked file of the name, else the XML found by bare name (General first, then the other groups), else the path as
-written. It checks the unscaled cooked name for every part: a scaled part whose own cooked file is missing, where the base game has the
+the XML beside the unscaled cooked file of the name, else the XML found by bare name (General first, then the other groups; an enabled mod's
+`RE_Kenshi.json` rebind of that file applies, [rekenshi](rekenshi.md#data-entries)), else the path as written. It checks the unscaled cooked name for every part: a scaled part whose own cooked file is missing, where the base game has the
 unscaled one and a mod replaces the XML, keeps the base XML in Meitou but uses the mod's in the original.
 
 ## Placement and groups

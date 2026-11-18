@@ -210,9 +210,43 @@ public sealed record WeaponData
     public int Value { get; init; }
 
     /// <summary>
+    /// <c>meitou skill</c> (Meitou only, not a field of the game's editor): the id of a code mod's skill (docs/modding.md "Skills") the weapon uses
+    /// and trains in place of its category's, trimmed; null when absent or blank, and for a weapon of the unarmed category, which fights as fists
+    /// on Martial Arts (the fist rating, packet and experience have no weapon skill to replace).
+    /// </summary>
+    public string? ModSkill { get; init; }
+
+    /// <summary>
+    /// <c>meitou class</c> (Meitou only, not a field of the game's editor): the name of a weapon class of the data's own
+    /// (<see cref="WeaponClassNames"/>), trimmed; null when absent or blank.
+    /// </summary>
+    public string? ModClass { get; init; }
+
+    /// <summary>
+    /// The category number of its <see cref="ModClass"/> (<see cref="WeaponClassNames.Apply"/>); null for a weapon that names none.
+    /// </summary>
+    public int? ClassCategory { get; init; }
+
+    /// <summary>
+    /// The category its techniques are picked by: its class's number when it names one, else its <see cref="SkillCategory"/>.
+    /// </summary>
+    public int TechniqueCategory => ClassCategory ?? SkillCategory;
+
+    /// <summary>
     /// Whether the weapon is a fist rather than a held weapon.
     /// </summary>
     public bool IsUnarmed => SkillCategory == (int)WeaponCategory.Unarmed;
+
+    /// <summary>
+    /// A Meitou-only text field of <paramref name="r"/>, trimmed; null when absent or blank (no copy is made of a text without spaces at its ends).
+    /// </summary>
+    internal static string? Text(GameRecord r, string key) => r.Strings.GetValueOrDefault(key)?.Trim() is { Length: > 0 } text ? text : null;
+
+    /// <summary>
+    /// The <see cref="ModSkill"/> a WEAPON record names: <c>meitou skill</c> trimmed, null when absent or blank and for the unarmed category.
+    /// </summary>
+    public static string? ModSkillOf(GameRecord r) =>
+        RecordReading.Int(r, "skill category", (int)WeaponCategory.Unarmed) != (int)WeaponCategory.Unarmed ? Text(r, "meitou skill") : null;
 
     /// <summary>
     /// Reads a WEAPON record; the defaults are those named on each property (<c>skill category</c> defaults to unarmed).
@@ -220,14 +254,13 @@ public sealed record WeaponData
     public static WeaponData From(GameRecord r)
     {
         int animationOverride = RecordReading.Int(r, "skill category animation override", 21);
+        int skillCategory = RecordReading.Int(r, "skill category", (int)WeaponCategory.Unarmed);
         return new()
         {
             StringId = r.StringId,
             Name = r.Name,
-            SkillCategory = RecordReading.Int(r, "skill category", (int)WeaponCategory.Unarmed),
-            AnimationCategory = animationOverride is not 21
-                ? animationOverride
-                : RecordReading.Int(r, "skill category", (int)WeaponCategory.Unarmed),
+            SkillCategory = skillCategory,
+            AnimationCategory = animationOverride is not 21 ? animationOverride : skillCategory,
             CutDamageMultiplier = RecordReading.Float(r, "cut damage multiplier", 1),
             BluntDamageMultiplier = RecordReading.Float(r, "blunt damage multiplier", 0),
             MinCutDamageMult = RecordReading.Float(r, "min cut damage mult", 1),
@@ -246,6 +279,8 @@ public sealed record WeaponData
             RobotDamageMult = RecordReading.Float(r, "robot damage mult", 1),
             RaceDamage = r.GetReferences("race damage").ToDictionary(x => x.TargetStringId, x => x.Values.Value0),
             Value = RecordReading.Int(r, "value", 0),
+            ModSkill = ModSkillOf(r),
+            ModClass = Text(r, "meitou class"),
         };
     }
 }

@@ -180,9 +180,10 @@ static class GiShaders
             // cascade would paint the corner dark. Look again a cell into the room before falling back.
             if (a.a <= 0.0) a = giCascade(0, p, n, v, 1.0);
             if (a.a >= 1.0) return a;
-            // A room's point inside the room grid (32 across; the outdoor near grid is 128, GiProbes) whose probes all stand in the walls and the floor takes
-            // nothing of the coarse cascade, whose probes stand outside in the sky's light: the foot of a tower's wall read a pale band of it at night with
-            // the probes alone. It keeps the room's fill (giSurfaceIrradiance); the hybrid cache gives such a point its own light.
+
+            // A room's point inside the room grid (32 across; the outdoor near grid is 128, GiProbes) whose probes all stand in the walls and the
+            // floor takes nothing of the coarse cascade, whose probes stand outside in the sky's light: the foot of a tower's wall read a pale band
+            // of it at night with the probes alone. It keeps the room's fill (giSurfaceIrradiance); the hybrid cache gives such a point its own light.
             if (room && a.a <= 0.0 && placed >= 1.0 && uGiGrid[0].z < 64.0)
             {
                 giKept = 0.0;

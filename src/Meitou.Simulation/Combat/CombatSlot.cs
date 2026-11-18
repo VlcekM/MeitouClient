@@ -214,6 +214,12 @@ public struct CombatSlot
     public int Loaded, Shots;
 
     /// <summary>
+    /// Meitou (docs/modding.md "Ammunition"): the ammunition the last reload loaded, from a crossbow with an ammunition list; the bolts loaded keep it
+    /// through a swap of crossbows. Null for every base-game crossbow, which fires the original's bolt.
+    /// </summary>
+    public Meitou.Data.Gameplay.Combat.AmmoData? LoadedKind;
+
+    /// <summary>
     /// Seconds of the reload left and its full length (0: not reloading); the steady-aim timer; the time the line of fire has been clear while
     /// closing in.
     /// </summary>
@@ -333,6 +339,7 @@ public struct CombatSlot
         h.Add(Steady);
         h.Add(ClearTime);
         h.Add(ShotTick);
+        if (LoadedKind is not null) h.Add(Rng.StableHash(LoadedKind.StringId));   // only from a list, so base-game crossbows hash as before
     }
 
     /// <summary>

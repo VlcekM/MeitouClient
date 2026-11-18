@@ -113,6 +113,11 @@ public sealed class CharacterCold
     /// </summary>
     public string Name { get; set; } = "";
     /// <summary>
+    /// The character's lasting id (<see cref="LastingIds"/>); none until a code mod asks for one. Given only by <see cref="LastingIds"/>, so two
+    /// characters never share one.
+    /// </summary>
+    public LastingId LastingId { get; internal set; }
+    /// <summary>
     /// The character's faction, a position in the world's faction list.
     /// </summary>
     public int Faction { get; set; }
@@ -377,9 +382,27 @@ public sealed class CharacterCold
     /// </summary>
     public List<StuckBolt>? StuckBolts { get; set; }
     /// <summary>
-    /// The character's stats (null: none).
+    /// The character's stats (<see cref="Stats"/>).
     /// </summary>
-    public CharacterStats? Stats { get; set; }
+    CharacterStats? _stats;
+
+    /// <summary>
+    /// The character's stats (null: none). New stats take over the old ones' binding to the code mods' experience filters
+    /// (<see cref="CharacterStats.BindExperience"/>), so a character whose stats are replaced in the world (the editor) stays filtered; stats taken
+    /// off (null) lose it, so they keep no world alive.
+    /// </summary>
+    public CharacterStats? Stats
+    {
+        get => _stats;
+        set
+        {
+            if (ReferenceEquals(_stats, value)) return;
+
+            if (value is null) _stats?.UnbindExperience();
+            else value.TakeExperienceBinding(_stats);
+            _stats = value;
+        }
+    }
     /// <summary>
     /// The character's medical state (null: none).
     /// </summary>
@@ -1496,6 +1519,10 @@ public sealed class CharacterTable
     /// Where in a tick the table is (see <see cref="Phase"/>).
     /// </summary>
     TablePhase _phase = TablePhase.Outside;
+    /// <summary>
+    /// The characters in the table that have a lasting id, by that id (<see cref="LastingIds"/>); null until one has.
+    /// </summary>
+    Dictionary<LastingId, CharacterId>? _lasting;
 
     /// <summary>
     /// Limbs cut off in the tick (the character's slot, the limb slot 0 to 3, whether the limb's item drops): the population system rebuilds the
@@ -1518,6 +1545,12 @@ public sealed class CharacterTable
     /// Slots ever used: every character is in 0..HighWater-1.
     /// </summary>
     public int HighWater => _highWater;
+
+    /// <summary>
+    /// The world's watch on characters entering and leaving the table, set only while a code mod's hook needs it (<see cref="CharacterWatch"/>);
+    /// null otherwise.
+    /// </summary>
+    internal CharacterWatch? Watch { get; set; }
 
     /// <summary>
     /// Characters alive.
@@ -1576,6 +1609,30 @@ public sealed class CharacterTable
     }
 
     /// <summary>
+    /// The character in the table that has lasting id <paramref name="id"/>; <see cref="CharacterId.None"/> when none has (never given, its squad
+    /// out of the world, or removed).
+    /// </summary>
+    internal CharacterId FindLasting(LastingId id) =>
+        _lasting is not null && _lasting.TryGetValue(id, out var found) && TryResolveNext(found, out int slot) && _cold[slot]?.LastingId == id
+            ? found
+            : CharacterId.None;
+
+    /// <summary>
+    /// Notes that the character <paramref name="character"/> has lasting id <paramref name="id"/> (its cold state holds it).
+    /// </summary>
+    internal void IndexLasting(LastingId id, CharacterId character) => (_lasting ??= [])[id] = character;
+
+    /// <summary>
+    /// How many characters in the table have a lasting id.
+    /// </summary>
+    internal int LastingCount => _lasting?.Count ?? 0;
+
+    /// <summary>
+    /// A save is under way (set by its capture, cleared when the next tick begins): no lasting id may be given (<see cref="LastingIds.GetOrGive"/>).
+    /// </summary>
+    internal bool SaveHold { get; set; }
+
+    /// <summary>
     /// Where in a tick the table is: spawns and removals in the wrong phase throw.
     /// </summary>
     internal TablePhase Phase
@@ -1600,6 +1657,7 @@ public sealed class CharacterTable
     internal void BeginTick()
     {
         Ticks++;
+        SaveHold = false;
         Array.Copy(_previous, _next, _highWater);
         _inTick = true;
     }
@@ -1650,7 +1708,10 @@ public sealed class CharacterTable
         if (!_inTick) _previous[slot] = state;
         this._cold[slot] = cold;
         Spawns++;
-        return new CharacterId(slot, generation);
+        var id = new CharacterId(slot, generation);
+        if (!cold.LastingId.IsNone) IndexLasting(cold.LastingId, id);
+        Watch?.Added(id, cold);
+        return id;
     }
 
     /// <summary>
@@ -1668,8 +1729,18 @@ public sealed class CharacterTable
             throw new InvalidOperationException("characters are removed in the commit or the slow world only (a phase reads them as alive)");
 
         if (!TryResolveNext(id, out int slot)) return false;
+        if (Watch is { } watch)
+        {
+            watch.Removing(slot, _cold[slot]!);
+
+            // A code mod's death observer told of this character that removed it itself (against its contract, and disabled for it): it is gone,
+            // and freeing the slot again would hand it to two characters.
+            if (!TryResolveNext(id, out _)) return true;
+        }
+
         _next[slot].Alive = false;
         if (!_inTick) _previous[slot].Alive = false;
+        if (_cold[slot] is { LastingId.IsNone: false } lasting) _lasting?.Remove(lasting.LastingId);
         _cold[slot] = null;
         _free.Push(slot);
         return true;

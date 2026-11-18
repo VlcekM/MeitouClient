@@ -1301,8 +1301,7 @@ sealed class TooltipRuntime(PlayerInterface player)
         lines.Add(Row("Blood loss:", Fixed2(bow.BleedMult) + "x", TooltipTone.Main));
         lines.Add(Row("Required skill:", bow.AccuracyPerfectSkill.ToString(CultureInfo.InvariantCulture), TooltipTone.Main));
         lines.Add(new("---------------", "", TooltipTone.Grey));
-        lines.Add(Row("Ammunition type:", bow.AmmoId.Length > 0 && player.RecordName?.Invoke(bow.AmmoId) is { Length: > 0 } ammo ? ammo : "???",
-            TooltipTone.Main));
+        lines.Add(Row("Ammunition type:", AmmoNames(bow), TooltipTone.Main));
         Signed(lines, "Damage vs robots", (bow.RobotDamageMult - 1) * 100);
         Signed(lines, "Damage vs humans", (bow.HumanDamageMult - 1) * 100);
         Signed(lines, "Damage vs animals", (bow.AnimalDamageMult - 1) * 100);
@@ -1312,13 +1311,35 @@ sealed class TooltipRuntime(PlayerInterface player)
     }
 
     /// <summary>
+    /// The class line of a weapon naming a code mod's skill (WEAPON <c>meitou skill</c>, Meitou only): the skill's label as the mod gave it; null for
+    /// any other weapon, which takes its category's line.
+    /// </summary>
+    static string? ModSkillClass(WeaponData weapon) =>
+        weapon.ModSkill is { } id && Simulation.Bodies.ModSkills.Find(id) is { } skill ? skill.Label + " class" : null;
+
+    /// <summary>
+    /// The crossbow's "Ammunition type:" value: the ammo item's name, "???" without one or without a name; Meitou: a crossbow with a
+    /// <c>meitou ammo</c> list names every kind it loads, in its order, joined by ", " (docs/modding.md "Ammunition").
+    /// </summary>
+    string AmmoNames(CrossbowData bow)
+    {
+        string Name(string id) => id.Length > 0 && player.RecordName?.Invoke(id) is { Length: > 0 } name ? name : "???";
+
+        if (bow.AmmoCount <= 1) return Name(bow.AmmoCount == 0 ? "" : bow.AmmoAt(0));
+
+        var names = new string[bow.AmmoCount];
+        for (int k = 0; k < names.Length; k++) names[k] = Name(bow.AmmoAt(k));
+        return string.Join(", ", names);
+    }
+
+    /// <summary>
     /// A weapon's class, damage, multipliers, bonuses and weight (<see cref="WeaponStats"/>).
     /// </summary>
     void AddWeaponRows(List<TooltipLine> lines, ItemTip t, WeaponData weapon, CombatDatabase combat)
     {
         var maker = combat.Manufacturer(t.Company) ?? WeaponManufacturer.Neutral;
         var stats = WeaponStats.Compute(t.Level * 0.01f, weapon, maker, combat.WeaponMaterial(t.Material) ?? WeaponMaterial.None, combat.Constants);
-        string? className = weapon.SkillCategory switch
+        string? className = ModSkillClass(weapon) ?? weapon.SkillCategory switch
         {
             (int)WeaponCategory.Katanas => "Katana class",
             (int)WeaponCategory.Sabres => "Sabre class",
