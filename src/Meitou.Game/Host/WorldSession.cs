@@ -119,6 +119,11 @@ public sealed class WorldSession : IDisposable
     /// </summary>
     public Vector3? ViewEye { get; set; }
     /// <summary>
+    /// The buildings whose interior the player sees, by key, which the simulation takes at each tick's start (<see cref="World.ShownInteriors"/>);
+    /// the interior view sets it each frame it changes, never altering a set it handed over. Null: no view (no gate).
+    /// </summary>
+    public IReadOnlySet<string>? ShownInteriors { get; set; }
+    /// <summary>
     /// Where the frame is between the previous and the current control tick (camera interpolation).
     /// </summary>
     public float Alpha => (float)Ticks.Alpha;
@@ -312,6 +317,7 @@ public sealed class WorldSession : IDisposable
         // the ragdoll physics steps in real time
         World.PhysicsSpeed = (float)(Simulation.Speed > 0 ? Simulation.Speed : Simulation.LastNonZeroSpeed);
         World.ViewPosition = ViewEye ?? Camera.Current.Eye;
+        World.ShownInteriors = ShownInteriors;
         long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
         World.RunTick(publish);
         Measure(System.Diagnostics.Stopwatch.GetElapsedTime(t0).TotalMilliseconds);
@@ -422,6 +428,7 @@ public sealed class WorldSession : IDisposable
         for (int i = 0; i < count; i++, seconds += Simulation.TickSeconds) starts[i] = (Clock.TotalHoursAt(seconds), Clock.IsDaytimeAt(seconds));
         World.PhysicsSpeed = (float)Simulation.Speed;   // the ragdoll physics steps in real time
         World.ViewPosition = ViewEye ?? Camera.Current.Eye;
+        World.ShownInteriors = ShownInteriors;
         _runner ??= new TickRunner();
         _runner.Start(World, starts);
         _running = true;

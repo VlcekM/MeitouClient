@@ -125,14 +125,15 @@ public sealed partial class DialogueSystem
     /// <summary>
     /// <paramref name="ev"/> fired at <paramref name="npc"/> with <paramref name="whom"/> as its target outside a player conversation
     /// (<c>FUN_140684990</c>, <b>Verified</b>): refused while the event cools down, by the starter test (<see cref="StarterRefuses"/>), for a
-    /// character asleep, out cold or caged, and for one talking (any event: the interrupting set does not lift this); else a line is chosen from
+    /// character asleep, out cold or caged, for one talking (any event: the interrupting set does not lift this) and for one in a building whose
+    /// interior is not shown (<see cref="UnseenIndoors"/>); else a line is chosen from
     /// the NPC's list for the event and said as a speech bubble, the rest of its chain after it. Returns whether a line was said.
     /// </summary>
     bool Fire(World world, CharacterId npc, CharacterId whom, int ev)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(npc, out int n) || !table.Next[n].Alive || CoolingDown(world, npc, ev)) return false;
-        if (StarterRefuses(npc, ev)) return false;
+        if (StarterRefuses(npc, ev) || UnseenIndoors(world, n, ev)) return false;
         if (!Awake(table, n) || SleepsThrough(table, n, ev) || BubbleOf(npc)) return false;
 
         var c = new Conversation { Npc = npc, Player = whom, Event = ev };
@@ -146,6 +147,17 @@ public sealed partial class DialogueSystem
         if (ev is 3 or 4 or SeeAnimalSquad or 66 or 67) _eventCooldown[(npc, ev)] = world.Tick + CooldownTicks(world);
         return true;
     }
+
+    /// <summary>
+    /// The interior test of <c>FUN_140684990</c> (<b>Verified</b>): a character in a building says no line while the building's interior is not shown
+    /// (<c>Building::myInterior</c> <c>+0x1f0</c>, its <c>+0x10</c> set only while shown), but for events 6 (sound the alarm), 11 (screaming torture)
+    /// and 39 (slave delivery). Without a view (<see cref="World.ShownInteriors"/> null) it never refuses.
+    /// </summary>
+    static bool UnseenIndoors(World world, int slot, int ev) =>
+        ev is not (6 or Kidnap.CaptiveSystem.ScreamingTorture or Kidnap.CaptiveSystem.SlaveDelivery)
+        && world.ShownInteriors is { } shown
+        && world.Sight.BuildingOf(slot) is { } building
+        && !shown.Contains(building);
 
     /// <summary>
     /// The starter test of <c>FUN_140684990</c> (<b>Verified</b>), for a speaker that runs no conversation of its own (Dialogue <c>+0x190</c>

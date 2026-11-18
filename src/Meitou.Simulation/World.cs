@@ -561,6 +561,12 @@ public sealed partial class World : IDisposable
     /// </summary>
     public System.Numerics.Vector3? ViewPosition { get; set; }
     /// <summary>
+    /// The town buildings whose interior the player sees (by <see cref="Data.World.TownBuilding.Key"/>: one holding a player character, or left by
+    /// one within the keep-open time); a character inside another says no line for most events (<see cref="Dialogue.DialogueSystem"/>). Null without
+    /// a view (headless runs, tests): no such gate. An input like <see cref="ViewPosition"/>: not hashed, not saved.
+    /// </summary>
+    public IReadOnlySet<string>? ShownInteriors { get; set; }
+    /// <summary>
     /// Within this distance of <see cref="ViewPosition"/> a character is near for the far cadence (<see cref="WorldSettings.FarTickPeriod"/>): the
     /// renderer's character draw distance plus its reach margin, so every drawn character steps every tick. The host sets it; an input like
     /// <see cref="ViewPosition"/>.

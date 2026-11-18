@@ -46,6 +46,10 @@ sealed class InteriorView(GameHost host)
     /// </summary>
     internal readonly HashSet<CharacterId> HiddenIndoors = [];
     /// <summary>
+    /// The buildings last handed to the simulation as shown (<see cref="WorldSession.ShownInteriors"/>), a new set each time the view changes.
+    /// </summary>
+    HashSet<string> _published = new(StringComparer.Ordinal);
+    /// <summary>
     /// The followed character the viewed floor follows (game: PI+0x270): the viewed floor follows that character's floor changes only.
     /// </summary>
     CharacterId? _floorFollow;
@@ -111,6 +115,7 @@ sealed class InteriorView(GameHost host)
                 _viewed.Add(building);
         host.ApplyForcedInteriorView(objects);
         HoldLeftOpen(objects);
+        PublishShown();
         objects.InteriorView = InteriorFloors;
         objects.CutIntoViewed = host.Config.FixPartsInBuildings;
         objects.HiddenItems = host.GroundItemSync.HiddenGroundKeys;
@@ -191,6 +196,19 @@ sealed class InteriorView(GameHost host)
             }
         }
         foreach (var id in _expired) _keepOpen.Remove(id);
+    }
+
+    /// <summary>
+    /// Hands the buildings in the view this frame to the simulation (<see cref="WorldSession.ShownInteriors"/>) when they changed: a new set, as the
+    /// ticks may run beside the frame.
+    /// </summary>
+    void PublishShown()
+    {
+        if (_published.Count == InteriorFloors.Count && InteriorFloors.Keys.All(_published.Contains) && host.Session.ShownInteriors == _published)
+            return;
+
+        _published = new HashSet<string>(InteriorFloors.Keys, StringComparer.Ordinal);
+        host.Session.ShownInteriors = _published;
     }
 
     /// <summary>

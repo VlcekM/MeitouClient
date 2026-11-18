@@ -149,7 +149,11 @@ dead; the **starter test**: for an owner that runs no conversation of its own (`
 queued end (a 1 in the `+0x80` list, written by `FUN_140674830` off the main thread) is popped and forces the start. Then it refuses an owner KO
 or asleep (unless the event is in the mask `DAT_141eeaecc` = 0x03800800, events 11, 23, 24, 25; **Verified**, the exe's data), an owner talking
 already (`FUN_140671c60` false: not ended (`+0x148` 0), a bubble or window object (`+0x228`) or a chained speaker (`+0x2c0`); the interrupting set
-does not lift this, only event 1 or the force does) and a failed owner-state test (skipped for 6, 11, 39). After a successful 3, 4,
+does not lift this, only event 1 or the force does) and an owner in a building whose interior is not shown (skipped for 6, 11, 39 and an owner
+in no building: its location, vfunc `0x1d8`, must be a building with `myInterior` (`+0x1f0`) whose `+0x10` is set, which it is only while the
+interior is shown). **Verified** in the Kenshi harness (#930's save, Hub bar): with the roof on, the barman greets no NPC customer; with Yosuke
+inside, he does, and for about 10 game seconds after Yosuke leaves (the interior's keep-open time). Meitou: `World.ShownInteriors`, which the host
+sets from its interior view; null (headless, tests) lifts the test. After a successful 3, 4,
 27, 66 or 67 that event has a 1.0 cooldown: the timer (Dialogue `+0xd0`, one per event) is set to 1.0 there and the dialogue update
 `FUN_140685090` takes its time step off every timer above 0, the step the bubble timers lose (**Verified**). It is the speaker's own, keyed by
 event alone: no squad, target or time of day is remembered for these events (the per-event counter and last target written at the end,
@@ -378,8 +382,8 @@ arrest and crime systems keep engine fallbacks: the escapee's arrest, slave catc
 event is refused while its 1.0 cooldown runs ([firing an event](#firing-an-event)). No start-of-game delay was found. **Observed** (user, vanilla): a new
 game in the Hub, the barman greets the player character only after it walks into the bar. Meitou (`SightSystem` quiet pairs): the pairs an NPC senses
 at the world's first look (one aggro look round after a new game or a load) get no sight line until the NPC no longer senses that player
-character. **Observed** (Kenshi harness on #930's save, the Hub bar): the barman's `shop welcome customer` (event 3, repetition limit 1) greets
-NPC customers in the bar as well as the player's characters, at most once per 2 game hours across all targets: Yosuke greeted on walking in at
+character. **Observed** (Kenshi harness on #930's save, the Hub bar): while the bar's interior is shown, the barman's `shop welcome customer`
+(event 3, repetition limit 1) greets NPC customers in the bar as well as the player's characters, at most once per 2 game hours across all targets: Yosuke greeted on walking in at
 10:05, the next line at 12:06, then two more after Yosuke's conversation with him had made him "met" (16:10, 18:06, as patrons walked in).
 Whom he can see depends on where he faces ([watching from a node](ai-tasks.md#town-goals)).
 
