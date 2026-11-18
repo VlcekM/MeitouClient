@@ -503,12 +503,14 @@ public sealed class InputBindings
     public static bool HostKey(Binding binding) => !binding.IsMouse && binding.Key is Key.Insert or Key.Delete or Key.Backspace;
 
     /// <summary>
-    /// The action that holds <paramref name="binding"/>, other than <paramref name="except"/>; null when none.
+    /// The action of <paramref name="except"/>'s key map (the build map or the general one, <see cref="IsBuildMap"/>) that holds
+    /// <paramref name="binding"/>, other than <paramref name="except"/>; null when none. A key of the other map is no conflict, as on the Controls
+    /// page.
     /// </summary>
     internal InputAction? Holder(Binding binding, InputAction except)
     {
         foreach (var (action, list) in _map)
-            if (action != except && list.Contains(binding)) return action;
+            if (action != except && IsBuildMap(action) == IsBuildMap(except) && list.Contains(binding)) return action;
         return null;
     }
 

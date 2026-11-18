@@ -590,10 +590,12 @@ holds refuses the second mod.
   like the game's: a row `label [mod name]` on the settings' Controls page after the game's rows, in load order, rebound there as theirs are
   (a key taken from another action, the game's or a mod's, leaves it, with the same notice; Delete or Backspace unbinds). At start the game's
   bindings are laid first (the player's saved ones included), then each mod action's saved keys, in load order, then the `defaults` (keys
-  `Key.G`, buttons `MouseButton.Button4`) of the actions with nothing saved, in load order; a key another action holds by then is left out with
-  a log line, so neither a default nor a returning mod takes a key the player chose. Escape, F6, Alt, Ctrl and Shift as defaults refuse the
-  mod; Insert (the console on the Vulkan host), Delete and Backspace (the page's unbind keys) are left out with a log line, and the page
-  refuses them for a mod's action as reserved. Restore defaults lays every action's defaults again, logging those left out. The player's
+  `Key.G`, buttons `MouseButton.Button4`) of the actions with nothing saved, in load order; a key another action of the general key map
+  holds by then is left out with a log line, so neither a default nor a returning mod takes a key the player chose (a key only build mode's
+  map holds is no conflict, as on the Controls page: [build map](game/ui-input.md#4-action-table)). Escape, F6, Alt, Ctrl and Shift as
+  defaults refuse the mod; Insert (the console on the Vulkan host), Delete and Backspace (the page's unbind keys) are left out with a log
+  line, and the page refuses them for a mod's action as reserved. Restore defaults lays every action's defaults again, logging those left
+  out. The player's
   changes are kept in `meitou.user.json` beside the game's (`modBindings`: mod id, `name`, keys as in `bindings`; an empty value unbinds): an
   action whose keys were not set on the page since the start keeps the entry it had then (none stays none, even when a saved key was left
   out); one set there (rebound, unbound, or its key taken for another action) is written as its keys, or dropped when they are the mod's
