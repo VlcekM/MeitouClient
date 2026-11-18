@@ -663,7 +663,8 @@ entries for the four types only, and what it does with another number is not kno
 It is written as the record's int (the construction set's `BodyPartType` list names only 0 to 3; Meitou's `FcsWriter` writes any value). Meitou
 gives such a part none of the four types' roles (`BodyPartTemplate.HasBaseType`): it is hit by its hit weight (low strikes too), covered by armour
 that lists it in `part coverage`, bleeds and heals, knocks out or kills when `death` is set, sorts after the legs and is saved with its health like any
-part. With `severance` and without `death`, a blow (Dismemberment Rare or more) or a worsening wound (Frequent) cuts it off: it becomes a stump, is no
+part. With `severance` and without `death`, a blow (Dismemberment Rare or more) or a worsening wound (Frequent) cuts it off, and the rack cuts off
+any part with a side whatever its `severance` (`MedicalState.StretchLimbs`): it becomes a stump, is no
 longer hit, stays a stump through a save ([save](../formats/save.md#limbs-medical_state-limbs)) and the character cries no lost-limb line
 (`DialogueEvents.LostLimb`); no item drops and the part stays drawn. **Observed** (2026-11-17, scratch run of a Greenlander body with a type 4 tail of
 hit weight 60: picked by 168 of 2,000 hit rolls whole, 0 after a 400 cut severed it; the stump loaded back).

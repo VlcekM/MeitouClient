@@ -372,7 +372,7 @@ not original gets a Meitou-only int `meitou limb<k>` on MEDICAL_STATE (k the par
 A save first removes every `meitou limb<digits>` key of the record (a loaded record is written again, and an old key may name a position that holds
 another part now) and then writes the current ones. A load keeps a key only when it is 1 or 3 and the part it names is, in the loaded order, an extra
 part of a slot or of another type and not vital; any other key is ignored. A body with one part per slot and no other type, as every base-game race
-(probe of the 53 races, 2026-11-17), writes no such key and the same `limbs` value as before. **Observed** (2026-11-17 and 2026-11-18, scratch
+(**Observed**: the 53 races of the base load order read through `GameDatabase.Load`, 2026-11-17), writes no such key and the same `limbs` value as before. **Observed** (2026-11-17 and 2026-11-18, scratch
 `WriteSave` / `ReadSave` / `ApplySavedLimbs` round trips on one reused set of record keys: a four-armed body's replaced upper and stumped lower left arm,
 and a cut-off tail, load as they were; with the lower arms' records then gone, three save and load rounds leave the remaining arms whole and the
 record with no `meitou limb` key; keys on the head and a malformed value load as nothing; the 256 limb-state combinations of a human body give the

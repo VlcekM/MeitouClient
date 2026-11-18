@@ -305,7 +305,7 @@ to Jobs; the saved `chase mode` flag is that switch (**Verified**, [perma-jobs](
   between those places lies partly under a painted bar (**Observed**: the texture's alpha, and a 2026-11-18 screenshot of ten squeezed rows whose
   names were cut by bars at the layout's pitch). Meitou: code mods' meters add copies of `LifeBar9` ([modding](../modding.md#registration-surface)).
   A character with more rows than the bars (Blood or Oil, each part, Hunger, meter readings; a race of more parts, none in the base game) shows
-  them a bar's worth at a time on the bars' own places: the wheel over the panel moves the run a row a step, and `^` / `v` before the top / bottom
+  them a bar's worth at a time on the bars (the layout's nine places without meters): the wheel over the panel moves the run a row a step, and `^` / `v` before the top / bottom
   row's arrows mark rows hidden above / below. Life-bar skins in `data/gui/skins` (**Verified**):
   `Kenshi_LifeBarSkin`, `...HurtSkin`, `...HealedSkin`, `...StunnedSkin`, `...CrushedSkin`, `...RobotSkin`,
   `...SplintSkin`; each `LifeBarN` holds the layers `LifeBarNGrey` (Stunned skin), `...Red` (Hurt), `...Yellow` (Healed), `...White` (Splint),
