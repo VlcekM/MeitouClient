@@ -73,20 +73,26 @@ public static class InventoryCommands
             => item.WearableBy(wearer?.Race?.StringId, wearer is not null && SquadRegistry.IsAnimal(wearer));
 
     /// <summary>
-    /// Wears a bag in a free <c>backpack_attach</c> (Meitou: a picked-up bag that no grid takes, as worn gear that does not fit is;
-    /// <see cref="TryEquip"/> leaves bags to the trade): an item of the Backpack attach slot the wearer may wear, while it wears none. False:
-    /// nothing changed.
+    /// Wears a bag in a free <c>backpack_attach</c> (a right click's move into a character, <see cref="MoveInto"/>: the slot of the bag's type;
+    /// Meitou: a picked-up bag that no grid takes, as worn gear that does not fit is; <see cref="TryEquip"/> leaves bags to the trade): an item of
+    /// the Backpack attach slot the wearer may wear, while it wears none. False: nothing changed.
     /// </summary>
     public static bool TryWearBag(Inventory root, ItemInstance item, CharacterCold? wearer)
     {
-        if (item.AttachSlot != (int)AttachSlot.Backpack || item.Quantity != 1 || root.Backpack is not null || !WearableBy(item, wearer))
-            return false;
+        if (!CanWearBag(root, item, wearer)) return false;
+
         item.Section = "backpack_attach";
         item.X = 0;
         item.Y = 0;
         root.Items.Add(item);
         return true;
     }
+
+    /// <summary>
+    /// Whether <see cref="TryWearBag"/> would wear <paramref name="item"/> (a dry run, nothing changes).
+    /// </summary>
+    static bool CanWearBag(Inventory root, ItemInstance item, CharacterCold? wearer)
+            => item.AttachSlot == (int)AttachSlot.Backpack && item.Quantity == 1 && root.Backpack is null && WearableBy(item, wearer);
 
     /// <summary>
     /// <c>validateInventorySections</c> (<c>FUN_1406218f0</c>, character vtable slot 130; <b>Verified</b> body): a section
@@ -223,10 +229,10 @@ public static class InventoryCommands
 
     /// <summary>
     /// Whether <see cref="MoveInto"/> would place one unit of <paramref name="item"/> in <paramref name="into"/> (a dry run, nothing changes): the
-    /// worn bag first when <paramref name="bagFirst"/> (never a container holding items), then a free equipment slot, then the main grid, the unit no
-    /// death item (as it arrives, so it joins the stacks it tops up). The trade window's right click asks the taker's inventory, else its backpack,
-    /// before the steal roll and refuses the take without room (<c>FUN_140713d20</c>: <c>Inventory</c> slot 4 <c>FUN_14074afa0</c> before
-    /// <c>Character</c> slot 83 <c>FUN_140794810</c>, <b>Verified</b> decompile), so a full thief gets no roll.
+    /// worn bag first when <paramref name="bagFirst"/> (never a container holding items), then a free equipment or bag slot, then the main grid,
+    /// the unit no death item (as it arrives, so it joins the stacks it tops up). The trade window's right click asks the taker's inventory, else its
+    /// backpack, before the steal roll and refuses the take without room (<c>FUN_140713d20</c>: <c>Inventory</c> slot 4 <c>FUN_14074afa0</c>
+    /// before <c>Character</c> slot 83 <c>FUN_140794810</c>, <b>Verified</b> decompile), so a full thief gets no roll.
     /// </summary>
     public static bool HasRoomFor(Inventory into, ItemInstance item, bool bagFirst, CharacterCold? wearer = null)
     {
@@ -236,6 +242,7 @@ public static class InventoryCommands
         item.Death = false;
         bool room = bagFirst && FitsInBag(item) && into.Backpack?.Contents is { } bag && bag.HasRoomIn("backpack_content", item)
             || EquipCell(into, item, w, h, wearer) is not null
+            || CanWearBag(into, item, wearer)
             || !MainClosed(wearer) && into.HasRoomIn("main", item);
         item.Death = death;
         return room;
@@ -595,7 +602,8 @@ public static class InventoryCommands
     /// <summary>
     /// The right click's move into another character (<c>FUN_140713d20</c>, its target <c>FUN_14070dcd0</c>): one unit at a time, at most <paramref
     /// name="count"/> (0: until one fails), each into the target's open bag window first (<paramref name="bagFirst"/>; a container holding items
-    /// never, <see cref="FitsInBag"/>), then its character window: the slots of the item's type (<see cref="TryEquip"/>), then the main grid, stacks
+    /// never, <see cref="FitsInBag"/>), then its character window: the slots of the item's type (<see cref="TryEquip"/>; a bag its free bag slot,
+    /// <see cref="TryWearBag"/>, so a pack animal, whose grid is shut, is given its pack, #1022), then the main grid, stacks
     /// of it first (<see cref="Inventory.AddTo"/>). Leaving its owner a unit is no longer a death item. Returns the units moved; <paramref
     /// name="equipped"/>: one was worn. <paramref name="bagOnly"/>: only into the target's worn bag, nowhere else.
     /// </summary>
@@ -617,7 +625,7 @@ public static class InventoryCommands
             bool intoBag = FitsInBag(unit);
             bool placed = bagOnly ? intoBag && into.Backpack?.Contents is { } only && only.AddTo("backpack_content", unit)
                 : bagFirst && intoBag && into.Backpack?.Contents is { } bag && bag.AddTo("backpack_content", unit)
-                        || (worn = TryEquip(into, unit, wearer))
+                        || (worn = TryEquip(into, unit, wearer) || TryWearBag(into, unit, wearer))
                         || !MainClosed(wearer) && into.AddTo("main", unit);
             if (!placed)
             {
