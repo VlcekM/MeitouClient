@@ -84,6 +84,9 @@ static class SaveProbe
             case ("squads", >= 1): Squads(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10); return true;
             case ("watch", >= 1): Watch(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 10); return true;
             case ("medic", >= 1): MedicProbe.Run(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 30, a.Count > 2 ? int.Parse(a[2]) : 20); return true;
+            case ("treat", >= 1):
+                TreatProbe.Run(probe, a[0], a.Count > 1 && a[1] != "-" ? a[1] : null, a.Count > 2 ? int.Parse(a[2]) : 30, a.Count > 3 ? int.Parse(a[3]) : 20);
+                return true;
             case ("turrets", >= 4):
                 TurretProbe.Run(probe, a[0], int.Parse(a[1]), new Vector2(float.Parse(a[2]), float.Parse(a[3])),
                     a.Count > 4 ? int.Parse(a[4]) : 10, a.Count > 5 ? int.Parse(a[5]) : 40);
@@ -1894,6 +1897,7 @@ static class SaveProbe
               squads <radius> [rounds]  the other squads near the leader: leader state, goal, members' spread every 40 ticks
               watch <name> [rounds]    a character's task, AI, fight target, hunger and decision trace every 40 ticks (default 10 rounds)
               medic <name> [rounds] [interval]  a medic's treatment and decision every interval (20) ticks; each downed character in sight: need, senses, sight test, ray (#843)
+              treat <medic> [patient|-] [rounds] [interval]  order a treatment (- or none: itself); task, posture and each leg every interval (20) ticks (#898)
               turrets <character> <count> <x> <z> [rounds] [interval]  spawn hostiles there; the turret squads near: goals, claims, enemies, gunners
               stage <x> <z> <faction:template> <faction:template> [rounds] [interval]  two squads spawned there; each: size, KO, slaves, carried, centre
               anim <radius> [ticks] [name]  the animation layers of the seated characters near the leader (or those named) each tick, then each clip's rate
