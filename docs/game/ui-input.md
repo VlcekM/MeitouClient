@@ -456,7 +456,9 @@ interior-mask hulls); the hits are sorted nearest first (**Verified**, comparato
   collision, roof included; a player site behind that hit, inside its hull, not `Hidden` and not above the viewed floor, takes the click instead (furniture in a bought house, #320).
 - A turret or lamp mounted on the hit building (its slot 135 handle) met within 12 units behind the hit is taken instead (`FUN_1407f2af0`).
 - Outdoor farms have no collision ([collision](../formats/collision.md)), yet the original selects them. Meitou (engine choice, `BuildingFootprints.Plot`): a building without collision (a player's site of any kind,
-  a level farm) is hit where the ground under the cursor lies inside the hull of its parts' render-mesh bounds, just before the ground.
+  a level farm) is hit where the ground under the cursor lies inside the hull of its parts' render-mesh bounds, just before the ground. A mod's part
+  mesh outside the install's data (a mod folder) is found by file name in the game's resource folders, as the renderer does (**Observed**: without it
+  a mod farm had no hull and only a 12-unit disc at its origin was clickable).
 
 **Building hover and click** (`FUN_1407fc6e0`, **Observed**). Every frame over a building it sets the pointer; on a command release (a quick
 right click) it gives the order to the selected characters (the shared order dispatch `FUN_1407fa650` / `FUN_1407fae70` / `FUN_1407f9e20`,

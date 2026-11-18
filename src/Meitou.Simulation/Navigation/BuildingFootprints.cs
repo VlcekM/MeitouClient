@@ -138,6 +138,7 @@ public sealed class BuildingFootprints
     public BuildingFootprints(GameInstall install, GameDatabase db, WorldLevelData? levels)
     {
         this._install = install;
+        _assets = new(() => new Data.Ogre.AssetLocator(install));
         this._db = db;
         this._levels = levels;
         _collision = new CollisionCache(install);
@@ -356,7 +357,7 @@ public sealed class BuildingFootprints
         var points = new List<Vector3>();
         foreach (var mesh in WorldObjectLayout.Building(_db, building, "footprint", Vector3.Zero, Quaternion.Identity, new BuildingState()))
         {
-            if (Data.Physics.CollisionPaths.Resolve(_install, mesh.MeshPath) is not { } path
+            if (MeshFile(mesh.MeshPath) is not { } path
                     || !Data.Ogre.OgreMeshReader.TryReadBounds(path, out var b))
                 continue;
             for (int corner = 0; corner < 8; corner++)
@@ -367,6 +368,18 @@ public sealed class BuildingFootprints
         var hull = NavGeometry.Footprint(points, 0, 0, 0).Polygon;
         return hull.Length < 3 ? null : new BuildingFootprint(hull, points.Min(p => p.Y), points.Max(p => p.Y));
     });
+
+    /// <summary>
+    /// The resource index the renderer finds a mesh by bare name in (a mod's own folders), made on first use.
+    /// </summary>
+    readonly Lazy<Data.Ogre.AssetLocator> _assets;
+
+    /// <summary>
+    /// The file of a part mesh a record names: its install-relative path, else the file of that name in the resource folders the game registers (the
+    /// mods': the renderer draws such a mesh, so its bounds must be found too).
+    /// </summary>
+    string? MeshFile(string meshPath) => Data.Physics.CollisionPaths.Resolve(_install, meshPath)
+        ?? _assets.Value.Find(Path.GetFileName(meshPath.Replace('\\', '/')));
 
     /// <summary>
     /// The part meshes' bounds by mesh path, read once each (<see cref="PartBounds"/>).
@@ -384,7 +397,7 @@ public sealed class BuildingFootprints
     /// </summary>
     (Vector3 Min, Vector3 Max)? ReadPartBounds(string meshPath)
     {
-        if (Data.Physics.CollisionPaths.Resolve(_install, meshPath) is not { } file) return null;
+        if (MeshFile(meshPath) is not { } file) return null;
 
         try
         {
