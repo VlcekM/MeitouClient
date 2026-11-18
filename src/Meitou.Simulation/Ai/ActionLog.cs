@@ -114,6 +114,7 @@ public sealed class ActionLog
             if (cold is null || !Followed(state[slot], cold, scope))
             {
                 _generation[slot] = -1;
+                _rescue[slot] = BedRescueNote.None;
                 continue;
             }
 
@@ -198,7 +199,7 @@ public sealed class ActionLog
     /// </summary>
     static string RescueText(BedRescueNote note) => note switch
     {
-        BedRescueNote.CannotLift => "not eligible: on Hold, carrying, or cannot lift",
+        BedRescueNote.CannotLift => "not eligible: on Hold, carrying, or not able to lift",
         BedRescueNote.NobodyDown => "not eligible: nobody is down",
         BedRescueNote.NoBody => "not eligible: no downed ally its finder takes",
         BedRescueNote.NoBed => "not eligible: no bed for it",

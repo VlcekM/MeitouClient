@@ -856,10 +856,13 @@ a Pack Beast, an Iron Spider and a Bonedog of the player's squad). The player's 
   (`AiBehaviour.RescueToBed`, its own plan) and stands while it is chosen; the sweep then lifts the body as row 148 (`TaskSource.Goal`) once the AI holds the character (not in a
   talk, a trade or an arrest), unless someone lifts it already. The carrier's goals then take the body on ([town duties](#town-duties)): with 106 listed it lays it in a bed.
   Engine choices: the factor and the lift wait for the beat (up to 15 ticks); the finder runs only while anyone is down, and before the bed search (the same result); a character
-  that could not lift (`CarrySystem.CanCarry`: an unusable left arm, crouching or lying, a row it may not start) does not want the goal; a walk to the body that has not reached it
-  in 60 game seconds (`CarrySettings.RescueWalkSeconds`) is given up and that rescuer leaves the body alone for 2 game hours (`RescueRefuseHours`, hashed while set), as the
-  town duties' lifts do; a body that dies before the lift starts ends the walk, so this goal lifts no corpse (one that comes round ends it as any lift's). The leader rescue (142)
-  takes the same lifting test, hold test and give-up.
+  not able to lift at all (`CarrySystem.CouldLift`: no usable left arm, or the row not in its repertoire) does not want the goal, while a fight, a crouch or lying down only delay
+  the lift (`CarrySystem.Free`, `CanCarry`); a walk to the body that has not reached it in 60 game seconds (`CarrySettings.RescueWalkSeconds`) is given up and that rescuer
+  leaves the body alone for 2 game hours (`RescueRefuseHours`, hashed while set), as the town duties' lifts do; a body that dies while the rescuer walks to it ends the walk, so
+  this goal lifts no body that is already dead when the lift clip starts (one that comes round ends it as any lift's); a body this goal lifted that no carried-body goal takes on
+  (no bed found after the lift: another rescuer reserved the last one, or sleepers filled them; or a package without 106) is put down at the carrier's next look and left to that
+  rescuer for those 2 hours (`CarrySystem.RescuedBy148`, `RefuseRescue`; the lifts are tracked while they last, not saved, hashed while set). The leader rescue (142) takes the
+  same ability test, hold test and walk give-up, but not the put-down: its carrier keeps the leader, as on master.
 - **NPC looting** (`CarrySystem.Scavenge.cs`, facts: [carry-loot 3.3](game/carry-loot.md#33-npc-looting)): every `AutoEveryTicks` on its slot's turn (slot mod the period, so the looks spread over the ticks, as the original's AI updates run 8 characters a frame in turn, [game loop](game/game-loop.md#the-character-update-budget)), an NPC the AI runs whose package lists goal 177 for its role
   in the hour (`PopulationSystem.GoalDuty`) loots the nearest dead body (not of its faction), else downed living one of a non-allied faction, within 100 and reachable (no shut gate route between, no building without an open door around it unless the looter is in it, `CarrySystem.Reachable`): the player's only with
   `PlayerState.BanditsLoot` (CAMERA `bl`, default on), only whom `shouldIScrewThisGuyOver` allows (classes, love/hate tags), not one its squad tagged short-term 6
@@ -1252,8 +1255,10 @@ Duties are priority-2 goals (**Observed**: `FUN_140510ef0` tries orders, jobs, u
   sets none without a bounty, [economy 11.5](game/economy.md#115-bail-and-sentence); not `Kidnapped`, **Verified** `FUN_140358670`). Throw out: with **274** listed (desire 2.0 unless the carrier regards the body as friendly), to the town's exit point (`TownExit`: 200 outward from the first gate outside the walls or wall with an interior, the same for every carrier; no walkability test, **Verified** `FUN_140927120`), put down. Bed: with **106** listed and its desire above 0 (`BedSystem.PutInDesire`: 2.0 for a body the
   carrier regards as friendly, no animal, of a faction not hostile to its own, with no grudge tag against it and no bounty owed to a police-like carrier, [carry-loot 3.2](game/carry-loot.md#32-goals-and-their-target-finders)),
   the bed the bed search finds for the carrier (`BedSystem.FindForCarrier`: no bed another carrier is on its way to; a squad with no town only its own or an ally's within `BedSearchRange`, never the player's), where the bed system walks it and lays the body in as the player's put-in does (`BedSystem.PutIn`, row 106, `TaskSource.Goal`); the errand
-  (`TownDutyKind.Bed`) holds the carrier while the walk runs, starts it again with a fresh search after a fight or a stop, at most 4 walks, then lets the carrier keep the body for the next
-  look; a body that dies on the way is carried on (106's desire and row 99's list B test no death). With none of them, put down. A body put down short of its goal is left alone for 2 game hours.
+  (`TownDutyKind.Bed`) holds the carrier while the walk runs, starts it again with a fresh search after a fight or a stop, at most 4 restarts (5 walks), then lets the carrier keep the
+  body for the next look; a body that dies on the way is carried on (106's desire, its friendly test and row 99's list B test no death). 106 is weighed only for a carrier whose body no
+  errand's plan holds (`LookCarriers`): after an errand's own lift (273, 223, 138 / 137) the goal that lifted goes on, as the original runs a goal's plan task by task and chooses
+  again only when it ends ([ai-tasks](game/ai-tasks.md), "The plan's lifecycle", **Verified**), so a corpse lifted for the disposal is burned, not laid in a bed. With none of them, put down. A body put down short of its goal is left alone for 2 game hours.
   A lift whose walk to the body takes over 60 game seconds is given up the same way (engine choice: a body the carrier cannot reach would hold it forever).
 - **223 Remove Home Intruder** (checked before 273): a free member of a squad with a home building lifts the nearest knocked-out, carriable character inside that building
   (`SightMap.BuildingOf`), not carried, caged or in a bed, not of its faction or an ally; within its sight stands in for the sensed list. With **224** listed it carries it to the point past the
@@ -2175,7 +2180,7 @@ beside log.txt, so a log sent with a report has it at hand, kept like log.txt (`
 else replaced, or ended by its own system), the task taken up and the start's source, row, job, target and site. Squad follows the player's
 characters and adds the decision step's trace of that tick (it turns `DecisionSystem.Tracing` on); everyone adds every NPC and animal (in a town,
 about 650 lines a minute), and for each NPC whose goal lists hold 148 a line whenever where that goal stands changes at a rescue beat
-(`AiMind.BedRescueNote`, set by `CarrySystem.RescueToBeds`, neither saved nor hashed): "rescue 148, not eligible: ..." (cannot lift, nobody is
+(`AiMind.BedRescueNote`, set by `CarrySystem.RescueToBeds`, neither saved nor hashed): "rescue 148, not eligible: ..." (not able to lift, nobody is
 down, no downed ally its finder takes, no bed for it), "wanted, not chosen: its goal is ...", "chosen, not free to lift: task ...", "chosen, the
 lift would not start" or "chosen, lifting". It only reads the world. Its lines, like
 log_dialogue.txt's, only join a queue that a thread of its own writes to the file (`QueuedLog`), so the tick never waits on the disk; as the

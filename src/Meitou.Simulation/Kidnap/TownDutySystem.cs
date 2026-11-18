@@ -957,8 +957,10 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
 
     /// <summary>
     /// The goals for a body already on the shoulder, whoever lifted it (a victim who died on the way, an arrest's target, a carry a save restored,
-    /// which no errand is saved with): a free member takes up the first of its disposal goals that starts (<see cref="DisposeCarried"/>); with none
-    /// it keeps the body.
+    /// which no errand is saved with): a free member takes up the first of its disposal goals that starts (<see cref="DisposeCarried"/>, with 106
+    /// weighed too, as no goal's plan holds this body); with none it keeps the body, but a body that goal 148 lifted is put down there and left to
+    /// that rescuer for a while (<see cref="CarrySystem.RefuseRescue"/>; engine choice, as the town duties' short put-down), so a rescuer that
+    /// finds no bed after the lift does not stand holding it.
     /// </summary>
     void LookCarriers(World world, int every)
     {
@@ -975,7 +977,11 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             var at = table.Next[slot].Position;
             var duty = new TownDuty { Member = id, Body = cold.Carrying, Faction = cold.Faction, Town = AiSystem.TownAt(data, world, at),
                     Kind = TownDutyKind.Cage };
-            if (!DisposeCarried(world, duty, slot, b)) continue;
+            if (!DisposeCarried(world, duty, slot, b, bed: true))
+            {
+                if (carry.RescuedBy148(world, slot) && carry.BeginPutDown(world, slot, TaskSource.Goal)) carry.RefuseRescue(world, id, cold.Carrying);
+                continue;
+            }
 
             cold.Engaged = true;
             _duties.Add(duty);
@@ -985,15 +991,18 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// <summary>
     /// The goal chooser over a carried body's disposal goals (<c>FUN_140510ef0</c> with the scorer <c>FUN_14050df10</c>, <b>Verified</b>): the
     /// candidates ranked by <see cref="RankDisposals"/>, the first that starts wins (the cage goals need a free cage). Without
-    /// <paramref name="cageable"/> the cage goals are left out. False when none starts.
+    /// <paramref name="cageable"/> the cage goals are left out. 106 is weighed only with <paramref name="bed"/>: for a carrier whose body no goal's
+    /// plan holds (<see cref="LookCarriers"/>). After an errand's own lift (273, 223, 138 / 137) the goal that lifted goes on with its plan, as the
+    /// original runs a goal's plan task by task and chooses again only when it ends (docs/game/ai-tasks.md "The plan's lifecycle", Verified), so a
+    /// corpse lifted for the disposal is not taken to a bed. False when none starts.
     /// </summary>
-    bool DisposeCarried(World world, TownDuty d, int g, int b, bool cageable = true)
+    bool DisposeCarried(World world, TownDuty d, int g, int b, bool cageable = true, bool bed = false)
     {
         var gc = world.Characters.Cold(g)!;
         if (world.Squads.Find(gc.SquadId) is not { } squad || population.GoalsOf(world, squad, AiSystem.RoleOf(squad, d.Member, gc)) is not { } goals)
             return false;
 
-        foreach (var goal in RankDisposals(world, g, b, goals, cageable))
+        foreach (var goal in RankDisposals(world, g, b, goals, cageable, bed))
         {
             bool started = goal.Task.Type switch
             {
@@ -1013,16 +1022,17 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// disposal for a dead body (list B 99) at <see cref="DisposalDesire"/>, 112 FIND_CAGE_AND_PUT_IN (a living body, its list B <c>!99</c>) and 281
     /// FIND_CAGE_AND_PUT_DEADGUY_IN (any body) at <see cref="CageDesire"/> times the cage finder's factor (<c>FUN_1408d0d30</c>: 1.0,
     /// <c>DAT_14167c308</c>, with a free cage, else 0; tested when the goal starts), 274 at <see cref="ThrowOutDesire"/> (no effect, so no finder
-    /// factor, <c>FUN_14060fd80</c>), 106 FIND_BED_AND_PUT_IN at <see cref="BedSystem.PutInDesire"/> (<c>FUN_1405a0d50</c>: no death or power
-    /// test) times the bed search's factor (its finder, <c>FUN_1408cfe00</c>: tested when the goal starts), each times its package weight. A higher
+    /// factor, <c>FUN_14060fd80</c>), with <paramref name="bed"/> 106 FIND_BED_AND_PUT_IN at <see cref="BedSystem.PutInDesire"/>
+    /// (<c>FUN_1405a0d50</c>: no death or power test, and its friendly test passes a body of the carrier's faction at once) times the bed search's
+    /// factor (its finder, <c>FUN_1408cfe00</c>: tested when the goal starts), each times its package weight. A higher
     /// tier first (an urgent cage before 274), then the higher score; of equal scores the goal listed later (<see cref="AiSystem"/>'s rank).
     /// </summary>
-    List<AiGoal> RankDisposals(World world, int g, int b, IReadOnlyList<AiGoal> goals, bool cageable)
+    List<AiGoal> RankDisposals(World world, int g, int b, IReadOnlyList<AiGoal> goals, bool cageable, bool bed)
     {
         bool dead = world.Characters.Cold(b)!.Medical!.Dead;
         float cage = cageable ? CageDesire(world, g, b) : 0;
         float throwOut = ThrowOutDesire(world, g, b);
-        float? disposal = null, bed = null;
+        float? disposal = null, putIn = null;
         int hour = world.Hour;
         var ranked = new List<(AiGoal Goal, float Score)>();
         for (int k = 0; k < goals.Count; k++)
@@ -1034,7 +1044,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
                 TaskType.FindCageAndPutIn when !dead => cage,
                 TaskType.TakeIntruderOutsideTown => throwOut,
                 TaskType.DeadGuysGoInThePot when dead => disposal ??= DisposalDesire(world, g),
-                TaskType.FindBedAndPutIn => bed ??= Beds(world)?.PutInDesire(world, g) ?? 0,
+                TaskType.FindBedAndPutIn when bed => putIn ??= Beds(world)?.PutInDesire(world, g) ?? 0,
                 _ => 0,
             };
             float score = desire * goal.Weight;

@@ -1652,6 +1652,12 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     readonly List<(CharacterId Rescuer, CharacterId Body, double Until)> _refusedRescues = [];
 
     /// <summary>
+    /// The lifts goal 148 started and the carries they became (<see cref="RescuedBy148"/>), dropped once the rescuer no longer lifts or carries that
+    /// body. Not saved; hashed while set.
+    /// </summary>
+    readonly List<(CharacterId Rescuer, CharacterId Body)> _rescueCarries = [];
+
+    /// <summary>
     /// Every <see cref="CarrySettings.AutoEveryTicks"/> ticks (serial, slot order): NPCs with a rescue job (a loaded list), idle, wandering or
     /// following (or on a list job below it), able to carry and with no fight in their squad, pick up the nearest knocked-out member of their faction
     /// within their sight (<see cref="FindRescue"/>); then the NPCs whose AI chose the leader rescue goal (142) lift their knocked-out squad leader
@@ -1662,7 +1668,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     {
         var next = table.Next;
         var taken = Lifting(table);
-        _refusedRescues.RemoveAll(r => r.Until <= world.GameHours);
+        if (_refusedRescues.Count > 0) _refusedRescues.RemoveAll(r => r.Until <= world.GameHours);
+        if (_rescueCarries.Count > 0) _rescueCarries.RemoveAll(r => !Holds148(table, r.Rescuer, r.Body));
         for (int i = 0; i < table.HighWater; i++)
         {
             if (!next[i].Alive || table.Cold(i) is not { IsPlayer: false, RescueJob: true } cold) continue;
@@ -1848,7 +1855,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
     /// <summary>
     /// The leader rescue goal (142) of an NPC the AI runs: its factor for the think (<see cref="AiMind.RescueWant"/>) is 1 while
-    /// <see cref="LeaderToRescue"/> finds the leader, the character could lift it (<see cref="CanCarry"/>, so one with no usable arm does not
+    /// <see cref="LeaderToRescue"/> finds the leader, the character is able to lift (<see cref="CouldLift"/>, so one with no usable arm does not
     /// choose a goal it cannot act out) and it has not given that leader up (<see cref="GivesUpRescue"/>). Once the AI chose the goal (the package
     /// lists it in this hour) and holds the character (<see cref="AiSystem.Holds"/>: not in a talk, a trade or an arrest), a character that is free
     /// lifts the leader as row 213 (the snatch lift) does, unless someone lifts it already.
@@ -1859,7 +1866,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         {
             if (!table.Next[i].Alive || table.Cold(i) is not { IsPlayer: false, Ai: { Engine: false } mind } cold) continue;
             int leader = LeaderToRescue(world, i);
-            if (leader >= 0 && (!CanCarry(world, cold, TaskType.FindAndRescueIfTheresBeds) || GaveUp(table.IdOf(i), table.IdOf(leader))))
+            if (leader >= 0 && (!CouldLift(world, cold) || GaveUp(table.IdOf(i), table.IdOf(leader))))
                 leader = -1;
             mind.RescueWant = leader >= 0 ? 1 : 0;   // the think's desire for goal 142 reads it
 
@@ -1875,13 +1882,14 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// Goal 148 Find and rescue if there's beds of an NPC the AI runs (not an engine mind), whose goal lists hold it
     /// (<see cref="AiSystem.ListsGoal"/>): on each beat its factor for the think (<see cref="AiMind.BedRescueWant"/>) is 1 when its desire
     /// (<c>FUN_1405994c0</c>, <b>Verified</b>: not on Hold, carrying nothing, the bed search finds a bed for it) and its finder
-    /// (<c>FUN_1408cd550</c>, the rescue finder <see cref="FindRescue"/>) both hold and the character could lift (<see cref="CanCarry"/>), else 0.
-    /// The finder runs only while someone is down at all, and first, so the bed search runs only with a body found; it leaves out the bodies this
-    /// rescuer gave up (<see cref="GivesUpRescue"/>), and the bed search leaves out the beds other carriers are on their way to and keeps a squad
-    /// with no town to its own or an ally's beds in range (<see cref="Locks.BedSystem.FindForCarrier"/>). Once the AI chose the goal and holds the
-    /// character (<see cref="AiSystem.Holds"/>), a character that is free lifts that body as the player's rescue job does (row 148), as the goal's
-    /// own task; a body someone lifts already is not taken (<paramref name="taken"/>). The carried body's goals then take it on (106 lays it in a
-    /// bed, <see cref="Kidnap.TownDutySystem"/>).
+    /// (<c>FUN_1408cd550</c>, the rescue finder <see cref="FindRescue"/>) both hold and the character is able to lift (<see cref="CouldLift"/>),
+    /// else 0. The finder runs only while someone is down at all, and first, so the bed search runs only with a body found; it leaves out the
+    /// bodies this rescuer gave up (<see cref="GivesUpRescue"/>, <see cref="RefuseRescue"/>), and the bed search leaves out the beds other
+    /// carriers are on their way to and keeps a squad with no town to its own or an ally's beds in range
+    /// (<see cref="Locks.BedSystem.FindForCarrier"/>). Once the AI chose the goal and holds the character (<see cref="AiSystem.Holds"/>), a
+    /// character that is free lifts that body as the player's rescue job does (row 148), as the goal's own task; a body someone lifts already is
+    /// not taken (<paramref name="taken"/>). The carried body's goals then take it on (106 lays it in a bed, <see cref="Kidnap.TownDutySystem"/>;
+    /// with no bed the body is put down).
     /// </summary>
     void RescueToBeds(World world, CharacterTable table, HashSet<int> taken)
     {
@@ -1908,7 +1916,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     int RescueTarget(World world, int i, CharacterCold cold, HashSet<int> taken, ref bool? down, out BedRescueNote note)
     {
         note = BedRescueNote.NotChosen;
-        if (!Rescuing(cold) || !CanCarry(world, cold, TaskType.FindAndRescueIfTheresBeds))
+        if (!Rescuing(cold) || !CouldLift(world, cold))
         {
             note = BedRescueNote.CannotLift;
             return -1;
@@ -1935,7 +1943,10 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         if (mind.Goal is not { Task.Type: TaskType.FindAndRescueIfTheresBeds }) return BedRescueNote.NotChosen;
         if (!Starts(world, i, cold)) return BedRescueNote.NotFree;
 
-        return LiftRescued(world, i, body, taken, TaskSource.Goal) ? BedRescueNote.Lifting : BedRescueNote.Refused;
+        if (!LiftRescued(world, i, body, taken, TaskSource.Goal)) return BedRescueNote.Refused;
+
+        _rescueCarries.Add((world.Characters.IdOf(i), world.Characters.IdOf(body)));
+        return BedRescueNote.Lifting;
     }
 
     /// <summary>
@@ -1958,6 +1969,15 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     }
 
     /// <summary>
+    /// Whether the character is able to lift at all (the lasting part of <see cref="CanCarry"/>): awake, of a race, with a usable left arm, carrying
+    /// nothing and not carried, and the rescue row is in its repertoire. A fight, a crouch or lying down pass, so they do not change the rescue
+    /// goals' factors; the lift itself waits for them (<see cref="Free"/>).
+    /// </summary>
+    static bool CouldLift(World world, CharacterCold cold) =>
+        cold is { Medical: { Incapacitated: false } m, Race: not null } && cold.Carrying.IsNone && cold.CarriedBy.IsNone && LeftArmUsable(m)
+        && TaskStart.Eligible(world, cold, TaskType.FindAndRescueIfTheresBeds);
+
+    /// <summary>
     /// A rescue goal's lift may start now: the character is free (<see cref="Free"/>) and the AI holds it (<see cref="AiSystem.Holds"/>), so one a
     /// talk, a trade or an arrest holds is not walked off.
     /// </summary>
@@ -1978,7 +1998,38 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// <summary>
     /// Whether <paramref name="rescuer"/> gave up walking to <paramref name="body"/> and still leaves it alone.
     /// </summary>
-    bool GaveUp(CharacterId rescuer, CharacterId body) => _refusedRescues.Exists(r => r.Rescuer == rescuer && r.Body == body);
+    bool GaveUp(CharacterId rescuer, CharacterId body)
+    {
+        foreach (var r in _refusedRescues)
+            if (r.Rescuer == rescuer && r.Body == body) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// The rescuer leaves <paramref name="body"/> alone for <see cref="CarrySettings.RescueRefuseHours"/> (a given-up walk, or a body put down for
+    /// want of a bed, <see cref="Kidnap.TownDutySystem"/>). Serial.
+    /// </summary>
+    public void RefuseRescue(World world, CharacterId rescuer, CharacterId body) =>
+        _refusedRescues.Add((rescuer, body, world.GameHours + Settings.RescueRefuseHours));
+
+    /// <summary>
+    /// Whether the character in <paramref name="slot"/> carries the body its goal 148 lifted.
+    /// </summary>
+    public bool RescuedBy148(World world, int slot)
+    {
+        var id = world.Characters.IdOf(slot);
+        var carrying = world.Characters.Cold(slot)?.Carrying ?? CharacterId.None;
+        foreach (var (rescuer, body) in _rescueCarries)
+            if (rescuer == id && body == carrying && !body.IsNone) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="rescuer"/> still lifts (walks to, or lifts) or carries <paramref name="body"/>.
+    /// </summary>
+    static bool Holds148(CharacterTable table, CharacterId rescuer, CharacterId body) =>
+        table.TryResolveNext(rescuer, out int s) && table.Cold(s) is { } c
+        && (c.Carrying == body || table.Next[s].Task == (byte)CharacterTask.PickUp && c.CarryTarget == body);
 
     /// <summary>
     /// A rescue goal's walk to its body (148's, or 142's to the squad leader; not a job's or an order's) is given up when the body has died (a
@@ -1996,7 +2047,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         bool late = (world.Tick - since) * world.TickSeconds > Settings.RescueWalkSeconds;
         if (!dead && !late) return false;
 
-        if (late) _refusedRescues.Add((table.IdOf(i), cold.CarryTarget, world.GameHours + Settings.RescueRefuseHours));
+        if (late) RefuseRescue(world, table.IdOf(i), cold.CarryTarget);
         End(world, i);
         return true;
     }
@@ -2018,19 +2069,29 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     }
 
     /// <summary>
-    /// Adds the given-up rescues to the world's state hash, while there are any.
+    /// Adds the given-up rescues and the rescue carries to the world's state hash, while there are any.
     /// </summary>
     public void Hash(ref StateHasher hasher)
     {
-        if (_refusedRescues.Count == 0) return;
+        if (_refusedRescues.Count > 0)
+        {
+            hasher.Add(0x52657346);   // "ResF"
+            hasher.Add(_refusedRescues.Count);
+            foreach (var (rescuer, body, until) in _refusedRescues)
+            {
+                hasher.Add(rescuer);
+                hasher.Add(body);
+                hasher.Add(until);
+            }
+        }
 
-        hasher.Add(0x52657346);   // "ResF"
-        hasher.Add(_refusedRescues.Count);
-        foreach (var (rescuer, body, until) in _refusedRescues)
+        if (_rescueCarries.Count == 0) return;
+        hasher.Add(0x52657343);   // "ResC"
+        hasher.Add(_rescueCarries.Count);
+        foreach (var (rescuer, body) in _rescueCarries)
         {
             hasher.Add(rescuer);
             hasher.Add(body);
-            hasher.Add(until);
         }
     }
 

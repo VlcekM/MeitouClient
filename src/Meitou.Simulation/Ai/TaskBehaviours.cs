@@ -141,7 +141,8 @@ public enum AiBehaviour : byte
     Captive = 25,
     /// <summary>
     /// Find and rescue if there's beds (148, finder <c>FUN_1408cd550</c>, desire <c>FUN_1405994c0</c>, effect 48 <c>IS_CARRYING_TARGET</c>): wanted
-    /// while the character is not on Hold, carries nothing, the bed search finds a bed for it and the rescue finder finds a downed ally
+    /// while the character is not on Hold, carries nothing, is able to lift, the bed search finds a bed for it and the rescue finder finds a downed
+    /// ally
     /// (<see cref="Carrying.CarrySystem"/>'s serial sweep keeps that in <see cref="AiMind.BedRescueWant"/>); once the goal is chosen the sweep lifts
     /// the body (row 148, as the player's rescue job does), and the carried body's goals then take it on (106 lays it in a bed,
     /// <see cref="Kidnap.TownDutySystem"/>).

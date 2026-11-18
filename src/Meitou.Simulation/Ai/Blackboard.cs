@@ -834,7 +834,7 @@ public enum BedRescueNote : byte
     /// </summary>
     None = 0,
     /// <summary>
-    /// Not eligible: on Hold, carrying, or it could not lift (an arm down, crouching or lying, in a fight).
+    /// Not eligible: on Hold, carrying, or it is not able to lift (no usable left arm, or the row is not in its repertoire).
     /// </summary>
     CannotLift = 1,
     /// <summary>
@@ -1236,8 +1236,8 @@ public sealed class AiMind
 
     /// <summary>
     /// The factor of goal 148 Find and rescue if there's beds (<see cref="AiBehaviour.RescueToBed"/>): 1 while its desire holds (not on Hold,
-    /// carrying nothing, a bed found) and the rescue finder finds a downed ally, else 0. Kept by the carry system's serial sweep for a character
-    /// whose goal lists hold 148 (the think reads it). Not saved; hashed while set.
+    /// carrying nothing, a bed found), the character is able to lift (an arm, its repertoire) and the rescue finder finds a downed ally, else 0.
+    /// Kept by the carry system's serial sweep for a character whose goal lists hold 148 (the think reads it). Not saved; hashed while set.
     /// </summary>
     public float BedRescueWant { get; set; }
 
