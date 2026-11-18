@@ -894,6 +894,11 @@ public sealed partial class MainWindow : Window
     readonly WorkshopSyncRunner _workshopSync = new();
 
     /// <summary>
+    /// True while Steam is asked to subscribe to endorsed ports (<see cref="SubscribeToPorts"/>): one request at a time.
+    /// </summary>
+    bool _subscribing;
+
+    /// <summary>
     /// Off the UI thread, so a large workshop folder does not hold up the window: listing the folders and reading every header (for the
     /// dependency order and the authors) is file work per mod. Until it is done the list is not saved (Play, presets), so a click
     /// meanwhile cannot write an empty mods.cfg. A later load (another Kenshi folder, Refresh) supersedes an unfinished one.
@@ -939,89 +944,170 @@ public sealed partial class MainWindow : Window
         _modsReady = true;
         ShowDependencyProblems();
         QueueBlankingCheck();
-        MarkSuggestions();
+        MarkPorts();
         ModsEmpty.IsVisible = _mods.Count == 0;
         ModsEmpty.Text = Tr(gameInstall is null ? "Set the Kenshi folder in Settings to list its mods."
             : "No mods found in Kenshi's mods folder or among its Steam workshop items.");
-        OfferSuggestions();
+        OfferPorts();
     }
 
     /// <summary>
-    /// Tells each row of an RE_Kenshi mod with a suggested code mod whether the list holds it (<see cref="CoveredMods.Suggested"/>).
+    /// Tells each row of an RE_Kenshi mod with an endorsed port whether the list holds it (<see cref="CoveredMods.Endorsed"/>).
     /// </summary>
-    void MarkSuggestions()
+    void MarkPorts()
     {
         var mods = _mods
             .Select(r => r.Mod)
             .ToList();
         foreach (var row in _mods)
-            if (row.Suggestion is { } suggested) row.SuggestionInstalled = CoveredMods.HasSuggestion(suggested, mods);
+            if (row.Port is { } port) row.PortInstalled = CoveredMods.HasPort(port, mods);
     }
 
     /// <summary>
-    /// Once per mod, in one question for all of them: the enabled RE_Kenshi mods with a suggested code mod that is not installed, with an
-    /// offer (not a requirement: other ports may exist) to open the suggested mods' Steam workshop pages, where the player subscribes (the
-    /// launcher has no Steam subscribe call). Asked or not, each is remembered (<see cref="LauncherConfig.OfferedSuggestions"/>), and the row
-    /// keeps its button. Not over another question or the first-start dialog: the next listing asks.
+    /// Once per mod, in one question for all of them: the enabled RE_Kenshi mods with an endorsed port that is not installed are offered
+    /// (<see cref="OfferPortsAsync"/>). Asked or not, each is remembered (<see cref="LauncherConfig.OfferedPorts"/>), and the row keeps its
+    /// button. Not over another question or the first-start dialog: the next listing asks.
     /// </summary>
-    async void OfferSuggestions()
+    async void OfferPorts()
     {
         if (SetupHost.IsVisible) return;
 
         var rows = _mods
-            .Where(r => r.Enabled && r.SuggestionPage is not null && !_config.OfferedSuggestions.Contains(r.Name))
+            .Where(r => r.Enabled && r.PortPage is not null && !_config.OfferedPorts.Contains(r.Name))
             .ToList();
         if (rows.Count == 0) return;
 
-        _config.OfferedSuggestions.AddRange(rows.Select(r => r.Name));
+        _config.OfferedPorts.AddRange(rows.Select(r => r.Name));
         _config.Save();
-
-        string intro = Tr("The plugins of these RE_Kenshi mods do not run in Meitou.") + " "
-            + Tr("One Meitou mod on the Steam workshop that does the same (others may too):");
-        Control[] body = [Wrapped(intro), SuggestionTable(rows), Wrapped(Tr("Want to look at them on Steam?"))];
-        var pages = rows
-            .Select(r => r.SuggestionPage)
-            .OfType<Uri>()
-            .Distinct()
-            .ToList();
-        string open = pages.Count == 1 ? Tr("Open its page") : Tr("Open {1} pages", pages.Count);
-        if (!await ChooseAsync(Tr("Meitou mods you might like"), body, [(Tr("No thanks"), false), (open, true)], cancel: false)) return;
-
-        foreach (var page in pages) await this.Launcher.LaunchUriAsync(page);
+        await OfferPortsAsync(rows);
     }
 
     /// <summary>
-    /// The suggestions of <see cref="OfferSuggestions"/> as a table: a header row, then each RE_Kenshi mod beside its suggested Meitou mod.
+    /// Asks whether to subscribe to the endorsed ports of <paramref name="rows"/> on the Steam workshop, as a table of each RE_Kenshi mod
+    /// beside its port and maintainer, and does what is chosen: subscribe through Steam, open the ports' workshop pages, or nothing.
+    /// Subscribing is offered only where Steam can be asked (<see cref="SteamLibrary.Locate"/>).
     /// </summary>
-    Grid SuggestionTable(IReadOnlyList<ModRow> rows)
+    async Task OfferPortsAsync(IReadOnlyList<ModRow> rows)
+    {
+        var ports = rows
+            .Select(r => r.Port!)
+            .DistinctBy(p => p.PortWorkshopId)
+            .ToList();
+        string? library = _subscribing ? null : SteamLibrary.Locate(_install);
+        string intro = Tr("The plugins of these RE_Kenshi mods do not run in Meitou.") + " "
+            + Tr("Each has a port for Meitou on the Steam workshop, kept up by its maintainer and endorsed by Meitou:");
+        string question = library is null ? Tr("Want to look at them on Steam?") : Tr("Do you want to subscribe now?");
+        Control[] body = [Wrapped(intro), PortTable(rows), Wrapped(question)];
+
+        var choice = await ChooseAsync(Tr("Meitou ports of your mods"), body, PortChoices(ports.Count, library is not null), PortChoice.None);
+        if (choice == PortChoice.Pages) await OpenPortPages(ports);
+        if (choice == PortChoice.Subscribe) await SubscribeToPorts(library!, ports);
+    }
+
+    /// <summary>
+    /// The buttons of the port offer for <paramref name="count"/> ports: no, their workshop pages and, when Steam can be asked, subscribing
+    /// (the main button).
+    /// </summary>
+    static List<(string Label, PortChoice Value)> PortChoices(int count, bool canSubscribe)
+    {
+        string open = count == 1 ? Tr("Open its page") : Tr("Open {1} pages", count);
+        List<(string, PortChoice)> choices = [(Tr("No thanks"), PortChoice.None), (open, PortChoice.Pages)];
+        if (canSubscribe) choices.Add((Tr("Subscribe"), PortChoice.Subscribe));
+
+        return choices;
+    }
+
+    /// <summary>
+    /// Opens the Steam workshop page of each of <paramref name="ports"/>, where the player subscribes.
+    /// </summary>
+    async Task OpenPortPages(IEnumerable<EndorsedPort> ports)
+    {
+        foreach (var port in ports) await this.Launcher.LaunchUriAsync(CoveredMods.WorkshopPage(port.PortWorkshopId));
+    }
+
+    /// <summary>
+    /// Has Steam subscribe the account to <paramref name="ports"/> (<see cref="WorkshopSubscribeRunner"/>), says how it went and lists the
+    /// mods again; for the ports Steam did not subscribe to, with the reasons, it offers their workshop pages instead.
+    /// </summary>
+    async Task SubscribeToPorts(string library, IReadOnlyList<EndorsedPort> ports)
+    {
+        _subscribing = true;
+        Status(Tr("Asking Steam to subscribe..."));
+        var result = await WorkshopSubscribeRunner.RunAsync(library, [.. ports.Select(p => p.PortWorkshopId)]);
+        _subscribing = false;
+
+        var failed = ports
+            .Where(p => result.Items.FirstOrDefault(i => i.Id == p.PortWorkshopId) is not { Problem: null })
+            .ToList();
+        Status(SubscribeSummary(result, ports, failed));
+        if (failed.Count > 0) await OfferPagesOfFailed(result, failed);
+
+        if (failed.Count < ports.Count) LoadMods();
+    }
+
+    /// <summary>
+    /// The status line after subscribing: the ports subscribed to and whether Steam is still downloading them, or that none was.
+    /// </summary>
+    static string SubscribeSummary(WorkshopSubscribeResult result, IReadOnlyList<EndorsedPort> ports, IReadOnlyList<EndorsedPort> failed)
+    {
+        var subscribed = ports
+            .Except(failed)
+            .ToList();
+        if (subscribed.Count == 0) return Tr("Steam did not subscribe to anything.");
+
+        string done = Tr("Subscribed on Steam: {1}.", string.Join(", ", subscribed.Select(p => p.Port)));
+        bool installed = subscribed.All(p => result.Items.Any(i => i.Id == p.PortWorkshopId && i.Installed));
+        return installed ? done : done + " " + Tr("Steam is still downloading; press Refresh when it is done.");
+    }
+
+    /// <summary>
+    /// Says why Steam did not subscribe to <paramref name="failed"/> (one reason for all when Steam could not be asked, else one per port)
+    /// and offers to open their workshop pages instead.
+    /// </summary>
+    async Task OfferPagesOfFailed(WorkshopSubscribeResult result, IReadOnlyList<EndorsedPort> failed)
+    {
+        var reasons = result.Problem is { } problem
+            ? [Tr(problem)]
+            : failed.Select(p => p.Port + ": " + Tr(result.Items.FirstOrDefault(i => i.Id == p.PortWorkshopId)?.Problem ?? "Steam gave no answer."));
+        string text = string.Join("\n", reasons) + "\n\n" + Tr("You can subscribe on the Steam workshop page instead.");
+        string open = failed.Count == 1 ? Tr("Open its page") : Tr("Open {1} pages", failed.Count);
+        if (await AskAsync(Tr("Steam could not subscribe"), text, open, Tr("No thanks"))) await OpenPortPages(failed);
+    }
+
+    /// <summary>
+    /// The ports of <see cref="OfferPortsAsync"/> as a table: a header row, then each RE_Kenshi mod beside its port and the port's maintainer.
+    /// </summary>
+    Grid PortTable(IReadOnlyList<ModRow> rows)
     {
         var table = new Grid
         {
-            ColumnDefinitions = new("*,*"), ColumnSpacing = 16, Margin = new(0, 8),
+            ColumnDefinitions = new("*,*,Auto"), ColumnSpacing = 16, Margin = new(0, 8),
             RowDefinitions = new(string.Join(",", Enumerable.Repeat("Auto", rows.Count + 1))),
         };
         var line = (Avalonia.Media.IBrush)this.FindResource("PlateRim")!;
         AddRowLine(table, 0, line);
         AddCell(table, 0, 0, Tr("RE_Kenshi mod"), header: true);
-        AddCell(table, 0, 1, Tr("Meitou mod"), header: true);
+        AddCell(table, 0, 1, Tr("Meitou port"), header: true);
+        AddCell(table, 0, 2, Tr("Maintained by"), header: true);
         for (int i = 0; i < rows.Count; i++)
         {
             if (i < rows.Count - 1) AddRowLine(table, i + 1, line);
             AddCell(table, i + 1, 0, rows[i].Name, header: false);
-            AddCell(table, i + 1, 1, rows[i].Suggestion!.By, header: false);
+            AddCell(table, i + 1, 1, rows[i].Port!.Port, header: false);
+            AddCell(table, i + 1, 2, rows[i].Port!.Maintainer, header: false);
         }
 
         return table;
     }
 
     /// <summary>
-    /// A line under row <paramref name="row"/> of <paramref name="table"/>, across both columns.
+    /// A line under row <paramref name="row"/> of <paramref name="table"/>, across its columns.
     /// </summary>
     static void AddRowLine(Grid table, int row, Avalonia.Media.IBrush brush)
     {
         var line = new Border { BorderBrush = brush, BorderThickness = new(0, 0, 0, 1) };
         Grid.SetRow(line, row);
-        Grid.SetColumnSpan(line, 2);
+        Grid.SetColumnSpan(line, table.ColumnDefinitions.Count);
         table.Children.Add(line);
     }
 
@@ -1272,12 +1358,13 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// A click on the View button of an RE_Kenshi mod with a suggested code mod opens that mod's Steam workshop page.
+    /// A click on the Get the port button of an RE_Kenshi mod with an endorsed port that is not installed offers that port.
     /// </summary>
-    async void SuggestionPage_Click(object? sender, RoutedEventArgs e)
+    async void GetPort_Click(object? sender, RoutedEventArgs e)
     {
-        if (sender is Control { DataContext: ModRow { SuggestionPage: { } page } })
-            await this.Launcher.LaunchUriAsync(page);
+        if (SetupHost.IsVisible || sender is not Control { DataContext: ModRow { PortPage: not null } row }) return;
+
+        await OfferPortsAsync([row]);
     }
 
     /// <summary>

@@ -71,13 +71,9 @@ public sealed class ModContext
     public string Name => Mod.Info.Name;
 
     /// <summary>
-    /// The mod's folder (where its <c>.mod</c> file is; for an official port, the RE_Kenshi mod's, with the plugin's settings files).
+    /// The mod's folder (where its <c>.mod</c> file and code are).
     /// </summary>
     public string Folder => Mod.Info.Folder;
-    /// <summary>
-    /// Where the mod's code is: <see cref="Folder"/>, or for an official port its folder beside the game (docs/formats/rekenshi.md "Ports").
-    /// </summary>
-    public string CodeFolder => Mod.Info.CodeFolder;
     /// <summary>
     /// The mod's code manifest.
     /// </summary>

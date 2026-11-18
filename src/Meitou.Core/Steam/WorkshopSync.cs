@@ -26,7 +26,7 @@ public static class WorkshopSync
         if (!MacSteam.CanSync) return Failed("Steam's library was not found, so the Workshop cannot be synchronised.");
         if (!MacSteam.IsRunning) return Failed(NotRunning);
 
-        using var ugc = SteamUgc.TryOpen(out string? problem);
+        using var ugc = SteamUgc.TryOpen(MacSteam.LibraryPath, out string? problem);
         if (ugc is null) return Failed(problem!);
 
         ulong[] subscribed = ugc.SubscribedItems();
@@ -72,7 +72,7 @@ public static class WorkshopSync
     /// <summary>
     /// True for an item that is installed and has nothing left to download.
     /// </summary>
-    static bool IsCurrent(WorkshopItemState state) =>
+    internal static bool IsCurrent(WorkshopItemState state) =>
         state.HasFlag(WorkshopItemState.Installed)
         && (state & (WorkshopItemState.NeedsUpdate | WorkshopItemState.Downloading | WorkshopItemState.DownloadPending)) == 0;
 }

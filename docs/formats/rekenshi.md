@@ -4,17 +4,18 @@
 behaviour.** Meitou never loads RE_Kenshi plugin DLLs (`RE_Kenshi.json`, `startPlugin`) and offers no
 KenshiLib facade. The public wishlist of RE_Kenshi mods decides which plugins get one of:
 
-- **Superseded:** another mod does the same in Meitou (a [code mod](../modding.md) on the workshop); the
-  launcher suggests it.
-- **Redundant (built in):** a feature that fits the engine (item rotation) becomes a Meitou option or tweak.
-  Enabling the RE_Kenshi mod switches the option on, with a note saying so.
-- **Ported:** the plugin's DLLs are replaced by an official Meitou port against the code-mod API, its source
-  in this repo, shipped with the game and run in the plugin's place when the mod is enabled ([ports](#ports)).
+- **Built in:** a feature that fits the engine (item rotation) becomes a Meitou option or tweak. Enabling
+  the RE_Kenshi mod switches the option on, with a note saying so.
+- **Ported:** the plugin is rewritten against the [code-mod API](../modding.md) as a mod of its own on the
+  Steam workshop, kept up by its maintainer. **Decision (owner, 2026-11-18):** no port's source or binary is
+  in this repository or ships with the game, whoever wrote it (Meitou's contributors upload theirs to the
+  workshop like anyone); the repository only lists the ports Meitou endorses, by workshop link
+  ([endorsed ports](#endorsed-ports)), and the launcher offers to subscribe to them.
 
 A mod's ordinary data and assets load through the normal readers either way.
 
-**Status:** every plugin's DLLs are ignored, a ported one's port runs instead, and the launcher says which ([launcher](../launcher.md));
-the `FileRebinds` and `SoundBanks` data entries are applied ([data entries](#data-entries)). Covered mods are one table,
+**Status:** every plugin's DLLs are ignored and the launcher says so ([launcher](../launcher.md)); the `FileRebinds` and `SoundBanks` data
+entries are applied ([data entries](#data-entries)). Covered mods are one table,
 `CoveredMods` (Meitou.Core), read by the game and by the launcher's Mods page. Built-in mods (`BuiltInMods`,
 Meitou.Game): at start, each enabled mod the table names, by `.mod` name or code-mod id, that was not taken in before
 (`UserConfig.AdoptedMods`) has its settings copied once into Meitou's setting, with a notice. A covered code mod is not run (counted as
@@ -26,42 +27,21 @@ disabled), so the feature never applies twice, and a save made while it ran does
 | Its code-mod port (`player-only-xp`) | Squad XP | any version (by its id) | the plugin's file when the plugin is installed (the port shares it), else its saved `Multiplier`, else 10. Per-skill settings are not kept |
 | Swamp Turtle FIX (ikahurula, data mod, workshop 2237731365) | Swamp turtle attacks (Fixes) | its 2020-09-24 update | the fix is switched on. Its data still loads: it sets the Swamp Turtle's `weapon` to `_elephant type` (and its unread `attack type`), so its turtles use the elephant moves and that weapon's damage and reach ([animals](../game/animals.md) "Natural weapon") |
 
-Superseded (suggested) mods: the RE_Kenshi plugin still loads only its data, and the launcher suggests a code mod on the Steam workshop that does the
-same (one option; other ports may exist). Nothing is taken in.
+## Endorsed ports
 
-| Mod | Suggested code mod | Matched against |
-| --- | --- | --- |
-| Loot-Scoot-Execute (Emkej, `Loot-Scoot-Execute`, workshop 3675700748; its MCM fork 3813852124) | [MeitouClient] Execution (`Execution`, workshop 3838346946) | 2026-04-26 update; the fork's 2026-11-13 update |
+`CoveredMods.Endorsed` (Meitou.Core) names each RE_Kenshi mod, by `.mod` name or workshop item, that has a port Meitou endorses: a
+ported and checked code mod on the Steam workshop. The plugin mod still loads only its data; the port is an ordinary code mod the player
+subscribes to and enables (below the original where it needs the original's data), and the game does nothing special for either. The
+launcher notes the port on the plugin mod's row and offers to subscribe ([launcher](../launcher.md)). Nothing is taken in. To add a
+port: a row here and an entry in `CoveredMods.Endorsed`.
+
+| RE_Kenshi mod | Endorsed port | Maintainer | Matched against |
+| --- | --- | --- | --- |
+| Loot-Scoot-Execute (Emkej, `Loot-Scoot-Execute`, workshop 3675700748; its MCM fork 3813852124) | [[MeitouClient] Execution](https://steamcommunity.com/sharedfiles/filedetails/?id=3838346946) (`Execution`) | Jame | 2026-04-26 update; the fork's 2026-11-13 update |
+| Proving Grounds (Shutori, `Proving Grounds`, workshop 3774745195) | [[Meitou] Proving Grounds](https://steamcommunity.com/sharedfiles/filedetails/?id=3841575072) (`ProvingGroundsMeitou`; [source](https://github.com/roscatoday/ProvingGroundsMeitou)) | roscatoday | 2026-09-26 update |
 
 The date each entry was matched against is Steam's `timeupdated` of that workshop item when it was compared; what the launcher shows
 for a newer installed copy, and for other plugins, is in [launcher](../launcher.md).
-
-## Ports
-
-`CoveredMods.Ported` (Meitou.Core) names each ported mod by `.mod` name or workshop item (its `RE_Kenshi.json` is not checked) and its
-port's code-mod id. A mod matches one kind, first of built in, ported, suggested; a mod with its own `meitou.json` runs that, never a port,
-so an RE_Kenshi mod's author ships a Meitou version by putting a code mod's `meitou.json` and DLL in the mod's folder.
-
-| Mod | Port | Matched against |
-| --- | --- | --- |
-| Proving Grounds (Shutori, `Proving Grounds`, workshop 3774745195) | Proving Grounds for Meitou (roscatoday, `ProvingGroundsMeitou`, `PortedMods/ProvingGrounds`) | 2026-09-26 update |
-
-- **Source:** `PortedMods/<Name>/`, one class library per mod setting `PortId` (its `meitou.json` id) with `meitou.json` beside it, listed
-  in `MeitouClient.slnx`; the authors' code keeps their style (`PortedMods/Directory.Build.props` turns the style checks off).
-  `PortedMods/Directory.Build.targets` references the game (`Private="false"`) and after each build copies the DLL and manifest to
-  `PortedMods/<PortId>/` beside the game's Debug or Release build; `package-release.ps1` builds each port into the zip's `PortedMods/`
-  with the game's version (**Observed**, scratch run: a port built against an unversioned game is refused by a 0.1.0 one).
-  A port's code is one DLL: no libraries of its own.
-- **Running:** `ModHost.CodeMods` puts an enabled ported mod in its `mods.cfg` place as the port (`ModInfo.WithPort`): manifest and
-  assemblies from `PortedMods/<PortId>/` beside the executable (`ModInfo.CodeFolder`, `ModContext.CodeFolder`), name, folder and data the
-  mod's, so `ModContext.Folder` holds the plugin's settings files. It then loads as any code mod; the JIT warm-up and `mod-check` see it.
-  Another enabled code mod with the port's id (a workshop port) is not run, so the feature applies once. A port missing from the game's
-  folder is logged and the plugin does not run. **Verified** by `ModdingTests.A_ported_mod_runs_its_port_in_its_place` (temporary install).
-  **Observed** (2026-11-18, harness, no game data): Proving Grounds' DLL loads from `PortedMods/ProvingGroundsMeitou` in the mod's
-  place and its `Initialize` runs.
-- **Observed** (2026-11-18, scratch install, scratch port and harness outside the repo, Release): the port built through the targets
-  file landed in the game's `bin/Release/net11.0/` port folder; enabled, it ran in the plugin mod's place with that mod's name and folder and a
-  workshop-style mod of the same id was skipped; with the port's folder gone the plugin ran nothing and the log said so.
 
 ## Data entries
 

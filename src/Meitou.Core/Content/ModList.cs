@@ -278,10 +278,6 @@ public sealed class ModInfo(string name, string path, ModSource source)
     /// <see cref="HasCode"/> once checked; null before the first use.
     /// </summary>
     bool? _code;
-    /// <summary>
-    /// The folder of the official port that runs in place of the mod's RE_Kenshi plugin (<see cref="WithPort"/>); null for the mod as found.
-    /// </summary>
-    string? _portFolder;
 
     /// <summary>
     /// The mod's name: the <c>.mod</c> file's name without its extension, as <c>mods.cfg</c> lists it.
@@ -322,31 +318,14 @@ public sealed class ModInfo(string name, string path, ModSource source)
     }
 
     /// <summary>
-    /// A Meitou code mod: its <see cref="CodeFolder"/> has <see cref="ModList.CodeManifestFile"/>, so it runs C# code. Checked on first use.
+    /// A Meitou code mod: its folder has <see cref="ModList.CodeManifestFile"/>, so it runs C# code of its own. Checked on first use.
     /// </summary>
     public bool HasCode => _code ??= File.Exists(CodeManifestPath);
 
     /// <summary>
-    /// Where the mod's code (its <see cref="ModList.CodeManifestFile"/> and assemblies) is: <see cref="Folder"/>, or the official port's folder
-    /// for the copy <see cref="WithPort"/> made.
+    /// Where the mod's <see cref="ModList.CodeManifestFile"/> is (or would be): in <see cref="Folder"/>.
     /// </summary>
-    public string CodeFolder => _portFolder ?? Folder;
-
-    /// <summary>
-    /// Whether this is the copy <see cref="WithPort"/> made: the code is an official port of the mod's RE_Kenshi plugin.
-    /// </summary>
-    public bool IsPort => _portFolder is not null;
-
-    /// <summary>
-    /// Where the mod's <see cref="ModList.CodeManifestFile"/> is (or would be): in <see cref="CodeFolder"/>.
-    /// </summary>
-    public string CodeManifestPath => System.IO.Path.Combine(CodeFolder, ModList.CodeManifestFile);
-
-    /// <summary>
-    /// This mod with its code in <paramref name="portFolder"/>: the official port that runs in place of its RE_Kenshi plugin
-    /// (docs/formats/rekenshi.md "Ports"). Its name, folder and data stay the mod's.
-    /// </summary>
-    public ModInfo WithPort(string portFolder) => new(Name, Path, Source) { _portFolder = portFolder };
+    public string CodeManifestPath => System.IO.Path.Combine(Folder, ModList.CodeManifestFile);
 
     /// <summary>
     /// The <c>.mod</c> file's header, read on first use; null when it is unreadable.

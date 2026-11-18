@@ -236,10 +236,10 @@
                           IsVisible="{Binding WorkshopPage, Converter={x:Static ObjectConverters.IsNotNull}}" ToolTip.Tip="{Binding PageTip}">
                     <Path Data="M0,2 H6 V4 H2 V12 H10 V8 H12 V14 H0 Z M8,0 H14 V6 H12 V3.4 L6.7,8.7 L5.3,7.3 L10.6,2 H8 Z" />
                   </Button>
-                  <!-- An RE_Kenshi mod with a suggested Meitou code mod: that mod's Steam page, while it is not installed -->
-                  <Button DockPanel.Dock="Right" VerticalAlignment="Center" Margin="10,0,0,0" Click="SuggestionPage_Click"
-                          Content="{Binding SuggestionLabel}" IsVisible="{Binding SuggestionPage, Converter={x:Static ObjectConverters.IsNotNull}}"
-                          ToolTip.Tip="{Binding SuggestionTip}" />
+                  <!-- An RE_Kenshi mod with an endorsed Meitou port: subscribe to it or open its Steam page, while it is not installed -->
+                  <Button DockPanel.Dock="Right" VerticalAlignment="Center" Margin="10,0,0,0" Click="GetPort_Click"
+                          Content="{Binding PortLabel}" IsVisible="{Binding PortPage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                          ToolTip.Tip="{Binding PortTip}" />
                   <!-- An RE_Kenshi mod Meitou does not cover: the public wishlist, to ask for it -->
                   <Button DockPanel.Dock="Right" VerticalAlignment="Center" Margin="10,0,0,0" Click="RequestPage_Click"
                           Content="{Binding RequestLabel}" IsVisible="{Binding RequestPage, Converter={x:Static ObjectConverters.IsNotNull}}"

@@ -9,7 +9,7 @@ static class Program
 {
     /// <summary>
     /// Runs Velopack's hooks, loads the native libraries and starts the Avalonia app; with <see cref="WorkshopSyncChild.Argument"/> it only
-    /// does a Workshop sync, without a window.
+    /// does a Workshop sync, with <see cref="WorkshopSubscribeChild.Argument"/> it only subscribes to Workshop items, both without a window.
     /// </summary>
     [STAThread]
     public static void Main(string[] args)
@@ -17,6 +17,12 @@ static class Program
         if (args is [WorkshopSyncChild.Argument])
         {
             WorkshopSyncChild.Run();
+            return;
+        }
+
+        if (args is [WorkshopSubscribeChild.Argument, _, _, ..])
+        {
+            WorkshopSubscribeChild.Run(args[1..]);
             return;
         }
 

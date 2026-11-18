@@ -201,12 +201,6 @@ msgstr "Oficina Steam"
 msgid "Local mod"
 msgstr "Mod local"
 
-msgid "MeitouClient ships this port itself: this copy is not run while the original mod is enabled"
-msgstr "O MeitouClient já inclui esta versão portada: esta cópia não roda enquanto o mod original estiver ativado"
-
-msgid "This mod has no official MeitouClient version, so the MeitouClient team provides a port: it runs on its own, nothing more to install"
-msgstr "Este mod não tem versão oficial para o MeitouClient, então a equipe do MeitouClient fornece uma versão portada: ela roda sozinha, não há mais nada a instalar"
-
 msgid "RE_Kenshi plugin: its DLLs are ignored in Meitou"
 msgstr "Plugin RE_Kenshi: as DLLs são ignoradas pelo Meitou"
 
@@ -216,11 +210,11 @@ msgstr "Integrado ao Meitou: {1}; este mod não é executado"
 msgid "Squad XP in the Advanced settings"
 msgstr "Squad XP nas configurações Avançadas"
 
-msgid "One Meitou mod that does the same: {1}"
-msgstr "Um mod do Meitou que faz o mesmo: {1}"
+msgid "Meitou port on the Steam workshop, endorsed by Meitou: {1} by {2}"
+msgstr "Port para o Meitou na Oficina Steam, endossado pelo Meitou: {1}, por {2}"
 
-msgid "One Meitou mod that does the same: {1} (installed)"
-msgstr "Um mod do Meitou que faz o mesmo: {1} (instalado)"
+msgid "Meitou port, endorsed by Meitou: {1} by {2} (installed)"
+msgstr "Port para o Meitou, endossado pelo Meitou: {1}, por {2} (instalado)"
 
 msgid "Updated on the workshop on {1}, after Meitou last checked it: some new features may be missing"
 msgstr "Atualizado na Oficina em {1}, depois da última verificação do Meitou: alguns recursos novos podem faltar"
@@ -231,23 +225,53 @@ msgstr "Pedir"
 msgid "Open the public wishlist of RE_Kenshi mods for Meitou, where you can ask for this one"
 msgstr "Abre a lista pública de pedidos de mods RE_Kenshi para o Meitou, onde você pode pedir este"
 
-msgid "View {1}"
-msgstr "Ver {1}"
+msgid "Get the port"
+msgstr "Obter o port"
 
-msgid "Open the Steam workshop page of a Meitou mod that does the same; subscribing is up to you"
-msgstr "Abre a página na Oficina Steam de um mod do Meitou que faz o mesmo; assinar fica a seu critério"
+msgid "Subscribe to this mod's Meitou port on the Steam workshop, or open its page"
+msgstr "Assina o port deste mod para o Meitou na Oficina Steam, ou abre a página dele"
 
-msgid "Meitou mods you might like"
-msgstr "Mods do Meitou que talvez você goste"
+msgid "Meitou ports of your mods"
+msgstr "Ports dos seus mods para o Meitou"
 
 msgid "The plugins of these RE_Kenshi mods do not run in Meitou."
 msgstr "Os plugins destes mods RE_Kenshi não rodam no Meitou."
 
-msgid "One Meitou mod on the Steam workshop that does the same (others may too):"
-msgstr "Um mod do Meitou na Oficina Steam que faz o mesmo (pode haver outros):"
+msgid "Each has a port for Meitou on the Steam workshop, kept up by its maintainer and endorsed by Meitou:"
+msgstr "Cada um tem um port para o Meitou na Oficina Steam, mantido por seu responsável e endossado pelo Meitou:"
 
 msgid "Want to look at them on Steam?"
 msgstr "Quer vê-los na Steam?"
+
+msgid "Do you want to subscribe now?"
+msgstr "Quer assinar agora?"
+
+msgid "Subscribe"
+msgstr "Assinar"
+
+msgid "Maintained by"
+msgstr "Mantido por"
+
+msgid "Asking Steam to subscribe..."
+msgstr "Pedindo à Steam para assinar..."
+
+msgid "Steam did not subscribe to anything."
+msgstr "A Steam não assinou nada."
+
+msgid "Subscribed on Steam: {1}."
+msgstr "Assinado na Steam: {1}."
+
+msgid "Steam is still downloading; press Refresh when it is done."
+msgstr "A Steam ainda está baixando; clique em Atualizar quando terminar."
+
+msgid "Steam could not subscribe"
+msgstr "A Steam não conseguiu assinar"
+
+msgid "Steam gave no answer."
+msgstr "A Steam não respondeu."
+
+msgid "You can subscribe on the Steam workshop page instead."
+msgstr "Você pode assinar pela página da Oficina Steam."
 
 msgid "Open its page"
 msgstr "Abrir a página"
@@ -1623,5 +1647,5 @@ msgstr "{1} foi pego cometendo {2}!"
 msgid "RE_Kenshi mod"
 msgstr "Mod RE_Kenshi"
 
-msgid "Meitou mod"
-msgstr "Mod Meitou"
+msgid "Meitou port"
+msgstr "Port para o Meitou"

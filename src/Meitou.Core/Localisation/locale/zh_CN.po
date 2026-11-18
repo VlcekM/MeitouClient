@@ -206,12 +206,6 @@ msgstr "Steam 创意工坊"
 msgid "Local mod"
 msgstr "本地模组"
 
-msgid "MeitouClient ships this port itself: this copy is not run while the original mod is enabled"
-msgstr "MeitouClient 自带此移植版：启用原模组时不会运行这个副本"
-
-msgid "This mod has no official MeitouClient version, so the MeitouClient team provides a port: it runs on its own, nothing more to install"
-msgstr "此模组没有官方的 MeitouClient 版本，因此由 MeitouClient 团队提供移植版：它会自动运行，无需再安装任何东西"
-
 msgid "RE_Kenshi plugin: its DLLs are ignored in Meitou"
 msgstr "RE_Kenshi 插件：Meitou 会忽略它的 DLL"
 
@@ -221,11 +215,11 @@ msgstr "已内置于 Meitou：{1}；此模组不会运行"
 msgid "Squad XP in the Advanced settings"
 msgstr "高级设置中的 Squad XP"
 
-msgid "One Meitou mod that does the same: {1}"
-msgstr "一个功能相同的 Meitou 模组：{1}"
+msgid "Meitou port on the Steam workshop, endorsed by Meitou: {1} by {2}"
+msgstr "Steam 创意工坊上有 Meitou 认可的 Meitou 移植版：{1}，维护者 {2}"
 
-msgid "One Meitou mod that does the same: {1} (installed)"
-msgstr "一个功能相同的 Meitou 模组：{1}（已安装）"
+msgid "Meitou port, endorsed by Meitou: {1} by {2} (installed)"
+msgstr "Meitou 认可的 Meitou 移植版：{1}，维护者 {2}（已安装）"
 
 msgid "Updated on the workshop on {1}, after Meitou last checked it: some new features may be missing"
 msgstr "于 {1} 在创意工坊更新，晚于 Meitou 上次核对：可能缺少部分新功能"
@@ -236,23 +230,53 @@ msgstr "申请支持"
 msgid "Open the public wishlist of RE_Kenshi mods for Meitou, where you can ask for this one"
 msgstr "打开 Meitou 的 RE_Kenshi 模组公开愿望单，可在那里申请支持此模组"
 
-msgid "View {1}"
-msgstr "查看 {1}"
+msgid "Get the port"
+msgstr "获取移植版"
 
-msgid "Open the Steam workshop page of a Meitou mod that does the same; subscribing is up to you"
-msgstr "打开一个功能相同的 Meitou 模组的 Steam 创意工坊页面；是否订阅由你决定"
+msgid "Subscribe to this mod's Meitou port on the Steam workshop, or open its page"
+msgstr "在 Steam 创意工坊订阅此模组的 Meitou 移植版，或打开其页面"
 
-msgid "Meitou mods you might like"
-msgstr "你可能喜欢的 Meitou 模组"
+msgid "Meitou ports of your mods"
+msgstr "你的模组的 Meitou 移植版"
 
 msgid "The plugins of these RE_Kenshi mods do not run in Meitou."
 msgstr "这些 RE_Kenshi 模组的插件无法在 Meitou 中运行。"
 
-msgid "One Meitou mod on the Steam workshop that does the same (others may too):"
-msgstr "Steam 创意工坊上有一个功能相同的 Meitou 模组（可能还有其他的）："
+msgid "Each has a port for Meitou on the Steam workshop, kept up by its maintainer and endorsed by Meitou:"
+msgstr "它们在 Steam 创意工坊上都有由维护者维护、Meitou 认可的 Meitou 移植版："
 
 msgid "Want to look at them on Steam?"
 msgstr "要在 Steam 上看看它们吗？"
+
+msgid "Do you want to subscribe now?"
+msgstr "要现在订阅吗？"
+
+msgid "Subscribe"
+msgstr "订阅"
+
+msgid "Maintained by"
+msgstr "维护者"
+
+msgid "Asking Steam to subscribe..."
+msgstr "正在请求 Steam 订阅..."
+
+msgid "Steam did not subscribe to anything."
+msgstr "Steam 没有订阅任何内容。"
+
+msgid "Subscribed on Steam: {1}."
+msgstr "已在 Steam 上订阅：{1}。"
+
+msgid "Steam is still downloading; press Refresh when it is done."
+msgstr "Steam 仍在下载；完成后请点击刷新。"
+
+msgid "Steam could not subscribe"
+msgstr "Steam 无法订阅"
+
+msgid "Steam gave no answer."
+msgstr "Steam 没有回应。"
+
+msgid "You can subscribe on the Steam workshop page instead."
+msgstr "你可以改为在 Steam 创意工坊页面订阅。"
 
 msgid "Open its page"
 msgstr "打开页面"
@@ -3053,5 +3077,5 @@ msgstr "{1}以{3}开币卖出了{2}"
 msgid "RE_Kenshi mod"
 msgstr "RE_Kenshi 模组"
 
-msgid "Meitou mod"
-msgstr "Meitou 模组"
+msgid "Meitou port"
+msgstr "Meitou 移植版"

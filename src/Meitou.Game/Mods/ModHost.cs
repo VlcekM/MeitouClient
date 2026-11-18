@@ -186,40 +186,26 @@ public sealed class ModHost
     public IReadOnlyDictionary<int, string> RecordTypes => _registry.RecordTypes;
 
     /// <summary>
-    /// The enabled mods of <c>mods.cfg</c>, in order, that carry code (<see cref="ModInfo.HasCode"/>) or run an official port (<see cref="CodeMods"/>).
+    /// The enabled mods of <c>mods.cfg</c>, in order, that carry code (<see cref="ModInfo.HasCode"/>).
     /// </summary>
     public static List<ModInfo> EnabledCodeMods(GameInstall install) => CodeMods(install).Enabled;
 
     /// <summary>
-    /// The code mods on disk: the enabled ones in <c>mods.cfg</c> order, then the others. An enabled RE_Kenshi mod with an official port
-    /// (<see cref="CoveredMods.PortOf"/>) is in its place as the port (<see cref="ModInfo.WithPort"/>); another code mod with the port's id is
-    /// among the others (docs/formats/rekenshi.md "Ports").
+    /// The code mods on disk: the enabled ones in <c>mods.cfg</c> order, then the others.
     /// </summary>
     /// <remarks>A folder that cannot be read gives none (logged): a failing scan must not stop a game that may have no code mods at all.</remarks>
-    public static (List<ModInfo> Enabled, List<ModInfo> Disabled) CodeMods(GameInstall install) =>
-        CodeMods(install, CoveredMods.Ported, AppContext.BaseDirectory);
-
-    /// <summary>
-    /// <see cref="CodeMods(GameInstall)"/> with the ports of <paramref name="ported"/> found beside the game in <paramref name="gameFolder"/>.
-    /// </summary>
-    internal static (List<ModInfo> Enabled, List<ModInfo> Disabled) CodeMods(
-        GameInstall install, IReadOnlyList<PortedMod> ported, string gameFolder)
+    public static (List<ModInfo> Enabled, List<ModInfo> Disabled) CodeMods(GameInstall install)
     {
         try
         {
             var discovered = ModList.Discover(install);
-            var onDisk = discovered.ToDictionary(m => m.Name, StringComparer.Ordinal);
-            List<ModInfo> enabled =
-            [
-                .. ModList.ReadEnabled(install)
-                    .Select(onDisk.GetValueOrDefault)
-                    .OfType<ModInfo>()
-                    .Select(m => CodeOf(m, ported, gameFolder))
-                    .OfType<ModInfo>(),
-            ];
-            List<ModInfo> disabled = [.. discovered.Where(m => m.HasCode).Except(enabled)];
-            SkipShadowedByPorts(enabled, disabled);
-            return (enabled, disabled);
+            var onDisk = discovered.Where(m => m.HasCode).ToDictionary(m => m.Name, StringComparer.Ordinal);
+            List<ModInfo> enabled = [];
+            foreach (string name in ModList.ReadEnabled(install))
+            {
+                if (onDisk.GetValueOrDefault(name) is { } code) enabled.Add(code);
+            }
+            return (enabled, [.. onDisk.Values.Except(enabled)]);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -227,48 +213,6 @@ public sealed class ModHost
             return ([], []);
         }
     }
-
-    /// <summary>
-    /// The code an enabled mod runs: its own, else its official port of <paramref name="ported"/> from beside the game in <paramref name="gameFolder"/>;
-    /// null for none (a port missing from the game's folder is logged).
-    /// </summary>
-    static ModInfo? CodeOf(ModInfo mod, IReadOnlyList<PortedMod> ported, string gameFolder)
-    {
-        if (mod.HasCode) return mod;
-        if (CoveredMods.PortOf(mod, ported) is not { } entry) return null;
-
-        var port = mod.WithPort(CoveredMods.PortFolder(gameFolder, entry));
-        if (port.HasCode) return port;
-
-        Console.Error.WriteLine($"mods      {mod.Name}: its port {entry.PortId} is missing from {port.CodeFolder}; the plugin does not run");
-        return null;
-    }
-
-    /// <summary>
-    /// Moves each enabled code mod that is not an official port but has a running port's id to <paramref name="disabled"/>, with a log line, so the
-    /// feature runs once (the game's port in the plugin's place).
-    /// </summary>
-    static void SkipShadowedByPorts(List<ModInfo> enabled, List<ModInfo> disabled)
-    {
-        var portIds = enabled
-            .Where(m => m.IsPort)
-            .Select(IdOf)
-            .OfType<string>()
-            .ToHashSet(StringComparer.Ordinal);
-        if (portIds.Count == 0) return;
-
-        foreach (var mod in enabled.Where(m => !m.IsPort && IdOf(m) is { } id && portIds.Contains(id)).ToList())
-        {
-            Console.WriteLine($"mods      {mod.Name} not run: Meitou runs its own port with that id");
-            enabled.Remove(mod);
-            disabled.Add(mod);
-        }
-    }
-
-    /// <summary>
-    /// The id in a code mod's manifest; null when it cannot be read.
-    /// </summary>
-    static string? IdOf(ModInfo mod) => CodeModManifest.TryReadId(mod.CodeManifestPath);
 
     /// <summary>
     /// Loads and initializes the code mods, in order. Never throws for a mod's fault.
@@ -391,12 +335,12 @@ public sealed class ModHost
     /// </summary>
     static List<Assembly> LoadAssemblies(ModInfo info, CodeModManifest manifest, IReadOnlyDictionary<string, Assembly> imports)
     {
-        var context = new ModLoadContext(info.CodeFolder, manifest.Id, imports);
+        var context = new ModLoadContext(info.Folder, manifest.Id, imports);
         var loaded = new List<Assembly>();
         foreach (var file in manifest.Assemblies)
         {
-            var path = Path.Combine(info.CodeFolder, file);
-            if (!File.Exists(path)) throw new ModLoadException($"{file} is missing from {(info.IsPort ? "its port's" : "the mod")} folder");
+            var path = Path.Combine(info.Folder, file);
+            if (!File.Exists(path)) throw new ModLoadException($"{file} is missing from the mod folder");
             if (ModLoadContext.IsShipped(Path.GetFileNameWithoutExtension(file)))
                 throw new ModLoadException($"{file} is one of the game's own assemblies; list only the mod's");
             if (imports.ContainsKey(Path.GetFileNameWithoutExtension(file)))

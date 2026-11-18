@@ -294,18 +294,17 @@ interpolated string, which no translation could match.
   they are applied to the map files, one with `SoundBanks` that they load before the game's ([data entries](formats/rekenshi.md#data-entries)).
 - A mod Meitou has built in (`CoveredMods`, Meitou.Core, the table the game uses: [RE_Kenshi](formats/rekenshi.md)) says so and names
   the setting it became and that the mod is not run, instead of the plugin or code-mod note.
-- A mod (no `meitou.json`) with an official port ([ports](formats/rekenshi.md#ports)) says it has no official MeitouClient version, the
-  MeitouClient team provides a port that runs on its own and nothing more is to be installed, instead of the ignored-DLLs note. A code
-  mod with a shipped port's id (a workshop copy of the port) says the game ships it and the copy is not run while the original is enabled.
-- An RE_Kenshi plugin (no `meitou.json`) with a suggested code mod on the Steam workshop that does the same (matched by `.mod` name or
-  workshop item) names it as one mod that does the same, not a requirement (other ports may exist), and, while the list does not hold it
-  (a workshop mod by its item, a local copy by its `.mod` name), has a View button opening its workshop page. The first listing in which
-  such a mod is enabled and its suggestion is not installed asks once for all of them, as a table of each RE_Kenshi mod beside its Meitou mod, whether to open those pages (the launcher has no Steam subscribe call, so the player subscribes there); each mod asked about is kept in
-  `launcher.json` (`OfferedSuggestions`) and not asked again. Not asked while another question or the first-start dialog is open.
+- An RE_Kenshi plugin (no `meitou.json`) with an endorsed port on the Steam workshop ([endorsed ports](formats/rekenshi.md#endorsed-ports),
+  matched by `.mod` name or workshop item) names the port and its maintainer and, while the list does not hold it (a workshop mod by its
+  item, a local copy by its `.mod` name), has a **Get the port** button. The button, and once per mod the first listing in which such a
+  mod is enabled and its port is not installed (one question for all of them), shows a table of each RE_Kenshi mod beside its port and
+  maintainer and asks whether to subscribe now: **Subscribe** ([Workshop subscribe](#workshop-subscribe); offered only where Steam can
+  be asked), **Open its page** (the ports' workshop pages) or No thanks. Each mod asked about on a listing is kept in `launcher.json`
+  (`OfferedPorts`) and not asked again. Not asked while another question or the first-start dialog is open.
 - Each covered workshop item names the Steam update it was matched against. When the installed copy is newer (its `timeupdated` in
   `steamapps/workshop/appworkshop_233860.acf`, `WorkshopUpdates`), the row adds that it has updated since, with the date, and that some new
   features may be missing. A local copy has no date and gets no such note.
-- Any other RE_Kenshi plugin (not built in, ported or suggested) keeps the ignored-DLLs note and has a Request button opening the public wishlist
+- Any other RE_Kenshi plugin (not built in, no endorsed port) keeps the ignored-DLLs note and has a Request button opening the public wishlist
   of RE_Kenshi mods (`CoveredMods.Wishlist`, the roadmap's compatibility sheet), where players ask for one to be covered.
 - A mod folder with `meitou.json` is marked as a code mod ([modding](modding.md)); enabled, its code runs, with no question
   ([Trust](modding.md#trust)).
@@ -318,7 +317,7 @@ interpolated string, which no translation could match.
 
 Kenshi has no Mac build, so the macOS Steam client never installs it, but it still downloads the Kenshi Workshop items of an account that owns
 the game. The mods page's **Sync workshop** button (`WorkshopSync`, `SteamUgc`, `MacSteam` in `Meitou.Core/Steam`) asks that client to download
-or update the subscribed items and waits until they are installed; subscribing and unsubscribing stay in Steam (client or web).
+or update the subscribed items and waits until they are installed; unsubscribing stays in Steam (client or web).
 
 - The button is shown only on macOS and only when the client's own `libsteam_api.dylib` exists
   (`~/Library/Application Support/Steam/Steam.AppBundle/Steam/Contents/MacOS/Frameworks/Steam Helper.app/Contents/MacOS/`, hardcoded). Without it
@@ -344,6 +343,37 @@ folders; `SubscribeItem` alone downloads an item within a second (11 KB), `Unsub
 20 s; with Steam closed `SteamAPI_InitFlat` fails ("Could not determine Steam client install directory") and does not start it.
 **Observed**: Steam's `content_log.txt` shows the subscriptions' download starting when the first process that queried them ran as app 233860, and
 `DownloadItem` only raising its priority ("Priority First"); `GetItemDownloadInfo` reported 0 bytes throughout, so progress is the installed count.
+
+## Workshop subscribe
+
+**Subscribe** in the endorsed-port question has the running Steam client subscribe the account to the ports and download them
+(`WorkshopSubscribe`, `SteamUgc`, `SteamLibrary` in `Meitou.Core/Steam`), as the button on their workshop pages does.
+
+- The Steam API library is one the user already has (`SteamLibrary.Locate`): the Kenshi install's `steam_api64.dll` on Windows, the Steam
+  client's `libsteam_api.dylib` on macOS ([Workshop sync](#workshop-sync-macos)). Without one (a Kenshi without Steam, no Kenshi folder
+  set, Linux: the install's library is a Windows DLL) the question has no Subscribe button, only the workshop pages.
+- Kenshi's library is an older generation than the client's: no `SteamAPI_InitFlat` (so `SteamAPI_Init`, which gives no reason) and no
+  versioned accessors, so `ISteamUGC` and `ISteamUtils` come from the `SteamClient` export's `ISteamClient` by version string,
+  `STEAMUGC_INTERFACE_VERSION008` and `SteamUtils008`. **Verified** (Kenshi 1.0.68, Steam): those strings are in `kenshi_x64.exe`, and the
+  DLL exports `SteamAPI_Init`, `SteamClient`, `SteamAPI_GetHSteamUser`/`Pipe`, `SteamAPI_ISteamClient_GetISteamUGC`/`Utils`,
+  `SteamAPI_ISteamUGC_SubscribeItem`/`GetItemState`/`DownloadItem` and `SteamAPI_ISteamUtils_IsAPICallCompleted`/`GetAPICallResult`.
+  A current library's accessors (`SteamAPI_SteamUGC_v0NN`, `SteamAPI_SteamUtils_v0NN`) are found by trying the version numbers.
+- It runs in a child process, the launcher started with `--workshop-subscribe <library> <id>...` (`WorkshopSubscribeChild`,
+  `WorkshopSubscribeRunner`), for the reason the sync does and so a library that misbehaves cannot take the launcher down; the launcher
+  ends it after 4 minutes. Steam is not started.
+- Per item: one already subscribed is left; else `SubscribeItem`, then up to 20 s for its call result
+  (`RemoteStorageSubscribePublishedFileResult_t`, callback 1313: an `EResult`, then the id; 16 bytes on Windows, 12 elsewhere). The item
+  counts as subscribed when the result is OK or its state has Subscribed. `DownloadItem` is then asked for, and the child waits up to
+  90 s for the items to be installed before answering.
+- Afterwards the status line names the ports subscribed to (and says when Steam is still downloading) and the list is read again; a new
+  mod starts enabled. For each port Steam did not subscribe to, a second question gives the reason (Steam not running or not signed in,
+  the item unknown, no answer in time, the child failing) and offers its workshop page instead.
+
+**Verified** (Windows, Kenshi 1.0.68's `steam_api64.dll`, Steam not running): the child loads the library, `SteamAPI_Init` fails, it
+answers "Steam could not be reached" and Steam is not started. **Verified** (same, Steam running, the owner's account, 2026-11-18): the
+child subscribed to item 3841575072, which was not subscribed, and answered `item 3841575072 1` after 11 s with the item's folder in
+`steamapps/workshop/content/233860/`. **Unknown:** whether that success came from the call result or from the item's state, and every
+refusal reason (none was provoked).
 
 ## Continue
 

@@ -2,9 +2,6 @@
   <Folder Name="/launcher/">
     <Project Path="launcher/Meitou.Launcher/Meitou.Launcher.csproj" />
   </Folder>
-  <Folder Name="/PortedMods/">
-    <Project Path="PortedMods/ProvingGrounds/ProvingGrounds.csproj" />
-  </Folder>
   <Folder Name="/services/">
     <Project Path="services/Meitou.Reports/Meitou.Reports.csproj" />
   </Folder>

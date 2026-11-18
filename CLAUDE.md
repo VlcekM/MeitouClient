@@ -57,8 +57,6 @@ drop-in replacement that runs original content and mods unchanged.
 
 ## Code style
 
-`PortedMods/` keeps its authors' style so a new version syncs as a copy; its build files follow the rules below.
-
 - Keep methods short: one job each, roughly a screen at most. Split a longer method into named steps (its body reads as a list of
   calls), and split one you're editing when it has grown past that. Keep every comment that records a fact next to its code.
 - Regions: a class with more than one responsibility gets one `#region` per responsibility, not nested. A region's fields and

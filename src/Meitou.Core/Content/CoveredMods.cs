@@ -12,30 +12,18 @@ public sealed record MatchedItem(ulong Id, long Updated);
 public sealed record BuiltInMod(string? ModName, string? CodeId, string Setting, MatchedItem[] Items);
 
 /// <summary>
-/// An RE_Kenshi mod whose plugin does not run in Meitou, with a code mod on the Steam workshop that does the same, offered as a suggestion
-/// (other ports may exist): the RE_Kenshi mod's <c>.mod</c> name and the workshop items that carry it, and the suggested mod's title,
-/// <c>.mod</c> name and workshop item.
+/// An RE_Kenshi mod whose plugin does not run in Meitou, with a port on the Steam workshop that Meitou endorses (docs/formats/rekenshi.md
+/// "Endorsed ports"; the port's source is its maintainer's, not this repository's): the RE_Kenshi mod's <c>.mod</c> name and the workshop
+/// items that carry it, and the port's title, <c>.mod</c> name, workshop item and maintainer.
 /// </summary>
-public sealed record SuggestedMod(string ModName, MatchedItem[] Items, string By, string ByModName, ulong ByWorkshopId);
+public sealed record EndorsedPort(string ModName, MatchedItem[] Items, string Port, string PortModName, ulong PortWorkshopId, string Maintainer);
 
 /// <summary>
-/// An RE_Kenshi mod whose plugin Meitou runs an official port of in its place (docs/formats/rekenshi.md "Ports"): the mod's <c>.mod</c> name, the
-/// workshop items that carry it, and the port's code mod id, which names its folder under <see cref="CoveredMods.PortsFolder"/>.
-/// </summary>
-public sealed record PortedMod(string ModName, MatchedItem[] Items, string PortId);
-
-/// <summary>
-/// The mods Meitou covers, one table for the game (which takes in a built-in mod's settings and does not run its code mod, and runs a ported
-/// plugin's port) and the launcher (which notes every kind on the Mods page and suggests a code mod for an RE_Kenshi one). A mod matches one
-/// kind, first found of built in, ported, suggested.
+/// The mods Meitou covers, one table for the game (which takes in a built-in mod's settings and does not run its code mod) and the launcher
+/// (which notes both kinds on the Mods page and offers to subscribe to the endorsed port of an RE_Kenshi mod).
 /// </summary>
 public static class CoveredMods
 {
-    /// <summary>
-    /// The folder beside the game's executable that holds the official ports, one folder per port id with its <c>meitou.json</c> and assemblies.
-    /// </summary>
-    public const string PortsFolder = "PortedMods";
-
     /// <summary>
     /// xXDarkrusoXx's RE_Kenshi plugin "Player-Only XP x10" (workshop 3679678086, matched against its 2026-11-07 update).
     /// </summary>
@@ -60,22 +48,22 @@ public static class CoveredMods
     public static IReadOnlyList<BuiltInMod> BuiltIn { get; } = [RekenshiXp, XpPort, SwampTurtleFix];
 
     /// <summary>
-    /// The RE_Kenshi mods with a suggested code mod: Emkej's "Loot-Scoot-Execute" (workshop 3675700748, matched against its 2026-04-26 update,
-    /// and its "MCM fork" 3813852124, its 2026-11-13 update), with "[MeitouClient] Execution".
+    /// Emkej's "Loot-Scoot-Execute" (workshop 3675700748, matched against its 2026-04-26 update, and its "MCM fork" 3813852124, its 2026-11-13
+    /// update), with Jame's "[MeitouClient] Execution".
     /// </summary>
-    public static IReadOnlyList<SuggestedMod> Suggested { get; } =
-    [
-        new("Loot-Scoot-Execute", [new(3675700748, 1777211773), new(3813852124, 1794544300)], "[MeitouClient] Execution", "Execution", 3838346946),
-    ];
+    static readonly EndorsedPort Execution = new(
+        "Loot-Scoot-Execute", [new(3675700748, 1777211773), new(3813852124, 1794544300)], "[MeitouClient] Execution", "Execution", 3838346946, "Jame");
 
     /// <summary>
-    /// The RE_Kenshi mods whose plugin has an official port (source in the repo's <c>PortedMods</c> folder, shipped with the game): Shutori's
-    /// "Proving Grounds" (workshop 3774745195, matched against its 2026-09-26 update) with roscatoday's "Proving Grounds for Meitou".
+    /// Shutori's "Proving Grounds" (workshop 3774745195, matched against its 2026-09-26 update), with roscatoday's "[Meitou] Proving Grounds".
     /// </summary>
-    public static IReadOnlyList<PortedMod> Ported { get; } =
-    [
-        new("Proving Grounds", [new(3774745195, 1790470536)], "ProvingGroundsMeitou"),
-    ];
+    static readonly EndorsedPort ProvingGrounds = new(
+        "Proving Grounds", [new(3774745195, 1790470536)], "[Meitou] Proving Grounds", "ProvingGroundsMeitou", 3841575072, "roscatoday");
+
+    /// <summary>
+    /// The RE_Kenshi mods with an endorsed port on the Steam workshop.
+    /// </summary>
+    public static IReadOnlyList<EndorsedPort> Endorsed { get; } = [Execution, ProvingGrounds];
 
     /// <summary>
     /// The public wishlist of RE_Kenshi mods for Meitou (the roadmap's compatibility sheet), where players ask for one to be covered.
@@ -95,38 +83,16 @@ public static class CoveredMods
         BuiltIn.FirstOrDefault(c => c.ModName == modName || (codeId is not null && c.CodeId == codeId));
 
     /// <summary>
-    /// The entry suggesting a code mod for <paramref name="mod"/>, an RE_Kenshi plugin without code of its own, by its <c>.mod</c> name or its
-    /// workshop item; null when none does.
+    /// The endorsed port of <paramref name="mod"/>, an RE_Kenshi plugin without code of its own, by its <c>.mod</c> name or its workshop item;
+    /// null when it has none.
     /// </summary>
-    public static SuggestedMod? SuggestionOf(ModInfo mod)
+    public static EndorsedPort? PortOf(ModInfo mod)
     {
-        if (!mod.HasNativePlugin || mod.HasCode || PortOf(mod) is not null) return null;
+        if (!mod.HasNativePlugin || mod.HasCode) return null;
 
         ulong? item = WorkshopId(mod);
-        return Suggested.FirstOrDefault(r => r.ModName == mod.Name || (item is { } id && r.Items.Any(i => i.Id == id)));
+        return Endorsed.FirstOrDefault(r => r.ModName == mod.Name || (item is { } id && r.Items.Any(i => i.Id == id)));
     }
-
-    /// <summary>
-    /// The entry porting the plugin of <paramref name="mod"/>, a mod without code of its own that Meitou has not built in, by its <c>.mod</c> name or
-    /// its workshop item; null when none does. The table names each mod, so its <c>RE_Kenshi.json</c> is not checked.
-    /// </summary>
-    public static PortedMod? PortOf(ModInfo mod) => PortOf(mod, Ported);
-
-    /// <summary>
-    /// The entry of <paramref name="ported"/> porting <paramref name="mod"/>'s plugin, as <see cref="PortOf(ModInfo)"/>.
-    /// </summary>
-    public static PortedMod? PortOf(ModInfo mod, IReadOnlyList<PortedMod> ported)
-    {
-        if (mod.HasCode || BuiltInOf(mod) is not null) return null;
-
-        ulong? item = WorkshopId(mod);
-        return ported.FirstOrDefault(p => p.ModName == mod.Name || (item is { } id && p.Items.Any(i => i.Id == id)));
-    }
-
-    /// <summary>
-    /// The folder of the port <paramref name="ported"/> names, under <see cref="PortsFolder"/> of the game in <paramref name="gameFolder"/>.
-    /// </summary>
-    public static string PortFolder(string gameFolder, PortedMod ported) => Path.Combine(gameFolder, PortsFolder, ported.PortId);
 
     /// <summary>
     /// When the workshop copy of <paramref name="mod"/> was updated, if after the version <paramref name="items"/> was matched against
@@ -143,11 +109,11 @@ public static class CoveredMods
     }
 
     /// <summary>
-    /// Whether <paramref name="mods"/> hold the code mod <paramref name="suggested"/> names: a workshop mod by its item, a local mod (a copy in
-    /// Kenshi's mods folder) by its <c>.mod</c> name.
+    /// Whether <paramref name="mods"/> hold the port <paramref name="port"/> names: a workshop mod by its item, a local mod (a copy in Kenshi's
+    /// mods folder) by its <c>.mod</c> name.
     /// </summary>
-    public static bool HasSuggestion(SuggestedMod suggested, IEnumerable<ModInfo> mods) =>
-        mods.Any(m => WorkshopId(m) is { } id ? id == suggested.ByWorkshopId : m.Name == suggested.ByModName);
+    public static bool HasPort(EndorsedPort port, IEnumerable<ModInfo> mods) =>
+        mods.Any(m => WorkshopId(m) is { } id ? id == port.PortWorkshopId : m.Name == port.PortModName);
 
     /// <summary>
     /// The workshop item of <paramref name="mod"/>: a workshop mod's folder is named by its published file id. Null for a local mod.

@@ -88,25 +88,14 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     public BuiltInMod? BuiltIn => CoveredMods.BuiltInOf(Mod.Name, Code.Id);
 
     /// <summary>
-    /// The entry suggesting a code mod in place of this RE_Kenshi mod (<see cref="CoveredMods.SuggestionOf"/>); null when none does.
+    /// The endorsed port of this RE_Kenshi mod on the Steam workshop (<see cref="CoveredMods.PortOf"/>); null when it has none.
     /// </summary>
-    public SuggestedMod? Suggestion => CoveredMods.SuggestionOf(Mod);
+    public EndorsedPort? Port => CoveredMods.PortOf(Mod);
 
     /// <summary>
-    /// The entry of the official port the game runs in place of this RE_Kenshi mod's plugin (<see cref="CoveredMods.PortOf"/>); null when none.
+    /// Whether the mod list holds <see cref="Port"/>'s mod (set with the list), so the row does not offer it.
     /// </summary>
-    public PortedMod? Port => CoveredMods.PortOf(Mod);
-
-    /// <summary>
-    /// Whether this code mod has the id of a port the game ships (<see cref="CoveredMods.Ported"/>), so the game runs its own copy instead while the
-    /// ported mod is enabled.
-    /// </summary>
-    bool Shipped => Code.Id is { } id && CoveredMods.Ported.Any(p => p.PortId == id);
-
-    /// <summary>
-    /// Whether the mod list holds <see cref="Suggestion"/>'s code mod (set with the list), so the row offers no link to it.
-    /// </summary>
-    public bool SuggestionInstalled
+    public bool PortInstalled
     {
         get;
         set
@@ -114,25 +103,25 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
             if (field == value) return;
             field = value;
             Changed(nameof(Notes));
-            Changed(nameof(SuggestionPage));
+            Changed(nameof(PortPage));
         }
     }
 
     /// <summary>
-    /// The Steam workshop page of the suggested code mod while it is not installed; null otherwise, and the row shows no button.
+    /// The Steam workshop page of the endorsed port while it is not installed; null otherwise, and the row shows no button.
     /// </summary>
-    public Uri? SuggestionPage => Suggestion is { } r && !SuggestionInstalled ? CoveredMods.WorkshopPage(r.ByWorkshopId) : null;
+    public Uri? PortPage => Port is { } r && !PortInstalled ? CoveredMods.WorkshopPage(r.PortWorkshopId) : null;
 
     /// <summary>
-    /// The text of the button that opens <see cref="SuggestionPage"/>.
+    /// The text of the button that offers <see cref="Port"/>.
     /// </summary>
-    public string? SuggestionLabel => Suggestion is { } r ? Loc.Format(LauncherText.Translate("View {1}"), r.By) : null;
+    public string? PortLabel => Port is null ? null : LauncherText.Translate("Get the port");
 
     /// <summary>
-    /// The tip of the button that opens <see cref="SuggestionPage"/> (bound: the list's own text is not translated with the window's labels).
+    /// The tip of the button that offers <see cref="Port"/> (bound: the list's own text is not translated with the window's labels).
     /// </summary>
-    public string? SuggestionTip => Suggestion is null ? null
-        : LauncherText.Translate("Open the Steam workshop page of a Meitou mod that does the same; subscribing is up to you");
+    public string? PortTip => Port is null ? null
+        : LauncherText.Translate("Subscribe to this mod's Meitou port on the Steam workshop, or open its page");
 
     /// <summary>
     /// The tip of the row's link icon, which opens <see cref="WorkshopPage"/>; null (no tip) for a local mod, whose row has no icon.
@@ -140,18 +129,17 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     public string? PageTip => WorkshopPage is null ? null : LauncherText.Translate("Open its Steam workshop page");
 
     /// <summary>
-    /// The row's notes: built into Meitou, a code mod, an ignored or ported RE_Kenshi plugin, its file rebinds and sound banks and a suggested code
-    /// mod, an update since the cover was matched, its dependencies, its game version, why it will not load and the mods it blanks.
+    /// The row's notes: built into Meitou, a code mod, an ignored RE_Kenshi plugin, its file rebinds and sound banks and its endorsed port, an
+    /// update since the cover was matched, its dependencies, its game version, why it will not load and the mods it blanks.
     /// </summary>
     public string Notes => string.Join(" · ", new[]
     {
         CoveredNote,
-        Mod.HasCode && BuiltIn is null && !Shipped ? LauncherText.Translate("Code mod: runs C# code of its own") : null,
-        Shipped ? LauncherText.Translate("MeitouClient ships this port itself: this copy is not run while the original mod is enabled") : null,
-        PluginNote,
+        Mod.HasCode && BuiltIn is null ? LauncherText.Translate("Code mod: runs C# code of its own") : null,
+        Mod.HasNativePlugin && !Mod.HasCode && BuiltIn is null ? LauncherText.Translate("RE_Kenshi plugin: its DLLs are ignored in Meitou") : null,
         Mod.ReKenshi is { FileRebinds.Count: > 0 } ? LauncherText.Translate("RE_Kenshi file rebinds: applied to the map files") : null,
         Mod.ReKenshi is { SoundBanks.Count: > 0 } ? LauncherText.Translate("RE_Kenshi sound banks: loaded before the game's") : null,
-        SuggestionNote,
+        PortNote,
         UpdatedNote,
         Manifest is { DependsOn.Count: > 0 } m ? Loc.Format(LauncherText.Translate("Requires {1}"), string.Join(", ", m.DependsOn)) : null,
         Manifest is { LoadAfter.Count: > 0 } a ? Loc.Format(LauncherText.Translate("Loads after {1}"), string.Join(", ", a.LoadAfter)) : null,
@@ -165,21 +153,6 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
         .OfType<string>());
 
     /// <summary>
-    /// The note for a mod without code of its own that Meitou has not built in: the port Meitou runs in its plugin's place (<see cref="Port"/>), or
-    /// for another RE_Kenshi plugin that its DLLs are ignored; null otherwise.
-    /// </summary>
-    string? PluginNote => Mod.HasCode || BuiltIn is not null ? null
-        : Port is not null ? LauncherText.Translate(PortText)
-        : Mod.HasNativePlugin ? LauncherText.Translate("RE_Kenshi plugin: its DLLs are ignored in Meitou")
-        : null;
-
-    /// <summary>
-    /// The note for a mod Meitou runs a port of (<see cref="Port"/>).
-    /// </summary>
-    const string PortText = "This mod has no official MeitouClient version, so the MeitouClient team provides a port: it runs on its own, "
-        + "nothing more to install";
-
-    /// <summary>
     /// The note for <see cref="BuiltIn"/>: the Meitou setting the feature became, and that the mod is not run (a plugin's DLLs never are, a code
     /// mod is skipped); null when not built in.
     /// </summary>
@@ -187,11 +160,11 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
         : Loc.Format(LauncherText.Translate("Built into Meitou: {1}; this mod is not run"), LauncherText.Translate(built.Setting));
 
     /// <summary>
-    /// The note for <see cref="Suggestion"/>: the suggested code mod, and whether the list holds it; null when none is suggested.
+    /// The note for <see cref="Port"/>: the port, its maintainer, and whether the list holds it; null when the mod has none.
     /// </summary>
-    string? SuggestionNote => Suggestion is not { } r ? null
-        : SuggestionInstalled ? Loc.Format(LauncherText.Translate("One Meitou mod that does the same: {1} (installed)"), r.By)
-        : Loc.Format(LauncherText.Translate("One Meitou mod that does the same: {1}"), r.By);
+    string? PortNote => Port is not { } r ? null
+        : PortInstalled ? Loc.Format(LauncherText.Translate("Meitou port, endorsed by Meitou: {1} by {2} (installed)"), r.Port, r.Maintainer)
+        : Loc.Format(LauncherText.Translate("Meitou port on the Steam workshop, endorsed by Meitou: {1} by {2}"), r.Port, r.Maintainer);
 
     /// <summary>
     /// The note for a covered workshop mod updated after the version its cover was matched against (<see cref="CoveredMods.UpdatedSince"/>): the
@@ -201,7 +174,7 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     {
         get
         {
-            var items = BuiltIn?.Items ?? Port?.Items ?? Suggestion?.Items;
+            var items = BuiltIn?.Items ?? Port?.Items;
             if (items is null || CoveredMods.UpdatedSince(Mod, items) is not { } updated) return null;
 
             string date = updated.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
@@ -211,10 +184,10 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     }
 
     /// <summary>
-    /// The public wishlist (<see cref="CoveredMods.Wishlist"/>) for an RE_Kenshi plugin Meitou neither builds in, ports nor has a suggestion for, so
-    /// the player can ask for it; null otherwise, and the row shows no Request button.
+    /// The public wishlist (<see cref="CoveredMods.Wishlist"/>) for an RE_Kenshi plugin Meitou neither builds in nor knows a port of, so the
+    /// player can ask for it; null otherwise, and the row shows no Request button.
     /// </summary>
-    public Uri? RequestPage => Mod.HasNativePlugin && !Mod.HasCode && BuiltIn is null && Port is null && Suggestion is null ? CoveredMods.Wishlist : null;
+    public Uri? RequestPage => Mod.HasNativePlugin && !Mod.HasCode && BuiltIn is null && Port is null ? CoveredMods.Wishlist : null;
 
     /// <summary>
     /// The text of the button that opens <see cref="RequestPage"/>.
@@ -251,7 +224,6 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
         || Mod.HasCode
         || BuiltIn is not null
         || Port is not null
-        || Suggestion is not null
         || Blanks.Count > 0;
 
     /// <summary>
@@ -278,8 +250,8 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
         Changed(nameof(Detail));
         Changed(nameof(Notes));
         Changed(nameof(PageTip));
-        Changed(nameof(SuggestionLabel));
-        Changed(nameof(SuggestionTip));
+        Changed(nameof(PortLabel));
+        Changed(nameof(PortTip));
         Changed(nameof(RequestLabel));
         Changed(nameof(RequestTip));
     }
