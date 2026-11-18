@@ -816,7 +816,7 @@ every landed melee blow and bolt, the cagings of the player, the police and kidn
 any two factions, weighted by the victim's `faction importance` and the town it stands in (`PopulationData.TownAt`, its squad's
 `Town`). Engine choices: every striker rates above the 0.1 / 0.15 thresholds; a death is credited only at the killing blow (a later
 bleed-out has no killer); first-aid gratitude on every bandaging update. The attack order and looting change no relation. A
-witness that regards the culprit as friendly takes 20 off on every sweep (`CrimeSystem.BetrayalDelta`). Wars:
+witness that regards the culprit as friendly (slot 126, squad tags included) and cares about the victim takes 20 off once: its squad drops TEMP_ALLY on the culprit and tags it TEMP_ENEMY, so it no longer regards it as friendly (`CrimeSystem.Betrayed`; **Verified**, the witness function `FUN_140854d10`'s ally branch, tags 3 and 4 before the relation call). Testing the faction relation alone, every witness took 20 off every sweep and a town's allies went to war with it within seconds (#948). Wars:
 `PlayerRelations.DeclareWar` / `EndWar` (one direction, the speaker's table; the war flag is not saved). Campaigns and diplomats in the aggro
 (`AggroSystem.Regards`, `FinderDrops`, `LeaveAlone`; [ai-tasks](game/ai-tasks.md#combat-goals)): an enemy Diplomat is tagged NEUTRAL by a player-side looker, and by
 others inside its faction's `biomes`; 16 skips members of a campaign in phase 0 and of a unique platoon; every scored target choice (the fight's, the finders', the

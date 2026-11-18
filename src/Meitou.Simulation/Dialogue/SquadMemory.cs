@@ -162,6 +162,16 @@ public sealed class SquadMemory
     }
 
     /// <summary>
+    /// Clears TEMP_ALLY on the character (<c>FUN_1406788d0</c> with tag 3, <b>Verified</b>): for a player-faction character the squad's player flag
+    /// too, which <see cref="Read"/> takes for its TEMP_ALLY.
+    /// </summary>
+    public void ClearTempAlly(World world, int squad, CharacterId who)
+    {
+        if (world.Characters.TryResolveNext(who, out int s) && world.Characters.Cold(s) is { } c && PlayerSide(world, c)) _tempPlayerAlly.Remove(squad);
+        ClearShort(squad, who, MemoryTag.TempAlly);
+    }
+
+    /// <summary>
     /// Clears a short-term tag on every character of <paramref name="faction"/> the squad remembers (<see cref="ClearShort"/> on each).
     /// </summary>
     public void ClearShortOfFaction(World world, int squad, int faction, int tag)

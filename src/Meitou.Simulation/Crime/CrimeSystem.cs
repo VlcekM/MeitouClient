@@ -420,10 +420,9 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             if (premises && !AggroSystem.IsEnemy(Relations, wf, c.Faction) && Trespasses(world, w, culprit))
                 SetPending(world, culprit, CrimeCode.Trespassing, wf, table.IdOf(w), MinTimer);
             if (c.Pending is not { } p) continue;
-            if (!Reacts(world, wc, c, p)) continue;
-            if (Friendly(wf, c.Faction) && Betrays(p.Code))
-                PlayerRelations.Add(world, Relations, wf, c.Faction, BetrayalDelta, new(RelationCauseType.Crime, culpritId),
-                    $"a friend's crime witnessed ({p.Code})");
+            bool friendly = RegardsFriendly(world, w, culprit);
+            if (!Reacts(world, wc, c, p, friendly)) continue;
+            if (friendly && Betrays(p.Code)) Betrayed(world, wc, culpritId, c.Faction, p.Code);
             // The refresh (FUN_140851f40) skips a culprit that is down: a knocked-out culprit's crime runs out under its witnesses' eyes.
             if (!Bodies.CharacterFacts.Down(c))
             {
@@ -604,10 +603,27 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// <summary>
     /// What a witness's faction loses towards a culprit it regards as friendly that it sees commit a crime against its own faction (the witness
     /// function's ally branch, <c>FUN_140854d10</c>: slot 4 of its table, -20 x 1, <b>Observed</b>; skipped there when the witness's platoon object
-    /// <c>+0x210</c> has <c>+0xa8</c> set, <b>Unknown</b>, not modelled). The game runs it on every perception update while the crime is fresh, here
-    /// on every sweep, so it repeats until the culprit is no longer an ally.
+    /// <c>+0x210</c> has <c>+0xa8</c> set, not modelled). Once per witness squad while its TEMP_ENEMY tag on the culprit lasts (<see cref="Betrayed"/>).
     /// </summary>
     public const float BetrayalDelta = -20;
+
+    /// <summary>
+    /// The witness function's ally branch (<c>FUN_140854d10</c>, <b>Verified</b>): the witness's squad drops TEMP_ALLY on the culprit and tags it
+    /// TEMP_ENEMY, so the squad no longer regards it as friendly (slot 126) and the branch does not run again on the next sweep, then its faction
+    /// loses <see cref="BetrayalDelta"/> towards the culprit's. Without the tag every witness took 20 off on every sweep, and a town's allies went
+    /// hostile to it within seconds of one of them hitting a townsman (#948).
+    /// </summary>
+    void Betrayed(World world, CharacterCold witness, CharacterId culprit, int culpritFaction, CrimeCode code)
+    {
+        if (witness.SquadId >= 0 && world.SystemOf<Dialogue.DialogueSystem>() is { } talk)
+        {
+            talk.Memory.ClearTempAlly(world, witness.SquadId, culprit);
+            talk.Memory.Flag(world, witness.SquadId, culprit, Dialogue.MemoryTag.TempEnemy);
+        }
+
+        var cause = new RelationCause(RelationCauseType.Crime, culprit);
+        PlayerRelations.Add(world, Relations, witness.Faction, culpritFaction, BetrayalDelta, cause, $"a friend's crime witnessed ({code})");
+    }
 
     /// <summary>
     /// The crimes whose witness path reaches the ally branch: every code but Burglary, Looting, Trespassing, Crop Theft and Uniform Theft (their
@@ -874,12 +890,11 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// <summary>
     /// The witness function's tests for one witness and one pending crime (see <see cref="Witnesses"/>).
     /// </summary>
-    bool Reacts(World world, CharacterCold w, CharacterCold culprit, PendingCrime p)
+    bool Reacts(World world, CharacterCold w, CharacterCold culprit, PendingCrime p, bool friendlySuspect)
     {
         int wf = w.Faction, vf = p.VictimFaction;
         if (!Relations.Contains(vf) || Relations.IsHostile(wf, vf) || Factions.Lawless(vf)) return false;
         if (Factions.Books(wf) && Factions.Bandit(vf)) return false;
-        bool friendlySuspect = Friendly(wf, culprit.Faction);
         if (friendlySuspect && vf != wf) return false;
         bool cares = Friendly(wf, vf);
         var victim = world.Characters.TryResolveNext(p.Victim, out int v) ? world.Characters.Cold(v) : null;
