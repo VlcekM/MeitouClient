@@ -2917,7 +2917,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         board.Crowd.Clear();
         board.CrowdEntries.Clear();
 
-        bool populationMoves = platoon is not null && !BoardMoves(board);
+        // Every loaded platoon acts out its package's goals in the original, so its members get full minds. Two kinds stay on the engine's
+        // routine while their package does not travel: a campaign's squad (its march stands for the war packages that are not built) and one a
+        // code mod holds (the mod moves it).
+        bool populationMoves = platoon is not null && PopulationRuns(platoon) && !BoardMoves(board);
         if (populationMoves) EngineMinds(world, squad, board);
 
         for (int k = 0; k < squad.Members.Count; k++) MindAndCrowd(world, squad, board, k, populationMoves);
@@ -3359,17 +3362,26 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// The platoon whose squad this is when the population moves it (a loaded roaming or campaign platoon: not a town's own saved squad, nor a wild
-    /// one); null for any other squad. Every loaded platoon runs its blackboard in the original (<c>FUN_1402732b0</c> from the platoon's slot 27,
+    /// The platoon whose squad this is when it is a loaded roaming or campaign platoon's (not a town's own saved squad, nor a wild one); null for
+    /// any other squad. Such a squad claims no building of its own, and the population moves it only when <see cref="PopulationRuns"/>. Every loaded platoon runs its blackboard in the original (<c>FUN_1402732b0</c> from the platoon's slot 27,
     /// docs/game/ai.md "Blackboard update"), whatever its kind.
     /// </summary>
     Platoon? PlatoonOf(World world, Squad squad) =>
         squad.PlatoonId >= 0 && !squad.Pinned && !squad.Wild ? world.Platoons.Find(squad.PlatoonId) : null;
 
     /// <summary>
+    /// Whether the population, not the squad's blackboard, moves a loaded platoon's squad: a campaign's (<see cref="Platoon.Campaign"/>: the
+    /// campaign march stands for the war package classes, which are not built) and one a code mod holds (<see cref="Platoon.Held"/>). Every other
+    /// loaded platoon acts out its package's goals with full minds, as in the original (<see cref="PlatoonOf"/>). The test never changes while
+    /// the squad walks, so a squad cannot flip between the two kinds of mind on its way.
+    /// </summary>
+    internal static bool PopulationRuns(Platoon platoon) => platoon.Campaign is not null || platoon.Held;
+
+    /// <summary>
     /// Whether the running package moves the squad itself (the trader, the refugee, the shipping and retreat classes): one of its goals travels and a
-    /// mission town is set. Else the population's trip or campaign march moves a platoon's squad and its members keep the engine's routine
-    /// (<see cref="AiMind.Engine"/>), as before the platoons ran a blackboard.
+    /// mission town is set. For a squad the population runs (<see cref="PopulationRuns"/>) the campaign march or the mod moves it otherwise, and
+    /// its members keep the engine's routine (<see cref="AiMind.Engine"/>). It also names the squads whose mission town is the stand-in's target
+    /// at unload and is saved.
     /// </summary>
     internal static bool BoardMoves(Blackboard board)
     {

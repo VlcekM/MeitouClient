@@ -748,9 +748,10 @@ public sealed partial class PopulationSystem
         if (p.Pinned || p.Wild || p.Dead) return;   // a town's own or a wild one: its AI runs it, it has no trips (nor has a dead one)
         if (p.Held) return;   // a code mod runs it (HoldPlatoon)
 
-        // A package that travels (the trader, the shipping classes) moves the squad itself: no trip order meanwhile, and the trip starts afresh when
-        // it gives way. So does a leader obeying its master, which follows it (its Slave list, job 187).
-        if (squad.Ai is { } board && AiSystem.BoardMoves(board) || LeaderObeys(world, squad))
+        // A squad with a blackboard acts out its package's goals itself (every loaded platoon does in the original): no trip order, so the two
+        // never order the leader against each other, and the stand-in chooses afresh once it unloads. So does a leader obeying its master, which
+        // follows it (its Slave list, job 187). The trip is left for a squad the AI does not run (a template without packages).
+        if (squad.Ai is not null || LeaderObeys(world, squad))
         {
             (p.Target, p.WaitLeft, p.Point) = (-1, 0, null);
             return;
