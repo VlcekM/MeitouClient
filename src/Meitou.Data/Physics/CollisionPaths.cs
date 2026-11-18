@@ -95,18 +95,31 @@ public static class CollisionPaths
 
         string name = Path.GetFileName(recordPath.Replace('\\', '/'));
         if (CookedSource(resources, name) is { } cooked) return cooked;
-        if (resources.Find(name, DefaultGroup) is { } byName && File.Exists(byName)) return Rebound(install, byName);
+        if (resources.Find(name, DefaultGroup) is { } byName && File.Exists(byName)) return Rebound(install, resources, byName);
 
         return Resolve(install, recordPath);
     }
 
     /// <summary>
-    /// The XML the game opens through Ogre when no cooked file of its name exists, or the file an enabled mod rebinds it to
-    /// (<see cref="ReKenshiRebinds"/>); null for a rebind to no file (<c>HIDE</c>).
+    /// The enabled mods' rebinds, by the resource index they were read with (<see cref="GameResources.For"/> makes a new one when <c>mods.cfg</c>
+    /// changes), so the collision lookups read them once instead of once per file.
     /// </summary>
-    static string? Rebound(GameInstall install, string xml)
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<OgreScriptResources, ReKenshiRebinds> RebindsByIndex = new();
+
+    /// <summary>
+    /// The XML the game opens through Ogre when no cooked file of its name exists, or the file an enabled mod rebinds it to
+    /// (<see cref="ReKenshiRebinds"/>); null for a rebind to no file (<c>HIDE</c>). Without any rebind, the path itself.
+    /// </summary>
+    static string? Rebound(GameInstall install, OgreScriptResources resources, string xml)
     {
-        string target = ReKenshiRebinds.For(install).Redirect(xml);
+        if (!RebindsByIndex.TryGetValue(resources, out var rebinds))
+        {
+            rebinds = ReKenshiRebinds.For(install);
+            RebindsByIndex.AddOrUpdate(resources, rebinds);
+        }
+        if (rebinds.IsEmpty) return xml;
+
+        string target = rebinds.Redirect(xml);
         return ReferenceEquals(target, xml) || File.Exists(target) ? target : null;
     }
 

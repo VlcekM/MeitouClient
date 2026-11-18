@@ -57,6 +57,11 @@ public sealed class ReKenshiRebinds
         For(install).Redirect(GameFiles.Resolve(Path.Combine(install.DataDirectory, relativePath)));
 
     /// <summary>
+    /// Whether no enabled mod rebinds any file: <see cref="Redirect"/> then returns every path as it is.
+    /// </summary>
+    public bool IsEmpty => _targets.Count == 0;
+
+    /// <summary>
     /// <paramref name="path"/> (a file the game would open) or the file an enabled mod rebinds it to; a hidden file becomes a path where nothing is.
     /// </summary>
     public string Redirect(string path)

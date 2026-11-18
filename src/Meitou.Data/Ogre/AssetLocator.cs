@@ -32,6 +32,11 @@ public sealed class AssetLocator
     /// animation and skeleton files thousands of times while loading. A name not found is looked for again next time.
     /// </summary>
     readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Path, string How)> _found = new();
+    /// <summary>
+    /// The files found and what an enabled mod rebinds each to (null: hidden), so a rebind's key is worked out once per file; filled only when some
+    /// mod rebinds a file.
+    /// </summary>
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, string?> _rebound = new(StringComparer.Ordinal);
 
     /// <summary>
     /// A locator for <paramref name="install"/>; the indexes are made on first use.
@@ -67,20 +72,26 @@ public sealed class AssetLocator
             return known.Path;
         }
 
-        var path = Rebound(Search(name, out how));
+        var found = Search(name, out how);
+        var path = Rebound(found);
+        if (path is not null && !ReferenceEquals(path, found)) how = "RE_Kenshi rebind";
         if (path is not null) _found.TryAdd(name, (path, how));
         return path;
     }
 
     /// <summary>
     /// <paramref name="path"/> (a file found), or the file an enabled mod rebinds it to; null for none found or a rebind to no file (<c>HIDE</c>).
+    /// Without any rebind, the path itself and no work.
     /// </summary>
     string? Rebound(string? path)
     {
-        if (path is null) return null;
+        if (path is null || _rebinds.Value.IsEmpty) return path;
+        if (_rebound.TryGetValue(path, out var known)) return known;
 
         string target = _rebinds.Value.Redirect(path);
-        return ReferenceEquals(target, path) || File.Exists(target) ? target : null;
+        string? result = ReferenceEquals(target, path) || File.Exists(target) ? target : null;
+        _rebound.TryAdd(path, result);
+        return result;
     }
 
     /// <summary>
