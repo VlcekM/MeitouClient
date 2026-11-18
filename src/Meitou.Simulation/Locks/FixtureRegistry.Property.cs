@@ -494,7 +494,8 @@ public sealed partial class FixtureRegistry
         && saved.Strings.GetValueOrDefault(ResidentRuins.ResidentsTemplateKey) == b.ResidentsTemplate;
 
     /// <summary>
-    /// Writes a property's Meitou keys into its building state: its rebuild site's state when it has one.
+    /// Writes a property's Meitou keys into its building state: its rebuild site's state when it has one; a bought house's owner and its empty
+    /// <c>residents</c> link (docs/formats/save.md "Zone files").
     /// </summary>
     void WriteProperty(string building, FcsRecord state)
     {
@@ -513,6 +514,10 @@ public sealed partial class FixtureRegistry
         state.Strings["owner faction ID"] = p.Data.Factions[p.Owner].Id;
         state.Bools["sell home"] = false;
         state.Bools["is public night"] = false;
+
+        // Nobody lives in a bought house: the original's save of one has no residents link (Observed, ShopCounterSold; no player-owned building
+        // of three original saves has one), where the record kept the evicted squad's.
+        if (p.Purchased) Hand.Null.Write(state, "residents");
     }
 
     /// <summary>
