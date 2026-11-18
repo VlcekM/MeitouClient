@@ -31,6 +31,8 @@ items); the launcher never downloads or hosts mods.
   `osx-x64`, `osx-arm64`). Legacy Mac assets append `-legacy` to the RID. The legacy launcher selects only those assets and uses
   matching Velopack channels (`osx-x64-legacy`, `osx-arm64-legacy`), so self-updates stay on .NET 10. Its pack ID and app title are
   `MeitouLauncherLegacy` / `Meitou Launcher Legacy`; installed games live in `versions-legacy/`, separately from standard builds.
+  A release's `Meitou-<version>-refs.zip` is the code-mod [reference pack](modding.md#reference-pack); no launcher reads it, as `Releases`
+  matches only the asset named for its own channel.
   Settings are shared; moving the installed versions to a new install folder moves both build families. A release with no matching zip is listed but not installable.
 - The list comes from the REST API without a token (60 requests an hour per IP). Every page is read (`per_page=100`, until a short page),
   cached together with page 1's ETag in `releases-cache.json`; an unchanged page 1 is a 304 that costs no quota and keeps the cache. Downloads use the asset URLs, which don't count

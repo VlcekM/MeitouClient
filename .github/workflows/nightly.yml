@@ -1,5 +1,6 @@
 # Nightly pre-release twice a day (05:00 nightly, 16:00 daily, UTC) or by hand, when there are game changes since the last v* tag: the same
 # zips as release.yml (tools/scripts/package-release.ps1), tagged v<X.Y.Z+1>-nightly.<yyyymmdd>[.<n>], never marked Latest (docs/launcher.md).
+# The code-mod reference pack is added afterwards, when it built, as in release.yml.
 name: Nightly
 
 on:
@@ -111,6 +112,39 @@ jobs:
           compression-level: 0
           if-no-files-found: error
 
+  # The reference pack code mods compile against (tools/scripts/package-references.ps1, docs/modding.md "Reference pack"), one zip for every
+  # platform. Nothing waits on it: the release job does not need this job, so a failure here leaves the release as it would have been,
+  # without the pack; references-attach adds the zip to the published release afterwards. Read-only: it publishes nothing itself.
+  references:
+    needs: version
+    if: needs.version.outputs.skip != 'true'
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            11.0.x
+            10.0.x
+
+      - name: Package references
+        shell: pwsh
+        run: ./tools/scripts/package-references.ps1 -Version "${{ needs.version.outputs.version }}" -Output out -Work "$env:RUNNER_TEMP/references"
+
+      # Not named zip-*: the release job downloads that pattern and must never see this zip.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: refs-zip
+          path: out/Meitou-${{ needs.version.outputs.version }}-refs.zip
+          compression-level: 0
+          if-no-files-found: error
+
   release:
     needs: [version, package]
     runs-on: ubuntu-latest
@@ -181,6 +215,23 @@ jobs:
           } else {
             Invoke-RestMethod -Uri $env:WEBHOOK -Method Post -ContentType 'application/json; charset=utf-8' -Body $bytes
           }
+
+  # Adds the reference pack to the release once both exist; skipped when either failed, never undoing the release.
+  references-attach:
+    needs: [version, release, references]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: refs-zip
+          path: out
+
+      - name: Attach the reference pack
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: gh release upload "v$env:VERSION" "out/Meitou-$env:VERSION-refs.zip" --repo "$env:GITHUB_REPOSITORY"
 
   # The day's first nightly becomes a benchmark target (bench/README.md).
   bench-target:

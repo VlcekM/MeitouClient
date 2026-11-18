@@ -1,0 +1,21 @@
+<Project>
+
+  <!-- MeitouClient's reference pack for code mods (docs/modding.md "Reference pack"). A mod's project imports it:
+         <Import Project="<pack folder>/Meitou.Mod.targets" />
+       and gets references to the five assemblies the game supplies at run time (MeitouClient, Meitou.Simulation, Meitou.Core, Meitou.Data,
+       0Harmony) for its TargetFramework (net11.0 for the standard builds, net10.0 for the legacy macOS ones), none copied to the mod's output.
+       The game's other libraries (Bepu, DotRecast, Silk.NET and the rest) are referenced the same way, so a member typed in one compiles too.
+       The paths use only MSBuild's own MSBuildThisFileDirectory and the mod's TargetFramework, read when items are evaluated, after every
+       property: no property of the mod's can collide with them, and the Import may sit anywhere in the project. -->
+
+  <ItemGroup>
+    <!-- Every assembly of the set, named by path: the four Meitou assemblies, 0Harmony and the game's libraries. -->
+    <Reference Include="$(MSBuildThisFileDirectory)$(TargetFramework)/ref/*.dll" Private="false" />
+  </ItemGroup>
+
+  <Target Name="MeitouCheckReferencePack" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(MSBuildThisFileDirectory)$(TargetFramework)/ref/MeitouClient.dll')"
+           Text="This reference pack has no '$(TargetFramework)' set. Target net11.0 (standard builds) or net10.0 (legacy macOS builds)." />
+  </Target>
+
+</Project>
