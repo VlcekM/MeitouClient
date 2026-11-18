@@ -457,16 +457,20 @@ holds refuses the second mod.
   its own (`WeaponClassNames`; the class's number is internal, from 1000000 up). Every mod naming a class shares it, so prefix the name with the
   mod's id (`mymod.whip`), as skill ids. Defence works as for any weapon: one that can block never dodges, so a class's dodges serve only its
   weapons with `can block` off (and fist-category ones), and a block stops only blows of its own direction, so a class that blocks needs one per
-  direction (the stock sets have six: up, left, right, thrust, up rear, right rear). With no class attack fitting, a person falls back to the
-  unarmed techniques, as with any weapon; blocks and dodges have no fallback, so a class with none of its own neither blocks nor dodges, but a
-  stumble break-out with no stumble dodge of the class takes those of the weapon's own `skill category` (base data: "Dodge back fly" and "Dodge back
-  (copy for stumble)", flagged for the six skill classes and Unarmed; a base category of 6, 7 or 9 and up has none). The load log warns (`warning
-  weapon class '<name>'`) of a class named only by techniques, only by weapons, or with no attack technique, which is usually a misspelled name. The
-  technique's clip is found by name as any person's technique's; keep its `animal` at 0 (9 and up files its clip among the animals'). Classes are
-  made for people's weapons: an animal whose natural weapon names one picks from it too, and plays a clip only if its skeleton has one of that name;
-  a race's `fists lv1` naming one is not used (fists are not a weapon in hand). Everything else (skill, stance, two-arm rule, the Current Skill
-  line) follows the weapon's `skill category`, its override and `meitou skill`. Leave the techniques' weapon flags off: the original game, and
-  Meitou without the class, read the weapon as its `skill category` and the techniques fit no weapon then.
+  direction (the stock sets have six: up, left, right, thrust, up rear, right rear). When no class attack fits the moment (the target beyond every
+  class attack's reach, the skill outside their `min skill` and `max skill`, the wrong posture, a needed limb out), a person throws an unarmed one
+  at its Martial Arts, as the original does for any weapon ([combat](game/combat.md#attack-technique-choice)), and it walks in only as close as the
+  longest reach it had: give a class an attack reaching as far as the unarmed ones (`attack distance` 13 or more; every stock class has "heavy
+  downcut v2" at 25) and ground attacks (`is prone`), or its wielders mix in kicks and punches. Blocks and dodges have no fallback, so a class with
+  none of its own neither blocks nor dodges, but a stumble break-out with no stumble dodge of the class takes those of the weapon's own `skill
+  category` (base data: "Dodge back fly" and "Dodge back (copy for stumble)", flagged for the six skill classes and Unarmed; a base category of 6, 7
+  or 9 and up has none). The load log warns (`warning weapon class '<name>'`) of a class named only by techniques, only by weapons, or with no
+  attack technique, which is usually a misspelled name. The technique's clip is found by name as any person's technique's; keep its `animal` at 0 (9
+  and up files its clip among the animals'). Classes are made for people's weapons: an animal whose natural weapon names one picks from it too, and
+  plays a clip only if its skeleton has one of that name; a race's `fists lv1` naming one is not used (fists are not a weapon in hand). Everything
+  else (skill, stance, two-arm rule, the Current Skill line) follows the weapon's `skill category`, its override and `meitou skill`. Leave the
+  techniques' weapon flags off: the original game, and Meitou without the class, read the weapon as its `skill category` and the techniques fit no
+  weapon then.
   To enter the fields in the construction set, add `meitou skill: "" "A code mod's skill this weapon uses"` and `meitou class: "" "Weapon class"`
   under `[WEAPON]` and `meitou class: "" "Weapon class"` under `[COMBAT_TECHNIQUE]` in the install's `fcs.def`. Steam's file check and game updates
   put back the stock `fcs.def` and so remove the lines (add them again). The editor keeps a field `fcs.def` does not declare through a load and a
