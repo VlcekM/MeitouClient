@@ -109,6 +109,12 @@ holding files to matching base resource group, default General. Skip `leveldata`
 `newland/leveldata`, `locale`, translation folders. Add mod root only for files other than
 `.mod`, `.translation`, `_`-prefixed metadata/images.
 
+## MyGUI XML
+
+**Observed** (`AppearanceManager::loadEditorXMLData`, `FUN_140077090`): the game reads XML such as a race's `editor limits` with
+`MyGUI::xml::Document::open` and reads attributes with `Element::findAttribute`. A tag may repeat an attribute; the first is used.
+AnimeRace Face+'s `asd*_EditorData.xml` (Workshop 3660471163) repeat `mid` on `Neck width`, which a strict XML parser rejects.
+
 ## Format inventory
 
 **Observed** counts under `data/`; confidence and detailed verification live in each reference.
