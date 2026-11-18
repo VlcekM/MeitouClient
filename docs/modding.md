@@ -372,11 +372,12 @@ holds refuses the second mod.
   ([save](formats/save.md#compatibility-exceptions)), so it follows the character through squad moves and recruiting, and set again with its amounts
   at a load. An effect of a mod not running now is kept and saved again, not shown, adding nothing, its time standing still;
   `StatusEffects.Forget(stats, id)` drops any id, registered or not (an effect a mod renamed, or one of a mod that is gone). Effects enter the state
-  hash while a character holds one. Apply, Remove and Forget run from the mod's system outside the parallel phases, as stat modifiers. Refused: a
-  bad id (1 to 48 letters, digits, `_`, `.`, `-`), an id another effect has (case-insensitive), a name over 32 characters, `MaxStacks` below 1, an
-  unknown tone or stacking, a null list or description, or a modifier on a stat without storage, on a storage another of its modifiers names (Medic,
-  HiveMedic and Vet share one), or whose amount, or amount times `MaxStacks`, is not finite. With no effect registered the tick step does nothing,
-  and a save without effect keys makes, saves and hashes nothing. Engine API, not in the original.
+  hash while a character holds one. Apply, Remove and Forget run from the mod's system outside the parallel phases, as stat modifiers. `Forget`
+  drops any mod's effect, by design (it is the cure for orphans), so a mod forgets only ids it knows to be its own or orphaned. Refused: a bad id (1
+  to 48 letters, digits, `_`, `.`, `-`), an id another effect has (case-insensitive), a blank name or one over 32 characters, `MaxStacks` below 1,
+  an unknown tone or stacking, a null list or description, or a modifier on a stat without storage, on a storage another of its modifiers names
+  (Medic, HiveMedic and Vet share one), or whose amount, or amount times `MaxStacks`, is not finite. With no effect registered the tick step does
+  nothing, and a save without effect keys makes, saves and hashes nothing. Engine API, not in the original.
 - **Commands:** a mod's own `SimCommand` types, queued with `Enqueue` and handled in its system's `Inputs`.
 - **Player squads on AI packages** (`Meitou.Simulation.Ai`, [rules](simulation.md#autonomous-player-squads)): `SetSquadAutonomy(squadId, on)` lets
   the AI run a player's squad; then `ChangeAi(squadId, packageId)` and `StartContract(squadId, packageId, hours)` give it packages as dialogue's

@@ -68,15 +68,21 @@ public static class StatusEffects
     }
 
     /// <summary>
-    /// Adds <paramref name="effect"/> after the others, with a copy of its stat amounts; throws when <see cref="Refusal"/> refuses it.
+    /// Adds <paramref name="effect"/> after the others, with a copy of its stat amounts taken now; throws when <see cref="Refusal"/> refuses it.
     /// </summary>
-    public static void Add(StatusEffect effect)
+    public static void Add(StatusEffect effect) => Add(effect, [.. effect.Modifiers]);
+
+    /// <summary>
+    /// Adds <paramref name="effect"/> after the others with <paramref name="modifiers"/>, the copy of its stat amounts taken when the mod asked
+    /// (<c>ModContext.AddStatusEffect</c>), so a later change of the mod's list does nothing; throws when <see cref="Refusal"/> refuses it with them.
+    /// </summary>
+    public static void Add(StatusEffect effect, StatusEffectModifier[] modifiers)
     {
-        if (Refusal(effect, []) is { } refusal) throw new ArgumentException(refusal, nameof(effect));
+        if (Refusal(effect with { Modifiers = modifiers }, []) is { } refusal) throw new ArgumentException(refusal, nameof(effect));
 
         var byId = new Dictionary<string, StatusEffectEntry>(s_byId, StringComparer.Ordinal)
         {
-            [effect.Id] = new StatusEffectEntry(effect, [.. effect.Modifiers]),
+            [effect.Id] = new StatusEffectEntry(effect, modifiers),
         };
         s_byId = byId;
         s_all = [.. s_all, effect];
@@ -108,18 +114,25 @@ public static class StatusEffects
     /// </summary>
     static string? ModifierRefusal(StatusEffect effect)
     {
-        var storages = new HashSet<StatsEnumerated>();
+        var storages = new Dictionary<StatsEnumerated, StatsEnumerated>();
         foreach (var m in effect.Modifiers)
         {
             var storage = StatsInfo.StorageOf(m.Stat);
             if (storage == StatsEnumerated.None) return $"Status effect '{effect.Id}': {m.Stat} has no stored value to modify.";
-            if (!storages.Add(storage)) return $"Status effect '{effect.Id}': two modifiers change the storage of {m.Stat}.";
+            if (!storages.TryAdd(storage, m.Stat)) return SharedStorage(effect.Id, storages[storage], m.Stat);
             if (!float.IsFinite(m.Amount) || !float.IsFinite(m.Amount * effect.MaxStacks))
                 return $"Status effect '{effect.Id}': a modifier's amount, and that times its most stacks, must be finite.";
         }
 
         return null;
     }
+
+    /// <summary>
+    /// The refusal of two modifiers on one stored value: the same stat twice, or two stats that share one (Medic, HiveMedic and Vet).
+    /// </summary>
+    static string SharedStorage(string id, StatsEnumerated first, StatsEnumerated second) => first == second
+        ? $"Status effect '{id}': two modifiers change {first}; give one modifier with the sum."
+        : $"Status effect '{id}': {first} and {second} share one stored value; give one modifier with the sum.";
 
     #endregion
 
@@ -129,7 +142,11 @@ public static class StatusEffects
     /// Takes effect <paramref name="id"/> off <paramref name="stats"/>' character with its stat amounts, registered or not (an effect of a mod that is
     /// gone, or an id a mod renamed); false when the character did not have it. From a mod's system outside the parallel phases.
     /// </summary>
-    public static bool Forget(CharacterStats stats, string id) => stats.EffectsOrNull is { } effects && effects.Remove(id, stats);
+    public static bool Forget(CharacterStats stats, string id)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+        return stats.EffectsOrNull is { } effects && effects.Remove(id, stats);
+    }
 
     /// <summary>
     /// The ticks of <paramref name="hours"/> game hours, at least 1, rounded up; -1 for positive infinity.
