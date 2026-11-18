@@ -474,7 +474,22 @@ static class SaveProbe
         var bounties = c.Bounties?.Entries.Select(e => $"{probe.Faction(e.Faction)}:{e.Amount}{(e.Claimed ? "/claimed" : "")}"
             + (relations.Contains(e.Faction) && relations.Contains(c.Faction) ? $" relation={relations.Get(e.Faction, c.Faction):F0}" : "")) ?? [];
         return $"pending=[{pending}] bounties=[{string.Join(", ", bounties)}] recentlyWanted={c.RecentlyWanted:F0} freed={c.Freed} "
-            + $"escaped={c.Escaped} ordered={c.Ordered} row={c.Running?.Row} imprisoned={c.IsImprisoned} squadEnemies={enemies}";
+            + $"escaped={c.Escaped} ordered={c.Ordered} row={c.Running?.Row} imprisoned={c.IsImprisoned} squadEnemies={enemies} "
+            + $"door=[{DoorWork(probe, slot, c)}]";
+    }
+
+    /// <summary>
+    /// The door, gate or lock the character works (a bash, or its way through a locked door): the fixture with its owner and place, whether it is
+    /// a way through, an errand or an order, the building the character stands in and its goal; "-" when it works none.
+    /// </summary>
+    static string DoorWork(ProbeWorld probe, int slot, CharacterCold c)
+    {
+        if (c.Bashing is not { } id) return "-";
+
+        var f = probe.World.Fixtures.Find(id);
+        string fixture = f is null ? id : $"{id} {f.Kind} gate={f.IsGate} owner={probe.Faction(f.Owner)} building={f.Building} at={f.Position:F0}";
+        return $"{fixture} way={c.DoorWay is not null} errand={c.BashErrand} ordered={c.BashOrdered} time={c.BashTime:F1} "
+            + $"in={probe.World.Sight.BuildingOf(slot) ?? "-"} goal={c.Ai?.Goal?.Task.Type}";
     }
 
     /// <summary>
