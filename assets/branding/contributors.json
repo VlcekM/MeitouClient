@@ -48,15 +48,15 @@
     "areas": "Mod settings"
   },
   "teppum": {
-    "commits": 124,
-    "areas": "Code mods, Squads, Launcher"
+    "commits": 125,
+    "areas": "Code mods, Squads, Logging, Bounties"
   },
   "robgreen490": {
     "commits": 4,
     "areas": "UI scaling, Inventory rendering"
   },
   "deseven": {
-    "commits": 29,
+    "commits": 32,
     "areas": "Metal rendering, Debug menu"
   },
   "mattresspad": {
