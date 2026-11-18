@@ -312,8 +312,7 @@ public sealed partial class ProductionSystem
                 return (TaskType.DitchAllResources, keep);
 
             if (!PlayerOrders.Holds(world, slot) && cold.Inventory is { } inv
-                && NearestSite(world, at, Settings.HaulRange,
-                    (_, m) => m.Data.IsStorage && m.Storage is not null && Ditchable(inv).Any(item => Stores(m, item))) is { } store)
+                && NearestSite(world, at, float.MaxValue, (s, m) => InFinderRange(s.Position, at) && TakesDitched(m, inv)) is { } store)
                 return (TaskType.DitchAllResources, store);
         }
 
@@ -518,7 +517,7 @@ public sealed partial class ProductionSystem
     /// Whether a job cannot run (the original skips such a job: an unmet start condition the planner cannot meet, or the target finder found nothing;
     /// docs/game/ai-tasks.md "Perma-jobs"). Operating: the building is gone or not an operable machine, its operator places are taken by others, or
     /// it has no work (<see cref="HasWork"/>). Hauling to: the storage is gone, and the character carries nothing it takes and no machine within
-    /// <see cref="ProductionSettings.HaulRange"/> has an output it takes. Automatic machines (152, and 124 on one): <see cref="AutoWork"/>.
+    /// <see cref="InFinderRange"/> has an output it takes. Automatic machines (152, and 124 on one): <see cref="AutoWork"/>.
     /// </summary>
     bool Blocked(World world, CharacterCold cold, PermaJob job)
     {
@@ -648,6 +647,12 @@ public sealed partial class ProductionSystem
             && Fits(store.Storage!, item);
 
     /// <summary>
+    /// A storage machine that takes something 242 Ditch all resources carries off from <paramref name="inv"/>.
+    /// </summary>
+    static bool TakesDitched(Machine m, Items.Inventory inv) =>
+        m.Data.IsStorage && m.Storage is not null && Ditchable(inv).Any(item => Stores(m, item));
+
+    /// <summary>
     /// What 242 Ditch all resources carries off (finder <c>FUN_1405a59a0</c>, its item collection <c>FUN_140749490</c>, <b>Verified</b>): ITEMs with
     /// <c>item function</c> 0 or 15, and food (function 3) but the first, in inventory order.
     /// </summary>
@@ -674,7 +679,7 @@ public sealed partial class ProductionSystem
         ditch ? Ditchable(inv).Where(i => Stores(store, i)) : inv.All().Where(i => Takes(world, store, i));
 
     /// <summary>
-    /// The player's complete machine (not a storage) nearest a storage within <see cref="ProductionSettings.HaulRange"/> whose output (a bench's:
+    /// The player's complete machine (not a storage) nearest a storage within <see cref="InFinderRange"/> whose output (a bench's:
     /// its finished items) holds items the storage takes (ties: the lower site id).
     /// </summary>
     string? HaulSource(World world, BuildSite storage, Machine store)
@@ -688,8 +693,8 @@ public sealed partial class ProductionSystem
                 continue;
 
             float gap = Gap(site.Position, storage.Position);
-            if (gap > Settings.HaulRange || gap > bestGap || (gap == bestGap && string.CompareOrdinal(s.Site, best) > 0)) continue;
-            if (!Offers(s, store)) continue;
+            if (gap > bestGap || (gap == bestGap && string.CompareOrdinal(s.Site, best) > 0)) continue;
+            if (!InFinderRange(site.Position, storage.Position) || !Offers(s, store)) continue;
 
             best = s.Site;
             bestGap = gap;

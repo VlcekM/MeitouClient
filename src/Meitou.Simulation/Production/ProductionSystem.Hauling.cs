@@ -227,8 +227,8 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The nearest player storage within <see cref="ProductionSettings.HaulRange"/> of <paramref name="site"/> that takes <paramref name="item"/>
-    /// and has room for it.
+    /// The nearest player storage within <see cref="InFinderRange"/> of <paramref name="site"/> that takes <paramref name="item"/> and has room
+    /// for it.
     /// </summary>
     string? StorageFor(World world, BuildSite site, ItemInstance item) =>
         NearestStorage(world, site, s => s.Data.Accepts(item.Record, item.Type) && Fits(s.Storage!, item));
@@ -257,14 +257,15 @@ public sealed partial class ProductionSystem
     /// </summary>
     string? NearestSource(World world, BuildSite from, string record, CharacterCold? by = null) =>
         NearestSite(world, from.Position, float.MaxValue, (s, m) => s.Id != from.Id
-            && Vector3.DistanceSquared(s.Position, from.Position) < ConstructionSystem.SourceRangeSquared
+            && InFinderRange(s.Position, from.Position)
             && (m.Data.IsStorage
                 ? m.Storage is { } st && st.Items.Any(i => i.Record == record && i.Quantity > 0 && i.Section == "main")
                 : m.Output is { Count: > 0 } o && o.Recipe.Item == record && (o.Full || by?.OperateSite != s.Id)));
 
     /// <summary>
-    /// The player's nearest complete storage within <see cref="ProductionSettings.HaulRange"/> of a machine that passes <paramref name="ok"/> (ties:
-    /// the lower site id).
+    /// The player's nearest complete storage within <see cref="InFinderRange"/> of a machine that passes <paramref name="ok"/> (ties: the lower
+    /// site id). The original's per-item storage finder (<c>FUN_14059acd0</c>) measures from the character, who stands at the machine (#965: a
+    /// storage 3000 or more away was missed).
     /// </summary>
     string? NearestStorage(World world, BuildSite from, Func<Machine, bool> ok)
     {
@@ -277,11 +278,19 @@ public sealed partial class ProductionSystem
                 continue;
 
             float gap = Gap(site.Position, from.Position);
-            if (gap > Settings.HaulRange || gap > bestGap || (gap == bestGap && string.CompareOrdinal(s.Site, best) > 0) || !ok(s)) continue;
+            if (gap > bestGap || (gap == bestGap && string.CompareOrdinal(s.Site, best) > 0)) continue;
+            if (!InFinderRange(site.Position, from.Position) || !ok(s)) continue;
+
             best = s.Site;
             bestGap = gap;
         }
 
         return best;
     }
+
+    /// <summary>
+    /// Whether two points are within the squared 3D distance the original's storage and fill finders take in the default ROAM_FAR range mode
+    /// (<see cref="ConstructionSystem.SourceRangeSquared"/>, about 6517; docs/game/buildings-production.md "Material delivery").
+    /// </summary>
+    static bool InFinderRange(Vector3 a, Vector3 b) => Vector3.DistanceSquared(a, b) < ConstructionSystem.SourceRangeSquared;
 }

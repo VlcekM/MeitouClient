@@ -53,11 +53,6 @@ public sealed class ProductionSettings
     /// zone loads again, as the game does (docs/game/buildings-production.md "Unloaded zones").
     /// </summary>
     public bool UnloadedProduction { get; init; } = true;
-    /// <summary>
-    /// How far (X/Z) from its machine a storage an operator puts output in stands (engine choice); an input's fetch uses the original finder's
-    /// range (<c>ProductionSystem.NearestSource</c>).
-    /// </summary>
-    public float HaulRange { get; init; } = 3000;
 }
 
 /// <summary>
