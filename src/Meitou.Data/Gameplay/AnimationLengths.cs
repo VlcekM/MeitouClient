@@ -72,10 +72,22 @@ public sealed class AnimationLengths
     /// </summary>
     void AddLinked(IReadOnlyList<string> files, Func<string, string?> find)
     {
-        var paths = files.Select(f => find(AnimationFiles.BareName(f))).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var found = files.Select(f => find(AnimationFiles.BareName(f)));
+        AddFiles([.. found.OfType<string>()]);
+    }
+
+    /// <summary>
+    /// Adds the clips of skeleton files (full paths, in order; a file listed twice is read once), read in parallel; one that cannot be read is
+    /// left out.
+    /// </summary>
+    void AddFiles(IReadOnlyList<string> files)
+    {
+        var paths = files.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var read = new OgreSkeleton?[paths.Count];
         Parallel.For(0, paths.Count, i => read[i] = TryRead(paths[i]));
-        foreach (var skeleton in read) if (skeleton is not null) AddSkeleton(skeleton);
+
+        foreach (var skeleton in read)
+            if (skeleton is not null) AddSkeleton(skeleton);
     }
 
     /// <summary>
@@ -141,7 +153,7 @@ public sealed class AnimationLengths
         Parallel.ForEach(keyOf.Values.OfType<(string File, string[] Linked)>().DistinctBy(Key, StringComparer.OrdinalIgnoreCase), k =>
         {
             var table = new AnimationLengths();
-            table.AddLinked(k.Linked, f => f);   // a linked file's clip replaces the skeleton's own of that name
+            table.AddFiles(k.Linked);   // found already; a linked file's clip replaces the skeleton's own of that name
             table.AddSkeleton(k.File);
             tables[Key(k)] = table;
         });
