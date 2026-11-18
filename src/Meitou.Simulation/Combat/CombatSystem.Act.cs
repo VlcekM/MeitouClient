@@ -120,6 +120,17 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
+    /// The creature category of the elephant techniques ("elephant type bash" <c>attack1</c>, "elephant type bite" <c>attack2</c>).
+    /// </summary>
+    const int ElephantCategory = 9;
+
+    /// <summary>
+    /// The category a fighter's techniques are picked by: <paramref name="own"/>, or the elephant one for an animal with a drawn weapon while
+    /// <see cref="AnimalMovesFix"/> is on.
+    /// </summary>
+    int MovesCategory(Fighter f, int own) => AnimalMovesFix && f.WeaponDrawn ? ElephantCategory : own;
+
+    /// <summary>
     /// The seconds one swing of an animal's door bash takes (<c>Task_BashDoor</c>, <c>FUN_140887420</c>, <b>Verified</b>): the first attack
     /// technique, in data order, that fits the animal's weapon category (not <c>disabled</c>, no block or dodge) plays at speed 1; its clip's length
     /// from the animal's own skeleton over the technique's <c>anim speed mult</c>. 0 when there is none or the clip is unknown (the caller keeps the
@@ -130,7 +141,7 @@ public sealed partial class CombatSystem
         if (cold.Fighter is not { IsAnimal: true } f) return 0;
         foreach (var t in _asWritten)
         {
-            if (t.Disabled || t.IsBlock || t.IsDodge || !TechniqueChooser.Fits(t, f.AnimalCategory)) continue;
+            if (t.Disabled || t.IsBlock || t.IsDodge || !TechniqueChooser.Fits(t, MovesCategory(f, f.AnimalCategory))) continue;
             return _lengths.For(cold.Race?.StringId).Of(t.AnimName) / MathF.Max(t.AnimSpeedMult, 0.1f);
         }
         return 0;
@@ -745,7 +756,7 @@ public sealed partial class CombatSystem
         float e = fighter.EncumbranceFactor;
         var query = new AttackQuery
         {
-            Category = fighter.TechniqueCategory,
+            Category = MovesCategory(fighter, fighter.TechniqueCategory),
             Skill = cold.Stats![fighter.WeaponSkill],
             // the chooser asks FUN_140884e00 with the injury term on (FUN_140884580 subtracts the dust penalty)
             UnarmedSkill = WeaponStats.Lerp(e, 0.2f, 1)
@@ -1515,7 +1526,7 @@ public sealed partial class CombatSystem
             dodge = DefenceFormulas.BlockChance(effective, attack.AttackSkill, _combat, 0, 95);
         }
         int direction = BlowSide(world, i, in swing);
-        return TechniqueChooser.ChooseReaction(_techniques, fighter.TechniqueCategory, cold.Medical!.Prone, fighter.CanBlock, direction,
+        return TechniqueChooser.ChooseReaction(_techniques, MovesCategory(fighter, fighter.TechniqueCategory), cold.Medical!.Prone, fighter.CanBlock, direction,
             block, dodge, chanceRoll, pickRoll, stumbling);
     }
 

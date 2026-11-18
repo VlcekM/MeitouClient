@@ -711,7 +711,8 @@ sealed class GameSaves(GameHost host)
             // The duel prints what its measured lap holds (MeasureLap).
             Combat = new Simulation.Combat.CombatOptions { SelfApproach = false, TickMedical = false, RecordLog = host.Duel.IsDuel,
                 AttackSlots = host.Config.AttackSlotsOption, StuckLimit = Gameplay.HarpoonLimit, LateDefences = host.Config.LateDefences,
-                GunnerFacesBarrel = host.Config.FixGunnerFacing, PunchReachFix = host.Config.FixPunchReach },
+                GunnerFacesBarrel = host.Config.FixGunnerFacing, PunchReachFix = host.Config.FixPunchReach,
+                AnimalMovesFix = host.Config.FixAnimalMoves },
             AnimalsPickUp = host.Config.AnimalsPickUp,
             AnimationLengths = host.AnimationLengths,
             AnimationLibrary = host.AnimationLibrary,

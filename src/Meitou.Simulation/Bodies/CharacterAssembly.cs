@@ -133,31 +133,33 @@ sealed class CharacterAssembly(PopulationData data)
     /// as on a person (<see cref="PackOf"/>: the Garru Backpack's <c>combat skill bonus</c> -4 shows on a Pack Beast's Attack in the original,
     /// <b>Observed</b>, docs/game/animals.md).
     /// </summary>
-    Fighter MakeAnimalFighter(WeaponInstance? weapon, Inventory inventory)
+    Fighter MakeAnimalFighter((WeaponInstance? Weapon, bool Drawn) natural, Inventory inventory)
     {
         var pack = PackOf(inventory);
-        return new Fighter(weapon, null, pack.Stealth, pack.Athletics, pack.Skill, pack.Speed) { IsAnimal = true };
+        return new Fighter(natural.Weapon, null, pack.Stealth, pack.Athletics, pack.Skill, pack.Speed) { IsAnimal = true, WeaponDrawn = natural.Drawn };
     }
 
     /// <summary>
     /// An animal's natural weapon (docs/game/animals.md "Natural weapon", <c>CharacterAnimal</c> slot 133 <c>FUN_14062aa60</c> through the item
     /// factory <c>FUN_140580750</c>, <b>Verified</b>): made by its <c>weapon level</c> manufacturer, of its <c>weapon</c> or, naming none (the Swamp
     /// Turtle), of one drawn from the manufacturer's <c>weapon types</c> (v0, 0 counting as 100); the model and level as a shop weapon's
-    /// (<see cref="ShopFiller.MakerModel"/>). No manufacturer, or no weapon to make, gives none (a fighter without an attack).
+    /// (<see cref="ShopFiller.MakerModel"/>). No manufacturer, or no weapon to make, gives none (a fighter without an attack). Drawn: whether
+    /// the weapon came from the <c>weapon types</c>.
     /// </summary>
-    WeaponInstance? NaturalWeapon(AnimalData animal, ulong roll)
+    (WeaponInstance? Weapon, bool Drawn) NaturalWeapon(AnimalData animal, ulong roll)
     {
         var db = data.Db;
         var combat = data.Combat;
-        if (animal.WeaponLevelId is not { } mid || db.Find(mid) is not { Type: FcsRecordType.WeaponManufacturer } maker) return null;
+        if (animal.WeaponLevelId is not { } mid || db.Find(mid) is not { Type: FcsRecordType.WeaponManufacturer } maker) return (null, false);
 
         var rng = new RandomStream(roll, 0, RngPurpose.Spawn);
+        bool drawn = animal.WeaponId is null;
         var weapon = animal.WeaponId is { } wid ? combat.Weapon(wid) : WeaponType(maker, ref rng);
-        if (weapon is null) return null;
+        if (weapon is null) return (null, false);
 
         var (madeBy, model, level) = ShopFiller.MakerModel(maker, db, ref rng);
         var material = model is not null ? combat.WeaponMaterial(model) : null;
-        return WeaponInstance.Create(level * 0.01f, weapon, combat.Manufacturer(madeBy.StringId), material, combat.Constants);
+        return (WeaponInstance.Create(level * 0.01f, weapon, combat.Manufacturer(madeBy.StringId), material, combat.Constants), drawn);
     }
 
     /// <summary>
@@ -244,7 +246,7 @@ sealed class CharacterAssembly(PopulationData data)
     {
         if (cold.Inventory is not { } inventory) return;
         var fighter = cold.Fighter is { IsAnimal: true } animal
-            ? MakeAnimalFighter(animal.HipWeapon, inventory)
+            ? MakeAnimalFighter((animal.HipWeapon, animal.WeaponDrawn), inventory)
             : FighterOf(data.Db.Find(cold.RecordId), inventory, cold.Medical, cold.Race?.StringId, 0);
         fighter.Guarding = cold.Fighter?.Guarding ?? false;
         fighter.EncumbranceFactor = cold.Fighter?.EncumbranceFactor ?? 1;

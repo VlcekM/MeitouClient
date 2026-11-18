@@ -131,6 +131,12 @@ public sealed record CombatOptions
     public bool PunchReachFix { get; init; }
 
     /// <summary>
+    /// An animal fighting with a weapon drawn from its manufacturer (the Swamp Turtle) picks the elephant creature techniques (Meitou fix); false:
+    /// its weapon's own, whose clips its skeleton lacks, as the game does.
+    /// </summary>
+    public bool AnimalMovesFix { get; init; }
+
+    /// <summary>
     /// Most bolts left stuck in the world per bolt mesh (the original's <c>harpoonLimit</c> setting, 10 to 10000).
     /// </summary>
     public int StuckLimit { get; init; } = RangedTuning.DefaultStuckLimit;

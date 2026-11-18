@@ -54,7 +54,11 @@ Pose/LOD distances can scale by animal size in engine, not original scheduler pr
   a Swamp Turtle fights with a random Ancient weapon (a sword, cleaver, club or polearm). The model and level
   are drawn as for a shop weapon ([economy.md](economy.md) "Weapon level"). Ancient's three models are 15, 20 and 25 at chance 100 each, so
   every animal's weapon level is one of those. It is not an inventory item and is made again on load. Meitou
-  `CharacterAssembly.NaturalWeapon`, kept when the kit changes; the turtle's techniques are those of its weapon's category.
+  `CharacterAssembly.NaturalWeapon`, kept when the kit changes. The fighting category is the weapon's `skill category` (`FUN_140897f30` sets
+  CharStats +0x1f0 from it, **Verified**), so the turtle picks its weapon's human techniques, whose clips its skeleton lacks: the blows land
+  with no motion ([animation.md](../animation.md#clips-a-body-lacks)). Meitou fix (Fixes page `Swamp turtle attacks`, on by default;
+  `CombatSystem.AnimalMovesFix`): an animal with a drawn weapon picks its attacks and defences from the elephant techniques (category 9:
+  "elephant type bash" `attack1`, "elephant type bite" `attack2`) and keeps the drawn weapon's damage.
 - `attack type` (an int in the creature category range) does **not** always match the weapon's category: Wild
   Bull 11 with a category-20 weapon, Cage Beast 14 and Landbat 19 with the dog weapon (10). The string "attack
   type" does not occur in `kenshi_x64.exe` (**Observed**: absent from the binary's string table), so the game does

@@ -563,6 +563,11 @@ sealed class GamePages(SettingsMenu menu)
             + "The game's data gives it a negative reach, so they throw it only when nearly touching their target.",
             Toggle: new("Weak punch reach", () => menu.Config.FixPunchReach,
                 v => { menu.Config.FixPunchReach = v; menu.PunchReachChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
+        result.Add(new("Swamp turtle attacks",
+            "A swamp turtle butts and bites when it fights. "
+            + "In the game it fights with a sword or club drawn for it, whose moves its body cannot play, so its blows land without any motion.",
+            Toggle: new("Swamp turtle attacks", () => menu.Config.FixAnimalMoves,
+                v => { menu.Config.FixAnimalMoves = v; menu.AnimalMovesChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
         result.Add(new("Bench facing",
             "A character on a bench with the table behind it sits facing away from the table. "
             + "The game mirrors the bench's look point through the middle of the world map, so the sitter faces an unrelated direction.",

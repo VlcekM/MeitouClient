@@ -465,6 +465,11 @@ sealed class UserConfig
     /// </summary>
     public bool FixPunchReach { get; set; } = true;
     /// <summary>
+    /// An animal fighting with a weapon drawn from its manufacturer (the Swamp Turtle) attacks with the elephant creature moves (Fixes settings;
+    /// off: its weapon's moves, which its body cannot play, as the game does).
+    /// </summary>
+    public bool FixAnimalMoves { get; set; } = true;
+    /// <summary>
     /// A bench with its table behind is sat facing away from it (Fixes settings; off: towards the world origin, as the game does;
     /// docs/game/ai-tasks.md "Town goals").
     /// </summary>

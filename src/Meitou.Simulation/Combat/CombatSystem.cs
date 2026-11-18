@@ -121,6 +121,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         LateDefences = Settings.LateDefences;
         GunnerFacesBarrel = Settings.GunnerFacesBarrel;
         PunchReachFix = Settings.PunchReachFix;
+        AnimalMovesFix = Settings.AnimalMovesFix;
         StuckLimit = Math.Clamp(Settings.StuckLimit, RangedTuning.MinStuckLimit, RangedTuning.MaxStuckLimit);
         _xp = new XpService(constants, options);
     }
@@ -161,6 +162,13 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     /// A turret's gunner faces along the barrel as the gun turns (<see cref="CombatOptions.GunnerFacesBarrel"/>); off is the game's facing.
     /// </summary>
     public bool GunnerFacesBarrel { get; set; }
+
+    /// <summary>
+    /// An animal whose natural weapon was drawn from its manufacturer (<see cref="Fighter.WeaponDrawn"/>, the Swamp Turtle) picks its attacks and
+    /// defences from the elephant creature techniques, whose <c>attack1</c> / <c>attack2</c> clips its skeleton plays (<see
+    /// cref="CombatOptions.AnimalMovesFix"/>, Meitou fix; docs/game/animals.md "Natural weapon"); off: its weapon's own, as the game does.
+    /// </summary>
+    public bool AnimalMovesFix { get; set; }
 
     /// <summary>
     /// A fist attack whose <c>attack distance</c> is negative but above -100 (base data: "ma badpunch", -4, the only punch up to martial arts 20)
