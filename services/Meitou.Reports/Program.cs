@@ -79,6 +79,15 @@ static void MapFeedback(WebApplication app)
         return issue is not null ? Results.Ok(issue) : Results.BadRequest(new Refused(error!));
     }).RequireRateLimiting("feedback");
 
+    // The load order with every workshop link, for an issue too long to hold them: public like the files; no scripts, the names are the player's.
+    app.MapGet($"/feedback/{{token}}/{Feedback.LoadOrderFile}", async (string token, Feedback feedback, HttpResponse response) =>
+    {
+        if (await feedback.LoadOrderPage(token) is not { } page) return Results.NotFound();
+
+        response.Headers.ContentSecurityPolicy = "default-src 'none'";
+        return Results.Content(page, "text/html; charset=utf-8");
+    });
+
     // The issue's links: public, the token is the secret. The log is stored gzipped and sent as such for the browser to unpack.
     app.MapGet("/feedback/{token}/{file}", (string token, string file, Feedback feedback, HttpResponse response) =>
     {
