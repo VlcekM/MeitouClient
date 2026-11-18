@@ -2,6 +2,12 @@
 
 Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.yml`; each release needs its `## v<version>` section.
 
+## v1.15.0
+
+- Endorsed ports: an RE_Kenshi mod with a Meitou port on the Steam workshop names the port and its maintainer, and Get the port asks whether to subscribe now
+- Subscribe has Steam subscribe to and download the port in one click (Windows with Steam Kenshi, macOS); when Steam cannot, it says why and offers the workshop page
+- Proving Grounds is offered its workshop port, [Meitou] Proving Grounds by roscatoday
+
 ## v1.14.0
 
 - Official ports: an enabled RE_Kenshi mod with a Meitou port runs the port in its place, and its row says the port runs on its own
