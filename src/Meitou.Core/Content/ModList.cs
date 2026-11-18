@@ -400,6 +400,8 @@ public sealed record ModHeader(int FileType, string Author, string Description, 
         else
         {
             bytes = r.ReadBytes(StringSize);
+            if (bytes.Length < StringSize) throw new EndOfStreamException();
+
             r.BaseStream.Seek((long)(int)length - StringSize, SeekOrigin.Current);
             if (cutLast) bytes = bytes[..(StringSize - 1)];
         }
