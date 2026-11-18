@@ -1757,8 +1757,8 @@ public sealed class AnimationSystem(
     /// an <b>engine reading</b>); standing (in a fight too), one of its idles; a creature technique the combat system plays, over everything; down,
     /// its <c>gotosleep</c> once, then <c>sleep</c> (or the fall's last frame held); no hit reactions (no animal record has <c>stumbles</c>) and no
     /// getting up (none exists: it fades back to standing). Standing in a job's clip (a spider eating a body), its own clip of that name.
-    /// Root motion of an attack is scaled by the size. F follows the live size, so an animal that ages (or is set by <c>animalage</c>) plays
-    /// slower as it grows.
+    /// Root motion of an attack is scaled by the size. F and the movement clips' speeds follow the live size, so an animal that ages (or is set
+    /// by <c>animalage</c>) plays slower and takes its run at a higher speed as it grows.
     /// </summary>
     Vector2 UpdateAnimal(CharacterAnimation a, CharacterCold cold, AnimalPlan plan, float speed, float dt, ulong seed, ulong key, long tick,
         List<(int Index, float Weight)> wanted, in CombatView fight, RagdollView ragdoll, CharacterTask task)
@@ -1804,7 +1804,7 @@ public sealed class AnimationSystem(
         {
             // Down without any lying clip (the crab, the robot spiders, gorillos: their skeletons have none) it stays in its idle rather than the
             // binding pose.
-            if (v >= MovingSpeed && !down) Library.Movement(plan.Movement, v, wanted);
+            if (v >= MovingSpeed && !down) Library.Movement(plan.Movement, v, size, wanted);
             if (wanted.Count == 0)
             {
                 bool fresh = a.Idle < 0 || a.IdleLeft <= 0;

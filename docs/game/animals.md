@@ -160,8 +160,9 @@ Meitou: `BodySystem.Age` grows `CharacterStats.Scale` (`CharacterCold.Age`, what
 is `+0x6fc` (the drawn size only; it is not refreshed above 0.95, unlike the original), the save writes and reads `age`.
 Growth and the Meitou-only [`animalage` console command](ui-input.md#dev-console) share `BodySystem.SetAnimalAge`; explicit edits also refresh
 `ShownAge` immediately, including shrinking an animal and setting an adult or elder. Natural growth retains the step gate described above.
-The animation's playback factor is 1 / the live size (`ScaleK`, slot 0x390), re-read every tick as `FUN_14052bad0` does at each movement pick
-(**Verified**, decompile), so a grown animal's run slows with its age.
+The animation's playback factor is 1 / the live size (`ScaleK`, slot 0x390), re-read every tick as `FUN_14052bad0` does at each movement pick, and
+the movement clips' speed weights scale their speeds by that size ([animation](../animation.md#choosing-candidates--14051d660); **Verified**,
+decompile), so a grown animal's run slows and starts at a higher speed with its age.
 
 ## Pack animals
 

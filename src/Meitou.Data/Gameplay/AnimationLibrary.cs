@@ -358,15 +358,15 @@ public sealed class AnimationLibrary
     /// <summary>
     /// The movement clips among <paramref name="candidates"/> to play at speed <paramref name="v"/>, as (index, weight): each weighted by its speed
     /// weight, normalised to sum 1 (the humanoid rule without the stance and the legs, which the animal records do not have). Nothing is added when
-    /// none weighs anything.
+    /// none weighs anything. The clips' speeds are scaled by the body's size <paramref name="scale"/>.
     /// </summary>
-    public void Movement(IReadOnlyList<int> candidates, float v, List<(int Index, float Weight)> into)
+    public void Movement(IReadOnlyList<int> candidates, float v, float scale, List<(int Index, float Weight)> into)
     {
         int first = into.Count;
         float total = 0;
         foreach (int i in candidates)
         {
-            float w = _all[i].SpeedWeight(v);
+            float w = _all[i].SpeedWeight(v, scale);
             if (!(w > 0)) continue;
             into.Add((i, w));
             total += w;
