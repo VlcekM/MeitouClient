@@ -31,7 +31,7 @@ static class ModDataScan
         {
             var manifest = CodeModManifest.Read(mod.CodeManifestPath);
             return manifest.Assemblies
-                .Select(a => Path.Combine(mod.CodeFolder, a))
+                .Select(a => Path.Combine(mod.Folder, a))
                 .Where(File.Exists)
                 .Any(path => Declares(path, manifest.Entry));
         }

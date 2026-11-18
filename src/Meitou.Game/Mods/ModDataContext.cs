@@ -51,11 +51,6 @@ public sealed class ModDataContext
     public string Folder => Mod.Info.Folder;
 
     /// <summary>
-    /// The folder of the mod's manifest and assemblies (<see cref="Folder"/>, or an official port's folder beside the game).
-    /// </summary>
-    public string CodeFolder => Mod.Info.CodeFolder;
-
-    /// <summary>
     /// The mod's code manifest.
     /// </summary>
     public CodeModManifest Manifest => Mod.Manifest;

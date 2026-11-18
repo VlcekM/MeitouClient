@@ -142,7 +142,7 @@ is the consent, as in RimWorld: the game loads every enabled code mod's code, wi
   one is read from the assemblies' metadata (no code run); a base class in another assembly (a framework's) does not give a mod a data phase,
   and only the mods found that way are called, whatever other mods are enabled. A loaded entry that is an `IModDataPhase` the scan did not
   find gets a log line saying its `EditData` does not run.
-- `ModDataContext`: `Id`, `Name`, `Folder`, `CodeFolder`, `Manifest`, `Log`/`LogError`, the merged `Data` to read (the files, translations
+- `ModDataContext`: `Id`, `Name`, `Folder`, `Manifest`, `Log`/`LogError`, the merged `Data` to read (the files, translations
   and the earlier mods' changes), and changes in the form of a `.mod` file's records: `Edit(id)` (a change of a loaded record, returned to
   fill), `Add(id, type, name)`, `Remove(id)` and `Apply(FcsRecord)`, allowed only during `EditData` (later they throw). They are queued; when
   `EditData` returns they are copied and checked whole (an id on each, no null name, value, reference target or instance), then merged in
