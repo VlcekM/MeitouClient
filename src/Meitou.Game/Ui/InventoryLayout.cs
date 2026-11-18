@@ -314,8 +314,9 @@ sealed class InventoryLayout(PlayerInterface player)
     }
 
     /// <summary>
-    /// The player's own animal's inventory window ends where its "-INVENTORY-" label would start, with no main grid, so its death items stay out of
-    /// sight (<b>Observed</b>, original: a bought Garru with meat and skins in its save, and a dog). The loot window keeps the grid.
+    /// An inventory or loot window of an animal whose main grid is shut (<see cref="Simulation.Items.InventoryCommands.MainClosed"/>: alive, and
+    /// the player's or not down) ends where its "-INVENTORY-" label would start, with no main grid, so its death items stay out of sight
+    /// (<b>Observed</b>, original: a bought Garru with meat and skins in its save, a dog, and Trade on a caged own Bonedog, #1007).
     /// </summary>
     internal static void TrimAnimalWindow(List<UiControl> controls)
     {

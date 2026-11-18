@@ -848,8 +848,8 @@ body comes round (another faction's); a carried body stays open (lootable, as th
 row (**Observed**, owner's screenshots of the original, 2026-10-24; Meitou: limbs, own bag, own character, theirs, their bag, centred, and a bag the window opened closes with it unless OPEN BAG was pressed); a death item taken butchers only a down body. An animal's inventory and loot windows use `Kenshi_InventoryAnimalWindow` (backpack slot,
 main grid, grid size from its `inventory w` / `inventory h`; **Observed** in the original); its data panel follows the faction rule
 ([ui-screens](game/ui-screens.md)): weight and burden only for another faction's animal, the Disguise and slave rows too for the player's own (**Observed**, a Garru,
-a Pack Beast, an Iron Spider and a Bonedog of the player's squad). The player's own animal's window ends above the grid
-([animals](game/animals.md#death-items)). It also runs the stealth knock-out
+a Pack Beast, an Iron Spider and a Bonedog of the player's squad). A live animal's window (the player's own, or another faction's
+not down; Trade on an own animal too) ends above the grid ([animals](game/animals.md#death-items)). It also runs the stealth knock-out
 (`StealthKo` task, reusing `CarryTarget`/`LiftTime`): [combat](game/combat.md#stealth-knock-out).
 - **NPC rescue to a bed** (goal 148 Find and rescue if there's beds, facts: [carry-loot 3.2](game/carry-loot.md#32-goals-and-their-target-finders)):
   on the `AutoEveryTicks` beat, after the rescue jobs and the leader rescue, an NPC the AI runs (not an engine mind, not a player character) whose

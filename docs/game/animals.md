@@ -123,10 +123,11 @@ from the start.
 - Taking one out (`FUN_14075e7e0`, from the inventory's remove functions) clears the flag; when the owner is alive and down
   (`isDown`, [carry-loot.md](carry-loot.md): unconscious, playing dead, carried or ragdolled, so an awake carried body too) the owner dies (the death function) with "{1} has been butchered"
   (**Verified**, `FUN_14075e7e0`: not dead, then `isDown` or posture 3+, which `isDown` already covers; the flag clears either way).
-- No inventory-window filter on the flag was found (**Observed**, absence in the decompile). The player's own animal's inventory window
-  shows no main grid at all, so they are out of sight there: it ends under the data panel, without the grid or "-INVENTORY-" (**Observed**,
-  original: a bought Garru whose save holds its skins and meat, and a dog with none; Meitou `InventoryLayout.TrimAnimalWindow`; its loot
-  window keeps the grid).
+- No inventory-window filter on the flag was found (**Observed**, absence in the decompile). A live animal's main grid is shut while it is the
+  player's or not down (`FUN_1405cc630`, Meitou `InventoryCommands.MainClosed`), and the window then shows no main grid at all, so they are out
+  of sight there: it ends under the data panel, without the grid or "-INVENTORY-" (**Observed**, original: a bought Garru whose save holds its
+  skins and meat, a dog with none, and Trade on the player's own caged Bonedog, #1007; Meitou `InventoryLayout.TrimAnimalWindow`, inventory
+  and loot windows alike; a dead or down other-faction animal's loot window keeps the grid).
 - Death items weigh nothing for a living owner (**Observed**, original: a Garru pup with a 6 kg backpack and 14 flagged 1 kg meat/skin items
   shows Total Weight 6). Meitou excludes them from Total Weight and encumbrance, including worn bag contents. Unknown: `FUN_1405a59a0` (reads record 3979's `death items`).
 

@@ -390,7 +390,7 @@ sealed class ScreenRouter(PlayerInterface player)
             player.InventoryLayout.ArrangeEquipmentGrid(controls, grid);
             player.InventoryLayout.AddModSlots(controls);
             InventoryLayout.CloseSlots(controls, lead);
-            if (id == "inventory" && TradeWindows.IsAnimal(lead)) InventoryLayout.TrimAnimalWindow(controls);
+            if (lead.ClosedSlots.Contains("main")) InventoryLayout.TrimAnimalWindow(controls);
         }
 
         if (id is "inventory" or "loot") player.InventoryLayout.AddInventorySummary(controls, lead);
