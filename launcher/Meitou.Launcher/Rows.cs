@@ -227,6 +227,28 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
         || Blanks.Count > 0;
 
     /// <summary>
+    /// Whether the row matches the Mods page's search (<see cref="Matches"/>); a hidden row keeps its place in the load order.
+    /// </summary>
+    public bool IsShown
+    {
+        get;
+        set
+        {
+            if (field == value) return;
+            field = value;
+            Changed();
+        }
+    } = true;
+
+    /// <summary>
+    /// Whether <paramref name="search"/> is empty or found, ignoring case, in the mod's name or author.
+    /// </summary>
+    public bool Matches(string search) =>
+        search.Length == 0
+        || Name.Contains(search, StringComparison.OrdinalIgnoreCase)
+        || Mod.Header is { Author.Length: > 0 } h && h.Author.Contains(search, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Whether the mod is ticked; a change raises <see cref="PropertyChanged"/>.
     /// </summary>
     public bool Enabled

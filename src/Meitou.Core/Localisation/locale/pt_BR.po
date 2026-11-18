@@ -1649,3 +1649,18 @@ msgstr "Mod RE_Kenshi"
 
 msgid "Meitou port"
 msgstr "Port para o Meitou"
+
+msgid "Search mods"
+msgstr "Pesquisar mods"
+
+msgid "Show only the mods whose name or author holds this text"
+msgstr "Mostrar apenas os mods cujo nome ou autor contém este texto"
+
+msgid "No mods match the search."
+msgstr "Nenhum mod corresponde à pesquisa."
+
+msgid "Tick every mod the search shows"
+msgstr "Marcar todos os mods que a pesquisa mostra"
+
+msgid "Untick every mod the search shows"
+msgstr "Desmarcar todos os mods que a pesquisa mostra"

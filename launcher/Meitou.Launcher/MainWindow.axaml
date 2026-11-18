@@ -208,12 +208,14 @@
               <Button Content="Delete" Click="DeletePreset_Click" />
               <Button Content="From save" Click="ModsFromSave_Click" ToolTip.Tip="Take the mod list and load order a save was made with" />
             </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <Button Content="Select all" Click="SelectAll_Click" />
-              <Button Content="Select none" Click="SelectNone_Click" />
+            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="6">
+              <Button Content="Select all" Click="SelectAll_Click" ToolTip.Tip="Tick every mod the search shows" />
+              <Button Content="Select none" Click="SelectNone_Click" ToolTip.Tip="Untick every mod the search shows" />
               <Button Content="Arrange" Click="ArrangeMods_Click"
                       ToolTip.Tip="Propose an order where each enabled mod loads after the mods it needs; nothing moves until you accept" />
             </StackPanel>
+            <TextBox x:Name="ModSearch" Margin="6,0" PlaceholderText="Search mods" TextChanged="ModSearch_TextChanged"
+                     ToolTip.Tip="Show only the mods whose name or author holds this text" />
           </DockPanel>
           <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6">
@@ -225,6 +227,19 @@
           <Panel>
           <TextBlock x:Name="ModsEmpty" Classes="empty" IsVisible="False" />
           <ListBox x:Name="ModListBox" SelectionMode="Multiple" SelectionChanged="ModListBox_SelectionChanged" KeyDown="ModListBox_KeyDown">
+            <!-- Compact rows, so a long list shows more at once; a row the search leaves out is hidden -->
+            <ListBox.Styles>
+              <Style Selector="ListBoxItem" x:DataType="l:ModRow">
+                <Setter Property="Padding" Value="8,2" />
+                <Setter Property="IsVisible" Value="{Binding IsShown}" />
+              </Style>
+              <Style Selector="TextBlock.name">
+                <Setter Property="FontSize" Value="14" />
+              </Style>
+              <Style Selector="CheckBox">
+                <Setter Property="MinHeight" Value="26" />
+              </Style>
+            </ListBox.Styles>
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="l:ModRow">
                 <DockPanel>
@@ -245,8 +260,12 @@
                           Content="{Binding RequestLabel}" IsVisible="{Binding RequestPage, Converter={x:Static ObjectConverters.IsNotNull}}"
                           ToolTip.Tip="{Binding RequestTip}" />
                   <StackPanel VerticalAlignment="Center">
-                    <TextBlock Classes="name" Text="{Binding Name}" />
-                    <TextBlock Classes="desc" Text="{Binding Detail}" />
+                    <!-- The name with its source and author beside it, on one line -->
+                    <DockPanel>
+                      <TextBlock DockPanel.Dock="Left" Classes="name" Text="{Binding Name}" VerticalAlignment="Center" />
+                      <TextBlock Classes="desc" Text="{Binding Detail}" Margin="10,0,0,0" VerticalAlignment="Center"
+                                 TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
                     <TextBlock Classes="warn" Text="{Binding Notes}" IsVisible="{Binding HasNotes}" />
                   </StackPanel>
                 </DockPanel>

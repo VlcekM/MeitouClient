@@ -945,10 +945,31 @@ public sealed partial class MainWindow : Window
         ShowDependencyProblems();
         QueueBlankingCheck();
         MarkPorts();
-        ModsEmpty.IsVisible = _mods.Count == 0;
-        ModsEmpty.Text = Tr(gameInstall is null ? "Set the Kenshi folder in Settings to list its mods."
-            : "No mods found in Kenshi's mods folder or among its Steam workshop items.");
+        ApplyModSearch();
         OfferPorts();
+    }
+
+    /// <summary>
+    /// The search text changed: the rows that do not match it are hidden.
+    /// </summary>
+    void ModSearch_TextChanged(object? sender, TextChangedEventArgs e) => ApplyModSearch();
+
+    /// <summary>
+    /// Shows only the rows matching the search box (<see cref="ModRow.Matches"/>), and says why the list is empty when it is.
+    /// </summary>
+    void ApplyModSearch()
+    {
+        string search = ModSearch.Text?.Trim() ?? "";
+        foreach (var row in _mods) row.IsShown = row.Matches(search);
+
+        // Until a load ends the empty line is the load's own (its error, or nothing).
+        if (!_modsReady) return;
+
+        bool none = _mods.Count == 0;
+        ModsEmpty.IsVisible = !_mods.Any(m => m.IsShown);
+        ModsEmpty.Text = Tr(!none ? "No mods match the search."
+            : _install is null ? "Set the Kenshi folder in Settings to list its mods."
+            : "No mods found in Kenshi's mods folder or among its Steam workshop items.");
     }
 
     /// <summary>
@@ -1324,14 +1345,14 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Ticks every mod.
+    /// Ticks every mod the search shows.
     /// </summary>
-    void SelectAll_Click(object? sender, RoutedEventArgs e) { foreach (var m in _mods) m.Enabled = true; }
+    void SelectAll_Click(object? sender, RoutedEventArgs e) { foreach (var m in _mods.Where(m => m.IsShown)) m.Enabled = true; }
 
     /// <summary>
-    /// Unticks every mod.
+    /// Unticks every mod the search shows.
     /// </summary>
-    void SelectNone_Click(object? sender, RoutedEventArgs e) { foreach (var m in _mods) m.Enabled = false; }
+    void SelectNone_Click(object? sender, RoutedEventArgs e) { foreach (var m in _mods.Where(m => m.IsShown)) m.Enabled = false; }
 
     /// <summary>
     /// Alt+Up / Alt+Down move the selected mods one place, as dragging does.
