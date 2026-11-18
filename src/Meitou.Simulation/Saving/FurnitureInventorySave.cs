@@ -1,4 +1,6 @@
+using Meitou.Data;
 using Meitou.Data.Fcs;
+using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.Save;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Locks;
@@ -11,7 +13,9 @@ namespace Meitou.Simulation.Saving;
 /// lie in the INVENTORY_STATE that entry lists, section <c>backpack_content</c>. A container whose house state has no
 /// <c>meitou container &lt;i&gt;</c> key (<see cref="ContainerSave"/>) takes them when it registers, and a save writes the container back into that
 /// entry, the key removed; an entry whose items are as they were read stays as it was. Read only from a zone that is not loaded fresh and a house
-/// with <c>serialised interior</c> 1 (otherwise the original makes the interior again from its layout and its pieces start empty).
+/// with <c>serialised interior</c> 1 (otherwise the original makes the interior again from its layout and its pieces start empty), never into a
+/// bought house (whose entries a save removes), an object a town machine owns or a building the level editor places. What was read only mirrors
+/// the save (<see cref="Fixture.LoadedContents"/>): no simulation step reads it.
 /// </summary>
 public static class FurnitureInventorySave
 {
@@ -39,20 +43,35 @@ public static class FurnitureInventorySave
     }
 
     /// <summary>
+    /// Whether the record's object is a town machine's (a farm, a producer such as the Rain Collector, or a battery bank:
+    /// <c>ProductionSystem.IsPieceMachine</c>), whose machine reads and writes the entry's inventory (<see cref="TownMachineSave"/>).
+    /// </summary>
+    public static bool MachineOwns(GameDatabase db, string recordId) =>
+        db.Find(recordId) is { } record && MachineData.From(db, record) is { } m && (m.Farm is not null || m.IsProducer || m.IsBattery);
+
+    /// <summary>
     /// Writes each registered town container that has an entry of the original's into that entry's inventory (after the fixtures' own keys,
     /// <c>SaveCapture.WriteLocks</c>), and removes the container's <c>meitou container</c> key from its house state; a home an override furnished anew
-    /// is left to <see cref="RuinSave"/>, which removes its entries.
+    /// is left to <see cref="RuinSave"/>, which removes its entries, and a bought house's furniture entries go (<see cref="DropBought"/>).
     /// </summary>
-    public static void Write(SaveGame game, World world, IReadOnlyDictionary<string, FcsRecord> buildings)
+    public static void Write(SaveGame game, World world, GameDatabase db, IReadOnlyDictionary<string, FcsRecord> buildings)
     {
         SavedPieces? pieces = null;
+        var bought = new HashSet<(int C, int I)>();
         foreach (string building in world.Fixtures.Buildings)
         {
-            if (world.Fixtures.IsRebuilt(building) || buildings.GetValueOrDefault(building) is not { } house || !Keeps(house.Ints)) continue;
+            if (buildings.GetValueOrDefault(building) is not { } house) continue;
+            if (world.Fixtures.IsEmptied(building))
+            {
+                if (Hand.Read(house, "handle") is { IsNull: false } hand) bought.Add((hand.C, hand.I));
+                continue;
+            }
+
+            if (world.Fixtures.IsRebuilt(building) || !Keeps(house.Ints)) continue;
 
             foreach (var f in world.Fixtures.OfBuilding(building))
             {
-                if (f.Contents is not { } grid || ContainerSave.KeyOf(f, building) is not { } key) continue;
+                if (f.Contents is not { } grid || ContainerSave.KeyOf(f, building) is not { } key || MachineOwns(db, f.RecordId)) continue;
 
                 pieces ??= new SavedPieces(game);
                 if (pieces.Of(f.Id, f.RecordId, f.Position) is not { Fresh: false } entry) continue;
@@ -61,6 +80,8 @@ public static class FurnitureInventorySave
                 house.Strings.Remove(key);
             }
         }
+
+        if (bought.Count > 0) DropBought(game, world, bought);
     }
 
     /// <summary>
@@ -73,4 +94,38 @@ public static class FurnitureInventorySave
 
         MachineSave.WriteInventory(entry.Zone.File, entry.Zone.Coordinate, entry.Instance, null, items);
     }
+
+    /// <summary>
+    /// Removes the entries standing inside a bought house (<c>is inside building</c>, its <c>isInsideBuilding</c> handle), with their inventories and
+    /// states, as <see cref="RuinSave"/> removes a ruin's: the original's purchase destroys the interior's furniture and its items
+    /// (docs/game/ui-screens.md "Selected building"), so its own save holds none there, and Meitou takes those objects out at the purchase. The
+    /// player's own buildings inside it (<see cref="World.Buildings"/>) stay.
+    /// </summary>
+    static void DropBought(SaveGame game, World world, HashSet<(int C, int I)> bought)
+    {
+        foreach (var zone in game.Zones.Values)
+        {
+            if (zone.BuildingList is not { } list) continue;
+
+            var states = new Dictionary<string, FcsRecord>(StringComparer.Ordinal);
+            foreach (var r in zone.BuildingStates) states[r.StringId] = r;
+
+            foreach (var instance in list.Instances.ToList())
+            {
+                var state = instance.States.Select(id => states.GetValueOrDefault(id)).FirstOrDefault(r => r is not null);
+                if (state is null || world.Buildings.Find(instance.Id) is not null || !Inside(state, bought)) continue;
+
+                MachineSave.WriteInventory(zone.File, zone.Coordinate, instance, null, []);
+                zone.File.Records.Remove(state);
+                list.Instances.Remove(instance);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether a building state stands inside one of <paramref name="houses"/>.
+    /// </summary>
+    static bool Inside(FcsRecord state, HashSet<(int C, int I)> houses) =>
+        state.Bools.GetValueOrDefault("is inside building") && Hand.Read(state, "isInsideBuilding") is { IsNull: false } parent
+        && houses.Contains((parent.C, parent.I));
 }

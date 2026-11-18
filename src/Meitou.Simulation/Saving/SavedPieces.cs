@@ -30,6 +30,12 @@ public sealed class SavedPieces
     readonly Dictionary<string, SavedPiece?> _matched = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// The entries already matched to a layout object: one entry serves one object, so two identical objects standing within <see cref="Reach"/>
+    /// of each other cannot both read and write it.
+    /// </summary>
+    readonly HashSet<SavedPiece> _taken = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>
     /// Indexes every entry of the save's building lists that names a record.
     /// </summary>
     public SavedPieces(SaveGame save)
@@ -47,28 +53,30 @@ public sealed class SavedPieces
     }
 
     /// <summary>
-    /// The entry of the layout object <paramref name="piece"/>: the first of its record within <see cref="Reach"/>; null for none.
+    /// The entry of the layout object <paramref name="piece"/> (<see cref="Of(string, string, Vector3)"/>); null for none.
     /// </summary>
     public SavedPiece? Of(TownLayoutBuilding piece) => Of(piece.Id, piece.RecordId, piece.Position);
 
     /// <summary>
-    /// The entry of the layout object <paramref name="id"/> (record <paramref name="recordId"/>, standing at <paramref name="position"/>): the first of
-    /// its record within <see cref="Reach"/>; null for none.
+    /// The entry of the layout object <paramref name="id"/> (record <paramref name="recordId"/>, standing at <paramref name="position"/>): the nearest
+    /// of its record within <see cref="Reach"/> no other object took (the first of equals in the save's order); null for none.
     /// </summary>
     public SavedPiece? Of(string id, string recordId, Vector3 position)
     {
         if (_matched.TryGetValue(id, out var known)) return known;
 
         SavedPiece? found = null;
+        float best = Reach * Reach;
         foreach (var entry in _byRecord.GetValueOrDefault(recordId) ?? [])
         {
-            if (Vector3.DistanceSquared(entry.Instance.Position, position) > Reach * Reach) continue;
+            float d = Vector3.DistanceSquared(entry.Instance.Position, position);
+            if (d > best || d == best && found is not null || _taken.Contains(entry)) continue;
 
-            found = entry;
-            break;
+            (found, best) = (entry, d);
         }
 
         _matched[id] = found;
+        if (found is not null) _taken.Add(found);
         return found;
     }
 

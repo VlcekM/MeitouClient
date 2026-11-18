@@ -580,11 +580,16 @@ has an override world state (its lists are then replaced) or `0-buildinglist` ho
   INVENTORY_ITEM_STATE with `section` `backpack_content` (**Observed**, TESTSKELETON from the original: The Hub's Residential Small `24-Newwworld-INGAME`
   has its Secure Wooden Chest as entry `111301-zone20.32-INGAME`, states `[111303-zone20.32-INGAME, 111301-zone20.32-INGAME-S23]`, the
   inventory holding 10 stacks, the house's `internalbuildings` naming the entry's slot). Meitou (`Saving/FurnitureInventorySave`): a town
-  container takes the items of the entry of its record within 1 unit of it (`Saving/SavedPieces`, as a layout object's machine) when its house state
-  has `serialised interior` 1 and its zone does not load fresh, unless the house state holds Meitou's `meitou container <i>` key
-  ([containers](../game/locks.md#containers-meitou)); a save writes the container's items into that entry's inventory (a new
+  container takes the items of the nearest entry of its record within 1 unit of it that no other object took (`Saving/SavedPieces`, as a layout
+  object's machine) when its house state has `serialised interior` 1 and its zone does not load fresh, unless the house state holds Meitou's
+  `meitou container <i>` key ([containers](../game/locks.md#containers-meitou)); not in a bought house, not for an object a town machine owns (a
+  farm, a producer such as the Rain Collector, a battery bank: its machine reads that inventory), and not for a building the level editor places
+  (one placed again would take the save's items twice). A save writes the container's items into that entry's inventory (a new
   `<n>-zone<X>.<Y>-INGAME` listed first when it had none, the record removed when it holds nothing) and drops the key, leaving an inventory whose
-  items are as they were read as it is. **Observed** (headless, TESTSKELETON, plain game): the chest loads its 10 stacks (none before), a capture
+  items are as they were read as it is. A bought house's entries go with their inventories and states, the player's own buildings inside it staying,
+  and so do its Meitou container and interior lock keys: the original's purchase destroys the interior's furniture with its items
+  ([selected building](../game/ui-screens.md#selected-building)), and a stale entry or key would be read back at every load and dropped on the
+  ground by the bought-house emptying. **Observed** (headless, TESTSKELETON, plain game): the chest loads its 10 stacks (none before), a capture
   with nothing changed writes the entry's inventory with the same records, one Damaged Book taken writes that stack's record with quantity 1, and
   the reloaded save shows it.
 - `1-itemlist` (**Observed**, METARU: 285 items in its zone files): INSTANCE_COLLECTION, name "0", flags 0; entries numbered "1", "2", ... with no states, the item's position and a

@@ -215,7 +215,7 @@ public static partial class SaveCapture
         buildings = HeldSave.BuildingStates(game);
         MachineSave.Write(game, world);
         TownMachineSave.Write(game, world);
-        FurnitureInventorySave.Write(game, world, buildings);
+        FurnitureInventorySave.Write(game, world, data.Db, buildings);
         RuinSave.Write(game, world, data, buildings);
         if (world.Systems.OfType<Production.ProductionSystem>().FirstOrDefault() is { } production)
             RockMachineSave.Write(game.Camera.Record, world, production);
