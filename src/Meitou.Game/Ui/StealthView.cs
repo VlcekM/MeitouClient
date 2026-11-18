@@ -275,9 +275,9 @@ sealed class StealthView(PlayerInterface player)
     string? _taskBarTrack;
 
     /// <summary>
-    /// The floating progress bar over a player character at work (<c>FloatingProgressBar::ProgressBarWidget</c>, the <c>Kenshi_ProgressBarPanel</c>
-    /// layout, <b>Verified</b>): the bar's fill and the centred caption of <see cref="CharacterSnapshot.Bar"/>. It stands just above the name tag
-    /// (the original's anchor is not mapped).
+    /// The floating progress bar over a player character at work, or a code mod's over any character (<c>FloatingProgressBar::ProgressBarWidget</c>,
+    /// the <c>Kenshi_ProgressBarPanel</c> layout, <b>Verified</b>): the bar's fill and the centred caption of <see cref="CharacterSnapshot.Bar"/>. It
+    /// stands just above the name tag (the original's anchor is not mapped). Another character's bar shows only while that character is drawn.
     /// </summary>
     internal void AddTaskBars(List<UiControl> controls)
     {
@@ -291,6 +291,7 @@ sealed class StealthView(PlayerInterface player)
         {
             var c = all[i];
             if (c.Bar is not { } bar || c.CarriedBy != CharacterId.None) continue;
+            if (!c.IsPlayer && (HiddenInWorld?.Invoke(c.Id) == true || DrawnHead is { } drawn && drawn(c.Id) is null)) continue;
 
             var feet = player.Where(c);
             if (Vector3.DistanceSquared(player.Eye, feet) >= NameTagRangeSquared) continue;

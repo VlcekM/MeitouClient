@@ -824,6 +824,12 @@ public sealed class CharacterCold
     public DrawAnchor? DrawAnchor { get; set; }
 
     /// <summary>
+    /// The floating progress bar a code mod shows over this character (docs/modding.md "Task bars"; null: none): published as the snapshot's
+    /// <see cref="CharacterSnapshot.Bar"/> ahead of the game's own bars, for any character; not saved, not hashed and read by no system.
+    /// </summary>
+    public TaskBar? ModTaskBar { get; set; }
+
+    /// <summary>
     /// The rigid meshes code mods hang on this character's bones (docs/modding.md "Bone meshes"), in the order first set: replaced as a whole on each
     /// change, so the snapshot publishes it as it is. Not saved, not hashed and read by no system.
     /// </summary>
