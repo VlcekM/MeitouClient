@@ -30,6 +30,17 @@ public sealed class InputSlot(RecipeInput recipe)
     /// The level taken from items, one item = 1 (the save's <c>consumption amount-&lt;k&gt;</c>).
     /// </summary>
     public float Level { get; set; }
+
+    /// <summary>
+    /// A crafting bench's section the bound craft takes nothing from (<b>Verified</b>, <c>CraftingBuilding::vfunc_182</c> <c>FUN_1402bb470</c>):
+    /// the original clears its item and disables it while it is empty, so it takes no item.
+    /// </summary>
+    public bool Idle { get; set; }
+
+    /// <summary>
+    /// Whether the section takes units of <paramref name="record"/>: its item, unless it is <see cref="Idle"/>.
+    /// </summary>
+    public bool Takes(string record) => !Idle && Item == record;
 }
 
 /// <summary>

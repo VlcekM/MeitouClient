@@ -927,7 +927,7 @@ entry (building +0x448: progress, record) whose progress is below 1, the `out` g
 ready-made Item it will produce; shown while `out` is empty), `OutputText` that Item's name, `OutputProgressBar` progress x 100 and `CraftingName` `#afa68b` + the entry record's
 name; otherwise ghost none, `OutputText` `-`, bar 0 and `CraftingName` `#afa68b` + an empty string. The layout's setup (`FUN_1401524f0`) writes "Nothing Queued" into
 `CraftingName` (so it shows only until the first update) and `OutputTitleText` the translated "Output" upper-cased.
-Meitou (`ProductionWindows`): these texts and ghosts for crafting benches; a section holds only its ingredient, so "Invalid item!" never shows; the output ghost is the queue front's item (its record and model).
+Meitou (`ProductionWindows`): these texts and ghosts for crafting benches; a section holds only its ingredient, so "Invalid item!" never shows; the output ghost is the queue front's item (its record and model); a section the bound craft takes nothing from (`InputSlot.Idle`) shows `-`, no status, bar 0 and no ghost, drawn disabled while empty, and takes no item (#951).
 
 Inventory opening geometry (**Verified**, `FUN_1406e4960`; constants `DAT_141696c74` = 0.05 and `DAT_14167e8d8` = 0.5): independent character
 windows start at the integer margin `0.05 × min(screen width, screen height)`, after other inventory windows on that row. A full row advances by

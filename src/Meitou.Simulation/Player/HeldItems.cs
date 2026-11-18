@@ -651,7 +651,7 @@ sealed class HeldItems(PopulationData? data)
             ReturnHeldItem(world);
             return;
         }
-        if (m.Inputs[k].Item != item.Record)
+        if (!m.Inputs[k].Takes(item.Record))
         {
             world.Post("Invalid container type.");
             ReturnHeldItem(world);

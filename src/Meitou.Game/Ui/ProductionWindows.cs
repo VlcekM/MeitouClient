@@ -495,6 +495,13 @@ sealed class ProductionWindows(PlayerInterface player)
             }
 
             var input = m.Inputs[k];
+
+            if (input.Idle)
+            {
+                BindIdleInput(n, b);
+                continue;
+            }
+
             b.Text[$"Input{n}Text"] = input.Name;
 
             if (m.Craft is not null)
@@ -512,6 +519,16 @@ sealed class ProductionWindows(PlayerInterface player)
 
             b.Progress[$"Input{n}ProgressBar"] = input.Fill;
         }
+    }
+
+    /// <summary>
+    /// A bench section the bound craft takes nothing from (<c>FUN_1402b6110</c>, its ingredient cleared): name "-", no status, bar 0.
+    /// </summary>
+    static void BindIdleInput(string n, UiBindings b)
+    {
+        b.Text[$"Input{n}Text"] = "-";
+        b.Text[$"Input{n}StatusText"] = "";
+        b.Progress[$"Input{n}ProgressBar"] = 0;
     }
 
     /// <summary>
@@ -666,7 +683,9 @@ sealed class ProductionWindows(PlayerInterface player)
     {
         if (SizeSection(controls, name) is not var (b, clip)) return;
 
-        if (view.Count <= 0 && m.Craft is not null)
+        // An idle bench section has no ghost and is disabled while empty (FUN_1402bb470, setEnabled through FUN_14014ea30).
+        if (view is { Idle: true, Count: <= 0 }) DisableSection(controls, name);
+        if (view.Count <= 0 && m.Craft is not null && !view.Idle)
             AddItemGhost(controls, $"machine-{name}", b, view.Item, "", clip);
         if (view.Count <= 0 || player.InventoryWindows.Lifted(ItemOwner.AtSite(m.Site), code)) return;
 
@@ -697,6 +716,18 @@ sealed class ProductionWindows(PlayerInterface player)
     }
 
     /// <summary>
+    /// Draws a section in the slot skin's red <c>disabled</c> state.
+    /// </summary>
+    static void DisableSection(List<UiControl> controls, string name)
+    {
+        int index = controls.FindIndex(c => c.Name == name);
+        if (index < 0) return;
+
+        var slot = controls[index];
+        controls[index] = slot with { Properties = new Dictionary<string, string>(slot.Properties) { ["State"] = "disabled" } };
+    }
+
+    /// <summary>
     /// A furnace's input grid and its items.
     /// </summary>
     void AddFurnaceGrid(List<UiControl> controls, MachineSnapshot m, InventoryView fg, FurnaceView burn)
@@ -704,13 +735,12 @@ sealed class ProductionWindows(PlayerInterface player)
         // The furnace's grid in in1, its items the storage's (picked up as storage items); disabled while it burns
         // (InventorySection::setEnabled(!active)).
         AddSlot(controls, m, "in1", new MachineSlotView("", "", 0, 0, 0, fg.Width, fg.Height), -1);
+        if (burn.Burning) DisableSection(controls, "in1");
         int gi = controls.FindIndex(c => c.Name == "in1");
 
         if (gi >= 0)
         {
             var g = controls[gi];
-            if (burn.Burning)
-                controls[gi] = g with { Properties = new Dictionary<string, string>(g.Properties) { ["State"] = "disabled" } };
 
             foreach (var item in fg.Items)
             {

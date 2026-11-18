@@ -2087,7 +2087,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// </summary>
     static bool PutInInput(Machine m, Inventory owner, ItemInstance item, PutInMachine put)
     {
-        if (put.Slot >= m.Inputs.Length || m.Inputs[put.Slot] is not { } input || input.Item != item.Record) return false;
+        if (put.Slot >= m.Inputs.Length || m.Inputs[put.Slot] is not { } input || !input.Takes(item.Record)) return false;
         int room = input.Recipe.Capacity - input.Count;
         int n = Math.Min(room, put.Count > 0 ? Math.Min(put.Count, item.Quantity) : item.Quantity);
         if (n <= 0) return false;

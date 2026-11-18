@@ -5,9 +5,11 @@ using Meitou.Simulation.Player;
 namespace Meitou.Simulation.Production;
 
 /// <summary>
-/// A recipe slot as the host shows it: the item, how many are held of how many, and the level (input) or progress (output) 0..1.
+/// A recipe slot as the host shows it: the item, how many are held of how many, the level (input) or progress (output) 0..1, and whether it is a
+/// bench section the bound craft takes nothing from (<see cref="InputSlot.Idle"/>).
 /// </summary>
-public readonly record struct MachineSlotView(string Item, string Name, int Count, int Capacity, float Fill, int Width = 1, int Height = 1);
+public readonly record struct MachineSlotView(string Item, string Name, int Count, int Capacity, float Fill, int Width = 1, int Height = 1,
+    bool Idle = false);
 
 /// <summary>
 /// A farm as the host shows it (docs/simulation.md "Production").
@@ -338,7 +340,7 @@ public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<M
     {
         string Name(string record) => items.Info(record)?.Name ?? record;
         var inputs = m.Inputs.Select(i => new MachineSlotView(i.Item, Name(i.Item), i.Count, i.Recipe.Capacity, Math.Clamp(i.Level, 0, 1),
-            items.Info(i.Item)?.Width ?? 1, items.Info(i.Item)?.Height ?? 1)).ToArray();
+            items.Info(i.Item)?.Width ?? 1, items.Info(i.Item)?.Height ?? 1, i.Idle)).ToArray();
         MachineSlotView? output = m.Output is { } o
             ? new MachineSlotView(o.Recipe.Item, Name(o.Recipe.Item), o.Count, o.Recipe.Capacity, Math.Clamp(o.Progress, 0, 1),
                 items.Info(o.Recipe.Item)?.Width ?? 1, items.Info(o.Recipe.Item)?.Height ?? 1)

@@ -721,6 +721,8 @@ Function 10, `CraftingBuilding` (**Observed** unless noted).
   ingredients` or no ingredients, the bench's `consumes` at v1/100. Material cost (item vfunc 102): a weapon's
   `material cost`, else 1. Armour: each section at `total coverage`/100; Fabrics (`584-gamedata.base`, hard-coded,
   **Verified** bytes) at that x `fabrics amount`.
+- **Unused sections** (**Verified**, `FUN_1402bb470`): a section past the bound craft's inputs gets no item and is disabled (`InventorySection::setEnabled`,
+  which refuses items) while it is empty; the window shows it as `-` ([Selected building](ui-screens.md#selected-building)). Meitou: `InputSlot.Idle`.
 - **Partial levels** (**Verified**, `FUN_1402bb470`, `FUN_1402b8440`): the bench keeps a map item -> level (+0x520). A recipe switch first stores every
   section's level under its item, then each section taking an ingredient gets `map[item]` (0 when absent), so a half-used ingredient comes back when
   the recipe does. A save stores the sections' levels in the map, then writes each entry above 0 (k counts written entries only); a load fills the map

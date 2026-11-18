@@ -138,6 +138,7 @@ public sealed partial class ProductionSystem
         {
             m.Inputs[k].Item = ItemOf(m, job, k);
             m.Inputs[k].Rate = k < job.Recipe.Inputs.Count ? job.Recipe.Inputs[k].PerItem : 0;
+            m.Inputs[k].Idle = k >= job.Recipe.Inputs.Count;
         }
     }
 

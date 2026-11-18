@@ -104,7 +104,7 @@ public sealed partial class ProductionSystem
         if (inv is not null && cold.HaulFetch is { } want)
         {
             int room = 0;
-            foreach (var input in machine.Inputs) if (input.Item == want) room += Math.Max(0, input.Recipe.Capacity - input.Count);
+            foreach (var input in machine.Inputs) if (input.Takes(want)) room += Math.Max(0, input.Recipe.Capacity - input.Count);
 
             // A producer (a well): out of its output.
             if (!store.Data.IsStorage)
