@@ -377,9 +377,25 @@ public sealed class CharacterCold
     /// </summary>
     public List<StuckBolt>? StuckBolts { get; set; }
     /// <summary>
-    /// The character's stats (null: none).
+    /// The character's stats (<see cref="Stats"/>).
     /// </summary>
-    public CharacterStats? Stats { get; set; }
+    CharacterStats? _stats;
+
+    /// <summary>
+    /// The character's stats (null: none). New stats take over the old ones' binding to the code mods' experience filters
+    /// (<see cref="CharacterStats.BindExperience"/>), so a character whose stats are replaced in the world (the editor) stays filtered.
+    /// </summary>
+    public CharacterStats? Stats
+    {
+        get => _stats;
+        set
+        {
+            if (ReferenceEquals(_stats, value)) return;
+
+            value?.TakeExperienceBinding(_stats);
+            _stats = value;
+        }
+    }
     /// <summary>
     /// The character's medical state (null: none).
     /// </summary>
@@ -1656,6 +1672,7 @@ public sealed class CharacterTable
         if (!_inTick) _previous[slot] = state;
         this._cold[slot] = cold;
         Spawns++;
+        Watch?.Added(new CharacterId(slot, generation), cold);
         return new CharacterId(slot, generation);
     }
 
@@ -1674,7 +1691,7 @@ public sealed class CharacterTable
             throw new InvalidOperationException("characters are removed in the commit or the slow world only (a phase reads them as alive)");
 
         if (!TryResolveNext(id, out int slot)) return false;
-        Watch?.Removing(slot);
+        Watch?.Removing(slot, _cold[slot]!);
         _next[slot].Alive = false;
         if (!_inTick) _previous[slot].Alive = false;
         _cold[slot] = null;

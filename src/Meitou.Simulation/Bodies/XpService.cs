@@ -77,6 +77,13 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
         stats.Gain(stat, ContinuousRate * dtSeconds * constants.ExpGainMultiplier * amount * race.StatMultiplier(stat), CharacterStats.XpCap, source);
 
     /// <summary>
+    /// <see cref="Continuous(CharacterStats, RaceData, StatsEnumerated, float, float, ExperienceSource)"/> from <see cref="ExperienceSource.Other"/>,
+    /// as a code mod built before the sources calls it.
+    /// </summary>
+    public float Continuous(CharacterStats stats, RaceData race, StatsEnumerated stat, float dtSeconds, float amount) =>
+        Continuous(stats, race, stat, dtSeconds, amount, ExperienceSource.Other);
+
+    /// <summary>
     /// The continuous entry with a cap (<c>FUN_1408c64f0</c>, <b>Verified</b> by decompile; the training dummy's): nothing once the stat is at the
     /// cap, else the same gain with the core curve ((cap - stat) / cap)^2, so the stat only creeps towards the cap and never reaches it. Its
     /// source is <see cref="ExperienceSource.Training"/>.
@@ -93,6 +100,13 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     /// </summary>
     public float PerEvent(CharacterStats stats, RaceData race, StatsEnumerated stat, float factor, ExperienceSource source) =>
         stats.Gain(stat, EventUnit * factor * race.StatMultiplier(stat), CharacterStats.XpCap, source);
+
+    /// <summary>
+    /// <see cref="PerEvent(CharacterStats, RaceData, StatsEnumerated, float, ExperienceSource)"/> from <see cref="ExperienceSource.Other"/>, as a
+    /// code mod built before the sources calls it.
+    /// </summary>
+    public float PerEvent(CharacterStats stats, RaceData race, StatsEnumerated stat, float factor) =>
+        PerEvent(stats, race, stat, factor, ExperienceSource.Other);
 
     /// <summary>
     /// The weapon-weight factor for strength XP (<c>FUN_1408838e0</c>): <c>min strength xp mult</c> + clamp((weapon weight - strength x injury
@@ -313,7 +327,7 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
 
         float rate = stats.XpRate > 1 && skill >= MedicRateLimit ? 1 : stats.XpRate;
         float gain = dtSeconds * rate / secondsPerPoint * constants.ExpGainMultiplier * medicRace.StatMultiplier(patientRace.HealStat);
-        return stats[stat] = skill + stats.FilterStraight(stat, gain, ExperienceSource.FirstAid);
+        return stats[stat] = skill + stats.FilterStraight(stat, gain, ExperienceSource.FirstAid, MedicRateLimit);
     }
 
     /// <summary>
@@ -324,7 +338,8 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     /// </summary>
     public float MassCombat(CharacterStats stats) =>
         stats[StatsEnumerated.MassCombat] = stats.Stored(StatsEnumerated.MassCombat)
-            + stats.FilterStraight(StatsEnumerated.MassCombat, constants.ExpGainMultiplier * 0.05f * stats.XpRate, ExperienceSource.Combat);
+            + stats.FilterStraight(StatsEnumerated.MassCombat, constants.ExpGainMultiplier * 0.05f * stats.XpRate, ExperienceSource.Combat,
+                float.PositiveInfinity);
 
     /// <summary>
     /// Toughness when a hit knocks the character out (<c>FUN_1408c6720</c>, from the part damage <c>FUN_14064f300</c>, <b>Verified</b> decompile):

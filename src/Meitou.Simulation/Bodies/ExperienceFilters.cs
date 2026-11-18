@@ -5,8 +5,8 @@ namespace Meitou.Simulation.Bodies;
 /// <summary>
 /// The world's systems that filter experience gains (<see cref="IExperienceFilter"/>). Gains happen in the parallel phases too, so a fault is kept
 /// as the tick it happened: the filter is still asked for the rest of that tick and not from the next, and the cut falls on a tick boundary
-/// whatever the threads did. The characters' stats are bound to the world and their ids at the start of every tick (<see cref="Bind"/>), so a
-/// gain knows whose it is.
+/// whatever the threads did. A character's stats are bound to the world and its id while it is in the world's table (bound as it enters, cleared as
+/// it leaves, <see cref="CharacterWatch"/>), so a gain knows whose it is.
 /// </summary>
 sealed class ExperienceFilters
 {
@@ -52,18 +52,25 @@ sealed class ExperienceFilters
     }
 
     /// <summary>
-    /// Binds every character's stats in the world to the world and the character's id (<see cref="CharacterStats.BindExperience"/>); nothing
-    /// without a filter. Serial, at the start of the tick.
+    /// Binds the stats of every character already in the world's table (<see cref="CharacterStats.BindExperience"/>), when the first filter is
+    /// registered; the ones entering later are bound as they enter. Serial, before the first tick.
     /// </summary>
-    internal void Bind(World world)
+    internal static void BindAll(World world)
     {
-        if (!Active) return;
-
         var table = world.Characters;
         for (int slot = 0; slot < table.HighWater; slot++)
         {
             if (table.Cold(slot)?.Stats is { } stats) stats.BindExperience(world, new CharacterId(slot, table.Next[slot].Generation));
         }
+    }
+
+    /// <summary>
+    /// Clears the binding of every character's stats in the world's table (the world is discarded), so no stats object keeps it alive.
+    /// </summary>
+    internal static void UnbindAll(World world)
+    {
+        var table = world.Characters;
+        for (int slot = 0; slot < table.HighWater; slot++) table.Cold(slot)?.Stats?.UnbindExperience();
     }
 
     /// <summary>

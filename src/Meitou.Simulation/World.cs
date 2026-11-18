@@ -674,11 +674,15 @@ public sealed partial class World : IDisposable
     }
 
     /// <summary>
-    /// Sets the table's watch on characters leaving it (<see cref="CharacterWatch"/>) once a death observer needs it; none otherwise.
+    /// Sets the table's watch on characters entering and leaving it (<see cref="CharacterWatch"/>) once a death observer or an experience filter
+    /// needs it, binding the stats of the characters already in it for the filters; none otherwise.
     /// </summary>
     void WatchCharacters()
     {
-        if (DeathObservers.Active && Characters.Watch?.Of(this) != true) Characters.Watch = new CharacterWatch(this);
+        if (!DeathObservers.Active && !ExperienceFilters.Active) return;
+
+        if (Characters.Watch?.Of(this) != true) Characters.Watch = new CharacterWatch(this);
+        if (ExperienceFilters.Active) Bodies.ExperienceFilters.BindAll(this);
     }
 
     /// <summary>
@@ -752,7 +756,6 @@ public sealed partial class World : IDisposable
         prof?.Begin(_systems.Count);
         table.BeginTick();
         ModFaults.Settle();
-        ExperienceFilters.Bind(this);   // whose stats are whose this tick, for the experience filters (nothing without one)
 
         // 1. Inputs (serial).
         RunInputs(table, prof);
@@ -1216,5 +1219,14 @@ public sealed partial class World : IDisposable
     /// <summary>
     /// Stops the worker pool.
     /// </summary>
-    public void Dispose() => _pool.Dispose();
+    public void Dispose()
+    {
+        _pool.Dispose();
+
+        // a stats object kept past the world (by a mod, say) must not keep the world alive through its experience binding
+        if (Characters.Watch?.Of(this) != true) return;
+
+        Bodies.ExperienceFilters.UnbindAll(this);
+        Characters.Watch = null;
+    }
 }

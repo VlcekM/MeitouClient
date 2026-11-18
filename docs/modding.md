@@ -310,17 +310,20 @@ holds refuses the second mod.
 - **Experience:** a registered system implementing `IExperienceFilter` (`Meitou.Simulation.Bodies`) is asked `Gain(World, in ExperienceGain)` for
   every experience gain the game makes to a character in the world (every `XpService` entry: combat, injuries, ranged and turrets, moving,
   sneaking, assassination, thievery, lockpicking, building, machine work, training dummies, first aid, mass combat) and for a direct
-  `CharacterStats.Gain` (`ExperienceSource.Other`): the tick, the character, the stat, the amount and its `ExperienceSource`. It returns the
-  amount to add, so a mod scales experience by squad, faction, stat or source, or cancels it (0). The amount is the one the core curve takes,
-  after the Squad XP and Others' XP setting (first aid and mass combat: the amount added straight); only an amount the curve would add is asked,
-  and the answer is held as that setting's is: to the curve's limit of 20, and with no raise for a stat at or past a training dummy's cap.
-  Filters run in system order (mods in load order), each seeing the amount the earlier ones left, until one answers 0. Gains happen in the
-  parallel phases too, so a filter runs on any thread, concurrently: it must be quick, thread-safe and a pure read of the gain and of world state
-  the tick has settled (its own system's serial step, the last finished tick). Characters are bound to their ids at the start of each tick, so
-  a character made during a tick is filtered from the next. Mod skills (`ModSkill.Gain`) are not asked. A filter that throws, or answers an amount
-  that is negative or not finite, leaves that gain as it came and is logged once; it is still asked for the rest of that tick and not from the
-  next, and the fault (with its tick) enters the state hash. Without a filter no stats are bound and nothing is built. Engine API, not in the
-  original.
+  `CharacterStats.Gain` or an `XpService` call without a source (`ExperienceSource.Other`): the tick, the character, the stat, the amount and its
+  `ExperienceSource`. It returns the amount to add, so a mod scales experience by squad, faction, stat or source, or cancels it (0). Filters
+  run in system order, each seeing the amount the earlier ones left, until one answers 0. For a gain through the core curve, the amount is the
+  one the curve takes, after the Squad XP and Others' XP setting; only an amount in the curve's range (above 0, at most 20) is asked, since the
+  curve adds nothing for any other (a raw amount above 20 is dropped and a filter cannot bring it back), and the answer is held as that setting
+  is: to 20, and with no raise for a stat at or past a training dummy's cap. First aid and mass combat add straight, past the curve: their
+  amount is the one added, and the answer is held as the setting is there too: no raise for a medic stat at or past 100, none needed for mass
+  combat (nothing reads it). A character's stats are bound to it as it enters the world and cleared as it leaves, so its gains are filtered from
+  its first step. Gains happen in the parallel phases too, so a filter runs on any thread, concurrently: it must be quick, thread-safe and a pure
+  read of the gain and of world state the tick has settled (its own system's serial step, the last finished tick), and must not grant
+  experience itself. The paused interface's commands between ticks (a theft's thievery) ask it on the host's thread, with the coming tick's
+  number. Mod skills (`ModSkill.Gain`) are not asked. A filter that throws, or answers an amount that is negative or not finite, leaves that gain
+  as it came and is logged once; it is still asked for the rest of that tick and not from the next, and the fault (with its tick) enters the
+  state hash. Without a filter nothing is bound or built. Engine API, not in the original.
 - **Faction list:** `ArrangeFactionList(arrange)` arranges the Overview's Faction tab: `arrange` gets the rows the tab would show
   (`FactionListRow`: faction, name, the player's relation), sorted by name, and returns the rows to show, in order. It can reorder, rename
   (names go through the translation catalog like the tab's own), leave out, or add headings (faction -1: the name alone, no number or bar),

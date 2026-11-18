@@ -40,7 +40,8 @@ public sealed class CharacterStats
     ActiveStatusEffects? _effects;
 
     /// <summary>
-    /// The world whose experience filters this character's gains pass (<see cref="BindExperience"/>); null while no filter is registered.
+    /// The world whose experience filters this character's gains pass (<see cref="BindExperience"/>): set while the character is in a world that
+    /// has a filter, null otherwise.
     /// </summary>
     World? _xpWorld;
 
@@ -237,30 +238,61 @@ public sealed class CharacterStats
     }
 
     /// <summary>
-    /// Binds these stats to <paramref name="world"/>'s experience filters as <paramref name="owner"/>'s (<see cref="ExperienceFilters.Bind"/>).
+    /// Binds these stats to <paramref name="world"/>'s experience filters as <paramref name="owner"/>'s, as the character enters the world
+    /// (<see cref="CharacterWatch"/>).
     /// </summary>
     internal void BindExperience(World world, CharacterId owner) => (_xpWorld, _xpOwner) = (world, owner);
 
     /// <summary>
+    /// Clears the binding, as the character leaves the world or the world is discarded.
+    /// </summary>
+    internal void UnbindExperience() => (_xpWorld, _xpOwner) = (null, CharacterId.None);
+
+    /// <summary>
+    /// Takes the binding of <paramref name="old"/>, the stats these replace on a character, and clears it there.
+    /// </summary>
+    internal void TakeExperienceBinding(CharacterStats? old)
+    {
+        if (old?._xpWorld is null) return;
+
+        (_xpWorld, _xpOwner) = (old._xpWorld, old._xpOwner);
+        old.UnbindExperience();
+    }
+
+    /// <summary>
     /// A core gain's amount after the code mods' experience filters (<see cref="IExperienceFilter"/>), held as <see cref="Rated"/> holds the
-    /// rate: to the core's limit, and with no raise for a stat at or past the gain's cap. Only an amount the core would add is asked; the amount
-    /// itself without a filter, or for stats not bound to the character they belong to (one moved to another slot since the tick began).
+    /// rate: to the core's limit, and with no raise for a stat at or past the gain's cap. Only an amount in the core's range (above 0, at most its
+    /// limit) is asked: the core adds nothing for any other, and a filter cannot bring one back. The amount itself without a filter.
     /// </summary>
     float Filtered(StatsEnumerated stat, float value, float amount, float cap, ExperienceSource source)
     {
         if (_xpWorld is null || !(amount > 0 && amount <= MaxCoreGain)) return amount;
 
-        float filtered = FilterStraight(stat, amount, source);
+        float filtered = Ask(stat, amount, source);
         return value >= cap ? MathF.Min(filtered, amount) : MathF.Min(filtered, MaxCoreGain);
     }
 
     /// <summary>
-    /// An amount the game adds to a stat straight, past the core curve (first aid, mass combat), after the code mods' experience filters; the
-    /// amount itself without a filter, for one not above 0, or for stats not bound to the character they belong to.
+    /// An amount the game adds to a stat straight, past the core curve (first aid, mass combat), after the code mods' experience filters, held as
+    /// the game holds the XP rate setting there: no raise once the stat is at or past <paramref name="raiseBelow"/> (first aid's 100; mass combat
+    /// has no such limit). The amount itself without a filter or for one not above 0.
     /// </summary>
-    internal float FilterStraight(StatsEnumerated stat, float amount, ExperienceSource source)
+    internal float FilterStraight(StatsEnumerated stat, float amount, ExperienceSource source, float raiseBelow)
     {
-        if (_xpWorld is not { } world || !(amount > 0) || world.Characters.Cold(_xpOwner.Slot)?.Stats != this) return amount;
+        if (_xpWorld is null || !(amount > 0)) return amount;
+
+        float filtered = Ask(stat, amount, source);
+        return Stored(stat) >= raiseBelow ? MathF.Min(filtered, amount) : filtered;
+    }
+
+    /// <summary>
+    /// The filters' amount for a gain of these bound stats; the amount itself for stats no longer the bound character's (a safety: a stats object
+    /// a mod moved by hand is never charged to whoever now holds the slot).
+    /// </summary>
+    float Ask(StatsEnumerated stat, float amount, ExperienceSource source)
+    {
+        var world = _xpWorld!;
+        if (world.Characters.Cold(_xpOwner.Slot)?.Stats != this) return amount;
 
         return world.ExperienceFilters.Pass(world, _xpOwner, stat, amount, source);
     }
