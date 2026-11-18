@@ -13,7 +13,8 @@ static class CharacterSurface
     /// </summary>
     public const string Prototypes = """
         bool surfaceOn = false;
-        uint surfaceParts = 0u;   // the Advanced materials' parts that are on (CharacterRenderer.SurfaceParts): 1 hair, 2 cloth, 4 skin, 8 eyes, 16 metal, 32 water beads
+        uint surfaceParts = 0u;   // the Advanced materials' parts that are on (CharacterRenderer.SurfaceParts): 1 hair, 2 cloth, 4 skin, 8 eyes, 16 metal, 32 water beads,
+                                  // 64 polished armour
         vec3 surfaceSun(vec3 sun, float sunScale, vec3 diffuseAlbedo, float share);
         vec3 surfaceSunTraced(vec3 sun, vec3 diffuseAlbedo);
         vec3 surfaceSpecular(vec3 l);
@@ -113,9 +114,20 @@ static class CharacterSurface
 
         float lobeD(float nh, float a) { float a2 = a * a, d = nh * nh * (a2 - 1.0) + 1.0; return a2 / (ATMO_PI * d * d); }
 
+        // How much of a worn plate's bare metal is metal, from its diffuse's alpha, the gloss the artists painted: cloth is black in it, a dull plate
+        // (paint, grime, rust) low, a polished one high, so it says how much, not only where. The polished look (the Advanced materials part 64) and
+        // an item's own metalness (ARMOUR `metalness`) take it as where only. Wholly opaque means none was painted: no metal, or the item's own.
+        float wornPainted(float a, float wornMetal)
+        {
+            bool own = wornMetal >= 0.0;
+            float painted = own || (surfaceParts & 64u) != 0u ? smoothstep(0.08, 0.22, a) : smoothstep(0.1, 0.5, a);
+            return mix(painted, own ? 1.0 : 0.0, smoothstep(0.97, 1.0, a));
+        }
+
         // How much of a fragment is bare metal. A worn item says so in its colour map (metal); nothing marks it on a robot's body or a held item, so there it is what shines
-        // and has no colour of its own: rust and paint are saturated, and rust is matte.
-        float surfaceMetal(float metal, vec3 albedo, inout float gloss, uint shading, bool mechanical, bool worn, bool mapped, float wornGlossMap, float heldGlossMap)
+        // and has no colour of its own: rust and paint are saturated, and rust is matte. wornMetal: a worn plate's own metalness, -1 for none.
+        float surfaceMetal(float metal, vec3 albedo, inout float gloss, uint shading, bool mechanical, bool worn, bool mapped, float wornGlossMap, float heldGlossMap,
+            float wornMetal)
         {
             float top = max(albedo.r, max(albedo.g, albedo.b));
             float saturation = 1.0 - min(albedo.r, min(albedo.g, albedo.b)) / max(top, 1e-3);
@@ -124,10 +136,9 @@ static class CharacterSurface
             else if (mapped) metal = bare * 0.65 * smoothstep(0.02, 0.2, metal);   // the map says where the metal is, the estimate how much
             else if (shading == 1u ? mechanical : !worn)
             {
-                // A worn plate: the diffuse's alpha is the gloss the artists painted: cloth is black in it. Wholly opaque means none was painted.
-                float painted = wornGlossMap >= 0.0 ? smoothstep(0.08, 0.22, wornGlossMap) * (1.0 - smoothstep(0.97, 1.0, wornGlossMap))
+                float painted = wornGlossMap >= 0.0 ? wornPainted(wornGlossMap, wornMetal)
                     : heldGlossMap >= 0.0 ? smoothstep(0.04, 0.14, heldGlossMap) : 1.0;   // a held item's gloss map is painted lower: wood is near 0 in it
-                metal = max(metal, bare * 0.65 * painted);
+                metal = max(metal, bare * (wornMetal >= 0.0 ? wornMetal : 0.65) * painted);
             }
             // Worn plate has no gloss of its own in the game: the painted one says where it is polished and where it is dull.
             float polish = wornGlossMap >= 0.0 && wornGlossMap < 0.97 ? mix(0.25, 0.8, smoothstep(0.1, 0.7, wornGlossMap)) : mix(0.45, 0.9, gloss);

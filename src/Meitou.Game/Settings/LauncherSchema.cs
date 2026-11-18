@@ -257,6 +257,8 @@ static class LauncherSchema
         yield return Switch(WorldFrame.MaterialSkinSwitch, "Off", "On", true);
         yield return Switch(WorldFrame.MaterialEyesSwitch, "Off", "On", true);
         yield return Switch(WorldFrame.MaterialMetalSwitch, "Off", "On", true);
+        // Polished armour (worn plate shines wherever gloss is painted), off at start.
+        yield return Switch(WorldFrame.MaterialPolishSwitch, "Off", "On", false);
         yield return Switch(WorldFrame.MaterialBeadsSwitch, "Off", "On", true);
         yield return Switch(WorldFrame.TracedGrassSwitch, "Off", "On", true) with { ShownWhen = SunTraced() };
         yield return Switch(WorldFrame.GrassCoverSwitch, "Off", "Meitou: on", true);

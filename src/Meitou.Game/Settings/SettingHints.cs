@@ -161,6 +161,8 @@ static class SettingHints
         WorldFrame.MaterialSkinSwitch => "Skin's oily sheen, a soft bright edge, and light through ears and fingers.",
         WorldFrame.MaterialEyesSwitch => "A small catchlight on the eyes instead of a mirror of the landscape.",
         WorldFrame.MaterialMetalSwitch => "Weapons, armour plates, prosthetics and robots read as metal.",
+        WorldFrame.MaterialPolishSwitch => "Armour plates shine as bare metal wherever they have any gloss. Off: dull, painted or rusty plate "
+            + "stays dull. An armour a mod gives its own metalness keeps it.",
         WorldFrame.MaterialBeadsSwitch => "Drops of water stand on wet skin, leather and metal, in the rain and after a swim.",
         WorldFrame.WetWorldSwitch => "Rain shows on the world: water runs down walls, drops stand on metal and stone, puddles gather on the ground. "
             + "Off: as the original.",
