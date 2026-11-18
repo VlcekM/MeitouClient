@@ -642,8 +642,24 @@ the stomach comes first; the panel, splinting's "first part", the hit table and 
 
 #### Bodies of other shapes (Meitou)
 
+A race's body is its `combat anatomy` list, read whole (`RaceData.From`), so a data mod shapes it with no code:
+
+- Any number of parts, of the nine base records or its own LOCATIONAL_DAMAGE records, each with its hit weight and base HP; the parts are hit,
+  armoured (by `part coverage`, which names parts by record), healed and saved one by one (`sid<k>`, [save](../formats/save.md)). The medical panel
+  shows every part ([ui-screens](ui-screens.md)); blood shows on the body for the first eight parts only ([blood-decals](blood-decals.md)).
+- Fewer parts work as the No-Head MkII skeleton's six do: with no arm part the stat multipliers' arm term is 1, with no torso part the torso term,
+  with no head the head term (`MedicalState.ComputeAggregates`).
+- Animals list their own anatomy: 15 of the 53 base races (the animals) list Left and Right Foreleg, ARM parts, in place of arms (probe of the base
+  game, 2026-11-17).
+- Extra parts of the four types count where their type counts: speed follows the worst leg, the arm term the best arm, the stealth term the torso and
+  legs, dialogue conditions 27 to 29 any leg, arm or head. Any part whose `collapse part` names a leg being down makes the character crawl, and any
+  part with an arm's bit (4 left, 2 right) that is down, cut off or crushed stops that arm working (`ArmWorks`). An arm or leg part with a side shares
+  that side's limb slot ([limb replacements](#limb-replacements-and-robots)). Extra arms never hold a weapon or strike: a technique's blow names
+  limbs 0 to 4 (`RobotLimb` in `fcs_enums.def`).
+
 A `body part type` other than 0 to 3 (a tail or a wing) is Meitou-only: the original reads past its four-entry tables for one ([part order](#part-order)).
-Meitou gives such a part none of the four types' roles (`BodyPartTemplate.HasBaseType`): it is hit by its hit weight (low strikes too), covered by armour
+It is written as the record's int (the construction set's `BodyPartType` list names only 0 to 3; Meitou's `FcsWriter` writes any value). Meitou
+gives such a part none of the four types' roles (`BodyPartTemplate.HasBaseType`): it is hit by its hit weight (low strikes too), covered by armour
 that lists it in `part coverage`, bleeds and heals, knocks out or kills when `death` is set, sorts after the legs and is saved with its health like any
 part. With `severance` and without `death`, a blow (Dismemberment Rare or more) or a worsening wound (Frequent) cuts it off: it becomes a stump, is no
 longer hit, stays a stump through a save ([save](../formats/save.md#limbs-medical_state-limbs)) and the character cries no lost-limb line

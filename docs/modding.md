@@ -432,6 +432,11 @@ holds refuses the second mod.
   takes the carried body to a cage as its faction's slave), `AggroSystem.Spotted` / `Unseen`. `CharacterCold.FedTo` is a free hunger level
   that comes before the game's rule (not saved), for a captive the mod's squad carries.
 
+## Data mods
+
+Some shapes need no code: a race's anatomy of any length, extra or missing parts, and parts of a new type such as a tail are plain records
+([bodies of other shapes](game/character-stats.md#bodies-of-other-shapes-meitou)).
+
 ## Harmony
 
 - With code mods enabled the JIT warm-up (`JitWarmup`) starts only after `Initialize` returns. Tiered compilation is off, so a caller
