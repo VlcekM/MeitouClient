@@ -156,8 +156,8 @@ sealed class HudPanels(PlayerInterface player)
     /// The State line with the code mods' status effects (docs/modding.md "Status effects"): where it would read Normal, the first effect's name in its
     /// tone's colour (" +N" for N more); its tooltip lists every effect (name, stacks, time left, description) after the line's own.
     /// </summary>
-    static (string State, string? Colour, string Tip) WithEffects(IReadOnlyList<EffectView> effects, string state, string? colour, string? tooltip,
-        bool normal)
+    static (string State, string? Colour, string Tip) WithEffects(IReadOnlyList<StatusEffectView> effects, string state, string? colour,
+        string? tooltip, bool normal)
     {
         var tip = new StringBuilder(tooltip ?? "");
         foreach (var e in effects)
@@ -170,27 +170,29 @@ sealed class HudPanels(PlayerInterface player)
         if (!normal) return (state, colour, tip.ToString());
 
         var first = effects[0].Effect;
-        string more = effects.Count > 1 ? " +" + (effects.Count - 1).ToString(CultureInfo.InvariantCulture) : "";
+        string name = effects.Count > 1 ? Loc.Tr("{1} +{2,num}", Loc.Tr(first.Name), effects.Count - 1) : Loc.Tr(first.Name);
         string? tone = first.Tone switch
         {
-            EffectTone.Good => PlayerInterface.GoodColour,
-            EffectTone.Bad => PlayerInterface.BadColour,
+            StatusEffectTone.Good => PlayerInterface.GoodColour,
+            StatusEffectTone.Bad => PlayerInterface.BadColour,
             _ => null,
         };
-        return (Loc.Tr(first.Name) + more, tone, tip.ToString());
+        return (name, tone, tip.ToString());
     }
 
     /// <summary>
     /// An effect's tooltip heading: its name, " xN" with stacks, and the game time left in hours and minutes, rounded up.
     /// </summary>
-    static string EffectHeading(EffectView e)
+    static string EffectHeading(StatusEffectView e)
     {
-        string name = Loc.Tr(e.Effect.Name) + (e.Stacks > 1 ? " x" + e.Stacks.ToString(CultureInfo.InvariantCulture) : "");
+        string name = e.Stacks > 1 ? Loc.Tr("{1} x{2,num}", Loc.Tr(e.Effect.Name), e.Stacks) : Loc.Tr(e.Effect.Name);
         if (double.IsPositiveInfinity(e.HoursLeft)) return name;
 
         long minutes = (long)Math.Ceiling(e.HoursLeft * 60);
-        string left = minutes >= 60 ? $"{minutes / 60}h {minutes % 60}m" : $"{minutes}m";
-        return name + " (" + Loc.Tr("{1} left", left) + ")";
+        string left = minutes >= 60
+            ? Loc.Tr("{1,num}h {2,num}m left", minutes / 60, minutes % 60)
+            : Loc.Tr("{1,num}m left", minutes);
+        return Loc.Tr("{1} ({2})", name, left);
     }
 
     /// <summary>

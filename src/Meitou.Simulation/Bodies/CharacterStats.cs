@@ -37,7 +37,7 @@ public sealed class CharacterStats
     /// <summary>
     /// The code mods' status effects on this character, made on first use (<see cref="Effects"/>).
     /// </summary>
-    ActiveEffects? _effects;
+    ActiveStatusEffects? _effects;
 
     /// <summary>
     /// What this character's XP gains are multiplied by (Advanced settings "Squad XP" and "Others' XP", <see cref="BodyOptions.SquadXp"/>; Meitou
@@ -94,12 +94,12 @@ public sealed class CharacterStats
     /// The code mods' status effects on this character (docs/modding.md "Status effects"), null if none was ever put on; put them on and take them
     /// off through <see cref="StatusEffect"/>.
     /// </summary>
-    public ActiveEffects? EffectsOrNull => _effects;
+    public ActiveStatusEffects? EffectsOrNull => _effects;
 
     /// <summary>
     /// The status effects, made on first use.
     /// </summary>
-    internal ActiveEffects Effects => _effects ??= new();
+    internal ActiveStatusEffects Effects => _effects ??= new();
 
     /// <summary>
     /// A storage's value with its modifiers.
@@ -309,8 +309,8 @@ public sealed class CharacterStats
     /// Writes the saved STATS floats (docs/formats/save.md): the stat's field name (<c>strength</c>, <c>attack</c>, <c>toughness2</c>, <c>mass
     /// combat</c>...) to its value. The legacy keys (<c>endurance</c>, <c>warrior spirit</c>, <c>xp</c>, <c>free attribute points</c>...) are not
     /// kept; the save writer gives a new character the STATS template's <c>warrior spirit</c> and a loaded one keeps its saved value. The code mods'
-    /// skill levels follow under <see cref="ModSkillLevels.SaveKeyPrefix"/>, and their status effects under <see cref="ActiveEffects.SaveKeyPrefix"/>,
-    /// none without them.
+    /// skill levels follow under <see cref="ModSkillLevels.SaveKeyPrefix"/>, none without them, and their status effects under
+    /// <see cref="ActiveStatusEffects.SaveKeyPrefix"/> (the record's earlier effect keys removed first) once this character had one.
     /// </summary>
     public void WriteSave(IDictionary<string, float> floats)
     {
@@ -336,7 +336,7 @@ public sealed class CharacterStats
         // FUN_14064b6a0: toughness = defence
         if (!floats.ContainsKey("toughness2")) stats._values[(int)StatsEnumerated.Toughness] = stats._values[(int)StatsEnumerated.MeleeDefence];
         stats._modSkills = ModSkillLevels.ReadSave(floats);
-        stats._effects = ActiveEffects.ReadSave(floats, stats);
+        stats._effects = ActiveStatusEffects.ReadSave(floats, stats);
         return stats;
     }
 }

@@ -140,8 +140,10 @@ once a level was set. Every such key is read back and saved again, so a save kee
 (2026-11-15, a scratch `WriteSave` / `ReadSave` round trip).
 
 A code mod's [status effect](../modding.md#registration-surface) on a character is a float `meitou effect <id>` in its STATS record, the ticks left
-(-1: until removed), and `meitou effect stacks <id>` when it has more than one stack, written only while the effect is on. Every such key is read
-back and saved again, so a save keeps the effects of mods not loaded now.
+(-1: until removed), and `meitou effect stacks <id>` when it has more than one stack. A character that had any writes its record's `meitou effect`
+keys afresh at each save (a record copied from the loaded save loses those of effects that ended), so the keys are there only while an effect
+is on. Every such key is read back and saved again, so a save keeps the effects of mods not loaded now. **Observed** (2026-11-18, a scratch
+`WriteSave` / `ReadSave` round trip: ticks, stacks and -1 kept; an effect that ended after the read left no key in the same record).
 
 ### Where saves live
 

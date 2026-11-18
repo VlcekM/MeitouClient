@@ -275,7 +275,8 @@ public sealed class ModContext
     {
         CheckOpen();
         ArgumentNullException.ThrowIfNull(effect);
-        if (Simulation.Bodies.StatusEffects.Refusal(effect, Pending.StatusEffects) is { } refusal) throw new ArgumentException(refusal, nameof(effect));
+        if (Simulation.Bodies.StatusEffects.Refusal(effect, Pending.StatusEffects) is { } refusal)
+            throw new ArgumentException(refusal, nameof(effect));
 
         Pending.StatusEffects.Add(effect);
         return effect;

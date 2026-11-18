@@ -602,7 +602,7 @@ public sealed class CharacterSnapshot
     /// A selected or inspected character's status effects from the code mods (docs/modding.md "Status effects"), in registration order; empty
     /// otherwise.
     /// </summary>
-    public IReadOnlyList<Bodies.EffectView> Effects { get; internal set; } = [];
+    public IReadOnlyList<Bodies.StatusEffectView> Effects { get; internal set; } = [];
     /// <summary>
     /// The inventory of a selected character, of the one whose loot window is open, or of a player character whose inventory is shown (null for
     /// the others).

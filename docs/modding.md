@@ -358,19 +358,25 @@ holds refuses the second mod.
   a new body (a race change at character creation) starts without modifiers. **Verified** by `StatsTests` (reads, save, gain, hash).
 - **Status effects:** `AddStatusEffect(new StatusEffect(id, name) { Description, Tone, Stacking, MaxStacks, Modifiers })` (`StatusEffects`,
   `src/Meitou.Simulation/Bodies`) adds a named effect (a poison, a drug, a blessing) the mod's systems put on a character with `effect.Apply(world,
-  character, hours, stacks)` (positive infinity: until removed) and take off with `Remove(world, character)`; `On(stats)` reads it (ticks left, -1
-  forever, and stacks). Applying it again follows `Stacking`: `Refresh` starts the time again, `Extend` adds the hours, `Stack` adds stacks up to
-  `MaxStacks` and starts the time again. While it lasts its `Modifiers` (stat, amount per stack) are set through the character's [stat
-  modifiers](#registration-surface) under the key `effect:<id>`, so they work and display as any modifier (a mod's own modifier key must not start
-  with `effect:`). It ends by itself on the tick its time runs out, counted in ticks of game time after the slow world, only while its character is
-  in the world (an NPC whose platoon is off screen keeps its time). The HUD's State line shows a selected character's effects: where it would read
-  Normal, the first effect's name (in registration order) in its tone's colour, with "+N" for N more; its tooltip lists every effect with its
-  stacks, game time left and description. Saved with the character in its STATS record ([save](formats/save.md#compatibility-exceptions)), so it
-  follows the character through squad moves and recruiting, and set again with its amounts at a load; an effect of a mod not running now is kept and
-  saved again, not shown, adding nothing, its time standing still. Effects enter the state hash while one is on. Apply and Remove run from the mod's
-  system outside the parallel phases, as stat modifiers. A bad id (1 to 48 letters, digits, `_`, `.`, `-`), an id another effect has
-  (case-insensitive), a name over 32 characters, stacks below 1 or a modifier on a stat without storage refuses the mod. With no effect registered
-  the tick step does nothing and nothing is made, saved or hashed. Engine API, not in the original.
+  character, hours, stacks)` (positive infinity: until removed) and take off with `Remove(world, character)`; `On(world, character)` or `On(stats)`
+  reads it (ticks left, -1 forever, and stacks) and `stats.EffectsOrNull` lists every effect a character holds. Applying it again follows
+  `Stacking`: `Refresh` starts the time again, `Extend` adds the hours, `Stack` adds stacks up to `MaxStacks` and starts the time again (a stack
+  count read from a save is held to the same rule). While it lasts its `Modifiers` (stat, amount per stack; the list is copied at registration) are
+  set through the character's [stat modifiers](#registration-surface) under the key `effect:<id>`, so they work and display as any modifier (a mod's
+  own modifier key must not start with `effect:`). It ends by itself on the tick its time runs out, counted in ticks of game time after the slow
+  world, only while its character is in the world (an NPC whose platoon is off screen keeps its time; a corpse's counts on). The HUD's State line
+  shows the effects of a selected or inspected character: where it would read Normal, the first effect's name (in registration order) in its tone's
+  colour, with "+N" for N more; its tooltip lists every effect with its stacks, game time left and description, after the line's own text. Any other
+  state (dead, caged, unconscious, sleeping, aiming or reloading, defensive, a weather notice) keeps its word, so the effects are then in the
+  tooltip only, and in a cage without a lock, which has no State line, nowhere. Saved with the character in its STATS record
+  ([save](formats/save.md#compatibility-exceptions)), so it follows the character through squad moves and recruiting, and set again with its amounts
+  at a load. An effect of a mod not running now is kept and saved again, not shown, adding nothing, its time standing still;
+  `StatusEffects.Forget(stats, id)` drops any id, registered or not (an effect a mod renamed, or one of a mod that is gone). Effects enter the state
+  hash while a character holds one. Apply, Remove and Forget run from the mod's system outside the parallel phases, as stat modifiers. Refused: a
+  bad id (1 to 48 letters, digits, `_`, `.`, `-`), an id another effect has (case-insensitive), a name over 32 characters, `MaxStacks` below 1, an
+  unknown tone or stacking, a null list or description, or a modifier on a stat without storage, on a storage another of its modifiers names (Medic,
+  HiveMedic and Vet share one), or whose amount, or amount times `MaxStacks`, is not finite. With no effect registered the tick step does nothing,
+  and a save without effect keys makes, saves and hashes nothing. Engine API, not in the original.
 - **Commands:** a mod's own `SimCommand` types, queued with `Enqueue` and handled in its system's `Inputs`.
 - **Player squads on AI packages** (`Meitou.Simulation.Ai`, [rules](simulation.md#autonomous-player-squads)): `SetSquadAutonomy(squadId, on)` lets
   the AI run a player's squad; then `ChangeAi(squadId, packageId)` and `StartContract(squadId, packageId, hours)` give it packages as dialogue's
