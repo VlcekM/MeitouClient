@@ -173,8 +173,9 @@ static class FoliageShaders
 
     /// <summary>
     /// The near fade's test (<see cref="FoliageNearFade"/>), at the top of the full mesh fragment stages (<c>vFade</c>, <c>vWorld</c>, <c>uEye</c>,
-    /// <c>uFoliageNear</c>, <c>foliageDither</c>): a marked instance's fragment is kept where the pattern is under the larger of its distance's
-    /// share (whole from the reach on) and its angle's (whole outside the outer angle). The pattern is the fade's, which never moves.
+    /// <c>uFoliageNear</c>, <c>foliageDither</c>): a marked instance's fragment is kept where the pattern is under the largest of its distance's
+    /// share (whole from the reach on), its angle's (whole outside the outer angle) and <see cref="FoliageNearFade.MinOpacity"/>. The pattern is the
+    /// fade's, which never moves.
     /// </summary>
     static readonly string NearFadeTest = $$"""
 
@@ -185,7 +186,7 @@ static class FoliageShaders
                     float nearDepth = smoothstep(uFoliageNear.w - {{F(FoliageNearFade.DepthBand)}}, uFoliageNear.w, nearDistance);
                     float nearSide = 1.0 - smoothstep({{F(MathF.Cos(FoliageNearFade.OuterAngle))}}, {{F(MathF.Cos(FoliageNearFade.InnerAngle))}},
                         dot(nearRay, uFoliageNear.xyz) / nearDistance);
-                    if (foliageDither() >= max(nearDepth, nearSide)) discard;
+                    if (foliageDither() >= max(max(nearDepth, nearSide), {{F(FoliageNearFade.MinOpacity)}})) discard;
                 }
 
         """;

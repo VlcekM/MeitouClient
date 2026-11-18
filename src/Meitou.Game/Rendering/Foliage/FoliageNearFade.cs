@@ -40,6 +40,11 @@ public sealed class FoliageNearFade
     public const float DepthBand = 200;
 
     /// <summary>
+    /// The opacity a marked tree keeps at the most faded (the share of its fragments the pattern keeps).
+    /// </summary>
+    public const float MinOpacity = 0.2f;
+
+    /// <summary>
     /// The angles off the view's axis (radians): fully faded inside the inner one, whole outside the outer one.
     /// </summary>
     public const float InnerAngle = 0.14f, OuterAngle = 0.3f;
