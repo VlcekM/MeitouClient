@@ -679,9 +679,16 @@ public sealed partial class World : IDisposable
     /// </summary>
     void WatchCharacters()
     {
+        // A table handed over from another world drops that world's watch and its stats' bindings to it, so nothing reports to it or keeps it.
+        if (Characters.Watch is { } foreign && !foreign.Of(this))
+        {
+            Characters.Watch = null;
+            Bodies.ExperienceFilters.UnbindAll(this);
+        }
+
         if (!DeathObservers.Active && !ExperienceFilters.Active) return;
 
-        if (Characters.Watch?.Of(this) != true) Characters.Watch = new CharacterWatch(this);
+        Characters.Watch ??= new CharacterWatch(this);
         if (ExperienceFilters.Active) Bodies.ExperienceFilters.BindAll(this);
     }
 

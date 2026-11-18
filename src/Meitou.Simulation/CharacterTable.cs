@@ -383,7 +383,8 @@ public sealed class CharacterCold
 
     /// <summary>
     /// The character's stats (null: none). New stats take over the old ones' binding to the code mods' experience filters
-    /// (<see cref="CharacterStats.BindExperience"/>), so a character whose stats are replaced in the world (the editor) stays filtered.
+    /// (<see cref="CharacterStats.BindExperience"/>), so a character whose stats are replaced in the world (the editor) stays filtered; stats taken
+    /// off (null) lose it, so they keep no world alive.
     /// </summary>
     public CharacterStats? Stats
     {
@@ -392,7 +393,8 @@ public sealed class CharacterCold
         {
             if (ReferenceEquals(_stats, value)) return;
 
-            value?.TakeExperienceBinding(_stats);
+            if (value is null) _stats?.UnbindExperience();
+            else value.TakeExperienceBinding(_stats);
             _stats = value;
         }
     }

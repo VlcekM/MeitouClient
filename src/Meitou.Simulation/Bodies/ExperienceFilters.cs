@@ -60,7 +60,8 @@ sealed class ExperienceFilters
         var table = world.Characters;
         for (int slot = 0; slot < table.HighWater; slot++)
         {
-            if (table.Cold(slot)?.Stats is { } stats) stats.BindExperience(world, new CharacterId(slot, table.Next[slot].Generation));
+            if (table.Cold(slot)?.Stats is { } stats)
+                stats.BindExperience(world, new CharacterId(slot, table.Next[slot].Generation));
         }
     }
 
@@ -137,9 +138,10 @@ sealed class ExperienceFilters
     /// </summary>
     static void LogFault(IExperienceFilter filter, long tick, string fault)
     {
+        string what = $"failed at tick {tick}, dropped from the next: {fault}";
         if (SimulationExtensions.FactoryOf(filter) is { } factory)
-            Console.Error.WriteLine($"mod       {factory.Owner}: experience filter '{factory.Name}' failed at tick {tick}, dropped from the next: {fault}");
+            Console.Error.WriteLine($"mod       {factory.Owner}: experience filter '{factory.Name}' {what}");
         else
-            Console.Error.WriteLine($"experience filter '{filter.GetType().FullName}' failed at tick {tick}, dropped from the next: {fault}");
+            Console.Error.WriteLine($"experience filter '{filter.GetType().FullName}' {what}");
     }
 }

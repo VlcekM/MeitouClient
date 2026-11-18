@@ -431,7 +431,8 @@ public sealed partial class CrimeSystem
     {
         if (world.Characters.Cold(thief) is not { } c || owner < 0 || owner == c.Faction) return;
         SetPending(world, thief, CrimeCode.Theft, owner, CharacterId.None, MinTimer);
-        if (c.Stats is { } stats && c.Race is { } race) Xp?.Continuous(stats, race, StatsEnumerated.Thieving, 1, PickUpXp, ExperienceSource.Thievery);
+        if (c.Stats is { } stats && c.Race is { } race)
+            Xp?.Continuous(stats, race, StatsEnumerated.Thieving, 1, PickUpXp, ExperienceSource.Thievery);
     }
 }
 
