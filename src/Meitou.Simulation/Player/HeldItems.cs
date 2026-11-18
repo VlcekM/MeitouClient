@@ -455,11 +455,21 @@ sealed class HeldItems(PopulationData? data)
                 && InventoryCommands.MainClosed(target.Owner)) refusal = "";   // a live animal's grid (the original leaves it out of the window)
         if (refusal is null && target.Machine is { Data.IsStorage: true } storage && !storage.Data.TakesByHand(item.Record, item.Type))
             refusal = "Invalid container type.";
-        if (refusal is null && InventoryCommands.LimbSlotOf(target.Section) is >= 0 and var limbSlot
-            && (data?.Items.Limb(item.Record)?.LimbSlot != limbSlot
-                    || target.Owner?.Medical?.LimbPart(limbSlot) is not { Limb: Bodies.LimbState.Stump or Bodies.LimbState.Replaced }))
-            refusal = "Can't wear that item.";   // a prosthetic of the slot's side, on a stump (or swapped with the one fitted there)
+        if (refusal is null && InventoryCommands.LimbSlotOf(target.Section) is >= 0 and var limbSlot)
+            refusal = LimbRefusal(target, item, limbSlot);
         return refusal;
+    }
+
+    /// <summary>
+    /// Why prosthetic slot <paramref name="limbSlot"/> refuses the item, or null when it takes it: another side's (or no) prosthetic gets "Invalid
+    /// container type." (the section's type 50 + slot against the item's <c>slot</c>, <c>FUN_14074bc30</c>); a slot without a stump or a fitted
+    /// prosthetic is disabled in the original and takes no drop, so it refuses silently.
+    /// </summary>
+    string? LimbRefusal(Target target, ItemInstance item, int limbSlot)
+    {
+        if (data?.Items.Limb(item.Record)?.LimbSlot != limbSlot) return "Invalid container type.";
+        if (target.Owner?.Medical?.LimbPart(limbSlot) is not { Limb: Bodies.LimbState.Stump or Bodies.LimbState.Replaced }) return "";
+        return null;
     }
 
     /// <summary>

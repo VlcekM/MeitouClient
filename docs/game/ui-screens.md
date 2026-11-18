@@ -1300,7 +1300,9 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
     pushes the inventory and bag right. Opened without a parent: it does not move with the inventory (**Observed**). Closing the inventory closes it (`FUN_1406e53d0`); Meitou also
     closes it when the inventory shows another character (the original's inventory is per character).
   - Slots: sections `left_arm_replace`, `right_arm_replace`, `left_leg_replace`, `right_leg_replace` (`FUN_1400d04d0`), arms 2 x 6 and legs 2 x 7 cells (`FUN_1401534f0`). A slot is
-    enabled only for a stump or a replaced limb, else drawn with the skin's `disabled` tile and taking no drop (MyGUI gives it no focus, **Observed**). A fitted prosthetic shows its
+    enabled only for a stump or a replaced limb, else drawn with the skin's `disabled` tile and taking no drop (MyGUI gives it no focus, **Observed**). Each section's type is
+    50 + its slot, and it takes only an item of that `slot` (`FUN_14074bc30`): another side's prosthetic gets "Invalid container type." (message 6 of `FUN_14070f7e0` in the drag
+    `FUN_140715560`, **Verified** by decompile). The window is mirrored: the left limbs' slots are the right-hand column (**Observed**, the original layout in Meitou, #954). A fitted prosthetic shows its
     icon; a stump's race item never sits in the slot. Labels `-ARMS-` / `-LEGS-`; `figure.png` never changes. The slots are built on open (a limb lost meanwhile shows on reopening,
     **Observed**; Meitou refreshes live).
   The pin button (`Kenshi_PinButtonSkin` in the `Kenshi_WindowCXP` caption, drawn "O"; the skin's `*_checked` states while pinned) keeps the inventory window on the character shown
