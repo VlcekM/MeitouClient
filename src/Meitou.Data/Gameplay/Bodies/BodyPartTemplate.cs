@@ -120,6 +120,12 @@ public sealed record BodyPartTemplate
     public int PainThreshold { get; init; }
 
     /// <summary>
+    /// Whether <see cref="Type"/> is one of the four the original knows (torso, leg, arm, head). A part of another number (a tail, Meitou-only: the
+    /// original reads past its four-entry tables for one) has none of their roles; Meitou treats it as an extra limb when it can be cut off.
+    /// </summary>
+    public bool HasBaseType => Type is BodyPartType.Torso or BodyPartType.Leg or BodyPartType.Arm or BodyPartType.Head;
+
+    /// <summary>
     /// The side of the part from its <c>collapse part</c> bits.
     /// </summary>
     public BodySide Side => CollapsePart is 4 or 0x20 ? BodySide.Left : CollapsePart is 2 or 0x10 ? BodySide.Right : BodySide.None;

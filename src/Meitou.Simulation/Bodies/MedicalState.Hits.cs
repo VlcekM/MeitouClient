@@ -128,13 +128,14 @@ public sealed partial class MedicalState
     static bool Alive(HealthPart p) => p.Flesh > -p.MaxHp;
 
     /// <summary>
-    /// A part's weight in the hit roll: 0 for a part already gone, the stump of an arm or leg, or an arm or head on a low strike; else its hit weight
-    /// times <see cref="HealthPart.HitMult"/> (the weight alone for hit direction 6).
+    /// A part's weight in the hit roll: 0 for a part already gone, the stump of an arm or leg (or of a Meitou part of a type outside the four, a
+    /// cut-off tail; head and torso parts are never stumps in the base game), or an arm or head on a low strike; else its hit weight times
+    /// <see cref="HealthPart.HitMult"/> (the weight alone for hit direction 6).
     /// </summary>
     static float Weight(HealthPart p, bool lowStrike, bool directionSix)
     {
         if (!Alive(p)) return 0;
-        if (p.Limb == LimbState.Stump && p.Template.Type is BodyPartType.Leg or BodyPartType.Arm) return 0;
+        if (p.Limb == LimbState.Stump && p.Template.Type is not (BodyPartType.Head or BodyPartType.Torso)) return 0;
         if (lowStrike && p.Template.Type is BodyPartType.Arm or BodyPartType.Head) return 0;
         return p.HitWeight * (directionSix ? 1 : p.HitMult);
     }

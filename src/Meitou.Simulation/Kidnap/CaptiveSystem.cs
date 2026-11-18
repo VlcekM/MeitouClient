@@ -1846,9 +1846,10 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             if (e.Kind is MedicalEventKind.Died or MedicalEventKind.KnockedOut) TaskStart.Stand(world.Characters, c);
             else if (e.Kind == MedicalEventKind.PartSevered)
             {
-                world.Characters.LimbsChanged.Enqueue((c, medical.Parts[e.Part].Template.LimbSlot, limbDrops));
-                world.Defer(new Dialogue.DialogueEvent(captive, CharacterId.None, medical.Parts[e.Part].Template.LimbSlot is 2 or 3 ? 70
-                        : 71) { Tick = world.Tick + 1 });
+                var part = medical.Parts[e.Part].Template;
+                world.Characters.LimbsChanged.Enqueue((c, part.LimbSlot, limbDrops));
+                if (Data.Gameplay.Dialogue.DialogueEvents.LostLimb(part) is { } cry)
+                    world.Defer(new Dialogue.DialogueEvent(captive, CharacterId.None, cry) { Tick = world.Tick + 1 });
             }
         }
     }

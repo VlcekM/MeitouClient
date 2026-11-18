@@ -76,12 +76,16 @@ public sealed partial class MedicalState
     }
 
     /// <summary>
-    /// Whether part <paramref name="index"/> is an extra limb: a part of limb slot 0 to 3 after the first of that slot (a second left arm), which
-    /// the <c>limbs</c> value has no bits for. No base-game race has one.
+    /// Whether part <paramref name="index"/> is an extra limb, one the <c>limbs</c> value has no bits for: a part of limb slot 0 to 3 after the first
+    /// of that slot (a second left arm), or a part whose <c>body part type</c> is none of the four (a tail, Meitou-only: the original reads past its
+    /// four-entry table for one). No base-game race has either.
     /// </summary>
     public bool IsExtraLimb(int index)
     {
-        int slot = _parts[index].Template.LimbSlot;
+        var template = _parts[index].Template;
+        if (!template.HasBaseType) return true;
+
+        int slot = template.LimbSlot;
         if (slot is < 0 or >= 4) return false;
 
         for (int i = 0; i < index; i++)

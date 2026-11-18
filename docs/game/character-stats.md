@@ -640,6 +640,16 @@ byte key = table[`body part type`] (`0x1416fc42c`: torso 10, leg 30, arm 20, hea
 left then right arm (forelegs too), left then right leg. Parts with one key (chest, stomach) keep the map's order, which is keyed by pointer (vanilla shows stomach first). Meitou: `MedicalState.Create` and `ReadSave` sort the parts by `BodyPartTemplate.MedicalOrder`, ties in `combat anatomy` (or saved) order, so
 the stomach comes first; the panel, splinting's "first part", the hit table and saves all use that list.
 
+#### Bodies of other shapes (Meitou)
+
+A `body part type` other than 0 to 3 (a tail or a wing) is Meitou-only: the original reads past its four-entry tables for one ([part order](#part-order)).
+Meitou gives such a part none of the four types' roles (`BodyPartTemplate.HasBaseType`): it is hit by its hit weight (low strikes too), covered by armour
+that lists it in `part coverage`, bleeds and heals, knocks out or kills when `death` is set, sorts after the legs and is saved with its health like any
+part. With `severance` and without `death`, a blow (Dismemberment Rare or more) or a worsening wound (Frequent) cuts it off: it becomes a stump, is no
+longer hit, stays a stump through a save ([save](../formats/save.md#limbs-medical_state-limbs)) and the character cries no lost-limb line
+(`DialogueEvents.LostLimb`); no item drops and the part stays drawn. **Observed** (2026-11-17, scratch run of a Greenlander body with a type 4 tail of
+hit weight 60: picked by 168 of 2,000 hit rolls whole, 0 after a 400 cut severed it; the stump loaded back).
+
 ### Per-part state (`MedicalSystem::HealthPartStatus`)
 
 **Observed**, from `FUN_14064d0e0` (constructor), `FUN_14064f5c0` (update), `FUN_14064f300` / `FUN_140644a70`
