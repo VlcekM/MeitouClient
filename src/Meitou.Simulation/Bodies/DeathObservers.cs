@@ -78,7 +78,8 @@ sealed class DeathObservers
         var table = world.Characters;
         for (int slot = 0; slot < table.HighWater; slot++)
         {
-            if (table.Cold(slot) is { Medical.DeathUnreported: true }) Report(world, slot, CharacterId.None, DeathSite.Other);
+            if (table.Cold(slot) is { Medical.DeathUnreported: true })
+                Report(world, slot, CharacterId.None, DeathSite.Other);
         }
     }
 
@@ -104,7 +105,8 @@ sealed class DeathObservers
         world.Characters.TryResolveNext(id, out int slot) && world.Characters.Cold(slot) is { } cold ? cold.Faction : -1;
 
     /// <summary>
-    /// Passes a death to every enabled observer, disabling one that throws. Serial phases only.
+    /// Passes a death to every enabled observer, disabling one that throws or removes the dead character from the world (against its contract;
+    /// the removal it made stands, and the world's own removal under way is not repeated, <see cref="CharacterTable.Remove"/>). Serial phases only.
     /// </summary>
     void Observe(World world, in CharacterDeath death)
     {
@@ -114,26 +116,32 @@ sealed class DeathObservers
             var entry = observers[i];
             if (!entry.Enabled) continue;
 
+            string? fault = null;
             try
             {
                 entry.Observer.Died(world, death);
+                if (!death.Victim.IsNone && !world.Characters.TryResolveNext(death.Victim, out _))
+                    fault = "it removed the character it was told about";
             }
             catch (Exception e)
             {
-                observers[i] = (entry.Observer, entry.SystemIndex, false);
-                _active--;
-                _faulted++;
-                LogFault(entry.Observer, e);
+                fault = $"{e.GetType().Name}: {e.Message}";
             }
+
+            if (fault is null || !observers[i].Enabled) continue;
+
+            observers[i] = (entry.Observer, entry.SystemIndex, false);
+            _active--;
+            _faulted++;
+            LogFault(entry.Observer, fault);
         }
     }
 
     /// <summary>
     /// A disabled observer's log line: the mod and the name it registered the system under, as the mods' other log lines; else its type.
     /// </summary>
-    static void LogFault(ICharacterDeathObserver observer, Exception e)
+    static void LogFault(ICharacterDeathObserver observer, string fault)
     {
-        string fault = $"{e.GetType().Name}: {e.Message}";
         if (SimulationExtensions.FactoryOf(observer) is { } factory)
             Console.Error.WriteLine($"mod       {factory.Owner}: death observer '{factory.Name}' disabled for this world: {fault}");
         else

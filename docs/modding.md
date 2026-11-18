@@ -313,11 +313,13 @@ holds refuses the second mod.
   else in a sweep in slot order after the parallel phases (the body's tick, and the inputs' debug kill) and again after the slow world, or as
   the dead character leaves the world, whichever comes first. So the order never depends on the thread count, but it is not the order of death
   within a tick (a debug kill in the inputs is told after the bolts of the schedule). During a tick the call runs on the thread running the
-  tick; a butchering by the paused interface's commands between ticks is told at once, on the host's thread, with the coming tick's number. The
-  dead character is still in the world during the call; a body loaded dead is never reported. Callbacks may read the world and change their
-  own hashed state, and must not change characters or other world state (gameplay changes go through commands). One that throws is logged and
-  disabled for that world; faulted registrations enter the state hash. Without an observer no payload is made and no watch is kept. Engine
-  API, not in the original.
+  tick; the paused interface's commands between ticks (the dialogue window's choices, character trades, squad, item and trade commands) tell
+  theirs at once on the host's thread, with the coming tick's number: in the stock game, a death item taken by hand. The dead character is
+  still in the world's table during the call (a member of a squad being stored off screen has its in-world state, such as its AI and pending
+  crime, already cleared); a body loaded dead is never reported. Callbacks may read the world and change their own hashed state, and must not
+  change characters or other world state (gameplay changes go through commands). One that throws, or that removes the dead character itself,
+  is logged and disabled for that world (the removal it made stands, and is not made twice); faulted registrations enter the state hash.
+  Without an observer no payload is made and no death watch is kept. Engine API, not in the original.
 - **Experience:** a registered system implementing `IExperienceFilter` (`Meitou.Simulation.Bodies`) is asked `Gain(World, in ExperienceGain)` for
   every experience gain the game makes to a character in the world (every `XpService` entry: combat, injuries, ranged and turrets, moving,
   sneaking, assassination, thievery, lockpicking, building, machine work, training dummies, first aid, mass combat) and for a direct

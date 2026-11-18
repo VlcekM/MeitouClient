@@ -1691,7 +1691,15 @@ public sealed class CharacterTable
             throw new InvalidOperationException("characters are removed in the commit or the slow world only (a phase reads them as alive)");
 
         if (!TryResolveNext(id, out int slot)) return false;
-        Watch?.Removing(slot, _cold[slot]!);
+        if (Watch is { } watch)
+        {
+            watch.Removing(slot, _cold[slot]!);
+
+            // A code mod's death observer told of this character that removed it itself (against its contract, and disabled for it): it is gone,
+            // and freeing the slot again would hand it to two characters.
+            if (!TryResolveNext(id, out _)) return true;
+        }
+
         _next[slot].Alive = false;
         if (!_inTick) _previous[slot].Alive = false;
         _cold[slot] = null;

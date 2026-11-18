@@ -69,10 +69,11 @@ public readonly record struct CharacterDeath(long Tick, CharacterId Victim, stri
 /// off-screen fight kills. Called once per death, serially and never during a parallel phase, in system order: at once where a blow, a
 /// butchering, a meal, the rack or an off-screen fight killed; else in a sweep in slot order after the parallel phases (a death in them or in the
 /// inputs) and after the slow world, or as the dead character leaves the world, whichever comes first. During a tick it runs on the thread running
-/// the tick; a butchering by the paused interface's commands between ticks runs on the host's thread, with <see cref="CharacterDeath.Tick"/> the
-/// coming tick. The dead character is still in the world during the call. It may read the world and change its own hashed state, and must not
-/// change characters or other world state in the call (gameplay changes go through commands). One that throws is disabled for that world, and the
-/// fault enters the state hash. Engine API, not in the original.
+/// the tick; a death the paused interface's commands make between ticks (a death item taken by hand) is told on the host's thread, with
+/// <see cref="CharacterDeath.Tick"/> the coming tick. The dead character is still in the world's table during the call. It may read the world and
+/// change its own hashed state, and must not change characters or other world state in the call (gameplay changes go through commands). One that
+/// throws, or that removes the dead character itself, is disabled for that world, and the fault enters the state hash. Engine API, not in the
+/// original.
 /// </summary>
 public interface ICharacterDeathObserver : ITickSystem
 {
