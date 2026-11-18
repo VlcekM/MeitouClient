@@ -137,6 +137,10 @@ public sealed class ModHost
     /// Every mod's debug menu commands, in load order.
     /// </summary>
     public IReadOnlyList<ModDebugCommand> DebugCommands => _registry.DebugCommands;
+    /// <summary>
+    /// Every mod's key actions, in load order.
+    /// </summary>
+    public IReadOnlyList<Game.Host.Input.ModKeyAction> KeyActions => _registry.KeyActions;
 
     /// <summary>
     /// A mod registered a combat hit feed: the host then gives each world a <see cref="World.CombatHitFeed"/> and drains it every frame.

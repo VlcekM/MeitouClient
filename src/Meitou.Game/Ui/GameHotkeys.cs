@@ -48,9 +48,9 @@ sealed class GameHotkeys(PlayerInterface player)
         || Bound(InputAction.ToggleCrafting, key);
 
     /// <summary>
-    /// Whether <paramref name="key"/> is bound to a game-view hotkey (the host then keeps it from the cinema's numpad keys).
+    /// Whether <paramref name="key"/> is bound to a game-view hotkey or a code mod's key action (the host then keeps it from the cinema's numpad keys).
     /// </summary>
-    public bool IsHotkey(EngineKey key) => HotkeyActions.Any(a => Bound(a, key));
+    public bool IsHotkey(EngineKey key) => HotkeyActions.Any(a => Bound(a, key)) || player.Session.Bindings.IsModBound(key);
 
     /// <summary>
     /// The order toggle an orders hotkey stands for (toggle_block .. toggle_taunt), or null.

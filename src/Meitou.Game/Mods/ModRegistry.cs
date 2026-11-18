@@ -92,6 +92,10 @@ sealed class ModRegistrations
     /// </summary>
     public List<ModDebugCommand> DebugCommands { get; } = [];
     /// <summary>
+    /// The key actions.
+    /// </summary>
+    public List<Game.Host.Input.ModKeyAction> KeyActions { get; } = [];
+    /// <summary>
     /// The combat hit feeds.
     /// </summary>
     public List<ModHitFeed> HitFeeds { get; } = [];
@@ -187,6 +191,10 @@ sealed class ModRegistry
     /// </summary>
     public List<ModDebugCommand> DebugCommands { get; } = [];
     /// <summary>
+    /// Every mod's key actions, in load order, numbered from <see cref="Game.Host.Input.InputBindings.FirstModAction"/>.
+    /// </summary>
+    public List<Game.Host.Input.ModKeyAction> KeyActions { get; } = [];
+    /// <summary>
     /// Every mod's combat hit feeds, in load order.
     /// </summary>
     public List<ModHitFeed> HitFeeds { get; } = [];
@@ -253,6 +261,11 @@ sealed class ModRegistry
         Ui.AddRange(r.Ui);
         foreach (var (extension, folder) in r.UiFolders) UiFolders[extension] = folder;
         DebugCommands.AddRange(r.DebugCommands);
+        foreach (var action in r.KeyActions)
+        {
+            action.Action = Game.Host.Input.InputBindings.FirstModAction + KeyActions.Count;
+            KeyActions.Add(action);
+        }
         HitFeeds.AddRange(r.HitFeeds);
         FactionLists.AddRange(r.FactionLists);
         if (r.Settings is not null) Settings.Add(r.Settings);

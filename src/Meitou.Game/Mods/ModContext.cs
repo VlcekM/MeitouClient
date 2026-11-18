@@ -424,6 +424,28 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// A key action (docs/modding.md "Key actions"): a row named <paramref name="label"/> on the settings' Controls page after the game's, bound to
+    /// those of <paramref name="defaults"/> that no other action holds, rebindable and saved as the game's are (under <paramref name="name"/>, unique
+    /// within the mod). Each press in the game view runs <paramref name="pressed"/> on the host's thread while a tick may be in flight: it must not
+    /// touch the world, only read the context and queue commands. A throw is logged and the action gets no more presses.
+    /// </summary>
+    public Game.Host.Input.ModKeyAction AddKeyAction(string name, string label, Action<Game.Host.Input.ModKeyContext> pressed,
+        params Game.Host.Input.Binding[] defaults)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(label);
+        ArgumentNullException.ThrowIfNull(pressed);
+        ArgumentNullException.ThrowIfNull(defaults);
+        if (Game.Host.Input.ModKeyAction.Refusal(name, label, defaults, Pending.KeyActions) is { } refusal)
+            throw new ArgumentException(refusal, nameof(name));
+
+        var action = new Game.Host.Input.ModKeyAction(Id, Name, name, label, pressed, [.. defaults]);
+        Pending.KeyActions.Add(action);
+        return action;
+    }
+
+    /// <summary>
     /// The mod's settings (docs/modding.md "Settings"): the public properties of <paramref name="settings"/> marked <see cref="SettingAttribute"/>,
     /// one group under the mod on the Settings screen's Mods page. The player's saved values are set on the object before this returns; the values it
     /// has now are the defaults. Once per mod.

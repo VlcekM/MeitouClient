@@ -815,7 +815,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     void StartPlayerSquad()
     {
         // The saved key bindings feed the same settings dialog and camera/order input as Vulkan.
-        GameHost.UseSavedBindings(host.Session.Bindings, host.Install, host.Config);
+        GameHost.UseSavedBindings(host.Session.Bindings, host.Install, host.Config, host.Modding.KeyActions);
         // The game's new-game shortcut: the player's squad in the simulation, which the world draw list then shows.
         if (start is not null && host.Population is not null)
         {
@@ -1704,6 +1704,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         if (_hud is not null && (!host.GameOptions.LowEnd || _hud.UiMode != Meitou.Data.Ui.UiMode.Faithful))
             host.Config.UiMode = _hud.UiMode;   // --low-end's Faithful UI is for the run
         host.Config.Bindings = host.Session.Bindings.ToDictionary();
+        host.Config.ModBindings = host.Session.Bindings.ModChanges(host.Config.ModBindings);
         if (_settingsValues is not null)
         {
             foreach (var slider in _settingsValues.Sliders)
@@ -2233,6 +2234,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         if (actions.Pressed(InputAction.QuickLoad)) host.Saves.QuickLoadRequested = true;
         if (actions.Pressed(InputAction.FloorUp)) host.Interiors.StepFloor(1);
         if (actions.Pressed(InputAction.FloorDown)) host.Interiors.StepFloor(-1);
+        host.Modding.PressKeyActions(actions);
         if (_hud is not null)
         {
             // Panning, or leaving for the free camera, lets go of the character the camera follows; turning and

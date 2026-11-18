@@ -271,6 +271,33 @@ sealed class GameMods(GameHost host)
     }
 
     /// <summary>
+    /// The mods' key actions, in load order (none without code mods), for the bindings (<see cref="GameHost.UseSavedBindings"/>).
+    /// </summary>
+    internal IReadOnlyList<Game.Host.Input.ModKeyAction> KeyActions => Mods?.KeyActions ?? [];
+
+    /// <summary>
+    /// Once a control tick on the host's thread: each mod key action's held state, and its press for each one pressed this tick (docs/modding.md
+    /// "Key actions"), with the snapshot on screen, the selection and the command queue; none over the title or a loading cover.
+    /// </summary>
+    internal void PressKeyActions(Game.Host.Input.ActionState actions)
+    {
+        var keyActions = KeyActions;
+        if (keyActions.Count == 0) return;
+
+        bool playing = host.Player is { TitleOpen: false } && !host.Covered;
+        Game.Host.Input.ModKeyContext? context = null;
+        foreach (var action in keyActions)
+        {
+            action.Held = playing && actions.Held(action.Action);
+            if (!playing || !actions.Pressed(action.Action)) continue;
+
+            context ??= new Game.Host.Input.ModKeyContext(host.Session.CurrentSnapshot, host.Player.SelectedIds(), host.Session.World.Tick,
+                host.Session.World.Commands.Enqueue);
+            action.Press(context);
+        }
+    }
+
+    /// <summary>
     /// The debug menu rows the mods registered, after the game's own.
     /// </summary>
     internal IReadOnlyList<ModDebugCommand> ModDebugRows => Mods?.DebugCommands ?? [];

@@ -514,6 +514,20 @@ holds refuses the second mod.
 - **Debug rows:** `AddDebugCommand(label, run, hasField)` adds a row to the F10 menu after the vanilla ones. `run` gets
   `DebugCommandContext` (field, selection, camera target, tick, `Enqueue`) on the host thread while a tick may be in flight, so it must
   not touch the world; it returns the status line, and a throw shows as the status.
+- **Key actions:** `AddKeyAction(name, label, pressed, defaults)` (`ModKeyAction`, `src/Meitou.Game/Host/Input`) adds an action the player binds
+  like the game's: a row `label [mod name]` on the settings' Controls page after the game's rows, in load order, rebound there as theirs are
+  (a key taken from another action, the game's or a mod's, leaves it, with the same notice; Delete unbinds). It starts with those of
+  `defaults` (keys `Key.G`, buttons `MouseButton.Button4`; Escape, F6, Alt, Ctrl and Shift refuse the mod) that no other action holds once the
+  game's bindings and the earlier mods' are laid, so a default never steals a key; the left-out keys are logged. Restore defaults lays them
+  again. The player's changes are kept in `meitou.user.json` beside the game's (`modBindings`: mod id, `name`, keys as in `bindings`; an
+  action at its defaults is not kept, and `modBindings` is not written while nothing is; a mod not running keeps its entries), and a saved key another
+  action holds is left out. A press reaches it only when the game view gets the key (not in a text field, a menu or a window that takes keys,
+  nor over the title or a loading cover; a numpad key bound to one is not the cinema camera's): once per press, `pressed(ModKeyContext)`
+  (the `Snapshot` on screen, `Selected`, `Tick`, `Enqueue`) runs on the host thread at the control tick, so it must not touch the world and
+  queues commands for gameplay; `action.Held` is its state at the last control tick. A throw is logged with the mod id and the name and that
+  action gets no more presses. `name` (1 to 48 letters, digits, `_ . -`, unique within the mod) keys the saved keys; a bad name or a label
+  over 48 characters refuses the mod. The actions are numbered `InputAction` from `InputBindings.FirstModAction` (1000) in load order, for
+  this session only. Without key actions the bindings, the page and `meitou.user.json` are the game's. Engine API, not in the original.
 - **Squad AI tab options:** in `Register`, `registration.AddSquadAiOptions(context => options)` adds tick buttons to the squad overview's AI
   tab, after the game's own and above Follow Formation; the tab's lines shrink to fit. The source runs on the host thread on every layout pass
   while the tab is open, so it must be cheap; a tick may be in flight, so it must not touch the world. It gets `UiSquadAiContext` (the

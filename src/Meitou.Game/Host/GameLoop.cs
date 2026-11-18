@@ -769,6 +769,7 @@ sealed class GameLoop(GameHost host)
         // PageUp / PageDown step the viewed floor in the strategy camera: in the free camera and on a held one the cinema takes them for the lens.
         if (actions.Pressed(InputAction.FloorUp)) host.Interiors.StepFloor(1);
         if (actions.Pressed(InputAction.FloorDown)) host.Interiors.StepFloor(-1);
+        host.Modding.PressKeyActions(actions);
         if (actions.Pressed(InputAction.CycleProfiler) && host.DebugMenu.Profiler is not null)
             host.DebugMenu.Profiler.Showing = (FrameProfiler.Mode)(((int)host.DebugMenu.Profiler.Showing + 1) % 3);
         // The camera the cinema left (a cut, a scrub, the end of a flight) goes back to the rig at the first camera input: the free camera at
@@ -2420,6 +2421,7 @@ sealed class GameLoop(GameHost host)
             _panel.Tiers.SavePreset();
         }
         host.Config.Bindings = host.Session.Bindings.ToDictionary();
+        host.Config.ModBindings = host.Session.Bindings.ModChanges(host.Config.ModBindings);
         if (!host.GameOptions.LowEnd || host.Player.UiMode != Data.Ui.UiMode.Faithful)
             host.Config.UiMode = host.Player.UiMode;   // --low-end's Faithful UI is for the run
         host.Config.Save();
