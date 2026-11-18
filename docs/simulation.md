@@ -162,6 +162,9 @@ no loot 26 / 177 / 42, no first aid, no operate, no medic, no lock, cage or door
 Loot is 26 for the orders, 177 for NPC scavenging and 42 for an NPC arming itself. The engine's starts test their rows too ("Task starts"): a refused errand walk counts
 as a walk that ended short (the errand gives up after its tries); a refused standing task (`TaskStart.Become`) gives way to 14 Idleness, which every repertoire registers (a crippled
 character does not wander, 24, after a flight, a trade or at a roaming mill). Shoo 158, ransack 216 and liberate 276 have TaskData rows and are tested.
+The goal pick tests the goal's own row too (`PlanContext.TryPlan`, after the engine-run goals): a root row the repertoire lacks plans nothing, as the original's planner
+(docs/game/ai-tasks.md "Leaving the night cage"), so a caravan's pack animals under its bar package never relax (214, 0x1). The seat claims (`TownPlaceClaims`) skip a
+member that cannot use the seat: relaxing needs 214, staying home and sitting around 221 (human only), so animals and crawlers take no chair (#968).
 The rows of the dialogue's walks are the original's (**Verified**, the dialogue action switch `FUN_140680560`): action 2 orders 102 (`Task_TalktoPlayer`), so the
 approach is 102; action 30 makes the target drop the carried person and orders the speaker 213 and 112, action 29 240 and 112, so the arrest's takeover lift is 213 and
 its cage walk 112. 126, 205 and 206 have no TaskData, and nothing starts them. The AI's own starts (`TaskStart.StartOwn`) are not tested: its planner chose the row. Not yet routed through it: the trade and talk orders. A caging ends the task through

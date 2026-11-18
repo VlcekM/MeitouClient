@@ -220,6 +220,10 @@ public sealed partial class AiSystem
                 return true;
             }
 
+            // The planner looks the root row up in the character's repertoire: a row it lacks plans nothing (docs/game/ai-tasks.md "Leaving the
+            // night cage"), so an animal of a bar squad does not relax (214 is human only).
+            if ((row.Category & Category) == 0) return false;
+
             var target = GoalTarget(row);
             if (row.Is(TaskDataFlags.NeedsTarget) && !row.Is(TaskDataFlags.Finder) && target.IsNone) return false;
 

@@ -182,9 +182,17 @@ sealed class TownPlaceClaims(PopulationData data)
                 sits |= roles[g].Task.Type == TaskType.StayInHome;
             }
 
+            relaxes &= TaskStart.Eligible(world, cold, TaskType.RelaxInTownPackage);
+            sits &= Seated(world, cold);
             ClaimSeat(world, board, s, id, relaxes, sits && !relaxes, cold.Ai);
         }
     }
+
+    /// <summary>
+    /// Whether the member's repertoire can use a seat of staying home or sitting around: both lead to 221 (effect 136), which only the human
+    /// repertoire registers, so an animal or a crawling character plans nothing there and takes no seat (docs/game/ai-tasks.md "Town goals").
+    /// </summary>
+    static bool Seated(World world, CharacterCold cold) => TaskStart.Eligible(world, cold, TaskType.PretendToOperateMachinery);
 
     /// <summary>
     /// One member's seat of <see cref="ClaimSeats"/>: the one it kept, else a free one of the building its goal names; one that relaxes and stays
@@ -366,7 +374,7 @@ sealed class TownPlaceClaims(PopulationData data)
             }
 
             bool had = _keptSits.TryGetValue(s, out var old);
-            if (!sits || cold.Ai.SeatUnreachable)   // one that gave its seat up leaves it to the next member
+            if (!sits || cold.Ai.SeatUnreachable || !Seated(world, cold))   // one that gave its seat up leaves it to the next member
             {
                 if (had) TakenOf(old.Building).Remove(old.Index);
                 continue;
