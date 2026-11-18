@@ -24,21 +24,34 @@ public static class Encumbrance
     /// <summary>
     /// Capacity C = <c>carry weight mult</c> x strength x strengthInjuryMultiplier + <c>encumbrance base</c>.
     /// <paramref name="strengthInjuryMultiplier"/> is the stat multiplier of strength (<see cref="MedicalState.StatMultiplier"/> with strength, 1
-    /// when unhurt). A code mod's <paramref name="modifiers"/> (<see cref="CharacterStats.CarryModifiers"/>) apply to the whole of C.
+    /// when unhurt).
     /// </summary>
-    public static float Capacity(GameConstants c, float strength, float strengthInjuryMultiplier = 1, CarryModifiers? modifiers = null)
+    public static float Capacity(GameConstants c, float strength, float strengthInjuryMultiplier = 1) =>
+        c.CarryWeightMult * strength * strengthInjuryMultiplier + c.EncumbranceBase;
+
+    /// <summary>
+    /// <see cref="Capacity(GameConstants, float, float)"/> with a code mod's <paramref name="modifiers"/> (<see cref="CharacterStats.CarryModifiers"/>,
+    /// null: none) applied to the whole of C.
+    /// </summary>
+    public static float Capacity(GameConstants c, float strength, float strengthInjuryMultiplier, CarryModifiers? modifiers)
     {
-        float capacity = c.CarryWeightMult * strength * strengthInjuryMultiplier + c.EncumbranceBase;
+        float capacity = Capacity(c, strength, strengthInjuryMultiplier);
         return modifiers is null ? capacity : modifiers.Apply(capacity);
     }
 
     /// <summary>
     /// The maximum the inventory window prints (<b>Observed</b>, docs/game/ui-screens.md "Total Weight"): the strength (times the stats
     /// multiplier, which is an animal's age, and its injury multiplier) plus <c>encumbrance base</c>, truncated. It has no <c>carry weight mult</c>:
-    /// that only enters the capacity of the encumbrance factor (<see cref="Capacity"/>). A code mod's <paramref name="modifiers"/> apply before
-    /// the truncation.
+    /// that only enters the capacity of the encumbrance factor (<see cref="Capacity(GameConstants, float, float)"/>).
     /// </summary>
-    public static float WindowCapacity(GameConstants c, float strength, float strengthInjuryMultiplier = 1, CarryModifiers? modifiers = null)
+    public static float WindowCapacity(GameConstants c, float strength, float strengthInjuryMultiplier = 1) =>
+        MathF.Floor(strength * strengthInjuryMultiplier + c.EncumbranceBase);
+
+    /// <summary>
+    /// <see cref="WindowCapacity(GameConstants, float, float)"/> with a code mod's <paramref name="modifiers"/> (null: none) applied before the
+    /// truncation.
+    /// </summary>
+    public static float WindowCapacity(GameConstants c, float strength, float strengthInjuryMultiplier, CarryModifiers? modifiers)
     {
         float capacity = strength * strengthInjuryMultiplier + c.EncumbranceBase;
         return MathF.Floor(modifiers is null ? capacity : modifiers.Apply(capacity));
@@ -55,9 +68,15 @@ public static class Encumbrance
     }
 
     /// <summary>
-    /// The factor of a character: weight and capacity from its strength, injuries and code mods' carry modifiers.
+    /// The factor of a character: weight and capacity from its strength and injuries.
     /// </summary>
-    public static float Factor(GameConstants c, float inventoryWeight, bool carryingPerson, float strength, float strengthInjuryMultiplier = 1,
-        CarryModifiers? modifiers = null) =>
+    public static float Factor(GameConstants c, float inventoryWeight, bool carryingPerson, float strength, float strengthInjuryMultiplier = 1) =>
+        Factor(CarriedWeight(c, inventoryWeight, carryingPerson), Capacity(c, strength, strengthInjuryMultiplier));
+
+    /// <summary>
+    /// The factor of a character with a code mod's carry <paramref name="modifiers"/> (null: none) on its capacity.
+    /// </summary>
+    public static float Factor(GameConstants c, float inventoryWeight, bool carryingPerson, float strength, float strengthInjuryMultiplier,
+        CarryModifiers? modifiers) =>
         Factor(CarriedWeight(c, inventoryWeight, carryingPerson), Capacity(c, strength, strengthInjuryMultiplier, modifiers));
 }

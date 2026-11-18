@@ -24,12 +24,24 @@ public readonly record struct CarryModifier(string Key, CarryTerm Term, float Am
 
 /// <summary>
 /// A character's carrying capacity modifiers (Meitou, for code mods; docs/modding.md "Carry capacity"): keyed amounts applied to the capacity the
-/// game works out from strength (<see cref="Encumbrance.Capacity"/> and the window's <see cref="Encumbrance.WindowCapacity"/>): the capacity times
-/// (1 + the <see cref="CarryTerm.Scale"/> sum) plus the <see cref="CarryTerm.Kilograms"/> sum, never below 0. State (hashed) but not saved, so the
-/// mod sets it again after a load. Change it outside the parallel phases (docs/simulation.md "Threading"): the body step reads it.
+/// game works out from strength (<see cref="Encumbrance.Capacity(Meitou.Data.Gameplay.GameConstants, float, float, CarryModifiers?)"/> and the
+/// window's <see cref="Encumbrance.WindowCapacity(Meitou.Data.Gameplay.GameConstants, float, float, CarryModifiers?)"/>): the capacity times
+/// (1 + the <see cref="CarryTerm.Scale"/> sum) plus the <see cref="CarryTerm.Kilograms"/> sum, never below 0. Keys are shared by every mod, so a
+/// mod prefixes its own with its id. State (hashed) but not saved, so the mod sets it again after a load. Change it outside the parallel phases
+/// (docs/simulation.md "Threading"): the body step reads it.
 /// </summary>
 public sealed class CarryModifiers
 {
+    /// <summary>
+    /// The most the kilogram sum adds or takes away (a sum past it is held at it, so many mods' amounts cannot overflow).
+    /// </summary>
+    const float MaxKilograms = 1_000_000;
+
+    /// <summary>
+    /// The most the scale sum adds or takes away (as <see cref="MaxKilograms"/>).
+    /// </summary>
+    const float MaxScale = 1_000;
+
     /// <summary>
     /// The modifiers, ordered by key (ordinal) then term, so sums and the state hash do not depend on the order they were set in.
     /// </summary>
@@ -93,7 +105,7 @@ public sealed class CarryModifiers
     /// <summary>
     /// <paramref name="capacity"/> (the game's own, kg) with the modifiers: times (1 + <see cref="Scale"/>) plus <see cref="Kilograms"/>, at least 0.
     /// </summary>
-    public float Apply(float capacity) => MathF.Max(capacity * (1 + Scale) + Kilograms, 0);
+    internal float Apply(float capacity) => MathF.Max(capacity * (1 + Scale) + Kilograms, 0);
 
     /// <summary>
     /// Adds the modifiers to the state hash, in their order.
@@ -137,7 +149,7 @@ public sealed class CarryModifiers
     }
 
     /// <summary>
-    /// Recomputes both sums, adding in list order.
+    /// Recomputes both sums, adding in list order, each held within its limit (<see cref="MaxKilograms"/>, <see cref="MaxScale"/>).
     /// </summary>
     void Resum()
     {
@@ -148,7 +160,7 @@ public sealed class CarryModifiers
             else scale += m.Amount;
         }
 
-        Kilograms = kilograms;
-        Scale = scale;
+        Kilograms = Math.Clamp(kilograms, -MaxKilograms, MaxKilograms);
+        Scale = Math.Clamp(scale, -MaxScale, MaxScale);
     }
 }

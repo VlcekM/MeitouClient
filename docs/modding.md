@@ -539,16 +539,19 @@ holds refuses the second mod.
   Medic, HiveMedic and Vet share one storage. Change it from the mod's system outside the parallel phases. The body's look reads the stored value;
   a new body (a race change at character creation) starts without modifiers. **Verified** by `StatsTests` (reads, save, gain, hash).
 - **Carry capacity:** `cold.Stats.CarryModifiers.Set(key, term, amount)` / `Remove(key, term)` / `RemoveAll(key)` (`CarryModifiers`,
-  `src/Meitou.Simulation/Bodies`) change a character's carrying capacity under the mod's own key, for race traits and gear (a frame pack's +20 kg)
+  `src/Meitou.Simulation/Bodies`) change a character's carrying capacity under keys of the mod's own, for race traits and gear (a frame pack's +20 kg)
   without touching strength, which also drives damage, blood and training. `CarryTerm.Scale` amounts add a fraction of the game's capacity
   (0.25: a quarter more), `CarryTerm.Kilograms` amounts add kilograms; the capacity becomes the game's own times (1 + the scales) plus the
-  kilograms, never below 0. The game's own is `carry weight mult` x strength x its injury multiplier + `encumbrance base`
-  ([stats](game/character-stats.md), "Encumbrance and carrying"), so the modifiers act after strength and its injuries. Every reader takes them: the
-  encumbrance factor (run speed, hunger, the strength and athletics training it drives, combat), the inventory window's maximum and burden
-  word, and the "Max carry weight" lines of the HUD and the stats window. Several mods each keep their own keys; amounts add up. It enters the
-  state hash once one is set, and is not saved: keep it in the mod's `IModSaveData` (or work it out again from worn gear) and set it again
-  after a load, for example in `IWorldReady`. Change it from the mod's system outside the parallel phases. A new body starts without
-  modifiers. Engine API, not in the original.
+  kilograms, never below 0 (each sum is held within plus or minus 1,000,000 kg and 1,000 times). A capacity of 0 (scales adding up to -1 or
+  less) leaves a character carrying anything unable to move. The game's own is `carry weight mult` x strength x its injury multiplier +
+  `encumbrance base` ([stats](game/character-stats.md), "Encumbrance and carrying"), so the modifiers act after strength and its injuries. Every
+  reader takes them: the encumbrance factor (run speed, hunger, the strength and athletics training it drives, combat), the inventory window's
+  maximum and burden word, and the "Max carry weight" lines of the HUD and the stats window. The window's maximum has no `carry weight mult`
+  (as in the game), so a scale adds fewer kilograms there than it gives the factor. Keys are shared by every mod: prefix yours with your mod id
+  (`context.Id + ".pack"`), and amounts of different keys add up. It enters the state hash once one is set, and is not saved: keep it in the
+  mod's `IModSaveData` (or work it out again from worn gear) and set it again after a load, for example in `IWorldReady`. Change it, and even
+  read `CarryModifiers` (it is made on first use), only from the mod's system outside the parallel phases. A new body starts without modifiers.
+  Engine API, not in the original.
 - **Sounds:** `world.PostSound(eventName, characterId)` plays a named sound event on a character, `world.PostSound(eventName, point)` at a world
   point and `world.PostInterfaceSound(eventName)` on the interface (heard alike wherever the camera is), each with an optional switch
   (`switchGroup`, `switchValue`) set on the object first; `ModContext` has the same three calls for code off the tick (an interface press),
