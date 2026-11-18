@@ -625,7 +625,8 @@ public sealed partial class World
         s.Stealth = sneaking ? watchers.Length == 0 ? StealthExposure.Unobserved : watchers.Max(w => w.Level) : null;
         s.Light = sneaking ? Sight.PeekLight(i) : 1;
         s.Watchers = watchers;
-        s.Bar = cold is { IsPlayer: true } ? PickBar(cold, state[i].Task) ?? CutBar(cold, state[i].Task) ?? TrainBar(cold) : null;
+        var gameBar = cold is { IsPlayer: true } ? PickBar(cold, state[i].Task) ?? CutBar(cold, state[i].Task) ?? TrainBar(cold) : null;
+        s.Bar = ModBar(cold) ?? gameBar;
         s.Prison = cold is { IsImprisoned: true }
             ? new PrisonView(!(cold.InWhat is { } cageId && Fixtures.Find(cageId) is { } cage && cage.Lock is not { EffectivelyLocked: true }),
                 cold.SentenceLength, cold.SentenceStart + cold.SentenceLength - GameHours)
@@ -861,6 +862,14 @@ public sealed partial class World
             StealChance = steal?.Invoke(item)
         };
     }
+
+    /// <summary>
+    /// A code mod's bar (<see cref="CharacterCold.ModTaskBar"/>) as drawn: no caption shows as an empty one, and a fill that is not a number
+    /// as empty.
+    /// </summary>
+    static TaskBar? ModBar(CharacterCold? c) => c?.ModTaskBar is { } bar
+        ? new TaskBar(bar.Text ?? "", float.IsFinite(bar.Progress) ? Math.Clamp(bar.Progress, 0, 1) : 0)
+        : null;
 
     /// <summary>
     /// The bar of Task_PickLock and Task_PickLock_Shackles (docs/game/locks.md "Lockpicking"): "Lockpicking (Chance {p}%)" with the cage penalty,

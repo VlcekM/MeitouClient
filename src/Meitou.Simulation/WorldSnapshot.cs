@@ -757,7 +757,8 @@ public sealed class CharacterSnapshot
     /// </summary>
     public float Light { get; internal set; } = 1;
     /// <summary>
-    /// The floating progress bar over a player character picking a lock (docs/game/locks.md "Lockpicking"); null when none.
+    /// The floating progress bar over a player character picking a lock (docs/game/locks.md "Lockpicking"), cutting one or training, or the bar a
+    /// code mod set (<see cref="CharacterCold.ModTaskBar"/>); null when none.
     /// </summary>
     public TaskBar? Bar { get; internal set; }
     /// <summary>
