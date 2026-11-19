@@ -28,6 +28,9 @@ sealed class NavAdapter(NavmeshWalkability nav) : IAgentWalkability, Locks.IDoor
     public Locks.DoorSpot? DoorSpotOf(string buildingRecordId, int doorIndex) => nav.DoorGeometry?.Spot(buildingRecordId, doorIndex);
 
     /// <inheritdoc/>
+    public void TickStarts(long tick, float tickSeconds) => nav.TickStarts(tick, tickSeconds);
+
+    /// <inheritdoc/>
     public float GroundHeight(float x, float z) => nav.GroundHeight(x, z);
 
     /// <inheritdoc/>

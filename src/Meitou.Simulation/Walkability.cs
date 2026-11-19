@@ -135,6 +135,12 @@ public interface IWalkability
     float? SeatHeight(float x, float z, float y) => null;
 
     /// <summary>
+    /// Told by the world as each tick starts: the tick's number and its length in game seconds, for what the surface times in game time (the
+    /// navmesh's unreachable goals). Default: nothing.
+    /// </summary>
+    void TickStarts(long tick, float tickSeconds) { }
+
+    /// <summary>
     /// The search of <see cref="FloorNear"/>, for an implementation that keeps its answers; uncached out to <paramref name="reach"/> for a wider one.
     /// </summary>
     static Vector3? ScanFloor(IWalkability walk, float x, float z, float y, float slack, float reach = FloorSearch)

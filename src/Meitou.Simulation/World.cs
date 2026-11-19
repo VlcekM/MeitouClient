@@ -807,6 +807,7 @@ public sealed partial class World : IDisposable
         prof?.Begin(_systems.Count);
         table.BeginTick();
         ModFaults.Settle();
+        Walkability.TickStarts(Tick, TickSeconds);
 
         // 1. Inputs (serial).
         RunInputs(table, prof);

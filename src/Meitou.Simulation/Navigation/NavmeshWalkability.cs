@@ -442,7 +442,7 @@ public sealed partial class NavmeshWalkability : IWalkability
         var door = metDoor && !arrives ? new NavQuery(w, Doors).ClosedDoorOnTheWay(from, to, nearest, agent) : null;
 
         // Also after a search cut short by its limit: the exact search would be cut short the same way, so the walker gets this same route.
-        if (key is { } found) Remember(found, new Unreachable(w, doors, nearest, door, arrives, ground, System.Diagnostics.Stopwatch.GetTimestamp()));
+        if (key is { } found) Remember(found, new Unreachable(w, doors, nearest, door, arrives, ground, Volatile.Read(ref _tick)));
 
         return arrives ? part : Provisional(w, part, to, door);
     }
@@ -466,9 +466,7 @@ public sealed partial class NavmeshWalkability : IWalkability
     {
         if (key is not { } known || !_unreachable.TryGetValue(known, out var hit)) return null;
 
-        bool current = ReferenceEquals(hit.World, w) && hit.Doors == doors
-            && System.Diagnostics.Stopwatch.GetElapsedTime(hit.At).TotalSeconds < UnreachableSeconds;
-        if (!current) return null;
+        if (!ReferenceEquals(hit.World, w) || hit.Doors != doors || !Fresh(hit.At)) return null;
 
         // The same ground: the walker's start polygon is one the failed search covered.
         if (!w.TryFindPolygon(from, NavQuery.StartSnap, out var start, out _) || Array.BinarySearch(hit.Ground, start.Key) < 0)
@@ -503,7 +501,7 @@ public sealed partial class NavmeshWalkability : IWalkability
     /// What is remembered of a goal found unreachable: the navmesh it was found on (any other mesh, after a zone went live or unloaded, asks again),
     /// the doors' version (NavDoors.Version), the nearest reachable point, the closed door the tail goes through
     /// (<see cref="NavQuery.ClosedDoorOnTheWay"/>), whether that point was within the goal's snap (<see cref="Arrives"/>: the path ended there),
-    /// the ground the failed search covered (<see cref="NavQuery.LastSearchReached"/>) and when.
+    /// the ground the failed search covered (<see cref="NavQuery.LastSearchReached"/>) and the world tick it was found on.
     /// </summary>
     readonly record struct Unreachable(NavWorld World, int Doors, Vector3 Nearest, Vector3? Door, bool Arrived, long[] Ground, long At);
 
@@ -521,9 +519,18 @@ public sealed partial class NavmeshWalkability : IWalkability
     }
 
     /// <summary>
-    /// How long (s) a goal found unreachable is remembered (engine choice; a door locked or unlocked meanwhile drops it at once).
+    /// How long (game seconds: world ticks, so the same from run to run) a goal found unreachable is remembered (engine choice; a door locked or
+    /// unlocked meanwhile drops it at once).
     /// </summary>
     public const double UnreachableSeconds = 10;
+    /// <summary>
+    /// The world tick now running (<see cref="TickStarts"/>); read by the path threads.
+    /// </summary>
+    long _tick;
+    /// <summary>
+    /// A world tick's length in game seconds (<see cref="TickStarts"/>).
+    /// </summary>
+    float _tickSeconds;
     /// <summary>
     /// How many unreachable goals are remembered at most; reaching it clears them all.
     /// </summary>
@@ -543,6 +550,23 @@ public sealed partial class NavmeshWalkability : IWalkability
     /// The polygon keys added to <see cref="_unreachable"/>'s grounds since it was last cleared (<see cref="GroundLimit"/>).
     /// </summary>
     long _groundKept;
+
+    /// <inheritdoc/>
+    public void TickStarts(long tick, float tickSeconds)
+    {
+        _tickSeconds = tickSeconds;
+        Volatile.Write(ref _tick, tick);
+    }
+
+    /// <summary>
+    /// Whether what was remembered on world tick <paramref name="at"/> is younger than <see cref="UnreachableSeconds"/>. A tick before it (another
+    /// world was swapped in, a loaded save's) is not.
+    /// </summary>
+    bool Fresh(long at)
+    {
+        long ticks = Volatile.Read(ref _tick) - at;
+        return ticks >= 0 && ticks * (double)_tickSeconds < UnreachableSeconds;
+    }
 
     /// <summary>
     /// The key of the goal polygon of <paramref name="to"/> for <paramref name="agent"/>; null when no polygon is within

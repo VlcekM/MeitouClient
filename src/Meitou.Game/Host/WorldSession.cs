@@ -150,6 +150,7 @@ public sealed class WorldSession : IDisposable
         var list = systems.ToList();
         var next = new World(_worldSettings, _worldWalkability, list);
         next.Floaters = World.Floaters;   // the host keeps drawing the floaters across the swap
+        next.NearRadius = World.NearRadius;   // the host's: the character draw distance and its margin (GameHost.CreateSession)
         next.BenchFacingFix = World.BenchFacingFix;
         next.PrisonPoseFix = World.PrisonPoseFix;
         next.CagedAnimalFix = World.CagedAnimalFix;

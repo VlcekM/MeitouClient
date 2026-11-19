@@ -70,8 +70,9 @@ rendering is camera-relative.
 ### Far cadence
 
 **Engine choice** (`WorldSettings.FarTickPeriod`, the game 4; 1 in tests, goldens and headless worlds without a `World.ViewPosition`, where nothing changes).
-Each tick, after the grid (serial, from the last tick's positions), every character is near or far: near when within `World.NearRadius` of the camera eye (the host sets
-it to the character renderer's draw distance plus its reach margin, 8000, so every drawn character steps every tick), a player character the player leads, or
+Each tick, after the grid (serial, from the last tick's positions), every character is near or far: near when within `World.NearRadius` of the camera eye (8000 without a host; the game's host sets
+the character renderer's draw distance when the session is made plus its reach margin of 2000, so every drawn character steps every tick: the NPC View
+Range of the install's `settings.cfg`, 3250 without one. `WorldSession.ReplaceWorld` carries it to the world swapped in, a loaded save or a new game), a player character the player leads, or
 within `World.PlayerNearRadius` (1500) of one. A player squad the player does not lead (`Squad.Independent`) or a code mod put to sleep (`Squad.Dormant`)
 counts as NPCs do; a sleeping one also gets no far step, so away from the camera and the led characters it stands still, and it asks for no zones round it. A far character steps once in `FarTickPeriod` ticks, on its slot's turn (`(Tick + slot) % period`), and its step covers the
 ticks since its last (`World.StepTicks`, at most the period), so one that crosses the boundary loses no time. `World.Steps(slot)` is honoured by the parallel
@@ -115,8 +116,21 @@ Commands apply by tick and queue order. Simplification: the original drains a ch
 precede host orders for their due tick. No concurrent host enqueue may alter that ordering.
 Randomness: stateless `Rng.Hash(seed,entityKey,purpose,counter)`; changing purpose/salt changes rolls.
 Worker partitions are `threads*2`, minimum 16 slots (game 32: 128 left a 500-character battle 3 partitions); one worker means caller execution.
-Async paths, navmesh and population results enter at tick boundaries; arrival timing is not
-repeatable in play. Determinism tests use synchronous services; the headless probes' building collision too
+Async path and population results enter at tick boundaries and a navmesh zone goes live when its build ends, also in the middle of a tick; arrival
+timing is not repeatable in play. What play reads that no tick decides (**Observed**, code reading, #1056):
+- Services on their own threads: `PopulationSettings.Background` (town, wild and roamer builds), `PathService` without `SynchronousPaths`,
+  `RagdollGeometry` without `Synchronous` (zone gathers; `ZoneRead` gates a zone's loading), `NavMeshService` (zone builds).
+- The host's frame loop (`GameHost.UpdateNav`): it asks for the navmesh of `PopulationSystem.ActiveZones` and `NavmeshWalkability.RouteZones`
+  (aged 30 real seconds), drops zones unwanted for 120 real seconds, and sends `RepathCommand` at most once a real second. The population's
+  `ZoneGate` (the zone's mesh is live) therefore follows frame and build timing; it is read by the zone loading (`PopulationSystem.Accepted`),
+  the town and wild loads and the roamers' `Ready`.
+- Per-player inputs: `World.ViewPosition` (the camera eye) and `World.NearRadius` decide who the [far cadence](#far-cadence) steps, so two
+  machines with another camera or NPC View Range step other characters from the first tick.
+
+What a surface times, it times in world ticks: the world tells its walkability each tick's number and length (`IWalkability.TickStarts`), and the
+navmesh forgets a goal found unreachable after `UnreachableSeconds` (10) of game time, so with synchronous paths the same tick gets the same route.
+
+Determinism tests use synchronous services; the headless probes' building collision too
 (`RagdollGeometry.Synchronous`): with zones gathered on a worker, whether a zone was in by a tick depended on the machine's load, and a sight ray it
 blocks changed the look (**Observed**, #803's save, 300 + 1500 ticks: 2 runs in 48 under load ended on the hash every synchronous run gives). `PathService` runs 2-4 threads (a quarter of the cores) and drops a
 request its character replaced before a thread took it up; F12's sim rows show the requests waiting.
