@@ -418,7 +418,8 @@ When the handle's character does not resolve, its platoon is looked up and the s
 **Observed** (1.0.68 `FUN_1405a4f50` and `FUN_1404fe6e0`): with neither found, the slave escapes unless the handle still names a registered object.
 A null handle (type 11) fails that check, so an ownerless slave becomes escaped even inside town; only the resolved-owner distance branch checks the town.
 A cage or a carry is not tested. Meitou keeps an unloaded master squad or pending saved `slaver` handle until it can resolve, and a slave whose Meitou save lost its owner
-([save](../formats/save.md) "Slave state") until it finds one.
+([save](../formats/save.md) "Slave state") until it finds one. A saved handle (or job 187's) whose platoon is not in the world, the owner's squad gone before the save,
+names no registered object: it is dropped and the slave escapes (`CaptiveSystem.OwnerGone`; **Observed** on #1073's save, whose Reaver owner platoon was no longer saved).
 
 Since the setter removes job 187 Obedient Slave, the slave then plans with its own lists. In the Rebirth hold (**Observed**, one slave), a slave sent to a workplace about 4 000 from its owner became an escaped slave and took its own 172 Getting in my cage, whose finder (`FUN_1408caaf0`) has no slave state test.
 
