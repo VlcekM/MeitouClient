@@ -272,6 +272,32 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// Rows in the character editor (docs/modding.md "Character editor rows"): <paramref name="source"/> is asked, on the interface's thread, for the
+    /// rows of each character the editor shows (its race, sex, look and whether it is a new game's creation) and answers sliders, lists and colours
+    /// for any tab, shown after the game's own. Their values are kept on the look record under this mod's id, so the editor's CONFIRM, the save and
+    /// EXPORT carry them; read them with <see cref="Data.Characters.ModLooks"/>. Return none for a character the mod has nothing for.
+    /// </summary>
+    public void AddEditorRows(Data.Characters.LookRowSource source)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(source);
+        Pending.LookRows.Add(source);
+    }
+
+    /// <summary>
+    /// This mod's values for a look (docs/modding.md "Character editor rows"): <paramref name="roll"/> writes them on every generated character's
+    /// look, after the game's own rolls, and on the editor's RANDOMISE (<see cref="Data.Characters.LookRollContext.Tab"/>, the tab rolled, null for
+    /// RANDOMISE ALL), with a random sequence of its own. It may run on any thread, so it must be quick, read no world state and write the same
+    /// values for the same arguments. A throw keeps what it wrote and is logged once.
+    /// </summary>
+    public void AddLookRoll(Data.Characters.LookRoll roll)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(roll);
+        Pending.LookRolls.Add(roll);
+    }
+
+    /// <summary>
     /// A bar on the medical panel after Hunger (docs/modding.md "Medical meters") labelled <paramref name="label"/>: the mod's systems set each
     /// character's reading in the tick with <see cref="Simulation.Bodies.ModMeter.Set"/>, and the panel shows it for the selected or inspected
     /// character. A label another meter has, or a fifth meter of all mods together, refuses it.

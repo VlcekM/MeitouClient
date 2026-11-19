@@ -191,7 +191,7 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         if (player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { Appearance: { } look } snapshot
                 || RecordOf(look) is not { } record)
             return null;
-        draft = new CharacterDraft(data.Db, data.InstallRoot, record, snapshot.Name);
+        draft = new CharacterDraft(data.Db, data.InstallRoot, record, snapshot.Name) { Creation = Editor.Kind == EditKind.Creation };
         Editor.Drafts[id] = draft;
         Editor.StartNames[id] = snapshot.Name;
         return draft;
@@ -444,7 +444,7 @@ sealed class CharacterEditorPanel(PlayerInterface player)
                 && draft.Controls(s.Tab).ElementAtOrDefault(row.Control) is { } control)
         {
             if (e.Action == "scroll" && !control.IsPicker) draft.Set(control, control.Min + (int)MathF.Round(e.Value));
-            else if (e.Action == "step" && control.IsPicker) draft.Step(control.Kind, (int)e.Value);
+            else if (e.Action == "step" && control.IsPicker) draft.Step(control, (int)e.Value);
         }
     }
 
@@ -730,7 +730,7 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         for (int i = 0; i < controls.Count; i++)
         {
             string name = "EditorRow" + i.ToString(CultureInfo.InvariantCulture);
-            string template = controls[i].Kind == EditorControlKind.HairHue ? "Kenshi_MultiSlider" : controls[i].IsPicker
+            string template = controls[i].StartsMultiSlider ? "Kenshi_MultiSlider" : controls[i].IsPicker
                 ? "Kenshi_ListSlider" : "Kenshi_Slider";
             float height = player.UiResources.Templates.TryGetValue(template, out var resource)
                 ? MyGuiReader.ReadResourceLayout(resource).Roots[0].Position.Height : 55;
@@ -777,6 +777,13 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         foreach (var (owner, index) in _editorRows)
         {
             if (controls.ElementAtOrDefault(index) is not { } c) continue;
+            if (c.Kind == EditorControlKind.ModChoice)
+            {
+                b.Text[owner + ".ElementText"] = c.Label;
+                b.Text[owner + ".ElementValueText"] = draft.ChoiceName(c);
+                b.Text[owner + ".NumberText"] = $"{draft.Value(c) + 1}/{c.Max + 1}";
+                continue;
+            }
             if (c.IsPicker)
             {
                 var options = draft.Options(c.Kind);
@@ -788,9 +795,9 @@ sealed class CharacterEditorPanel(PlayerInterface player)
             int value = draft.Value(c);
             b.Text[owner + ".ElementText"] = c.Kind switch
             {
-                EditorControlKind.HairHue => "Colour",
-                EditorControlKind.HairSaturation => "Saturation",
-                EditorControlKind.HairBrightness => "Brightness",
+                EditorControlKind.HairHue or EditorControlKind.ModHue => "Colour",
+                EditorControlKind.HairSaturation or EditorControlKind.ModSaturation => "Saturation",
+                EditorControlKind.HairBrightness or EditorControlKind.ModBrightness => "Brightness",
                 _ => c.Label,
             };
             b.Text[owner + ".NumberText"] = value.ToString(CultureInfo.InvariantCulture);
@@ -800,9 +807,9 @@ sealed class CharacterEditorPanel(PlayerInterface player)
                 b.Properties[bar.Name] = new Dictionary<string, string> { ["Range"] = (c.Max - c.Min + 1).ToString(CultureInfo.InvariantCulture) };
                 player.FaithfulScreens.SetScroll("editor", bar.Name, value - c.Min);
             }
-            if (c.Kind == EditorControlKind.HairHue
+            if (c.StartsMultiSlider
                 && _editorRowWidgets.FirstOrDefault(r => owner.StartsWith(r.Name + "@", StringComparison.Ordinal)).Name is { } multi)
-                b.Text[multi + ".Name"] = "Hair colour";
+                b.Text[multi + ".Name"] = c.Kind == EditorControlKind.HairHue ? "Hair colour" : c.Label;
         }
         // Rows stacked at their templates' heights on a canvas as wide as the view: its client, less the vertical bar when the rows are taller than
         // it.

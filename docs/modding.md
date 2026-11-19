@@ -410,6 +410,27 @@ holds refuses the second mod.
   neither. Weapon slots, bags and mod slots are asked too, so a rule meant for clothing checks the item's type (`ctx.Data`); no item record
   changes, so it works with other mods' gear. It may run on any thread: quick, no world state, the same answer for the same arguments. A
   throw counts as yes and is logged once; with no rule the race lists alone decide.
+- **Character editor rows:** `AddEditorRows(context => rows)` (`ModLooks`, `src/Meitou.Data/Characters`) adds rows to the character editor's
+  tabs, after the game's own, in registration order (mods in load order). The source is asked on the interface's thread for the character shown
+  (`LookRowContext`: its `Race`, `Female`, the `Look` record being edited, read only, and `Creation`, true in a new game's creation, false for a
+  surgeon's, recruit's or bought slave's edit), again whenever the look changes, so it answers per race, sex or head: none leaves that
+  character's editor as it was. A `LookRow` is `LookRow.Slider(tab, key, caption, min, max, default)`, `LookRow.Choice(tab, key, caption,
+  choices, default)` or `LookRow.Colour(tab, key, caption, hue, saturation, brightness)` (each 0..1), drawn as the game's `Kenshi_Slider`,
+  `Kenshi_ListSlider` and `Kenshi_MultiSlider` (three sliders, as the hair colour). A value lives on the look record (CHARACTER_APPEARANCE) under
+  `mod id:key` (`ModLooks.KeyOf`): a slider's value or a choice's index as an int, a colour as a vec3 of hue, saturation and brightness. No other
+  code reads those keys, and the editor's CONFIRM (`EditCharacter`), the save and EXPORT carry every key of the record, so the value is kept with
+  the character with no save data of the mod's own; a row the source stops returning (another race, an unknown head) keeps its value on the
+  record. RESET puts each shown row back at its default. Read a value with `ModLooks.Int(look, modId, key, fallback)`, `ModLooks.Hsb` or
+  `ModLooks.Rgb` (null when the look has none) from a look record, e.g. `cold.Appearance?.Loadout?.Appearance.Record`. A source that throws, or
+  answers a row without a caption, with a key that is empty, repeated or not letters, digits, spaces, `-`, `_` and `.`, a slider whose `min`
+  is above its `max`, a list without choices or a default outside its range, is logged once and asked no more for the session.
+  `AddLookRoll(context => ...)` writes a mod's values on a look: every generated character's, after the game's rolls (`LookRollContext`:
+  `Look`, `Race`, `Female`, the `Character` record, `Faction`, `FromBodyFile` for a unique character's own body file), and the editor's
+  RANDOMISE (`Tab`, the tab rolled, null for RANDOMISE ALL; `InEditor`). It writes only through `Set(key, value)` and `SetColour(key, hsb)`
+  (its own keys) and draws only from its `Random`, a sequence of its own made from the look's seed and the mod's id, so the game's rolls and
+  every other mod's stay as they are. Generation runs in the tick and on worker threads, so a roll must be quick, read no world state and write
+  the same values for the same arguments; a throw keeps what it wrote and is logged once. A character generated before the mod was added has
+  no value: read it with a fallback. Without a source or roll the editor and the generator are as before. Engine API, not in the original.
 - **Medical meters:** `AddMedicalMeter(label)` returns a `ModMeter` (`ModMeters`, `src/Meitou.Simulation/Bodies`): a bar on the medical panel after
   Hunger, in registration order. The mod's system sets a character's `MeterReading(Green, Value) { Yellow, Red, Arrows, Tooltip }` in the tick with
   `meter.Set(cold, reading)` (the character's own partition in a parallel phase) and hides it with `Clear`; layers are width fractions clamped to

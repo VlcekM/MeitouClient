@@ -72,6 +72,14 @@ sealed class ModRegistrations
     /// </summary>
     public List<Data.Gameplay.WearRule> WearRules { get; } = [];
     /// <summary>
+    /// The character editor row sources, in registration order.
+    /// </summary>
+    public List<Data.Characters.LookRowSource> LookRows { get; } = [];
+    /// <summary>
+    /// The look rolls, in registration order.
+    /// </summary>
+    public List<Data.Characters.LookRoll> LookRolls { get; } = [];
+    /// <summary>
     /// The medical meters, in registration order.
     /// </summary>
     public List<ModMeter> Meters { get; } = [];
@@ -278,6 +286,8 @@ sealed class ModRegistry
         }
         foreach (var slot in r.Slots) ModSlots.Add(slot);
         foreach (var rule in r.WearRules) Data.Gameplay.WearRules.Add(mod, rule);
+        foreach (var source in r.LookRows) Data.Characters.ModLooks.AddRows(mod, source);
+        foreach (var roll in r.LookRolls) Data.Characters.ModLooks.AddRoll(mod, roll);
         foreach (var meter in r.Meters) ModMeters.Add(meter);
         foreach (var skill in r.Skills) ModSkills.Add(skill);
         foreach (var (effect, modifiers) in r.StatusEffects) StatusEffects.Add(effect, modifiers);

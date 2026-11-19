@@ -324,7 +324,8 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   only); each control is a template widget stacked at its template's height (`kenshi_templates.xml`): a list is `Kenshi_ListSlider` (name box,
   arrows, value name, "n/count"; captions "Face", "Hair", "Beard"), a slider `Kenshi_Slider` (name box, `Kenshi_ScrollBar` with arrows, value
   box), the hair colour one `Kenshi_MultiSlider` "Hair colour" with "Colour", "Saturation", "Brightness". Captions are catalog messages, not
-  upper-cased. The rows scale with the screen (55 layout px = 73 px at 1440p in the vanilla screenshot).
+  upper-cased. The rows scale with the screen (55 layout px = 73 px at 1440p in the vanilla screenshot). Meitou: a code mod's rows follow the
+  game's on their tab, in those templates ([modding](modding.md), "Character editor rows").
 - **Tabs** (`FUN_1405ebd50`, Body first): FACE = head list (if more than one) + XML Face ranges + colours; BODY = "Idle stance" slider, then
   `Skin Tone` (vec3 interpolated; only with more than one colour), then XML Body ranges, then other colours (order also seen in the original's
   screen); HAIR = Hair (attach slot 2) and Beard (13) lists with
