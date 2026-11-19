@@ -260,7 +260,7 @@ public sealed class WorldSession : IDisposable
         if (!Simulation.IsPaused)
         {
             // A speed change scales the estimate at once: a batch sized for 5x would hold the picture for frames at 1x.
-            if (_owedSpeed > 0 && Simulation.Speed != _owedSpeed) _owedPerFrame *= Simulation.Speed / _owedSpeed;
+            if (_owedSpeed > 0 && Math.Abs(Simulation.Speed - _owedSpeed) > 0.0001) _owedPerFrame *= Simulation.Speed / _owedSpeed;
             _owedSpeed = Simulation.Speed;
             _owedPerFrame += (n - _owedPerFrame) * 0.25;
         }

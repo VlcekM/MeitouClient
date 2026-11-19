@@ -1409,7 +1409,7 @@ sealed class GameLoop(GameHost host)
         var pointer = PreparePointer(takeFile);
         host.PlayBench.BenchLap(5);
         if (_display.BeginFrame(size.X, size.Y)) DrawFrame(size, pointer, takeFile);
-        else if (host.ScreenshotRequested && host.AgentChannel.ShotPath is not null && ++host.ShotNoFrame >= 30)
+        else if (host is { ScreenshotRequested: true, AgentChannel.ShotPath: not null } && ++host.ShotNoFrame >= 30)
             host.AgentChannel.ControlShotFailed("the frame cannot be drawn (window minimised or device lost)");
         UpdateStats(dt);
         _totalFrames++;
@@ -1483,7 +1483,10 @@ sealed class GameLoop(GameHost host)
         host.Session.World.Profile.Enabled = host.DebugMenu.Profiler is { Showing: not FrameProfiler.Mode.Off }
             || host.GameOptions.PlayBench is not null || SpikeLog.Enabled;
         host.UpdateLoadingPause();
+
+        // TICKS HAPPEN HERE!
         if (!host.Covered) host.Session.Advance(frameDt);   // loading and arrival preserve the loaded world's exact time
+
         host.Duel.DuelHoldClock();
         double advanceMs = Stopwatch.GetElapsedTime(a0).TotalMilliseconds;
         host.AdvanceTotal += advanceMs;

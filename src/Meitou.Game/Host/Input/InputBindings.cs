@@ -749,8 +749,14 @@ public sealed class InputBindings
     {
         var state = new ActionState(input, _mod?.Actions.Count ?? 0);
         foreach (var action in Enum.GetValues<InputAction>()) ResolveOne(state, input, action);
-        if (_mod is not null)
+        if (_mod is null)
+        {
+            return state;
+        }
+
+        {
             foreach (var action in _mod.Actions) ResolveOne(state, input, action.Action);
+        }
         return state;
     }
 
