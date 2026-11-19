@@ -328,12 +328,12 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     static Vector2 Flat(Vector3 p) => new(p.X, p.Z);
 
     /// <summary>
-    /// Hashes the errands, the refusals and the food waits (only while there are any).
+    /// Hashes the errands, the refusals, the food waits and the lifts given up (only while there are any).
     /// </summary>
     public void Hash(ref StateHasher hasher)
     {
         // only while one runs, so worlds without them hash as before
-        if (_duties.Count == 0 && _refused.Count == 0 && _foodWaits.Count == 0) return;
+        if (_duties.Count == 0 && _refused.Count == 0 && _foodWaits.Count == 0 && _gaveUp.Count == 0) return;
         hasher.Add(0x546F776E);
         hasher.Add(_duties.Count);
         foreach (var d in _duties) d.Hash(ref hasher);
@@ -352,6 +352,16 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
                 hasher.Add(member);
                 hasher.Add(until);
             }
+        }
+
+        if (_gaveUp.Count == 0) return;
+
+        hasher.Add(_gaveUp.Count);
+        foreach (var (member, body, until) in _gaveUp)
+        {
+            hasher.Add(member);
+            hasher.Add(body);
+            hasher.Add(until);
         }
     }
 
@@ -1317,8 +1327,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         foreach (int v in _downed)
         {
             var body = table.Cold(v)!;
-            if (v == slot || body.InSomething == HeldState.Bed || _reserved.Contains(table.IdOf(v)) || carry.Friendly(cold, body)) continue;
-            if (!CharacterFacts.Perceives(world, slot, v) || GaveUp(table.IdOf(slot), table.IdOf(v))) continue;
+            if (v == slot || body.InSomething == HeldState.Bed || _reserved.Contains(table.IdOf(v))) continue;
+            if (carry.Friendly(cold, body) || !CharacterFacts.Perceives(world, slot, v)) continue;
+            if (GaveUp(table.IdOf(slot), table.IdOf(v))) continue;
 
             var p = next[v].Position;
             float d2 = Vector2.DistanceSquared(at, Flat(p));
