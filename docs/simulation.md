@@ -661,8 +661,8 @@ is not stopped, and an unwalkable result falls back to its own step.
 
 ## Navmesh
 
-Own DotRecast builder/cache (`Meitou.Simulation.Navigation`), not Havok runtime. Default cells 2, height 1,
-48-cell tiles (a building interior is one tile), agent height 18/max climb 5 (two cells connect over a shared free space of 18 − 5); ground/water/door
+Own DotRecast builder/cache (`Meitou.Simulation.Navigation`), not Havok runtime. Default cells 2, height 0.5,
+288-cell tiles, 8 a zone side (a building interior is one tile), agent height 18/max climb 5 (two cells connect over a shared free space of 18 − 5); ground/water/door
 areas. A* checks portal clearance (radius per wall end, default radius 4), water factor and doors. `NavAdapter` exposes simulation interfaces;
 `ZoneGate` holds population until ready. Collision and world placement rules:
 [collision.md](formats/collision.md), [pathfinding.md](game/pathfinding.md).
@@ -676,6 +676,16 @@ zone is resolved again whenever one is published or unloaded (the border rule to
 a running one is still cached but not published, and its task is cancelled. A zone's tiles build in parallel on every core but one under a
 loading screen and on a quarter of the cores in play (`NavMeshService.Covered`): **Observed** (allocation trace, coming down into unbuilt zones) the tile
 builds allocated ~13 GB in 5 s and, on every core, starved every simulation system and the render thread into 100-180 ms frames.
+A tile's heightfield stage is ours (`NavTriangleRaster`, `NavSpanField`, `NavTileSpans`, `NavCompactField`: rasterization, the two span filters, the
+compact field; adapted from DotRecast, same output) in arrays rented from `ArrayPool<T>.Shared` for the tile: a rented array is longer than its
+count and is the tile's only until it is built. DotRecast's own allocates an `RcSpan` object per rasterized span, a builder object per compact span
+and its per-column arrays (294² columns a tile, ~0.7 MB each, so on the large object heap) for every tile, the span objects referenced until the
+tile's compact field is built. **Observed** (2026-11-19, Ryzen 5600X, 32 GB at 78-88 % memory load, play benchmark of
+`bench-bases-2026-10-27` from an empty navmesh cache, ~165 s of play, 65-88 zones built; DotRecast's stage, then ours): 124 -> 79 GB allocated, gen0
+pauses 11.5 -> 1.8 s, gen1 20.4 -> 1.7 s, blocking gen2s 2 -> 0, frames drawn 5203 -> 7012; with `System.GC.HighMemoryPercent` at 80, under
+that load ([engine.md](engine.md) "GC"), blocking gen2s 27 -> 1 (22.4 -> 0.8 s) and frames over 500 ms 34 -> 3.
+The cache files of the 78 zones that runs of both builds made are byte-identical. A cold tile still allocates inside DotRecast's region building (a
+builder per span, `RcDirtyEntry` lists, level stacks, `int[spanCount]` buffers: ~40 of the 79 GB).
 
 ## Animation
 

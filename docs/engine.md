@@ -76,6 +76,14 @@ Satori vs stock 10.0.12 fast flight): longest GC pause 15-21 ms stock vs 1-18 ms
 **Observed** (2026-11-01, headless simulation probe of a ~1600-character town save, Ryzen 5600X, 60 s runs): `HeapCount` pins the four GC threads to CPUs 0-3, and about 1 in 40 ephemeral collections paused 100-290 ms while doing 1.5-3 ms of GC work: the time is between the suspension finishing and the collection starting (GC events `SuspendEEStop` to `GCStart`). Pinned: 6 such pauses in 5 runs; `NoAffinitize`: none in 5 (max 2.6 ms); workstation GC: none in 3. The game was not measured.
 `GCConserveMemory` is not set. **Observed** A/B (`DOTNET_GCConserveMemory=5`, 3600-frame fly benchmark, 3 clean runs each): managed heap at the end
 1.42 vs 1.93 GB, working set 3.37 vs 3.93 GB, but gen2 GCs 12-14 vs 7-8 and pause totals 54-306 vs 36-53 ms (one run 64 frames over 33 ms).
+Background GC is on (its default; `System.GC.Concurrent` is not set): background gen2s (reason `AllocLarge`) pause 1-2 ms; a blocking, compacting
+gen2 (`NonConcurrentGC`) pauses 0.7-1.4 s over a 6-7 GB heap. **Observed** (2026-11-19, Ryzen 5600X, 32 GB at 78-88 % memory load, every process
+counted; play benchmark from an empty navmesh cache with DotRecast's own tile heightfields, [simulation.md](simulation.md#navmesh)): with
+`System.GC.HighMemoryPercent` (default 90, not set) at 80, under that load, 27 of 28 gen2s were blocking (reason `AllocSmall`; 22.4 s of pauses,
+34 frames over 500 ms; the GC's memory pressure read 80-84 at each), at the default 2 of 5 (at 88-89 % load); with the pooled heightfields 1 of 6
+and 0 of 10. The heap count and `ConserveMemory` stay as they are: **Observed** (same benchmark, pooled heightfields, one run each) 8 heaps halve
+the gen0 collections (330 for 699) for 2.2 s of pauses against 2.9 s, with longer single ones (gen0 21 ms for 14, gen1 52 for 42) and frame times
+within the runs' spread; `ConserveMemory` 5 changed nothing (2.9 s of pauses, no blocking gen2 either way).
 Process memory beyond the GC heap is mostly untouched write-combined commit (~6 GB at 6.7 GB of VRAM in use), not resident RAM.
 **Pooled buffers** (allocation is the GC lever): streaming garbage is mostly LOH arrays from worker jobs. **Observed** in flights: gen0/gen1 pauses under
 ~40 ms; single blocking gen2s (`NonConcurrentGC`, reason `AllocSmall`) of 0.3-1.7 s in some runs despite SustainedLowLatency, with or without pooling. Pooled now:

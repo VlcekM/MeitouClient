@@ -84,10 +84,11 @@ internal static class NavSideSteps
     /// </summary>
     internal static void Cut(RcCompactHeightfield chf, List<StepLink> steps)
     {
+        var builder = RcCompactSpanBuilder.NewBuilder();
         foreach (var s in steps)
         {
-            SetCon(chf, s.Span, s.Direction, RcRecast.RC_NOT_CONNECTED);
-            SetCon(chf, s.Neighbour, (s.Direction + 2) % 4, RcRecast.RC_NOT_CONNECTED);
+            NavCompactField.SetConnection(chf, builder, s.Span, s.Direction, RcRecast.RC_NOT_CONNECTED);
+            NavCompactField.SetConnection(chf, builder, s.Neighbour, (s.Direction + 2) % 4, RcRecast.RC_NOT_CONNECTED);
         }
     }
 
@@ -97,23 +98,14 @@ internal static class NavSideSteps
     /// </summary>
     internal static void Relink(RcCompactHeightfield chf, List<StepLink> steps)
     {
+        var builder = RcCompactSpanBuilder.NewBuilder();
         foreach (var s in steps)
         {
             if (chf.spans[s.Span].reg != chf.spans[s.Neighbour].reg) continue;
-            SetCon(chf, s.Span, s.Direction, s.Con);
-            SetCon(chf, s.Neighbour, (s.Direction + 2) % 4, s.NeighbourCon);
-        }
-    }
 
-    /// <summary>
-    /// Sets the connection of <paramref name="span"/> in direction <paramref name="d"/> to <paramref name="con"/> (a compact span is rebuilt to
-    /// change it).
-    /// </summary>
-    static void SetCon(RcCompactHeightfield chf, int span, int d, int con)
-    {
-        var builder = RcCompactSpanBuilder.NewBuilder(ref chf.spans[span]);
-        RcRecast.SetCon(builder, d, con);
-        chf.spans[span] = builder.Build();
+            NavCompactField.SetConnection(chf, builder, s.Span, s.Direction, s.Con);
+            NavCompactField.SetConnection(chf, builder, s.Neighbour, (s.Direction + 2) % 4, s.NeighbourCon);
+        }
     }
 
     /// <summary>

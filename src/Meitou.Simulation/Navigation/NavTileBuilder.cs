@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Numerics;
 using DotRecast.Core;
-using DotRecast.Core.Numerics;
 using DotRecast.Recast;
 
 namespace Meitou.Simulation.Navigation;
@@ -47,7 +46,7 @@ internal static class NavTileBuilder
         long t0 = Stopwatch.GetTimestamp();
         int walkableHeight = (int)MathF.Ceiling(s.AgentHeight / s.CellHeight);
         int walkableClimb = (int)MathF.Floor(s.MaxClimb / s.CellHeight);
-        var hf = Heightfield(ctx, s, verts, indices, areas, tris, x0, z0, tileWorld, walkableHeight, walkableClimb);
+        using var spans = Heightfield(s, verts, indices, areas, tris, x0, z0, tileWorld, walkableHeight, walkableClimb);
         long t1 = Stopwatch.GetTimestamp();
 
         // Recast connects two neighbouring spans only when the free space they share (above the higher floor, below the lower ceiling) is the agent
@@ -55,7 +54,8 @@ internal static class NavTileBuilder
         // the margin, although every cell has the headroom on its own (the filter in Heightfield). The original connects faces by step height alone
         // and asks the clearance per face, so the shared space is asked the agent height less the climb (docs/game/pathfinding.md, "Own builder",
         // stairs under floors).
-        var chf = RcCompacts.BuildCompactHeightfield(ctx, Math.Max(1, walkableHeight - walkableClimb), walkableClimb, hf);
+        using var compact = new NavCompactField(spans, Math.Max(1, walkableHeight - walkableClimb), walkableClimb);
+        var chf = compact.Field;
 
         CutVolumes(ctx, g, s, chf, carvers, painters, solids, meshSolids);
         var steps = NavSideSteps.Find(chf, g.Ground);
@@ -73,10 +73,10 @@ internal static class NavTileBuilder
     }
 
     /// <summary>
-    /// The tile's heightfield over the tile and its border, its spans filtered for low obstacles and headroom.
+    /// The spans of the tile's heightfield over the tile and its border, filtered for low obstacles and headroom.
     /// </summary>
-    static RcHeightfield Heightfield(RcContext ctx, NavBuildSettings s, float[] verts, int[] indices, int[] areas, List<int> tris, float x0,
-        float z0, float tileWorld, int walkableHeight, int walkableClimb)
+    static NavTileSpans Heightfield(NavBuildSettings s, float[] verts, int[] indices, int[] areas, List<int> tris, float x0, float z0,
+        float tileWorld, int walkableHeight, int walkableClimb)
     {
         // Tile bounds in Y from the triangles that touch it.
         float yMin = float.MaxValue;
@@ -98,18 +98,18 @@ internal static class NavTileBuilder
         // so a narrow strip along the edge is not simplified away from it (docs/game/pathfinding.md, "Own builder", tile seams).
         int border = TileBorderCells;
         float pad = border * s.CellSize;
-        var bmin = new RcVec3f(x0 - pad, yMin - 1, z0 - pad);
-        var bmax = new RcVec3f(x0 + tileWorld + pad, yMax + 1, z0 + tileWorld + pad);
+        var min = new Vector3(x0 - pad, yMin - 1, z0 - pad);
+        var max = new Vector3(x0 + tileWorld + pad, yMax + 1, z0 + tileWorld + pad);
         int cells = s.TileCells + 2 * border;
-        RcHeightfield Field() => new(cells, cells, bmin, bmax, s.CellSize, ch, border);
-        var hf = NavTileRaster.Rasterize(ctx, verts, indices, areas, tris, Field, walkableClimb);
+        var grid = new NavTileGrid(cells, cells, min, max, s.CellSize, ch, border);
+        var spans = NavTileRaster.Rasterize(grid, verts, indices, areas, tris, walkableClimb);
 
         // Recast walks the top of a cutting span within the climb over a walkable one; the original has no face there. Only a top under the climb is
         // lifted: one cell at it was the steep riser beside a roof cap, a stair of riser cells up to the cap (docs/game/pathfinding.md, "Own
         // builder", low obstacles).
-        RcFilters.FilterLowHangingWalkableObstacles(ctx, walkableClimb - 1, hf);
-        RcFilters.FilterWalkableLowHeightSpans(ctx, walkableHeight, hf);
-        return hf;
+        spans.LiftLowObstacles(walkableClimb - 1);
+        spans.DropLowHeadroom(walkableHeight);
+        return spans;
     }
 
     /// <summary>
