@@ -956,12 +956,8 @@ polygons expanded within 1 % (18.39: 5 % fewer).
 Unreachable goals were most of the rest. **Observed** (same run): a town's residents in zone 14.23 kept asking for goals in a building they cannot
 enter (radius 4 found no way in, radius 0 did: an unjoined seam on its door stair, "Inner seams"), 300-600 ms each: the exact search, up to four
 off-mesh start retries, then the nearest-point search, each exploring all the ground they reach. Engine choices since: a goal found unreachable
-is remembered (goal polygon, radius, door rule; same navmesh; `NavmeshWalkability.UnreachableSeconds`) with the polygons its failed nearest-point
-search covered (`NavQuery.LastSearchReached`), and a walker whose start polygon is one of them gets the provisional route to the remembered nearest
-point at once. Reaching that point is no proof of the same ground: **Observed** (#1025 save, Cat-Lon's Exile, `probe crowd --nav`): fighters shoved
-onto an unjoined two-polygon sliver at a stair foot (105634,125000, on the tile seam z 124992) marked their target's polygon unreachable, and the
-~50 Stormthralls on the open mesh, who reach that corner too, were turned back to it from 115 short of the target or stood 200 away; by the start
-polygon all close in. The memory holds while no door was locked or unlocked since (`NavDoors.Version`: through a door unlocked since,
+is remembered (goal polygon, radius, door rule; same navmesh; `NavmeshWalkability.UnreachableSeconds`), and a walker that reaches its
+remembered nearest point gets the provisional route at once, while no door was locked or unlocked since (`NavDoors.Version`: through a door unlocked since,
 walkers outside reached the corner of a locked L-House that one shut in it had found, and stood there; **Observed**, Gigachad save, 39.16); retries skip start
 polygons a failed search reached (same region, same failure). GoTo answers went from ~95 to ~17 ms on average, polygons per search ~11,000 to ~5,800.
 
