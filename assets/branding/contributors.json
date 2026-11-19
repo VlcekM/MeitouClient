@@ -48,8 +48,8 @@
     "areas": "Mod settings"
   },
   "teppum": {
-    "commits": 125,
-    "areas": "Code mods, Squads, Logging, Bounties"
+    "commits": 234,
+    "areas": "Code mod hooks, NPC goals"
   },
   "robgreen490": {
     "commits": 4,
@@ -62,5 +62,9 @@
   "mattresspad": {
     "commits": 3,
     "areas": "Benchmarks, Homepage"
+  },
+  "pza-mods-bot": {
+    "commits": 1,
+    "areas": "Mod settings"
   }
 }
