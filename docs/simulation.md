@@ -963,7 +963,9 @@ when the host passes `CharacterRigs` (the game does; tests and goldens do not). 
 - **Scene**: 32-unit tiles round each moving ragdoll, terrain sampled every 4 units (the heightmap's samples are 18 apart; the Bepu mesh build is nearly all of a tile's
   cost, 0.45 ms at 2-unit cells, **Observed**), plus building
   collision from `Meitou.Simulation.Navigation.RagdollGeometry` (per zone on a worker, doors and passable parts
-  skipped; the 24 most recently asked zones besides the loaded ones, which are kept) and the map features' collision (rocks, cliff blocks, Rebirth's statue: each triangle in the zone its
+  skipped; the 24 most recently asked zones besides the loaded ones, which are kept; the eviction looks only after a zone was added, the
+  loaded zones changed or a gathering zone could not go yet: run on every ask, its count under all the dictionary's locks cost the sight checks 1.2-4 ms
+  a tick, **Observed** 2026-11-19, play benchmark, interleaved pairs: AggroSystem 1.25-1.52 -> 0.51-0.59 ms a tick at 1x, 1.8-3.8 -> 0.65-0.77 after travel) and the map features' collision (rocks, cliff blocks, Rebirth's statue: each triangle in the zone its
   centre lies in, as features reach past a building's 600; outdoor bodies hit group 14, the features' group (**Verified**,
   [pathfinding](game/pathfinding.md#own-builder) "Map features"). **Observed** (`meitou-tools navmesh --ragdoll`): map
   features add 8,475 triangles to 21.19's 9,617 (Rebirth), 2,702 to 20.32's 12,926, 4,355 to 23.22's 19,844, 792 to 34.46, 304 to 18.39;
