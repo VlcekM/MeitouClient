@@ -197,6 +197,9 @@ static void say_stats(Text* out, const char* stats)
     text_add(out, "\n");
 }
 
+// state --addr: each character's address goes into the text, for `peek`.
+static int s_addresses;
+
 static void say_character(Text* out, void* character, int detailed)
 {
     char name[128], faction[128];
@@ -209,6 +212,7 @@ static void say_character(Text* out, void* character, int detailed)
     character_faction(character, faction, sizeof faction);
 
     text_add(out, "  %s [%s]", name, faction);
+    if (s_addresses) text_add(out, " @%llX", (unsigned long long)(uintptr_t)character);
     if (character_is_selected(character)) text_add(out, " selected");
     if (((char*)character)[CHARACTER_ON_ROOF]) text_add(out, " on-roof");
     if (((char*)character)[CHARACTER_ON_SCREEN]) text_add(out, " on-screen");
@@ -276,10 +280,10 @@ static void add_clock(Text* out)
              minutes / 60, minutes % 60);
 }
 
-// state [--near=<radius>] [--brief] [--json]: the clock, the speed, the camera and the player's characters with their
+// state [--near=<radius>] [--brief] [--addr] [--json]: the clock, the speed, the camera and the player's characters with their
 // health and stats; with --near also everyone else within that distance of the point the camera looks at. `screen` is
 // where a character's body is in the window (a point to click), absent when it is out of view. --brief leaves out body
-// parts and stats. Text by default; --json gives the same as JSON, with every figure unrounded.
+// parts and stats; --addr adds each character's address to the text (for peek). Text by default; --json gives the same as JSON, with every figure unrounded.
 int cmd_state(Command* c)
 {
     const Lektor* squad = game_squad();
@@ -302,6 +306,7 @@ int cmd_state(Command* c)
 
     if (!json)
     {
+        s_addresses = option(c, "--addr");
         say_state(out, squad, radius, detailed);
         return 1;
     }
