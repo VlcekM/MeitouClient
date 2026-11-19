@@ -959,9 +959,9 @@ off-mesh start retries, then the nearest-point search, each exploring all the gr
 is remembered (goal polygon, radius, door rule; same navmesh; `NavmeshWalkability.UnreachableSeconds`) with the polygons its failed nearest-point
 search covered (`NavQuery.LastSearchReached`), and a walker whose start polygon is one of them gets the provisional route to the remembered nearest
 point at once. Reaching that point is no proof of the same ground: **Observed** (#1025 save, Cat-Lon's Exile, `probe crowd --nav`): fighters shoved
-onto an unjoined two-polygon sliver at a stair foot (105634,125000, on the tile seam z 124992) marked their target's polygon unreachable, and the
-~50 Stormthralls on the open mesh, who reach that corner too, were turned back to it from 115 short of the target or stood 200 away; by the start
-polygon all close in. The memory holds while no door was locked or unlocked since (`NavDoors.Version`: through a door unlocked since,
+onto an unjoined two-polygon sliver at a stair foot (105634,125000, on the tile seam z 124992) marked their target's polygon unreachable, and of
+the 50 Stormthralls on the open mesh, who reach that corner too, about 25 stood 200 away and several were turned back to it from 115 short of the
+target; by the start polygon all 50 stand within 100. The memory holds while no door was locked or unlocked since (`NavDoors.Version`: through a door unlocked since,
 walkers outside reached the corner of a locked L-House that one shut in it had found, and stood there; **Observed**, Gigachad save, 39.16); retries skip start
 polygons a failed search reached (same region, same failure). GoTo answers went from ~95 to ~17 ms on average, polygons per search ~11,000 to ~5,800.
 
