@@ -1885,7 +1885,8 @@ holds refuses the second mod.
 ## Data mods
 
 Some shapes need no code: a race's anatomy of any length, extra or missing parts, and parts of a new type such as a tail are plain records
-([bodies of other shapes](game/character-stats.md#bodies-of-other-shapes-meitou)).
+([bodies of other shapes](game/character-stats.md#bodies-of-other-shapes-meitou)). A WEAPON of the unarmed `skill category` fights as fists with
+martial arts and is worn on the body's skeleton ([worn unarmed weapons](characters.md#worn-unarmed-weapons)).
 
 ## Fixed record ids
 

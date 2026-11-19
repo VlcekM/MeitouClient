@@ -165,6 +165,15 @@ Boots (slot 9, not `is locked`) on a character with exactly one fitted leg prost
 
 **Verified** (`skin.hlsl`): worn items always `clip(normal.a - 0.6)`, so a normal map whose alpha is low (BC1 punch-through, atlas islands) hides those texels.
 
+### Worn unarmed weapons
+
+Engine extension, not in the original: a WEAPON of `skill category` 5 (Unarmed) is worn, not hung and drawn. A fight already treats it as fists
+(`Fighter.Unarmed`: martial arts, the unarmed techniques and stance, the fist damage with the weapon's kind and race multipliers, bleed and
+penetration; docs/game/combat.md), so it is never drawn, and its `mesh` (`mesh female` for a woman when set) is skinned to the body's skeleton
+like armour (`CharacterAppearance.IsWornWeapon`, `AttachMode.SharedSkeleton`), in its grade's model, whether the character fights or not.
+`bare sword` and `sheath` are not used. The base game has no such item (its only category 5 WEAPONs are `FISTS` and `FISTS- robo`, the races'
+fists), so nothing vanilla changes. A mod's knuckles, claws or arm braces author `mesh` skinned to the `Bip01` forearm and hand bones.
+
 ### Surveys
 
 `dotnet run --project tools/Meitou.Tools -- characters` builds the look of every ANIMAL_CHARACTER and of one CHARACTER per race list and reports a missing body mesh, skeleton,

@@ -1096,6 +1096,12 @@ public sealed class CharacterAppearance
     void AddWeapon(GameRecord weapon, bool female, string slot, bool drawn, int backCount, GameRecord? model = null, bool both = false,
             bool back = false)
     {
+        if (IsWornWeapon(weapon))
+        {
+            AddWornWeapon(weapon, female, model);
+            return;
+        }
+
         if (slot == "back" && backCount > 0) slot = "back2";
         string Field(string f) => f == "mesh" && female && weapon.GetPath("mesh female").Length > 0 ? "mesh female" : f;
         bool bare = weapon.GetPath("bare sword").Length > 0;
@@ -1128,6 +1134,37 @@ public sealed class CharacterAppearance
             Material = model,
             Shown = !(both && bare) ? WeaponShown.Always : back ? WeaponShown.BackSheathed : WeaponShown.Sheathed,
             Local = local
+        });
+    }
+
+    /// <summary>
+    /// Whether a WEAPON is worn on the body instead of hung and drawn (engine extension, docs/characters.md "Worn unarmed weapons"): one of the
+    /// unarmed <c>skill category</c>, which a fight uses as fists and so never draws.
+    /// </summary>
+    public static bool IsWornWeapon(GameRecord weapon) =>
+        weapon.Type == FcsRecordType.Weapon && weapon.GetInt("skill category") == (int)Gameplay.Combat.WeaponCategory.Unarmed;
+
+    /// <summary>
+    /// A worn unarmed weapon (<see cref="IsWornWeapon"/>): its <c>mesh</c> (by gender) skinned to the body's skeleton like armour, shown whether
+    /// the character fights or not, in its grade's model.
+    /// </summary>
+    void AddWornWeapon(GameRecord weapon, bool female, GameRecord? model)
+    {
+        string field = female && weapon.GetPath("mesh female").Length > 0 ? "mesh female" : "mesh";
+        if (weapon.GetPath(field) is not { Length: > 0 } mesh)
+        {
+            Notes.Add($"'{weapon.Name}' has no mesh");
+            return;
+        }
+
+        Parts.Add(new CharacterPart
+        {
+            Record = weapon,
+            Mesh = mesh,
+            Field = field,
+            Mode = AttachMode.SharedSkeleton,
+            Slot = AttachSlot.Weapon,
+            Material = model,
         });
     }
 
