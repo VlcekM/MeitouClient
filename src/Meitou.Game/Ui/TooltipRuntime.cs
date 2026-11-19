@@ -559,7 +559,7 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// The bounty panel's tooltip rows (<c>FUN_1405d2da0</c>, docs/game/ui-screens.md section 4): per faction its name and <c>c.{1,num}</c> (Main for
     /// the local faction, else Greyed), <c>-Wanted For: </c> with the first four crimes and a <c> </c> row with the rest; then the imprisonment row,
     /// or a rule, the turn-in line and the local faction's expiry. <paramref name="everyExpiry"/> (Meitou UI): each faction's expiry under its own
-    /// rows instead.
+    /// rows instead, none for a prisoner.
     /// </summary>
     static List<(string Key, string Value)> BountyRows(IReadOnlyList<Simulation.Crime.BountyLine> bounties, PrisonView? prison, bool everyExpiry)
     {
@@ -573,7 +573,10 @@ sealed class TooltipRuntime(PlayerInterface player)
             if (crimes.Length > 0)
                 rows.Add((wanted + Loc.Tr("-Wanted For:") + " ", wanted + string.Join(", ", crimes.Take(4))));
             if (crimes.Length > 4) rows.Add((" ", wanted + string.Join(", ", crimes.Skip(4))));
-            if (everyExpiry) rows.Add((Expiry(bounty), ""));
+
+            // No expiry for a prisoner (#1064): the original's panel prints none then, and the lifetime's sweep is skipped in a cage
+            // (FUN_1405cbb80), so a prisoner's hours left run below zero and read like a sentence that is over.
+            if (everyExpiry && prison is null) rows.Add((Expiry(bounty), ""));
         }
 
         if (prison is { } p)

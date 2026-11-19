@@ -493,7 +493,25 @@ static class SaveProbe
         return $"pending=[{pending}] bounties=[{string.Join(", ", bounties)}] recentlyWanted={c.RecentlyWanted:F0} freed={c.Freed} "
             + $"escaped={c.Escaped} ordered={c.Ordered} row={c.Running?.Row} imprisoned={c.IsImprisoned} squadEnemies={enemies} "
             + $"door=[{DoorWork(probe, slot, c)}] disguise={c.DisguiseLevel:F2}/{probe.Faction(c.DisguiseFaction)} "
-            + $"seenAs={SeenAs(probe, c)} orders={c.Orders} body={c.Medical is not null} takenBy=[{string.Join(", ", MatesTaking(probe, slot, c))}]";
+            + $"seenAs={SeenAs(probe, c)} orders={c.Orders} body={c.Medical is not null} takenBy=[{string.Join(", ", MatesTaking(probe, slot, c))}]"
+            + Jail(probe, c);
+    }
+
+    /// <summary>
+    /// A prisoner's sentence (start and length in game hours, the hours left, whether it is served) and its cage's owner with whether that
+    /// faction regards the prisoner's as an enemy, which a jailer's release refuses (#1064); empty for a character in no cage.
+    /// </summary>
+    static string Jail(ProbeWorld probe, CharacterCold c)
+    {
+        if (!c.IsImprisoned || c.InWhat is not { } where || probe.World.Fixtures.Find(where) is not { } cage) return "";
+
+        double now = probe.World.GameHours;
+        bool enemy = Meitou.Simulation.Bodies.CharacterFacts.RegardsEnemy(probe.Data.Relations, cage.Owner, c.Faction);
+        bool served = Meitou.Simulation.Locks.FixtureRegistry.SentenceServed(c, now);
+        double left = c.SentenceStart + c.SentenceLength - now;
+
+        return $" jail=[{probe.Faction(cage.Owner)} sentence={c.SentenceStart:F1}+{c.SentenceLength:F1} left={left:F1} served={served} "
+            + $"enemy={enemy} kidnapped={c.Kidnapped} slave={c.SlaveState}]";
     }
 
     /// <summary>
