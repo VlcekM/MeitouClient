@@ -16,10 +16,9 @@ namespace Meitou.Game.Host;
 
 /// <summary>
 /// Quicksave (F5) and quickload (F9), docs/simulation.md "Saves". The key only sets a request (a control tick runs inside
-/// <c>WorldSession.Advance</c>); the frame loop takes the request right after <c>Advance</c> returns, when no world tick is in flight. A save
-/// captures the world there, on the thread that ticks it (a few milliseconds), and writes the files on a worker; a load reads the files on a worker
-/// and swaps in a new world there. The slot is Meitou's own <c>%LOCALAPPDATA%\Meitou\save\quicksave</c> (<see cref="QuickSave"/>), never a folder of
-/// the original game.
+/// <c>WorldSession.Advance</c>). The frame loop takes the request right after <c>Advance</c> returns, when no world tick is in flight. A save
+/// captures the world on the frame thread and finalizes and writes the detached records on a worker. A load reads on a worker and swaps in the
+/// new world between ticks. Meitou's quicksave slot is <c>%LOCALAPPDATA%\Meitou\save\quicksave</c> (<see cref="QuickSave"/>).
 /// </summary>
 sealed class GameSaves(GameHost host)
 {
@@ -151,9 +150,8 @@ sealed class GameSaves(GameHost host)
     /// </summary>
     IReadOnlyList<string>? _saveDataFiles;
     /// <summary>
-    /// The save a capture starts from (a copy of the loaded one, or a new one from the data) costs tens of milliseconds and holds nothing of the
-    /// world: it is made ahead on a worker, so the capture at the tick boundary only reads the squad (a few ms). Stale (for another loaded save)
-    /// after a load.
+    /// The save a capture starts from (a copy of the loaded one, or a new one from the data). It is made ahead on a worker because it holds no live
+    /// state. Stale after loading a different save.
     /// </summary>
     internal Task<SaveBuilder>? PreparedBase;
     /// <summary>
@@ -213,18 +211,7 @@ sealed class GameSaves(GameHost host)
         bool ahead = PreparedBase is { IsCompletedSuccessfully: true } && ReferenceEquals(_preparedFor, LoadedSave);
         try
         {
-            var clock = host.Session.Clock;
-            var prepared = ahead ? PreparedBase!.Result : null;
-            PreparedBase = null;   // used, or stale
-            game = SaveCapture.Capture(world, host.PopData!, new SaveClock((int)clock.Day, clock.Hour, clock.Minute),
-                LoadedSave, CaptureOptions(), prepared);
-            Difficulty.Write(game.Camera);
-            WriteWeather(game, (int)clock.Day, clock.HourOfDay);
-            host.BloodDecals.WriteDecals(game);
-            host.BloodDecals.WriteWeaponBlood(game);
-            host.Player.BiomeBanner.WriteBiome(game.Camera);
-            host.Modding.CaptureModData(world, game);
-            host.LevelEditorHost.WriteLevelEdits(game);
+            game = CaptureSave(world, ahead);
         }
         catch (Exception e)
         {
@@ -235,23 +222,51 @@ sealed class GameSaves(GameHost host)
         double captureMs = watch.Elapsed.TotalMilliseconds;
         string folder = destination ?? QuickSave.Folder();
         if (!feedback) SaveInUse = folder;
-        SaveWrite = Task.Run(() =>
+        SaveWrite = Task.Run(() => WriteSave(game, folder, captureMs, ahead, feedback));
+    }
+
+    /// <summary>
+    /// Captures the live world and the host state on the frame thread, leaving file finalization to the worker.
+    /// </summary>
+    SaveGame CaptureSave(World world, bool ahead)
+    {
+        var clock = host.Session.Clock;
+        var prepared = ahead ? PreparedBase!.Result : null;
+        PreparedBase = null;   // used, or stale
+        var game = SaveCapture.CaptureState(world, host.PopData!, new SaveClock((int)clock.Day, clock.Hour, clock.Minute),
+            LoadedSave, CaptureOptions(), prepared);
+
+        Difficulty.Write(game.Camera);
+        WriteWeather(game, (int)clock.Day, clock.HourOfDay);
+        host.BloodDecals.WriteDecals(game);
+        host.BloodDecals.WriteWeaponBlood(game);
+        host.Player.BiomeBanner.WriteBiome(game.Camera);
+        host.Modding.CaptureModData(world, game);
+        host.LevelEditorHost.WriteLevelEdits(game);
+        return game;
+    }
+
+    /// <summary>
+    /// Finalizes the captured records, writes the save and queues its result for the frame thread.
+    /// </summary>
+    void WriteSave(SaveGame game, string folder, double captureMs, bool ahead, bool feedback)
+    {
+        try
         {
-            try
-            {
-                var written = Stopwatch.StartNew();
-                game.Write(folder);
-                Console.WriteLine($"save      {folder}: captured in {captureMs:0.0} ms{(ahead ? "" : " (the base made on the spot)")}, "
-                    + $"written in {written.ElapsedMilliseconds} ms");
-                if (!feedback) _saveNotices.Enqueue(("Saved", false, folder));
-            }
-            catch (Exception e)
-            {
-                Console.Error.WriteLine($"save      write failed: {e}");
-                if (feedback) throw;
-                _saveNotices.Enqueue((Loc.Tr("Save failed: {1}", e.Message), true, null));
-            }
-        });
+            var written = Stopwatch.StartNew();
+            game.UpdateDerived();
+            game.Write(folder);
+            Console.WriteLine($"save      {folder}: captured in {captureMs:0.0} ms{(ahead ? "" : " (the base made on the spot)")}, "
+                + $"written in {written.ElapsedMilliseconds} ms");
+            if (!feedback) _saveNotices.Enqueue(("Saved", false, folder));
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"save      write failed: {e}");
+            if (feedback) throw;
+
+            _saveNotices.Enqueue((Loc.Tr("Save failed: {1}", e.Message), true, null));
+        }
     }
 
     /// <summary>

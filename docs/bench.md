@@ -113,6 +113,12 @@ The navmesh cache changes a run: from an empty one (`--cache-root` on a copy of 
 the zones in reach are built during the script, 65-88 of them on `bench-bases-2026-10-27` by timing, and a run on the cache earlier runs
 filled still builds about 20 more (**Observed**, 2026-11-19).
 
+**Observed** (2026-11-19, Windows Release, Ryzen 5600X and RTX 4070, `settle,flights` on `bench-bases-2026-10-27`):
+with the autosave interval set to one minute, live capture took 330 ms and allocated 80 MiB on the frame thread, down from
+523–1,002 ms and 326–329 MiB in two baseline runs. In the detailed baseline, ruin cleanup allocated 91 MiB and updating
+derived save fields allocated 86 MiB. The latter now runs on the write worker ([simulation](simulation.md#saves)).
+Loading the same autosave and resaving after 300 headless ticks gave matching SHA-256 hashes for all 776 files.
+
 **Metal** (`--renderer metal`, `MetalPlayBench`): the same script, sections and columns, with these differences.
 - `gpu_total_ms` is the frame's command buffer (`GPUEndTime - GPUStartTime`) minus its overlap with the previous frame's
   (consecutive frames overlap on the GPU, so whole spans over-count); it arrives when the ring slot is reused, so the last

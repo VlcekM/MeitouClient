@@ -102,19 +102,35 @@ public static class RuinSave
         if (zone.BuildingList is not { } list) return;
 
         var states = new Dictionary<string, FcsRecord>(StringComparer.Ordinal);
-        foreach (var r in zone.BuildingStates) states[r.StringId] = r;
+        var inventories = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var record in zone.File.Records)
+        {
+            if (record.RecordType == FcsRecordType.GamestateBuilding) states[record.StringId] = record;
+            if (record.RecordType == FcsRecordType.InventoryState) inventories.Add(record.StringId);
+        }
 
         foreach (var instance in list.Instances.ToList())
         {
-            var state = instance.States
-                .Select(id => states.GetValueOrDefault(id))
-                .FirstOrDefault(r => r is not null);
+            var state = ListedBuilding(instance, states);
             if (state is null || !InsideRuin(state, ruins)) continue;
 
-            MachineSave.WriteInventory(zone.File, zone.Coordinate, instance, null, []);
+            if (instance.States.Exists(inventories.Contains))
+                MachineSave.WriteInventory(zone.File, zone.Coordinate, instance, null, []);
+
             zone.File.Records.Remove(state);
             list.Instances.Remove(instance);
         }
+    }
+
+    /// <summary>
+    /// The first building state named by the instance, using the zone's building-state index.
+    /// </summary>
+    static FcsRecord? ListedBuilding(FcsInstance instance, Dictionary<string, FcsRecord> states)
+    {
+        foreach (string id in instance.States)
+            if (states.TryGetValue(id, out var state)) return state;
+
+        return null;
     }
 
     /// <summary>
@@ -132,7 +148,7 @@ public static class RuinSave
     /// </summary>
     static void UnmarkStood(SaveGame game, World world, PopulationData data, IReadOnlyDictionary<string, FcsRecord> states)
     {
-        var parents = Parents(game);
+        HashSet<(int C, int I)>? parents = null;
         foreach (var site in data.Sites)
         {
             foreach (var b in site.Buildings)
@@ -141,6 +157,7 @@ public static class RuinSave
                 if (!world.Fixtures.IsReset(b.Key) && !world.Fixtures.IsRebuilt(b.Key)) continue;
                 if (states.GetValueOrDefault(b.Key) is not { } state || Hand.Read(state, "handle") is not { IsNull: false } hand) continue;
 
+                parents ??= Parents(game);
                 if (!parents.Contains((hand.C, hand.I))) state.Ints.Remove(SerialisedKey);
             }
         }

@@ -68,8 +68,8 @@ public static class BuildingSave
     /// Whether a building instance is the player's: a registry id, a state that is not a town's construction and the player faction as its owner.
     /// </summary>
     static bool IsPlayerBuilt(string instanceId, FcsRecord? state, string playerFactionId) =>
-        BuildingRegistry.TryParseId(instanceId, out _, out _) && state is not null && !state.Bools.GetValueOrDefault("meitou town construction")
-        && state.Strings.GetValueOrDefault("owner faction ID") == playerFactionId;
+        state is not null && state.Strings.GetValueOrDefault("owner faction ID") == playerFactionId
+        && !state.Bools.GetValueOrDefault("meitou town construction") && BuildingRegistry.TryParseId(instanceId, out _, out _);
 
     #endregion
 
@@ -488,12 +488,28 @@ public static class BuildingSave
         var townHands = WriteTowns(game, world, playerFactionId, seed, db ?? world.SystemOf<PopulationSystem>()?.Data.Db);
         if (reg.Count == 0) return townHands;
 
-        foreach (var site in reg.All.Where(s => s.LevelPlacement is null))
-            WriteSite(game, site, playerFactionId, seed, site.Town == 0 && site.ForeignTown is { } kept ? kept : townHands.GetValueOrDefault(site.Town, Hand.Null),
-                world.Fixtures, world.Walkability);
-
+        WriteSites(game, world, playerFactionId, seed, townHands);
         WriteParents(game, world);
         return townHands;
+    }
+
+    /// <summary>
+    /// Writes the current sites using one building and inventory index per zone.
+    /// </summary>
+    static void WriteSites(SaveGame game, World world, string playerFactionId, ulong seed, IReadOnlyDictionary<int, Hand> townHands)
+    {
+        var zones = new Dictionary<ZoneCoordinate, SiteRecords>();
+        foreach (var site in world.Buildings.All.Where(s => s.LevelPlacement is null))
+        {
+            if (!zones.TryGetValue(site.Zone, out var records))
+            {
+                if (!game.Zones.TryGetValue(site.Zone, out var zone)) game.Zones[site.Zone] = zone = new SaveZone(site.Zone, new SaveFile());
+                zones[site.Zone] = records = new SiteRecords(zone);
+            }
+
+            var town = site.Town == 0 && site.ForeignTown is { } kept ? kept : townHands.GetValueOrDefault(site.Town, Hand.Null);
+            WriteSite(records, site, playerFactionId, seed, town, world.Fixtures, world.Walkability);
+        }
     }
 
     /// <summary>
@@ -507,15 +523,13 @@ public static class BuildingSave
         {
             if (zone.BuildingList is not { } list) continue;
 
-            var byId = new Dictionary<string, FcsRecord>(StringComparer.Ordinal);
+            var byId = new Dictionary<string, FcsRecord>(zone.File.Records.Count, StringComparer.Ordinal);
             foreach (var r in zone.File.Records) byId[r.StringId] = r;
             foreach (var instance in list.Instances.ToList())
             {
                 if (live.TryGetValue(instance.Id, out var home) && (home is null || home == zone.Coordinate)) continue;
 
-                var state = instance.States
-                    .Select(id => byId.GetValueOrDefault(id))
-                    .FirstOrDefault(r => r?.RecordType == FcsRecordType.GamestateBuilding);
+                var state = ListedBuilding(instance, byId);
                 if (!IsPlayerBuilt(instance.Id, state, playerFactionId)) continue;
 
                 list.Instances.Remove(instance);
@@ -529,6 +543,17 @@ public static class BuildingSave
                     zone.File.SlotLists[0] = [.. zone.File.SlotLists[0].Where(slot => slot != h.I)];
             }
         }
+    }
+
+    /// <summary>
+    /// The first GAMESTATE_BUILDING named in an instance's state list.
+    /// </summary>
+    static FcsRecord? ListedBuilding(FcsInstance instance, Dictionary<string, FcsRecord> byId)
+    {
+        foreach (string id in instance.States)
+            if (byId.GetValueOrDefault(id) is { RecordType: FcsRecordType.GamestateBuilding } state) return state;
+
+        return null;
     }
 
     /// <summary>
@@ -574,55 +599,115 @@ public static class BuildingSave
     /// <summary>
     /// Writes one site: its instance in the zone's building list, its state record and its keys.
     /// </summary>
-    static void WriteSite(SaveGame game, BuildSite site, string playerFactionId, ulong seed, Hand town, Locks.FixtureRegistry fixtures,
+    static void WriteSite(SiteRecords records, BuildSite site, string playerFactionId, ulong seed, Hand town, Locks.FixtureRegistry fixtures,
         IWalkability walkability)
     {
-        var coordinate = site.Zone;
-        if (!game.Zones.TryGetValue(coordinate, out var zone)) game.Zones[coordinate] = zone = new SaveZone(coordinate, new SaveFile());
-        var file = zone.File;
-        var list = zone.BuildingList;
-        if (list is null)
-        {
-            list = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Id = NextNumber(file), Name = "0",
-                StringId = WorldLevelData.BuildingListId };
-            file.Records.Add(list);
-        }
-
-        string stateId = site.Id + StateSuffix;
-        var state = file.Records.FirstOrDefault(r => r.StringId == stateId && r.RecordType == FcsRecordType.GamestateBuilding);
-        if (state is null)
-        {
-            state = new FcsRecord { Type = (int)FcsRecordType.GamestateBuilding, Id = NextNumber(file), Name = "0", StringId = stateId };
-            file.Records.Add(state);
-        }
-
-        var instance = list.Instances.FirstOrDefault(i => i.Id == site.Id);
-        if (instance is null)
-        {
-            instance = new FcsInstance { Id = site.Id };
-            list.Instances.Add(instance);
-        }
-
+        var state = records.GetOrAddState(site.Id + StateSuffix);
+        var instance = records.GetOrAddInstance(site.Id);
         var at = site.Position;
         instance.Target = site.Record;
 
         // Outdoor height above terrain; the parent pass supplies indoor height (docs/formats/save.md).
         instance.Position = at with { Y = at.Y - walkability.TerrainHeight(at.X, at.Z) };
         instance.Rotation = site.Rotation;
-        KeepInventoryStates(file, instance);
-        instance.States.Add(stateId);
+        records.KeepInventoryStates(instance);
+        instance.States.Add(state.StringId);
 
-        var hand = WriteSlot(file, zone, state, site, seed);
+        var hand = WriteSlot(records.Zone.File, records.Zone, state, site, seed);
         WriteSiteKeys(state, site, playerFactionId, hand, town, fixtures);
     }
 
     /// <summary>
-    /// Leaves only the INVENTORY_STATE records among an instance's states (the original lists its inventory first, under any id: <b>Observed</b>,
-    /// Beep Fan Club 1's <c>425867-zone28.29-INGAME</c> of a Shop Counter), so the machine writer finds it (<see cref="MachineSave"/>) and the
-    /// record is not left in the file unlisted.
+    /// The building states, instances and inventory ids of a zone while its player sites are written.
     /// </summary>
-    static void KeepInventoryStates(SaveFile file, FcsInstance instance) =>
-        instance.States.RemoveAll(id => !file.Records.Any(r => r.StringId == id && r.RecordType == FcsRecordType.InventoryState));
+    sealed class SiteRecords
+    {
+        /// <summary>
+        /// The building collection holding the sites.
+        /// </summary>
+        readonly FcsRecord _list;
+
+        /// <summary>
+        /// The first building record by id, in case a file has duplicate entries.
+        /// </summary>
+        readonly Dictionary<string, FcsRecord> _states = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// The first building instance by id.
+        /// </summary>
+        readonly Dictionary<string, FcsInstance> _instances = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// The ids of all inventory states, which the site writer leaves in place.
+        /// </summary>
+        readonly HashSet<string> _inventories = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// The zone being updated.
+        /// </summary>
+        public SaveZone Zone { get; }
+
+        /// <summary>
+        /// Indexes the existing records, adding the building list when the zone has none.
+        /// </summary>
+        public SiteRecords(SaveZone zone)
+        {
+            Zone = zone;
+            _list = zone.BuildingList ?? AddBuildingList(zone.File);
+
+            foreach (var record in zone.File.Records)
+            {
+                if (record.RecordType == FcsRecordType.GamestateBuilding) _states.TryAdd(record.StringId, record);
+                if (record.RecordType == FcsRecordType.InventoryState) _inventories.Add(record.StringId);
+            }
+
+            foreach (var instance in _list.Instances) _instances.TryAdd(instance.Id, instance);
+        }
+
+        /// <summary>
+        /// Finds or appends a player site's building state.
+        /// </summary>
+        public FcsRecord GetOrAddState(string id)
+        {
+            if (_states.TryGetValue(id, out var state)) return state;
+
+            var file = Zone.File;
+            state = new FcsRecord { Type = (int)FcsRecordType.GamestateBuilding, Id = NextNumber(file), Name = "0", StringId = id };
+            file.Records.Add(state);
+            _states.Add(id, state);
+            return state;
+        }
+
+        /// <summary>
+        /// Finds or appends a player site's building instance.
+        /// </summary>
+        public FcsInstance GetOrAddInstance(string id)
+        {
+            if (_instances.TryGetValue(id, out var instance)) return instance;
+
+            instance = new FcsInstance { Id = id };
+            _list.Instances.Add(instance);
+            _instances.Add(id, instance);
+            return instance;
+        }
+
+        /// <summary>
+        /// Keeps the inventory links so the machine writer can find them (<see cref="MachineSave"/>). The original lists its inventory first,
+        /// under any id (<b>Observed</b>, Beep Fan Club 1's Shop Counter <c>425867-zone28.29-INGAME</c>).
+        /// </summary>
+        public void KeepInventoryStates(FcsInstance instance) => instance.States.RemoveAll(id => !_inventories.Contains(id));
+
+        /// <summary>
+        /// Appends a missing building list as the next numbered record.
+        /// </summary>
+        static FcsRecord AddBuildingList(SaveFile file)
+        {
+            var list = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Id = NextNumber(file), Name = "0",
+                StringId = WorldLevelData.BuildingListId };
+            file.Records.Add(list);
+            return list;
+        }
+    }
 
     /// <summary>
     /// The handle of a site's state: kept while the state has one in this zone, else the next free one of the zone's slot list. The slot is recorded

@@ -1,5 +1,5 @@
+using System.Globalization;
 using System.Numerics;
-using System.Text.RegularExpressions;
 using Meitou.Data.Fcs;
 using Meitou.Data.World;
 
@@ -11,7 +11,7 @@ namespace Meitou.Data.Save;
 /// again without a change gives the same bytes. <see cref="UpdateDerived"/> brings the parts that follow from the rest (slot lists, counters,
 /// CAMERA zone list) up to date after changes.
 /// </summary>
-public sealed partial class SaveGame
+public sealed class SaveGame
 {
     /// <summary>
     /// The game version the saves are written as (<see cref="SaveCamera.Version"/>); the original refuses nothing at or above 0.99.99.
@@ -356,15 +356,30 @@ public sealed partial class SaveGame
     {
         var platoonContainers = new SortedSet<int>(Platoons.Select(p => p.Handle).Where(h => !h.IsNull).Select(h => h.C));
         var townContainers = new SortedSet<int>(Towns.Select(t => t.Handle).Where(h => !h.IsNull).Select(h => h.C));
-        foreach (var file in AllFiles().Select(f => f.File))
-            foreach (var r in file.Records)
-                foreach (var prefix in Hand.Prefixes(r))
-                    if (Hand.Read(r, prefix) is { IsNull: false, Type: (int)FcsRecordType.Town or 85 } h)
-                        townContainers.Add(h.C);
+        foreach (var (_, file) in AllFiles())
+            foreach (var record in file.Records)
+                AddTownContainers(record, townContainers);
+
         var lists = Quick.SlotLists;
         while (lists.Count < 4) lists.Add(lists.Count >= 2 ? Enumerable.Range(1, ZoneContainerCount).ToArray() : []);
         lists[0] = [.. platoonContainers];
         lists[1] = [.. townContainers];
+    }
+
+    /// <summary>
+    /// Adds the containers of town handles without reading the parts of unrelated handles. As in <see cref="Hand.Read"/>, a handle must have a
+    /// slot key and a missing container key reads as zero.
+    /// </summary>
+    static void AddTownContainers(FcsRecord record, SortedSet<int> containers)
+    {
+        foreach (var (key, type) in record.Ints)
+        {
+            if (type is not ((int)FcsRecordType.Town or (int)FcsRecordType.Nest) || !key.EndsWith("TYPE", StringComparison.Ordinal)) continue;
+
+            var prefix = key.AsSpan(0, key.Length - 4);
+            if (record.Ints.ContainsKey(string.Concat(prefix, "I")))
+                containers.Add(record.Ints.GetValueOrDefault(string.Concat(prefix, "C")));
+        }
     }
 
     /// <summary>
@@ -444,16 +459,17 @@ public sealed partial class SaveGame
     #region Record numbers
 
     /// <summary>
-    /// Matches the leading number of a record's string id (<c>12-</c>).
-    /// </summary>
-    [GeneratedRegex(@"^(\d+)-")]
-    private static partial Regex NumberPrefix();
-
-    /// <summary>
     /// The number in the front of a record's string id (<c>12-quick.save-INGAME</c> is 12), or -1 when it has none.
     /// </summary>
-    public static int NumberOf(FcsRecord r) =>
-        NumberPrefix().Match(r.StringId) is { Success: true } m && int.TryParse(m.Groups[1].Value, out int v) ? v : -1;
+    public static int NumberOf(FcsRecord r)
+    {
+        ReadOnlySpan<char> id = r.StringId;
+        int digits = 0;
+        while (digits < id.Length && char.IsAsciiDigit(id[digits])) digits++;
+
+        if (digits == 0 || digits == id.Length || id[digits] != '-') return -1;
+        return int.TryParse(id[..digits], NumberStyles.None, CultureInfo.InvariantCulture, out int number) ? number : -1;
+    }
 
     #endregion
 }

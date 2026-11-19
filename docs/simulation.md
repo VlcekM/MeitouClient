@@ -2263,17 +2263,17 @@ Under the sliders are the original's two ticks, saved under its own CAMERA bools
 
 ## Saves
 
-`Meitou.Data.Save` parses/writes folders; `Meitou.Simulation.Saving` maps world state. Capture
-serially at a boundary, write/read on workers; `ReplaceWorld` publishes a successfully loaded
-world and preserves the running world on failure. [save.md](formats/save.md) owns file keys,
+`Meitou.Data.Save` parses and writes folders and `Meitou.Simulation.Saving` maps world state. Capture
+serially at a tick boundary, then finalize and write the detached save on a worker. Loads read on a worker.
+`ReplaceWorld` publishes a successfully loaded world and preserves the running world on failure. [save.md](formats/save.md) owns file keys,
 handles and original saved/derived/regenerated state.
 
 Code map:
-- **Capture.** `SaveCapture.PrepareBase` clones the loaded `SaveGame` (else builds a fresh one with `SaveBuilder`). `Capture` writes what
-  the world models over the clone, so every key Meitou does not model passes through. Characters from the loaded save keep their own records
-  (`WriteCharacter` gets their `SaveCharacter`; `SaveBuilder.AddCharacter` only makes new ones). Per-system key helpers live in `Saving/*Save.cs`.
-- **Host hooks.** `SaveCaptureOptions` carries what only the host knows: `Bodies`, `View` (the strategy camera). `GameHost.CaptureOptions`
-  fills them in. `GameHost.SwapInSave` applies host-side state after `SaveLoader.Load`: the camera and the weather.
+- **Capture.** `SaveCapture.PrepareBase` clones the loaded `SaveGame` on a worker (else builds a fresh one with `SaveBuilder`). The frame overlays
+  live state and host fields. Characters from the loaded save keep their records and unmodelled keys. The write worker updates slot lists, record
+  counters and other derived fields. Synchronous callers use `SaveCapture.Capture`, which updates those fields before returning.
+- **Host hooks.** `GameSaves.CaptureOptions` supplies the strategy camera view. `GameSaves.SwapInSave` restores the camera and weather after
+  `SaveLoader.Load`.
 - **Load.** `SaveLoader.Load` makes characters before the first tick. The character table copies its previous state over the next one at
   `BeginTick`, so state that must reach a tick is not written into `Next` there. It goes through `World.Commands` like player input.
 

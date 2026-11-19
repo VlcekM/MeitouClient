@@ -99,11 +99,22 @@ public static partial class SaveCapture
     }
 
     /// <summary>
-    /// <paramref name="prepared"/> is a <see cref="PrepareBase"/> made with the same <paramref name="loaded"/> (null: made here, which is the
-    /// slow part).
+    /// Captures a world at a tick boundary and updates the derived file fields, ready for callers that consume the save immediately.
     /// </summary>
     public static SaveGame Capture(World world, PopulationData data, SaveClock clock, LoadedSave? loaded = null, SaveCaptureOptions? options = null,
         SaveBuilder? prepared = null)
+    {
+        var game = CaptureState(world, data, clock, loaded, options, prepared);
+        game.UpdateDerived();
+        return game;
+    }
+
+    /// <summary>
+    /// Captures the world's state at a tick boundary. The writer must call <see cref="SaveGame.UpdateDerived"/> before writing the detached save.
+    /// <paramref name="prepared"/> is a <see cref="PrepareBase"/> made with the same <paramref name="loaded"/>, or null to make the base here.
+    /// </summary>
+    public static SaveGame CaptureState(World world, PopulationData data, SaveClock clock, LoadedSave? loaded, SaveCaptureOptions? options,
+        SaveBuilder? prepared)
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(data);
@@ -145,7 +156,6 @@ public static partial class SaveCapture
         options.HandlesWritten?.Invoke(s_memoryPass?.Handles ?? []);
         game.LastingIds = world.LastingIds.Write(game, s_memoryPass?.ColdHandles ?? []);
         WriteMemories();
-        game.UpdateDerived();
         return game;
     }
 
