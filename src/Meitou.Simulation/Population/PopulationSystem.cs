@@ -358,6 +358,10 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// </summary>
     Vector2?[] _wildCentres = [];
     /// <summary>
+    /// The nests with a decided centre (<see cref="PlacedNests"/>); null until asked for and after a centre changes.
+    /// </summary>
+    PlacedNest[]? _placedNests;
+    /// <summary>
     /// The player characters of a <see cref="Discover"/> check, with their zones.
     /// </summary>
     readonly List<(Vector2 At, ZoneCoordinate Zone)> _viewers = [];

@@ -59,7 +59,8 @@ static class StageProbe
     }
 
     /// <summary>
-    /// One platoon's squad: members, knocked out, in slave state 1, carried, carrying, the centre and the leader's goal.
+    /// One platoon's squad: members, knocked out, in slave state 1, carried, carrying, the centre, the leader's goal, the running package and the
+    /// town the squad is in.
     /// </summary>
     static void Print(ProbeWorld probe, int platoon)
     {
@@ -87,6 +88,6 @@ static class StageProbe
         var goal = table.TryResolveNext(squad.Leader, out int lead) ? table.Cold(lead)?.Ai?.Goal?.Task.Type.ToString() : "-";
         var mid = n > 0 ? centre / n : centre;
         Console.WriteLine($"  {probe.Faction(squad.Faction)} sq={squad.Id} n={n} ko={ko} slaves={slaves} carried={carried} carrying={carrying} "
-            + $"at <{mid.X:F0}, {mid.Z:F0}> lead={goal}");
+            + $"at <{mid.X:F0}, {mid.Z:F0}> lead={goal} package={squad.Ai?.Current?.Name} town={SaveProbe.TownLabel(squad.Ai?.InTown)}");
     }
 }

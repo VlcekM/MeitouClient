@@ -55,6 +55,12 @@ public sealed partial class AiSystem
     internal const float PlayerTownReach = 1.25f, StayReach = 1.5f, EnterReach = 1;
 
     /// <summary>
+    /// A nest's radius as a town (<c>Nest</c> vfunc <c>0x2a0</c>, <c>FUN_140926e90</c>, <b>Verified</b>: <c>DAT_141733c14</c>, whatever the TOWN
+    /// record's own radius fields say; a nest marker's is 0).
+    /// </summary>
+    internal const float NestTownRadius = 625;
+
+    /// <summary>
     /// Where the squad is: its leader's place, else its first living member's; null when nobody lives.
     /// </summary>
     static Vector3? LeaderPosition(World world, Squad squad)
@@ -63,6 +69,23 @@ public sealed partial class AiSystem
         if (table.IsAlive(squad.Leader)) return table.Previous[squad.Leader.Slot].Position;
         foreach (var m in squad.Members)
             if (table.IsAlive(m)) return table.Previous[m.Slot].Position;
+        return null;
+    }
+
+    /// <summary>
+    /// Where the squad stands for the town it is in: <see cref="LeaderPosition"/>, else, for a squad made this tick (its members are in the next
+    /// state only), its leader's or first member's place there, so its board has the town and arrival hour before its first package choice.
+    /// </summary>
+    static Vector3? TownPosition(World world, Squad squad)
+    {
+        if (LeaderPosition(world, squad) is { } at) return at;
+
+        var table = world.Characters;
+        if (table.TryResolveNext(squad.Leader, out int lead)) return table.Next[lead].Position;
+
+        foreach (var m in squad.Members)
+            if (table.TryResolveNext(m, out int s)) return table.Next[s].Position;
+
         return null;
     }
 
@@ -100,7 +123,10 @@ public sealed partial class AiSystem
     /// The character's status town (the original's status <c>+0x88</c>, written by <c>FUN_1405a51e0</c> before each status update,
     /// docs/game/ai-tasks.md "Status town"), from its position and its <paramref name="current"/> one: the nearest placed town of the player's
     /// faction within 1.25 x its radius; else the current town within 1.5 x its radius, or, with none, the nearest placed town within its radius;
-    /// else the nearest player town within the same reach. The original's walled-town and building steps are not modelled.
+    /// else the nearest player town within the same reach (player towns stand in the original's first town list with the placed ones); else
+    /// the nearest nest of the list's second list (<c>FUN_140927ad0</c>, <see cref="PopulationSystem.PlacedNests"/>) within the same reach of
+    /// its radius (<see cref="NestTownRadius"/>). A nest held as the current town is kept like any other. The original's walled-town and
+    /// building steps are not modelled.
     /// </summary>
     internal static CampaignTown StatusTownAt(PopulationData data, World world, Vector3 p, CampaignTown current)
     {
@@ -111,7 +137,9 @@ public sealed partial class AiSystem
         float reach = current.IsNone ? EnterReach : StayReach;
         var held = current.IsNone ? NearestSite(data, at, -1) : TownPlace(data, world, current);
         if (held is { } town && Reaches(at, town, reach)) return town.Town;
-        return NearestPlayerTown(world, at) is { } built && Reaches(at, built, reach) ? built.Town : CampaignTown.None;
+        if (NearestPlayerTown(world, at) is { } built && Reaches(at, built, reach)) return built.Town;
+
+        return NearestNest(world, at) is { } nest && Reaches(at, nest, reach) ? nest.Town : CampaignTown.None;
     }
 
     /// <summary>
@@ -150,6 +178,26 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
+    /// The nest standing nearest <paramref name="at"/> (<see cref="PopulationSystem.PlacedNests"/>); null when none stands, or without a
+    /// population.
+    /// </summary>
+    static PlacedTown? NearestNest(World world, Vector2 at)
+    {
+        if (world.SystemOf<PopulationSystem>() is not { } population) return null;
+
+        PlacedTown? best = null;
+        float bestD = float.MaxValue;
+        var nests = population.PlacedNests;
+        for (int i = 0; i < nests.Length; i++)
+        {
+            float d = Vector2.DistanceSquared(at, nests[i].Centre);
+            if (d < bestD) (best, bestD) = (new PlacedTown(CampaignTown.OfNest(nests[i].Site), nests[i].Centre, NestTownRadius), d);
+        }
+
+        return best;
+    }
+
+    /// <summary>
     /// The player town whose centre is nearest <paramref name="at"/>; null when the player has none.
     /// </summary>
     static PlacedTown? NearestPlayerTown(World world, Vector2 at)
@@ -174,11 +222,16 @@ public sealed partial class AiSystem
         TownPlace(data, world, t) is { } place ? (place.Centre, place.Radius) : null;
 
     /// <summary>
-    /// Where campaign town <paramref name="t"/> stands: a town site's position and radius, or a player town's; null when it is not (or no
-    /// longer) there.
+    /// Where campaign town <paramref name="t"/> stands: a town site's position and radius, a nest's decided centre and
+    /// <see cref="NestTownRadius"/>, or a player town's; null when it is not (or no longer) there.
     /// </summary>
     static PlacedTown? TownPlace(PopulationData data, World world, CampaignTown t)
     {
+        if (t.Nest > 0)
+        {
+            return world.SystemOf<PopulationSystem>()?.WildCentreOf(t.Nest - 1) is { } centre ? new PlacedTown(t, centre, NestTownRadius) : null;
+        }
+
         if (t.Site >= 0)
         {
             if (t.Site >= data.Sites.Count) return null;
@@ -235,13 +288,14 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// The town the squad is in, before the package choice (the original's Blackboard +0x138 and its arrival hour +0x140); coming into one, the
-    /// leader fires ENTER_TOWN (49).
+    /// The town the squad is in, before the package choice (the original's Blackboard +0x138 and its arrival hour +0x140, <c>FUN_1402688d0</c>,
+    /// <b>Verified</b>): its effective leader's status town when that leader is up and has one (so a nest counts, and a town is kept out to
+    /// 1.5 x its radius), else the town whose radius holds the squad; coming into one, the leader fires ENTER_TOWN (49).
     /// </summary>
     void UpdateInTown(World world, Squad squad, Blackboard board)
     {
-        if (LeaderPosition(world, squad) is not { } at) return;
-        var town = CurrentTown(world, at);
+        if (TownPosition(world, squad) is not { } at) return;
+        var town = LeaderStatusTown(world, squad) is { IsNone: false } status ? status : CurrentTown(world, at);
         if (board.InTown.IsNone && !town.IsNone)
         {
             board.InTownSince = world.GameHours;
@@ -251,6 +305,20 @@ public sealed partial class AiSystem
 
         board.InTown = town;
         if (town.Site >= 0 && !_townPlaces.Has(town.Site)) _townPlaces.Refresh(world, this);
+    }
+
+    /// <summary>
+    /// The status town of the squad's effective leader (<c>FUN_14079aea0</c>, <see cref="PopulationSystem.EffectiveLeader"/>) as its next status
+    /// update writes it (<see cref="StatusTownAt"/>: the kept one is a spotting pass old, and none for a squad just made, whose patrol test
+    /// would then read a town the board has no arrival hour for); none when it is down (vfunc <c>0x30</c>) or gone.
+    /// </summary>
+    CampaignTown LeaderStatusTown(World world, Squad squad)
+    {
+        var table = world.Characters;
+        var lead = world.SystemOf<PopulationSystem>()?.EffectiveLeader(world, squad) ?? squad.Leader;
+        if (!table.TryResolveNext(lead, out int s) || table.Cold(s) is not { } leader || CharacterFacts.Down(leader)) return CampaignTown.None;
+
+        return StatusTownAt(data, world, table.Next[s].Position, leader.StatusTown);
     }
 
     #endregion

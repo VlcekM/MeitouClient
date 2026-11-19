@@ -110,7 +110,9 @@ A slave's Slave role list runs through the Obedient Slave job (187): [role lists
 - Vtable: +0x30 start (called on activation after the old package's +0x38 end), +0x48 update (the running package, after the choice), +0x50 sees a character,
   +0x60 can start, +0x68 finished, +0x90 may hand over to `Leads to` (base: yes; a finished package whose `Leads to` is refused fails its slot), +0x18 speed
   mode (base 4, PassingByTownAssault 2, Refugee and DefendPlayerBase 1). Package fields: +0x8 `mission town`, +0x28 `mission target`, +0x48 `mission employer` (saved under these keys).
-- Blackboard current town (+0x138, `FUN_1402688d0`, before the choice): the leader's town, else the nearest town (any type but nest markers) whose radius
+- Blackboard current town (+0x138, `FUN_1402688d0`, before the choice): the effective leader's [status town](carry-loot.md#the-status-town)
+  when it is not down (vfunc `0x30`), so a nest it stands in counts and a town is kept out to 1.5 x its radius (**Verified**; Meitou
+  `AiSystem.UpdateInTown`, `Blackboard.InTown`), else the nearest town (any type but nest markers) whose radius
   (`FUN_140926d50` × 1) holds the platoon; entering one sets the arrival hour (+0x140) and fires the leader's ENTER_TOWN (49). The leader's own town is the `+0x88` of the
   object at Character `+0x1a0`; Character slot 15 (`FUN_1405c89b0`) reads that field for any member (Town slot 70 compares it, [campaigns](factions-squads-towns.md#campaigns)).
 - **GoOutOnPatrol** (6), **_Running** (23), **_Cannibal** (4) (**Verified**, decompile): can start (`FUN_140288890`; 4 first refuses while its
@@ -123,7 +125,8 @@ A slave's Slave role list runs through the Obedient Slave job (187): [role lists
   its PATROL goal (22) is [Task_Patrol](factions-squads-towns.md#off-screen-world)'s sector walk. Data (base files, record dump): the patrol
   package is the lone slot-0 package of 94 templates, which starts whatever its test says and is never started again once finished; it sits in
   slot 1 over an at-home or refugee package in `skin bandit patrol`, `Cannibal raid 1`, `Cannibal scrawny`, `Fog raid` and `Bandit Raiders`, where a
-  finished patrol falls to slot 0 and starts again at the next update while its leader is out of every town. Meitou: `AiSystem.PatrolCanStart`,
+  finished patrol falls to slot 0 and starts again at the next update while its leader is out of every town. A nest is a town here (the
+  status town's second list), so a nest's squad waits its 8 h in the nest. Meitou: `AiSystem.PatrolCanStart`,
   `PatrolFinished`, `Blackboard.PatrolStart` (not saved: a loaded patrol counts its 12 h from the load, engine choice). **Observed** (headless,
   #1030 save): a homeless `skin bandit patrol` platoon beside the player runs `Cannibal patrol map (short range)` and walks to a sector point.
 - **Package_HangAroundBar** (17/26): can start in its home town, or in a town not hostile to it that has bars (`vfunc 0x2d0` kind 3); finished in a player town

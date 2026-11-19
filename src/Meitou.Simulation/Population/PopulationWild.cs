@@ -23,6 +23,11 @@ public enum WildKind : byte
 }
 
 /// <summary>
+/// A nest standing in the world as a town: its wild site's index and its centre (X/Z).
+/// </summary>
+public readonly record struct PlacedNest(int Site, Vector2 Centre);
+
+/// <summary>
 /// A place in the wild that gets squads while its zone is active: an area sector (one zone cell and its BIOME_GROUP) or a nest of a biome group.
 /// <see cref="Spots"/> are the seeded candidate centres of a nest (the first walkable one is used when it loads); a sector has none.
 /// <see cref="SaveInstance"/> is the town-list entry of a nest that came from a save (its one spot is the saved position). <see cref="Key"/> keys a
@@ -165,6 +170,38 @@ public sealed partial class PopulationSystem
     internal Vector2? WildCentreOf(int site) => site >= 0 && site < _wildCentres.Length ? _wildCentres[site] : null;
 
     /// <summary>
+    /// The nests standing in the world as towns (the original's town list keeps its <c>Nest</c> objects in a second list, <c>TownList +0x88</c>,
+    /// which the status town falls back to): every nest site whose centre is decided, but a nest marker (radius 0, it holds nobody). A nest gets
+    /// its centre when it first loads (engine choice: the original places a nest when it makes it), and keeps its place in the list when it is
+    /// wiped out (the wipe <c>FUN_14092f010</c> only posts the message and stamps the hour, <b>Verified</b>). A new array on every change, so
+    /// the parallel steps read it freely.
+    /// </summary>
+    internal PlacedNest[] PlacedNests => _placedNests ??= BuildPlacedNests();
+
+    /// <summary>
+    /// The faction of nest wild site <paramref name="site"/>; -1 when it is no nest.
+    /// </summary>
+    internal int NestFaction(int site) => _wildSites is { } sites && site >= 0 && site < sites.Count && sites[site].Kind == WildKind.Nest
+        ? sites[site].Faction
+        : -1;
+
+    /// <summary>
+    /// Lists the nests with a decided centre for <see cref="PlacedNests"/>.
+    /// </summary>
+    PlacedNest[] BuildPlacedNests()
+    {
+        var nests = new List<PlacedNest>();
+        var sites = WildSites;
+        for (int i = 0; i < sites.Count && i < _wildCentres.Length; i++)
+        {
+            if (sites[i] is { Kind: WildKind.Nest, Nest.Type: not TownType.NestMarker } && _wildCentres[i] is { } centre)
+                nests.Add(new PlacedNest(i, centre));
+        }
+
+        return [.. nests];
+    }
+
+    /// <summary>
     /// A wild squad made: when, by a sector or a nest (its biome group or nest name), the squad, its members.
     /// </summary>
     public readonly record struct WildSpawn(long Tick, WildKind Kind, string Place, string Squad, int Members);
@@ -203,6 +240,7 @@ public sealed partial class PopulationSystem
         _wildSites = BuildWildSites(_data, _settings, biomes, world.Seed, saved?.Nests, States, world.Walkability.TerrainHeight);
         _wildStates = new SiteState[_wildSites.Count];
         _wildCentres = new Vector2?[_wildSites.Count];
+        _placedNests = null;
         for (int i = 0; i < _wildStates.Length; i++) _wildStates[i] = new SiteState();
         foreach (var site in _wildSites)
         {
@@ -865,7 +903,12 @@ public sealed partial class PopulationSystem
         var site = _wildSites![b.Site];
         // A load that found a centre has a layout (empty or not), also when a player near it held its squads back; a dormant nest has none.
         bool found = b.Squads.Count > 0 || site.SaveInstance is not null || b.Layout is not null;
-        if (site.Kind == WildKind.Nest && found) _wildCentres[b.Site] = b.Centre;
+        if (site.Kind == WildKind.Nest && found)
+        {
+            _wildCentres[b.Site] = b.Centre;
+            _placedNests = null;
+        }
+
         if (!b.TopUp) SpawnKeptWild(world, b.Site, state);
         if (b.Layout is { IsEmpty: false } layout)
         {

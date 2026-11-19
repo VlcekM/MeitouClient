@@ -140,6 +140,7 @@ static class SaveProbe
             case ("platoons", >= 1): Platoons(probe, float.Parse(a[0])); return true;
             case ("mine", >= 4): MineRock(probe, a[0], Point(a, 1), a.Count > 4 ? int.Parse(a[4]) : 10); return true;
             case ("research", _): Research(probe); return true;
+            case ("nests", >= 1): NestsNear(probe, float.Parse(a[0])); return true;
             case ("nests", _): Nests(probe); return true;
             case ("heights", >= 2) when probe.Nav is not null: HeightsAt(probe, a); return true;
             case ("path", >= 3) when probe.Nav is not null: PathTo(probe, a); return true;
@@ -672,7 +673,7 @@ static class SaveProbe
                 + $"@{Vector3.Distance(t.Next[m.Slot].Position, at):F0}");
         return $"sq {squad.Id} '{squad.Name}' {probe.Faction(squad.Faction)} platoon={squad.PlatoonId} leader={(CharacterTask)t.Next[lead].Task} "
             + $"engine={c.Ai?.Engine} behaviour={c.Ai?.Behaviour} goal={c.Ai?.Goal?.Task.Type} fight={c.Ai?.FightGoal} "
-            + $"target={Target(probe, lead)} package={squad.Ai?.Current?.Name} "
+            + $"target={Target(probe, lead)} package={squad.Ai?.Current?.Name} town={TownLabel(squad.Ai?.InTown)} "
             + $"home={squad.HomeCentre:F0}/{squad.HomeRadius:F0} building={HomeName(probe, squad.Ai?.OwnHome ?? squad.HomeBuilding)} "
             + $"ai-home={HomeName(probe, squad.Ai?.Home)} table={squad.Ai?.BarTable} pinned={squad.Pinned} pos={at:F0} "
             + $"[{string.Join(" ", members)}]";
@@ -927,7 +928,6 @@ static class SaveProbe
             if (f.Kind == FixtureKind.Container) Container(probe, f);
             if (f.Kind == FixtureKind.Door) Door(probe, f);
         }
-    }
 
         if (carrier is not null) CarrierCage(probe, carrier, at);
     }
@@ -947,14 +947,15 @@ static class SaveProbe
             ? "none"
             : $"{cage.Id} at {cage.Position:F1} owner={FactionName(probe, cage.Owner)} distance={Vector3.Distance(cage.Position, at):F0}";
         Console.WriteLine($"{probe.Who(g)} lifting at {at:F1} cages in: {choice}");
+    }
 
-    /// <summary>
     /// <summary>
     /// A faction's name; "-" for none.
     /// </summary>
     static string FactionName(ProbeWorld probe, int faction) =>
         faction >= 0 && faction < probe.Data.Factions.Count ? probe.Data.Factions[faction].Name : "-";
 
+    /// <summary>
     /// A door fixture's motion, lock and the flags that decide them; a gate's also with the gate codes it joins and its gate state.
     /// </summary>
     static void Door(ProbeWorld probe, Fixture f)
@@ -1534,6 +1535,38 @@ static class SaveProbe
     }
 
     /// <summary>
+    /// <c>nests radius</c>: the nests within the radius of the leader: wild site, TOWN, faction, first spot, the centre it stands at as a
+    /// town (none before it first loads) and its distance.
+    /// </summary>
+    static void NestsNear(ProbeWorld probe, float radius)
+    {
+        var population = probe.World.Systems.OfType<PopulationSystem>().First();
+        var at = new Vector2(probe.LeaderPosition.X, probe.LeaderPosition.Z);
+        var placed = population.PlacedNests.ToDictionary(n => n.Site, n => n.Centre);
+        foreach (var site in population.WildSites.Where(s => s.Kind == WildKind.Nest && s.Spots.Count > 0))
+        {
+            var spot = placed.TryGetValue(site.Index, out var centre) ? centre : site.Spots[0];
+            float d = Vector2.Distance(spot, at);
+            if (d > radius) continue;
+
+            string stands = placed.ContainsKey(site.Index) ? $"{centre:F0}" : "-";
+            Console.WriteLine($"nest {site.Index} '{site.Nest?.Name}' {probe.Faction(site.Faction)} spot {site.Spots[0]:F0} stands {stands} "
+                + $"distance {d:F0}");
+        }
+    }
+
+    /// <summary>
+    /// A town a squad or character is in, for a probe line: a placed town's site, a player town's number, a nest's wild site; "-" for none.
+    /// </summary>
+    internal static string TownLabel(CampaignTown? town) => town switch
+    {
+        { Nest: > 0 } t => $"nest:{t.Nest - 1}",
+        { Site: >= 0 } t => $"site:{t.Site}",
+        { PlayerTown: > 0 } t => $"outpost:{t.PlayerTown}",
+        _ => "-",
+    };
+
+    /// <summary>
     /// Writes the world's buildings back into the save (in memory) and lists the instance ids that more than one zone's building list holds.
     /// </summary>
     static void Resave(ProbeWorld probe)
@@ -1973,7 +2006,8 @@ static class SaveProbe
               crime <name> [rounds] [interval]  a character's saved squad memory, then its pending crime, bounties and who targets it with which tags
               meet <name> <near> [gap] [rounds] [interval] [forget]  heals <name>, puts it gap from <near> (forget: its squad drops TEMP_ENEMY),
                                        then the lines said and how that squad senses, fights and remembers it
-              nests                    the wild layout's nests whose first candidate spot the original would refuse
+              nests [radius]           the wild layout's nests whose first candidate spot the original would refuse; with a radius, the
+                                       nests within it of the leader and where each stands as a town
               bait <radius> [rounds]   send the player's squad after the nearest other squad each round, listing squads as squads does
               squads <radius> [rounds]  the other squads near the leader: leader state, goal, members' spread every 40 ticks
               watch <name> [rounds]    a character's task, AI, fight target, hunger and decision trace every 40 ticks (default 10 rounds)

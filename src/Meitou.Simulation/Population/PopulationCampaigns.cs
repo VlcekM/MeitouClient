@@ -13,10 +13,16 @@ namespace Meitou.Simulation.Population;
 
 /// <summary>
 /// A town a campaign aims at or comes from: a placed town (<see cref="Site"/>, a position in the population's sites) or a player town
-/// (<see cref="PlayerTown"/>, its number).
+/// (<see cref="PlayerTown"/>, its number); as the town a character or squad is in also a wild nest (<see cref="Nest"/>).
 /// </summary>
 public readonly record struct CampaignTown(int Site, int PlayerTown)
 {
+    /// <summary>
+    /// The wild nest this is (the original's <c>Nest</c>, kept in the town list's second list): its wild site's index + 1; 0: not a nest. Only
+    /// the status town and the squad's current town are ever one (<see cref="Ai.AiSystem.StatusTownAt"/>).
+    /// </summary>
+    public int Nest { get; init; }
+
     /// <summary>
     /// No town.
     /// </summary>
@@ -24,7 +30,7 @@ public readonly record struct CampaignTown(int Site, int PlayerTown)
     /// <summary>
     /// Whether this is no town.
     /// </summary>
-    public bool IsNone => Site < 0 && PlayerTown <= 0;
+    public bool IsNone => Site < 0 && PlayerTown <= 0 && Nest <= 0;
     /// <summary>
     /// The placed town at site <paramref name="site"/>.
     /// </summary>
@@ -33,13 +39,18 @@ public readonly record struct CampaignTown(int Site, int PlayerTown)
     /// The player town numbered <paramref name="number"/>.
     /// </summary>
     public static CampaignTown OfPlayer(int number) => new(-1, number);
+    /// <summary>
+    /// The wild nest of wild site <paramref name="wildSite"/>.
+    /// </summary>
+    public static CampaignTown OfNest(int wildSite) => new(-1, 0) { Nest = wildSite + 1 };
 
     /// <summary>
     /// The faction owning this town: a placed town's from the population's site factions, a player town's (an outpost) from the player's
-    /// buildings; -1 for no town, a site outside the population's or a player town that is gone.
+    /// buildings, a nest's from its wild site; -1 for no town, a site outside the population's or a player town that is gone.
     /// </summary>
     public int Owner(World world, PopulationData data)
     {
+        if (Nest > 0) return world.SystemOf<PopulationSystem>()?.NestFaction(Nest - 1) ?? -1;
         if (Site < 0) return world.Buildings.FindTown(PlayerTown)?.Owner ?? -1;
 
         return Site < data.SiteFactions.Count ? data.SiteFactions[Site] : -1;

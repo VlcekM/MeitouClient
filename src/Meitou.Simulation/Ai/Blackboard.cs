@@ -413,9 +413,9 @@ public sealed class Blackboard
     public int MissionTown { get; set; } = -1;
 
     /// <summary>
-    /// The town the squad is in (the original's Blackboard +0x138, docs/game/ai.md "Package classes": its leader's town, else the town whose radius
-    /// holds the squad) and the game hour it came in (+0x140); <see cref="CampaignTown.None"/> outside every town. Set on the package cadence before
-    /// the choice.
+    /// The town the squad is in (the original's Blackboard +0x138, docs/game/ai.md "Package classes": its leader's status town, a nest included,
+    /// else the town whose radius holds the squad) and the game hour it came in (+0x140); <see cref="CampaignTown.None"/> outside every town. Set
+    /// on the package cadence before the choice.
     /// </summary>
     public CampaignTown InTown { get; set; } = CampaignTown.None;
     /// <summary>
@@ -860,11 +860,13 @@ public sealed class Blackboard
             hasher.Add(TraderWait);
             hasher.Add(InTown.Site);
             hasher.Add(InTown.PlayerTown);
+            if (InTown.Nest > 0) hasher.Add(InTown.Nest + 0x4E657374);   // only in a nest, so the other worlds hash as before
             hasher.Add(InTownSince);
             if (!TraderLeft.IsNone)
             {
                 hasher.Add(TraderLeft.Site);
                 hasher.Add(TraderLeft.PlayerTown);
+                if (TraderLeft.Nest > 0) hasher.Add(TraderLeft.Nest + 0x4E657374);
             }
         }
 

@@ -424,12 +424,19 @@ times a factor, and a nest marker never holds anyone (`FUN_140926d50`). In order
 2. the current town when there is one, within **1.5 x** radius (`DAT_14168ad18`), else the nearest town, within 1 x (`DAT_14167c308`): entering takes the radius,
    leaving takes half again;
 3. for a town whose vfunc `0x230` and `0x2f0` hold (likely walls), a point it gives for the position (vfunc `0x308`) within 300;
-4. the nearest entry of the world's second town list (`FUN_140927ad0`; **Observed** to be the player towns), with step 2's factor;
+4. the nearest entry of the town list's second list (`FUN_140927ad0`), with step 2's factor: the nests. The town factory (`FUN_140581770`) makes a
+   `Nest` object for a TOWN record of `type` 0 and a `Town` for any other, and the list's add (`FUN_14092d690`) puts an object whose vfunc `0x268`
+   is null (`TownBase`, `Nest`) into the second list (`+0x88` / `+0x90`) and a `Town` (player towns too) into the first (`+0x58` / `+0x60`), the
+   one steps 1 and 2 search. A nest's radius is a flat 625 (`Nest` vfunc `0x2a0`, `FUN_140926e90`, `DAT_141733c14`), a nest marker's 0. A wiped-out
+   nest stays in the list (`FUN_14092f010` only posts the message and stamps the hour). **Verified**, decompile;
 5. the town of the building the character stands in (Character vfunc `0x1d8`).
 
 **Observed** (Rebirth hold, radius 2 875): slaves working 2 350-2 590 from the centre and 3 600-3 950 from their
 owners stayed slaves all hour; one that walked past about 4 100 escaped. Meitou: `CharacterCold.StatusTown`, `AiSystem.StatusTownAt`, kept up by `ArrestSystem` on the
-spotting cadence; steps 3 and 5 are not modelled, step 1 reads the placed towns of the player's faction and step 4 the player towns.
+spotting cadence; steps 3 and 5 are not modelled, step 1 reads the placed towns of the player's faction, step 2 the placed towns and then the player
+towns, step 4 the nests whose centre is decided (`PopulationSystem.PlacedNests`: a nest gets its centre when it first loads, engine choice) as
+`CampaignTown.Nest` with `AiSystem.NestTownRadius`. A nest status town is its faction's home town (state 95, `ArrestSystem.AtHomeTown`) and a
+bandit nest's own faction answers event 45 there (`SightCrimes`); it is no town for DC 31 and nobody shops in it.
 
 Loading can free an escaped slave at once, because the clock is restored to the minute while the stamp is not. **Observed** with a "The Slaves" save written right after New Game:
 - the save holds `ssct` 34.00063 and the clock day 1 10:00, which is 34.0 h;

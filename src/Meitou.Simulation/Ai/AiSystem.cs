@@ -3299,6 +3299,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     const int RehomeFunctions = 0x13;
 
     /// <summary>
+    /// The town a squad made at <paramref name="at"/> starts in: the one whose radius holds it, else the nest it stands in.
+    /// </summary>
+    CampaignTown StartTown(World world, Vector3 at) =>
+        CurrentTown(world, at) is { IsNone: false } town ? town : StatusTownAt(data, world, at, CampaignTown.None);
+
+    /// <summary>
     /// Gives a squad its AI: its home (assigned, or the one its town gave it), whose template and initial door state apply, and a new blackboard of
     /// its template's packages, taken as already in the town it starts in; a saved squad's AI state is applied to it.
     /// </summary>
@@ -3331,8 +3337,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             PatrolStart = world.GameHours,
         };
 
-        // The town it starts in, taken as already entered (engine choice: no ENTER_TOWN line for every squad a town makes).
-        if (LeaderPosition(world, squad) is { } at) (squad.Ai.InTown, squad.Ai.InTownSince) = (CurrentTown(world, at), world.GameHours);
+        // The town it starts in (a nest too), taken as already entered (engine choice: no ENTER_TOWN line for every squad a town or nest makes).
+        if (TownPosition(world, squad) is { } at) (squad.Ai.InTown, squad.Ai.InTownSince) = (StartTown(world, at), world.GameHours);
         if (squad.SavedAi is { } saved)
         {
             _rules.Bind(this, world, squad);

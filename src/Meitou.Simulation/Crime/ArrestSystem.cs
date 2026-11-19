@@ -992,11 +992,14 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// <summary>
     /// State 95 isAtHomeTown (<c>FUN_140997fe0</c>, <b>Verified</b>): the character's status town is set and is its faction's or houses a squad of
     /// its faction (Town vfunc <c>0x2c0</c> <c>FUN_140952060</c>: the town's own faction, else its set of factions <c>+0xe8</c>, which the housing
-    /// <c>FUN_14057f820</c> fills with each housed squad's faction). A player town is nobody else's home.
+    /// <c>FUN_14057f820</c> fills with each housed squad's faction). A player town is nobody else's home; a nest is its own faction's.
     /// </summary>
     static bool AtHomeTown(PopulationData towns, World world, int slot, CharacterCold c)
     {
-        int site = StatusTownNow(towns, world, slot).Site;
+        var town = StatusTownNow(towns, world, slot);
+        if (town.Nest > 0) return town.Owner(world, towns) == c.Faction;
+
+        int site = town.Site;
         if (site < 0) return false;
         if (site < towns.SiteFactions.Count && towns.SiteFactions[site] == c.Faction) return true;
 

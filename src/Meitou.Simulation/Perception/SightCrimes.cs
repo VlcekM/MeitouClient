@@ -68,7 +68,11 @@ static class SightCrimes
         if (world.SystemOf<ArrestSystem>() is not { } arrest || !arrest.InOwnTown(world, w)) return false;
         if (TownOf(world, data, t, tc) is not { IsNone: false } town) return false;
 
-        int owner = town.Site >= 0 && town.Site < data.SiteFactions.Count ? data.SiteFactions[town.Site] : world.Player.Faction;
+        int owner = town.Nest > 0
+            ? town.Owner(world, data)
+            : town.Site >= 0 && town.Site < data.SiteFactions.Count
+                ? data.SiteFactions[town.Site]
+                : world.Player.Faction;
         bool banditTown = data.Relations.Contains(owner) && data.Relations.Factions[owner].FundamentalType == FundamentalType.Bandit;
         return banditTown && lc.Faction == owner || arrest.Crimes.IsPoliceLike(world, lc);
     }
