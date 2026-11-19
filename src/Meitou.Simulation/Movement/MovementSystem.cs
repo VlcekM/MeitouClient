@@ -657,6 +657,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             if (!next[i].Alive || (next[i].Flags & (ushort)MoveFlags.NeedPath) == 0) continue;
 
             var cold = table.Cold(i)!;
+            if (WaitsAfterGivingUp(world, next[i], cold)) continue;
 
             // The goal's floor: the height the order was given at (a follower's leader on another storey), else the character's own (a wander or
             // follow goal on its level).
@@ -673,6 +674,25 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
         // The synchronous service has the answers already.
         if (Paths.IsSynchronous) ApplyAnswers(world);
+    }
+
+    /// <summary>
+    /// Whether a walk waits before asking for its path: one sent again to the goal a walk was just given up at (<see cref="GiveUpWalk"/>), until
+    /// <see cref="BlockedRetrySeconds"/> have passed since. The AI sends a failed errand again at its next think (a patrol leader the same tick),
+    /// and each try is a whole search (<b>Observed</b>, #1054: a pack beast herd's leader blocked where it stood asked for its 4,800-unit patrol
+    /// path every other tick, 20-130 ms a search). A player's move order asks at once.
+    /// </summary>
+    static bool WaitsAfterGivingUp(World world, in CharacterHot n, CharacterCold cold) =>
+        world.Tick < cold.GivenUpRetryTick && n.Task == (byte)CharacterTask.GoTo && !cold.OrderMove
+        && Vector2.DistanceSquared(n.Goal, cold.GivenUpGoal) < 1;
+
+    /// <summary>
+    /// Books a walk the movement system gives up, so that one sent to the same goal again waits (<see cref="WaitsAfterGivingUp"/>).
+    /// </summary>
+    static void GiveUpWalk(World world, in CharacterHot n, CharacterCold cold)
+    {
+        cold.GivenUpGoal = n.Goal;
+        cold.GivenUpRetryTick = world.Tick + (long)MathF.Ceiling(BlockedRetrySeconds / world.TickSeconds);
     }
 
     /// <summary>
@@ -756,6 +776,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         if (n.Task == (byte)CharacterTask.GoTo)
         {
             LogDropped(world, n, cold, following ? "no path found on asking again (the path it followed is dropped)" : "no path found");
+            GiveUpWalk(world, n, cold);
             EndWalk(cold, WalkEnd.Failed);
             PlayerOrders.WalkFailed(cold);
             TaskStart.Step(world.Characters, slot, CharacterTask.Idle);
@@ -872,6 +893,8 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     static bool AsksAgainBlocked(World world, ref CharacterHot n, CharacterCold cold)
     {
         bool provisional = n.PathCursor >= cold.PathExact;
+        if (!provisional && cold.BlockedRepaths == 0) cold.BlockedAt = new Vector2(n.Position.X, n.Position.Z);
+
         bool within = provisional ? ++cold.ProvisionalBlocked <= ProvisionalBlockedLimit : ++cold.BlockedRepaths <= BlockedRepathLimit;
         if (!within && !cold.OrderMove) return false;
 
@@ -885,6 +908,14 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
         return true;
     }
+
+    /// <summary>
+    /// Whether a walker has left the spot its blocks are counted at (<see cref="CharacterCold.BlockedAt"/>) by more than a stride. A waypoint
+    /// passed there is no way on: a path asked for at a block starts where the walker stands, so its first point is reached without a step
+    /// (<b>Observed</b>, #1054: a follower blocked at the second point of each new path counted 1 again and asked for a path every tick).
+    /// </summary>
+    static bool LeftBlockedSpot(in CharacterHot p, CharacterCold cold) =>
+        Vector2.DistanceSquared(new Vector2(p.Position.X, p.Position.Z), cold.BlockedAt) > ArriveRadius * ArriveRadius;
 
     /// <summary>
     /// A blocked walk given up (<see cref="AsksAgainBlocked"/>): the path is dropped and the walker waits before trying again; a follower steering at
@@ -902,6 +933,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             ? $"blocked {cold.ProvisionalBlocked} times on the provisional long-range part (limit {ProvisionalBlockedLimit})"
             : $"blocked {cold.BlockedRepaths} times on the navmesh part (limit {BlockedRepathLimit})";
         LogDropped(world, n, cold, $"{why}, waypoint {n.PathCursor} of {cold.Path.Length}, stuck stepping to {x:0}, {z:0}");
+        GiveUpWalk(world, n, cold);
         EndWalk(cold, WalkEnd.Failed);
         PlayerOrders.WalkFailed(cold);
         TaskStart.Step(world.Characters, slot, CharacterTask.Idle);
@@ -1817,7 +1849,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             if (reached)
             {
                 n.PathCursor++;
-                if (cold.BlockedRepaths != 0) cold.BlockedRepaths = 0;
+                if (cold.BlockedRepaths != 0 && LeftBlockedSpot(p, cold)) cold.BlockedRepaths = 0;
 
                 if (last) s.Finished = true;
             }

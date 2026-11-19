@@ -281,8 +281,11 @@ over it never reached it. Now it walks out to the ground and the fight goes on. 
 2026-11-15): loaded, the cannibal already stood at -96838,138,-52567, on the ground at its own height 21 from its saved spot (not on the ramp), fought and was
 knocked out within 30 game seconds; the spot is inside the hut's rock (the camera's centre snaps to its top at 193), so a live teleport there could not be tried. Movement turns early for the next waypoint (within 5) only where it can stand along
 the first 10 units of the straight line to it, else it walks to within 2 of the corner. A step blocked on the navmesh part asks for the path again from where the walker
-stands, up to 3 times since its last waypoint or order (`BlockedRepathLimit`), before the path and an engine GoTo are dropped (a player's move order is kept and
-asks again every 5 s, [walls](#blocked-walkers)); a block while a request is in flight is not counted (the walker stands until the answer comes; counted per tick, 4 blocks took 0.3 s and dropped orders, **Observed** zone 21.29, save
+stands, up to 3 times since its last waypoint more than a stride (`ArriveRadius` 10) from where the count began (`CharacterCold.BlockedAt`) or order (`BlockedRepathLimit`), before the path and an engine GoTo are dropped (a player's move order is kept and
+asks again every 5 s, [walls](#blocked-walkers)); a GoTo sent again to the goal of a walk given up (blocked past the limits, or no path) asks for its path only 5 s after
+(`BlockedRetrySeconds`, `MovementSystem.WaitsAfterGivingUp`; a player's move order at once). **Observed** (#1054, a pack beast herd blocked on a slope at -91300, -118900, `probe cost`): the waypoint a new path starts
+with is passed without a step, which began the count again, so a blocked follower asked for a path every tick; its leader's patrol walk, given up and sent again by the next
+think, asked for its 4,800-unit path every other tick; a block while a request is in flight is not counted (the walker stands until the answer comes; counted per tick, 4 blocks took 0.3 s and dropped orders, **Observed** zone 21.29, save
 "Gigachad", scratch sim). **Observed** (zone 22.10, save "stuck", scratch sim): a walker on the terrain at
 Y392 beside the Old Storm House's (`6-rebirth-INGAME`) door stair snapped to the stair's corner (Recast corner vertices take the highest neighbouring cell, 408 over
 ground at 395); that polygon's only exits were narrower than the radius, the next start's path was cut up the stair's side, and the walker stood still. With the three rules it enters in 3 s.

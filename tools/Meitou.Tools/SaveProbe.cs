@@ -79,6 +79,9 @@ static class SaveProbe
         switch (mode, a.Count)
         {
             case ("near", >= 1): Near(probe, float.Parse(a[0])); return true;
+            case ("cost", _):
+                TickCostProbe.Run(probe, a.Count > 0 ? int.Parse(a[0]) : 10, a.Count > 1 ? int.Parse(a[1]) : 300, a.Count > 2 ? double.Parse(a[2]) : 20);
+                return true;
             case ("crowd", >= 1): Crowd(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10, a.Count > 2 ? int.Parse(a[2]) : 40); return true;
             case ("fight", >= 1): Fight(probe, int.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10, a.Count > 2 ? int.Parse(a[2]) : 40); return true;
             case ("crime", >= 1): Crime(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 10, a.Count > 2 ? int.Parse(a[2]) : 10); return true;
@@ -2124,6 +2127,8 @@ static class SaveProbe
         Console.Error.WriteLine("""
             meitou-tools probe <save folder> <mode> [args] [--ticks n (default 300)] [--nav] [--stream] [--speed s (default 1)] [--at x,z] [--seed n (default 1)] [--load-order <file>] [--mod-dir <folder>]...
               near <radius>            characters near the player's squad leader
+              cost [rounds] [interval] [slow ms]  what a tick costs every interval (300) ticks: characters, mean and slowest tick, ms by phase,
+                                       system and part; each tick over slow ms (20) with the paths it asked for
               crowd <radius> [rounds] [interval]  characters near the leader every interval (40) ticks: down, water state, goal, load, fight target
               fight <slot> [rounds] [interval]  a character's combat state and body, and everyone targeting it: gap, blows thrown and landed
               crime <name> [rounds] [interval]  a character's saved squad memory, then its pending crime, bounties and who targets it with which tags

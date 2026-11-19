@@ -252,6 +252,23 @@ public sealed class CharacterCold
     public long BlockedRetryTick { get; set; }
 
     /// <summary>
+    /// Where the walker stood at the first block <see cref="BlockedRepaths"/> counts: the count starts again only once it has left that spot. Not
+    /// hashed.
+    /// </summary>
+    public Vector2 BlockedAt { get; set; }
+
+    /// <summary>
+    /// The goal of the walk the movement system last gave up (no path, or blocked past the limits). Not hashed.
+    /// </summary>
+    public Vector2 GivenUpGoal { get; set; }
+
+    /// <summary>
+    /// The tick a walk sent to <see cref="GivenUpGoal"/> again asks for its path (<see cref="MovementSystem.BlockedRetrySeconds"/>); 0: no walk
+    /// given up. Not hashed.
+    /// </summary>
+    public long GivenUpRetryTick { get; set; }
+
+    /// <summary>
     /// The path request in flight, so an answer to an older one is ignored.
     /// </summary>
     public long PathRequest { get; set; }
