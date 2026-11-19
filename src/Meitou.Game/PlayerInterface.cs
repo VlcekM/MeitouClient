@@ -643,6 +643,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
                 ("label", lines[i].Label, lines[i].LabelColour, "Left Top", labelProperties),
                 ("value", lines[i].Action is null ? lines[i].Value : "", lines[i].ValueColour, "Right Top", valueProperties),
             };
+            var (labelBox, valueBox) = LineColumns(row, lines[i], labelProperties["FontName"], valueProperties["FontName"]);
             foreach (var (part, text, colour, align, properties) in columns)
                 if (text.Length > 0)
                 {
@@ -652,11 +653,10 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
                     // A line with a tooltip is a mouse target (the HUD's own tooltip, anchored on its panel).
                     if (tipProperties is not null) foreach (var pair in tipProperties) textProperties[pair.Key] = pair.Value;
 
-                    // A value beside a label keeps out of the label's column: a long one (a French weather notice) is cut short instead of running
-                    // over the label. A label beside a button keeps to its left: added after the button, a full-row label with a tooltip would take
-                    // its clicks.
-                    var box = part == "value" && lines[i].Label.Length > 0 ? row with { X = row.X + row.Width * 0.35f, Width = row.Width * 0.65f }
-                        : lines[i].Action is not null ? row with { Width = row.Width * (1 - Math.Clamp(lines[i].ButtonWidth, 0.1f, 1)) } : row;
+                    // A label beside a button keeps to its left: added after the button, a full-row label with a tooltip would take its clicks.
+                    var box = part == "value" ? valueBox
+                        : lines[i].Action is not null ? row with { Width = row.Width * (1 - Math.Clamp(lines[i].ButtonWidth, 0.1f, 1)) }
+                        : labelBox;
                     controls.Add(new($"{panel}-{part}-{i}", "TextBox", box, Loc.Tr(text), "", "Kenshi_TextboxStandardText", true,
                         textProperties, Vector4.Zero, Pickable: tipProperties is not null, Clip: host.Clip));
                 }
@@ -669,6 +669,31 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
                 properties["FontPixels"] = Math.Max(8, (int)MathF.Round(p)).ToString(CultureInfo.InvariantCulture);
             return properties;
         }
+    }
+
+    /// <summary>
+    /// A text line's label and value boxes in <paramref name="row"/>. The value sits right of the label's column (35 % of the row), so a long one
+    /// (a French weather notice) is cut short instead of running over the label. When the label is wider than that column, as "Total Weight:" in
+    /// the inventory's narrow data panel at a small interface scale (#1038), the value starts after the label as measured; when both do not fit,
+    /// the value stays whole and the label is cut.
+    /// </summary>
+    (UiRect Label, UiRect Value) LineColumns(UiRect row, HudLine line, string labelFont, string valueFont)
+    {
+        var value = row with { X = row.X + row.Width * 0.35f, Width = row.Width * 0.65f };
+        if (line.Label.Length == 0) return (row, row);
+        if (line.Value.Length == 0 || line.Action is not null || UiPainter is not { } painter) return (row, value);
+
+        float minimum = TitleOpen ? 0 : StandardPixels;
+        float labelWidth = painter.MeasureText(labelFont, Loc.Tr(line.Label), Height, 0, minimum).Width;
+        float valueWidth = painter.MeasureText(valueFont, Loc.Tr(line.Value), Height, 0, minimum).Width;
+        float gap = 4 * UiScale;
+        float right = row.X + row.Width;
+        float start = Math.Max(value.X, row.X + labelWidth + gap);
+        start = Math.Max(row.X, Math.Min(start, right - valueWidth));
+        if (start == value.X) return (row, value);
+
+        var label = row with { Width = Math.Max(0, start - gap - row.X) };
+        return (labelWidth + gap + valueWidth > row.Width ? label : row, row with { X = start, Width = right - start });
     }
 
     /// <summary>
