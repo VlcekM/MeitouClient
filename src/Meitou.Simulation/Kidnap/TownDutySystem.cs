@@ -442,8 +442,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// <see cref="FixtureRegistry.OwnsPropertyIn"/>). In a town with occupiers while it senses an enemy: inside the walls it wants food whatever its
     /// hunger (desire 0.2), outside them in a town with gates not at all; else the 259 desire (slot 25): stomach empty, hunger at most 2.4, no food
     /// it would bite on it, not fighting unless hunger is below 1.2. It walks to the nearest store of the town owned by its faction with food in it
-    /// and takes one item, which the eating rule then eats. A player character's goal is the decision step's (<see cref="GettingFood"/>, priority 3,
-    /// weight 0.5); this pass runs it for the other characters of the player's faction while idle (they hold no jobs; engine choice).
+    /// and takes one item, which the eating rule then eats; without room for that item (state 82, <see cref="TakeFits"/>) it starts no run. A player
+    /// character's goal is the decision step's (<see cref="GettingFood"/>, priority 3, weight 0.5); this pass runs it for the other characters of
+    /// the player's faction while idle (they hold no jobs; engine choice).
     /// </summary>
     void LookPlayerFood(World world, int every)
     {
@@ -510,6 +511,13 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (Store(world, at, town, owner: c.Faction, animal: animal, race: race, asker: c) is not var (storeId, spot))
         {
             why = "no store with food";
+            return 0;
+        }
+
+        // 244 needs state 82, room for the food it takes: a full inventory starts no run, and the character keeps its job
+        if (!TakeFits(world, storeId, c))
+        {
+            why = "no room for the food";
             return 0;
         }
 
@@ -2234,13 +2242,28 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// race's special food), else the first food (function 3); one unit goes into the worn backpack when it takes it, else the character's inventory.
     /// Returns the units moved (0: nothing to take, or no room).
     /// </summary>
-    static int GrabFood(Inventory store, CharacterCold c, Inventory into)
+    static int GrabFood(Inventory store, CharacterCold c, Inventory into) =>
+        FoodToTake(store, c) is { } item
+            ? InventoryCommands.MoveInto(store, item, 1, into, bagFirst: true, out _)
+            : 1;   // nothing listed is no failure of room
+
+    /// <summary>
+    /// The item <see cref="GrabFood"/> takes: the first raw-food item the character accepts, else the first food; null when the store lists none.
+    /// </summary>
+    static ItemInstance? FoodToTake(Inventory store, CharacterCold c)
     {
         bool animal = c.Medical is { HasStatsObject: false };
-        var item = store.Items.FirstOrDefault(i => i.ItemFunction == FeedSystem.RawFoodFunction && Edible(i, animal, c.Race))
+        return store.Items.FirstOrDefault(i => i.ItemFunction == FeedSystem.RawFoodFunction && Edible(i, animal, c.Race))
             ?? store.Items.FirstOrDefault(i => i.IsFood);
-        return item is null ? 1 : InventoryCommands.MoveInto(store, item, 1, into, bagFirst: true, out _);   // nothing listed is no failure of room
     }
+
+    /// <summary>
+    /// State 82 for a player-side run (<see cref="FoodWant"/>): one unit of the item the take would move has room in the character's inventory or
+    /// worn bag (<see cref="Inventory.HasRoomFor"/>). Read on the take's own pick, not <see cref="FoodFits"/>'s, so a player animal's raw food and a
+    /// race's special food are tested as they would be taken.
+    /// </summary>
+    bool TakeFits(World world, string storeId, CharacterCold c) =>
+        StoreInventory(world, storeId) is { } store && c.Inventory is { } inv && FoodToTake(store, c) is { } item && inv.HasRoomFor(item);
 
     /// <summary>
     /// One tick of a food run: walking to the store, then taking one food item; false when it is over.
@@ -2268,7 +2291,11 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             if (d.Kind == TownDutyKind.LootFood)
                 LootFirstFood(store, into);
             else if (GrabFood(store, gc, into) == 0 && d.PlayerSide)
-                _foodWaits.Add((d.Member, world.GameHours + Settings.RefuseHours));   // no room for it: not again for a while
+            {
+                // No room on arrival although the start found some: room lost on the walk, or a room test that said yes where the move refuses
+                // (a food stack carrying a trade receipt, which a plain unit does not join). Not again for a while, so the run cannot loop.
+                _foodWaits.Add((d.Member, world.GameHours + Settings.RefuseHours));
+            }
             world.Machines.Touch();
             return End(world, d);
         }
