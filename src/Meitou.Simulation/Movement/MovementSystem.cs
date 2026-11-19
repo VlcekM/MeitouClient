@@ -23,8 +23,9 @@ namespace Meitou.Simulation.Movement;
 /// <item>Body contact (engine choice; the original only avoids the standing bodies round a character, no physical collision was found:
 /// docs/game/pathfinding.md "Bodies in the way"): two standing bodies (<see cref="BodyShare"/> of their footprints) do not stay overlapped. Each
 /// takes half of the overlap between its stepped position and the other's last position, averaged over the bodies it overlaps, so a walker shoves a
-/// stander aside; an imprisoned or bedded one does not give. Its own velocity into a body it already touches is dropped, so a crowd pressing on does
-/// not squash its front. A sitter is never moved, by contact or separation (the original pushes no sitter, Observed), and is not solid to others.
+/// stander aside; an imprisoned or bedded one does not give. Two walkers on their paths, out of a fight, are not solid to each other. Its own
+/// velocity into a body it already touches is dropped, so a crowd pressing on does not squash its front. A sitter is never moved, by contact or
+/// separation (the original pushes no sitter, Observed), and is not solid to others.
 /// Downed, dead and carried bodies neither push (separation) nor block (contact, the walk's covered goal, root motion): the original's avoidance list
 /// leaves them out (docs/game/pathfinding.md "Bodies in the way").</item>
 /// <item>Paths: a character that wants one is flagged in Think; the Schedule step of the next tick asks the <see cref="PathService"/>;
@@ -2039,9 +2040,10 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         if (s.Closing || seated) push.Sum = Vector2.Zero;
 
         var at = new Vector2(p.Position.X, p.Position.Z);
-        var drive = s.Closing || seated ? s.Dir * s.Speed : Blocked(world, cold, ref push, at, s.Dir * s.Speed);
+        bool walker = s.AgentWalk && !cold.InCombat;
+        var drive = s.Closing || seated ? s.Dir * s.Speed : Blocked(world, cold, ref push, at, s.Dir * s.Speed, walker);
         var step = (drive + push.Sum * SeparationStrength) * dt;
-        var shove = s.Closing || seated ? Vector2.Zero : Contact(world, i, cold, ref push, at + step);
+        var shove = s.Closing || seated ? Vector2.Zero : Contact(world, i, cold, ref push, at + step, walker);
         step += shove;
         float x = p.Position.X + step.X, z = p.Position.Z + step.Y, y = 0;
         bool stands = false;
@@ -2309,9 +2311,10 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     /// last tick's state of the others): half of each overlap with the other's last position, all of it against one held in a bed or cage, averaged
     /// over the bodies it overlaps (a sum overshoots in a packed crowd and the whole crowd shakes). Lying, sitting and carried bodies are not in the
     /// way (a walker only steers past a sitter, so a ring of sitters cannot wall it in), and a carried or bedded one is not moved. Not where the
-    /// other's velocity takes it: in a jam that is where it wants to go, not where it gets to.
+    /// other's velocity takes it: in a jam that is where it wants to go, not where it gets to. <paramref name="walker"/>: it walks a path out of
+    /// a fight (<see cref="InTheWay"/>).
     /// </summary>
-    static Vector2 Contact(World world, int self, CharacterCold cold, ref SeparationState near, Vector2 at)
+    static Vector2 Contact(World world, int self, CharacterCold cold, ref SeparationState near, Vector2 at, bool walker)
     {
         if (!cold.CarriedBy.IsNone || cold.InSomething != Locks.HeldState.None) return Vector2.Zero;
 
@@ -2327,7 +2330,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             if (table.Cold(other) is not { } them || them.Medical is { Incapacitated: true }) continue;
 
             ref readonly var o = ref all[other];
-            if (Seated(o, them)) continue;
+            if (!InTheWay(o, them, walker)) continue;
 
             var d = at - new Vector2(o.Position.X, o.Position.Z);
             float len = d.Length(), reach = mine + BodyRadius(them);
@@ -2346,7 +2349,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     /// blocked one do not press it into those in front and a crowd does not squash; what is left slides it round them. The bodies counted are
     /// <see cref="Contact"/>'s.
     /// </summary>
-    static Vector2 Blocked(World world, CharacterCold cold, ref SeparationState near, Vector2 at, Vector2 drive)
+    static Vector2 Blocked(World world, CharacterCold cold, ref SeparationState near, Vector2 at, Vector2 drive, bool walker)
     {
         if (drive == Vector2.Zero || !cold.CarriedBy.IsNone) return drive;
 
@@ -2360,7 +2363,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             if (table.Cold(other) is not { } them || them.Medical is { Incapacitated: true }) continue;
 
             ref readonly var o = ref all[other];
-            if (Seated(o, them)) continue;
+            if (!InTheWay(o, them, walker)) continue;
 
             var d = at - new Vector2(o.Position.X, o.Position.Z);
             float len = d.Length();
@@ -2373,6 +2376,15 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
         return drive;
     }
+
+    /// <summary>
+    /// Whether the standing body of <paramref name="them"/> is in a stepping character's way (<see cref="Contact"/>, <see cref="Blocked"/>): not a
+    /// sitter's, and for a <paramref name="walker"/> (on a path, out of a fight) not that of another one walking its own path out of a fight. The
+    /// original's walkers only push each other apart (docs/game/pathfinding.md "Bodies in the way"); solid to each other, two columns meeting on
+    /// a stair stood still and a carrier among them made a unit a second (#1024).
+    /// </summary>
+    static bool InTheWay(in CharacterHot o, CharacterCold them, bool walker) =>
+        !Seated(o, them) && !(walker && !them.InCombat && ((MoveFlags)o.Flags & MoveFlags.HasPath) != 0);
 
     /// <summary>
     /// Whether another standing character's footprint covers <paramref name="goal"/> (last tick's positions).

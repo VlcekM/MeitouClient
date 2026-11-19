@@ -92,7 +92,7 @@ characters round its owner and tests each as a circle (its footprint radius plus
 
 | State | In the avoidance list (blocks, pushes, covers a goal) | Meitou |
 |---|---|---|
-| Standing, walking, fighting | yes | yes |
+| Standing, walking, fighting | yes | yes; two walkers on their own paths, out of a fight, are not solid to each other and only push apart (`MovementSystem.InTheWay`). **Observed** (#1024 save, headless): solid to each other, some 20 thralls walking both ways on the dome's stair stood still and a carrier among them made about a unit a second |
 | Crawling / staying low (not ragdolled) | yes (`FUN_1407d1440` is false) | yes |
 | Knocked out or dead (ragdolled) | no | no: separation, contact, covered goal, fight steering (`MovementSystem`, `AnimationSystem.Relocate`, `CombatSteering.OutOfFlock`) |
 | Carried | no | no |
