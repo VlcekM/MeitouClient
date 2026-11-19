@@ -323,10 +323,12 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
     }
 
     /// <summary>
-    /// Whether a character holds food it would bite in its own items (the "no food on it" test of the 243 / 259 desires, <c>FUN_1403344c0</c>).
+    /// Whether a character holds food it would bite in its own items or its worn bag, the two places the eating rule bites from (the "no food on
+    /// it" test of the 243 food run): the item a food run puts in the bag counts at once, so no second run starts before the bite (the original
+    /// takes one item per meal, <b>Observed</b>, docs/game/ai-tasks.md "Perma-jobs").
     /// </summary>
     internal static bool CarriesFood(CharacterCold cold, RaceData race, bool animal) => cold.Inventory is { } own
-            && Best(own.Items, race, animal) is not null;
+            && (Best(own.Items, race, animal) is not null || own.Backpack?.Contents is { } bag && Best(bag.Items, race, animal) is not null);
 
     /// <summary>
     /// The bite of <c>FUN_140748d70</c>: raw food the race eats first, then food.

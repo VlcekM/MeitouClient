@@ -16,7 +16,8 @@ internal static class NavInteriors
     public const float JoinDistance = 6, JoinHeight = 12;
 
     /// <summary>
-    /// How far (units) round a door's polygons its approach reaches when the door itself joins nothing (engine choice: a flight of steps).
+    /// How far (units) round a door's polygons its approach reaches when the earlier joins link none of the door polygons its interior kept
+    /// (engine choice: a flight of steps).
     /// </summary>
     public const float ApproachReach = 32;
 
@@ -259,9 +260,9 @@ internal static class NavInteriors
 
     /// <summary>
     /// Two edges that run along each other: their midpoints and both ends within <paramref name="distance"/> in plan and <see cref="JoinHeight"/> in
-    /// height, overlapping.
+    /// height, overlapping by more than 0.5 and by at least <paramref name="minOverlap"/>.
     /// </summary>
-    static bool Facing(Vector3 a0, Vector3 a1, Vector3 b0, Vector3 b1, float distance = JoinDistance)
+    static bool Facing(Vector3 a0, Vector3 a1, Vector3 b0, Vector3 b1, float distance = JoinDistance, float minOverlap = 0)
     {
         var ma = (a0 + a1) * 0.5f;
         var mb = (b0 + b1) * 0.5f;
@@ -278,7 +279,8 @@ internal static class NavInteriors
 
         float lo = Math.Min(Along(b0), Along(b1));
         float hi = Math.Max(Along(b0), Along(b1));
-        return Math.Min(hi, len) - Math.Max(lo, 0) > 0.5f;
+        float overlap = Math.Min(hi, len) - Math.Max(lo, 0);
+        return overlap > 0.5f && overlap >= minOverlap;
     }
 
     /// <summary>
@@ -311,18 +313,26 @@ internal static class NavInteriors
         /// <summary>
         /// Links the interior's polygons of one door to the exterior: to the exterior's polygons of the same door, else to those the pruning cut
         /// off (<paramref name="cutOff"/>: not kept, beside a kept polygon), else along the hull's edge round the doorway, else from the door's
-        /// approach.
+        /// approach. A step ends the search only when it links one of the door's polygons the interior's own pruning kept (<see cref="KeptOrAll"/>).
         /// </summary>
         public void JoinDoor(List<int> inside, List<int> outside, List<int> cutOff, string doorId)
         {
             // An edge that faces several polygons links to all of them, so which edges are open is decided before any link is added.
             var openInside = inside.SelectMany(p => Enumerable.Range(0, polygons[p].Length).Where(e => Free(p, e)).Select(e => (p, e))).ToList();
-            if (Link(openInside, OpenEdges(outside), doorId) > 0) return;
+
+            // An obstacle across the doorway can cut a piece of the door's polygons off the rest of the interior: that piece is pruned and can face
+            // the ground while the kept door polygons face only the obstacle's cut, so a link from it alone leaves the rooms sealed and the later
+            // steps must still run (Observed: Heft's Outpost s-IV 47.16:243-Newwworld-INGAME with Universal Wasteland Expansion, which gives the
+            // banners' supports a collision box: the banners hang flat on the wall beside the door, and one support's box reaches into the outer
+            // half of the doorway). Its links are still made, as before.
+            var counted = KeptOrAll(inside);
+            int linksBefore = LinkCount(inside);
+            if (Link(openInside, OpenEdges(outside), doorId, counted) > 0) return;
 
             // A landing whose edge along the doorway is split into pieces shorter than a portal: the seed flood stops there, so the door's own
             // exterior polygons are pruned and the kept landing's edges toward them are not open (Observed: the Waystation's L-House
             // 38.29:3-rebirth-INGAME, a 14.4 doorway met by edges of 8.9 and 5.7). Joined, the carry keeps them.
-            int behind = Link(openInside, OpenEdges(cutOff), $"{doorId} (door behind a narrow edge)");
+            int behind = Link(openInside, OpenEdges(cutOff), $"{doorId} (door behind a narrow edge)", counted);
 
             // A door leaf set back inside the interior hull paints nothing outside it (the exterior is carved to the hull): the doorway's interior
             // polygons meet the exterior's ground along the hull's edge (Observed: the L-House 13-rebirth-INGAME, zone 18.35). Also after a join
@@ -332,7 +342,7 @@ internal static class NavInteriors
             lo -= new Vector2(JoinDistance);
             hi += new Vector2(JoinDistance);
             var near = Near(lo, hi);
-            if (Link(openInside, OpenEdges(near), $"{doorId} (doorway edge)") + behind > 0) return;
+            if (Link(openInside, OpenEdges(near), $"{doorId} (doorway edge)", counted) + behind > 0) return;
 
             // A raised sill reached by steps that cross the hull: the steps' upper part is the interior's (joined to the door polygons), the lower
             // part the exterior's, and the two meet on the hull's edge below the door (Observed: 29- and 27-rebirth-INGAME, zone 18.35). So the
@@ -342,11 +352,18 @@ internal static class NavInteriors
             var approach = Approach(inside, lo, hi);
             var openApproach = approach.SelectMany(p => Enumerable.Range(0, polygons[p].Length).Where(e => Free(p, e)).Select(e => (p, e))).ToList();
             near = Near(lo, hi);
-            if (Link(openApproach, OpenEdges(near), $"{doorId} (approach)") == 0)
-            {
-                log?.Invoke($"    door {doorId} joins nothing: {inside.Count} interior door polygons ({openInside.Count} open edges), " +
-                    $"{outside.Count} exterior door polygons, {near.Count} kept exterior polygons in the approach box");
-            }
+
+            // A door whose earlier steps linked only door polygons its interior's pruning cut off reaches this step for that reason alone: its
+            // approach joins only over an overlap of at least a portal (SeedPruner.MinPortalWidth), as wide as the seed flood passes, so the side of
+            // a stair no walker fits past does not make the rooms look reachable (Observed: the Storm House 39.7:518-Minor Factions Expansion-INGAME
+            // with Universal Wasteland Expansion, whose stair top met the street over 1.4). A door no earlier step linked joins as before.
+            int prunedLinks = LinkCount(inside) - linksBefore;
+            float minOverlap = prunedLinks > 0 ? SeedPruner.MinPortalWidth : 0;
+            if (Link(openApproach, OpenEdges(near), $"{doorId} (approach)", minOverlap: minOverlap) > 0) return;
+
+            string joined = prunedLinks > 0 ? $"joins only door polygons its interior's pruning cut off ({prunedLinks / 2} links)" : "joins nothing";
+            log?.Invoke($"    door {doorId} {joined}: {inside.Count} interior door polygons ({openInside.Count} open edges), " +
+                $"{outside.Count} exterior door polygons, {near.Count} kept exterior polygons in the approach box");
         }
 
         /// <summary>
@@ -360,8 +377,23 @@ internal static class NavInteriors
             hi += new Vector2(JoinDistance);
             var near = Near(lo, hi);
             var openInside = inside.SelectMany(p => Enumerable.Range(0, polygons[p].Length).Where(e => Free(p, e)).Select(e => (p, e))).ToList();
-            Link(openInside, OpenEdges(near), $"{name} (doorless hull edge)", hullDistance);
+            Link(openInside, OpenEdges(near), $"{name} (doorless hull edge)", distance: hullDistance);
         }
+
+        /// <summary>
+        /// The door polygons <paramref name="door"/> that the interior's own seed pruning kept, or all of them when it kept none of them (for example
+        /// an interior no seed reaches, such as an Ancient Lab, which is joined through any of its door polygons).
+        /// </summary>
+        HashSet<int> KeptOrAll(List<int> door)
+        {
+            var keptOnes = door.Where(p => kept[p]).ToHashSet();
+            return keptOnes.Count > 0 ? keptOnes : [.. door];
+        }
+
+        /// <summary>
+        /// The link entries (two per link: edge and polygon) that <paramref name="polys"/> carry.
+        /// </summary>
+        int LinkCount(List<int> polys) => polys.Sum(p => links[p]?.Count ?? 0);
 
         /// <summary>
         /// Whether polygon <paramref name="p"/>'s edge <paramref name="e"/> has neither a neighbour nor a link.
@@ -428,9 +460,12 @@ internal static class NavInteriors
             [.. outside.SelectMany(q => Enumerable.Range(0, polygons[q].Length).Where(f => Free(q, f)).Select(f => (q, f)))];
 
         /// <summary>
-        /// Links every pair of an inside and an outside edge that face each other within <paramref name="distance"/>; returns the links made.
+        /// Links every pair of an inside and an outside edge that face each other within <paramref name="distance"/>, overlapping by at least
+        /// <paramref name="minOverlap"/>; returns the links made from the inside polygons in <paramref name="counted"/> (all of them when it is
+        /// null).
         /// </summary>
-        int Link(List<(int, int)> openInside, List<(int, int)> openOutside, string kind, float distance = JoinDistance)
+        int Link(List<(int, int)> openInside, List<(int, int)> openOutside, string kind, HashSet<int>? counted = null, float distance = JoinDistance,
+            float minOverlap = 0)
         {
             int joined = 0;
             foreach (var (p, e) in openInside)
@@ -441,12 +476,12 @@ internal static class NavInteriors
                     var a1 = v[polygons[p][(e + 1) % polygons[p].Length]];
                     var b0 = v[polygons[q][f]];
                     var b1 = v[polygons[q][(f + 1) % polygons[q].Length]];
-                    if (!Facing(a0, a1, b0, b1, distance)) continue;
+                    if (!Facing(a0, a1, b0, b1, distance, minOverlap)) continue;
 
                     log?.Invoke($"    door join {kind}: interior polygon {p - first} edge {e} to exterior {q} edge {f}");
                     (links[p] ??= []).AddRange([e, q]);
                     (links[q] ??= []).AddRange([f, p]);
-                    joined++;
+                    if (counted is null || counted.Contains(p)) joined++;
                 }
             }
 

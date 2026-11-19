@@ -500,6 +500,19 @@ When neither joins, the interior polygons connected to the door polygons within 
 edges face: a raised sill reached by steps (~47..52°) that cross the hull, whose lower part is the exterior's (cut at the hull: Y351 for
 `29-rebirth-INGAME`, door Y365..380; Y418 for `27-`, door Y430..441) and upper part the interior's, meeting on the hull's edge.
 **Observed** (zone 18.35, scratch probe): both rooms reached from the street; no other door in 18.35, 19.29, 20.29, 20.32, 21.32, 21.42 needs it.
+A step ends the search only when it links one of the door's polygons that the interior's own seed pruning kept (any of them when it kept none of that
+door's, for example in an interior no seed reaches); links from the others are still made. An obstacle across a doorway can cut a piece of the door's
+polygons off the rest: that piece is pruned, can face the ground while the kept door polygons face only the obstacle's cut, and its link alone left
+the rooms sealed both ways. **Observed** (zone 47.16, `meitou-tools navmesh --verbose`, with Universal Wasteland Expansion, which gives the banners'
+`banner_support_part` a collision box): at Heft's Outpost s-IV `243-Newwworld-INGAME` the banners hang flat on the wall beside the door, and one
+support's collision box reaches into the outer half of the doorway; the doorway edge linked only a pruned 2-polygon piece, and no path led from the
+street into the rooms or out; now the approach joins the floor between the two supports' boxes (an edge overlap of 12.5, walkers up to radius 6.25)
+and both paths are found, while a doors-closed path still finds none. A door that reaches the approach only because its earlier links all start from
+cut-off door polygons joins there only where the edges overlap by at least a portal (`SeedPruner.MinPortalWidth`, 9), so a sliver no walker fits
+through does not make the rooms look reachable. **Observed** (zone 39.7, the same mod): the Storm House `518-Minor Factions Expansion-INGAME`, whose
+stair top meets the street over 1.4, would otherwise be entered by paths and never left; it keeps only its pruned door polygon's link. Without mods, a
+build logging each door's stopping step under both rules found none of the 815 doors (262 with door polygons on both sides of the pruning) in the 315
+zones holding a building with an interior stopping at a different step.
 **Door painters** (engine choice): in an interior a door painter that does not reach `DoorHullDepth` (4) into the hull is swept toward the door's inner
 marker, at most `DoorHullReach` (12), until it does (`ZoneGeometryGatherer.ReachIntoHull`; the original shifts its painters 5 along one local axis, Generator below). **Observed** (`meitou-tools navmesh`): Heft's bar, the Outpost s-III `47.16:241-Newwworld-INGAME`, has its
 leaf 2..3 outside the hull; its interior had no door polygons and no join, an island (issue #130), and now paths from the street reach its ramp and
