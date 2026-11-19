@@ -1172,16 +1172,16 @@ public sealed partial class PopulationSystem : ITickSystem, Bodies.ICharacterDea
         var cages = owner.Home is { } home
             ? world.Fixtures.OfBuilding(home.Key).Where(f => f.Kind == Locks.FixtureKind.Cage && Locks.FixtureRegistry.IsFree(table, f)).ToList() : [];
         ulong ownerKey = Rng.StableHash(owner.Home?.Key ?? squad.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        var ownerFaction = (uint)squad.Faction < (uint)_data.Factions.Count ? _data.Factions[squad.Faction] : null;
         int n = 0, picks = 0;
         foreach (var plan in owner.Plan.Slaves)
         {
             if (plan.Members.Count == 0) continue;
             int faction = plan.Template.Faction is { } tf && _data.FactionIndex(tf) is var fi and >= 0 ? fi : squad.Faction;
+            string? lookFaction = (uint)faction < (uint)_data.Factions.Count ? _data.Factions[faction].Id : null;
             var members = new List<BuiltMember>();
             foreach (var m in plan.Members)
             {
-                var look = _data.Appearances?.Create(m.RecordId, ownerFaction?.Id,
+                var look = _data.Appearances?.Create(m.RecordId, lookFaction,
                     (int)(Rng.Hash(world.Seed, ownerKey, RngPurpose.Spawn, SeedSalts.SlaveLook + (ulong)n++) & 0x7FFFFFFF));
                 members.Add(new BuiltMember(m, look));
             }
