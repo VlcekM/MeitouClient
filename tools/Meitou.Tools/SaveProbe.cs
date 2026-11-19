@@ -547,7 +547,8 @@ static class SaveProbe
                 Console.WriteLine($"tick {probe.World.Tick} {probe.Who(i)} in={c.InSomething} carrying={c.Carrying} behaviour={c.Ai?.Behaviour} "
                     + $"package={c.Ai?.Squad.Ai?.Current?.Name} goal={c.Ai?.Goal?.Task} fight={c.Ai?.FightGoal} "
                     + $"orders=[{string.Join(", ", c.OrderQueue.Select(o => o.Row))}] saved={c.SavedOrders?.Count} target={Target(probe, i)} "
-                    + $"hunger={c.Medical?.Hunger:F2} fed={c.Medical?.Fed:F2}");
+                    + $"hunger={c.Medical?.Hunger:F2} fed={c.Medical?.Fed:F2} mode={probe.Characters.Next[i].Mode} own mode={c.RunSpeed} "
+                    + $"speed={probe.Characters.Next[i].Velocity.Length():F1}");
                 if (c.Decision is { } d) Console.WriteLine($"  decision {d.Tick} {d.Winner}: {string.Join("; ", d.Lines)}");
             }
 
@@ -2033,7 +2034,7 @@ static class SaveProbe
                                        nests within it of the leader and where each stands as a town
               bait <radius> [rounds]   send the player's squad after the nearest other squad each round, listing squads as squads does
               squads <radius> [rounds]  the other squads near the leader: leader state, goal, members' spread every 40 ticks
-              watch <name> [rounds]    a character's task, AI, fight target, hunger and decision trace every 40 ticks (default 10 rounds)
+              watch <name> [rounds]    a character's task, AI, fight target, hunger, walk mode, speed and decision trace every 40 ticks (default 10 rounds)
               medic <name> [rounds] [interval]  a medic's treatment and decision every interval (20) ticks; each downed character in sight: need, senses, sight test, ray (#843)
               treat <medic> [patient|-] [rounds] [interval]  order a treatment (- or none: itself); task, posture and each leg every interval (20) ticks (#898)
               turrets <character> <count> <x> <z> [rounds] [interval]  spawn hostiles there; the turret squads near: goals, claims, enemies, gunners

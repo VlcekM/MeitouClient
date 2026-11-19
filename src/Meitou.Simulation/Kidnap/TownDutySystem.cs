@@ -417,6 +417,13 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
+    /// The speed mode of a food, loot, stash or ditch run's walk and its retries: a character of the player's faction keeps its own mode (the
+    /// HUD's speed selector), as the original's move-task start changes the mover's mode only for a faction without the player flag
+    /// (docs/game/pathfinding.md "Force speed"); anyone else walks.
+    /// </summary>
+    static byte ErrandMode(World world, CharacterCold cold) => cold.Faction == world.Player.Faction ? cold.RunSpeed : SpeedMode.Walk;
+
+    /// <summary>
     /// Starts a ditch errand: the member walks to the store spot to empty its inventory there.
     /// </summary>
     void StartDitch(World world, int slot, CharacterCold cold, CampaignTown town, string storeId, Vector2 spot)
@@ -424,7 +431,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         cold.Engaged = true;
         _duties.Add(new TownDuty { Member = world.Characters.IdOf(slot), Faction = cold.Faction, Town = town, Kind = TownDutyKind.Ditch,
                 Target = storeId, Goal = spot });
-        TaskStart.Walk(world, slot, spot, SpeedMode.Walk, RowOf(TownDutyKind.Ditch), TaskSource.Goal);
+        TaskStart.Walk(world, slot, spot, ErrandMode(world, cold), RowOf(TownDutyKind.Ditch), TaskSource.Goal);
     }
 
     /// <summary>
@@ -558,7 +565,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         c.Engaged = true;
         _duties.Add(new TownDuty { Member = world.Characters.IdOf(s), Faction = c.Faction, Town = store.Town, Kind = TownDutyKind.Food,
                 Target = store.Id, Goal = store.Spot, PlayerSide = true });
-        TaskStart.Walk(world, s, store.Spot, SpeedMode.Walk, RowOf(TownDutyKind.Food), TaskSource.Goal);
+        TaskStart.Walk(world, s, store.Spot, ErrandMode(world, c), RowOf(TownDutyKind.Food), TaskSource.Goal);
     }
 
     /// <summary>
@@ -973,7 +980,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
 
         cold.Engaged = true;
         _duties.Add(new TownDuty { Member = member, Faction = cold.Faction, Town = town, Kind = TownDutyKind.Food, Target = id, Goal = spot });
-        TaskStart.Walk(world, slot, spot, SpeedMode.Walk, RowOf(TownDutyKind.Food), TaskSource.Goal);
+        TaskStart.Walk(world, slot, spot, ErrandMode(world, cold), RowOf(TownDutyKind.Food), TaskSource.Goal);
     }
 
     /// <summary>
@@ -1808,7 +1815,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             return End(world, d);
         }
 
-        TaskStart.Walk(world, g, d.Goal, SpeedMode.Walk, RowOf(d.Kind), TaskSource.Goal);
+        TaskStart.Walk(world, g, d.Goal, ErrandMode(world, gc), RowOf(d.Kind), TaskSource.Goal);
         return true;
     }
 
@@ -2268,7 +2275,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
 
         if (walking) return true;
         if (++d.Tries > Settings.Walks) return End(world, d);
-        TaskStart.Walk(world, g, d.Goal, SpeedMode.Walk, RowOf(d.Kind), TaskSource.Goal);
+        TaskStart.Walk(world, g, d.Goal, ErrandMode(world, gc), RowOf(d.Kind), TaskSource.Goal);
         return true;
     }
 
