@@ -36,6 +36,7 @@ static class BuiltInMods
         // The port uses the plugin's file over its own saved setting when the plugin is installed.
         new(CoveredMods.XpPort, XpTaken, (config, _, onDisk) => config.SquadXp = Clamped(PortXp(config, onDisk))),
         new(CoveredMods.SwampTurtleFix, "Swamp turtle attacks on the Fixes page is on", (config, _, _) => config.FixAnimalMoves = true),
+        new(CoveredMods.CharacterHighlight, "Hover outline in the Advanced settings is on", (config, _, _) => config.HoverOutline = true),
     ];
 
     /// <summary>

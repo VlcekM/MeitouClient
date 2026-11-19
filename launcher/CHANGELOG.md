@@ -4,7 +4,8 @@ Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.
 
 ## v1.16.0
 
-- Eight more RE_Kenshi mods are offered their workshop ports, by dxseba: Character Highlight, Disarm, It. Tickles. Me., Kill Counter, Level Up Notifications, Speed Menu, Stack Sort and Taunt Expansion
+- Seven more RE_Kenshi mods are offered their workshop ports, by dxseba: Disarm, It. Tickles. Me., Kill Counter, Level Up Notifications, Speed Menu, Stack Sort and Taunt Expansion
+- Character Highlight is noted as built into Meitou: its Alt outline is the Hover outline setting
 - A search box filters the mod list by name or author, and the rows are more compact so more fit
 - News videos have sound again (lost since v1.10.0)
 - Settings, launcher.json and the mod list are written safely: an interrupted save keeps the previous file

@@ -26,6 +26,7 @@ disabled), so the feature never applies twice, and a save made while it ran does
 | Player-Only XP x10 (xXDarkrusoXx, `Player XP Only x10 RE`, workshop 3679678086) | Squad XP | its 2026-11-07 update | `xp_multiplier` of its `plugin/player_xp_boost.ini`, else 10 (**Observed**: the key and path are strings in its `PlayerXpBoost.dll`; the original game writes the file on its first run). Per-skill `stat_<SKILL>` lines are not kept |
 | Its code-mod port (`player-only-xp`) | Squad XP | any version (by its id) | the plugin's file when the plugin is installed (the port shares it), else its saved `Multiplier`, else 10. Per-skill settings are not kept |
 | Swamp Turtle FIX (ikahurula, data mod, workshop 2237731365) | Swamp turtle attacks (Fixes) | its 2020-09-24 update | the fix is switched on. Its data still loads: it sets the Swamp Turtle's `weapon` to `_elephant type` (and its unread `attack type`), so its turtles use the elephant moves and that weapon's damage and reach ([animals](../game/animals.md) "Natural weapon") |
+| Character Highlight (BFrizFoShiz, RE_Kenshi plugin, `Character Highlight`, workshop 3688641949) | Hover outline (Advanced) | its 2026-06-23 update | the outline is switched on. Alt then outlines the characters near ([ui-input](../game/ui-input.md#hover-outline)), coloured by the right-click order on each, not by the plugin's relation colours |
 
 ## Endorsed ports
 
@@ -40,7 +41,6 @@ keep the original's `.mod` name.
 | --- | --- | --- | --- |
 | Loot-Scoot-Execute (Emkej, `Loot-Scoot-Execute`, workshop 3675700748; its MCM fork 3813852124) | [[MeitouClient] Execution](https://steamcommunity.com/sharedfiles/filedetails/?id=3838346946) (`Execution`) | Jame | 2026-04-26 update; the fork's 2026-11-13 update |
 | Proving Grounds (Shutori, `Proving Grounds`, workshop 3774745195) | [[Meitou] Proving Grounds](https://steamcommunity.com/sharedfiles/filedetails/?id=3841575072) (`ProvingGroundsMeitou`; [source](https://github.com/roscatoday/ProvingGroundsMeitou)) | roscatoday | 2026-09-26 update |
-| Character Highlight (BFrizFoShiz, `Character Highlight`, workshop 3688641949) | [[Meitou Client] Character Highlight Port](https://steamcommunity.com/sharedfiles/filedetails/?id=3841647050) (`CharacterHighlight`) | dxseba | 2026-06-23 update |
 | Disarm (RE_Kenshi; Dafi, `Disarm`, workshop 3759461630) | [[Meitou Client] Disarm Port](https://steamcommunity.com/sharedfiles/filedetails/?id=3841646137) (`Disarm`) | dxseba | 2026-08-12 update |
 | It. Tickles. Me (Grynn, `It. Tickles. Me`, workshop 3731488940) | [[Meitou Client] It. Tickles. Me. Port](https://steamcommunity.com/sharedfiles/filedetails/?id=3841647083) (`ItTicklesMe`) | dxseba | 2026-06-16 update |
 | Kill Counter (luckyren, `KillCounter`, workshop 3779464387) | [[Meitou Client] Kill Counter Port](https://steamcommunity.com/sharedfiles/filedetails/?id=3841647109) (`KillCounter`) | dxseba | 2026-08-09 update |

@@ -43,9 +43,16 @@ public static class CoveredMods
         new("Swamp Turtle FIX", null, "Swamp turtle attacks on the Fixes page", [new(2237731365, 1600962568)]);
 
     /// <summary>
+    /// BFrizFoShiz's RE_Kenshi plugin "Character Highlight" (workshop 3688641949, matched against its 2026-06-23 update): Alt outlines the
+    /// characters near, as Meitou's hover outline does.
+    /// </summary>
+    public static readonly BuiltInMod CharacterHighlight =
+        new("Character Highlight", null, "Hover outline in the Advanced settings", [new(3688641949, 1782253588)]);
+
+    /// <summary>
     /// The mods Meitou has built in.
     /// </summary>
-    public static IReadOnlyList<BuiltInMod> BuiltIn { get; } = [RekenshiXp, XpPort, SwampTurtleFix];
+    public static IReadOnlyList<BuiltInMod> BuiltIn { get; } = [RekenshiXp, XpPort, SwampTurtleFix, CharacterHighlight];
 
     /// <summary>
     /// Emkej's "Loot-Scoot-Execute" (workshop 3675700748, matched against its 2026-04-26 update, and its "MCM fork" 3813852124, its 2026-11-13
@@ -59,13 +66,6 @@ public static class CoveredMods
     /// </summary>
     static readonly EndorsedPort ProvingGrounds = new(
         "Proving Grounds", [new(3774745195, 1790470536)], "[Meitou] Proving Grounds", "ProvingGroundsMeitou", 3841575072, "roscatoday");
-
-    /// <summary>
-    /// BFrizFoShiz's "Character Highlight" (workshop 3688641949, matched against its 2026-06-23 update),
-    /// with dxseba's "[Meitou Client] Character Highlight Port".
-    /// </summary>
-    static readonly EndorsedPort CharacterHighlight = new(
-        "Character Highlight", [new(3688641949, 1782253588)], "[Meitou Client] Character Highlight Port", "CharacterHighlight", 3841647050, "dxseba");
 
     /// <summary>
     /// Dafi's "Disarm (RE_Kenshi)" (workshop 3759461630, matched against its 2026-08-12 update), with dxseba's "[Meitou Client] Disarm Port".
@@ -115,7 +115,7 @@ public static class CoveredMods
     /// </summary>
     public static IReadOnlyList<EndorsedPort> Endorsed { get; } =
     [
-        Execution, ProvingGrounds, CharacterHighlight, Disarm, ItTicklesMe, KillCounter, LevelUpNotify, SpeedMenu, StackSort, TauntExpansion,
+        Execution, ProvingGrounds, Disarm, ItTicklesMe, KillCounter, LevelUpNotify, SpeedMenu, StackSort, TauntExpansion,
     ];
 
     /// <summary>
