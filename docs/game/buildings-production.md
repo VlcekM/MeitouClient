@@ -784,7 +784,8 @@ the [layout's plant count](#farm-plants), not `amount`.
   (0..1; the def field `+0x94` of the region's current weather at the farm, loader `FUN_1409de7b0`), not `rain intensity` and not times the weather's strength;
   any weather counts, acid included. Meitou: `WeatherHere.Wetness`, `ProductionSystem.FarmTick`. Water draw
   (`FUN_1400df4c0`): an input whose level is below `w x dt` takes one item from its section, or fails (level 0); then
-  level -= `w x dt`. Growth step `inc = h x F / growth time`, x `drought multiplier` when the draw failed, x health x
+  level -= `w x dt`. The draw comes before the growth branch and tests no stage, so a ripe, rotting or dead crop draws water as a
+  growing one does (**Verified**, `FUN_1400e5580` call order; no farm function but the setup `FUN_1400e8420` writes the rate `+0x534`). Growth step `inc = h x F / growth time`, x `drought multiplier` when the draw failed, x health x
   powerSat when the building uses power. Farm growth < 1: each plant with -1 <= g < 1 gains inc; farm growth = the
   lowest such g, capped at 1. 1 <= growth < 2: growth += h / `harvest time` (ripe; at 2 it rots). Growth >= 2:
   d += h / `death time`. While 0 < growth < 1 and `drought death time` > 0: a failed draw adds h / `drought death time`
