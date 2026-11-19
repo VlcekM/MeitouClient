@@ -1091,9 +1091,8 @@ sealed class BuildMode(PlayerInterface player)
 
         // Only what the ray meets before the ground counts, as in PickBuilding and the original's raycast (terrain ends the walk): a building's
         // hull and collision reach below the ground, and the part of the ray that has gone through the ground must not find them (the pointer
-        // showed the hammer on bare ground beside a building).
-        float ground = player.Picking.GroundHit(ray.Origin, ray.Direction) is { } groundPoint
-            ? Vector3.Distance(ray.Origin, groundPoint) : float.MaxValue;
+        // showed the hammer on bare ground beside a building). Terrain cut inside a building does not end it (PickReach).
+        var (ground, terrain) = player.Picking.PickReach(ray.Origin, ray.Direction, float.MaxValue);
         float bestT = ground;
         var hits = new List<(BuildingSnapshot Site, float T)>();
         foreach (var site in player.Session.CurrentSnapshot.Buildings)
@@ -1110,7 +1109,7 @@ sealed class BuildMode(PlayerInterface player)
                 ? player.Picking.BuildingRayT(ray, footprint.Place(site.Position, yaw), footprint.YMin, footprint.YMax, site.Record, site.Position,
                     site.Position.Y, yaw)
                 : host.Placement.Plot(site.Record) is { } plot
-                    ? WorldPicking.PlotT(ray, plot.Place(site.Position, yaw), ground < float.MaxValue ? ground : null)
+                    ? WorldPicking.PlotT(ray, plot.Place(site.Position, yaw), terrain)
                     : WorldPicking.RaySegment(ray.Origin, ray.Direction, site.Position, site.Position + new Vector3(0, 16, 0), 12);
             if (t is not { } hit || hit >= ground) continue;
 

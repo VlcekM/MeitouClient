@@ -142,7 +142,7 @@ sealed class PickInspector(PlayerInterface player)
     {
         if (!InspectorOn || player.Ray(player.Mouse) is not { } ray) return;
         var ground = player.Picking.GroundHit(ray.Origin, ray.Direction);
-        float limit = ground is { } g ? Vector3.Distance(ray.Origin, g) : 6000;
+        float limit = player.Picking.PickReach(ray.Origin, ray.Direction).Reach;
         var buildings = InspectBuildings(ray, limit);
         var hits = buildings.Where(b => b.Hit is { } t && t < limit).OrderBy(b => b.Hit).ToList();
         var picked = hits.FirstOrDefault();
@@ -152,7 +152,7 @@ sealed class PickInspector(PlayerInterface player)
             var zone = Data.World.WorldLayout.ZoneOf(at.X, at.Z);
             lines.Add(new("Ground", $"{N(at.X)}, {N(at.Y)}, {N(at.Z)}"));
             lines.Add(new("Zone", $"{zone.X}, {zone.Y}"));
-            lines.Add(new("Ground distance", N(limit)));
+            lines.Add(new("Ground distance", N(Vector3.Distance(ray.Origin, at))));
         }
         else lines.Add(new("Ground", "the ray leaves the world"));
         lines.Add(new("Click selects", picked is null ? "no building" : picked.Name));

@@ -603,7 +603,7 @@ sealed class FurnitureUse(PlayerInterface player)
     {
         if (player.Ray(pixel) is not { } ray || player.Build.Services is not { } host) return null;
 
-        float bestT = player.Picking.GroundHit(ray.Origin, ray.Direction) is { } ground ? Vector3.Distance(ray.Origin, ground) : 6000;
+        float bestT = player.Picking.PickReach(ray.Origin, ray.Direction).Reach;
         (string, string, float)? best = null;
         foreach (var candidate in host.Placement.StaticAlong(ray.Origin, ray.Direction, bestT))
         {

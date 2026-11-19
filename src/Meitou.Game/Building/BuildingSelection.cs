@@ -129,7 +129,7 @@ sealed class BuildingSelection(PlayerInterface player)
         if (player.Ray(pixel) is not { } ray) return null;
         if (PickFurnitureAt(pixel) is { } furniture) return furniture;
 
-        float limit = player.Picking.GroundHit(ray.Origin, ray.Direction) is { } groundPoint ? Vector3.Distance(ray.Origin, groundPoint) : 6000;
+        var (limit, terrain) = player.Picking.PickReach(ray.Origin, ray.Direction);
         float bestT = limit;
         SelectedBuilding? best = null;
         var site = player.Build.PickSiteAt(pixel);
@@ -150,7 +150,7 @@ sealed class BuildingSelection(PlayerInterface player)
                 float y = b.WorldY ?? player.Ground(b.Position.X, b.Position.Z) + b.Position.Y;
                 var hull = candidate.Footprint.Place(b.Position, b.Rotation);
                 float? hit = candidate.Plot
-                    ? WorldPicking.PlotT(ray, hull, limit < 6000 ? limit : null)
+                    ? WorldPicking.PlotT(ray, hull, terrain)
                     : player.Picking.BuildingRayT(ray, hull, candidate.Footprint.YMin, candidate.Footprint.YMax,
                         b.BuildingId, b.Position, y, b.Rotation);
                 if (hit is not { } t || t >= bestT) continue;
@@ -219,7 +219,7 @@ sealed class BuildingSelection(PlayerInterface player)
     {
         if (player.Ray(pixel) is not { } ray || player.Build.Services is not { } host) return null;
 
-        float limit = player.Picking.GroundHit(ray.Origin, ray.Direction) is { } ground ? Vector3.Distance(ray.Origin, ground) : 6000;
+        float limit = player.Picking.PickReach(ray.Origin, ray.Direction).Reach;
         (Data.World.TownPiece Piece, Data.World.BuildingPlacement House, float T)? best = null;
         foreach (var candidate in host.Placement.StaticAlong(ray.Origin, ray.Direction, limit))
         {

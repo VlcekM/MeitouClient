@@ -53,6 +53,12 @@ static class SaveProbe
             return 0;
         }
 
+        if (rest[1] == "pick" && rest.Count >= 5 && probe.Nav is not null)
+        {
+            PickProbe.Run(probe, install, Point(rest, 2), rest.Count > 5 ? float.Parse(rest[5]) : 300);
+            return 0;
+        }
+
         return Mode(probe, rest[1], rest[2..]) ? 0 : Usage();
     }
 
@@ -2108,6 +2114,8 @@ static class SaveProbe
               places <radius> [step]   the place test over the walkable surface round the leader (needs --nav): outdoor-mesh points it puts indoors, and the reverse
               path [x y z] <x y z>     the path a walker gets from the leader (or a point) to a point (needs --nav): points, end, provisional part; short of it, the polygon chain
               walk <name> [x y z] [rounds]  a character walks (to a point, at its height): position, goal, goal height, walk end (needs --nav)
+              pick <eye x y z> [radius]  the mouse ray from a camera eye to each player site near it (needs --nav): the site's and the terrain's
+                                       distance, and its house's mask cut, box exit, shown floors' first hit and the site's floor (#1049)
               ray <x y z> <x y z>      the sight ray between two points (needs --nav): where it first hits the terrain or a building
               sightlines <x y z> <radius> [step] [spread]  walkable points whose spot-meter ray reaches the spot (or each spot within spread), with places
               sees <radius>            NPCs near the leader: place, sight range, the plain sight test and with the sight ray (needs --nav)

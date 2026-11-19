@@ -121,6 +121,18 @@ sealed class WorldPicking(PlayerInterface player)
     }
 
     /// <summary>
+    /// How far along the ray a building pick looks, with the distance of the terrain hit (null: none, the reach is <paramref name="open"/>): up to
+    /// the terrain, or on through the room it lies in when the terrain is cut there (<see cref="FloorReach"/>), as the original's walk goes on past
+    /// a terrain hit inside a building (docs/game/ui-input.md "Building picking and selection"; a bench in a house dug into a hillside, #1049).
+    /// </summary>
+    internal (float Reach, float? Terrain) PickReach(Vector3 origin, Vector3 direction, float open = 6000)
+    {
+        if (GroundHit(origin, direction) is not { } hit) return (open, null);
+
+        return (FloorReach(origin, direction, hit), Vector3.Distance(origin, hit));
+    }
+
+    /// <summary>
     /// The distance within <paramref name="limit"/> at which the ray first meets a steep building face: of a building with rooms
     /// (<see cref="InteriorFaceHit"/>) or of one without (<see cref="StaticFaceHit"/>).
     /// </summary>
