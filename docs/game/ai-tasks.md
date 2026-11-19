@@ -1056,7 +1056,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   drops a candidate that is not current (its target cleared first) when its fresh slot 4 and list A hold, or when it can run but neither acts nor has an effect. After the
   chooser the update clears `currentGoal` when no task runs. So a walk ends as it arrives (its list A, `isAtLocation`) and the next task or a new plan follows at once; an
   animal following its leader (141, list B with 59) stops when its leader goes into a building that keeps animals out (59's default false; read with the mover's destination
-  inside the leader's building, **Observed**). A fight step still ends only by itself (nothing left, target down, give-up) or when its row stops being runnable.
+  inside the leader's building, **Observed**). A fight step still ends only by itself (nothing left, target down, give-up), when its row stops being runnable, or when its goal scores 0 and the pick plans another over it ([leaving a fight](combat.md#leaving-a-fight)).
   Meitou: [planner](../simulation.md#planner).
 - **Goal end** (**Verified**, disassembly; fields from KenshiLib `AITaskSytem`: +0x1C0 `currentGoal`, +0x20C its priority, +0x280
   `currentGoalExpiryTime` in game hours):

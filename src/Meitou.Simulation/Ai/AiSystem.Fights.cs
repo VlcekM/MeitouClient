@@ -142,19 +142,33 @@ public sealed partial class AiSystem
     /// A combat goal's finder factor for the chooser (<see cref="FightPick"/>). The current goal whose fight runs (<see cref="OwnsFight"/>) is kept
     /// while its goal is not done (the original's plan step ends a goal only when its list A holds, its hours end or its row cannot run,
     /// <c>FUN_14050d970</c>, <b>Observed</b>; the running fight is the queued task its plan accepts): an attack goal while the looker senses an enemy
-    /// (16's effect, state 6 <c>isNoEnemiesInVicinity</c>, <c>numEnemies</c>; engine reading for 21, 144 and 34) or its finder still picks one; a
-    /// protect goal while its finder values a mate or ally above 0 (its own fight counts for 143: <c>FUN_14099a190</c>'s 0.01 floor), row 13 not
-    /// asked again.
+    /// (16's effect, state 6 <c>isNoEnemiesInVicinity</c>, <c>numEnemies</c>; engine reading for 21, 144 and 34) and its fight has a target
+    /// (<see cref="FightHasTarget"/>), or its finder still picks one; a protect goal while its finder values a mate or ally above 0 (its own fight
+    /// counts for 143: <c>FUN_14099a190</c>'s 0.01 floor), row 13 not asked again. A fight without a target is not kept by the enemy count: the
+    /// scorer scores the current goal as desire x finder too (<c>FUN_14050df10</c> → <c>FUN_14060fd80</c>, <b>Observed</b>), a goal scoring 0
+    /// is no candidate, and the pick (<c>FUN_140510650</c>) then plans another goal over the fight, which the plan step does not end; the count
+    /// also holds enemies no longer seen or heard, which no finder picks, so the fighter stood in its stance until their entries decayed (#1035;
+    /// docs/game/combat.md "Leaving a fight").
     /// </summary>
     float FightFactor(World world, int slot, TaskType type, AiMind mind)
     {
         if (mind.Goal?.Task.Type == type && world.Characters.Cold(slot) is { InCombat: true } cold && OwnsFight(cold, mind))
         {
             if (Protects(type)) return ProtectPick(world, slot, type, mind.Squad, attacker: false).Factor;
-            if (_aggro?.SensesOf(slot) is { Enemies: > 0 }) return 1;
+            if (_aggro?.SensesOf(slot) is { Enemies: > 0 } && FightHasTarget(world, slot)) return 1;
         }
 
         return FightPick(world, slot, type, mind.Squad).Factor;
+    }
+
+    /// <summary>
+    /// Whether the character's fight has a target as of the last tick; true without a combat system (nothing then tells a fight without one).
+    /// </summary>
+    bool FightHasTarget(World world, int slot)
+    {
+        if ((ThreatSource ?? _combat) is not { } source) return true;
+
+        return source.TargetOf(slot, world.Characters.Previous[slot].Generation).Slot >= 0;
     }
 
     /// <summary>

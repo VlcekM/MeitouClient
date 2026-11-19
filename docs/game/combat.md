@@ -674,6 +674,12 @@ which its next update (`FUN_14050d920` → `FUN_14050d7d0`) consumes by dropping
   and a task target in a cage counts as gone. The original ends such a fight through its goal ([arrest chain](ai-tasks.md): effect 129 holds once the target is
   imprisoned), which the engine's own fights (an arrest's, a joiner's) lack. **Observed** (Meitou, headless The Slaves start, a player slave put in a cage
   mid-arrest): without it the guards stayed in combat mode while they sensed the prisoner and turned on it when it was let out (#629).
+  An NPC's attack goal (16, 21, 144, 34) ends such a targetless fight sooner. **Observed** (decompile): the scorer `FUN_14050df10` scores the current goal like any other, desire x
+  finder (`FUN_14060fd80` → `FUN_14060f460` → `FUN_14060f1d0`, which calls the finder once per finder and target hand and then answers from the character's map at `+0x208`), puts
+  only scores above 0 among the candidates, and the pick (`FUN_140510650`) walks them from the best down, keeping the current goal when it comes to it and else planning the
+  candidate over the fight; `numEnemies` still counts enemies no longer seen or heard (entries not yet decayed), which the finders skip. Meitou: `AiSystem.FightFactor` keeps a
+  running attack goal by the enemy count only while its fight has a target; without one the finder's factor decides. **Observed** (probe, #1035 save): held by the count alone, an
+  ex-slave whose last target fell stood in its stance for 370 ticks, and 1500 after a later fight, on the entry of a Bonedog out of sight; with the target test it leaves within 40.
 - **Path chase give-up** (`ChaseMode`, a base of `Task_MeleeAttack` at task `+0x78`): checked only while the fight is in
   state 11, the path chase that `CombatClassAI::vfunc_9` enters from state 10 when the navmesh line to the target is
   blocked, the two are in different places, or the 2 s chase timer runs ([Combat stance](#combat-stance)). Any other
