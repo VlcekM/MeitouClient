@@ -2111,10 +2111,15 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     }
 
     /// <summary>
-    /// The candidate's own gates: a standing character not caged, not an owned slave the looker may not fight, not staying low inside a building.
+    /// The candidate's own gates: a standing character not carried or caged, not an owned slave the looker may not fight, not staying low inside
+    /// a building.
     /// </summary>
     static bool Targetable(ref Scan s, int slot, CharacterCold c)
     {
+        // The finders' tag filter drops the KO bit, which a carried character has too (FUN_1408580d0 sets it from FUN_1407d1440: down or carried,
+        // Verified): one that came round on a shoulder is nobody's target, its carrier's neither.
+        if (!c.CarriedBy.IsNone) return false;
+
         // A caged prisoner is nobody's target, an owned slave nobody's but its owner's enemies' (engine choice: the original's sensed-list filter is
         // not decoded; town cages hold enemies of their guards, and slaves of a hostile faction, such as Heng's Outlaws, stand among them). The
         // territorial finder (144, FUN_14059fd70, Verified) skips a slave only when the looker's faction is allied with its owner.
