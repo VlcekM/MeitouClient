@@ -362,7 +362,9 @@ collision (`AshDome_Level_00_EXT_COL`, local y −77..181), lies 30+ under that 
 `AshDome-RUIN-WallS-*`) have no collision, so the original's tile walks the terrain through the walls as ours does (2,022 samples both, 0 either only;
 `--probe` radius 200: 1647 both, 11 original only, 6 ours only). 8 of the 12 ruins match within 30 samples; at 54.58 `15-`, 54.57 `2-`, 54.59 `9-` and `18-`
 the tile has 290..1,000 fewer samples inside the ring on bare terrain with no geometry at the mesh end, as a tile built with the dome carved; the tiles hold
-no interior group there.
+no interior group there. **Verified** (issue #1023, `--probe` at 317 points, every 30 units within 300 of `55.59:4-rebirth-INGAME`, origin 250 under
+the terrain): the original's tile has polygons within 27 of the terrain and on floors 21..181 over it (3644..3865) only, as ours; none on the
+ruin's walkable floors 31..303 under the terrain (3479..3734, 338 samples). Meitou (**Observed**, probe `walk`): a walk ordered to a buried floor ends on the terrain over it.
 **Interior parts**: the `interior` list (laid out like `parts` after the same position-seeded reseed, as drawn) is collision too,
 none when destroyed; it holds interior stairs and upper floors. **Verified** (tile20.32 interior `600815`, the Hub Storm House
 `4933-Newwworld-INGAME`): the original mesh ramps +4→+68 over (+30..+65, −45..−5) from the origin to the roof storey at +69..+72,
@@ -954,8 +956,12 @@ polygons expanded within 1 % (18.39: 5 % fewer).
 Unreachable goals were most of the rest. **Observed** (same run): a town's residents in zone 14.23 kept asking for goals in a building they cannot
 enter (radius 4 found no way in, radius 0 did: an unjoined seam on its door stair, "Inner seams"), 300-600 ms each: the exact search, up to four
 off-mesh start retries, then the nearest-point search, each exploring all the ground they reach. Engine choices since: a goal found unreachable
-is remembered (goal polygon, radius, door rule; same navmesh; `NavmeshWalkability.UnreachableSeconds`), and a walker that reaches its
-remembered nearest point gets the provisional route at once, while no door was locked or unlocked since (`NavDoors.Version`: through a door unlocked since,
+is remembered (goal polygon, radius, door rule; same navmesh; `NavmeshWalkability.UnreachableSeconds`) with the polygons its failed nearest-point
+search covered (`NavQuery.LastSearchReached`), and a walker whose start polygon is one of them gets the provisional route to the remembered nearest
+point at once. Reaching that point is no proof of the same ground: **Observed** (#1025 save, Cat-Lon's Exile, `probe crowd --nav`): fighters shoved
+onto an unjoined two-polygon sliver at a stair foot (105634,125000, on the tile seam z 124992) marked their target's polygon unreachable, and the
+~50 Stormthralls on the open mesh, who reach that corner too, were turned back to it from 115 short of the target or stood 200 away; by the start
+polygon all close in. The memory holds while no door was locked or unlocked since (`NavDoors.Version`: through a door unlocked since,
 walkers outside reached the corner of a locked L-House that one shut in it had found, and stood there; **Observed**, Gigachad save, 39.16); retries skip start
 polygons a failed search reached (same region, same failure). GoTo answers went from ~95 to ~17 ms on average, polygons per search ~11,000 to ~5,800.
 

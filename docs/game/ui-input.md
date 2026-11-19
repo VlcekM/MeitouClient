@@ -188,6 +188,7 @@ Meitou movement picks loaded buildings' floor/stair collision up to the viewed f
 Stationhouse `Storm_House_08_BASE_COL.xml` / `_Exterior_COL_Steps.xml`) rays clipping the foundation's or steps' sloped side dropped onto their undersides
 (Y −60 / −74, floor top 15.5); triangle-mesh faces keep the file's winding (unknown, 82 of 435 building collision files), so either side counts there. Clicks, queued moves and held-button steering share this destination and marker.
 A terrain hit that a building's drawn interior mask cuts (the renderer's rule, `InteriorVolume.CutsGround`; [interior cut](../render-interior-cut.md)) does not stop that pick: it looks on to where the ray leaves the room's box (`CutGroundReach`; the build ghost uses the same reach). Engine choice. **Verified** (scratch probe, feedback #712, Admag Watchtower `12.35:612-rebirth-INGAME`): its floor 0 lies at 1583-1589 under terrain at 1588-1630, so camera rays met the terrain first and a bed's ghost never reached floor 0; the game was not run.
+A building whose mask is not used (`interior terrain`, [interior cut](../render-interior-cut.md)) cuts no terrain, so the pick stops on the terrain in it, as the original's walk does in such a building.
 Buildings without a readable interior mask/floor collision still use terrain; the original's pick filters: [building picking](#building-picking-and-selection).
 Outside the rooms, the ray's first descent onto a kept navmesh surface more than 5 units above the terrain (a wall top, ramp, deck) wins
 over the terrain, and its height is the goal's floor (engine choice). "Outside the rooms" means not under the building's collision
@@ -432,7 +433,7 @@ interior-mask hulls); the hits are sorted nearest first (**Verified**, comparato
 
 | Hit groups | Result |
 |---|---|
-| 2, 6, 14 (terrain, foliage) | ground: ends the walk |
+| 2, 6, 14 (terrain, foliage) | ground: ends the walk. With no building taken yet, only where the hit point lies in no building (`FUN_1409b2ba0`, the building holding a point) or in one with `interior terrain` (Building +0xc1); in any other building the walk goes on past it (**Verified**, decompile) |
 | 0, 1, 3, 4 (characters, ragdolls) | that character if visible (`FUN_1407fb410`); behind an already taken building only when the building hit was a passable part (23..26) |
 | 3, 4, 28..31 with an item object | that item if visible (`FUN_1407fc440`); behind a taken building only when inside the building's bounding box |
 | 5 (doors) | the door, by its collision (group 5, on the door's own node, [collision](../formats/collision.md#placement-and-groups)); it ends the walk with no visibility or floor test of its own (**Verified**, decompile: the group-5 arm takes the hit's object, `FUN_1409f8f20`, and stops). When a building was taken first, that building. Meitou: the same, by the door's collision with the leaf where it has slid to (`PickDoorAt`, `NavDoorGeometry.Shape`) |

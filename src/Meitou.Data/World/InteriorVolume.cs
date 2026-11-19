@@ -358,9 +358,11 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     /// The volume of a building placed at <paramref name="position"/> / <paramref name="rotation"/>, or null when it has no <c>interior mask</c> part
     /// with a readable collision file, or is a gateway and <paramref name="gateways"/> is false (a gateway is walked under, not entered: no room, but
     /// its hull still answers the audio ray, <see cref="IsGateway"/>). <paramref name="collision"/> loads a record's collision path (shared, cached).
+    /// <paramref name="ground"/> is the terrain's height at the building, when known: an <c>interior terrain</c> building's mask meshes that reach
+    /// under it are left out (<see cref="ReachesUnder"/>).
     /// </summary>
     public static InteriorVolume? For(GameDatabase db, GameRecord building, string placementId, Vector3 position, Quaternion rotation,
-        InteriorCollisions collision, bool gateways = false)
+        InteriorCollisions collision, bool gateways = false, float? ground = null)
     {
         bool gateway = building.GetBool("is gateway");
         if (gateway && !gateways) return null;
@@ -389,6 +391,10 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
         if (points.Count < 3) return null;
         var hull = ConvexHull2(points);
         if (hull.Length < 3) return null;
+
+        // The terrain is such a building's floor (docs/render-interior-cut.md, "Interior terrain"): a mask holding it would cut the ground walked on.
+        if (ground is { } level && building.GetBool("interior terrain")) meshes.RemoveAll(m => ReachesUnder(collision, m, node, level));
+
         return new InteriorVolume(placementId, hull, yMin, yMax)
         {
             Ambience = building.GetInt("interior ambience"),
@@ -403,6 +409,18 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
             _roofCover = new Lazy<RoofCover>(() => RoofCover.For(db, building, placementId, position, rotation, collision)),
             _drawnMask = new Lazy<Vector3[]>(() => [.. meshes.SelectMany(m => collision.RenderTriangles(m)).Select(v => Vector3.Transform(v, node))]),
         };
+    }
+
+    /// <summary>
+    /// Whether the mask mesh at <paramref name="recordPath"/>, placed with <paramref name="node"/>, reaches under the height
+    /// <paramref name="level"/>: by its lowest placed vertex. False for a missing or unreadable mesh.
+    /// </summary>
+    static bool ReachesUnder(InteriorCollisions collision, string recordPath, Matrix4x4 node, float level)
+    {
+        foreach (var v in collision.RenderTriangles(recordPath))
+            if (Vector3.Transform(v, node).Y < level) return true;
+
+        return false;
     }
 
     /// <summary>

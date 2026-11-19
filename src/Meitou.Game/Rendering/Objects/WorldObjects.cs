@@ -510,7 +510,10 @@ sealed class WorldObjects : IDisposable
         var parts = WorldObjectLayout.Building(Database, record, b.InstanceId, layAt, b.Rotation, buildingState);
 
         // A destroyed building gets no interior view (game: the per-frame interior driver skips it).
-        var interior = isDestroyed ? null : InteriorVolume.For(Database, record, b.Key, position, b.Rotation, _interiorCollisions!, gateways: true);
+        float ground = map.HeightAt(b.Position.X, b.Position.Z);
+        var interior = isDestroyed
+            ? null
+            : InteriorVolume.For(Database, record, b.Key, position, b.Rotation, _interiorCollisions!, gateways: true, ground: ground);
         if (interior is not null) (interior.IsGateway ? result.GateHulls : result.Interiors).Add(interior);
 
         // Resource buildings ("is foliage", no parts) are drawn by the foliage system as a FOLIAGE_MESH naming them as "building type".

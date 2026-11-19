@@ -24,6 +24,15 @@ grows through a bar's floorboards. `InteriorMaskRenderer`; consumers: terrain, f
   (render queue 0x10, visibility 0x800, no shadows; skipped with `skip stencil tricks`) and destroyed on close, so a closed
   building cuts nothing ([closed interiors](render-objects.md#closed-interiors)). Meitou cuts with every loaded mask (engine
   difference).
+- **Verified (decompiled)**: the open path (`FUN_140561d10`) makes the mask for any complete building whose `interior mask` part has a
+  `phs or mesh`; it does not read `interior terrain` (Building +0xc1, "building interior includes terrain"). That flag has two readers: the
+  pick walk, where a ground hit inside a building ends the walk only in a building with it
+  ([building picking](game/ui-input.md#building-picking-and-selection)), and the character visibility pass `FUN_1405c9f60`, which keeps a
+  character on floor 0 of such a building drawn while its interior is closed.
+- **Verified** (mask mesh files, every placement): of the three `interior terrain` buildings, the Metal Warehouse's mask part has no mesh; the
+  Ancient Factory's mesh spans local Y 337..693, 238+ over the terrain at its 3 placements; the Ash Dome Ruin reuses the Ash Dome's
+  (Y -74..496) and its 12 placements lie 60..621 under the terrain, so its mask holds the terrain the ruin is walked on
+  ([pathfinding](game/pathfinding.md), #222, #1023).
 - **Observed**: the queue-16 geometry is the `interior mask` parts' `phs or mesh` (`Storm_House_01_Interior_MASK.mesh` etc.;
   [settings](formats/settings.md) `skip stencil tricks`), placed with the building node. **Verified** (probe, merged
   records): 31 mask parts have such a mesh (gate triggers have none), none has an offset; the meshes are not the
@@ -61,6 +70,12 @@ grows through a bar's floorboards. `InteriorMaskRenderer`; consumers: terrain, f
     nothing inside the hull (convex footprint and height range of up to 4 viewed buildings, 32 edges in all, in `ViewConstants.cutPlanes`; the
     objects' depth program discards). Limits: the mask is shared, so such a part between two masks along a ray, or in a non-convex mask's concavity, is
     cut too; a far cascade cached before the view opened keeps the shadow until it is redrawn.
+- **Interior terrain** (Meitou; `InteriorVolume.For`, `ReachesUnder`): a mask mesh of an `interior terrain` building that reaches under the
+  terrain at the building's origin is not used, so nothing is cut in it and a move pick stops on its terrain
+  ([movement marker](game/ui-input.md#movement-marker)). **Verified** (scratch check, every placed building with a mask): the 12 Ash Dome Ruins
+  lose theirs; the 3 Ancient Factories, the 6 Ash Domes and the other 39 building types are unchanged. The original's rule (above) cuts the
+  terrain in a ruin while a player character is in it, showing buried floors no navmesh reaches under a character walking unseen ground
+  (#1023; the game was not run).
 - Only the main view; not shadows or the water reflection.
 - Engine limits: "inside" is decided by the hull, not per ray; foliage impostors and the grass motion pass (TAA velocity)
   are not cut.
