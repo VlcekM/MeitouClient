@@ -695,7 +695,9 @@ sealed class ProductionWindows(PlayerInterface player)
             AddItemGhost(controls, $"machine-{name}", b, view.Item, "", clip);
         if (view.Count <= 0 || player.InventoryWindows.Lifted(ItemOwner.AtSite(m.Site), code)) return;
 
-        player.ItemCells.AddItemCell(controls, $"machine-{name}", b, view.Item, "", view.Name, view.Count, null, "MachineItem", code, clip);
+        // The stack's tooltip is an inventory item's (the original's sections hold real items, tipped by the inventory code).
+        var tip = view.Held is { } held ? TooltipRuntime.ItemTip.Of(held) : null;
+        player.ItemCells.AddItemCell(controls, $"machine-{name}", b, view.Item, "", view.Name, view.Count, tip, "MachineItem", code, clip);
     }
 
     /// <summary>
@@ -785,7 +787,8 @@ sealed class ProductionWindows(PlayerInterface player)
             if (player.InventoryWindows.Lifted(ItemOwner.AtSite(m.Site), 8)) return;
 
             var area = new UiRect(ob.X, ob.Y, made.Width * cell, made.Height * player.InventoryCellHeight);
-            player.ItemCells.AddItemCell(controls, "machine-out", area, made.Record, made.Material, made.Name, made.Quantity, null, "MachineItem", 8,
+            var tip = TooltipRuntime.ItemTip.Of(made);
+            player.ItemCells.AddItemCell(controls, "machine-out", area, made.Record, made.Material, made.Name, made.Quantity, tip, "MachineItem", 8,
                 clip, colour: made.Colour);
             return;
         }

@@ -772,7 +772,7 @@ sealed class TooltipRuntime(PlayerInterface player)
         float Charges, float MaxCharges, int StolenFrom, TradeItemView? Trade, string? MapNote)
     {
         /// <summary>
-        /// Only the name (the machine slots' items, which the original's tooltip shows the same way).
+        /// Only the name (a cell given no tip).
         /// </summary>
         public bool Brief { get; init; }
 
