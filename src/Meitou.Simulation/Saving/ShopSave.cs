@@ -46,6 +46,15 @@ internal static class ShopSave
     }
 
     /// <summary>
+    /// Drops a town platoon's stock and fill key, so the shop it left (settled into its old town's containers) is not read back for it.
+    /// </summary>
+    public static void Forget(FcsRecord platoon)
+    {
+        platoon.Strings.Remove(StockKey);
+        platoon.Ints.Remove(FillsKey);
+    }
+
+    /// <summary>
     /// The shop a Meitou save holds for <paramref name="squad"/> (made from a saved platoon, its home already set); null without one.
     /// A squad whose template fills no shop gets back the stock a trade gave it (<see cref="TradeSystem.UnfilledShop"/>;
     /// a housed squad's goes back to its containers at the next stock pass).

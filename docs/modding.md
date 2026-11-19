@@ -870,7 +870,7 @@ holds refuses the second mod.
   `ITownSwitchObserver` (`Meitou.Simulation.Population`) hears of every change as a `TownSwitch` (site, old and new TOWN, null the town's own, the
   unloaded platoons of the old version left homeless, off screen or at load); during that call it may move each with `RehomePlatoon(world, platoon,
   site)`, which puts an unloaded town platoon at another unloaded town at once as a guest (no travel; it keeps its characters, uniques and purse,
-  leaves its shop and home, does not stop the host making its own residents, is left alone by the host's later changes; saved, its members come
+  leaves its shop and home, is not in the host's pools, does not stop the host making its own residents, is left alone by the host's later changes; saved, its members come
   back round the host's centre), and those still homeless when every observer has heard are despawned (with Towns change far away off, as in the
   game, they are refused when they would come back instead). `OffscreenSwitches` counts changes made off
   screen.

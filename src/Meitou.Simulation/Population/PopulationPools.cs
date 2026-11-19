@@ -268,8 +268,8 @@ public sealed partial class PopulationSystem
     /// Town wipe-out (<c>TownPopulationManager::vfunc_4</c> <c>FUN_1408f7a80</c>, docs/game/factions-squads-towns.md "Town wipe"): a started town in
     /// a loaded zone that is not yet <c>ded</c>, whose roaming pool is at most 3 and whose roaming platoons have at most 25 living, and none of whose
     /// resident squads (any with a home; engine reading of the resident pool) is intact (<see cref="ResidentIntact"/>: the platoon's flag, which a
-    /// squad with a member held keeps true), is <c>ded</c> for good: it remakes no depleted squads (<see cref="CheckRegeneration"/>) and its
-    /// <c>regenerates</c> squads die. Nothing is posted (the town's <c>setDead</c> is empty).
+    /// squad with a member held keeps true; a mod's guest counts for neither), is <c>ded</c> for good: it remakes no depleted squads
+    /// (<see cref="CheckRegeneration"/>) and its <c>regenerates</c> squads die. Nothing is posted (the town's <c>setDead</c> is empty).
     /// </summary>
     void CheckTownWipes(World world)
     {
@@ -279,7 +279,7 @@ public sealed partial class PopulationSystem
         var roamers = new int[_data.Sites.Count];
         foreach (var p in world.Platoons.All)
         {
-            if (p.Origin < 0 || p.Origin >= resident.Length || p.Wild) continue;
+            if (p.Origin < 0 || p.Origin >= resident.Length || p.Wild || p.Guest) continue;
 
             if (p.Pinned)
             {
@@ -452,11 +452,11 @@ public sealed partial class PopulationSystem
     /// Whether a platoon is in one of a town's pools (<see cref="PoolOf"/>). Joining one has no faction test (<c>FUN_1407ec8d0</c>, <b>Verified</b>):
     /// a platoon joins its home town's pool when its faction and the town's owner are both the player's or both not (faction <c>+0x250</c>), so a
     /// town's squads of other factions (the Hub's Mercenary guild) are members. A declared-dead one is out (<c>declareDead</c> erases it); a
-    /// campaign's is left to its campaign.
+    /// campaign's is left to its campaign, and a mod's guest (<see cref="Platoon.Guest"/>) is not one of its host's.
     /// </summary>
     bool InTownPool(World world, Platoon p, int site, bool residents)
     {
-        if (p.Origin != site || p.Dead || p.Wild || p.Campaign is not null) return false;
+        if (p.Origin != site || p.Dead || p.Wild || p.Guest || p.Campaign is not null) return false;
 
         int player = PlayerFactionOf(world);
         bool playerTown = player >= 0 && _data.SiteFactions[site] == player;
@@ -562,7 +562,7 @@ public sealed partial class PopulationSystem
     {
         var site = _data.Sites[p.Origin];
         float radius = site.Town.SizeRadius * site.Town.TownRadiusMult;
-        var home = p.Stored?.HomeBuilding ?? (p.Saved is { } sp ? Saving.SavedCharacters.SavedHome(world, sp, site) : null);
+        var home = HomeOf(world, p, site);
 
         // Its unique members are freed first, so the fresh squad makes them again rather than their replacements.
         ReleaseUniques(world, p);
@@ -578,6 +578,12 @@ public sealed partial class PopulationSystem
         Log($"{site.Town.Name}: {squad.Name} made afresh ({squad.Members.Count})");
         return squad;
     }
+
+    /// <summary>
+    /// The building an unloaded town platoon lives in: the one it was stored with, else its save's <c>homebuilding</c> in <paramref name="site"/>.
+    /// </summary>
+    static TownBuilding? HomeOf(World world, Platoon p, TownSite site) =>
+        p.Stored?.HomeBuilding ?? (p.Saved is { } sp ? Saving.SavedCharacters.SavedHome(world, sp, site) : null);
 
     /// <summary>
     /// The old squad's building shop (kept when it left the world, else a save's): its containers keep its goods for the fresh one, and an older

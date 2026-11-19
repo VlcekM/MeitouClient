@@ -648,9 +648,8 @@ public static class SaveLoader
 
         // Several placed towns can be one TOWN (the four Waystations of 44854-rebirth.mod): the platoon's `hometown` handle names its own.
         var named = Hand.Read(platoon.Record, "hometown");
-        if (named.Type == (int)FcsRecordType.Town && context.TownSites.TryGetValue((named.C, named.Cs), out int namedSite)
-                && IsBaseTown(data.Sites[namedSite], baseTown))
-            return namedSite;
+        int namedSite = named.Type == (int)FcsRecordType.Town && context.TownSites.TryGetValue((named.C, named.Cs), out int s) ? s : -1;
+        if (namedSite >= 0 && IsBaseTown(data.Sites[namedSite], baseTown)) return namedSite;
 
         for (int i = 0; i < data.Sites.Count && baseTown.Length > 0; i++)
         {
@@ -661,6 +660,8 @@ public static class SaveLoader
             }
         }
 
+        // A platoon of an older version of its town (its `basetown` a TOWN no placed town is now) stays its handle's, so its activation refuses it.
+        if (origin < 0 && namedSite >= 0 && data.Db.Find(baseTown) is { Type: FcsRecordType.Town }) origin = namedSite;
         if (origin < 0 && campaignHome is { IsNull: false } home && context.TownSites.TryGetValue((home.C, home.Cs), out int homeSite))
             origin = homeSite;
 

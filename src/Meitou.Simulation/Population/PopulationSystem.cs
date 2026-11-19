@@ -908,7 +908,6 @@ public sealed partial class PopulationSystem : ITickSystem, Bodies.ICharacterDea
         _states[site.Index].Repopulate = true;
         _states[site.Index].SwitchedAway |= offscreen;
         _overrides.Changed(site.Index);
-        if (version is not null) _overrides.Reach(version);
         ResetZone(world, site);
 
         var homeless = Homeless(world, site);
@@ -1066,21 +1065,17 @@ public sealed partial class PopulationSystem : ITickSystem, Bodies.ICharacterDea
 
     /// <summary>
     /// A platoon leaving its town leaves its shop: what its trader window changed is written into the shop's containers, which stay in the town
-    /// for its next trader (<see cref="Trading.TradeSystem.Settle"/>).
+    /// for its next trader (<see cref="SettleOldShop"/>, which also reads a save's shop not read yet). The save's record forgets the stock, so the
+    /// platoon does not bring it to its new town.
     /// </summary>
-    static void SettleShop(World world, Platoon p)
+    void SettleShop(World world, Platoon p)
     {
-        if (p.Stored is { Shop: { } shop } stored)
-        {
-            Trading.TradeSystem.Settle(world, shop);
-            stored.Shop = null;
-        }
+        SettleOldShop(world, p, HomeOf(world, p, _data.Sites[p.Origin]));
+        if (p.Stored is { } stored) stored.Shop = null;
+        if (p.Saved is not { } saved) return;
 
-        if (p.Saved is { Shop: { } savedShop } saved)
-        {
-            Trading.TradeSystem.Settle(world, savedShop);
-            saved.Shop = null;
-        }
+        saved.Shop = null;
+        Saving.ShopSave.Forget(saved.Source.Record);
     }
 
     /// <summary>
@@ -1098,9 +1093,9 @@ public sealed partial class PopulationSystem : ITickSystem, Bodies.ICharacterDea
 
     /// <summary>
     /// The off-screen look, after the zones' loads (<see cref="PopulationSettings.OffscreenOverrides"/>): in Meitou mode, each switchable town
-    /// (<see cref="Switchable"/>) takes its winning override at once, unless that would bring it back to a version it already held since the
+    /// (<see cref="Switchable"/>) takes its winning override at once, unless that would bring it back to a version it already held since its own
     /// tested world states' answers last changed (<see cref="TownOverrides.Revisits"/>), so a two-way pair moves once per change, not at every
-    /// look; a chain moves one step per look. A town with nothing to take is looked at again only once an answer or its TOWN changes.
+    /// look; a chain moves one step per look. A town with nothing to take is looked at again only once one of its answers or its TOWN changes.
     /// </summary>
     void StepOverrides(World world)
     {

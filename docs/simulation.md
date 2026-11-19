@@ -476,11 +476,12 @@ Seven Faithful/Meitou switches (the fifth, campaign inheritance, under Campaigns
 (a load a zone gate put off), not of the player's
   faction, not held by a mod and not behind the loading screen takes its winning override at once (town overrides above: old platoons dropped,
   `Repopulate`, zone reset, a `town` log line marked off screen, `OffscreenSwitches` counted), so campaigns, spawns, trade and the map see the new
-  owner before the player arrives; a chain moves one step per look. A switch that would bring a town back to a version it held since the answers of
-  the states its entries test last changed waits for the next change, so a pair of entries that both qualify moves once, not at every look (the
-  original flips such a town at each load); a load starts this afresh. A town with nothing to take is looked at again only once an answer or its TOWN
-  changes (each TOWN's entries are read once; the states tested are those of every TOWN the towns are or reach through the lists, and a TOWN a
-code mod puts in place adds its own). Engine choice. Faithful: only at the zone's load.
+  owner before the player arrives; a chain moves one step per look. Each town has its own tested states: those the entries of the TOWNs its own
+  record and the version in its place reach through their lists test (a version they do not reach, a mod's or a save's, adds its own). A switch
+  that would bring a town back to a version it held since the answers of its tested states last changed waits for their next change, so a pair of
+  entries that both qualify moves once, not at every look (the original flips such a town at each load), and a change elsewhere does not move it;
+  a load starts this afresh. A town with nothing to take is looked at again only once one of its answers or its TOWN changes (each TOWN's entries
+  are read once). Engine choice. Faithful: only at the zone's load.
 
 Implemented (`PopulationRoaming.cs`):
 

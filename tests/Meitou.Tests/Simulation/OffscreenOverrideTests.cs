@@ -245,7 +245,13 @@ public class OffscreenOverrideTests
         var rehomer = new Rehomer(1);
         using var world = World(data, extra: rehomer);
         VisitAndLeave(world, SyntheticTown.Centre);
-        int[] garrison = [.. world.Platoons.All.Where(p => p.Origin == 0 && p.Pinned).Select(p => p.Id).Order()];
+        int[] garrison =
+        [
+            .. world.Platoons.All
+                .Where(p => p.Origin == 0 && p.Pinned)
+                .Select(p => p.Id)
+                .Order(),
+        ];
 
         // Own → B: the garrison is homeless, moved to Faraway as guests; B → A finds nobody left.
         states.Holding.UnionWith(["91-t", "92-t"]);
