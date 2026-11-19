@@ -1353,7 +1353,11 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         var gc = table.Cold(g)!;
         var at = table.Next[g].Position;
         var candidate = Towns is { } data ? world.Fixtures.CageCandidates(world, data, gc, at) : null;
-        return world.Fixtures.FindCage(world, gc, at, gc.Ai?.Squad.Ai?.Home?.Key, f => candidate?.Invoke(f) == false || Reserved(f, self));
+
+        // His squad's own home, not the bar a bar package has it sitting in: the finder reads the ownerships' home (economy.md 11.7).
+        string? home = FixtureRegistry.HomeOf(world, gc);
+
+        return world.Fixtures.FindCage(world, gc, at, home, f => candidate?.Invoke(f) == false || Reserved(f, self));
     }
 
     /// <summary>
