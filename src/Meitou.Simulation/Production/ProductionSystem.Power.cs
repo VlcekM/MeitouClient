@@ -79,6 +79,16 @@ public sealed partial class ProductionSystem
     /// The level buildings by key with the index of the town they stand in, for <see cref="LevelPowerOf"/>; built for one population data.
     /// </summary>
     (PopulationData Data, Dictionary<string, (int Town, TownBuilding Building)> ByKey)? _levelBuildings;
+    /// <summary>
+    /// The level towns' buildings and layout objects that can draw or generate power, which their frames walk (<see cref="NpcDraws"/>,
+    /// <see cref="NpcOutput"/>).
+    /// </summary>
+    LevelPowerParts? _levelParts;
+
+    /// <summary>
+    /// <see cref="_levelParts"/>, made on first use.
+    /// </summary>
+    LevelPowerParts LevelParts => _levelParts ??= new LevelPowerParts(Data);
 
     /// <summary>
     /// The research upgrade of the machine's building: the player's only (<c>FUN_14082ec70</c>).
@@ -328,14 +338,15 @@ public sealed partial class ProductionSystem
         var draws = new List<PseudoDraw>();
         if (world.SystemOf<PopulationSystem>()?.Data.Sites.FirstOrDefault(t => t.Index == index) is not { } site) return draws;
 
-        foreach (var b in site.Buildings)
+        // Only the buildings whose record or layout objects can draw: the rest of the list adds nothing.
+        foreach (var (b, own, pieces) in LevelParts.Draws(site))
         {
             if (b.Destroyed) continue;
 
-            if (Draw(world, b.BuildingId, outdoors: true) is { } draw) draws.Add(new PseudoDraw(b.Key, draw, LevelGetsBattery(world, site, b)));
-            if (world.Fixtures.IsDestroyed(b)) continue;   // a ruin holds no layout objects (FUN_140557280)
+            if (own && Draw(world, b.BuildingId, outdoors: true) is { } draw) draws.Add(new PseudoDraw(b.Key, draw, LevelGetsBattery(world, site, b)));
+            if (pieces.Length == 0 || world.Fixtures.IsDestroyed(b)) continue;   // a ruin holds no layout objects (FUN_140557280)
 
-            foreach (var item in b.LayoutBuildings)
+            foreach (var item in pieces)
                 if (Draw(world, item.RecordId, item.Outdoors) is { } drawn) draws.Add(new PseudoDraw(item.Id, drawn, PieceGetsBattery(world, item)));
         }
 
@@ -524,32 +535,33 @@ public sealed partial class ProductionSystem
     {
         if (world.SystemOf<PopulationSystem>()?.Data.Sites.FirstOrDefault(t => t.Index == index) is not { } site) return 0;
 
+        // Only the buildings whose record or layout objects generate: the rest of the list adds nothing.
         float total = 0;
-        foreach (var b in site.Buildings)
+        foreach (var (b, own, pieces) in LevelParts.Generators(site))
         {
             if (b.Destroyed) continue;
 
-            if (Data(b.BuildingId) is { IsGenerator: true } data)
+            if (own && Data(b.BuildingId) is { } data)
                 total += Generated(data, NpcGeneratorHealth(world, site, b), data.IsWind ? NpcWind(world, b) : 0);
 
-            total += LayoutOutput(world, b);
+            total += LayoutOutput(world, b, pieces);
         }
 
         return total;
     }
 
     /// <summary>
-    /// What the generators of a standing building's layouts give now; none for a ruin, which holds no layout objects (<c>FUN_140557280</c>).
+    /// What the generators among a standing building's layout objects (<paramref name="pieces"/>) give now; none for a ruin, which holds no layout
+    /// objects (<c>FUN_140557280</c>).
     /// </summary>
-    float LayoutOutput(World world, TownBuilding b)
+    float LayoutOutput(World world, TownBuilding b, TownLayoutBuilding[] pieces)
     {
-        if (world.Fixtures.IsDestroyed(b)) return 0;
+        if (pieces.Length == 0 || world.Fixtures.IsDestroyed(b)) return 0;
 
         float total = 0;
-        foreach (var piece in b.LayoutBuildings)
+        foreach (var piece in pieces)
         {
-            if (Data(piece.RecordId) is not { IsGenerator: true } data) continue;
-
+            var data = Data(piece.RecordId)!;
             total += Generated(data, PieceGeneratorHealth(world, piece), data.IsWind ? PieceWind(world, piece) : 0);
         }
 

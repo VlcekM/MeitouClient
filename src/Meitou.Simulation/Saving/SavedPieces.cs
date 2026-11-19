@@ -47,8 +47,9 @@ public sealed class SavedPieces
             var states = new Dictionary<string, FcsRecord>(StringComparer.Ordinal);
             foreach (var r in zone.BuildingStates) states[r.StringId] = r;
 
+            bool fresh = list.Bools.ContainsKey("imported");
             foreach (var i in list.Instances)
-                if (i.Target.Length > 0) Add(zone, i, states);
+                if (i.Target.Length > 0) Add(zone, i, states, fresh);
         }
     }
 
@@ -81,25 +82,21 @@ public sealed class SavedPieces
     }
 
     /// <summary>
-    /// Indexes one entry with its building state (an inventory state can come first, docs/formats/save.md "Zone files").
+    /// Indexes one entry with its building state (an inventory state can come first, docs/formats/save.md "Zone files") and whether its zone loads
+    /// fresh (<see cref="SavedPiece.Fresh"/>).
     /// </summary>
-    void Add(SaveZone zone, FcsInstance instance, Dictionary<string, FcsRecord> states)
+    void Add(SaveZone zone, FcsInstance instance, Dictionary<string, FcsRecord> states, bool fresh)
     {
         var state = instance.States.Select(id => states.GetValueOrDefault(id)).FirstOrDefault(r => r is not null);
         if (!_byRecord.TryGetValue(instance.Target, out var list)) _byRecord[instance.Target] = list = [];
-        list.Add(new SavedPiece(zone, instance, state));
+        list.Add(new SavedPiece(zone, instance, state, fresh));
     }
 }
 
 /// <summary>
-/// A building-list entry a layout object was matched to (<see cref="SavedPieces"/>): its zone file, instance and GAMESTATE_BUILDING (null: none).
-/// Its keys are read only from a zone that is not loaded fresh (<see cref="Fresh"/>), as the original's loader guard has it
-/// (docs/game/buildings-production.md "NPC generator state").
+/// A building-list entry a layout object was matched to (<see cref="SavedPieces"/>): its zone file, instance and GAMESTATE_BUILDING (null: none),
+/// and whether the zone loads fresh in spite of its file: its building list holds <c>imported</c> (<paramref name="Fresh"/>, <c>FUN_1409ffad0</c>,
+/// key presence; read once when the entries are indexed: finding the list scans the zone file's records). Its keys are read only from a zone that is
+/// not loaded fresh, as the original's loader guard has it (docs/game/buildings-production.md "NPC generator state").
 /// </summary>
-public sealed record SavedPiece(SaveZone Zone, FcsInstance Instance, FcsRecord? State)
-{
-    /// <summary>
-    /// The zone loads fresh in spite of its file: its building list holds <c>imported</c> (<c>FUN_1409ffad0</c>, key presence).
-    /// </summary>
-    public bool Fresh => Zone.BuildingList?.Bools.ContainsKey("imported") == true;
-}
+public sealed record SavedPiece(SaveZone Zone, FcsInstance Instance, FcsRecord? State, bool Fresh);

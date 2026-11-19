@@ -1767,7 +1767,12 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
   operators, so grants follow last tick's operators. The factor scales production, crafting, research and farm growth;
   research `improve buildings` (`ResearchState.Upgrades`) scales rates and adds output and capacity. Engine choices: health
   is 1; wind generators give their blades' share of the region's wind ([rotating parts](game/buildings-production.md#rotating-parts)), loaded or not; battery mode is not saved. HUD: output, fuel use, charge,
-  "No power" / "Low power".
+  "No power" / "Low power". A level town's frame walks only its buildings and layout objects whose records can draw or generate
+  (`LevelPowerParts`, made again when the town's list is swapped), and a layout object's saved entry has its zone's `imported` flag from when the
+  save's entries were indexed (`SavedPiece.Fresh`: finding the zone's building list scans the zone file's records).
+  **Observed** (play bench, `bench-bases-2026-10-27`, two interleaved pairs, 2026-11-19, about 50-60 drawing objects in each NPC town frame):
+  `ProductionSystem` 1.3-1.7 -> 0.5-0.6 ms a tick at 5x, 8.9-10.2 -> 2.0-2.2 ms a frame in speed-x5 and paths; headless probe of the save at 5x
+  (`--nav`, 3,300 ticks): state hashes identical.
 - **Hauling** (`ProductionSystem.Hauling.cs`, `ProductionSettings.AutoHaul`, default on; facts in
   [buildings-production](game/buildings-production.md#hauling)). An operator at its machine first puts carried items
   into empty input room. It takes a full output only when a storage will accept it (else the machine stays full) and
