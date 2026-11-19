@@ -585,7 +585,8 @@ static class SaveProbe
                     + $"package={c.Ai?.Squad.Ai?.Current?.Name} goal={c.Ai?.Goal?.Task} fight={c.Ai?.FightGoal} "
                     + $"orders=[{string.Join(", ", c.OrderQueue.Select(o => o.Row))}] saved={c.SavedOrders?.Count} target={Target(probe, i)} "
                     + $"hunger={c.Medical?.Hunger:F2} fed={c.Medical?.Fed:F2} mode={probe.Characters.Next[i].Mode} own mode={c.RunSpeed} "
-                    + $"speed={probe.Characters.Next[i].Velocity.Length():F1}");
+                    + $"speed={probe.Characters.Next[i].Velocity.Length():F1} running={Running(c)} follows={Followed(probe, i)} "
+                    + $"race={c.Race?.StringId ?? "none"}");
                 if (c.Decision is { } d) Console.WriteLine($"  decision {d.Tick} {d.Winner}: {string.Join("; ", d.Lines)}");
             }
 
@@ -742,6 +743,23 @@ static class SaveProbe
         if (!state.Fighting || probe.Characters.Cold(state.TargetSlot) is not { } c) return "-";
 
         return $"{state.TargetSlot} '{c.Name}' {probe.Faction(c.Faction)}";
+    }
+
+    /// <summary>
+    /// The task, row, source and list job the character's plan runs, or "-".
+    /// </summary>
+    static string Running(CharacterCold c) =>
+        c.Running is { } run ? $"{run.Task}/{(int)run.Row}/{run.Source}{(run.Job >= 0 ? $"[{run.Job}]" : "")}" : "-";
+
+    /// <summary>
+    /// The name of the character <paramref name="i"/> follows by order or job and how far it is, or "-".
+    /// </summary>
+    static string Followed(ProbeWorld probe, int i)
+    {
+        var t = probe.Characters;
+        if (!t.TryResolveNext(t.Cold(i)!.FollowOrder, out int f)) return "-";
+
+        return $"'{t.Cold(f)?.Name}' gap {Vector3.Distance(t.Next[i].Position, t.Next[f].Position):F0}";
     }
 
     /// <summary>
@@ -2115,7 +2133,7 @@ static class SaveProbe
                                        nests within it of the leader and where each stands as a town
               bait <radius> [rounds]   send the player's squad after the nearest other squad each round, listing squads as squads does
               squads <radius> [rounds]  the other squads near the leader: leader state, goal, members' spread every 40 ticks
-              watch <name> [rounds]    a character's task, AI, fight target, hunger, walk mode, speed and decision trace every 40 ticks (default 10 rounds)
+              watch <name> [rounds]    a character's task, AI, fight target, hunger, walk mode, speed, running plan, follow, race and decision trace every 40 ticks (default 10 rounds)
               medic <name> [rounds] [interval]  a medic's treatment and decision every interval (20) ticks; each downed character in sight: need, senses, sight test, ray (#843)
               treat <medic> [patient|-] [rounds] [interval]  order a treatment (- or none: itself); task, posture and each leg every interval (20) ticks (#898)
               turrets <character> <count> <x> <z> [rounds] [interval]  spawn hostiles there; the turret squads near: goals, claims, enemies, gunners
