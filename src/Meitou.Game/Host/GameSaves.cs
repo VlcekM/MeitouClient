@@ -345,6 +345,7 @@ sealed class GameSaves(GameHost host)
                 prepared = PrepareSystems(read!, interactive: true);
                 return null;
             }, duringAscent: true),
+            GameHost.Stage("navmesh", () => NavmeshOfPlayer(read!)),
             GameHost.Stage("build", () => SwapInSave(read!, interactive: true, out summary, prepared: prepared)),
             GameHost.Stage("finishing", () =>
             {
@@ -400,10 +401,8 @@ sealed class GameSaves(GameHost host)
                 prepared = PrepareSystems(read!, interactive: true);
                 return null;
             }, duringAscent: true),
-            // The squads moved to the reset place stand on its ground, whose navmesh is waited for.
-            GameHost.Stage("navmesh",
-                () => (options & ImportOptions.ResetPositions) != 0 && read!.IsCompletedSuccessfully
-                ? NavmeshAround(SaveImport.ResetPosition) : null),
+            // The squads moved to the reset place stand on its ground, whose navmesh is waited for; else the mesh they are made on.
+            GameHost.Stage("navmesh", () => ImportNavmesh(read!, options)),
             GameHost.Stage("build", () =>
             {
                 if ((options & ImportOptions.ResetPositions) != 0 && host.Nav is not null && read!.IsCompletedSuccessfully)
@@ -571,6 +570,29 @@ sealed class GameSaves(GameHost host)
     void PauseAfterLoad()
     {
         if (host.Config.PauseOnLoad) host.Session.Simulation.Pause();
+    }
+
+    /// <summary>
+    /// The navmesh an import waits for before its world is made: round the reset place when the squads are moved there, else round the save's
+    /// player (<see cref="NavmeshOfPlayer"/>).
+    /// </summary>
+    Task ImportNavmesh(Task<SaveGame> read, ImportOptions options)
+    {
+        bool reset = (options & ImportOptions.ResetPositions) != 0 && read.IsCompletedSuccessfully;
+        return reset ? NavmeshAround(SaveImport.ResetPosition) : NavmeshOfPlayer(read);
+    }
+
+    /// <summary>
+    /// The navmesh round the save's first player character, waited for before the save's world is made: a character made on a loaded mesh is
+    /// seated on it, as the original loads the mesh before its characters (docs/game/pathfinding.md "Made on the mesh"). Done at once for a save
+    /// that was not read or has no player character.
+    /// </summary>
+    internal Task NavmeshOfPlayer(Task<SaveGame> read)
+    {
+        if (!read.IsCompletedSuccessfully || read.Result.PlayerFaction is not { } player) return Task.CompletedTask;
+
+        var first = read.Result.Characters.FirstOrDefault(c => c.Platoon.FactionId == player.Id);
+        return first is null ? Task.CompletedTask : NavmeshAround(first.Position);
     }
 
     /// <summary>

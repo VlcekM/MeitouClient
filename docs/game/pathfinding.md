@@ -109,7 +109,9 @@ Not modelled: a conscious ragdolled character (a stagger that ragdolls a limb or
 **Observed** (original 1.0.65 through the harness: the #1024 save with its knocked-out leader's saved position edited, his height read at load; floors are Meitou's mesh heights there): the face nearest in height in the column wins, up or down. Where the floors
 are 3682, 3705, 3765 and 3851, a saved 3720 loaded on 3705 and 3750 and 3762 on 3765 (the body lying 8 to 9 over the floor); where the only floor is 3855, saved heights 3500 (under the terrain), 3632 and 3700 loaded on it.
 Meitou (`SavedCharacters.Make`, `IWalkability.SeatHeight`): a character made from a save that stands on no surface (`StandRise` / `StandDrop`; a polygon within `EdgeTolerance` counts, engine choice: Meitou's walkers stand that far off an edge and would change floors at a load)
-is put on the column's surface nearest in height and its saved ragdoll is dropped; a column with no face keeps the saved position (no 30-unit snap).
+is put on the column's surface nearest in height and its saved ragdoll is dropped; a column with no face keeps the saved position (no 30-unit snap), and so does a character over every face of its column
+(engine choice: the floors of a building the save or the world's state adds enter the mesh after its characters are made, and the ground under them would take it).
+A load waits for the mesh round the save's first player character before it makes the world (`GameSaves.NavmeshOfPlayer`), so the player's squad there is made on it; a character made where no mesh is loaded keeps its saved position.
 
 ### Walls
 

@@ -1275,7 +1275,11 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             host.Saves.ReadingFolder = host.GameOptions.Load ?? "";
             try
             {
-                var navmesh = host.Saves.SwapInSave(Task.FromResult(startSave), interactive: true, out string summary);
+                // The mesh round the player first, as the menu's load: the save's characters are seated on it when they are made.
+                var read = Task.FromResult(startSave);
+                host.AwaitLoading(host.Saves.NavmeshOfPlayer(read));
+
+                var navmesh = host.Saves.SwapInSave(read, interactive: true, out string summary);
                 host.AwaitLoading(navmesh);
                 host.SettleNewWorld();
                 _hud.FollowSelected();

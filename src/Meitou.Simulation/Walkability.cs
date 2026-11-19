@@ -130,7 +130,7 @@ public interface IWalkability
     /// <summary>
     /// The height a character made at (<paramref name="x"/>, <paramref name="y"/>, <paramref name="z"/>) is seated at
     /// (docs/game/pathfinding.md "Made on the mesh"): the walkable surface of its column nearest <paramref name="y"/> in height, however far up or
-    /// down; null where it stands on one already or the column has none (it keeps its height).
+    /// down; null where it stands on one already, is over all of them or the column has none (it keeps its height).
     /// </summary>
     float? SeatHeight(float x, float z, float y) => null;
 

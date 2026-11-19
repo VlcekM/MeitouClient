@@ -1029,11 +1029,17 @@ sealed partial class GameHost(
         if (StartSave is not { } save || GameOptions.Load is not { } folder) return;
 
         Saves.ReadingFolder = folder;
+        var read = Task.FromResult(save);
+
+        // The mesh round the player first, as the menu's load: the save's characters are seated on it when they are made.
+        LoadingStep("navmesh");
+        AwaitLoading(Saves.NavmeshOfPlayer(read));
+
         Task navmesh;
         string summary;
         try
         {
-            navmesh = Saves.SwapInSave(Task.FromResult(save), interactive, out summary);
+            navmesh = Saves.SwapInSave(read, interactive, out summary);
         }
         catch (SceneLoadFailed e)
         {

@@ -205,11 +205,16 @@ public sealed partial class NavmeshWalkability : IWalkability
         w.HeightsAt(x, z, heights);
         if (heights.Count == 0) return null;
 
-        float nearest = heights[0];
+        float nearest = heights[0], top = heights[0];
         foreach (float h in heights)
+        {
             if (MathF.Abs(h - y) < MathF.Abs(nearest - y)) nearest = h;
+            top = MathF.Max(top, h);
+        }
 
-        return Snap(w, x, z, nearest, out _);
+        // Over every face of its column it keeps its height: the floors of a building the save or the world's state adds are not in the mesh yet
+        // when its characters are made, and the ground under them would take it.
+        return top < y ? null : Snap(w, x, z, nearest, out _);
     }
 
     /// <summary>
