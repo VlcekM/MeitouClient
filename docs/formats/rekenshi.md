@@ -33,12 +33,21 @@ disabled), so the feature never applies twice, and a save made while it ran does
 ported and checked code mod on the Steam workshop. The plugin mod still loads only its data; the port is an ordinary code mod the player
 subscribes to and enables (below the original where it needs the original's data), and the game does nothing special for either. The
 launcher notes the port on the plugin mod's row and offers to subscribe ([launcher](../launcher.md)). Nothing is taken in. To add a
-port: a row here and an entry in `CoveredMods.Endorsed`.
+port: a row here and an entry in `CoveredMods.Endorsed`. A local copy counts as the port only when it has code, since several ports
+keep the original's `.mod` name.
 
 | RE_Kenshi mod | Endorsed port | Maintainer | Matched against |
 | --- | --- | --- | --- |
 | Loot-Scoot-Execute (Emkej, `Loot-Scoot-Execute`, workshop 3675700748; its MCM fork 3813852124) | [[MeitouClient] Execution](https://steamcommunity.com/sharedfiles/filedetails/?id=3838346946) (`Execution`) | Jame | 2026-04-26 update; the fork's 2026-11-13 update |
 | Proving Grounds (Shutori, `Proving Grounds`, workshop 3774745195) | [[Meitou] Proving Grounds](https://steamcommunity.com/sharedfiles/filedetails/?id=3841575072) (`ProvingGroundsMeitou`; [source](https://github.com/roscatoday/ProvingGroundsMeitou)) | roscatoday | 2026-09-26 update |
+| Character Highlight (BFrizFoShiz, `Character Highlight`, workshop 3688641949) | [[Meitou Client] Character Highlight Port](https://steamcommunity.com/sharedfiles/filedetails/?id=3841647050) (`CharacterHighlight`) | dxseba | 2026-06-23 update |
+| Disarm (RE_Kenshi; Dafi, `Disarm`, workshop 3759461630) | [[Meitou Client] Disarm Port](https://steamcommunity.com/sharedfiles/filedetails/?id=3841646137) (`Disarm`) | dxseba | 2026-08-12 update |
+| It. Tickles. Me (Grynn, `It. Tickles. Me`, workshop 3731488940) | [[Meitou Client] It. Tickles. Me. Port](https://steamcommunity.com/sharedfiles/filedetails/?id=3841647083) (`ItTicklesMe`) | dxseba | 2026-06-16 update |
+| Kill Counter (luckyren, `KillCounter`, workshop 3779464387) | [[Meitou Client] Kill Counter Port](https://steamcommunity.com/sharedfiles/filedetails/?id=3841647109) (`KillCounter`) | dxseba | 2026-08-09 update |
+| [RE_Kenshi] Level Up Notifications (Walnuts, `LevelUpNotify`, workshop 3701534964) | [[Meitou Client] Level Up Notify Port](https://steamcommunity.com/sharedfiles/filedetails/?id=3841647147) (`LevelUpNotify`) | dxseba | 2026-10-10 update |
+| Speed menu (zuop, `Speed Menu`, workshop 3818592083) | [[Meitou Client] Speed Menu Port](https://steamcommunity.com/sharedfiles/filedetails/?id=3841647205) (`SpeedMenu`) | dxseba | 2026-10-14 update |
+| Stack Sort (Jakematt2004, `StackSort`, workshop 3813810734) | [[Meitou Client] Stack Sort Port](https://steamcommunity.com/sharedfiles/filedetails/?id=3841647266) (`StackSort`) | dxseba | 2026-10-05 update |
+| Taunt Expansion (tata, `TauntExpansion`, workshop 3771499164) | [[Meitou Client] Taunt Expansion Port](https://steamcommunity.com/sharedfiles/filedetails/?id=3841647315) (`TauntExpansion`) | dxseba | 2026-07-25 update |
 
 The date each entry was matched against is Steam's `timeupdated` of that workshop item when it was compared; what the launcher shows
 for a newer installed copy, and for other plugins, is in [launcher](../launcher.md).

@@ -61,9 +61,62 @@ public static class CoveredMods
         "Proving Grounds", [new(3774745195, 1790470536)], "[Meitou] Proving Grounds", "ProvingGroundsMeitou", 3841575072, "roscatoday");
 
     /// <summary>
+    /// BFrizFoShiz's "Character Highlight" (workshop 3688641949, matched against its 2026-06-23 update),
+    /// with dxseba's "[Meitou Client] Character Highlight Port".
+    /// </summary>
+    static readonly EndorsedPort CharacterHighlight = new(
+        "Character Highlight", [new(3688641949, 1782253588)], "[Meitou Client] Character Highlight Port", "CharacterHighlight", 3841647050, "dxseba");
+
+    /// <summary>
+    /// Dafi's "Disarm (RE_Kenshi)" (workshop 3759461630, matched against its 2026-08-12 update), with dxseba's "[Meitou Client] Disarm Port".
+    /// </summary>
+    static readonly EndorsedPort Disarm = new(
+        "Disarm", [new(3759461630, 1786501591)], "[Meitou Client] Disarm Port", "Disarm", 3841646137, "dxseba");
+
+    /// <summary>
+    /// Grynn's "It. Tickles. Me" (workshop 3731488940, matched against its 2026-06-16 update), with dxseba's "[Meitou Client] It. Tickles. Me. Port".
+    /// </summary>
+    static readonly EndorsedPort ItTicklesMe = new(
+        "It. Tickles. Me", [new(3731488940, 1781649808)], "[Meitou Client] It. Tickles. Me. Port", "ItTicklesMe", 3841647083, "dxseba");
+
+    /// <summary>
+    /// luckyren's "Kill Counter" (workshop 3779464387, matched against its 2026-08-09 update), with dxseba's "[Meitou Client] Kill Counter Port".
+    /// </summary>
+    static readonly EndorsedPort KillCounter = new(
+        "KillCounter", [new(3779464387, 1786291833)], "[Meitou Client] Kill Counter Port", "KillCounter", 3841647109, "dxseba");
+
+    /// <summary>
+    /// Walnuts's "[RE_Kenshi] Level Up Notifications" (workshop 3701534964, matched against its 2026-10-10 update),
+    /// with dxseba's "[Meitou Client] Level Up Notify Port".
+    /// </summary>
+    static readonly EndorsedPort LevelUpNotify = new(
+        "LevelUpNotify", [new(3701534964, 1791669646)], "[Meitou Client] Level Up Notify Port", "LevelUpNotify", 3841647147, "dxseba");
+
+    /// <summary>
+    /// zuop's "Speed menu" (workshop 3818592083, matched against its 2026-10-14 update), with dxseba's "[Meitou Client] Speed Menu Port".
+    /// </summary>
+    static readonly EndorsedPort SpeedMenu = new(
+        "Speed Menu", [new(3818592083, 1791936783)], "[Meitou Client] Speed Menu Port", "SpeedMenu", 3841647205, "dxseba");
+
+    /// <summary>
+    /// Jakematt2004's "Stack Sort" (workshop 3813810734, matched against its 2026-10-05 update), with dxseba's "[Meitou Client] Stack Sort Port".
+    /// </summary>
+    static readonly EndorsedPort StackSort = new(
+        "StackSort", [new(3813810734, 1791166681)], "[Meitou Client] Stack Sort Port", "StackSort", 3841647266, "dxseba");
+
+    /// <summary>
+    /// tata's "Taunt Expansion" (workshop 3771499164, matched against its 2026-07-25 update), with dxseba's "[Meitou Client] Taunt Expansion Port".
+    /// </summary>
+    static readonly EndorsedPort TauntExpansion = new(
+        "TauntExpansion", [new(3771499164, 1784997418)], "[Meitou Client] Taunt Expansion Port", "TauntExpansion", 3841647315, "dxseba");
+
+    /// <summary>
     /// The RE_Kenshi mods with an endorsed port on the Steam workshop.
     /// </summary>
-    public static IReadOnlyList<EndorsedPort> Endorsed { get; } = [Execution, ProvingGrounds];
+    public static IReadOnlyList<EndorsedPort> Endorsed { get; } =
+    [
+        Execution, ProvingGrounds, CharacterHighlight, Disarm, ItTicklesMe, KillCounter, LevelUpNotify, SpeedMenu, StackSort, TauntExpansion,
+    ];
 
     /// <summary>
     /// The public wishlist of RE_Kenshi mods for Meitou (the roadmap's compatibility sheet), where players ask for one to be covered.
@@ -110,10 +163,10 @@ public static class CoveredMods
 
     /// <summary>
     /// Whether <paramref name="mods"/> hold the port <paramref name="port"/> names: a workshop mod by its item, a local mod (a copy in Kenshi's
-    /// mods folder) by its <c>.mod</c> name.
+    /// mods folder) by its <c>.mod</c> name and its code (several ports keep the original's <c>.mod</c> name, so a local original is no port).
     /// </summary>
     public static bool HasPort(EndorsedPort port, IEnumerable<ModInfo> mods) =>
-        mods.Any(m => WorkshopId(m) is { } id ? id == port.PortWorkshopId : m.Name == port.PortModName);
+        mods.Any(m => WorkshopId(m) is { } id ? id == port.PortWorkshopId : m.HasCode && m.Name == port.PortModName);
 
     /// <summary>
     /// The workshop item of <paramref name="mod"/>: a workshop mod's folder is named by its published file id. Null for a local mod.
