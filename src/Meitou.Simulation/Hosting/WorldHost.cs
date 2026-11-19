@@ -233,8 +233,8 @@ public sealed class WorldHost : IDisposable
 
     /// <summary>
     /// The frame's loading pause, before its ticks are counted: off, nothing is held; on, the world holds or lets go
-    /// (<see cref="World.StepLoadingPause"/>). A world paused otherwise is not held, as the original tests only while its paused flag is clear, but its
-    /// zones go on loading.
+    /// (<see cref="World.StepLoadingPause"/>). A world paused otherwise is not held, as the original tests only while its paused flag is clear,
+    /// but its zones go on loading.
     /// </summary>
     void StepLoadingPause()
     {
