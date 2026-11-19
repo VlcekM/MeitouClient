@@ -92,7 +92,7 @@ public static class RowStates
     /// <summary>
     /// The rested level above which state 72 holds (<c>DAT_14168a25c</c>, 0.9 as a float).
     /// </summary>
-    const float RestedPast = 0.9f;
+    public const float RestedPast = 0.9f;
 
     /// <summary>
     /// A state's value for the character at <paramref name="slot"/> and its row's target; null for a state not evaluated here.

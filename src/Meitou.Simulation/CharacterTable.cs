@@ -1344,6 +1344,13 @@ public sealed class CharacterCold
     public string? OperateSite { get; set; }
 
     /// <summary>
+    /// The game hours (<see cref="World.GameHours"/>) until which the implicit "Sleep when injured" job (153) it is on holds against its job list
+    /// (<see cref="Production.ProductionSystem"/>, docs/game/ai-tasks.md "Perma-jobs"; 0: none). Serial phases only; not saved. Hashed
+    /// only while set.
+    /// </summary>
+    public double BedCommitUntil { get; set; }
+
+    /// <summary>
     /// The progress (0 to 1) of the <see cref="CharacterTask.Prospect"/> task (null: not prospecting). Serial phases only; not saved. Hashed only
     /// while set.
     /// </summary>
@@ -2197,6 +2204,12 @@ public sealed class CharacterTable
         {
             hasher.Add(0x4F706572);
             hasher.Add(Rng.StableHash(machine));
+        }
+
+        if (k.BedCommitUntil != 0)
+        {
+            hasher.Add(0x42436F6D);
+            hasher.Add(k.BedCommitUntil);
         }
 
         if (k.Prospecting is { } prospected)

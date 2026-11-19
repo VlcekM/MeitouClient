@@ -809,6 +809,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (followJob) cold.FollowOrder = CharacterId.None;
         if (followJob || task is CharacterTask.Operate or CharacterTask.Haul or CharacterTask.Sleep) TaskStart.End(world, slot, TaskEnd.Done);
         cold.OperateSite = null;
+        cold.BedCommitUntil = 0;
         cold.HaulSite = null;
         cold.HaulFetch = null;
         cold.Operating = false;

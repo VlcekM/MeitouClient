@@ -173,9 +173,10 @@ public sealed partial class MedicalState
     /// Medical <c>+0xb0</c>, which state 72 <c>isFullyRested</c> reads (the aggregates function <c>FUN_140644e60</c>, <b>Verified</b> by its
     /// disassembly): from 100, each organic part (no robot race, no fitted limb) whose 100 / M x (flesh - stun) is below the running value stores its
     /// raw flesh - stun (the compare is on the percentage, the store is not: the store at <c>0x140644f9b</c> takes the unscaled register); the result
-    /// x 0.01, set to 1 above 0.999. So a part at 190 of 200 stores 190, which reads 1.
+    /// x 0.01, set to 1 above 0.999. So a part at 190 of 200 stores 190, which reads 1. With a <paramref name="fullSlack"/> (Meitou's, for the
+    /// injured-sleep job), a part within it of its maximum is left out as full.
     /// </summary>
-    public float RestedLevel(RaceData race)
+    public float RestedLevel(RaceData race, float fullSlack = 0)
     {
         float level = 100;
         foreach (var p in _parts)
@@ -183,6 +184,8 @@ public sealed partial class MedicalState
             if (p.IsRobotic(race)) continue;
 
             float rest = p.Flesh - p.Stun;
+            if (fullSlack > 0 && rest > p.MaxHp - fullSlack) continue;
+
             if (100f / p.MaxHp * rest < level) level = rest;
         }
 

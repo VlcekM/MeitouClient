@@ -904,10 +904,20 @@ public sealed partial class FirstAidSystem
     /// State 22 <c>needsFirstAid</c> (<c>FUN_14099d8f0</c>, <b>Verified</b>): a non-robot patient whose organic first aid need is above
     /// <see cref="MedicalState.AidNeedFloor"/>.
     /// </summary>
-    public static bool NeedsFirstAid(World world, CharacterCold c) =>
-        c is { Race: { IsRobot: false } race, Medical: { } med } && med.FirstAidNeed(race, false,
-            MathF.Max(MedicalState.BloodCapacity(race, c.Stats?.Strength ?? 50, med.HasStatsObject, med.ScaleK, med.ScaleZ), 1),
-                    world.SystemOf<BodySystem>()?.Constants.ExtraBloodLossFromBodyparts ?? 1) > MedicalState.AidNeedFloor;
+    public static bool NeedsFirstAid(World world, CharacterCold c) => OrganicAidNeed(world, c) > MedicalState.AidNeedFloor;
+
+    /// <summary>
+    /// The organic first aid need (<see cref="MedicalState.FirstAidNeed"/>, medical <c>+0xac</c>) of a non-robot character; 0 for a robot or one
+    /// with no body.
+    /// </summary>
+    public static float OrganicAidNeed(World world, CharacterCold c)
+    {
+        if (c is not { Race: { IsRobot: false } race, Medical: { } med }) return 0;
+
+        float capacity = MathF.Max(MedicalState.BloodCapacity(race, c.Stats?.Strength ?? 50, med.HasStatsObject, med.ScaleK, med.ScaleZ), 1);
+        float extraLoss = world.SystemOf<BodySystem>()?.Constants.ExtraBloodLossFromBodyparts ?? 1;
+        return med.FirstAidNeed(race, false, capacity, extraLoss);
+    }
 
     /// <summary>
     /// The planner's first step ahead of a lift that wants <c>!22</c> (row 25 First aid, the provider of the unmet state; its list B needs a first
