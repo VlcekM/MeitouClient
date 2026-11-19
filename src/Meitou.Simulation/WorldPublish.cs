@@ -33,9 +33,10 @@ public sealed partial class World
     #region Snapshot buffers
 
     /// <summary>
-    /// Slots a publish job takes at a time: the characters are made on the worker pool, each one reading only the tick's state.
+    /// Slots a publish job takes at a time: the characters are made on the worker pool, each one reading only the tick's state. Small enough that
+    /// a few hundred characters still spread over the workers.
     /// </summary>
-    const int PublishChunk = 256;
+    const int PublishChunk = 64;
 
     /// <summary>
     /// The points the characters look at this publish, by slot (<see cref="Movement.LookTargets"/>; read by the fills, not hashed).
@@ -143,7 +144,9 @@ public sealed partial class World
     /// </summary>
     /// <param name="farShared">A tick's publish: a character the far cadence skipped this tick (<see cref="Steps"/>) is published as the last publish
     /// had it, the same object.</param>
-    void Publish(TickProfile? prof = null, bool farShared = false)
+    /// <param name="views">False: only what the host interpolates from is new (the characters, the projectiles); the other views are the last
+    /// snapshot's (<see cref="MotionOf"/>).</param>
+    void Publish(TickProfile? prof = null, bool farShared = false, bool views = true)
     {
         var table = Characters;
         var state = table.Previous;
@@ -200,9 +203,16 @@ public sealed partial class World
 
         (_olderBuffer, _previousBuffer, _shownBuffer) = (_previousBuffer, _shownBuffer, buffer);
         PreviousSnapshot = Snapshot;
-        Snapshot = SnapshotOf(list, population, beds, combat);
+        Snapshot = views ? SnapshotOf(list, population, beds, combat) : MotionOf(list);
         prof?.Part("publish views");
     }
+
+    /// <summary>
+    /// The snapshot of a tick the host only interpolates from (a frame's second-to-last, docs/simulation.md "Snapshots"): the characters and the
+    /// projectiles of the tick, every other view the last snapshot's.
+    /// </summary>
+    WorldSnapshot MotionOf(List<CharacterSnapshot> list) =>
+        Snapshot with { Tick = Tick, Characters = list, Projectiles = _projectiles?.PublishProjectiles() ?? [] };
 
     /// <summary>
     /// The selection's slots the context figures are against: its first member that could knock someone out from behind (the stealth KO

@@ -804,9 +804,11 @@ public sealed partial class World : IDisposable
     }
 
     /// <summary>
-    /// Runs one simulation tick; <paramref name="publish"/> false skips its snapshot (a tick the host will not draw: not one of a frame's last two).
+    /// Runs one simulation tick; <paramref name="publish"/> false skips its snapshot (a tick the host will not draw: not one of a frame's last two),
+    /// <paramref name="views"/> false publishes only what the host interpolates from (a frame's second-to-last tick, docs/simulation.md
+    /// "Snapshots").
     /// </summary>
-    public void RunTick(bool publish = true)
+    public void RunTick(bool publish = true, bool views = true)
     {
         var table = Characters;
         var prof = Profile.Enabled ? Profile : null;
@@ -843,7 +845,7 @@ public sealed partial class World : IDisposable
         prof?.Part("end tick");   // F12: the squads, the prune, the table's end and the logs, apart from the snapshot
         Tick++;
         GameHours += TickSeconds / SecondsPerGameHour;
-        if (publish && Settings.PublishSnapshots) Publish(prof, farShared: true);
+        if (publish && Settings.PublishSnapshots) Publish(prof, farShared: true, views);
 
         prof?.Lap(TickProfile.Publish);
     }

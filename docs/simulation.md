@@ -14,7 +14,7 @@ accumulate `min(realDt, 0.05)*speed` (the original's cap before the speed multip
 `AchievedSpeed` reports it. Control ticks precede simulation ticks; a speed change applies
 to the entire frame. `WorldSession` rejects unequal world/clock tick lengths, owns snapshots,
 clocks, input and camera, and disposes systems/services. Of a frame's ticks only the last two publish
-a snapshot (`RunTick(publish)`), the pair the host interpolates between. Advanced → Pause after loading (`PauseOnLoad`, a Faithful / Meitou switch, Meitou and on by default; Faithful runs a loaded save at once as the game does, [game loop](game/game-loop.md)) pauses the speed after a menu load or import; `--load` runs. Advanced → Pause while loading (`LoadingPause`, a Faithful / Meitou switch, Meitou and off by default) holds the world without touching the speed while the zones round the camera load, as the game does ([loading pause](game/game-loop.md#loading-pause)).
+a snapshot (`RunTick(publish, views)`), the pair the host interpolates between; the earlier of them only its motion ([snapshots](#snapshots)). Advanced → Pause after loading (`PauseOnLoad`, a Faithful / Meitou switch, Meitou and on by default; Faithful runs a loaded save at once as the game does, [game loop](game/game-loop.md)) pauses the speed after a menu load or import; `--load` runs. Advanced → Pause while loading (`LoadingPause`, a Faithful / Meitou switch, Meitou and off by default) holds the world without touching the speed while the zones round the camera load, as the game does ([loading pause](game/game-loop.md#loading-pause)).
 
 ### Engine choices against the original's frame loop
 
@@ -41,6 +41,11 @@ publish) into a set none of `Snapshot`, `PreviousSnapshot` and the one before th
 paused publish and loading keep `PreviousSnapshot`'s set out of the ring with it. Contract: a published snapshot's characters stay as they are until
 two more snapshots are published; hold them across frames, not across ticks (the host's per-id index and the HUD's selection are rebuilt when the
 snapshot object changes). `WorldSnapshot` itself is new on each publish.
+A frame's second-to-last tick publishes a motion snapshot (**engine choice**, `World.MotionOf`): its characters and projectiles are the tick's, every
+other view the last snapshot's, as the host reads nothing else of `PreviousSnapshot` (its per-id index, the turrets' angles, the bolts, the splashes'
+tick). **Observed** (play bench, `bench-bases-2026-10-27`, ~270-290 characters, two interleaved pairs, 2026-11-19; with the 64-slot chunks of
+[threading](#threading)): the publish 3.7-4.3 -> 1.9-2.1 ms a frame in speed-x5 and paths, 2.0-2.4 -> 1.2-1.4 ms a tick at 1x (its characters
+1.1-1.5 -> 0.45-0.6).
 
 ### Tick ahead
 
@@ -94,7 +99,7 @@ slow world's 1.5-4.9 (its physics step 0.4-0.5 ms with one moving ragdoll, its s
 
 Tick order: Inputs → Schedule → Think → Move → Act → ordered Apply → SlowWorld → Publish.
 Inputs/Schedule/Apply/SlowWorld are serial; each implemented parallel phase has a system barrier. Publish makes the character snapshots on the
-workers in 256-slot chunks (each reads only the tick's state), listed in slot order.
+workers in 64-slot chunks, so a few hundred characters still spread over them (each reads only the tick's state), listed in slot order.
 Engine choice, to keep the publish small with ~1,400 characters: the context menu's figures (kidnap and stealth KO chances, shackles) and the AI goal text
 go only to the selected, inspected and pointed character (`PlayerState.Pointed`, set by the host as the mouse moves; while paused, a move onto another
 character publishes again) and the player's (goal text);
