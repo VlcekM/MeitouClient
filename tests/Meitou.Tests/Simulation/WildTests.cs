@@ -44,7 +44,7 @@ public class WildTests(ITestOutputHelper output)
         changeDen?.Invoke(nest);
         var group = Rec("50-t", FcsRecordType.BiomeGroup, "Wilds");
         group.Ints["index"] = 0x123456;
-        group.Ints["num nests"] = 2;
+        group.Ints["num nests"] = 1;
         group.Floats["homeless spawn amount"] = 1.5f;
         group.References["homeless spawns"] = [new FcsReference("10-t", 30, 0, 0), new FcsReference("52-t", 10, 0, 0),
                 new FcsReference("11-t", 50, 0, 0)];
@@ -117,9 +117,10 @@ public class WildTests(ITestOutputHelper output)
         var sectors = pop.WildSites.Where(s => s.Kind == WildKind.Sector).ToList();
         var nests = pop.WildSites.Where(s => s.Kind == WildKind.Nest).ToList();
         Assert.Equal(4, sectors.Count);
-        Assert.Equal(2, nests.Count);
+        Assert.Single(nests);
         Assert.All(nests, n => Assert.Equal("Dog Den", n.Nest!.Name));
-        // A den stands in a sector of its own (FUN_1408f62e0) for at least one of them: that sector makes none of the group's squads.
+        // The den stands in a sector of its own (FUN_1408f62e0), not the town's: that sector makes none of the group's squads, and the three others
+        // fill the island's 4 x 1.5.
         Assert.Contains(sectors, s => OwnTownIsNest(data, nests, s));
         foreach (var s in sectors)
         {

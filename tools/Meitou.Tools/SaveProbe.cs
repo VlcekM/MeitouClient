@@ -1509,20 +1509,25 @@ static class SaveProbe
 
     /// <summary>
     /// Every nest of the wild layout with the terrain height at each candidate spot; flags a first spot or all spots the original's spot finder
-    /// refuses: under its floor (95) or on a black pixel of the areas map (docs/game/factions-squads-towns.md "Spot finder").
+    /// refuses: under its floor (95) or on a black pixel of the areas map (docs/game/factions-squads-towns.md "Spot finder"); and how many
+    /// rolled ones (not a save's, not at a marker) stand in a zone a town stands in, where the original makes a nest only by its fallback (#1041).
     /// </summary>
     static void Nests(ProbeWorld probe)
     {
         var population = probe.World.Systems.OfType<PopulationSystem>().First();
         var walk = probe.World.Walkability;
         var biomes = probe.Data.Biomes!;
-        int nests = 0, firstWet = 0, allWet = 0;
+        var townZones = PopulationSystem.TownZones(probe.Data);
+        int nests = 0, firstWet = 0, allWet = 0, inTownZone = 0;
+        bool AtMarkers(WildSite site) => site.Group >= 0 && biomes.Groups[site.Group].NestsAtFixedMarkersOnly;
+
         foreach (var site in population.WildSites.Where(s => s.Kind == WildKind.Nest && s.Spots.Count > 0))
         {
             var heights = site.Spots.Select(s => walk.TerrainHeight(s.X, s.Y)).ToArray();
             var refused = site.Spots.Select((s, i) => heights[i] < 95 || !biomes.IsPainted(s.X, s.Y)).ToArray();
             bool first = refused[0], all = refused.All(r => r);
             nests++;
+            if (townZones.Contains(site.Zone) && site.SaveInstance is null && !AtMarkers(site)) inTownZone++;
             if (first) firstWet++;
             if (all) allWet++;
             if (!first) continue;
@@ -1532,18 +1537,22 @@ static class SaveProbe
             Console.WriteLine($"{flag} nest {site.Index} '{site.Nest?.Name}' at {site.Spots[0]:F0} spots [{spots}]");
         }
 
-        Console.WriteLine($"{nests} nests, first spot refused: {firstWet}, every spot refused: {allWet}");
+        Console.WriteLine($"{nests} nests, first spot refused: {firstWet}, every spot refused: {allWet}, rolled in a town's zone: {inTownZone}");
     }
 
     /// <summary>
     /// <c>nests radius</c>: the nests within the radius of the leader: wild site, TOWN, faction, first spot, the centre it stands at as a
-    /// town (none before it first loads) and its distance.
+    /// town (none before it first loads), its distance, its zone with whether a town stands in that zone (where the original makes no nest), the
+    /// gate code at its place (above 0: inside town walls; with <c>--nav</c>) and whether the save holds it.
     /// </summary>
     static void NestsNear(ProbeWorld probe, float radius)
     {
         var population = probe.World.Systems.OfType<PopulationSystem>().First();
         var at = new Vector2(probe.LeaderPosition.X, probe.LeaderPosition.Z);
         var placed = population.PlacedNests.ToDictionary(n => n.Site, n => n.Centre);
+        var townZones = PopulationSystem.TownZones(probe.Data);
+        var regions = probe.World.SystemOf<LockSystem>()?.Regions;
+        var walk = probe.World.Walkability;
         foreach (var site in population.WildSites.Where(s => s.Kind == WildKind.Nest && s.Spots.Count > 0))
         {
             var spot = placed.TryGetValue(site.Index, out var centre) ? centre : site.Spots[0];
@@ -1551,8 +1560,11 @@ static class SaveProbe
             if (d > radius) continue;
 
             string stands = placed.ContainsKey(site.Index) ? $"{centre:F0}" : "-";
+            var zone = Meitou.Data.World.WorldLayout.ZoneOf(spot.X, spot.Y);
+            string gate = regions is null ? "-" : $"{regions.CodeAt(new Vector3(spot.X, walk.TerrainHeight(spot.X, spot.Y), spot.Y))}";
             Console.WriteLine($"nest {site.Index} '{site.Nest?.Name}' {probe.Faction(site.Faction)} spot {site.Spots[0]:F0} stands {stands} "
-                + $"distance {d:F0}{NestPoolText(population, site)}");
+                + $"distance {d:F0} zone {zone.X},{zone.Y}{(townZones.Contains(zone) ? " town zone" : "")} gate {gate}"
+                + $"{(site.SaveInstance is null ? "" : " saved")}{NestPoolText(population, site)}");
         }
     }
 

@@ -52,8 +52,9 @@ public sealed record WildSite(int Index, WildKind Kind, ZoneCoordinate Zone, int
 /// made. A sector whose nearest town is the player's makes none, and so does one whose own town is a nest with roaming squads.</item>
 /// <item><b>Nests</b> (6.3). The original adds one nest per area tick until a group has <c>num nests</c> x the nests multiplier; here the layout is
 /// made at once from the world seed (engine choice; the end state is the same count): each nest's TOWN is a weighted pick from the group's
-/// <c>nests</c> (v0, 0 as 100, the TOWN's <c>world state</c> gate), its place a seeded cell of the group's area with candidate spots away from placed
-/// towns and on terrain no lower than <see cref="SpawnFloor"/>, or for groups with <c>nests at fixed markers only</c> one of the placed
+/// <c>nests</c> (v0, 0 as 100, the TOWN's <c>world state</c> gate), its place a seeded cell of the group's area no town stands in and without a
+/// town of its own (any cell once 10 draws a nest found none), with candidate spots away from placed towns and on terrain no lower than
+/// <see cref="SpawnFloor"/>, or for groups with <c>nests at fixed markers only</c> one of the placed
 /// NEST_MARKER towns of the area. When its zone activates the nest fills its roaming pool to its pool's floor(<c>pop2</c>) members (0.7 x
 /// <c>nest resident population</c> at first; <c>PopulationPools.cs</c>) from the TOWN's <c>roaming squads</c> (weight max(0, v0 - count), k = 1;
 /// an entry whose expected size passes the free capacity is skipped, unless the pool is empty and more than 4 are free), the squads wandering round
@@ -454,6 +455,11 @@ public sealed partial class PopulationSystem
         readonly List<(int X, int Z)>[] _cellsOf;
 
         /// <summary>
+        /// The cells a town stands in (<see cref="TownZones"/>): no nest is rolled there.
+        /// </summary>
+        readonly HashSet<ZoneCoordinate> _townZones;
+
+        /// <summary>
         /// A save's nests by the group of the cell they stand in.
         /// </summary>
         readonly Dictionary<int, List<Saving.SavedNest>> _savedOf = new();
@@ -483,6 +489,7 @@ public sealed partial class PopulationSystem
             _groups = _biomes.Groups;
             _cellsOf = new List<(int X, int Z)>[_groups.Count];
             for (int g = 0; g < _groups.Count; g++) _cellsOf[g] = [];
+            _townZones = TownZones(data);
         }
 
         /// <summary>
@@ -558,21 +565,32 @@ public sealed partial class PopulationSystem
             int rolls = markers is null ? count * NestDraws : count;
             for (int i = 0; i < rolls && room > 0; i++)
             {
-                if (RollNest(g, group, mine, markers, groupKey, i)) room--;
+                if (RollNest(g, group, mine, markers, groupKey, i, anyCell: false)) room--;
+            }
+
+            // A nest whose 10 draws found no sector takes a random one of the group, a town's too (FUN_1408f6350's fallback), so a group whose
+            // cells all hold towns still gets its count; the spots keep their tests (engine choice: the original takes that sector's spot
+            // unchecked).
+            if (markers is not null) return;
+
+            for (int i = rolls; i < rolls + count * NestDraws && room > 0; i++)
+            {
+                if (RollNest(g, group, mine, markers, groupKey, i, anyCell: true)) room--;
             }
         }
 
         /// <summary>
-        /// One roll of a group's nest: its spots (a marker, else up to 8 in a random cell), then a saved nest there takes it over, else a town is
-        /// picked.
+        /// One roll of a group's nest: its spots (a marker, else up to 8 in a random cell that takes a nest, <see cref="CellTakesNest"/>), then a
+        /// saved nest there takes it over, else a town is picked. <paramref name="anyCell"/>: the fallback's roll, which takes any cell.
         /// </summary>
-        bool RollNest(int g, BiomeGroupData group, List<Saving.SavedNest> mine, List<TownSite>? markers, ulong groupKey, int i)
+        bool RollNest(int g, BiomeGroupData group, List<Saving.SavedNest> mine, List<TownSite>? markers, ulong groupKey, int i, bool anyCell)
         {
             ulong key = Rng.Mix(groupKey ^ (ulong)i << 16);
             ulong pick = 0, place = SeedSalts.NestPlace;
             ulong Pick() => Rng.Hash(_seed, key, RngPurpose.Spawn, pick++);
             ulong Place() => Rng.Hash(_seed, key, RngPurpose.Spawn, place++);
             var spots = new List<Vector2>();
+            (int X, int Z)? cell = null;
             if (markers is not null)
             {
                 // A seeded draw without repeats: marker i of a shuffled order.
@@ -591,6 +609,8 @@ public sealed partial class PopulationSystem
                 }
 
                 if (spots.Count == 0) return false;
+
+                cell = (cx, cz);
             }
 
             float near = markers is not null ? 100 : 1;
@@ -601,12 +621,41 @@ public sealed partial class PopulationSystem
                 return false;
             }
 
+            // After the save's nest took its roll: that nest is its cell's own town, and may stand in a town's zone.
+            if (!anyCell && cell is var (x, z) && !CellTakesNest(x, z)) return false;
+
             if (SquadFactory.WeightedPick(group.Nests, Gated, Pick) is not { } townId || _data.Db.Find(townId) is not { } record) return false;
             var town = TownData.From(record);
             var zone = WorldLayout.ZoneOf(spots[0].X, spots[0].Y);
             int faction = town.Faction is { } f ? _data.FactionIndex(f) : -1;
             _sites.Add(new WildSite(_sites.Count, WildKind.Nest, zone, g, town, faction, spots, Key: key));
             return true;
+        }
+
+        /// <summary>
+        /// Whether the original draws a sector for a new nest (<c>FUN_1408f6350</c>, <b>Verified</b>): no town stands in it (the sector flag
+        /// +0x30, <see cref="TownZones"/>) and it has no town of its own (<c>FUN_1408f62e0</c>): the town nearest its centre does not stand in
+        /// it. That town is a placed one or a nest made before, at its first spot (<b>Observed</b>: a nest is a sector's own town,
+        /// docs/game/factions-squads-towns.md). So no nest is made in a town's zones, and a cell gets a second nest only when another town is
+        /// nearer its centre than the first.
+        /// </summary>
+        bool CellTakesNest(int cx, int cz)
+        {
+            var cell = new ZoneCoordinate(cx, cz);
+            if (_townZones.Contains(cell)) return false;
+
+            var (minX, minZ, maxX, maxZ) = WeatherAreas.CellRect(cx, cz);
+            var centre = new Vector2((minX + maxX) / 2, (minZ + maxZ) / 2);
+            var town = NearestTown(_data, centre, out float nearest);
+            ZoneCoordinate? own = town is null ? null : WorldLayout.ZoneOf(town.Position.X, town.Position.Z);
+            foreach (var s in _sites)
+            {
+                if (s.Kind != WildKind.Nest || s.Spots.Count == 0) continue;
+                float d = Vector2.Distance(centre, s.Spots[0]);
+                if (d < nearest) (own, nearest) = (s.Zone, d);
+            }
+
+            return own != cell;
         }
 
         /// <summary>

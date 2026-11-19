@@ -435,7 +435,7 @@ public sealed partial class PopulationSystem
         var intactIn = new Dictionary<ZoneCoordinate, int>();
         var sectors = new List<int>();
         var ownTown = new List<bool>();
-        var towns = TownZones();
+        var towns = TownZones(_data);
         HashSet<int>? persistent = null;
         float target = 0, load = 0;
         var roaming = new Dictionary<ZoneCoordinate, float>();
@@ -592,10 +592,10 @@ public sealed partial class PopulationSystem
     /// position's zone, for every town type but Ruins and points of interest (a nest marker sets it); whether <c>setup</c> runs for the Null type is
     /// Unknown, so those are left out. Built afresh on each refill pass, so it follows town overrides (<see cref="TownSite.Replacement"/>).
     /// </summary>
-    HashSet<ZoneCoordinate> TownZones()
+    public static HashSet<ZoneCoordinate> TownZones(PopulationData data)
     {
         HashSet<ZoneCoordinate> zones = [];
-        foreach (var s in _data.Sites)
+        foreach (var s in data.Sites)
         {
             if (s.Town.Type is TownType.Ruins or TownType.PointOfInterest or TownType.Null) continue;
             if (s.Coverage.Count > 0) zones.UnionWith(s.Coverage);

@@ -674,7 +674,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   **Observed**) and never spawns again. New nests come only from the area tick, up to `num nests` per biome group. A group with `nests at fixed markers only` picks among its NEST_MARKER towns, leaving out every marker whose
   nearest town (by XZ, markers skipped) is within 2500 (3D) (**Verified**, `FUN_1408f6350`, 6,250,000 squared).
 - **Spot finder** (**Verified** by decompile; nests and homeless squads): a new nest (`FUN_1408f6350`) draws up to 10 random sectors of its group,
-  skipping the one in view and town-flagged ones, and takes the first where `FUN_1408f50d0` places a spot; failing that, a random sector and whatever
+  skipping the one in view, town-flagged ones (+0x30, below: every sector of a town's zone list) and ones with a town of their own (`FUN_1408f62e0`: the town nearest the sector's position, with no distance limit `DAT_14169bc38` = FLT_MAX, stands in it; a nest made before counts as such a town, **Observed**, the Wolf Pack Den hold below), and takes the first where `FUN_1408f50d0` places a spot (multipliers 1.4 and 3, `DAT_14169bb48`, `DAT_14168a254`; the last inside-town test × 1, `DAT_14167c308`); failing that, a random sector and whatever
   the finder left, unchecked (the sector's own position, +0x18, when nothing passed: the finder writes the out point only on a pass). `FUN_1408f50d0`:
   4 rounds of a uniform point in the sector, each pushed up to 10 times out of a town's radius × 1.4 (another faction's × 3; the nest call's
   arguments) and from within 1382.4 of the camera focus; a point passes when `FUN_1408f4d70` does: terrain height (`Terrain::getHeight`) not under
@@ -685,9 +685,10 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   the water (surface 100). **Data** (vanilla `areasmap.tga`, 256 × 256): 33 % black; black cells are the base `NONE` group, which has no nests or
   homeless spawns; 917 black pixels (2 %) lie inside other groups' cells, at region edges. Meitou (`PopulationWild.cs` `SpotRefused`): the same three
   tests for a homeless spot; a nest's candidate spots take the height and pixel tests at layout and the gate code (where the navmesh is loaded)
-  when it picks its centre; a nest roll whose cell has no passing spot passes to the next roll key (up to 10 a nest). The unchecked fallback is not
-  modelled: **Observed** (`probe nests`, the seed of a save): every nest finds a passing spot, so it would not fire (#496: before, navmesh water
-  counted as walkable and camps stood in lakes).
+  when it picks its centre; a nest roll whose cell a town stands in (`TownZones`) or has its own town (a placed one or a nest rolled before, `CellTakesNest`), or has no passing spot, passes to the next
+  roll key (up to 10 a nest). A group still short of its count then rolls in any of its cells, the fallback, its spots tested all the same (engine choice).
+  **Observed** (`probe nests`, #1041's save under Rebirth): 331 nests with the fallback, 326 without, none rolled in a town's zone; that save's `River Nest` stands inside Blister Hill's walls (zone 23,22 of the town's list, gate code 1, 915 from a centre of radius 350), which
+  the 2 × radius test does not refuse (#496: before, navmesh water counted as walkable and camps stood in lakes).
 - **Nest furniture** (**Verified** by code unless marked): when an area loads (`FUN_1409fdbd0` → `FUN_1408f5e70`; "area load" **Observed**), each of its nests runs `Nest` slot 64
   (`FUN_1409278a0`), which queues its TOWN record at its position, owner none; the queue (`FUN_140928410`, "delayedSpawningChecks") runs `TownBase` slot 113
   (`FUN_140938440`) once the zone is loaded. That seeds `srand` from the nest's X/Z and places: `debris` (ITEM / NEST_ITEM, `FUN_140937510`, within
