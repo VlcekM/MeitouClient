@@ -323,7 +323,7 @@ included), else 0.025 (outside every town too).
 
 | Deed | Where | Events |
 | --- | --- | --- |
-| melee blow lands | `FUN_1404394f0` (Character slot 62) via `FUN_140999f00` | kind 1 when the striker's status float `+0xac` > 0.1 (and the victim's combat byte `+0x130` clear); after the damage, if the victim is unconscious or dead (`+0x5b9`/`+0x5bc`): kind 2 if striker `+0xac` <= 0.15 else 3, plus kind 4 if dead. Every later blow on a downed body repeats it |
+| melee blow lands | `FUN_1404394f0` (Character slot 62) via `FUN_140999f00` | kind 1 when the striker's status float `+0xac` (its current goal's intended aggression, below) > 0.1 (and the victim's combat byte `+0x130` clear); after the damage, if the victim is unconscious or dead (`+0x5b9`/`+0x5bc`): kind 2 if striker `+0xac` <= 0.15 else 3, plus kind 4 if dead. Every later blow on a downed body repeats it |
 | bolt lands | `FUN_140439c90` via `FUN_140999d50` | as melee, thresholds 0.1; with no shooter nothing; a bolt whose flag (param 4, read as "aimed") is clear gives no kind 1 and kind 2 |
 | death | `FUN_1407a6200` (sets `+0x5bc`, runs inside the damage, so before the blow's own events) | kind 5 against the killer recorded in the character's handle at `+0x2c0` , and squad tag 9 |
 | caging | `Task_PutInSomething` `FUN_140358670`, after the bounty claim | kind = task `+0x7c`: 12 for the cage task, 9 (no row) for the bed (factory `FUN_14032ebd0`) against the putter's faction |
@@ -337,7 +337,10 @@ included), else 0.025 (outside every town too).
   target score spares a non-hostile one ([ai-tasks](ai-tasks.md#combat-goals)); they are sensed like anyone. Diplomats (NPC class 5) are sensed NEUTRAL by enemies inside their faction's
   `biomes` (by the player's side anywhere) and assaulting them there is code 9 ([perception](perception.md#sense-tags-who-is-an-enemy), [economy](economy.md)); **Verified** by disassembly of `FUN_140796240`.
 - Kind 8 is not a drift: nothing moves relations back over time.
-- Status `+0xac` (Character slot 61 `FUN_140598b90` returns it) is summed by the perception (`FUN_140854370`) as a threat value. Meitou rates every striker above both thresholds (kinds 1 and 3; engine choice).
+- Status `+0xac` (Character slot 61 `FUN_140598b90` returns it) is the intended aggression of the striker's current goal (**Verified**: the state broadcast `FUN_14050ed60` copies TaskData `+0x24` of the AI's goal `+0x1c0`,
+  0 without one or while the status byte `+0x41` is set; the rows hold only 1, 0.5, 0 and negatives, [ai-tasks](ai-tasks.md#combat-goals)). So a striker on an attack goal (16, 21, 144, an order's 61) costs kind 1 per blow and kind 3 per downing; one on 34, a protect goal
+  (15, 143, 288), Self preservation (32) or Attack Target (5) costs no kind 1 and kind 2 per downing. Meitou: `FactionDeeds.Rating` (the mind's goal in a fight its AI started, else the fight's row; a defence, row 13, rates 0 as the
+  32 or protect goal the original plans it under).
 - `FUN_140673a20(self, other, tag)` (not a witness function) sets a long-term tag (`CharacterPerceptionTags_LongTerm`, read by DC 23) in
   `self`'s squad memory (`platoon+0x98`, `FUN_140673930`, time-stamped): 1 MY_INTRUDER (trespass), 5 MY_CAPTOR (cage), 7 / 8 (the victim's
   squad tags the striker DEFEATED_MY_SQUAD_ONCE and the striker's tags the victim SQUAD_LOST_TO_ME_ONCE, on a downing blow when

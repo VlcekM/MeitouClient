@@ -26,6 +26,20 @@ static class StageProbe
             Console.WriteLine($"tick {probe.World.Tick} hours {probe.World.GameHours:F2}");
             Print(probe, a);
             Print(probe, b);
+            PrintEvents(probe);
+        }
+    }
+
+    /// <summary>
+    /// The event log's fight starts and relation changes since the last call (a downing blow's change names its striker, whose goal the fight line
+    /// gives: the striker's rating, <c>FactionDeeds.Rating</c>).
+    /// </summary>
+    static void PrintEvents(ProbeWorld probe)
+    {
+        foreach (string line in probe.World.Events.Take())
+        {
+            if (line.StartsWith("relation", StringComparison.Ordinal) || line.StartsWith("fight", StringComparison.Ordinal))
+                Console.WriteLine("  " + line);
         }
     }
 
