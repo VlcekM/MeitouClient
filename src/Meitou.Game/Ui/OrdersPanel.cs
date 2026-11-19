@@ -198,8 +198,8 @@ sealed class OrdersPanel(PlayerInterface player)
         .FirstOrDefault()?.Extensions?.JobTypes.GetValueOrDefault(type);
 
     /// <summary>
-    /// A jobs row: the type's text (a mod's job: the name it registered) and the building, rock, training dummy or character it targets. The engineer
-    /// works every site, not the one it was ordered on, so its row is plain "Engineer" (<b>Observed</b> in the original by players, #348/#353).
+    /// A jobs row: the type's text (a mod's job: the name it registered) and the building, town machine, rock, training dummy or character it
+    /// targets. The engineer works every site, not the one it was ordered on, so its row is plain "Engineer" (<b>Observed</b> in the original by players, #348/#353).
     /// </summary>
     string JobRowText(Simulation.Production.PermaJob job)
     {
@@ -213,6 +213,10 @@ sealed class OrdersPanel(PlayerInterface player)
         // A rock is no registry building: its id names its BUILDING (an Iron Ore deposit, a Stone outcrop).
         if (job.Site is { } rockId && Simulation.Production.ProductionSystem.NaturalRecord(rockId) is { } rock)
             return text + ": " + (player.Build.Services?.ItemName(rock) ?? rock);
+
+        // A town building's machine (a well, a farm: townwork:<key>) is no registry building either: its machine names its BUILDING (#1039).
+        if (player.Production.Machine(job.Site) is { IsContainer: false } machine)
+            return text + ": " + (player.Build.Services?.ItemName(machine.Record) ?? machine.Record);
 
         if (job.Site is { } dummyId && player.Session.CurrentSnapshot.Dummies.FirstOrDefault(d => d.Id == dummyId) is { } dummy)
             return text + ": " + (player.Build.Services?.ItemName(dummy.Record) ?? dummy.Record);
