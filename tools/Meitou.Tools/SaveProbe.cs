@@ -1552,8 +1552,18 @@ static class SaveProbe
 
             string stands = placed.ContainsKey(site.Index) ? $"{centre:F0}" : "-";
             Console.WriteLine($"nest {site.Index} '{site.Nest?.Name}' {probe.Faction(site.Faction)} spot {site.Spots[0]:F0} stands {stands} "
-                + $"distance {d:F0}");
+                + $"distance {d:F0}{NestPoolText(population, site)}");
         }
+    }
+
+    /// <summary>
+    /// A nest's roaming pool for a probe line: its current max of its desired one, and whether it is wiped out; empty before the nest has pools.
+    /// </summary>
+    static string NestPoolText(PopulationSystem population, WildSite site)
+    {
+        if (population.NestPoolsOf(site.Index) is not { } pools) return "";
+
+        return $" pool {pools.Roaming.Current:F2} of {pools.Roaming.Desired}{(pools.Ded ? " wiped out" : "")}";
     }
 
     /// <summary>

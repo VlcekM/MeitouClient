@@ -639,6 +639,14 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   is taken out of its pool (platoon +0xa8: 1 residents, 2 roaming) and, while that pool is above 0, lowers it by its living members (no floor);
   a `regenerates` platoon (+0xd9) is charged nothing and only marked to be remade. The platoon's faction's prosperity also drops by 10, floor 0, when its +0xa4 is above 0, pool or not (`FUN_1406bab60`, **Verified**; +0xa4 is the template's expected size above, which `FUN_14079acf0` compares with 4). Meitou: roamers and a save's wild platoons that despawn Faithful (`PayRoamerDespawn`, both costs) and nests
   (`PayNestDespawn`). Not intact is the squad-intact rule for all of them (`SquadIntact`); the pool is only charged while above 0, no floor; the prosperity drop applies to every wild site's squad that leaves not intact (nest or sector).
+- **Death cost** (**Verified**, the death function `FUN_1407a6200` -> `FUN_140796a50`): when a character of a faction that is not the player's dies
+  and its platoon has a town or nest, each of that site's pools (1, then 2) that lists the platoon loses 1 from its current max while it is
+  above 0. So a killed squad costs its pool its whole size (its dead here, its survivors when it leaves damaged, above), a nest's pool falls
+  with every kill, and once nothing fits the nest is wiped out. Meitou: `PopulationSystem.Died` (a death observer; loaded characters only, an
+  off-screen fight's dead are not charged), a nest's squad from its roaming pool, a town's platoon from the pool it is in (`InTownPool`); a
+  save's nest platoon in the world counts its living now for the nest's budget (`HoldOf`). **Observed** headless (#1033's save, `probe nests`):
+  the 8 members in the world of a `Nest of Beak Things` (15) killed, its pool goes 15 to 7 and it makes one squad of 1 once the pool passes
+  the 6 living elsewhere; a `Boneyard Wolf Den` (10) with all 10 killed goes to 0 and is wiped out.
 - **Town pools in saves** (**Observed**, saves 1, 2, wade): every town has `pop` = `popd`, `started` true when populated, `popd2` 0 (none of
   304), while `read_roaming_population_n4` (`0x1408f98d0`) would set pool 2 to the faction's `roaming population`. `pop` is near the living members of the town's resident platoons (`is resident`) of the town's own faction:
   save 2 Squin 36 = 36, the Hub 12 vs 10, Stack 93 vs 95 (Squin without a Tech Hunters resident shop of 4).

@@ -150,6 +150,55 @@ public sealed partial class PopulationSystem
     static bool Living(World world, CharacterId m) =>
         world.Characters.TryResolveNext(m, out int slot) && world.Characters.Next[slot].Alive && world.Characters.Cold(slot) is { DiedTick: < 0 };
 
+    /// <summary>
+    /// A death takes one out of the pool its platoon is in (the death function <c>FUN_1407a6200</c> -&gt; <c>FUN_140796a50</c>, <b>Verified</b>):
+    /// for a character of a faction that is not the player's, the current max of its town's or nest's pool that lists its platoon drops by 1 while
+    /// it is above 0. So a nest whose squads are killed has less to make them again from, and is wiped out once nothing fits. The original has no
+    /// off-screen deaths; an off-screen fight's are not charged.
+    /// </summary>
+    public void Died(World world, in CharacterDeath death)
+    {
+        if (death.OffScreen || death.Faction == PlayerFactionOf(world)) return;
+        if (!world.Characters.TryResolveNext(death.Victim, out int slot) || world.Characters.Cold(slot) is not { } cold) return;
+        if (world.Squads.Find(cold.SquadId) is not { } squad) return;
+
+        if (DeathPool(world, squad) is { Current: > 0 } pool) pool.Current -= 1;
+    }
+
+    /// <summary>
+    /// The pool a death in <paramref name="squad"/> is taken from: its nest's roaming pool, else the pool of its home town its platoon is in
+    /// (<see cref="InTownPool"/>); null for a squad in no pool.
+    /// </summary>
+    PoolState? DeathPool(World world, Squad squad)
+    {
+        var p = world.Platoons.Find(squad.PlatoonId);
+        if (p is { Dead: true }) return null;
+
+        int nest = NestSiteOf(squad, p);
+        if (nest >= 0) return NestPools(world, _wildSites![nest]).Roaming;
+
+        if (p is null || p.Origin < 0 || p.Origin >= _townPools.Length || _townPools[p.Origin] is not { } pools) return null;
+        if (InTownPool(world, p, p.Origin, residents: true)) return pools.Residents;
+
+        return InTownPool(world, p, p.Origin, residents: false) ? pools.Roaming : null;
+    }
+
+    /// <summary>
+    /// The wild site of the nest <paramref name="squad"/> belongs to: its save's platoon's nest, else the loaded nest that made it; -1 for none.
+    /// </summary>
+    int NestSiteOf(Squad squad, Platoon? p)
+    {
+        if (_wildSites is null) return -1;
+        if (p is { Saved: { Wild: WildKind.Nest, WildSite: >= 0 } sp } && sp.WildSite < _wildSites.Count) return sp.WildSite;
+
+        foreach (int i in _wildLoaded)
+        {
+            if (_wildSites[i].Kind == WildKind.Nest && _wildStates[i].Squads.Contains(squad.Id)) return i;
+        }
+
+        return -1;
+    }
+
     #endregion
 
     #region Towns

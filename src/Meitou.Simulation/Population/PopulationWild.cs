@@ -370,8 +370,9 @@ public sealed partial class PopulationSystem
         {
             if (p.Saved is not { Wild: not null } sp || sp.WildSite != site) continue;
             // A never-made one (SaveLoader.UnmadeWild) counts its `char count`, then, once made (or made afresh), its squad's living (LivingOf):
-            // it has no saved members that count.
-            int alive = sp.Members.Count == 0 || p.Stored is not null
+            // it has no saved members that count. A nest's in the world counts its living now, as the pool counts an active platoon
+            // (FUN_140792f90): its saved members only learn of a death when it leaves.
+            int alive = sp.Members.Count == 0 || p.Stored is not null || NestSquadInWorld(world, p, sp)
                 ? LivingOf(world, p)
                 : sp.Members.Count(m => !m.Dead && !m.Gone && (m.Position is not null || m.Source.Medical?.Bools.GetValueOrDefault("dead") != true));
             if (alive == 0) continue;
@@ -383,6 +384,12 @@ public sealed partial class PopulationSystem
 
         return hold is null ? null : hold with { Squads = squads, Members = members };
     }
+
+    /// <summary>
+    /// Whether a save's platoon is a nest's with its squad in the world.
+    /// </summary>
+    static bool NestSquadInWorld(World world, Platoon p, Saving.SavedPlatoon sp) =>
+        sp.Wild == WildKind.Nest && p.State == PlatoonState.Loaded && world.Squads.Find(p.SquadId) is not null;
 
     /// <summary>
     /// The sectors (every in-map zone whose group has homeless spawns), then the nests of every group in record order: the <paramref name="saved"/>

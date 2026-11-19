@@ -31,7 +31,7 @@ namespace Meitou.Simulation.Population;
 /// choice). Bar squads, the roaming squads (<c>PopulationRoaming.cs</c>) and the wild, homeless squads and nests (<c>PopulationWild.cs</c>), are made
 /// here too.</para>
 /// </summary>
-public sealed partial class PopulationSystem : ITickSystem, IDisposable
+public sealed partial class PopulationSystem : ITickSystem, Bodies.ICharacterDeathObserver, IDisposable
 {
     /// <summary>
     /// The population's data.
