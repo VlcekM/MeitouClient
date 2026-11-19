@@ -298,6 +298,19 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// Additions to how people are drawn (docs/modding.md "Look extras"): <paramref name="source"/> is asked each time a person's look is built
+    /// (its look record, race, sex and head) and answers pose weights set over the look's own and colour tints on disks of the skin, or null. It may
+    /// run on any thread, so it must be quick, read no world state and answer the same for the same arguments. A throw, or a tint that is not
+    /// valid, adds nothing to that look and is logged once.
+    /// </summary>
+    public void AddLookExtras(Data.Characters.LookExtrasSource source)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(source);
+        Pending.LookExtras.Add(source);
+    }
+
+    /// <summary>
     /// A bar on the medical panel after Hunger (docs/modding.md "Medical meters") labelled <paramref name="label"/>: the mod's systems set each
     /// character's reading in the tick with <see cref="Simulation.Bodies.ModMeter.Set"/>, and the panel shows it for the selected or inspected
     /// character. A label another meter has, or a fifth meter of all mods together, refuses it.

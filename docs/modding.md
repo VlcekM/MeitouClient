@@ -431,6 +431,20 @@ holds refuses the second mod.
   every other mod's stay as they are. Generation runs in the tick and on worker threads, so a roll must be quick, read no world state and write
   the same values for the same arguments; a throw keeps what it wrote and is logged once. A character generated before the mod was added has
   no value: read it with a fallback. Without a source or roll the editor and the generator are as before. Engine API, not in the original.
+- **Look extras:** `AddLookExtras(context => extras)` (`ModLooks`, `src/Meitou.Data/Characters`) adds to how people are drawn. The source is
+  asked each time a person's look is built (`CharacterAppearance.Build`: in the world, the editor's previews, a loaded save; not animals), with
+  `LookExtrasContext`: the `Look` record (read only, so a value from the mod's editor rows is at hand), `Race`, `Female` and the `Head` drawn. It
+  answers null, or `LookExtras` with `PoseWeights` (shape keys by pose name, set over the look's own; 0 takes one off) and `Tints`. A `LookTint`
+  lays a colour over a disk of the skin: on `LookArea.Body` or `LookArea.Head` (the HEAD's `texture map`), centred at `Centre` (0..1 across and
+  down the texture image), `Radius` a fraction of its width; the texel keeps its brightness (its largest channel) and takes the `Colour`'s hue and
+  saturation by `Strength`, fading over the outer `Softness` of the radius and above `MaxLightness`; `Side` (`Both`, `Left`, `Right`: the
+  character's own, by the side of the mesh) limits it to one half, as both eyes share one patch of the head texture. Every mod's extras are merged
+  in registration order (pose weights set over one another), at most `ModLooks.MaxTints` (4) tints a look. The renderer reads them when it builds
+  the look, so they cost nothing per frame: the body's material gets a companion record in the material table with the tints
+  (`CharacterLookTints`), and the shaders get the tints' code only when a source is registered, so without one they are as before. A look is
+  built again whenever it changes (an editor change, equipment, a load), so a source answers from the look alone. It may run on any thread: quick,
+  no world state, the same answer for the same arguments; a throw, a pose weight that is not a number or a tint out of its ranges adds nothing to
+  that look and is logged once. Engine API, not in the original.
 - **Medical meters:** `AddMedicalMeter(label)` returns a `ModMeter` (`ModMeters`, `src/Meitou.Simulation/Bodies`): a bar on the medical panel after
   Hunger, in registration order. The mod's system sets a character's `MeterReading(Green, Value) { Yellow, Red, Arrows, Tooltip }` in the tick with
   `meter.Set(cold, reading)` (the character's own partition in a parallel phase) and hides it with `Clear`; layers are width fractions clamped to

@@ -351,6 +351,14 @@ internal sealed class PartMaterial
     /// </summary>
     public int Slot = -1;
     /// <summary>
+    /// A body's code mod tints (<see cref="CharacterAppearance.Tints"/>), drawn from a companion record (<see cref="CharacterLookTints"/>).
+    /// </summary>
+    public IReadOnlyList<LookTint> Tints = [];
+    /// <summary>
+    /// The companion record's slot in <see cref="CharacterMaterialTable"/> (-1: none), placed with <see cref="Slot"/>.
+    /// </summary>
+    public int TintSlot = -1;
+    /// <summary>
     /// The renderer's update stamp in which the material was last drawn; <see cref="CharacterMaterialTable"/> retires slots unused since a given
     /// stamp.
     /// </summary>
@@ -2106,6 +2114,7 @@ internal sealed class CharacterContent : IDisposable
             Mechanical = c.Race.GetBool("is robot"),
             SkinDefault = CharacterRenderer.SkinByDefault(c.Race),
             Race = c.Race.StringId,
+            Tints = c.Tints,
         };
 
         // Animal meshes put the mirrored half of the body at u 1..2 (goat, bull, beak thing: Observed, the meshes' texture coordinates), so their

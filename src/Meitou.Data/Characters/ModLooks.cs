@@ -207,7 +207,106 @@ public sealed class LookRollContext
 }
 
 /// <summary>
-/// The character editor rows and look rolls code mods added (docs/modding.md "Character editor rows"). Filled at startup before the first world
+/// Which texture a <see cref="LookTint"/> is placed on: the body texture, or the head's (<c>texture map</c> of the HEAD).
+/// </summary>
+public enum LookArea
+{
+    /// <summary>
+    /// The body texture.
+    /// </summary>
+    Body,
+    /// <summary>
+    /// The head texture (the head is part of the body mesh, its texture coordinates beside the body's).
+    /// </summary>
+    Head
+}
+
+/// <summary>
+/// Which half of the body a <see cref="LookTint"/> reaches: both, or only the character's left or right (both eyes share one patch of the head
+/// texture, so a tint per eye tells them apart by side).
+/// </summary>
+public enum LookSide
+{
+    /// <summary>
+    /// Both halves.
+    /// </summary>
+    Both,
+    /// <summary>
+    /// The character's own left half.
+    /// </summary>
+    Left,
+    /// <summary>
+    /// The character's own right half.
+    /// </summary>
+    Right
+}
+
+/// <summary>
+/// A colour a code mod lays over a disk of a character's skin (<see cref="LookExtras"/>): on <see cref="Area"/>'s texture, centred at
+/// <see cref="Centre"/> (0..1 across and down the texture image) with <see cref="Radius"/> (a fraction of its width). The texel keeps its lightness
+/// and takes <see cref="Colour"/>'s hue and saturation, by <see cref="Strength"/>, fading out over the disk's outer <see cref="Softness"/>; texels
+/// lighter than <see cref="MaxLightness"/> are left out (an eye's white round its iris).
+/// </summary>
+/// <param name="Area">The texture the disk is on.</param>
+/// <param name="Centre">The disk's centre, 0..1 across and down the texture image.</param>
+/// <param name="Radius">The disk's radius, a fraction of the texture's width.</param>
+/// <param name="Colour">The colour, red, green and blue 0..1.</param>
+public sealed record LookTint(LookArea Area, Vector2 Centre, float Radius, Vector3 Colour)
+{
+    /// <summary>
+    /// How much of the colour is taken, 0..1.
+    /// </summary>
+    public float Strength { get; init; } = 1;
+
+    /// <summary>
+    /// The share of the radius over which the colour fades out at the disk's edge, 0..1.
+    /// </summary>
+    public float Softness { get; init; } = 0.2f;
+
+    /// <summary>
+    /// The lightness (0..1) above which texels are left as they are; 1 tints them all.
+    /// </summary>
+    public float MaxLightness { get; init; } = 1;
+
+    /// <summary>
+    /// The half of the body the tint reaches.
+    /// </summary>
+    public LookSide Side { get; init; }
+}
+
+/// <summary>
+/// What a code mod adds to how a look is drawn (<see cref="LookExtrasSource"/>): pose weights (face and body shape keys, by pose name, set over the
+/// look's own) and colour tints.
+/// </summary>
+public sealed record LookExtras
+{
+    /// <summary>
+    /// Pose weights by pose name, each set over the look's own (0 takes the pose off).
+    /// </summary>
+    public IReadOnlyDictionary<string, float> PoseWeights { get; init; } = new Dictionary<string, float>();
+
+    /// <summary>
+    /// Colour tints, drawn in order.
+    /// </summary>
+    public IReadOnlyList<LookTint> Tints { get; init; } = [];
+}
+
+/// <summary>
+/// What an extras source is asked with (<see cref="LookExtrasSource"/>): a person's look as it is built.
+/// </summary>
+/// <param name="Look">The look record (read only).</param>
+/// <param name="Race">The RACE.</param>
+/// <param name="Female">Whether the look is female.</param>
+/// <param name="Head">The HEAD record drawn, or null.</param>
+public sealed record LookExtrasContext(FcsRecord Look, GameRecord Race, bool Female, GameRecord? Head);
+
+/// <summary>
+/// A code mod's additions to how a person's look is drawn, asked each time the look is built (<see cref="ModLooks"/>); null adds nothing.
+/// </summary>
+public delegate LookExtras? LookExtrasSource(LookExtrasContext context);
+
+/// <summary>
+/// The character editor rows, look rolls and look extras code mods added (docs/modding.md "Character editor rows", "Look extras"). Filled at startup before the first world
 /// is built; empty without mods, so the editor and the generator are as before. A mod's values live on the look record (CHARACTER_APPEARANCE) under
 /// <c>mod id:key</c>, sliders and choices as whole numbers and colours as vectors, which nothing else reads: the editor's CONFIRM, the save and
 /// EXPORT carry every key of the record.
@@ -248,6 +347,11 @@ public static class ModLooks
     static volatile Entry<LookRoll>[] s_rolls = [];
 
     /// <summary>
+    /// The extras sources in registration order; replaced whole on a change.
+    /// </summary>
+    static volatile Entry<LookExtrasSource>[] s_extras = [];
+
+    /// <summary>
     /// Serializes the changes.
     /// </summary>
     static readonly Lock Gate = new();
@@ -261,6 +365,11 @@ public static class ModLooks
     /// Whether any mod added a roll.
     /// </summary>
     public static bool HasRolls => s_rolls.Length > 0;
+
+    /// <summary>
+    /// Whether any mod added an extras source; read when the characters' shaders are built (the tints' code is left out without one).
+    /// </summary>
+    public static bool HasExtras => s_extras.Length > 0;
 
     /// <summary>
     /// Adds <paramref name="source"/> for mod <paramref name="owner"/>.
@@ -281,6 +390,17 @@ public static class ModLooks
         lock (Gate)
         {
             s_rolls = [.. s_rolls, new Entry<LookRoll>(owner, roll)];
+        }
+    }
+
+    /// <summary>
+    /// Adds <paramref name="source"/> for mod <paramref name="owner"/>.
+    /// </summary>
+    public static void AddExtras(string owner, LookExtrasSource source)
+    {
+        lock (Gate)
+        {
+            s_extras = [.. s_extras, new Entry<LookExtrasSource>(owner, source)];
         }
     }
 
@@ -393,6 +513,85 @@ public static class ModLooks
         uint h = 0x811c9dc5;
         foreach (char c in s) h = (h ^ c) * 0x01000193;
         return (int)h;
+    }
+
+    #endregion
+
+    #region Extras
+
+    /// <summary>
+    /// The most tints one look draws, of all mods together; the ones past it are left out.
+    /// </summary>
+    public const int MaxTints = 4;
+
+    /// <summary>
+    /// Every mod's extras for <paramref name="context"/>, merged in registration order: pose weights set over one another, tints in order, at most
+    /// <see cref="MaxTints"/>; null without a source. A source that throws or answers a tint that is not valid (<see cref="Problem(LookTint)"/>)
+    /// adds nothing for that look and is logged once; it stays, so the same look always gets the same extras whichever thread builds it.
+    /// </summary>
+    public static (Dictionary<string, float> PoseWeights, List<LookTint> Tints)? Extras(LookExtrasContext context)
+    {
+        var entries = s_extras;
+        if (entries.Length == 0) return null;
+
+        var poses = new Dictionary<string, float>(StringComparer.Ordinal);
+        var tints = new List<LookTint>();
+        foreach (var entry in entries)
+        {
+            if (AskExtras(entry, context) is not { } extras) continue;
+            foreach (var (name, weight) in extras.PoseWeights) poses[name] = weight;
+            tints.AddRange(extras.Tints);
+        }
+        if (tints.Count > MaxTints) tints.RemoveRange(MaxTints, tints.Count - MaxTints);
+        return (poses, tints);
+    }
+
+    /// <summary>
+    /// One source's extras, checked; null when it has none or failed (logged once).
+    /// </summary>
+    static LookExtras? AskExtras(Entry<LookExtrasSource> entry, LookExtrasContext context)
+    {
+        string? problem;
+        try
+        {
+            var extras = entry.Hook(context);
+            if (extras is null) return null;
+            problem = ExtrasProblem(extras);
+            if (problem is null) return extras;
+        }
+        catch (Exception e)
+        {
+            problem = $"threw {e.GetType().Name}: {e.Message}";
+        }
+
+        if (Interlocked.Exchange(ref entry.Dropped, 1) == 0)
+            Console.Error.WriteLine($"mod       {entry.Owner}: look extras left out: {problem}");
+        return null;
+    }
+
+    /// <summary>
+    /// What makes a source's extras unusable, or null: a pose weight that is not a number, or a tint that is not valid.
+    /// </summary>
+    static string? ExtrasProblem(LookExtras extras)
+    {
+        if (extras.PoseWeights is null || extras.Tints is null) return "no pose weights or tints list";
+        if (extras.PoseWeights.Any(p => !float.IsFinite(p.Value))) return "a pose weight that is not a number";
+        return extras.Tints.Select(t => t is null ? "a null tint" : Problem(t)).FirstOrDefault(p => p is not null);
+    }
+
+    /// <summary>
+    /// What makes a tint unusable, or null: an area or side that does not exist, a value that is not a number, a radius not above 0, or a strength,
+    /// softness or lightness outside 0..1.
+    /// </summary>
+    static string? Problem(LookTint t)
+    {
+        if (!Enum.IsDefined(t.Area) || !Enum.IsDefined(t.Side)) return "a tint's area or side";
+        float[] values = [t.Centre.X, t.Centre.Y, t.Radius, t.Colour.X, t.Colour.Y, t.Colour.Z, t.Strength, t.Softness, t.MaxLightness];
+        if (values.Any(v => !float.IsFinite(v))) return "a tint value that is not a number";
+        if (t.Radius <= 0) return "a tint radius not above 0";
+        if (t.Strength is < 0 or > 1 || t.Softness is < 0 or > 1 || t.MaxLightness is < 0 or > 1)
+            return "a tint strength, softness or lightness outside 0..1";
+        return null;
     }
 
     #endregion
