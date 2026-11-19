@@ -855,9 +855,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             // the finder's factor times the desire of AI slot 35.
             AiBehaviour.Turret => board.TurretClaims.ContainsKey(self.Slot)
                 ? board.TurretFactors.GetValueOrDefault(self.Slot, 1) * TurretDesire(world, self.Slot) : 0,
-            AiBehaviour.TownNode =>
-                _townPlaces.WanderIn(board.Town, world.Characters.Previous[self.Slot].Position).Count > 0 || OccupiedBuildings(world, board) > 0
-                    ? 1 : 0,
+            AiBehaviour.TownNode => WanderDesire(world, board, world.Characters.Previous[self.Slot].Position),
             // Row 36 has no finder: its update strolls round the squad's town, or where the character stands without one (Task_PatrolTown,
             // docs/game/ai-tasks.md).
             AiBehaviour.PatrolTown => 1,
@@ -1036,11 +1034,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// Where a town goal goes (docs/game/ai-tasks.md "Town goals"): wandering in town, a random general node of a random public building of the town
-    /// in the walker's zone (<b>Verified</b>, <c>FUN_1409fc6c0</c>, <c>FUN_140999a60</c>: one without such a node gives no target); shopping, a
+    /// in the walker's zone (<b>Verified</b>, <c>FUN_1409fc6c0</c>, <c>FUN_140999a60</c>: one without such a node gives no target), in an outpost
+    /// the squad has as its town a public building there itself (<see cref="TownPlaceIndex.Of(CampaignTown)"/>); shopping, a
     /// random shop of the town that sells what its list wants, else a random public building (<see cref="ShopFor"/>): a shop at a general node in it,
     /// else at it, any other building at its origin; the wanderer, the nearest town that is no nest marker. Null when there is none.
     /// </summary>
-    Vector3? TargetFor(World world, CharacterId self, AiBehaviour behaviour, int town, AiMind mind)
+    Vector3? TargetFor(World world, CharacterId self, AiBehaviour behaviour, CampaignTown town, AiMind mind)
     {
         ulong roll = TargetRoll(world, self, behaviour);
         switch (behaviour)
@@ -1048,11 +1047,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             case AiBehaviour.TownNode:
                 {
                     // Wandering: a random general node of the drawn building, none: no target and no redraw (FUN_140999a60, FUN_14038c2f0).
-                    var b = PickFrom(_townPlaces.WanderIn(town, world.Characters.Previous[self.Slot].Position), roll);
+                    // A building the player built (an outpost's) has no nodes: the building itself, its origin on any floor, and not one the
+                    // player has locked since the places were built (engine choice).
+                    var b = PickFrom(Unlocked(world, _townPlaces.WanderIn(town, world.Characters.Previous[self.Slot].Position)), roll);
+                    if (b is { RuntimeKey: not null }) return new Vector3(b.Position.X, float.NaN, b.Position.Z);
+
                     return b is null ? null : RandomNode(b, IsGeneralNode, roll);
                 }
             case AiBehaviour.Shop:
-                return ShopTarget(world, self, town, mind, roll);
+                return ShopTarget(world, self, town.Site, mind, roll);
             case AiBehaviour.ToTown:
                 {
                     var at = Flat(world.Characters.Previous[self.Slot].Position);
@@ -1120,6 +1123,48 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// A building of <paramref name="from"/> picked by <paramref name="roll"/> (uniform); null when the list is empty.
     /// </summary>
     static TownBuilding? PickFrom(IReadOnlyList<TownBuilding> from, ulong roll) => from.Count == 0 ? null : from[Rng.Int(roll, from.Count)];
+
+    /// <summary>
+    /// 37 Wandering town's desire: 1 while the squad's town has a building to wander to from <paramref name="at"/> (<see cref="Unlocked"/>) or
+    /// one occupied, else 0.
+    /// </summary>
+    float WanderDesire(World world, Blackboard board, Vector3 at)
+    {
+        bool any = Unlocked(world, _townPlaces.WanderIn(board.HomeTown, at)).Count > 0 || OccupiedBuildings(world, board) > 0;
+        return any ? 1 : 0;
+    }
+
+    /// <summary>
+    /// The buildings of <paramref name="from"/> a wanderer may still go to: a placed town's list as it is; from an outpost's (stand-ins of buildings
+    /// the player built, <see cref="TownBuilding.RuntimeKey"/>) those whose doors the player has not all locked since the places were built
+    /// (<see cref="TownPlaceIndex"/>; the AI-run squad keeps to the player's locks, <see cref="SquadAutonomy.KeepsPlayerLocks"/>).
+    /// </summary>
+    static IReadOnlyList<TownBuilding> Unlocked(World world, IReadOnlyList<TownBuilding> from)
+    {
+        if (from.Count == 0 || from[0].RuntimeKey is null) return from;
+
+        return from.Where(b => !world.Fixtures.AllDoorsLocked(b.RuntimeKey!)).ToArray();
+    }
+
+    /// <summary>
+    /// Whether <paramref name="target"/>, a wanderer's target in an outpost (a building the player built, walked to at its origin on any floor),
+    /// is no longer offered: its building has left <paramref name="town"/>'s places (made private, locked or pulled down by the last refresh,
+    /// <see cref="TownPlaceIndex"/>) or the player has locked all its doors since. The target is given up and drawn again, so no walk goes on to
+    /// a locked door (engine choice; the squad keeps to the player's locks, <see cref="Unlocked"/>).
+    /// </summary>
+    bool NoLongerOffered(World world, CampaignTown town, Vector3 target)
+    {
+        if (town.PlayerTown <= 0 || !float.IsNaN(target.Y)) return false;
+
+        foreach (var zone in _townPlaces.Of(town).Wander.Values)
+            foreach (var b in zone)
+            {
+                if (b.Position.X == target.X && b.Position.Z == target.Z)
+                    return world.Fixtures.AllDoorsLocked(b.RuntimeKey!);
+            }
+
+        return true;
+    }
 
     /// <summary>
     /// The shop goal 118 goes to (<c>FUN_1409997f0</c>, <b>Verified</b>): a random shop of the town selling an item function of the first entry on
@@ -2192,7 +2237,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             mind.ShopAt = ShopFor(places, mind, TargetRoll(world, table.IdOf(slot), behaviour), random);
         }
 
-        mind.Target ??= TargetFor(world, table.IdOf(slot), behaviour, board.Town, mind)
+        // An outpost's building no longer offered since the walker drew it (locked, private, gone): drawn again (engine choice; the squad keeps
+        // to the player's locks).
+        bool withdrawn = behaviour == AiBehaviour.TownNode && mind.Target is { } drawn && NoLongerOffered(world, board.HomeTown, drawn);
+        if (withdrawn) mind.Target = null;
+
+        mind.Target ??= TargetFor(world, table.IdOf(slot), behaviour, board.HomeTown, mind)
             ?? (behaviour == AiBehaviour.TownNode ? OccupiedSpot(world, board, table.IdOf(slot)) : null);
 
         if (mind.Target is not { } goTo) Become(world, slot, CharacterTask.Idle);
@@ -2340,6 +2390,14 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         {
             claim = board.SitClaims.TryGetValue(slot, out var sitting);
             if (claim) claimed = sitting.Spot;
+
+            // A piece the player built that a character took by an order or job since the claim: given up at once, so two never share it.
+            if (claim && TownPlaceClaims.TakenByOrder(world, sitting))
+            {
+                mind.SeatUnreachable = true;
+                Become(world, slot, CharacterTask.Idle);
+                return;
+            }
         }
         else claim = board.SeatClaims.TryGetValue(slot, out claimed);
 
@@ -3159,16 +3217,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     void FindGate(World world, Blackboard board, Squad squad)
     {
         board.GateHome ??= board.OwnHome;   // the HOME_GATE hand is cached on its first resolve and never follows a later change of the home
+        var town = board.HomeTown;
         TownBuilding? gate = board.GateHome is { IsGate: true } home ? home : null;
-        if (gate is null && board.Crowd.ContainsKey(TaskType.ManTheGate) && board.Town >= 0)
-        {
-            float best = float.MaxValue;
-            foreach (var b in data.Sites[board.Town].Buildings)
-            {
-                float d = Vector2.DistanceSquared(Flat(b.Position), Flat(squad.Position));
-                if (b.IsGate && d < best) (gate, best) = (b, d);
-            }
-        }
+        if (gate is null && board.Crowd.ContainsKey(TaskType.ManTheGate))
+            gate = NearestGate(town, Flat(squad.Position));
 
         if (gate is null)
         {
@@ -3177,14 +3229,37 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
 
         if (board.Gate?.Building == gate) return;
-        board.Gate = PostOf(world, gate, board.Town >= 0 ? Flat(data.Sites[board.Town].Position) : Flat(gate.Position));
+        var centre = town.IsNone ? Flat(gate.Position) : TownExit.Centre(world, data, town);
+        board.Gate = PostOf(world, gate, centre, inside: gate.RuntimeKey is not null);
+    }
+
+    /// <summary>
+    /// The gate of <paramref name="town"/> nearest <paramref name="at"/> (the fallback of <see cref="FindGate"/>): a placed town's building with
+    /// <c>is wall gate</c>, or an outpost's complete wall gate the player built (<see cref="TownPlaceIndex.OutpostGates"/>, an outpost a squad has
+    /// as its town; Meitou only, the original plans no goals for the player's squads); null for no town or a town without one.
+    /// </summary>
+    TownBuilding? NearestGate(CampaignTown town, Vector2 at)
+    {
+        if (town.IsNone) return null;
+
+        TownBuilding? gate = null;
+        float best = float.MaxValue;
+        var buildings = town.Site >= 0 ? data.Sites[town.Site].Buildings : _townPlaces.OutpostGates(town.PlayerTown);
+        foreach (var b in buildings)
+        {
+            float d = Vector2.DistanceSquared(Flat(b.Position), at);
+            if (b.IsGate && d < best) (gate, best) = (b, d);
+        }
+
+        return gate;
     }
 
     /// <summary>
     /// The post of <paramref name="gate"/> (see <see cref="FindGate"/>) for a town centred at <paramref name="town"/>; null: no door, or its leaf's
-    /// place not known.
+    /// place not known. <paramref name="inside"/>: its guards stand on the town's side (<b>engine choice</b> for a gate the player built, an
+    /// outpost's: a guard posted outside would pass through it and so unlock and open the player's gate on its way).
     /// </summary>
-    internal static GatePost? PostOf(World world, TownBuilding gate, Vector2 town)
+    internal static GatePost? PostOf(World world, TownBuilding gate, Vector2 town, bool inside = false)
     {
         Locks.Fixture? door = null;
         foreach (var f in world.Fixtures.OfBuilding(gate.Key))
@@ -3194,13 +3269,18 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         // Out of the town: the original's side is not decoded (engine choice).
         if (Vector2.Dot(way, Flat(leaf.Centre) - town) < 0) way = -way;
-        return new GatePost(gate, leaf.Centre with { Y = leaf.Foot }, way, leaf.HalfWidth);
+        return new GatePost(gate, leaf.Centre with { Y = leaf.Foot }, way, leaf.HalfWidth, inside);
     }
 
     /// <summary>
-    /// Where a gate's gate guard stands: <see cref="GateGuardOut"/> out from its leaf.
+    /// Where a gate's gate guard stands: <see cref="GateGuardOut"/> out from its leaf, or in from it for a guard posted inside
+    /// (<see cref="GatePost.Inside"/>; it still faces out).
     /// </summary>
-    internal static Vector3 FrontOf(GatePost gate) => gate.Door + new Vector3(gate.Out.X, 0, gate.Out.Y) * GateGuardOut;
+    internal static Vector3 FrontOf(GatePost gate)
+    {
+        float side = gate.Inside ? -GateGuardOut : GateGuardOut;
+        return gate.Door + new Vector3(gate.Out.X, 0, gate.Out.Y) * side;
+    }
 
     /// <summary>
     /// Where a gate's guards stand: the gate guard 15 out from its leaf; a member whose node goal finds no node in a gate it lives in flanks the

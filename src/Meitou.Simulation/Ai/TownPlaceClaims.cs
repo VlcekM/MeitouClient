@@ -338,7 +338,7 @@ sealed class TownPlaceClaims(PopulationData data)
     /// <summary>
     /// Whether a character working a machine (<see cref="CharacterTask.Operate"/>) is on the spot, as of the last tick.
     /// </summary>
-    static bool Operated(World world, Vector3 at)
+    internal static bool Operated(World world, Vector3 at)
     {
         var scan = new OperatorScan { Table = world.Characters, At = at };
         world.Grid.Query(at.X, at.Z, 1, ref scan, static (int other, ref OperatorScan st) =>
@@ -391,11 +391,13 @@ sealed class TownPlaceClaims(PopulationData data)
     /// The sitting-around (275) counterpart of <see cref="ClaimSeats"/> (the finder <c>FUN_1408caf00</c>, docs/game/ai-tasks.md "Town goals"): a
     /// member whose role list has 275 open at this hour takes a piece of furniture of the mask 0x1020080 that no one claimed in this cadence pass, in
     /// the town it stands in (<see cref="TownPlaces.Seats"/>; the home need not be a part of it): a chair or throne, and a training dummy unless the
-    /// character is on the player's side (the mask 0x1020000 of <c>FUN_140856bc0</c>; an AI-run squad is never the player's, so this only spares a
-    /// recruit). The town must be the squad's home town or owned by the squad's faction, a player-side character's a town of the player's faction
+    /// character is on the player's side (the mask 0x1020000 of <c>FUN_140856bc0</c>: a recruit, or a member of an autonomous player squad). The
+    /// town must be the squad's home town or owned by the squad's faction, a player-side character's a town of the player's faction
     /// (<see cref="MaySitIn"/>), and the piece's building owned by the character's faction or the squad's (<see cref="TownPlaces.SeatOwners"/>);
-    /// outside every town it finds nothing. The nearest free piece is an engine choice (the original takes the first of its zone map). A member keeps
-    /// its piece while it still sits around and may sit there, as in <see cref="ClaimSeats"/>.
+    /// outside every town it finds nothing; in the outpost the squad has as its town (<see cref="SitTown"/>) the pieces are the player's
+    /// (<see cref="OutpostSeats"/>), and one a character sits on by an order or job is not taken. The nearest free piece is an engine choice (the
+    /// original takes the first of its zone map). A member keeps its piece while it still sits around and may sit there, as in
+    /// <see cref="ClaimSeats"/>.
     /// </summary>
     public void ClaimSitting(World world, Blackboard board, Squad squad, TownPlaceIndex places)
     {
@@ -425,15 +427,15 @@ sealed class TownPlaceClaims(PopulationData data)
 
             bool playerSide = PlayerSide(world, cold);
             var at = world.Characters.Next[s].Position;
-            int site = data.TownAt(at);
-            var seats = site >= 0 && MaySitIn(world, board, squad, site, playerSide) ? places.Of(site) : TownPlaceIndex.None;
+            var town = SitTown(world, board, at);
+            var seats = !town.IsNone && MaySitIn(world, board, squad, town, playerSide) ? places.Of(town) : TownPlaceIndex.None;
             bool Mine(TownBuilding b) =>
                 seats.SeatOwners.TryGetValue(b, out int owner) && owner >= 0 && (owner == cold.Faction || owner == squad.Faction);
 
             // Only reigning open: the throne furniture alone (BF_THRONE, mask 0x1000000 of FUN_1408cbd50); sitting around also takes chairs and
             // dummies.
             bool Takes(HomeSpotKind kind) => around ? Sittable(kind, !playerSide) : kind == HomeSpotKind.ThroneSeat;
-            if (had && Mine(old.Building) && Takes(old.Spot.Kind) && !DummyUsed(old.Spot))
+            if (had && Mine(old.Building) && Takes(old.Spot.Kind) && !DummyUsed(old.Spot) && !TakenByOrder(world, old))
             {
                 TakenOf(old.Building).Add(old.Index);
                 board.SitClaims[s] = old;
@@ -447,7 +449,7 @@ sealed class TownPlaceClaims(PopulationData data)
             {
                 var seat = seats.Seats[i];
                 if (!Takes(seat.Spot.Kind) || !Mine(seat.Building) || DummyUsed(seat.Spot)
-                    || _seatTaken.TryGetValue(seat.Building, out var taken) && taken.Contains(seat.Index))
+                    || _seatTaken.TryGetValue(seat.Building, out var taken) && taken.Contains(seat.Index) || TakenByOrder(world, seat))
                     continue;
 
                 float d = Vector3.DistanceSquared(seat.Spot.Position, at);
@@ -469,7 +471,7 @@ sealed class TownPlaceClaims(PopulationData data)
     /// </summary>
     public void ClaimTownPosts(World world, Blackboard board, Squad squad, TownPlaceIndex places)
     {
-        var posts = places.Of(board.Town).Posts;
+        var posts = places.Of(board.HomeTown).Posts;
         for (int k = 0; k < squad.Members.Count; k++)
         {
             var id = squad.Members[k];
@@ -538,15 +540,37 @@ sealed class TownPlaceClaims(PopulationData data)
     }
 
     /// <summary>
-    /// Whether a member standing in town <paramref name="site"/> may sit around there (the town gate of <c>FUN_1408caf00</c>): a non-player character
+    /// The town a member standing at <paramref name="at"/> sits around in: the placed town it stands in (<see cref="PopulationData.TownAt"/>),
+    /// else the outpost the squad has as its town when it stands within that outpost's radius (Meitou only: the original plans no goals for the
+    /// player's squads, and only those have an outpost as their town); none outside both.
+    /// </summary>
+    CampaignTown SitTown(World world, Blackboard board, Vector3 at)
+    {
+        if (data.TownAt(at) is >= 0 and var site) return CampaignTown.OfSite(site);
+
+        var home = board.HomeTown;
+        if (home.PlayerTown <= 0 || world.Buildings.FindTown(home.PlayerTown) is not { } outpost)
+            return CampaignTown.None;
+        return Vector2.DistanceSquared(Flat(at), Flat(outpost.Position)) <= outpost.Radius * outpost.Radius ? home : CampaignTown.None;
+    }
+
+    /// <summary>
+    /// Whether a member standing in <paramref name="town"/> may sit around there (the town gate of <c>FUN_1408caf00</c>): a non-player character
     /// needs the squad's home town or a town owned by the squad's faction, a player-side one a town owned by the player's faction (no home test).
     /// </summary>
-    bool MaySitIn(World world, Blackboard board, Squad squad, int site, bool playerSide)
+    bool MaySitIn(World world, Blackboard board, Squad squad, CampaignTown town, bool playerSide)
     {
-        int owner = site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
+        int owner = town.Owner(world, data);
         if (playerSide) return owner >= 0 && owner == (world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction);
-        return site == board.Town || owner >= 0 && owner == squad.Faction;
+        return town == board.HomeTown || owner >= 0 && owner == squad.Faction;
     }
+
+    /// <summary>
+    /// Whether a character sits on a player-built seat piece (an outpost's, <see cref="OutpostSeats"/>) by the player's order or job: such a
+    /// sitter operates it (<see cref="Operated"/>), so no member claims it. A placed town's pieces are reserved as before
+    /// (<see cref="ReserveSeats"/>).
+    /// </summary>
+    internal static bool TakenByOrder(World world, SeatClaim seat) => seat.Building.RuntimeKey is not null && Operated(world, seat.Spot.Position);
 
     /// <summary>
     /// Whether sitting around takes a piece of furniture of this kind (bits CHAIR and THRONE of the mask; TRAINING too unless

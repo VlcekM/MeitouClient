@@ -186,6 +186,23 @@ public sealed class SquadAutonomy(PopulationData data)
     internal static bool WalkTaken(CharacterCold cold, AiMind mind) => mind.Player && (cold.Running is not { } run || !mind.Owns(run));
 
     /// <summary>
+    /// Whether a character keeps to the player's locked doors (<see cref="Locks.LockSystem"/>: it has no way through one, and opens or unlocks
+    /// none): a member of an autonomous squad whose town is an outpost (<see cref="Blackboard.Outpost"/>) on a task the AI started for it
+    /// (<see cref="AiMind.Owns"/>). An order or a job of the player's still goes through as the player's characters do. <b>Engine choice</b>
+    /// (Meitou only): the AI never undoes a lock the player set on the outpost it lives in.
+    /// </summary>
+    internal static bool KeepsPlayerLocks(CharacterCold cold) =>
+        cold.Ai is { Player: true, Squad: { Autonomous: true, Ai.Outpost: > 0 } } mind && cold.Running is { } run && mind.Owns(run);
+
+    /// <summary>
+    /// Whether a sitter's seat gives way to the player's characters: a member of an autonomous squad whose town is an outpost, sitting by its
+    /// package (<see cref="AiMind.SitClip"/>). The player's Use order and Sit job do not count it as using the chair, and it gets up once one of
+    /// them sits there (<see cref="TownPlaceClaims.TakenByOrder"/>). <b>Engine choice</b> (Meitou only): the player's own furniture is the
+    /// player's first.
+    /// </summary>
+    internal static bool YieldsSeat(AiMind mind) => mind.Player && mind.Squad is { Autonomous: true, Ai.Outpost: > 0 };
+
+    /// <summary>
     /// The think started a task for a player character: its tick and row are kept, so the task counts as the AI's own (<see cref="AiMind.Owns"/>).
     /// The character's own slot.
     /// </summary>

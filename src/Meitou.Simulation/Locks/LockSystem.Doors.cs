@@ -471,7 +471,8 @@ public sealed partial class LockSystem
     /// unlocking its own or 287 bashing; in, 81 bashing, 78 / 140 unlocking its own, or where the restricted rows are offered 285 cutting or 76
     /// picking), then 72 / 74 opening it, so the first with a way goes through (<see cref="StartDoorWay"/>) unless someone already works the door;
     /// the others stop there, a player's character saying "It's locked.". A patroller has no way through a gate and no way in
-    /// (<see cref="PatrolsPast"/>).
+    /// (<see cref="PatrolsPast"/>), nor has a member of an AI-run squad living in an outpost through a door of the player's on a walk of the
+    /// AI's (<see cref="WayThrough"/>): it stops there, saying nothing.
     /// </summary>
     void AtLockedDoor(World world, Fixture door, List<int> stopped)
     {
@@ -493,7 +494,7 @@ public sealed partial class LockSystem
 
             TaskStart.Stand(table, slot);
             c.WalkEnd = WalkEnd.Failed;
-            if (c.IsPlayer) SayLocked(world, c, door, n.Position);
+            if (c.IsPlayer && !SquadAutonomy.KeepsPlayerLocks(c)) SayLocked(world, c, door, n.Position);
         }
     }
 

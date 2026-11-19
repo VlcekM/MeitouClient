@@ -628,8 +628,9 @@ public sealed partial class AiSystem
                 case TaskType.WanderTown or TaskType.Shopping or TaskType.Wanderer:
                     {
                         var behaviour = TaskBehaviours.Of(type);
-                        var at = _mind.Goal?.Task.Type == type && _mind.Target is { } kept
-                            ? kept : _system.TargetFor(_world, _world.Characters.IdOf(_slot), behaviour, _board.Town, _mind);
+                        bool keeps = _mind.Goal?.Task.Type == type && _mind.Target is { } kept
+                            && !(type == TaskType.WanderTown && _system.NoLongerOffered(_world, _board.HomeTown, kept));
+                        var at = keeps ? _mind.Target : _system.TargetFor(_world, _world.Characters.IdOf(_slot), behaviour, _board.HomeTown, _mind);
                         if (at is not { } p) return default;
                         return new PlanTarget(type == TaskType.Wanderer ? Targets.Town : Targets.Spot,
                             type == TaskType.Wanderer ? p with { Y = float.NaN } : p);
