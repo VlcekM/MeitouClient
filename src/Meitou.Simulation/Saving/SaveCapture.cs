@@ -1113,8 +1113,9 @@ public static partial class SaveCapture
                 continue;
             }
 
-            if (!sp.Touched) continue;   // a stand-in that travelled is written by WriteRoaming, a never-made one once made by WriteFreshNpcs
             var p = sp.PlatoonId >= 0 ? world.Platoons.Find(sp.PlatoonId) : null;
+            if (p is { Guest: true }) WriteGuest(builder.Game, world, data, platoon, p, sp.Anchor);
+            if (!sp.Touched) continue;   // a stand-in that travelled is written by WriteRoaming, a never-made one once made by WriteFreshNpcs
             var squad = p is { State: PlatoonState.Loaded } ? world.Squads.Find(p.SquadId) : null;
             if (squad is not null && table.TryResolveNext(squad.Leader, out int leaderSlot)) platoon.Position = table.Previous[leaderSlot].Position;
 
@@ -1138,7 +1139,6 @@ public static partial class SaveCapture
             }
 
             if (p is not null) WriteMovedOut(builder.Game, world, data, platoon.Record, sp, p, squad);
-            if (p is { Guest: true }) WriteGuest(builder.Game, data, platoon.Record, p);
             if (squad is not null) NoteMemory(platoon.Record, MemoryOf(world)?.Snapshot(squad.Id));
             else if (sp.MemorySet) NoteMemory(platoon.Record, sp.Memory);
             WriteSavedMembers(builder, world, data, options, clock, buildings, races, platoon, sp, squad);
@@ -1166,22 +1166,40 @@ public static partial class SaveCapture
     }
 
     /// <summary>
-    /// A save's platoon a code mod moved to another town as a guest (<see cref="Platoon.Guest"/>): written as one of the host town's, its
-    /// <c>basetown</c> the host's TOWN now and its <c>hometown</c> the host's handle, with no home building, and marked
-    /// <see cref="SavedPlatoon.GuestKey"/>.
+    /// A save's platoon a code mod moved to another town as a guest (<see cref="Platoon.Guest"/>), made since or not: written as one of the host
+    /// town's, its <c>basetown</c> the host's TOWN now and its <c>hometown</c> the host's handle, with no home building, and marked
+    /// <see cref="SavedPlatoon.GuestKey"/>; while unloaded, at the host and with its members' anchor (<see cref="WriteGuestAnchor"/>).
     /// </summary>
-    static void WriteGuest(SaveGame game, PopulationData data, FcsRecord record, Platoon p)
+    static void WriteGuest(SaveGame game, World world, PopulationData data, SavePlatoon platoon, Platoon p, Vector2 anchor)
     {
         if ((uint)p.Origin >= (uint)data.Sites.Count) return;
 
         var host = data.Sites[p.Origin];
+        var record = platoon.Record;
         record.Bools[SavedPlatoon.GuestKey] = true;
         record.Strings["basetown"] = PopulationSystem.TownIdOf(host);
         record.Bools[SavedPlatoon.BaseTownKey] = true;
         if (game.Towns.FirstOrDefault(t => !t.IsNest && t.Instance == host.InstanceId) is { Handle.IsNull: false } town)
             town.Handle.Write(record, "hometown");
         Hand.Null.Write(record, "homebuilding");
+
+        // In the world, its members are written where they stand.
+        if (p.State != PlatoonState.Unloaded)
+        {
+            record.Vector3S.Remove(SavedPlatoon.GuestAnchorKey);
+            return;
+        }
+
+        platoon.Position = Ground(world, p.Position);
+        WriteGuestAnchor(record, anchor);
     }
+
+    /// <summary>
+    /// An unloaded guest's <see cref="SavedPlatoon.GuestAnchorKey"/>: the platoon place its members' saved places belong to (at its old town), so
+    /// the load moves them to the host with it.
+    /// </summary>
+    static void WriteGuestAnchor(FcsRecord record, Vector2 anchor) =>
+        record.Vector3S[SavedPlatoon.GuestAnchorKey] = new Vector3(anchor.X, 0, anchor.Y);
 
     /// <summary>
     /// A platoon's owned list (<c>owned stuff count</c>, <c>owned&lt;k&gt;</c>) with the entry naming <paramref name="old"/> replaced by
@@ -1614,6 +1632,7 @@ public static partial class SaveCapture
 
             // Moved out of a house the player bought with no other home: not persistent, as the original's purchase leaves it (WriteMovedOut).
             if (squad.MovedOut && squad.HomeBuilding is null) written.Record.Bools["persistent"] = false;
+            if (roamer is not null && into is null) WriteBaseTown(written.Record, roamer);
             return written;
         }
 
@@ -1643,12 +1662,14 @@ public static partial class SaveCapture
                     into: into, missionTown: p.Target);
                 if (p.Persistent) _written[p.Id].Record.Bools["persistent"] = true;   // a split-off prisoner's platoon
                 WriteBaseTown(_written[p.Id].Record, p);
+                if (p.Guest) WriteGuestAnchor(_written[p.Id].Record, stored.Anchor);
+                if (p.Guest) _written[p.Id].Position = Ground(_world, p.Position);
             }
         }
 
         /// <summary>
-        /// A stored town platoon's <c>basetown</c>: the TOWN its town was when it was stored (<see cref="Platoon.BaseTown"/>), so one of an older
-        /// version stays refused after a load, as the original's activation refuses it; a mod's guest is written as one of its host's
+        /// A town platoon's <c>basetown</c>: the TOWN its town was when it was stored (<see cref="Platoon.BaseTown"/>), so one of an older version
+        /// stays refused after a load, as the original's activation refuses it; a mod's guest is written as one of its host's
         /// (<see cref="SavedPlatoon.GuestKey"/>).
         /// </summary>
         static void WriteBaseTown(FcsRecord record, Platoon p)

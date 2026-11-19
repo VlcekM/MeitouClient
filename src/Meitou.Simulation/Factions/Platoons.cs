@@ -196,19 +196,13 @@ public sealed class Platoon
     public bool PersistentCleared { get; set; }
     /// <summary>
     /// The TOWN its town was when the platoon was stored from it (its own record's id, or the override in its place); null when unknown, as for one
-    /// read from a save, whose record keeps its <c>basetown</c>. A town that changes version leaves the platoons of an older one homeless
-    /// (<see cref="Displaced"/>), and a save writes it as the platoon's <c>basetown</c>.
+    /// read from a save, whose record keeps its <c>basetown</c>. A town that changes version drops the platoons of an older one, and its activation
+    /// refuses one (<c>PopulationSystem</c> town overrides); a save writes it as the platoon's <c>basetown</c>.
     /// </summary>
     public string? BaseTown { get; set; }
     /// <summary>
-    /// Its town changed version and it no longer belongs there (<c>PopulationSystem</c> town overrides): it is not made in the world and goes at the
-    /// population's next look unless a code mod moves it to another town (<c>PopulationSystem.RehomePlatoon</c>). Not saved: a save writes its old
-    /// <c>basetown</c>, which the activation refuses.
-    /// </summary>
-    public bool Displaced { get; set; }
-    /// <summary>
     /// A code mod moved it to its town (<c>PopulationSystem.RehomePlatoon</c>, engine API): it stays there as a guest, not one of the town's own
-    /// residents, so the town still makes its residents, and a later change of the town's version leaves it where it is. Saved.
+    /// residents, so the town still makes its residents, and a later change of the town's version leaves it where it is. Saved (<c>meitou guest</c>).
     /// </summary>
     public bool Guest { get; set; }
     /// <summary>
@@ -407,8 +401,7 @@ public sealed class PlatoonRegistry
             h.Add(p.UnloadAtTick);
             h.Add(p.OrderCooldown);
             if (p.Held) h.Add(0x48656C64);   // only when held, so worlds without code mods hash as before
-            if (p.Displaced) h.Add(0x44697370);   // only while displaced or a guest, so worlds without town overrides hash as before
-            if (p.Guest) h.Add(0x47756573);
+            if (p.Guest) h.Add(0x47756573);   // only for a guest, so worlds without town overrides hash as before
             HashMod(ref h, p);
             if (p.Job != Ai.PlatoonJob.None || p.Point is not null)
             {

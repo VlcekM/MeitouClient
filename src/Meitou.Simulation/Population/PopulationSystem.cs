@@ -129,7 +129,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         /// </summary>
         public int Planned;
         /// <summary>
-        /// Replaced, its new residents not made yet (the original's <c>updatedTownOverrides</c>; not saved, as there).
+        /// Replaced, its new residents not made yet (the original's <c>updatedTownOverrides</c>; Meitou saves it, <see cref="OverridePendingKey"/>).
         /// </summary>
         public bool Repopulate;
     }
@@ -153,6 +153,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         KeepWild = this._settings.KeepWild;
         ResidentSchedule = this._settings.ResidentSchedule;
         OffscreenOverrides = this._settings.OffscreenOverrides;
+        _overrides = new TownOverrides(_data.Db);
         _live = new WorldStates(data.Db, data.Relations);
         if (!this._settings.Background) return;
         _work = [];
@@ -337,7 +338,6 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         world.Uniques.SeedPrisoners(_data.Db);
         RefreshUniques(world);
         RefreshStates(world);
-        DropDisplaced(world);
         RefreshZones(world);
         StepOverrides(world);
         StepRoaming(world);
@@ -813,7 +813,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
 
         // A town made once (its pools say so) never makes residents again; its own squads that lost too many are made afresh (docs/simulation.md
         // "Off-screen tier"). A town that has just been replaced makes the replacement's residents, as the original treats its zone as fresh; the
-        // squads it had stay.
+        // squads of its old version are gone (DropHomeless).
         bool replaced = Replace(world, site);
         bool held = !replaced && (HoldsSquads(world, site.Index) || PoolsOf(site.Index) is { Started: true });
         if (held) CheckRegeneration(world, site.Index);
@@ -838,23 +838,23 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     bool _loadingScreen;
 
     /// <summary>
-    /// The original's <c>ZoneManager::checkForRepopulateTown</c> at a town's load (docs/game/factions-squads-towns.md "Town overrides"): not behind
-    /// the loading screen, nor for a town of the player's faction or one a code mod holds (<see cref="HoldTown"/>); a town replaced whose new
-    /// residents have not been made yet (the original's <c>updatedTownOverrides</c>) answers yes again without looking, else the winning
-    /// <c>override town</c> (<see cref="ChooseOverride"/>) takes the town's place (<see cref="ApplyVersion"/>). Either way its zone is reset
-    /// (<see cref="ResetZone"/>). Whether the town is to be made afresh.
+    /// The original's <c>ZoneManager::checkForRepopulateTown</c> at a town's load (docs/game/factions-squads-towns.md "Town overrides"): a town
+    /// replaced whose new residents have not been made yet (the original's <c>updatedTownOverrides</c>) answers yes again without looking, whoever
+    /// replaced it; else, not behind the loading screen, nor for a town of the player's faction or one a code mod holds (<see cref="HoldTown"/>),
+    /// the winning <c>override town</c> (<see cref="TownOverrides.Choose"/>) takes the town's place (<see cref="ApplyVersion"/>). Either way its
+    /// zone is reset (<see cref="ResetZone"/>). Whether the town is to be made afresh.
     /// </summary>
     bool Replace(World world, TownSite site)
     {
-        if (_loadingScreen || PlayersTown(world, site) || _overrides.IsHeld(site.Index)) return false;
-
         if (_states[site.Index].Repopulate)
         {
             ResetZone(world, site);
             return true;
         }
 
-        if (ChooseOverride(site) is not { } best) return false;
+        if (_loadingScreen || PlayersTown(world, site) || _overrides.IsHeld(site.Index)) return false;
+        if (_overrides.Choose(site, States) is not { } best) return false;
+
         ApplyVersion(world, site, best, offscreen: false);
         return true;
     }
@@ -866,85 +866,76 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         site.Index < _data.SiteFactions.Count && _data.SiteFactions[site.Index] is >= 0 and var f && f == PlayerFactionOf(world);
 
     /// <summary>
-    /// The current TOWN's winning <c>override town</c> entry (docs/game/factions-squads-towns.md "Town overrides"): of the entries whose every
-    /// <c>world state</c> holds, weighted by how many they have (none: never), other than the replacement in place, the heaviest, the first of
-    /// equals; null when none qualifies.
-    /// </summary>
-    TownData? ChooseOverride(TownSite site)
-    {
-        if (site.Town.OverrideTown.Count == 0) return null;
-
-        TownData? best = null;
-        int weight = 0;
-        foreach (var link in site.Town.OverrideTown)
-        {
-            if (_data.Db.Find(link.Id) is not { Type: FcsRecordType.Town } record || record.StringId == site.Replacement?.Id) continue;
-            var candidate = TownData.From(record);
-            var states = candidate.WorldState.Where(w => _data.Db.Find(w.Id) is { Type: FcsRecordType.WorldEventState }).DistinctBy(w => w.Id).ToList();
-            if (states.Count > weight && states.All(w => IWorldStates.Passes(States, _data.Db, w.Id, w.V0))) (best, weight) = (candidate, states.Count);
-        }
-
-        return best;
-    }
-
-    /// <summary>
     /// Puts <paramref name="version"/> in the town's place (null, or the town's own record: back to its own TOWN), its new residents to be made at
-    /// its next load, its zone reset (<see cref="ResetZone"/>); the platoons of the old version are left homeless (<see cref="DisplacePlatoons"/>),
-    /// the change logged and the observers told (<see cref="ITownSwitchObserver"/>).
+    /// its next load, its zone reset (<see cref="ResetZone"/>); the change is logged and the observers told (<see cref="ITownSwitchObserver"/>),
+    /// then the platoons of the old version that no observer moved go (<see cref="DropHomeless"/>).
     /// </summary>
     void ApplyVersion(World world, TownSite site, TownData? version, bool offscreen)
     {
         if (version?.Id == site.Record.Id) version = null;
-        string from = VersionOf(site);
+        string? from = site.Replacement?.Id;
         _data.SetReplacement(site.Index, version);
         _states[site.Index].Repopulate = true;
+        _overrides.Changed(site.Index);
         ResetZone(world, site);
-        var displaced = DisplacePlatoons(world, site);
 
-        if (_townLog.Count >= 256) _townLog.RemoveAt(0);
-        _townLog.Add($"{site.Record.Name}: now {version?.Name ?? site.Record.Name}{(offscreen ? " (off screen)" : "")}");
-        var change = new TownSwitch(world.Tick, site.Index, from.Length == 0 ? null : from, version?.Id, displaced, offscreen);
-        world.TownSwitchObservers.Observe(world, change);
+        var homeless = Homeless(world, site);
+        LogSwitch(site, version, offscreen);
+        world.TownSwitchObservers.Observe(world, new TownSwitch(world.Tick, site.Index, from, version?.Id, homeless, offscreen));
+        DropHomeless(world, site, homeless);
     }
 
     /// <summary>
-    /// The TOWN a site is now: its replacement's id, or "" for its own record.
+    /// One town log line for a town that changed version.
+    /// </summary>
+    void LogSwitch(TownSite site, TownData? version, bool offscreen)
+    {
+        if (_townLog.Count >= 256) _townLog.RemoveAt(0);
+        string where = offscreen ? " (off screen)" : "";
+        _townLog.Add($"{site.Record.Name}: now {version?.Name ?? site.Record.Name}{where}");
+    }
+
+    /// <summary>
+    /// The unloaded platoons of a town that changed version that no longer belong to it (<see cref="Outdated"/>), in id order.
+    /// </summary>
+    List<int> Homeless(World world, TownSite site)
+    {
+        var homeless = new List<int>();
+        foreach (var p in world.Platoons.All)
+            if (p.State == PlatoonState.Unloaded && Outdated(p, site)) homeless.Add(p.Id);
+        return homeless;
+    }
+
+    /// <summary>
+    /// The platoons of the old version still homeless once the observers heard of the change (none moved them, <see cref="RehomePlatoon"/>) go
+    /// (<see cref="Despawn"/>, their uniques released). The original leaves them to its activation, which refuses them (spawn mode 3,
+    /// <see cref="RefuseReplacedHome"/>); dropping them at the change keeps a town changed back from bringing an old garrison back (engine choice).
+    /// </summary>
+    void DropHomeless(World world, TownSite site, List<int> homeless)
+    {
+        foreach (int id in homeless)
+        {
+            if (world.Platoons.Find(id) is { State: PlatoonState.Unloaded } p && Outdated(p, site)) Despawn(world, p);
+        }
+    }
+
+    /// <summary>
+    /// Whether a platoon is one of a town's own (not a guest's, a campaign's or a roaming one) that does not belong to its version now: a save's by
+    /// its <c>basetown</c> (<see cref="HomeFits(Platoon)"/>), one stored this session by the TOWN it was stored from (<see cref="Platoon.BaseTown"/>;
+    /// unknown: it belongs).
+    /// </summary>
+    bool Outdated(Platoon p, TownSite site)
+    {
+        if (p.Origin != site.Index || !p.Pinned || p.Guest || p.Campaign is not null) return false;
+        if (p.Saved is not null) return !HomeFits(p);
+
+        return p.BaseTown is { } home && home != TownIdOf(site);
+    }
+
+    /// <summary>
+    /// The TOWN a site is now: its replacement's id, or "" for its own record (the key of <see cref="TownOverrides.Revisits"/>).
     /// </summary>
     internal static string VersionOf(TownSite site) => site.Replacement?.Id ?? "";
-
-    /// <summary>
-    /// The unloaded platoons of a town that changed version and no longer belong to it: its own (not a guest's, a campaign's or one already
-    /// displaced) whose TOWN is not the town's new one. They are marked (<see cref="Platoon.Displaced"/>), so they are not made, and go at the
-    /// next look unless a mod moves them (<see cref="RehomePlatoon"/>); the original leaves them to its activation, which refuses them (spawn mode
-    /// 3), so here a town changed back cannot bring an old garrison back. Their ids, in id order.
-    /// </summary>
-    List<int> DisplacePlatoons(World world, TownSite site)
-    {
-        var displaced = new List<int>();
-        foreach (var p in world.Platoons.All)
-        {
-            if (p.Origin != site.Index || !p.Pinned || p.Guest || p.Displaced || p.Campaign is not null) continue;
-            if (p.State != PlatoonState.Unloaded || BelongsTo(p, site)) continue;
-
-            p.Displaced = true;
-            displaced.Add(p.Id);
-            _overrides.Displace(p.Id);
-        }
-
-        displaced.Sort();
-        return displaced;
-    }
-
-    /// <summary>
-    /// Whether a town's platoon belongs to its version now: a save's by its <c>basetown</c> (<see cref="HomeFits(Platoon)"/>), one stored this
-    /// session by the TOWN it was stored from (<see cref="Platoon.BaseTown"/>); one whose TOWN is unknown belongs.
-    /// </summary>
-    bool BelongsTo(Platoon p, TownSite site)
-    {
-        if (p.Saved is not null) return HomeFits(p);
-
-        return p.BaseTown is not { } home || home == TownIdOf(site);
-    }
 
     /// <summary>
     /// The TOWN record a site is now: its replacement's id, else its own record's (what a save writes as its platoons' <c>basetown</c>).
@@ -952,9 +943,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     internal static string TownIdOf(TownSite site) => site.Replacement?.Id ?? site.Record.Id;
 
     /// <summary>
-    /// The holds, the versions held, the displaced platoons and the off-screen count (<see cref="TownOverrides"/>).
+    /// The override entries, their answers, the holds and the versions held (<see cref="TownOverrides"/>).
     /// </summary>
-    readonly TownOverrides _overrides = new();
+    readonly TownOverrides _overrides;
 
     /// <summary>
     /// How many towns changed version off screen in this world (each one also logged: <see cref="TakeTownLog"/>).
@@ -962,18 +953,18 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     public int OffscreenSwitches => _overrides.OffscreenSwitches;
 
     /// <summary>
-    /// Whether <paramref name="site"/>'s new residents are still to be made at its next load (saved as <c>meitou override pending</c>).
+    /// Whether <paramref name="site"/>'s new residents are still to be made at its next load (saved as <see cref="OverridePendingKey"/>).
     /// </summary>
     public bool OverridePending(int site) => _states[site].Repopulate;
 
     /// <summary>
-    /// A code mod asks for a town's <c>override town</c> list now, as its zone's load would (engine API, docs/modding.md "Town overrides"): the winner,
-    /// if any, takes the town's place at once. False, changing nothing, for an unknown town, one loaded or loading, one of the player's faction, one
-    /// held, or when no entry qualifies. Serial phases only.
+    /// A code mod asks for a town's <c>override town</c> list now, as its zone's load would (engine API, docs/modding.md "Town overrides"): the
+    /// winner, if any, takes the town's place at once. False, changing nothing, for an unknown town, one loaded or loading, one of the player's
+    /// faction, one held, or when no entry qualifies. Serial phases only.
     /// </summary>
     public bool CheckOverrides(World world, int site)
     {
-        if (!Switchable(world, site, mod: true) || ChooseOverride(_data.Sites[site]) is not { } best) return false;
+        if (!Switchable(world, site) || _overrides.Choose(_data.Sites[site], States) is not { } best) return false;
 
         SwitchOffscreen(world, _data.Sites[site], best);
         return true;
@@ -981,12 +972,14 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
 
     /// <summary>
     /// A code mod puts a TOWN of its choice in a town's place (engine API, docs/modding.md "Town overrides"): <paramref name="town"/> (a TOWN
-    /// record's string id; null or the town's own id: back to its own record, residents made afresh). Held towns may be switched this way. False,
-    /// changing nothing, for an unknown town, one loaded or loading, a record that is no TOWN, or the version already in place. Serial phases only.
+    /// record's string id; null or the town's own id: back to its own record, residents made afresh). Held towns and towns of the player's faction
+    /// may be switched this way. False, changing nothing, for an unknown town, one loaded or loading, a record that is no TOWN, or the version
+    /// already in place. Serial phases only.
     /// </summary>
     public bool ApplyTownVersion(World world, int site, string? town)
     {
-        if (!Switchable(world, site, mod: true, ignoreHold: true)) return false;
+        if (!Switchable(world, site, byMod: true)) return false;
+
         var target = _data.Sites[site];
         TownData? version = null;
         if (town is not null && town != target.Record.Id)
@@ -994,6 +987,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             if (_data.Db.Find(town) is not { Type: FcsRecordType.Town } record) return false;
             version = TownData.From(record);
         }
+
         if ((version?.Id ?? "") == VersionOf(target)) return false;
 
         SwitchOffscreen(world, target, version);
@@ -1001,9 +995,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// A code mod takes a town out of the override checks, or gives it back (engine API, docs/modding.md "Town overrides"): held, neither its zone's
-    /// load nor the off-screen look replaces it, and only <see cref="ApplyTownVersion"/> changes it. Not saved: the mod holds it again in
-    /// <c>IWorldReady</c>. False for an unknown town. Serial phases only.
+    /// A code mod takes a town out of the override checks, or gives it back (engine API, docs/modding.md "Town overrides"): held, neither its
+    /// zone's load nor the off-screen look chooses a new version for it, and only <see cref="ApplyTownVersion"/> changes it (residents already due
+    /// are still made). Not saved: the mod holds it again in <c>IWorldReady</c>. False for an unknown town. Serial phases only.
     /// </summary>
     public bool HoldTown(int site, bool held)
     {
@@ -1014,11 +1008,11 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// A code mod moves an unloaded town platoon (a displaced one, say: <see cref="TownSwitch.Displaced"/>) to another town at once, as a guest
-    /// (engine API, docs/modding.md "Town overrides"): it travels no road, keeps its characters, uniques and purse, leaves its shop and home,
-    /// and stays at the host town (<see cref="Platoon.Guest"/>), which still makes its own residents; its members come back near the host town's
-    /// centre when the town loads. False, changing nothing, for a platoon that is not an unloaded town platoon or is in a campaign, or a host town
-    /// that is unknown, its own, loaded or loading. Serial phases only.
+    /// A code mod moves an unloaded town platoon (one a town's change leaves homeless, say: <see cref="TownSwitch.Homeless"/>) to another town at
+    /// once, as a guest (engine API, docs/modding.md "Town overrides"): it travels no road, keeps its characters, uniques and purse, leaves its shop
+    /// and home, and stays at the host town (<see cref="Platoon.Guest"/>), which still makes its own residents; its members come back round the
+    /// host town's centre when the town loads. False, changing nothing, for a platoon that is not an unloaded town platoon or is in a campaign, or
+    /// a host town that is unknown, its own, loaded or loading. Serial phases only.
     /// </summary>
     public bool RehomePlatoon(World world, int platoon, int site)
     {
@@ -1027,13 +1021,12 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
 
         SettleShop(world, p);
         if (p.Stored is { } stored) stored.HomeBuilding = null;
+
         var at = _data.Sites[site].Position;
         p.Origin = site;
         p.Position = new Vector2(at.X, at.Z);
         p.Guest = true;
-        p.Displaced = false;
         p.BaseTown = null;
-        _overrides.Claim(platoon);
         return true;
     }
 
@@ -1058,33 +1051,35 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
 
     /// <summary>
     /// Whether a town may change version away from its zone's load: known, its residents not in the world (not loading, not loaded, not waiting
-    /// to unload), not of the player's faction (a mod's choice may override that), not held (unless <paramref name="ignoreHold"/>) and not
-    /// behind the loading screen.
+    /// to unload) and not behind the loading screen; for the override checks also not held and not of the player's faction (a mod's own choice,
+    /// <paramref name="byMod"/>, may switch those).
     /// </summary>
-    bool Switchable(World world, int site, bool mod = false, bool ignoreHold = false)
+    bool Switchable(World world, int site, bool byMod = false)
     {
         if ((uint)site >= (uint)_data.Sites.Count || _loadingScreen || _states[site].Status != SiteStatus.Unloaded) return false;
-        if (!ignoreHold && _overrides.IsHeld(site)) return false;
 
-        return mod && ignoreHold || !PlayersTown(world, _data.Sites[site]);
+        return byMod || (!_overrides.IsHeld(site) && !PlayersTown(world, _data.Sites[site]));
     }
 
     /// <summary>
     /// The off-screen look, after the zones' loads (<see cref="PopulationSettings.OffscreenOverrides"/>): in Meitou mode, each switchable town
-    /// (<see cref="Switchable"/>) takes its winning override at once, unless that would bring it back to a version it already held since the world states' inputs last changed
-    /// (<see cref="TownOverrides.Revisits"/>), so a two-way pair moves once per change, not at every look.
+    /// (<see cref="Switchable"/>) takes its winning override at once, unless that would bring it back to a version it already held since the
+    /// tested world states' answers last changed (<see cref="TownOverrides.Revisits"/>), so a two-way pair moves once per change, not at every
+    /// look; a chain moves one step per look. A town with nothing to take is looked at again only once an answer or its TOWN changes.
     /// </summary>
     void StepOverrides(World world)
     {
         if (!OffscreenOverrides || _loadingScreen) return;
 
-        _overrides.Inputs(StatesFingerprint(world));
+        _overrides.Inputs(StatesFingerprint(world), States, _data.Sites);
         foreach (var site in _data.Sites)
         {
-            if (site.Town.OverrideTown.Count == 0 || !Switchable(world, site.Index)) continue;
-            if (ChooseOverride(site) is not { } best || _overrides.Revisits(site.Index, best.Id)) continue;
+            if (site.Town.OverrideTown.Count == 0 || _overrides.IsSettled(site.Index) || !Switchable(world, site.Index)) continue;
 
-            SwitchOffscreen(world, site, best);
+            var best = _overrides.Choose(site, States);
+            string key = best is null || best.Id == site.Record.Id ? "" : best.Id;
+            if (best is null || _overrides.Revisits(site.Index, key)) _overrides.Settle(site.Index);
+            else SwitchOffscreen(world, site, best);
         }
     }
 
@@ -1100,20 +1095,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// The platoons displaced at an earlier look and not moved by a mod go (<see cref="Despawn"/>, their uniques released), as the original's
-    /// activation refuses a platoon of an older version (spawn mode 3); run before the zones' loads, which may displace more for the next look.
-    /// </summary>
-    void DropDisplaced(World world)
-    {
-        foreach (int id in _overrides.TakeDisplaced())
-        {
-            if (world.Platoons.Find(id) is { Displaced: true, State: PlatoonState.Unloaded } p) Despawn(world, p);
-        }
-    }
-
-    /// <summary>
-    /// A fingerprint of what the world states read (docs/game/factions-squads-towns.md "Relations and world states"): the unique table's version,
-    /// the code mods' values' version and, for each faction, whether it is the player's ally or hostile to it.
+    /// A cheap fingerprint of what the world states read (docs/game/factions-squads-towns.md "Relations and world states"): the unique table's
+    /// version, the code mods' values' version and, for each faction, whether it is the player's ally or hostile to it. The answers themselves are
+    /// compared only when it changes (<see cref="TownOverrides.Inputs"/>).
     /// </summary>
     long StatesFingerprint(World world)
     {
@@ -1135,18 +1119,18 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     }
 
     /// <summary>
-    /// Whether a loaded save's pending overrides were read (<see cref="RestoreOverrides"/>).
-    /// </summary>
-    bool _overridesRestored;
-
-    /// <summary>
     /// The GAMESTATE_TOWN key of a town whose new residents are still to be made (the original makes them in the load that replaced the town, so it
     /// writes none; the game ignores the key).
     /// </summary>
     public const string OverridePendingKey = "meitou override pending";
 
     /// <summary>
-    /// A loaded save's towns whose new residents were still to be made (<c>meitou override pending</c>), once, at the first tick.
+    /// Whether a loaded save's pending overrides were read (<see cref="RestoreOverrides"/>).
+    /// </summary>
+    bool _overridesRestored;
+
+    /// <summary>
+    /// A loaded save's towns whose new residents were still to be made (<see cref="OverridePendingKey"/>), once, at the first tick.
     /// </summary>
     void RestoreOverrides(World world)
     {
@@ -1154,21 +1138,21 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
 
         _overridesRestored = true;
         if (world.Saved is not { } saved) return;
+
         foreach (var site in _data.Sites)
         {
-            if (site.InstanceId.Length > 0 && saved.TownStates.TryGetValue(site.InstanceId, out var state)
-                && state.Bools.GetValueOrDefault(OverridePendingKey))
-                _states[site.Index].Repopulate = true;
+            if (site.InstanceId.Length == 0 || !saved.TownStates.TryGetValue(site.InstanceId, out var state)) continue;
+            if (state.Bools.GetValueOrDefault(OverridePendingKey)) _states[site.Index].Repopulate = true;
         }
     }
 
     /// <summary>
-    /// Adds the replaced towns, the pending ones and the off-screen state to the world's state hash, only once a town is replaced, pending, held or
-    /// changed off screen (so worlds without them hash as before).
+    /// Adds the replaced towns, the pending ones and the holds to the world's state hash, only once a town is replaced, pending or held (so worlds
+    /// without them hash as before).
     /// </summary>
     void HashOverrides(ref StateHasher h)
     {
-        bool any = _overrides.Any;
+        bool any = _overrides.AnyHeld;
         for (int i = 0; i < _states.Length && !any; i++) any = _states[i].Repopulate || _data.Sites[i].Replacement is not null;
         if (!any) return;
 

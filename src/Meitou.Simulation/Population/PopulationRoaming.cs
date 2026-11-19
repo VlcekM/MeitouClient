@@ -1031,6 +1031,19 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
+    /// A town platoon stored this session from an older version of its town (one still in the world when the town changed: a squad chasing the
+    /// player, say) goes at its activation as the others went at the change (<see cref="DropHomeless"/>), so it does not come back beside the new
+    /// residents. Whether it went.
+    /// </summary>
+    bool DropOutdated(World world, Platoon p)
+    {
+        if (p.Saved is not null || (uint)p.Origin >= (uint)_data.Sites.Count || !Outdated(p, _data.Sites[p.Origin])) return false;
+
+        Despawn(world, p);
+        return true;
+    }
+
+    /// <summary>
     /// The home-hand test of activation: the platoon's <c>basetown</c> (unset: its town's own TOWN) names the town's own TOWN when it has no
     /// replacement, else the replacement.
     /// </summary>
@@ -1051,7 +1064,7 @@ public sealed partial class PopulationSystem
     /// </summary>
     void Activate(World world, Platoon p)
     {
-        if (p.Displaced || RefuseReplacedHome(world, p)) return;   // a displaced one goes at the next look (DropDisplaced)
+        if (RefuseReplacedHome(world, p) || DropOutdated(world, p)) return;
         p.State = PlatoonState.Activating;
 
         // A stand-in that travelled comes back on walkable ground (it went in straight lines, over water and through buildings); one that did not
