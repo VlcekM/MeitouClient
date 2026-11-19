@@ -327,8 +327,11 @@ static class BuildingLodShaders
             if (dot(shellFace, uEye - vWorld) < 0.0) shellFace = -shellFace;
             shellFace /= max(length(shellFace), 1e-20);
             // The triangle's own plane, not the shading normal: a bevel shaded smooth and a rough stone's normal map left lines and speckles in the room.
-            atmoStreet = fract(vInterior) > 0.25
-                && (shellFace.y > 0.5 || (shellFace.y >= -0.5 && dot(shellFace.xz, vToAxis) <= 0.3 * length(vToAxis)));
+            // A shell holding the rooms (three quarters, ShellHoldsRooms: the Ash Dome) keeps its faces turned up in the room: they are its floors,
+            // which the street's light left black under the hidden floors.
+            float shell = fract(vInterior);
+            atmoStreet = shell > 0.25
+                && (shellFace.y > 0.5 && shell < 0.6 || (abs(shellFace.y) <= 0.5 && dot(shellFace.xz, vToAxis) <= 0.3 * length(vToAxis)));
             if (atmoStreet) giInterior = false;
             // The game's metalness map (objects.hlsl), then the named metal textures (MetalTextures): what has no colour of its own; rust and paint are saturated.
             atmoMetalness = uMetalMap != 0u ? texture(uMetal, uv).r : 0.0;

@@ -49,6 +49,12 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     public bool MaskHoldsGround { get; init; }
 
     /// <summary>
+    /// A building with a mask mesh whose <c>interior</c> list draws nothing, so its rooms' floors, ramps and inner walls are parts of its shell (the
+    /// Ash Dome, the Ash Dome Ruin, the Ancient Factory; <b>Verified</b>, a scan of the install's merged records: the only three).
+    /// </summary>
+    public bool ShellHoldsRooms { get; init; }
+
+    /// <summary>
     /// The building's node (position, rotation, <c>scale</c>) the mask meshes are placed with.
     /// </summary>
     public Matrix4x4 Node { get; init; } = Matrix4x4.Identity;
@@ -408,6 +414,7 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
             IsGateway = gateway,
             MaskMeshes = meshes,
             MaskHoldsGround = holdsGround,
+            ShellHoldsRooms = meshes.Count > 0 && !building.GetReferences("interior").Any(r => DrawsMesh(db, r.TargetStringId, 0)),
             Node = node,
             _maskCorners = [.. corners],
             _pieces = [.. pieces],
@@ -415,6 +422,16 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
             _roofCover = new Lazy<RoofCover>(() => RoofCover.For(db, building, placementId, position, rotation, collision)),
             _drawnMask = new Lazy<Vector3[]>(() => [.. meshes.SelectMany(m => collision.RenderTriangles(m)).Select(v => Vector3.Transform(v, node))]),
         };
+    }
+
+    /// <summary>
+    /// Whether the part <paramref name="partId"/> or one of its <c>parts</c> (a few levels down) names a render mesh.
+    /// </summary>
+    static bool DrawsMesh(GameDatabase db, string partId, int depth)
+    {
+        if (db.Find(partId) is not { } part) return false;
+        if (part.GetPath("phs or mesh").Contains(".mesh", StringComparison.OrdinalIgnoreCase)) return true;
+        return depth < 3 && part.GetReferences("parts").Any(r => DrawsMesh(db, r.TargetStringId, depth + 1));
     }
 
     /// <summary>

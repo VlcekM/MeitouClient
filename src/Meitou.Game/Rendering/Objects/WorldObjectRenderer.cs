@@ -1658,6 +1658,16 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         && InteriorView.TryGetValue(p.PlacementId, out int shown) && (p.Floor <= shown || p.DoorIndex >= 0);
 
     /// <summary>
+    /// Whether the instance's building keeps its rooms in its shell (<see cref="InteriorVolume.ShellHoldsRooms"/>): its faces turned up are the
+    /// rooms' floors, not the street's ledges. False when its own volume is not found round the instance.
+    /// </summary>
+    bool ShellHoldsRooms(ObjectStreamer.Instance inst)
+    {
+        var p = inst.Placed;
+        return InteriorAt(inst.Transform.Translation, 2, p.PlacementId) is { ShellHoldsRooms: true } own && own.PlacementId == p.PlacementId;
+    }
+
+    /// <summary>
     /// Whether the instance takes the indoor GI (docs/render-gi.md): a building's interior part, its layout furniture inside a hull, or a building of
     /// its own (furniture or a station the player placed) standing in another building's hull; a building in its own hull is its outside.
     /// </summary>
@@ -2147,10 +2157,12 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         // Spare instance-matrix component: room GI gain without splitting shared furniture batches (1), plus 2 when its building's lights are off,
         // which darkens its EMISSIVE materials (BuildingLodShaders).
         // Plus a half for the own shell of a building whose inside is viewed (ViewedShell): its walls turned to the street are no room's
-        // pixels (BuildingLodShaders atmoStreet).
+        // pixels (BuildingLodShaders atmoStreet); three quarters when that shell holds the rooms, whose floors face up.
         m.M34 = (IndoorFurniture(inst) ? 1 : 0)
             + (!_depthPass && EmissiveDark is { } dark && dark(inst.Placed.ParentPlacementId ?? inst.Placed.PlacementId) ? 2 : 0)
-            + (!_depthPass && ViewedShell(inst.Placed) ? 0.5f : 0);
+            + (_depthPass || !ViewedShell(inst.Placed) ? 0
+                : ShellHoldsRooms(inst) ? 0.75f
+                : 0.5f);
 
         // Another spare component, M44: 1, or for a construction site BuildingLodShaders.ScaffoldBase + its look's f, or a negative packed tint
         // (FarmPlants.PackTint). A site's M34 also carries its part's mesh top and the scaffold tiling (BuildingLodShaders.PackSite).
