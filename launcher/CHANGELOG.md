@@ -2,6 +2,14 @@
 
 Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.yml`; each release needs its `## v<version>` section.
 
+## v1.16.0
+
+- Eight more RE_Kenshi mods are offered their workshop ports, by dxseba: Character Highlight, Disarm, It. Tickles. Me., Kill Counter, Level Up Notifications, Speed Menu, Stack Sort and Taunt Expansion
+- A search box filters the mod list by name or author, and the rows are more compact so more fit
+- News videos have sound again (lost since v1.10.0)
+- Settings, launcher.json and the mod list are written safely: an interrupted save keeps the previous file
+- A mod whose header is cut short no longer breaks the mod scan
+
 ## v1.15.0
 
 - Endorsed ports: an RE_Kenshi mod with a Meitou port on the Steam workshop names the port and its maintainer, and Get the port asks whether to subscribe now
