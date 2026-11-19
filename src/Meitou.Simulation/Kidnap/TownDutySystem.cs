@@ -42,8 +42,8 @@ public sealed record TownDutySettings
     /// </summary>
     public int Walks { get; init; } = 4;
     /// <summary>
-    /// Game seconds a lift may spend walking to the body before the member gives it up as put down short (no timer of the original's is known; a body
-    /// it cannot reach would hold it forever).
+    /// Game seconds a lift may spend walking to the body before the member gives it up for itself (<see cref="TownDutySystem.GiveUpLift"/>; no
+    /// timer of the original's is known; a body it cannot reach would hold it forever).
     /// </summary>
     public float LiftSeconds { get; init; } = 60;
     /// <summary>
@@ -217,7 +217,7 @@ public sealed class TownDuty
 /// same for every carrier) and put down.</item>
 /// <item><b>223 Remove Home Intruder</b> (finder <c>FUN_14099c110</c>): a knocked-out character in the squad's home building
 /// (<see cref="HomeIntruder"/>) is lifted, then with <b>224</b> (<c>Task_TakeIntruderOutside</c>) carried past the home's first door
-/// (<see cref="AiSystem.LeavePoint"/>) and put down; without 224 it goes on as 273's body does.</item>
+/// (<see cref="AiSystem.LeavePoint"/>; a home with no door: the town's exit point) and put down; without 224 it goes on as 273's body does.</item>
 /// <item><b>138 Find corpses</b> and <b>137 Corpse disposal</b> (<see cref="LiftsCorpse"/>): a member listing 138, or 137 with a disposal found
 /// (<see cref="CorpseDisposal.Find"/>), lifts the corpse 138's finder gives; then 137, ranked with the cage and throw-out goals
 /// (<see cref="RankDisposals"/>), carries it to the disposal, which takes it in; without a disposal goal it keeps the body.</item>
@@ -259,6 +259,12 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// Bodies put down short of their goal: left alone until this game hour, in the order they were put down.
     /// </summary>
     readonly List<(CharacterId Body, double Until)> _refused = [];
+
+    /// <summary>
+    /// Lifts given up on the walk (<see cref="TownDutySettings.LiftSeconds"/>): the member leaves that body alone until this game hour, while the
+    /// others may still lift it.
+    /// </summary>
+    readonly List<(CharacterId Member, CharacterId Body, double Until)> _gaveUp = [];
 
     /// <summary>
     /// Player-side characters whose last food run found no room for the item: no new run until this game hour.
@@ -711,8 +717,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// The look's census: the bodies a duty or a refusal holds or a carrier carries or goes to pick up are taken, the carriers and the downed
-    /// that may be lifted are listed.
+    /// The look's census: the bodies a duty or a refusal holds or a carrier carries or goes to pick up are taken (not an intruder its lifter still
+    /// walks to, <see cref="WalksToIntruder(CharacterTable, TownDuty)"/>), the carriers and the downed that may be lifted are listed.
     /// </summary>
     void CountBodies(World world)
     {
@@ -721,16 +727,21 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         _carriers.Clear();
         _reserved.Clear();
 
+        // An intruder a member still walks to is nobody's yet: the original's finders (223, 273) leave out only a carried body, so every member
+        // that senses it goes for it and the first in reach lifts it (Observed, original 1.0.65, #1024: three thralls converged on one body).
         foreach (var d in _duties)
-            if (!d.Body.IsNone) _reserved.Add(d.Body);
+            if (!d.Body.IsNone && !WalksToIntruder(table, d)) _reserved.Add(d.Body);
 
         _refused.RemoveAll(r => r.Until <= world.GameHours);
+        _gaveUp.RemoveAll(r => r.Until <= world.GameHours);
         foreach (var r in _refused) _reserved.Add(r.Body);
 
         for (int s = 0; s < table.HighWater; s++)
         {
             if (!table.Next[s].Alive || table.Cold(s) is not { } c) continue;
-            if (table.Next[s].Task == (byte)CharacterTask.PickUp && !c.CarryTarget.IsNone) _reserved.Add(c.CarryTarget);
+
+            bool lifts = table.Next[s].Task == (byte)CharacterTask.PickUp && !c.CarryTarget.IsNone;
+            if (lifts && !WalksToIntruder(table, s, c)) _reserved.Add(c.CarryTarget);
 
             if (!c.Carrying.IsNone)
             {
@@ -1203,6 +1214,39 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
+    /// Whether errand <paramref name="d"/> is an intruder's lift whose member still walks to the body (its lift clip has not started).
+    /// </summary>
+    static bool WalksToIntruder(CharacterTable table, TownDuty d) =>
+        d.Kind is TownDutyKind.Lift or TownDutyKind.HomeLift
+        && table.TryResolveNext(d.Member, out int g)
+        && table.Next[g].Task == (byte)CharacterTask.PickUp
+        && table.Cold(g)!.LiftTime < 0;
+
+    /// <summary>
+    /// Whether the character in <paramref name="slot"/> still walks to an intruder it lifts for an errand
+    /// (<see cref="WalksToIntruder(CharacterTable, TownDuty)"/>).
+    /// </summary>
+    bool WalksToIntruder(CharacterTable table, int slot, CharacterCold cold)
+    {
+        if (cold.LiftTime >= 0) return false;
+
+        var id = table.IdOf(slot);
+        foreach (var d in _duties)
+            if (d.Member == id) return WalksToIntruder(table, d);
+        return false;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="member"/> gave up walking to <paramref name="body"/> and still leaves it alone (<see cref="_gaveUp"/>).
+    /// </summary>
+    bool GaveUp(CharacterId member, CharacterId body)
+    {
+        foreach (var r in _gaveUp)
+            if (r.Member == member && r.Body == body) return true;
+        return false;
+    }
+
+    /// <summary>
     /// <c>Ownerships::isMyTown</c> (<c>FUN_1406211e0</c>, <b>Verified</b> by decompile): the squad's home town, the town its occupation holds
     /// (<c>Ownerships +0x80</c>, which the occupation's start declares), or a town of its faction.
     /// </summary>
@@ -1233,9 +1277,10 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// 223's finder (<c>FUN_14099c110</c>, docs/game/ai-tasks.md): the nearest knocked-out character within the member's sight inside the squad's
-    /// home building, not carried, caged or in a bed (special state 0), not another errand's, and not one the member regards as friendly (the sensed
-    /// filter leaves out SENSE_ALLY; a dead one is tagged dead alone and fails it too). -1: none.
+    /// 223's finder (<c>FUN_14099c110</c>, docs/game/ai-tasks.md): the nearest knocked-out character the member senses
+    /// (<see cref="CharacterFacts.Perceives"/>) within its sight inside the squad's home building, not carried, caged or in a bed (special state
+    /// 0), not one another errand lifts or carries or the member gave up on (<see cref="GaveUp"/>), and not one the member regards as friendly (the
+    /// sensed filter leaves out SENSE_ALLY; a dead one is tagged dead alone and fails it too). -1: none.
     /// </summary>
     int HomeIntruder(World world, int slot, CharacterCold cold, Meitou.Data.World.TownBuilding home)
     {
@@ -1248,6 +1293,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             var body = table.Cold(v)!;
             if (v == slot || body.InSomething != HeldState.None || _reserved.Contains(table.IdOf(v))) continue;
             if (world.Sight.BuildingOf(v) != home.Key || carry.Friendly(cold, body)) continue;
+            if (!CharacterFacts.Perceives(world, slot, v) || GaveUp(table.IdOf(slot), table.IdOf(v))) continue;
 
             float d2 = Vector2.DistanceSquared(at, Flat(table.Next[v].Position));
             if (d2 <= best2) (best, best2) = (v, d2);
@@ -1257,20 +1303,22 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// The nearest downed intruder within the member's sight in its town's built-up area (-1: none). Meitou: one in a bed is left alone (the
-    /// original skips only the caged, so guards threw patients out of rented beds, issue 751).
+    /// The nearest downed intruder the member senses (<see cref="CharacterFacts.Perceives"/>, 273's finder walks the sensed list) within its sight
+    /// in its town's built-up area, not one it gave up on (<see cref="GaveUp"/>); -1: none. Meitou: one in a bed is left alone (the original skips
+    /// only the caged, so guards threw patients out of rented beds, issue 751).
     /// </summary>
     int Intruder(World world, int slot, CharacterCold cold, CampaignTown town)
     {
-        var next = world.Characters.Next;
+        var table = world.Characters;
+        var next = table.Next;
         var at = Flat(next[slot].Position);
         float range = AggroSystem.RangeOf(cold, Settings.Sight), best2 = range * range;
         int best = -1;
         foreach (int v in _downed)
         {
-            var body = world.Characters.Cold(v)!;
-            if (v == slot || body.InSomething == HeldState.Bed || _reserved.Contains(world.Characters.IdOf(v)) || carry.Friendly(cold, body))
-                continue;
+            var body = table.Cold(v)!;
+            if (v == slot || body.InSomething == HeldState.Bed || _reserved.Contains(table.IdOf(v)) || carry.Friendly(cold, body)) continue;
+            if (!CharacterFacts.Perceives(world, slot, v) || GaveUp(table.IdOf(slot), table.IdOf(v))) continue;
 
             var p = next[v].Position;
             float d2 = Vector2.DistanceSquared(at, Flat(p));
@@ -1649,7 +1697,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (d.Kind is TownDutyKind.Lift or TownDutyKind.HomeLift or TownDutyKind.CorpseLift)
         {
             if (gn.Task == (byte)CharacterTask.PickUp)
-                return gc.LiftTime >= 0 || (d.Next += world.TickSeconds) <= Settings.LiftSeconds || PutDown(world, d, g);
+                return gc.LiftTime >= 0 || (d.Next += world.TickSeconds) <= Settings.LiftSeconds || GiveUpLift(world, d, g);
 
             if (gc.Carrying != d.Body) return End(world, d);   // fought off or pushed away: the body lies there for the next look
             return d.Kind switch
@@ -1851,16 +1899,25 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
 
     /// <summary>
     /// After a 223 lift: with 224 listed (<c>Task_TakeIntruderOutside</c>) the body goes to the point past the home's first door
-    /// (<see cref="AiSystem.LeavePoint"/>, <c>FUN_140296a40</c>) and is put down there; without 224, or with no door known, it goes on as a 273 body
-    /// does (<see cref="Dispose"/>; engine choice: the original's carrier keeps it).
+    /// (<see cref="AiSystem.LeavePoint"/>, <c>FUN_140296a40</c>) and is put down there; a home with no door has its town's exit point
+    /// (<see cref="Outside"/>, <b>Verified</b> <c>FUN_140335480</c>). Without 224, or with neither door nor town, it goes on as a 273 body does
+    /// (<see cref="Dispose"/>; engine choice: the original's carrier keeps it).
     /// </summary>
     bool CarryOut(World world, TownDuty d, int g, int b)
     {
         var gc = world.Characters.Cold(g)!;
         var squad = world.Squads.Find(gc.SquadId);
-        if (squad?.HomeBuilding is not { } home || AiSystem.LeavePoint(world, home) is not { } door
+        if (squad?.HomeBuilding is not { } home
             || !population.GoalDuty(world, squad, AiSystem.RoleOf(squad, d.Member, gc), TaskType.TakeIntruderOutside))
             return Dispose(world, d, g, b);
+
+        // A home with no door: its town's exit point (FUN_140335480).
+        if (AiSystem.LeavePoint(world, home) is not { } door)
+        {
+            if (d.Town.IsNone) return Dispose(world, d, g, b);
+
+            door = Outside(world, d.Town);
+        }
 
         (d.Kind, d.Goal, d.Tries) = (TownDutyKind.HomeOut, door, 0);
         TaskStart.Walk(world, g, d.Goal, SpeedMode.Free, RowOf(d.Kind), TaskSource.Goal);
@@ -1875,6 +1932,17 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         TaskStart.Stand(world.Characters, g);
         carry.BeginPutDown(world, g, TaskSource.Goal);
         _refused.Add((d.Body, world.GameHours + Settings.RefuseHours));
+        return End(world, d);
+    }
+
+    /// <summary>
+    /// The member gives up a lift whose body it never reached (<see cref="TownDutySettings.LiftSeconds"/>): it leaves that body alone for
+    /// <see cref="TownDutySettings.RefuseHours"/>, and the body stays free for the others.
+    /// </summary>
+    bool GiveUpLift(World world, TownDuty d, int g)
+    {
+        TaskStart.Stand(world.Characters, g);
+        _gaveUp.Add((d.Member, d.Body, world.GameHours + Settings.RefuseHours));
         return End(world, d);
     }
 
