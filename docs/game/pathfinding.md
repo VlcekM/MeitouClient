@@ -66,6 +66,8 @@ takes the larger of the result and an explicit task mode when both are not 4 (so
 does all of this only for a character whose faction has no player flag (`+0x250` null), so a player's carrier keeps the mode it was ordered at
 (**Verified**, decompile). Meitou (`MovementSystem`, `Squad.ForceSpeed`): the raise every NPC member's walk or jog mode gets (the rule both
 readers share), and the carrier raise for NPCs only (#995); lowering by the selector is not applied. The slave rule is not modelled here.
+The carry-out tasks 224 / 274 go through neither reader: their start (`FUN_1403355e0`, **Verified**) writes mode 0 into the mover of a character whose faction has no player flag and drives it with `FUN_1405c68a0`, which applies the mover's own mode, so an NPC carries a body out at its race's walk speed and a player's carrier at the mode it has.
+**Observed** (original 1.0.65 through the harness, the #1024 save, the carrier's mover read every 0.7 s from the lift to the drop): mode 0, cap `+0xbc` 15 = the race's `walk speed`, speed `+0xb8` about 15, top speed `+0xb4` 82.9 (Meitou's S for it: 80.7 to 83); mode 2 before the task started. Meitou: `TownDutySystem.CarryOutMode`, `MovementSystem.CarriesOutAtWalk`.
 
 ### Running after a moving target
 

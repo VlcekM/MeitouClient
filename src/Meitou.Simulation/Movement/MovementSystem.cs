@@ -1865,7 +1865,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
         // An NPC carrier in walk mode is raised to jog; a player's carrier keeps the mode it was given (#995; docs/game/pathfinding.md
         // "Force speed").
-        if (mode == SpeedMode.Walk && !cold.Carrying.IsNone && !cold.IsPlayer) mode = SpeedMode.Run;
+        if (mode == SpeedMode.Walk && !cold.Carrying.IsNone && !cold.IsPlayer && !CarriesOutAtWalk(cold)) mode = SpeedMode.Run;
 
         // Its squad template's force speed 0..2 replaces the AI's mode (FUN_140332390 never lowers an explicit task mode, so only a raise
         // is applied; docs/game/pathfinding.md "Force speed").
@@ -1891,6 +1891,14 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
         return desired;
     }
+
+    /// <summary>
+    /// Whether the character's task is a carry-out (224 <c>Task_TakeIntruderOutside</c>, 274 <c>...OutsideTown</c>): its start sets the mover's
+    /// mode itself and goes through neither reader that raises a carrier's walk to a jog, so it walks (<c>FUN_1403355e0</c>, <b>Verified</b>;
+    /// <b>Observed</b>, original 1.0.65, #1024 save: mode 0 at the race's walk speed from the lift to the drop).
+    /// </summary>
+    internal static bool CarriesOutAtWalk(CharacterCold cold) =>
+        cold.Running is { Row: TaskType.TakeIntruderOutside or TaskType.TakeIntruderOutsideTown };
 
     /// <summary>
     /// A follower near its aim (Think set it as the goal) steers straight at it at its desired speed, capped by its top speed, never past it.

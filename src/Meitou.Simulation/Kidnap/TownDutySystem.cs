@@ -1160,7 +1160,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (d.Town.IsNone) return false;
 
         (d.Kind, d.Goal, d.Tries) = (TownDutyKind.Out, Outside(world, d.Town), 0);
-        TaskStart.Walk(world, g, d.Goal, SpeedMode.Free, RowOf(d.Kind), TaskSource.Goal);
+        TaskStart.Walk(world, g, d.Goal, CarryOutMode, RowOf(d.Kind), TaskSource.Goal);
         return true;
     }
 
@@ -1650,6 +1650,12 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     static readonly HashSet<TaskType> ErrandRows = [.. Enum.GetValues<TownDutyKind>().Where(k => k != TownDutyKind.Cage).Select(RowOf)];
 
     /// <summary>
+    /// The mode 224 and 274 carry a body out in: their start sets the mover of a character of no player faction to walk (<c>FUN_1403355e0</c>,
+    /// <b>Verified</b>), and <see cref="MovementSystem.CarriesOutAtWalk"/> keeps it from the carrier's raise to a jog.
+    /// </summary>
+    const byte CarryOutMode = SpeedMode.Walk;
+
+    /// <summary>
     /// Whether a walk's row is an errand's (<see cref="RowOf"/>, not the cage walk's, which the kidnapper's shares): a fight may interrupt it, the
     /// errand waits for the fight's end and walks on (<see cref="Ai.AiSystem"/>'s pre-emption).
     /// </summary>
@@ -1734,7 +1740,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (Vector2.Distance(Flat(gn.Position), d.Goal) <= Settings.Arrive) return LetGo(world, d, g, refuse: false);
         if (walking) return true;
         if (++d.Tries > Settings.Walks) return LetGo(world, d, g, refuse: true);
-        TaskStart.Walk(world, g, d.Goal, SpeedMode.Free, RowOf(d.Kind), TaskSource.Goal);
+        TaskStart.Walk(world, g, d.Goal, CarryOutMode, RowOf(d.Kind), TaskSource.Goal);
         return true;
     }
 
@@ -1929,7 +1935,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         }
 
         (d.Kind, d.Goal, d.Tries) = (TownDutyKind.HomeOut, door, 0);
-        TaskStart.Walk(world, g, d.Goal, SpeedMode.Free, RowOf(d.Kind), TaskSource.Goal);
+        TaskStart.Walk(world, g, d.Goal, CarryOutMode, RowOf(d.Kind), TaskSource.Goal);
         return true;
     }
 
