@@ -351,7 +351,7 @@ public sealed partial class ProductionSystem
 
         // Sleep and Sit not while holding position (FUN_1402b2b90) or carrying someone (+0x348; FUN_14050e5b0).
         if (Orders.Holding(cold) || !cold.Carrying.IsNone) return null;
-        if ((options & SquadAi.Sleep) != 0 && WantsBed(world, cold) && Beds is not null)
+        if ((options & SquadAi.Sleep) != 0 && WantsBed(world, slot, cold) && Beds is not null)
         {
             if (on == TaskType.GoHomeAndGoToBed && cold.OperateSite is { } bed && world.Fixtures.Find(bed) is { } kept
                 && Gap(kept.Position, at) <= Locks.FixtureRegistry.BedSearchRange)
@@ -419,9 +419,29 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// The player branch of row 98 Sleeping's desire (<c>FUN_1405a0880</c>, <b>Verified</b>; 153 plans into 98, and a node whose desire is 0 is
-    /// dropped): its organic first aid need is 0 (everything bandaged) and it is <see cref="Unrested"/>. The branch's town test is not modelled.
+    /// dropped): it stands in a player place (<see cref="InPlayerPlace"/>), its organic first aid need is 0 (everything bandaged) and it is
+    /// <see cref="Unrested"/>.
     /// </summary>
-    static bool WantsBed(World world, CharacterCold cold) => Unrested(cold) && FirstAid.FirstAidSystem.OrganicAidNeed(world, cold) <= 0;
+    bool WantsBed(World world, int slot, CharacterCold cold) =>
+        Unrested(cold) && FirstAid.FirstAidSystem.OrganicAidNeed(world, cold) <= 0 && InPlayerPlace(world, slot, cold);
+
+    /// <summary>
+    /// The player branch's place test (<c>FUN_1405a0880</c>, <b>Verified</b> decompile): the character's status town (status <c>+0x88</c>) is set,
+    /// and that town's faction is the player's, or the building it stands in (its <c>isIndoors</c> handle, vfunc <c>0x1d8</c>) is the player's.
+    /// So a character out in the wild, or outdoors in another faction's town, is not sent to bed. A world built without town data has no towns to
+    /// test, so there it is not asked.
+    /// </summary>
+    bool InPlayerPlace(World world, int slot, CharacterCold cold)
+    {
+        if (_towns is not { } towns) return true;
+
+        int player = world.Player.Faction;
+        var town = Ai.AiSystem.StatusTownAt(towns, world, world.Characters.Next[slot].Position, cold.StatusTown);
+        if (town.IsNone) return false;
+        if (town.Owner(world, towns) == player) return true;
+
+        return world.Sight.BuildingOf(slot) is { } building && world.Fixtures.OwnerOf(building) == player;
+    }
 
     /// <summary>
     /// A living character whose rested level (<see cref="MedicalState.RestedLevel"/>, medical <c>+0xb0</c>) is at most

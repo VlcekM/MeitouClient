@@ -1770,13 +1770,13 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
     pick, whatever the job's target ([buildings](#buildings)); its tasks are *Build*, *DeliverMaterials* and *FetchMaterials*. Blocked with no site.
   - Implicit jobs (`ImplicitPick`, `ImplicitJobs`, the decision step's step 5 after the list): with no list job to run, the switch on, not sneaking and not a slave (Sleep and Sit also not while holding position), the squad AI options (`PlayerState.SquadAi`, the
     overview's AI tab, on by default) start, in this order: Ditch items (242: carried ITEMs of function 0 or 15, and food but the first, go to the nearest
-    storage within the 4.246733e7 bound (3D) of the character that takes them (finder `FUN_1405a59a0`, **Verified**), as a Haul trip; only with no queued orders; re-tested every pass, so a trip whose storage no longer takes a carried item, or that gained a queued order, drops out or re-picks at once, **Verified** `FUN_14050e5b0`), Sleep when injured (153: a character whose rested level is at most 0.9 and whose organic
+    storage within the 4.246733e7 bound (3D) of the character that takes them (finder `FUN_1405a59a0`, **Verified**), as a Haul trip; only with no queued orders; re-tested every pass, so a trip whose storage no longer takes a carried item, or that gained a queued order, drops out or re-picks at once, **Verified** `FUN_14050e5b0`), Sleep when injured (153: a character in a player town or a player building whose rested level is at most 0.9 and whose organic
     first aid need is 0 (`WantsBed`, [the original's test](game/ai-tasks.md#perma-jobs); engine choice: a part within half a point of its maximum counts
     as full, as the treated pool can leave a hundredth unhealed, #500) lies in the bed the bed search finds, a `BedSystem` trip (task Sleep, the bed
     id in `OperateSite`), until its rested level passes 0.9; job lists are then looked at even with no machine; 257 gets up a rested player sleeper with no order and no job
     too, such as one loaded asleep: `GetsUpHealed`), Sit when idle (275: the nearest free player chair or
     throne within `SeatRange` 600). The one running is kept while it holds; any list job preempts it, but not a bed trip or sleep while its commitment
-    runs (`BedCommitted`: 2 + r x 8 game hours from the job's start, `CharacterCold.BedCommitUntil`, not saved; over once rested or when the bed is gone; orders,
+    runs (`BedCommitted`: 2 + r x 8 game hours from the job's start, `CharacterCold.BedCommitUntil`, not saved, as the original saves no current goal; over once rested or when the bed is gone; orders,
     urgent jobs and the priority-3 goals still take over, #1034). Distances are from the character, or its
     squad leader while it follows, so it gets up when the leader walks off. Sitters are put on the seat's origin facing its way;
     the medic job counts them as idle.
