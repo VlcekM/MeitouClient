@@ -194,7 +194,8 @@ public class OffscreenOverrideTests
     [Fact]
     public void A_town_changed_back_to_its_own_record_makes_its_own_residents_afresh()
     {
-        var data = SyntheticTown.Data(PopulationTests.OverrideDb());
+        // No state holds (states with no conditions would answer true live, and the fresh town would take an override at its load).
+        var data = PopulationTests.WithStates(SyntheticTown.Data(PopulationTests.OverrideDb()), new PopulationTests.FixedStates());
         string[] own;
         using (var fresh = World(data))
         {
