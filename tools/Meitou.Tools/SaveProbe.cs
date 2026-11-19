@@ -1195,7 +1195,22 @@ static class SaveProbe
 
         Console.WriteLine($"open={dialogue.PublishConversation() is not null} gap={Vector3.Distance(t.Next[talker].Position, t.Next[npc].Position):F0} "
             + $"{probe.Who(npc)} player={t.Cold(npc)!.IsPlayer}");
+        PrintRequest(probe, dialogue.PublishRequest());
         probe.PrintMessages();
+    }
+
+    /// <summary>
+    /// The host request a conversation left (the editor it opens) with the look of the character it edits: the records the editor drafts from.
+    /// </summary>
+    static void PrintRequest(ProbeWorld probe, DialogueRequest? request)
+    {
+        if (request is null) return;
+
+        var t = probe.Characters;
+        var look = t.TryResolveNext(request.Player, out int slot) ? t.Cold(slot)?.Appearance : null;
+        Console.WriteLine($"request #{request.Id} {request.Kind} player={request.Player} npc={request.Npc} look={look is not null} "
+            + $"loadoutRecord={look?.Loadout?.Appearance.Record?.StringId ?? "-"} bodyRecord={look?.Body?.Record?.StringId ?? "-"} "
+            + $"character={look?.Character?.StringId ?? "-"}");
     }
 
     /// <summary>
