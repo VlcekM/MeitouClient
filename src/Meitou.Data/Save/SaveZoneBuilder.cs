@@ -28,26 +28,172 @@ public static partial class SaveZoneBuilder
     public static SaveZone? FromLevel(ZoneCoordinate zone, GameDatabase? levelZone, ZoneLevelInfo? info, GameDatabase gameData)
     {
         if (levelZone?.Find(WorldLevelData.BuildingListId) is not { } levelList) return null;
+
         var file = new SaveFile();
-        int nextId = Math.Max(info?.NextId ?? 0, 0);
-        var list = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Name = "0", StringId = WorldLevelData.BuildingListId };
+        var list = NewList();
+        var entries = new LevelEntries(file, list, Math.Max(info?.NextId ?? 0, 0));
+        entries.Slots.UnionWith(info?.Slots ?? []);
+        entries.Add(levelZone, levelList, gameData);
+        if (!list.Instances.Any(i => !i.IsRemoved)) return null;
 
-        // The handles of the zone's level buildings: an `internalbuildings-<k>` handle is kept only when it names one of them (most name generated
-        // furniture that is not written).
-        var handles = new HashSet<(int I, int S)>();
-        foreach (var s in levelZone.OfType(FcsRecordType.GamestateBuilding))
-            if (s.Ints.ContainsKey("handleI")) handles.Add((s.GetInt("handleI"), s.GetInt("handleS")));
+        list.Id = entries.TakeId();
+        file.Records.Add(list);
+        file.Data.NextId = entries.LastId;
+        file.SlotLists.Add([.. entries.Slots]);
+        return new SaveZone(zone, file);
+    }
 
-        var slots = new SortedSet<int>(info?.Slots ?? []);
-        var written = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var (id, instance) in levelList.Instances)
+    /// <summary>
+    /// Adds to a zone file the save already has the level's buildings its building list does not name, each as <see cref="FromLevel"/> writes it,
+    /// when it has a level state and stands inside no building. Such a file comes from an import (it keeps a zone's removals and the player's
+    /// buildings only, docs/formats/save.md "Importing a game"), from a zone first written for the player's buildings or loose items alone, or
+    /// from a save made before a mod placed the building. An entry the list names, a removal too, stays as it is. A building inside another is
+    /// not added: a save takes those out of a ruin, a bought house and a home furnished anew, and their absence is all that records it. A level
+    /// state whose handle slot a state of the file holds is written without its handle (the building is then named by its level handle, as one
+    /// with no saved state is). Returns the instance ids of the buildings added.
+    /// </summary>
+    public static IReadOnlyList<string> Complete(SaveZone zone, GameDatabase? levelZone, GameDatabase gameData)
+    {
+        if (levelZone?.Find(WorldLevelData.BuildingListId) is not { } levelList) return [];
+
+        var file = zone.File;
+        var list = zone.BuildingList ?? NewList();
+        int lastId = file.Records.Count == 0 ? Math.Max(file.Data.NextId, 0) : Math.Max(file.Data.NextId, file.Records.Max(r => r.Id));
+        var entries = new LevelEntries(file, list, lastId);
+        entries.KeepFile(zone.ContainerId);
+        entries.Add(levelZone, levelList, gameData);
+        if (entries.Added.Count == 0) return [];
+
+        if (zone.BuildingList is null)
         {
-            if (instance.IsCleared)
+            list.Id = entries.TakeId();
+            file.Records.Add(list);
+        }
+
+        file.Data.NextId = entries.LastId;
+
+        // A file without a slot list gets one from its states when the save is written (SaveGame.FillZoneSlotLists).
+        if (file.SlotLists.Count > 0) file.SlotLists[0] = [.. file.SlotLists[0].Union(entries.Slots).Order()];
+        return entries.Added;
+    }
+
+    /// <summary>
+    /// An empty <c>0-buildinglist</c>.
+    /// </summary>
+    static FcsRecord NewList() =>
+        new() { Type = (int)FcsRecordType.InstanceCollection, Name = "0", StringId = WorldLevelData.BuildingListId };
+
+    /// <summary>
+    /// The level's entries going into one zone file's building list, with the states they add to the file.
+    /// </summary>
+    sealed class LevelEntries(SaveFile file, FcsRecord list, int lastId)
+    {
+        /// <summary>
+        /// The instance ids the list named before <see cref="Add"/>: their entries stay as they are.
+        /// </summary>
+        readonly HashSet<string> _listed = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// The string ids of the states the file holds: one is listed again, not written twice.
+        /// </summary>
+        readonly HashSet<string> _written = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// The handle slots (container, slot) the file's own building states held before <see cref="Add"/>.
+        /// </summary>
+        readonly HashSet<(int C, int I)> _taken = [];
+
+        /// <summary>
+        /// Whether the entries go into a file the save had (<see cref="KeepFile"/>): then only buildings with a level state that stand inside no
+        /// building are added, and no removal.
+        /// </summary>
+        bool _completing;
+
+        /// <summary>
+        /// The last record id given in the file.
+        /// </summary>
+        public int LastId { get; private set; } = lastId;
+
+        /// <summary>
+        /// The handle slots of the states added, and any the caller put in first.
+        /// </summary>
+        public SortedSet<int> Slots { get; } = [];
+
+        /// <summary>
+        /// The instance ids of the buildings added.
+        /// </summary>
+        public List<string> Added { get; } = [];
+
+        /// <summary>
+        /// The next record id of the file.
+        /// </summary>
+        public int TakeId() => ++LastId;
+
+        /// <summary>
+        /// Notes what the file holds already: the list's entries, the records' ids and the slots of the building states in the zone's container.
+        /// </summary>
+        public void KeepFile(int container)
+        {
+            _completing = true;
+            foreach (var i in list.Instances) _listed.Add(i.Id);
+
+            foreach (var r in file.Records)
             {
-                list.Instances.Add(new FcsInstance { Id = id, Target = "" });
-                continue;
+                _written.Add(r.StringId);
+                if (r.RecordType != FcsRecordType.GamestateBuilding) continue;
+                if (Hand.Read(r, "handle") is { IsNull: false } h && h.C == container) _taken.Add((h.C, h.I));
             }
-            if (gameData.Find(instance.Target) is not { Type: FcsRecordType.Building } building) continue;
+        }
+
+        /// <summary>
+        /// Adds every level entry the list does not name: a removal as an empty-target entry, a building with its state; into a file the save
+        /// had, only the buildings <see cref="StandsAlone"/> passes.
+        /// </summary>
+        public void Add(GameDatabase levelZone, GameRecord levelList, GameDatabase gameData)
+        {
+            // The handles of the zone's level buildings: an `internalbuildings-<k>` handle is kept only when it names one of them (most name
+            // generated furniture that is not written).
+            var handles = new HashSet<(int I, int S)>();
+            foreach (var s in levelZone.OfType(FcsRecordType.GamestateBuilding))
+                if (s.Ints.ContainsKey("handleI")) handles.Add((s.GetInt("handleI"), s.GetInt("handleS")));
+
+            foreach (var (id, instance) in levelList.Instances)
+            {
+                if (_listed.Contains(id)) continue;
+                if (_completing && !StandsAlone(levelZone, instance)) continue;
+
+                if (instance.IsCleared)
+                {
+                    list.Instances.Add(new FcsInstance { Id = id, Target = "" });
+                    continue;
+                }
+
+                if (gameData.Find(instance.Target) is not { Type: FcsRecordType.Building } building) continue;
+
+                list.Instances.Add(Entry(levelZone, id, instance, building, handles));
+                Added.Add(id);
+            }
+        }
+
+        /// <summary>
+        /// Whether a level entry places a building that has a level state and stands inside no building.
+        /// </summary>
+        static bool StandsAlone(GameDatabase levelZone, GameInstance instance)
+        {
+            if (instance.IsCleared) return false;
+
+            var state = instance.States
+                .Select(levelZone.Find)
+                .FirstOrDefault(s => s?.Type == FcsRecordType.GamestateBuilding);
+            return state is not null && !state.GetBool("is inside building");
+        }
+
+        /// <summary>
+        /// A building's list entry: its level inventory state when that holds items, and its building state, written into the file when it is not
+        /// there yet.
+        /// </summary>
+        FcsInstance Entry(GameDatabase levelZone, string id, GameInstance instance, GameRecord building, HashSet<(int I, int S)> handles)
+        {
             var entry = new FcsInstance { Id = id, Target = instance.Target, Position = instance.Position, Rotation = instance.Rotation };
             string? stateId = null;
             foreach (var sid in instance.States.Distinct(StringComparer.Ordinal))
@@ -56,21 +202,33 @@ public static partial class SaveZoneBuilder
                 if (state?.Type == FcsRecordType.InventoryState && state.Instances.Count > 0) entry.States.Add(sid);
                 else if (state?.Type == FcsRecordType.GamestateBuilding && stateId is null) stateId = sid;
             }
-            if (stateId is not null && written.Add(stateId))
-            {
-                var record = StateFromLevel(levelZone.Find(stateId)!, building, handles, ++nextId);
-                file.Records.Add(record);
-                if (Hand.Read(record, "handle") is { IsNull: false } h) slots.Add(h.I);
-            }
+
+            if (stateId is not null && _written.Add(stateId)) file.Records.Add(State(levelZone.Find(stateId)!, building, handles));
             if (stateId is not null) entry.States.Add(stateId);
-            list.Instances.Add(entry);
+            return entry;
         }
-        if (!list.Instances.Any(i => !i.IsRemoved)) return null;
-        list.Id = ++nextId;
-        file.Records.Add(list);
-        file.Data.NextId = nextId;
-        file.SlotLists.Add([.. slots]);
-        return new SaveZone(zone, file);
+
+        /// <summary>
+        /// A building's state from its level state, its handle's slot noted; without the handle when a state of the file holds that slot.
+        /// </summary>
+        FcsRecord State(GameRecord level, GameRecord building, HashSet<(int I, int S)> handles)
+        {
+            var record = StateFromLevel(level, building, handles, TakeId());
+            if (Hand.Read(record, "handle") is not { IsNull: false } h) return record;
+
+            if (_taken.Contains((h.C, h.I))) DropHandle(record);
+            else Slots.Add(h.I);
+
+            return record;
+        }
+
+        /// <summary>
+        /// Takes the five parts of a state's own handle off it.
+        /// </summary>
+        static void DropHandle(FcsRecord record)
+        {
+            foreach (string part in (string[])["TYPE", "C", "CS", "I", "S"]) record.Ints.Remove("handle" + part);
+        }
     }
 
     /// <summary>

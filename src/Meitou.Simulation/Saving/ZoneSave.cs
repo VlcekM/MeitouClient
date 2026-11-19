@@ -9,50 +9,64 @@ namespace Meitou.Simulation.Saving;
 /// The zone files of a save (docs/formats/save.md "Zone files"). The original writes a file for every zone it has loaded (on unload and at save time)
 /// that holds any record, and a zone file marks the zone as visited: the original then makes no town residents for it at load (they come from the
 /// save's platoons). A Meitou save does the same for the zones its population has had active (<see cref="World.VisitedZones"/>): a zone the loaded
-/// save has a file of keeps it (the building locks and doors and the player's buildings are written into it by <see cref="SaveCapture"/>), one it has
-/// none of gets one made from the level data (<see cref="SaveZoneBuilder.FromLevel"/>), whose buildings name their town by the save's town handle.
+/// save has a file of keeps it (the building locks and doors and the player's buildings are written into it by <see cref="SaveCapture"/>) and gets
+/// the level buildings it does not name (<see cref="SaveZoneBuilder.Complete"/>), one it has none of gets one made from the level data
+/// (<see cref="SaveZoneBuilder.FromLevel"/>); the buildings written so name their town by the save's town handle.
 /// </summary>
 public static class ZoneSave
 {
     /// <summary>
-    /// Adds a zone file for each visited zone the save has none of, in grid order; returns those zones.
+    /// Adds a zone file for each visited zone the save has none of, in grid order, and to a visited zone's file the level buildings it does not
+    /// name (<see cref="SaveZoneBuilder.Complete"/>): the town writers put a building's owner, ruin state, locks and residents into its state, so
+    /// a building without one saves nothing (a house bought in a zone whose file an import had cut down came back for sale and in ruins, #1046).
+    /// Returns the zones a file was made for.
     /// </summary>
     public static List<ZoneCoordinate> WriteVisited(SaveGame game, World world, PopulationData data, WorldLevelData? levels)
     {
         var made = new List<ZoneCoordinate>();
         if (levels is null) return made;
+
+        // The buildings written now by zone; null for a zone whose whole file is new.
+        var added = new Dictionary<ZoneCoordinate, HashSet<string>?>();
         foreach (var z in world.VisitedZones.OrderBy(z => z.X).ThenBy(z => z.Y))
         {
-            if (game.Zones.ContainsKey(z)) continue;
             levels.Zones.TryGetValue(z, out var db);
+            if (game.Zones.TryGetValue(z, out var saved))
+            {
+                var ids = SaveZoneBuilder.Complete(saved, db, data.Db);
+                if (ids.Count > 0) added[z] = ids.ToHashSet(StringComparer.Ordinal);
+                continue;
+            }
+
             levels.ZoneInfo.TryGetValue(z, out var info);
             if (SaveZoneBuilder.FromLevel(z, db, info, data.Db) is not { } zone) continue;
+
             game.Zones[z] = zone;
             made.Add(z);
+            added[z] = null;
         }
 
-        if (made.Count > 0) BindTowns(game, data, made);
+        if (added.Count > 0) BindTowns(game, data, added);
         return made;
     }
 
     /// <summary>
-    /// The <c>town</c> handle of each building of a placed town in the new zone files: the <c>hand</c> of the town's state in the save
-    /// (the original writes the town the building belongs to, <b>Observed</b>: 3726 of 6743 saved base-building states name another
-    /// town container than their level state). A building inside another keeps its level value.
+    /// The <c>town</c> handle of each building of a placed town written now (<paramref name="added"/>: its ids by zone, null for a whole new
+    /// file): the <c>hand</c> of the town's state in the save (the original writes the town the building belongs to, <b>Observed</b>: 3726 of
+    /// 6743 saved base-building states name another town container than their level state). A building inside another keeps its level value.
     /// </summary>
-    static void BindTowns(SaveGame game, PopulationData data, List<ZoneCoordinate> made)
+    static void BindTowns(SaveGame game, PopulationData data, Dictionary<ZoneCoordinate, HashSet<string>?> added)
     {
         var hands = new Dictionary<string, Hand>(StringComparer.Ordinal);
         foreach (var t in game.Towns)
             if (t.Instance.Length > 0 && !t.Handle.IsNull) hands.TryAdd(t.Instance, t.Handle);
-        var fresh = made.ToHashSet();
         var states = new Dictionary<ZoneCoordinate, Dictionary<string, FcsRecord>>();
         foreach (var site in data.Sites)
         {
             if (!hands.TryGetValue(site.InstanceId, out var hand)) continue;
             foreach (var b in site.Buildings)
             {
-                if (!fresh.Contains(b.Zone)) continue;
+                if (!added.TryGetValue(b.Zone, out var ids) || ids?.Contains(b.InstanceId) == false) continue;
                 if (!states.TryGetValue(b.Zone, out var map)) states[b.Zone] = map = StatesByInstance(game.Zones[b.Zone]);
                 if (!map.TryGetValue(b.InstanceId, out var state) || state.Bools.GetValueOrDefault("is inside building")) continue;
                 hand.Write(state, "town");

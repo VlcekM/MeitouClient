@@ -1957,7 +1957,8 @@ static class SaveProbe
         }
 
         probe.Tick(2);
-        var game = SaveCapture.Capture(probe.World, probe.Data, new SaveClock(1, 12, 0), probe.Loaded);
+        var options = new SaveCaptureOptions { Placements = [.. probe.Levels.Towns()], Levels = probe.Levels };
+        var game = SaveCapture.Capture(probe.World, probe.Data, new SaveClock(1, 12, 0), probe.Loaded, options);
         game.Write(folder);
         Console.WriteLine($"saved with {key} rebuilt to {folder}");
     }

@@ -680,12 +680,19 @@ has an override world state (its lists are then replaced) or `0-buildinglist` ho
   ints, a `scale` vector and a `timeout` float (131.7).
 
 **Meitou** (`Saving/ZoneSave`, `Data/Save/SaveZoneBuilder`): every zone the population had active, and every zone of a town it made but another town's centre zone (engine choice:
-a town is made and saved whole; three such zones, e.g. Black Desert City's buildings in Scraphouse's 34.28), is visited (`World.VisitedZones`, not hashed). A save keeps the loaded save's zone files (locks, doors and player buildings are written into them) and makes
+a town is made and saved whole; three such zones, e.g. Black Desert City's buildings in Scraphouse's 34.28), is visited (`World.VisitedZones`, not hashed). A save keeps the loaded save's zone files (locks, doors and player buildings are written into them), adds to a visited zone's file the level buildings its building list
+does not name that have a level state and stand inside no building (`SaveZoneBuilder.Complete`: each with its level state; an entry the list names, a removal too, stays as it is; a building
+inside another is not added, since a save takes those out of a ruin, a bought house and a home furnished anew; a level state whose handle slot a state of the file holds is written without its
+handle) and makes
 the missing ones from the level data as above, with `town` set to the save's town state `hand` and a new save's town states taking their level `hand`; it writes no
 `serialised interior` but on a ruin's state and on a house that holds a prisoner in one of its layout's cages, whose interior it writes whole ([above](#zone-files)), no other furniture and no inventories but its town machines' (Town machines, above) and the furniture inventories of a save's entries (above), so the original makes every other interior as for a fresh zone from its `interior layout name` (only the residents differ: the
 saved platoons). A load lays each town building whose saved state names an interior layout out with the saved interior and exterior names (the original generated
 the saved furniture from them; **Observed** headless, METARU: 972 such buildings, 117 named otherwise than Meitou's housing, all laid out with the saved names), and a
-save writes them back. **Observed** (headless new game, the player moved to Squin and Stack): 8 visited zones, 8 files, every handle in its slot list, 300 of 300 `town` handles
+save writes them back. A file that lacks level buildings comes from an import (it keeps the removals and the player's buildings only, [Importing a game](#importing-a-game-savemanagerimportgame-fun_140378a30)), from a save made
+before a mod placed them, or from a zone first written for loose items or the player's buildings alone; the town writers (owner, ruin and rebuild state, locks, residents) write only into a state
+the file holds. **Observed** (#1046, headless, a save after an import: Blister Hill's 23.22 and 24.22 held 15 building states each, 266 and 141 after): a ruined shack bought and rebuilt there
+had no state, so its reload stood it as the town's ruin for sale again; with the entries added the reload has it standing, the player's and not for sale, and two more saves with no time passed
+write the same zone files. **Observed** (headless new game, the player moved to Squin and Stack): 8 visited zones, 8 files, every handle in its slot list, 300 of 300 `town` handles
 name a town state; key set = the real saves' minus the runtime-only keys (`serialised interior`, `internalbuildings`, farm, craft and lock keys of buildings that have none
 here) plus `meitou lock <i>`; doors and an interior chest locked before the save are locked after reload, and a second save made with no time passed writes the same zone
 files. Once time passes a live farm's `save time` is the clock then, as the original's farm save (`FUN_1400e3b80`) writes it (**Observed** headless, METARU with
