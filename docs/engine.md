@@ -1,7 +1,7 @@
 # Engine architecture
 
 Projects: Core installation, settings, localisation (shared with the launcher); Data clean-room readers, typed game data and pure rules;
-Simulation the headless world (systems, `Navigation/` own navmesh, saving, `Session/` tick clocks, `WorldBoot`), which never references Game;
+Simulation the headless world (systems, `Navigation/` own navmesh, saving, `Session/` tick clocks, `Hosting/` the world host, `WorldBoot`), which never references Game;
 Game the executable `MeitouClient` (`Host/` WorldSession/input/camera, `Rendering/` Vulkan/content/streaming with `Display/` and `Metal/`,
 `Audio/`, `Ui/`, `Mods/` the code-mod loader); ModelViewer debug world/atlas; Tools surveys and mod-check. Folders are feature slices and
 namespaces follow them. GPU and simulation ownership stay separate. [Simulation contracts](simulation.md),
@@ -9,7 +9,7 @@ namespaces follow them. GPU and simulation ownership stay separate. [Simulation 
 
 ## Loop, input and camera
 
-WorldSession owns world, clocks, input/bindings, camera and last two snapshots. Control30Hz real
+`WorldHost` (Simulation `Hosting/`, no camera and no input) owns the world, its clocks, the tick loop and the last two snapshots; WorldSession, the local player's seat, owns input/bindings and the camera, and hands the host the eye before the ticks. Control30Hz real
 (default config tickRate), max10 ticks/frame; simulation1/30 game second, speed0/1/2/5 and
 2*speed budget. Control precedes simulation; interpolation uses each clock's alpha, shortest
 angle rotation and cuts on mode changes. The authoritative time/order/determinism details are

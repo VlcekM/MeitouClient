@@ -12,8 +12,8 @@ crafting/research queues, squads, inventory, shops, building settings, the Stop 
 accumulate `min(realDt, 0.05)*speed` (the original's cap before the speed multiplier, slows below 20 fps, [game loop](game/game-loop.md#frame-clocks), **Verified**
 `FUN_14082ac70`), speeds 0/1/2/5 (the 2 and 5 are Advanced settings, 1.5-4x and 5-20x in half steps). A safety budget of `ceil(2*speed)` ticks per frame stays above that cap (engine choice; a larger one let a heavy world snowball); excess is dropped and
 `AchievedSpeed` reports it. Control ticks precede simulation ticks; a speed change applies
-to the entire frame. `WorldSession` rejects unequal world/clock tick lengths, owns snapshots,
-clocks, input and camera, and disposes systems/services. Of a frame's ticks only the last two publish
+to the entire frame. `WorldHost` (`Hosting/`) rejects unequal world/clock tick lengths, owns the world, the snapshots and the
+clocks, and disposes systems/services; the game's `WorldSession` owns input and camera and gives the host the eye and the shown interiors before the ticks. Of a frame's ticks only the last two publish
 a snapshot (`RunTick(publish)`), the pair the host interpolates between. Advanced → Pause after loading (`PauseOnLoad`, a Faithful / Meitou switch, Meitou and on by default; Faithful runs a loaded save at once as the game does, [game loop](game/game-loop.md)) pauses the speed after a menu load or import; `--load` runs. Advanced → Pause while loading (`LoadingPause`, a Faithful / Meitou switch, Meitou and off by default) holds the world without touching the speed while the zones round the camera load, as the game does ([loading pause](game/game-loop.md#loading-pause)).
 
 ### Engine choices against the original's frame loop
@@ -44,7 +44,7 @@ snapshot object changes). `WorldSnapshot` itself is new on each publish.
 
 ### Tick ahead
 
-The game can run the next ticks on their own thread (`WorldSession.BeginTickAhead`, thread `Meitou.Tick`) during the world draw (`WorldFrame.Draw`, after
+The game can run the next ticks on their own thread (`WorldHost.BeginTickAhead`, thread `Meitou.Tick`) during the world draw (`WorldFrame.Draw`, after
 `DrawWorld`'s host prefix), and joins them right after (`EndTickAhead`), so the frame costs about the slower of the two instead of their sum. A batch runs as many ticks as a frame has owed
 lately (smoothed, rounded down after adding 0.1; at least 1, at most the frame budget), so at 2x and 5x a frame's ticks overlap the draw instead of adding to it; only its
 last two publish. The ticks are ahead of the clock: they count as the next ones owed (`AdvanceSimulation` takes them, then runs the rest), and the game
@@ -54,11 +54,11 @@ the session's snapshots, and the world reads the renderer only through the weath
 (**engine choice**): a command lands a batch later (one tick, 33 ms, at 1x; about a frame's ticks at 5x); blood marks and sounds come out with the tick, up to a batch before it
 shows; a pause with ticks ahead takes them at once (the picture jumps, then the paused interface's republished snapshots show); a save takes them first
 (`SettleAhead`); `ReplaceWorld` drops them. Display → World tick alongside drawing (`TickAhead`): Faithful never (the world, then the draw); Meitou, the default, once
-a tick takes 4 ms (`WorldSession.TickMs`, smoothed over about ten ticks) until it is under 2 ms (a tick ahead is slower, sharing the cores); Always
+a tick takes 4 ms (`WorldHost.TickMs`, smoothed over about ten ticks) until it is under 2 ms (a tick ahead is slower, sharing the cores); Always
 every frame. Off whatever the setting in stills, the duel, recorded flights and the play benchmark (their ticks stay in step with the frame).
 F12's `tick ahead` row is its wall time; `outside ticks` leaves it out.
 
-The game speed is an input of one system: the ragdoll physics steps in real time (`World.PhysicsSpeed`, set by `WorldSession` before each tick, 1 without a clock; not hashed, not saved;
+The game speed is an input of one system: the ragdoll physics steps in real time (`World.PhysicsSpeed`, set by `WorldHost` before each tick, 1 without a clock; not hashed, not saved;
 [ragdolls](game/ragdolls.md)), so a ragdoll's outcome, and the position of a body that follows it, differs between speeds, as in the original. Runs at one speed, headless runs and the goldens are unaffected.
 
 **Verified** original clock: 1200/11 seconds per game hour ([game-loop.md](game/game-loop.md)).
