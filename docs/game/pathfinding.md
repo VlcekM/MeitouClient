@@ -966,7 +966,10 @@ search covered (`NavQuery.LastSearchReached`), and a walker whose start polygon 
 point at once. Reaching that point is no proof of the same ground: **Observed** (#1025 save, Cat-Lon's Exile, `probe crowd --nav`): fighters shoved
 onto a two-polygon ledge at a stair foot (105634,125000, [the dead end](#own-builder) radius 4 could not leave then) marked their target's polygon unreachable, and of
 the 50 Stormthralls on the open mesh, who reach that corner too, about 25 stood 200 away and several were turned back to it from 115 short of the
-target; by the start polygon all 50 stand within 100. The memory holds while no door was locked or unlocked since (`NavDoors.Version`: through a door unlocked since,
+target; by the start polygon all 50 stand within 100. A goal whose nearest reachable point lies within its snap (`NavQuery.GoalSnap` 30, the
+path ends there) is remembered too, and that end reused only for a goal within the snap of it: **Observed** (same save, walkway to a goal on that
+ledge 4 off the mesh's reach, `NavQuery.Stats`): each ask ran the exact and the nearest-point search over the whole ground, 21,206 polygons; the
+asks after the first now run one search of 8 to 16. The memory holds while no door was locked or unlocked since (`NavDoors.Version`: through a door unlocked since,
 walkers outside reached the corner of a locked L-House that one shut in it had found, and stood there; **Observed**, Gigachad save, 39.16); retries skip start
 polygons a failed search reached (same region, same failure). GoTo answers went from ~95 to ~17 ms on average, polygons per search ~11,000 to ~5,800.
 

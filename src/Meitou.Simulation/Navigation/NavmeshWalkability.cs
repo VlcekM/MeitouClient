@@ -407,32 +407,37 @@ public sealed partial class NavmeshWalkability : IWalkability
         // provisionally, which asks again a few times on the way (MovementSystem) before the walker gives up.
         var part = Toward(w, from, to, agent);
         if (!part.Found) return exact;
-        if (Vector2.Distance(new(part.Points[^1].X, part.Points[^1].Z), new(to.X, to.Z)) <= NavQuery.GoalSnap)
-            return part;
 
         // The ground the nearest-point search covered, read before the door query below searches again on this thread.
         bool metDoor = NavQuery.LastSearchMetClosedDoor;
         long[] ground = key is null ? [] : NavQuery.LastSearchReached();
 
         // Shut out by a door closed at run time: the tail goes on through that door, so the walker meets it and a locked one stops it (LockSystem);
-        // straight to the goal, it passed beside a locked gate's post (#560).
-        var door = metDoor ? new NavQuery(w, Doors).ClosedDoorOnTheWay(from, to, part.Points[^1], agent) : null;
+        // straight to the goal, it passed beside a locked gate's post (#560). A nearest point within the goal's snap is the path's end as it is.
+        var nearest = part.Points[^1];
+        bool arrives = Arrives(nearest, to);
+        var door = metDoor && !arrives ? new NavQuery(w, Doors).ClosedDoorOnTheWay(from, to, nearest, agent) : null;
 
-        // Also after a search cut short by its limit: the exact search would be cut short the same way, so the walker gets this same provisional
-        // route.
-        if (key is { } found) Remember(found, w, doors, part.Points[^1], door, ground);
+        // Also after a search cut short by its limit: the exact search would be cut short the same way, so the walker gets this same route.
+        if (key is { } found) Remember(found, new Unreachable(w, doors, nearest, door, arrives, ground, System.Diagnostics.Stopwatch.GetTimestamp()));
 
-        return Provisional(w, part, to, door);
+        return arrives ? part : Provisional(w, part, to, door);
     }
 
     /// <summary>
-    /// The provisional route to a goal just found unreachable (shut in, or a way in too narrow for the radius; <see cref="_unreachable"/>), for a
-    /// walker whose start polygon the failed search covered: it stands on the same ground, which does not reach the goal either, so it walks to the
-    /// nearest point found then instead of running the exact and the nearest-point searches, each of which explores all the ground it can reach.
-    /// Null for any other walker. Reaching that nearest point is no proof of the same ground: where an unjoined sliver touches the open mesh,
-    /// fighters on the goal's own side were sent back to the sliver's corner, 200 from their target (#1025). Only while no door was locked or
-    /// unlocked since: through a door opened since, a walker outside reached the corner of a locked house nearest the goal that one shut in it had
-    /// found, and stood there.
+    /// Whether a path ending at <paramref name="end"/> has arrived at <paramref name="goal"/>: within <see cref="NavQuery.GoalSnap"/> of it on the
+    /// X/Z plane.
+    /// </summary>
+    static bool Arrives(Vector3 end, Vector3 goal) => Vector2.Distance(new(end.X, end.Z), new(goal.X, goal.Z)) <= NavQuery.GoalSnap;
+
+    /// <summary>
+    /// The route to a goal just found unreachable (shut in, or a way in too narrow for the radius; <see cref="_unreachable"/>), for a walker whose
+    /// start polygon the failed search covered: it stands on the same ground, which does not reach the goal either, so it walks to the nearest point
+    /// found then instead of running the exact and the nearest-point searches, each of which explores all the ground it can reach; from there the
+    /// route goes on provisionally unless that point is within the goal's snap. Null for any other walker. Reaching that nearest point is no proof
+    /// of the same ground: where a ledge the radius could not leave touched the open mesh, fighters on the goal's own side were sent back to the
+    /// ledge's corner, 200 from their target (#1025). Only while no door was locked or unlocked since: through a door opened since, a walker
+    /// outside reached the corner of a locked house nearest the goal that one shut in it had found, and stood there.
     /// </summary>
     PathResult? Remembered(NavWorld w, Vector3 from, Vector3 to, NavAgent agent, (NavRef, float, bool)? key, int doors)
     {
@@ -446,26 +451,38 @@ public sealed partial class NavmeshWalkability : IWalkability
         if (!w.TryFindPolygon(from, NavQuery.StartSnap, out var start, out _) || Array.BinarySearch(hit.Ground, start.Key) < 0)
             return null;
 
+        // The remembered point is the nearest to the goal asked for then. Within this goal's snap too it is the path's end; one that ended a path
+        // then says nothing of where a path to another point of the polygon ends, so that is searched for.
+        bool arrives = Arrives(hit.Nearest, to);
+        if (hit.Arrived && !arrives) return null;
+
         var near = new NavQuery(w, Doors).FindPath(from, hit.Nearest, agent, null, out _);
         if (!near.Found) return null;
 
-        return Provisional(w, FromWalker(from, near), to, hit.Door);
+        return arrives ? FromWalker(from, near) : Provisional(w, FromWalker(from, near), to, hit.Door);
     }
 
     /// <summary>
-    /// Remembers <paramref name="goal"/> as unreachable from <paramref name="ground"/> (<see cref="_unreachable"/>); at either limit everything
-    /// remembered is dropped first.
+    /// Remembers <paramref name="goal"/> as unreachable (<see cref="_unreachable"/>); at either limit everything remembered is dropped first.
     /// </summary>
-    void Remember((NavRef, float, bool) goal, NavWorld w, int doors, Vector3 nearest, Vector3? door, long[] ground)
+    void Remember((NavRef, float, bool) goal, Unreachable found)
     {
-        if (_unreachable.Count >= UnreachableLimit || Interlocked.Add(ref _groundKept, ground.Length) > GroundLimit)
+        if (_unreachable.Count >= UnreachableLimit || Interlocked.Add(ref _groundKept, found.Ground.Length) > GroundLimit)
         {
             _unreachable.Clear();
-            Interlocked.Exchange(ref _groundKept, ground.Length);
+            Interlocked.Exchange(ref _groundKept, found.Ground.Length);
         }
 
-        _unreachable[goal] = (w, doors, nearest, door, ground, System.Diagnostics.Stopwatch.GetTimestamp());
+        _unreachable[goal] = found;
     }
+
+    /// <summary>
+    /// What is remembered of a goal found unreachable: the navmesh it was found on (any other mesh, after a zone went live or unloaded, asks again),
+    /// the doors' version (NavDoors.Version), the nearest reachable point, the closed door the tail goes through
+    /// (<see cref="NavQuery.ClosedDoorOnTheWay"/>), whether that point was within the goal's snap (<see cref="Arrives"/>: the path ended there),
+    /// the ground the failed search covered (<see cref="NavQuery.LastSearchReached"/>) and when.
+    /// </summary>
+    readonly record struct Unreachable(NavWorld World, int Doors, Vector3 Nearest, Vector3? Door, bool Arrived, long[] Ground, long At);
 
     /// <summary>
     /// A navmesh part to the nearest reachable point, then on to the goal provisionally (asked again on the way, MovementSystem), through
@@ -494,14 +511,11 @@ public sealed partial class NavmeshWalkability : IWalkability
     const long GroundLimit = 2_000_000;
 
     /// <summary>
-    /// Goals found unreachable over the loaded zones, by goal polygon and the agent's radius and door rule: the navmesh they were found on (any other
-    /// mesh, after a zone went live or unloaded, asks again), the doors' version (NavDoors.Version), the nearest reachable point, the closed door
-    /// the tail goes through (<see cref="NavQuery.ClosedDoorOnTheWay"/>), the ground the failed search covered
-    /// (<see cref="NavQuery.LastSearchReached"/>) and when. Each was 300-600 ms of searching, asked again and again by a town's residents walking to
-    /// a goal they cannot reach (Observed, zone 14.23: a cabinet in a building, docs/game/pathfinding.md).
+    /// Goals found unreachable over the loaded zones, by goal polygon and the agent's radius and door rule (<see cref="Unreachable"/>). Each was
+    /// 300-600 ms of searching, asked again and again by a town's residents walking to a goal they cannot reach (Observed, zone 14.23: a cabinet in
+    /// a building, docs/game/pathfinding.md).
     /// </summary>
-    readonly System.Collections.Concurrent.ConcurrentDictionary<(NavRef Goal, float Radius, bool DoorsClosed), (NavWorld World, int Doors,
-            Vector3 Nearest, Vector3? Door, long[] Ground, long At)> _unreachable = new();
+    readonly System.Collections.Concurrent.ConcurrentDictionary<(NavRef Goal, float Radius, bool DoorsClosed), Unreachable> _unreachable = new();
     /// <summary>
     /// The polygon keys added to <see cref="_unreachable"/>'s grounds since it was last cleared (<see cref="GroundLimit"/>).
     /// </summary>
