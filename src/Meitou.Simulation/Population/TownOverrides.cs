@@ -75,10 +75,6 @@ sealed class TownOverrides(GameDatabase db)
     #region Answers
 
     /// <summary>
-    /// The cheap fingerprint of the world states' inputs last seen (<see cref="Inputs"/>).
-    /// </summary>
-    long _inputs = long.MinValue;
-    /// <summary>
     /// The hash of the answers of every state an entry tests, as last computed; null before the first look.
     /// </summary>
     long? _answers;
@@ -96,14 +92,11 @@ sealed class TownOverrides(GameDatabase db)
     readonly Dictionary<int, HashSet<string>> _visited = [];
 
     /// <summary>
-    /// Takes the world states' inputs now (<paramref name="inputs"/>: a cheap fingerprint of what they read). When those changed and an answer of a
-    /// state an entry tests changed with them, every town is looked at again and may move again, also back to a version it held.
+    /// Takes the world states' answers now: when an answer of a state an entry tests changed, every town is looked at again and may move again,
+    /// also back to a version it held.
     /// </summary>
-    public void Inputs(long inputs, IWorldStates states, IReadOnlyList<TownSite> sites)
+    public void Answers(IWorldStates states, IReadOnlyList<TownSite> sites)
     {
-        if (inputs == _inputs) return;
-
-        _inputs = inputs;
         long answers = AnswersHash(states, sites);
         if (answers == _answers) return;
 

@@ -1071,7 +1071,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     {
         if (!OffscreenOverrides || _loadingScreen) return;
 
-        _overrides.Inputs(StatesFingerprint(world), States, _data.Sites);
+        _overrides.Answers(States, _data.Sites);
         foreach (var site in _data.Sites)
         {
             if (site.Town.OverrideTown.Count == 0 || _overrides.IsSettled(site.Index) || !Switchable(world, site.Index)) continue;
@@ -1092,30 +1092,6 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         ApplyVersion(world, site, version, offscreen: true);
         _overrides.Visited(site.Index, from, VersionOf(site));
         _overrides.CountOffscreen();
-    }
-
-    /// <summary>
-    /// A cheap fingerprint of what the world states read (docs/game/factions-squads-towns.md "Relations and world states"): the unique table's
-    /// version, the code mods' values' version and, for each faction, whether it is the player's ally or hostile to it. The answers themselves are
-    /// compared only when it changes (<see cref="TownOverrides.Inputs"/>).
-    /// </summary>
-    long StatesFingerprint(World world)
-    {
-        var h = new StateHasher();
-        h.Add(world.Uniques.Version);
-        h.Add(world.ModStatesOrNull?.Version ?? 0);
-        int player = PlayerFactionOf(world);
-        var relations = _data.Relations;
-        if (relations.Contains(player))
-        {
-            for (int f = 0; f < relations.Count; f++)
-            {
-                h.Add(relations.IsAlly(f, player));
-                h.Add(relations.IsHostile(f, player));
-            }
-        }
-
-        return (long)h.Value;
     }
 
     /// <summary>
