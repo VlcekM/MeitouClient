@@ -3119,8 +3119,8 @@ msgstr "未启用：游戏不会加载它"
 msgid "Image"
 msgstr "图片"
 
-msgid "{1} mods · {2} enabled"
-msgstr "{1} 个模组 · {2} 个已启用"
+msgid "{1} mods, {2} enabled"
+msgstr "{1} 个模组，{2} 个已启用"
 
-msgid "{1} of {2} mods shown · {3} enabled"
-msgstr "显示 {2} 个模组中的 {1} 个 · {3} 个已启用"
+msgid "{1} of {2} mods shown, {3} enabled"
+msgstr "显示 {2} 个模组中的 {1} 个，{3} 个已启用"
