@@ -115,7 +115,10 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
             Assert.Contains(ui.UiFrame, c => c.Name == "BeginButton" && c.Enabled);
             Assert.True(ui.UiKey(Key.Escape));
             Assert.DoesNotContain(ui.UiFrame, c => c.Name == "BeginButton");
+            // The title style is its own setting, apart from the UI style.
             ui.SetUiMode(UiMode.Faithful);
+            Assert.Contains(ui.UiFrame, c => c.Name == "MeitouTitle");
+            ui.MeitouMainMenu = false;
             Assert.Contains(ui.UiFrame, c => c.Properties.GetValueOrDefault("ImageResource") == "Kenshi_TitleScreen");
             ui.Frontend.CloseFrontend();
             Assert.False(session.Simulation.RequestedPause);
