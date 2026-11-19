@@ -641,6 +641,27 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     }
 
     /// <summary>
+    /// Whether the lifter in <paramref name="slot"/>, still walking to its body, holds the answer that no path gets it there: none found, or one
+    /// whose navmesh part ends out of reach of the spot it walks to and goes on provisionally (the walkability's answer for a goal it cannot reach,
+    /// docs/game/pathfinding.md "Own builder"). False while a request is on its way or the path is for an older spot.
+    /// </summary>
+    internal bool LiftWalkFails(World world, int slot)
+    {
+        var table = world.Characters;
+        ref readonly var n = ref table.Next[slot];
+        var cold = table.Cold(slot)!;
+        bool walks = n.Task == (byte)CharacterTask.PickUp && cold.LiftTime < 0;
+        if (!walks || (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0) return false;
+        if (cold.PathFailed) return true;
+
+        bool provisional = (n.Flags & (ushort)MoveFlags.HasPath) != 0 && cold.PathExact < cold.Path.Length;
+        if (!provisional || !table.TryResolveNext(cold.CarryTarget, out int t)) return false;
+
+        var end = cold.PathExact > 0 ? cold.Path[cold.PathExact - 1] : n.Position;
+        return Vector2.Distance(new Vector2(end.X, end.Z), n.Goal) > ReachOf(world, table.Cold(t)!);
+    }
+
+    /// <summary>
     /// Lets go of the carried body where the carrier stands, without the put-down knock-out (serial phases; the arrest system's put-in-cage, the
     /// carry-out's end). False when it carries nothing.
     /// </summary>

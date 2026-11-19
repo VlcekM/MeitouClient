@@ -1708,7 +1708,10 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (d.Kind is TownDutyKind.Lift or TownDutyKind.HomeLift or TownDutyKind.CorpseLift)
         {
             if (gn.Task == (byte)CharacterTask.PickUp)
-                return gc.LiftTime >= 0 || (d.Next += world.TickSeconds) <= Settings.LiftSeconds || GiveUpLift(world, d, g);
+            {
+                bool reaches = !carry.LiftWalkFails(world, g) && (d.Next += world.TickSeconds) <= Settings.LiftSeconds;
+                return gc.LiftTime >= 0 || reaches || GiveUpLift(world, d, g);
+            }
 
             if (gc.Carrying != d.Body) return End(world, d);   // fought off or pushed away: the body lies there for the next look
             return d.Kind switch
@@ -1956,8 +1959,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// The member gives up a lift whose body it never reached (<see cref="TownDutySettings.LiftSeconds"/>): it leaves that body alone for
-    /// <see cref="TownDutySettings.RefuseHours"/>, and the body stays free for the others.
+    /// The member gives up a lift whose body it cannot reach (no path gets there, <see cref="CarrySystem.LiftWalkFails"/>) or never reached
+    /// (<see cref="TownDutySettings.LiftSeconds"/>): it leaves that body alone for <see cref="TownDutySettings.RefuseHours"/>, and the body stays
+    /// free for the others.
     /// </summary>
     bool GiveUpLift(World world, TownDuty d, int g)
     {
