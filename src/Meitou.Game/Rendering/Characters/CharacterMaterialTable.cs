@@ -82,17 +82,42 @@ internal sealed class CharacterMaterialTable : IDisposable
     }
 
     /// <summary>
-    /// <paramref name="m"/>'s <see cref="PartMaterial.Record"/> into a new slot (its old one, if any, retired), uploaded at <see cref="Flush"/>.
+    /// <paramref name="m"/>'s <see cref="PartMaterial.Record"/> into a new slot (its old one, if any, retired), uploaded at <see cref="Flush"/>; a
+    /// body with code mod tints first places their companion record (<see cref="CharacterLookTints"/>) and names its slot in the body's
+    /// <c>alphaChannel.x</c> (exact as a float while the table is below 2^24 slots).
     /// </summary>
     public void Place(PartMaterial m)
     {
         if (m.Slot >= 0) Retire(m.Slot);
-        int slot = _free.Count > 0 ? _free.Pop() : Reserve();
+        PlaceTints(m);
+
+        int slot = Take();
         _host[slot] = m.Record;
+        if (m.TintSlot >= 0) _host[slot].AlphaChannel.X = m.TintSlot;
         _owners[slot] = m;
         m.Slot = slot;
         _dirty.Add(slot);
     }
+
+    /// <summary>
+    /// A body's tint companion into a new slot (its old one retired), or none without tints.
+    /// </summary>
+    void PlaceTints(PartMaterial m)
+    {
+        if (m.TintSlot >= 0) Retire(m.TintSlot);
+        m.TintSlot = -1;
+        if (m.Tints.Count == 0) return;
+
+        int slot = Take();
+        _host[slot] = CharacterLookTints.Record(m.Tints);
+        m.TintSlot = slot;
+        _dirty.Add(slot);
+    }
+
+    /// <summary>
+    /// A free slot, else a new one.
+    /// </summary>
+    int Take() => _free.Count > 0 ? _free.Pop() : Reserve();
 
     /// <summary>
     /// Gives up <paramref name="slot"/>: it is freed once the frames in flight are done with it.
@@ -114,6 +139,8 @@ internal sealed class CharacterMaterialTable : IDisposable
             {
                 m.Slot = -1;
                 Retire(s);
+                if (m.TintSlot >= 0) Retire(m.TintSlot);
+                m.TintSlot = -1;
             }
         }
     }

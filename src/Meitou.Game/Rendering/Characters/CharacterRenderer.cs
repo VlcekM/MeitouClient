@@ -2052,6 +2052,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         if (has[CharacterShaders.SlotBodyMask]) flags |= CharacterShaders.HasBodyMask;
         if (has[CharacterShaders.SlotHairOverlay]) flags |= CharacterShaders.HasHair;
         if (has[CharacterShaders.SlotBeardOverlay]) flags |= CharacterShaders.HasBeard;
+        if (m.Tints.Count > 0) flags |= CharacterLookTints.Flag;
         if (m.ClipOnNormalAlpha && has[CharacterShaders.SlotNormal]) flags |= CharacterShaders.ClipNormalAlpha;
         if (m.Dyed && has[CharacterShaders.SlotColourMap]) flags |= CharacterShaders.Dyed;
         if (m.Worn) flags |= CharacterShaders.Worn;

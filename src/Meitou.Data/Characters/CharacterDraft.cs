@@ -68,6 +68,26 @@ public enum EditorControlKind
     /// <c>idle stance</c>: a slider over <see cref="CharacterDraft.IdleStances"/>, 1-based.
     /// </summary>
     IdleStance,
+    /// <summary>
+    /// A code mod's slider (<see cref="LookRow"/>), a whole number under its key.
+    /// </summary>
+    ModSlider,
+    /// <summary>
+    /// A code mod's list of choices, the choice's index under its key.
+    /// </summary>
+    ModChoice,
+    /// <summary>
+    /// A code mod's colour: its hue (× 100), the first of its three sliders.
+    /// </summary>
+    ModHue,
+    /// <summary>
+    /// A code mod's colour: its saturation (× 100).
+    /// </summary>
+    ModSaturation,
+    /// <summary>
+    /// A code mod's colour: its brightness (× 100).
+    /// </summary>
+    ModBrightness,
 }
 
 /// <summary>
@@ -86,9 +106,24 @@ public sealed record EditorControl(string Label, EditorControlKind Kind, int Min
     public AppearanceColourRange? Colour { get; init; }
 
     /// <summary>
-    /// Whether the control is a picker (head, hair style or beard) rather than a slider.
+    /// For a code mod's control: the row it edits.
     /// </summary>
-    public bool IsPicker => Kind is EditorControlKind.Head or EditorControlKind.HairStyle or EditorControlKind.Beard;
+    public LookRow? Row { get; init; }
+
+    /// <summary>
+    /// For a code mod's control: the mod's id, its key's prefix.
+    /// </summary>
+    public string? Mod { get; init; }
+
+    /// <summary>
+    /// Whether the control is a picker (head, hair style, beard or a mod's choices) rather than a slider.
+    /// </summary>
+    public bool IsPicker => Kind is EditorControlKind.Head or EditorControlKind.HairStyle or EditorControlKind.Beard or EditorControlKind.ModChoice;
+
+    /// <summary>
+    /// Whether the control is the first of three colour sliders shown as one <c>Kenshi_MultiSlider</c> (the hair colour or a mod's colour).
+    /// </summary>
+    public bool StartsMultiSlider => Kind is EditorControlKind.HairHue or EditorControlKind.ModHue;
 }
 
 /// <summary>
@@ -144,6 +179,12 @@ public sealed class CharacterDraft
     /// Counts the changes, so a preview is rebuilt only when the look changed.
     /// </summary>
     public int Version { get; private set; }
+
+    /// <summary>
+    /// True when the draft is edited in a new game's character creation, false for an edit in play; the code mods' rows are told
+    /// (<see cref="LookRowContext.Creation"/>).
+    /// </summary>
+    public bool Creation { get; init; }
 
     /// <summary>
     /// A draft of a copy of <paramref name="appearance"/> named <paramref name="name"/>.
@@ -248,6 +289,11 @@ public sealed class CharacterDraft
     IReadOnlyList<string>? _idleStances;
 
     /// <summary>
+    /// The code mods' rows of the look as it is now, by tab, and the <see cref="Version"/> they were asked at (<see cref="ModControls"/>).
+    /// </summary>
+    (int Version, ILookup<EditorTab, EditorControl> Controls)? _modControls;
+
+    /// <summary>
     /// The choices of the Idle stance slider (the original's list, <c>FUN_14007d480</c> and <c>FUN_1405bbd40</c>, <b>Observed</b>): the record names
     /// of the ANIMATIONs, in data order, that are <c>idle</c>, not <c>disabled</c>, of no <c>weather type</c>, not on the <c>overlay</c> layer, with
     /// no weapon in either hand and not <c>crouched</c>.
@@ -263,6 +309,17 @@ public sealed class CharacterDraft
     /// beard for women or races without beards) and the hair colour sliders.
     /// </summary>
     public IReadOnlyList<EditorControl> Controls(EditorTab tab)
+    {
+        var list = GameControls(tab);
+        if (ModLooks.HasRows) list.AddRange(ModControls(tab));
+
+        return list;
+    }
+
+    /// <summary>
+    /// The game's own controls of a tab (see <see cref="Controls"/>).
+    /// </summary>
+    List<EditorControl> GameControls(EditorTab tab)
     {
         var list = new List<EditorControl>();
         if (tab == EditorTab.Face && Options(EditorControlKind.Head).Count > 1)
@@ -294,6 +351,45 @@ public sealed class CharacterDraft
     }
 
     /// <summary>
+    /// The code mods' controls of a tab (docs/modding.md "Character editor rows"), after the game's own: a slider, a list of choices, or a colour's
+    /// three sliders. The sources are asked again only when the look changed.
+    /// </summary>
+    IEnumerable<EditorControl> ModControls(EditorTab tab)
+    {
+        if (_modControls is not { } cached || cached.Version != Version)
+        {
+            var context = new LookRowContext(Race, Female, Record, Creation);
+            var controls = ModLooks.Rows(context)
+                .SelectMany(r => ControlsOf(r.Mod, r.Row))
+                .ToLookup(c => c.Row!.Tab);
+            cached = (Version, controls);
+            _modControls = cached;
+        }
+
+        return cached.Controls[tab];
+    }
+
+    /// <summary>
+    /// A mod row's controls: one for a slider or a list, three (hue, saturation, brightness, each 0..100) for a colour.
+    /// </summary>
+    static IEnumerable<EditorControl> ControlsOf(string mod, LookRow row) => row.Kind switch
+    {
+        LookRowKind.Slider => [new(row.Caption, EditorControlKind.ModSlider, row.Min, row.Max, row.Default) { Row = row, Mod = mod }],
+        LookRowKind.Choice => [new(row.Caption, EditorControlKind.ModChoice, 0, row.Choices.Count - 1, row.Default) { Row = row, Mod = mod }],
+        _ =>
+        [
+            new(row.Caption, EditorControlKind.ModHue, 0, 100, Percent(row.DefaultColour.X)) { Row = row, Mod = mod },
+            new(row.Caption, EditorControlKind.ModSaturation, 0, 100, Percent(row.DefaultColour.Y)) { Row = row, Mod = mod },
+            new(row.Caption, EditorControlKind.ModBrightness, 0, 100, Percent(row.DefaultColour.Z)) { Row = row, Mod = mod },
+        ],
+    };
+
+    /// <summary>
+    /// A 0..1 colour part as a slider's 0..100.
+    /// </summary>
+    static int Percent(float part) => CharacterGenerator.Round(Math.Clamp(part, 0, 1) * 100);
+
+    /// <summary>
     /// A slider's value as the editor shows it.
     /// </summary>
     public int Value(EditorControl c)
@@ -315,6 +411,10 @@ public sealed class CharacterDraft
             // A stance not in the list shows as the first, as in the original.
             case EditorControlKind.IdleStance:
                 return Math.Max(IdleStances.ToList().IndexOf(Record.Strings.GetValueOrDefault("idle stance") ?? ""), 0) + 1;
+            case EditorControlKind.ModSlider or EditorControlKind.ModChoice:
+                return Math.Clamp(ModLooks.Int(Record, c.Mod!, c.Row!.Key, c.Mid), c.Min, c.Max);
+            case EditorControlKind.ModHue or EditorControlKind.ModSaturation or EditorControlKind.ModBrightness:
+                return Percent(PartOf(ModHsb(Record, c), c.Kind));
             default: return OptionIndex(c.Kind);
         }
     }
@@ -339,6 +439,12 @@ public sealed class CharacterDraft
     /// </summary>
     public void Set(EditorControl c, int value)
     {
+        if (c.Kind == EditorControlKind.ModChoice)
+        {
+            SetChoice(c, value);
+            return;
+        }
+
         if (c.IsPicker)
         {
             SetOption(c.Kind, value);
@@ -372,7 +478,48 @@ public sealed class CharacterDraft
             case EditorControlKind.HairHue: record.Floats["Hair Colour"] = value; break;
             case EditorControlKind.HairSaturation: record.Floats["Hair Saturation"] = value; break;
             case EditorControlKind.HairBrightness: record.Floats["Hair Brightness"] = value; break;
+            case EditorControlKind.ModSlider: record.Ints[ModKey(c)] = value; break;
+            case EditorControlKind.ModHue or EditorControlKind.ModSaturation or EditorControlKind.ModBrightness:
+                WriteModColour(record, c, value);
+                break;
         }
+    }
+
+    /// <summary>
+    /// A mod colour's hue, saturation and brightness (each 0..1): the look's, else the row's default.
+    /// </summary>
+    static Vector3 ModHsb(FcsRecord record, EditorControl c) => ModLooks.Hsb(record, c.Mod!, c.Row!.Key) ?? c.Row.DefaultColour;
+
+    /// <summary>
+    /// The part of a mod colour's hue, saturation and brightness that a control of <paramref name="kind"/> edits.
+    /// </summary>
+    static float PartOf(Vector3 hsb, EditorControlKind kind) => kind switch
+    {
+        EditorControlKind.ModHue => hsb.X,
+        EditorControlKind.ModSaturation => hsb.Y,
+        _ => hsb.Z,
+    };
+
+    /// <summary>
+    /// The look record's key of a code mod's control (<see cref="ModLooks.KeyOf"/>).
+    /// </summary>
+    static string ModKey(EditorControl c) => ModLooks.KeyOf(c.Mod!, c.Row!.Key);
+
+    /// <summary>
+    /// Writes one part of a mod colour (0..100) and keeps the other two, so the hue stays where it was set when the saturation goes to 0.
+    /// </summary>
+    static void WriteModColour(FcsRecord record, EditorControl c, int value)
+    {
+        var hsb = ModHsb(record, c);
+        float part = value * 0.01f;
+        hsb = c.Kind switch
+        {
+            EditorControlKind.ModHue => hsb with { X = part },
+            EditorControlKind.ModSaturation => hsb with { Y = part },
+            _ => hsb with { Z = part },
+        };
+
+        record.Vector3S[ModKey(c)] = hsb;
     }
 
     #endregion
@@ -451,6 +598,33 @@ public sealed class CharacterDraft
     /// </summary>
     public void Step(EditorControlKind kind, int direction) => SetOption(kind, OptionIndex(kind) + direction);
 
+    /// <summary>
+    /// Steps a picker, a mod's list included, to the previous or next choice.
+    /// </summary>
+    public void Step(EditorControl c, int direction)
+    {
+        if (c.Kind == EditorControlKind.ModChoice) SetChoice(c, Value(c) + direction);
+        else Step(c.Kind, direction);
+    }
+
+    /// <summary>
+    /// Picks a mod list's choice <paramref name="index"/>, wrapped around its choices.
+    /// </summary>
+    void SetChoice(EditorControl c, int index)
+    {
+        int count = c.Max + 1;
+        index = ((index % count) + count) % count;
+        if (Value(c) == index && Record.Ints.ContainsKey(ModKey(c))) return;
+
+        Record.Ints[ModKey(c)] = index;
+        Version++;
+    }
+
+    /// <summary>
+    /// The caption of a mod list's current choice.
+    /// </summary>
+    public string ChoiceName(EditorControl c) => c.Row!.Choices[Value(c)];
+
     #endregion
 
     #region Randomise and reset
@@ -478,6 +652,8 @@ public sealed class CharacterDraft
         if (tab is null or EditorTab.Face) CharacterGenerator.RollFace(_db, Race, Limits, next, rng);
         if (tab is null or EditorTab.Body) CharacterGenerator.RollBody(Limits, next, rng, skinReroll: false);
         if (tab is null or EditorTab.Face) CharacterGenerator.RollFacePoses(Limits, next, rng);
+        if (ModLooks.HasRolls)
+            ModLooks.Roll(next, Race, Female, seed, new LookRollSubject(null, null, false, tab, InEditor: true));
         return next;
     }
 
@@ -489,7 +665,20 @@ public sealed class CharacterDraft
     public void Reset()
     {
         Defaults(Record, Limits);
+        if (ModLooks.HasRows) ModDefaults(Record);
         Version++;
+    }
+
+    /// <summary>
+    /// The code mods' rows of every tab back at their defaults.
+    /// </summary>
+    void ModDefaults(FcsRecord record)
+    {
+        foreach (var c in Enum.GetValues<EditorTab>().SelectMany(ModControls))
+        {
+            if (c.Kind is EditorControlKind.ModSlider or EditorControlKind.ModChoice) record.Ints[ModKey(c)] = c.Mid;
+            else if (c.Kind == EditorControlKind.ModHue) record.Vector3S[ModKey(c)] = c.Row!.DefaultColour;
+        }
     }
 
     /// <summary>

@@ -53,6 +53,14 @@ public static class CharacterGenerator
 
         faction ??= character?.GetReferences("faction").Select(r => db.Find(r.TargetStringId))
             .FirstOrDefault(f => f is { Type: FcsRecordType.Faction });
+
+        // The code mods' values (docs/modding.md "Character editor rows"), each on its own sequence, so the game's rolls stay as they are.
+        if (ModLooks.HasRolls)
+        {
+            var subject = new LookRollSubject(character, faction, FromBodyFile: bodyFile is not null, Tab: null, InEditor: false);
+            ModLooks.Roll(appearance.Record, race, isFemale, seed ^ Fnv1A(record.StringId), subject);
+        }
+
         var loadout = new Loadout
         {
             Seed = seed,

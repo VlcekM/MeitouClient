@@ -441,6 +441,8 @@ static class CharacterShaders
             sheen = mix(sheen, layerSheen, vn.a);
         }
 
+        {{CharacterLookTints.Functions}}
+
         // The Meitou skin's sun term in place of the clamped N.L (docs/character-renderer.md "Skin"; SkinScattering): the pre-integrated table at the surface's
         // curvature, read per channel with its own normal, red nearest the smooth geometric one (light that travels farther under the skin sees less of the bumps).
         // curvature: 1 / radius in world units; share: how much of the fragment is bare skin. The light the table adds over the plain term takes the skin's own hue,
@@ -537,6 +539,7 @@ static class CharacterShaders
                 else if (flag(f, 131072u) && uv.y < 0.0) nm = vec4(0.5, 0.5, 1.0, 0.5);
                 if (flag(f, 32u)) tone += TEXG(m.tex[5], huv, vUvGx, vUvGy).r;
                 body.rgb *= 1.0 - m.skinTone.rgb * tone;
+                {{CharacterLookTints.Call}}
                 if (flag(f, 128u))
                 {
                     vec4 h = TEXG(m.tex[7], huv, vUvGx, vUvGy);
