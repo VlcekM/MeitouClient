@@ -454,6 +454,11 @@ internal static class SavedCharacters
         var race = p.Race;
         var stats = p.Stats;
         var medical = p.Medical;
+
+        // The original seats a character on the mesh when its movement is made (docs/game/pathfinding.md "Made on the mesh").
+        float? seat = world.Walkability.SeatHeight(position.X, position.Z, position.Y);
+        if (seat is { } floor) position.Y = floor;
+
         float athletics = stats?.Athletics ?? 20;
         float speed = race is null
             ? 45
@@ -472,6 +477,8 @@ internal static class SavedCharacters
         int faction = ownerId.Length > 0 && data.FactionIndex(ownerId) is var fi and >= 0 ? fi : fallbackFaction;
         bool player = faction == playerFaction && (playerPlatoon || playerFaction >= 0);
         var cold = NewCold(p, platoonName, squad, faction, player);
+        if (seat is not null) cold.Save!.Ragdoll = null;   // the ragdoll saved where it lay is not on that floor
+
         cold.LastingId = world.LastingIds.ForSaved(sc);
 
         ReadState(world, sc, cold, ref hot, data, context, bounties);

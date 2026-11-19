@@ -194,6 +194,24 @@ public sealed partial class NavmeshWalkability : IWalkability
         return w.Contains(WorldLayout.ZoneOf(x, z)) ? reachable : _fallback.IsWalkable(x, z);
     }
 
+    /// <inheritdoc/>
+    public float? SeatHeight(float x, float z, float y)
+    {
+        var w = _world;
+        if (!TryStand(w, x, z, y, out _, out bool stands) || stands) return null;
+
+        var heights = s_scratch!;
+        heights.Clear();
+        w.HeightsAt(x, z, heights);
+        if (heights.Count == 0) return null;
+
+        float nearest = heights[0];
+        foreach (float h in heights)
+            if (MathF.Abs(h - y) < MathF.Abs(nearest - y)) nearest = h;
+
+        return Snap(w, x, z, nearest, out _);
+    }
+
     /// <summary>
     /// As the other overload, without telling whether a layer was within reach.
     /// </summary>

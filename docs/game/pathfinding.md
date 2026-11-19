@@ -102,6 +102,15 @@ characters round its owner and tests each as a circle (its footprint radius plus
 
 Not modelled: a conscious ragdolled character (a stagger that ragdolls a limb or the whole body) is left out in the original; Meitou keeps it solid unless it is incapacitated.
 
+### Made on the mesh
+
+**Verified** (decompile): the movement's init `FUN_140661f90` makes the nav agent (`FUN_1401468a0`) at the character's position and takes the agent's position back as its own (not for a character getting up, `+0x278`, whose agent is within 20 squared of it on X/Z). The agent's setter `FUN_140145e50` scales the position by 0.1 and asks
+`FUN_1403a20b0` with a reach of 500, which changes only the height (it logs "Position mismatch" when X or Z moved); with no face found the constructor snaps within 30 (`FUN_1403a2fa0`, the agent's radius).
+**Observed** (original 1.0.65 through the harness: the #1024 save with its knocked-out leader's saved position edited, his height read at load; floors are Meitou's mesh heights there): the face nearest in height in the column wins, up or down. Where the floors
+are 3682, 3705, 3765 and 3851, a saved 3720 loaded on 3705 and 3750 and 3762 on 3765 (the body lying 8 to 9 over the floor); where the only floor is 3855, saved heights 3500 (under the terrain), 3632 and 3700 loaded on it.
+Meitou (`SavedCharacters.Make`, `IWalkability.SeatHeight`): a character made from a save that stands on no surface (`StandRise` / `StandDrop`; a polygon within `EdgeTolerance` counts, engine choice: Meitou's walkers stand that far off an edge and would change floors at a load)
+is put on the column's surface nearest in height and its saved ragdoll is dropped; a column with no face keeps the saved position (no 30-unit snap).
+
 ### Walls
 
 Every move of the nav agent, the animation-driven one (root motion, mode 3) included, is a circle swept against the walls round it.
