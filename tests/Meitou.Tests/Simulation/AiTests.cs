@@ -182,6 +182,47 @@ public class AiTests(ITestOutputHelper output)
         Assert.Null(board.Current);
     }
 
+    /// <summary>
+    /// docs/game/ai.md "Package classes", GoOutOnPatrol (<c>FUN_140288890</c>, <c>FUN_1402870a0</c>): a patrol package above the town package
+    /// waits until its squad has been 8 game hours in the town, is finished 12 hours after it started (and sets out again), and starts at once
+    /// for a squad standing outside every town.
+    /// </summary>
+    [Fact]
+    public void A_patrol_package_waits_eight_hours_in_town_ends_after_twelve_and_starts_at_once_outside()
+    {
+        using var world = Town(1, out _, WithHomes(Database(1, ("111-t", 0), ("113-t", 1)), out _, out _), null);
+        world.RunTicks(90);
+        var board = Assert.Single(world.Squads.All, s => s.TemplateId == "10-t").Ai!;
+
+        Assert.Equal("111-t", board.Current?.Id);
+
+        world.GameHours += 8.5;
+        world.RunTicks(60);
+
+        Assert.Equal("113-t", board.Current?.Id);
+
+        double started = board.PatrolStart;
+        world.GameHours += 11;
+        world.RunTicks(60);
+
+        Assert.Equal(started, board.PatrolStart);
+
+        world.GameHours += 2;
+        world.RunTicks(90);
+
+        Assert.True(board.PatrolStart > started);
+
+        using var away = Town(1, out _, WithHomes(Database(1, ("111-t", 0), ("113-t", 1)), out _, out _), null);
+        away.RunTicks(30);
+        var squad = Assert.Single(away.Squads.All, s => s.TemplateId == "10-t");
+
+        // 1.7 town radii out: past the 1.5 a town keeps a character it held.
+        foreach (var m in squad.Members) away.Characters.Place(m.Slot, Centre + new Vector3(0, 0, 4250), 0);
+        away.RunTicks(60);
+
+        Assert.Equal("113-t", squad.Ai!.Current?.Id);
+    }
+
     static SimWorld Town(int threads, out PopulationData data) => Town(threads, out data, null, null);
 
     static SimWorld Town(int threads, out PopulationData data, PopulationData? given, AiSettings? settings, double startHours = 24 + 13,
