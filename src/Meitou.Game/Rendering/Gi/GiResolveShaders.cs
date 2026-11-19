@@ -156,6 +156,10 @@ static partial class GiResolveShaders
             bool interior = (surface.w & 512u) != 0u;
             vec4 gi = giIrradiance(p, n, v, interior);
             float share = giWeight(gi.a, interior);
+            // A viewed building's face lit as the street (surface bit 30) takes the probes by their trust (giTrust): next to the cut-away room its probes
+            // stand in the walls and the hidden storey, and its plinth read their dark, black with a speckled edge (Observed, save lamp, the Storm
+            // House's base); the sky's ambient takes the rest. Other outdoor points keep the probes' share (nooks between buildings stay shaded).
+            if (!interior && (surface.w & 1073741824u) != 0u) share *= giTrust();
             vec3 sky = atmoIrradiance(n) * {{F(1 - KenshiLighting.DielectricSpecular)}} * atmoAmbientMapAt(p).rgb * uAtmoLight.w;
             gi.rgb = giSurfaceIrradiance(gi.rgb, sky, interior);
             // The haze is linear in the colour (colour · T + in-scattering): T from two evaluations, so the added light is hazed as the fragment's was.
@@ -193,6 +197,7 @@ static partial class GiResolveShaders
                 float bound = cached.a > 0.0 ? 1.0 - smoothstep({{F(0.75f * GiCache.Range)}}, {{F(GiCache.Range)}}, length(p - uGiEye)) : 0.0;
                 vec3 fill = mix(gi.rgb, min(gi.rgb, cached.rgb), bound);
                 gi = vec4(mix(fill, cached.rgb, cached.a), mix(gi.a, 1.0, cached.a));
+                giKept = mix(giKept, 1.0, cached.a);   // the cache's light is its own texel's, not probes the point barely sees (giWeight's trust)
             """;
         return resolve.Replace(ResolveUniforms, ResolveUniforms + "\nuniform sampler2D uGiCache;", StringComparison.Ordinal)
             .Replace(ProbesRead, ProbesRead + taken, StringComparison.Ordinal);

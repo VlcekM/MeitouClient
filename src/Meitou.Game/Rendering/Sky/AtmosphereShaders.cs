@@ -731,6 +731,12 @@ static class AtmosphereShaders
                 if ((giFlags & 2) != 0 && atmoPuddle) stored |= 536870912u;   // the reflections' sky is the dome's (SsrShaders ssrPuddle)
                 if (atmoStreet) stored |= 1073741824u;
                 giAlbedoOut = uvec4(o, c.r | (c.g << 8) | specular, stored);
+
+                // The resolve swaps the sky's diffuse ambient for the probes' and leaves the reflection: without the reflections (giFlags 2), a room's surfaces
+                // and metal mirrored the whole sky, bright beads on a bed's studs and the stair treads in a closed room (Observed, save lamp, the Storm House).
+                // They take the occlusion of the path that reads the probes itself (below): the probes' light over the sky's.
+                if (useGi && (giFlags & 2) == 0 && (giInterior || atmoMetalness > 0.0))
+                    specularOcclusion = giSkyOcclusion(world, n, v, envDiffuse, giInterior);
             }
             else
                     #endif
