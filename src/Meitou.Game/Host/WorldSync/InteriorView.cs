@@ -119,6 +119,7 @@ sealed class InteriorView(GameHost host)
         objects.InteriorView = InteriorFloors;
         objects.CutIntoViewed = host.Config.FixPartsInBuildings;
         objects.CutRainOverViewed = host.Config.FixRainInBuildings;
+        objects.KeepHeldGround = host.Config.FixRuinGround;
         objects.HiddenItems = host.GroundItemSync.HiddenGroundKeys;
         host.Session.Camera.Floors ??= CameraFloor;
         foreach (var c in characters)

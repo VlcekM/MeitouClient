@@ -1423,7 +1423,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         foreach (var zone in _streamer.AllZones)
             foreach (var room in zone.Interiors)
             {
-                if (room.Contains(ground, CutMargin) && room.CutsGround(origin, direction, distance)
+                if (MaskUsed(room) && room.Contains(ground, CutMargin) && room.CutsGround(origin, direction, distance)
                     && room.BoxExit(origin, direction) is { } exit && exit > (reach ?? 0))
                     reach = exit;
             }
@@ -1574,6 +1574,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     }
 
     /// <summary>
+    /// Whether a building's mask meshes cut: it has some, and they do not hold its own ground while <see cref="KeepHeldGround"/>.
+    /// </summary>
+    bool MaskUsed(InteriorVolume v) => v.MaskMeshes.Count > 0 && !(KeepHeldGround && v.MaskHoldsGround);
+
+    /// <summary>
     /// The loaded buildings with interior mask meshes whose footprint comes within <paramref name="range"/> of <paramref name="eye"/> (X/Z), into
     /// <paramref name="into"/>.
     /// </summary>
@@ -1586,7 +1591,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             if (zone.Interiors.Length == 0 || ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, eye) > range + 200) continue;
             foreach (var v in zone.Interiors)
             {
-                if (v.MaskMeshes.Count == 0 || v.Footprint.Length == 0) continue;
+                if (!MaskUsed(v) || v.Footprint.Length == 0) continue;
                 float nearest = float.MaxValue;
                 foreach (var p in v.Footprint) nearest = MathF.Min(nearest, Vector2.DistanceSquared(p, q));
                 if (nearest <= range * range || v.ContainsGround(eye.X, eye.Z)) into.Add(v);
@@ -2405,6 +2410,13 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// building in the interior view, over its mask (docs/render-interior-cut.md); off, only inside it, as the game does.
     /// </summary>
     public bool CutRainOverViewed { get; set; } = true;
+
+    /// <summary>
+    /// Meitou (Fixes settings, <c>Ground in buried ruins</c>): the mask of a building that holds its own ground
+    /// (<see cref="InteriorVolume.MaskHoldsGround"/>) is not used, so nothing is cut in it and a move pick stops on its terrain
+    /// (docs/render-interior-cut.md "Interior terrain"); off, it cuts as the game's does.
+    /// </summary>
+    public bool KeepHeldGround { get; set; } = true;
 
     /// <summary>
     /// The interior masks last drawn (the main view's), whose owners a shadow pass leaves uncut as the colour pass does.

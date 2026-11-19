@@ -598,6 +598,11 @@ sealed class GamePages(SettingsMenu menu)
             + "The game leaves out only what falls inside it, so with the camera pulled back the rain in front still streaks across the room.",
             Toggle: new("Rain in open buildings", () => menu.Config.FixRainInBuildings, v => menu.Config.FixRainInBuildings = v,
                 Remaster: true, OnOff: true)));
+        result.Add(new("Ground in buried ruins",
+            "The ash filling a half-buried Ash Dome ruin stays drawn while your characters are in it, and they are ordered onto it. "
+            + "The game hides the ground inside the ruin, showing buried floors nobody can reach under characters that seem to walk on air.",
+            Toggle: new("Ground in buried ruins", () => menu.Config.FixRuinGround, v => menu.Config.FixRuinGround = v,
+                Remaster: true, OnOff: true)));
         result.Add(new("Bags in the inventory",
             "Guards searching for smuggled or stolen goods and bandits after food or loot also look inside bags carried in the inventory, and guards "
             + "confiscating stolen goods inside the worn backpack. The game misses those bags, so goods hidden in them are never found.",

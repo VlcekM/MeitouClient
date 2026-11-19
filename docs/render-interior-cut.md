@@ -70,12 +70,12 @@ grows through a bar's floorboards. `InteriorMaskRenderer`; consumers: terrain, f
     nothing inside the hull (convex footprint and height range of up to 4 viewed buildings, 32 edges in all, in `ViewConstants.cutPlanes`; the
     objects' depth program discards). Limits: the mask is shared, so such a part between two masks along a ray, or in a non-convex mask's concavity, is
     cut too; a far cascade cached before the view opened keeps the shadow until it is redrawn.
-- **Interior terrain** (Meitou; `InteriorVolume.For`, `ReachesUnder`): a mask mesh of an `interior terrain` building that reaches under the
-  terrain at the building's origin is not used, so nothing is cut in it and a move pick stops on its terrain
-  ([movement marker](game/ui-input.md#movement-marker)). **Verified** (scratch check, every placed building with a mask): the 12 Ash Dome Ruins
-  lose theirs; the 3 Ancient Factories, the 6 Ash Domes and the other 39 building types are unchanged. The original's rule (above) cuts the
-  terrain in a ruin while a player character is in it, showing buried floors no navmesh reaches under a character walking unseen ground
-  (#1023; the game was not run).
+- **Interior terrain** (Fixes settings, `Ground in buried ruins`, on; off: the game's rule; `InteriorVolume.MaskHoldsGround`,
+  `WorldObjectRenderer.KeepHeldGround`): the mask of an `interior terrain` building with a mask mesh reaching under the terrain at the building's
+  origin is not used, so nothing is cut in it and a move pick stops on its terrain ([movement marker](game/ui-input.md#movement-marker)).
+  **Verified** (scratch check, every placed building with a mask): the 12 Ash Dome Ruins are such; the 3 Ancient Factories, the 6 Ash Domes and the
+  other 39 building types are not. The original's rule (above) cuts the terrain in a ruin while a player character is in it, showing buried
+  floors no navmesh reaches under a character walking unseen ground (#1023; the game was not run).
 - Only the main view; not shadows or the water reflection.
 - Engine limits: "inside" is decided by the hull, not per ray; foliage impostors and the grass motion pass (TAA velocity)
   are not cut.

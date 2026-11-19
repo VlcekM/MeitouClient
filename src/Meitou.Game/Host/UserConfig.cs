@@ -501,6 +501,11 @@ sealed class UserConfig
     /// </summary>
     public bool FixRainInBuildings { get; set; } = true;
     /// <summary>
+    /// The terrain inside an Ash Dome Ruin stays drawn and orders land on it (Fixes settings; off: the ruin's interior mask cuts it, as the game
+    /// does; docs/render-interior-cut.md "Interior terrain").
+    /// </summary>
+    public bool FixRuinGround { get; set; } = true;
+    /// <summary>
     /// A head a task turned toward something turns back to the front once nothing is looked at (Fixes settings; off by default: it stays turned
     /// until the next look, as the game does; docs/animation.md "Head turning").
     /// </summary>

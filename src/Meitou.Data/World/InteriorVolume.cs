@@ -43,6 +43,12 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     public IReadOnlyList<string> MaskMeshes { get; init; } = [];
 
     /// <summary>
+    /// An <c>interior terrain</c> building with a mask mesh reaching under the terrain it stands in (the Ash Dome Ruins): its mask holds the ground
+    /// the building is walked on (docs/render-interior-cut.md, "Interior terrain").
+    /// </summary>
+    public bool MaskHoldsGround { get; init; }
+
+    /// <summary>
     /// The building's node (position, rotation, <c>scale</c>) the mask meshes are placed with.
     /// </summary>
     public Matrix4x4 Node { get; init; } = Matrix4x4.Identity;
@@ -358,8 +364,7 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     /// The volume of a building placed at <paramref name="position"/> / <paramref name="rotation"/>, or null when it has no <c>interior mask</c> part
     /// with a readable collision file, or is a gateway and <paramref name="gateways"/> is false (a gateway is walked under, not entered: no room, but
     /// its hull still answers the audio ray, <see cref="IsGateway"/>). <paramref name="collision"/> loads a record's collision path (shared, cached).
-    /// <paramref name="ground"/> is the terrain's height at the building, when known: an <c>interior terrain</c> building's mask meshes that reach
-    /// under it are left out (<see cref="ReachesUnder"/>).
+    /// <paramref name="ground"/> is the terrain's height at the building, when known: what <see cref="MaskHoldsGround"/> is told by.
     /// </summary>
     public static InteriorVolume? For(GameDatabase db, GameRecord building, string placementId, Vector3 position, Quaternion rotation,
         InteriorCollisions collision, bool gateways = false, float? ground = null)
@@ -392,8 +397,8 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
         var hull = ConvexHull2(points);
         if (hull.Length < 3) return null;
 
-        // The terrain is such a building's floor (docs/render-interior-cut.md, "Interior terrain"): a mask holding it would cut the ground walked on.
-        if (ground is { } level && building.GetBool("interior terrain")) meshes.RemoveAll(m => ReachesUnder(collision, m, node, level));
+        // The terrain is such a building's floor (docs/render-interior-cut.md, "Interior terrain"): a mask holding it cuts the ground walked on.
+        bool holdsGround = ground is { } level && building.GetBool("interior terrain") && meshes.Any(m => ReachesUnder(collision, m, node, level));
 
         return new InteriorVolume(placementId, hull, yMin, yMax)
         {
@@ -402,6 +407,7 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
             Cavernous = building.GetBool("cavernous"),
             IsGateway = gateway,
             MaskMeshes = meshes,
+            MaskHoldsGround = holdsGround,
             Node = node,
             _maskCorners = [.. corners],
             _pieces = [.. pieces],
