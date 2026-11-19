@@ -391,7 +391,7 @@ public sealed partial class ProductionSystem
 
         if (e.Kind != ErrandKind.Corpse && CarryOutOver(world, e, wasWalking))
         {
-            Carry!.BeginPutDown(world, i, TaskSource.Job);
+            Carry!.LetGo(world, i);   // the task's own unlink (FUN_1405ce1e0), not the put-down task
             _errands.Remove(id);
             return;
         }

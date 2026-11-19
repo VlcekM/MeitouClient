@@ -1728,14 +1728,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (d.Kind == TownDutyKind.Corpse) return StepCorpse(world, d, g);
 
         bool walking = gn.Task == (byte)CharacterTask.GoTo;
-        if (Vector2.Distance(Flat(gn.Position), d.Goal) <= Settings.Arrive)
-        {
-            carry.BeginPutDown(world, g, TaskSource.Goal);
-            return End(world, d);
-        }
-
+        if (Vector2.Distance(Flat(gn.Position), d.Goal) <= Settings.Arrive) return LetGo(world, d, g, refuse: false);
         if (walking) return true;
-        if (++d.Tries > Settings.Walks) return PutDown(world, d, g);
+        if (++d.Tries > Settings.Walks) return LetGo(world, d, g, refuse: true);
         TaskStart.Walk(world, g, d.Goal, SpeedMode.Free, RowOf(d.Kind), TaskSource.Goal);
         return true;
     }
@@ -1943,6 +1938,20 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         TaskStart.Stand(world.Characters, g);
         carry.BeginPutDown(world, g, TaskSource.Goal);
         _refused.Add((d.Body, world.GameHours + Settings.RefuseHours));
+        return End(world, d);
+    }
+
+    /// <summary>
+    /// 224 and 274 at the end of their walk: the body is let go where the carrier stands, without the put-down task and its knock-out (their update
+    /// <c>FUN_1403356e0</c> calls the unlink <c>FUN_1405ce1e0</c>, <b>Verified</b>; <b>Observed</b>, original 1.0.65, #1024: a body that came round
+    /// on the shoulder stayed conscious where it was dropped at the exit). <paramref name="refuse"/>: the walk ended short of its goal, and the body
+    /// is left alone for <see cref="TownDutySettings.RefuseHours"/>.
+    /// </summary>
+    bool LetGo(World world, TownDuty d, int g, bool refuse)
+    {
+        carry.LetGo(world, g);
+        if (refuse) _refused.Add((d.Body, world.GameHours + Settings.RefuseHours));
+
         return End(world, d);
     }
 

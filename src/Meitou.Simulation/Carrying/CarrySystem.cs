@@ -641,8 +641,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     }
 
     /// <summary>
-    /// Lets go of the carried body where the carrier stands, without the put-down knock-out (serial phases; the arrest system's put-in-cage). False
-    /// when it carries nothing.
+    /// Lets go of the carried body where the carrier stands, without the put-down knock-out (serial phases; the arrest system's put-in-cage, the
+    /// carry-out's end). False when it carries nothing.
     /// </summary>
     public bool LetGo(World world, int carrier)
     {
