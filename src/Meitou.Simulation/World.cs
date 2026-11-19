@@ -248,6 +248,7 @@ public sealed partial class World : IDisposable
             TradePriceFilters.Register(this._systems[k], k);
             ItemUseObservers.Register(this._systems[k], k);
             GoodsTakenObservers.Register(this._systems[k], k);
+            TownSwitchObservers.Register(this._systems[k], k);
             RelationObservers.Register(this._systems[k], k);
             DeathObservers.Register(this._systems[k], k);
             ExperienceFilters.Register(this._systems[k], k);
@@ -451,6 +452,10 @@ public sealed partial class World : IDisposable
     /// The systems hearing of goods taken (<see cref="Crime.IGoodsTakenObserver"/>).
     /// </summary>
     internal Crime.GoodsTakenObservers GoodsTakenObservers { get; } = new();
+    /// <summary>
+    /// The systems that hear of towns changing version (<see cref="Population.ITownSwitchObserver"/>).
+    /// </summary>
+    internal Population.TownSwitchObservers TownSwitchObservers { get; } = new();
     /// <summary>
     /// The systems filtering hits before they land (<see cref="Combat.ICombatHitFilter"/>).
     /// </summary>
@@ -708,6 +713,7 @@ public sealed partial class World : IDisposable
         TradePriceFilters.Register(system, _systems.Count - 1);
         ItemUseObservers.Register(system, _systems.Count - 1);
         GoodsTakenObservers.Register(system, _systems.Count - 1);
+        TownSwitchObservers.Register(system, _systems.Count - 1);
         RelationObservers.Register(system, _systems.Count - 1);
         DeathObservers.Register(system, _systems.Count - 1);
         ExperienceFilters.Register(system, _systems.Count - 1);
@@ -1262,6 +1268,7 @@ public sealed partial class World : IDisposable
         TradePriceFilters.HashFaults(ref h);
         ItemUseObservers.HashFaults(ref h);
         GoodsTakenObservers.HashFaults(ref h);
+        TownSwitchObservers.HashFaults(ref h);
         RelationObservers.HashFaults(ref h);
         DeathObservers.HashFaults(ref h);
         ExperienceFilters.HashFaults(ref h);

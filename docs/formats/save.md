@@ -103,6 +103,14 @@ the 166 player buildings whose BUILDING the data lacks, as the original does ([p
 
 **Roaming mark** (Meitou key `meitou roams`, a bool on a platoon record, absent on a town's own platoon): the platoon roamed when Meitou saved it, and the load makes it a roaming platoon again whatever `currentPackage` says (`SaveLoader.Travels`). A loaded platoon's `currentPackage` is the package it runs, which for a caravan stopped in a town is a bar package whose off-screen job is to stay home; without the mark the load would take such a platoon for its base town's own squad. It is written for every platoon that is not a town's own when saved, a wild one and a captive squad split off its town's squad included. A save of the original has no mark and is classified by the engine rule as before; the original ignores the key.
 
+**Guest mark** (Meitou key `meitou guest`, a bool on a platoon record, absent: none): a code mod moved the platoon to another town as a guest
+(`PopulationSystem.RehomePlatoon`, [modding](../modding.md) "Town overrides"); its `basetown` and `hometown` name the host town (with `meitou basetown`
+set) and it has no `homebuilding`. While unloaded its position is at the host and vec3 `meitou guest anchor` (x, 0, z) is the platoon place its
+characters' saved places belong to (at the old town), read back as the anchor so they come to the host with it. Read back as `Platoon.Guest`: never
+refused as a replaced town's platoon and not counted as the host's own squads. **Town override pending** (Meitou bool `meitou override pending` on a
+town's state, absent: none): the town changed version but its new residents are not made yet (`SiteState.Repopulate`, [simulation](../simulation.md)
+"Town overrides"). The original ignores these keys.
+
 **Building record** (Meitou keys on a registered town building's GAMESTATE_BUILDING, [locks](../game/locks.md#building-record)): int `meitou designation`, string `meitou template` (the last assigned SQUAD_TEMPLATE id, absent: none) and the stored public byte as `is public day`; a state without them is a building with no record yet.
 
 **Town-house repair** (Meitou): the original zone instance's GAMESTATE_BUILDING stores `destroyed`, `is complete`,

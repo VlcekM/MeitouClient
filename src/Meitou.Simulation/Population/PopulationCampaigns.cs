@@ -2193,12 +2193,14 @@ public sealed partial class PopulationSystem : IStateHashed
 
     /// <summary>
     /// The war managers once any faction has started or queued a campaign, the kept wild squads while there are any, the towns' artifacts while any
-    /// are left and the prosperity of the factions below their cap (so worlds without them hash as before).
+    /// are left, the towns' versions once one is replaced (<see cref="HashOverrides"/>) and the prosperity of the factions below their cap (so
+    /// worlds without them hash as before).
     /// </summary>
     public void Hash(ref StateHasher h)
     {
         HashWars(ref h);
         HashArtifacts(ref h);
+        HashOverrides(ref h);
         if (_prosperity is not null)
         {
             for (int f = 0; f < _prosperity.Length; f++)

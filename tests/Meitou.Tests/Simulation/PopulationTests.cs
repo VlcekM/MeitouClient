@@ -312,13 +312,14 @@ public class PopulationTests
     public void A_replaced_town_whose_residents_were_never_made_makes_them_at_the_next_load_without_a_new_choice()
     {
         // The original's updatedTownOverrides (docs/game/factions-squads-towns.md "Town overrides"): the build of B's residents is dropped as the
-        // town unloads; next time B's residents are made and B's own list (which would give A) is not looked at.
+        // town unloads; next time B's residents are made and B's own list (which would give A) is not looked at. Faithful: in Meitou mode the
+        // off-screen look takes B's list while the town is away.
         var looks = new GatedLooks();
         var data = WithStates(SyntheticTown.Data(OverrideDb()), new FixedStates("91-t", "92-t"), looks);
         var walk = new OpenGroundWalkability(SyntheticTown.Ground);
+        var settings = new PopulationSettings { CheckEveryTicks = 1, UnloadGraceSeconds = 1, Background = true, OffscreenOverrides = false };
         using var world = new Meitou.Simulation.World(new WorldSettings { Seed = 3, PublishSnapshots = false }, walk,
-            SyntheticTown.Standard(data, walk, StandardParts.Population | StandardParts.Movement,
-                new PopulationSettings { CheckEveryTicks = 1, UnloadGraceSeconds = 1, Background = true }).Systems);
+            SyntheticTown.Standard(data, walk, StandardParts.Population | StandardParts.Movement, settings).Systems);
         using var population = world.Systems.OfType<PopulationSystem>().Single();
         world.Commands.Enqueue(new FocusCommand(SyntheticTown.Centre) { Tick = 0 });
         world.RunTicks(2);

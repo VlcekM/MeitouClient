@@ -84,6 +84,16 @@ public sealed class SavedPlatoon
     /// </summary>
     public const string BaseTownKey = "meitou basetown";
     /// <summary>
+    /// Set on a platoon a code mod moved to its town as a guest (<see cref="Platoon.Guest"/>); its <c>basetown</c> and <c>hometown</c> name the host
+    /// town, so the game reads it as one of that town's.
+    /// </summary>
+    public const string GuestKey = "meitou guest";
+    /// <summary>
+    /// On an unloaded guest (<see cref="GuestKey"/>): the platoon place, x and z, its members' saved places belong to (their old town); read back as
+    /// <see cref="Anchor"/>, so they come to the host with the platoon.
+    /// </summary>
+    public const string GuestAnchorKey = "meitou guest anchor";
+    /// <summary>
     /// A platoon of an older Meitou save: its <c>basetown</c> is the placement's own id even in a replaced town, so it is taken to fit (the
     /// original's test is not applied).
     /// </summary>

@@ -35,9 +35,10 @@ public sealed class Platoon
     /// </summary>
     public required int Id { get; init; }
     /// <summary>
-    /// The town (a position in the population's site list) whose pool it counts against; -1 for a save's wild platoon.
+    /// The town (a position in the population's site list) whose pool it counts against; -1 for a save's wild platoon. Changed only when a code mod
+    /// moves the platoon to another town (<see cref="Guest"/>).
     /// </summary>
-    public required int Origin { get; init; }
+    public required int Origin { get; set; }
     /// <summary>
     /// The SQUAD_TEMPLATE its members are made from.
     /// </summary>
@@ -193,6 +194,17 @@ public sealed class Platoon
     /// the platoon is gone within a minute.
     /// </summary>
     public bool PersistentCleared { get; set; }
+    /// <summary>
+    /// The TOWN its town was when the platoon was stored from it (its own record's id, or the override in its place); null when unknown, as for one
+    /// read from a save, whose record keeps its <c>basetown</c>. A town that changes version drops the platoons of an older one, and its activation
+    /// refuses one (<c>PopulationSystem</c> town overrides); a save writes it as the platoon's <c>basetown</c>.
+    /// </summary>
+    public string? BaseTown { get; set; }
+    /// <summary>
+    /// A code mod moved it to its town (<c>PopulationSystem.RehomePlatoon</c>, engine API): it stays there as a guest, not one of the town's own
+    /// residents, so the town still makes its residents, and a later change of the town's version leaves it where it is. Saved (<c>meitou guest</c>).
+    /// </summary>
+    public bool Guest { get; set; }
     /// <summary>
     /// The unloaded platoon's activation dwell (+0x78, <c>FUN_1407ebf30</c>, <b>Verified</b>): 5 s when it becomes unloaded, 2 s again whenever it
     /// stands outside its zone's activation box; inside, it counts down and the platoon activates once it is below 0. Not saved (a loaded platoon
@@ -389,6 +401,7 @@ public sealed class PlatoonRegistry
             h.Add(p.UnloadAtTick);
             h.Add(p.OrderCooldown);
             if (p.Held) h.Add(0x48656C64);   // only when held, so worlds without code mods hash as before
+            if (p.Guest) h.Add(0x47756573);   // only for a guest, so worlds without town overrides hash as before
             HashMod(ref h, p);
             if (p.Job != Ai.PlatoonJob.None || p.Point is not null)
             {

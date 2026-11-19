@@ -617,6 +617,7 @@ public static class SaveLoader
             Saved = sp,
             Unmade = unmade,
             Target = MissionTownOf(platoon.Record, data),
+            Guest = platoon.Record.Bools.GetValueOrDefault(SavedPlatoon.GuestKey),
         };
         ReadSavedState(p, platoon);
         Register(world, platoon, loaded, context, p, sp, unmade, travels);
@@ -672,6 +673,16 @@ public static class SaveLoader
     static bool IsBaseTown(TownSite site, string baseTown) => site.Record.Id == baseTown || site.Replacement?.Id == baseTown;
 
     /// <summary>
+    /// The platoon place a saved platoon's members' places belong to: its own, or for a guest moved while unloaded the place at its old town
+    /// (<see cref="SavedPlatoon.GuestAnchorKey"/>), so its members follow it to the host.
+    /// </summary>
+    static Vector2 AnchorOf(SavePlatoon platoon)
+    {
+        var at = platoon.Record.Vector3S.TryGetValue(SavedPlatoon.GuestAnchorKey, out var anchor) ? anchor : platoon.Position;
+        return new Vector2(at.X, at.Z);
+    }
+
+    /// <summary>
     /// The saved characters a platoon carries: none for a town's platoon never made (made from its template), else its saved ones.
     /// </summary>
     static SavedPlatoon? SavedOf(SavePlatoon platoon, SavedPopulation context, bool unmade, bool hasCharacters, bool travels)
@@ -681,13 +692,13 @@ public static class SaveLoader
         if (unmade)
         {
             sp = new SavedPlatoon { Source = platoon, Pinned = true, LegacyBaseTown = context.MeitouWritten
-                && !platoon.Record.Bools.ContainsKey(SavedPlatoon.BaseTownKey), Anchor = new Vector2(platoon.Position.X, platoon.Position.Z) };
+                && !platoon.Record.Bools.ContainsKey(SavedPlatoon.BaseTownKey), Anchor = AnchorOf(platoon) };
         }
 
         if (hasCharacters)
         {
             sp = new SavedPlatoon { Source = platoon, Pinned = !travels, LegacyBaseTown = context.MeitouWritten
-                && !platoon.Record.Bools.ContainsKey(SavedPlatoon.BaseTownKey), Anchor = new Vector2(platoon.Position.X, platoon.Position.Z) };
+                && !platoon.Record.Bools.ContainsKey(SavedPlatoon.BaseTownKey), Anchor = AnchorOf(platoon) };
             foreach (var sc in platoon.Characters) sp.Members.Add(new SavedMember { Source = sc });
         }
 

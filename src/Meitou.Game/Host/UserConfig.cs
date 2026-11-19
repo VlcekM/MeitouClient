@@ -384,6 +384,11 @@ sealed class UserConfig
     /// </summary>
     public bool ResidentSchedule { get; set; } = true;
     /// <summary>
+    /// A town away from the player's squads takes its override version (taken over, destroyed) as soon as the story allows (Advanced settings;
+    /// Faithful off: only when the player comes near, as the game does).
+    /// </summary>
+    public bool OffscreenOverrides { get; set; } = true;
+    /// <summary>
     /// Farms, automatic machines and generators work in unloaded zones (Advanced settings; Faithful off: they stop there and farms catch up on load,
     /// as the game does).
     /// </summary>
