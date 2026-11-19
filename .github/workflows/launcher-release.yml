@@ -212,3 +212,27 @@ jobs:
           [ -n "$previous" ] && flags+=(--generate-notes --notes-start-tag "$previous")
           gh release create "launcher-v$VERSION" $(find out -type f) --target "$GITHUB_SHA" \
             --title "Meitou Launcher $VERSION" --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}"
+
+      # Posts the changelog section to Discord as an embed linking the release, in the nightlies' channel and the same way (nightly.yml).
+      - name: Announce on Discord
+        shell: pwsh
+        env:
+          BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          CHANNEL: ${{ vars.DISCORD_NIGHTLY_CHANNEL }}
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          $bot = $env:BOT_TOKEN -and $env:CHANNEL
+          if (-not $bot -and -not $env:WEBHOOK) { 'No Discord bot or webhook set; not announced.' >> $env:GITHUB_STEP_SUMMARY; exit 0 }
+          $url = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/releases/tag/launcher-v$env:VERSION"
+          $text = (Get-Content -Raw "$env:RUNNER_TEMP/changes.md").Trim()
+          # An embed description holds at most 4096 characters; a longer changelog is cut and the release has it all.
+          if ($text.Length -gt 3900) { $text = $text.Substring(0, 3900) + "`n…full notes on the release" }
+          $body = @{ embeds = @(@{ title = "Meitou Launcher $env:VERSION"; url = $url; description = $text; color = 0x4080C0 }) } | ConvertTo-Json -Depth 4
+          $bytes = [Text.Encoding]::UTF8.GetBytes($body)
+          if ($bot) {
+            # Discord's Cloudflare answers a bot call with a browser-like User-Agent (pwsh's default) with 40333 "internal network error".
+            Invoke-RestMethod -Uri "https://discord.com/api/v10/channels/$env:CHANNEL/messages" -Method Post -Headers @{ Authorization = "Bot $env:BOT_TOKEN" } -UserAgent 'DiscordBot (https://github.com/VlcekM/MeitouClient, 1.0)' -ContentType 'application/json; charset=utf-8' -Body $bytes
+          } else {
+            Invoke-RestMethod -Uri $env:WEBHOOK -Method Post -ContentType 'application/json; charset=utf-8' -Body $bytes
+          }
