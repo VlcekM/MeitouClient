@@ -367,6 +367,26 @@ public static class TaskDataTable
     };
 
     /// <summary>
+    /// A row's alertness (<c>+0x3c</c>, <b>Verified</b>: 0.4 from the TaskData constructor <c>FUN_14061d350</c>, the other values written by the
+    /// registrations of <c>FUN_140319a60</c>): how fast a character running the task fills its spot meter on a sneaker
+    /// (docs/game/perception.md "Spotting a sneaker"); 0 sees none.
+    /// </summary>
+    public static float Alertness(TaskType type) => type switch
+    {
+        TaskType.UseBed or TaskType.UseBedOrder or TaskType.SleepOnFloor or TaskType.SleepOnFloorFakeAmbush => 0,
+        TaskType.UseTrainingDummy => 0.1f,
+        TaskType.HealMyLegs or TaskType.FirstAidOrder or TaskType.SplintOrder or TaskType.FirstAidRobot => 0.2f,
+        TaskType.StripTargetsWeapons or TaskType.ProcessAndStripNewSlave => 0.25f,
+        TaskType.NewSlaveProcessing => 0.5f,
+        TaskType.Patrol => 0.75f,
+        TaskType.PatrolTown => 0.8f,
+        TaskType.UseTurret or TaskType.Protection or TaskType.Bodyguard or TaskType.StandAtNode or TaskType.StandAtGeneralNode
+            or TaskType.StandAtGuardNodeHomebuilding or TaskType.StandAtGuardNodeHomebuildingIndoorsOnly
+            or TaskType.StandAtGuardNodeHometownOutside or TaskType.HuntingBloodsmell => 1,
+        _ => 0.4f,
+    };
+
+    /// <summary>
     /// The row of a type; null for the 37 named types without one.
     /// </summary>
     public static TaskDataRow? Of(TaskType type) => (uint)type < (uint)ByType.Length ? ByType[(int)type] : null;

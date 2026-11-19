@@ -66,8 +66,15 @@ and stealth x 5). Each looker keeps a meter per target (`SensoryData::SpottingPe
 **Verified** literals, flow **Observed**:
 
 - In view with line of sight: the meter fills by dt / T, T = lerp(v, 0.5 + 5 s, 0.5) x lerp(f, 4, 1). f is the looker's
-  alertness: 0.5 without a current goal, else a goal float (+0x3c); 0 when it is KO'd, busy
-  (+0x2f8 count > 0) or in state 1, and then the meter does not fill and the target is not seen.
+  alertness (`FUN_1408529c0`, literals **Verified**): the TaskData `+0x3c` of the task it runs (**Observed**: CharBody `+0x68`, set by its
+  set-task slot 3 `FUN_1405c6ec0`; its TaskData at `+0x70`), 0.5 with none; 0 when it is KO'd, busy (+0x2f8 count > 0) or in state 1. At 0 or less, awake (StateBroadcast `+0xb4` 0), the meter does not fill and
+  the target is not seen.
+- **Alertness per task** (**Verified**: 0.4 from the TaskData constructor `FUN_14061d350`, the rest written by the registrations of
+  `FUN_140319a60`): 1 for 17 Protection, 38 / 157 / 268 the guard nodes, 45 Bodyguard, 47 Stand at general node, 51 Stand at node,
+  146 Use turret, 176 Hunting bloodsmell; 0.8 for 36 Patrol town; 0.75 for 22 Patrol; 0.5 for 260 New slave processing; 0.25 for 181 and 182
+  (stripping a captive); 0.2 for 25, 60, 249 and 269 (first aid, splint, heal my legs); 0.1 for 97 Use training dummy; 0 for 98 / 258 Use bed
+  and 175 / 261 Sleep on floor; every other task 0.4. So the spot time is x1 for a guard on its post, x2.8 for one walking, x2.5 for one
+  with no task. Meitou: `TaskDataTable.Alertness` of the plan's running step (`Orders.Alertness`), for the sneak and the disguise meters.
 - Seen (result 1) when the meter was above 1 before this check; else result 2 (noticing). No line of sight: result 0.
 - Not in view: the meter empties by dt / 260 (`FUN_140853aa0`) and is dropped at 0.
 - The target keeps a watcher list (+0x1f0, `FUN_140855f30`): level and time per looker; level 0 removes it. Its only two writers are the spot
@@ -98,7 +105,7 @@ and stealth x 5). Each looker keeps a meter per target (`SensoryData::SpottingPe
 - Stealth XP: see [character-stats](character-stats.md#levelling-xp).
 
 Meitou: `AggroSystem` keeps one meter per looker and sneaker for every awake NPC of another faction (one that picks no fights
-looks for sneakers only, when one is in range; not in bed, asleep, carried, caged or fighting), f = 0.5,
+looks for sneakers only, when one is in range; not in bed, asleep, carried, caged or fighting), f its running step's alertness,
 dt = the scan interval; a meter decays also when the target is out of range. Crime
 witnesses and the stealth knock-out read the same meters. Line of sight (`SightRay.Clear`, #588, #655): the meter's ray `FUN_1408533a0` (**Verified** literals) runs from 18 over the
 looker's feet to 9 over the target's (half the start offset) and blocks when it hits more than 2 short of the target; its mask is `0x87f9e04` (terrain 2, building parts 9..12, stairs 15..18,
@@ -139,7 +146,7 @@ State on the character's status object (Character `+0x1a0`): level `+0x100`, uni
 - Not traced: `sellingUniformDetectionCheck` (selling a uniform, `CRIME_UNIFORM_THEFT`), the dialogue gates of "regards as enemy".
 
 Meitou (`ArrestSystem.Disguise.cs`, every spot sweep): the level and faction from the worn head, armour and legs; lookers are awake NPCs not of the player's faction within 400 that see
-the character (`SightMap.Sees`), with their own meter per pair (not shared with the sneak meters, engine choice), alertness 0.5; the town tests read the town the point stands in
+the character (`SightMap.Sees`), with their own meter per pair (not shared with the sneak meters, engine choice), the looker's alertness as above; the town tests read the town the point stands in
 (engine reading of the status object's hysteresis), inside the walls by the gate regions. The slave and bounty branches stay the arrest system's (a working disguise hides the bounty
 from its spotting); `AggroSystem` and the arrest spotting take `ArrestSystem.SeenFaction`.
 
@@ -348,7 +355,7 @@ is read into the platoon's patrol settings; its consumer was not traced.
 
 - Slot 14 `+0xb4`, slot 60's `+0xd5`, the hearing re-roll factor.
 - The writer of a character's location handle `+0x80`; the building rules of can-hear;
-  the alertness goal float and the +0x3f0 (green pointer) test of spotting.
+  the +0x3f0 (green pointer) test of spotting.
 
 ## Evidence index
 

@@ -114,7 +114,7 @@ public sealed partial class ArrestSystem
                 }
                 if (Vector3.DistanceSquared(next[w].Position, at) > DisguiseRange * DisguiseRange) continue;
                 float v = SightRay.Sees(world, w, s, next[w].Position, at, DisguiseRange);
-                if (v <= 0) continue;
+                if (v <= 0 || Orders.Alertness(wc) <= 0) continue;   // no alertness: the meter empties (FUN_140856cb0)
                 var key = (table.IdOf(w), target);
                 seen.Add(key);
                 float meter = _disguiseMeters.GetValueOrDefault(key);
@@ -141,7 +141,7 @@ public sealed partial class ArrestSystem
     /// lerp(stealth, 1, 2) x level x the factors (the uniform is the looker's faction's x 0.6, its faction owns the slave x 0.5, its squad has a
     /// grudge on the character x 0.5, the character is inside the walls of a town that is not public x 0.75, the looker stands outside a friendly
     /// town of a real faction x 2); then the spot meter's time lerp(v, 5a, a) x lerp(f, 4, 1) with the looker's alertness f
-    /// (<see cref="Orders.SpotAlertness"/>). The looker's marks go on the character for the tooltip.
+    /// (<see cref="Orders.Alertness"/>). The looker's marks go on the character for the tooltip.
     /// </summary>
     float DisguiseSeconds(World world, int w, CharacterCold wc, CharacterId target, CharacterCold c, float v, bool secure)
     {
@@ -165,7 +165,7 @@ public sealed partial class ArrestSystem
         if (secure) k *= 0.75f;
         if (!InFriendlyTown(world, world.Characters.Next[w].Position, wc.Faction)) k *= 2;
         float a = 5 + 40 * k;
-        return (5 * a + (a - 5 * a) * Math.Clamp(v, 0, 1)) * (4 + (1 - 4) * Orders.SpotAlertness);
+        return (5 * a + (a - 5 * a) * Math.Clamp(v, 0, 1)) * (4 + (1 - 4) * Orders.Alertness(wc));
     }
 
     /// <summary>

@@ -1395,12 +1395,16 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             float v = s.Sight.Sees(s.Self, slot, s.Eye, other.Position, s.Outdoor, stealth);
             if (v > 0 && !SightRay.Clear(s.World.Walkability, s.Fights?.Buildings, s.Eye, other.Position)) v = 0;
 
+            // A looker whose task has no alertness (in bed, asleep on the floor) fills no meter and sees no sneaker (FUN_140856cb0).
+            float alertness = s.Cold is { } looker ? Orders.Alertness(looker) : Orders.SpotAlertness;
+            if (alertness <= 0) v = 0;
+
             bool full = SpotOf(s.Spots, slot, other.Generation) > 1;
 
             if (s.Meters)
             {
                 if (v > 0 && !Sighted(s.Sightings!, slot))
-                    s.Sightings!.Add(new Sighting(slot, other.Generation, Orders.SpotSeconds(v, stealth)));
+                    s.Sightings!.Add(new Sighting(slot, other.Generation, Orders.SpotSeconds(v, stealth, alertness)));
 
                 if (Vector3.DistanceSquared(other.Position, s.Eye) <= s.Range * s.Range)
                 {
