@@ -751,11 +751,14 @@ sealed class WorldMap(PlayerInterface player)
             if (trade.Stock.FirstOrDefault(i => i.Index == int.Parse(stockIndex, CultureInfo.InvariantCulture)) is not { } stock)
                 return false;
 
+            var into = player.InventoryWindows.InventoryOwner()?.Id ?? CharacterId.None;
+
             player.Say(new BuyItem(stock.Token, shift ? stock.Quantity : 1)
             {
                 Tick = player.Session.World.Tick,
                 Equip = true,
-                Into = player.InventoryWindows.InventoryOwner()?.Id ?? CharacterId.None,
+                IntoBag = !into.IsNone && player.InventoryWindows.BagShown(into),
+                Into = into,
             });
             return true;
         }

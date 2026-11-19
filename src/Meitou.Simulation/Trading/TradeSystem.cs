@@ -54,6 +54,11 @@ public sealed record BuyItem(InventoryItemToken Item, int Quantity) : SimCommand
     /// </summary>
     public bool Equip { get; init; }
     /// <summary>
+    /// With <see cref="Equip"/>: the receiving character's bag window is open, so the units go into the worn bag first, then as
+    /// <see cref="Equip"/> says (the right click's target window is the bag's before the character's, <c>FUN_140714a20</c> -> <c>FUN_14070dcd0</c>).
+    /// </summary>
+    public bool IntoBag { get; init; }
+    /// <summary>
     /// The character whose window it goes into: the trade passes to them (<see cref="TradeSystem.TradeWith"/>). None: the customer, or the
     /// selection's.
     /// </summary>
@@ -1566,7 +1571,8 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     /// <summary>
-    /// Puts the bought units into the receiving character's inventory: at the cell dropped on, worn (a right click), else wherever they fit; the
+    /// Puts the bought units into the receiving character's inventory: at the cell dropped on, into the open bag window's bag (a right click), worn
+    /// (a right click), else wherever they fit; the
     /// units placed. A live animal's shut grid takes nothing (<see cref="InventoryCommands.MainClosed"/>), only its worn bag does: stock
     /// right-clicked into a bagless dog's window is "No room for that item." in the original.
     /// </summary>
@@ -1586,6 +1592,31 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
 
         if (buy.Section == "backpack_attach") return 0;
         if (buy.Section is { } section) return PlaceAt(into, bought, units, section, buy.X, buy.Y, shut);
+
+        int inBag = buy.Equip && buy.IntoBag ? IntoWornBag(into, bought) : 0;
+        if (inBag == units) return units;
+
+        return inBag + PutRest(buy, into, bought, units - inBag, shut, cold);
+    }
+
+    /// <summary>
+    /// Puts as many of the bought units as fit into the worn bag's grid (stacks of it first, then free cells, <see cref="Inventory.AddTo"/>); the
+    /// units placed, the others staying in <paramref name="bought"/>.
+    /// </summary>
+    static int IntoWornBag(Inventory into, ItemInstance bought)
+    {
+        if (into.Backpack?.Contents is not { } bag) return 0;
+
+        int units = bought.Quantity;
+        return bag.AddTo("backpack_content", bought) ? units : units - bought.Quantity;
+    }
+
+    /// <summary>
+    /// Puts the bought units not in the bag: with <see cref="BuyItem.Equip"/> one unit into the equipment slot that takes it when that is free,
+    /// then wherever they fit; the units placed.
+    /// </summary>
+    int PutRest(BuyItem buy, Inventory into, ItemInstance bought, int units, bool shut, CharacterCold cold)
+    {
         if (!buy.Equip || !InventoryCommands.TryEquip(into, bought.WithQuantity(1), cold)) return Place(into, bought, units, shut);
 
         // One unit is worn; the rest of a stack goes where it fits.
