@@ -204,9 +204,10 @@ public sealed class InteriorSave
 
     /// <summary>
     /// Where a loose-item slot's group entry stands: the slot's place, its height taken above the ground. The original's group adds its zone's
-    /// ground height back when it is made from an entry (<c>FUN_1405534f0</c>, <c>FUN_1409b3710</c>, <b>Verified</b>); Meitou takes the terrain's,
-    /// at least the water level (<b>Observed</b>, METARU: within 0.5 of the saved height for 4370 of the 5627 saved groups, within 2 for 5276;
-    /// docs/formats/save.md "Zone files"). A furniture entry keeps its world height.
+    /// ground height to its own when it is made with no parent building (<c>FUN_1405534f0</c>, <c>FUN_1409b3710</c>, <b>Verified</b> by code),
+    /// and its saved groups stand that much under their slots (<b>Observed</b>, METARU); Meitou takes the terrain's height, at least the water
+    /// level (<b>Observed</b>: within 0.5 of the saved height for 4370 of the 5627 saved groups, within 2 for 5276; docs/formats/save.md "Zone
+    /// files"). A furniture entry keeps its world height.
     /// </summary>
     public static Vector3 GroupPosition(World world, TownItemSlot slot)
     {
@@ -285,10 +286,12 @@ public sealed class InteriorSave
 
     /// <summary>
     /// Adds an occupied cage's entry state to the building states under the cage's id, with its lock as it is now, when the save holds the
-    /// cage's entry (its house keeps its saved interior, its zone does not load fresh).
+    /// cage's entry and keeps it: its house keeps its saved interior, its zone does not load fresh, and the house was neither bought nor
+    /// furnished anew (the later writers remove such a house's entries, <see cref="FurnitureInventorySave"/>, <see cref="RuinSave"/>).
     /// </summary>
     static void NameCage(World world, TownBuilding b, TownLayoutBuilding cage, SavedPieces saved, Dictionary<string, FcsRecord> buildings)
     {
+        if (world.Fixtures.IsEmptied(b.Key) || world.Fixtures.IsRebuilt(b.Key)) return;
         if (!buildings.TryGetValue(b.Key, out var house) || !FurnitureInventorySave.Keeps(house.Ints)) return;
         if (saved.Of(cage) is not { Fresh: false, State: { } state } || !Hand.IsComplete(state, "handle")) return;
 

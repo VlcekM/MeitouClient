@@ -600,8 +600,9 @@ has an override world state (its lists are then replaced) or `0-buildinglist` ho
   have `resource mult` 1, `production amount` and one `consumption amount-<k>` per input section, a bench (10) also `num crafts`, `repeat`,
   `craft partial item size`; `usagenode_<k>` only while used. The house's state names each furniture entry by `internalbuildings-<k>`
   (`FUN_1405547f0`). An item slot's entry targets its ITEM_PLACEMENT_GROUP, with a state of that type under its own `<n>-zone<X>.<Y>-INGAME`
-  id (`is inside building`, `isInsideBuilding`, `floornum`, `respawn time`, `base data sid`) and no handle; its height is above the ground:
-  the group adds its zone's ground height back when it is made from an entry (`FUN_1405534f0`, `FUN_1409b3710`, **Verified** by code).
+  id (`is inside building`, `isInsideBuilding`, `floornum`, `respawn time`, `base data sid`) and no handle; its height is above the ground
+  (**Observed**, the 5627 groups against their layout slots), and a group made with no parent building adds its zone's ground height to its
+  own (`FUN_1405534f0`, `FUN_1409b3710`, **Verified** by code).
   The original keeps a loaded entry as it is saved (**Observed**, harness: a Meitou-written interior of 242 objects and 36 groups loaded and saved
   again came back with the same ids, handles and values, `usagenode_<k>` added).
 - Meitou (`Saving/InteriorSave`) writes a house's interior this way when one of its layout's cages holds a prisoner and its state has no
