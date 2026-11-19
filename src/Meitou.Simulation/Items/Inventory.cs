@@ -180,8 +180,8 @@ public sealed class Inventory(int width, int height)
 
     /// <summary>
     /// Whether two items may share a stack: same record, company and material (as <see cref="InventoryCommands.Stackable"/>, <c>FUN_14075d510</c>),
-    /// stolen mark, death and unique flags, mod tag. The material keeps blueprints of different researches apart: they share their look record
-    /// (#354).
+    /// stolen mark (the original's owner hands, <c>FUN_14075d470</c>: goods stolen from two owners stay apart, and apart from clean ones, #1053),
+    /// death and unique flags, mod tag. The material keeps blueprints of different researches apart: they share their look record (#354).
     /// </summary>
     internal static bool SameStack(ItemInstance a, ItemInstance b) => a.Record == b.Record && a.MaterialId == b.MaterialId
             && a.CompanyId == b.CompanyId && a.ModTag == b.ModTag && a.Mark == b.Mark

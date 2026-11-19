@@ -206,6 +206,13 @@ player's) only when `InventoryGUI::isStealing(source window, other window)` (`FU
 - the two windows trade for money (`isTradingForMoney`).
 
 The mark does not ask `isItOkForMeToLoot` (that only picks the crime), so a bandit's or bounty holder's gear is stolen from its faction too.
+The hand `notifyTheftFrom` writes (`FUN_140792780`, `FUN_140792680`, **Verified** by decompile and disassembly): a character source's own hand, so each robbed
+body gives its own owner; for a BUILDING source a hand kept on the building (`+0xd0`, of the building it is mounted on or inside when it has one,
+`FUN_1400d5fa0`), the null hand when that one's type is 0; a `ShopTraderClass` (0x5b) hand gives the null hand. With a null hand the item stays ownerless
+(`FUN_140792800` writes only onto an ownerless item). **Verified** (harness, 1.0.65, Stack): the building's hand names a character (item `+0x148` type 1 after
+the take): a clothes shop's goods read "Stolen from: Clothing trader holy", a home's chest "Stolen from: Holy Citizen", a knocked-out guard's kit
+"Stolen from: Holy Sentinel"; the player's own clean item put into such a container shows no owner there and is marked the same way when taken back.
+How the marks stack: [stack test](ui-screens.md#6-inventory-trade-dialogue-build).
 Right click and drag mark only an item with no owner yet; a give to a portrait (`FUN_140712490`) calls `notifyTheftFrom` whatever the owner (**Verified** call sites).
 `isStealing` also holds for a move out of the player's window into another faction's (a container, #851); the crime and roll are skipped for a source of
 the player's faction (`FUN_1407916d0`), an ownerless item stays unmarked, and a marked one put into the window of its from-owner, or of an owner of the

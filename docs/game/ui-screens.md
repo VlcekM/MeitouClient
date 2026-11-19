@@ -1258,7 +1258,13 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
     names the barred ones; `fcs.def` gives both lists to ARMOUR, CONTAINER, ITEM, LIMB_REPLACEMENT, NEST_ITEM, WEAPON and CROSSBOW `races` only. Vanilla shirts (Rag Shirt, Cloth Shirt, Leather Turtleneck...) exclude the 10 Hive and Deadhive races, read with `meitou-tools armour`); a section named `out` refuses everything; a non-empty CONTAINER into a CONTAINER's inventory: "Container cannot be placed here unless it is empty.". Under the footprint: two or
     more items refuse it; none, but the section's item-count cap reached, refuses it (`FUN_14071a6b0`: InventorySection `+0xa8` KenshiLib `itemsLimit`, when above 0, at most the
     section's item count); one item locked (shackles) on either side: "Item is locked in place."; one of the same kind (Item vfunc 0x2a0
-    `FUN_14075d510`: same record, company and material, quality not compared; if either is stolen, also the same owner hand, `FUN_14075d470`) is
+    `FUN_14075d510`: same record, company and material, quality not compared; then `FUN_14075d470`, **Verified** by decompile: two items neither of
+    which is stolen for its holder (`FUN_14079e550`, strict) join whatever their owners, else both owner hands (`+0x140`) must be equal, `hand`
+    slot 1 `FUN_1400cd060`: two null hands, or the same type and all four ids, so goods stolen from two characters never share a stack and a
+    stolen unit never joins a clean one; the auto-add `FUN_14074c8b0` and `FUN_140954480` call the same test. **Verified** (harness, 1.0.65,
+    Stack, Leather with room left in every stack): a unit stolen from a shop's basket goes to a cell of its own beside the clean stack and,
+    dropped on it, swaps; a second unit from the same shop joins the first; a unit from a citizen's chest joins neither and swaps with the
+    shop's. Meitou `Inventory.SameStack`) is
     joined with it by the stack join `FUN_14075e220`, whether its stack is full or the item does not stack at all (`stackable` 1) (**Verified** by
     decompile): the two partly used units pool their charges (`+0x118`, max `+0x114`), one unit when the sum is at most one unit's, else a full
     one and the rest; the held item takes the units up to its stack limit at the drop cell, all full when cut there, and the other, with the rest

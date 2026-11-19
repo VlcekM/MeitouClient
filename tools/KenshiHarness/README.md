@@ -62,6 +62,11 @@ are the raw skill levels.
 - Re_Dev: `kh key f6` toggles its window (`toggle_devtools` in `controls.cfg`); its tabs, buttons, search
   boxes and combo boxes are ordinary widgets, e.g. `kh click "Search for squads"`, `kh type "dust bandit squad"`,
   `kh click Spawn --nth=0`.
+- Re_Dev on the selected or clicked character: Stats tab `Give XP` (pick the stat, type the amount), Spawn tab `Give item` (clean items),
+  Main tab `Squish` (cutting 0, blunt 150 knocks an NPC out in a hit or two; more kills a weak one). An NPC is clicked 30 to 70 px above its
+  `screen` point when zoomed in.
+- Inventory: `kh drag` lifts and drops an item (a click does not lift), a right click moves it across; both work while paused. A locked
+  container is picked with `kh click <x> <y> right --alt`. `kh scroll` over the world zooms the camera, over a slider moves it.
 - A game loaded from a save runs unpaused: `kh speed 0` first for a fixed starting point.
 - RE_Kenshi opens its settings window at the main menu and after a load: `kh click "[close]" --nth=0`.
 
