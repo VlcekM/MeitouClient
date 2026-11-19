@@ -1012,15 +1012,19 @@ public sealed partial class PopulationSystem
     readonly List<BuiltRoamer> _readyRoamers = [];
 
     /// <summary>
-    /// Spawn mode 3 (<c>FUN_1404ffad0</c>, <b>Verified</b>): a saved platoon whose <c>basetown</c> no longer fits its home town's replacement
-    /// (<see cref="HomeFits"/>) is not activated. Its template's leader being unique, the template's uniques it holds are released and the flag stays
-    /// (the keep test refuses it unless persistent); otherwise the persistent flag is cleared as well. Either way the keep test then fails
-    /// (<see cref="Kept"/>) and the platoon goes with the orphan timer. A mod's guest (<see cref="Platoon.Guest"/>) is never refused. Whether it was
-    /// refused.
+    /// Spawn mode 3 (<c>FUN_1404ffad0</c>, <b>Verified</b>): a platoon whose home no longer fits its home town's version (<see cref="HomeRefused"/>)
+    /// is not activated. Its template's leader being unique, the template's uniques it holds are released and the flag stays (the keep test refuses
+    /// it unless persistent); otherwise the persistent flag is cleared as well. Either way the keep test then fails (<see cref="Kept"/>) and the
+    /// platoon goes with the orphan timer. Whether it was refused.
     /// </summary>
     bool RefuseReplacedHome(World world, Platoon p)
     {
-        if (p.Saved is null || p.Guest || p.Origin < 0 || p.Origin >= _data.Sites.Count || HomeFits(p)) { p.ReplacedHome = false; return false; }
+        if (!HomeRefused(p))
+        {
+            p.ReplacedHome = false;
+            return false;
+        }
+
         p.ReplacedHome = true;
         p.State = PlatoonState.Unloaded;
         if (_data.Db.Find(p.TemplateId) is { } template
@@ -1031,13 +1035,28 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// A town platoon stored this session from an older version of its town (one still in the world when the town changed: a squad chasing the
-    /// player, say) goes at its activation as the others went at the change (<see cref="DropHomeless"/>), so it does not come back beside the new
-    /// residents. Whether it went.
+    /// Whether spawn mode 3 refuses a platoon (<see cref="RefuseReplacedHome"/>): a saved one whose <c>basetown</c> no longer fits its home town's
+    /// replacement (<see cref="HomeFits(Platoon)"/>), or one stored this session from an older version of its town (<see cref="Outdated"/>). A
+    /// mod's guest (<see cref="Platoon.Guest"/>) never.
+    /// </summary>
+    bool HomeRefused(Platoon p)
+    {
+        if (p.Guest || (uint)p.Origin >= (uint)_data.Sites.Count) return false;
+        if (p.Saved is not null) return !HomeFits(p);
+
+        return Outdated(p, _data.Sites[p.Origin]);
+    }
+
+    /// <summary>
+    /// In Meitou mode (<see cref="OffscreenOverrides"/>), a town platoon stored this session from an older version of its town (one still in the
+    /// world when the town changed: a squad chasing the player, say) goes at its activation as the others went at the change
+    /// (<see cref="DropHomeless"/>), so it does not come back beside the new residents; Faithful refuses it (<see cref="RefuseReplacedHome"/>).
+    /// Whether it went.
     /// </summary>
     bool DropOutdated(World world, Platoon p)
     {
-        if (p.Saved is not null || (uint)p.Origin >= (uint)_data.Sites.Count || !Outdated(p, _data.Sites[p.Origin])) return false;
+        if (!OffscreenOverrides || p.Saved is not null || (uint)p.Origin >= (uint)_data.Sites.Count) return false;
+        if (!Outdated(p, _data.Sites[p.Origin])) return false;
 
         Despawn(world, p);
         return true;
@@ -1064,7 +1083,7 @@ public sealed partial class PopulationSystem
     /// </summary>
     void Activate(World world, Platoon p)
     {
-        if (RefuseReplacedHome(world, p) || DropOutdated(world, p)) return;
+        if (DropOutdated(world, p) || RefuseReplacedHome(world, p)) return;
         p.State = PlatoonState.Activating;
 
         // A stand-in that travelled comes back on walkable ground (it went in straight lines, over water and through buildings); one that did not

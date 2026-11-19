@@ -2,8 +2,9 @@ namespace Meitou.Simulation.Population;
 
 /// <summary>
 /// A town that changed version (docs/modding.md "Town overrides"): the world's tick, the town (a position in the population's site list), the TOWN it
-/// was and the one it is now (null: its own record), the unloaded platoons of the old version left homeless (they go as soon as the observers have
-/// heard, unless one moves them with <see cref="PopulationSystem.RehomePlatoon"/>) and whether it changed off screen
+/// was and the one it is now (null: its own record), the unloaded platoons of the old version left homeless (unless one moves them with
+/// <see cref="PopulationSystem.RehomePlatoon"/>, they go as soon as the observers have heard, or with <see cref="PopulationSettings.OffscreenOverrides"/>
+/// off are refused at their activation) and whether it changed off screen
 /// (<see cref="PopulationSettings.OffscreenOverrides"/>, a code mod's call) rather than at its zone's load.
 /// </summary>
 public readonly record struct TownSwitch(long Tick, int Site, string? From, string? To, IReadOnlyList<int> Homeless, bool Offscreen);

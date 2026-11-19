@@ -26,17 +26,17 @@ sealed class TownOverrides(GameDatabase db)
 
     /// <summary>
     /// The town's winning <c>override town</c> entry now (docs/game/factions-squads-towns.md "Town overrides"): of the entries whose every
-    /// <c>world state</c> holds, weighted by how many they have (none: never), other than the TOWN in place, the heaviest, the first of equals;
-    /// null when none qualifies.
+    /// <c>world state</c> holds, weighted by how many they have (none: never), other than the replacement in place, the heaviest, the first of
+    /// equals; null when none qualifies. An unreplaced town whose list names its own TOWN may take it, which then is the replacement in place.
     /// </summary>
     public TownData? Choose(TownSite site, IWorldStates states)
     {
-        string current = PopulationSystem.TownIdOf(site);
+        string? inPlace = site.Replacement?.Id;
         TownData? best = null;
         int weight = 0;
-        foreach (var entry in EntriesOf(current, site.Town.OverrideTown))
+        foreach (var entry in EntriesOf(PopulationSystem.TownIdOf(site), site.Town.OverrideTown))
         {
-            if (entry.Town.Id == current || entry.States.Length <= weight) continue;
+            if (entry.Town.Id == inPlace || entry.States.Length <= weight) continue;
             if (!entry.States.All(w => IWorldStates.Passes(states, db, w.Id, w.V0))) continue;
 
             (best, weight) = (entry.Town, entry.States.Length);
@@ -52,7 +52,12 @@ sealed class TownOverrides(GameDatabase db)
     {
         if (_entries.TryGetValue(town, out var entries)) return entries;
 
-        entries = [.. links.Select(l => db.Find(l.Id)).OfType<GameRecord>().Where(r => r.Type == FcsRecordType.Town).Select(EntryOf)];
+        entries = links
+            .Select(l => db.Find(l.Id))
+            .OfType<GameRecord>()
+            .Where(r => r.Type == FcsRecordType.Town)
+            .Select(EntryOf)
+            .ToArray();
         _entries[town] = entries;
         return entries;
     }
@@ -75,13 +80,21 @@ sealed class TownOverrides(GameDatabase db)
     #region Answers
 
     /// <summary>
-    /// The hash of the answers of every state an entry tests, as last computed; null before the first look.
+    /// The hash of the answers of every state an entry tests, as last computed; null before the first look and once a TOWN adds tested states.
     /// </summary>
     long? _answers;
     /// <summary>
-    /// Every WORLD_EVENT_STATE an entry of a town's own TOWN, or of a TOWN reachable from it through the lists, tests, in ordinal order.
+    /// Every WORLD_EVENT_STATE an entry of a TOWN a town has been or can become tests (<see cref="Reach"/>), in ordinal order.
     /// </summary>
-    string[]? _tested;
+    readonly SortedSet<string> _tested = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The TOWNs whose entries' states are in <see cref="_tested"/>, by string id.
+    /// </summary>
+    readonly HashSet<string> _reached = new(StringComparer.Ordinal);
+    /// <summary>
+    /// Whether the sites' own TOWNs and their replacements were reached (at the first look).
+    /// </summary>
+    bool _sitesReached;
     /// <summary>
     /// The towns looked at since the answers last changed that had no entry to take (looked at again only once their TOWN changes).
     /// </summary>
@@ -103,6 +116,15 @@ sealed class TownOverrides(GameDatabase db)
         _answers = answers;
         _settled.Clear();
         _visited.Clear();
+    }
+
+    /// <summary>
+    /// Adds the states tested by the entries of <paramref name="town"/> and of every TOWN its lists lead to, once each: a version a code mod put in
+    /// place may lie outside the TOWNs the sites reach. When that adds a state, every town is looked at again at the next look.
+    /// </summary>
+    public void Reach(TownData town)
+    {
+        if (Reach([town])) _answers = null;
     }
 
     /// <summary>
@@ -137,36 +159,41 @@ sealed class TownOverrides(GameDatabase db)
     }
 
     /// <summary>
-    /// The hash of the answer of every tested state (<see cref="_tested"/>), in their order.
+    /// The hash of the answer of every tested state (<see cref="_tested"/>), in their order; the sites' TOWNs are reached first.
     /// </summary>
     long AnswersHash(IWorldStates states, IReadOnlyList<TownSite> sites)
     {
-        _tested ??= Tested(sites);
+        if (!_sitesReached)
+        {
+            Reach(sites.Select(s => s.Record).Concat(sites.Select(s => s.Replacement).OfType<TownData>()));
+            _sitesReached = true;
+        }
+
         var h = new StateHasher();
         foreach (string id in _tested) h.Add(states.IsTrue(id));
         return (long)h.Value;
     }
 
     /// <summary>
-    /// The states tested by the entries of every TOWN a town can be: its own, and those its lists lead to.
+    /// Adds the states tested by the entries of <paramref name="towns"/> and of every TOWN their lists lead to, each TOWN once. Whether a state was
+    /// added.
     /// </summary>
-    string[] Tested(IReadOnlyList<TownSite> sites)
+    bool Reach(IEnumerable<TownData> towns)
     {
-        var tested = new SortedSet<string>(StringComparer.Ordinal);
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        var open = new Queue<TownData>(sites.Select(s => s.Record));
+        int before = _tested.Count;
+        var open = new Queue<TownData>(towns);
         while (open.TryDequeue(out var town))
         {
-            if (!seen.Add(town.Id)) continue;
+            if (!_reached.Add(town.Id)) continue;
 
             foreach (var entry in EntriesOf(town.Id, town.OverrideTown))
             {
-                foreach (var state in entry.States) tested.Add(state.Id);
+                foreach (var state in entry.States) _tested.Add(state.Id);
                 open.Enqueue(entry.Town);
             }
         }
 
-        return [.. tested];
+        return _tested.Count > before;
     }
 
     #endregion

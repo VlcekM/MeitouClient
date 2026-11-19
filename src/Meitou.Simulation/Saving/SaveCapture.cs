@@ -548,7 +548,8 @@ public static partial class SaveCapture
 
     /// <summary>
     /// Each placed town's <c>replacementTown</c> (the TOWN in its place, "" none) and, while replaced, its <c>faction</c>, into its state; a town
-    /// whose new residents are still to be made gets <see cref="PopulationSystem.OverridePendingKey"/> (dropped once they are).
+    /// whose new residents are still to be made gets <see cref="PopulationSystem.OverridePendingKey"/> when <see cref="PopulationSystem.OverrideSaved"/>
+    /// (dropped once they are).
     /// </summary>
     static void WriteTownReplacements(SaveGame game, PopulationData data, PopulationSystem? population)
     {
@@ -562,7 +563,7 @@ public static partial class SaveCapture
         {
             if (town.IsNest || !sites.TryGetValue(town.Instance, out int site)) continue;
 
-            if (population?.OverridePending(site) == true) town.Record.Bools[PopulationSystem.OverridePendingKey] = true;
+            if (population?.OverrideSaved(site) == true) town.Record.Bools[PopulationSystem.OverridePendingKey] = true;
             else town.Record.Bools.Remove(PopulationSystem.OverridePendingKey);
             var replacement = data.Sites[site].Replacement;
             if (replacement is null && !town.Record.Strings.ContainsKey("replacementTown")) continue;

@@ -109,7 +109,7 @@ set) and it has no `homebuilding`. While unloaded its position is at the host an
 characters' saved places belong to (at the old town), read back as the anchor so they come to the host with it. Read back as `Platoon.Guest`: never
 refused as a replaced town's platoon and not counted as the host's own squads. **Town override pending** (Meitou bool `meitou override pending` on a
 town's state, absent: none): the town changed version but its new residents are not made yet (`SiteState.Repopulate`, [simulation](../simulation.md)
-"Town overrides"). The original ignores these keys.
+"Town overrides"); written with Towns change far away on, or for a change made away from a zone's load, and read back as such a change. The original ignores these keys.
 
 **Building record** (Meitou keys on a registered town building's GAMESTATE_BUILDING, [locks](../game/locks.md#building-record)): int `meitou designation`, string `meitou template` (the last assigned SQUAD_TEMPLATE id, absent: none) and the stored public byte as `is public day`; a state without them is a building with no record yet.
 

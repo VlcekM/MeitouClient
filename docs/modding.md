@@ -865,13 +865,14 @@ holds refuses the second mod.
 - **Town overrides** (engine API, not in the original; serial phases; [simulation](simulation.md) "Town overrides"): `PopulationSystem.CheckOverrides(world,
   site)` runs a town's `override town` list now, as its zone's load would; `ApplyTownVersion(world, site, townId)` puts a TOWN of the mod's choice
   in its place (null or the town's own id: back to its own record, residents made afresh; also for a held town or one of the player's faction); both
-  refuse a town that is loaded or loading and return false, changing nothing. `HoldTown(site, held)` keeps the zone load and the off-screen look from
+  refuse a town that is loaded or loading, or whose zone is active, and return false, changing nothing. `HoldTown(site, held)` keeps the zone load and the off-screen look from
   choosing a new version for a town the mod drives (not saved: hold it again in `IWorldReady`). A registered system implementing
   `ITownSwitchObserver` (`Meitou.Simulation.Population`) hears of every change as a `TownSwitch` (site, old and new TOWN, null the town's own, the
   unloaded platoons of the old version left homeless, off screen or at load); during that call it may move each with `RehomePlatoon(world, platoon,
   site)`, which puts an unloaded town platoon at another unloaded town at once as a guest (no travel; it keeps its characters, uniques and purse,
   leaves its shop and home, does not stop the host making its own residents, is left alone by the host's later changes; saved, its members come
-  back round the host's centre), and those still homeless when every observer has heard are despawned. `OffscreenSwitches` counts changes made off
+  back round the host's centre), and those still homeless when every observer has heard are despawned (with Towns change far away off, as in the
+  game, they are refused when they would come back instead). `OffscreenSwitches` counts changes made off
   screen.
 - **Driving NPCs** (engine API; serial phases): `PopulationSystem.HoldPlatoon` stops a roaming platoon's trips and its
   stand-in's travel (not saved: find it by its tag and hold again after a load; it still unloads, and despawns as any platoon but a mod's
