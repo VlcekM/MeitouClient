@@ -200,17 +200,15 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// One squad's patrol (<c>Task_Patrol</c>): when its leader acts a PATROL goal that is not on a patrol package's route nor under a mission town
-    /// (a trader on its way, an assault or occupation roaming the town it took), it draws the next point once it has reached the last
+    /// One squad's patrol (<c>Task_Patrol</c>): when its leader acts a PATROL goal that is not under a mission town (a trader on its way, an
+    /// assault or occupation roaming the town it took), it draws the next point once it has reached the last
     /// (<see cref="PatrolPoint"/>) and walks to it. Every squad does, homeless or not: the picker's only caller is the patrol task
     /// (<c>FUN_1408fd6c0</c>, <c>FUN_1408fe0d0</c>, <b>Verified</b>).
     /// </summary>
     void PatrolStep(World world, Squad squad, int slot, int group, ZoneCoordinate zone)
     {
         var table = world.Characters;
-        if (table.Cold(slot)?.Ai is not { Goal.Task.Type: TaskType.Patrol }
-            || squad.Ai is { CurrentClass: PackageClass.Patrol or PackageClass.PatrolRunning } board
-            && board.RouteIndex < board.Route.Length || squad.Ai is { Destination.IsNone: false }) return;
+        if (table.Cold(slot)?.Ai is not { Goal.Task.Type: TaskType.Patrol } || squad.Ai is { Destination.IsNone: false }) return;
         _patrolSeen.Add(squad.Id);
         var at = new Vector2(table.Previous[slot].Position.X, table.Previous[slot].Position.Z);
         _homelessPatrols.TryGetValue(squad.Id, out var patrol);
@@ -222,8 +220,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// The loaded squads outside the homeless sectors (a town's, a platoon's) whose leader acts a PATROL goal outside a patrol package walk from
-    /// sector to sector as well (a2-011).
+    /// The loaded squads outside the homeless sectors (a town's, a platoon's) whose leader acts a PATROL goal walk from sector to sector as well
+    /// (a2-011).
     /// </summary>
     void PatrolLoadedSquads(World world)
     {

@@ -761,7 +761,7 @@ holds refuses the second mod.
   the AI run a player's squad; then `ChangeAi(squadId, packageId)` and `StartContract(squadId, packageId, hours)` give it packages as dialogue's
   `change AI` / `AI contract` give an NPC squad's (both are ignored for a player squad that is not autonomous), and
   `SetSquadHome(squadId, building)` its home: a town building's key (`TownBuilding.Key`, `x.y:instance`) or a player-built building's id
-  (`BuildSite.Id`); null clears it. A player-built home in one of the faction's outposts makes the outpost the squad's town: its patrols and
+  (`BuildSite.Id`); null clears it. A player-built home in one of the faction's outposts makes the outpost the squad's town:
   going home and town work on the outpost's own machines use it ([rules](simulation.md#autonomous-player-squads)). The player's orders and
   jobs come first. `SetSquadAutonomy(squadId, true, Independent: true)` makes it a squad the player does not lead: not selectable, no squad
   tab, no squad commands, not counted against `max squads` (for staff, caravans or companions with a will of their own; orders that name its

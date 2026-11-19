@@ -509,8 +509,7 @@ Implemented (`PopulationRoaming.cs`):
     (N 20, pool 14) refills an 8-duck squad after its two squads die; drained to 1 with all dead it is wiped out and saved with `ded`, `tod`,
     `pop2` 1.008, `popd2` 20.
   - **Homeless squads** (`PopulationHomeless.cs`; [original rules](game/factions-squads-towns.md#off-screen-world)): every 2 s a squad whose
-    leader patrols (a PATROL goal, outside a patrol-class package's town route; a homeless squad has no town, so its patrol package walks here too: the
-    Border Zone's starving bandits) walks to its patrol point: the leader to the point exactly (`AiSystem.ActPatrol`, kept as the home centre), the
+    leader patrols (a PATROL goal, in any package: the Border Zone's starving bandits, a town's patrol squads) walks to its patrol point: the leader to the point exactly (`AiSystem.ActPatrol`, kept as the home centre), the
     others following it; within 100 of it the next is drawn (the 2 s step stands in for the original's "move ended"); a town drawn with `patrol
     approaches towns` is aimed 200 outside its first gate that is not a ruin with gate code 0 or unknown (unknown = outside, engine choice) or wall
     with `interior` references, so bandits stop outside the Hub ([patrol task](game/factions-squads-towns.md#off-screen-world)).
@@ -1940,7 +1939,7 @@ off screen only come back where their schedule puts them ([off-screen tier](#off
 ### Package classes
 
 `PackageClasses.Of` maps the `signal func` ([ai.md](game/ai.md#package-classes)); `Blackboard` runs the original's slot walk with the class rules of `AiSystem`
-(`IPackageRules`: start, finished, started, ended, may lead). Built: plain, retreat, patrol (route an engine choice), bar, contracts, and
+(`IPackageRules`: start, finished, started, ended, may lead). Built: plain, retreat, patrol, bar, contracts, and
 (`AiSystem.Packages.cs`) the wandering trader (16), passing-by assault (29), occupation (30) and refugee (22: a slave-led squad of fewer than 3 flees to the nearest other town of its faction, a broken one joins a healthy squad there, `SquadManagement.Merge`) as decoded, and the campaign classes
 (war 19, 20, 32 and the defence 31; only a campaign gives them in the data) with their finished tests ([ai](game/ai.md#package-classes)); they start only as a
 campaign's override (engine choice: the original's can-start is always true, so a template slot listing one would start it; none does in the data). The war
@@ -1985,9 +1984,8 @@ Meitou only (the original's AI plans for no player squad; asked for as the RE_Ke
   home has no indoor volume: "inside" is within the home radius.
 - **Outpost as town**: a complete player-built home in an outpost the squad's faction owns makes that outpost its town (`Blackboard.Outpost`, the
   player town's number, beside `Town` = -1; `Blackboard.HomeTown` is either kind; derived from the home on each settle, not hashed or saved).
-  Patrols start and ring it, "at home town" is within its radius (`PlayerTown.Radius`) and going home with the home unreachable walks to its
-  centre. **Engine choice**: a patrol route's town radius is a third of the outpost's radius, so the route stays within it (a site's is its size
-  radius times its town radius mult).
+  "At home town" is within its radius (`PlayerTown.Radius`) and going home with the home unreachable walks to its centre; a patrol package
+  starts there after 8 hours in it, as in any town ([package classes](game/ai.md#package-classes)).
 - **Outpost work**: the outpost's complete, standing buildings of the workers' functions (MINE, RESEARCH, REFINERY, CRAFTING) are its workplaces for
   goals 189 / 190, stand-ins known by their site id (`TownPlaceIndex.OutpostWorkplaces`), but a research bench while no research is current (the
   finder's `couldIOperate`, slot `0x500`, refuses it through `dontNeedWorkRightNow`, `FUN_1402995e0`, **Verified**); the player-flag gate lets the

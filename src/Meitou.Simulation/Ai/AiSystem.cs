@@ -39,43 +39,6 @@ public sealed class AiSettings
     public float Continuity { get; init; } = 1.25f;
 
     /// <summary>
-    /// A patrol package may start this many game hours after the last one started (uniform), and the first one within <see cref="FirstPatrolHours"/>
-    /// of the squad appearing.
-    /// </summary>
-    public float PatrolEveryHoursMin { get; init; } = 6;
-    /// <summary>
-    /// The most game hours between two patrols (<see cref="PatrolEveryHoursMin"/>).
-    /// </summary>
-    public float PatrolEveryHoursMax { get; init; } = 12;
-    /// <summary>
-    /// Game hours from the squad appearing to its first patrol.
-    /// </summary>
-    public float FirstPatrolHours { get; init; } = 4;
-
-    /// <summary>
-    /// A patrol gives up after this many game hours.
-    /// </summary>
-    public float PatrolGiveUpHours { get; init; } = 6;
-
-    /// <summary>
-    /// A patrol's route: this many points round the home town, between these multiples of the town's radius from its centre, then home.
-    /// </summary>
-    public int PatrolPoints { get; init; } = 4;
-    /// <summary>
-    /// The nearest a patrol point lies from the town's centre, in town radii (<see cref="PatrolPoints"/>).
-    /// </summary>
-    public float PatrolRadiusMin { get; init; } = 1.5f;
-    /// <summary>
-    /// The farthest a patrol point lies from the town's centre, in town radii (<see cref="PatrolPoints"/>).
-    /// </summary>
-    public float PatrolRadiusMax { get; init; } = 3f;
-
-    /// <summary>
-    /// The patrol's leader is at a route point within this distance.
-    /// </summary>
-    public float RouteArrive { get; init; } = 40;
-
-    /// <summary>
     /// The original's <c>attacks</c> (settings.cfg "Town attacks frequency": 0 Bombardment, 1 High, 2 Normal, 3 Fewer, 4 Rare, 5 Never; default 2): a
     /// faction's wait between passing-by assaults on the player's towns (docs/game/ai.md "Package classes"); Never stops them.
     /// </summary>
@@ -2095,9 +2058,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// A patrol package's route: the leader walks (or runs) to the route's next point, the others follow it. Without a route the leader walks to
-    /// the patrol point exactly (<c>Task_Patrol</c>'s move, docs/game/factions-squads-towns.md "Patrol task"), which the population's patrol step
-    /// keeps in <see cref="Squad.HomeCentre"/> and redraws once it is reached; the others follow.
+    /// A patrol (<c>Task_Patrol</c>'s move, docs/game/factions-squads-towns.md "Patrol task"): the leader walks to the patrol point exactly, which
+    /// the population's patrol step keeps in <see cref="Squad.HomeCentre"/> and redraws once it is reached; the others follow. Under a running
+    /// patrol package the leader runs (<c>GoOutOnPatrol_Running</c>'s speed mode 2, <c>FUN_140289cb0</c>; the other packages' 4 changes nothing).
     /// </summary>
     static void ActPatrol(World world, int slot, AiMind mind, Blackboard board)
     {
@@ -2109,9 +2072,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return;
         }
 
-        if (board.CurrentClass is PackageClass.Patrol or PackageClass.PatrolRunning && board.RouteIndex < board.Route.Length)
-            WalkTo(world, slot, board.Route[board.RouteIndex], board.CurrentClass == PackageClass.PatrolRunning ? SpeedMode.Run : SpeedMode.Walk);
-        else WalkTo(world, slot, mind.Squad.HomeCentre, SpeedMode.Walk);
+        WalkTo(world, slot, mind.Squad.HomeCentre, board.CurrentClass == PackageClass.PatrolRunning ? SpeedMode.Run : SpeedMode.Walk);
     }
 
     /// <summary>
@@ -3059,7 +3020,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// One squad's turn on the package cadence: its board's state and package (a campaign's phase package), the contract end talk, its route, the
+    /// One squad's turn on the package cadence: its board's state and package (a campaign's phase package), the contract end talk, the
     /// minds and crowd of its members, and the claims (turrets, seats, sitting, work, town posts) and gate.
     /// </summary>
     void UpdateSquad(World world, Squad squad)
@@ -3086,7 +3047,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 { Tick = world.Tick + 1 });
         }
 
-        AdvanceRoute(world, squad, board);
         board.Crowd.Clear();
         board.CrowdEntries.Clear();
 
@@ -3359,7 +3319,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         // The template's initial door state applies to the home it is given (docs/game/locks.md "Doors"); the first squad's wins, a saved building
         // keeps its own.
         if (home is not null) world.Fixtures.ApplyInitialDoorState(home.Key, template?.InitialDoorState ?? 0);
-        ulong roll = Rng.Hash(world.Seed, (ulong)squad.Id, RngPurpose.Think, SeedSalts.AiPatrol);
         squad.Ai = new Blackboard(packages)
         {
             Town = squad.Town,
@@ -3367,7 +3326,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             OwnHome = home,
             Home = home,
             HomePublic = template?.PublicDay ?? true,
-            NextPatrol = world.GameHours + Rng.Float(roll) * Settings.FirstPatrolHours,
+
+            // A patrol package a save restores as running counts its 12 hours from the load (engine choice: Meitou does not save the stamp).
+            PatrolStart = world.GameHours,
         };
 
         // The town it starts in, taken as already entered (engine choice: no ENTER_TOWN line for every squad a town makes).
@@ -3772,19 +3733,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// A running patrol moves on when its leader reaches the route point; the members think again at once.
-    /// </summary>
-    void AdvanceRoute(World world, Squad squad, Blackboard board)
-    {
-        if (board.CurrentClass is not (PackageClass.Patrol or PackageClass.PatrolRunning) || board.RouteIndex >= board.Route.Length) return;
-        if (!world.Characters.TryResolveNext(squad.Leader, out int s)) return;
-        var p = world.Characters.Next[s].Position;
-        if (Vector2.Distance(new Vector2(p.X, p.Z), board.Route[board.RouteIndex]) > Settings.RouteArrive) return;
-        board.RouteIndex++;
-        board.Touch();
-    }
-
-    /// <summary>
     /// The package-class rules of <see cref="Blackboard.Update"/>, bound to the squad being updated (serial steps only).
     /// </summary>
     sealed class Rules : IPackageRules
@@ -3813,9 +3761,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         public bool CanStart(Blackboard board, AiPackage package, PackageClass kind) => kind switch
         {
             PackageClass.Retreat => !board.Intact,
-            PackageClass.Patrol or PackageClass.PatrolRunning =>
-                !board.HomeTown.IsNone && _world.GameHours >= board.NextPatrol && _world.Characters.IsAlive(_squad.Leader)
-                && !_system.CannibalPatrolHeld(_world, _squad, board, package),
+            PackageClass.Patrol or PackageClass.PatrolRunning => _system.PatrolCanStart(_world, _squad, board, package),
             PackageClass.Bar => BarHere(board),
             PackageClass.BarOutdoors => true,
             PackageClass.CannibalRetreat or PackageClass.CannibalsAtHome or PackageClass.PrisonerGathering or PackageClass.SlaverShipping =>
@@ -3862,8 +3808,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         public bool Finished(Blackboard board, AiPackage package, PackageClass kind) => kind switch
         {
             PackageClass.Retreat => board.Intact,
-            PackageClass.Patrol or PackageClass.PatrolRunning =>
-                board.RouteIndex >= board.Route.Length || _world.GameHours >= board.PatrolGiveUp || !_world.Characters.IsAlive(_squad.Leader),
+            PackageClass.Patrol or PackageClass.PatrolRunning => PatrolFinished(_world, board),
             PackageClass.CannibalRetreat or PackageClass.CannibalsAtHome or PackageClass.PrisonerGathering or PackageClass.SlaverShipping =>
                 _system.CaptiveFinished(_world, _squad, board, package, kind),
             // Away from home a bar package ends where it could not start (the original's finished test is its start test negated).
@@ -3900,7 +3845,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
 
         /// <summary>
-        /// A package of class <paramref name="kind"/> just started for the bound squad: a patrol lays its route, a bar package that relaxes
+        /// A package of class <paramref name="kind"/> just started for the bound squad: a patrol stamps its hour, a bar package that relaxes
         /// takes a table (<see cref="AsksForTable"/>), and the other classes set up what they need.
         /// </summary>
         public void Started(Blackboard board, AiPackage package, PackageClass kind)
@@ -3909,7 +3854,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             {
                 case PackageClass.Patrol:
                 case PackageClass.PatrolRunning:
-                    _system.LayRoute(_world, _squad, board);
+                    board.PatrolStart = _world.GameHours;
                     break;
                 case PackageClass.Bar:
                 case PackageClass.BarOutdoors:
@@ -4042,62 +3987,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// </summary>
     internal int BuildingOwner(World world, TownBuilding b, int townFaction) =>
         world.Fixtures.PropertyOwner(b.Key) ?? data.LevelOwnerOf(b, townFaction);
-
-    /// <summary>
-    /// A patrol's route (<b>engine choice</b>: the original's <c>GoOutOnPatrol</c> is not decoded): <see cref="AiSettings.PatrolPoints"/> points
-    /// round the home town at seeded angles and distances of 1.5 to 3 town radii (<see cref="PatrolRadius"/>), each pulled in towards the town until
-    /// walkable (dropped when none is), then home. The next patrol may start 6 to 12 game hours after this one started; this one gives up after 6.
-    /// </summary>
-    void LayRoute(World world, Squad squad, Blackboard board)
-    {
-        if (HomePlace(world, board) is not { } town)
-        {
-            board.Route = [];
-            return;
-        }
-
-        var centre = town.Centre;
-        float r = PatrolRadius(world, board);
-        ulong key = Rng.Mix((ulong)squad.Id << 20 ^ (ulong)board.Version);
-        float start = Rng.Float(Rng.Hash(world.Seed, key, RngPurpose.Think, SeedSalts.AiPatrol)) * MathF.Tau;
-        var route = new List<Vector2>();
-        for (int k = 0; k < Settings.PatrolPoints; k++)
-        {
-            float angle = start + k * MathF.Tau / Settings.PatrolPoints;
-            float f = Rng.Float(Rng.Hash(world.Seed, key, RngPurpose.Think, (ulong)k + 1));
-            float d = r * (Settings.PatrolRadiusMin + f * (Settings.PatrolRadiusMax - Settings.PatrolRadiusMin));
-            for (int tries = 0; tries < 4; tries++, d *= 0.75f)
-            {
-                var p = centre + new Vector2(MathF.Sin(angle), MathF.Cos(angle)) * d;
-                if (!world.Walkability.IsWalkable(p.X, p.Y)) continue;
-                route.Add(p);
-                break;
-            }
-        }
-
-        route.Add(board.OwnHome is { } home ? Flat(home.Position) : centre);
-        board.Route = [.. route];
-        board.RouteIndex = 0;
-        float every = Settings.PatrolEveryHoursMin
-            + Rng.Float(Rng.Hash(world.Seed, key, RngPurpose.Think, 0x50)) * (Settings.PatrolEveryHoursMax - Settings.PatrolEveryHoursMin);
-        board.NextPatrol = world.GameHours + every;
-        board.PatrolGiveUp = world.GameHours + Settings.PatrolGiveUpHours;
-    }
-
-    /// <summary>
-    /// The town radius a patrol route is laid by (<b>engine choice</b>): a site's size radius times its town radius mult, at least 100; an
-    /// outpost's a third of its radius (an outpost record has no size radius of its own), so the route's 1.5 to 3 radii stay within the outpost.
-    /// </summary>
-    float PatrolRadius(World world, Blackboard board)
-    {
-        if (board.Town >= 0)
-        {
-            var site = data.Sites[board.Town];
-            return MathF.Max(site.Town.SizeRadius * site.Town.TownRadiusMult, 100);
-        }
-
-        return world.Buildings.FindTown(board.Outpost) is { } outpost ? outpost.Radius / 3 : 100;
-    }
 
     #endregion
 }

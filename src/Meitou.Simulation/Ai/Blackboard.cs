@@ -25,7 +25,8 @@ public enum PackageClass : byte
     /// </summary>
     Retreat = 1,
     /// <summary>
-    /// <c>GoOutOnPatrol</c> (6) and <c>GoOutOnPatrol_Cannibal</c> (4): a walk round the outskirts of the home town every few hours.
+    /// <c>GoOutOnPatrol</c> (6) and <c>GoOutOnPatrol_Cannibal</c> (4): starts while the leader is out of every town or after 8 hours in one, and
+    /// is finished after 12 hours or once the squad is not intact (<see cref="AiSystem"/>'s <c>PatrolCanStart</c>, <c>PatrolFinished</c>).
     /// </summary>
     Patrol = 2,
     /// <summary>
@@ -402,22 +403,9 @@ public sealed class Blackboard
     public bool Intact { get; set; } = true;
 
     /// <summary>
-    /// A patrol's route (world X/Z) and the point the leader walks to next; empty when no patrol runs.
+    /// The game hour the running patrol package started (<c>GoOutOnPatrol</c> +0xb0, stamped by its activation), from which its 12 hours count.
     /// </summary>
-    public Vector2[] Route { get; set; } = [];
-    /// <summary>
-    /// The index in <see cref="Route"/> of the point the leader walks to next.
-    /// </summary>
-    public int RouteIndex { get; set; }
-
-    /// <summary>
-    /// The game hours from which the next patrol may start, and when the running one gives up.
-    /// </summary>
-    public double NextPatrol { get; set; }
-    /// <summary>
-    /// The game hours at which the running patrol gives up (see <see cref="NextPatrol"/>).
-    /// </summary>
-    public double PatrolGiveUp { get; set; }
+    public double PatrolStart { get; set; }
 
     /// <summary>
     /// The town (site index) a retreat or slave shipping package goes to, set when it starts; -1: none.
@@ -630,8 +618,8 @@ public sealed class Blackboard
     }
 
     /// <summary>
-    /// Starts a package in <paramref name="slot"/> (-1: a contract): ends the one it replaces, loads its roles, bumps the version, resets the route,
-    /// home, bar table, mission town, destination and refugee state, then tells the rules it started.
+    /// Starts a package in <paramref name="slot"/> (-1: a contract): ends the one it replaces, loads its roles, bumps the version, resets the home,
+    /// bar table, mission town, destination and refugee state, then tells the rules it started.
     /// </summary>
     void Start(AiPackage package, int slot, IPackageRules? rules)
     {
@@ -641,8 +629,6 @@ public sealed class Blackboard
         CurrentIndex = slot >= 0 && _slots.TryGetValue(slot, out var list) ? list.IndexOf(package) : -1;
         Roles = package.Roles;
         Version++;
-        Route = [];
-        RouteIndex = 0;
         Home = OwnHome;
         BarTable = -1;
         BarWaits = false;
@@ -654,7 +640,7 @@ public sealed class Blackboard
     }
 
     /// <summary>
-    /// Makes the members think again at once (a patrol moved on).
+    /// Makes the members think again at once (the squad's home or autonomy changed).
     /// </summary>
     public void Touch() => Version++;
 
@@ -853,11 +839,7 @@ public sealed class Blackboard
         if (PhaseContract) hasher.Add(0x50686173);   // only a campaign sets it, so worlds without one hash as before
         if (Replacement is not null) hasher.Add(Rng.StableHash(Replacement.Id));
         hasher.Add(Intact);
-        hasher.Add(Route.Length);
-        foreach (var p in Route) hasher.Add(p);
-        hasher.Add(RouteIndex);
-        hasher.Add(NextPatrol);
-        hasher.Add(PatrolGiveUp);
+        hasher.Add(PatrolStart);
         hasher.Add(Home?.Position ?? default);
         if (BarTable >= 0) hasher.Add(BarTable);
         if (MissionTown >= 0) hasher.Add(MissionTown + 0x4D69);

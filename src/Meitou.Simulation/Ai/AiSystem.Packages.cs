@@ -342,6 +342,48 @@ public sealed partial class AiSystem
 
     #endregion
 
+    #region Patrol
+
+    /// <summary>
+    /// The game hours a squad stays in a town before its patrol package may start there (<c>DAT_1416ad81c</c>).
+    /// </summary>
+    const float PatrolTownHours = 8;
+
+    /// <summary>
+    /// The game hours after which a running patrol package is finished (<c>DAT_1416adc00</c>).
+    /// </summary>
+    const double PatrolHours = 12;
+
+    /// <summary>
+    /// <c>GoOutOnPatrol</c> slot 12 (<c>FUN_140288890</c>, <b>Verified</b>; signals 6 and 23, and 4 after its cage test,
+    /// <see cref="CannibalPatrolHeld"/>): never the running package once it is finished; a squad with members that is intact
+    /// (<c>FUN_1407ac7b0</c>), none of them carrying someone (<c>+0x348</c>), with an effective leader (<c>FUN_14079aea0</c>,
+    /// <see cref="PopulationSystem.EffectiveLeader"/>); then while that leader is in no town (its status town, <c>+0x88</c>), or once the squad has
+    /// been more than 8 game hours in the town it is in (the blackboard's arrival hour, <c>+0x140</c>). It asks for no home town, so a homeless
+    /// squad's patrol starts where it stands.
+    /// </summary>
+    bool PatrolCanStart(World world, Squad squad, Blackboard board, AiPackage package)
+    {
+        if (board.Current == package && PatrolFinished(world, board)) return false;
+        if (squad.Members.Count == 0 || !board.Intact || AnyCarrying(world, squad)) return false;
+        if (CannibalPatrolHeld(world, squad, board, package)) return false;
+
+        var table = world.Characters;
+        var lead = world.SystemOf<PopulationSystem>()?.EffectiveLeader(world, squad) ?? squad.Leader;
+        if (!table.TryResolveNext(lead, out int s) || table.Cold(s) is not { } leader) return false;
+
+        var town = StatusTownAt(data, world, table.Next[s].Position, leader.StatusTown);
+        return town.IsNone || world.GameHours - board.InTownSince > PatrolTownHours;
+    }
+
+    /// <summary>
+    /// <c>GoOutOnPatrol</c> slot 13 (<c>FUN_1402870a0</c>, <b>Verified</b>; all three patrol classes): the squad is not intact, or more than 12
+    /// game hours have passed since the package started (its activation <c>FUN_140287060</c> stamps the hour, <see cref="Blackboard.PatrolStart"/>).
+    /// </summary>
+    static bool PatrolFinished(World world, Blackboard board) => !board.Intact || world.GameHours - board.PatrolStart > PatrolHours;
+
+    #endregion
+
     #region Wandering trader
 
     /// <summary>
