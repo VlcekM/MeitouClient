@@ -259,9 +259,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## DotRecast
 
 `src/Meitou.Simulation/Navigation/` uses the DotRecast NuGet packages `DotRecast.Core` and `DotRecast.Recast`
-(version 2026.3.1) for voxelisation and polygon-mesh generation; it is a port of Recast Navigation. The tile heightfield
-stage there (`NavTriangleRaster.cs`, `NavSpanField.cs`, `NavTileSpans.cs`, `NavCompactField.cs`) is adapted from DotRecast's
-`RcRasterizations`, `RcFilters` and `RcCompacts`, altered to work in pooled arrays; the notice below carries those files' copyright lines.
+(version 2026.3.1), a port of Recast Navigation. The tile heightfield stage (`NavTriangleRaster.cs`, `NavSpanField.cs`,
+`NavTileSpans.cs`, `NavCompactField.cs`) is adapted from DotRecast's `RcRasterizations`, `RcFilters` and `RcCompacts`.
+The region stage (`NavTileRegions.cs`, `NavRegionDistances.cs`, `NavWatershed.cs`, `NavMonotoneRegions.cs`, `NavRegionMerge.cs`)
+is adapted from `RcRegions.cs` at commit `16976369bebab455b59bcb93c799c775a91d816d`. Both stages use reusable buffers.
+The notice below carries those files' copyright lines.
 
 ```
 Copyright (c) 2024 Choi Ikpil ikpil@naver.com

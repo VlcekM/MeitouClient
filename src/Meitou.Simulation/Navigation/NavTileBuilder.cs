@@ -155,15 +155,7 @@ internal static class NavTileBuilder
         mesh = null;
         long t0 = Stopwatch.GetTimestamp();
         NavSideSteps.Cut(chf, steps);
-        if (watershed)
-        {
-            RcRegions.BuildDistanceField(ctx, chf);
-            RcRegions.BuildRegions(ctx, chf, s.MinRegionArea, s.MergeRegionArea);
-        }
-        else
-        {
-            RcRegions.BuildRegionsMonotone(ctx, chf, s.MinRegionArea, s.MergeRegionArea);
-        }
+        NavTileRegions.Build(ctx, chf, s.MinRegionArea, s.MergeRegionArea, watershed);
 
         NavSideSteps.Relink(chf, steps);
         long t1 = Stopwatch.GetTimestamp();

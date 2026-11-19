@@ -684,8 +684,14 @@ tile's compact field is built. **Observed** (2026-11-19, Ryzen 5600X, 32 GB at 7
 `bench-bases-2026-10-27` from an empty navmesh cache, ~165 s of play, 65-88 zones built; DotRecast's stage, then ours): 124 -> 79 GB allocated, gen0
 pauses 11.5 -> 1.8 s, gen1 20.4 -> 1.7 s, blocking gen2s 2 -> 0, frames drawn 5203 -> 7012; with `System.GC.HighMemoryPercent` at 80, under
 that load ([engine.md](engine.md) "GC"), blocking gen2s 27 -> 1 (22.4 -> 0.8 s) and frames over 500 ms 34 -> 3.
-The cache files of the 78 zones that runs of both builds made are byte-identical. A cold tile still allocates inside DotRecast's region building (a
-builder per span, `RcDirtyEntry` lists, level stacks, `int[spanCount]` buffers: ~40 of the 79 GB).
+The cache files of the 78 zones built by both heightfield versions are byte-identical. DotRecast's region stage accounted for about 40 of the 79 GB.
+The tile region stage adapts DotRecast's watershed and monotone partitioners. Each tile rents one array for region IDs and, for watershed,
+distances. The unblurred distance buffer is reused for expansion. Each worker reuses its level stacks, expansion updates, sweep buffers, region
+records, adjacency lists and compact span builder. DotRecast builds the contours and polygon mesh from the resulting compact spans.
+**Observed** (2026-11-19, same benchmark, two interleaved pairs, DotRecast's region stage then ours): 73-74 -> 37 GB allocated (DotRecast types
+29-30 GB -> 0.3), gen0 collections 658-679 -> 269-272, gen0+gen1 pauses 2.2 -> 1.6-1.7 s, frames and segment times within the runs' spread.
+Zone cache files from cold runs of both versions are byte-identical, except zones 28,29 and 49,14, which come out in one of two versions from
+run to run with either version.
 
 ## Animation
 
