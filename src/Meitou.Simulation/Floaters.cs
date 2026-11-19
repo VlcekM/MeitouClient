@@ -49,6 +49,11 @@ public enum FloaterKind : byte
     /// floater font (<c>FUN_1409a14b0</c>).
     /// </summary>
     Price,
+    /// <summary>
+    /// A farm harvest roll's "Failed" (<see cref="Floater.Part"/>) over the operator when a plant gave nothing, grey in the small floater font
+    /// (<c>FUN_1400e59e0</c>).
+    /// </summary>
+    HarvestFailed,
 }
 
 /// <summary>
@@ -94,6 +99,12 @@ public readonly record struct Floater(FloaterKind Kind, CharacterId Target, Vect
     /// </summary>
     public static Floater Pick(CharacterId picker, Vector3 position, string text, bool success) =>
         new(success ? FloaterKind.PickSuccess : FloaterKind.PickFailed, picker, position, false, false, text, default, default);
+
+    /// <summary>
+    /// A harvest that gave nothing, over the operator (<see cref="FloaterKind.HarvestFailed"/>).
+    /// </summary>
+    public static Floater HarvestFailed(CharacterId farmer, Vector3 position, string text) =>
+        new(FloaterKind.HarvestFailed, farmer, position, false, false, text, default, default);
 
     /// <summary>
     /// A building's damage number at the point hit (<see cref="FloaterKind.Building"/>).

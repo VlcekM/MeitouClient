@@ -76,6 +76,7 @@ static class FloaterText
         FloaterKind.StealthHit or FloaterKind.PickSuccess => StealthHit,
         FloaterKind.StealthMiss or FloaterKind.PickFailed => StealthMiss,
         FloaterKind.Price => PriceYellow,
+        FloaterKind.HarvestFailed => Grey,
         _ => HitColour(f),
     };
 

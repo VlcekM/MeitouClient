@@ -795,7 +795,9 @@ the [layout's plant count](#farm-plants), not `amount`.
   section is asked for room for the item (**Verified**, `FUN_1400e59e0`): none sets status 1 and keeps the progress (the tick keeps 1 while the output
   cannot take the item, else resets to 2; the work function does nothing at 1). With room, ceil(`output per plant`) rolls give one item each with probability e (a do-while: 1 to 2 rolls
   for an output of 1 or 2; 0.5 gives one e-roll), then the fraction `output - int(output)` is rolled once against itself; the progress resets to 0, the plant's g = -10, `plants
-  harvested` += 1; the work point moves to the next plant. A crop of zero items floats "Failed".
+  harvested` += 1; the work point moves to the next plant. A plant of zero items floats "Failed" over its operator, any operator, only while the GUI's
+  shown flag `DAT_142133ae0` is set, whatever the floaters option: font 0 (small), colour (0.9, 0.9, 0.9, 0.9), 15 units up (**Verified**,
+  `FUN_1400e59e0`, the `FUN_14073faf0` call and its literals). Meitou: `ProductionSystem.HarvestFailed`, `FloaterKind.HarvestFailed` (#1044).
   e (`FUN_1400dfe10`) = `clamp01(lerp(farming/100, 0.5, 2))` x C x F, C = sum of the farm's crop weights x the biome
   coverages (1 indoors), farming the operator's effective stat (**Verified**: the 0.01 at `141682ad8` and the call order).
 - **Clearing**: d >= `death threshold`: clear progress += health x powerSat x P x dt x s x clear rate; at 1 one plant is

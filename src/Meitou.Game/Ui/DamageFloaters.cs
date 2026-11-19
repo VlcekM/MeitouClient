@@ -96,11 +96,13 @@ sealed class DamageFloaters(PlayerInterface player)
     }
 
     /// <summary>
-    /// The font a floater takes: a machine label (<c>FUN_1403567a0</c>) and a pick result (<c>FUN_140359160</c>) pass font 0, the small floater font;
-    /// the rest follow the option.
+    /// The font a floater takes: a machine label (<c>FUN_1403567a0</c>), a pick result (<c>FUN_140359160</c>) and a failed harvest
+    /// (<c>FUN_1400e59e0</c>) pass font 0, the small floater font; the rest follow the option.
     /// </summary>
     FloaterMode FontMode(FloaterKind kind) =>
-        kind is FloaterKind.Label or FloaterKind.PickSuccess or FloaterKind.PickFailed ? FloaterMode.Full : player.Floaters;
+        kind is FloaterKind.Label or FloaterKind.PickSuccess or FloaterKind.PickFailed or FloaterKind.HarvestFailed
+            ? FloaterMode.Full
+            : player.Floaters;
 
     /// <summary>
     /// The floater's MyGUI font: the large one for a price, else the small one for Full info (and the fixed small-font floaters), the medium one
