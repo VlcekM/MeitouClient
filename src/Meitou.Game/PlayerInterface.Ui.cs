@@ -266,6 +266,18 @@ sealed partial class PlayerInterface
         _uiHost.BuildingActions(new UiBuildingContext(building, snapshot, () => Session.World.Tick, Say));
 
     /// <summary>
+    /// Whether any UI extension adds lines to the town panel.
+    /// </summary>
+    internal bool HasModTownLines => _uiHost.HasTownLines;
+
+    /// <summary>
+    /// The lines the interface extensions add to the town panel for <paramref name="town"/> (<see cref="UiHost.TownLines"/>), given whether the
+    /// player's faction owns it and the snapshot the panel is laid out from.
+    /// </summary>
+    internal IReadOnlyList<UiTownLine> ModTownLines(Simulation.Production.OutpostSnapshot town, bool owned, WorldSnapshot snapshot) =>
+        _uiHost.TownLines(new UiTownContext(town, owned, snapshot, () => Session.World.Tick, Say));
+
+    /// <summary>
     /// Future code-mod loader entry point; disposal removes the extension's owned registrations.
     /// </summary>
     public IDisposable RegisterUiExtension(IUiExtension extension) => _uiHost.Register(extension);

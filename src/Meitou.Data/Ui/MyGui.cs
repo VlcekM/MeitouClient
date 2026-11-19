@@ -92,6 +92,12 @@ public readonly record struct UiRect(float X, float Y, float Width, float Height
     public static bool StretchesWidth(string align) => (Flags(align) & Align.HStretch) == Align.HStretch;
 
     /// <summary>
+    /// Whether <paramref name="align"/> keeps a piece's distance to its parent's top edge only (Top or Default, or a missing <c>align</c>): a parent
+    /// growing in height leaves it where it is from the top, neither moved down, stretched nor centred.
+    /// </summary>
+    public static bool TopAnchored(string align) => (Flags(align) & Align.VStretch) == Align.Top;
+
+    /// <summary>
     /// One axis of <see cref="AlignTo"/>: the start and length of a piece at <paramref name="start"/>, <paramref name="length"/> long, in a parent
     /// <paramref name="parent"/> long that grew by <paramref name="growth"/>, by the axis' bits <paramref name="flags"/> (<paramref name="near"/>,
     /// <paramref name="far"/>, both, or neither).

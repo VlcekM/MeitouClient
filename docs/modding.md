@@ -656,6 +656,28 @@ holds refuses the second mod.
   and still qualifies before acting. A source that throws, or returns a
   button without a caption or press, is logged once and dropped for the session; a press that throws is logged. Without a source the panel
   is as before. Engine API, not in the original.
+- **Town panel lines:** in `Register`, `registration.AddTownPanelLines(context => lines)` adds lines to the HUD's town panel (the outpost the
+  camera is in: name, Open to public, Research, Power, Battery charge; [town panel](game/ui-screens.md#town-panel)) under the game's own, in
+  registration order (mods in load order), so several mods share it. A `UiTownLine` has a `Label` (in the labels' column, drawn as the game's
+  labels), an optional `Value` (in the bars' column, centred, in the labels' look; blank is none) and `Tooltip`, and an optional `Press`: with a
+  value the value is a button's caption, without one the whole line is one button captioned with the label (the game's neutral button, its
+  caption in the panel's main colour). At most four lines show, of all mods together, so keep to one; the lines past them are left out, logged
+  once per interface extension. The panel grows upward by one of its rows per line: its lower edge stays, and its own rows keep their distance
+  from its top, so they move up with it. Return the same lines for an outpost every time, changing only their text (a line with nothing to say can
+  show a dash), so the panel keeps its shape while the player looks at it. Each line is placed and sized as a copy of the Battery charge row; a
+  layout the lines cannot be placed in (a UI mod's without the Power and Battery rows and bar as direct children of the panel, or with a child of
+  the panel aligned other than to its top) shows none. A label or value is cut to 64 characters and put on one line (line breaks, `\n` and
+  control characters become spaces), a tooltip is cut to 1,000; the panel shortens what does not fit its column, and colour tags work as in the
+  game's texts. Labels, values and tooltips go through the translation catalog, as the game's own. The source runs on the host thread whenever the
+  panel is arranged (each tick, each mouse move, at least 20 times a second while it shows), so it must be cheap and read only its context; a
+  tick may be in flight, so it must not touch the world. It gets `UiTownContext`: `Town` (the `OutpostSnapshot`: `Number`, the
+  `PlayerTown.Number` commands name it by, numbered again in load order when a save loads; `Name`, `Owner`, `Public`, `Power`), `Owned` (whether
+  the player's faction owns it; the panel shows only the player's outposts today), the `Snapshot` on screen, `Tick` read when asked, and
+  `Enqueue`, to be called only from a press. A press plays the panel's click and runs only while the panel still shows the outpost it was shown
+  for; it changes the world only by queueing commands, which the mod's system applies in its serial `Inputs` step, checking that the outpost still
+  exists (`world.Buildings.FindTown`) and, for a change only its owner may make, that its `Owner` is still the player's faction. A source that
+  throws, or returns a line without a label, is logged once and dropped for the session; a press that throws is logged. The hook keeps no state:
+  nothing of it enters the state hash or a save. Without a source the panel is as before. Engine API, not in the original.
 - **Settings:** `AddSettings(object)`, once per mod: the object's public get/set properties marked
   `[Setting(label, Hint, Min, Max, Step, Options, SubGroup, VisibleWhen)]` (`ModSettings.cs`) become one group, in declaration order (a
   sub-group's settings together at its first one's place), under the mod's row on the Settings screen's Mods page

@@ -552,6 +552,7 @@ to Jobs; the saved `chase mode` flag is that switch (**Verified**, [perma-jobs](
 - Meitou (`TownPanel`): the subtree is registered as a screen panel (drawn under the windows, not raised, skipped by Esc and Tab) so the box takes typing; the
   position is the camera pivot; Enter or losing the focus renames (`RenameTown`; an empty name is ignored, engine choice); the tick sends `SetTownPublic`; both only for
   the player's own outposts (`PlayerTown.Public`, saved as `public`). A public outpost is a wandering trader's destination as a public placed town is, and keeps it for its stay.
+  Code mods' lines (engine extension, [modding](../modding.md#registration-surface)) go below Battery charge, the panel growing upward by a row each (its lower edge stays; its own rows move up with its top).
 
 ### Biome banner
 

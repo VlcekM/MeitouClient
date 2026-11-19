@@ -28,6 +28,11 @@ sealed class TownPanel(PlayerInterface player)
     (int Town, string Name)? _townDraft;
 
     /// <summary>
+    /// The code mods' lines under the panel's own (docs/modding.md "Town panel lines").
+    /// </summary>
+    readonly TownModLines _modLines = new(player);
+
+    /// <summary>
     /// The town panel's subtree as a layout of its own, on the HUD's layer and shown (the HUD layout hides it until the code shows it).
     /// </summary>
     internal static MyGuiLayout TownPanelLayout(MyGuiLayout hud)
@@ -65,11 +70,15 @@ sealed class TownPanel(PlayerInterface player)
     /// <summary>
     /// The panel's lines (<c>FUN_140722de0</c>, <c>FUN_140727380</c>): the name box and the tick, live only for a town of the player's faction; the
     /// research being done and its progress, else "None"; generated / demanded power; the batteries' charge / capacity, " &gt;&gt;" after it while
-    /// they charge, "&lt;&lt; " before it while they drain.
+    /// they charge, "&lt;&lt; " before it while they drain; then the code mods' lines (<see cref="TownModLines"/>).
     /// </summary>
     internal void BindTownScreen(UiBindings b)
     {
-        if (player.Session.CurrentSnapshot.Outposts.FirstOrDefault(t => t.Number == ShownTown) is not { } town) return;
+        if (player.Session.CurrentSnapshot.Outposts.FirstOrDefault(t => t.Number == ShownTown) is not { } town)
+        {
+            _modLines.Clear();
+            return;
+        }
 
         bool own = town.Owner == player.Session.World.Player.Faction;
         if (own)
@@ -90,7 +99,13 @@ sealed class TownPanel(PlayerInterface player)
         string battery = Loc.Tr("{1,num}/{2,num}", (int)p.Charge, (int)p.Capacity);
         b.Text["BatteryProgressBarCaption"] = p.Charging > 0 ? battery + " >>" : p.Draining > 0 ? "<< " + battery : battery;
         b.Progress["BatteryProgressBar"] = p.Capacity > 0 ? Percent(p.Charge / p.Capacity) : 0;
+        _modLines.Bind(b, town, own);
     }
+
+    /// <summary>
+    /// The code mods' lines over the arranged panel (<see cref="TownModLines.AddContent"/>).
+    /// </summary>
+    internal void AddModLines(List<UiControl> controls) => _modLines.AddContent(controls);
 
     /// <summary>
     /// The player's faction's outpost nearest <paramref name="pivot"/> (X/Z) when the pivot is within its radius, else null.
@@ -114,11 +129,16 @@ sealed class TownPanel(PlayerInterface player)
     static float Percent(float fraction) => MathF.Round(fraction * 100) / 100;
 
     /// <summary>
-    /// A text change in the name box is kept as the draft; the tick flips Open to public (<c>FUN_140721e50</c>, with <c>General_Click</c>).
+    /// A text change in the name box is kept as the draft; the tick flips Open to public (<c>FUN_140721e50</c>, with <c>General_Click</c>); a mod
+    /// line's button runs its press.
     /// </summary>
     internal void TownAction(MyGuiEvent e)
     {
-        if (e.Widget == TownNameBox && e.Action == "text" && ShownTown > 0)
+        if (e.Action.StartsWith(TownModLines.LineAction, StringComparison.Ordinal))
+        {
+            _modLines.Press(e.Action, ShownTown);
+        }
+        else if (e.Widget == TownNameBox && e.Action == "text" && ShownTown > 0)
         {
             _townDraft = (ShownTown, e.Text);
         }
