@@ -1051,6 +1051,12 @@ public sealed class PopulationSettings
     /// </summary>
     public bool ResidentSchedule { get; init; } = true;
 
+    /// <summary>
+    /// Meitou: a town that is not loaded takes its <c>override town</c> at the next look once one qualifies (<see cref="TownOverrides"/>).
+    /// Faithful: only when its zone loads, as the original.
+    /// </summary>
+    public bool OffscreenOverrides { get; init; } = true;
+
     // ---- faction campaigns (docs/game/factions-squads-towns.md "Campaigns") ----
 
     /// <summary>

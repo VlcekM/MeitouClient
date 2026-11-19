@@ -617,6 +617,7 @@ public static class SaveLoader
             Saved = sp,
             Unmade = unmade,
             Target = MissionTownOf(platoon.Record, data),
+            Guest = platoon.Record.Bools.GetValueOrDefault(SavedPlatoon.GuestKey),
         };
         ReadSavedState(p, platoon);
         Register(world, platoon, loaded, context, p, sp, unmade, travels);

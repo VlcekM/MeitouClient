@@ -711,6 +711,11 @@ sealed class GamePages(SettingsMenu menu)
             + "In the game they are where they stood when you left.",
             Toggle: new("Towns keep their schedule", () => menu.Config.ResidentSchedule,
                 v => { menu.Config.ResidentSchedule = v; menu.OffscreenChanged?.Invoke(); }, Remaster: true, OnOff: true)));
+        result.Add(new("Towns change far away",
+            "A town far from your squads is taken over or destroyed as soon as its story calls for it, so the map and the factions show it at once. "
+            + "In the game it changes only when you come near.",
+            Toggle: new("Towns change far away", () => menu.Config.OffscreenOverrides,
+                v => { menu.Config.OffscreenOverrides = v; menu.OffscreenChanged?.Invoke(); }, Remaster: true, OnOff: true)));
         result.Add(new("Production far away",
             "Farms, mines, wells and generators away from your squads keep working. "
             + "In the game they stop while their area is unloaded, and only farms catch up when you come back.",

@@ -1015,11 +1015,12 @@ public sealed partial class PopulationSystem
     /// Spawn mode 3 (<c>FUN_1404ffad0</c>, <b>Verified</b>): a saved platoon whose <c>basetown</c> no longer fits its home town's replacement
     /// (<see cref="HomeFits"/>) is not activated. Its template's leader being unique, the template's uniques it holds are released and the flag stays
     /// (the keep test refuses it unless persistent); otherwise the persistent flag is cleared as well. Either way the keep test then fails
-    /// (<see cref="Kept"/>) and the platoon goes with the orphan timer. Whether it was refused.
+    /// (<see cref="Kept"/>) and the platoon goes with the orphan timer. A mod's guest (<see cref="Platoon.Guest"/>) is never refused. Whether it was
+    /// refused.
     /// </summary>
     bool RefuseReplacedHome(World world, Platoon p)
     {
-        if (p.Saved is null || p.Origin < 0 || p.Origin >= _data.Sites.Count || HomeFits(p)) { p.ReplacedHome = false; return false; }
+        if (p.Saved is null || p.Guest || p.Origin < 0 || p.Origin >= _data.Sites.Count || HomeFits(p)) { p.ReplacedHome = false; return false; }
         p.ReplacedHome = true;
         p.State = PlatoonState.Unloaded;
         if (_data.Db.Find(p.TemplateId) is { } template
@@ -1050,7 +1051,7 @@ public sealed partial class PopulationSystem
     /// </summary>
     void Activate(World world, Platoon p)
     {
-        if (RefuseReplacedHome(world, p)) return;
+        if (p.Displaced || RefuseReplacedHome(world, p)) return;   // a displaced one goes at the next look (DropDisplaced)
         p.State = PlatoonState.Activating;
 
         // A stand-in that travelled comes back on walkable ground (it went in straight lines, over water and through buildings); one that did not

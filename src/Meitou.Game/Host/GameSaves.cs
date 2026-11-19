@@ -694,6 +694,7 @@ sealed class GameSaves(GameHost host)
                 CampaignAncestorsOnce = host.Config.CampaignAncestorsOnce,
                 KeepWild = host.Config.KeepWild,
                 ResidentSchedule = host.Config.ResidentSchedule,
+                OffscreenOverrides = host.Config.OffscreenOverrides,
                 NestsMultiplier = (settings ?? Difficulty)[6],
                 SquadSizeMultiplier = Gameplay.SquadSize,
                 PopulationMultiplier = Gameplay.Population,

@@ -411,16 +411,22 @@ budgets. The tier follows it, with Meitou choices marked.
 **Engine choice (s18-f24).** The original examines one platoon per faction per frame (`FUN_1406b9970`: its loop bound is one; a per-faction cursor at +0x23c, wrapped past the end of the list, picks it; if that platoon has an unloaded half it runs its update and, when that returns false, activates it and returns, else the cursor advances), so each platoon is examined once per (platoon count of its faction) frames (**Verified**, decompile). Meitou steps and may activate every unloaded platoon on each `CheckEveryTicks` look (`PopulationRoaming.StepRoaming`); rates do not depend on it because each step measures its own elapsed time, only the activation latency differs.
 
 **Town overrides** ([rule](game/factions-squads-towns.md#town-overrides)): `PopulationSystem.Replace` runs at each town load but those behind the loading
-screen (`PrepareLoading`); the winner goes into `TownSite.Replacement`, and `TownSite.Town` (what every reader uses) becomes it with the placement's id and names
-kept (engine choice) and the old faction when it names none; `SiteFactions` follows. The town then makes the replacement's residents even if it was made before;
-its old squads stay. Until those residents are made (`SiteState.Repopulate`, the original's `updatedTownOverrides`, not saved) each load makes them afresh without a
+screen (`PrepareLoading`) and those a code mod holds; the winner (`ChooseOverride`) goes into `TownSite.Replacement` (`ApplyVersion`; a replacement that is the
+town's own record is stored as none), and `TownSite.Town` (what every reader uses) becomes it with the placement's id and names
+kept (engine choice) and the old faction when it names none; `SiteFactions` follows. The town then makes the replacement's residents even if it was made before.
+Its unloaded own platoons whose TOWN is not the new one (a save's by `basetown`, one stored this session by `Platoon.BaseTown`, the TOWN it was stored from) are
+marked `Platoon.Displaced` at once: not made, and despawned (uniques released) at the next look unless a mod moved them; the original leaves them to its
+activation's spawn mode 3, with the same outcome, but marking them at the change keeps a town changed back from bringing an old garrison back (engine choice).
+Until the new residents are made (`SiteState.Repopulate`, the original's `updatedTownOverrides`) each load makes them afresh without a
 new choice. Each such load resets the zone (`ResetZone`): the town's buildings there that are not the player's are registered again from the level (state, locks,
 doors, contents; `FixtureRegistry.TownReplaced`; a save writes their owner and level `destroyed` into the old record of each, fixtures or not, `WriteResets`), its other buildings change owner, its homes in every zone are furnished anew ([town overrides](game/factions-squads-towns.md#town-overrides)), the zone's item slots are due at once and its loose items are removed.
-Saves write `replacementTown` (and the town's `faction` while replaced) and read it back; a new game or a load clears them first.
+Saves write `replacementTown` (and the town's `faction` while replaced) and read it back; a new game or a load clears them first. A town replaced but not
+loaded since gets `meitou override pending` on its state (`PopulationSystem.OverridePendingKey`), read back into `Repopulate`; a stored platoon's `basetown` is
+its `Platoon.BaseTown`, so one of an older version stays refused after a load.
 Tests: `PopulationTests.A_town_takes_its_heaviest_qualifying_override_at_each_load_and_makes_its_residents`, `..._whose_residents_were_never_made_...`,
 `TownOverrideSaveTests`.
 
-Six Faithful/Meitou switches (the fifth, campaign inheritance, under Campaigns below; `PopulationSettings`, live on `PopulationSystem`; Advanced settings (the fifth on the Fixes page), Meitou on by default; `PopulationOffscreen.cs`):
+Seven Faithful/Meitou switches (the fifth, campaign inheritance, under Campaigns below; `PopulationSettings`, live on `PopulationSystem`; Advanced settings (the fifth on the Fixes page), Meitou on by default; `PopulationOffscreen.cs`):
 - **Squads keep their people** (`KeepRoamers`). Meitou: a roaming squad the population made keeps its characters as a `StoredSquad` from the
   first time it leaves, travels on as them and comes back as them (moved along with its stand-in); saves write it as a new platoon (`sqt` 2,
   `persistent` false). Faithful (the original): a platoon that is not a town's own is despawned as it leaves, and a stand-in out of range for
@@ -446,6 +452,13 @@ Six Faithful/Meitou switches (the fifth, campaign inheritance, under Campaigns b
   marked `Squad.Resume`; each member's first think picks where its plan's walk ends (its bed at night, the counter, its node, seat or gun; a ring of 4 by member index, walkable only), the serial step moves it there (Movement would overwrite a move from the parallel think) and
   the act-out goes on from there, so the town looks as if it had lived through the time; nothing runs while it is unloaded. Faithful (the
   original, which runs nothing for residents off screen): where they stood when it unloaded.
+- **Towns change far away** (`OffscreenOverrides`, `PopulationSystem.StepOverrides`, state in `TownOverrides`). Meitou: at each look, after the zones'
+  loads, every town whose residents are not in the world (status `Unloaded`: not loading, loaded or waiting out its unload grace), not of the player's
+  faction, not held by a mod and not behind the loading screen takes its winning override at once ([town overrides](#off-screen-tier) above: displaced
+  platoons, `Repopulate`, zone reset, a `town` log line marked off screen, `OffscreenSwitches` counted), so campaigns, spawns, trade and the map see the
+  new owner before the player arrives. A switch that would bring a town back to a version it held since the world states' inputs last changed (the
+  unique table's version, the mods' values' version, each faction's ally and hostile standing to the player) waits for the next change, so a pair of
+  entries that both qualify moves once, not at every look (the original flips such a town at each load). Faithful: only at the zone's load.
 
 Implemented (`PopulationRoaming.cs`):
 

@@ -1346,6 +1346,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                     (population.KeepRoamers, population.OffscreenFights, population.OffscreenHealing, population.CampaignAncestorsOnce,
                         population.KeepWild, population.ResidentSchedule) = (host.Config.KeepRoamers, host.Config.OffscreenFights,
                         host.Config.OffscreenHealing, host.Config.CampaignAncestorsOnce, host.Config.KeepWild, host.Config.ResidentSchedule);
+                    population.OffscreenOverrides = host.Config.OffscreenOverrides;
                 }
                 foreach (var production in host.Session.World.Systems.OfType<Meitou.Simulation.Production.ProductionSystem>())
                     production.UnloadedProduction = host.Config.UnloadedProduction;

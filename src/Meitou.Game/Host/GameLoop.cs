@@ -543,6 +543,7 @@ sealed class GameLoop(GameHost host)
                 (host.Config.KeepRoamers, host.Config.OffscreenFights, host.Config.OffscreenHealing);
             (population.CampaignAncestorsOnce, population.KeepWild, population.ResidentSchedule) =
                 (host.Config.CampaignAncestorsOnce, host.Config.KeepWild, host.Config.ResidentSchedule);
+            population.OffscreenOverrides = host.Config.OffscreenOverrides;
         }
 
         foreach (var production in host.Session.World.Systems.OfType<Simulation.Production.ProductionSystem>())

@@ -192,7 +192,7 @@ public static partial class SaveCapture
             WriteTownArtifacts(game, data, world, pools);
         }
 
-        WriteTownReplacements(game, data);
+        WriteTownReplacements(game, data, population);
     }
 
     /// <summary>
@@ -544,9 +544,10 @@ public static partial class SaveCapture
     }
 
     /// <summary>
-    /// Each placed town's <c>replacementTown</c> (the TOWN in its place, "" none) and, while replaced, its <c>faction</c>, into its state.
+    /// Each placed town's <c>replacementTown</c> (the TOWN in its place, "" none) and, while replaced, its <c>faction</c>, into its state; a town
+    /// whose new residents are still to be made gets <see cref="PopulationSystem.OverridePendingKey"/> (dropped once they are).
     /// </summary>
-    static void WriteTownReplacements(SaveGame game, PopulationData data)
+    static void WriteTownReplacements(SaveGame game, PopulationData data, PopulationSystem? population)
     {
         var sites = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var s in data.Sites)
@@ -558,6 +559,8 @@ public static partial class SaveCapture
         {
             if (town.IsNest || !sites.TryGetValue(town.Instance, out int site)) continue;
 
+            if (population?.OverridePending(site) == true) town.Record.Bools[PopulationSystem.OverridePendingKey] = true;
+            else town.Record.Bools.Remove(PopulationSystem.OverridePendingKey);
             var replacement = data.Sites[site].Replacement;
             if (replacement is null && !town.Record.Strings.ContainsKey("replacementTown")) continue;
 
@@ -1135,6 +1138,7 @@ public static partial class SaveCapture
             }
 
             if (p is not null) WriteMovedOut(builder.Game, world, data, platoon.Record, sp, p, squad);
+            if (p is { Guest: true }) WriteGuest(builder.Game, data, platoon.Record, p);
             if (squad is not null) NoteMemory(platoon.Record, MemoryOf(world)?.Snapshot(squad.Id));
             else if (sp.MemorySet) NoteMemory(platoon.Record, sp.Memory);
             WriteSavedMembers(builder, world, data, options, clock, buildings, races, platoon, sp, squad);
@@ -1159,6 +1163,24 @@ public static partial class SaveCapture
         (hand ?? Hand.Null).Write(record, "homebuilding");
         WriteOwned(record, oldHand, hand);
         if (hand is null) record.Bools["persistent"] = false;
+    }
+
+    /// <summary>
+    /// A save's platoon a code mod moved to another town as a guest (<see cref="Platoon.Guest"/>): written as one of the host town's, its
+    /// <c>basetown</c> the host's TOWN now and its <c>hometown</c> the host's handle, with no home building, and marked
+    /// <see cref="SavedPlatoon.GuestKey"/>.
+    /// </summary>
+    static void WriteGuest(SaveGame game, PopulationData data, FcsRecord record, Platoon p)
+    {
+        if ((uint)p.Origin >= (uint)data.Sites.Count) return;
+
+        var host = data.Sites[p.Origin];
+        record.Bools[SavedPlatoon.GuestKey] = true;
+        record.Strings["basetown"] = PopulationSystem.TownIdOf(host);
+        record.Bools[SavedPlatoon.BaseTownKey] = true;
+        if (game.Towns.FirstOrDefault(t => !t.IsNest && t.Instance == host.InstanceId) is { Handle.IsNull: false } town)
+            town.Handle.Write(record, "hometown");
+        Hand.Null.Write(record, "homebuilding");
     }
 
     /// <summary>
@@ -1620,7 +1642,19 @@ public static partial class SaveCapture
                     Ground(_world, p.Position), ai: stored.Ai, memory: stored.Memory, imprisoned: p.Imprisoned, dead: p.Dead, intact: p.IntactFlag,
                     into: into, missionTown: p.Target);
                 if (p.Persistent) _written[p.Id].Record.Bools["persistent"] = true;   // a split-off prisoner's platoon
+                WriteBaseTown(_written[p.Id].Record, p);
             }
+        }
+
+        /// <summary>
+        /// A stored town platoon's <c>basetown</c>: the TOWN its town was when it was stored (<see cref="Platoon.BaseTown"/>), so one of an older
+        /// version stays refused after a load, as the original's activation refuses it; a mod's guest is written as one of its host's
+        /// (<see cref="SavedPlatoon.GuestKey"/>).
+        /// </summary>
+        static void WriteBaseTown(FcsRecord record, Platoon p)
+        {
+            if (p.Guest) record.Bools[SavedPlatoon.GuestKey] = true;
+            else if (p.BaseTown is { } home) record.Strings["basetown"] = home;
         }
 
         /// <summary>
