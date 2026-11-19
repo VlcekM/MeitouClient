@@ -47,14 +47,22 @@ public sealed class Fighter
     #region Weapons and arms
 
     /// <summary>
-    /// The weapon in hand (docs/game/combat.md "Arms"): with both arms working the <see cref="BackWeapon"/>, else the hip one; with only the right
-    /// arm the hip one; without the right arm none (fists). An animal's natural weapon always.
+    /// The weapon in hand (docs/game/combat.md "Arms"): with both arms working the <see cref="BackWeapon"/>, else the hip one, except that a worn
+    /// unarmed weapon on the back yields to a real weapon on the hip (engine extension, docs/characters.md "Worn unarmed weapons"); with only the
+    /// right arm the hip one; without the right arm none (fists). An animal's natural weapon always.
     /// </summary>
     public WeaponInstance? Weapon =>
         IsAnimal ? _hip
         : !_rightArm ? null
-        : _leftArm ? BackWeapon ?? _hip
+        : _leftArm ? BothArms
         : _hip;
+
+    /// <summary>
+    /// The weapon in hand with both arms working: the back one, else the hip one; the hip one when the back one is unarmed and the hip one is not.
+    /// </summary>
+    WeaponInstance? BothArms =>
+        BackWeapon is { Data.IsUnarmed: true } && _hip is { Data.IsUnarmed: false } ? _hip
+        : BackWeapon ?? _hip;
 
     /// <summary>
     /// The first weapon in the <c>back</c> section, if any (the constructor's weapon is the <c>hip</c> one).

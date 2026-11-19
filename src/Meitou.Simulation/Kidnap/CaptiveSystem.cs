@@ -722,7 +722,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     internal bool DrawWeapon(CharacterCold cold)
     {
         if (cold.Fighter is null || cold.Inventory is not { } inv) return false;
-        if (cold.Fighter.Unarmed
+        // A worn unarmed weapon in hand is not swapped for a packed one (engine extension, docs/characters.md "Worn unarmed weapons").
+        if (cold.Fighter is { Unarmed: true, Weapon: null }
                 && inv.All().FirstOrDefault(i => i.Type == FcsRecordType.Weapon && !InventoryCommands.IsEquipmentSection(i.Section)) is { } packed)
         {
             var owner = inv.Items.Contains(packed) ? inv : inv.Backpack?.Contents;

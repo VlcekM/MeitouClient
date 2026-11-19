@@ -1142,7 +1142,7 @@ public sealed class CharacterAppearance
     /// unarmed <c>skill category</c>, which a fight uses as fists and so never draws.
     /// </summary>
     public static bool IsWornWeapon(GameRecord weapon) =>
-        weapon.Type == FcsRecordType.Weapon && weapon.GetInt("skill category") == (int)Gameplay.Combat.WeaponCategory.Unarmed;
+        weapon.Type == FcsRecordType.Weapon && Gameplay.Combat.WeaponData.IsUnarmedRecord(weapon);
 
     /// <summary>
     /// A worn unarmed weapon (<see cref="IsWornWeapon"/>): its <c>mesh</c> (by gender) skinned to the body's skeleton like armour, shown whether

@@ -2525,8 +2525,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (armed.Fighter is { } fighter)
             armed.DrawnWeapon = !ranged ? Combat.CombatSystem.MeleeDrawn(fighter) : fighter.Crossbow is not null ? BowHold : WeaponKinds.None;
 
-        // Neither the back nor the hip gave one: an NPC of a non-player faction takes the first matching weapon of its inventory (s08-f09).
-        if (armed.DrawnWeapon == WeaponKinds.None && DrawFromInventory(world, armed, ranged) && armed.Fighter is { } rebuilt)
+        // Neither the back nor the hip gave one: an NPC of a non-player faction takes the first matching weapon of its inventory (s08-f09). A worn
+        // unarmed weapon in hand is the melee weapon it chose (engine extension, docs/characters.md "Worn unarmed weapons").
+        bool worn = !ranged && armed.Fighter?.Weapon is not null;
+        if (armed.DrawnWeapon == WeaponKinds.None && !worn && DrawFromInventory(world, armed, ranged) && armed.Fighter is { } rebuilt)
             armed.DrawnWeapon = !ranged ? Combat.CombatSystem.MeleeDrawn(rebuilt) : rebuilt.Crossbow is not null ? BowHold : WeaponKinds.None;
 
         StepDone(mind);
