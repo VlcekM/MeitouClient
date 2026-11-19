@@ -145,20 +145,12 @@ sealed class FeedbackCapture(GameHost host)
     /// </summary>
     bool StartFeedbackNav()
     {
-        if (host.Nav is null || host.DebugOverlays.NavOverlayRenderer is not { } overlay) return false;
+        if (host.Zones is not { } zones || host.DebugOverlays.NavOverlayRenderer is not { } overlay) return false;
         _feedbackNavRestore = host.DebugOverlays.NavViewMode;
         host.DebugOverlays.NavViewMode = DebugOverlays.NavView.Meitou;
         overlay.Visible = true;
-        host.FinishNavUnload();
-        long now = Stopwatch.GetTimestamp();
-        var loads = new List<Task>();
-        foreach (var z in Simulation.Population.ZoneActivation.ZonesAround(host.Camera.Target, 1))
-        {
-            if (!host.NavZones.ContainsKey(z)) loads.Add(host.Nav.LoadZone(z));
-            host.NavZones[z] = now;
-        }
-        _feedbackNavLoad = Task.WhenAll(loads);
-        _feedbackNavSince = now;
+        _feedbackNavLoad = zones.Load(Simulation.Population.ZoneActivation.ZonesAround(host.Camera.Target, 1));
+        _feedbackNavSince = Stopwatch.GetTimestamp();
         _feedbackNavStage = FeedbackNavStage.Loading;
         return true;
     }

@@ -7,6 +7,7 @@ using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.Ogre;
 using Meitou.Data.World;
 using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Hosting;
 using Meitou.Simulation.Navigation;
 using Meitou.Simulation.Perception;
 using Meitou.Simulation.Population;
@@ -35,11 +36,6 @@ public sealed record WorldBootOptions(GameInstall Install, GameDatabase Database
     /// The body options the population is made with.
     /// </summary>
     public BodyOptions Bodies { get; init; } = BodyOptions.Default;
-
-    /// <summary>
-    /// Subscribed to <see cref="NavSystem.ZoneReady"/> before the navmesh starts building zones.
-    /// </summary>
-    public Action<NavZoneReady>? ZoneReady { get; init; }
 }
 
 /// <summary>
@@ -58,6 +54,11 @@ public sealed class WorldBoot
     /// The navmesh, when the world has levels.
     /// </summary>
     public NavSystem? Nav { get; init; }
+
+    /// <summary>
+    /// The streaming of <see cref="Nav"/>'s zones, made before the navmesh builds any (it hears of each that goes live); null without a navmesh.
+    /// </summary>
+    public ZoneStreamer? Zones { get; init; }
 
     /// <summary>
     /// The terrain and buildings ragdolls land on, when the world has levels.
@@ -124,6 +125,7 @@ public sealed class WorldBoot
         }
 
         var nav = levels is null ? null : StartNav(o, levels);
+        var zones = nav is null ? null : new ZoneStreamer(nav);
         IWalkability walkability = nav is null ? new OpenGroundWalkability(o.Heights.HeightAt) : new NavAdapter(nav.Walkability);
 
         // Ragdolls land on the terrain and the buildings' collision (gathered per zone on a worker when a ragdoll comes near).
@@ -141,6 +143,7 @@ public sealed class WorldBoot
         {
             Walkability = walkability,
             Nav = nav,
+            Zones = zones,
             RagdollGeometry = ragdollGeometry,
             Data = data,
             Towns = towns,
@@ -152,16 +155,11 @@ public sealed class WorldBoot
     }
 
     /// <summary>
-    /// Starts the navmesh, its zone listener subscribed and the long-range grid warmed on a worker.
+    /// Starts the navmesh, the long-range grid warmed on a worker.
     /// </summary>
     static NavSystem StartNav(WorldBootOptions o, WorldLevelData levels)
     {
         var nav = new NavSystem(o.Install, o.Database, levels, o.Heights.HeightAt);
-
-        if (o.ZoneReady is { } ready)
-        {
-            nav.ZoneReady += ready;
-        }
 
         // The long-range grid built behind the loading: built by the first long route instead, it held the path threads ~3 s (issue #124).
         _ = Task.Run(() => nav.Walkability.Coarse.Warm());

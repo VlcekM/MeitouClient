@@ -1,7 +1,7 @@
 # Engine architecture
 
 Projects: Core installation, settings, localisation (shared with the launcher); Data clean-room readers, typed game data and pure rules;
-Simulation the headless world (systems, `Navigation/` own navmesh, saving, `Session/` tick clocks, `Hosting/` the world host, `WorldBoot`), which never references Game;
+Simulation the headless world (systems, `Navigation/` own navmesh, saving, `Session/` tick clocks, `Hosting/` the world host and the navmesh's zone streaming, `WorldBoot`), which never references Game;
 Game the executable `MeitouClient` (`Host/` WorldSession/input/camera, `Rendering/` Vulkan/content/streaming with `Display/` and `Metal/`,
 `Audio/`, `Ui/`, `Mods/` the code-mod loader); ModelViewer debug world/atlas; Tools surveys and mod-check. Folders are feature slices and
 namespaces follow them. GPU and simulation ownership stay separate. [Simulation contracts](simulation.md),
@@ -25,7 +25,7 @@ settings and current key list belong in viewer. Quicksave F5/loadF9; cinematic F
 
 ## Host and loading
 
-`WorldBoot` reads a world's content on a worker with no window (navmesh, towns' buildings, population data, ragdoll rigs, animations);
+`WorldBoot` reads a world's content on a worker with no window (navmesh and its `ZoneStreamer`, towns' buildings, population data, ragdoll rigs, animations);
 GameHost adds the code mods and the systems. GameHost partials keep boot, the Metal loop, loading, transitions and the character feed; each other feature is a class the host holds and makes in
 `CreateFeatures`: `GameLoop` (the Vulkan and headless run), `GameSound`, `GameSaves`, `TitleScreen`, the scenarios, `Host/WorldSync`, `Effects`, `DevTools`, `Editor`;
 PlayerInterface keeps the input entry points, selection, commands and shared UI helpers (core and `PlayerInterface.Ui.cs`); its windows, HUD panels, picking and pointer are classes it makes on first use (`Ui`, `Building`, `Title`, `Editor`). StandardSystems supplies order. NavAdapter

@@ -846,9 +846,9 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     {
         // The population's zones: the background towns activate the zones round the player, and a walker's path may cross one
         // that has to be built first. The interactive loop keeps this table current (UpdateNav), as the Vulkan host does.
-        if (host.Nav is not null && host.Population is not null)
+        if (host.Nav is not null && host.Zones is not null && host.Population is not null)
         {
-            host.Population.ZoneGate = zone => host.Nav.Walkability.World.Contains(zone);
+            host.Zones.Gate(host.Population);
             var around = host.PlayerSquad is not null
                 ? host.Session.World.Characters.Previous[host.PlayerSquad.Leader.Slot].Position
                 : host.Session.Focus;
@@ -856,7 +856,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             var watch = Stopwatch.StartNew();
             host.LoadingStep("navmesh");
             host.AwaitLoading(Task.WhenAll(zones.Select(z => (Task)host.Nav.LoadZone(z))));
-            foreach (var z in zones) host.NavZones[z] = Stopwatch.GetTimestamp();
+            host.Zones.MarkWanted(zones);
             Console.WriteLine($"metal     navmesh {zones.Count} zone(s) round the start ready in {watch.ElapsedMilliseconds} ms");
         }
     }

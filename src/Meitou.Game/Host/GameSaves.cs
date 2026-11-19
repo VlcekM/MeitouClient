@@ -497,7 +497,7 @@ sealed class GameSaves(GameHost host)
         // The New game window then shows the loaded save's options (the original loads them into its globals).
         host.Player.AdvancedOptions.NewGameOptions = nextDifficulty;
         host.Population = built.Population;
-        if (host.Nav is not null) host.Population!.ZoneGate = zone => host.Nav.Walkability.World.Contains(zone);
+        host.Zones?.Gate(host.Population!);
         SnapshotPlayerTowns();
         LoadedSave = loaded;
         PreparedBase = null;
@@ -579,17 +579,11 @@ sealed class GameSaves(GameHost host)
     /// </summary>
     internal Task NavmeshAround(Vector3 at)
     {
-        if (host.Nav is null) return Task.CompletedTask;
-        host.FinishNavUnload();
-        long now = Stopwatch.GetTimestamp();
-        var pending = new List<Task>();
-        foreach (var z in ZoneActivation.ZonesAround(at, 0))
-        {
-            if (!host.NavZones.ContainsKey(z)) pending.Add(host.Nav.LoadZone(z));
-            host.NavZones[z] = now;
-        }
-        if (pending.Count == 0) return Task.CompletedTask;
-        var all = Task.WhenAll(pending);
+        if (host.Zones is not { } zones) return Task.CompletedTask;
+
+        var all = zones.Load(ZoneActivation.ZonesAround(at, 0));
+        if (all.IsCompleted) return Task.CompletedTask;
+
         return Task.WhenAny(all, Task.Delay(TimeSpan.FromSeconds(15))).ContinueWith(t =>
         {
             if (t.Result != all) Console.Error.WriteLine("load      the navmesh round the player was not ready after 15 s; loading goes on");

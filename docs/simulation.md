@@ -2248,7 +2248,7 @@ A counter at the top middle (with the interface, stills too) gives each side's f
 
 ## The game host
 
-`Meitou.Game/GameHost*.cs` adapts input to commands, drives WorldSession, navmesh upkeep,
+`Meitou.Game/GameHost*.cs` adapts input to commands, drives WorldSession and the navmesh's `ZoneStreamer` ([zone streaming](game/pathfinding.md#zone-streaming)),
 interpolated CharacterDrawList, HUD, loading/transitions and saves. It does not duplicate system
 order. Renderer state lives in Rendering; snapshots are the simulation-to-host boundary.
 

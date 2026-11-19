@@ -337,6 +337,10 @@ sealed partial class GameHost(
     /// </summary>
     internal Simulation.Navigation.NavSystem? Nav;
     /// <summary>
+    /// The streaming of <see cref="Nav"/>'s zones while the world runs; null without a navmesh.
+    /// </summary>
+    internal Simulation.Hosting.ZoneStreamer? Zones;
+    /// <summary>
     /// The animations' lengths, for the simulation.
     /// </summary>
     internal Data.Gameplay.AnimationLengths? AnimationLengths;
@@ -684,7 +688,7 @@ sealed partial class GameHost(
 
             var built = Saves.BuildSystems(interactive);
             Population = built.Population;
-            if (Nav is not null) Population!.ZoneGate = zone => Nav.Walkability.World.Contains(zone);
+            Zones?.Gate(Population!);
 
             Saves.SnapshotPlayerTowns();
             systems = built.Systems;
@@ -701,6 +705,7 @@ sealed partial class GameHost(
     void KeepWorldContent(WorldBoot boot, Meitou.Data.World.WorldLevelData? levels)
     {
         Nav = boot.Nav;
+        Zones = boot.Zones;
         RagdollGeometry = boot.RagdollGeometry;
         CharacterRigs = boot.Rigs;
         AnimationLengths = boot.AnimationLengths;
@@ -711,7 +716,7 @@ sealed partial class GameHost(
     }
 
     /// <summary>
-    /// The world's content as this scene loads it: its levels and the renderer's layouts, the body settings, and the nav zones reported to the host.
+    /// The world's content as this scene loads it: its levels and the renderer's layouts, and the body settings.
     /// </summary>
     WorldBootOptions BootOptions(Data.GameDatabase gameDb, Meitou.Data.World.GroundHeights heights, Meitou.Data.World.WorldLevelData? levels) =>
         new(Install, gameDb, heights, Assets)
@@ -725,11 +730,6 @@ sealed partial class GameHost(
                 AdvancedRagdolls = Config.AdvancedRagdolls,
                 SquadXp = Config.SquadXp,
                 OthersXp = Config.OthersXp,
-            },
-            ZoneReady = ready =>
-            {
-                lock (_navReady)
-                    _navReady.Add(ready.Zone);
             },
         };
 
@@ -944,8 +944,7 @@ sealed partial class GameHost(
         LoadingStep("navmesh");
         AwaitLoading(Task.WhenAll(zones.Select(z => (Task)Nav.LoadZone(z))));
 
-        foreach (var z in zones)
-            NavZones[z] = Stopwatch.GetTimestamp();
+        Zones?.MarkWanted(zones);
         Console.WriteLine($"navmesh   {zones.Count} zone(s) round the start ready in {watch.ElapsedMilliseconds} ms");
     }
 
@@ -1334,206 +1333,14 @@ sealed partial class GameHost(
     #region Nav streaming
 
     /// <summary>
-    /// Seconds between <see cref="Meitou.Simulation.RepathCommand"/>s at least: zones go live in runs along a long walk, and are sent together
-    /// (engine choice).
-    /// </summary>
-    const double RepathCoalesceSeconds = 1;
-
-    // Meitou's asset cache (engine choice): a left zone's mesh stays NavCacheSeconds, at most NavCacheZones zones, the oldest dropped first, so a
-    // return within two minutes rebuilds nothing.
-    /// <summary>
-    /// The seconds a left zone's mesh stays.
-    /// </summary>
-    const double NavCacheSeconds = 120;
-    /// <summary>
-    /// At most this many left zones' meshes stay cached.
-    /// </summary>
-    const int NavCacheZones = 60;
-
-    /// <summary>
-    /// The loaded zones and when each was last wanted (a <see cref="Stopwatch"/> timestamp).
-    /// </summary>
-    internal readonly Dictionary<Meitou.Data.World.ZoneCoordinate, long> NavZones = [];
-
-    /// <summary>
-    /// Zones whose mesh went live since the last <see cref="Meitou.Simulation.RepathCommand"/> (filled on the nav thread, under its own lock).
-    /// </summary>
-    readonly HashSet<Meitou.Data.World.ZoneCoordinate> _navReady = [];
-    /// <summary>
-    /// When the last <see cref="Meitou.Simulation.RepathCommand"/> was sent (a <see cref="Stopwatch"/> timestamp).
-    /// </summary>
-    long _lastRepath;
-
-    // The batch of zones being dropped on the pool, and its task.
-    /// <summary>
-    /// The task.
-    /// </summary>
-    Task _navUnload = Task.CompletedTask;
-    /// <summary>
-    /// The zones being dropped.
-    /// </summary>
-    HashSet<Meitou.Data.World.ZoneCoordinate> _navUnloading = [];
-
-    /// <summary>
-    /// Waits for the zones being dropped (a load right after must not be undone by it).
-    /// </summary>
-    internal void FinishNavUnload()
-    {
-        if (_navUnloading.Count == 0) return;
-
-        _navUnload.Wait();
-        _navUnloading = [];
-        _relabelGates = true;
-    }
-
-    /// <summary>
-    /// Keeps the navmesh on the zones the population has active (built on the nav thread in the order the player's characters reach them, cached),
-    /// drops the ones idle too long, and has the characters whose way leads through a zone whose mesh arrived ask for their paths again (their first
-    /// path may have crossed a building), at most every <see cref="RepathCoalesceSeconds"/>.
+    /// Keeps the navmesh on the zones the world needs and its gate codes current (<see cref="Simulation.Hosting.ZoneStreamer.Update"/>), once a
+    /// frame; <paramref name="wait"/> waits for the zones asked for.
     /// </summary>
     internal void UpdateNav(bool wait = false)
     {
-        if (Nav is null || Population is null) return;
+        if (Zones is null || Population is null) return;
 
-        UpdateGateRegions(Nav);
-        long now = Stopwatch.GetTimestamp();
-
-        // Dropping zones republishes the whole mesh (tens of ms): it runs on the pool, one batch at a time, and a zone being dropped is loaded again
-        // once that is done.
-        if (_navUnloading.Count > 0 && _navUnload.IsCompleted)
-        {
-            _navUnloading = [];
-            _relabelGates = true;
-        }
-        if (wait) FinishNavUnload();
-
-        Nav.Favour(Session.World);
-        Nav.Walkability.GameSpeed = Session.World.PhysicsSpeed;
-        var pending = LoadWantedZones(Nav, Population, now);
-        DropStaleZones(Nav, now);
-        if (wait) Task.WaitAll([.. pending]);
-
-        SendRepath(pending, wait, now);
-    }
-
-    /// <summary>
-    /// Starts loading the population's zones and those the walkers' long routes lead into (NavmeshWalkability.RouteZones), and marks them wanted now.
-    /// </summary>
-    List<Task<Simulation.Navigation.NavZoneReady>> LoadWantedZones(
-        Simulation.Navigation.NavSystem nav, Simulation.Population.PopulationSystem population, long now)
-    {
-        var pending = new List<Task<Simulation.Navigation.NavZoneReady>>();
-        foreach (var z in population.ActiveZones.Concat(nav.Walkability.RouteZones(TimeSpan.FromSeconds(30))))
-        {
-            if (_navUnloading.Contains(z)) continue;
-            if (!NavZones.ContainsKey(z)) pending.Add(nav.LoadZone(z));
-
-            NavZones[z] = now;
-        }
-
-        return pending;
-    }
-
-    /// <summary>
-    /// Drops the zones unwanted for <see cref="NavCacheSeconds"/>, and the oldest past <see cref="NavCacheZones"/>, once no other batch is
-    /// being dropped.
-    /// </summary>
-    void DropStaleZones(Simulation.Navigation.NavSystem nav, long now)
-    {
-        var stale = NavZones.Where(e => Stopwatch.GetElapsedTime(e.Value, now).TotalSeconds > NavCacheSeconds).Select(e => e.Key).ToList();
-        int overCache = NavZones.Count - stale.Count - NavCacheZones;
-        if (overCache > 0)
-            stale.AddRange(NavZones.Where(e => !stale.Contains(e.Key)).OrderBy(e => e.Value).Take(overCache).Select(e => e.Key));
-
-        if (stale.Count == 0 || _navUnloading.Count > 0) return;
-
-        foreach (var z in stale)
-            NavZones.Remove(z);
-        _navUnloading = [.. stale];
-        _navUnload = Task.Run(() => nav.UnloadZones(stale));
-    }
-
-    /// <summary>
-    /// Sends the zones gone live as one <see cref="RepathCommand"/>, at most every <see cref="RepathCoalesceSeconds"/> unless waited for.
-    /// </summary>
-    void SendRepath(List<Task<Simulation.Navigation.NavZoneReady>> pending, bool wait, long now)
-    {
-        HashSet<Meitou.Data.World.ZoneCoordinate> zones;
-        lock (_navReady)
-        {
-            // The event follows the task's completion, so zones waited for are added here.
-            if (wait)
-            {
-                foreach (var task in pending)
-                    _navReady.Add(task.Result.Zone);
-            }
-
-            bool coalescing = !wait && Stopwatch.GetElapsedTime(_lastRepath, now).TotalSeconds < RepathCoalesceSeconds;
-            if (_navReady.Count == 0 || coalescing) return;
-
-            zones = [.. _navReady];
-            _navReady.Clear();
-        }
-
-        _lastRepath = now;
-        _relabelGates = true;
-        Session.World.Commands.Enqueue(new RepathCommand { Tick = Session.World.Tick, Zones = zones });
-    }
-
-    #endregion
-
-    #region Gate codes
-
-    /// <summary>
-    /// The navmesh changed since the gate codes were made (a zone went live or was dropped).
-    /// </summary>
-    bool _relabelGates;
-    /// <summary>
-    /// The labelling running on the pool; null when none.
-    /// </summary>
-    Task<Simulation.Navigation.NavGateRegions>? _gateLabelling;
-    /// <summary>
-    /// The last gate codes made; null before the first.
-    /// </summary>
-    Simulation.Navigation.NavGateRegions? _gateRegions;
-    /// <summary>
-    /// The world <see cref="_gateRegions"/> was last handed to: a new world is handed them again.
-    /// </summary>
-    object? _gateRegionsFor;
-
-    /// <summary>
-    /// Keeps the simulation's gate codes (docs/game/pathfinding.md "Gate codes") up to date: labels the loaded meshes on the pool after they changed,
-    /// one labelling at a time, and hands each result to the world (again to a new world) as a
-    /// <see cref="Meitou.Simulation.Locks.GateRegionsCommand"/>.
-    /// </summary>
-    void UpdateGateRegions(Simulation.Navigation.NavSystem navSystem)
-    {
-        if (_gateLabelling is { IsCompleted: true } done)
-        {
-            if (done.Status == TaskStatus.RanToCompletion)
-            {
-                _gateRegions = done.Result;
-                _gateRegionsFor = null;
-            }
-            else
-            {
-                Console.Error.WriteLine($"nav       gate codes failed: {done.Exception?.GetBaseException().Message}");
-            }
-
-            _gateLabelling = null;
-        }
-
-        if (_relabelGates && _gateLabelling is null)
-        {
-            _relabelGates = false;
-            _gateLabelling = Task.Run(navSystem.LabelGates);
-        }
-
-        if (_gateRegions is { } regions && !ReferenceEquals(_gateRegionsFor, Session.World))
-        {
-            _gateRegionsFor = Session.World;
-            Session.World.Commands.Enqueue(new Simulation.Locks.GateRegionsCommand(regions) { Tick = Session.World.Tick });
-        }
+        Zones.Update(Session.World, Population, wait);
     }
 
     #endregion

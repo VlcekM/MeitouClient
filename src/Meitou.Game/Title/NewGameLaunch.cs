@@ -43,7 +43,7 @@ sealed class NewGameLaunch(GameHost host)
             host.Session.ReplaceWorld(built.Systems);
             host.Population = built.Population;
             host.PlayerSquad = null;
-            if (host.Nav is not null) host.Population!.ZoneGate = zone => host.Nav.Walkability.World.Contains(zone);
+            host.Zones?.Gate(host.Population!);
 
             host.Saves.SnapshotPlayerTowns();
             host.Saves.LoadedSave = null;
@@ -120,7 +120,7 @@ sealed class NewGameLaunch(GameHost host)
                 host.Saves.Difficulty = nextDifficulty;
                 host.Population = built.Population;
                 host.PlayerSquad = spawned;
-                if (host.Nav is not null) host.Population!.ZoneGate = zone => host.Nav.Walkability.World.Contains(zone);
+                host.Zones?.Gate(host.Population!);
 
                 host.Saves.SnapshotPlayerTowns();
                 host.Saves.LoadedSave = null;

@@ -716,6 +716,16 @@ its `xml collision` cleared, so only `destroyed collision` applies; a ground-flo
 lose the collision too once a destroyed one was made; Meitou clears it per placement only.) Meitou: `WorldObjectLayout.AddPart`, `AddCollisionOnlyPart` (`PlacedMesh.RenderHidden`, `BlankXmlCollision`,
 `PlacedMesh.CollisionPath`); the renderer skips hidden parts, the navmesh gatherers use them.
 
+### Zone streaming
+
+`ZoneStreamer` (Simulation `Hosting/`, made by `WorldBoot` with the navmesh; engine choices throughout) keeps the navmesh on the zones a running
+world needs. Each update (the game: once a frame, `GameHost.UpdateNav`) it asks for the population's active zones and those the walkers' routes
+of the last 30 s lead into (`NavmeshWalkability.RouteZones`); the population activates a zone only once its mesh is live
+(`PopulationSystem.ZoneGate`). A zone no longer wanted keeps its mesh 120 s (`CacheSeconds`) and at most 60 zones stay loaded (`CacheZones`, the
+ones wanted longest ago dropped first); drops run on the pool, one batch at a time, and a zone being dropped is asked for again only once the
+batch is done. Zones gone live are sent together as one `RepathCommand`, at most one a second (`RepathSeconds`), and each such change has the
+[gate codes](#gate-codes) labelled again. `probe --stream` runs the same class with nothing dropped.
+
 ### Generator (runtime and tool-time navmesh building)
 
 - Thread "NavMeshGenerator" (FUN_1403ce430): sleeps 100 ms when idle, works only when the manager's queues are empty
@@ -1045,7 +1055,7 @@ Character slot 35 `FUN_140792200`: the location building's slot 0x118, a gateway
 is `getGateCode` at its first door's outer marker, or at its position when it has no door, e.g. a ruin (**Verified**, `FUN_140555fd0`; a building
 with a parent takes the parent's). Each interior polygon carries its building's placement key (`ZoneNavMesh.BuildingIds` / `BuildingOf`) and
 each zone the point its buildings read their code at (`ZoneNavMesh.CodePoints`: the outer marker by `GateDoorMarkers.Outer`, else the
-placement), so an interior split by a zone border takes one code (`GateInteriorCodes`). `NavSystem.LabelGates` runs on the pool whenever zone meshes go live or unload; `LockSystem` applies the result
+placement), so an interior split by a zone border takes one code (`GateInteriorCodes`). `NavSystem.LabelGates` runs on the pool whenever zone meshes go live or unload ([zone streaming](#zone-streaming)); `LockSystem` applies the result
 (`GateRegionsCommand`, not hashed or saved): door 0's `Fixture.GateCode` takes the first code, the building the second, and Town slot 96 reads both
 from the last labelling that listed the gate. Before the first labelling a
 building's code is -1 (the lock system knows no navmesh face). **Observed** (`NavGateRegions.Label` over Meitou's meshes, 3 x 3 zones around each
