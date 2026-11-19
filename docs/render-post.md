@@ -248,6 +248,18 @@ the Hub at 14:00 within 0.7/255 (99th percentile). Read per fragment instead, th
 every flat sprite: **Observed** (2026-11-07, dust over a cliff and a canyon, shafts off) as blurred, offset tree silhouettes in the dust.
 The Metal chain has no copy: its sprites stay hard-edged.
 
+**Lit dust** (`PostOptions.LitDust`, the `dustlight` switch, on by default; engine choice): the dust a foot kicks up and the spray it throws
+from water (`Dustkick01`, the biomes' `water effects`: bursts fired with `scatters`, `EffectUnit.Scatters`) are additive, unlit
+(`lighting off`, `scene_blend add`: **Verified**, `particles/materials/Dustkick01.material`, `Dustkick_streak.material`), so they add the same
+light by night as by day and the night exposure turned them into glowing patches (**Observed**, the user's image at night; save multi at
+23:00: a yellow-white blob beside the runner). Meitou multiplies such a sprite by the light at its centre against the noon's in the open
+(`ParticleRenderer` `dustLight`): the sun's light through the volume's visibility (`particleSun`), the clouds' shadow and the glow towards
+it, times pi; the sky's irradiance from above times the environment factor; the lamps from both sides of the plane facing the eye; both the
+light and the noon's (`SkyRenderer.NoonLight`: the sun's light at the zenith, the noon environment factor with the ambient slider) times the
+ambient map as the ground takes it, at most twice the noon's. Such a burst is no fire (its own reactive coverage, its size by the sprites'
+rule). **Observed** (save multi, open ground, paired runs): at 12:00 the kicks unchanged to the eye, at 23:00 a faint puff the colour of the
+ground's light.
+
 Fog shading rate (`FogShadingRate`): build tile rates from completed scene depth/fog; frame N's
 R8_UINT rate image drives frame N+1 opaque scene shading. Requires device fragment-shading-rate
 support; absent support uses normal shading. Excludes reflection, shadow, particles and post, and every

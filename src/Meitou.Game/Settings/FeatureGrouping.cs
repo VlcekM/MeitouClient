@@ -93,6 +93,7 @@ sealed class FeatureGrouping(SettingsMenu menu)
         new("Clouds", "Clouds", [WorldFrame.CloudHeightSlider, "Cloud shadows", "Cloud shadows in fog"]),
         new("Weather particles", WorldFrame.ParticleSliders[0], [WorldFrame.ParticleSliders[1]]),
         new("Fog", "Fog", []),
+        new("Lit dust", "Lit dust", []),
         new(WorldFrame.WetWorldSwitch, WorldFrame.WetWorldSwitch, []),
 
         // Colour

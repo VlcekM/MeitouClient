@@ -305,7 +305,7 @@ sealed partial class GameHost
         if (!InSplashFrustum(surface)) return;
 
         string? fired = depth >= 0 ? WaterEffectAt(point, depth, speed) : null;
-        if (fired is not null) particles.Burst(fired, surface, Quaternion.Identity, SplashEmitSeconds);
+        if (fired is not null) particles.Burst(fired, surface, Quaternion.Identity, SplashEmitSeconds, scatters: true);
         if (!foam) return;
 
         float strength = Math.Clamp(speed / 50, 0.5f, 1) * Math.Clamp(1 - depth / SplashDeepest, 0.3f, 1);
@@ -313,7 +313,7 @@ sealed partial class GameHost
 
         // Water too shallow to reach the ankle bone: the game shows nothing; the biome's shallowest splash.
         if (fired is null && WaterEffectAt(point, 0, speed) is { } shallow)
-            particles.Burst(shallow, surface, Quaternion.Identity, SplashEmitSeconds);
+            particles.Burst(shallow, surface, Quaternion.Identity, SplashEmitSeconds, scatters: true);
     }
 
     /// <summary>
@@ -347,7 +347,7 @@ sealed partial class GameHost
         if (!InSplashFrustum(at)) return true;
 
         wet.AddSplash(new Vector2(point.X, point.Z), Math.Clamp(speed / 50, 0.5f, 1));
-        if (WaterEffectAt(point, 0, speed) is { } shallow) particles.Burst(shallow, at, Quaternion.Identity, SplashEmitSeconds);
+        if (WaterEffectAt(point, 0, speed) is { } shallow) particles.Burst(shallow, at, Quaternion.Identity, SplashEmitSeconds, scatters: true);
         return true;
     }
 

@@ -380,6 +380,11 @@ public static class Enhancements
             "the game draws a bolt in flight as its mesh alone, stretched a little with its speed, which is hard to follow at a distance; "
                 + "Meitou draws a faint streak behind it that grows out of the crossbow and shrinks into where the bolt stops; "
                 + "drawn with the particles, so none with --no-particles (docs/game/combat.md \"Bolt visuals\")"),
+        new("dustlight", "Lit dust", "unlit", "lit",
+            () => post.LitDust, v => post.LitDust = v,
+            "the game draws the dust and the spray a running foot throws up as glowing sprites, as bright by night as by day and in shade as in "
+                + "the sun; Meitou lights them as the ground is lit: the sun through its shadows, the sky, the lamps, the same as the game's by day "
+                + "(docs/render-post.md \"Lit dust\")"),
         new("fog", "Fog", "hard-edged, flat", "soft, lit",
             () => post.MeitouFog, v => post.MeitouFog = v,
             "the game's dust and smoke sprites cut straight into the ground and walls they cross (all but its mist and steam, which fade; Faithful "

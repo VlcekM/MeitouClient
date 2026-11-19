@@ -1451,6 +1451,8 @@ static partial class WorldFrame
         if (gpu.Particles is not { } particles || f.ParticleNear <= 0) return;
 
         particles.RangeFade = particles.Lit = post.Options.MeitouFog;
+        particles.LitDust = post.Options.LitDust;
+        particles.DustNoon = gpu.Sky.NoonLight;
         particles.InteriorCut = gpu.InteriorMask;
         particles.SunShade = ShaftDarkening(post.Options, f.Light, f.Sun.Y) * ShaftCloudFade(Overcast(gpu));
         float pixelsPerUnit = post.ParticlePixelsPerUnit(f.Camera.Projection(f.Aspect, 1, 10).M22);

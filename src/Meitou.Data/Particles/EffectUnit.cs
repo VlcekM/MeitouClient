@@ -60,6 +60,11 @@ public sealed class EffectUnit
     /// </summary>
     public float LongestLife { get; }
     /// <summary>
+    /// The unit's particles are a medium that scatters the light it is in (dust, spray thrown up by a foot), whatever the material's blend: the
+    /// Meitou <c>dustlight</c> switch lights them as the scene is (docs/render-post.md "Lit dust"). False for what glows (flames, sparks).
+    /// </summary>
+    public bool Scatters { get; set; }
+    /// <summary>
     /// The unit's simulation while it is active (near the camera); null otherwise.
     /// </summary>
     public ParticleSimulation? Simulation { get; set; }

@@ -639,7 +639,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             "Ground parallax" or "Ground displacement (tessellation)" or "Ground trails" or WorldFrame.RockSmoothingSwitch
                 or WorldFrame.OutlineRefineSwitch => "Terrain",
             "Foliage ranges" or "Foliage levels" or "Far impostors" or WorldFrame.GrassCoverSwitch or WorldFrame.NearTreeFadeSwitch => "Vegetation",
-            "Haze" or "Night air" or "Night sky" or "Clouds" or "Cloud shadows" or "Cloud shadows in fog" or "Fog"
+            "Haze" or "Night air" or "Night sky" or "Clouds" or "Cloud shadows" or "Cloud shadows in fog" or "Fog" or "Lit dust"
                 or WorldFrame.WetWorldSwitch => "Sky & weather",
             "Tone map and grade" or "Night grading" or "Dithering" => "Colour",
             "Heat haze" or WorldFrame.BloomSwitch or WorldFrame.DepthOfFieldSwitch or WorldFrame.CameraEffectsSwitch or WorldFrame.VignetteSwitch

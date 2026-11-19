@@ -159,6 +159,6 @@ sealed class DryGroundEffects(GameHost host)
 
         _pool.Enqueue(_clock);
         Kicks++;
-        particles.Burst(system, at, Quaternion.Identity, EmitSeconds);
+        particles.Burst(system, at, Quaternion.Identity, EmitSeconds, scatters: true);
     }
 }
