@@ -78,21 +78,52 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// Whether a character (other than the one at <paramref name="except"/>) sits resting on the seat site's place: one the AI seated, but not one
-    /// that gives its seat way to the player's characters (<see cref="Ai.SquadAutonomy.YieldsSeat"/>).
+    /// Whether a character sits resting on the seat site's place: one the AI seated, but not one that gives its seat way to the player's characters
+    /// (<see cref="Ai.SquadAutonomy.YieldsSeat"/>).
     /// </summary>
-    static bool SeatOccupied(World world, BuildSite site, int except = -1)
+    static bool SeatOccupied(World world, BuildSite site)
     {
         var table = world.Characters;
 
         for (int i = 0; i < table.HighWater; i++)
         {
-            if (i == except || !table.Next[i].Alive || table.Next[i].Task != (byte)CharacterTask.Rest) continue;
-            if (table.Cold(i)?.Ai is not { SitClip: not null } mind || Ai.SquadAutonomy.YieldsSeat(mind)) continue;
-            if (Vector3.DistanceSquared(table.Next[i].Position, site.Position) < 1) return true;
+            if (table.Next[i].Alive && RestsOn(in table.Next[i], table.Cold(i), site)) return true;
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Whether a living character sits resting on the seat site's place (<see cref="SeatOccupied"/>'s rule).
+    /// </summary>
+    static bool RestsOn(in CharacterHot n, CharacterCold? cold, BuildSite site)
+    {
+        if (n.Task != (byte)CharacterTask.Rest) return false;
+        if (cold?.Ai is not { SitClip: not null } mind || Ai.SquadAutonomy.YieldsSeat(mind)) return false;
+
+        return Vector3.DistanceSquared(n.Position, site.Position) < 1;
+    }
+
+    /// <summary>
+    /// Whether seat <paramref name="seat"/> (at <paramref name="site"/>) is taken: a character other than the one at <paramref name="except"/>
+    /// rests on it (<see cref="RestsOn"/>), or its operators (<see cref="OperatorsOf"/>), less <paramref name="own"/>, reach <paramref name="max"/>.
+    /// One walk over the table for both, as a mod may ask it of many seats.
+    /// </summary>
+    static bool SeatTaken(World world, BuildSite site, string seat, int except, int own, int max)
+    {
+        var table = world.Characters;
+        var dummy = DummyAt(world, seat);
+        int operators = 0;
+        for (int i = 0; i < table.HighWater; i++)
+        {
+            if (!table.Next[i].Alive) continue;
+
+            var cold = table.Cold(i);
+            if (i != except && RestsOn(in table.Next[i], cold, site)) return true;
+            if (cold is not null && Operates(in table.Next[i], cold, seat, dummy)) operators++;
+        }
+
+        return operators - own >= max;
     }
 
     /// <summary>
@@ -113,7 +144,7 @@ public sealed partial class ProductionSystem
         // Another rests there (the AI's sitters too), or one other character is on the operate task for it, walking there included: one sitter per
         // seat whatever its max operators, since the act-out has only the seat's origin to put a sitter on.
         int own = cold.OperateSite == seat ? 1 : 0;
-        if (SeatOccupied(world, site, slot) || OperatorsOf(world, seat) - own >= 1) return SeatAnswer.Taken;
+        if (SeatTaken(world, site, seat, slot, own, 1)) return SeatAnswer.Taken;
 
         return ShutTo(world, slot, site.Position) ? SeatAnswer.ShutOut : SeatAnswer.Seated;
     }

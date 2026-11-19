@@ -259,7 +259,8 @@ public sealed partial class World : IDisposable
             if (SimulationExtensions.FactoryOf((ITickSystem)owner) is { } made) Tasks.RegisterMod(owner, made.Owner, ClaimedTasks());
             else owner.RegisterTasks(Tasks);
         }
-        foreach (var owner in this._systems.OfType<IDecisionOwner>()) owner.RegisterSources(Decisions);
+        foreach (var owner in this._systems.OfType<IDecisionOwner>())
+            Decisions.RegisterFrom(owner, SimulationExtensions.FactoryOf((ITickSystem)owner)?.Owner);
         for (int k = 0; k < this._systems.Count; k++) if (this._systems[k] is Ai.AiSystem ai) ai.BindModGoals(this._systems);
         for (int k = 0; k < this._systems.Count; k++) if (DecidesAfter(this._systems[k])) _decideAfter = k;
 
@@ -718,7 +719,7 @@ public sealed partial class World : IDisposable
         DeathObservers.Register(system, _systems.Count - 1);
         ExperienceFilters.Register(system, _systems.Count - 1);
         CrimeObservers.Register(system, _systems.Count - 1);
-        if (system is IDecisionOwner owner) owner.RegisterSources(Decisions);
+        if (system is IDecisionOwner owner) Decisions.RegisterFrom(owner, SimulationExtensions.FactoryOf(system)?.Owner);
         if (DecidesAfter(system)) _decideAfter = _systems.Count - 1;
         WatchCharacters();
     }
@@ -1275,6 +1276,7 @@ public sealed partial class World : IDisposable
         DeathObservers.HashFaults(ref h);
         ExperienceFilters.HashFaults(ref h);
         CrimeObservers.HashFaults(ref h);
+        Decisions.HashFaults(ref h);
         ModFaults.HashFaults(ref h);
         return h.Value;
     }

@@ -363,7 +363,8 @@ holds refuses the second mod.
   DIALOG_ACTION's `condition name` / `action name`. A condition gets `DialogueCheck` (world, speaker, the subject `who` picked, the
   condition) with `Matches(bool)` and `Compare(double)` that apply the vanilla value and `compare by` rules; it only reads (it also runs
   for interface previews). An effect gets `DialogueAct` (world, speaker, target, effect) in a serial step. An unregistered code
-  computes "no" / does nothing, as an unknown vanilla code.
+  computes "no" / does nothing, as an unknown vanilla code. A handler that throws is logged once with the mod id and code; that call computes
+  "no" / does nothing more, and the handler is still asked later (the interface asks conditions too, so a drop would depend on what it asked).
 - **World states:** `AddWorldState(record)` claims a WORLD_EVENT_STATE of the merged data (`ModWorldState`, `src/Meitou.Simulation/Factions`; a
   record of another type, or one another mod claimed, refuses the mod, and so loses all its registrations, not only the claim: two mods that
   claim the same state never run together). The mod's system sets its answer in a world with `state.Set(world, bool)` through the handle
@@ -535,7 +536,9 @@ holds refuses the second mod.
   elsewhere the first that can run. `CanRun` and `Desire` are pure reads of the world; `Start` starts the task (`TaskStart.Walk`, a row of
   the mod's own from 1000 up). To run before a character idles, register at step 6 with a key below Idleness (`2000 + TaskType.Idle`).
   Every player character is asked, so a source checks that the character is one of its own squads'. Several mods can each add sources.
-  `RegisterJob(type, source)` is the other kind: one contributor per job type, for the types a mod claimed with `AddJobType`. NPCs do not
+  `RegisterJob(type, source)` is the other kind: one contributor per job type, for the types a mod claimed with `AddJobType`. A mod's source or
+  contributor whose call throws is dropped for that world: it cannot run and starts nothing from then on, what the call did stands, the first
+  fault is logged with the mod id and the player gets a notice, and the fault enters the state hash. NPCs do not
   go through this step; their AI packages run them (a mod's goals for them: NPC goals, below).
 - **Task handlers** (`Meitou.Simulation.Ai`, [task starts](simulation.md#task-starts)): a registered system implementing `ITaskOwner` gets
   `RegisterTasks(TaskHandlers)` once when the world is made, in system order, and registers an `ITaskHandler` (`Start`, `End`, `Done`) per

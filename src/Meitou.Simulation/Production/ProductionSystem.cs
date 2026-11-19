@@ -610,17 +610,31 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     static int OperatorsOf(World world, string site)
     {
         var table = world.Characters;
-        var dummy = world.Fixtures.Find(site) is { Kind: Locks.FixtureKind.Training } f ? f : null;
+        var dummy = DummyAt(world, site);
         int n = 0;
         for (int i = 0; i < table.HighWater; i++)
         {
-            if (!table.Next[i].Alive || table.Cold(i) is not { } cold) continue;
-
-            bool job = table.Next[i].Task == (byte)CharacterTask.Operate && cold.OperateSite == site;
-            if (job || cold.Ai?.WorkPost?.RuntimeKey == site || dummy is not null && PretendsAt(in table.Next[i], cold, dummy)) n++;
+            if (table.Next[i].Alive && table.Cold(i) is { } cold && Operates(in table.Next[i], cold, site, dummy)) n++;
         }
 
         return n;
+    }
+
+    /// <summary>
+    /// The town training dummy that <paramref name="site"/> is, whose pretend-users count as its operators (<see cref="OperatorsOf"/>); null for
+    /// any other site.
+    /// </summary>
+    static Locks.Fixture? DummyAt(World world, string site) =>
+        world.Fixtures.Find(site) is { Kind: Locks.FixtureKind.Training } f ? f : null;
+
+    /// <summary>
+    /// Whether a living character counts as an operator of <paramref name="site"/> (<see cref="OperatorsOf"/>): on the operate task for it, posted
+    /// there, or pretend-operating <paramref name="dummy"/> (<see cref="DummyAt"/>).
+    /// </summary>
+    static bool Operates(in CharacterHot n, CharacterCold cold, string site, Locks.Fixture? dummy)
+    {
+        bool job = n.Task == (byte)CharacterTask.Operate && cold.OperateSite == site;
+        return job || cold.Ai?.WorkPost?.RuntimeKey == site || dummy is not null && PretendsAt(in n, cold, dummy);
     }
 
     /// <summary>

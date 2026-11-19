@@ -180,6 +180,14 @@ public sealed class DecisionSystem
     /// The trace lines of the decision being made (kept only while <see cref="Tracing"/> is on).
     /// </summary>
     readonly List<string> _lines = [];
+    /// <summary>
+    /// The code mods' sources and contributors, caught (<see cref="RegisterFrom"/>).
+    /// </summary>
+    readonly ModDecisionFaults _modFaults = new();
+    /// <summary>
+    /// The mod whose system registers now (<see cref="RegisterFrom"/>); null for a standard system.
+    /// </summary>
+    string? _registering;
 
     /// <summary>
     /// Makes the step with its own sources: the order queue, the urgent jobs, the jobs and 14 Idleness.
@@ -202,7 +210,11 @@ public sealed class DecisionSystem
     /// Registers (or replaces) the contributor of the jobs of <paramref name="type"/> (an open list: a job type without one is kept in the list but
     /// never run).
     /// </summary>
-    public void RegisterJob(TaskType type, IJobSource source) => _jobs[type] = source ?? throw new ArgumentNullException(nameof(source));
+    public void RegisterJob(TaskType type, IJobSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        _jobs[type] = _registering is { } mod ? _modFaults.Wrap(source, mod, type) : source;
+    }
 
     /// <summary>
     /// The contributor of the jobs of <paramref name="type"/>; null when none is registered.
@@ -225,9 +237,33 @@ public sealed class DecisionSystem
     public void Register(IDecisionSource source)
     {
         ArgumentNullException.ThrowIfNull(source);
+        if (_registering is { } mod) source = _modFaults.Wrap(source, mod);
+
         int at = _sources.FindLastIndex(s => s.Step < source.Step || s.Step == source.Step && s.Key <= source.Key);
         _sources.Insert(at + 1, source);
     }
+
+    /// <summary>
+    /// Has <paramref name="owner"/> register its sources and contributors; those of a code mod's system (<paramref name="mod"/>, its id) are caught,
+    /// a throwing one dropped for this world (<see cref="ModDecisionFaults"/>).
+    /// </summary>
+    internal void RegisterFrom(IDecisionOwner owner, string? mod)
+    {
+        _registering = mod;
+        try
+        {
+            owner.RegisterSources(this);
+        }
+        finally
+        {
+            _registering = null;
+        }
+    }
+
+    /// <summary>
+    /// Adds the code mods' dropped sources and contributors to the state hash; nothing while none has dropped.
+    /// </summary>
+    internal void HashFaults(ref StateHasher hasher) => _modFaults.Hash(ref hasher);
 
     /// <summary>
     /// Asks for the character to be decided again (a replan trigger): any phase, its own slot or a serial one. Only the player's characters keep the
@@ -384,7 +420,7 @@ public sealed class DecisionSystem
 
             float score = source.Desire(world, slot) * source.Weight * (check.Running ? 1.25f : 1);
             if (check.Running && score < 1 && Unfinished(world, slot)) score *= 1.25f;
-            Note(source, score > 0 ? $"score {score:0.###}{(check.Running ? " (running)" : "")}" : "desire 0");
+            if (Tracing) Note(source, score > 0 ? $"score {score:0.###}{(check.Running ? " (running)" : "")}" : "desire 0");
             if (score > 0 && score >= bestScore) (best, bestScore, bestRuns) = (k, score, check.Running);
         }
 
