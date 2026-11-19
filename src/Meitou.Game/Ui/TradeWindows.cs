@@ -235,23 +235,13 @@ sealed class TradeWindows(PlayerInterface player)
         var c = controls[contentIndex].Bounds;
         float w0 = c.Width - contentWidget.Position.Width * dx, h0 = c.Height - contentWidget.Position.Height * dy;
 
-        UiRect Fixed(MyGuiWidget w, UiRect parent, float pw, float ph) =>
-            new(parent.X + w.Position.X * pw, parent.Y + w.Position.Y * ph, w.Position.Width * pw, w.Position.Height * ph);
-
         void Move(string name, UiRect bounds)
         {
             int i = controls.FindIndex(x => x.Name == name);
             if (i >= 0) controls[i] = controls[i] with { Bounds = bounds };
         }
 
-        if (layout.Find("datapanel") is { } panel && contentWidget.Children.FirstOrDefault(w => w.Children.Contains(panel)) is { } box)
-        {
-            var boxBounds = Fixed(box, c, w0, h0);
-            int boxIndex = controls.FindIndex(x => x.Skin == box.Skin && x.Name == box.Name);
-            if (boxIndex >= 0) controls[boxIndex] = controls[boxIndex] with { Bounds = boxBounds };
-
-            Move("datapanel", panel.Position.RelativeTo(boxBounds, true));
-        }
+        PlaceMoneyBox(controls, layout, contentWidget, c with { Width = w0, Height = h0 });
 
         if (layout.Find("ArrangeButton") is { } arrange)
         {
@@ -276,6 +266,30 @@ sealed class TradeWindows(PlayerInterface player)
             Clip = client.Intersect(slot.Clip ?? client),
             Properties = new Dictionary<string, string>(slot.Properties) { ["TileSize"] = FormattableString.Invariant($"{cell} {player.InventoryCellHeight}") },
         });
+    }
+
+    /// <summary>
+    /// The trader window's money box at its layout size in the content area <paramref name="content"/> (the content's position, its ungrown size),
+    /// and its <c>datapanel</c> clipped to it.
+    /// </summary>
+    void PlaceMoneyBox(List<UiControl> controls, MyGuiLayout layout, MyGuiWidget contentWidget, UiRect content)
+    {
+        if (layout.Find("datapanel") is not { } panel) return;
+        if (contentWidget.Children.FirstOrDefault(w => w.Children.Contains(panel)) is not { } box) return;
+
+        var p = box.Position;
+        var boxBounds = new UiRect(content.X + p.X * content.Width, content.Y + p.Y * content.Height, p.Width * content.Width,
+            p.Height * content.Height);
+        int boxIndex = controls.FindIndex(x => x.Skin == box.Skin && x.Name == box.Name);
+        if (boxIndex >= 0) controls[boxIndex] = controls[boxIndex] with { Bounds = boxBounds };
+
+        // The panel was clipped to the box as the growth sized it: a stock narrower than the layout's grid (likely below an interface scale of 1,
+        // the cells shrinking) shrinks the window and the box with it, and the money line would stay cut to that narrower box (#1038).
+        var boxClip = boxIndex >= 0 && controls[boxIndex].Clip is { } outer ? boxBounds.Intersect(outer) : boxBounds;
+        int panelIndex = controls.FindIndex(x => x.Name == "datapanel");
+        var panelBounds = panel.Position.RelativeTo(boxBounds, true);
+        if (panelIndex >= 0)
+            controls[panelIndex] = controls[panelIndex] with { Bounds = panelBounds, Clip = boxClip };
     }
 
     /// <summary>

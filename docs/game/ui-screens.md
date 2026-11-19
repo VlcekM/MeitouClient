@@ -1353,7 +1353,9 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
   - Size (**Verified**, `FUN_140150570`): the grid is the trader's `backpack_content` section at the `Kenshi_InventorySlotSkin` size (25 x 25 px, read once from the skin). The grid is
     first sized columns x columns; the root window and `scrollview_backpack_content` grow by that size less the layout's grid size; then the grid takes its real rows, becomes the scroll
     view's canvas and is reparented into its client at 0,0. So the visible stock is square (as tall as wide) and the window scales with the column count. ARRANGE gets the caption "Arrange"
-    and the inventory's arrange handler; `datapanel` holds the money.
+    and the inventory's arrange handler; `datapanel` holds the money. `Root` is `position_real`, a screen fraction (**Verified**, the layout file),
+    while the cells scale with the interface: a stock narrower than the layout's grid (likely at a small interface scale) makes the growth negative. Meitou keeps the money box at
+    its layout size and clips `datapanel` to that box.
   - The scroll view is the `Kenshi_ScrollView` template (**Verified**, `kenshi_templates.xml`): a `Kenshi_GenericTextBoxSkin` frame, client 10 px in from left and top, `Kenshi_ScrollBarV`
     20 px wide 5 px off the right (arrows 12 px, track between, thumb `Kenshi_SmallBarSkin` at least `MinTrackSize` 10); the horizontal bar is off (`VisibleHScroll` false).
     Meitou draws it with the host's generic ScrollView ([widget runtime](../formats/mygui.md#widget-runtime-2026-10-20)): the stock grid is the canvas, the bar shows only when the stock overflows.
