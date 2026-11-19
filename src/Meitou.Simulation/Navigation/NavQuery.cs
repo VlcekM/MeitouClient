@@ -482,12 +482,28 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
         float through = g + toGoal * Factor(area, agent);
         if (node.Closed || through >= node.Through) return;
 
+        // A dead end's polygons are open again while nodes reached through them stand (SqueezeOut): entered from one of those, the two would be
+        // each other's parent and the corridor's walk back to the start would never end.
+        if (node.Squeezed && Descends(nodes, from, node)) return;
+
         node.Through = through;
         node.G = g;
         node.Position = mid;
         node.Parent = from.Ref.Key;
         node.F = g + toGoal * search.MinFactor;
         search.Scratch.Open.Enqueue(node, node.F);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="node"/> is <paramref name="ancestor"/> or was reached through it.
+    /// </summary>
+    static bool Descends(Dictionary<long, Node> nodes, Node node, Node ancestor)
+    {
+        for (var n = node; ; n = nodes[n.Parent])
+        {
+            if (n == ancestor) return true;
+            if (n.Parent < 0) return false;
+        }
     }
 
     /// <summary>

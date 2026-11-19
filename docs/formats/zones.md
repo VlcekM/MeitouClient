@@ -174,8 +174,12 @@ zone file ([player outposts](save.md#player-outposts)); the buildings' `town` ha
 GAMESTATE_TOWN state `-S5e`. **Verified**304 targets resolve;224 town states listing zones contain
 their town,80 list none. Keys `zones_count`, `zone_x_<i>`, `zone_y_<i>`, handle `hand*`, string
 `instance`=list entry ID. ROAD keys: `hidden`, `width`46..200, `length`, `weight`, `start`, `end`
-(junction numbers, [roads](../game/factions-squads-towns.md#off-screen-world)); ordered instances target `-`, absolute positions, rotation w1/y0/z0,
-x0..1 (**Observed**, purpose Unknown). `5-roadfoliage` target- points use quaternion w as
+(junction numbers, [roads](../game/factions-squads-towns.md#off-screen-world)); instances target `-`, absolute positions, rotation w1/y0/z0,
+x0..1. A road's points are its instances by number: the id is the point's number in lowercase hex without padding (`0`..`f`, `10`..), and the
+loader (`FUN_14045e760`, id made by `FUN_1400ac750`) asks for 0, 1, 2.. until an id is missing or the point read has rotation x >= 1, the mark of
+the last point (**Verified**: `meitou-tools world`, of 2109 roads each has the mark on its highest id and on no other point, and none ends before
+its instances). The files list the ids as text (`1`, `10`..`1f`, `2`), so file order is not the road's order for the 368 roads of over 16 points
+(`WorldLevelData.RoadPoints`; **Observed**, #1065: `1154-Newwworld`, 46 points, read in file order ran (22104,13517) → (29077,5154) → (21889,13829)). `5-roadfoliage` ids are hex slot numbers too (**Observed**, `FUN_14045eb80`, `strtol` base 16); its target- points use quaternion w as
 size0.1..3590 (**Observed**, likely clearing radius). Furnished interiors use GAMESTATE_BUILDING,
 ITEM_PLACEMENT_GROUP, inventory states and collections, often `<n>-[basedata]-INGAME` IDs;
 `WorldLevelData.Load(includeInteriors:true)` merges them. Item groups: [loose items](../game/factions-squads-towns.md#loose-items-in-buildings); inventory semantics Unknown.

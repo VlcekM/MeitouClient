@@ -614,7 +614,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
     the +8 flag skipped), scored by distance minus a pull towards the travel direction (reversed for the exit) of clamp(w, 0.2, 0.9). The road is
     taken when the two access legs together, and the legs plus w × the A* road length (`FUN_14045da60`), are each no longer
     than the straight line; the mover then heads for the first waypoint, keeping the final destination. Road data: ROAD records (`start`, `end`,
-    `length`, `width`, `weight`, `hidden`), their instances the polyline points; `start`/`end` are junction numbers, each road one edge costing its
+    `length`, `width`, `weight`, `hidden`), their instances the polyline points ([by number](../formats/zones.md), not file order); `start`/`end` are junction numbers, each road one edge costing its
     `length` (not its polyline; `weight` unread), the A* heuristic the straight distance to the goal, and `hidden` never read by routing (**Verified**).
 - **Meetings**: nothing looks at other platoons; there is no off-screen combat. Off-screen outcomes are campaign phases and despawning.
 - **Pool growth** (`FUN_1408f4c20`): each pool's current max (`pop`) grows `+0.21818` per game hour (5.24 a day) up to its desired max

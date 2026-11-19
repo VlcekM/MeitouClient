@@ -101,7 +101,8 @@ public class HubNavigationTests
 
     /// <summary>
     /// The player's long route from the Hub to Stack takes the roads by the original's rule (Nameless, road preference 0.3), as the off-screen squads
-    /// do (docs/game/pathfinding.md "Roads": 34054 walked for 16898 straight, Observed); without a road preference it goes over the terrain.
+    /// do (docs/game/pathfinding.md "Roads": 23748 walked for 16898 straight, Observed): longer than the terrain route and on the roads; without a road
+    /// preference it goes over the terrain.
     /// </summary>
     [Fact]
     public void A_long_route_from_the_hub_to_stack_follows_the_roads()
@@ -149,7 +150,7 @@ public class HubNavigationTests
 
             var road = Walk(data.RoadPreferenceOf(data.PlayerFaction));
 
-            Assert.True(road.Walked > straight * 1.8f && road.OnRoad > 0.9f,
+            Assert.True(road.Walked > straight * 1.3f && road.OnRoad > 0.9f,
                     $"by road: walked {road.Walked:0} for a straight {straight:0}, {road.OnRoad:P0} near a road");
 
             var terrain = Walk(0);

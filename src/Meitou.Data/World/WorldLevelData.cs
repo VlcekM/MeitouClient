@@ -417,13 +417,33 @@ public sealed class WorldLevelData
     /// Road segments: <see cref="FcsRecordType.Road"/> records whose instances are the path's points.
     /// </summary>
     public IEnumerable<RoadPath> Roads() =>
-        Level.OfType(FcsRecordType.Road).Select(r => new RoadPath(
-            r.StringId,
-            r.GetFloat("width"),
-            r.GetInt("start"),
-            r.GetInt("end"),
-            r.GetFloat("length"),
-            r.Instances.Values.Where(i => !i.IsCleared).Select(i => i.Position).ToList()));
+        Level.OfType(FcsRecordType.Road).Select(RoadOf);
+
+    /// <summary>
+    /// The road of a <see cref="FcsRecordType.Road"/> record.
+    /// </summary>
+    static RoadPath RoadOf(GameRecord road) =>
+        new(road.StringId, road.GetFloat("width"), road.GetInt("start"), road.GetInt("end"), road.GetFloat("length"), RoadPoints(road));
+
+    /// <summary>
+    /// A road's points in the original's order (docs/formats/zones.md, <b>Verified</b>, the road loader <c>FUN_14045e760</c>): the instance ids
+    /// are the points' numbers in lowercase hex without padding, looked up from 0 on until one is missing or the point read has a rotation x of
+    /// 1 or more, the road's last point. The level files list the ids as text (<c>1</c>, <c>10</c> ... <c>1f</c>, <c>2</c>), so file order
+    /// scrambles a road of over 16 points. A point a later layer cleared is left out and the road goes on (engine choice; no base road has one).
+    /// </summary>
+    static List<Vector3> RoadPoints(GameRecord road)
+    {
+        var points = new List<Vector3>();
+        for (int i = 0; road.Instances.TryGetValue(i.ToString("x"), out var point); i++)
+        {
+            if (point.IsCleared) continue;
+
+            points.Add(point.Position);
+            if (point.Rotation.X >= 1) break;
+        }
+
+        return points;
+    }
 
     #endregion
 }

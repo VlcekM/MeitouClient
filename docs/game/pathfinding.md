@@ -265,7 +265,9 @@ in it). **Observed** (zone 39.16, Stoat, scratch probe from ground-level points 
 (Y-House `16-` 35046..35064,−71590..−71582, 4..6 wide, one 6-unit wall-ended exit; Y-House `18-`; Old Storm House `20-`) held
 8 of 1999 starts with no path at all, so a walker stopped or pushed there stayed stuck at the door; with the rule all 1999 path.
 The same holds for a dead end of up to 8 polygons round the start (`NavQuery.SqueezeCluster`, `SqueezeOut`), opened again for each dead end the
-way out leads into while the count holds. **Observed** (#1025 save, Cat-Lon's Exile `54.59:4-`, `probe path --nav`): a ledge of the interior mesh
+way out leads into while the count holds. A polygon opened again is not entered from one reached through it (`NavQuery.Descends`): the two would be
+each other's parent and the corridor's walk back to the start would not end (**Observed**, #1065 save, `probe walk --stream`: in one run of four a
+path search grew its corridor list until memory ran out; the rule comes from the code, the run was not repeated with it). **Observed** (#1025 save, Cat-Lon's Exile `54.59:4-`, `probe path --nav`): a ledge of the interior mesh
 beside a stair foot, a 6-wide strip (105560..105610) and two thin triangles (105608..105634, 124992..125000), is tied to the stair only by a
 4.5-wide wall-ended edge at (105634,125000); fighters the crowd pushed onto it found no path (42 failed searches closing 2 polygons each in one
 fight; a walker really shut out closed 143 and 2012), now every start on its three polygons and on the collision beside them paths out.
@@ -733,8 +735,8 @@ when taken, the legs to and from the road are terrain-grid routes (engine choice
 (1500) along it, so bends are not cut. Not built: the road try for a trip over 1000 within one loaded block (Meitou: navmesh only) and the road fallback after 16 navmesh
 failures (Meitou: the nearest reachable point and a straight tail). Both would send every such walker's request through `RoadNetwork.Route` on the path threads; left out until a
 measurement shows the cost, since most in-town trips exceed 1000 units.
-**Observed** (scratch harness, nothing loaded): Hub→Squin 17657 straight walks 25522 at 0.3 (99 % within 400 of a road; 43 % at 0);
-Hub→Stack 34054; Squin→Admag at 0.8 walks 132184 for 26834 straight (short road `length` values, as off screen).
+**Observed** (`HubNavigationTests`, road points in number order): Hub→Stack walks 23748 for 16898 straight at 0.3, 92 % within 400 of a road; at 0 it
+goes over the terrain.
 Destroyed-part rules (**Verified**, `FUN_14055f6e0` l.144-176): a stairs part with no `destroyed mesh` is dropped. A non-stairs part with `building floor` != 0 and no `destroyed mesh` keeps its
 normal mesh in mode 2: not drawn, but its collision is made (`destroyed collision`, else `xml collision`). A stairs or upper-floor part whose `destroyed mesh` replaces a blank own `phs or mesh` has
 its `xml collision` cleared, so only `destroyed collision` applies; a ground-floor non-stairs part is never cleared. (The original clears the shared part record, so intact buildings using the part

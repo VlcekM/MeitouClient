@@ -116,7 +116,25 @@ static class WorldSurvey
         var roads = world.Roads().ToList();
         Console.WriteLine($"  roads: {roads.Count} segments, {roads.Sum(r => r.Points.Count)} points, "
             + $"width {roads.Min(r => r.Width):0.#}..{roads.Max(r => r.Width):0.#}");
+        SurveyRoadPoints(world, roads);
         return problems;
+    }
+
+    /// <summary>
+    /// How the roads' points relate to their instances: roads of over 16 points (their ids sort as text out of order), roads whose points stop
+    /// before their instances do, and where the last-point mark (a rotation x of 1 or more) sits.
+    /// </summary>
+    static void SurveyRoadPoints(WorldLevelData world, List<RoadPath> roads)
+    {
+        var records = world.Level.OfType(FcsRecordType.Road).ToDictionary(r => r.StringId);
+        static string LastId(GameRecord r) => (r.Instances.Count - 1).ToString("x");
+
+        int shorter = roads.Count(r => r.Points.Count < records[r.StringId].Instances.Values.Count(i => !i.IsCleared));
+        int markedLast = records.Values.Count(r => r.Instances.TryGetValue(LastId(r), out var last) && last.Rotation.X >= 1);
+        int markedOther = records.Values.Sum(r => r.Instances.Count(i => i.Value.Rotation.X >= 1 && i.Key != LastId(r)));
+
+        Console.WriteLine($"  road points: {roads.Count(r => r.Points.Count > 16)} roads of over 16; {shorter} roads end before their instances; "
+            + $"last-point mark on the highest id of {markedLast} roads, on {markedOther} other points");
     }
 
     /// <summary>
