@@ -160,7 +160,8 @@ context/string argument; disabled controls never call it. Contribute supplies or
 with optional UI-mode restriction. OverrideControl can extend context.CreateBaseControl(id).
 AddMapMarkers adds world map markers from a per-frame source (modding.md "Map markers").
 AddSquadAiOptions adds tick buttons to the overview's AI tab, AddBuildingActions button lines to the
-selected building's panel after the game's own; a press queues SimCommands
+selected building's panel after the game's own, AddTownPanelLines lines (text or buttons) to the
+town panel under the game's own; a press queues SimCommands
 ([modding](modding.md#registration-surface)).
 Source/test interfaces are authoritative for signatures; samples in Ui extension tests.
 
