@@ -2152,6 +2152,10 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     {
         ref readonly var other = ref s.Table.Previous[slot];
 
+        // Slot 125 (FUN_14079c950, Verified) compares the real factions before it reads the disguise: a character of the looker's own faction is
+        // never an enemy, whatever uniform it wears (#1057: a squad mate in a hostile faction's armour).
+        if (c.Faction == s.Faction) return false;
+
         // Wanted characters are the arrest system's (Crime.ArrestSystem): the police spot, fine or arrest them there. A working disguise stands in
         // for the target's faction (slot 125, docs/game/perception.md "Sense tags"; Crime.ArrestSystem.SeenFaction).
         int seenAs = Crime.ArrestSystem.SeenFaction(c);
@@ -2770,9 +2774,9 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// <summary>
     /// Whether the character in <paramref name="slot"/> would attack <paramref name="target"/> had it sensed it itself: its own look's gates (a slave
     /// and a faction without relations pick no fight) and its attack-on-sight finder (<see cref="Candidate"/>: the relations, a holder's post test).
-    /// Serial phases only.
+    /// Serial phases only. Also the probe's (<c>crime</c>: the squad mates that would attack a character).
     /// </summary>
-    bool Takes(World world, int slot, CharacterCold cold, int target, CharacterCold targetCold)
+    internal bool Takes(World world, int slot, CharacterCold cold, int target, CharacterCold targetCold)
     {
         if (cold.SlaveState == 1 || !Relations.Contains(cold.Faction)) return false;
 

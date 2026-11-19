@@ -472,7 +472,7 @@ static class SaveProbe
 
     /// <summary>
     /// A character's pending crime, bounties with the booking faction's relation to its faction, the flags the police read and how many characters
-    /// its own squad holds TEMP_ENEMY on.
+    /// its own squad holds TEMP_ENEMY on, its disguise with the faction it is seen as, its standing orders and the squad mates whose finder would take it.
     /// </summary>
     static string CrimeLine(ProbeWorld probe, SquadMemory? memory, int slot)
     {
@@ -486,7 +486,37 @@ static class SaveProbe
             + (relations.Contains(e.Faction) && relations.Contains(c.Faction) ? $" relation={relations.Get(e.Faction, c.Faction):F0}" : "")) ?? [];
         return $"pending=[{pending}] bounties=[{string.Join(", ", bounties)}] recentlyWanted={c.RecentlyWanted:F0} freed={c.Freed} "
             + $"escaped={c.Escaped} ordered={c.Ordered} row={c.Running?.Row} imprisoned={c.IsImprisoned} squadEnemies={enemies} "
-            + $"door=[{DoorWork(probe, slot, c)}]";
+            + $"door=[{DoorWork(probe, slot, c)}] disguise={c.DisguiseLevel:F2}/{probe.Faction(c.DisguiseFaction)} "
+            + $"seenAs={SeenAs(probe, c)} orders={c.Orders} body={c.Medical is not null} takenBy=[{string.Join(", ", MatesTaking(probe, slot, c))}]";
+    }
+
+    /// <summary>
+    /// The faction the character is seen as (a working disguise's) with its own faction's relation to it and whether that is attacked on sight.
+    /// </summary>
+    static string SeenAs(ProbeWorld probe, CharacterCold c)
+    {
+        var relations = probe.Data.Relations;
+        int seen = Meitou.Simulation.Crime.ArrestSystem.SeenFaction(c);
+        if (seen == c.Faction || !relations.Contains(seen) || !relations.Contains(c.Faction)) return probe.Faction(seen);
+
+        bool onSight = Meitou.Simulation.Aggro.AggroSystem.AttacksOnSight(relations, c.Faction, seen);
+        return $"{probe.Faction(seen)}(relation={relations.Get(c.Faction, seen):F0} onSight={onSight})";
+    }
+
+    /// <summary>
+    /// The character's squad mates whose attack-on-sight finder would take it as a target had they sensed it (#1057: none, whatever it wears).
+    /// </summary>
+    static IEnumerable<string> MatesTaking(ProbeWorld probe, int slot, CharacterCold c)
+    {
+        var table = probe.Characters;
+        var aggro = probe.World.Systems.OfType<Meitou.Simulation.Aggro.AggroSystem>().FirstOrDefault();
+        if (aggro is null || probe.World.Squads.Find(c.SquadId) is not { } squad) yield break;
+
+        foreach (var m in squad.Members)
+        {
+            if (m.Slot == slot || table.Cold(m.Slot) is not { } mate) continue;
+            if (aggro.Takes(probe.World, m.Slot, mate, slot, c)) yield return mate.Name;
+        }
     }
 
     /// <summary>
