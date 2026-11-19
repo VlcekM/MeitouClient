@@ -384,16 +384,10 @@ public sealed partial class NavmeshWalkability : IWalkability
         bool fromLoaded = w.Contains(WorldLayout.ZoneOf(from.X, from.Z));
         if (!fromLoaded || !w.Contains(WorldLayout.ZoneOf(to.X, to.Z)))
             return LongRoute(w, from, to, agent, fromLoaded);
-        // A goal just found unreachable (shut in, or a way in too narrow for the radius): a walker that can reach the nearest point found then is on
-        // the same ground, which does not reach the goal either, so it walks there instead of running the exact and the nearest-point searches, each
-        // of which explores all the ground it can reach. Only while no door was locked or unlocked since: through a door opened since, a walker
-        // outside reached the corner of a locked house nearest the goal that one shut in it had found, and stood there.
         int doors = Doors.Version;
         var key = UnreachableKey(w, to, agent);
-        if (key is { } known && _unreachable.TryGetValue(known, out var hit) && ReferenceEquals(hit.World, w) && hit.Doors == doors
-            && System.Diagnostics.Stopwatch.GetElapsedTime(hit.At).TotalSeconds < UnreachableSeconds
-            && new NavQuery(w, Doors).FindPath(from, hit.Nearest, agent, null, out _) is { Found: true } near)
-            return Provisional(w, FromWalker(from, near), to, hit.Door);
+        if (Remembered(w, from, to, agent, key, doors) is { } known) return known;
+
         var exact = Exact(w, from, to, agent);
         if (exact.Found) return exact;
         // A walker on a region its zone's pruning dropped (its way to a seed leads through a zone not loaded): that region is kept, and the path
@@ -415,17 +409,62 @@ public sealed partial class NavmeshWalkability : IWalkability
         if (!part.Found) return exact;
         if (Vector2.Distance(new(part.Points[^1].X, part.Points[^1].Z), new(to.X, to.Z)) <= NavQuery.GoalSnap)
             return part;
+
+        // The ground the nearest-point search covered, read before the door query below searches again on this thread.
+        bool metDoor = NavQuery.LastSearchMetClosedDoor;
+        long[] ground = key is null ? [] : NavQuery.LastSearchReached();
+
         // Shut out by a door closed at run time: the tail goes on through that door, so the walker meets it and a locked one stops it (LockSystem);
         // straight to the goal, it passed beside a locked gate's post (#560).
-        var door = NavQuery.LastSearchMetClosedDoor ? new NavQuery(w, Doors).ClosedDoorOnTheWay(from, to, part.Points[^1], agent) : null;
+        var door = metDoor ? new NavQuery(w, Doors).ClosedDoorOnTheWay(from, to, part.Points[^1], agent) : null;
+
         // Also after a search cut short by its limit: the exact search would be cut short the same way, so the walker gets this same provisional
         // route.
-        if (key is { } found)
-        {
-            if (_unreachable.Count >= UnreachableLimit) _unreachable.Clear();
-            _unreachable[found] = (w, doors, part.Points[^1], door, System.Diagnostics.Stopwatch.GetTimestamp());
-        }
+        if (key is { } found) Remember(found, w, doors, part.Points[^1], door, ground);
+
         return Provisional(w, part, to, door);
+    }
+
+    /// <summary>
+    /// The provisional route to a goal just found unreachable (shut in, or a way in too narrow for the radius; <see cref="_unreachable"/>), for a
+    /// walker whose start polygon the failed search covered: it stands on the same ground, which does not reach the goal either, so it walks to the
+    /// nearest point found then instead of running the exact and the nearest-point searches, each of which explores all the ground it can reach.
+    /// Null for any other walker. Reaching that nearest point is no proof of the same ground: where an unjoined sliver touches the open mesh,
+    /// fighters on the goal's own side were sent back to the sliver's corner, 200 from their target (#1025). Only while no door was locked or
+    /// unlocked since: through a door opened since, a walker outside reached the corner of a locked house nearest the goal that one shut in it had
+    /// found, and stood there.
+    /// </summary>
+    PathResult? Remembered(NavWorld w, Vector3 from, Vector3 to, NavAgent agent, (NavRef, float, bool)? key, int doors)
+    {
+        if (key is not { } known || !_unreachable.TryGetValue(known, out var hit)) return null;
+
+        bool current = ReferenceEquals(hit.World, w) && hit.Doors == doors
+            && System.Diagnostics.Stopwatch.GetElapsedTime(hit.At).TotalSeconds < UnreachableSeconds;
+        if (!current) return null;
+
+        // The same ground: the walker's start polygon is one the failed search covered.
+        if (!w.TryFindPolygon(from, NavQuery.StartSnap, out var start, out _) || Array.BinarySearch(hit.Ground, start.Key) < 0)
+            return null;
+
+        var near = new NavQuery(w, Doors).FindPath(from, hit.Nearest, agent, null, out _);
+        if (!near.Found) return null;
+
+        return Provisional(w, FromWalker(from, near), to, hit.Door);
+    }
+
+    /// <summary>
+    /// Remembers <paramref name="goal"/> as unreachable from <paramref name="ground"/> (<see cref="_unreachable"/>); at either limit everything
+    /// remembered is dropped first.
+    /// </summary>
+    void Remember((NavRef, float, bool) goal, NavWorld w, int doors, Vector3 nearest, Vector3? door, long[] ground)
+    {
+        if (_unreachable.Count >= UnreachableLimit || Interlocked.Add(ref _groundKept, ground.Length) > GroundLimit)
+        {
+            _unreachable.Clear();
+            Interlocked.Exchange(ref _groundKept, ground.Length);
+        }
+
+        _unreachable[goal] = (w, doors, nearest, door, ground, System.Diagnostics.Stopwatch.GetTimestamp());
     }
 
     /// <summary>
@@ -449,15 +488,24 @@ public sealed partial class NavmeshWalkability : IWalkability
     /// How many unreachable goals are remembered at most; reaching it clears them all.
     /// </summary>
     const int UnreachableLimit = 4096;
+    /// <summary>
+    /// How many polygon keys the remembered goals' grounds hold together at most (8 bytes each); reaching it clears them all.
+    /// </summary>
+    const long GroundLimit = 2_000_000;
 
     /// <summary>
     /// Goals found unreachable over the loaded zones, by goal polygon and the agent's radius and door rule: the navmesh they were found on (any other
     /// mesh, after a zone went live or unloaded, asks again), the doors' version (NavDoors.Version), the nearest reachable point, the closed door
-    /// the tail goes through (<see cref="NavQuery.ClosedDoorOnTheWay"/>) and when. Each was 300-600 ms of searching, asked again and again by a
-    /// town's residents walking to a goal they cannot reach (Observed, zone 14.23: a cabinet in a building, docs/game/pathfinding.md).
+    /// the tail goes through (<see cref="NavQuery.ClosedDoorOnTheWay"/>), the ground the failed search covered
+    /// (<see cref="NavQuery.LastSearchReached"/>) and when. Each was 300-600 ms of searching, asked again and again by a town's residents walking to
+    /// a goal they cannot reach (Observed, zone 14.23: a cabinet in a building, docs/game/pathfinding.md).
     /// </summary>
     readonly System.Collections.Concurrent.ConcurrentDictionary<(NavRef Goal, float Radius, bool DoorsClosed), (NavWorld World, int Doors,
-            Vector3 Nearest, Vector3? Door, long At)> _unreachable = new();
+            Vector3 Nearest, Vector3? Door, long[] Ground, long At)> _unreachable = new();
+    /// <summary>
+    /// The polygon keys added to <see cref="_unreachable"/>'s grounds since it was last cleared (<see cref="GroundLimit"/>).
+    /// </summary>
+    long _groundKept;
 
     /// <summary>
     /// The key of the goal polygon of <paramref name="to"/> for <paramref name="agent"/>; null when no polygon is within

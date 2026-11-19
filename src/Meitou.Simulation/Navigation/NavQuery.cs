@@ -256,6 +256,22 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
     }
 
     /// <summary>
+    /// The keys (<see cref="NavRef.Key"/>) of the polygons the last search on this thread closed, ascending: the ground it covered, which is all
+    /// its start reaches when it failed without running to <see cref="MaxIterations"/>. Empty before any search.
+    /// </summary>
+    public static long[] LastSearchReached()
+    {
+        if (s_searchScratch is not { } s) return [];
+
+        var keys = new List<long>(s.Nodes.Count);
+        foreach (var (key, node) in s.Nodes)
+            if (node.Closed) keys.Add(key);
+
+        keys.Sort();
+        return [.. keys];
+    }
+
+    /// <summary>
     /// Whether the last search on this thread was turned back by a door closed at run time somewhere.
     /// </summary>
     public static bool LastSearchMetClosedDoor => s_searchScratch?.MetClosedDoor == true;
