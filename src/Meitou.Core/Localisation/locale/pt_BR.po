@@ -1680,9 +1680,6 @@ msgstr "Usar a lista de mods e a ordem de carregamento da predefinição escolhi
 msgid "Delete the chosen preset"
 msgstr "Excluir a predefinição escolhida"
 
-msgid "Select a mod to read its details."
-msgstr "Selecione um mod para ver seus detalhes."
-
 msgid "Needs"
 msgstr "Requer"
 
@@ -1697,3 +1694,9 @@ msgstr "Não ativado: o jogo não o carrega"
 
 msgid "Image"
 msgstr "Imagem"
+
+msgid "{1} mods · {2} enabled"
+msgstr "{1} mods · {2} ativados"
+
+msgid "{1} of {2} mods shown · {3} enabled"
+msgstr "{1} de {2} mods exibidos · {3} ativados"

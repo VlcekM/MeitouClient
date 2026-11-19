@@ -148,6 +148,8 @@ public sealed partial class MainWindow : Window
         _updater = new LauncherUpdater(_releases, config.IncludePrereleases);
         InitializeComponent();
         _modDrag = new ModListDrag(ModListBox, _mods);
+        _ = new SmoothWheelScroll(ModListBox);
+        RestoreWindowSize(config);
         _grips = new WindowResizeGrips(this);
         LauncherText.Use(StartLanguage(found), found);
         PopulateLanguageOptions(found);
@@ -160,6 +162,7 @@ public sealed partial class MainWindow : Window
         ModDetailsToggle.IsChecked = config.ModDetailsShown;
         ShowModDetails();
         AnimateModDetails();
+        ShowModsSummary();
         ConfigureOptions(config);
         ShowBuiltTexts();
         InstallPathBox.Text = LauncherConfig.InstallDirectory;
@@ -227,6 +230,7 @@ public sealed partial class MainWindow : Window
     {
         Closing += (_, _) =>
         {
+            SaveWindowSize();
             _workshopSync.Stop();
             if (_graphicsSave?.IsEnabled == true) SaveGame();
         };
@@ -330,6 +334,7 @@ public sealed partial class MainWindow : Window
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
+        if (change.Property == ClientSizeProperty && WindowState == WindowState.Normal) _normalSize = ClientSize;
         if (change.Property != WindowStateProperty || Plate is null) return;
         bool max = WindowState == WindowState.Maximized;
         Plate.Margin = new Thickness(max ? 0 : 8);
@@ -338,6 +343,40 @@ public sealed partial class MainWindow : Window
         SetupHost.CornerRadius = new CornerRadius(0, 0, max ? 0 : 10, max ? 0 : 10);
         Grips.IsVisible = !max;
         MaximizeIcon.Data = Avalonia.Media.Geometry.Parse(max ? "M2,0 H10 V8 M0,2 H8 V10 H0 Z" : "M0,0 H10 V10 H0 Z");
+    }
+
+    /// <summary>
+    /// The window's size the last time it was neither maximised nor full screen, saved on close; null until known.
+    /// </summary>
+    Size? _normalSize;
+
+    /// <summary>
+    /// The size and state <c>launcher.json</c> kept from the last close: the size within the primary screen's working area, then
+    /// maximised or full screen again.
+    /// </summary>
+    void RestoreWindowSize(LauncherConfig config)
+    {
+        if (config.WindowWidth is { } width && config.WindowHeight is { } height)
+        {
+            var screen = Screens.Primary;
+            var area = screen is null ? new Size(width, height) : screen.WorkingArea.Size.ToSize(screen.Scaling);
+            Width = Math.Clamp(width, MinWidth, Math.Max(MinWidth, area.Width));
+            Height = Math.Clamp(height, MinHeight, Math.Max(MinHeight, area.Height));
+        }
+
+        if (config.WindowState is WindowState.Maximized or WindowState.FullScreen) WindowState = config.WindowState;
+    }
+
+    /// <summary>
+    /// Keeps the window's normal size and whether it is maximised or full screen in <c>launcher.json</c>.
+    /// </summary>
+    void SaveWindowSize()
+    {
+        var size = _normalSize ?? ClientSize;
+        _config.WindowWidth = size.Width;
+        _config.WindowHeight = size.Height;
+        _config.WindowState = WindowState is WindowState.Maximized or WindowState.FullScreen ? WindowState : WindowState.Normal;
+        _config.Save();
     }
 
     #endregion
@@ -383,6 +422,7 @@ public sealed partial class MainWindow : Window
         foreach (var row in _mods) row.LanguageChanged();
         if (_modsReady) ShowDependencyProblems();
         ShowModDetails();
+        ShowModsSummary();
         ShowReleases();
         PopulateLanguageOptions(_install);
     }
@@ -967,6 +1007,7 @@ public sealed partial class MainWindow : Window
     {
         string search = ModSearch.Text?.Trim() ?? "";
         foreach (var row in _mods) row.IsShown = row.Matches(search);
+        ShowModsSummary();
 
         // Until a load ends the empty line is the load's own (its error, or nothing).
         if (!_modsReady) return;
@@ -1293,6 +1334,7 @@ public sealed partial class MainWindow : Window
         ShowDependencyProblems();
         QueueBlankingCheck();
         ShowModDetails();
+        ShowModsSummary();
         if (_checksSuspended || !_modsReady || _toggleSavePending) return;
 
         _toggleSavePending = true;
@@ -1352,14 +1394,45 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Ticks every mod the search shows.
+    /// The Select all button's icon: a ticked box.
     /// </summary>
-    void SelectAll_Click(object? sender, RoutedEventArgs e) { foreach (var m in _mods.Where(m => m.IsShown)) m.Enabled = true; }
+    static readonly Avalonia.Media.Geometry SelectAllIcon = Avalonia.Media.Geometry.Parse("F0 M0,0 H14 V14 H0 Z M3.5,6 L2.5,7 L6,10.5 L11.5,5 L10.5,4 L6,8.5 Z");
 
     /// <summary>
-    /// Unticks every mod the search shows.
+    /// The Select none button's icon: an empty box.
     /// </summary>
-    void SelectNone_Click(object? sender, RoutedEventArgs e) { foreach (var m in _mods.Where(m => m.IsShown)) m.Enabled = false; }
+    static readonly Avalonia.Media.Geometry SelectNoneIcon = Avalonia.Media.Geometry.Parse("F0 M0,0 H14 V14 H0 Z M2,2 V12 H12 V2 Z");
+
+    /// <summary>
+    /// Ticks every mod the search shows, or unticks them all when every one is ticked.
+    /// </summary>
+    void SelectToggle_Click(object? sender, RoutedEventArgs e)
+    {
+        bool tick = !AllShownEnabled();
+        foreach (var m in _mods.Where(m => m.IsShown)) m.Enabled = tick;
+    }
+
+    /// <summary>
+    /// Whether the search shows mods and every one of them is ticked.
+    /// </summary>
+    bool AllShownEnabled() => _mods.Any(m => m.IsShown) && _mods.Where(m => m.IsShown).All(m => m.Enabled);
+
+    /// <summary>
+    /// The header's count (the mods, those the search shows, those enabled) and the Select all / Select none button for the shown mods.
+    /// </summary>
+    void ShowModsSummary()
+    {
+        int shown = _mods.Count(m => m.IsShown);
+        int enabled = _mods.Count(m => m.Enabled);
+        ModCount.Text = shown == _mods.Count
+            ? Tr("{1} mods · {2} enabled", _mods.Count, enabled)
+            : Tr("{1} of {2} mods shown · {3} enabled", shown, _mods.Count, enabled);
+
+        bool untick = AllShownEnabled();
+        SetText(SelectToggleText, untick ? "Select none" : "Select all");
+        SelectToggleIcon.Data = untick ? SelectNoneIcon : SelectAllIcon;
+        ToolTip.SetTip(SelectToggle, Tr(untick ? "Untick every mod the search shows" : "Tick every mod the search shows"));
+    }
 
     /// <summary>
     /// Alt+Up / Alt+Down move the selected mods one place, as dragging does.
@@ -1444,19 +1517,16 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// The side pane, while shown: the selected mod's details (<see cref="ModDetailsView"/>), else what to do for them.
+    /// The side pane: open with the selected mod's details (<see cref="ModDetailsView"/>) while Details is on and a mod is selected, else shut.
     /// </summary>
     void ShowModDetails()
     {
-        ModDetailsSlide.Width = _config.ModDetailsShown ? ModDetailsWidth : 0;
-        ModDetailsSlide.Opacity = _config.ModDetailsShown ? 1 : 0;
-        if (!_config.ModDetailsShown) return;
+        var row = _config.ModDetailsShown ? ModListBox.SelectedItem as ModRow : null;
+        ModDetailsSlide.Width = row is null ? 0 : ModDetailsWidth;
+        ModDetailsSlide.Opacity = row is null ? 0 : 1;
 
-        bool selected = ModListBox.SelectedItem is ModRow;
-        ModDetailsEmpty.IsVisible = !selected;
-        ModDetails.Content = ModListBox.SelectedItem is ModRow row
-            ? ModDetailsView.Render(row, dependency => IsAvailableBefore(dependency, row), OpenLink)
-            : null;
+        // Shutting, the pane keeps the last mod's details while it slides away.
+        if (row is not null) ModDetails.Content = ModDetailsView.Render(row, dependency => IsAvailableBefore(dependency, row), OpenLink);
     }
 
     /// <summary>

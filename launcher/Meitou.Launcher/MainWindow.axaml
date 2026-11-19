@@ -191,6 +191,7 @@
           <Border DockPanel.Dock="Top" Classes="header" Margin="0,0,0,10">
             <DockPanel>
               <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+                <TextBlock x:Name="ModCount" Classes="aside" Margin="0,0,6,0" />
                 <Button x:Name="SyncWorkshopButton" Classes="aside" IsVisible="False" Click="SyncWorkshop_Click"
                         ToolTip.Tip="Ask the running Steam client to download or update your subscribed Kenshi workshop mods; subscribe in Steam">
                   <TextBlock x:Name="SyncWorkshopText" Text="Sync workshop" />
@@ -246,16 +247,11 @@
               </Button>
             </StackPanel>
             <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="6">
-              <Button Click="SelectAll_Click" ToolTip.Tip="Tick every mod the search shows">
+              <!-- Select all, or Select none once every shown mod is ticked (ShowModsSummary sets its text, tip and icon) -->
+              <Button x:Name="SelectToggle" Click="SelectToggle_Click">
                 <StackPanel Orientation="Horizontal" Spacing="6">
-                  <Path Classes="glyph" Data="F0 M0,0 H14 V14 H0 Z M3.5,6 L2.5,7 L6,10.5 L11.5,5 L10.5,4 L6,8.5 Z" />
-                  <TextBlock Text="Select all" />
-                </StackPanel>
-              </Button>
-              <Button Click="SelectNone_Click" ToolTip.Tip="Untick every mod the search shows">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <Path Classes="glyph" Data="F0 M0,0 H14 V14 H0 Z M2,2 V12 H12 V2 Z" />
-                  <TextBlock Text="Select none" />
+                  <Path x:Name="SelectToggleIcon" Classes="glyph" Data="F0 M0,0 H14 V14 H0 Z M3.5,6 L2.5,7 L6,10.5 L11.5,5 L10.5,4 L6,8.5 Z" />
+                  <TextBlock x:Name="SelectToggleText" />
                 </StackPanel>
               </Button>
               <Button Click="ArrangeMods_Click"
@@ -271,12 +267,12 @@
           </DockPanel>
           <!-- The list, and beside it the side pane with the selected mod's details while Details is on -->
           <Grid ColumnDefinitions="*,Auto">
-          <!-- Slides open and shut by its width (ShowModDetails); the content keeps its own width, so it does not rewrap meanwhile -->
+          <!-- Slides open (a mod selected, Details on) and shut by its width (ShowModDetails); the content keeps its own width, so it does not
+               rewrap meanwhile -->
           <Border x:Name="ModDetailsSlide" Grid.Column="1" ClipToBounds="True">
             <DockPanel Width="381" HorizontalAlignment="Right">
               <Border DockPanel.Dock="Left" Classes="vrule" Margin="10,0" />
               <Panel>
-                <TextBlock x:Name="ModDetailsEmpty" Classes="empty" Text="Select a mod to read its details." />
                 <ScrollViewer Classes="page">
                   <ContentControl x:Name="ModDetails" Margin="0,0,14,0" />
                 </ScrollViewer>

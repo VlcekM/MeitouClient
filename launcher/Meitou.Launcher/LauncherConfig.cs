@@ -134,6 +134,21 @@ public sealed class LauncherConfig
     public bool AutoUpdateLauncher { get; set; } = true;
 
     /// <summary>
+    /// The window's width at the last close, when it was not maximised (its size before that); null before the first close.
+    /// </summary>
+    public double? WindowWidth { get; set; }
+
+    /// <summary>
+    /// The window's height at the last close, as <see cref="WindowWidth"/>.
+    /// </summary>
+    public double? WindowHeight { get; set; }
+
+    /// <summary>
+    /// Whether the window was maximised or full screen at the last close (Normal otherwise).
+    /// </summary>
+    public Avalonia.Controls.WindowState WindowState { get; set; }
+
+    /// <summary>
     /// Whether the Mods page shows the selected mod's details in its side pane.
     /// </summary>
     public bool ModDetailsShown { get; set; } = true;
