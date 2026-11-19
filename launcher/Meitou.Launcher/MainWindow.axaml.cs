@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Controls.Primitives;
@@ -157,6 +159,7 @@ public sealed partial class MainWindow : Window
         WireModList();
         ModDetailsToggle.IsChecked = config.ModDetailsShown;
         ShowModDetails();
+        AnimateModDetails();
         ConfigureOptions(config);
         ShowBuiltTexts();
         InstallPathBox.Text = LauncherConfig.InstallDirectory;
@@ -1417,11 +1420,36 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// The side pane's width when open: its rule with the margins around it, then the details.
+    /// </summary>
+    const double ModDetailsWidth = 381;
+
+    /// <summary>
+    /// How long the side pane takes to slide open or shut.
+    /// </summary>
+    static readonly TimeSpan ModDetailsSlideTime = TimeSpan.FromMilliseconds(220);
+
+    /// <summary>
+    /// Makes the side pane slide (its width) and fade from now on; set after the first <see cref="ShowModDetails"/>, so the window opens with
+    /// the pane already where it was left.
+    /// </summary>
+    void AnimateModDetails()
+    {
+        var easing = new CubicEaseOut();
+        ModDetailsSlide.Transitions =
+        [
+            new DoubleTransition { Property = WidthProperty, Duration = ModDetailsSlideTime, Easing = easing },
+            new DoubleTransition { Property = OpacityProperty, Duration = ModDetailsSlideTime, Easing = easing },
+        ];
+    }
+
+    /// <summary>
     /// The side pane, while shown: the selected mod's details (<see cref="ModDetailsView"/>), else what to do for them.
     /// </summary>
     void ShowModDetails()
     {
-        ModDetailsPane.IsVisible = ModDetailsRule.IsVisible = _config.ModDetailsShown;
+        ModDetailsSlide.Width = _config.ModDetailsShown ? ModDetailsWidth : 0;
+        ModDetailsSlide.Opacity = _config.ModDetailsShown ? 1 : 0;
         if (!_config.ModDetailsShown) return;
 
         bool selected = ModListBox.SelectedItem is ModRow;
