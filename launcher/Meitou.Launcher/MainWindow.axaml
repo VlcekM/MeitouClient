@@ -197,33 +197,87 @@
                 </Button>
                 <Button Classes="aside" Content="Refresh" Click="RefreshMods_Click"
                         ToolTip.Tip="List the mods folder and the Steam workshop items again" />
+                <!-- Shows or hides the side pane with the selected mod's details: a box with its right part filled -->
+                <ToggleButton x:Name="ModDetailsToggle" Classes="aside" Click="ModDetailsToggle_Click"
+                              ToolTip.Tip="Show or hide the selected mod's details beside the list">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Path Classes="glyph" Data="F0 M0,0 H14 V12 H0 Z M1.5,1.5 V10.5 H8 V1.5 Z" />
+                    <TextBlock Text="Details" />
+                  </StackPanel>
+                </ToggleButton>
               </StackPanel>
               <TextBlock Text="Mods" />
             </DockPanel>
           </Border>
+          <!-- Presets: apply or delete a saved one on the left, save the list as a new one on the right -->
           <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+              <TextBox x:Name="PresetName" Width="220" PlaceholderText="New preset name" />
+              <Button Click="SavePreset_Click" ToolTip.Tip="Save the mod list and load order as a preset of this name">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Path Classes="glyph" Data="M6,0 H8 V6 H14 V8 H8 V14 H6 V8 H0 V6 H6 Z" />
+                  <TextBlock Text="Save as preset" />
+                </StackPanel>
+              </Button>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="6">
               <ComboBox x:Name="PresetBox" MinWidth="170" PlaceholderText="Presets" />
-              <Button Content="Apply" Click="ApplyPreset_Click" />
-              <Button Content="Delete" Click="DeletePreset_Click" />
-              <Button Content="From save" Click="ModsFromSave_Click" ToolTip.Tip="Take the mod list and load order a save was made with" />
+              <Button Click="ApplyPreset_Click" ToolTip.Tip="Take the chosen preset's mod list and load order">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Path Classes="glyph" Data="M0,7 L1.5,5.5 L5,9 L12.5,1.5 L14,3 L5,12 Z" />
+                  <TextBlock Text="Apply" />
+                </StackPanel>
+              </Button>
+              <Button Click="DeletePreset_Click" ToolTip.Tip="Delete the chosen preset">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Path Classes="glyph" Data="M4.5,0 H9.5 V1.5 H14 V3.5 H0 V1.5 H4.5 Z M1.5,4.5 H12.5 L11.5,14 H2.5 Z" />
+                  <TextBlock Text="Delete" />
+                </StackPanel>
+              </Button>
+            </StackPanel>
+          </DockPanel>
+          <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+              <Button Click="ModsFromSave_Click" ToolTip.Tip="Take the mod list and load order a save was made with">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Path Classes="glyph" Data="F0 M0,0 H11 L14,3 V14 H0 Z M3,1.5 V5 H10 V1.5 Z M3,8 V12.5 H11 V8 Z" />
+                  <TextBlock Text="From save" />
+                </StackPanel>
+              </Button>
             </StackPanel>
             <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="6">
-              <Button Content="Select all" Click="SelectAll_Click" ToolTip.Tip="Tick every mod the search shows" />
-              <Button Content="Select none" Click="SelectNone_Click" ToolTip.Tip="Untick every mod the search shows" />
-              <Button Content="Arrange" Click="ArrangeMods_Click"
-                      ToolTip.Tip="Propose an order where each enabled mod loads after the mods it needs; nothing moves until you accept" />
+              <Button Click="SelectAll_Click" ToolTip.Tip="Tick every mod the search shows">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Path Classes="glyph" Data="F0 M0,0 H14 V14 H0 Z M3.5,6 L2.5,7 L6,10.5 L11.5,5 L10.5,4 L6,8.5 Z" />
+                  <TextBlock Text="Select all" />
+                </StackPanel>
+              </Button>
+              <Button Click="SelectNone_Click" ToolTip.Tip="Untick every mod the search shows">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Path Classes="glyph" Data="F0 M0,0 H14 V14 H0 Z M2,2 V12 H12 V2 Z" />
+                  <TextBlock Text="Select none" />
+                </StackPanel>
+              </Button>
+              <Button Click="ArrangeMods_Click"
+                      ToolTip.Tip="Propose an order where each enabled mod loads after the mods it needs; nothing moves until you accept">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Path Classes="glyph" Data="M0,1 H14 V3 H0 Z M0,6 H10 V8 H0 Z M0,11 H6 V13 H0 Z" />
+                  <TextBlock Text="Arrange" />
+                </StackPanel>
+              </Button>
             </StackPanel>
             <TextBox x:Name="ModSearch" Margin="6,0" PlaceholderText="Search mods" TextChanged="ModSearch_TextChanged"
                      ToolTip.Tip="Show only the mods whose name or author holds this text" />
           </DockPanel>
-          <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6">
-              <TextBox x:Name="PresetName" Width="240" PlaceholderText="New preset name" />
-              <Button Content="Save as preset" Click="SavePreset_Click" />
-            </StackPanel>
-          </DockPanel>
-          <TextBlock x:Name="ModDetails" DockPanel.Dock="Bottom" Classes="desc" Margin="0,8,0,0" MaxLines="2" TextTrimming="CharacterEllipsis" />
+          <!-- The list, and beside it the side pane with the selected mod's details while Details is on -->
+          <Grid ColumnDefinitions="*,Auto,Auto">
+          <Border x:Name="ModDetailsRule" Grid.Column="1" Classes="vrule" Margin="10,0" />
+          <Panel x:Name="ModDetailsPane" Grid.Column="2" Width="360">
+            <TextBlock x:Name="ModDetailsEmpty" Classes="empty" Text="Select a mod to read its details." />
+            <ScrollViewer Classes="page">
+              <ContentControl x:Name="ModDetails" Margin="0,0,14,0" />
+            </ScrollViewer>
+          </Panel>
           <Panel>
           <TextBlock x:Name="ModsEmpty" Classes="empty" IsVisible="False" />
           <ListBox x:Name="ModListBox" SelectionMode="Multiple" SelectionChanged="ModListBox_SelectionChanged" KeyDown="ModListBox_KeyDown">
@@ -273,6 +327,7 @@
             </ListBox.ItemTemplate>
           </ListBox>
           </Panel>
+          </Grid>
         </DockPanel>
 
         <!-- Versions -->

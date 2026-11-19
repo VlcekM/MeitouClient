@@ -134,6 +134,11 @@ public sealed class LauncherConfig
     public bool AutoUpdateLauncher { get; set; } = true;
 
     /// <summary>
+    /// Whether the Mods page shows the selected mod's details in its side pane.
+    /// </summary>
+    public bool ModDetailsShown { get; set; } = true;
+
+    /// <summary>
     /// The saved mod presets.
     /// </summary>
     public List<ModPreset> Presets { get; set; } = [];

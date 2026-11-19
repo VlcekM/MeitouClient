@@ -155,6 +155,8 @@ public sealed partial class MainWindow : Window
         PlayVersionButton.Flyout = _versionMenu;
         TrackPointer();
         WireModList();
+        ModDetailsToggle.IsChecked = config.ModDetailsShown;
+        ShowModDetails();
         ConfigureOptions(config);
         ShowBuiltTexts();
         InstallPathBox.Text = LauncherConfig.InstallDirectory;
@@ -377,6 +379,7 @@ public sealed partial class MainWindow : Window
         ShowBuiltTexts();
         foreach (var row in _mods) row.LanguageChanged();
         if (_modsReady) ShowDependencyProblems();
+        ShowModDetails();
         ShowReleases();
         PopulateLanguageOptions(_install);
     }
@@ -1286,6 +1289,7 @@ public sealed partial class MainWindow : Window
     {
         ShowDependencyProblems();
         QueueBlankingCheck();
+        ShowModDetails();
         if (_checksSuspended || !_modsReady || _toggleSavePending) return;
 
         _toggleSavePending = true;
@@ -1398,26 +1402,33 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// A mod selected: its details (description, the dependencies with those not enabled above it, folder).
+    /// A mod selected: its details in the side pane.
     /// </summary>
-    void ModListBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+    void ModListBox_SelectionChanged(object? sender, SelectionChangedEventArgs e) => ShowModDetails();
+
+    /// <summary>
+    /// The Details button shows or hides the side pane; the choice is kept in <c>launcher.json</c>.
+    /// </summary>
+    void ModDetailsToggle_Click(object? sender, RoutedEventArgs e)
     {
-        if (ModListBox.SelectedItem is not ModRow row)
-        {
-            ModDetails.Text = "";
-            return;
-        }
-        var header = row.Mod.Header;
-        var parts = new List<string>();
-        if (header is { Description.Length: > 0 }) parts.Add(header.Description.ReplaceLineEndings(" "));
-        if (header is { Dependencies.Count: > 0 })
-        {
-            var missing = header.Dependencies.Where(d => !IsAvailableBefore(d, row)).ToList();
-            string notEnabled = missing.Count > 0 ? Tr(" (not enabled above it: {1})", string.Join(", ", missing)) : "";
-            parts.Add(Tr("Needs {1}", string.Join(", ", header.Dependencies)) + notEnabled);
-        }
-        parts.Add(row.Mod.Folder);
-        ModDetails.Text = string.Join(" · ", parts);
+        _config.ModDetailsShown = ModDetailsToggle.IsChecked == true;
+        _config.Save();
+        ShowModDetails();
+    }
+
+    /// <summary>
+    /// The side pane, while shown: the selected mod's details (<see cref="ModDetailsView"/>), else what to do for them.
+    /// </summary>
+    void ShowModDetails()
+    {
+        ModDetailsPane.IsVisible = ModDetailsRule.IsVisible = _config.ModDetailsShown;
+        if (!_config.ModDetailsShown) return;
+
+        bool selected = ModListBox.SelectedItem is ModRow;
+        ModDetailsEmpty.IsVisible = !selected;
+        ModDetails.Content = ModListBox.SelectedItem is ModRow row
+            ? ModDetailsView.Render(row, dependency => IsAvailableBefore(dependency, row), OpenLink)
+            : null;
     }
 
     /// <summary>

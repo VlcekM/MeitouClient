@@ -214,7 +214,7 @@
       <Setter Property="Foreground" Value="{StaticResource Quiet}" />
     </Style>
     <!-- A small plate button at the bar's right end; overhangs the padding so the bar keeps its height -->
-    <Style Selector="Border.header Button.aside">
+    <Style Selector="Border.header Button.aside, Border.header ToggleButton.aside">
       <Setter Property="Padding" Value="12,4" />
       <Setter Property="MinHeight" Value="0" />
       <Setter Property="Margin" Value="0,-4" />
@@ -591,6 +591,18 @@
     </Style>
     <Style Selector="Button.link:pointerover TextBlock">
       <Setter Property="TextDecorations" Value="Underline" />
+    </Style>
+
+    <!-- An icon beside a button's label, in the label's colour: lighter while hovered or on, quiet while disabled -->
+    <Style Selector="Path.glyph">
+      <Setter Property="Fill" Value="{StaticResource Main}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button:pointerover Path.glyph, ToggleButton:pointerover Path.glyph, ToggleButton:checked Path.glyph">
+      <Setter Property="Fill" Value="{StaticResource PaperLight}" />
+    </Style>
+    <Style Selector="Button:disabled Path.glyph, ToggleButton:disabled Path.glyph">
+      <Setter Property="Fill" Value="{StaticResource Quiet}" />
     </Style>
 
     <!-- A small icon that shows it is a button only when hovered (the title bar's Kenshi folder) -->

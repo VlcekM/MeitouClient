@@ -21,7 +21,7 @@ static class MarkdownView
     /// <summary>
     /// The code font, with fallbacks for each platform.
     /// </summary>
-    static readonly FontFamily Mono = new("Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace");
+    internal static readonly FontFamily Mono = new("Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace");
 
     /// <summary>
     /// The URL of each link span.
@@ -196,6 +196,15 @@ static class MarkdownView
         var text = new TextBlock { TextWrapping = TextWrapping.Wrap, FontWeight = FontWeight.Medium, FontSize = 14, LineHeight = 21, Inlines = [] };
         if (container is not null)
             foreach (var inline in container) Add(text.Inlines!, inline, post);
+        HandleLinks(text, open);
+        return text;
+    }
+
+    /// <summary>
+    /// Makes the <see cref="Link"/> spans of <paramref name="text"/> clickable: a hand and a tooltip over one, <paramref name="open"/> on a click.
+    /// </summary>
+    internal static void HandleLinks(TextBlock text, Action<string> open)
+    {
         // Links are runs in the text (so they sit on its baseline); the pointer finds them by hit-testing the layout.
         text.PointerMoved += (_, e) =>
         {
@@ -209,7 +218,6 @@ static class MarkdownView
             open(url);
             e.Handled = true;
         };
-        return text;
     }
 
     /// <summary>
@@ -283,7 +291,7 @@ static class MarkdownView
     /// <summary>
     /// A link: underlined in brass, its URL kept for the pointer.
     /// </summary>
-    static Span Link(string label, string url)
+    internal static Span Link(string label, string url)
     {
         var link = new Underline { Foreground = Brush("BrassLight"), Inlines = { new Run(label) } };
         LinkUrls.Add(link, url);
