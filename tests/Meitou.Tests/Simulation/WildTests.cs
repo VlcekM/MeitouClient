@@ -309,4 +309,71 @@ public class WildTests(ITestOutputHelper output)
         Assert.InRange(members, 1, (int)(0.7f * den.Nest!.NestResidentPopulation) + 4);
         world.RunTicks(300);
     }
+
+    [Fact]
+    [Slow]
+    public void A_wolf_den_whose_wolves_are_killed_loses_them_from_its_pool_and_is_wiped_out()
+    {
+        // Each death takes one from the pool of the nest its platoon is in (docs/game/factions-squads-towns.md "Death cost", #1033): killed packs
+        // are not made again for free.
+        var data = RealData();
+        var sites = PopulationSystem.BuildWildSites(data, new PopulationSettings(), data.Biomes!, 1);
+        var den = sites.First(s => s.Kind == WildKind.Nest && s.Nest!.Name == "Wolf Den");
+        var at = new Vector3(den.Spots[0].X, 300, den.Spots[0].Y);
+        var (world, systems) = RealWorld(data, at, StandardParts.Population | StandardParts.Movement | StandardParts.Body);
+        using var _ = world;
+        world.RunTicks(16);
+        var pop = systems.Population!;
+        var pool = pop.NestPoolsOf(den.Index)!.Roaming;
+        float start = pool.Current;
+
+        int killed = 0;
+        for (int round = 0; round < 8 && Living(world, pop.WildSquadsOf(den.Index)) > 0; round++)
+        {
+            killed += KillSquads(world, pop.WildSquadsOf(den.Index));
+            world.RunTicks(64);
+            output.WriteLine($"round {round}: start {start}, killed {killed}, pool {pool.Current} of {pool.Desired}, "
+                + $"living {Living(world, pop.WildSquadsOf(den.Index))}, ded {pop.NestPoolsOf(den.Index)!.Ded}");
+        }
+
+        Assert.True(killed > 0);
+        Assert.Equal(0, Living(world, pop.WildSquadsOf(den.Index)));
+        Assert.InRange(pool.Current, Math.Max(0, start - killed), Math.Max(0, start - killed) + 0.05f);
+        Assert.True(pop.NestPoolsOf(den.Index)!.Ded);
+
+        // Wiped out, it makes no wolves again when the player comes back to it, as the reporter's gutter camp did.
+        world.Commands.Enqueue(new FocusCommand(new Vector3(at.X + 90000, 300, at.Z + 90000)) { Tick = world.Tick });
+        world.RunTicks(2100);   // the 60 s grace of a wild site, then its block's 4 s
+        Assert.Equal(SiteStatus.Unloaded, pop.WildStatusOf(den.Index));
+        world.Commands.Enqueue(new FocusCommand(at) { Tick = world.Tick });
+        world.RunTicks(64);
+        Assert.Equal(SiteStatus.Loaded, pop.WildStatusOf(den.Index));
+        Assert.Equal(0, Living(world, pop.WildSquadsOf(den.Index)));
+    }
+
+    /// <summary>
+    /// Kills every living member of <paramref name="squads"/> outright; the count killed.
+    /// </summary>
+    static int KillSquads(SimWorld world, IReadOnlyList<int> squads)
+    {
+        int killed = 0;
+        foreach (int id in squads.ToList())
+        {
+            foreach (var m in world.Squads.Find(id)!.Members)
+            {
+                if (world.Characters.Cold(m.Slot)!.Medical is not { Dead: false } medical) continue;
+
+                medical.Kill();
+                killed++;
+            }
+        }
+
+        return killed;
+    }
+
+    /// <summary>
+    /// The living members of <paramref name="squads"/>.
+    /// </summary>
+    static int Living(SimWorld world, IReadOnlyList<int> squads) =>
+        squads.Sum(id => world.Squads.Find(id)!.Members.Count(m => world.Characters.Cold(m.Slot)!.Medical is { Dead: false }));
 }
