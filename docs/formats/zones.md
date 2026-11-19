@@ -99,7 +99,7 @@ Building state writer/reader (**Verified** by code, no player-built building in 
 | `is public day` | bool | |
 | `pause` | bool | construction paused |
 | `<i>construction mats` | float | delivered amount of material entry i, i from 0 in entry order |
-| `owner faction ID` | string | owner FACTION id |
+| `owner faction ID` | string | owner FACTION id: in level data whatever the designer left, in a save the live owner ([building owner](../game/factions-squads-towns.md#town-residents)) |
 | `handle` | handle | own handle |
 | `interior layout name`, `exterior layout name` | string | only with an interior |
 | `player furniture Y offset` | float | height above the parent building's origin for furniture, else 0 |

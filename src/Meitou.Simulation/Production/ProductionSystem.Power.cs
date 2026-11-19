@@ -611,7 +611,8 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The saved owner when it resolves, otherwise the level owner (player override or town faction), using the same rules as fixture registration.
+    /// Whether the player owns it: by the saved owner when it resolves, otherwise by the level owner (player override, the residents' faction or the
+    /// town's).
     /// </summary>
     static bool PlayerGeneratorOwner(World world, TownSite town, TownBuilding b, Meitou.Data.Fcs.FcsRecord? saved)
     {

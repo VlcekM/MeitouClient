@@ -508,8 +508,8 @@ sealed class BuildingSync(GameHost host)
 
     /// <summary>
     /// Each town building of <paramref name="d"/> by zone and instance: its town, its owner faction (<see cref="PopulationData.LevelOwnerOf"/>: the
-    /// player's when the level data names it, else the town's, as the original re-owns a town's buildings) and its site and index in the site's
-    /// buildings.
+    /// player's when the level data names it, else its residents', else the town's, as the original re-owns a town's buildings) and its site and
+    /// index in the site's buildings.
     /// </summary>
     static Dictionary<(ZoneCoordinate, string), (string Town, int Owner, int Site, int Index)> TownBuildings(PopulationData d)
     {

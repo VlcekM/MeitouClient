@@ -554,12 +554,7 @@ public sealed partial class FixtureRegistry
         if (_byBuilding.ContainsKey(b.Key)) return;
 
         int levelOwner = data.LevelOwnerOf(b, townFaction);
-        int owner = levelOwner;
-        if (Saved?.GetValueOrDefault(b.Key)?.Strings.GetValueOrDefault("owner faction ID") is { Length: > 0 } savedOwner
-            && data.FactionIndex(savedOwner) is >= 0 and var savedFaction)
-        {
-            owner = savedFaction;
-        }
+        int owner = SavedOwner(data, b) ?? levelOwner;
 
         // saved as the player's: bought, and saved again as such
         RegisterProperty(world, data, site, b, owner, purchased: owner != levelOwner && owner == data.PlayerFaction);

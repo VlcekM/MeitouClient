@@ -52,6 +52,11 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
+    /// The save's key of a building state's owner faction (a FACTION string id).
+    /// </summary>
+    const string OwnerKey = "owner faction ID";
+
+    /// <summary>
     /// The town properties by building key.
     /// </summary>
     readonly Dictionary<string, Property> _properties = new(StringComparer.Ordinal);
@@ -164,6 +169,50 @@ public sealed partial class FixtureRegistry
 
             state.Strings[ResidentRuins.ResidentsTemplateKey] = template;
             state.Strings[ResidentRuins.SquadTemplateKey] = template;
+        }
+    }
+
+    /// <summary>
+    /// The owner a loaded save names for a town building, when it is to be believed: null for no saved owner, a faction that is not loaded, or one
+    /// that is only the level data's string and not the player's. The original saves the live owner, which the housing has set
+    /// (<see cref="PopulationData.LevelOwnerOf"/>; Observed: all 3244 town buildings of the save METARU hold that rule's owner), while Meitou's
+    /// saves before <see cref="WriteOwners"/> kept the level's string, which names the wrong faction for a home of another faction's residents.
+    /// </summary>
+    public int? SavedOwner(PopulationData data, TownBuilding b)
+    {
+        if (Saved?.GetValueOrDefault(b.Key)?.Strings.GetValueOrDefault(OwnerKey) is not { Length: > 0 } id) return null;
+        if (data.FactionIndex(id) is not (>= 0 and var faction)) return null;
+
+        return faction != data.PlayerFaction && id == b.OwnerFactionId ? null : faction;
+    }
+
+    /// <summary>
+    /// The faction that owns a town building now: its property's owner, else its fixtures', else a loaded save's (<see cref="SavedOwner"/>), else
+    /// the housing's (<see cref="PopulationData.LevelOwnerOf"/>).
+    /// </summary>
+    public int OwnerNow(PopulationData data, TownBuilding b, int townFaction) =>
+        PropertyOwner(b.Key)
+        ?? OfBuilding(b.Key).FirstOrDefault()?.Owner
+        ?? SavedOwner(data, b)
+        ?? data.LevelOwnerOf(b, townFaction);
+
+    /// <summary>
+    /// Writes each town building's owner into its saved record as <c>owner faction ID</c>: the original saves the live owner, not the level's
+    /// string (Observed: the save METARU has Sho-Battai's Slave Shop as the Slave Traders', where its level state names the Tech Hunters). The
+    /// player's buildings keep what <see cref="WriteProperty"/> and the level gave them.
+    /// </summary>
+    public void WriteOwners(PopulationData data, IReadOnlyDictionary<string, FcsRecord> states)
+    {
+        foreach (var site in data.Sites)
+        {
+            int townFaction = site.Index < data.SiteFactions.Count ? data.SiteFactions[site.Index] : -1;
+            foreach (var b in site.Buildings)
+            {
+                if (!states.TryGetValue(b.Key, out var state)) continue;
+
+                int owner = OwnerNow(data, b, townFaction);
+                if ((uint)owner < (uint)data.Factions.Count && owner != data.PlayerFaction) state.Strings[OwnerKey] = data.Factions[owner].Id;
+            }
         }
     }
 

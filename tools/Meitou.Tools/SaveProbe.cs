@@ -111,7 +111,8 @@ static class SaveProbe
                 ObeyProbe.Run(probe, a[0], a[1], point, a.Count > 2 ? int.Parse(a[2]) : 15);
                 return true;
             case ("ko", >= 1): Knockout(probe, int.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 15); return true;
-            case ("cages", >= 1): Cages(probe, a[0]); return true;
+            case ("cages", >= 1): Cages(probe, a[0], a.Count > 1 ? a[1] : null); return true;
+            case ("owners", _): OwnerProbe.Run(probe); return true;
             case ("sleeper", >= 1): Sleeper(probe, a[0]); return true;
             case ("force", >= 2):
                 Force(probe, a[0], a[1] == "tools" ? LockForce.Tools : LockForce.Strength, a.Count > 2 ? a[2] : null);
@@ -908,10 +909,11 @@ static class SaveProbe
     }
 
     /// <summary>
-    /// The fixtures within 300 units (on the ground plane) of the first character named like <paramref name="name"/>, with their occupants; a
-    /// container also with its lock, grid and items.
+    /// The fixtures within 300 units (on the ground plane) of the first character named like <paramref name="name"/>, with their owners and
+    /// occupants; a container also with its lock, grid and items. With <paramref name="carrier"/>, also the cage the first character named like
+    /// it would take a captive lifted there to.
     /// </summary>
-    static void Cages(ProbeWorld probe, string name)
+    static void Cages(ProbeWorld probe, string name, string? carrier)
     {
         int who = probe.Named(name)[0];
         var c = probe.Characters.Cold(who)!;
@@ -920,14 +922,39 @@ static class SaveProbe
 
         foreach (var f in probe.World.Fixtures.All.Where(f => Vector2.Distance(new(f.Position.X, f.Position.Z), new(at.X, at.Z)) < 300))
         {
-            Console.WriteLine($"fixture {f.Kind} {f.Id} record={f.RecordId} at {f.Position:F1} occupant={Occupant(probe, f)} "
-                + $"designation={probe.World.Fixtures.RecordOf(f.Building)?.Designation}");
+            Console.WriteLine($"fixture {f.Kind} {f.Id} record={f.RecordId} at {f.Position:F1} owner={FactionName(probe, f.Owner)} "
+                + $"occupant={Occupant(probe, f)} designation={probe.World.Fixtures.RecordOf(f.Building)?.Designation}");
             if (f.Kind == FixtureKind.Container) Container(probe, f);
             if (f.Kind == FixtureKind.Door) Door(probe, f);
         }
     }
 
+        if (carrier is not null) CarrierCage(probe, carrier, at);
+    }
+
     /// <summary>
+    /// The cage the first character named like <paramref name="carrier"/> would take a captive lifted at <paramref name="at"/> to: the cage
+    /// finder over its town's candidates (docs/game/economy.md 11.7), with the cage's owner and how far it is.
+    /// </summary>
+    static void CarrierCage(ProbeWorld probe, string carrier, Vector3 at)
+    {
+        int g = probe.Named(carrier)[0];
+        var gc = probe.Characters.Cold(g)!;
+        var fixtures = probe.World.Fixtures;
+        var candidate = fixtures.CageCandidates(probe.World, probe.Data, gc, at);
+        var cage = fixtures.FindCage(probe.World, gc, at, FixtureRegistry.HomeOf(probe.World, gc), f => !candidate(f));
+        string choice = cage is null
+            ? "none"
+            : $"{cage.Id} at {cage.Position:F1} owner={FactionName(probe, cage.Owner)} distance={Vector3.Distance(cage.Position, at):F0}";
+        Console.WriteLine($"{probe.Who(g)} lifting at {at:F1} cages in: {choice}");
+
+    /// <summary>
+    /// <summary>
+    /// A faction's name; "-" for none.
+    /// </summary>
+    static string FactionName(ProbeWorld probe, int faction) =>
+        faction >= 0 && faction < probe.Data.Factions.Count ? probe.Data.Factions[faction].Name : "-";
+
     /// A door fixture's motion, lock and the flags that decide them; a gate's also with the gate codes it joins and its gate state.
     /// </summary>
     static void Door(ProbeWorld probe, Fixture f)
@@ -1962,7 +1989,9 @@ static class SaveProbe
               slaves <radius>          slave state, owner faction, master squad and squad town near the leader
               captors [rounds] [walk]  captive jobs on the leader: worker, phase, gap, its senses of the leader; walk clears sneak (#759)
               obey <name> <stand|sneak|walk> [rounds] [x z]  an enslaved player character stands, sneaks or walks to x z: state, owner, order, who sees it (#813)
-              cages <name>             fixtures within 300 of a character, with occupants and building designation; a container's lock, grid and items
+              cages <name> [carrier]   fixtures within 300 of a character, with owners, occupants and building designation; a container's lock, grid
+                                       and items; with a carrier, the cage that character would take a captive lifted there to
+              owners                   town buildings whose saved owner is not the housing rule's (the residents' faction, else the town's), and the counts
               sleeper <name>           the bed a character lies in: record, yaw, use node yaws, lie spot and the sleeper's own yaw
               force <name> <tools|strength> [fixture id]  a character cuts or breaks a fixture's lock (a prisoner its own cage's); 120 ticks of it
               cage [cage id]           the carrying player character puts its load in a cage; 600 ticks of it

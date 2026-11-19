@@ -210,6 +210,7 @@ public static partial class SaveCapture
         WriteLocks(game, world, buildings, options.Levels);
         world.Fixtures.WriteResets(buildings);
         world.Fixtures.WriteResidents(data, buildings);
+        world.Fixtures.WriteOwners(data, buildings);
         ResearchSave.Write(game.Research, world.Research);
         var outposts = data.PlayerFaction >= 0
             ? BuildingSave.Write(game, world, data.Factions[data.PlayerFaction].Id, options.Seed, data.Db)
