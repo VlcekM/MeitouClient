@@ -136,6 +136,9 @@ static class AtmosphereShaders
         uniform sampler2D uLightCells, uLightIndex, uLightData, uLampTiles;
         {{LampShaders.Defines}}{{LampShaders.TileMapping}}{{LampShaders.TileVisibility}}
         #define LAMP_VISIBILITY(world, n, toLamp, indoor, emitter) lampTileVisibility(lamp, toLamp, d, n)
+        // An interior surface (giInterior, set by kenshiLight before the lamps): its room's lamps reach it WorldLamps.RoomInteriorSlack past the room's footprint.
+        float lampRoomSlack = 0.0;
+        #define LAMP_ROOM_SLACK lampRoomSlack
         {{LampShaders.Lighting}}
 
         // ---- the weather's surfaces (docs/formats/weather.md "Rain and wetness", "Dust") ----
@@ -762,6 +765,7 @@ static class AtmosphereShaders
             if (uLightGrid.w > 0.5)
             {
                 vec3 lampDiffuse = vec3(0.0), lampSpecular = vec3(0.0);
+                lampRoomSlack = giInterior ? {{F(Objects.WorldLamps.RoomInteriorSlack)}} : 0.0;
                 lampLight(world, n, v, a, a2, lampDiffuse, lampSpecular);
                 lit += albedo * lampDiffuse + lampSpecular;
                 lampDiffuseOut = dot(albedo * lampDiffuse, vec3(1.0 / 3.0));   // the channels' mean, not the luminance: LampShadowShaders.Apply

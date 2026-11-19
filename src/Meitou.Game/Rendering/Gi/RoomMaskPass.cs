@@ -9,7 +9,8 @@ namespace Meitou.Game.Rendering.Gi;
 
 /// <summary>
 /// The rooms seen through the floor view's cut (docs/render-post.md "Rooms' exposure"): a pixel lit as an interior (the surface target's bit 9)
-/// that has, straight above it, a part the floor view hides (<see cref="GeometryRecord.Interior"/> bit 1; the traced scene still holds those). What
+/// that has, straight above it or, where that ray finds the sky, along one of <see cref="TiltRays"/> rays <see cref="TiltDegrees"/> from it, a
+/// part the floor view hides (<see cref="GeometryRecord.Interior"/> bit 1; the traced scene still holds those). What
 /// stands on an open roof, in a building seen from outside or in one whose every floor is shown has no hidden part over it and is no room;
 /// nor is a wall of the viewed building turned to the street (bit 30), which a hidden cornice may hang over. With the eye itself inside a
 /// viewed building (the character editor's bar) no floor is hidden between it and the room: every interior pixel but those walls is a room's.
@@ -26,6 +27,18 @@ sealed unsafe class RoomMaskPass : IDisposable
     /// World units the ray starts off the drawn surface, along its plane's normal: an inner wall's ray rises through the room, not along the wall.
     /// </summary>
     const float Lift = 0.3f;
+
+    /// <summary>
+    /// Where the ray straight up finds no hidden part, rays this far from the upright, round it, look again: under a stairwell's opening (the stairs,
+    /// the floor below them) the upright ray left the room through the opening and they took the street's exposure, a dark band the opening's
+    /// shape (**Observed**, save lamp, the Storm House's stairs). An open roof has no hidden part beside it either.
+    /// </summary>
+    const float TiltDegrees = 40;
+
+    /// <summary>
+    /// The tilted rays (<see cref="TiltDegrees"/>), evenly round the upright.
+    /// </summary>
+    const int TiltRays = 6;
 
     /// <summary>
     /// The GPU context the pass records into.
@@ -207,6 +220,20 @@ sealed unsafe class RoomMaskPass : IDisposable
         }
 
 """ + "\n" + TracedSunShaders.Enclosed + "\n" + $$"""
+        // One ray that only a hidden part stops: every shown part it meets is passed, however many (a partition of planks and battens stood
+        // a dozen deep over its own face, and a ray that gave up after four left rectangles of it out of the room, black at night).
+        bool underHidden(vec3 from, vec3 dir)
+        {
+            rayQueryEXT q;
+            rayQueryInitializeEXT(q, uScene, gl_RayFlagsNoOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT, uint(p.eye.w), from, 0.02, dir, p.size.z);
+            while (rayQueryProceedEXT(q))
+            {
+                int record = rayQueryGetIntersectionInstanceCustomIndexEXT(q, false) + rayQueryGetIntersectionGeometryIndexEXT(q, false);
+                if ((geometries[record].interior & 2u) != 0u) rayQueryConfirmIntersectionEXT(q);
+            }
+            return rayQueryGetIntersectionTypeEXT(q, true) != gl_RayQueryCommittedIntersectionNoneEXT;
+        }
+
         void main()
         {
             ivec2 px = ivec2(gl_GlobalInvocationID.xy);
@@ -222,17 +249,14 @@ sealed unsafe class RoomMaskPass : IDisposable
             // The shell's faces turned to the street are lit as the outside (BuildingLodShaders), inside the walls or not: none takes the room's gain.
             if (street) { imageStore(uOut, px, vec4(0.0)); return; }
             vec3 from = p.eye.xyz + at + planeNormal(px, at) * ({{F(Lift)}} + length(at) * p.size.w);
-            // One ray that only a hidden part stops: every shown part it meets is passed, however many (a partition of planks and battens stood
-            // a dozen deep over its own face, and a ray that gave up after four left rectangles of it out of the room, black at night).
-            rayQueryEXT q;
-            rayQueryInitializeEXT(q, uScene, gl_RayFlagsNoOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT, uint(p.eye.w), from, 0.02, vec3(0.0, 1.0, 0.0), p.size.z);
-            while (rayQueryProceedEXT(q))
+            bool room = underHidden(from, vec3(0.0, 1.0, 0.0));
+            const vec2 tilt = vec2({{F(MathF.Sin(TiltDegrees * MathF.PI / 180))}}, {{F(MathF.Cos(TiltDegrees * MathF.PI / 180))}});   // sine, cosine
+            for (int i = 0; i < {{TiltRays}} && !room; i++)
             {
-                int record = rayQueryGetIntersectionInstanceCustomIndexEXT(q, false) + rayQueryGetIntersectionGeometryIndexEXT(q, false);
-                if ((geometries[record].interior & 2u) != 0u) rayQueryConfirmIntersectionEXT(q);
+                float a = float(i) * {{F(2 * MathF.PI / TiltRays)}};
+                room = underHidden(from, vec3(cos(a) * tilt.x, tilt.y, sin(a) * tilt.x));
             }
-            float room = rayQueryGetIntersectionTypeEXT(q, true) == gl_RayQueryCommittedIntersectionNoneEXT ? 0.0 : 1.0;
-            imageStore(uOut, px, vec4(room, 0.0, 0.0, 1.0));
+            imageStore(uOut, px, vec4(room ? 1.0 : 0.0, 0.0, 0.0, 1.0));
         }
         """;
 }
