@@ -48,6 +48,11 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
     /// The original's iteration limit.
     /// </summary>
     public const int MaxIterations = 100000;
+    /// <summary>
+    /// The most polygons a dead end round the start may hold to be left through exits too narrow for the radius (<see cref="SqueezeOut"/>; engine
+    /// choice: the failed searches from #1025's ledge closed 2, those of walkers really shut out 143 and 2012).
+    /// </summary>
+    public const int SqueezeCluster = 4;
 
     /// <summary>
     /// The counters behind <see cref="Stats"/>, updated with <see cref="Interlocked"/>.
@@ -120,6 +125,10 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
         /// Whether the node has been expanded.
         /// </summary>
         public bool Closed;
+        /// <summary>
+        /// Whether the polygon is part of the start's dead end, left through exits too narrow for the radius (<see cref="SqueezeOut"/>).
+        /// </summary>
+        public bool Squeezed;
     }
 
     /// <summary>
@@ -175,6 +184,7 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
             var node = _made[_used++];
             (node.Ref, node.Position, node.G, node.F, node.Parent, node.Closed) = (at, position, g, f, -1, false);
             node.Through = float.MaxValue;
+            node.Squeezed = false;
             return node;
         }
     }
@@ -215,10 +225,9 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
         public readonly float MinFactor = Math.Min(1f, agent.Water.Min);
 
         /// <summary>
-        /// A start polygon none of whose exits leaves the radius clear (a sliver by a stair or a wall the walker was pushed into) is left through the
-        /// narrow ones: the walker stands in it already (docs/game/pathfinding.md, "Own builder").
+        /// How many polygons of the start's dead end were opened to their narrow exits (<see cref="SqueezeOut"/>; 0: none yet).
         /// </summary>
-        public bool SqueezeOut;
+        public int Squeezed;
     }
 
     /// <summary>
@@ -387,14 +396,31 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
             if (partial && Vector3.Distance(NavWorld.ClosestPoint(mesh, p, goalPoint), goalPoint) is var d && d < nearestDistance)
                 (nearest, nearestDistance) = (node, d);
             Expand(ref search, node, mesh, p);
-            if (node == first && open.Count == 0 && last is null && !search.SqueezeOut)
-            {
-                search.SqueezeOut = true;
-                first.Closed = false;
-                open.Enqueue(first, first.F);
-            }
+            if (open.Count == 0) SqueezeOut(ref search);
         }
         return (last, nearest, iterations);
+    }
+
+    /// <summary>
+    /// A search that ran dry in a dead end of at most <see cref="SqueezeCluster"/> polygons round its start, none of whose exits leaves the radius
+    /// clear (a sliver by a stair or a wall the walker was pushed into, or a ledge of a few), opens them again to leave through the narrow exits:
+    /// the walker stands there already (docs/game/pathfinding.md, "Own builder"). Again for each dead end the way out leads into, while the count
+    /// holds.
+    /// </summary>
+    static void SqueezeOut(ref CorridorSearch search)
+    {
+        var nodes = search.Scratch.Nodes;
+        if (nodes.Count > SqueezeCluster || nodes.Count == search.Squeezed) return;
+
+        search.Squeezed = nodes.Count;
+        foreach (var node in nodes.Values)
+        {
+            if (node.Squeezed) continue;
+
+            node.Squeezed = true;
+            node.Closed = false;
+            search.Scratch.Open.Enqueue(node, node.F);
+        }
     }
 
     /// <summary>
@@ -437,8 +463,8 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
         // Only an end on a wall takes the radius off the portal (as Pull insets it); a tile-border, seam or area-change end has walkable ground
         // beyond.
         float width = Vector2.Distance(new(left.X, left.Z), new(right.X, right.Z));
-        if (width < ((leftWall ? 1 : 0) + (rightWall ? 1 : 0)) * agent.Radius && !(search.SqueezeOut && from == search.First))
-            return;
+        if (width < ((leftWall ? 1 : 0) + (rightWall ? 1 : 0)) * agent.Radius && !from.Squeezed) return;
+
         var mid = BestCrossing(from.Position, left, right, search.GoalPoint);
         float g = from.G + Vector3.Distance(from.Position, mid) * factor;
         if (area == NavArea.Door) g += OpenDoorCost;

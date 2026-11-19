@@ -250,6 +250,11 @@ A start polygon with no exit that clears the radius is left through its narrow e
 in it). **Observed** (zone 39.16, Stoat, scratch probe from ground-level points round its 25 doors): slivers beside door steps
 (Y-House `16-` 35046..35064,−71590..−71582, 4..6 wide, one 6-unit wall-ended exit; Y-House `18-`; Old Storm House `20-`) held
 8 of 1999 starts with no path at all, so a walker stopped or pushed there stayed stuck at the door; with the rule all 1999 path.
+The same holds for a dead end of up to 4 polygons round the start (`NavQuery.SqueezeCluster`, `SqueezeOut`), opened again for each dead end the
+way out leads into while the count holds. **Observed** (#1025 save, Cat-Lon's Exile `54.59:4-`, `probe path --nav`): a ledge of the interior mesh
+beside a stair foot, a 6-wide strip (105560..105610) and two thin triangles (105608..105634, 124992..125000), is tied to the stair only by a
+4.5-wide wall-ended edge at (105634,125000); fighters the crowd pushed onto it found no path (42 failed searches closing 2 polygons each in one
+fight; a walker really shut out closed 143 and 2012), now every start on its three polygons and on the collision beside them paths out.
 A walker off the mesh (engine choices): its path starts at its own position, then the nearest mesh point, which it walks to; if the nearest start polygon gives no path, or
 one whose first 10 units it cannot stand along, up to 4 next-nearest starts are tried, then the nearest start within `StandRise`/`StandDrop` of its height,
 which it walks out of the hole to (start polygons score 4 × plan distance + height gap). **Observed** (#780, the issue's save, a Scrawny Cannibal at
@@ -959,7 +964,7 @@ off-mesh start retries, then the nearest-point search, each exploring all the gr
 is remembered (goal polygon, radius, door rule; same navmesh; `NavmeshWalkability.UnreachableSeconds`) with the polygons its failed nearest-point
 search covered (`NavQuery.LastSearchReached`), and a walker whose start polygon is one of them gets the provisional route to the remembered nearest
 point at once. Reaching that point is no proof of the same ground: **Observed** (#1025 save, Cat-Lon's Exile, `probe crowd --nav`): fighters shoved
-onto an unjoined two-polygon sliver at a stair foot (105634,125000, on the tile seam z 124992) marked their target's polygon unreachable, and of
+onto a two-polygon ledge at a stair foot (105634,125000, [the dead end](#own-builder) radius 4 could not leave then) marked their target's polygon unreachable, and of
 the 50 Stormthralls on the open mesh, who reach that corner too, about 25 stood 200 away and several were turned back to it from 115 short of the
 target; by the start polygon all 50 stand within 100. The memory holds while no door was locked or unlocked since (`NavDoors.Version`: through a door unlocked since,
 walkers outside reached the corner of a locked L-House that one shut in it had found, and stood there; **Observed**, Gigachad save, 39.16); retries skip start
