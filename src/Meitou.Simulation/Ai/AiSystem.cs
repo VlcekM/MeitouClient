@@ -1403,13 +1403,26 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     internal float WorkRangeOf(TownBuilding b) => _work.RangeOf(b);
 
     /// <summary>
-    /// A worker is at its building within <paramref name="reach"/> of the building's position, or twice that once it has stopped (the original's
-    /// arrival doubles the reach of a character that is not moving, docs/game/buildings-production.md "Work distance"), so one held off by the
-    /// building's collision short of the reach has arrived there.
+    /// Where a worker walks to at a workplace and what its reach is measured from: the building's use node nearest <paramref name="from"/>, its
+    /// position without one (<see cref="WorkFunctionality.MarkerOf"/>).
     /// </summary>
-    internal static bool AtWork(in CharacterHot n, Vector3 building, float reach)
+    internal Vector3 WorkMarker(World world, TownBuilding b, Vector3 from) => _work.MarkerOf(b, from, world.Walkability);
+
+    /// <summary>
+    /// A worker is at its workplace: within the building's work range of its marker from where the worker stands (<see cref="WorkMarker"/>,
+    /// <see cref="AtWork"/>).
+    /// </summary>
+    internal bool AtWorkplace(World world, in CharacterHot n, TownBuilding b) =>
+        AtWork(in n, WorkMarker(world, b, n.Position), WorkRangeOf(b));
+
+    /// <summary>
+    /// A worker is within <paramref name="reach"/> of <paramref name="point"/>, or twice that once it has stopped (the original's arrival doubles
+    /// the reach of a character that is not moving, docs/game/buildings-production.md "Work distance"), so one held off by the building's
+    /// collision short of the reach has arrived there.
+    /// </summary>
+    internal static bool AtWork(in CharacterHot n, Vector3 point, float reach)
     {
-        float dx = n.Position.X - building.X, dz = n.Position.Z - building.Z;
+        float dx = n.Position.X - point.X, dz = n.Position.Z - point.Z;
         bool stopped = n.Velocity.X * n.Velocity.X + n.Velocity.Z * n.Velocity.Z <= 1;
         float r = stopped ? 2 * reach : reach;
         return dx * dx + dz * dz <= r * r;
@@ -1574,11 +1587,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// At its work building (<see cref="AtWork"/>): the walk there is over.
+    /// At its work building's <paramref name="marker"/> (<see cref="AtWork"/>): the walk there is over.
     /// </summary>
-    static bool ArrivedAtWork(in CharacterHot n, AiMind mind, Vector3 building)
+    static bool ArrivedAtWork(in CharacterHot n, AiMind mind, Vector3 marker)
     {
-        if (!AtWork(in n, building, mind.WorkRange)) return false;
+        if (!AtWork(in n, marker, mind.WorkRange)) return false;
         mind.Walking = false;
         mind.FailedWalks = 0;
         return true;
@@ -2227,7 +2240,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return;
         }
 
-        if (!ArrivedAtWork(in n, mind, workAt) && !GoToSpot(world, slot, mind, Flat(workAt), GiveUp.Target, SpeedMode.Walk, mind.WorkRange))
+        // It walks to the building's use node nearest it, and its reach is measured from there (getPositionMarker).
+        var marker = aimed is null ? workAt : WorkMarker(world, aimed, n.Position);
+        if (!ArrivedAtWork(in n, mind, marker) && !GoToSpot(world, slot, mind, Flat(marker), GiveUp.Target, SpeedMode.Walk, mind.WorkRange))
             return;
 
         // At the building: facing it, at its work clip.

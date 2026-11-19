@@ -578,7 +578,7 @@ public sealed partial class ProductionSystem
             ref var n = ref table.Next[i];
             var mind = cold.Ai!;
             var building = mind.WorkOperate ?? mind.CollectFrom ?? mind.FillTo!;
-            if (!Able(cold) || mind.Behaviour != Ai.AiBehaviour.Work || !AtTownWork(n, building, mind.WorkRange)) continue;
+            if (!Able(cold) || mind.Behaviour != Ai.AiBehaviour.Work || !AtTownWork(world, i, building, mind.WorkRange)) continue;
             if (MachineFor(world, building, mind.WorkOwner) is not { } m || !Live(world, m)) continue;
             if (mind.FillTo is not null) FillInputs(world, cold, m);
             else if (mind.CollectFrom is not null) TakeOutput(world, cold, m);
@@ -600,7 +600,7 @@ public sealed partial class ProductionSystem
         for (int i = 0; i < table.HighWater; i++)
         {
             if (!table.Next[i].Alive || table.Cold(i) is not { SlaveWork: { Place: var place } work } cold) continue;
-            if (!Able(cold) || cold.ActionClip != place.Clip || !AtTownWork(table.Next[i], place.Building, place.Range)) continue;
+            if (!Able(cold) || cold.ActionClip != place.Clip || !AtTownWork(world, i, place.Building, place.Range)) continue;
 
             var m = world.Machines.Find(TownWorkId(place.Building)) ?? TownWork(world, place.Building, place.Owner);
             if (m is null || !Live(world, m)) continue;
@@ -628,10 +628,17 @@ public sealed partial class ProductionSystem
         m.Output is { } o && cold.Inventory is { } inv && _items.Create(o.Recipe.Item, 1) is { } unit && inv.HasRoomFor(unit);
 
     /// <summary>
-    /// Whether a worker stands at the town building within <paramref name="reach"/>, idle or resting.
+    /// Whether a worker stands at the town building (<see cref="Ai.AiSystem.AtWorkplace"/>), idle or resting; in a world without the AI system
+    /// (nothing reads the building's use nodes there), within <paramref name="reach"/> of the building's position.
     /// </summary>
-    static bool AtTownWork(in CharacterHot n, TownBuilding building, float reach) =>
-        Ai.AiSystem.AtWork(in n, building.Position, reach) && (CharacterTask)n.Task is CharacterTask.Idle or CharacterTask.Rest;
+    static bool AtTownWork(World world, int slot, TownBuilding building, float reach)
+    {
+        ref readonly var n = ref world.Characters.Next[slot];
+        if ((CharacterTask)n.Task is not (CharacterTask.Idle or CharacterTask.Rest)) return false;
+        if (world.SystemOf<Ai.AiSystem>() is { } ai) return ai.AtWorkplace(world, in n, building);
+
+        return Ai.AiSystem.AtWork(in n, building.Position, reach);
+    }
 
     /// <summary>
     /// One worker's frame at a town machine, rows 87 and 221 alike (<c>Task_OperateMachine</c>'s update reads no row, <c>FUN_14035bc90</c>,

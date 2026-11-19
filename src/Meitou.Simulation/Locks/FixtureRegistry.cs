@@ -928,7 +928,7 @@ public sealed partial class FixtureRegistry
     /// A BUILDING's NODE_USE instances (<see cref="UseNode"/>) in instance id order, placed by the building's <c>scale</c> as its parts are; null with
     /// none (a bed with none is lain in at its position marker, <see cref="Fixture.Marker"/>).
     /// </summary>
-    static UseNode[]? UseNodes(GameDatabase db, GameRecord building)
+    internal static UseNode[]? UseNodes(GameDatabase db, GameRecord building)
     {
         float scale = building.GetFloat("scale", 1) is > 0 and var s ? s : 1;
         UseNode[] nodes = [.. building.Instances.Values.Where(i => !i.IsCleared && db.Find(i.Target) is { } n && n.GetBool("is node")

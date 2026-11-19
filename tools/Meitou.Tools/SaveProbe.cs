@@ -113,7 +113,10 @@ static class SaveProbe
                 if (a.Count > 5) Move(probe, a[3], float.Parse(a[4]), float.Parse(a[5]), 0);
                 Doors(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10, a.Count > 2 ? int.Parse(a[2]) : 40);
                 return true;
-            case ("slaves", >= 1): Slaves(probe, float.Parse(a[0])); return true;
+            case ("slaves", >= 1):
+                Slaves(probe, float.Parse(a[0]));
+                if (a.Count > 1) SlaveWork(probe, float.Parse(a[0]), int.Parse(a[1]), a.Count > 2 ? int.Parse(a[2]) : 200);
+                return true;
             case ("captors", _): Captors(probe, a.Count > 0 ? int.Parse(a[0]) : 15, a.Count > 1 && a[1] == "walk"); return true;
             case ("obey", >= 2):
                 Vector2? point = a.Count > 4 ? new(float.Parse(a[3]), float.Parse(a[4])) : null;
@@ -892,6 +895,47 @@ static class SaveProbe
                 + $"town={squad?.Town} platoon={squad?.PlatoonId} home={squad?.HomeBuilding?.Position} template={squad?.TemplateId}");
         }
     }
+
+    /// <summary>
+    /// The slaves within <paramref name="radius"/> of the leader every <paramref name="interval"/> ticks: task, goal, plan step, the workplace
+    /// each works at (an AI slave's, or an obedient player slave's) with the gap to its marker from where the slave stands and its work range,
+    /// speed, clip and carried items; then how many work, how many walk on their path, and how many of those within twice the range (#1059).
+    /// </summary>
+    static void SlaveWork(ProbeWorld probe, float radius, int rounds, int interval)
+    {
+        var slaves = probe.Near(probe.LeaderPosition, radius).Where(i => probe.Characters.Cold(i) is { SlaveState: not 0 }).ToList();
+        var ai = probe.World.SystemOf<Meitou.Simulation.Ai.AiSystem>();
+
+        for (int round = 0; round < rounds; round++)
+        {
+            int walking = 0, near = 0, working = 0;
+            foreach (int i in slaves)
+            {
+                if (probe.Characters.Cold(i) is not { } c) continue;
+
+                var n = probe.Characters.Next[i];
+                var place = c.Ai?.WorkBuilding ?? c.SlaveWork?.Place.Building;
+                float range = place is null || ai is null ? 0 : ai.WorkRangeOf(place);
+                float gap = place is null || ai is null ? -1 : Flat(ai.WorkMarker(probe.World, place, n.Position), n.Position);
+                bool walks = n.Task == (byte)CharacterTask.GoTo;
+                if (walks) walking++;
+                if (walks && gap >= 0 && gap <= 2 * range) near++;
+                if (!walks && c.ActionClip is not null) working++;
+
+                Console.WriteLine($"tick {probe.World.Tick} {i} '{c.Name}' task={(CharacterTask)n.Task} goal={c.Ai?.Goal?.Task.Type} step={c.Ai?.Step} "
+                    + $"workplace={place?.Position} gap={gap:F0} range={range:F0} speed={n.Velocity.Length():F1} clip={c.ActionClip} in={c.InSomething} "
+                    + $"items={c.Inventory?.Items.Sum(it => it.Quantity)} at={n.Position}");
+            }
+
+            Console.WriteLine($"tick {probe.World.Tick} working {working}, walking {walking} ({near} within twice the range) of {slaves.Count}");
+            probe.Tick(interval);
+        }
+    }
+
+    /// <summary>
+    /// The flat distance between two points.
+    /// </summary>
+    static float Flat(Vector3 a, Vector3 b) => Vector2.Distance(new Vector2(a.X, a.Z), new Vector2(b.X, b.Z));
 
     /// <summary>
     /// Recruits the first character named like <paramref name="name"/> into the player's squad, then unloads the save's platoon it was made from
@@ -2148,7 +2192,8 @@ static class SaveProbe
               move <name> <x> <z> [rounds]  order a character to walk to a point, then watch it
               premises [rounds] [interval]  the building the leader stands in (needs --nav): public flags, house lock, doors, residents, who is inside, lines said
               ko <slot> [rounds]       the sneaking leader's stealth KO order on a slot: the chance, the target's spot meter and the task every 20 ticks
-              slaves <radius>          slave state, owner faction, master squad and squad town near the leader
+              slaves <radius> [rounds] [interval]  slave state, owner faction, master squad and squad town near the leader; with rounds, each
+                                         slave's task, goal, workplace and gap to its marker every interval (200) ticks, and how many work
               captors [rounds] [walk]  captive jobs on the leader: worker, phase, gap, its senses of the leader; walk clears sneak (#759)
               obey <name> <stand|sneak|walk> [rounds] [x z]  an enslaved player character stands, sneaks or walks to x z: state, owner, order, who sees it (#813)
               cages <name> [carrier]   fixtures within 300 of a character, with owners, occupants and building designation; a container's lock, grid

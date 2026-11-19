@@ -1,3 +1,4 @@
+using System.Numerics;
 using Meitou.Data.World;
 using Meitou.Simulation.Population;
 
@@ -35,6 +36,11 @@ sealed class WorkFunctionality(PopulationData data)
     readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _functions = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// The use nodes of each building record, in the building's own frame (<see cref="MarkerOf"/>).
+    /// </summary>
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, Vector3[]> _useNodes = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// How near a worker must come to its building's position: the functionality's <c>use range</c> (the original's <c>UseableStuff</c> reach,
     /// <c>maxUseRange</c>, docs/game/buildings-production.md "Work distance"), <see cref="AiSystem.WorkReach"/> for a building without one.
     /// </summary>
@@ -42,6 +48,57 @@ sealed class WorkFunctionality(PopulationData data)
         data.Db.Find(id)?.GetReferences("functionality") is [var link, ..] && data.Db.Find(link.TargetStringId) is { } function
             ? function.GetFloat("use range", AiSystem.WorkReach)
             : AiSystem.WorkReach);
+
+    /// <summary>
+    /// <c>Building::getPositionMarker(from)</c> of a workplace (<c>FUN_14054b850</c>, <b>Verified</b>; docs/game/buildings-production.md "Work
+    /// distance"): where a worker walks to and what its reach is measured from. With two or more use nodes the one nearest <paramref name="from"/>
+    /// (squared 3D distance), with one that node, with none the building's position. A node that cannot be stood on is passed over and with none
+    /// left the building's position is taken (engine choice, for the original's bad-node map: it skips a node a walk to which proved impossible).
+    /// </summary>
+    public Vector3 MarkerOf(TownBuilding b, Vector3 from, IWalkability walk)
+    {
+        var nodes = _useNodes.GetOrAdd(b.BuildingId, LocalNodes);
+        if (nodes.Length == 0) return b.Position;
+
+        var turn = Matrix4x4.CreateRotationY(b.Yaw);
+        if (nodes.Length == 1) return b.Position + Vector3.Transform(nodes[0], turn);
+
+        Span<bool> refused = stackalloc bool[nodes.Length];
+        while (Nearest(b, nodes, turn, from, refused) is var (k, at))
+        {
+            if (walk.IsWalkable(at.X, at.Z)) return at;
+            refused[k] = true;
+        }
+
+        return b.Position;
+    }
+
+    /// <summary>
+    /// The use nodes of building record <paramref name="id"/> in the building's own frame, none for a record without them.
+    /// </summary>
+    Vector3[] LocalNodes(string id) =>
+        data.Db.Find(id) is { } record && Locks.FixtureRegistry.UseNodes(data.Db, record) is { } nodes ? [.. nodes.Select(n => n.At)] : [];
+
+    /// <summary>
+    /// The node of <paramref name="nodes"/> nearest <paramref name="from"/> among those not <paramref name="refused"/>, with its place in the
+    /// world; null when every one is refused.
+    /// </summary>
+    static (int Index, Vector3 At)? Nearest(TownBuilding b, Vector3[] nodes, Matrix4x4 turn, Vector3 from, ReadOnlySpan<bool> refused)
+    {
+        (int Index, Vector3 At)? best = null;
+        float bestD = float.MaxValue;
+
+        for (int k = 0; k < nodes.Length; k++)
+        {
+            if (refused[k]) continue;
+
+            var at = b.Position + Vector3.Transform(nodes[k], turn);
+            float d = Vector3.DistanceSquared(at, from);
+            if (d < bestD) (best, bestD) = ((k, at), d);
+        }
+
+        return best;
+    }
 
     /// <summary>
     /// The clip a worker plays at a building: its functionality's <c>animation</c>, else <c>stonemine</c> (<c>Task_OperateMachine</c>,

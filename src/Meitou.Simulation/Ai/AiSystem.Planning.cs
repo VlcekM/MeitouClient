@@ -363,6 +363,18 @@ public sealed partial class AiSystem
         ref CharacterHot Me => ref _world.Characters.Next[_slot];
 
         /// <summary>
+        /// Whether the bound character is at a work target: at the workplace standing there (<see cref="AtWorkplace"/>), else within
+        /// <paramref name="reach"/> of the point.
+        /// </summary>
+        bool AtWorkTarget(Vector3 at, float reach)
+        {
+            foreach (var b in Workplaces())
+                if (b.Position.X == at.X && b.Position.Z == at.Z) return _system.AtWorkplace(_world, in Me, b);
+
+            return AtWork(in Me, at, reach);
+        }
+
+        /// <summary>
         /// Whether the bound character is at a target: none counts as there, as does a walk there that ended on its own; a work target by its work
         /// range, else within the target kind's slack and on the target's floor.
         /// </summary>
@@ -372,7 +384,7 @@ public sealed partial class AiSystem
             var p = Me.Position;
             var mind = _world.Characters.Cold(_slot)?.Ai;
             if (mind is not null && mind.ArrivedThere(Flat(t.Position), Flat(p))) return true;   // its walk there ended on its own (isAtLocation)
-            if (t.Kind == Targets.Work) return AtWork(in Me, t.Position, mind?.WorkRange ?? WorkReach);
+            if (t.Kind == Targets.Work) return AtWorkTarget(t.Position, mind?.WorkRange ?? WorkReach);
             float slack = t.Kind == Targets.Store ? StoreSlack : t.Kind == Targets.Turret ? TurretSlack : _system.Settings.PostSlack;
             if (Vector2.DistanceSquared(Flat(p), Flat(t.Position)) > slack * slack) return false;
 

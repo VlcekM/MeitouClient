@@ -148,12 +148,23 @@ score and the 0.75 falloff spread them). Work distance: [below](#work-distance).
 100 copper rocks, 140 hybrid stone mines. Which tasks reach their building through `isAtLocation` is **Observed** only through
 the goal conditions (the call is virtual). Meitou applies the height limit above wherever it applies the reach range of the same function: builders, fetchers, machine operators, haulers and corpse carriers (`SiteReach.AtHeight`; rocks and turret posts keep their own arrival test).
 
-Meitou's NPC town workers (189, 190, and a player slave's work, `AiSystem.AtWork`): within the building functionality's `use range` (30
-without one) of the building's position, doubled once its velocity is nearly 0, so a worker held off by the rock short of the reach has arrived
-(standing in for the touching test; the usage nodes of `getPositionMarker` are not read: engine choice). **Observed** (Meitou, Rebirth, before
-this rule: a fixed 30): every worker that reached its mine stood 57 to 71 units from the mine's position with its walk never over, and never mined;
-with it (the mines' `use range` 40) all 15 that reached their rock work at its clip. They still gather at the same point of each rock, where the
-original's spread round it (the usage nodes).
+**Where the walk to a building goes** (**Verified**, `getPosWithinChoppingRange` `FUN_14059bf30`, called by the move helper `FUN_1405c68a0`
+every update, and `FUN_140596800`, which gives the arrival test above its point): for a building that is not foliage and has no object at
+slot 0x2c8 (a constant null for `UseableStuff` and `ProductionBuilding`, `FUN_1400f6b20`) both are `getPositionMarker(the character's
+position)` (`FUN_14054b850`): with two or more use nodes the one nearest the character (squared 3D distance, the bad nodes skipped), else
+the marker. Data (**Verified**, merged base game): Quarry Mine A and B hold eight `Node Use` instances 120 to 140 units round the mine
+(local radius 133 to 155, `scale` 0.9), a Well eight at 21 to 33; the Stone mine's `use range` is 40, the Well's 18.
+
+Meitou's NPC town workers (189, 190, and a player slave's work, `AiSystem.AtWorkplace`, `WorkFunctionality.MarkerOf`): they walk to the
+workplace's use node nearest them and have arrived within the functionality's `use range` (30 without one) of the node nearest where they
+stand, twice that when not moving; a building with one node uses it, one with none its position. A node that cannot be stood on is passed
+over, and with none left the building's position is taken (engine choice for the bad-node map). Not moving is a velocity of nearly 0, so a
+worker held off by the rock short of the reach has arrived (standing in for the touching test). **Observed** (probe
+`slaves 3000 70 200 --nav`, #1059 save, Rebirth): measured from the mine's position every worker walked to the same point of the rock, 57 to
+71 from the mine's position, where the walk ended only once the mesh's edge refused its steps; one that came up behind a mate working there
+was held by that body (Meitou's contact, [bodies in the way](pathfinding.md#bodies-in-the-way)), stepped on the spot and never arrived: 6 of
+25 after 12 000 ticks, 13 still on a walk. With the nodes 23 to 24 of the 25 work at their clip from tick 8 300 until the night's cage hour,
+none stepping on the spot, the workplaces' operators 20 at tick 9 000 (8 at tick 5 000 before); a Well's worker stands on its node.
 
 Meitou (`SiteReach`): builders 40 (walls 60), operators and storage fetches the `use range`, doubled once stopped, measured
 to the building's footprint hull (engine choice standing in for touching; a building without collision uses its parts' bounds

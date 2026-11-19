@@ -164,6 +164,8 @@ static class RecordDump
             foreach (var f in r.Vector4S.OrderBy(f => f.Key)) Console.WriteLine($"  {f.Key} = {f.Value}");
             foreach (var f in r.Bools.OrderBy(f => f.Key)) Console.WriteLine($"  {f.Key} = {f.Value}");
             foreach (string list in r.ReferenceLists) Console.WriteLine(ListLine(db, r, list));
+            foreach (var i in r.Instances.Values.Where(i => !i.IsCleared).OrderBy(i => i.Id, StringComparer.Ordinal))
+                Console.WriteLine($"  INSTANCE {i.Id}: {db.Find(i.Target)?.Name ?? "?" + i.Target} at {i.Position} rotation {i.Rotation}");
         }
 
         return 0;
