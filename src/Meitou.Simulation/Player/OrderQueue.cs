@@ -251,8 +251,8 @@ public sealed class OrderQueue : IReadOnlyList<OrderEntry>
 }
 
 /// <summary>
-/// The order queue's rules (docs/simulation.md "Order queue"; the original's <c>checkOrders</c> <c>FUN_140510920</c> and <c>Character::addOrder</c>
-/// <c>FUN_1405c8da0</c>, docs/game/ai-tasks.md "Precedence"): an order command clears the queue (unless Shift) and queues the order; the front starts
+/// The order queue's rules (docs/simulation.md "Order queue"; the original's <c>checkOrders</c> <c>FUN_140510920</c> and order giver
+/// <c>FUN_1405d20d0</c>, docs/game/ai-tasks.md "Precedence"): an order command clears the queue (unless Shift) and queues the order; the front starts
 /// through its owner when it can run, else shows its failure text and stays queued while the character's jobs, goals and reactions go on; a front
 /// whose task ended leaves the queue and the next starts. The decision step asks the front as its source 1 (<see cref="DecisionSystem"/>).
 /// </summary>

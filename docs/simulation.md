@@ -249,7 +249,7 @@ Each character's `CharacterCold.OrderQueue` (`OrderQueue`, the original's `+0x40
 owning `IOrderOwner`, target, site, point, owner detail, and `TaskPoint`: the point the original's order goal is made at, a ground move's or a
 building's on a quick right click, `OrderCommand.Clicked`, [orders' points](game/ai-tasks.md#slave-work-shout-and-capture)): the front is the order in hand.
 Every order command (`OrderCommand`) goes through `PlayerOrders.Give`: without `Queued`
-(Shift) the queue is cleared first, as `addOrder`; the order is queued; at the front it starts through its owner when `PlayerOrders.CanRun` says so (the row's repertoire, then
+(Shift) the queue is cleared first, as the original's order giver `FUN_1405d20d0`; the order is queued; at the front it starts through its owner when `PlayerOrders.CanRun` says so (the row's repertoire, then
 the owner's pure `IOrderOwner.CanRun`: `Run`, `Blocked` with its failure text, or `Gone` when its target or site no longer fits the verb; then the plan's
 first step, `ListTests.OrderBlocked`: the first list B entry `RowStates` evaluates that fails (the walk left out) with no provider in the character's
 repertoire blocks it with that state's line, `StateFailureLines`, so a Follow on a downed character waits silently until it is up; one with a provider is a step
@@ -296,7 +296,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   item id) and the Medic / Rescue buttons' one-shot looks. An owner with a detail (`IOrderOwner.SaveKind` / `LoadDetail`) codes it in Meitou's own key. Before the front is checked, each order's owner
   readies what its live command would (`IOrderOwner.Restored`): production makes the machine of a rock, town dummy or seat, which no save holds (without it
   the operate order was `Gone` and a miner stood idle after a load, #598). **Engine choice**: the original's loader
-  re-adds each order as a one-shot order of its second list, not into the deque ([precedence](game/ai-tasks.md#precedence)). Hashed as the move-only queue was while it holds only that (nothing, a started order alone, started moves), else under its own mark.
+  re-adds each order into its second list (`+0x70`), not into the deque ([precedence](game/ai-tasks.md#precedence)). Hashed as the move-only queue was while it holds only that (nothing, a started order alone, started moves), else under its own mark.
 
 ### Decision step
 
@@ -311,7 +311,7 @@ system when the world has none), and between ticks for orders only (`ApplyPaused
      job's (`ProductionSystem.BedCommitment`, key -1 of step 5; [implicit jobs](game/ai-tasks.md#perma-jobs)).
   3. Urgent jobs: the job list as in step 5, asking only the jobs urgent now: kind-2 234 Turret guard while the character senses an enemy (AI `+0xbc`,
      `SenseBlock.Enemies`). It beats Self preservation until a melee attacker comes within 40 (234's effect is planned through 146, `!158`). 187 Obedient
-     Slave of an enslaved player character (slave state 1, not sneaking) is urgent at all times: the master squad's Slave goals decide it ([captives](#captives)). The original's list `+0x70` (the entries its order giver adds, [precedence](game/ai-tasks.md#precedence)) is not modelled apart from the order queue.
+     Slave of an enslaved player character (slave state 1, not sneaking) is urgent at all times: the master squad's Slave goals decide it ([captives](#captives)). The original's list `+0x70` (a loaded queue and permanent orders whose row has no job kind, [precedence](game/ai-tasks.md#precedence)) is not modelled apart from the order queue.
   4. Priority-3 goals: 32 Self preservation (`RetaliationSystem`, weight 1: the attacker this tick that took the character as target and alerted it, within 181.7, not shooting at a
      gunner, passing a holder's post test; desire 1 within 40, else 0.7; a deferred defence, row 13); 243 Getting food (`TownDutySystem`, weight 0.5, the
      [eating](game/character-stats.md#eating) desire; a food run); a player animal's priority-3 race goals (`CaptiveSystem.RaceGoals`: 277 limb fetch 1, 278 limb play and 279 chase by

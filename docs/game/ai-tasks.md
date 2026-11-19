@@ -1030,7 +1030,7 @@ town food run (244) that finds no room ditches first (a2-039). Row 94's finder `
 **Verified** (decompile: `AITaskSytem::chooseGoal` `FUN_140510ef0`, order step `checkOrders` `FUN_140510920`, job pass `FUN_14050e5b0`, tier pass `FUN_140510d60`,
 update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **Observed**). How orders, jobs and goals take turns.
 
-- **When**: the chooser runs on every AI update (**Verified**, disassembly: `AI` update `FUN_1405112b0` calls `FUN_140511130` unconditionally, which at `14051114a` tests the
+- **When**: the chooser runs on every AI update (**Verified**, disassembly: `AI` update `FUN_1405112b0` calls `FUN_140511130` whenever the AI's `+0x10` is non-null, which at `14051114a` tests the
   replan request +0x1b0 and either way reaches the chooser call at `14051121f`). Without a request it first runs the plan step `FUN_14050d970`; with one (`AITaskSytem` vfunc 3
   `FUN_140506cf0`: a plan finished, an order added, a stagger (`forceOrderInsert`), `underMeleeAttack` with the fight off unless the target gets up or is player-side and moving,
   [combat](combat.md#fight-lifecycle-and-orders)) it stops the driver's task (vfunc 0x60) and clears `currentGoal` unless it commits and has not expired. So the order queue's front is
@@ -1074,21 +1074,33 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
     and turrets 12 to 22 (**Verified**, record dump). Its town guards still walking to bed at 11:00 (#959: back from a fight off town) stand
     where they are until 12:00, then walk to their posts (**Observed**, headless probe of the #959 save).
 - **Sources**, in order; the first whose pick has a plan above 0 runs:
-  1. The front of the order queue (+0x40 deque, count +0x60): first popped when done (list A holds) or its desire x finder is 0 or less; then planned with the search flag
-     ([planner](#planner)). A player character's order that fails to plan shows its failure text (vfunc 0x2d8) and stays queued (**Observed**); the chooser goes on. The text is the
+  1. The front of the order queue (+0x40 deque, count +0x60): first popped when done (list A `FUN_14060f570`, the effect test `FUN_14050c8e0` and the Tasker's own
+     finished test, slot 4, all hold) or its desire x finder (`FUN_14060fd80`) is 0 or less; then planned with the search flag
+     ([planner](#planner)). The step is the same for every character (**Verified**, `FUN_140510920`): an order that fails to plan stays queued and the chooser goes on; its
+     only faction test (`+0x250`) gates the failure text (vfunc 0x2d8), shown for a character of the player's faction that is not an animal (vfunc 0x248 null). The text is the
      line of the row's first list B entry that does not hold (`FUN_140610020`; each state's line is the fourth argument of its registration `FUN_140610170` in
      `FUN_140610250`, **Verified**: empty for 7 and 16, "It needs electricity." for 93, "My arm is messed up too badly to lift anything." for 80, Meitou
      `StateFailureLines`). Meitou (`ListTests.OrderBlocked`): an order whose first failing evaluated entry has no provider waits so; one with a provider starts,
      its act-out doing the step (a follow order whose target is threatened fights the attacker first, then follows).
-  2. Committed mode (the update's argument while a committing current goal's commitment runs; off without a current goal) with the running goal's priority (+0x20c) above 2: stop, the goal keeps its plan.
-  3. The entries of a second list (+0x70, the one-shot order list, emptied with the queue by `FUN_1405074a0`) become candidates, scored by `FUN_14050df10`. **What fills it** (**Verified**, the writers of the add
-     function `FUN_1405086d0`): the entries that are not perma-jobs, i.e. added without the permanent flag or whose TaskData row has kind +4 = 0, from the order giver `FUN_1405c8da0` (Character-side order
-     calls, which first clear the queue and this list unless the order is queued) and the save loaders `FUN_140508e10` / `FUN_1405092d0`; job 187 is a perma-job and never in it. The deque +0x40 is filled by the order dispatchers through `FUN_140508380`. With a job list, the **urgent job pass** adds the
-     candidates of Obedient Slave 187 (slave state 1, not sneaking: the owner platoon's Slave goals, [Obedient Slave](#slave-work-shout-and-capture)) and the kind-2 jobs (turret guard 234) while the AI's sensed-enemy count +0xbc is non-zero, and picks.
+  2. Committed mode (**Verified**: the update `FUN_140511130` works it out and passes it to the chooser: a current goal with the commit flag `+0x20`, `+0x26d` clear and its
+     expiry `+0x280` not passed; the chooser turns it off without a current goal) with the running goal's priority (+0x20c) above 2: stop, the goal keeps its plan.
+  3. The entries of a second list (+0x70, count +0x78, emptied with the queue by `FUN_1405074a0`) become candidates, scored by `FUN_14050df10`. It is not the one-shot order
+     list: one-shot orders go to the deque. **What fills it** (**Verified**, the add function `FUN_1405086d0` and its callers): an entry added without the permanent flag, or
+     with it when its TaskData row has kind +4 = 0. Without the flag only the queue loader `FUN_1405092d0` adds (a player-faction character's saved queue,
+     [save](../formats/save.md#order-queue)); with it the perma-job loader `FUN_140508e10`, the permanent order path `FUN_1405c8da0` and the enslaving paths `FUN_14032e0d0`,
+     `FUN_14032e590` and `FUN_14035aa20` (job 187, a perma-job and never in it).
+     **Order givers** (**Verified**): `FUN_1405d20d0` gives a character its order (the interface's, a dialogue effect's `FUN_140680560`, the kidnap's `FUN_14034ffa0`): on its
+     clear flag it empties the queue and this list, then pushes the order onto the deque through `FUN_140508380` and resets the default task. Only a permanent order of a
+     player-faction character whose row has a job kind goes to `FUN_1405c8da0` instead, which adds through `FUN_1405086d0`; its other callers are the Shift job giver
+     `FUN_1407f5a90` and `FUN_14062ef70` (job 57 for a character not of the player's faction whose race data has `+0x7c` set).
+     With a job list (count +0x90), the **urgent job pass** adds the
+     candidates of Obedient Slave 187 (slave state 1, not sneaking: the owner platoon's Slave goals, [Obedient Slave](#slave-work-shout-and-capture)) and the kind-2 jobs (turret guard 234) while the AI's sensed-enemy count +0xbc is non-zero, and picks
+     among them and this list's candidates; when that pick plans nothing, the candidates are cleared, this list's with them.
   4. Priority-3 goals: the squad's (blackboard, `FUN_140269240` / `FUN_14026b790`) and the character's own (+0xa0 + 0x18 x priority), one pick.
   5. Committed with the running priority above 1: stop. Else **every job** in list order, then the implicit jobs ([Perma-jobs](#perma-jobs)).
-  6. Priority-2 goals; committed with the running priority above 0: stop; priority-1 goals; the default task (+0x190, at key 1.0); else AI vfunc 0x98. The default task (**Verified**:
-     setter `OrdersReceiver` vfunc 4 `FUN_14050c030`, a fresh 14 Idleness with no target when given none) is reset by every order (`FUN_1405d20d0`, the move order `FUN_1405d22b0`) and by
+  6. Priority-2 goals; committed with the running priority above 0: stop; priority-1 goals; the default task (+0x190, at key 1.0); else the mover reset (vfunc 0x98 of the movement object at Character `+0x640`, `FUN_14065fc70`). The default task (**Verified**:
+     setter `OrdersReceiver` vfunc 4 `FUN_14050c030`, a fresh 14 Idleness with no target when given none) is reset by every order on `FUN_1405d20d0`'s queue path (not by its
+     permanent-job branch), by the move order `FUN_1405d22b0` and by
      standing orders 8 / 9, by the AI's manoeuvre mode (+0x2bc): `FUN_140599970` (a point: the order's) and `FUN_1405966a0` (a target) make it 30 Holding position for HOLD_GROUND (0),
      31 Staying close for STAY_CLOSE (1), and idleness for ROAM_FAR (2, the default). The Hold toggle (standing order 12) does not touch it.
 - **Goals of a character** (`setupAI`): everyone 14 Idleness (priority 1, weight 0.1) and 32 Self preservation (priority 3, weight 1, target itself). A player-faction character
@@ -1521,11 +1533,12 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
 
 A character's job list (the Orders menu's "Perma-Jobs"; class `OrdersReceiver`, base of `AITaskSytem`). Meitou: [simulation](../simulation.md#production).
 
-- **Lists** (**Verified**, add function `FUN_1405086d0`, constructor `FUN_140507d20`): `OrdersReceiver` +0x70 holds one-shot orders, +0x88 (count +0x90,
+- **Lists** (**Verified**, add function `FUN_1405086d0`, constructor `FUN_140507d20`): `OrdersReceiver` +0x40 is the order queue (a deque, count +0x60), +0x70 (count +0x78,
+  data +0x80) a second list ([precedence](#precedence), source 3), +0x88 (count +0x90,
   data +0x98) the perma-jobs in priority order, +0x35 the jobs switch. Each entry is a Tasker: +0x10 target hand, +0x70 its TaskData (+0x44 task type).
 - **Adding** (**Verified**, `FUN_1405086d0(orders, type, target, position, permanent)`; Shift with an order, tutorial `FUN_14098d8c0`):
   1. TaskData row +4 set and +0xc set: the type becomes +0xc (orders too).
-  2. Not permanent, or the resulting row's +4 is 0: appended to the order list.
+  2. Not permanent, or the resulting row's +4 is 0: appended to the second list +0x70.
   3. Else refused when a job of that type exists and the row's +8 is 0, or when one exists with the same target. Otherwise appended, the jobs
      switch turns on (`FUN_140508210`, which also posts a UI event for a player character), and +0x10, when set, is appended as a second job on the
      same target with no checks (0x1f becomes 0x121 = 289 when the receiving character's vfunc +0x248, `asAnimal`, is non-null: **Verified**, `FUN_1405e1f50`
@@ -1576,7 +1589,7 @@ A character's job list (the Orders menu's "Perma-Jobs"; class `OrdersReceiver`, 
   `isTargetInRangeForOrders(Vector3)` by `AI::ordersMovement` (+0x2bc, `AIManuverabilityOrders`; the constructor sets 2): zero vector → true;
   2 ROAM_FAR: the 3D distance² from the character itself < 4.246733e7 (≈ 6517; 12.5 × the medic nearness 3397386.5); 1 STAY_CLOSE (standing order
   NEAR, the centre set to the character's position then): from `centerOfMovement` (+0x2c0) < `meiDistance` (+8) + 200 + `meiDistanceTolerance` (+0xc). Other values: false. Standing order FAR sets ROAM_FAR (EDX = 2 in the disassembly) and clears the centre target.
-- **Implicit jobs** (**Verified**, `FUN_14050e5b0` after the list, only for a character with a squad (+0x250), the switch on and not sneaking
+- **Implicit jobs** (**Verified**, `FUN_14050e5b0` after the list, only for a character of the player's faction (faction `+0x250`), the switch on and not sneaking
   (`FUN_1405c9750`)): lowest keys for the squad AI options at `DAT_142134690` (the overview's AI tab), each kept when its task's desire is above 0:
   +0x117 "Ditch items" → 242 "Ditching resources" (only with an empty task queue +0x60; the entry is tested afresh on every pass, nothing carries over, so a running trip drops out as soon as the finder finds nothing or an order is queued; finder `FUN_1405a59a0`: the carried ITEMs (type 4) of `item
   function` 0 or 15, and food (3) but the first, via `FUN_140749490`, **Verified**; that 242 passes the collect flag **Observed**; the nearest UseableStuff in range whose accept test (slot 0x4a0) takes one, skipping
