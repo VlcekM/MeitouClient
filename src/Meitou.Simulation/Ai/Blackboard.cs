@@ -548,7 +548,8 @@ public sealed class Blackboard
             if (Current != list[0]) Start(list[0], 0, rules);
             else if (Finished(list[0], rules))
             {
-                // Finished and alone: its Leads to, else itself again once it can start (a patrol's next round).
+                // Finished and alone: its Leads to, else itself again once it can start (a patrol never does: its start test refuses the
+                // finished running package, so it stays as it is).
                 if (list[0].LeadsTo is { } hop && Find(hop) is { } follow && MayLead(list[0], rules)) Start(follow.Package, follow.Slot, rules);
                 else if (CanStart(list[0], rules)) Start(list[0], 0, rules);
             }
