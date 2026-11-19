@@ -1424,9 +1424,12 @@ public sealed partial class MainWindow : Window
     {
         int shown = _mods.Count(m => m.IsShown);
         int enabled = _mods.Count(m => m.Enabled);
-        ModCount.Text = shown == _mods.Count
+        string count = shown == _mods.Count
             ? Tr("{1} mods · {2} enabled", _mods.Count, enabled)
             : Tr("{1} of {2} mods shown · {3} enabled", shown, _mods.Count, enabled);
+
+        // An inline, as SetText's: the language pass when the window opens would put a plain Text back to its first value.
+        ModCount.Inlines = [new Run(count)];
 
         bool untick = AllShownEnabled();
         SetText(SelectToggleText, untick ? "Select none" : "Select all");
