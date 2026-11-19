@@ -331,7 +331,7 @@ public sealed partial class ProductionSystem
     #region Stepping a carrying job
 
     /// <summary>
-    /// One step of a character's errand: lifted, it walks the body to its goal and puts it down there (or feeds it to the corpse machine); the lift
+    /// One step of a character's errand: lifted, it walks the body to its goal and lets it go there (or feeds it to the corpse machine); the lift
     /// lost or the walk given up ends it.
     /// </summary>
     void StepErrand(World world, int i, CharacterCold cold, Errand e)
@@ -378,7 +378,7 @@ public sealed partial class ProductionSystem
         if (arrived)
         {
             if (machine is not null) Incinerate(world, i, machine);
-            else Carry!.BeginPutDown(world, i, TaskSource.Job);
+            else Carry!.LetGo(world, i);   // a carry-out at its goal: the task's own unlink, as below
             _errands.Remove(id);
             return;
         }
