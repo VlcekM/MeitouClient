@@ -178,8 +178,9 @@ public interface IPackageRules
 
 /// <summary>
 /// A guarded gate: its door leaf's centre at the leaf's foot, the unit X/Z way through it pointing away from the town, and half the leaf's width.
+/// <paramref name="Inside"/>: its guards stand on the town's side of the leaf (a gate the player built, so they never pass through it).
 /// </summary>
-public readonly record struct GatePost(TownBuilding Building, Vector3 Door, Vector2 Out, float HalfWidth);
+public readonly record struct GatePost(TownBuilding Building, Vector3 Door, Vector2 Out, float HalfWidth, bool Inside = false);
 
 /// <summary>
 /// A seat a member sitting around claimed: the piece <paramref name="Index"/> (<see cref="TownBuilding.SeatAt"/>) of <paramref name="Building"/>.
@@ -306,7 +307,7 @@ public sealed class Blackboard
     /// <summary>
     /// The town the squad belongs to (a site index, -1: none) and the building it lives in (null: none known); <see cref="OwnHome"/> is the one it
     /// was given, <see cref="Home"/> the one in use (a bar package moves it to the bar). An autonomous player squad's is its assigned home's town
-    /// (<see cref="SquadAutonomy"/>).
+    /// (<see cref="SquadAutonomy"/>). The town goals' finders read the squad's town through <see cref="HomeTown"/>, which also answers an outpost.
     /// </summary>
     public int Town { get; set; } = -1;
 

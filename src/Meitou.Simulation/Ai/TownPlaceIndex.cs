@@ -56,15 +56,43 @@ sealed class TownPlaceIndex(PopulationData data)
     readonly Dictionary<int, TownPlaces> _outpostShops = [];
 
     /// <summary>
+    /// The places of each outpost a squad has as its town (<see cref="Blackboard.Outpost"/>), by the player town's number: where its squads
+    /// wander and sit (<see cref="AddOutpostPlaces"/>). Rebuilt with the places (derived, not hashed); none without such a squad.
+    /// </summary>
+    readonly Dictionary<int, TownPlaces> _outpostPlaces = [];
+
+    /// <summary>
+    /// The wall gates of each outpost a squad has as its town, by the player town's number (<see cref="OutpostGates"/>): rebuilt with the places
+    /// (derived, not hashed); none without such a squad.
+    /// </summary>
+    readonly Dictionary<int, IReadOnlyList<TownBuilding>> _outpostGates = [];
+
+    /// <summary>
     /// The stand-in of each player-built workplace, by site id: kept across refreshes, as a worker holds its workplace by reference
     /// (<see cref="AiMind.WorkPost"/>); a site whose record changed gets a new one (derived, not hashed).
     /// </summary>
     readonly Dictionary<string, TownBuilding> _standIns = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// The seat pieces of the outposts squads have as their town, and their stand-ins (<see cref="OutpostSeats"/>).
+    /// </summary>
+    readonly OutpostSeats _outpostSeats = new(data);
+
+    /// <summary>
     /// The places of town <paramref name="site"/> (<see cref="None"/> when it was not looked at).
     /// </summary>
     public TownPlaces Of(int site) => site >= 0 && _places.TryGetValue(site, out var p) ? p : None;
+
+    /// <summary>
+    /// The places of <paramref name="town"/>, a placed town's (<see cref="Of(int)"/>) or a player town's (an outpost some squad has as its town:
+    /// where to wander and sit, <see cref="AddOutpostPlaces"/>); <see cref="None"/> for no town and for any other outpost.
+    /// </summary>
+    public TownPlaces Of(CampaignTown town)
+    {
+        if (town.Site >= 0) return Of(town.Site);
+
+        return town.PlayerTown > 0 && _outpostPlaces.TryGetValue(town.PlayerTown, out var p) ? p : None;
+    }
 
     /// <summary>
     /// Whether the places of town <paramref name="site"/> were looked at since the last refresh.
@@ -96,6 +124,12 @@ sealed class TownPlaceIndex(PopulationData data)
     public TownPlaces OutpostShops(int number) => _outpostShops.TryGetValue(number, out var p) ? p : None;
 
     /// <summary>
+    /// The wall gates of outpost <paramref name="number"/> (a player town's number) a squad has as its town (<see cref="AddOutpostGates"/>); none
+    /// for an outpost not looked at.
+    /// </summary>
+    public IReadOnlyList<TownBuilding> OutpostGates(int number) => _outpostGates.TryGetValue(number, out var gates) ? gates : [];
+
+    /// <summary>
     /// The outposts' workplaces as the last refresh found them, by outpost number in order.
     /// </summary>
     public IEnumerable<TownBuilding> OutpostStandIns() => _outposts
@@ -103,11 +137,10 @@ sealed class TownPlaceIndex(PopulationData data)
         .SelectMany(o => o.Value.All);
 
     /// <summary>
-    /// The buildings wandering in <paramref name="site"/> can go to from <paramref name="at"/>: its public ones with a general node in the zone of
-    /// that point.
+    /// The buildings wandering in <paramref name="town"/> can go to from <paramref name="at"/>: its public ones in the zone of that point.
     /// </summary>
-    public IReadOnlyList<TownBuilding> WanderIn(int site, Vector3 at) =>
-        Of(site).Wander.TryGetValue(WorldLayout.ZoneOf(at.X, at.Z), out var list) ? list : [];
+    public IReadOnlyList<TownBuilding> WanderIn(CampaignTown town, Vector3 at) =>
+        Of(town).Wander.TryGetValue(WorldLayout.ZoneOf(at.X, at.Z), out var list) ? list : [];
 
     /// <summary>
     /// The towns' places for the AI's squads (serial, on the package cadence). A bar is a building whose residents' template has <c>building
@@ -127,6 +160,8 @@ sealed class TownPlaceIndex(PopulationData data)
         _realWork.Clear();
         _outposts.Clear();
         _outpostShops.Clear();
+        _outpostPlaces.Clear();
+        _outpostGates.Clear();
         var refresh = new Refresher(this, world, ai, data);
         var seen = new HashSet<string>(StringComparer.Ordinal);
 
@@ -136,6 +171,7 @@ sealed class TownPlaceIndex(PopulationData data)
         AddOutpostShops(world, ai, seen);
 
         foreach (string gone in _standIns.Keys.Where(id => !seen.Contains(id)).ToList()) _standIns.Remove(gone);
+        _outpostSeats.Prune(seen);
     }
 
     /// <summary>
@@ -159,8 +195,74 @@ sealed class TownPlaceIndex(PopulationData data)
             }
 
             _outposts[number] = (all, [.. all.Where(b => AiSystem.RealWork(world, b))]);
+            AddOutpostPlaces(world, ai, number, seen);
+            AddOutpostGates(world, ai, number, seen);
         }
     }
+
+    /// <summary>
+    /// The places of outpost <paramref name="number"/>, their sites noted in <paramref name="seen"/>: where its squads sit (its seat pieces,
+    /// <see cref="OutpostSeats"/>) and where they wander (37 Wandering town, <see cref="WanderIn"/>): its complete, standing, public buildings
+    /// of the outpost's owner (<see cref="InOutpost"/>) whose doors are not all locked (the AI-run squad keeps to the player's locks,
+    /// <see cref="SquadAutonomy.KeepsPlayerLocks"/>), that stand on their own (no furniture or machine placed in another) and have an interior,
+    /// no wall or gate, by zone in the
+    /// order of the player's buildings, each a stand-in known by its site id (<see cref="TownBuilding.RuntimeKey"/>). <b>Engine choice</b> (Meitou
+    /// only: the original plans no goals for the player's squads): a placed town's wanderer goes to a general node of a public building, and a
+    /// player-built building has no nodes, so the building itself is the target (<see cref="AiSystem"/>'s <c>TargetFor</c>), as an outpost's
+    /// shop is.
+    /// </summary>
+    void AddOutpostPlaces(World world, AiSystem ai, int number, HashSet<string> seen)
+    {
+        var wander = new List<TownBuilding>();
+        foreach (var site in world.Buildings.All)
+        {
+            bool standing = site.Complete && !site.Destroyed && site.Public && site.Parent is null;
+            if (!standing || !InOutpost(world, site, number)) continue;
+            if (world.Fixtures.AllDoorsLocked(site.Id) || data.Db.Find(site.Record) is not { } record) continue;
+            if (record.GetReferences("interior").Count == 0 || IsWallOrGate(record)) continue;
+
+            wander.Add(StandIn(site, ai.FunctionOf(site.Record)));
+            seen.Add(site.Id);
+        }
+
+        var byZone = wander.GroupBy(b => b.Zone).ToDictionary(g => g.Key, g => g.ToArray());
+        var (seats, owners) = _outpostSeats.Of(world, number, seen);
+        _outpostPlaces[number] = None with { Wander = byZone, Seats = seats, SeatOwners = owners };
+    }
+
+    /// <summary>
+    /// The wall gates of outpost <paramref name="number"/> (<see cref="OutpostGates"/>), their sites noted in <paramref name="seen"/>: its
+    /// complete, standing buildings of the outpost's owner (<see cref="InOutpost"/>) with <c>is wall gate</c> (the flag a placed town's gate is
+    /// known by, <see cref="TownBuilding.IsGate"/>), in the order of the player's buildings, each a stand-in known by its site id, whose doors the
+    /// player's door fixtures name (<see cref="Locks.FixtureRegistry.RegisterPlayerBuilding"/>). Their guards stand on the outpost's side
+    /// (<see cref="GatePost.Inside"/>).
+    /// </summary>
+    void AddOutpostGates(World world, AiSystem ai, int number, HashSet<string> seen)
+    {
+        var gates = new List<TownBuilding>();
+        foreach (var site in world.Buildings.All)
+        {
+            if (!site.Complete || site.Destroyed || !InOutpost(world, site, number)) continue;
+            if (data.Db.Find(site.Record)?.GetBool("is wall gate") != true) continue;
+
+            gates.Add(StandIn(site, ai.FunctionOf(site.Record)));
+            seen.Add(site.Id);
+        }
+
+        _outpostGates[number] = gates;
+    }
+
+    /// <summary>
+    /// Whether a building the player built stands in outpost <paramref name="number"/> (<see cref="Construction.TownLookup.PlayerTownOf"/>) and is
+    /// owned by the outpost's owner (not another faction's building inside it).
+    /// </summary>
+    internal static bool InOutpost(World world, Construction.BuildSite site, int number) =>
+        Construction.TownLookup.PlayerTownOf(world, site) is { } town && town.Number == number && site.Owner == town.Owner;
+
+    /// <summary>
+    /// A wall (<c>links together</c>) or a wall gate (<c>is wall gate</c>): not a building to wander into.
+    /// </summary>
+    static bool IsWallOrGate(Data.GameRecord record) => record.GetBool("links together") || record.GetBool("is wall gate");
 
     /// <summary>
     /// The shops of each outpost (<see cref="OutpostShops"/>), their sites noted in <paramref name="seen"/>: the original's shop test passes a
@@ -211,6 +313,7 @@ sealed class TownPlaceIndex(PopulationData data)
             RuntimeKey = site.Id,
             Zone = site.Zone,
             Function = function,
+            IsGate = data.Db.Find(site.Record)?.GetBool("is wall gate") == true,
         };
     }
 

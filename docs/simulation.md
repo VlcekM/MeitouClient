@@ -2007,6 +2007,29 @@ Meitou only (the original's AI plans for no player squad; asked for as the RE_Ke
   player town's number, beside `Town` = -1; `Blackboard.HomeTown` is either kind; derived from the home on each settle, not hashed or saved).
   "At home town" is within its radius (`PlayerTown.Radius`) and going home with the home unreachable walks to its centre; a patrol package
   starts there after 8 hours in it, as in any town ([package classes](game/ai.md#package-classes)).
+  The town goals' finders ask by `Blackboard.HomeTown` (`TownPlaceIndex.Of(CampaignTown)`); an outpost's
+  places exist only while some squad has it as its town, and take only the outpost owner's buildings. **Engine choices** throughout:
+  - **Locks**: on a walk the AI started for it (`AiMind.Owns`), a member keeps to the player's locks (`SquadAutonomy.KeepsPlayerLocks`): it has
+    no way through a locked door or gate of a building the player owns (`LockSystem.WayThrough` gives none, so the planner finds the
+    destination shut and a walk that meets one stops there, without "It's locked."), and nothing the AI does unlocks it. A closed, unlocked
+    door it passes is opened as for any walker and left open. A player's order or job to the member goes through as for the player's
+    characters.
+  - **Wandering** (37): draws among the outpost's complete, standing, public player-built buildings with an interior that stand on their own
+    (no wall or gate) and whose doors are not all locked, in the walker's zone, and walks to the drawn building's origin on any floor, ending
+    within reach of it (a player-built building has no general nodes; an outpost's shop is walked to the same way). A walker whose building the
+    player locks on its way draws again, so it does not walk on to the locked door.
+  - **Gate guard** (180): with no gate home, the outpost's complete player-built wall gate (`is wall gate`) nearest the squad
+    (`TownPlaceIndex.OutpostGates`); the guard stands 15 from its first door leaf on the outpost's side, facing out (`GatePost.Inside`), so it
+    never passes through the player's gate, where a placed town's guard stands outside. The lock rounds never open or lock a building the
+    player owns. A player-built home is never the squad's gate home (its stand-in is no gate), so a squad living in the player's gate guards
+    the nearest gate this way and its other members do not flank it.
+  - **Sitting** (275) and **reigning** (255), while the member stands within the outpost's radius (an outpost inside a placed town's radius
+    offers none: the placed town is taken first): the complete chairs and thrones the player built there in a public building whose doors are
+    not all locked, or standing on their own (`OutpostSeats`; owner the building each stands in, else its own; a chair facing its table as the
+    player's chair does), never training dummies (the members are on the player's side), and not one a character operates by an order or
+    job. The town and owner gates are a placed town's (player side: a town of the player's faction). The player's characters come first: the
+    player's Use order and Sit job do not count a member's sitting as using the chair (`SquadAutonomy.YieldsSeat`), and a member whose piece a
+    character takes that way gets up at once.
 - **Outpost work**: the outpost's complete, standing buildings of the workers' functions (MINE, RESEARCH, REFINERY, CRAFTING) are its workplaces for
   goals 189 / 190, stand-ins known by their site id (`TownPlaceIndex.OutpostWorkplaces`), but a research bench while no research is current (the
   finder's `couldIOperate`, slot `0x500`, refuses it through `dontNeedWorkRightNow`, `FUN_1402995e0`, **Verified**); the player-flag gate lets the
@@ -2032,8 +2055,9 @@ Meitou only (the original's AI plans for no player squad; asked for as the RE_Ke
   `GameMods.DropUnownedAutonomy`); one with no owner stays as saved.
 - **Engine choices**: the sleeping desire and state 72 (fully rested) read an autonomous member as an NPC (with the player stand-in its sleep
   goals would never plan).
-- **Not built**: the outpost's gates and turrets are not yet goal targets of its residents; a work building; the contract's mission target over a
-  save (as NPC platoons).
+- **Not built**: the outpost's turrets as goal targets (the player's turret job, `AddJob`, mans them with the player turret's power and
+  research; the AI's town turret post applies neither), its guard posts (157), bars and relaxing (a player-built building has no nodes, bar
+  designation or tables); a work building; the contract's mission target over a save (as NPC platoons).
 
 ### Planner
 

@@ -78,7 +78,8 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// Whether a character (other than the one at <paramref name="except"/>) sits resting on the seat site's place.
+    /// Whether a character (other than the one at <paramref name="except"/>) sits resting on the seat site's place: one the AI seated, but not one
+    /// that gives its seat way to the player's characters (<see cref="Ai.SquadAutonomy.YieldsSeat"/>).
     /// </summary>
     static bool SeatOccupied(World world, BuildSite site, int except = -1)
     {
@@ -86,8 +87,9 @@ public sealed partial class ProductionSystem
 
         for (int i = 0; i < table.HighWater; i++)
         {
-            if (i != except && table.Next[i].Alive && table.Next[i].Task == (byte)CharacterTask.Rest && table.Cold(i)?.Ai?.SitClip is not null
-                && Vector3.DistanceSquared(table.Next[i].Position, site.Position) < 1) return true;
+            if (i == except || !table.Next[i].Alive || table.Next[i].Task != (byte)CharacterTask.Rest) continue;
+            if (table.Cold(i)?.Ai is not { SitClip: not null } mind || Ai.SquadAutonomy.YieldsSeat(mind)) continue;
+            if (Vector3.DistanceSquared(table.Next[i].Position, site.Position) < 1) return true;
         }
 
         return false;

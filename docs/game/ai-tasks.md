@@ -1481,7 +1481,8 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
     inside buildings (**Observed**: the bar-table finder, same scan, tests "inside the bar").
   - Meitou (`TownPlaceClaims.ClaimSitting`, on the package cadence): no piece claimed means the goal is not wanted; a squad does not sit where it stands. The town gate and the owner test above are
     applied as written, with the town the member stands in (radius test) and the building's owner = its property owner, else the level state's `owner faction ID`, else the town's faction;
-    the player-side branch is coded but unused (an AI-run squad is never the player's). Pieces: a free chair, throne or (not for the player's side) training dummy in any building of that
+    the player-side branch applies to an autonomous player squad's members, who also sit in the outpost they have as their town
+    ([autonomous player squads](../simulation.md#autonomous-player-squads)). Pieces: a free chair, throne or (not for the player's side) training dummy in any building of that
     town (`TownBuilding.SeatAt`: the layout's chairs, then `Furniture`: layout thrones and dummies, and free-standing chairs, thrones and dummies), the nearest to the member (engine choice:
     the original takes the first of an arbitrary order). A dummy is stood at, facing its way, and pretend-operated like a home workstation (221 `Task_OperateMachine`: the functionality's
     clip, hunger rate and `animation events`; `AiSystem.PretendOperate`). Not modelled: the finder's usability and avoid-set filters (slot 0), a piece's own owner

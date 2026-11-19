@@ -784,7 +784,9 @@ holds refuses the second mod.
   `change AI` / `AI contract` give an NPC squad's (both are ignored for a player squad that is not autonomous), and
   `SetSquadHome(squadId, building)` its home: a town building's key (`TownBuilding.Key`, `x.y:instance`) or a player-built building's id
   (`BuildSite.Id`); null clears it. A player-built home in one of the faction's outposts makes the outpost the squad's town:
-  going home and town work on the outpost's own machines use it ([rules](simulation.md#autonomous-player-squads)). The player's orders and
+  going home, town work on the outpost's own machines, wandering between its public buildings, the gate guard's gate (guarded from
+  inside) and sitting and reigning on its chairs and thrones use it; on its own walks the squad never unlocks a door or gate the player
+  locked, and gives a chair up to the player's characters ([rules](simulation.md#autonomous-player-squads)). The player's orders and
   jobs come first. `SetSquadAutonomy(squadId, true, Independent: true)` makes it a squad the player does not lead: not selectable, no squad
   tab, no squad commands, not counted against `max squads` (for staff, caravans or companions with a will of their own; orders that name its
   characters still apply; refused for the last squad the player leads; `SetSquadAutonomy(squadId, true)` leads it again). Its menu has no
@@ -941,9 +943,10 @@ holds refuses the second mod.
   loaded towns' buildings, with record, position and owning faction) or a complete building's in `world.Buildings.All` whose functionality is a
   chair or throne, of any faction. `CanSit(world, slot, seat)` gives the same answer without starting anything; it changes nothing in the world
   and logs nothing, so a mod picks a free seat with it. `SeatAnswer`: `Seated`; `NotASeat` (also a destroyed seat, a null or empty id);
-  `Taken` (someone rests on it, the AI's sitters included, or another character is on an operate task for it, walking there included: one sitter
-  per seat, whatever its `max operators`); `Unable` (dead, down, carried, carrying someone, fleeing, in a bed or cage, or not of the human
-  repertoire: animals, crawlers, one staying low); `ShutOut` (at the call, its building is shut to the character as to a player character's walk:
+  `Taken` (someone rests on it, the AI's sitters included but not a member of an AI-run squad living in an outpost, who gives the seat up, or another
+  character is on an operate task for it, walking there included: one sitter per seat, whatever its `max operators`); `Unable` (dead, down, carried,
+  carrying someone, fleeing, in a bed or cage, or not of the human repertoire: animals, crawlers, one staying low); `ShutOut` (at the call, its
+  building is shut to the character as to a player character's walk:
   no lock is picked or cut for it, though one whose faction bashes doors may bash its way in; or the character stands in a shut building with no
   way out; a door locked during the walk is the walk's business). Any answer but `Seated` changes nothing and logs a line naming the row, once
   per row, seat and answer; a character already on that seat on that row is left as it is. Both run in the serial phases only and throw in a
