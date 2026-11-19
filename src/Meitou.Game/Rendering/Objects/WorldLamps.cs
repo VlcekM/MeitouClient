@@ -40,6 +40,14 @@ internal sealed class WorldLamps : IDisposable
     internal const float RoomSurfaceMargin = 0.5f, TracedRoomMargin = 100000f;
 
     /// <summary>
+    /// How much further an untraced interior lamp reaches a surface lit as an interior (the room's own walls and furniture): a room's convex
+    /// footprint can cut inside its walls, round a door most, where the walls were left out of their own lamps' light, a dark polygon round the
+    /// doorway (**Observed**, save lamp, the Storm House's teal tubes, lamp shadows off; traced, the rays stop the light at the walls instead).
+    /// Outside surfaces keep the tight margin, so the lamps do not light the street.
+    /// </summary>
+    internal const float RoomInteriorSlack = 40;
+
+    /// <summary>
     /// How far past an interior lamp's room hull its light still reaches (set each frame): <see cref="RoomSurfaceMargin"/>, or
     /// <see cref="TracedRoomMargin"/> when the lamps are traced.
     /// </summary>

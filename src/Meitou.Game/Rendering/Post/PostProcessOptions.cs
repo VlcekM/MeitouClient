@@ -83,6 +83,12 @@ public sealed class PostOptions
     public bool MeitouFog = true;
 
     /// <summary>
+    /// Meitou switch (<c>dustlight</c>; docs/render-post.md "Lit dust"): the dust and spray a foot throws up are lit as the scene is (the sun
+    /// through its shadows, the sky, the lamps); Faithful draws them as the game does, additive and unlit, as bright by night as by day.
+    /// </summary>
+    public bool LitDust = true;
+
+    /// <summary>
     /// Meitou switch (<c>gihybrid</c>; docs/render-gi.md "Hybrid GI"), off by default: nothing it holds has been seen on a GPU.
     /// <c>--gi-hybrid</c> picks among its parts.
     /// </summary>

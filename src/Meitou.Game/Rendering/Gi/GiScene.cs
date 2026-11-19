@@ -96,9 +96,11 @@ internal sealed unsafe class GiScene : IDisposable
     #region Settings
 
     /// <summary>
-    /// Most instances in the top-level structure, and most geometry records.
+    /// Most instances in the top-level structure, and most geometry records. At 16384 a stand of bushes (save trees-shadows: 12000 to 15000 small
+    /// foliage casters in reach and over 3 pixels, 1600 to 1900 trees) overflowed the foliage's share, and the bushes left out, the smallest on screen,
+    /// changed as the eye moved: their shadows came and went (the user's "unstable blobs" on and round foliage).
     /// </summary>
-    public const int MaxInstances = 16384, MaxRecords = 65536;
+    public const int MaxInstances = 32768, MaxRecords = 131072;
 
     /// <summary>
     /// The objects' range the probes need (<see cref="Range"/>'s default; the traced sun takes it to the shadows' range).

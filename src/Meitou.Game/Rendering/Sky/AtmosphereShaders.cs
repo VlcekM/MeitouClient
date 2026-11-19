@@ -136,6 +136,10 @@ static class AtmosphereShaders
         uniform sampler2D uLightCells, uLightIndex, uLightData, uLampTiles;
         {{LampShaders.Defines}}{{LampShaders.TileMapping}}{{LampShaders.TileVisibility}}
         #define LAMP_VISIBILITY(world, n, toLamp, indoor, emitter) lampTileVisibility(lamp, toLamp, d, n)
+        // An interior surface (giInterior, set by kenshiLight before the lamps): its room's lamps reach it WorldLamps.RoomInteriorSlack past the
+        // room's footprint.
+        float lampRoomSlack = 0.0;
+        #define LAMP_ROOM_SLACK lampRoomSlack
         {{LampShaders.Lighting}}
 
         // ---- the weather's surfaces (docs/formats/weather.md "Rain and wetness", "Dust") ----
@@ -728,6 +732,12 @@ static class AtmosphereShaders
                 if ((giFlags & 2) != 0 && atmoPuddle) stored |= 536870912u;   // the reflections' sky is the dome's (SsrShaders ssrPuddle)
                 if (atmoStreet) stored |= 1073741824u;
                 giAlbedoOut = uvec4(o, c.r | (c.g << 8) | specular, stored);
+
+                // The resolve swaps the sky's diffuse ambient for the probes' and leaves the reflection: without the reflections (giFlags 2), a room's
+                // surfaces and metal mirrored the whole sky, bright beads on a bed's studs and the stair treads in a closed room (Observed, save lamp, the
+                // Storm House). They take the occlusion of the path that reads the probes itself (below): the probes' light over the sky's.
+                if (useGi && (giFlags & 2) == 0 && (giInterior || atmoMetalness > 0.0))
+                    specularOcclusion = giSkyOcclusion(world, n, v, envDiffuse, giInterior);
             }
             else
                     #endif
@@ -762,6 +772,7 @@ static class AtmosphereShaders
             if (uLightGrid.w > 0.5)
             {
                 vec3 lampDiffuse = vec3(0.0), lampSpecular = vec3(0.0);
+                lampRoomSlack = giInterior ? {{F(Objects.WorldLamps.RoomInteriorSlack)}} : 0.0;
                 lampLight(world, n, v, a, a2, lampDiffuse, lampSpecular);
                 lit += albedo * lampDiffuse + lampSpecular;
                 lampDiffuseOut = dot(albedo * lampDiffuse, vec3(1.0 / 3.0));   // the channels' mean, not the luminance: LampShadowShaders.Apply

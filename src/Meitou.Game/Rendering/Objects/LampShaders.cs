@@ -161,6 +161,10 @@ static class LampShaders
         #ifndef LAMP_VISIBILITY
         #define LAMP_VISIBILITY(world, n, toLamp, indoor, emitter) 1.0
         #endif
+        // How far past its room's footprint an interior lamp still lights this surface, beyond the rows' own margin (WorldLamps.RoomInteriorSlack).
+        #ifndef LAMP_ROOM_SLACK
+        #define LAMP_ROOM_SLACK 0.0
+        #endif
         // The game's light attenuation (docs/formats/lights.md, WorldLights.Attenuation): not inverse-square, 1 at the lamp, 0 at its radius.
         float lampAttenuation(float d, float radius)
         {
@@ -203,7 +207,7 @@ static class LampShaders
                     for (int e = 0; e < edges; e++)
                     {
                         vec3 plane = texelFetch(uLightData, ivec2(6 + e, lamp), 0).xyz;
-                        if (dot(plane.xy, world.xz) + plane.z < 0.0) { inside = false; break; }
+                        if (dot(plane.xy, world.xz) + plane.z + LAMP_ROOM_SLACK < 0.0) { inside = false; break; }
                     }
                     if (!inside) continue;
                 }

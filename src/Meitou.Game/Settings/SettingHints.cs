@@ -115,6 +115,7 @@ static class SettingHints
         "Water contact foam, wakes and ripples" => "Foam clings to rocks, posts and legs; wading characters leave ripples and wakes.",
         "Weather particles" => "Render weather at an adaptive lower resolution.",
         "Fog" => "Soften dust and fog where they meet the ground, and light them by the sun and its shadows.",
+        "Lit dust" => "Light the dust and spray kicked up by running feet like the ground around them, instead of glowing at night.",
         "Foliage levels" => "Use generated simpler meshes for distant foliage.",
         "Indirect light" => "Use light probes for bounced and ambient lighting.",
         "Indoor GI" => "Bounced light indoors too.",

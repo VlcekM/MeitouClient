@@ -247,7 +247,7 @@ sealed class LookPresets(SettingsMenu menu)
         "Interior lamps" or "Lamp warmth" => "Advanced",
         "Anti-aliasing" or "Weather particles" => "Hidden",
         "Shadows" or "Indirect light" or "Indoor GI" or "Ambient occlusion" or "Light shafts" or "Planetshine" => "Light",
-        "Haze" or "Night air" or "Night sky" or "Clouds" or "Cloud shadows" or "Cloud shadows in fog" or "Heat haze" or "Fog" => "Sky",
+        "Haze" or "Night air" or "Night sky" or "Clouds" or "Cloud shadows" or "Cloud shadows in fog" or "Heat haze" or "Fog" or "Lit dust" => "Sky",
         "Tone map and grade" or "Night grading" or "Dithering" or WorldFrame.BloomSwitch
             or WorldFrame.DepthOfFieldSwitch or WorldFrame.CameraEffectsSwitch or WorldFrame.VignetteSwitch or WorldFrame.FilmGrainSwitch => "Colour",
         "Water" => "Water",
@@ -320,7 +320,7 @@ sealed class LookPresets(SettingsMenu menu)
             or "Bloody footprints" or "Blood on weapons and gear" or "Water beads" or "Metal on buildings" or "Metal on characters"
             or "Skin sheen and glow" or "Eye catchlights" or "Anti-aliasing: 0 off 1 FXAA 2 SMAA 3 TAA 4 FSR 5 DLSS" or "Draw distances"
             or WorldFrame.DepthOfFieldSwitch => "Medium impact",
-        "Night air" or "Night sky" or "Skin" or "Rock smoothing (tessellation)" or "Cloud shadows in fog" or "Bloom strength (0 = game)"
+        "Night air" or "Night sky" or "Skin" or "Rock smoothing (tessellation)" or "Cloud shadows in fog" or "Bloom strength (0 = game)" or "Lit dust"
             or WorldFrame.BloomSwitch or "Heat haze" or "Blood cells" or WorldFrame.BloodDrawsSlider or "Item icons" or "Fog" or "Bolt tracers"
             or "Water contact foam, wakes and ripples" or "Light shafts air (0 = none)" or WorldFrame.ShaftQualitySlider or WorldFrame.GiRaysSwitch
             or WorldFrame.ShadowCascadesSlider or "Reflection range x (game 0.6)" or WorldFrame.ReflectionSamplesSlider or "Hair highlights" or "Cloth sheen"

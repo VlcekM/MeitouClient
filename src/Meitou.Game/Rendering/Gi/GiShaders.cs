@@ -226,6 +226,16 @@ static class GiShaders
             if (!interior) return irradiance;
             return giFill(irradiance * giTrust(), sky, clamp(uGiParams.w - 1.0, 0.0, 1.0));
         }
+        // How much of the sky a surface's reflection keeps: its ambient from the probes (the indoor floor included) over the sky's ambient, weighted as
+        // the GI weighs the probes (kenshiLight's specular occlusion).
+        float giSkyOcclusion(vec3 p, vec3 n, vec3 v, vec3 sky, bool interior)
+        {
+            const vec3 lum = vec3(0.2126, 0.7152, 0.0722);
+            // Not "vec4 gi = ...": the resolve's hybrid variant edits that line (GiResolveShaders.ResolveFor).
+            vec4 probes = giIrradiance(p, n, v, interior);
+            float light = dot(giSurfaceIrradiance(probes.rgb, sky, interior), lum);
+            return mix(1.0, clamp(light / max(dot(sky, lum), 1e-4), 0.0, 1.0), giWeight(probes.a, interior));
+        }
 
         """;
 

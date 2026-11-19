@@ -645,6 +645,13 @@ public sealed unsafe class SkyRenderer : IDisposable
     public Vector3 PlanetAlbedo => _textures.PlanetAlbedo;
 
     /// <summary>
+    /// The noon's light in the open, which the lit dust measures its own against (<see cref="Particles.ParticleRenderer.DustNoon"/>): x pi times the
+    /// luminance of the sun's light at the zenith, y the environment light's factor at noon with the ambient slider.
+    /// </summary>
+    public Vector2 NoonLight => new(MathF.PI * Meitou.Data.World.Planetshine.Luminance(KenshiLighting.SunLight(Vector3.UnitY)),
+        KenshiLighting.EnvironmentFactor(KenshiLighting.LightDirection(Vector3.UnitY)) * AmbientFor(1));
+
+    /// <summary>
     /// The sun height the shadow pass tests against its cut-off (<see cref="ShadowPass.MinSunHeight"/>): the real sun's, but while the planet is
     /// lighting the land (planetshine on, some light of it) never under the horizon, so the shadows go on all night along the published direction.
     /// </summary>
