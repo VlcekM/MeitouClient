@@ -45,7 +45,7 @@ public sealed class ItemSlots
     /// next item is due, in the building's GAMESTATE_BUILDING (the original keeps the respawn time in the interior's own group record, which Meitou
     /// does not write).
     /// </summary>
-    const string DueKey = "meitou slot due ";
+    internal const string DueKey = "meitou slot due ";
 
     /// <summary>
     /// One loose-item slot.

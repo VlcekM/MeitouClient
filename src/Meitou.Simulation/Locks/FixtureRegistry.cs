@@ -2366,7 +2366,7 @@ public sealed partial class FixtureRegistry
     /// <summary>
     /// The start of <see cref="InteriorKey"/>'s keys.
     /// </summary>
-    const string InteriorLockPrefix = "meitou lock ";
+    internal const string InteriorLockPrefix = "meitou lock ";
 
     /// <summary>
     /// Whether a fixture of <paramref name="building"/> is one of its layout's objects (id <c>&lt;building&gt;/&lt;object&gt;</c>).

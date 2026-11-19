@@ -9,7 +9,8 @@ namespace Meitou.Simulation.Saving;
 /// keys" and economy.md 11.5). Character keys of GAMESTATE_CHARACTER: <c>in something</c> (int, <see cref="HeldState"/>), <c>in what</c> (a building
 /// handle), <c>sentence</c> (int, the sentence's start in game hours, day x 24 + hour, truncated) and <c>psts</c> (float, its length in hours);
 /// Meitou's own <c>meitou in something</c> / <c>meitou in what</c> (the <see cref="Fixture.Id"/>) carry what the original's handle cannot name (an
-/// interior cage, a bed). Building locks are read from and written into the zones' existing GAMESTATE_BUILDING records only.
+/// interior bed, a cage whose entry the save does not hold). Building locks are read from and written into the zones' existing
+/// GAMESTATE_BUILDING records only.
 /// </summary>
 public static class HeldSave
 {
@@ -96,9 +97,10 @@ public static class HeldSave
 
     /// <summary>
     /// Writes them back. The original's keys are left as read while the held state and fixture did not change since loading
-    /// (<paramref name="loaded"/>); otherwise <c>in what</c> is the handle of the fixture's building when the fixture is the building's own (a placed
-    /// cage or standalone bed) and the save has its state, else the null handle with <c>in something</c> 0 (the original would hold a prisoner
-    /// with no prison; Meitou's keys keep the truth).
+    /// (<paramref name="loaded"/>) and those keys name it; otherwise <c>in what</c> is the handle of the fixture's own state in
+    /// <paramref name="buildings"/>: its building's when the fixture is the building's own (a placed cage or standalone bed), a layout cage's
+    /// entry under the cage's id (<see cref="InteriorSave"/>). With no such state it is the null handle with <c>in something</c> 0 (the original
+    /// would hold a prisoner with no prison; Meitou's keys keep the truth).
     /// </summary>
     public static void Write(
         FcsRecord state, CharacterCold cold, SavedCharacterLink? loaded, FixtureRegistry fixtures, IReadOnlyDictionary<string, FcsRecord> buildings)
@@ -109,7 +111,9 @@ public static class HeldSave
             state.Floats["psts"] = cold.SentenceLength;
         }
 
-        if (loaded is not null && loaded.InSomething == cold.InSomething && loaded.InWhat == cold.InWhat) return;
+        // A held state read from Meitou's keys alone (the original's said free) is written again: its cage may have an entry to name now.
+        bool named = cold.InSomething == HeldState.None || state.Ints.GetValueOrDefault("in something") != 0;
+        if (loaded is not null && named && loaded.InSomething == cold.InSomething && loaded.InWhat == cold.InWhat) return;
 
         if (cold.InSomething != HeldState.None && cold.InWhat is { } what)
         {
@@ -124,11 +128,16 @@ public static class HeldSave
 
         var hand = Hand.Null;
         if (cold.InSomething != HeldState.None && cold.InWhat is { } id && fixtures.Find(id) is { } f
-            && (f.Id == f.Building || f is { Kind: FixtureKind.Bed, Indoors: false })
-            && buildings.TryGetValue(f.Building, out var b) && Hand.IsComplete(b, "handle"))
+            && buildings.TryGetValue(StateKey(f), out var b) && Hand.IsComplete(b, "handle"))
             hand = Hand.Read(b, "handle");
 
         state.Ints["in something"] = hand.IsNull ? 0 : (int)cold.InSomething;
         hand.Write(state, "in what");
     }
+
+    /// <summary>
+    /// The key of the state that stands for a fixture in the building states: its building's when it is the building's own or an outdoor bed,
+    /// else its own id, which only a layout cage with a saved entry has a state under.
+    /// </summary>
+    static string StateKey(Fixture f) => f.Id == f.Building || f is { Kind: FixtureKind.Bed, Indoors: false } ? f.Building : f.Id;
 }

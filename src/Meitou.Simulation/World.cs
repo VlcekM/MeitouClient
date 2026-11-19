@@ -526,6 +526,11 @@ public sealed partial class World : IDisposable
     /// </summary>
     public Items.ItemSlots ItemSlots { get; } = new();
     /// <summary>
+    /// The writer of the houses' interiors into a save, with the entry ids it gave this session (<see cref="Saving.InteriorSave"/>). Only read by
+    /// saves, so not hashed.
+    /// </summary>
+    public Saving.InteriorSave Interiors { get; } = new();
+    /// <summary>
     /// Every zone the population has had active in this world (docs/formats/save.md "Zone files": the original writes a file for each zone it
     /// loaded): a save writes a zone file for each that its loaded save has none of. Only read by saves, so not hashed.
     /// </summary>

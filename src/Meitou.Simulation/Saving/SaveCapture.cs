@@ -219,6 +219,9 @@ public static partial class SaveCapture
         // Again, with the states of the buildings first written now (job targets name them by handle).
         buildings = HeldSave.BuildingStates(game);
         MachineSave.Write(game, world);
+
+        // Before the machines and furniture inventories, which write into the entries it makes.
+        world.Interiors.Write(game, world, data, buildings, options.Seed);
         TownMachineSave.Write(game, world);
         FurnitureInventorySave.Write(game, world, data.Db, buildings);
         RuinSave.Write(game, world, data, buildings);

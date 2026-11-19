@@ -587,6 +587,32 @@ has an override world state (its lists are then replaced) or `0-buildinglist` ho
   name no level building); `town` the town the building belongs to (3726 of 6743 name another town than the level state; the town states keep the level `hand`, 304 of 304 in
   saves 1 and 2). Record flags 0, name "0".
 - `serialised interior` = 1 stops the building factory (`FUN_14057cc70`) from generating the interior (**Verified** by code); absent or another value, it is generated.
+- A serialised interior's entries (**Verified**, `meitou-tools probe METARU interiors`: Meitou's written states against the save's, 14660 furniture
+  entries and 5627 item groups of 283 houses, every key of each; only live state differs: lock rolls, `batterycharge`, a lit campfire, a farm's keys).
+  One entry per object the house's interior and exterior layouts place, a record with `is node` excepted (none of 4485 saved); id
+  `<n>-zone<X>.<Y>-INGAME`, world position and rotation, state `<id>-S23`. Every state: `is inside building` true, `isInsideBuilding` the house's
+  handle (the factory skips an entry whose parent it cannot find, `FUN_14057cc70`), its own `handle` (slot in the zone's list), `floornum`,
+  `flags`, `version`, `serialised interior` 1, null `residents`, `foliage` / `pause` / `destroyed` false, `is complete` and `is public day` true
+  (whatever the house's), `world Y pos`, `player furniture Y offset` (its height less the house's `world Y pos`), `construction progress` (the
+  build target) and `<i>construction mats` (each material in full), `name` (the record's), `owner faction ID` (the house's), empty
+  `squad template` / `residents template`. By the record's `functionality`: any has `broken`, `power on`, `gets battery`, `batterycharge`;
+  function 15 (light) a null `mounted` handle; function 8 (cage) or `has lock` has `locked`, `lock lvl`, `hardness`; functions 1, 4, 5, 10, 23
+  have `resource mult` 1, `production amount` and one `consumption amount-<k>` per input section, a bench (10) also `num crafts`, `repeat`,
+  `craft partial item size`; `usagenode_<k>` only while used. The house's state names each furniture entry by `internalbuildings-<k>`
+  (`FUN_1405547f0`). An item slot's entry targets its ITEM_PLACEMENT_GROUP, with a state of that type under its own `<n>-zone<X>.<Y>-INGAME`
+  id (`is inside building`, `isInsideBuilding`, `floornum`, `respawn time`, `base data sid`) and no handle; its height is above the ground:
+  the group adds its zone's ground height back when it is made from an entry (`FUN_1405534f0`, `FUN_1409b3710`, **Verified** by code).
+  The original keeps a loaded entry as it is saved (**Observed**, harness: a Meitou-written interior of 242 objects and 36 groups loaded and saved
+  again came back with the same ids, handles and values, `usagenode_<k>` added).
+- Meitou (`Saving/InteriorSave`) writes a house's interior this way when one of its layout's cages holds a prisoner and its state has no
+  `serialised interior` 1 (a zone file Meitou made): a standing house that was neither bought nor furnished anew by an override. The locks are
+  the fixtures' (else the house's `meitou lock <i>`), an empty slot's `respawn time` its due hour, new handles take the slots after the
+  zone's last, and the machine and furniture-inventory writers then fill the entries as they do the original's. A group's height is taken
+  above Meitou's terrain height, at least the water level (**Observed**, METARU: within 0.5 of the saved height for 4370 of 5627 groups,
+  within 2 for 5276; under water the original's reference is 100.0). **Observed** (headless, feedback save of #1026): the slave shop's
+  49 objects and 19 groups and the police station's are written, a reload registers the same fixtures, occupants and container items, and
+  a second save writes the same file; (harness) the original loads it with the prisoner "Locked (lvl: 22)", still held an hour later, and
+  the shop's chest holding the 3 stacks Meitou saved.
 - A ruin (`destroyed` true) has no entry inside it: no state names it as `isInsideBuilding` (**Observed**, METARU, autosaves 1 and 2, redev, Beep Fan
   Club 1); its `internalbuildings-<k>` handles may name objects that are gone, their slots kept in the slot list
   ([ruins](../game/buildings-production.md#ruined-by-residents)). Meitou (`Saving/RuinSave`): a capture removes each entry inside a town building the
@@ -655,7 +681,7 @@ has an override world state (its lists are then replaced) or `0-buildinglist` ho
 **Meitou** (`Saving/ZoneSave`, `Data/Save/SaveZoneBuilder`): every zone the population had active, and every zone of a town it made but another town's centre zone (engine choice:
 a town is made and saved whole; three such zones, e.g. Black Desert City's buildings in Scraphouse's 34.28), is visited (`World.VisitedZones`, not hashed). A save keeps the loaded save's zone files (locks, doors and player buildings are written into them) and makes
 the missing ones from the level data as above, with `town` set to the save's town state `hand` and a new save's town states taking their level `hand`; it writes no
-`serialised interior` but on a ruin's state ([above](#zone-files)), no furniture and no inventories but its town machines' (Town machines, above) and the furniture inventories of a loaded save's entries (above), so the original makes each interior as for a fresh zone from its `interior layout name` (only the residents differ: the
+`serialised interior` but on a ruin's state and on a house that holds a prisoner in one of its layout's cages, whose interior it writes whole ([above](#zone-files)), no other furniture and no inventories but its town machines' (Town machines, above) and the furniture inventories of a save's entries (above), so the original makes every other interior as for a fresh zone from its `interior layout name` (only the residents differ: the
 saved platoons). A load lays each town building whose saved state names an interior layout out with the saved interior and exterior names (the original generated
 the saved furniture from them; **Observed** headless, METARU: 972 such buildings, 117 named otherwise than Meitou's housing, all laid out with the saved names), and a
 save writes them back. **Observed** (headless new game, the player moved to Squin and Stack): 8 visited zones, 8 files, every handle in its slot list, 300 of 300 `town` handles
@@ -713,7 +739,9 @@ Shop prisoner's cage (`1783-gamedata.base`, an `<n>-zoneX.Y-INGAME` entry of the
 the shop's `interior layout name`, the next cage 27.8 away. A sleeper's generated interior bed is matched the same way
 (**Observed**: the 24 saved sleepers of the Rebirth garrison, record `3460-otto.mod`, at distance 0 from Meitou's beds, the next bed
 of the record 33 away). Meitou-only keys `meitou in something` (int) /
-`meitou in what` (fixture id) carry the rest and win on load. The held characters are bound (`FixtureRegistry.Bind`) when a town registers
+`meitou in what` (fixture id) carry the rest and win on load. A prisoner in a layout cage is written with `in what` naming the cage's
+entry when the save holds it (the house's saved interior, else the one `InteriorSave` writes, [Zone files](#zone-files)), the entry's
+`locked` and `lock lvl` as the cage's lock is now; a prisoner of a platoon the save leaves as read gets it too. The held characters are bound (`FixtureRegistry.Bind`) when a town registers
 and again when a saved or stored platoon comes in, since a town's saved platoons are made after it registers. Unchanged held state keeps
 the original keys as read; a changed one without a building handle writes `in something` 0 and the null handle. `sentence`/`psts` are written while a sentence is set or the save had them; Meitou's start equals `World.GameHours` (day x 24 + hour).
 

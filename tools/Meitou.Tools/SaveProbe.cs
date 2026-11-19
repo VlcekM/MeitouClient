@@ -113,6 +113,7 @@ static class SaveProbe
             case ("ko", >= 1): Knockout(probe, int.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 15); return true;
             case ("cages", >= 1): Cages(probe, a[0], a.Count > 1 ? a[1] : null); return true;
             case ("owners", _): OwnerProbe.Run(probe); return true;
+            case ("interiors", _): InteriorProbe.Run(probe, a.Count > 0 ? a[0] : null); return true;
             case ("sleeper", >= 1): Sleeper(probe, a[0]); return true;
             case ("force", >= 2):
                 Force(probe, a[0], a[1] == "tools" ? LockForce.Tools : LockForce.Strength, a.Count > 2 ? a[2] : null);
