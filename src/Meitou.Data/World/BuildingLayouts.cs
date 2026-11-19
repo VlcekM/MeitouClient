@@ -207,13 +207,28 @@ public sealed class BuildingLayouts
         foreach (var i in layout.Instances.Values.Where(i => !i.IsCleared).OrderBy(i => i.Id, StringComparer.Ordinal))
             if (_db.Find(i.Target) is { } b && b.Type == type)
             {
-                var state = i.States.Count > 0 ? _interiors?.Find(i.States[0]) : null;
+                var state = StateOf(i, type);
                 yield return new LayoutItem(i.Id, b, i.Position, i.Rotation)
                 {
                     Floor = state is not null ? Math.Clamp(state.GetInt("floornum"), 0, 3) : 0,
-                    Outside = state is not null && IsOutside(state),
+
+                    // Only `flags`: the older bool `is outside` of a layout state does not reach the object made from it.
+                    Outside = state is not null && (state.GetInt("flags") & 1) != 0,
                 };
             }
+    }
+
+    /// <summary>
+    /// The state a layout object is made from: the last of the states its instance lists that is of its kind (a GAMESTATE_BUILDING for furniture,
+    /// an ITEM_PLACEMENT_GROUP for an item slot). A later file adds its state after an earlier one's, and a container lists its inventory too.
+    /// </summary>
+    GameRecord? StateOf(GameInstance i, FcsRecordType type)
+    {
+        var kind = type == FcsRecordType.ItemPlacementGroup ? FcsRecordType.ItemPlacementGroup : FcsRecordType.GamestateBuilding;
+        for (int k = i.States.Count - 1; k >= 0; k--)
+            if (_interiors?.Find(i.States[k]) is { } state && state.Type == kind) return state;
+
+        return null;
     }
 
     /// <summary>

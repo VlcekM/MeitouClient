@@ -93,6 +93,7 @@ Building state writer/reader (**Verified** by code, no player-built building in 
 | `destroyed` | bool | +0x1a1 |
 | `town` | handle | its town (outpost), only when the building is not inside another one (**Observed** condition) |
 | `flags` | int | bit0 is outside (+0x240), bit1 foliage, bit2 +0x241 ; old saves use bools `is outside` / `foliage` |
+| (a layout object's state) | | An `interiors.level` instance can list several states (a later file adds its own; a container lists its INVENTORY_STATE first). The object is made from the last GAMESTATE_BUILDING (an item slot: the last ITEM_PLACEMENT_GROUP): its `floornum`, and `flags` bit 0 alone, a state with only the old `is outside` giving an inside object (**Verified**, `meitou-tools probe METARU interiors`: the saved `floornum` and `flags` of all 14660 generated furniture entries and 5627 groups; reading the first state missed 904 and 232). Meitou `BuildingLayouts.StateOf`. |
 | `serialised interior` | int 1 | when not in interior edit mode, followed by the interior layout records; on load 1 keeps the saved furniture, anything else makes the building generate its interior (**Verified** by code, [zone files](save.md#zone-files)) |
 | `construction progress` | float | progress in material units |
 | `is complete` | bool | absent means complete |
