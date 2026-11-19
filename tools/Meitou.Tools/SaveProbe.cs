@@ -118,6 +118,7 @@ static class SaveProbe
             case ("force", >= 2):
                 Force(probe, a[0], a[1] == "tools" ? LockForce.Tools : LockForce.Strength, a.Count > 2 ? a[2] : null);
                 return true;
+            case ("free", >= 1): Free(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 10, a.Count > 2 && a[2] == "unlocked"); return true;
             case ("kit", >= 1): Kit(probe, a[0]); return true;
             case ("uniques", _): Uniques(probe, a.Count > 0 ? a[0] : null); return true;
             case ("recruit", >= 1): Recruit(probe, a[0]); return true;
@@ -1032,6 +1033,34 @@ static class SaveProbe
             Console.WriteLine($"tick {probe.World.Tick} {probe.Who(who)} forcing={c.ForcingLock} locked={cage.Lock?.EffectivelyLocked} "
                 + $"hardness={cage.Lock?.Hardness:F2} in={c.InSomething}");
             probe.PrintMessages();
+        }
+    }
+
+    /// <summary>
+    /// Gives the player's squad Set Free (110) on the first caged character named like <paramref name="name"/> and follows it: the cage's owner and
+    /// lock, the prisoner's hold and whether the order's conscious test passes, and the player characters walking to free it.
+    /// <paramref name="unlocked"/> opens the cage's lock first.
+    /// </summary>
+    static void Free(ProbeWorld probe, string name, int rounds, bool unlocked)
+    {
+        var t = probe.Characters;
+        int who = probe.Named(name).First(i => t.Cold(i) is { IsImprisoned: true });
+        var c = t.Cold(who)!;
+        var cage = probe.World.Fixtures.Find(c.InWhat!)!;
+        var squad = Enumerable.Range(0, t.HighWater).Where(i => t.Next[i].Alive && t.Cold(i) is { IsPlayer: true }).Select(t.IdOf).ToArray();
+        if (unlocked && cage.Lock is { } cageLock) cageLock.Locked = false;
+        probe.World.Commands.Enqueue(new SetFreeOrder(squad, t.IdOf(who)) { Tick = probe.World.Tick });
+
+        for (int round = 0; round <= rounds; round++)
+        {
+            Console.WriteLine($"tick {probe.World.Tick} {probe.Who(who)} in={c.InSomething} "
+                + $"conscious={Meitou.Simulation.Bodies.CharacterFacts.Conscious(c)} animal={SquadRegistry.IsAnimal(c)} "
+                + $"cage {cage.Id} owner={FactionName(probe, cage.Owner)} locked={cage.Lock?.EffectivelyLocked}");
+            foreach (int p in Enumerable.Range(0, t.HighWater).Where(i => t.Next[i].Alive && t.Cold(i) is { IsPlayer: true }))
+                Console.WriteLine($"  {probe.Who(p)} row={t.Cold(p)!.Running?.Row} freeing={!t.Cold(p)!.Freeing.IsNone}");
+
+            probe.PrintMessages();
+            probe.Tick(5);
         }
     }
 
@@ -2067,6 +2096,7 @@ static class SaveProbe
               owners                   town buildings whose saved owner is not the housing rule's (the residents' faction, else the town's), and the counts
               sleeper <name>           the bed a character lies in: record, yaw, use node yaws, lie spot and the sleeper's own yaw
               force <name> <tools|strength> [fixture id]  a character cuts or breaks a fixture's lock (a prisoner its own cage's); 120 ticks of it
+              free <name> [rounds] [unlocked]  the squad's Set Free (110) on a caged character, its lock opened first or not: its hold and who frees it
               cage [cage id]           the carrying player character puts its load in a cage; 600 ticks of it
               escape <cage id> [rounds] [interval] [x z]  the leader is caged, sneaks out and walks to x z: who sees, has spotted or fights it (#776)
               wars [start <campaign> | arrive | resave <folder>]...  campaigns and Upcoming Events after each step: start one against the
