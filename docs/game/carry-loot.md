@@ -362,8 +362,8 @@ arrival (vfunc 1, `FUN_14034ffa0`) first rolls:
   kidnapper (code 15, [town alarms](economy.md#town-alarms)); a sleeper (state 1) gets order 116 Getting out of bed; its squad tags the
   kidnapper TEMP ENEMY and long-term 1 (intruder) and says event 8 to it; assassination XP 300; the task ends; a sleeper wakes (state 0).
 - **What the victim does** (**Verified**, `FUN_14034ffa0`): every victim gets the forced sense of the kidnapper (`FUN_140858f40`, seen). A sleeper gets order 116 through `FUN_1405d20d0` with
-  its clear flag set (`FUN_1405074a0` empties the order queue and the second list, a replan follows), then `FUN_1405cb0a0` (the kidnapper into its engaged list, forced sense, TEMP ENEMY,
-  a replan request): no `Character::attackTarget` and no task push. The fight is the chooser's (**Observed**): no order can win, the queue is gone; an awake victim gets the forced sense and tags only.
+  its clear flag set (`FUN_1405074a0` empties the order queue and the second list, a replan follows), then `FUN_1405cb0a0` (the kidnapper onto its threats list AI `+0x78`, forced sense, TEMP ENEMY,
+  an immediate update): no `Character::attackTarget` and no task push. The fight is the chooser's (**Observed**): no order can win, the queue is gone; an awake victim gets the forced sense and tags only.
 
 ### The kidnap victim flag
 
@@ -398,10 +398,11 @@ choice) and the bounty panel (`TooltipRuntime.ShowsBountyPanel`). Meitou's own
 spawned cage prisoners, cleared with the hold) is a separate flag, saved as `meitou kidnapped`.
 
 The kidnap itself in Meitou (`CarrySystem.Kidnap.cs`, `PickUpOrder.Kidnap`): as [Kidnapping](#kidnapping) describes; asleep is lying in a bed or resting with the sleep behaviour; the
-perception mark is not modelled; `+0x110` is `CharacterCold.RecentlyWanted`. A woken NPC sleeper gets no fight from the kidnap (**Verified**: `FUN_14034ffa0` pushes no attack order, it tags the
-kidnapper TEMP_ENEMY and forces the sense) and replans, its AI answering the sensed kidnapper; a player character's queue is cleared, the kidnapper is
-forced into its senses and the decision step answers with `EngagedDefence` (an engine stand-in for the threats list, [decision step](../simulation.md#decision-step)); an awake player
-victim is only forced-sensed.
+perception mark is not modelled; `+0x110` is `CharacterCold.RecentlyWanted`. A woken sleeper gets no fight from the kidnap (**Verified**: `FUN_14034ffa0` pushes no attack order, it tags the
+kidnapper TEMP_ENEMY and forces the sense, gives 116 and, under the same in-bed test, `FUN_1405cb0a0`: the kidnapper on the sleeper's threats list, no faction test); Meitou
+`CarrySystem.Threaten`, and its chooser decides at the next tick ([decision step](../simulation.md#decision-step)). An awake victim is only forced-sensed and tagged.
+Meitou difference: the threats entry stands until the victim's next look, so its 32 finds the kidnapper (`BestAttackerOf` reads the list), where the original's sense pass
+clears the list before the chooser, which then finds the kidnapper only through the immediate-threat flag (desire 1) and no attacker for row 13 ([stealth knock-out](combat.md#stealth-knock-out)).
 
 - **Goal 169 PUT_DOWN_CARRIED_DUDE_IF_THEY_CAN_WALK** (desire `FUN_1405a0710`, **Verified** by decompile; registered with a `Task_Blank` row, B `!47`, whose plan is `Task_PutDownObject` 69): desire 0 unless the character carries; then 1.0 when the carried body is not `+0x5b9` (unconscious), not dead (`+0x5bc`), not `+0x5b8` and (not chained, or the carrier does not regard it as an enemy: vslot `0x3e8` `FUN_14079c950`), else 0. So a woken body is put down by an NPC carrier whose packages list 169 (9 packages), whatever the relation; the put-down task knocks a body that is no friend out again on the ground. Only a chained enemy stays carried awake. Meitou: `CarrySystem.WakesIntoPutDown` (NPC carriers) behind `CarrySystem.ListsPutDown` (the goal is scored only when the carrier's lists hold it: its squad's running package or campaign phase role list, `PopulationSystem.GoalDuty`, and its race's `AI Goals`; faction `AI Goals` are not modelled); any other woken body, and a chained enemy, rides on awake (`CharacterCold.CarriedAwake`) as no other goal puts it down; `+0x5b8` is 0); player-side carriers keep the older rule (a friendly body is set down at once).
 

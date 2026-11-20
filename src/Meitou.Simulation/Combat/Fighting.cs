@@ -797,6 +797,12 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem
     }
 
     /// <summary>
+    /// <c>AI::underMeleeAttack</c> (<c>FUN_140999f00</c>) called from outside a fight, as a failed stealth knock-out calls it on its victim
+    /// (<c>FUN_1405c9290</c>): the melee alert of <paramref name="target"/> by <paramref name="attacker"/> (<see cref="Alert"/>). Serial phases only.
+    /// </summary>
+    internal void UnderMeleeAttack(World world, int attacker, int target) => Alert(world, attacker, target, melee: true);
+
+    /// <summary>
     /// The target's side of an alert (<c>AI::underMeleeAttack</c> for a melee attacker, the shot handler <c>FUN_140999d50</c> for a shooter): it
     /// senses the attacker (seen), stops sneaking, its squad tags the attacker TEMP_ENEMY, and with its fight off it replans. Only a melee attacker
     /// makes one staying low stand and rolls the knock-down of one getting up.

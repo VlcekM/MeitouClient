@@ -205,11 +205,12 @@ public sealed partial class CombatSystem
 
     /// <summary>
     /// <c>AI::findAttackerOf</c> (<c>FUN_14099c3b0</c>, <b>Verified</b>) for a character joining <paramref name="subject"/>'s fight: of those
-    /// fighting the subject, and the subject's own target while it fights, the best by <see cref="TargetScore"/> for <paramref name="looker"/>; for a
-    /// looker other than the subject only those within <see cref="RetaliationSystem.ProtectReach"/> of the subject, and never one the looker counts
-    /// as an ally (the subject's own target also only when either side is the other's enemy). -1 when none. The finder's sense tests and its fallback
-    /// to the subject's threats are left out (an attacker is put in the senses of whom it attacks). <paramref name="pending"/>: fights started this
-    /// tick by target, counted as attackers of theirs (the AI's serial step).
+    /// fighting the subject, those on its threats list (<see cref="SenseBlock.Threats"/>; the collector <c>FUN_1405cb150</c> reads the engaged list,
+    /// then the threats list, then the own target), and the subject's own target while it fights, the best by <see cref="TargetScore"/> for
+    /// <paramref name="looker"/>; for a looker other than the subject only those within <see cref="RetaliationSystem.ProtectReach"/> of the subject,
+    /// and never one the looker counts as an ally (the subject's own target also only when either side is the other's enemy). -1 when none. The
+    /// finder's sense tests are left out (an attacker is put in the senses of whom it attacks). <paramref name="pending"/>: fights started this tick by
+    /// target, counted as attackers of theirs (the AI's serial step).
     /// </summary>
     public int BestAttackerOf(World world, int subject, int looker, IReadOnlyDictionary<int, int>? pending = null)
     {
@@ -247,6 +248,15 @@ public sealed partial class CombatSystem
         int generation = prev[subject].Generation;
         foreach (var (_, _, _, a) in _index.AttackersOf(subject))
             if (_read[a].TargetGeneration == generation && Joinable(a)) Consider(world, ref q, a, looker != subject);
+
+        // Then the subject's threats list (FUN_1405cb150's second list, AI +0x78): those fighting it at its last look and those put there
+        // (FUN_1405cb0a0, a failed stealth knock-out's attacker).
+        if (CharacterFacts.Senses(world, subject) is { } senses)
+        {
+            foreach (var t in senses.Threats)
+                if ((uint)t.Slot < (uint)prev.Length && prev[t.Slot].Generation == t.Generation && Joinable(t.Slot))
+                    Consider(world, ref q, t.Slot, looker != subject);
+        }
 
         int own = _read[subject].TargetSlot;
         if (own >= 0 && own != looker && (uint)own < (uint)prev.Length && prev[own].Generation == _read[subject].TargetGeneration && Joinable(own)

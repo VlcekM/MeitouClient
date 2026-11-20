@@ -411,11 +411,11 @@ phases, no source ever called from the think:
      The player faction's 15 Protect allies on the AI's rung (the faction list's entry, weight 1; the NPC's desire, finder and plan, with the distance falloff and Help Allies of a
      player-faction looker, [precedence](game/ai-tasks.md#precedence)): the aggro looks' allies valued by their fight threat (`CombatSystem.FightThreat`), a defence on row 13 against
      `CombatSystem.BestAttackerOf`'s pick for the ally, acted out as an NPC's (`AskFight`). The chooser reaches it at the think turn or any replan, so a medic or worker on its job joins, one on an order does not.
-     A player character woken by a failed kidnap (`CarrySystem.Kidnap`) or targeted by a failed stealth knock-out (`CarrySystem.StealthKo`) is told of the attacker (forced sense) and
-     replans (`EngagedDefence.Engage`); `EngagedDefence` (key 32, desire 1 within 40 else 0.7, a deferred defence, row 13) answers for 5 s unless an order runs first (**Engine**
-     stand-in for the threats list, [carry-loot](game/carry-loot.md#kidnapping), [combat](game/combat.md#stealth-knock-out)). A sleeper's kidnap also gives it order 116 with the clear flag
-     ([order queue](#order-queue)). An NPC victim gets no fight from the kidnap (**Verified** `FUN_14034ffa0` pushes no attack order): it replans and its AI
-     answers the kidnapper its squad has tagged TEMP ENEMY. A failed stealth knock-out's NPC victim keeps its deferred defensive attack (engine stand-in). An autonomous squad's urgent package goals: `SquadAutonomy.PackageGoals`
+     A character woken by a failed kidnap (`CarrySystem.Kidnap`) or targeted by a failed stealth knock-out (`CarrySystem.StealthKo`), of any faction, gets no fight pushed: the
+     attacker goes on its threats list (`CarrySystem.Threaten`, `AggroSystem.Threaten`: `FUN_1405cb0a0`), after the knock-out's melee alert (`RetaliationSystem.UnderMeleeAttack`),
+     and it thinks at the next tick, where 32 Self preservation (desire 1 within 40) finds the attacker on that list (`SelfDefencePick` → `CombatSystem.BestAttackerOf`) unless an
+     order runs first ([carry-loot](game/carry-loot.md#kidnapping), [combat](game/combat.md#stealth-knock-out)). A sleeper's kidnap also gives it order 116 with the clear flag
+     ([order queue](#order-queue)). An autonomous squad's urgent package goals: `SquadAutonomy.PackageGoals`
      ([autonomous player squads](#autonomous-player-squads)).
   5. Jobs: the job list in order (`IJobSource` contributors by type, `DecisionSystem.RegisterJob`; the original's keys N+8, N+7, ...): the jobs switch gates every type but 16, 31,
      45, 57, 58, 250 (`FUN_14050c1c0`, both passes; 289 is gated), a row the repertoire does not register is skipped, the first that can run starts and one that runs the task ends the

@@ -97,10 +97,6 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     internal PopulationData? Data { get; set; }
 
     /// <summary>
-    /// The player characters a failed kidnap or knock-out engaged, and their defence as a decision source (<see cref="EngagedDefence.Engage"/>).
-    /// </summary>
-    readonly EngagedDefence _engaged = new();
-    /// <summary>
     /// NPC looting (177) and arming (42) as chooser goals: the finders' picks and the act-outs.
     /// </summary>
     readonly LootGoals _lootGoals = new();
@@ -1744,7 +1740,6 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         var jobs = new CarryJobs(this);
         decisions.RegisterJob(TaskType.FindAndRescueIfTheresBeds, jobs);
         decisions.RegisterJob(TaskType.LootAnimalsJob, jobs);
-        decisions.Register(_engaged);
     }
 
     /// <summary>

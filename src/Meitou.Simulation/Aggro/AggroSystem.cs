@@ -1198,6 +1198,22 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     }
 
     /// <summary>
+    /// <c>FUN_1405cb0a0</c>'s threat (<b>Verified</b>: it appends the target to the AI's <c>+0x78</c> list, SensoryData <c>+0x50</c>, the threats
+    /// list, and forces the sense): <paramref name="target"/> is sensed by <paramref name="looker"/> (<see cref="Force"/>) and on its threats list
+    /// (<see cref="SenseBlock.Threats"/>) until the looker's next look rebuilds it (the original's sense pass at its next AI update clears it after
+    /// <c>FUN_1404378f0</c> took its immediate-threat flag from it). Adds nothing to <see cref="SenseBlock.ThreatToMe"/> (the push adds no
+    /// aggression). Serial phases only.
+    /// </summary>
+    internal void Threaten(World world, int looker, int target)
+    {
+        Force(world, looker, target);
+        if ((uint)looker >= (uint)_slots.Length || _slots[looker].Senses is not { } b) return;
+
+        var id = world.Characters.IdOf(target);
+        if (!b.ThreatList.Contains(id)) b.ThreatList.Add(id);
+    }
+
+    /// <summary>
     /// The forced sense (<c>FUN_140858f40</c>, docs/game/perception.md "Spotting a sneaker"): <paramref name="looker"/> has been told of
     /// <paramref name="target"/> (a massive alarm, a blow or bolt that landed on it, a dialogue attack) and goes on its watcher list as seen, whether
     /// or not it sees it. Only a player-side target keeps the list (the arrows and the sneak XP read it). Serial phases only.

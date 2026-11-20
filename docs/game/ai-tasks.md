@@ -1356,7 +1356,7 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   and never one the looker regards an ally (slot 126). On that reading relations do not matter (a neutral attacking an ally is fought), which agrees with
   the owner's report that the original's guards fight skimmers. Candidates (`FUN_1405cb150`): the subject's attackers plus its own target while it fights;
   only when that list is empty its threats. All passing ones go to `chooseBestAttackTarget` (`FUN_14059e300`, the target score): the best is taken
-  (**Verified**). Meitou: `CombatSystem.BestAttackerOf` picks each joiner's attacker (the sense tests and the threats fallback left out); a player character's own 15 is in [Precedence](#precedence).
+  (**Verified**). Meitou: `CombatSystem.BestAttackerOf` picks each joiner's attacker (the sense tests left out; it reads the subject's threats list too); a player character's own 15 is in [Precedence](#precedence).
   Once in the fight, the joiner re-targets by the fight's own lists and then any sensed enemy (the aggro mode that would stop that is 0 for every character, **Verified**: no code writes it), so
   no leash holds it near the one it protected. Gate guards (`Gate guard -no turrets`
   and those inheriting it) list 15, `Gate guard stay in town -no turrets` 288 (**Verified**, package dump).
