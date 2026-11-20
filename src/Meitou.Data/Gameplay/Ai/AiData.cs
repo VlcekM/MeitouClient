@@ -209,7 +209,7 @@ public sealed class AiDatabase(GameDatabase db)
     readonly Dictionary<string, IReadOnlyList<SlottedPackage>> _templates = [];
 
     /// <summary>
-    /// Each race's <c>AI Goals</c>, by race id.
+    /// Each RACE's or FACTION's <c>AI Goals</c>, by record id.
     /// </summary>
     readonly Dictionary<string, IReadOnlyList<AiGoal>> _races = [];
 
@@ -383,19 +383,51 @@ public sealed class AiDatabase(GameDatabase db)
     /// </summary>
     public IReadOnlyList<AiGoal> RaceGoals(string raceId)
     {
+        lock (_gate) return OwnListLocked(raceId);
+    }
+
+    /// <summary>
+    /// A non-player character's own goals beside its squad's (<c>setupAI</c> <c>FUN_140621b70</c>, <b>Verified</b>): its race's <c>AI Goals</c>, then,
+    /// when <paramref name="withFaction"/> (no contract runs on its blackboard), its FACTION's, both read as <see cref="RaceGoals"/> reads a list
+    /// (<c>FUN_1405094f0</c>). A type the race lists is not added again, its weight becomes the faction's (the adder <c>FUN_140507950</c>
+    /// overwrites a held goal of the same type and hand, <b>Verified</b>). Null ids read nothing.
+    /// </summary>
+    public IReadOnlyList<AiGoal> OwnGoals(string? raceId, string? factionId, bool withFaction)
+    {
         lock (_gate)
         {
-            if (_races.TryGetValue(raceId, out var known)) return known;
-            var list = new List<AiGoal>();
-            if (db.Find(raceId) is { } race)
-                foreach (var e in race.GetReferences("AI Goals"))
-                {
-                    if (TaskLocked(e.TargetStringId) is { } task)
-                        list.Add(new AiGoal(task with { Target = TaskTargetType.Specific }, 0, 100, e.Values.Value1 * 0.01f));
-                    else _problems++;
-                }
-            _races[raceId] = list;
+            var race = raceId is null ? [] : OwnListLocked(raceId);
+            var faction = withFaction && factionId is not null ? OwnListLocked(factionId) : [];
+            if (faction.Count == 0) return race;
+
+            var list = new List<AiGoal>(race);
+            foreach (var g in faction)
+            {
+                int held = list.FindIndex(r => r.Task.Type == g.Task.Type);
+                if (held >= 0) list[held] = list[held] with { Weight = g.Weight };
+                else list.Add(g);
+            }
+
             return list;
         }
+    }
+
+    /// <summary>
+    /// The <c>AI Goals</c> of a RACE or FACTION record as <c>FUN_1405094f0</c> reads them (see <see cref="RaceGoals"/>), cached by record id, with
+    /// <see cref="_gate"/> held.
+    /// </summary>
+    IReadOnlyList<AiGoal> OwnListLocked(string recordId)
+    {
+        if (_races.TryGetValue(recordId, out var known)) return known;
+        var list = new List<AiGoal>();
+        if (db.Find(recordId) is { } record)
+            foreach (var e in record.GetReferences("AI Goals"))
+            {
+                if (TaskLocked(e.TargetStringId) is { } task)
+                    list.Add(new AiGoal(task with { Target = TaskTargetType.Specific }, 0, 100, e.Values.Value1 * 0.01f));
+                else _problems++;
+            }
+        _races[recordId] = list;
+        return list;
     }
 }

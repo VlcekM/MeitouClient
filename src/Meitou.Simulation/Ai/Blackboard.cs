@@ -1079,9 +1079,9 @@ public sealed class AiMind
     public float WanderRadius { get; set; }
 
     /// <summary>
-    /// Its routine is the engine's, not the AI's: it is a member of a squad the AI does not run (a roaming platoon's active half, whose trip is the
-    /// population's, or a squad whose template lists no AI packages). The AI weighs only its combat goals (<see cref="EngineGoals"/> and its race's)
-    /// and Self preservation, on that routine and in its fights, and acts nothing else out (docs/simulation.md "AI").
+    /// Its routine is the engine's, not the AI's: it is a member of a loaded platoon a code mod holds (<see cref="Platoon.Held"/>, Meitou only),
+    /// which the mod moves. The AI weighs only its combat goals (<see cref="EngineGoals"/> and its own lists) and Self preservation, on that routine
+    /// and in its fights, and acts nothing else out (docs/simulation.md "AI").
     /// </summary>
     public bool Engine { get; init; }
 
@@ -1119,8 +1119,10 @@ public sealed class AiMind
     public IReadOnlyList<AiGoal> EngineGoals { get; set; } = [];
 
     /// <summary>
-    /// Its race's <c>AI Goals</c>, looked up once when the mind is made (the lookup takes a lock; the think runs on every worker). Follows from the
-    /// race, so not hashed.
+    /// Its own goal lists beside its squad's (<c>setupAI</c> <c>FUN_140621b70</c>, <b>Verified</b>): its race's <c>AI Goals</c>, then its faction's
+    /// when no contract ran as the mind was made (<see cref="AiDatabase.OwnGoals"/>; a debug spawn that must aggro also gets Attack enemies),
+    /// looked up once when the mind is made (the lookup takes a lock; the think runs on every worker). Follows from the race and faction, so not
+    /// hashed.
     /// </summary>
     public IReadOnlyList<AiGoal> RaceGoals { get; init; } = [];
 

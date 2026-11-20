@@ -584,6 +584,32 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   "startoff- Wanderer squad"); `FUN_1404ffad0` (the platoon's own template +0x108, from its constructor's argument or, at load, a typed 0x34
   `squad template` lookup in `FUN_1407ed0f0`). Three early returns of `FUN_14095b210` (**Observed**, constructors `FUN_14055ca90`, `FUN_14029fb40`, factory `FUN_14057cc70`): the building's location hand `+0x88` must be null (type 0xb; the base constructor copies it from a parent object or a door's parent building), its parent `+0x238` null (a turret mounted on a building has one) and its byte `+0x1a0` clear (set only by `DoorStuff`); so only a child object is refused, never a level-data home. Meitou: `TradeSystem.StockHome` refuses a turret post, for the squad path and `StockEmptyHome` alike. `FUN_14057f4c0` stamps its template's designation on the building even when the template makes no squad (`NoteMade` for every home).
 
+### Squads without packages
+
+**Verified** (decompile) unless marked.
+
+- **Where a platoon's packages come from**: the Platoon constructor `FUN_1407ee2d0` adds its FACTION's `AI fallback` packages at slot 0 (`FUN_140271fd0`, its
+  only caller); the template reader `FUN_140271620` (run by the factory on the creation template, Platoon +0x108, or the blackboard's unique mission +0x100)
+  has no record-type test: a record with `Leader AI Goals` or `AI Goals` is itself added as a slot-0 package, then each `AI packages` entry at its slot. The
+  adder `FUN_14026c160` appends to the slot's list and skips a record the slot already holds. Nothing else fills the role lists (package activation,
+  `FUN_1402721a0`), so a template that lists no package (and no own goals) leaves them empty.
+- **A CHARACTER's `AI Goals` reach no character**: `setupAI` reads only the FACTION and RACE lists (campaign-goals confirmation: the string's five references
+  are in `setupAI`, the template reader and the goal loader). The template reader takes a CHARACTER only as a creation template, which the untyped `spawns`
+  lists (`FUN_140586510`) and the factory's `prisoners` recursion can give (each entry, looked up with no type, becomes a platoon of its own with that
+  record by `FUN_1407f4420`, then the factory runs on it as the template); but the factory draws members only from the template's `leader`, `squad`,
+  `animals`, `slaves` and `prisoners` lists, which no CHARACTER has, so such a platoon is made empty. A new game's CHARACTER entries are made as single
+  characters (`FUN_140583400`, the record-type-1 test in `FUN_140872e00`). Base data: every `spawns` and `prisoners` target is a SQUAD_TEMPLATE.
+- **Loaded**: every member runs the chooser (it needs only a platoon, `FUN_1405112b0`) over 14, 32, its race's and its faction's lists ([goals of a
+  character](ai-tasks.md#precedence)) and the blackboard's requests, which only `Task_FirstAid` / `Task_FirstAidRig` post (62 for their patient). The
+  generic goal adder `FUN_1405c9020` has no caller (no call, jump, pointer or RIP-relative reference to it or its thunk in the exe); the combat-event
+  adder gives 16 only. No base RACE or FACTION list holds a travel or follow goal (data: 32, 269, 143, 15, the eating and dog-limb goals), so such a squad
+  neither travels nor follows: each member stands (14: the weapon sheathe, else the mover reset), fights back (32) and acts out its race's goals.
+- **Off screen** (`FUN_1407ee790`): with no package the job is 0, which becomes 2 for a non-persistent platoon (a goto with no speed: the step resets
+  the mover's speed to 0 first) and 4 or the idle hook for a persistent one, so it does not move.
+- Meitou: `AiSystem.Runs` gives every non-player squad a blackboard, so these members get full minds (`AiDatabase.OwnGoals`) and stand; the population
+  orders no loaded leader (`PopulationRoaming.StepTrip`). Off screen a persistent one stands; a non-persistent one, which the original destroys at
+  unload, lives on only where Meitou keeps roamers (`KeepRoamers`) and then takes the engine's travel ([off-screen world](#off-screen-world)).
+
 ### Off-screen world
 
 **Verified** by code (kenshi-named dump) unless marked. Who is kept off screen: [persistent platoons](#1-object-model).

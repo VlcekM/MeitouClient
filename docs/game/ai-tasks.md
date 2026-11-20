@@ -1142,7 +1142,9 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   (its faction's +0x250 set, `FUN_1407916d0`) also 243 Getting food (priority 3, weight 0.5) unless it has it; a player-faction animal also its race's `AI Goals` and 259 Picking
   up food (priority 3, 0.5), and loses 230. A character of another faction gets its race's `AI Goals`. Before that branch, any character whose platoon AI object (`FUN_140791ba0`: Character +0x658,
   +0x78, +0xf8) has +0x210 null gets its FACTION record's `AI Goals` (**Verified**, code; +0x210 read as the AI contract slot, null for an ordinary squad, **Observed**). The player faction
-  (`204 Nameless`, the only base FACTION with the list) lists 15 Protect allies (AI_TASK 957, classification 3: priority 3, weight 1), so a player character holds goal 15. Hold adds 16 at priority 3; AI packages add theirs ([AI](../simulation.md#ai)). Priorities
+  (`204 Nameless`, the only base FACTION with the list) lists 15 Protect allies (AI_TASK 957, classification 3: priority 3, weight 1), so a player character holds goal 15.
+  A list's type already held keeps its place and takes the later list's weight (the adder `FUN_140507950`, **Verified**). Meitou (`AiDatabase.OwnGoals`, `AiMind.RaceGoals`):
+  an NPC's race list, then its faction's while its blackboard runs no contract as the mind is made. Hold adds 16 at priority 3; AI packages add theirs ([AI](../simulation.md#ai)). Priorities
   (`taskPriority`): 1 fluff, 2 non-urgent, 3 urgent, 4 obedience; orders are queued at 3.
 - **So, for a player character**: an order beats everything, Self preservation included (an ordered medic keeps treating while hit; each landed blow staggers it and the order
   is planned again, [combat](combat.md#fight-lifecycle-and-orders)). Self preservation (while an attacker is within 181.7), Getting food and Hold's attack on sight beat every
@@ -1419,12 +1421,13 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   with a pick for the attack goals (`AggroSystem.FindFoe`: the looker's sensed entries and its squad mates' within 2 R, the shared sightings) and the capped fight threat for the protect
   goals, whose pick is row 13's attacker (none: the goal fails). Engine gates: a character that cannot fight, crawls, runs away under Self preservation or mans a turret wants none. One whose
   lists hold no combat goal starts no fight and joins none: it only fights back when attacked (32 in the same chooser). Nothing else starts an NPC's fight on sight or pulls a mate in.
-  - **Squads the AI does not run** (`AiSystem.EngineMinds`, `AiMind.Engine`; engine choice for the routine): `setupAI` gives every character goals (14, 32, its race's, its faction's; [Precedence](#precedence))
-    and its squad's packages add theirs, so every NPC of such a squad gets a mind: a loaded platoon's squad whose movement the population owns (one a code mod holds; every other loaded platoon, a campaign's included, acts out its package with full minds; the platoon runs a blackboard, [simulation](../simulation.md#ai); its running package supplies the goals) and a squad
-    whose template lists no AI packages. Its combat goals are those of its package for its role (a held one's the package its blackboard runs, as `PopulationSystem.GoalDuty` reads it;
-    none without packages) and of its race; it weighs only them and Self preservation (fight or run), on its routine (standing, wandering, following, the population's trip from town to town)
-    and in its own fight, and acts nothing else out; a fight's end gives the routine back (the stand-down). A member whose full mind gives way to an engine one (a code mod holds its loaded platoon) stops what the full mind had it doing: a sleeper gets up, one sitting stands, and a member other than the leader follows its leader again (`AiSystem.ToRoutine`, engine choice); one busy with something the mind does not hold then (a fight, a carry, a knock-out) rejoins on a later package step once it stands idle, as does any idle follower of such a squad (`AiSystem.Rejoins`). So a template without packages starts no fight (no base race lists an
-    attack goal; Cannibal lists 143) and a caravan with 143 / 15 only defends. Not modelled for them: 35 and the packages' other goals (the march, or the mod, goes on as before). A mind dropped by trade,
+  - **Squads the AI does not fully run** (`AiSystem.EngineMinds`, `AiMind.Engine`; Meitou only): a loaded platoon a code mod holds (`HoldPlatoon`). Every other non-player
+    squad has a blackboard and full minds, one whose template lists no AI packages included (empty role lists: 14, 32 and its own lists only, [squads without
+    packages](factions-squads-towns.md#squads-without-packages)). A held squad's member weighs only the combat goals of its running package for its role and of its own lists,
+    and Self preservation (fight or run), on its routine (standing, wandering, following; the mod moves the leader) and in its own fight, and acts nothing else out; a fight's
+    end gives the routine back (the stand-down). A member whose full mind gives way to an engine one stops what the full mind had it doing: a sleeper gets up, one sitting
+    stands, and a member other than the leader follows its leader again (`AiSystem.ToRoutine`, engine choice); one busy with something the mind does not hold then (a fight, a
+    carry, a knock-out) rejoins on a later package step once it stands idle, as does any idle follower of such a squad (`AiSystem.Rejoins`). A mind dropped by trade,
     recruitment, capture or storage is made again at the next package cadence (30 ticks); meanwhile, and for an NPC with no squad (scripted worlds only), there is no mind.
   - **In the fight** (`AiSystem.InFight`): the fight a goal started is the AI's own (`AiMind.FightFrom`), and its fighter thinks in it as anyone does. The current combat goal is kept while it is not
     done (the plan step above): an attack goal while its senses count an enemy (`numEnemies`, 16's effect; the same taken for 21, 144 and 34) or its finder picks one, a protect goal while

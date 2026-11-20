@@ -88,7 +88,7 @@ public sealed class Platoon
     /// </summary>
     public long UnloadAtTick { get; set; } = -1;
     /// <summary>
-    /// Seconds before a loaded platoon's leader is sent on again when it has no go-to (a blocked path must not be retried every look).
+    /// Unused: the population orders no loaded platoon's leader (its own AI moves it); kept for code mods that read it, always 0.
     /// </summary>
     public float OrderCooldown { get; set; }
     /// <summary>
@@ -229,7 +229,7 @@ public sealed class Platoon
     /// </summary>
     public Vector2? RouteGoal { get; set; }
     /// <summary>
-    /// A code mod runs it (<c>PopulationSystem.HoldPlatoon</c>, engine API): the population gives it no trip and moves no stand-in of it; it still
+    /// A code mod runs it (<c>PopulationSystem.HoldPlatoon</c>, engine API): its members keep engine minds and the population moves no stand-in of it; it still
     /// loads, unloads and despawns as any platoon (a mod's spawn is kept, <see cref="ModSpawned"/>). Not saved: the mod finds it again by
     /// <see cref="ModTag"/> and holds it again after a load.
     /// </summary>

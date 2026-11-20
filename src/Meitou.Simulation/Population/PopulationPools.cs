@@ -516,7 +516,6 @@ public sealed partial class PopulationSystem
         squad.SpawnSize = built.Plan.TotalMembers;
         MoveOutOfPlayerWalls(world, squad);
         TakeRemade(p, squad, built, null, pinned: false);
-        if (Goal(p) is not null && p.WaitLeft <= 0) OrderLeader(world, p, squad);
         Log($"{site.Town.Name}: {squad.Name} made afresh ({squad.Members.Count})");
         return squad;
     }

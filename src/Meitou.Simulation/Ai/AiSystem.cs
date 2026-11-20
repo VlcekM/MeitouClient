@@ -79,17 +79,17 @@ public sealed record ChangeAi(int SquadId, string PackageId) : SimCommand;
 public sealed record VisitTown(int SquadId, int PlayerTown, float Hours) : SimCommand;
 
 /// <summary>
-/// The AI (docs/simulation.md "AI"; the original's in docs/game/ai.md). Squads whose template lists <c>AI packages</c> get a <see cref="Blackboard"/>
-/// that picks the package by slot and package class; each member thinks on its own cadence: it scores the goals of its role list, its race's <c>AI
-/// Goals</c> and the default idle goal by tier (urgent, then non-urgent, then fluff; the first tier with a positive score wins), weight, hour window,
+/// The AI (docs/simulation.md "AI"; the original's in docs/game/ai.md). Every squad that is not the player's gets a <see cref="Blackboard"/> that
+/// picks the package of its template's <c>AI packages</c> by slot and package class (none: empty role lists); each member thinks on its own cadence:
+/// it scores the goals of its role list, its own <c>AI Goals</c> (race and faction) and the default idle goal by tier (urgent, then non-urgent, then fluff; the first tier with a positive score wins), weight, hour window,
 /// crowding and continuity, acts out the winner through <see cref="TaskBehaviours"/> (in its home building's nodes and beds where it has one); its
 /// combat goals are goals of the same choice (AiSystem.Fights.cs), which <see cref="AggroSystem"/>'s look asks it to weigh again when it senses a new
 /// enemy. The AI runs only characters that nothing else holds: not the player's (but those of a squad made autonomous, below their orders and jobs,
 /// <see cref="SquadAutonomy"/>), not in a fight it did not start, fleeing, down, carrying, carried,
 /// treating, looting or trading; in its own fight it chooses but acts out nothing (<see cref="InFight"/>), and an engine duty or fight is taken over
-/// only by the goals that pre-empt it (<see cref="Preempts"/>). The members of a squad it does not run get a mind that weighs only their combat goals
-/// (<see cref="AiMind.Engine"/>, <see cref="EngineMinds"/>). Roaming platoons keep their travel stand-in (<see cref="PopulationSystem"/>; their
-/// off-screen mode follows their package, <see cref="PlatoonJobs"/>).
+/// only by the goals that pre-empt it (<see cref="Preempts"/>). The members of a platoon a code mod holds get a mind that weighs only their combat
+/// goals (<see cref="AiMind.Engine"/>, <see cref="EngineMinds"/>). Off screen a platoon's stand-in follows its package's job
+/// (<see cref="PopulationSystem"/>, <see cref="PlatoonJobs"/>).
 /// <list type="bullet">
 /// <item><c>Think</c> (parallel): the choice and the act-out write only the character's own state (its task, goal, path flags and
 /// <see cref="AiMind"/>); they read the squad's blackboard, which only the serial steps change.</item>
@@ -509,7 +509,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         if (cold.InCombat) return cold.Gunning is null && cold.Carrying.IsNone ? Restrict.Self : Restrict.None;
         if (cold.Engaged) return InterruptibleDuty(n, cold) || InterruptibleModGoal(n, cold, mind) ? Restrict.Combat : Restrict.Self;
-        if (mind.Engine && EngineRoutine(n, cold)) return Restrict.Combat;
+        if (mind.Engine && EngineRoutine(n)) return Restrict.Combat;
 
         // Fixing Legs' own treatment: the original's chooser weighs every goal on each update, and while the urgent goal is wanted only an urgent
         // goal can outscore it; once the legs work the treatment still runs until the leg is fully bandaged (Observed in the original), and only
@@ -589,16 +589,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// The engine's routine of an <see cref="AiMind.Engine"/> mind, which a fight its combat goals start interrupts: standing, wandering, following
-    /// its leader, or the roaming leader's walk on its trip (row 53 of the population's travel stand-in, <see cref="PopulationSystem"/>; the trip
-    /// goes on after the fight).
+    /// The engine's routine of an <see cref="AiMind.Engine"/> mind, which a fight its combat goals start interrupts: standing, wandering or
+    /// following its leader.
     /// </summary>
-    static bool EngineRoutine(in CharacterHot n, CharacterCold cold) => (CharacterTask)n.Task switch
-    {
-        CharacterTask.Idle or CharacterTask.Wander or CharacterTask.Follow => true,
-        CharacterTask.GoTo => OnTrip(n, cold),
-        _ => false,
-    };
+    static bool EngineRoutine(in CharacterHot n) => (CharacterTask)n.Task is CharacterTask.Idle or CharacterTask.Wander or CharacterTask.Follow;
 
     /// <summary>
     /// Whether the character's fight is the AI's own: the one the serial step started for its combat goal (<see cref="AiMind.FightFrom"/>), still
@@ -3275,18 +3269,17 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// A squad without a board: the first time it is seen, one the AI runs gets its board (and its town's places), and so does one a campaign drafted
-    /// since (looked at again on the cadence); else its minds are the engine's (again on the cadence). True when it was attached now.
+    /// A squad without a board: the first time it is seen, and again on the cadence, one the AI runs gets its board (and its town's places); a
+    /// player's squad it does not run has its minds dropped instead. True when it was attached now.
     /// </summary>
     bool AttachNew(World world, Squad squad, bool cadence)
     {
         bool first = _looked.Add(squad.Id);
-        bool drafted = !first && cadence && PlatoonOf(world, squad)?.Campaign is not null;
+        if (!first && !cadence) return false;
 
-        if (!(first || drafted) || !Runs(world, squad))
+        if (!Runs(world, squad))
         {
-            if (first || cadence) EngineMinds(world, squad);
-
+            SquadAutonomy.DropMinds(world, squad);   // none for a player's squad; what an autonomous one left goes
             return false;
         }
 
@@ -3372,18 +3365,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// Member <paramref name="k"/> (slot <paramref name="s"/>) gets a mind of the squad's package. A leader the population had walking its trip
-    /// (an engine mind's routine, <see cref="EngineRoutine"/>, or the walk a platoon is given as it comes into the world, before it has a mind) is
-    /// stopped first: the trip is the engine's stand-in for the package that moved it, and in the original the package that takes over (a
-    /// contract started on the way, or simply the package of a platoon that loaded) gives the leader its own goals at once.
+    /// Member <paramref name="k"/> (slot <paramref name="s"/>) gets a mind of the squad's package and its own lists (<see cref="OwnGoals"/>; a
+    /// player character's own goals stay the decision step's).
     /// </summary>
     void GiveMind(World world, Squad squad, Blackboard board, int k, int s, bool own)
     {
         var table = world.Characters;
         var cold = table.Cold(s)!;
-        if ((cold.Ai is { Engine: true } || cold.Ai is null && squad.PlatoonId >= 0) && OnTrip(table.Next[s], cold))
-            TaskStart.End(world, s, TaskEnd.Stopped);
-
         var p = table.Next[s].Position;
         cold.Ai = new AiMind
         {
@@ -3391,17 +3379,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             MemberIndex = k,
             Post = OccupierPost(world, board, k) ?? new Vector2(p.X, p.Z),
             Player = own,
-            RaceGoals = cold.Race is { } race && !own ? data.Ai.RaceGoals(race.StringId) : [],
+            RaceGoals = own ? [] : OwnGoals(squad, board, cold),
             Resume = squad.Resume,
             Shopping = ShoppingList.Make(data.Db, cold.RecordId, world.Seed, Rng.Key(table.IdOf(s))),
         };
     }
-
-    /// <summary>
-    /// Whether the character walks the population's trip (row 53 of its travel stand-in, <see cref="EngineRoutine"/>'s walk).
-    /// </summary>
-    static bool OnTrip(in CharacterHot n, CharacterCold cold) =>
-        n.Task == (byte)CharacterTask.GoTo && cold.Running is { Source: TaskSource.Goal, Row: TaskType.TravelToTargetTown, Task: CharacterTask.GoTo };
 
     #endregion
 
@@ -3575,11 +3557,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     const double PhaseHours = 24;
 
     /// <summary>
-    /// Derived from the data, not hashed.
-    /// </summary>
-    readonly Dictionary<string, AiPackage?> _firstPackages = [];
-
-    /// <summary>
     /// The combat goals of each package and role (<see cref="CombatGoalsOf"/>); derived from the data, not hashed.
     /// </summary>
     readonly Dictionary<(AiPackage, AiRole), IReadOnlyList<AiGoal>> _combatGoals = [];
@@ -3660,36 +3637,22 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// Minds for the members of a squad the AI does not run (<see cref="Runs"/>: a template without packages; not the player's) or that a code mod
-    /// holds (<paramref name="board"/> given): every character has goals in the original (<c>setupAI</c> <c>FUN_140621b70</c>: 14, 32, its race's
-    /// and its faction's <c>AI Goals</c>; its squad's packages add theirs, docs/game/ai-tasks.md "Precedence"), so each gets an
-    /// <see cref="AiMind.Engine"/> mind whose combat goals are its package's for its role (the held squad's running package, a roaming one's the
-    /// package the population's stand-in follows, else the template's first choice; none for a template without packages) and its race's. Its
-    /// routine stays the engine's. Serial, on the package cadence and when the squad appears; a mind made for another squad is made again.
+    /// Minds for the members of a loaded platoon a code mod holds (<see cref="PopulationRuns"/>, Meitou only: the hold strips the package's
+    /// movement on purpose): every character has goals in the original (<c>setupAI</c> <c>FUN_140621b70</c>: 14, 32, its race's and its faction's
+    /// <c>AI Goals</c>; its squad's packages add theirs, docs/game/ai-tasks.md "Precedence"), so each gets an <see cref="AiMind.Engine"/> mind whose
+    /// combat goals are its running package's for its role, beside its own lists. Its routine stays the engine's. Serial, on the package cadence; a
+    /// mind made for another squad is made again.
     /// </summary>
-    void EngineMinds(World world, Squad squad, Blackboard? board = null)
+    void EngineMinds(World world, Squad squad, Blackboard board)
     {
-        if (IsPlayers(world, squad))
-        {
-            SquadAutonomy.DropMinds(world, squad);   // none for a player's squad; what an autonomous one left goes
-            return;
-        }
-
         var table = world.Characters;
-        AiPackage? package;
-        if (board is not null) package = board.Current;   // a platoon's squad running its blackboard: the package that runs
-        else if (squad.PlatoonId >= 0 && world.Platoons.Find(squad.PlatoonId) is { Package: { } id })
-            package = data.Ai.Package(id);   // a roaming one: the package its stand-in follows
-        else package = FirstPackage(squad.TemplateId);
+        var package = board.Current;
         for (int k = 0; k < squad.Members.Count; k++)
         {
-            // A full mind gives way to an engine one only under a blackboard that says the population moves the squad.
-            if (!table.TryResolveNext(squad.Members[k], out int s) || table.Cold(s) is not { IsPlayer: false } cold
-                || cold.Ai is { Engine: false } && board is null)
-                continue;
+            if (!table.TryResolveNext(squad.Members[k], out int s) || table.Cold(s) is not { IsPlayer: false } cold) continue;
 
             // A slave obeying its master takes the master's Slave list with a full mind (MindAndCrowd), not its own squad's routine.
-            if (board is not null && ObeyedRoles(world, squad, cold) is not null) continue;
+            if (ObeyedRoles(world, squad, cold) is not null) continue;
 
             if (cold.Ai is { Engine: false })
             {
@@ -3707,18 +3670,28 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                     Post = new Vector2(p.X, p.Z),
                     Engine = true,
                     Version = EngineBoard.Version,
-                    RaceGoals = cold.Race is { } race ? data.Ai.RaceGoals(race.StringId) : [],
+                    RaceGoals = OwnGoals(squad, board, cold),
                 };
             }
 
             cold.Ai.EngineGoals = package is null ? [] : CombatGoalsOf(package, RoleOf(squad, squad.Members[k], cold));
-            if (squad.DebugAggro && AttackEnemiesGoal() is { } attack) cold.Ai.EngineGoals = [.. cold.Ai.EngineGoals, attack];
 
             // A follower of a squad a code mod holds that stands idle (it came round, its fight ended, the swap found it held by something else:
             // ToRoutine) follows its leader again (engine choice: the mod moves the leader).
-            if (board is not null && Rejoins(world, squad, s, cold))
-                TaskStart.Become(world, s, CharacterTask.Follow, TaskType.FollowSquadleader, TaskSource.Goal);
+            if (Rejoins(world, squad, s, cold)) TaskStart.Become(world, s, CharacterTask.Follow, TaskType.FollowSquadleader, TaskSource.Goal);
         }
+    }
+
+    /// <summary>
+    /// A non-player member's own goal lists (<see cref="AiMind.RaceGoals"/>): its race's <c>AI Goals</c>, then its faction's while no contract runs
+    /// on the squad's blackboard (<c>setupAI</c> reads the faction's only then, <b>Verified</b>), and for a debug spawn that must aggro
+    /// (<see cref="Squad.DebugAggro"/>, engine API) Attack enemies.
+    /// </summary>
+    IReadOnlyList<AiGoal> OwnGoals(Squad squad, Blackboard board, CharacterCold cold)
+    {
+        string? faction = (uint)cold.Faction < (uint)data.Factions.Count ? data.Factions[cold.Faction].Id : null;
+        var own = data.Ai.OwnGoals(cold.Race?.StringId, faction, board.Contract is null);
+        return squad.DebugAggro && AttackEnemiesGoal() is { } attack ? [.. own, attack] : own;
     }
 
     /// <summary>
@@ -3784,25 +3757,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         board.StartContract(package, world.GameHours, PhaseHours, _rules, phase: true);
 
     /// <summary>
-    /// The package a template's squad starts with (<see cref="Blackboard.Update"/> over its slots, as the population's stand-in takes it,
-    /// <see cref="PlatoonJobs.For"/>); null without one.
-    /// </summary>
-    AiPackage? FirstPackage(string templateId)
-    {
-        if (_firstPackages.TryGetValue(templateId, out var known)) return known;
-        var packages = TemplateOf(templateId).Packages;
-        AiPackage? first = null;
-        if (packages.Count > 0)
-        {
-            var board = new Blackboard(packages);
-            board.Update();
-            first = board.Current;
-        }
-
-        return _firstPackages[templateId] = first;
-    }
-
-    /// <summary>
     /// The combat goals (<see cref="AiBehaviour.Fight"/>) of a package's role list, kept per package and role (serial only).
     /// </summary>
     IReadOnlyList<AiGoal> CombatGoalsOf(AiPackage package, AiRole role)
@@ -3813,37 +3767,19 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// The AI runs a squad that is not the player's, not a roaming platoon's active half (a town's own saved squad, pinned, is run like the town's, a
-    /// save's wild one like the wild sites' squads), and whose template lists AI packages. A player's squad only when it is autonomous and a save
-    /// held its AI (<see cref="Squad.SavedAi"/>): else it is attached when it is given a package (<see cref="TakePackage"/>). A squad of slaves
-    /// whose template lists none (Garret's slave, #938) is run too: its members plan with their master's Slave AI Goals (<see cref="ObeyedRoles"/>),
-    /// as the original's AI slaves run their master's list. A campaign's platoon is run whatever its template lists: its phase package is its
-    /// blackboard's override (<c>FUN_140272570</c> installs it on every loaded platoon's visit, <b>Verified</b>).
+    /// The AI runs every squad that is not the player's: every platoon has a blackboard in the original and every member of one runs the chooser
+    /// (<c>FUN_1405112b0</c> needs only the platoon, <b>Verified</b>). One whose template lists no AI packages has empty role lists, so its members
+    /// weigh only 14, 32 and their own lists (<see cref="OwnGoals"/>) and stand idle otherwise; a slave of it plans with its master's Slave list
+    /// (<see cref="ObeyedRoles"/>), and a campaign's platoon runs its phase package as the blackboard's override (<c>FUN_140272570</c>). A player's
+    /// squad only when it is autonomous and a save held its AI (<see cref="Squad.SavedAi"/>): else it is attached when it is given a package
+    /// (<see cref="TakePackage"/>).
     /// </summary>
-    bool Runs(World world, Squad squad) =>
-        IsPlayers(world, squad) ? squad is { Autonomous: true, SavedAi: not null }
-            : TemplateOf(squad.TemplateId).Packages.Count > 0 || AllSlaves(world, squad) || PlatoonOf(world, squad)?.Campaign is not null;
-
-    /// <summary>
-    /// Every living member of the squad is a slave (state 1); false for an empty squad.
-    /// </summary>
-    static bool AllSlaves(World world, Squad squad)
-    {
-        var table = world.Characters;
-        bool any = false;
-        foreach (var m in squad.Members)
-        {
-            if (!table.TryResolveNext(m, out int s) || table.Cold(s) is not { } cold) continue;
-            if (cold.SlaveState != 1) return false;
-            any = true;
-        }
-
-        return any;
-    }
+    bool Runs(World world, Squad squad) => !IsPlayers(world, squad) || squad is { Autonomous: true, SavedAi: not null };
 
     /// <summary>
     /// The platoon whose squad this is when it is a loaded roaming or campaign platoon's (not a town's own saved squad, nor a wild one); null for
-    /// any other squad. Such a squad claims no building of its own, and the population moves it only when <see cref="PopulationRuns"/>. Every loaded platoon runs its blackboard in the original (<c>FUN_1402732b0</c> from the platoon's slot 27,
+    /// any other squad. Such a squad claims no building of its own, and a code mod moves it only when <see cref="PopulationRuns"/>. Every loaded
+    /// platoon runs its blackboard in the original (<c>FUN_1402732b0</c> from the platoon's slot 27,
     /// docs/game/ai.md "Blackboard update"), whatever its kind.
     /// </summary>
     Platoon? PlatoonOf(World world, Squad squad) =>
@@ -3877,8 +3813,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// Whether a goal walks its squad to the mission town: a travel goal, or 192 Delivering slaves, the shipping package's leader goal (a captive
-    /// job). Under the population's trip the slavers had engine minds, so the leader walked the trip alone while the rest neither followed nor
-    /// carried its knocked-out captives, which then escaped far from it (#904).
+    /// job): a held squad keeps full minds while it travels, so its members follow and carry its captives (#904).
     /// </summary>
     static bool Travels(TaskType type) =>
         TaskBehaviours.Of(type) == AiBehaviour.Travel || type == TaskType.GoToSomewhereForDeliveringSlaves;

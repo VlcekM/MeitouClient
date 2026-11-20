@@ -453,9 +453,8 @@ public sealed class DecisionSystem
     }
 
     /// <summary>
-    /// An order is about to take an NPC its AI does not fully run (an engine mind or none, serial): the routine it is on, wandering or following
-    /// its leader, is kept for <see cref="BackToRoutine"/>; a routine kept by an earlier order of the queue stays. A roaming leader's trip needs
-    /// none: the population walks it on once its order no longer holds it.
+    /// An order is about to take an NPC its AI does not fully run (a held platoon's engine mind, or none: no squad; serial): the routine it is on, wandering or following
+    /// its leader, is kept for <see cref="BackToRoutine"/>; a routine kept by an earlier order of the queue stays.
     /// </summary>
     internal static void KeepRoutine(CharacterTable table, int slot, CharacterCold cold)
     {
