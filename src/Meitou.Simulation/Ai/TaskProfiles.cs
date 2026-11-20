@@ -55,12 +55,12 @@ public static class TaskProfiles
         [TaskType.Bodyguard] = new(Special, Crowd: 0.9f),
         // Medic: the desire function's 1 times the finder's score (FUN_140998410); crowd factor 0.8 (FUN_140319a60, Observed).
         [TaskType.JobMedic] = new(Special, Crowd: 0.8f),
-        // 248 Attacking Squad (FUN_140319a60: commitment 0.3 + rand x 2, +0x20 set)
+        // 248 Attacking Squad (FUN_140319a60: commitment 0.3 + rand x 2, +0x20 and +0x21 set)
         [TaskType.DefeatSquadLimitChaseRange] = new(Special, 0.3f, 2, true),
         [TaskType.GoHomeAndGoToBed] = new(Special, 2, 8, true),
         [TaskType.GoHomeAndGoToBedSecure] = new(Special, 2, 8, true),
-        [TaskType.RunAwayHometown] = new(Special, 0.05f, 0.15f, true),   // 127 Retreating fast (FUN_140319a60: 0.05 + 0.15 r, +0x20 set, a2-003)
-        // 35 Running away, a goal of its own (FUN_140319a60: +0x18 0.05, +0x1c 0.1, +0x20 set; 280 registers the same, but is only ever an order).
+        [TaskType.RunAwayHometown] = new(Special, 0.05f, 0.15f, true),   // 127 Retreating fast (FUN_140319a60: 0.05 + 0.15 r, +0x20 set, +0x21 clear, a2-003)
+        // 35 Running away, a goal of its own (FUN_140319a60: +0x18 0.05, +0x1c 0.1, +0x20 set, +0x21 clear; 280 registers the same, but is only ever an order).
         [TaskType.RunAway] = new(Special, 0.05f, 0.1f, true),
         // Home territory aggression: AI slot 41, 0.5 (docs/game/ai-tasks.md "Combat goals", Observed). 21 and 34 desire 1 (slot 19), 16 slot 52 (1
         // but its zeros); 15 / 288 / 143 slot 14 (AiSystem.Fights.cs).

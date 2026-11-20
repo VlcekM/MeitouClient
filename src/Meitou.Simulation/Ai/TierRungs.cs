@@ -315,7 +315,8 @@ internal sealed class TierRungs : ITierRungs
 
     /// <summary>
     /// Scores goal <paramref name="g"/> into <paramref name="candidates"/> when it is of <paramref name="tier"/> (null: any) and in its hours, is
-    /// wanted and scores above 0, and is not dropped for having nothing to do.
+    /// wanted (or held by its commitment, <see cref="AiSystem.HeldByCommitment"/>: the scorer multiplies first and floors the current goal after,
+    /// <c>FUN_14050df10</c>) and scores above 0, and is not dropped for having nothing to do.
     /// </summary>
     void Consider(List<(AiGoal? Goal, float Score, float Desire, int Source)> candidates, AiGoal g, TaskPriority? tier)
     {
@@ -326,7 +327,7 @@ internal sealed class TierRungs : ITierRungs
 
         var profile = TaskProfiles.Of(g.Task.Type);
         float desire = _ai.Desire(_world, TaskBehaviours.Of(g.Task.Type), g.Task.Type, profile, _squad, _board, _mind, _id, g.Task.Target);
-        if (desire <= 0) return;
+        if (desire <= 0 && !AiSystem.HeldByCommitment(_world, g, profile, _mind, _slot)) return;
 
         float score = _ai.Score(_world, g, profile, desire, _squad, _board, _mind, _id);
         if (score <= 0 || _plans.GivesNothingNow(g)) return;

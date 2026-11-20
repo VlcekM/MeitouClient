@@ -856,7 +856,7 @@ byte compares at `+0x15` in the exe's code). Readers and every class's test: [fi
 there (`FUN_14060f570` answers false), so for 180 Man the gate the byte changes none of the list-A tests.
 
 - Score = desire x goal weight x crowd^n; x1.25 for the current task. For a committing current task the
-  score is at least 0.4 until the commitment ends and at most 0.05 after it, so the character moves on. Then, while the running task (the plan's current step) answers
+  score is at least 0.4 until the commitment ends and at most 0.05 after it, so the character moves on (a row with `+0x21` is cleared at its end instead, [below](#desire-and-commitment)). Then, while the running task (the plan's current step) answers
   slot 4 false and the score is below 1 (`DAT_14167c308`), x1.25 again (`DAT_14168ba14`; **Verified**, `FUN_14050df10`). Man the gate at its desire 1 and the Gate guard packages'
   weight 1 (val2 0, **Verified** data) scores 1.25 as the current goal, so this never applies to it in the base data. The job and order passes have no x1.25 at all (their
   keys are list places, `FUN_14050e5b0`, `FUN_140510920`). Meitou: [finished tests](#finished-tests).
@@ -915,10 +915,27 @@ there (`FUN_14060f570` answers false), so for 180 Man the gate the byte changes 
 | 153, 239 Going to bed | 2 + r x 8 | 1 |
 | 190 Worker, 221 Operating machine | 0.5 + r x 2 | 1 |
 | 240 Capture Target | 0.05 + r x 0.5 | 1 |
-| 35, 280 Running away | 0.05 + r x 0.1 (+0x20 set; **Verified**, the registrations in `FUN_140319a60`; Meitou `TaskProfiles`, 280 being only an order there) | 1 |
+| 35, 280 Running away | 0.05 + r x 0.1 (+0x20 set, +0x21 clear; **Verified**, the registrations in `FUN_140319a60`; Meitou `TaskProfiles`, 280 being only an order there) | 1 |
+| 127 Retreating fast | 0.05 + r x 0.15 (+0x21 clear) | 1 |
+| 52 Waking up, 65 Getting up | 0.001 (+0x21 clear) | 1 |
 | 248 Attacking Squad | 0.3 + r x 2 (+0x20 and +0x21 set; **Verified**, the registration in `FUN_140319a60`; Meitou `TaskProfiles`) | 1 |
 | 45 Bodyguard | - | 0.9 |
 | 57, 58, 125, 237, 250 | - | 0.8 |
+
+How a commitment ends (**Verified**: the registrations in `FUN_140319a60`, `FUN_14050caf0`, `FUN_14050d130`, `FUN_14050f0b0`, `FUN_14050d080`,
+`FUN_140511130`, `FUN_14050df10`). There are two timers: the goal's (`+0x280`), rolled by the goal setter (AITaskSytem slot 5 `FUN_14050caf0`: from now
+when a committing goal that is not the current one is set, and min + r x range added on every set, so the same goal planned again extends it), and the
+task's (`+0x288`), rolled from now at each task start whose commit Tasker (`FUN_14050cff0`: the running task, or the plan's front when the running row does
+not commit and that one has a finder) commits. Rows with TaskData `+0x21` as well (37, 38, 43, 47, 118, 153, 157, 190, 221, 239, 240, 248, 255, 268, 275)
+end at the task's timer: the frame step ends the running task and asks a replan, so the next update clears the goal and scores it afresh. The others (35,
+280, 127, 52, 65) only leave committed mode when the goal's timer passes: the goal stays current and the scorer caps it at 0.05. While the goal's timer runs
+the scorer floors the current goal at 0.4 after its x1.25, whatever its desire; it is scored then only on an update whose plan step set the failed flag
+(`+0x26d`: the walk's target unreachable, `FUN_14050d970`), since committed mode skips its tier otherwise, and the failed flag's handler (`FUN_14050d080`)
+zeroes the goal's timer at the next character update. Meitou: one timer (`AiMind.CommitUntil`, rolled at take-up); the floor and cap in `AiSystem.Score`,
+the floor ahead of the desire gate (`AiSystem.HeldByCommitment`); the failed flag is not modelled, so the floor holds only a current committed goal that
+committed mode does not keep. Engine choice: every committing row ends as one without `+0x21` (capped while current): clearing a `+0x21` goal at its end
+makes the next choice without the engine goals' looks, which skip a committed character's lower goals and run on their own turn (a captive goal's look
+every 30 ticks), so the goal would win again and recommit before they are looked at.
 
 ### Finished tests
 
@@ -1083,14 +1100,14 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   no task runs or no goal is current) and `AITaskSytem` vfunc 3 `FUN_140506cf0` (1 unless `+0x1b1`, which is set while the chooser runs; it also clears the goal unless it commits
   and has not expired, `FUN_14050cdc0`). Vfunc 3 is called by: an order added (`FUN_140508380`, twice when the queue became one entry), a job or second-list add (`FUN_1405086d0`), a front
   insert (`FUN_140507a90`, the stagger), second-list entries of a type removed (`FUN_140507090`), a move order updated in place (`FUN_140508990`), a plan ended with nothing queued
-  (`FUN_14050d7d0`), the failed flag's handler (`FUN_14050d080`), a commit row whose commitment passed (`FUN_14050f0b0`), `underMeleeAttack` (`FUN_140999f00`: the fight off, not
+  (`FUN_14050d7d0`), the failed flag's handler (`FUN_14050d080`), a commit row with `+0x21` whose commitment passed (`FUN_14050f0b0`), `underMeleeAttack` (`FUN_140999f00`: the fight off, not
   getting up, and not moving with `FUN_140856bc0`, [combat](combat.md#fight-lifecycle-and-orders)), a hostile act or bolt (`FUN_140999d50`: the fight off, not getting up), sneak
   turned on while the goal is 16 (`FUN_1405ca9a0`) and, for a player-faction character only, standing order 3 sneak (`FUN_1405caa50`). The jobs switch (standing order 15,
   `FUN_140508210`) asks none: it sets `+0x35` and posts an interface event. Removing a job (`FUN_140507300`, Character `FUN_1405c9000`) or moving it in the list (`FUN_1405078a0`, `FUN_1405c8fc0`) asks none either, and turning sneak off asks none (`FUN_1405ca9a0`) (**Verified**). Meitou: sneak on through `Orders.SneakOn` (the toggle, the stealth knock-out's walk, a follower copying its leader). Meitou: [decision step](../simulation.md#decision-step) "Replan request".
 - **The plan's lifecycle** (**Verified**, decompile): a goal's plan is kept and run task by task. Each frame (AI slot 3 `FUN_1405965b0` → `FUN_14050f0b0`) the 20 s
   unreachable marks (`+0x218`) count down, a replan is asked when no task runs or no goal is current, the next queued task starts when none runs, and the running task ends when
   its slot 4 says finished, its commitment (`+0x288`, set for committing rows by `FUN_14050d130`) has passed or it does not commit, its list A (`FUN_14060f570`) and its effect
-  test (`FUN_14050c8e0`) hold; a commit row 248 whose commitment passed ends at once. The update's plan step (`FUN_14050d970`, on the update without a replan request) ends the
+  test (`FUN_14050c8e0`) hold; a commit row with `+0x21` whose commitment passed ends at once ([commitment](#desire-and-commitment)). The update's plan step (`FUN_14050d970`, on the update without a replan request) ends the
   running task (the driver's `+0x270` → `+0x68`) when: (a) slot 4, list A and the effect test hold (`FUN_140513f50`); (b) the mover is idle (vfunc 0x50) and `isAtLocation`
   is false: the target is marked unreachable for 20 s (`FUN_140796ed0`, the blackboard told) and a replan asked (`+0x26d`); (c) it is a walk row (1, 67, 82, 83, 120, 121, 163,
   199, 267) and the next queued task's row can already run; (d) the hours (the plan's tasks carry the goal's, `FUN_14050fe10`) are over, or (e) its own list B no longer holds
@@ -1479,8 +1496,8 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   `Run away!`) and of the Slave lists of four police-station packages, all day (**Verified**, base data: `police station patrol`, `Police Station`,
   `empire police station`, `empire vault prison`; 0.001 for an NPC). As a goal of its own it [commits](#desire-and-commitment) (0.05 + r x 0.1 h):
   priority 3, so until then only an order (a stagger's 147 among them), a replan request (a blow, the melee alert: it stops the task, and the update clears a goal
-  left with none) or its list A (the update's plan step) ends it, and 32 at 0.7 or 1 does not take over ([committed mode](#precedence)); then it no longer holds (the
-  frame step asks a replan for a commit row whose commitment passed; Meitou: the score cap 0.05). Committed mode reads the current goal, so it does not hold a run under 32.
+  left with none) or its list A (the update's plan step) ends it, and 32 at 0.7 or 1 does not take over ([committed mode](#precedence)); then it no longer holds:
+  row 35 has no `+0x21`, so no replan is asked and it stays current with the scorer's cap 0.05, which any goal above that outscores (Meitou the same). Committed mode reads the current goal, so it does not hold a run under 32.
   Meitou: `SelfPreservation` (the two desires, the choice), `CombatSystem.ThreatLevel` (slot 17), goal 32 as `AiSystem.SelfPreservationGoal` (once per NPC mind, the list entries ignored), a priority-3
   goal of the chooser like the combat goals, no candidate while not current with no threat on the senses' list (`AiSystem.SelfPreservationDesire`, `CombatSystem.Threatened`). Its plan
   (`AiSystem.SelfPreservationPlans`, the table above, for NPC and player-faction minds; a player-faction mind's 35 desire is `AiSystem.PlayerSideRowRunDesire`) is `[35, 32]` when 35

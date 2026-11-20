@@ -864,6 +864,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     const float FollowShare = 0.5f;
 
     /// <summary>
+    /// The current committed goal's floor while its commitment lasts and its cap after (<c>DAT_141696c90</c>, <c>DAT_141696c74</c>).
+    /// </summary>
+    const float CommitFloor = 0.4f, CommitCap = 0.05f;
+
+    /// <summary>
     /// 253's desire ramp (<c>FUN_140597900</c>, <b>Verified</b>): 0 within <see cref="EscapeNear"/> x f of the followed character, 1 from
     /// <see cref="EscapeFar"/> x f (<c>DAT_1416b3ac8</c>, <c>DAT_1416abee4</c>).
     /// </summary>
@@ -946,14 +951,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 CrowdTarget(g.Task.Target, squad, board, id), id);
         float score = desire * g.Weight * (crowd > 0 ? MathF.Pow(profile.Crowd, crowd) : 1);
 
-        if (mind.Goal is { } current && current.Task.Type == g.Task.Type && current.Task.Target == g.Task.Target
-            && !Displaced(world, id.Slot, mind))
+        if (IsCurrent(world, g, mind, id.Slot))
         {
             score *= Settings.Continuity;
 
-            // A goal it committed to holds at least 0.4 until the commitment runs out, then at most 0.05 (docs/game/ai.md "Packages and
-            // goals", Observed).
-            if (profile.Commits) score = world.GameHours < mind.CommitUntil ? MathF.Max(score, 0.4f) : MathF.Min(score, 0.05f);
+            // A goal it committed to holds at least 0.4 until the commitment runs out, whatever its desire, then at most 0.05 (FUN_14050df10,
+            // Verified: DAT_141696c90, DAT_141696c74).
+            if (profile.Commits) score = world.GameHours < mind.CommitUntil ? MathF.Max(score, CommitFloor) : MathF.Min(score, CommitCap);
 
             // While the running task's class says it is not finished (its slot 4, TaskFinished), a score below 1 is raised once more
             // (FUN_14050df10, Verified).
@@ -962,6 +966,20 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         return score;
     }
+
+    /// <summary>
+    /// Whether <paramref name="g"/> is the current goal for the scorer: the mind's goal, the same type and target, not displaced by an engine task
+    /// (<see cref="Displaced"/>).
+    /// </summary>
+    static bool IsCurrent(World world, AiGoal g, AiMind mind, int slot) =>
+        mind.Goal is { } current && current.Task.Type == g.Task.Type && current.Task.Target == g.Task.Target && !Displaced(world, slot, mind);
+
+    /// <summary>
+    /// Whether the scorer's commitment floor holds <paramref name="g"/> above 0 (<see cref="Score"/>): it is the current goal, commits and its
+    /// commitment has not run out, so a desire of 0 still scores <see cref="CommitFloor"/> (<c>FUN_14050df10</c>, <b>Verified</b>).
+    /// </summary>
+    internal static bool HeldByCommitment(World world, AiGoal g, TaskProfile profile, AiMind mind, int slot) =>
+        profile.Commits && world.GameHours < mind.CommitUntil && IsCurrent(world, g, mind, slot);
 
     /// <summary>
     /// The character a goal is aimed at, as its <c>TaskInfo</c> entry holds it (<c>FUN_140269e90</c> copies the goal's target hand): the member
