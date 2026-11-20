@@ -998,8 +998,9 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.HasPath);
         n.TaskTime = FailedPathWait;
 
-        // a talk act-out's walk fails as a walk does: its owner reads the failure (Dialogue.DialogueOrders.WalkTo)
-        if (n.Task == (byte)CharacterTask.Talk) cold.PathFailed = true;
+        // a talk act-out's or a lift's walk fails as a walk does: its owner reads the failure (Dialogue.DialogueOrders.WalkTo,
+        // CarrySystem.LiftWalkFails; the original's plan step takes any failed mover as a lost walk, FUN_14050d970)
+        if (n.Task is (byte)CharacterTask.Talk or (byte)CharacterTask.PickUp) cold.PathFailed = true;
         if (n.Task != (byte)CharacterTask.GoTo) return;
 
         string why = n.PathCursor >= cold.PathExact

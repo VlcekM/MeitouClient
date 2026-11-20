@@ -653,9 +653,10 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     }
 
     /// <summary>
-    /// Whether the lifter in <paramref name="slot"/>, still walking to its body, holds the answer that no path gets it there: none found, or one
-    /// whose navmesh part ends out of reach of the spot it walks to and goes on provisionally (the walkability's answer for a goal it cannot reach,
-    /// docs/game/pathfinding.md "Own builder"). False while a request is on its way or the path is for an older spot.
+    /// Whether the lifter in <paramref name="slot"/>, still walking to its body, holds the answer that no path gets it there: none found, a walk
+    /// given up blocked past the limit, or one whose navmesh part ends out of reach of the spot it walks to and goes on provisionally (the
+    /// walkability's answer for a goal it cannot reach, docs/game/pathfinding.md "Own builder"). False while a request is on its way or the path is
+    /// for an older spot.
     /// </summary>
     internal bool LiftWalkFails(World world, int slot)
     {
