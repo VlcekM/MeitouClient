@@ -1191,8 +1191,9 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// A war assault's squad roams its mission town (engine choice, as the passing-by assault's: the town duties' ransack is not a goal yet, and
-    /// 216's act-out walks the leader round <see cref="Squad.HomeCentre"/>).
+    /// A war assault's squad has its mission town as its <see cref="Squad.HomeCentre"/> (engine choice, as the passing-by assault's), which only its
+    /// patrol point and the go-home fallback read; its members go into the town by their own goals (216's finder,
+    /// <see cref="Kidnap.TownWatchFinders.RansackTarget"/>).
     /// </summary>
     void RoamTarget(World world, Squad squad, Blackboard board)
     {
