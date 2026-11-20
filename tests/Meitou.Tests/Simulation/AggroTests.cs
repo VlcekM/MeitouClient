@@ -850,8 +850,9 @@ public class AggroTests
     /// <summary>
     /// Self preservation competes with the other priority-3 goals by its desire (<c>FUN_140599d20</c>: 0.7 with an attacker within 181.7, 1 within 40): a
     /// member following its leader at weight 12 (desire 0.5 x the idle leader's followMe 0.1, x1.25 as the current goal and x1.25 again as a
-    /// never-finishing one under 1, <c>FUN_14050df10</c>: 0.94) keeps following while the bandit that attacks it runs in from 120, and fights it once
-    /// the bandit is within 40.
+    /// never-finishing one under 1, <c>FUN_14050df10</c>: 0.94) keeps following while the bandit that attacks it runs in from 250, and fights it once
+    /// the bandit is within 40. The bandit starts beyond 181.7: its targeting alert asks the goal-clearing replan (<c>FUN_140999f00</c>, docs/game/
+    /// combat.md "Being targeted"), which takes the follow's x1.25s (0.6 against 0.7 at 120), and there 32 wants nothing.
     /// Catches a self-defence at any distance whatever the other goals, and one that never outranks a goal above 0.7.
     /// </summary>
     [Fact]
@@ -864,7 +865,7 @@ public class AggroTests
         CharacterId member = squad.Members[1];
         Lists(squad, [], [Goal(TaskType.FollowSquadleader, 12f, target: TaskTargetType.Leader)]);
         Think(a);
-        var bandit = a.SquadOf(Bandits, o, true, (o + new Vector2(10, 120), MathF.PI)).Members[0];
+        var bandit = a.SquadOf(Bandits, o, true, (o + new Vector2(10, 250), MathF.PI)).Members[0];
         a.World.RunTicks(15);
         var table = a.World.Characters;
         a.World.Commands.Enqueue(new AttackOrder([bandit], member) { Tick = a.World.Tick });

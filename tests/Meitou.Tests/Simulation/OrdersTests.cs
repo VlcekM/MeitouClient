@@ -2,6 +2,7 @@ using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
+using Meitou.Data.Gameplay.Ai;
 using Meitou.Simulation;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
@@ -98,6 +99,7 @@ public class OrdersTests
         var goal = new Vector3(1000, 150, 3000);
         world.Commands.Enqueue(new MoveOrder([player], goal) { Tick = 0 });
         bool stood = false, walkedOn = false, ordered = false;
+        TaskType? lastRow = null;
         for (int k = 0; k < 900 && !(stood && walkedOn); k++)
         {
             world.RunTicks(1);
@@ -105,9 +107,14 @@ public class OrdersTests
             ref readonly var n = ref world.Characters.Next[player.Slot];
             if (cold.Medical!.Incapacitated) break;
             ordered |= n.Task == (byte)CharacterTask.GoTo;
+
+            // The stagger ends the walk and its order 147 stands in for it, its act-out the tick after it starts; once it is popped the move is
+            // planned again from its start (docs/game/combat.md "Stagger outside a fight").
+            var expected = lastRow == TaskType.StumbleTaskForced ? CharacterTask.Idle : CharacterTask.GoTo;
+            lastRow = cold.Running?.Row;
             if (!ordered) continue;
 
-            Assert.Equal((byte)CharacterTask.GoTo, n.Task);
+            Assert.Equal((byte)expected, n.Task);
 
             float speed = new Vector2(n.Velocity.X, n.Velocity.Z).Length();
             if (cold.StaggeredUntil > world.Tick) { if (speed == 0) stood = true; }

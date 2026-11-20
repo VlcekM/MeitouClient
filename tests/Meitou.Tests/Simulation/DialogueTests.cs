@@ -232,7 +232,7 @@ public class DialogueTests
     /// <summary>
     /// A guard greets a stranger of another squad and faction he sees on his sight pass (event 3; its line refuses player targets), the chain
     /// passes to the line the stranger says back (speaker T_TARGET), and the guard's third line has a crowd trigger: the whole squad, the guard
-    /// with it, cheers (event 74), the cheer taking the place of the line that set it off.
+    /// with it, cheers (event 74), the cheer taking the place of the line that set it off and turning the mate to the stranger, whom it greets too.
     /// </summary>
     [Fact]
     public void A_greeting_between_npcs_sets_off_the_crowd_and_the_target_answers()
@@ -291,7 +291,7 @@ public class DialogueTests
         }
         Spawn("hero", 0, data.PlayerFaction, true, "");
         Spawn("Guard", 100, villagers, false, "guard-c");
-        Spawn("Mate", 200, villagers, false, "guard-c", join: true);   // past the stranger: only the guard faces him
+        Spawn("Mate", 200, villagers, false, "guard-c", join: true);   // past the stranger: only the guard faces him at first
         Spawn("Stranger", 150, data.FactionIndex("f-o"), false, "");   // of a faction the guards do not regard as friendly
 
         var said = new HashSet<string>();
@@ -303,7 +303,9 @@ public class DialogueTests
 
         string[] all = [.. said.Order()];
 
-        Assert.Equal(["Guard: Hail, Stranger.", "Guard: Hurrah!", "Mate: Hurrah!", "Stranger: Hail yourself."], all);
+        // The mate's cheer turns it once to face the target, the stranger behind it (FUN_140683f90, docs/game/dialogue.md "Ambient
+        // conversations"), whom it then sees and greets too.
+        Assert.Equal(["Guard: Hail, Stranger.", "Guard: Hurrah!", "Mate: Hail, Stranger.", "Mate: Hurrah!", "Stranger: Hail yourself."], all);
     }
 
     /// <summary>
