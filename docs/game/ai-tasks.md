@@ -1708,11 +1708,14 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   town is the campaign's target, a player outpost or a placed town alike), only when that hand does not resolve the town the character is in (vfunc `0x78`); a resolved town
   with no candidate gives 0, with no second town tried. Candidates: the town's vfunc `0x2c8` scan (as 275's, shared by `TownBase`, `Town`, `Nest` and `TownNull`) with
   `BuildingFinder_OnesWithInteriors`, mask 0x80000: the buildings of function key 19 BF_SHELL_WITH_INTERIOR (a building with an `interior` and no functionality of its own;
-  walls are 20, gates 21, machines their function, [construction](buildings-production.md); the zone map's key read as that function key, as 275's mask reads
-  TRAINING, CHAIR and THRONE, **Observed**: what fills the map was not read) whose town it is, with an interior object and not a `WallBuilding` (slot 5
-  `FUN_1408ca540`); no owner, public, complete or ruin test. The zones scanned are those registered with the town: its own and those within one zone of it as they load
-  (`FUN_14092d730`, `FUN_14092dbb0`). The pick is uniform (`FUN_1409fb020`); its position is the plan's target (156 walks in, then 216 runs inside). Meitou:
-  `TownWatchFinders.RansackTarget`, an outpost's houses from the player's complete, standing buildings.
+  walls are 20 and gates 21 even with an interior, machines their function; the mask's bits are the zone map's function keys, **Verified**, see
+  [the zone map's building lists](buildings-production.md#classes-and-functions)) whose town it is (`FUN_1400f6c20`, nearest-town fallback included), then slot 5
+  `FUN_1408ca540`: the root object's stored town handle equals the town's own (hand `!=`, `FUN_1400cd0b0`; so a building that takes the town only as the nearest is
+  dropped), it has an interior object, and it is not a `WallBuilding`; no owner, public, complete or ruin test. Base data (**Verified**, scratch count over the base
+  game's `TownBuildings`, 261 towns, 9766 buildings): 1299 of key 19; 1946 walls and 125 gates with an interior are keys 20 and 21; no machine building has an
+  interior. The zones scanned are those registered with the town: its own and those within one zone of it as they load (`FUN_14092d730`, `FUN_14092dbb0`). The pick
+  is uniform (`FUN_1409fb020`); its position is the plan's target (156 walks in, then 216 runs inside). Meitou: `TownWatchFinders.RansackTarget`, an outpost's houses
+  from the player's complete, standing buildings.
 - Chairs (**Verified**, BUILDING_FUNCTIONALITY records of gamedata.base / rebirth.mod / the install's mods, dumped): BuildingFunction 17 BF_CHAIR
   `chair`, `chair-fixed`, `chair-fixed 180` (animation "sitting chair"; Stool, Old Stool, Bench, Sitting Box) and `sit on floor (no chair)`
   ("sitting idle"; Sitting Pillow, Sitting spot (invisible)); 24 BF_THRONE `throne chair` ("sitting chair"); all `max operators` 1.

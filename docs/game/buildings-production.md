@@ -313,7 +313,7 @@ shows the first failing message in this order (**Verified** unless marked):
   and the constants agree; the Ghidra text is wrong at the division, so build nothing from it; via `TownList::reassessTownPositions` `FUN_14054d080`; called on placement commit `FUN_1404d72a0`, dismantle `FUN_1402a2860` /
   `FUN_14054fea0` and town merge `FUN_140931840`). Only for a town of the player faction. The buildings of a town are those whose root object's town handle resolves to it, else the NEAREST non-nest town by
   horizontal distance (`FUN_1400f6c20`; so a building left with a dangling handle by a load that removed an overlapping outpost belongs to the nearest town and is counted at the next refit). The building
-  function keys come from the constructors (house with an interior 19, wall gate 21, wall piece 20, others their functionality's `function`, plain 18). The centre (+0x48) is
+  function keys are the constructors' ([function key](#classes-and-functions): house with an interior 19, wall gate 21, wall piece 20, others their functionality's `function`, plain 18). The centre (+0x48) is
   `(4 x sum of the marker positions of the houses (19) and gates (21) + 1 x sum of the top-level REFINERY (4) buildings that are not foliage) / (4 nA + nB)`, X and Z (the move, slot 32 `FUN_140933b90`, sets the town's Y to the terrain height; **Observed**, round-4 parity); with no such building
   nothing changes (no centre, no radius; the town is removed only when it has no building at all). It is then put on the closest navmesh point within a 500 box (doors and water excluded) and
   **keeps its old position when none is found**. The radius (+0x51c) is the farthest building's X/Z distance from the new position + 200 over every building that is not a wall piece (gates, doors, storage, turrets
@@ -542,6 +542,15 @@ generators, `RainCollectorBuilding`; `ResearchBuilding` beside them. `BuildingFu
 27 MINE_NATURAL, 28 STEERING, 29 ENGINE, 30 LIQUID_TANK. `MiningResource` (**Verified**): 0 NONE, 1 IRON, 2 STONE,
 3 COPPER, 4 CARBON, 5 WATER, 6 GROUND. A farm is function 1 with `world resource mining` 6 and a BUILDING `farm data`
 reference (FARM_DATA); a well is function 1 with resource 5 (**Verified**, probe: `farming wheat`, `well`).
+
+**Function key and the zone map's building lists** (**Verified**, decompile): a building's key is `+0x158`, read by slot 94 (`FUN_1400f6b30`, which gives 27
+MINE_NATURAL for a factionless 1). The factory tests in order `is wall gate` (GatewayBuilding, 21), `links together` (WallBuilding, 20), `farm data`, then the
+functionality's `function`: 0 or 18 or none make a plain Building, any other a machine class keyed by that function (`FUN_1402a0900`); given a parent object
+(its ninth argument) it makes a DoorStuff instead (`FUN_14029fb40`, 22). The Building constructor (`FUN_14055ca90`) sets 18, then `FUN_140551b20` makes the interior object and sets 19 when the record has an
+`interior` reference; the derived constructors run after it and set their own key, and later calls of `FUN_140551b20` find the interior made and leave the key,
+so 19 means a plain building with an interior. `RootObjectFactory::createBuilding` (`FUN_14057cc70`) registers each new building in its zone's
+`ZoneMapContent` `+0x70`, a `map<BuildingFunction, set<Building*>>` (its allocator type names it), under that key; the finders' masks (`FUN_1400db970`) select
+keys by bit. A mine is moved to key 1 when it gains a faction (`FUN_140557950`).
 
 **Corpse machine label** (**Verified**, `Task_FeedCorpseIntoMachine` slot 3 `FUN_1403567a0`, disassembly; floats read from the exe): each time a body is fed in
 ([job 136](ai-tasks.md)) and the task's target hand is a BUILDING (type 0) that resolves, the building's functionality (`UseableStuff` +0x400, KenshiLib 1ce4a16) `string`
