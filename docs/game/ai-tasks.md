@@ -1179,10 +1179,11 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   Bodyguard `!16, !39` (16 / 39: the followed character's / its own +0x2b0, a threat within 40, `FUN_14059de10`), which 13 Attacking attackers of provides on the row's target,
   so a follower fights whoever threatens its leader (**Verified**, decompile): `Task_Follow`'s update (`FUN_14033b350`) starts no fight and the melee alert (`FUN_140999f00`)
   and the shot handler replan only the attacked character; the plan step (`FUN_14050d970`) ends a running follow whose list B fails and asks a replan (`FUN_14050d7d0`), and
-  the job pass (`FUN_14050e5b0`) skips 45 while its list B holds (it neither acts nor has an effect) and otherwise plans it, else 31, as 13 first (finder `AI::findAttackerOf`,
-  the followed character's attacker within 150) and the row after it. The chain's only test of the follower is row 4's desire (`FUN_1405a4260`): 0 with no working arm, against
-  a caged target, on Hold for a target the post test refuses, or crippled with no threat within 40 of itself for an NPC neither of the player's faction nor `unique` (0.0001 on
-  Block or Hold, else 0.1), so such a plan fails; a squad not intact halves it; Passive and sneaking (15's zeros) are not on it. 45 from the player is always a job (`FUN_1407fa650` adds 0x2d as one). A job higher in the list takes
+  the job pass (`FUN_14050e5b0`) skips 45 while its list B holds (it neither acts nor has an effect) and otherwise plans it, else 31; the planner gives an unmet list-B entry's
+  providers the node's own target (`FUN_14051bae0`), so 13 runs on the followed character (finder `AI::findAttackerOf`, its attacker within 150) and the row comes after it
+  (the plan's order, **Observed**, [planner](#planner)). Row 4's desire (`FUN_1405a4260`) is 0 with no working arm, against a caged target, on Hold for a target the post test
+  refuses, or crippled with no threat within 40 of itself for an NPC neither of the player's faction nor `unique` (0.0001 on Block or Hold, else 0.1), so such a plan fails; a
+  squad not intact halves it; it reads neither Passive nor sneaking (15's zeros). 45 from the player is always a job (`FUN_1407fa650` adds 0x2d as one). A job higher in the list takes
   over at the next choice; the implicit jobs come after the list, Idleness last. Passive leaves
   Self preservation alone; the Jobs switch only gates the job passes. A fight is a task (4 `Task_MeleeAttack`) in a goal's or an order's plan; `CombatClassAI` steers it and
   chooses nothing; the fight ends with the task.

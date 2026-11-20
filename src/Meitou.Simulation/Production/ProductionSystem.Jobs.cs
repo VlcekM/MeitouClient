@@ -178,7 +178,7 @@ public sealed partial class ProductionSystem
 
             if (!owner.Runnable(world, slot, cold, k)) return DecisionCheck.No("blocked");
             if (PermaJobs.Follows(type) && Defends(world, slot, cold, k) is { } foe)
-                return foe.IsNone ? DecisionCheck.No("its plan's 13 finds no attacker to fight") : DecisionCheck.Run;
+                return foe.IsNone ? DecisionCheck.No("its plan's 13 has no attacker it can fight") : DecisionCheck.Run;
 
             return runs ? DecisionCheck.Runs : DecisionCheck.Run;
         }

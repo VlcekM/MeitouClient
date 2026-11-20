@@ -8,7 +8,8 @@ using Meitou.Simulation.Production;
 namespace Meitou.Simulation.Ai;
 
 /// <summary>
-/// The fight a follow row (31 Staying close, 45 Bodyguard, 289) plans before itself (docs/game/ai-tasks.md "Precedence", <b>Verified</b>): 31 and
+/// The fight a follow row (31 Staying close, 45 Bodyguard, 289) plans before itself (docs/game/ai-tasks.md "Precedence", <b>Verified</b> but for
+/// the plan's order, <b>Observed</b>): 31 and
 /// 289 need <c>!16</c> and 45 <c>!16 !39</c> (a threat within 40 of the followed character, of the follower itself: <c>FUN_14059de10</c> on their
 /// <c>+0x2b0</c>), which 13 Attacking attackers of provides on the row's target: its finder (<c>AI::findAttackerOf</c>,
 /// <see cref="CombatSystem.BestAttackerOf"/>) takes the followed character's attacker and the chain goes on to 4 Attacking, whose desire
@@ -78,10 +79,9 @@ public static class FollowDefence
     }
 
     /// <summary>
-    /// Whether the chain 13 to 4 has a value above 0 for the follower (<c>FUN_1405a4260</c>, <b>Verified</b>): 13 in its repertoire (not imprisoned
-    /// or chained), a working fighter with a working arm; crippled (crawling), only of the player's side or with a threat within 40 of itself (its
-    /// <c>+0x2b0</c>; a non-unique NPC with none answers 0). The chain reads no other state of the follower: not its other wounds, hunger, Passive
-    /// or sneaking (those two zero 15's desire, not this chain's).
+    /// Whether the chain 13 to 4 has a value above 0 for the follower (row 4's desire, <c>FUN_1405a4260</c>, <b>Verified</b>): 13 in its repertoire
+    /// (not imprisoned or chained), a working fighter with a working arm; crippled (crawling), only of the player's side or with a threat within 40
+    /// of itself (its <c>+0x2b0</c>; a non-unique NPC with none answers 0). Row 4's desire reads neither Passive nor sneaking (those zero 15's).
     /// </summary>
     static bool Fights(World world, int slot, CharacterCold cold, CombatSystem combat)
     {
