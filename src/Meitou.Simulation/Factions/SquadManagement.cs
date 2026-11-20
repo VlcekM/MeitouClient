@@ -623,7 +623,7 @@ public static class SquadManagement
         if (faction < 0) faction = data.FactionIndex(DismissFallbackFaction);
         if (faction < 0) return;
         world.Events.Line(world, "recruit", $"{EventLog.Who(world, slot)} dismissed: leaves for {EventLog.FactionName(world, faction)}");
-        world.ReleaseDuties(slot, null);   // the faction change empties its goal lists (FUN_1405cbac0 -> FUN_14050a9d0): a food run it was on ends
+        world.ReleaseDuties(slot);   // the faction change empties its goal lists (FUN_1405cbac0 -> FUN_14050a9d0): a food run it was on ends
         if (world.Squads.Find(cold.SquadId) is { } old)
         {
             old.Members.Remove(id);

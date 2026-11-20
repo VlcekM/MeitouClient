@@ -123,8 +123,8 @@ public interface IOrderOwner
 
 /// <summary>
 /// A system that holds NPCs on an engine duty (<see cref="CharacterCold.Engaged"/>, or a record of its own that steers them): when an order's task is
-/// about to start on an NPC (<see cref="PlayerOrders"/>' front start, serial), the world asks every such system but the order's
-/// <see cref="OrderEntry.Keeps"/> to let the character go (<see cref="World.ReleaseDuties"/>). Found on the world's systems, nothing to register.
+/// about to start on an NPC (<see cref="PlayerOrders"/>' front start, serial), the world asks every such system to let the character go
+/// (<see cref="World.ReleaseDuties"/>). Found on the world's systems, nothing to register.
 /// </summary>
 internal interface IDutyRelease
 {
@@ -202,11 +202,6 @@ public sealed class OrderEntry(TaskType row, IOrderOwner owner)
     /// row's fight, 13) being over; the original runs its row only then, so only then does a failing list B end it.
     /// </summary>
     public bool RowRuns { get; internal set; }
-    /// <summary>
-    /// The duty holder that gave the order and keeps its own record when it starts (<see cref="IDutyRelease"/>; null: every holder lets go). Not
-    /// saved: a loaded order releases its giver too.
-    /// </summary>
-    internal IDutyRelease? Keeps { get; init; }
     /// <summary>
     /// An engine act on the character's body (getting up, stumbling, getting out of bed, <see cref="Combat.BodyOrders"/>): its start lets no duty
     /// go (<see cref="IDutyRelease"/>), as the original's goals are planned again once it is over.
@@ -529,7 +524,7 @@ public static class PlayerOrders
             if (!DecisionSystem.Decides(cold))
             {
                 DecisionSystem.KeepRoutine(world.Characters, slot, cold);
-                if (!front.Interrupts) world.ReleaseDuties(slot, front.Keeps);
+                if (!front.Interrupts) world.ReleaseDuties(slot);
                 else world.SystemOf<Ai.AiSystem>()?.ReplanDuty(world, slot);
             }
 

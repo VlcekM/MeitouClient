@@ -324,10 +324,10 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   front no longer runs the mind chooses again at once; when it starts the mind's plan, goal and commitment go. An NPC's queue is not saved, and an NPC keeps a replan bit only
   while it holds an order.
 - **Duties let go** when an NPC's front starts, but for the body's orders (engine design; `PlayerOrders.TryFront`, serial, before the owner's `Start`): `World.ReleaseDuties` asks every system that
-  is an `IDutyRelease` (found on the world's systems, nothing registered) but the order's `OrderEntry.Keeps`, its giver, to let the character go through its own give-up.
+  is an `IDutyRelease` (found on the world's systems, nothing registered) to let the character go through its own give-up.
   The ditch (its record), the player side's food runs and the mod NPC goals (`NpcGoals`) drop their record and clear `Engaged`; a body carried
   for one is let go where it stands (the unlink, no knock-out); an [engine goal](#engine-goals) ends (`DutyEnd.Order`, through the AI; a town goal lets its carried body go the same way); a door way is dropped and a bash
-  errand stopped. Neither the dialogue nor a trade holds anyone. The giver's own `Engaged` (one shared bit) is put back after the others let go. The duty sweeps take no
+  errand stopped. Neither the dialogue nor a trade holds anyone. The duty sweeps take no
   ordered character again (`DecisionSystem.Ordered` or `AiSystem.Holds` in their free tests).
 - **Routine after an order** (engine design): an NPC its AI does not fully run (a held platoon's engine mind, or none: no squad) keeps the routine it was on at the start, wandering or
   following its leader (`CharacterCold.OrderRoutine`, `DecisionSystem.KeepRoutine`), and takes it up again once its order no longer holds it, if it then stands idle,

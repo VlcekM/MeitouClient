@@ -145,7 +145,7 @@ public sealed partial class DialogueSystem
 
         // The faction change empties its own goal lists (Character slot 20 FUN_1405cbac0 -> FUN_14050a9d0), so the engine duties those goals stand
         // for let it go; its order queue stays (nothing there empties it), the front planned again from its start.
-        world.ReleaseDuties(slot, null);
+        world.ReleaseDuties(slot);
         Player.PlayerOrders.Interrupt(mc);
         Leave(world, me, mc);
         mc.Faction = world.Player.Faction;
