@@ -142,7 +142,8 @@ internal sealed class KidnapGoals(KidnapSystem kidnap, CarrySystem carry, Popula
 
     /// <summary>
     /// 254's desire factor of the town the member stands in (<c>FUN_1405a1280</c>, <b>Verified</b>): in its squad's home town the cage desire of an
-    /// empty target (<c>FUN_1405a0f10</c>: 0 while the squad's mission town is set and is not this town, else 1.0) times the free-cage finder
+    /// empty target (<c>FUN_1405a0f10</c>: 0 while the blackboard's <c>+0x48</c> town is set and is not this town, read as the mission town as
+    /// <see cref="TownDutySystem.CageDesire"/> does, <b>Observed</b>; else 1.0) times the free-cage finder
     /// (<c>FUN_1408d0d30</c>: 1.0 with a free cage it may use, <see cref="KidnapSystem.HasCage"/>, else 0); anywhere else 1.0.
     /// </summary>
     float TownFactor(World world, int slot, CharacterCold cold, Blackboard board)
@@ -236,7 +237,23 @@ internal sealed class KidnapGoals(KidnapSystem kidnap, CarrySystem carry, Popula
             _acting.Remove(slot);
             Lifted(world, slot, act);
             _duties!.Done(world, slot, TaskType.FinalKidnapperCageJob);
+            FollowWithBody(world, slot);
         }
+    }
+
+    /// <summary>
+    /// A carrier whose lift is done and that stands: a squad member whose lists hold 141 Follow leader follows its leader with the body. Engine
+    /// stand-in: its chooser runs (<see cref="AiSystem.CarrierMind"/>) but acts out only an engine goal it chooses (a cage goal), so the follow its
+    /// list would make it go on with is started here; the leader stands.
+    /// </summary>
+    static void FollowWithBody(World world, int slot)
+    {
+        var table = world.Characters;
+        if (table.Next[slot].Task != (byte)CharacterTask.Idle || table.Cold(slot) is not { Carrying.IsNone: false } cold) return;
+        if (world.Squads.Find(cold.SquadId) is not { } squad || squad.Leader == table.IdOf(slot)) return;
+        if (!AiSystem.WeighsGoal(world, slot, TaskType.FollowSquadleader)) return;
+
+        TaskStart.Become(world, slot, CharacterTask.Follow, TaskType.FollowSquadleader, TaskSource.Goal);
     }
 
     /// <summary>
@@ -348,7 +365,7 @@ internal sealed class KidnapGoals(KidnapSystem kidnap, CarrySystem carry, Popula
         int carriers = 0;
         foreach (var member in ask.Squad.Members)
         {
-            if (table.TryResolveNext(member, out int m) && table.Cold(m) is { Carrying.IsNone: false } && ++carriers > 1) return true;
+            if (table.IsAlive(member) && table.Cold(member.Slot) is { Carrying.IsNone: false } && ++carriers > 1) return true;
         }
 
         return false;
@@ -400,8 +417,7 @@ internal sealed class KidnapGoals(KidnapSystem kidnap, CarrySystem carry, Popula
             return null;
         if (state == StateType.FinalFoundAndPutCarriedInACage) return cold.Carrying.IsNone;
 
-        return table.TryResolveNext(cold.Carrying, out int body) && world.SystemOf<TownDutySystem>() is { } duties
-            && duties.CageDesire(world, slot, body) > 0;
+        return table.IsAlive(cold.Carrying) && world.SystemOf<TownDutySystem>() is { } duties && duties.CageDesire(world, slot, cold.Carrying.Slot) > 0;
     }
 
     #endregion
@@ -414,9 +430,14 @@ internal sealed class KidnapGoals(KidnapSystem kidnap, CarrySystem carry, Popula
     readonly record struct Lift(CharacterId Carrier, CharacterId Victim, int Faction);
 
     /// <summary>
-    /// The lifted victims by their carrier's slot (hashed): the caging that follows marks the victim kidnapped (<see cref="TakeLift"/>).
+    /// The lifted victims by their carrier's slot (hashed): the caging that follows marks the victim kidnapped (<see cref="PruneLifts"/>).
     /// </summary>
     readonly SortedDictionary<int, Lift> _lifts = [];
+
+    /// <summary>
+    /// Scratch: the lifts that went stale in a step.
+    /// </summary>
+    readonly List<int> _stale = [];
 
     /// <summary>
     /// A done act-out whose carrier holds its victim: the lift is logged, told for a player victim and kept for the caging.
@@ -434,32 +455,41 @@ internal sealed class KidnapGoals(KidnapSystem kidnap, CarrySystem carry, Popula
     }
 
     /// <summary>
-    /// The lift of the carrier at <paramref name="slot"/> when it lifted <paramref name="victim"/> for 254 (and still carried it at the last step),
-    /// taken off the list; null for none.
-    /// </summary>
-    internal int? TakeLift(World world, int slot, CharacterId victim)
-    {
-        if (!_lifts.TryGetValue(slot, out var lift) || lift.Victim != victim || world.Characters.IdOf(slot) != lift.Carrier) return null;
-
-        _lifts.Remove(slot);
-        return lift.Faction;
-    }
-
-    /// <summary>
-    /// Drops the lifts whose carrier is gone or no longer carries its victim.
+    /// Drops the lifts whose carrier is gone or no longer carries its victim; a victim that left the shoulder into a cage since the last step (the
+    /// carrier's own 112 / 281 put it there) is caged as kidnapped (<see cref="Caged"/>).
     /// </summary>
     void PruneLifts(World world)
     {
         if (_lifts.Count == 0) return;
 
         var table = world.Characters;
-        List<int>? stale = null;
+        _stale.Clear();
         foreach (var (slot, lift) in _lifts)
         {
-            if (!table.TryResolveNext(lift.Carrier, out int at) || at != slot || table.Cold(slot)?.Carrying != lift.Victim) (stale ??= []).Add(slot);
+            if (!table.TryResolveNext(lift.Carrier, out int at) || at != slot || table.Cold(slot)?.Carrying != lift.Victim) _stale.Add(slot);
         }
 
-        if (stale is not null) foreach (int slot in stale) _lifts.Remove(slot);
+        foreach (int slot in _stale)
+        {
+            Caged(world, _lifts[slot]);
+            _lifts.Remove(slot);
+        }
+    }
+
+    /// <summary>
+    /// A lifted victim now held in a cage: held without a sentence in a cage of its kidnapper's own faction (<see cref="CharacterCold.Kidnapped"/>;
+    /// in another faction's cage, a public barracks' the carrier may use, it is that faction's prisoner, whose jailers free it once served, #628), a
+    /// player victim is told and the caging logged. Nothing for a victim that is not in a cage.
+    /// </summary>
+    void Caged(World world, in Lift lift)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(lift.Victim, out int v) || table.Cold(v) is not { IsImprisoned: true, InWhat: { } id } victim) return;
+        if (world.Fixtures.Find(id) is not { Kind: FixtureKind.Cage } cage) return;
+
+        victim.Kidnapped = cage.Owner == lift.Faction;
+        if (victim.IsPlayer) world.Post($"{victim.Name} has been kidnapped by {data.Factions[lift.Faction].Name}");
+        kidnap.Note(world, KidnapEventKind.Caged, lift.Carrier, lift.Victim, lift.Faction);
     }
 
     #endregion

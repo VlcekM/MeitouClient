@@ -890,7 +890,7 @@ there (`FUN_14060f570` answers false), so for 180 Man the gate the byte changes 
   is not public, else 0); 243 slot 26 `FUN_140597cb0`; 177 and 238 slot 62 `FUN_140597ae0` (0 while the posture is not 0, else 1); 58, 250 and 57 the stub `LAB_1400442d8`,
   a `jmp` to `FUN_140998410` ([medic jobs](#medic-jobs)). 254's desire `FUN_1405a1280`: 0 while carrying or when two squad mates already carry; in its home town (status
   `+0x88` equal to the ownership town `+0x30`) the carried-body cage desire `FUN_1405a0f10` x the free-cage finder `FUN_1408d0d30`; elsewhere 1.0. With 254's empty target
-  that cage desire is 0 while the squad's mission town is set and is not the town it stands in, else 1.0. 132's desire `FUN_14059a600` (exe bytes) has the same two zero tests,
+  that cage desire is 0 while the blackboard's `+0x48` town hand is set and differs from the town it stands in (`FUN_1405944e0` compares the hands), else 1.0. 132's desire `FUN_14059a600` (exe bytes) has the same two zero tests,
   else 1.0. What the two make of 254's plan: [carry-loot 3.2](carry-loot.md#32-goals-and-their-target-finders).
 
 | Type | Commitment (h) | Crowd |

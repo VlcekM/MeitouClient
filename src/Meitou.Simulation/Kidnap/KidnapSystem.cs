@@ -151,7 +151,7 @@ public readonly record struct KidnapEvent(long Tick, KidnapEventKind Kind, Chara
 /// <list type="bullet">
 /// <item><b>Goal 254</b> "Find and kidnap (with cages) urgent" is a goal of the one chooser (<see cref="KidnapGoals"/>): a member whose lists hold it
 /// weighs it, and once chosen lifts the victim 132's finder found (<see cref="IsVictim"/>). The lift ends the goal; the carrier's own goals (112 / 281)
-/// cage the victim, and the caging marks it <see cref="CharacterCold.Kidnapped"/> through <see cref="Caged"/>.</item>
+/// cage the victim, which is then <see cref="CharacterCold.Kidnapped"/> in a cage of the kidnapper's faction.</item>
 /// <item><b>Carries to a cage</b> the <see cref="CaptiveSystem"/> asks for (<see cref="Carry"/>, a slave's haul for goal 168): lift the captive, carry it
 /// with the squad, walk it to a free cage of the carrier's faction or an ally (<see cref="CageFor"/>) and imprison it.</item>
 /// </list>
@@ -238,23 +238,6 @@ public sealed class KidnapSystem : ITickSystem, IStateHashed, IDutyRelease, IDut
 
         var relations = _data.Relations;
         return c.Faction != faction && !(relations.Contains(faction) && relations.Contains(c.Faction) && relations.IsAlly(faction, c.Faction));
-    }
-
-    /// <summary>
-    /// A 254 victim was put in <paramref name="cage"/> by the carrier in <paramref name="carrier"/> (a hook for the caging goals 112 / 281, called
-    /// after the imprisonment): when that carrier lifted it for 254, it is held without a sentence in a cage of the carrier's own faction
-    /// (<see cref="CharacterCold.Kidnapped"/>; in another faction's cage, a public barracks' it may use, it is that faction's prisoner, whose jailers
-    /// free it once served, #628), a player victim is told, and the caging is logged. Nothing for any other body.
-    /// </summary>
-    internal void Caged(World world, int carrier, CharacterId victim, Fixture cage)
-    {
-        var table = world.Characters;
-        if (_goals.TakeLift(world, carrier, victim) is not { } faction || !table.TryResolveNext(victim, out int v) || table.Cold(v) is not { } tc)
-            return;
-
-        tc.Kidnapped = cage.Owner == faction;
-        if (tc.IsPlayer) world.Post($"{tc.Name} has been kidnapped by {_data.Factions[faction].Name}");
-        Note(world, KidnapEventKind.Caged, table.IdOf(carrier), victim, faction);
     }
 
     #endregion

@@ -1358,18 +1358,20 @@ what it wore there going into its inventory (engine choice; `DialogueSystem.Chai
 (the finder, 254's plan), [ai-tasks](game/ai-tasks.md) (the desires), [campaigns](game/factions-squads-towns.md#campaigns) (which packages).
 - **Goal 254** "Find and kidnap (with cages) urgent" is an [engine goal](#engine-goals) (`KidnapGoals`), registered with its plan rows 132 and 68. A member weighs it when its
   role, slave or race list holds it in the hour (`AiSystem.WeighsGoal`: an AI squad's running package, a campaign platoon's phase package: the cannibal raid's assault and
-  retreat); a squad whose template lists no package, a platoon a code mod holds and a squadless character never kidnap.
-- **Desire** (**Verified**): 254 and 132 are 0 while the member carries or two squad mates do; 254 in its squad's home town is 0 while the mission town is set elsewhere,
-  else 1 with a free cage it may use (`HasCage`, the town candidates below) and 0 without; elsewhere 1. 68 is the lift desire (slot 59).
+  retreat; no race or faction list holds it); a platoon a code mod holds and a squadless character never kidnap.
+- **Desire** (**Verified**): 254 and 132 are 0 while the member carries or two squad mates do; 254 in its squad's home town is 0 while the mission town is set elsewhere
+  (**Observed** reading of the blackboard hand), else 1 with a free cage it may use (`HasCage`, the town candidates below) and 0 without; elsewhere 1. 68 is the lift desire
+  (slot 59).
 - **Victim** (132's finder, the serial look every 15 ticks on the slot's turn; `IsVictim`): the nearest within sight (`RangeOf`, the rescue range) that is alive, down, of a carriable
   race, not carried, caged or in a bed, not an animal, nobody's pick-up or haul, and not of the kidnapper's faction or an ally. Player characters included; so is anyone lying in a
   bed, awake or not (the finder's bed branch, **Verified**): the lift is then a kidnap that rolls on arrival (`CarrySystem.Kidnap`: a hit knocks the sleeper out, a miss wakes it
   and raises the alarm).
 - **Act-out**: plan `[1, 68, 132, 254]`; the start lifts the plan's victim (`CarrySystem.BeginPickUp`, row 68, back to standing) unless another member works it; the goal is done
-  (`DutyGoals.Done`) when the pick-up ends, with the body on the shoulder or not. A player victim's message "is carrying X away". The carrier then chooses again: its goals 112 /
-  281 (town duties) cage the body. A kidnapper stumbling or getting up loses the goal (replanned) and chooses again.
-- **Caging** (`KidnapSystem.Caged`, called by the caging after the imprisonment): a victim the carrier lifted for 254 is `CharacterCold.Kidnapped` in a cage of the carrier's
-  own faction, and a player victim gets "has been kidnapped by F".
+  (`DutyGoals.Done`) when the pick-up ends, with the body on the shoulder or not. A player victim's message "is carrying X away". The carrier then chooses again
+  (`AiSystem.CarrierMind`): its goals 112 / 281 (town duties) cage the body; a squad member whose lists hold 141 follows its leader with the body meanwhile (engine stand-in: a
+  carrier's chooser acts out only engine goals). A kidnapper stumbling or getting up loses the goal (replanned) and chooses again.
+- **Caging**: a victim that leaves its 254 carrier's shoulder into a cage (seen at the next kidnap step, `KidnapGoals`' lift record) is `CharacterCold.Kidnapped` in a cage of
+  the carrier's own faction, and a player victim gets "has been kidnapped by F".
 - **Carries to a cage** (`KidnapSystem.Carry`, asked by the captive system: a slave's haul for 168, or a carry needing a cage in range): the carrier is held (`Engaged`, released
   for an order) until it lifts the captive (3 tries), carries it, looks for the best free cage every 15 ticks (the candidates are `FixtureRegistry.CageCandidates`: the cages of the
   town it stands in, else of its faction's nearest town within 3953, within 1.1 x that town's radius, plus its squad's home town; `FindCage`, the original's weights and usable
