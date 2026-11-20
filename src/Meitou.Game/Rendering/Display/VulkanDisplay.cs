@@ -32,6 +32,10 @@ public sealed unsafe class VulkanDisplay : IDisposable
     /// </summary>
     public IWindow? Window { get; }
     /// <summary>
+    /// The 1-based monitor requested for this display's full-screen window; null selects the primary monitor.
+    /// </summary>
+    public int? Monitor { get; }
+    /// <summary>
     /// The Vulkan device.
     /// </summary>
     public VulkanDevice Device { get; }
@@ -68,8 +72,9 @@ public sealed unsafe class VulkanDisplay : IDisposable
     /// <paramref name="hdr"/>: asks for an HDR10 swapchain (<see cref="HdrActive"/>).
     /// </summary>
     public VulkanDisplay(WindowOptions? options, bool vsync, bool dlss = false, FrameGenerationMethod frameGeneration = FrameGenerationMethod.Off,
-        bool hdr = false)
+        bool hdr = false, int? monitor = null)
     {
+        Monitor = monitor;
         var (validation, sync, gpu) = VulkanDeviceOptions.FromEnvironment();
         _validationRequested = validation == true;
         var deviceOptions = new VulkanDeviceOptions
