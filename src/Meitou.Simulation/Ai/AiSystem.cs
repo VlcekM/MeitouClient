@@ -864,6 +864,19 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     const float FollowShare = 0.5f;
 
     /// <summary>
+    /// 253's desire ramp (<c>FUN_140597900</c>, <b>Verified</b>): 0 within <see cref="EscapeNear"/> x f of the followed character, 1 from
+    /// <see cref="EscapeFar"/> x f (<c>DAT_1416b3ac8</c>, <c>DAT_1416abee4</c>).
+    /// </summary>
+    const float EscapeNear = 70, EscapeFar = 200;
+
+    /// <summary>
+    /// The followed mover runs (<c>FUN_14065ee70</c>, <b>Verified</b>) above this share of its top speed (<c>DAT_141696c84</c>), heading for a
+    /// destination over <see cref="EscapeAhead"/> from the follower (squared 2500, <c>DAT_1416aef20</c>) and over <see cref="EscapeAway"/> times
+    /// farther (squared, <c>DAT_1416b3bf0</c>) than the mover itself is.
+    /// </summary>
+    const float EscapeRunShare = 0.85f, EscapeAhead = 50, EscapeAway = 1.2f;
+
+    /// <summary>
     /// The plan step before the choice (<see cref="PlanSteps"/>): the current goal's running step ends by its own tests and the next starts; with no
     /// step left the goal goes, committed or not (the original keeps a committed goal over the next update only for a choice limited to the tiers
     /// above it, then clears it, <c>FUN_14050d7d0</c>, <c>FUN_140511130</c>; one think here does both), so the choice that follows plans afresh. A
@@ -1103,7 +1116,36 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             : Kidnap.ObedientSlave.OwnerOf(world, cold) ?? squad.Leader;
         if (target.IsNone || target == self || !world.Characters.IsAlive(target)) return 0;
 
-        return FollowDesire(type, target);
+        return type == TaskType.FollowUrgentEscape ? EscapeDesire(world, self.Slot, target.Slot) : FollowDesire(type, target);
+    }
+
+    /// <summary>
+    /// 253 Following (urgent escape)'s desire (AI slot 16, <c>FUN_140597900</c>, <b>Verified</b>): the follower's distance d to the followed
+    /// character on the ramp (d - 70 f) / (130 f), clamped to [0, 1], where f is 1 while the followed character runs away from the follower
+    /// (<see cref="RunsAway"/>) and 2 otherwise: a runner is kept within 70 to 200, anyone else within 140 to 400. Reads the last tick's state.
+    /// </summary>
+    static float EscapeDesire(World world, int slot, int followed)
+    {
+        var prev = world.Characters.Previous;
+        float f = RunsAway(prev[followed], Flat(prev[slot].Position)) ? 1 : 2;
+        float d = Vector3.Distance(prev[slot].Position, prev[followed].Position);
+        return Math.Clamp((d - EscapeNear * f) / ((EscapeFar - EscapeNear) * f), 0, 1);
+    }
+
+    /// <summary>
+    /// The followed mover's escape test (<c>FUN_14065ee70</c>, <b>Verified</b>): its current speed (CharMovement <c>+0xb8</c>, the velocity) above
+    /// 0.85 of its top speed (<c>+0xb4</c>, <see cref="CharacterHot.MaxSpeed"/>), its destination (<c>+0xdc</c>, <see cref="CharacterHot.Goal"/>)
+    /// over 50 from the follower and, squared, over 1.2 times the mover's own squared distance to it. Engine reading: flat distances, the
+    /// destination having no height here.
+    /// </summary>
+    static bool RunsAway(in CharacterHot mover, Vector2 from)
+    {
+        float speed = new Vector2(mover.Velocity.X, mover.Velocity.Z).Length();
+        if (speed <= mover.MaxSpeed * EscapeRunShare) return false;
+
+        float toGoal = Vector2.DistanceSquared(from, mover.Goal);
+        float toMover = Vector2.DistanceSquared(from, Flat(mover.Position));
+        return toGoal > EscapeAhead * EscapeAhead && toGoal > EscapeAway * toMover;
     }
 
     /// <summary>

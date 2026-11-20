@@ -883,6 +883,13 @@ there (`FUN_14060f570` answers false), so for 180 Man the gate the byte changes 
   serial schedule step from its mind's goal, else the row of its running order, job or goal; `TaskDataTable.FollowMeWeight`) and
   `AiSystem.SleepingDesire` for 153, 239 and 175 (153 / 239 times their bed finder's 1, 0 without a bed). `AiSystem.FollowFactor` checks the resolved mission target, slave owner or squad leader, as movement does;
   leading its own squad does not prevent a slave from following its owner.
+- **253 Following (urgent escape)** (AI slot 16 `FUN_140597900`, **Verified**; Rebirth's `follow mission target (for urgent escapes)`, targeting
+  SQUAD_MISSION, a Leader goal of `Escaping slave- work together BASE`): clamp((d - 70 f) / (130 f), 0, 1), d the follower's distance (its position as
+  the AI update stamps it, status `+0xc8`) to its target; f = 2, but 1 while the target's mover runs away from it (`FUN_14065ee70`: current speed
+  CharMovement `+0xb8` above 0.85 of its top speed `+0xb4` (copied from `+0x3a0` -> `+0x19c` by `FUN_140660dc0`), and its
+  destination `+0xdc` over 50 from the follower and, squared, over 1.2 times the mover's own squared distance to it). So an escort lets a walking
+  target go 140 to 400 ahead before it fully wants to follow, a running one 70 to 200. Meitou: `AiSystem.EscapeDesire` on the last tick's velocity,
+  `CharacterHot.MaxSpeed` and `Goal` (flat distances for the destination, which has no height here).
 - More desire stubs (**Verified**, the registration stubs' bytes in the 1.0.68 exe, `jmp` to an `AI` vtable slot): 184, 202, 219 and 41 share slot 47 `FUN_1406415d0`
   (2.0); 155 and 197 slot 31 `FUN_140795f80` (1 while the squad's house-locked flag `+0xe8` is clear); 283 slot 71 `FUN_1405998b0` (1 while the home building resolves and
   is not public, else 0); 255 Reigning slot 67 `FUN_140597c20` (1 for its squad's leader, the active platoon `FUN_140791b10` `+0xa0`, else 0, so no
