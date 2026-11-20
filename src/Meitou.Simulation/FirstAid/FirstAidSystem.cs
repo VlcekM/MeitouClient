@@ -208,7 +208,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         if (order.Detail == MedicButton || order.Detail == RoboticsButton) return OrderCheck.Run;
 
         if (order.Row == TaskType.Rest) return CanAct(cold) ? OrderCheck.Run : OrderCheck.Blocked();
-        if (order.Row == TaskType.JobMedic) return MedicEntryCheck(world, slot, cold);
+        if (IsJobEntry(order.Row)) return JobEntryCheck(world, slot, cold, order.Row);
         if (!table.TryResolveNext(order.Target, out int patient) || table.Cold(patient)!.Medical is not { Dead: false })
             return OrderCheck.Gone;
 
@@ -240,9 +240,9 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             return;
         }
 
-        if (order.Row == TaskType.JobMedic)
+        if (IsJobEntry(order.Row))
         {
-            StartMedicEntry(world, slot);
+            StartJobEntry(world, slot, order.Row);
             return;
         }
 
@@ -988,40 +988,66 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     }
 
     /// <summary>
-    /// Whether a loaded 58 Medic entry can start: an able medic with a working arm whose finder (<see cref="FindPatient"/>) finds a patient, as row
-    /// 58's plan treats the finder's pick (its effect <c>!22</c>, provided by 25 on the found hand), not the saved one.
+    /// The second-list entries a load makes of a saved treatment (<c>FUN_1405086d0</c>'s job remap): 25 as 58 Medic, 60 as 57 Robotics, 249 as 250
+    /// Splint Rigging.
     /// </summary>
-    OrderCheck MedicEntryCheck(World world, int slot, CharacterCold cold)
+    internal static bool IsJobEntry(TaskType row) => row is TaskType.JobMedic or TaskType.JobRepairRobot or TaskType.SplintJob;
+
+    /// <summary>
+    /// Whether a loaded 58, 57 or 250 entry can start: an able medic with a working arm whose finder (<see cref="JobEntryPick"/>) finds a patient, as
+    /// the row's plan treats the finder's pick (its effect, provided on the found hand by <see cref="ProviderOf"/>), not the saved one.
+    /// </summary>
+    OrderCheck JobEntryCheck(World world, int slot, CharacterCold cold, TaskType row)
     {
         if (!CanAct(cold) || !HasWorkingArm(cold)) return OrderCheck.Blocked();
 
-        return FindPatient(world, slot, SquadGoals.Of(world), robotics: false).Slot >= 0 ? OrderCheck.Run : OrderCheck.Blocked();
+        return JobEntryPick(world, slot, SquadGoals.Of(world), row).Slot >= 0 ? OrderCheck.Run : OrderCheck.Blocked();
     }
 
     /// <summary>
-    /// Starts a loaded 58 Medic entry: 25 First aid on the patient its finder picks now (serial).
+    /// Starts a loaded 58, 57 or 250 entry: its effect's provider on the patient its finder picks now (serial).
     /// </summary>
-    void StartMedicEntry(World world, int slot)
+    void StartJobEntry(World world, int slot, TaskType row)
     {
         var taken = SquadGoals.Of(world);
-        var (patient, _) = FindPatient(world, slot, taken, robotics: false);
+        var (patient, _) = JobEntryPick(world, slot, taken, row);
         if (patient < 0) return;
 
-        StartJob(world, slot, patient, taken, new TaskRequest(CharacterTask.Treat, TaskType.FirstAidOrder, TaskSource.Order));
+        StartJob(world, slot, patient, taken, new TaskRequest(CharacterTask.Treat, ProviderOf(row), TaskSource.Order));
     }
 
     /// <summary>
-    /// A loaded 58 Medic entry's score in the second list (<c>FUN_14060fd80</c>, <b>Verified</b>): the row's desire (<see cref="AiSystem.MedicDesire"/>,
-    /// <c>FUN_140998410</c>) times its finder's value (<see cref="FindPatient"/>, <c>FUN_14099e240</c>) while the desire is above 0
+    /// A loaded 58, 57 or 250 entry's score in the second list (<c>FUN_14060fd80</c>, <b>Verified</b>): the rows' shared desire
+    /// (<see cref="AiSystem.MedicDesire"/>, <c>FUN_140998410</c>) times the finder's value (<see cref="JobEntryPick"/>) while the desire is above 0
     /// (<c>DAT_141681b38</c> = 0.0).
     /// </summary>
-    internal float MedicEntryScore(World world, int slot)
+    internal float JobEntryScore(World world, int slot, TaskType row)
     {
         float desire = AiSystem.MedicDesire(world, slot);
         if (desire <= 0) return desire;
 
-        return desire * FindPatient(world, slot, SquadGoals.Of(world), robotics: false).Score;
+        return desire * JobEntryPick(world, slot, SquadGoals.Of(world), row).Score;
     }
+
+    /// <summary>
+    /// The finder of a 58, 57 or 250 entry and its value: <c>FUN_14099f690</c> with flag 0 or 1 (<see cref="FindPatient"/>), the splint finder
+    /// <c>FUN_14099e240</c> (<see cref="SplintPick"/>).
+    /// </summary>
+    (int Slot, float Score) JobEntryPick(World world, int slot, SquadGoals taken, TaskType row) =>
+        row == TaskType.SplintJob
+            ? SplintPick(world, slot, taken)
+            : FindPatient(world, slot, taken, robotics: row == TaskType.JobRepairRobot);
+
+    /// <summary>
+    /// The row providing a medic job row's effect (TaskData lists, <c>FUN_140319a60</c>): 58's <c>!22</c> is 25 First aid's, 57's <c>!133</c> 60
+    /// Repairing's, 250's <c>!152</c> 249 Splinting's.
+    /// </summary>
+    static TaskType ProviderOf(TaskType row) => row switch
+    {
+        TaskType.JobRepairRobot => TaskType.FirstAidRobot,
+        TaskType.SplintJob => TaskType.SplintOrder,
+        _ => TaskType.FirstAidOrder,
+    };
 
     /// <summary>
     /// The Medic goal's finder result for the think (<see cref="AiMind.MedicPatient"/>, <see cref="AiMind.MedicScore"/>; none and 0 without a

@@ -369,7 +369,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   ([decision step](#decision-step)). Left out: a row no system owns, a target character or site that is not in the world, a handle that names nothing, ground-item pick-ups (a runtime
   item id) and the Medic / Rescue buttons' one-shot looks. An owner with a detail (`IOrderOwner.SaveKind` / `LoadDetail`) codes it in Meitou's own key. Before an order is first checked,
   its owner readies what its live command would (`IOrderOwner.Restored`): production makes the machine of a rock, town dummy or seat, which no save holds (without it the operate order
-  was `Gone` and a miner stood idle after a load, #598). Of the add function's job-form remaps Meitou makes 25 → 58 and 26 on a character → 238 (`OrderSave.LoadedRow`). Hashed as the move-only
+  was `Gone` and a miner stood idle after a load, #598). Of the add function's job-form remaps Meitou makes all but 146 → 234 and 136 → 137 (`OrderSave.LoadedRow`, [loaded entries](game/ai-tasks.md#precedence)). Hashed as the move-only
   queue was while it holds only that (nothing, a started order alone, started moves), else under its own mark.
 
 ### Decision step

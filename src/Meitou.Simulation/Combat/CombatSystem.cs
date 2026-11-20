@@ -558,10 +558,10 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     int IOrderOwner.SaveKind(OrderEntry order) => order.Detail is PickedAttack or null ? 0 : -1;
 
     /// <summary>
-    /// The detail of a saved attack order: the pick rebuilt for 5 and 61; none for 4, an engine order's attack.
+    /// The detail of a saved attack order: the pick rebuilt for 5 and 61; none for 4, an engine order's attack, and 16, a loaded entry's.
     /// </summary>
     object? IOrderOwner.LoadDetail(World world, CharacterId self, TaskType row, int kind, CharacterId target) =>
-        row == TaskType.MeleeAttack ? null : Picked(world, self, row, target);
+        row is TaskType.FocusedMeleeAttack or TaskType.UnprovokedFocusedMeleeAttack ? Picked(world, self, row, target) : null;
 
     /// <summary>
     /// The pick of a saved attack order (5, 61), rebuilt from its attacker and target.
@@ -576,6 +576,8 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     /// </summary>
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
+        if (order.Row == TaskType.AttackEnemies) return world.SystemOf<AggroSystem>()?.AttackEntryCheck(world, slot) ?? OrderCheck.Blocked();
+
         var table = world.Characters;
         if (!table.TryResolveNext(order.Target, out int t) || t == slot || table.Cold(t)!.Medical is not { Incapacitated: false })
             return OrderCheck.Gone;
@@ -593,18 +595,27 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     /// </summary>
     bool IOrderOwner.StillHolds(World world, int slot, OrderEntry order)
     {
+        if (order.Row == TaskType.AttackEnemies) return true;   // the fight is on the finder's pick, not on the saved hand
+
         var table = world.Characters;
         return !table.TryResolveNext(order.Target, out int t) || !SwimBarred(table.Cold(slot)!, table.Cold(t), focused: true);
     }
 
     /// <summary>
     /// Starts the attack order: the player's pick (5, 61) as it was given; an engine order's 4 Attacking (DA 29 outside the speaker's town) as a fight
-    /// of that row with the order's provenance.
+    /// of that row with the order's provenance; a loaded 16 entry as 4 on the enemy its finder picks now (row 16's effect 6 is 4's).
     /// </summary>
     void IOrderOwner.Start(World world, int slot, OrderEntry order)
     {
         var table = world.Characters;
         var id = table.IdOf(slot);
+        if (order.Row == TaskType.AttackEnemies)
+        {
+            if (world.SystemOf<AggroSystem>()?.AttackEntryPick(world, slot) is { IsNone: false } foe)
+                EngageOrder(world, slot, foe, TaskType.MeleeAttack, "a loaded attack order");
+            return;
+        }
+
         if (order.Detail is not PickedAttack picked)
         {
             Sync(table);

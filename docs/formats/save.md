@@ -813,10 +813,10 @@ A player character's order queue (the deque at `AITaskSytem` +0x40, [order queue
 - **Load** (**Verified**): the loader reads `tjob<i>` until one is missing and adds each through the add function `FUN_1405086d0` without the permanent flag (it lands in the second list +0x70,
   [precedence](../game/ai-tasks.md#precedence), not in the deque; a row with a job form is replaced by it; priority 3, weight 1.0; one the repertoire lacks is not made), then a replan
   is asked. The writer saves the deque alone, so orders loaded into the second list are not written by a later save. Meitou: a load reads the orders into `CharacterCold.SavedOrders`;
-  the look puts them in the second list once every character and building exists (25 as 58 and 26 on a character as 238, the job-form remap; 258 has none and stays a
-  rest order on its bed, [second list](../game/ai-tasks.md#precedence)); a save writes the queue alone.
-  An order is dropped when no system owns its row (so 16, 60 and the other rows Meitou has no order for), its target character or building is not in the world, or its handle names nothing the
-  save holds. A building handle is the building's instance (a build site, or a fixture whose id is the building's own, a bed too); a CHARACTER handle finds the character by its saved handle.
+  the look puts them in the second list once every character and building exists (the job-form remap: 2 and 95 as 125, 4, 5 and 61 as 16, 25 as 58, 60 as 57, 249 as
+  250, 26 as 238; 146 and 136 are not remapped; 258 has none and stays a rest order on its bed, [second list](../game/ai-tasks.md#precedence)); a save writes the queue alone.
+  An order is dropped when no system owns its row, its target character or building is not in the world, or its handle names nothing the save holds; an entry of a finder row
+  (125, 16, 58, 57, 250, 238) is kept whatever its hand names, as its finder picks the target. A building handle is the building's instance (a build site, or a fixture whose id is the building's own, a bed too); a CHARACTER handle finds the character by its saved handle.
 - **Meitou keys**: string `meitou tjob<i>` (the order's site id: a build site, fixture or rock, which wins on load over a building handle, as `meitou pjob<i>`), int `meitou tjobK<i>` (the owner's
   detail code, `IOrderOwner.SaveKind`: a loot that opens the window, a bed named by a put-in order, a lock order done in place), each written only when set. Ground-item
   pick-ups (a runtime item id) and the Medic / Rescue buttons' looks are not saved. A container order is 26 on its site and a walk only to it a 29; a row 3 on a

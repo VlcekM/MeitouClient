@@ -123,6 +123,12 @@ public static class PermaJobs
     public static int IndexOf(CharacterCold cold, TaskType type) => cold.Jobs.FindIndex(j => j.Type == type);
 
     /// <summary>
+    /// The type the add function gives an entry of <paramref name="ordered"/>, a job or not (<c>FUN_1405086d0</c>'s first step, <b>Verified</b>): the
+    /// row's +0xc when its +4 and +0xc are set, else the type itself.
+    /// </summary>
+    public static TaskType Remapped(TaskType ordered) => Rules.TryGetValue(ordered, out var rule) && rule.Job != 0 ? rule.Job : ordered;
+
+    /// <summary>
     /// The job an order of <paramref name="ordered"/> becomes (<b>Verified</b>: the row's +0xc when it has one), or null when it cannot be a job and
     /// the order runs once: the type has no row, or the type it becomes has none (beds become 153, which is no job).
     /// </summary>

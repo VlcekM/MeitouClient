@@ -302,6 +302,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     {
         var cold = world.Characters.Cold(slot)!;
         var reg = world.Buildings;
+        if (order.Row == TaskType.JobBuilder) return EngineerEntryCheck(world, slot, cold);
         if (order.Site is not { } id) return OrderCheck.Gone;
         switch (order.Row)
         {
@@ -324,10 +325,17 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     }
 
     /// <summary>
-    /// Starts the order's task: a build (a stalled site with no materials to be had gets the builder's complaint), else the dismantle or repair.
+    /// Starts the order's task: a build (a stalled site with no materials to be had gets the builder's complaint), else the dismantle or repair; a
+    /// loaded 125 entry builds the site its finder picks (<see cref="StartEngineerEntry"/>).
     /// </summary>
     void IOrderOwner.Start(World world, int slot, OrderEntry order)
     {
+        if (order.Row == TaskType.JobBuilder)
+        {
+            StartEngineerEntry(world, slot);
+            return;
+        }
+
         if (order.Row != TaskType.Build)
         {
             Start(world, slot, new TaskRequest(order.Row == TaskType.Dismantle ? CharacterTask.Dismantle : CharacterTask.Build, order.Row,
@@ -2016,10 +2024,47 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// working it; the highest wins (the first on a tie). A stalled site the character carries nothing for counts only when <see cref="Source"/>
     /// finds a material. Null: none.
     /// </summary>
-    public BuildSite? EngineerSite(World world, int slot)
+    public BuildSite? EngineerSite(World world, int slot) => EngineerPick(world, slot).Site;
+
+    /// <summary>
+    /// A loaded 125 Engineer entry's score in the second list (<c>FUN_14060fd80</c>, <b>Verified</b>): row 125's desire (AI slot 19, 1; its stub
+    /// jumps through the AI vtable at <c>+0x98</c>) times its finder's value (<c>FUN_140999060</c>, the pick's score of <see cref="EngineerSite"/>;
+    /// 0 with none).
+    /// </summary>
+    internal float EngineerEntryScore(World world, int slot) => EngineerPick(world, slot).Score;
+
+    /// <summary>
+    /// Whether a loaded 125 entry can start, as the engineer job can (<c>Production.ProductionSystem</c>'s list jobs): its finder picks a site
+    /// (the saved hand is not asked) that row 2, the provider of 125's effect 2, can build: a character that can work with a working arm (state
+    /// 38), not getting up, the site within <see cref="Production.ProductionSystem.JobRangeSq"/> (the walk the pick plans needs state 27).
+    /// </summary>
+    OrderCheck EngineerEntryCheck(World world, int slot, CharacterCold cold)
+    {
+        if (!Able(cold) || !HasWorkingArm(cold) || CharacterFacts.GettingUp(cold, world.Tick)) return OrderCheck.Blocked();
+        if (EngineerSite(world, slot) is not { } pick) return OrderCheck.Blocked();
+
+        var at = world.Characters.Next[slot].Position;
+        return Vector3.DistanceSquared(at, pick.Position) < Production.ProductionSystem.JobRangeSq ? OrderCheck.Run : OrderCheck.Blocked();
+    }
+
+    /// <summary>
+    /// Starts a loaded 125 entry: row 2 Building on the site its finder picks now, as the build order starts it (serial).
+    /// </summary>
+    void StartEngineerEntry(World world, int slot)
+    {
+        if (EngineerSite(world, slot) is not { } site) return;
+
+        if (site.LevelPlacement is not null) Touch(world, site);
+        Start(world, slot, new TaskRequest(CharacterTask.Build, TaskType.Build, TaskSource.Order) { Site = site.Id });
+    }
+
+    /// <summary>
+    /// <see cref="EngineerSite"/>'s pick and its score (0 with none).
+    /// </summary>
+    (BuildSite? Site, float Score) EngineerPick(World world, int slot)
     {
         var reg = world.Buildings;
-        if (!reg.AnyNeedsWork) return null;
+        if (!reg.AnyNeedsWork) return (null, 0);
         var table = world.Characters;
         var cold = table.Cold(slot)!;
         var at = table.Next[slot].Position;
@@ -2042,7 +2087,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             }
         }
 
-        return best;
+        return (best, bestScore);
     }
 
     /// <summary>

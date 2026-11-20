@@ -155,15 +155,16 @@ public static class OrderSave
         {
             bool onSite = (o.Site ?? o.InstanceKey) is not null;
             var row = LoadedRow(o, onSite);
-            if (o.Lost || row == TaskType.None || world.OrderOwnerOf(row, onSite) is not { } owner) continue;
+            if (row == TaskType.None || world.OrderOwnerOf(row, onSite) is not { } owner) continue;
 
-            // A finder row's saved hand only feeds its finder (the plan treats the finder's pick): its entry stays when the hand names nobody.
+            // A finder row's saved hand only feeds its finder (the plan treats the finder's pick): its entry stays when the hand names nothing.
             var target = CharacterId.None;
             bool finder = TaskDataTable.Of(row)?.Is(TaskDataFlags.Finder) == true;
+            if (o.Lost && !finder) continue;
             if (o is { Hand: { IsNull: false, Type: (int)FcsRecordType.Character } } && (target = Find(table, o.Hand)).IsNone && !finder) continue;
 
             string? site = null;
-            if ((o.Site ?? o.InstanceKey) is not null && (site = SiteOf(world, o)) is null) continue;
+            if ((o.Site ?? o.InstanceKey) is not null && (site = SiteOf(world, o)) is null && !finder) continue;
 
             // A body order is built as the body gives it (Combat.BodyOrders): it lets no duty go, and its stumble is forced.
             bool body = Combat.BodyOrders.Rows.Contains(row);
@@ -185,19 +186,30 @@ public static class OrderSave
     }
 
     /// <summary>
-    /// The queue row of a saved order: the original's sleep order 258 is Meitou's 98 (258 has no job form, so it loads as itself); a container
-    /// order an older Meitou wrote as row 3 on a site is 26 (kind 0, opening it), and one that only walked there (kind 1) is left out
-    /// (<see cref="TaskType.None"/>). The loader's add takes a row's job remap (<c>FUN_1405086d0</c>, TaskData <c>+0xc</c>, <b>Verified</b>): 25 First aid loads as 58 Medic and 26 Loot on a character as 238 Foraging
-    /// animals, the saved hand kept.
+    /// The queue row of a saved order. A container order an older Meitou wrote as row 3 on a site is 26 (kind 0, opening it), and one that only
+    /// walked there (kind 1) is left out (<see cref="TaskType.None"/>). Then the loader's add takes the row's job remap whatever the hand names
+    /// (<c>FUN_1405086d0</c>, TaskData <c>+4</c> and <c>+0xc</c>, <b>Verified</b>; <see cref="PermaJobs.Remapped"/>), the saved hand kept: 2 and 95
+    /// load as 125 Engineer, 4, 5 and 61 as 16 Attacking enemies, 25 as 58 Medic, 60 as 57 Robotics, 249 as 250 Splint Rigging, 26 as 238
+    /// Foraging animals; Meitou leaves 146 and 136 as they are (<see cref="Unremapped"/>). Last, the original's sleep order 258 (no job form, so it
+    /// loads as itself) is Meitou's 98.
     /// </summary>
-    static TaskType LoadedRow(SavedOrder o, bool onSite) => o.Row switch
+    static TaskType LoadedRow(SavedOrder o, bool onSite)
     {
-        TaskType.UseBedOrder => TaskType.UseBed,
-        TaskType.FirstAidOrder => TaskType.JobMedic,
-        TaskType.LootTarget when !onSite => TaskType.LootAnimalsJob,
-        TaskType.Pickup when onSite => o.Kind == 0 ? TaskType.LootTarget : TaskType.None,
-        _ => o.Row,
-    };
+        var row = o.Row == TaskType.Pickup && onSite
+            ? o.Kind == 0 ? TaskType.LootTarget : TaskType.None
+            : o.Row;
+        if (!Unremapped(row)) row = PermaJobs.Remapped(row);
+
+        return row == TaskType.UseBedOrder ? TaskType.UseBed : row;
+    }
+
+    /// <summary>
+    /// The remaps Meitou does not take: 146 Turret gunner to 234 Turret guard (234's player-faction desire and its unused-turret finder,
+    /// <c>BuildingFinderTurrets_Unused</c> in <c>FUN_1408ccfa0</c>, are not built) and 136 Disposing of corpse to 137 Corpse disposal (137's plan
+    /// runs the corpse chain, 138's find and lift before 136 at the machine, which Meitou has only as a list job and its companion). They load as
+    /// the order of their own row.
+    /// </summary>
+    static bool Unremapped(TaskType row) => row is TaskType.UseTurret or TaskType.FeedCorpseIntoMachine;
 
     /// <summary>
     /// The world character whose saved handle is <paramref name="hand"/>; <see cref="CharacterId.None"/> when none is.

@@ -844,23 +844,27 @@ public sealed partial class FirstAidSystem
     /// own faction only, whose <c>needsSplint</c>(X) holds weigh 0.1 x <see cref="Nearness"/> (x 0.05 when another medic works on it); the medic
     /// itself 0.1. A patient the medic already treats (a pair on the sub-target list) is taken at once. Returns the patient's slot, -1 for none.
     /// </summary>
-    int FindSplint(World world, int i, SquadGoals taken)
+    int FindSplint(World world, int i, SquadGoals taken) => SplintPick(world, i, taken).Slot;
+
+    /// <summary>
+    /// <see cref="FindSplint"/>'s pick and the finder's value, its weight (0 with no patient).
+    /// </summary>
+    (int Slot, float Score) SplintPick(World world, int i, SquadGoals taken)
     {
         var table = world.Characters;
         var next = table.Next;
         var cold = table.Cold(i)!;
-        if (!cold.CarriedBy.IsNone) return -1;
-
+        if (!cold.CarriedBy.IsNone) return (-1, 0);
 
         // no combat test: the original's finder has none (FUN_14099e240)
         if (cold.Medical is not { Incapacitated: false } own || cold.Race is not { } ownRace || cold.Stats is not { } stats || !HasWorkingArm(cold))
-            return -1;
-        if (OwnKit(cold, ItemInfo.SplintKitFunction) is not { } kit) return -1;   // the medic's own kit, as the order and the splint use
+            return (-1, 0);
+        if (OwnKit(cold, ItemInfo.SplintKitFunction) is not { } kit) return (-1, 0);   // the medic's own kit, as the order and the splint use
 
         // No fight test in the original finder (FUN_14099e240) and the job keeps a positive desire (FUN_140998410): a player's splint job runs during
         // a fight, as the Medic job does.
         if (!cold.IsPlayer && cold.SquadId >= 0 && world.Squads.Find(cold.SquadId) is { } squad && CharacterFacts.SquadFighting(table, squad))
-            return -1;
+            return (-1, 0);
 
         float skill = MathF.Min(stats[StatsEnumerated.Medic] * own.StatMultiplier(StatsEnumerated.Medic), Items.Info(kit.Item.Record)?.Quality ?? 0);
         float range = AggroSystem.RangeOf(cold, AggroSystem.OutdoorSight);
@@ -879,15 +883,15 @@ public sealed partial class FirstAidSystem
             var d = next[s].Position - next[i].Position;
             if (d.LengthSquared() > range * range) continue;
             float score = SplintWeight * Nearness(world, i, cold, s);
-            if (score > StickyMinScore && taken.IsMine(table.IdOf(i), GoalTarget.Of(table.IdOf(s)))) return s;   // the running pair is taken at once
+            if (score > StickyMinScore && taken.IsMine(table.IdOf(i), GoalTarget.Of(table.IdOf(s)))) return (s, score);   // the running pair at once
             if (OthersOn(table, taken, i, s) > 0) score *= TakenWeight;
             if (score <= bestScore) continue;
             best = s;
             bestScore = score;
         }
 
-        if (bestScore < SplintWeight && own.NeedsSplint(ownRace, skill)) best = i;
-        return best;
+        if (bestScore < SplintWeight && own.NeedsSplint(ownRace, skill)) return (i, SplintWeight);
+        return (best, bestScore);
     }
 
     /// <summary>

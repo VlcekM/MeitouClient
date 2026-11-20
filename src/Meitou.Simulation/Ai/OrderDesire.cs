@@ -58,8 +58,11 @@ public static class OrderDesire
             TaskType.FirstAidRobot => world.SystemOf<FirstAidSystem>()?.TreatOrderDesire(world, slot, order.Target, robot: true),
             TaskType.SplintOrder => world.SystemOf<FirstAidSystem>()?.SplintOrderDesire(world, slot, order.Target),
 
-            // A loaded 25 or 26 (OrderSave's job remap) is scored as its job's goal: desire x finder.
-            TaskType.JobMedic => world.SystemOf<FirstAidSystem>()?.MedicEntryScore(world, slot),
+            // A loaded order its job remap turned into a job row (OrderSave) is scored as that row: desire x finder.
+            TaskType.JobMedic or TaskType.JobRepairRobot or TaskType.SplintJob
+                => world.SystemOf<FirstAidSystem>()?.JobEntryScore(world, slot, order.Row),
+            TaskType.AttackEnemies => world.SystemOf<Aggro.AggroSystem>()?.AttackEntryScore(world, slot),
+            TaskType.JobBuilder => world.SystemOf<Construction.ConstructionSystem>()?.EngineerEntryScore(world, slot),
             TaskType.LootAnimalsJob => world.SystemOf<Carrying.CarrySystem>()?.ForageEntryScore(world, slot),
             _ => 1,
         };

@@ -2396,6 +2396,30 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     }
 
     /// <summary>
+    /// A loaded 16 entry's score in the second list (<c>FUN_14060fd80</c>, <b>Verified</b>): row 16's desire (<see cref="WantsToAttack"/>: 1, else
+    /// 0) times its finder's value (<c>FUN_14059f3a0</c>: 1 with an enemy taken, else 0; <see cref="AttackEntryPick"/>).
+    /// </summary>
+    internal float AttackEntryScore(World world, int slot) =>
+        WantsToAttack(world.Characters.Cold(slot)!) && !AttackEntryPick(world, slot).IsNone ? 1 : 0;
+
+    /// <summary>
+    /// Whether a loaded 16 entry can start, as the job 16 can (<see cref="AttackJob"/>): free of another fight, a flight, a cage and a turret, with
+    /// an enemy the finder takes (row 16's plan fights the finder's pick, not the saved hand).
+    /// </summary>
+    internal OrderCheck AttackEntryCheck(World world, int slot)
+    {
+        var cold = world.Characters.Cold(slot)!;
+        if (cold is not { InCombat: false, Fleeing: false, IsImprisoned: false, Gunning: null }) return OrderCheck.Blocked();
+
+        return AttackEntryPick(world, slot).IsNone ? OrderCheck.Blocked() : OrderCheck.Run;
+    }
+
+    /// <summary>
+    /// Row 16's finder for a loaded entry: goal 16's (<see cref="FindFoe"/> with <see cref="FoeFinder.Enemies"/>).
+    /// </summary>
+    internal CharacterId AttackEntryPick(World world, int slot) => FindFoe(world, slot, FoeFinder.Enemies);
+
+    /// <summary>
     /// Whether one of the player's characters has Hold's attack on sight: Hold adds goal 16 (standing order 12, <see cref="Ai.AiSystem.HoldGoalOf"/>),
     /// whose desire (<c>AI::scoreAttackEnemies</c>) is 0 while sneaking outside a fight, Passive or not standing. Its targets pass the Hold post test
     /// (<see cref="Orders.HoldPost"/>).
