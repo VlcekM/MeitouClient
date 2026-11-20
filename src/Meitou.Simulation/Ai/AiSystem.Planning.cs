@@ -243,9 +243,7 @@ public sealed partial class AiSystem
             // system's, as the combat goals'); with neither the next goal is tried.
             if (type == TaskType.SelfPreservation)
             {
-                if (_world.Characters.Cold(_slot) is not { } me) return false;
-                bool runs = SelfPreservation.Runs(me, desire, SelfPreservation.Walled(_world, _slot));
-                if (!runs && _system.SelfDefencePick(_world, _slot).IsNone) return false;
+                if (!_system.SelfPreservationPlans(_world, _slot, desire, out bool runs)) return false;
                 _mind.Plan.Clear();
                 _mind.Plan.Add(new PlanStep(runs ? TaskType.RunAway : TaskType.AttackAttackersOf, default));
                 _mind.Plan.Add(new PlanStep(type, default));

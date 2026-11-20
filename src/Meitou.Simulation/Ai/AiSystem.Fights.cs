@@ -197,6 +197,20 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
+    /// Whether 32 Self preservation's plan has a provider (the planner's choice between 35 and 13): <paramref name="runs"/> when the run wins
+    /// (<see cref="SelfPreservation.Runs"/>), else an attacker of its own to fight (<see cref="SelfDefencePick"/>); false with neither. Reads only
+    /// the last tick's state.
+    /// </summary>
+    internal bool SelfPreservationPlans(World world, int slot, float desire, out bool runs)
+    {
+        runs = false;
+        if (world.Characters.Cold(slot) is not { } me) return false;
+
+        runs = SelfPreservation.Runs(me, desire, SelfPreservation.Walled(world, slot));
+        return runs || !SelfDefencePick(world, slot).IsNone;
+    }
+
+    /// <summary>
     /// A character on Hold (standing order 12, <see cref="Orders.Holding"/>; only the player's have it) takes on only an attacker its post test
     /// accepts (<see cref="Orders.HoldPost"/>), as its defence did when the decision step's source ran it (<b>engine</b>, kept with the move of 32 to
     /// the chooser). Reads the last tick's positions.

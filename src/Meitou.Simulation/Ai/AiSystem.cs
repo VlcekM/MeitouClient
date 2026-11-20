@@ -460,9 +460,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// An autonomous squad's member (Meitou only, <see cref="SquadAutonomy"/>), one ladder: while the AI holds it, the NPC's (<see cref="ThinkHeld"/>:
-    /// the package's goals, Self preservation and the look's sources, acted out as an NPC's); else the sources' rungs alone, which leave its package
-    /// mind as it is (<see cref="ThinkSources"/>), on a job's task after its urgent package goals are weighed for the source that takes it off the job
-    /// (<see cref="AskOffJob"/>).
+    /// the package's goals, Self preservation and the look's sources, acted out as an NPC's); else the sources' rungs with Self preservation alone,
+    /// which leave its package mind as it is (<see cref="ThinkSources"/>), on a job's task after its urgent package goals are weighed for the source
+    /// that takes it off the job (<see cref="AskOffJob"/>).
     /// </summary>
     void ThinkMember(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, IReadOnlyList<AiGoal> roles,
         int hour, ChooserRow? row)
@@ -475,18 +475,34 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
 
         if (SquadAutonomy.OnJob(n, cold, mind)) AskOffJob(world, i, id, cold, mind, squad, board, roles, hour);
-        ThinkSources(world, cold, row);
+        ThinkSources(world, i, id, cold, mind, squad, board, row);
     }
 
     /// <summary>
-    /// The ladder's sources' rungs alone (<see cref="Ladder.Run"/> with no AI rungs), for an autonomous squad's member the AI does not hold: its
-    /// package goal and plan stay for when the AI holds it again. None while it is down or without this tick's look.
+    /// The ladder for an autonomous squad's member the AI does not hold: the sources' rungs and 32 Self preservation among the priority-3 ones
+    /// (<see cref="SelfPreservationRung"/>), whose pick fights its attacker or runs (<see cref="ActOwnDefence"/>); its package goal and plan stay for
+    /// when the AI holds it again. None while it is down or without this tick's look.
     /// </summary>
-    static void ThinkSources(World world, CharacterCold cold, ChooserRow? row)
+    void ThinkSources(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, ChooserRow? row)
     {
         if (DecisionSystem.Down(cold) || row is null) return;
 
-        row.Pick = Ladder.Run(world.Decisions.Steps, row, null, cold.Jobs.Count > 0, cold.SecondList);
+        var rung = SelfPreservationRung.Local.Bind(this, world, i, id, mind, squad, board);
+        row.Pick = Ladder.Run(world.Decisions.Steps, row, rung, cold.Jobs.Count > 0, cold.SecondList);
+        if (ReferenceEquals(row.Pick.Goal, SelfPreservationGoal)) ActOwnDefence(world, i, cold, mind, rung.Runs);
+    }
+
+    /// <summary>
+    /// Self preservation of a member the AI does not hold, asked of the serial steps as a pre-empting goal's is (<see cref="ActPreempting"/>): the
+    /// run (<see cref="FleeAsk.Threat"/>) or the fight on its attacker (<see cref="AskFight"/>), whose start replaces its task; in a fight the fight
+    /// goes on. The package goal stays the mind's. Writes only its own mind.
+    /// </summary>
+    void ActOwnDefence(World world, int i, CharacterCold cold, AiMind mind, bool runs)
+    {
+        if (cold.InCombat) return;
+
+        if (runs) mind.FleeRequest = FleeAsk.Threat;
+        else AskFight(world, i, TaskType.SelfPreservation, mind);
     }
 
     /// <summary>
