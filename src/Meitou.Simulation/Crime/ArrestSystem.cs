@@ -862,8 +862,9 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// <summary>
     /// The orders of <c>DA_ARREST_TARGET</c> (29, <c>FUN_140680560</c>, <b>Verified</b>), also the engine's arrest where no dialogue says the line:
     /// with <paramref name="capture"/> (<see cref="CapturesInTown"/>) the guard gets 240 Capture Target on the target, his queue cleared, then 112
-    /// Find and put in cage queued behind it; otherwise 4 Attacking, his queue cleared, which the order check <c>FUN_1405d1940</c> refuses with no
-    /// usable arm ("My arm is broken!"). His squad mates near the target join the attack (engine reading of the squad marking it).
+    /// Find and put in cage queued behind it; otherwise his squad tags the target TEMP_ENEMY (<c>FUN_140674300</c> with 4, before the order, also
+    /// when the order is refused), then 4 Attacking, his queue cleared, which the order check <c>FUN_1405d1940</c> refuses with no usable arm ("My
+    /// arm is broken!"). The mates join through their own attack-on-sight goals on that tag, as anyone the tag makes an enemy.
     /// </summary>
     void OrderArrest(World world, int g, int t, bool capture)
     {
@@ -878,6 +879,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             return;
         }
 
+        if (gc.SquadId >= 0) world.SystemOf<Dialogue.DialogueSystem>()?.Memory.Flag(world, gc.SquadId, target, Dialogue.MemoryTag.TempEnemy);
         if (gc.Medical is { } arms && !arms.ArmWorks(left: true) && !arms.ArmWorks(left: false))
         {
             world.Bark(guard, Loc.Tr("My arm is broken!"));
@@ -886,7 +888,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
 
         if (world.SystemOf<CombatSystem>() is { } combat)
             PlayerOrders.Give(world, g, new OrderEntry(TaskType.MeleeAttack, combat) { Target = target }, queued: false);
-        MatesAttack(world, g, t);
+
         int bounty = table.Cold(t)!.Bounties?.BookedAmount(Crimes.Factions.Relations, gc.Faction) ?? 0;
         Note(world, ArrestEventKind.Attack, guard, target, gc.Faction, bounty);
     }
@@ -1006,52 +1008,17 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     }
 
     /// <summary>
-    /// The guard attacks the target from the next tick as a step of his order (row 4, the order's provenance), and so do the free members of his
-    /// squad near it (<see cref="MatesAttack"/>).
+    /// The guard attacks the target from the next tick as a step of his order (row 4, the order's provenance). The fight's start marks nothing for
+    /// his squad (the melee and ranged attack tasks call no squad tag, <b>Verified</b>): his mates join only through their own goals (a protect
+    /// goal once the target fights him, an attack-on-sight goal on a target their senses call an enemy).
     /// </summary>
-    void Attack(World world, int g, int t)
+    static void Attack(World world, int g, int t)
     {
         var table = world.Characters;
         var guard = new List<CharacterId> { table.IdOf(g) };
         world.Defer(new AttackOrder(guard, table.IdOf(t))
         {
             Tick = world.Tick + 1, Source = TaskSource.Order, Row = TaskType.MeleeAttack, Cause = "an arrest",
-        });
-        MatesAttack(world, g, t);
-    }
-
-    /// <summary>
-    /// The free members of the guard's squad within twice their sight of the target attack it from the next tick (the squad marking the target,
-    /// engine reading).
-    /// </summary>
-    void MatesAttack(World world, int g, int t)
-    {
-        var table = world.Characters;
-        if (world.Squads.Find(table.Cold(g)!.SquadId) is not { } squad) return;
-
-        var fighters = new List<CharacterId>();
-        var at = table.Next[t].Position;
-        foreach (var m in squad.Members)
-        {
-            if (!table.TryResolveNext(m, out int s) || s == g || !table.Next[s].Alive
-                || table.Next[s].Task is (byte)CharacterTask.Attack or (byte)CharacterTask.Treat)
-            {
-                continue;
-            }
-            if (table.Cold(s) is not { IsPlayer: false, InCombat: false, Fleeing: false, IsImprisoned: false, Medical.Incapacitated: false,
-                Carrying.IsNone: true, Fighter.CanAttack: true } mc || Busy(m) || DecisionSystem.Ordered(mc))
-            {
-                continue;
-            }
-            float r = 2 * AggroSystem.RangeOf(mc, AggroSystem.OutdoorSight);
-            if (Vector3.DistanceSquared(table.Next[s].Position, at) <= r * r) fighters.Add(m);
-        }
-
-        if (fighters.Count == 0) return;
-
-        world.Defer(new AttackOrder(fighters, table.IdOf(t))
-        {
-            Tick = world.Tick + 1, Source = TaskSource.Npc, Cause = "an arrest resisted or out of town",
         });
     }
 

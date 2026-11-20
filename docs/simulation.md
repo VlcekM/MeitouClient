@@ -1274,7 +1274,9 @@ one starts with the order's provenance. The chain's rows and states are in [AI t
   his queue's front); paying ends it.
 - **Arrest orders** (DA 29, `ArrestSystem.OrderArrest`): in his own town (the town his resident squad belongs to, `Ai.AiSystem.TownAt` by its radius; engine stand-in without
   town data: within 2 x the squad's home radius of its centre) a non-animal target gets the guard 240 (his queue cleared), then 112 queued behind it; otherwise 4 Attacking
-  (cleared; refused with "My arm is broken!" when no arm works), and his free squad mates near the target attack it too (engine reading). Without dialogue events (e.g.
+  (cleared; refused with "My arm is broken!" when no arm works), his squad tagging the target TEMP_ENEMY first, so his mates join through their own attack-on-sight
+  goals (`FUN_140674300`, **Verified**); no attack task tags anything, so a capture's (240) or goal 204's fight draws the mates only through their own goals
+  (a protect goal once the target fights back, attack on sight). Without dialogue events (e.g.
   headless tests) the engine gives the same orders where a spotting, an escapee seen or a booking witness would have fired its event; with them a booking witness is left to
   its witness event unless it is already fighting, then it is ordered at once. There is no engine fine: a fine is the dialogue's (DA 2's talk and its window).
 - **Town needs of 240** ([arrest chain](game/ai-tasks.md#arrest-and-prison-rows)): while the target stands in no town (113) the order waits queued, its task ended and the fight
