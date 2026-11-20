@@ -152,6 +152,12 @@ public sealed class SenseBlock
     public float ThreatToAllies { get; internal set; }
 
     /// <summary>
+    /// The summed intended aggression (+0x90, the AI's +0xb8) of the sensed characters of other factions not ragdolled or carried: each one's
+    /// goal's (<see cref="Ai.TaskAggression.OfGoal"/>, <c>FUN_140854370</c>, <b>Verified</b>).
+    /// </summary>
+    public float Aggression { get; internal set; }
+
+    /// <summary>
     /// The last look was a fade (<c>SensoryData::fade</c>: carried or knocked out), so the counts are zero, not sensed.
     /// </summary>
     public bool Faded { get; internal set; }

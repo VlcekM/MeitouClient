@@ -1496,7 +1496,9 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
     among them), each resolved, uncarried (`+0x3d4`) one whose CharStats top speed (Character `+0x450` → `+0x17c`) is below the cap lowers it to 0.9 x that speed (`0x14168a25c`),
     so the result lies between 0.9 x and 1 x the slowest. The cap is the mover's desired speed (`+0xbc`). So under a package of mode 4 both rows walk and a carrier does not jog.
   - Walk: to the squad's town, or the detour once set (`+0x90`, resolved by `FUN_140792980`), through `FUN_1405c68a0`: a town's point is its waypoint (Town vfunc `0x38`,
-    `getPosWithinChoppingRange` `FUN_14059bf30`, the town's slot 5 `FUN_1400d1d80` being false for town and nest kinds).
+    `getPosWithinChoppingRange` `FUN_14059bf30`, the town's slot 5 `FUN_1400d1d80` being false for town and nest kinds). Each update it applies the mover's own mode,
+    then sets mode 2 (run) while AI `+0xb8` (SensoryData `+0x90`, [perception](perception.md)), the character's own goal aggression (status `+0xac`) or AI `+0xb4`
+    (SensoryData `+0x8c`) is above 0 (`DAT_141681b38` 0.0; **Verified**); the functor's cap stays. Meitou: `TownTravel.UnderThreat`, `+0x8c` as one per fighting threat.
   - No town (none, or it resolves to nothing): the running package's start (vtable `+0x30`) runs again and the task ends with a replan request (CharBody slot 5
     `FUN_1405c6810`: AITaskSytem `+0x26d`, which the update turns into a replan, [finished tests](#finished-tests)).
   - No path for good (CharMovement `0x50`: path state 3 past the goal-offset retries, [pathfinding](pathfinding.md#walls)) to a town of type 0 (Town `+0xd8` is the TOWN

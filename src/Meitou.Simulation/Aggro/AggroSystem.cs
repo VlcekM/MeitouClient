@@ -1085,7 +1085,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         var b = s.Block;
         b.ThreatList.Clear();
         b.Enemies = b.CagedEnemies = b.Neutrals = b.Allies = b.AlliesDown = 0;
-        b.ThreatToMe = b.ThreatToAllies = 0;
+        b.ThreatToMe = b.ThreatToAllies = b.Aggression = 0;
         b.Faded = false;
         var table = s.Table;
         var prev = table.Previous;
@@ -1128,7 +1128,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         var b = s.Block;
         b.ThreatList.Clear();
         b.Enemies = b.CagedEnemies = b.Neutrals = b.Allies = b.AlliesDown = 0;
-        b.ThreatToMe = b.ThreatToAllies = 0;
+        b.ThreatToMe = b.ThreatToAllies = b.Aggression = 0;
         b.Faded = true;
         var table = s.Table;
         var prev = table.Previous;
@@ -1444,7 +1444,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// An entry sensed now (<c>FUN_1408580d0</c>): its place and time, seen and heard, its tags (<see cref="TagOf"/>); the threats
     /// (<c>addToThreatsAndFlockingList</c> <c>FUN_140854370</c>: a standing character of another faction whose fight targets the looker joins the
     /// threats list and adds 1 to <see cref="SenseBlock.ThreatToMe"/>, one fighting another of the looker's faction adds 1 to
-    /// <see cref="SenseBlock.ThreatToAllies"/>; the original adds its aggression, Meitou has none); an ally counts as standing or not; and the
+    /// <see cref="SenseBlock.ThreatToAllies"/>; the original adds its aggression, Meitou has none; and its goal's aggression to
+    /// <see cref="SenseBlock.Aggression"/>); an ally counts as standing or not; and the
     /// sensing hooks of the looker's squad package (war assault TEMP_ENEMY, hired ally TEMP_ALLY) tag it in the squad's memory.
     /// </summary>
     static void Refresh(ref Scan s, ref SenseEntry e, int slot, CharacterCold c, bool seen, bool heard)
@@ -1470,16 +1471,20 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     }
 
     /// <summary>
-    /// The threats of a sensed entry (<c>addToThreatsAndFlockingList</c> <c>FUN_140854370</c>): a standing character of another faction whose
-    /// fight targets the looker joins the threats list and adds 1 to <see cref="SenseBlock.ThreatToMe"/>; one fighting another of the looker's
-    /// faction adds 1 to <see cref="SenseBlock.ThreatToAllies"/>.
+    /// The threats of a sensed entry (<c>addToThreatsAndFlockingList</c> <c>FUN_140854370</c>): a character of another faction not ragdolled or
+    /// carried (<c>FUN_1407d1440</c>) adds the intended aggression of its goal (status <c>+0xac</c>) to <see cref="SenseBlock.Aggression"/>
+    /// (<b>Verified</b>); a standing one whose fight targets the looker joins the threats list and adds 1 to <see cref="SenseBlock.ThreatToMe"/>; one
+    /// fighting another of the looker's faction adds 1 to <see cref="SenseBlock.ThreatToAllies"/>.
     /// </summary>
     static void Threats(ref Scan s, int slot, CharacterCold c)
     {
         var prev = s.Table.Previous;
         ref readonly var other = ref prev[slot];
         var b = s.Block;
-        if (c.Faction == s.Faction || !c.InCombat || c.Medical is not { Incapacitated: false } || s.Fights is not { } combat) return;
+        if (c.Faction == s.Faction || Ragdolls.RagdollSystem.IsRagdoll(c)) return;
+
+        b.Aggression += TaskAggression.OfGoal(c);
+        if (!c.InCombat || c.Medical is not { Incapacitated: false } || s.Fights is not { } combat) return;
 
         var (ft, fg) = combat.TargetOf(slot, other.Generation);
 

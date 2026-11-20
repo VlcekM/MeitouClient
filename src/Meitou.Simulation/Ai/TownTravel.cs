@@ -139,9 +139,15 @@ internal sealed class TownTravel(PopulationData data)
         if (SquadTown.Reached(world, data, slot, squad, board)) return GoalTravel.Arrived;
 
         ref var n = ref world.Characters.Next[slot];
-        var (mode, cap) = Speed(world, slot, cold, squad, board, TaskType.TravelToTargetTown);
+        var (start, cap) = Speed(world, slot, cold, squad, board, TaskType.TravelToTargetTown);
+        byte mode = UnderThreat(world, slot, cold, start);
         cold.PaceCap = cap;
-        if (n.Task == (byte)CharacterTask.GoTo && cold.Running?.Row == row) return GoalTravel.Walking;
+        if (n.Task == (byte)CharacterTask.GoTo && cold.Running?.Row == row)
+        {
+            n.Mode = mode;
+            return GoalTravel.Walking;
+        }
+
         if (walked && NoPath(cold)) return GoalTravel.NoPath;
 
         var point = Waypoint(system, world, town);
@@ -210,13 +216,27 @@ internal sealed class TownTravel(PopulationData data)
             return;
         }
 
-        var (mode, cap) = Speed(world, slot, cold, mind.Squad, board, row);
+        var (start, cap) = Speed(world, slot, cold, mind.Squad, board, row);
         cold.PaceCap = cap;
         if (n.Task != (byte)CharacterTask.GoTo) cold.PathFailed = false;   // a failure from before is not this walk's
 
-        AiSystem.WalkTo(world, slot, point, mode);
+        AiSystem.WalkTo(world, slot, point, UnderThreat(world, slot, cold, start));
         mind.ArrivedAt = null;
         mind.Walking = n.Task == (byte)CharacterTask.GoTo;
+    }
+
+    /// <summary>
+    /// The walk's run under threat (the tail of <c>FUN_1405c68a0</c>, <b>Verified</b>): the mover keeps the start's mode, but runs (mode 2,
+    /// <see cref="SpeedMode.Free"/>) while the sensed others' aggression (<see cref="Perception.SenseBlock.Aggression"/>, AI <c>+0xb8</c>), its
+    /// own goal's (<see cref="TaskAggression.OfGoal"/>, status <c>+0xac</c>) or the threat to its faction
+    /// (<see cref="Perception.SenseBlock.ThreatToAllies"/>, AI <c>+0xb4</c>) is above 0. The pace cap stays the functor's.
+    /// </summary>
+    static byte UnderThreat(World world, int slot, CharacterCold cold, byte mode)
+    {
+        var senses = Bodies.CharacterFacts.Senses(world, slot);
+        bool threat = senses is { Aggression: > 0 } or { ThreatToAllies: > 0 } || TaskAggression.OfGoal(cold) > 0;
+
+        return threat ? SpeedMode.Free : mode;
     }
 
     /// <summary>
