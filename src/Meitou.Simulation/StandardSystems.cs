@@ -783,7 +783,7 @@ public static class StandardSystems
                 (_deeds.CagedHook, _deeds.Memory) = (_talk.Captured, _talk.Memory);
 
             if (_talk is not null && _population is not null)
-                (_population.Announcer, _population.PendingTalk) = (_talk.Announce, _talk.HasInterrupt);
+                _population.Announcer = _talk.Announce;
 
             if (_talk is not null) (_talk.Arrests, _talk.Extensions) = (_arrest, _o.Extensions);
             if (_weather is not null) _weather.Talk = _talk;

@@ -88,10 +88,6 @@ public sealed class Platoon
     /// </summary>
     public long UnloadAtTick { get; set; } = -1;
     /// <summary>
-    /// Unused: the population orders no loaded platoon's leader (its own AI moves it); kept for code mods that read it, always 0.
-    /// </summary>
-    public float OrderCooldown { get; set; }
-    /// <summary>
     /// The AI package it runs (an AI_PACKAGE id, saved as <c>currentPackage</c>; null: none) and the off-screen job that package gives
     /// (<see cref="Ai.PlatoonJobs"/>).
     /// </summary>
@@ -399,7 +395,6 @@ public sealed class PlatoonRegistry
             h.Add((int)p.State);
             h.Add(p.SquadId);
             h.Add(p.UnloadAtTick);
-            h.Add(p.OrderCooldown);
             if (p.Held) h.Add(0x48656C64);   // only when held, so worlds without code mods hash as before
             if (p.Guest) h.Add(0x47756573);   // only for a guest, so worlds without town overrides hash as before
             HashMod(ref h, p);

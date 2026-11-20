@@ -1910,14 +1910,9 @@ public sealed partial class PopulationSystem : IStateHashed
     #region Announcements
 
     /// <summary>
-    /// The dialogue's announcement and pending-talk queries (<see cref="Dialogue.DialogueSystem.Announce"/>,
-    /// <see cref="Dialogue.DialogueSystem.HasInterrupt"/>), set by the host; null: none.
+    /// The dialogue's announcement query (<see cref="Dialogue.DialogueSystem.Announce"/>), set by the host; null: none.
     /// </summary>
     public Func<World, CharacterId, string, bool>? Announcer { get; set; }
-    /// <summary>
-    /// The dialogue's pending-talk query (see <see cref="Announcer"/>); null: none.
-    /// </summary>
-    public Func<CharacterId, bool>? PendingTalk { get; set; }
 
     /// <summary>
     /// The squads' memories (the dialogue system's): a squad that leaves the world hands its memory to its platoon
@@ -1925,10 +1920,6 @@ public sealed partial class PopulationSystem : IStateHashed
     /// </summary>
     public Dialogue.SquadMemory? Memory { get; set; }
 
-    /// <summary>
-    /// Unused: the original waits for the announcement with no time limit (<see cref="LeaderDelivered"/>); kept for code mods that read it.
-    /// </summary>
-    public const double AnnouncementPatience = 1;
     /// <summary>
     /// The announcement needs the leader within this of the camera and a target-faction member within this of the leader (<b>Verified</b>, task 129).
     /// </summary>

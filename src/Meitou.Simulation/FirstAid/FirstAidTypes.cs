@@ -60,10 +60,6 @@ public sealed class FirstAidSettings
     /// </summary>
     public int AutoEveryTicks { get; init; } = 15;
     /// <summary>
-    /// Characters that treat by themselves look for a patient this far (X/Z units) from them, in their own squad.
-    /// </summary>
-    public float AutoReach { get; init; } = 250;
-    /// <summary>
     /// NPCs on a full AI mind whose lists hold the Medic goal run its patient finder on their turn (<c>AiBehaviour.Medic</c>); false: no NPC treats
     /// through it. The player's characters treat only by the medic job or an order.
     /// </summary>
