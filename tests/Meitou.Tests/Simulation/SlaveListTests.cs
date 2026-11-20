@@ -308,8 +308,7 @@ public class SlaveListTests
         }
 
         Assert.Equal(CharacterTask.Rest, (CharacterTask)world.Characters.Next[eater.Slot].Task);
-        Assert.Equal([(TaskType.EatARandomCageOccupant, 1f)], cold.Ai!.CaptiveOffers);
-        Assert.Equal((null, Data.Gameplay.WeaponKinds.Katana), (cold.Ai.FateCage, cold.DrawnWeapon));
+        Assert.Equal((null, Data.Gameplay.WeaponKinds.Katana), (cold.Ai!.FateCage, cold.DrawnWeapon));
         Assert.DoesNotContain(captive.Log, e => e.Worker == eater);
 
         sitter.Up = true;
@@ -320,6 +319,5 @@ public class SlaveListTests
             e => e is { Kind: CaptiveEventKind.Started, Job: CaptiveJobKind.Eat } && e.Worker == eater && e.Captive == prisoner);
 
         Assert.Equal((cage.Id, Data.Gameplay.WeaponKinds.None), (cold.Ai.FateCage, cold.DrawnWeapon));
-        Assert.Empty(cold.Ai.CaptiveOffers);
     }
 }

@@ -148,10 +148,6 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
     /// </summary>
     public const int RoundEveryTicks = 30;
     /// <summary>
-    /// The game seconds the release tests take as the longest a served prisoner waits for its jailer; nothing in the simulation reads it.
-    /// </summary>
-    public const float ReleaseTimeout = 120;
-    /// <summary>
     /// A round's walk that ended on its own within this of the spot counts as there (engine choice), but for opening a door.
     /// </summary>
     public const float WalkSlack = 200;

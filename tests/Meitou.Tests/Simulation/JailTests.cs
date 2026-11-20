@@ -183,7 +183,7 @@ public class JailTests
 
         // A round of the policeman, after a walk of about 250 units (the system's fallback frees at the first sweep, tick 0, or only after 120 s).
         Assert.True(round);
-        Assert.InRange(freed, 300, (long)(LockSystem.ReleaseTimeout / j.World.TickSeconds) - 1);
+        Assert.InRange(freed, 300, (long)(120 / j.World.TickSeconds) - 1);
         Assert.True(Vector2.Distance(new Vector2(start.X, start.Z), new Vector2(at.X, at.Z)) > 150);
         Assert.True(Vector2.Distance(new Vector2(at.X, at.Z),
                 new Vector2(j.CageA.Position.X, j.CageA.Position.Z)) <= j.CageA.UseRange + LockSystem.Reach + 1);

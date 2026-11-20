@@ -1345,12 +1345,6 @@ public sealed class AiMind
     public bool ArrivalSaid { get; set; }
 
     /// <summary>
-    /// No longer filled: the captive goals are engine goals of the one chooser, their picks kept by <see cref="Kidnap.CaptiveSystem"/>. Always
-    /// empty; not saved or hashed.
-    /// </summary>
-    public List<(TaskType Type, float Desire)> CaptiveOffers { get; } = [];
-
-    /// <summary>
     /// The engine and mod goal types whose start answered false for this character (<see cref="IDutyGoal.Start"/>, <see cref="IModGoal.Start"/>), each
     /// weighed at 0 until its tick (exclusive), so a goal its system will not start does not hold the character standing; null when none. An entry
     /// goes at the first think after its tick, and the list with its last entry. Hashed while set.
@@ -1359,7 +1353,8 @@ public sealed class AiMind
 
     /// <summary>
     /// The goal record whose act-out an engine system runs for this character (<see cref="DutyGoals"/>): the goal holds the character, so the AI
-    /// keeps thinking for it (<see cref="AiSystem.Holds"/>) and a goal that scores higher takes it over. Null when none. Set and cleared by the AI's serial step; hashed while set.
+    /// keeps thinking for it (<see cref="AiSystem.Holds"/>) and a goal that scores higher takes it over. Null when none. Set and cleared by the AI's
+    /// serial step; hashed while set.
     /// </summary>
     public AiGoal? Duty { get; internal set; }
 

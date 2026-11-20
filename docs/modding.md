@@ -1,6 +1,6 @@
 # Code mods (C#)
 
-**Status: implemented, code-mod API version 2 (1 still runs; 2 adds [dependencies](modding-dependencies.md)).** Meitou's own in-process loader,
+**Status: implemented, code-mod API version 3 (1 and 2 still run; 2 adds [dependencies](modding-dependencies.md), 3 the chooser surface).** Meitou's own in-process loader,
 Lib.Harmony shipped by the game as the sanctioned patching library, and a registration surface kept to the cases where a patch would silently
 break an invariant. No BepInEx.
 RE_Kenshi plugin DLLs are never loaded: wishlist plugins get built in, or ported to this API as workshop mods of their own ([rekenshi](formats/rekenshi.md)). Code:
@@ -1127,9 +1127,11 @@ difference it runs the game without mods: if that differs too, the fault is the 
   job contributor dropped, and the game runs on (`CodeModFaults`; **Observed**, by reading `ModHost`, `ModRegistry`, `ModSystemFaults`,
   `ModTaskHandler`, `ChooserRegistry`, `ModGoal`, `ModDecisionFaults` and `World.TellReady`). Observers and filters drop themselves with their
   own log line, as for any fault.
-- The manifest's `apiVersion` must lie in `ModApi.MinimumVersion` (1) to `ModApi.Version` (2); otherwise the mod is refused at load with a
+- The manifest's `apiVersion` must lie in `ModApi.MinimumVersion` (1) to `ModApi.Version` (3); otherwise the mod is refused at load with a
   message. 2 added `version`, `dependencies`, `loadAfter`, `incompatible`, `gameVersion`, `ModContext.Dependency<T>` and
-  `IModDependents`; an API 1 mod loads unchanged. `gameVersion` ties a mod to the engine releases it was built against. The
+  `IModDependents`. 3 added the chooser surface ("Chooser goals and jobs", `World.GiveOrder`) and removed `CharacterCold.Engaged`,
+  `AiMind.Engine` / `EngineGoals` and `HoldPlatoon`'s in-world hold, so a mod on that surface declares 3 and an older game refuses it at load.
+  An API 1 or 2 mod loads unchanged; one that uses a removed member gets the notice above. `gameVersion` ties a mod to the engine releases it was built against. The
   [data phase](#data-phase) (`IModDataPhase`) adds no manifest key; a mod using it names the releases that have it in `gameVersion`.
 - Harmony patches non-public members; compiling against them takes the [reference package](#reference-package)'s publicized set, or a
   publicizer package (BepInEx.AssemblyPublicizer.MSBuild with `Publicize="true"`) on a release folder's assemblies. Compatibility is per game
