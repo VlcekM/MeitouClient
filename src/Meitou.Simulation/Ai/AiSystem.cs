@@ -3504,8 +3504,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// The serial step: the requests the thinks left (placing, beds, shopping, assaults, fights, treatments, captive jobs, leaving fights), then on
-    /// the package cadence each squad's package, crowd and claims (a squad that appears at once; between cadences only the minds a member that came
-    /// lacks), then the squad merges.
+    /// the package cadence each squad's package, crowd and claims (a squad that appears at once), then the squad merges.
     /// </summary>
     public void SlowWorld(World world)
     {
@@ -3522,12 +3521,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 if (cadence) ClaimSlaveWork(world, squad);
                 if (!AttachNew(world, squad, cadence)) continue;
             }
-            else if (!cadence)
-            {
-                // The rest is looked at on the package cadence only (and when the squad appears).
-                GiveMissingMinds(world, squad);
-                continue;
-            }
+            else if (!cadence) continue;   // the rest is looked at on the package cadence only (and when the squad appears)
 
             UpdateSquad(world, squad);
         }
@@ -3654,47 +3648,19 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         // An autonomous squad: minds for the player's characters only (not a prisoner kept in it), made again for one that came from another squad.
         if (squad.Autonomous && !cold.IsPlayer) return;
 
+        bool own = squad.Autonomous && cold.IsPlayer;
+        bool moved = own && cold.Ai is { } brought && !ReferenceEquals(brought.Squad, squad);
+
         // Every character has goals in the original, and a slave's are its master's Slave list (ObeyedRoles), whoever moves its own squad: a
         // captive of a squad a code mod holds would otherwise stand where it was enslaved, on an engine mind (#904).
         bool obeys = populationMoves && ObeyedRoles(world, squad, cold) is not null;
-        if ((!populationMoves || obeys) && Lacks(squad, cold)) GiveMind(world, squad, board, k, s, squad.Autonomous);
+        bool lacks = moved || cold.Ai is null or { Engine: true } or { PlayerSide: true };
+        if ((!populationMoves || obeys) && lacks) GiveMind(world, squad, board, k, s, own);
 
         if (cold.Ai?.Goal is { } g)
         {
             board.Crowd[g.Task.Type] = board.Crowd.GetValueOrDefault(g.Task.Type) + 1;
             board.CrowdEntries.Add(new CrowdEntry(squad.Members[k], g.Task.Type, CrowdTarget(g.Task.Target, squad, board, squad.Members[k])));
-        }
-    }
-
-    /// <summary>
-    /// Whether a member of a squad the AI moves lacks the mind of this squad: none, an engine mind, a player-faction mind, or (a player character of
-    /// an autonomous squad) one it brought from another squad.
-    /// </summary>
-    static bool Lacks(Squad squad, CharacterCold cold)
-    {
-        bool moved = squad.Autonomous && cold.Ai is { } brought && !ReferenceEquals(brought.Squad, squad);
-        return moved || cold.Ai is null or { Engine: true } or { PlayerSide: true };
-    }
-
-    /// <summary>
-    /// Between two package cadences, a member that came to a squad the AI moves (a merge, a split into it, a transfer) gets its mind at once, as a
-    /// player's squad's members get theirs at every schedule step (<see cref="PlayerSideMinds"/>), so it chooses from the next tick on; the
-    /// cadence counts its goal in the crowd. Nothing for a squad a code mod holds, whose minds the cadence makes (<see cref="EngineMinds"/>).
-    /// </summary>
-    void GiveMissingMinds(World world, Squad squad)
-    {
-        var table = world.Characters;
-        var board = squad.Ai!;
-        bool? populationMoves = null;
-        for (int k = 0; k < squad.Members.Count; k++)
-        {
-            if (!table.TryResolveNext(squad.Members[k], out int s) || table.Cold(s) is not { } cold) continue;
-            if (squad.Autonomous && !cold.IsPlayer || !Lacks(squad, cold)) continue;
-
-            populationMoves ??= PlatoonOf(world, squad) is { } platoon && PopulationRuns(platoon) && !BoardMoves(board);
-            if (populationMoves == true) return;
-
-            GiveMind(world, squad, board, k, s, squad.Autonomous);
         }
     }
 
