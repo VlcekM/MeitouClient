@@ -707,6 +707,11 @@ public sealed class PopulationData
     }
 
     /// <summary>
+    /// The FACTION record id at position <paramref name="index"/> of <see cref="Factions"/>; null for one outside it.
+    /// </summary>
+    public string? FactionId(int index) => (uint)index < (uint)Factions.Count ? Factions[index].Id : null;
+
+    /// <summary>
     /// The faction <c>Wildlife</c> (<c>3943-gamedata.base</c>): a spawned squad's faction when nothing else gives one (<c>FUN_1408fe6b0</c>); -1
     /// when absent.
     /// </summary>

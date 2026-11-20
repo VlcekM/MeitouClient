@@ -49,12 +49,14 @@ public static class PlatoonJobs
     public const float PatrolArrive = 500;
 
     /// <summary>
-    /// The AI package and unloaded-squad job of a new or loaded platoon: the template's package named <paramref name="savedPackage"/>, else the one a
-    /// fresh blackboard of the template's packages starts with.
+    /// The AI package and unloaded-squad job of a new or loaded platoon of faction <paramref name="factionId"/>: its package named
+    /// <paramref name="savedPackage"/>, else the one a fresh blackboard of its packages (the template's and the faction's <c>AI fallback</c>,
+    /// <see cref="AiDatabase.Packages(SquadTemplate, string, bool)"/>; <paramref name="restored"/>: rebuilt from a saved record) starts with.
     /// </summary>
-    public static (AiPackage? Package, PlatoonJob Job) For(AiDatabase ai, SquadTemplate template, string? savedPackage = null)
+    public static (AiPackage? Package, PlatoonJob Job) For(AiDatabase ai, SquadTemplate template, string? factionId, bool restored = false,
+        string? savedPackage = null)
     {
-        var packages = ai.Packages(template);
+        var packages = ai.Packages(template, factionId, restored);
         AiPackage? package = null;
         foreach (var p in packages)
         {

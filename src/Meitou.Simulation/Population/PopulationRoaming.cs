@@ -1330,7 +1330,7 @@ public sealed partial class PopulationSystem
         Vector2 position)
     {
         int squadFaction = template.Faction is { } tf && _data.FactionIndex(tf) is var ti and >= 0 ? ti : factionIndex;
-        var (package, job) = PlatoonJobs.For(_data.Ai, template);
+        var (package, job) = PlatoonJobs.For(_data.Ai, template, _data.FactionId(squadFaction));
         var platoon = new Platoon
         {
             Id = id,
@@ -1380,7 +1380,7 @@ public sealed partial class PopulationSystem
         var plan = SquadFactory.Plan(_data.Db, template, _settings.SquadSizeMultiplier, world.Seed, key, States);
         if (plan.TotalMembers == 0 || ModSpot(world, key, around, minRadius, maxRadius) is not { } spot) return -1;
 
-        var (package, job) = PlatoonJobs.For(_data.Ai, template);
+        var (package, job) = PlatoonJobs.For(_data.Ai, template, _data.FactionId(faction));
         world.Platoons.NextId();
         world.Platoons.Add(new Platoon
         {

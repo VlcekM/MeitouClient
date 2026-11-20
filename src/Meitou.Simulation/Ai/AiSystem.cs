@@ -3587,7 +3587,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// Gives a squad its AI: its home (assigned, or the one its town gave it), whose template and initial door state apply, and a new blackboard of
-    /// its template's packages, taken as already in the town it starts in; a saved squad's AI state is applied to it.
+    /// its template's packages and its faction's <c>AI fallback</c> (<see cref="AiDatabase.Packages(SquadTemplate, string, bool)"/>), taken as
+    /// already in the town it starts in; a saved squad's AI state is applied to it.
     /// </summary>
     void Attach(World world, Squad squad)
     {
@@ -3606,7 +3607,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         // The template's initial door state applies to the home it is given (docs/game/locks.md "Doors"); the first squad's wins, a saved building
         // keeps its own.
         if (home is not null) world.Fixtures.ApplyInitialDoorState(home.Key, template?.InitialDoorState ?? 0);
-        squad.Ai = new Blackboard(packages)
+        string? faction = data.FactionId(squad.Faction);
+        squad.Ai = new Blackboard(template is null ? packages : data.Ai.Packages(template, faction, squad.Restored))
         {
             Town = squad.Town,
             Size = squad.Members.Count,
@@ -3626,6 +3628,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             saved.Apply(squad.Ai, data.Ai, _rules, world.Saved is { } population ? population.CharacterOf : null,
                 world.Saved is { } towns ? h => Saving.WarSave.Town(world, towns, h) : null);
             squad.SavedAi = null;
+
+            // A saved replacementAI clears the template's packages; the constructor then adds the faction's fallback (FUN_1407ee2d0).
+            if (squad.Ai.Replacement is not null && template is not null && faction is not null) squad.Ai.AddAtSlotZero(data.Ai.Fallback(faction));
         }
 
         // An occupation it left the world in goes on in the player town it comes back in (the original keeps the occupier's platoon and package,
@@ -3695,7 +3700,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// </summary>
     IReadOnlyList<AiGoal> OwnGoals(Squad squad, Blackboard board, CharacterCold cold)
     {
-        string? faction = (uint)cold.Faction < (uint)data.Factions.Count ? data.Factions[cold.Faction].Id : null;
+        string? faction = data.FactionId(cold.Faction);
         var own = data.Ai.OwnGoals(cold.Race?.StringId, faction, board.Contract is null);
         return squad.DebugAggro && AttackEnemiesGoal() is { } attack ? [.. own, attack] : own;
     }
@@ -3836,7 +3841,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// The packages and the template of a squad template id (none for an id that is no squad template), cached.
+    /// The template's own packages (without its faction's <c>AI fallback</c>, which <see cref="Attach"/> adds) and the template of a squad template
+    /// id (none for an id that is no squad template), cached.
     /// </summary>
     internal (IReadOnlyList<SlottedPackage> Packages, SquadTemplate? Template) TemplateOf(string templateId)
     {

@@ -214,6 +214,11 @@ public sealed class AiDatabase(GameDatabase db)
     readonly Dictionary<string, IReadOnlyList<AiGoal>> _races = [];
 
     /// <summary>
+    /// Each FACTION's <c>AI fallback</c> packages, by record id.
+    /// </summary>
+    readonly Dictionary<string, IReadOnlyList<AiPackage>> _fallbacks = [];
+
+    /// <summary>
     /// The lock every cache read and fill takes.
     /// </summary>
     readonly object _gate = new();
@@ -358,7 +363,8 @@ public sealed class AiDatabase(GameDatabase db)
     }
 
     /// <summary>
-    /// A template's <c>AI packages</c> with their slots (v0), in the listed order; links that are not AI_PACKAGE records are skipped.
+    /// A template's <c>AI packages</c> with their slots (v0), in the listed order; links that are not AI_PACKAGE records are skipped, and so is a
+    /// package its slot already holds (the add-package function <c>FUN_14026c160</c> returns when the slot's list has the record, <b>Verified</b>).
     /// </summary>
     public IReadOnlyList<SlottedPackage> Packages(SquadTemplate template)
     {
@@ -368,12 +374,62 @@ public sealed class AiDatabase(GameDatabase db)
             var list = new List<SlottedPackage>();
             foreach (var link in template.AiPackages)
             {
-                if (PackageLocked(link.Id) is { } package) list.Add(new SlottedPackage(Math.Max(0, link.V0), package));
+                if (PackageLocked(link.Id) is { } package) AddOnce(list, new SlottedPackage(Math.Max(0, link.V0), package));
                 else _problems++;
             }
             _templates[template.Id] = list;
             return list;
         }
+    }
+
+    /// <summary>
+    /// A platoon's packages (docs/game/ai.md "Other records that touch the AI", <b>Verified</b>): the template's (<see cref="Packages(SquadTemplate)"/>)
+    /// and its FACTION's <c>AI fallback</c> packages at slot 0 (<see cref="Fallback"/>), each once per slot. A new platoon's constructor
+    /// (<c>FUN_1407ee2d0</c>) adds the fallback before its factory reads the template (<c>FUN_140271620</c>); one rebuilt from its saved or kept
+    /// record (<paramref name="restored"/>) reads the template first (<c>FUN_140272c20</c>, inside the constructor) and then the fallback.
+    /// </summary>
+    public IReadOnlyList<SlottedPackage> Packages(SquadTemplate template, string? factionId, bool restored)
+    {
+        var own = Packages(template);
+        var fallback = factionId is null ? [] : Fallback(factionId);
+        if (fallback.Count == 0) return own;
+
+        var list = new List<SlottedPackage>();
+        if (restored) list.AddRange(own);
+        foreach (var package in fallback) AddOnce(list, new SlottedPackage(0, package));
+        if (!restored)
+            foreach (var p in own) AddOnce(list, p);
+
+        return list;
+    }
+
+    /// <summary>
+    /// A FACTION's <c>AI fallback</c> packages in the listed order (<c>FUN_140271fd0</c> adds each at slot 0, <b>Verified</b>); links that are not
+    /// AI_PACKAGE records are skipped. Cached by record id; empty for an id that is no record.
+    /// </summary>
+    public IReadOnlyList<AiPackage> Fallback(string factionId)
+    {
+        lock (_gate)
+        {
+            if (_fallbacks.TryGetValue(factionId, out var known)) return known;
+            var list = new List<AiPackage>();
+            if (db.Find(factionId) is { } record)
+                foreach (var link in record.GetReferences("AI fallback"))
+                {
+                    if (PackageLocked(link.TargetStringId) is { } package) list.Add(package);
+                    else _problems++;
+                }
+            _fallbacks[factionId] = list;
+            return list;
+        }
+    }
+
+    /// <summary>
+    /// Adds <paramref name="entry"/> unless its slot already holds its package.
+    /// </summary>
+    static void AddOnce(List<SlottedPackage> list, SlottedPackage entry)
+    {
+        if (!list.Exists(p => p.Slot == entry.Slot && p.Package.Id == entry.Package.Id)) list.Add(entry);
     }
 
     /// <summary>

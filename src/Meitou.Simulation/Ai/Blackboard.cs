@@ -851,6 +851,17 @@ public sealed class Blackboard
     }
 
     /// <summary>
+    /// Adds <paramref name="packages"/> to slot 0 after its own, each one the slot does not hold yet (<c>FUN_14026c160</c>): a restored platoon's
+    /// faction <c>AI fallback</c>, which its constructor adds after its saved <c>replacementAI</c> (<c>FUN_1407ee2d0</c>). The running package stays.
+    /// </summary>
+    public void AddAtSlotZero(IEnumerable<AiPackage> packages)
+    {
+        if (!_slots.TryGetValue(0, out var list)) _slots[0] = list = [];
+        foreach (var p in packages)
+            if (!list.Contains(p)) list.Add(p);
+    }
+
+    /// <summary>
     /// Adds the board's state to the world's state hash (the derived claims are left out).
     /// </summary>
     internal void Hash(ref StateHasher hasher)

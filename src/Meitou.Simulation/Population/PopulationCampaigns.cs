@@ -1018,7 +1018,7 @@ public sealed partial class PopulationSystem : IStateHashed
             }
         }
 
-        var (package, job) = PlatoonJobs.For(_data.Ai, template);
+        var (package, job) = PlatoonJobs.For(_data.Ai, template, _data.FactionId(inst.Faction));
         var p = new Platoon
         {
             Id = id,
