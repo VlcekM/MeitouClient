@@ -307,7 +307,8 @@ internal sealed class LootGoals
         if (!_acting.TryGetValue(slot, out var act) || act.Id != id) return;
 
         _acting.Remove(slot);
-        if (act.Item >= 0 && world.Characters.Cold(slot) is { } cold && cold.PickingUpItem == act.Item) cold.PickingUpItem = null;
+        if (act.Item < 0 || world.Characters.IdOf(slot) != id) return;   // gone: the slot may hold another character now
+        if (world.Characters.Cold(slot) is { } cold && cold.PickingUpItem == act.Item) cold.PickingUpItem = null;
     }
 
     /// <summary>
