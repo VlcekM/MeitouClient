@@ -276,8 +276,8 @@ internal sealed class TierRungs : ITierRungs
     #region Scoring
 
     /// <summary>
-    /// The own lists' goals of the tier: for a player-faction mind only the types on the ladder's rungs (<see cref="Ladder.OnRungs"/>); the rest are
-    /// their sources'.
+    /// The own lists' goals of the tier: for a player-faction mind only the types on the ladder's rungs (<see cref="Ladder.OnRungs"/>; the rest are
+    /// their sources'), then the Hold entry last (<see cref="AiSystem.HoldGoalOf"/>).
     /// </summary>
     void AddOwnLists(List<(AiGoal? Goal, float Score, float Desire, int Source)> candidates, TaskPriority tier)
     {
@@ -287,6 +287,8 @@ internal sealed class TierRungs : ITierRungs
             if (_mind.Player && !Ladder.OnRungs.Contains(own[k].Task.Type)) continue;
             Consider(candidates, own[k], tier);
         }
+
+        if (_world.Characters.Cold(_slot) is { } cold && AiSystem.HoldGoalOf(cold, _mind) is { } hold) Consider(candidates, hold, tier);
     }
 
     /// <summary>

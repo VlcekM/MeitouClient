@@ -391,7 +391,7 @@ phases, no source ever called from the think:
 - **Starts** (`DecisionSystem.Run`, serial, slot order, the slow world right after the last of retaliation, aggro and flight): the order step asked again (an order given or
   ended since the look still wins), the sources the ladder went past passed, the pick asked again next to its `Start`. A start's own asks are dropped; a character downed since its
   look keeps the ask. Between ticks orders alone run serially (`ApplyPausedInterfaceCommands`; the bit stays). **Engine** latency (the phases): an ask raised before the look
-  (inputs, schedule) starts in that tick; one raised after it (the think to the slow world: a blow, an alert, a sight offer) at the next tick's look and starts; a fight the
+  (inputs, schedule) starts in that tick; one raised after it (the think to the slow world: a blow, an alert, a sighting) at the next tick's look and starts; a fight the
   chooser picks is a deferred attack for the tick after its start, so a player character's 32 fights two ticks after the blow, as an NPC's (the original answers in the same update).
 - **Sources** (`IDecisionSource`: `CanRun` and `Desire` pure reads, `Start`): an open list sorted by step, then `Key` (the original's list order); systems register theirs
   (`IDecisionOwner`), later code may add more (`DecisionSystem.Register`). The first source that can run starts; one that runs the character's task already ends the step. Step 4 picks
@@ -405,8 +405,9 @@ phases, no source ever called from the think:
   4. Priority-3 goals: 32 Self preservation is the AI's rung (`AiSystem.SelfPreservationGoal` in every player-faction mind: the attacker that took the character as target
      within 181.7, not shooting at a gunner, passing a holder's post test, `SelfDefencePick`; desire 1 within 40, else 0.7; a deferred defence, row 13); 243 Getting food on the
      AI's rung (the own list's entry, weight 0.5, [town duties](#town-duties)); a player animal's priority-3 race goals on the AI's rung (`Ladder.OnRungs`, [captives](#captives):
-     277 limb fetch 1, 278 limb play and 279 chase by their desires, x the race entry's weight); 259 Picking up food on the AI's rung (`CaptiveGoals`, animals, weight 0.5); 16 attack on sight while on Hold (`AggroSystem`, 1 here,
-     listed last as Hold adds it; the enemy this tick's look or a squad mate's found; desire 0 while Passive, sneaking outside a fight or not standing; a deferred fight, row 16).
+     277 limb fetch 1, 278 limb play and 279 chase by their desires, x the race entry's weight); 259 Picking up food on the AI's rung (`CaptiveGoals`, animals, weight 0.5); 16 attack on sight while on Hold on the AI's rung (`AiSystem.HoldGoalOf`: the own list's Hold entry, weight 1,
+     listed last as Hold adds it, `FUN_1405caa50` case 0xc; the NPC's finder `AggroSystem.FindFoe`: an enemy of its last look or a squad mate's passing the post test;
+     desire 0 while Passive, sneaking outside a fight or not standing; acted out as an NPC's, row 16). Each look of a holder that finds an enemy asks it to think.
      The player faction's 15 Protect allies on the AI's rung (the faction list's entry, weight 1; the NPC's desire, finder and plan, with the distance falloff and Help Allies of a
      player-faction looker, [precedence](game/ai-tasks.md#precedence)): the aggro looks' allies valued by their fight threat (`CombatSystem.FightThreat`), a defence on row 13 against
      `CombatSystem.BestAttackerOf`'s pick for the ally, acted out as an NPC's (`AskFight`). The chooser reaches it at the think turn or any replan, so a medic or worker on its job joins, one on an order does not.
@@ -2021,7 +2022,7 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
     - 238 Foraging animals (`CarrySystem.FindForage`): the nearest downed, uncarried animal within sight holding items, not of its own faction
       (engine choice), is looted (take-all and butchering).
     - 16 Attacking enemies: `AggroSystem` looks for the character as for an NPC (`HuntsEnemies`: the job and row 16's desire, not Passive, not sneaking outside a fight, standing) and
-      offers the sighting to the step (`AttackJob`); never gives up a chase; after the fight it stands idle and is decided again.
+      the job's contributor (`AttackJob`) takes goal 16's finder (`FindFoe`), asked at the look and before the start; never gives up a chase; after the fight it stands idle and is decided again.
   - Engine choices: the re-ask period; the ranges, a bed's clip (`sleeponfloor`) and a seat's facing (its own, not the table it faces).
   - Saves: GAMESTATE_AI `pjob<i>` / `pjobT<i>` / `jobs` as the original, plus `meitou pjob<i>` (the site id) for a building the handle cannot
     name; the older `meitou jobs enabled` is read, not written; `chase mode` is written and read as the switch. The squad AI options are the

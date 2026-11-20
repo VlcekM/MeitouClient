@@ -32,6 +32,36 @@ public sealed partial class AiSystem
 
     #endregion
 
+    #region Hold's goal
+
+    /// <summary>
+    /// Goal 16 Attacking enemies as the Hold standing order adds it to a player-faction character's own list (<c>FUN_1405caa50</c> case 0xc,
+    /// <b>Verified</b>: priority 3, weight 1.0 <c>DAT_14167c308</c>, hours 0 to 100, after the entries setupAI made, unless the list holds a 16,
+    /// <c>FUN_140507440</c>; turned off, the list's 16 goes, <c>FUN_140507390</c>). Standing orders are the player faction's only (the function returns
+    /// at its top for any other).
+    /// </summary>
+    internal static readonly AiGoal HoldAttackGoal =
+        new(new AiTask("", "ATTACK_ENEMIES", TaskType.AttackEnemies, TaskPriority.Urgent, TaskTargetType.Specific, TaskEndEvent.Nothing), 0, 100, 1f);
+
+    /// <summary>
+    /// The Hold entry of a player-faction mind's own list (<see cref="HoldAttackGoal"/>), null without it: there while the Hold toggle is on
+    /// (CharStats <c>+0x12b</c>, which the standing order writes with the entry; sneaking leaves it, 16's desire is 0 then) and the list holds no 16 of
+    /// its own. Derived from the toggle, so nothing more is kept, saved or hashed. A pure read.
+    /// </summary>
+    internal static AiGoal? HoldGoalOf(CharacterCold cold, AiMind mind)
+    {
+        if (!mind.Player || (cold.Orders & CharacterOrders.Hold) == 0) return null;
+
+        foreach (var g in mind.RaceGoals)
+        {
+            if (g.Task.Type == TaskType.AttackEnemies) return null;
+        }
+
+        return HoldAttackGoal;
+    }
+
+    #endregion
+
     #region Desire
 
     /// <summary>
