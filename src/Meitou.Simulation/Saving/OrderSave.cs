@@ -157,8 +157,10 @@ public static class OrderSave
             var row = LoadedRow(o, onSite);
             if (o.Lost || row == TaskType.None || world.OrderOwnerOf(row, onSite) is not { } owner) continue;
 
+            // A finder row's saved hand only feeds its finder (the plan treats the finder's pick): its entry stays when the hand names nobody.
             var target = CharacterId.None;
-            if (o is { Hand: { IsNull: false, Type: (int)FcsRecordType.Character } } && (target = Find(table, o.Hand)).IsNone) continue;
+            bool finder = TaskDataTable.Of(row)?.Is(TaskDataFlags.Finder) == true;
+            if (o is { Hand: { IsNull: false, Type: (int)FcsRecordType.Character } } && (target = Find(table, o.Hand)).IsNone && !finder) continue;
 
             string? site = null;
             if ((o.Site ?? o.InstanceKey) is not null && (site = SiteOf(world, o)) is null) continue;
@@ -186,7 +188,7 @@ public static class OrderSave
     /// The queue row of a saved order: the original's sleep order 258 is Meitou's 98; a container order an older Meitou wrote as row 3 on a site is 26
     /// (kind 0, opening it), and one that only walked there (kind 1) is left out (<see cref="TaskType.None"/>). The loader's add takes a row's job
     /// remap (<c>FUN_1405086d0</c>, TaskData <c>+0xc</c>, <b>Verified</b>): 25 First aid loads as 58 Medic and 26 Loot on a character as 238 Foraging
-    /// animals, each on its saved target.
+    /// animals, the saved hand kept.
     /// </summary>
     static TaskType LoadedRow(SavedOrder o, bool onSite) => o.Row switch
     {

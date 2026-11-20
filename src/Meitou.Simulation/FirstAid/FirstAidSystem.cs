@@ -208,6 +208,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         if (order.Detail == MedicButton || order.Detail == RoboticsButton) return OrderCheck.Run;
 
         if (order.Row == TaskType.Rest) return CanAct(cold) ? OrderCheck.Run : OrderCheck.Blocked();
+        if (order.Row == TaskType.JobMedic) return MedicEntryCheck(world, slot, cold);
         if (!table.TryResolveNext(order.Target, out int patient) || table.Cold(patient)!.Medical is not { Dead: false })
             return OrderCheck.Gone;
 
@@ -236,6 +237,12 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         if (order.Row == TaskType.Rest)
         {
             TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Rest, TaskType.Rest, TaskSource.Order));
+            return;
+        }
+
+        if (order.Row == TaskType.JobMedic)
+        {
+            StartMedicEntry(world, slot);
             return;
         }
 
@@ -981,9 +988,32 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     }
 
     /// <summary>
+    /// Whether a loaded 58 Medic entry can start: an able medic with a working arm whose finder (<see cref="FindPatient"/>) finds a patient, as row
+    /// 58's plan treats the finder's pick (its effect <c>!22</c>, provided by 25 on the found hand), not the saved one.
+    /// </summary>
+    OrderCheck MedicEntryCheck(World world, int slot, CharacterCold cold)
+    {
+        if (!CanAct(cold) || !HasWorkingArm(cold)) return OrderCheck.Blocked();
+
+        return FindPatient(world, slot, SquadGoals.Of(world), robotics: false).Slot >= 0 ? OrderCheck.Run : OrderCheck.Blocked();
+    }
+
+    /// <summary>
+    /// Starts a loaded 58 Medic entry: 25 First aid on the patient its finder picks now (serial).
+    /// </summary>
+    void StartMedicEntry(World world, int slot)
+    {
+        var taken = SquadGoals.Of(world);
+        var (patient, _) = FindPatient(world, slot, taken, robotics: false);
+        if (patient < 0) return;
+
+        StartJob(world, slot, patient, taken, new TaskRequest(CharacterTask.Treat, TaskType.FirstAidOrder, TaskSource.Order));
+    }
+
+    /// <summary>
     /// A loaded 58 Medic entry's score in the second list (<c>FUN_14060fd80</c>, <b>Verified</b>): the row's desire (<see cref="AiSystem.MedicDesire"/>,
-    /// <c>FUN_140998410</c>) times its finder's value (<see cref="FindPatient"/>, <c>FUN_14099e240</c>) while the desire is above 0. The finder's
-    /// pick goes into a scratch hand the scorer drops: the entry keeps its saved patient.
+    /// <c>FUN_140998410</c>) times its finder's value (<see cref="FindPatient"/>, <c>FUN_14099e240</c>) while the desire is above 0
+    /// (<c>DAT_141681b38</c> = 0.0).
     /// </summary>
     internal float MedicEntryScore(World world, int slot)
     {

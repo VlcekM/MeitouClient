@@ -513,6 +513,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             if (cold.Carrying.IsNone) return OrderCheck.Gone;
             return cold.Medical is { Incapacitated: false } ? OrderCheck.Run : OrderCheck.Blocked();
         }
+        if (order.Row == TaskType.LootAnimalsJob) return ForageEntryCheck(world, slot, cold);
         if (!table.TryResolveNext(order.Target, out int target) || target == slot) return OrderCheck.Gone;
         var tc = table.Cold(target)!;
         switch (order.Row)
@@ -523,9 +524,6 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             case TaskType.LootTarget:
                 // Opening an inventory opens the loot window (OpenWindow).
                 if (order.Detail == OpenInventory ? !Openable(table, target) : !CanBeLooted(tc)) return OrderCheck.Gone;
-                return cold is { Medical.Incapacitated: false, Inventory: not null } && cold.CarriedBy.IsNone ? OrderCheck.Run : OrderCheck.Blocked();
-            case TaskType.LootAnimalsJob:
-                if (!CanBeLooted(tc)) return OrderCheck.Gone;
                 return cold is { Medical.Incapacitated: false, Inventory: not null } && cold.CarriedBy.IsNone ? OrderCheck.Run : OrderCheck.Blocked();
             case TaskType.StealthKnockout:
                 if (!CanBeKnockedOut(tc)) return OrderCheck.Gone;
@@ -566,9 +564,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                 Start(world, slot, CharacterTask.Loot, TaskType.LootTarget, TaskSource.Order, order.Target, CharacterTask.Idle);
                 break;
             case TaskType.LootAnimalsJob:
-                // a loaded 26 on a character (OrderSave): the forage loot of its saved body
-                if (Start(world, slot, CharacterTask.Loot, TaskType.LootAnimalsJob, TaskSource.Order, order.Target, CharacterTask.Idle))
-                    cold.Foraging = true;
+                StartForageEntry(world, slot, cold);
                 break;
             case TaskType.StealthKnockout:
                 Start(world, slot, CharacterTask.StealthKo, TaskType.StealthKnockout, TaskSource.Order, order.Target, CharacterTask.Idle);
