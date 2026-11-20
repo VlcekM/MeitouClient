@@ -48,6 +48,10 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// </summary>
     internal const int GraphicsPageIndex = 1;
     /// <summary>
+    /// The Advanced page (its Squad XP folds the skills' own multipliers).
+    /// </summary>
+    internal const int AdvancedPageIndex = 4;
+    /// <summary>
     /// The MODS page (<see cref="Settings.ModsPage"/>): the loaded mods, each with the settings its code registered.
     /// </summary>
     internal const int ModsPageIndex = 8;
@@ -923,7 +927,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
-    /// The rows shown: the search's results while it has a query, else the page's, the Display and Graphics ones folded into features
+    /// The rows shown: the search's results while it has a query, else the page's, the Display, Graphics and Advanced ones folded into features
     /// (on Display, the upscaler's and the HDR output's settings under their rows).
     /// </summary>
     internal List<Entry> Entries()
@@ -932,7 +936,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
 
         var rows = PageRows(Page, GraphicsPage);
 
-        return Page is 0 or GraphicsPageIndex ? Grouping.Grouped(rows) : rows;
+        return Page is 0 or GraphicsPageIndex or AdvancedPageIndex ? Grouping.Grouped(rows) : rows;
     }
 
     /// <summary>

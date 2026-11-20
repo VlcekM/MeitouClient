@@ -48,7 +48,7 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     public const float ContinuousRate = 0.02f;
 
     /// <summary>
-    /// The medic skill from which <see cref="CharacterStats.XpRate"/> above 1 no longer applies to <see cref="Medic"/>.
+    /// The medic skill from which an XP rate above 1 (<see cref="CharacterStats.RateOf"/>) no longer applies to <see cref="Medic"/>.
     /// </summary>
     const float MedicRateLimit = 100;
 
@@ -315,7 +315,8 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     /// Medic (<c>FUN_1408c6130</c>, <b>Verified</b> decompile): <c>dt / T x exp gain multiplier x race[stat]</c> added straight to the stat (no core
     /// curve, no cap), T seconds per point = lerp(<c>XP rate medic 1</c>, <c>XP rate medic 99</c>, skill / 100) and nothing when T is not above 0
     /// (the order of the lerp's ends is read from the editor's field names). The race factor is the medic race's entry for the patient race's <c>heal
-    /// stat</c>. Meitou: the time counts <see cref="CharacterStats.XpRate"/> times, a raise only below 100 (the gain has no cap to stop it).
+    /// stat</c>. Meitou: the time counts the stat's XP rate times (<see cref="CharacterStats.RateOf"/>), a raise only below 100 (the gain has no cap
+    /// to stop it).
     /// </summary>
     public float Medic(CharacterStats stats, RaceData patientRace, RaceData medicRace, float dtSeconds, StatsEnumerated? healStat = null)
     {
@@ -325,7 +326,8 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
         float secondsPerPoint = constants.XpRateMedic1 + (constants.XpRateMedic99 - constants.XpRateMedic1) * t;
         if (!(secondsPerPoint > 0)) return skill;
 
-        float rate = stats.XpRate > 1 && skill >= MedicRateLimit ? 1 : stats.XpRate;
+        float own = stats.RateOf(stat);
+        float rate = own > 1 && skill >= MedicRateLimit ? 1 : own;
         float gain = dtSeconds * rate / secondsPerPoint * constants.ExpGainMultiplier * medicRace.StatMultiplier(patientRace.HealStat);
         return stats[stat] = skill + stats.FilterStraight(stat, gain, ExperienceSource.FirstAid, MedicRateLimit);
     }

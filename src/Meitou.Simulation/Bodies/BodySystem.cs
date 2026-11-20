@@ -286,7 +286,9 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         StopIncapacitated(table, i, cold, medical, ref n);
         SheatheRagdolled(cold);
         if (medical.Dead) return;
-        stats.XpRate = AggroSystem.PlayerSide(world, cold) ? Options.SquadXp : Options.OthersXp;
+        bool squad = AggroSystem.PlayerSide(world, cold);
+        stats.XpRate = squad ? Options.SquadXp : Options.OthersXp;
+        stats.SkillXpRates = squad ? Options.SquadSkillXp : null;
         if (!TryStartStep(world, i, cold, medical, out float dt)) return;
         if (cold.Animal is { } animal) Age(cold, animal, stats, dt);
 

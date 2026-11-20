@@ -360,7 +360,7 @@ holds refuses the second mod.
   direct `CharacterStats.Gain` or an `XpService` call without a source (`ExperienceSource.Other`): the tick, the character, the stat, the amount
   and its `ExperienceSource`. It returns the amount to add, so a mod scales experience by squad, faction, stat or source, or cancels it (0).
   Filters run in system order, each seeing the amount the earlier ones left, until one answers 0. For a gain through the core curve, the amount
-  is the one the curve takes, after the Squad XP and Others' XP setting; only an amount in the curve's range (above 0, at most 20) is asked,
+  is the one the curve takes, after the XP settings (Squad XP or the skill's own, Others' XP); only an amount in the curve's range (above 0, at most 20) is asked,
   since the curve adds nothing for any other (a raw amount above 20 is dropped and a filter cannot bring it back), and the answer is held as that
   setting is: to 20, and with no raise for a stat at or past a training dummy's cap. First aid and mass combat add straight, past the curve:
   their amount is the one added, and the answer is held as the setting is there too: no raise for the stat first aid trains (medic, or robotics
