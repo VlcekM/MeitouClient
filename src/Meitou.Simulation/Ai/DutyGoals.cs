@@ -318,6 +318,32 @@ internal sealed class DutyGoals
     }
 
     /// <summary>
+    /// The act-out's walk ended short of its place (serial), as the original's plan step answers a running task whose mover is idle while
+    /// <c>isAtLocation</c> is false (<c>FUN_14050d970</c>, <b>Verified</b>): the target goes into the character's ignore map for 20 s
+    /// (<c>notifyPathImpossible</c> <c>FUN_140796ed0</c>, <see cref="CharacterCold.Ignored"/>; the finders that read it skip the target meanwhile) and
+    /// the goal ends for a replan (<see cref="Done"/>). There is no back-off and no limit on tries: a finder that does not read the map gives the
+    /// same target again.
+    /// </summary>
+    internal void LostWalk(World world, int slot, TaskType type, IgnoreKey? target)
+    {
+        if (target is { } key && world.Characters.Cold(slot) is { } cold)
+            cold.Ignore(key, world.Tick + (long)MathF.Ceiling(Construction.ConstructionSystem.UnreachableSeconds / world.TickSeconds));
+
+        Done(world, slot, type);
+    }
+
+    /// <summary>
+    /// The ignore-map key of an act-out's target: its character, else its fixture, else none (a bare place is not remembered).
+    /// </summary>
+    internal static IgnoreKey? KeyOf(in PlanTarget target)
+    {
+        if (target.Character is { } who) return IgnoreKey.Of(who);
+        if (target.Fixture is { } id) return new IgnoreKey(id, default);
+
+        return null;
+    }
+
+    /// <summary>
     /// Ends the goal holding the character at <paramref name="slot"/> for <paramref name="why"/> (serial): an order's start
     /// (<see cref="IDutyRelease"/>), an order on its body. Nothing when no goal holds it.
     /// </summary>

@@ -279,8 +279,8 @@ internal sealed class WardenGoals(LockSystem locks)
 
     /// <summary>
     /// The act-outs' step (serial, the lock step): each member a goal still holds moves its round on (<see cref="LockSystem.Advance"/>); one whose
-    /// round is over is done (<see cref="DutyGoals.Done"/>) and its finders look again, so its next choice sees its next target. One the goal no
-    /// longer holds is left to the AI's sweep, which ends it.
+    /// round is over is done (<see cref="DutyGoals.Done"/>; a lost walk marks the target first, <see cref="DutyGoals.LostWalk"/>) and its finders
+    /// look again, so its next choice sees its next target. One the goal no longer holds is left to the AI's sweep, which ends it.
     /// </summary>
     internal void Step(World world)
     {
@@ -295,7 +295,9 @@ internal sealed class WardenGoals(LockSystem locks)
         {
             var act = _acting[slot];
             _acting.Remove(slot);
-            _duties!.Done(world, slot, act.Goal);
+            if (act.Round.Lost) _duties!.LostWalk(world, slot, act.Goal, DutyGoals.KeyOf(act.Target));
+            else _duties!.Done(world, slot, act.Goal);
+
             LookAt(world, slot);
         }
     }

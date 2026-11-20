@@ -19,7 +19,7 @@ internal sealed class GateGoals(LockSystem locks)
     #region Act-outs
 
     /// <summary>
-    /// A gate guard 180 holds: who, the round opening its gate (null while it walks to its place or stands there) and its failed walks there.
+    /// A gate guard 180 holds: who, the round opening its gate (null while it walks to its place or stands there) and whether it walked there.
     /// </summary>
     sealed class ActOut(CharacterId id)
     {
@@ -32,9 +32,9 @@ internal sealed class GateGoals(LockSystem locks)
         /// </summary>
         public Round? Round { get; set; }
         /// <summary>
-        /// The walks to its place that ended short since it last stood there.
+        /// A walk to its place was started and it has not stood there since.
         /// </summary>
-        public int Failed { get; set; }
+        public bool Walked { get; set; }
     }
 
     /// <summary>
@@ -46,6 +46,11 @@ internal sealed class GateGoals(LockSystem locks)
     /// The guards 180 holds, by slot: added at the start, removed at the end (hashed).
     /// </summary>
     readonly SortedDictionary<int, ActOut> _acting = [];
+
+    /// <summary>
+    /// Scratch: the guards whose walk was lost in a step.
+    /// </summary>
+    readonly List<int> _lost = [];
 
     /// <summary>
     /// The engine goals of the world (the AI's), resolved at the first step.
@@ -72,37 +77,50 @@ internal sealed class GateGoals(LockSystem locks)
         if (_acting.Count == 0) return;
 
         _duties ??= world.SystemOf<AiSystem>()?.Duties;
+        _lost.Clear();
         foreach (var (slot, act) in _acting)
-            if (_duties?.Runs(world, slot, TaskType.ManTheGate) == true) StepGuard(world, slot, act);
+            if (_duties?.Runs(world, slot, TaskType.ManTheGate) == true && StepGuard(world, slot, act)) _lost.Add(slot);
+
+        foreach (int slot in _lost)
+        {
+            var key = GateKey(world, slot);
+            _acting.Remove(slot);
+            _duties!.LostWalk(world, slot, TaskType.ManTheGate, key);
+        }
     }
 
     /// <summary>
-    /// One tick of a gate guard: a round runs until it is over; else a shut gate it may open gets a round, else it walks to its place. Rounds and
-    /// walks that leave it short, <see cref="AiSystem.MaxFailedWalks"/> in a row, leave it standing where it is until the goal goes (engine choice).
+    /// One tick of a gate guard: a round runs until it is over; else a shut gate it may open gets a round, else it walks to its place. True when a
+    /// walk ended short (the round's to a door, or its own to its place): the goal ends for a replan (<see cref="DutyGoals.LostWalk"/>; no limit on
+    /// tries, as the original's plan step).
     /// </summary>
-    void StepGuard(World world, int slot, ActOut act)
+    bool StepGuard(World world, int slot, ActOut act)
     {
         if (act.Round is { } round)
         {
-            if (!_locks.Advance(world, round, slot)) return;
+            if (!_locks.Advance(world, round, slot)) return false;
 
             act.Round = null;
             if (world.Characters.Next[slot].Task == (byte)CharacterTask.GoTo) TaskStart.Stand(world.Characters, slot);
-            if (!Shut(world, slot)) act.Failed = 0;
+            if (round.Lost) return true;
         }
 
-        if (act.Failed >= AiSystem.MaxFailedWalks || world.Characters.Next[slot].Task == (byte)CharacterTask.GoTo) return;
+        if (world.Characters.Next[slot].Task == (byte)CharacterTask.GoTo) return false;
 
-        if (OpenRound(world, slot) is { } open) (act.Round, act.Failed) = (open, act.Failed + 1);
-        else ToPlace(world, slot, act);
+        if (OpenRound(world, slot) is { } open)
+        {
+            act.Round = open;
+            return false;
+        }
+
+        return ToPlace(world, slot, act);
     }
 
     /// <summary>
-    /// Whether the guard's gate is shut (its first door, not broken, closed or closing).
+    /// The ignore-map key of the guard's gate building; null without one.
     /// </summary>
-    static bool Shut(World world, int slot) =>
-        world.Characters.Cold(slot) is { Ai.Squad.Ai: { } board } && GateOf(board) is { } gate
-        && LockSystem.FirstDoor(world, gate.Key) is { DoorBroken: false, Motion: DoorMotion.Closed or DoorMotion.Closing };
+    static IgnoreKey? GateKey(World world, int slot) =>
+        world.Characters.Cold(slot) is { Ai.Squad.Ai: { } board } && GateOf(board) is { } gate ? new IgnoreKey(gate.Key, default) : null;
 
     /// <summary>
     /// The guard's gate when it is shut and the guard may open it: not the player's, its first door closed or closing (DOOR_IS_OPEN,
@@ -150,23 +168,28 @@ internal sealed class GateGoals(LockSystem locks)
     }
 
     /// <summary>
-    /// The guard walks to its place (the post's slack, <see cref="AiSettings.PostSlack"/>) and stands there; each walk counts until it stands there.
+    /// The guard walks to its place (the post's slack, <see cref="AiSettings.PostSlack"/>) and stands there. True when its last walk there ended
+    /// short.
     /// </summary>
-    static void ToPlace(World world, int slot, ActOut act)
+    static bool ToPlace(World world, int slot, ActOut act)
     {
         ref var n = ref world.Characters.Next[slot];
-        if (Place(world, slot) is not { } place) return;
+        if (Place(world, slot) is not { } place) return false;
 
         float slack = world.SystemOf<AiSystem>()?.Settings.PostSlack ?? 12;
         if (Vector2.DistanceSquared(new Vector2(n.Position.X, n.Position.Z), new Vector2(place.X, place.Z)) <= slack * slack)
         {
-            act.Failed = 0;
-            return;
+            act.Walked = false;
+            return false;
         }
 
-        act.Failed++;
+        if (act.Walked) return true;
+
+        act.Walked = true;
         if (float.IsNaN(place.Y)) TaskStart.Walk(world, slot, new Vector2(place.X, place.Z), SpeedMode.Walk, TaskType.ManTheGate, TaskSource.Goal);
         else TaskStart.Walk(world, slot, place, SpeedMode.Walk, TaskType.ManTheGate, TaskSource.Goal);
+
+        return false;
     }
 
     /// <summary>
@@ -239,7 +262,7 @@ internal sealed class GateGoals(LockSystem locks)
         {
             hasher.Add(slot);
             hasher.Add(act.Id);
-            hasher.Add(act.Failed);
+            hasher.Add(act.Walked ? 1 : 0);
             if (act.Round is { } round) round.Hash(ref hasher);
             else hasher.Add(0);
         }

@@ -97,6 +97,10 @@ public sealed class Round
     /// Game seconds in the phase.
     /// </summary>
     public float Time { get; set; }
+    /// <summary>
+    /// The round ended on a lost walk: the worker stopped short of its spot (<see cref="LockSystem.Advance"/> returned true for that).
+    /// </summary>
+    public bool Lost { get; set; }
 
     /// <summary>
     /// Adds the round to the world's state hash.
@@ -113,6 +117,7 @@ public sealed class Round
         h.Add((int)Phase);
         h.Add(Time);
         h.Add(FromOutside ? 1 : 0);
+        h.Add(Lost ? 1 : 0);
     }
 }
 
@@ -494,7 +499,11 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
         var from = Flat(n.Position);
         var (at, reach) = RoundSpot(world, r, f, from);
         float d = Vector2.Distance(from, at);
-        if (d > reach && (r.Kind == RoundKind.UnlockDoors || walking || d > WalkSlack)) return !walking;
+        if (d > reach && (r.Kind == RoundKind.UnlockDoors || walking || d > WalkSlack))
+        {
+            r.Lost = !walking;
+            return r.Lost;
+        }
 
         if (walking) TaskStart.Stand(table, w);
         r.Phase = RoundPhase.Work;

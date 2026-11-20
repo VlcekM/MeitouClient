@@ -1264,7 +1264,7 @@ one starts with the order's provenance. The chain's rows and states are in [AI t
   [locks](game/locks.md#doors)): a chooser goal held as any engine goal; its act-out runs the unlock round on its gate (`Blackboard.Gate`, else a gate home)
   while the gate's first door is closed or closing and whole (52, met by 72 and 78; the planner holds 52 true, so the act-out folds them in); a locked
   one only when the door is its faction's (78 needs isObjectMine) (#816); then it walks to the gate guard's place (`AiSystem.FrontOf`; its post
-  without a gate) and stands; a gate shut again is opened again; three rounds or walks that leave it short in a row leave it standing (engine choice).
+  without a gate) and stands; a gate shut again is opened again; a walk that ends short (a round's or its own) is a lost walk (see "Engine goals").
   An arrest's guard walking to a cage behind its faction's shut doors has them opened at once. Act-outs and locked homes are hashed only while any exist.
 - **Lock orders** (`LockSystem`, context-menu verbs on a caged character): `PickLockOrder` (the prisoner its own cage, a mate
   walks to it; `Lockpicking.Step` each tick in reach, floaters "Pick success!"/"Pick failed"), `GetOutOrder` (refused while
@@ -2391,7 +2391,10 @@ its plan the act-out carries out besides the goal's own. Built: 135, 139, 282, 2
   order on the body (`AiSystem.ReplanDuty`), a knock-out or death, a wiped or ended plan, a new mind (replanned); anything else holding it (taken: engaged by another
   system, fleeing, fighting, carried, caged by another, a task another system started; a caged mind keeps the goal it acts out from the cage); gone. A displaced act-out whose provenance is still its own is stopped after `End` (a walk
   stands, another task but idle ends through its handler), so the AI holds the character for the winner; the other ends leave the task to what ended the goal. The
-  system's own end is `DutyGoals.Done` (no `End`; a task of the act-out still running stops as a displaced one's). Records are hashed while any.
+  system's own end is `DutyGoals.Done` (no `End`; a task of the act-out still running stops as a displaced one's). A walk of the act-out that ends short is a lost walk
+  (`DutyGoals.LostWalk`, the gate and warden act-outs): its target goes into `CharacterCold.Ignored` for 20 s and the goal ends for a replan, with no back-off
+  and no limit on tries (**Verified**, plan step `FUN_14050d970` → `notifyPathImpossible` `FUN_140796ed0`; only the finders that read `pathFailures` skip the
+  target, not the warden ones `FUN_1408cf3c0`, `FUN_1408cb1c0`, `FUN_1408cb360`, `FUN_1408cc2a0`, nor 180, which has none). Records are hashed while any.
 
 ### Mod goals
 
