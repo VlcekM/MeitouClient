@@ -162,7 +162,7 @@ public interface IPackageRules
     bool Finished(Blackboard board, AiPackage package, PackageClass kind);
 
     /// <summary>
-    /// A package of the class just started (a patrol lays out its route, a bar package moves the home).
+    /// A package of the class just started (a patrol stamps its hour, a bar package moves the home).
     /// </summary>
     void Started(Blackboard board, AiPackage package, PackageClass kind);
 
@@ -201,7 +201,7 @@ public readonly record struct CrowdEntry(CharacterId Who, TaskType Type, Charact
 
 /// <summary>
 /// A squad's AI state (docs/game/ai.md "Blackboard update"): its packages by slot, the package running and the role lists it loaded, a contract
-/// package that overrides the slots, and what the running package needs: a home building, a patrol route. Changed only in <see cref="AiSystem"/>'s
+/// package that overrides the slots, and what the running package needs: a home building, a patrol's start hour. Changed only in <see cref="AiSystem"/>'s
 /// serial step; the members' think reads it.
 /// </summary>
 public sealed class Blackboard

@@ -36,8 +36,8 @@ public enum AiBehaviour : byte
     /// </summary>
     Sit = 6,
     /// <summary>
-    /// While a patrol package runs, the leader walks the patrol's route and the others follow it; otherwise wanders about the town
-    /// (<see cref="CharacterTask.Wander"/>).
+    /// PATROL (22, <c>Task_Patrol</c>): the leader walks to the squad's patrol point, which the population's patrol step draws sector by sector
+    /// (<see cref="Factions.Squad.PatrolPoint"/>), and the others follow it.
     /// </summary>
     Patrol = 7,
     /// <summary>

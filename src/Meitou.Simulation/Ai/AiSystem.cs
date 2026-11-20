@@ -19,7 +19,7 @@ namespace Meitou.Simulation.Ai;
 public sealed class AiSettings
 {
     /// <summary>
-    /// A character thinks every this many ticks (staggered by slot), and at once when its squad starts another package or its patrol moves on.
+    /// A character thinks every this many ticks (staggered by slot), and at once when its squad starts another package.
     /// </summary>
     public int ThinkEveryTicks { get; init; } = 15;
 
@@ -2465,8 +2465,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// A patrol (<c>Task_Patrol</c>'s move, docs/game/factions-squads-towns.md "Patrol task"): the leader walks to the patrol point exactly, which
-    /// the population's patrol step keeps in <see cref="Squad.HomeCentre"/> and redraws once it is reached; the others follow. Under a running
-    /// patrol package the leader runs (<c>GoOutOnPatrol_Running</c>'s speed mode 2, <c>FUN_140289cb0</c>; the other packages' 4 changes nothing).
+    /// the population's patrol step keeps in <see cref="Squad.PatrolPoint"/> and redraws once it is reached; until the first is drawn it stands.
+    /// The others follow. Under a running patrol package the leader runs (<c>GoOutOnPatrol_Running</c>'s speed mode 2, <c>FUN_140289cb0</c>; the
+    /// other packages' 4 changes nothing).
     /// </summary>
     static void ActPatrol(World world, int slot, AiMind mind, Blackboard board)
     {
@@ -2478,7 +2479,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return;
         }
 
-        WalkTo(world, slot, mind.Squad.HomeCentre, board.CurrentClass == PackageClass.PatrolRunning ? SpeedMode.Run : SpeedMode.Walk);
+        if (mind.Squad.PatrolPoint is not { } point)
+        {
+            Become(world, slot, CharacterTask.Idle);
+            return;
+        }
+
+        WalkTo(world, slot, point, board.CurrentClass == PackageClass.PatrolRunning ? SpeedMode.Run : SpeedMode.Walk);
     }
 
     /// <summary>

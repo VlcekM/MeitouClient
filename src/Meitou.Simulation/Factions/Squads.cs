@@ -77,6 +77,11 @@ public sealed class Squad
     /// </summary>
     public float HomeRadius { get; set; }
     /// <summary>
+    /// The point the squad's patrol walks to now (<c>Task_Patrol</c>'s move, drawn by the population's patrol step, docs/game/factions-squads-towns.md
+    /// "Patrol task"), apart from its home; null while it does not patrol. Hashed, not saved: a load draws afresh, as the original's task start does.
+    /// </summary>
+    public Vector2? PatrolPoint { get; set; }
+    /// <summary>
     /// The building the town gave it as its home (docs/game/factions-squads-towns.md "Town residents"), or the one a save names; the AI takes it as
     /// the squad's own home. Null: none (the AI picks one).
     /// </summary>
@@ -421,6 +426,12 @@ public sealed class SquadRegistry
             hasher.Add(s.Money);
             hasher.Add(s.HomeCentre);
             hasher.Add(s.HomeRadius);
+            if (s.PatrolPoint is { } patrol)
+            {
+                hasher.Add(0x50747250);   // "PtrP": nothing for a squad not patrolling, so the pinned hashes stay
+                hasher.Add(patrol);
+            }
+
             hasher.Add(s.Position);
             hasher.Add(s.Leader);
             if (!s.Backup.IsNone) hasher.Add(s.Backup);   // nothing for a squad that never needed one, so the pinned hashes stay
