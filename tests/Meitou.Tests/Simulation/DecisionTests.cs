@@ -329,9 +329,9 @@ public class DecisionTests
     }
 
     /// <summary>
-    /// The target of a failed stealth knock-out (<c>Character::attackTarget</c>: a replan, then the chooser) fights its attacker through the step,
-    /// and a standing order beats that as it beats Self preservation. Catches a player target that is pushed into a fight over its order, or one that
-    /// never answers.
+    /// The target of a failed stealth knock-out (<c>Character::attackTarget</c>: a replan, then the chooser) whose attacker then stands idle does not
+    /// fight it: the push puts the attacker on no list 32 Self preservation's scorer reads (<c>FUN_14050df10</c>), and a standing order keeps
+    /// running. Catches a player target pushed into a fight by the push alone, or over its order.
     /// </summary>
     [Theory]
     [InlineData(false)]
@@ -367,9 +367,11 @@ public class DecisionTests
             return;
         }
 
-        Assert.Equal(CharacterTask.Attack, rig.Task(target));
-        Assert.Equal(attacker.Slot, rig.Combat.StateOf(target).TargetSlot);
-        Assert.StartsWith("32 Self preservation", rig.Cold(target).Decision!.Winner);
+        // The attacker stands idle after the miss, so it is on no threats list the target's chooser reads (the look's refill, FUN_140854370, wants
+        // its fight aimed at the target): 32 is dropped before any plan (FUN_14050df10, list A !159 holding) and the push alone starts no fight.
+        Assert.NotEqual(CharacterTask.Attack, rig.Task(target));
+        Assert.False(rig.Cold(target).InCombat);
+        Assert.DoesNotContain("32 Self preservation", rig.Cold(target).Decision!.Winner ?? "");
     }
 
     /// <summary>

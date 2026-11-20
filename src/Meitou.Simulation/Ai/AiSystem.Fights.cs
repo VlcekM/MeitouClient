@@ -128,19 +128,23 @@ public sealed partial class AiSystem
 
     /// <summary>
     /// 32 Self preservation's desire (AI slot 17 <c>FUN_140599d20</c>, <b>Verified</b>): the threat level
-    /// (<see cref="Combat.CombatSystem.ThreatLevel"/>: 1 with a threat within 40, 0.7 with one within 181.7, else 0). In its own fight the goal is
-    /// kept while it is not done (its list A <c>!159</c>, a threat on its list at any distance, <c>FUN_140436720</c>; the plan step,
-    /// <c>FUN_14050d970</c>): <b>engine</b>, a threat only beyond 181.7 keeps it at 0.7 at Meitou's re-think (the original does not weigh a
-    /// running goal again).
+    /// (<see cref="Combat.CombatSystem.ThreatLevel"/>: 1 with a threat within 40, 0.7 with one within 181.7, else 0). Not the current goal, it is no
+    /// candidate while no threat is on the senses' list (<see cref="Combat.CombatSystem.Threatened"/>): the scorer drops it before any plan, its list
+    /// A <c>!159</c> holding, its finished test the base one and its effect test passing unasked (<c>FUN_14050df10</c>, <b>Verified</b>), so an
+    /// <c>attackTarget</c> push alone (a crime's victim, an alarm's investigator) weighs nothing. In its own fight the goal is kept while it is not
+    /// done (its list A, a threat on its list at any distance, <c>FUN_140436720</c>; the plan step, <c>FUN_14050d970</c>): <b>engine</b>, a threat
+    /// only beyond 181.7 keeps it at 0.7 at Meitou's re-think (the original does not weigh a running goal again).
     /// </summary>
     float SelfPreservationDesire(World world, int slot, AiMind mind)
     {
         if ((ThreatSource ?? _combat) is not { } source) return 0;
 
+        bool holdsGoal = mind.Goal?.Task.Type == TaskType.SelfPreservation;
+        if (!holdsGoal && !source.Threatened(world, slot)) return 0;
+
         float level = source.ThreatLevel(world, slot, out _);
         if (level > 0) return level;
 
-        bool holdsGoal = mind.Goal?.Task.Type == TaskType.SelfPreservation;
         bool ownFight = holdsGoal && world.Characters.Cold(slot) is { InCombat: true } cold && OwnsFight(cold, mind);
         return ownFight && source.Threatened(world, slot) ? SelfPreservation.Attacking : 0;
     }
@@ -225,36 +229,71 @@ public sealed partial class AiSystem
     /// Row 13 Attacking attackers of under 32 Self preservation (<c>AI::findAttackerOf</c> on the character itself, <c>FUN_14099c3b0</c>,
     /// <b>Verified</b>; <see cref="Combat.CombatSystem.BestAttackerOf"/> with the character as both subject and looker: its engaged list, its threats
     /// list and its own target, at any distance, best by the target score): the attacker it fights, <see cref="CharacterId.None"/> when none, when it cannot fight
-    /// (no working fighter, crawling) or when deep water bars the fight (<see cref="SwimBarred(World, int, CharacterId)"/>). A turret's gunner
-    /// takes no shooter (its turret row wants only a melee threat gone; <b>engine</b>, kept from the old answer). <paramref name="pending"/>: the
-    /// fights the serial step started this tick. Reads only the last tick's state (any thread in the think).
+    /// (no working fighter) or when deep water bars the fight (<see cref="SwimBarred(World, int, CharacterId)"/>). A crawling character's
+    /// attacker is taken too: row 13 and its 4 are in the crippled repertoire, and 4's desire is 0.1 for it (<c>FUN_1405a4260</c>); a crippled NPC's
+    /// 32 runs before (<see cref="SelfPreservationPlans"/>). A turret's gunner takes no shooter (its turret row wants only a melee threat gone;
+    /// <b>engine</b>, kept from the old answer). <paramref name="pending"/>: the fights the serial step started this tick. Reads only the last
+    /// tick's state (any thread in the think).
     /// </summary>
-    internal CharacterId SelfDefencePick(World world, int slot, IReadOnlyDictionary<int, int>? pending = null)
+    internal CharacterId SelfDefencePick(World world, int slot, IReadOnlyDictionary<int, int>? pending = null) =>
+        SelfDefencePick(world, slot, pending, out _);
+
+    /// <summary>
+    /// <see cref="SelfDefencePick(World, int, IReadOnlyDictionary{int, int}?)"/>; <paramref name="noneFound"/>: row 13's finder ran and took no one
+    /// (<c>findAttackerOf</c> answers 0), the engine's own refusals (deep water, Hold's post, a gunner's shooter) aside.
+    /// </summary>
+    CharacterId SelfDefencePick(World world, int slot, IReadOnlyDictionary<int, int>? pending, out bool noneFound)
     {
+        noneFound = false;
         var table = world.Characters;
         if ((ThreatSource ?? _combat) is not { } source) return CharacterId.None;
 
-        if (table.Cold(slot) is not { Fighter.CanAttack: true, Medical.Crawling: false } cold) return CharacterId.None;
+        if (table.Cold(slot) is not { Fighter.CanAttack: true } cold) return CharacterId.None;
 
         int foe = source.BestAttackerOf(world, slot, slot, pending);
-        if (foe < 0) return CharacterId.None;
+        noneFound = foe < 0;
+        if (noneFound) return CharacterId.None;
+
         var id = new CharacterId(foe, table.Previous[foe].Generation);
         if (SwimBarred(world, slot, id) || !PassesHoldPost(world, slot, cold, foe, source.StateOf(id))) return CharacterId.None;
         return cold.Gunning is not null && source.StateOf(id).Ranged ? CharacterId.None : id;
     }
 
     /// <summary>
-    /// Whether 32 Self preservation's plan has a provider (the planner's choice between 35 and 13): <paramref name="runs"/> when the run wins
-    /// (<see cref="SelfPreservation.Runs"/>), else an attacker of its own to fight (<see cref="SelfDefencePick"/>); false with neither. Reads only
-    /// the last tick's state.
+    /// Whether 32 Self preservation's plan has a provider (the planner's search from 32's effect <c>!39</c>, docs/game/ai-tasks.md "Combat goals",
+    /// <b>Verified</b>): <paramref name="runs"/> when 35 wins (<see cref="SelfPreservation.RunsAt"/> at row 35's desire, a player-faction mind's
+    /// with its vetoes; with row 4 worth nothing it wins whenever it can run), else 13 on an attacker of its own, else 35 when row 13's finder takes
+    /// no one (the chain through 13 dead-ends; 35 is made at any desire above 0); false when none of them plans. Reads only the last tick's state.
     /// </summary>
-    internal bool SelfPreservationPlans(World world, int slot, float desire, out bool runs)
+    internal bool SelfPreservationPlans(World world, int slot, AiMind mind, float desire, out bool runs)
     {
         runs = false;
-        if (world.Characters.Cold(slot) is not { } me) return false;
+        if (world.Characters.Cold(slot) is not { Medical: { } medical } me) return false;
 
-        runs = SelfPreservation.Runs(me, desire, SelfPreservation.Walled(world, slot));
-        return runs || !SelfDefencePick(world, slot).IsNone;
+        float run = mind.PlayerSide
+            ? PlayerSideRowRunDesire(world, slot, me, medical)
+            : SelfPreservation.RunDesire(me, SelfPreservation.Walled(world, slot));
+        runs = SelfPreservation.RunsAt(me, desire, run);
+        if (runs) return true;
+
+        // Row 4 worth nothing: 13 dead-ends, and 35 cannot run either (RunsAt would have taken it).
+        if (!AttackRowWanted(me, medical, mind, desire)) return false;
+
+        if (!SelfDefencePick(world, slot, null, out bool noneFound).IsNone) return true;
+
+        runs = noneFound && SelfPreservation.CanRunAt(me, run);
+        return runs;
+    }
+
+    /// <summary>
+    /// Whether row 4 under 13 is worth anything (AI slot 53 <c>FUN_1405a4260</c>, <b>Verified</b>; <see cref="SelfPreservation.AttackDesire"/>): a
+    /// player-faction mind's crippled character with a working arm is worth 0.1 whether or not a threat is within 40.
+    /// </summary>
+    static bool AttackRowWanted(CharacterCold me, Bodies.MedicalState medical, AiMind mind, float desire)
+    {
+        if (SelfPreservation.AttackDesire(me, desire >= 1) > 0) return true;
+
+        return mind.PlayerSide && medical.Crawling && (medical.ArmWorks(left: true) || medical.ArmWorks(left: false));
     }
 
     /// <summary>

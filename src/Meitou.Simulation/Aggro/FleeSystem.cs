@@ -320,8 +320,8 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
 
     /// <summary>
     /// A flight the AI asked for (<see cref="Ai.AiMind.FleeRequest"/>). From the threats (<see cref="Ai.FleeAsk.Threat"/>, Self preservation's
-    /// provider 35, <see cref="Ai.SelfPreservation"/>): if a threat still attacks it and its body still takes the choice to running; it runs from
-    /// their centre. From the enemies it senses (<see cref="Ai.FleeAsk.Enemies"/>, a goal 35), as a broken squad's member does. The run is its goal's
+    /// provider 35, <see cref="Ai.AiSystem.SelfPreservationPlans"/>, whose plan already made the choice, a player-faction mind's included): if a
+    /// threat still attacks it; it runs from their centre. From the enemies it senses (<see cref="Ai.FleeAsk.Enemies"/>, a goal 35), as a broken squad's member does. The run is its goal's
     /// task (<see cref="GoalFlight"/>).
     /// </summary>
     void Begin(World world, CharacterTable table, int s, FleeAsk ask)
@@ -330,7 +330,8 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
         if (ask == FleeAsk.Threat)
         {
             float level = combat.ThreatLevel(world, s, out var threats);
-            if (level <= 0 || !SelfPreservation.Runs(cold, level, SelfPreservation.Walled(world, s))) return;
+            if (level <= 0) return;
+
             cold.FleesAlone = true;
             Begin(world, table, s, threats, 1, TaskSource.Goal);
             return;

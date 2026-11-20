@@ -82,6 +82,16 @@ public sealed partial class AiSystem
         bool threatened = _combat is { } combat && Bodies.CharacterFacts.ImmediateThreat(combat, world, slot);
         if (!threatened && _aggro?.SensesOf(slot) is not { Enemies: > 0 }) return 0;
 
+        return PlayerSideRowRunDesire(world, slot, cold, medical);
+    }
+
+    /// <summary>
+    /// Row 35's desire for a player-faction character (<c>FUN_1405a34e0</c>'s player-faction branch, <b>Verified</b>): 0 while either arm works, while
+    /// it shoots (<see cref="Shoots"/>) or while a hip weapon is not one of <see cref="RunningWeapons"/>; else the body's desire
+    /// (<see cref="SelfPreservation.BodyRunDesire"/>). The value of a 35 node of any plan, Self preservation's among them.
+    /// </summary>
+    float PlayerSideRowRunDesire(World world, int slot, CharacterCold cold, Bodies.MedicalState medical)
+    {
         if (medical.ArmWorks(left: true) || medical.ArmWorks(left: false) || Shoots(world, slot, cold) || FightsFromHip(cold)) return 0;
 
         return SelfPreservation.BodyRunDesire(cold, SelfPreservation.Walled(world, slot));

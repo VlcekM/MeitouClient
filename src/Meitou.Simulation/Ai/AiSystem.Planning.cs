@@ -269,12 +269,12 @@ public sealed partial class AiSystem
                 return true;
             }
 
-            // Self preservation (the planner's choice between its providers 13 and 35, SelfPreservation.Runs): [35, 32] when 35 wins, else [13, 32]
-            // when row 13's finder takes an attacker of its own (AI::findAttackerOf on itself, AiSystem.SelfDefencePick; the fight is the combat
-            // system's, as the combat goals'); with neither the next goal is tried.
+            // Self preservation (the planner's choice between its providers 13 and 35, AiSystem.SelfPreservationPlans): [35, 32] when 35 wins or
+            // the chain through 13 dead-ends, else [13, 32] on an attacker of its own (AI::findAttackerOf on itself, AiSystem.SelfDefencePick; the
+            // fight is the combat system's, as the combat goals'); with neither the next goal is tried.
             if (type == TaskType.SelfPreservation)
             {
-                if (!_system.SelfPreservationPlans(_world, _slot, desire, out bool runs)) return false;
+                if (!_system.SelfPreservationPlans(_world, _slot, _mind, desire, out bool runs)) return false;
                 if (!InRepertoire(runs ? TaskType.RunAway : TaskType.AttackAttackersOf)) return false;
                 _mind.Plan.Clear();
                 _mind.Plan.Add(new PlanStep(runs ? TaskType.RunAway : TaskType.AttackAttackersOf, default));

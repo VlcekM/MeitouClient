@@ -1410,22 +1410,35 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
 - 32 SELF_PRESERVATION and 35 RUN_AWAY (**Verified** unless marked: `FUN_140319a60` registrations, stub bytes read from the exe, `Character::setupAI` `FUN_140621b70`). `setupAI` gives **every**
   character goal 14 (weight 0.1) and goal 32 (weight 1, target itself, tier 3); the race `AI Goals` (30 races list 32) may add it again. Row 32: flags 0x65, list A `!159`, no B, effect `!39`;
   desire AI slot 17 (`FUN_140599d20`, [combat](combat.md#fight-lifecycle-and-orders): 1 with a threat within 40, 0.7 with an attacking threat within 181.7, else 0); its finder stub jumps to `FUN_1405985e0`,
-  which copies the character's own hand and returns 1.0. The goal row does not act, so the planner goes down to a provider of `!39`: only 13 (desire 1, finder `AI::findAttackerOf`, leads to 4 / 262 / 266) and
-  35 (flags 0x61, A `!39, 6`, B `60, !26`, desire slot 55 `FUN_1405a34e0`: 1.0 for a crippled character, else 0.001; 0 for a player-faction one with an arm). Best-first by g + h
-  makes 13's chain win unless its leaf is worth less than 35 (**Observed**, [planner](#planner)):
-  - **Crippled** (Character vslot `0x360` = `isCrippled`, [the flag](combat.md#crippled-flag)): 35 is worth 1, 4 only 0.1 under a threat within 40 (`FUN_1405a4260`; 0.0001 on Block or Hold, 0 for a non-unique
-    NPC with nothing close). 35's `!26` holds although the character lies down (state 26 `FUN_140599e90` answers false for a crippled character) and the crippled repertoire (0x40, set with posture 1 or 2
-    by `FUN_1405c7e20`) has no stand-up row (28 and 65 are 0x25). So a crippled NPC under threat **crawls away**; it has no attack on sight either (goal 16's desire is 0 unless standing).
-  - **No working arm** (medical `+0x165` and `+0x166` both false): 4's desire is 0 and shooting needs an arm, so 13 is a dead end and 35 runs at 0.001.
-  - Anyone else fights: 4 is worth 1 (0.05 at the least with the ranged and squad factors), 35 0.001.
-  - **An empty threats list** (**Verified**, `FUN_14050df10`, `FUN_14060f570`, `FUN_14050c8e0`, `FUN_14032dee0`; 32 has no case of its own in the factory `FUN_14032ebd0`): 32
-    not current is dropped by the scorer before any plan, as its list A `!159` holds, its base slot 4 holds (+0x15 clear) and its effect test holds unasked (+0x120). So the
-    immediate flag alone (an `attackTarget` push within 40 that the sense pass cleared, `SenseBlock.Pushed`: a crime's victim, an alarm's investigator) makes no dash.
-    The planner's nodes (**Verified**, `FUN_14051bae0`, `FUN_14051c240`, `FUN_14051ad80`, `FUN_14050f800`): a node's value is its row's desire alone, a provider is expanded as
-    it is made and dropped when that desire is not above 0, and a needs-target provider is left out while its parent's finder took no target; a state left with no provider
-    gets the dead end 104. **Observed** from that: 13 whose finder (`FUN_14099c3b0`, `findAttackerOf`: none found, 0) takes no one dead-ends at its effect 7, so a 32 planned
-    with no attacker runs on 35; the third provider of `!39`, 234 Turret guard, needs a turret its finder takes. Meitou: with the push alone 32 weighs 1 and plans
-    nothing for an able NPC, the same pick; one that `SelfPreservation.Runs` (crippled, no arm) plans `[35, 32]` and crawls off, where the original drops 32.
+  which copies the character's own hand and returns 1.0. The goal row does not act, so the planner goes down to the providers of `!39` (list A holds it), in ascending type: 13 (flags 0x61,
+  needs a target, list A `!16, !39, !12`, effect 7, desire slot 19 = 1, finder `AI::findAttackerOf` `FUN_14099c3b0`; leads to 4 / 262 / 266), 35 (flags 0x61, A `!39, 6`, B `60, !26`,
+  desire slot 55 `FUN_1405a34e0`: 1.0 for a crippled character, else 0.001; its player-faction branch below) and 234 Turret guard (flags 0x1 only, desire slot 35 `FUN_140598080`).
+  - **Scoring** (**Verified**, `FUN_14050df10`, `FUN_14060f570`, `FUN_14050c8e0`, `FUN_14032dee0`; 32 has no case of its own in the factory `FUN_14032ebd0`, so its slot 4 is
+    `Task_Blank`'s): 32 not current is dropped before any plan while the senses' threats count is 0, as its list A `!159` holds, its base finished test holds (+0x15 clear) and its effect
+    test holds unasked (+0x120 set). The count is the look's: the AI update's sense pass (`FUN_1405112b0` → `FUN_14085a8d0` → `FUN_14085a070`) zeroes it and refills it with the sensed
+    characters of another faction whose AI target is this one and who pass `FUN_1405c92d0` (`FUN_140854370`), before the chooser. An `attackTarget` push (`FUN_1405cb0a0`: appends to the
+    list, forces the sense, aggression 4, queues an immediate update `FUN_14001a5b9`) only raises the immediate flag `+0x2b0` at the logic tick before (`FUN_1404378f0`), so a
+    crime's victim, an alarm's investigator or a failed knock-out's target whose culprit is not fighting it has no 32 at all, whatever its body. (The pass is skipped once after a look
+    flagged `+0x1d0` by `FUN_14085a770`, which has no caller in the decompile.) With a threat on the list 32 weighs slot 17's level; 0 is no candidate.
+  - **Planning** (**Verified**, `FUN_14050f800`, `FUN_14051c240`, `FUN_14051bae0`, `FUN_14051b500`, `FUN_14051ad80`, `FUN_140519730`, `FUN_140519070`, `FUN_14050f4f0`,
+    `FUN_14051b160`, `FUN_14051ac20`, `FUN_14051b980`): the root's finder is asked first (none: the plan fails); a node's g and h are its row's desire, a child's g the least of its own and
+    its parent's; a provider is made only with a desire above 0, and a needs-target one only while its parent's finder took a target, else the state gets the dead end 104 (made unexpanded,
+    desire slot 19, never accepted); the open list gives the highest g + h, the first on a tie; a node without a finder that acts and can run, or one repeating an ancestor or a queued
+    task, is accepted, and `FUN_14050f4f0` walks its chain to the root, prunes the states its rows' lists A give (`FUN_14051ac20`) and goes on from an ancestor still wanting one.
+    Under 32: 13 at 2, 35 at 1 + 1 crippled or 0.002, and 234 (human repertoire only). Row 4's desire (slot 53, `FUN_1405a4260`) is 0 with no working arm (medical `+0x165`, `+0x166`
+    both false), 0.1 for a crippled character with a threat within 40 or of the player's faction (0 for a non-unique NPC with nothing close), else 1 (x0.1 Ranged, x0.5 squad not intact).
+    | Character | Attacker on its threats list | Push only / nothing |
+    |---|---|---|
+    | can fight | `[4, 13, 32]`: it fights its attacker | no 32 |
+    | crippled NPC | `[35, 32]` (35 at 2 is taken before 4 at 0.2): it **crawls away** | no 32: it stays put |
+    | crippled, player faction, an arm working | 35 is 0: `[4, 13, 32]` at 0.1, it fights lying down | no 32 |
+    | no working arm | 4 is not made, 13 dead-ends at 7: `[35, 32]` at 0.001, it runs (a player-faction one only when slot 55's vetoes leave 35 above 0; else no plan) | no 32 |
+    13's finder taking no one (`findAttackerOf` answers 0) dead-ends the same way, so 32 runs on 35 at its desire. 35's `!26` holds although a crippled character lies down (state 26
+    `FUN_140599e90` answers false for it) and the crippled repertoire (0x40, set with posture 1 or 2 by `FUN_1405c7e20`) has no stand-up row (28 and 65 are 0x25); a crippled NPC has no
+    attack on sight either (goal 16's desire is 0 unless standing). 234's desire (`FUN_140598080`): 0 when carrying; for a player-faction character 1.0 with job 146, else 0 without
+    job 234 and stat flag `+0x129`; then 0 beyond clamp(AI `+0x28` x 1.2, 10000, 1e6) squared of its target (here itself), 2.0 with enemies sensed and a target, 0.4 hurt and sensing
+    none, else 1.0. So an NPC's 234 is made (at 3 with sensed enemies and a target, ahead of 13) and, when its finder (`FUN_1408ccfa0`) takes no turret, dead-ends at its effect
+    (its provider 146 needs that target) and 13 follows; with an unused turret taken it leads to 146 Turret gunner on that turret.
   - 35's entries: 60 `LOCATION_IS_ACCESSIBLE` (`FUN_1405a2710`, 0 behind a locked gate in town walls, [combat](combat.md#fight-lifecycle-and-orders)) and `!26` (a character staying low must stand first).
   State evaluators: 39 `isAggressionTowardsMe` = Character `+0x2b0` (`iAmBeingMeleeAttacked immediate`, `FUN_14059de10`); 159 = the senses' threat count `+0x58` non-zero (`FUN_140436720`); 6 `isNoEnemiesInVicinity` =
   AI `+0xbc` == 0 (`FUN_140597630`; SensoryData `numEnemies`, **Verified**: [senses](perception.md#senses)).
@@ -1438,9 +1451,11 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   left with none) or its list A (the update's plan step) ends it, and 32 at 0.7 or 1 does not take over ([committed mode](#precedence)); then it no longer holds (the
   frame step asks a replan for a commit row whose commitment passed; Meitou: the score cap 0.05). Committed mode reads the current goal, so it does not hold a run under 32.
   Meitou: `SelfPreservation` (the two desires, the choice), `CombatSystem.ThreatLevel` (slot 17), goal 32 as `AiSystem.SelfPreservationGoal` (once per NPC mind, the list entries ignored), a priority-3
-  goal of the chooser like the combat goals: its plan is `[35, 32]` when `SelfPreservation.Runs` (a crippled NPC, or one with no working arm), else `[13, 32]` when row 13 finds an attacker of its own
-  (`AiSystem.SelfDefencePick`: `CombatSystem.BestAttackerOf` with the NPC as subject and looker, its engaged list, threats and own target at any distance; a turret gunner takes no shooter, engine), else none
-  and the next goal is tried. The fight starts as a goal fight (`SendFights`, a defence, not in the aggro log) and is the AI's own: kept while 32 is chosen (a threat on its list beyond 181.7 keeps it at
+  goal of the chooser like the combat goals, no candidate while not current with no threat on the senses' list (`AiSystem.SelfPreservationDesire`, `CombatSystem.Threatened`). Its plan
+  (`AiSystem.SelfPreservationPlans`, the table above, for NPC and player-faction minds; a player-faction mind's 35 desire is `AiSystem.PlayerSideRowRunDesire`) is `[35, 32]` when 35
+  wins (`SelfPreservation.RunsAt`), else `[13, 32]` when row 4 is worth anything and row 13 finds an attacker of its own (`AiSystem.SelfDefencePick`: `CombatSystem.BestAttackerOf` with
+  the character as subject and looker, its engaged list, threats and own target at any distance; a crawling one's too; a turret gunner takes no shooter, engine), else `[35, 32]` when 13's
+  finder took no one and 35 can run, else none and the next goal is tried; `FleeSystem` runs the planned 35 while a threat stands (no second body test). The fight starts as a goal fight (`SendFights`, a defence, not in the aggro log) and is the AI's own: kept while 32 is chosen (a threat on its list beyond 181.7 keeps it at
   0.7, standing for list A `!159`, engine), left for a higher goal. 35 is acted out by
   `FleeSystem` (the squads' run: first run from the threats' centre, hops, `CharacterCold.Fleeing`): the AI asks (`AiMind.FleeRequest`), a fighter is stopped first. The run is the goal's task (row 35,
   a goal's provenance, `FleeSystem.GoalFlight`) and the runner's chooser runs on (`AiSystem.RunsOwnFlight` holds it): the flight ends when 32 or the goal 35 does (another winner's task replaces the run,
@@ -1451,7 +1466,7 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   compares a hand with the task's target): a player-faction character's run starts, hops and ends as an NPC's (Meitou: its fight ends at once, not by the player's Stop); what
   differs is the desire, slot 55's player-faction branch (`FUN_1407916d0`, a player faction: 0 while either arm works, while it shoots a target not down, or
   with a hip weapon of a skill category other than 3, 6, 8; `AiSystem.PlayerSideRunDesire` for a player-faction mind's goal 35, such as an obeying slave's of its
-  master's Slave list). Not modelled: that branch under 32 (a player's character has run desire 0 there, `SelfPreservation.RunDesire`), the locked-gate zero of 60, 4's ranged and squad factors, standing up first for a character staying low. An NPC without a mind (no squad, or until its next package
+  master's Slave list; its vetoes alone, `PlayerSideRowRunDesire`, for its 35 under 32). Not modelled: 234 under 32 (Meitou plans 13), the locked-gate zero of 60, 4's ranged and squad factors, standing up first for a character staying low. An NPC without a mind (no squad, or until its next package
   cadence) has no 32 and does not answer: every character has goals in the original.
   - **Timing**: the original replans an attacked character whose fight is off (`underMeleeAttack` `FUN_140999f00`, the shot handler `FUN_140999d50`) and chooses at its next AI update
     (`FUN_1405112b0`, **Verified**: its sense pass `FUN_14085a8d0` runs first, so the threats list is current, then the task system's update `FUN_140511130`), 8 characters a frame in turn
