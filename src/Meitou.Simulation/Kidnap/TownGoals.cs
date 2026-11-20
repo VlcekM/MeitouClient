@@ -133,14 +133,17 @@ internal sealed class TownGoals(TownDutySystem owner)
     }
 
     /// <summary>
-    /// The NPC at <paramref name="slot"/> when the look serves it: alive, not dormant, a full mind of its own in a squad with a blackboard; else null.
+    /// The character at <paramref name="slot"/> when the look serves it: alive, not dormant, and an NPC with a full mind of its own in a squad with a
+    /// blackboard or a player-faction mind (<see cref="AiMind.PlayerSide"/>, which weighs only the types on the chooser's rungs,
+    /// <see cref="AiSystem.WeighsGoal"/>); else null.
     /// </summary>
     static CharacterCold? Minded(World world, int slot)
     {
         var table = world.Characters;
         if (!table.Next[slot].Alive || table.Next[slot].Dormant) return null;
 
-        return table.Cold(slot) is { IsPlayer: false, Ai: { Engine: false, Player: false, Squad.Ai: not null } } cold ? cold : null;
+        var cold = table.Cold(slot);
+        return cold is { Ai.PlayerSide: true } or { IsPlayer: false, Ai: { Engine: false, Player: false, Squad.Ai: not null } } ? cold : null;
     }
 
     /// <summary>
@@ -234,15 +237,15 @@ internal sealed class TownGoals(TownDutySystem owner)
     }
 
     /// <summary>
-    /// The store finders: 243's food store (an NPC of the player's faction runs the player-side food run instead), 131's store to loot and 184's
-    /// storage for stolen goods.
+    /// The store finders: 243's food store (a player-faction character's among its faction's stores, <see cref="TownDutySystem.FoodPick"/>), 131's
+    /// store to loot and 184's storage for stolen goods.
     /// </summary>
     void LookForStores(World world, int slot, CharacterId id, CharacterCold cold, Squad squad, Vector3 at, CampaignTown town)
     {
         // 243 and 131 search the blackboard's target town (Blackboard.Destination), else the current one, else the 3 x 3 zone cells round the member
         // (FUN_1408cb650).
         var foodTown = squad.Ai is { Destination.IsNone: false } target ? target.Destination : town;
-        bool food = cold.Faction != world.Player.Faction && AiSystem.WeighsGoal(world, slot, TaskType.AquireFoodAtHomebase);
+        bool food = AiSystem.WeighsGoal(world, slot, TaskType.AquireFoodAtHomebase);
         Keep(_food, slot, food ? owner.FoodPick(world, slot, cold, at, foodTown) : null, id);
 
         bool loot = AiSystem.WeighsGoal(world, slot, TaskType.LootFoodAndStuff);

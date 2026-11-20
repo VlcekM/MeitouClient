@@ -688,7 +688,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// interrupt it, the combat goals and Self preservation; on any other (and in a fight it did not start: a dialogue's, an assault's, a duty's),
     /// Self preservation alone, whose fight or run (<see cref="SelfPreservation.Runs"/>) ends the duty's task as any fight's start does (in a fight,
     /// only its run changes anything). The duties a fight may interrupt: treating (<see cref="FirstAid.FirstAidSystem"/> lets go of the patient at
-    /// the fight's start), the walk of a town errand no goal holds (a ditch, a player-side food run: <see cref="Kidnap.TownDutySystem"/> waits for
+    /// the fight's start), the walk of the town errand no goal holds (a ditch: <see cref="Kidnap.TownDutySystem"/> waits for
     /// the fight to end and walks on), a captive job's walk carrying nothing and its meal
     /// (<see cref="InterruptibleDuty"/>), a code mod's goal below the urgent tier (<see cref="InterruptibleModGoal"/>), and the routine of an
     /// <see cref="AiMind.Engine"/> mind (<see cref="EngineRoutine"/>).

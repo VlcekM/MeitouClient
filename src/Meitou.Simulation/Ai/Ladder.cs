@@ -81,10 +81,11 @@ internal static class Ladder
 {
     /// <summary>
     /// The goal types of the own lists of a player-faction mind (<see cref="AiMind.Player"/>) that are on the ladder's rungs: their goals are
-    /// weighed by the tiers. Every other type of those lists is still decided by its source (an adapter, <see cref="DecisionSystem"/>) and weighed 0
-    /// by the tiers, so nothing is chosen twice. A fan-out step that moves a goal onto its rung adds its type here and deletes the adapter.
+    /// weighed by the tiers and acted out as an NPC's. Every other type of those lists is still decided by its source (an adapter,
+    /// <see cref="DecisionSystem"/>) and weighed 0 by the tiers, so nothing is chosen twice. A fan-out step that moves a goal onto its rung adds its
+    /// type here and deletes the adapter. Never written at run time.
     /// </summary>
-    internal static readonly HashSet<TaskType> OnRungs = [];
+    internal static readonly HashSet<TaskType> OnRungs = [TaskType.AquireFoodAtHomebase];
 
     /// <summary>
     /// The first key of the priority-1 sources of <see cref="DecisionStep.Fallback"/> (keys 1000 + type are priority-2 goals, 2000 + type
