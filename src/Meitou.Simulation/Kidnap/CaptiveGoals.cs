@@ -295,17 +295,21 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
         {
             TaskType.PlayBecauseIHaveALimbInMouth => CaptiveSystem.PlayDesire(world, cold),
             TaskType.ChaseAllyDogsWithMouthLimbs => PickOf(ask) is null ? 0 : CaptiveSystem.ChaseDesire(world, cold),
-            TaskType.NewSlaveProcessing or TaskType.SlaveWatching or TaskType.CaptureNewSlaves => PickOf(ask) is null ? 0 : WatchDesire(cold),
+            TaskType.NewSlaveProcessing or TaskType.SlaveWatching or TaskType.CaptureNewSlaves => PickOf(ask) is null ? 0 : WatchDesire(ask, cold),
             TaskType.CarryWoundedSlaves => PickOf(ask) is null ? 0 : RescueDesire(cold),
             _ => PickOf(ask)?.Desire ?? 0,
         };
     }
 
     /// <summary>
-    /// AI slot 61 (<c>FUN_140597b20</c>, <b>Verified</b>) of 167, 183 and 260 as the chooser asks it (no target kept): 1 while the character carries
-    /// nothing and its posture is 0, else 0.
+    /// AI slot 61 (<c>FUN_140597b20</c>, <b>Verified</b>) of 167, 183 and 260: with a target kept (the goal holds the asker on its job) slot 59's, 0
+    /// while carrying; with none, 1 while the character carries nothing and its posture is 0, else 0.
     /// </summary>
-    static float WatchDesire(CharacterCold cold) => cold.Carrying.IsNone && CharacterFacts.PostureZero(cold) ? 1 : 0;
+    float WatchDesire(in DutyAsk ask, CharacterCold cold)
+    {
+        if (!cold.Carrying.IsNone) return 0;
+        return captives.JobOf(ask.Id, ask.Type) is not null || CharacterFacts.PostureZero(cold) ? 1 : 0;
+    }
 
     /// <summary>
     /// 168's desire, the rescue one (<c>FUN_140599480</c>, <b>Verified</b>): 0 on the raw Hold bit (also while sneaking) or while carrying, else 1.
@@ -460,13 +464,16 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
     #region States
 
     /// <summary>
-    /// The states of the goals' rows (parallel: <c>Previous</c> places, cold state and fixtures only serial steps write): a finder's target first
-    /// (<see cref="PlanTarget.Found"/>: a character, a cage, a farm or a limb), else the asker's own; null for the rest.
+    /// The states of the goals' rows (parallel: <c>Previous</c> places, cold state and fixtures only serial steps write): the asker's own whatever
+    /// the target (149 for 277's limb, 79 for 172's cage, 155 for 194 / 218's receiver), then a finder's target's (<see cref="PlanTarget.Found"/>: a
+    /// character, a cage, a farm or a limb); null for the rest.
     /// </summary>
     bool? State(World world, in DutyAsk ask, StateType state)
     {
+        if (OwnState(world, ask, state) is { } own) return own;
+
         var target = ask.Target;
-        if (target.Kind != PlanTarget.Found) return OwnState(world, ask, state);
+        if (target.Kind != PlanTarget.Found) return null;
         if (target.Character is { } who) return CharacterState(world, ask, who, state);
         if (target.Fixture is { } id) return CageState(world, ask, id, state);
 
@@ -475,7 +482,8 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
 
     /// <summary>
     /// The asker's own states the rows list: 149 gotAFoodItem (<c>FUN_140597e20</c>: a mouthful, or food among its items or in its worn bag), 79
-    /// I_AM_IMPRISONED (held in a cage), 155 iHaveSomeSlaves (<c>FUN_14059a0e0</c>: the platoon's slave list is not empty, as the look counted it),
+    /// I_AM_IMPRISONED (held in a cage), 155 iHaveSomeSlaves (<c>FUN_14059a0e0</c>: the platoon's slave list is not empty; asked only by 194 / 218, whose look's desire is 0.25 x
+    /// that list),
     /// 144 "am hungry" always true and 135, 146 always false (<b>Verified</b>, docs/game/ai-tasks.md).
     /// </summary>
     bool? OwnState(World world, in DutyAsk ask, StateType state)
@@ -505,7 +513,7 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
     /// (<c>FUN_1405a1940</c>), 109 / 110 false until the job ends, 115 carried by the asker and needing no first aid (<c>FUN_14059ab30</c>), 116 its
     /// slave (<see cref="MySlave"/>), 118 unarmed, 120 looks like a slave to the asker (<c>FUN_1405a6f60</c>), 124 slave state other than 1
     /// (<c>FUN_1405a2080</c>), 125 conscious, 134 chained (<c>FUN_1405a1db0</c>, the chained flag <c>setChainedMode</c> sets: Meitou reads its locked
-    /// shackles), 135 false, 142 dead, down or held in something (<c>FUN_1405a17a0</c>).
+    /// shackles), 142 dead, down or held in something (<c>FUN_1405a17a0</c>).
     /// </summary>
     bool? CharacterState(World world, in DutyAsk ask, CharacterId who, StateType state)
     {
@@ -518,7 +526,7 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
             StateType.IsTargetDown => CharacterFacts.TargetDown(c),
             StateType.NeedsFirstAid => c is not null && FirstAid.FirstAidSystem.NeedsFirstAid(world, c),
             StateType.IsNearTo => c is not null && Vector3.Distance(table.Previous[ask.Slot].Position, table.Previous[who.Slot].Position) <= 10,
-            StateType.MachineHasFreeOperatorSlot or StateType.TargetIsEaten or StateType.IsDialogDelivered or StateType.IsDialogDelivered110 => false,
+            StateType.MachineHasFreeOperatorSlot or StateType.IsDialogDelivered or StateType.IsDialogDelivered110 => false,
             StateType.TargetIsImprisoned => c is { InSomething: HeldState.Imprisoned },
             StateType.MachineOccupantIsAlive => c is { Medical: not { Dead: true } },
             StateType.IsCarryingTargetHealthy => c is not null && me.Carrying == who && !FirstAid.FirstAidSystem.NeedsFirstAid(world, c),
@@ -561,7 +569,7 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
 
     /// <summary>
     /// The states of a cage target (237's shrine, 172's own cage): 1 / 46 within the worship reach (236) or the cage's use range +
-    /// <see cref="CaptiveSettings.Reach"/> (107), 73 the cage free, 146 false.
+    /// <see cref="CaptiveSettings.Reach"/> (107), 73 the cage free.
     /// </summary>
     bool? CageState(World world, in DutyAsk ask, string id, StateType state)
     {
@@ -572,7 +580,6 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
         {
             StateType.IsAtLocation or StateType.IsAtLocation46 => Near(world.Characters.Previous[ask.Slot].Position, cage.Position, reach),
             StateType.MachineHasFreeOperatorSlot => FixtureRegistry.IsFree(world.Characters, cage),
-            StateType.TargetWorshiped => false,
             _ => null,
         };
     }

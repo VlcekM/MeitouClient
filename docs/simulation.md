@@ -1490,7 +1490,7 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   target (the job's while the goal holds the member: the original keeps the running goal's finder hand); the think reads only those picks and its own state; hashed
   while any. Desires (**Verified**): 135 and 282 1 once the kill timer is due (read first, creating it); 173 and 245 1 while the platoon has at most 3 slaves
   neither down nor held in anything (slot 63, `FUN_14059b940`); 217 in an export town; 188, 192 and 194 0.25 x the platoon's slave list; 218 that only in a
-  prison or slave camp the leader stands in (slot 66, `FUN_140597c70`); 167, 183 and 260 1 while carrying nothing at posture 0 (slot 61); 168 the rescue desire;
+  prison or slave camp the leader stands in (slot 66, `FUN_140597c70`); 167, 183 and 260 1 while carrying nothing at posture 0, once on the job while carrying nothing (slot 61, then 59); 168 the rescue desire;
   278 and 279 their own; the rest 1. Of the rows on the way, 3 is 0 while down and 170 while carrying. The finder's factor is 1 with a target.
 - **Plans** are the planner's. The rows the job carries out are registered: 134; 220; 231; 236; 3; 40; 182, 166 and 181; 170 and 25; 174; 159; 53; 107; 110. Their
   states are asked of `CaptiveGoals` for the target (character, cage, farm, limb; evaluators in [ai-tasks](game/ai-tasks.md#prisoner-fate-and-slave-rows)), the
@@ -1522,7 +1522,7 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   (`FUN_1408db680` -> `FUN_1408db510`, **Observed**, 1.0.68 decompile); 217 still excludes player occupants (engine choice).
   **Observed** (KenshiOracle hold, Rebirth, 2026-11-09): the original's gathered slaves keep their squads all hour (Pao 40, Mu 44).
   **Observed** (probe): the Slave Farm's workmasters take the caged slaves out by day; at night their slaves' 172 puts them back.
-- **Deliver** (192, the squad leader under a shipping package): walks to `Blackboard.MissionTown` (row 53), done within its radius (at least 100). **Sell** (194,
+- **Deliver** (192, the squad leader under a shipping package): walks to `Blackboard.MissionTown` (row 53), done once inside it as state 36 reads it. **Sell** (194,
   or 218 in a prison or slave camp): the finder (`FUN_1408ca950`, **Verified**) takes the nearest (to the leader) NPC of the faction of the town the leader stands in,
   or an ally, within the town's radius, and keeps it; none, the goal is unwanted. The leader walks within 40 of it and says event 39 (row 159). Each of its slaves then
   leaves for a "Wandering Squad" of its own, owned by the town's faction, caged in the nearest free cage of that faction or an ally (engine: the original's handover is a

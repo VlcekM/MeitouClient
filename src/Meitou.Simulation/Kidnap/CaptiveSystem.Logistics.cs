@@ -252,8 +252,8 @@ public sealed partial class CaptiveSystem
 
     /// <summary>
     /// 192's act-out (its plan's 53 Travelling, the only provider of state 36): the leader walks to the shipping town (re-sent whenever its walk
-    /// ended outside it, at most <see cref="CaptiveSettings.Walks"/> times plus one per 1000 units) and is done once inside it, where the goal's
-    /// plan is its own row alone and 194 / 218 hand the slaves over.
+    /// ended outside it, at most <see cref="CaptiveSettings.Walks"/> times plus one per 1000 units) and is done once inside it as state 36 reads it
+    /// (<see cref="AiSystem.TownAt"/>), where the goal's plan is its own row alone and 194 / 218 hand the slaves over.
     /// </summary>
     bool StepDeliver(World world, CaptiveJob j, int w)
     {
@@ -261,9 +261,9 @@ public sealed partial class CaptiveSystem
         var site = data.Sites[j.Site];
         var centre = new Vector2(site.Position.X, site.Position.Z);
         ref var n = ref table.Next[w];
-        float r = MathF.Max(site.Town.Radius, 100);
+        if (AiSystem.TownAt(data, world, n.Position) == CampaignTown.OfSite(j.Site)) return End(world, j, null);
+
         float d = Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), centre);
-        if (d <= r) return End(world, j, null);
         if (WalksOwn(table, w, j)) return true;
         if (++j.Walks > Settings.Walks + 1 + (int)(d / 1000)) return End(world, j, CaptiveEventKind.GaveUp);
 
