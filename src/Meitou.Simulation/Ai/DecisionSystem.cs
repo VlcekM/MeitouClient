@@ -216,10 +216,10 @@ public sealed class DecisionSystem
         cold.SquadId >= 0 && cold.CarriedBy.IsNone && cold.Medical is not { Incapacitated: true };
 
     /// <summary>
-    /// Whether an NPC's order holds it now (<see cref="CharacterCold.OrderWins"/>, its queue not emptied since): its AI, the engine's reactions and
-    /// the duties' sweeps leave it alone. Any phase: it reads only the character's own state.
+    /// Whether an NPC's order holds it now (<see cref="CharacterCold.OrderWins"/>, its queue not emptied since, and the step does not decide it):
+    /// its AI, the engine's reactions and the duties' sweeps leave it alone. Any phase: it reads only the character's own state.
     /// </summary>
-    public static bool Ordered(CharacterCold cold) => cold.OrderWins && cold.OrderQueue.Count > 0;
+    public static bool Ordered(CharacterCold cold) => cold.OrderWins && !Decides(cold) && cold.OrderQueue.Count > 0;
 
     /// <summary>
     /// Registers (or replaces) the contributor of the jobs of <paramref name="type"/> (an open list: a job type without one is kept in the list but
@@ -348,6 +348,7 @@ public sealed class DecisionSystem
         {
             // a far character decides at its step (the far cadence)
             if (!table.Next[i].Alive || !world.Steps(i) || table.Cold(i) is not { } cold) continue;
+            if (Decides(cold) && cold.OrderWins) Hold(world, i);   // made a player character while its order held it
             if (Decides(cold)) RunPlayer(world, i, cold, paused);
             else if (cold.OrderQueue.Count > 0 || cold.OrderWins) RunOrders(world, i, cold, paused);
         }
@@ -404,12 +405,19 @@ public sealed class DecisionSystem
     /// <summary>
     /// Sets an NPC's <see cref="CharacterCold.OrderWins"/> from its queue (serial phases): its front runs (<see cref="PlayerOrders.Wins"/>; a front
     /// that could start has started by now) while the chooser runs for it. When it turns on, the AI's plan, goal and commitment go (the order's
-    /// plan replaces them); when it turns off, the AI chooses again at once. Nothing for a character the step decides.
+    /// plan replaces them); when it turns off, the AI chooses again at once. An NPC with no order left keeps no replan bit (only its queue reads
+    /// it). A character the step decides holds no such flag.
     /// </summary>
     internal static void Hold(World world, int slot)
     {
         var cold = world.Characters.Cold(slot)!;
-        if (Decides(cold)) return;
+        if (Decides(cold))
+        {
+            cold.OrderWins = false;
+            return;
+        }
+
+        if (cold.OrderQueue.Count == 0) cold.Replan = false;
         bool wins = TakesOrders(cold) && cold.OrderQueue.Front is { Started: true } && PlayerOrders.Wins(world, slot);
         if (wins == cold.OrderWins) return;
 

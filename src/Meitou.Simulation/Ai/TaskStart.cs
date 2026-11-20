@@ -425,8 +425,7 @@ public static class TaskStart
         var current = (CharacterTask)table.Next[slot].Task;
         var handler = world.Tasks.Of(request.Task, request.Row, request.Site);
         bool step = cold.Running is { } kept && Step(cold, kept, current, request);
-        if (!step && request.Source is TaskSource.Goal or TaskSource.Reaction && DecisionSystem.Ordered(cold))
-            return StartResult.Ordered;
+        if (!step && Yields(cold, request.Source)) return StartResult.Ordered;
 
         PlayerOrders.Replacing(world, slot, request, step);
         if (request.Task != CharacterTask.Attack) world.Tasks.Of(CharacterTask.Attack)?.End(world, slot, CharacterTask.Attack, TaskEnd.Replaced);
@@ -455,11 +454,13 @@ public static class TaskStart
 
     /// <summary>
     /// Starts an engine walk to <paramref name="goal"/> at <paramref name="mode"/> as row <paramref name="row"/> (<see cref="Start"/> of a
-    /// <see cref="CharacterTask.GoTo"/> with <see cref="TaskRequest.Goal"/>).
+    /// <see cref="CharacterTask.GoTo"/> with <see cref="TaskRequest.Goal"/>). A goal's or reaction's walk that yields to an order is refused before
+    /// the destination is tested (<see cref="Yields"/>).
     /// </summary>
     public static StartResult Walk(World world, int slot, System.Numerics.Vector2 goal, byte mode, TaskType row, TaskSource source)
     {
         var point = new System.Numerics.Vector3(goal.X, float.NaN, goal.Y);
+        if (Yields(world.Characters.Cold(slot)!, source)) return StartResult.Ordered;   // before a refusal would stand the order's walk
         if (DestinationAccess.WalkRefused(world, slot, row, point)) return Refuse(world, slot);
 
         return Start(world, slot, new TaskRequest(CharacterTask.GoTo, row, source) { Goal = goal, Mode = mode });
@@ -471,10 +472,17 @@ public static class TaskStart
     /// </summary>
     public static StartResult Walk(World world, int slot, System.Numerics.Vector3 at, byte mode, TaskType row, TaskSource source)
     {
+        if (Yields(world.Characters.Cold(slot)!, source)) return StartResult.Ordered;   // before a refusal would stand the order's walk
         if (DestinationAccess.WalkRefused(world, slot, row, at)) return Refuse(world, slot);
 
         return Start(world, slot, new TaskRequest(CharacterTask.GoTo, row, source) { Point = at, Mode = mode });
     }
+
+    /// <summary>
+    /// Whether a start from <paramref name="source"/> yields to the character's order (<see cref="StartResult.Ordered"/>): a goal's or a
+    /// reaction's, while an NPC's order holds it (<see cref="DecisionSystem.Ordered"/>). A step of a follow row is decided by the caller.
+    /// </summary>
+    static bool Yields(CharacterCold cold, TaskSource source) => source is TaskSource.Goal or TaskSource.Reaction && DecisionSystem.Ordered(cold);
 
     /// <summary>
     /// An engine walk refused by its destination's doors (docs/game/locks.md "Locked doors on the way"): it counts as a walk that ended short, as one

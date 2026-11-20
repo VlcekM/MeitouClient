@@ -457,8 +457,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             if (!table.Next[s].Alive || !world.Turn(s, every) || table.Cold(s) is not { IsPlayer: false } c || c.Faction != faction)
                 continue;
 
+            // An order beats the goal: one its order holds (an order in place runs on Idle) starts no run.
             var task = (CharacterTask)table.Next[s].Task;
-            if (task != CharacterTask.Idle) continue;
+            if (task != CharacterTask.Idle || DecisionSystem.Ordered(c)) continue;
             if (FoodWant(world, s, c, out var store, out _) > 0) StartFood(world, s, c, store);
         }
     }

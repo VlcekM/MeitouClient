@@ -120,6 +120,9 @@ public sealed partial class CarrySystem
         if (asleep)
         {
             if (victim.InSomething == Locks.HeldState.Bed) world.Fixtures.LeaveBed(world, victimId);
+
+            // Order 116 clears any victim's queue (FUN_1405d20d0, no faction test): an NPC's first, so its order holds it no more.
+            if (!decides) victim.OrderQueue.Clear();
             TaskStart.Become(world, b, CharacterTask.Idle, Meitou.Data.Gameplay.Ai.TaskType.Idle, TaskSource.Reaction);
             if (decides)
             {

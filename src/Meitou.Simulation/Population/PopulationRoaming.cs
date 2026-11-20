@@ -816,8 +816,8 @@ public sealed partial class PopulationSystem
         var table = world.Characters;
         Arrive(world, p);
 
-        // At the town the squad mills about in it.
-        if (table.TryResolveNext(squad.Leader, out int slot))
+        // At the town the squad mills about in it (a leader its order holds keeps to the order).
+        if (table.TryResolveNext(squad.Leader, out int slot) && !DecisionSystem.Ordered(table.Cold(slot)!))
         {
             TaskStart.Become(world, slot, CharacterTask.Wander, Meitou.Data.Gameplay.Ai.TaskType.Wanderer, TaskSource.Goal);
             table.Next[slot].Mode = SpeedMode.Walk;

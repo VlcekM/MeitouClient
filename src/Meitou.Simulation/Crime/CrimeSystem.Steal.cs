@@ -401,7 +401,7 @@ public sealed partial class CrimeSystem
             else
             {
                 if (watcher.InSomething == Locks.HeldState.Bed) world.Fixtures.LeaveBed(world, watcherId);
-                else if (table.Next[w].Task == (byte)CharacterTask.Rest)
+                else if (table.Next[w].Task == (byte)CharacterTask.Rest && !Ai.DecisionSystem.Ordered(watcher))   // an order's rest goes on
                     TaskStart.Become(world, w, CharacterTask.Idle, Data.Gameplay.Ai.TaskType.Idle, TaskSource.Npc);
                 // One staying low or playing dead stands (posture 0, docs/game/ragdolls.md "Staying low").
                 if (watcher.Medical is { } low) low.StandUp();

@@ -485,6 +485,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// The carry orders' checks: the target must still fit the verb (else the order leaves the queue); the character must be able to lift
     /// (<see cref="CanCarry"/>, ordered: a fight ends with the order's task), loot (awake, an inventory, not carried), knock out
     /// (<see cref="CanKnockOut"/>) or put down (awake); the Rescue button needs a rescuer (not fleeing, able to lift, not on Hold) and a free bed.
+    /// The Rescue button and opening an inventory are a player character's only (else the order leaves the queue).
     /// </summary>
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
@@ -514,7 +515,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                 if (!LiftOf(world, order, slot, target)) return OrderCheck.Gone;
                 return CanCarry(world, cold, order.Row, ordered: true) && cold.Carrying != order.Target ? OrderCheck.Run : OrderCheck.Blocked();
             case TaskType.LootTarget:
-                if (order.Detail == OpenInventory ? !Openable(table, target) : !CanBeLooted(tc)) return OrderCheck.Gone;
+                // Opening an inventory opens the player's loot window (OpenWindow): a player character's order only.
+                if (order.Detail == OpenInventory ? !cold.IsPlayer || !Openable(table, target) : !CanBeLooted(tc)) return OrderCheck.Gone;
                 return cold is { Medical.Incapacitated: false, Inventory: not null } && cold.CarriedBy.IsNone ? OrderCheck.Run : OrderCheck.Blocked();
             case TaskType.StealthKnockout:
                 if (!CanBeKnockedOut(tc)) return OrderCheck.Gone;

@@ -192,7 +192,9 @@ A fight is row 5 when the player picked the target, 13 for a defence, else 16 (1
 
 ### Task starts
 
-`TaskStart.Start(world, slot, TaskRequest)` (serial phases) is the one start path. In order: the row must be `Eligible`; a fight ends (the original's new task drops the fight task,
+`TaskStart.Start(world, slot, TaskRequest)` (serial phases) is the one start path. In order: the row must be `Eligible`; a goal's or reaction's start (`TaskSource.Goal`,
+`Reaction`) that is no step of a follow row is refused while an NPC's order holds the character (`StartResult.Ordered`, `DecisionSystem.Ordered`, [order queue](#order-queue);
+`TaskStart.Walk` refuses it before its destination test, so the order's walk is not stood); a fight ends (the original's new task drops the fight task,
 [combat](game/combat.md#fight-lifecycle-and-orders)); the task before ends through its handler (`TaskEnd.Replaced`: it lets go of its target, while the movement, the task and
 the task it goes back to are the new start's); the provenance is recorded in `CharacterCold.Running` (`RunningTask`: act-out, row, `TaskSource`, job index or implicit flag,
 target, site, tick, resume task); the act-out starts.
@@ -220,7 +222,8 @@ delivering, fetching and dismantling are steps of one act-out (`TaskStart.ActOut
   Sources: a package goal's act-out (town duties, captive jobs, kidnap, smell, food, population) `Goal`; an engine rule or dialogue act (arrest, flight, dialogue, trade) `Npc`.
 - Not serial: the AI's think (parallel, its own slot) starts its goals' walks and standing tasks with `TaskStart.StartOwn`: the provenance (row: the goal's, source `Goal`) and the
   walk or stand are written on the slot only; no fight or task before it is ended and no handler runs (the AI acts out nothing for a fighting character, and its tasks hold nothing). Its repertoire
-  is not tested (the AI's planner chose the row). Same timing as before at any thread count.
+  is not tested (the AI's planner chose the row). It does nothing while the character's order holds it. Same timing as before at any thread count.
+- Engine starts of `TaskSource.Npc` are not refused: those that are no order in the original test `DecisionSystem.Ordered` themselves ([order queue](#order-queue)).
 - An act-out's own system moves its character on with `TaskStart.Step` (another task of the act-out, or back to a standing task), `TaskStart.StepTo` (its next walk) and
   `TaskStart.Stand` (stop, idle): any phase, its own slot, provenance kept (it then no longer runs the task). These are the walks' arrivals and give-ups, a failed or blocked path, a
   follow whose target or leader is gone, a builder's steps, a bed reached, a fight's end (`CombatSystem.EndFight`: idle, a follow row's provenance kept for `FollowResume`), an NPC's
@@ -292,20 +295,25 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
 - **Any character** holds orders on the same path. An NPC's queue is asked by the [decision step](#decision-step) as source 1 alone while its chooser runs
   (`DecisionSystem.TakesOrders`: it has a squad, is not carried and is neither out cold nor dead; in a bed or a cage it runs; its mind plays no part), as the original's AI update
   runs the task system only with a platoon (`FUN_1405112b0`) and not while carried or down (`FUN_1405d00b0`); `Give` starts its front at once only then, else it waits queued.
-  While the front runs (`PlayerOrders.Wins`) `CharacterCold.OrderWins` is set (by the decision step and `Give`, serial; hashed while set, not saved; never for a character the
+  While the front runs (`PlayerOrders.Wins`) `CharacterCold.OrderWins` is set (by the decision step and `Give`, serial; hashed while set, not saved; cleared for a character the
   step decides), and `DecisionSystem.Ordered` (the flag while the queue holds an order) keeps everything else off the character, as the original's order step comes before every
-  goal, 32 and committed goals included ([precedence](game/ai-tasks.md#precedence)): the AI (`AiSystem.Holds`, `Preempts`, `TaskStart.StartOwn`); a goal's or reaction's
-  `TaskStart.Start` that is no step of the order (`StartResult.Ordered`: the AI's, retaliation's and the victims' deferred fights); retaliation's own defence (it answers as a player
-  character does); the flight step, which also ends a running flight; the stand-down after a fight; the duty sweeps' free tests (town duties, captive jobs and race goals, kidnap,
-  arrests and bounty hunters, the shut-in release, rejoining the leader); and the population's leader walk and campaign march. An engine act's start (`TaskSource.Npc`: dialogue,
-  arrest) still replaces it. A blocked front waits, the AI going on with its goals meanwhile, and is tried again on the re-ask (every `ProductionSystem.JobCheckTicks`). Once the
-  front no longer runs the mind chooses again at once; when it starts the mind's plan, goal and commitment go. An NPC's queue is not saved.
+  goal, 32 and committed goals included ([precedence](game/ai-tasks.md#precedence)): the AI (`AiSystem.Holds`, `Preempts`, `TaskStart.StartOwn`); a goal's or reaction's start
+  ([task starts](#task-starts): the AI's, retaliation's, the duties' and the victims' deferred fights and walks); retaliation's own defence (it answers as a player character
+  does); the flight step, which also ends a running flight; the stand-down after a fight; the free tests of the duty sweeps and routines (town duties and the player faction's
+  food runs, captive jobs and race goals, 259, kidnap, arrests and bounty hunters, the shut-in release, NPC healing, arming and scavenging, rejoining the leader); the
+  population's leader walk, arrival and campaign march; and two engine reactions that are no order (`TaskSource.Npc`): a crime victim's attack on its culprit and a caught thief's
+  watcher getting up from rest. The engine acts the original gives as orders (dialogue acts, an arrest) still replace the front; a failed kidnap of a sleeper clears any victim's
+  queue (order 116). A blocked front waits, the AI going on with its goals meanwhile, and is tried again on the re-ask (every `ProductionSystem.JobCheckTicks`). Once the
+  front no longer runs the mind chooses again at once; when it starts the mind's plan, goal and commitment go. An NPC's queue is not saved, and an NPC keeps a replan bit only
+  while it holds an order.
 - The failure text is said only for a character of the player's faction that is not an animal (`PlayerOrders.Show`; the order step's vfunc `0x2d8` call in `FUN_140510920`,
   [precedence](game/ai-tasks.md#precedence)); anyone else's blocked order waits silently.
-- Owners that take a player character's order only (an NPC's leaves the queue, `Gone`), their act-outs being the player's: build, repair and dismantle (the player faction's sites
-  and stores), the machine orders and prospecting (87, 97, 124, 146, 150: the player's workers' machines), a container's (26, 76: the player's container window) and a door walk
-  (72, 73, 76 on a door: the interface's one door target, `PlayerState.DoorTarget`), and the Medic, Robotics and Rescue buttons. A ground pick-up (3), the rest of the lock work and
-  put in cage (108) take any character.
+- Owners that take a player character's order only (an NPC's leaves the queue, `Gone`), their act-outs being the player's: build, repair and dismantle (sites and doors of the
+  player's faction only, materials from its stores, the "construction complete" message), the machine orders and prospecting (87, 97, 124, 146, 150: the player faction's
+  machines and research, posted results), a container's (26, 76: the player's container window), opening an inventory (26 with the inventory detail: the player's loot window)
+  and a door walk (72, 73, 76 on a door: the interface's one door target, `PlayerState.DoorTarget`), and the Medic, Robotics and Rescue buttons. Moves, follows, attacks,
+  first aid, splint and rest, lifts, kidnap, loot, stealth KO, put down, beds, a ground pick-up (3), the rest of the lock work and put in cage (108) take any character; their
+  act-outs post and say the worker's own messages for the player's side only.
 - Saved for player characters (`Saving/OrderSave`, in the character's GAMESTATE_AI record next to the perma-jobs; format and evidence: [save](formats/save.md#order-queue)): the queue front first,
   started or not, as the original saves its deque as `tjob<i>`. A load reads the orders into `CharacterCold.SavedOrders` and starts nothing; `DecisionSystem.Run` makes them the queue (nothing
   started) the first time it meets the character, once every character and fixture they name is there, and the replan bit every load sets runs the front through source 1 like a new order.
