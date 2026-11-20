@@ -1112,7 +1112,7 @@ public sealed partial class PopulationSystem
             // A save's wild platoon wanders round its nest, or (homeless) round where it stands.
             var (centre, homeRadius, nest) = WildHome(wild, p.Position);
             squad = b.Saved is { } wildMembers ? Saving.SavedCharacters.Spawn(world, p, wild, wildMembers, _data, _assembly, centre, homeRadius) : null;
-            BindNest(squad, nest);
+            BindNest(squad, nest, wild.WildSite);
         }
         else
         {
@@ -1207,9 +1207,12 @@ public sealed partial class PopulationSystem
     /// Binds a save's nest squad to its nest (<see cref="NestOf"/>), as the nest's own squads are: its town hand is the nest, so
     /// it patrols round it (<c>FUN_1409f9100</c> takes a nest's type 85 hand as a town, #771) and its territory is the nest's.
     /// </summary>
-    void BindNest(Squad? squad, TownData? nest)
+    void BindNest(Squad? squad, TownData? nest, int site)
     {
-        if (squad is not null && nest is not null) _nestSquads[squad.Id] = nest;
+        if (squad is null || nest is null) return;
+
+        _nestSquads[squad.Id] = nest;
+        _nestSites[squad.Id] = site;
     }
 
     #endregion

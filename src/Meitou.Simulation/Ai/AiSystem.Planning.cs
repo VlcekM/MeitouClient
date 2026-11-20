@@ -607,11 +607,9 @@ public sealed partial class AiSystem
                 || Vector2.DistanceSquared(Flat(Me.Position), Flat(home.Position)) <= HomeRadius * HomeRadius,
             // Without a town it is never at its home town; its destination town (patrolling in town) is wherever it is.
             StateType.IsAtHomeTown => !_board.HomeTown.IsNone && _system.AtHomeTown(_world, _mind.Squad, _board, _world.Characters.IdOf(_slot)),
-            // The running package's mission town when it has one (the trader's next town), else the home town.
-            StateType.AtDestinationTown or StateType.AtDestinationTown94 => _board.Destination.IsNone
-                ? _system.AtHomeTown(_world, _mind.Squad, _board, _world.Characters.IdOf(_slot))
-                : _system.CurrentTown(_world, Me.Position) == _board.Destination,
-            StateType.HasDestinationTown => !_board.HomeTown.IsNone || !_board.Destination.IsNone,
+            // 36 and 94 (FUN_140507610): the squad's town with the home fallback against the status town; 32 (FUN_1405075d0) the town without it.
+            StateType.AtDestinationTown or StateType.AtDestinationTown94 => SquadTown.Reached(_world, _system.Data, _slot, _mind.Squad, _board),
+            StateType.HasDestinationTown => !SquadTown.Of(_world, _mind.Squad, _board, homeFallback: false).IsNone,
             StateType.AtATown => _system.TownAt(Me.Position) >= 0,
             // Any alarm of its town in reach (goal 210's own-faction filter is its desire's).
             StateType.AlarmsInTheVicinity => _system.AlarmOf(_world, _slot, TaskType.InvestigateAlarms, _board) is not null,

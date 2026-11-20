@@ -146,7 +146,7 @@ public sealed partial class PopulationSystem
             : (platoon.Position, _settings.HomelessHomeRadius, null);
         var squad = SpawnKept(world, stored, platoon.TemplateId, platoon.Faction, -1, platoon.Id, platoon.Position, centre, radius, platoon.Size,
             wild: platoon.Wild);
-        BindNest(squad, nest);
+        BindNest(squad, nest, platoon.Saved?.WildSite ?? -1);
         return squad;
     }
 

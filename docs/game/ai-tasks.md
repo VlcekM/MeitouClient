@@ -1463,7 +1463,17 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
 - **53 Travelling / 130 Travelling quickly** (`Task_TravelToTargetTown`, **Verified**, registry `FUN_140319a60`): desire AI slot 57, the constant 1.0 (stub
   `LAB_140046371`, shared with 215); 53 achieves state 36 and 130 state 94, both `atDestinationTown` (one evaluator, `FUN_140507610`); 36 is in list B of
   39 and 192, 94 in 36 Patrolling town's, and no other row has either in list A, so 39 and 192 plan 53 and 36 plans 130. The evaluator: true without squad data; the squad's
-  town (`FUN_140269cd0` with the home fallback) against the character's status town (`+0x88`, none: false).
+  town (below, with the home fallback) against the character's status town (`+0x88`, none: false); no town: AI slot 11 (`FUN_1405a2450`) with the row's own target, false
+  for one with neither hand nor point, which 39, 192, 36, 53 and 130 all are. State 32 `hasDestinationTown` (`FUN_1405075d0`): the squad's town without the fallback is set
+  (no row provides 32). So a squad with no override, campaign or running package has no 32, plans neither travel row and goes home by none; the fallback only lets 36 stroll
+  round the home town while it stands in it. Meitou: `SquadTown.Reached`, `SquadTown.Of`.
+- **The squad's town** (`FUN_140269cd0`, **Verified**): the override's (`+0x210`) mission town, set or not; else the campaign's target when a town (hand type 0xd) or nest
+  (0x55); else the running package's (`+0x48`) mission town, set or not; only with no running package and the caller's flag the platoon's Ownerships home town (`+0x30`).
+  What each class's start (vtable `+0x30`) leaves in the mission town: the base start `FUN_1402856c0` the home town when there is one (the base package,
+  `Contract_Timed`, `Contract_UntilExSlave`, `RetreatAndRefresh`, both prisoner gatherings, `Contract_UntilOutOfDanger`; occupation, the passing assault and the cannibal
+  retreat run it first); the trader its drawn town (`FUN_140286740`); the patrols none (`FUN_140287060` only stamps the hour); the shippings the platoon's slot-`0x98` hand
+  `+0x60` (`FUN_140287520`); the cannibal retreat, when the base start left none, the nearest town of its faction over both town lists (`FUN_140927bb0`), its nearest-nest
+  kind that always (`FUN_140289b50`); the bars their bar town (`FUN_1402916b0`). Meitou: `SquadTown` (a nest squad's home town is its nest, `PopulationSystem.NestSiteOf`).
   The task (**Verified**, start `FUN_14033ad80`, update `FUN_14033ae40`, speed functor `FUN_140342a30`): the start keeps the running package's speed mode (package slot 3:
   4 for the base class, the patrols, bars, cannibals at home, prisoner gathering, the trader, occupation, the war base and `Contract_Timed`; 2 for `RetreatAndRefresh`,
   `GoOutOnPatrol_Running`, `Contract_UntilExSlave`, `Contract_UntilOutOfDanger`, the passing assault and the war assaults; 1 for `Contract_HiredAlly`, both base defences,
@@ -1596,7 +1606,7 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   running package the Ownerships home town; resolved by `FUN_1409f9100`, which takes a hand of type 13 TOWN or 85, a nest's (**Verified** by the decompile), so a nest squad patrols round its nest (that a nest platoon's Ownerships home is its nest is inferred from its save `hometown`, **Observed**); Meitou `AiSystem.PatrolArea` via `PopulationSystem.NestOf`, #771). With a town the move is an area order on the town's position with scatter
   max(500, 0.5 x the town's radius, Town vfunc 84); with none, on the character's own position with scatter 1250 (`DAT_1416f190c`). `setPatrolInput` draws the destination within ±scatter/2 in
   X and Z (redraws: [patrol moves](factions-squads-towns.md#off-screen-world)). So a resident strolls within ±625 of a Town's centre (±250 for a Village), after its list B is met (`atDestinationTown`).
-  Meitou (`AiSystem.PatrolArea`, `PatrolPoint`): a running contract's mission town (`ContractTown`, or the retreat's `MissionTown` a campaign's phase package set, so a retreating raider patrols its home town), else the board's `Destination`, else its home `Town`, else the own position; the first of 10 draws on
+  Meitou (`AiSystem.PatrolArea`, `PatrolPoint`): the squad's town (`SquadTown.Of` with the fallback), else the own position; the first of 10 draws on
   walkable ground that passes the building test of the [patrol draws](factions-squads-towns.md#off-screen-world), a new draw each time a walk is over.
   **Observed** (headless, #370 save, The Hub): before, residents on 36 drifted to 2479 from the centre; after 3000 ticks they end 248-556 from it.
 - Building layouts' `is bar` / `is shop` are 0 on every exterior layout of the base game and mods checked (2 interior layouts set `is bar`, 9 `is shop`),
