@@ -529,7 +529,8 @@ Meitou registers them as outdoor fixtures using their level placement and bed ma
   The finders' allies test (`FUN_1408ca5d0`, **Verified** by decompile) passes a building of the finder's faction or one `canIUseThisBuilding` accepts, which
   includes the town the squad occupies ([economy](economy.md)), so a homeless occupier sleeps in the occupied town's beds. Meitou: `AiSystem.OccupiedBed`, the
   member index's (round robin) complete BF_BED of the occupied town not held outside the squad (engine choice for the order).
-- **UI**: a quick right click on a bed (function 6 or 25) gives 258 (UseableStuff slot 131 `FUN_140299230`), sent to every selected character (`FUN_1407f9e20`, **Verified**: no gate for 258); the first to arrive takes the bed, the others are refused at it; the held menu (`FUN_1407a6bc0`) offers
+- **UI**: a quick right click on a bed (function 6 or 25) gives 258 (UseableStuff slot 131 `FUN_140299230`), sent to every selected character (`FUN_1407f9e20`, **Verified**: no gate for 258); the first to arrive takes the bed, the others are refused at it (258's list B state 73, the bed's "free for X", fails for them: their plan fails and the
+  order stays queued, [precedence](ai-tasks.md#precedence)); the held menu (`FUN_1407a6bc0`) offers
   99 "Put in Bed" when the last selected player character carries someone, else 258 "Sleep" (verb names `FUN_14079b2d0`).
 - Meitou: [simulation](../simulation.md#cages-beds-and-locks).
 

@@ -133,8 +133,21 @@ public static class RowStates
             StateType.IsCrouchingOrLying => CharacterFacts.CrouchingOrLying(cold),
             StateType.IsAggressionTowards => Threatened(world, target.Character),
             StateType.IsAggressionTowardsMe => world.SystemOf<CombatSystem>() is { } combat && CharacterFacts.ImmediateThreat(combat, world, slot),
+            StateType.MachineHasFreeOperatorSlot => BedSlotFree(world, slot, target.Site),
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// 73 machineHasFreeOperatorSlot (<c>FUN_140598de0</c> → <c>UseableStuff</c> slot 158 <c>FUN_1400f7bf0</c>, <b>Verified</b>) of a bed target:
+    /// true for a character among its users, else while its users are fewer than its places (one; Meitou reads the users as the bed's occupant).
+    /// Null for a target that is no bed (a machine's or a cage's slots are their systems' own tests).
+    /// </summary>
+    static bool? BedSlotFree(World world, int slot, string? site)
+    {
+        if (site is null || world.Fixtures.Find(site) is not { Kind: FixtureKind.Bed } bed) return null;
+
+        return FixtureRegistry.IsFree(world.Characters, bed) || bed.Occupant == world.Characters.IdOf(slot);
     }
 
     /// <summary>
