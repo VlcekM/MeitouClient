@@ -266,7 +266,8 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   does the same in `CarrySystem.Link`); waking gives 65 Getting up (an animal, or waking standing) or 52 (waking staying low or crawling) with the clear flag,
   none in a bed or cage and, while carried, only once put down; a return to standing from staying low or crawling (Stand Up, a leg back up; not at a
   kneeling treatment; not in a bed or cage, engine) gives 65 with the clear flag unless one is queued. A flight
-  waits while one of these runs (engine: the original's replan after it drops an uncommitted goal) (`PlayerOrders.BodyHolds`) and goes on after it; a ditch and a player-side food run end;
+  ends when one of these starts (`PlayerOrders.BodyHolds`; **Verified**: its body task replaces `Task_Runaway`, `FUN_1405c6ec0`, and the replan after it
+  chooses again, a new run starting from a new first leg, `FUN_14034b440`); a ditch and a player-side food run end;
   an [engine goal](#engine-goals) ends when one starts (`AiSystem.ReplanDuty`, as the original's replan; no duty goal commits). A stagger outside a fight (`CombatSystem.Stagger`, not getting up, not at a turret;
   a squadless NPC too, whose ended front leaves the queue without a chooser, `PlayerOrders.DropEnded`, **Verified** slot 27 `FUN_1405c7c30` → `FUN_14050d920`) pushes 147 Stumbling to the front (`PlayerOrders.GiveFront`): the running front waits behind it unstarted and is started again from its
   start afterwards; 147 starts with no repertoire or list test (`OrderEntry.Forced`, `TaskRequest.Forced`); a blow during a running stumble adds another front

@@ -395,8 +395,8 @@ public static class PlayerOrders
     }
 
     /// <summary>
-    /// Whether an order on the character's body (<see cref="OrderEntry.Interrupts"/>: a stumble, a get-up) is its started front now: a duty holding
-    /// the character waits for it rather than counting its own walk as given up (a pure read, any phase).
+    /// Whether an order on the character's body (<see cref="OrderEntry.Interrupts"/>: a stumble, a get-up) is its started front now: its body task
+    /// replaced the goal's, so a duty or a flight holding the character ends and the AI chooses again after it (a pure read, any phase).
     /// </summary>
     internal static bool BodyHolds(CharacterCold cold) => cold.OrderQueue.Front is { Interrupts: true, Started: true };
 
