@@ -789,10 +789,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 Rank(candidates, g, score, desire);
             }
 
-            // Index loops: a foreach over the interface would box an enumerator per list and pass.
+            // In the original's order, which settles ties (Rank): the role lists, then the character's own list, where setupAI puts Self
+            // preservation before the faction's and race's goals (FUN_140510d60, FUN_140621b70, Verified). Index loops: a foreach over the
+            // interface would box an enumerator per list and pass.
             for (int k = 0; k < roles.Count; k++) Consider(roles[k]);
-            for (int k = 0; k < race.Count; k++) Consider(race[k]);
             if (tier == TaskPriority.Urgent && !mind.Player) Consider(SelfPreservationGoal);   // a player character's is the decision step's
+            for (int k = 0; k < race.Count; k++) Consider(race[k]);
             for (int k = 0; k < candidates.Count; k++)
             {
                 var g = candidates[k].Goal;

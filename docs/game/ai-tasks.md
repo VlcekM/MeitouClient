@@ -1026,7 +1026,7 @@ order step runs on every AI update, and decides it then. 31 / 289 have Following
   g = min(its g, the node's g) and the node as parent; one already closed is accepted from there. A node repeated 4 times is reused, not made again.
 - **Result**: the accepted node's chain up to the root (stopping at a queued task) is the plan. Its value is the least desire on it (from 10); above 0,
   every node that acts or has an effect becomes a task (factory) in a new queue, leaf first. A failed plan clears the queue unless the root keeps it.
-- **Pick**: candidates are tried by key, highest first (a taken key is raised by 0.0001 until free, so a tie goes to the later-listed goal; **Verified**, `FUN_14050df10`); the first whose plan has a value above 0 becomes current, a candidate whose plan fails has its
+- **Pick**: candidates are tried by key, highest first (a taken key is raised by 0.0001 until free, so a tie goes to the later-listed goal; **Verified**, `FUN_14050df10`; per tier the lists are scored in the order: the two role lists, then the character's own, which setupAI fills 14, 32, then the faction's and the race's `AI Goals`, `FUN_140510d60`, `FUN_140621b70`. So `empire vault prison`'s Leader 260 wins a tie with 183, `Cannibals at home`' 135 one with 138, and in the occupy lists 177 beats 276, 276 beats 273 and 273 beats 243); the first whose plan has a value above 0 becomes current, a candidate whose plan fails has its
   target cleared and the next is tried.
 - **Source order**: [Precedence](#precedence).
 
