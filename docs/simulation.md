@@ -2333,9 +2333,12 @@ type of the original's that `TaskBehaviours` does not act out, registered by its
 its plan the act-out carries out besides the goal's own. Built: 176 (`SmellSystem`, [blood smell](#blood-smell)).
 - **Choosing**: a registered type has `AiBehaviour.Duty`. Its desire is the system's (`DutyGoals.Desire`: the desire times the finder's factor when the TaskData row has
   a finder and an effect; 0 for a player character's mind, an engine mind and a type in back-off), scored by the package record's tier and weight with the continuity
-  and no commitment (no duty goal commits). The plan is the planner's: its rows' desires and finders are asked of the system, a finder may give a character or a fixture
-  (`PlanTarget.OfCharacter`, `OfFixture`), a state the planner does not evaluate is asked of the system before the held-true default, and the registered rows pass the
-  carried-steps test; the kept plan runs by `PlanSteps` (list A, list B, the hours), whose end ends the goal.
+  and no commitment (no duty goal commits). The plan is the planner's: its rows' desires and finders are asked of the system, a finder may give a character, a
+  fixture or a place (`PlanTarget.OfCharacter`, `OfFixture`, `OfPlace`), every state of a finder's target and any state the planner does not evaluate are asked of
+  the system first (the latter before the held-true default), the registered rows pass the carried-steps test and are the act-out's in the plan step, and a goal
+  whose plan is its own row alone that neither acts nor has an effect is dropped, as the scorer drops it (`FUN_14050df10`, **Verified**; not for a row with
+  TaskData `+0x14`). The kept plan runs by `PlanSteps` (list A, list B, the hours), whose end ends the goal; a goal whose row neither acts nor has an effect (42,
+  202, 254) is not kept and is planned afresh at each think.
 - **Start**: the think stands on the goal's row and asks (`AiMind.DutyAsk`); the serial step (`SendRequests`, after the captive jobs) calls `IDutyGoal.Start` in slot
   order for each asker the AI still holds, with the plan; a start makes the goal hold the character (`AiMind.Duty`, the record, and `DutyTick`, the start tick of the
   task it left running; hashed), a refusal backs the type off for four think periods.

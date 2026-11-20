@@ -269,10 +269,19 @@ public sealed partial class AiSystem
             }
             if (TaskPlanner.Local.Plan(row, desire, target, this, _mind.Plan, _scratch) <= 0) return false;
             if (_scratch[0].Type != type && !Carried(_scratch[0].Type) && _duty?.Acts(_scratch[0].Type) != true) return false;
+            if (_duty is not null && GivesNothing(row)) return false;
             _mind.Plan.Clear();
             _mind.Plan.AddRange(_scratch);
             return true;
         }
+
+        /// <summary>
+        /// The scorer's drop of a goal that can run but neither acts nor has an effect, unless its row keeps such a job (TaskData <c>+0x14</c>;
+        /// <c>FUN_14050df10</c>, <b>Verified</b>), asked of an engine goal (<see cref="DutyGoals"/>) whose plan is its own row alone: its act-out would
+        /// have nothing to do (42 armed, 254 with its victim caged).
+        /// </summary>
+        bool GivesNothing(TaskDataRow row) => _scratch.Count == 1 && _scratch[0].Type == row.Type && !row.Is(TaskDataFlags.KeepsJob)
+            && !row.Is(TaskDataFlags.Acts) && row.Effect is null;
 
         /// <summary>
         /// Whether goal <paramref name="type"/> is its own plan, acted out by an engine system (the assault, the combat goals, Medic, the leader
@@ -484,6 +493,10 @@ public sealed partial class AiSystem
         {
             var cold = _world.Characters.Cold(_slot)!;
             if (target.Kind == Targets.Door) return DoorHolds(condition, cold);
+
+            // A finder's target of an engine goal (PlanTarget.Found): its system answers the target's states first, from the live character, fixture
+            // or item (the original reads the target object; the plan holds only where the finder saw it).
+            if (target.Kind == PlanTarget.Found && DutyState(condition.State, target) is { } own) return own == condition.Holds;
 
             bool value = condition.State switch
             {

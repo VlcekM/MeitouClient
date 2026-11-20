@@ -70,8 +70,9 @@ internal interface IDutyGoal
     }
 
     /// <summary>
-    /// A state of the goal's plan rows that the planner does not evaluate itself, for <see cref="DutyAsk.Target"/>; null: not known here (the
-    /// planner's own answer stands). Asked before the planner's held-true and false defaults, so a goal's states need no edit of the shared planner.
+    /// A state of the goal's plan rows for <see cref="DutyAsk.Target"/>; null: not known here (the planner's own answer stands). Asked first for a
+    /// target of the goal's finder (<see cref="PlanTarget.Found"/>: at it, its state, read live), else before the planner's held-true and false
+    /// defaults for a state the planner does not evaluate, so a goal's states need no edit of the shared planner.
     /// </summary>
     bool? State(World world, in DutyAsk ask, StateType state) => null;
 
