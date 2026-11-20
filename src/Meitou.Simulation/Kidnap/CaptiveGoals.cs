@@ -514,8 +514,8 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
     /// reach when caged), 7 <see cref="CharacterFacts.TargetDown"/>, 22 needsFirstAid, 28 within 10, 73 false (no building), 78 caged, 98 not dead
     /// (<c>FUN_1405a1940</c>), 109 / 110 false until the job ends, 115 carried by the asker and needing no first aid (<c>FUN_14059ab30</c>), 116 its
     /// slave (<see cref="MySlave"/>), 118 unarmed, 120 looks like a slave to the asker (<c>FUN_1405a6f60</c>), 124 slave state other than 1
-    /// (<c>FUN_1405a2080</c>), 125 conscious, 134 chained (<c>FUN_1405a1db0</c>, the chained flag <c>setChainedMode</c> sets: Meitou reads its locked
-    /// shackles), 142 dead, down or held in something (<c>FUN_1405a17a0</c>).
+    /// (<c>FUN_1405a2080</c>), 125 conscious, 134 chained (<c>FUN_1405a1db0</c>, the chained flag <c>setChainedMode</c> sets:
+    /// <see cref="LockSystem.Chained"/>, worn shackles locked or not), 142 dead, down or held in something (<c>FUN_1405a17a0</c>).
     /// </summary>
     bool? CharacterState(World world, in DutyAsk ask, CharacterId who, StateType state)
     {
@@ -537,7 +537,7 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
             StateType.TargetLooksLikeASlave => c is not null && captives.LooksLikeASlave(me, c),
             StateType.IsTargetEscapee => c is { SlaveState: not 1 },
             StateType.TargetIsConscious => c is not null && CharacterFacts.Conscious(c),
-            StateType.IsChained => LockSystem.WornShackles(c) is not null,
+            StateType.IsChained => LockSystem.Chained(c),
             StateType.IsTargetRestrainedOrKo => c is not null && (c.Medical is { Dead: true } || CharacterFacts.Down(c) || c.InSomething != HeldState.None),
             _ => null,
         };
@@ -548,7 +548,7 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
     /// faction obeying its squad).
     /// </summary>
     static bool MySlave(CharacterCold me, CharacterCold c) =>
-        LockSystem.WornShackles(c) is not null && c.SlaveState == 1 && c.SlaveOwner == me.Faction && c.SlaveMaster == me.SquadId;
+        LockSystem.Chained(c) && c.SlaveState == 1 && c.SlaveOwner == me.Faction && c.SlaveMaster == me.SquadId;
 
     /// <summary>
     /// Whether the asker is at its character target: its job is at work there, or it stands within the job's reach (the cage's use range +
