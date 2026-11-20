@@ -732,6 +732,19 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     }
 
     /// <summary>
+    /// The cages the player built in outpost <paramref name="number"/> (a player town's number): the cage fixtures of its buildings
+    /// (<see cref="Construction.TownLookup.PlayerTownOf"/>).
+    /// </summary>
+    static IEnumerable<Fixture> OutpostCages(World world, int number)
+    {
+        foreach (var f in world.Fixtures.All)
+        {
+            if (f.Kind != FixtureKind.Cage || f.Site >= 0 || world.Buildings.Find(f.Building) is not { } site) continue;
+            if (Construction.TownLookup.PlayerTownOf(world, site)?.Number == number) yield return f;
+        }
+    }
+
+    /// <summary>
     /// The live character held in a cage, or -1.
     /// </summary>
     internal static int OccupantSlot(World world, Fixture f)
@@ -975,17 +988,21 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// <summary>
     /// The cage a liberator opens (276, <c>BuildingFinder_CagesToLiberate</c> <c>FUN_1408cf140</c>, <b>Observed</b>): a cage of a faction that is
     /// neither the worker's nor allied to it, holding a live occupant that is not the worker's enemy and that no other job works; the nearest in the
-    /// town the worker stands in, else its squad's town.
+    /// town the worker stands in, a player outpost too (the finder scans the character's status town, <c>FUN_1409fc450</c> on <c>+0x88</c>,
+    /// <b>Verified</b>), else its squad's town.
     /// </summary>
     internal Fixture? LiberateTarget(World world, int slot, CharacterCold cold, Blackboard board)
     {
         var table = world.Characters;
         var at = table.Next[slot].Position;
-        int site = TownAt(data, at) is >= 0 and var here ? here : board.Town;
-        if (site < 0) return null;
+        int site = TownAt(data, at);
+        int outpost = site < 0 ? Ai.AiSystem.TownAt(data, world, at).PlayerTown : 0;
+        if (site < 0 && outpost <= 0) site = board.Town;
+        if (site < 0 && outpost <= 0) return null;
+
         Fixture? best = null;
         float bestD = float.MaxValue;
-        foreach (var f in CagesOf(world, site))
+        foreach (var f in outpost > 0 ? OutpostCages(world, outpost) : CagesOf(world, site))
         {
             if (f.Owner < 0 || f.Owner == cold.Faction || Allied(cold.Faction, f.Owner) || Taken(f.Id)) continue;
             if (OccupantSlot(world, f) is not (>= 0 and var s) || Busy(table.IdOf(s))) continue;
