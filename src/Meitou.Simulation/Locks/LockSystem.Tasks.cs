@@ -10,7 +10,8 @@ namespace Meitou.Simulation.Locks;
 /// The lock system's task starts (docs/simulation.md "Task starts"): each order (and a warden's round) starts through <see cref="TaskStart.Start"/>
 /// with its row, which the lock system handles whatever the walk that acts it out: pick lock 76, unlock / cut / break shackles 201 / 185 / 186
 /// (putting shackles on, an engine stand-in for the original's inventory drag, has no row: <see cref="TaskType.None"/>), set free 110, get in 107,
-/// open / close door 72 / 73, lock / unlock door 77 / 140, cut / break lock 285 / 286, smash 226; a round runs release 110, lock 77 or unlock 78.
+/// open / close door 72 / 73, lock / unlock door 77 / 140, cut / break lock 285 / 286, smash 226; a round (a warden goal's act-out, a gate guard's
+/// door work) runs release 110, lock 77 or unlock 78.
 /// </summary>
 public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
 {
@@ -183,7 +184,7 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
         var c = table.Cold(slot)!;
         if (request.Detail is Round round)
         {
-            StartRound(world, slot, round, world.Fixtures.Find(request.Site!)!);
+            StartRound(world, slot, round, world.Fixtures.Find(request.Site!)!, request.Source);
             return;
         }
 
@@ -234,8 +235,8 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
     }
 
     /// <summary>
-    /// Lock work another task replaces or the Stop order ends lets go of its lock, shackles, door, prisoner or cage (a warden's round ends by itself
-    /// once its worker is on another task).
+    /// Lock work another task replaces or the Stop order ends lets go of its lock, shackles, door, prisoner or cage (a gate guard's round ends by
+    /// itself once its worker is on another task, a warden goal's with its goal).
     /// </summary>
     void ITaskHandler.End(World world, int slot, CharacterTask task, TaskEnd reason)
     {

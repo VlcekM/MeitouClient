@@ -265,8 +265,8 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   going down (knocked out or dead) wipes the queue, a loaded queue not restored yet and an AI's plan and goal, the jobs kept (`PlayerOrders.Wipe`; being picked up
   does the same in `CarrySystem.Link`); waking gives 65 Getting up (an animal, or waking standing) or 52 (waking staying low or crawling) with the clear flag,
   none in a bed or cage and, while carried, only once put down; a return to standing from staying low or crawling (Stand Up, a leg back up; not at a
-  kneeling treatment; not in a bed or cage, engine) gives 65 with the clear flag unless one is queued. A town duty's errand, a kidnap, a flight, an engine arrest, a bounty hunt, a
-  captive job and a warden's round wait while one of these runs (engine: the original's replan after it drops an uncommitted goal) (`PlayerOrders.BodyHolds`) and go on after it;
+  kneeling treatment; not in a bed or cage, engine) gives 65 with the clear flag unless one is queued. A town duty's errand, a kidnap, a flight, an engine arrest, a bounty hunt and a
+  captive job wait while one of these runs (engine: the original's replan after it drops an uncommitted goal) (`PlayerOrders.BodyHolds`) and go on after it; a gate round ends;
   an [engine goal](#engine-goals) ends when one starts (`AiSystem.ReplanDuty`, as the original's replan; no duty goal commits). A stagger outside a fight (`CombatSystem.Stagger`, not getting up, not at a turret;
   a squadless NPC too, whose ended front leaves the queue without a chooser, `PlayerOrders.DropEnded`, **Verified** slot 27 `FUN_1405c7c30` → `FUN_14050d920`) pushes 147 Stumbling to the front (`PlayerOrders.GiveFront`): the running front waits behind it unstarted and is started again from its
   start afterwards; 147 starts with no repertoire or list test (`OrderEntry.Forced`, `TaskRequest.Forced`); a blow during a running stumble adds another front
@@ -325,7 +325,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   while it holds an order.
 - **Duties let go** when an NPC's front starts, but for the body's orders (engine design; `PlayerOrders.TryFront`, serial, before the owner's `Start`): `World.ReleaseDuties` asks every system that
   is an `IDutyRelease` (found on the world's systems, nothing registered) but the order's `OrderEntry.Keeps`, its giver, to let the character go through its own give-up.
-  Town duties, kidnaps, captive jobs, arrests and bounty hunts, lock rounds and the mod NPC goals (`NpcGoals`) drop their record and clear `Engaged`; a body carried
+  Town duties, kidnaps, captive jobs, arrests and bounty hunts, gate rounds and the mod NPC goals (`NpcGoals`) drop their record and clear `Engaged`; a body carried
   for one is let go where it stands (the unlink, no knock-out); an [engine goal](#engine-goals) ends (`DutyEnd.Order`, through the AI); a door way is dropped and a bash
   errand stopped. Neither the dialogue nor a trade holds anyone. The giver's own `Engaged` (one shared bit) is put back after the others let go. The duty sweeps take no
   ordered character again (`DecisionSystem.Ordered` or `AiSystem.Holds` in their free tests).
@@ -1252,21 +1252,19 @@ one starts with the order's provenance. The chain's rows and states are in [AI t
   Police Station Tower, `Outpost s-IV` `43.11:6-Newwworld-INGAME`): its 19 cages stand on the storey at y 1092, 43 above the ground floor where the guards lift raiders; the
   guards carry all eight raiders up and cage them. Still flat (arrival by distance only, so they do not loop):
   the captive jobs' cage walks and confiscation (212). The player's Put in Cage order (`StepTo`) is flat too but tests `AtCage`: an upper-storey cage still fails it.
-- **Release**: player and NPC prisoners alike are freed by the release rounds below.
-- **Rounds** (`LockSystem.Rounds.cs`, serial; a sweep every 30 ticks starts at most 4, at most 8 run; the worker is
-  `Engaged`; each lock takes the owner's 3.3 s): **release** (211): an awake prisoner whose sentence is served is freed by an NPC of the
-  cage's faction with goal 211 in its role list and hours (the finder has no booking test, skips an occupant the jailer regards as an enemy, and only that goal frees, **Verified** `FUN_1408cf3c0`; police-like NPCs without it never do),
-  driven by each such jailer (`FUN_1408cf3c0`, **Verified**: the first cage of the jailer's town and faction in the 3 x 3 zone cells round it, no radius), who walks there, unlocks and `Release`s in its faction's name; engine: in a cage of a faction that books bounties, no NPC of the faction holds the goal
-  (then only a prisoner given a sentence: one that walked in or was put in without a bounty stays), or the jailer's round fails (3 failed walks or
-  120 s), and the system frees it; the cages of non-booking factions wait for a 211 holder. **Lock-up** (155, 197): while
-  a member has the goal in its hours a free member with it locks every door of the home (155 only with every member
-  inside, engine: within the home's farthest node + 10; neither with a stranger inside; a 197 worker prefers a member already outside and otherwise leaves the home first, then works each door within 45 of its outer point, [locks](game/locks.md)); when no member's goal is in its
-  hours, a free member with 86 Opening up in its hours unlocks the home while it counts as locked (87: a round locked it, or every door is locked and whole, as from the level state; squads without 86 stay locked, as the original). The house flag is set at each door the round locks (worker's faction's lock, no door of the home open or opening) and cleared by the unlock round (engine: the round unlocks rather than opens; a loaded night's locked homes come back flagged, `meitou house locked`). **Wardens**
-  (195): occupied unlocked cages of the faction in its town are locked. **Gates** (`OpenGate`, row 180's need of an open gate, [locks](game/locks.md#doors)):
+- **Release**: player and NPC prisoners alike are freed by the jailers' goal 211 below; Meitou has no other release of a served prisoner.
+- **Wardens' goals** (`WardenGoals`, [engine goals](#engine-goals); finders and states: [locks](game/locks.md#wardens-goals)): 211 police free prisoners
+  (`[1, 110, 211]`), 155 Lock all the doors (`[163, 162, 155]`), 197 Lock all the doors - stay outside (`[199, 198, 197]`), 86 Opening up (`[82, 78, 72, 86]`)
+  and 195 Lock all my cages (`[82, 77, 195]`), each chosen by the chooser like any goal of the package. A serial look (`LookEveryTicks`, 15) keeps each
+  member's finder pick of a goal it weighs: one prisoner, door or cage. The chosen goal's act-out is a round on that one target (`Round`: walk, then the
+  owner's 3.3 s lock time; a door unlocked already only opens): 211 unlocks the cage and `Release`s in its faction's name, 155 / 197 close and lock the door
+  from its inner / outer point (setting the house flag once no door of the home is open), 86 unlocks and opens it (clearing the flag when its finder finds
+  none), 195 locks the cage. A round asks `DutyGoals.Runs` before each step and ends with `Done`; a failed walk ends it too, and the next think picks again.
+  A target another member's act-out works is refused. 197's members inside the home get no plan (its !107 provider 200 needs a target). A loaded night's
+  locked homes come back flagged (`meitou house locked`). **Gates** (`OpenGate`, row 180's need of an open gate, [locks](game/locks.md#doors)):
   a free member whose current goal is 180 Man the gate runs the unlock round on its gate (`Blackboard.Gate`, else a gate home) while the gate's first
-  door is closed or closing and whole; a locked one only when the door is its faction's (78 needs isObjectMine) (#816). **Keys** (engine): a worker whose target is behind
-  its own faction's or home's shut doors unlocks them standing before it walks (the sim doesn't know door positions); an
-  arrest's guard walking to such a cage has them opened at once. Rounds and locked homes are hashed only while any exist.
+  door is closed or closing and whole; a locked one only when the door is its faction's (78 needs isObjectMine) (#816); the gate worker is `Engaged`.
+  An arrest's guard walking to a cage behind its faction's shut doors has them opened at once. Act-outs, gate rounds and locked homes are hashed only while any exist.
 - **Lock orders** (`LockSystem`, context-menu verbs on a caged character): `PickLockOrder` (the prisoner its own cage, a mate
   walks to it; `Lockpicking.Step` each tick in reach, floaters "Pick success!"/"Pick failed"), `GetOutOrder` (refused while
   locked; any other than a kidnap victim whose sentence is not served, or whose cage owner is not real or a bandit faction, books a pending Escaping Prison (refused for a
@@ -2336,7 +2334,8 @@ enemy (`numEnemies`, `SenseBlock.Enemies`), so guards man the turrets only while
 Goals of the NPCs' packages that an engine system acts out, chosen by the one chooser as the original's (docs/game/ai-tasks.md "Precedence"). `DutyGoals`
 (one per world, built in `World`'s constructor by `AiSystem.BindGoals` from the `IDutyGoalOwner` systems; null when none registered) holds each registered type: a
 type of the original's that `TaskBehaviours` does not act out, registered by its own system with its `IDutyGoal` (desire, finder, states, start, end) and the rows of
-its plan the act-out carries out besides the goal's own. Built: 176 (`SmellSystem`, [blood smell](#blood-smell)); 177 and 42 (`CarrySystem` through `LootGoals`, [looting and arming](#carrying-rescue-and-looting)).
+its plan the act-out carries out besides the goal's own. Built: 176 (`SmellSystem`, [blood smell](#blood-smell)); 177 and 42 (`CarrySystem` through `LootGoals`, [looting and arming](#carrying-rescue-and-looting)); 211, 155, 197, 86 and 195 (`LockSystem` through `WardenGoals`,
+[wardens' goals](#arrest-and-jail)).
 - **Choosing**: a registered type has `AiBehaviour.Duty`. Its desire is the system's (`DutyGoals.Desire`: the desire times the finder's factor when the TaskData row has
   a finder and an effect; 0 for a player character's mind, an engine mind and a type in back-off), scored by the package record's tier and weight with the continuity
   and no commitment (no duty goal commits). The plan is the planner's: its rows' desires and finders are asked of the system, a finder may give a character, a
@@ -2428,8 +2427,8 @@ save clock, so an entry does not lose an hour per save and load; `BountySave`), 
 and recognition timers (player platoon characters, written only while set), the locks of interior cages and containers (an imprisoned character stays locked in), and the homes a
 lock-up round locked (without the flag a loaded night's locks would never be undone). **Restarted, not saved** (engine choice; the guard, hunter, releaser and warden of each job is a
 town NPC the population makes again with a new id, so a saved link would dangle): arrests (a downed target lies where it fell, is spotted again once awake, the saved markers make
-that quick), cagings (the carry link is not saved: give the cage's Put in again), hunts and their rest timers, release, lock-up and warden rounds (the 30-tick sweep finds
-them again), the unreachable-cage memo (relearned by a failed walk), lock picking (an order), pending crimes
+that quick), cagings (the carry link is not saved: give the cage's Put in again), hunts and their rest timers, gate rounds (the 30-tick sweep finds
+them again) and the wardens' act-outs (chosen again), the unreachable-cage memo (relearned by a failed walk), lock picking (an order), pending crimes
 (seconds long, victim id unsaveable). Spawn bounties are not saved: they are rolled when the population makes an NPC, never for a loaded character.
 
 ## Sandbox

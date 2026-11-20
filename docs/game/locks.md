@@ -219,7 +219,7 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   hold no lock goal (**Verified**, data), and the door's state `+0x380` is set only by the open (`FUN_140297040`), close (`FUN_140298c50`) and
   update functions, a snap shut (`FUN_1402991c0`) and `FUN_140299000`, which the initial door state (`FUN_140553210`) calls (**Observed**, the
   field writers and callers): no relation to the player closes a gate. Meitou: `LockSystem.OpenGate`
-  ([simulation](../simulation.md#arrest-and-jail) "Rounds", "Gates"; #816).
+  ([simulation](../simulation.md#arrest-and-jail) "Gates"; #816).
 - **Door panel** (player's building, the HUD lines of a selected house: [ui-screens](ui-screens.md#selected-building)): open/close button `FUN_140546fb0`: an open door closes; otherwise an effectively locked
   one is unlocked first, then opened (**Verified**). Meitou: a door still moving counts by where it heads and turns back (an opening one closes, a
   closing one reopens); the original's open/close act only from closed / open, so a slow gate ignores the button for seconds.
@@ -284,7 +284,7 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   `Character_Lock` / `Character_Unlock_Success`. Locking closes the door first. No skill or level involved (**Verified**). Task_LockDoor update `FUN_140337670` (**Verified**): work += dt x 0.3; on reaching 1 it starts the door closing (`FUN_140298c50`,
   only from open), sets the lock's locked byte at once (`wants lock` is not touched), plays `Character_Lock` and sets the squad's house flag. The context menu's own-door verbs are these two orders: Lock 77 on an unlocked own door, Unlock 140 (0x8c) on a locked own door (`FUN_1407a6bc0` door branch, **Verified**); an own cage gets Lock 77 / Unlock 78 (cage branch, **Verified**; the update has no door to close there; Meitou runs the cage's unlock as row 140, same conditions); the panel's buttons are the instant toggle below.
   Row 77 (lock) lists `!DOOR_IS_BROKEN` in list B, so it is never planned on a smashed door (rows 79/162/198 have none; a lock on a broken door is not shown). The close acts only on an open, whole door (a closing, opening or smashed door is left as it is).
-  Meitou: `DoorLockOrder` (nearest selected character walks to the door's work spot, `LockSystem.DoorLockJobs`); the job (`CharacterCold.DoorJob`) is hashed while set and not saved. The lock-up round (`LockSystem.Rounds`) does the same: `FixtureRegistry.CloseDoor` then the lock at once, smashed doors left out of the round (engine choice for 198: the data does not exclude them).
+  Meitou: `DoorLockOrder` (nearest selected character walks to the door's work spot, `LockSystem.DoorLockJobs`); the job (`CharacterCold.DoorJob`) is hashed while set and not saved. The lock-up act-out ([wardens' goals](#wardens-goals)) does the same: `FixtureRegistry.CloseDoor` then the lock at once, a smashed door refused (engine choice for 198: the data does not exclude them).
 - **Residents** (`allDoorsLocked` 87, `FUN_140596bd0`): true when the character is in bed, or its squad's "house locked" flag
   is set (squad AI object +0xe8, saved `homelok`; also read by dialogue condition 11 `BUILDING_IS_CLOSED_AND_SECURED`, **Verified** `FUN_140676950` case 0xb; set by Task_LockDoor at each door it locks whose lock is the worker's faction's, and Task_CloseDoor (a door with a working lock), when no door of the home is open or opening (`FUN_1407933a0`, **Verified**: one locked door is enough); cleared by unlocking, picking or a
   non-player opening a door (`Task_OpenDoor` update `FUN_1403370f0`, **Verified**: every update with the door unlocked, unless the opener's faction is the player's; Meitou `LockSystem.NoteDoorOpened`, from the walk-through opening)), else when the home building has no door that is open, broken or effectively unlocked
@@ -306,13 +306,13 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
 - **Lock up from outside** (197; **Verified** rows, `FUN_140596e90`): list B is `!strangers in house` and `!107` (107 I_AM_INSIDE_TARGET_BUILDING), and the lock row 198 needs state 126 AT_LOCATION_BUILDING_DOOR_OUTSIDE
   (**Verified**, `FUN_140596e90`: true when the character's X/Z distance to the door's outer point is below its reach range, 45 for a door; the outer point is the door record's point `+0x3bc` pushed out
   by 1.1 times (`DAT_14169bb44`) its distance to the other point `+0x3c8`; the two points lie 15 either side of the leaf, so about 48 from the leaf), so a 197 worker inside first
-  leaves (row 200) and locks each door from its outer side. Meitou: a 197 round (`Round.FromOutside`) is given to a member already outside when there is one, else the worker first walks out to the first
-  door's outer point (the side away from the building's origin), then works each door within 45 of its outer point (`LockSystem.OuterPoint`); 155 rounds are unchanged.
+  leaves (row 200) and locks each door from its outer side. Row 200's own TaskData row needs a target, which the planner's finder root does not give, so in Meitou a
+  197 member inside the home has no plan ([wardens' goals](#wardens-goals)).
 - **Opening up** (86 `OPEN_UP_SHOP_DOORS`, Task_Blank, finder `FUN_1408cb360`, **Verified** decompile): the building the character stands in when
   its owner matches the AI's (an owner test, **Observed**), else its home; the target is the first door that is closed and not opening (the plan unlocks, then opens it). With none left
   the finder clears the squad's "house locked" flag. A = !87, so it scores only while the home counts as locked. Only squads whose packages list
   86 open up (base data: Civilian, Shop, Shop-24hr, Slaver and Storage Guard leaders, among others); the rest stay locked.
-  Meitou (`LockSystem.LockUpSweep`): the opener's round starts while the home counts as locked by either branch of 87 (the round's flag, or `FixtureRegistry.AllDoorsLocked`). The worker approaches each door from its nearer side, unlocks it and starts the opening motion. **Observed** (headless, #293): the three `stolen slave clothing shop` Swamp Shacks of Slave Markets (Newwworld level data) start `locked0` true with `initial door state` 0 (CLOSED) on the template; the level state wins, so with only round-locked homes opened the shopkeeper outside could not get in, its path ended 29 units from its node behind the back wall (within the goal snap 30) and it stood there all day.
+  Meitou: [wardens' goals](#wardens-goals); the opener approaches the door from its nearer side, unlocks it and starts the opening motion. **Observed** (headless, #293): the three `stolen slave clothing shop` Swamp Shacks of Slave Markets (Newwworld level data) start `locked0` true with `initial door state` 0 (CLOSED) on the template; the level state wins, so with only round-locked homes opened the shopkeeper outside could not get in, its path ended 29 units from its node behind the back wall (within the goal snap 30) and it stood there all day.
 - **Initial door state** (`FUN_140553210`, when the home building is assigned to a squad; **Verified**): CLOSED -> unlocked, not
   broken, closed; OPEN -> unlocked, open; LOCKED -> locked, closed; BROKEN -> unlocked, lock broken, door broken, pose 0 (closed). Saved buildings keep
   their saved values.
@@ -325,6 +325,28 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   [save](../formats/save.md#object-handles-and-slot-lists)). Meitou: lock and door state from the level state, the save's on top;
   only doors with a `state` key count as restored, so `initial door state` still applies to the others (**engine choice**, the
   +0xa8 gate is Unknown).
+
+### Wardens' goals
+
+Goals 211, 155, 197, 86 and 195 (**Verified**, registration `FUN_140319a60`, its stubs read in the exe, and the state evaluators `FUN_140610250`):
+- **Desires**: 1.0 for 211 and the rows 110, 162, 198, 72, 73, 77, 78 (AI slot 19 `FUN_140641550`), 1.0 for 82, 163, 199 (slot 57 `FUN_1405983f0`),
+  1.0 for 86 and 195 (slot 19); 155 and 197 slot 31 `FUN_140795f80`: 1.0 while the squad's house flag is clear, else 1.0 only for a member standing outdoors
+  whose home's first door is open or broken (`FUN_1402ea2f0`), else 0.
+- **Finders** (each gives one target; factor 1.0, none 0): 211 the prisoner ([economy 11.5](economy.md#115-bail-and-sentence)). 155 and 197 share
+  `FUN_1408cb1c0`: the building the character stands in when its owner is the character's faction (building vfunc `0x58` against the character's), else the
+  platoon's home (`FUN_1407956a0` `+0x38`); its first door whose lock is not effectively locked (locked byte clear, broken `FUN_140297d60`, or level below 1), or
+  that is open or broken. 86 `FUN_1408cb360`: the same building, its first door neither broken nor open (state not 1); with none in the home, clears the
+  house flag. 195 `FUN_1408cc2a0` above.
+- **States**: 73 machineHasFreeOperatorSlot is false for a target that is no building, so 110's list B `!73` holds on a prisoner (`FUN_140598de0`); 54 of a
+  character is the lock of the cage it is held in (`FUN_1405a00c0`); 52 is false for a building without a door, a cage (`FUN_1405a3ad0`); 112 is the door
+  locked with the character inside a building, false outdoors (`FUN_1405a02d0`); 127 the same outdoors (`FUN_1405a0470`); 111 the inner point's mirror of 126
+  (`FUN_140596cf0`); 57 the chopping range of the door or the cage (`FUN_1405a25b0`).
+- **Plans**: 211 `[1, 110, 211]`; 155 `[163, 162, 155]` with 82 and 73 first while the door stands open; 197 `[199, 198, 197]`; 86 `[82, 78, 72, 86]` (78 only
+  while locked); 195 `[82, 77, 195]`.
+
+Meitou (`WardenGoals`, [simulation](../simulation.md#arrest-and-jail)): the finders run in a serial look every 15 ticks for each member weighing the goal,
+the act-out is a round on the one target, done once worked; 111's inner point is `DoorPoints.Inner`, the outer point mirrored through the leaf
+(**Observed**).
 
 ## Cages and beds
 
