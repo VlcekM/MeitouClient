@@ -397,8 +397,13 @@ public static class PlayerOrders
                 if (show && first) Show(world, slot, check);
                 return check;
             }
-            // an NPC's engine duties let go first, so no holder's step stops or redirects the order's task
-            if (!DecisionSystem.Decides(world.Characters.Cold(slot)!)) world.ReleaseDuties(slot, front.Keeps);
+            // an NPC keeps its routine for after the order, and its engine duties let go, so no holder's step stops or redirects the order's task
+            var cold = world.Characters.Cold(slot)!;
+            if (!DecisionSystem.Decides(cold))
+            {
+                DecisionSystem.KeepRoutine(world.Characters, slot, cold);
+                world.ReleaseDuties(slot, front.Keeps);
+            }
 
             front.Started = true;
             front.RowRuns = ListTests.OrderNeedsFailNow(world, slot, front) == false;   // else a step of its plan comes first

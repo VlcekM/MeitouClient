@@ -1480,6 +1480,12 @@ public sealed class CharacterCold
     public bool OrderWins { get; internal set; }
 
     /// <summary>
+    /// The routine (wander or follow its leader) an NPC its AI does not fully run had when an order took it, taken up again once its order no
+    /// longer holds it (<see cref="DecisionSystem.Hold"/>); <see cref="CharacterTask.Idle"/>: none. Serial phases; not saved; hashed while set.
+    /// </summary>
+    public CharacterTask OrderRoutine { get; internal set; }
+
+    /// <summary>
     /// The queued orders a load read (<see cref="Saving.OrderSave"/>), until the decision step makes them the <see cref="OrderQueue"/> once the world
     /// they name is there; null: none. Not hashed.
     /// </summary>
@@ -2050,6 +2056,7 @@ public sealed class CharacterTable
         if (k.FollowResume) hasher.Add(0x46526573);
         if (k.Replan) hasher.Add(0x52706C6E);
         if (k.OrderWins) hasher.Add(0x4F57696E);
+        if (k.OrderRoutine != CharacterTask.Idle) hasher.Add(0x4F527400 | (int)k.OrderRoutine);
         if (!k.TurretTarget.IsNone)
         {
             hasher.Add(0x54725467);

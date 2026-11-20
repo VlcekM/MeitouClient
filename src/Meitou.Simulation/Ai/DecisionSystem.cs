@@ -406,8 +406,9 @@ public sealed class DecisionSystem
     /// <summary>
     /// Sets an NPC's <see cref="CharacterCold.OrderWins"/> from its queue (serial phases): its front runs (<see cref="PlayerOrders.Wins"/>; a front
     /// that could start has started by now) while the chooser runs for it. When it turns on, the AI's plan, goal and commitment go (the order's
-    /// plan replaces them); when it turns off, the AI chooses again at once. An NPC with no order left keeps no replan bit (only its queue reads
-    /// it). A character the step decides holds no such flag.
+    /// plan replaces them); when it turns off, the AI chooses again at once. While it is off a routine kept at the order's start is taken up again
+    /// (<see cref="BackToRoutine"/>). An NPC with no order left keeps no replan bit (only its queue reads it). A character the step decides holds no
+    /// such flag.
     /// </summary>
     internal static void Hold(World world, int slot)
     {
@@ -420,6 +421,7 @@ public sealed class DecisionSystem
 
         if (cold.OrderQueue.Count == 0) cold.Replan = false;
         bool wins = TakesOrders(cold) && cold.OrderQueue.Front is { Started: true } && PlayerOrders.Wins(world, slot);
+        if (!wins) BackToRoutine(world, slot, cold);
         if (wins == cold.OrderWins) return;
 
         cold.OrderWins = wins;
@@ -434,6 +436,46 @@ public sealed class DecisionSystem
             mind.Replan = true;
         }
     }
+
+    /// <summary>
+    /// An order is about to take an NPC its AI does not fully run (an engine mind or none, serial): the routine it is on, wandering or following
+    /// its leader, is kept for <see cref="BackToRoutine"/>; a routine kept by an earlier order of the queue stays. A roaming leader's trip needs
+    /// none: the population walks it on once its order no longer holds it.
+    /// </summary>
+    internal static void KeepRoutine(CharacterTable table, int slot, CharacterCold cold)
+    {
+        if (cold.Ai is { Engine: false }) return;
+
+        var task = (CharacterTask)table.Next[slot].Task;
+        if (task is CharacterTask.Wander or CharacterTask.Follow) cold.OrderRoutine = task;
+    }
+
+    /// <summary>
+    /// The order no longer holds the NPC: one standing idle, awake and held by nothing takes its kept routine up again (a follow only while its
+    /// leader is there); the kept routine goes either way.
+    /// </summary>
+    static void BackToRoutine(World world, int slot, CharacterCold cold)
+    {
+        var routine = cold.OrderRoutine;
+        if (routine == CharacterTask.Idle) return;
+
+        cold.OrderRoutine = CharacterTask.Idle;
+        if (!Free(world.Characters, slot, cold)) return;
+
+        if (routine == CharacterTask.Wander)
+            TaskStart.Become(world, slot, CharacterTask.Wander, TaskType.Wanderer, TaskSource.Goal);
+        else if (world.Squads.Find(cold.SquadId) is { } squad && squad.Leader != world.Characters.IdOf(slot)
+                && world.Characters.TryResolveNext(squad.Leader, out _))
+            TaskStart.Become(world, slot, CharacterTask.Follow, TaskType.FollowSquadleader, TaskSource.Goal);
+    }
+
+    /// <summary>
+    /// Whether the NPC stands idle, awake and held by nothing (no fight, duty, flight, carry, bed or cage), so its routine may start.
+    /// </summary>
+    static bool Free(CharacterTable table, int slot, CharacterCold cold) =>
+        table.Next[slot].Alive && table.Next[slot].Task == (byte)CharacterTask.Idle
+        && cold is { InCombat: false, Engaged: false, Fleeing: false, IsImprisoned: false, CarriedBy.IsNone: true, Carrying.IsNone: true }
+        && cold.Medical is not { Incapacitated: true } && cold.InSomething == Locks.HeldState.None;
 
     /// <summary>
     /// Decides one character now (serial phases): the order queue's own pops first (<see cref="PlayerOrders.Prepare"/>), then the sources in order.
