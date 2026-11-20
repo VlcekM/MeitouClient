@@ -2053,7 +2053,8 @@ to the next tick. A free hostile target is attacked instead; a caged one, hostil
   [dialogue](game/dialogue.md#effects)): DA 2 gives the speaker squad's leader 102, DA 16 / 17 the speaker 164 / 165 and DA 34 / 7 280 / 19 (`Dialogue.DialogueOrders`,
   `Ai.EngineOrders`); DA 6 / 57 101 and DA 55 248, none to a player-faction speaker holding an order (`PlayerOrders.Holds`); DA 33 67 to the target when the speaker's
   task is idle, DA 52 67 to the speaker for each other member, DA 56 29 to the target's position queued behind each member's orders. 102 and 165 act out as
-  `CharacterTask.Talk` (`ApproachQueue`, `TownStalkers`: one task through the walk and the stand), 164 as the follow (`TalkFollowers`); 101 / 248 fight the member
+  `CharacterTask.Talk` (`ApproachQueue`, `TownStalkers`: one task through the walk and the stand), 164 as the follow (`TalkFollowers`); a record goes once its order no longer runs, a
+  talk act-out still on the character stood idle and the talk's follow target cleared (unless a later follow of the same character runs); 101 / 248 fight the member
   `AiSystem.AssaultTargetFor` picks (`CombatSystem.EngageOrder`) and repeat for the next until none is left. A building purchase gives each resident of the squads
   moving out 19 to the new home, or 22 without one (`AiSystem.Rehome`; the leader walks the patrol step's points, the others follow it).
   A conversation's or bubble's start turns its NPC or speaker once to face the other and stops no one.

@@ -87,9 +87,11 @@ sealed class ApproachQueue(DialogueSystem dialogue)
     void StepOne(World world, Approach a)
     {
         var table = world.Characters;
-        if (!table.TryResolveNext(a.Npc, out int n) || !DialogueOrders.Runs(table, n, TaskType.SeekAndTalkAndSendSignal, a.Target))
+        bool there = table.TryResolveNext(a.Npc, out int n);
+        if (!there || !DialogueOrders.Runs(table, n, TaskType.SeekAndTalkAndSendSignal, a.Target))
         {
             Drop(a.Npc);
+            if (there) DialogueOrders.LetGo(table, n);
             return;
         }
 

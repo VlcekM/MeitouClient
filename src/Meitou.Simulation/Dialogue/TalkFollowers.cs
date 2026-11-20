@@ -27,8 +27,8 @@ sealed class TalkFollowers(DialogueSystem system)
 
     /// <summary>
     /// Each follow's step (serial): dropped once its follower no longer runs the order; done once the follower and its target are both free of
-    /// conversation (or the target is gone), the follow target cleared (#883: a kept one sent its next follow of its leader after the talk's
-    /// target instead) and the follower standing.
+    /// conversation (or the target is gone) and the follower standing. Either way the follow target goes (#883: a kept one sent its next follow of
+    /// its leader after the talk's target instead).
     /// </summary>
     public void Step(World world)
     {
@@ -37,9 +37,11 @@ sealed class TalkFollowers(DialogueSystem system)
         var table = world.Characters;
         foreach (var (who, whom) in _followers.ToArray())
         {
-            if (!table.TryResolveNext(who, out int s) || !DialogueOrders.Runs(table, s, TaskType.FollowWhileTalking, whom))
+            bool there = table.TryResolveNext(who, out int s);
+            if (!there || !DialogueOrders.Runs(table, s, TaskType.FollowWhileTalking, whom))
             {
                 _followers.Remove(who);
+                if (there) ForgetTarget(table.Cold(s)!, whom);
                 continue;
             }
 
@@ -47,10 +49,20 @@ sealed class TalkFollowers(DialogueSystem system)
             if (talks && table.TryResolveNext(whom, out _)) continue;
 
             _followers.Remove(who);
-            var cold = table.Cold(s)!;
-            if (cold.FollowOrder == whom) cold.FollowOrder = CharacterId.None;
+            ForgetTarget(table.Cold(s)!, whom);
             TaskStart.End(world, s, TaskEnd.Done);
         }
+    }
+
+    /// <summary>
+    /// The follow target goes while it is still the talk's: not when a follow of the same character another order or a job gave runs since.
+    /// </summary>
+    static void ForgetTarget(CharacterCold cold, CharacterId whom)
+    {
+        if (cold.FollowOrder != whom) return;
+        if (cold.Running is { Task: Movement.CharacterTask.Follow, Row: not TaskType.FollowWhileTalking } run && run.Target == whom) return;
+
+        cold.FollowOrder = CharacterId.None;
     }
 
     /// <summary>

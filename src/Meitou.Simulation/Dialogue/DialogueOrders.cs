@@ -58,6 +58,15 @@ sealed class DialogueOrders(ApproachQueue approaches, TalkFollowers followers, T
         return front && cold.Running is { Source: TaskSource.Order } run && run.Row == row && run.Runs((CharacterTask)table.Next[slot].Task);
     }
 
+    /// <summary>
+    /// A record dropped while its character still stands on the talk act-out (its order cleared by one that cannot start yet): the act-out stops,
+    /// as the original's replan deletes the running task, so the character stands idle for its AI rather than on a task nothing steers.
+    /// </summary>
+    internal static void LetGo(CharacterTable table, int slot)
+    {
+        if (table.Next[slot].Task == (byte)CharacterTask.Talk) TaskStart.Stand(table, slot);
+    }
+
     #endregion
 
     #region Talk act-out
