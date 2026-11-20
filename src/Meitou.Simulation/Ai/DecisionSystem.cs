@@ -341,8 +341,8 @@ public sealed class DecisionSystem
 
     /// <summary>
     /// Whether the character's task is one the priority-3 goals come before, so a goal that can run takes it over: not a fight, and no start runs
-    /// it (idling, a standing task), or it is a job's (list or implicit) or 14 Idleness's, or the AI's for a package goal that is not urgent (an
-    /// autonomous squad's, <see cref="SquadAutonomy.Yields"/>). Not an order's, another goal's or the engine's. A pure read.
+    /// it (idling, a standing task), or it is a job's (list or implicit) or 14 Idleness's. Not an order's, another goal's or the engine's. A pure
+    /// read.
     /// </summary>
     public static bool GoalsComeFirst(CharacterTable table, int slot, CharacterCold cold)
     {
@@ -350,8 +350,7 @@ public sealed class DecisionSystem
         if (task == CharacterTask.Attack || cold.InCombat) return false;
         if (cold.Running is not { } run || !run.Runs(task)) return true;
 
-        return run.Source == TaskSource.Job || run.Row == TaskType.Idle || run.Source == TaskSource.Goal && Idleness.IsDefault(run.Row)
-            || SquadAutonomy.Yields(cold, run);
+        return run.Source == TaskSource.Job || run.Row == TaskType.Idle || run.Source == TaskSource.Goal && Idleness.IsDefault(run.Row);
     }
 
     /// <summary>

@@ -97,8 +97,7 @@ public sealed record VisitTown(int SquadId, int PlayerTown, float Hours) : SimCo
 /// intact test, the package choice, the patrol's progress and the crowding counts.</item>
 /// </list>
 /// </summary>
-public sealed partial class AiSystem(PopulationData data, AiSettings? settings = null) : ITickSystem, IStateHashed, IDecisionOwner,
-        IDutyRelease
+public sealed partial class AiSystem(PopulationData data, AiSettings? settings = null) : ITickSystem, IStateHashed, IDutyRelease
 {
     #region Settings and wiring
 
@@ -345,15 +344,28 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// The blackboard a mind chooses under: an engine mind's and a player-faction mind's the empty one (no package), any other its squad's (null
-    /// before it has one).
+    /// The blackboard a mind chooses under: an engine mind's the empty one (no package), a player-faction mind's its squad's while that squad is
+    /// autonomous and has one (<see cref="PlayerSideBoard"/>), any other its squad's (null before it has one).
     /// </summary>
-    static Blackboard? BoardOf(AiMind mind, Squad squad) => mind.Engine || mind.PlayerSide ? EngineBoard : squad.Ai;
+    static Blackboard? BoardOf(AiMind mind, Squad squad) => mind.Engine ? EngineBoard : mind.PlayerSide ? PlayerSideBoard(squad) : squad.Ai;
+
+    /// <summary>
+    /// The blackboard a player-faction mind chooses under: an autonomous squad's own (its package, home and town; Meitou only,
+    /// <see cref="SquadAutonomy"/>), else the empty one (the player's platoon runs no package).
+    /// </summary>
+    internal static Blackboard PlayerSideBoard(Squad squad) => squad is { Autonomous: true, Ai: { } board } ? board : EngineBoard;
+
+    /// <summary>
+    /// The role list a player-faction mind's tiers score: its autonomous squad's package list for its role (<see cref="PlayerSideBoard"/>; none for
+    /// any other player squad). An obeying slave's master's Slave list is the job passes' (<see cref="ObeyedRoles"/>).
+    /// </summary>
+    internal static IReadOnlyList<AiGoal> PlayerSideRoles(Squad squad, CharacterId id, CharacterCold cold) =>
+        PlayerSideBoard(squad).Roles[(int)RoleOf(squad, id, cold)];
 
     /// <summary>
     /// One character's chooser (<see cref="Ladder"/>), one ladder per think: first the order step for everyone, whose pick (an order that runs or can
-    /// start) ends it; then a player-faction mind's ladder with the sources (<see cref="ThinkPlayer"/>), an autonomous squad's member's
-    /// (<see cref="ThinkMember"/>), or an NPC's (<see cref="ThinkNpc"/>).
+    /// start) ends it; then a player-faction mind's ladder with the sources (<see cref="ThinkPlayer"/>; an autonomous squad's member too, its roles
+    /// its package's), or an NPC's (<see cref="ThinkNpc"/>).
     /// </summary>
     void ThinkOne(World world, int i, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, ChooserRow? row, int hour, bool replan)
     {
@@ -374,28 +386,24 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
 
         var roles = mind.Engine ? mind.EngineGoals : board.Roles[(int)RoleOf(squad, id, cold)];
-        if (cold.IsPlayer && mind.Player)
-        {
-            ThinkMember(world, i, id, cold, mind, squad, board, roles, hour, row, replan);
-            return;
-        }
-
         ThinkNpc(world, i, id, cold, mind, squad, board, roles, hour, row, replan);
     }
 
     /// <summary>
-    /// The ladder of a player-faction character (<see cref="Ladder.Run"/> with its look's sources and the AI's rungs: no role list, the own lists'
-    /// types on the rungs, 32): a source's pick is started in the serial pass and ends the AI's goal (<see cref="LeaveChoice"/>); a goal's is acted
-    /// out as an NPC's is (<see cref="ActChosen"/>) while nothing else holds the character (<see cref="PlayerSideHold.Free"/>), else only Self
-    /// preservation acts (<see cref="ActSelfPreservation"/>). The default task and the mover reset leave its task as it is (the Idleness source
-    /// stands for them). None while it is down (no chooser runs) or without this tick's look.
+    /// The ladder of a player-faction character (<see cref="Ladder.Run"/> with its look's sources and the AI's rungs: its autonomous squad's package
+    /// roles, else none, <see cref="PlayerSideRoles"/>; the own lists' types on the rungs, 32): a source's pick is started in the serial pass and
+    /// ends the AI's goal (<see cref="LeaveChoice"/>); a goal's is acted out as an NPC's is (<see cref="ActChosen"/>) while nothing else holds the
+    /// character (<see cref="PlayerSideHold.Free"/>), else only Self preservation acts (<see cref="ActSelfPreservation"/>). The default task and
+    /// the mover reset leave its task as it is (the Idleness source stands for them). None while it is down (no chooser runs) or without this
+    /// tick's look.
     /// </summary>
     void ThinkPlayer(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, ChooserRow? row, int hour,
         bool replan)
     {
         if (DecisionSystem.Down(cold) || row is null) return;
 
-        var tiers = TierRungs.Local.Bind(this, world, i, id, mind, squad, board, [], hour, MeitouHold.None, replan);
+        var roles = PlayerSideRoles(squad, id, cold);
+        var tiers = TierRungs.Local.Bind(this, world, i, id, mind, squad, board, roles, hour, MeitouHold.None, replan);
         var pick = Ladder.Run(world.Decisions.Steps, row, tiers, cold.Jobs.Count > 0);
         row.Pick = pick;
         if (pick.Goal is not { } goal || ReferenceEquals(goal, Idle)) LeaveChoice(cold, mind);
@@ -436,7 +444,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     void ActChosen(World world, int i, CharacterCold cold, AiMind mind, AiGoal goal, Blackboard board, ChooserRow? row)
     {
         if (row is not null && world.Decisions.Tracing) row.Winner = GoalName(goal);
-        if (mind.Player) mind.Urgent = goal.Task.Priority == TaskPriority.Urgent;
 
         if (mind.Duty is { } duty && !DutyGoals.Same(duty, goal)) _duties!.Leave(mind);
         else if (cold.InCombat) InFight(mind, goal, board);
@@ -469,55 +476,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// A goal's trace name: its number and TaskData text ("32 Self preservation").
     /// </summary>
     internal static string GoalName(AiGoal goal) => $"{(int)goal.Task.Type} {TaskDataTable.Of(goal.Task.Type)?.Text ?? goal.Task.Name}";
-
-    /// <summary>
-    /// An autonomous squad's member (Meitou only, <see cref="SquadAutonomy"/>), one ladder: while the AI holds it, or it obeys as a slave on its list
-    /// job's task, the NPC's (<see cref="ThinkHeld"/>: the package's goals, Self preservation and the look's sources, acted out as an NPC's); else the sources' rungs with Self preservation alone,
-    /// which leave its package mind as it is (<see cref="ThinkSources"/>), on a job's task after its urgent package goals are weighed for the source
-    /// that takes it off the job (<see cref="AskOffJob"/>).
-    /// </summary>
-    void ThinkMember(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, IReadOnlyList<AiGoal> roles,
-        int hour, ChooserRow? row, bool replan)
-    {
-        ref var n = ref world.Characters.Next[i];
-
-        // An obeying slave on its list job's task is the 187 branch's in both job passes (FUN_14050e5b0), so the whole ladder runs over the job.
-        if (Holds(n, cold) || RunsListJob(n, cold) && ObeyedRoles(world, squad, cold) is not null)
-        {
-            ThinkHeld(world, i, id, cold, mind, squad, board, roles, hour, row, replan);
-            return;
-        }
-
-        if (SquadAutonomy.OnJob(n, cold, mind)) AskOffJob(world, i, id, cold, mind, squad, board, roles, hour);
-        ThinkSources(world, i, id, cold, mind, squad, board, row);
-    }
-
-    /// <summary>
-    /// The ladder for an autonomous squad's member the AI does not hold: the sources' rungs and 32 Self preservation among the priority-3 ones
-    /// (<see cref="SelfPreservationRung"/>), whose pick fights its attacker or runs (<see cref="ActOwnDefence"/>); its package goal and plan stay for
-    /// when the AI holds it again. None while it is down or without this tick's look.
-    /// </summary>
-    void ThinkSources(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, ChooserRow? row)
-    {
-        if (DecisionSystem.Down(cold) || row is null) return;
-
-        var rung = SelfPreservationRung.Local.Bind(this, world, i, id, mind, squad, board);
-        row.Pick = Ladder.Run(world.Decisions.Steps, row, rung, cold.Jobs.Count > 0);
-        if (ReferenceEquals(row.Pick.Goal, SelfPreservationGoal)) ActOwnDefence(world, i, cold, mind, rung.Runs);
-    }
-
-    /// <summary>
-    /// Self preservation of a member the AI does not hold, asked of the serial steps as a pre-empting goal's is (<see cref="ActPreempting"/>): the
-    /// run (<see cref="FleeAsk.Threat"/>) or the fight on its attacker (<see cref="AskFight"/>), whose start replaces its task; in a fight the fight
-    /// goes on. The package goal stays the mind's. Writes only its own mind.
-    /// </summary>
-    void ActOwnDefence(World world, int i, CharacterCold cold, AiMind mind, bool runs)
-    {
-        if (cold.InCombat) return;
-
-        if (runs) mind.FleeRequest = FleeAsk.Threat;
-        else AskFight(world, i, TaskType.SelfPreservation, mind);
-    }
 
     /// <summary>
     /// An NPC's think after the order step: the full ladder (<see cref="ChooseOnLadder"/>) whatever task it is on, as the original's chooser runs on
@@ -747,7 +705,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// The think of an autonomous squad's member or a Meitou-held NPC the AI holds (<see cref="Holds"/>): an engine mind weighs its combat goals in
+    /// The think of a Meitou-held NPC the AI holds (<see cref="Holds"/>): an engine mind weighs its combat goals in
     /// its own fight; any other runs the ladder (<see cref="ChooseOnLadder"/>) and acts the goal out, or leaves a source's pick to the serial pass.
     /// </summary>
     void ThinkHeld(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, IReadOnlyList<AiGoal> roles,
@@ -772,22 +730,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         var pick = ChooseOnLadder(world, i, id, cold, mind, squad, board, roles, hour, row, replan);
         if (pick.Goal is { } goal) ActChosen(world, i, cold, mind, goal, board, row);
-        else if (!cold.IsPlayer && pick.Source >= 0) TakeSource(cold, mind, row, pick, takes: true);
-    }
-
-    /// <summary>
-    /// The think of a player character on a job's task (<see cref="SquadAutonomy.OnJob"/>): only its urgent package goals are weighed; one that
-    /// plans is kept as <see cref="AiMind.Urgent"/> and asks the decision step, whose source takes the character off the job
-    /// (<see cref="SquadAutonomy.PackageGoals"/>). Writes only its own slot.
-    /// </summary>
-    void AskOffJob(World world, int slot, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board,
-        IReadOnlyList<AiGoal> roles, int hour)
-    {
-        bool wanted = Choose(world, slot, id, mind, squad, board, roles, hour, MeitouHold.Urgent) is not null;
-        if (wanted && !mind.Urgent) DecisionSystem.Request(cold);
-
-        mind.Urgent = wanted;
-        mind.Version = board.Version;
+        else if (pick.Source >= 0) TakeSource(cold, mind, row, pick, takes: true);
     }
 
     /// <summary>
@@ -923,9 +866,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         // An engine goal holds it (DutyGoals): the AI runs it while its act-out runs, carrying included (the act-out's own body), not in a fight.
         if (mind.Duty is not null) return !cold.InCombat && !mind.Engine && OnDuty(cold, mind);
 
-        // A player character: only one of an autonomous squad, carrying nothing, on no order's or job's task (SquadAutonomy.Free).
-        if (cold.IsPlayer && (!cold.Carrying.IsNone || !SquadAutonomy.Free(n, cold, mind))) return false;
-
         // An NPC carrying a body is the AI's as anyone is (only the carried one loses its chooser, docs/game/ai-tasks.md "Precedence"): its plans
         // leave out the rows that need empty hands (list B !47); not in a fight.
         if (cold.InCombat) return cold.Carrying.IsNone && n.Task == (byte)CharacterTask.Attack && OwnsFight(cold, mind);
@@ -977,16 +917,16 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// Whether the chooser weighs goal <paramref name="type"/> for the character at <paramref name="slot"/> now: its role's list of its squad's
     /// running package, or the slave list of the squad it obeys, or its race's <c>AI Goals</c> hold the type in the hour's window. False without a
-    /// mind or a squad blackboard, for an autonomous squad's player character (its mod goals are weighed at 0), and for an engine mind (a squad the
-    /// population moves) but for a combat goal of its combat or race lists. A player-faction mind (<see cref="AiMind.PlayerSide"/>) weighs a type of
-    /// its own lists that is on the chooser's rungs (<see cref="Ladder.OnRungs"/>; never a code mod's) and, obeying, its master's Slave list
-    /// (<see cref="ObeyedRoles"/>). For code mods (docs/modding.md "NPC goals"):
+    /// mind or a squad blackboard, and for an engine mind (a squad the population moves) but for a combat goal of its combat or race lists. A
+    /// player-faction mind (<see cref="AiMind.PlayerSide"/>) weighs a type of its own lists that is on the chooser's rungs
+    /// (<see cref="Ladder.OnRungs"/>; never a code mod's), its autonomous squad's package list (<see cref="PlayerSideRoles"/>) and, obeying, its
+    /// master's Slave list (<see cref="ObeyedRoles"/>). For code mods (docs/modding.md "NPC goals"):
     /// whether a goal of theirs is still weighed for a character they act it out for (unlike <see cref="ListsGoal"/>, the hour's window counts).
     /// Serial phases, or the character's own partition.
     /// </summary>
     public static bool WeighsGoal(World world, int slot, TaskType type)
     {
-        if (world.Characters.Cold(slot) is { Ai: { PlayerSide: true } side } player) return PlayerSideWeighs(world, player, side, type);
+        if (world.Characters.Cold(slot) is { Ai: { PlayerSide: true } side } player) return PlayerSideWeighs(world, slot, player, side, type);
         if (world.Characters.Cold(slot) is not { Ai: { Squad: var squad, Player: false } mind } cold) return false;
 
         int hour = world.Hour;
@@ -999,13 +939,14 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// <see cref="WeighsGoal"/> for a player-faction mind: a type its master's Slave list holds while it obeys, or one on the chooser's rungs that its
-    /// own lists hold, in the hour's window.
+    /// <see cref="WeighsGoal"/> for a player-faction mind: a type its master's Slave list holds while it obeys, its autonomous squad's package list
+    /// for its role, or one on the chooser's rungs that its own lists hold, in the hour's window.
     /// </summary>
-    static bool PlayerSideWeighs(World world, CharacterCold cold, AiMind mind, TaskType type)
+    static bool PlayerSideWeighs(World world, int slot, CharacterCold cold, AiMind mind, TaskType type)
     {
         int hour = world.Hour;
         if (Lists(ObeyedRoles(world, mind.Squad, cold), type, hour)) return true;
+        if (Lists(PlayerSideRoles(mind.Squad, world.Characters.IdOf(slot), cold), type, hour)) return true;
 
         return Ladder.OnRungs.Contains(type) && Lists(mind.RaceGoals, type, hour);
     }
@@ -1175,7 +1116,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// A code mod's goal's desire (<see cref="INpcGoal.Desire"/>, the whole desire: its type has the default profile, no commitment and no crowding);
-    /// 0 for a type no mod registered, for a player character's mind (an autonomous squad's: its goals stay the engine's), and for a type whose
+    /// 0 for a type no mod registered, for a player-faction mind (a code mod's goals are an NPC's, docs/modding.md "NPC goals"), and for a type whose
     /// start the mod refused, until its back-off ends (<see cref="AiMind.ModGoalBackoff"/>).
     /// </summary>
     static float ModDesire(NpcGoals goals, World world, TaskType type, Squad squad, AiMind mind, CharacterId self, TaskTargetType targeting) =>
@@ -1185,12 +1126,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// An engine-acted goal's desire (<see cref="DutyGoals.Desire"/>: the registering system's desire times its finder's factor; the type's default
-    /// profile adds no commitment and no crowding); 0 for an autonomous squad's player character (its own goals are the decision step's), an engine
-    /// mind (it weighs its combat goals only) and a type whose start the system refused, until its back-off ends. A player-faction mind
-    /// (<see cref="AiMind.PlayerSide"/>) weighs the goals its tiers score: its own lists' only on the rungs (<see cref="Ladder.OnRungs"/>).
+    /// profile adds no commitment and no crowding); 0 for an engine mind (it weighs its combat goals only) and a type whose start the system
+    /// refused, until its back-off ends. A player-faction mind (<see cref="AiMind.PlayerSide"/>) weighs the goals its tiers score: its autonomous
+    /// squad's package roles, its own lists' only on the rungs (<see cref="Ladder.OnRungs"/>).
     /// </summary>
     static float DutyDesire(DutyGoals goals, World world, TaskType type, Squad squad, AiMind mind, CharacterId self, TaskTargetType targeting) =>
-        mind.Player && !mind.PlayerSide || mind.Engine || mind.BackedOff(type, world.Tick)
+        mind.Engine || mind.BackedOff(type, world.Tick)
             ? 0
             : goals.Desire(world, new DutyAsk(self.Slot, self, squad, type, targeting, type, default));
 
@@ -1882,8 +1823,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 continue;
             var type = mind.Goal?.Task.Type;
 
-            // An autonomous member on a player job holds no AI work slot (its job's machine counts it).
-            bool onJob = mind.Player && SquadAutonomy.OnJob(world.Characters.Next[s], cold, mind);
+            // A player-faction member on a player job holds no AI work slot (its job's machine counts it).
+            bool onJob = mind.Player && OnJobTask(world.Characters.Next[s], cold);
             bool works = type is TaskType.AutoLabouringMines or TaskType.AutoLabouringMinesPretend && !onJob;
             var town = WorkTownOf(mind, board);
             if (works && HoldsWork(mind, town, type!.Value)) continue;
@@ -3430,11 +3371,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     readonly SquadAutonomy _autonomy = new(data);
 
     /// <summary>
-    /// Registers the decision step's source for the urgent package goals of the player's autonomous squads.
-    /// </summary>
-    public void RegisterSources(DecisionSystem decisions) => decisions.Register(new SquadAutonomy.PackageGoals());
-
-    /// <summary>
     /// The commands: a trader's visit and a contract's end, an autonomous squad's switch and home (<see cref="SquadAutonomy.Apply"/>; a home in a
     /// town not looked at yet has its places found), then the contract and AI change commands (<see cref="TakePackage"/>).
     /// </summary>
@@ -3568,19 +3504,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// A squad without a board: the first time it is seen, and again on the cadence, one the AI runs gets its board (and its town's places); a
-    /// player's squad it does not run has its minds dropped instead. True when it was attached now.
+    /// A squad without a board: the first time it is seen, and again on the cadence, one the AI runs gets its board (and its town's places). True
+    /// when it was attached now.
     /// </summary>
     bool AttachNew(World world, Squad squad, bool cadence)
     {
         bool first = _looked.Add(squad.Id);
         if (!first && !cadence) return false;
 
-        if (!Runs(world, squad))
-        {
-            SquadAutonomy.DropMinds(world, squad);   // none for a player's squad; what an autonomous one left goes
-            return false;
-        }
+        if (!Runs(world, squad)) return false;
 
         Attach(world, squad);
         if (squad.Ai!.Town >= 0 && !_townPlaces.Has(squad.Ai.Town)) _townPlaces.Refresh(world, this);
@@ -3645,30 +3577,38 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         var cold = table.Cold(s)!;
 
-        // An autonomous squad: minds for the player's characters only (not a prisoner kept in it), made again for one that came from another squad.
-        if (squad.Autonomous && !cold.IsPlayer) return;
-
-        bool own = squad.Autonomous && cold.IsPlayer;
-        bool moved = own && cold.Ai is { } brought && !ReferenceEquals(brought.Squad, squad);
+        // An autonomous squad's members keep their player-faction minds (PlayerSideMinds), whose goals count in the crowd; a prisoner it keeps has
+        // none.
+        if (squad.Autonomous)
+        {
+            Crowd(squad, board, k, cold);
+            return;
+        }
 
         // Every character has goals in the original, and a slave's are its master's Slave list (ObeyedRoles), whoever moves its own squad: a
         // captive of a squad a code mod holds would otherwise stand where it was enslaved, on an engine mind (#904).
         bool obeys = populationMoves && ObeyedRoles(world, squad, cold) is not null;
-        bool lacks = moved || cold.Ai is null or { Engine: true } or { PlayerSide: true };
-        if ((!populationMoves || obeys) && lacks) GiveMind(world, squad, board, k, s, own);
+        bool lacks = cold.Ai is null or { Engine: true } or { PlayerSide: true };
+        if ((!populationMoves || obeys) && lacks) GiveMind(world, squad, board, k, s);
 
-        if (cold.Ai?.Goal is { } g)
-        {
-            board.Crowd[g.Task.Type] = board.Crowd.GetValueOrDefault(g.Task.Type) + 1;
-            board.CrowdEntries.Add(new CrowdEntry(squad.Members[k], g.Task.Type, CrowdTarget(g.Task.Target, squad, board, squad.Members[k])));
-        }
+        Crowd(squad, board, k, cold);
     }
 
     /// <summary>
-    /// Member <paramref name="k"/> (slot <paramref name="s"/>) gets a mind of the squad's package and its own lists (<see cref="OwnGoals"/>; a
-    /// player character's own goals stay the decision step's).
+    /// Member <paramref name="k"/>'s goal counts in the squad's crowd.
     /// </summary>
-    void GiveMind(World world, Squad squad, Blackboard board, int k, int s, bool own)
+    void Crowd(Squad squad, Blackboard board, int k, CharacterCold cold)
+    {
+        if (cold.Ai?.Goal is not { } g) return;
+
+        board.Crowd[g.Task.Type] = board.Crowd.GetValueOrDefault(g.Task.Type) + 1;
+        board.CrowdEntries.Add(new CrowdEntry(squad.Members[k], g.Task.Type, CrowdTarget(g.Task.Target, squad, board, squad.Members[k])));
+    }
+
+    /// <summary>
+    /// Member <paramref name="k"/> (slot <paramref name="s"/>) gets a mind of the squad's package and its own lists (<see cref="OwnGoals"/>).
+    /// </summary>
+    void GiveMind(World world, Squad squad, Blackboard board, int k, int s)
     {
         var table = world.Characters;
         var cold = table.Cold(s)!;
@@ -3678,8 +3618,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             Squad = squad,
             MemberIndex = k,
             Post = OccupierPost(world, board, k) ?? new Vector2(p.X, p.Z),
-            Player = own,
-            RaceGoals = own ? [] : OwnGoals(squad, board, cold),
+            RaceGoals = OwnGoals(squad, board, cold),
             Resume = squad.Resume,
             Shopping = ShoppingList.Make(data.Db, cold.RecordId, world.Seed, Rng.Key(table.IdOf(s))),
         };
@@ -3708,12 +3647,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             bool? populationMoves = null;
             for (int k = 0; k < squad.Members.Count; k++)
             {
+                if (squad.Autonomous) break;   // its members' minds are the player-faction ones (PlayerSideMinds)
                 if (!table.TryResolveNext(squad.Members[k], out int s) || !table.Next[s].Alive || table.Cold(s) is not { Ai: null } cold) continue;
-                if (squad.Autonomous && !cold.IsPlayer) continue;
 
                 populationMoves ??= PopulationMoves(PlatoonOf(world, squad), board);
                 bool full = !populationMoves.Value || ObeyedRoles(world, squad, cold) is not null;
-                if (full) GiveMind(world, squad, board, k, s, squad.Autonomous && cold.IsPlayer);
+                if (full) GiveMind(world, squad, board, k, s);
                 else EngineMind(world, squad, board, k);
             }
         }
@@ -3741,9 +3680,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// Every member of a player's squad (<see cref="IsPlayers"/>) gets a player-faction mind (<see cref="AiMind.PlayerSide"/>) when it has none of
-    /// that squad: not the player characters of an autonomous squad with its board, whose package mind <see cref="MindAndCrowd"/> gives (one still
-    /// without a mind gets this one until then); its work town is stamped (<see cref="StampWorkTown"/>). Serial, before the look and the think, so
-    /// every player-faction character with a squad runs the chooser.
+    /// that squad, an autonomous squad's members too (their roles are its package's, <see cref="PlayerSideRoles"/>); its work town is stamped
+    /// (<see cref="StampWorkTown"/>). Serial, before the look and the think, so every player-faction character with a squad runs the chooser.
     /// </summary>
     void PlayerSideMinds(World world)
     {
@@ -3751,10 +3689,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         {
             if (!IsPlayers(world, squad)) continue;
 
-            bool package = squad is { Autonomous: true, Ai: not null };
             for (int k = 0; k < squad.Members.Count; k++)
             {
-                GivePlayerSideMind(world, squad, k, package);
+                GivePlayerSideMind(world, squad, k);
                 StampWorkTown(world, squad, k);
             }
         }
@@ -3762,15 +3699,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// Member <paramref name="k"/> gets its player-faction mind when it is of the player's faction (<c>+0x250</c>; not a prisoner the squad keeps),
-    /// unless it holds one of this squad, or its package mind (<paramref name="package"/>); an engine goal of the mind it had lets go first.
+    /// unless it holds one of this squad; an engine goal of the mind it had lets go first. Its shopping list serves an autonomous squad's package
+    /// goal 118.
     /// </summary>
-    void GivePlayerSideMind(World world, Squad squad, int k, bool package)
+    void GivePlayerSideMind(World world, Squad squad, int k)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(squad.Members[k], out int s) || !table.Next[s].Alive || table.Cold(s) is not { } cold) return;
         if (!cold.IsPlayer && (PlayerFactionOf(world) is var faction && (faction < 0 || cold.Faction != faction))) return;   // setupAI's branch: the faction's
         if (cold.Ai is { PlayerSide: true } held && ReferenceEquals(held.Squad, squad)) return;
-        if (package && cold.IsPlayer && cold.Ai is { PlayerSide: false }) return;
 
         if (cold.Ai?.Duty is not null) _duties?.Release(world, s, DutyEnd.Gone);
         var p = table.Next[s].Position;
@@ -3782,6 +3719,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             Player = true,
             PlayerSide = true,
             RaceGoals = PlayerOwnGoals(cold),
+            Shopping = ShoppingList.Make(data.Db, cold.RecordId, world.Seed, Rng.Key(table.IdOf(s))),
         };
     }
 

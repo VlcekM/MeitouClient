@@ -381,7 +381,7 @@ of a player's squad of the player's faction, not a prisoner it keeps) the ladder
 goals (`AiSystem.ThinkPlayer`; the other own-list goals weigh 0 and stay with their sources). Its winning goal is acted out as an NPC's (`AiSystem.ActChosen`) while nothing else holds it
 (`PlayerSideHold.Free`: not fleeing, engaged, imprisoned, carried or down), and holds it (`PlayerSideHold.Holds`, the look due on its turn) until an order, a job or a higher goal
 ends it (`OrderStep.TakeOver`, `DutyEnd`); a goal over an order's or a job's task ends that task in the serial step and acts at the next tick; a source's win ends the goal (`DutyGoals.Leave`);
-an autonomous squad's member the NPC's while the AI holds it or it obeys as a slave on its list job's task (the 187 branch's), else the sources' rungs, 32 and its second list (`SelfPreservationRung`; its package mind untouched); an NPC the full ladder (`AiSystem.ThinkNpc`)
+an autonomous squad's member the same, its role list its package's (`AiSystem.PlayerSideRoles`); an NPC the full ladder (`AiSystem.ThinkNpc`)
 on whatever task, in a fight it did not start and in its cage, but while it flees, is carried or down or its order holds it (`ChooserRuns`); the winner is acted out on a task the
 AI runs, or on its list job's (`AiSystem.RunsListJob`: a job's pick leaves its goal, a goal that wins ends the job's task first, as a player-faction mind's), from the cage, or over
 a task an engine system runs (`ActOverEngineTask`, [AI](#ai)); the two holds only Meitou has keep their own choice (`MeitouHolds`, [AI](#ai)), and an engine mind with nothing
@@ -421,8 +421,7 @@ phases, no source ever called from the think:
      no chooser's list), after the knock-out's melee alert (`RetaliationSystem.UnderMeleeAttack`: the attacker on its engaged list, `AlertedAttackers`), and it thinks at the
      next tick, where 32 Self preservation (desire 1 within 40) finds a knock-out's attacker on the engaged list (`SelfDefencePick` → `CombatSystem.BestAttackerOf`) and a
      kidnapper nowhere, unless an order runs first ([carry-loot](game/carry-loot.md#kidnapping), [combat](game/combat.md#stealth-knock-out)). A sleeper's kidnap also gives it order 116 with the clear flag
-     ([order queue](#order-queue)). An autonomous squad's urgent package goals: `SquadAutonomy.PackageGoals`
-     ([autonomous player squads](#autonomous-player-squads)).
+     ([order queue](#order-queue)).
   5. Jobs: the job list in order (`IJobSource` contributors by type, `DecisionSystem.RegisterJob`; the original's keys N+8, N+7, ...): the jobs switch gates every type but 16, 31,
      45, 57, 58, 250 (`FUN_14050c1c0`, both passes; 289 is gated), a row the repertoire does not register is skipped, the first that can run starts and one that runs the task ends the
      step. So a higher job takes over a lower running one at the next decision; the running job keeps no priority beyond its place. With nothing found, a list job the task still runs
@@ -2224,16 +2223,14 @@ the leader), and the war classes' start (`AiSystem.WarStart`) the campaign's tar
 
 Meitou only (the original's AI plans for no player squad; asked for as the RE_Kenshi "Squad Autonomy" plugin's base). `Squad.Autonomous`
 (`SetSquadAutonomy`) opens a player's squad to `ChangeAi` / `StartContract` (dialogue's `change AI` on it too); `SquadAutonomy` holds the rules.
-- **Minds**: only its `IsPlayer` members get one (`AiMind.Player`), of the package's role goals; while the AI does not hold it, the
-  [decision step](#decision-step)'s sources, 32 and its second list (`SelfPreservationRung`). A member moved to another squad loses its mind at the next package step. Off: board, saved AI and minds go,
-  an AI-started task ends (one in a bed lies on).
-- **Precedence** (the chooser's order, [precedence](game/ai-tasks.md#precedence)): orders, urgent package goals, jobs, the other package goals.
-  `AiSystem.Holds` takes a player character only when no plan runs its task or the plan is 14 Idleness's or the think's own (`AiMind.Owns`: the
-  tick and row of its last start; its own fight), so an order's, job's or reaction's task is never touched. On a job's task the think weighs the
-  urgent tier only (`MeitouHold.Urgent`); a goal that plans sets `AiMind.Urgent` and the step-4 source `SquadAutonomy.PackageGoals` frees the
-  character (idle; the next think acts the goal out) and counts as running, so step 5 does not take it back. A task for a goal that is not urgent
-  yields to the jobs at the engine re-ask (`DecisionSystem.GoalsComeFirst`). **Engine choices**: the source's weight 0.5 and desire 1 (Self
-  preservation wins); implicit jobs take only a standing character, as before.
+- **Minds**: its members keep their player-faction minds (`AiMind.PlayerSide`, [decision step](#decision-step)) on the ordinary route
+  (`AiSystem.ThinkPlayer`); only the role list is the package's (`AiSystem.PlayerSideRoles`) and the board the squad's (`PlayerSideBoard`). The
+  switch, either way, drops the members' minds and the schedule step gives fresh ones; off also drops board and saved AI. An AI-started task ends
+  (one in a bed lies on).
+- **Precedence**: the one ladder's ([precedence](game/ai-tasks.md#precedence)): orders, committed stops, the second list, jobs, tiers 3/2/1,
+  the default task. A package goal is held while its task is the think's own (`PlayerSideHold.Holds`, `AiMind.Owns`) and ends at an order, an
+  urgent job or a higher goal. Not reached this way: code mods' NPC goals (a player-faction mind weighs none, `ModDesire`), and the race goals
+  off the chooser's rungs (`Ladder.OnRungs`).
 - **Home** (`SetSquadHome`, `Squad.AssignedHome`): a town building (its town becomes `Blackboard.Town`, so town goals, turrets and workplaces are
   that town's) or a player-built building, stood in for by a `TownBuilding` with `RuntimeKey` = the site id and no spots. A player-built home that
   is not complete counts as none; one removed is forgotten. A purchase does not evict an autonomous squad. Beds: the home's layout beds, else the

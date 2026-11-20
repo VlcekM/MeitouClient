@@ -154,14 +154,18 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
     }
 
     /// <summary>
-    /// The squad, board and lists whose captive goals the character's look weighs: a player-faction mind its master's Slave list while it obeys and
-    /// its own lists, under the engine's board; an NPC with a mind of its own and a squad board its role list (an obeying slave's: its master's
-    /// Slave list) and race list; null for any other character.
+    /// The squad, board and lists whose captive goals the character's look weighs: a player-faction mind its master's Slave list while it obeys, else
+    /// its autonomous squad's package role, and its own lists, under its board (<see cref="AiSystem.PlayerSideBoard"/>); an NPC with a mind of its
+    /// own and a squad board its role list (an obeying slave's: its master's Slave list) and race list; null for any other character.
     /// </summary>
     static (Squad Squad, Blackboard Board, IReadOnlyList<AiGoal> Roles, IReadOnlyList<AiGoal> Own)? ListsOf(World world, int s, CharacterCold cold)
     {
         if (cold.Ai is { PlayerSide: true, Squad: var side } player)
-            return (side, AiSystem.EngineBoard, AiSystem.ObeyedRoles(world, side, cold) ?? [], player.RaceGoals);
+        {
+            var sideRoles = AiSystem.ObeyedRoles(world, side, cold) ?? AiSystem.PlayerSideRoles(side, world.Characters.IdOf(s), cold);
+            return (side, AiSystem.PlayerSideBoard(side), sideRoles, player.RaceGoals);
+        }
+
         if (cold is not { IsPlayer: false, Ai: { Engine: false, Player: false, Squad: { Ai: { } board } squad } mind }) return null;
 
         var roles = AiSystem.ObeyedRoles(world, squad, cold) ?? board.Roles[(int)AiSystem.RoleOf(squad, world.Characters.IdOf(s), cold)];
