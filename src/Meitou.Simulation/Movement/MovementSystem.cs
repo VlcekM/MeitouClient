@@ -79,22 +79,23 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
         var owned = OwnedSlaves(world);
         foreach (var squad in world.Squads.All)
-            RefreshFormation(world, squad, owned.GetValueOrDefault(squad.Id));
+            RefreshFormation(world, squad, owned?.GetValueOrDefault(squad.Id));
     }
 
     /// <summary>
     /// The slaves of other squads by the master squad they obey (<see cref="CharacterCold.SlaveMaster"/>), in slot order: the original's formation
     /// gives each member's record the slaves whose owner it is, wherever their platoon (<c>FUN_14026db30</c>; Meitou's owner is the master squad's
-    /// leader, <see cref="Kidnap.ObedientSlave.OwnerOf"/>).
+    /// leader, <see cref="Kidnap.ObedientSlave.OwnerOf"/>); null when there are none.
     /// </summary>
-    static Dictionary<int, List<CharacterId>> OwnedSlaves(World world)
+    static Dictionary<int, List<CharacterId>>? OwnedSlaves(World world)
     {
         var table = world.Characters;
-        var owned = new Dictionary<int, List<CharacterId>>();
+        Dictionary<int, List<CharacterId>>? owned = null;
         for (int s = 0; s < table.HighWater; s++)
         {
             if (!table.Next[s].Alive || table.Cold(s) is not { SlaveState: 1, SlaveMaster: >= 0 } c || c.SquadId == c.SlaveMaster) continue;
 
+            owned ??= [];
             if (!owned.TryGetValue(c.SlaveMaster, out var list)) owned[c.SlaveMaster] = list = [];
             list.Add(table.IdOf(s));
         }
