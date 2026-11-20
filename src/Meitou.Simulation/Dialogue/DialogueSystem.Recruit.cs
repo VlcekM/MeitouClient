@@ -142,6 +142,11 @@ public sealed partial class DialogueSystem
         var me = table.IdOf(slot);
         var mc = table.Cold(slot)!;
         world.Events.Line(world, "recruit", $"{EventLog.Who(world, slot)} joins the player's squad");
+
+        // The faction change empties its own goal lists (Character slot 20 FUN_1405cbac0 -> FUN_14050a9d0), so the engine duties those goals stand
+        // for let it go; its order queue stays (nothing there empties it), the front planned again from its start.
+        world.ReleaseDuties(slot, null);
+        Player.PlayerOrders.Interrupt(mc);
         Leave(world, me, mc);
         mc.Faction = world.Player.Faction;
         mc.RoadPreference = data.RoadPreferenceOf(mc.Faction);
