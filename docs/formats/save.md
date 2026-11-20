@@ -22,6 +22,17 @@ instanced ITEM_PLACEMENT_GROUP, quick.save INSTANCE_COLLECTION and zone1-itemlis
 platoon collections, zone0-buildinglist, BIOMES, town/list and decals. Editor-written type17
 uses actual byte sizes. Preserve trailers and unknown records/fields/instances losslessly.
 
+**Rejected files.** A save's files go through the game-data loader, which fails only on a file that does not open or whose type is
+outside 8..17 ([fcs-mod](fcs-mod.md#files-that-fail-to-load)); the load goes on (**Verified**, decompile 1.0.68):
+- Platoon file: activation's slot 9 (`FUN_140795b30`) calls slot 6 (`FUN_14036d7e0`), which loads the file (slot 1 `FUN_14036b660` →
+  `FUN_14036b5d0` → `FUN_1406c29a0`) and on a failure makes nothing from it: the squad is loaded with no characters, its loaded flag (+8) left clear.
+- Zone file: `FUN_1409ffad0` stores the failure in ZoneMapContent +0xA8, as for a zone with no file, and makes the zone with that flag.
+
+**Observed** (one user save, "the great adventure 240"): 703 of 1362 `.platoon` and 287 of 407 `.zone` files are zero bytes for their whole
+length (type 0) at an ordinary size; `quick.save` is whole, and 62 of them have a twin of the same size and write time, whole, in an
+earlier save of the playthrough. Meitou does not load such a save: `SaveGame.Load` throws `FcsFormatException` "Unknown file type 0" at
+the first such platoon or zone file (`FcsReader` reads types 15..17), where a missing platoon file is only a `Problems` entry.
+
 ## Folder and state mapping
 
 User location `%LOCALAPPDATA%/kenshi/save/<name>` when User-save-location1, otherwise install/save.
