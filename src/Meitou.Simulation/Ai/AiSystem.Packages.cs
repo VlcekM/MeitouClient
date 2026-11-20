@@ -1119,6 +1119,31 @@ public sealed partial class AiSystem
         }
 
         board.ContractTown = campaign.Target;
+        CopyWarLead(world, squad, board, campaign, platoon);
+    }
+
+    /// <summary>
+    /// A loaded campaign platoon joined its campaign after its squad's package started (the war states load at the population's first campaign
+    /// step, <see cref="PopulationSystem.EnsureWars"/>): the copies the original's start makes of the lead, the pace and the point are made now
+    /// (its load runs the start with the campaign known, docs/formats/save.md "NPC goals across a load"); the mission town stays the one the
+    /// load put back.
+    /// </summary>
+    internal void WarLinked(World world, Squad squad)
+    {
+        if (squad.Ai is not { Current: { } running } board) return;
+
+        var kind = board.Contract is not null ? PackageClasses.OfOverride(running.Signal) : PackageClasses.Of(running.Signal);
+        if (kind is not (PackageClass.WarBase or PackageClass.WarAssault or PackageClass.WarAssaultCannibal)) return;
+        if (PlatoonOf(world, squad) is not { Campaign: { } campaign } platoon) return;
+
+        CopyWarLead(world, squad, board, campaign, platoon);
+    }
+
+    /// <summary>
+    /// The war start's copies (<see cref="WarStart"/>): the lead platoon, the campaign's loaded travel pace and the point aimed at.
+    /// </summary>
+    void CopyWarLead(World world, Squad squad, Blackboard board, CampaignInstance campaign, Platoon platoon)
+    {
         if (campaign.Leader >= 0 && campaign.Leader != platoon.Id) board.WarLead = campaign.Leader;
         board.WarSpeed = world.SystemOf<PopulationSystem>()?.CampaignOf(campaign.CampaignId)?.TravelSpeedLoaded ?? MoveSpeed.Run;
         AimWar(world, squad, board);

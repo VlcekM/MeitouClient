@@ -804,20 +804,21 @@ Meitou-only loose-item key (`Items/ItemSlots.WriteDue`, [ground items](../simula
 ### NPC goals across a load
 
 **Verified** by decompile (the writers and readers named). What of a character's goal choice a save keeps:
-- **AI object**: the character's AI writes only its town-info memory (AI `+0x2b0`, `TI town` / `TI day` / `TI dat`, `FUN_1409a1280` / `FUN_1409a1080`) and
-  `squad mem type`; the order queue (`AITaskSytem`, [order queue](#order-queue)) only for a player-faction character. Not saved: the current goal and its plan
-  (the task queue), the commitment, the chooser's path-failure map (`+0x218`, 20 s entries, `FUN_140796ed0`) and every task object, so a travel task's
-  detour and its per-task state and a goal's act-out progress. A loaded NPC's AI is set up afresh (`setupAI`) and chooses from nothing at its first think.
+- **AI object**: the character save writes of its AI only the `+0x2b0` object's `TI town` / `TI day` / `TI dat` entries (`FUN_1409a1280`, read back by
+  `FUN_1409a1080`) and `squad mem type`; the order queue (`AITaskSytem`, [order queue](#order-queue)) only for a player-faction character. Not saved: the
+  current goal and its plan (the task queue), the commitment, the chooser's path-failure map (`+0x218`, 20 s entries, `FUN_140796ed0`) and every task
+  object, with a travel task's detour (`Task_TravelToTargetTown` `+0x90`) and a goal's act-out progress. A loaded NPC chooses with no current goal.
 - **Platoon blackboard** (`FUN_14026c2d0` / `FUN_140272c20`): `runningAwayMode`, `currentPackage`, `target town`, `towntime`, `mission data`, `currenttown`,
   `jobhr`, `contractjob`, `replacementAI`, `homelok`, `target <i>` / `target key <i>`, then the running package's own keys (vfunc `+0x20`): the base class's
   `mission target` / `mission town` / `mission employer` (`FUN_140269640`), plus `persist` for OccupyTown and `done`, `started`, `enemy` for
-  PassingByTownAssault; the war classes add none. The load activates the package (`FUN_1402721a0`, which runs its start, vfunc `+0x30`, at once) and then
-  its load (vfunc `+0x28`) puts the saved hands over the start's. So a war package's start runs again: the lead, pace and point it copies come from the
-  loaded campaign, not the save.
-- **Announcement**: state 76 `isMessageDelivered` reads the speaker's dialogue map at `+0x100` (`FUN_140673830`); the character's dialogue save
-  (`FUN_140679900`) writes only its `lok<i>` list, so after a load the announcement counts as not delivered until it is said again.
-- Meitou writes none of these goal states; a load builds new minds and blackboards, starts each running package (`Blackboard.Start`, so `WarStart`
-  copies lead, pace and point again) and then puts the saved hands back (`AiSave`), as the original does.
+  PassingByTownAssault; the war classes add none. The load activates the package (`FUN_1402721a0`, which calls its start, vfunc `+0x30`, at once) and then
+  its load (vfunc `+0x28`) puts the saved hands over the start's. So the war start (`FUN_14028fc80`, [ai](../game/ai.md#package-classes)) runs again and
+  its copies of the lead platoon, pace and point are made from the loaded state.
+- **Announcement**: state 76 `isMessageDelivered` (`FUN_140792190`) reads the speaker's Dialogue per-event map (`+0xf8`, `FUN_140673830`); the character's
+  dialogue save (`FUN_140679900`) writes only its `lok<i>` list, so after a load the announcement counts as not delivered until it is said again.
+- Meitou saves no goal, plan, commitment, path failure, task, act-out, war-start copy or delivered announcement either: a load builds new minds and
+  blackboards, starts each running package (`Blackboard.Start`) and puts the saved hands back (`AiSave`); a campaign platoon linked once the war states
+  load (`PopulationSystem.EnsureWars`, after the squad's start) takes the war start's copies then (`AiSystem.WarLinked`).
 
 ### Player outposts
 

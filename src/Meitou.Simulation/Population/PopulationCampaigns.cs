@@ -308,7 +308,8 @@ public sealed partial class PopulationSystem : IStateHashed
     int PlayerFactionOf(World world) => world.Player.Faction >= 0 ? world.Player.Faction : _data.PlayerFaction;
 
     /// <summary>
-    /// The managers, made once: each faction's <c>campaigns</c> list known, the first roll 6 h on; then a loaded save's war states over them.
+    /// The managers, made once: each faction's <c>campaigns</c> list known, the first roll 6 h on; then a loaded save's war states over them, and
+    /// the squads of the campaign platoons it links whose package already started take the start's copies (<see cref="Ai.AiSystem.WarLinked"/>).
     /// </summary>
     internal void EnsureWars(World world)
     {
@@ -322,7 +323,13 @@ public sealed partial class PopulationSystem : IStateHashed
                 if (CampaignOf(link.Id) is not null) m.Know(link.Id);
         }
 
-        if (world.Saved is { Wars.Count: > 0 } saved) Saving.WarSave.Read(world, this, saved);
+        if (world.Saved is not { Wars.Count: > 0 } saved) return;
+
+        Saving.WarSave.Read(world, this, saved);
+        if (world.SystemOf<Ai.AiSystem>() is not { } ai) return;
+
+        foreach (var p in world.Platoons.All)
+            if (p.Campaign is not null && world.Squads.Find(p.SquadId) is { Ai: not null } squad) ai.WarLinked(world, squad);
     }
 
     /// <summary>
