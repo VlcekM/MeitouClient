@@ -30,7 +30,7 @@ namespace Meitou.Simulation.Kidnap;
 /// it and lifted (row 170, <see cref="StartLift"/>); the lift ends the goal, and the carrier's own goals take the slave on (112 cages it).</item>
 /// <item><b>Shout</b> (188 "Working the slaves", finder <c>FUN_1408cd940</c>): the worker says event 38 SHOUT_AT_SLAVE_WORKER to a random slave of
 /// its squad that is alive, uncarried and uncaged (the row's TaskData event, <b>Verified</b>: the registration of 188 stores 0x26 at <c>+0x130</c>)
-/// and keeps with it, saying the event again every <see cref="CaptiveSettings.ShoutSeconds"/>, until it says a line: the row's B list is
+/// and keeps with it, saying the event again at each of its think turns, until it says a line: the row's B list is
 /// <c>isDialogDelivered</c>, and the original's worker stays on 188 with one slave as target for long spells (<b>Observed</b>). The chooser then
 /// picks a slave again, with no pause between.</item>
 /// </list>
@@ -265,8 +265,9 @@ public sealed partial class CaptiveSystem
     Dialogue.DialogueSystem? _talk;
 
     /// <summary>
-    /// One tick of a Shout job (188, <c>Task_TalktoPlayer</c>): event 38 as it starts, as the task fires it, and again every
-    /// <see cref="CaptiveSettings.ShoutSeconds"/> while the worker is quiet (engine choice: the original's re-plan rate is not decoded). The job ends
+    /// One tick of a Shout job (188, <c>Task_TalktoPlayer</c>): event 38 as it starts, as the task's start fires it (<c>FUN_14034c5a0</c>), and again
+    /// at every think turn while the worker is quiet: the task's update ends it once the dialogue is free (<c>FUN_14034c7c0</c>, <b>Verified</b>), so an
+    /// event no line answered is fired again by the next plan, an AI update later (the think, <see cref="Ai.DecisionSystem.ThinkSeconds"/>). The job ends
     /// once the worker speaks after an event went out (engine choice, see <c>docs/simulation.md</c>: the original's B list <c>isDialogDelivered</c>
     /// is true without a Dialogue object, else the event delivered in its town), so a line still showing from the last job neither ends this one nor
     /// is talked over. A worker with no line never ends it: <see cref="CaptiveSettings.GiveUpSeconds"/> does.
@@ -276,7 +277,7 @@ public sealed partial class CaptiveSystem
         bool speaking = (_talk ??= world.SystemOf<Dialogue.DialogueSystem>())?.Engages(j.Worker) == true;
         if (j.Blows > 0 && speaking) return End(world, j, CaptiveEventKind.Shouted);
 
-        if (!speaking && (j.Blows == 0 || j.Time >= Settings.ShoutSeconds))
+        if (!speaking && (j.Blows == 0 || j.Time >= world.Decisions.ThinkSeconds(world)))
         {
             j.Blows++;
             j.Time = 0;

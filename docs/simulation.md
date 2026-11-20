@@ -1655,7 +1655,7 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   works the plan's front row and is done when that work ends; 202 is planned afresh at each think and dropped once neither chained nor caged. A cage that stays
   shut refuses the start. Act-outs are hashed while any.
 - **Shout** (188): a worker with slaves of its squad's list up and uncaged says event 38 at a random one, walks to it and stands within 40, following it
-  when it moves on; it says the event again every 8 s (engine choice) until its worker speaks (`DialogueSystem.Engages`; the row's B list
+  when it moves on; it says the event again at each of its think turns until its worker speaks (the task fires it only at its start and ends once the dialogue is free, `FUN_14034c5a0` / `FUN_14034c7c0`, **Verified**, so the next plan, an AI update later, fires it again) (`DialogueSystem.Engages`; the row's B list
   `isDialogDelivered` is read differently, [ai-tasks](game/ai-tasks.md)), and the chooser then picks a slave again with no pause. A worker with no
   event-38 line, or with the event lines off, never speaks: its job then ends only at `CaptiveSettings.GiveUpSeconds` (600 s) or when the slave goes
   (engine choice).

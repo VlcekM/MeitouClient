@@ -79,11 +79,6 @@ public sealed record CaptiveSettings
     /// </summary>
     public float CuffSeconds { get; init; } = 10;
     /// <summary>
-    /// A worker shouting at a slave says event 38 again after this many seconds while no line is said (<b>engine choice</b>: the original's re-plan
-    /// rate is not decoded).
-    /// </summary>
-    public float ShoutSeconds { get; init; } = 8;
-    /// <summary>
     /// It stands within this distance of its slave and follows it when the slave moves on.
     /// </summary>
     public float ShoutReach { get; init; } = 40;

@@ -361,6 +361,11 @@ public sealed class DecisionSystem
     internal void Bind(int thinkEvery) => _thinkEvery = thinkEvery;
 
     /// <summary>
+    /// The game seconds between two think turns of a character at the world's speed: the engine's stand-in for one AI update of the original.
+    /// </summary>
+    internal float ThinkSeconds(World world) => world.Every(_thinkEvery) * world.TickSeconds;
+
+    /// <summary>
     /// Whether this tick's look made any row.
     /// </summary>
     internal bool AnyRow => _anyRow;
