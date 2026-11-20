@@ -310,7 +310,8 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
 - **Talk and Trade** are order 12 Talking (`DialogueOrders`, act-out `PlayerTalks`; [player conversation](game/dialogue.md#player-conversation)): `TalkOrder` gives it, Meitou's
   `OpenTrade` gives it with the detail `DialogueOrders.Trade` (saved as `meitou tjobK` 1). Its walk runs on its own Talk task, re-aimed on a moving target (a sleeper gets up first; a caged talker, whose repertoire has
   no row 29, waits blocked until the target is in talk range, row 12 being in the 0x45 repertoires); in talk range the
-  queue and second list are emptied, the task ends and event 1 fires (or the trade opens). The interface gives both clearing the queue, Shift or not, as the original's givers do
+  queue and second list are emptied, the task ends and event 1 fires (or the trade opens). The menu's Talk To gives it to every selected character (`TalkOrder.Talkers`,
+  each vetted, as `FUN_1407f9e20`), the quick click to the nearest. The interface gives both clearing the queue, Shift or not, as the original's givers do
   ([order givers](game/ai-tasks.md#order-givers)); `World.GiveOrder(queued: true)` appends one. DA_TRADE opens its window with no order (`OpenTradeNow`).
 - Not queued (they act at once): Shoot At (sets the turret's target), Get Out, Dispose Corpse (an errand). **Stop** is no order in the original either
   (`FUN_1407f6470`, [what clears the queue](game/ai-tasks.md#what-clears-the-queue)): it wipes the queue, the second list and the goal (`PlayerOrders.Wipe`) and ends the task.

@@ -156,14 +156,14 @@ sealed class ContextMenuWindow(PlayerInterface player)
     CharacterSnapshot? Customer(CharacterSnapshot trader) => NearestSelected(trader.Position, player.Selected().Where(c => !c.Down && !c.Animal));
 
     /// <summary>
-    /// Talk To (12) when the target has something to say to the talker: the first selected character that is no animal (an animal never talks, as
-    /// the quick click's receiver <c>FUN_1407fae70</c> skips them).
+    /// Talk To (12) when the target has something to say to the first selected character that is no animal; the order goes to every selected
+    /// character (the menu's dispatch <c>FUN_1407fa650</c> → <c>FUN_1407f9e20</c>, whose order check refuses a dumb one, <b>Verified</b>).
     /// </summary>
     void AddTalkVerb(List<(string, Action)> verbs, CharacterId id)
     {
         if (player.Selected().FirstOrDefault(c => !c.Animal) is not { } talker || !player.Session.World.CanTalk(id, talker.Id)) return;
 
-        verbs.Add(("Talk To", () => player.Say(new Simulation.Dialogue.TalkOrder(talker.Id, id) { Tick = player.Session.World.Tick })));
+        verbs.Add(("Talk To", () => player.Say(new Simulation.Dialogue.TalkOrder(player.SelectedIds(), id) { Tick = player.Session.World.Tick })));
     }
 
     /// <summary>

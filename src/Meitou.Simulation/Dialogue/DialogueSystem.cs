@@ -10,10 +10,19 @@ using Meitou.Simulation.Population;
 namespace Meitou.Simulation.Dialogue;
 
 /// <summary>
-/// The player's Talk order: <see cref="Talker"/> gets order 12 Talking on <see cref="Target"/> (<see cref="PlayerTalks"/>): it walks up and the
-/// conversation opens in reach (event 1).
+/// The player's Talk order: each of <see cref="Talkers"/> gets order 12 Talking on <see cref="Target"/> (<see cref="PlayerTalks"/>): it walks up and
+/// the conversation opens in reach (event 1). The menu's Talk To names every selected character, as the original's giver <c>FUN_1407f9e20</c>; the
+/// quick right click the nearest (<c>FUN_1407fae70</c>).
 /// </summary>
-public sealed record TalkOrder(CharacterId Talker, CharacterId Target) : OrderCommand;
+public sealed record TalkOrder(IReadOnlyList<CharacterId> Talkers, CharacterId Target) : OrderCommand
+{
+    /// <summary>
+    /// The order for one talker.
+    /// </summary>
+    public TalkOrder(CharacterId talker, CharacterId target) : this([talker], target)
+    {
+    }
+}
 /// <summary>
 /// Clicks choice <see cref="Index"/> of the open conversation.
 /// </summary>
@@ -353,7 +362,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
             {
                 case TalkOrder t:
                     End(world);
-                    GiveTalk(world, t);
+                    foreach (var talker in t.Talkers) GiveTalk(world, t, talker);
                     break;
                 case DialogueChoice c when _open is not null:
                     Choose(world, _open, c.Index);
@@ -405,14 +414,14 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     }
 
     /// <summary>
-    /// Gives a Talk order: a player character gets order 12 on an awake NPC through its queue (<see cref="PlayerOrders.Give"/>, the queue cleared
-    /// unless <see cref="OrderCommand.Queued"/>); the order check (<c>FUN_1405d1940</c>, before the giver's clear) refuses a dumb talker, and a
-    /// hostile NPC without a pending interrupt is attacked instead.
+    /// Gives a Talk order to <paramref name="talker"/>: a player character gets order 12 on an awake NPC through its queue
+    /// (<see cref="PlayerOrders.Give"/>, the queue cleared unless <see cref="OrderCommand.Queued"/>); the order check (<c>FUN_1405d1940</c>, before
+    /// the giver's clear) refuses a dumb talker, and a hostile NPC without a pending interrupt is attacked instead.
     /// </summary>
-    void GiveTalk(World world, TalkOrder order)
+    void GiveTalk(World world, TalkOrder order, CharacterId talker)
     {
         var table = world.Characters;
-        if (!table.TryResolveNext(order.Talker, out int p) || table.Cold(p) is not { IsPlayer: true } pc
+        if (!table.TryResolveNext(talker, out int p) || table.Cold(p) is not { IsPlayer: true } pc
             || !table.TryResolveNext(order.Target, out int n) || table.Cold(n) is not { IsPlayer: false } nc)
         {
             return;
@@ -428,7 +437,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         // "Campaigns", announcement), and so does a caged one (its menu's Talk To, #737).
         if (_data.Relations.IsHostile(nc.Faction, world.Player.Faction) && !_interrupts.ContainsKey(order.Target) && !nc.IsImprisoned)
         {
-            world.Defer(new Combat.AttackOrder([order.Talker], order.Target) { Tick = world.Tick + 1, Cause = "talking to a hostile character" });
+            world.Defer(new Combat.AttackOrder([talker], order.Target) { Tick = world.Tick + 1, Cause = "talking to a hostile character" });
             return;
         }
         PlayerOrders.Give(world, p, new OrderEntry(Data.Gameplay.Ai.TaskType.PlayerTalkTo, _orders) { Target = order.Target }, order.Queued);
