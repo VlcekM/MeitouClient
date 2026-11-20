@@ -250,6 +250,10 @@ checking call keeps the target it was given (`FUN_140678f30` param 3) and `FUN_1
 shows from the next speaker resolution, walk or click (`FUN_140683c00` re-reads the handle). Callers: the `target carrying character`, `target has item (type)` and
 `target race` tests above, and two conditions in `FUN_140676950` (IS_FEMALE's branch and HAS_ILLEGAL_ITEM's). Meitou: `SetTarget` writes `Conversation.Player` when the
 check's `me` is the conversation's NPC (an interjector candidate's own state is not the conversation's); `Pick` tests the target it started with.
+Meitou fix "Animals stay out of talks" (on by default, `World.AnimalTargetFix`): `SetTarget` skips an animal, so the conversation keeps its target.
+**Observed** (player report 2026-11-20, LivingWasteland's event-1 report roots such as `bg_tg_fabrics_report` on the `shopkeep` package, `target has item`
+Fabrics): probing the root at the conversation's start retargets to a pack animal carrying the item even though the root's conditions then fail, so the
+animal takes the player's replies and trade opens nothing.
 
 ### Speakers
 

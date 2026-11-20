@@ -429,6 +429,11 @@ public sealed partial class World : IDisposable
     /// </summary>
     public bool BagSearchFix { get; set; } = true;
     /// <summary>
+    /// A dialogue line's search of the player's squad (an item, race or carried body found) never makes an animal the conversation's target (Fixes
+    /// settings, Meitou); off, the first member found becomes the target whatever it is, as the game does (docs/game/dialogue.md "Retargeting").
+    /// </summary>
+    public bool AnimalTargetFix { get; set; } = true;
+    /// <summary>
     /// The player's pick-ups and right-click takes out of loot, containers and storage go into the character's backpack first, then its slots and
     /// grid (Controls settings, off by default as in the game, where only an open bag window does that).
     /// </summary>
