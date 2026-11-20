@@ -306,6 +306,17 @@ public sealed class DecisionSystem
     }
 
     /// <summary>
+    /// The original's replan request (<c>FUN_140506cf0</c>, <see cref="AiMind.AskReplan"/>), for its triggers alone: the character is decided again
+    /// (<see cref="Request(CharacterCold)"/>) and its mind's next think clears an uncommitted goal and chooses without continuity. Meitou's own asks
+    /// stay <see cref="Request(CharacterCold)"/> or <see cref="AiMind.Replan"/>. Any phase, its own slot or a serial one.
+    /// </summary>
+    internal static void Replan(CharacterCold cold)
+    {
+        Request(cold);
+        cold.Ai?.AskReplan();
+    }
+
+    /// <summary>
     /// <see cref="Request(CharacterCold)"/> for the character at <paramref name="slot"/>, if any.
     /// </summary>
     public static void Request(World world, int slot)

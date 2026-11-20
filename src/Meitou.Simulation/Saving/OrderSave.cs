@@ -179,7 +179,7 @@ public static class OrderSave
             cold.SecondList.Add(entry);
         }
 
-        DecisionSystem.Request(cold);
+        DecisionSystem.Replan(cold);   // each second-list add replans (FUN_1405086d0)
     }
 
     /// <summary>

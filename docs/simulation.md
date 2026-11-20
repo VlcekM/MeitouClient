@@ -439,6 +439,12 @@ phases, no source ever called from the think:
   periodic replan was found): a player character's think turn asks the chooser while its task is a job's, 14 Idleness's or no start's, out of a fight, or its front order runs
   its task (the original's order step tests it on every AI update); any other character's turn always asks. The job step passes
   over a job the general list tests skip (`ListTests.JobSkipped`, [finished tests](game/ai-tasks.md#finished-tests)).
+- **Replan request** (`DecisionSystem.Replan`, `AiMind.AskReplan`; `AiMind.ReplanAsked`, hashed while set): the original's vfunc 3 alone
+  ([precedence](game/ai-tasks.md#precedence)): an order given or pushed to the front, a job add, a load's second list, a task that ended by itself with no order queued
+  (`TaskStart.End`, `TaskEnd.Done`), a fight's end, the melee alert and a blow or bolt with the fight off. The mind's next think runs no plan step and clears the goal and its plan
+  unless it commits and its commitment has not run out (`TierRungs.Begin`), so the winner is planned afresh with no continuity; a committed stop it keeps picks the mover reset
+  (the request stopped the goal's task). Every other ask (sightings, a mate's fight, a duty's or a mod goal's end, a walk's end, the jobs switch, a job removed or moved, the think
+  turn) thinks again with the goal kept (`AiMind.Replan`, `DecisionSystem.Request`). The goal is cleared at the think, not at the ask (engine: at most a tick later).
 - **Engine starts outside the step** (a step of a running row, or a reaction to another's act; the step leaves a claimed character alone that tick, `DecisionSystem.Claim`): a follow
   job's (or a not yet running follow order's) defence of its followed character and a bodyguard's own defence within 40 (`RetaliationSystem.Guards`, `SelfDefends`; claimed).
 - **Trace** (`DecisionSystem.Tracing`, off by default): each start pass fills `CharacterCold.Decision` (`DecisionTrace`: tick, winner, one line per source asked with its answer: an
@@ -2323,8 +2329,8 @@ the protect goals and 32), logs it with the aggro system's fights (not 32's) and
 as attackers (the original's choosers run one after another). That fight is the AI's own (`AiMind.FightFrom`): `Holds` keeps its fighter, which thinks in it but acts nothing out
 (`InFight`): a combat goal or 32's fight keeps the fight, Self preservation's run or a goal 35 asks the flee step, any other goal makes `LeaveFights` (serial) end the fight, and the next tick acts it out.
 An engine duty a fight may interrupt (treating, a town errand's walk, a captive job's walk and its meal at a body, #623) is weighed by `Choose` with only the combat goals and 32; any other duty, and a fight the AI did not
-start (a dialogue's, an assault's, a duty's), with 32 alone (`Preempts`; in a fight only its run changes anything); the fight's start ends the duty's task through its handler. Replan triggers
-(`AiMind.Replan`, engine stand-ins): a sighting of the look (the looker and its mates within 2 R), a new enemy sensed by a fighter in its own fight, an alert (the attacked NPC with its fight
+start (a dialogue's, an assault's, a duty's), with 32 alone (`Preempts`; in a fight only its run changes anything); the fight's start ends the duty's task through its handler. Think-again asks
+(`AiMind.Replan`, engine stand-ins; the original's replan requests are the [decision step](#decision-step)'s): a sighting of the look (the looker and its mates within 2 R), a new enemy sensed by a fighter in its own fight, an alert (the attacked NPC with its fight
 off, the squad mates of the attacker and the attacked), a mate's fight start, the end of its own fight (`CombatSystem.EndFight`) and of its walk (`MovementSystem.EndWalk`); else
 the 15-tick cadence. A new enemy is acted on one tick after the look that sensed it (look at T, think at T+1, fight from T+2); so is an attack (alert at T, the attacker a threat at once). Any
 other character the AI does not hold (fleeing, carried) starts no fight. The members of a loaded platoon a code mod holds (see "Platoon blackboards" below)

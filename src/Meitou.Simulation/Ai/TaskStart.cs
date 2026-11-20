@@ -676,7 +676,10 @@ public static class TaskStart
 
         cold.Running = null;
         (cold.EndedTick, cold.Ended) = (table.Ticks, reason);   // the action log's
-        DecisionSystem.Request(cold);   // the plan finished or was stopped: the character is decided again
+        // The plan finished or was stopped: the character is decided again. A plan that ended by itself with no order queued is the original's
+        // plan end (FUN_14050d7d0), which asks a replan (vfunc 3).
+        if (reason == TaskEnd.Done && cold.OrderQueue.Count == 0) DecisionSystem.Replan(cold);
+        else DecisionSystem.Request(cold);
         Stamp(table, slot);
     }
 }

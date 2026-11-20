@@ -39,13 +39,15 @@ internal readonly record struct LadderPick(int Source, AiGoal? Goal, int Through
 internal interface ITierRungs
 {
     /// <summary>
-    /// The plan step before the choice (<c>FUN_140511130</c>: the current goal's running step ends by its tests); returns the priority of the goal
-    /// the character is committed to (<see cref="TaskPriority.JustAction"/>: none).
+    /// The update's start (<c>FUN_140511130</c>): without a replan request the plan step (the current goal's running step ends by its tests), with
+    /// one the uncommitted goal cleared; returns the priority of the goal the character is committed to (<see cref="TaskPriority.JustAction"/>:
+    /// none).
     /// </summary>
     TaskPriority Begin();
 
     /// <summary>
-    /// The goal the character is committed to (null: none), kept with its plan when a committed stop ends the choice.
+    /// The pick of a committed stop that ends the choice: the goal the character is committed to, kept with its plan; after a replan request, which
+    /// stopped its task, the mover reset (null: none).
     /// </summary>
     AiGoal? Committed { get; }
 
@@ -125,7 +127,7 @@ internal static class Ladder
         // 1. The order step (FUN_140510920): its pick ends the choice.
         if (First(row, steps.Orders, steps.Commitment) is { } order) return order;
 
-        // 2. Committed above priority 2: the goal keeps its plan.
+        // 2. The update's start (the plan step, or a replan request's clear), then committed above priority 2: the goal keeps its plan.
         var committed = tiers?.Begin() ?? TaskPriority.JustAction;
         if (committed > TaskPriority.NonUrgent) return new(-1, tiers!.Committed, steps.Commitment);
         if (First(row, steps.Commitment, steps.UrgentJobs) is { } commitment) return commitment;

@@ -639,12 +639,12 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
 
     /// <summary>
     /// The hit path of <c>AI::underMeleeAttack</c> (a landed blow, <c>FUN_1404394f0</c>; a bolt, <c>FUN_140999d50</c>): an NPC hit with its fight
-    /// off, not getting up, has its AI think at the next tick (<see cref="Ai.AiMind.Replan"/>), where its Self preservation weighs the attacker the
-    /// hit made a threat (<see cref="AggroSystem.Force"/>). Serial phases.
+    /// off, not getting up, asks the original's replan (vfunc 3, <see cref="Ai.AiMind.AskReplan"/>): its AI chooses afresh at the next tick, where its
+    /// Self preservation weighs the attacker the hit made a threat (<see cref="AggroSystem.Force"/>). Serial phases.
     /// </summary>
     static void HitReplan(CharacterCold dc, long tick)
     {
-        if (!dc.InCombat && dc.Ai is { } mind && !CharacterFacts.GettingUp(dc, tick)) mind.Replan = true;
+        if (!dc.InCombat && dc.Ai is { } mind && !CharacterFacts.GettingUp(dc, tick)) mind.AskReplan();
     }
 
     #endregion
@@ -789,11 +789,9 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         // the fight's own end: idle, its provenance kept (a follow row's, FollowResume)
         if (table.Next[slot].Task == (byte)CharacterTask.Attack) TaskStart.Step(table, slot, CharacterTask.Idle);
 
-        // the fight task ended: a player character is decided again (a follow row takes up its follow)
-        DecisionSystem.Request(cold);
-
-        // and an NPC's AI chooses again at the next tick (the original's "plan finished" trigger)
-        if (cold.Ai is { } mind) mind.Replan = true;
+        // the fight task ended: the original's "plan finished" replan (FUN_14050d7d0's vfunc 3): a player character is decided again (a follow row
+        // takes up its follow), and an AI's mind chooses afresh at the next tick
+        DecisionSystem.Replan(cold);
     }
 
     #endregion

@@ -1070,7 +1070,8 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   insert (`FUN_140507a90`, the stagger), second-list entries of a type removed (`FUN_140507090`), a move order updated in place (`FUN_140508990`), a plan ended with nothing queued
   (`FUN_14050d7d0`), the failed flag's handler (`FUN_14050d080`), a commit row whose commitment passed (`FUN_14050f0b0`), `underMeleeAttack` (`FUN_140999f00`: the fight off, not
   getting up, and not moving with `FUN_140856bc0`, [combat](combat.md#fight-lifecycle-and-orders)), a hostile act or bolt (`FUN_140999d50`: the fight off, not getting up), sneak
-  turned on while the goal is 16 (`FUN_1405ca9a0`) and, for a player-faction character only, standing order 3 sneak (`FUN_1405caa50`).
+  turned on while the goal is 16 (`FUN_1405ca9a0`) and, for a player-faction character only, standing order 3 sneak (`FUN_1405caa50`). The jobs switch (standing order 15,
+  `FUN_140508210`) asks none: it sets `+0x35` and posts an interface event. Meitou: [decision step](../simulation.md#decision-step) "Replan request".
 - **The plan's lifecycle** (**Verified**, decompile): a goal's plan is kept and run task by task. Each frame (AI slot 3 `FUN_1405965b0` → `FUN_14050f0b0`) the 20 s
   unreachable marks (`+0x218`) count down, a replan is asked when no task runs or no goal is current, the next queued task starts when none runs, and the running task ends when
   its slot 4 says finished, its commitment (`+0x288`, set for committing rows by `FUN_14050d130`) has passed or it does not commit, its list A (`FUN_14060f570`) and its effect

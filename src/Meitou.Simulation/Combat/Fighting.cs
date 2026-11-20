@@ -1019,8 +1019,7 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
         // thinks at the next tick, where its Self preservation takes the attacker up.
         if (!tc.InCombat && !gettingUp && !(tc.IsPlayer && world.Characters.Next[t].Velocity.LengthSquared() > 1))
         {
-            DecisionSystem.Request(tc);
-            if (tc.Ai is { } mind) mind.Replan = true;
+            DecisionSystem.Replan(tc);
         }
     }
 

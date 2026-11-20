@@ -1533,11 +1533,30 @@ public sealed class AiMind
     public bool LeaveFight { get; set; }
 
     /// <summary>
-    /// It thinks at the next tick whatever its cadence (a replan request, engine stand-in for the original's triggers): set by a sighting of its own
-    /// or of a squad mate, a new enemy sensed while it fights (<see cref="AggroSystem"/>), an alert near it (<see cref="RetaliationSystem"/>), a
-    /// mate's fight start and the end of its own fight (<see cref="Combat.CombatSystem"/>); cleared by that think.
+    /// It thinks at the next tick whatever its cadence, its goal kept (a plain "think again", Meitou's own asks: a sighting of its own or of a squad
+    /// mate, a new enemy sensed while it fights (<see cref="AggroSystem"/>), an alert near it, a mate's fight start, a duty's or a mod goal's end);
+    /// cleared by that think. The original's replan request sets it too (<see cref="AskReplan"/>).
     /// </summary>
     public bool Replan { get; set; }
+
+    /// <summary>
+    /// The original's replan request is pending (<c>AITaskSytem</c> <c>+0x1b0</c>, set by its vfunc 3 <c>FUN_140506cf0</c>, <b>Verified</b>): the next
+    /// think runs no plan step, clears the current goal and its plan unless it commits and its commitment has not run out, and chooses with no
+    /// continuity (<c>FUN_140511130</c>; docs/game/ai-tasks.md "Precedence"). Set only by <see cref="AskReplan"/>; cleared by that think. Not saved;
+    /// hashed while set.
+    /// </summary>
+    public bool ReplanAsked { get; set; }
+
+    /// <summary>
+    /// The original's replan request (vfunc 3: an order added or pushed to the front, a job or second-list entry added, a plan or task that ended
+    /// with nothing queued, a melee alert or a hit with the fight off): the think at the next tick chooses afresh (<see cref="ReplanAsked"/>). Any
+    /// phase, its own slot or a serial one.
+    /// </summary>
+    public void AskReplan()
+    {
+        Replan = true;
+        ReplanAsked = true;
+    }
 
     /// <summary>
     /// The AI task system's plan reset (<c>FUN_1405074a0</c>): the pending steps and the committed goal go, so the next think chooses again.
@@ -1683,6 +1702,7 @@ public sealed class AiMind
         }
 
         if (Replan) hasher.Add(0x5265706C);
+        if (ReplanAsked) hasher.Add(0x52706C41);   // "RplA": only while the original's replan request waits for the think
         if (LookAbout != Crime.CrimeSystem.FirstLookAboutSeconds) hasher.Add(LookAbout);
         if (NextBuyTick != 0) hasher.Add(NextBuyTick);
         if (FateCage is { } fateCage) hasher.Add(Rng.StableHash(fateCage));

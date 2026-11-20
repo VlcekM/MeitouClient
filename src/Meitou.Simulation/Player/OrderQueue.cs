@@ -336,7 +336,7 @@ public static class PlayerOrders
         }
 
         q.Add(order);
-        DecisionSystem.Request(cold);   // addOrder replans at once: the order's own start below, the fall-through at the decision step
+        DecisionSystem.Replan(cold);   // addOrder replans at once: the order's own start below, the fall-through at the decision step
         bool starts = q.Count == 1 && (DecisionSystem.Decides(cold) || DecisionSystem.TakesOrders(cold));
         var check = starts ? TryFront(world, slot, show) : OrderCheck.Run;
         DecisionSystem.Hold(world, slot);
@@ -360,7 +360,7 @@ public static class PlayerOrders
         bool adopts = q.Front is { } running && running.Row == order.Row && Runs(world, slot, running);
         Interrupt(cold);
         q.AddFront(order);
-        DecisionSystem.Request(cold);
+        DecisionSystem.Replan(cold);   // the front insert's vfunc 3 (FUN_140507a90)
 
         bool starts = DecisionSystem.Decides(cold) || DecisionSystem.TakesOrders(cold) || order.Forced && !DecisionSystem.Down(cold);
         if (adopts)

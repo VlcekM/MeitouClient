@@ -306,7 +306,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// The parallel think: each character with a mind, on its turn or when asked (its look's <see cref="ChooserRow.Due"/>, its replan bit, an order
-    /// that held it until now), runs the chooser (<see cref="ThinkOne"/>; writes its own slot only).
+    /// that held it until now), runs the chooser (<see cref="ThinkOne"/>; writes its own slot only), told whether the original's replan request is
+    /// pending (<see cref="AiMind.ReplanAsked"/>, used up here as the original's update uses <c>+0x1b0</c>).
     /// </summary>
     public void Think(World world, Partition part)
     {
@@ -329,9 +330,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             bool asked = mind.Replan || cold.OrderWins || row is { Due: true };
             if ((world.Tick + i) % every >= world.StepTicks(i) && mind.Version == board.Version && !asked) continue;
 
+            bool replan = mind.ReplanAsked;
             mind.Replan = false;
+            mind.ReplanAsked = false;
             if (row is not null) row.Thought = true;
-            ThinkOne(world, i, cold, mind, squad, board, row, hour);
+            ThinkOne(world, i, cold, mind, squad, board, row, hour, replan);
         }
     }
 
@@ -346,7 +349,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// start) ends it; then a player-faction mind's ladder with the sources (<see cref="ThinkPlayer"/>), an autonomous squad's member's
     /// (<see cref="ThinkMember"/>), or an NPC's (<see cref="ThinkNpc"/>).
     /// </summary>
-    void ThinkOne(World world, int i, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, ChooserRow? row, int hour)
+    void ThinkOne(World world, int i, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, ChooserRow? row, int hour, bool replan)
     {
         if (world.Decisions.OrderStep(row) is { } order)
         {
@@ -360,18 +363,18 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         var id = world.Characters.IdOf(i);
         if (mind.PlayerSide)
         {
-            ThinkPlayer(world, i, id, cold, mind, squad, board, row, hour);
+            ThinkPlayer(world, i, id, cold, mind, squad, board, row, hour, replan);
             return;
         }
 
         var roles = mind.Engine ? mind.EngineGoals : board.Roles[(int)RoleOf(squad, id, cold)];
         if (cold.IsPlayer && mind.Player)
         {
-            ThinkMember(world, i, id, cold, mind, squad, board, roles, hour, row);
+            ThinkMember(world, i, id, cold, mind, squad, board, roles, hour, row, replan);
             return;
         }
 
-        ThinkNpc(world, i, id, cold, mind, squad, board, roles, hour, row);
+        ThinkNpc(world, i, id, cold, mind, squad, board, roles, hour, row, replan);
     }
 
     /// <summary>
@@ -381,11 +384,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// preservation acts (<see cref="ActSelfPreservation"/>). The default task and the mover reset leave its task as it is (the Idleness source
     /// stands for them). None while it is down (no chooser runs) or without this tick's look.
     /// </summary>
-    void ThinkPlayer(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, ChooserRow? row, int hour)
+    void ThinkPlayer(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, ChooserRow? row, int hour,
+        bool replan)
     {
         if (DecisionSystem.Down(cold) || row is null) return;
 
-        var tiers = TierRungs.Local.Bind(this, world, i, id, mind, squad, board, [], hour, Restrict.None);
+        var tiers = TierRungs.Local.Bind(this, world, i, id, mind, squad, board, [], hour, Restrict.None, replan);
         var pick = Ladder.Run(world.Decisions.Steps, row, tiers, cold.Jobs.Count > 0);
         row.Pick = pick;
         if (pick.Goal is not { } goal || ReferenceEquals(goal, Idle)) LeaveChoice(cold, mind);
@@ -467,12 +471,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// that takes it off the job (<see cref="AskOffJob"/>).
     /// </summary>
     void ThinkMember(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, IReadOnlyList<AiGoal> roles,
-        int hour, ChooserRow? row)
+        int hour, ChooserRow? row, bool replan)
     {
         ref var n = ref world.Characters.Next[i];
         if (Holds(n, cold))
         {
-            ThinkHeld(world, i, id, cold, mind, squad, board, roles, hour, row);
+            ThinkHeld(world, i, id, cold, mind, squad, board, roles, hour, row, replan);
             return;
         }
 
@@ -513,12 +517,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// job passes (<see cref="EngineJobs"/>).
     /// </summary>
     void ThinkNpc(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, IReadOnlyList<AiGoal> roles,
-        int hour, ChooserRow? row)
+        int hour, ChooserRow? row, bool replan)
     {
         ref var n = ref world.Characters.Next[i];
         if (Holds(n, cold) || !mind.Engine && RunsListJob(n, cold))
         {
-            ThinkHeld(world, i, id, cold, mind, squad, board, roles, hour, row);
+            ThinkHeld(world, i, id, cold, mind, squad, board, roles, hour, row, replan);
             return;
         }
 
@@ -588,7 +592,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// to the serial pass.
     /// </summary>
     void ThinkHeld(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, IReadOnlyList<AiGoal> roles,
-        int hour, ChooserRow? row)
+        int hour, ChooserRow? row, bool replan)
     {
         if (mind.ModGoalStarted) EndModGoal(mind);   // the mod let it go: its act-out is over
         if (mind.ModGoalBackoff is not null) mind.PruneBackoff(world.Tick);
@@ -606,11 +610,14 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return;
         }
 
-        var tiers = TierRungs.Local.Bind(this, world, i, id, mind, squad, board, roles, hour, Restrict.None);
+        var tiers = TierRungs.Local.Bind(this, world, i, id, mind, squad, board, roles, hour, Restrict.None, replan);
         var pick = Ladder.Run(world.Decisions.Steps, row, tiers, cold.Jobs.Count > 0);
         if (row is not null) row.Pick = pick;
+
+        // A source's pick is started in the serial pass, and an NPC's goal is no longer the current one (the original's update clears a goal that
+        // runs no task after the choice, FUN_140511130).
         if (pick.Goal is { } goal) ActChosen(world, i, cold, mind, goal, board, row);
-        else if (!cold.IsPlayer && pick.Source >= 0) LeaveChoice(cold, mind);   // an NPC's job: the serial pass starts it, the goal is left
+        else if (!cold.IsPlayer && pick.Source >= 0) LeaveChoice(cold, mind);
     }
 
     /// <summary>
@@ -991,7 +998,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// </summary>
     AiGoal? Choose(World world, int slot, CharacterId id, AiMind mind, Squad squad, Blackboard board, IReadOnlyList<AiGoal> roles,
         int hour, Restrict only) =>
-        TierRungs.Local.Bind(this, world, slot, id, mind, squad, board, roles, hour, only).Restricted();
+        TierRungs.Local.Bind(this, world, slot, id, mind, squad, board, roles, hour, only, replan: false).Restricted();
 
     /// <summary>
     /// The plan step before the choice (<see cref="PlanSteps"/>): the current goal's running step ends by its own tests and the next starts; with no

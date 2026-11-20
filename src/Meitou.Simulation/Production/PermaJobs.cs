@@ -156,7 +156,7 @@ public static class PermaJobs
         }
 
         cold.Orders |= CharacterOrders.Jobs;
-        DecisionSystem.Request(cold);   // the job list changed: decided again
+        DecisionSystem.Replan(cold);   // the job add replans (FUN_1405086d0)
         return true;
     }
 

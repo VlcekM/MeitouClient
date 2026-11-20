@@ -78,6 +78,10 @@ internal sealed class TierRungs : ITierRungs
     /// </summary>
     AiGoal? _committed;
     /// <summary>
+    /// The original's replan request is pending for this choice (<see cref="AiMind.ReplanAsked"/>): no plan step, the uncommitted goal cleared.
+    /// </summary>
+    bool _replan;
+    /// <summary>
     /// One tier's candidates, highest score first: a goal, or a source of the look (<c>Source</c> at least 0, the goal null).
     /// </summary>
     readonly List<(AiGoal? Goal, float Score, float Desire, int Source)> _candidates = [];
@@ -92,12 +96,14 @@ internal sealed class TierRungs : ITierRungs
     IReadOnlyList<AiGoal>? _slaveGoals;
 
     /// <summary>
-    /// Binds the rungs to one character's choice; <paramref name="only"/> limits the goals weighed.
+    /// Binds the rungs to one character's choice; <paramref name="only"/> limits the goals weighed; <paramref name="replan"/>: the original's replan
+    /// request is pending (<see cref="Begin"/>).
     /// </summary>
     public TierRungs Bind(AiSystem ai, World world, int slot, CharacterId id, AiMind mind, Squad squad, Blackboard board,
-        IReadOnlyList<AiGoal> roles, int hour, AiSystem.Restrict only)
+        IReadOnlyList<AiGoal> roles, int hour, AiSystem.Restrict only, bool replan)
     {
         (_ai, _world, _slot, _id, _mind, _squad, _board, _roles, _hour, _only) = (ai, world, slot, id, mind, squad, board, roles, hour, only);
+        _replan = replan;
         _plans = AiSystem.PlanContext.Local.Bind(ai, world, slot, mind, board);
         _slaveGoals = world.Characters.Cold(slot) is { } cold ? AiSystem.ObeyedRoles(world, squad, cold) : null;
         _committed = null;
@@ -111,13 +117,16 @@ internal sealed class TierRungs : ITierRungs
     #region Ladder rungs
 
     /// <summary>
-    /// The plan step (<see cref="AiSystem.EndStep"/>) and committed mode: while a goal it committed to is running, only a tier above that goal's
-    /// priority may take over; if none plans, the goal and its plan stay (<c>FUN_140510ef0</c> in committed mode, <b>Verified</b>). Not past its
-    /// hours: the plan step ends a goal's plan then, and the update clears a goal left with no plan however long its commitment runs
-    /// (<c>FUN_14050d970</c>, <c>FUN_140511130</c>, <b>Verified</b>; docs/game/ai-tasks.md "Precedence").
+    /// The update's start (<c>FUN_140511130</c>, <b>Verified</b>; docs/game/ai-tasks.md "Precedence"). Without a replan request: the plan step
+    /// (<see cref="AiSystem.EndStep"/>), then committed mode: while a goal it committed to is running, only a tier above that goal's priority may take
+    /// over; if none plans, the goal and its plan stay (<c>FUN_140510ef0</c> in committed mode). Not past its hours: the plan step ends a goal's plan
+    /// then, and the update clears a goal left with no plan however long its commitment runs (<c>FUN_14050d970</c>). With one: no plan step, and
+    /// the goal and its plan are cleared unless it commits and its commitment has not run out (<see cref="Replanned"/>).
     /// </summary>
     public TaskPriority Begin()
     {
+        if (_replan) return Replanned();
+
         _ai.EndStep(_world, _slot, _id, _mind, _squad, _board, _plans, _hour);
         _committed = _mind.Goal is { } running && _mind.Plan.Count > 0 && TaskProfiles.Of(running.Task.Type).Commits
             && _world.GameHours < _mind.CommitUntil && running.InWindow(_hour) ? running : null;
@@ -125,9 +134,32 @@ internal sealed class TierRungs : ITierRungs
     }
 
     /// <summary>
-    /// The goal the character is committed to (null: none).
+    /// The update's start with a replan request (<c>FUN_140511130</c>, <b>Verified</b>): the running task is stopped and the current goal cleared,
+    /// unless it commits and its commitment has not run out (the goal's <c>+0x20</c> and its timer, the same test as the request's own clear,
+    /// <c>FUN_14050cdc0</c>). So the choice that follows has no current goal: no x1.25 continuity, no unfinished x1.25, no plan kept, and the winner
+    /// is planned afresh (a fresh target and node roll). The task is not stopped here: the winner's act-out or start replaces it, and a stop the
+    /// committed goal makes picks the mover reset (<see cref="Committed"/>). The behaviour stays for the hold tests until the act-out sets it.
     /// </summary>
-    public AiGoal? Committed => _committed;
+    TaskPriority Replanned()
+    {
+        var goal = _mind.Goal;
+        bool kept = goal is not null && TaskProfiles.Of(goal.Task.Type).Commits && _world.GameHours < _mind.CommitUntil;
+        if (!kept)
+        {
+            _mind.Goal = null;
+            _mind.Plan.Clear();
+        }
+
+        _committed = kept ? goal : null;
+        return _committed?.Task.Priority ?? TaskPriority.JustAction;
+    }
+
+    /// <summary>
+    /// The pick of a committed stop: the goal the character is committed to, with its plan (null: none). After a replan request the stop picks the
+    /// mover reset instead: the request stopped the committed goal's task, and the update clears a goal that runs no task after the choice
+    /// (<c>FUN_140511130</c>), so the character is left with no goal until its next update chooses freely.
+    /// </summary>
+    public AiGoal? Committed => _replan && _committed is not null ? Mover() : _committed;
 
     /// <summary>
     /// Takes the look's second-list scores into their own candidates (they join the urgent pass's pick, or the priority-3 one), each by its code
