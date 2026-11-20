@@ -1541,15 +1541,7 @@ public sealed partial class PopulationSystem : IStateHashed
     public const double CannibalCarryHours = 0.25;
 
     /// <summary>
-    /// Whether the members of a squad run the "find, kidnap and put in a cage" goal now (task 254, <see cref="TaskType.FinalKidnapperCageJob"/>): the
-    /// goals of <paramref name="role"/> in the squad's running AI package (a campaign squad's phase package while its blackboard runs it), in the
-    /// hour's window.
-    /// </summary>
-    public bool KidnapDuty(World world, Squad squad, Meitou.Data.Gameplay.Ai.AiRole role) =>
-        GoalDuty(world, squad, role, Meitou.Data.Gameplay.Ai.TaskType.FinalKidnapperCageJob);
-
-    /// <summary>
-    /// As <see cref="KidnapDuty"/> for any goal type: whether <paramref name="role"/>'s goals in the package the squad runs now hold
+    /// Whether <paramref name="role"/>'s goals in the package the squad runs now (a campaign squad's phase package while its blackboard runs it) hold
     /// <paramref name="type"/> in the hour's window.
     /// </summary>
     public bool GoalDuty(World world, Squad squad, Meitou.Data.Gameplay.Ai.AiRole role, Meitou.Data.Gameplay.Ai.TaskType type)

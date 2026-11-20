@@ -271,8 +271,13 @@ kidnap 132 with 0x4008 / 0x811 and `allowBed` 1): walks the owner's sensed list,
 the target to share the owner's faction (vfunc `0x58`), tested only when the global `+0x112` (Rescue Allies, [squad AI options](ai-tasks.md#squad-ai-options)) is clear **and** the owner's
 faction has `+0x250` set (the player's; **Verified** `FUN_1408cd2d0`). An NPC rescuer is never faction-tested: it takes any sensed ALLY body, allied factions included. Rescue (`allowBed` 0)
 therefore skips bed and cage occupants and animals; there is no range limit (the bound is `DAT_14169bc38`, the largest float), the distance is to the place the entry was last sensed at (Meitou: `CarrySystem.FindRescue` reads the ALLY entries of the sense block, and every character in sight as well, since the block is capped); leader finder 142 (`FUN_140598540`) has neither test. Kidnap's `allowBed` 1 also takes sleepers out of beds. 132 is a
-planner goal (A: 153 got a victim, B: not carrying, effect 48 carrying); 254 has no finder: its B list 153, 154 chains 132, then 112/281 find a cage (`FUN_1408d0770`) and 108 puts the
-carried one in (the candidate cages are the current town's, else the faction's nearest, plus the home's: [economy 11.7](economy.md#117-arrest)). 281 applies to **any** carried body, whoever lifted it: its desire `FUN_1405a1140` reads only the carry flag and the carried handle (no dead test) and 281 has no list B (**Verified**, `FUN_1405a1140`, `FUN_140319a60`). Meitou: `TownDutySystem.LookCarriers` cages a body carried by a free member whose package lists 281 (or 112 for a living one), or throws it out with 274 listed, whichever the chooser's ranking puts first (an animal's cage desire is 0); a kidnapper or arrester whose victim dies keeps it on the shoulder for that. `Status+0xe9` is the [kidnap victim flag](#the-kidnap-victim-flag); it is not part of target eligibility.
+planner goal (A: 153 got a victim, B: not carrying, effect 48 carrying); 254 has no finder and no effect, its list B is 153 and 154. **Verified** (exe bytes and
+decompile): 153 (`FUN_1405a3980`) holds when the put-in-cage desire of the carried body (`FUN_1405a1140`) is above 0, so only while carrying; 154 (`140598d00`, the carried hand's
+`hand` slot 0 `FUN_1400cd100` asked with 0) holds while the carried hand is empty; 254's desire (`FUN_1405a1280`) and 132's (`FUN_14059a600`) are 0 while the character carries
+(`+0x348`) or two squad mates do, else 132's is 1.0. So 254 plans only for an empty-handed member, as `[1, 68, 132, 254]` on 132's victim, and its plan never reaches 154's providers
+112/281: it ends once the victim is on the shoulder, and the carrier's own goals 112 / 281 then find a cage (`FUN_1408d0770`) and 108 puts the carried one in (the candidate cages are
+the current town's, else the faction's nearest, plus the home's: [economy 11.7](economy.md#117-arrest)). Of the base packages that list 254 (`gamedata_base.txt`), all list 112 too but
+`Assault and kidnap` (Squad and Squad2 roles) and the campaign assault `Cannibal raid assault town`. 281 applies to **any** carried body, whoever lifted it: its desire `FUN_1405a1140` reads only the carry flag and the carried handle (no dead test) and 281 has no list B (**Verified**, `FUN_1405a1140`, `FUN_140319a60`). Meitou: `TownDutySystem.LookCarriers` cages a body carried by a free member whose package lists 281 (or 112 for a living one), or throws it out with 274 listed, whichever the chooser's ranking puts first (an animal's cage desire is 0); a kidnapper's victim is such a body once 254's lift ends, and an arrester or hauler whose victim dies keeps it on the shoulder for that. `Status+0xe9` is the [kidnap victim flag](#the-kidnap-victim-flag); it is not part of target eligibility.
 
 ### 3.3 NPC looting
 
@@ -385,7 +390,7 @@ Meitou: `CharacterCold.KidnapVictim`, set by `CarrySystem.Kidnap` on a roll of o
 test reads "its home town" as `InOwnTown`) and `PopulationSystem.RejoinSeparated`, read by `CarrySystem.LetKidnapVictimGo`, the status line and
 the witnesses (`CharacterFacts.Kidnapped`, `CrimeSystem.MindsKidnapping`; a witness friendly to the carrier's faction is still skipped, engine
 choice) and the bounty panel (`TooltipRuntime.ShowsBountyPanel`). Meitou's own
-`CharacterCold.Kidnapped` ("held by a kidnapper: no sentence, no bail, leaving is no escape"; set when `KidnapSystem` cages a victim and on
+`CharacterCold.Kidnapped` ("held by a kidnapper: no sentence, no bail, leaving is no escape"; set when a 254 victim or a haul is caged in its kidnapper's faction's cage, `KidnapSystem.Caged` / `Carry`, and on
 spawned cage prisoners, cleared with the hold) is a separate flag, saved as `meitou kidnapped`.
 
 The kidnap itself in Meitou (`CarrySystem.Kidnap.cs`, `PickUpOrder.Kidnap`): as [Kidnapping](#kidnapping) describes; asleep is lying in a bed or resting with the sleep behaviour; the

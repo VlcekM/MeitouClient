@@ -284,7 +284,7 @@ public sealed partial class AiSystem
         /// <summary>
         /// The scorer's drop of a goal that can run but neither acts nor has an effect, unless its row keeps such a job (TaskData <c>+0x14</c>;
         /// <c>FUN_14050df10</c>, <b>Verified</b>), asked of an engine goal (<see cref="DutyGoals"/>) whose plan is its own row alone: its act-out would
-        /// have nothing to do (42 armed, 254 with its victim caged).
+        /// have nothing to do (42 armed; never 254, whose list B states 153 and 154 never hold together).
         /// </summary>
         bool GivesNothing(TaskDataRow row) => _scratch.Count == 1 && _scratch[0].Type == row.Type && !row.Is(TaskDataFlags.KeepsJob)
             && !row.Is(TaskDataFlags.Acts) && row.Effect is null;
