@@ -210,10 +210,11 @@ public sealed class DecisionSystem
     /// <summary>
     /// Whether the chooser runs for an NPC, so its order queue is asked (the AI update runs the task system only while the character has a platoon,
     /// <c>FUN_1405112b0</c>, and not while it is carried or down, <c>FUN_1405d00b0</c>; it does in a bed or a cage, docs/game/ai-tasks.md
-    /// "Precedence"): it has a squad, is not carried and is neither out cold nor dead. Its mind plays no part. A pure read.
+    /// "Precedence"): it has a squad, is not carried and is neither out cold nor dead; one playing dead (posture 3) is awake to its AI and takes them.
+    /// Its mind plays no part. A pure read.
     /// </summary>
     internal static bool TakesOrders(CharacterCold cold) =>
-        cold.SquadId >= 0 && cold.CarriedBy.IsNone && cold.Medical is not { Incapacitated: true };
+        cold.SquadId >= 0 && cold.CarriedBy.IsNone && cold.Medical is not ({ Dead: true } or { Unconscious: true, PlayingDead: false });
 
     /// <summary>
     /// Whether an NPC's order holds it now (<see cref="CharacterCold.OrderWins"/>, its queue not emptied since, and the step does not decide it):

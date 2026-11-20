@@ -293,7 +293,8 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
 - `World.CanOrder(row, actor, target, site, point)` / `CanOrder(OrderEntry, actor)` -> `(Can, Why)` is `PlayerOrders.CanRun` as a pure read between ticks (a `Gone` verdict is `false` with no text); the queue's start and bark use the same read. It is not a menu filter (decision D5): the original's menu offers its verbs (operate, build, dismantle, prospect, ...) without testing the character and lets the order fail with its text, so Meitou's does too; no verb is greyed. Planned native multiplayer can call it on the host to gate guest commands.
 - Every `OrderCommand` also applies while paused (`World.ApplyPausedInterfaceCommands`, through every `IOrderOwner`'s inputs).
 - **Any character** holds orders on the same path. An NPC's queue is asked by the [decision step](#decision-step) as source 1 alone while its chooser runs
-  (`DecisionSystem.TakesOrders`: it has a squad, is not carried and is neither out cold nor dead; in a bed or a cage it runs; its mind plays no part), as the original's AI update
+  (`DecisionSystem.TakesOrders`: it has a squad, is not carried and is neither out cold nor dead; playing dead, posture 3, counts as awake; in a bed or a cage it runs;
+  its mind plays no part), as the original's AI update
   runs the task system only with a platoon (`FUN_1405112b0`) and not while carried or down (`FUN_1405d00b0`); `Give` starts its front at once only then, else it waits queued.
   While the front runs (`PlayerOrders.Wins`) `CharacterCold.OrderWins` is set (by the decision step and `Give`, serial; hashed while set, not saved; cleared for a character the
   step decides), and `DecisionSystem.Ordered` (the flag while the queue holds an order) keeps everything else off the character, as the original's order step comes before every
