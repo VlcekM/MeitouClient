@@ -117,14 +117,14 @@ internal sealed class TownWatchFinders(PopulationData data)
         town.Site >= 0 || town.PlayerTown > 0 && world.Buildings.FindTown(town.PlayerTown) is not null;
 
     /// <summary>
-    /// The town's houses, each by its building key and position. A placed town's: its standing buildings with an interior. An outpost's: the
-    /// buildings whose town it is (<see cref="Construction.TownLookup.PlayerTownOf"/>) that are complete and standing, of function key 19
-    /// BF_SHELL_WITH_INTERIOR (<see cref="Construction.ConstructionSystem.FunctionKey(string)"/>: a building with an interior and no functionality
-    /// of its own, so no wall, gate or machine), whatever their owner. <b>Verified</b> (<c>FUN_1408cb510</c> asks the town's vfunc 0x2c8,
+    /// The town's houses, each by its building key and position: its buildings of function key 19 BF_SHELL_WITH_INTERIOR (a building with an
+    /// interior and no functionality of its own, so no wall, gate or machine), whatever their owner. A placed town's: its standing ones
+    /// (<see cref="IsHouse"/>). An outpost's: those whose town it is (<see cref="Construction.TownLookup.PlayerTownOf"/>) that are complete and
+    /// standing (<see cref="Construction.ConstructionSystem.FunctionKey(string)"/>). <b>Verified</b> (<c>FUN_1408cb510</c> asks the town's vfunc 0x2c8,
     /// <c>FUN_1408d10f0</c>, shared by every TownBase class, with <c>BuildingFinder_OnesWithInteriors</c> and mask 0x80000: the buildings of key 19
     /// in the zones registered with the town whose town it is, <c>FUN_1409fb880</c>, that have an interior object and are not a WallBuilding, slot 5
     /// <c>FUN_1408ca540</c>). Complete and standing are an engine choice: the finder has no such test, and Meitou gives an unfinished or ruined
-    /// player building no doors.
+    /// building no doors.
     /// </summary>
     List<(string Key, Vector3 At)> Houses(World world, CampaignTown town)
     {
@@ -133,7 +133,7 @@ internal sealed class TownWatchFinders(PopulationData data)
         {
             foreach (var x in data.Sites[town.Site].Buildings)
             {
-                if (!world.Fixtures.IsDestroyed(x) && (x.InteriorLayout.Length > 0 || x.InteriorLayouts.Count > 0)) houses.Add((x.Key, x.Position));
+                if (IsHouse(x) && !world.Fixtures.IsDestroyed(x)) houses.Add((x.Key, x.Position));
             }
 
             return houses;
@@ -147,6 +147,13 @@ internal sealed class TownWatchFinders(PopulationData data)
 
         return houses;
     }
+
+    /// <summary>
+    /// A placed building of function key 19 BF_SHELL_WITH_INTERIOR: an <c>interior</c>, no wall or gate, and no functionality of its own (none, BF_ANY,
+    /// BF_FLUFF or BF_SHELL_WITH_INTERIOR itself).
+    /// </summary>
+    static bool IsHouse(Meitou.Data.World.TownBuilding x) =>
+        x.HasInterior && !x.IsWall && !x.IsGate && x.Function is -1 or 0 or Construction.TownRefit.Fluff or Construction.TownRefit.Shell;
 
     /// <summary>
     /// The function key of a BUILDING record (<see cref="Construction.ConstructionSystem.FunctionKey(string)"/>), read once.
