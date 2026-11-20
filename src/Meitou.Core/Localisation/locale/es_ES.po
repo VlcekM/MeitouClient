@@ -4339,3 +4339,234 @@ msgstr "Polvo iluminado"
 
 msgid "Light the dust and spray kicked up by running feet like the ground around them, instead of glowing at night."
 msgstr "Ilumina el polvo y las salpicaduras que levantan los pies al correr como el suelo que los rodea, en lugar de brillar de noche."
+
+msgid "Save"
+msgstr "Guardar"
+
+msgid "Cancel"
+msgstr "Cancelar"
+
+msgid "Reset"
+msgstr "Restablecer"
+
+msgid "Delete"
+msgstr "Eliminar"
+
+msgid "Close"
+msgstr "Cerrar"
+
+msgid "Continue"
+msgstr "Continuar"
+
+msgid "It supports me in the development of Meitou. ko-fi.com/martinvlcek"
+msgstr "Me apoya en el desarrollo de Meitou. ko-fi.com/martinvlcek"
+
+msgid "Mods"
+msgstr "Mods"
+
+msgid "New preset name"
+msgstr "Nombre del nuevo preajuste"
+
+msgid "Arrange"
+msgstr "Ordenar"
+
+msgid "Search mods"
+msgstr "Buscar mods"
+
+msgid "Graphics"
+msgstr "Gráficos"
+
+msgid "Of the game (written to Kenshi's settings.cfg) and of the launcher. Kenshi's own translations, plus Meitou's where they exist."
+msgstr "Del juego (se escribe en settings.cfg de Kenshi) y del lanzador. Las traducciones propias de Kenshi, más las de Meitou donde existan."
+
+msgid "Open"
+msgstr "Abrir"
+
+msgid "Meitou's texts not yet translated"
+msgstr "Textos de Meitou aún sin traducir"
+
+msgid "Loading"
+msgstr "Cargando"
+
+msgid "'{1}' is not a Kenshi folder (data/gamedata.base not found)."
+msgstr "'{1}' no es una carpeta de Kenshi (no se encontró data/gamedata.base)."
+
+msgid "OK"
+msgstr "Aceptar"
+
+msgid "and {1} more"
+msgstr "y {1} más"
+
+msgid "Not found: browse to the folder with data/gamedata.base."
+msgstr "No encontrada: busca la carpeta con data/gamedata.base."
+
+msgid "The folder with data/gamedata.base."
+msgstr "La carpeta con data/gamedata.base."
+
+msgid "The folder with data/gamedata.base; Steam workshop mods found."
+msgstr "La carpeta con data/gamedata.base; se encontraron mods del Steam Workshop."
+
+msgid "Vulkan loader not found. Use Auto/Metal or install it with Setup."
+msgstr "No se encontró el cargador de Vulkan. Usa Auto/Metal o instálalo con Configuración."
+
+msgid "Vulkan loader not found. Install Homebrew and MoltenVK, or use Auto/Metal."
+msgstr "No se encontró el cargador de Vulkan. Instala Homebrew y MoltenVK, o usa Auto/Metal."
+
+msgid "The Vulkan loader is not installed: use Auto/Metal, or install MoltenVK from Settings > Setup."
+msgstr "El cargador de Vulkan no está instalado: usa Auto/Metal o instala MoltenVK desde Ajustes > Configuración."
+
+msgid "Not found. Browse to your Kenshi folder (it contains data/gamedata.base)."
+msgstr "No encontrada. Busca tu carpeta de Kenshi (contiene data/gamedata.base)."
+
+msgid "Not a Kenshi folder: data/gamedata.base not found."
+msgstr "No es una carpeta de Kenshi: no se encontró data/gamedata.base."
+
+msgid "Vulkan loader not found; choose Auto/Metal, or install it later in Settings."
+msgstr "No se encontró el cargador de Vulkan; elige Auto/Metal o instálalo más tarde en Ajustes."
+
+msgctxt "save notice"
+msgid "Loaded"
+msgstr "Cargada"
+
+msgid "WASD move    Q / E down, up    Right mouse look    Ctrl + left click focus    Wheel zoom    Alt + wheel fly speed    Shift fast    Ctrl slow    Z / X roll    V level    "
+msgstr "WASD mover    Q / E bajar, subir    Botón derecho mirar    Ctrl + clic izquierdo enfocar    Rueda zoom    Alt + rueda velocidad de vuelo    Mayús rápido    Ctrl lento    Z / X girar    V nivelar    "
+
+msgid "Script mod not loaded"
+msgstr "Mod de script no cargado"
+
+msgid "{1} problem"
+msgid_plural "{1} problems"
+msgstr[0] "{1} problema"
+msgstr[1] "{1} problemas"
+
+msgid "Anti-aliasing"
+msgstr "Antialiasing"
+
+msgid "the game lights every surface's shadow side with one flat sky ambient per biome; Meitou traces rays from a grid of probes around the camera (needs a GPU with ray tracing; --no-gi leaves it out), so corners, interiors and the ground under overhangs darken and sunlit ground lights what faces it (docs/render-gi.md)"
+msgstr "el juego ilumina el lado en sombra de cada superficie con una única luz ambiental plana del cielo por bioma; Meitou traza rayos desde una cuadrícula de sondas alrededor de la cámara (necesita una GPU con trazado de rayos; --no-gi lo omite), así que las esquinas, los interiores y el suelo bajo los salientes se oscurecen y el suelo soleado ilumina lo que tiene enfrente (docs/render-gi.md)"
+
+msgid "the game lights its haze and weather fog the same everywhere, so shadows end at the ground; Meitou darkens the air the sun does not reach (a froxel grid of shadow samples along the view), so mountains, rock stacks and buildings cast shafts through the haze and the fog (docs/render-shafts.md)"
+msgstr "el juego ilumina la bruma y la niebla del clima igual en todas partes, así que las sombras acaban en el suelo; Meitou oscurece el aire al que no llega el sol (una cuadrícula de froxels con muestras de sombra a lo largo de la vista), así que montañas, pilares de roca y edificios proyectan haces a través de la bruma y la niebla (docs/render-shafts.md)"
+
+msgid "the game's haze takes the sky's sunlit colour, which is black at night, so everything a few thousand units away fades to black against a black sky and only the land round the camera stays lit; Meitou gives the air a faint glow of its own (airglow, and the planet's light scattered by the air, darker when the planet is a crescent): the far land fades into it, and the sky shows the same glow above the horizon, falling off with height, so ridges stand against it and the stars keep their contrast (docs/formats/sky.md, \"Night air\")"
+msgstr "la bruma del juego toma el color soleado del cielo, que de noche es negro, así que todo lo que está a unos miles de unidades se funde a negro contra un cielo negro y solo queda iluminada la tierra alrededor de la cámara; Meitou da al aire un tenue brillo propio (luminiscencia nocturna y la luz del planeta dispersada por el aire, más oscura cuando el planeta es una media luna): la tierra lejana se funde en él y el cielo muestra el mismo brillo sobre el horizonte, que se atenúa con la altura, así que las crestas destacan contra él y las estrellas mantienen su contraste (docs/formats/sky.md, \"Night air\")"
+
+msgid "the game lights the night land with a flat, directionless ambient; Meitou lets the big planet light it, as a sunlit sphere would (its phase, colour and size decide how much; the Tab slider scales it), from its fixed direction, with the shadows, the water's glint and the probes' light following (docs/formats/sky.md \"Planetshine\")"
+msgstr "el juego ilumina la tierra nocturna con una luz ambiental plana y sin dirección; Meitou deja que la ilumine el gran planeta, como lo haría una esfera iluminada por el sol (su fase, color y tamaño deciden cuánto; el control deslizante de Tab lo escala), desde su dirección fija, con las sombras, el brillo del agua y la luz de las sondas a juego (docs/formats/sky.md \"Planetshine\")"
+
+msgid "the game lays one 4096 pixel starfield texture over the dome (blobby purple stars, a smeared brown nebula, blurred when it is magnified); Meitou draws point stars (a few thousand naked-eye ones and a faint background, colours from blackbody temperatures, one or two pixels wide at any resolution), turning about the sun's axis once a game day, dimming and reddening towards the horizon, the low ones twinkling (docs/formats/sky.md, \"Meitou night sky\")"
+msgstr "el juego pone una sola textura de campo estelar de 4096 píxeles sobre la cúpula (estrellas moradas como manchas, una nebulosa marrón emborronada, borrosa al ampliarse); Meitou dibuja estrellas puntuales (unos miles visibles a simple vista y un fondo tenue, colores según temperaturas de cuerpo negro, de uno o dos píxeles de ancho a cualquier resolución), que giran sobre el eje del sol una vez por día de juego, se atenúan y enrojecen hacia el horizonte y titilan las más bajas (docs/formats/sky.md, \"Meitou night sky\")"
+
+msgid "the game uses a flat cloud texture; Meitou ray marches a procedural cloud volume with rounded shapes, light absorption, sunlit edges and shaded interiors, lit by the sun and by the planet at night; coverage and wind follow the existing weather, with separate temporal histories for the sky and water reflections (docs/render-clouds.md)"
+msgstr "el juego usa una textura de nubes plana; Meitou recorre con ray marching un volumen de nubes procedural con formas redondeadas, absorción de luz, bordes soleados e interiores sombreados, iluminado por el sol y de noche por el planeta; la cobertura y el viento siguen el clima existente, con historiales temporales separados para el cielo y los reflejos del agua (docs/render-clouds.md)"
+
+msgid "the game's clouds cast no shadows; Meitou anchors the cloud layer to the world (1.2 km up, so the clouds also drift past as the camera moves) and dims the sun on the land and the water under it, the shadows sweeping over the ground with the wind (docs/formats/clouds.md, \"Meitou cloud shadows\")"
+msgstr "las nubes del juego no proyectan sombras; Meitou ancla la capa de nubes al mundo (a 1,2 km de altura, así que las nubes también pasan cuando la cámara se mueve) y atenúa el sol sobre la tierra y el agua bajo ella, con las sombras barriendo el suelo con el viento (docs/formats/clouds.md, \"Meitou cloud shadows\")"
+
+msgid "with Cloud shadows on, Meitou weakens them as the camera nears a placed fog volume and drops them inside one; otherwise the cloud shadows darken the already dim fog, and places like the swamp or the Deadlands get too dark (docs/render-clouds.md)"
+msgstr "con las sombras de nubes activadas, Meitou las debilita cuando la cámara se acerca a un volumen de niebla colocado y las quita dentro de él; si no, las sombras de nubes oscurecen la niebla ya tenue, y lugares como el pantano o las Deadlands quedan demasiado oscuros (docs/render-clouds.md)"
+
+msgid "the game draws a character's meshes with their files' own LOD levels (one reduced level at 200 or 400 units for some, none for most: human_female, hair cuts, weapons) by the distance_sphere rule; Meitou makes four reductions of every mesh at load and picks one by how many pixels its deviation would show, with coarser levels in the shadow maps (docs/characters.md \"LOD of character meshes\")"
+msgstr "el juego dibuja las mallas de un personaje con los niveles de LOD de sus propios archivos (un nivel reducido a 200 o 400 unidades en algunas, ninguno en la mayoría: human_female, cortes de pelo, armas) según la regla distance_sphere; Meitou crea cuatro reducciones de cada malla al cargar y elige una según cuántos píxeles mostraría su desviación, con niveles más bastos en los mapas de sombras (docs/characters.md \"LOD of character meshes\")"
+
+msgid "the game lights skin as it lights stone, so the sun's terminator on a face or arm is a hard grey edge; Meitou lets the light spread under bare skin (pre-integrated scattering from a measured skin profile, by how tightly the surface curves), so the edge softens and warms to red, in the world and on the Meitou stage and portraits; clothing, hair, animals and robots stay as they were (docs/character-renderer.md \"Skin\")"
+msgstr "el juego ilumina la piel como la piedra, así que el terminador del sol en una cara o un brazo es un borde gris y duro; Meitou deja que la luz se difunda bajo la piel desnuda (dispersión preintegrada a partir de un perfil de piel medido, según lo curvada que esté la superficie), así que el borde se suaviza y se calienta hacia el rojo, en el mundo y en el escenario y los retratos de Meitou; la ropa, el pelo, los animales y los robots quedan como estaban (docs/character-renderer.md \"Skin\")"
+
+msgid "the game lights its ceiling lamps and other light buildings only at night, indoors too, so rooms are dim by day; Meitou keeps the lamps of buildings' interior layouts lit all day, outdoor lamps stay night-only (docs/render-lights.md)"
+msgstr "el juego enciende sus lámparas de techo y otros edificios de luz solo de noche, también en interiores, así que las habitaciones están oscuras de día; Meitou mantiene encendidas todo el día las lámparas de los interiores de los edificios, las exteriores siguen solo de noche (docs/render-lights.md)"
+
+msgid "the game draws an inventory item's icon from its mesh with one sample a pixel (jagged edges, shimmering fine detail) and shows the pictures it saved before; Meitou draws each one supersampled 4 x 4, as the enhanced portraits, and keeps its own pictures (docs/game/ui-screens.md \"Item icons\")"
+msgstr "el juego dibuja el icono de un objeto del inventario a partir de su malla con una muestra por píxel (bordes dentados, detalle fino parpadeante) y muestra las imágenes que guardó antes; Meitou dibuja cada uno con supermuestreo 4 x 4, como los retratos mejorados, y guarda sus propias imágenes (docs/game/ui-screens.md \"Item icons\")"
+
+msgid "the game leaves blood only on the terrain, so a fight beside a wall or inside a building marks nothing there; Meitou also sprays splashes over walls, buildings, rocks and other static objects, and leaves pools and drips on floors, never up a wall (docs/game/blood-decals.md \"Blood on surfaces\")"
+msgstr "el juego deja sangre solo en el terreno, así que una pelea junto a una pared o dentro de un edificio no deja marca allí; Meitou también salpica paredes, edificios, rocas y otros objetos estáticos, y deja charcos y gotas en los suelos, nunca pared arriba (docs/game/blood-decals.md \"Blood on surfaces\")"
+
+msgid "the game leaves no tracks; Meitou lets a character who walks through a wet pool or splash carry its colour and leave a few fading prints on the terrain (docs/game/blood-decals.md \"Bloody footprints\")"
+msgstr "el juego no deja huellas; Meitou hace que un personaje que pisa un charco o una salpicadura húmeda se lleve su color y deje unas cuantas huellas que se desvanecen sobre el terreno (docs/game/blood-decals.md \"Bloody footprints\")"
+
+msgid "the game's ground is flat, its normal maps only shading it; Meitou marches the view ray through a height made from each layer's normal map near the eye, and toward the sun for a self-shadow (docs/render-terrain.md \"Ground relief\")"
+msgstr "el suelo del juego es plano, sus mapas de normales solo lo sombrean; Meitou recorre con el rayo de la vista una altura hecha a partir del mapa de normales de cada capa cerca del ojo, y hacia el sol para una autosombra (docs/render-terrain.md \"Ground relief\")"
+
+msgid "stores the game's 3D models more compactly, so they take about half the video memory and look practically the same; in detail, the game's meshes store most corners once for every triangle that uses them, each copy with its own triangle's tangent; Meitou merges the copies that differ only in that tangent into one vertex with their averaged tangent, so meshes keep about 60% fewer vertices (object meshes at The Hub take 50 MB of video memory instead of 98) and the bump lighting barely changes (tangents move 4° on average); applies to meshes loaded after the change (docs/render-objects.md)"
+msgstr "guarda los modelos 3D del juego de forma más compacta, así que ocupan cerca de la mitad de memoria de vídeo y se ven prácticamente igual; en detalle, las mallas del juego guardan la mayoría de las esquinas una vez por cada triángulo que las usa, cada copia con la tangente de su propio triángulo; Meitou une las copias que solo difieren en esa tangente en un solo vértice con su tangente promediada, así que las mallas conservan cerca de un 60 % menos de vértices (las mallas de objetos en The Hub ocupan 50 MB de memoria de vídeo en lugar de 98) y la iluminación del relieve apenas cambia (las tangentes se mueven 4° de media); se aplica a las mallas cargadas después del cambio (docs/render-objects.md)"
+
+msgid "the game draws a bolt in flight as its mesh alone, stretched a little with its speed, which is hard to follow at a distance; Meitou draws a faint streak behind it that grows out of the crossbow and shrinks into where the bolt stops; drawn with the particles, so none with --no-particles (docs/game/combat.md \"Bolt visuals\")"
+msgstr "el juego dibuja un virote en vuelo solo como su malla, algo estirada con la velocidad, lo que cuesta seguir a distancia; Meitou dibuja detrás una estela tenue que sale de la ballesta y se encoge hacia donde se detiene el virote; se dibuja con las partículas, así que no hay con --no-particles (docs/game/combat.md \"Bolt visuals\")"
+
+msgid "the game's dust and smoke sprites cut straight into the ground and walls they cross (all but its mist and steam, which fade; Faithful draws those hard-edged too); Meitou fades each sprite out over the last stretch before a surface (a quarter of its size, 0.2 to 30 m), so dust clouds meet the ground softly; the game's sprites are also flat and not fogged (one brightness in sun and shade, near and far, seen through fog banks), Meitou darkens dust and smoke where the sun is shadowed, brightens them towards the sun and puts the haze and the fog volumes in front of them over them; and it fades each effect out before the distance it stops being simulated at, where its whole cloud popped in and out (docs/render-post.md \"Fog\")"
+msgstr "los sprites de polvo y humo del juego cortan en seco el suelo y las paredes que cruzan (todos menos la neblina y el vapor, que se desvanecen; Faithful dibuja también esos con bordes duros); Meitou desvanece cada sprite en el último tramo antes de una superficie (un cuarto de su tamaño, de 0,2 a 30 m), así que las nubes de polvo tocan el suelo con suavidad; los sprites del juego además son planos y sin niebla (un solo brillo al sol y a la sombra, cerca y lejos, vistos a través de bancos de niebla), Meitou oscurece el polvo y el humo donde el sol queda tapado, los aclara hacia el sol y pone por encima la bruma y los volúmenes de niebla que tienen delante; y desvanece cada efecto antes de la distancia a la que deja de simularse, donde toda su nube aparecía y desaparecía de golpe (docs/render-post.md \"Fog\")"
+
+msgid "the probes' grid leaves many probes inside walls, where they only go dark; Meitou moves them out of the geometry, lets the clouds shade the bounced light and the light shafts, and adds a world-space cache of short traced rays, small cells near the eye, for the fine indirect light the probes are too coarse for (corners, under tables) (--gi-hybrid picks the parts; docs/render-gi.md \"Hybrid GI\")"
+msgstr "la cuadrícula de sondas deja muchas sondas dentro de las paredes, donde solo se oscurecen; Meitou las saca de la geometría, deja que las nubes sombreen la luz rebotada y los haces de luz, y añade una caché en espacio de mundo de rayos cortos trazados, con celdas pequeñas cerca del ojo, para la luz indirecta fina para la que las sondas son demasiado bastas (esquinas, bajo las mesas) (--gi-hybrid elige las partes; docs/render-gi.md \"Hybrid GI\")"
+
+msgid "the game lights hair and cloth as it lights stone; Meitou draws two highlights along the strands and a soft sheen on the edges of cloth and a little on leather, and skin glows past its shadows and through ears and fingers held against the light, eyes show a small catchlight instead of a mirror of the landscape, robots and held weapons read as metal, and everything wets in the rain, in the sun and under lamps (docs/character-renderer.md \"Hair, cloth, skin and eyes\")"
+msgstr "el juego ilumina el pelo y la tela como la piedra; Meitou dibuja dos brillos a lo largo de los mechones y un suave lustre en los bordes de la tela y un poco en el cuero, la piel brilla más allá de sus sombras y a través de orejas y dedos a contraluz, los ojos muestran un pequeño reflejo en lugar de un espejo del paisaje, los robots y las armas empuñadas se ven metálicos, y todo se moja con la lluvia, al sol y bajo las lámparas (docs/character-renderer.md \"Hair, cloth, skin and eyes\")"
+
+msgid "the game's characters leave nothing on the ground; Meitou presses footprints and drag marks into sand, mud, snow and, lightly, dirt near the camera, shaded as a normal and a height with the ground relief; wind and rain wear them away (visual only: not saved; docs/render-terrain.md \"Ground trails\")"
+msgstr "los personajes del juego no dejan nada en el suelo; Meitou marca huellas y rastros de arrastre en arena, barro, nieve y, levemente, tierra cerca de la cámara, sombreados como normal y altura con el relieve del suelo; el viento y la lluvia los borran (solo visual: no se guardan; docs/render-terrain.md \"Ground trails\")"
+
+msgid "the game's water meets what stands in it without a mark; Meitou clings foam to rocks, posts and legs at the waterline, from the scene's depth behind the surface, and the posed bodies of the characters and animals in the water near the camera push a simulated surface: legs raise bow waves and ripples that spread, slow in the shallows, stop at the shore and leave a wake with foam behind (Vulkan; needs the depth the refraction copies; docs/render-water.md \"Contact foam, wakes and ripples\")"
+msgstr "el agua del juego toca lo que hay en ella sin dejar marca; Meitou pega espuma a rocas, postes y piernas en la línea de agua, a partir de la profundidad de la escena tras la superficie, y los cuerpos posados de los personajes y animales en el agua cerca de la cámara empujan una superficie simulada: las piernas levantan olas de proa y ondas que se extienden, se frenan en lo poco profundo, se detienen en la orilla y dejan una estela con espuma detrás (Vulkan; necesita la profundidad que copia la refracción; docs/render-water.md \"Contact foam, wakes and ripples\")"
+
+msgid "the game's blood stays on the skin: a blade that has just cut a man is clean, and a coat over a bleeding wound shows nothing; Meitou lets a weapon take the blood of what it wounds on its blade (wet and bright, then dried and dark, then flaking off; washed away in water and rain) and lets worn armour and clothing show the splatter of the body part under them, as the skin does (docs/game/blood-decals.md \"On weapons and gear\")"
+msgstr "la sangre del juego se queda en la piel: una hoja que acaba de cortar a un hombre está limpia, y un abrigo sobre una herida sangrante no muestra nada; Meitou hace que un arma recoja en su hoja la sangre de lo que hiere (húmeda y brillante, luego seca y oscura, luego desconchándose; se lava en el agua y con la lluvia) y que la armadura y la ropa puestas muestren las salpicaduras de la parte del cuerpo que cubren, como hace la piel (docs/game/blood-decals.md \"On weapons and gear\")"
+
+msgid "the game fixes a sheathed weapon, its scabbard and a crossbow on the back to their bone, and a backpack to the spine, so they move as one block with the hip or the back; Meitou lets them swing a little behind the body's motion (a damped spring on each hanging point, stepped in game time: at most 22 degrees for a weapon, 7 for a backpack, which never swings into the back and whose straps stay on the chest) for people near enough to see it (docs/character-renderer.md \"Gear sway\")"
+msgstr "el juego fija un arma envainada, su vaina y una ballesta a la espalda a su hueso, y una mochila a la columna, así que se mueven como un bloque con la cadera o la espalda; Meitou deja que se balanceen un poco tras el movimiento del cuerpo (un muelle amortiguado en cada punto de anclaje, calculado en tiempo de juego: como mucho 22 grados para un arma, 7 para una mochila, que nunca se mete en la espalda y cuyas correas se quedan en el pecho) en la gente lo bastante cerca para verlo (docs/character-renderer.md \"Gear sway\")"
+
+msgid "the game keeps everything in focus; Meitou blurs what is away from the focus as a real lens does, by the field of view, the f-number and the distance, for the free and cinematic cameras (the cinema's keys can set focus and aperture; docs/render-post.md \"Depth of field\")"
+msgstr "el juego lo mantiene todo enfocado; Meitou desenfoca lo que está fuera del foco como lo hace un objetivo real, según el campo de visión, el número f y la distancia, en las cámaras libre y cinemática (las claves de la cinemática pueden fijar el foco y la apertura; docs/render-post.md \"Depth of field\")"
+
+msgid "the game's picture is as bright at its corners as at its centre; Meitou can darken it towards the corners as a camera lens does, by the Vignette strength, in every camera (photo mode's Look tab is this same switch; docs/render-post.md \"Vignette and film grain\")"
+msgstr "la imagen del juego es tan brillante en las esquinas como en el centro; Meitou puede oscurecerla hacia las esquinas como hace un objetivo de cámara, según la intensidad de Viñeta, en todas las cámaras (la pestaña Estilo del modo foto es este mismo interruptor; docs/render-post.md \"Vignette and film grain\")"
+
+msgid "the game's picture is clean; Meitou can lay a fine film grain over it, new each frame and strongest in the mid-tones, by the Film grain strength, in every camera (photo mode's Look tab is this same switch; docs/render-post.md \"Vignette and film grain\")"
+msgstr "la imagen del juego es limpia; Meitou puede ponerle encima un fino grano de película, nuevo en cada fotograma y más fuerte en los tonos medios, según la intensidad de Grano de película, en todas las cámaras (la pestaña Estilo del modo foto es este mismo interruptor; docs/render-post.md \"Vignette and film grain\")"
+
+msgid "the game's lamps shine through walls and everything else that stands in their way; Meitou traces a ray from each surface to the lamps that light it most and takes the light of the blocked ones back off, so buildings, rocks, plants, grass and characters cast lamp shadows (needs a GPU with ray tracing and Indirect light on; characters cast them but do not receive them; docs/render-lights.md \"Traced lamp shadows\")"
+msgstr "las lámparas del juego brillan a través de las paredes y de todo lo que se interpone; Meitou traza un rayo desde cada superficie hasta las lámparas que más la iluminan y resta la luz de las que están tapadas, así que edificios, rocas, plantas, hierba y personajes proyectan sombras de lámpara (necesita una GPU con trazado de rayos y Luz indirecta activada; los personajes las proyectan pero no las reciben; docs/render-lights.md \"Traced lamp shadows\")"
+
+msgid "the game lights its portraits and the character editor with a plain key light and nothing else; Meitou sets a fixed warm sun high on one side, a cool sky over warm sand, the sun's shadow on the character itself and the occlusion of its folds, the same whatever the hour (with Meitou's tone map, grade or anti-aliasing on; docs/character-renderer.md \"Meitou stage and portraits\")"
+msgstr "el juego ilumina sus retratos y el editor de personajes con una simple luz principal y nada más; Meitou pone un sol cálido fijo en lo alto de un lado, un cielo frío sobre arena cálida, la sombra del sol sobre el propio personaje y la oclusión de sus pliegues, igual a cualquier hora (con el mapeo de tonos, la gradación o el antialiasing de Meitou activados; docs/character-renderer.md \"Meitou stage and portraits\")"
+
+msgid "the game's ceiling lamps, spotlights and searchlights are a pale yellow with more green than red, which reads as a sickly yellow-green on walls and skin; Meitou draws such lamps a warm yellow, halfway to the game's own torch colour and as bright as they were; torches, fires and the blue-green street lamps stay as they are (docs/render-lights.md)"
+msgstr "las lámparas de techo, focos y reflectores del juego son de un amarillo pálido con más verde que rojo, que se ve de un amarillo verdoso enfermizo en paredes y piel; Meitou dibuja esas lámparas de un amarillo cálido, a medio camino del color de antorcha del propio juego y con el mismo brillo; las antorchas, los fuegos y las farolas verdeazuladas quedan como están (docs/render-lights.md)"
+
+msgid "the game draws its sake and rum bottles solid; Meitou draws them as glass: the scene behind bent and tinted through the walls, reflections of the sun, sky and lamps brighter towards the edges, the drink inside up to its level, the neck or cork solid (docs/render-objects.md \"See-through items\")"
+msgstr "el juego dibuja sus botellas de sake y ron macizas; Meitou las dibuja como vidrio: la escena de detrás curvada y teñida a través de las paredes, reflejos del sol, el cielo y las lámparas más brillantes hacia los bordes, la bebida dentro hasta su nivel, el cuello o el corcho macizos (docs/render-objects.md \"See-through items\")"
+
+msgid "Sky flight to/from the main menu (Meitou main menu)."
+msgstr "Vuelo por el cielo hacia/desde el menú principal (menú principal de Meitou)."
+
+msgid "Sky flight for save loads/new games during play (Meitou UI)."
+msgstr "Vuelo por el cielo al cargar partidas/empezar partidas nuevas durante el juego (interfaz de Meitou)."
+
+msgid "Seconds a character flight takes, and each hop of the squad tour (numpad /)."
+msgstr "Segundos que dura un vuelo hacia un personaje, y cada salto del recorrido por el escuadrón (teclado numérico /)."
+
+msgid "Version"
+msgstr "Versión"
+
+msgid "Author"
+msgstr "Autor"
+
+msgid "Custom list"
+msgstr "Lista personalizada"
+
+msgid "off"
+msgstr "desactivado"
+
+msgid "unavailable"
+msgstr "no disponible"
+
+msgid "Attach log.txt (it shows folder names; your user name is hidden)"
+msgstr "Adjuntar log.txt (muestra nombres de carpetas; tu nombre de usuario queda oculto)"
+
+msgid "This machine needs electricity to function. You either need to build generators, or you are out of fuel / there is no wind."
+msgstr "Esta máquina necesita electricidad para funcionar. O necesitas construir generadores, o te has quedado sin combustible / no hay viento."
+
+msgid "the game draws the dust and the spray a running foot throws up as glowing sprites, as bright by night as by day and in shade as in the sun; Meitou lights them as the ground is lit: the sun through its shadows, the sky, the lamps, the same as the game's by day (docs/render-post.md \"Lit dust\")"
+msgstr "el juego dibuja el polvo y las salpicaduras que levanta un pie al correr como sprites luminosos, igual de brillantes de noche que de día y a la sombra que al sol; Meitou los ilumina como está iluminado el suelo: el sol a través de sus sombras, el cielo, las lámparas, igual que el juego de día (docs/render-post.md \"Lit dust\")"
+
+msgid "1 game data problem, see log.txt"
+msgstr "1 problema en los datos del juego, consulta log.txt"

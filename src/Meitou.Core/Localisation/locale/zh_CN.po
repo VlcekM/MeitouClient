@@ -5282,3 +5282,145 @@ msgstr "受光照的尘土"
 
 msgid "Light the dust and spray kicked up by running feet like the ground around them, instead of glowing at night."
 msgstr "奔跑的脚扬起的尘土和水花像周围地面一样受光照，而不是在夜里发光。"
+
+msgid "Arrange"
+msgstr "排列"
+
+msgid "OK"
+msgstr "确定"
+
+msgid "and {1} more"
+msgstr "以及另外 {1} 个"
+
+msgid "Vulkan loader not found. Install Homebrew and MoltenVK, or use Auto/Metal."
+msgstr "未找到 Vulkan 加载器。请安装 Homebrew 和 MoltenVK，或使用 Auto/Metal。"
+
+msgid "The Vulkan loader is not installed: use Auto/Metal, or install MoltenVK from Settings > Setup."
+msgstr "未安装 Vulkan 加载器：请使用 Auto/Metal，或在 设置 > 配置 中安装 MoltenVK。"
+
+msgid "WASD move    Q / E down, up    Right mouse look    Ctrl + left click focus    Wheel zoom    Alt + wheel fly speed    Shift fast    Ctrl slow    Z / X roll    V level    "
+msgstr "WASD 移动    Q / E 下降、上升    右键 环顾    Ctrl + 左键 聚焦    滚轮 缩放    Alt + 滚轮 飞行速度    Shift 加速    Ctrl 减速    Z / X 翻滚    V 水平    "
+
+msgid "Script mod not loaded"
+msgstr "脚本模组未加载"
+
+msgid "{1} problem"
+msgid_plural "{1} problems"
+msgstr[0] "{1} 个问题"
+
+msgid "the game lights every surface's shadow side with one flat sky ambient per biome; Meitou traces rays from a grid of probes around the camera (needs a GPU with ray tracing; --no-gi leaves it out), so corners, interiors and the ground under overhangs darken and sunlit ground lights what faces it (docs/render-gi.md)"
+msgstr "原版游戏用每个生物群系一个平坦的天空环境光照亮每个表面的背光面；Meitou 从相机周围的探针网格追踪光线（需要支持光线追踪的 GPU；--no-gi 可关闭），因此角落、室内和悬垂物下方的地面会变暗，而阳光照射的地面会照亮朝向它的物体 (docs/render-gi.md)"
+
+msgid "the game lights its haze and weather fog the same everywhere, so shadows end at the ground; Meitou darkens the air the sun does not reach (a froxel grid of shadow samples along the view), so mountains, rock stacks and buildings cast shafts through the haze and the fog (docs/render-shafts.md)"
+msgstr "原版游戏在各处以相同方式照亮雾霭和天气雾，因此阴影止于地面；Meitou 让阳光照不到的空气变暗（沿视线采样阴影的视锥体素网格），因此山峦、石柱和建筑会在雾霭和雾中投下光束 (docs/render-shafts.md)"
+
+msgid "the game's haze takes the sky's sunlit colour, which is black at night, so everything a few thousand units away fades to black against a black sky and only the land round the camera stays lit; Meitou gives the air a faint glow of its own (airglow, and the planet's light scattered by the air, darker when the planet is a crescent): the far land fades into it, and the sky shows the same glow above the horizon, falling off with height, so ridges stand against it and the stars keep their contrast (docs/formats/sky.md, \"Night air\")"
+msgstr "原版游戏的雾霭采用天空的日照颜色，夜间为黑色，因此几千单位外的一切都会在黑色天空下淡入黑暗，只有相机周围的地面仍被照亮；Meitou 给空气一层自身的微光（大气辉光，以及被空气散射的行星光，行星呈新月形时更暗）：远处的地面淡入其中，天空在地平线上方显出同样的微光并随高度减弱，因此山脊在其衬托下显现，星星保持对比度 (docs/formats/sky.md, \"Night air\")"
+
+msgid "the game lights the night land with a flat, directionless ambient; Meitou lets the big planet light it, as a sunlit sphere would (its phase, colour and size decide how much; the Tab slider scales it), from its fixed direction, with the shadows, the water's glint and the probes' light following (docs/formats/sky.md \"Planetshine\")"
+msgstr "原版游戏用平坦、无方向的环境光照亮夜间地面；Meitou 让巨大的行星像被阳光照亮的球体那样照亮地面（其相位、颜色和大小决定强度；Tab 滑块可缩放），光从其固定方向而来，阴影、水面闪光和探针光照随之变化 (docs/formats/sky.md \"Planetshine\")"
+
+msgid "the game lays one 4096 pixel starfield texture over the dome (blobby purple stars, a smeared brown nebula, blurred when it is magnified); Meitou draws point stars (a few thousand naked-eye ones and a faint background, colours from blackbody temperatures, one or two pixels wide at any resolution), turning about the sun's axis once a game day, dimming and reddening towards the horizon, the low ones twinkling (docs/formats/sky.md, \"Meitou night sky\")"
+msgstr "原版游戏在天穹上铺一张 4096 像素的星空纹理（模糊的紫色星点、涂抹状的棕色星云，放大时会糊）；Meitou 绘制点状星星（数千颗肉眼可见的星和一层暗淡的背景，颜色取自黑体温度，在任何分辨率下都只有一两个像素宽），每个游戏日绕太阳的轴转一圈，越靠近地平线越暗越红，低处的星星会闪烁 (docs/formats/sky.md, \"Meitou night sky\")"
+
+msgid "the game uses a flat cloud texture; Meitou ray marches a procedural cloud volume with rounded shapes, light absorption, sunlit edges and shaded interiors, lit by the sun and by the planet at night; coverage and wind follow the existing weather, with separate temporal histories for the sky and water reflections (docs/render-clouds.md)"
+msgstr "原版游戏使用平面云纹理；Meitou 以光线步进渲染程序化的云体积，具有圆润的形状、光吸收、受光的边缘和阴影中的内部，白天由太阳照亮，夜晚由行星照亮；云量和风遵循现有天气，天空和水面反射各有独立的时间历史 (docs/render-clouds.md)"
+
+msgid "the game's clouds cast no shadows; Meitou anchors the cloud layer to the world (1.2 km up, so the clouds also drift past as the camera moves) and dims the sun on the land and the water under it, the shadows sweeping over the ground with the wind (docs/formats/clouds.md, \"Meitou cloud shadows\")"
+msgstr "原版游戏的云不投射阴影；Meitou 将云层固定在世界中（高 1.2 公里，因此相机移动时云也会飘过），并减弱其下方陆地和水面的阳光，阴影随风掠过地面 (docs/formats/clouds.md, \"Meitou cloud shadows\")"
+
+msgid "with Cloud shadows on, Meitou weakens them as the camera nears a placed fog volume and drops them inside one; otherwise the cloud shadows darken the already dim fog, and places like the swamp or the Deadlands get too dark (docs/render-clouds.md)"
+msgstr "开启云影时，Meitou 会在相机靠近放置的雾体积时减弱云影，并在其内部去掉云影；否则云影会让本已昏暗的雾更暗，沼泽或 Deadlands 等地会过暗 (docs/render-clouds.md)"
+
+msgid "the game draws a character's meshes with their files' own LOD levels (one reduced level at 200 or 400 units for some, none for most: human_female, hair cuts, weapons) by the distance_sphere rule; Meitou makes four reductions of every mesh at load and picks one by how many pixels its deviation would show, with coarser levels in the shadow maps (docs/characters.md \"LOD of character meshes\")"
+msgstr "原版游戏按 distance_sphere 规则用角色网格文件自带的 LOD 级别绘制（部分在 200 或 400 单位处有一个简化级别，大多数没有：human_female、发型、武器）；Meitou 在加载时为每个网格生成四个简化版本，并按其偏差会显示多少像素来选择，阴影贴图中使用更粗的级别 (docs/characters.md \"LOD of character meshes\")"
+
+msgid "the game lights skin as it lights stone, so the sun's terminator on a face or arm is a hard grey edge; Meitou lets the light spread under bare skin (pre-integrated scattering from a measured skin profile, by how tightly the surface curves), so the edge softens and warms to red, in the world and on the Meitou stage and portraits; clothing, hair, animals and robots stay as they were (docs/character-renderer.md \"Skin\")"
+msgstr "原版游戏像照亮石头一样照亮皮肤，因此脸上或手臂上的明暗交界线是一道生硬的灰边；Meitou 让光在裸露的皮肤下散开（基于实测皮肤轮廓、按表面弯曲程度的预积分散射），因此边缘变得柔和并偏向暖红，在世界中以及 Meitou 的舞台和肖像上都是如此；衣物、头发、动物和机器人保持原样 (docs/character-renderer.md \"Skin\")"
+
+msgid "the game lights its ceiling lamps and other light buildings only at night, indoors too, so rooms are dim by day; Meitou keeps the lamps of buildings' interior layouts lit all day, outdoor lamps stay night-only (docs/render-lights.md)"
+msgstr "原版游戏只在夜间点亮吊灯和其他照明建筑，室内也一样，因此白天房间很暗；Meitou 让建筑室内布局中的灯全天亮着，室外的灯仍只在夜间亮 (docs/render-lights.md)"
+
+msgid "the game draws an inventory item's icon from its mesh with one sample a pixel (jagged edges, shimmering fine detail) and shows the pictures it saved before; Meitou draws each one supersampled 4 x 4, as the enhanced portraits, and keeps its own pictures (docs/game/ui-screens.md \"Item icons\")"
+msgstr "原版游戏以每像素一个采样从网格绘制物品栏物品的图标（锯齿边缘、闪烁的细节），并显示之前保存的图片；Meitou 像增强肖像一样以 4 x 4 超采样绘制每个图标，并保留自己的图片 (docs/game/ui-screens.md \"Item icons\")"
+
+msgid "the game leaves blood only on the terrain, so a fight beside a wall or inside a building marks nothing there; Meitou also sprays splashes over walls, buildings, rocks and other static objects, and leaves pools and drips on floors, never up a wall (docs/game/blood-decals.md \"Blood on surfaces\")"
+msgstr "原版游戏只在地形上留下血迹，因此在墙边或建筑内的战斗不会在那里留下痕迹；Meitou 还会把血溅到墙壁、建筑、岩石和其他静态物体上，并在地面上留下血泊和血滴，但不会顺墙向上 (docs/game/blood-decals.md \"Blood on surfaces\")"
+
+msgid "the game leaves no tracks; Meitou lets a character who walks through a wet pool or splash carry its colour and leave a few fading prints on the terrain (docs/game/blood-decals.md \"Bloody footprints\")"
+msgstr "原版游戏不留足迹；Meitou 让走过湿血泊或血迹的角色沾上其颜色，并在地形上留下几个渐渐消失的脚印 (docs/game/blood-decals.md \"Bloody footprints\")"
+
+msgid "the game's ground is flat, its normal maps only shading it; Meitou marches the view ray through a height made from each layer's normal map near the eye, and toward the sun for a self-shadow (docs/render-terrain.md \"Ground relief\")"
+msgstr "原版游戏的地面是平的，法线贴图只负责着色；Meitou 在眼睛附近让视线光线穿过由每层法线贴图生成的高度步进，并朝太阳方向步进以产生自阴影 (docs/render-terrain.md \"Ground relief\")"
+
+msgid "stores the game's 3D models more compactly, so they take about half the video memory and look practically the same; in detail, the game's meshes store most corners once for every triangle that uses them, each copy with its own triangle's tangent; Meitou merges the copies that differ only in that tangent into one vertex with their averaged tangent, so meshes keep about 60% fewer vertices (object meshes at The Hub take 50 MB of video memory instead of 98) and the bump lighting barely changes (tangents move 4° on average); applies to meshes loaded after the change (docs/render-objects.md)"
+msgstr "以更紧凑的方式存储游戏的 3D 模型，因此它们只占约一半显存，外观几乎不变；具体来说，游戏的网格为每个使用某个顶点的三角形各存一份该顶点，每份都带有其所属三角形的切线；Meitou 把仅切线不同的副本合并为一个使用平均切线的顶点，因此网格的顶点减少约 60%（The Hub 的物体网格占用 50 MB 显存而非 98 MB），凹凸光照几乎不变（切线平均偏移 4°）；适用于更改后加载的网格 (docs/render-objects.md)"
+
+msgid "the game draws a bolt in flight as its mesh alone, stretched a little with its speed, which is hard to follow at a distance; Meitou draws a faint streak behind it that grows out of the crossbow and shrinks into where the bolt stops; drawn with the particles, so none with --no-particles (docs/game/combat.md \"Bolt visuals\")"
+msgstr "原版游戏只用网格本身绘制飞行中的弩箭，按速度略微拉长，远处很难看清；Meitou 在其后绘制一道淡淡的轨迹，从弩中伸出，并收缩到弩箭停下的地方；与粒子一起绘制，因此使用 --no-particles 时没有 (docs/game/combat.md \"Bolt visuals\")"
+
+msgid "the game's dust and smoke sprites cut straight into the ground and walls they cross (all but its mist and steam, which fade; Faithful draws those hard-edged too); Meitou fades each sprite out over the last stretch before a surface (a quarter of its size, 0.2 to 30 m), so dust clouds meet the ground softly; the game's sprites are also flat and not fogged (one brightness in sun and shade, near and far, seen through fog banks), Meitou darkens dust and smoke where the sun is shadowed, brightens them towards the sun and puts the haze and the fog volumes in front of them over them; and it fades each effect out before the distance it stops being simulated at, where its whole cloud popped in and out (docs/render-post.md \"Fog\")"
+msgstr "原版游戏的尘土和烟雾精灵会直接切入它们穿过的地面和墙壁（只有薄雾和蒸汽会淡出；Faithful 也把它们画成硬边）；Meitou 让每个精灵在接触表面前的最后一段（其大小的四分之一，0.2 到 30 米）淡出，因此尘云会柔和地接触地面；原版的精灵还是平面的且不受雾影响（在阳光和阴影中、远近、隔着雾带看都是同一亮度），Meitou 在阳光被遮挡处让尘土和烟雾变暗，朝向太阳时变亮，并把它们前方的雾霭和雾体积叠加在其上；它还会在效果停止模拟的距离之前将其淡出，原版在那里整团云会突然出现和消失 (docs/render-post.md \"Fog\")"
+
+msgid "the probes' grid leaves many probes inside walls, where they only go dark; Meitou moves them out of the geometry, lets the clouds shade the bounced light and the light shafts, and adds a world-space cache of short traced rays, small cells near the eye, for the fine indirect light the probes are too coarse for (corners, under tables) (--gi-hybrid picks the parts; docs/render-gi.md \"Hybrid GI\")"
+msgstr "探针网格会把许多探针留在墙内，它们在那里只会变暗；Meitou 把它们移出几何体，让云遮挡反射光和光束，并加入一个世界空间的短追踪光线缓存，眼睛附近使用小单元，用于探针太粗而无法表现的细微间接光（角落、桌子下）（--gi-hybrid 选择部分；docs/render-gi.md \"Hybrid GI\"）"
+
+msgid "the game lights hair and cloth as it lights stone; Meitou draws two highlights along the strands and a soft sheen on the edges of cloth and a little on leather, and skin glows past its shadows and through ears and fingers held against the light, eyes show a small catchlight instead of a mirror of the landscape, robots and held weapons read as metal, and everything wets in the rain, in the sun and under lamps (docs/character-renderer.md \"Hair, cloth, skin and eyes\")"
+msgstr "原版游戏像照亮石头一样照亮头发和布料；Meitou 沿发丝绘制两道高光，在布料边缘和少许皮革上绘制柔和光泽，皮肤会在阴影之外以及逆光的耳朵和手指中透出光，眼睛显示一个小高光而非风景的镜像，机器人和手持武器呈金属质感，一切在雨中、阳光下和灯下都会湿润 (docs/character-renderer.md \"Hair, cloth, skin and eyes\")"
+
+msgid "the game's characters leave nothing on the ground; Meitou presses footprints and drag marks into sand, mud, snow and, lightly, dirt near the camera, shaded as a normal and a height with the ground relief; wind and rain wear them away (visual only: not saved; docs/render-terrain.md \"Ground trails\")"
+msgstr "原版游戏的角色不会在地上留下任何东西；Meitou 在相机附近的沙地、泥地、雪地以及（轻微地）土地上压出脚印和拖痕，与地面浮雕一起作为法线和高度着色；风和雨会把它们抹去（仅视觉效果：不保存；docs/render-terrain.md \"Ground trails\"）"
+
+msgid "the game's water meets what stands in it without a mark; Meitou clings foam to rocks, posts and legs at the waterline, from the scene's depth behind the surface, and the posed bodies of the characters and animals in the water near the camera push a simulated surface: legs raise bow waves and ripples that spread, slow in the shallows, stop at the shore and leave a wake with foam behind (Vulkan; needs the depth the refraction copies; docs/render-water.md \"Contact foam, wakes and ripples\")"
+msgstr "原版游戏的水与其中站立的物体接触时毫无痕迹；Meitou 根据水面后方场景的深度，在水线处的岩石、木桩和腿上附着泡沫，相机附近水中角色和动物摆好姿势的身体会推动模拟的水面：腿会掀起船首波和涟漪，涟漪扩散、在浅水处减慢、在岸边停止，并在身后留下带泡沫的尾迹（Vulkan；需要折射复制的深度；docs/render-water.md \"Contact foam, wakes and ripples\"）"
+
+msgid "the game's blood stays on the skin: a blade that has just cut a man is clean, and a coat over a bleeding wound shows nothing; Meitou lets a weapon take the blood of what it wounds on its blade (wet and bright, then dried and dark, then flaking off; washed away in water and rain) and lets worn armour and clothing show the splatter of the body part under them, as the skin does (docs/game/blood-decals.md \"On weapons and gear\")"
+msgstr "原版游戏的血只留在皮肤上：刚砍过人的刀刃是干净的，流血伤口上的外套什么也不显示；Meitou 让武器的刀刃沾上所伤之物的血（先湿润鲜艳，再干涸发暗，然后剥落；会被水和雨冲掉），并让穿着的盔甲和衣物像皮肤一样显示其下身体部位的血迹 (docs/game/blood-decals.md \"On weapons and gear\")"
+
+msgid "the game fixes a sheathed weapon, its scabbard and a crossbow on the back to their bone, and a backpack to the spine, so they move as one block with the hip or the back; Meitou lets them swing a little behind the body's motion (a damped spring on each hanging point, stepped in game time: at most 22 degrees for a weapon, 7 for a backpack, which never swings into the back and whose straps stay on the chest) for people near enough to see it (docs/character-renderer.md \"Gear sway\")"
+msgstr "原版游戏把入鞘的武器、它的鞘和背上的弩固定在各自的骨骼上，把背包固定在脊柱上，因此它们与臀部或背部作为一个整体移动；Meitou 让它们在身体动作之后略微摆动（每个悬挂点一个阻尼弹簧，按游戏时间步进：武器最多 22 度，背包 7 度，背包绝不会摆进背里，背带留在胸前），适用于离得够近能看到的人 (docs/character-renderer.md \"Gear sway\")"
+
+msgid "the game keeps everything in focus; Meitou blurs what is away from the focus as a real lens does, by the field of view, the f-number and the distance, for the free and cinematic cameras (the cinema's keys can set focus and aperture; docs/render-post.md \"Depth of field\")"
+msgstr "原版游戏让一切都保持清晰；Meitou 像真实镜头那样按视野、光圈值和距离模糊焦点以外的物体，适用于自由相机和电影相机（电影的关键帧可设置焦点和光圈；docs/render-post.md \"Depth of field\"）"
+
+msgid "the game's picture is as bright at its corners as at its centre; Meitou can darken it towards the corners as a camera lens does, by the Vignette strength, in every camera (photo mode's Look tab is this same switch; docs/render-post.md \"Vignette and film grain\")"
+msgstr "原版游戏的画面四角和中心一样亮；Meitou 可以像相机镜头那样让画面向四角变暗，强度由暗角数值决定，适用于所有相机（照片模式的外观标签就是这个开关；docs/render-post.md \"Vignette and film grain\"）"
+
+msgid "the game's picture is clean; Meitou can lay a fine film grain over it, new each frame and strongest in the mid-tones, by the Film grain strength, in every camera (photo mode's Look tab is this same switch; docs/render-post.md \"Vignette and film grain\")"
+msgstr "原版游戏的画面是干净的；Meitou 可以在其上叠加细腻的胶片颗粒，每帧更新且在中间调最强，强度由胶片颗粒数值决定，适用于所有相机（照片模式的外观标签就是这个开关；docs/render-post.md \"Vignette and film grain\"）"
+
+msgid "the game's lamps shine through walls and everything else that stands in their way; Meitou traces a ray from each surface to the lamps that light it most and takes the light of the blocked ones back off, so buildings, rocks, plants, grass and characters cast lamp shadows (needs a GPU with ray tracing and Indirect light on; characters cast them but do not receive them; docs/render-lights.md \"Traced lamp shadows\")"
+msgstr "原版游戏的灯光会穿透墙壁和挡在路上的一切；Meitou 从每个表面向照亮它最多的灯追踪一条光线，并减去被遮挡灯的光，因此建筑、岩石、植物、草和角色会投下灯光阴影（需要支持光线追踪的 GPU 并开启间接光照；角色会投射但不会接收这种阴影；docs/render-lights.md \"Traced lamp shadows\"）"
+
+msgid "the game lights its portraits and the character editor with a plain key light and nothing else; Meitou sets a fixed warm sun high on one side, a cool sky over warm sand, the sun's shadow on the character itself and the occlusion of its folds, the same whatever the hour (with Meitou's tone map, grade or anti-aliasing on; docs/character-renderer.md \"Meitou stage and portraits\")"
+msgstr "原版游戏只用一盏简单的主光照亮肖像和角色编辑器；Meitou 设置一侧高处固定的暖色太阳、暖色沙地上方的冷色天空、角色自身上的太阳阴影及其衣褶的遮蔽，无论何时都一样（开启 Meitou 的色调映射、调色或抗锯齿时；docs/character-renderer.md \"Meitou stage and portraits\"）"
+
+msgid "the game's ceiling lamps, spotlights and searchlights are a pale yellow with more green than red, which reads as a sickly yellow-green on walls and skin; Meitou draws such lamps a warm yellow, halfway to the game's own torch colour and as bright as they were; torches, fires and the blue-green street lamps stay as they are (docs/render-lights.md)"
+msgstr "原版游戏的吊灯、聚光灯和探照灯是绿多于红的淡黄色，照在墙上和皮肤上呈病态的黄绿色；Meitou 把这类灯画成暖黄色，介于原色与游戏火把颜色之间，亮度不变；火把、火堆和蓝绿色路灯保持原样 (docs/render-lights.md)"
+
+msgid "the game draws its sake and rum bottles solid; Meitou draws them as glass: the scene behind bent and tinted through the walls, reflections of the sun, sky and lamps brighter towards the edges, the drink inside up to its level, the neck or cork solid (docs/render-objects.md \"See-through items\")"
+msgstr "原版游戏把清酒瓶和朗姆酒瓶画成实心的；Meitou 把它们画成玻璃：后方场景透过瓶壁弯曲并着色，太阳、天空和灯的反射越靠近边缘越亮，瓶中酒液到其液面为止，瓶颈或软木塞为实心 (docs/render-objects.md \"See-through items\")"
+
+msgid "Sky flight to/from the main menu (Meitou main menu)."
+msgstr "往返主菜单时的天空飞行（Meitou 主菜单）。"
+
+msgid "Version"
+msgstr "版本"
+
+msgid "Author"
+msgstr "作者"
+
+msgid "Custom list"
+msgstr "自定义列表"
+
+msgid "Attach log.txt (it shows folder names; your user name is hidden)"
+msgstr "附加 log.txt（会显示文件夹名称；你的用户名会被隐藏）"
+
+msgid "This machine needs electricity to function. You either need to build generators, or you are out of fuel / there is no wind."
+msgstr "这台机器需要电力才能运转。你要么需要建造发电机，要么燃料耗尽了 / 没有风。"
+
+msgid "the game draws the dust and the spray a running foot throws up as glowing sprites, as bright by night as by day and in shade as in the sun; Meitou lights them as the ground is lit: the sun through its shadows, the sky, the lamps, the same as the game's by day (docs/render-post.md \"Lit dust\")"
+msgstr "原版游戏把奔跑的脚扬起的尘土和水花画成发光的精灵，夜里和白天一样亮，阴影中和阳光下一样亮；Meitou 像照亮地面那样照亮它们：透过阴影的太阳、天空、灯光，白天与原版相同 (docs/render-post.md \"Lit dust\")"
+
+msgid "1 game data problem, see log.txt"
+msgstr "1 个游戏数据问题，请查看 log.txt"
