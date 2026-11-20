@@ -233,7 +233,7 @@ public sealed partial class DialogueSystem
             {
                 if (Cold(world, m) is { Carrying.IsNone: false } carrier && Cold(world, carrier.Carrying) is { } body && body.RecordId == listed)
                 {
-                    SetTarget(c, me, m);
+                    SetTarget(world, c, me, m);
                     carried = true;
                     break;
                 }
@@ -257,7 +257,7 @@ public sealed partial class DialogueSystem
                 typeOk = true;
             if (!itemOk && items is not null) itemOk = Listed(items).Any(i => node.TargetHasItem.Contains(i.Record));
             if (!itemOk) continue;
-            SetTarget(c, me, m);
+            SetTarget(world, c, me, m);
             break;
         }
         return itemOk && typeOk;
@@ -276,7 +276,7 @@ public sealed partial class DialogueSystem
             {
                 if (Cold(world, m)?.Race is { } r && _dialogue.RaceMatches(r.StringId, listed))
                 {
-                    if (retarget) SetTarget(c, me, m);
+                    if (retarget) SetTarget(world, c, me, m);
                     hit = true;
                     break;
                 }
@@ -319,11 +319,15 @@ public sealed partial class DialogueSystem
     /// <summary>
     /// A line check found <paramref name="member"/> of the target's squad (<c>FUN_140671930</c>): it becomes the conversation's target unless it is
     /// the NPC itself or already the target. The state written is <paramref name="me"/>'s, so only a check of the conversation's NPC retargets (an
-    /// interjector candidate's own state is not the conversation's). Happens when the test matches, even if a later test of the line fails.
+    /// interjector candidate's own state is not the conversation's). Happens when the test matches, even if a later test of the line fails. With
+    /// <see cref="World.AnimalTargetFix"/> an animal never becomes the target (it cannot talk or trade, so the player's choices would be lost).
     /// </summary>
-    static void SetTarget(Conversation c, CharacterId me, CharacterId member)
+    static void SetTarget(World world, Conversation c, CharacterId me, CharacterId member)
     {
-        if (me == c.Npc && !member.IsNone && member != c.Npc) c.Player = member;
+        if (me != c.Npc || member.IsNone || member == c.Npc) return;
+        if (world.AnimalTargetFix && Cold(world, member) is { } mc && SquadRegistry.IsAnimal(mc)) return;
+
+        c.Player = member;
     }
 
     /// <summary>
