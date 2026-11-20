@@ -1409,12 +1409,13 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
     by `FUN_1405c7e20`) has no stand-up row (28 and 65 are 0x25). So a crippled NPC under threat **crawls away**; it has no attack on sight either (goal 16's desire is 0 unless standing).
   - **No working arm** (medical `+0x165` and `+0x166` both false): 4's desire is 0 and shooting needs an arm, so 13 is a dead end and 35 runs at 0.001.
   - Anyone else fights: 4 is worth 1 (0.05 at the least with the ranged and squad factors), 35 0.001.
-  - **An empty threats list** (**Verified**, `FUN_14050df10`, `FUN_14060f570`, `FUN_14050c8e0`, `FUN_14032dee0`): 32 not current is dropped by the scorer before any plan, as its
-    list A `!159` holds, its base slot 4 holds (+0x15 clear) and its effect test holds unasked (+0x120). So the immediate flag alone (an `attackTarget` push within 40 that the
-    sense pass cleared: a crime's victim, an alarm's investigator) makes no dash. The planner itself (**Verified**, `FUN_14051bae0`, `FUN_14051c240`, `FUN_14051ad80`,
-    `FUN_14050f800`): a node's value is its row's desire alone, and a provider is expanded as it is made, dropped when that desire is not above 0. A needs-target provider is left out
-    while its parent's finder took no target. 13 with `findAttackerOf` (`FUN_14099c3b0`) finding no one gets the dead end 104 for its effect 7, so a 32 planned with no attacker
-    runs (35 is the leaf accepted). The third provider of `!39` is 234 Turret guard, whose effect needs a turret its finder takes. Meitou: with the push alone 32 weighs 1 and plans
+  - **An empty threats list** (**Verified**, `FUN_14050df10`, `FUN_14060f570`, `FUN_14050c8e0`, `FUN_14032dee0`; 32 has no case of its own in the factory `FUN_14032ebd0`): 32
+    not current is dropped by the scorer before any plan, as its list A `!159` holds, its base slot 4 holds (+0x15 clear) and its effect test holds unasked (+0x120). So the
+    immediate flag alone (an `attackTarget` push within 40 that the sense pass cleared, `SenseBlock.Pushed`: a crime's victim, an alarm's investigator) makes no dash.
+    The planner's nodes (**Verified**, `FUN_14051bae0`, `FUN_14051c240`, `FUN_14051ad80`, `FUN_14050f800`): a node's value is its row's desire alone, a provider is expanded as
+    it is made and dropped when that desire is not above 0, and a needs-target provider is left out while its parent's finder took no target; a state left with no provider
+    gets the dead end 104. **Observed** from that: 13 whose finder (`FUN_14099c3b0`, `findAttackerOf`: none found, 0) takes no one dead-ends at its effect 7, so a 32 planned
+    with no attacker runs on 35; the third provider of `!39`, 234 Turret guard, needs a turret its finder takes. Meitou: with the push alone 32 weighs 1 and plans
     nothing for an able NPC, the same pick; one that `SelfPreservation.Runs` (crippled, no arm) plans `[35, 32]` and crawls off, where the original drops 32.
   - 35's entries: 60 `LOCATION_IS_ACCESSIBLE` (`FUN_1405a2710`, 0 behind a locked gate in town walls, [combat](combat.md#fight-lifecycle-and-orders)) and `!26` (a character staying low must stand first).
   State evaluators: 39 `isAggressionTowardsMe` = Character `+0x2b0` (`iAmBeingMeleeAttacked immediate`, `FUN_14059de10`); 159 = the senses' threat count `+0x58` non-zero (`FUN_140436720`); 6 `isNoEnemiesInVicinity` =
