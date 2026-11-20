@@ -941,7 +941,7 @@ campaign is not hostile, or that is not active (slot 70); a redirected request d
 
 **Phases** (`CampaignInstance::vfunc_10`, every war-manager run, loaded or not; times are game hours since the phase began):
 - Any phase but ended: the leader platoon loaded with every member down → defeat.
-- 0 travel: arrived strictly within 0.8 × town radius (XZ; `Town::getRadius` `FUN_140926eb0`, **Verified**: a placed town's `town radius mult` × its type base ([towns](buildings-production.md#placement), not `size radius`, which only the nest debris scatter `FUN_140938440` reads), a player town's [reassessed radius](buildings-production.md#placement), at least 1250; a nest marker is never inside, `FUN_140926d50`) or 400 of a non-town target; then the `dialog announcement` waits, "{1} has arrived at
+- 0 travel: arrived strictly within 0.8 × town radius (XZ; `Town::getRadius` `FUN_140926eb0`, **Verified**: a placed town's `town radius mult` × its type base ([towns](buildings-production.md#placement), not `size radius`, which only the nest debris scatter `FUN_140938440` reads), a player town's [reassessed radius](buildings-production.md#placement), at least 1250; a nest marker is never inside, `FUN_140926d50`) or 400 of a non-town target; then the `dialog announcement` waits ([below](#campaigns)), "{1} has arrived at
   {2}", and phase 1, or straight to ended without victory or defeat when there is no `pt2 AI leader`. A loaded, non-hostile, non-DEFEND
   campaign within 1.8 × radius of a town with hostile occupiers (+0x128) is defeated at once (a trader or ally does not walk into an occupied town).
 - 1 at target: victory when the leader is back in its home town (two null towns compare equal); else by `key`: ASSAULT_TOWN wins after
@@ -1027,11 +1027,20 @@ campaign is not hostile, or that is not active (slot 70); a redirected request d
   inside 100 is capped by `CharacterCold.PaceCap` = the campaign leader's last velocity, × 0.9 under 70, only while 215 runs (reading the speed value as
   the velocity is an engine reading). Off screen the leader travels to the target and the followers to their trail points (`MoveCampaigns`; the
   trail point is measured from the trail's newest point and stops at its oldest).
-- Announcement (task 129 in the pt1 leader package, **Verified**): "{1} has arrived at {2}" once; task 129 needs the leader not down (!101)
-  and at the package target (131 `atPackageTarget`, [TaskData](ai-tasks.md); Meitou uses the 0.8 × radius arrival); with the leader within 2500 of the camera
-  and a target-faction member within 2500 of it, `dialog announcement` fires as event 2 ANNOUNCEMENT with no target; phase 0 then waits on
-  the leader's event-2 state. When that state ends, the update of `FUN_140355770` clears the waiting flag (+0x78) and falls through to the camera and faction-object test (`FUN_140354990`, 2500) and the event (`FUN_140685750`) again, so the announcement repeats while the leader stays at the target and the conditions hold; only the 'has arrived' message is gated once (+0x7a) (**Verified**, decompile; Meitou: 129 is the leader's goal, whose act-out stands and asks the serial step for the line, `AiSystem.SendAnnouncements`
-  -> `PopulationCampaigns.TryAnnounce`, bounded by its patience of one game hour). Talking to a campaign member (event 1) is refused without a pending `interrupt`.
+- Announcement (task 129 `Task_MakeAnnouncement` in the pt1 leader package, update `FUN_140355770`, **Verified**): 129 needs the leader not down (!101)
+  and at the package target (131 `atPackageTarget`, [TaskData](ai-tasks.md)); list A is 76 `isMessageDelivered` ([StateType ids](ai-tasks.md#statetype-ids)).
+  Each run's first update posts "{1} has arrived at {2}" for a town target (its +0x7a; a new run is a new task, so a repeat posts it again). With the
+  leader within 2500 of the camera and a target-faction member within 2500 of it (`FUN_140354990`), `dialog announcement` fires as event 2
+  ANNOUNCEMENT with no target (`FUN_140685750`) and sets +0x78. While +0x78 is set the update waits for the conversation's end (+0x79,
+  `FUN_140671c60`); then with `FUN_140673830(dialogue, 2)` true the run is finished (slot 4 `FUN_140333f60`) and the plan step ends it, else +0x78
+  is cleared and it announces again. A fresh 129 never passes the scorer's done test (slot 4 false), so it is planned again and repeats while the
+  leader stands at the target and the conditions hold.
+- **The phase-0 wait** (`FUN_1409c70f0`, **Verified**): with a `dialog announcement` (`FUN_1409c6fc0`) the campaign stays in phase 0 until the lead
+  platoon's effective leader (`FUN_14079aea0`) exists and `FUN_140673830(its dialogue, 2)` is true, with no time limit and no "has arrived" line of its
+  own; an unloaded leader platoon resolves no leader character (**Observed**), so it waits. So a talk with the leader holds phase 0 until it ends.
+  Without an announcement the war manager posts the line itself and moves on, unless `FUN_140672a30(the leader's dialogue, 2)` (its +0x1a0 entry
+  for event 2) is set. Meitou: `AiSystem.ActAnnounce` / `SendAnnouncements` -> `PopulationSystem.Announce`, `TaskFinished.AnnouncementOver`,
+  `PopulationSystem.LeaderDelivered`; the no-announcement branch's +0x1a0 test is not built. Talking to a campaign member (event 1) is refused without a pending `interrupt`.
   "Invasion with demands" (data): the announcement sets the negotiation as `interrupt`; paying 2000 (DA 8 + DA 38) retreats and requests it
   again in 42-56 h; refusing is DA 37 (attack); stabbing the speaker is DA 21 + DA 38 and the "EXTRA ANGRY" campaign in 20-50 h.
 
@@ -1060,7 +1069,7 @@ every message {1} is the campaign's name and {2} the target town's (the cancel m
 - Nest respawn delay after "wiped out", the default of `DAT_142133588` (the Number of nests multiplier option; **Unknown**, the exe image holds zeros there), the rule that makes `TownPopulationManager::vfunc_4`
   declare a town wiped out (**Observed** gates: roaming pool cap <= 3 and <= 25 roaming members).
 - Campaigns: TownBase slots 92 / 96, the disabled-town flag, what besides the two calls recomputes the town level,
-  the "fought a player squad" test, the announcement wait's event-2 state, the A* road cost, `Platoon::vfunc_25` (sends phase 0 to 2), whether spawned campaign squads are `persistent`.
+  the "fought a player squad" test, the A* road cost, `Platoon::vfunc_25` (sends phase 0 to 2), whether spawned campaign squads are `persistent`.
 - Unique characters: the `Character +0x279 & 7` gate and the 0.1 roll against a town list at platoon unload, platoon +0xac, the unit of
   `replacement time` (constant 2618.18 from `FUN_14066cd50`), UNIQUE_SQUAD_TEMPLATE `persistent` use,
   the polarity of the import handle test; other readers of `unique` (`FUN_14067b070` dialogue conditions, `FUN_1407609e0` / `FUN_140761550`) not opened.

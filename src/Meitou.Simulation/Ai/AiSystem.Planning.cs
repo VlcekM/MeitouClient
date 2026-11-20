@@ -638,6 +638,8 @@ public sealed partial class AiSystem
             StateType.StrangersInHouseP => _system.StrangersInHouseP(_world, _board, _slot),
             StateType.StrangersInHouse => _system.StrangersInHouse(_world, _board, _slot),
             StateType.AtPackageTarget => AtPackageTarget(),
+            // 76 (FUN_140792190): its announcement was delivered in the town it stands in and it says nothing now (129's list A).
+            StateType.IsMessageDelivered => _system.MessageDelivered(_world, _slot),
             _ => DutyState(state, target) ?? HeldTrue(state),
         };
 

@@ -1412,23 +1412,35 @@ public sealed partial class PopulationSystem : IStateHashed
         float arrival = 0.8f * RadiusOf(world, inst.Target);
         if (Vector2.DistanceSquared(leader.Position, CentreOf(world, inst.Target)) >= arrival * arrival) return false;
 
-        if (inst.ArrivedAt < 0)
-        {
-            world.Post(Loc.Tr("{1} has arrived at {2}", c.DisplayName, NameOf(world, inst.Target)));
-            inst.ArrivedAt = now;
-        }
+        if (inst.ArrivedAt < 0) inst.ArrivedAt = now;
 
-        // With an announcement, a loaded leader waits for it, then while its negotiation is pending (engine choice for the Unknown event-2 state: up
-        // to AnnouncementPatience hours from arriving); off screen nobody can hear it, so it goes on.
-        if (c.DialogAnnouncement is not null && leader.State == PlatoonState.Loaded && Announcer is not null
-            && now - inst.ArrivedAt < AnnouncementPatience
-            && (inst.AnnouncedAt < 0 || PendingTalk?.Invoke(inst.Announcer) == true || AnnouncementHeard(world, inst, leader.Position)))
-            return false;
+        // With an announcement the campaign waits, with no time limit, until its leader's announcement was delivered and it says nothing (the
+        // leader's 129 says the arrival line); without one the arrival line is said here (FUN_1409c70f0, Verified).
+        if (c.DialogAnnouncement is not null)
+        {
+            if (!LeaderDelivered(world, leader)) return false;
+        }
+        else world.Post(Loc.Tr("{1} has arrived at {2}", c.DisplayName, NameOf(world, inst.Target)));
 
         inst.Phase = c.HasPt2 ? 1 : 2;
         inst.PhaseStart = now;
         inst.FightStart = -1;
         return false;
+    }
+
+    /// <summary>
+    /// The phase-0 wait of a campaign with an announcement (<c>FUN_1409c70f0</c>, <b>Verified</b>): the lead platoon's effective leader
+    /// (<c>FUN_14079aea0</c>) has delivered its announcement and says nothing (<c>FUN_140673830(dialogue, 2)</c>,
+    /// <see cref="Dialogue.DialogueSystem.MessageDelivered"/>). An unloaded platoon has no leader character, so it waits (<b>Observed</b>: the
+    /// leader hand resolves through the loaded objects only). A world without dialogue waits for nothing (engine choice).
+    /// </summary>
+    bool LeaderDelivered(World world, Platoon leader)
+    {
+        if (world.SystemOf<Dialogue.DialogueSystem>() is not { } talk) return true;
+        if (leader.State != PlatoonState.Loaded || world.Squads.Find(leader.SquadId) is not { } squad) return false;
+
+        var lead = EffectiveLeader(world, squad);
+        return world.Characters.TryResolveNext(lead, out _) && talk.MessageDelivered(world, lead);
     }
 
     /// <summary>
@@ -1907,7 +1919,7 @@ public sealed partial class PopulationSystem : IStateHashed
     public Dialogue.SquadMemory? Memory { get; set; }
 
     /// <summary>
-    /// Game hours an arrived campaign waits for its announcement and negotiation before it goes on (engine choice).
+    /// Unused: the original waits for the announcement with no time limit (<see cref="LeaderDelivered"/>); kept for code mods that read it.
     /// </summary>
     public const double AnnouncementPatience = 1;
     /// <summary>
@@ -1916,38 +1928,39 @@ public sealed partial class PopulationSystem : IStateHashed
     const float AnnounceRange = 2500;
 
     /// <summary>
-    /// 129 Approaching fast, acted out by the campaign leader's own goal (<see cref="Ai.AiBehaviour.Announce"/>; the planner holds its list B,
-    /// !101 and 131 at the package target): the leader of a loaded lead platoon in phase 0 says its campaign's <c>dialog announcement</c>, again each
-    /// time it has ended, while the camera and a target-faction member are within 2500 of it (<c>FUN_140354990</c>). Serial.
+    /// 129 Approaching fast's update (<c>Task_MakeAnnouncement</c>, <c>FUN_140355770</c>, <b>Verified</b>), acted out by the speaker's own goal
+    /// (<see cref="Ai.AiBehaviour.Announce"/>) for a character of a campaign's platoon: on <paramref name="arrival"/> (the run's first update, its
+    /// +0x7a) "{1} has arrived at {2}" for a town target; then, with the speaker within 2500 of the camera and a target-faction member within 2500 of
+    /// it (<c>FUN_140354990</c>), the campaign's <c>dialog announcement</c> as event 2. Serial. Whether the line started.
     /// </summary>
-    internal void Announce(World world, CharacterId speaker)
+    internal bool Announce(World world, CharacterId speaker, bool arrival)
     {
         var table = world.Characters;
-        if (!table.TryResolveNext(speaker, out int s) || table.Cold(s)?.Ai?.Squad is not { PlatoonId: >= 0 } squad) return;
-        if (world.Platoons.Find(squad.PlatoonId) is not { Campaign: { } inst } p || inst.Leader != p.Id || squad.Leader != speaker) return;
+        if (!table.TryResolveNext(speaker, out int s) || table.Cold(s)?.Ai?.Squad is not { PlatoonId: >= 0 } squad) return false;
+        if (world.Platoons.Find(squad.PlatoonId) is not { Campaign: { } inst } || CampaignOf(inst.CampaignId) is not { } c) return false;
 
-        TryAnnounce(world, inst, speaker, table.Next[s].Position);
+        if (arrival && inst.Target is { IsNone: false, Nest: 0 })
+            world.Post(Loc.Tr("{1} has arrived at {2}", c.DisplayName, NameOf(world, inst.Target)));
+
+        return TryAnnounce(world, inst, c, speaker, table.Next[s].Position);
     }
 
     /// <summary>
-    /// The announcement itself: not after phase 0, nor while the last one's talk is pending, nor by a leader that is down.
+    /// The announcement itself (<c>FUN_140685750</c> with the campaign's root): not by a speaker that is down, nor without the dialogue or a
+    /// target faction. Whether it started.
     /// </summary>
-    void TryAnnounce(World world, CampaignInstance inst, CharacterId leader, Vector3 at)
+    bool TryAnnounce(World world, CampaignInstance inst, CampaignData c, CharacterId speaker, Vector3 at)
     {
-        // After the wait ends (its dialogue finished, nothing pending) the task falls through to the announcement again while the conditions hold
-        // (FUN_140355770, a2-047).
-        if (inst.Phase != 0 || inst.AnnouncedAt >= 0 && PendingTalk?.Invoke(inst.Announcer) == true || Announcer is null
-            || inst.Enemy < 0 || CampaignOf(inst.CampaignId)?.DialogAnnouncement is not { } announcement)
-            return;
-
-        if (!world.Characters.TryResolveNext(leader, out int ls) || !world.Characters.Next[ls].Alive
+        if (Announcer is null || inst.Enemy < 0 || c.DialogAnnouncement is not { } announcement) return false;
+        if (!world.Characters.TryResolveNext(speaker, out int ls) || !world.Characters.Next[ls].Alive
             || world.Characters.Cold(ls)?.Medical?.Incapacitated == true)
-            return;
+            return false;
 
-        if (!AnnouncementHeard(world, inst, new Vector2(at.X, at.Z)) || !Announcer(world, leader, announcement)) return;
+        if (!AnnouncementHeard(world, inst, new Vector2(at.X, at.Z)) || !Announcer(world, speaker, announcement)) return false;
 
-        inst.Announcer = leader;
+        inst.Announcer = speaker;
         inst.AnnouncedAt = world.GameHours;
+        return true;
     }
 
     /// <summary>

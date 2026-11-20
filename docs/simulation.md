@@ -658,9 +658,12 @@ the player has one and stands in it; requests (victory/loss chains, ally help) c
   `pt2` package is a Package_WarAssault (20, 32), else the target faction when the campaign is hostile. Looting is [goal 177](#carrying-rescue-and-looting) where the package lists it, weighed by the members'
   full minds. A cannibal assault (class 32) goes to phase 2
   when three members of one platoon carry someone or 15 game minutes after that platoon's first carrier (`CampaignInstance.CarryStarts`, per platoon, cleared while it has none; saved by Meitou only); kidnapping: [below](#kidnapping).
-- **Announcement**: a loaded leader in phase 0 says `dialog announcement` once (camera and a target-faction member within 2500): its lines are said as speech bubbles 2 + 0.12 × length seconds apart, or DA 12's wait, and their `interrupt` makes the next talk
-  with it the negotiation, also when its faction is hostile. After arriving it waits for the announcement and then while the negotiation is
-  pending, at most 1 game hour (engine choice for the Unknown event-2 state); off screen it goes on. Dialogue DA 37 sets phase 1 (2 without a
+- **Announcement**: the leader's goal 129 (`AiSystem.ActAnnounce`) says "has arrived" once per run and `dialog announcement` when the camera and a
+  target-faction member are within 2500: its lines are said as speech bubbles 2 + 0.12 × length seconds apart, or DA 12's wait, and their `interrupt` makes the next talk
+  with it the negotiation, also when its faction is hostile. Its end, or the player's talk cutting it short, marks it delivered in the leader's
+  status town (`DialogueSystem.MessageDelivered`, state 76, not saved); 129 then ends and is planned again, so it repeats while the conditions hold.
+  The campaign waits in phase 0, with no time limit, until the lead platoon's leader has delivered it and says nothing; an unloaded leader platoon
+  waits too (`PopulationSystem.LeaderDelivered`). Dialogue DA 37 sets phase 1 (2 without a
   pt2 leader package), DA 38 phase 2; DA 39 (phase 3, unhandled in the original, unused in the data) is not built. **Observed** (headless, real
   data): Dust Bandits "Invasion with demands" shout their four lines 20 s apart; talking to the boss opens the negotiation; paying takes 2000
   and sends them back (phase 2), refusing starts the assault (phase 1, the squad's targets set), stabbing him sends them back.

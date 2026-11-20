@@ -161,6 +161,12 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     readonly SortedDictionary<(CharacterId, int), (int Count, double Last)> _counters = new(Comparer<(CharacterId, int)>.Create((a, b) =>
         a.Item1 != b.Item1 ? CompareIds(a.Item1, b.Item1) : a.Item2.CompareTo(b.Item2)));
     /// <summary>
+    /// Per NPC: the status town it stood in when its last ANNOUNCEMENT (event 2) conversation ended, or when the player's talk took over one it was
+    /// saying (the Dialogue's per-event map <c>+0xf8</c>, written by <c>FUN_140674830</c> and <c>FUN_140684320</c>, <b>Verified</b>; never cleared,
+    /// not saved: <see cref="MessageDelivered"/>).
+    /// </summary>
+    readonly SortedDictionary<CharacterId, CampaignTown> _delivered = new(Comparer<CharacterId>.Create(CompareIds));
+    /// <summary>
     /// Per NPC: the id of its pending <c>interrupt</c> dialogue, opened when the player talks to it.
     /// </summary>
     readonly SortedDictionary<CharacterId, string> _interrupts = new(Comparer<CharacterId>.Create(CompareIds));
@@ -563,6 +569,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
             return;
         }
 
+        if (Announcing(npc)) Deliver(world, npc);   // the talk cuts an announcement short: it counts as delivered (FUN_140684320)
         DropBubbles(npc);   // the conversation takes over the NPC's dialogue state: a chain it was saying does not go on after (#707)
         _starters.Started(npc, player);
         world.DialogueLines.Line(world, "talk", $"{pair}: conversation opens with {DialogueLog.Node(p.Root ?? p.Line)} (from {from})");
@@ -863,6 +870,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     public void Hash(ref StateHasher hasher)
     {
         if (_lastUse.Count == 0 && _permanent.Count == 0 && _counters.Count == 0 && Memory.IsEmpty && _interrupts.Count == 0 && _bubbles.Count == 0
+            && _delivered.Count == 0
             && _eventCooldown.Count == 0 && _npcApproaches.Count == 0 && _down.Count == 0 && _starters.Count == 0
             && _followers.Count == 0 && _stalkers.Count == 0 && _open is null && _talker.IsNone)
         {
@@ -895,6 +903,13 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         {
             hasher.Add(who);
             hasher.Add(Rng.StableHash(line));
+        }
+        foreach (var (who, town) in _delivered)
+        {
+            hasher.Add(who);
+            hasher.Add(town.Site);
+            hasher.Add(town.PlayerTown);
+            hasher.Add(town.Nest);
         }
         foreach (var b in _bubbles)
         {

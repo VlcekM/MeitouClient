@@ -1192,18 +1192,28 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// 129 Approaching fast: it stands while the serial step has the campaign's announcement said (<see cref="SendAnnouncements"/>).
+    /// 129 Approaching fast (<c>Task_MakeAnnouncement</c>'s update <c>FUN_140355770</c>, <b>Verified</b>): it stands. Once its line was said it waits
+    /// while it still talks, and stays done once the message counts as delivered (its finished test, list A 76, ends the step); a talk over with the
+    /// message not delivered clears the said flag and it announces again. Otherwise the serial step says the arrival line on the run's first update
+    /// and the campaign's announcement (<see cref="SendAnnouncements"/>). Writes its own slot only.
     /// </summary>
     void ActAnnounce(World world, int slot, AiMind mind)
     {
         Become(world, slot, CharacterTask.Idle);
+        if (mind.Announced)
+        {
+            if (_dialogue?.SaysNothing(world.Characters.IdOf(slot)) == false || MessageDelivered(world, slot)) return;
+
+            mind.Announced = false;
+        }
+
         mind.AnnounceAsk = true;
         Interlocked.Exchange(ref _announcing, 1);
     }
 
     /// <summary>
-    /// The announcements the thinks asked for (serial, slot order): each asker's campaign says its <c>dialog announcement</c> when its rules let it
-    /// (<see cref="PopulationSystem.Announce"/>).
+    /// The announcements the thinks asked for (serial, slot order): each asker's arrival line on its run's first update, then its campaign's
+    /// <c>dialog announcement</c> when its rules let it (<see cref="PopulationSystem.Announce"/>), which marks the run's line said.
     /// </summary>
     void SendAnnouncements(World world)
     {
@@ -1214,7 +1224,9 @@ public sealed partial class AiSystem
             if (table.Cold(s) is not { Ai: { AnnounceAsk: true } mind }) continue;
 
             mind.AnnounceAsk = false;
-            population?.Announce(world, table.IdOf(s));
+            bool arrival = !mind.ArrivalSaid;
+            mind.ArrivalSaid = true;
+            if (population?.Announce(world, table.IdOf(s), arrival) == true) mind.Announced = true;
         }
     }
 

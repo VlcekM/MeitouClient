@@ -477,7 +477,7 @@ shackles locked); 123 and 136 false; 16 `FUN_14059de10` (the target's immediate-
 | 72 | `isFullyRested` (**Verified**, evaluator `FUN_1405a0610` from the registry's id-0x48 call): of the character target, else the character itself (`FUN_140643cd0`); false for one whose faction is not the player's (faction `+0x250`), so an NPC's rows 98, 100, 175 and 261 are never done and their goals run in their hours; for the player's faction, true when the MedicalSystem's (Character `+0x458`) float `+0xb0` is above 0.9 (the upper half of `DAT_14168a258`). The field (**Verified**, the medical update `FUN_140644e60`, disassembled at `0x140644f9b`): starting at 100, for each part with no replacement limb (`+0x28` null) and the flag `+0x7c` of its vfunc-0xd0 object clear, a part whose (h - s) x 100 / M (M = base x mult x scale - wear, [character-stats](character-stats.md)) is below the running value stores its raw h - s (the exe compares a percentage and stores the raw value); the result x 0.01, snapped to 1 above 0.999. Bandage and rig are not counted. Meitou: `MedicalState.RestedLevel`, `RowStates.FullyRested` |
 | 73 | `machineHasFreeOperatorSlot` |
 | 74 | `isEnemyForceDefeated` |
-| 76 | `isMessageDelivered` |
+| 76 | `isMessageDelivered` (`FUN_140792190`, **Verified**): no Dialogue object (Character +0x280), else `FUN_140673830(dialogue, 2)`: the Dialogue's per-event map (+0xf8) holds event 2, the status town stored there equals the character's current one (Character vfunc 0x78: status +0x88; not compared while it has none), its conversation has ended (+0x148) and it has no chained speaker (+0x2c0). Event 2's entry is written as an ANNOUNCEMENT conversation ends (`FUN_140674830`) and when the player's talk takes over one still running (`FUN_140684320`); nothing clears it, and no save code reads or writes it. Meitou: `DialogueSystem.MessageDelivered` |
 | 77 | `isCarriedDudeInBed` |
 | 78 | `TARGET_IS_IMPRISONED` |
 | 79 | `I_AM_IMPRISONED` |
@@ -955,9 +955,8 @@ the original's task: a fight (`Attack`) is 4 or 227, or Task_RangedAttack's 262 
 and `CombatSystem.Playing`; Stumble the hit reaction (`StumbleClip` until `StunUntil`); Talk `DialogueSystem.Talking` and `CharacterFacts.ImmediateThreat`; Formation the squad
 leading its platoon's campaign (`CampaignInstance.Leader`) with the character its leader (215's list A, state 131: [StateType ids](#statetype-ids)); a move counts as updated
 once its act-out has had a tick. The fight answer raises a running fight goal below 1 (the `goal-fights` golden scenario). Still different: no goal or plan step Meitou runs is
-of the Stumble or Talk classes (147, 164 and 165 are engine systems), so their answers are never asked; of the Announcement class 103 is not acted out and
-129's answer is the start's false: state 76 is not evaluated, so a campaign leader's 129 stands at the target while 131 holds (the line itself as
-`PopulationCampaigns.TryAnnounce`, [campaigns](factions-squads-towns.md#campaigns)).
+of the Stumble or Talk classes (147, 164 and 165 are engine systems), so their answers are never asked; of the Announcement class 103 is not acted out;
+129's running answer is `AiMind.Announced` with state 76 (`TaskFinished.AnnouncementOver`, [campaigns](factions-squads-towns.md#campaigns)).
 
 The order step and the job pass (**Verified**): the order step (`FUN_140510920`) pops the front order, read as the running task when it is the one running (`FUN_140506b10`),
 when its list A, its effect test and its slot 4 hold, or when its desire x finder is 0 or less; the task's own end and a replan (`FUN_14050d7d0`, `FUN_14050d080`) pop the

@@ -1329,6 +1329,18 @@ public sealed class AiMind
     public bool AnnounceAsk { get; set; }
 
     /// <summary>
+    /// The announcement of the running 129 has been said (<c>Task_MakeAnnouncement</c> +0x78, set as its line starts, cleared when the goal is taken
+    /// up anew): with the character's message delivered after it, its finished test holds (<see cref="TaskFinished"/>). Hashed while set.
+    /// </summary>
+    public bool Announced { get; set; }
+
+    /// <summary>
+    /// The running 129 has said its arrival line (<c>Task_MakeAnnouncement</c> +0x7a, once per run: cleared when the goal is taken up anew). Hashed
+    /// while set.
+    /// </summary>
+    public bool ArrivalSaid { get; set; }
+
+    /// <summary>
     /// No longer filled: the captive goals are engine goals of the one chooser, their picks kept by <see cref="Kidnap.CaptiveSystem"/>. Always
     /// empty; not saved or hashed.
     /// </summary>
@@ -1597,6 +1609,8 @@ public sealed class AiMind
         }
 
         if (FightFrom != 0) hasher.Add(FightFrom);
+        if (Announced) hasher.Add(0x416E6E63);   // "Annc": only while the running 129 has said its line
+        if (ArrivalSaid) hasher.Add(0x41727253);   // "ArrS": only while the running 129 has said its arrival line
         if (ModGoalStarted)
         {
             hasher.Add(0x4D6F6447);   // "ModG": only while a mod's goal runs

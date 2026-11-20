@@ -204,7 +204,20 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     {
         _duties = DutyGoals.Build(systems);
         _modGoals = NpcGoals.Build(Extensions, systems);
+        _dialogue = systems.OfType<Dialogue.DialogueSystem>().FirstOrDefault();
     }
+
+    /// <summary>
+    /// The world's dialogue (<see cref="BindGoals"/>), whose delivered announcements state 76 reads (<see cref="MessageDelivered"/>); null without
+    /// one.
+    /// </summary>
+    Dialogue.DialogueSystem? _dialogue;
+
+    /// <summary>
+    /// <c>isMessageDelivered</c> (state 76) of the character at <paramref name="slot"/> (<see cref="Dialogue.DialogueSystem.MessageDelivered"/>):
+    /// false without a dialogue. Any phase: the dialogue's serial steps write what it reads.
+    /// </summary>
+    internal bool MessageDelivered(World world, int slot) => _dialogue?.MessageDelivered(world, world.Characters.IdOf(slot)) == true;
 
     /// <summary>
     /// An order takes the character (<see cref="IDutyRelease"/>): an engine goal holding it ends (<see cref="DutyEnd.Order"/>), and a code mod's goal
@@ -1943,6 +1956,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         mind.Walking = false;
         mind.FailedWalks = 0;
         mind.Target = null;
+        mind.Announced = false;   // a new Task_MakeAnnouncement: its said flag (+0x78) and arrival line flag (+0x7a) start clear
+        mind.ArrivalSaid = false;
 
         // a renewed goal draws its node anew
         mind.NodeRoll = Rng.Hash(world.Seed, Rng.Key(table.IdOf(slot)), RngPurpose.Think, SeedSalts.NodePick ^ (ulong)++mind.NodeEpoch);
