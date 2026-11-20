@@ -113,7 +113,8 @@ A slave's Slave role list runs through the Obedient Slave job (187): [role lists
 - Blackboard current town (+0x138, `FUN_1402688d0`, before the choice): the effective leader's [status town](carry-loot.md#the-status-town)
   when it is not down (vfunc `0x30`), so a nest it stands in counts and a town is kept out to 1.5 x its radius (**Verified**; Meitou
   `AiSystem.UpdateInTown`, `Blackboard.InTown`), else the nearest town (any type but nest markers) whose radius
-  (`FUN_140926d50` × 1) holds the platoon; entering one sets the arrival hour (+0x140) and fires the leader's ENTER_TOWN (49). The leader's own town is the `+0x88` of the
+  (`FUN_140926d50` × 1) holds the platoon; entering one sets the arrival hour (+0x140) and fires the leader's ENTER_TOWN (49); both are saved
+  ([platoon blackboard](../formats/save.md#platoon-blackboard)). The leader's own town is the `+0x88` of the
   object at Character `+0x1a0`; Character slot 15 (`FUN_1405c89b0`) reads that field for any member (Town slot 70 compares it, [campaigns](factions-squads-towns.md#campaigns)).
 - **GoOutOnPatrol** (6), **_Running** (23), **_Cannibal** (4) (**Verified**, decompile): can start (`FUN_140288890`; 4 first refuses while its
   cages are full, `FUN_140289d80`, [table](#prisoner-and-slaver-packages)): never the running package once it is finished; the platoon has a loaded

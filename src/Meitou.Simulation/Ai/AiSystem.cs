@@ -3899,8 +3899,14 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             PatrolStart = world.GameHours,
         };
 
-        // The town it starts in (a nest too), taken as already entered (engine choice: no ENTER_TOWN line for every squad a town or nest makes).
+        // The town it starts in (a nest too), taken as already entered (engine choice: no ENTER_TOWN line for every squad a town or nest makes);
+        // a saved squad then takes its saved town.
         if (TownPosition(world, squad) is { } at) (squad.Ai.InTown, squad.Ai.InTownSince) = (StartTown(world, at), world.GameHours);
+
+        // A saved squad's town and arrival hour as its save held them (FUN_140272c20 reads currenttown and towntime).
+        if (squad.SavedTown is { } stay && world.Saved is { } placed)
+            stay.Apply(squad.Ai, h => Saving.WarSave.Town(world, placed, h));
+        squad.SavedTown = null;
         if (squad.SavedAi is { } saved)
         {
             _rules.Bind(this, world, squad);

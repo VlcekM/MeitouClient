@@ -846,6 +846,9 @@ internal static class SavedCharacters
         squad.Shop = sp.Shop ?? ShopSave.Read(world, squad, sp.Source.Record, data);
         squad.SavedAi = sp.Ai;
         squad.SavedPackage = PackageSave.Read(sp.Source.Record);
+
+        // Its town as the save had it, the first time it is made (a squad that left the world since starts as a new one does).
+        if (!sp.Touched) squad.SavedTown = CurrentTownSave.Read(sp.Source.Record);
         world.Squads.Add(squad);
 
         // What the squad remembered: the save's, else what it kept when it last left the world.

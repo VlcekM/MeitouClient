@@ -844,9 +844,9 @@ reads its own keys. Keys are looked up by name: **Observed**, METARU and i949 ho
 | `runningAwayMode` | bool | `+0x14c` | set by `FUN_140269320`; while set the update `FUN_1402732b0` makes no package choice or package update; only the constructor and the load clear it | not modelled; kept as read |
 | `currentPackage` | string | `+0x48` | the running package's AI_PACKAGE id, "" none | written ([NPC platoons](#npc-platoons-meitou-mapping)) |
 | `target town` | handle | `+0xf0` | the null handle for none | `AiSave`, with a contract |
-| `towntime` | float | `+0x140` | the game hour (day x 24 + hour) the squad came into `currenttown` (`FUN_1402688d0`) | kept as read |
+| `towntime` | float | `+0x140` | the game hour (day x 24 + hour) the squad came into `currenttown` (`FUN_1402688d0`) | `CurrentTownSave`, below |
 | `mission data` | string | `+0x100` | a record id (looked up as type 71), "" none | kept as read |
-| `currenttown` | handle | `+0x138` | the town the squad is in (`FUN_1402688d0`, [ai](../game/ai.md#package-classes)), the null handle for none | kept as read |
+| `currenttown` | handle | `+0x138` | the town the squad is in (`FUN_1402688d0`, [ai](../game/ai.md#package-classes)), the null handle for none | `CurrentTownSave`, below |
 | `jobhr` | float | `+0x218` | the contract's end hour | `AiSave` |
 | `contractjob` | string | `+0x210` | the contract's AI_PACKAGE id, "" none | `AiSave` |
 | `replacementAI` | string | `+0x58` | the `change AI` package id, "" none | `AiSave` |
@@ -859,6 +859,13 @@ reads its own keys. Keys are looked up by name: **Observed**, METARU and i949 ho
   load reads pairs until a `target <i>` is missing; the writer numbers them from 0 again. **Observed**: none in the 1933 platoons of seven original saves
   (METARU, autosave0, autosave2, i949 and three archived games). Meitou writes the loaded record back, so the keys keep their values (**Observed**:
   METARU given a pair or two on each of its 538 platoons, loaded headless and saved: every platoon written back keeps them).
+- **Current town**: the update `FUN_1402688d0` stamps `towntime` and says ENTER_TOWN only when `currenttown` was none, so a loaded squad still in its
+  saved town keeps its saved hour. Meitou (`Saving/CurrentTownSave`, `Blackboard.InTown` / `InTownSince`) writes both for a squad in the world (a
+  nest, which has no town handle here, keeps the record's handle); a save's platoon made for the first time since the load takes them (`Squad.SavedTown`,
+  hashed, until its blackboard is made): the null handle as no town, so its next in-town step stamps the hour and says ENTER_TOWN as the original's
+  does; a handle naming no town of the world (a nest) leaves the town it starts in. Other squads start in the town they stand in at the current hour
+  (engine choice). **Observed** (METARU loaded headless, 1500 ticks, saved): 535 of 537 platoons written back with the same `currenttown` and
+  `towntime`; with every `currenttown` made null first, the 38 loaded squads in a town are written with that town and the hour of the load.
 - **Observed** (METARU, autosave0, autosave2, i949): `runningAwayMode` and `mission data` are false and "" on every platoon; `towntime` is 0 or
   between 34 (day 1, 10:00) and the save's clock.
 
