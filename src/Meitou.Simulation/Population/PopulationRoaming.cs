@@ -817,7 +817,7 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// A loaded platoon's place (<c>FUN_1404fed50</c>, <b>Verified</b>): its effective leader's while that one is not down, else the mean of the
-    /// members that are not dead (a knocked-out one counts), else where it was.
+    /// members that are not dead (a knocked-out one counts; divided by the number summed), else where it was.
     /// </summary>
     Vector2 PlatoonPosition(World world, Squad squad, Vector2 last)
     {
