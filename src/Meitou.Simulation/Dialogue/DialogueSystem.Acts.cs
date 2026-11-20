@@ -253,12 +253,22 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// DA_RUN_AWAY (34): the speaker gets order 280 from the target (clear; its goals reset and its task stopped by the order's start), run as
-    /// <c>Task_Runaway</c>'s first run to a point drawn here (engine: one run at full speed), and its squad tags the target AGGRESSOR.
+    /// The stop the attack, go-home and run-away acts run on the speaker before their order (<c>FUN_1405c8330</c>, <see cref="Bodies.BodySystem.Stop"/>):
+    /// its task ends, its queue stays with the front to be planned again.
+    /// </summary>
+    static void StopSpeaker(World world, CharacterId me)
+    {
+        if (world.Characters.TryResolveNext(me, out int s)) Bodies.BodySystem.Stop(world, s);
+    }
+
+    /// <summary>
+    /// DA_RUN_AWAY (34): the speaker's goals are reset and it is stopped (<see cref="StopSpeaker"/>), then it gets order 280 from the target (clear),
+    /// run as <c>Task_Runaway</c>'s first run to a point drawn here (engine: one run at full speed), and its squad tags the target AGGRESSOR.
     /// </summary>
     void RunAway(World world, CharacterId me, CharacterCold mc, CharacterId target, CharacterCold tc)
     {
         var table = world.Characters;
+        StopSpeaker(world, me);
         if (table.TryResolveNext(me, out int s) && Position(world, target) is { } from)
         {
             var here = table.Next[s].Position;
@@ -273,11 +283,12 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// DA_GO_HOME (7): the speaker gets order 19 with the target (clear; walked as <see cref="Ai.EngineOrders"/> does) and its squad tags the target
-    /// AGGRESSOR.
+    /// DA_GO_HOME (7): the speaker is stopped (<see cref="StopSpeaker"/>), then gets order 19 with the target (clear; walked as
+    /// <see cref="Ai.EngineOrders"/> does) and its squad tags the target AGGRESSOR.
     /// </summary>
     void GoHome(World world, CharacterId me, CharacterCold mc, CharacterId target, CharacterCold? tc)
     {
+        StopSpeaker(world, me);
         Order(world, me, TaskType.GoHomebuilding, target);
         if (tc is not null) FlagFrom(world, mc, me, target, tc, MemoryTag.Aggressor);
     }

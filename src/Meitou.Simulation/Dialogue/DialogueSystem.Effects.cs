@@ -520,15 +520,17 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// DA 6 / 55 / 57's order (<c>FUN_140680560</c>, <b>Verified</b>): the speaker alone gets order 101 Assault (55: 248 Attacking squad) on the
-    /// target (clear), but a speaker of the player's faction holding any order gets none (its squad's tag, written by the caller, stands either
-    /// way). Its mates follow through that tag. The original's stop before it (<c>FUN_1405c8330</c>) keeps the queue, whose front is then planned
-    /// again, so a refused speaker's order goes on.
+    /// DA 6 / 55 / 57's order (<c>FUN_140680560</c>, <b>Verified</b>): the speaker is stopped (<c>FUN_1405c8330</c>, <see cref="StopSpeaker"/>), then
+    /// gets alone order 101 Assault (55: 248 Attacking squad) on the target (clear), but a speaker of the player's faction holding any order gets
+    /// none (its squad's tag, written by the caller, stands either way). Its mates follow through that tag. The stop keeps the queue, whose front is
+    /// planned again, so a refused speaker's order goes on from its start.
     /// </summary>
     static void Attack(World world, CharacterId me, CharacterCold? mc, CharacterId target, bool nearHome)
     {
         var table = world.Characters;
         if (mc is null || !table.TryResolveNext(target, out _) || !table.TryResolveNext(me, out int s)) return;
+
+        StopSpeaker(world, me);
         if ((mc.IsPlayer || mc.Faction == world.Player.Faction) && PlayerOrders.Holds(world, s)) return;
 
         Order(world, me, nearHome ? TaskType.DefeatSquadLimitChaseRange : TaskType.DefeatSquad, target);
