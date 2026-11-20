@@ -350,7 +350,8 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
     }
 
     /// <summary>
-    /// Stops player characters (the selection when none named): their queued orders and task end, and they no longer follow.
+    /// Stops player characters (the selection when none named), as the original's stop key (<c>FUN_1407f6470</c>, which gives no order): their
+    /// order queue, second list and goal go (<c>FUN_1405074a0</c>, <see cref="PlayerOrders.Wipe"/>), their task ends, and they no longer follow.
     /// </summary>
     void Stop(World world, StopCommand stop)
     {
@@ -359,7 +360,7 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
         foreach (var id in stop.Characters.Count > 0 ? stop.Characters : player.Selection.ToArray())
         {
             if (!table.TryResolveNext(id, out int slot) || !table.Cold(slot)!.IsPlayer) continue;
-            table.Cold(slot)!.OrderQueue.Clear();   // drops the queued orders too
+            PlayerOrders.Wipe(table.Cold(slot)!);
             TaskStart.End(world, slot, TaskEnd.Stopped);
             table.Cold(slot)!.FollowOrder = CharacterId.None;
         }

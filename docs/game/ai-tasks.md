@@ -1301,14 +1301,16 @@ Moving) is dead code: its only reference is a thunk nothing calls.
   body, deletes the running task (CharBody slot 12), runs `FUN_1405074a0`, empties the plan queue (`+0x300`, where the pick installs a plan, `FUN_14050d1b0`) and removes the
   character's Blackboard entries (`FUN_140269f30`); being picked up (`FUN_1405ce9c0` with 1) does the same wipe itself;
 - every order given with clear, the get-up orders 65 / 52 above included;
-- the talk tasks' ends: row 12's update and Task_TalktoPlayer's ([dialogue](dialogue.md#player-conversation)).
+- the talk tasks' ends: row 12's update and Task_TalktoPlayer's ([dialogue](dialogue.md#player-conversation));
+- the stop key (`stop_movement`, event 0x16, `FUN_1407f6470`), which gives no order: for each selected character it stops the mover (slot 19), runs `FUN_1405074a0` (the goal
+  dropped too) and ends the running body task (CharBody slot 12).
 
 Not cleared by: the stop `FUN_1405c8330` (leg collapse, DA 6 / 7 / 34 / 55 / 57: it sets the task-ended flag `+0x26c`, calls the AI's vfunc `0x60`, empties the plan queue
 `+0x300` and runs `FUN_140507530`, unless the current task's row has `+0x22`), enslaving (table above), the dialogue tail's `change AI` and `AI contract` (`FUN_140272430`,
 `FUN_140272740`: they destroy only the members' job lists), or the body attach `FUN_1405ced90` (carry flag `+0x3d4` set, `+0x2f8` cleared, the running task marked done).
 A queued order also leaves when it is popped ([source 1](#precedence)) or when its task ends: the plan end (`FUN_14050d7d0`) and the failed flag's handler (`FUN_14050d080`:
 the target unreachable, the next task cannot start) pop the front when it matches the running task.
-Meitou: the same for every character (`PlayerOrders.Wipe` at going down and being picked up, the body's orders' clear flag; the leg collapse, enslaving and bed or
+Meitou: the same for every character (`PlayerOrders.Wipe` at going down, being picked up and the Stop, the body's orders' clear flag; the leg collapse, enslaving and bed or
 cage entry keep the queue; [simulation](../simulation.md#order-queue)).
 
 ### Immediate update

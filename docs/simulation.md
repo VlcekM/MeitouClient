@@ -312,7 +312,8 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   no row 29, waits blocked until the target is in talk range, row 12 being in the 0x45 repertoires); in talk range the
   queue and second list are emptied, the task ends and event 1 fires (or the trade opens). The interface gives both clearing the queue, Shift or not, as the original's givers do
   ([order givers](game/ai-tasks.md#order-givers)); `World.GiveOrder(queued: true)` appends one. DA_TRADE opens its window with no order (`OpenTradeNow`).
-- Not queued (they act at once): Shoot At (sets the turret's target), Get Out, Dispose Corpse (an errand), Stop (clears the queue).
+- Not queued (they act at once): Shoot At (sets the turret's target), Get Out, Dispose Corpse (an errand). **Stop** is no order in the original either
+  (`FUN_1407f6470`, [what clears the queue](game/ai-tasks.md#what-clears-the-queue)): it wipes the queue, the second list and the goal (`PlayerOrders.Wipe`) and ends the task.
 - `World.CanOrder(row, actor, target, site, point)` / `CanOrder(OrderEntry, actor)` -> `(Can, Why)` is `PlayerOrders.CanRun` as a pure read between ticks (a `Gone` verdict is `false` with no text); the queue's start and bark use the same read. It is not a menu filter (decision D5): the original's menu offers its verbs (operate, build, dismantle, prospect, ...) without testing the character and lets the order fail with its text, so Meitou's does too; no verb is greyed. Planned native multiplayer can call it on the host to gate guest commands.
 - Every `OrderCommand` also applies while paused (`World.ApplyPausedInterfaceCommands`, through every `IOrderOwner`'s inputs).
 - **Any character** holds orders on the same path. An NPC's queue is asked by the [decision step](#decision-step) as source 1 alone while its chooser runs
