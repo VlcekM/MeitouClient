@@ -189,7 +189,11 @@ public enum CaptivePhase : byte
     /// <summary>
     /// Working on it.
     /// </summary>
-    Work
+    Work,
+    /// <summary>
+    /// Lifting it (168's row 170).
+    /// </summary>
+    Lift
 }
 
 /// <summary>
@@ -464,7 +468,6 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         StepRacks(world);
         StepJobs(world);
         OrderRunsFromRisers(world);
-        StartHauls(world);
 
         // Each character is looked at once in SweepEveryTicks, on its slot's turn (slot mod the period), so the looks spread over the ticks
         // (docs/simulation.md "Spread sweeps"; the original runs its AI updates 8 characters a frame in turn, FUN_140786e30).

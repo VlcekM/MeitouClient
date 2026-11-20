@@ -26,8 +26,8 @@ namespace Meitou.Simulation.Kidnap;
 /// (<c>Task_CuffTarget</c>: a "Restraining" bar, <c>medic</c>, event 37 to the captive when it is full; the shackles are an <b>engine choice</b>,
 /// their source in the original is <b>Unknown</b>)
 /// and the cuff makes it a slave of the capturer's faction (<c>setChainedMode</c>, see <see cref="Hand"/>).</item>
-/// <item><b>Carry</b> (168 "Carrying slaves", finder <c>FUN_1408cdf50</c>): a downed slave owned by the carrier's faction is lifted and carried along
-/// with the squad until a cage is found (goal 112 in the original, here <see cref="KidnapSystem.Carry"/> hauling).</item>
+/// <item><b>Carry</b> (168 "Carrying slaves", finder <c>FUN_1408cdf50</c>): a downed slave owned by the carrier's faction is treated when it needs
+/// it and lifted (row 170, <see cref="StartLift"/>); the lift ends the goal, and the carrier's own goals take the slave on (112 cages it).</item>
 /// <item><b>Shout</b> (188 "Working the slaves", finder <c>FUN_1408cd940</c>): the worker says event 38 SHOUT_AT_SLAVE_WORKER to a random slave of
 /// its squad that is alive, uncarried and uncaged (the row's TaskData event, <b>Verified</b>: the registration of 188 stores 0x26 at <c>+0x130</c>)
 /// and keeps with it, saying the event again every <see cref="CaptiveSettings.ShoutSeconds"/>, until it says a line: the row's B list is
@@ -47,7 +47,7 @@ public sealed partial class CaptiveSystem
     internal readonly List<(CharacterId Who, double Until)> GivenUp = [];
 
     /// <summary>
-    /// The kidnapping system that carries a captive to a cage once it is cuffed (null: captives are cuffed and left).
+    /// The world's kidnapping system (null: a world that carries no captives, so 168 finds no slave to lift and captives are cuffed and left).
     /// </summary>
     public KidnapSystem? Kidnap { get; set; }
 
@@ -238,8 +238,7 @@ public sealed partial class CaptiveSystem
             return false;
 
         var id = table.IdOf(v);
-        if (Busy(id) || Waiting(GivenUp, id, world.GameHours) || Kidnap is { } k && k.Abductions.Any(a => a.Victim == id))
-            return false;
+        if (Busy(id) || Waiting(GivenUp, id, world.GameHours)) return false;
 
         if (!capture)
             return c.SlaveState != 0 && c.SlaveOwner == me.Faction && c.Medical is not { Unconscious: false, Crawling: false, StayingLow: true };
@@ -324,6 +323,7 @@ public sealed partial class CaptiveSystem
         float dt = world.TickSeconds;
         if (!table.TryResolveNext(j.Captive, out int c) || table.Cold(c) is not { } cc || cc.Medical is not { Dead: false })
             return End(world, j, CaptiveEventKind.GaveUp);
+        if (j.Phase == CaptivePhase.Lift) return Lifting(world, j, w, wc);
 
         if (!cc.CarriedBy.IsNone || cc.IsImprisoned)
         {
@@ -372,18 +372,54 @@ public sealed partial class CaptiveSystem
     /// <summary>
     /// 168 at its slave (plan <c>[1, 25, 170, 168]</c>): row 170 wants !22, so a slave that needs first aid is treated first (row 25,
     /// <see cref="FirstAid.FirstAidSystem.TreatBeforeLift"/>: a kit and an arm, else the plan fails and the job is given up) and the lift waits for
-    /// the treatment's end; then the slave is handed to the haul (<see cref="Hand"/>).
+    /// the treatment's end; then 170 lifts it (<see cref="StartLift"/>).
     /// </summary>
     bool Lift(World world, CaptiveJob j, int w, CharacterCold cc)
     {
         var table = world.Characters;
         if (table.Next[w].Task == (byte)CharacterTask.Treat) return true;
-        if (!FirstAid.FirstAidSystem.NeedsFirstAid(world, cc)) return Hand(world, j, w);
+        if (!FirstAid.FirstAidSystem.NeedsFirstAid(world, cc)) return StartLift(world, j, w);
         if (j.Blows > 0 || !table.TryResolveNext(j.Captive, out int c) || !FirstAid.FirstAidSystem.TreatBeforeLift(world, w, c))
             return End(world, j, CaptiveEventKind.GaveUp);
 
         (j.Phase, j.Blows) = (CaptivePhase.Work, 1);
         return true;
+    }
+
+    /// <summary>
+    /// 170 Lifting and healing (<c>Task_LiftObjectButHealFirst</c>) of the slave, a goal's lift back to standing: the job waits for it
+    /// (<see cref="Lifting"/>); one that cannot start gives the slave up for a while.
+    /// </summary>
+    bool StartLift(World world, CaptiveJob j, int w)
+    {
+        var lifts = world.SystemOf<CarrySystem>()?.BeginPickUp(world, w, j.Captive, CharacterTask.Idle, kidnap: true, source: TaskSource.Goal,
+            row: TaskType.LiftObjectButHealFirst);
+        if (lifts != true)
+        {
+            SetWait(GivenUp, j.Captive, world.GameHours + Settings.GiveUpHours);
+            return End(world, j, CaptiveEventKind.GaveUp);
+        }
+
+        j.Phase = CaptivePhase.Lift;
+        return true;
+    }
+
+    /// <summary>
+    /// The lift of 168 running: once it ends the job is over and the goal with it (168's desire is 0 while carrying, <c>FUN_140599480</c>). With the
+    /// slave on its shoulder the carrier's own goals take it on (112 cages it, 141 follows the leader); a lift that ended without it gives the slave
+    /// up for a while.
+    /// </summary>
+    bool Lifting(World world, CaptiveJob j, int w, CharacterCold wc)
+    {
+        if (world.Characters.Next[w].Task == (byte)CharacterTask.PickUp) return true;
+        if (wc.Carrying == j.Captive)
+        {
+            Note(world, CaptiveEventKind.Captured, j);
+            return End(world, j, null);
+        }
+
+        SetWait(GivenUp, j.Captive, world.GameHours + Settings.GiveUpHours);
+        return End(world, j, CaptiveEventKind.GaveUp);
     }
 
     /// <summary>
@@ -428,38 +464,14 @@ public sealed partial class CaptiveSystem
     /// <summary>
     /// Ends the job. A capture's captive is now chained: the cuff's message (type 5, read by the world's update <c>FUN_1407b65b0</c>) runs
     /// <c>setChainedMode</c> (<c>FUN_14032e590</c>, <b>Verified</b>), which makes it a slave (state 1) of the cuffer's faction, obeying it (job 187);
-    /// 168 then lifts it like any downed slave. A carry's slave is lifted and hauled by the kidnapping system once the goal is done
-    /// (<see cref="StartHauls"/>).
+    /// 168 then lifts it like any downed slave.
     /// </summary>
     bool Hand(World world, CaptiveJob j, int w)
     {
         Note(world, CaptiveEventKind.Captured, j);
         End(world, j, null);
-        if (j.Kind == CaptiveJobKind.Capture) Chain(world, w, j.Captive);
-        else _hauls.Add((j.Worker, j.Captive));
+        Chain(world, w, j.Captive);
         return false;
-    }
-
-    /// <summary>
-    /// The carriers whose 168 reached its slave this step, with it: lifted after the job loop (<see cref="StartHauls"/>).
-    /// </summary>
-    readonly List<(CharacterId Carrier, CharacterId Slave)> _hauls = [];
-
-    /// <summary>
-    /// Has the kidnapping system lift and haul each slave of <see cref="_hauls"/> (<see cref="KidnapSystem.Carry"/>; goal 112 cages it once a cage is
-    /// found), after the goal was done, so the lift is not stopped as the act-out's task; one it does not take goes on the give-up list (serial).
-    /// </summary>
-    void StartHauls(World world)
-    {
-        if (_hauls.Count == 0) return;
-
-        foreach (var (carrier, slave) in _hauls)
-        {
-            if (!world.Characters.TryResolveNext(carrier, out int w)) continue;
-            if (Kidnap is null || !Kidnap.Carry(world, w, slave, hauls: true)) SetWait(GivenUp, slave, world.GameHours + Settings.GiveUpHours);
-        }
-
-        _hauls.Clear();
     }
 
     /// <summary>

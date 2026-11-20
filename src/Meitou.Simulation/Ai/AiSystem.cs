@@ -340,8 +340,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 continue;
             }
 
-            if (ThinksCarrying(n, cold) && ThinkCarrying(world, i, id, mind, squad, board, roles, hour)) continue;
-
             // A character on an engine duty or in an engine fight: only the goals that pre-empt it (Preempts) are weighed.
             if (Preempts(n, cold) is not Restrict.None and var only && Choose(world, i, id, mind, squad, board, roles, hour, only) is { } urgent)
             {
@@ -391,43 +389,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// starts and holds there.
     /// </summary>
     internal static bool MayHoldDuty(in CharacterHot n, CharacterCold cold) =>
-        Holds(n, cold) || CagedMind(cold) && (cold.Ai!.Duty is null || OnDuty(cold, cold.Ai)) || CarrierMind(n, cold);
-
-    /// <summary>
-    /// Whether the character's chooser runs while it carries a body that no goal holds (<see cref="CarrierMind"/>) and systems act engine goals out.
-    /// </summary>
-    bool ThinksCarrying(in CharacterHot n, CharacterCold cold) => _duties is not null && CarrierMind(n, cold);
-
-    /// <summary>
-    /// An NPC carrying a body that no engine goal holds, on its routine (standing, wandering, following): a full mind of its own, awake, not carried,
-    /// fleeing, fighting, caged, engaged or held by an order. The original's chooser runs for a carrier as for anyone (docs/game/ai-tasks.md
-    /// "Precedence"), and the carried-body goals (cage, throw out, bed, disposal) plan only for a carrier (their list B 47); an engine goal it chooses
-    /// then holds it (<see cref="Holds"/>, carrying included).
-    /// </summary>
-    internal static bool CarrierMind(in CharacterHot n, CharacterCold cold) =>
-        cold is { IsPlayer: false, Fleeing: false, Engaged: false, IsImprisoned: false, InCombat: false, Ai: { Engine: false, Player: false, Duty: null } }
-        && !cold.Carrying.IsNone && cold.CarriedBy.IsNone && cold.Medical is not { Incapacitated: true } && !DecisionSystem.Ordered(cold)
-        && (CharacterTask)n.Task is CharacterTask.Idle or CharacterTask.Wander or CharacterTask.Follow;
-
-    /// <summary>
-    /// The think of a carrier no goal holds (<see cref="CarrierMind"/>): it weighs all its goals; an engine goal that wins is acted out (the serial
-    /// step starts it). Any other winner becomes its current goal with its plan (its followers read it, <see cref="FollowMe"/>) but is not acted out:
-    /// the AI does not run a carrier's other act-outs, so it keeps standing, following or wandering with the body as before. False then, so the
-    /// goals that pre-empt a character the AI does not hold (<see cref="Preempts"/>, Self preservation) are weighed next. Writes only its own slot.
-    /// </summary>
-    bool ThinkCarrying(World world, int slot, CharacterId id, AiMind mind, Squad squad, Blackboard board, IReadOnlyList<AiGoal> roles, int hour)
-    {
-        var goal = Choose(world, slot, id, mind, squad, board, roles, hour);
-        if (goal is not null && _duties!.Has(goal.Task.Type))
-        {
-            Act(world, slot, mind, goal, board);
-            return true;
-        }
-
-        mind.Goal = goal;
-        mind.Version = board.Version;
-        return false;
-    }
+        Holds(n, cold) || CagedMind(cold) && (cold.Ai!.Duty is null || OnDuty(cold, cold.Ai));
 
     /// <summary>
     /// The think of an NPC in its cage (<see cref="CagedMind"/>): it weighs its goals as anyone does (<see cref="Restrict.Caged"/>), and acts the winner
@@ -637,10 +599,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         (int)goal.Task.Type >= SimulationExtensions.FirstModCode && goal.Task.Name.Length > 0 ? goal.Task.Name : TaskBehaviours.Text(goal.Task.Type);
 
     /// <summary>
-    /// Whether the AI runs the character now: it has a mind and nothing else holds it (a fight it did not start, a flight, an order, a carry, a
-    /// trade, a knock-out). In its own fight it thinks as anyone does (on the cadence and the replan triggers) and may leave it for another goal
-    /// (<see cref="InFight"/>). An NPC's order that runs holds it (<see cref="DecisionSystem.Ordered"/>); one that is blocked does not. An engine
-    /// goal's act-out (<see cref="AiMind.Duty"/>) is the AI's own: it runs the character while that act-out runs, also one carrying a body.
+    /// Whether the AI runs the character now: it has a mind and nothing else holds it (a fight it did not start, a flight, an order, being carried,
+    /// a trade, a knock-out). In its own fight it thinks as anyone does (on the cadence and the replan triggers) and may leave it for another goal
+    /// (<see cref="InFight"/>). An NPC's order that runs holds it (<see cref="DecisionSystem.Ordered"/>); one that is blocked does not. An NPC
+    /// carrying a body is held as anyone outside a fight, and an engine goal's act-out (<see cref="AiMind.Duty"/>) is the AI's own: it runs the
+    /// character while that act-out runs.
     /// </summary>
     public static bool Holds(in CharacterHot n, CharacterCold cold)
     {
@@ -650,12 +613,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         // An engine goal holds it (DutyGoals): the AI runs it while its act-out runs, carrying included (the act-out's own body), not in a fight.
         if (mind.Duty is not null) return !cold.InCombat && !mind.Engine && OnDuty(cold, mind);
-        if (!cold.Carrying.IsNone) return false;
 
-        // A player character: only one of an autonomous squad, on no order's or job's task (SquadAutonomy.Free).
-        if (cold.IsPlayer && !SquadAutonomy.Free(n, cold, mind)) return false;
+        // A player character: only one of an autonomous squad, carrying nothing, on no order's or job's task (SquadAutonomy.Free).
+        if (cold.IsPlayer && (!cold.Carrying.IsNone || !SquadAutonomy.Free(n, cold, mind))) return false;
 
-        if (cold.InCombat) return n.Task == (byte)CharacterTask.Attack && OwnsFight(cold, mind);
+        // An NPC carrying a body is the AI's as anyone is (only the carried one loses its chooser, docs/game/ai-tasks.md "Precedence"): its plans
+        // leave out the rows that need empty hands (list B !47); not in a fight.
+        if (cold.InCombat) return cold.Carrying.IsNone && n.Task == (byte)CharacterTask.Attack && OwnsFight(cold, mind);
         if (mind.Engine) return false;
         return (CharacterTask)n.Task switch
         {

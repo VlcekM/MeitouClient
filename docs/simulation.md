@@ -213,7 +213,7 @@ delivering, fetching and dismantling are steps of one act-out (`TaskStart.ActOut
   (job, button, NPC leaders), kidnappers' and guards' lifts (`BeginPickUp`), foraging, NPC scavenging and arming, the operate, turret, haul and prospect orders, the production list jobs
   (87, 97, 124, 152, 234, the engineer 125) and implicit jobs (242, 153, 275), the build, repair, door repair and dismantle orders, the bed orders and job 106, the lock, shackle, cage,
   door and force orders, the gate rounds, item pick-up and container walks, put in cage; the engine's starts: crime fights and the arrest mates' and hunters' fights
-  (`AttackOrder.Source`: `Npc`; an NPC's attack on sight is its AI's goal fight, `Goal`), an engine arrest's walks and lifts (goal 204, slave catching), kidnappers' lifts (68) and hauls' walks to the cage (112) and lifts (168), captive jobs'
+  (`AttackOrder.Source`: `Npc`; an NPC's attack on sight is its AI's goal fight, `Goal`), an engine arrest's walks and lifts (goal 204, slave catching), kidnappers' lifts (68) and 168's lifts (170), captive jobs'
   walks (the row of their task, `CaptiveSystem.RowOf`), the ditch's and the player side's food runs' walks (`TownDutySystem.RowOf`), the [engine goals'](#engine-goals) act-outs on their goal's row (smell hunts 176, NPC looting and arming, the wardens' goals, escapes, town goals), flight (35, then wander 24), food on the ground
   (259) and limbs (277), NPC arming walks (42), roaming leaders' walks (53) and mills (24); the engine's orders' act-outs start with `TaskSource.Order` ([order queue](#order-queue)). Engine walks go through `TaskStart.Walk` (`TaskRequest.Goal`: as given, or
   `Point` onto the floor, at `Mode`; one to a building shut to the walker is refused, `StartResult.Inaccessible`, as the original's plan walk:
@@ -265,7 +265,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   going down (knocked out or dead) wipes the queue, a loaded queue not restored yet and an AI's plan and goal, the jobs kept (`PlayerOrders.Wipe`; being picked up
   does the same in `CarrySystem.Link`); waking gives 65 Getting up (an animal, or waking standing) or 52 (waking staying low or crawling) with the clear flag,
   none in a bed or cage and, while carried, only once put down; a return to standing from staying low or crawling (Stand Up, a leg back up; not at a
-  kneeling treatment; not in a bed or cage, engine) gives 65 with the clear flag unless one is queued. A haul, a flight, an engine arrest and a bounty hunt
+  kneeling treatment; not in a bed or cage, engine) gives 65 with the clear flag unless one is queued. A flight, an engine arrest and a bounty hunt
   wait while one of these runs (engine: the original's replan after it drops an uncommitted goal) (`PlayerOrders.BodyHolds`) and go on after it; a gate round, a ditch and a player-side food run end;
   an [engine goal](#engine-goals) ends when one starts (`AiSystem.ReplanDuty`, as the original's replan; no duty goal commits). A stagger outside a fight (`CombatSystem.Stagger`, not getting up, not at a turret;
   a squadless NPC too, whose ended front leaves the queue without a chooser, `PlayerOrders.DropEnded`, **Verified** slot 27 `FUN_1405c7c30` → `FUN_14050d920`) pushes 147 Stumbling to the front (`PlayerOrders.GiveFront`): the running front waits behind it unstarted and is started again from its
@@ -316,7 +316,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   goal, 32 and committed goals included ([precedence](game/ai-tasks.md#precedence)): the AI (`AiSystem.Holds`, `Preempts`, `TaskStart.StartOwn`); a goal's or reaction's start
   ([task starts](#task-starts): the AI's, retaliation's, the duties' and the victims' deferred fights and walks); retaliation's own defence (it answers as a player character
   does); the flight step, which also ends a running flight; the stand-down after a fight; the free tests of the duty sweeps and routines (the ditch and the player faction's
-  food runs, the player animals' race goals, 259, hauls, arrests and bounty hunters, the shut-in release, NPC healing, arming and scavenging, rejoining the leader); the
+  food runs, the player animals' race goals, 259, arrests and bounty hunters, the shut-in release, NPC healing, arming and scavenging, rejoining the leader); the
   population's leader walk and arrival; and two engine reactions that are no order (`TaskSource.Npc`): a crime victim's attack on its culprit and a caught thief's
   watcher getting up from rest. The dialogue's acts ([dialogue](#dialogue)), the body's orders above and the arrest orders are orders of the receiver's queue. An
   owner's order may repeat (`IOrderOwner.Repeats`): when its task ends it waits unstarted at the front for its next step instead of leaving (22, 101, 248), until its
@@ -325,7 +325,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   while it holds an order.
 - **Duties let go** when an NPC's front starts, but for the body's orders (engine design; `PlayerOrders.TryFront`, serial, before the owner's `Start`): `World.ReleaseDuties` asks every system that
   is an `IDutyRelease` (found on the world's systems, nothing registered) but the order's `OrderEntry.Keeps`, its giver, to let the character go through its own give-up.
-  The ditch and food runs, hauls, arrests and bounty hunts, gate rounds and the mod NPC goals (`NpcGoals`) drop their record and clear `Engaged`; a body carried
+  The ditch and food runs, arrests and bounty hunts, gate rounds and the mod NPC goals (`NpcGoals`) drop their record and clear `Engaged`; a body carried
   for one is let go where it stands (the unlink, no knock-out); an [engine goal](#engine-goals) ends (`DutyEnd.Order`, through the AI; a town goal lets its carried body go the same way); a door way is dropped and a bash
   errand stopped. Neither the dialogue nor a trade holds anyone. The giver's own `Engaged` (one shared bit) is put back after the others let go. The duty sweeps take no
   ordered character again (`DecisionSystem.Ordered` or `AiSystem.Holds` in their free tests).
@@ -1246,7 +1246,7 @@ one starts with the order's provenance. The chain's rows and states are in [AI t
   carries the target, 240 leaves the queue (its desire, AI slot 59, is 0 while carrying) and 112 starts (it keeps the arrest's carry: `OrderEntry.Keeps`); 112 leaves the
   queue with nothing carried or no free cage (its finder), the guard keeping what he carries for his own goals. After 3 walks that end short the cage is
   unreachable for his faction for 24 game hours (`MarkUnreachable`, as the kidnapper's and the town duty's). An engine arrest drops the captive when it finds no free cage (engine).
-- **Cage walks** (arrest, haul, town duty 112 / 281; engine): a walk onto the cage's floor (`TaskStart.Walk` with the cage's position, `MovementSystem.GoToFloor`), so a cage on
+- **Cage walks** (arrest, town duty 112 / 281; engine): a walk onto the cage's floor (`TaskStart.Walk` with the cage's position, `MovementSystem.GoToFloor`), so a cage on
   an upper storey is reached by the stairs. A flat goal resolves on the walker's own storey and ends under the cage, out of `AtCage`'s height. **Observed** (#314 save, Sho-Battai
   Police Station Tower, `Outpost s-IV` `43.11:6-Newwworld-INGAME`): its 19 cages stand on the storey at y 1092, 43 above the ground floor where the guards lift raiders; the
   guards carry all eight raiders up and cage them. Still flat (arrival by distance only, so they do not loop):
@@ -1360,20 +1360,15 @@ what it wore there going into its inventory (engine choice; `DialogueSystem.Chai
   (**Observed** reading of the blackboard hand), else 1 with a free cage it may use (`HasCage`, the town candidates below) and 0 without; elsewhere 1. 68 is the lift desire
   (slot 59).
 - **Victim** (132's finder, the serial look every 15 ticks on the slot's turn; `IsVictim`): the nearest within sight (`RangeOf`, the rescue range) that is alive, down, of a carriable
-  race, not carried, caged or in a bed, not an animal, nobody's pick-up or haul, and not of the kidnapper's faction or an ally. Player characters included; so is anyone lying in a
+  race, not carried, caged or in a bed, not an animal, nobody's pick-up, and not of the kidnapper's faction or an ally. Player characters included; so is anyone lying in a
   bed, awake or not (the finder's bed branch, **Verified**): the lift is then a kidnap that rolls on arrival (`CarrySystem.Kidnap`: a hit knocks the sleeper out, a miss wakes it
   and raises the alarm).
 - **Act-out**: plan `[1, 68, 132, 254]`; the start lifts the plan's victim (`CarrySystem.BeginPickUp`, row 68, back to standing) unless another member works it; the goal is done
-  (`DutyGoals.Done`) when the pick-up ends, with the body on the shoulder or not. A player victim's message "is carrying X away". The carrier then chooses again
-  (`AiSystem.CarrierMind`): its goals 112 / 281 ([town goals](#town-duties)) cage the body; a squad member whose lists hold 141 follows its leader with the body meanwhile (engine stand-in: a
-  carrier's chooser acts out only engine goals). A kidnapper stumbling or getting up loses the goal (replanned) and chooses again.
+  (`DutyGoals.Done`) when the pick-up ends, with the body on the shoulder or not. A player victim's message "is carrying X away". The carrier then chooses again with all
+  its goals and acts the winner out as anyone ([holding](#engine-goals)): its goals 112 / 281 ([town goals](#town-duties)) cage the body, 141 follows its leader with it.
+  A kidnapper stumbling or getting up loses the goal (replanned) and chooses again.
 - **Caging**: a victim that leaves its 254 carrier's shoulder into a cage (seen at the next kidnap step, `KidnapGoals`' lift record) is `CharacterCold.Kidnapped` in a cage of
   the carrier's own faction, and a player victim gets "has been kidnapped by F".
-- **Carries to a cage** (`KidnapSystem.Carry`, asked by the captive system: a slave's haul for 168, or a carry needing a cage in range): the carrier is held (`Engaged`, released
-  for an order) until it lifts the captive (3 tries), carries it, looks for the best free cage every 15 ticks (the candidates are `FixtureRegistry.CageCandidates`: the cages of the
-  town it stands in, else of its faction's nearest town within 3953, within 1.1 x that town's radius, plus its squad's home town; `FindCage`, the original's weights and usable
-  test; other carries' cages reserved), walks there (3 walks, then `MarkUnreachable`) and within `use range` + 15 imprisons it (`Imprison`; `Kidnapped` in its faction's cage).
-  A haul without a cage goes on with its squad; any other carry drops the captive after 60 s (engine choices). A captive that dies stays on a carrier whose package lists 281.
 - **Prisoner**: `Kidnapped` = held without a sentence: it is never served (no release round), no bail is offered, and getting out is no escape crime. Set only in a cage of the kidnapper's own faction: in another faction's cage (one `canIUseThisBuilding` lets it use, a public barracks') the victim is that faction's prisoner and its goal-211 jailers free it once served, as the original, which has no such hold (#628; a prisoner with a slave state is never served there either, `FUN_1405c9f00`). The cage is locked; rescue is the usual
   lock work, or a lift out of an unlocked cage ([Cages](#cages-beds-and-locks)).
 - **Save**: the cage state is the existing `in something` / `in what` (an interior cage's entry, written with its house's interior when the save has none, plus Meitou's keys), and `meitou kidnapped` ([save](formats/save.md)). Carry links are saved and restored
@@ -1409,8 +1404,8 @@ full mind of its own weighs each one its role, slave or race list holds in the h
 test or cap of their own. The finders run in a serial look on the member's slot turn every 15 ticks (every tick for a carrier no goal holds, which chooses at once; again after an
 act-out ends) and keep their picks by slot (hashed while any); the think reads them. An act-out walks or lifts with `TaskSource.Goal` tasks on the goal's row, steps only while
 its goal holds the member (`DutyGoals.Runs`: a fight, an order, an order on its body or a better goal ends the goal) and ends with `DutyGoals.Done` at the original's end.
-An end never drops a carried body (the original's goal ends do not unlink it) but an order's, which lets it go where the carrier stands (engine choice). A carrier no goal holds
-thinks with all its goals (`AiSystem.ThinkCarrying`), so whoever lifted a body (a lift goal, an arrest, a kidnap, a rescue, a save) takes its carried-body goals from its own lists.
+An end never drops a carried body (the original's goal ends do not unlink it) but an order's, which lets it go where the carrier stands (engine choice). A carrier thinks with
+all its goals as anyone ([holding](#engine-goals)), so whoever lifted a body (a lift goal, an arrest, a kidnap, a rescue, a save) takes its carried-body goals from its own lists.
 Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game/carry-loot.md#32-goals-and-their-target-finders).
 - **Lifts 273 / 223 / 138** (plan `[67, 68, goal]`; the goal row has an empty list A, so the plan ends with the lift and the carried body's goals take the body on). Row 68's and
   223's desire is AI slot 59 (`FUN_14059e1a0`, **Verified**): 0 while carrying, 1.0 for a character target, 0.5 for any other (`DAT_14167e8d8`); the scorer clears a fresh
@@ -1538,7 +1533,7 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   are full. A squad's slaves are its live slave members in slave state 1 (engine reading of the platoon's slave list).
 - **Capture** (167, `CaptiveSystem.Capture.cs`; facts: [slave work, shout and capture](game/ai-tasks.md#slave-work-shout-and-capture)): started by a standing (posture 0) capturer with one working arm (the lift needs the left); the nearest (3D) downed, uncarried, uncaged character on its sensed list that is
   not of the capturer's side (engine reading of the sensed-class masks; the entries not tagged ally, then whoever within sight the capped block lacks that passes `SightMap.Sees`: `CharacterFacts.Perceives`, shared with the medic finder; so none in another building unless either stands on top; 168's carry the same, its mask excluding imprisoned instead of ally), no slave (state 1), not law enforcement, trader or diplomat and not shackled. The capturer walks to it, strips the `hip` and
-  `back` items into its inventory (0.8 s of `medic`), cuffs it (10 s, engine choice; locked stock `SHACKLES` put on, what it wore in that slot goes to its inventory; event 37); the cuff makes it a slave (state 1) of the capturer's faction obeying its squad (`CaptiveSystem.Chain`, the original's `setChainedMode`, [slave work](game/ai-tasks.md#slave-work-shout-and-capture); the original's owner is the cuffer character). Neither 167 nor 168 needs a cage. **Carry** (168): a downed slave owned by the carrier's faction, the fresh captive included, is lifted (first aid first) by `KidnapSystem.Carry` as a haul (`Abduction.Hauls`): a squad member then follows its leader with it, and each look takes a free cage of its faction or an ally in range (goal 112), where the slave is held as kidnapped and later processed; it is never dropped for want of one. **Observed** (headless, `5 fugs` save, Slave Traders' "slave hunters" 87k units from their nearest town): they cuff a downed player squad, lift the slaves after treating them and carry them along under "Slaver deliver to work camp"; one that wakes is put down and follows. 168 runs not on Hold (the raw bit, even sneaking: its desire is the rescue one, [goals](game/carry-loot.md#32-goals-and-their-target-finders)). A caged target that got up is beaten down first (196, an armed capturer: a `chop down static` blow per clip, `CombatSystem.Execute`), any other is given up. A target a job gave up on, or that someone else carries off or jails first (a capture only), is left alone for an hour (engine give-up list). **Observed** (probe, Rebirth, real data): a downed character of the player's faction
+  `back` items into its inventory (0.8 s of `medic`), cuffs it (10 s, engine choice; locked stock `SHACKLES` put on, what it wore in that slot goes to its inventory; event 37); the cuff makes it a slave (state 1) of the capturer's faction obeying its squad (`CaptiveSystem.Chain`, the original's `setChainedMode`, [slave work](game/ai-tasks.md#slave-work-shout-and-capture); the original's owner is the cuffer character). Neither 167 nor 168 needs a cage. **Carry** (168): a downed slave owned by the carrier's faction, the fresh captive included, is treated when it needs it (row 25) and lifted (row 170, `TaskSource.Goal`); the lift ends the goal (its desire is 0 while carrying), and the carrier's own goals take the slave on: 112 cages it, 141 follows the leader with it. 168 runs not on Hold (the raw bit, even sneaking: its desire is the rescue one, [goals](game/carry-loot.md#32-goals-and-their-target-finders)). A caged target that got up is beaten down first (196, an armed capturer: a `chop down static` blow per clip, `CombatSystem.Execute`), any other is given up. A target a job gave up on, or that someone else carries off or jails first (a capture only), is left alone for an hour (engine give-up list). **Observed** (probe, Rebirth, real data): a downed character of the player's faction
   beside the garrison leader is stripped, shackled, carried to a cage and enslaved by the Cage Wardens in about 1250 ticks; its squad then remembers the capturer as captor. **Observed** (probe, Stoat, real data): the Slave Traders cuff a downed player character, cage it in a cage of the slave shop and enslave it in about 500 ticks.
 - **Liberate** (276): the nearest cage, in the town the worker stands in (else its squad's), of a faction neither its own nor allied, holding a live occupant that is not its
   enemy. 3 s of `medic` at the cage (engine), then `FixtureRegistry.Release` (no crime is booked for an NPC liberator).
@@ -2377,9 +2372,9 @@ its plan the act-out carries out besides the goal's own. Built: 135, 139, 282, 2
   task it left running; hashed), a refusal backs the type off for four think periods.
 - **Holding**: the goal, not `Engaged`, holds the character. `AiSystem.Holds` is true while the provenance is the act-out (`AiSystem.OnDuty`: that task, or a goal's
   task started since; carrying included, not in a fight), so the think keeps choosing; another goal that wins sets `AiMind.DutyLeave`, the serial step ends the act-out
-  and the next tick acts the winner out. A carrier no goal holds (`AiSystem.CarrierMind`: a full mind, on its routine, not engaged, fighting, fleeing or ordered) thinks
-  too (`ThinkCarrying`, all tiers): an engine goal that wins starts as above (`MayHoldDuty` admits it); any other winner becomes its current goal unacted (its
-  followers read it), it keeps its routine with the body, and Self preservation is weighed next as for any character the AI does not hold.
+  and the next tick acts the winner out. An NPC carrying a body is held as anyone outside a fight (`Holds`; the original takes the chooser only from the carried one,
+  [holds](game/ai-tasks.md#precedence)): it chooses with all its goals and acts the winner out (141 follows the leader with the body, a Post walks there); rows that
+  need empty hands do not plan (list B `!47`: sleeping, sitting, the static guards, 36 patrolling town, the turret, assaults).
 - **End** (`IDutyGoal.End` with `DutyEnd`, then the goal and plan leave the mind, which replans): displaced; an order's start (`IDutyRelease`, a faction change too); an
   order on the body (`AiSystem.ReplanDuty`), a knock-out or death, a wiped or ended plan, a new mind (replanned); anything else holding it (taken: engaged by another
   system, fleeing, fighting, carried, caged by another, a task another system started; a caged mind keeps the goal it acts out from the cage); gone. A displaced act-out whose provenance is still its own is stopped after `End` (a walk

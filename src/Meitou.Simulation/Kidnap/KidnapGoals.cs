@@ -40,7 +40,7 @@ internal sealed class KidnapGoals(KidnapSystem kidnap, CarrySystem carry, Popula
         /// </summary>
         public List<int>? Downed;
         /// <summary>
-        /// The characters someone lifts or hauls now.
+        /// The characters someone lifts now.
         /// </summary>
         public HashSet<CharacterId>? Claimed;
     }
@@ -104,7 +104,7 @@ internal sealed class KidnapGoals(KidnapSystem kidnap, CarrySystem carry, Popula
     }
 
     /// <summary>
-    /// The characters someone is picking up now (a running pick-up's target), lifts for 254 or hauls (<see cref="KidnapSystem.Abductions"/>).
+    /// The characters someone is picking up now (a running pick-up's target) or lifts for 254.
     /// </summary>
     HashSet<CharacterId> Claimed(CharacterTable table)
     {
@@ -116,7 +116,6 @@ internal sealed class KidnapGoals(KidnapSystem kidnap, CarrySystem carry, Popula
         }
 
         foreach (var act in _acting.Values) claimed.Add(act.Victim);
-        foreach (var a in kidnap.Abductions) claimed.Add(a.Victim);
         return claimed;
     }
 
@@ -237,28 +236,12 @@ internal sealed class KidnapGoals(KidnapSystem kidnap, CarrySystem carry, Popula
             _acting.Remove(slot);
             Lifted(world, slot, act);
             _duties!.Done(world, slot, TaskType.FinalKidnapperCageJob);
-            FollowWithBody(world, slot);
         }
     }
 
     /// <summary>
-    /// A carrier whose lift is done and that stands: a squad member whose lists hold 141 Follow leader follows its leader with the body. Engine
-    /// stand-in: its chooser runs (<see cref="AiSystem.CarrierMind"/>) but acts out only an engine goal it chooses (a cage goal), so the follow its
-    /// list would make it go on with is started here; the leader stands.
-    /// </summary>
-    static void FollowWithBody(World world, int slot)
-    {
-        var table = world.Characters;
-        if (table.Next[slot].Task != (byte)CharacterTask.Idle || table.Cold(slot) is not { Carrying.IsNone: false } cold) return;
-        if (world.Squads.Find(cold.SquadId) is not { } squad || squad.Leader == table.IdOf(slot)) return;
-        if (!AiSystem.WeighsGoal(world, slot, TaskType.FollowSquadleader)) return;
-
-        TaskStart.Become(world, slot, CharacterTask.Follow, TaskType.FollowSquadleader, TaskSource.Goal);
-    }
-
-    /// <summary>
     /// The act-out's start (serial): the lift (row 68) of the plan's victim, back to standing; false when the victim is no longer one, another
-    /// member's act-out or haul works it, or the lift cannot start. A sleeper in a bed is lifted through the kidnap roll
+    /// member's act-out works it, or the lift cannot start. A sleeper in a bed is lifted through the kidnap roll
     /// (<see cref="CarrySystem.BeginPickUp"/> with <c>kidnap</c>).
     /// </summary>
     bool Start(World world, in DutyAsk ask, IReadOnlyList<PlanStep> plan)
@@ -285,15 +268,12 @@ internal sealed class KidnapGoals(KidnapSystem kidnap, CarrySystem carry, Popula
     }
 
     /// <summary>
-    /// Whether another member's act-out lifts <paramref name="victim"/>, or a haul carries it.
+    /// Whether another member's act-out lifts <paramref name="victim"/>.
     /// </summary>
     bool Worked(int slot, CharacterId victim)
     {
         foreach (var (other, act) in _acting)
             if (other != slot && act.Victim == victim) return true;
-
-        foreach (var a in kidnap.Abductions)
-            if (a.Victim == victim) return true;
 
         return false;
     }
