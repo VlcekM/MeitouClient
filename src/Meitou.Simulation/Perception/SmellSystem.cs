@@ -18,12 +18,13 @@ public readonly record struct ZoneBlood(float Value, Vector2 Position);
 /// <c>Task_HuntingSmell</c>). Serial, in <c>SlowWorld</c> every <see cref="EveryTicks"/> ticks, the zones stepping once per <see cref="StepSeconds"/>
 /// with the elapsed time: each zone's target is its corpses with flies (1 each; the bleeders the original posts are skipped by its accumulation); its
 /// position is the corpses' centroid, or (0, 0) without corpses (the original's zero vector); the value rises toward the target at 1/60 a game second
-/// and falls at 1/240. A zone not loaded is dropped once its target is 0 (<c>FUN_1408f85f0</c>). An animal whose squad's package lists 176 hunts the
-/// zone with the best weighted value (its own x1, a neighbour x0.8, any other x0.5) above its race's ANIMAL_CHARACTER <c>smell blood</c>, keeps it
-/// while the value stays at the threshold, and runs to its position. Engine choices: every loaded zone is a candidate (the original's active zone
+/// and falls at 1/240. A zone not loaded is dropped once its target is 0 (<c>FUN_1408f85f0</c>). An animal-led squad whose leader weighs goal 176
+/// keeps the zone with the best weighted value (its own x1, a neighbour x0.8, any other x0.5) above the leader's ANIMAL_CHARACTER
+/// <c>smell blood</c> while the value stays at the threshold; goal 176 is an engine goal of the chooser (<see cref="BloodHunt"/>, wanted while the
+/// squad keeps a zone), whose act-out runs to the zone's position. Engine choices: every loaded zone is a candidate (the original's active zone
 /// island); all zones step together, the original one zone per kick in a cycle.
 /// </summary>
-public sealed class SmellSystem(PopulationData data, PopulationSystem? population) : ITickSystem, IStateHashed, Player.IDutyRelease
+public sealed class SmellSystem(PopulationData data, PopulationSystem? population) : ITickSystem, IStateHashed, IDutyGoalOwner
 {
     #region Zone smell
 
@@ -142,16 +143,29 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
     const float HuntArrive = 50;
 
     /// <summary>
-    /// The zone each hunting squad keeps (Blackboard +0xf8), by squad id.
+    /// The zone each hunting squad keeps (the squad data's <c>+0xf8</c>, <c>FUN_140507070</c>), by squad id.
     /// </summary>
     readonly SortedDictionary<int, int> _hunts = [];
     /// <summary>
-    /// The <c>smell blood</c> threshold per record id, read once.
+    /// The <c>smell blood</c> threshold per record id, read once (the serial zone step fills it).
     /// </summary>
     readonly Dictionary<string, float> _thresholds = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The characters goal 176 holds (its act-out, <see cref="BloodHunt"/>), by slot: added at the start, removed at the end.
+    /// </summary>
+    readonly SortedDictionary<int, CharacterId> _hunters = [];
+    /// <summary>
+    /// The engine goals of the world (the AI's), resolved at the first hunters' step.
+    /// </summary>
+    DutyGoals? _duties;
 
     /// <summary>
-    /// ANIMAL_CHARACTER <c>smell blood</c> of a character's record (<c>CharacterAnimal +0x6e8</c>); 0 when it has none.
+    /// Registers goal 176 HUNTING_BLOODSMELL with the chooser (<see cref="BloodHunt"/>): its row's own act-out, no other row.
+    /// </summary>
+    void IDutyGoalOwner.RegisterGoals(DutyGoals goals) => goals.Register(TaskType.HuntingBloodsmell, new BloodHunt(this));
+
+    /// <summary>
+    /// ANIMAL_CHARACTER <c>smell blood</c> of a character's record (<c>CharacterAnimal +0x6e8</c>, the AI's vfunc <c>0x430</c>); 0 when it has none.
     /// </summary>
     float Threshold(CharacterCold c)
     {
@@ -163,33 +177,62 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
     }
 
     /// <summary>
-    /// The blood hunters: each animal-led squad whose package lists goal 176 keeps or picks its zone and runs to its smell.
+    /// The hunt's serial part: the zones the squads keep (<see cref="KeepZones"/>), then the walks of the hunters (<see cref="StepHunters"/>).
     /// </summary>
     void Hunt(World world)
+    {
+        KeepZones(world);
+        if (_hunters.Count > 0) StepHunters(world);
+    }
+
+    /// <summary>
+    /// The zone each animal-led squad keeps for goal 176 (the desire <c>FUN_140794b60</c> keeps the squad data's zone while its value is at least the
+    /// asker's <c>smell blood</c>, else picks anew, <b>Verified</b>), for a squad whose leader weighs the goal now (the goal is in the Leader lists
+    /// only, docs/game/perception.md "Blood smell"); the leader's threshold stands for the asker's. The original's desire writes the zone; here this
+    /// serial step does, every <see cref="EveryTicks"/>, and the think's desire reads it (<see cref="BloodHunt.Desire"/>).
+    /// </summary>
+    void KeepZones(World world)
     {
         var table = world.Characters;
         foreach (var squad in world.Squads.All)
         {
-            if (squad.Ai is null || squad.Members.Count == 0 || !table.TryResolveNext(squad.Leader, out int lead)
-                || table.Cold(lead) is not { Fighter.IsAnimal: true } leader)
-                continue;
+            int zone = -1;
+            if (squad.Ai is not null && table.TryResolveNext(squad.Leader, out int lead) && table.Cold(lead) is { Fighter.IsAnimal: true } leader
+                && AiSystem.WeighsGoal(world, lead, TaskType.HuntingBloodsmell) && Threshold(leader) is > 0 and var threshold)
+                zone = PickZone(world, squad, lead, threshold);
 
-            int role = (int)AiSystem.RoleOf(squad, squad.Leader, leader);
-            bool listed = population!.GoalDuty(world, squad, (AiRole)role, TaskType.HuntingBloodsmell);
-            float threshold = Threshold(leader);
-            int zone = listed && threshold > 0 ? PickZone(world, squad, lead, threshold) : -1;
-            if (zone < 0)
-            {
-                if (_hunts.Remove(squad.Id)) Release(world, squad);
-
-                continue;
-            }
-
-            _hunts[squad.Id] = zone;
-            var to = _zones[zone].Position;
-            foreach (var member in squad.Members)
-                HuntWith(world, member, to);
+            if (zone < 0) _hunts.Remove(squad.Id);
+            else _hunts[squad.Id] = zone;
         }
+
+        foreach (int gone in _hunts.Keys.Where(id => world.Squads.Find(id) is null).ToList())
+            _hunts.Remove(gone);
+    }
+
+    /// <summary>
+    /// Each hunter the goal still holds walks on towards its squad's zone as the smell's position moves (<c>Task_HuntingSmell</c> runs to it, movement
+    /// mode 2); one the goal no longer holds is left to the AI's sweep, which ends it.
+    /// </summary>
+    void StepHunters(World world)
+    {
+        _duties ??= world.SystemOf<AiSystem>()?.Duties;
+        foreach (var (slot, _) in _hunters)
+        {
+            if (_duties?.Runs(world, slot, TaskType.HuntingBloodsmell) != true || world.Characters.Cold(slot)?.Ai is not { } mind) continue;
+            if (_hunts.TryGetValue(mind.Squad.Id, out int zone) && _zones.TryGetValue(zone, out var z)) RunTo(world, slot, z.Position);
+        }
+    }
+
+    /// <summary>
+    /// Sends the hunter running to the smell's position (row 176, a goal's task), unless it is there already or going there.
+    /// </summary>
+    static void RunTo(World world, int slot, Vector2 to)
+    {
+        ref var n = ref world.Characters.Next[slot];
+        bool far = Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), to) > HuntArrive;
+        bool goingThere = n.Task == (byte)CharacterTask.GoTo && !(Vector2.Distance(n.Goal, to) > HuntArrive);
+        if (far && !goingThere)
+            TaskStart.Walk(world, slot, to, SpeedMode.Run, TaskType.HuntingBloodsmell, TaskSource.Goal);
     }
 
     /// <summary>
@@ -215,43 +258,39 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
     }
 
     /// <summary>
-    /// Sends one squad member that is free to hunt to the smell's position, when it is not there yet.
+    /// Goal 176 HUNTING_BLOODSMELL as the chooser weighs it (<see cref="IDutyGoal"/>; tier and weight from the package's AI_TASK record, no finder,
+    /// no commitment): its desire, its start and its end.
     /// </summary>
-    static void HuntWith(World world, CharacterId member, Vector2 to)
+    sealed class BloodHunt(SmellSystem smell) : IDutyGoal
     {
-        var table = world.Characters;
-        if (!table.TryResolveNext(member, out int s) || table.Cold(s) is not { } c || c.InCombat || c.Fleeing || c.Medical is { Incapacitated: true }
-            || !c.CarriedBy.IsNone)
-            return;
+        /// <summary>
+        /// The desire <c>FUN_140794b60</c> (<b>Verified</b>): 0 for a character that is not an animal (vfunc <c>0x248</c>), else 1
+        /// (<c>DAT_14167c308</c>) while its squad keeps a zone (<see cref="KeepZones"/>), else 0. Parallel: reads the asker's own cold state and the
+        /// zones only the serial step writes.
+        /// </summary>
+        public float Desire(World world, in DutyAsk ask) =>
+            world.Characters.Cold(ask.Slot) is { Fighter.IsAnimal: true } && smell._hunts.ContainsKey(ask.Squad.Id) ? 1 : 0;
 
-        if (!c.Engaged && !AiSystem.Holds(table.Next[s], c)) return;
-
-        c.Engaged = true;
-        ref var n = ref table.Next[s];
-        bool far = Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), to) > HuntArrive;
-        bool goingThere = n.Task == (byte)CharacterTask.GoTo && !(Vector2.Distance(n.Goal, to) > HuntArrive);
-        if (far && !goingThere)
-            TaskStart.Walk(world, s, to, SpeedMode.Run, TaskType.HuntingBloodsmell, TaskSource.Goal);
-    }
-
-    /// <summary>
-    /// An order takes a member of a hunting squad (<see cref="Player.IDutyRelease"/>): the member is let go as at the hunt's end (<see cref="Release"/>);
-    /// the squad's hunt goes on with the others, and it re-engages the member only once the AI holds it again.
-    /// </summary>
-    void Player.IDutyRelease.ReleaseForOrder(World world, int slot)
-    {
-        if (world.Characters.Cold(slot) is { Engaged: true } c && _hunts.ContainsKey(c.SquadId)) c.Engaged = false;
-    }
-
-    /// <summary>
-    /// Lets the squad's members' AI take them again.
-    /// </summary>
-    static void Release(World world, Squad squad)
-    {
-        foreach (var member in squad.Members)
+        /// <summary>
+        /// The act-out's start (serial): the hunter runs to its squad's zone's smell (<see cref="RunTo"/>) and is kept until the goal ends. False
+        /// when the squad no longer keeps a zone.
+        /// </summary>
+        public bool Start(World world, in DutyAsk ask, IReadOnlyList<PlanStep> plan)
         {
-            if (world.Characters.TryResolveNext(member, out int s) && world.Characters.Cold(s) is { Engaged: true } c)
-                c.Engaged = false;
+            if (!smell._hunts.TryGetValue(ask.Squad.Id, out int zone) || !smell._zones.TryGetValue(zone, out var z)) return false;
+
+            smell._hunters[ask.Slot] = ask.Id;
+            RunTo(world, ask.Slot, z.Position);
+            return true;
+        }
+
+        /// <summary>
+        /// The goal ended (displaced, an order, a replan, taken, gone): the hunter is no longer kept. <c>Task_HuntingSmell</c> has no end of its own
+        /// and holds nothing; the squad's zone stays with the squad, as the squad data's does.
+        /// </summary>
+        public void End(World world, int slot, CharacterId id, DutyEnd why)
+        {
+            if (smell._hunters.TryGetValue(slot, out var hunter) && hunter == id) smell._hunters.Remove(slot);
         }
     }
 
@@ -262,7 +301,7 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
     /// </summary>
     public void Hash(ref StateHasher hasher)
     {
-        if (_zones.Count == 0 && _hunts.Count == 0) return;
+        if (_zones.Count == 0 && _hunts.Count == 0 && _hunters.Count == 0) return;
 
         hasher.Add(0x536D656C);
         foreach (var (k, z) in _zones)
@@ -276,6 +315,16 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
         {
             hasher.Add(s);
             hasher.Add(z);
+        }
+
+        if (_hunters.Count > 0)
+        {
+            hasher.Add(0x48756E74);   // "Hunt": only while a hunter runs
+            foreach (var (slot, id) in _hunters)
+            {
+                hasher.Add(slot);
+                hasher.Add(id);
+            }
         }
 
         hasher.Add(_elapsed);

@@ -349,7 +349,14 @@ until the value falls below its threshold). A zone record is freed when its zone
 176 HUNTING_BLOODSMELL (`AI::scoreHuntingBlood` `FUN_140794b60`, `Task_HuntingSmell`): animals only; the blackboard keeps a zone (`+0xf8`) while its blood is at least the animal's
 Cadence (`FUN_1408f85f0`, **Verified**): a timer collects the speed-scaled frame time until 10 s; each kick then steps ONE zone record (cursor `DAT_1421352f8`) with dt = the frozen timer (10 s plus the overshoot), and when the cursor passes the last record timer and cursor reset. So a zone steps about once per cycle with dt >= 10 game seconds, in lumps of 10 s x rate, and the posted-entry map is cleared after each step. Meitou (`SmellSystem`): all zones step together every 10 game seconds with the time gathered since the last step.
 ANIMAL_CHARACTER `smell blood` (`smell eggs` is the eggs threshold); else the best of its zone and its active island's, x0.8 for a neighbour, x0.5 otherwise, above the threshold;
-desire 1 with one. The task runs (movement mode 2) to the smell's position; no end of its own. Data: "Smell Hunter" in the two Blood Hunter packages. SQUAD_TEMPLATE `blood smell mult`
+desire 1 with one; picked anew when the kept zone falls below the threshold, the pick (`FUN_1408f58e0`) stored even when it found none (**Verified**,
+`FUN_140794b60`). The task runs (movement mode 2) to the smell's position; no end of its own. Data (**Verified**, `gamedata_base.txt`): the AI_TASK "Smell Hunter" (176,
+classification 2) is listed only in the `Leader AI Goals` of `Blood Hunter day` and `Blood Hunter nocturnal` (`Smell Hunter=0,23,4`: hours 0 to 23, weight 0.04; the
+packages' `Squad AI Goals` have Follow leader 141 instead), used by the templates `Lone Wolf`, `Mountain Wolf Pack`, `Wolf Pack nocturnal` and `Wolf pack patrol day`; no
+other package, race or faction list names it. The same Leader lists hold `Patrol=0,50,50` (22, classification 2, desire 0.25, weight 0.5). So by the scorer
+([desire and commitment](ai-tasks.md#desire-and-commitment)) Patrol (0.125) outscores Smell Hunter (0.04, at most 0.0625 as the current goal) in tier 2 whenever
+Patrol plans (its list B !26, 60, !157 holds for a wolf), and the leader hunts blood only when it does not (**Observed**: from the data and the scorer, not checked in
+the running game). SQUAD_TEMPLATE `blood smell mult`
 is read into the platoon's patrol settings; its consumer was not traced.
 
 ## Unknowns

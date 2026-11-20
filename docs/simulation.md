@@ -214,7 +214,7 @@ delivering, fetching and dismantling are steps of one act-out (`TaskStart.ActOut
   (87, 97, 124, 152, 234, the engineer 125) and implicit jobs (242, 153, 275), the build, repair, door repair and dismantle orders, the bed orders and job 106, the lock, shackle, cage,
   door and force orders, the wardens' rounds, item pick-up and container walks, put in cage; the engine's starts: crime fights and the arrest mates' and hunters' fights
   (`AttackOrder.Source`: `Npc`; an NPC's attack on sight is its AI's goal fight, `Goal`), an engine arrest's walks and lifts (goal 204, slave catching), kidnappers' walks to the cage (112) and lifts (132, 168), captive jobs'
-  walks (the row of their task, `CaptiveSystem.RowOf`), town duties' walks, lifts and drops (the goal of their kind, `TownDutySystem.RowOf`), smell hunts (176), flight (35, then wander 24), food on the ground
+  walks (the row of their task, `CaptiveSystem.RowOf`), town duties' walks, lifts and drops (the goal of their kind, `TownDutySystem.RowOf`), the [engine goals'](#engine-goals) act-outs (smell hunts 176), flight (35, then wander 24), food on the ground
   (259) and limbs (277), NPC arming walks (42), roaming and campaign leaders' walks (53, 215) and mills (24); the engine's orders' act-outs start with `TaskSource.Order` ([order queue](#order-queue)). Engine walks go through `TaskStart.Walk` (`TaskRequest.Goal`: as given, or
   `Point` onto the floor, at `Mode`; one to a building shut to the walker is refused, `StartResult.Inaccessible`, as the original's plan walk:
   [locks](game/locks.md#doors)); engine standing tasks (idle, wander, a follow of the squad's leader) through `TaskStart.Become` (the movement's handler stops the character on it).
@@ -326,8 +326,8 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
 - **Duties let go** when an NPC's front starts, but for the body's orders (engine design; `PlayerOrders.TryFront`, serial, before the owner's `Start`): `World.ReleaseDuties` asks every system that
   is an `IDutyRelease` (found on the world's systems, nothing registered) but the order's `OrderEntry.Keeps`, its giver, to let the character go through its own give-up.
   Town duties, kidnaps, captive jobs, arrests and bounty hunts, lock rounds and the mod NPC goals (`NpcGoals`) drop their record and clear `Engaged`; a body carried
-  for one is let go where it stands (the unlink, no knock-out); a smell hunt lets the member go while the squad hunts on; a door way is dropped and a bash errand
-  stopped. Neither the dialogue nor a trade holds anyone. The giver's own `Engaged` (one shared bit) is put back after the others let go. The duty sweeps take no
+  for one is let go where it stands (the unlink, no knock-out); an [engine goal](#engine-goals) ends (`DutyEnd.Order`, through the AI); a door way is dropped and a bash
+  errand stopped. Neither the dialogue nor a trade holds anyone. The giver's own `Engaged` (one shared bit) is put back after the others let go. The duty sweeps take no
   ordered character again (`DecisionSystem.Ordered` or `AiSystem.Holds` in their free tests).
 - **Routine after an order** (engine design): an NPC its AI does not fully run (an engine mind or none) keeps the routine it was on at the start, wandering or
   following its leader (`CharacterCold.OrderRoutine`, `DecisionSystem.KeepRoutine`), and takes it up again once its order no longer holds it, if it then stands idle,
@@ -1384,9 +1384,14 @@ what it wore there going into its inventory (engine choice; `DialogueSystem.Chai
 
 `SmellSystem` (serial `SlowWorld`, every 30 ticks; facts: [perception](game/perception.md#blood-smell)): each zone's blood target is its corpses with flies, its
 position their centroid ((0, 0) without corpses), an unloaded zone dropped once its target is 0; the value rises 1/60 and falls 1/240 per game second. Corpses get flies 4 game hours after
-death while the weather there acts on no one (`BodySystem.Flies`, `CharacterCold.HasFlies`; none in a world without weather). The host draws the effect and plays the sound at them (`CorpseFlies`). An animal squad whose package lists 176 hunts
-the zone with the best value (own x1, neighbour x0.8, other x0.5) above its ANIMAL_CHARACTER `smell blood`, keeps it while the value holds, and its members run to the
-position. Engine: every loaded zone is a candidate; a hunter stops within 50.
+death while the weather there acts on no one (`BodySystem.Flies`, `CharacterCold.HasFlies`; none in a world without weather). The host draws the effect and plays the sound at them (`CorpseFlies`).
+Goal 176 HUNTING_BLOODSMELL is an [engine goal](#engine-goals) (`SmellSystem.BloodHunt`): the same serial step keeps, for each animal-led squad whose leader weighs 176 now
+(`AiSystem.WeighsGoal`: its role list in the hour's window), the zone with the best value (own x1, neighbour x0.8, other x0.5) above the leader's ANIMAL_CHARACTER `smell blood`
+while the value holds (the squad data's zone, which the original's desire writes; here the serial step writes it and the desire reads it); the desire is 1 for an animal whose
+squad keeps a zone, else 0. The chooser weighs it at the package record's tier and weight like any goal and plans `[176]` (list B !26, 60); the start runs the character to the
+zone's position (row 176, `SpeedMode.Run`), the step re-aims it as the position moves, and the goal ends as every engine goal does. Only the squad leader has the goal in the
+base data, so the members follow it ([perception](game/perception.md#blood-smell)). Engine: every loaded zone is a candidate; a hunter stops within 50; the leader's threshold
+stands for the asker's.
 
 ### Town duties
 
@@ -2320,11 +2325,6 @@ state's `mounted` handle). Claim order and gunner spot are engine choices. The g
 no enemy is sensed (list A `isNoEnemiesInVicinity`, [combat.md](game/combat.md#turrets)): false while the character's senses count an
 enemy (`numEnemies`, `SenseBlock.Enemies`), so guards man the turrets only while enemies come. A guard at its turret fires it ([Ranged](#ranged)).
 
-### Mod goals
-
-Engine API for code mods, not in the original ([modding](modding.md), "NPC goals"). `NpcGoals` (one per world, built in `World`'s constructor by
-`AiSystem.BindGoals` from `SimulationExtensions.GoalTypes` and the `INpcGoalOwner` systems; null when no mod claimed a type, and then none of
-the paths below runs) holds each registered type from 1000 up with the index of the system that registered it. A type outside `TaskBehaviours`
 ### Engine goals
 
 Goals of the NPCs' packages that an engine system acts out, chosen by the one chooser as the original's (docs/game/ai-tasks.md "Precedence"). `DutyGoals`
@@ -2346,6 +2346,11 @@ its plan the act-out carries out besides the goal's own. Built: 176 (`SmellSyste
   order on the body (`AiSystem.ReplanDuty`), a knock-out or death, a wiped or ended plan, a new mind (replanned); anything else holding it (taken: engaged by another
   system, fleeing, fighting, carried, caged, a task another system started); gone. The system's own end is `DutyGoals.Done`. Records are hashed while any.
 
+### Mod goals
+
+Engine API for code mods, not in the original ([modding](modding.md), "NPC goals"). `NpcGoals` (one per world, built in `World`'s constructor by
+`AiSystem.BindGoals` from `SimulationExtensions.GoalTypes` and the `INpcGoalOwner` systems; null when no mod claimed a type, and then none of
+the paths below runs) holds each registered type from 1000 up with the index of the system that registered it. A type outside `TaskBehaviours`
 has `AiBehaviour.None`, whose desire is 0; for a registered type `AiSystem.Desire` asks the mod instead (`ModDesire`: 0 for a player character's
 mind, for a goal whose system is stopped, and for a type the mod refused to start for that character, until its back-off ends,
 `AiMind.ModGoalBackoff`), and the default profile (desire "special", no commitment, crowd 1) leaves the score desire x weight with the continuity.
