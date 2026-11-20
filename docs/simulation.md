@@ -265,8 +265,8 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   going down (knocked out or dead) wipes the queue, a loaded queue not restored yet and an AI's plan and goal, the jobs kept (`PlayerOrders.Wipe`; being picked up
   does the same in `CarrySystem.Link`); waking gives 65 Getting up (an animal, or waking standing) or 52 (waking staying low or crawling) with the clear flag,
   none in a bed or cage and, while carried, only once put down; a return to standing from staying low or crawling (Stand Up, a leg back up; not at a
-  kneeling treatment; not in a bed or cage, engine) gives 65 with the clear flag unless one is queued. A town duty's errand, a haul, a flight, an engine arrest, a bounty hunt and a
-  captive job wait while one of these runs (engine: the original's replan after it drops an uncommitted goal) (`PlayerOrders.BodyHolds`) and go on after it; a gate round ends;
+  kneeling treatment; not in a bed or cage, engine) gives 65 with the clear flag unless one is queued. A town duty's errand, a haul, a flight, an engine arrest and a bounty hunt
+  wait while one of these runs (engine: the original's replan after it drops an uncommitted goal) (`PlayerOrders.BodyHolds`) and go on after it; a gate round ends;
   an [engine goal](#engine-goals) ends when one starts (`AiSystem.ReplanDuty`, as the original's replan; no duty goal commits). A stagger outside a fight (`CombatSystem.Stagger`, not getting up, not at a turret;
   a squadless NPC too, whose ended front leaves the queue without a chooser, `PlayerOrders.DropEnded`, **Verified** slot 27 `FUN_1405c7c30` → `FUN_14050d920`) pushes 147 Stumbling to the front (`PlayerOrders.GiveFront`): the running front waits behind it unstarted and is started again from its
   start afterwards; 147 starts with no repertoire or list test (`OrderEntry.Forced`, `TaskRequest.Forced`); a blow during a running stumble adds another front
@@ -316,7 +316,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   goal, 32 and committed goals included ([precedence](game/ai-tasks.md#precedence)): the AI (`AiSystem.Holds`, `Preempts`, `TaskStart.StartOwn`); a goal's or reaction's start
   ([task starts](#task-starts): the AI's, retaliation's, the duties' and the victims' deferred fights and walks); retaliation's own defence (it answers as a player character
   does); the flight step, which also ends a running flight; the stand-down after a fight; the free tests of the duty sweeps and routines (town duties and the player faction's
-  food runs, captive jobs and race goals, 259, hauls, arrests and bounty hunters, the shut-in release, NPC healing, arming and scavenging, rejoining the leader); the
+  food runs, the player animals' race goals, 259, hauls, arrests and bounty hunters, the shut-in release, NPC healing, arming and scavenging, rejoining the leader); the
   population's leader walk and arrival; and two engine reactions that are no order (`TaskSource.Npc`): a crime victim's attack on its culprit and a caught thief's
   watcher getting up from rest. The dialogue's acts ([dialogue](#dialogue)), the body's orders above and the arrest orders are orders of the receiver's queue. An
   owner's order may repeat (`IOrderOwner.Repeats`): when its task ends it waits unstarted at the front for its next step instead of leaving (22, 101, 248), until its
@@ -325,7 +325,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   while it holds an order.
 - **Duties let go** when an NPC's front starts, but for the body's orders (engine design; `PlayerOrders.TryFront`, serial, before the owner's `Start`): `World.ReleaseDuties` asks every system that
   is an `IDutyRelease` (found on the world's systems, nothing registered) but the order's `OrderEntry.Keeps`, its giver, to let the character go through its own give-up.
-  Town duties, hauls, captive jobs, arrests and bounty hunts, gate rounds and the mod NPC goals (`NpcGoals`) drop their record and clear `Engaged`; a body carried
+  Town duties, hauls, arrests and bounty hunts, gate rounds and the mod NPC goals (`NpcGoals`) drop their record and clear `Engaged`; a body carried
   for one is let go where it stands (the unlink, no knock-out); an [engine goal](#engine-goals) ends (`DutyEnd.Order`, through the AI); a door way is dropped and a bash
   errand stopped. Neither the dialogue nor a trade holds anyone. The giver's own `Engaged` (one shared bit) is put back after the others let go. The duty sweeps take no
   ordered character again (`DecisionSystem.Ordered` or `AiSystem.Holds` in their free tests).
@@ -440,8 +440,7 @@ crime sees deeds and final positions/carry links. Game combat uses `SelfApproach
 
 Engine choice: a periodic per-character pass looks at each character on its slot's turn (`World.Turn`: `Tick - slot` a multiple of the period, within the far cadence's step; the AI's think anchors at `Tick + slot`, so a slot's look and think interleave), as the original runs its AI
 updates 8 characters a frame in turn ([game loop](game/game-loop.md#the-character-update-budget)), instead of all on one tick: Aggro, Crime,
-FirstAid, NPC looting, Captive (`SweepEveryTicks` 30; new jobs at most `MaxNewJobs` over the period, at least one a tick), Town duty and
-Kidnap (`LookEveryTicks` 15). **Observed** (`--log-spikes`, ~1,400 characters loaded): the captive sweep on one tick was 8-11 ms once a second.
+FirstAid, NPC looting, Captive (`SweepEveryTicks` 30, the goals' look), Town duty and Kidnap (`LookEveryTicks` 15).
 
 ## Population
 
@@ -1474,23 +1473,25 @@ Duties are priority-2 goals (**Observed**: `FUN_140510ef0` tries orders, jobs, u
 ## Captives
 
 `Kidnap/CaptiveSystem` (serial `SlowWorld`, right after Kidnap; with the population and the AI). Facts: [ai-tasks, prisoner fate and slave rows](game/ai-tasks.md#prisoner-fate-and-slave-rows),
-[ai, prisoner and slaver packages](game/ai.md#prisoner-and-slaver-packages). Each goal runs as a job of one worker: every 30 ticks a sweep gives a job to a member of an AI squad
-whose current role list holds the goal in its hours and that is free (the AI's, awake, not fighting, in no job; at most 8 new and 32 running jobs, engine); the worker is `Engaged`
-while it works. Cages are those of the squad's town (`Fixture.Site`) unless said otherwise. A walk to a cage ends within `use range` + 15, or a walk that ended within 200; three
+[ai, prisoner and slaver packages](game/ai.md#prisoner-and-slaver-packages). Each goal is an [engine goal](#engine-goals) (`CaptiveGoals`) of a member with a full mind whose role list (an obeying
+slave's: its master's Slave list) or own lists hold it in its hours; its act-out is a job of the worker (`CaptiveJob` with its `Goal` and `Target`), begun by
+`IDutyGoal.Start` on the plan's target (refused when the target is gone, no longer fits or is another job's), stepped only while `DutyGoals.Runs`, and done
+(`DutyGoals.Done`) at the original's end. Cages are those of the squad's town (`Fixture.Site`) unless said otherwise. A walk to a cage ends within `use range` + 15, or a walk that ended within 200; three
 failed walks mark the cage unreachable for the faction; its own faction's shut doors are unlocked first. A job gives up after 600 game s (engine).
 A job's walk is its own, run as the job's row (`CaptiveSystem.WalksOwn`): one the worker was on when the job started, its AI's or an errand's, is replaced at once, as a
 goal taken up ends the plan before it ([precedence](game/ai-tasks.md#precedence)). **Observed** (KenshiOracle state 0.5 hold, Rebirth, N = 1): the workmasters take their
 gather jobs while walking home under 43, and a job that waited on that walk reached its cage only after about 90 of the hold's 110 s.
-- **Weighed by the AI** (`CaptiveSystem.Offers.cs`, `AiBehaviour.Captive`): the sweep takes a free member's first goal that finds a target, unscored. A member awake but
-  not free (resting on a seat the AI gave it: a home chair under 43, a bar seat, a throne; in a job; on another system's duty) keeps, on its sweep turn and when its job
-  ends, the captive goals in its hours whose job would start (`TryStart` as a probe: nothing drawn, fetched, said or remembered) with the original's desire (188 and 192
-  0.25 x the platoon's slave list, the limb play and chase their own, the rest 1; `AiMind.CaptiveOffers`, hashed, not saved). Its think weighs them with its other goals
-  ([precedence](game/ai-tasks.md#precedence): a seated goal's commitment holds its tier, then scores at most 0.05). One that wins gets it up, and the AI's serial step
-  starts that goal's job on the state of now (`SendGoalJobs`; none: it chooses again). Sleepers are not offered any (engine choice).
-- **The job's goal is the mind's**: a job that starts (the sweep's or the AI's) makes its goal the worker's current AI goal, with a one-step plan and no commitment, as
-  the original's chooser holds the goal it runs (`AiSystem.TakeCaptiveGoal`). The goal it ran before ends with its commitment, so the think after the job chooses anew
-  rather than resuming it (a workmaster's 43 taken at load would otherwise seat it after its first job).
-- **Kill** (135; the desire reads the town and creates its timer first, whatever the worker carries; its plan then draws a weapon, `DrawWeapon`: one in a back or hip slot, else a melee weapon of its inventory put in a free slot, else the goal does not plan): when the kill timer of the town the worker stands in (else its squad's: engine reading) has run out or all the faction's cages there are held; the best occupied cage by the cage finder's weights
+- **Look**: every 30 ticks on its slot's turn, and after its job ends, a serial look (`CaptiveGoals.Look`) keeps for each listed goal its desire and its finder's
+  target (the job's while the goal holds the member: the original keeps the running goal's finder hand); the think reads only those picks and its own state; hashed
+  while any. Desires (**Verified**): 135 and 282 1 once the kill timer is due (read first, creating it); 173 and 245 1 while the platoon has at most 3 slaves
+  neither down nor held in anything (slot 63, `FUN_14059b940`); 217 in an export town; 188, 192 and 194 0.25 x the platoon's slave list; 218 that only in a
+  prison or slave camp the leader stands in (slot 66, `FUN_140597c70`); 167, 183 and 260 1 while carrying nothing at posture 0 (slot 61); 168 the rescue desire;
+  278 and 279 their own; the rest 1. Of the rows on the way, 3 is 0 while down and 170 while carrying. The finder's factor is 1 with a target.
+- **Plans** are the planner's. The rows the job carries out are registered: 134; 220; 231; 236; 3; 40; 182, 166 and 181; 170 and 25; 174; 159; 53; 107; 110. Their
+  states are asked of `CaptiveGoals` for the target (character, cage, farm, limb; evaluators in [ai-tasks](game/ai-tasks.md#prisoner-fate-and-slave-rows)), the
+  at-location test passing at the job's work or within its reach. Player characters and mod-held minds take none; a player animal's race goals are
+  decision-step jobs (`CaptiveJob.PlayerSide`, `Engaged`, [animals](#animals)).
+- **Kill** (135; the desire reads the town and creates its timer first, whatever the worker carries; its plan then draws a weapon, `DrawWeapon`: one in a back or hip slot, else a melee weapon of its inventory put in a free slot, else the start is refused): when the kill timer of the town the worker stands in (else its squad's: engine reading) has run out or all the faction's cages there are held; the best occupied cage by the cage finder's weights
   and usable test (`FindCage` in its occupied mode over `CageCandidates`: the worker's town, else its faction's nearest, plus its home's; x100 own faction, x100 home building; another faction's cage only when `CanUse` passes), not a robot. At the cage it holds `chop down static` (`CharacterCold.ActionClip`, which the animation system plays for an idle character) and strikes once per
   clip length at 0.55 of it (`CombatSystem.Execute`: the weapon packet landed through armour, no defence, no crime) until the captive dies. Events 10 (on picking) and 11 (each blow).
 - **Eat** (139 always; 282 "Dinner time" at the kill rate): same target, weapon sheathed, `eat` held, `MedicalState.BeingEaten` each tick at lerp(2, 0.4, toughness/100) a second
@@ -1499,7 +1500,7 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   **Observed** (headless probe, real data): a cannibal village kills a caged player character within 16 s of work once its timer is due; a fishman lab eats one in about 160 s.
 - **Process** (260: an awake non-slave occupant anywhere in the town; 183: first the nearest free slave of state 1 or 2 in sight that needs processing, walked to with no cage (the characters within sight range that the watcher senses, `CharacterFacts.Perceives`, stand in for the sensed list: none before the watcher's first look, and a sneaker on its feet only once its look senses it; not caged ones; engine reading; **Observed** #759 save: a guard's first think after load took a sneaking escaped slave 480 away and followed her), else an occupant on the worker's floor and in its building within 180 in 3D, whose owner is an ally or none, and that needs processing: an escaped or ex-slave, or a slave not both shaven and looking like one): cages of the worker's faction or an ally,
   not the player's. 3 s of `medic`, then a human captive without locked shackles is cuffed first (182 needs 134 `isChained`, which only 166 Restraining gives, [ai-tasks](game/ai-tasks.md) planner table;
-  engine choice: 166's 7 `isTargetDown` is not asked): it is chained (`CharacterAssembly.Chain`) and becomes a slave of the worker's faction and squad, as `setChainedMode` makes the cuffer the owner, so that squad's medics treat it in its cage. **Observed** (probe, #508 and #509 saves):
+  166's 7 `isTargetDown` holds for a caged captive, `CharacterFacts.TargetDown`; a loose slave standing unshackled plans nothing, only attack rows giving 7): it is chained (`CharacterAssembly.Chain`) and becomes a slave of the worker's faction and squad, as `setChainedMode` makes the cuffer the owner, so that squad's medics treat it in its cage. **Observed** (probe, #508 and #509 saves):
   a sold slave caged unshackled was stripped again and again, and Rebirth's caged player slaves that had taken their shackles off were neither re-shackled nor bandaged; now both are chained once and then bandaged. Then the captive's worn weapons and armour (not locked shackles, slave garments or the worker faction's `slave clothing`) go to the worker's inventory (else the ground; engine for the original's
   storage), its faction's `slave clothing` is put on where free, event 35 (37 for a shaven captive), its head is shaven, and it becomes the worker's faction's slave unless it has an owner already (a recaptured escaped slave keeps its owner and master squad); its queued orders and perma-jobs are cleared. Kidnapped player characters are
   processed too, and so are the worker's own faction's people (**Observed** in the original, 1.0.68: a knocked-out Slaver Guard put in a Sho-Battai
@@ -1516,9 +1517,11 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   (`FUN_1408db680` -> `FUN_1408db510`, **Observed**, 1.0.68 decompile); 217 still excludes player occupants (engine choice).
   **Observed** (KenshiOracle hold, Rebirth, 2026-11-09): the original's gathered slaves keep their squads all hour (Pao 40, Mu 44).
   **Observed** (probe): the Slave Farm's workmasters take the caged slaves out by day; at night their slaves' 172 puts them back.
-- **Deliver** (192, the squad leader under a shipping package): walks to `Blackboard.MissionTown`; there, with 194 (or 218 in a prison or slave camp) in its hours, it says event 39
-  to the nearest (to the leader) NPC of the town's faction or an ally within the town's radius; none found, the finder `FUN_1408ca950` returns 0 (**Verified**: the goal is unwanted) and nothing is handed over until the next sweep. Each of its slaves then leaves for a "Wandering Squad" of its own, owned by the town's faction, caged in the nearest free cage of
-  that faction or an ally (engine: the original's handover is a dialogue for event 39).
+- **Deliver** (192, the squad leader under a shipping package): walks to `Blackboard.MissionTown` (row 53), done within its radius (at least 100). **Sell** (194,
+  or 218 in a prison or slave camp): the finder (`FUN_1408ca950`, **Verified**) takes the nearest (to the leader) NPC of the faction of the town the leader stands in,
+  or an ally, within the town's radius, and keeps it; none, the goal is unwanted. The leader walks within 40 of it and says event 39 (row 159). Each of its slaves then
+  leaves for a "Wandering Squad" of its own, owned by the town's faction, caged in the nearest free cage of that faction or an ally (engine: the original's handover is a
+  dialogue for event 39).
 - **Get in the cage** (172, a Slave AI Goal): a slave not held walks to the nearest free cage of its owner's faction in the 3x3 zone cells round it, in any town, and gets in.
 - **Packages** (`PackageClass` 8 to 11, rules in `AiSystem.Captives.cs` as the facts): cannibal retreat (1, 25; it ends when the effective leader's status town is of the squad's faction, so a wiped
   squad keeps it), cannibals at home (27), prisoner gathering (10, 24), slave shipping (11, 28); the cannibal patrol (4) does not start while the town's cages
@@ -1529,7 +1532,7 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   beside the garrison leader is stripped, shackled, carried to a cage and enslaved by the Cage Wardens in about 1250 ticks; its squad then remembers the capturer as captor. **Observed** (probe, Stoat, real data): the Slave Traders cuff a downed player character, cage it in a cage of the slave shop and enslave it in about 500 ticks.
 - **Liberate** (276): the nearest cage, in the town the worker stands in (else its squad's), of a faction neither its own nor allied, holding a live occupant that is not its
   enemy. 3 s of `medic` at the cage (engine), then `FixtureRegistry.Release` (no crime is booked for an NPC liberator).
-- **Eating on the ground** (230 / 233, `CaptiveJobKind.EatBody`; also from the race's `AI Goals`, which the sweep reads after the role list): the nearest body within sight that
+- **Eating on the ground** (230 / 233, `CaptiveJobKind.EatBody`; also from the member's own lists): the nearest body within sight that
   the finder takes; the eater walks to it and eats it as a caged meal is eaten (`eat`, event 52, `MedicalState.BeingEaten`, which can kill a living one). The eat action has no dead test (`FUN_140353c50`, `FUN_1404356f0`, `FUN_140650370`, **Verified**): a corpse is bitten the
   same way until no part is left to eat and the passes run out (more than 5), when the original destroys the character with the reason "eaten" (`FUN_140799af0`); Meitou removes the corpse at once (`CaptiveSystem.StepEatBody`, as the body system removes a decayed one). A living one eaten away is not removed but left dead (**not modelled**). A meal that
   gets up (not a robot; the bite wakes one playing dead) is bitten once more, then the job ends and the eater is ordered 35 Running away on it, its queue cleared
@@ -1539,7 +1542,7 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   plays `bowing` and barks event 53 every 3-14 game s; ends once the cage is empty or the job grows old (the original runs on while the cage stands).
 - **Dogs' limb play** (race goals 277-279): 277 sends an animal with an empty mouth (an adult only when its stomach is empty and hunger at most 2.75) to the nearest limb within
   200, which the pick-up takes into its mouth; 278 (a mouthful, not a player squad's adult over 0.95) sprints in random 1000-1400 legs while it holds it; 279 (any NPC animal, a player
-  squad's only under 0.95) runs after the first allied animal in sight with something in its mouth. Engine: the play's first leg is random too.
+  squad's only under 0.95) runs after the first allied animal in sight with something in its mouth. Engine: the play's first leg is random too. An NPC's 277 is the pick-up (row 3, `TaskSource.Goal`), done once it ends.
 - **Crop raiding** (232, `CaptiveJobKind.EatCrops`): in a player town whose faction is its enemy (engine reading of the coexist test), a random farm with food; at it, `eat`, crime
   14 each tick, one plant per game second (`ProductionSystem.EatCrop`). NPC towns' farms are not machines in Meitou, so only the player's are eaten.
 - **Escapes** (`EscapeGoals`, [engine goals](#engine-goals), facts: [ai-tasks](game/ai-tasks.md)): 256 Get out of cage (`[256]`, only while its cage's lock is
@@ -1550,7 +1553,7 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   shut refuses the start. Act-outs are hashed while any.
 - **Shout** (188): a worker with slaves of its squad's list up and uncaged says event 38 at a random one, walks to it and stands within 40, following it
   when it moves on; it says the event again every 8 s (engine choice) until its worker speaks (`DialogueSystem.Engages`; the row's B list
-  `isDialogDelivered` is read differently, [ai-tasks](game/ai-tasks.md)), and the next sweep picks a slave again with no pause. A worker with no
+  `isDialogDelivered` is read differently, [ai-tasks](game/ai-tasks.md)), and the chooser then picks a slave again with no pause. A worker with no
   event-38 line, or with the event lines off, never speaks: its job then ends only at `CaptiveSettings.GiveUpSeconds` (600 s) or when the slave goes
   (engine choice).
 - **Work** (189, 190; `AiBehaviour.Work` in the AI, not a job: it competes by score like any goal): a worker of a town with a mine, research bench, refinery or crafting bench (BuildingFunction 1, 3, 4,
@@ -1558,7 +1561,7 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   or a machine running there with its inputs, [ai-tasks](game/ai-tasks.md#slave-work-shout-and-capture); each holds one of the workplace's
   `max operators` slots, `AiMind.WorkPost`) to within its functionality's `use range` of its position, or twice that once stopped (30 without one; `AiSystem.AtWork`, [work distance](game/buildings-production.md#work-distance)), faces it and plays its functionality's clip (`stonemine` by default) as
   `ActionClip` and operates the building's town machine ([NPC town machines](game/buildings-production.md#npc-town-machines)); the worker takes the building's `hunger rate` (`AiMind.WorkHungerRate`). **Observed** (probe, Rebirth, real data): 35 workers, slaves among them, stand at the mines of the Holy Nation's towns by day.
-- **Obedient Slave** (187, [facts](game/ai-tasks.md#slave-work-shout-and-capture)): for the AI's slaves the Slave role list of the squad they obey, `CharacterCold.SlaveMaster` (after a load, the squad of the owner character its `slaver` handle names, [save](formats/save.md)), in place of their own role's list, whether that squad is another or their own (an empty Slave list leaves them their own role's), for its captive jobs too (the captive sweep reads the same list, so a slave whose own package lists Slave get in Cage all day goes to its cage only in its master's hours).
+- **Obedient Slave** (187, [facts](game/ai-tasks.md#slave-work-shout-and-capture)): for the AI's slaves the Slave role list of the squad they obey, `CharacterCold.SlaveMaster` (after a load, the squad of the owner character its `slaver` handle names, [save](formats/save.md)), in place of their own role's list, whether that squad is another or their own (an empty Slave list leaves them their own role's), for its captive goals too (their look reads the same list, so a slave whose own package lists Slave get in Cage all day goes to its cage only in its master's hours).
   **A player character** has the job in its list (`Kidnap/ObedientSlave.cs`, `CaptiveSystem`): `FixtureRegistry.SetSlave` (every route to slave state 1: sale, arrest, processing, a cage, a delivery) destroys its jobs and order
   queue and adds the job toward the master squad's leader (`CharacterCold.SlaveMaster`; handing a slave to another master resets it, engine choice), and removes it when the state leaves 1 (freed, escaped, bail).
   While it is a slave and not sneaking, the job is urgent (step 3, `IJobSource.Urgent`): the best goal of the master squad's Slave list in its hour and repertoire by desire x finder x weight x crowd (x1.25 the one running) starts through `TaskStart` --
@@ -2344,7 +2347,8 @@ enemy (`numEnemies`, `SenseBlock.Enemies`), so guards man the turrets only while
 Goals of the NPCs' packages that an engine system acts out, chosen by the one chooser as the original's (docs/game/ai-tasks.md "Precedence"). `DutyGoals`
 (one per world, built in `World`'s constructor by `AiSystem.BindGoals` from the `IDutyGoalOwner` systems; null when none registered) holds each registered type: a
 type of the original's that `TaskBehaviours` does not act out, registered by its own system with its `IDutyGoal` (desire, finder, states, start, end) and the rows of
-its plan the act-out carries out besides the goal's own. Built: 176 (`SmellSystem`, [blood smell](#blood-smell)); 177 and 42 (`CarrySystem` through `LootGoals`, [looting and arming](#carrying-rescue-and-looting)); 211, 155, 197, 86 and 195 (`LockSystem` through `WardenGoals`,
+its plan the act-out carries out besides the goal's own. Built: 135, 139, 282, 230, 232, 233, 237, 277, 278, 279, 260, 183, 167, 168, 173, 245, 217,
+188, 192, 194, 218, 172 and 276 (`CaptiveSystem` through `CaptiveGoals`, [captives](#captives)); 176 (`SmellSystem`, [blood smell](#blood-smell)); 177 and 42 (`CarrySystem` through `LootGoals`, [looting and arming](#carrying-rescue-and-looting)); 211, 155, 197, 86 and 195 (`LockSystem` through `WardenGoals`,
 [wardens' goals](#arrest-and-jail)); 256, 207 and 202 (`LockSystem` through `EscapeGoals`, [escapes](#captives)); 254 (`KidnapSystem` through
 `KidnapGoals`, [kidnapping](#kidnapping)).
 - **Choosing**: a registered type has `AiBehaviour.Duty`. Its desire is the system's (`DutyGoals.Desire`: the desire times the finder's factor when the TaskData row has
@@ -2358,7 +2362,7 @@ its plan the act-out carries out besides the goal's own. Built: 176 (`SmellSyste
 - **Caged**: an NPC in its cage with a mind of its own (`AiSystem.CagedMind`: not fleeing, fighting, carried, down or ordered) weighs its goals at every tier,
   the planner's root row limited to the cage's repertoire (TaskData category bit 4); it acts the winner out only when it is an engine goal, else it stays held
   with no goal. A plan step on a door way through the lock system is told from a goal's own door row by its target kind (`AiSystem.IsDoorWay`).
-- **Start**: the think stands on the goal's row and asks (`AiMind.DutyAsk`); the serial step (`SendRequests`, after the captive jobs) calls `IDutyGoal.Start` in slot
+- **Start**: the think stands on the goal's row and asks (`AiMind.DutyAsk`); the serial step (`SendRequests`) calls `IDutyGoal.Start` in slot
   order for each asker the AI still holds, with the plan; a start makes the goal hold the character (`AiMind.Duty`, the record, and `DutyTick`, the start tick of the
   task it left running; hashed), a refusal backs the type off for four think periods.
 - **Holding**: the goal, not `Engaged`, holds the character. `AiSystem.Holds` is true while the provenance is the act-out (`AiSystem.OnDuty`: that task, or a goal's
@@ -2382,7 +2386,7 @@ mind, for a goal whose system is stopped, and for a type the mod refused to star
 `AiMind.ModGoalBackoff`), and the default profile (desire "special", no commitment, crowd 1) leaves the score desire x weight with the continuity.
 With no TaskData row the goal is its own one-step plan (`TryPlan`), never kept as a stepped plan. `Act` gives it `AiBehaviour.Mod`: the character
 stands on row 14 (not the goal's number, which the mod may use as its own row and handler) and `AiMind.ModGoalAsk` asks the serial step
-(`SendRequests`, after the captive jobs: `NpcGoals.Step`). The step first drops the goals of systems the world stopped and marks their records
+(`SendRequests`, after the engine goals: `NpcGoals.Step`). The step first drops the goals of systems the world stopped and marks their records
 orphaned, then sweeps the records (`NpcGoals` keeps one per started character, by slot, hashed: the goal and the row and start tick of the task
 `Start` left running): a record ends when its character is gone or dead, no longer engaged, or runs another row from 1000 up with
 `TaskSource.Goal` started since, and its goal then ends on the mind it was started on; an orphaned record waits out a fight, an open conversation
