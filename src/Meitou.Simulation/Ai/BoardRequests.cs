@@ -37,9 +37,17 @@ internal sealed class BoardRequests
     /// Files a request on the blackboard of <paramref name="subject"/>'s platoon (serial; the first aid update's call, <c>FUN_1403346d0</c>,
     /// <b>Verified</b>, takes the board of the character it names): nothing for a character with no squad.
     /// </summary>
-    public static void FileOn(World world, CharacterId asker, CharacterId subject, TaskType type, TaskPriority tier, float weight)
+    public static void FileOn(World world, CharacterId asker, CharacterId subject, TaskType type, TaskPriority tier, float weight) =>
+        FileOn(world, subject, asker, subject, type, tier, weight);
+
+    /// <summary>
+    /// Files a request on the blackboard of <paramref name="owner"/>'s platoon (serial): the splint update's call (<c>FUN_14034ef20</c>,
+    /// <b>Verified</b>) takes the medic's own board (<c>FUN_140507070</c> of its AI: AI <c>+0x10</c>, its platoon), so a patient of another squad
+    /// never reads it. Nothing for an owner with no squad.
+    /// </summary>
+    public static void FileOn(World world, CharacterId owner, CharacterId asker, CharacterId subject, TaskType type, TaskPriority tier, float weight)
     {
-        if (!world.Characters.TryResolveNext(subject, out int slot) || world.Characters.Cold(slot) is not { SquadId: >= 0 } cold) return;
+        if (!world.Characters.TryResolveNext(owner, out int slot) || world.Characters.Cold(slot) is not { SquadId: >= 0 } cold) return;
         if (world.Squads.Find(cold.SquadId) is not { } squad) return;
 
         (squad.Requests ??= new BoardRequests()).File(world, asker, subject, type, tier, weight);

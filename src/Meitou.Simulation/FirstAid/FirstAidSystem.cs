@@ -552,15 +552,23 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     /// The first aid task's every update asks the patient to stand still (<c>Task_FirstAid</c> / <c>Task_FirstAidRig</c> /
     /// <c>Task_MakeTargetStandStill</c> slot 5 <c>FUN_1403346d0</c>, <b>Verified</b>; docs/game/ai-tasks.md "Medic jobs"): it files 62 Standing still at
     /// priority 3, weight 1.4, on the patient's platoon blackboard, for the patient, or for its carrier while it is carried (the call takes the
-    /// carrier then). The request competes in that character's priority-3 pick (<see cref="Ai.TierRungs"/>), so a patient stands still unless an
+    /// carrier then). A splint files it on the medic's own platoon blackboard for the patient, no carrier swap (<c>Task_FirstAidRig</c>'s update
+    /// <c>FUN_14034ef20</c>, <b>Verified</b>), so a patient of another squad never reads it. The request competes in that character's priority-3 pick (<see cref="Ai.TierRungs"/>), so a patient stands still unless an
     /// order, an urgent job or a goal that scores higher wins, and not under a threat within 40 (62's list B <c>!39</c>). <see cref="Act"/> treats
     /// only a patient standing still.
     /// </summary>
     static void AskToStandStill(World world, int medic, int patient)
     {
         var table = world.Characters;
+        var asker = table.IdOf(medic);
+        if (table.Cold(medic)!.TreatSplint)
+        {
+            Ai.BoardRequests.FileOn(world, asker, asker, table.IdOf(patient), TaskType.StandStill, TaskPriority.Urgent, StandStillWeight);
+            return;
+        }
+
         var subject = table.Cold(patient)!.CarriedBy is { IsNone: false } carrier ? carrier : table.IdOf(patient);
-        Ai.BoardRequests.FileOn(world, table.IdOf(medic), subject, TaskType.StandStill, TaskPriority.Urgent, StandStillWeight);
+        Ai.BoardRequests.FileOn(world, asker, subject, TaskType.StandStill, TaskPriority.Urgent, StandStillWeight);
     }
 
     /// <summary>
