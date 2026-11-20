@@ -443,10 +443,11 @@ public sealed class AiDatabase(GameDatabase db)
     }
 
     /// <summary>
-    /// A non-player character's own goals beside its squad's (<c>setupAI</c> <c>FUN_140621b70</c>, <b>Verified</b>): its race's <c>AI Goals</c>, then,
-    /// when <paramref name="withFaction"/> (no contract runs on its blackboard), its FACTION's, both read as <see cref="RaceGoals"/> reads a list
-    /// (<c>FUN_1405094f0</c>). A type the race lists is not added again, its weight becomes the faction's (the adder <c>FUN_140507950</c>
-    /// overwrites a held goal of the same type and hand, <b>Verified</b>). Null ids read nothing.
+    /// A non-player character's own goals beside its squad's (<c>setupAI</c> <c>FUN_140621b70</c>, <b>Verified</b>): when
+    /// <paramref name="withFaction"/> (no contract runs on its blackboard) its FACTION's <c>AI Goals</c>, then its race's, both read as
+    /// <see cref="RaceGoals"/> reads a list (<c>FUN_1405094f0</c>). A type the faction lists is not added again, its weight becomes the race's (the
+    /// adder <c>FUN_140507950</c> overwrites a held goal of the same type and hand, <b>Verified</b>); the order settles the chooser's ties. Null ids
+    /// read nothing.
     /// </summary>
     public IReadOnlyList<AiGoal> OwnGoals(string? raceId, string? factionId, bool withFaction)
     {
@@ -456,8 +457,8 @@ public sealed class AiDatabase(GameDatabase db)
             var faction = withFaction && factionId is not null ? OwnListLocked(factionId) : [];
             if (faction.Count == 0) return race;
 
-            var list = new List<AiGoal>(race);
-            foreach (var g in faction)
+            var list = new List<AiGoal>(faction);
+            foreach (var g in race)
             {
                 int held = list.FindIndex(r => r.Task.Type == g.Task.Type);
                 if (held >= 0) list[held] = list[held] with { Weight = g.Weight };

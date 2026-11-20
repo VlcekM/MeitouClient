@@ -789,7 +789,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 Rank(candidates, g, score, desire);
             }
 
-            // In the original's order, which settles ties (Rank): the role lists, then the character's own list, where setupAI puts Self
+            // In the original's order, which settles ties (Rank): its role list, then the character's own list, where setupAI puts Self
             // preservation before the faction's and race's goals (FUN_140510d60, FUN_140621b70, Verified). Index loops: a foreach over the
             // interface would box an enumerator per list and pass.
             for (int k = 0; k < roles.Count; k++) Consider(roles[k]);
@@ -3744,8 +3744,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// A non-player member's own goal lists (<see cref="AiMind.RaceGoals"/>): its race's <c>AI Goals</c>, then its faction's while no contract runs
-    /// on the squad's blackboard (<c>setupAI</c> reads the faction's only then, <b>Verified</b>), and for a debug spawn that must aggro
+    /// A non-player member's own goal lists (<see cref="AiMind.RaceGoals"/>): its faction's <c>AI Goals</c> while no contract runs on the
+    /// squad's blackboard, then its race's (<c>setupAI</c> reads the faction's only then, <b>Verified</b>), and for a debug spawn that must aggro
     /// (<see cref="Squad.DebugAggro"/>, engine API) Attack enemies.
     /// </summary>
     IReadOnlyList<AiGoal> OwnGoals(Squad squad, Blackboard board, CharacterCold cold)

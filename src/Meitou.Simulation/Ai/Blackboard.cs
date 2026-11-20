@@ -1130,8 +1130,8 @@ public sealed class AiMind
     public IReadOnlyList<AiGoal> EngineGoals { get; set; } = [];
 
     /// <summary>
-    /// Its own goal lists beside its squad's (<c>setupAI</c> <c>FUN_140621b70</c>, <b>Verified</b>): its race's <c>AI Goals</c>, then its faction's
-    /// when no contract ran as the mind was made (<see cref="AiDatabase.OwnGoals"/>; a debug spawn that must aggro also gets Attack enemies),
+    /// Its own goal lists beside its squad's (<c>setupAI</c> <c>FUN_140621b70</c>, <b>Verified</b>): its faction's <c>AI Goals</c> when no contract
+    /// ran as the mind was made, then its race's (<see cref="AiDatabase.OwnGoals"/>; a debug spawn that must aggro also gets Attack enemies),
     /// looked up once when the mind is made (the lookup takes a lock; the think runs on every worker). Follows from the race and faction, so not
     /// hashed.
     /// </summary>

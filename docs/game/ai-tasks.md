@@ -1026,7 +1026,7 @@ order step runs on every AI update, and decides it then. 31 / 289 have Following
   g = min(its g, the node's g) and the node as parent; one already closed is accepted from there. A node repeated 4 times is reused, not made again.
 - **Result**: the accepted node's chain up to the root (stopping at a queued task) is the plan. Its value is the least desire on it (from 10); above 0,
   every node that acts or has an effect becomes a task (factory) in a new queue, leaf first. A failed plan clears the queue unless the root keeps it.
-- **Pick**: candidates are tried by key, highest first (a taken key is raised by 0.0001 until free, so a tie goes to the later-listed goal; **Verified**, `FUN_14050df10`; per tier the lists are scored in the order: the two role lists, then the character's own, which setupAI fills 14, 32, then the faction's and the race's `AI Goals`, `FUN_140510d60`, `FUN_140621b70`. So `empire vault prison`'s Leader 260 wins a tie with 183, `Cannibals at home`' 135 one with 138, and in the occupy lists 177 beats 276, 276 beats 273 and 273 beats 243); the first whose plan has a value above 0 becomes current, a candidate whose plan fails has its
+- **Pick**: candidates are tried by key, highest first (a taken key is raised by 0.0001 until free, so a tie goes to the later-listed goal; **Verified**, `FUN_14050df10`; per tier the lists are scored in the order: the platoon blackboard's requests of that tier aimed at the character (`FUN_140269240`), its role list (`FUN_14026b790`), then its own, which setupAI fills 14, 32, then the faction's and the race's `AI Goals`, `FUN_140510d60`, `FUN_140621b70`. So `empire vault prison`'s Leader 260 wins a tie with 183, `Cannibals at home`' 135 one with 138, and in the occupy lists 177 beats 276, 276 beats 273 and 273 beats 243); the first whose plan has a value above 0 becomes current, a candidate whose plan fails has its
   target cleared and the next is tried.
 - **Source order**: [Precedence](#precedence).
 
@@ -1155,7 +1155,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   +0x78, +0xf8) has +0x210 null gets its FACTION record's `AI Goals` (**Verified**, code; +0x210 read as the AI contract slot, null for an ordinary squad, **Observed**). The player faction
   (`204 Nameless`, the only base FACTION with the list) lists 15 Protect allies (AI_TASK 957, classification 3: priority 3, weight 1), so a player character holds goal 15.
   A list's type already held keeps its place and takes the later list's weight (the adder `FUN_140507950`, **Verified**). Meitou (`AiDatabase.OwnGoals`, `AiMind.RaceGoals`):
-  an NPC's race list, then its faction's while its blackboard runs no contract as the mind is made. Hold adds 16 at priority 3; AI packages add theirs ([AI](../simulation.md#ai)). Priorities
+  an NPC's faction list while its blackboard runs no contract as the mind is made, then its race's (setupAI's order, `FUN_140621b70`). Hold adds 16 at priority 3; AI packages add theirs ([AI](../simulation.md#ai)). Priorities
   (`taskPriority`): 1 fluff, 2 non-urgent, 3 urgent, 4 obedience; orders are queued at 3.
 - **So, for a player character**: an order beats everything, Self preservation included (an ordered medic keeps treating while hit; each landed blow staggers it and the order
   is planned again, [combat](combat.md#fight-lifecycle-and-orders)). Self preservation (while an attacker is within 181.7), Getting food and Hold's attack on sight beat every
