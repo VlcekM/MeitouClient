@@ -1429,8 +1429,8 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
 - **Lifts 273 / 223 / 138** (plan `[67, 68, goal]`; the goal row has an empty list A, so the plan ends with the lift and the carried body's goals take the body on). Row 68's and
   223's desire is AI slot 59 (`FUN_14059e1a0`, **Verified**): 0 while carrying, 1.0 for a character target, 0.5 for any other (`DAT_14167e8d8`); the scorer clears a fresh
   candidate's target, so a new 273 or 223 scores 0.5 and the one held 1.0. 273's (slot 60 `FUN_140597f20`, **Verified**) is that, 0 in a current town that is no Town (a nest:
-  vfunc `0x268` null; the town builder `FUN_140581770` makes the cut-down class only for TOWN `type` 0, **Verified**), has no gates (`Town::hasGates`) or has its walls
-  locked up (Town slot 96, `LockSystem.TownLockedUp`) for a member of the player's faction. 138's is 1.0, 0 on Hold or while carrying (**Verified**).
+  vfunc `0x268` null; the town builder `FUN_140581770` makes the cut-down class only for TOWN `type` 0, **Verified**), has no gates (`Town::hasGates`,
+  `TownExit.HasGates`: in a town of the player's faction any building, elsewhere an `is gateway` one, [condition 49](game/dialogue.md)) or has its walls locked up (Town slot 96, `LockSystem.TownLockedUp`) for a member of the player's faction. 138's is 1.0, 0 on Hold or while carrying (**Verified**).
   - **273** (finder `FUN_14099c250`): in its home town, the town its occupation holds or a town of its faction (`Ownerships::isMyTown`), the nearest knocked-out character it
     senses within its sight in that town inside its walls (`amInsideTownWalls` > 0: its [gate code](game/pathfinding.md#gate-codes) is a walled region; where the codes are
     unknown, the built-up area: a placed town's radius, a player town's farthest building from its centre), not carried or caged (Meitou: nor in a bed; the original lifts a

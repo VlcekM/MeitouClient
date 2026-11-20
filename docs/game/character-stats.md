@@ -537,7 +537,7 @@ eat task, animation or player command (a right click on food does nothing, [ui-s
   `FUN_14059bbd0` and the Town slots. The finder and the take (244, one item): [ai-tasks](ai-tasks.md#arrest-and-prison-rows).
   Meitou (`TownDutySystem.FoodWant`): for a player character a step-4 source of the [decision step](../simulation.md#decision-step) (after its orders, before its jobs; weight 0.5 against
   Self preservation's 1 and Hold's attack on sight), for the other player-faction characters a pass over those idle or on a job's task; a store owned by their faction in their own town or
-  one where the player owns a house, its storages too (engine reading of the resident set, not tied to having stood in it; #762); the occupied branch as above, gates read as a gate building in the town. A fight
+  one where the player owns a house, its storages too (engine reading of the resident set, not tied to having stood in it; #762); the occupied branch as above (`TownExit.HasGates`: the gate set's rule, [condition 49](dialogue.md)). A fight
   that replaces a player character's food run ends it. No run starts without room for the item the take picks ([state 82](ai-tasks.md#statetype-ids)):
   the step's reason is "no room for the food" and the character keeps its job. Food in the worn bag counts as carried, so one meal takes one item
   ([244](ai-tasks.md#perma-jobs)).

@@ -1215,7 +1215,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// <summary>
     /// <c>Town::hasGates</c> (<see cref="TownExit.HasGates"/>).
     /// </summary>
-    bool HasGates(World world, CampaignTown town) => TownExit.HasGates(world, data, town, _gateFunctions);
+    bool HasGates(World world, CampaignTown town) => TownExit.HasGates(world, data, town);
 
     /// <summary>
     /// The intruder finder's stand-in for <c>amInsideTownWalls</c> where the gate codes are unknown (<b>engine reading</b>): a placed town's radius,

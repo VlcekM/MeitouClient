@@ -394,7 +394,7 @@ public sealed partial class AiSystem
             if (TownPlace(_system.Data, _world, town) is not { } placed) return true;
 
             var here = Flat(Me.Position);
-            if (!TownExit.HasGates(_world, _system.Data, town, _gateFunctions))
+            if (!TownExit.HasGates(_world, _system.Data, town))
                 return Vector2.DistanceSquared(here, placed.Centre) < placed.Radius * TownShare * (placed.Radius * TownShare);
 
             var outside = TownExit.Of(_world, _system.Data, _system._locks?.Regions, town, _gateFunctions);
