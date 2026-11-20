@@ -1229,7 +1229,7 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
   so `saveGame` writes it with every platoon. Meitou saves it as a homeless persistent platoon ([save](../formats/save.md#wild-and-nest-platoons-meitou-mapping)).
   The faction change (Character slot 20 `FUN_1405cbac0` → `FUN_14050a9d0`) empties the goal lists; the job list goes (`FUN_140507280`) and the plan is
   emptied (`FUN_14050d1b0` on `+0x300`); nothing empties the order deque, so its orders stay, the front planned again (**Verified**, `FUN_14048fa30`).
-  Recruiting (DA 3 / 18) changes the faction the same way: its goals go, its orders stay.
+  Recruiting (DA 3 / 18, `FUN_1407ff8b0`) changes the faction through the same vfunc `0xa0` and drops the jobs (`FUN_140507280`): its goals go, its orders stay (**Verified**, `FUN_1407ff8b0`).
 - Meitou: a portrait clicked without dragging selects the character (engine choice); a box is dragged by its frame.
 - **Observed** (installed `Kenshi_OverviewWindow.layout`, `kenshi_templates.xml`): `DismissCharPanel` expands to a transparent `PanelEmpty` ItemBox;
   its caption has `NeedMouse=false`. Meitou checks the arranged panel's bounds and clip for portrait drops, with the overview as the top hit screen.

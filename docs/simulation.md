@@ -198,7 +198,7 @@ A fight is row 5 when the player picked the target, 13 for a defence, else 16 (1
 [combat](game/combat.md#fight-lifecycle-and-orders)); the task before ends through its handler (`TaskEnd.Replaced`: it lets go of its target, while the movement, the task and
 the task it goes back to are the new start's); the provenance is recorded in `CharacterCold.Running` (`RunningTask`: act-out, row, `TaskSource`, job index or implicit flag,
 target, site, tick, resume task); the act-out starts.
-`TaskStart.End(world, slot, reason)` ends a task and drops its provenance: `TaskEnd.Stopped` from outside the act-out (the Stop order, a squad mate lifted awake, a leg giving out: `BodySystem.Collapse` keeps the order queue, its front waiting to start again, [ragdolls](game/ragdolls.md#forced-crawl); then idle);
+`TaskStart.End(world, slot, reason)` ends a task and drops its provenance: `TaskEnd.Stopped` from outside the act-out (the Stop order, a squad mate lifted awake, a leg giving out and the dialogue's DA 6, 7, 34, 55 and 57 run the stop `BodySystem.Stop`, `FUN_1405c8330`, which keeps the order queue, its front waiting to start again (recruiting and dismissal do the same, their duties let go), [ragdolls](game/ragdolls.md#forced-crawl); then idle);
 `TaskEnd.Done` the act-out's own end (a treatment, carry, site's or machine's work, haul trip, prospecting, a job's follow: the handler lets go, then the character takes up
 `RunningTask.Resume`, engine; one the [decision step](#decision-step) decides stands idle; every end also sets the replan bit). Walks (bed, item work) end by standing; their provenance then no longer runs the task. A lock order's worker (lock, shackle, cage, door, force work)
 stands at its work and its provenance runs `Idle` from then (`LockSystem.AtWork`), so the next start ends the work through the lock handler (a move order given at a cage walks away). Each `CharacterTask` has one
@@ -277,7 +277,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   container work done in place (`Idle`) report `Done` once the character holds no work.
 - A front whose task ended leaves the queue (a move's arrival in the character's own partition, `PlayerOrders.Arrived`, which also starts a queued move at once as the move-only
   queue did; `TaskEnd.Done`; else the decision step, `PlayerOrders.Prepare`) and the next is tried at once. An interrupted move drops the queue (as `GoTo`/`Stop` dropped queued moves),
-  so does `TaskEnd.Stopped`; a start from another source replacing the running front pops it (a follow order's fight before its row runs does not). A move whose walk finds no path or is given
+  so does `TaskEnd.Stopped` of a running front (a stop that keeps the queue sets the front back first, `PlayerOrders.Interrupt`); a start from another source replacing the running front pops it (a follow order's fight before its row runs does not). A move whose walk finds no path or is given
   up blocked leaves the queue alone and the next order is tried at the decision step (`PlayerOrders.WalkFailed`: the mover has no path, so state 1 holds).
 - After `Give` the decision step ([below](#decision-step)) asks the front again as its source 1: a blocked one falls through to goals and jobs there.
 - A done front leaves before it is asked (`PlayerOrders.PopDone`, `ListTests.OrderDone`: its row's list A, effect test and finished test, the original's
@@ -387,7 +387,7 @@ cold or dead (`DecisionSystem.Down`, the character tick `FUN_1405d00b0` runs no 
      replans (`EngagedDefence.Engage`); `EngagedDefence` (key 32, desire 1 within 40 else 0.7, a deferred defence, row 13) answers for 5 s unless an order runs first (**Engine**
      stand-in for the threats list, [carry-loot](game/carry-loot.md#kidnapping), [combat](game/combat.md#stealth-knock-out)). A sleeper's kidnap also gives it order 116 with the clear flag
      ([order queue](#order-queue)). An NPC victim gets no fight from the kidnap (**Verified** `FUN_14034ffa0` pushes no attack order): it replans and its AI
-     answers the kidnapper it senses. An autonomous squad's urgent package goals: `SquadAutonomy.PackageGoals`
+     answers the kidnapper its squad has tagged TEMP ENEMY. A failed stealth knock-out's NPC victim keeps its deferred defensive attack (engine stand-in). An autonomous squad's urgent package goals: `SquadAutonomy.PackageGoals`
      ([autonomous player squads](#autonomous-player-squads)).
   5. Jobs: the job list in order (`IJobSource` contributors by type, `DecisionSystem.RegisterJob`; the original's keys N+8, N+7, ...): the jobs switch gates every type but 16, 31,
      45, 57, 58, 250 (`FUN_14050c1c0`, both passes; 289 is gated), a row the repertoire does not register is skipped, the first that can run starts and one that runs the task ends the
@@ -2049,7 +2049,8 @@ to the next tick. A free hostile target is attacked instead; a caged one, hostil
   triggers, `give item`, `change AI` and `AI contract` (`Ai.ChangeAi`, `Ai.StartContract` with the target: `Blackboard.MissionTarget`, followed by goals aimed at the
   squad mission through `AiMind.FollowTarget`; on its end the leader's `contract end talk passive`), DA 25 / 53 (`FixtureRegistry.TagEscaped` / `FreeSlave`) and DA 29
   (`ArrestSystem.ArrestFromDialogue`), DA 43 (the bail list, [Arrest and jail](#arrest-and-jail)), DA 13, 14, 19-21, 23, 28, 54 (`DialogueSystem.Acts`); the rest is listed in [dialogue](game/dialogue.md#meitou-design).
-- **Orders** (`DialogueSystem.Acts.Order`, `PlayerOrders.Give`, one-shot, the receiver's queue cleared unless noted; rows and receivers in
+- **Orders** (`DialogueSystem.Acts.Order`, `PlayerOrders.Give`, one-shot, the receiver's queue cleared unless noted; DA 6 / 7 / 34 / 55 / 57 stop the
+  speaker first, `BodySystem.Stop`; rows and receivers in
   [dialogue](game/dialogue.md#effects)): DA 2 gives the speaker squad's leader 102, DA 16 / 17 the speaker 164 / 165 and DA 34 / 7 280 / 19 (`Dialogue.DialogueOrders`,
   `Ai.EngineOrders`); DA 6 / 57 101 and DA 55 248, none to a player-faction speaker holding an order (`PlayerOrders.Holds`); DA 33 67 to the target when the speaker's
   task is idle, DA 52 67 to the speaker for each other member, DA 56 29 to the target's position queued behind each member's orders. 102 and 165 act out as
