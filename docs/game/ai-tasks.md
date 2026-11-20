@@ -1155,7 +1155,10 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   +0x78, +0xf8) has +0x210 null gets its FACTION record's `AI Goals` (**Verified**, code; +0x210 read as the AI contract slot, null for an ordinary squad, **Observed**). The player faction
   (`204 Nameless`, the only base FACTION with the list) lists 15 Protect allies (AI_TASK 957, classification 3: priority 3, weight 1), so a player character holds goal 15.
   A list's type already held keeps its place and takes the later list's weight (the adder `FUN_140507950`, **Verified**). Meitou (`AiDatabase.OwnGoals`, `AiMind.RaceGoals`):
-  an NPC's faction list while its blackboard runs no contract as the mind is made, then its race's (setupAI's order, `FUN_140621b70`). Hold adds 16 at priority 3; AI packages add theirs ([AI](../simulation.md#ai)). Priorities
+  an NPC's faction list while its blackboard runs no contract as the mind is made, then its race's (setupAI's order, `FUN_140621b70`). Hold adds 16 at priority 3; AI packages add theirs ([AI](../simulation.md#ai)). A player-faction
+  character gets the same lists in Meitou (`AiSystem.PlayerOwnGoals`). `FUN_1405c9020` (asks a replan with the player-faction flag, then adds a priority-3, weight-1 own goal through
+  `FUN_140507950`) is dead code: its only reference is an unreferenced thunk (`0x14000588a`; the other hit is `.pdata`), and Hold's case 0xc does not call it (**Verified**,
+  disassembly cross-references). Priorities
   (`taskPriority`): 1 fluff, 2 non-urgent, 3 urgent, 4 obedience; orders are queued at 3.
 - **So, for a player character**: an order beats everything, Self preservation included (an ordered medic keeps treating while hit; each landed blow staggers it and the order
   is planned again, [combat](combat.md#fight-lifecycle-and-orders)). Self preservation (while an attacker is within 181.7), Getting food and Hold's attack on sight beat every
@@ -1184,7 +1187,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   14 Idleness (a player character's routine: it stands; the default task is never reached, as only ROAM_FAR is modelled). A task that ends leaves its character idle for the step to
   re-decide (the original re-plans; nothing resumes). A follow order running its row ends when the followed character is attacked or goes down, as the original's (**Verified** below); follow and bodyguard
   jobs, and a follow order given while its target is already threatened, fight by their rows: an attacker of the followed character within 40 (16), a bodyguard also its own
-  within 40 (39), as a step of the row, and follow again when the fight ends. The step runs on the replan triggers above plus an engine re-ask every `JobCheckTicks` of a character
+  within 40 (39), as a step of the row, and follow again when the fight ends. The step runs on the replan triggers above plus an engine re-ask at the think turn (`ThinkEveryTicks`) of a character
   idle, on a job's task or on a running order (no periodic replan was found), so a higher job takes over a running one within that period, where the original waits for its next replan. Goal 15 is
   `RetaliationSystem.JoinFight` at step 4 (below).
 - **15 Protect allies for a player character** (**Verified**: desire `FUN_140599b90`, finder `FUN_14099ca10`, falloff `FUN_1409b2380`, constants from the exe): desire 0 when Passive or
@@ -1196,7 +1199,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   threat is `CombatSystem.FightThreat` (so an attacked ally that fights nobody counts), Passive gives the desire 0 in a fight too, the slave gate is asked once for the first slave met (the finder latches it), the best ally is the first in slot order on a tie,
   the result is capped at 1.2, the plan is `CombatSystem.BestAttackerOf` for the ally, and a character on Hold also needs `Orders.HoldPost`. It cannot start while the character fights on another plan or
   cannot fight; while its own fight runs with no ally left its desire stays 0.7 (engine: the fight ends by itself, once targetless with no threat left, [leaving a fight](combat.md#leaving-a-fight)). The step reaches it at the engine re-ask of an idle or job-task character
-  (within `JobCheckTicks` of a mate starting to fight) or at any replan; an order or a goal's task keeps it out. **Observed** (offscreen sandbox): a player character in a squad of its own 45 to 55 units away joins
+  (within a think period of a mate starting to fight) or at any replan; an order or a goal's task keeps it out. **Observed** (offscreen sandbox): a player character in a squad of its own 45 to 55 units away joins
   an ally's fight when nothing else wants it (run with the threat taken as 1). The second zero of `FUN_140599b90` is Passive (the byte `+0x12c` of the character's `+0x450` object, standing order 13; **Observed** that it is the same object as Hold's `+0x12b`). The old engine join (squad mates within 250 at a fixed 0.6) is gone.
 - **The medic jobs' own threat tests** (**Verified** against `TaskDataTable`, lists read row by row): 58 Medic and 250 Splint Rigging have no list B; their treatment rows 25 First aid and
   249 Splinting need `38 23 !140 42 46 !157` / `38 151 !140 42 46 !157` (an arm, a kit, the target not swimming, standing still, at the target, weapon away): no threat state. Only 57
@@ -1780,8 +1783,9 @@ A character's job list (the Orders menu's "Perma-Jobs"; class `OrdersReceiver`, 
   +0x117 "Ditch items" → 242 "Ditching resources" (only with an empty task queue +0x60; the entry is tested afresh on every pass, nothing carries over, so a running trip drops out as soon as the finder finds nothing or an order is queued; finder `FUN_1405a59a0`: the carried ITEMs (type 4) of `item
   function` 0 or 15, and food (3) but the first, via `FUN_140749490`, **Verified**; that 242 passes the collect flag **Observed**; the nearest UseableStuff in range whose accept test (slot 0x4a0) takes one, skipping
   ones the squad already uses, **Observed**; Meitou: storages only); then, unless one of three tests holds (`FUN_1402b2b90`
-  on the character's +0x450: hold position +0x12b on and not sneaking, **Verified**; byte +0x348, carrying someone; `FUN_1407f4d20`, a set lookup
-  read as "selected by the player", **Observed**, not modelled), +0x116 "Sleep when injured" → 257 "Getting out of
+  on the character's +0x450: hold position +0x12b on and not sneaking, **Verified**; byte +0x348, carrying someone; `FUN_1407f4d20`, the player
+  interface's "is selected" (its selection set `+0x208`, the character passed in rdx; **Verified** through its callers `FUN_1407f7f20`, `FUN_1407f8410`,
+  `FUN_1407f4dd0`, `FUN_14048f320`; Meitou `ImplicitPick`: `Player.Selection`), +0x116 "Sleep when injured" → 257 "Getting out of
   bed once healed" above 153 "Go home and go to bed", and +0x118 "Sit when idle" → 275 "Sitting around" (its task is built with a float 0.5 where the others pass 1).
   Tooltips (**Verified**, `FUN_140005e11`): ditch puts excess carried materials into storage when idle; sleep goes to bed when injured and idle;
   sit takes chairs and benches at home. its target finder is the bed search (**Verified**, [locks](locks.md#beds)). Saved as CAMERA bools ([save](../formats/save.md)).
