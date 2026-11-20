@@ -446,7 +446,8 @@ phases, no source ever called from the think:
   (`TaskStart.End`, `TaskEnd.Done`), a fight's end, the melee alert and a blow or bolt with the fight off. The mind's next think runs no plan step and clears the goal and its plan
   unless it commits and its commitment has not run out (`TierRungs.Begin`), so the winner is planned afresh with no continuity; a committed stop it keeps picks the mover reset
   (the request stopped the goal's task). Every other ask (sightings, a mate's fight, a duty's or a mod goal's end, a walk's end, the jobs switch, a job removed or moved, the think
-  turn) thinks again with the goal kept (`AiMind.Replan`, `DecisionSystem.Request`). The goal is cleared at the think, not at the ask (engine: at most a tick later).
+  turn) thinks again with the goal kept (`AiMind.Replan`, `DecisionSystem.Request`). The goal is cleared at the think, not at the ask (engine: at most a tick later). The
+  request waits while the character is carried or down: the original's update skips the AI then (`FUN_1405d00b0`), so its first update after it takes the request.
 - **Engine starts outside the step** (a step of a running row, or a reaction to another's act; the step leaves a claimed character alone that tick, `DecisionSystem.Claim`): a follow
   job's (or a not yet running follow order's) defence of its followed character and a bodyguard's own defence within 40 (`RetaliationSystem.Guards`, `SelfDefends`; claimed).
 - **Trace** (`DecisionSystem.Tracing`, off by default): each start pass fills `CharacterCold.Decision` (`DecisionTrace`: tick, winner, one line per source asked with its answer: an

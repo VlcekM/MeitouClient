@@ -308,7 +308,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// The parallel think: each character with a mind, on its turn or when asked (its look's <see cref="ChooserRow.Due"/>, its replan bit, an order
     /// that held it until now), runs the chooser (<see cref="ThinkOne"/>; writes its own slot only), told whether the original's replan request is
-    /// pending (<see cref="AiMind.ReplanAsked"/>, used up here as the original's update uses <c>+0x1b0</c>).
+    /// pending (<see cref="AiMind.ReplanAsked"/>, used up here as the original's update uses <c>+0x1b0</c>, but not while no update runs).
     /// </summary>
     public void Think(World world, Partition part)
     {
@@ -331,9 +331,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             bool asked = mind.Replan || cold.OrderWins || row is { Due: true };
             if ((world.Tick + i) % every >= world.StepTicks(i) && mind.Version == board.Version && !asked) continue;
 
-            bool replan = mind.ReplanAsked;
+            // The original's update skips the AI while the character is carried or down (FUN_1405d00b0), so its replan request waits for the first
+            // update after it.
+            bool down = DecisionSystem.Down(cold);
+            bool replan = mind.ReplanAsked && !down;
             mind.Replan = false;
-            mind.ReplanAsked = false;
+            if (!down) mind.ReplanAsked = false;
             if (row is not null) row.Thought = true;
             ThinkOne(world, i, cold, mind, squad, board, row, hour, replan);
         }
