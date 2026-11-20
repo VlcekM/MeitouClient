@@ -79,6 +79,12 @@ drop-in replacement that runs original content and mods unchanged.
 - After merging a branch into master, remove its worktree (`git worktree remove`) and delete the branch
   (`git branch -d`) without asking, once the worktree has no uncommitted work.
 
+## Player-facing text
+
+- Meitou's own texts go through `Loc.Tr` (placeholders `{1}`, never concatenation or `$"..."`) and need a translation in every built-in
+  catalog: `node .github/scripts/loc-strings.mjs --write` updates the template, and without arguments it lists what each catalog lacks
+  ([localisation](docs/formats/localisation.md)).
+
 ## Code mods
 
 - Contract: [docs/modding.md](docs/modding.md) and [docs/modding-dependencies.md](docs/modding-dependencies.md). A change to

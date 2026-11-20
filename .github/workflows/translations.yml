@@ -1,0 +1,25 @@
+# Translations: checks that every built-in catalog (src/Meitou.Core/Localisation/locale/<code>.po) translates each of Meitou's own texts
+# and that locale/meitou.pot is current (.github/scripts/loc-strings.mjs).
+name: Translations
+
+on:
+  push:
+    branches: [master]
+    paths: ["src/**", "launcher/**", ".github/scripts/loc-*.mjs", ".github/scripts/po.mjs"]
+  pull_request:
+    paths: ["src/**", "launcher/**", ".github/scripts/loc-*.mjs", ".github/scripts/po.mjs"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  translations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Check translations
+        run: node .github/scripts/loc-strings.mjs
