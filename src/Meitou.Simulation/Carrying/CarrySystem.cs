@@ -34,13 +34,13 @@ namespace Meitou.Simulation.Carrying;
 /// <item><b>Rescue</b>: the rescue job, and NPC squads' knocked-out leaders (<see cref="RescueLeaders"/>).</item>
 /// <item><b>Loot</b> (<see cref="CharacterTask.Loot"/>): the walk, then everything of the main inventory and the backpack that fits moves to the
 /// looter (<see cref="LootOrder"/>), or the body's inventory opens in a window to take from (<see cref="OpenLootOrder"/>); a member of the victim's
-/// faction who sees it makes it a theft. NPCs with goal 177 loot by the original's rules (CarrySystem.Scavenge.cs).</item>
+/// faction who sees it makes it a theft. NPCs with goal 177 loot by the original's rules (<see cref="LootGoals"/>).</item>
 /// </list>
 /// Everything runs in the serial phases (<c>Inputs</c>, <c>Schedule</c>, <c>SlowWorld</c>), in slot order, so the result does not depend on threads
 /// or partitions. Placed after the body system (its <c>SlowWorld</c> sees this tick's knock-outs and the corpses already removed) and before combat.
 /// </summary>
 public sealed partial class CarrySystem(GameConstants constants, BodyOptions options, float liftSeconds = 1, CarrySettings? settings = null)
-    : ITickSystem, ITaskOwner, ITaskHandler, IOrderOwner, IDecisionOwner, IGoalSource, IStateHashed
+    : ITickSystem, ITaskOwner, ITaskHandler, IOrderOwner, IDecisionOwner, IGoalSource, IStateHashed, IDutyGoalOwner
 {
     #region State
 
@@ -100,6 +100,10 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// The player characters a failed kidnap or knock-out engaged, and their defence as a decision source (<see cref="EngagedDefence.Engage"/>).
     /// </summary>
     readonly EngagedDefence _engaged = new();
+    /// <summary>
+    /// NPC looting (177) and arming (42) as chooser goals: the finders' picks and the act-outs.
+    /// </summary>
+    readonly LootGoals _lootGoals = new();
     /// <summary>
     /// The body options (the put-down knock-out reads them).
     /// </summary>
@@ -699,7 +703,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// Starts a pick-up, a loot or a stealth knock-out of <paramref name="target"/> as row <paramref name="row"/> through
     /// <see cref="TaskStart.Start"/>: false when the row is not the character's.
     /// </summary>
-    static bool Start(World world, int slot, CharacterTask task, TaskType row, TaskSource source, CharacterId target, CharacterTask resume,
+    internal static bool Start(World world, int slot, CharacterTask task, TaskType row, TaskSource source, CharacterId target, CharacterTask resume,
         int job = -1) =>
         TaskStart.Start(world, slot, new TaskRequest(task, row, source) { Target = target, Resume = resume, Job = job }) == StartResult.Started;
 
@@ -850,8 +854,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
     /// <summary>
     /// The serial carry step: each stepping character's lift, put-down, loot or stealth knock-out runs, then the saved links are restored every
-    /// <see cref="RestoreEveryTicks"/> ticks, the loot window and the links are kept, and the automatic rescue, scavenging and arming run on
-    /// their beat.
+    /// <see cref="RestoreEveryTicks"/> ticks, the loot window and the links are kept, the looting and arming goals' act-outs that ended are done, and
+    /// the automatic rescue and the looting and arming finders' look run on their beat.
     /// </summary>
     public void SlowWorld(World world)
     {
@@ -880,12 +884,12 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         if (world.Tick % RestoreEveryTicks == 0) RestoreLinks(world);
         LootWindow(world);
         KeepLinks(world);
+        _lootGoals.Step(world);
         if (Settings.AutoEveryTicks > 0)
         {
-            bool beat = world.Tick % world.Every(Settings.AutoEveryTicks) == 0;
-            if (beat) Rescue(world, table);
-            Scavenge(world, table);   // each looter on its slot's turn
-            if (beat) Arm(world, table);
+            int every = world.Every(Settings.AutoEveryTicks);
+            if (world.Tick % every == 0) Rescue(world, table);
+            _lootGoals.Look(world, this, every);   // each character on its slot's turn
         }
     }
 
@@ -2110,10 +2114,16 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     }
 
     /// <summary>
-    /// Adds the given-up rescues to the world's state hash, while there are any.
+    /// Registers the looting and arming goals 177 and 42 with the chooser (<see cref="LootGoals"/>).
+    /// </summary>
+    void IDutyGoalOwner.RegisterGoals(DutyGoals goals) => _lootGoals.Register(goals);
+
+    /// <summary>
+    /// Adds the given-up rescues and the looting and arming goals' picks and act-outs to the world's state hash, while there are any.
     /// </summary>
     public void Hash(ref StateHasher hasher)
     {
+        _lootGoals.Hash(ref hasher);
         if (_refusedRescues.Count > 0)
         {
             hasher.Add(0x52657346);   // "ResF"

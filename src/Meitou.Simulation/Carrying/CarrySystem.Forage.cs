@@ -125,7 +125,7 @@ public sealed partial class CarrySystem
     /// <summary>
     /// The bodies being looted now (by slot).
     /// </summary>
-    static HashSet<int> Looting(CharacterTable table)
+    internal static HashSet<int> Looting(CharacterTable table)
     {
         var taken = new HashSet<int>();
         for (int i = 0; i < table.HighWater; i++)

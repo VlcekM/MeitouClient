@@ -656,7 +656,8 @@ the player has one and stands in it; requests (victory/loss chains, ally help) c
   arrival, timers and the 20 % rule run. **Observed** (headless, Dust Bandits, 4 squads of 49 at `raidSizeMult` 4, camera on the leader): the
   followers keep 190, 380 and 470 behind a walking leader (the rule's 187, 375, 562).
 - **Assault**: in phase 1 a loaded campaign squad also fights (`Squad.War`, read by the aggro) everyone not of its faction in the target town or in no town (not animals, fake or bandit factions: [sensing hooks](game/ai.md#package-classes)) when its
-  `pt2` package is a Package_WarAssault (20, 32), else the target faction when the campaign is hostile. Looting is [goal 177](#carrying-rescue-and-looting) where the package lists it. A cannibal assault (class 32) goes to phase 2
+  `pt2` package is a Package_WarAssault (20, 32), else the target faction when the campaign is hostile. Looting is [goal 177](#carrying-rescue-and-looting) where the package lists it, an engine goal that
+  the members' engine minds do not weigh. A cannibal assault (class 32) goes to phase 2
   when three members of one platoon carry someone or 15 game minutes after that platoon's first carrier (`CampaignInstance.CarryStarts`, per platoon, cleared while it has none; saved by Meitou only); kidnapping: [below](#kidnapping).
 - **Announcement**: a loaded leader in phase 0 says `dialog announcement` once (camera and a target-faction member within 2500): its lines are said as speech bubbles 2 + 0.12 × length seconds apart, or DA 12's wait, and their `interrupt` makes the next talk
   with it the negotiation, also when its faction is hostile. After arriving it waits for the announcement and then while the negotiation is
@@ -996,17 +997,22 @@ not down; Trade on an own animal too) ends above the grid ([animals](game/animal
   to is read from what the world holds, not remembered (`CarrySystem.RescuedBy148`: an NPC the AI runs whose goal lists hold 148, carrying a body of
   its own or an allied faction that is not its squad leader), so it holds after a load too. The leader rescue (142) takes the same ability test, hold
   test and walk give-up, but not the put-down: its carrier keeps the leader.
-- **NPC looting** (`CarrySystem.Scavenge.cs`, facts: [carry-loot 3.3](game/carry-loot.md#33-npc-looting)): every `AutoEveryTicks` on its slot's turn (slot mod the period, so the looks spread over the ticks, as the original's AI updates run 8 characters a frame in turn, [game loop](game/game-loop.md#the-character-update-budget)), an NPC the AI runs whose package lists goal 177 for its role
-  in the hour (`PopulationSystem.GoalDuty`) loots the nearest dead body (not of its faction), else downed living one of a non-allied faction, within 100 and reachable (no shut gate route between, no building without an open door around it unless the looter is in it, `CarrySystem.Reachable`): the player's only with
+- **NPC looting** (`LootGoals`, the finder `CarrySystem.LootTarget`, facts: [carry-loot 3.3](game/carry-loot.md#33-npc-looting)): goal 177 is an [engine goal](#engine-goals) of the
+  chooser (desire 1 at posture 0, times its finder's factor; plan `[1, 3, 177]`, row 3 the loot). Every `AutoEveryTicks` on its slot's turn (slot mod the period, so the looks spread over the ticks, as the original's AI updates run 8 characters a frame in turn, [game loop](game/game-loop.md#the-character-update-budget)), an NPC with a mind of its own that weighs 177 (`AiSystem.WeighsGoal`) keeps its finder's pick for the think
+  (engine: the original's finder runs at each score); the pick is the nearest dead body (not of its faction), else downed living one of a non-allied faction, within 100 and reachable (no shut gate route between, no building without an open door around it unless the looter is in it, `CarrySystem.Reachable`): the player's only with
   `PlayerState.BanditsLoot` (CAMERA `bl`, default on), only whom `shouldIScrewThisGuyOver` allows (classes, love/hate tags), not one its squad tagged short-term 6
   (`MemoryTag.Looted`). At the body (`Loot` task, `LiftTime` from arrival, `medic` clip) it takes after 8 s (animal 20): weapons when it has none equipped, food (functions 3, 15, the
   backpack's 3), and for a non-player-side or dead body, unless it is a Bandit or malnourished (floor < 2.8), every item and armour; a weaponless non-bandit grabs one weapon of a
   living player-side body at 0.8 s instead. Then the tag, and back to its task. On arrival it says event 33 or 32 and may get a pending Looting (`CrimeSystem.NpcLooting`,
   [looting crime](game/carry-loot.md#33-npc-looting)), which its witnesses answer as any NPC culprit's ([crimes](#crimes-and-bounties)). A police-like looter (`CrimeSystem.IsPoliceLike`) confiscates instead: past 0.8 s one unit of each stolen item of the body's inventory (`CarrySystem.Confiscate`), tagging it only when there was none. Engine choices: nearest per pass, the tag never expires.
-- **Unarmed NPCs** (`CarrySystem.Arm.cs`, goal 42 "Don't be unarmed" with step 8 FIND_WEAPON, `AI::findWeapon`): on the same cadence an NPC without a weapon, with a working arm,
-  whose package lists 42, goes for the nearest free ground weapon within 100 (in a town only an unowned or enemy-owned one) and picks it up, else a dead body with a weapon,
-  else a downed living non-ally with one (player side only with `BanditsLoot`, not one its squad loves), which it loots as above. Engine choices: the body loot takes
-  more than the weapon; the nearest body, not the sensed-list order; accessibility left to the walk.
+  The chosen goal's start loots the plan's body (row 177's loot task, a goal's task); a body another member's act-out works is refused, and the goal is done when the loot
+  ends (`DutyGoals.Done`).
+- **Unarmed NPCs** (`LootGoals`, the finder `CarrySystem.FindWeapon`, goal 42 "Don't be unarmed" with step 8 FIND_WEAPON, `AI::findWeapon`): an [engine goal](#engine-goals) too,
+  desire 2.0, plan `[1, 3, 8, 42]` while the planner's state 4 (a weapon) fails, the finder on row 8; with a weapon the scorer drops it. On the same look an NPC without a
+  weapon that weighs 42 keeps row 8's pick: the nearest free ground weapon within 100 (in a town only an unowned or enemy-owned one), else a dead body with a weapon,
+  else a downed living non-ally with one (player side only with `BanditsLoot`, not one its squad loves). The start picks the ground weapon up (row 3, `PickUps`) or
+  loots the body as above (row 42's loot task); the goal is done when the pick-up or loot ends. Engine choices: the body loot takes more than the weapon; the nearest
+  body, not the sensed-list order; accessibility left to the walk.
 
 ## Ragdolls
 
@@ -2330,7 +2336,7 @@ enemy (`numEnemies`, `SenseBlock.Enemies`), so guards man the turrets only while
 Goals of the NPCs' packages that an engine system acts out, chosen by the one chooser as the original's (docs/game/ai-tasks.md "Precedence"). `DutyGoals`
 (one per world, built in `World`'s constructor by `AiSystem.BindGoals` from the `IDutyGoalOwner` systems; null when none registered) holds each registered type: a
 type of the original's that `TaskBehaviours` does not act out, registered by its own system with its `IDutyGoal` (desire, finder, states, start, end) and the rows of
-its plan the act-out carries out besides the goal's own. Built: 176 (`SmellSystem`, [blood smell](#blood-smell)).
+its plan the act-out carries out besides the goal's own. Built: 176 (`SmellSystem`, [blood smell](#blood-smell)); 177 and 42 (`CarrySystem` through `LootGoals`, [looting and arming](#carrying-rescue-and-looting)).
 - **Choosing**: a registered type has `AiBehaviour.Duty`. Its desire is the system's (`DutyGoals.Desire`: the desire times the finder's factor when the TaskData row has
   a finder and an effect; 0 for a player character's mind, an engine mind and a type in back-off), scored by the package record's tier and weight with the continuity
   and no commitment (no duty goal commits). The plan is the planner's: its rows' desires and finders are asked of the system, a finder may give a character, a

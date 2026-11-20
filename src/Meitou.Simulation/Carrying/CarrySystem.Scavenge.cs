@@ -46,51 +46,13 @@ public sealed partial class CarrySystem
     static readonly string[] WeaponSections = ["back", "hip"];
 
     /// <summary>
-    /// Each tick (serial, slot order), every <see cref="CarrySettings.AutoEveryTicks"/> ticks per character on its slot's turn (slot mod the period,
-    /// so the looks spread over the ticks): each member of an NPC squad whose running package lists goal 177 for its role in the hour's window
-    /// (<see cref="PopulationSystem.GoalDuty"/>) and that the AI runs now (<see cref="Ai.AiSystem.Holds"/>) walks to the body
-    /// <see cref="LootTarget"/> picks and loots it (<see cref="CharacterTask.Loot"/>, <see cref="NpcLoot"/>).
-    /// </summary>
-    void Scavenge(World world, CharacterTable table)
-    {
-        if (world.SystemOf<PopulationSystem>() is not { } population) return;
-        var memory = world.SystemOf<DialogueSystem>()?.Memory;
-        int every = world.Every(Settings.AutoEveryTicks);
-        SquadGoals? goals = null;
-        List<int>? bodies = null;
-        Span<int> duty = stackalloc int[5];
-        foreach (var squad in world.Squads.All)
-        {
-            if (squad.Members.Count == 0) continue;
-            duty.Fill(-1);
-            foreach (var member in squad.Members)
-            {
-                if (!table.TryResolveNext(member, out int slot) || !world.Turn(slot, every)
-                    || table.Cold(slot) is not { IsPlayer: false, Inventory: not null } cold || !AiSystem.Holds(table.Next[slot], cold))
-                    continue;
-                int role = (int)AiSystem.RoleOf(squad, member, cold);
-                if (duty[role] < 0) duty[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.LootTheDead) ? 1 : 0;
-                if (duty[role] == 0) continue;
-                goals ??= SquadGoals.Of(world);
-                bodies ??= LootableBodies(table);
-                if (!TaskStart.Eligible(world, cold, TaskType.LootTheDead)) continue;
-                int target = LootTarget(world, table, slot, cold, goals, bodies, memory);
-                if (target < 0) continue;
-                goals.Add(cold.SquadId, table.IdOf(slot), GoalTarget.Of(table.IdOf(target)));
-                var task = (CharacterTask)table.Next[slot].Task;
-                Start(world, slot, CharacterTask.Loot, TaskType.LootTheDead, TaskSource.Npc, table.IdOf(target), TaskStart.Standing(cold, task));
-            }
-        }
-    }
-
-    /// <summary>
     /// Goal 177's finder (<c>FUN_14099ae10(ai, 0)</c>): within <see cref="ScavengeRange"/> in 3D (<c>FUN_14099ae10</c> :42, :88), not carried, not
     /// worked by a squad mate (the squad's goal list) and not tagged <see cref="MemoryTag.Looted"/> by the looter's squad; first the dead, then the
     /// downed living of factions neither its own nor allied (the kidnap finder's masks), not of the player's faction unless
     /// <see cref="PlayerState.BanditsLoot"/>, whom <see cref="ScrewsOver"/> allows. Engine choices: the nearest of each pass (the original takes its
     /// sensed-list order); the dead pass has no faction test, so a body of the looter's own faction is looted too (Verified). -1: none.
     /// </summary>
-    int LootTarget(World world, CharacterTable table, int slot, CharacterCold cold, SquadGoals goals, List<int> bodies, SquadMemory? memory)
+    internal int LootTarget(World world, CharacterTable table, int slot, CharacterCold cold, SquadGoals goals, List<int> bodies, SquadMemory? memory)
     {
         var next = table.Next;
         var at = next[slot].Position;
@@ -134,12 +96,22 @@ public sealed partial class CarrySystem
     /// The lootable characters (carried ones too: a looter that starts may drop its load), in slot order: what <see cref="LootTarget"/> tests,
     /// collected once a pass.
     /// </summary>
-    static List<int> LootableBodies(CharacterTable table)
+    internal static List<int> LootableBodies(CharacterTable table)
     {
         var bodies = new List<int>();
         for (int s = 0; s < table.HighWater; s++)
             if (table.Next[s].Alive && table.Cold(s) is { } body && CanBeLooted(body)) bodies.Add(s);
         return bodies;
+    }
+
+    /// <summary>
+    /// Whether the looter at <paramref name="slot"/> stands where its loot of the body at <paramref name="body"/> takes (the loot's reach,
+    /// <see cref="ReachOf"/>), from the last tick's places: state 1 of goals 177's and 42's body for the parallel think (<see cref="LootGoals"/>).
+    /// </summary>
+    internal bool AtBody(World world, int slot, int body)
+    {
+        var previous = world.Characters.Previous;
+        return InReach(world, previous[slot], previous[body], ReachOf(world, world.Characters.Cold(body)!));
     }
 
     /// <summary>
@@ -402,7 +374,7 @@ public sealed partial class CarrySystem
     /// <summary>
     /// <c>AI::hasWeapon</c> (engine reading): an animal (its natural weapon), or any weapon in the inventory or backpack.
     /// </summary>
-    static bool HasWeapon(CharacterCold c) => c.Fighter is { IsAnimal: true } || c.Inventory?.All().Any(x => x.Type == FcsRecordType.Weapon) == true;
+    internal static bool HasWeapon(CharacterCold c) => c.Fighter is { IsAnimal: true } || c.Inventory?.All().Any(x => x.Type == FcsRecordType.Weapon) == true;
 
     /// <summary>
     /// <c>Inventory::hasWeaponEquipped</c>: a weapon in a worn section (hip or back).
