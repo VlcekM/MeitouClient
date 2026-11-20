@@ -166,8 +166,8 @@ public enum CaptiveJobKind : byte
     /// </summary>
     Fetch,
     /// <summary>
-    /// Goals 194 / 218 by way of 159 (event 39 SLAVE_DELIVERY): the leader hands its slaves over to a receiver of the town it stands in, each put
-    /// into a cage there.
+    /// Goals 194 / 218 by way of 159 (event 39 SLAVE_DELIVERY): the leader says the event to a slave pen's keeper in the town it stands in, whose
+    /// dialogue hands its slaves over (DA 24).
     /// </summary>
     Sell,
     /// <summary>
@@ -249,7 +249,7 @@ public sealed class CaptiveJob
     /// </summary>
     internal IgnoreKey? LostKey { get; set; }
     /// <summary>
-    /// Blows struck (kill); the game second of the next line (eat).
+    /// Blows struck (kill); the game second of the next line (eat); the job's steps since event 39 went out (sell).
     /// </summary>
     public int Blows { get; set; }
     /// <summary>
@@ -321,10 +321,6 @@ public enum CaptiveEventKind
     /// A slave was gathered from a cage into the squad.
     /// </summary>
     Gathered,
-    /// <summary>
-    /// A slave was delivered into a cage.
-    /// </summary>
-    Delivered,
     /// <summary>
     /// A slave was put in a cage.
     /// </summary>

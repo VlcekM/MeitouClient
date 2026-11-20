@@ -153,7 +153,7 @@ internal sealed class TownWatchFinders(PopulationData data)
     /// A placed building of function key 19 BF_SHELL_WITH_INTERIOR: an <c>interior</c>, no wall or gate, and no functionality of its own (none, BF_ANY,
     /// BF_FLUFF or BF_SHELL_WITH_INTERIOR itself).
     /// </summary>
-    static bool IsHouse(Meitou.Data.World.TownBuilding x) =>
+    internal static bool IsHouse(Meitou.Data.World.TownBuilding x) =>
         x.HasInterior && !x.IsWall && !x.IsGate && x.Function is -1 or 0 or Construction.TownRefit.Fluff or Construction.TownRefit.Shell;
 
     /// <summary>

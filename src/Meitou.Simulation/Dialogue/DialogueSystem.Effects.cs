@@ -372,7 +372,7 @@ public sealed partial class DialogueSystem
         switch (effect.Action)
         {
             case DialogueActions.GiveTargetMySlaves when tc is not null && mc is not null:
-                GiveSlaves(world, me, mc, tc);
+                GiveSlaves(world, mc, tc);
                 break;
             case DialogueActions.SurrenderNonHumans when tc is not null && mc is not null:
                 SurrenderNonHumans(world, me, mc, tc);

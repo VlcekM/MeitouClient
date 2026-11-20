@@ -4,6 +4,7 @@ using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.World;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Carrying;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Locks;
@@ -28,7 +29,7 @@ namespace Meitou.Simulation.Kidnap;
 /// cage is opened (<b>engine reading</b>: which task does it in the original is <b>Unknown</b>). A player character is gathered too.</item>
 /// <item><b>Deliver</b> (192 "Delivering slaves", wanted at 0.25 per slave, AI slot 65): the leader walks to the shipping package's town
 /// (<see cref="Blackboard.MissionTown"/>). <b>Sell</b> (194 / 218 "Selling slaves", 218 only in a prison or slave camp, AI slot 66): in the town it
-/// stands in it says event 39 SLAVE_DELIVERY to a receiver of the town and hands its slaves over (<see cref="HandOverSlaves"/>).</item>
+/// stands in it says event 39 SLAVE_DELIVERY to the keeper of a slave pen there, whose line DA 24 hands its slaves over (<see cref="GiveSlaves"/>).</item>
 /// <item><b>Get in the cage</b> (172 "Getting in my cage", a Slave AI Goal; <c>FUN_1408caaf0</c>, <b>Observed</b>): a slave not held walks to the
 /// nearest free cage of its owner's faction in the 3x3 zone cells round it, in any town, and gets in (<c>Task_UseCage</c>).</item>
 /// </list>
@@ -278,152 +279,167 @@ public sealed partial class CaptiveSystem
     }
 
     /// <summary>
-    /// The receiver 194 / 218 hand the slaves to (<c>FUN_1408ca950</c>, <b>Verified</b>: the finder searches the town the leader stands in, its status
-    /// town, and keeps a target it has): in the town at <paramref name="w"/>'s feet, the live NPC of the town's faction or an ally nearest to the
-    /// leader (<see cref="Receiver"/>); null outside a town or with nobody there.
+    /// The BuildingDesignation of the slave pens: the <c>building designation</c> of the Cage Warden, Slaver Shop and cage guard templates.
+    /// </summary>
+    const int PenDesignation = 10;
+
+    /// <summary>
+    /// The salt of the receiver finder's draw.
+    /// </summary>
+    const ulong ReceiverSalt = 0x5245_4345_4956_4552;
+
+    /// <summary>
+    /// The receiver 194 / 218 hand the slaves to (<c>FUN_1408ca950</c>, <b>Verified</b>; it keeps a target it has, as the look keeps the job's):
+    /// <c>BuildingFinderNearestAllies_Designated</c> with mask 0x80000 and designation 10 over the 3 x 3 zone cells round the leader
+    /// (<c>FUN_1409fc450</c>) in its status town (any town with none): the houses (function key 19) of designation 10 (slave pens, <see cref="Pens"/>)
+    /// not on the leader's ignore list, of its faction or one its squad may use (<c>FUN_1408ca5d0</c>, <see cref="FixtureRegistry.CanUse"/>), one
+    /// drawn at random (<c>FUN_1409fb020</c>), then its owner squad's effective leader (<c>FUN_14079aea0</c>). Null: none, and the goal is unwanted.
     /// </summary>
     internal CharacterId? ReceiverHere(World world, int w, CharacterCold cold, out int site)
     {
-        site = TownAt(data, world.Characters.Next[w].Position);
-        if (site < 0) return null;
+        var at = world.Characters.Next[w].Position;
+        var town = AiSystem.StatusTownAt(data, world, at, cold.StatusTown);
+        var pens = Pens(world, w, cold, town);
+        site = -1;
+        if (pens.Count == 0) return null;
 
-        var town = data.Sites[site];
-        int owner = site < data.SiteFactions.Count && data.SiteFactions[site] >= 0 ? data.SiteFactions[site] : cold.Faction;
-        return Receiver(world, w, owner, new Vector2(town.Position.X, town.Position.Z), MathF.Max(town.Town.Radius, 100));
+        var roll = Rng.Hash(world.Seed, (ulong)Rng.Key(world.Characters.IdOf(w)) ^ (ulong)world.Tick, RngPurpose.Slow, ReceiverSalt);
+        (var owner, site) = pens[Rng.Int(roll, pens.Count)];
+        var lead = world.SystemOf<PopulationSystem>()?.EffectiveLeader(world, owner) ?? owner.Leader;
+        return world.Characters.IsAlive(lead) && lead != world.Characters.IdOf(w) ? lead : null;
     }
 
     /// <summary>
-    /// 194 / 218's act-out (159 Talking on the receiver, event 39 SLAVE_DELIVERY): the leader walks to within <see cref="CaptiveSettings.ShoutReach"/>
-    /// of the receiver, says the event and hands its slaves over (<see cref="HandOverSlaves"/>); done then. Nothing while it crouches or lies (row
-    /// 192's !26; engine reading for the handover).
+    /// The slave pens <see cref="ReceiverHere"/> draws from, each by its owner squad and town: the placed towns' houses
+    /// (<see cref="TownWatchFinders.IsHouse"/>) within one zone of the leader whose record's designation is 10, of <paramref name="town"/> (every
+    /// placed town when none), not ignored; a pen's owner is the live squad with the lowest id housed in it (engine reading of the building's owner
+    /// hand), whose faction is the building's.
+    /// </summary>
+    List<(Squad Owner, int Site)> Pens(World world, int w, CharacterCold cold, CampaignTown town)
+    {
+        var at = world.Characters.Next[w].Position;
+        var owners = new List<(Squad, int)>();
+        foreach (var site in data.Sites)
+        {
+            if (!town.IsNone && town.Site != site.Index) continue;
+
+            foreach (var b in site.Buildings)
+            {
+                if (!TownWatchFinders.IsHouse(b) || !WorldLayout.WithinOneZone(at.X, at.Z, b.Position.X, b.Position.Z)) continue;
+                if (world.Fixtures.RecordOf(b.Key)?.Designation != PenDesignation || cold.IsIgnored(new IgnoreKey(b.Key, default), world.Tick)) continue;
+
+                if (PenOwner(world, b.Key) is { } owner && MayGiveTo(world, cold, owner, site.Index, b.Key)) owners.Add((owner, site.Index));
+            }
+        }
+
+        return owners;
+    }
+
+    /// <summary>
+    /// The live squad with the lowest id whose home is the building <paramref name="key"/>; null: none.
+    /// </summary>
+    static Squad? PenOwner(World world, string key)
+    {
+        Squad? owner = null;
+        foreach (var s in world.Squads.All)
+        {
+            if (s.HomeBuilding?.Key != key || owner is not null && owner.Id < s.Id || !s.Members.Exists(world.Characters.IsAlive)) continue;
+            owner = s;
+        }
+
+        return owner;
+    }
+
+    /// <summary>
+    /// The pen test of <c>FUN_1408ca5d0</c>: the owner is of the leader's faction, or the leader's squad may use the building
+    /// (<c>canIUseThisBuilding</c>, <see cref="FixtureRegistry.CanUse"/>).
+    /// </summary>
+    static bool MayGiveTo(World world, CharacterCold cold, Squad owner, int site, string key) =>
+        owner.Faction == cold.Faction
+        || world.Fixtures.CanUse(world, cold, owner.Faction, new FixtureRegistry.UsedBuilding(CampaignTown.OfSite(site), site, key, false, false));
+
+    /// <summary>
+    /// 194 / 218's act-out (159 Talking on the receiver, <c>Task_TalktoPlayer</c> with event 39 SLAVE_DELIVERY): the leader walks to within
+    /// <see cref="CaptiveSettings.ShoutReach"/> of the receiver and says the event; the slaves change hands only through the line the event's
+    /// dialogue says (DA 24, <see cref="GiveSlaves"/>), and the job is done once the leader's dialogue is free again, as the task ends
+    /// (docs/game/ai-tasks.md "Shout"). Nothing while it crouches or lies (row 192's !26). With the event lines off (a headless world without
+    /// dialogue) the leader hands the slaves over itself, as DA 24 would.
     /// </summary>
     bool StepSell(World world, CaptiveJob j, int w, CharacterCold wc)
     {
         var table = world.Characters;
+        if (j.Phase == CaptivePhase.Work) return SaysDelivery(world, j);
         if (world.Squads.Find(wc.SquadId) is not { } squad || !SlavesOf(world, squad).Any() || !table.TryResolveNext(j.Captive, out int r))
             return End(world, j, CaptiveEventKind.GaveUp);
 
-        var to = new Vector2(table.Next[r].Position.X, table.Next[r].Position.Z);
-        if (Vector2.Distance(new Vector2(table.Next[w].Position.X, table.Next[w].Position.Z), to) > Settings.ShoutReach)
-        {
-            if (WalksOwn(table, w, j) && Vector2.Distance(table.Next[w].Goal, to) <= 5) return true;
-            if (!WalksOwn(table, w, j) && Lost(j, IgnoreKey.Of(j.Captive)) || ++j.Walks > Settings.Walks)
-                return End(world, j, CaptiveEventKind.GaveUp);
+        if (!AtReceiver(world, j, w, r, out bool gaveUp)) return !gaveUp || End(world, j, CaptiveEventKind.GaveUp);
+        if (CharacterFacts.CrouchingOrLying(wc)) return true;
 
-            TaskStart.Walk(world, w, to, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
-            return true;
+        TaskStart.Stand(table, w);
+        if (world.SystemOf<Dialogue.DialogueSystem>() is not { Settings.AmbientEvents: true })
+        {
+            GiveSlaves(world, squad, table.Cold(r)!);
+            return End(world, j, null);
         }
 
-        if (CharacterFacts.CrouchingOrLying(wc)) return true;
-        TaskStart.Stand(table, w);
         world.Defer(new Dialogue.DialogueEvent(j.Worker, j.Captive, SlaveDelivery) { Tick = world.Tick + 1 });
-        HandOverSlaves(world, j, squad, table.Cold(r)!);
+        j.Phase = CaptivePhase.Work;
+        j.Time = 0;
+        j.Blows = 0;
+        return true;
+    }
+
+    /// <summary>
+    /// Whether the leader stands within <see cref="CaptiveSettings.ShoutReach"/> of the receiver at <paramref name="r"/>; else it walks there
+    /// (<paramref name="gaveUp"/>: a lost walk, or too many walks).
+    /// </summary>
+    bool AtReceiver(World world, CaptiveJob j, int w, int r, out bool gaveUp)
+    {
+        var table = world.Characters;
+        var to = new Vector2(table.Next[r].Position.X, table.Next[r].Position.Z);
+        gaveUp = false;
+        if (Vector2.Distance(new Vector2(table.Next[w].Position.X, table.Next[w].Position.Z), to) <= Settings.ShoutReach) return true;
+
+        if (WalksOwn(table, w, j) && Vector2.Distance(table.Next[w].Goal, to) <= 5) return false;
+        if (!WalksOwn(table, w, j) && Lost(j, IgnoreKey.Of(j.Captive)) || ++j.Walks > Settings.Walks)
+        {
+            gaveUp = true;
+            return false;
+        }
+
+        TaskStart.Walk(world, w, to, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
+        return false;
+    }
+
+    /// <summary>
+    /// The talk of a Sell job once event 39 went out: the job holds while the leader's dialogue runs (<c>Task_TalktoPlayer</c> ends when the dialogue
+    /// is free) and ends after it, or at once when the event said nothing (the deferred event is in by the job's second step since it went out).
+    /// </summary>
+    bool SaysDelivery(World world, CaptiveJob j)
+    {
+        bool speaking = (_talk ??= world.SystemOf<Dialogue.DialogueSystem>())?.Engages(j.Worker) == true;
+        if (speaking || ++j.Blows < 2) return true;
+
         return End(world, j, null);
     }
 
     /// <summary>
-    /// The handover (<b>engine choice</b>: the original's goes through the event 39 dialogue, and no base-game dialogue answers it): each slave of the
-    /// squad leaves it for a squad of its own, owned by the town's faction and obeying the receiver's squad, and goes into the nearest free cage of
-    /// that faction or an ally in the town.
+    /// <c>DA_GIVE_TARGET_MY_SLAVES</c> (24, <c>FUN_140680560</c>, <b>Verified</b>): each slave on the speaker squad's slave list (<see cref="SlavesOf"/>)
+    /// that is being carried is put down by its carrier first (the carry flag <c>+0x3d4</c> and partner <c>+0x380</c>, then the put-down unlink
+    /// <c>FUN_1405ce1e0</c> on the carrier), then gets the target as its owner (<c>FUN_14032e430</c>): it leaves the old owner's squad's slave list
+    /// for the target squad's (<see cref="CharacterCold.SlaveMaster"/>), and its owner faction is the target's. Nothing else: the slave keeps its
+    /// own squad, its slave state and where it is (no cage), so the receiver's squad's Slave AI Goals take it on (job 187); then the speaker's list is
+    /// cleared. The 5 DA 24 lines of the base data are all under event-39 roots.
     /// </summary>
-    void HandOverSlaves(World world, CaptiveJob j, Squad squad, CharacterCold receiver)
+    public static void GiveSlaves(World world, Squad speaker, CharacterCold target)
     {
         var table = world.Characters;
-        int owner = j.Site < data.SiteFactions.Count && data.SiteFactions[j.Site] >= 0 ? data.SiteFactions[j.Site] : receiver.Faction;
-        foreach (int s in SlavesOf(world, squad).ToList())
+        foreach (int s in SlavesOf(world, speaker).ToList())
         {
-            var sc = table.Cold(s)!;
-            var id = table.IdOf(s);
-            Join(world, id, sc, NewSquad(world, sc, table.Next[s].Position), SquadRole.Leader);
-            FixtureRegistry.Enslave(world, sc, owner, receiver.SquadId);
-            if (FreeCageNear(world, j.Site, owner, table.Next[s].Position) is { } best) world.Fixtures.Imprison(world, id, best);
-            if (Settings.RecordLog) _log.Add(new CaptiveEvent(world.Tick, CaptiveEventKind.Delivered, j.Kind, j.Worker, id));
+            var slave = table.Cold(s)!;
+            if (table.TryResolveNext(slave.CarriedBy, out int carrier)) world.SystemOf<CarrySystem>()?.LetGo(world, carrier);
+
+            FixtureRegistry.Enslave(world, slave, target.Faction, target.SquadId);
         }
-    }
-
-    /// <summary>
-    /// The free cage of <paramref name="owner"/> or an ally in the town <paramref name="site"/> nearest to <paramref name="at"/>, that no job heads
-    /// for; null: none.
-    /// </summary>
-    Fixture? FreeCageNear(World world, int site, int owner, Vector3 at)
-    {
-        Fixture? best = null;
-        float bestD = float.MaxValue;
-        foreach (var f in CagesOf(world, site))
-        {
-            if (f.Owner != owner && !Allied(owner, f.Owner) || !FixtureRegistry.IsFree(world.Characters, f) || Taken(f.Id)) continue;
-
-            float d = Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(f.Position.X, f.Position.Z));
-            if (d < bestD) (best, bestD) = (f, d);
-        }
-
-        return best;
-    }
-
-    /// <summary>
-    /// The live NPC of <paramref name="faction"/> or an ally within <paramref name="radius"/> of the town's <paramref name="centre"/> nearest to the
-    /// leader (the original's designated-building finder, <c>FUN_1408ca950</c>, reduced to its owner hand: <b>engine reading</b>).
-    /// </summary>
-    internal CharacterId? Receiver(World world, int w, int faction, Vector2 centre, float radius)
-    {
-        var table = world.Characters;
-        var at = table.Next[w].Position;
-        int best = -1;
-        float bestD = float.MaxValue;
-        for (int s = 0; s < table.HighWater; s++)
-        {
-            if (s == w || !table.Next[s].Alive || table.Cold(s) is not { IsPlayer: false, SlaveState: not (1 or 2), Medical.Incapacitated: false } c
-                    || c.Faction != faction && !Allied(faction, c.Faction))
-                continue;
-
-            var p = table.Next[s].Position;
-            if (Vector2.Distance(new Vector2(p.X, p.Z), centre) > radius) continue;
-            float d = Vector3.DistanceSquared(at, p);
-            if (d < bestD) (best, bestD) = (s, d);
-        }
-
-        return best < 0 ? null : table.IdOf(best);
-    }
-
-    /// <summary>
-    /// A squad of its own for a handed-over slave (a "Wandering Squad" of its faction, as a slave bought free,
-    /// <see cref="SquadManagement.DismissTemplate"/>).
-    /// </summary>
-    Squad NewSquad(World world, CharacterCold c, Vector3 at)
-    {
-        var template = data.Db.Find(SquadManagement.DismissTemplate);
-        var squad = new Squad
-        {
-            Id = world.Squads.NextId(),
-            TemplateId = template?.StringId ?? SquadManagement.DismissTemplate,
-            Name = template?.Name ?? "",
-            Faction = c.Faction,
-            Position = at,
-            HomeCentre = new Vector2(at.X, at.Z),
-            HomeRadius = 100,
-            SpawnSize = 1,
-        };
-        world.Squads.Add(squad);
-        return squad;
-    }
-
-    /// <summary>
-    /// Moves a character into <paramref name="squad"/> in <paramref name="role"/>; its AI mind is made again for the new squad at the AI's next
-    /// schedule step.
-    /// </summary>
-    static void Join(World world, CharacterId id, CharacterCold c, Squad squad, SquadRole role)
-    {
-        if (world.Squads.Find(c.SquadId) is { } old)
-        {
-            old.Members.Remove(id);
-            if (old.Leader == id) old.Leader = SquadRegistry.Successor(old.Members, world.Characters);
-        }
-
-        c.SquadId = squad.Id;
-        c.Role = (int)role;
-        c.Ai = null;
-        c.Kidnapped = false;
-        squad.Members.Add(id);
-        if (squad.Leader.IsNone || role == SquadRole.Leader) squad.Leader = id;
     }
 }

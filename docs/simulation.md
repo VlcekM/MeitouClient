@@ -1618,10 +1618,12 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   **Observed** (KenshiOracle hold, Rebirth, 2026-11-09): the original's gathered slaves keep their squads all hour (Pao 40, Mu 44).
   **Observed** (probe): the Slave Farm's workmasters take the caged slaves out by day; at night their slaves' 172 puts them back.
 - **Deliver** (192, the squad leader under a shipping package): its plan's 53 is the travel task (`TownTravel.StepGoal`, [town goals](game/ai-tasks.md#town-goals)): to the squad's town (the shipping package's mission town) by its waypoint at the functor's pace, done once state 36 holds; a walk with no path to the town is a lost walk. **Sell** (194,
-  or 218 in a prison or slave camp): the finder (`FUN_1408ca950`, **Verified**) takes the nearest (to the leader) NPC of the faction of the town the leader stands in,
-  or an ally, within the town's radius, and keeps it; none, the goal is unwanted. The leader walks within 40 of it and says event 39 (row 159). Each of its slaves then
-  leaves for a "Wandering Squad" of its own, owned by the town's faction, caged in the nearest free cage of that faction or an ally (engine: the original's handover is a
-  dialogue for event 39).
+  or 218 in a prison or slave camp): the finder (`FUN_1408ca950`, **Verified**) picks at random a slave pen (a house of designation 10 in the 3x3 zone cells round the
+  leader, of the town it stands in, not ignored, of its faction or one it may use, `FUN_1408ca5d0`) and takes its owner squad's effective leader; none, the goal is
+  unwanted. The leader walks up and says event 39 SLAVE_DELIVERY (row 159); the job ends once its dialogue is free. The base data answers it (`slave delivery`, package
+  `slaver guard MAIN`), and its line's DA 24 hands the slaves over ([dialogue](game/dialogue.md#effects)): no squad change, no cage. **Observed** (probe, Slave Hunters
+  at Stone Camp): the receiver's line ran DA 24 and the slave's master became the pen keeper's squad. Captives the carriers cage first (112) already belong to the
+  cage owner's squad (`FUN_140330600`), so most of a haul changes hands before 194.
 - **Get in the cage** (172, a Slave AI Goal): a slave not held walks to the nearest free cage of its owner's faction in the 3x3 zone cells round it, in any town, and gets in.
 - **Packages** (`PackageClass` 8 to 11, rules in `AiSystem.Captives.cs` as the facts): cannibal retreat (1, 25; it ends when the effective leader's status town is of the squad's faction, so a wiped
   squad keeps it), cannibals at home (27), prisoner gathering (10, 24), slave shipping (11, 28); the cannibal patrol (4) does not start while the town's cages
