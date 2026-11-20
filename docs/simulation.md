@@ -2011,7 +2011,9 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
   - The list is reordered by dragging a row (`MoveJob`).
   - Jobs on characters: the Medic and Rescue buttons (H, J) start one look for a patient or body, with Shift they add 58 / 148 (+ 106); Shift with
     the First Aid, Splint Injuries, attack or Loot verb (context menu or quick order) adds the job the order becomes (`AddOrderJob`: 58, or 57 on a
-    robot, 250, 16, 238). Each is the decision step's (switch on unless the type ignores it), the first in list order that finds a target:
+    robot, 250, 16, 238). An NPC of a robot race (a person, not of the player's faction) is made with 57 in its list (`CharacterAssembly.GiveRoboticsJob`,
+    [order givers](game/ai-tasks.md#order-givers): CharacterHuman's slot 111 `FUN_14062ef70`), new or loaded. Each is the decision step's (switch on unless
+    the type ignores it), the first in list order that finds a target:
     - 58 Medic / 57 Robotics (`FirstAidSystem.FindPatient`) and 250 Splint Rigging (`FindSplint`): the original's finders
       ([medic jobs](game/ai-tasks.md#medic-jobs)) over characters within sight (stand-in for the sensed list): score = need (untreated HP for
       the kits it has) × relation factor × nearness (1 - d²/1843²); the medic itself scores its need. 58 skips robot races. Splinting takes
