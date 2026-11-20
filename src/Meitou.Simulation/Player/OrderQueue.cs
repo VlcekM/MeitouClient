@@ -203,6 +203,11 @@ public sealed class OrderEntry(TaskType row, IOrderOwner owner)
     /// </summary>
     public bool RowRuns { get; internal set; }
     /// <summary>
+    /// A second-list entry whose task ended done (<b>engine</b>: the original keeps the entry, and a row with no list A, a body order, would be
+    /// picked again at once): it scores 0 until the list is cleared.
+    /// </summary>
+    public bool Spent { get; internal set; }
+    /// <summary>
     /// An engine act on the character's body (getting up, stumbling, getting out of bed, <see cref="Combat.BodyOrders"/>): its start lets no duty
     /// go (<see cref="IDutyRelease"/>), as the original's goals are planned again once it is over.
     /// </summary>
@@ -592,6 +597,7 @@ public static class PlayerOrders
     /// </summary>
     internal static void Ending(World world, int slot, TaskEnd reason)
     {
+        if (reason == TaskEnd.Done && RunningSecond(world, slot) is { } second) second.Spent = true;
         if (reason == TaskEnd.Replaced) return;
         var q = world.Characters.Cold(slot)!.OrderQueue;
         if (q.Front is not { } front || !Runs(world, slot, front)) return;
@@ -752,6 +758,32 @@ public static class PlayerOrders
         entry.Started = entry.Tried = true;
         entry.RowRuns = ListTests.OrderNeedsFailNow(world, slot, entry) == false;
         entry.Owner.Start(world, slot, entry);
+    }
+
+    /// <summary>
+    /// The second-list entry that runs the character's task, if one does; a pure read.
+    /// </summary>
+    internal static OrderEntry? RunningSecond(World world, int slot)
+    {
+        foreach (var e in world.Characters.Cold(slot)!.SecondList)
+            if (Runs(world, slot, e)) return e;
+
+        return null;
+    }
+
+    /// <summary>
+    /// The plan step on a running second-list entry, as on a running front (<see cref="Step"/>): its task ends when its row is done or its list B
+    /// fails, a move's walk going on; the entry stays in the list, spent. False when it goes on.
+    /// </summary>
+    internal static bool EndSecond(World world, int slot, OrderEntry entry)
+    {
+        bool ends = ListTests.OrderDone(world, slot, entry, true) || RowEnds(world, slot, entry);
+        if (!ends) return false;
+
+        entry.Spent = true;
+        if (!entry.IsMove) TaskStart.End(world, slot, TaskEnd.Done);
+        entry.Started = false;
+        return true;
     }
 
     /// <summary>

@@ -447,8 +447,8 @@ public sealed class DecisionSystem
     /// <summary>
     /// Whether the think's turn asks the chooser again (<b>engine</b>: no periodic replan was found in the original, but Meitou's idleness and job
     /// tasks do not end where the original's plans do): any character but the player's; a player character whose task the priority-3 goals come
-    /// before (<see cref="GoalsComeFirst"/>), or whose front order runs its task, which the original's order step tests on every AI update (its
-    /// list A, <see cref="ListTests.OrderDone"/>), or that its chooser's goal holds (<see cref="AiMind.Goal"/> of a player-faction mind: its
+    /// before (<see cref="GoalsComeFirst"/>), or whose front order or second-list entry runs its task, which the original's order step tests on
+    /// every AI update (its list A, <see cref="ListTests.OrderDone"/>), or that its chooser's goal holds (<see cref="AiMind.Goal"/> of a player-faction mind: its
     /// chooser turns as an NPC's, so an urgent job or a higher goal can end the goal and its plan steps run). Not one in a fight or on another plan's
     /// task: those end by their own rules or a replan.
     /// </summary>
@@ -456,6 +456,7 @@ public sealed class DecisionSystem
     {
         if (!Decides(cold) || GoalsComeFirst(world.Characters, slot, cold)) return true;
         if (cold.Ai is { PlayerSide: true, Goal: not null }) return true;
+        if (cold.SecondList.Count > 0 && PlayerOrders.RunningSecond(world, slot) is not null) return true;
 
         return cold.OrderQueue.Front is { Started: true } front && PlayerOrders.Runs(world, slot, front);
     }
@@ -475,7 +476,8 @@ public sealed class DecisionSystem
     /// <summary>
     /// Scores the second list's entries for the think's rung 3 (<c>FUN_14050df10</c> over <c>+0x70</c>): an entry that runs the character's task, or
     /// can start and is not done (its row's list A, effect and finished test, <see cref="ListTests.OrderDone"/>), scores its desire
-    /// (<see cref="OrderDesire"/>) x weight 1 (the loader's), as a goal source does; one whose task ended is no longer started.
+    /// (<see cref="OrderDesire"/>) x weight 1 (the loader's), as a goal source does; one whose task ended is no longer started. The plan step
+    /// ends a running entry's task as a front's (<see cref="PlayerOrders.EndSecond"/>).
     /// </summary>
     void LookSecond(World world, int slot, CharacterCold cold, ChooserRow row)
     {
@@ -487,8 +489,9 @@ public sealed class DecisionSystem
             var entry = list[k];
             var check = PlayerOrders.SecondCheck(world, slot, entry);
             if (entry.Started && !check.Running) entry.Started = false;
+            if (check.Running && PlayerOrders.EndSecond(world, slot, entry)) check = PlayerOrders.SecondCheck(world, slot, entry);
 
-            bool done = !check.Running && ListTests.OrderDone(world, slot, entry, false);
+            bool done = entry.Spent || !check.Running && ListTests.OrderDone(world, slot, entry, false);
             float desire = check.Can && !done ? OrderDesire.Of(world, slot, entry) ?? 1 : 0;   // a row with no TaskData row (54 Rest) is wanted
             row.SecondScores[k] = desire > 0 ? SecondScore(world, slot, desire, check) : 0;
             if (Tracing) _lines.Add($"3 second list [{k}] {(int)entry.Row}: {(done ? "done" : Verdict(check, row.SecondScores[k]))}");

@@ -1150,7 +1150,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
      31 Staying close for STAY_CLOSE (1), and idleness for ROAM_FAR (2, the default). The Hold toggle (standing order 12) does not touch it. Nothing else writes it: the
      constructor leaves it null and neither spawning nor `setupAI` sets it, and while it is null the pick skips its slot (`FUN_140510650` needs a candidate) and the mover
      reset follows. 31 and 30 are made at priority 2, weight 1.0, with the AI's repertoire (none outside it), on the order's point or target: 31 is `Task_Follow`
-     (factory `FUN_14032ebd0`, case 0x1f), whose update does nothing without a target, so NEAR's 31 at a point stands; 30 is `Task_Blank` with the effect
+     (factory `FUN_14032ebd0`, case 0x1f), whose update (slot 2 `FUN_14033b350`) returns at once without a target, so NEAR's 31 at a point stands; 30 is `Task_Blank` with the effect
      isAtLocation, so it walks back to the point and stands. FAR and NEAR first reset it to 14 (`FUN_140596680`, vfunc 4 with none). Neither the mode nor the slot is
      saved: the character loader `FUN_140627b30` reads the AI record through `AITaskSytem` slot 2 (`FUN_1405092d0`) only, `FUN_140626f50` replays the standing
      orders 11, 12, 13, 14, 15 and 17 only, and `AI::AI` sets ROAM_FAR, so a loaded character is ROAM_FAR with an empty slot until its next order; an NPC is always

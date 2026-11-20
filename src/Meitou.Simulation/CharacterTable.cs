@@ -1916,6 +1916,7 @@ public sealed class CharacterTable
         {
             hasher.Add((int)e.Row);
             hasher.Add(e.Started);
+            hasher.Add(e.Spent);
             hasher.Add(e.Target);
             hasher.Add(e.Site is { } site ? Rng.StableHash(site) : 0UL);
             hasher.Add(e.Point);
