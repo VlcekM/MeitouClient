@@ -1494,7 +1494,7 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
     `FUN_140358670`), with the relation event and the bounty claim. A cage taken or a lost walk (the cage ignored for 20 s, which the cage finder skips: `FUN_1408d0770` asks `FUN_1405b0290`) end the goal with
     the body on the shoulder. **Observed** (#314 save): a Sho-Battai police guard loaded carrying a raider cages it.
   - **274** (plan `[274]`, list A 164) and **224** (plan `[224]`, list A 137): desire 2.0 unless the carrier regards the body as friendly (`FUN_1405a13a0`, **Verified**; no
-    town, animal or death test). 274 walks to its town's exit point (`TownExit`: 200 outward from the first gate outside the walls or wall with an interior, the same for every
+    town, animal or death test). 274 walks to its town's exit point (`TownExit`: 200 outward from the first gate outside the walls or wall with an interior of its gate set, the same for every
     carrier, **Verified** `FUN_140927120`), 224 to the point past the home's first door (`AiSystem.LeavePoint`; a home with no door: its town's exit point, **Verified**
     `FUN_140335480`; **Observed**, original 1.0.65, #1024 save: the thrall put the body down at 105525, 125662, Meitou's exit point is 105520, 125641). States 164
     INTRUDER_IS_OUTSIDE_GATES (`FUN_140598fa0`) and 137 INTRUDER_IS_OUTSIDE (`FUN_140598ef0`), **Verified**: true with no intruder or a friendly one, false while the asker carries

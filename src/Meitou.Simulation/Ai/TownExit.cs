@@ -8,10 +8,13 @@ namespace Meitou.Simulation.Ai;
 
 /// <summary>
 /// A town's point outside its gates (<c>Town::getPositionOutsideTownGates(dist)</c>, <c>FUN_140927120</c> over <c>FUN_140929560</c>,
-/// docs/game/factions-squads-towns.md): the first of the town's buildings, in list order, that is a gate outside the walls (gate code 0) or a wall
-/// with an interior, moved <see cref="Offset"/> outward from the town's position; the town's position when there is none. It takes only the town, so
+/// docs/game/factions-squads-towns.md): the first of the town's gate set (its <c>is gateway</c> buildings, <see cref="TownBuilding.IsGateway"/>; Town
+/// <c>+0x390</c>, which <c>FUN_140929560</c> walks), in list order, that is a gate outside the walls (gate code 0) or a wall with an interior, moved
+/// <see cref="Offset"/> outward from the town's position; the town's position when there is none. It takes only the town, so
 /// every walker is given the same point (<b>Verified</b>; no walkability test anywhere, and the original's cache of the point is <b>Unknown</b>, not
-/// modelled). The patrols and the throwing out of an intruder (274) use it.
+/// modelled). The patrols, the throwing out of an intruder (274), the travel rows 53 / 130, the war point and the homeward walks use it; for a town
+/// without gates the original's waypoint (Town <c>+0x38</c>) is the door point of the building under its position, for which the town's position
+/// stands (engine reading).
 /// </summary>
 public static class TownExit
 {
@@ -29,11 +32,23 @@ public static class TownExit
         var centre = new Vector2(town.Position.X, town.Position.Z);
         foreach (var b in town.Buildings)
         {
-            bool gate = b.IsGate && !(destroyed?.Invoke(b) ?? b.Destroyed) && !(regions?.CodeAt(b.Position) > 0);
-            if (gate || b.IsWall && b.HasInterior) return Away(centre, new Vector2(b.Position.X, b.Position.Z));
+            if (!b.IsGateway || !Qualifies(b, regions, destroyed)) continue;
+
+            return Away(centre, new Vector2(b.Position.X, b.Position.Z));
         }
 
         return centre;
+    }
+
+    /// <summary>
+    /// Whether a building of the gate set gives the point (<c>FUN_140929560</c>, <b>Verified</b>): a gate (a GatewayBuilding, Building slot 123) only
+    /// outside the walls and with a door (a ruin has none), never as a wall; any other building when it is a wall with an interior.
+    /// </summary>
+    static bool Qualifies(TownBuilding b, IGateRegions? regions, Func<TownBuilding, bool>? destroyed)
+    {
+        if (b.IsGate) return !(destroyed?.Invoke(b) ?? b.Destroyed) && !(regions?.CodeAt(b.Position) > 0);
+
+        return b.IsWall && b.HasInterior;
     }
 
     /// <summary>
@@ -101,18 +116,20 @@ public static class TownExit
     }
 
     /// <summary>
-    /// The player town's complete buildings as exit candidates: each one's point and whether it is a way through (an unlocked gate, or a linking
-    /// building with an interior).
+    /// The player town's complete buildings of its gate set (<c>is gateway</c>) as exit candidates: each one's point and whether it gives the point
+    /// (a gate outside the walls; any other a linking building with an interior).
     /// </summary>
     static IEnumerable<(Vector2, bool)> PlayerExits(World world, PopulationData data, IGateRegions? regions, CampaignTown town,
         Dictionary<string, GameRecord?> cache)
     {
         foreach (var site in world.Buildings.All)
         {
-            if (site.Town != town.PlayerTown || !site.Complete || data.Db.Find(site.Record) is not { } r) continue;
+            if (site.Town != town.PlayerTown || !site.Complete || data.Db.Find(site.Record) is not { } r || !r.GetBool("is gateway")) continue;
 
-            bool gate = TownBuildings.IsGate(data.Db, r, cache) && !(regions?.CodeAt(site.Position) > 0);
-            yield return (Flat(site.Position), gate || r.GetBool("links together") && r.GetReferences("interior").Count > 0);
+            bool qualifies = TownBuildings.IsGate(data.Db, r, cache)
+                ? !(regions?.CodeAt(site.Position) > 0)
+                : r.GetBool("links together") && r.GetReferences("interior").Count > 0;
+            yield return (Flat(site.Position), qualifies);
         }
     }
 

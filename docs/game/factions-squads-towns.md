@@ -816,15 +816,19 @@ Meitou: [ground items](../simulation.md#items-and-eating).
      `getPositionForWaypoint` (`TownBase`, `FUN_140927120`, vtable +0x38) is the target. Else a placed spot in that sector
      (`FUN_1408f50d0`); with no neighbour, `FUN_1408fc1a0` takes the first active sector of the group (no town flag, fewer than 2
      excluded platoons) where a spot is placed, else a random sector of the group; it ignores the tether.
-  **The town waypoint is outside the town** (**Verified**, decompile): `getPositionForWaypoint` caches its point (`TownPositionCacher`,
-  Town +0xc0) and, for a town with a building list (vtable +0x2f0: Town +0x3b0 set), takes `Town::getPositionOutsideTownGates(200)`
-  (`FUN_140929560`): one pass over the building list, returning at the first entry that is either a gateway (`isGate`) with
+  **The town waypoint is outside the town gates** (**Verified**, decompile): `getPositionForWaypoint` (Town vtable +0x38, `FUN_140927120`) caches its point
+  (`TownPositionCacher`, Town +0xc0) and, for a town with gates (vtable +0x2f0 `hasGates`: its gate set Town +0x390 is not empty), takes
+  `Town::getPositionOutsideTownGates(200)` (vtable +0x290, `FUN_140929560`): one pass over the gate set (the `is gateway` buildings only,
+  [dialogue](dialogue.md#conditions) DC 49), returning at the first entry that is either a gateway (`isGate`, Building slot 123) with
   `amInsideTownWalls` 0 and a door (`getDoor`), whose door point +0x3bc is moved 200 along a normalised direction (its origin is dropped
-  by the decompile; outward from the town is **Observed** from the name), or a wall (`isAWall`) whose BUILDING record has `interior` references (`myInterior` +0x1f0, created only then by `Building::setup` `FUN_140551b20`; **Verified**, decompile), whose position
-  is moved the same way; neither: the town position. Meitou: `TownExit` serves the patrols and the intruder errand 274 (`TownDutySystem.Outside`; placed towns by their level buildings, a player town by its complete sites). A town without buildings: a door point of the object under the town position
-  (`FUN_1409b2ab0`, a ray from 1000 above), else the position. So bandits never aim inside a walled town, the Hub included (its two
-  `Defensive Gate IV` are ruins in the level data; a ruin has no door ([locks](locks.md#doors)), so the wall branch applies, skipping the first wall, a `Defensive Wall IV Connector` without `interior`; **Observed**).
-  The point still lies within the town radius (2500), so the squad counts as in the town and its loot goals walk it in through the ruined gates (**Observed**, headless, Rebirth save: Dust Bandit roamers at the Hub's west gate run LOOT_THE_DEAD inside the walls).
+  by the decompile; outward from the town is **Observed** from the name), or another building that is a wall (`isAWall`) whose BUILDING record has `interior` references (`myInterior` +0x1f0, created only then by `Building::setup` `FUN_140551b20`), whose position
+  is moved the same way; a gateway inside the walls or without a door (a ruin, [locks](locks.md#doors)) is passed over, never taken as a wall; neither: the town position. A town without gates: a door point of the object under the town position
+  (`FUN_1409b2ab0`, a ray from 1000 above), else the position. So the Hub, whose gate set holds only its two ruined `Defensive Gate IV`, gives its town position,
+  and Skinhouse HQ, which has no gateway building (its first wall with an interior, a `Defensive Wall IV` 3700 from its centre, is none), takes the gateless branch
+  (**Verified**, the data).
+  Meitou: `TownExit` (Town +0x38 and +0x290 alike: the patrols, the intruder errand 274, the travel rows 53 / 130, the war point and the homeward walks; placed towns by
+  their level buildings in list order, a player town by its complete sites; engine readings: list order for the set's, and the town position for the door point of a
+  town without gates).
   The move: `CharMovement::setPatrolInput` (`FUN_14065eaa0`, vtable +0xa0) in mode 3 (a `PatrolInfo` with a biome group) draws the point
   above and sends the character to it exactly; it redraws (up to 10 times) only a point whose ground is present and below 95 when the
   byte at +0x79 of the object at Character +0x2e0 is set (a race flag, water below 95: **Observed**), else accepts it (**Verified**). The
@@ -914,10 +918,10 @@ to now + 6 h and, only if the faction has no active campaign and no pending requ
 
 **Start** (`FUN_1409c9830`): home missing or disabled → the nearest own town to the target. Required men = int(`num forces` ×
 `raidSizeMult`) (**Verified** by disassembly). Gathering stops once men > required (each platoon adds its living members):
-1. the `special leader`'s platoon, taken as leader without any eligibility test (**Verified**, `FUN_1409c5040` / join `FUN_1409c4720`: it only returns when the platoon is already in this campaign; the free-platoon passes below do test); if not spawned, the squad template naming it `leader`, made 700 outward through the first gate or wall with an interior (Town vfunc 0x290 with 700, `TownExit`'s rule) of the first of the faction's 4 own towns nearest the campaign's start (`FUN_140943880`), or by the sector spawn helper `FUN_1408f50d0` when the faction has no town (**Verified**);
+1. the `special leader`'s platoon, taken as leader without any eligibility test (**Verified**, `FUN_1409c5040` / join `FUN_1409c4720`: it only returns when the platoon is already in this campaign; the free-platoon passes below do test); if not spawned, the squad template naming it `leader`, made 700 outward through the first gate or wall with an interior of its gate set (Town vfunc 0x290 with 700, `TownExit`'s rule) of the first of the faction's 4 own towns nearest the campaign's start (`FUN_140943880`), or by the sector spawn helper `FUN_1408f50d0` when the faction has no town (**Verified**);
 2. the faction's free, idle, intact homeless platoons (of a `squads to use` template when the list is set);
 3. for each of the 4 own towns nearest the target: such platoons homed there, then new squads drawn from `squads to use` by val0, made 700
-   outward through the town's first gate or wall with an interior (the town's position without one), or at the leader platoon's position once the campaign has a
+   outward through the first gate or wall with an interior of the town's gate set (the town's position without one), or at the leader platoon's position once the campaign has a
    leader, the spot without a leader snapped by the sector spawn helper `FUN_1408f50d0` (`FUN_1409c4150`, **Verified**); up to 100 tries per town; none when the
    list is empty. No rally point or phase: the travel packages start at once and the followers converge on the leader (`GatherAndMove`'s update `FUN_1409d66d0`).
    Meitou (`DraftNewSquad`, `NewSquad`): a walkable point within 700 of the town's centre, or of the leader platoon (engine stand-in).
@@ -1014,8 +1018,9 @@ campaign is not hostile, or that is not active (slot 70); a redirected request d
   walks; its task is done when its movement arrives, and it is finished at once for the campaign leader (`FUN_140349de0`), so the scorer drops it once
   131 holds; a follower's never finishes on its own. Speed modes: WALK default, JOG 55, RUN and GROUPED 999 (no cap), NO_SPEED_CHANGE unchanged.
   The campaign leader's package target is the campaign's town, so it walks to the town's waypoint point (Town vfunc 0x38, `FUN_140927120`, cached
-  on a timer): for a town with gates 200 outward through its first gate or wall with an interior (vfunc 0x290 with 200, `TownExit`), else 3 × (A − B)
-  beyond the first door of the building `FUN_1409b2ab0` finds at the town's position, else the town's position. A follower platoon's mission target is
+  on a timer, [the town waypoint](#off-screen-world)): for a town with gates 200 outward through the first entry of its gate set that is a gate outside the walls or a
+  wall with an interior (vfunc 0x290 with 200, `TownExit`), else 3 × (A − B) beyond the first door of the building `FUN_1409b2ab0` finds at the town's position,
+  else the town's position. A follower platoon's mission target is
   the leader platoon's own hand with a zero point (`FUN_1409d5020`), which the war class's mission-target slot pairs with its trail point
   (`FUN_14028fb10`); the hand resolver (`FUN_140284510`) finds a kind-0x22 hand through the platoon list and refuses a platoon for kind 1
   (**Verified**). The war start copies that hand once, and the platoon is not saved with it: a load runs the start again (`FUN_140272c20` installs the

@@ -314,6 +314,7 @@ sealed class TownPlaceIndex(PopulationData data)
             Zone = site.Zone,
             Function = function,
             IsGate = data.Db.Find(site.Record)?.GetBool("is wall gate") == true,
+            IsGateway = data.Db.Find(site.Record)?.GetBool("is gateway") == true,
         };
     }
 
