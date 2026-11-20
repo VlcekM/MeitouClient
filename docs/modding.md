@@ -931,12 +931,13 @@ holds refuses the second mod.
 - **Chooser goals and jobs** (`Meitou.Simulation.Ai`, [rules](simulation.md#engine-goals) "Code mods' goals"; **Observed**, by reading
   `ChooserRegistry`, `ModGoal`, `DutyGoals` and `AiSystem`): `AddGoalType(type, name)` and `AddJobType(type, name)` claim task type numbers from
   1000 up, one owning mod per number across both (a mod may claim one number as both, so it can be its goal type and its act-out's row); `name`
-  is for log lines, notices and the HUD. A registered system implementing `IChooserOwner` gets `Register(ChooserRegistry)` once when the world is
+  is for log lines and notices (the HUD's Goal line shows the AI_TASK record's name). A registered system implementing `IChooserOwner` gets `Register(ChooserRegistry)` once when the world is
   made, in system order, and calls `Goal(type, IModGoal)` for a goal type and `Jobs(type, IJobSource)` for a job type its mod claimed. A type not
   claimed, another mod's or registered twice, or a call outside `Register`, throws, and a throw drops everything that system registered, with a
   log line, and stops the system (Tick systems above). A system added later (`World.AddSystem`) registers job contributors only.
-  - **Who weighs a goal:** a character whose lists hold an AI_TASK of that `enum`: an NPC's running package role list, its race's `AI Goals` or
-    the slave list of the squad it obeys; a player character's own `AI Goals` and its autonomous squad's package roles. It is weighed beside the
+  - **Who weighs a goal:** a character whose lists hold an AI_TASK of that `enum`: an NPC's running package role list, its race's `AI Goals`, its
+    faction's `AI Goals` while its squad runs no contract, or the slave list of the squad it obeys; a player character's faction's `AI Goals`
+    (an animal's race's too) and its autonomous squad's package roles (`AiSystem.OwnGoals`, `PlayerOwnGoals`). It is weighed beside the
     engine's goals by the record's tier (`classification`) and hours, the list's weight and the running goal's continuity (x1.25); the type has no
     commitment or crowding. Without the code mod the goal is inert.
   - **`Desire(in ModGoalAsk ask)`** is the whole desire (0 or below: not wanted), asked in parallel with other characters' asks, on the
@@ -1139,7 +1140,7 @@ difference it runs the game without mods: if that differs too, the fault is the 
   parallel loop's `AggregateException`): at load (its types, its `IMod`, `Initialize`, its data phase), in a system factory, or at the first
   call that uses it: a system phase, a task handler, a registration, `IWorldReady`, a goal, a job contributor, an observer or filter, a combat
   move, an item use, a dialogue code, a wear rule or look hook, a hit feed, a faction list arranger, a key action, a debug row, a setting, its
-  save data, an interface extension's registration. The mod gets one notice for the session, `Mod <name> was built for another version of the
+  save data, an interface extension's registration. The mod gets one notice for the session, `Mod <id> was built for another version of the
   game and needs an update; it is stopped and the rest of the game goes on.` (`CodeModFaults.Tell`), in place of the fault's own notice; what
   faulted is refused, stopped, dropped or skipped by its own rule, and the game runs on (**Observed**, by reading `CodeModFaults.Tell` and its
   callers).
