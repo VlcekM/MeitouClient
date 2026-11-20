@@ -85,11 +85,6 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     public const int PickupUnits = 2;
 
     /// <summary>
-    /// Loose materials are looked for within this far of the builder (<b>Verified</b>, <c>FUN_14059d000</c>).
-    /// </summary>
-    public const float GroundRadius = 1200;
-
-    /// <summary>
     /// Buildings holding materials count within this squared distance of the builder (about 6517; <b>Verified</b>, <c>FUN_14059d000</c>: the AI's
     /// default range mode 2, docs/game/buildings-production.md "Material delivery").
     /// </summary>
@@ -1332,11 +1327,6 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     public const float UnreachableSeconds = 20;
 
     /// <summary>
-    /// The unreachable-target key of a loose item.
-    /// </summary>
-    static string ItemKey(int id) => "item:" + id;
-
-    /// <summary>
     /// The path of a worker ended short of its target (<c>FUN_14059c6d0</c>, "Task impossible: X can't get to Y"): the site, or the loose item it
     /// fetches, is ignored for <see cref="UnreachableSeconds"/> (readers: <see cref="EngineerSite"/>, <see cref="Source"/>). A fetcher of a loose
     /// item goes back to its site, which picks another source. True when the worker left its goal.
@@ -1344,7 +1334,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     bool NoteUnreachable(World world, int slot, CharacterCold cold, BuildSite site)
     {
         bool fetch = world.Characters.Next[slot].Task == (byte)CharacterTask.FetchMaterials;
-        string? key = !fetch ? site.Id : cold.FetchItem is { } item ? ItemKey(item) : null;
+        string? key = !fetch ? site.Id : cold.FetchItem is { } item ? LooseSource.Key(item) : null;
         if (key is null) return false;
         cold.NoteUnreachable(key, world.Tick + (long)MathF.Ceiling(UnreachableSeconds / world.TickSeconds));
         if (!fetch) return false;
@@ -1734,12 +1724,11 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// <summary>
     /// The material finder (<b>Verified</b>, the 115 "Finding building mats" target finder <c>FUN_1405a2a60</c> -> <c>FUN_14059d000</c>;
     /// docs/game/buildings-production.md "Material delivery"): for each material still owed, in the site's order, the first that has a source wins: a
-    /// loose item of it within <see cref="GroundRadius"/> of the builder, else the nearest player storage holding it within
-    /// <see cref="SourceRangeSquared"/>, else the nearest player machine whose output holds it. The buildings are those of the builder's town
-    /// (<see cref="FixtureRegistry.TownCandidates"/>). Engine choices: the nearest loose item (the original takes the first its grid search meets),
-    /// no per-material memory of the last source (the original's is a cache emptied at each AI update, so it changes no answer), the exact record
-    /// (the original also lets any record of the same type stand in for a non-ITEM material). A loose item must pass the ownership test
-    /// (<see cref="ItemOwnership.MayTake"/>, <c>FUN_140997d80</c>).
+    /// loose item of it (<see cref="LooseSource.Nearest"/>), else the nearest player storage holding it within <see cref="SourceRangeSquared"/>,
+    /// else the nearest player machine whose output holds it. The buildings are those of the builder's town
+    /// (<see cref="FixtureRegistry.TownCandidates"/>). Engine choices: no per-material memory of the last source (the original's is a cache emptied
+    /// at each AI update, so it changes no answer), the exact record (the original also lets any record of the same type stand in for a non-ITEM
+    /// material).
     /// </summary>
     MaterialSource? Source(World world, int slot, CharacterCold cold, BuildSite site)
     {
@@ -1752,19 +1741,8 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         {
             if (material.Required <= material.Delivered) continue;
             string want = material.Item;
-            int? loose = null;
-            float best = GroundRadius * GroundRadius;
-            foreach (var g in world.GroundItems.All)
-            {
-                if (IsUnreachable(world, cold, ItemKey(g.Id))) continue;   // before the ownership test (FUN_14059d000)
-                if (g.Item.Record != want || g.Item.Quantity <= 0 || g.Item.Contents is not null || !ItemOwnership.MayTake(world, data, cold, at, g))
-                    continue;
+            if (LooseSource.Nearest(world, data, cold, at, want) is { } loose) return new MaterialSource(null, loose.Id, want);
 
-                float d = Vector3.DistanceSquared(g.Position, at);
-                if (d <= best && (loose is null || d < best)) (loose, best) = (g.Id, d);
-            }
-
-            if (loose is not null) return new MaterialSource(null, loose, want);
             string? store = null, machine = null;
             float storeGap = float.MaxValue, machineGap = float.MaxValue;
             foreach (var m in world.Machines.All)

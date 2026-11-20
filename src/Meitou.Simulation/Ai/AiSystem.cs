@@ -2268,6 +2268,14 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 mind.DitchRequest = true;
                 Become(world, slot, CharacterTask.Idle);
                 return false;
+            case TaskType.MoveOnFreeWill or TaskType.MoveOnFreeWillFast or TaskType.CollectOutputResource when IsFetchStep(mind.Plan[0]):
+                // Step 92 from row 94's loose item or storage, and the walk to it: the town duty system walks there and takes the item while the step
+                // runs (RunsFetchStep), then the AI plans again. Its walk or pick-up under way goes on.
+                if (Kidnap.TownDutySystem.Fetches(table.Next[slot], table.Cold(slot)!)) return false;
+
+                mind.FetchRequest = true;
+                Become(world, slot, CharacterTask.Idle);
+                return false;
             case TaskType.UnlockDoor or TaskType.UnlockDoorHere or TaskType.BashDoor or TaskType.BashDoorHere or TaskType.PickLock
                 or TaskType.CutLock:
                 // A way through a locked door (TakeDoorStep): the lock system works it while the step runs; one it dropped or failed is over.

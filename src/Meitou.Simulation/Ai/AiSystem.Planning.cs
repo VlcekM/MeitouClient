@@ -48,6 +48,49 @@ public sealed partial class AiSystem
         step.Type is TaskType.MoveOnFreeWill or TaskType.MoveOnFreeWillFast or TaskType.FillMachine && step.Target.Kind == Targets.Store;
 
     /// <summary>
+    /// Whether the kept plan runs its fetch step now: 92 Collecting resource, or the walk to it, on a loose item or a storage (row 94's
+    /// <see cref="Targets.Loose"/> and <see cref="Targets.Supply"/> sources). The town duty system walks it there and takes the item while it does
+    /// (<see cref="AiMind.FetchRequest"/>).
+    /// </summary>
+    internal static bool RunsFetchStep(CharacterCold cold) => FetchStepOf(cold) is not null;
+
+    /// <summary>
+    /// The source the kept plan's fetch step works on (<see cref="RunsFetchStep"/>): <see cref="PlanTarget.Item"/> a loose item's, else
+    /// <see cref="PlanTarget.Fixture"/> the storage's id; null when it runs none.
+    /// </summary>
+    internal static PlanTarget? FetchStepOf(CharacterCold cold) => cold.Ai is { Plan: [var step, ..] } && IsFetchStep(step) ? step.Target : null;
+
+    /// <summary>
+    /// Whether a plan step is the fetch's (<see cref="RunsFetchStep"/>).
+    /// </summary>
+    static bool IsFetchStep(in PlanStep step) => step.Type is TaskType.MoveOnFreeWill or TaskType.MoveOnFreeWillFast or TaskType.CollectOutputResource
+        && step.Target.Kind is Targets.Loose or Targets.Supply;
+
+    /// <summary>
+    /// The fetch took its item (serial, <see cref="Kidnap.TownDutySystem"/>): the fetch steps leave the kept plan's front, as the original's queue
+    /// moves on when the walk and then the take end.
+    /// </summary>
+    internal static void FetchDone(CharacterCold cold)
+    {
+        if (cold.Ai is not { } mind) return;
+
+        while (mind.Plan.Count > 1 && IsFetchStep(mind.Plan[0])) mind.Plan.RemoveAt(0);
+    }
+
+    /// <summary>
+    /// Where the machine stands that the kept plan fills after its fetch (its step 93 on a work target); null with none.
+    /// </summary>
+    internal static Vector3? FillTargetOf(CharacterCold cold)
+    {
+        if (cold.Ai is not { } mind) return null;
+
+        foreach (var step in mind.Plan)
+            if (step.Type == TaskType.FillMachine && step.Target.Kind == Targets.Work) return step.Target.Position;
+
+        return null;
+    }
+
+    /// <summary>
     /// Whether a plan step is a way through a door (<see cref="TakeDoorStep"/>): one of its rows on a <see cref="Targets.Door"/> target. The same row
     /// planned by an engine goal on its finder's door (86 Opening up's 78 Unlocking door, a <see cref="PlanTarget.Found"/> target) is that goal's.
     /// </summary>
@@ -67,9 +110,11 @@ public sealed partial class AiSystem
         /// <summary>
         /// The target kinds: a spot, bed, seat, turret, town, work place, machine and store; the character a follow goal follows (its place is read
         /// live, <see cref="PlanContext.Followed"/>); the door a way through works (<see cref="TakeDoorStep"/>, the door read live from
-        /// <see cref="CharacterCold.Bashing"/>).
+        /// <see cref="CharacterCold.Bashing"/>); row 94's loose item and storage sources (<see cref="RunsFetchStep"/>; 11 is
+        /// <see cref="PlanTarget.Found"/>).
         /// </summary>
-        public const byte Spot = 1, Bed = 2, Seat = 3, Turret = 4, Town = 5, Work = 6, Machine = 7, Store = 8, Follow = 9, Door = 10;
+        public const byte Spot = 1, Bed = 2, Seat = 3, Turret = 4, Town = 5, Work = 6, Machine = 7, Store = 8, Follow = 9, Door = 10, Loose = 12,
+            Supply = 13;
     }
 
     /// <summary>
@@ -503,7 +548,13 @@ public sealed partial class AiSystem
             var mind = _world.Characters.Cold(_slot)?.Ai;
             if (mind is not null && mind.ArrivedThere(Flat(t.Position), Flat(p))) return true;   // its walk there ended on its own (isAtLocation)
             if (t.Kind == Targets.Work) return AtWorkTarget(t.Position, mind?.WorkRange ?? WorkReach);
-            float slack = t.Kind == Targets.Store ? StoreSlack : t.Kind == Targets.Turret ? TurretSlack : _system.Settings.PostSlack;
+            float slack = t.Kind switch
+            {
+                Targets.Store or Targets.Supply => StoreSlack,
+                Targets.Turret => TurretSlack,
+                Targets.Loose => Items.PickUps.PickUpReach,
+                _ => _system.Settings.PostSlack,
+            };
             if (Vector2.DistanceSquared(Flat(p), Flat(t.Position)) > slack * slack) return false;
 
             // A spot on a floor counts on that floor only (NaN: no floor).
@@ -590,16 +641,14 @@ public sealed partial class AiSystem
                     ? !_board.UnpoweredSeats.Contains(_slot)
                     : MachineAt(target) is not { } machine
                         || _world.SystemOf<Production.ProductionSystem>()?.MachinePowered(_world, machine) != false,
-                // 82 of a machine target (FUN_14059bd80): room in the inventory or the worn backpack for a unit of its output item.
-                StateType.GotInventoryRoomForResources => MachineAt(target) is { Output: { } room } && cold.Inventory is { } bag
-                    && _system.Data.Items.Create(room.Recipe.Item, 1) is { } unit && bag.HasRoomFor(unit),
+                StateType.GotInventoryRoomForResources => RoomForResources(target, cold),
                 // 67 for the ditch target (a storage the finder found takes a carried item, FUN_1405a59a0): the character still carries something the
                 // collection lists. For a machine target (row 93 at a town machine) it carries an item an input takes (FUN_1405a45f0); 66
                 // (FUN_140597530): it carries the machine's output item.
                 StateType.HaveSomeResourcesFor =>
                     target.Kind == Targets.Store && cold.Inventory is { } carried ? Production.ProductionSystem.Ditchable(carried).Any()
                     : MachineAt(target) is { } fillable && Production.ProductionSystem.CarriesInputOf(cold, fillable),
-                StateType.HaveSomeResourcesFrom => MachineAt(target) is { } emptiable && Production.ProductionSystem.CarriesOutputOf(cold, emptiable),
+                StateType.HaveSomeResourcesFrom => ResourcesFrom(target, cold),
                 // 89 (FUN_1405a2c90): it carries the machine's output and a storage takes it (FUN_14059acd0), so row 87's !89 plans 113, then 93 into
                 // the ditch storage: the output is put away before the machine is worked again.
                 StateType.HaveSomeResourcesFromThisMachineButWantThemGoneIfPossible => MachineAt(target) is { Output: { } made } m
@@ -616,6 +665,45 @@ public sealed partial class AiSystem
                 _ => BodyOrTownHolds(condition.State, target, cold),
             };
             return value == condition.Holds;
+        }
+
+        /// <summary>
+        /// 82 <c>gotInventoryRoomForResources</c> (<c>FUN_14059bd80</c>, <b>Verified</b>): room in the inventory or the worn backpack for a unit of
+        /// the target's item: a machine's output item, a loose item's record. Engine reading for a storage (<see cref="Targets.Supply"/>), whose item
+        /// the original reads through its vfunc <c>0x550</c>: the record fetched.
+        /// </summary>
+        bool RoomForResources(in PlanTarget target, CharacterCold cold)
+        {
+            string? record = target.Kind is Targets.Loose or Targets.Supply ? target.Record : MachineAt(target)?.Output?.Recipe.Item;
+            return record is not null && cold.Inventory is { } bag && _system.Data.Items.Create(record, 1) is { } unit && bag.HasRoomFor(unit);
+        }
+
+        /// <summary>
+        /// 66 <c>haveSomeResourcesFrom</c> (<c>FUN_140597530</c>, <b>Verified</b>): of a machine, the character carries its output item; of a loose
+        /// item, the item is off the ground (the original reads the item's own in-inventory byte <c>+0xd8</c>); of a storage, engine reading as for
+        /// 82: the character carries the record fetched.
+        /// </summary>
+        bool ResourcesFrom(in PlanTarget target, CharacterCold cold) => target.Kind switch
+        {
+            Targets.Loose => _world.GroundItems.Find(target.Item) is null,
+            Targets.Supply => target.Record is { } record && Production.ProductionSystem.Carries(cold, record),
+            _ => MachineAt(target) is { } emptiable && Production.ProductionSystem.CarriesOutputOf(cold, emptiable),
+        };
+
+        /// <summary>
+        /// Row 94's source as the plan's target (<see cref="Production.FillSources.Find"/>): a loose item at its place, a storage (no floor) or a
+        /// producer's workplace.
+        /// </summary>
+        static PlanTarget SourceTarget(Production.FillSource source)
+        {
+            var p = source.Position;
+            return source.Kind switch
+            {
+                Production.FillSourceKind.Loose => new PlanTarget(Targets.Loose, p, Record: source.Record, Item: source.Item),
+                Production.FillSourceKind.Storage => new PlanTarget(Targets.Supply, new Vector3(p.X, float.NaN, p.Z), Fixture: source.Store,
+                    Record: source.Record),
+                _ => new PlanTarget(Targets.Work, new Vector3(p.X, float.NaN, p.Z)),
+            };
         }
 
         /// <summary>
@@ -805,10 +893,10 @@ public sealed partial class AiSystem
                         && duties.DitchStore(_world, _mind.Squad, carrier, Me.Position, register: false) is var (_, spot)
                         ? new PlanTarget(Targets.Store, new Vector3(spot.X, float.NaN, spot.Y)) : default;
                 case TaskType.WantToFillMachine:
-                    // Row 94 (FUN_14059d9b0): the machine whose output holds what the target machine's inputs need (the town's workplaces here).
-                    return MachineAt(from) is { } wanting
-                        && Production.ProductionSystem.InputSource(_world, wanting, Workplaces(), Me.Position) is { } source
-                        ? new PlanTarget(Targets.Work, new Vector3(source.Position.X, float.NaN, source.Position.Z)) : default;
+                    // Row 94 (FUN_14059d9b0): a loose item, a storage or a producer holding what the target machine's inputs need.
+                    return MachineAt(from) is { } wanting && _world.Characters.Cold(_slot) is { } filler
+                        && Production.FillSources.Find(_world, _system.Data, wanting, filler, Me.Position, Workplaces()) is { } source
+                        ? SourceTarget(source) : default;
                 case TaskType.ManATurret or TaskType.ManATurretOnBuilding or TaskType.ManATurretPlayerJob or TaskType.UseTurret:
                     return _board.TurretClaims.TryGetValue(_slot, out int t) && (uint)t < (uint)_board.Turrets.Count
                         && _board.Turrets[t].Turret is { } turret

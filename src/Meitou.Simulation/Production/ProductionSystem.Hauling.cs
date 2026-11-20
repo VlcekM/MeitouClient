@@ -104,8 +104,7 @@ public sealed partial class ProductionSystem
         var inv = cold.Inventory;
         if (inv is not null && cold.HaulFetch is { } want)
         {
-            int room = 0;
-            foreach (var input in machine.Inputs) if (input.Takes(want)) room += Math.Max(0, input.Recipe.Capacity - input.Count);
+            int room = InputRoom(machine, want);
 
             // A producer (a well): out of its output.
             if (!store.Data.IsStorage)
@@ -114,23 +113,7 @@ public sealed partial class ProductionSystem
                     && _items.Create(want, take) is { } made)
                     from.Count -= Placed(inv, made);
             }
-            else if (store.Storage is { } storage)
-            {
-                foreach (var item in storage.Items.Where(i => i.Record == want && i.Section == "main").ToList())
-                {
-                    if (room <= 0) break;
-                    int n = Math.Min(room, item.Quantity);
-                    var moving = n == item.Quantity ? item : item.WithQuantity(n);
-                    if (ReferenceEquals(moving, item)) storage.Items.Remove(item);
-                    else item.Quantity -= n;
-                    int placed = Placed(inv, moving);
-
-                    // What the character has no room for goes back.
-                    if (placed < n) storage.Add(moving);
-                    room -= placed;
-                    if (placed == 0) break;
-                }
-            }
+            else if (store.Storage is { } storage) TakeStored(storage, inv, want, room);
         }
         else if (inv is not null && store.Storage is { } into)
         {
@@ -158,6 +141,46 @@ public sealed partial class ProductionSystem
     {
         int before = item.Quantity;
         return into.Add(item) ? before : before - item.Quantity;
+    }
+
+    /// <summary>
+    /// A fetch's take at a storage, the player's haul and an NPC worker's (<see cref="Kidnap.TownDutySystem"/>): up to <paramref name="room"/> units
+    /// of <paramref name="want"/> out of the storage's main grid into <paramref name="into"/>, what finds no room going back; the units moved.
+    /// </summary>
+    internal static int TakeStored(Inventory storage, Inventory into, string want, int room)
+    {
+        int moved = 0;
+        foreach (var item in storage.Items.Where(i => i.Record == want && i.Section == "main").ToList())
+        {
+            if (room <= 0) break;
+
+            int n = Math.Min(room, item.Quantity);
+            var moving = n == item.Quantity ? item : item.WithQuantity(n);
+            if (ReferenceEquals(moving, item)) storage.Items.Remove(item);
+            else item.Quantity -= n;
+
+            // What the character has no room for goes back.
+            int placed = Placed(into, moving);
+            if (placed < n) storage.Add(moving);
+
+            room -= placed;
+            moved += placed;
+            if (placed == 0) break;
+        }
+
+        return moved;
+    }
+
+    /// <summary>
+    /// The units of <paramref name="record"/> a machine's inputs have room for (the haul fetch's take, <see cref="HaulAt"/>).
+    /// </summary>
+    internal static int InputRoom(Machine machine, string record)
+    {
+        int room = 0;
+        foreach (var input in machine.Inputs)
+            if (input.Takes(record)) room += Math.Max(0, input.Recipe.Capacity - input.Count);
+
+        return room;
     }
 
     /// <summary>
@@ -262,15 +285,16 @@ public sealed partial class ProductionSystem
         string? own = world.Machines.Find(from.Id)?.Data.Id;
         bool Fetchable(BuildSite s, Machine m) => s.Id != from.Id && m.Data.Id != own && InSourceRange(s.Position, from.Position);
 
-        return NearestSite(world, from.Position, float.MaxValue, (s, m) => m.Data.IsStorage && Fetchable(s, m) && StorageHolds(m, record))
+        return NearestSite(world, from.Position, float.MaxValue, (s, m) => m.Data.IsStorage && Fetchable(s, m) && m.Storage is { } st
+                && StorageHolds(st, record))
             ?? NearestSite(world, from.Position, float.MaxValue, (s, m) => !m.Data.IsStorage && Fetchable(s, m) && OutputHolds(m, s, record, by));
     }
 
     /// <summary>
-    /// A storage holding <paramref name="record"/> in its main grid.
+    /// A storage's inventory holding <paramref name="record"/> in its main grid.
     /// </summary>
-    static bool StorageHolds(Machine m, string record) =>
-        m.Storage is { } st && st.Items.Any(i => i.Record == record && i.Quantity > 0 && i.Section == "main");
+    internal static bool StorageHolds(Inventory storage, string record) =>
+        storage.Items.Any(i => i.Record == record && i.Quantity > 0 && i.Section == "main");
 
     /// <summary>
     /// A producer whose output holds <paramref name="record"/>: one <paramref name="by"/> operates only once its output is full.

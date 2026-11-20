@@ -1539,8 +1539,9 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
   character that wants to (`AggressiveTowards`), bashed first (81: `LockSystem.BashForErrand`); a locked door nobody will bash or unlock leaves the building out. A closed gate on
   the route is planned the same way (`LockSystem.GateEntry`, `GatePlan.PlansEntry`). It runs into the building and the goal is done once inside.
 - Not goals: the ditch the plan's step 93 asks for (rows 113, 114, 242; `AiMind.DitchRequest`) is held by that step (`AiSystem.RunsDitchStep`: the AI
-  holds its walk and may choose another goal over it, which ends it). A fight interrupts its walk (`TownDutySystem.IsErrandRow`), an order on the body
-  ends it.
+  holds its walk and may choose another goal over it, which ends it), and so is the fetch step 92 asks for at row 94's loose item or storage
+  (`AiMind.FetchRequest`, `AiSystem.RunsFetchStep`, the `Fetch` errand). A fight interrupts their walk (`TownDutySystem.IsErrandRow`), an order on
+  the body ends them.
 - Occupiers' **36 / 37** town goals walk to a random complete building of the player town (`AiSystem.OccupiedSpot`, engine choice; the original's 36 scatters round the
   occupied town's centre, [town goals](game/ai-tasks.md#town-goals)), 36 drawing again after every walk.
 - Every act-out's walk that ends short (a lift with no path to its body too) is a lost walk (see "Engine goals"), the errands no goal holds (a ditch, a player-side food run) marking their store the same way. Engine choices: sight `AggroSystem.OutdoorSight`, arrival 40 (a cage: its `use range` + 15), a lift given up after 60 game s of walking.

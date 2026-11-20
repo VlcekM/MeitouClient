@@ -34,13 +34,15 @@ internal static class PlayerSideHold
     /// <summary>
     /// Whether the character's task is the AI's own, so the think may start the goal's next task over it on its own slot: no provenance runs it, or
     /// it is a goal's the think started (<see cref="AiMind.Owns"/>), 14 Idleness's stand (the default task), the engine goal's act-out, its own
-    /// fight or its plan's ditch walk (<see cref="AiSystem.RunsDitchStep"/>). An order's, a job's or the engine's task is not.
+    /// fight, its plan's ditch walk (<see cref="AiSystem.RunsDitchStep"/>) or its plan's fetch (<see cref="AiSystem.RunsFetchStep"/>). An order's, a
+    /// job's or the engine's task is not.
     /// </summary>
     public static bool OwnsTask(in CharacterHot n, CharacterCold cold, AiMind mind)
     {
         if (cold.Running is not { } run || !run.Runs((CharacterTask)n.Task)) return true;
         if (run.Source != TaskSource.Goal) return false;
-        if (run.Row == TaskType.Idle || mind.Owns(run) || AiSystem.OwnsFight(cold, mind) || AiSystem.RunsDitchStep(cold)) return true;
+        if (run.Row == TaskType.Idle || mind.Owns(run) || AiSystem.OwnsFight(cold, mind)) return true;
+        if (AiSystem.RunsDitchStep(cold) || AiSystem.RunsFetchStep(cold)) return true;
 
         return mind.Duty is not null && AiSystem.OnDuty(cold, mind);
     }

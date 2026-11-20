@@ -1240,6 +1240,11 @@ public sealed class AiMind
     /// </summary>
     public bool DitchRequest { get; set; }
     /// <summary>
+    /// The plan's step 92 Collecting resource from a loose item or a storage (row 94's sources) is due: the think sets it,
+    /// <see cref="Kidnap.TownDutySystem"/> starts the errand and clears it (derived, not hashed).
+    /// </summary>
+    public bool FetchRequest { get; set; }
+    /// <summary>
     /// The faction owning the machine of <see cref="WorkOperate"/> (-1: none; derived, not hashed).
     /// </summary>
     public int WorkOwner { get; set; }
@@ -1566,6 +1571,8 @@ public sealed class AiMind
             hasher.Add(step.Target.Position);
             if (step.Target.Character is { } character) hasher.Add(character);   // a finder's character or fixture: only while set
             if (step.Target.Fixture is { } fixture) hasher.Add(Rng.StableHash(fixture));
+            if (step.Target.Record is { } record) hasher.Add(Rng.StableHash(record));
+            if (step.Target.Item >= 0) hasher.Add(step.Target.Item);
         }
         hasher.Add((int)Behaviour);
         hasher.Add(Version);

@@ -112,7 +112,11 @@ public enum TownDutyKind : byte
     /// <summary>
     /// 106 Find and put in bed: carrying a body to a bed and laying it in (the bed system's put-in walk, <see cref="BedSystem.PutIn"/>).
     /// </summary>
-    Bed
+    Bed,
+    /// <summary>
+    /// Fetching a machine's input from a loose item or a storage (the plan's step 92 on row 94's source).
+    /// </summary>
+    Fetch,
 }
 
 /// <summary>
@@ -162,6 +166,14 @@ public sealed class TownDuty
     /// A corpse disposal errand's machine (its id is <see cref="Target"/>).
     /// </summary>
     public CorpseMachine? Machine { get; set; }
+    /// <summary>
+    /// The record a fetch takes.
+    /// </summary>
+    public string? Record { get; init; }
+    /// <summary>
+    /// A fetch's loose item, its <see cref="Items.GroundItems"/> id (-1: the fetch is at the storage <see cref="Target"/>).
+    /// </summary>
+    public int Item { get; init; } = -1;
 
     /// <summary>
     /// The chooser's goal the errand acts out (<see cref="TownGoals"/>); <see cref="TaskType.None"/> for the errand no goal holds: a ditch the plan's
@@ -201,6 +213,10 @@ public sealed class TownDuty
         }
 
         if (Kind is TownDutyKind.Confiscate or TownDutyKind.Lift or TownDutyKind.HomeLift or TownDutyKind.CorpseLift) h.Add(Next);
+        if (Kind != TownDutyKind.Fetch) return;
+
+        h.Add(Rng.StableHash(Record ?? ""));
+        h.Add(Item);
     }
 }
 
@@ -329,6 +345,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         int every = world.Every(Settings.LookEveryTicks);
         Goals.Look(world, every);
         StartRequestedDitches(world);
+        StartRequestedFetches(world);
     }
 
     /// <summary>
@@ -442,6 +459,60 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         _duties.Add(new TownDuty { Member = world.Characters.IdOf(slot), Faction = cold.Faction, Town = town, Kind = TownDutyKind.Ditch,
                 Target = storeId, Goal = spot });
         TaskStart.Walk(world, slot, spot, ErrandMode(world, cold), DitchRow, TaskSource.Goal);
+    }
+
+    /// <summary>
+    /// The plan's step 92 Collecting resource from row 94's loose item or storage (<see cref="AiMind.FetchRequest"/>, set by the think when the plan's
+    /// first step walks to or takes from that source): a <see cref="TownDutyKind.Fetch"/> errand takes it while the AI holds the character on that
+    /// step (<see cref="AiSystem.RunsFetchStep"/>); the AI plans again when it ends, anew when it took nothing.
+    /// </summary>
+    void StartRequestedFetches(World world)
+    {
+        var table = world.Characters;
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (!table.Next[s].Alive || table.Cold(s) is not { Ai: { FetchRequest: true } mind } c) continue;
+
+            mind.FetchRequest = false;
+            if (c.InCombat || !AiSystem.Holds(table.Next[s], c) || mind.Duty is not null || Busy(table.IdOf(s))) continue;
+            if (AiSystem.FetchStepOf(c) is not { Record: { } record } source) continue;
+
+            bool started = source.Item >= 0 ? StartPickUp(world, s, c, source.Item, record) : StartTake(world, s, c, source, record);
+            if (!started) mind.AskReplan();
+        }
+    }
+
+    /// <summary>
+    /// A fetch from a loose item: row 3's pick-up (<see cref="Items.PickUps"/>, <c>Task_Pickup</c>, the class row 92 builds for an item target),
+    /// a walk to it or the take where it stands within reach; false when the item is gone or another character fetches it.
+    /// </summary>
+    bool StartPickUp(World world, int slot, CharacterCold cold, int item, string record)
+    {
+        var table = world.Characters;
+        if (world.GroundItems.Find(item) is not { } loose || CarrySystem.Claimed(table).Contains(item)) return false;
+
+        var task = Items.PickUps.InReach(table.Next[slot].Position, loose.Position) ? CharacterTask.Idle : CharacterTask.GoTo;
+        var request = new TaskRequest(task, TaskType.Pickup, TaskSource.Goal) { Point = loose.Position, Detail = item };
+        if (TaskStart.Start(world, slot, request) != StartResult.Started) return false;
+
+        _duties.Add(new TownDuty { Member = table.IdOf(slot), Faction = cold.Faction, Town = TownOf(world, slot), Kind = TownDutyKind.Fetch,
+                Goal = Flat(loose.Position), Record = record, Item = item });
+        return true;
+    }
+
+    /// <summary>
+    /// A fetch from a storage (<c>Task_EmptyMachine</c>, the class row 92 builds for a building target): the walk to it, the take on arrival
+    /// (<see cref="StepFetch"/>); false when the storage is gone.
+    /// </summary>
+    bool StartTake(World world, int slot, CharacterCold cold, PlanTarget source, string record)
+    {
+        if (source.Fixture is not { } storeId || StoreInventory(world, storeId) is null) return false;
+
+        var spot = Flat(source.Position);
+        _duties.Add(new TownDuty { Member = world.Characters.IdOf(slot), Faction = cold.Faction, Town = TownOf(world, slot),
+                Kind = TownDutyKind.Fetch, Target = storeId, Goal = spot, Record = record });
+        TaskStart.Walk(world, slot, spot, ErrandMode(world, cold), FetchRow, TaskSource.Goal);
+        return true;
     }
 
     #endregion
@@ -1292,6 +1363,18 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         n.Task == (byte)CharacterTask.GoTo && cold.Running is { Source: TaskSource.Goal } run && run.Row == DitchRow;
 
     /// <summary>
+    /// The row a fetch's walk to its storage acts out: 92 Collecting resource, the plan's step.
+    /// </summary>
+    const TaskType FetchRow = TaskType.CollectOutputResource;
+
+    /// <summary>
+    /// Whether the character runs its fetch errand's task now (<see cref="StartRequestedFetches"/>): the walk to a storage, or a loose item's pick-up
+    /// (row 3, while <see cref="CharacterCold.PickingUpItem"/> is set). The AI waits for it.
+    /// </summary>
+    internal static bool Fetches(in CharacterHot n, CharacterCold cold) => cold.Running is { Source: TaskSource.Goal } run
+        && (run.Row == FetchRow && n.Task == (byte)CharacterTask.GoTo || run.Row == TaskType.Pickup && cold.PickingUpItem is not null);
+
+    /// <summary>
     /// The mode 224 and 274 carry a body out in: their start sets the mover of a character of no player faction to walk (<c>FUN_1403355e0</c>,
     /// <b>Verified</b>), and <see cref="MovementSystem.CarriesOutAtWalk"/> keeps it from the carrier's raise to a jog.
     /// </summary>
@@ -1324,9 +1407,12 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         }
         else if (d.Kind == TownDutyKind.Ditch && !AiSystem.RunsDitchStep(gc))
             return End(world, d);
+        else if (d.Kind == TownDutyKind.Fetch && !AiSystem.RunsFetchStep(gc))
+            return End(world, d);
         else if (ErrandWaits(gc) is { } waits)
             return waits || End(world, d);
 
+        if (d.Kind == TownDutyKind.Fetch) return StepFetch(world, d, g, gc);
         if (d.Kind is TownDutyKind.Food or TownDutyKind.LootFood) return StepFood(world, d, g, gc);
         if (d.Kind is TownDutyKind.Stash or TownDutyKind.Ditch) return StepStash(world, d, g, gc);
         if (d.Kind == TownDutyKind.Confiscate) return StepConfiscate(world, d, g, gc);
@@ -1423,6 +1509,87 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
 
         // A walk that ends short puts the store on the ignore map (20 s) the finders skip (FUN_1405b0290 in FUN_1408dac20).
         return walking || Lost(world, d, g, TargetKey(d));
+    }
+
+    /// <summary>
+    /// One tick of a fetch: a loose item's while its pick-up runs (<see cref="Items.PickUps.PickUpWorkers"/> walks and takes it); a storage's walk,
+    /// and on arrival the take (<see cref="TakeAt"/>). Over with the item taken (the AI plans on), else failed (<see cref="FetchFailed"/>).
+    /// </summary>
+    bool StepFetch(World world, TownDuty d, int g, CharacterCold gc)
+    {
+        var table = world.Characters;
+        if (d.Item >= 0)
+        {
+            if (gc.PickingUpItem == d.Item) return true;
+
+            var left = world.GroundItems.Find(d.Item);
+            if (left is null && Production.ProductionSystem.Carries(gc, d.Record!)) return FetchTaken(world, d, gc);
+
+            bool lost = left is not null && !Items.PickUps.InReach(table.Next[g].Position, left.Position);
+            return FetchFailed(world, d, gc, lost);
+        }
+
+        ref var gn = ref table.Next[g];
+        bool walking = gn.Task == (byte)CharacterTask.GoTo;
+        float gap = Vector2.Distance(Flat(gn.Position), d.Goal);
+        if (gap > Settings.Arrive && (walking || gap > Settings.CageSlack)) return walking || FetchFailed(world, d, gc, lost: true);
+
+        TaskStart.Stand(table, g);
+        return TakeAt(world, d, gc) > 0 ? FetchTaken(world, d, gc) : FetchFailed(world, d, gc, lost: false);
+    }
+
+    /// <summary>
+    /// A fetch that took its item: the task ends by itself, so the plan goes on to its next step (the walk to the machine), as the original's
+    /// queue moves on when a task ends (<see cref="AiSystem.FetchDone"/>). False, for the step.
+    /// </summary>
+    static bool FetchTaken(World world, TownDuty d, CharacterCold gc)
+    {
+        AiSystem.FetchDone(gc);
+        return End(world, d);
+    }
+
+    /// <summary>
+    /// A fetch's take at its storage: the record, up to what the machine the plan fills next has room for (<see cref="AiSystem.FillTargetOf"/>,
+    /// <see cref="Production.ProductionSystem.InputRoom"/>), with the player's haul take (<see cref="Production.ProductionSystem.TakeStored"/>); the
+    /// units moved. Engine choice: the original's <c>Task_EmptyMachine</c> takes the first record the storage lists that its slot 5
+    /// (<c>FUN_140356db0</c>) counts above 0, up to that count (docs/game/buildings-production.md "NPC town machines").
+    /// </summary>
+    int TakeAt(World world, TownDuty d, CharacterCold gc)
+    {
+        if (d.Target is not { } id || StoreInventory(world, id) is not { } store || gc.Inventory is not { } inv) return 0;
+        if (AiSystem.FillTargetOf(gc) is not { } at || FillMachineAt(world, at) is not { } machine) return 0;
+
+        int taken = Production.ProductionSystem.TakeStored(store, inv, d.Record!, Production.ProductionSystem.InputRoom(machine, d.Record!));
+        if (taken > 0 && world.Machines.Find(id) is not null) world.Machines.Touch();
+        return taken;
+    }
+
+    /// <summary>
+    /// The machine standing at a plan's work target (matched on the ground plane).
+    /// </summary>
+    static Production.Machine? FillMachineAt(World world, Vector3 at)
+    {
+        foreach (var m in world.Machines.All)
+            if (m.Position.X == at.X && m.Position.Z == at.Z) return m;
+
+        return null;
+    }
+
+    /// <summary>
+    /// A fetch that took nothing: the source emptied or taken by another, no room, or its walk ended short. As <c>Task_EmptyMachine</c>'s and
+    /// <c>Task_Pickup</c>'s failed flag (<c>AITaskSytem</c> <c>+0x26d</c>, <c>FUN_14001953d</c>, <b>Verified</b>) its handler <c>FUN_14050d080</c>
+    /// asks a replan (<see cref="AiMind.AskReplan"/>); a walk that ended short also puts the source in the ignore map for 20 s
+    /// (<c>FUN_14050d970</c>), which the finder reads for loose items only (<see cref="Items.LooseSource.Nearest"/>). False, for the step.
+    /// </summary>
+    bool FetchFailed(World world, TownDuty d, CharacterCold gc, bool lost)
+    {
+        IgnoreKey? key = d.Item >= 0 ? new IgnoreKey(Items.LooseSource.Key(d.Item), default) : TargetKey(d);
+        long until = world.Tick + (long)MathF.Ceiling(Construction.ConstructionSystem.UnreachableSeconds / world.TickSeconds);
+        if (lost && key is { } k) gc.Ignore(k, until);
+
+        End(world, d);
+        gc.Ai?.AskReplan();
+        return false;
     }
 
     /// <summary>
@@ -1558,8 +1725,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         var table = world.Characters;
         if (!table.TryResolveNext(d.Member, out int g) || table.Cold(g) is not { } gc) return false;
 
-        // the plan's step 93 is done: the planner asks again with the inventory as it is now
-        if (Ditches(table.Next[g], gc)) TaskStart.Stand(table, g);
+        // the plan's step 93 or 92 is done: the planner asks again with the inventory as it is now
+        bool walks = d.Kind == TownDutyKind.Fetch ? Fetches(table.Next[g], gc) : Ditches(table.Next[g], gc);
+        if (walks) TaskStart.Stand(table, g);
         if (gc.Ai is { } mind) mind.Replan = true;
         return false;
     }

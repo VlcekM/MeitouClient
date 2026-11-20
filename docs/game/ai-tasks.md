@@ -1030,7 +1030,7 @@ order step runs on every AI update, and decides it then. 31 / 289 have Following
 text above). A node's effect is always followed (a child for each provider of the state, whether or not it already holds); so with a storage target, whatever its state 62 (slot 149 of its StorageBuilding cast, virtual `0x2f8`) answers,
 the plan is `93 Filling machine -> 114` (93 is the only row listing `!62` in list A; B: 2, 67, `!169`, isAtLocation). Row 93 moves the carried items into the storage and ends the first update that moves nothing.
 - **Candidates** (**Observed**, read in the decompile `FUN_1405a59a0`, per carried item `FUN_14059acd0`, town query `FUN_1408cbea0`, not traced): the buildings of the character's current town
-  (else the nearest town in reach) in the spatial query with mask `0x4002436` (functions 1, 2, 4, 5, 10, 13, 26 if one bit per function, as 184's `0x2004` reads; 9 BF_SHOP would not be in it),
+  (else the nearest town in reach) in the spatial query with mask `0x4002436` (functions 1, 2, 4, 5, 10, 13, 26, one bit per function, [verified](buildings-production.md#npc-town-machines); 9 BF_SHOP is not in it),
   with a StorageBuilding cast (virtual `0x2f8`), other than the machine being served, owned by the character's faction (vfunc `0x58`; or, when `FUN_140856bc0` holds for the character, by a
   faction with the player flag `+0x250`), whose slot `0x4a0` takes the item; the nearest within the range mode's bound wins. Shop stock containers are mostly function 2 or 13 (barrels,
   crates, `Storage: Ore`; **Verified**, base data: only the three Shop Counters are 9), so when a shop's container is such a candidate, a worker's ditched output joins that shop's stock.
@@ -1038,7 +1038,7 @@ Meitou: `PlanContext.Find` gives rows 113 / 114 / 242 a `Targets.Store` target (
 of `ProductionSystem.Ditchable`), state 67 is true for it while the character carries such an item, and a plan whose first step is 93 or the walk to a
 Store target sets `AiMind.DitchRequest`; `TownDutySystem` runs a `Ditch` errand (walk, put in, `Replan`). A building shop's stock container is tested and filled as any
 other; it holds the shop's goods, so the put-in items are for sale until the next restock clears them. So a worker of goal 189 whose inventory is full ditches before it empties the machine (92's B 82), and a
-town food run (244) that finds no room ditches first (a2-039). Row 94's finder `FUN_14059d9b0` (the nearest machine whose output holds an item the target machine's inputs take, scored by `FUN_14059d000`) is modelled for machines (`ProductionSystem.InputSource`), see [NPC town machines](buildings-production.md#npc-town-machines).
+town food run (244) that finds no room ditches first (a2-039). Row 94's finder `FUN_14059d9b0` (loose items, then storages, then producers, per input; `FUN_14059d000`) is `FillSources.Find` with the `Fetch` errand, see [NPC town machines](buildings-production.md#npc-town-machines).
 
 ## Animals in beds
 

@@ -492,36 +492,8 @@ public sealed partial class ProductionSystem
     /// <summary>
     /// Whether the character carries <paramref name="item"/> (in its inventory or its backpack's).
     /// </summary>
-    static bool Carries(CharacterCold cold, string item) =>
+    internal static bool Carries(CharacterCold cold, string item) =>
         cold.Inventory is { } inv && (inv.All().Any(i => i.Record == item) || inv.Backpack?.Contents?.All().Any(i => i.Record == item) == true);
-
-    /// <summary>
-    /// The finder of row 94 (<c>FUN_14059d9b0</c>, scored by <c>FUN_14059d000</c>, <b>Verified</b>): for each item type the target machine's inputs
-    /// take, in list order, the nearest machine of another record (<c>FUN_14059d000</c> skips the excluded target's record) whose output holds that
-    /// item and has some; the first item with one decides. Engine choices: the candidates are the town's workplaces, so no storage and no loose
-    /// item is a source (the original's loose items come first and its storages before the producers; docs/game/buildings-production.md "NPC town
-    /// machines").
-    /// </summary>
-    public static TownBuilding? InputSource(World world, Machine target, IEnumerable<TownBuilding> candidates, Vector3 from)
-    {
-        foreach (var input in target.Inputs)
-        {
-            TownBuilding? best = null;
-            float bestD = float.MaxValue;
-            foreach (var b in candidates)
-            {
-                if (TownWorkOf(world, b) is not { Output: { Count: > 0 } o } other || other.Data.Id == target.Data.Id || o.Recipe.Item != input.Item)
-                    continue;
-
-                float d = Vector3.DistanceSquared(new Vector3(from.X, 0, from.Z), new Vector3(b.Position.X, 0, b.Position.Z));
-                if (d < bestD) (best, bestD) = (b, d);
-            }
-
-            if (best is not null) return best;
-        }
-
-        return null;
-    }
 
     /// <summary>
     /// <c>Task_FillMachine</c> (row 93, <c>FUN_140344510</c>, <b>Verified</b>) at a machine with a production component: the carried items (inventory
