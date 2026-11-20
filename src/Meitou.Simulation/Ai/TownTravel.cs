@@ -28,6 +28,29 @@ public enum TravelAsk : byte
 }
 
 /// <summary>
+/// How an engine goal's travel step stands (<see cref="TownTravel.StepGoal"/>).
+/// </summary>
+internal enum GoalTravel : byte
+{
+    /// <summary>
+    /// Walking to the town, or standing at its waypoint.
+    /// </summary>
+    Walking,
+    /// <summary>
+    /// In the town (state 36).
+    /// </summary>
+    Arrived,
+    /// <summary>
+    /// The squad has no town (the running package starts again).
+    /// </summary>
+    NoTown,
+    /// <summary>
+    /// The walk ended with no path to the town.
+    /// </summary>
+    NoPath,
+}
+
+/// <summary>
 /// <c>Task_TravelToTargetTown</c>, rows 53 Travelling and 130 Travelling quickly (start <c>FUN_14033ad80</c>, update <c>FUN_14033ae40</c>, speed
 /// functor <c>FUN_140342a30</c>, <b>Verified</b>; docs/game/ai-tasks.md "Town goals"): the walk to the squad's town (<see cref="SquadTown.Of"/>) or its
 /// detour nest at the functor's speed, and the task's two exits. The think acts it out on the character's own mind; the package calls of the exits
@@ -73,12 +96,14 @@ internal sealed class TownTravel(PopulationData data)
     const float JogCap = 55, RunCap = 999, SlowerShare = 0.9f;
 
     /// <summary>
-    /// Whether the character acts out a travel step (53, 130) the AI walks in full: not one an engine-acted goal carries (192's walk is the captive
-    /// system's). The movement's carrier jog does not apply to it (<see cref="MovementSystem.CarriesOutAtWalk"/>) and its pace cap does
+    /// Whether the character acts out a travel step (53, 130): one the AI walks in full, or the one 192's act-out carries (<see cref="StepGoal"/>, its
+    /// walk on row 192). The movement's carrier jog does not apply to it (<see cref="MovementSystem.CarriesOutAtWalk"/>) and its pace cap does
     /// (<see cref="CharacterCold.PaceCap"/>). Any thread.
     /// </summary>
     internal static bool Runs(CharacterCold cold) =>
-        cold.Ai is { Engine: false, Duty: null, Step: TaskType.TravelToTargetTown or TaskType.TravelToTargetTownFast };
+        cold.Ai is { Engine: false, Duty: null, Step: TaskType.TravelToTargetTown or TaskType.TravelToTargetTownFast }
+        || cold.Ai is { Duty.Task.Type: TaskType.GoToSomewhereForDeliveringSlaves }
+            && cold.Running is { Row: TaskType.GoToSomewhereForDeliveringSlaves };
 
     /// <summary>
     /// The update on the think (own slot only): the town, else the restart exit; the walk's end read (the detour or the path-impossible exit); then
@@ -98,6 +123,37 @@ internal sealed class TownTravel(PopulationData data)
         if (Town(world, mind, board) is not { } aim) return;
 
         Walk(system, world, slot, mind, cold, board, aim, row);
+    }
+
+    /// <summary>
+    /// The travel row an engine goal's act-out carries (192's 53; serial, the same task as <see cref="Act"/>): <see cref="GoalTravel.Arrived"/> once
+    /// state 36 holds (<see cref="SquadTown.Reached"/>); <see cref="GoalTravel.NoTown"/> when the squad has none; <see cref="GoalTravel.NoPath"/> when
+    /// a walk it started (<paramref name="walked"/>) ended with no path to the town; else it walks to the town's waypoint on <paramref name="row"/>
+    /// with the goal's provenance at the functor's mode and cap, and stands once there.
+    /// </summary>
+    internal GoalTravel StepGoal(AiSystem system, World world, int slot, Squad squad, Blackboard board, TaskType row, bool walked)
+    {
+        var cold = world.Characters.Cold(slot)!;
+        var town = SquadTown.Of(world, squad, board, homeFallback: true);
+        if (town.IsNone || AiSystem.TownCircle(data, world, town) is null) return GoalTravel.NoTown;
+        if (SquadTown.Reached(world, data, slot, squad, board)) return GoalTravel.Arrived;
+
+        ref var n = ref world.Characters.Next[slot];
+        var (mode, cap) = Speed(world, slot, cold, squad, board, TaskType.TravelToTargetTown);
+        cold.PaceCap = cap;
+        if (n.Task == (byte)CharacterTask.GoTo && cold.Running?.Row == row) return GoalTravel.Walking;
+        if (walked && NoPath(cold)) return GoalTravel.NoPath;
+
+        var point = Waypoint(system, world, town);
+        if (Vector2.DistanceSquared(new Vector2(n.Position.X, n.Position.Z), point) <= system.Settings.PostSlack * system.Settings.PostSlack)
+        {
+            TaskStart.Stand(world.Characters, slot);
+            return GoalTravel.Walking;
+        }
+
+        cold.PathFailed = false;   // a failure from before is not this walk's
+        TaskStart.Walk(world, slot, point, mode, row, TaskSource.Goal);
+        return GoalTravel.Walking;
     }
 
     /// <summary>

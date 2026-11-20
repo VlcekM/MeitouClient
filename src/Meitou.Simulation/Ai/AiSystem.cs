@@ -206,6 +206,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     internal DutyGoals? Duties => _duties;
 
     /// <summary>
+    /// The travel task of rows 53 and 130 (<see cref="TownTravel"/>), for an engine goal's act-out that carries one (192's 53).
+    /// </summary>
+    internal TownTravel Travel => _travel;
+
+    /// <summary>
     /// Asks the world's systems for the goals they act out (<see cref="IDutyGoalOwner"/>) and the code mods' (<see cref="INpcGoalOwner"/>), once when
     /// the world is made (<see cref="World"/>'s constructor); nothing is built for either when none registered (for the mods', when no mod claimed a
     /// goal type).

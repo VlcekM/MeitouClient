@@ -250,23 +250,30 @@ public sealed partial class CaptiveSystem
     public float DeliverDesire(World world, Squad squad) => DeliverDesirePerSlave * SlavesOf(world, squad).Count();
 
     /// <summary>
-    /// 192's act-out (its plan's 53 Travelling, the only provider of state 36): the leader walks to the shipping town (re-sent whenever its walk
-    /// ended outside it, at most <see cref="CaptiveSettings.Walks"/> times plus one per 1000 units) and is done once inside it as state 36 reads it
-    /// (<see cref="AiSystem.TownAt"/>), where the goal's plan is its own row alone and 194 / 218 hand the slaves over.
+    /// 192's act-out, its plan's 53 Travelling (<c>Task_TravelToTargetTown</c>, the only provider of state 36; <see cref="TownTravel.StepGoal"/>): the
+    /// leader walks to the squad's town (the shipping package's, <see cref="SquadTown.Of"/>) at the travel functor's pace and is done once state 36
+    /// holds, where the goal's plan is its own row alone and 194 / 218 hand the slaves over. A walk with no path to the town is a lost walk (the task
+    /// asks a replan and calls the package's path-impossible slot, nothing for the shipping classes); a squad with no town starts its package again.
     /// </summary>
     bool StepDeliver(World world, CaptiveJob j, int w)
     {
-        var table = world.Characters;
-        var site = data.Sites[j.Site];
-        var centre = new Vector2(site.Position.X, site.Position.Z);
-        ref var n = ref table.Next[w];
-        if (AiSystem.TownAt(data, world, n.Position) == CampaignTown.OfSite(j.Site)) return End(world, j, null);
+        if (world.SystemOf<AiSystem>() is not { } ai || world.Characters.Cold(w)?.Ai is not { Squad: { Ai: { } board } squad })
+            return End(world, j, null);
 
-        float d = Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), centre);
-        if (WalksOwn(table, w, j)) return true;
-        if (++j.Walks > Settings.Walks + 1 + (int)(d / 1000)) return End(world, j, CaptiveEventKind.GaveUp);
+        switch (ai.Travel.StepGoal(ai, world, w, squad, board, RowOf(j.Kind), j.Walks > 0))
+        {
+            case GoalTravel.Arrived:
+                return End(world, j, null);
+            case GoalTravel.NoTown:
+                ai.RestartPackage(world, squad);
+                return End(world, j, CaptiveEventKind.GaveUp);
+            case GoalTravel.NoPath:
+                ai.PathImpossible(world, squad);
+                Lost(j, null);
+                return End(world, j, CaptiveEventKind.GaveUp);
+        }
 
-        TaskStart.Walk(world, w, centre, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
+        j.Walks = 1;
         return true;
     }
 

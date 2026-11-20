@@ -1537,7 +1537,7 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   (`FUN_1408db680` -> `FUN_1408db510`, **Observed**, 1.0.68 decompile); 217 still excludes player occupants (engine choice).
   **Observed** (KenshiOracle hold, Rebirth, 2026-11-09): the original's gathered slaves keep their squads all hour (Pao 40, Mu 44).
   **Observed** (probe): the Slave Farm's workmasters take the caged slaves out by day; at night their slaves' 172 puts them back.
-- **Deliver** (192, the squad leader under a shipping package): walks to `Blackboard.MissionTown` (row 53), done once inside it as state 36 reads it. **Sell** (194,
+- **Deliver** (192, the squad leader under a shipping package): its plan's 53 is the travel task (`TownTravel.StepGoal`, [town goals](game/ai-tasks.md#town-goals)): to the squad's town (the shipping package's mission town) by its waypoint at the functor's pace, done once state 36 holds; a walk with no path to the town is a lost walk. **Sell** (194,
   or 218 in a prison or slave camp): the finder (`FUN_1408ca950`, **Verified**) takes the nearest (to the leader) NPC of the faction of the town the leader stands in,
   or an ally, within the town's radius, and keeps it; none, the goal is unwanted. The leader walks within 40 of it and says event 39 (row 159). Each of its slaves then
   leaves for a "Wandering Squad" of its own, owned by the town's faction, caged in the nearest free cage of that faction or an ally (engine: the original's handover is a
