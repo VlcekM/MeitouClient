@@ -12,7 +12,7 @@ namespace Meitou.Simulation.Ai;
 internal static class PlayerSideHold
 {
     /// <summary>
-    /// Whether nothing outside the chooser holds the character: not fleeing, not engaged by a system (a conversation, a trade, a door way), not
+    /// Whether nothing outside the chooser holds the character: not fleeing, not engaged by a code mod (<see cref="CharacterCold.Engaged"/>), not
     /// imprisoned, not carried and not knocked out. The same exits as an NPC's (<see cref="AiSystem.Holds"/>).
     /// </summary>
     public static bool Free(CharacterCold cold) =>
