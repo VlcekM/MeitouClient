@@ -77,8 +77,29 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             else if (command is MoveOrder order) GiveMove(world, order);
         }
 
+        var owned = OwnedSlaves(world);
         foreach (var squad in world.Squads.All)
-            RefreshFormation(world, squad);
+            RefreshFormation(world, squad, owned.GetValueOrDefault(squad.Id));
+    }
+
+    /// <summary>
+    /// The slaves of other squads by the master squad they obey (<see cref="CharacterCold.SlaveMaster"/>), in slot order: the original's formation
+    /// gives each member's record the slaves whose owner it is, wherever their platoon (<c>FUN_14026db30</c>; Meitou's owner is the master squad's
+    /// leader, <see cref="Kidnap.ObedientSlave.OwnerOf"/>).
+    /// </summary>
+    static Dictionary<int, List<CharacterId>> OwnedSlaves(World world)
+    {
+        var table = world.Characters;
+        var owned = new Dictionary<int, List<CharacterId>>();
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (!table.Next[s].Alive || table.Cold(s) is not { SlaveState: 1, SlaveMaster: >= 0 } c || c.SquadId == c.SlaveMaster) continue;
+
+            if (!owned.TryGetValue(c.SlaveMaster, out var list)) owned[c.SlaveMaster] = list = [];
+            list.Add(table.IdOf(s));
+        }
+
+        return owned;
     }
 
     /// <summary>
@@ -481,10 +502,10 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
     /// <summary>
     /// Rebuilds a squad's <see cref="Squad.FormationSlots"/> when its formation, head, members or their roles changed (serial). The head is the
-    /// leader, or the squad mate the leader follows (the original's task-31 head). The draws are keyed by the squad and the key, so a rebuild of the
-    /// same squad gives the same slots.
+    /// leader, or the squad mate the leader follows (the original's task-31 head). The slaves are its slave members and <paramref name="owned"/>, the
+    /// slaves of other squads that obey it. The draws are keyed by the squad and the key, so a rebuild of the same squad gives the same slots.
     /// </summary>
-    static void RefreshFormation(World world, Squad squad)
+    static void RefreshFormation(World world, Squad squad, List<CharacterId>? owned)
     {
         var table = world.Characters;
         squad.ForceSpeed = world.ForcedSpeeds is { } forced && forced.TryGetValue(squad.TemplateId, out byte force) ? force : Squad.NoForceSpeed;
@@ -494,6 +515,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             : (int)SquadFormation.Random;
         ulong key = Rng.Mix((ulong)type ^ Rng.Key(head) << 2);
         foreach (var m in squad.Members) key = Rng.Mix(key ^ Rng.Key(m) ^ (ulong)(table.IsAlive(m) ? table.Cold(m.Slot)!.Role : 7) << 56);
+        if (owned is not null) foreach (var o in owned) key = Rng.Mix(key ^ Rng.Key(o) ^ 8UL << 56);
         if (key == squad.FormationKey) return;
 
         squad.FormationKey = key;
@@ -521,6 +543,8 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             var member = Of(m);
             (member.Role == (int)SquadRole.Slave ? slaves : others).Add(member);
         }
+
+        if (owned is not null) foreach (var o in owned) slaves.Add(Of(o) with { Role = (int)SquadRole.Slave });
 
         ulong draws = 0, seed = Rng.Hash(world.Seed, (ulong)squad.Id, RngPurpose.Formation, key);
         squad.FormationSlots = Formation.Layout((SquadFormation)type, Of(head), others, slaves,
@@ -1115,7 +1139,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         Vector2? door = null;
         float aimHeight = lead.Position.Y;
 
-        if (squad is not null && squad.FormationSlots.TryGetValue(self, out var slot) && squad.Members.Contains(leader))
+        if (FormationOf(world, squad, cold, leader) is { } formation && formation.FormationSlots.TryGetValue(self, out var slot))
         {
             (slotPos, door, aimHeight) = FormationAim(world, i, dt, n.Position, cold, slot, leader.Slot, lead.Position, leadAt, leadDir, leadSpeed,
                 moving);
@@ -1309,6 +1333,18 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     static CharacterId Followed(World world, Squad? squad, CharacterCold cold) =>
         !cold.FollowOrder.IsNone ? cold.FollowOrder : cold.Ai is { FollowTarget.IsNone: false } follows ? follows.FollowTarget
         : Kidnap.ObedientSlave.OwnerOf(world, cold) is { } owner ? owner : squad?.Leader ?? CharacterId.None;
+
+    /// <summary>
+    /// The squad whose formation a follower takes its slot in (<c>Task_Follow</c>'s formation test <c>FUN_14033b160</c> and its spot
+    /// <c>FUN_14033b220</c>, <b>Verified</b>): its owner's platoon when it follows its owner (a slave's master squad,
+    /// <see cref="Kidnap.ObedientSlave.OwnerOf"/>), else its own when the followed one is in it; null for none.
+    /// </summary>
+    static Squad? FormationOf(World world, Squad? squad, CharacterCold cold, CharacterId followed)
+    {
+        if (Kidnap.ObedientSlave.OwnerOf(world, cold) == followed && world.Squads.Find(cold.SlaveMaster) is { } master) return master;
+
+        return squad is not null && squad.Members.Contains(followed) ? squad : null;
+    }
 
     /// <summary>
     /// A velocity's horizontal unit direction (zero stays zero, as Ogre's normalise leaves it).
