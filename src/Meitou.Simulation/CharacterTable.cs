@@ -806,14 +806,6 @@ public sealed class CharacterCold
     public (Items.ItemInstance Item, Items.Inventory Owner)? TreatKit { get; set; }
 
     /// <summary>
-    /// The tick until which a medic treating this character asked it to stand still (the original's request of 62 Standing still on the patient's
-    /// blackboard, renewed by every update of the first aid task, docs/game/ai-tasks.md "Medic jobs"; <see cref="FirstAid.FirstAidSystem"/>).
-    /// <see cref="MovementSystem"/> holds an NPC still until then unless it fights or flees. Runtime only (not saved, not hashed): the running
-    /// treatment renews it every tick.
-    /// </summary>
-    public long StandStillUntil { get; set; }
-
-    /// <summary>
     /// The treating medic kneels at its patient (the <c>medic</c> clip): in reach of a patient keeping still, or treating itself
     /// (<see cref="FirstAid.FirstAidSystem"/>'s serial step, every tick of the treatment). Runtime only (not saved, not hashed): drawing only.
     /// </summary>

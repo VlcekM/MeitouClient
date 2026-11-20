@@ -246,8 +246,12 @@ asking itself adds nothing, asking again renews the entry, and the Blackboard up
 (`FUN_140510d60`, [precedence](ai-tasks.md#precedence) step 4) adds the entries of its tier whose subject is none or the character itself as candidates.
 The float (1.4 in both callers) is read as the candidate's weight (**Observed**). The add has two callers (**Verified**, caller scan): `FUN_1403346d0` (every update of `Task_MakeTargetStandStill` and of
 the first aid tasks, [medic jobs](ai-tasks.md#medic-jobs)) asks 62 Standing still of the target at tier 3 on the target's platoon Blackboard (`FUN_140791ba0`); the splint
-update `FUN_14034ef20` posts the same entry on the medic's own platoon's Blackboard.
-Meitou models only that caller ([medic jobs](ai-tasks.md#medic-jobs)).
+update `FUN_14034ef20` posts the same entry on the medic's own platoon's Blackboard, which the patient reads only when it shares that platoon (then it is the
+same asker's entry). The scorer runs the requests with its request flag, whose delete of a done request (`FUN_140268860`) is an empty function in 1.0.68
+(**Verified**). Every tier pass reads its tier's requests; only tier-3 ones are ever filed.
+Meitou (`Ai.BoardRequests`, held on the `Squad` as Meitou's player squads have no `Blackboard`; filed and lapsed serially, hashed while any): first aid files 62 from
+its update ([medic jobs](ai-tasks.md#medic-jobs)); `TierRungs.Tier` scores the tier's requests after the second list's leftovers and before the role list, with the
+normal scorer (desire 1 x 1.4, x1.25 while current), for NPCs and player-faction minds alike; 62 is acted out by standing (`AiBehaviour.Mill`).
 
 ### Update cadence and scope (engine choices)
 

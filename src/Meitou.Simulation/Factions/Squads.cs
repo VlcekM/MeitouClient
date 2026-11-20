@@ -163,6 +163,10 @@ public sealed class Squad
     /// </summary>
     public Ai.Blackboard? Ai { get; set; }
     /// <summary>
+    /// The requests filed on the squad's platoon blackboard for its members to weigh (<see cref="Ai.BoardRequests"/>); null until the first one.
+    /// </summary>
+    internal Ai.BoardRequests? Requests { get; set; }
+    /// <summary>
     /// The dialogue-given AI a save or its stored state held, until the AI attaches a blackboard and applies it (then null).
     /// </summary>
     public Saving.AiSave? SavedAi { get; set; }
@@ -452,6 +456,7 @@ public sealed class SquadRegistry
             }
             s.Shop?.Hash(ref hasher);   // nothing for squads that do not trade, so the pinned hashes of worlds without shops stay
             s.Ai?.Hash(ref hasher);     // nor for squads without AI packages
+            s.Requests?.Hash(ref hasher);   // nor for squads with no request filed
             if (s.War.IsSet)
             {
                 hasher.Add(s.War.Faction);

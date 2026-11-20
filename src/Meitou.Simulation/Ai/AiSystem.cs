@@ -295,11 +295,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     readonly FollowMe _followMe = new();
 
     /// <summary>
-    /// The serial schedule step: stamps every character's <c>followMe</c> before the parallel think, and gives every member of a player's squad
-    /// that lacks one its player-faction mind (<see cref="PlayerSideMinds"/>).
+    /// The serial schedule step: drops the blackboards' lapsed requests (<see cref="BoardRequests"/>), stamps every character's <c>followMe</c>
+    /// before the parallel think, and gives every member of a player's squad that lacks one its player-faction mind (<see cref="PlayerSideMinds"/>).
     /// </summary>
     public void Schedule(World world)
     {
+        BoardRequests.LapseAll(world);
         _followMe.Stamp(world);
         PlayerSideMinds(world);
     }

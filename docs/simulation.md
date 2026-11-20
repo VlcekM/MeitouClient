@@ -373,7 +373,7 @@ Shift, a knock-out, being picked up, a get-up's or a body order's clear, the sto
 only), the urgent job pass (its pick takes the second list
 and an obeying NPC's 187 Slave goals), the priority-3 tier (the second list's leftovers first, so a tie goes to the tier's goals), committed above 1, the full job pass (list jobs,
 implicit jobs, then the 187 goals), the priority-2 tier, committed above 0, the priority-1 tier, the default task (14 Idleness for the player's faction, the IDLE plan for an
-NPC), the mover reset. A tier scores the AI's goals (`TierRungs`: role list, own lists, 32) with the goal sources of its step; a goal with nothing to do now is dropped
+NPC), the mover reset. A tier scores the AI's goals (`TierRungs`: the squad blackboard's requests of the tier, [requests](game/ai.md#requests); role list, own lists, 32) with the goal sources of its step; a goal with nothing to do now is dropped
 (`PlanContext.GivesNothingNow`, `FUN_14050df10`; of the goals base data lists with a desire only 14 and 45). The routes: a player-faction mind (`AiMind.PlayerSide`, every member
 of a player's squad of the player's faction, not a prisoner it keeps) the ladder with its sources, 32, the own-list types in `Ladder.OnRungs` (243) and, obeying, its master's Slave
 goals (`AiSystem.ThinkPlayer`; the other own-list goals weigh 0 and stay with their sources). Its winning goal is acted out as an NPC's (`AiSystem.ActChosen`) while nothing else holds it

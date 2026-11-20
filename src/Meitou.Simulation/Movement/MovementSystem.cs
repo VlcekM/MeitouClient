@@ -1781,15 +1781,6 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             return true;
         }
 
-        if (AskedToStandStill(n, cold, world.Tick))
-        {
-            // A medic treating it asked it to stand still (FirstAidSystem): it stops where it is; its own walk is kept and goes on when the ask
-            // lapses.
-            n.Velocity = Vector3.Zero;
-            cold.AgentSpeed = 0;
-            return true;
-        }
-
         return false;
     }
 
@@ -2345,17 +2336,6 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     /// The way from the walker to the point past the corner it heads for, the point <see cref="CornerBrake"/> tests.
     /// </summary>
     static Vector2 PastCorner(in CharacterHot p, Vector3 past) => new(past.X - p.Position.X, past.Z - p.Position.Z);
-
-    /// <summary>
-    /// Whether a medic's ask to stand still holds the character (<see cref="CharacterCold.StandStillUntil"/>): the original's patient takes 62
-    /// Standing still as an urgent goal (a tier 3 request, docs/game/ai-tasks.md "Stand still"), which the front of its order queue outranks (the
-    /// chooser's source 1) and which beats its jobs and routine (sources 5 and 6); its row needs no attack on it (<c>!isAggressionTowardsMe</c>).
-    /// So a character no order holds (<see cref="Ai.OrderStep.HoldsOrder"/>: a player-faction one with no order in hand, an NPC its order does not
-    /// hold) is held; not one fighting or fleeing.
-    /// </summary>
-    static bool AskedToStandStill(in CharacterHot n, CharacterCold cold, long tick) =>
-        cold.StandStillUntil > tick && !Ai.OrderStep.HoldsOrder(cold) && !cold.InCombat && !cold.Fleeing
-        && cold.CarriedBy.IsNone && n.Task != (byte)CharacterTask.Attack;
 
     /// <summary>
     /// The factor on a character's step time: <see cref="OffViewTime"/> out of view.

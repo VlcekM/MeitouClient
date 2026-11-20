@@ -39,12 +39,6 @@ internal static class OrderStep
     public static bool ResumesRoutine(CharacterCold cold) => !DecisionSystem.Decides(cold);
 
     /// <summary>
-    /// Whether an order holds the character now for the engine's sweeps and walks: for a character the sources decide, any order in its queue; for an
-    /// NPC, its order hold (<see cref="Ordered"/>). A pure read.
-    /// </summary>
-    public static bool HoldsOrder(CharacterCold cold) => DecisionSystem.Decides(cold) ? cold.OrderQueue.Count > 0 : Ordered(cold);
-
-    /// <summary>
     /// Whether the order step concerns the character: an order in its queue, or the hold of one it just lost (<see cref="CharacterCold.OrderWins"/>,
     /// set anew at the next starts). A pure read.
     /// </summary>

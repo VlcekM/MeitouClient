@@ -177,6 +177,8 @@ public static class TaskBehaviours
     static readonly Dictionary<TaskType, (AiBehaviour Behaviour, string Text)> Table = new()
     {
         [TaskType.Idle] = (AiBehaviour.Mill, "Idleness"),
+        // 62 Standing still (Task_StandStill): a request first aid files on the patient's blackboard (BoardRequests); it stands where it is.
+        [TaskType.StandStill] = (AiBehaviour.Mill, "Standing still"),
         [TaskType.Wanderer] = (AiBehaviour.ToTown, "Wandering"),
         [TaskType.WanderTown] = (AiBehaviour.TownNode, "Wandering town"),
         [TaskType.PatrolTown] = (AiBehaviour.PatrolTown, "Patrolling town"),

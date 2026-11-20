@@ -90,6 +90,11 @@ internal sealed class TierRungs : ITierRungs
     /// </summary>
     readonly List<(AiGoal? Goal, float Score, float Desire, int Source)> _second = [];
     /// <summary>
+    /// The tier's requests copied from the squad's blackboard for one pick (<c>+0x2e8</c>, emptied at the choice's start and after a tier that
+    /// fails, <c>FUN_140514100</c>).
+    /// </summary>
+    readonly List<AiGoal> _requests = [];
+    /// <summary>
     /// The master squad's Slave goals the job passes' 187 branch scores for the bound character (<see cref="AiSystem.ObeyedRoles"/>: an NPC, or a
     /// player character whose list holds job 187); null when it does not obey.
     /// </summary>
@@ -203,15 +208,16 @@ internal sealed class TierRungs : ITierRungs
 
     /// <summary>
     /// One tier's pick: in the original's order, which settles ties (<see cref="Rank"/>): at priority 3 the second list's candidates still kept
-    /// (scored into the map before the tier, <c>FUN_140510ef0</c>), then the role list, then the character's own list, where setupAI puts Self
-    /// preservation before the faction's and race's goals (<c>FUN_140510d60</c>, <c>FUN_140621b70</c>, <b>Verified</b>), then the look's sources of
-    /// the priority-3 goals (the decision step's step 4).
+    /// (scored into the map before the tier, <c>FUN_140510ef0</c>), then the blackboard's requests of the tier (<see cref="AddRequests"/>), the role
+    /// list, then the character's own list, where setupAI puts Self preservation before the faction's and race's goals (<c>FUN_140510d60</c>,
+    /// <c>FUN_140621b70</c>, <b>Verified</b>), then the look's sources of the priority-3 goals (the decision step's step 4).
     /// </summary>
     public AiGoal? Tier(TaskPriority tier, ChooserRow? row, int from, int to, out int source)
     {
         var candidates = _candidates;
         candidates.Clear();
         if (tier == TaskPriority.Urgent) AddSecondList(candidates);
+        AddRequests(candidates, tier);
         for (int k = 0; k < _roles.Count; k++) Consider(candidates, _roles[k], tier);
         if (tier == TaskPriority.Urgent) Consider(candidates, AiSystem.SelfPreservationGoal, tier);
         AddOwnLists(candidates, tier);
@@ -281,6 +287,21 @@ internal sealed class TierRungs : ITierRungs
             if (_mind.Player && !Ladder.OnRungs.Contains(own[k].Task.Type)) continue;
             Consider(candidates, own[k], tier);
         }
+    }
+
+    /// <summary>
+    /// The requests of the tier filed on the squad's blackboard for the character (<see cref="BoardRequests.For"/>: subject none or itself,
+    /// <c>FUN_140269240</c>, <b>Verified</b>), scored as every goal (<c>FUN_14050df10</c> with its request flag, whose done-request delete
+    /// <c>FUN_140268860</c> is empty in 1.0.68). A player-faction mind weighs them too: they are no own-list goals.
+    /// </summary>
+    void AddRequests(List<(AiGoal? Goal, float Score, float Desire, int Source)> candidates, TaskPriority tier)
+    {
+        if (_squad.Requests is not { Count: > 0 } requests) return;
+
+        _requests.Clear();
+        requests.For(tier, _id, _world.Tick, _requests);
+        foreach (var goal in _requests) Consider(candidates, goal, tier);
+        _requests.Clear();
     }
 
     /// <summary>

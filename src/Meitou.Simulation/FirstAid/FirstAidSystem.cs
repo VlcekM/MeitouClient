@@ -21,7 +21,7 @@ namespace Meitou.Simulation.FirstAid;
 /// <item><b>Treat</b> (<see cref="CharacterTask.Treat"/>): <see cref="TreatOrder"/> (the player), the medic job and the NPC rule start it.
 /// <c>Schedule</c> walks the medic to the patient
 /// (the pursuit system's pattern: a path at free speed, asked again when the patient has moved) and, in reach, asks the patient to stand still
-/// (<see cref="CharacterCold.StandStillUntil"/>); <c>Act</c> (own slot, read-only on the patient) emits one effect per tick while the medic is in
+/// (a request of 62 on its platoon's blackboard, <see cref="Ai.BoardRequests"/>); <c>Act</c> (own slot, read-only on the patient) emits one effect per tick while the medic is in
 /// reach, awake, not fighting and still, and the patient is still or down; <c>Apply</c> (serial commit, in target / source order) picks the kit,
 /// bandages the patient, drains the kit and trains the medic. So nothing on another character is written in a parallel phase.</item>
 /// <item><b>Rate</b> (<b>Observed</b>, character-stats.md): <c>lerp(1, 15, min(skill, kit quality) x 0.01) x medic speed mult</c> (x <c>robot medic
@@ -450,9 +450,9 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     #region Walking to the patient
 
     /// <summary>
-    /// How long a medic's ask to stand still lasts after its last renewal: the request's time to live (3 s, <c>FUN_140269ff0</c>).
+    /// The weight of the request to stand still a treating medic files (<c>DAT_14169bb48</c>, <b>Verified</b>).
     /// </summary>
-    const float StandStillSeconds = 3;
+    const float StandStillWeight = 1.4f;
 
     /// <summary>
     /// The walk to the patient: each medic on a treatment walks to the treatment spot, or stands still in reach; a hopeless way ends the treatment.
@@ -488,7 +488,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
                 // In reach (or treating itself): stand still and let the Act step work, and ask the patient to stand still too. The medic kneels only
                 // while the patient keeps still (the original plays the clip in the first aid task's update, which runs once the target stands still,
                 // row 25's state 42).
-                if (t != i) AskToStandStill(world, table.Cold(t)!);
+                if (t != i) AskToStandStill(world, i, t);
                 bool patientStill = Speed2(table.Previous[t].Velocity) <= Settings.StillSpeed * Settings.StillSpeed;
                 cold.TreatKneels = !cold.Medical!.PlayingDead && (t == i || table.Cold(t)!.Medical!.Incapacitated || patientStill);
                 if ((n.Flags & path) != 0)
@@ -549,12 +549,19 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     }
 
     /// <summary>
-    /// The first aid task's every update asks the patient to stand still (<c>Task_FirstAid</c> / <c>Task_FirstAidRig</c> call <c>FUN_1403346d0</c>,
-    /// docs/game/ai-tasks.md "Medic jobs"): a crawling or walking patient stops, so the treatment can run (<see cref="Act"/> treats only a patient
-    /// standing still). Without it a medic knelt, stood to follow, knelt again (issue #232).
+    /// The first aid task's every update asks the patient to stand still (<c>Task_FirstAid</c> / <c>Task_FirstAidRig</c> /
+    /// <c>Task_MakeTargetStandStill</c> slot 5 <c>FUN_1403346d0</c>, <b>Verified</b>; docs/game/ai-tasks.md "Medic jobs"): it files 62 Standing still at
+    /// priority 3, weight 1.4, on the patient's platoon blackboard, for the patient, or for its carrier while it is carried (the call takes the
+    /// carrier then). The request competes in that character's priority-3 pick (<see cref="Ai.TierRungs"/>), so a patient stands still unless an
+    /// order, an urgent job or a goal that scores higher wins, and not under a threat within 40 (62's list B <c>!39</c>). <see cref="Act"/> treats
+    /// only a patient standing still.
     /// </summary>
-    static void AskToStandStill(World world, CharacterCold patient) =>
-        patient.StandStillUntil = world.Tick + (long)MathF.Ceiling(StandStillSeconds / world.TickSeconds);
+    static void AskToStandStill(World world, int medic, int patient)
+    {
+        var table = world.Characters;
+        var subject = table.Cold(patient)!.CarriedBy is { IsNone: false } carrier ? carrier : table.IdOf(patient);
+        Ai.BoardRequests.FileOn(world, table.IdOf(medic), subject, TaskType.StandStill, TaskPriority.Urgent, StandStillWeight);
+    }
 
     /// <summary>
     /// A path whose last waypoint is farther than the reach from the goal on X/Z, or off the treatment spot's floor: the patient cannot be got to.
