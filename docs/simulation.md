@@ -1299,8 +1299,9 @@ one starts with the order's provenance. The chain's rows and states are in [AI t
   and plans it (`[4 | 262, 181, 68, 203, 204]`, the fights providing 7). The act-out is the plan's front work on its target, each with the goal's
   provenance: the fight (4 or 262, deferred to the next tick; combat then takes the guard, `DutyEnd.Taken`), the strip (181, `ArrestSystem.Strip`, shared
   with ordered arrests) or the lift (68); a strip walk that ends short of the target or a lift with no path to it is a lost walk on the target. Each ends the act-out (`Done`), as the original's plan ends at row 203, which does not act: the chooser plans
-  afresh, and a lifted target is 129 (carried by another faction), so the carrier's own goals (112 / 281) cage it. A target another act-out or an ordered
-  arrest works is refused. Picks and act-outs are hashed only while any exist.
+  afresh, and a lifted target is 129 (carried by another faction), so the carrier's own goals (112 / 281) cage it. A body that leaves the shoulder before a
+  cage ends 129, and the next score finds it again (uncarried, down, a bounty: `FUN_14099bfc0`): with 7 and 118 holding the new plan is the lift, so the guard
+  lifts it again as a fresh 204 (**Verified**, `FUN_14059a380`, `FUN_14099bfc0`). A target another act-out or an ordered arrest works is refused. Picks and act-outs are hashed only while any exist.
 - **Bounty desk** (dialogue, [economy 11.4](game/economy.md#114-claiming)): `DA_PAY_BOUNTY` (`ArrestSystem.PayBounty`) pays the carried body's
   unclaimed entry for the speaker's booking faction (halved dead) and marks it claimed; the hand-over of DA 10, 30 and 40 (`TakeOver`) runs
   after the line's other effects (data lists them in either order): the carrier lets go and the speaker is ordered 213 on the body (cleared; refused with "I can't carry anyone
