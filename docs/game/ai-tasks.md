@@ -1449,7 +1449,7 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
     end gives the routine back (the stand-down). A member whose full mind gives way to an engine one stops what the full mind had it doing: a sleeper gets up, one sitting
     stands, and a member other than the leader follows its leader again (`AiSystem.ToRoutine`, engine choice); one busy with something the mind does not hold then (a fight, a
     carry, a knock-out) rejoins on a later package step once it stands idle, as does any idle follower of such a squad (`AiSystem.Rejoins`). A mind dropped by trade,
-    recruitment, capture or storage is made again at the next package cadence (30 ticks); meanwhile, and for an NPC with no squad (scripted worlds only), there is no mind.
+    recruitment, capture or storage is made again in the AI's next slow world step (a squad the AI moves; a mod-held one at the next package cadence, 30 ticks); meanwhile, and for an NPC with no squad (scripted worlds only), there is no mind.
   - **In the fight** (`AiSystem.InFight`): the fight a goal started is the AI's own (`AiMind.FightFrom`), and its fighter thinks in it as anyone does. The current combat goal is kept while it is not
     done (the plan step above): an attack goal while its senses count an enemy (`numEnemies`, 16's effect; the same taken for 21, 144 and 34) or its finder picks one, a protect goal while
     its finder values someone above 0 (143 counts its own fight, the 0.01 floor), row 13 not asked again; another combat goal chosen keeps the fight too (the fight re-targets by itself).

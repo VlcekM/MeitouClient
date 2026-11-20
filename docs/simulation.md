@@ -2348,7 +2348,7 @@ the 15-tick cadence. A new enemy is acted on one tick after the look that sensed
 other character the AI does not hold (fleeing, carried) starts no fight. The members of a loaded platoon a code mod holds (see "Platoon blackboards" below)
 get an engine-run mind (`AiMind.Engine`, `AiSystem.EngineMinds`): the combat goals of their package for their role and of their own lists, and Self preservation, weighed on their routine and
 in their own fights; nothing else is acted out ([combat goals](game/ai-tasks.md#combat-goals)). Every other non-player squad has full minds, one whose template lists no AI packages
-included: its members weigh 14, 32 and their race's and faction's lists and stand idle otherwise ([squads without packages](game/factions-squads-towns.md#squads-without-packages)). An NPC without a mind (no squad, or between a dropped mind and the next package cadence) runs
+included: its members weigh 14, 32 and their race's and faction's lists and stand idle otherwise ([squads without packages](game/factions-squads-towns.md#squads-without-packages)). An NPC without a mind (no squad, or between a dropped mind and the AI's next slow world step) runs
 only its orders and jobs and does not fight back (every character has goals in the original). An NPC whose order runs (`DecisionSystem.Ordered`) is left alone: its think acts
 nothing, no goal pre-empts it and its fight requests are dropped; it thinks again as soon as the order no longer runs ([order queue](#order-queue)).
 

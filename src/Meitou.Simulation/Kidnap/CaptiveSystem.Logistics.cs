@@ -408,8 +408,8 @@ public sealed partial class CaptiveSystem
     }
 
     /// <summary>
-    /// Moves a character into <paramref name="squad"/> in <paramref name="role"/>; its AI mind is made again for the new squad on the AI's next
-    /// package cadence.
+    /// Moves a character into <paramref name="squad"/> in <paramref name="role"/>; its AI mind is made again for the new squad at the AI's next
+    /// slow world step.
     /// </summary>
     static void Join(World world, CharacterId id, CharacterCold c, Squad squad, SquadRole role)
     {
