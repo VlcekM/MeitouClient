@@ -334,7 +334,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
         else if (selection.Contains(id))
         {
             if (!down)
-                verbs.Add(("Escape", () => player.Say(new GetOutOrder([id]) { Tick = player.Session.World.Tick })));
+                verbs.Add(("Escape", () => player.Say(new GetOutOrder(player.SelectedIds()) { Tick = player.Session.World.Tick })));   // every selected one (FUN_1407f9e20)
         }
         else if (target.CarriedBy.IsNone)
         {

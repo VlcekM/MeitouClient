@@ -313,7 +313,9 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   queue and second list are emptied, the task ends and event 1 fires (or the trade opens). The menu's Talk To gives it to every selected character (`TalkOrder.Talkers`,
   each vetted, as `FUN_1407f9e20`), the quick click to the nearest. The interface gives both clearing the queue, Shift or not, as the original's givers do
   ([order givers](game/ai-tasks.md#order-givers)); `World.GiveOrder(queued: true)` appends one. DA_TRADE opens its window with no order (`OpenTradeNow`).
-- Not queued (they act at once): Shoot At (sets the turret's target), Get Out, Dispose Corpse (an errand). **Stop** is no order in the original either
+- **Escape** (the caged character's menu verb) is order 207 Escape cage (`GetOutOrder` → `Locks.CageEscape`) for every selected character, the queue cleared, as the
+  original's giver: done for one in no cage (list A `!79`), held while the cage is locked (list B `!54`), else Task_GetOutOfCage's leave with the escape flag.
+- Not queued (they act at once): Shoot At (sets the turret's target), Dispose Corpse (an errand). **Stop** is no order in the original either
   (`FUN_1407f6470`, [what clears the queue](game/ai-tasks.md#what-clears-the-queue)): it wipes the queue, the second list and the goal (`PlayerOrders.Wipe`) and ends the task.
 - `World.CanOrder(row, actor, target, site, point)` / `CanOrder(OrderEntry, actor)` -> `(Can, Why)` is `PlayerOrders.CanRun` as a pure read between ticks (a `Gone` verdict is `false` with no text); the queue's start and bark use the same read. It is not a menu filter (decision D5): the original's menu offers its verbs (operate, build, dismantle, prospect, ...) without testing the character and lets the order fail with its text, so Meitou's does too; no verb is greyed. Planned native multiplayer can call it on the host to gate guest commands.
 - Every `OrderCommand` also applies while paused (`World.ApplyPausedInterfaceCommands`, through every `IOrderOwner`'s inputs).
@@ -1336,7 +1338,7 @@ which an order's hold refuses. The chain's rows and states are in [AI tasks](gam
   without a gate) and stands; a gate shut again is opened again; a walk that ends short (a round's or its own) is a lost walk (see "Engine goals").
   An arrest's guard walking to a cage behind its faction's shut doors has them opened at once. Act-outs and locked homes are hashed only while any exist.
 - **Lock orders** (`LockSystem`, context-menu verbs on a caged character): `PickLockOrder` (the prisoner its own cage, a mate
-  walks to it; `Lockpicking.Step` each tick in reach, floaters "Pick success!"/"Pick failed"), `GetOutOrder` (refused while
+  walks to it; `Lockpicking.Step` each tick in reach, floaters "Pick success!"/"Pick failed"), `GetOutOrder` (order 207, [order queue](#order-queue): held while
   locked; any other than a kidnap victim whose sentence is not served, or whose cage owner is not real or a bandit faction, books a pending Escaping Prison (refused for a
   lawless owner) and sets `Escaped` unless the cage owner is not real; [locks](game/locks.md#cages-and-beds)).
   `Imprison` clears `Escaped`; being outside every town does (`ArrestSystem.DropTownStatusOutsideTowns`, as for `Freed`); an engine release (trade, recruit,

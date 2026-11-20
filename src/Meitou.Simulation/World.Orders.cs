@@ -92,6 +92,7 @@ public sealed partial class World
         TaskType.PutInCage or TaskType.LiftPersonSnatchingAllowed or TaskType.LiftPersonSnatchingAllowedInTownOnly or TaskType.FindCageAndPutIn
             => SystemOf<Crime.ArrestSystem>(),
         TaskType.GetOutOfCageLegit => Locks.FreedPrisoner.Instance,
+        TaskType.GetOutOfCageEscape => Locks.CageEscape.Instance,
         TaskType.RunAway => SystemOf<Aggro.FleeSystem>(),
         TaskType.GetUp or TaskType.Aoeu or TaskType.StumbleTaskForced or TaskType.GetOutOfBed => SystemOf<Combat.CombatSystem>()?.BodyOrders,
         TaskType.PlayerTalkTo or TaskType.SeekAndTalkAndSendSignal or TaskType.FollowWhileTalking or TaskType.TownStalker

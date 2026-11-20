@@ -20,8 +20,8 @@ public sealed record PickLockOrder(IReadOnlyList<CharacterId> Characters, Charac
 }
 
 /// <summary>
-/// The characters (the selection when empty) leave their cage (Task_GetOutOfCage 207): refused while it is locked; whether it is an escape is the
-/// task's flag (<see cref="Locks.FixtureRegistry.GetOut"/>).
+/// The player's Escape: the characters (the selection when empty) get order 207 Escape cage (<see cref="CageEscape"/>, Task_GetOutOfCage), held while
+/// the cage is locked; whether it is an escape is the task's flag (<see cref="Locks.FixtureRegistry.GetOut"/>).
 /// </summary>
 public sealed record GetOutOrder(IReadOnlyList<CharacterId> Characters) : OrderCommand;
 
@@ -137,23 +137,15 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
     }
 
     /// <summary>
-    /// A get-out order: each prisoner listed leaves its cage when it is unlocked.
+    /// A get-out order: each character listed gets order 207 Escape cage through its queue (<see cref="CageEscape"/>), the queue cleared unless
+    /// <see cref="OrderCommand.Queued"/>.
     /// </summary>
     void GetOutInput(World world, GetOutOrder getOut)
     {
         var table = world.Characters;
         foreach (var id in Who(world, getOut.Characters))
-        {
-            if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { IsImprisoned: true, Medical.Incapacitated: false } c)
-                continue;
-
-            if (world.Fixtures.GetOut(world, id, Crimes))
-            {
-                c.PickingLock = null;
-                if (c.IsPlayer) world.Post(Loc.Tr("{1} got out of the cage", c.Name));
-            }
-            else if (c.IsPlayer) world.Post("It's locked.");
-        }
+            if (table.TryResolveNext(id, out int s) && table.Cold(s) is { IsPlayer: true })
+                PlayerOrders.Give(world, s, CageEscape.Order(world, s), getOut.Queued);
     }
 
     /// <summary>
