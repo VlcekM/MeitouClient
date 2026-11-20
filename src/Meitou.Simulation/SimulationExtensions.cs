@@ -142,7 +142,7 @@ public delegate CombatMove? CombatMoveSource(World world, CharacterId id, long t
 public sealed record ModCombatMove(string Owner, CombatMoveSource Source);
 
 /// <summary>
-/// An NPC goal type a mod claimed (docs/modding.md "NPC goals"): the mod's id and the name its log lines give the goal.
+/// A goal type a mod claimed (docs/modding.md "Chooser goals and jobs"): the mod's id and the name its log lines give the goal.
 /// </summary>
 public sealed record ModGoalType(string Owner, string Name);
 
@@ -183,11 +183,12 @@ public sealed class SimulationExtensions
     /// </summary>
     public Dictionary<Data.Gameplay.Ai.TaskType, string> JobTypes { get; } = [];
     /// <summary>
-    /// The mods' own NPC goal types, each with the mod that claimed it and its name (docs/modding.md "NPC goals"; <see cref="Ai.NpcGoals"/>).
+    /// The mods' own goal types, each with the mod that claimed it and its name (docs/modding.md "Chooser goals and jobs";
+    /// <see cref="Ai.ChooserRegistry"/>).
     /// </summary>
     public Dictionary<Data.Gameplay.Ai.TaskType, ModGoalType> GoalTypes { get; } = [];
     /// <summary>
-    /// The mod that claimed each task type number, as a job or an NPC goal type: a task row from 1000 up is that mod's (<see cref="Ai.TaskHandlers"/>
+    /// The mod that claimed each task type number, as a job or a goal type: a task row from 1000 up is that mod's (<see cref="Ai.TaskHandlers"/>
     /// refuses another mod's handler for it).
     /// </summary>
     public Dictionary<Data.Gameplay.Ai.TaskType, string> TaskOwners { get; } = [];

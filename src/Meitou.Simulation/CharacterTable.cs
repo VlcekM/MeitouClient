@@ -1051,8 +1051,8 @@ public sealed class CharacterCold
     public AiMind? Ai { get; set; }
 
     /// <summary>
-    /// Held by a code mod's goal or system that steers it (<see cref="Ai.NpcGoals"/>, <see cref="Player.IDutyRelease"/>; Meitou only, no engine system
-    /// sets it): the chooser weighs only what may take it over (<see cref="Ai.MeitouHolds"/>). Serial phases only.
+    /// Held by a code mod's system that steers it (Meitou only, no engine system sets it): the chooser weighs only what may take it over
+    /// (<see cref="Ai.MeitouHolds"/>). Serial phases only.
     /// </summary>
     public bool Engaged { get; set; }
 

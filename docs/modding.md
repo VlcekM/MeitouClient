@@ -196,7 +196,8 @@ holds refuses the second mod.
   logged once with the mod id, the system's name and the phase, and the player gets a notice; the system's tick phases (paused orders'
   `Inputs` too) stop from the next serial step, and the fault enters the state hash (`ModSystemFaults`). A throw in a parallel phase lets
   that phase's other partitions finish, so that tick's partial work depends on the thread count, and none of the system's effects of that
-  tick are applied. The system's other hooks (observers, filters, task and decision sources) keep their own rules. `IStateHashed` puts a
+  tick are applied. A throw from one of its task handlers stops it the same way; its other hooks (observers, filters, chooser goals and job
+  contributors) keep their own rules. `IStateHashed` puts a
   system's state into `World.StateHash`. A mod system implementing a source interface `World` looks
   up by first match (`IAnimationSource`, `IProjectileSource`...) and placed before the standard one would replace it.
 - **Resolved combat:** a registered system implementing `ICombatHitObserver` receives `HitResolved(World, in CombatHit)` once per
@@ -528,18 +529,6 @@ holds refuses the second mod.
   the mods' folders, by bare name), drawn with its own material as a loose mesh: no shadow, no outline or picking
   ([character-renderer](character-renderer.md#bone-anchors-meitou-engine-choice)). Set it in the tick from the mod's system, as `DrawAnchor`;
   display only: not saved, not hashed, read by no system, so set it again after a load.
-- **Decision sources** (`Meitou.Simulation.Ai`, [rules](simulation.md#decision-step)): what each of the player's characters does next (the
-  order queue, jobs, goals, idling) is picked by the decision step from an open list of `IDecisionSource`s. A registered system implementing
-  `IDecisionOwner` gets `RegisterSources(DecisionSystem)` once when the world is made and adds its own with `Register(source)`, so a mod adds
-  a behavior without patching. Sources are asked in `Step` order (`DecisionStep`: 1 orders, 2 commitment, 3 urgent jobs, 4 goals, 5 jobs,
-  6 fallback) and by `Key` within a step, equal keys in registration order (mods in load order); in step 4 the best desire x weight wins,
-  elsewhere the first that can run. `CanRun` and `Desire` are pure reads of the world; `Start` starts the task (`TaskStart.Walk`, a row of
-  the mod's own from 1000 up). To run before a character idles, register at step 6 with a key below Idleness (`2000 + TaskType.Idle`).
-  Every player character is asked, so a source checks that the character is one of its own squads'. Several mods can each add sources.
-  `RegisterJob(type, source)` is the other kind: one contributor per job type, for the types a mod claimed with `AddJobType`. A mod's source or
-  contributor whose call throws is dropped for that world: it cannot run and starts nothing from then on, what the call did stands, the first
-  fault is logged with the mod id and the player gets a notice, and the fault enters the state hash. NPCs do not
-  go through this step; their AI packages run them (a mod's goals for them: NPC goals, below).
 - **Task handlers** (`Meitou.Simulation.Ai`, [task starts](simulation.md#task-starts)): a registered system implementing `ITaskOwner` gets
   `RegisterTasks(TaskHandlers)` once when the world is made, in system order, and registers an `ITaskHandler` (`Start`, `End`, `Done`) per
   `CharacterTask`, per row (`Register(TaskType, handler)`, a mod's row from 1000 up) or per row on a site (`RegisterOnSite`). One handler per
@@ -566,8 +555,8 @@ holds refuses the second mod.
   too. It chooses nothing and starts nothing. `Publish` only reads the world, in a fixed order: the claims steer later starts, so they must be
   the same on every run. A throw is not caught as a mod fault: the world's end of tick and the engine's finders call it.
 - **Mod jobs:** `AddJobType(type, name)` claims a task type number from 1000 up (`SimulationExtensions.FirstModCode`; the game's tasks stay
-  below it; one mod per number, also refused when another mod holds it as an NPC goal type, below; a mod may hold one number as both). The mod
-  puts such jobs in `CharacterCold.Jobs` and runs them itself (an `IJobSource` of its system); like the
+  below it; one mod per number, also refused when another mod holds it as a goal type; a mod may hold one number as both). The mod
+  puts such jobs in `CharacterCold.Jobs` and runs them itself (an `IJobSource` its system registers, Chooser goals and jobs below); like the
   game's jobs, they are worked only while the character's jobs switch is on. Taking a mod job off the list does not stop a task the mod already
   started from it, so the mod checks that the job is still listed. The jobs panel names them `name`. A save keeps each in its place in the list
   under Meitou keys (`meitou mjob<k>`, [save](formats/save.md)), out of the original's `pjob` list, with its building id but not a character
@@ -937,57 +926,72 @@ holds refuses the second mod.
   slave list, the race's `AI Goals`, in the hour's window), or per squad `PopulationSystem.GoalDuty(world, squad, role, type)` (public, from
   `world.Systems`; the running package's role list in the hour's window, a campaign squad's phase package included) or `GoalsOf`, the role from
   `AiSystem.RoleOf(squad, id, cold)`. It takes members the AI holds as above, walks them with a row of its own
-  (`TaskStart.Walk(world, slot, point, mode, row, TaskSource.Goal)`, `TaskStart.Become` to stand; not the row of one of its NPC goals' act-outs,
-  which would count as that act-out), optionally with a task handler of that row, publishes its targets as goal claims, releases them when done,
+  (`TaskStart.Walk(world, slot, point, mode, row, TaskSource.Goal)`, `TaskStart.Become` to stand; not a goal type's row its chooser goals act out
+  on), optionally with a task handler of that row, publishes its targets as goal claims, releases them when done,
   and keeps its state in `IModSaveData`. Such a duty does not weigh against the package's other goals (weight, tier, hours):
-  the mod decides when to take a member; NPC goals (below) let the chooser decide.
-- **NPC goals** (`Meitou.Simulation.Ai`, [rules](simulation.md#mod-goals)): `AddGoalType(type, name)` claims a task type number from 1000 up for
-  NPCs, as `AddJobType` does for jobs; a number has one owning mod across both kinds (that mod may claim it as both, so one number can be its goal
-  type and its act-out's row), and `name` is for log lines and notices. A registered system implementing `INpcGoalOwner` gets
-  `RegisterGoals(NpcGoals)` once when the world is made (in system order, only when some mod claimed a goal type) and calls
-  `Register(type, goal)` for a type its mod claimed; a type not claimed, another mod's or registered twice throws, and a throw drops that system's
-  goals with a log line. An NPC whose running package (or race's `AI Goals`, or the slave list of the squad it obeys) lists an AI_TASK of that
-  `enum` then weighs it in the AI's chooser beside its other goals: by the record's tier (`classification`) and hours, the list's weight and the
-  running goal's continuity (x1.25); the mod's type has no commitment or crowding. `INpcGoal.Desire(world, in NpcGoalAsk)` (slot, id, squad,
-  type, `targeting`) is the whole desire: asked in the parallel think on the asker's own partition, it must be a cheap, deterministic, pure read
-  (the character's own slot and cold state, `Previous` for others, the squad's blackboard, the mod's state that only its serial steps change;
-  randomness through `Rng.Hash` with the mod's purpose; scratch lists `[ThreadStatic]`); work out costly answers in the mod's own serial step and
-  keep them in its hashed state. The winner stands (idle, on row 14 Idleness) while `Start(world, in NpcGoalAsk)` is called in the AI's serial
-  step of the same tick, in slot order, for a character the AI still holds: it engages the character (`Engaged = true`), starts its task with a
-  row it claimed and `TaskSource.Goal` (`TaskStart.Walk`, `Become`), and answers true. The engine records the start: the character, the goal,
-  and the row and start tick of the task `Start` left running. That record is the act-out: a task of that row started since. A start that did
-  not engage or did not start such a task is logged once per goal. False starts nothing: that character weighs that goal type at 0 for four
-  think periods (each refused type on its own) and chooses again at once; a goal whose starts keep answering false is logged once, and a refusal
-  that left the character engaged too.
-  While the record lasts, the HUD's Goal line shows the AI_TASK record's name as the character walks or stands on the act-out (also while the AI
-  holds it), and while it walks on the act-out's own walk, carrying nothing, a goal below the urgent tier may be taken over by the combat goals,
-  as a captive job's walk is. The fight's start ends the mod's task (its row handler's `End`, `Replaced`); release then (`Engaged = false`,
-  `Replan`), so the AI runs the fight and weighs the goal again after it (one kept engaged fights only as the combat system runs it). A standing
-  act-out is not taken over (a conversation or a trade holds a standing character without changing its task or provenance, so the engine cannot
-  tell the two apart); release now and then if the character should join fights. When done, stop the mod's task
-  (`TaskStart.End(world, slot, TaskEnd.Stopped)` or a stand of your own), clear your `Engaged` and set `Replan`. The AI's serial step ends the
-  record once the character is no longer engaged, or once it runs another mod row's act-out started since; then the goal ends on the character's
-  mind, so the choice weighs it afresh, without continuity, and a desire that stays up starts it again at once: lower the desire when the work
-  is done. A package change does not stop an act-out started, so the mod checks in its serial step that the goal is still weighed for the
-  character: `AiSystem.WeighsGoal(world, slot, type)` reads the lists the chooser weighs, in the hour's window, and answers false wherever the
-  chooser never weighs a mod goal (`AiSystem.RoleOf` is public too). Player characters (an autonomous squad's), the members of a squad the
-  population moves (engine minds) and characters of a squad without a blackboard never weigh it. A `Desire` that throws or answers a number that
-  is not finite, or a `Start` that throws, is logged once with the mod id and the goal type and gives the player a notice, as a tick system's
-  fault does; the goal is not started again from then (that tick included) and not asked from the next tick (the rest of the desire's tick still
-  asks it), and the fault enters the state hash. When the system that registered a goal is stopped after a fault (Tick systems above), its goals
-  are dropped the same way at the AI's next serial step, and the AI lets go of every character the goal's records still hold, whatever its mind
-  (a new one after a squad change included): one in a fight, an open conversation or a trade once that ends; then, while its provenance is the
-  act-out (walking, arrived, woken from a knock-out), a fight's started since or none, it is no longer engaged, a walk on the act-out is stood
-  still (no handler runs: the mod's system is stopped) and it chooses again. One another system has put on a task of its own since is left to
-  that system. The release takes no body off a carrier's shoulder and frees no bed or seat the mod put the character in. Nothing is saved: after
-  a load the engine has no record of an act-out, so a mod that saved its characters' work releases them in `IWorldReady` (clears its `Engaged`,
-  sets `Replan`) and lets the chooser start the goal again; an act-out it resumes itself has no record (no HUD name, no take-over by a fight, no
-  release if its system stops). Without the code mod the goal is inert again. With no goal type claimed nothing is built. Engine API, not in the
-  original.
+  the mod decides when to take a member; chooser goals (below) let the chooser decide.
+- **Chooser goals and jobs** (`Meitou.Simulation.Ai`, [rules](simulation.md#engine-goals) "Code mods' goals"; **Observed**, by reading
+  `ChooserRegistry`, `ModGoal`, `DutyGoals` and `AiSystem`): `AddGoalType(type, name)` and `AddJobType(type, name)` claim task type numbers from
+  1000 up, one owning mod per number across both (a mod may claim one number as both, so it can be its goal type and its act-out's row); `name`
+  is for log lines, notices and the HUD. A registered system implementing `IChooserOwner` gets `Register(ChooserRegistry)` once when the world is
+  made, in system order, and calls `Goal(type, IModGoal)` for a goal type and `Jobs(type, IJobSource)` for a job type its mod claimed. A type not
+  claimed, another mod's or registered twice, or a call outside `Register`, throws, and a throw drops everything that system registered, with a
+  log line. A system added later (`World.AddSystem`) registers job contributors only.
+  - **Who weighs a goal:** a character whose lists hold an AI_TASK of that `enum`: an NPC's running package role list, its race's `AI Goals` or
+    the slave list of the squad it obeys; a player character's own `AI Goals` and its autonomous squad's package roles. It is weighed beside the
+    engine's goals by the record's tier (`classification`) and hours, the list's weight and the running goal's continuity (x1.25); the type has no
+    commitment or crowding. The members of a platoon a code mod holds (engine minds) never weigh it. Without the code mod the goal is inert.
+  - **`Desire(in ModGoalAsk ask)`** is the whole desire (0 or below: not wanted), asked in the AI's parallel think on the asker's own partition.
+    The ask is a read-only `ref struct` that cannot be kept or captured: `Slot`, `Id`, `Type`, `Targeting`; the asker's own state this tick
+    (`Self`, `ref readonly`), `Faction`, `Role`, `PlayerSide`, `IsAnimal`, `Carrying`, `InCombat`, `Orders`, `RunningRow`, `Running` (this goal
+    holds it now); another character's state as of the last finished tick (`TryPrevious`, `FactionOf`); its squad (`SquadId`, `Leader`,
+    `MemberCount`, `Member(k)`, `Town`, `Package`); `Relation` and `IsHostile` of two factions; `Tick`, `Hour`, `GameHours`, `Seed` (for
+    `Rng.Hash`); `Record(stringId)`, the merged game data. Answer from it and from the mod's own state that only its serial steps change; work a
+    costly answer out in the mod's serial step and keep it in its hashed state. `mod-check` runs the determinism check on it
+    ([Determinism check](#determinism-check)).
+  - **`Start(World, in ModGoalStart ask)`** (slot, id, squad, type, `targeting`): the winner stands idle on row 14 Idleness (not on the goal's
+    number) and `Start` is called serially, in slot order, in the tick it wins or the next, while the chooser still holds the character for it. It
+    finds its own target and starts the act-out with a row of the mod's own and `TaskSource.Goal` (`TaskStart.Walk`, `ProductionSystem.SitOn`),
+    and answers true: the goal then holds the character, the chooser keeps weighing it with the continuity, and the AI runs the character while
+    its task is the act-out (the task `Start` left running, or a goal's task started since). False starts nothing: the type weighs 0 for that
+    character for four think periods. The HUD's Goal line shows the AI_TASK record's name while the goal holds the character.
+  - **Ends:** `End(world, slot, id, type, ModGoalEnd why)`, serial, in the tick the end is seen or the next: `Displaced` (another goal won; the
+    engine stops a task still the act-out's: a walk stands, another ends through its handler), `Order` (an order's task starts), `Replanned` (a
+    knock-out, death or pick-up, an order on the body, a new mind, the goal's hours over), `Taken` (it flees, fights, is carried or caged, or
+    another system's task replaced the act-out), `Gone` (it left the world or died). Drop what the act-out holds and leave the task alone. A fight
+    takes the character over this way: Self preservation or a combat goal wins on the chooser. `ModGoals.Done(world, slot, type)` ends the goal
+    by the mod's rule (no `End`; a task still the act-out's stops as for `Displaced`), and `ModGoals.Holds(world, slot, type)` tells the mod's
+    serial step whether its act-out goes on; both throw in a parallel phase. Nothing is saved: after a load no goal holds anyone, and the chooser
+    starts the goal again.
+  - **Faults:** a `Desire` that throws or answers a number that is not finite at tick T is still asked by T's other threads and not from T + 1,
+    and no start of it is asked from T; a `Start` or `End` that throws stops it at once. The first fault is logged with the mod id and the goal
+    type, gives the player a notice and enters the state hash. A faulted goal, and the goals of a system the world stopped (Tick systems above),
+    are dropped: the mod is called no more, and the characters they hold are let go with no `End` and no handler (a walk on the act-out stands)
+    and choose again.
+  - **Jobs:** the chooser's job passes ask the contributor of a job type for each listed job of that type, for any character with a job list (Mod
+    jobs above). A contributor whose call throws is dropped for that world: the first fault is logged with the mod id, the player gets a notice,
+    and the fault enters the state hash.
+- **Ordering characters** (`Meitou.Simulation`, [order queue](simulation.md#order-queue); **Observed**, by reading `World.GiveOrder` and
+  `PlayerOrders.Give`): `world.GiveOrder(actor, row, target, site, point, queued)` gives a player character or an NPC an order through the one
+  queue the player's orders use, with the parts the menu's verbs give (`TaskType.MoveCusOrdered` to `point` is a walk). The row is one a system
+  owns as an order (the rows `World.CanOrder` answers for; a mod's own row is not one). Without `queued` it replaces the queue. Serial phases
+  only (it throws in a parallel one). It answers the front's `OrderCheck`: `Run`, `Blocked` (with the text the player's order would show),
+  `Gone` (the actor is not in the world, or no system owns the row: nothing queued). An NPC's front starts only while its chooser runs, else it
+  waits queued; its start ends a goal holding the character (`ModGoalEnd.Order`), and the chooser takes the character back once the queue is
+  empty. `CanOrder` asks the same without giving.
+- **Moving from the old hooks** (the hooks are gone; a mod built on them gets the notice under [Versioning](#versioning)):
+  - `IDecisionOwner` with `DecisionSystem.Register(source)`: a chooser goal (`ChooserRegistry.Goal`) or an order (`World.GiveOrder`);
+    `DecisionSystem.RegisterJob(type, source)`: `ChooserRegistry.Jobs(type, source)`.
+  - `INpcGoalOwner.RegisterGoals(NpcGoals)` with `Register(type, goal)`: `IChooserOwner.Register` with `ChooserRegistry.Goal(type, goal)`.
+  - `INpcGoal.Desire(world, in NpcGoalAsk)`: `IModGoal.Desire(in ModGoalAsk)`, still in the parallel think, reading through the ask.
+  - `INpcGoal.Start` setting `Engaged`, walking and answering true: `IModGoal.Start` walking and answering true; the goal holds the character.
+  - Done by stopping the task, clearing `Engaged` and setting `Replan`: `ModGoals.Done(world, slot, type)`.
+  - Releasing for a fight: nothing to do; the fight's goal wins and `End(Displaced)` is called.
+  - Player characters weigh a mod's goal type in their own lists and their autonomous squad's package.
 - **Seats** (`Meitou.Simulation.Production`; the system from `SystemBuildContext.Find<ProductionSystem>()` or `world.Systems`):
   `SitOn(world, slot, seat, row, source)` puts a character, the player's or an NPC, on a chair or throne through the player's Use order's
   act-out (the original's sitting is its operate task, [chairs](game/ai-tasks.md#town-goals)): it starts `CharacterTask.Operate` through
-  `TaskStart.Start` with `row` (the mod's own, 1000 up; a lower one throws) and `source` (`TaskSource.Goal` for a goal or decision source), so
+  `TaskStart.Start` with `row` (the mod's own, 1000 up; a lower one throws) and `source` (`TaskSource.Goal` for a goal's act-out), so
   the character walks there, sits on the seat's origin facing its way (the Bench facing switch applies), plays its sitting clip, gets hungry at
   the seat's `hunger rate` and trains its `stat used`. `seat` is a town seat's id (`world.Fixtures.SeatSpots`: the chairs and thrones of the
   loaded towns' buildings, with record, position and owning faction) or a complete building's in `world.Buildings.All` whose functionality is a
@@ -1000,15 +1004,16 @@ holds refuses the second mod.
   no lock is picked or cut for it, though one whose faction bashes doors may bash its way in; or the character stands in a shut building with no
   way out; a door locked during the walk is the walk's business). Any answer but `Seated` changes nothing and logs a line naming the row, once
   per row, seat and answer; a character already on that seat on that row is left as it is. Both run in the serial phases only and throw in a
-  parallel one: a mod's serial step or `Inputs`, a decision source's or an NPC goal's `Start`, `IWorldReady`; never an NPC goal's `Desire`, so
+  parallel one: a mod's serial step or `Inputs`, a chooser goal's `Start`, `IWorldReady`; never a goal's `Desire`, so
   work free seats out in the mod's serial step and keep them in its state. A character in a fight leaves it, as for any start (it may be drawn
   back in at once).
-  Who may be seated: a player character, an NPC the AI holds now (`AiSystem.Holds(table.Next[slot], cold)`) or one the mod engaged itself (an
-  NPC goal's `Start`). A character another system holds (a conversation, a trade, an arrest, a duty, another mod's goal) is taken from it and
-  may be left engaged with no owner, so do not seat one. The AI holds no character on the operate task, so a seated NPC stays seated without
-  `Engaged`, only Self preservation takes it over, and the AI takes it back once the seat ends. A squad the population moves walks its leader
-  on (its seat ends `Replaced`) while its other members stay seated, so hold the platoon first (`HoldPlatoon`). A player character is decided
-  again at its next decision (an order, a job) unless a decision source of the mod answers `Runs` for its row.
+  Who may be seated: a player character, an NPC the AI holds now (`AiSystem.Holds(table.Next[slot], cold)`), one the mod engaged itself, or one
+  its chooser goal's `Start` seats (the goal then holds the sitter). A character another system holds (a conversation, a trade, an arrest, a
+  duty, another mod's goal) is taken from it and may be left engaged with no owner, so do not seat one. Outside a goal the AI holds no
+  character on the operate task, so a seated NPC stays seated without `Engaged`, only Self preservation takes it over, and the AI takes it back
+  once the seat ends; a goal's sitter is the goal's until another goal wins (`End(Displaced)`, the seat stopped). A squad the population moves
+  walks its leader on (its seat ends `Replaced`) while its other members stay seated, so hold the platoon first (`HoldPlatoon`). A player character seated
+  outside a goal is decided again at its next choice (an order, a job, a goal that wins); one a goal seated stays while the goal holds it.
   How it ends: the walk reserves nothing from the AI's own sitters, and they always win: whenever one rests on the seat's origin (one that got
   there first, or one arriving later on a sitting-around or throne claim it already held) the task ends `Done` and the mod's character stands
   where it sat. Once it sits, a relaxing or staying-home member passes over that chair of its bar or home; another claim may still send a
@@ -1110,6 +1115,14 @@ difference it runs the game without mods: if that differs too, the fault is the 
 
 ## Versioning
 
+- A mod compiled against a member or type the game removed or made internal fails where the runtime binds it (a `MissingMemberException`,
+  `MemberAccessException`, `TypeLoadException` or `ReflectionTypeLoadException`, unwrapped from a reflection call or a static constructor): at
+  load (its types, its `IMod`, `Initialize`, its data phase), in a system factory, or at the first call that uses it (a system phase, a task
+  handler, a chooser registration, a goal, a job contributor, `IWorldReady`). Each ends in one notice, `Mod <name> was built for another version
+  of the game and needs an update; it is stopped and the rest of the game goes on.`: the mod is refused, or its system stopped, or its goal or
+  job contributor dropped, and the game runs on (`CodeModFaults`; **Observed**, by reading `ModHost`, `ModRegistry`, `ModSystemFaults`,
+  `ModTaskHandler`, `ChooserRegistry`, `ModGoal`, `ModDecisionFaults` and `World.TellReady`). Observers and filters drop themselves with their
+  own log line, as for any fault.
 - The manifest's `apiVersion` must lie in `ModApi.MinimumVersion` (1) to `ModApi.Version` (2); otherwise the mod is refused at load with a
   message. 2 added `version`, `dependencies`, `loadAfter`, `incompatible`, `gameVersion`, `ModContext.Dependency<T>` and
   `IModDependents`; an API 1 mod loads unchanged. `gameVersion` ties a mod to the engine releases it was built against. The

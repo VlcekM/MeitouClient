@@ -1115,7 +1115,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     /// finder (<see cref="FindPatient"/>) finds a patient, Splint Rigging 250 while its finder does (<see cref="FindSplint"/>); all three run with
     /// the jobs switch off. A job's treatment runs until it ends by itself.
     /// </summary>
-    public void RegisterSources(DecisionSystem decisions)
+    void IDecisionOwner.RegisterSources(DecisionSystem decisions)
     {
         var jobs = new MedicJobs(this);
         foreach (var type in (ReadOnlySpan<TaskType>)[TaskType.JobMedic, TaskType.JobRepairRobot, TaskType.SplintJob])

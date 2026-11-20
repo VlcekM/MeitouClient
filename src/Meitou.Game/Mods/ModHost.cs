@@ -71,6 +71,12 @@ public sealed record ModHostOptions(
 public sealed class ModHost
 {
     /// <summary>
+    /// The reason of a mod refused as one built for another version of the game (<see cref="CodeModFaults.BuiltForAnother"/>), whose notice is
+    /// <see cref="CodeModFaults.Notice"/>.
+    /// </summary>
+    const string Outdated = "built for another version of the game";
+
+    /// <summary>
     /// Every loaded mod's committed registrations.
     /// </summary>
     readonly ModRegistry _registry = new();
@@ -118,6 +124,12 @@ public sealed class ModHost
     /// What went wrong or was left out, one line per mod, for the player's notices.
     /// </summary>
     public IReadOnlyList<string> Notices => _notices;
+
+    /// <summary>
+    /// The next notice for the player about a mod whose system factory failed while a world was made (built for another version of the game), if
+    /// any; each is given once.
+    /// </summary>
+    public bool TryTakeFactoryNotice(out string notice) => _registry.TryTakeNotice(out notice);
 
     /// <summary>
     /// The reason each refused code mod was not loaded, by mod name (the <c>.mod</c> file's stem, as in mods.cfg).
@@ -286,7 +298,7 @@ public sealed class ModHost
         catch (Exception e)
         {
             Console.Error.WriteLine($"mod       {info.Name}: {e}");
-            RefuseEarly(info.Name, $"failed to start: {e.GetBaseException().Message}");
+            RefuseEarly(info.Name, CodeModFaults.BuiltForAnother(e) ? Outdated : $"failed to start: {e.GetBaseException().Message}");
         }
     }
 
@@ -376,7 +388,7 @@ public sealed class ModHost
         catch (Exception e)
         {
             Console.Error.WriteLine($"mod       {mod.Info.Name}: {e}");
-            failure = $"failed to change the game data: {e.GetBaseException().Message}";
+            failure = CodeModFaults.BuiltForAnother(e) ? Outdated : $"failed to change the game data: {e.GetBaseException().Message}";
         }
         finally
         {
@@ -444,7 +456,7 @@ public sealed class ModHost
         catch (Exception e)
         {
             Console.Error.WriteLine($"mod       {mod.Info.Name}: {e}");
-            Refuse(mod.Info.Name, $"failed to start: {e.GetBaseException().Message}");
+            Refuse(mod.Info.Name, CodeModFaults.BuiltForAnother(e) ? Outdated : $"failed to start: {e.GetBaseException().Message}");
         }
     }
 
@@ -478,7 +490,7 @@ public sealed class ModHost
         catch (Exception e)
         {
             Console.Error.WriteLine($"mod       {info.Name}: {e}");
-            Refuse(info.Name, $"failed to start: {e.GetBaseException().Message}");
+            Refuse(info.Name, CodeModFaults.BuiltForAnother(e) ? Outdated : $"failed to start: {e.GetBaseException().Message}");
         }
     }
 
@@ -494,12 +506,13 @@ public sealed class ModHost
     }
 
     /// <summary>
-    /// Leaves a mod out: a log line, a notice, and its reason for the dependency checks.
+    /// Leaves a mod out: a log line, a notice (for one built for another version of the game, <see cref="CodeModFaults.Notice"/>), and its reason
+    /// for the dependency checks.
     /// </summary>
     void Refuse(string mod, string reason)
     {
         Console.Error.WriteLine($"mod       {mod}: not loaded: {reason}");
-        _notices.Add($"Mod {mod} not loaded: {reason}");
+        _notices.Add(reason == Outdated ? CodeModFaults.Notice(mod) : $"Mod {mod} not loaded: {reason}");
         _pass.Refused(mod, reason);
     }
 
@@ -598,12 +611,34 @@ public sealed class ModHost
     static IMod CreateEntry(LoadedMod mod)
     {
         var type = mod.Assemblies.Select(a => a.GetType(mod.Manifest.Entry, throwOnError: false)).FirstOrDefault(t => t is not null)
-            ?? throw new ModLoadException($"entry type {mod.Manifest.Entry} is not in its assemblies");
+            ?? throw EntryMissing(mod);
         if (!typeof(IMod).IsAssignableFrom(type))
             throw new ModLoadException($"entry type {type.FullName} does not implement {typeof(IMod).FullName}");
         if (type.GetConstructor(Type.EmptyTypes) is null)
             throw new ModLoadException($"entry type {type.FullName} has no public parameterless constructor");
         return (IMod)Activator.CreateInstance(type)!;
+    }
+
+    /// <summary>
+    /// Why the mod's entry type was not found: an assembly whose types cannot load as built for another version of the game (an entry that
+    /// implements a type the game no longer has or no longer shows is not found by name; <see cref="CodeModFaults.BuiltForAnother"/>), else that it
+    /// is not in the assemblies.
+    /// </summary>
+    static Exception EntryMissing(LoadedMod mod)
+    {
+        foreach (var assembly in mod.Assemblies)
+        {
+            try
+            {
+                assembly.GetTypes();
+            }
+            catch (ReflectionTypeLoadException e) when (CodeModFaults.BuiltForAnother(e))
+            {
+                return e;
+            }
+        }
+
+        return new ModLoadException($"entry type {mod.Manifest.Entry} is not in its assemblies");
     }
 
     /// <summary>

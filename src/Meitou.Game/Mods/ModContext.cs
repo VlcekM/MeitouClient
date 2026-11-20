@@ -396,7 +396,7 @@ public sealed class ModContext
     /// A job type of the mod's own (docs/modding.md "Mod jobs"): a task type number (<see cref="SimulationExtensions.FirstModCode"/> and up, so
     /// never a game task), which the mod puts in characters' job lists and runs itself. The jobs panel names it <paramref name="name"/>; a save keeps
     /// it in its place in the list under Meitou keys (the original's list never holds it), and a load puts it back while the type is registered.
-    /// One mod per number, whether claimed as a job or an NPC goal type (a mod may claim one number as both).
+    /// One mod per number, whether claimed as a job or a goal type (a mod may claim one number as both).
     /// </summary>
     public void AddJobType(Data.Gameplay.Ai.TaskType type, string name)
     {
@@ -408,11 +408,11 @@ public sealed class ModContext
     }
 
     /// <summary>
-    /// An NPC goal type of the mod's own (docs/modding.md "NPC goals"): a task type number (<see cref="SimulationExtensions.FirstModCode"/> and up,
-    /// so never a game task) that AI_TASK records of a data mod name in AI packages; NPCs whose running package lists it weigh it in the AI's chooser
-    /// by the desire of the goal one of the mod's systems registers (<see cref="Meitou.Simulation.Ai.INpcGoalOwner"/>), and the mod acts it out. Log
-    /// lines and notices name it <paramref name="name"/>. One mod per number, whether claimed as a goal or a job type (a mod may claim one number as
-    /// both); without the mod the goal stays inert.
+    /// A goal type of the mod's own (docs/modding.md "Chooser goals and jobs"): a task type number (<see cref="SimulationExtensions.FirstModCode"/>
+    /// and up, so never a game task) that AI_TASK records of a data mod name in AI packages and goal lists; characters whose lists hold it weigh it in
+    /// the AI's chooser by the desire of the goal one of the mod's systems registers (<see cref="Meitou.Simulation.Ai.IChooserOwner"/>), and the
+    /// mod acts it out. Log lines and notices name it <paramref name="name"/>. One mod per number, whether claimed as a goal or a job type (a mod may
+    /// claim one number as both); without the mod the goal stays inert.
     /// </summary>
     public void AddGoalType(Data.Gameplay.Ai.TaskType type, string name)
     {

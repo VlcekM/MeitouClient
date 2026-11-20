@@ -252,8 +252,8 @@ internal sealed class TierRungs : ITierRungs
     #region Meitou holds
 
     /// <summary>
-    /// The choice of a character a hold only Meitou has keeps (<see cref="MeitouHolds"/>: a code mod's goal, a platoon a code mod holds, an
-    /// autonomous squad's member on a job): an obeying slave's job pass first (<see cref="PickJobPass"/>), then the urgent tier's goals
+    /// The choice of a character a hold only Meitou has keeps (<see cref="MeitouHolds"/>: a platoon a code mod holds, an autonomous
+    /// squad's member on a job): an obeying slave's job pass first (<see cref="PickJobPass"/>), then the urgent tier's goals
     /// <see cref="_only"/> lets through; null when none plans. No sources, no committed stop.
     /// </summary>
     public AiGoal? HeldChoice()
@@ -270,8 +270,8 @@ internal sealed class TierRungs : ITierRungs
     /// <summary>
     /// The own lists' goals of the tier: everyone's 14 Idleness first (<c>Character::setupAI</c>, priority 1, weight 0.1, <b>Verified</b>; the scorer
     /// drops it unless its list B <c>!162 !157</c> fails, so it is weighed only prone or armed, when its plan gets up or sheathes), then for a
-    /// player-faction mind only the types on the ladder's rungs (<see cref="Ladder.OnRungs"/>; the rest are their sources'), then the Hold entry last
-    /// (<see cref="AiSystem.HoldGoalOf"/>).
+    /// player-faction mind only the types on the ladder's rungs or of a code mod (<see cref="AiSystem.OnRungs"/>; the rest are their sources'),
+    /// then the Hold entry last (<see cref="AiSystem.HoldGoalOf"/>).
     /// </summary>
     void AddOwnLists(List<(AiGoal? Goal, float Score, float Desire, int Source)> candidates, TaskPriority tier)
     {
@@ -280,7 +280,7 @@ internal sealed class TierRungs : ITierRungs
         var own = _mind.RaceGoals;
         for (int k = 0; k < own.Count; k++)
         {
-            if (_mind.Player && !Ladder.OnRungs.Contains(own[k].Task.Type)) continue;
+            if (_mind.Player && !_ai.OnRungs(own[k].Task.Type)) continue;
             Consider(candidates, own[k], tier);
         }
 

@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
+using Meitou.Content;
 using Meitou.Game.Ui;
 using Meitou.Simulation;
 using Meitou.Simulation.Bodies;
@@ -201,6 +203,15 @@ sealed class ModRegistry
     /// The mod and name each world's mod system was made under (weakly held, gone with the world).
     /// </summary>
     readonly ConditionalWeakTable<ITickSystem, ModSystemTag> _made = new();
+    /// <summary>
+    /// The notices of mods whose system factory failed as built for another version of the game, once per mod, for the player
+    /// (<see cref="TryTakeNotice"/>); factories may run off the main thread.
+    /// </summary>
+    readonly ConcurrentQueue<string> _notices = new();
+    /// <summary>
+    /// The mods <see cref="_notices"/> has told of.
+    /// </summary>
+    readonly ConcurrentDictionary<string, bool> _told = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The simulation's mod part: the systems (tagged with their mod) and the dialogue handlers.
@@ -385,6 +396,11 @@ sealed class ModRegistry
     public ModSystemTag? TagOf(ITickSystem system) => _made.TryGetValue(system, out var tag) ? tag : null;
 
     /// <summary>
+    /// The next notice for the player about a mod whose system factory failed as built for another version of the game, if any; each is given once.
+    /// </summary>
+    public bool TryTakeNotice(out string notice) => _notices.TryDequeue(out notice!);
+
+    /// <summary>
     /// Records the mod as the code's owner and adds its handler.
     /// </summary>
     void Claim(ModCodeKind kind, int code, string mod, Action add)
@@ -454,7 +470,7 @@ sealed class ModRegistry
 
     /// <summary>
     /// The factory with its systems tagged with the mod (<see cref="TagOf"/>); a system whose factory throws is left out of the world, with a
-    /// log line.
+    /// log line, and the player's notice when the mod was built for another version of the game (<see cref="CodeModFaults.BuiltForAnother"/>).
     /// </summary>
     SystemFactory Tagged(string mod, SystemFactory factory) => factory with
     {
@@ -469,6 +485,7 @@ sealed class ModRegistry
             {
                 // A mod's fault leaves its system out of this world; the world is still made.
                 Console.Error.WriteLine($"mod       {mod}: system '{factory.Name}' not made: {e}");
+                if (CodeModFaults.BuiltForAnother(e) && _told.TryAdd(mod, true)) _notices.Enqueue(CodeModFaults.Notice(mod));
                 return null;
             }
             if (system is not null) _made.AddOrUpdate(system, new ModSystemTag(mod, factory.Name));

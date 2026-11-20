@@ -326,7 +326,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   while it holds an order.
 - **Duties let go** when an NPC's front starts, but for the body's orders (engine design; `PlayerOrders.TryFront`, serial, before the owner's `Start`): `World.ReleaseDuties` asks every system that
   is an `IDutyRelease` (found on the world's systems, nothing registered) to let the character go through its own give-up.
-  The ditch (its record), the player side's food runs and the mod NPC goals (`NpcGoals`) drop their record and clear `Engaged`; a body carried
+  The ditch (its record) and the player side's food runs drop their record and clear `Engaged`; a body carried
   for one is let go where it stands (the unlink, no knock-out); an [engine goal](#engine-goals) ends (`DutyEnd.Order`, through the AI; a town goal lets its carried body go the same way); a door way is dropped and a bash
   errand stopped. Neither the dialogue nor a trade holds anyone. The duty sweeps take no
   ordered character again (`DecisionSystem.Ordered` or `AiSystem.Holds` in their free tests).
@@ -398,8 +398,8 @@ phases, no source ever called from the think:
   look keeps the ask. Between ticks orders alone run serially (`ApplyPausedInterfaceCommands`; the bit stays). **Engine** latency (the phases): an ask raised before the look
   (inputs, schedule) starts in that tick; one raised after it (the think to the slow world: a blow, an alert, a sighting) at the next tick's look and starts; a fight the
   chooser picks is a deferred attack for the tick after its start, so a player character's 32 fights two ticks after the blow, as an NPC's (the original answers in the same update).
-- **Sources** (`IDecisionSource`: `CanRun` and `Desire` pure reads, `Start`): an open list sorted by step, then `Key` (the original's list order); systems register theirs
-  (`IDecisionOwner`), later code may add more (`DecisionSystem.Register`). The first source that can run starts; one that runs the character's task already ends the step. Step 4 picks
+- **Sources** (`IDecisionSource`: `CanRun` and `Desire` pure reads, `Start`): an open list sorted by step, then `Key` (the original's list order); the engine's systems register theirs
+  (`IDecisionOwner`, internal); code mods add job contributors only (`ChooserRegistry.Jobs`) and goals as [engine goals](#engine-goals). The first source that can run starts; one that runs the character's task already ends the step. Step 4 picks
   the best desire x weight (x1.25 for the goal running now, again below 1 while its task is not [finished](game/ai-tasks.md#finished-tests); a tie goes to the later-listed).
   1. Orders: the front of the queue ([order queue](#order-queue)): runs, starts, or (blocked) shows its text once (`Tried`), stays queued and the step goes on.
   2. Commitment: no source at this step; the one player goal above priority 2 with the commit flag is 35 Running away (a Slave-list goal an obedient
@@ -423,7 +423,7 @@ phases, no source ever called from the think:
      next tick, where 32 Self preservation (desire 1 within 40) finds a knock-out's attacker on the engaged list (`SelfDefencePick` → `CombatSystem.BestAttackerOf`) and a
      kidnapper nowhere, unless an order runs first ([carry-loot](game/carry-loot.md#kidnapping), [combat](game/combat.md#stealth-knock-out)). A sleeper's kidnap also gives it order 116 with the clear flag
      ([order queue](#order-queue)).
-  5. Jobs: the job list in order (`IJobSource` contributors by type, `DecisionSystem.RegisterJob`; the original's keys N+8, N+7, ...): the jobs switch gates every type but 16, 31,
+  5. Jobs: the job list in order (`IJobSource` contributors by type, `DecisionSystem.RegisterJob`, a mod's through `ChooserRegistry.Jobs`; the original's keys N+8, N+7, ...): the jobs switch gates every type but 16, 31,
      45, 57, 58, 250 (`FUN_14050c1c0`, both passes; 289 is gated), a row the repertoire does not register is skipped, the first that can run starts and one that runs the task ends the
      step. So a higher job takes over a lower running one at the next decision; the running job keeps no priority beyond its place. With nothing found, a list job the task still runs
      ends when its contributor says so (`IJobSource.Stop`: production's operators, haulers and follow jobs; the other act-outs end by themselves). Contributors: production (87, 152,
@@ -2230,7 +2230,7 @@ Meitou only (the original's AI plans for no player squad; asked for as the RE_Ke
   (one in a bed lies on).
 - **Precedence**: the one ladder's ([precedence](game/ai-tasks.md#precedence)): orders, committed stops, the second list, jobs, tiers 3/2/1,
   the default task. A package goal is held while its task is the think's own (`PlayerSideHold.Holds`, `AiMind.Owns`) and ends at an order, an
-  urgent job or a higher goal. Not reached this way: code mods' NPC goals (a player-faction mind weighs none, `ModDesire`); the goals whose
+  urgent job or a higher goal; a code mod's goal type in the package's role list is weighed too ([engine goals](#engine-goals)). Not reached this way: the goals whose
   looks take NPC minds only: 204 (`ArrestGoals`), the warden goals (`WardenGoals`), the kidnap goals (`KidnapGoals`), the loot goals
   (`LootGoals`), the cage escapes (`AiSystem.CagedMind`); the race goals off the chooser's rungs (`Ladder.OnRungs`).
 - **Home** (`SetSquadHome`, `Squad.AssignedHome`): a town building (its town becomes `Blackboard.Town`, so town goals, turrets and workplaces are
@@ -2431,14 +2431,14 @@ enemy (`numEnemies`, `SenseBlock.Enemies`), so guards man the turrets only while
 ### Engine goals
 
 Goals of the NPCs' packages that an engine system acts out, chosen by the one chooser as the original's (docs/game/ai-tasks.md "Precedence"). `DutyGoals`
-(one per world, built in `World`'s constructor by `AiSystem.BindGoals` from the `IDutyGoalOwner` systems; null when none registered) holds each registered type: a
-type of the original's that `TaskBehaviours` does not act out, registered by its own system with its `IDutyGoal` (desire, finder, states, start, end) and the rows of
+(one per world, built in `World`'s constructor by `AiSystem.BindGoals` from the `IDutyGoalOwner` systems and the code mods' goals; null when none registered) holds each
+registered type: a code mod's (below), or a type of the original's that `TaskBehaviours` does not act out, registered by its own system with its `IDutyGoal` (desire, finder, states, start, end) and the rows of
 its plan the act-out carries out besides the goal's own. Built: 135, 139, 282, 230, 232, 233, 237, 277, 278, 279, 259, 260, 183, 167, 168, 173, 245, 217,
 188, 192, 194, 218, 172 and 276 (`CaptiveSystem` through `CaptiveGoals`, [captives](#captives)); 176 (`SmellSystem`, [blood smell](#blood-smell)); 177 and 42 (`CarrySystem` through `LootGoals`, [looting and arming](#carrying-rescue-and-looting)); 148 and 142 (`CarrySystem` through `RescueGoals`, [rescue](#carrying-rescue-and-looting)); 211, 155, 197, 86 and 195 (`LockSystem` through `WardenGoals`,
 [wardens' goals](#arrest-and-jail)); 180 (`LockSystem` through `GateGoals`, gates in [arrest and jail](#arrest-and-jail)); 204 (`ArrestSystem` through `ArrestGoals`, [arrest and jail](#arrest-and-jail)); 256, 207 and 202 (`LockSystem` through `EscapeGoals`, [escapes](#captives)); 254 (`KidnapSystem` through
 `KidnapGoals`, [kidnapping](#kidnapping)); 273, 223, 138, 137, 112, 281, 224, 274, 106, 243, 131, 184, 212, 158, 283 and 216 (`TownDutySystem` through `TownGoals`, [town duties](#town-duties)).
 - **Choosing**: a registered type has `AiBehaviour.Duty`. Its desire is the system's (`DutyGoals.Desire`: the desire times the finder's factor when the TaskData row has
-  a finder and an effect; 0 for a player character's mind, an engine mind and a type in back-off), scored by the package record's tier and weight with the continuity
+  a finder and an effect; 0 for an engine mind and a type in back-off; a player-faction mind weighs those its tiers score, **Observed** in `AiSystem.DutyDesire`), scored by the package record's tier and weight with the continuity
   and no commitment (no duty goal commits). The plan is the planner's: its rows' desires and finders are asked of the system, a finder may give a character, a
   fixture or a place (`PlanTarget.OfCharacter`, `OfFixture`, `OfPlace`), every state of a finder's target and any state the planner does not evaluate are asked of
   the system first (the latter before the held-true default), the registered rows pass the carried-steps test and are the act-out's in the plan step, and a goal
@@ -2465,33 +2465,21 @@ its plan the act-out carries out besides the goal's own. Built: 135, 139, 282, 2
   (`DutyGoals.LostWalk`; the gate, warden and town act-outs): its target goes into `CharacterCold.Ignored` for 20 s and the goal ends for a replan, with no back-off
   and no limit on tries (**Verified**, plan step `FUN_14050d970` → `notifyPathImpossible` `FUN_140796ed0`; only the finders that read `pathFailures` skip the
   target, not the warden ones `FUN_1408cf3c0`, `FUN_1408cb1c0`, `FUN_1408cb360`, `FUN_1408cc2a0`, nor 180, which has none). Records are hashed while any.
-
-### Mod goals
-
-Engine API for code mods, not in the original ([modding](modding.md), "NPC goals"). `NpcGoals` (one per world, built in `World`'s constructor by
-`AiSystem.BindGoals` from `SimulationExtensions.GoalTypes` and the `INpcGoalOwner` systems; null when no mod claimed a type, and then none of
-the paths below runs) holds each registered type from 1000 up with the index of the system that registered it. A type outside `TaskBehaviours`
-has `AiBehaviour.None`, whose desire is 0; for a registered type `AiSystem.Desire` asks the mod instead (`ModDesire`: 0 for a player character's
-mind, for a goal whose system is stopped, and for a type the mod refused to start for that character, until its back-off ends,
-`AiMind.ModGoalBackoff`), and the default profile (desire "special", no commitment, crowd 1) leaves the score desire x weight with the continuity.
-With no TaskData row the goal is its own one-step plan (`TryPlan`), never kept as a stepped plan. `Act` gives it `AiBehaviour.Mod`: the character
-stands on row 14 (not the goal's number, which the mod may use as its own row and handler) and `AiMind.ModGoalAsk` asks the serial step
-(`SendRequests`, after the engine goals: `NpcGoals.Step`). The step first drops the goals of systems the world stopped and marks their records
-orphaned, then sweeps the records (`NpcGoals` keeps one per started character, by slot, hashed: the goal and the row and start tick of the task
-`Start` left running): a record ends when its character is gone or dead, no longer engaged, or runs another row from 1000 up with
-`TaskSource.Goal` started since, and its goal then ends on the mind it was started on; an orphaned record waits out a fight, an open conversation
-or a trade, then releases the character (not engaged; a walk on the act-out stood still with no handler) while its provenance is the act-out's,
-a fight's since or none. Last, `INpcGoal.Start` is called in slot order for each asker the AI still holds (one skipped replans): a start records
-the character and sets `AiMind.ModGoalStarted`, `ModGoalRow` and `ModGoalTick`; a refusal backs that type off for four think periods
-(`world.Every(ThinkEveryTicks)` x 4) and replans. `AiSystem.OnModTask` tells the act-out from another hold: the provenance is a goal's, of that row
-(from 1000 up), started at or after that tick. With it, `ActivityText` names the goal by its AI_TASK record while the character walks or stands
-on it, and its hold (`MeitouHolds.Of`) lets the combat goals take over a goal below the urgent tier while the character walks on the act-out's walk carrying
-nothing (as a captive job's walk; not while it stands, which a conversation's or trade's hold does not change). The first think that holds the
-character again also ends the goal (goal and plan cleared, so no continuity) and drops the ended back-offs. Faults: a desire's fault at tick T stops
-asking the desire from T + 1 (the threads of T still ask it, so the cut does not depend on the thread count) and its starts from T; a start's
-fault stops both at once; each is logged once, gives a notice through the world's mod fault notices and is hashed (`AiSystem.Hash`). The minds'
-new fields are hashed only while in use (a started goal, a back-off not yet dropped). Task rows from 1000 up have one owning mod
-(`TaskHandlers.RegisterMod`, against `SimulationExtensions.TaskOwners`).
+- **Code mods' goals** (engine API, not in the original; [modding](modding.md) "Chooser goals and jobs"; **Observed**, by reading the code named):
+  a mod's `IModGoal` for a type from 1000 up that its mod claimed (`SimulationExtensions.GoalTypes`) is an entry of the same table (`DutyGoals`,
+  built once with the world from what `ChooserRegistry` collected, read by the think's threads without a lock) through `ModGoal`, so every rule
+  above holds but these. Its desire is the mod's alone (`IModGoal.Desire`, asked in the parallel think on the asker's partition through the
+  read-only `ModGoalAsk`); the type has no TaskData row, so it is its own one-step plan (`PlanContext.OwnPlan`), is never stepped, plans nowhere
+  from a cage, and no finder or state is asked of the mod. The think stands on row 14 Idleness (`AiSystem.StandOnIdleRow`), not on the goal's
+  number, which the mod may use as its act-out's row and handler. `IModGoal.Start` (serial, slot order) finds its own target and starts the
+  act-out; `End` hears the `DutyEnd` as a `ModGoalEnd`; `ModGoals.Holds` / `Done` are the mod's reads and end. A player-faction mind weighs a
+  mod type of its own lists (`AiSystem.OnRungs`: the rungs or a registered mod type) and of its autonomous squad's package roles. Faults: a
+  desire that throws or is not finite at tick T is still asked by T's other threads and not from T + 1, and no start of it is asked from T; a
+  start's or end's throw stops it at once; the first is logged with the mod's id, gives the player a notice (`CodeModFaults.Notice` for a mod
+  built for another version of the game) and the faulted goals are hashed (`DutyGoals.Hash`, "MGFL"). A faulted goal, or one whose registering
+  system the world stopped, is dropped at the AI's next serial step: the mod is called no more, its holds end with no `End` and no handler (a
+  walk on the act-out is stood still) and the character chooses again (`DutyGoals.LetGoDropped`). Task rows from 1000 up have one owning mod
+  (`TaskHandlers.RegisterMod`, against `SimulationExtensions.TaskOwners`).
 
 ## New-game difficulty
 

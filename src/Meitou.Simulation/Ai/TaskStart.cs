@@ -1,3 +1,4 @@
+using Meitou.Content;
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Factions;
@@ -272,9 +273,15 @@ public sealed class TaskHandlers
     string? _mod;
 
     /// <summary>
-    /// The task numbers the mods claimed (job and NPC goal types) and the mod of each, while a mod registers.
+    /// The task numbers the mods claimed (job and goal types) and the mod of each, while a mod registers.
     /// </summary>
     IReadOnlyDictionary<TaskType, string>? _claimed;
+
+    /// <summary>
+    /// The faults of the world's mod systems and the registering system's index, while a mod registers: its handlers are guarded
+    /// (<see cref="ModTaskHandler"/>).
+    /// </summary>
+    (ModSystemFaults Faults, int System)? _guard;
 
     /// <summary>
     /// The mod that registered each row handler from 1000 up (null until a mod does).
@@ -292,6 +299,7 @@ public sealed class TaskHandlers
     public void Register(CharacterTask task, ITaskHandler handler)
     {
         ArgumentNullException.ThrowIfNull(handler);
+        handler = Guarded(handler);
         if (_undo is not null)
         {
             var before = _handlers[(byte)task];
@@ -303,11 +311,12 @@ public sealed class TaskHandlers
 
     /// <summary>
     /// Registers the handler of the starts of <paramref name="row"/>, whatever their act-out. A mod's system may not register a row from 1000 up that
-    /// another mod claimed (a job or NPC goal type) or registered first: one mod owns a row (docs/modding.md "Task handlers").
+    /// another mod claimed (a job or goal type) or registered first: one mod owns a row (docs/modding.md "Task handlers").
     /// </summary>
     public void Register(TaskType row, ITaskHandler handler)
     {
         ArgumentNullException.ThrowIfNull(handler);
+        handler = Guarded(handler);
         if (_mod is not null) Own(row, _rows);
 
         _rows[row] = handler;
@@ -320,6 +329,7 @@ public sealed class TaskHandlers
     public void RegisterOnSite(TaskType row, ITaskHandler handler)
     {
         ArgumentNullException.ThrowIfNull(handler);
+        handler = Guarded(handler);
         if (_mod is not null) Own(row, _siteRows);
 
         _siteRows[row] = handler;
@@ -327,11 +337,13 @@ public sealed class TaskHandlers
 
     /// <summary>
     /// A mod system's <see cref="ITaskOwner.RegisterTasks"/>, with its rows from 1000 up checked against <paramref name="claimed"/> and the rows
-    /// other mods registered; a throw (a refused row among them) undoes that system's registrations and is logged, and the world is made without them.
+    /// other mods registered, and its handlers guarded (<see cref="ModTaskHandler"/>: a throw stops system <paramref name="system"/>). A throw of the
+    /// registration (a refused row among them) undoes that system's registrations and is logged, and the world is made without them; a mod built for
+    /// another version of the game (<see cref="CodeModFaults.BuiltForAnother"/>) also has its system stopped, with the player's notice.
     /// </summary>
-    internal void RegisterMod(ITaskOwner owner, string mod, IReadOnlyDictionary<TaskType, string>? claimed)
+    internal void RegisterMod(ITaskOwner owner, string mod, IReadOnlyDictionary<TaskType, string>? claimed, ModSystemFaults faults, int system)
     {
-        (_mod, _claimed, _undo) = (mod, claimed, []);
+        (_mod, _claimed, _undo, _guard) = (mod, claimed, [], (faults, system));
         try
         {
             owner.RegisterTasks(this);
@@ -340,12 +352,18 @@ public sealed class TaskHandlers
         {
             for (int i = _undo.Count - 1; i >= 0; i--) _undo[i]();
             Console.Error.WriteLine($"mod       {mod}: task handlers not registered for this world: {e}");
+            if (CodeModFaults.BuiltForAnother(e)) faults.Fault(system, "task registration", e);
         }
         finally
         {
-            (_mod, _claimed, _undo) = (null, null, null);
+            (_mod, _claimed, _undo, _guard) = (null, null, null, null);
         }
     }
+
+    /// <summary>
+    /// <paramref name="handler"/> as registered: guarded while a mod's system registers (<see cref="RegisterMod"/>), else as it is.
+    /// </summary>
+    ITaskHandler Guarded(ITaskHandler handler) => _guard is { } guard ? new ModTaskHandler(handler, guard.Faults, guard.System) : handler;
 
     /// <summary>
     /// The registering mod takes <paramref name="row"/> in <paramref name="table"/>: a row from 1000 up another mod claimed or registered is refused

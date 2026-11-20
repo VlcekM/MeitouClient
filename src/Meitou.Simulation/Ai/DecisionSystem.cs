@@ -8,7 +8,7 @@ namespace Meitou.Simulation.Ai;
 /// The steps of the original's chooser (<c>AITaskSytem::chooseGoal</c> <c>FUN_140510ef0</c>, docs/game/ai-tasks.md "Precedence"), in the order they
 /// are tried.
 /// </summary>
-public enum DecisionStep : byte
+internal enum DecisionStep : byte
 {
     /// <summary>
     /// 1: the front of the order queue (<c>checkOrders</c> <c>FUN_140510920</c>).
@@ -38,9 +38,9 @@ public enum DecisionStep : byte
 }
 
 /// <summary>
-/// A source's answer for one character (<see cref="IDecisionSource.CanRun"/>, a pure read): it can run (<see cref="Can"/>; the original's desire x
-/// finder above 0), it runs the character's task already (<see cref="Running"/>: the plan goes on, nothing is started), or why not
-/// (<see cref="Why"/>: an order's failure text, "no attacker in range"; null: none to show).
+/// The chooser's answer from a source or a job contributor for one character (<see cref="IJobSource.CanRun"/>, a pure read): it can run
+/// (<see cref="Can"/>; the original's desire x finder above 0), it runs the character's task already (<see cref="Running"/>: the plan goes on,
+/// nothing is started), or why not (<see cref="Why"/>: an order's failure text, "no attacker in range"; null: none to show).
 /// </summary>
 public readonly record struct DecisionCheck(bool Can, bool Running = false, string? Why = null)
 {
@@ -64,7 +64,7 @@ public readonly record struct DecisionCheck(bool Can, bool Running = false, stri
 /// <see cref="TaskStart"/> (or a deferred fight). Sources are registered in an open list (<see cref="DecisionSystem.Register"/>), sorted by the
 /// original's <see cref="Step"/> and, within it, its <see cref="Key"/>.
 /// </summary>
-public interface IDecisionSource
+internal interface IDecisionSource
 {
     /// <summary>
     /// A short name for the trace ("32 Self preservation").
@@ -108,7 +108,7 @@ public interface IDecisionSource
 /// <summary>
 /// A system that contributes decision sources registers them when the world is made (<see cref="World.Decisions"/>).
 /// </summary>
-public interface IDecisionOwner
+internal interface IDecisionOwner
 {
     /// <summary>
     /// Registers its decision sources and job contributors with <paramref name="decisions"/>.
@@ -117,32 +117,34 @@ public interface IDecisionOwner
 }
 
 /// <summary>
-/// The contributor of the jobs of one or more types (<see cref="DecisionSystem.RegisterJob"/>). The decision step's job sources (steps 3 and 5) walk
-/// the character's list in order (the original's keys N+8, N+7, ...) and ask the contributor of each job's type; the jobs switch, the repertoire and
-/// the walk's order are theirs, everything else the contributor's.
+/// The contributor of the jobs of one or more types (<see cref="ChooserRegistry.Jobs"/>), asked for any character with a job list, player or NPC
+/// (docs/modding.md "Chooser goals and jobs"). The chooser's job passes walk the character's list in order (the original's keys N+8, N+7, ...) and
+/// ask the contributor of each job's type; the jobs switch, the repertoire and the walk's order are theirs, everything else the contributor's.
 /// </summary>
 public interface IJobSource
 {
     /// <summary>
-    /// Whether job <paramref name="k"/> of the character's list can run now (a pure read: the original's desire x finder above 0);
-    /// <see cref="DecisionCheck.Runs"/> when the character's task is that job's already.
+    /// Whether job <paramref name="k"/> of the character's list can run now (a read of the world: the original's desire x finder above 0);
+    /// <see cref="DecisionCheck.Runs"/> when the character's task is that job's already. Called serially, in slot order, at most once per character
+    /// per tick before that tick's choice, and again right before <see cref="Start"/>.
     /// </summary>
     DecisionCheck CanRun(World world, int slot, int k);
 
     /// <summary>
-    /// Starts job <paramref name="k"/> (serial phases only), after <see cref="CanRun"/> said it can.
+    /// Starts job <paramref name="k"/>, after <see cref="CanRun"/> said it can. Called serially, in slot order, in the tick the job wins or the next.
     /// </summary>
     void Start(World world, int slot, int k);
 
     /// <summary>
-    /// Step 3: whether job <paramref name="k"/> is urgent now (the kind-2 jobs while enemies are sensed, Obedient Slave 187 while its gate holds;
-    /// <c>FUN_14050e5b0</c>). Default: never.
+    /// Whether job <paramref name="k"/> is urgent now (the kind-2 jobs while enemies are sensed; <c>FUN_14050e5b0</c>): an urgent job is weighed
+    /// before the urgent tier's goals. Called as <see cref="CanRun"/>. Default: never.
     /// </summary>
     bool Urgent(World world, int slot, int k) => false;
 
     /// <summary>
     /// The character's task is job <paramref name="k"/>'s, which can no longer run, and no other job of the list can: the task ends (the original's
-    /// idleness takes over at that choice). Default: nothing (the act-out ends by itself).
+    /// idleness takes over at that choice). Called serially, in slot order, in the tick that is seen or the next. Default: nothing (the act-out ends by
+    /// itself).
     /// </summary>
     void Stop(World world, int slot, int k) { }
 }
@@ -155,11 +157,11 @@ public sealed record DecisionTrace(long Tick, string Winner, IReadOnlyList<strin
 
 /// <summary>
 /// The host of the chooser's sources (docs/simulation.md "Decision step"; the original's one chooser <c>FUN_140510ef0</c>, <see cref="Ladder"/>):
-/// the open list of <see cref="IDecisionSource"/>s and job contributors (the mod contract), the serial look that asks them before the parallel
-/// think (<see cref="Look"/>: no source is ever called from the think), and the serial pass in slot order that starts what the think's ladder
-/// picked (<see cref="Run"/>), passing the sources it went past. Every character with a squad runs the ladder; the player's characters
-/// (<see cref="Decides"/>) are asked every source, the others the order step and the engine's job passes. The look runs in the schedule step,
-/// the starts in the slow world after retaliation, aggro and flight (<see cref="World.RunTick"/>), and orders alone also between ticks
+/// the engine's <see cref="IDecisionSource"/>s and the job contributors (the mods' through <see cref="ChooserRegistry.Jobs"/>), the serial look
+/// that asks them before the parallel think (<see cref="Look"/>: no source is ever called from the think), and the serial pass in slot order that
+/// starts what the think's ladder picked (<see cref="Run"/>), passing the sources it went past. Every character with a squad runs the ladder; the
+/// player's characters (<see cref="Decides"/>) are asked every source, the others the order step and the job passes. The look runs in the schedule
+/// step, the starts in the slow world after retaliation, aggro and flight (<see cref="World.RunTick"/>), and orders alone also between ticks
 /// (<see cref="World.ApplyPausedInterfaceCommands"/>), serially, as no think runs there.
 /// </summary>
 public sealed class DecisionSystem
@@ -175,13 +177,9 @@ public sealed class DecisionSystem
     /// </summary>
     readonly Dictionary<TaskType, IJobSource> _jobs = [];
     /// <summary>
-    /// The code mods' sources and contributors, caught (<see cref="RegisterFrom"/>).
+    /// The code mods' job contributors, caught (<see cref="RegisterModJob"/>).
     /// </summary>
     readonly ModDecisionFaults _modFaults = new();
-    /// <summary>
-    /// The mod whose system registers now (<see cref="RegisterFrom"/>); null for a standard system.
-    /// </summary>
-    string? _registering;
     /// <summary>
     /// The sources' index ranges by step (<see cref="Steps"/>), made again at each registration.
     /// </summary>
@@ -222,24 +220,35 @@ public sealed class DecisionSystem
     public static bool Ordered(CharacterCold cold) => Ai.OrderStep.Ordered(cold);
 
     /// <summary>
-    /// Registers (or replaces) the contributor of the jobs of <paramref name="type"/> (an open list: a job type without one is kept in the list but
-    /// never run).
+    /// Registers (or replaces) the engine's contributor of the jobs of <paramref name="type"/> (a job type without one is kept in the list but never
+    /// run).
     /// </summary>
-    public void RegisterJob(TaskType type, IJobSource source)
+    internal void RegisterJob(TaskType type, IJobSource source)
     {
         ArgumentNullException.ThrowIfNull(source);
-        _jobs[type] = _registering is { } mod ? _modFaults.Wrap(source, mod, type) : source;
+        _jobs[type] = source;
     }
+
+    /// <summary>
+    /// Registers mod <paramref name="mod"/>'s contributor of the jobs of <paramref name="type"/> (<see cref="ChooserRegistry.Jobs"/>), its calls caught:
+    /// one that throws is dropped for this world (<see cref="ModDecisionFaults"/>).
+    /// </summary>
+    internal void RegisterModJob(TaskType type, IJobSource source, string mod) => _jobs[type] = _modFaults.Wrap(source, mod, type);
+
+    /// <summary>
+    /// Takes the contributor of <paramref name="type"/> back (a mod system's registration that threw).
+    /// </summary>
+    internal void RemoveJob(TaskType type) => _jobs.Remove(type);
 
     /// <summary>
     /// The contributor of the jobs of <paramref name="type"/>; null when none is registered.
     /// </summary>
-    public IJobSource? JobSourceOf(TaskType type) => _jobs.GetValueOrDefault(type);
+    internal IJobSource? JobSourceOf(TaskType type) => _jobs.GetValueOrDefault(type);
 
     /// <summary>
     /// The sources in the order they are asked.
     /// </summary>
-    public IReadOnlyList<IDecisionSource> Sources => _sources;
+    internal IReadOnlyList<IDecisionSource> Sources => _sources;
 
     /// <summary>
     /// The sources' index ranges by step, for the ladder (<see cref="Ladder.Run"/>).
@@ -252,12 +261,11 @@ public sealed class DecisionSystem
     public bool Tracing { get; set; }
 
     /// <summary>
-    /// Adds a source after those of a lower step or key and after equal ones (an open list: a mod may add its own).
+    /// Adds a source after those of a lower step or key and after equal ones (the engine's own sources).
     /// </summary>
-    public void Register(IDecisionSource source)
+    internal void Register(IDecisionSource source)
     {
         ArgumentNullException.ThrowIfNull(source);
-        if (_registering is { } mod) source = _modFaults.Wrap(source, mod);
 
         int at = _sources.FindLastIndex(s => s.Step < source.Step || s.Step == source.Step && s.Key <= source.Key);
         _sources.Insert(at + 1, source);
@@ -265,24 +273,12 @@ public sealed class DecisionSystem
     }
 
     /// <summary>
-    /// Has <paramref name="owner"/> register its sources and contributors; those of a code mod's system (<paramref name="mod"/>, its id) are caught,
-    /// a throwing one dropped for this world (<see cref="ModDecisionFaults"/>).
+    /// Has an engine system register its sources and contributors (<see cref="IDecisionOwner"/>).
     /// </summary>
-    internal void RegisterFrom(IDecisionOwner owner, string? mod)
-    {
-        _registering = mod;
-        try
-        {
-            owner.RegisterSources(this);
-        }
-        finally
-        {
-            _registering = null;
-        }
-    }
+    internal void RegisterFrom(IDecisionOwner owner) => owner.RegisterSources(this);
 
     /// <summary>
-    /// Adds the code mods' dropped sources and contributors to the state hash; nothing while none has dropped.
+    /// Adds the code mods' dropped contributors to the state hash; nothing while none has dropped.
     /// </summary>
     internal void HashFaults(ref StateHasher hasher) => _modFaults.Hash(ref hasher);
 

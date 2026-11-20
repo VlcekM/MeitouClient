@@ -125,7 +125,7 @@ public sealed partial class ProductionSystem
     /// jobs 138, 137, 223, 273 (<see cref="ErrandJobs"/>). A job runs while <see cref="Runnable"/> holds; one that no longer does and that nothing
     /// replaces ends (<see cref="End"/>).
     /// </summary>
-    public void RegisterSources(DecisionSystem decisions)
+    void IDecisionOwner.RegisterSources(DecisionSystem decisions)
     {
         var jobs = new ListJobs(this);
         foreach (var type in (ReadOnlySpan<TaskType>)[TaskType.OperateMachinery, TaskType.OperateAutomaticMachinery, TaskType.OperateStorage,

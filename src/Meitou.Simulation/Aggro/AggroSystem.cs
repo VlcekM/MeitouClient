@@ -2345,7 +2345,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// <summary>
     /// Registers the job 16 with the decision step (Hold's goal 16 is the chooser's own list entry, <see cref="Ai.AiSystem.HoldGoalOf"/>).
     /// </summary>
-    public void RegisterSources(DecisionSystem decisions) => decisions.RegisterJob(Data.Gameplay.Ai.TaskType.AttackEnemies, new AttackJob(this));
+    void IDecisionOwner.RegisterSources(DecisionSystem decisions) => decisions.RegisterJob(Data.Gameplay.Ai.TaskType.AttackEnemies, new AttackJob(this));
 
     /// <summary>
     /// The job 16 Attacking enemies of a character's list (Shift with an attack; it runs with the jobs switch off, docs/game/ai-tasks.md

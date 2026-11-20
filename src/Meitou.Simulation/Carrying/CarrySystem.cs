@@ -1730,7 +1730,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// in its squad, whose finder finds a body (<see cref="FindRescue"/>, which also needs <see cref="MayRescue"/>; <see cref="FindForage"/>) lifts
     /// or loots it. It runs while its lift or loot does.
     /// </summary>
-    public void RegisterSources(DecisionSystem decisions)
+    void IDecisionOwner.RegisterSources(DecisionSystem decisions)
     {
         var jobs = new CarryJobs(this);
         decisions.RegisterJob(TaskType.FindAndRescueIfTheresBeds, jobs);

@@ -106,10 +106,10 @@ internal interface IDutyGoalOwner
 
 /// <summary>
 /// The engine-acted goals of one world (docs/simulation.md "Engine goals"): each goal type an engine system acts out, registered by that system from
-/// its own file (<see cref="IDutyGoalOwner"/>), and the characters such a goal holds. The goal holds its character, not
-/// <see cref="CharacterCold.Engaged"/>: <see cref="AiMind.Duty"/> names the goal record whose act-out runs, the AI keeps thinking for the character
-/// (<see cref="AiSystem.Holds"/>), and a goal that scores higher takes it over. Made with the world and never changed after (the threads read it
-/// without a lock); the held records change only in the AI's serial step.
+/// its own file (<see cref="IDutyGoalOwner"/>), each code mod's goal type from 1000 up (<see cref="ModGoal"/>, <see cref="IChooserOwner"/>), and
+/// the characters such a goal holds. The goal holds its character: <see cref="AiMind.Duty"/> names the goal record whose act-out runs, the AI keeps
+/// thinking for the character (<see cref="AiSystem.Holds"/>), and a goal that scores higher takes it over. Made with the world and never changed
+/// after (the threads read it without a lock); the held records change only in the AI's serial step.
 /// </summary>
 internal sealed class DutyGoals
 {
@@ -150,14 +150,25 @@ internal sealed class DutyGoals
     readonly List<Entry> _entries = [];
 
     /// <summary>
+    /// The code mods' goals by type (from 1000 up; empty without any).
+    /// </summary>
+    readonly Dictionary<TaskType, Entry> _mods = [];
+
+    /// <summary>
+    /// The faults of the mods' goals.
+    /// </summary>
+    readonly ModGoalFaults _modFaults = new();
+
+    /// <summary>
     /// Whether a system's <see cref="IDutyGoalOwner.RegisterGoals"/> runs now: registering is allowed only then.
     /// </summary>
     bool _open;
 
     /// <summary>
-    /// The goals of a world's systems (<see cref="IDutyGoalOwner"/>, asked in tick order); null when none registered a goal.
+    /// The goals of a world's systems (<see cref="IDutyGoalOwner"/>, asked in tick order) and the code mods' goals the world's systems registered
+    /// (<paramref name="mods"/>, <see cref="IChooserOwner"/>; <paramref name="data"/> for their asks); null when there is none.
     /// </summary>
-    internal static DutyGoals? Build(IReadOnlyList<ITickSystem> systems)
+    internal static DutyGoals? Build(IReadOnlyList<ITickSystem> systems, IReadOnlyList<ModGoalClaim> mods, Population.PopulationData data)
     {
         var goals = new DutyGoals();
         foreach (var system in systems)
@@ -169,7 +180,18 @@ internal sealed class DutyGoals
             goals._open = false;
         }
 
+        foreach (var claim in mods) goals.RegisterMod(new ModGoal(claim, data, goals._modFaults));
         return goals._entries.Count > 0 ? goals : null;
+    }
+
+    /// <summary>
+    /// Takes up a code mod's goal for its type (from 1000 up, which no behaviour acts out; the registry has refused a type registered twice).
+    /// </summary>
+    void RegisterMod(ModGoal goal)
+    {
+        var entry = new Entry(goal, goal.Type, []);
+        _mods[goal.Type] = entry;
+        _entries.Add(entry);
     }
 
     /// <summary>
@@ -195,12 +217,17 @@ internal sealed class DutyGoals
     /// <summary>
     /// The registered goal of <paramref name="type"/>; null for none.
     /// </summary>
-    internal Entry? EntryOf(TaskType type) => (uint)type < TaskBehaviours.TypeCount ? _byType[(int)type] : null;
+    internal Entry? EntryOf(TaskType type) => (uint)type < TaskBehaviours.TypeCount ? _byType[(int)type] : _mods.GetValueOrDefault(type);
 
     /// <summary>
     /// Whether a system registered a goal for <paramref name="type"/>.
     /// </summary>
     internal bool Has(TaskType type) => EntryOf(type) is not null;
+
+    /// <summary>
+    /// Whether <paramref name="type"/> is a code mod's registered goal type.
+    /// </summary>
+    internal bool IsMod(TaskType type) => _mods.ContainsKey(type);
 
     #endregion
 
@@ -247,6 +274,11 @@ internal sealed class DutyGoals
     readonly List<(int Slot, DutyEnd Why)> _ended = [];
 
     /// <summary>
+    /// Scratch: the slots a dropped mod goal holds (<see cref="LetGoDropped"/>).
+    /// </summary>
+    readonly List<int> _dropped = [];
+
+    /// <summary>
     /// The chooser's desire of an engine goal for the asker: the goal's desire times its finder's factor when its TaskData row has a finder and an
     /// effect (<c>FUN_14060fd80</c>, docs/game/ai-tasks.md "Desire and commitment"); 0 for a type no system registered or an answer at or below 0.
     /// Parallel: the asker's own partition.
@@ -282,11 +314,13 @@ internal sealed class DutyGoals
     }
 
     /// <summary>
-    /// The AI's serial step: the held records are swept (<see cref="Sweep"/>: displaced, ordered, replanned, taken, gone), then the goals the thinks
-    /// chose this tick start (<see cref="SendStarts"/>); a refused start keeps the goal at 0 for that character for <paramref name="backoffTicks"/>.
+    /// The AI's serial step: the characters a dropped mod goal holds are let go (<see cref="LetGoDropped"/>), the held records are swept
+    /// (<see cref="Sweep"/>: displaced, ordered, replanned, taken, gone), then the goals the thinks chose this tick start (<see cref="SendStarts"/>); a
+    /// refused start keeps the goal at 0 for that character for <paramref name="backoffTicks"/>.
     /// </summary>
     internal void Step(World world, int backoffTicks)
     {
+        if (_mods.Count > 0 && _held.Count > 0) LetGoDropped(world);
         if (_held.Count > 0) Sweep(world);
         if (Interlocked.Exchange(ref _asking, 0) != 0) SendStarts(world, backoffTicks);
     }
@@ -436,6 +470,29 @@ internal sealed class DutyGoals
     }
 
     /// <summary>
+    /// The characters held by a mod goal that is dropped (<see cref="ModGoal.Dropped"/>: it faulted, or its system was stopped) are let go by the AI,
+    /// since the mod is called no more: no <see cref="IDutyGoal.End"/>, a walk of the act-out stands (no handler runs, the mod's may be stopped), any
+    /// other task is left to end by itself, and the goal ends on the mind, which chooses again.
+    /// </summary>
+    void LetGoDropped(World world)
+    {
+        _dropped.Clear();
+        foreach (var (slot, held) in _held)
+        {
+            if (held.Entry.Goal is ModGoal goal && goal.Dropped(world)) _dropped.Add(slot);
+        }
+
+        foreach (int slot in _dropped)
+        {
+            _held.Remove(slot, out var held);
+            if (world.Characters.Cold(slot) is not { Ai: { } mind } cold || world.Characters.IdOf(slot) != held!.Id) continue;
+
+            if (AiSystem.OnDuty(cold, mind) && world.Characters.Next[slot].Task == (byte)CharacterTask.GoTo) TaskStart.Stand(world.Characters, slot);
+            EndOnMind(mind, held);
+        }
+    }
+
+    /// <summary>
     /// A displaced goal's act-out stops (its provenance still the act-out's: nothing else replaced it), so the AI holds the character for the winner
     /// at the next think, as a fight it leaves ends (<c>LeaveFights</c>): a walk stands, any other task but standing idle ends through its handler.
     /// </summary>
@@ -487,12 +544,20 @@ internal sealed class DutyGoals
     }
 
     /// <summary>
-    /// Adds the held characters' records to the state hash; nothing while none is held.
+    /// Adds the held characters' records and the faulted mod goals with their ticks to the state hash; nothing while none is held and none has
+    /// faulted.
     /// </summary>
     internal void Hash(ref StateHasher hasher)
     {
-        if (_held.Count == 0) return;
+        if (_held.Count > 0) HashHeld(ref hasher);
+        if (Volatile.Read(ref _modFaults.Count) > 0) HashModFaults(ref hasher);
+    }
 
+    /// <summary>
+    /// The held characters' records.
+    /// </summary>
+    void HashHeld(ref StateHasher hasher)
+    {
         hasher.Add(0x44757479);   // "Duty"
         foreach (var (slot, held) in _held)
         {
@@ -501,6 +566,22 @@ internal sealed class DutyGoals
             hasher.Add((int)held.Goal.Task.Type);
             hasher.Add((int)held.Goal.Task.Target);
             hasher.Add(held.Tick);
+        }
+    }
+
+    /// <summary>
+    /// The faulted mod goals: how many, then each one's type and fault tick, in registration order.
+    /// </summary>
+    void HashModFaults(ref StateHasher hasher)
+    {
+        hasher.Add(0x4D47464C);   // "MGFL"
+        hasher.Add(_modFaults.Count);
+        foreach (var entry in _entries)
+        {
+            if (entry.Goal is not ModGoal { FaultTick: not long.MaxValue } goal) continue;
+
+            hasher.Add((int)goal.Type);
+            hasher.Add(goal.FaultTick);
         }
     }
 

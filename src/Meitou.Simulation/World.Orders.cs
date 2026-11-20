@@ -6,7 +6,7 @@ using Meitou.Simulation.Player;
 namespace Meitou.Simulation;
 
 /// <summary>
-/// The world's order checks: whether an order could start, and the system that owns its row.
+/// The world's orders: whether an order could start, giving one (<see cref="GiveOrder"/>), and the system that owns its row.
 /// </summary>
 public sealed partial class World
 {
@@ -33,13 +33,38 @@ public sealed partial class World
     /// </summary>
     public (bool Can, string? Why) CanOrder(TaskType row, CharacterId actor, CharacterId target = default, string? site = null, Vector3 point = default)
     {
-        var entry = OrderOwnerOf(row, site is not null) is { } owner
-            ? new OrderEntry(row, owner)
-            {
-                Target = target, Site = site, Point = point, Detail = owner is Locks.LockSystem locks ? locks.WorkDetail() : null,
-            }
-            : null;
+        var entry = EntryOf(row, target, site, point);
         return entry is null ? (false, null) : CanOrder(entry, actor);
+    }
+
+    /// <summary>
+    /// Gives <paramref name="actor"/> (a player character or an NPC) the order <paramref name="row"/> with its parts as the row's <c>CanOrder</c>
+    /// takes them (no <paramref name="target"/>: none), through the one order queue the player's orders use (<see cref="PlayerOrders.Give"/>): without
+    /// <paramref name="queued"/> it replaces the queue. Serial phases only (between ticks, or a system's serial step). Returns the check of the queue's
+    /// front; <see cref="OrderCheck.Gone"/> for an actor not in the world or a row no system owns as an order (nothing is queued then).
+    /// </summary>
+    public OrderCheck GiveOrder(CharacterId actor, TaskType row, CharacterId? target = null, string? site = null, Vector3 point = default,
+        bool queued = false)
+    {
+        if (Characters.Phase == TablePhase.Parallel) throw new InvalidOperationException("Orders are given in the serial phases only.");
+        if (!Characters.TryResolveNext(actor, out int slot) || Characters.Cold(slot) is null) return OrderCheck.Gone;
+        if (EntryOf(row, target ?? CharacterId.None, site, point) is not { } entry) return OrderCheck.Gone;
+
+        return PlayerOrders.Give(this, slot, entry, queued);
+    }
+
+    /// <summary>
+    /// The order entry of <paramref name="row"/> with its parts, owned by the row's order owner (<see cref="OrderOwnerOf"/>); null for a row no system
+    /// owns as an order. A lock order's detail is its common case (<see cref="Locks.LockSystem.WorkDetail"/>).
+    /// </summary>
+    OrderEntry? EntryOf(TaskType row, CharacterId target, string? site, Vector3 point)
+    {
+        if (OrderOwnerOf(row, site is not null) is not { } owner) return null;
+
+        return new OrderEntry(row, owner)
+        {
+            Target = target, Site = site, Point = point, Detail = owner is Locks.LockSystem locks ? locks.WorkDetail() : null,
+        };
     }
 
     /// <summary>

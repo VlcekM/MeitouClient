@@ -134,14 +134,9 @@ public enum AiBehaviour : byte
     /// </summary>
     HealLegs = 27,
     /// <summary>
-    /// A code mod's goal (a type from 1000 up that a mod registered, <see cref="NpcGoals"/>; never in <see cref="TaskBehaviours"/>' table): it stands
-    /// while the serial step asks the mod to start it (<see cref="AiMind.ModGoalAsk"/>, <see cref="INpcGoal.Start"/>).
-    /// </summary>
-    Mod = 28,
-    /// <summary>
-    /// A goal an engine system acts out (a type no entry of this table acts out, registered by that system, <see cref="DutyGoals"/>): it stands on
-    /// the goal's row while the serial step asks the system to start the act-out (<see cref="AiMind.DutyAsk"/>, <see cref="IDutyGoal.Start"/>), and
-    /// the goal then holds the character (<see cref="AiMind.Duty"/>).
+    /// A goal an engine system or a code mod acts out (a type no entry of this table acts out, registered by that system or mod,
+    /// <see cref="DutyGoals"/>): it stands on the goal's row (a code mod's type on row 14 Idleness) while the serial step asks for the act-out's start
+    /// (<see cref="AiMind.DutyAsk"/>, <see cref="IDutyGoal.Start"/>), and the goal then holds the character (<see cref="AiMind.Duty"/>).
     /// </summary>
     Duty = 29,
     /// <summary>

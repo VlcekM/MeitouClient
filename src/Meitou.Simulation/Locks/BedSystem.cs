@@ -723,7 +723,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     /// character carrying a body whose faction is not hostile to its own and that is no animal lays it in the bed the bed search finds (row 106
     /// registers the bed search <c>FUN_1408cfe00</c> as its finder, <b>Verified</b>). It runs while its walk does.
     /// </summary>
-    public void RegisterSources(DecisionSystem decisions) => decisions.RegisterJob(TaskType.FindBedAndPutIn, new PutInJob(this));
+    void IDecisionOwner.RegisterSources(DecisionSystem decisions) => decisions.RegisterJob(TaskType.FindBedAndPutIn, new PutInJob(this));
 
     /// <summary>
     /// The put-in-bed job's contributor (<see cref="IJobSource"/>).
