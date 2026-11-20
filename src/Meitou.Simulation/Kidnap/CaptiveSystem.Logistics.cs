@@ -300,7 +300,8 @@ public sealed partial class CaptiveSystem
         if (Vector2.Distance(new Vector2(table.Next[w].Position.X, table.Next[w].Position.Z), to) > Settings.ShoutReach)
         {
             if (WalksOwn(table, w, j) && Vector2.Distance(table.Next[w].Goal, to) <= 5) return true;
-            if (++j.Walks > Settings.Walks) return End(world, j, CaptiveEventKind.GaveUp);
+            if (!WalksOwn(table, w, j) && Lost(j, IgnoreKey.Of(j.Captive)) || ++j.Walks > Settings.Walks)
+                return End(world, j, CaptiveEventKind.GaveUp);
 
             TaskStart.Walk(world, w, to, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
             return true;

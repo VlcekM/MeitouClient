@@ -215,7 +215,9 @@ internal sealed class KidnapGoals(KidnapSystem kidnap, CarrySystem carry, Popula
 
     /// <summary>
     /// The act-outs' step (serial, the kidnap step): each member 254 still holds whose lift has ended (the body on its shoulder, or the lift given
-    /// up) is done (<see cref="DutyGoals.Done"/>); one the goal no longer holds is left to the AI's sweep, which ends it. Then the lifts are pruned.
+    /// up) is done (<see cref="DutyGoals.Done"/>), and one whose walk to the victim no path reaches (<see cref="CarrySystem.LiftWalkFails"/>) is a
+    /// lost walk on the victim (<see cref="DutyGoals.LostWalk"/>); one the goal no longer holds is left to the AI's sweep, which ends it. Then the
+    /// lifts are pruned.
     /// </summary>
     internal void Step(World world)
     {
@@ -226,17 +228,28 @@ internal sealed class KidnapGoals(KidnapSystem kidnap, CarrySystem carry, Popula
         _done.Clear();
         foreach (var (slot, act) in _acting)
         {
-            if (_duties?.Runs(world, slot, TaskType.FinalKidnapperCageJob) == true && world.Characters.Next[slot].Task != (byte)CharacterTask.PickUp)
-                _done.Add(slot);
+            if (_duties?.Runs(world, slot, TaskType.FinalKidnapperCageJob) != true) continue;
+            if (world.Characters.Next[slot].Task != (byte)CharacterTask.PickUp || carry.LiftWalkFails(world, slot)) _done.Add(slot);
         }
 
-        foreach (int slot in _done)
+        foreach (int slot in _done) Finish(world, slot);
+    }
+
+    /// <summary>
+    /// A held member's lift is over: a lift still walking found no path (a lost walk on the victim), else the lift ended and the goal is done.
+    /// </summary>
+    void Finish(World world, int slot)
+    {
+        var act = _acting[slot];
+        _acting.Remove(slot);
+        if (world.Characters.Next[slot].Task == (byte)CharacterTask.PickUp)
         {
-            var act = _acting[slot];
-            _acting.Remove(slot);
-            Lifted(world, slot, act);
-            _duties!.Done(world, slot, TaskType.FinalKidnapperCageJob);
+            _duties!.LostWalk(world, slot, TaskType.FinalKidnapperCageJob, IgnoreKey.Of(act.Victim));
+            return;
         }
+
+        Lifted(world, slot, act);
+        _duties!.Done(world, slot, TaskType.FinalKidnapperCageJob);
     }
 
     /// <summary>

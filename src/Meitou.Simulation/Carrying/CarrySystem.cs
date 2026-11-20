@@ -654,17 +654,38 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     internal bool LiftWalkFails(World world, int slot)
     {
         var table = world.Characters;
-        ref readonly var n = ref table.Next[slot];
-        var cold = table.Cold(slot)!;
-        bool walks = n.Task == (byte)CharacterTask.PickUp && cold.LiftTime < 0;
-        if (!walks || (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0) return false;
+        bool walks = table.Next[slot].Task == (byte)CharacterTask.PickUp && table.Cold(slot)!.LiftTime < 0;
+        return walks && table.TryResolveNext(table.Cold(slot)!.CarryTarget, out int t) && WalkFails(world, slot, ReachOf(world, table.Cold(t)!));
+    }
+
+    /// <summary>
+    /// Whether the looter in <paramref name="slot"/>, out of reach of its body, holds the answer that no path gets it there (as
+    /// <see cref="LiftWalkFails"/>, with the loot's reach).
+    /// </summary>
+    internal bool LootWalkFails(World world, int slot)
+    {
+        var table = world.Characters;
+        if (table.Next[slot].Task != (byte)CharacterTask.Loot || !table.TryResolveNext(table.Cold(slot)!.CarryTarget, out int t)) return false;
+
+        return !InReach(world, table.Next[slot], table.Next[t], Settings.Reach) && WalkFails(world, slot, Settings.Reach);
+    }
+
+    /// <summary>
+    /// The walk to the body has no path for good: none found, or one whose navmesh part ends farther than <paramref name="reach"/> from the spot it
+    /// walks to; false while a request is on its way.
+    /// </summary>
+    bool WalkFails(World world, int slot, float reach)
+    {
+        ref readonly var n = ref world.Characters.Next[slot];
+        var cold = world.Characters.Cold(slot)!;
+        if ((n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0) return false;
         if (cold.PathFailed) return true;
 
         bool provisional = (n.Flags & (ushort)MoveFlags.HasPath) != 0 && cold.PathExact < cold.Path.Length;
-        if (!provisional || !table.TryResolveNext(cold.CarryTarget, out int t)) return false;
+        if (!provisional) return false;
 
         var end = cold.PathExact > 0 ? cold.Path[cold.PathExact - 1] : n.Position;
-        return Vector2.Distance(new Vector2(end.X, end.Z), n.Goal) > ReachOf(world, table.Cold(t)!);
+        return Vector2.Distance(new Vector2(end.X, end.Z), n.Goal) > reach;
     }
 
     /// <summary>
@@ -884,7 +905,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         if (world.Tick % RestoreEveryTicks == 0) RestoreLinks(world);
         LootWindow(world);
         KeepLinks(world);
-        _lootGoals.Step(world);
+        _lootGoals.Step(world, this);
         if (Settings.AutoEveryTicks > 0)
         {
             int every = world.Every(Settings.AutoEveryTicks);

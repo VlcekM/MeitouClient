@@ -231,6 +231,10 @@ internal sealed class ArrestGoals(ArrestSystem arrests)
         /// Game seconds walking up to strip.
         /// </summary>
         public float Walked { get; set; }
+        /// <summary>
+        /// The work's walk ended short of the target or found no path to it (a lost walk).
+        /// </summary>
+        public bool Lost { get; set; }
     }
 
     /// <summary>
@@ -257,7 +261,8 @@ internal sealed class ArrestGoals(ArrestSystem arrests)
 
     /// <summary>
     /// The act-outs' step (serial, the arrest step): each member 204 still holds goes on with its work; one whose work is over is done
-    /// (<see cref="DutyGoals.Done"/>). One the goal no longer holds is left to the AI's sweep, which ends it.
+    /// (<see cref="DutyGoals.Done"/>), one whose walk to the target was lost is a lost walk on it (<see cref="DutyGoals.LostWalk"/>). One the goal
+    /// no longer holds is left to the AI's sweep, which ends it.
     /// </summary>
     internal void Step(World world)
     {
@@ -272,9 +277,12 @@ internal sealed class ArrestGoals(ArrestSystem arrests)
 
         foreach (int slot in _done)
         {
+            var act = _acting[slot];
             _acting.Remove(slot);
             if (world.Characters.Cold(slot) is { } cold) ArrestSystem.DropStripClip(cold);
-            _duties!.Done(world, slot, TaskType.HuntBounties);
+
+            if (act.Lost) _duties!.LostWalk(world, slot, TaskType.HuntBounties, IgnoreKey.Of(act.Target));
+            else _duties!.Done(world, slot, TaskType.HuntBounties);
         }
     }
 
@@ -298,10 +306,16 @@ internal sealed class ArrestGoals(ArrestSystem arrests)
     /// <summary>
     /// The strip (<see cref="ArrestSystem.Strip"/>); false when it is over: the weapons taken (181's list A holds, and the plan's next row 203 does
     /// not act, so the original's plan is over and the chooser plans afresh: <c>FUN_14050d540</c>), the target got up or was taken, the guard has no
-    /// working arm or the walk up took too long.
+    /// working arm, the walk up took too long, or it ended short of the target (a lost walk).
     /// </summary>
     bool StepStrip(World world, int g, int t, ActOut act)
     {
+        if (act.Walked > 0 && world.Characters.Next[g].Task != (byte)CharacterTask.GoTo && !arrests.InStripReach(world, g, t))
+        {
+            act.Lost = true;
+            return false;
+        }
+
         switch (arrests.Strip(world, g, t, act.Time, TaskSource.Goal))
         {
             case StripStep.Walk:
@@ -319,12 +333,17 @@ internal sealed class ArrestGoals(ArrestSystem arrests)
     }
 
     /// <summary>
-    /// The lift runs; once it ended, a body on the guard's shoulder is logged as lifted.
+    /// The lift runs (one whose walk no path reaches the target is a lost walk, <see cref="Carrying.CarrySystem.LiftWalkFails"/>); once it ended, a
+    /// body on the guard's shoulder is logged as lifted.
     /// </summary>
     bool Lifting(World world, int g, ActOut act)
     {
         var table = world.Characters;
-        if (table.Next[g].Task == (byte)CharacterTask.PickUp) return true;
+        if (table.Next[g].Task == (byte)CharacterTask.PickUp)
+        {
+            act.Lost = arrests.Carry?.LiftWalkFails(world, g) == true;
+            return !act.Lost;
+        }
 
         if (table.Cold(g)!.Carrying == act.Target) arrests.Note(world, ArrestEventKind.Lifted, act.Id, act.Target, table.Cold(g)!.Faction, 0);
         return false;

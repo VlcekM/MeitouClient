@@ -1005,7 +1005,8 @@ not down; Trade on an own animal too) ends above the grid ([animals](game/animal
   living player-side body at 0.8 s instead. Then the tag, and back to its task. On arrival it says event 33 or 32 and may get a pending Looting (`CrimeSystem.NpcLooting`,
   [looting crime](game/carry-loot.md#33-npc-looting)), which its witnesses answer as any NPC culprit's ([crimes](#crimes-and-bounties)). A police-like looter (`CrimeSystem.IsPoliceLike`) confiscates instead: past 0.8 s one unit of each stolen item of the body's inventory (`CarrySystem.Confiscate`), tagging it only when there was none. Engine choices: nearest per pass, the tag never expires.
   The chosen goal's start loots the plan's body (row 177's loot task, a goal's task); a body another member's act-out works is refused, and the goal is done when the loot
-  ends (`DutyGoals.Done`).
+  ends (`DutyGoals.Done`); a loot whose body no path reaches (`CarrySystem.LootWalkFails`), or a pick-up whose walk ended short of its item, is a lost walk
+  ([engine goals](#engine-goals)).
 - **Unarmed NPCs** (`LootGoals`, the finder `CarrySystem.FindWeapon`, goal 42 "Don't be unarmed" with step 8 FIND_WEAPON, `AI::findWeapon`): an [engine goal](#engine-goals) too,
   desire 2.0, plan `[1, 3, 8, 42]` while the planner's state 4 (a weapon) fails, the finder on row 8; with a weapon the scorer drops it. On the same look an NPC without a
   weapon that weighs 42 keeps row 8's pick: the nearest free ground weapon within 100 (in a town only an unowned or enemy-owned one), else a dead body with a weapon,
@@ -1296,7 +1297,7 @@ one starts with the order's provenance. The chain's rows and states are in [AI t
   every 15 ticks keeps each member's finder pick (`FUN_14099bfc0`) and its free-cage and town answers; the chooser weighs 204 like any goal of the package
   and plans it (`[4 | 262, 181, 68, 203, 204]`, the fights providing 7). The act-out is the plan's front work on its target, each with the goal's
   provenance: the fight (4 or 262, deferred to the next tick; combat then takes the guard, `DutyEnd.Taken`), the strip (181, `ArrestSystem.Strip`, shared
-  with ordered arrests) or the lift (68). Each ends the act-out (`Done`), as the original's plan ends at row 203, which does not act: the chooser plans
+  with ordered arrests) or the lift (68); a strip walk that ends short of the target or a lift with no path to it is a lost walk on the target. Each ends the act-out (`Done`), as the original's plan ends at row 203, which does not act: the chooser plans
   afresh, and a lifted target is 129 (carried by another faction), so the carrier's own goals (112 / 281) cage it. A target another act-out or an ordered
   arrest works is refused. Picks and act-outs are hashed only while any exist.
 - **Bounty desk** (dialogue, [economy 11.4](game/economy.md#114-claiming)): `DA_PAY_BOUNTY` (`ArrestSystem.PayBounty`) pays the carried body's
@@ -1375,7 +1376,8 @@ what it wore there going into its inventory (engine choice; `DialogueSystem.Chai
   bed, awake or not (the finder's bed branch, **Verified**): the lift is then a kidnap that rolls on arrival (`CarrySystem.Kidnap`: a hit knocks the sleeper out, a miss wakes it
   and raises the alarm).
 - **Act-out**: plan `[1, 68, 132, 254]`; the start lifts the plan's victim (`CarrySystem.BeginPickUp`, row 68, back to standing) unless another member works it; the goal is done
-  (`DutyGoals.Done`) when the pick-up ends, with the body on the shoulder or not. A player victim's message "is carrying X away". The carrier then chooses again with all
+  (`DutyGoals.Done`) when the pick-up ends, with the body on the shoulder or not; a lift whose walk no path gets to the victim (`CarrySystem.LiftWalkFails`) is a
+  lost walk on it ([engine goals](#engine-goals)). A player victim's message "is carrying X away". The carrier then chooses again with all
   its goals and acts the winner out as anyone ([holding](#engine-goals)): its goals 112 / 281 ([town goals](#town-duties)) cage the body, 141 follows its leader with it.
   A kidnapper stumbling or getting up loses the goal (replanned) and chooses again.
 - **Caging**: a victim that leaves its 254 carrier's shoulder into a cage (seen at the next kidnap step, `KidnapGoals`' lift record) is `CharacterCold.Kidnapped` in a cage of
@@ -1493,8 +1495,9 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
 [ai, prisoner and slaver packages](game/ai.md#prisoner-and-slaver-packages). Each goal is an [engine goal](#engine-goals) (`CaptiveGoals`) of a member with a full mind whose role list (an obeying
 slave's: its master's Slave list) or own lists hold it in its hours; its act-out is a job of the worker (`CaptiveJob` with its `Goal` and `Target`), begun by
 `IDutyGoal.Start` on the plan's target (refused when the target is gone, no longer fits or is another job's), stepped only while `DutyGoals.Runs`, and done
-(`DutyGoals.Done`) at the original's end. Cages are those of the squad's town (`Fixture.Site`) unless said otherwise. A walk to a cage ends within `use range` + 15, or a walk that ended within 200; three
-failed walks mark the cage unreachable for the faction; its own faction's shut doors are unlocked first. A job gives up after 600 game s (engine).
+(`DutyGoals.Done`) at the original's end. Cages are those of the squad's town (`Fixture.Site`) unless said otherwise. A walk to a cage ends within `use range` + 15, or a walk that ended within 200; a
+job's walk that ends short of its place is a lost walk ([engine goals](#engine-goals); a player animal's job gives up after three, marking a cage unreachable for
+the faction); its own faction's shut doors are unlocked first. A job gives up after 600 game s (engine).
 A job's walk is its own, run as the job's row (`CaptiveSystem.WalksOwn`): one the worker was on when the job started, its AI's or an errand's, is replaced at once, as a
 goal taken up ends the plan before it ([precedence](game/ai-tasks.md#precedence)). **Observed** (KenshiOracle state 0.5 hold, Rebirth, N = 1): the workmasters take their
 gather jobs while walking home under 43, and a job that waited on that walk reached its cage only after about 90 of the hold's 110 s.

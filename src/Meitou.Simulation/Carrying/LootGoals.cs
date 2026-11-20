@@ -196,9 +196,10 @@ internal sealed class LootGoals
 
     /// <summary>
     /// The act-outs' step (serial, the carry step): each member a goal still holds whose loot or pick-up has ended (taken, done or given up) is done
-    /// (<see cref="DutyGoals.Done"/>); one the goal no longer holds is left to the AI's sweep, which ends it.
+    /// (<see cref="DutyGoals.Done"/>), and one whose walk was lost (<see cref="Lost"/>) ends as a lost walk (<see cref="DutyGoals.LostWalk"/>: a
+    /// body is ignored for 20 s); one the goal no longer holds is left to the AI's sweep, which ends it.
     /// </summary>
-    internal void Step(World world)
+    internal void Step(World world, CarrySystem carry)
     {
         if (_acting.Count == 0) return;
 
@@ -206,15 +207,29 @@ internal sealed class LootGoals
         _done.Clear();
         foreach (var (slot, act) in _acting)
         {
-            if (_duties?.Runs(world, slot, act.Goal) == true && Over(world, slot, act)) _done.Add(slot);
+            if (_duties?.Runs(world, slot, act.Goal) == true && (Over(world, slot, act) || Lost(world, carry, slot, act))) _done.Add(slot);
         }
 
         foreach (int slot in _done)
         {
             var act = _acting[slot];
+            bool lost = Lost(world, carry, slot, act);
             _acting.Remove(slot);
-            _duties!.Done(world, slot, act.Goal);
+
+            if (lost) _duties!.LostWalk(world, slot, act.Goal, DutyGoals.KeyOf(act.Target));
+            else _duties!.Done(world, slot, act.Goal);
         }
+    }
+
+    /// <summary>
+    /// Whether the act-out's walk was lost (the plan step's rule, <c>FUN_14050d970</c>, <b>Verified</b>): a loot whose body no path reaches
+    /// (<see cref="CarrySystem.LootWalkFails"/>), or a pick-up given up with its item still on the ground (its walk ended short of it).
+    /// </summary>
+    static bool Lost(World world, CarrySystem carry, int slot, in ActOut act)
+    {
+        if (act.Item < 0) return carry.LootWalkFails(world, slot);
+
+        return world.Characters.Cold(slot)!.PickingUpItem != act.Item && world.GroundItems.Find(act.Item) is not null;
     }
 
     /// <summary>

@@ -238,9 +238,17 @@ public sealed class CaptiveJob
     /// </summary>
     public float Age { get; set; }
     /// <summary>
-    /// Walks that ended away from the cage so far (<see cref="CaptiveSettings.Walks"/>).
+    /// Walks started so far; a player animal's job gives up past <see cref="CaptiveSettings.Walks"/>.
     /// </summary>
     public int Walks { get; set; }
+    /// <summary>
+    /// A goal's job whose walk ended short of its place (<see cref="CaptiveSystem.Lost"/>): its end is a lost walk on <see cref="LostKey"/>.
+    /// </summary>
+    internal bool LostWalk { get; set; }
+    /// <summary>
+    /// The ignore-map key of a lost walk's target (none: nothing is remembered).
+    /// </summary>
+    internal IgnoreKey? LostKey { get; set; }
     /// <summary>
     /// Blows struck (kill); the game second of the next line (eat).
     /// </summary>
@@ -514,18 +522,34 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             }
 
             _jobs.RemoveAt(k);
-            if (j.Goal != TaskType.None) Finish(world, w, j.Goal);
+            if (j.Goal != TaskType.None) Finish(world, w, j);
         }
     }
 
     /// <summary>
-    /// A goal's job is over by its own rule: the goal is done (its act-out's task stops) and the worker's finders look again, so its next choice sees
-    /// what is left.
+    /// A goal's job is over by its own rule: the goal is done (its act-out's task stops), or for a lost walk ends as one
+    /// (<see cref="DutyGoals.LostWalk"/>: its target ignored for 20 s), and the worker's finders look again, so its next choice sees what is left.
     /// </summary>
-    void Finish(World world, int w, TaskType goal)
+    void Finish(World world, int w, CaptiveJob j)
     {
-        _duties!.Done(world, w, goal);
+        if (j.LostWalk) _duties!.LostWalk(world, w, j.Goal, j.LostKey);
+        else _duties!.Done(world, w, j.Goal);
+
         Goals.LookAt(world, w);
+    }
+
+    /// <summary>
+    /// Whether a goal's job lost its walk: called once its walk is over short of the place, true when it had started one (<see cref="CaptiveJob.Walks"/>
+    /// above 0), marking the job so (<paramref name="key"/>, its target): the original's plan step ends a running step whose mover is idle away from
+    /// its target and ignores that target for 20 s (<c>FUN_14050d970</c>, <b>Verified</b>; no tries). False for a player animal's job, which counts
+    /// its walks.
+    /// </summary>
+    internal static bool Lost(CaptiveJob j, IgnoreKey? key)
+    {
+        if (j.Goal == TaskType.None || j.Walks == 0) return false;
+
+        (j.LostWalk, j.LostKey) = (true, key);
+        return true;
     }
 
     /// <summary>
@@ -1436,6 +1460,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             if (d > Settings.Reach && !(!walking && j.Walks > 0 && d <= Settings.Slack))
             {
                 if (walking && Vector2.Distance(n.Goal, to) <= 5) return true;
+                if (!walking && Lost(j, IgnoreKey.Of(j.Captive))) return End(world, j, CaptiveEventKind.GaveUp);
                 if (!walking && ++j.Walks > Settings.Walks)
                 {
                     SetWait(GivenUp, j.Captive, world.GameHours + Settings.GiveUpHours);
@@ -1473,6 +1498,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         bool walking = WalksOwn(table, w, j);
         arrived = d <= cage.UseRange + Settings.Reach || !walking && j.Walks > 0 && d <= Settings.Slack;
         if (arrived || walking) return true;
+        if (Lost(j, new IgnoreKey(cage.Id, default))) return false;
         if (++j.Walks > Settings.Walks)
         {
             world.Fixtures.MarkUnreachable(world, cage, j.Faction);
@@ -1620,7 +1646,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             if (d > Settings.Reach && !(!walking && j.Walks > 0 && d <= Settings.Slack))
             {
                 if (walking) return true;
-                if (++j.Walks > Settings.Walks) return End(world, j, CaptiveEventKind.GaveUp);
+                if (Lost(j, IgnoreKey.Of(j.Captive)) || ++j.Walks > Settings.Walks)
+                    return End(world, j, CaptiveEventKind.GaveUp);
                 TaskStart.Walk(world, w, new Vector2(body.X, body.Z), SpeedMode.Run, RowOf(j.Kind), TaskSource.Goal);
                 return true;
             }
@@ -1732,7 +1759,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             if (d > Settings.Reach + CropReach && !(!walking && j.Walks > 0 && d <= Settings.Slack + CropReach))
             {
                 if (walking) return true;
-                if (++j.Walks > Settings.Walks) return End(world, j, CaptiveEventKind.GaveUp);
+                if (Lost(j, new IgnoreKey(j.Cage, default)) || ++j.Walks > Settings.Walks)
+                    return End(world, j, CaptiveEventKind.GaveUp);
                 TaskStart.Walk(world, w, new Vector2(site.Position.X, site.Position.Z), SpeedMode.Run, RowOf(j.Kind), TaskSource.Goal);
                 return true;
             }

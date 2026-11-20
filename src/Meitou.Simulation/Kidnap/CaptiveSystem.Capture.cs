@@ -349,6 +349,7 @@ public sealed partial class CaptiveSystem
             if (d > Settings.Reach && !(!walking && j.Walks > 0 && d <= Settings.Slack))
             {
                 if (walking && Vector2.Distance(table.Next[w].Goal, to) <= 5) return true;
+                if (!walking && Lost(j, IgnoreKey.Of(j.Captive))) return End(world, j, CaptiveEventKind.GaveUp);
                 if (!walking && ++j.Walks > Settings.Walks)
                 {
                     SetWait(GivenUp, j.Captive, world.GameHours + Settings.GiveUpHours);
