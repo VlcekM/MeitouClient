@@ -1120,9 +1120,19 @@ break golden hashes and any future replay. Nothing in the API can stop a patch; 
 the release zips beside the game) loads a save
 headless with the enabled code mods, or only the `--mod` folders (their code; their records join the data only when enabled), and runs
 it three times: twice on one thread and once on `--threads` (default 4), for `--ticks` (default 600). It compares `World.StateHash`
-after every tick and reports the first differing tick of each pair and the `IStateHashed` systems that differ there, a mod's by id and
-name. One-thread runs differing points at unseeded randomness or the clock; thread counts differing, at a threading mistake. On a
-difference it runs the game without mods: if that differs too, the fault is the game's.
+right after the load and after every tick, and reports the first difference of each pair with the parts of the state that differ there
+(characters, squads, platoons, the player, ..., the hashed systems, the hooks' faults: `World.StatePartNames`) and the `IStateHashed`
+systems, a mod's by id and name. One-thread runs differing points at unseeded randomness or the clock; thread counts differing, at a
+threading mistake; runs differing right after the load, at something a run leaves behind that the next load does not reset (a static
+field, or game data the worlds share). On a difference after a tick it then takes a close look: it runs both again to that tick, hashes
+each part after each serial step of it (inputs, schedule, think move and act, commit, slow world: `World.AfterPhase`), and names the
+first step that differs, the characters that differ (slot, name, record, faction, squad; `CharacterTable.SlotHash`) and the fields of the
+first that differ, both runs' values side by side (read by reflection from its hot and cold state and what that owns, floats to the
+last bit). It says when a run comes out differently the second time, the new runs differ at an earlier tick, or the difference does not
+come back. Last, it runs the game without mods: if that differs too, the fault is the game's.
+
+- Combat hashes its tick's state only from its slow world on (it swaps its buffers there), so a combat difference shows at that step.
+- The field listing holds fields the hash does not read too: across thread counts some can differ without being the cause.
 
 - Walkability is the open terrain, not the navmesh (whose zones load on threads), paths are answered in the tick and the population works
   in it, so runs repeat; the world differs from play in where characters walk.
@@ -1132,6 +1142,11 @@ difference it runs the game without mods: if that differs too, the fault is the 
 - **Observed** (2026-11-04, win-x64, saves `autosave0`, `Gigachad`, `260`): a clean scratch mod passes; a mod rolling `Random.Shared` in
   `SlowWorld` differs from tick 1 in both comparisons and is named; a mod whose `Act` writes one field from every partition differs only
   across thread counts once the population passes 64 characters (tick 152) and is named; the game alone agrees.
+- **Observed** (2026-11-20, win-x64, two saves of 22 and 75 characters, a scratch mod planting each fault from tick 100): a `Random.Shared`
+  nudge to one character's field is named by step (slow world), character and field with both runs' values; a roll into the mod's hashed
+  state by part and system; an unguarded write from every partition only across thread counts, the close look saying when the new runs
+  differ at another tick or agree; a first run that changed faction relations makes the later runs differ right after loading, in
+  `AggroSystem`. A clean 600-tick check takes as long as before.
 
 ## Versioning
 
