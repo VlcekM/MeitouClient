@@ -360,7 +360,8 @@ public sealed class SaveGame
     {
         var listed = Camera.Zones.ToHashSet();
         var rejected = RejectedZones().ToHashSet();
-        foreach (var z in listed.Where(z => !Zones.ContainsKey(z) && !rejected.Contains(z))) Problems.Add($"Zone file missing: zone.{z.X}.{z.Y}.zone");
+        foreach (var z in listed.Where(z => !Zones.ContainsKey(z) && !rejected.Contains(z)))
+            Problems.Add($"Zone file missing: zone.{z.X}.{z.Y}.zone");
         foreach (var z in Zones.Keys.Where(z => !listed.Contains(z))) Problems.Add($"Extra zone file: zone.{z.X}.{z.Y}.zone");
     }
 

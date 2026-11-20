@@ -30,13 +30,16 @@ outside 8..17 ([fcs-mod](fcs-mod.md#files-that-fail-to-load)); the load goes on 
 
 Both are read only when the platoon or zone is made in the session, and a save rewrites neither file otherwise (**Verified**, decompile 1.0.68):
 an unloaded platoon's file is written only with its loaded flag set (`FUN_14036bad0`), an active one's only when it has members or +0xe8
-(`FUN_1404ff410` → `FUN_14036bc90`); the PLATOON record is rewritten from the kept state either way (`FUN_140372ef0`). Saving into another
-folder copies the loaded save's folder without overwriting, then the working folder over it (`FUN_140473720` queues, `FUN_140472ac0` →
-`FUN_1404726a0`), so a file the session did not rewrite reaches the new save byte for byte. An NPC platoon made with no members is declared dead
-on its next step ([declareDead](../game/factions-squads-towns.md)); a zone made fresh is written from its state.
+(`FUN_1404ff410` → `FUN_14036bc90`); the PLATOON record is rewritten from the kept state either way (`FUN_140372ef0`). The save's copy step
+(`FUN_140473720` queues, `FUN_140472ac0` → `FUN_1404726a0` → `CopyFileW`): into the loaded save's own folder, the working folder over it; into
+another folder, the working folder, then the loaded save's folder without overwriting (fail-if-exists). So a file the session did not rewrite
+reaches the new save byte for byte. An NPC platoon made with no members is declared dead on its next step, unless its template `regenerates`
+and its town is not `ded` (then remade at its next activation, [declareDead](../game/factions-squads-towns.md)); a zone made fresh is written
+from its state.
 
 Meitou: `SaveGame.Load` keeps a platoon or zone file whose type is outside 8..17 or that is under 4 bytes in `RejectedFiles`, adds the
-`Problems` entry "File rejected, loaded as none (...): <name>" and loads the platoon or zone as having no file. A file of type 8..17 that does
+`Problems` entry "File rejected, loaded as none (...): <name>" and loads the platoon or zone as having no file: a zone as fresh, a platoon by
+the no-file rules of [NPC platoons](#npc-platoons-meitou-mapping) (not made as an empty squad; a player one is not loaded). A file of type 8..17 that does
 not parse (types 8..14, or damage further in) still throws `FcsFormatException`, its message prefixed with the file name. A write carries each
 rejected file on unchanged (`SaveGame.CarriedRejects`) while a PLATOON record without a file still names it, or while its zone has no file
 (a visited zone gets a fresh one, [Zone files](#zone-files)); a carried zone the CAMERA `zones` list named stays in it. The game logs the
