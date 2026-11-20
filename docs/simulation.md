@@ -2463,7 +2463,7 @@ its plan the act-out carries out besides the goal's own. Built: 135, 139, 282, 2
   acts out from the cage); gone (it left the table). A displaced act-out whose provenance is still its own is stopped after `End` (a walk
   stands, another task but idle ends through its handler), so the AI holds the character for the winner; the other ends leave the task to what ended the goal. The
   system's own end is `DutyGoals.Done` (no `End`; a task of the act-out still running stops as a displaced one's). A walk of the act-out that ends short is a lost walk
-  (`DutyGoals.LostWalk`; the gate, warden and town act-outs): its target goes into `CharacterCold.Ignored` for 20 s and the goal ends for a replan, with no back-off
+  (`DutyGoals.LostWalk`; the gate, warden and town act-outs): its target goes into `CharacterCold.Ignored` (hashed, character and named entries) for 20 s and the goal ends for a replan, with no back-off
   and no limit on tries (**Verified**, plan step `FUN_14050d970` → `notifyPathImpossible` `FUN_140796ed0`; only the finders that read `pathFailures` skip the
   target, not the warden ones `FUN_1408cf3c0`, `FUN_1408cb1c0`, `FUN_1408cb360`, `FUN_1408cc2a0`, nor 180, which has none). Records are hashed while any.
 - **Code mods' goals** (engine API, not in the original; [modding](modding.md) "Chooser goals and jobs"; **Observed**, by reading the code named):

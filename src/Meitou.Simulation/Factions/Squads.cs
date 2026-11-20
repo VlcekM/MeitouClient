@@ -428,6 +428,8 @@ public sealed class SquadRegistry
             if (s.Resume) hasher.Add(0x52657375);
             if (s.Dead) hasher.Add(0x44656164);
             if (s.Autonomous) hasher.Add(0x4175746F);
+            if (s.SavedPackage is { } saved) HashSavedPackage(ref hasher, saved);
+            if (s.LeftPackage is { } left) hasher.Add(0x4C667450 ^ Rng.StableHash(left));   // "LftP": only until the AI attaches a blackboard
             if (s.Independent) hasher.Add(0x496E6470);
             if (s.HomeInteriorShown) hasher.Add(0x496E7472);
             if (s.AssignedHome is { } assigned) hasher.Add(Rng.StableHash(assigned));
@@ -465,5 +467,17 @@ public sealed class SquadRegistry
                 hasher.Add(s.War.Town.PlayerTown);
             }   // nor for squads not assaulting
         }
+    }
+
+    /// <summary>
+    /// Hashes the running package's keys a save held, while the AI has not applied them yet.
+    /// </summary>
+    static void HashSavedPackage(ref StateHasher hasher, Saving.PackageSave saved)
+    {
+        hasher.Add(0x506B5376);   // "PkSv"
+        hasher.Add(saved.Persist);
+        hasher.Add(saved.Done);
+        hasher.Add(saved.Started);
+        if (saved.Enemy is { } enemy) hasher.Add(Rng.StableHash(enemy));
     }
 }

@@ -279,5 +279,6 @@ public sealed class SenseBlock
         h.Add(AlliesDown);
         h.Add(ThreatToMe);
         h.Add(ThreatToAllies);
+        if (Aggression != 0) h.Add(Aggression);
     }
 }

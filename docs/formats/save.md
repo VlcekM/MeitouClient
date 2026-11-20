@@ -817,7 +817,7 @@ Meitou-only loose-item key (`Items/ItemSlots.WriteDue`, [ground items](../simula
   the platoon not persistent and made it so, and its end (`FUN_140296150`) makes it not persistent again. `done` (bool): the assault is spent (its
   finished test `FUN_14028eca0` sets it while it is the current package; its start test `FUN_140290450` then refuses it); `started` (float, the game
   hour its start `FUN_1402900c0` stamped); `enemy` (string, the id of the town owner's faction it attacks, `FUN_1402963a0` / `FUN_1402965a0`, written
-  only with one). Meitou (`Saving/PackageSave`) writes them for a squad in the world; a load resumes a saved running passing-by assault in the player
+  only with one). Meitou (`Saving/PackageSave`) writes them for a squad in the world; the keys read wait on the squad (`Squad.SavedPackage`, hashed) until the AI applies them; a load resumes a saved running passing-by assault in the player
   town the squad stands in and puts the three over its start, else keeps only `done`. It writes `persist` true for a roaming platoon not persistent on its
   own, and a saved `persistent` beside a true `persist` is the occupation's, so it does not keep the platoon once the occupation ends; Meitou keeps
   an occupier while it occupies. The load activates the package (`FUN_1402721a0`, which calls its start, vfunc `+0x30`, at once) and then

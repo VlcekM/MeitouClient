@@ -1900,7 +1900,8 @@ public sealed class CharacterTable
     }
 
     /// <summary>
-    /// The second list (<see cref="CharacterCold.SecondList"/>): its count, then each order's row, start, target, site and point in list order.
+    /// The second list (<see cref="CharacterCold.SecondList"/>): its count, then each order's row, start, try, row run, spent mark, target, site and
+    /// point in list order.
     /// </summary>
     static void HashSecondList(ref StateHasher hasher, List<OrderEntry> list)
     {
@@ -1910,10 +1911,43 @@ public sealed class CharacterTable
         {
             hasher.Add((int)e.Row);
             hasher.Add(e.Started);
+            hasher.Add(e.Tried);
+            hasher.Add(e.RowRuns);
             hasher.Add(e.Spent);
             hasher.Add(e.Target);
             hasher.Add(e.Site is { } site ? Rng.StableHash(site) : 0UL);
             hasher.Add(e.Point);
+        }
+    }
+
+    /// <summary>
+    /// Hashes the ignore map (<see cref="CharacterCold.Ignored"/>): its character entries, then its named ones (a door, cage, store or disposal a lost
+    /// walk put there, a site or item no path reached), each kind only while one is there.
+    /// </summary>
+    static void HashIgnored(ref StateHasher hasher, List<(IgnoreKey Key, long Until)> failures)
+    {
+        if (failures.Exists(e => e.Key.Name is null))
+        {
+            hasher.Add(0x50464C53);
+            foreach (var (key, until) in failures)
+            {
+                if (key.Name is not null) continue;
+
+                hasher.Add(key.Id.Slot);
+                hasher.Add(key.Id.Generation);
+                hasher.Add(until);
+            }
+        }
+
+        if (!failures.Exists(e => e.Key.Name is not null)) return;
+
+        hasher.Add(0x49676E4E);   // "IgnN"
+        foreach (var (key, until) in failures)
+        {
+            if (key.Name is null) continue;
+
+            hasher.Add(Rng.StableHash(key.Name));
+            hasher.Add(until);
         }
     }
 
@@ -1937,19 +1971,7 @@ public sealed class CharacterTable
             hasher.Add(chase.ChaseTarget);
             hasher.Add(chase.PathUntil);
         }   // a path chase, only while on one
-        if (k.Ignored is { Count: > 0 } failures && failures.Exists(e => e.Key.Name is null))
-        {
-            hasher.Add(0x50464C53);
-            foreach (var (key, until) in failures)
-            {
-                if (key.Name is null)
-                {
-                    hasher.Add(key.Id.Slot);
-                    hasher.Add(key.Id.Generation);
-                    hasher.Add(until);
-                }
-            }
-        }
+        if (k.Ignored is { Count: > 0 } failures) HashIgnored(ref hasher, failures);
 
         if (k.SteerSpeed != 0)
         {
