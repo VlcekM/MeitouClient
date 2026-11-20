@@ -76,9 +76,10 @@ public static class OrderDesire
 
     /// <summary>
     /// 225 / 246, and the arrest's 213 / 240 (AI slot 59, <c>FUN_14059e1a0</c>, <b>Verified</b>): 0 while the character carries someone
-    /// (<c>+0x348</c>); 0.5 for a target that is no character; 0 for one a member of its own squad carries (the carrier hand's container fields
-    /// <c>+0xc</c> / <c>+0x10</c> against its own hand's, which for a character are its platoon's, docs/formats/save.md "handle"); else 1, so a
-    /// body another squad carries, of its own faction too, is lifted (snatched by 213 / 225 / 240).
+    /// (<c>+0x348</c>); 0.5 for a target that is no character; 0 for one a member of its own squad carries (the carrier hand's <c>+0xc</c> /
+    /// <c>+0x10</c> against its own hand's: the container id and serial, as the hand maker <c>FUN_1400d1c20</c> writes them, and a character's
+    /// container is its platoon, docs/formats/save.md "Object handles"); else 1, so a body another squad carries, of its own faction too, is
+    /// lifted (snatched by 213 / 225 / 240).
     /// </summary>
     static float LiftDesire(World world, int slot, CharacterCold cold, CharacterId target)
     {

@@ -1300,10 +1300,10 @@ which an order's hold refuses. The chain's rows and states are in [AI tasks](gam
   is the order's own row, `FUN_140506b10` comparing the task type, so the fight row ending pops nothing, **Verified**); only 113 / 95 above or a new order
   stop it. The downed target is lifted whether or not a cage is free (240's list B and desire ask for none) and snatched from any carrier outside the
   guard's squad, of his faction too; while a member of his own squad carries it, 240's desire (AI slot 59, `FUN_14059e1a0`: the carrier hand's
-  container is the guard's platoon) is 0 and the order leaves the queue, then the 112 behind it with nothing carried (**Verified**). Once the guard
+  container id and serial, `+0xc` / `+0x10` as `FUN_1400d1c20` writes them, are the guard's platoon's) is 0 and the order leaves the queue, then the 112 behind it with nothing carried (**Verified**). Once the guard
   carries the target, 240 leaves the queue (that desire is 0 while carrying) and 112 starts (on the arrest's carry); 112 leaves the
   queue with nothing carried or no free cage (its score is desire x finder, `FUN_14060fd80` asking the finder `FUN_1408d0d30` for a row with an effect,
-  **Verified**), the guard keeping what he carries for his own goals (no drop). A walk that ends short is a lost walk, as the
+  **Verified**), the guard keeping what he carries for his own goals (no drop): the law-enforcement add-ons list 112, 281, 106 and 137 and no throw-out (224 / 274), so a living body rides on until 112's finder finds a cage free (**Verified**, base data `addon- law enforcement` and its no-freeing variant). A walk that ends short is a lost walk, as the
   goals' ([engine goals](#engine-goals)): the cage is ignored for 20 s and the finder picks again. At the cage the put-in is 108's, as the goals' (captor memory,
   relation event, bounty claim). The cage finders of arrest orders and of the carriers' 112 / 281 goals skip the cages of the asker's squad mates' arrests and errands only,
   as the squad's work count `FUN_1402690e0` that `FUN_1408d0770` asks reads the asker's own platoon blackboard (`FUN_140507070`; a member's entry names
@@ -1507,7 +1507,7 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
   in the look for the body carried then.
   - **112** (a living body: list B `!99`) / **281** (any body), plan `[1, 108, goal]`: `CageDesire` (`FUN_1405a1140` with `FUN_1405a0f10`, **Verified**: 0.1 outside a town,
     0 while the running package's mission town is another (`SquadTown.MissionTown`: a plain package's is the home town), 0 for an animal, 1.4 police with a bounty-free slave or escapee, 0 friendly, 0.5 dead, 2.0 alive) times the cage finder's 1.0
-    with a free cage (`FUN_1408d0d30`: the best free cage of its town candidates, an occupier's occupied town included, not another errand's). At the cage it is locked up with
+    with a free cage (`FUN_1408d0d30`: the best free cage of its town candidates, an occupier's occupied town included, not one a squad mate's errand or arrest takes a body to). At the cage it is locked up with
     the usual put-in sentence (108 `Task_PutInSomething` sets none without a bounty, [economy 11.5](game/economy.md#115-bail-and-sentence); not `Kidnapped`, **Verified**
     `FUN_140358670`), with the relation event and the bounty claim. A cage taken or a lost walk (the cage ignored for 20 s, which the cage finder skips: `FUN_1408d0770` asks `FUN_1405b0290`) end the goal with
     the body on the shoulder. **Observed** (#314 save): a Sho-Battai police guard loaded carrying a raider cages it.
