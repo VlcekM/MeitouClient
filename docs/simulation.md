@@ -1624,8 +1624,9 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   leader, of the town it stands in, not ignored, of its faction or one it may use, `FUN_1408ca5d0`) and takes its owner squad's effective leader; none, the goal is
   unwanted. The leader walks up and says event 39 SLAVE_DELIVERY (row 159); the job ends once its dialogue is free. The base data answers it (`slave delivery`, package
   `slaver guard MAIN`), and its line's DA 24 hands the slaves over ([dialogue](game/dialogue.md#effects)): no squad change, no cage. **Observed** (probe, Slave Hunters
-  at Stone Camp): the receiver's line ran DA 24 and the slave's master became the pen keeper's squad. Captives the carriers cage first (112) already belong to the
-  cage owner's squad (`FUN_140330600`), so most of a haul changes hands before 194.
+  at Stone Camp): the receiver's line ran DA 24 and the slave's master became the pen keeper's squad. A captive the carriers cage first (112) takes the cage's
+  owner (`FUN_140330600`; Meitou's master is the resident squad of the cage's building, `FixtureRegistry.CageMaster`, kept when none is loaded), so 194 hands over
+  only the rest. **Observed** (same run): 3 of 4 changed hands by caging; the 4th, in a cage whose building had no loaded squad, by DA 24.
 - **Get in the cage** (172, a Slave AI Goal): a slave not held walks to the nearest free cage of its owner's faction in the 3x3 zone cells round it, in any town, and gets in.
   A cage a squad mate works on or the slave ignores is passed over; another squad's work does not count (172 and 245, `FUN_1408db510` with limit 0 on the squad's own
   blackboard, `FUN_1402690e0`, **Verified**).

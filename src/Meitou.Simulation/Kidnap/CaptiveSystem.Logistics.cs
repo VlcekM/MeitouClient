@@ -90,7 +90,7 @@ public sealed partial class CaptiveSystem
         SquadGoals? goals = null;
         foreach (var f in NearbyCages(world, -1, at, cold.SlaveOwner))
         {
-            if (!FixtureRegistry.IsFree(table, f) || SquadClaimed(world, goals ??= SquadGoals.Of(world), slot, cold, f)) continue;
+            if (!FixtureRegistry.IsFree(table, f) || SquadClaimed(world, goals ??= SquadGoals.Of(world), table.IdOf(slot), cold, f)) continue;
             float d = Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(f.Position.X, f.Position.Z));
             if (d < bestD) (best, bestD) = (f, d);
         }
@@ -103,9 +103,8 @@ public sealed partial class CaptiveSystem
     /// works on it (<c>Blackboard::howManyGuysWorkingOnThisSubTarget</c> on the squad's own blackboard, <c>FUN_1402690e0</c>; another squad's work
     /// does not count) or the asker ignores it (<c>FUN_1405b0290</c>).
     /// </summary>
-    static bool SquadClaimed(World world, SquadGoals goals, int slot, CharacterCold cold, Fixture f)
+    internal static bool SquadClaimed(World world, SquadGoals goals, CharacterId asker, CharacterCold cold, Fixture f)
     {
-        var asker = world.Characters.IdOf(slot);
         if (cold.IsIgnored(new IgnoreKey(f.Id, default), world.Tick)) return true;
         return goals.Working(cold.SquadId, asker, GoalTarget.At(f.Id)) > 0;
     }
@@ -172,7 +171,7 @@ public sealed partial class CaptiveSystem
         var asker = table.IdOf(slot);
 
         // 173 claims nothing (FUN_1408db510 with the finder limit 0x100): gatherers of any squad may head for the same cage, the first lifts.
-        if (export ? goals!.Working(cold.SquadId, asker, GoalTarget.At(f.Id)) > 0 : unholy && SquadClaimed(world, goals!, slot, cold, f)) return false;
+        if (export ? goals!.Working(cold.SquadId, asker, GoalTarget.At(f.Id)) > 0 : unholy && SquadClaimed(world, goals!, asker, cold, f)) return false;
         if (!export && f.Owner != cold.Faction || OccupantSlot(world, f) is not (>= 0 and var s)) return false;
         c = table.Cold(s)!;
         if (Spared(cold, c)) return false;

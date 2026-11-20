@@ -802,8 +802,8 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
     }
 
     /// <summary>
-    /// A job at a cage itself (237's shrine, 172's own cage): the shrine still holds someone; the own cage is still free and no other job heads for
-    /// it.
+    /// A job at a cage itself (237's shrine, 172's own cage): the shrine still holds someone; the own cage is still free and passes its finder's
+    /// squad claim (<see cref="CaptiveSystem.SquadClaimed"/>: another squad's slave may head for it too, the first in takes it).
     /// </summary>
     CaptiveJob? CageOnlyJob(World world, in DutyAsk ask, CharacterCold cold, in PlanTarget target, CaptiveJobKind kind)
     {
@@ -811,7 +811,8 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
         if (kind == CaptiveJobKind.Worship)
             return CaptiveSystem.OccupantSlot(world, cage) < 0 ? null : New(ask, cold, kind, cage.Occupant, cage.Id, cage.Site, target);
 
-        if (!FixtureRegistry.IsFree(world.Characters, cage) || captives.Taken(cage.Id) || cold.InSomething != HeldState.None) return null;
+        if (!FixtureRegistry.IsFree(world.Characters, cage) || cold.InSomething != HeldState.None) return null;
+        if (CaptiveSystem.SquadClaimed(world, SquadGoals.Of(world), ask.Id, cold, cage)) return null;
         return New(ask, cold, kind, ask.Id, cage.Id, cage.Site, target);
     }
 
