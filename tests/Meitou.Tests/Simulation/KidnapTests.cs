@@ -36,13 +36,16 @@ public class KidnapTests
             Anatomy = Human.Anatomy, Carriable = true };
 
     /// <summary>
-    /// A package whose every role list holds goal 254 (find, kidnap and put in a cage), always in its hours.
+    /// A package whose every role list holds goal 254 (find and kidnap) and 112 (find and put in a cage: the carrier's own goal cages the body once
+    /// 254 is done at the lift), always in their hours.
     /// </summary>
     static AiPackage Kidnapping()
     {
-        var goal = new AiGoal(new AiTask("t", "kidnap", TaskType.FinalKidnapperCageJob, TaskPriority.Urgent, TaskTargetType.Specific,
+        var kidnap = new AiGoal(new AiTask("t", "kidnap", TaskType.FinalKidnapperCageJob, TaskPriority.Urgent, TaskTargetType.Specific,
                 TaskEndEvent.Nothing), 0, 100, 1);
-        return new AiPackage { Id = "kidnap", Name = "kidnap", Roles = [[goal], [goal], [goal], [], []] };
+        var cage = new AiGoal(new AiTask("c", "cage", TaskType.FindCageAndPutIn, TaskPriority.Urgent, TaskTargetType.Specific,
+                TaskEndEvent.Nothing), 0, 100, 1);
+        return new AiPackage { Id = "kidnap", Name = "kidnap", Roles = [[kidnap, cage], [kidnap, cage], [kidnap, cage], [], []] };
     }
 
     static CharacterId Add(SimWorld world, CharacterCold cold, Vector2 at, Squad squad)
@@ -68,7 +71,8 @@ public class KidnapTests
         var kidnap = new KidnapSystem(data, population, carry, new KidnapSettings { RecordLog = true });
         var walk = new OpenGroundWalkability((_, _) => 150);
         using var world = new SimWorld(new WorldSettings { Seed = 31, Threads = threads, PublishSnapshots = false, MinPartitionSize = 1 }, walk,
-            [new PlayerSystem(), new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), carry, kidnap]);
+            [new PlayerSystem(), new AiSystem(data), new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), carry, kidnap,
+                    new TownDutySystem(data, population, carry)]);
         world.Fixtures.RegisterSite(world, data, 0);
         int city = data.FactionIndex("50-a");
 

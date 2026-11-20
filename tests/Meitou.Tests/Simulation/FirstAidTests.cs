@@ -14,6 +14,7 @@ using Meitou.Simulation.Items;
 using Meitou.Simulation.Locks;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
 using SimWorld = Meitou.Simulation.World;
 using static Meitou.Tests.Bodies.BodyFixtures;
 
@@ -116,12 +117,16 @@ public class FirstAidTests
         readonly OpenGroundWalkability _walk = new(SyntheticTown.Ground);
         public List<CharacterId> Ids { get; } = [];
 
-        public Rig(int threads = 1, int minPartition = 16, FirstAidSettings? settings = null, ulong seed = 5)
+        public Rig(int threads = 1, int minPartition = 16, FirstAidSettings? settings = null, ulong seed = 5, bool ai = false)
         {
             Items = new ItemFactory(KitDatabase(), BaseGame);
             var movement = new MovementSystem(new PathService(_walk, true));
             var systems = new List<ITickSystem> { new PlayerSystem(), movement, new FirstAidSystem(BaseGame, BodyOptions.Default, Items, settings),
                     new BodySystem(BaseGame, BodyOptions.Default) };
+
+            // An NPC treats only by a goal, which a mind the AI runs chooses.
+            var data = new PopulationData { Db = new GameDatabase(), Sites = [], Factions = [], Relations = FactionRelations.Build([]) };
+            if (ai) systems.Insert(1, new AiSystem(data));
             World = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = minPartition },
                     _walk, systems);
         }
@@ -263,7 +268,7 @@ public class FirstAidTests
     /// </summary>
     internal static List<ulong> Scripted(int threads)
     {
-        using var rig = new Rig(threads, minPartition: 1, seed: 12);
+        using var rig = new Rig(threads, minPartition: 1, seed: 12, ai: true);
         var a = rig.Add(1000, 2000, player: true, medic: 60, kits: "72-t");
         var b = rig.Add(1060, 2000, player: true);
         var c = rig.Add(1100, 2060, player: true);
@@ -274,6 +279,7 @@ public class FirstAidTests
         rig.Hurt(c, LArm, 0.5f);
         rig.Hurt(e, RArm, 0.1f);
         rig.Hurt(f, RLeg, 0.6f);
+        Package(rig.World, 1, [Goal(TaskType.JobMedic, TaskPriority.Urgent)]);   // the NPCs treat by their Medic goal (58)
         void Say(SimCommand cmd) => rig.Say(cmd);
         Say(new TreatOrder([a], b) { Tick = 5 });
         Say(new RestOrder([c]) { Tick = 8 });
@@ -482,10 +488,18 @@ public class FirstAidTests
     /// </summary>
     static void GiveGoals(SimWorld world, int squad, AiGoal[] goals)
     {
+        Package(world, squad, goals);
+        world.RunTick();
+    }
+
+    /// <summary>
+    /// Gives a squad one AI package with <paramref name="goals"/> in every role; the AI's next serial step makes its minds.
+    /// </summary>
+    static void Package(SimWorld world, int squad, AiGoal[] goals)
+    {
         var board = new Blackboard([new(0, new AiPackage { Id = "p", Name = "p", Roles = [goals, goals, goals, [], []] })]);
         board.Update();
         world.Squads.Find(squad)!.Ai = board;
-        world.RunTick();
     }
 
     static AiGoal Goal(TaskType type, TaskPriority priority) =>

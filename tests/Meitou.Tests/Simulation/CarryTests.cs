@@ -1,13 +1,17 @@
 using System.Numerics;
+using Meitou.Data;
 using Meitou.Data.Gameplay;
+using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Simulation;
+using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Carrying;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
 using SimWorld = Meitou.Simulation.World;
 using static Meitou.Tests.Bodies.BodyFixtures;
 
@@ -33,11 +37,16 @@ public class CarryTests
         public CarrySystem Carry { get; }
         readonly OpenGroundWalkability _walk = new(SyntheticTown.Ground);
 
-        public Rig(int threads = 1, int minPartition = 16, FactionRelations? relations = null, ulong seed = 5, CarrySettings? settings = null)
+        public Rig(int threads = 1, int minPartition = 16, FactionRelations? relations = null, ulong seed = 5, CarrySettings? settings = null,
+                bool ai = false)
         {
             Carry = new CarrySystem(BaseGame, BodyOptions.Default, 1, settings) { Relations = relations };
             var systems = new List<ITickSystem> { new PlayerSystem(), new MovementSystem(new PathService(_walk, true)),
                     new BodySystem(BaseGame, BodyOptions.Default), Carry };
+
+            // NPCs choose their goals (the rescue goals among them) only on a mind the AI runs.
+            var data = new PopulationData { Db = new GameDatabase(), Sites = [], Factions = [], Relations = relations ?? FactionRelations.Build([]) };
+            if (ai) systems.Insert(1, new AiSystem(data));
             World = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = minPartition },
                     _walk, systems);
         }
@@ -279,7 +288,7 @@ public class CarryTests
     internal static List<ulong> Scripted(int threads)
     {
         var relations = TwoFactions();
-        using var rig = new Rig(threads, minPartition: 1, relations: relations, seed: 21);
+        using var rig = new Rig(threads, minPartition: 1, relations: relations, seed: 21, ai: true);
         var p1 = rig.Add(1000, 2000, faction: 1, strength: 20);
         var p2 = rig.Add(1050, 2000, faction: 1);
         var p3 = rig.Add(1000, 2100, faction: 1);
@@ -289,16 +298,15 @@ public class CarryTests
         var leader = rig.Add(1600, 2000, player: false, squad: 4, faction: 0, leader: true);
         var rescuer = rig.Add(1650, 2000, player: false, squad: 4, faction: 0, task: CharacterTask.Wander);
 
-        // Its AI chose goal 142 (Find and rescue leader, listed by a few retreat packages);
+        // Its package lists goal 142 (Find and rescue leader, listed by a few retreat packages) for its Squad role;
         // a squad whose package does not list it leaves its leader lying.
-        rig.Cold(rescuer).Ai = new Meitou.Simulation.Ai.AiMind
-        {
-            Squad = rig.World.Squads.Find(4)!,
-            Goal = new Meitou.Data.Gameplay.Ai.AiGoal(new Meitou.Data.Gameplay.Ai.AiTask("142", "Find and rescue leader",
-                Data.Gameplay.Ai.TaskType.FindAndRescueLeader, Data.Gameplay.Ai.TaskPriority.NonUrgent, Data.Gameplay.Ai.TaskTargetType.Specific,
-                Data.Gameplay.Ai.TaskEndEvent.Nothing), 0, 100, 1)
-        };
-        rig.Add(1700, 2050, player: false, squad: 4, faction: 0, task: CharacterTask.Idle, yaw: -MathF.PI / 2);   // the witness, facing the looting
+        var rescue = new AiGoal(new AiTask("142", "Find and rescue leader", TaskType.FindAndRescueLeader, TaskPriority.NonUrgent,
+                TaskTargetType.Specific, TaskEndEvent.Nothing), 0, 100, 1);
+        var board = new Blackboard([new(0, new AiPackage { Id = "p", Name = "p", Roles = [[rescue], [], [], [], []] })]);
+        board.Update();
+        rig.World.Squads.Find(4)!.Ai = board;
+        var witness = rig.Add(1700, 2050, player: false, squad: 4, faction: 0, task: CharacterTask.Idle, yaw: -MathF.PI / 2);   // facing the looting
+        rig.Cold(witness).Role = (int)SquadRole.Squad2;   // its role's list is empty: it only watches
         foreach (var r in new[] { "a", "b", "c", "d" }) rig.Cold(down1).Inventory!.Add(Item(r, 2, 2));
         rig.Body(down1).KnockOut(10000);
         rig.Body(down2).KnockOut(3);
