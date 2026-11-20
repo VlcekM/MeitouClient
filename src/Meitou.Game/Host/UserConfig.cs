@@ -379,6 +379,11 @@ sealed class UserConfig
     /// </summary>
     public bool FixRaidClocks { get; set; } = true;
     /// <summary>
+    /// An arrest's guard lifts a downed target only with a cage free for it and never from another carrier of his faction (Fixes settings; off: he
+    /// lifts either way, as the game does, and guards at a full station pass the same body round; read at load; <c>ArrestSettings.LiftFix</c>).
+    /// </summary>
+    public bool FixArrestLifts { get; set; } = true;
+    /// <summary>
     /// Wild animals and homeless squads keep their characters while their area is unloaded (Advanced settings; Faithful off: removed and made anew,
     /// as the game does).
     /// </summary>

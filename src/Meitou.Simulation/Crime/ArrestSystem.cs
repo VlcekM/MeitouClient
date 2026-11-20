@@ -51,6 +51,11 @@ public sealed record ArrestSettings
     /// </summary>
     public float CageSearchRange { get; init; } = AggroSystem.OutdoorSight;
     /// <summary>
+    /// Fixes option (Meitou, on by default): an arrest order does not lift its downed target while no cage is free for it or while another
+    /// character of the guard's faction carries it (<see cref="ArrestSystem.LiftHeld"/>, #339). Off: it lifts either way, as the game does.
+    /// </summary>
+    public bool LiftFix { get; init; } = true;
+    /// <summary>
     /// Keep a <see cref="ArrestSystem.Log"/> (tests).
     /// </summary>
     public bool RecordLog { get; init; }
@@ -1160,8 +1165,10 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         if (!CanLift(gc)) return End(world, a, ArrestEventKind.GaveUp);
 
         // Row 240 Capture Target is the chain's lift (snatch byte set), 213 a hand-over's: it takes a body another carries too, with no cage free
-        // as well (neither its list B nor its desire asks for one). A body his own squad carries ends the order by its desire (OrderDesire).
-        if (Carry.BeginPickUp(world, g, a.Target, source: TaskSource.Order, row: a.Order.Row))
+        // as well (neither its list B nor its desire asks for one). A body his own squad carries ends the order by its desire (OrderDesire), as
+        // a lift the Fixes option holds back does (LiftHeld): the guard waits for that pop rather than lift first.
+        bool held = LiftHeld(world, g, a.Order);
+        if (!held && Carry.BeginPickUp(world, g, a.Target, source: TaskSource.Order, row: a.Order.Row))
         {
             a.Phase = ArrestPhase.Lift;
             a.Waited = 0;
@@ -1175,6 +1182,34 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// Whether the guard's left arm can carry (state 80 <c>isCarryingArmOK</c>, <see cref="Carrying.CarrySystem.LeftArmUsable"/>).
     /// </summary>
     internal static bool CanLift(CharacterCold guard) => guard.Medical is { } m && Carrying.CarrySystem.LeftArmUsable(m);
+
+    /// <summary>
+    /// Whether the Fixes option <see cref="ArrestSettings.LiftFix"/> holds back the lift of the arrest order <paramref name="order"/> (240, 213) of
+    /// the guard at <paramref name="g"/>: its target is down and another character of his faction carries it, or no cage is free for it
+    /// (<see cref="GuardCage"/>). Meitou fix (#339): the original's lift asks neither, so guards at a full station pass the same body round. Its
+    /// desire is then 0 (<see cref="Ai.OrderDesire"/>). A pure read but for the lazy duty lookup (serial phases).
+    /// </summary>
+    internal bool LiftHeld(World world, int g, OrderEntry order)
+    {
+        var table = world.Characters;
+        if (!Settings.LiftFix || !table.TryResolveNext(order.Target, out int t)) return false;
+        if (table.Cold(t) is not { Medical.Incapacitated: true } tc) return false;
+
+        var gc = table.Cold(g)!;
+        return CarriedByAlly(world, gc, tc) || GuardCage(world, g, ArrestOf(order)) is null;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="target"/> is carried by another character of the guard's faction.
+    /// </summary>
+    static bool CarriedByAlly(World world, CharacterCold guard, CharacterCold target) =>
+        world.Characters.TryResolveNext(target.CarriedBy, out int carrier) && world.Characters.Cold(carrier) is { } c && c != guard
+            && c.Faction == guard.Faction;
+
+    /// <summary>
+    /// The arrest acting out <paramref name="order"/>; null before it starts.
+    /// </summary>
+    Arrest? ArrestOf(OrderEntry order) => _arrests.Find(a => ReferenceEquals(a.Order, order));
 
     /// <summary>
     /// The lift: once the guard carries the target his 112 takes it to the cage (the queue drops the lift order once he carries, its desire 0); a

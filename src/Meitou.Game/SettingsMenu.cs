@@ -1568,6 +1568,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         BagSearchChanged?.Invoke(true);
         Config.FixHeadTurnBack = false;
         Config.FixRaidClocks = true;
+        Config.FixArrestLifts = true;
         Config.FixGround = true;
         OffscreenChanged?.Invoke();
         Config.Audio = new();

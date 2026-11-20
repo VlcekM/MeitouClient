@@ -742,6 +742,7 @@ sealed class GameSaves(GameHost host)
             },
             Ai = new Simulation.Ai.AiSettings { TownAttacks = Gameplay.TownAttacks },
             Captives = new Simulation.Kidnap.CaptiveSettings { SpareOwnFaction = host.Config.CagesSpareOwn },
+            Arrest = new Simulation.Crime.ArrestSettings { LiftFix = host.Config.FixArrestLifts },
             Construction = new Simulation.Construction.ConstructionSettings { BuildingSpeed = (settings ?? Difficulty)[5], EdgeGap = SiteEdgeGap },
             Production = new Simulation.Production.ProductionSettings { ProductionOption = (settings ?? Difficulty)[3],
                 ResearchOption = (settings ?? Difficulty)[4], EdgeGap = SiteEdgeGap, UnloadedProduction = host.Config.UnloadedProduction },

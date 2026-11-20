@@ -1302,7 +1302,10 @@ which an order's hold refuses. The chain's rows and states are in [AI tasks](gam
   is the order's own row, `FUN_140506b10` comparing the task type, so the fight row ending pops nothing, **Verified**); only 113 / 95 above or a new order
   stop it. The downed target is lifted whether or not a cage is free (240's list B and desire ask for none) and snatched from any carrier outside the
   guard's squad, of his faction too; while a member of his own squad carries it, 240's desire (AI slot 59, `FUN_14059e1a0`: the carrier hand's
-  container id and serial, `+0xc` / `+0x10` as `FUN_1400d1c20` writes them, are the guard's platoon's) is 0 and the order leaves the queue, then the 112 behind it with nothing carried (**Verified**). Once the guard
+  container id and serial, `+0xc` / `+0x10` as `FUN_1400d1c20` writes them, are the guard's platoon's) is 0 and the order leaves the queue, then the 112 behind it with nothing carried (**Verified**). So at a full station
+  guards can pass one body round. Meitou fix, Fixes option **Guards stop passing bodies** (`ArrestSettings.LiftFix`, on by default, read at load):
+  240's and 213's desire is also 0 while their downed target is carried by another character of the guard's faction or no cage is free for it
+  (`ArrestSystem.LiftHeld`, `GuardCage`), so the order leaves the queue unlifted (#339); off lifts as the original does. Once the guard
   carries the target, 240 leaves the queue (that desire is 0 while carrying) and 112 starts (on the arrest's carry); 112 leaves the
   queue with nothing carried or no free cage (its score is desire x finder, `FUN_14060fd80` asking the finder `FUN_1408d0d30` for a row with an effect,
   **Verified**), the guard keeping what he carries for his own goals (no drop): the law-enforcement add-ons list 112, 281, 106 and 137 and no throw-out (224 / 274), so a living body rides on until 112's finder finds a cage free (**Verified**, base data `addon- law enforcement` and its no-freeing variant). A walk that ends short is a lost walk, as the

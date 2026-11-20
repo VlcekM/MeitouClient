@@ -49,6 +49,8 @@ public static class OrderDesire
 
             // AI slot 44 (FUN_1405991c0): 0 for the character itself as target, which its own senses never list.
             TaskType.Bodyguard => order.Target == world.Characters.IdOf(slot) ? 0 : 1,
+            TaskType.LiftPersonSnatchingAllowed or TaskType.LiftPersonSnatchingAllowedInTownOnly when order.Owner is Crime.ArrestSystem arrests
+                => ArrestLiftDesire(world, slot, cold, order, arrests),
             TaskType.LiftPersonPlayerOrder or TaskType.KidnapOrder or TaskType.LiftPersonSnatchingAllowed
                 or TaskType.LiftPersonSnatchingAllowedInTownOnly => LiftDesire(world, slot, cold, order.Target),
             TaskType.UseTurret => TurretDesire(world, slot, cold),
@@ -87,6 +89,17 @@ public static class OrderDesire
         if (!world.Characters.TryResolveNext(target, out int t)) return NoCharacter;
 
         return CarriedBySquad(world, slot, cold, world.Characters.Cold(t)!) ? 0 : 1;
+    }
+
+    /// <summary>
+    /// The arrest's 213 / 240: <see cref="LiftDesire"/>, and 0 while the Fixes option holds the lift back (<see cref="Crime.ArrestSystem.LiftHeld"/>:
+    /// a downed target an ally carries or with no cage free, Meitou fix), so the order leaves the queue as for a squad mate's carry.
+    /// </summary>
+    static float ArrestLiftDesire(World world, int slot, CharacterCold cold, OrderEntry order, Crime.ArrestSystem arrests)
+    {
+        float desire = LiftDesire(world, slot, cold, order.Target);
+
+        return desire > 0 && arrests.LiftHeld(world, slot, order) ? 0 : desire;
     }
 
     /// <summary>
