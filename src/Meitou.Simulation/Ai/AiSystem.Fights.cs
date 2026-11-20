@@ -75,13 +75,13 @@ public sealed partial class AiSystem
     /// Passive (even in a fight), while sneaking and not in combat mode and for a slave holding job 187 (<see cref="HoldsJob187"/>), x0.5 while
     /// carrying (a carrier on a town errand); the desire of 15 / 288 is the finder's first ally above 0,
     /// uncapped (<see cref="ProtectScan"/>), the rest 1 (144's 0.5 is its profile's). The finder's factor multiplies it (<see cref="FightPick"/>).
-    /// Engine gates for all: a character that cannot fight (no working fighter, crawling, or one Self preservation runs away with,
-    /// <see cref="SelfPreservation.Flees"/>) and a turret's gunner (it keeps to its turret) want none.
+    /// Engine gates: a character that cannot fight (no working fighter, or one Self preservation runs away with, <see cref="SelfPreservation.Flees"/>)
+    /// wants none; a crawler and a turret's gunner none but a protect goal, on row 4's terms (<see cref="ProtectsCrawling"/>).
     /// </summary>
     float FightDesire(World world, int slot, TaskType type, Squad squad)
     {
-        if (world.Characters.Cold(slot) is not { Fighter.CanAttack: true, Medical: { Crawling: false } medical, Gunning: null } cold)
-            return 0;
+        if (world.Characters.Cold(slot) is not { Fighter.CanAttack: true, Medical: { } medical } cold) return 0;
+        if (Protects(type) ? !ProtectsCrawling(world, slot, cold) : medical.Crawling || cold.Gunning is not null) return 0;
 
         if (SelfPreservation.Flees(cold, 1, SelfPreservation.Walled(world, slot))) return 0;
 
@@ -97,6 +97,17 @@ public sealed partial class AiSystem
             _ => 1,
         };
     }
+
+    /// <summary>
+    /// Whether a crawling character can take up a protect goal: rows 15 and 13 and their attack 4 are in the crippled repertoire (0x40), and no
+    /// desire, finder or state of the chain tests posture but row 4's (<c>FUN_1405a4260</c>, <b>Verified</b>): a crippled character answers 0.1
+    /// with a threat within 40 (Character <c>+0x2b0</c>) or when it is of the player's faction; an NPC without one 0 (unless its CharStats
+    /// <c>+0x450</c> flags <c>FUN_1402b2b50</c> / <c>FUN_1402b2b90</c> or <c>FUN_140506960</c> hold, not modelled). Any other character can; a
+    /// turret's gunner too, whose turret goal or job competes with them on its rung.
+    /// </summary>
+    bool ProtectsCrawling(World world, int slot, CharacterCold cold) =>
+        cold.Medical is not { Crawling: true } || DecisionSystem.Decides(cold)
+            || _combat is { } combat && Bodies.CharacterFacts.ImmediateThreat(combat, world, slot);
 
     /// <summary>
     /// The protect goals' desire: 0 for an idle character (passive or sneaking, or a slave holding job 187: a player character's list holds it, an
