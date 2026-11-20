@@ -225,9 +225,10 @@ public sealed class Platoon
     /// </summary>
     public Vector2? RouteGoal { get; set; }
     /// <summary>
-    /// A code mod runs it (<c>PopulationSystem.HoldPlatoon</c>, engine API): its members keep engine minds and the population moves no stand-in of it; it still
-    /// loads, unloads and despawns as any platoon (a mod's spawn is kept, <see cref="ModSpawned"/>). Not saved: the mod finds it again by
-    /// <see cref="ModTag"/> and holds it again after a load.
+    /// A code mod moves it off screen (<c>PopulationSystem.HoldPlatoon</c>, engine API): the population gives it no trips and moves no stand-in of
+    /// it (the mod's <see cref="ModGoal"/> does); loaded, its members run their package's full minds as any platoon's. It still loads, unloads and
+    /// despawns as any platoon (a mod's spawn is kept, <see cref="ModSpawned"/>). Not saved: the mod finds it again by <see cref="ModTag"/> and
+    /// holds it again after a load.
     /// </summary>
     public bool Held { get; set; }
     /// <summary>

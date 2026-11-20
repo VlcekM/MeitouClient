@@ -143,7 +143,7 @@ internal sealed class TownGoals(TownDutySystem owner)
         if (!table.Next[slot].Alive || table.Next[slot].Dormant) return null;
 
         var cold = table.Cold(slot);
-        return cold is { Ai.PlayerSide: true } or { IsPlayer: false, Ai: { Engine: false, Player: false, Squad.Ai: not null } } ? cold : null;
+        return cold is { Ai.PlayerSide: true } or { IsPlayer: false, Ai: { Player: false, Squad.Ai: not null } } ? cold : null;
     }
 
     /// <summary>

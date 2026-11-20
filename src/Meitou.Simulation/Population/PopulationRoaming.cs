@@ -1486,8 +1486,10 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// A code mod takes over a platoon's movement, or gives it back (engine API, <see cref="Platoon.Held"/>): held, it gets no trip orders and its
-    /// stand-in stays where it is, so the mod can walk its members itself. False for an unknown platoon, a town's own or a campaign's. Serial phases only.
+    /// A code mod takes over a platoon's off-screen movement, or gives it back (engine API, <see cref="Platoon.Held"/>): held, it gets no trip
+    /// orders and its stand-in stays where it is until <see cref="SendPlatoon(World, int, Vector2?)"/> moves it. Loaded, its members run their
+    /// package's full minds as any platoon's: the mod steers them with orders (<c>World.GiveOrder</c>), a chooser goal or a package change. False
+    /// for an unknown platoon, a town's own or a campaign's. Serial phases only.
     /// </summary>
     public static bool HoldPlatoon(World world, int platoon, bool held)
     {
@@ -1505,7 +1507,7 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// Sends a held platoon's stand-in toward a point off screen, or stops it (null) (engine API, <see cref="Platoon.ModGoal"/>): it travels as a
     /// roaming stand-in does (by the roads, at the engine's travel speed), stops within <see cref="PopulationSettings.RoamArrivalRadius"/> of the
-    /// point, and waits to be made at a loaded zone like any stand-in; once loaded, the mod walks its members. False for a platoon not held
+    /// point, and waits to be made at a loaded zone like any stand-in; once loaded, its members run their package. False for a platoon not held
     /// (<see cref="HoldPlatoon"/>) or a point that is not finite. Serial phases only.
     /// </summary>
     public static bool SendPlatoon(World world, int platoon, Vector2? point)

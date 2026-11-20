@@ -1000,7 +1000,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     static void EndWalk(CharacterCold cold, WalkEnd how)
     {
         cold.WalkEnd = how;
-        if (cold.Ai is { Engine: false } mind) mind.Replan = true;
+        if (cold.Ai is { } mind) mind.Replan = true;
     }
 
     /// <summary>

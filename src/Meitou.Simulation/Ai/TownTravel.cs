@@ -101,7 +101,7 @@ internal sealed class TownTravel(PopulationData data)
     /// (<see cref="CharacterCold.PaceCap"/>). Any thread.
     /// </summary>
     internal static bool Runs(CharacterCold cold) =>
-        cold.Ai is { Engine: false, Duty: null, Step: TaskType.TravelToTargetTown or TaskType.TravelToTargetTownFast }
+        cold.Ai is { Duty: null, Step: TaskType.TravelToTargetTown or TaskType.TravelToTargetTownFast }
         || cold.Ai is { Duty.Task.Type: TaskType.GoToSomewhereForDeliveringSlaves }
             && cold.Running is { Row: TaskType.GoToSomewhereForDeliveringSlaves };
 

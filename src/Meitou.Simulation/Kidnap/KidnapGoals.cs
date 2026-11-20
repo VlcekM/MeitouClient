@@ -67,7 +67,7 @@ internal sealed class KidnapGoals(KidnapSystem kidnap, CarrySystem carry, Popula
     {
         var table = world.Characters;
         var cold = table.Next[s].Alive ? table.Cold(s) : null;
-        if (cold is not { IsPlayer: false, Ai: { Engine: false, Player: false, Squad.Ai: { } board } }
+        if (cold is not { IsPlayer: false, Ai: { Player: false, Squad.Ai: { } board } }
             || !AiSystem.WeighsGoal(world, s, TaskType.FinalKidnapperCageJob))
         {
             _picks.Remove(s);

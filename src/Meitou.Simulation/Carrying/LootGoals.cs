@@ -77,7 +77,7 @@ internal sealed class LootGoals
             if (!world.Turn(s, every)) continue;
 
             var cold = table.Next[s].Alive ? table.Cold(s) : null;
-            if (cold is not { IsPlayer: false, Inventory: not null, Ai: { Engine: false, Player: false } })
+            if (cold is not { IsPlayer: false, Inventory: not null, Ai.Player: false })
             {
                 _bodies.Remove(s);
                 _weapons.Remove(s);

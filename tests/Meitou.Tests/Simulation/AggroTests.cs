@@ -996,8 +996,6 @@ public class AggroTests
         Think(a);
         var table = a.World.Characters;
 
-        Assert.All(hunters.Members.Concat(traders.Members), m => Assert.True(table.Cold(m.Slot)!.Ai is { Engine: true }, "an engine-run mind"));
-
         table.Cold(hunters.Members[1].Slot)!.Ai = null;
         var bandit = a.SquadOf(Bandits, o, true, (o + new Vector2(0, 150), MathF.PI)).Members[0];
         for (int k = 0; k < (int)(4 / a.World.TickSeconds) && !hunters.Members.All(a.Fighting); k++)
@@ -1008,7 +1006,7 @@ public class AggroTests
         }
 
         Assert.All(hunters.Members, m => Assert.Equal(bandit.Slot, a.Combat.StateOf(m).TargetSlot));
-        Assert.True(table.Cold(hunters.Members[1].Slot)!.Ai is { Engine: true }, "the dropped mind is made again");
+        Assert.True(table.Cold(hunters.Members[1].Slot)!.Ai is not null, "the dropped mind is made again");
     }
 
     /// <summary>
@@ -1027,7 +1025,7 @@ public class AggroTests
         var bandit = a.SquadOf(Bandits, o, true, (o + new Vector2(5, 60), MathF.PI)).Members[0];
         a.World.RunTicks((int)(2 / a.World.TickSeconds));
 
-        Assert.True(a.World.Characters.Cold(folk.Members[0].Slot)!.Ai is { Engine: true, EngineGoals.Count: 0 });
+        Assert.True(a.World.Characters.Cold(folk.Members[0].Slot)!.Ai is not null);
         Assert.All(folk.Members, m => Assert.False(a.Fighting(m), "no attack on sight"));
 
         a.World.Commands.Enqueue(new AttackOrder([bandit], folk.Members[0]) { Tick = a.World.Tick });

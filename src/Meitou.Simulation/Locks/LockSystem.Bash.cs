@@ -537,7 +537,7 @@ public sealed partial class LockSystem
     /// original's planner puts the door rows in front of the walk (docs/game/locks.md "Locked doors on the way"), held by it alone
     /// (<see cref="DoorWayHolder"/>): an NPC with a kept plan takes it as its plan's step (<see cref="AiSystem.TakeDoorStep"/>), which its AI ends and
     /// may replace as any running step; one an engine goal holds as a step of its act-out (<see cref="AiMind.Duty"/>); anyone else (a player's
-    /// character, an NPC on an order, on a goal that is its own plan, of an engine mind or of none) as a step of the task that runs its walk, until
+    /// character, an NPC on an order, on a goal that is its own plan, or of no mind) as a step of the task that runs its walk, until
     /// another task starts.
     /// </summary>
     internal static void StartDoorWay(World world, int s, Fixture door, Vector2 goal, byte mode)

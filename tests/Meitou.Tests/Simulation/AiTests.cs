@@ -985,7 +985,6 @@ public class AiTests(ITestOutputHelper output)
             Assert.Equal("116-t", squad.Ai?.Current?.Id);
             Assert.Null(squad.Ai!.OwnHome);
             Assert.False(AiSystem.BoardMoves(squad.Ai));
-            Assert.All(squad.Members, m => Assert.False(world.Characters.Cold(world.Characters.TryResolveNext(m, out int s) ? s : -1)!.Ai!.Engine));
         }
     }
 

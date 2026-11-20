@@ -965,7 +965,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
 
                 // The AI's own: its Medic goal weighs the patient found here (AiBehaviour.Medic). One whose lists hold no Medic goal does not treat,
                 // nor does a character without a full mind: in the original a character treats only through goal 58, a job or an order.
-                if (cold.Ai is not { Engine: false } mind) continue;
+                if (cold.Ai is not { } mind) continue;
                 if ((_ai ??= world.SystemOf<AiSystem>())?.ListsGoal(world, i, TaskType.JobMedic) != true)
                 {
                     mind.MedicScore = 0;

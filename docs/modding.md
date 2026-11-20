@@ -907,14 +907,15 @@ holds refuses the second mod.
 - **Driving NPCs** (engine API; serial phases): `PopulationSystem.HoldPlatoon` stops a roaming platoon's trips and its
   stand-in's travel (not saved: find it by its tag and hold again after a load; it still unloads, and despawns as any platoon but a mod's
   spawn). `PopulationSystem.SendPlatoon` sends a held platoon's stand-in off screen toward a point or a living character (by the roads, at the
-  stand-in travel speed, stopping within the roam arrival radius; null stops it; not saved, cleared when the hold ends); once loaded the mod
-  walks its members. A hold on a platoon that is in the world changes its members' minds on the next package step: they stop acting out their package (a sleeper gets up, one sitting stands, the followers follow their leader again and the leader stands; one in a fight or knocked out rejoins once it stands idle) and keep only its combat goals, and releasing the hold gives the full minds back. A held squad whose package itself travels (a wandering trader's, a mission's) is still walked by that package while it has somewhere to go. The `EndContract(squadId)` command ends a running contract as its hours running out would (a `StartContract` of the
+  stand-in travel speed, stopping within the roam arrival radius; null stops it; not saved, cleared when the hold ends). The hold is off screen
+  only: loaded, a held platoon's members run their package's full minds as any platoon's, and the mod steers them with orders (Ordering
+  characters, below; a member whose package follows its leader follows an ordered leader), a chooser goal in the package, or a package change
+  (`ChangeAi`, `StartContract`). The `EndContract(squadId)` command ends a running contract as its hours running out would (a `StartContract` of the
   same package after it starts it afresh; the game ignores a start of the contract already running), and `StartContract { AnyRange = true }`
   lets the contract's assault take its target wherever it is, not only within the manoeuvre mode's reach (about 6517 units for ROAM_FAR;
   saved with the contract). **Verified** by `ModHookTests` (synthetic world): a held stand-in, travel to a point, the contract's end and restart,
   and an any-range target taken past the reach. A chooser goal's act-out (below) drives its character with what the engine's own duties use:
-  `TaskStart.Walk`,
-  `CharacterOrders.Sneak` on `Orders` (speed, sight and spot meters follow it for any faction), `LockSystem.Picking.Step` (books the Burglary
+  `TaskStart.Walk`, `CharacterOrders.Sneak` on `Orders` (speed, sight and spot meters follow it for any faction), `LockSystem.Picking.Step` (books the Burglary
   a witness answers), `CrimeSystem.Pickpocket`, `CarrySystem.BeginPickUp` / `BeginPutDown`, `ArrestSystem.TakeOver(enslave: true)` (a guard
   takes the carried body to a cage as its faction's slave), `AggroSystem.Spotted` / `Unseen`. `CharacterCold.FedTo` is a free hunger level
   that comes before the game's rule (not saved), for a captive the mod's squad carries.
@@ -936,7 +937,7 @@ holds refuses the second mod.
   - **Who weighs a goal:** a character whose lists hold an AI_TASK of that `enum`: an NPC's running package role list, its race's `AI Goals` or
     the slave list of the squad it obeys; a player character's own `AI Goals` and its autonomous squad's package roles. It is weighed beside the
     engine's goals by the record's tier (`classification`) and hours, the list's weight and the running goal's continuity (x1.25); the type has no
-    commitment or crowding. The members of a platoon a code mod holds (engine minds) never weigh it. Without the code mod the goal is inert.
+    commitment or crowding. Without the code mod the goal is inert.
   - **`Desire(in ModGoalAsk ask)`** is the whole desire (0 or below: not wanted), asked in the AI's parallel think on the asker's own partition.
     The ask is a read-only `ref struct` that cannot be kept or captured: `Slot`, `Id`, `Type`, `Targeting`; the asker's own state this tick
     (`Self`, `ref readonly`), `Faction`, `Role`, `PlayerSide`, `IsAnimal`, `Carrying`, `InCombat`, `Orders`, `RunningRow`, `Running` (this goal
@@ -988,6 +989,9 @@ holds refuses the second mod.
     or a chooser goal whose `Start` walks it; the order or the goal holds the character.
   - A serial step taking a package's members for a goal of the mod's type (the duty route): a chooser goal of that type in the package's role
     list; the chooser decides when it wins.
+  - `HoldPlatoon` to put a loaded platoon's members on the engine's routine and walk them: the hold keeps only its off-screen half (no trips,
+    `SendPlatoon`); loaded members run their package, and the mod orders them (`World.GiveOrder`), adds a chooser goal to the package, or
+    changes the package (`ChangeAi`, `StartContract`).
   - Player characters weigh a mod's goal type in their own lists and their autonomous squad's package.
 - **Seats** (`Meitou.Simulation.Production`; the system from `SystemBuildContext.Find<ProductionSystem>()` or `world.Systems`):
   `SitOn(world, slot, seat, row, source)` puts a character, the player's or an NPC, on a chair or throne through the player's Use order's
@@ -1012,8 +1016,7 @@ holds refuses the second mod.
   its chooser goal's `Start` seats (the goal then holds the sitter). A character another system holds (a conversation, a trade, an arrest, a
   duty, another mod's goal) is taken from it, so do not seat one. Outside a goal the AI holds no
   character on the operate task, so a seated NPC stays seated, only Self preservation takes it over, and the AI takes it back
-  once the seat ends; a goal's sitter is the goal's until another goal wins (`End(Displaced)`, the seat stopped). A squad the population moves
-  walks its leader on (its seat ends `Replaced`) while its other members stay seated, so hold the platoon first (`HoldPlatoon`). A player character seated
+  once the seat ends; a goal's sitter is the goal's until another goal wins (`End(Displaced)`, the seat stopped). A player character seated
   outside a goal is decided again at its next choice (an order, a job, a goal that wins); one a goal seated stays while the goal holds it.
   How it ends: the walk reserves nothing from the AI's own sitters, and they always win: whenever one rests on the seat's origin (one that got
   there first, or one arriving later on a sitting-around or throne claim it already held) the task ends `Done` and the mod's character stands

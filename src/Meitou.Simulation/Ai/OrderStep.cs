@@ -105,12 +105,12 @@ internal static class OrderStep
     }
 
     /// <summary>
-    /// An order is about to take an NPC its AI does not fully run (a held platoon's engine mind, or none: no squad; serial): the routine it is on,
-    /// wandering or following its leader, is kept for <see cref="BackToRoutine"/>; a routine kept by an earlier order of the queue stays.
+    /// An order is about to take an NPC with no mind (no squad; serial): the routine it is on, wandering or following its leader, is kept for
+    /// <see cref="BackToRoutine"/>; a routine kept by an earlier order of the queue stays.
     /// </summary>
     public static void KeepRoutine(CharacterTable table, int slot, CharacterCold cold)
     {
-        if (cold.Ai is { Engine: false }) return;
+        if (cold.Ai is not null) return;
 
         var task = (CharacterTask)table.Next[slot].Task;
         if (task is CharacterTask.Wander or CharacterTask.Follow) cold.OrderRoutine = task;

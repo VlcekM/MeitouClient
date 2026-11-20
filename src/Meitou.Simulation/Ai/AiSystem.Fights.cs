@@ -679,10 +679,9 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// Ends the fights whose fighter's think chose a goal that is no fight (<see cref="InFight"/>), the Fixing Legs treatments an urgent goal
-    /// outscored (<see cref="LeaveTreatment"/>) and the tasks a player-faction character's goal waits on (<see cref="LeaveTask"/>; serial, slot
-    /// order): the task ends as any task's start ends it (<see cref="TaskStart.Become"/>, the character idle), and the character thinks at the next
-    /// tick, which acts the chosen goal out.
+    /// Ends the fights whose fighter's think chose a goal that is no fight (<see cref="InFight"/>), and the treatments and the tasks a
+    /// player-faction character's goal waits on that a winner outscored (<see cref="LeaveTask"/>; serial, slot order): the task ends as any task's
+    /// start ends it (<see cref="TaskStart.Become"/>, the character idle), and the character thinks at the next tick, which acts the chosen goal out.
     /// </summary>
     void LeaveFights(World world)
     {

@@ -54,7 +54,7 @@ public sealed partial class AiSystem
     /// </summary>
     void ClaimSlaveWork(World world, Squad squad)
     {
-        if (IsPlayers(world, squad)) ClaimWork(world, EngineBoard, squad);
+        if (IsPlayers(world, squad)) ClaimWork(world, EmptyBoard, squad);
     }
 
     #endregion

@@ -1082,13 +1082,6 @@ public sealed class AiMind
     public float WanderRadius { get; set; }
 
     /// <summary>
-    /// Its routine is the engine's, not the AI's: it is a member of a loaded platoon a code mod holds (<see cref="Platoon.Held"/>, Meitou only),
-    /// which the mod moves. The AI weighs only its combat goals (<see cref="EngineGoals"/> and its own lists) and Self preservation, on that routine
-    /// and in its fights, and acts nothing else out (docs/simulation.md "AI").
-    /// </summary>
-    public bool Engine { get; init; }
-
-    /// <summary>
     /// A player-faction character's mind (always with <see cref="PlayerSide"/>). Its own lists' goals are weighed only once their type is on the
     /// chooser's rungs or a code mod's (<see cref="AiSystem.OnRungs"/>); the rest stay the sources' (<see cref="DecisionSystem"/>).
     /// </summary>
@@ -1116,12 +1109,6 @@ public sealed class AiMind
     /// Whether <paramref name="run"/> is the provenance of a task the think started for this mind's character (a goal's, of its tick and row).
     /// </summary>
     public bool Owns(RunningTask run) => run.Source == TaskSource.Goal && run.Tick == OwnTick && run.Row == OwnRow;
-
-    /// <summary>
-    /// The combat goals of its platoon's package for its role (none without a package), set by the AI's serial step on the package cadence. Follow
-    /// from the package, so not hashed.
-    /// </summary>
-    public IReadOnlyList<AiGoal> EngineGoals { get; set; } = [];
 
     /// <summary>
     /// Its own goal lists beside its squad's (<c>setupAI</c> <c>FUN_140621b70</c>, <b>Verified</b>): its faction's <c>AI Goals</c> when no contract
@@ -1553,7 +1540,6 @@ public sealed class AiMind
     /// </summary>
     internal void Hash(ref StateHasher hasher)
     {
-        if (Engine) hasher.Add(0x456E6769);
         if (PlayerSide) hasher.Add(0x506C5364);   // "PlSd"
         if (Player)
         {

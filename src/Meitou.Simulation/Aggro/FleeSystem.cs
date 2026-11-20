@@ -26,8 +26,8 @@ namespace Meitou.Simulation.Aggro;
 /// <item><b>On the AI's request</b> (<see cref="Ai.AiMind.FleeRequest"/>, the same run): an NPC whose Self preservation goes to Running away (a
 /// crippled one, or one with no working arm, under attack: <see cref="Ai.SelfPreservation"/>) runs from the centre of its threats; a goal 35 of its
 /// lists from the enemies it senses. The run is the task of that goal (<see cref="CharacterCold.FleesAlone"/>, row 35, a goal's provenance): the
-/// runner's chooser runs on, and the flight ends when the goal does (another winner's task replaces the run, or no goal of the run is current).
-/// A mind a Meitou hold keeps (an engine mind) runs as a broken squad's member and stops when no threat is left.</item>
+/// runner's chooser runs on, and the flight ends when the goal does (another winner's task replaces the run, or no goal of the run is
+/// current).</item>
 /// </list>
 /// </summary>
 public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, float sightRange = AggroSystem.OutdoorSight)
@@ -222,10 +222,10 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     }
 
     /// <summary>
-    /// Whether an AI-asked flight is its goal's task (<see cref="CharacterCold.FleesAlone"/>): the runner's own chooser runs, not a Meitou hold's
-    /// (<see cref="Ai.MeitouHolds"/>: an engine mind).
+    /// Whether an AI-asked flight is still its goal's task (<see cref="CharacterCold.FleesAlone"/>): the runner keeps its mind, whose chooser runs on
+    /// (a squad or faction change drops the mind and leaves the run to end as a broken squad's member's does).
     /// </summary>
-    static bool GoalFlight(CharacterCold cold) => cold.Ai is { Engine: false };
+    static bool GoalFlight(CharacterCold cold) => cold.Ai is not null;
 
     /// <summary>
     /// Whether a goal's run goes on: its goal is current (32 on its step 35, or a goal of the Flee behaviour, 35) and no other start replaced the
@@ -304,25 +304,23 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     /// A flight the AI asked for (<see cref="Ai.AiMind.FleeRequest"/>). From the threats (<see cref="Ai.FleeAsk.Threat"/>, Self preservation's
     /// provider 35, <see cref="Ai.SelfPreservation"/>): if a threat still attacks it and its body still takes the choice to running; it runs from
     /// their centre. From the enemies it senses (<see cref="Ai.FleeAsk.Enemies"/>, a goal 35), as a broken squad's member does. The run is its goal's
-    /// task (<see cref="GoalFlight"/>); a Meitou hold's runs as the engine's, a threat run until no threat is left, an enemies run until it is safe.
+    /// task (<see cref="GoalFlight"/>).
     /// </summary>
     void Begin(World world, CharacterTable table, int s, FleeAsk ask)
     {
         var cold = table.Cold(s)!;
-        bool goal = GoalFlight(cold);
-        var source = goal ? TaskSource.Goal : TaskSource.Npc;
         if (ask == FleeAsk.Threat)
         {
             float level = combat.ThreatLevel(world, s, out var threats);
             if (level <= 0 || !SelfPreservation.Runs(cold, level, SelfPreservation.Walled(world, s))) return;
             cold.FleesAlone = true;
-            Begin(world, table, s, threats, 1, source);
+            Begin(world, table, s, threats, 1, TaskSource.Goal);
             return;
         }
 
         var (centre, k) = EnemyCentre(world, table, s);
-        cold.FleesAlone = goal;
-        Begin(world, table, s, centre, k, source);
+        cold.FleesAlone = true;
+        Begin(world, table, s, centre, k, TaskSource.Goal);
     }
 
     /// <summary>

@@ -55,7 +55,7 @@ internal sealed class ArrestGoals(ArrestSystem arrests)
     {
         var table = world.Characters;
         var cold = table.Next[s].Alive ? table.Cold(s) : null;
-        if (cold is not { IsPlayer: false, Ai: { Engine: false, Player: false } } || !AiSystem.WeighsGoal(world, s, TaskType.HuntBounties))
+        if (cold is not { IsPlayer: false, Ai.Player: false } || !AiSystem.WeighsGoal(world, s, TaskType.HuntBounties))
         {
             _picks.Remove(s);
             return;

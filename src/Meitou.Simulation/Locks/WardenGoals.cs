@@ -74,7 +74,7 @@ internal sealed class WardenGoals(LockSystem locks)
     {
         var table = world.Characters;
         var cold = table.Next[s].Alive ? table.Cold(s) : null;
-        if (cold is not { IsPlayer: false, IsImprisoned: false, Ai: { Engine: false, Player: false, Squad.Ai: { } board } })
+        if (cold is not { IsPlayer: false, IsImprisoned: false, Ai: { Player: false, Squad.Ai: { } board } })
         {
             _prisoners.Remove(s);
             _toLock.Remove(s);

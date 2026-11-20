@@ -66,10 +66,6 @@ internal sealed class TierRungs : ITierRungs
     /// </summary>
     int _hour;
     /// <summary>
-    /// Which goals a Meitou hold lets be weighed (<see cref="MeitouHold"/>; none: all).
-    /// </summary>
-    MeitouHold _only;
-    /// <summary>
     /// The planner bound to the character.
     /// </summary>
     AiSystem.PlanContext _plans = null!;
@@ -101,13 +97,12 @@ internal sealed class TierRungs : ITierRungs
     IReadOnlyList<AiGoal>? _slaveGoals;
 
     /// <summary>
-    /// Binds the rungs to one character's choice; <paramref name="only"/> limits the goals weighed; <paramref name="replan"/>: the original's replan
-    /// request is pending (<see cref="Begin"/>).
+    /// Binds the rungs to one character's choice; <paramref name="replan"/>: the original's replan request is pending (<see cref="Begin"/>).
     /// </summary>
     public TierRungs Bind(AiSystem ai, World world, int slot, CharacterId id, AiMind mind, Squad squad, Blackboard board,
-        IReadOnlyList<AiGoal> roles, int hour, MeitouHold only, bool replan)
+        IReadOnlyList<AiGoal> roles, int hour, bool replan)
     {
-        (_ai, _world, _slot, _id, _mind, _squad, _board, _roles, _hour, _only) = (ai, world, slot, id, mind, squad, board, roles, hour, only);
+        (_ai, _world, _slot, _id, _mind, _squad, _board, _roles, _hour) = (ai, world, slot, id, mind, squad, board, roles, hour);
         _replan = replan;
         _plans = AiSystem.PlanContext.Local.Bind(ai, world, slot, mind, board);
         _slaveGoals = world.Characters.Cold(slot) is { } cold ? AiSystem.ObeyedRoles(world, squad, cold) : null;
@@ -249,22 +244,6 @@ internal sealed class TierRungs : ITierRungs
 
     #endregion
 
-    #region Meitou holds
-
-    /// <summary>
-    /// The choice of a character a hold only Meitou has keeps (<see cref="MeitouHolds"/>: a platoon a code mod holds, an autonomous
-    /// squad's member on a job): an obeying slave's job pass first (<see cref="PickJobPass"/>), then the urgent tier's goals
-    /// <see cref="_only"/> lets through; null when none plans. No sources, no committed stop.
-    /// </summary>
-    public AiGoal? HeldChoice()
-    {
-        if (Obeys && PickJobPass(out _) is { } obeyed) return obeyed;
-
-        return Tier(TaskPriority.Urgent, null, 0, 0, out _);
-    }
-
-    #endregion
-
     #region Scoring
 
     /// <summary>
@@ -327,8 +306,8 @@ internal sealed class TierRungs : ITierRungs
     }
 
     /// <summary>
-    /// Scores goal <paramref name="g"/> into <paramref name="candidates"/> when it is of <paramref name="tier"/> (null: any) and in its hours, is not
-    /// left out by a Meitou hold (<see cref="_only"/>), is wanted and scores above 0, and is not dropped for having nothing to do.
+    /// Scores goal <paramref name="g"/> into <paramref name="candidates"/> when it is of <paramref name="tier"/> (null: any) and in its hours, is
+    /// wanted and scores above 0, and is not dropped for having nothing to do.
     /// </summary>
     void Consider(List<(AiGoal? Goal, float Score, float Desire, int Source)> candidates, AiGoal g, TaskPriority? tier)
     {
@@ -336,7 +315,6 @@ internal sealed class TierRungs : ITierRungs
 
         // The list entries of Self preservation are the engine's own goal, which every character has once.
         if (g.Task.Type == TaskType.SelfPreservation && !ReferenceEquals(g, AiSystem.SelfPreservationGoal)) return;
-        if (Excluded(g)) return;
 
         var profile = TaskProfiles.Of(g.Task.Type);
         float desire = _ai.Desire(_world, TaskBehaviours.Of(g.Task.Type), g.Task.Type, profile, _squad, _board, _mind, _id, g.Task.Target);
@@ -347,17 +325,6 @@ internal sealed class TierRungs : ITierRungs
 
         Rank(candidates, g, score, desire, -1);
     }
-
-    /// <summary>
-    /// Whether a Meitou hold leaves goal <paramref name="g"/> out.
-    /// </summary>
-    bool Excluded(AiGoal g) => _only switch
-    {
-        MeitouHold.Self => !ReferenceEquals(g, AiSystem.SelfPreservationGoal),
-        MeitouHold.Combat => TaskBehaviours.Of(g.Task.Type) != AiBehaviour.Fight && !ReferenceEquals(g, AiSystem.SelfPreservationGoal),
-        MeitouHold.Urgent => g.Task.Priority != TaskPriority.Urgent,
-        _ => false,
-    };
 
     /// <summary>
     /// The pick (<c>FUN_140510650</c>): the candidates highest first; a source or a second-list entry wins as it is (the look found it can run, its
