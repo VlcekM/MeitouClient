@@ -272,7 +272,8 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   start afterwards; 147 starts with no repertoire or list test (`OrderEntry.Forced`, `TaskRequest.Forced`); a blow during a running stumble adds another front
   147 that takes the running stumble over, the older one ending at once after it. A failed kidnap of a sleeper gives 116 with the clear flag
   (`CarrySystem.Kidnap`), which leaves the queue at once as the kidnap has got it out of bed. Each acts out standing in place (`Idle` under its row) until the
-  body's hold ends: 65 / 52 the get-up's `GettingUpUntil` (set at the wake by the body step), 147 the stumble's `StaggeredUntil` (at once without a clip);
+  body's hold ends: 65 / 52 the get-up's `GettingUpUntil` (set at the wake by the body step), 147 the stumble's `StaggeredUntil` (at once without a clip), which any end of the stumble's task cuts short with the clip (`BodyOrders` `End`,
+  `CombatSystem.EndStumble`: an order that clears the queue, a task that replaces it, a wipe);
   65 and 52 start nothing in a bed or cage and leave.
 - `PlayerOrders.Runs`: the front started and its task's provenance is an order's that runs the task (a move also needs `OrderMove`) and the handler is not `Done`. Lock work and item or
   container work done in place (`Idle`) report `Done` once the character holds no work.

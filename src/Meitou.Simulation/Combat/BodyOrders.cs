@@ -40,7 +40,7 @@ public enum BodyEvents : byte
 /// "Order queue"): getting up 65 and waking low 52 (<c>FUN_1405d00b0</c>, <c>FUN_1405c7e20</c>), stumbling 147 (<c>FUN_1404391f0</c> →
 /// <c>FUN_140507cd0</c>) and getting out of bed 116 (a failed kidnap, <c>FUN_14034ffa0</c>). Their act-out is standing in place (<see cref="CharacterTask.Idle"/>
 /// under the order's row) while the body's own hold lasts: the get-up's (<see cref="CharacterCold.GettingUpUntil"/>) and the stumble's
-/// (<see cref="CharacterCold.StaggeredUntil"/>), which the body step and the hit set. They release no duty (<see cref="OrderEntry.Interrupts"/>).
+/// (<see cref="CharacterCold.StaggeredUntil"/>), which the body step and the hit set; the stumble's ends with its task. They release no duty (<see cref="OrderEntry.Interrupts"/>).
 /// Saved as any queued order (the writer <c>FUN_1405090b0</c> has no row filter), their holds not. Serial phases, but <see cref="Stumbles"/>.
 /// </summary>
 public sealed class BodyOrders : IOrderOwner, ITaskHandler
@@ -171,10 +171,19 @@ public sealed class BodyOrders : IOrderOwner, ITaskHandler
     }
 
     /// <summary>
-    /// Holds nothing: the body's hold runs out by itself.
+    /// A get-up's or a bed leave's end holds nothing: the body's hold runs out by itself. A stumble's is the hold's end, however the task ends (its
+    /// clip done, an order that clears the queue, a task that replaces it, a wipe): <c>Task_Stumble</c>'s end unlocks the mover and clears the
+    /// stumble clip (<c>FUN_140335040</c>, <b>Verified</b>), which is what held the character (<c>FUN_1405cfd90</c> → <c>FUN_140435570</c>
+    /// locks the mover each frame only while that clip plays). A get-up's hold the stumble's shares stays.
     /// </summary>
     void ITaskHandler.End(World world, int slot, CharacterTask task, TaskEnd reason)
     {
+        var cold = world.Characters.Cold(slot)!;
+        if (cold.Running?.Row != TaskType.StumbleTaskForced) return;
+
+        long now = world.Tick;
+        if (cold.StaggeredUntil > now) cold.StaggeredUntil = Math.Min(cold.StaggeredUntil, Math.Max(now, cold.GettingUpUntil));
+        world.SystemOf<CombatSystem>()?.EndStumble(slot, (int)now);
     }
 
     /// <summary>

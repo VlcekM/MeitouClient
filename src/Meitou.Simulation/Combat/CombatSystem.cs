@@ -755,6 +755,27 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     }
 
     /// <summary>
+    /// The end of a stagger's <c>Task_Stumble</c> (<c>FUN_140335040</c>, <b>Verified</b>), from any serial phase: the stumble clip is dropped in both
+    /// state arrays (the animation fades it out), and the wait for the fighter's next move it set is cut to now.
+    /// </summary>
+    internal void EndStumble(int slot, int now)
+    {
+        if (slot >= _read.Length) return;
+
+        Drop(ref _read[slot], now);
+        Drop(ref _write[slot], now);
+
+        static void Drop(ref CombatSlot s, int now)
+        {
+            if (s.StumbleClip < 0 || s.StunUntil <= now) return;
+
+            if (s.ReadyTick == s.StunUntil) s.ReadyTick = now;
+            s.StumbleClip = -1;
+            s.StunUntil = now;
+        }
+    }
+
+    /// <summary>
     /// The end of the fight task of <paramref name="slot"/> also zeroes its engaged list (<c>FUN_1406659b0</c> mode 2): everyone who let close in on
     /// it is out of it, by a new <see cref="CombatSlot.ListEpoch"/> the fighters read (<see cref="CombatSlot.JoinedEpoch"/>); they keep their target
     /// and ask again.
