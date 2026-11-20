@@ -1237,7 +1237,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
         if (sneak)
         {
-            cold.Orders |= CharacterOrders.Sneak;
+            Orders.SneakOn(cold);   // its own slot: the replan request writes only its own mind
         }
         else if ((cold.Orders & CharacterOrders.Sneak) != 0)
         {
