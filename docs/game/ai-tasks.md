@@ -1291,7 +1291,9 @@ Interface givers: `FUN_1407f9e20` gives every selected player-faction character 
 unless its sixth argument is set, and sets its `+0xec` ([staying low](ragdolls.md#staying-low)); `FUN_1407fae70` the nearest such character, clear; `FUN_1407fb410` the
 quick right click on a character (26 Looting, 12 Talking on a standing NPC that talks); `FUN_1407f5a90` the Shift job giver ([perma-jobs](#perma-jobs)). **Verified**
 (disassembly): the held menu's verbs (`FUN_1407a7f10` → `FUN_1407fa650`) pass 0, so a verb whose row has no job kind clears the queue with or without Shift (12 Talk
-To among them: its registration in `FUN_140319a60` sets no `+4`); a complete building's quick-click order (`FUN_1407fc6e0`) and 235 Shoot At (`FUN_1407fb410`) pass 1 and are appended. `FUN_1405c95b0` (would push 1
+To among them: its registration in `FUN_140319a60` sets no `+4`). The building quick click `FUN_1407fc6e0` passes 0 to `FUN_1407fa650` for its slot-131 order, Build, Repair
+and the Alt 207 (call sites `1407fc7c1`, `1407fc9ea`, `1407fcdb0`, `1407fd066`), so those clear too; only a door's own order (vfunc `0x418`, 72 or 73; call site `1407fc8f5`) goes
+straight to `FUN_1407f9e20` with 1 and is appended, as is 235 Shoot At (`FUN_1407fb410`). `FUN_1405c95b0` (would push 1
 Moving) is dead code: its only reference is a thunk nothing calls.
 
 ### What clears the queue
