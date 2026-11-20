@@ -539,15 +539,20 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     }
 
     /// <summary>
-    /// A police-like NPC free to start an arrest: awake, not fighting, fleeing, carrying, held or treating, not in another arrest.
+    /// A police-like NPC free to start an arrest (<see cref="Free"/>).
     /// </summary>
-    bool FreeGuard(World world, int slot)
+    bool FreeGuard(World world, int slot) => Free(world, slot) && Crimes.IsPoliceLike(world, world.Characters.Cold(slot)!);
+
+    /// <summary>
+    /// An NPC free to act on a sighting: awake, not fighting, fleeing, carrying, held or treating, not in another arrest, with no order.
+    /// </summary>
+    bool Free(World world, int slot)
     {
         var table = world.Characters;
         if (!table.Next[slot].Alive || table.Next[slot].Task is (byte)CharacterTask.Attack or (byte)CharacterTask.Treat) return false;
         return table.Cold(slot) is { IsPlayer: false, InCombat: false, Fleeing: false, IsImprisoned: false, Medical.Incapacitated: false,
             Carrying.IsNone: true, CarriedBy.IsNone: true, Fighter.CanAttack: true } c
-            && Crimes.IsPoliceLike(world, c) && !Busy(table.IdOf(slot)) && !DecisionSystem.Ordered(c);
+            && !Busy(table.IdOf(slot)) && !DecisionSystem.Ordered(c);
     }
 
     /// <summary>
@@ -720,7 +725,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
 
             if (!sight && c.SlaveState == 1 && view > EscapingSlave.SpotValue && Escapes(world, w, s, c, at)) FixtureRegistry.TagEscaped(world, c);
             if (c.SlaveState == 2 && d2 < catcherD2
-                && (Crimes.IsPoliceLike(world, wc) || wc.NpcClass == FundamentalType.Slaver) && FreeGuard(world, w))
+                && (Crimes.IsPoliceLike(world, wc) || wc.NpcClass == FundamentalType.Slaver) && Free(world, w))
             {
                 (catcher, catcherD2) = (w, d2);
             }
