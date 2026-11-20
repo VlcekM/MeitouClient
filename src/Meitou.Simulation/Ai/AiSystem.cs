@@ -1038,6 +1038,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             // Relaxing needs a free seat of the package's bar, sitting around a free chair of the home (claimed in
             // <see cref="TownPlaceClaims.ClaimSeats"/>); the original's finder returns 0 without one (FUN_1408caf00).
             AiBehaviour.Relax => board.BarTable >= 0 && board.SeatClaims.ContainsKey(self.Slot) && !mind.SeatUnreachable ? 1 : 0,
+            // Reigning (255): AI slot 67 (FUN_140597c20, Verified), 1 only for the leader of the character's squad, else 0.
+            AiBehaviour.Sit when type == TaskType.SitOnThrone && squad.Leader != self => 0,
             AiBehaviour.Sit => board.SitClaims.ContainsKey(self.Slot) && !mind.SeatUnreachable ? 1 : 0,
             AiBehaviour.ToTown => TownAt(world.Characters.Previous[self.Slot].Position) >= 0 ? 0 : 1,
             // 215 under a war package: AI slot 57, the constant 1 (FUN_140319a60, Verified); its list A ends it (the planner's 131).

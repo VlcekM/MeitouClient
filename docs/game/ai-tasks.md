@@ -880,7 +880,8 @@ there (`FUN_14060f570` answers false), so for 180 Man the gate the byte changes 
   leading its own squad does not prevent a slave from following its owner.
 - More desire stubs (**Verified**, the registration stubs' bytes in the 1.0.68 exe, `jmp` to an `AI` vtable slot): 184, 202, 219 and 41 share slot 47 `FUN_1406415d0`
   (2.0); 155 and 197 slot 31 `FUN_140795f80` (1 while the squad's house-locked flag `+0xe8` is clear); 283 slot 71 `FUN_1405998b0` (1 while the home building resolves and
-  is not public, else 0); 243 slot 26 `FUN_140597cb0`; 177 and 238 slot 62 `FUN_140597ae0` (0 while the posture is not 0, else 1); 58, 250 and 57 the stub `LAB_1400442d8`,
+  is not public, else 0); 255 Reigning slot 67 `FUN_140597c20` (1 for its squad's leader, the active platoon `FUN_140791b10` `+0xa0`, else 0, so no
+  other member sits a throne; Meitou `AiSystem.FinderFactor`, `TownPlaceClaims.ClaimSitting`); 243 slot 26 `FUN_140597cb0`; 177 and 238 slot 62 `FUN_140597ae0` (0 while the posture is not 0, else 1); 58, 250 and 57 the stub `LAB_1400442d8`,
   a `jmp` to `FUN_140998410` ([medic jobs](#medic-jobs)). 270 Assaulting town slot 68 `FUN_140597a20` (stub `LAB_140003413`): 1.0 when the current town is a
   `Town` (`isTown`, vfunc `0x268`) whose owner faction is the player's (`+0x250`) and no ally of the character's (`FUN_1406b2630`), else 0. The registration
   sets `+0x120`, so the effect test holds without asking the finder (`FUN_14050c8e0`), and list A 90 holds on the goal's own hand, empty for targeting
