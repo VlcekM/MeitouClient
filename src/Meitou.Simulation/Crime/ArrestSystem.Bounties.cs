@@ -247,8 +247,13 @@ public sealed partial class ArrestSystem : IOrderOwner
     }
 
     /// <summary>
-    /// Paying (<c>FUN_1406ae170</c>, economy.md 11.5): the money, the jail's entry erased, the cage unlocked and the prisoner out through task 133
-    /// (<see cref="SendOut"/>).
+    /// Paying (<c>FUN_1406ae170</c>, economy.md 11.5): the money, the jail's entry erased, the cage unlocked and the prisoner out through order 133.
+    /// The end of each freed prisoner's block (<b>Verified</b> by disassembly): one that could not speak (event 51 returned 0) is given 128 Retreat
+    /// to hometown, then every one 133 Get out of cage (legit); both gives clear the order queue first (<c>FUN_1405d20d0</c> with its clear argument
+    /// 1: <c>FUN_1405074a0</c> and <c>FUN_140507530</c>), so 133 replaces 128 and the prisoner only steps out of its unlocked cage
+    /// (<see cref="FixtureRegistry.GetOutLegit"/>); its own AI goes on from there. <b>Engine order</b>: 133 is given (and started) before event 51,
+    /// since Meitou's events need a speaker out of its cage, so whether the event would fail is not known before it and 128, which 133 wipes unrun,
+    /// is not given. A prisoner whose chooser does not run (no squad, out cold) keeps the order queued in its unlocked cage until it does.
     /// </summary>
     void Bail(World world, int p, CharacterCold pc, Fixture cage, int price, int payer)
     {
@@ -266,22 +271,9 @@ public sealed partial class ArrestSystem : IOrderOwner
         // event 0x33; Verified).
         var payerId = table.IdOf(payer);
         Talk?.Memory.Remember(world, pc.SquadId, payerId, Dialogue.MemoryTag.FreedMe);
-        SendOut(world, prisoner);
+        FreedPrisoner.Give(world, p);
         Talk?.FireEvent(world, prisoner, payerId, Dialogue.DialogueSystem.BoughtMeFromSlavery);
         Note(world, ArrestEventKind.Bailed, table.IdOf(payer), prisoner, cage.Owner, price);
-    }
-
-    /// <summary>
-    /// The end of each freed prisoner's block in <c>FUN_1406ae170</c> (<b>Verified</b> by disassembly): one that could not speak (event 51 returned
-    /// 0) is given 128 Retreat to hometown, then every one 133 Get out of cage (legit); both gives clear the order queue first (<c>FUN_1405d20d0</c>
-    /// with its clear argument 1: <c>FUN_1405074a0</c> and <c>FUN_140507530</c>), so 133 replaces 128 and the prisoner only steps out of its
-    /// unlocked cage (<see cref="FixtureRegistry.GetOutLegit"/>); its own AI goes on from there. <b>Engine order</b>: 133 is given before event 51,
-    /// since Meitou's events need a speaker out of its cage, so whether the event would fail is not known before it and 128, which 133 wipes
-    /// unrun, is not given. A prisoner whose chooser does not run (no squad, out cold) keeps the order queued in its unlocked cage until it does.
-    /// </summary>
-    void SendOut(World world, CharacterId prisoner)
-    {
-        if (world.Characters.TryResolveNext(prisoner, out int p)) FreedPrisoner.Give(world, p);
     }
 
     #endregion
