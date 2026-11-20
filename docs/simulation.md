@@ -1625,6 +1625,8 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   at Stone Camp): the receiver's line ran DA 24 and the slave's master became the pen keeper's squad. Captives the carriers cage first (112) already belong to the
   cage owner's squad (`FUN_140330600`), so most of a haul changes hands before 194.
 - **Get in the cage** (172, a Slave AI Goal): a slave not held walks to the nearest free cage of its owner's faction in the 3x3 zone cells round it, in any town, and gets in.
+  A cage a squad mate works on or the slave ignores is passed over; another squad's work does not count (172 and 245, `FUN_1408db510` with limit 0 on the squad's own
+  blackboard, `FUN_1402690e0`, **Verified**).
 - **Packages** (`PackageClass` 8 to 11, rules in `AiSystem.Captives.cs` as the facts): cannibal retreat (1, 25; it ends when the effective leader's status town is of the squad's faction, so a wiped
   squad keeps it), cannibals at home (27), prisoner gathering (10, 24), slave shipping (11, 28); the cannibal patrol (4) does not start while the town's cages
   are full. A squad's slaves are its live slave members in slave state 1 (engine reading of the platoon's slave list).

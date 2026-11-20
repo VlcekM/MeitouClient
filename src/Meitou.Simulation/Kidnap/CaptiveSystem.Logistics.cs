@@ -76,8 +76,8 @@ public sealed partial class CaptiveSystem
     /// <summary>
     /// The finder of 172 Getting in my cage (<c>FUN_1408caaf0</c>, <b>Verified</b>): for a character with an owner, whatever its slave state (the
     /// finder tests the owner handle only, so an escaped or ex-slave that keeps its owner finds a cage too), not held in anything, the nearest free
-    /// cage of the owner's faction in the 3x3 zone cells round it, whatever the town (the finder's town argument is 0), that no job heads for; null:
-    /// none.
+    /// cage of the owner's faction in the 3x3 zone cells round it, whatever the town (the finder's town argument is 0), that no squad mate works on
+    /// and it does not ignore (<see cref="SquadClaimed"/>); null: none.
     /// </summary>
     internal Fixture? OwnCage(World world, int slot, CharacterCold cold)
     {
@@ -87,14 +87,27 @@ public sealed partial class CaptiveSystem
         var at = table.Next[slot].Position;
         Fixture? best = null;
         float bestD = float.MaxValue;
+        SquadGoals? goals = null;
         foreach (var f in NearbyCages(world, -1, at, cold.SlaveOwner))
         {
-            if (!FixtureRegistry.IsFree(table, f) || Taken(f.Id)) continue;
+            if (!FixtureRegistry.IsFree(table, f) || SquadClaimed(world, goals ??= SquadGoals.Of(world), slot, cold, f)) continue;
             float d = Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(f.Position.X, f.Position.Z));
             if (d < bestD) (best, bestD) = (f, d);
         }
 
         return best;
+    }
+
+    /// <summary>
+    /// The cage filter of 172 and 245 (<c>FUN_1408db510</c> with the finder limit 0, <b>Verified</b>): a cage is out when a squad mate of the asker
+    /// works on it (<c>Blackboard::howManyGuysWorkingOnThisSubTarget</c> on the squad's own blackboard, <c>FUN_1402690e0</c>; another squad's work
+    /// does not count) or the asker ignores it (<c>FUN_1405b0290</c>).
+    /// </summary>
+    static bool SquadClaimed(World world, SquadGoals goals, int slot, CharacterCold cold, Fixture f)
+    {
+        var asker = world.Characters.IdOf(slot);
+        if (cold.IsIgnored(new IgnoreKey(f.Id, default), world.Tick)) return true;
+        return goals.Working(cold.SquadId, asker, GoalTarget.At(f.Id)) > 0;
     }
 
     /// <summary>
@@ -155,11 +168,11 @@ public sealed partial class CaptiveSystem
         var table = world.Characters;
         c = cold;
         bool export = type == TaskType.GatherSlavesFromCagesIfItsAnExportTown, unholy = type == TaskType.GatherSlavesFromCagesIfFemaleOrBeast;
-        var goals = export ? SquadGoals.Of(world) : null;
+        var goals = export || unholy ? SquadGoals.Of(world) : null;
         var asker = table.IdOf(slot);
 
         // 173 claims nothing (FUN_1408db510 with the finder limit 0x100): gatherers of any squad may head for the same cage, the first lifts.
-        if (export ? goals!.Working(cold.SquadId, asker, GoalTarget.At(f.Id)) > 0 : unholy && Taken(f.Id)) return false;
+        if (export ? goals!.Working(cold.SquadId, asker, GoalTarget.At(f.Id)) > 0 : unholy && SquadClaimed(world, goals!, slot, cold, f)) return false;
         if (!export && f.Owner != cold.Faction || OccupantSlot(world, f) is not (>= 0 and var s)) return false;
         c = table.Cold(s)!;
         if (Spared(cold, c)) return false;
