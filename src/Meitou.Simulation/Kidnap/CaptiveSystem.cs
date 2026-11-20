@@ -1415,6 +1415,9 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             return End(world, j, CaptiveEventKind.GaveUp);
         }
 
+        // A stumble or a get-up (an order on the body, which lets no duty go) holds the worker a moment: the job waits for it.
+        if (Player.PlayerOrders.BodyHolds(wc)) return true;
+
         if (j.Age > Settings.GiveUpSeconds) return End(world, j, CaptiveEventKind.GaveUp);
 
         return StepUncaged(world, j, w, wc) ?? StepAtCage(world, j, w, wc, dt);

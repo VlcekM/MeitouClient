@@ -842,6 +842,9 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease
             || table.Next[w].Task is not ((byte)CharacterTask.Idle or (byte)CharacterTask.GoTo) || InArrest(world, r.Worker))
             return End(world, r, fallback: false);   // taken by something else: the next sweep looks again
 
+        // A stumble or a get-up (an order on the body, which lets no duty go) holds the worker a moment: the round waits for it.
+        if (Player.PlayerOrders.BodyHolds(wc)) return true;
+
         float dt = world.TickSeconds;
         r.Age += dt;
         if (r.Kind == RoundKind.Release)

@@ -619,6 +619,9 @@ public sealed partial class ArrestSystem : IOrderOwner
             return false;
         }
 
+        // A stumble or a get-up (an order on the body, which lets no duty go) holds the hunter a moment: the hunt waits for it.
+        if (PlayerOrders.BodyHolds(gc)) return true;
+
         bool over = !table.TryResolveNext(h.Target, out int t)
             || table.Cold(t) is not { Medical.Incapacitated: false, IsImprisoned: false, CarriedBy.IsNone: true };
         if (!over)

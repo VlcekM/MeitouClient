@@ -1041,6 +1041,10 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             return End(world, a, ArrestEventKind.GaveUp);
         if (a.Order is { } order && !ReferenceEquals(gc.OrderQueue.Front, order) || a.Order is { Started: false })
             return Leave(world, a, g, t, gc);
+
+        // An engine arrest waits out a stumble or a get-up (an order on the body, which lets no duty go); an ordered one has left above.
+        if (PlayerOrders.BodyHolds(gc)) return true;
+
         if (tc.IsImprisoned && a.Phase != ArrestPhase.Walk) return End(world, a, ArrestEventKind.GaveUp);
         if (AwayFromHome(world, a, g, gc)) return RunHome(world, a, g, t, gc);
 
