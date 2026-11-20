@@ -1005,6 +1005,47 @@ public class AggroTests
         Assert.Equal(one, Run(16));
     }
 
+    /// <summary>
+    /// A crime's push alone (<c>Character::attackTarget</c> <c>FUN_1405cb0a0</c>, <see cref="Meitou.Simulation.Crime.CrimeSystem"/>'s
+    /// AttackTarget: the culprit on the threats list, which the sense pass clears before any chooser reads it) puts nobody on the list 32 Self
+    /// preservation's scorer reads (<c>FUN_14050df10</c>, docs/game/ai-tasks.md "Combat goals"), so a crippled NPC pushed against a culprit that
+    /// does not fight it has no 32 and stays put. Catches 32 planned on the push, whose [35, 32] crawled the crippled victim away.
+    /// </summary>
+    [Fact]
+    public void A_crippled_npc_put_in_danger_by_a_crime_push_alone_stays_put()
+    {
+        using var a = Make(23, 1, TownRelations(), ai: true, flee: true);
+        a.Aggro.Combat = a.Combat;
+        var o = new Vector2(2000, 2000);
+        var squad = a.SquadOf(Town, o, true, (o, 0f));
+        Lists(squad, []);
+        var victim = squad.Members[0];
+        var culprit = a.SquadOf(Drifters, o, true, (o + new Vector2(10, 0), 0f)).Members[0];
+        var cold = a.World.Characters.Cold(victim.Slot)!;
+        cold.Medical!.Parts[RLeg].Limb = LimbState.Stump;
+        cold.Medical.Tick(1e-4f, Context());
+        a.World.RunTicks(30);
+
+        Assert.True(cold.Medical.Crawling, "crippled");
+
+        var at = a.World.Characters.Next[victim.Slot].Position;
+        a.Aggro.Threaten(a.World, victim.Slot, culprit.Slot);
+
+        Assert.Contains(culprit, a.Aggro.SensesOf(victim.Slot)!.Pushes(a.World.Tick));
+
+        DecisionSystem.Request(cold);
+        cold.Ai!.Replan = true;
+        for (int t = 0; t < 120; t++)
+        {
+            a.World.RunTicks(1);
+
+            Assert.False(cold.Fleeing, $"running away at tick {t}");
+            Assert.NotEqual(TaskType.SelfPreservation, cold.Ai!.Goal?.Task.Type);
+        }
+
+        Assert.InRange(Vector3.Distance(at, a.World.Characters.Next[victim.Slot].Position), 0, 0.5f);
+    }
+
     #endregion
 
     #region Roaming squads

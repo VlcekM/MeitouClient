@@ -5,6 +5,7 @@ using Meitou.Data.Gameplay.Ai;
 using Meitou.Simulation;
 using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Ai;
+using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Carrying;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Factions;
@@ -14,6 +15,7 @@ using Meitou.Simulation.Items;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
 using Meitou.Simulation.Production;
+using static Meitou.Tests.Bodies.BodyFixtures;
 
 namespace Meitou.Tests.Simulation;
 
@@ -395,9 +397,9 @@ public class DecisionTests
     /// The rig with the fighter enslaved to a master squad 300 units off whose Slave AI Goals list <paramref name="goal"/> (docs/game/ai-tasks.md
     /// "Obedient Slave"): the state setter gave it job 187, which the urgent pass runs.
     /// </summary>
-    static (TaskStartTests.Rig Rig, CharacterId Master) Enslaved(TaskType goal = TaskType.FollowSlavemaster)
+    static (TaskStartTests.Rig Rig, CharacterId Master) Enslaved(TaskType goal = TaskType.FollowSlavemaster, bool flee = false)
     {
-        var rig = new TaskStartTests.Rig(carrying: false, decide: true, slaves: true);
+        var rig = new TaskStartTests.Rig(carrying: false, decide: true, slaves: true, ai: flee, flee: flee);
         rig.World.RunTicks(3);
         rig.Say(new StopCommand([rig.Fighter]) { Tick = rig.World.Tick });
         rig.World.RunTick();
@@ -409,10 +411,60 @@ public class DecisionTests
         var squad = new Squad { Id = rig.World.Squads.NextId(), TemplateId = "m", Faction = 2, Ai = board };
         rig.World.Squads.Add(squad);
         var master = rig.Add(1300, 2000, player: false);
-        rig.Cold(master).SquadId = squad.Id;
-        squad.Members.Add(master);
-        squad.Leader = master;
+        rig.Join(master, squad);
         FixtureRegistry.Enslave(rig.World, rig.Cold(rig.Fighter), 2, squad.Id);
         return (rig, master);
+    }
+
+    /// <summary>
+    /// An obeying slave's goal 35 Running away from its master's Slave list (<c>Task_Runaway</c> tests no faction, <c>FUN_14034b440</c>,
+    /// <c>FUN_140336820</c>; the player-faction desire of slot 55 <c>FUN_1407916d0</c> is 0 while either arm works): a player slave with both arms
+    /// stumps, attacked beside it, runs as an NPC does, its run the goal's task. Catches a player-faction character whose goal 35 never starts the
+    /// flee step.
+    /// </summary>
+    [Fact]
+    public void An_armless_player_slave_told_to_run_away_runs_as_goal_35()
+    {
+        var (rig, _) = Enslaved(TaskType.RunAway, flee: true);
+        using var _ = rig;
+        var f = rig.Fighter;
+        var medical = rig.Cold(f).Medical!;
+        medical.Parts[LArm].Limb = medical.Parts[RArm].Limb = LimbState.Stump;
+        var at = rig.World.Characters.Next[f.Slot].Position;
+        var foe = rig.Add(at.X + 12, at.Z, player: false);
+        rig.Cold(foe).Faction = 0;
+        rig.Say(new AttackOrder([foe], f) { Tick = rig.World.Tick });
+        RunUntil(rig, () => rig.Cold(f).Fleeing, 300, "running away");
+
+        Assert.Equal((TaskType.RunAway, TaskSource.Goal), (rig.Cold(f).Running!.Row, rig.Cold(f).Running!.Source));
+        Assert.Equal(TaskType.RunAway, rig.Cold(f).Ai!.Goal!.Task.Type);
+    }
+
+    /// <summary>
+    /// A Bodyguard job's follow row plans its fight for its charge first (45 needs <c>!16 !39</c>, provided by 13 Attacking attackers of, whose chain
+    /// to 4 reads neither Passive nor sneaking, <c>FUN_1405a4260</c>; docs/game/ai-tasks.md "Precedence"): a Passive bodyguard fights its charge's
+    /// attacker under its job's row, and once that attacker is down follows its charge again. Catches Passive keeping a bodyguard out of its
+    /// charge's fight, or a bodyguard that does not take its follow up again.
+    /// </summary>
+    [Fact]
+    public void A_passive_bodyguard_joins_its_charges_fight_and_follows_again_after_it()
+    {
+        using var rig = Quiet(senses: true);
+        var (guard, charge) = (rig.Fighter, rig.Mate);
+        rig.Cold(guard).Orders |= CharacterOrders.Passive;
+        rig.Cold(rig.Enemy).Medical!.KnockOut(100000);   // the rig's own enemy would make the guard a target of its own
+        rig.Say(new AddOrderJob([guard], TaskType.Bodyguard, charge) { Tick = rig.World.Tick });
+        RunUntil(rig, () => rig.Task(guard) == CharacterTask.Follow, 2 * ProductionSystem.JobCheckTicks + 2, "guarding");
+        var foe = AttackMate(rig);
+        RunUntil(rig, () => rig.Task(guard) == CharacterTask.Attack, 300, "defending its charge");
+
+        Assert.Equal(foe.Slot, rig.Combat.StateOf(guard).TargetSlot);
+        Assert.Equal((TaskType.Bodyguard, TaskSource.Job), (rig.Cold(guard).Running!.Row, rig.Cold(guard).Running!.Source));
+
+        rig.Cold(foe).Medical!.KnockOut(100000);
+        RunUntil(rig, () => rig.Task(guard) == CharacterTask.Follow, 300, "following again");
+
+        Assert.Equal(charge, rig.Cold(guard).FollowOrder);
+        Assert.True(Orders.Has(rig.Cold(guard), CharacterOrders.Passive));
     }
 }

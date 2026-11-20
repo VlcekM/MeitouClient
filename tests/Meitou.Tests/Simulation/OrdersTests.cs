@@ -138,6 +138,57 @@ public class OrdersTests
     }
 
     /// <summary>
+    /// Whose AI update ends a stumble (<c>FUN_140511130</c> stops the running task before the chooser, <see cref="BodyOrders.UpdateEnds"/>,
+    /// docs/game/combat.md "Stagger outside a fight"): a walker in a squad, whose chooser runs, is held by its stumble (order 147's
+    /// <see cref="CharacterCold.StaggeredUntil"/>) for one tick; one with no squad, whose chooser does not run (<c>FUN_1405112b0</c>), for the clip's
+    /// whole second. Catches the update's end applied to a character with no update, or lost for one that has it.
+    /// </summary>
+    [Fact]
+    public void A_stumble_ends_at_the_next_ai_update_only_for_a_character_whose_chooser_runs()
+    {
+        Assert.Equal(1, StumbleTicks(squadless: false).Held);
+
+        var (held, clip) = StumbleTicks(squadless: true);
+
+        Assert.InRange(held, clip - 1, clip + 1);
+    }
+
+    /// <summary>
+    /// The ticks the first stumble of a walker hit from behind holds it (0 when it is not staggered within 900 ticks) and the ticks of its 1 s clip;
+    /// the walker is taken out of its squad when <paramref name="squadless"/>.
+    /// </summary>
+    static (int Held, int Clip) StumbleTicks(bool squadless)
+    {
+        var (world, combat, player, _) = Attacked(CharacterOrders.None, distance: 15);
+        using var w = world;
+        combat.StumbleChooser = (_, _, _, _, _) => (0, 1f);
+        var cold = world.Characters.Cold(player.Slot)!;
+        cold.RunSpeed = SpeedMode.Walk;
+        if (squadless)
+        {
+            world.Squads.Remove(cold.SquadId);
+            cold.SquadId = -1;
+        }
+
+        world.Commands.Enqueue(new MoveOrder([player], new Vector3(1000, 150, 3000)) { Tick = 0 });
+        int ticks = 0;
+        bool staggered = false;
+        for (int k = 0; k < 900; k++)
+        {
+            world.RunTicks(1);
+            if (cold.Medical!.Incapacitated) break;
+
+            staggered |= cold.Running?.Row == TaskType.StumbleTaskForced;
+            if (!staggered) continue;
+
+            if (cold.StaggeredUntil > world.Tick) ticks++;
+            else break;
+        }
+
+        return (ticks, (int)MathF.Round(1 / world.TickSeconds));
+    }
+
+    /// <summary>
     /// A follower copies its leader's sneaking each update (<c>FUN_14033b350</c>), and dropping it leaves the posture alone (the setter
     /// <c>FUN_1405ca9a0</c> resets the mover, not the posture; docs/game/combat.md standing orders): a player character staying low that follows a
     /// sneaking mate, when the mate stops sneaking and walks off, stops sneaking itself but stays low, keeps its follow order at the front of its

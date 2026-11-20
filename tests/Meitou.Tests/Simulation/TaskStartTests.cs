@@ -89,7 +89,7 @@ public class TaskStartTests
     /// <paramref name="senses"/> adds the aggro system's looks (attack on sight off) after retaliation, over <paramref name="relations"/> (the combat
     /// system reads them too) when given; <paramref name="ai"/> adds the AI system after the player's, the senses (Self preservation's threats) and
     /// puts every character in a squad (the chooser runs only for a character with a platoon, <c>FUN_1405112b0</c>); with <paramref name="senses"/>
-    /// too, the factions, the player's listing goal 15 Protect allies.
+    /// too, the factions, the player's listing goal 15 Protect allies; <paramref name="flee"/> adds the flee step after the senses.
     /// </summary>
     internal sealed class Rig : IDisposable
     {
@@ -107,7 +107,7 @@ public class TaskStartTests
         readonly Squad? _playerSquad;
 
         public Rig(bool carrying, bool decide = false, bool slaves = false, bool senses = false, FactionRelations? relations = null,
-                bool ai = false)
+                bool ai = false, bool flee = false)
         {
             var db = Database();
             if (ai && senses) AddFactions(db);
@@ -140,6 +140,9 @@ public class TaskStartTests
 
                     // A failed stealth knock-out puts its attacker on the victim's threats (the game's wiring, StandardSystems).
                     if (ai) (aggro.Combat, carry.Aggro) = (Combat, aggro);
+
+                    // The flee step runs the goals' and Self preservation's runs, after the looks as in the game.
+                    if (flee) systems.Insert(systems.IndexOf(aggro) + 1, new FleeSystem(relations ?? data.Relations, Combat));
                 }
             }
             // The chooser's goals on the ladder's rungs (Self preservation, Protect allies) are the AI's, after the player's as in the game.

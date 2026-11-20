@@ -6,6 +6,7 @@ using Meitou.Data.World;
 using Meitou.Simulation;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Combat;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Population;
 using SimWorld = Meitou.Simulation.World;
 
@@ -262,9 +263,10 @@ public class WildTests(ITestOutputHelper output)
         return PopulationData.Create(db, InstallData.Levels!.Towns(), biomes: biomes);
     }
 
-    static (SimWorld World, StandardSystemSet Systems) RealWorld(PopulationData data, Vector3 at, StandardParts parts, int threads = 1)
+    static (SimWorld World, StandardSystemSet Systems) RealWorld(PopulationData data, Vector3 at, StandardParts parts, int threads = 1,
+            Func<float, float, float>? ground = null)
     {
-        var walk = new OpenGroundWalkability((_, _) => 300);
+        var walk = new OpenGroundWalkability(ground ?? ((_, _) => 300));
         var systems = StandardSystems.Build(data, walk, new StandardSystemOptions
         {
             Parts = parts, SynchronousPaths = true,
@@ -350,6 +352,56 @@ public class WildTests(ITestOutputHelper output)
         world.RunTicks(64);
         Assert.Equal(SiteStatus.Loaded, pop.WildStatusOf(den.Index));
         Assert.Equal(0, Living(world, pop.WildSquadsOf(den.Index)));
+    }
+
+    /// <summary>
+    /// A patrol leader whose walk to its point ends short (no way there) stands and draws the next point, as <c>Task_Patrol</c> does once its move
+    /// ends (<c>FUN_1405c6b30</c> mode 1; docs/game/factions-squads-towns.md "Off-screen world", <see cref="AiSystem.PatrolMoveOver"/>): round the
+    /// corner of four Border Zone sectors, with a water band along the sectors' line north to south, every homeless leader that draws a point
+    /// across the water draws a new one within 4 s. Catches a leader that stands for good before a point it cannot reach.
+    /// </summary>
+    [Fact]
+    [Slow]
+    public void Every_patrol_leader_whose_point_lies_across_water_draws_a_new_one()
+    {
+        var data = RealData();
+        int group = data.Biomes!.Groups.ToList().FindIndex(g => g.Name == "Border Zone");
+        var sector = PopulationSystem.BuildWildSites(data, new PopulationSettings(), data.Biomes, 1)
+            .First(s => s.Kind == WildKind.Sector && s.Group == group);
+        var (minX, minZ, _, _) = WeatherAreas.CellRect(sector.Zone.X, sector.Zone.Y);
+        float WaterBand(float x, float z) => MathF.Abs(x - minX) < 100 ? WorldWater.Height - 50 : 300;
+        var (world, _) = RealWorld(data, new Vector3(minX, 300, minZ), StandardParts.Population | StandardParts.Movement | StandardParts.Ai,
+                ground: WaterBand);
+        using var _ = world;
+        bool Across(Squad s) => s.PatrolPoint is { } p && world.Characters.TryResolveNext(s.Leader, out int l)
+            && (p.X < minX) != (world.Characters.Next[l].Position.X < minX);
+        var stuck = new Dictionary<int, (Vector2 Point, long Since)>();
+        int blocked = 0;
+        for (int t = 0; t < 3000; t++)
+        {
+            world.RunTicks(1);
+            foreach (var squad in world.Squads.All)
+            {
+                if (!Across(squad))
+                {
+                    stuck.Remove(squad.Id);
+                    continue;
+                }
+
+                if (!stuck.TryGetValue(squad.Id, out var was) || was.Point != squad.PatrolPoint!.Value)
+                {
+                    stuck[squad.Id] = (squad.PatrolPoint!.Value, world.Tick);
+                    blocked++;
+                    continue;
+                }
+
+                Assert.True(world.Tick - was.Since < 120, $"{squad.Name} stands before {was.Point} across the water since tick {was.Since}");
+            }
+        }
+
+        output.WriteLine($"{blocked} points drawn across the water");
+
+        Assert.True(blocked > 0, "a leader drew a point across the water");
     }
 
     /// <summary>
