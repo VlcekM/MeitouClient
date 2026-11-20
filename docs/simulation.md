@@ -386,7 +386,8 @@ cold or dead (`DecisionSystem.Down`, the character tick `FUN_1405d00b0` runs no 
      A player character woken by a failed kidnap (`CarrySystem.Kidnap`) or targeted by a failed stealth knock-out (`CarrySystem.StealthKo`) is told of the attacker (forced sense) and
      replans (`EngagedDefence.Engage`); `EngagedDefence` (key 32, desire 1 within 40 else 0.7, a deferred defence, row 13) answers for 5 s unless an order runs first (**Engine**
      stand-in for the threats list, [carry-loot](game/carry-loot.md#kidnapping), [combat](game/combat.md#stealth-knock-out)). A sleeper's kidnap also gives it order 116 with the clear flag
-     ([order queue](#order-queue)). NPC victims keep their deferred defensive attack (engine stand-in: the original pushes no fight, its chooser fights). An autonomous squad's urgent package goals: `SquadAutonomy.PackageGoals`
+     ([order queue](#order-queue)). An NPC victim gets no fight from the kidnap (**Verified** `FUN_14034ffa0` pushes no attack order): it replans and its AI
+     answers the kidnapper it senses. An autonomous squad's urgent package goals: `SquadAutonomy.PackageGoals`
      ([autonomous player squads](#autonomous-player-squads)).
   5. Jobs: the job list in order (`IJobSource` contributors by type, `DecisionSystem.RegisterJob`; the original's keys N+8, N+7, ...): the jobs switch gates every type but 16, 31,
      45, 57, 58, 250 (`FUN_14050c1c0`, both passes; 289 is gated), a row the repertoire does not register is skipped, the first that can run starts and one that runs the task ends the

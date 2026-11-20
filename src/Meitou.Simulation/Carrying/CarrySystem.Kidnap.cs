@@ -114,27 +114,19 @@ public sealed partial class CarrySystem
         world.Defer(new Dialogue.DialogueEvent(victimId, kidnapperId, 8) { Tick = world.Tick + 1 });
 
         // Every victim notices the kidnapper for 5 s: the forced sense with the alarm flag (FUN_14034ffa0:73 -> FUN_140858f40, entry seen flag set,
-        // timer +0x3c = 5), then the step decides what a player character does (EngagedDefence.Engage).
+        // timer +0x3c = 5). The kidnap gives no fight: an NPC's own AI fights the sensed TEMP_ENEMY, the step decides what a player character does
+        // (EngagedDefence.Engage).
         bool decides = DecisionSystem.Decides(victim);
         Aggro?.Alarm(world, victimId, kidnapperId);
-        if (asleep)
-        {
-            // The kidnap clears the in-bed state itself, then gives any victim order 116 Getting out of bed with the clear flag (FUN_1405d20d0, no
-            // faction test): its list A (not in bed) holds, so it leaves the queue at once and no order holds the victim any more.
-            if (victim.InSomething == Locks.HeldState.Bed) world.Fixtures.LeaveBed(world, victimId);
-            OutOfBed(world, b);
-            if (decides)
-            {
-                _engaged.Engage(world, Aggro, b, i);
-            }
-            else
-            {
-                world.Defer(new Combat.AttackOrder([victimId], kidnapperId)
-                {
-                    Tick = world.Tick + 1, Source = TaskSource.Reaction, Cause = "woke up being kidnapped",
-                });
-            }
-        }
+        if (!asleep) return false;
+
+        // The kidnap clears the in-bed state itself, then gives any victim order 116 Getting out of bed with the clear flag (FUN_1405d20d0, no
+        // faction test): its list A (not in bed) holds, so it leaves the queue at once and no order holds the victim any more.
+        if (victim.InSomething == Locks.HeldState.Bed) world.Fixtures.LeaveBed(world, victimId);
+        OutOfBed(world, b);
+        if (decides) _engaged.Engage(world, Aggro, b, i);
+        else if (victim.Ai is { } mind) mind.Replan = true;
+
         return false;
     }
 

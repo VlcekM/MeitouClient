@@ -389,7 +389,8 @@ choice) and the bounty panel (`TooltipRuntime.ShowsBountyPanel`). Meitou's own
 spawned cage prisoners, cleared with the hold) is a separate flag, saved as `meitou kidnapped`.
 
 The kidnap itself in Meitou (`CarrySystem.Kidnap.cs`, `PickUpOrder.Kidnap`): as [Kidnapping](#kidnapping) describes; asleep is lying in a bed or resting with the sleep behaviour; the
-perception mark is not modelled; `+0x110` is `CharacterCold.RecentlyWanted`. A woken NPC sleeper gets a deferred defensive attack; a player character's queue is cleared, the kidnapper is
+perception mark is not modelled; `+0x110` is `CharacterCold.RecentlyWanted`. A woken NPC sleeper gets no fight from the kidnap (**Verified**: `FUN_14034ffa0` pushes no attack order, it tags the
+kidnapper TEMP_ENEMY and forces the sense) and replans, its AI answering the sensed kidnapper; a player character's queue is cleared, the kidnapper is
 forced into its senses and the decision step answers with `EngagedDefence` (an engine stand-in for the threats list, [decision step](../simulation.md#decision-step)); an awake player
 victim is only forced-sensed.
 
