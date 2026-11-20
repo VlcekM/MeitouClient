@@ -266,8 +266,8 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   does the same in `CarrySystem.Link`); waking gives 65 Getting up (an animal, or waking standing) or 52 (waking staying low or crawling) with the clear flag,
   none in a bed or cage and, while carried, only once put down; a return to standing from staying low or crawling (Stand Up, a leg back up; not at a
   kneeling treatment; not in a bed or cage, engine) gives 65 with the clear flag unless one is queued. A town duty's errand, a kidnap and a flight wait while
-  one of these runs (`PlayerOrders.BodyHolds`) and go on after it. A stagger outside a fight (`CombatSystem.Stagger`, not getting up, not at a turret,
-  not a squadless NPC) pushes 147 Stumbling to the front (`PlayerOrders.GiveFront`): the running front waits behind it unstarted and is started again from its
+  one of these runs (`PlayerOrders.BodyHolds`) and go on after it. A stagger outside a fight (`CombatSystem.Stagger`, not getting up, not at a turret;
+  a squadless NPC too, whose ended front leaves the queue without a chooser, `PlayerOrders.DropEnded`, **Verified** slot 27 `FUN_1405c7c30` → `FUN_14050d920`) pushes 147 Stumbling to the front (`PlayerOrders.GiveFront`): the running front waits behind it unstarted and is started again from its
   start afterwards; 147 starts with no repertoire or list test (`OrderEntry.Forced`, `TaskRequest.Forced`); a blow during a running stumble adds another front
   147 that takes the running stumble over, the older one ending at once after it. A failed kidnap of a sleeper gives 116 with the clear flag
   (`CarrySystem.Kidnap`), which leaves the queue at once as the kidnap has got it out of bed. Each acts out standing in place (`Idle` under its row) until the

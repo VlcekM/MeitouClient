@@ -378,14 +378,21 @@ public sealed class DecisionSystem
     /// <summary>
     /// An NPC's turn of <see cref="Run"/> (one with an order, or whose order held it until now): while the chooser runs for it
     /// (<see cref="TakesOrders"/>) its order queue is asked when due, the steps' source 1 alone (its AI keeps every other source); a blocked front
-    /// is tried again at the re-ask, as the original's order step tries it on every update. Then <see cref="CharacterCold.OrderWins"/> is set anew.
+    /// is tried again at the re-ask, as the original's order step tries it on every update. One with no squad that is not down only drops a started
+    /// front whose task ended (<see cref="PlayerOrders.DropEnded"/>: a stagger's 147). Then <see cref="CharacterCold.OrderWins"/> is set anew.
     /// </summary>
     void RunOrders(World world, int slot, CharacterCold cold, bool paused)
     {
         bool blocked = cold.OrderQueue.Front is { Started: false };
         bool due = !paused && (world.Tick + slot) % Production.ProductionSystem.JobCheckTicks == 0 && (blocked || ReAsked(world, slot, cold));
-        if (TakesOrders(cold) && Due(world, slot, cold, paused, due) && !DropsClaimed(world, slot, cold, paused))
+        if (!TakesOrders(cold))
+        {
+            if (!Down(cold)) PlayerOrders.DropEnded(world, slot);
+        }
+        else if (Due(world, slot, cold, paused, due) && !DropsClaimed(world, slot, cold, paused))
+        {
             DecideSteps(world, slot, paused, ordersOnly: true);
+        }
 
         Hold(world, slot);
     }

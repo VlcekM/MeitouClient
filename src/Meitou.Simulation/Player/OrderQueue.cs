@@ -346,7 +346,9 @@ public static class PlayerOrders
     /// Pushes an order to the front of the character's queue (serial phases; <c>AI::forceOrderInsert</c> <c>FUN_140507cd0</c> → <c>FUN_14050b6a0</c>,
     /// docs/game/combat.md "Fight lifecycle and orders"): a front whose task ended leaves first; a running front stays queued behind it, to be
     /// planned again from its start once the new one is over. A running front of the same row keeps its task and the new entry takes it over (the
-    /// body task keeps the running stumble, <c>FUN_1405c6ec0</c>), the old one waiting behind it; else the new front starts as <see cref="Give"/>'s.
+    /// body task keeps the running stumble, <c>FUN_1405c6ec0</c>), the old one waiting behind it; else the new front starts as <see cref="Give"/>'s,
+    /// a <see cref="OrderEntry.Forced"/> one also for a character whose chooser does not run but that is not down (the insert sets the body task
+    /// itself).
     /// </summary>
     internal static void GiveFront(World world, int slot, OrderEntry order)
     {
@@ -358,18 +360,25 @@ public static class PlayerOrders
         q.AddFront(order);
         DecisionSystem.Request(cold);
 
+        bool starts = DecisionSystem.Decides(cold) || DecisionSystem.TakesOrders(cold) || order.Forced && !DecisionSystem.Down(cold);
         if (adopts)
         {
             order.Started = true;
             order.Tried = true;
         }
-        else if (DecisionSystem.Decides(cold) || DecisionSystem.TakesOrders(cold))
+        else if (starts)
         {
             TryFront(world, slot, show: false);
         }
 
         DecisionSystem.Hold(world, slot);
     }
+
+    /// <summary>
+    /// The task-ended handling of a character whose chooser does not run (no squad) but that is not down (Character slot 27 <c>FUN_1405c7c30</c> →
+    /// <c>FUN_14050d920</c> → <c>FUN_14050d7d0</c>, <b>Verified</b>: no platoon test): a started front whose task ended leaves (serial phases).
+    /// </summary>
+    internal static void DropEnded(World world, int slot) => Settle(world, slot);
 
     /// <summary>
     /// The running front's task is ended from outside while the order stays queued (the stagger's front insert, the leg collapse's stop

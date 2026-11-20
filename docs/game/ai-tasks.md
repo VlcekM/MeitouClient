@@ -917,7 +917,8 @@ Goals, jobs and orders are factory instances that never run (the planner builds 
 constructor's 0. A byte raised together with the task's own end (CharBody slot 4 `FUN_1405c67e0`, AITaskSytem `+0x26c`) or a replan request (slot 5 `FUN_1405c6810`, `+0x26d`)
 is acted on in the same character update (`FUN_1405c7c30`: CharBody slot 1 `FUN_1405c6d20` runs the task's update, then `FUN_14050d920` ends the task through
 `FUN_14050d7d0` or replans through `FUN_14050d080`), so no chooser pass sees it set on a running task; `FUN_14050d920` is skipped while the character is down
-(`FUN_1407d1440`), whose task update runs only on a branch of `FUN_140598c20`.
+(`FUN_1407d1440`), whose task update runs only on a branch of `FUN_140598c20`. The end through `FUN_14050d7d0` pops the front order when it is the
+ended task's, with no platoon or chooser test, so a squadless character's ended order leaves too (**Verified**, `FUN_14050d7d0`).
 
 | Class (rows) | Slot 4 | Never run | Running |
 |---|---|---|---|

@@ -114,16 +114,11 @@ public sealed class BodyOrders : IOrderOwner, ITaskHandler
     /// <summary>
     /// The stagger outside a fight (<c>FUN_1404391f0</c> → <c>FUN_140507cd0</c>, <b>Verified</b>): 147 at the front of the queue, its stumble started
     /// with no plan; a second blow while one runs adds another front 147 and the running stumble goes on (<see cref="PlayerOrders.GiveFront"/>).
-    /// Serial phases, after the hit set the stumble's hold. A character with no squad, which no chooser ever runs for (and so none would pop it),
-    /// gets none unless the decision step decides it.
+    /// Serial phases, after the hit set the stumble's hold. A character with no squad gets it too: the insert sets the body task itself, and the
+    /// task-ended handling that pops it (<c>FUN_1405c7c30</c> → <c>FUN_14050d920</c>) runs without a chooser (<see cref="PlayerOrders.DropEnded"/>).
     /// </summary>
-    internal void Stumble(World world, int slot)
-    {
-        var cold = world.Characters.Cold(slot)!;
-        if (cold.SquadId < 0 && !DecisionSystem.Decides(cold)) return;
-
+    internal void Stumble(World world, int slot) =>
         PlayerOrders.GiveFront(world, slot, new OrderEntry(TaskType.StumbleTaskForced, this) { Interrupts = true, Forced = true });
-    }
 
     /// <summary>
     /// A failed kidnap of a sleeper (<c>FUN_14034ffa0</c>, <b>Verified</b>): 116 Getting out of bed with the clear flag (<c>FUN_1405d20d0</c>). The
