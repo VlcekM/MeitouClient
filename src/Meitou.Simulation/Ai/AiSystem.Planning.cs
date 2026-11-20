@@ -229,9 +229,7 @@ public sealed partial class AiSystem
             // The assault is its own plan (engine choice): its finder's target is not a plan target, the combat system draws weapons and closes in,
             // and its only list B entry (!47, not carrying) is what Holds already requires of a character the AI runs. So are the combat goals
             // (engine choice): the desire already holds the finder's pick (and for the protect goals row 13's attacker), and the fight is the combat
-            // system's. And the Medic goal: its desire holds the patient finder's score, and the treatment is the first aid system's. And the leader
-            // rescue (142: its finder and its done state, the leader down, are the desire's; the lift is the carry system's), and the rescue to a bed
-            // (148: its desire and finder are kept by the carry system's sweep, which lifts the body).
+            // system's. And the Medic goal: its desire holds the patient finder's score, and the treatment is the first aid system's.
             if (EngineActs(type))
             {
                 _mind.Plan.Clear();

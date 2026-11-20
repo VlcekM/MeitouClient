@@ -187,8 +187,16 @@ internal sealed class RescueGoals
             bool lost = !Over(world, slot, act);
             _acting.Remove(slot);
 
-            if (lost) _duties!.LostWalk(world, slot, act.Goal, DutyGoals.KeyOf(act.Target));
-            else _duties!.Done(world, slot, act.Goal);
+            if (lost)
+            {
+                _duties!.LostWalk(world, slot, act.Goal, DutyGoals.KeyOf(act.Target));
+                continue;
+            }
+
+            // Done: its picks go until the next beat looks again, so the think does not weigh the lifted body.
+            _bodies.Remove(slot);
+            _leaders.Remove(slot);
+            _duties!.Done(world, slot, act.Goal);
         }
     }
 
