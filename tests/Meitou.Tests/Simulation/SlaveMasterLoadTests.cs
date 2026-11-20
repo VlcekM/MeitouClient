@@ -158,7 +158,7 @@ public class SlaveMasterLoadTests
         int city = data.FactionIndex("50-a");
         var captive = new CaptiveSystem(data, null, new CaptiveSettings { RecordLog = true });
         var walk = new OpenGroundWalkability((_, _) => 150);
-        using var world = new SimWorld(new WorldSettings { PublishSnapshots = false, StartHours = 24 + 12 }, walk, [captive]);
+        using var world = new SimWorld(new WorldSettings { PublishSnapshots = false, StartHours = 24 + 12 }, walk, [new AiSystem(data), captive]);
         world.Fixtures.RegisterSite(world, data, 0);
         var cage = world.Fixtures.Find("0.0:cageA")!;
 

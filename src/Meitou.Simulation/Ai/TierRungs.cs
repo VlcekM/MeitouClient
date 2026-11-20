@@ -128,10 +128,18 @@ internal sealed class TierRungs : ITierRungs
         if (_replan) return Replanned();
 
         _ai.EndStep(_world, _slot, _id, _mind, _squad, _board, _plans, _hour);
-        _committed = _mind.Goal is { } running && _mind.Plan.Count > 0 && TaskProfiles.Of(running.Task.Type).Commits
-            && _world.GameHours < _mind.CommitUntil && running.InWindow(_hour) ? running : null;
+        _committed = CommittedTo(_world, _mind, _hour);
         return _committed?.Task.Priority ?? TaskPriority.JustAction;
     }
+
+    /// <summary>
+    /// The goal committed mode keeps (<c>FUN_140510ef0</c>, <b>Verified</b>: with it, only the tiers above its priority are scored, so no lower
+    /// goal's desire or finder is asked): the running goal that commits, has a plan, is in its hours and whose commitment has not run out; null
+    /// for none.
+    /// </summary>
+    internal static AiGoal? CommittedTo(World world, AiMind mind, int hour) =>
+        mind.Goal is { } running && mind.Plan.Count > 0 && TaskProfiles.Of(running.Task.Type).Commits
+            && world.GameHours < mind.CommitUntil && running.InWindow(hour) ? running : null;
 
     /// <summary>
     /// The update's start with a replan request (<c>FUN_140511130</c>, <b>Verified</b>): the running task is stopped and the current goal cleared,

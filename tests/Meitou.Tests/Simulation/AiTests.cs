@@ -728,7 +728,8 @@ public class AiTests(ITestOutputHelper output)
 
     /// <summary>
     /// A captive job's goal is its worker's (docs/simulation.md "Captives", the job's goal is the mind's): a workmaster walking home under 43
-    /// Staying home, committed for an hour, that the sweep sets shouting at a slave of its squad holds 188 from then on. When that slave dies
+    /// Staying home, its commitment run out (committed mode would score no goal of 43's tier, FUN_140510ef0), that takes up 188 to shout at a
+    /// slave of its squad holds 188 from then on. When that slave dies
     /// as two more come, the think after the job weighs 188 again and shouts at one of them, never going back to 43. Catches the job that left 43
     /// and its commitment in place, and the think after a job that saw no captive goal: either way Rebirth's workmasters went home to sit after
     /// their first job.
@@ -754,8 +755,8 @@ public class AiTests(ITestOutputHelper output)
         Assert.Equal(TaskType.StayInHome, mind.Goal?.Task.Type);
         Assert.NotEqual(CharacterTask.Rest, (CharacterTask)world.Characters.Next[leader].Task);
 
-        // On its walk home, committed an hour more, a slave of its squad comes: the sweep sets it shouting, and 188 is its goal.
-        mind.CommitUntil = world.GameHours + 1;
+        // On its walk home, its commitment run out, a slave of its squad comes: its chooser takes 188 up and it shouts.
+        mind.CommitUntil = world.GameHours;
         var first = ObeyingSlave(world, squad, house.Position + new Vector3(0, 0, 30));
         Meitou.Simulation.Kidnap.CaptiveJob? Shout() =>
             captives.Jobs.FirstOrDefault(j => j.Kind == Meitou.Simulation.Kidnap.CaptiveJobKind.Shout && j.Worker == squad.Leader);

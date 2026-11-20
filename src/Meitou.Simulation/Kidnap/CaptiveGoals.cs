@@ -139,13 +139,13 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
         if (s < 0) return;
         var table = world.Characters;
         var cold = table.Next[s].Alive ? table.Cold(s) : null;
-        if (cold is null || ListsOf(world, s, cold) is not var (squad, board, roles, own))
+        if (cold is null || ListsOf(world, s, cold) is not var (squad, board, roles, own, obeyed))
         {
             foreach (var picks in _picks) picks.Remove(s);
             return;
         }
 
-        MarkListed(world, roles, own, rungsOnly: cold.Ai!.PlayerSide);
+        MarkListed(world, roles, own, rungsOnly: cold.Ai!.PlayerSide, obeyed, TierRungs.CommittedTo(world, cold.Ai, world.Hour));
         for (int k = 0; k < Types.Length; k++)
         {
             if (_listed[k]) LookFor(world, k, s, cold, squad, board);
@@ -157,41 +157,52 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
     /// The squad, board and lists whose captive goals the character's look weighs: a player-faction mind its master's Slave list while it obeys, else
     /// its autonomous squad's package role, and its own lists, under its board (<see cref="AiSystem.PlayerSideBoard"/>); an NPC with a mind of its
     /// own and a squad board its role list (an obeying slave's: its master's Slave list) and race list; null for any other character.
+    /// <c>Obeyed</c>: the role list is the master's Slave list.
     /// </summary>
-    static (Squad Squad, Blackboard Board, IReadOnlyList<AiGoal> Roles, IReadOnlyList<AiGoal> Own)? ListsOf(World world, int s, CharacterCold cold)
+    static (Squad Squad, Blackboard Board, IReadOnlyList<AiGoal> Roles, IReadOnlyList<AiGoal> Own, bool Obeyed)? ListsOf(World world, int s,
+        CharacterCold cold)
     {
         if (cold.Ai is { PlayerSide: true, Squad: var side } player)
         {
-            var sideRoles = AiSystem.ObeyedRoles(world, side, cold) ?? AiSystem.PlayerSideRoles(side, world.Characters.IdOf(s), cold);
-            return (side, AiSystem.PlayerSideBoard(side), sideRoles, player.RaceGoals);
+            var obeyedSide = AiSystem.ObeyedRoles(world, side, cold);
+            var sideRoles = obeyedSide ?? AiSystem.PlayerSideRoles(side, world.Characters.IdOf(s), cold);
+            return (side, AiSystem.PlayerSideBoard(side), sideRoles, player.RaceGoals, obeyedSide is not null);
         }
 
         if (cold is not { IsPlayer: false, Ai: { Player: false, Squad: { Ai: { } board } squad } mind }) return null;
 
-        var roles = AiSystem.ObeyedRoles(world, squad, cold) ?? board.Roles[(int)AiSystem.RoleOf(squad, world.Characters.IdOf(s), cold)];
-        return (squad, board, roles, mind.RaceGoals);
+        var obeyed = AiSystem.ObeyedRoles(world, squad, cold);
+        var roles = obeyed ?? board.Roles[(int)AiSystem.RoleOf(squad, world.Characters.IdOf(s), cold)];
+        return (squad, board, roles, mind.RaceGoals, obeyed is not null);
     }
 
     /// <summary>
     /// Marks in <see cref="_listed"/> the captive goals of the member's role and own lists (<see cref="ListsOf"/>) that hold in the hour; with
     /// <paramref name="rungsOnly"/> (a player-faction mind) only the own lists' types on the chooser's rungs (<see cref="Ladder.OnRungs"/>).
+    /// While the member is <paramref name="committed"/> to a goal, only the goals committed mode scores (<c>FUN_140510ef0</c>, <b>Verified</b>;
+    /// <see cref="TierRungs.CommittedTo"/>): that goal, those of a tier above its priority, and, of the master's Slave list
+    /// (<paramref name="obeyed"/>), all of them unless it is committed above priority 2, as the urgent job pass scores them before the tiers. No
+    /// other goal's desire or finder is asked, so a seated eater's finder picks and announces no victim.
     /// </summary>
-    void MarkListed(World world, IReadOnlyList<AiGoal> roles, IReadOnlyList<AiGoal> own, bool rungsOnly)
+    void MarkListed(World world, IReadOnlyList<AiGoal> roles, IReadOnlyList<AiGoal> own, bool rungsOnly, bool obeyed, AiGoal? committed)
     {
         Array.Clear(_listed);
-        Mark(roles, world.Hour, rungsOnly: false);
-        Mark(own, world.Hour, rungsOnly);
+        var rolesFloor = obeyed && committed is { Task.Priority: <= TaskPriority.NonUrgent } ? null : committed;
+        Mark(roles, world.Hour, rungsOnly: false, rolesFloor);
+        Mark(own, world.Hour, rungsOnly, committed);
     }
 
     /// <summary>
-    /// Marks the captive goals of one list that hold in <paramref name="hour"/> (<see cref="MarkListed"/>).
+    /// Marks the captive goals of one list that hold in <paramref name="hour"/>, while <paramref name="committed"/> only it and those of a priority
+    /// above it (<see cref="MarkListed"/>).
     /// </summary>
-    void Mark(IReadOnlyList<AiGoal> list, int hour, bool rungsOnly)
+    void Mark(IReadOnlyList<AiGoal> list, int hour, bool rungsOnly, AiGoal? committed)
     {
         for (int g = 0; g < list.Count; g++)
         {
             var type = list[g].Task.Type;
             if ((uint)type >= (uint)IndexOfType.Length || IndexOfType[(int)type] is not (>= 0 and var k) || !list[g].InWindow(hour)) continue;
+            if (committed is not null && type != committed.Task.Type && list[g].Task.Priority <= committed.Task.Priority) continue;
             if (!rungsOnly || Ladder.OnRungs.Contains(type)) _listed[k] = true;
         }
     }

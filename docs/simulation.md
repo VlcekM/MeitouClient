@@ -1558,7 +1558,10 @@ goal taken up ends the plan before it ([precedence](game/ai-tasks.md#precedence)
 gather jobs while walking home under 43, and a job that waited on that walk reached its cage only after about 90 of the hold's 110 s.
 - **Look**: every 30 ticks on its slot's turn, and after its job ends, a serial look (`CaptiveGoals.Look`) keeps for each listed goal its desire and its finder's
   target (the job's while the goal holds the member: the original keeps the running goal's finder hand); the think reads only those picks and its own state; hashed
-  while any. Desires (**Verified**): 135 and 282 1 once the kill timer is due (read first, creating it); 173 and 245 1 while the platoon has at most 3 slaves
+  while any. While the member is committed (`TierRungs.CommittedTo`) the look keeps only that goal and those of a tier above its priority, and of an obeyed
+  master's Slave list all unless the commitment is above priority 2: committed mode scores no other goal (`FUN_140510ef0`, **Verified**; the urgent job pass
+  `FUN_14050e5b0` scores job 187's Slave goals before that return), so no other finder runs: 139's finder `FUN_1408d0d90` says event 10 to its occupant on a
+  fresh pick (**Verified**), which a seated eater committed to 43 never hears. Desires (**Verified**): 135 and 282 1 once the kill timer is due (read first, creating it); 173 and 245 1 while the platoon has at most 3 slaves
   neither down nor held in anything (slot 63, `FUN_14059b940`); 217 in an export town; 188, 192 and 194 0.25 x the platoon's slave list; 218 that only in a
   prison or slave camp the leader stands in (slot 66, `FUN_140597c70`); 167, 183 and 260 1 while carrying nothing at posture 0, once on the job while carrying nothing (slot 61, then 59); 168 the rescue desire;
   278 and 279 their own; the rest 1. Of the rows on the way, 3 is 0 while down and 170 while carrying. The finder's factor is 1 with a target.
