@@ -389,6 +389,18 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
+    /// The storage the per-item storage finder (<c>FUN_14059acd0</c>, state 89's) finds for the carried stacks of <paramref name="record"/>, as
+    /// <see cref="DitchStore"/> searches; null when none takes them. A read-only look (the planner's).
+    /// </summary>
+    internal (string Id, Vector2 Spot)? OutputStore(World world, Squad squad, CharacterCold cold, Vector3 at, string record)
+    {
+        var town = AiSystem.TownAt(data, world, at);
+        if (town.IsNone || cold.Inventory is not { } inv) return null;
+
+        return StoreFor(world, squad, cold, at, town, [.. Production.ProductionSystem.Ditchable(inv).Where(i => i.Record == record)], register: false);
+    }
+
+    /// <summary>
     /// The plan's step 93 Filling machine at a storage (<see cref="AiMind.DitchRequest"/>, set by the think when the plan's first step walks to or
     /// fills the ditch target): a <see cref="TownDutyKind.Ditch"/> errand walks there and puts the carried items in while the AI holds the character on
     /// that step (<see cref="AiSystem.RunsDitchStep"/>); the AI plans again when it ends.
