@@ -1301,7 +1301,9 @@ one starts with the order's provenance. The chain's rows and states are in [AI t
   with ordered arrests) or the lift (68); a strip walk that ends short of the target or a lift with no path to it is a lost walk on the target. Each ends the act-out (`Done`), as the original's plan ends at row 203, which does not act: the chooser plans
   afresh, and a lifted target is 129 (carried by another faction), so the carrier's own goals (112 / 281) cage it. A body that leaves the shoulder before a
   cage ends 129, and the next score finds it again (uncarried, down, a bounty: `FUN_14099bfc0`): with 7 and 118 holding the new plan is the lift, so the guard
-  lifts it again as a fresh 204 (**Verified**, `FUN_14059a380`, `FUN_14099bfc0`). A target another act-out or an ordered arrest works is refused. Picks and act-outs are hashed only while any exist.
+  lifts it again as a fresh 204 (**Verified**, `FUN_14059a380`, `FUN_14099bfc0`). A target another act-out or an ordered arrest works is refused. In
+  `Gate guard  -turrets -arrests` 149 Man the turrets (weight 1.2, desire 1 idle within 1500 of a free turret, 0.3 farther) beats 204's 1.0, so only members with no free
+  turret in reach arrest (**Verified**, `FUN_140598080`, `FUN_1408ccc70`, `gamedata_base.txt`). Picks and act-outs are hashed only while any exist.
 - **Bounty desk** (dialogue, [economy 11.4](game/economy.md#114-claiming)): `DA_PAY_BOUNTY` (`ArrestSystem.PayBounty`) pays the carried body's
   unclaimed entry for the speaker's booking faction (halved dead) and marks it claimed; the hand-over of DA 10, 30 and 40 (`TakeOver`) runs
   after the line's other effects (data lists them in either order): the carrier lets go and the speaker is ordered 213 on the body (cleared; refused with "I can't carry anyone
@@ -1381,7 +1383,9 @@ what it wore there going into its inventory (engine choice; `DialogueSystem.Chai
   (`DutyGoals.Done`) when the pick-up ends, with the body on the shoulder or not; a lift whose walk no path gets to the victim (`CarrySystem.LiftWalkFails`) is a
   lost walk on it ([engine goals](#engine-goals)). A player victim's message "is carrying X away". The carrier then chooses again with all
   its goals and acts the winner out as anyone ([holding](#engine-goals)): its goals 112 / 281 ([town goals](#town-duties)) cage the body, 141 follows its leader with it.
-  A kidnapper stumbling or getting up loses the goal (replanned) and chooses again.
+  A kidnapper stumbling or getting up loses the goal (replanned) and chooses again. In the cannibal raid's assault (no cage goal listed) the carriers carry at most
+  15 clock minutes or until 3 carry, then the campaign switches to `Cannibal Raid Retreat` (`PopulationCampaigns.CannibalsLoaded`), whose 112 cages at home
+  ([carry-loot](game/carry-loot.md#32-goals-and-their-target-finders)).
 - **Caging**: a victim that leaves its 254 carrier's shoulder into a cage (seen at the next kidnap step, `KidnapGoals`' lift record) is `CharacterCold.Kidnapped` in a cage of
   the carrier's own faction, and a player victim gets "has been kidnapped by F".
 - **Prisoner**: `Kidnapped` = held without a sentence: it is never served (no release round), no bail is offered, and getting out is no escape crime. Set only in a cage of the kidnapper's own faction: in another faction's cage (one `canIUseThisBuilding` lets it use, a public barracks') the victim is that faction's prisoner and its goal-211 jailers free it once served, as the original, which has no such hold (#628; a prisoner with a slave state is never served there either, `FUN_1405c9f00`). The cage is locked; rescue is the usual
@@ -1513,6 +1517,9 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   neither down nor held in anything (slot 63, `FUN_14059b940`); 217 in an export town; 188, 192 and 194 0.25 x the platoon's slave list; 218 that only in a
   prison or slave camp the leader stands in (slot 66, `FUN_140597c70`); 167, 183 and 260 1 while carrying nothing at posture 0, once on the job while carrying nothing (slot 61, then 59); 168 the rescue desire;
   278 and 279 their own; the rest 1. Of the rows on the way, 3 is 0 while down and 170 while carrying. The finder's factor is 1 with a target.
+  168's plan is `[1, 25, 170, 168]`: 170 needs `!22`, so a slaver first-aids a hurt downed slave and then lifts it (`FirstAidSystem.TreatBeforeLift`; **Verified**, 170's
+  list B in `FUN_140319a60`). 260 and 183 find the same fresh captive (`FUN_1408cc110`, `FUN_1408cd630`): in `Patrol map reavers` 183 (weight 1.1) wins, in
+  `empire vault prison` the 1.0 tie goes to the later-listed 260 ([pick](game/ai-tasks.md#planner)); both plan 182 (**Verified**, data).
 - **Plans** are the planner's. The rows the job carries out are registered: 134; 220; 231; 236; 3; 40; 182, 166 and 181; 170 and 25; 174; 159; 53; 107; 110. Their
   states are asked of `CaptiveGoals` for the target (character, cage, farm, limb; evaluators in [ai-tasks](game/ai-tasks.md#prisoner-fate-and-slave-rows)), the
   at-location test passing at the job's work or within its reach. Player characters and mod-held minds take none; a player animal's race goals are

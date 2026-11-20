@@ -359,7 +359,9 @@ Goals` have Follow leader 141 instead), used by the templates `Lone Wolf`, `Moun
 package, race or faction list names it. The same Leader lists hold `Patrol=0,50,50` (22 Patrol, classification 2, weight 0.5); Patrol's desire is AI slot 40
 `FUN_140641570`, 0.25 (`DAT_141696c80`), its row has no finder and its list B is !26, 60, !157 (**Verified**). So in tier 2 Patrol scores 0.125 and Smell Hunter
 0.04, at most 0.0625 as the current goal with both x1.25 ([desire and commitment](ai-tasks.md#desire-and-commitment)): the leader hunts blood only when Patrol does
-not plan (its list B fails), and its members follow it (**Verified** from these functions and the data; not checked in the running game).
+not plan (its list B fails), and its members follow it (**Verified** from these functions and the data; not checked in the running game). They still go to
+corpses they sense: 230 eating corpses (both packages' Squad lists, and the `AI Goals` of the races `Bonedog` and `Boneyard Wolf`, weight 1) scores 1 with a
+corpse found and beats Patrol's 0.125 (**Verified**, `gamedata_base.txt`).
 Patrol's own walk does not seek blood: its sector weight adds the zone's smell x PatrolInfo `+0x34` (`FUN_1408f5ad0`), which the platoon fills from the
 template's `blood smell mult` looked up in the boolean fields (`FUN_1407ecdc0`, `FUN_1407ee130`; `FUN_14006c7c0` is the boolean fields' lookup, which adds a
 false entry for a name it lacks), and the base data has the field only as a number (0, or 4 on `Mountain Wolf Pack`), so the factor is 0 (**Verified**).

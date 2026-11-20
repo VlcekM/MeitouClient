@@ -980,8 +980,9 @@ campaign is not hostile, or that is not active (slot 70); a redirected request d
   - Kidnapping (**Verified**, data query of the install's AI_PACKAGE records for task enum 254 "Find and kidnap (with cages) urgent"; 132 and 246 are in no
     base package): the leader goal list of `Cannibal Raid Retreat` (the `retreat AI leader` of "BASE Basic Invasion", "slave raider silent", its
     "non slave trade" copy and "BASE- standard cannibal raid"), `Cannibal raid assault town` (the pt2 leader of the cannibal raid), `Cannibals at home`, the squad
-    goals of `Cannibal patrol map (short range)` and `Assault and kidnap` (a DIALOGUE_LINE's `delivery AI package`). So raiders (bandit invasions, slave
-    raiders, cannibals) kidnap when their leader retreats from a raid, cannibals also during their assault, on patrol and at home. The task (254, final state 153 got a
+    goals of `Cannibal patrol map (short range)` and `Assault and kidnap` (a DIALOGUE_LINE's `delivery AI package`, a field the exe never reads, so that
+    package never runs: [carry-loot](carry-loot.md#32-goals-and-their-target-finders)). So raiders (bandit invasions, slave raiders,
+    cannibals) kidnap when their leader retreats from a raid, cannibals also during their assault, on patrol and at home. The task (254, final state 153 got a
     victim, then 154 put the carried one in a cage) needs a free squad member to lift a downed one and a cage of its faction. The target is the nearest
     down, uncarried, uncaged, non-animal character of the sensed classes (and, unlike rescue, a sleeper in a bed). Not every raid kidnaps: the Dust Bandit "Invasion with demands" and the Hive, Ninja and Crab
     raids retreat with other packages (**Verified**, same query). The retreat package's mission town is the platoon's home town, else the nearest town of its
