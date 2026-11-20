@@ -765,7 +765,7 @@ public class AiTests(ITestOutputHelper output)
         Assert.Equal(first, Shout()?.Captive);
         Assert.Equal(TaskType.WorkTheSlaves, mind.Goal?.Task.Type);
 
-        // Right after that sweep turn, the slave dies as two more come: the job ends, and the think comes before the next turn.
+        // Right after that look's turn, the slave dies as two more come: the job ends, and the think comes before the next turn.
         var next = new[]
         {
             ObeyingSlave(world, squad, house.Position + new Vector3(10, 0, 30)), ObeyingSlave(world, squad, house.Position + new Vector3(-10, 0, 30)),

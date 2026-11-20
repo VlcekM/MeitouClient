@@ -7,9 +7,9 @@ namespace Meitou.Simulation.Ai;
 /// <summary>
 /// The chooser's order step (<c>checkOrders</c> <c>FUN_140510920</c>, <b>Verified</b>; docs/game/ai-tasks.md "Precedence" source 1) as it holds a
 /// character: the same step for every character with a squad (<see cref="Ladder"/>'s first rung). Its pick ends the choice, so an order beats every
-/// goal; what the order's hold means outside the chooser lives here: <see cref="CharacterCold.OrderWins"/> (the engine's reactions and the duties'
-/// sweeps leave an NPC its order holds alone, <see cref="Ordered"/>), the NPC's routine kept for after the order (<see cref="KeepRoutine"/>), and the
-/// task an engine start goes back to (<see cref="ResumesRoutine"/>). Serial phases but for the pure reads.
+/// goal; what the order's hold means outside the chooser lives here: <see cref="CharacterCold.OrderWins"/> (the engine's reactions and the plan
+/// steps' errands leave an NPC its order holds alone, <see cref="Ordered"/>), the NPC's routine kept for after the order
+/// (<see cref="KeepRoutine"/>), and the task an engine start goes back to (<see cref="ResumesRoutine"/>). Serial phases but for the pure reads.
 /// </summary>
 internal static class OrderStep
 {
@@ -28,7 +28,7 @@ internal static class OrderStep
 
     /// <summary>
     /// Whether an NPC's order holds it now (<see cref="CharacterCold.OrderWins"/>, its queue not emptied since, and the sources do not decide it):
-    /// its AI's act-outs, the engine's reactions and the duties' sweeps leave it alone. Any phase: it reads only the character's own state.
+    /// its AI's act-outs, the engine's reactions and the plan steps' errands leave it alone. Any phase: it reads only the character's own state.
     /// </summary>
     public static bool Ordered(CharacterCold cold) => cold.OrderWins && !DecisionSystem.Decides(cold) && cold.OrderQueue.Count > 0;
 
@@ -53,9 +53,9 @@ internal static class OrderStep
     /// <summary>
     /// The front order is about to start (serial, <see cref="PlayerOrders"/>): a character its AI runs (<see cref="ResumesRoutine"/>) keeps the
     /// routine it is on for after the order (<see cref="KeepRoutine"/>), and its engine duties let go, so no holder's step stops or redirects the
-    /// order's task; an order on its body (<paramref name="interrupts"/>: a stumble, a get-up) interrupts the duty sweeps only, and ends an engine
-    /// goal, as the original's update after it plans anew. A character the sources decide has no routine to keep; the engine goal its chooser
-    /// picked ends the same way (<see cref="AiSystem.ReleaseChosen"/>).
+    /// order's task; an order on its body (<paramref name="interrupts"/>: a stumble, a get-up) lets no duty go, the errands waiting it out, and ends
+    /// an engine goal, as the original's update after it plans anew. A character the sources decide has no routine to keep; the engine goal its
+    /// chooser picked ends the same way (<see cref="AiSystem.ReleaseChosen"/>).
     /// </summary>
     public static void TakeOver(World world, int slot, CharacterCold cold, bool interrupts)
     {

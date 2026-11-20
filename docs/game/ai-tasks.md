@@ -1187,7 +1187,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   The providers a plan adds before these rows were not checked for threat states.
 - **Meitou**: the player's characters are decided by one step in this order ([decision step](../simulation.md#decision-step)): source 1 the order queue
   ([simulation](../simulation.md#order-queue); one that cannot run stays queued with its text and the step goes on; a turret gunner's 146 ends under a melee threat and is taken up again
-  once it is gone), step 2 has no source (no player goal Meitou runs commits), step 3 the urgent jobs (234 while an enemy is sensed; 187 Obedient Slave of an enslaved player character: its master squad's Slave goals 171, 189 / 190, 172, 41, 143, 35, 14, [Obedient Slave](#slave-work-shout-and-capture)), step 4
+  once it is gone), step 2 has no source (the committed stop, `TierRungs.Begin`; of a player's goals only 35 Running away commits), step 3 the urgent jobs (234 while an enemy is sensed; 187 Obedient Slave of an enslaved player character: its master squad's Slave goals 171, 189 / 190, 172, 41, 143, 35, 14, [Obedient Slave](#slave-work-shout-and-capture)), step 4
   picks among 32 Self preservation, 243 Getting food, a player animal's priority-3 race goals (277-279), 259 Picking up food, Hold's 16 and 15 Protect allies (joining a mate's or
   an ally's fight; 243 and the race goals are the AI's own-list goals, acted out as an NPC's: 243 by `TownGoals`, 277-279 and 259 by `CaptiveGoals`;
   fights by the combat system), step 5 every job in list order through its system's contributor (the switch and the repertoire first), then the implicit jobs, step 6 the priority-2 race goals 233 and 232 and

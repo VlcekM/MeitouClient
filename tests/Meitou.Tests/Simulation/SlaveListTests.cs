@@ -138,7 +138,7 @@ public class SlaveListTests
 
     /// <summary>
     /// With its line on (a dialogue package with an event-38 line, ambient events on), the worker's Shout job ends once it says the line, and the
-    /// next sweep starts another on its slaves. Catches a job that never ended, or ended without a line.
+    /// chooser starts another on its slaves. Catches a job that never ended, or ended without a line.
     /// </summary>
     [Fact]
     public void A_worker_ends_its_shout_job_on_its_line_and_starts_another()

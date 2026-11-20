@@ -179,8 +179,8 @@ Rigging 250, operate, build, repair, dismantle, put in bed, sit 275, ditch 242, 
 no loot 26 / 177 / 42, no first aid, no operate, no medic, no lock, cage or door work but smashing 226; it may pick up items, 3 (Meitou: a player's animal only with the Advanced setting
 "Animals pick up items", whose Faithful side is on and Meitou side (the default) off, `PlayerSystem.AnimalsPickUp`, and only into its bag, its grid being shut; a limb for its mouth always); job 289 is animal-only, so a human with that job never runs it).
 Loot is 26 for the orders, 177 for NPC scavenging and 42 for an NPC arming itself. The engine's starts test their rows too ("Task starts"): a refused errand walk counts
-as a walk that ended short (the errand gives up after its tries); a refused standing task (`TaskStart.Become`) gives way to 14 Idleness, which every repertoire registers (a crippled
-character does not wander, 24, after a flight, a trade or at a roaming mill). Shoo 158, ransack 216 and liberate 276 have TaskData rows and are tested.
+as a walk that ended short (a lost walk, [engine goals](#engine-goals)); a refused standing task (`TaskStart.Become`) gives way to 14 Idleness, which every repertoire registers (a crippled
+character does not wander, 24, after a flight or on its routine after an order). Shoo 158, ransack 216 and liberate 276 have TaskData rows and are tested.
 The goal pick tests the goal's own row too (`PlanContext.TryPlan`, after the engine-run goals): a root row the repertoire lacks plans nothing, as the original's planner
 (docs/game/ai-tasks.md "Leaving the night cage"), so a caravan's pack animals under its bar package never relax (214, 0x1). The seat claims (`TownPlaceClaims`) skip a
 member that cannot use the seat: relaxing needs 214, staying home and sitting around 221 (human only), so animals and crawlers take no chair (#968).
@@ -209,15 +209,15 @@ handler): the lock system's rows (lock, shackle, cage, door and round work), the
 put in cage 108 and combat's body orders 65, 52, 147 and 116 ([order queue](#order-queue)), all acted out by a walk (`GoTo`) or in place (`Idle`). `TaskRequest.Detail` carries an act-out's own parameters (a shackle job, a ground item, a round). A builder's
 delivering, fetching and dismantling are steps of one act-out (`TaskStart.ActOut`): `RunningTask.Runs` and the debug check treat them as Build.
 - Routed through it: move, follow and bodyguard (order and job), stop, every fight (`AttackOrder`: picked is an order, `Defensive` a reaction, else a goal), First Aid, Splint, the Medic
-  button, medic, robotics and splint jobs, NPC healing, Rest, pick up, kidnap, loot, open inventory, stealth KO and put down orders, the lifts and drops of errands and town duties, rescue
-  (job, button, NPC leaders), kidnappers' and guards' lifts (`BeginPickUp`), foraging, NPC scavenging and arming, the operate, turret, haul and prospect orders, the production list jobs
+  button, medic, robotics and splint jobs, the Medic and Fixing Legs goals' treatments, Rest, pick up, kidnap, loot, open inventory, stealth KO and put down orders, the lifts and drops of errands and town duties, rescue
+  (job, button, goals 148 / 142), kidnappers' and guards' lifts (`BeginPickUp`), foraging, NPC scavenging and arming, the operate, turret, haul and prospect orders, the production list jobs
   (87, 97, 124, 152, 234, the engineer 125) and implicit jobs (242, 153, 275), the build, repair, door repair and dismantle orders, the bed orders and job 106, the lock, shackle, cage,
   door and force orders, item pick-up and container walks, put in cage; the engine's starts: crime fights and the arrest mates' fights
   (`AttackOrder.Source`: `Npc`; an NPC's attack on sight is its AI's goal fight, `Goal`), kidnappers' lifts (68) and 168's lifts (170), captive jobs'
-  walks (the row of their task, `CaptiveSystem.RowOf`), the ditch's and the player side's food runs' walks (`TownDutySystem.RowOf`), the [engine goals'](#engine-goals) act-outs on their goal's row (smell hunts 176, NPC looting and arming, the wardens' goals, arrests 204, escapes, town goals), flight (35, then wander 24), NPC arming walks (42), roaming leaders' walks (53) and mills (24); the engine's orders' act-outs start with `TaskSource.Order` ([order queue](#order-queue)). Engine walks go through `TaskStart.Walk` (`TaskRequest.Goal`: as given, or
+  walks (the row of their task, `CaptiveSystem.RowOf`), the ditch's and the fetch's walks (the plan step's row), the [engine goals'](#engine-goals) act-outs on their goal's row (smell hunts 176, NPC looting and arming, the wardens' goals, arrests 204, escapes, town goals), flight (35, then wander 24), NPC arming walks (42); the engine's orders' act-outs start with `TaskSource.Order` ([order queue](#order-queue)). Engine walks go through `TaskStart.Walk` (`TaskRequest.Goal`: as given, or
   `Point` onto the floor, at `Mode`; one to a building shut to the walker is refused, `StartResult.Inaccessible`, as the original's plan walk:
   [locks](game/locks.md#doors)); engine standing tasks (idle, wander, a follow of the squad's leader) through `TaskStart.Become` (the movement's handler stops the character on it).
-  Sources: a package goal's act-out (town duties, captive jobs, kidnap, smell, food, population) `Goal`; an engine rule (flight, crime) `Npc`.
+  Sources: a package goal's act-out (town duties, captive jobs, kidnap, smell, food) `Goal`; an engine rule (flight, crime) `Npc`.
 - Not serial: the AI's think (parallel, its own slot) starts its goals' walks and standing tasks with `TaskStart.StartOwn`: the provenance (row: the goal's, source `Goal`) and the
   walk or stand are written on the slot only; no fight or task before it is ended and no handler runs (the AI acts out nothing for a fighting character, and its tasks hold nothing). Its repertoire
   is not tested (the AI's planner chose the row). It does nothing while the character's order holds it. Same timing as before at any thread count.
@@ -228,7 +228,7 @@ delivering, fetching and dismantling are steps of one act-out (`TaskStart.ActOut
   stand-down back to its routine (`AggroSystem`), a knock-out (`BodySystem`), a caged character held
   in place (`FixtureRegistry`).
 - Engine starts end the fight and the task before as any start does (a flight's run stops the fight at once, a dialogue act's walk ends it). An errand's own walks would end a fight
-  its character is in, so they wait for it: a ditch steps nothing while its member fights (a player character's food run ends instead; engine choice, the
+  its character is in, so they wait for it: a ditch steps nothing while its member fights (engine choice, the
   original's priority-3 reactions beat these goals).
 - Provenance is the only job mark: `PermaJobs.ListJob` is the production pick's list job (its index) or implicit job it runs (not a follow row's fight step), which the implicit jobs and the circle
   break read; a list edit moves any job provenance's index (one whose job left the list keeps running with index -1). The task an act-out goes back to is `RunningTask.Resume`, for the
@@ -268,7 +268,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   a body out cold or dead, [ragdolls](game/ragdolls.md#saves): one that came round on a shoulder before the save gets none, **Observed** from those reads); a return to standing from staying low or crawling (Stand Up, a leg back up; not at a
   kneeling treatment; not in a bed or cage, engine) gives 65 with the clear flag unless one is queued. A flight
   ends when one of these starts (`PlayerOrders.BodyHolds`; **Verified**: its body task replaces `Task_Runaway`, `FUN_1405c6ec0`, and the replan after it
-  chooses again, a new run starting from a new first leg, `FUN_14034b440`); a ditch and a player-side food run end;
+  chooses again, a new run starting from a new first leg, `FUN_14034b440`); a ditch ends;
   an [engine goal](#engine-goals) ends when one starts (`AiSystem.ReplanDuty`, as the original's replan; no duty goal commits). A stagger outside a fight (`CombatSystem.Stagger`, not getting up, not at a turret;
   a squadless NPC too, whose ended front leaves the queue without a chooser, `PlayerOrders.DropEnded`, **Verified** slot 27 `FUN_1405c7c30` → `FUN_14050d920`) pushes 147 Stumbling to the front (`PlayerOrders.GiveFront`): the running front waits behind it unstarted and is started again from its
   start afterwards; 147 starts with no repertoire or list test (`OrderEntry.Forced`, `TaskRequest.Forced`); a blow during a running stumble adds another front
@@ -317,9 +317,8 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   step decides), and `DecisionSystem.Ordered` (the flag while the queue holds an order) keeps everything else off the character, as the original's order step comes before every
   goal, 32 and committed goals included ([precedence](game/ai-tasks.md#precedence)): the AI (`AiSystem.Holds`, `ChooserRuns`, `TaskStart.StartOwn`); a goal's or reaction's start
   ([task starts](#task-starts): the AI's, retaliation's and the duties' deferred fights and walks); retaliation's own defence (it answers as a player character
-  does); the flight step, which also ends a running flight; the stand-down after a fight; the free tests of the duty sweeps and routines (the ditch and the player faction's
-  food runs, the shut-in release, NPC healing, arming and scavenging, rejoining the leader); the
-  population's leader walk and arrival; and an engine reaction that is no order (`TaskSource.Npc`): a caught thief's watcher getting up from rest. The dialogue's acts ([dialogue](#dialogue)), the body's orders above and the arrest orders are orders of the receiver's queue. An
+  does); the flight step, which also ends a running flight; the stand-down after a fight; the free tests of the plan steps' errands and the engine's own pickers (the ditch and fetch
+  steps, the shut-in leave, the arrest's spotting guard and bounty hunter); and an engine reaction that is no order (`TaskSource.Npc`): a caught thief's watcher getting up from rest. The dialogue's acts ([dialogue](#dialogue)), the body's orders above and the arrest orders are orders of the receiver's queue. An
   owner's order may repeat (`IOrderOwner.Repeats`): when its task ends it waits unstarted at the front for its next step instead of leaving (22, 101, 248), until its
   row's done test, its desire or its owner's check ends it. A blocked front waits, the AI going on with its goals meanwhile, and is tried again at the think turn ([decision step](#decision-step)). Once the
   front no longer runs the mind chooses again at once; when it starts the mind's plan, goal and commitment go. An NPC's queue is not saved, and an NPC keeps a replan bit only
@@ -328,8 +327,8 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   is an `IDutyRelease` (found on the world's systems, nothing registered) to let the character go through its own give-up.
   The ditch drops its record; a body carried
   for one is let go where it stands (the unlink, no knock-out); an [engine goal](#engine-goals) ends (`DutyEnd.Order`, through the AI; a town goal lets its carried body go the same way); a door way is dropped and a bash
-  errand stopped. Neither the dialogue nor a trade holds anyone. The duty sweeps take no
-  ordered character again (`DecisionSystem.Ordered` or `AiSystem.Holds` in their free tests).
+  errand stopped. Neither the dialogue nor a trade holds anyone. The engine goals and the plan steps' errands take no
+  ordered character again (the chooser does not run, `DutyGoals` ends the goal, `AiSystem.Holds` in the errands' free tests).
 - **Routine after an order** (engine design): an NPC with no mind (no squad) keeps the routine it was on at the start, wandering or
   following its leader (`CharacterCold.OrderRoutine`, `OrderStep.KeepRoutine`), and takes it up again once its order no longer holds it, if it then stands idle,
   awake and held by nothing (`OrderStep.BackToRoutine`; it waits while the order's task goes on, a move's walk after the move left the
@@ -360,7 +359,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   ([decision step](#decision-step)). Left out: a row no system owns, a target character or site that is not in the world, a handle that names nothing, ground-item pick-ups (a runtime
   item id) and the Medic / Rescue buttons' one-shot looks. An owner with a detail (`IOrderOwner.SaveKind` / `LoadDetail`) codes it in Meitou's own key. Before an order is first checked,
   its owner readies what its live command would (`IOrderOwner.Restored`): production makes the machine of a rock, town dummy or seat, which no save holds (without it the operate order
-  was `Gone` and a miner stood idle after a load, #598). Meitou keeps the saved row where the add function replaces a row that has a job form by that job's row. Hashed as the move-only
+  was `Gone` and a miner stood idle after a load, #598). Of the add function's job-form remaps Meitou makes 25 → 58 and 26 on a character → 238 (`OrderSave.LoadedRow`). Hashed as the move-only
   queue was while it holds only that (nothing, a started order alone, started moves), else under its own mark.
 
 ### Decision step
@@ -1544,7 +1543,7 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
   the body ends them.
 - Occupiers' **36 / 37** town goals walk to a random complete building of the player town (`AiSystem.OccupiedSpot`, engine choice; the original's 36 scatters round the
   occupied town's centre, [town goals](game/ai-tasks.md#town-goals)), 36 drawing again after every walk.
-- Every act-out's walk that ends short (a lift with no path to its body too) is a lost walk (see "Engine goals"), the errands no goal holds (a ditch, a player-side food run) marking their store the same way. Engine choices: sight `AggroSystem.OutdoorSight`, arrival 40 (a cage: its `use range` + 15), a lift given up after 60 game s of walking.
+- Every act-out's walk that ends short (a lift with no path to its body too) is a lost walk (see "Engine goals"), the errand no goal holds (a ditch) marking its store the same way. Engine choices: sight `AggroSystem.OutdoorSight`, arrival 40 (a cage: its `use range` + 15), a lift given up after 60 game s of walking.
 
 ## Captives
 
@@ -1668,7 +1667,7 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   waits for it to load (`PopulationSystem.ShippingCamp`); a save's travelling platoon not made yet ships too, its slaves read from the save (slave role, `slavestate` 1), to the nearest
   such camp (the save's mission town is not read). Not
   shipped off screen: wild ones (a save's homeless platoons and the squads `KeepWild` keeps), which their sector makes again where they stood, so they stay there as other wild squads.
-- Not built: goal 112 as such (captives are carried by the kidnapping system) and short-term tag 6 of the strip. Town workers run real machines:
+- Not built: short-term tag 6 of the strip. Town workers run real machines:
   [NPC town machines](game/buildings-production.md#npc-town-machines).
 
 ## Buildings

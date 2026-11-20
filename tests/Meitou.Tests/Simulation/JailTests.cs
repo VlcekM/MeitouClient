@@ -215,7 +215,7 @@ public class JailTests
             return !j.Cold(hero).IsImprisoned;
         }, 1500, "the release");
 
-        // A round of the policeman, after a walk of about 250 units (no release at the first sweep, tick 0).
+        // A round of the policeman, after a walk of about 250 units (no release at tick 0).
         Assert.True(round);
         Assert.True(freed >= 300, $"freed at tick {freed}");
         Assert.True(Vector2.Distance(new Vector2(start.X, start.Z), new Vector2(at.X, at.Z)) > 150);

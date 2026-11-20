@@ -782,8 +782,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// that holds the job (a player character's list, <see cref="Kidnap.ObedientSlave.HasJob"/>; an NPC holds it in effect, Meitou keeping no
     /// perma-job list for it, <see cref="CharacterCold.ObedienceLost"/> standing for its removal by a split) has its master squad's
     /// <c>Slave AI Goals</c> as the 187 branch's goals, which the chooser's job passes score before its own tiers (<see cref="TierRungs.PickJobPass"/>),
-    /// whatever its squad role: a guard enslaved by its own squad stops guarding while a Slave goal plans (#991). The engine's sweeps take it as the
-    /// list the slave plans with. Null: no master squad, an empty Slave list, or no job.
+    /// whatever its squad role: a guard enslaved by its own squad stops guarding while a Slave goal plans (#991). The engine goals' looks and the
+    /// seat claims take it as the list the slave plans with. Null: no master squad, an empty Slave list, or no job.
     /// </summary>
     internal static IReadOnlyList<AiGoal>? ObeyedRoles(World world, Squad squad, CharacterCold cold) =>
         HoldsObedience(cold) && Kidnap.ObedientSlave.Obeys(cold) && (cold.Orders & CharacterOrders.Jobs) != 0 && cold.SlaveMaster >= 0

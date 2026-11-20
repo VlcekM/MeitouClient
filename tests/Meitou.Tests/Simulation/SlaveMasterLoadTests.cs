@@ -148,7 +148,7 @@ public class SlaveMasterLoadTests
     /// <summary>
     /// An obeying slave takes its captive jobs from its master's Slave AI Goals, not its own lists (job 187, docs/simulation.md
     /// "Obedient Slave"): at noon the one whose master gets it into its cage only at night stays out, the one with no master goes by
-    /// its own package's all-day goal. Catches the captive sweep reading the own lists of an obeying slave, which sent saved slaves to
+    /// its own package's all-day goal. Catches the captive goals' look reading the own lists of an obeying slave, which sent saved slaves to
     /// their cages by day once they had owners.
     /// </summary>
     [Fact]
