@@ -311,11 +311,15 @@ public class CrimeInstallTests(ITestOutputHelper output)
         {
             if (data.Sites.FirstOrDefault(s => s.Town.Name == town) is not { } site) continue;
             var walk = new OpenGroundWalkability((_, _) => 300);
+
+            // The police go after a bounty by their package's goal 204 (the AI) or by their event line's arrest orders 240 and 112 (the dialogue
+            // and the carrying that acts them out).
             var systems = StandardSystems.Build(data, walk, new StandardSystemOptions
             {
                 Parts = StandardParts.Population | StandardParts.Player | StandardParts.Movement | StandardParts.Pursuit
                     | StandardParts.Body | StandardParts.Combat
-                    | StandardParts.Retaliation | StandardParts.Aggro | StandardParts.Crime,
+                    | StandardParts.Retaliation | StandardParts.Aggro | StandardParts.Crime
+                    | StandardParts.Ai | StandardParts.Dialogue | StandardParts.Carry,
                 SynchronousPaths = true,
                 Population = new PopulationSettings { CheckEveryTicks = 1 },
                 Combat = new CombatOptions { SelfApproach = false, TickMedical = false, RecordLog = true },
