@@ -1563,11 +1563,17 @@ public sealed partial class FixtureRegistry
     /// functionality's <c>use range</c>, doubled while it is not moving, and it is less than 15 above or below it (the original's same-floor test has
     /// no counterpart here: Meitou's cage has no floor of its own).
     /// </summary>
-    public static bool AtCage(Fixture cage, Vector3 character, bool moving)
+    public static bool AtCage(Fixture cage, Vector3 character, bool moving) => AtFixture(cage, character, moving);
+
+    /// <summary>
+    /// Whether a character is at a piece of furniture to use it (a cage, a bed, a storage container; <c>isAtLocation</c> for a building,
+    /// <c>AI::isWithinChoppingRange</c> <c>FUN_14059c6d0</c>, <b>Verified</b>): as <see cref="AtCage"/>.
+    /// </summary>
+    public static bool AtFixture(Fixture f, Vector3 character, bool moving)
     {
-        float reach = cage.UseRange * (moving ? 1 : StillReachFactor);
-        return Vector2.Distance(new(character.X, character.Z), new(cage.Position.X, cage.Position.Z)) < reach
-                && MathF.Abs(character.Y - cage.Position.Y) < WorkHeight;
+        float reach = f.UseRange * (moving ? 1 : StillReachFactor);
+        return Vector2.Distance(new(character.X, character.Z), new(f.Position.X, f.Position.Z)) < reach
+                && MathF.Abs(character.Y - f.Position.Y) < WorkHeight;
     }
 
     /// <summary>

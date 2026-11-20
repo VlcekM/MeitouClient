@@ -28,15 +28,6 @@ public sealed record TownDutySettings
     /// A member looks for an intruder within its sight (the sensed list's size is <b>Unknown</b>).
     /// </summary>
     public float Sight { get; init; } = AggroSystem.OutdoorSight;
-    /// <summary>
-    /// A walk counts as arrived within this of its goal; a walk that ended within <see cref="CageSlack"/> of it does too (a cage's reach is
-    /// <see cref="FixtureRegistry.AtCage"/>).
-    /// </summary>
-    public float Arrive { get; init; } = 40;
-    /// <summary>
-    /// A walk that ended within this of its goal counts as arrived (see <see cref="Arrive"/>).
-    /// </summary>
-    public float CageSlack { get; init; } = 200;
 }
 
 /// <summary>
@@ -429,7 +420,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     {
         _duties.Add(new TownDuty { Member = world.Characters.IdOf(slot), Faction = cold.Faction, Town = town, Kind = TownDutyKind.Ditch,
                 Target = storeId, Goal = spot });
-        TaskStart.Walk(world, slot, spot, ErrandMode(world, cold), DitchRow, TaskSource.Goal);
+        WalkToStore(world, slot, storeId, spot, ErrandMode(world, cold), DitchRow);
     }
 
     /// <summary>
@@ -482,7 +473,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         var spot = Flat(source.Position);
         _duties.Add(new TownDuty { Member = world.Characters.IdOf(slot), Faction = cold.Faction, Town = TownOf(world, slot),
                 Kind = TownDutyKind.Fetch, Target = storeId, Goal = spot, Record = record });
-        TaskStart.Walk(world, slot, spot, ErrandMode(world, cold), FetchRow, TaskSource.Goal);
+        WalkToStore(world, slot, storeId, spot, ErrandMode(world, cold), FetchRow);
         return true;
     }
 
@@ -925,7 +916,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             Planned = target,
         });
         byte mode = kind == TownDutyKind.Food ? ErrandMode(world, cold) : SpeedMode.Walk;
-        TaskStart.Walk(world, ask.Slot, spot, mode, ask.Type, TaskSource.Goal);
+        WalkToStore(world, ask.Slot, store, spot, mode, ask.Type);
         return true;
     }
 
@@ -946,7 +937,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             Member = ask.Id, Body = prisoner, Faction = table.Cold(ask.Slot)!.Faction, Town = TownOf(world, ask.Slot), Kind = TownDutyKind.Confiscate,
             Target = cage.Id, Goal = goal, Chosen = ask.Type, Planned = target,
         });
-        TaskStart.Walk(world, ask.Slot, goal, SpeedMode.Walk, ask.Type, TaskSource.Goal);
+        TaskStart.Walk(world, ask.Slot, cage.Position, SpeedMode.Walk, ask.Type, TaskSource.Goal);   // onto its floor, as WalkToCage
         return true;
     }
 
@@ -1432,15 +1423,20 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// One tick of 224 or 274's walk: at its point the body is let go (<see cref="LetGo"/>); a walk that ends short is a lost walk with no target
-    /// (the rows have none, <see cref="Lost"/>), the body kept on the shoulder.
+    /// One tick of 224 or 274's walk. The task's update (<c>FUN_1403356e0</c>, <b>Verified</b>) does nothing while the carrier moves and lets the
+    /// body go (<see cref="LetGo"/>) once the movement says the walk is over (<c>CharMovement</c> slot 12 <c>FUN_14065edb0</c>: no path, or the path
+    /// followed to its end), wherever that is. A walk whose path failed is the plan step's lost walk (<c>FUN_14050d970</c>: a failed mover away
+    /// from the step's place, <c>isAtLocation</c> <c>FUN_1405a2450</c>: within 12 flat), with no target (the rows have none, <see cref="Lost"/>),
+    /// the body kept on the shoulder. Engine choice: one that failed within 12 of its point lets go at once (the update's 5 minutes standing are
+    /// not kept).
     /// </summary>
     bool StepOut(World world, TownDuty d, int g)
     {
         ref var gn = ref world.Characters.Next[g];
-        if (Vector2.Distance(Flat(gn.Position), d.Goal) <= Settings.Arrive) return LetGo(world, d, g);
+        if (gn.Task == (byte)CharacterTask.GoTo) return true;
 
-        return gn.Task == (byte)CharacterTask.GoTo || Lost(world, d, g, null);
+        bool failed = world.Characters.Cold(g)!.WalkEnd == WalkEnd.Failed;
+        return failed && !AtPoint(gn.Position, d.Goal) ? Lost(world, d, g, null) : LetGo(world, d, g);
     }
 
     /// <summary>
@@ -1457,9 +1453,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         var box = d.Target is { } fid && machine is null ? world.Fixtures.Find(fid) : null;
         var store = machine?.Storage ?? box?.Contents;
         if (store is null || gc.Inventory is not { } inv) return End(world, d);
-        bool walking = gn.Task == (byte)CharacterTask.GoTo;
-        float gap = Vector2.Distance(Flat(gn.Position), d.Goal);
-        if (gap <= Settings.Arrive || !walking && gap <= Settings.CageSlack)
+        if (AtStore(world, gn, d.Target!))
         {
             TaskStart.Stand(table, g);
             StashHere(world, d.Kind == TownDutyKind.Ditch, gc, inv, machine, box, store, gn.Position);
@@ -1467,7 +1461,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         }
 
         // A walk that ends short puts the store on the ignore map (20 s) the finders skip (FUN_1405b0290 in FUN_1408dac20).
-        return walking || Lost(world, d, g, TargetKey(d));
+        return gn.Task == (byte)CharacterTask.GoTo || Lost(world, d, g, TargetKey(d));
     }
 
     /// <summary>
@@ -1489,9 +1483,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         }
 
         ref var gn = ref table.Next[g];
-        bool walking = gn.Task == (byte)CharacterTask.GoTo;
-        float gap = Vector2.Distance(Flat(gn.Position), d.Goal);
-        if (gap > Settings.Arrive && (walking || gap > Settings.CageSlack)) return walking || FetchFailed(world, d, gc, lost: true);
+        if (d.Target is not { } id || !AtStore(world, gn, id))
+            return gn.Task == (byte)CharacterTask.GoTo || FetchFailed(world, d, gc, lost: true);
 
         TaskStart.Stand(table, g);
         return TakeAt(world, d, gc, gn.Position) > 0 ? FetchTaken(world, d, gc) : FetchFailed(world, d, gc, lost: false);
@@ -1728,8 +1721,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         ref var gn = ref table.Next[g];
         if (d.Machine is not { } machine) return End(world, d);
 
-        bool walking = gn.Task == (byte)CharacterTask.GoTo;
-        if (AtDisposal(gn.Position, machine.Position, walking))
+        if (AtDisposal(world, gn, machine))
         {
             TaskStart.Stand(table, g);
             string label = world.SystemOf<Production.ProductionSystem>()?.Data(machine.RecordId)?.Label ?? "";
@@ -1737,18 +1729,16 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             return End(world, d);
         }
 
-        return walking || Lost(world, d, g, new IgnoreKey(machine.Id, default));
+        return gn.Task == (byte)CharacterTask.GoTo || Lost(world, d, g, new IgnoreKey(machine.Id, default));
     }
 
     /// <summary>
-    /// Whether a carrier at <paramref name="at"/> is at the disposal: within <see cref="TownDutySettings.Arrive"/> on the ground, or within
-    /// <see cref="TownDutySettings.CageSlack"/> once its walk has ended, on the machine's storey (<see cref="FixtureRegistry.WorkHeight"/>).
+    /// Whether the carrier at <paramref name="n"/> is at the disposal: the player's corpse job's test
+    /// (<see cref="Production.ProductionSystem.AtDisposal"/>, <c>AI::isWithinChoppingRange</c>: the BUILDING's use range, doubled once stopped, on
+    /// its storey).
     /// </summary>
-    bool AtDisposal(Vector3 at, Vector3 machine, bool walking)
-    {
-        float gap = Vector2.Distance(Flat(at), Flat(machine));
-        return (gap <= Settings.Arrive || !walking && gap <= Settings.CageSlack) && MathF.Abs(at.Y - machine.Y) < FixtureRegistry.WorkHeight;
-    }
+    internal static bool AtDisposal(World world, in CharacterHot n, CorpseMachine machine) =>
+        world.SystemOf<Production.ProductionSystem>()?.AtDisposal(world, n, machine) == true;
 
     #endregion
 
@@ -1901,9 +1891,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (d.Target is not { } id || StoreInventory(world, id) is not { } store || gc.Inventory is not { } into)
             return End(world, d);
 
-        bool walking = gn.Task == (byte)CharacterTask.GoTo;
-        if (Vector2.Distance(Flat(gn.Position), d.Goal) <= Settings.Arrive || !walking
-                && Vector2.Distance(Flat(gn.Position), d.Goal) <= Settings.CageSlack)
+        if (AtStore(world, gn, id))
         {
             TaskStart.Stand(table, g);
             bool grabbed = d.Kind == TownDutyKind.LootFood || GrabFood(store, gc, into) > 0;
@@ -1916,7 +1904,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             return grabbed ? End(world, d) : Lost(world, d, g, key: null);
         }
 
-        return walking || Lost(world, d, g, TargetKey(d));
+        return gn.Task == (byte)CharacterTask.GoTo || Lost(world, d, g, TargetKey(d));
     }
 
     /// <summary>
@@ -1979,7 +1967,6 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             return End(world, d);
 
         bool walking = gn.Task == (byte)CharacterTask.GoTo;
-        float gap = Vector2.Distance(Flat(gn.Position), d.Goal);
         if (FixtureRegistry.AtCage(cage, gn.Position, walking))
         {
             TaskStart.Stand(table, g);
@@ -2058,20 +2045,60 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
 
     /// <summary>
     /// 216 Ransacking town (156 into the drawn building, then <c>Task_PatrolTownViolent</c>, which only sets running): the member runs into the
-    /// building; once inside (or when the walk ends near it) the errand ends and the next look draws another, so the raiders run from building to
-    /// building.
+    /// building; once inside the errand ends and the next look draws another, so the raiders run from building to building. 156's update
+    /// (<c>Task_EnterBuilding</c> slot 2 <c>FUN_1403359a0</c>, <b>Verified</b>) walks at the building and ends only once the character's building is
+    /// it; a walk whose path failed is a lost walk (the building ignored 20 s, <see cref="Lost"/>). Engine choice: a walk followed to its end
+    /// outside ends the errand too (the original's update walks on).
     /// </summary>
     bool StepRansack(World world, TownDuty d, int g)
     {
         var table = world.Characters;
-        ref var gn = ref table.Next[g];
-        bool walking = gn.Task == (byte)CharacterTask.GoTo;
-        if (table.Cold(g)?.Bashing is not null) return true;   // bashing the door first (the lock system walks and swings)
-        if (world.Sight.BuildingOf(g) == d.Target || !walking && Vector2.Distance(Flat(gn.Position), d.Goal) <= Settings.CageSlack)
-            return End(world, d);
+        var cold = table.Cold(g)!;
+        if (cold.Bashing is not null) return true;   // bashing the door first (the lock system walks and swings)
+        if (world.Sight.BuildingOf(g) == d.Target) return End(world, d);
+        if (table.Next[g].Task == (byte)CharacterTask.GoTo) return true;
 
-        return walking || Lost(world, d, g, TargetKey(d));
+        return cold.WalkEnd == WalkEnd.Finished ? End(world, d) : Lost(world, d, g, TargetKey(d));
     }
+
+    #endregion
+
+    #region Arrival
+
+    /// <summary>
+    /// <see cref="AtPoint"/>'s squared flat distance (<c>DAT_1416ad830</c>, <b>Verified</b>).
+    /// </summary>
+    const float PointReachSq = 144;
+
+    /// <summary>
+    /// Whether the character at <paramref name="n"/> is at the store <paramref name="id"/>: <c>isAtLocation</c> for a building
+    /// (<c>AI::isWithinChoppingRange</c> <c>FUN_14059c6d0</c>, <b>Verified</b>; docs/game/buildings-production.md "Work distance"): a player
+    /// machine's operator test (<see cref="Production.ProductionSystem.AtMachine"/>), a container's use test (<see cref="FixtureRegistry.AtFixture"/>):
+    /// its use range, doubled once the character stops, at its height. No slack: a walk that ends out of it is a lost walk.
+    /// </summary>
+    internal static bool AtStore(World world, in CharacterHot n, string id)
+    {
+        if (world.Machines.Find(id) is not null) return world.SystemOf<Production.ProductionSystem>()?.AtMachine(world, n, id) == true;
+
+        return world.Fixtures.Find(id) is { } box && FixtureRegistry.AtFixture(box, n.Position, n.Task == (byte)CharacterTask.GoTo);
+    }
+
+    /// <summary>
+    /// The walk to the store <paramref name="id"/> at <paramref name="spot"/>, onto its floor (<see cref="MovementSystem.GoToFloor"/>): a flat goal
+    /// would end under a store on an upper storey, out of <see cref="AtStore"/>'s height.
+    /// </summary>
+    static void WalkToStore(World world, int slot, string id, Vector2 spot, byte mode, TaskType row)
+    {
+        var at = world.Buildings.Find(id)?.Position ?? world.Fixtures.Find(id)?.Position;
+        if (at is { } floor) TaskStart.Walk(world, slot, floor, mode, row, TaskSource.Goal);
+        else TaskStart.Walk(world, slot, spot, mode, row, TaskSource.Goal);
+    }
+
+    /// <summary>
+    /// The place test of <c>isAtLocation</c> for a position (<c>FUN_1405a2450</c>, <b>Verified</b>): flat squared distance below 144; its height
+    /// test (|dy| below 20, <c>DAT_141683188</c>) is not made, the errand's point being flat.
+    /// </summary>
+    static bool AtPoint(Vector3 at, Vector2 point) => Vector2.DistanceSquared(Flat(at), point) < PointReachSq;
 
     #endregion
 }

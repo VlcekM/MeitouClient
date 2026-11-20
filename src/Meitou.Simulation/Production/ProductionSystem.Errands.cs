@@ -463,7 +463,7 @@ public sealed partial class ProductionSystem
     /// Whether the carrier is at the disposal: a player machine's <see cref="AtSite"/>, else within the BUILDING's use range
     /// (<c>UseableStuff::getReachRange</c>, doubled once stopped, <see cref="SiteReach.Within"/>) on its storey.
     /// </summary>
-    bool AtDisposal(World world, in CharacterHot n, CorpseMachine machine)
+    internal bool AtDisposal(World world, in CharacterHot n, CorpseMachine machine)
     {
         if (world.Machines.Find(machine.Id) is { } m && Site(world, machine.Id) is { } site) return AtSite(world, n, site, m);
 

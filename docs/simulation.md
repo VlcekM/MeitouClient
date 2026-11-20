@@ -1527,7 +1527,11 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
     INTRUDER_IS_OUTSIDE_GATES (`FUN_140598fa0`) and 137 INTRUDER_IS_OUTSIDE (`FUN_140598ef0`), **Verified**: true with no intruder or a friendly one, false while the asker carries
     it. Both end with the task's own unlink (`FUN_1403356e0` calls `FUN_1405ce1e0`, **Verified**): the body falls where the carrier stands and is not knocked out again
     (**Observed**, original 1.0.65, #1024 save). They carry at a walk (`FUN_1403355e0`, **Verified**; `TownDutySystem.CarryOutMode`; [force speed](game/pathfinding.md#force-speed)).
-    A walk that ends short is a lost walk with no target: the body stays on the shoulder and the carrier chooses again.
+    The update (`FUN_1403356e0`, **Verified**) waits while the carrier moves and lets go once the movement reports the walk over (`CharMovement` slot 12 `FUN_14065edb0`:
+    no path, or the path followed to its end), wherever it ended; a walk whose path failed (slot 10 `FUN_14065e830`: path state 3) away from its point (`isAtLocation`
+    `FUN_1405a2450` for a position: flat squared distance below 144 and |dy| below 20, **Verified** `DAT_1416ad830` / `DAT_141683188`) is the plan step's lost walk
+    (`FUN_14050d970`) with no target: the body stays on the shoulder and the carrier chooses again. Meitou `TownDutySystem.StepOut` (`WalkEnd`; engine choice: one that
+    failed within 12 lets go at once, the 5 standing minutes not kept).
   - **106** (plan `[1, 99, 106]`): `BedSystem.PutInDesire` (2.0 for a body the carrier would lay in a bed, [carry-loot 3.2](game/carry-loot.md#32-goals-and-their-target-finders))
     times the bed search's (`BedSystem.FindForCarrier`); the bed system walks the carrier and lays the body in (`BedSystem.PutIn`, row 106, `TaskSource.Goal`).
   - **137** (list B 99 a dead body carried; plan `[1, 136, 137]`, else `[67, 68, 138, 137]`): desire 1.0 (slot 43, **Verified**) times the disposal finder's (`FUN_1408d1090`:
@@ -1564,7 +1568,14 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
   else where it stands; an outpost's are the player's complete, standing houses ([216](game/ai-tasks.md#town-goals)); among those the planner gets it into
   (row 156's B list 59 `hasAnOpenDoor` and 90, **Observed**): `DoorPlan.PlansEntry` plans 216 with the exact state 59, so a closed unlocked door is opened (72) or, for a
   character that wants to (`AggressiveTowards`), bashed first (81: `LockSystem.BashForErrand`); a locked door nobody will bash or unlock leaves the building out. A closed gate on
-  the route is planned the same way (`LockSystem.GateEntry`, `GatePlan.PlansEntry`). It runs into the building and the goal is done once inside.
+  the route is planned the same way (`LockSystem.GateEntry`, `GatePlan.PlansEntry`). It runs into the building and the goal is done once inside (156's update
+  `FUN_1403359a0`, **Verified**: it walks at the building and ends only when the character's building is it); a walk whose path failed is a lost walk (20 s). Engine
+  choice: a walk followed to its end outside ends the goal too (the original walks on).
+- **Arrival at a store, a disposal, a cage or a bed** (rows 244, 284, 93, 92, 136, 108, 99 and state 1 in the plans): `isAtLocation` for a building is
+  `AI::isWithinChoppingRange` (`FUN_14059c6d0`, [work distance](game/buildings-production.md#work-distance)): the building's use range, doubled once the character
+  stops, at its height; a walk followed to its end out of it is a lost walk (the target ignored 20 s). Meitou `TownDutySystem.AtStore` (a player machine's
+  `ProductionSystem.AtMachine`, a container's `FixtureRegistry.AtFixture`), `TownDutySystem.AtDisposal` (`ProductionSystem.AtDisposal`), `FixtureRegistry.AtCage`; the
+  planner's state 1 reads the same tests on the last tick's place. The bed's put-in walk is `BedSystem.PutIn`'s own.
 - Not goals: the ditch the plan's step 93 asks for (rows 113, 114, 242; `AiMind.DitchRequest`) is held by that step (`AiSystem.RunsDitchStep`: the AI
   holds its walk and may choose another goal over it, which ends it), and so is the fetch step 92 asks for at row 94's loose item or storage
   (`AiMind.FetchRequest`, `AiSystem.RunsFetchStep`, the `Fetch` errand). A fight interrupts their walk (`TownDutySystem.IsErrandRow`), an order on

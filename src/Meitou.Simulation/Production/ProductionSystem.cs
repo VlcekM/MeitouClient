@@ -704,6 +704,12 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     }
 
     /// <summary>
+    /// Whether the character is at the player machine of site <paramref name="siteId"/> (<see cref="AtSite"/>); false when there is none.
+    /// </summary>
+    internal bool AtMachine(World world, in CharacterHot n, string siteId) =>
+        world.Machines.Find(siteId) is { } m && Site(world, siteId) is { } site && AtSite(world, n, site, m);
+
+    /// <summary>
     /// A character stopped within reach of a site whose height has no floor (furniture placed on an upper storey the navmesh lacks, #388: a Hub
     /// house's storages): its walk gets no nearer, so it counts as there (engine choice; the original's floor test passes on the same floor only).
     /// </summary>

@@ -552,12 +552,17 @@ internal sealed class TownGoals(TownDutySystem owner)
     }
 
     /// <summary>
-    /// Whether the asker stands at a found place (the last tick's place): within <see cref="TownDutySettings.Arrive"/> flat, any floor.
+    /// State 1 at a found store, bed or disposal (the last tick's place): <c>isAtLocation</c> for a building (<c>AI::isWithinChoppingRange</c>
+    /// <c>FUN_14059c6d0</c>, <b>Verified</b>), the act-out's own arrival test (<see cref="TownDutySystem.AtStore"/>,
+    /// <see cref="FixtureRegistry.AtFixture"/>, <see cref="TownDutySystem.AtDisposal"/>); false without the building.
     /// </summary>
-    bool AtPlace(World world, in DutyAsk ask, Vector3 at)
+    static bool AtBuilding(World world, in DutyAsk ask, string? store = null, Fixture? bed = null, CorpseMachine? disposal = null)
     {
-        var me = world.Characters.Previous[ask.Slot].Position;
-        return Vector2.Distance(new Vector2(me.X, me.Z), new Vector2(at.X, at.Z)) <= owner.Settings.Arrive;
+        ref readonly var me = ref world.Characters.Previous[ask.Slot];
+        if (store is not null) return TownDutySystem.AtStore(world, me, store);
+        if (bed is not null) return FixtureRegistry.AtFixture(bed, me.Position, me.Task == (byte)Movement.CharacterTask.GoTo);
+
+        return disposal is { } machine && TownDutySystem.AtDisposal(world, me, machine);
     }
 
     /// <summary>
@@ -693,8 +698,8 @@ internal sealed class TownGoals(TownDutySystem owner)
         /// </summary>
         public bool? State(World world, in DutyAsk ask, StateType state)
         {
-            if (ask.Target is { Kind: PlanTarget.Found, Character: null } place && state is StateType.IsAtLocation)
-                return goals.AtPlace(world, ask, place.Position);
+            if (ask.Target is { Kind: PlanTarget.Found, Character: null } && state is StateType.IsAtLocation)
+                return AtBuilding(world, ask, disposal: goals.Held(ask)?.Machine ?? PickOf(goals._disposals, ask, p => p.Id)?.Machine);
 
             return goals.LiftState(world, ask, state);
         }
@@ -816,7 +821,8 @@ internal sealed class TownGoals(TownDutySystem owner)
         /// </summary>
         public bool? State(World world, in DutyAsk ask, StateType state)
         {
-            if (state == StateType.IsAtLocation && ask.Target.Kind == PlanTarget.Found) return goals.AtPlace(world, ask, ask.Target.Position);
+            if (state == StateType.IsAtLocation && ask.Target is { Kind: PlanTarget.Found } bed)
+                return AtBuilding(world, ask, bed: bed.Fixture is { } id ? world.Fixtures.Find(id) : null);
 
             return LoadState(world, ask, state);
         }
@@ -860,7 +866,7 @@ internal sealed class TownGoals(TownDutySystem owner)
             StateType.GotAFoodItem => world.Characters.Cold(ask.Slot) is { } cold && TownDutySystem.HoldsFood(cold),
             StateType.GotInventoryRoomForResources => PickOf(goals._food, ask, p => p.Id)?.Room ?? true,
             StateType.IsAlliesFighting => PickOf(goals._food, ask, p => p.Id)?.AlliesFighting ?? false,
-            _ => goals.StoreState(world, ask, state),
+            _ => goals.StoreState(world, ask, state, goals._food),
         };
 
         /// <summary>
@@ -897,7 +903,7 @@ internal sealed class TownGoals(TownDutySystem owner)
         {
             StateType.HaveSomeLootFrom => LootFrom(world, ask),
             StateType.GotInventoryRoomForResources => PickOf(goals._loot, ask, p => p.Id)?.Room ?? true,
-            _ => goals.StoreState(world, ask, state),
+            _ => goals.StoreState(world, ask, state, goals._loot),
         };
 
         /// <summary>
@@ -945,7 +951,7 @@ internal sealed class TownGoals(TownDutySystem owner)
             StateType.MachineHasEmptyInputs or StateType.HaveSomeResourcesFor when ask.Target.Kind == PlanTarget.Found =>
                 world.Characters.Cold(ask.Slot) is { } cold && TownDutySystem.CarriesLoot(world, cold),
             StateType.IsMachineOutputFull when ask.Target.Kind == PlanTarget.Found => false,
-            _ => goals.StoreState(world, ask, state),
+            _ => goals.StoreState(world, ask, state, goals._stash),
         };
 
         /// <summary>
@@ -976,10 +982,15 @@ internal sealed class TownGoals(TownDutySystem owner)
         PickOf(picks, ask, p => p.Id) is { } pick ? (pick.Store, pick.At) : null;
 
     /// <summary>
-    /// At a found store's spot (state 1); null for the rest.
+    /// At a found store (state 1, <see cref="AtBuilding"/>): the held errand's store, else the asker's pick in <paramref name="picks"/>; null for
+    /// the rest.
     /// </summary>
-    bool? StoreState(World world, in DutyAsk ask, StateType state) =>
-        state == StateType.IsAtLocation && ask.Target.Kind == PlanTarget.Found ? AtPlace(world, ask, ask.Target.Position) : null;
+    bool? StoreState(World world, in DutyAsk ask, StateType state, SortedDictionary<int, StorePick> picks)
+    {
+        if (state != StateType.IsAtLocation || ask.Target.Kind != PlanTarget.Found) return null;
+
+        return AtBuilding(world, ask, store: Held(ask)?.Target ?? PickOf(picks, ask, p => p.Id)?.Store);
+    }
 
     #endregion
 

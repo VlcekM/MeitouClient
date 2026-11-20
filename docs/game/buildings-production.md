@@ -134,15 +134,18 @@ score and the 0.75 falloff spread them). Work distance: [below](#work-distance).
 
 ### Work distance
 
-**Observed** (decompile of kenshi_x64.exe 1.0.68, names from KenshiLib 1ce4a16): the AI's arrival condition `isAtLocation`
-(AI slot 11, `FUN_1405a2450`) at a Vector3 is 12 units X/Z and |dy| < 20, or the path has ended; at an object it is
+The AI's arrival condition `isAtLocation` (AI slot 11, `FUN_1405a2450`; names from KenshiLib 1ce4a16) at a Vector3 (handle type 0xb) is the
+movement's "walk over" (`CharMovement` slot 12 `FUN_14065edb0`: no path object, or the path in state 1 with the mover stopped), or X/Z squared distance
+below 144 (`DAT_1416ad830`) and |dy| below 20 (`DAT_141683188`) (**Verified**, decompile and `data_values.txt`). A failed path is slot 10
+(`FUN_14065e830`: path state 3, after 16 retries when retrying); the plan step's lost walk (`FUN_14050d970`) is a failed, stopped mover not at the
+location (**Verified**). At an object it is
 `AI::isWithinChoppingRange(target, isMoving)` (`FUN_14059c6d0`). For a building (type 0) that is arrived when:
 - the building `is foliage` (+0xc0, a rock) and the character is inside its bounds box scaled 1.2 (`getAABB`, slot 0x420), under a
   movement flag (+0x640 +8); or the character's movement reports touching the building's handle (+0x300 slot 1); or
 - the X/Z distance to `getPositionMarker(charPos)` (slot 0x470: the nearest valid usage node, else the construction position
   +0x26c when fewer than 2) is below `getReachRange()` (slot 0x350), **doubled when not moving**, and the character is on the
   same floor (slot 0x60) or |dy| below a limit: 130 when the door byte (+0x1a0) is set or the building has a door child (slot 0x3e0), else 45 when its containing-building handle (slot 0x1d8) is null (outside any building) or slot 0x428 is true, else 15 (**Verified**, `AI::isWithinChoppingRange` `FUN_14059c6d0`, constants 130 / 45 / 15 in `data_values.txt`; what slot 0x428 is stays **Observed**: ceiling-mounted class).
-- Meitou: one shared `FixtureRegistry.AtCage` for the cage goals (arrest, kidnap, town duty): flat distance to the cage's position below its `use range` (doubled when not moving) and |dy| below 15; the former `CageReach` / `CageSlack` slack of cages is gone (a cage's position marker, the floor number and the outdoor 45 are not modelled).
+- Meitou: one shared `FixtureRegistry.AtCage` / `AtFixture` for the cage goals (arrest, kidnap, town duty) and the town errands' containers and beds: flat distance to the fixture's position below its `use range` (doubled when not moving) and |dy| below 15; no slack (a fixture's position marker, the floor number and the outdoor 45 are not modelled). The town errands' player machines use the operators' test (`ProductionSystem.AtMachine`), their disposals the corpse job's (`ProductionSystem.AtDisposal`).
 - Otherwise not; once the path has ended at the target it logs "Task impossible: X can't get to Y". There is no settle slack.
 - That notice (**Verified**, `FUN_14059c6d0`, also the failure handlers `FUN_14033da80` / `FUN_140332150`) calls `FUN_140796ed0`: the target's handle goes into the AI's ignore map (AI +0x20 -> +0x218) with the timer 20.0, and the squad blackboard is told. Readers skip the handle: the loose-item source finder `FUN_14059d000` (before the ownership test), the engineer finder `FUN_1409a6900` (first condition), the turret finder `FUN_1405b0da0`, the corpse-machine finder ([ai-tasks](ai-tasks.md)). Meitou `ConstructionSystem.NoteUnreachable` (`CharacterCold.Ignored`, not saved): a builder whose path ended short ignores that site or loose item for 20 s; a fetcher of a loose item goes back to its site and picks another source.
 
