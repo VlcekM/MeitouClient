@@ -1004,8 +1004,9 @@ public sealed class CharacterCold
 
     /// <summary>
     /// What the combat system's body step (parallel, its own slot) saw happen to the body this tick, for <see cref="Combat.BodyOrders"/>' serial pass
-    /// the same tick: gone down, woken, or back to standing from staying low or crawling. A wake while carried waits here until it is put down. Not
-    /// saved; the owed wake is hashed while set (<see cref="Combat.BodyEvents.Lying"/> follows the hashed medical state).
+    /// the same tick: gone down, woken, or back to standing from staying low or crawling. A wake while carried waits here until it is put down, as the
+    /// original's WHOLE ragdoll does. Not saved (a load re-requests WHOLE only for a body out cold or dead, so the original loses it too); the owed
+    /// wake is hashed while set (<see cref="Combat.BodyEvents.Lying"/> follows the hashed medical state).
     /// </summary>
     internal Combat.BodyEvents BodyEvents { get; set; }
 

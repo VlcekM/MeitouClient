@@ -263,7 +263,9 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   step (parallel, own slot) notes in `CharacterCold.BodyEvents` what the body did, and `BodyOrders.Pass` (combat's slow world, serial) acts on it:
   going down (knocked out or dead) wipes the queue, the second list and an AI's plan and goal, the jobs kept (`PlayerOrders.Wipe`; being picked up
   does the same in `CarrySystem.Link`); waking gives 65 Getting up (an animal, or waking standing) or 52 (waking staying low or crawling) with the clear flag,
-  none in a bed or cage and, while carried, only once put down; a return to standing from staying low or crawling (Stand Up, a leg back up; not at a
+  none in a bed or cage and, while carried, only once put down (the original pushes none while carried, `FUN_140598c20` false, and pushes it every
+  tick its WHOLE ragdoll is on and it is able, so the first tick after the put-down; the owed wake is not saved, as a load re-requests WHOLE only for
+  a body out cold or dead, [ragdolls](game/ragdolls.md#saves): one that came round on a shoulder before the save gets none, **Observed** from those reads); a return to standing from staying low or crawling (Stand Up, a leg back up; not at a
   kneeling treatment; not in a bed or cage, engine) gives 65 with the clear flag unless one is queued. A flight
   ends when one of these starts (`PlayerOrders.BodyHolds`; **Verified**: its body task replaces `Task_Runaway`, `FUN_1405c6ec0`, and the replan after it
   chooses again, a new run starting from a new first leg, `FUN_14034b440`); a ditch and a player-side food run end;
