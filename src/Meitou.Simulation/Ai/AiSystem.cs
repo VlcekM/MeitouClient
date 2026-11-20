@@ -624,11 +624,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         return (CharacterTask)n.Task switch
         {
             CharacterTask.Idle or CharacterTask.Wander or CharacterTask.Follow => true,
-            // The walks to its spots, and lying or sitting there, are the AI's own.
+            // The walks to its spots, and lying or sitting there, are the AI's own, and so is the walk of its plan's ditch step.
             CharacterTask.GoTo => mind.Behaviour is AiBehaviour.Post or AiBehaviour.Sleep or AiBehaviour.Sit or AiBehaviour.GoHome
                 or AiBehaviour.Patrol or AiBehaviour.Turret or AiBehaviour.TownNode or AiBehaviour.Shop or AiBehaviour.Relax
                 or AiBehaviour.ToTown or AiBehaviour.Travel or AiBehaviour.Work or AiBehaviour.Investigate
-                or AiBehaviour.PatrolTown,
+                or AiBehaviour.PatrolTown || RunsDitchStep(cold),
             CharacterTask.Rest => mind.Behaviour is AiBehaviour.Sleep or AiBehaviour.Sit or AiBehaviour.Relax,
             // In the bed it went to (or lying in one when loaded, before its first think, or laid in by a carrier while it was down: no task of
             // its own keeps it there, and its goal of before then is stale), its think lets it lie on or gets it out (Act).
@@ -2042,7 +2042,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 break;
             case TaskType.MoveOnFreeWill or TaskType.MoveOnFreeWillFast or TaskType.FillMachine when mind.Plan[0].Target.Kind == Targets.Store:
                 // Step 93 into the ditch target (rows 113, 114, 242), and the walk to it: the town duty system walks there and puts the carried items
-                // in, then the AI plans again.
+                // in while the step runs (RunsDitchStep), then the AI plans again. Its walk under way goes on.
+                if (Kidnap.TownDutySystem.Ditches(table.Next[slot], table.Cold(slot)!)) return false;
+
                 mind.DitchRequest = true;
                 Become(world, slot, CharacterTask.Idle);
                 return false;

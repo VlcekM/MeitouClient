@@ -35,6 +35,19 @@ public sealed partial class AiSystem
     internal static bool RunsDoorStep(CharacterCold cold) => cold.Ai is { Plan: [var step, ..] } && IsDoorWay(step);
 
     /// <summary>
+    /// Whether the NPC's kept plan runs its ditch step now: 93 Filling machine, or the walk to it, on the ditch storage (rows 113, 114, 242's
+    /// <see cref="Targets.Store"/> target). The town duty system walks it there and puts the carried items in while it does
+    /// (<see cref="AiMind.DitchRequest"/>).
+    /// </summary>
+    internal static bool RunsDitchStep(CharacterCold cold) => cold.Ai is { Plan: [var step, ..] } && IsDitchStep(step);
+
+    /// <summary>
+    /// Whether a plan step is the ditch's (<see cref="RunsDitchStep"/>).
+    /// </summary>
+    static bool IsDitchStep(in PlanStep step) =>
+        step.Type is TaskType.MoveOnFreeWill or TaskType.MoveOnFreeWillFast or TaskType.FillMachine && step.Target.Kind == Targets.Store;
+
+    /// <summary>
     /// Whether a plan step is a way through a door (<see cref="TakeDoorStep"/>): one of its rows on a <see cref="Targets.Door"/> target. The same row
     /// planned by an engine goal on its finder's door (86 Opening up's 78 Unlocking door, a <see cref="PlanTarget.Found"/> target) is that goal's.
     /// </summary>

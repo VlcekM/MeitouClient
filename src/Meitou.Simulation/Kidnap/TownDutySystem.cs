@@ -177,7 +177,8 @@ public sealed class TownDuty
 
     /// <summary>
     /// The chooser's goal the errand acts out (<see cref="TownGoals"/>); <see cref="TaskType.None"/> for an errand no goal holds (a ditch the plan's
-    /// step 93 asked for, a player-side food run), which holds its member with <see cref="CharacterCold.Engaged"/>.
+    /// step 93 asked for, held by that step, <see cref="AiSystem.RunsDitchStep"/>; a player-side food run, which holds its member with
+    /// <see cref="CharacterCold.Engaged"/>).
     /// </summary>
     public TaskType Chosen { get; init; } = TaskType.None;
 
@@ -442,7 +443,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
 
     /// <summary>
     /// The plan's step 93 Filling machine at a storage (<see cref="AiMind.DitchRequest"/>, set by the think when the plan's first step walks to or
-    /// fills the ditch target): a <see cref="TownDutyKind.Ditch"/> errand walks there and puts the carried items in; the AI plans again when it ends.
+    /// fills the ditch target): a <see cref="TownDutyKind.Ditch"/> errand walks there and puts the carried items in while the AI holds the character on
+    /// that step (<see cref="AiSystem.RunsDitchStep"/>); the AI plans again when it ends.
     /// </summary>
     void StartRequestedDitches(World world)
     {
@@ -452,7 +454,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             if (!table.Next[s].Alive || table.Cold(s) is not { Ai: { DitchRequest: true } mind } c) continue;
             mind.DitchRequest = false;
             var id = table.IdOf(s);
-            if (c.Engaged || c.InCombat || c.Fleeing || mind.Duty is not null || Busy(id) || DecisionSystem.Ordered(c)) continue;
+            if (c.InCombat || !AiSystem.Holds(table.Next[s], c) || !AiSystem.RunsDitchStep(c) || mind.Duty is not null || Busy(id))
+                continue;
+
             var at = table.Next[s].Position;
             if (DitchStore(world, mind.Squad, c, at, register: true) is not var (storeId, spot))
             {
@@ -476,7 +480,6 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// </summary>
     void StartDitch(World world, int slot, CharacterCold cold, CampaignTown town, string storeId, Vector2 spot)
     {
-        cold.Engaged = true;
         _duties.Add(new TownDuty { Member = world.Characters.IdOf(slot), Faction = cold.Faction, Town = town, Kind = TownDutyKind.Ditch,
                 Target = storeId, Goal = spot });
         TaskStart.Walk(world, slot, spot, ErrandMode(world, cold), RowOf(TownDutyKind.Ditch), TaskSource.Goal);
@@ -1496,10 +1499,16 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     #region Errands
 
     /// <summary>
-    /// The rows of the errands no goal holds (the ditch, a player-side food run), which hold their member with <see cref="CharacterCold.Engaged"/>:
+    /// The rows of the errands no goal holds (the ditch, its plan's step; a player-side food run, held with <see cref="CharacterCold.Engaged"/>):
     /// a fight may interrupt their walk, the errand waits for the fight's end and walks on (<see cref="Ai.AiSystem"/>'s pre-emption).
     /// </summary>
     static readonly HashSet<TaskType> ErrandRows = [RowOf(TownDutyKind.Ditch), RowOf(TownDutyKind.Food)];
+
+    /// <summary>
+    /// Whether the character walks its ditch errand now (its plan's ditch step, <see cref="StartRequestedDitches"/>): the AI waits for it.
+    /// </summary>
+    internal static bool Ditches(in CharacterHot n, CharacterCold cold) =>
+        n.Task == (byte)CharacterTask.GoTo && cold.Running is { Source: TaskSource.Goal } run && run.Row == RowOf(TownDutyKind.Ditch);
 
     /// <summary>
     /// The mode 224 and 274 carry a body out in: their start sets the mover of a character of no player faction to walk (<c>FUN_1403355e0</c>,
@@ -1525,7 +1534,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
 
     /// <summary>
     /// One tick of an errand; false when it is over. A goal's act-out goes on only while its goal holds the member (<see cref="DutyGoals.Runs"/>):
-    /// a fight, an order on its body, an order or another goal ends the goal, whose end drops the errand (<see cref="EndGoal"/>).
+    /// a fight, an order on its body, an order or another goal ends the goal, whose end drops the errand (<see cref="EndGoal"/>). A ditch goes on only
+    /// while its plan's step runs (<see cref="AiSystem.RunsDitchStep"/>): another goal the AI chose ends it.
     /// </summary>
     bool Step(World world, TownDuty d)
     {
@@ -1537,7 +1547,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         {
             if (_goalDuties?.Runs(world, g, d.Chosen) != true) return true;
         }
-        else if (EngagedWaits(d, gc) is { } waits)
+        else if (d.Kind == TownDutyKind.Ditch && !AiSystem.RunsDitchStep(gc))
+            return End(world, d);
+        else if (ErrandWaits(d, gc) is { } waits)
             return waits || End(world, d);
 
         if (d.Kind is TownDutyKind.Food or TownDutyKind.LootFood) return StepFood(world, d, g, gc);
@@ -1554,7 +1566,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// dialogue turned into; its walks would end it, as a new task drops the fight task), false when it ends (a player character's food run is a
     /// goal its fight replaced, the decision step chooses again; a stumble or a get-up plans the AI anew); null when it steps on.
     /// </summary>
-    static bool? EngagedWaits(TownDuty d, CharacterCold gc)
+    static bool? ErrandWaits(TownDuty d, CharacterCold gc)
     {
         if (gc.InCombat) return !(d.PlayerSide && gc.IsPlayer);
 
@@ -1787,23 +1799,26 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// Ends an errand (false, for the step): the member of one no goal holds goes back to its routine (the AI takes it again); a goal's is done by
-    /// <see cref="Finish"/>, which stops what is left of its act-out.
+    /// Ends an errand (false, for the step): the member of one no goal holds goes back to its routine (the AI takes it again; a ditch's walk stands
+    /// only while it is still the ditch's); a goal's is done by <see cref="Finish"/>, which stops what is left of its act-out.
     /// </summary>
     static bool End(World world, TownDuty d)
     {
         if (d.Chosen != TaskType.None) return false;
 
         var table = world.Characters;
-        if (table.TryResolveNext(d.Member, out int g) && table.Cold(g) is { } gc)
+        if (!table.TryResolveNext(d.Member, out int g) || table.Cold(g) is not { } gc) return false;
+
+        if (d.Kind != TownDutyKind.Ditch)
         {
             gc.Engaged = false;
             if (table.Next[g].Task == (byte)CharacterTask.GoTo) TaskStart.Stand(table, g);
-
-            // the plan's step 93 is done: the planner asks again with the inventory as it is now
-            if (d.Kind == TownDutyKind.Ditch && gc.Ai is { } mind) mind.Replan = true;
+            return false;
         }
 
+        // the plan's step 93 is done: the planner asks again with the inventory as it is now
+        if (Ditches(table.Next[g], gc)) TaskStart.Stand(table, g);
+        if (gc.Ai is { } mind) mind.Replan = true;
         return false;
     }
 

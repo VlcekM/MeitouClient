@@ -325,7 +325,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   while it holds an order.
 - **Duties let go** when an NPC's front starts, but for the body's orders (engine design; `PlayerOrders.TryFront`, serial, before the owner's `Start`): `World.ReleaseDuties` asks every system that
   is an `IDutyRelease` (found on the world's systems, nothing registered) but the order's `OrderEntry.Keeps`, its giver, to let the character go through its own give-up.
-  The ditch and food runs, arrests and bounty hunts and the mod NPC goals (`NpcGoals`) drop their record and clear `Engaged`; a body carried
+  The ditch (its record), the player side's food runs, arrests and bounty hunts and the mod NPC goals (`NpcGoals`) drop their record and clear `Engaged`; a body carried
   for one is let go where it stands (the unlink, no knock-out); an [engine goal](#engine-goals) ends (`DutyEnd.Order`, through the AI; a town goal lets its carried body go the same way); a door way is dropped and a bash
   errand stopped. Neither the dialogue nor a trade holds anyone. The giver's own `Engaged` (one shared bit) is put back after the others let go. The duty sweeps take no
   ordered character again (`DecisionSystem.Ordered` or `AiSystem.Holds` in their free tests).
@@ -1471,8 +1471,9 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
   (row 156's B list 59 `hasAnOpenDoor` and 90, **Observed**): `DoorPlan.PlansEntry` plans 216 with the exact state 59, so a closed unlocked door is opened (72) or, for a
   character that wants to (`AggressiveTowards`), bashed first (81: `LockSystem.BashForErrand`); a locked door nobody will bash or unlock leaves the building out. A closed gate on
   the route is planned the same way (`LockSystem.GateEntry`, `GatePlan.PlansEntry`). It runs into the building and the goal is done once inside.
-- Not goals: the ditch the plan's step 93 asks for (rows 113, 114, 242; `AiMind.DitchRequest`) and the player side's food runs hold their member with `Engaged`; a fight
-  interrupts their walk (`TownDutySystem.IsErrandRow`), an order on the body ends them.
+- Not goals: the ditch the plan's step 93 asks for (rows 113, 114, 242; `AiMind.DitchRequest`) is held by that step (`AiSystem.RunsDitchStep`: the AI
+  holds its walk and may choose another goal over it, which ends it); the player side's food runs hold their member with `Engaged`. A fight interrupts their walk
+  (`TownDutySystem.IsErrandRow`), an order on the body ends them.
 - Occupiers' **36 / 37** town goals walk to a random complete building of the player town (`AiSystem.OccupiedSpot`, engine choice; the original's 36 scatters round the
   occupied town's centre, [town goals](game/ai-tasks.md#town-goals)), 36 drawing again after every walk.
 - Engine choices: sight `AggroSystem.OutdoorSight`, arrival 40 (a cage: its `use range` + 15), 4 short walks before an act-out gives up.
