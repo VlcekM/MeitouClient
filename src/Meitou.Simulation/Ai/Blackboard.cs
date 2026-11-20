@@ -1,4 +1,5 @@
 using System.Numerics;
+using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.World;
 using Meitou.Simulation.Aggro;
@@ -303,6 +304,28 @@ public sealed class Blackboard
     /// <see cref="Saving.AiSave.PhaseKey"/>; hashed only while set.
     /// </summary>
     public bool PhaseContract { get; private set; }
+
+    /// <summary>
+    /// The war classes' mission target (package <c>+0x28</c>, written once by their start <c>FUN_14028fc80</c>, <b>Verified</b>): the platoon id of
+    /// the campaign's lead as it was when the package started, for a platoon that was not the lead then; -1 for the lead platoon, a campaign with no
+    /// lead yet and any other package, whose 215 aims at the campaign's target. Nothing refreshes the copy while the package runs (the war update
+    /// <c>FUN_140287670</c> is empty). Not saved: a loaded package starts again and copies the campaign's lead then (<c>FUN_140272c20</c>
+    /// installs the saved override, whose activation runs the start). Hashed while set.
+    /// </summary>
+    public int WarLead { get; set; } = -1;
+
+    /// <summary>
+    /// The campaign's <c>travel speed loaded</c>, copied by the war classes' start for 215's pace (<see cref="MissionFormation"/>). Hashed with
+    /// <see cref="WarLead"/>.
+    /// </summary>
+    public MoveSpeed WarSpeed { get; set; } = MoveSpeed.Run;
+
+    /// <summary>
+    /// The point 215 walks to while it aims at the campaign's target (<see cref="WarLead"/> -1): the target town's own point (Town vfunc 0x38,
+    /// <see cref="TownExit"/>), found again on each package cadence by the serial step (<c>AiSystem.StepWar</c>); null without a target. Hashed while
+    /// set.
+    /// </summary>
+    public Vector2? WarPoint { get; set; }
 
     /// <summary>
     /// The town the squad belongs to (a site index, -1: none) and the building it lives in (null: none known); <see cref="OwnHome"/> is the one it
@@ -636,6 +659,8 @@ public sealed class Blackboard
         BarWaits = false;
         MissionTown = -1;
         Destination = CampaignTown.None;
+        WarLead = -1;
+        WarPoint = null;
         RefugeeBroken = false;
         RefugeeTarget = -1;
         rules?.Started(this, package, PackageClasses.Of(package.Signal));
@@ -838,7 +863,7 @@ public sealed class Blackboard
         if (!MissionTarget.IsNone) hasher.Add(MissionTarget);
         if (!MissionEmployer.IsNone && MissionEmployer != MissionTarget) hasher.Add(MissionEmployer);   // differs only for a town mission
         if (MissionAnyRange) hasher.Add(0x416E7952);   // only when a code mod set it, so worlds without one hash as before
-        if (PhaseContract) hasher.Add(0x50686173);   // only a campaign sets it, so worlds without one hash as before
+        if (PhaseContract) HashPhase(ref hasher);
         if (Replacement is not null) hasher.Add(Rng.StableHash(Replacement.Id));
         hasher.Add(Intact);
         hasher.Add(PatrolStart);
@@ -888,6 +913,29 @@ public sealed class Blackboard
             hasher.Add(RefugeeBroken);
             hasher.Add(RefugeeTarget);
         }
+    }
+
+    /// <summary>
+    /// A campaign's phase package: its mark, and the war classes' mission (<see cref="ContractTown"/>, <see cref="WarLead"/>,
+    /// <see cref="WarSpeed"/>, <see cref="WarPoint"/>) once their start set it. Only a campaign sets these, so worlds without one hash as before.
+    /// </summary>
+    void HashPhase(ref StateHasher hasher)
+    {
+        hasher.Add(0x50686173);
+        if (!ContractTown.IsNone)
+        {
+            hasher.Add(ContractTown.Site);
+            hasher.Add(ContractTown.PlayerTown);
+            hasher.Add(ContractTown.Nest);
+        }
+
+        if (WarLead >= 0)
+        {
+            hasher.Add(WarLead);
+            hasher.Add((int)WarSpeed);
+        }
+
+        if (WarPoint is { } point) hasher.Add(point);
     }
 }
 
@@ -1271,6 +1319,12 @@ public sealed class AiMind
     /// character itself (<see cref="FirstAid.FirstAidSystem.SendGoalTreatments"/>) and clears it (not hashed).
     /// </summary>
     public bool HealLegsAsk { get; set; }
+
+    /// <summary>
+    /// The think acts 129 Approaching fast out: the serial step of the same tick has the campaign's announcement said (<c>AiSystem.SendAnnouncements</c>,
+    /// <see cref="PopulationSystem.Announce"/>) and clears it (not hashed).
+    /// </summary>
+    public bool AnnounceAsk { get; set; }
 
     /// <summary>
     /// The captive goals (<see cref="AiBehaviour.Captive"/>) whose job would start, each with the original's desire, found on the character's last

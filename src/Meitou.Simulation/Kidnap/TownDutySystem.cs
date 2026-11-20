@@ -2523,8 +2523,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// <c>AI::findRandomBuildingInTown</c> (<c>FUN_1408cb510</c>, goal 216): the squad's mission town (its blackboard's, else the campaign target it
-    /// marches on), else the town the member stands in; one of its standing buildings with an interior, drawn uniformly at random among those the
+    /// <c>AI::findRandomBuildingInTown</c> (<c>FUN_1408cb510</c>, goal 216): the squad's town as <c>FUN_140269cd0</c> gives it (the override's mission
+    /// town, a campaign's war package's the campaign target, <see cref="Blackboard.ContractMissionTown"/>; else the running package's mission town),
+    /// else the town the member stands in; a player town is not drawn from; one of its standing buildings with an interior, drawn uniformly at random among those the
     /// planner would reach: row 156 Entering building (the only provider of effect 107, which goal 216 wants) needs DESTINATION_IS_ACCESSIBLE (59:
     /// <c>hasAnOpenDoor</c>) and DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS (90: no closed gate between), <b>Observed</b>. The door sub-steps are
     /// planned (<see cref="EntryTo"/>: open the door, row 72, or bash it, row 81); a building with no way in is left out of the draw. A closed gate
@@ -2533,8 +2534,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// </summary>
     (Meitou.Data.World.TownBuilding Building, string? Door)? RansackTarget(World world, Squad squad, int slot)
     {
-        int site = squad.Ai is { MissionTown: >= 0 } b ? b.MissionTown : squad.Ai is { Destination: { Site: >= 0 } dest } ? dest.Site
-                : AiSystem.TownAt(data, world, world.Characters.Next[slot].Position).Site;
+        int site = squad.Ai is { ContractMissionTown.Site: >= 0 } b ? b.ContractMissionTown.Site
+            : squad.Ai is { Destination: { Site: >= 0 } dest } ? dest.Site
+            : AiSystem.TownAt(data, world, world.Characters.Next[slot].Position).Site;
         if (site < 0) return null;
         _locks ??= world.Systems.OfType<LockSystem>().FirstOrDefault();
         var from = world.Characters.Next[slot].Position;

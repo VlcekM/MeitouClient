@@ -368,13 +368,16 @@ public sealed partial class AiSystem
 
         /// <summary>
         /// 131 atPackageTarget (<c>FUN_140506d30</c>, <b>Verified</b>; row 215's list A), at the squad's package target (<see cref="PackageTarget"/>):
-        /// a character as <see cref="AtCharacter"/>; no target, or a town that is not there, holds; a town with gates
+        /// a character as <see cref="AtCharacter"/>; a platoon (a war package's copied lead) holds, as the evaluator takes any hand that is not a
+        /// character's for a town and finds none (<c>FUN_140792980</c> searches the towns' list); no target, or a town that is not there, holds; a
+        /// town with gates
         /// (<see cref="TownExit.HasGates"/>) within 250 of its point outside the gates (Town vfunc 0x38, <see cref="TownExit"/>), any other within
         /// 0.4 of its radius.
         /// </summary>
         bool AtPackageTarget()
         {
-            var (town, character) = _system.PackageTarget(_world, _mind.Squad, _board);
+            var (town, character, platoon) = _system.PackageTarget(_world, _mind.Squad, _board);
+            if (platoon >= 0) return true;
             if (!character.IsNone) return AtCharacter(character);
             if (TownPlace(_system.Data, _world, town) is not { } placed) return true;
 
@@ -681,6 +684,11 @@ public sealed partial class AiSystem
 
             switch (type)
             {
+                case TaskType.MakeAnnouncementFast:
+                    // Aimed at the squad's mission (targeting SQUAD_MISSION): the package target's town.
+                    return _system.PackageTarget(_world, _mind.Squad, _board) is { Town.IsNone: false } aim
+                        && TownPlace(_system.Data, _world, aim.Town) is { } place
+                        ? new PlanTarget(Targets.Town, new Vector3(place.Centre.X, float.NaN, place.Centre.Y)) : default;
                 case TaskType.StandAtShopkeeperNode or TaskType.StandAtGuardNodeHomebuilding or TaskType.StandAtGuardNodeHomebuildingIndoorsOnly
                     or TaskType.StandAtGuardNodeHometownOutside or TaskType.StandAtGeneralNode or TaskType.StayInHome
                     or TaskType.HoldPosition or TaskType.ManTheGate:

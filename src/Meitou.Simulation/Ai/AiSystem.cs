@@ -1001,6 +1001,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             AiBehaviour.Relax => board.BarTable >= 0 && board.SeatClaims.ContainsKey(self.Slot) && !mind.SeatUnreachable ? 1 : 0,
             AiBehaviour.Sit => board.SitClaims.ContainsKey(self.Slot) && !mind.SeatUnreachable ? 1 : 0,
             AiBehaviour.ToTown => TownAt(world.Characters.Previous[self.Slot].Position) >= 0 ? 0 : 1,
+            // 215 under a war package: AI slot 57, the constant 1 (FUN_140319a60, Verified); its list A ends it (the planner's 131).
+            AiBehaviour.Travel when type == TaskType.TravelToTargetPackage && MissionFormation.Runs(board, PlatoonOf(world, squad)) => 1,
             // To the package's mission town while not in it.
             AiBehaviour.Travel => board.RefugeeTarget >= 0 ? 1
                 : board.Destination.IsNone || CurrentTown(world, world.Characters.Previous[self.Slot].Position) == board.Destination ? 0 : 1,
@@ -2114,6 +2116,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     void ActOut(World world, int slot, AiMind mind, AiGoal goal, Blackboard board, TaskType type, AiBehaviour behaviour)
     {
         var table = world.Characters;
+        if (type != TaskType.TravelToTargetPackage) table.Cold(slot)!.PaceCap = null;   // only 215's formation caps the pace
 
         switch (behaviour)
         {
@@ -2187,6 +2190,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             case AiBehaviour.Travel:
                 ActTravel(world, slot, mind, board, type);
                 break;
+            case AiBehaviour.Announce:
+                ActAnnounce(world, slot, mind);
+                break;
             case AiBehaviour.Relax:
             case AiBehaviour.Sit:
                 ActSeated(world, slot, mind, board, type);
@@ -2255,10 +2261,16 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// A trip to the mission town's centre.
+    /// A trip to the mission town's centre; 215 under a campaign's war package is the formation's walk (<see cref="ActFormation"/>).
     /// </summary>
     void ActTravel(World world, int slot, AiMind mind, Blackboard board, TaskType type)
     {
+        if (type == TaskType.TravelToTargetPackage && PlatoonOf(world, mind.Squad) is { } platoon && MissionFormation.Runs(board, platoon))
+        {
+            ActFormation(world, slot, mind, board, platoon);
+            return;
+        }
+
         // To the mission town's centre; the goal is no longer wanted once inside the town (Desire), long before the centre.
         if (DestinationCentre(world, board) is not { } town) Become(world, slot, CharacterTask.Idle);
         else if (GoToSpot(world, slot, mind, town, GiveUp.Target, type == TaskType.TravelToTargetTownFast ? SpeedMode.Run : SpeedMode.Walk))
@@ -3203,6 +3215,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (Interlocked.Exchange(ref _assaulting, 0) != 0) SendAssaults(world);
         if (Interlocked.Exchange(ref _fighting, 0) != 0) SendFights(world);
         if (Interlocked.Exchange(ref _treating, 0) != 0) (_firstAid ??= world.SystemOf<FirstAid.FirstAidSystem>())?.SendGoalTreatments(world);
+        if (Interlocked.Exchange(ref _announcing, 0) != 0) SendAnnouncements(world);
 
         SendCaptiveJobs(world);
         _duties?.Step(world, world.Every(Settings.ThinkEveryTicks) * ModGoalBackoffThinks);
@@ -3223,14 +3236,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// A squad without a board: the first time it is seen, one the AI runs gets its board (and its town's places); else its minds are the
-    /// engine's (again on the cadence). True when it was attached now.
+    /// A squad without a board: the first time it is seen, one the AI runs gets its board (and its town's places), and so does one a campaign drafted
+    /// since (looked at again on the cadence); else its minds are the engine's (again on the cadence). True when it was attached now.
     /// </summary>
     bool AttachNew(World world, Squad squad, bool cadence)
     {
         bool first = _looked.Add(squad.Id);
+        bool drafted = !first && cadence && PlatoonOf(world, squad)?.Campaign is not null;
 
-        if (!first || !Runs(world, squad))
+        if (!(first || drafted) || !Runs(world, squad))
         {
             if (first || cadence) EngineMinds(world, squad);
 
@@ -3261,7 +3275,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         board.Update(_rules, world.GameHours);
         StepWar(world, squad, board);
-        if (platoon?.Campaign is null) StepPackage(world, squad, board);   // a campaign's squad has its war targets from the campaign
+        StepPackage(world, squad, board, campaign: platoon?.Campaign is not null);
         if (board.BarWaits) _rules.RetryTable(board);
 
         // A contract that ended: its leader says the package's contract end talk to the employer (event 30, FUN_14026a110).
@@ -3274,9 +3288,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         board.Crowd.Clear();
         board.CrowdEntries.Clear();
 
-        // Every loaded platoon acts out its package's goals in the original, so its members get full minds. Two kinds stay on the engine's
-        // routine while their package does not travel: a campaign's squad (its march stands for the war packages that are not built) and one a
-        // code mod holds (the mod moves it).
+        // Every loaded platoon acts out its package's goals in the original, so its members get full minds, a campaign's too. One a code mod
+        // holds stays on the engine's routine while its package does not travel (the mod moves it).
         bool populationMoves = platoon is not null && PopulationRuns(platoon) && !BoardMoves(board);
         if (populationMoves) EngineMinds(world, squad, board);
 
@@ -3308,7 +3321,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         bool moved = own && cold.Ai is { } brought && !ReferenceEquals(brought.Squad, squad);
 
         // Every character has goals in the original, and a slave's are its master's Slave list (ObeyedRoles), whoever moves its own squad: a
-        // captive of a squad the population moves (a campaign's, a held one) would otherwise stand where it was enslaved, on an engine mind (#904).
+        // captive of a squad a code mod holds would otherwise stand where it was enslaved, on an engine mind (#904).
         bool obeys = populationMoves && ObeyedRoles(world, squad, cold) is not null;
         if ((!populationMoves || obeys) && (moved || cold.Ai is null or { Engine: true })) GiveMind(world, squad, board, k, s, own);
 
@@ -3608,12 +3621,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// Minds for the members of a squad the AI does not run (<see cref="Runs"/>; not the player's): every character has goals in the original
-    /// (<c>setupAI</c> <c>FUN_140621b70</c>: 14, 32, its race's and its faction's <c>AI Goals</c>; its squad's packages add theirs,
-    /// docs/game/ai-tasks.md "Precedence"), so each gets an <see cref="AiMind.Engine"/> mind whose combat goals are its platoon's package's for its
-    /// role (a campaign squad's phase package, a roaming one's the package the population's stand-in follows, else the template's first choice; none
-    /// for a template without packages) and its race's. Its routine stays the engine's. Serial, on the package cadence and when the squad appears; a
-    /// mind made for another squad is made again.
+    /// Minds for the members of a squad the AI does not run (<see cref="Runs"/>: a template without packages; not the player's) or that a code mod
+    /// holds (<paramref name="board"/> given): every character has goals in the original (<c>setupAI</c> <c>FUN_140621b70</c>: 14, 32, its race's
+    /// and its faction's <c>AI Goals</c>; its squad's packages add theirs, docs/game/ai-tasks.md "Precedence"), so each gets an
+    /// <see cref="AiMind.Engine"/> mind whose combat goals are its package's for its role (the held squad's running package, a roaming one's the
+    /// package the population's stand-in follows, else the template's first choice; none for a template without packages) and its race's. Its
+    /// routine stays the engine's. Serial, on the package cadence and when the squad appears; a mind made for another squad is made again.
     /// </summary>
     void EngineMinds(World world, Squad squad, Blackboard? board = null)
     {
@@ -3626,12 +3639,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         var table = world.Characters;
         AiPackage? package;
         if (board is not null) package = board.Current;   // a platoon's squad running its blackboard: the package that runs
-        else if (squad.PlatoonId >= 0 && world.Platoons.Find(squad.PlatoonId) is { } platoon)
-        {
-            // A campaign's squad runs its phase's package (as PopulationSystem.GoalDuty reads it); a roaming one the package its stand-in follows.
-            AiPackage? phase = platoon.Campaign is { } inst ? PhasePackage(world, platoon, inst) : null;
-            package = phase ?? (platoon.Package is { } id ? data.Ai.Package(id) : platoon.Campaign is null ? FirstPackage(squad.TemplateId) : null);
-        }
+        else if (squad.PlatoonId >= 0 && world.Platoons.Find(squad.PlatoonId) is { Package: { } id })
+            package = data.Ai.Package(id);   // a roaming one: the package its stand-in follows
         else package = FirstPackage(squad.TemplateId);
         for (int k = 0; k < squad.Members.Count; k++)
         {
@@ -3666,19 +3675,18 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             cold.Ai.EngineGoals = package is null ? [] : CombatGoalsOf(package, RoleOf(squad, squad.Members[k], cold));
             if (squad.DebugAggro && AttackEnemiesGoal() is { } attack) cold.Ai.EngineGoals = [.. cold.Ai.EngineGoals, attack];
 
-            // A follower of a squad the population moves that stands idle (it came round, its fight ended, the swap found it held by something
-            // else: ToRoutine) follows its leader again, as the original's followers walk to their leader (goal 215).
+            // A follower of a squad a code mod holds that stands idle (it came round, its fight ended, the swap found it held by something else:
+            // ToRoutine) follows its leader again (engine choice: the mod moves the leader).
             if (board is not null && Rejoins(world, squad, s, cold))
                 TaskStart.Become(world, s, CharacterTask.Follow, TaskType.FollowSquadleader, TaskSource.Goal);
         }
     }
 
     /// <summary>
-    /// A member's full mind gives way to an engine one (a campaign drafted its loaded platoon, a code mod holds it): what the full mind had it
+    /// A member's full mind gives way to an engine one (a code mod holds its loaded platoon): what the full mind had it
     /// doing ends, so a sleeper gets up, one sitting at a table stands and a walk to a shop stops, and a member other than the leader follows
     /// its leader again, as one made under the population does; the leader stands for the population to move. Else each would stay where its
-    /// package left it while the population marches the leader off (engine choice: the original has one kind of mind, and the campaign's
-    /// package gives every member its goals at once). One the mind does not hold now (in a fight, a flight, a carry, a treatment, a talk, a
+    /// package left it while the mod moves the leader off (engine choice: the original has one kind of mind). One the mind does not hold now (in a fight, a flight, a carry, a treatment, a talk, a
     /// knock-out) is left alone and rejoins on a later package step, once it stands idle (<see cref="Rejoins"/>).
     /// </summary>
     static void ToRoutine(World world, Squad squad, int s, CharacterCold cold)
@@ -3770,11 +3778,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// save's wild one like the wild sites' squads), and whose template lists AI packages. A player's squad only when it is autonomous and a save
     /// held its AI (<see cref="Squad.SavedAi"/>): else it is attached when it is given a package (<see cref="TakePackage"/>). A squad of slaves
     /// whose template lists none (Garret's slave, #938) is run too: its members plan with their master's Slave AI Goals (<see cref="ObeyedRoles"/>),
-    /// as the original's AI slaves run their master's list.
+    /// as the original's AI slaves run their master's list. A campaign's platoon is run whatever its template lists: its phase package is its
+    /// blackboard's override (<c>FUN_140272570</c> installs it on every loaded platoon's visit, <b>Verified</b>).
     /// </summary>
     bool Runs(World world, Squad squad) =>
         IsPlayers(world, squad) ? squad is { Autonomous: true, SavedAi: not null }
-            : TemplateOf(squad.TemplateId).Packages.Count > 0 || AllSlaves(world, squad);
+            : TemplateOf(squad.TemplateId).Packages.Count > 0 || AllSlaves(world, squad) || PlatoonOf(world, squad)?.Campaign is not null;
 
     /// <summary>
     /// Every living member of the squad is a slave (state 1); false for an empty squad.
@@ -3802,20 +3811,17 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         squad.PlatoonId >= 0 && !squad.Pinned && !squad.Wild ? world.Platoons.Find(squad.PlatoonId) : null;
 
     /// <summary>
-    /// Whether the population, not the squad's blackboard, moves a loaded platoon's squad: a campaign's (<see cref="Platoon.Campaign"/>: the
-    /// campaign march stands for the war package classes, which are not built) and one a code mod holds (<see cref="Platoon.Held"/>). Every other
-    /// loaded platoon acts out its package's goals with full minds, as in the original (<see cref="PlatoonOf"/>). The test does not depend on
-    /// where the squad stands, so a free platoon walking into or out of a town never changes its kind of mind; a campaign drafting or releasing
-    /// a loaded platoon and a mod's hold or release do, and the minds are made again then (<see cref="EngineMinds"/>, <see cref="ToRoutine"/>,
-    /// <see cref="GiveMind"/>). A campaign's or a held squad whose own package travels still takes full minds while it does
-    /// (<see cref="BoardMoves"/>).
+    /// Whether a code mod, not the squad's blackboard, moves a loaded platoon's squad (<see cref="Platoon.Held"/>, engine API): its members keep the
+    /// engine's routine (<see cref="AiMind.Engine"/>) while its package does not travel (<see cref="BoardMoves"/>). Every other loaded platoon,
+    /// a campaign's included, acts out its package's goals with full minds, as in the original (<see cref="PlatoonOf"/>). A mod's hold or release
+    /// makes the minds again (<see cref="EngineMinds"/>, <see cref="ToRoutine"/>, <see cref="GiveMind"/>).
     /// </summary>
-    internal static bool PopulationRuns(Platoon platoon) => platoon.Campaign is not null || platoon.Held;
+    internal static bool PopulationRuns(Platoon platoon) => platoon.Held;
 
     /// <summary>
     /// Whether the running package moves the squad itself (the trader, the refugee, the shipping and retreat classes): one of its goals travels and a
-    /// mission town is set. For a squad the population runs (<see cref="PopulationRuns"/>) the campaign march or the mod moves it otherwise, and
-    /// its members keep the engine's routine (<see cref="AiMind.Engine"/>). It also names the squads whose mission town is the stand-in's target
+    /// mission town is set. For a squad a code mod holds (<see cref="PopulationRuns"/>) the mod moves it otherwise, and its members keep the
+    /// engine's routine (<see cref="AiMind.Engine"/>). It also names the squads whose mission town is the stand-in's target
     /// at unload and is saved.
     /// </summary>
     internal static bool BoardMoves(Blackboard board)
@@ -4151,6 +4157,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                     break;
                 case PackageClass.CampaignDefend:
                     _system.CampaignDefendStart(_world, _squad, board);
+                    break;
+                case PackageClass.WarBase:
+                case PackageClass.WarAssault:
+                case PackageClass.WarAssaultCannibal:
+                    _system.WarStart(_world, _squad, board);
                     break;
             }
         }

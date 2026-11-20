@@ -268,24 +268,26 @@ public sealed partial class AiSystem
             : world.Buildings.FindTown(board.Destination.PlayerTown)?.Radius ?? 0;
 
     /// <summary>
-    /// The squad's package target, a town or a character (<c>FUN_140796120</c> over the platoon's <c>FUN_140269b60</c>, <b>Verified</b>): its
-    /// platoon's campaign target while it runs one (<see cref="CampaignInstance.Target"/>); else the running package's (vtable +0x8): a broken
-    /// refugee's squad to join once it has one (its leader), else its mission town (<c>FUN_140288dc0</c>); any other package's mission target
-    /// (<c>FUN_1402859e0</c>: package +0x30), which a contract aimed at a town holds as its mission town (<see cref="Blackboard.AimMissionAtTown"/>).
-    /// Both none: no target.
+    /// The squad's package target, a town, a character or a platoon (<c>FUN_140796120</c> over the platoon's <c>FUN_140269b60</c>, <b>Verified</b>):
+    /// the running package's (vtable +0x8). A campaign platoon's war package (19, 20, 32; slot 1 <c>FUN_14028fb10</c>) aims at the mission target
+    /// its start copied (<see cref="WarStart"/>): the lead platoon (<see cref="Blackboard.WarLead"/>), else the campaign's target as it was then
+    /// (<see cref="Blackboard.ContractTown"/>). A broken refugee aims at its squad to join once it has one (its leader), else its mission town
+    /// (<c>FUN_140288dc0</c>); any other package at its mission target (<c>FUN_1402859e0</c>: package +0x30), which a contract aimed at a town
+    /// holds as its mission town (<see cref="Blackboard.AimMissionAtTown"/>). All none: no target. Platoon -1: not a platoon.
     /// </summary>
-    internal (CampaignTown Town, CharacterId Character) PackageTarget(World world, Squad squad, Blackboard board)
+    internal (CampaignTown Town, CharacterId Character, int Platoon) PackageTarget(World world, Squad squad, Blackboard board)
     {
-        if (squad.PlatoonId >= 0 && world.Platoons.Find(squad.PlatoonId) is { Campaign: { } campaign }) return (campaign.Target, CharacterId.None);
+        if (MissionFormation.Runs(board, PlatoonOf(world, squad)))
+            return board.WarLead >= 0 ? (CampaignTown.None, CharacterId.None, board.WarLead) : (board.ContractTown, CharacterId.None, -1);
 
         if (board.CurrentClass == PackageClass.Refugee)
         {
             return board.RefugeeBroken && world.Squads.Find(board.RefugeeTarget) is { } join
-                ? (CampaignTown.None, join.Leader)
-                : (board.Destination, CharacterId.None);
+                ? (CampaignTown.None, join.Leader, -1)
+                : (board.Destination, CharacterId.None, -1);
         }
 
-        return board.MissionTarget.IsNone ? (board.ContractTown, CharacterId.None) : (CampaignTown.None, board.MissionTarget);
+        return board.MissionTarget.IsNone ? (board.ContractTown, CharacterId.None, -1) : (CampaignTown.None, board.MissionTarget, -1);
     }
 
     /// <summary>
@@ -339,9 +341,9 @@ public sealed partial class AiSystem
     /// <summary>
     /// The running package's update (the original's vtable +0x48, after the choice): the trader's arrival; under an assault or occupation the squad
     /// treats the town's faction as enemies (<see cref="Squad.War"/>; the original tags each one it sees with squad memory 4) and roams the town
-    /// (engine choice: its wander centre).
+    /// (engine choice: its wander centre). A <paramref name="campaign"/> squad's war targets are its campaign's (the population's loaded step).
     /// </summary>
-    void StepPackage(World world, Squad squad, Blackboard board)
+    void StepPackage(World world, Squad squad, Blackboard board, bool campaign)
     {
         switch (board.CurrentClass)
         {
@@ -366,8 +368,8 @@ public sealed partial class AiSystem
 
                 break;
             default:
-                // An AI-run squad is never a campaign's (the campaign runs those), so nobody else sets its war targets.
-                if (squad.War.IsSet) squad.War = WarTargets.None;
+                // Nobody else sets the war targets of a squad that is not a campaign's.
+                if (!campaign && squad.War.IsSet) squad.War = WarTargets.None;
                 break;
         }
     }
@@ -1039,14 +1041,15 @@ public sealed partial class AiSystem
 
     /// <summary>
     /// The start <c>Campaign_DefendPlayerBase</c> shares with <c>Contract_DefendPlayerBase</c> (<c>FUN_14028a170</c>, <b>Verified</b>): the player
-    /// town nearest the leader is its mission town and its mission (<see cref="Blackboard.AimMissionAtTown"/>), so its sensing hook exempts the
-    /// town's owner (<c>AggroSystem.EmployerOf</c>). Engine stand-in: the blackboard's target town (+0xf0) is left unset while the campaign march
-    /// moves the squad, as it would make the package travel on its own (<see cref="BoardMoves"/>).
+    /// town nearest the leader is its mission town, its target town (+0xf0, <see cref="Blackboard.Destination"/>: its 130 travels there and its 36
+    /// patrols it) and its mission (<see cref="Blackboard.AimMissionAtTown"/>), so its sensing hook exempts the town's owner
+    /// (<c>AggroSystem.EmployerOf</c>).
     /// </summary>
     internal void CampaignDefendStart(World world, Squad squad, Blackboard board)
     {
         var at = LeaderPosition(world, squad) ?? squad.Position;
         board.ContractTown = NearestPlayerTown(world, Flat(at))?.Town ?? CampaignTown.None;
+        board.Destination = board.ContractTown;
         board.AimMissionAtTown();
     }
 
@@ -1056,14 +1059,20 @@ public sealed partial class AiSystem
     /// Assault, and the first step after it stops running (ended, replaced or swapped) clears the marks of the squad's members
     /// (<see cref="Blackboard.MarksOrdered"/>; engine stand-in for the original's clear at each task end, <c>FUN_1405c91c0</c>, which lets the mark
     /// lapse soon after the package stops renewing it); the campaign's defence without a mission town runs its start again (its update
-    /// <c>FUN_140291410</c>, <b>Verified</b>).
+    /// <c>FUN_140291410</c>, <b>Verified</b>). The war classes' 215 point is found again (<see cref="AimWar"/>), and a war assault's squad roams its
+    /// mission town (<see cref="RoamTarget"/>).
     /// </summary>
     void StepWar(World world, Squad squad, Blackboard board)
     {
         switch (board.CurrentClass)
         {
+            case PackageClass.WarBase:
+                AimWar(world, squad, board);
+                break;
             case PackageClass.WarAssault:
             case PackageClass.WarAssaultCannibal:
+                AimWar(world, squad, board);
+                RoamTarget(world, squad, board);
                 SetOrdered(world, squad, true);
                 board.MarksOrdered = true;
                 return;
@@ -1085,6 +1094,128 @@ public sealed partial class AiSystem
         var table = world.Characters;
         foreach (var m in squad.Members)
             if (table.TryResolveNext(m, out int s)) table.Cold(s)!.Ordered = on;
+    }
+
+    #endregion
+
+    #region Campaign war packages
+
+    /// <summary>
+    /// The functionality cache of the serial step's town points (<see cref="WarTownPoint"/>; derived from the data, not hashed).
+    /// </summary>
+    readonly Dictionary<string, Meitou.Data.GameRecord?> _warGates = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Set by a think that acts 129 out (<see cref="AiMind.AnnounceAsk"/>).
+    /// </summary>
+    int _announcing;
+
+    /// <summary>
+    /// The war classes' start (<c>FUN_14028fc80</c>, shared by 19, 20 and 32, <b>Verified</b>), on the blackboard: with a campaign, the mission town
+    /// is the campaign's target (<see cref="Blackboard.ContractTown"/>; slot 20 <c>FUN_1409d4370</c>), and the mission target the campaign's target
+    /// for its lead platoon or while it has no lead, else the lead platoon (<see cref="Blackboard.WarLead"/>; slot 17 <c>FUN_1409d5020</c>), each
+    /// a copy nothing refreshes while the package runs; without one, the mission town is the platoon's home town. The off-screen job (5 / 6) is
+    /// the unloaded platoon's (<see cref="PlatoonJobs.WarJob"/>). The start writes no blackboard target town (+0xf0).
+    /// </summary>
+    void WarStart(World world, Squad squad, Blackboard board)
+    {
+        if (PlatoonOf(world, squad) is not { Campaign: { } campaign } platoon)
+        {
+            board.ContractTown = squad.Town >= 0 ? CampaignTown.OfSite(squad.Town) : CampaignTown.None;
+            return;
+        }
+
+        board.ContractTown = campaign.Target;
+        if (campaign.Leader >= 0 && campaign.Leader != platoon.Id) board.WarLead = campaign.Leader;
+        board.WarSpeed = world.SystemOf<PopulationSystem>()?.CampaignOf(campaign.CampaignId)?.TravelSpeedLoaded ?? MoveSpeed.Run;
+        AimWar(world, squad, board);
+    }
+
+    /// <summary>
+    /// The point 215 walks to while it aims at a town (<see cref="Blackboard.WarPoint"/>): the copied target's own point while it stands, else
+    /// (the hand no longer resolves) the campaign's current target's (<c>FUN_1409b65d0</c> on the campaign's target hand, the lead's fallback).
+    /// </summary>
+    void AimWar(World world, Squad squad, Blackboard board)
+    {
+        var current = PlatoonOf(world, squad)?.Campaign?.Target ?? CampaignTown.None;
+        board.WarPoint = WarTownPoint(world, board.ContractTown) ?? WarTownPoint(world, current);
+    }
+
+    /// <summary>
+    /// A town's own point (Town vfunc 0x38, <see cref="TownExit"/>: outward through its first gate or linking building with an interior); a nest's
+    /// centre; null for a town that is not there.
+    /// </summary>
+    Vector2? WarTownPoint(World world, CampaignTown town)
+    {
+        if (town.IsNone || TownPlace(data, world, town) is not { } place) return null;
+
+        return town.Nest > 0 ? place.Centre : TownExit.Of(world, data, _locks?.Regions, town, _warGates);
+    }
+
+    /// <summary>
+    /// A war assault's squad roams its mission town (engine choice, as the passing-by assault's: the town duties' ransack is not a goal yet, and
+    /// 216's act-out walks the leader round <see cref="Squad.HomeCentre"/>).
+    /// </summary>
+    void RoamTarget(World world, Squad squad, Blackboard board)
+    {
+        if (TownPlace(data, world, board.ContractTown) is not { } place) return;
+
+        squad.HomeCentre = place.Centre;
+        squad.HomeRadius = MathF.Max(place.Radius * 0.5f, 40);
+    }
+
+    /// <summary>
+    /// 215 Mission formation under a war package (<see cref="MissionFormation"/>): the walk to the package target at the campaign's pace; it stands
+    /// with nowhere to go, at the target, and while the campaign leader waits for its column. The campaign leader's goal ends by the planner (131 at
+    /// the target); another member's runs while the package does.
+    /// </summary>
+    void ActFormation(World world, int slot, AiMind mind, Blackboard board, Platoon platoon)
+    {
+        var cold = world.Characters.Cold(slot)!;
+        cold.PaceCap = null;
+        if (MissionFormation.Destination(world, platoon, board) is not { } to)
+        {
+            Become(world, slot, CharacterTask.Idle);
+            return;
+        }
+
+        float distance = Vector2.Distance(Flat(world.Characters.Next[slot].Position), to);
+        var (mode, cap, stands) = MissionFormation.Pace(world, slot, platoon, board, distance);
+        if (stands)
+        {
+            Become(world, slot, CharacterTask.Idle);
+            return;
+        }
+
+        cold.PaceCap = cap;
+        if (GoToSpot(world, slot, mind, to, GiveUp.Target, mode)) Become(world, slot, CharacterTask.Idle);
+    }
+
+    /// <summary>
+    /// 129 Approaching fast: it stands while the serial step has the campaign's announcement said (<see cref="SendAnnouncements"/>).
+    /// </summary>
+    void ActAnnounce(World world, int slot, AiMind mind)
+    {
+        Become(world, slot, CharacterTask.Idle);
+        mind.AnnounceAsk = true;
+        Interlocked.Exchange(ref _announcing, 1);
+    }
+
+    /// <summary>
+    /// The announcements the thinks asked for (serial, slot order): each asker's campaign says its <c>dialog announcement</c> when its rules let it
+    /// (<see cref="PopulationSystem.Announce"/>).
+    /// </summary>
+    void SendAnnouncements(World world)
+    {
+        var table = world.Characters;
+        var population = world.SystemOf<PopulationSystem>();
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (table.Cold(s) is not { Ai: { AnnounceAsk: true } mind }) continue;
+
+            mind.AnnounceAsk = false;
+            population?.Announce(world, table.IdOf(s));
+        }
     }
 
     #endregion

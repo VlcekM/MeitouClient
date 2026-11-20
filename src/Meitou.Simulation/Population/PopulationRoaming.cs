@@ -741,7 +741,7 @@ public sealed partial class PopulationSystem
         var table = world.Characters;
         if (p.Campaign is not null)
         {
-            StepCampaignLoaded(world, p, squad, dt);
+            StepCampaignLoaded(world, p, squad);
             return;
         }
 
@@ -841,7 +841,7 @@ public sealed partial class PopulationSystem
     void FollowPackage(World world, Platoon p, Meitou.Data.Gameplay.Ai.AiPackage running)
     {
         p.Package = running.Id;
-        var job = PlatoonJobs.JobOf(running.Unloaded);
+        var job = PlatoonJobs.WarJob(p, running) ?? PlatoonJobs.JobOf(running.Unloaded);
         if (job == p.Job) return;
         p.Job = job;
         if (job is not (PlatoonJob.GoHome or PlatoonJob.PatrolShortRange) || p.Campaign is not null || p.Pinned || p.Wild) return;
@@ -1236,7 +1236,7 @@ public sealed partial class PopulationSystem
         p.State = PlatoonState.Loaded;
         p.SquadId = squad.Id;
         p.UnloadAtTick = -1;
-        if (Goal(p) is not null && p.WaitLeft <= 0) OrderLeader(world, p, squad);
+        if (p.Campaign is null && Goal(p) is not null && p.WaitLeft <= 0) OrderLeader(world, p, squad);   // a campaign's: its own goals
     }
 
     /// <summary>

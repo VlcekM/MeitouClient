@@ -165,6 +165,11 @@ public enum AiBehaviour : byte
     /// the goal then holds the character (<see cref="AiMind.Duty"/>).
     /// </summary>
     Duty = 29,
+    /// <summary>
+    /// 129 Approaching fast (<c>Task_MakeAnnouncement</c>, a campaign leader's goal at its package target): it stands while the serial step has
+    /// the campaign's announcement said (<see cref="AiMind.AnnounceAsk"/>, <see cref="Population.PopulationSystem.Announce"/>).
+    /// </summary>
+    Announce = 30,
 }
 
 /// <summary>
@@ -200,7 +205,10 @@ public static class TaskBehaviours
         [TaskType.SitOnThrone] = (AiBehaviour.Sit, "Reigning"),
         [TaskType.FollowSquadleader] = (AiBehaviour.Follow, "Following leader"),
         [TaskType.FollowSlavemaster] = (AiBehaviour.Follow, "Following master"),
-        // 45 Bodyguard has no behaviour of its own (FUN_14032ebd0 builds Task_Blank for it): the following of a bodyguard contract is goal 44's.
+        // 45 Bodyguard is Task_Blank (FUN_14032ebd0): with nobody threatening its target or itself it neither acts nor has an effect and is dropped,
+        // else it plans row 13 Attacking attackers of its target, as the protect goals' fight (AiSystem.Fights.cs). The following of a bodyguard
+        // contract is goal 44's.
+        [TaskType.Bodyguard] = (AiBehaviour.Fight, "Bodyguard"),
         [TaskType.FollowPlayerOrder] = (AiBehaviour.Follow, "Following"),
         // 253 Following (urgent escape): a Task_Follow like 31 / 44 / 289 (FUN_14032ebd0 case 253, list B !7 60 90 59); one package lists it as a
         // Leader goal.
@@ -218,9 +226,10 @@ public static class TaskBehaviours
         // To the running package's destination (Blackboard.Destination): the trader's next town; under the retreat packages that list it (signals 1
         // and 25) the squad's home town (AiSystem.Captives.cs, engine reading).
         [TaskType.TravelToTargetTownFast] = (AiBehaviour.Travel, "Travelling quickly"),
-        // Row 215 of the refugee package (and of the campaigns' first phase, whose squads the campaign drives): to its mission, the town or the squad
-        // it is to join.
-        [TaskType.TravelToTargetPackage] = (AiBehaviour.Travel, "Travelling"),
+        // Row 215: the refugee package's walk to its mission, the town or the squad it is to join; under a campaign's war package the formation's
+        // walk to the package target (MissionFormation).
+        [TaskType.TravelToTargetPackage] = (AiBehaviour.Travel, "Mission formation"),
+        [TaskType.MakeAnnouncementFast] = (AiBehaviour.Announce, "Approaching fast"),
         // Its Task_PatrolTownViolent is not decoded (engine choice): it roams the town it assaults, as patrolling does without a patrol package.
         [TaskType.RunAroundTownLookingForPeople] = (AiBehaviour.Patrol, "Ransacking town"),
         [TaskType.InvestigateAlarms] = (AiBehaviour.Investigate, "Investigating"),

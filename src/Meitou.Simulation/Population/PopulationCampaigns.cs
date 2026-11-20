@@ -255,7 +255,8 @@ public sealed class WarManager
 /// Faction campaigns (docs/game/factions-squads-towns.md "Campaigns", docs/simulation.md "Off-screen tier"): one war manager per faction,
 /// one runs per tick at a wrapping cursor (<see cref="StepWarManager"/>; every rule reads the game clock): the running campaigns, then the
 /// due requests, then the roll when the clock passes <c>updatetime</c>. Campaign squads are platoons kept while their campaign runs; off
-/// screen they are moved here (the leader to the target, the others to the leader), loaded their leader is sent to the same goal. Rolls are
+/// screen they are moved here (the leader to the target, the others to the leader); loaded, their members act out the phase package's goals
+/// (<c>AiSystem.InstallPhasePackage</c>, <see cref="Ai.MissionFormation"/>). Rolls are
 /// keyed by the world seed, the faction and the roll's hour, so a run repeats at any thread count.
 /// </summary>
 public sealed partial class PopulationSystem : IStateHashed
@@ -1541,8 +1542,8 @@ public sealed partial class PopulationSystem : IStateHashed
 
     /// <summary>
     /// Whether the members of a squad run the "find, kidnap and put in a cage" goal now (task 254, <see cref="TaskType.FinalKidnapperCageJob"/>): the
-    /// goals of <paramref name="role"/> in the package their campaign is in the phase of (a loaded campaign squad is driven by the campaign, not the
-    /// AI), or in the squad's running AI package, in the hour's window.
+    /// goals of <paramref name="role"/> in the squad's running AI package (a campaign squad's phase package while its blackboard runs it), in the
+    /// hour's window.
     /// </summary>
     public bool KidnapDuty(World world, Squad squad, Meitou.Data.Gameplay.Ai.AiRole role) =>
         GoalDuty(world, squad, role, Meitou.Data.Gameplay.Ai.TaskType.FinalKidnapperCageJob);
@@ -1563,21 +1564,11 @@ public sealed partial class PopulationSystem : IStateHashed
     }
 
     /// <summary>
-    /// <paramref name="role"/>'s goals in the package the squad runs now (a campaign's phase package, else its blackboard's), in list order; null
-    /// for none.
+    /// <paramref name="role"/>'s goals in the package the squad's blackboard runs now, in list order, as its members' minds read them (a campaign
+    /// squad's phase package is its blackboard's override, <c>AiSystem.InstallPhasePackage</c>); null for a squad without a blackboard.
     /// </summary>
-    public IReadOnlyList<Meitou.Data.Gameplay.Ai.AiGoal>? GoalsOf(World world, Squad squad, Meitou.Data.Gameplay.Ai.AiRole role)
-    {
-        if (squad.PlatoonId >= 0 && world.Platoons.Find(squad.PlatoonId) is { Campaign: { } inst } p)
-        {
-            if (inst.Phase > 2) return null;
-            if (CampaignOf(inst.CampaignId)?.PackageOf(inst.Phase, inst.Leader == p.Id) is not { } id) return null;
-
-            return _data.Ai.Package(id)?.Goals(role);
-        }
-
-        return squad.Ai is { Roles: { } roles } ? roles[(int)role] : null;
-    }
+    public IReadOnlyList<Meitou.Data.Gameplay.Ai.AiGoal>? GoalsOf(World world, Squad squad, Meitou.Data.Gameplay.Ai.AiRole role) =>
+        squad.Ai is { Roles: { } roles } ? roles[(int)role] : null;
 
     /// <summary>
     /// A campaign won: it ends (phase 2), a hostile one posts its end, and the victory triggers follow up.
@@ -1934,15 +1925,27 @@ public sealed partial class PopulationSystem : IStateHashed
     const float AnnounceRange = 2500;
 
     /// <summary>
-    /// A loaded leader in phase 0 that has arrived at the target (task 129 needs state 131 <c>atPackageTarget</c>; Meitou:
-    /// <see cref="CampaignInstance.ArrivedAt"/>) and is not down (!101) says its campaign's <c>dialog announcement</c>, again each time it has ended,
-    /// while the camera and a target-faction member are within 2500 of it.
+    /// 129 Approaching fast, acted out by the campaign leader's own goal (<see cref="Ai.AiBehaviour.Announce"/>; the planner holds its list B,
+    /// !101 and 131 at the package target): the leader of a loaded lead platoon in phase 0 says its campaign's <c>dialog announcement</c>, again each
+    /// time it has ended, while the camera and a target-faction member are within 2500 of it (<c>FUN_140354990</c>). Serial.
+    /// </summary>
+    internal void Announce(World world, CharacterId speaker)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(speaker, out int s) || table.Cold(s)?.Ai?.Squad is not { PlatoonId: >= 0 } squad) return;
+        if (world.Platoons.Find(squad.PlatoonId) is not { Campaign: { } inst } p || inst.Leader != p.Id || squad.Leader != speaker) return;
+
+        TryAnnounce(world, inst, speaker, table.Next[s].Position);
+    }
+
+    /// <summary>
+    /// The announcement itself: not after phase 0, nor while the last one's talk is pending, nor by a leader that is down.
     /// </summary>
     void TryAnnounce(World world, CampaignInstance inst, CharacterId leader, Vector3 at)
     {
         // After the wait ends (its dialogue finished, nothing pending) the task falls through to the announcement again while the conditions hold
         // (FUN_140355770, a2-047).
-        if (inst.Phase != 0 || inst.ArrivedAt < 0 || inst.AnnouncedAt >= 0 && PendingTalk?.Invoke(inst.Announcer) == true || Announcer is null
+        if (inst.Phase != 0 || inst.AnnouncedAt >= 0 && PendingTalk?.Invoke(inst.Announcer) == true || Announcer is null
             || inst.Enemy < 0 || CampaignOf(inst.CampaignId)?.DialogAnnouncement is not { } announcement)
             return;
 
@@ -2014,6 +2017,19 @@ public sealed partial class PopulationSystem : IStateHashed
     }
 
     /// <summary>
+    /// A follower platoon's point on the lead's trail (campaign slot 21 <c>FUN_1409d5990</c>, <b>Verified</b>): slots x 150 / platoons x its index
+    /// in the campaign's list (0 when it is not in it) back from the newest point; null while the trail is empty. A pure read (any phase).
+    /// </summary>
+    internal static Vector2? TrailAim(CampaignInstance inst, int platoon)
+    {
+        if (inst.Trail.Count == 0 || inst.Platoons.Count == 0) return null;
+
+        int count = inst.Platoons.Count, slots = count > TrailSlots ? count + 1 : TrailSlots;
+        int index = Math.Max(inst.Platoons.IndexOf(platoon), 0);
+        return TrailPoint(inst, slots * TrailStep / count * index);
+    }
+
+    /// <summary>
     /// The point <paramref name="back"/> units back along the trail from its newest point (its oldest when the trail is shorter).
     /// </summary>
     static Vector2 TrailPoint(CampaignInstance inst, float back)
@@ -2035,24 +2051,6 @@ public sealed partial class PopulationSystem : IStateHashed
     #region Column
 
     /// <summary>
-    /// A <c>travel speed loaded</c> as a movement mode (<b>Verified</b>: WALK the default walk, JOG 55, RUN and GROUPED uncapped,
-    /// NO_SPEED_CHANGE as it was).
-    /// </summary>
-    static byte LoadedMode(MoveSpeed speed, byte current) => speed switch
-    {
-        MoveSpeed.Walk => SpeedMode.Walk,
-        MoveSpeed.Jog => SpeedMode.Run,
-        MoveSpeed.Run or MoveSpeed.Grouped => SpeedMode.Free,
-        _ => current,
-    };
-
-    /// <summary>
-    /// The leader keeps its loaded speed while every intact platoon is within this of it (<b>Verified</b>), else it stops within
-    /// <see cref="WaitNearTarget"/> of its target, else walks.
-    /// </summary>
-    const float ColumnRange = 6000, WaitNearTarget = 8294.4f;
-
-    /// <summary>
     /// The off-screen speed of a campaign platoon, in units per second: by its <c>move speed</c>, else the leader 25 and the others 60, or 90 more
     /// than 25000 away.
     /// </summary>
@@ -2065,127 +2063,13 @@ public sealed partial class PopulationSystem : IStateHashed
     };
 
     /// <summary>
-    /// A loaded campaign platoon (serial, from the roaming look): its leader is sent to the goal (walking for WALK, else running),
-    /// and mills about once there.
+    /// A loaded campaign platoon (serial, from the roaming look): whom it fights besides its faction's enemies (<see cref="AssaultTargets"/>) and
+    /// its intact flag, which 215's column reads (<see cref="Ai.MissionFormation"/>). Its members move by their own goals.
     /// </summary>
-    void StepCampaignLoaded(World world, Platoon p, Squad squad, float dt)
+    void StepCampaignLoaded(World world, Platoon p, Squad squad)
     {
-        var table = world.Characters;
         squad.War = AssaultTargets(world, p.Campaign!, p.Campaign!.Leader == p.Id);
-        if (p.CampaignGoal is not { } goal || !table.TryResolveNext(squad.Leader, out int slot)) return;
-
-        var cold = table.Cold(slot)!;
-        cold.PaceCap = null;   // set again below while it trails at the leader's pace
-        if (p.Campaign!.Leader == p.Id) TryAnnounce(world, p.Campaign, squad.Leader, table.Next[slot].Position);
-
-        RetreatHome(p, squad, goal);
-
-        // a fight, a lift (a kidnapper), a loot or an order is left to itself
-        byte task = table.Next[slot].Task;
-        if (task is (byte)CharacterTask.Attack or (byte)CharacterTask.PickUp or (byte)CharacterTask.PutDown or (byte)CharacterTask.Loot) return;
-        if (DecisionSystem.Ordered(cold)) return;
-
-        if (MillAtGoal(world, p, squad, table, slot, goal)) return;
-
-        // The column (task 215, Verified): followers jog to their trail points; the leader marching out keeps its loaded speed while every intact
-        // platoon is within 6000, else it waits near the target or walks.
-        var inst = p.Campaign!;
-        bool leads = inst.Leader == p.Id;
-        ref var n = ref table.Next[slot];
-        float d = Vector2.Distance(p.Position, goal);
-        byte mode = FollowerPace(world, inst, leads, table, cold, d);
-
-        if (leads)
-        {
-            mode = LoadedMode(CampaignOf(inst.CampaignId)?.TravelSpeedLoaded ?? MoveSpeed.Run, n.Mode);
-            if (inst.Phase == 0 && !inst.Platoons.All(id => id == p.Id || world.Platoons.Find(id) is not { } q || !Intact(world, q)
-                || Vector2.Distance(q.Position, p.Position) <= ColumnRange))
-            {
-                if (Vector2.Distance(p.Position, goal) <= WaitNearTarget)
-                {
-                    if (n.Task == (byte)CharacterTask.GoTo) TaskStart.Stand(table, slot);
-                    return;
-                }
-
-                mode = SpeedMode.Walk;
-            }
-        }
-
-        bool busy = n.Task == (byte)CharacterTask.GoTo && (n.Flags & (ushort)MoveFlags.AnyPath) != 0 && n.Mode == mode;
-        p.OrderCooldown -= dt;
-        if (busy || p.OrderCooldown > 0) return;
-
-        TaskStart.Walk(world, slot, goal, mode, Meitou.Data.Gameplay.Ai.TaskType.TravelToTargetPackage, TaskSource.Goal);
-        p.OrderCooldown = 4;
-    }
-
-    /// <summary>
-    /// Retreating, members the column does not move (a carrier, whom the AI leaves alone) mill round their own town again, not round the raid target
-    /// the squad last milled at, so a kidnapper takes its captive home (engine choice; the arrival below still mills them round the goal).
-    /// </summary>
-    void RetreatHome(Platoon p, Squad squad, Vector2 goal)
-    {
-        var inst = p.Campaign!;
-        float homeLimit = inst.Leader == p.Id ? _settings.RoamArrivalRadius : CampaignFollowDistance;
-        if (inst.Phase == 2 && squad.Town >= 0 && Vector2.Distance(p.Position, goal) > homeLimit)
-        {
-            squad.HomeCentre = SiteCentre(squad.Town);
-            squad.HomeRadius = 60;
-        }
-    }
-
-    /// <summary>
-    /// The arrival of a campaign platoon at its goal (task 215): a leader, or a follower in phase 1, within its arrival radius mills round the goal
-    /// (its home centre and radius are set); true when it has arrived, which ends the step.
-    /// </summary>
-    bool MillAtGoal(World world, Platoon p, Squad squad, CharacterTable table, int slot, Vector2 goal)
-    {
-        var inst = p.Campaign!;
-        bool leads = inst.Leader == p.Id;
-        float arrive = leads ? _settings.RoamArrivalRadius : CampaignFollowDistance;
-
-        // A travelling follower (task 215) never mills: inside 100 of its trail point it keeps walking straight at it at the leader's pace
-        // (FUN_140349e70); only the arrival at the target (phase 1) mills.
-        bool arrived = Vector2.Distance(p.Position, goal) <= arrive && (leads || inst.Phase == 1);
-        if (!arrived) return false;
-
-        if (table.Next[slot].Task == (byte)CharacterTask.GoTo)
-        {
-            TaskStart.Become(world, slot, CharacterTask.Wander, Meitou.Data.Gameplay.Ai.TaskType.Wanderer, TaskSource.Goal);
-            table.Next[slot].Mode = SpeedMode.Walk;
-            table.Next[slot].TaskTime = 0.5f;
-        }
-
-        squad.HomeCentre = goal;
-
-        // The mill at the target is an engine choice, sized as a roaming squad's at a town (PopulationRoaming.cs): the size radius of a placed town,
-        // a player town's own.
-        float mill = inst.Target.Site >= 0
-            ? _data.Sites[inst.Target.Site].Town.SizeRadius * _data.Sites[inst.Target.Site].Town.TownRadiusMult
-            : RadiusOf(world, inst.Target);
-        squad.HomeRadius = leads && inst.Phase == 1 ? Math.Max(mill * 0.5f, 40) : 60;
-        return true;
-    }
-
-    /// <summary>
-    /// The movement mode of a follower inside its trail point's reach: inside 100 it takes its leader's mode and, as a cap, the leader's speed now (x
-    /// 0.9 inside 70, FUN_140349e70); otherwise the run mode.
-    /// </summary>
-    byte FollowerPace(World world, CampaignInstance inst, bool leads, CharacterTable table, CharacterCold cold, float d)
-    {
-        byte mode = SpeedMode.Run;
-
-        // Inside 100 a follower takes the campaign leader's current speed, x 0.9 inside 70 (FUN_140349e70): its leader's mode and, as a cap, the
-        // leader's speed now.
-        if (!leads && d < CampaignFollowDistance && world.Platoons.Find(inst.Leader) is { } head && world.Squads.Find(head.SquadId) is { } headSquad
-            && table.TryResolveNext(headSquad.Leader, out int hs))
-        {
-            mode = table.Next[hs].Mode;
-            var v = table.Next[hs].Velocity;
-            cold.PaceCap = new Vector2(v.X, v.Z).Length() * (d < CampaignPaceDistance ? CampaignPaceFactor : 1);
-        }
-
-        return mode;
+        Intact(world, p);
     }
 
     #endregion

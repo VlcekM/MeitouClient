@@ -86,4 +86,15 @@ public static class PlatoonJobs
         6 => PlatoonJob.TravelTargetFast,
         _ => PlatoonJob.None,
     };
+
+    /// <summary>
+    /// The unloaded job a war package's start writes over its <c>unloaded func</c> (package <c>+0x78</c>, campaign slot 12 <c>FUN_1409d4cc0</c>,
+    /// <b>Verified</b>): 5 TRAVEL_TARGET for the campaign's lead platoon, 6 TRAVEL_TARGET_FAST for any other; null for another package or a platoon
+    /// with no campaign.
+    /// </summary>
+    internal static PlatoonJob? WarJob(Factions.Platoon platoon, AiPackage running) =>
+        platoon.Campaign is { } campaign && PackageClasses.Of(running.Signal) is PackageClass.WarBase or PackageClass.WarAssault
+            or PackageClass.WarAssaultCannibal
+            ? campaign.Leader == platoon.Id ? PlatoonJob.TravelTarget : PlatoonJob.TravelTargetFast
+            : null;
 }

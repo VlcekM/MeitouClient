@@ -63,6 +63,7 @@ public sealed partial class AiSystem
             TaskType.ProtectAllies or TaskType.ProtectAlliesStayInTown => ProtectGoalDesire(world, slot, type, squad, cold, passive || sneaking),
             // 41's desire is the constant 2 (AI slot 0x178, FUN_1406415d0, Verified): the slave's Slave list weighs it above the other fighting goals.
             TaskType.AttackEnemiesOfMySlavemaster => MasterDesire,
+            TaskType.Bodyguard => BodyguardDesire(world, slot, squad),
             _ => 1,
         };
     }
@@ -113,6 +114,7 @@ public sealed partial class AiSystem
         if (world.Characters.Cold(slot) is { } lying && Repertoire.StuckInBed(world, lying))
             return (0, CharacterId.None);
 
+        if (type == TaskType.Bodyguard) return BodyguardPick(world, slot, squad, pending);
         if (Protects(type)) return ProtectPick(world, slot, type, squad, pending: pending);
         var foe = type switch
         {
@@ -154,6 +156,7 @@ public sealed partial class AiSystem
     {
         if (mind.Goal?.Task.Type == type && world.Characters.Cold(slot) is { InCombat: true } cold && OwnsFight(cold, mind))
         {
+            if (type == TaskType.Bodyguard) return BodyguardPick(world, slot, mind.Squad).Factor;
             if (Protects(type)) return ProtectPick(world, slot, type, mind.Squad, attacker: false).Factor;
             if (_aggro?.SensesOf(slot) is { Enemies: > 0 } && FightHasTarget(world, slot)) return 1;
         }
@@ -279,7 +282,8 @@ public sealed partial class AiSystem
     /// <summary>
     /// Whether a combat goal defends someone (its plan row is 13 Attacking attackers of, a defence) rather than attacking (row 4 / 16).
     /// </summary>
-    static bool Protects(TaskType type) => type is TaskType.ProtectOwnSquad or TaskType.ProtectAllies or TaskType.ProtectAlliesStayInTown;
+    static bool Protects(TaskType type) =>
+        type is TaskType.ProtectOwnSquad or TaskType.ProtectAllies or TaskType.ProtectAlliesStayInTown or TaskType.Bodyguard;
 
     /// <summary>
     /// The protect goals' finders and their plan row 13 (docs/game/ai-tasks.md "Combat goals", <b>Verified</b> finders): 143 PROTECT_OWN_SQUAD
@@ -421,6 +425,40 @@ public sealed partial class AiSystem
 
         var id = new CharacterId(foe, prev[foe].Generation);
         return SwimBarred(world, slot, id) ? (0, CharacterId.None) : (MathF.Min(value, CombatSystem.ProtectCap), id);
+    }
+
+    /// <summary>
+    /// 45 Bodyguard's desire (AI slot 44 <c>FUN_1405991c0</c>, <b>Verified</b>): 1 when its target, the squad leader (targeting LEADER), is the
+    /// character itself or one its last look sensed now (seen or heard), else 0.
+    /// </summary>
+    float BodyguardDesire(World world, int slot, Squad squad)
+    {
+        var leader = squad.Leader;
+        if (leader.Slot == slot && world.Characters.IdOf(slot) == leader) return 1;
+
+        return _aggro?.SensesOf(slot) is { } senses && senses.Knows(leader, now: true) ? 1 : 0;
+    }
+
+    /// <summary>
+    /// 45 Bodyguard's plan (row 45, list B !16 !39, <b>Verified</b> from the registry): with neither its target, the squad leader, nor itself under
+    /// a melee threat (state 16 on the leader, 39 on itself: <see cref="CharacterFacts.ImmediateThreat"/>) the goal neither acts nor has an effect
+    /// and the scorer drops it (factor 0); else row 13 Attacking attackers of, the only provider of !16 and !39, on the goal's target: the
+    /// leader's attacker (<c>AI::findAttackerOf</c>, <see cref="Combat.CombatSystem.BestAttackerOf"/> with the looker counted), none or one deep
+    /// water bars failing the plan. Reads only the last tick's state (any thread in the think).
+    /// </summary>
+    (float Factor, CharacterId Target) BodyguardPick(World world, int slot, Squad squad, IReadOnlyDictionary<int, int>? pending = null)
+    {
+        var table = world.Characters;
+        if (_combat is not { } fights || !table.TryResolveNext(squad.Leader, out int lead)) return (0, CharacterId.None);
+
+        bool threatened = CharacterFacts.ImmediateThreat(fights, world, lead) || CharacterFacts.ImmediateThreat(fights, world, slot);
+        if (!threatened) return (0, CharacterId.None);
+
+        int foe = fights.BestAttackerOf(world, lead, slot, pending);
+        if (foe < 0) return (0, CharacterId.None);
+
+        var id = new CharacterId(foe, table.Previous[foe].Generation);
+        return SwimBarred(world, slot, id) ? (0, CharacterId.None) : (1, id);
     }
 
     #endregion

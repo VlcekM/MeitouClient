@@ -1935,8 +1935,9 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         if (mode == SpeedMode.Group && cold.SpeedOverride <= 0 && n.Task != (byte)CharacterTask.Follow)
             desired = MathF.Min(desired, _groupSpeeds.Of(world, i, cold, p.Position));
 
-        if (cold.PaceCap is { } pace && n.Task == (byte)CharacterTask.GoTo && !cold.InCombat)
-            desired = MathF.Min(desired, pace);   // a campaign follower near its trail point
+        // A campaign member near its formation's destination keeps to the campaign leader's pace (215, Ai.MissionFormation).
+        bool formation = cold.Running is { Row: TaskType.TravelToTargetPackage };
+        if (cold.PaceCap is { } pace && formation && n.Task == (byte)CharacterTask.GoTo && !cold.InCombat) desired = MathF.Min(desired, pace);
 
         return desired;
     }

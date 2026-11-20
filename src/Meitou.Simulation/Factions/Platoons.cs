@@ -150,7 +150,7 @@ public sealed class Platoon
     public bool Unmade { get; set; }
     /// <summary>
     /// The faction campaign it marches in (null: none; <c>PopulationCampaigns.cs</c>): kept (never despawned) until the campaign is removed, moved by
-    /// the campaign off screen and led to <see cref="CampaignGoal"/> while loaded, out of the roaming pools.
+    /// the campaign off screen toward <see cref="CampaignGoal"/>, out of the roaming pools; loaded, its members act out its phase package's goals.
     /// </summary>
     public CampaignInstance? Campaign { get; set; }
     /// <summary>
@@ -212,7 +212,7 @@ public sealed class Platoon
     /// </summary>
     public float DwellLeft { get; set; } = 5;
     /// <summary>
-    /// Where its campaign sends it (the target for the leader platoon, the leader for the others; set each population look).
+    /// Where its campaign sends it off screen (the target for the leader platoon, the leader's trail for the others; set each population look).
     /// </summary>
     public Vector2? CampaignGoal { get; set; }
     /// <summary>

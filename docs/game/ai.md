@@ -202,8 +202,8 @@ A slave's Slave role list runs through the Obedient Slave job (187): [role lists
   then gets dialogue event 0x1f); else false until the contract time (+0x218, 24 h after install), then true only while no faction's war manager reports a hostile campaign
   (`FUN_1407f2e80` asks each faction's manager `FUN_140793340(…, 1)`, the call the DEFEND_TOWN phase-1 victory makes). `Contract_DefendPlayerBase`'s own test
   (`FUN_140289720`) is turned or past the time. Only a campaign's `pt2` package in the data. Meitou (`PackageClass.CampaignDefend`, `AiSystem.CampaignDefendFinished`,
-  `CampaignDefendStart`): as decoded but the turned flag (not modelled for 15 either) and the can-start (only as a campaign's override); its start sets the mission town and mission, not the target town, while the
-  campaign march moves the squad (engine stand-in: the target town would make it travel on its own).
+  `CampaignDefendStart`): as decoded but the turned flag (not modelled for 15 either) and the can-start (only as a campaign's override); its start sets the mission town, the target town (+0xf0, which its 130
+  travels to) and the mission.
 - **Package_WarBase** (19, vtable `0x1416ade78`) / **Package_WarAssault** (20, `0x1416ae738`) / **Package_WarAssault_Cannibal** (32, `0x1416ae7f8`), **Verified** slot by slot:
   can start always (`FUN_140287690`); finished when the platoon is in no campaign (`FUN_14028fdb0`); start (`FUN_14028fc80`, shared): with a campaign, the unloaded job
   from CampaignInstance slot 12 (5 TRAVEL_TARGET for the leader platoon, 6 TRAVEL_TARGET_FAST for the others), the mission town from slot 20 (the campaign's target, none
@@ -214,8 +214,8 @@ A slave's Slave role list runs through the Obedient Slave job (187): [role lists
   its squad on each update, no other condition; the sensing hook `FUN_14028a3f0` above; speed mode 2 (`FUN_14028a3e0`). The cannibal kind's update (`FUN_14028fdf0`)
   runs WarAssault's first, then the carrier rule ([campaigns](factions-squads-towns.md#campaigns)). Meitou (`PackageClass.WarBase` / `WarAssault` /
   `WarAssaultCannibal`, `AiSystem.OutOfCampaign`, `AiSystem.StepWar`): the finished test and the ordered marks on the package cadence, cleared on the
-  members at the first step after the package stops running (engine stand-in for the clear at each task end); the start's hands and jobs
-  are the campaign march's ([simulation](../simulation.md#package-classes)); like 31 they start only as a campaign's override, never from a template slot (engine
+  members at the first step after the package stops running (engine stand-in for the clear at each task end); the start as decoded
+  (`AiSystem.WarStart`: the copied lead platoon `Blackboard.WarLead`, the jobs `PlatoonJobs.WarJob`; 215: [campaigns](factions-squads-towns.md#campaigns)); like 31 they start only as a campaign's override, never from a template slot (engine
   choice; no template lists one in the data).
 
 ### Goal loading
