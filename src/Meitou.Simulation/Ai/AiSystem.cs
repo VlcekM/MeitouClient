@@ -421,8 +421,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// An autonomous squad's member (Meitou only, <see cref="SquadAutonomy"/>), one ladder: while the AI holds it, the NPC's (<see cref="ThinkHeld"/>:
-    /// the package's goals, Self preservation and the look's sources, acted out as an NPC's); else the player-faction one (<see cref="ThinkPlayer"/>),
-    /// on a job's task after its urgent package goals are weighed for the source that takes it off the job (<see cref="AskOffJob"/>).
+    /// the package's goals, Self preservation and the look's sources, acted out as an NPC's); else the sources' rungs alone, which leave its package
+    /// mind as it is (<see cref="ThinkSources"/>), on a job's task after its urgent package goals are weighed for the source that takes it off the job
+    /// (<see cref="AskOffJob"/>).
     /// </summary>
     void ThinkMember(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, IReadOnlyList<AiGoal> roles,
         int hour, ChooserRow? row)
@@ -435,7 +436,18 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
 
         if (SquadAutonomy.OnJob(n, cold, mind)) AskOffJob(world, i, id, cold, mind, squad, board, roles, hour);
-        ThinkPlayer(world, i, id, cold, mind, squad, board, row, hour);
+        ThinkSources(world, cold, row);
+    }
+
+    /// <summary>
+    /// The ladder's sources' rungs alone (<see cref="Ladder.Run"/> with no AI rungs), for an autonomous squad's member the AI does not hold: its
+    /// package goal and plan stay for when the AI holds it again. None while it is down or without this tick's look.
+    /// </summary>
+    static void ThinkSources(World world, CharacterCold cold, ChooserRow? row)
+    {
+        if (DecisionSystem.Down(cold) || row is null) return;
+
+        row.Pick = Ladder.Run(world.Decisions.Steps, row, null, cold.Jobs.Count > 0, cold.SecondList);
     }
 
     /// <summary>
@@ -3519,13 +3531,14 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// Member <paramref name="k"/> gets its player-faction mind unless it holds one of this squad, or its package mind (<paramref name="package"/>);
-    /// an engine goal of the mind it had lets go first.
+    /// Member <paramref name="k"/> gets its player-faction mind when it is of the player's faction (<c>+0x250</c>; not a prisoner the squad keeps),
+    /// unless it holds one of this squad, or its package mind (<paramref name="package"/>); an engine goal of the mind it had lets go first.
     /// </summary>
     void GivePlayerSideMind(World world, Squad squad, int k, bool package)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(squad.Members[k], out int s) || !table.Next[s].Alive || table.Cold(s) is not { } cold) return;
+        if (!cold.IsPlayer && (PlayerFactionOf(world) is var faction && (faction < 0 || cold.Faction != faction))) return;   // setupAI's branch: the faction's
         if (cold.Ai is { PlayerSide: true } held && ReferenceEquals(held.Squad, squad)) return;
         if (package && cold.IsPlayer && cold.Ai is { PlayerSide: false }) return;
 
