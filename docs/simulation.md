@@ -1291,7 +1291,10 @@ one starts with the order's provenance. The chain's rows and states are in [AI t
 - **Arrest**: attack until the target is down (combat ends the fight; nobody beats a downed target), lift
   (`CarrySystem.BeginPickUp`), `FindCage` from the guard over his town candidates (`CageCandidates`, as kidnapping and town duty; his squad's home building; other arrests' cages reserved), walk,
   and at the cage (`FixtureRegistry.AtCage`: within its `use range`, doubled standing, and under 15 above or below it) `LetGo` + `Imprison` (`prison time` CONSTANTS). The fight
-  stopping with the target up re-orders it within 800, else he gives up; a downed target is not lifted at all with no free cage, nor from an ally who carries it (engine: guards passed bodies round a full station, #339). Once the guard
+  stopping with the target up (it ran off, the guard lost it) starts it again at any distance: the order stays queued and is planned again each update,
+  its need 7 planning the fight anew (the order step `FUN_140510920` pops it only on its desire or done test; a failed step pops the front only when it
+  is the order's own row, `FUN_140506b10` comparing the task type, so the fight row ending pops nothing, **Verified**); only 113 / 95 above or a new order
+  stop it. A downed target is not lifted at all with no free cage, nor from an ally who carries it (engine: guards passed bodies round a full station, #339). Once the guard
   carries the target, 240 leaves the queue (its desire, AI slot 59, is 0 while carrying) and 112 starts (on the arrest's carry); 112 leaves the
   queue with nothing carried or no free cage (its finder), the guard keeping what he carries for his own goals. A walk that ends short is a lost walk, as the
   goals' ([engine goals](#engine-goals)): the cage is ignored for 20 s and the finder picks again. At the cage the put-in is 108's, as the goals' (captor memory,

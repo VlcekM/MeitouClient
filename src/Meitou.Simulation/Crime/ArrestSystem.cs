@@ -1043,10 +1043,9 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
 
         a.Time += dt;
         ref var gn = ref table.Next[g];
-        float gap = Vector2.Distance(new Vector2(gn.Position.X, gn.Position.Z), new Vector2(table.Next[t].Position.X, table.Next[t].Position.Z));
         switch (a.Phase)
         {
-            case ArrestPhase.Fight: return StepFight(world, a, g, t, gc, tc, ref gn, gap, dt);
+            case ArrestPhase.Fight: return StepFight(world, a, g, t, gc, tc, ref gn, dt);
             case ArrestPhase.Lift: return StepLift(world, a, g, gc, ref gn);
             case ArrestPhase.Walk: return StepWalk(world, a, g, t);
         }
@@ -1148,16 +1147,16 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         combat.TargetOf(who.Slot, who.Generation) == (whom.Slot, whom.Generation);
 
     /// <summary>
-    /// The fight: once the target is down the guard strips or lifts it (when there is a cage to take it to); a fight that stopped with the target
-    /// still up starts again while it is near.
+    /// The fight: once the target is down the guard lifts it; a fight that stopped with the target still up starts again, however far it is. The
+    /// order stays queued and is planned again each update (<c>FUN_140510920</c> pops it only on its desire or its done test; a failed step pops
+    /// the front only when it is the order's own row, <c>FUN_140506b10</c> comparing the task type, so the fight row 4 ending pops nothing,
+    /// <b>Verified</b>), and its need 7 plans the fight again. Only the town needs (113, 95) or a new order stop it.
     /// </summary>
-    bool StepFight(World world, Arrest a, int g, int t, CharacterCold gc, CharacterCold tc, ref CharacterHot gn, float gap, float dt)
+    bool StepFight(World world, Arrest a, int g, int t, CharacterCold gc, CharacterCold tc, ref CharacterHot gn, float dt)
     {
         if (tc.Medical is { Incapacitated: true }) return StepTargetDown(world, a, g, gc, tc, dt);
         if (gn.Task != (byte)CharacterTask.Attack && !gc.InCombat && a.Time >= 1)
         {
-            // The fight stopped (the leash, a lost target) with the target still up: again while it is near, else he gives up.
-            if (gap > 2 * Settings.SpotRange) return End(world, a, ArrestEventKind.GaveUp);
             a.Time = 0;
             Attack(world, g, t);
         }
