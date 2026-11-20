@@ -22,8 +22,8 @@ namespace Meitou.Simulation.Kidnap;
 public sealed record CaptiveSettings
 {
     /// <summary>
-    /// The captive goals' finders look for each character once in this many ticks (on its slot's turn), and so do the player animals' race goals
-    /// (engine: the original's finders run at each score, so a pick is at most this old).
+    /// The captive goals' finders look for each character once in this many ticks (on its slot's turn) (engine: the original's finders run at each
+    /// score, so a pick is at most this old).
     /// </summary>
     public int SweepEveryTicks { get; init; } = 30;
     /// <summary>
@@ -238,7 +238,7 @@ public sealed class CaptiveJob
     /// </summary>
     public float Age { get; set; }
     /// <summary>
-    /// Walks started so far; a player animal's job gives up past <see cref="CaptiveSettings.Walks"/>.
+    /// Walks started so far; a job whose walks keep ending short gives up past <see cref="CaptiveSettings.Walks"/>.
     /// </summary>
     public int Walks { get; set; }
     /// <summary>
@@ -262,24 +262,11 @@ public sealed class CaptiveJob
     /// </summary>
     public float NextBark { get; set; }
     /// <summary>
-    /// A job of one of the player's animals (<see cref="CaptiveSystem"/>'s race-goal run for them): a player order ends it. The worker's task and
-    /// goal as the last step left them.
-    /// </summary>
-    public bool PlayerSide { get; init; }
-    /// <summary>
-    /// The worker's task as the last step left it (<see cref="PlayerSide"/>).
-    /// </summary>
-    public byte LastTask { get; set; }
-    /// <summary>
-    /// The worker's goal as the last step left it (<see cref="PlayerSide"/>).
-    /// </summary>
-    public Vector2 LastGoal { get; set; }
-    /// <summary>
-    /// The chooser's goal whose act-out the job is (<see cref="CaptiveGoals"/>); <see cref="TaskType.None"/> for a player animal's job.
+    /// The chooser's goal whose act-out the job is (<see cref="CaptiveGoals"/>).
     /// </summary>
     internal TaskType Goal { get; init; }
     /// <summary>
-    /// The goal's finder target as the plan holds it (none for a player animal's job).
+    /// The goal's finder target as the plan holds it.
     /// </summary>
     internal PlanTarget Target { get; init; }
     /// <summary>
@@ -292,12 +279,8 @@ public sealed class CaptiveJob
     /// </summary>
     internal void Hash(ref StateHasher h)
     {
-        if (Goal != TaskType.None)
-        {
-            h.Add((int)Goal);
-            h.Add(Item);
-        }
-
+        h.Add((int)Goal);
+        h.Add(Item);
         h.Add((int)Kind);
         h.Add(Worker);
         h.Add(Captive);
@@ -311,11 +294,6 @@ public sealed class CaptiveJob
         h.Add(Blows);
         h.Add(NextBark);
         if (Beats != 0) h.Add(Beats);
-        if (PlayerSide)
-        {
-            h.Add((int)LastTask);
-            h.Add(LastGoal);
-        }
     }
 }
 
@@ -379,8 +357,8 @@ public readonly record struct CaptiveEvent(long Tick, CaptiveEventKind Kind, Cap
 /// What captors do with their captives (docs/simulation.md "Captives"; facts in docs/game/ai-tasks.md "Prisoner fate" and "Slave rows"). The original
 /// runs these as package and race goals planned down to their tasks; each is a goal of the one chooser here (<see cref="CaptiveGoals"/>: the finders'
 /// serial look, desires, states), and a goal the chooser starts is acted out as a job of its worker, worked serially in <c>SlowWorld</c> while the
-/// goal holds the worker (<see cref="DutyGoals"/>) and done at the original's own end. The player's animals' race goals run as jobs of the decision
-/// step and of an idle pass (<see cref="CaptiveJob.PlayerSide"/>), held by <see cref="CharacterCold.Engaged"/>.
+/// goal holds the worker (<see cref="DutyGoals"/>) and done at the original's own end. A player-faction animal's race goals are the same goals, on
+/// its chooser's rungs (<see cref="Ladder.OnRungs"/>).
 /// <list type="bullet">
 /// <item><b>Kill</b> (135 "Kill random prisoner"; 282 "Dinner time" eats instead): wanted when the town's kill timer has run out or all the faction's
 /// cages there are full (<b>Observed</b>, AI slot 20 <c>FUN_14032e9b0</c>; the timer is set to now + uniform[1, 15) game hours when the town is first
@@ -406,7 +384,7 @@ public readonly record struct CaptiveEvent(long Tick, CaptiveEventKind Kind, Cap
 /// any exist.
 /// </summary>
 public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? combat, CaptiveSettings? settings = null) : ITickSystem, IStateHashed,
-        IDecisionOwner, IGoalSource, IDutyGoalOwner
+        IGoalSource, IDutyGoalOwner
 {
     #region State and the serial step
 
@@ -467,8 +445,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     public IReadOnlyList<CaptiveEvent> Log => _log;
 
     /// <summary>
-    /// The serial step: the slavers restored now and then, the racks, every job stepped on, then the captive goals' finders and the player animals'
-    /// race goals on each character's turn.
+    /// The serial step: the slavers restored now and then, the racks, every job stepped on, then the captive goals' finders on each character's turn.
     /// </summary>
     public void SlowWorld(World world)
     {
@@ -482,7 +459,6 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         int every = world.Every(Settings.SweepEveryTicks), phase = (int)(world.Tick % every);
         if (phase == 0) ExpireWaits(world.GameHours);
         Goals.Look(world, every);
-        RunPlayerAnimalGoals(world, every);
     }
 
     /// <summary>
@@ -491,8 +467,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     void IDutyGoalOwner.RegisterGoals(DutyGoals goals) => Goals.Register(goals);
 
     /// <summary>
-    /// Steps every job on, in list order: a player animal's job a player order overrode is dropped; a goal's job is stepped only while its goal holds
-    /// the worker (one it no longer holds is left to the AI's sweep, which ends it), and one over by its own rule is done (<see cref="DutyGoals.Done"/>).
+    /// Steps every job on, in list order: a job is stepped only while its goal holds the worker (one it no longer holds is left to the AI's sweep,
+    /// which ends it), and one over by its own rule is done (<see cref="DutyGoals.Done"/>).
     /// </summary>
     void StepJobs(World world)
     {
@@ -501,28 +477,15 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         for (int k = 0; k < _jobs.Count;)
         {
             var j = _jobs[k];
-            if (j.PlayerSide && Overridden(world, j))
-            {
-                _jobs.RemoveAt(k);
-                continue;
-            }
-
             int w = table.TryResolveNext(j.Worker, out int at) ? at : -1;
-            if (j.Goal != TaskType.None && (w < 0 || _duties?.Runs(world, w, j.Goal) != true))
+            if (w < 0 || _duties?.Runs(world, w, j.Goal) != true || Step(world, j))
             {
-                k++;
-                continue;
-            }
-
-            if (Step(world, j))
-            {
-                if (j.PlayerSide && w >= 0) (j.LastTask, j.LastGoal) = (table.Next[w].Task, table.Next[w].Goal);
                 k++;
                 continue;
             }
 
             _jobs.RemoveAt(k);
-            if (j.Goal != TaskType.None) Finish(world, w, j);
+            Finish(world, w, j);
         }
     }
 
@@ -541,12 +504,11 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// <summary>
     /// Whether a goal's job lost its walk: called once its walk is over short of the place, true when it had started one (<see cref="CaptiveJob.Walks"/>
     /// above 0), marking the job so (<paramref name="key"/>, its target): the original's plan step ends a running step whose mover is idle away from
-    /// its target and ignores that target for 20 s (<c>FUN_14050d970</c>, <b>Verified</b>; no tries). False for a player animal's job, which counts
-    /// its walks.
+    /// its target and ignores that target for 20 s (<c>FUN_14050d970</c>, <b>Verified</b>; no tries). False before its first walk.
     /// </summary>
     internal static bool Lost(CaptiveJob j, IgnoreKey? key)
     {
-        if (j.Goal == TaskType.None || j.Walks == 0) return false;
+        if (j.Walks == 0) return false;
 
         (j.LostWalk, j.LostKey) = (true, key);
         return true;
@@ -596,16 +558,6 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     }
 
     /// <summary>
-    /// Registers the player animals' race goals of both priorities with the decision step (job 187's goals are the chooser's job passes',
-    /// <see cref="AiSystem.ObeyedRoles"/>).
-    /// </summary>
-    public void RegisterSources(DecisionSystem decisions)
-    {
-        decisions.Register(new RaceGoals(this, TaskPriority.Urgent));
-        decisions.Register(new RaceGoals(this, TaskPriority.NonUrgent));
-    }
-
-    /// <summary>
     /// Hashes the goals' picks, the jobs, the kill timers and the waits (each only once any exist).
     /// </summary>
     public void Hash(ref StateHasher hasher)
@@ -624,233 +576,6 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
         hasher.Add(_timerRolls);
         if (GivenUp.Count > 0) HashWaits(ref hasher);
-    }
-
-    #endregion
-
-    #region The player animals' race goals
-
-    /// <summary>
-    /// The player's animals keep their race's <c>AI Goals</c> but 230 (<c>Character::setupAI</c>, docs/game/animals.md "AI goals"): the limb fetch
-    /// (277, <see cref="Fetch"/>; the limb goes into the mouth and is eaten, <see cref="Items.FeedSystem"/>), the limb play (278) and chase (279) by
-    /// their player-side desires, and eating a downed body not of an ally (233). Crop raiding (232) finds nothing for them: its farms are those of a
-    /// town the eater does not get along with, and its finder looks only in player towns (<see cref="CropsToEat"/>). A player character's are the
-    /// chooser's for every one with a squad (<see cref="RaceGoals"/>: priority 3 at step 4, priority 2 at step 6; <see cref="DecisionSystem.Decides"/>);
-    /// this pass runs them in list order for the other animals of the player's faction (no squad, so no chooser), idle only (engine). An order that
-    /// runs ends one (<see cref="CaptiveJob.PlayerSide"/>).
-    /// </summary>
-    void RunPlayerAnimalGoals(World world, int every)
-    {
-        if (world.Player.Faction < 0) return;
-        var table = world.Characters;
-        for (int s = 0; s < table.HighWater; s++)
-        {
-            if (!table.Next[s].Alive || !world.Turn(s, every) || table.Next[s].Task != (byte)CharacterTask.Idle
-                    || table.Cold(s) is not { Fighter.IsAnimal: true } c || !PlayerSquad(world, c) || DecisionSystem.Decides(c))
-                continue;
-
-            if (!FreeForRaceGoal(world, s, c)) continue;
-            if (PickRaceGoal(world, s, c, null, firstInList: true) is { } pick) StartRaceGoal(world, s, c, pick);
-        }
-    }
-
-    /// <summary>
-    /// The race's <c>AI Goals</c> of the character (none without a race).
-    /// </summary>
-    IReadOnlyList<AiGoal> RaceGoalsOf(CharacterCold c) => c.Race is { } race ? data.Ai.RaceGoals(race.StringId) : [];
-
-    /// <summary>
-    /// A player animal's race goal: its type, desire x the entry's weight, and its target (a body's or a mouthful ally's slot, a limb).
-    /// </summary>
-    readonly record struct RaceGoal(TaskType Type, float Score, int Target, GroundItem? Limb);
-
-    /// <summary>
-    /// Not engaged, fighting, fleeing, carried, down, or another captive job's.
-    /// </summary>
-    bool FreeForRaceGoal(World world, int s, CharacterCold c) =>
-        !c.Engaged && !c.InCombat && !c.Fleeing && c.CarriedBy.IsNone && c.Medical is { Incapacitated: false } && !Busy(world.Characters.IdOf(s))
-        && !DecisionSystem.Ordered(c);
-
-    /// <summary>
-    /// The race goal of priority <paramref name="priority"/> (any: null) the animal would run now (a pure read): the first that can in list order
-    /// (<paramref name="firstInList"/>), else the best desire x weight, a tie to the later-listed (<c>FUN_14050df10</c>). Desires: 277 1 with a limb
-    /// found, 278 <see cref="PlayDesire"/>, 279 <see cref="ChaseDesire"/> with a mouthful ally, 233 1 with a body.
-    /// </summary>
-    RaceGoal? PickRaceGoal(World world, int s, CharacterCold c, TaskPriority? priority, bool firstInList)
-    {
-        if (c is not { Fighter.IsAnimal: true, Race: { } race }) return null;
-        RaceGoal? best = null;
-        foreach (var goal in data.Ai.RaceGoals(race.StringId))
-        {
-            if (priority is { } p && goal.Task.Priority != p) continue;
-            float desire = 0;
-            int target = -1;
-            GroundItem? limb = null;
-            switch (goal.Task.Type)
-            {
-                case TaskType.AnimalFetchALimb when LimbFor(world, s, c) is { } found:
-                    (desire, limb) = (1, found);
-                    break;
-                case TaskType.PlayBecauseIHaveALimbInMouth:
-                    desire = PlayDesire(world, c);
-                    break;
-                case TaskType.ChaseAllyDogsWithMouthLimbs when ChaseDesire(world, c) > 0 && MouthfulAlly(world, s, c) is >= 0 and var mouthful:
-                    (desire, target) = (ChaseDesire(world, c), mouthful);
-                    break;
-                case TaskType.EatARandomKoBody when BodyToEat(world, s, c, dead: false) is >= 0 and var meal:
-                    (desire, target) = (1, meal);
-                    break;
-            }
-
-            if (!(desire > 0)) continue;
-            var pick = new RaceGoal(goal.Task.Type, desire * goal.Weight, target, limb);
-            if (firstInList) return pick;
-            if (best is null || pick.Score >= best.Value.Score) best = pick;
-        }
-
-        return best;
-    }
-
-    /// <summary>
-    /// Starts the race goal picked: the limb fetch's pick-up walk, else the goal's job (play, chase, eating a body) as a player-side job.
-    /// </summary>
-    void StartRaceGoal(World world, int s, CharacterCold c, RaceGoal pick)
-    {
-        var table = world.Characters;
-        CaptiveJobKind? kind = pick.Type switch
-        {
-            TaskType.PlayBecauseIHaveALimbInMouth => CaptiveJobKind.DogPlay,
-            TaskType.ChaseAllyDogsWithMouthLimbs => CaptiveJobKind.DogChase,
-            TaskType.EatARandomKoBody => CaptiveJobKind.EatBody,
-            _ => null,
-        };
-        if (kind is not { } k)
-        {
-            if (pick.Limb is { } limb) Fetch(world, s, c, limb);
-            return;
-        }
-
-        var job = new CaptiveJob { Kind = k, Worker = table.IdOf(s), Captive = pick.Target >= 0 ? table.IdOf(pick.Target) : CharacterId.None,
-                Cage = "", Faction = c.Faction, PlayerSide = true };
-        (job.LastTask, job.LastGoal) = (table.Next[s].Task, table.Next[s].Goal);
-        _jobs.Add(job);
-        c.Engaged = true;
-        Note(world, CaptiveEventKind.Started, job);
-    }
-
-    /// <summary>
-    /// A player animal's race goals of one priority (<c>Character::setupAI</c> adds the race's <c>AI Goals</c> to a player-faction animal, after
-    /// 243): priority 3 at step 4, weighed with the other goals, priority 2 at step 6 before 14 Idleness. The best desire x weight starts
-    /// (<see cref="PickRaceGoal"/>); it runs while its job does (the fetch: while its pick-up walk does).
-    /// </summary>
-    sealed class RaceGoals(CaptiveSystem owner, TaskPriority priority) : IDecisionSource
-    {
-        /// <summary>
-        /// The goal <see cref="CanRun"/> picked, with its tick and slot (the desire and the start read it).
-        /// </summary>
-        (long Tick, int Slot, RaceGoal Goal) _picked = (-1, -1, default);
-
-        /// <summary>
-        /// The source's name in the decision log.
-        /// </summary>
-        public string Name => $"Race goals (priority {(int)priority})";
-        /// <summary>
-        /// Priority 3 among the goals, priority 2 in the fallback.
-        /// </summary>
-        public DecisionStep Step => priority == TaskPriority.Urgent ? DecisionStep.Goals : DecisionStep.Fallback;
-        /// <summary>
-        /// Step 4: after 243 (<c>setupAI</c>'s order); step 6: with the priority-2 goals, before the priority-1 ones.
-        /// </summary>
-        public int Key => priority == TaskPriority.Urgent ? 250 : 1000 + (int)TaskType.EatARandomKoBody;
-
-        /// <summary>
-        /// Runs while a race goal of this priority does; else may run for a free animal when one of this priority holds (and picks it).
-        /// </summary>
-        public DecisionCheck CanRun(World world, int slot)
-        {
-            var cold = world.Characters.Cold(slot)!;
-            if (cold is not { Fighter.IsAnimal: true, Race: not null }) return DecisionCheck.No("not an animal");
-            if (Running(world, slot, cold) is { } type)
-                return PriorityOf(cold, type) == priority ? DecisionCheck.Runs : DecisionCheck.No("another race goal runs");
-
-            if (!owner.FreeForRaceGoal(world, slot, cold)) return DecisionCheck.No("busy");
-            if (owner.PickRaceGoal(world, slot, cold, priority, firstInList: false) is not { } pick)
-                return DecisionCheck.No("none holds");
-
-            _picked = (world.Tick, slot, pick);
-            return DecisionCheck.Run;
-        }
-
-        /// <summary>
-        /// The running goal's score while it still holds (1 when it no longer does), else the picked goal's.
-        /// </summary>
-        public float Desire(World world, int slot)
-        {
-            var cold = world.Characters.Cold(slot)!;
-            if (Running(world, slot, cold) is { } type)
-                return owner.PickRaceGoal(world, slot, cold, priority, firstInList: false) is { } now && now.Type == type ? now.Score : 1;
-
-            return _picked.Tick == world.Tick && _picked.Slot == slot ? _picked.Goal.Score : 0;
-        }
-
-        /// <summary>
-        /// Starts the goal picked this tick for the slot.
-        /// </summary>
-        public void Start(World world, int slot)
-        {
-            if (_picked.Tick == world.Tick && _picked.Slot == slot)
-                owner.StartRaceGoal(world, slot, world.Characters.Cold(slot)!, _picked.Goal);
-        }
-
-        /// <summary>
-        /// The race goal the animal runs: its player-side job's, or the limb fetch's pick-up walk.
-        /// </summary>
-        TaskType? Running(World world, int slot, CharacterCold cold)
-        {
-            var id = world.Characters.IdOf(slot);
-            foreach (var j in owner._jobs)
-            {
-                if (j.Worker == id && j.PlayerSide)
-                {
-                    return j.Kind switch
-                    {
-                        CaptiveJobKind.DogPlay => TaskType.PlayBecauseIHaveALimbInMouth,
-                        CaptiveJobKind.DogChase => TaskType.ChaseAllyDogsWithMouthLimbs,
-                        _ => TaskType.EatARandomKoBody,
-                    };
-                }
-            }
-
-            return cold.PickingUpItem is not null && cold.Running is { Row: TaskType.AnimalFetchALimb } ? TaskType.AnimalFetchALimb : null;
-        }
-
-        /// <summary>
-        /// The priority of goal <paramref name="type"/> among the character's race goals; null when it has none.
-        /// </summary>
-        TaskPriority? PriorityOf(CharacterCold cold, TaskType type) =>
-            owner.RaceGoalsOf(cold).FirstOrDefault(g => g.Task.Type == type)?.Task.Priority;
-    }
-
-    /// <summary>
-    /// A player animal's job the player took over since its last step: its task changed other than a walk that ended, or it walks elsewhere. The job
-    /// ends without stopping it, so the order stands.
-    /// </summary>
-    static bool Overridden(World world, CaptiveJob j)
-    {
-        var table = world.Characters;
-        if (!table.TryResolveNext(j.Worker, out int w)) return false;
-        ref var n = ref table.Next[w];
-        byte go = (byte)CharacterTask.GoTo;
-        bool taken = n.Task == go ? j.LastTask != go || n.Goal != j.LastGoal : n.Task != j.LastTask
-                && !(j.LastTask == go && n.Task == (byte)CharacterTask.Idle);
-        if (!taken && !PlayerOrders.Wins(world, w)) return false;
-        if (table.Cold(w) is { } wc)
-        {
-            wc.Engaged = false;
-            wc.ActionClip = null;
-        }
-
-        return true;
     }
 
     #endregion
@@ -1534,21 +1259,12 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     }
 
     /// <summary>
-    /// Ends a job: its clip goes; a player animal's walk stands and the AI has the worker again (a goal's act-out is stopped by
-    /// <see cref="DutyGoals.Done"/>).
+    /// Ends a job: its clip goes (its goal's act-out is stopped by <see cref="DutyGoals.Done"/>).
     /// </summary>
     bool End(World world, CaptiveJob j, CaptiveEventKind? kind)
     {
         var table = world.Characters;
-        if (table.TryResolveNext(j.Worker, out int w) && table.Cold(w) is { } wc)
-        {
-            wc.ActionClip = null;
-            if (j.PlayerSide)
-            {
-                wc.Engaged = false;
-                if (table.Next[w].Task == (byte)CharacterTask.GoTo) TaskStart.Stand(table, w);
-            }
-        }
+        if (table.TryResolveNext(j.Worker, out int w) && table.Cold(w) is { } wc) wc.ActionClip = null;
 
         if (kind is { } k) Note(world, k, j);
         return false;

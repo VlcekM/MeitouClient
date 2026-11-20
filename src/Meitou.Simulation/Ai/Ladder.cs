@@ -103,7 +103,11 @@ internal static class Ladder
     /// <see cref="DecisionSystem"/>) and weighed 0 by the tiers, so nothing is chosen twice. A fan-out step that moves a goal onto its rung adds its
     /// type here and deletes the adapter. Never written at run time.
     /// </summary>
-    internal static readonly HashSet<TaskType> OnRungs = [TaskType.AquireFoodAtHomebase];
+    internal static readonly HashSet<TaskType> OnRungs =
+    [
+        TaskType.AquireFoodAtHomebase, TaskType.FindCropsToEat, TaskType.EatARandomKoBody, TaskType.AnimalFetchALimb,
+        TaskType.PlayBecauseIHaveALimbInMouth, TaskType.ChaseAllyDogsWithMouthLimbs,
+    ];
 
     /// <summary>
     /// The first key of the priority-1 sources of <see cref="DecisionStep.Fallback"/> (keys 1000 + type are priority-2 goals, 2000 + type

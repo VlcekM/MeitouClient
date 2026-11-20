@@ -129,7 +129,8 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
     /// <summary>
     /// The picks of the character at <paramref name="s"/>: for a member with a mind of its own, each captive goal its role, slave or race list holds
     /// in the hour (as <see cref="AiSystem.WeighsGoal"/> reads them) keeps its desire and target; for a player-faction mind those of its master's
-    /// Slave list while it obeys (<see cref="AiSystem.ObeyedRoles"/>), looked for under the engine's empty board; else none.
+    /// Slave list while it obeys (<see cref="AiSystem.ObeyedRoles"/>) and those of its own lists on the chooser's rungs (<see cref="Ladder.OnRungs"/>:
+    /// an animal's race goals), looked for under the engine's empty board; else none.
     /// </summary>
     internal void LookAt(World world, int s)
     {
@@ -142,7 +143,7 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
             return;
         }
 
-        MarkListed(world, roles, own);
+        MarkListed(world, roles, own, rungsOnly: cold.Ai!.PlayerSide);
         for (int k = 0; k < Types.Length; k++)
         {
             if (_listed[k]) LookFor(world, k, s, cold, squad, board);
@@ -151,14 +152,14 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
     }
 
     /// <summary>
-    /// The squad, board and lists whose captive goals the character's look weighs: a player-faction mind its master's Slave list alone (none while it
-    /// does not obey) under the engine's board; an NPC with a mind of its own and a squad board its role list (an obeying slave's: its master's
+    /// The squad, board and lists whose captive goals the character's look weighs: a player-faction mind its master's Slave list while it obeys and
+    /// its own lists, under the engine's board; an NPC with a mind of its own and a squad board its role list (an obeying slave's: its master's
     /// Slave list) and race list; null for any other character.
     /// </summary>
     static (Squad Squad, Blackboard Board, IReadOnlyList<AiGoal> Roles, IReadOnlyList<AiGoal> Own)? ListsOf(World world, int s, CharacterCold cold)
     {
-        if (cold.Ai is { PlayerSide: true, Squad: var side })
-            return AiSystem.ObeyedRoles(world, side, cold) is { } obeyed ? (side, AiSystem.EngineBoard, obeyed, []) : null;
+        if (cold.Ai is { PlayerSide: true, Squad: var side } player)
+            return (side, AiSystem.EngineBoard, AiSystem.ObeyedRoles(world, side, cold) ?? [], player.RaceGoals);
         if (cold is not { IsPlayer: false, Ai: { Engine: false, Player: false, Squad: { Ai: { } board } squad } mind }) return null;
 
         var roles = AiSystem.ObeyedRoles(world, squad, cold) ?? board.Roles[(int)AiSystem.RoleOf(squad, world.Characters.IdOf(s), cold)];
@@ -166,19 +167,26 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
     }
 
     /// <summary>
-    /// Marks in <see cref="_listed"/> the captive goals of the member's role and own lists (<see cref="ListsOf"/>) that hold in the hour.
+    /// Marks in <see cref="_listed"/> the captive goals of the member's role and own lists (<see cref="ListsOf"/>) that hold in the hour; with
+    /// <paramref name="rungsOnly"/> (a player-faction mind) only the own lists' types on the chooser's rungs (<see cref="Ladder.OnRungs"/>).
     /// </summary>
-    void MarkListed(World world, IReadOnlyList<AiGoal> roles, IReadOnlyList<AiGoal> own)
+    void MarkListed(World world, IReadOnlyList<AiGoal> roles, IReadOnlyList<AiGoal> own, bool rungsOnly)
     {
         Array.Clear(_listed);
-        int hour = world.Hour;
-        foreach (var list in new[] { roles, own })
+        Mark(roles, world.Hour, rungsOnly: false);
+        Mark(own, world.Hour, rungsOnly);
+    }
+
+    /// <summary>
+    /// Marks the captive goals of one list that hold in <paramref name="hour"/> (<see cref="MarkListed"/>).
+    /// </summary>
+    void Mark(IReadOnlyList<AiGoal> list, int hour, bool rungsOnly)
+    {
+        for (int g = 0; g < list.Count; g++)
         {
-            for (int g = 0; g < list.Count; g++)
-            {
-                var type = list[g].Task.Type;
-                if ((uint)type < (uint)IndexOfType.Length && IndexOfType[(int)type] is >= 0 and var k && list[g].InWindow(hour)) _listed[k] = true;
-            }
+            var type = list[g].Task.Type;
+            if ((uint)type >= (uint)IndexOfType.Length || IndexOfType[(int)type] is not (>= 0 and var k) || !list[g].InWindow(hour)) continue;
+            if (!rungsOnly || Ladder.OnRungs.Contains(type)) _listed[k] = true;
         }
     }
 

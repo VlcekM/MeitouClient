@@ -3651,7 +3651,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     #region Player-faction minds
 
     /// <summary>
-    /// <c>Character::setupAI</c>'s 243 Getting food of a player-faction character that is not an animal (priority 3, weight 0.5, all hours;
+    /// <c>Character::setupAI</c>'s 243 Getting food of a player-faction character, an animal too (priority 3, weight 0.5, all hours;
     /// <c>FUN_140621b70</c>, <b>Verified</b>).
     /// </summary>
     static readonly AiGoal GettingFood =
@@ -3714,17 +3714,20 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// A player-faction character's own lists (<c>setupAI</c>, <b>Verified</b>): its faction's <c>AI Goals</c> (the player platoon runs no contract),
-    /// then 243 Getting food unless held; an animal instead its race's <c>AI Goals</c> and 259 Picking up food unless held, without 230.
+    /// then 243 Getting food unless held; an animal then its race's <c>AI Goals</c> and 259 Picking up food unless held, without 230.
     /// 14 Idleness is the default task and 32 Self preservation the engine's own goal, both outside the list.
     /// </summary>
     IReadOnlyList<AiGoal> PlayerOwnGoals(CharacterCold cold)
     {
+        string? faction = data.FactionId(cold.Faction);
+        var factionGoals = data.Ai.OwnGoals(null, faction, withFaction: true);
         bool animal = Factions.SquadRegistry.IsAnimal(cold);
-        var own = new List<AiGoal>(data.Ai.OwnGoals(animal ? cold.Race?.StringId : null, data.FactionId(cold.Faction), withFaction: true));
-        if (animal) own.RemoveAll(g => g.Task.Type == TaskType.EatARandomDeadBody);
+        var own = new List<AiGoal>(animal ? data.Ai.OwnGoals(cold.Race?.StringId, faction, withFaction: true) : factionGoals);
+        if (!own.Exists(g => g.Task.Type == GettingFood.Task.Type)) own.Insert(factionGoals.Count, GettingFood);
+        if (!animal) return own;
 
-        var food = animal ? PickingUpFood : GettingFood;
-        if (!own.Exists(g => g.Task.Type == food.Task.Type)) own.Add(food);
+        own.RemoveAll(g => g.Task.Type == TaskType.EatARandomDeadBody);
+        if (!own.Exists(g => g.Task.Type == PickingUpFood.Task.Type)) own.Add(PickingUpFood);
 
         return own;
     }

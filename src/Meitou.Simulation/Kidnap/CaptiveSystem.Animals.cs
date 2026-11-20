@@ -114,17 +114,6 @@ public sealed partial class CaptiveSystem
     }
 
     /// <summary>
-    /// A player animal's 277 Fetch: it picks up <paramref name="limb"/> into its mouth (<see cref="Items.FeedSystem.HoldInMouth"/>, through the pick-up
-    /// walk), running to it first when it is out of reach. No job.
-    /// </summary>
-    static void Fetch(World world, int slot, CharacterCold cold, Items.GroundItem limb)
-    {
-        cold.PickingUpItem = limb.Id;
-        if (Vector3.Distance(world.Characters.Next[slot].Position, limb.Position) > Items.PickUps.PickUpReach)
-            TaskStart.Walk(world, slot, limb.Position, SpeedMode.Run, TaskType.AnimalFetchALimb, TaskSource.Goal);
-    }
-
-    /// <summary>
     /// 277's finder (<c>AI::findLimbOnGround</c> <c>FUN_1409993a0</c>, a pure read): for an animal with nothing in its mouth (an adult only while its
     /// stomach is empty and its hunger at most 2.75), the nearest severed limb on the ground within <see cref="FetchRange"/>; null when none or the
     /// animal does not want one.

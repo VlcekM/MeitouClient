@@ -292,8 +292,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   tick a character with a front steps (`PlayerOrders.PopsNow`) and decides it then. So a pick order on a lock already open leaves at once. A move leaves within 12 of its point
   and its walk goes on (`Task_Move`'s end stops the mover only once it is done), so the next order or job takes the walk over there.
 - `PlayerOrders.Holds` (a pure read): the character holds an order, running, waiting or queued (the original's count `+0x60`; a front whose task ended is not counted). The
-  implicit ditch job 242 runs only without one ([perma-jobs](game/ai-tasks.md#perma-jobs)). `PlayerOrders.Wins` (pure): the front runs or can start, so source 1 wins; the
-  player animals' race-goal jobs (`CaptiveJob.PlayerSide`) end once one runs or can start (a blocked order does not end them).
+  implicit ditch job 242 runs only without one ([perma-jobs](game/ai-tasks.md#perma-jobs)). `PlayerOrders.Wins` (pure): the front runs or can start, so source 1 wins.
 - A row needing no melee threat (`PlayerOrders.NeedsNoThreat`: `!158` in list B, of the orders only 146 Turret gunner) is blocked while `CombatSystem.ImmediateThreat` holds; at a
   decision its running order ends (`TaskEnd.Stopped`) and waits unstarted, so the gunner falls through to self-defence and mans the turret again once the threat is gone (S3).
   An owner's `IOrderOwner.StillHolds` does the same for its own start conditions (combat's and first aid's orders). An operate or gunner order (87, 146)
@@ -317,7 +316,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   goal, 32 and committed goals included ([precedence](game/ai-tasks.md#precedence)): the AI (`AiSystem.Holds`, `Preempts`, `TaskStart.StartOwn`); a goal's or reaction's start
   ([task starts](#task-starts): the AI's, retaliation's, the duties' and the victims' deferred fights and walks); retaliation's own defence (it answers as a player character
   does); the flight step, which also ends a running flight; the stand-down after a fight; the free tests of the duty sweeps and routines (the ditch and the player faction's
-  food runs, the player animals' race goals, 259, the shut-in release, NPC healing, arming and scavenging, rejoining the leader); the
+  food runs, 259, the shut-in release, NPC healing, arming and scavenging, rejoining the leader); the
   population's leader walk and arrival; and two engine reactions that are no order (`TaskSource.Npc`): a crime victim's attack on its culprit and a caught thief's
   watcher getting up from rest. The dialogue's acts ([dialogue](#dialogue)), the body's orders above and the arrest orders are orders of the receiver's queue. An
   owner's order may repeat (`IOrderOwner.Repeats`): when its task ends it waits unstarted at the front for its next step instead of leaving (22, 101, 248), until its
@@ -406,8 +405,8 @@ phases, no source ever called from the think:
      Slave has no source: the job pass's branch scores the master squad's Slave goals (`TierRungs.PickJobPass`, [captives](#captives)).
   4. Priority-3 goals: 32 Self preservation is the AI's rung (`AiSystem.SelfPreservationGoal` in every player-faction mind: the attacker that took the character as target
      within 181.7, not shooting at a gunner, passing a holder's post test, `SelfDefencePick`; desire 1 within 40, else 0.7; a deferred defence, row 13); 243 Getting food on the
-     AI's rung (the own list's entry, weight 0.5, [town duties](#town-duties)); a player animal's priority-3 race goals (`CaptiveSystem.RaceGoals`: 277 limb fetch 1, 278 limb play and 279 chase by
-     their desires, x the race entry's weight); 259 Picking up food (`FeedSystem`, animals, weight 0.5); 16 attack on sight while on Hold (`AggroSystem`, 1 here,
+     AI's rung (the own list's entry, weight 0.5, [town duties](#town-duties)); a player animal's priority-3 race goals on the AI's rung (`Ladder.OnRungs`, [captives](#captives):
+     277 limb fetch 1, 278 limb play and 279 chase by their desires, x the race entry's weight); 259 Picking up food (`FeedSystem`, animals, weight 0.5); 16 attack on sight while on Hold (`AggroSystem`, 1 here,
      listed last as Hold adds it; the enemy this tick's look or a squad mate's found; desire 0 while Passive, sneaking outside a fight or not standing; a deferred fight, row 16).
      The player faction's 15 Protect allies (`RetaliationSystem.JoinFight`, key 15, weight 1, listed before Self preservation; finder, desire and plan in
      [precedence](game/ai-tasks.md#precedence)): the aggro looks' allies valued by their fight threat (`CombatSystem.FightThreat`), weighted by distance, a deferred defence, row 13, against `CombatSystem.BestAttackerOf`'s pick for the ally.
@@ -426,7 +425,7 @@ phases, no source ever called from the think:
      250; the finders, a treatment runs until it ends), carry (148, 238), beds (106), aggro (16; the enemy the look offered this tick, the row's desire). Finders are asked only up to the
      first job that runs. Then the implicit jobs (`ProductionSystem.ImplicitJobs`, the squad AI options' lowest keys): over idling, a standing task or a job's task, the pick of
      `ImplicitPick` starts and runs while it is the one the character is on; one that no longer holds ends.
-  6. The priority-2 goals (a player animal's race goal 233, eating a downed body, `CaptiveSystem.RaceGoals`), then the priority-1 goals (keys 2000 + type), then the default task
+  6. The priority-2 goals (a player animal's race goals 233, eating a downed body, and 232, on the AI's rung), then the priority-1 goals (keys 2000 + type), then the default task
      (keys 3000 up, `+0x190`, one slot by the manoeuvre mode, `DecisionSystem.Idleness`): ROAM_FAR 14 Idleness, STAY_CLOSE (NEAR) 31 Staying close standing in place, HOLD_GROUND 30 Holding
      position walking back to the centre of movement first; the scorer drops a scored 14 while `!162 !157` hold.
      A player character stands idle, its routine (player characters neither wander nor follow a leader by themselves). Idleness runs over idling, a fight and any task a plan still runs
@@ -451,9 +450,9 @@ phases, no source ever called from the think:
   order's failure text, "no attacker in range", a score, a job's index), published as `CharacterSnapshot.Decision` while tracing. Not saved or hashed.
 - **Player-faction characters that are not `IsPlayer`** exist only in Meitou: the sandbox's and `--crowd`'s bystanders and tests' extras (a load, a new game or a recruit makes every
   other player-faction character `IsPlayer`; the original has no player-faction character the player does not command). One with a squad gets a player-faction mind (`AiMind.PlayerSide`,
-  `AiSystem.PlayerSideMinds`: setupAI's own lists, the faction goals and 243; an animal its race goals and 259, not 230), which thinks only with its look's row, and is decided as a
+  `AiSystem.PlayerSideMinds`: setupAI's own lists, the faction goals and 243; an animal also its race goals and 259, not 230), which thinks only with its look's row, and is decided as a
   player character is (`DecisionSystem.Decides`): every source, no order hold, no routine resumed, no chase given up. One with no squad runs no chooser (as in the original) and
-  keeps the idle-only passes of 259 (`FeedSystem`, an animal idle or following) and the animals' race goals (`CaptiveSystem.RunPlayerAnimalGoals`, list order); it gets no 243.
+  gets no 243, 259 or race goal.
 - Engine choices: errands' walks wait out a fight (duties, the dialogue approach); the step's starts act from the next tick (deferred fights) or at once (walks).
 
 ## Systems and their order
@@ -953,7 +952,7 @@ animals use faction hostility and carrying/damage rules where eligible. They age
 bag on, DA 48 sells them, and the context menu's Follow keeps any player character beside another
 ([animals](game/animals.md#ageing)). Player animals feed themselves: food on the ground (259, `FeedSystem.GroundFood`), food from their outpost's stores
 (243, also for people: the chooser's goal, [rules](game/character-stats.md#eating); 259 a decision-step goal) and their race goals: limbs (277), limb play and chase
-(278, 279) and eating downed non-allies (233) as [captive jobs](#captives) (`CaptiveSystem.RaceGoals`: decision-step goals, priority 3 at step 4, 233 priority 2 at step 6, by the original's desires x the entry's weight), ended by an order that runs. Corpses (230) are dropped from the player's animals by the original;
+(278, 279) and eating downed non-allies (233) as [captive jobs](#captives) (the chooser's goals on its rungs, as an NPC animal's, by the original's desires x the entry's weight), ended by an order. Corpses (230) are dropped from the player's animals by the original;
 crops (232) find nothing for them (only the player's farms are machines, and the eater must not get along with the town). Unarmed humans use
 martial-arts category 5. [animals.md](game/animals.md), [characters.md](characters.md).
 
@@ -1544,8 +1543,7 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
 slave's: its master's Slave list) or own lists hold it in its hours; its act-out is a job of the worker (`CaptiveJob` with its `Goal` and `Target`), begun by
 `IDutyGoal.Start` on the plan's target (refused when the target is gone, no longer fits or is another job's), stepped only while `DutyGoals.Runs`, and done
 (`DutyGoals.Done`) at the original's end. Cages are those of the squad's town (`Fixture.Site`) unless said otherwise. A walk to a cage ends within `use range` + 15, or a walk that ended within 200; a
-job's walk that ends short of its place is a lost walk ([engine goals](#engine-goals); a player animal's job gives up after three, marking a cage unreachable for
-the faction); its own faction's shut doors are unlocked first. A job gives up after 600 game s (engine).
+job's walk that ends short of its place is a lost walk ([engine goals](#engine-goals)); its own faction's shut doors are unlocked first. A job gives up after 600 game s (engine).
 A job's walk is its own, run as the job's row (`CaptiveSystem.WalksOwn`): one the worker was on when the job started, its AI's or an errand's, is replaced at once, as a
 goal taken up ends the plan before it ([precedence](game/ai-tasks.md#precedence)). **Observed** (KenshiOracle state 0.5 hold, Rebirth, N = 1): the workmasters take their
 gather jobs while walking home under 43, and a job that waited on that walk reached its cage only after about 90 of the hold's 110 s.
@@ -1560,8 +1558,8 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   `empire vault prison` the 1.0 tie goes to the later-listed 260 ([pick](game/ai-tasks.md#planner)); both plan 182 (**Verified**, data).
 - **Plans** are the planner's. The rows the job carries out are registered: 134; 220; 231; 236; 3; 40; 182, 166 and 181; 170 and 25; 174; 159; 53; 107; 110. Their
   states are asked of `CaptiveGoals` for the target (character, cage, farm, limb; evaluators in [ai-tasks](game/ai-tasks.md#prisoner-fate-and-slave-rows)), the
-  at-location test passing at the job's work or within its reach. Player characters and mod-held minds take none; a player animal's race goals are
-  decision-step jobs (`CaptiveJob.PlayerSide`, `Engaged`, [animals](#animals)).
+  at-location test passing at the job's work or within its reach. Mod-held minds take none; a player-faction mind takes its obeyed master's Slave goals and its own lists' types
+  on the chooser's rungs (`Ladder.OnRungs`: an animal's race goals, [animals](#animals)), under the engine's empty board.
 - **Kill** (135; the desire reads the town and creates its timer first, whatever the worker carries; its plan then draws a weapon, `DrawWeapon`: one in a back or hip slot, else a melee weapon of its inventory put in a free slot, else the start is refused): when the kill timer of the town the worker stands in (else its squad's: engine reading) has run out or all the faction's cages there are held; the best occupied cage by the cage finder's weights
   and usable test (`FindCage` in its occupied mode over `CageCandidates`: the worker's town, else its faction's nearest, plus its home's; x100 own faction, x100 home building; another faction's cage only when `CanUse` passes), not a robot. At the cage it holds `chop down static` (`CharacterCold.ActionClip`, which the animation system plays for an idle character) and strikes once per
   clip length at 0.55 of it (`CombatSystem.Execute`: the weapon packet landed through armour, no defence, no crime) until the captive dies. Events 10 (on picking) and 11 (each blow).
