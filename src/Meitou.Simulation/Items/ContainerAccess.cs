@@ -171,14 +171,16 @@ public static class ContainerAccess
 
     /// <summary>
     /// The container Take/Put address by <paramref name="site"/> (a fixture id) and the character, when it is open and the character is in reach;
-    /// posts "Out of trading range." otherwise (<see cref="TradingRange"/>). Null when <paramref name="site"/> is not a container.
+    /// posts "Out of trading range." otherwise (<see cref="TradingRange"/>). Null when <paramref name="site"/> is not a container. Any character with
+    /// an inventory: <c>Task_Loot_Order</c>'s start queues the window for whoever runs it, with no faction test (<c>FUN_140354dc0</c> →
+    /// <c>FUN_140791830</c> kind 3, <b>Verified</b>), so an NPC opener's window moves items too.
     /// </summary>
     internal static Locks.Fixture? ContainerFor(World world, string site, CharacterId who, out CharacterCold? cold)
     {
         cold = null;
         if (world.Fixtures.Find(site) is not { Contents: not null } f) return null;
         var table = world.Characters;
-        if (!table.TryResolveNext(who, out int slot) || table.Cold(slot) is not { IsPlayer: true, Inventory: not null } c)
+        if (!table.TryResolveNext(who, out int slot) || table.Cold(slot) is not { Inventory: not null } c)
             return f;
         if (Vector2.Distance(Flat(table.Next[slot].Position), Flat(f.Position)) > TradingRange)
         {
