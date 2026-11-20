@@ -47,6 +47,10 @@ sealed class PostComposite : IDisposable
     /// </summary>
     readonly UniformHandle _exposure, _useAo, _dither, _auto, _tone, _toneMix, _grade, _saturation, _contrast, _night, _balance, _sceneSize;
     /// <summary>
+    /// The composite program's look uniforms: photo mode's filter, the vignette and the film grain (<see cref="CompositeLook"/>).
+    /// </summary>
+    readonly UniformHandle _filterR, _filterG, _filterB, _filterContrast, _vignette, _grain;
+    /// <summary>
     /// The luminance program's cell size, and the adaptation program's level, blend and band.
     /// </summary>
     readonly UniformHandle _lumCell, _adaptLevel, _adaptBlend, _adaptBand;
@@ -204,8 +208,11 @@ sealed class PostComposite : IDisposable
     /// <summary>
     /// What <see cref="ApplyScene"/> and <see cref="Draw"/> need from the frame's camera.
     /// </summary>
+    /// <remarks>
+    /// <c>HaveScene</c>: a scene was drawn this frame (the vignette and the grain are not for a frame that is none).
+    /// </remarks>
     public readonly record struct SceneInputs(Vector3 Eye, Matrix4x4 View, float FieldOfView, float Aspect, float Near, float Far,
-        bool CharactersDrawn = true, float? WaterHeight = null, int SsaoTaps = PostOptions.DefaultSsaoTaps);
+        bool CharactersDrawn = true, float? WaterHeight = null, int SsaoTaps = PostOptions.DefaultSsaoTaps, bool HaveScene = true);
 
     /// <summary>
     /// Compiles the composite, exposure and fullscreen pass programs and looks up their uniforms.
@@ -252,6 +259,9 @@ sealed class PostComposite : IDisposable
         _night = c.Uniform("uNight");
         _balance = c.Uniform("uBalance");
         _sceneSize = c.Uniform("uSceneSize");
+        (_filterR, _filterG, _filterB, _filterContrast) = (c.Uniform("uFilterR"), c.Uniform("uFilterG"), c.Uniform("uFilterB"),
+            c.Uniform("uFilterContrast"));
+        (_vignette, _grain) = (c.Uniform("uVignette"), c.Uniform("uGrain"));
         _sceneSlot = c.Sampler("uScene");
         _aoSlot = c.Sampler("uAo");
         _adaptedSlot = c.Sampler("uAdapted");
@@ -347,7 +357,7 @@ sealed class PostComposite : IDisposable
         bool fxaaOn = o.Fxaa && !smaaOn && !temporal && _ldr is not null;
         bool hazeOn = o.HeatHaze && HasHeatHaze && HeatHazeAmount * o.HeatHazeScale > 0 && _ldr is not null;
         var compositeTarget = fxaaOn || smaaOn || hazeOn ? _ldr! : target;
-        RunComposite(cmd, scene, o, compositeTarget);
+        RunComposite(cmd, scene, o, compositeTarget, inputs.HaveScene);
 
         GpuTexture picture = compositeTarget;
         if (fxaaOn) picture = RunFxaa(cmd, picture, target, hazeOn);
@@ -408,9 +418,10 @@ sealed class PostComposite : IDisposable
     }
 
     /// <summary>
-    /// The composite pass of the scene into <paramref name="compositeTarget"/>: auto exposure, the tone map, grade and dither.
+    /// The composite pass of the scene into <paramref name="compositeTarget"/>: auto exposure, the tone map, grade, photo mode's filter, the vignette,
+    /// the film grain and dither.
     /// </summary>
-    void RunComposite(IGpuCommandList cmd, GpuTexture scene, PostOptions o, GpuTexture compositeTarget)
+    void RunComposite(IGpuCommandList cmd, GpuTexture scene, PostOptions o, GpuTexture compositeTarget, bool haveScene)
     {
         var p = _composite;
         p.Bind(_sceneSlot, _sceneSampler with { View = scene.View() });
@@ -428,7 +439,24 @@ sealed class PostComposite : IDisposable
         p.Set(_night, Math.Clamp(o.NightGradeAmount, 0, 1));
         p.Set(_balance, o.Balance);
         p.Set(_sceneSize, 0f, 0f);
+        SetLook(p, o, haveScene, compositeTarget);
         Fullscreen(cmd, _composite, compositeTarget, compositeTarget.Desc.Width, compositeTarget.Desc.Height);
+    }
+
+    /// <summary>
+    /// The composite's look (<see cref="CompositeLook"/>) for a picture the size of <paramref name="target"/>, as <see cref="PostProcess"/> sets it:
+    /// the vignette and the grain only in a whole view of a scene.
+    /// </summary>
+    void SetLook(LegacyProgram p, PostOptions o, bool haveScene, GpuTexture target)
+    {
+        bool whole = haveScene && ViewWindow.Current.IsWhole && !o.CameraEffectsHeld;
+        var look = CompositeLook.Of(o, whole, target.Desc.Width, target.Desc.Height, _ctx.Frame.Number);
+        p.Set(_filterR, look.FilterR);
+        p.Set(_filterG, look.FilterG);
+        p.Set(_filterB, look.FilterB);
+        p.Set(_filterContrast, look.FilterContrast);
+        p.Set(_vignette, look.Vignette);
+        p.Set(_grain, look.Grain);
     }
 
     /// <summary>
