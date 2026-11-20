@@ -508,14 +508,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// An NPC's think after the order step: held by the AI, the ladder (<see cref="ThinkHeld"/>); in its cage, its caged choice; on an engine duty
-    /// or fight, only the goals that pre-empt it.
+    /// An NPC's think after the order step: held by the AI or on its list job's task (<see cref="RunsListJob"/>), the ladder
+    /// (<see cref="ThinkHeld"/>); in its cage, its caged choice; on an engine duty or fight, only the goals that pre-empt it, then an engine mind's
+    /// job passes (<see cref="EngineJobs"/>).
     /// </summary>
     void ThinkNpc(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, IReadOnlyList<AiGoal> roles,
         int hour, ChooserRow? row)
     {
         ref var n = ref world.Characters.Next[i];
-        if (Holds(n, cold))
+        if (Holds(n, cold) || !mind.Engine && RunsListJob(n, cold))
         {
             ThinkHeld(world, i, id, cold, mind, squad, board, roles, hour, row);
             return;
@@ -529,7 +530,42 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         // A character on an engine duty or in an engine fight: only the goals that pre-empt it (Preempts) are weighed.
         if (Preempts(n, cold) is not Restrict.None and var only && Choose(world, i, id, mind, squad, board, roles, hour, only) is { } urgent)
+        {
             ActPreempting(world, i, cold, mind, urgent, only);
+            return;
+        }
+
+        EngineJobs(world, n, cold, mind, row);
+    }
+
+    /// <summary>
+    /// Whether the NPC runs its list job's task (<see cref="TaskSource.Job"/>) out of a fight and free (<see cref="PlayerSideHold.Free"/>, no order
+    /// holding it): the chooser runs over it as over any task (<c>FUN_140510ef0</c> has no faction or task test), so a priority-3 goal or a higher
+    /// job takes over, and a goal that wins ends the job's task first (<see cref="ActOverTask"/>). A pure read of its own state.
+    /// </summary>
+    internal static bool RunsListJob(in CharacterHot n, CharacterCold cold) => FreeForJobs(cold) && OnJobTask(n, cold);
+
+    /// <summary>
+    /// Out of a fight, free (<see cref="PlayerSideHold.Free"/>) and held by no order.
+    /// </summary>
+    static bool FreeForJobs(CharacterCold cold) => !cold.InCombat && PlayerSideHold.Free(cold) && !DecisionSystem.Ordered(cold);
+
+    /// <summary>
+    /// Whether the character's task is a job's (list or implicit) that its provenance still runs.
+    /// </summary>
+    static bool OnJobTask(in CharacterHot n, CharacterCold cold) => cold.Running is { Source: TaskSource.Job } run && run.Runs((CharacterTask)n.Task);
+
+    /// <summary>
+    /// The job passes of an <see cref="AiMind.Engine"/> mind (its tiers are the engine's combat goals, weighed above) on its routine or its job's
+    /// task: the ladder's source rungs (<see cref="Ladder.Run"/> with no tiers: its look asks only the job passes), so its list jobs run on the rungs
+    /// they have for anyone. Writes only its own row.
+    /// </summary>
+    static void EngineJobs(World world, in CharacterHot n, CharacterCold cold, AiMind mind, ChooserRow? row)
+    {
+        if (!mind.Engine || row is null || cold.Jobs.Count == 0 || !FreeForJobs(cold)) return;
+        if (!EngineRoutine(n) && !OnJobTask(n, cold)) return;
+
+        row.Pick = Ladder.Run(world.Decisions.Steps, row, null, jobs: true);
     }
 
     /// <summary>
@@ -573,7 +609,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         var tiers = TierRungs.Local.Bind(this, world, i, id, mind, squad, board, roles, hour, Restrict.None);
         var pick = Ladder.Run(world.Decisions.Steps, row, tiers, cold.Jobs.Count > 0);
         if (row is not null) row.Pick = pick;
-        if (pick.Goal is { } goal) ActChosen(world, i, cold, mind, goal, board, row);   // else a source's pick: the serial pass starts it
+        if (pick.Goal is { } goal) ActChosen(world, i, cold, mind, goal, board, row);
+        else if (!cold.IsPlayer && pick.Source >= 0) LeaveChoice(cold, mind);   // an NPC's job: the serial pass starts it, the goal is left
     }
 
     /// <summary>
@@ -1998,8 +2035,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         behaviour = Adopt(world, slot, mind, goal, board, type, behaviour, fresh);
         if (fresh) PlanAnew(world, slot, mind, goal, board, profile);
 
-        // A player-faction character on a task that is not the AI's (a job's, the engine's): the think starts nothing over it on its own slot.
-        if (mind.PlayerSide && !PlayerSideHold.OwnsTask(table.Next[slot], table.Cold(slot)!, mind))
+        // A player-faction character on a task that is not the AI's (a job's, the engine's), an NPC on its job's: the think starts nothing over it
+        // on its own slot.
+        var self = table.Cold(slot)!;
+        bool foreign = mind.PlayerSide || OnJobTask(table.Next[slot], self);
+        if (foreign && !PlayerSideHold.OwnsTask(table.Next[slot], self, mind))
         {
             ActOverTask(world, slot, mind, type, behaviour);
             return;
@@ -2029,8 +2069,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// A player-faction character's goal over a task that is not the AI's (<see cref="PlayerSideHold.OwnsTask"/>; the think's own-slot starts end no
-    /// handler, <see cref="TaskStart.StartOwn"/>): a fight or a run is asked of the serial steps, whose start replaces the task as any start does;
+    /// A player-faction character's goal over a task that is not the AI's, an NPC's over its job's (<see cref="PlayerSideHold.OwnsTask"/>; the
+    /// think's own-slot starts end no handler, <see cref="TaskStart.StartOwn"/>): a fight or a run is asked of the serial steps, whose start replaces the task as any start does;
     /// any other goal has the serial step end the task (<see cref="LeaveFights"/>: the character idle, the task's handler ended) and is acted out at
     /// the next tick, from its own stand.
     /// </summary>

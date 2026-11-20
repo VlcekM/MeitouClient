@@ -898,7 +898,8 @@ public static partial class SaveCapture
         if (cold.SlaveState != 0 && Kidnap.ObedientSlave.OwnerOf(world, cold) is { } owner) s_memoryPass?.Slavers.Add((g, owner));
         DialogueSave.Write(g, cold);
         if (orders) Orders.Write(g, cold);
-        if (orders && sc.Ai is { } ai)
+        // An NPC's job list too, while it has one (the original's records hold NPCs' 57 and 187, docs/game/ai-tasks.md "Perma-jobs").
+        if ((orders || cold.Jobs.Count > 0) && sc.Ai is { } ai)
         {
             var modJobs = world.SystemOf<PlayerSystem>()?.Extensions?.JobTypes;
             PermaJobSave.Write(ai, cold, world.Buildings, buildings, who => HandOf(world, who), modJobs);

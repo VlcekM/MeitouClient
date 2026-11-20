@@ -577,7 +577,8 @@ internal static class SavedCharacters
         if (cold.InSomething == Locks.HeldState.Bed)
             hot.Task = (byte)CharacterTask.Sleep;   // it lies there until an order (Locks.BedSystem)
 
-        if (cold.IsPlayer && sc.Ai is { } ai)
+        // Every character's job list, an NPC's too (the loader FUN_140508e10 has no faction test: an NPC robot's 57, an NPC slave's 187).
+        if (sc.Ai is { } ai)
         {
             PermaJobSave.Read(ai, sc.GameState, cold, world.Buildings, context.Handles, context.InstanceOf, context.InstanceIds,
                 world.SystemOf<Player.PlayerSystem>()?.Extensions?.JobTypes);

@@ -582,13 +582,14 @@ public sealed partial class AiSystem
 
     /// <summary>
     /// Whether the task the think asked to leave is still there to end: a fight, its own Fixing Legs treatment, or a player-faction character's task
-    /// that is not the AI's (an order given since is the player's and stays).
+    /// that is not the AI's, an NPC's job's task (an order given since stays).
     /// </summary>
     static bool Leaves(in CharacterHot n, CharacterCold cold, AiMind mind)
     {
         if (cold.InCombat || TreatsOwnLegs(n, cold)) return true;
 
-        return mind.PlayerSide && cold.Running is not { Source: TaskSource.Order } && !PlayerSideHold.OwnsTask(n, cold, mind);
+        bool foreign = mind.PlayerSide || cold.Running is { Source: TaskSource.Job };
+        return foreign && cold.Running is not { Source: TaskSource.Order } && !PlayerSideHold.OwnsTask(n, cold, mind);
     }
 
     #endregion

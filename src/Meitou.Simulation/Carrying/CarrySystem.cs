@@ -1728,29 +1728,13 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     Locks.BedSystem? _beds;
 
     /// <summary>
-    /// Every <see cref="CarrySettings.AutoEveryTicks"/> ticks (serial, slot order): NPCs with a rescue job (a loaded list), idle, wandering or
-    /// following (or on a list job below it), able to carry and with no fight in their squad, pick up the nearest knocked-out member of their faction
-    /// within their sight (<see cref="FindRescue"/>); then the NPCs whose AI chose the leader rescue goal (142) lift their knocked-out squad leader
-    /// (<see cref="RescueLeaders"/>), and those whose AI chose goal 148 the body its finder gives (<see cref="RescueToBeds"/>). A player character's
-    /// rescue job is the decision step's (<see cref="RegisterSources"/>).
+    /// Every <see cref="CarrySettings.AutoEveryTicks"/> ticks (serial, slot order): the NPCs whose AI chose the leader rescue goal (142) lift their
+    /// knocked-out squad leader (<see cref="RescueLeaders"/>), and those whose AI chose goal 148 the body its finder gives (<see cref="RescueToBeds"/>).
+    /// A rescue job is the chooser's job passes' for anyone (<see cref="RegisterSources"/>).
     /// </summary>
     void Rescue(World world, CharacterTable table)
     {
-        var next = table.Next;
         var taken = Lifting(table);
-        for (int i = 0; i < table.HighWater; i++)
-        {
-            if (!next[i].Alive || table.Cold(i) is not { IsPlayer: false, RescueJob: true } cold) continue;
-
-            // Free, or on a list job below the rescue job (which ranks above it).
-            int rescue = cold.Jobs.FindIndex(j => j.Type == TaskType.FindAndRescueIfTheresBeds);
-            if (!Free(world, i)
-                && !(Production.PermaJobs.ListJob(cold, (CharacterTask)next[i].Task) is { Implicit: false } job && job.Job > rescue
-                    && cold is { Fleeing: false } && CanCarry(world, cold, TaskType.FindAndRescueIfTheresBeds)))
-                continue;
-            if (!MayRescue(world, i, cold)) continue;
-            RescueSomeone(world, i, taken, TaskSource.Job, rescue);
-        }
         RescueLeaders(world, table, taken);
         RescueToBeds(world, table, taken);
     }

@@ -231,7 +231,7 @@ delivering, fetching and dismantling are steps of one act-out (`TaskStart.ActOut
 - Engine starts end the fight and the task before as any start does (a flight's run stops the fight at once, a dialogue act's walk ends it). An errand's own walks would end a fight
   its character is in, so they wait for it: a ditch steps nothing while its member fights (a player character's food run ends instead; engine choice, the
   original's priority-3 reactions beat these goals).
-- Provenance is the only job mark: `PermaJobs.ListJob` is the production pick's list job (its index) or implicit job it runs (not a follow row's fight step), which the implicit jobs, an NPC's rescue rank test and the circle
+- Provenance is the only job mark: `PermaJobs.ListJob` is the production pick's list job (its index) or implicit job it runs (not a follow row's fight step), which the implicit jobs and the circle
   break read; a list edit moves any job provenance's index (one whose job left the list keeps running with index -1). The task an act-out goes back to is `RunningTask.Resume`, for the
   characters the decision step does not decide: following or wandering when it did that, else idle (`TaskStart.Standing`); a medic or builder
   already at it keeps its own (`TaskStart.ResumeOf`).
@@ -379,8 +379,10 @@ of a player's squad of the player's faction, not a prisoner it keeps) the ladder
 goals (`AiSystem.ThinkPlayer`; the other own-list goals weigh 0 and stay with their sources). Its winning goal is acted out as an NPC's (`AiSystem.ActChosen`) while nothing else holds it
 (`PlayerSideHold.Free`: not fleeing, engaged, imprisoned, carried or down), and holds it (`PlayerSideHold.Holds`, the look due on its turn) until an order, a job or a higher goal
 ends it (`OrderStep.TakeOver`, `DutyEnd`); a goal over an order's or a job's task ends that task in the serial step and acts at the next tick; a source's win ends the goal (`DutyGoals.Leave`);
-an autonomous squad's member the NPC's while the AI holds it, else the sources' rungs alone (its package mind untouched); an NPC the ladder through `ThinkHeld` while the AI holds it, else the restricted choice
-(caged, or only the goals that pre-empt an engine duty or fight: **engine**, standing for the plan of a task Meitou's systems run); no mind (tests only) the sources' rungs. Three
+an autonomous squad's member the NPC's while the AI holds it, else the sources' rungs alone (its package mind untouched); an NPC the ladder through `ThinkHeld` while the AI holds it
+or it runs its list job's task free and out of a fight (`AiSystem.RunsListJob`: a job's pick leaves its goal, a goal that wins ends the job's task first, as a player-faction
+mind's), else the restricted choice (caged, or only the goals that pre-empt an engine duty or fight: **engine**, standing for the plan of a task Meitou's systems run), and
+an engine mind with nothing pre-empting the sources' rungs on its routine or job's task (`AiSystem.EngineJobs`: its job passes); no mind (tests only) the sources' rungs. Three
 phases, no source ever called from the think:
 - **Look** (`DecisionSystem.Look`, serial, end of the schedule step): a character the chooser runs for (`TakesOrders`: a squad, not carried, out cold or dead) that a source
   concerns (a player character, a player-faction mind, an order or a job list) and that is due (its think turn, `ThinkEveryTicks` anchored at tick + slot, for a player
@@ -1002,7 +1004,7 @@ a Pack Beast, an Iron Spider and a Bonedog of the player's squad). A live animal
 not down; Trade on an own animal too) ends above the grid ([animals](game/animals.md#death-items)). It also runs the stealth knock-out
 (`StealthKo` task, reusing `CarryTarget`/`LiftTime`): [combat](game/combat.md#stealth-knock-out).
 - **NPC rescue to a bed** (goal 148 Find and rescue if there's beds, facts: [carry-loot 3.2](game/carry-loot.md#32-goals-and-their-target-finders)):
-  on the `AutoEveryTicks` beat, after the rescue jobs and the leader rescue, an NPC the AI runs (not an engine mind, not a player character) whose
+  on the `AutoEveryTicks` beat, after the leader rescue, an NPC the AI runs (not an engine mind, not a player character) whose
   goal lists hold 148 keeps the goal's factor for its think (`CarrySystem.RescueToBeds`, `AiMind.BedRescueWant`, hashed while set): 1 while it is not
   on Hold, carries nothing, the rescue finder (`FindRescue`) finds a downed ally and the bed search a bed for it, else 0. The bed search is the
   carrier's (`BedSystem.FindForCarrier`): it leaves out beds other carriers are on their way to, and a squad with no town takes only its own or an
@@ -2008,7 +2010,7 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
       ([medic jobs](game/ai-tasks.md#medic-jobs)) over characters within sight (stand-in for the sensed list): score = need (untreated HP for
       the kits it has) × relation factor × nearness (1 - d²/1843²); the medic itself scores its need. 58 skips robot races. Splinting takes
       only its own faction, at skill min(medic, kit quality), and needs a splint kit in the medic's own inventory or backpack (as the original, [kit search](game/character-stats.md#first-aid-update)); its weight is 0.1 ([splints](game/character-stats.md#splints)). Engine: no same-building floor, no give-up list.
-    - 148 rescue (`CarrySystem.FindRescue`; a player character its own faction, with Rescue Allies also allied factions; an NPC rescuer allied factions always; never animals, bed or cage occupants; `CarrySystem.Rescues`). An NPC with a loaded rescue job keeps the carry pass.
+    - 148 rescue (`CarrySystem.FindRescue`; a player character its own faction, with Rescue Allies also allied factions; an NPC rescuer allied factions always; never animals, bed or cage occupants; `CarrySystem.Rescues`). An NPC's rescue job runs on the job passes as anyone's.
     - 238 Foraging animals (`CarrySystem.FindForage`): the nearest downed, uncarried animal within sight holding items, not of its own faction
       (engine choice), is looted (take-all and butchering).
     - 16 Attacking enemies: `AggroSystem` looks for the character as for an NPC (`HuntsEnemies`: the job and row 16's desire, not Passive, not sneaking outside a fight, standing) and
