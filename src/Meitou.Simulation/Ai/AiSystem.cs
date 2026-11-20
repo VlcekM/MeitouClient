@@ -562,12 +562,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// Puts back the plan <see cref="KeepPlan"/> kept: the winner was not taken up.
+    /// Puts back the plan <see cref="KeepPlan"/> kept: the winner was not taken up. A goal a replan request cleared (<see cref="TierRungs.Begin"/>)
+    /// keeps no plan.
     /// </summary>
     static void RestorePlan(AiMind mind)
     {
         mind.Plan.Clear();
-        mind.Plan.AddRange(PlanScratch);
+        if (mind.Goal is not null) mind.Plan.AddRange(PlanScratch);
     }
 
     /// <summary>
