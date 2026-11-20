@@ -1165,8 +1165,8 @@ public sealed partial class CombatSystem
     /// fewer are in. The ones that are not in yet ask whenever they decide; those with a lower slot ask first (engine choice for the original's
     /// update order), counted only when they may decide this tick (not staggered, blocking or dodging, or swinging past the point where it could
     /// still give the swing up) and not on a path chase, so a fighter is not left out for one that does not ask. The melee alert's entries
-    /// (<see cref="AlertedAttackers"/>) that do not fight <paramref name="t"/> take room too, and one the alert put there already is in
-    /// (<c>FUN_140666e20</c>'s contains test comes first).
+    /// (<see cref="AlertedAttackers"/>) that do not fight <paramref name="t"/> and are still on the list take room too, and one the alert put there
+    /// already is in (<c>FUN_140666e20</c>'s contains test comes first).
     /// </summary>
     bool MayJoin(World world, int i, int t, int now)
     {

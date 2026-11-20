@@ -407,18 +407,36 @@ public sealed partial class CombatSystem
             askers++;
         }
 
-        _alerted.Push(t, table.Next[t].Generation, live[t].ListEpoch, table.IdOf(a), askers);
+        int generation = table.Next[t].Generation;
+        bool targeted = live[a].TargetSlot == t && live[a].TargetGeneration == generation;
+        _alerted.Push(t, generation, live[t].ListEpoch, table.IdOf(a), targeted, askers, e => !table.TryResolveNext(e.Item1, out _) || LeftList(live, t, generation, e));
+    }
+
+    /// <summary>
+    /// Whether the alert entry <paramref name="entry"/> on <paramref name="owner"/>'s engaged list (of generation <paramref name="generation"/>) has
+    /// left it, judged on <paramref name="slots"/> (its character known to be there): it is down (<c>FUN_140665e00</c>), or it fought the owner when
+    /// pushed and fights another now (<c>FUN_140665580</c>).
+    /// </summary>
+    static bool LeftList(CombatSlot[] slots, int owner, int generation, (CharacterId Attacker, bool Targeted) entry)
+    {
+        int a = entry.Attacker.Slot;
+        if (a >= slots.Length || slots[a].Down) return true;
+
+        return entry.Targeted && !(slots[a].TargetSlot == owner && slots[a].TargetGeneration == generation);
     }
 
     /// <summary>
     /// Entry <paramref name="k"/> of the alert entries on <paramref name="owner"/>'s engaged list (<see cref="AlertedAttackers"/>) as of the last
-    /// tick: the attacker's slot, or -1 when the entry is no longer on the list or its character is gone. Any thread after the schedule.
+    /// tick: the attacker's slot, or -1 when the entry is no longer on the list or has left it (<see cref="LeftList"/>). Any thread after the schedule.
     /// </summary>
     int AlertedAt(World world, int owner, int k)
     {
         var prev = world.Characters.Previous;
-        var id = _alerted.At(owner, prev[owner].Generation, _read[owner].ListEpoch, k);
+        int generation = prev[owner].Generation;
+        var entry = _alerted.At(owner, generation, _read[owner].ListEpoch, k);
+        var id = entry.Attacker;
         if (id.IsNone || (uint)id.Slot >= (uint)prev.Length || !prev[id.Slot].Alive || prev[id.Slot].Generation != id.Generation) return -1;
+        if (LeftList(_read, owner, generation, entry)) return -1;
 
         return id.Slot;
     }

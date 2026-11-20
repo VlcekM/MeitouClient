@@ -6,7 +6,9 @@ namespace Meitou.Simulation.Combat;
 /// fights the character (a failed stealth knock-out's attacker does not). The askers that join the list in the fight are Meitou's
 /// <see cref="CombatSlot.Engaged"/> flags; this list holds the rest. An entry is stamped with its owner's <see cref="CombatSlot.ListEpoch"/>, so the
 /// end of the owner's fight task (<c>FUN_1406659b0</c> mode 2 zeroes the list) leaves it out; a blow the owner lands on it, or one it blocks, takes
-/// it off (<c>FUN_14060a2f0</c> → <c>FUN_1406657d0</c>). Written in serial phases only; read anywhere after the schedule.
+/// it off (<c>FUN_14060a2f0</c> → <c>FUN_1406657d0</c>), and so does the attacker turning from the owner to another target (<c>FUN_140665580</c>
+/// alerts the old target with the leave flag, <c>FUN_140999f00</c> → <c>FUN_1406657d0</c>) or going down (<c>FUN_140665e00</c> drops entries
+/// <c>FUN_1407d1440</c> finds down). Written in serial phases only; read anywhere after the schedule.
 /// </summary>
 internal sealed class AlertedAttackers
 {
@@ -22,20 +24,21 @@ internal sealed class AlertedAttackers
     /// <summary>
     /// The entries by owner slot, in push order (null: none yet).
     /// </summary>
-    List<(CharacterId Attacker, int Epoch)>?[] _lists = [];
+    List<(CharacterId Attacker, int Epoch, bool Targeted)>?[] _lists = [];
 
     /// <summary>
     /// Puts <paramref name="attacker"/> on the list of <paramref name="owner"/> (its generation <paramref name="generation"/>, its list epoch now
     /// <paramref name="epoch"/>): nothing when it is there already or when the list, with the <paramref name="askers"/> the fight put there,
-    /// holds <see cref="Cap"/>. Serial.
+    /// holds <see cref="Cap"/>; entries of another epoch and those <paramref name="left"/> holds for go first. <paramref name="targeted"/>: the attacker
+    /// fights the owner now, so turning away later takes it off. Serial.
     /// </summary>
-    public void Push(int owner, int generation, int epoch, CharacterId attacker, int askers)
+    public void Push(int owner, int generation, int epoch, CharacterId attacker, bool targeted, int askers, Predicate<(CharacterId, bool)> left)
     {
         var list = ListOf(owner, generation);
-        list.RemoveAll(e => e.Epoch != epoch);
+        list.RemoveAll(e => e.Epoch != epoch || left((e.Attacker, e.Targeted)));
         if (list.Exists(e => e.Attacker == attacker) || list.Count + askers >= Cap) return;
 
-        list.Add((attacker, epoch));
+        list.Add((attacker, epoch, targeted));
     }
 
     /// <summary>
@@ -53,14 +56,14 @@ internal sealed class AlertedAttackers
 
     /// <summary>
     /// Entry <paramref name="k"/> of <paramref name="owner"/>'s list when it is on it now (its generation <paramref name="generation"/>, its list
-    /// epoch <paramref name="epoch"/>); <see cref="CharacterId.None"/> otherwise.
+    /// epoch <paramref name="epoch"/>), with whether it fought the owner when it was pushed; <see cref="CharacterId.None"/> otherwise.
     /// </summary>
-    public CharacterId At(int owner, int generation, int epoch, int k)
+    public (CharacterId Attacker, bool Targeted) At(int owner, int generation, int epoch, int k)
     {
-        if (_generation[owner] != generation) return CharacterId.None;
+        if (_generation[owner] != generation) return (CharacterId.None, false);
 
-        var (attacker, stamp) = _lists[owner]![k];
-        return stamp == epoch ? attacker : CharacterId.None;
+        var (attacker, stamp, targeted) = _lists[owner]![k];
+        return stamp == epoch ? (attacker, targeted) : (CharacterId.None, false);
     }
 
     /// <summary>
@@ -75,10 +78,11 @@ internal sealed class AlertedAttackers
             h.Add(s);
             h.Add(_generation[s]);
             h.Add(list.Count);
-            foreach (var (attacker, epoch) in list)
+            foreach (var (attacker, epoch, targeted) in list)
             {
                 h.Add(attacker);
                 h.Add(epoch);
+                h.Add(targeted);
             }
         }
     }
@@ -86,7 +90,7 @@ internal sealed class AlertedAttackers
     /// <summary>
     /// The list of <paramref name="owner"/>, emptied when it last belonged to another character in that slot.
     /// </summary>
-    List<(CharacterId Attacker, int Epoch)> ListOf(int owner, int generation)
+    List<(CharacterId Attacker, int Epoch, bool Targeted)> ListOf(int owner, int generation)
     {
         if (owner >= _lists.Length)
         {
