@@ -1462,9 +1462,12 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
     reach, `canIUseThisBuilding`, weight x100 own / home, x1e-5 police in a private building). **Verified** desires and finders: [ai-tasks](game/ai-tasks.md#perma-jobs).
   - With none of them wanted the carrier keeps the body.
 - **243 Getting food** (plan `[1, 244, 243]`; a ditch first when 244's room test 82 fails, the planner's 114 and 93): the desire of AI slots 26, 24, 25 ([eating](game/character-stats.md#eating):
-  0 outside a town, in another faction's town, carrying food; the occupied branch; else hungry with an empty stomach), so an NPC fed by its hunger floor (3; a malnourished
-  squad's 1 to 2.2) wants none. The finder: the nearest store with food of the blackboard's target town, else the current one, else the 3 x 3 zone cells round it (a player
-  town's complete storage, else an unlocked container); 244 takes one item, not while a sensed ally fights (state 12). The player side's runs: [decision step](#decision-step).
+  0 outside a town, in another faction's town, carrying food; the occupied branch; else an empty stomach and hunger below 2.1 for an NPC that is no slave, at most 2.4; 0.1 in a
+  fight below 1.2). An NPC on the ordinary hunger floor 3 wants none; a `malnourished` squad's floor (1 + 1.2 x rand) is below 2.1 on most rolls and the free food refills only an
+  empty stomach, so it wants food for part of every cycle: starving raiders occupying a town (`hostile occupy town`, `campaign victory occupy town` list 243) take food from its
+  storages and eat it (**Verified**, `FUN_140597d30`, `FUN_1405c9d90`, the free food `FUN_1407ee2d0`, `gamedata_base.txt`). The finder: the nearest store with food of
+  the blackboard's target town, else the current one, else the 3 x 3 zone cells round it (a player town's complete storage, else an unlocked container); 244 takes one item, not while a sensed ally
+  fights (state 12). The player side's runs: [decision step](#decision-step).
 - **131 Looting food** (plan `[1, 284, 131]`, desire 1.0): the same finder, not a container of its own faction (engine reading of the own-shop skip); 284 takes up to 10 units of
   the first record the store lists (`Task_EmptyMachine` with flag 1, `FUN_14033cd10`, **Verified**: one unit per pass while the store holds the record and there is room; the
   record is the first the store's inventory lists, food or not, **Verified** `FUN_140299990`). State 68 is state 66's evaluator (**Verified**,

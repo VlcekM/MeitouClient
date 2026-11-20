@@ -884,7 +884,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// 243's desire for an NPC (AI slots 26, 24, 25, <b>Verified</b>, docs/game/character-stats.md "Food from storage"): 0 for an animal while Feed
     /// Animals is off, outside a town, in a town neither of its faction nor the player's faction's nor one where the player lives, and while it
     /// carries food; in a town with occupiers while it senses an enemy 0.2 inside the walls whatever its hunger, 0 outside them when the town has
-    /// gates; else 259's desire: 1.0 with its stomach empty and its hunger at most 2.4 (below 1.2 in a fight), else 0.
+    /// gates; else slot 25 (<c>FUN_140597d30</c>): 0 unless it wants food (a slave or one of the player's faction always, anyone else below
+    /// hunger 2.1, character slot <c>0x340</c>), its stomach is empty and its hunger at most 2.4; then 1.0, in a fight 0.1 below hunger 1.2, else 0.
     /// </summary>
     float NpcFoodDesire(World world, int slot, CharacterCold c, Vector3 at)
     {
@@ -906,8 +907,11 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             if (HasGates(world, town)) return 0;
         }
 
-        bool hungry = med.Fed <= 0 && med.Hunger <= FeedSystem.FoodOnGroundBelow && !(c.InCombat && med.Hunger >= FeedSystem.FoodOnGroundInFight);
-        return hungry ? 1 : 0;
+        bool wants = c.Faction == player || c.SlaveState == 1 || med.Hunger < FeedSystem.NpcWantsBelow;
+        if (!wants || med.Fed > 0 || med.Hunger > FeedSystem.FoodOnGroundBelow) return 0;
+        if (!c.InCombat) return 1;
+
+        return med.Hunger < FeedSystem.FoodOnGroundInFight ? 0.1f : 0;
     }
 
     #endregion
