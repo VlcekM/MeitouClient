@@ -488,8 +488,8 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
                 // In reach (or treating itself): stand still and let the Act step work, and ask the patient to stand still too. The medic kneels only
                 // while the patient keeps still (the original plays the clip in the first aid task's update, which runs once the target stands still,
                 // row 25's state 42).
-                if (t != i) AskToStandStill(world, i, t);
                 bool patientStill = Speed2(table.Previous[t].Velocity) <= Settings.StillSpeed * Settings.StillSpeed;
+                if (t != i) AskToStandStill(world, i, t, patientStill);
                 cold.TreatKneels = !cold.Medical!.PlayingDead && (t == i || table.Cold(t)!.Medical!.Incapacitated || patientStill);
                 if ((n.Flags & path) != 0)
                 {
@@ -552,16 +552,17 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     /// The first aid task's every update asks the patient to stand still (<c>Task_FirstAid</c> / <c>Task_FirstAidRig</c> /
     /// <c>Task_MakeTargetStandStill</c> slot 5 <c>FUN_1403346d0</c>, <b>Verified</b>; docs/game/ai-tasks.md "Medic jobs"): it files 62 Standing still at
     /// priority 3, weight 1.4, on the patient's platoon blackboard, for the patient, or for its carrier while it is carried (the call takes the
-    /// carrier then). A splint files it on the medic's own platoon blackboard for the patient, no carrier swap (<c>Task_FirstAidRig</c>'s update
-    /// <c>FUN_14034ef20</c>, <b>Verified</b>), so a patient of another squad never reads it. The request competes in that character's priority-3 pick (<see cref="Ai.TierRungs"/>), so a patient stands still unless an
+    /// carrier then). The splint's own update, which runs once the patient stands still (<paramref name="still"/>; before, row 64 asks as above),
+    /// files it on the medic's own platoon blackboard for the patient, no carrier swap (<c>Task_FirstAidRig</c>'s update <c>FUN_14034ef20</c>,
+    /// <b>Verified</b>), so a patient of another squad never reads it. The request competes in that character's priority-3 pick (<see cref="Ai.TierRungs"/>), so a patient stands still unless an
     /// order, an urgent job or a goal that scores higher wins, and not under a threat within 40 (62's list B <c>!39</c>). <see cref="Act"/> treats
     /// only a patient standing still.
     /// </summary>
-    static void AskToStandStill(World world, int medic, int patient)
+    static void AskToStandStill(World world, int medic, int patient, bool still)
     {
         var table = world.Characters;
         var asker = table.IdOf(medic);
-        if (table.Cold(medic)!.TreatSplint)
+        if (still && table.Cold(medic)!.TreatSplint)
         {
             Ai.BoardRequests.FileOn(world, asker, asker, table.IdOf(patient), TaskType.StandStill, TaskPriority.Urgent, StandStillWeight);
             return;
