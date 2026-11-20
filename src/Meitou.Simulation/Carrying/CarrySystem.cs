@@ -443,14 +443,14 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     }
 
     /// <summary>
-    /// <see cref="RescueJobCommand"/>: each player character gets the rescue job, or the Rescue button's one look for a body.
+    /// <see cref="RescueJobCommand"/>: each of its characters (else the selection) gets the rescue job, or the Rescue button's one look for a body.
     /// </summary>
     void GiveRescueJob(World world, RescueJobCommand job)
     {
         var table = world.Characters;
         foreach (var id in Who(world, job.Characters))
         {
-            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { IsPlayer: true } cold) continue;
+            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { } cold) continue;
 
             if (job.Job)
             {
@@ -489,7 +489,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// The carry orders' checks: the target must still fit the verb (else the order leaves the queue); the character must be able to lift
     /// (<see cref="CanCarry"/>, ordered: a fight ends with the order's task), loot (awake, an inventory, not carried), knock out
     /// (<see cref="CanKnockOut"/>) or put down (awake); the Rescue button needs a rescuer (not fleeing, able to lift, not on Hold) and a free bed.
-    /// The Rescue button and opening an inventory are a player character's only (else the order leaves the queue).
+    /// Opening an inventory opens the loot window for a player character only (the interface's); anyone else's is the original's plain 26 Looting
+    /// (<c>FUN_1405d20d0</c> tests the faction only on its permanent path), which loots the body (<see cref="NpcLoot"/>).
     /// </summary>
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
@@ -497,7 +498,6 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         var cold = table.Cold(slot)!;
         if (order.Detail == RescueButton)
         {
-            if (!cold.IsPlayer) return OrderCheck.Gone;
             if (cold.Fleeing || !CanCarry(world, cold, TaskType.FindAndRescueIfTheresBeds, ordered: true) || !Rescuing(cold))
                 return OrderCheck.Blocked();
 
@@ -519,8 +519,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                 if (!LiftOf(world, order, slot, target)) return OrderCheck.Gone;
                 return CanCarry(world, cold, order.Row, ordered: true) && cold.Carrying != order.Target ? OrderCheck.Run : OrderCheck.Blocked();
             case TaskType.LootTarget:
-                // Opening an inventory opens the player's loot window (OpenWindow): a player character's order only.
-                if (order.Detail == OpenInventory ? !cold.IsPlayer || !Openable(table, target) : !CanBeLooted(tc)) return OrderCheck.Gone;
+                // Opening an inventory opens the player's loot window (OpenWindow) for a player character; anyone else loots.
+                if (OpensWindow(cold, order) ? !Openable(table, target) : !CanBeLooted(tc)) return OrderCheck.Gone;
                 return cold is { Medical.Incapacitated: false, Inventory: not null } && cold.CarriedBy.IsNone ? OrderCheck.Run : OrderCheck.Blocked();
             case TaskType.StealthKnockout:
                 if (!CanBeKnockedOut(tc)) return OrderCheck.Gone;
@@ -551,7 +551,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                     cold.Snatching = !cold.Kidnapping;
                 }
                 break;
-            case TaskType.LootTarget when order.Detail == OpenInventory:
+            case TaskType.LootTarget when OpensWindow(cold, order):
                 Start(world, slot, CharacterTask.Loot, TaskType.LootTarget, TaskSource.Order, order.Target, CharacterTask.Idle);
                 (world.Player.OpenLoot, world.Player.OpeningLoot, world.Player.LootWalker) = (CharacterId.None, order.Target, table.IdOf(slot));
                 OpenAtBody(world, slot);
@@ -570,6 +570,11 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                 break;
         }
     }
+
+    /// <summary>
+    /// Whether a loot order opens the loot window: an Open Inventory order of a player character (the window is the interface's).
+    /// </summary>
+    static bool OpensWindow(CharacterCold cold, OrderEntry order) => order.Detail == OpenInventory && cold.IsPlayer;
 
     /// <summary>
     /// The lift rows whose task carries the snatch byte (<c>FUN_14032ebd0</c>): 213 Lifting/Snatching and 240 Capture Target (225, the player's

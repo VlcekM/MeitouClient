@@ -158,7 +158,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         bool robotics = SquadNeedsRobotics(world);
         foreach (var id in Who(world, job.Characters))
         {
-            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { IsPlayer: true } cold) continue;
+            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { } cold) continue;
             if (!job.Job)
             {
                 var detail = robotics ? RoboticsButton : MedicButton;
@@ -197,14 +197,15 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     /// <summary>
     /// First aid 25 and Splint 249 need the patient alive (else the order leaves the queue) and an able medic with a kit (a medkit or a robot kit
     /// anyone of its squad near it carries; its own splint kit) with a working arm (<see cref="HasWorkingArm"/>), Rest an able character; the Medic
-    /// button an able player character. The failure texts are the orders' refusals.
+    /// button's look anyone's (the button's 58 / 57 is a plain order in the queue: <c>FUN_1405d20d0</c> tests the faction only on its permanent path;
+    /// the finder decides).
+    /// The failure texts are the orders' refusals.
     /// </summary>
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
         var table = world.Characters;
         var cold = table.Cold(slot)!;
-        if (order.Detail == MedicButton || order.Detail == RoboticsButton)
-            return cold.IsPlayer ? OrderCheck.Run : OrderCheck.Gone;
+        if (order.Detail == MedicButton || order.Detail == RoboticsButton) return OrderCheck.Run;
 
         if (order.Row == TaskType.Rest) return CanAct(cold) ? OrderCheck.Run : OrderCheck.Blocked();
         if (!table.TryResolveNext(order.Target, out int patient) || table.Cold(patient)!.Medical is not { Dead: false })

@@ -347,9 +347,10 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
 - Owners that take a player character's order only (an NPC's leaves the queue, `Gone`), their act-outs being the player's: build, repair and dismantle (the sites, doors and
   towns they take are the player faction's, and the start's "I don't have any building materials." is said for anyone), the machine orders and prospecting (87, 97, 124,
   146, 150: a worked bench advances the player's research, hauls go to the player faction's storages, prospecting fills the player's prospecting window, the
-  turret's gunner is the interface's), a container's (26, 76: the player's container window), opening an inventory (26 with the inventory detail: the player's loot window)
-  and a door walk (72, 73, 76 on a door: the interface's one door target, `PlayerState.DoorTarget`), and the Medic, Robotics and Rescue buttons. Moves, follows, attacks,
-  first aid, splint and rest, lifts, kidnap, loot, stealth KO, put down, beds, a ground pick-up (3), the rest of the lock work, put in cage (108) and the arrest orders
+  turret's gunner is the interface's), a container's (26, 76: the player's container window) and a door walk (72, 73, 76 on a door: the interface's one door target,
+  `PlayerState.DoorTarget`). Moves, follows, attacks, first aid, splint and rest, the Medic, Robotics and Rescue buttons' one look (58 / 57 / 148 as plain orders: the
+  order giver `FUN_1405d20d0` tests the faction only on its permanent path, **Verified**), lifts, kidnap, loot (opening an inventory opens the loot window for a player character only; anyone
+  else's is the plain 26 and loots the body), stealth KO, put down, beds, a ground pick-up (3), the rest of the lock work, put in cage (108) and the arrest orders
   (240, 213, 112, 4), 133 and 35 take any character; their
   act-outs post and say the worker's own messages for the player's side only.
 - Saved for player characters (`Saving/OrderSave`, in the character's GAMESTATE_AI record next to the perma-jobs; format and evidence: [save](formats/save.md#order-queue)): the queue front first,
