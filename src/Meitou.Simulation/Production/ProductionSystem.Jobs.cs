@@ -377,7 +377,7 @@ public sealed partial class ProductionSystem
         // Sleep and Sit not while holding position (FUN_1402b2b90), carrying someone (+0x348) or selected by the player (FUN_1407f4d20, the
         // interface's selection set; FUN_14050e5b0, Verified).
         if (Orders.Holding(cold) || !cold.Carrying.IsNone || world.Player.Selection.Contains(table.IdOf(slot))) return null;
-        if ((options & SquadAi.Sleep) != 0 && WantsBed(world, slot, cold) && Beds is not null)
+        if ((options & SquadAi.Sleep) != 0 && WantsBed(world, _towns, slot, cold) && Beds is not null)
         {
             if (on == TaskType.GoHomeAndGoToBed && cold.OperateSite is { } bed && world.Fixtures.Find(bed) is { } kept
                 && Gap(kept.Position, at) <= Locks.FixtureRegistry.BedSearchRange)
@@ -446,10 +446,10 @@ public sealed partial class ProductionSystem
     /// <summary>
     /// The player branch of row 98 Sleeping's desire (<c>FUN_1405a0880</c>, <b>Verified</b>; 153 plans into 98, and a node whose desire is 0 is
     /// dropped): it stands in a player place (<see cref="InPlayerPlace"/>), its organic first aid need is 0 (everything bandaged) and it is
-    /// <see cref="Unrested"/>.
+    /// <see cref="Unrested"/>. <paramref name="towns"/>: the world's town data (null: none built).
     /// </summary>
-    bool WantsBed(World world, int slot, CharacterCold cold) =>
-        Unrested(cold) && FirstAid.FirstAidSystem.OrganicAidNeed(world, cold) <= 0 && InPlayerPlace(world, slot, cold);
+    internal static bool WantsBed(World world, Population.PopulationData? towns, int slot, CharacterCold cold) =>
+        Unrested(cold) && FirstAid.FirstAidSystem.OrganicAidNeed(world, cold) <= 0 && InPlayerPlace(world, towns, slot, cold);
 
     /// <summary>
     /// The player branch's place test (<c>FUN_1405a0880</c>, <b>Verified</b> decompile): the character's status town (status <c>+0x88</c>) is set,
@@ -457,9 +457,9 @@ public sealed partial class ProductionSystem
     /// So a character out in the wild, or outdoors in another faction's town, is not sent to bed. A world built without town data has no towns to
     /// test, so there it is not asked.
     /// </summary>
-    bool InPlayerPlace(World world, int slot, CharacterCold cold)
+    static bool InPlayerPlace(World world, Population.PopulationData? data, int slot, CharacterCold cold)
     {
-        if (_towns is not { } towns) return true;
+        if (data is not { } towns) return true;
 
         int player = world.Player.Faction;
         var town = Ai.AiSystem.StatusTownAt(towns, world, world.Characters.Next[slot].Position, cold.StatusTown);
