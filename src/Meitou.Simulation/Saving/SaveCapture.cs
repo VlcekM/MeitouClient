@@ -1149,6 +1149,7 @@ public static partial class SaveCapture
             if (squad is not null) PackageSave.Write(platoon.Record, squad.Ai, data, made);
             if (squad is not null) CurrentTownSave.Write(platoon.Record, squad.Ai, s_memoryPass?.TownHands);
             if (squad is not null) HomeLockSave.Write(platoon.Record, world, squad);
+            else if (p is not null) HomeLockSave.Write(platoon.Record, world, data, sp, p);
 
             // A wild one the AI ran: its package, persistent while it occupies a town (as the original's occupation).
             if (sp.Wild is not null && p is not null && (squad?.Ai?.Current?.Id ?? p.Package) is { } package)

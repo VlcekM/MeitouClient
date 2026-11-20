@@ -843,7 +843,7 @@ reads its own keys. Keys are looked up by name: **Observed**, METARU and i949 ho
 
 | Key | Type | Blackboard | Meaning | Meitou |
 |---|---|---|---|---|
-| `runningAwayMode` | bool | `+0x14c` | set by `FUN_140269320`; while set the update `FUN_1402732b0` makes no package choice or package update; only the constructor and the load clear it | not modelled; kept as read |
+| `runningAwayMode` | bool | `+0x14c` | set by `FUN_140269320`; while set the update `FUN_1402732b0` makes no package choice or package update; the constructor clears it | not modelled; kept as read |
 | `currentPackage` | string | `+0x48` | the running package's AI_PACKAGE id, "" none | written ([NPC platoons](#npc-platoons-meitou-mapping)) |
 | `target town` | handle | `+0xf0` | the null handle for none | `AiSave`, with a contract |
 | `towntime` | float | `+0x140` | the game hour (day x 24 + hour) the squad came into `currenttown` (`FUN_1402688d0`) | `CurrentTownSave`, below |
@@ -869,10 +869,10 @@ reads its own keys. Keys are looked up by name: **Observed**, METARU and i949 ho
   (engine choice). **Observed** (METARU loaded headless, 1500 ticks, saved): 535 of 537 platoons written back with the same `currenttown` and
   `towntime`; with every `currenttown` made null first, the 38 loaded squads in a town are written with that town and the hour of the load.
 - **House locked**: Meitou keeps the flag on the squad's home (`LockSystem.IsHouseLocked`, the building's `meitou house locked`). `Saving/HomeLockSave`
-  writes `homelok` as its home's flag for a squad in the world with a home (its blackboard's, else its assigned one; one without keeps the record's), and
-  a save's platoon made for the first time since the load with `homelok` set sets its home's flag. **Observed** (METARU loaded headless, 1500 ticks from
-  5:38, saved): of 32 platoons with it set, 28 keep it and 4 are written false (their homes' flags cleared since); 4 more are written true, 3 of them
-  squads Meitou gives a home the save names none for.
+  writes `homelok` as the flag of the home the platoon's `homebuilding` names (`Squad.HomeBuilding`; a save's platoon out of the world, from the same
+  building), and a save's platoon made for the first time since the load with `homelok` set sets its home's flag; a platoon without a home keeps the
+  record's. **Observed** (METARU loaded headless, 1500 ticks from 5:38, saved): of 32 platoons with it set, 28 keep it and 4 are written false (their
+  homes' flags cleared since); one more is written true.
 - **Observed** (METARU, autosave0, autosave2, i949): `runningAwayMode` and `mission data` are false and "" on every platoon; `towntime` is 0 or
   between 34 (day 1, 10:00) and the save's clock.
 
