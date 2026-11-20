@@ -646,12 +646,15 @@ decompile's `DialogActionEnum` / `DialogConditionEnum` / `EventTriggerEnum`, com
   `FUN_14099bfc0`: the first sensed character (mask 0x400e/0x221) not carried, not of a `not real` faction, not an animal (slot `0x248`), not
   imprisoned, that has a perceived bounty with the guard (`FUN_140853fd0`: the entry for the guard's booking faction, visible while
   `+0x110 > 0`, or when the target is down and an enemy), or that the guard's squad marks with flag 7, or regards as an enemy. Its effect
-  129 leads the planner to 203 Arresting (list B: target down, unarmed, carried) and then the cage goals. Meitou: `ArrestSystem.BountyTarget`
-  takes the nearest such character the guard sees (the witnesses' sight test: the ray where it applies, and for a sneaker a full spot meter),
-  standing for the sense list;
-  the mask's slave bit (0x20, slave state 1) leaves slaves out. A guard whose left arm cannot carry starts no arrest of a downed target it cannot
-  strip any further, and ends one once only the lift is left (its plan needs the carry, whose provider needs state 80, [ai-tasks](ai-tasks.md) "Arrest
-  chain"), so another guard takes it.
+  129 leads the planner to 203 Arresting (list B: target down, unarmed, carried) and then the cage goals. 203's desire (AI slot 32
+  `FUN_140598a40`) is 0 when the status town is unset and the ownership town is set, else 1; the fights' are 4's (AI slot 53, [combat](combat.md))
+  and 262's (slot 54 `FUN_140598260`: 0 unless ranged mode is on, an arm works, not crippled and a crossbow sits at back or hip; 0.1 while meleed;
+  0 at a caged target or without bolts; else 1, 0.5 while the squad is not intact), 181's 1 and 68's the lift desire (**Verified**, the registration's
+  stubs). 203 does not act, so the plan is over after each of the fight, the strip and the lift, and the chooser plans afresh; once the target is
+  carried 129 holds. Meitou (`ArrestGoals`, [arrest and jail](../simulation.md#arrest-and-jail)): the finder takes the nearest such character the guard
+  sees (the witnesses' sight test: the ray where it applies, and for a sneaker a full spot meter), standing for the sense list; flag 7 is the squad's
+  short-term memory tag 7 (`MemoryTag.Criminal`, `FUN_140678960`); the mask's slave bit (0x20, slave state 1) leaves slaves out. A guard whose left
+  arm cannot carry gets no lift (68 needs state 80, [ai-tasks](ai-tasks.md) "Arrest chain").
 - **Caging** (goals 112 / 281 "Find and put in cage", subtask 108 `PUT_IN_CAGE`): desire `FUN_1405a1140` (0 unless carrying;
   0.1 / 0.5 / 1.4 / 2.0 by status, death and bounty tests in `FUN_1405a0f10`); cage finder `FUN_1408d0770(ai, wantFree 1, function 8)`
   over the candidates `FUN_1408cbea0` gathers (interiors included): the town in the character's status (`+0x88`), else its faction's nearest town (`FUN_140927f10`, nest markers left out) when within squared `DAT_14172dd88` = 1.5625e7, the buildings within that town's radius x `DAT_1416b1640` = 1.1 of its position (`FUN_140a00690`, each passing the usable test with no character, only complete ones), plus those of the home building's town when it differs; with no town at all every zone is searched, i.e. every building (**Verified**): usable (`FUN_140621230`, `Ownerships::canIUseThisBuilding`, full rule in [locks](locks.md#beds); **Verified** by decompile), not reserved, free; weight

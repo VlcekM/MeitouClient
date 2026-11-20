@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Data.Gameplay.Ai;
+using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Locks;
@@ -43,8 +44,8 @@ public sealed class Caging
 }
 
 /// <summary>
-/// A bounty hunter after a player character (economy.md 11.8): chasing until the target is down, then resting from it (<see cref="Rest"/> game
-/// seconds left).
+/// A bounty hunter that recognised a player character's bounty (economy.md 11.8): its event 44 line, or the engine's order where no dialogue says
+/// it, sets it on the target; it leaves the target alone for <see cref="Rest"/> more game seconds.
 /// </summary>
 public sealed class Hunt
 {
@@ -57,11 +58,11 @@ public sealed class Hunt
     /// </summary>
     public required CharacterId Target { get; init; }
     /// <summary>
-    /// Game seconds since the last attack order.
+    /// Game seconds since the hunter recognised the target.
     /// </summary>
     public float Time { get; set; }
     /// <summary>
-    /// Above 0: the hunt is over and the hunter leaves this target alone for that many more game seconds.
+    /// Game seconds the hunter still leaves this target alone.
     /// </summary>
     public float Rest { get; set; }
 
@@ -97,7 +98,7 @@ public sealed partial class ArrestSystem : IOrderOwner
     /// </summary>
     readonly List<Caging> _cagings = [];
     /// <summary>
-    /// The hunts, the resting ones kept until their rest runs out.
+    /// The hunts, kept until their rest runs out.
     /// </summary>
     readonly List<Hunt> _hunts = [];
 
@@ -106,7 +107,7 @@ public sealed partial class ArrestSystem : IOrderOwner
     /// </summary>
     public IReadOnlyList<Caging> Cagings => _cagings;
     /// <summary>
-    /// The hunts, running and resting.
+    /// The hunts whose hunter still leaves its target alone.
     /// </summary>
     public IReadOnlyList<Hunt> Hunts => _hunts;
 
@@ -583,89 +584,69 @@ public sealed partial class ArrestSystem : IOrderOwner
         }
         var id = table.IdOf(slot);
         if (Busy(id)) return false;
-        foreach (var h in _hunts) if (h.Hunter == id && (h.Rest <= 0 || h.Target == target)) return false;
+        foreach (var h in _hunts) if (h.Hunter == id && h.Target == target) return false;
         return true;
     }
 
     /// <summary>
-    /// The hunter and his squad attack the target and chase it (the dialogue's <c>DA_ATTACK_CHASE_FOREVER</c>, economy.md 11.8).
+    /// The hunter recognised the target's bounty: it fires event 44 BOUNTY_SPOTTED at it (<c>FUN_140856f00</c>), whose bounty hunters' lines answer a
+    /// bounty above 4000 with <c>DA_ATTACK_CHASE_FOREVER</c> (6, order 101; economy.md 11.8); without dialogue events the engine orders it 101 itself
+    /// (<see cref="OrderChase"/>). It then leaves the target alone for <see cref="ArrestSettings.HuntRestSeconds"/>.
     /// </summary>
     void BeginHunt(World world, int hunter, int target)
     {
         var table = world.Characters;
         var hc = table.Cold(hunter)!;
-        hc.Engaged = true;
-        _hunts.Add(new Hunt { Hunter = table.IdOf(hunter), Target = table.IdOf(target) });
-        Attack(world, null, hunter, target);
-        world.Post(Loc.Tr("{1} is after the bounty on {2}!", hc.Name, table.Cold(target)!.Name));
-        Note(world, ArrestEventKind.Hunt, table.IdOf(hunter), table.IdOf(target), hc.Faction, HuntBounty(table.Cold(target)!, hc.Faction));
+        var hunterId = table.IdOf(hunter);
+        var targetId = table.IdOf(target);
+        if (Talks)
+        {
+            if (Talk!.FireEvent(world, hunterId, targetId, BountySpotted))
+                Note(world, ArrestEventKind.Spotted, hunterId, targetId, hc.Faction, BountySpotted);
+        }
+        else
+        {
+            OrderChase(world, hunter, target);
+            world.Post(Loc.Tr("{1} is after the bounty on {2}!", hc.Name, table.Cold(target)!.Name));
+        }
+
+        _hunts.Add(new Hunt { Hunter = hunterId, Target = targetId, Rest = Settings.HuntRestSeconds });
+        Note(world, ArrestEventKind.Hunt, hunterId, targetId, hc.Faction, HuntBounty(table.Cold(target)!, hc.Faction));
     }
 
     /// <summary>
-    /// One tick of a hunt; false when it is gone. The chase ends when the target is down (the hunter leaves it: nothing in the data cages it),
-    /// carried, caged or beyond the leash.
+    /// One tick of a hunt's rest; false when it ran out (the hunter may recognise the target again).
     /// </summary>
     bool StepHunt(World world, Hunt h)
     {
-        var table = world.Characters;
         float dt = world.TickSeconds;
-        if (h.Rest > 0) return (h.Rest -= dt) > 0;
-        if (!table.TryResolveNext(h.Hunter, out int g) || table.Cold(g) is not { } gc) return false;
+        h.Time += dt;
+        if ((h.Rest -= dt) > 0) return true;
 
-        // A hunter knocked out drops the hunt: the AI takes him again once he is up, as after an arrest (End).
-        if (gc.Medical is not { Incapacitated: false })
-        {
-            gc.Engaged = false;
-            return false;
-        }
-
-        // A stumble or a get-up (an order on the body, which lets no duty go) holds the hunter a moment: the hunt waits for it.
-        if (PlayerOrders.BodyHolds(gc)) return true;
-
-        bool over = !table.TryResolveNext(h.Target, out int t)
-            || table.Cold(t) is not { Medical.Incapacitated: false, IsImprisoned: false, CarriedBy.IsNone: true };
-        if (!over)
-        {
-            h.Time += dt;
-            ref var gn = ref table.Next[g];
-            if (gn.Task != (byte)CharacterTask.Attack && !gc.InCombat && h.Time >= 1)
-            {
-                float gap = Vector3.Distance(gn.Position, table.Next[t].Position);
-                if (gap > Settings.HuntLeash || HuntBounty(table.Cold(t)!, gc.Faction) <= HuntLimit) over = true;
-                else
-                {
-                    h.Time = 0;
-                    Attack(world, null, g, t);
-                }
-            }
-        }
-        if (!over) return true;
-        EndHunt(world, h, gc);
-        return true;
+        int faction = world.Characters.TryResolveNext(h.Hunter, out int g) ? world.Characters.Cold(g)!.Faction : -1;
+        Note(world, ArrestEventKind.HuntOver, h.Hunter, h.Target, faction, 0);
+        return false;
     }
 
     /// <summary>
-    /// A hunt is over: the hunter goes back to the AI and the hunt rests for <see cref="ArrestSettings.HuntRestSeconds"/>.
+    /// A bounty the target carries that the guard sees (goal 204's finder, <c>FUN_140853fd0</c>, <b>Verified</b>): the entry of the guard's booking
+    /// faction is above 0, and either the target is recently wanted (the status marker above 0) or it is down and the guard regards it as an enemy.
     /// </summary>
-    void EndHunt(World world, Hunt h, CharacterCold gc)
+    internal bool PerceivedBounty(CharacterCold guard, CharacterCold target)
     {
-        gc.Engaged = false;
-        h.Rest = Settings.HuntRestSeconds;
-        Note(world, ArrestEventKind.HuntOver, h.Hunter, h.Target, gc.Faction, 0);
+        if ((target.Bounties?.BookedAmount(Crimes.Relations, guard.Faction) ?? 0) <= 0) return false;
+        if (target.RecentlyWanted > 0) return true;
+
+        return target.Medical is { Incapacitated: true } && Enemy(guard, target);
     }
 
     /// <summary>
-    /// An order takes the hunter in <paramref name="slot"/>: each hunt of his under way is over (<see cref="EndHunt"/>).
+    /// Whether the guard's faction regards the target's as an enemy.
     /// </summary>
-    void ReleaseHunts(World world, int slot)
+    internal bool Enemy(CharacterCold guard, CharacterCold target)
     {
-        if (_hunts.Count == 0 || world.Characters.Cold(slot) is not { } gc) return;
-
-        var id = world.Characters.IdOf(slot);
-        foreach (var h in _hunts)
-        {
-            if (h.Hunter == id && h.Rest <= 0) EndHunt(world, h, gc);
-        }
+        var relations = Crimes.Relations;
+        return relations.Contains(guard.Faction) && relations.Contains(target.Faction) && AggroSystem.IsEnemy(relations, guard.Faction, target.Faction);
     }
 
     /// <summary>
