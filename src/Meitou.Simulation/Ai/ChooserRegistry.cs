@@ -243,7 +243,8 @@ public readonly record struct ModGoalStart(int Slot, CharacterId Id, Squad Squad
 public enum ModGoalEnd : byte
 {
     /// <summary>
-    /// Another goal of the character scored higher: the engine stops a task that is still the act-out's, and the next tick acts the winner out.
+    /// Another goal, or a job or source pick of a player character, won the chooser: the engine stops a task that is still the act-out's, and
+    /// the next tick acts the winner out.
     /// </summary>
     Displaced,
     /// <summary>

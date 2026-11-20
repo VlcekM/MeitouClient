@@ -247,10 +247,10 @@ public interface ITaskOwner
 }
 
 /// <summary>
-/// The act-out handlers by <see cref="CharacterTask"/> (<see cref="World.Tasks"/>): an open list each owning system fills (<see cref="ITaskOwner"/>)
-/// and later code may add to or replace. A task with no handler is started by setting it. A row may have a handler of its own, which takes the row's
-/// starts and ends from the task's handler: the lock, door, cage, item and bed rows a walk acts out (<see cref="CharacterTask.GoTo"/>) are their
-/// systems', not the movement's.
+/// The act-out handlers by <see cref="CharacterTask"/> (<see cref="World.Tasks"/>): a list each owning system fills in its
+/// <see cref="ITaskOwner.RegisterTasks"/>, and only there (a later system's handler replaces an earlier one's). A task with no handler is started
+/// by setting it. A row may have a handler of its own, which takes the row's starts and ends from the task's handler: the lock, door, cage, item
+/// and bed rows a walk acts out (<see cref="CharacterTask.GoTo"/>) are their systems', not the movement's.
 /// </summary>
 public sealed class TaskHandlers
 {
