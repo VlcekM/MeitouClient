@@ -449,26 +449,16 @@ public sealed partial class FirstAidSystem
 
     /// <summary>
     /// The finder's gates on the medic: able, not fighting (unless ordered), free, with a working arm (the treatment rows' state 38,
-    /// <see cref="HasWorkingArm"/>); an NPC also not while its squad fights or it carries someone.
+    /// <see cref="HasWorkingArm"/>); an NPC also not while it carries someone.
     /// </summary>
     bool MayLook(World world, CharacterCold cold, bool ordered)
     {
-        var table = world.Characters;
         // A character carried awake treats no one, itself included, as with orders (engine choice, docs/simulation.md).
         if (!cold.CarriedBy.IsNone) return false;
 
         var row = ordered ? TaskType.FirstAidOrder : TaskType.JobMedic;
         if (!Awake(cold.Medical) || cold.Race is null || cold.Stats is null || cold.InCombat && !ordered
                 || cold.IsImprisoned || !TaskStart.Eligible(world, cold, row) || !HasWorkingArm(cold))
-            return false;
-
-        // No fight in the squad: the stand-in for the goal's desire of an NPC the AI weighs no goals for (an AI-run one's think weighs its own
-        // senses, AiSystem.MedicDesire: a jailer treats its prisoners while squad mates fight across town, #643). The finder has no such test and
-        // the job list keeps any job whose desire is above 0 (FUN_14050e5b0), so a player's medic job and Medic order treat a downed mate while the
-        // squad fights.
-        bool weighed = cold.Ai is { Engine: false };
-        if (!cold.IsPlayer && !weighed && cold.SquadId >= 0 && world.Squads.Find(cold.SquadId) is { } squad
-                && CharacterFacts.SquadFighting(table, squad))
             return false;
 
         // Nor while it carries someone (the goal's 0.1 then): the carrying goal (a kidnap, a rescue) keeps it, so a carrier does not walk off after a

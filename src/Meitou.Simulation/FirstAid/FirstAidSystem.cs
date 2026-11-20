@@ -929,7 +929,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         var table = world.Characters;
         var next = table.Next;
 
-        // The treated list and the sweep are made on the turn's first idle NPC (a turn with none, most of them in a quiet world, makes neither).
+        // The treated list and the sweep are made on the turn's first NPC that weighs the Medic goal (a turn with none makes neither).
         SquadGoals? taken = null;
         try
         {
@@ -938,42 +938,23 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
                 if (!next[i].Alive || !world.Turn(i, every)) continue;   // its turn (the far cadence, World.Turn)
                 var cold = table.Cold(i)!;
                 if (cold.IsPlayer || !Settings.AutoNpcs) continue;   // a player's medic jobs are the decision step's (MedicJobs)
-                if (cold.Ai is { Engine: false } mind)
+
+                // The AI's own: its Medic goal weighs the patient found here (AiBehaviour.Medic). One whose lists hold no Medic goal does not treat,
+                // nor does a character without a full mind: in the original a character treats only through goal 58, a job or an order.
+                if (cold.Ai is not { Engine: false } mind) continue;
+                if ((_ai ??= world.SystemOf<AiSystem>())?.ListsGoal(world, i, TaskType.JobMedic) != true)
                 {
-                    // The AI's own: its Medic goal weighs the patient found here (AiBehaviour.Medic); one whose lists hold no Medic goal does not
-                    // treat.
-                    if ((_ai ??= world.SystemOf<AiSystem>())?.ListsGoal(world, i, TaskType.JobMedic) != true)
-                        mind.MedicScore = 0;
-                    else
-                    {
-                        if (taken is null)
-                        {
-                            taken = SquadGoals.Of(world);
-                            BeginSweep(world);
-                        }
-
-                        KeepPick(world, i, mind, taken);
-                    }
-
+                    mind.MedicScore = 0;
                     continue;
                 }
 
-                // A character whose mind the AI is about to make (none yet, in a squad the AI runs: after a join, a recruit or a lift from a
-                // cage) waits for it: its goal lists decide whether it treats.
-                if (MindPending(world, cold)) continue;
-
-                // An NPC the AI does not run (an engine mind, or none) treats when idle: no task, following, wandering or an implicit job; not
-                // while its order holds it.
-                bool idle = next[i].Task is (byte)CharacterTask.Idle or (byte)CharacterTask.Wander or (byte)CharacterTask.Follow
-                        || Production.PermaJobs.ListJob(cold, (CharacterTask)next[i].Task) is { Implicit: true };
-                if (!idle || DecisionSystem.Ordered(cold)) continue;
                 if (taken is null)
                 {
                     taken = SquadGoals.Of(world);
                     BeginSweep(world);
                 }
 
-                HealSomeone(world, i, taken, robotics: false, TaskSource.Npc);
+                KeepPick(world, i, mind, taken);
             }
         }
         finally
@@ -981,13 +962,6 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             EndSweep();
         }
     }
-
-    /// <summary>
-    /// Whether the AI makes this character's mind on its squad's next package step: it has none and its squad runs a blackboard (the AI gives every
-    /// member of such a squad a mind, a full one or an engine one, <see cref="AiSystem"/>). A slave lifted from a cage is one: in the original it
-    /// plans with its master's slave list and never treats on its own.
-    /// </summary>
-    static bool MindPending(World world, CharacterCold cold) => cold.Ai is null && world.Squads.Find(cold.SquadId) is { Ai: not null };
 
     /// <summary>
     /// The Medic goal's finder result for the think (<see cref="AiMind.MedicPatient"/>, <see cref="AiMind.MedicScore"/>; none and 0 without a

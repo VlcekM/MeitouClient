@@ -64,8 +64,8 @@ public sealed class FirstAidSettings
     /// </summary>
     public float AutoReach { get; init; } = 250;
     /// <summary>
-    /// NPCs with a kit treat hurt squad mates without an order (a stand-in for the original's medic job and AI goals until stage 9). The player's
-    /// characters do only with the medic job on.
+    /// NPCs on a full AI mind whose lists hold the Medic goal run its patient finder on their turn (<c>AiBehaviour.Medic</c>); false: no NPC treats
+    /// through it. The player's characters treat only by the medic job or an order.
     /// </summary>
     public bool AutoNpcs { get; init; } = true;
 }
