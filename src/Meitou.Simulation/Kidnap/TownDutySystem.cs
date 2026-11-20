@@ -1421,27 +1421,6 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// Row 93 at a storage for an obedient player slave's errand (<see cref="StashHere"/>, the ditch's collection): the carried items the storage
-    /// <paramref name="storeId"/> takes go in. Serial phases only.
-    /// </summary>
-    internal void PutAway(World world, CharacterCold cold, string storeId, Vector3 at)
-    {
-        var machine = world.Machines.Find(storeId);
-        var box = machine is null ? world.Fixtures.Find(storeId) : null;
-        if ((machine?.Storage ?? box?.Contents) is { } store && cold.Inventory is { } inv) StashHere(world, true, cold, inv, machine, box, store, at);
-    }
-
-    /// <summary>
-    /// The storage the ditch finder (<see cref="DitchStore"/>'s search, <see cref="StoreFor"/>) finds for <paramref name="items"/> in the town at
-    /// <paramref name="at"/>: the nearest that takes one of them; null outside a town or with none. A read-only look.
-    /// </summary>
-    internal (string Id, Vector2 Spot)? StoreTaking(World world, Squad squad, CharacterCold cold, Vector3 at, IEnumerable<ItemInstance> items)
-    {
-        var town = AiSystem.TownAt(data, world, at);
-        return town.IsNone ? null : StoreFor(world, squad, cold, at, town, [.. items], register: false);
-    }
-
-    /// <summary>
     /// The errand's member at its store puts the items in, whole stacks while there is room: for a ditch (<paramref name="ditch"/>) what the
     /// ditch's collection lists, else its loot. What goes into a building shop's stock container is for sale: the shop's stock is what the home's
     /// containers hold (docs/game/economy.md "Building shops"), and the ditch finder takes a shop's storages as any other.

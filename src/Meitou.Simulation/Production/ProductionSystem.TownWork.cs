@@ -587,40 +587,6 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The obedient player slaves at their workplace on goal 189 (<see cref="CharacterCold.SlaveWork"/>; serial, after the AI's workers): as the
-    /// AI's plan for 189 (87's list B in order: <c>!63</c>, whose provider is 92; <c>!62</c>, whose provider is 93), a full output is emptied into
-    /// the inventory (row 92), else an empty input is filled from what it carries (row 93, <see cref="FillInputs"/>), else the machine is operated
-    /// (row 87, <see cref="TownOperate"/>). Fetching an input from another machine and putting output away are walks of the job
-    /// (Kidnap/ObedientSlave.cs). The machine is the AI's workers' (<see cref="TownWork"/>). 190 pretends (row 221, no list B on the machine's
-    /// state) and operates it as row 87 does, whatever it holds.
-    /// </summary>
-    void ObedientWorkers(World world, float dt)
-    {
-        var table = world.Characters;
-        for (int i = 0; i < table.HighWater; i++)
-        {
-            if (!table.Next[i].Alive || table.Cold(i) is not { SlaveWork: { Place: var place } work } cold) continue;
-            if (!Able(cold) || cold.ActionClip != place.Clip || !AtTownWork(world, i, place.Building, place.Range)) continue;
-
-            var m = world.Machines.Find(TownWorkId(place.Building)) ?? TownWork(world, place.Building, place.Owner);
-            if (m is null || !Live(world, m)) continue;
-
-            if (work.Operates && m.OutputBlocked) TakeOutput(world, cold, m);
-            else if (work.Operates && m.HasEmptyInputs) FillInputs(world, cold, m);
-            else TownOperate(world, i, cold, m, dt);
-        }
-    }
-
-    /// <summary>
-    /// Row 92 at another town machine for an obedient player slave's errand (the source row 94 found): its output goes into the inventory while
-    /// there is room (<see cref="TakeOutput"/>). Serial phases only.
-    /// </summary>
-    internal void TakeTownOutput(World world, CharacterCold cold, TownBuilding building, int owner)
-    {
-        if (MachineFor(world, building, owner) is { } m && Live(world, m)) TakeOutput(world, cold, m);
-    }
-
-    /// <summary>
     /// State 82 <c>gotInventoryRoomForResources</c> of a machine (<c>FUN_14059bd80</c>, <b>Verified</b>): the inventory or the worn backpack has room
     /// for a unit of its output item.
     /// </summary>

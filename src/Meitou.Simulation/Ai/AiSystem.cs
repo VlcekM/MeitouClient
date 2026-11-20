@@ -264,9 +264,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     #region Think
 
     /// <summary>
-    /// The blackboard an <see cref="AiMind.Engine"/> mind chooses under: no package, nothing claimed (its combat goals read none of it).
+    /// The blackboard an <see cref="AiMind.Engine"/> or player-faction mind chooses under: no package, no town, nothing claimed (its combat goals
+    /// read none of it).
     /// </summary>
-    static readonly Blackboard EngineBoard = new([]);
+    internal static readonly Blackboard EngineBoard = new([]);
 
     /// <summary>
     /// Every character's default goal (docs/game/ai.md "Default tasks per character", Observed): IDLE at the fluff tier, weight 0.1.
@@ -858,15 +859,21 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// Job 187 Obedient Slave of an NPC (<c>FUN_14050e5b0</c>, docs/game/ai-tasks.md "Obedient Slave"): a slave (state 1) not sneaking, the jobs
-    /// switch on, holds the job in effect (Meitou keeps no perma-job list for an NPC; <see cref="CharacterCold.ObedienceLost"/> stands for its
-    /// removal by a split), and its master squad's <c>Slave AI Goals</c> are the 187 branch's goals, which the chooser's job passes score before its
-    /// own tiers (<see cref="TierRungs.PickJobPass"/>), whatever its squad role: a guard enslaved by its own squad stops guarding while a Slave goal
-    /// plans (#991). The engine's sweeps take it as the list the slave plans with. Null: no master squad, an empty Slave list, or a job a split took.
+    /// Job 187 Obedient Slave (<c>FUN_14050e5b0</c>, docs/game/ai-tasks.md "Obedient Slave"): a slave (state 1) not sneaking, the jobs switch on,
+    /// that holds the job (a player character's list, <see cref="Kidnap.ObedientSlave.HasJob"/>; an NPC holds it in effect, Meitou keeping no
+    /// perma-job list for it, <see cref="CharacterCold.ObedienceLost"/> standing for its removal by a split) has its master squad's
+    /// <c>Slave AI Goals</c> as the 187 branch's goals, which the chooser's job passes score before its own tiers (<see cref="TierRungs.PickJobPass"/>),
+    /// whatever its squad role: a guard enslaved by its own squad stops guarding while a Slave goal plans (#991). The engine's sweeps take it as the
+    /// list the slave plans with. Null: no master squad, an empty Slave list, or no job.
     /// </summary>
     internal static IReadOnlyList<AiGoal>? ObeyedRoles(World world, Squad squad, CharacterCold cold) =>
-        !cold.ObedienceLost && Kidnap.ObedientSlave.Obeys(cold) && (cold.Orders & CharacterOrders.Jobs) != 0 && cold.SlaveMaster >= 0
+        HoldsObedience(cold) && Kidnap.ObedientSlave.Obeys(cold) && (cold.Orders & CharacterOrders.Jobs) != 0 && cold.SlaveMaster >= 0
             ? Kidnap.ObedientSlave.SlaveList(world.Squads.Find(cold.SlaveMaster)) : null;
+
+    /// <summary>
+    /// Whether the character holds job 187: a player character's list has it, an NPC's was not split off (<see cref="ObeyedRoles"/>).
+    /// </summary>
+    static bool HoldsObedience(CharacterCold cold) => cold.IsPlayer ? Kidnap.ObedientSlave.HasJob(cold) : !cold.ObedienceLost;
 
     /// <summary>
     /// The role list a member takes (docs/game/ai.md "Goal loading"): the squad leader the leader's, else by its squad role. Public for code mods; a
@@ -883,13 +890,14 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// running package, or the slave list of the squad it obeys, or its race's <c>AI Goals</c> hold the type in the hour's window. False without a
     /// mind or a squad blackboard, for an autonomous squad's player character (its mod goals are weighed at 0), and for an engine mind (a squad the
     /// population moves) but for a combat goal of its combat or race lists. A player-faction mind (<see cref="AiMind.PlayerSide"/>) weighs a type of
-    /// its own lists that is on the chooser's rungs (<see cref="Ladder.OnRungs"/>; never a code mod's). For code mods (docs/modding.md "NPC goals"):
+    /// its own lists that is on the chooser's rungs (<see cref="Ladder.OnRungs"/>; never a code mod's) and, obeying, its master's Slave list
+    /// (<see cref="ObeyedRoles"/>). For code mods (docs/modding.md "NPC goals"):
     /// whether a goal of theirs is still weighed for a character they act it out for (unlike <see cref="ListsGoal"/>, the hour's window counts).
     /// Serial phases, or the character's own partition.
     /// </summary>
     public static bool WeighsGoal(World world, int slot, TaskType type)
     {
-        if (world.Characters.Cold(slot) is { Ai: { PlayerSide: true } side }) return PlayerSideWeighs(side, type, world.Hour);
+        if (world.Characters.Cold(slot) is { Ai: { PlayerSide: true } side } player) return PlayerSideWeighs(world, player, side, type);
         if (world.Characters.Cold(slot) is not { Ai: { Squad: var squad, Player: false } mind } cold) return false;
 
         int hour = world.Hour;
@@ -902,9 +910,16 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// <see cref="WeighsGoal"/> for a player-faction mind: a type on the chooser's rungs that its own lists hold in the hour's window.
+    /// <see cref="WeighsGoal"/> for a player-faction mind: a type its master's Slave list holds while it obeys, or one on the chooser's rungs that its
+    /// own lists hold, in the hour's window.
     /// </summary>
-    static bool PlayerSideWeighs(AiMind mind, TaskType type, int hour) => Ladder.OnRungs.Contains(type) && Lists(mind.RaceGoals, type, hour);
+    static bool PlayerSideWeighs(World world, CharacterCold cold, AiMind mind, TaskType type)
+    {
+        int hour = world.Hour;
+        if (Lists(ObeyedRoles(world, mind.Squad, cold), type, hour)) return true;
+
+        return Ladder.OnRungs.Contains(type) && Lists(mind.RaceGoals, type, hour);
+    }
 
     /// <summary>
     /// Whether <paramref name="goals"/> hold <paramref name="type"/> in <paramref name="hour"/>'s window.
@@ -1123,8 +1138,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             // The finder's factor follows its pick: 1 for a shop, 0.4 for any other public building, 0 when it finds none (FUN_1409997f0).
             AiBehaviour.Shop => ShopDesire(world, self, mind, board.Town),
             // A worker needs a mine, bench or refinery in its town (the finders return 0 without one).
-            AiBehaviour.Work => WorkAllowed(world, self.Slot, board.HomeTown)
-                && (HoldsWork(mind, board.HomeTown, type) || PickWork(world, self, board.HomeTown, mind.WorkEpoch, type) is not null) ? 1 : 0,
+            AiBehaviour.Work => WorkWanted(world, self, mind, WorkTownOf(mind, board), type) ? 1 : 0,
             // Relaxing needs a free seat of the package's bar, sitting around a free chair of the home (claimed in
             // <see cref="TownPlaceClaims.ClaimSeats"/>); the original's finder returns 0 without one (FUN_1408caf00).
             AiBehaviour.Relax => board.BarTable >= 0 && board.SeatClaims.ContainsKey(self.Slot) && !mind.SeatUnreachable ? 1 : 0,
@@ -1148,8 +1162,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             AiBehaviour.Assault => targeting == TaskTargetType.SquadMission && !AssaultTargetFor(world, self.Slot, board).IsNone ? 1 : 0,
             // Self preservation: the threat level (AI slot 17); Running away: row 35's own (AI slot 55), a goal of the packages that list it.
             AiBehaviour.SelfPreserve => SelfPreservationDesire(world, self.Slot, mind),
-            AiBehaviour.Flee => world.Characters.Cold(self.Slot) is { } runner
-                ? SelfPreservation.RunDesire(runner, SelfPreservation.Walled(world, self.Slot)) : 0,
+            AiBehaviour.Flee => mind.PlayerSide ? PlayerSideRunDesire(world, self.Slot)
+                : world.Characters.Cold(self.Slot) is { } runner ? SelfPreservation.RunDesire(runner, SelfPreservation.Walled(world, self.Slot)) : 0,
             // A combat goal: its own desire's zeros and factors, times its finder's factor (an attack goal's 1 with a target, a protect goal's fight
             // threat; AiSystem.Fights.cs).
             AiBehaviour.Fight => FightDesire(world, self.Slot, type, mind.Squad) is var want and > 0
@@ -1786,16 +1800,17 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             // An autonomous member on a player job holds no AI work slot (its job's machine counts it).
             bool onJob = mind.Player && SquadAutonomy.OnJob(world.Characters.Next[s], cold, mind);
             bool works = type is TaskType.AutoLabouringMines or TaskType.AutoLabouringMinesPretend && !onJob;
-            if (works && HoldsWork(mind, board.HomeTown, type!.Value)) continue;
+            var town = WorkTownOf(mind, board);
+            if (works && HoldsWork(mind, town, type!.Value)) continue;
             if (mind.WorkPost is { } left) _workTaken[left] = _workTaken.GetValueOrDefault(left) - 1;
-            mind.WorkPost = works ? PickWork(world, id, board.HomeTown, mind.WorkEpoch, type!.Value) : null;
+            mind.WorkPost = works ? PickWork(world, id, town, mind.WorkEpoch, type!.Value) : null;
             if (mind.WorkPost is { } got) _workTaken[got] = _workTaken.GetValueOrDefault(got) + 1;
         }
     }
 
     /// <summary>
-    /// The workplaces the members hold, reserved for every squad before any claims (as the seats, <see cref="TownPlaceClaims.Reserve"/>), those
-    /// obedient player slaves operate (<see cref="ReserveObedientWork"/>), and the player's operators on their jobs at an outpost's machines.
+    /// The workplaces the members hold, reserved for every squad before any claims (as the seats, <see cref="TownPlaceClaims.Reserve"/>; a player's
+    /// squad's slaves too, <see cref="ClaimSlaveWork"/>), and the player's operators on their jobs at an outpost's machines.
     /// </summary>
     void ReserveWork(World world)
     {
@@ -1813,8 +1828,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                     _workTaken[post] = _workTaken.GetValueOrDefault(post) + 1;
             }
         }
-
-        ReserveObedientWork(world);
     }
 
     /// <summary>
@@ -2667,7 +2680,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (mind.WorkPost is { } post && mind.Target is { } aim && (aim.X != post.Position.X || aim.Z != post.Position.Z)) mind.Target = null;
         if (mind.Target is null) PickWorkplace(world, slot, mind, board, type);
 
-        var stepAt = StepBuilding(mind, board.HomeTown);
+        var stepAt = StepBuilding(mind, WorkTownOf(mind, board));
         Vector3? working = stepAt is not null && stepAt != mind.WorkBuilding
             ? new Vector3(stepAt.Position.X, float.NaN, stepAt.Position.Z) : mind.Target;
         var aimed = stepAt is not null && stepAt != mind.WorkBuilding ? stepAt : mind.WorkBuilding;
@@ -2708,15 +2721,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (mind.WorkActive) mind.WorkEpoch++;
 
         mind.WorkActive = true;
-        if ((mind.WorkPost ?? PickWork(world, table.IdOf(slot), board.HomeTown, mind.WorkEpoch, type)) is not { } building)
-            return;
+        var town = WorkTownOf(mind, board);
+        if ((mind.WorkPost ?? PickWork(world, table.IdOf(slot), town, mind.WorkEpoch, type)) is not { } building) return;
 
         mind.Target = new Vector3(building.Position.X, float.NaN, building.Position.Z);
         mind.WorkClip = _work.ClipOf(building);
         mind.WorkFunctionality = _work.FunctionalityOf(building);
         mind.WorkHungerRate = _work.HungerRateOf(building);
         mind.WorkBuilding = building;
-        mind.WorkOwner = board.HomeTown.Owner(world, data);
+        mind.WorkOwner = town.Owner(world, data);
     }
 
     /// <summary>
@@ -3414,6 +3427,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         {
             if (squad.Ai is null)
             {
+                if (cadence) ClaimSlaveWork(world, squad);
                 if (!AttachNew(world, squad, cadence)) continue;
             }
             else if (!cadence) continue;   // the rest is looked at on the package cadence only (and when the squad appears)
@@ -3603,8 +3617,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// Every member of a player's squad (<see cref="IsPlayers"/>) gets a player-faction mind (<see cref="AiMind.PlayerSide"/>) when it has none of
     /// that squad: not the player characters of an autonomous squad with its board, whose package mind <see cref="MindAndCrowd"/> gives (one still
-    /// without a mind gets this one until then). Serial, before the look and the think, so every player-faction character with a squad runs the
-    /// chooser.
+    /// without a mind gets this one until then); its work town is stamped (<see cref="StampWorkTown"/>). Serial, before the look and the think, so
+    /// every player-faction character with a squad runs the chooser.
     /// </summary>
     void PlayerSideMinds(World world)
     {
@@ -3613,7 +3627,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             if (!IsPlayers(world, squad)) continue;
 
             bool package = squad is { Autonomous: true, Ai: not null };
-            for (int k = 0; k < squad.Members.Count; k++) GivePlayerSideMind(world, squad, k, package);
+            for (int k = 0; k < squad.Members.Count; k++)
+            {
+                GivePlayerSideMind(world, squad, k, package);
+                StampWorkTown(world, squad, k);
+            }
         }
     }
 

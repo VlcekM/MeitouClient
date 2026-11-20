@@ -86,8 +86,8 @@ internal sealed class TierRungs : ITierRungs
     /// </summary>
     readonly List<(AiGoal? Goal, float Score, float Desire, int Source)> _second = [];
     /// <summary>
-    /// The master squad's Slave goals the job passes' 187 branch scores for the bound character (<see cref="AiSystem.ObeyedRoles"/>); null when it
-    /// does not obey, and for a player-faction mind, whose job 187 is its contributor's (<see cref="Kidnap.ObedientSlave"/>).
+    /// The master squad's Slave goals the job passes' 187 branch scores for the bound character (<see cref="AiSystem.ObeyedRoles"/>: an NPC, or a
+    /// player character whose list holds job 187); null when it does not obey.
     /// </summary>
     IReadOnlyList<AiGoal>? _slaveGoals;
 
@@ -99,7 +99,7 @@ internal sealed class TierRungs : ITierRungs
     {
         (_ai, _world, _slot, _id, _mind, _squad, _board, _roles, _hour, _only) = (ai, world, slot, id, mind, squad, board, roles, hour, only);
         _plans = AiSystem.PlanContext.Local.Bind(ai, world, slot, mind, board);
-        _slaveGoals = mind.Player || world.Characters.Cold(slot) is not { } cold ? null : AiSystem.ObeyedRoles(world, squad, cold);
+        _slaveGoals = world.Characters.Cold(slot) is { } cold ? AiSystem.ObeyedRoles(world, squad, cold) : null;
         _committed = null;
         _candidates.Clear();
         _second.Clear();

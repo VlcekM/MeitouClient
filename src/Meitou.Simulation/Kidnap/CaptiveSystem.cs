@@ -596,11 +596,11 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     }
 
     /// <summary>
-    /// Registers 239 Slave obedience's job and the player animals' race goals of both priorities with the decision step.
+    /// Registers the player animals' race goals of both priorities with the decision step (job 187's goals are the chooser's job passes',
+    /// <see cref="AiSystem.ObeyedRoles"/>).
     /// </summary>
     public void RegisterSources(DecisionSystem decisions)
     {
-        decisions.RegisterJob(TaskType.SlaveObedience, Obedient);
         decisions.Register(new RaceGoals(this, TaskPriority.Urgent));
         decisions.Register(new RaceGoals(this, TaskPriority.NonUrgent));
     }
@@ -1893,7 +1893,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         else FixtureRegistry.Enslave(world, cc, wc.Faction, wc.SquadId);
 
         // Then its orders object is reset: the one-shot orders and the perma-jobs are destroyed (FUN_140507530, FUN_140507280) and job 187 is added
-        // toward the owner (a player character's list; the AI's slaves run it as AiSystem.ObeyedRoles).
+        // toward the owner (a player character's list; an NPC holds it in effect; both obey through AiSystem.ObeyedRoles).
         ObedientSlave.Reset(world, cc);
 
         // Then its head is shaven (CharacterHuman::shaveHead(true) in FUN_14035aa20, Verified); an animal has no head to shave.

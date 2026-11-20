@@ -1468,13 +1468,6 @@ public sealed class CharacterCold
     public WorkEvents? ActionWork { get; set; }
 
     /// <summary>
-    /// The workplace an obedient player slave stands at, at its work clip, for goal 189 or 190 of its Obedient Slave job (Kidnap/ObedientSlave.cs; the
-    /// original runs <c>Task_OperateMachine</c> for both): the production system works its machine for 189, the body takes its <c>hunger rate</c>
-    /// for both. Null: none. Runtime only, not saved, not hashed.
-    /// </summary>
-    public ObedientWork? SlaveWork { get; set; }
-
-    /// <summary>
     /// The replan bit (<see cref="DecisionSystem.Request(CharacterCold)"/>): set by a replan trigger, consumed by the decision step. Player
     /// characters, and NPCs while they hold an order; not saved (a load sets it); hashed while set.
     /// </summary>

@@ -519,9 +519,9 @@ public sealed partial class AiSystem
         }
 
         /// <summary>
-        /// The workplaces of the board's town, a site's or an outpost's (none outside a town).
+        /// The workplaces of the mind's work town, a site's or an outpost's (none outside a town; <see cref="WorkTownOf"/>).
         /// </summary>
-        IEnumerable<Meitou.Data.World.TownBuilding> Workplaces() => _system.WorkplacesOf(_board.HomeTown);
+        IEnumerable<Meitou.Data.World.TownBuilding> Workplaces() => _system.WorkplacesOf(WorkTownOf(_mind, _board));
 
         /// <summary>
         /// The outpost workplace standing at <paramref name="at"/> when the board's town is an outpost; null otherwise.
@@ -775,7 +775,7 @@ public sealed partial class AiSystem
                     if (_mind.Goal?.Task.Type == type && _mind.WorkPost is { } held)
                         return new PlanTarget(Targets.Work, new Vector3(held.Position.X, float.NaN, held.Position.Z));
 
-                    return _system.PickWork(_world, _world.Characters.IdOf(_slot), _board.HomeTown,
+                    return _system.PickWork(_world, _world.Characters.IdOf(_slot), WorkTownOf(_mind, _board),
                             _mind.WorkEpoch + (_mind.WorkActive ? 1 : 0), type) is { } work
                         ? new PlanTarget(Targets.Work, new Vector3(work.Position.X, float.NaN, work.Position.Z)) : default;
                 case TaskType.GetRidOfResourcesInMyInventory or TaskType.EmptyMachineOutputs or TaskType.DitchAllResources:

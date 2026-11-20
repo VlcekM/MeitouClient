@@ -1271,6 +1271,13 @@ public sealed class AiMind
     public TownBuilding? WorkPost { get; set; }
 
     /// <summary>
+    /// The town a player-faction slave's worker goals (189, 190) find their workplaces in: the one its squad's leader stands in, as their finders read
+    /// the platoon's current town (<c>FUN_1408cac60</c>, <c>+0x88</c>); stamped by the serial schedule while it obeys, else none. Any other mind's is
+    /// its board's home town (derived, not hashed).
+    /// </summary>
+    public CampaignTown WorkTown { get; set; } = CampaignTown.None;
+
+    /// <summary>
     /// The clip it plays at its work (the ANIMATION its building's functionality names), cleared with <see cref="CharacterCold.ActionClip"/> when it
     /// stops; null when not working.
     /// </summary>

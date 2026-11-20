@@ -955,7 +955,6 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         int bench = ResetOperators(world);
         TownMachines(world);
         TownWorkers(world, world.TickSeconds);
-        ObedientWorkers(world, world.TickSeconds);
         HomePretenders(world, world.TickSeconds);
 
         // Raise-only (FUN_140834390): losing the best bench does not lower the level; it starts at 0 with the research state and on a load.

@@ -932,7 +932,7 @@ static class SaveProbe
                 if (probe.Characters.Cold(i) is not { } c) continue;
 
                 var n = probe.Characters.Next[i];
-                var place = c.Ai?.WorkBuilding ?? c.SlaveWork?.Place.Building;
+                var place = c.Ai?.WorkBuilding;
                 float range = place is null || ai is null ? 0 : ai.WorkRangeOf(place);
                 float gap = place is null || ai is null ? -1 : Flat(ai.WorkMarker(probe.World, place, n.Position), n.Position);
                 bool walks = n.Task == (byte)CharacterTask.GoTo;

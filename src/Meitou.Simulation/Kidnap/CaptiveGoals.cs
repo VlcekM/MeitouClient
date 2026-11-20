@@ -128,20 +128,21 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
 
     /// <summary>
     /// The picks of the character at <paramref name="s"/>: for a member with a mind of its own, each captive goal its role, slave or race list holds
-    /// in the hour (as <see cref="AiSystem.WeighsGoal"/> reads them) keeps its desire and target; else none.
+    /// in the hour (as <see cref="AiSystem.WeighsGoal"/> reads them) keeps its desire and target; for a player-faction mind those of its master's
+    /// Slave list while it obeys (<see cref="AiSystem.ObeyedRoles"/>), looked for under the engine's empty board; else none.
     /// </summary>
     internal void LookAt(World world, int s)
     {
         if (s < 0) return;
         var table = world.Characters;
         var cold = table.Next[s].Alive ? table.Cold(s) : null;
-        if (cold is not { IsPlayer: false, Ai: { Engine: false, Player: false, Squad: { Ai: { } board } squad } mind })
+        if (cold is null || ListsOf(world, s, cold) is not var (squad, board, roles, own))
         {
             foreach (var picks in _picks) picks.Remove(s);
             return;
         }
 
-        MarkListed(world, s, cold, mind, squad, board);
+        MarkListed(world, roles, own);
         for (int k = 0; k < Types.Length; k++)
         {
             if (_listed[k]) LookFor(world, k, s, cold, squad, board);
@@ -150,15 +151,28 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
     }
 
     /// <summary>
-    /// Marks in <see cref="_listed"/> the captive goals of the member's role list (an obeying slave's: its master's Slave list) and race list that
-    /// hold in the hour.
+    /// The squad, board and lists whose captive goals the character's look weighs: a player-faction mind its master's Slave list alone (none while it
+    /// does not obey) under the engine's board; an NPC with a mind of its own and a squad board its role list (an obeying slave's: its master's
+    /// Slave list) and race list; null for any other character.
     /// </summary>
-    void MarkListed(World world, int s, CharacterCold cold, AiMind mind, Squad squad, Blackboard board)
+    static (Squad Squad, Blackboard Board, IReadOnlyList<AiGoal> Roles, IReadOnlyList<AiGoal> Own)? ListsOf(World world, int s, CharacterCold cold)
+    {
+        if (cold.Ai is { PlayerSide: true, Squad: var side })
+            return AiSystem.ObeyedRoles(world, side, cold) is { } obeyed ? (side, AiSystem.EngineBoard, obeyed, []) : null;
+        if (cold is not { IsPlayer: false, Ai: { Engine: false, Player: false, Squad: { Ai: { } board } squad } mind }) return null;
+
+        var roles = AiSystem.ObeyedRoles(world, squad, cold) ?? board.Roles[(int)AiSystem.RoleOf(squad, world.Characters.IdOf(s), cold)];
+        return (squad, board, roles, mind.RaceGoals);
+    }
+
+    /// <summary>
+    /// Marks in <see cref="_listed"/> the captive goals of the member's role and own lists (<see cref="ListsOf"/>) that hold in the hour.
+    /// </summary>
+    void MarkListed(World world, IReadOnlyList<AiGoal> roles, IReadOnlyList<AiGoal> own)
     {
         Array.Clear(_listed);
         int hour = world.Hour;
-        var roles = AiSystem.ObeyedRoles(world, squad, cold) ?? board.Roles[(int)AiSystem.RoleOf(squad, world.Characters.IdOf(s), cold)];
-        foreach (var list in new[] { roles, mind.RaceGoals })
+        foreach (var list in new[] { roles, own })
         {
             for (int g = 0; g < list.Count; g++)
             {

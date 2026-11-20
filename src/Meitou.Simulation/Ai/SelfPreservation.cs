@@ -33,8 +33,8 @@ public static class SelfPreservation
     /// Row 35's desire (AI slot 55, <c>FUN_1405a34e0</c>, <b>Verified</b>): 1 for a crippled character (Character <c>isCrippled</c>, the medical
     /// tick's flag: a leg down, so it crawls), else 0.001. 0 for a character shut in behind a locked gate of town walls (<paramref name="walled"/>,
     /// <b>Verified</b>: <c>FUN_1402eb070</c> to code 0 is 3); the building half of the location test <c>FUN_1405a2710</c> (no open door) is not
-    /// modelled. A player's character has 0 here: its Self preservation is the player's; its player-faction branch serves the Obedient Slave job
-    /// (<see cref="AiSystem.ObedientRunDesire"/>), which adds its vetoes to <see cref="BodyRunDesire"/>.
+    /// modelled. A player's character has 0 here: its Self preservation is the player's; its player-faction branch serves a player-faction slave's
+    /// 35 (<see cref="AiSystem"/>'s player-side run desire), which adds its vetoes to <see cref="BodyRunDesire"/>.
     /// </summary>
     public static float RunDesire(CharacterCold cold, bool walled = false) => cold.IsPlayer ? 0 : BodyRunDesire(cold, walled);
 
