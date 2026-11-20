@@ -714,14 +714,14 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         mind.FightFrom != 0 && cold.Running is { Task: CharacterTask.Attack } run && run.Tick == mind.FightFrom;
 
     /// <summary>
-    /// The HUD's Goal text: the goal's name while the AI holds the character; "Running away" (35's name, <c>Task_Runaway</c>) for an NPC on the flee
-    /// step, whichever of Self preservation, a goal 35 or a broken squad started it, rather than its walk's "Moving"; "Stumbling" while a stagger's
+    /// The HUD's Goal text: the goal's name while the AI holds the character; "Running away" (35's name, <c>Task_Runaway</c>) for a character on the
+    /// flee step, whichever of Self preservation, a goal 35 or a broken squad started it, rather than its walk's "Moving"; "Stumbling" while a stagger's
     /// order 147 runs its stumble (<see cref="Combat.BodyOrders"/>); "Fixing Legs" on its own Fixing Legs treatment (<see cref="TreatsOwnLegs"/>);
     /// null for the rest (the HUD then names the movement task).
     /// </summary>
     public static string? ActivityText(in CharacterHot n, CharacterCold cold, long tick = 0) =>
         Combat.BodyOrders.Stumbles(cold, tick) ? TaskBehaviours.Text(TaskType.StumbleTaskForced)
-        : cold is { Fleeing: true, IsPlayer: false, Medical.Incapacitated: not true } ? TaskBehaviours.Text(TaskType.RunAway)
+        : cold is { Fleeing: true, Medical.Incapacitated: not true } ? TaskBehaviours.Text(TaskType.RunAway)
         : cold.Ai is not null && TreatsOwnLegs(n, cold) ? TaskBehaviours.Text(TaskType.HealMyLegs)
         : cold.Ai is { Goal: { } goal } && Holds(n, cold) ? GoalText(goal) : null;
 
@@ -773,7 +773,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// Whether the character runs the flight its goal started (<see cref="FleeSystem"/>: row 35 of a goal's provenance, under 32 or a goal 35).
     /// </summary>
-    static bool RunsOwnFlight(CharacterCold cold, AiMind mind) =>
+    internal static bool RunsOwnFlight(CharacterCold cold, AiMind mind) =>
         cold is { Fleeing: true, Running: { Source: TaskSource.Goal, Row: TaskType.RunAway } }
         && mind is { Goal: not null, Behaviour: AiBehaviour.SelfPreserve or AiBehaviour.Flee };
 

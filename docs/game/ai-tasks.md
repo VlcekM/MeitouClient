@@ -1429,7 +1429,8 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   `Task_Runaway` (35, 280): start `FUN_14034b440` (first run: from the mean position of the sensed threats with positive aggression, by 2000 + 400 r, mover speed field `+0xbc` set to 999); update `FUN_140336820`
   (when the mover stops or is within 200 of its destination: a hop of 1000 + 400 r from where it stands, x and z uniform in [-1, 1] normalised). It has no end of its own: the planner drops it when its goal does
   (under 32, when the threat level falls to 0; as a goal of its own, when its list A `!39, 6` holds, **Observed**). 35 is also a goal of the package `Leader flees while guards fight` (Leader: `Go Home (Run away)`,
-  `Run away!`) and of the Slave lists of four police-station packages (0.001 for an NPC). As a goal of its own it [commits](#desire-and-commitment) (0.05 + r x 0.1 h):
+  `Run away!`) and of the Slave lists of four police-station packages, all day (**Verified**, base data: `police station patrol`, `Police Station`,
+  `empire police station`, `empire vault prison`; 0.001 for an NPC). As a goal of its own it [commits](#desire-and-commitment) (0.05 + r x 0.1 h):
   priority 3, so until then only an order (a stagger's 147 among them), a replan request (a blow, the melee alert: it stops the task, and the update clears a goal
   left with none) or its list A (the update's plan step) ends it, and 32 at 0.7 or 1 does not take over ([committed mode](#precedence)); then it no longer holds (the
   frame step asks a replan for a commit row whose commitment passed; Meitou: the score cap 0.05). Committed mode reads the current goal, so it does not hold a run under 32.
@@ -1441,9 +1442,13 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   `FleeSystem` (the squads' run: first run from the threats' centre, hops, `CharacterCold.Fleeing`): the AI asks (`AiMind.FleeRequest`), a fighter is stopped first. The run is the goal's task (row 35,
   a goal's provenance, `FleeSystem.GoalFlight`) and the runner's chooser runs on (`AiSystem.RunsOwnFlight` holds it): the flight ends when 32 or the goal 35 does (another winner's task replaces the run,
   or no goal of the run is current: `FleeSystem.FlightGoes`). A goal 35 commits (`TaskProfiles`; rolled in `AiSystem.TakeUp`, and in `InFight` when it becomes current
-  in a fight): its committed stop (`TierRungs.Begin`) keeps the run while its hours last. A runner whose mind was dropped since stops when no threat attacks it within 181.7; a broken squad's (the optional
-  `FleeSystem.SquadBreak`, which the original has no equivalent of: [perception](perception.md#retreat-and-memory)) when no enemy is in sight and nobody attacks it. Not modelled: the player faction's branch of slot 55 (the
-  player's characters never run), the locked-gate zero of 60, 4's ranged and squad factors, standing up first for a character staying low. An NPC without a mind (no squad, or until its next package
+  in a fight): its committed stop (`TierRungs.Begin`) keeps the run while its hours last. A runner whose mind was dropped since stops when no threat attacks it within 181.7 (a player-faction one then stands, an NPC wanders); a broken squad's (the optional
+  `FleeSystem.SquadBreak`, which the original has no equivalent of: [perception](perception.md#retreat-and-memory)) when no enemy is in sight and nobody attacks it.
+  `Task_Runaway`'s start and update test no faction (**Verified**, `FUN_14034b440`, `FUN_140336820`: no faction call among their callees; the start's one branch
+  compares a hand with the task's target): a player-faction character's run starts, hops and ends as an NPC's (Meitou: its fight ends at once, not by the player's Stop); what
+  differs is the desire, slot 55's player-faction branch (`FUN_1407916d0`, a player faction: 0 while either arm works, while it shoots a target not down, or
+  with a hip weapon of a skill category other than 3, 6, 8; `AiSystem.PlayerSideRunDesire` for a player-faction mind's goal 35, such as an obeying slave's of its
+  master's Slave list). Not modelled: that branch under 32 (a player's character has run desire 0 there, `SelfPreservation.RunDesire`), the locked-gate zero of 60, 4's ranged and squad factors, standing up first for a character staying low. An NPC without a mind (no squad, or until its next package
   cadence) has no 32 and does not answer: every character has goals in the original.
   - **Timing**: the original replans an attacked character whose fight is off (`underMeleeAttack` `FUN_140999f00`, the shot handler `FUN_140999d50`) and chooses at its next AI update
     (`FUN_1405112b0`, **Verified**: its sense pass `FUN_14085a8d0` runs first, so the threats list is current, then the task system's update `FUN_140511130`), 8 characters a frame in turn

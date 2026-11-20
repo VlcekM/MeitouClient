@@ -1656,7 +1656,7 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   score it (no job source answers for 187), and the winner is acted out on the NPC's path (`AiSystem.ActChosen`): **171** follows the owner (the follower sets its sneaking from the leader's every update, **Verified**, so a following
   slave cannot sneak away), **189 / 190** work the town its squad's leader stands in
   (`AiMind.WorkTown`, stamped by the schedule; the operator slot claimed on the cadence, `AiSystem.ClaimSlaveWork`; production by the AI's workers' pass and the planner, 89 held false),
-  **172** is the captive goals' cage walk, **41** / **143** the AI's combat goals, **35** the run with the player-faction vetoes (`AiSystem.PlayerSideRunDesire`), **14** stands. An order beats
+  **172** is the captive goals' cage walk, **41** / **143** the AI's combat goals, **35** the run with the player-faction vetoes (`AiSystem.PlayerSideRunDesire`; `FleeSystem` runs it as an NPC's goal 35, no faction test, and an order ends it with the goal), **14** stands. An order beats
   it (step 1) and it beats Self preservation and the other goals; the Jobs switch off stops it (as any job). Its senses side with the master (`AggroSystem.MasterSpares`, [sense tags](game/perception.md#sense-tags-who-is-an-enemy)):
   never the master's faction, nor anyone the master calls friendly; chained, the master's side never picks it as a fight target (`TargetScore.SparesSlave`).
   `SlaveMaster` is runtime only, so after a load the master comes back from the save's `slaver` handle or the job's saved handle (a character, `CaptiveSystem.RestoreSlavers`), else the slave obeys nobody; 41's finder and the senses read it.
