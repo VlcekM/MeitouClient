@@ -251,6 +251,14 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// </summary>
     internal void ReplanDuty(World world, int slot) => _duties?.Release(world, slot, DutyEnd.Replanned);
 
+    /// <summary>
+    /// An order starts on a character the sources decide (serial, <see cref="OrderStep.TakeOver"/>): the engine goal its chooser picked ends, for the
+    /// order (<see cref="DutyEnd.Order"/>) or, for an order on its body (<paramref name="interrupts"/>), for a replan; the order's pick beats every
+    /// goal at the order step.
+    /// </summary>
+    internal void ReleaseChosen(World world, int slot, bool interrupts) =>
+        _duties?.Release(world, slot, interrupts ? DutyEnd.Replanned : DutyEnd.Order);
+
     #endregion
 
     #region Think
@@ -342,7 +350,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (world.Decisions.OrderStep(row) is { } order)
         {
             row!.Pick = order;
-            if (mind.PlayerSide) LeaveGoal(mind);   // no continuity for its goal at the next choice
+
+            // No continuity for its goal at the next choice; an engine goal holding it ends at the order's start (OrderStep.TakeOver).
+            if (mind.PlayerSide && mind.Duty is null) LeaveGoal(mind);
             return;
         }
 
@@ -365,8 +375,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// The ladder of a player-faction character (<see cref="Ladder.Run"/> with its look's sources and the AI's rungs: no role list, the own lists'
-    /// types on the rungs, 32): a source's pick is started in the serial pass and ends the AI's goal; a goal's is acted out by
-    /// <see cref="ActPlayerGoal"/>. None while it is down (no chooser runs) or without this tick's look.
+    /// types on the rungs, 32): a source's pick is started in the serial pass and ends the AI's goal (<see cref="LeaveChoice"/>); a goal's is acted
+    /// out as an NPC's is (<see cref="ActChosen"/>) while nothing else holds the character (<see cref="PlayerSideHold.Free"/>), else only Self
+    /// preservation acts (<see cref="ActSelfPreservation"/>). The default task and the mover reset leave its task as it is (the Idleness source
+    /// stands for them). None while it is down (no chooser runs) or without this tick's look.
     /// </summary>
     void ThinkPlayer(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, ChooserRow? row, int hour)
     {
@@ -375,12 +387,24 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         var tiers = TierRungs.Local.Bind(this, world, i, id, mind, squad, board, [], hour, Restrict.None);
         var pick = Ladder.Run(world.Decisions.Steps, row, tiers, cold.Jobs.Count > 0, cold.SecondList);
         row.Pick = pick;
-        if (pick.Source >= 0) LeaveGoal(mind);
-        else if (pick.Goal is { } goal) ActPlayerGoal(world, i, cold, mind, goal, board, row);
+        if (pick.Goal is not { } goal || ReferenceEquals(goal, Idle)) LeaveChoice(mind);
+        else if (PlayerSideHold.Free(cold)) ActChosen(world, i, cold, mind, goal, board, row);
+        else ActSelfPreservation(world, i, cold, mind, goal, board);
     }
 
     /// <summary>
-    /// A source of the look won over a player-faction mind's goal: the goal is no longer the current one (no continuity at the next choice).
+    /// A source of the look won over a player-faction mind's goal, or nothing did: the engine goal holding it ends in the serial step of the same
+    /// tick (<see cref="DutyGoals.Leave"/>: its act-out stops, before the serial pass starts the source), and the goal is no longer the current one
+    /// (no continuity at the next choice).
+    /// </summary>
+    void LeaveChoice(AiMind mind)
+    {
+        if (mind.Duty is not null) _duties!.Leave(mind);
+        LeaveGoal(mind);
+    }
+
+    /// <summary>
+    /// The goal is no longer the mind's current one: goal, plan and behaviour cleared.
     /// </summary>
     static void LeaveGoal(AiMind mind)
     {
@@ -392,11 +416,27 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// A player-faction mind's tier goal: 32 Self preservation fights its attacker (row 13, <see cref="AskFight"/>; the serial step starts the
-    /// fight, which replaces a job's task as any fight's start does) or keeps its fight going; any other goal (IDLE, the mover reset) leaves the
-    /// character's task as it is. The goal is noted in the trace (<see cref="ChooserRow.Winner"/>).
+    /// The goal the ladder picked for a character the AI holds or a player-faction character, acted out on the one path (as the original's chooser
+    /// installs a goal whoever the character belongs to): a winner over the engine goal holding it ends that goal in the serial step and is acted
+    /// out at the next tick; in a fight the fight goes on or ends (<see cref="InFight"/>); else its act-out (<see cref="Act"/>: the behaviour's task,
+    /// an engine goal's start asked of its system, a fight or flight asked of the serial steps). Writes only its own slot.
     /// </summary>
-    void ActPlayerGoal(World world, int i, CharacterCold cold, AiMind mind, AiGoal goal, Blackboard board, ChooserRow? row)
+    void ActChosen(World world, int i, CharacterCold cold, AiMind mind, AiGoal goal, Blackboard board, ChooserRow? row)
+    {
+        if (row is not null && world.Decisions.Tracing) row.Winner = GoalName(goal);
+        if (mind.Player) mind.Urgent = goal.Task.Priority == TaskPriority.Urgent;
+
+        if (mind.Duty is { } duty && !DutyGoals.Same(duty, goal)) _duties!.Leave(mind);
+        else if (cold.InCombat) InFight(mind, goal, board);
+        else Act(world, i, mind, goal, board);
+    }
+
+    /// <summary>
+    /// A player-faction character something else holds (a flight, a conversation, a cage, <see cref="PlayerSideHold.Free"/>): only 32 Self preservation
+    /// acts, its fight on its attacker (row 13, <see cref="AskFight"/>; the fight's start replaces the task) or its run; in a fight the fight goes
+    /// on. Any other goal is left (an engine goal holding it ends by the sweep: no goal may hold it).
+    /// </summary>
+    void ActSelfPreservation(World world, int i, CharacterCold cold, AiMind mind, AiGoal goal, Blackboard board)
     {
         if (!ReferenceEquals(goal, SelfPreservationGoal))
         {
@@ -404,7 +444,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return;
         }
 
-        if (row is not null) row.Winner = GoalName(goal);
         mind.Goal = goal;
         mind.Behaviour = AiBehaviour.SelfPreserve;
         mind.Version = board.Version;
@@ -516,14 +555,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         var tiers = TierRungs.Local.Bind(this, world, i, id, mind, squad, board, roles, hour, Restrict.None);
         var pick = Ladder.Run(world.Decisions.Steps, row, tiers, cold.Jobs.Count > 0, cold.SecondList);
         if (row is not null) row.Pick = pick;
-        if (pick.Goal is not { } goal) return;   // a source's pick: the serial pass starts it
-
-        if (mind.Player) mind.Urgent = goal.Task.Priority == TaskPriority.Urgent;
-
-        // Another goal outscored the engine goal holding it: the serial step ends that goal's act-out, and the next tick acts this one out.
-        if (mind.Duty is { } duty && !DutyGoals.Same(duty, goal)) _duties!.Leave(mind);
-        else if (cold.InCombat) InFight(mind, goal, board);
-        else Act(world, i, mind, goal, board);
+        if (pick.Goal is { } goal) ActChosen(world, i, cold, mind, goal, board, row);   // else a source's pick: the serial pass starts it
     }
 
     /// <summary>
@@ -770,18 +802,17 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         (int)goal.Task.Type >= SimulationExtensions.FirstModCode && goal.Task.Name.Length > 0 ? goal.Task.Name : TaskBehaviours.Text(goal.Task.Type);
 
     /// <summary>
-    /// Whether the AI runs the character now: it has a mind that acts goals out (not a player-faction mind, <see cref="AiMind.PlayerSide"/>, whose
-    /// ladder only fights and leaves the rest to its sources) and nothing else holds it (a fight it did not start, a flight, an order, being carried,
+    /// Whether the AI runs the character now: it has a mind and nothing else holds it (a fight it did not start, a flight, an order, being carried,
     /// a trade, a knock-out). In its own fight it thinks as anyone does (on the cadence and the replan triggers) and may leave it for another goal
     /// (<see cref="InFight"/>). An NPC's order that runs holds it (<see cref="DecisionSystem.Ordered"/>); one that is blocked does not. An NPC
     /// carrying a body is held as anyone outside a fight, and an engine goal's act-out (<see cref="AiMind.Duty"/>) is the AI's own: it runs the
-    /// character while that act-out runs.
+    /// character while that act-out runs. A player-faction mind (<see cref="AiMind.PlayerSide"/>) is held only by the goal its chooser picked, on a
+    /// task that is the AI's own (<see cref="PlayerSideHold.Holds"/>): a source's pick, an order's task or a job's is not the AI's.
     /// </summary>
     public static bool Holds(in CharacterHot n, CharacterCold cold)
     {
-        if (cold.Ai is not { PlayerSide: false } mind || cold.Fleeing || cold.Engaged || cold.IsImprisoned || !cold.CarriedBy.IsNone
-            || cold.Medical is { Incapacitated: true } || DecisionSystem.Ordered(cold))
-            return false;
+        if (cold.Ai is not { } mind || !PlayerSideHold.Free(cold) || DecisionSystem.Ordered(cold)) return false;
+        if (mind.PlayerSide) return PlayerSideHold.Holds(n, cold, mind);
 
         // An engine goal holds it (DutyGoals): the AI runs it while its act-out runs, carrying included (the act-out's own body), not in a fight.
         if (mind.Duty is not null) return !cold.InCombat && !mind.Engine && OnDuty(cold, mind);
@@ -834,13 +865,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// Whether the chooser weighs goal <paramref name="type"/> for the character at <paramref name="slot"/> now: its role's list of its squad's
     /// running package, or the slave list of the squad it obeys, or its race's <c>AI Goals</c> hold the type in the hour's window. False without a
-    /// mind or a squad blackboard, for a player character's mind (an autonomous squad's: its mod goals are weighed at 0), and for an engine mind
-    /// (a squad the population moves) but for a combat goal of its combat or race lists. For code mods (docs/modding.md "NPC goals"): whether a goal
-    /// of theirs is still weighed for a character they act it out for (unlike <see cref="ListsGoal"/>, the hour's window counts). Serial phases, or
-    /// the character's own partition.
+    /// mind or a squad blackboard, for an autonomous squad's player character (its mod goals are weighed at 0), and for an engine mind (a squad the
+    /// population moves) but for a combat goal of its combat or race lists. A player-faction mind (<see cref="AiMind.PlayerSide"/>) weighs a type of
+    /// its own lists that is on the chooser's rungs (<see cref="Ladder.OnRungs"/>; never a code mod's). For code mods (docs/modding.md "NPC goals"):
+    /// whether a goal of theirs is still weighed for a character they act it out for (unlike <see cref="ListsGoal"/>, the hour's window counts).
+    /// Serial phases, or the character's own partition.
     /// </summary>
     public static bool WeighsGoal(World world, int slot, TaskType type)
     {
+        if (world.Characters.Cold(slot) is { Ai: { PlayerSide: true } side }) return PlayerSideWeighs(side, type, world.Hour);
         if (world.Characters.Cold(slot) is not { Ai: { Squad: var squad, Player: false } mind } cold) return false;
 
         int hour = world.Hour;
@@ -851,6 +884,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         var roles = ObeyedRoles(world, squad, cold) ?? board.Roles[(int)RoleOf(squad, world.Characters.IdOf(slot), cold)];
         return Lists(roles, type, hour) || Lists(mind.RaceGoals, type, hour);
     }
+
+    /// <summary>
+    /// <see cref="WeighsGoal"/> for a player-faction mind: a type on the chooser's rungs that its own lists hold in the hour's window.
+    /// </summary>
+    static bool PlayerSideWeighs(AiMind mind, TaskType type, int hour) => Ladder.OnRungs.Contains(type) && Lists(mind.RaceGoals, type, hour);
 
     /// <summary>
     /// Whether <paramref name="goals"/> hold <paramref name="type"/> in <paramref name="hour"/>'s window.
@@ -1028,11 +1066,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// An engine-acted goal's desire (<see cref="DutyGoals.Desire"/>: the registering system's desire times its finder's factor; the type's default
-    /// profile adds no commitment and no crowding); 0 for a player character's mind (an autonomous squad's goals are the decision step's), an engine
-    /// mind (it weighs its combat goals only) and a type whose start the system refused, until its back-off ends.
+    /// profile adds no commitment and no crowding); 0 for an autonomous squad's player character (its own goals are the decision step's), an engine
+    /// mind (it weighs its combat goals only) and a type whose start the system refused, until its back-off ends. A player-faction mind
+    /// (<see cref="AiMind.PlayerSide"/>) weighs the goals its tiers score: its own lists' only on the rungs (<see cref="Ladder.OnRungs"/>).
     /// </summary>
     static float DutyDesire(DutyGoals goals, World world, TaskType type, Squad squad, AiMind mind, CharacterId self, TaskTargetType targeting) =>
-        mind.Player || mind.Engine || mind.BackedOff(type, world.Tick)
+        mind.Player && !mind.PlayerSide || mind.Engine || mind.BackedOff(type, world.Tick)
             ? 0
             : goals.Desire(world, new DutyAsk(self.Slot, self, squad, type, targeting, type, default));
 
@@ -1929,6 +1968,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         behaviour = Adopt(world, slot, mind, goal, board, type, behaviour, fresh);
         if (fresh) PlanAnew(world, slot, mind, goal, board, profile);
 
+        // A player-faction character on a task that is not the AI's (a job's, the engine's): the think starts nothing over it on its own slot.
+        if (mind.PlayerSide && !PlayerSideHold.OwnsTask(table.Next[slot], table.Cold(slot)!, mind))
+        {
+            ActOverTask(world, slot, mind, type, behaviour);
+            return;
+        }
+
         // An animal in a bed has no row that gets it out (116, 208, 257 are not registered for its repertoire): every goal that moves or fights fails
         // to plan, so it lies on with no goal (docs/game/ai-tasks.md "Animals in beds", Verified).
         if (behaviour != AiBehaviour.Sleep && Repertoire.StuckInBed(world, table.Cold(slot)!))
@@ -1950,6 +1996,31 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (mind.Resume && Resume(world, slot, mind)) return;
 
         ActOut(world, slot, mind, goal, board, type, behaviour);
+    }
+
+    /// <summary>
+    /// A player-faction character's goal over a task that is not the AI's (<see cref="PlayerSideHold.OwnsTask"/>; the think's own-slot starts end no
+    /// handler, <see cref="TaskStart.StartOwn"/>): a fight or a run is asked of the serial steps, whose start replaces the task as any start does;
+    /// any other goal has the serial step end the task (<see cref="LeaveFights"/>: the character idle, the task's handler ended) and is acted out at
+    /// the next tick, from its own stand.
+    /// </summary>
+    void ActOverTask(World world, int slot, AiMind mind, TaskType type, AiBehaviour behaviour)
+    {
+        if (behaviour == AiBehaviour.Fight || behaviour == AiBehaviour.SelfPreserve && mind.Step != TaskType.RunAway)
+            AskFight(world, slot, type, mind);
+        else if (behaviour is AiBehaviour.SelfPreserve or AiBehaviour.Flee)
+            mind.FleeRequest = behaviour == AiBehaviour.SelfPreserve ? FleeAsk.Threat : FleeAsk.Enemies;
+        else LeaveTask(mind);
+    }
+
+    /// <summary>
+    /// A player-faction character's goal waits for the task it is on to end: the serial step of the same tick ends it (<see cref="LeaveFights"/>),
+    /// and the character thinks again at the next tick. Writes only its own mind.
+    /// </summary>
+    void LeaveTask(AiMind mind)
+    {
+        mind.LeaveFight = true;
+        Interlocked.Exchange(ref _leaving, 1);
     }
 
     /// <summary>

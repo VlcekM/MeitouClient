@@ -60,11 +60,16 @@ internal static class OrderStep
     /// The front order is about to start (serial, <see cref="PlayerOrders"/>): a character its AI runs (<see cref="ResumesRoutine"/>) keeps the
     /// routine it is on for after the order (<see cref="KeepRoutine"/>), and its engine duties let go, so no holder's step stops or redirects the
     /// order's task; an order on its body (<paramref name="interrupts"/>: a stumble, a get-up) interrupts the duty sweeps only, and ends an engine
-    /// goal, as the original's update after it plans anew.
+    /// goal, as the original's update after it plans anew. A character the sources decide has no routine to keep; the engine goal its chooser
+    /// picked ends the same way (<see cref="AiSystem.ReleaseChosen"/>).
     /// </summary>
     public static void TakeOver(World world, int slot, CharacterCold cold, bool interrupts)
     {
-        if (!ResumesRoutine(cold)) return;
+        if (!ResumesRoutine(cold))
+        {
+            world.SystemOf<AiSystem>()?.ReleaseChosen(world, slot, interrupts);
+            return;
+        }
 
         KeepRoutine(world.Characters, slot, cold);
         if (!interrupts) world.ReleaseDuties(slot);

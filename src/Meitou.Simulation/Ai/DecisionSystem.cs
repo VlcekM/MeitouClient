@@ -447,11 +447,14 @@ public sealed class DecisionSystem
     /// Whether the think's turn asks the chooser again (<b>engine</b>: no periodic replan was found in the original, but Meitou's idleness and job
     /// tasks do not end where the original's plans do): any character but the player's; a player character whose task the priority-3 goals come
     /// before (<see cref="GoalsComeFirst"/>), or whose front order runs its task, which the original's order step tests on every AI update (its
-    /// list A, <see cref="ListTests.OrderDone"/>). Not one in a fight or on another plan's task: those end by their own rules or a replan.
+    /// list A, <see cref="ListTests.OrderDone"/>), or that its chooser's goal holds (<see cref="AiMind.Goal"/> of a player-faction mind: its
+    /// chooser turns as an NPC's, so an urgent job or a higher goal can end the goal and its plan steps run). Not one in a fight or on another plan's
+    /// task: those end by their own rules or a replan.
     /// </summary>
     static bool TurnAsks(World world, int slot, CharacterCold cold)
     {
         if (!Decides(cold) || GoalsComeFirst(world.Characters, slot, cold)) return true;
+        if (cold.Ai is { PlayerSide: true, Goal: not null }) return true;
 
         return cold.OrderQueue.Front is { Started: true } front && PlayerOrders.Runs(world, slot, front);
     }
