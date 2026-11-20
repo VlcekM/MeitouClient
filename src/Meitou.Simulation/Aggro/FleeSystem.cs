@@ -162,6 +162,9 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
             ref var n = ref table.Next[i];
             if (!n.Alive || table.Cold(i) is not { Fleeing: true } cold) continue;
 
+            // A stumble or a get-up (an order on the body) holds the runner a moment; the flight goes on after it.
+            if (Player.PlayerOrders.BodyHolds(cold) && cold.Medical is not { Incapacitated: true }) continue;
+
             // An order beats the flight (Self preservation's run included): it stops, as for a player character.
             if (cold.Medical is { Incapacitated: true } || cold.IsPlayer || DecisionSystem.Ordered(cold))
             {

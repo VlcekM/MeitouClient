@@ -447,6 +447,9 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
         }
 
         if (tc.IsImprisoned) return End(world, a, KidnapEventKind.GaveUp);
+
+        // A stumble or a get-up (an order on the body, which lets no duty go) holds the carrier a moment: the kidnap waits for it.
+        if (PlayerOrders.BodyHolds(gc)) return true;
         a.Time += dt;
         ref var gn = ref table.Next[g];
         switch (a.Phase)

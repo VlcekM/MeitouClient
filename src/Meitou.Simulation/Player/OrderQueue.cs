@@ -377,6 +377,12 @@ public static class PlayerOrders
     }
 
     /// <summary>
+    /// Whether an order on the character's body (<see cref="OrderEntry.Interrupts"/>: a stumble, a get-up) is its started front now: a duty holding
+    /// the character waits for it rather than counting its own walk as given up (a pure read, any phase).
+    /// </summary>
+    internal static bool BodyHolds(CharacterCold cold) => cold.OrderQueue.Front is { Interrupts: true, Started: true };
+
+    /// <summary>
     /// The ragdoll setter's wipe (<c>FUN_1405d0db0</c> turning WHOLE or CARRY on → <c>FUN_1405074a0</c>, <c>FUN_14050d1b0</c>; a knock-out, death or
     /// being picked up, docs/game/ai-tasks.md "What clears the queue"): the order queue and the second list (a loaded queue not restored yet) are
     /// emptied and an AI's plan and goal dropped; the job list stays (serial phases).

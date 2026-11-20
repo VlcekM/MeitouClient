@@ -181,7 +181,7 @@ public readonly record struct TaskRequest(CharacterTask Task, TaskType Row, Task
     /// <summary>
     /// The engine sets the task itself, with no plan (the stagger's 147, <see cref="Player.OrderEntry.Forced"/>): the repertoire is not tested.
     /// </summary>
-    public bool Forced { get; init; }
+    internal bool Forced { get; init; }
 }
 
 /// <summary>

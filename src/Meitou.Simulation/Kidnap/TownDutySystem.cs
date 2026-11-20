@@ -1711,6 +1711,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         // A fight (a reaction, or what a shoo's dialogue turned into) beats the errand: its walks would end it (a new task drops the fight task), so
         // it waits for the fight to be over. a player character's food run is a goal its fight replaced: the decision step chooses again
         if (gc.InCombat) return d.PlayerSide && gc.IsPlayer ? End(world, d) : true;
+
+        // A stumble or a get-up (an order on the body, which lets no duty go) holds the member a moment: the errand waits for it, its walk not counted.
+        if (PlayerOrders.BodyHolds(gc)) return true;
         ref var gn = ref table.Next[g];
         if (d.Kind is TownDutyKind.Food or TownDutyKind.LootFood) return StepFood(world, d, g, gc);
         if (d.Kind is TownDutyKind.Stash or TownDutyKind.Ditch) return StepStash(world, d, g, gc);

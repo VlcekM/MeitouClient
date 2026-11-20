@@ -90,10 +90,13 @@ public sealed class BodyOrders : IOrderOwner, ITaskHandler
     }
 
     /// <summary>
-    /// The posture setter's 65 on a change back to standing (<c>FUN_1405c7e20</c>, <b>Verified</b>): unless a 65 is queued already.
+    /// The posture setter's 65 on a change back to standing (<c>FUN_1405c7e20</c>, <b>Verified</b>): unless a 65 is queued already. None in a bed or a
+    /// cage (engine: the original's 65 would end at once there, but its clear flag would still wipe the queue).
     /// </summary>
     void StandUp(World world, int slot, CharacterCold cold)
     {
+        if (cold.InSomething != Locks.HeldState.None) return;
+
         foreach (var queued in cold.OrderQueue)
         {
             if (queued.Row == TaskType.GetUp) return;
