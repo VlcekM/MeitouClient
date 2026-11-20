@@ -1,5 +1,7 @@
 # Translations: checks that every built-in catalog (src/Meitou.Core/Localisation/locale/<code>.po) translates each of Meitou's own texts
-# and that locale/meitou.pot is current (.github/scripts/loc-strings.mjs).
+# (.github/scripts/loc-strings.mjs). With an ANTHROPIC_API_KEY secret it first fills the gaps itself (loc-fill.mjs, Claude) and commits them
+# to the branch: on pushes, and on pull requests from a branch of this repository (GitHub gives no secrets to pull requests from forks, so
+# those are only checked; their gaps are filled once they land).
 name: Translations
 
 on:
@@ -11,15 +13,40 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: translations-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   translations:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.head_ref || github.ref }}
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+      - run: npm ci
+        working-directory: .github/scripts
+
+      - name: Fill missing translations
+        id: fill
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then echo "No ANTHROPIC_API_KEY secret; gaps are reported, not filled." >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          node .github/scripts/loc-strings.mjs --write
+          node .github/scripts/loc-fill.mjs
+          if git diff --quiet -- src/Meitou.Core/Localisation/locale; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/Meitou.Core/Localisation/locale
+          git commit -m "Translations: fill missing messages (machine-translated)"
+          git push
+
       - name: Check translations
         run: node .github/scripts/loc-strings.mjs
