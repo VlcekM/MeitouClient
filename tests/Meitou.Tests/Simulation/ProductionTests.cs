@@ -408,12 +408,13 @@ public class ProductionTests
     /// <summary>
     /// A town building an NPC worker of goal 189 stands at is a machine of the town's faction, made when it arrives
     /// (docs/game/buildings-production.md "NPC town machines"): with row 87 first in its plan it operates it and the output grows; with row 92 first
-    /// it empties the output into its inventory (<c>Task_EmptyMachine</c>) and a full output (status 1) goes back to 2.
+    /// it takes from the output into its inventory what the town wants (<c>Task_EmptyMachine</c> with flag 0, <c>FUN_14033cd10</c>: up to its slot 5
+    /// count <c>FUN_140356db0</c>, here the farm's water room) once, and a full output (status 1) goes back to 2.
     /// </summary>
     [Fact]
     public void An_npc_worker_operates_its_town_buildings_machine_and_then_empties_its_output()
     {
-        using var rig = new Rig(Database(), Constants, []);
+        using var rig = new Rig(Database(), Constants, [Farm]);
         const int town = 7;
         var building = new TownBuilding("well", Well, "Well", At, 0, false, false, []);
         var stats = new CharacterStats();
@@ -433,14 +434,21 @@ public class ProductionTests
 
         int made = machine.Output.Count;
 
+        // The farm's water input has room for 2 of the well's 4 or more: the take stops at 2.
+        var farmWater = rig.Machine(0).Inputs[0];
+        farmWater.Count = farmWater.Recipe.Capacity - 2;
+        const int wanted = 2;
+
+        Assert.True(made > wanted);
+
         machine.Status = 1;
         cold.Ai.WorkOperate = null;
         cold.Ai.CollectFrom = building;
         rig.World.RunTicks(2);
 
-        Assert.Equal(0, machine.Output.Count);
+        Assert.Equal(made - wanted, machine.Output.Count);
         Assert.Equal(2, machine.Status);
-        Assert.Equal(made, cold.Inventory!.All().Where(i => i.Record == Water).Sum(i => i.Quantity));
+        Assert.Equal(wanted, cold.Inventory!.All().Where(i => i.Record == Water).Sum(i => i.Quantity));
     }
 
     // ------------------------------------------------------------------ items and research costs

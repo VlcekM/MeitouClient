@@ -78,6 +78,25 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
+    /// A worker's 92 at a machine's output ended (serial, <see cref="Production.ProductionSystem"/>), so it takes once per task: with something taken
+    /// the step leaves the kept plan's front, as the original's queue moves on when <c>Task_EmptyMachine</c> ends (<c>FUN_1400522c0</c>); with
+    /// nothing taken the task failed (the failed flag <c>+0x26d</c>, <c>FUN_14001953d</c>), whose handler <c>FUN_14050d080</c> asks a replan.
+    /// </summary>
+    internal static void CollectDone(CharacterCold cold, bool taken)
+    {
+        if (cold.Ai is not { } mind) return;
+
+        mind.CollectFrom = null;
+        if (!taken)
+        {
+            mind.AskReplan();
+            return;
+        }
+
+        if (mind.Plan is [{ Type: TaskType.CollectOutputResource }, _, ..]) mind.Plan.RemoveAt(0);
+    }
+
+    /// <summary>
     /// Whether a plan step is a way through a door (<see cref="TakeDoorStep"/>): one of its rows on a <see cref="Targets.Door"/> target. The same row
     /// planned by an engine goal on its finder's door (86 Opening up's 78 Unlocking door, a <see cref="PlanTarget.Found"/> target) is that goal's.
     /// </summary>

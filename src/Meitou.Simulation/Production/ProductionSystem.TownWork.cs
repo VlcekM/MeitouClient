@@ -554,7 +554,7 @@ public sealed partial class ProductionSystem
             if (!Able(cold) || mind.Behaviour != Ai.AiBehaviour.Work || !AtTownWork(world, i, building, mind.WorkRange)) continue;
             if (MachineFor(world, building, mind.WorkOwner) is not { } m || !Live(world, m)) continue;
             if (mind.FillTo is not null) FillInputs(world, cold, m);
-            else if (mind.CollectFrom is not null) TakeOutput(world, cold, m);
+            else if (mind.CollectFrom is not null) TakeOutput(world, cold, n.Position, m);
             else if (mind.WorkOperate is not null && MachinePowered(world, m)) TownOperate(world, i, cold, m, dt);
         }
     }
@@ -645,21 +645,29 @@ public sealed partial class ProductionSystem
     public bool PiecePowered(World world, string piece) => TownWork(world, piece) is not { } m || MachinePowered(world, m);
 
     /// <summary>
-    /// <c>Task_EmptyMachine</c> (rows 92 and 284, <c>FUN_14033cd10</c>, <b>Verified</b>) at a machine with an output: the output's items go into the
-    /// character's inventory (the worn backpack when the main grid is full) while there is room, a unit at a time; a producer whose status was 1
-    /// (output full) then goes back to 2.
+    /// <c>Task_EmptyMachine</c> with flag 0 (row 92, <c>FUN_14033cd10</c>, <b>Verified</b>) at a machine with an output, the character standing at
+    /// <paramref name="at"/>: the output's item goes into its inventory (the worn backpack when the main grid is full) a unit at a time while there
+    /// is room, up to what the town wants of it (<see cref="FillDemand.Count"/>, the task's slot 5); a producer whose status was 1 (output full) then
+    /// goes back to 2. The task then ends, failed when nothing moved (<see cref="Ai.AiSystem.CollectDone"/>).
     /// </summary>
-    void TakeOutput(World world, CharacterCold cold, Machine m)
+    void TakeOutput(World world, CharacterCold cold, Vector3 at, Machine m)
     {
-        if (cold.Inventory is not { } inv || m.Output is not { Count: > 0 } output) return;
-        bool moved = false;
-        while (output.Count > 0 && _items.Create(output.Recipe.Item, 1) is { } unit && inv.HasRoomFor(unit) && inv.Add(unit))
+        if (cold.Inventory is not { } inv) return;
+
+        int moved = 0;
+        if (m.Output is { Count: > 0 } output && _items.Create(output.Recipe.Item, 1) is { } one)
         {
-            output.Count--;
-            moved = true;
+            int wanted = FillDemand.Count(world, _towns, cold, at, one, m.Site, m.Data.Id);
+            while (moved < wanted && output.Count > 0 && _items.Create(output.Recipe.Item, 1) is { } unit && inv.HasRoomFor(unit) && inv.Add(unit))
+            {
+                output.Count--;
+                moved++;
+            }
         }
 
-        if (!moved) return;
+        Ai.AiSystem.CollectDone(cold, moved > 0);
+        if (moved == 0) return;
+
         if (m.Status == 1) m.Status = 2;
         world.Machines.Touch();
     }
