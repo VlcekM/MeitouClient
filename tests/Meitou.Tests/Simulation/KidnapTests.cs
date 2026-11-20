@@ -115,7 +115,7 @@ public class KidnapTests
         var walk = new OpenGroundWalkability((_, _) => 150);
         using var world = new SimWorld(new WorldSettings { Seed = 7, PublishSnapshots = false }, walk,
             [new PlayerSystem(), new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), carry, population,
-                    new Meitou.Simulation.Dialogue.DialogueSystem(data)]);
+                    new Meitou.Simulation.Dialogue.DialogueSystem(data), new AiSystem(data)]);
         int city = data.FactionIndex("50-a");
 
         // Goal 177 in every role list, always in its hours.

@@ -74,22 +74,29 @@ internal sealed class LootGoals
         var scratch = new LookScratch();
         for (int s = 0; s < table.HighWater; s++)
         {
-            if (!world.Turn(s, every)) continue;
-
-            var cold = table.Next[s].Alive ? table.Cold(s) : null;
-            if (cold is not { IsPlayer: false, Inventory: not null, Ai.Player: false })
-            {
-                _bodies.Remove(s);
-                _weapons.Remove(s);
-                continue;
-            }
-
-            LookForBody(world, carry, s, cold, ref scratch);
-            LookForWeapon(world, carry, s, cold, ref scratch);
+            if (world.Turn(s, every)) LookAt(world, carry, s, ref scratch);
         }
 
         Prune(table, _bodies);
         Prune(table, _weapons);
+    }
+
+    /// <summary>
+    /// The picks of the character at <paramref name="s"/>: an NPC with a mind and an inventory keeps what its finders find, any other none.
+    /// </summary>
+    void LookAt(World world, CarrySystem carry, int s, ref LookScratch scratch)
+    {
+        var table = world.Characters;
+        var cold = table.Next[s].Alive ? table.Cold(s) : null;
+        if (cold is not { IsPlayer: false, Inventory: not null, Ai.Player: false })
+        {
+            _bodies.Remove(s);
+            _weapons.Remove(s);
+            return;
+        }
+
+        LookForBody(world, carry, s, cold, ref scratch);
+        LookForWeapon(world, carry, s, cold, ref scratch);
     }
 
     /// <summary>
@@ -197,7 +204,8 @@ internal sealed class LootGoals
     /// <summary>
     /// The act-outs' step (serial, the carry step): each member a goal still holds whose loot or pick-up has ended (taken, done or given up) is done
     /// (<see cref="DutyGoals.Done"/>), and one whose walk was lost (<see cref="Lost"/>) ends as a lost walk (<see cref="DutyGoals.LostWalk"/>: a
-    /// body is ignored for 20 s); one the goal no longer holds is left to the AI's sweep, which ends it.
+    /// body is ignored for 20 s); one the goal no longer holds is left to the AI's sweep, which ends it. Either way its finders look again at once,
+    /// so the think after the end sees the body its squad tagged <see cref="MemoryTag.Looted"/> as gone (the original's finder runs at the score).
     /// </summary>
     internal void Step(World world, CarrySystem carry)
     {
@@ -210,6 +218,7 @@ internal sealed class LootGoals
             if (_duties?.Runs(world, slot, act.Goal) == true && (Over(world, slot, act) || Lost(world, carry, slot, act))) _done.Add(slot);
         }
 
+        var scratch = new LookScratch();
         foreach (int slot in _done)
         {
             var act = _acting[slot];
@@ -218,6 +227,8 @@ internal sealed class LootGoals
 
             if (lost) _duties!.LostWalk(world, slot, act.Goal, DutyGoals.KeyOf(act.Target));
             else _duties!.Done(world, slot, act.Goal);
+
+            LookAt(world, carry, slot, ref scratch);
         }
     }
 

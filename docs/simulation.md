@@ -1045,7 +1045,7 @@ not down; Trade on an own animal too) ends above the grid ([animals](game/animal
   [looting crime](game/carry-loot.md#33-npc-looting)), which its witnesses answer as any NPC culprit's ([crimes](#crimes-and-bounties)). A police-like looter (`CrimeSystem.IsPoliceLike`) confiscates instead: past 0.8 s one unit of each stolen item of the body's inventory (`CarrySystem.Confiscate`), tagging it only when there was none. Engine choices: nearest per pass, the tag never expires.
   The chosen goal's start loots the plan's body (row 177's loot task, a goal's task); a body another member's act-out works is refused, and the goal is done when the loot
   ends (`DutyGoals.Done`); a loot whose body no path reaches (`CarrySystem.LootWalkFails`), or a pick-up whose walk ended short of its item, is a lost walk
-  ([engine goals](#engine-goals)).
+  ([engine goals](#engine-goals)). At either end the member's finders look again at once, so the think after it never takes the body just tagged.
 - **Unarmed NPCs** (`LootGoals`, the finder `CarrySystem.FindWeapon`, goal 42 "Don't be unarmed" with step 8 FIND_WEAPON, `AI::findWeapon`): an [engine goal](#engine-goals) too,
   desire 2.0, plan `[1, 3, 8, 42]` while the planner's state 4 (a weapon) fails, the finder on row 8; with a weapon the scorer drops it. On the same look an NPC without a
   weapon that weighs 42 keeps row 8's pick: the nearest free ground weapon within 100 (in a town only an unowned or enemy-owned one), else a dead body with a weapon,
