@@ -776,7 +776,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     /// The stop <c>FUN_1405c8330</c> (<b>Verified</b>, docs/game/ragdolls.md "Forced crawl"; a leg giving out, the dialogue's DA 6, 7, 34, 55 and 57):
     /// it deletes the running task, empties the plan and runs <c>FUN_140507530</c> (the second list and the current goal), so the running task and
     /// fight end (<see cref="TaskStart.End"/>, which asks for a new decision) while the order queue stays: its front is planned again from its start
-    /// (<see cref="PlayerOrders.Interrupt"/>), a loaded one not restored yet too; an AI's plan and goal go. Nothing while its task is a running
+    /// (<see cref="PlayerOrders.Interrupt"/>); the second list (a loaded queue) and an AI's plan and goal go. Nothing while its task is a running
     /// Stumbling (147) or Getting up (65), rows with TaskData <c>+0x22</c> (28 Standing too; Meitou has no such task: Stand Up is at once). Serial
     /// phases.
     /// </summary>
@@ -788,6 +788,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         if (spared) return;
 
         PlayerOrders.Interrupt(cold);
+        PlayerOrders.ClearSecond(cold);
         if (cold.Ai is { } mind)
         {
             mind.ResetPlan();

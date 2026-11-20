@@ -46,6 +46,18 @@ internal sealed class ChooserRow
     public float[] Scores = [];
 
     /// <summary>
+    /// Per entry of the second list (<see cref="CharacterCold.SecondList"/> order, <see cref="SecondCount"/> of them): its score when it can start or
+    /// runs and is not done (the scorer <c>FUN_14050df10</c>: desire x weight 1, x1.25 for the one running now, again below 1 while its task is not
+    /// finished); 0: no candidate.
+    /// </summary>
+    public float[] SecondScores = [];
+
+    /// <summary>
+    /// How many second-list entries the look scored.
+    /// </summary>
+    public int SecondCount;
+
+    /// <summary>
     /// The ladder's pick (<see cref="LadderPick.Source"/> -1: no source).
     /// </summary>
     public LadderPick Pick = LadderPick.None(0);
@@ -71,6 +83,7 @@ internal sealed class ChooserRow
         Pick = LadderPick.None(0);
         Winner = null;
         Lines = null;
+        SecondCount = 0;
         if (Asked.Length != count)
         {
             Asked = new bool[count];

@@ -468,7 +468,52 @@ public sealed class DecisionSystem
         _lines.Clear();
         PlayerOrders.Prepare(world, slot);
         Ask(world, slot, cold, row);
+        LookSecond(world, slot, cold, row);
         if (Tracing) row.Lines = [.. _lines];
+    }
+
+    /// <summary>
+    /// Scores the second list's entries for the think's rung 3 (<c>FUN_14050df10</c> over <c>+0x70</c>): an entry that runs the character's task, or
+    /// can start and is not done (its row's list A, effect and finished test, <see cref="ListTests.OrderDone"/>), scores its desire
+    /// (<see cref="OrderDesire"/>) x weight 1 (the loader's), as a goal source does; one whose task ended is no longer started.
+    /// </summary>
+    void LookSecond(World world, int slot, CharacterCold cold, ChooserRow row)
+    {
+        var list = cold.SecondList;
+        if (row.SecondScores.Length < list.Count) row.SecondScores = new float[Math.Max(list.Count, row.SecondScores.Length * 2)];
+        row.SecondCount = list.Count;
+        for (int k = 0; k < list.Count; k++)
+        {
+            var entry = list[k];
+            var check = PlayerOrders.SecondCheck(world, slot, entry);
+            if (entry.Started && !check.Running) entry.Started = false;
+
+            bool done = !check.Running && ListTests.OrderDone(world, slot, entry, false);
+            float desire = check.Can && !done ? OrderDesire.Of(world, slot, entry) ?? 1 : 0;   // a row with no TaskData row (54 Rest) is wanted
+            row.SecondScores[k] = desire > 0 ? SecondScore(world, slot, desire, check) : 0;
+            if (Tracing) _lines.Add($"3 second list [{k}] {(int)entry.Row}: {(done ? "done" : Verdict(check, row.SecondScores[k]))}");
+        }
+    }
+
+    /// <summary>
+    /// A second-list entry's score: its desire, x1.25 while it runs, and again below 1 while its task is not finished.
+    /// </summary>
+    static float SecondScore(World world, int slot, float desire, in DecisionCheck check)
+    {
+        float score = desire * (check.Running ? 1.25f : 1);
+        if (check.Running && score < 1 && Unfinished(world, slot)) score *= 1.25f;
+
+        return score;
+    }
+
+    /// <summary>
+    /// A second-list entry's answer as a trace line's verdict.
+    /// </summary>
+    static string Verdict(in DecisionCheck check, float score)
+    {
+        if (!check.Can) return check.Why ?? "cannot run";
+
+        return score > 0 ? $"score {score:0.###}{(check.Running ? " (running)" : "")}" : "desire 0";
     }
 
     /// <summary>
@@ -555,7 +600,7 @@ public sealed class DecisionSystem
             if (RowOf(world, i) is not { Due: true, Thought: false } row || table.Cold(i) is not { } cold) continue;
 
             row.Thought = true;
-            row.Pick = Ladder.Run(_steps, row, null, cold.Jobs.Count > 0, cold.SecondList);
+            row.Pick = Ladder.Run(_steps, row, null, cold.Jobs.Count > 0);
         }
     }
 
@@ -661,12 +706,29 @@ public sealed class DecisionSystem
     }
 
     /// <summary>
-    /// A pick past the order step: the sources the ladder went past are passed, and the picked source started.
+    /// A pick past the order step: the sources the ladder went past are passed, and the picked source or second-list entry started.
     /// </summary>
     void StartAfterOrders(World world, int slot, ChooserRow row, in LadderPick pick, ref bool asked)
     {
         Pass(world, slot, row, pick);
         if (pick.Source >= 0 && !StartPick(world, slot, pick.Source)) asked = true;
+        if (pick.Second >= 0 && !StartSecond(world, slot, pick.Second)) asked = true;
+    }
+
+    /// <summary>
+    /// Starts second-list entry <paramref name="k"/> after asking it again next to its start; nothing when it runs already. False when it is gone
+    /// or can no longer run.
+    /// </summary>
+    static bool StartSecond(World world, int slot, int k)
+    {
+        var list = world.Characters.Cold(slot)!.SecondList;
+        if ((uint)k >= (uint)list.Count) return false;
+
+        var check = PlayerOrders.SecondCheck(world, slot, list[k]);
+        if (!check.Can) return false;
+
+        if (!check.Running) PlayerOrders.StartSecond(world, slot, list[k]);
+        return true;
     }
 
     /// <summary>
@@ -721,6 +783,7 @@ public sealed class DecisionSystem
     string WinnerOf(CharacterCold cold, ChooserRow row, in LadderPick pick)
     {
         if (pick.Source >= 0) return _sources[pick.Source].Name;
+        if (pick.Second >= 0 && pick.Second < cold.SecondList.Count) return $"second list {(int)cold.SecondList[pick.Second].Row}";
         if (row.Winner is { } goal) return goal;
 
         return Decides(cold) ? "(none)" : "(orders only: the AI decides the rest)";

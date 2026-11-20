@@ -86,7 +86,7 @@ internal sealed class SelfPreservationRung : ITierRungs
     /// <summary>
     /// The second list is no goal of this rung.
     /// </summary>
-    public void ScoreSecondList(IReadOnlyList<AiGoal> list) { }
+    public void ScoreSecondList(ChooserRow? row) { }
 
     /// <summary>
     /// No 187 branch (its job is the member's list's).
@@ -96,7 +96,11 @@ internal sealed class SelfPreservationRung : ITierRungs
     /// <summary>
     /// No goal of a job pass.
     /// </summary>
-    public AiGoal? PickJobPass() => null;
+    public AiGoal? PickJobPass(out int code)
+    {
+        code = -1;
+        return null;
+    }
 
     /// <summary>
     /// The priority-3 tier: Self preservation against the look's goal sources of <paramref name="from"/> to <paramref name="to"/>, the higher score

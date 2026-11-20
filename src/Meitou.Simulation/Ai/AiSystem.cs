@@ -385,7 +385,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (DecisionSystem.Down(cold) || row is null) return;
 
         var tiers = TierRungs.Local.Bind(this, world, i, id, mind, squad, board, [], hour, Restrict.None);
-        var pick = Ladder.Run(world.Decisions.Steps, row, tiers, cold.Jobs.Count > 0, cold.SecondList);
+        var pick = Ladder.Run(world.Decisions.Steps, row, tiers, cold.Jobs.Count > 0);
         row.Pick = pick;
         if (pick.Goal is not { } goal || ReferenceEquals(goal, Idle)) LeaveChoice(mind);
         else if (PlayerSideHold.Free(cold)) ActChosen(world, i, cold, mind, goal, board, row);
@@ -488,7 +488,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (DecisionSystem.Down(cold) || row is null) return;
 
         var rung = SelfPreservationRung.Local.Bind(this, world, i, id, mind, squad, board);
-        row.Pick = Ladder.Run(world.Decisions.Steps, row, rung, cold.Jobs.Count > 0, cold.SecondList);
+        row.Pick = Ladder.Run(world.Decisions.Steps, row, rung, cold.Jobs.Count > 0);
         if (ReferenceEquals(row.Pick.Goal, SelfPreservationGoal)) ActOwnDefence(world, i, cold, mind, rung.Runs);
     }
 
@@ -569,7 +569,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
 
         var tiers = TierRungs.Local.Bind(this, world, i, id, mind, squad, board, roles, hour, Restrict.None);
-        var pick = Ladder.Run(world.Decisions.Steps, row, tiers, cold.Jobs.Count > 0, cold.SecondList);
+        var pick = Ladder.Run(world.Decisions.Steps, row, tiers, cold.Jobs.Count > 0);
         if (row is not null) row.Pick = pick;
         if (pick.Goal is { } goal) ActChosen(world, i, cold, mind, goal, board, row);   // else a source's pick: the serial pass starts it
     }

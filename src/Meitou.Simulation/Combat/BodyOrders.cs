@@ -40,8 +40,8 @@ public enum BodyEvents : byte
 /// "Order queue"): getting up 65 and waking low 52 (<c>FUN_1405d00b0</c>, <c>FUN_1405c7e20</c>), stumbling 147 (<c>FUN_1404391f0</c> →
 /// <c>FUN_140507cd0</c>) and getting out of bed 116 (a failed kidnap, <c>FUN_14034ffa0</c>). Their act-out is standing in place (<see cref="CharacterTask.Idle"/>
 /// under the order's row) while the body's own hold lasts: the get-up's (<see cref="CharacterCold.GettingUpUntil"/>) and the stumble's
-/// (<see cref="CharacterCold.StaggeredUntil"/>), which the body step and the hit set. They release no duty (<see cref="OrderEntry.Interrupts"/>) and
-/// are not saved. Serial phases, but <see cref="Stumbles"/>.
+/// (<see cref="CharacterCold.StaggeredUntil"/>), which the body step and the hit set. They release no duty (<see cref="OrderEntry.Interrupts"/>).
+/// Saved as any queued order (the writer <c>FUN_1405090b0</c> has no row filter), their holds not. Serial phases, but <see cref="Stumbles"/>.
 /// </summary>
 public sealed class BodyOrders : IOrderOwner, ITaskHandler
 {
@@ -156,11 +156,6 @@ public sealed class BodyOrders : IOrderOwner, ITaskHandler
         var request = new TaskRequest(CharacterTask.Idle, order.Row, TaskSource.Order) { Forced = order.Forced };
         TaskStart.Start(world, slot, request);
     }
-
-    /// <summary>
-    /// Not saved: each is a moment of the body, which a load does not keep either.
-    /// </summary>
-    int IOrderOwner.SaveKind(OrderEntry order) => -1;
 
     #endregion
 

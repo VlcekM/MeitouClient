@@ -23,8 +23,9 @@ public sealed record SavedOrder(TaskType Row, Vector3 Point, Hand Hand, string? 
 /// handle <c>tjobT&lt;i&gt;</c> (target: a character or a building). The queue is written front first, started or not; nothing is saved of it
 /// running. Meitou's own keys carry what the keys above cannot: the string <c>meitou tjob&lt;i&gt;</c> (the <see cref="OrderEntry.Site"/> id, which
 /// wins on load) and the int <c>meitou tjobK&lt;i&gt;</c> (the owner's detail code, <see cref="IOrderOwner.SaveKind"/>; absent: 0). A load reads the
-/// orders into <see cref="CharacterCold.SavedOrders"/>; the decision step makes them the queue (<see cref="Restore"/>) once the world they name
-/// exists, and starts the front as any other.
+/// orders into <see cref="CharacterCold.SavedOrders"/>; the decision step puts them in the second list (<see cref="Restore"/>, as the loader adds
+/// each through <c>FUN_1405086d0</c> without the permanent flag) once the world they name exists, where the chooser scores them. Only the queue is
+/// written, so a save after the load writes the loaded orders no more.
 /// </summary>
 public static class OrderSave
 {
@@ -34,8 +35,9 @@ public static class OrderSave
     const string Type = "tjob", Point = "tjobP", Target = "tjobT", MeitouSite = "meitou tjob", MeitouKind = "meitou tjobK";
 
     /// <summary>
-    /// Writes the queue (or, for a character loaded and not decided yet, the orders it was loaded with) over the old keys. A target character's
-    /// handle is given to <paramref name="target"/> to write once every character has one (the null handle is written first).
+    /// Writes the queue over the old keys (<c>FUN_1405090b0</c> writes the deque alone: neither the second list nor orders loaded and not restored
+    /// yet, which the original's load put in the second list). A target character's handle is given to <paramref name="target"/> to write once
+    /// every character has one (the null handle is written first).
     /// </summary>
     public static void Write(
         FcsRecord ai, CharacterCold cold, World world, IReadOnlyDictionary<string, FcsRecord> buildings, Action<FcsRecord, string, CharacterId> target)
@@ -52,17 +54,6 @@ public static class OrderSave
             ai.Vector3S.Remove(key);
 
         int i = 0;
-        if (cold.SavedOrders is { } pending)
-        {
-            foreach (var o in pending)
-            {
-                Put(ai, i, o.Row, o.Point, o.Hand, o.Site, o.Kind);
-                i++;
-            }
-
-            return;
-        }
-
         foreach (var e in cold.OrderQueue)
         {
             int kind = e.Row == TaskType.None ? -1 : e.Owner.SaveKind(e);
@@ -147,16 +138,16 @@ public static class OrderSave
     }
 
     /// <summary>
-    /// Makes the orders a load read the character's queue (serial phases, from the decision step or a queued order, <see cref="PlayerOrders.Give"/>):
-    /// nothing is started, its owner readies it (<see cref="IOrderOwner.Restored"/>), and the front is tried like any new order. An order whose row no
-    /// system owns, whose target character or site is not in the world, or whose handle named nothing is left out, as the queue pops an order that is
-    /// <see cref="OrderVerdict.Gone"/>.
+    /// Puts the orders a load read in the character's second list (serial phases, from the decision step or a queued order,
+    /// <see cref="PlayerOrders.Give"/>): nothing is started, its owner readies it (<see cref="IOrderOwner.Restored"/>), and the chooser scores it
+    /// from its next look. An order whose row no system owns, whose target character or site is not in the world, or whose handle named nothing is
+    /// left out.
     /// </summary>
     internal static void Restore(World world, int slot, CharacterCold cold)
     {
         var saved = cold.SavedOrders;
         cold.SavedOrders = null;
-        if (saved is null || cold.OrderQueue.Count > 0) return;
+        if (saved is null) return;
 
         var table = world.Characters;
         var self = table.IdOf(slot);
@@ -181,7 +172,7 @@ public static class OrderSave
                 Detail = owner.LoadDetail(world, self, row, o.Kind, target),
             };
             owner.Restored(world, entry);
-            cold.OrderQueue.Add(entry);
+            cold.SecondList.Add(entry);
         }
 
         DecisionSystem.Request(cold);

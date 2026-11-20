@@ -130,12 +130,18 @@ internal sealed class TierRungs : ITierRungs
     public AiGoal? Committed => _committed;
 
     /// <summary>
-    /// Scores the second list's goals into their own candidates (any priority: they join the urgent pass's pick, or the priority-3 one).
+    /// Takes the look's second-list scores into their own candidates (they join the urgent pass's pick, or the priority-3 one), each by its code
+    /// (<see cref="LadderPick.SecondCode"/>): the serial pass starts the one that wins.
     /// </summary>
-    public void ScoreSecondList(IReadOnlyList<AiGoal> list)
+    public void ScoreSecondList(ChooserRow? row)
     {
         _second.Clear();
-        for (int k = 0; k < list.Count; k++) Consider(_second, list[k], tier: null);
+        if (row is null) return;
+
+        for (int k = 0; k < row.SecondCount; k++)
+        {
+            if (row.SecondScores[k] > 0) Rank(_second, null, row.SecondScores[k], 0, LadderPick.SecondCode(k));
+        }
     }
 
     /// <summary>
@@ -148,7 +154,7 @@ internal sealed class TierRungs : ITierRungs
     /// (<c>FUN_14026b790</c> mask 0xe, <b>Verified</b>), scored after the candidates still kept (the second list's, in the urgent pass); the goal
     /// planned, or null. Either way the candidates are cleared, as a failed pick clears the map.
     /// </summary>
-    public AiGoal? PickJobPass()
+    public AiGoal? PickJobPass(out int code)
     {
         if (_slaveGoals is { } list)
         {
@@ -158,7 +164,7 @@ internal sealed class TierRungs : ITierRungs
             }
         }
 
-        var goal = PickGoal(_second, out _);
+        var goal = PickGoal(_second, out code);
         _second.Clear();
         return goal;
     }
@@ -216,7 +222,7 @@ internal sealed class TierRungs : ITierRungs
     {
         bool allTiers = _only == AiSystem.Restrict.Caged;
         if (allTiers) _ai.EndStep(_world, _slot, _id, _mind, _squad, _board, _plans, _hour);
-        if (Obeys && PickJobPass() is { } obeyed) return obeyed;
+        if (Obeys && PickJobPass(out _) is { } obeyed) return obeyed;
 
         foreach (var tier in (ReadOnlySpan<TaskPriority>)[TaskPriority.Urgent, TaskPriority.NonUrgent, TaskPriority.Fluff])
         {
@@ -264,7 +270,7 @@ internal sealed class TierRungs : ITierRungs
     /// </summary>
     void AddSecondList(List<(AiGoal? Goal, float Score, float Desire, int Source)> candidates)
     {
-        foreach (var (goal, score, desire, _) in _second) Rank(candidates, goal, score, desire, -1);
+        foreach (var (goal, score, desire, source) in _second) Rank(candidates, goal, score, desire, source);
         _second.Clear();
     }
 
@@ -303,8 +309,9 @@ internal sealed class TierRungs : ITierRungs
     };
 
     /// <summary>
-    /// The pick (<c>FUN_140510650</c>): the candidates highest first; a source wins as it is (the look found it can run); the current goal with a
-    /// step running is kept as it is (<see cref="AiSystem.Kept"/>), else the first whose plan succeeds wins.
+    /// The pick (<c>FUN_140510650</c>): the candidates highest first; a source or a second-list entry wins as it is (the look found it can run, its
+    /// code in <paramref name="source"/>); the current goal with a step running is kept as it is (<see cref="AiSystem.Kept"/>), else the first whose
+    /// plan succeeds wins.
     /// </summary>
     AiGoal? PickGoal(List<(AiGoal? Goal, float Score, float Desire, int Source)> candidates, out int source)
     {
@@ -312,7 +319,7 @@ internal sealed class TierRungs : ITierRungs
         for (int k = 0; k < candidates.Count; k++)
         {
             var (g, _, desire, from) = candidates[k];
-            if (from >= 0)
+            if (from != -1)
             {
                 source = from;
                 return null;

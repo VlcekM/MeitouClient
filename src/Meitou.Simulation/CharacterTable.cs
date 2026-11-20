@@ -1494,17 +1494,17 @@ public sealed class CharacterCold
     public CharacterTask OrderRoutine { get; internal set; }
 
     /// <summary>
-    /// The receiver's second list (<c>+0x70</c>, count <c>+0x78</c>; docs/game/ai-tasks.md "Precedence" source 3): goals the chooser scores after its
-    /// committed stop and before the urgent job pass (<see cref="Ladder"/>). The original's queue loader <c>FUN_1405092d0</c> fills it from a saved
-    /// order queue, its permanent givers with rows of no job kind; entries are never popped by completion (a done one is skipped) and leave only by
-    /// the clears (<c>FUN_1405074a0</c>, <c>FUN_140507530</c>) or a type removal (<c>FUN_140507090</c>). Empty in Meitou until a giver fills it.
-    /// Serial phases write it, the think reads it; hashed while not empty; not saved (the original saves the order queue, not this list).
+    /// The receiver's second list (<c>+0x70</c>, count <c>+0x78</c>; docs/game/ai-tasks.md "Precedence" source 3): orders the chooser scores after
+    /// its committed stop and before the urgent job pass (<see cref="Ladder"/>; the serial look scores each, the serial pass starts the pick). The
+    /// queue loader <c>FUN_1405092d0</c> fills it from a saved order queue (<see cref="Saving.OrderSave.Restore"/>); entries are never popped by
+    /// completion (a done one is skipped) and leave only by the clears (<c>FUN_1405074a0</c>, <c>FUN_140507530</c>). Serial phases write it;
+    /// hashed while not empty; not saved (the original's writer saves the order queue only).
     /// </summary>
-    public List<Data.Gameplay.Ai.AiGoal> SecondList { get; } = [];
+    public List<OrderEntry> SecondList { get; } = [];
 
     /// <summary>
-    /// The queued orders a load read (<see cref="Saving.OrderSave"/>), until the decision step makes them the <see cref="OrderQueue"/> once the world
-    /// they name is there; null: none. Not hashed.
+    /// The queued orders a load read (<see cref="Saving.OrderSave"/>), until the decision step puts them in the <see cref="SecondList"/> once the
+    /// world they name is there; null: none. Not hashed.
     /// </summary>
     public IReadOnlyList<Saving.SavedOrder>? SavedOrders { get; set; }
 
@@ -1913,19 +1913,19 @@ public sealed class CharacterTable
     }
 
     /// <summary>
-    /// The second list (<see cref="CharacterCold.SecondList"/>): its count, then each goal's type, target, hours and weight in list order.
+    /// The second list (<see cref="CharacterCold.SecondList"/>): its count, then each order's row, start, target, site and point in list order.
     /// </summary>
-    static void HashSecondList(ref StateHasher hasher, List<Data.Gameplay.Ai.AiGoal> list)
+    static void HashSecondList(ref StateHasher hasher, List<OrderEntry> list)
     {
         hasher.Add(0x32644C73);   // "2dLs"
         hasher.Add(list.Count);
-        foreach (var g in list)
+        foreach (var e in list)
         {
-            hasher.Add((int)g.Task.Type);
-            hasher.Add((int)g.Task.Target);
-            hasher.Add(g.Start);
-            hasher.Add(g.End);
-            hasher.Add(g.Weight);
+            hasher.Add((int)e.Row);
+            hasher.Add(e.Started);
+            hasher.Add(e.Target);
+            hasher.Add(e.Site is { } site ? Rng.StableHash(site) : 0UL);
+            hasher.Add(e.Point);
         }
     }
 

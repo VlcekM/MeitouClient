@@ -93,13 +93,13 @@ public static class ObedientSlave
     }
 
     /// <summary>
-    /// Destroys the character's perma-jobs and second list (<c>FUN_140507280</c>, <c>FUN_140507530</c>: a loaded queue not restored yet); the order
-    /// queue is kept (docs/game/ai-tasks.md "What clears the queue").
+    /// Destroys the character's perma-jobs and second list (<c>FUN_140507280</c>, <c>FUN_140507530</c>: a loaded queue); the order queue is kept
+    /// (docs/game/ai-tasks.md "What clears the queue").
     /// </summary>
     static void Destroy(World world, CharacterCold cold)
     {
         DestroyJobs(world, cold, SlotOf(world, cold));
-        cold.SavedOrders = null;
+        PlayerOrders.ClearSecond(cold);
     }
 
     /// <summary>

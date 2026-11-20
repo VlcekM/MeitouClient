@@ -780,8 +780,9 @@ A player character's order queue (the deque at `AITaskSytem` +0x40, [order queue
   258 `USE_BED_ORDER` (11; a BUILDING handle, point set), 16 `ATTACK_ENEMIES` (11) and 5 (5) with a CHARACTER handle and a zero point (a queue of two is 5 then 16 on one target), 60 / 201 / 26 / 65 / 87
   once each. Meitou's Sleep order is the row 98 it starts, so it is written and read as 258.
 - **Load** (**Verified**): the loader reads `tjob<i>` until one is missing and adds each through the add function `FUN_1405086d0` without the permanent flag (it lands in the second list +0x70,
-  [precedence](../game/ai-tasks.md#precedence), not in the deque; a row with a job form is replaced by it), then the planner is re-run. Meitou instead restores the queue as saved: a load reads the
-  orders into `CharacterCold.SavedOrders`; the decision step makes them the queue (nothing started) once every character and building exists, and the front starts through source 1.
+  [precedence](../game/ai-tasks.md#precedence), not in the deque; a row with a job form is replaced by it; priority 3, weight 1.0; one the repertoire lacks is not made), then a replan
+  is asked. The writer saves the deque alone, so orders loaded into the second list are not written by a later save. Meitou: a load reads the orders into `CharacterCold.SavedOrders`;
+  the look puts them in the second list once every character and building exists (keeping the saved row: no job-form remap); a save writes the queue alone.
   An order is dropped when no system owns its row (so 16, 60 and the other rows Meitou has no order for), its target character or building is not in the world, or its handle names nothing the
   save holds. A building handle is the building's instance (a build site, or a fixture whose id is the building's own, a bed too); a CHARACTER handle finds the character by its saved handle.
 - **Meitou keys**: string `meitou tjob<i>` (the order's site id: a build site, fixture or rock, which wins on load over a building handle, as `meitou pjob<i>`), int `meitou tjobK<i>` (the owner's

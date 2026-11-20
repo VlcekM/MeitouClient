@@ -318,17 +318,12 @@ public static class PlayerOrders
     {
         var cold = world.Characters.Cold(slot)!;
         var q = cold.OrderQueue;
-        // A queue loaded and not restored yet (OrderSave.Restore): a queued order goes behind it, any other replaces it.
-        if (cold.SavedOrders is not null)
-        {
-            if (queued) Saving.OrderSave.Restore(world, slot, cold);
-            else
-                cold.SavedOrders = null;
-        }
+        // A queue loaded and not restored yet (OrderSave.Restore) is the second list's: a queued order keeps it, any other empties it with the queue.
+        if (queued && cold.SavedOrders is not null) Saving.OrderSave.Restore(world, slot, cold);
         if (!queued)
         {
             q.Clear();
-            cold.SecondList.Clear();   // the order giver empties the second list with the queue
+            ClearSecond(cold);
         }
         else
         {
@@ -401,15 +396,23 @@ public static class PlayerOrders
     internal static bool BodyHolds(CharacterCold cold) => cold.OrderQueue.Front is { Interrupts: true, Started: true };
 
     /// <summary>
+    /// Empties the second list (<c>FUN_140507530</c>'s and <c>FUN_1405074a0</c>'s part of it), a loaded queue not put in it yet too (serial phases).
+    /// </summary>
+    internal static void ClearSecond(CharacterCold cold)
+    {
+        cold.SecondList.Clear();
+        cold.SavedOrders = null;
+    }
+
+    /// <summary>
     /// The ragdoll setter's wipe (<c>FUN_1405d0db0</c> turning WHOLE or CARRY on → <c>FUN_1405074a0</c>, <c>FUN_14050d1b0</c>; a knock-out, death or
-    /// being picked up, docs/game/ai-tasks.md "What clears the queue"): the order queue and the second list (a loaded queue not restored yet) are
+    /// being picked up, docs/game/ai-tasks.md "What clears the queue"): the order queue and the second list (a loaded queue) are
     /// emptied and an AI's plan and goal dropped; the job list stays (serial phases).
     /// </summary>
     internal static void Wipe(CharacterCold cold)
     {
         cold.OrderQueue.Clear();
-        cold.SecondList.Clear();
-        cold.SavedOrders = null;
+        ClearSecond(cold);
         if (cold.Ai is not { } mind) return;
 
         mind.ResetPlan();
@@ -527,6 +530,7 @@ public static class PlayerOrders
                 return check;
             }
             Ai.OrderStep.TakeOver(world, slot, world.Characters.Cold(slot)!, front.Interrupts);
+            LeaveSecond(world.Characters.Cold(slot)!);
             front.Started = true;
             front.RowRuns = ListTests.OrderNeedsFailNow(world, slot, front) == false;   // else a step of its plan comes first
             front.Owner.Start(world, slot, front);
@@ -723,6 +727,40 @@ public static class PlayerOrders
     /// The decision step's start of source 1: the front starts (<see cref="TryFront"/>).
     /// </summary>
     internal static void StartFront(World world, int slot) => TryFront(world, slot, show: true);
+
+    /// <summary>
+    /// Whether second-list entry <paramref name="entry"/> can start now (<see cref="CanRun"/>) or runs the character's task already
+    /// (<see cref="Runs"/>); a pure read.
+    /// </summary>
+    internal static DecisionCheck SecondCheck(World world, int slot, OrderEntry entry)
+    {
+        if (entry.Started && Runs(world, slot, entry)) return DecisionCheck.Runs;
+
+        var check = CanRun(world, slot, entry);
+        return check.CanRun ? DecisionCheck.Run : DecisionCheck.No(check.Why ?? $"{entry.Row} cannot run");
+    }
+
+    /// <summary>
+    /// The chooser picked second-list entry <paramref name="entry"/> (serial phases, after <see cref="SecondCheck"/> said it can start): it starts
+    /// through its owner as a front order does, and stays in the list, which no completion pops.
+    /// </summary>
+    internal static void StartSecond(World world, int slot, OrderEntry entry)
+    {
+        var cold = world.Characters.Cold(slot)!;
+        Ai.OrderStep.TakeOver(world, slot, cold, entry.Interrupts);
+        LeaveSecond(cold);
+        entry.Started = entry.Tried = true;
+        entry.RowRuns = ListTests.OrderNeedsFailNow(world, slot, entry) == false;
+        entry.Owner.Start(world, slot, entry);
+    }
+
+    /// <summary>
+    /// No second-list entry stands for the character's task any more (another order starts).
+    /// </summary>
+    static void LeaveSecond(CharacterCold cold)
+    {
+        foreach (var e in cold.SecondList) e.Started = false;
+    }
 
     /// <summary>
     /// The decision step went past a front that cannot run: its failure text is shown the first time it is tried, and it stays queued.

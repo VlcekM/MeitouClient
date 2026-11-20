@@ -262,7 +262,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
 - **The body's orders** (`Combat.BodyOrders`, the original's engine order givers, [order givers](game/ai-tasks.md#order-givers); any character, the player's
   included; owner and row handler for 65, 52, 147 and 116; not saved; they release no duty, `OrderEntry.Interrupts`, and keep an NPC's routine). The combat body
   step (parallel, own slot) notes in `CharacterCold.BodyEvents` what the body did, and `BodyOrders.Pass` (combat's slow world, serial) acts on it:
-  going down (knocked out or dead) wipes the queue, a loaded queue not restored yet and an AI's plan and goal, the jobs kept (`PlayerOrders.Wipe`; being picked up
+  going down (knocked out or dead) wipes the queue, the second list and an AI's plan and goal, the jobs kept (`PlayerOrders.Wipe`; being picked up
   does the same in `CarrySystem.Link`); waking gives 65 Getting up (an animal, or waking standing) or 52 (waking staying low or crawling) with the clear flag,
   none in a bed or cage and, while carried, only once put down; a return to standing from staying low or crawling (Stand Up, a leg back up; not at a
   kneeling treatment; not in a bed or cage, engine) gives 65 with the clear flag unless one is queued. A flight
@@ -353,18 +353,22 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   (240, 213, 112, 4), 133 and 35 take any character; their
   act-outs post and say the worker's own messages for the player's side only.
 - Saved for player characters (`Saving/OrderSave`, in the character's GAMESTATE_AI record next to the perma-jobs; format and evidence: [save](formats/save.md#order-queue)): the queue front first,
-  started or not, as the original saves its deque as `tjob<i>`. A load reads the orders into `CharacterCold.SavedOrders` and starts nothing; `DecisionSystem.Run` makes them the queue (nothing
-  started) the first time it meets the character, once every character and fixture they name is there, and the replan bit every load sets runs the front through source 1 like a new order.
-  Left out (the queue pops a `Gone` order the same way): a row no system owns, a target character or site that is not in the world, a handle that names nothing, ground-item pick-ups (a runtime
-  item id) and the Medic / Rescue buttons' one-shot looks. An owner with a detail (`IOrderOwner.SaveKind` / `LoadDetail`) codes it in Meitou's own key. Before the front is checked, each order's owner
-  readies what its live command would (`IOrderOwner.Restored`): production makes the machine of a rock, town dummy or seat, which no save holds (without it
-  the operate order was `Gone` and a miner stood idle after a load, #598). **Engine choice**: the original's loader
-  re-adds each order into its second list (`+0x70`), not into the deque ([precedence](game/ai-tasks.md#precedence)). Hashed as the move-only queue was while it holds only that (nothing, a started order alone, started moves), else under its own mark.
+  started or not, body orders too, as the original saves its deque as `tjob<i>`; only the queue, so the second list and a loaded queue not put in it yet are not written. A load reads
+  the orders into `CharacterCold.SavedOrders` and starts nothing; the look puts them in the second list (`OrderSave.Restore`, as the loader `FUN_1405092d0` adds each through
+  `FUN_1405086d0` without the permanent flag) the first time it meets the character, once every character and fixture they name is there; the chooser scores them from then on
+  ([decision step](#decision-step)). Left out: a row no system owns, a target character or site that is not in the world, a handle that names nothing, ground-item pick-ups (a runtime
+  item id) and the Medic / Rescue buttons' one-shot looks. An owner with a detail (`IOrderOwner.SaveKind` / `LoadDetail`) codes it in Meitou's own key. Before an order is first checked,
+  its owner readies what its live command would (`IOrderOwner.Restored`): production makes the machine of a rock, town dummy or seat, which no save holds (without it the operate order
+  was `Gone` and a miner stood idle after a load, #598). Meitou keeps the saved row where the add function replaces a row that has a job form by that job's row. Hashed as the move-only
+  queue was while it holds only that (nothing, a started order alone, started moves), else under its own mark.
 
 ### Decision step
 
 Every character with a squad runs one chooser, the original's `FUN_140510ef0` (`Ladder.Run`, [precedence](game/ai-tasks.md#precedence)), player or NPC, one ladder per think. Its
-rungs: the order step, committed above priority 2, the second list (`CharacterCold.SecondList`, `+0x70`; nothing fills it yet), the urgent job pass (its pick takes the second list
+rungs: the order step, committed above priority 2, the second list (`CharacterCold.SecondList`, `+0x70`: a loaded queue's orders; the look
+scores each, desire x 1, x1.25 for the one running, a done one skipped; the serial pass starts the winner through its owner, and no completion pops it; emptied by an order without
+Shift, a knock-out, being picked up, a get-up's or a body order's clear, the stop `BodySystem.Stop` and enslaving; the jobs panel does not show it, as the original's reads the job list
+only), the urgent job pass (its pick takes the second list
 and an obeying NPC's 187 Slave goals), the priority-3 tier (the second list's leftovers first, so a tie goes to the tier's goals), committed above 1, the full job pass (list jobs,
 implicit jobs, then the 187 goals), the priority-2 tier, committed above 0, the priority-1 tier, the default task (14 Idleness for the player's faction, the IDLE plan for an
 NPC), the mover reset. A tier scores the AI's goals (`TierRungs`: role list, own lists, 32) with the goal sources of its step; a goal with nothing to do now is dropped
