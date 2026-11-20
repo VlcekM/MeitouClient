@@ -5,6 +5,7 @@ using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Carrying;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Items;
 
@@ -158,10 +159,11 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
     /// stands (the same building, or both outdoors), not behind a closed gate (<c>FUN_140597160</c>), and passing the ownership test
     /// (<see cref="MayTake"/>); null when none. Pass 2 is <see cref="FoodBody"/>. Serial (the captive look).
     /// </summary>
-    internal static GroundItem? GroundFood(World world, int slot, CharacterCold cold)
+    internal static GroundItem? GroundFood(World world, PopulationData data, int slot, CharacterCold cold)
     {
         var at = world.Characters.Next[slot].Position;
         int place = world.Sight.PlaceOf(slot);
+        bool playerTown = InPlayerTown(world, data, at, cold);
         var locks = world.SystemOf<Locks.LockSystem>();
         GroundItem? best = null;
         float d2Best = FoodOnGroundRange * FoodOnGroundRange;
@@ -170,7 +172,7 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
             if (!FreeFood(g, cold) || world.Sight.PlaceAt(g.Position) != place) continue;
 
             float d2 = Vector3.DistanceSquared(at, g.Position);
-            if (d2 >= d2Best || locks is not null && !locks.NotBlocked(world, at, g.Position) || !MayTake(world, cold, g, place)) continue;
+            if (d2 >= d2Best || locks is not null && !locks.NotBlocked(world, at, g.Position) || !MayTake(world, cold, g, place, playerTown)) continue;
 
             (best, d2Best) = (g, d2);
         }
@@ -216,15 +218,30 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
 
     /// <summary>
     /// The ownership test of 259's ground pass (<c>FUN_140997d80</c>, <b>Verified</b>): an item that has an owner must be of the looker's faction,
-    /// but for a player-faction looker on an item outdoors or in a building of the player's faction, which it may take whoever owns it.
+    /// but for a looker whose status town is the player's (<paramref name="playerTown"/>) on an item outdoors or in a building of the player's
+    /// faction, which it may take whoever owns it.
     /// </summary>
-    static bool MayTake(World world, CharacterCold cold, GroundItem g, int place)
+    static bool MayTake(World world, CharacterCold cold, GroundItem g, int place, bool playerTown)
     {
         if (g.OwnedBy < 0 || g.OwnedBy == cold.Faction) return true;
-        if (world.Player.Faction < 0 || cold.Faction != world.Player.Faction) return false;
+        if (!playerTown) return false;
         if (place < 0) return true;
 
         return world.Buildings.Find(world.Sight.PlaceKey(place)) is { } building && building.Owner == world.Player.Faction;
+    }
+
+    /// <summary>
+    /// Whether the looker's status town (status <c>+0x88</c>, as its next status update writes it: <see cref="Ai.AiSystem.StatusTownAt"/>) is of a
+    /// player faction (the town's faction's <c>+0x250</c>): a player outpost the player owns, or a placed town of the player's faction.
+    /// </summary>
+    static bool InPlayerTown(World world, PopulationData data, Vector3 at, CharacterCold cold)
+    {
+        if (world.Player.Faction < 0) return false;
+
+        var town = Ai.AiSystem.StatusTownAt(data, world, at, cold.StatusTown);
+        if (town.Site >= 0) return town.Site < data.SiteFactions.Count && data.SiteFactions[town.Site] == world.Player.Faction;
+
+        return town.PlayerTown > 0 && world.Buildings.FindTown(town.PlayerTown) is { } built && built.Owner == world.Player.Faction;
     }
 
     /// <summary>

@@ -348,9 +348,10 @@ public sealed partial class CarrySystem
             if (item.LockedOn || !InventoryCommands.IsMovableSection(item.Section)) continue;
             if (OwnerOf(from, item) is not { } owner) continue;
             bool gear = InventoryCommands.IsEquipmentSection(item.Section);
-            int units = InventoryCommands.MoveInto(owner, item, 0, into, bagFirst: false, out bool equipped, looter);
+            var wearer = LootsToEat(looter) && FeedSystem.IsFood(item) ? null : looter;
+            int units = InventoryCommands.MoveInto(owner, item, 0, into, bagFirst: false, out bool equipped, wearer);
             bool alsoWorn = false;
-            if (owner.Items.Contains(item)) units += InventoryCommands.MoveInto(owner, item, 0, into, bagFirst: true, out alsoWorn, looter);
+            if (owner.Items.Contains(item)) units += InventoryCommands.MoveInto(owner, item, 0, into, bagFirst: true, out alsoWorn, wearer);
             if (units == 0) continue;
             moved++;
             worn |= gear;
@@ -360,6 +361,12 @@ public sealed partial class CarrySystem
         if (wear) Assembly?.RefreshEquipment(looter);
         return moved;
     }
+
+    /// <summary>
+    /// The looter loots a body for food to eat (259 Picking up food's pass 2): its food goes into an animal's shut grid too, as fetched food does
+    /// (<see cref="CharacterCold.FetchingFood"/>), so the body is not picked again for food it kept.
+    /// </summary>
+    static bool LootsToEat(CharacterCold looter) => looter.Running is { Row: TaskType.EatFoodOnGround };
 
     /// <summary>
     /// The inventory that holds <paramref name="item"/>: the victim's own, its worn backpack's or a carried bag's; null when none does any more.

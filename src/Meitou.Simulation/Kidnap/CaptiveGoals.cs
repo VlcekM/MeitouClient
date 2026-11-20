@@ -379,7 +379,7 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
         TaskType.FindCropsToEat => Farm(world, s, cold, board),
         TaskType.FogmanWorshipVictim => captives.WorshipTarget(world, s) is { } shrine ? OfCage(shrine) : null,
         TaskType.AnimalFetchALimb => CaptiveSystem.LimbFor(world, s, cold) is { } limb ? OfItem(limb) : null,
-        TaskType.EatFoodOnGround => Items.FeedSystem.GroundFood(world, s, cold) is { } food ? OfItem(food)
+        TaskType.EatFoodOnGround => Items.FeedSystem.GroundFood(world, data, s, cold) is { } food ? OfItem(food)
             : OfCharacter(world, Items.FeedSystem.FoodBody(world, s, cold)),
         TaskType.ChaseAllyDogsWithMouthLimbs => OfCharacter(world, captives.MouthfulAlly(world, s, cold)),
         TaskType.NewSlaveProcessing or TaskType.SlaveWatching => ToProcess(world, s, cold, board, type),
