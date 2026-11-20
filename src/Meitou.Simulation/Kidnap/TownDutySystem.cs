@@ -768,12 +768,13 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// The town test of 273's desire (AI slot 60 <c>FUN_140597f20</c>, <b>Verified</b> by decompile): in a current town (status <c>+0x88</c>) the
     /// desire is 0 when the town is no Town (vfunc <c>0x268</c>, null for a TownBase), has no gates (<c>Town::hasGates</c>, <see cref="HasGates"/>),
     /// or has its walls locked up (Town slot 96, <see cref="LockSystem.TownLockedUp"/>) and the member is of the player's faction; outside a town the
-    /// lift desire stands. Engine reading: a placed town of another type than Town is a TownBase, and a player town a Town whose walls are not read.
+    /// lift desire stands. The town builder (<c>FUN_140581770</c>, <b>Verified</b>) makes a TownBase only for a TOWN record of type 0 (a nest);
+    /// every other type, and every player town, is a Town.
     /// </summary>
     internal bool TownLets(World world, CharacterCold cold, CampaignTown town)
     {
         if (town.IsNone) return true;
-        if (town.Site >= 0 && data.Sites[town.Site].Town.Type != Data.Gameplay.TownType.Town) return false;
+        if (town.Site >= 0 && data.Sites[town.Site].Town.Type == Data.Gameplay.TownType.Nest) return false;
         if (!HasGates(world, town)) return false;
 
         bool locked = town.Site >= 0 && LockSystem.TownLockedUp(world, data.Sites[town.Site]);
