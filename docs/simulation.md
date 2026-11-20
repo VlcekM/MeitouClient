@@ -313,7 +313,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   queue and second list are emptied, the task ends and event 1 fires (or the trade opens). The menu's Talk To and the quick click give it to the nearest selected character that stands and is
   no animal (the original's menu gives it to every selected one through `FUN_1407f9e20`; one talker is the owner's choice). The interface gives both clearing the queue, Shift or not, as the original's givers do
   ([order givers](game/ai-tasks.md#order-givers)); `World.GiveOrder(queued: true)` appends one. DA_TRADE opens its window with no order (`OpenTradeNow`).
-- **Escape** (the caged character's menu verb) is order 207 Escape cage (`GetOutOrder` → `Locks.CageEscape`) for every selected character, the queue cleared, as the
+- **Escape** (the caged character's menu verb, and Alt + the quick click on it in another faction's unlocked cage, `CageClickOrder`) is order 207 Escape cage (`GetOutOrder` → `Locks.CageEscape`) for every selected character, the queue cleared, as the
   original's giver: done for one in no cage (list A `!79`), held while the cage is locked (list B `!54`), else Task_GetOutOfCage's leave with the escape flag.
 - Not queued (they act at once): Shoot At (sets the turret's target), Dispose Corpse (an errand). **Stop** is no order in the original either
   (`FUN_1407f6470`, [what clears the queue](game/ai-tasks.md#what-clears-the-queue)): it wipes the queue, the second list and the goal (`PlayerOrders.Wipe`) and ends the task.

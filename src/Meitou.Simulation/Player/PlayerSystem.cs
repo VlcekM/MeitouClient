@@ -144,6 +144,7 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
         Locks.SetFreeOrder o => o.Characters,
         Locks.GetInCageOrder o => o.Characters,
         Locks.GetOutOrder o => o.Characters,
+        Locks.CageClickOrder { Alt: true } o => o.Characters,
         Locks.PutInBedOrder o => o.Carriers,
         Crime.PutInCageOrder o => o.Carriers,
         Construction.DismantleOrder o => o.Characters,

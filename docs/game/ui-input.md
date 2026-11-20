@@ -506,7 +506,11 @@ that activation menu-only; once the ruin becomes an unfinished construction site
 - A cage (its quick click is reached only when the context menu does not open at once, last point): `use` while the lead selected character
   (+0xf0) carries someone (+0x348). Another faction's empty cage: 108 PUT_IN_CAGE when carrying, else 107 USE_CAGE; the player's own cage:
   108 (slot 131). In another faction's cage holding one of yours, Alt + right click gives 76 PICK_LOCK when its lock is locked or
-  207 GET_OUT_OF_CAGE_ESCAPE when not; without Alt the bar shows "Hold down the ALT key to pick the lock." / "...to escape the cage.".
+  207 GET_OUT_OF_CAGE_ESCAPE when not; without Alt the bar shows "Hold down the ALT key to pick the lock." / "...to escape the cage.". **Verified**
+  (`FUN_1407fc6e0`): this runs only when the occupant's own quick click (`FUN_1407fb410`) set no pointer (the pointer kind that `FUN_1406e3d60`
+  stores at `DAT_1421337b0` `+0x38`), and both orders go through `FUN_1407fa650` with 0 to every selected character, the queue cleared (207's registration sets no
+  `+4`, so Shift does not make it a job). Meitou: a quick right click on a caged character of the player's with no quick order of its own sends
+  `CageClickOrder` (`PlayerInterface.CageClick`), which gives `PickLockOrder` (one picker, as the menu's Pick Lock) or `GetOutOrder` (every selected character) or posts the hint (`LockSystem.CageClickInput`).
 - Another faction's non-cage building with a locked lock: Alt gives 76; without Alt the pick-lock message and a move to it.
 - A bed's held menu: 99 "Put in Bed" when the last selected player character carries someone, else 258 "Sleep" (`FUN_1407a6bc0`, [locks](locks.md#beds)).
 - No order while every selected character is unconscious ("Your selected character is unconscious", `FUN_1407f6f50`).
