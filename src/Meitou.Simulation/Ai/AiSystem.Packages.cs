@@ -640,6 +640,27 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
+    /// A passing-by assault a save held as running (its <c>currentPackage</c>): it starts again in the player town the squad is in, as the original's
+    /// load starts the saved package (<c>FUN_1402721a0</c>), and the saved keys go over what the start set (<see cref="Saving.PackageSave"/>); out of
+    /// a player town only its spent mark is kept.
+    /// </summary>
+    void ResumeAssault(World world, Squad squad)
+    {
+        var saved = squad.SavedPackage;
+        squad.SavedPackage = null;
+        if (saved is null || squad.Ai is not { } board || squad.LeftPackage is not { } left || data.Ai.Package(left) is not { } package
+            || PackageClasses.Of(package.Signal) != PackageClass.PassingAssault)
+            return;
+
+        board.AssaultDone = saved.Done;
+        if (board.Contract is not null || CurrentTown(world, squad.Position) is not { PlayerTown: > 0 } there || !board.Resume(package)) return;
+
+        board.InTown = there;
+        AssaultStarted(world, squad, board);
+        saved.ApplyAssault(board, data);
+    }
+
+    /// <summary>
     /// Engine choice: the members' posts move into the town they assault or hold (a ring round its centre by member), so their idle and their node
     /// and bed goals, which have no building there, stay in it (the original's ransacking goal, <c>Task_PatrolTownViolent</c>, has a target finder
     /// Meitou lacks); with <paramref name="say"/> each says it.

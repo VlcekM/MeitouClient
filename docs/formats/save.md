@@ -811,7 +811,13 @@ Meitou-only loose-item key (`Items/ItemSlots.WriteDue`, [ground items](../simula
 - **Platoon blackboard** (`FUN_14026c2d0` / `FUN_140272c20`): `runningAwayMode`, `currentPackage`, `target town`, `towntime`, `mission data`, `currenttown`,
   `jobhr`, `contractjob`, `replacementAI`, `homelok`, `target <i>` / `target key <i>`, then the running package's own keys (vfunc `+0x20`): the base class's
   `mission target` / `mission town` / `mission employer` (`FUN_140269640`), plus `persist` for OccupyTown and `done`, `started`, `enemy` for
-  PassingByTownAssault; the war classes add none. The load activates the package (`FUN_1402721a0`, which calls its start, vfunc `+0x30`, at once) and then
+  PassingByTownAssault; the war classes add none. `persist` (bool, `FUN_140295f90` / `FUN_140296070`): the occupation's start (`FUN_140288fe0`) found
+  the platoon not persistent and made it so, and its end (`FUN_140296150`) makes it not persistent again. `done` (bool): the assault is spent (its
+  finished test `FUN_14028eca0` sets it while it is the current package; its start test `FUN_140290450` then refuses it); `started` (float, the game
+  hour its start `FUN_1402900c0` stamped); `enemy` (string, the id of the town owner's faction it attacks, `FUN_1402963a0` / `FUN_1402965a0`, written
+  only with one). Meitou (`Saving/PackageSave`) writes them for a squad in the world; a load resumes a saved running passing-by assault in the player
+  town the squad stands in and puts the three over its start, else keeps only `done`; `persist` is read by nothing, as Meitou makes a roaming
+  platoon persistent while it occupies and not after. The load activates the package (`FUN_1402721a0`, which calls its start, vfunc `+0x30`, at once) and then
   its load (vfunc `+0x28`) puts the saved hands over the start's. So the war start (`FUN_14028fc80`, [ai](../game/ai.md#package-classes)) runs again and
   its copies of the lead platoon, pace and point are made from the loaded state.
 - **Announcement**: state 76 `isMessageDelivered` (`FUN_140792190`) reads the speaker's Dialogue per-event map (`+0xf8`, `FUN_140673830`); the character's

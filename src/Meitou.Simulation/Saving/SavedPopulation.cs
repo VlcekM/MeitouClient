@@ -844,6 +844,7 @@ internal static class SavedCharacters
         // Its shop as it was when it left the world, else the save's (a fresh fill when the save has none).
         squad.Shop = sp.Shop ?? ShopSave.Read(world, squad, sp.Source.Record, data);
         squad.SavedAi = sp.Ai;
+        squad.SavedPackage = PackageSave.Read(sp.Source.Record);
         world.Squads.Add(squad);
 
         // What the squad remembered: the save's, else what it kept when it last left the world.

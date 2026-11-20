@@ -1144,6 +1144,7 @@ public static partial class SaveCapture
             if (p is not null) platoon.Record.Bools["intact"] = p.IntactFlag;   // +0x100
             ShopSave.Write(platoon.Record, squad is not null ? squad.Shop : sp.Shop, world);
             WriteAi(platoon.Record, squad is not null ? AiSave.Of(squad.Ai) ?? squad.SavedAi : sp.Ai);
+            if (squad is not null) PackageSave.Write(platoon.Record, squad.Ai, data, sp.Wild is not null);
 
             // A wild one the AI ran: its package, persistent while it occupies a town (as the original's occupation).
             if (sp.Wild is not null && p is not null && (squad?.Ai?.Current?.Id ?? p.Package) is { } package)
@@ -1646,6 +1647,7 @@ public static partial class SaveCapture
 
             // Moved out of a house the player bought with no other home: not persistent, as the original's purchase leaves it (WriteMovedOut).
             if (squad.MovedOut && squad.HomeBuilding is null) written.Record.Bools["persistent"] = false;
+            PackageSave.Write(written.Record, squad.Ai, _data, roamer is { Pinned: false });
             if (roamer is not null && into is null) WriteBaseTown(written.Record, roamer);
             return written;
         }

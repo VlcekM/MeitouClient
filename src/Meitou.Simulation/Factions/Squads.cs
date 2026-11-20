@@ -167,6 +167,10 @@ public sealed class Squad
     /// </summary>
     public Saving.AiSave? SavedAi { get; set; }
     /// <summary>
+    /// The running package's own keys a save held (<see cref="Saving.PackageSave"/>), until the AI attaches a blackboard and applies them (then null).
+    /// </summary>
+    public Saving.PackageSave? SavedPackage { get; set; }
+    /// <summary>
     /// A player's squad the AI may run (<see cref="Ai.SetSquadAutonomy"/>, docs/simulation.md "Autonomous player squads"): it takes AI packages
     /// as an NPC squad does, and its members act them out while no order or job holds them. Meitou only; saved, hashed while set.
     /// </summary>

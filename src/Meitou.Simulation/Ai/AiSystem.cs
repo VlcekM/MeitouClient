@@ -3910,6 +3910,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             OccupyResumed(world, squad, squad.Ai);
         }
 
+        ResumeAssault(world, squad);
         squad.LeftPackage = null;
         if (squad.Autonomous) _autonomy.Settle(world, squad, squad.Ai);
     }
