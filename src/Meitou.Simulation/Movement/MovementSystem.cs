@@ -1262,9 +1262,10 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
     /// <summary>
     /// Task_Follow sets the follower's sneaking each update (FUN_14033b350, Verified): on while the leader sneaks out of a fight and the follower
-    /// regards it as friendly (vfunc 0x3f0; here: the same faction or an allied one, as Carry.Friendly reads it), off otherwise; dropping it also
-    /// stands it up. A leader that follows someone itself may change its own flag in this same parallel pass, so its followers are left as they are
-    /// (engine choice, keeps the step deterministic).
+    /// regards it as friendly (vfunc 0x3f0; here: the same faction or an allied one, as Carry.Friendly reads it), off otherwise. Dropping it leaves
+    /// the posture alone (its setter <c>FUN_1405ca9a0</c> resets the mover, not the posture, Verified), so one staying low follows on low. A leader
+    /// that follows someone itself may change its own flag in this same parallel pass, so its followers are left as they are (engine choice, keeps
+    /// the step deterministic).
     /// </summary>
     void CopySneak(CharacterTable table, in CharacterHot lead, int leader, CharacterCold cold)
     {
@@ -1278,10 +1279,9 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         {
             Orders.SneakOn(cold);   // its own slot: the replan request writes only its own mind
         }
-        else if ((cold.Orders & CharacterOrders.Sneak) != 0)
+        else
         {
             cold.Orders &= ~CharacterOrders.Sneak;
-            if (cold.Medical is { } med) med.StayingLow = false;
         }
     }
 
