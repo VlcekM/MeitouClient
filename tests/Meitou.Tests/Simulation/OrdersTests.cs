@@ -1,10 +1,15 @@
 using System.Numerics;
+using Meitou.Data;
 using Meitou.Data.Fcs;
+using Meitou.Data.Gameplay;
 using Meitou.Simulation;
+using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
 using Meitou.Tests.Combat;
 using static Meitou.Tests.Bodies.BodyFixtures;
 using static Meitou.Tests.Combat.CombatFixtures;
@@ -29,14 +34,25 @@ public class OrdersTests
 
         // Seed 1: a fight where the unordered player is not knocked out before its first swing (seeds 3 and 9 are, since the original part order).
         var world = new SimWorld(new WorldSettings { Seed = 1, PublishSnapshots = false }, walk,
-            [new PlayerSystem(), new PursuitSystem(combat), new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), combat,
-                    new RetaliationSystem(combat)]);
+            [new AiSystem(new PopulationData { Db = new GameDatabase(), Sites = [], Factions = [], Relations = FactionRelations.Build([]) }),
+                    new PlayerSystem(), new PursuitSystem(combat), new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), combat,
+                    new RetaliationSystem(combat), Senses(combat)]);
+
+        // Each in a squad and a faction of its own: the chooser (its 32 Self preservation) runs only for a squad member, and the senses take only
+        // another faction's attacker as a threat.
         CharacterId Make(string name, Vector3 at, bool player)
         {
             var cold = new Combatant { Name = name }.MakeCold();
             cold.IsPlayer = player;
-            return world.Characters.Spawn(new CharacterHot { Position = at, Health = 100, MaxSpeed = 60, WalkSpeed = 15, Mode = SpeedMode.Free },
+            cold.Faction = player ? 1 : 0;
+            var squad = new Squad { Id = world.Squads.NextId(), TemplateId = "t", Faction = cold.Faction };
+            world.Squads.Add(squad);
+            cold.SquadId = squad.Id;
+            var id = world.Characters.Spawn(new CharacterHot { Position = at, Health = 100, MaxSpeed = 60, WalkSpeed = 15, Mode = SpeedMode.Free },
                     cold, 0);
+            squad.Members.Add(id);
+            squad.Leader = id;
+            return id;
         }
         var player = Make("player", new Vector3(1000, 150, 1000), true);
         var bandit = Make("bandit", new Vector3(1000 + distance, 150, 1000), false);

@@ -308,7 +308,7 @@ public class FirstAidTests
         var items = new ItemFactory(KitDatabase(), BaseGame);
         var systems = new List<ITickSystem>
         {
-            new PlayerSystem(), new MovementSystem(new PathService(walk, true)),
+            new AiSystem(data), new PlayerSystem(), new MovementSystem(new PathService(walk, true)),
                     new FirstAidSystem(BaseGame, BodyOptions.Default, items) { Relations = data.Relations },
             new BodySystem(BaseGame, BodyOptions.Default),
         };
@@ -335,6 +335,7 @@ public class FirstAidTests
 
         Assert.True(world.Fixtures.Imprison(world, prisoner, cage));
 
+        GiveGoals(world, 1, [Goal(TaskType.JobMedic, TaskPriority.Urgent)]);   // an NPC treats by its Medic goal (58)
         var body = world.Characters.Cold(prisoner.Slot)!.Medical!;
         body.Parts[RLeg].Flesh = body.Parts[RLeg].MaxHp * 0.4f;   // 60% to bandage
         long started = -1;
@@ -374,7 +375,7 @@ public class FirstAidTests
         var items = new ItemFactory(KitDatabase(), BaseGame);
         var systems = new List<ITickSystem>
         {
-            new PlayerSystem(), new MovementSystem(new PathService(walk, true)),
+            new AiSystem(data), new PlayerSystem(), new MovementSystem(new PathService(walk, true)),
                     new FirstAidSystem(BaseGame, BodyOptions.Default, items) { Relations = data.Relations },
             new BodySystem(BaseGame, BodyOptions.Default),
         };
@@ -398,6 +399,7 @@ public class FirstAidTests
 
         Assert.True(world.Fixtures.Imprison(world, prisoner, cage));
 
+        GiveGoals(world, 1, [Goal(TaskType.JobMedic, TaskPriority.Urgent)]);   // an NPC treats by its Medic goal (58)
         var body = world.Characters.Cold(prisoner.Slot)!.Medical!;
 
         // The Rebirth prisoner's three hurt parts (41.3, 70.8 and 70.5 of 100).

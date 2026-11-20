@@ -1,6 +1,7 @@
 using System.Numerics;
 using Meitou.Simulation;
 using Meitou.Simulation.Combat;
+using Meitou.Simulation.Factions;
 using static Meitou.Tests.Combat.DuelFixture;
 using SimWorld = Meitou.Simulation.World;
 
@@ -45,6 +46,11 @@ public class FightRulesTests
             return world.Characters.Spawn(new CharacterHot { Position = new Vector3(1000 + x, 150, 1000), Health = 100 }, cold, 0);
         }
         CharacterId a = Put(0, 0);
+
+        // A squad: a character without one runs no chooser and its queued order never starts.
+        world.Squads.Add(new Squad { Id = 0, TemplateId = "t", Members = { a } });
+        world.Characters.Cold(a.Slot)!.SquadId = 0;
+
         CharacterId b = Put(1, far);
         CharacterId c = Put(2, -14);
         world.Commands.Enqueue(new AttackOrder([a], b) { Picked = picked, Tick = world.Tick });

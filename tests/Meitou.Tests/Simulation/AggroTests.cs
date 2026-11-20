@@ -82,22 +82,22 @@ public class AggroTests
                 members);
 
         /// <summary>
-        /// The active half of a roaming platoon that runs <paramref name="package"/> (the population's stand-in; the AI does not run its squad), its
-        /// members standing and facing along +Z.
+        /// The active half of a roaming platoon of <paramref name="template"/> (the population's stand-in), whose blackboard the AI makes of the
+        /// template's AI packages as for every squad; its members standing and facing along +Z.
         /// </summary>
-        public Squad Roamers(int faction, string package, Vector2 home, params Vector2[] at)
+        public Squad Roamers(int faction, string template, Vector2 home, params Vector2[] at)
         {
-            var platoon = new Platoon { Id = World.Platoons.NextId(), Origin = 0, TemplateId = "t", Key = 1, Faction = faction, Package = package,
+            var platoon = new Platoon { Id = World.Platoons.NextId(), Origin = 0, TemplateId = template, Key = 1, Faction = faction,
                     State = PlatoonState.Loaded };
             World.Platoons.Add(platoon);
-            var squad = SquadOf(faction, home, true, platoon.Id, [.. at.Select(p => (p, 0f))]);
+            var squad = SquadOf(faction, home, true, platoon.Id, [.. at.Select(p => (p, 0f))], template: template);
             platoon.SquadId = squad.Id;
             return squad;
         }
 
-        Squad SquadOf(int faction, Vector2 home, bool idle, int platoon, (Vector2 At, float Yaw)[] members, int town = -1)
+        Squad SquadOf(int faction, Vector2 home, bool idle, int platoon, (Vector2 At, float Yaw)[] members, int town = -1, string template = "t")
         {
-            var squad = new Squad { Id = World.Squads.NextId(), TemplateId = "t", Faction = faction, HomeCentre = home, HomeRadius = 30,
+            var squad = new Squad { Id = World.Squads.NextId(), TemplateId = template, Faction = faction, HomeCentre = home, HomeRadius = 30,
                     PlatoonId = platoon, Town = town };
             World.Squads.Add(squad);
             foreach (var (p, yaw) in members)
@@ -128,6 +128,17 @@ public class AggroTests
         }
 
         public bool Fighting(CharacterId id) => World.Characters.Cold(id.Slot)!.InCombat;
+
+        /// <summary>
+        /// Puts a character in a squad of its own, its leader: a character without one runs no chooser.
+        /// </summary>
+        public void Join(CharacterId id)
+        {
+            var cold = World.Characters.Cold(id.Slot)!;
+            var squad = new Squad { Id = World.Squads.NextId(), TemplateId = "t", Faction = cold.Faction, Members = { id }, Leader = id };
+            World.Squads.Add(squad);
+            cold.SquadId = squad.Id;
+        }
     }
 
     /// <summary>
@@ -370,13 +381,14 @@ public class AggroTests
     [Fact]
     public void A_holder_takes_on_a_raider_passing_its_post_but_not_one_standing_off()
     {
-        using var a = Make(4, 1, OneSided());
+        using var a = Make(4, 1, OneSided(), ai: true);
         a.Aggro.Combat = a.Combat;
         var o = new Vector2(2000, 2000);
         var me = a.World.Characters.Spawn(new CharacterHot { Position = new Vector3(o.X, 150, o.Y), Health = 100, MaxSpeed = 60, WalkSpeed = 15 },
             new Combatant { Name = "holder" }.MakeCold(), 0);
         var cold = a.World.Characters.Cold(me.Slot)!;
         (cold.Faction, cold.IsPlayer, cold.Orders, cold.HoldPoint) = (1, true, CharacterOrders.Hold, new Vector3(o.X, 150, o.Y));
+        a.Join(me);
         var stander = a.SquadOf(0, o, true, (o + new Vector2(0, 50), MathF.PI)).Members[0];
         Docile(a, stander);
         a.World.RunTicks((int)(3 / a.World.TickSeconds));
@@ -417,7 +429,7 @@ public class AggroTests
     public void A_holder_on_a_jobs_task_attacks_on_sight()
     {
         var holder = CharacterId.None;
-        using var a = Make(4, 1, OneSided(), extra: new JobStarter(() => holder));
+        using var a = Make(4, 1, OneSided(), extra: new JobStarter(() => holder), ai: true);
         a.Aggro.Combat = a.Combat;
         var o = new Vector2(2000, 2000);
         var me = holder = a.World.Characters.Spawn(new CharacterHot { Position = new Vector3(o.X, 150, o.Y), Health = 100, MaxSpeed = 60,
@@ -425,6 +437,7 @@ public class AggroTests
             new Combatant { Name = "holder" }.MakeCold(), 0);
         var cold = a.World.Characters.Cold(me.Slot)!;
         (cold.Faction, cold.IsPlayer, cold.Orders, cold.HoldPoint) = (1, true, CharacterOrders.Hold, new Vector3(o.X, 150, o.Y));
+        a.Join(me);
         a.World.RunTicks(2);
 
         Assert.True(cold.Running is { Source: TaskSource.Job } job && job.Runs(CharacterTask.Idle), "on a job's task");
@@ -954,7 +967,8 @@ public class AggroTests
     #region Roaming squads
 
     /// <summary>
-    /// Two AI packages, "210-t" with 16 Attacking enemies and "211-t" with 143 Protect close allies, for every role, all hours, weight 1.
+    /// Two AI packages, "210-t" with 16 Attacking enemies and "211-t" with 143 Protect close allies, for every role, all hours, weight 1, and the
+    /// squad templates "220-t" and "221-t" that list them.
     /// </summary>
     static GameDatabase RoamingPackages()
     {
@@ -971,19 +985,25 @@ public class AggroTests
             r.References["Squad AI Goals"] = [SyntheticTown.Ref(task, 0, 100, 0)];
             return r;
         }
+        Meitou.Data.Fcs.FcsRecord Template(string id, string package)
+        {
+            var r = SyntheticTown.Rec(id, Data.Fcs.FcsRecordType.SquadTemplate, id);
+            r.References["AI packages"] = [SyntheticTown.Ref(package, 0)];
+            return r;
+        }
         var file = new Meitou.Data.Fcs.FcsFile();
         file.Records.AddRange([Task("200-t", TaskType.AttackEnemies), Task("201-t", TaskType.ProtectOwnSquad), Package("210-t", "200-t"),
-                Package("211-t", "201-t")]);
+                Package("211-t", "201-t"), Template("220-t", "210-t"), Template("221-t", "211-t")]);
         var db = new GameDatabase();
         db.Apply(file, "test.mod");
         return db;
     }
 
     /// <summary>
-    /// A squad the AI does not run takes its combat goals from its package all the same (docs/simulation.md "AI": every character has goals,
-    /// <c>setupAI</c>): of two roaming squads of the town that see a bandit, the one whose package lists 16 attacks it, the one whose package lists
-    /// only 143 does not, and a member whose mind was dropped (as trade or recruitment do) gets one again. Catches the old stance-blind rule (attack
-    /// on sight by the relations alone) for squads without a mind of the AI's.
+    /// A roaming squad's members run the full minds of its template's package (docs/simulation.md "AI": every character has goals, <c>setupAI</c>;
+    /// every platoon has a blackboard, <c>FUN_1405112b0</c>): of two roaming squads of the town that see a bandit, the one whose package lists 16
+    /// attacks it, the one whose package lists only 143 does not, and a member whose mind was dropped (as trade or recruitment do) gets one again.
+    /// Catches the old stance-blind rule (attack on sight by the relations alone) for roaming squads.
     /// </summary>
     [Fact]
     public void A_roaming_squad_attacks_on_sight_only_by_its_packages_attack_goal()
@@ -991,10 +1011,14 @@ public class AggroTests
         using var a = Make(21, 1, TownRelations(), ai: true, db: RoamingPackages());
         a.Aggro.Combat = a.Combat;
         var o = new Vector2(2000, 2000);
-        var hunters = a.Roamers(Town, "210-t", o, o + new Vector2(-40, 0), o + new Vector2(-30, 0));
-        var traders = a.Roamers(Town, "211-t", o, o + new Vector2(30, 0), o + new Vector2(40, 0));
+        var hunters = a.Roamers(Town, "220-t", o, o + new Vector2(-40, 0), o + new Vector2(-30, 0));
+        var traders = a.Roamers(Town, "221-t", o, o + new Vector2(30, 0), o + new Vector2(40, 0));
         Think(a);
         var table = a.World.Characters;
+        string? PackageOf(CharacterId m) => table.Cold(m.Slot)!.Ai?.Squad.Ai?.Current?.Id;
+
+        Assert.All(hunters.Members, m => Assert.Equal("210-t", PackageOf(m)));
+        Assert.All(traders.Members, m => Assert.Equal("211-t", PackageOf(m)));
 
         table.Cold(hunters.Members[1].Slot)!.Ai = null;
         var bandit = a.SquadOf(Bandits, o, true, (o + new Vector2(0, 150), MathF.PI)).Members[0];
@@ -1006,7 +1030,7 @@ public class AggroTests
         }
 
         Assert.All(hunters.Members, m => Assert.Equal(bandit.Slot, a.Combat.StateOf(m).TargetSlot));
-        Assert.True(table.Cold(hunters.Members[1].Slot)!.Ai is not null, "the dropped mind is made again");
+        Assert.Equal("210-t", PackageOf(hunters.Members[1]));   // the dropped mind is made again, of its squad's package
     }
 
     /// <summary>
@@ -1025,7 +1049,7 @@ public class AggroTests
         var bandit = a.SquadOf(Bandits, o, true, (o + new Vector2(5, 60), MathF.PI)).Members[0];
         a.World.RunTicks((int)(2 / a.World.TickSeconds));
 
-        Assert.True(a.World.Characters.Cold(folk.Members[0].Slot)!.Ai is not null);
+        Assert.True(a.World.Characters.Cold(folk.Members[0].Slot)!.Ai is { Squad.Ai.Current: null }, "a full mind on a blackboard of no package");
         Assert.All(folk.Members, m => Assert.False(a.Fighting(m), "no attack on sight"));
 
         a.World.Commands.Enqueue(new AttackOrder([bandit], folk.Members[0]) { Tick = a.World.Tick });
