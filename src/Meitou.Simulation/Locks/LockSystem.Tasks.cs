@@ -140,21 +140,29 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
         });
 
     /// <summary>
-    /// A lock order (the pickers choose who gets it from the conditions of the moment): a player character's (else it leaves the queue) that is
-    /// awake, not carried and free, or caged and working on its own cage or shackles where it stands; its fixture or character still there. What else
-    /// the work needs is tested where it is done (the worker gives up there).
+    /// A lock order (the pickers choose who gets it from the conditions of the moment): a character's that is awake, not carried and free, or caged
+    /// and working on its own cage or shackles where it stands; its fixture or character still there (else it leaves the queue). What else the work
+    /// needs is tested where it is done (the worker gives up there). The walk to a door (<see cref="StartDoor"/>) is a player character's only (else
+    /// it leaves the queue): it takes the interface's one door target (<see cref="PlayerState.DoorTarget"/>).
     /// </summary>
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
         var table = world.Characters;
         var c = table.Cold(slot)!;
-        if (!c.IsPlayer || order.Site is { } site && world.Fixtures.Find(site) is null || !order.Target.IsNone
-                && !table.TryResolveNext(order.Target, out _))
+        if (order.Site is { } site && world.Fixtures.Find(site) is null || !order.Target.IsNone && !table.TryResolveNext(order.Target, out _))
             return OrderCheck.Gone;
+        if (!c.IsPlayer && WalksToDoor(world, order)) return OrderCheck.Gone;
 
         bool inPlace = ((LockWork)order.Detail!).Task == CharacterTask.Idle;
         return c.Medical is not { Incapacitated: true } && c.CarriedBy.IsNone && (inPlace || !c.IsImprisoned) ? OrderCheck.Run : OrderCheck.Blocked();
     }
+
+    /// <summary>
+    /// Whether the order's work is a walk to a door to open, close or pick it (<see cref="StartDoor"/>).
+    /// </summary>
+    static bool WalksToDoor(World world, OrderEntry order) =>
+        order.Row is TaskType.PickLock or TaskType.OpenDoor or TaskType.CloseDoor && order.Site is { } site
+        && world.Fixtures.Find(site) is { Kind: FixtureKind.Door };
 
     /// <summary>
     /// Starts the order's lock work.

@@ -1152,12 +1152,13 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     /// (<see cref="Ai.AiSystem.SelfDefencePick"/>). A player character's own defence is the decision step's Self preservation (<see cref="SelfFoe"/>,
     /// docs/game/ai-tasks.md "Precedence": its orders outrank it, it outranks the jobs), but a bodyguard following (row 45 running) answers here as a
     /// step of its row against an attacker within <see cref="ImmediateReach"/> (45 needs <c>!39</c>, its own <c>+0x2b0</c>; farther ones are Self
-    /// preservation's, which a Bodyguard order outranks and a Bodyguard job does not).
+    /// preservation's, which a Bodyguard order outranks and a Bodyguard job does not). An NPC its order holds (<see cref="DecisionSystem.Ordered"/>)
+    /// answers as a player character does: its order outranks the answer, but for the bodyguard's step.
     /// </summary>
     static bool SelfDefends(CharacterTable table, int slot, HashSet<int> taken, Vector3 attacker)
     {
         if (!Able(table, slot, taken, out var cold, out byte task)) return false;
-        if (!cold.IsPlayer) return cold.Ai is null;
+        if (!cold.IsPlayer && !DecisionSystem.Ordered(cold)) return cold.Ai is null;
 
         var d = attacker - table.Next[slot].Position;
         return cold.Guarding && task == (byte)CharacterTask.Follow && d.X * d.X + d.Z * d.Z <= ImmediateReach * ImmediateReach;

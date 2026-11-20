@@ -254,14 +254,16 @@ public sealed class OrderQueue : IReadOnlyList<OrderEntry>
 /// The order queue's rules (docs/simulation.md "Order queue"; the original's <c>checkOrders</c> <c>FUN_140510920</c> and order giver
 /// <c>FUN_1405d20d0</c>, docs/game/ai-tasks.md "Precedence"): an order command clears the queue (unless Shift) and queues the order; the front starts
 /// through its owner when it can run, else shows its failure text and stays queued while the character's jobs, goals and reactions go on; a front
-/// whose task ended leaves the queue and the next starts. The decision step asks the front as its source 1 (<see cref="DecisionSystem"/>).
+/// whose task ended leaves the queue and the next starts. The decision step asks the front as its source 1 (<see cref="DecisionSystem"/>), for
+/// every character with a queue: the player's and NPCs alike.
 /// </summary>
 public static class PlayerOrders
 {
     /// <summary>
     /// Gives a character an order (serial phases only): without <paramref name="queued"/> the queue is cleared first; the order is queued and, at the
     /// front, started when it can run, else its failure text is shown (<paramref name="show"/>). The character's task is left alone while the order
-    /// cannot run. Returns the check of the front.
+    /// cannot run. Any character takes orders; an NPC's front starts only while its chooser runs (<see cref="DecisionSystem.TakesOrders"/>), else it
+    /// waits queued. Returns the check of the front.
     /// </summary>
     public static OrderCheck Give(World world, int slot, OrderEntry order, bool queued, bool show = true)
     {
@@ -279,7 +281,11 @@ public static class PlayerOrders
             Settle(world, slot);
         q.Add(order);
         DecisionSystem.Request(cold);   // addOrder replans at once: the order's own start below, the fall-through at the decision step
-        return q.Count == 1 ? TryFront(world, slot, show) : OrderCheck.Run;
+        bool starts = q.Count == 1 && (DecisionSystem.Decides(cold) || DecisionSystem.TakesOrders(cold));
+        var check = starts ? TryFront(world, slot, show) : OrderCheck.Run;
+        DecisionSystem.Hold(world, slot);
+
+        return check;
     }
 
     /// <summary>
@@ -443,11 +449,16 @@ public static class PlayerOrders
     }
 
     /// <summary>
-    /// Shows a blocked check's failure text: posted as a message, or barked over the character; nothing without one.
+    /// Shows a blocked check's failure text: posted as a message, or barked over the character; nothing without one, and nothing for a character
+    /// not of the player's faction or an animal (the order step's vfunc <c>0x2d8</c> call, docs/game/ai-tasks.md "Precedence": its blocked order
+    /// waits silently).
     /// </summary>
     static void Show(World world, int slot, in OrderCheck check)
     {
-        if (check.Why is not { } why) return;
+        var cold = world.Characters.Cold(slot)!;
+        bool says = DestinationAccess.PlayerSide(world, cold) && !Factions.SquadRegistry.IsAnimal(cold);
+        if (check.Why is not { } why || !says) return;
+
         if (check.Posted) world.Post(why);
         else
             world.Bark(world.Characters.IdOf(slot), why);

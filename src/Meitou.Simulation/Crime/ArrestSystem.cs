@@ -564,7 +564,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         if (!table.Next[slot].Alive || table.Next[slot].Task is (byte)CharacterTask.Attack or (byte)CharacterTask.Treat) return false;
         return table.Cold(slot) is { IsPlayer: false, InCombat: false, Fleeing: false, IsImprisoned: false, Medical.Incapacitated: false,
             Carrying.IsNone: true, CarriedBy.IsNone: true, Fighter.CanAttack: true } c
-            && Crimes.IsPoliceLike(world, c) && !Busy(table.IdOf(slot));
+            && Crimes.IsPoliceLike(world, c) && !Busy(table.IdOf(slot)) && !DecisionSystem.Ordered(c);
     }
 
     /// <summary>

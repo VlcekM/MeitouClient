@@ -235,8 +235,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
             // Cheapest test first: most characters are not due this tick (a far character's step covers several ticks: due when its turn fell in
             // them, as World.Turn; the think's turn is anchored at Tick + slot, the sweeps' at Tick - slot, so a slot's aggro look and its think
-            // interleave).
-            if ((world.Tick + i) % every >= world.StepTicks(i) && mind.Version == board.Version && !mind.Replan) continue;
+            // interleave). One whose order held it until now thinks at once (DecisionSystem.Ordered: its queue may have emptied since the decision
+            // step).
+            bool asked = mind.Replan || cold.OrderWins;
+            if ((world.Tick + i) % every >= world.StepTicks(i) && mind.Version == board.Version && !asked) continue;
             mind.Replan = false;
             var id = table.IdOf(i);
             var roles = mind.Engine ? mind.EngineGoals : ObeyedRoles(world, squad, cold) ?? board.Roles[(int)RoleOf(squad, id, cold)];
@@ -360,12 +362,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// carrying an intruder out fights with the body on its shoulder, as the original's carrier does), a captive job's walk carrying nothing and its meal
     /// (<see cref="InterruptibleDuty"/>), a code mod's goal below the urgent tier (<see cref="InterruptibleModGoal"/>), and the routine of an
     /// <see cref="AiMind.Engine"/> mind (<see cref="EngineRoutine"/>).
-    /// Nothing for one fleeing, imprisoned, carried or down, nor for a gunner or a carrier in a fight.
+    /// Nothing for one fleeing, imprisoned, carried or down, nor for a gunner or a carrier in a fight, nor for one its order holds: the order beats
+    /// every goal, Self preservation included (<see cref="DecisionSystem.Ordered"/>).
     /// </summary>
     internal static Restrict Preempts(in CharacterHot n, CharacterCold cold)
     {
         if (cold.Ai is not { } mind || cold.IsPlayer || cold.Fleeing || cold.IsImprisoned || !cold.CarriedBy.IsNone
-            || cold.Medical is { Incapacitated: true })
+            || cold.Medical is { Incapacitated: true } || DecisionSystem.Ordered(cold))
             return Restrict.None;
 
         if (cold.InCombat) return cold.Gunning is null && cold.Carrying.IsNone ? Restrict.Self : Restrict.None;
@@ -487,12 +490,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// Whether the AI runs the character now: it has a mind and nothing else holds it (a fight it did not start, a flight, an order, a carry, a
     /// trade, a knock-out). In its own fight it thinks as anyone does (on the cadence and the replan triggers) and may leave it for another goal
-    /// (<see cref="InFight"/>).
+    /// (<see cref="InFight"/>). An NPC's order that runs holds it (<see cref="DecisionSystem.Ordered"/>); one that is blocked does not.
     /// </summary>
     public static bool Holds(in CharacterHot n, CharacterCold cold)
     {
         if (cold.Ai is not { } mind || cold.Fleeing || cold.Engaged || cold.IsImprisoned || !cold.CarriedBy.IsNone
-            || !cold.Carrying.IsNone || cold.Medical is { Incapacitated: true })
+            || !cold.Carrying.IsNone || cold.Medical is { Incapacitated: true } || DecisionSystem.Ordered(cold))
             return false;
 
         // A player character: only one of an autonomous squad, on no order's or job's task (SquadAutonomy.Free).
@@ -3544,7 +3547,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// Whether a member of a squad the population moves should take up following its leader again: not the leader, whose own task the
-    /// population gives; standing idle, alive and awake, and held by nothing (no fight, duty, flight, carry, bed or cage).
+    /// population gives; standing idle, alive and awake, and held by nothing (no fight, duty, order, flight, carry, bed or cage).
     /// </summary>
     static bool Rejoins(World world, Squad squad, int s, CharacterCold cold)
     {
@@ -3553,7 +3556,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         return n.Alive && n.Task == (byte)CharacterTask.Idle && table.IdOf(s) != squad.Leader
             && table.TryResolveNext(squad.Leader, out int led) && table.Next[led].Alive
             && cold is { InCombat: false, Engaged: false, Fleeing: false, IsImprisoned: false, CarriedBy.IsNone: true, Carrying.IsNone: true }
-            && cold.Medical is not { Incapacitated: true } && cold.InSomething == Locks.HeldState.None;
+            && cold.Medical is not { Incapacitated: true } && cold.InSomething == Locks.HeldState.None && !DecisionSystem.Ordered(cold);
     }
 
     /// <summary>

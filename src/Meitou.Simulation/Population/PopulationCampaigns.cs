@@ -2080,9 +2080,10 @@ public sealed partial class PopulationSystem : IStateHashed
 
         RetreatHome(p, squad, goal);
 
-        // a fight, a lift (a kidnapper) or a loot is left to itself
+        // a fight, a lift (a kidnapper), a loot or an order is left to itself
         byte task = table.Next[slot].Task;
         if (task is (byte)CharacterTask.Attack or (byte)CharacterTask.PickUp or (byte)CharacterTask.PutDown or (byte)CharacterTask.Loot) return;
+        if (DecisionSystem.Ordered(cold)) return;
 
         if (MillAtGoal(world, p, squad, table, slot, goal)) return;
 

@@ -404,7 +404,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             if (!table.Next[s].Alive || table.Cold(s) is not { Ai: { DitchRequest: true } mind } c) continue;
             mind.DitchRequest = false;
             var id = table.IdOf(s);
-            if (c.Engaged || c.InCombat || c.Fleeing || Busy(id)) continue;
+            if (c.Engaged || c.InCombat || c.Fleeing || Busy(id) || DecisionSystem.Ordered(c)) continue;
             var at = table.Next[s].Position;
             if (DitchStore(world, mind.Squad, c, at, register: true) is not var (storeId, spot))
             {
@@ -1203,7 +1203,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             return false;
 
         return table.Cold(slot) is { IsPlayer: false, Fleeing: false, Engaged: false, InCombat: false, Medical.Incapacitated: false,
-                CarriedBy.IsNone: true } c && c.Fighter is not { IsAnimal: true };
+                CarriedBy.IsNone: true } c && c.Fighter is not { IsAnimal: true } && !DecisionSystem.Ordered(c);
     }
 
     /// <summary>
@@ -1218,7 +1218,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             return false;
 
         return table.Cold(slot) is { IsPlayer: false, Fleeing: false, Engaged: false, InCombat: false } c
-                && CarrySystem.CanCarry(world, c, TaskType.PickupIntruders) && !HoldsHigherGoal(c);
+                && CarrySystem.CanCarry(world, c, TaskType.PickupIntruders) && !HoldsHigherGoal(c) && !DecisionSystem.Ordered(c);
     }
 
     /// <summary>

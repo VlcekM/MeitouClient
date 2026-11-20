@@ -541,7 +541,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// Not engaged, fighting, fleeing, carried, down, or another captive job's.
     /// </summary>
     bool FreeForRaceGoal(World world, int s, CharacterCold c) =>
-        !c.Engaged && !c.InCombat && !c.Fleeing && c.CarriedBy.IsNone && c.Medical is { Incapacitated: false } && !Busy(world.Characters.IdOf(s));
+        !c.Engaged && !c.InCombat && !c.Fleeing && c.CarriedBy.IsNone && c.Medical is { Incapacitated: false } && !Busy(world.Characters.IdOf(s))
+        && !DecisionSystem.Ordered(c);
 
     /// <summary>
     /// The race goal of priority <paramref name="priority"/> (any: null) the animal would run now (a pure read): the first that can in list order
@@ -814,7 +815,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         for (int g = 0; g < roles.Count; g++)
             if (roles[g].InWindow(hour) && Start(world, squad, board, slot, cold, roles[g])) return true;
         // The race's own AI Goals (Character::setupAI loads them for every NPC; their window is always open).
-        if (cold.Engaged || cold.Ai is not { RaceGoals: { Count: > 0 } race }) return false;
+        if (cold.Engaged || DecisionSystem.Ordered(cold) || cold.Ai is not { RaceGoals: { Count: > 0 } race }) return false;
         for (int g = 0; g < race.Count; g++)
             if (Start(world, squad, board, slot, cold, race[g])) return true;
         return false;

@@ -400,7 +400,8 @@ public sealed partial class LockSystem : IStateHashed
         var table = world.Characters;
         ref var n = ref table.Next[s];
         if (!n.Alive || table.Cold(s) is not { IsImprisoned: false, Engaged: false, Bashing: null, Medical.Incapacitated: false } c) return null;
-        if (!c.CarriedBy.IsNone || Busy(table.IdOf(s)) || world.Sight.BuildingOf(s) is not { } building) return null;
+        if (!c.CarriedBy.IsNone || Busy(table.IdOf(s)) || DecisionSystem.Ordered(c) || world.Sight.BuildingOf(s) is not { } building)
+            return null;
         if (!world.Fixtures.IsShut(building) || Targeted(building)) return null;
 
         bool walking = (n.Flags & (ushort)MoveFlags.AnyPath) != 0 || c.WalkEnd == WalkEnd.Failed;

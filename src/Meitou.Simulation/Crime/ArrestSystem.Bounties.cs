@@ -326,12 +326,12 @@ public sealed partial class ArrestSystem : IOrderOwner
     }
 
     /// <summary>
-    /// Put in prison 108 needs a player character carrying someone (else it leaves the queue), awake and free, and a free cage ("no free cage
-    /// nearby", posted).
+    /// Put in prison 108 needs a character carrying someone (else it leaves the queue), awake and free, and a free cage ("no free cage nearby",
+    /// posted).
     /// </summary>
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
-        if (Carry is null || world.Characters.Cold(slot) is not { IsPlayer: true, Carrying.IsNone: false } c) return OrderCheck.Gone;
+        if (Carry is null || world.Characters.Cold(slot) is not { Carrying.IsNone: false } c) return OrderCheck.Gone;
         if (c is not { IsImprisoned: false, Medical.Incapacitated: false }) return OrderCheck.Blocked();
         return CageFor(world, slot, c, order.Site) is null ? OrderCheck.Blocked($"{c.Name}: no free cage nearby", posted: true) : OrderCheck.Run;
     }
@@ -423,7 +423,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         {
             if (FindCageFor(world, s, c, k) is not { } other)
             {
-                world.Post(Loc.Tr("{1}: no free cage nearby", c.Name));
+                if (DestinationAccess.PlayerSide(world, c)) world.Post(Loc.Tr("{1}: no free cage nearby", c.Name));
                 return false;
             }
             k.Cage = other.Id;
@@ -440,7 +440,7 @@ public sealed partial class ArrestSystem : IOrderOwner
             Carry!.LetGo(world, s);
             if (!world.Fixtures.Imprison(world, k.Captive, cage, constants.PrisonTime))
             {
-                world.Post(Loc.Tr("{1} could not put the captive in the cage", c.Name));
+                if (DestinationAccess.PlayerSide(world, c)) world.Post(Loc.Tr("{1} could not put the captive in the cage", c.Name));
                 return false;
             }
             Claim(world, s, k.Captive, cage);
@@ -602,7 +602,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         var table = world.Characters;
         if (!table.Next[slot].Alive || table.Next[slot].Task is (byte)CharacterTask.Attack or (byte)CharacterTask.Treat) return false;
         if (table.Cold(slot) is not { IsPlayer: false, InCombat: false, Fleeing: false, IsImprisoned: false, Medical.Incapacitated: false,
-            Carrying.IsNone: true, CarriedBy.IsNone: true, Fighter.CanAttack: true })
+            Carrying.IsNone: true, CarriedBy.IsNone: true, Fighter.CanAttack: true } hc || DecisionSystem.Ordered(hc))
         {
             return false;
         }

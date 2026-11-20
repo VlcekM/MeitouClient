@@ -147,7 +147,8 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
             if (!table.Next[i].Alive || table.Cold(i) is not { Ai.FleeRequest: not FleeAsk.None } asker) continue;
             var ask = asker.Ai!.FleeRequest;
             asker.Ai.FleeRequest = FleeAsk.None;
-            if (!asker.Fleeing && !asker.IsPlayer && asker.Medical is not { Incapacitated: true }) Begin(world, table, i, ask);
+            if (!asker.Fleeing && !asker.IsPlayer && asker.Medical is not { Incapacitated: true } && !DecisionSystem.Ordered(asker))
+                Begin(world, table, i, ask);
         }
     }
 
@@ -160,7 +161,9 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
         {
             ref var n = ref table.Next[i];
             if (!n.Alive || table.Cold(i) is not { Fleeing: true } cold) continue;
-            if (cold.Medical is { Incapacitated: true } || cold.IsPlayer)
+
+            // An order beats the flight (Self preservation's run included): it stops, as for a player character.
+            if (cold.Medical is { Incapacitated: true } || cold.IsPlayer || DecisionSystem.Ordered(cold))
             {
                 cold.Fleeing = cold.FleesAlone = false;
                 continue;
@@ -228,7 +231,8 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
         Broken++;
         foreach (int s in _standing)
         {
-            if (table.Cold(s)!.Fleeing) continue;
+            // one its order holds stays (an order beats the flight)
+            if (table.Cold(s)!.Fleeing || DecisionSystem.Ordered(table.Cold(s)!)) continue;
             var (centre, k) = Centre(world, table, s);
             table.Cold(s)!.FleesAlone = false;
             Begin(world, table, s, centre, k);

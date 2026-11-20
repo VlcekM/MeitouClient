@@ -1468,9 +1468,16 @@ public sealed class CharacterCold
 
     /// <summary>
     /// The replan bit (<see cref="DecisionSystem.Request(CharacterCold)"/>): set by a replan trigger, consumed by the decision step. Player
-    /// characters only; not saved (a load sets it); hashed while set.
+    /// characters, and NPCs while they hold an order; not saved (a load sets it); hashed while set.
     /// </summary>
     public bool Replan { get; set; }
+
+    /// <summary>
+    /// An NPC's front order runs (the decision step's source 1 won, docs/simulation.md "Order queue"): its AI and the engine's reactions and duties
+    /// leave it alone (<see cref="DecisionSystem.Ordered"/>). Set and cleared by the decision step and <see cref="PlayerOrders.Give"/> (serial
+    /// phases); never set for a character the step decides. Not saved; hashed while set.
+    /// </summary>
+    public bool OrderWins { get; internal set; }
 
     /// <summary>
     /// The queued orders a load read (<see cref="Saving.OrderSave"/>), until the decision step makes them the <see cref="OrderQueue"/> once the world
@@ -2042,6 +2049,7 @@ public sealed class CharacterTable
 
         if (k.FollowResume) hasher.Add(0x46526573);
         if (k.Replan) hasher.Add(0x52706C6E);
+        if (k.OrderWins) hasher.Add(0x4F57696E);
         if (!k.TurretTarget.IsNone)
         {
             hasher.Add(0x54725467);

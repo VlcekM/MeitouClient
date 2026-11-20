@@ -100,6 +100,11 @@ public enum StartResult : byte
     /// ended short.
     /// </summary>
     Inaccessible,
+    /// <summary>
+    /// The character's order holds it (an NPC's, <see cref="DecisionSystem.Ordered"/>): a goal's or reaction's start that is no step of the order is
+    /// refused, as the original's order step comes before every goal (docs/game/ai-tasks.md "Precedence"); nothing changed.
+    /// </summary>
+    Ordered,
 }
 
 /// <summary>
@@ -408,7 +413,8 @@ public static class TaskStart
     /// docs/game/combat.md "Fight lifecycle and orders"), the task before ends through its handler, the provenance is recorded
     /// (<see cref="CharacterCold.Running"/>) and the act-out starts. A fight the character did not take up by an order or a job, while it runs a
     /// follow row (31, 45, 289), is a step of that row (31 and 45 need state 16, which 13 "Attacking attackers of" gives; docs/game/ai-tasks.md
-    /// "Precedence"): the row's provenance is kept, so the follow is taken up again after it.
+    /// "Precedence"): the row's provenance is kept, so the follow is taken up again after it. An NPC its order holds
+    /// (<see cref="DecisionSystem.Ordered"/>) takes no goal's or reaction's start but such a step (<see cref="StartResult.Ordered"/>).
     /// </summary>
     public static StartResult Start(World world, int slot, in TaskRequest request)
     {
@@ -419,6 +425,9 @@ public static class TaskStart
         var current = (CharacterTask)table.Next[slot].Task;
         var handler = world.Tasks.Of(request.Task, request.Row, request.Site);
         bool step = cold.Running is { } kept && Step(cold, kept, current, request);
+        if (!step && request.Source is TaskSource.Goal or TaskSource.Reaction && DecisionSystem.Ordered(cold))
+            return StartResult.Ordered;
+
         PlayerOrders.Replacing(world, slot, request, step);
         if (request.Task != CharacterTask.Attack) world.Tasks.Of(CharacterTask.Attack)?.End(world, slot, CharacterTask.Attack, TaskEnd.Replaced);
         if (current != CharacterTask.Attack && world.Tasks.Of(cold, current) is { } before
@@ -493,12 +502,14 @@ public static class TaskStart
     /// <see cref="TaskRequest.Goal"/>, or stops the character on the standing task (its <see cref="CharacterHot.TaskTime"/> restarted); nothing
     /// outside the slot is touched, so no fight or task before it is ended (the AI acts out nothing for a fighting character, and its walks and
     /// standing tasks hold nothing) and no handler runs. The row's repertoire is not tested: the AI's planner chose the row
-    /// (<see cref="Ai.AiSystem"/>).
+    /// (<see cref="Ai.AiSystem"/>). Nothing for an NPC its order holds (<see cref="DecisionSystem.Ordered"/>).
     /// </summary>
     public static void StartOwn(World world, int slot, in TaskRequest request)
     {
         var table = world.Characters;
         var cold = table.Cold(slot)!;
+        if (DecisionSystem.Ordered(cold)) return;   // the order's task is not the AI's to replace
+
         cold.Running = new RunningTask(request.Task, request.Row, request.Source, request.Job, request.Target, request.Site, world.Tick)
         {
             Resume = request.Resume,

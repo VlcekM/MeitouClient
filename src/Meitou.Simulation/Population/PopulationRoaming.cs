@@ -990,11 +990,13 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// Sends a loaded platoon's leader to its goal: walking on a short-range patrol or going home, else running.
+    /// Sends a loaded platoon's leader to its goal: walking on a short-range patrol or going home, else running; not while its order holds it
+    /// (<see cref="DecisionSystem.Ordered"/>).
     /// </summary>
     void OrderLeader(World world, Platoon p, Squad squad)
     {
         if (Goal(p) is not { } goal || !world.Characters.TryResolveNext(squad.Leader, out int slot)) return;
+        if (DecisionSystem.Ordered(world.Characters.Cold(slot)!)) return;
 
         // A short-range patrol and going home walk; travel runs (as before the packages).
         TaskStart.Walk(world, slot, goal, p.Job is PlatoonJob.PatrolShortRange or PlatoonJob.GoHome ? SpeedMode.Walk : SpeedMode.Run,

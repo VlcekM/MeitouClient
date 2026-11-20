@@ -2894,8 +2894,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     static void StandDown(World world, int i, ref CharacterHot n, in Slot s, CharacterCold cold)
     {
         var table = world.Characters;
-        if (cold.Medical is { Incapacitated: true } || cold.InCombat || n.Task != (byte)CharacterTask.Idle)
-            return;   // down (it wakes into wandering) or busy with something else
+        if (cold.Medical is { Incapacitated: true } || cold.InCombat || n.Task != (byte)CharacterTask.Idle || DecisionSystem.Ordered(cold))
+            return;   // down (it wakes into wandering), busy with something else, or held by its order
 
         // A follow row whose fight was a step of it follows again under the row (as the decision step does for the characters it decides); else
         // the routine is taken up again as the fight's own end (a step: the provenance stays).
