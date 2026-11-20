@@ -68,13 +68,6 @@ internal sealed class TownTravel(PopulationData data)
     const float JogCap = 55, RunCap = 999, SlowerShare = 0.9f;
 
     /// <summary>
-    /// How far from its goal a finished walk may end and still have reached it: the goal's snap onto the navmesh and the movement's arrival radius.
-    /// Farther, the path was the partial one toward an unreachable goal (<see cref="Navigation.NavQuery.FindPathToward"/>), which the original's
-    /// path state 3 reports as no path (engine choice).
-    /// </summary>
-    const float ShortEnd = Navigation.NavQuery.GoalSnap + MovementSystem.ArriveRadius;
-
-    /// <summary>
     /// Whether the character acts out a travel step (53, 130) the AI walks in full: not one an engine-acted goal carries (192's walk is the captive
     /// system's). The movement's carrier jog does not apply to it (<see cref="MovementSystem.CarriesOutAtWalk"/>) and its pace cap does
     /// (<see cref="CharacterCold.PaceCap"/>). Any thread.
@@ -113,9 +106,8 @@ internal sealed class TownTravel(PopulationData data)
     }
 
     /// <summary>
-    /// How the last walk stands: one with no path (CharMovement slots 0x50 and 0x48, path state 3: <see cref="CharacterCold.PathFailed"/>, or a
-    /// finished walk that ended <see cref="ShortEnd"/> away from its goal) is <see cref="WalkOutcome.NoPath"/>; one finished at its goal marks the
-    /// waypoint reached (<see cref="AiMind.ArrivedAt"/>).
+    /// How the last walk stands: one with no path (CharMovement slots 0x50 and 0x48, path state 3) is <see cref="WalkOutcome.NoPath"/>; one
+    /// finished at its goal marks the waypoint reached (<see cref="AiMind.ArrivedAt"/>).
     /// </summary>
     static WalkOutcome WalkOver(World world, int slot, AiMind mind, CharacterCold cold)
     {
@@ -123,19 +115,24 @@ internal sealed class TownTravel(PopulationData data)
         if (!mind.Walking || n.Task == (byte)CharacterTask.GoTo) return WalkOutcome.Walking;
 
         mind.Walking = false;
-        var here = new Vector2(n.Position.X, n.Position.Z);
-        bool finished = cold.WalkEnd == WalkEnd.Finished;
-        bool shortOf = finished && Vector2.DistanceSquared(here, n.Goal) > ShortEnd * ShortEnd;
-        if (cold.PathFailed || shortOf) return WalkOutcome.NoPath;
+        if (NoPath(cold)) return WalkOutcome.NoPath;
 
-        if (finished)
+        if (cold.WalkEnd == WalkEnd.Finished)
         {
             mind.ArrivedAt = n.Goal;
-            mind.ArrivedFrom = here;
+            mind.ArrivedFrom = new Vector2(n.Position.X, n.Position.Z);
         }
 
         return WalkOutcome.Over;
     }
+
+    /// <summary>
+    /// Whether the movement found no way to the goal for good: no path at all (<see cref="CharacterCold.PathFailed"/>), or a goal the navmesh does
+    /// not reach, whose route ends in a provisional tail (docs/game/pathfinding.md "Long routes") the walker gave up on after its retries
+    /// (<see cref="MovementSystem.ProvisionalBlockedLimit"/>; engine choice for the original's retries past the goal offsets).
+    /// </summary>
+    static bool NoPath(CharacterCold cold) =>
+        cold.PathFailed || cold.WalkEnd == WalkEnd.Failed && cold.ProvisionalBlocked > MovementSystem.ProvisionalBlockedLimit;
 
     /// <summary>
     /// The walk to the town's waypoint (<c>FUN_1405c68a0</c> with <c>getPosWithinChoppingRange</c> <c>FUN_14059bf30</c>: a town's vfunc 0x38,

@@ -4100,7 +4100,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         /// <summary>
         /// The town a bar package uses: for a squad that is not a town's own, the placed town it is in; else its own town.
         /// </summary>
-        int BarTown(Blackboard board) => !_squad.TownOwn && board.InTown.Site >= 0 ? board.InTown.Site : board.Town;
+        int BarTown(Blackboard board) => SquadTown.BarSite(_squad, board);
 
         /// <summary>
         /// Whether the running package of class <paramref name="kind"/> is finished for the bound squad (the class's finished test).

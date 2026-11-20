@@ -58,7 +58,7 @@ internal static class SquadTown
     /// leader stands in, else the home town the base start they run first set (<c>FUN_1402900c0</c>, <c>FUN_140288fe0</c>); the shipping's
     /// and the cannibal retreat's town (<see cref="Blackboard.MissionTown"/>, the retreat's else the home town); none for the patrols, whose start
     /// (<c>FUN_140287060</c>) only stamps its hour; the bar classes' bar town (<c>FUN_1402916b0</c>: the town of the home building, else the home
-    /// town); the war packages' campaign target (<c>FUN_14028fc80</c>, the campaign's vfunc 0xa0; with no campaign the home town); the contracts'
+    /// town; <see cref="BarSite"/>); the war packages' campaign target (<c>FUN_14028fc80</c>, the campaign's vfunc 0xa0; with no campaign the home town); the contracts'
     /// as <see cref="ContractHand"/>; for every other class the base start (<c>FUN_1402856c0</c>) makes it the home town.
     /// </summary>
     static CampaignTown RunningTown(World world, Squad squad, Blackboard board) => board.CurrentClass switch
@@ -70,26 +70,39 @@ internal static class SquadTown
         PackageClass.Patrol or PackageClass.PatrolRunning => CampaignTown.None,
         PackageClass.WarBase or PackageClass.WarAssault or PackageClass.WarAssaultCannibal => WarTown(world, squad, board),
         PackageClass.Contract or PackageClass.CampaignDefend => ContractHand(world, squad, board),
+        PackageClass.Bar or PackageClass.BarOutdoors or PackageClass.CannibalsAtHome => BarSite(squad, board) is >= 0 and var bar
+            ? CampaignTown.OfSite(bar)
+            : Home(world, squad, board),
         _ => Home(world, squad, board),
     };
 
     /// <summary>
-    /// A war package's mission town: the campaign's target, else the home town.
+    /// The town a bar package uses: for a squad that is not a town's own, the placed town it is in; else its own town (<see cref="Blackboard.Town"/>,
+    /// -1 without one).
     /// </summary>
-    static CampaignTown WarTown(World world, Squad squad, Blackboard board) =>
-        CampaignTarget(world, squad) is { IsNone: false } target ? target : Home(world, squad, board);
+    internal static int BarSite(Squad squad, Blackboard board) => !squad.TownOwn && board.InTown.Site >= 0 ? board.InTown.Site : board.Town;
+
+    /// <summary>
+    /// A war package's mission town: with a campaign its target (none when that is not a town or nest), else the home town.
+    /// </summary>
+    static CampaignTown WarTown(World world, Squad squad, Blackboard board)
+    {
+        if (squad.PlatoonId >= 0 && world.Platoons.Find(squad.PlatoonId)?.Campaign is { } campaign) return campaign.Target;
+
+        return Home(world, squad, board);
+    }
 
     /// <summary>
     /// A contract's mission town: the one its start or its save set (<see cref="Blackboard.ContractTown"/>; <c>Contract_HiredAlly</c> 12,
     /// <c>Contract_DefendPlayerBase</c> 15 and <c>Campaign_DefendPlayerBase</c> 31 the player's town nearest the squad, none without one); else for
-    /// the classes on the base start (<c>Contract_UntilExSlave</c> 13, <c>Contract_UntilOutOfDanger</c> 14, <c>Contract_Timed</c> 33, vtable
-    /// <c>+0x30</c> <c>FUN_1402856c0</c>, <b>Verified</b>) the home town.
+    /// the classes on the base start (<c>Contract_UntilExSlave</c> 13, <c>Contract_UntilOutOfDanger</c> 14, <c>Contract_Timed</c> 33 and the plain
+    /// package an override builds as it, vtable <c>+0x30</c> <c>FUN_1402856c0</c>, <b>Verified</b>) the home town.
     /// </summary>
     static CampaignTown ContractHand(World world, Squad squad, Blackboard board)
     {
         if (!board.ContractTown.IsNone) return board.ContractTown;
 
-        return board.Current?.Signal is 13 or 14 or 33 ? Home(world, squad, board) : CampaignTown.None;
+        return board.Current?.Signal is 12 or 15 or 31 ? CampaignTown.None : Home(world, squad, board);
     }
 
     /// <summary>

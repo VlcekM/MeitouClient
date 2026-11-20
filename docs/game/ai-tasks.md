@@ -1479,7 +1479,7 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   drawn town (`FUN_140286740`); the patrols none (`FUN_140287060` only stamps the hour); the shippings the platoon's slot-`0x98` hand `+0x60` (`FUN_140287520`); the cannibal
   retreat, when the base start left none, the nearest town of its faction over both town lists (`FUN_140927bb0`), its nearest-nest kind that always (`FUN_140289b50`); the
   bars their bar town (`FUN_1402916b0`); `Contract_HiredAlly` and both base defences the player's town nearest the squad (`FUN_140289490`, `FUN_14028a170`); the war packages
-  (`FUN_14028fc80`) the campaign's target (campaign vfunc `0xa0`), with no campaign the home town. Meitou: `SquadTown` (a nest squad's home town is its nest,
+  (`FUN_14028fc80`) the campaign's target hand (campaign vfunc `0xa0` `FUN_1409d4370`: its `+0x48` while `+0x6c` is 0, else none), with no campaign the home town. Meitou: `SquadTown` (a nest squad's home town is its nest,
   `PopulationSystem.NestSiteOf`).
 - **`Task_TravelToTargetTown`** (53 / 130; **Verified**, ctor `FUN_14033ace0`, start `FUN_14033ad80`, update `FUN_14033ae40`, speed functor `FUN_140342a30`; rows 53 and 130
   leave `+0x15` clear, so the base slot 4 calls them finished and their list A ends them on arrival, handing 36's plan `[130, 36]` over to 36):
@@ -1507,8 +1507,8 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
     are finders of characters, buildings, furniture and items (**Observed**: none is asked with a town), so the mark changes nothing for travel.
   - Meitou: `TownTravel` (the walk, the functor, both exits, the detour in `AiMind.TravelDetour`; the package calls in the serial step, `AiSystem.RestartPackage`,
     `AiSystem.PathImpossible`; the cap as `CharacterCold.PaceCap`, members in squad order; the town mark is not kept, having no reader; the movement's carrier jog is
-    skipped, `MovementSystem.CarriesOutAtWalk`). A finished walk that ends farther from the waypoint than the goal snap plus the arrival radius (40) followed the
-    partial path toward an unreachable goal and counts as no path (engine choice). A walk Meitou gives up for another reason (blocked, a door) is sent again, as the original's update re-sends its move.
+    skipped, `MovementSystem.CarriesOutAtWalk`). No path for good is the movement's no path, or a waypoint the navmesh does not reach whose provisional tail
+    ([long routes](pathfinding.md)) the walker gave up after its retries (engine choice). A walk Meitou gives up for another reason (blocked, a door) is sent again, as the original's update re-sends its move.
 - **129 Approaching fast**: desire AI
   slot 19 (`FUN_140641550`, 1.0; stub `LAB_1400215ee`), so at its target it ties with 215.
 - **37 Wandering town** (`FUN_140999a60`): keeps a target that is still a general node; else one building drawn uniformly from the **public**
