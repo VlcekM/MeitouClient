@@ -441,21 +441,10 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             var witness = table.IdOf(w);
             // Its squad tags the culprit short-term CRIMINAL (7).
             if (wc.SquadId >= 0) world.SystemOf<Dialogue.DialogueSystem>()?.Memory.Flag(world, wc.SquadId, culpritId, Dialogue.MemoryTag.Criminal);
-            // A witness that is the crime's own victim (a trespass's is the witness that called it) goes for the culprit (Character::attackTarget:
-            // its squad tags the culprit TEMP_ENEMY); the attack is no order, so one its order holds keeps to the order.
-            if (p.Victim == witness && wc.Fighter?.CanAttack == true
-                && !(world.SystemOf<Combat.CombatSystem>()?.StateOf(witness) is { } fight && fight.TargetSlot == culprit
-                    && fight.TargetGeneration == culpritId.Generation))
-            {
-                world.SystemOf<Dialogue.DialogueSystem>()?.TagEnemy(world, w, culprit);
-                if (!Ai.DecisionSystem.Ordered(wc))
-                {
-                    world.Defer(new Combat.AttackOrder([witness], culpritId)
-                    {
-                        Tick = world.Tick + 1, Source = TaskSource.Npc, Cause = $"the victim saw the crime ({p.Code})",
-                    });
-                }
-            }
+
+            // A witness that is the crime's own victim (a trespass's is the witness that called it) takes the culprit as its threat
+            // (Character::attackTarget, FUN_140854d10): its own chooser answers it.
+            if (p.Victim == witness) AttackTarget(world, w, culprit);
             bool first = !p.Witnessed;
             if (first)
             {
@@ -773,11 +762,9 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// <summary>
     /// The investigators' serial step (<c>Task_InvestigateAlarms</c> update, <b>Observed</b>), for each NPC whose AI acts out goal 209 or 210
     /// (<see cref="Ai.AiBehaviour.Investigate"/>): within <see cref="AlarmLookRange"/> of its alarm it counts <see cref="Ai.AiMind.LookAbout"/> down
-    /// and clears the alarm when it runs out; on the way there it keeps the count at <see cref="LookAboutSeconds"/>, and every character it sees that
-    /// is not down, not of its faction or an ally, and has a pending crime against its faction or an ally, its squad tags TEMP_ENEMY (all of them)
-    /// and it goes for the last (<c>Character::attackTarget</c>, which only stores the target: the last in slot order is attacked, <b>Verified</b>;
-    /// the task tests no capability to fight). Engine: "sees" is the witnesses' sight test (<see cref="SuspectView"/>), standing for the original's
-    /// sense list (seen or heard).
+    /// and clears the alarm when it runs out; on the way there it keeps the count at <see cref="LookAboutSeconds"/> and looks for suspects
+    /// (<see cref="LookForSuspects"/>). Engine: "sees" is the witnesses' sight test (<see cref="SuspectView"/>), standing for the original's sense
+    /// list (seen or heard).
     /// </summary>
     void Investigate(World world, float seconds)
     {
@@ -801,30 +788,48 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
                 continue;
             }
             mind.LookAbout = LookAboutSeconds;
-            // Every qualifying witness in sight is tagged and the last one scanned is the attack target (the original overwrites the AI's attack
-            // hand: FUN_140354260, Verified, no can-attack test on this path); the order is sent only for that last one.
-            float range = AggroSystem.RangeOf(cold, Settings.Sight);
-            int last = -1;
-            for (int c = 0; c < table.HighWater; c++)
-            {
-                if (c == i || !next[c].Alive || table.Cold(c) is not { Pending: { } p, Medical.Incapacitated: false } cc
-                    || Friendly(cold.Faction, cc.Faction) || !Friendly(cold.Faction, p.VictimFaction))
-                {
-                    continue;
-                }
-                if (Vector3.DistanceSquared(next[c].Position, next[i].Position) > range * range || SuspectView(world, i, c, cc, range) <= 0)
-                    continue;
-                world.SystemOf<Dialogue.DialogueSystem>()?.TagEnemy(world, i, c);
-                last = c;
-            }
-            if (last >= 0)
-            {
-                world.Defer(new Combat.AttackOrder([table.IdOf(i)], table.IdOf(last))
-                {
-                    Tick = world.Tick + 1, Source = TaskSource.Npc, Cause = "investigating an alarm",
-                });
-            }
+            LookForSuspects(world, i, cold);
         }
+    }
+
+    /// <summary>
+    /// The investigator's look on the way to its alarm (<c>FUN_140354260</c>, <b>Verified</b>): every character it sees that is not down, not of its
+    /// faction or an ally, with a pending crime against its faction or an ally, its squad tags TEMP_ENEMY and it takes as a threat
+    /// (<see cref="AttackTarget"/>, all of them); its own chooser picks whom it fights. No can-attack test on this path.
+    /// </summary>
+    void LookForSuspects(World world, int i, CharacterCold cold)
+    {
+        var table = world.Characters;
+        var next = table.Next;
+        float range = AggroSystem.RangeOf(cold, Settings.Sight);
+        for (int c = 0; c < table.HighWater; c++)
+        {
+            if (c == i || !next[c].Alive || table.Cold(c) is not { Pending: { } p, Medical.Incapacitated: false } cc
+                || Friendly(cold.Faction, cc.Faction) || !Friendly(cold.Faction, p.VictimFaction))
+            {
+                continue;
+            }
+
+            if (Vector3.DistanceSquared(next[c].Position, next[i].Position) > range * range || SuspectView(world, i, c, cc, range) <= 0) continue;
+
+            AttackTarget(world, i, c);
+        }
+    }
+
+    /// <summary>
+    /// <c>Character::attackTarget</c> (<c>FUN_1405cb0a0</c>, <b>Verified</b>): <paramref name="target"/> goes on <paramref name="slot"/>'s threats
+    /// list (AI <c>+0x78</c>, SensoryData <c>+0x50</c>; <see cref="AggroSystem.Threaten"/>: forced sense, the entry), its squad tags the target
+    /// TEMP_ENEMY, and its AI is updated at once (Meitou: it thinks at the next tick). No order and no fight start: the list's readers are 32 Self
+    /// preservation's desire and row 13's finder, the tag the attack-on-sight finders' (docs/game/economy.md "Witnesses"). Serial.
+    /// </summary>
+    static void AttackTarget(World world, int slot, int target)
+    {
+        world.SystemOf<AggroSystem>()?.Threaten(world, slot, target);
+        world.SystemOf<Dialogue.DialogueSystem>()?.TagEnemy(world, slot, target);
+        if (world.Characters.Cold(slot) is not { } cold) return;
+
+        Ai.DecisionSystem.Request(cold);
+        if (cold.Ai is { } mind) mind.Replan = true;
     }
 
     /// <summary>

@@ -481,19 +481,27 @@ me, 5 captor, 6 friendly, 7 defeated my squad, 8 I beat his squad, 9 killed my f
   through the wrapper in `AI::underMeleeAttack` (also reached from being targeted, [combat](combat.md#fight-lifecycle-and-orders)),
   `AI::underRangedAttack`, `Character::hitByMeleeAttack`, `CombatClass::_iHitYouAreYouHit` and `Character::iShotYou`. So an assault on one
   member makes the attacker an enemy of the whole squad (slot 125 below) at any relation, and its attack-on-sight members (goal 16) join.
-  `Character::attackTarget(self, target)` (gives the AI the target, perceives it, tags it 4 on self's squad, replans) is called only by:
+  `Character::attackTarget(self, target)` (`FUN_1405cb0a0`, **Verified**: adds the target to self's threats list, AI `+0x78` = SensoryData
+  `+0x50`, add-unique; forces its sense; tags it 4 on self's squad; queues an immediate update, no replan request) is called only by:
   a missed stealth KO (`Task_StealthKO`: both squads tag each other 4, then the victim goes for the attacker), a failed kidnap
   (`Task_Kidnapping`: the victim tags the kidnapper 4 and long-term 1, then goes for it), alarm investigators (`Task_InvestigateAlarms`:
   sensed characters of a faction hostile to theirs), DA 56 MASSIVE_ALARM, and the witness function `SensoryData::assessCrimes`: every
   reacting crime case ends by tagging the culprit short-term 7 criminal, setting its crime timer to 20 and, when the witness is the crime's
   victim (a trespass's victim is the witness that called it), `attackTarget` on the culprit. The player's attack orders do not call it.
+  The list's readers (**Verified**): the character tick's immediate-threat latch `FUN_1404378f0` (Character `+0x2b0` for a listed character
+  within 40, run before the AI update in `FUN_1405d00b0`), 32's desire `FUN_140599d20` (0.7 for a listed character within 181.7 whose running
+  task's aggression, status `+0xa0`, is above 0), row 13's candidates `FUN_1405cb150` (the engaged list, then this list, then its own target
+  while fighting) and the danger score `FUN_1405a0b50`. The sense pass `FUN_14085a070` empties the list at its start (count `+0x58` = 0) and
+  re-adds only characters whose fight targets the looker, so an entry of a character not attacking it lasts to the looker's next sense pass.
+  So the chooser sees only the immediate flag (32's desire 1 within 40) and tag 4, which the attack-on-sight finders read (Meitou
+  `AggroSystem.Threaten`).
   Short tags fade (**Verified**, `FUN_1406724e0` from the platoon slow step `FUN_1404ff060`, threshold 6.0 read from the exe): an entry
   whose game hours since its last write, truncated, exceed 6 (so 7 h) loses all its short tags; the entry stays unless the memory holds more than 40 entries and it is older than 48 h and its character is not a resolving player-faction one (then it is erased, `SquadMemory.Forget`, **Verified**); long tags, time and the player TEMP ALLY bool
   stay (Meitou: `SquadMemory.Age`). Besides that, the perception update (`SensoryData::add`, `FUN_1408580d0`) clears it (`FUN_1406788d0`, bit 4 of the looker's platoon memory) when slot 125
   calls the target an enemy and it is imprisoned (`+0x2f8` 2) or a slave in state 1 owned by the looker's faction (`FUN_14032e2a0`: owner hand set, chained
   flag `+0x320`, owner faction status `+0xe0` = the looker's), tagging it NEUTRAL instead (**Verified**, decompile). Meitou (`AggroSystem.EnemyUnlessOwnSlave`):
   the slave arm, also for one fighting the looker, and a cached ENEMY on such a slave is worked out again at once (#904); the imprisoned arm is not taken. Meitou (`DialogueSystem.TagEnemy`): the alert in `RetaliationSystem`, the stealth-KO
-  miss, the crime victim (`CrimeSystem.Witnesses`, an attack order unless it already fights the culprit, and the criminal tag 7), DA 56, the
+  miss, the crime victim (`CrimeSystem.Witnesses`: `AttackTarget`, threats list and tag, and the criminal tag 7), DA 56, the
   failed kidnap ([carry-loot](carry-loot.md#kidnapping)) and the alarm investigators ([economy](economy.md#town-alarms)).
 - **Readers**: DC 18 (`FUN_140673290`: hours since the time, **9999.99** when never noted), DC 20 (an entry exists), DC 23, DC 52
   (long & 0xc), DC 53 (long & 0x2b0), "regards as friendly" (`FUN_1407923d0`, Character slot 126: same faction; not with TEMP ENEMY;

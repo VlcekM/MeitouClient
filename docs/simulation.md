@@ -316,11 +316,10 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   While the front runs (`PlayerOrders.Wins`) `CharacterCold.OrderWins` is set (by the decision step and `Give`, serial; hashed while set, not saved; cleared for a character the
   step decides), and `DecisionSystem.Ordered` (the flag while the queue holds an order) keeps everything else off the character, as the original's order step comes before every
   goal, 32 and committed goals included ([precedence](game/ai-tasks.md#precedence)): the AI (`AiSystem.Holds`, `ChooserRuns`, `TaskStart.StartOwn`); a goal's or reaction's start
-  ([task starts](#task-starts): the AI's, retaliation's, the duties' and the victims' deferred fights and walks); retaliation's own defence (it answers as a player character
+  ([task starts](#task-starts): the AI's, retaliation's and the duties' deferred fights and walks); retaliation's own defence (it answers as a player character
   does); the flight step, which also ends a running flight; the stand-down after a fight; the free tests of the duty sweeps and routines (the ditch and the player faction's
   food runs, the shut-in release, NPC healing, arming and scavenging, rejoining the leader); the
-  population's leader walk and arrival; and two engine reactions that are no order (`TaskSource.Npc`): a crime victim's attack on its culprit and a caught thief's
-  watcher getting up from rest. The dialogue's acts ([dialogue](#dialogue)), the body's orders above and the arrest orders are orders of the receiver's queue. An
+  population's leader walk and arrival; and an engine reaction that is no order (`TaskSource.Npc`): a caught thief's watcher getting up from rest. The dialogue's acts ([dialogue](#dialogue)), the body's orders above and the arrest orders are orders of the receiver's queue. An
   owner's order may repeat (`IOrderOwner.Repeats`): when its task ends it waits unstarted at the front for its next step instead of leaving (22, 101, 248), until its
   row's done test, its desire or its owner's check ends it. A blocked front waits, the AI going on with its goals meanwhile, and is tried again at the think turn ([decision step](#decision-step)). Once the
   front no longer runs the mind chooses again at once; when it starts the mind's plan, goal and commitment go. An NPC's queue is not saved, and an NPC keeps a replan bit only
@@ -444,7 +443,7 @@ phases, no source ever called from the think:
      the character idle and asks a decision, which lands where the original's re-plan would; nothing resumes.
 - **Triggers** (`CharacterCold.Replan`, `DecisionSystem.Request`; hashed while set; an NPC keeps the bit only while it holds an order): a task end (`TaskStart.End`, any reason), an order given or the queue cleared, a stagger outside a
   fight (not for a gunner), the melee alert while the fight is off unless the target gets up or is player-side and moving (horizontal speed above 1), a job list change or the jobs switch,
-  a load, a sighting for row 16 (engine: the look stands in for the sensed list's update), a mate's or ally's defence offered, a failed kidnap's or knock-out's victim told of its attacker, a fight's end (a follow row then follows again,
+  a load, a sighting for row 16 (engine: the look stands in for the sensed list's update), a mate's or ally's defence offered, a failed kidnap's, knock-out's or crime's victim and an alarm's investigator told of their threat (`Character::attackTarget`), a fight's end (a follow row then follows again,
   `MovementSystem.FollowAgain`: for an order in `PlayerOrders.Prepare`, for a job as its contributor). Also a front whose task ended, or one not tried yet. **Engine** turn (`TurnAsks`; no
   periodic replan was found): a player character's think turn asks the chooser while its task is a job's, 14 Idleness's or no start's, out of a fight, or its front order runs
   its task (the original's order step tests it on every AI update); any other character's turn always asks. The job step passes

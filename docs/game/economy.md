@@ -585,8 +585,8 @@ money, mark the entry claimed (it never pays twice) and show "Received c.{1} rew
   (`+0x180`) is above 5; every run that reacts sets that timer back to 20 (`FUN_140851f40`), so a watched crime stays fresh, except while the culprit is down: the refresh tests vfunc `0x30` first and then sets neither the timer nor the recently-wanted marker (250), so a knocked-out culprit's crime runs out in its witnesses' sight (**Verified**, decompile; Meitou `CrimeSystem.Witnesses`). The witness function returns at once when the seen character or the witness is imprisoned (`+0x2f8 == 2`, **Verified**, decompile), or the witness is in slave state 1 or 2 (both `FUN_1405c8aa0` calls take the witness, **Verified** by disassembly; a culprit in slave state 1 is not skipped), so a caged culprit's timer runs out and its status line gives way to the bounty. A witness
   that regards the culprit as friendly and sees it wrong the witness's own faction costs the culprit's faction 20 relation each time
   ([factions 3.5](factions-squads-towns.md#35-what-fires-relation-changes-observed-decompile)). A reacting witness that is the crime's
-  victim (for a trespass, the witness itself) goes for the culprit, which its whole squad then takes for an enemy
-  ([squad memory](dialogue.md#squad-memory)).
+  victim (for a trespass, the witness itself) takes the culprit as its threat (`Character::attackTarget`), which its whole squad then takes
+  for an enemy ([squad memory](dialogue.md#squad-memory)); its own chooser answers it (Meitou `CrimeSystem.AttackTarget`, no attack order).
 - `FUN_140673a20` in the trespass path is the squad-memory tag MY_INTRUDER, not a witness function (factions 3.5).
 
 ### Town alarms
@@ -604,8 +604,8 @@ money, mark the entry claimed (it never pays twice) and show "Received c.{1} rew
 - **Update** (`FUN_140354260`): no town or no alarm ends the task. Within 100 of it: faces it and counts down (15 s at the start, 10
   after any walk); at 0 the alarm is deleted and the task ends (the only remover found). Farther: runs (mode 2) to 30 short of it on its
   own side, the count set to 10, and every sensed character (neutral or enemy, not down: `SenseItr(6, 8)`) with a pending crime whose
-  victim faction is an ally of the investigator's (`FactionRelations::isAlly`: same, or 50+) is tagged TEMP ENEMY and attacked
-  (`Character::attackTarget`, which only stores the target). **Verified** (decompile; `FUN_140354260`): the whole sense list is walked with no early exit and no can-attack test (the goal system decides who is offered the task), on every update while it walks; each qualifying entry is tagged and the AI's attack hand is overwritten, so the last one scanned is the target (Meitou `CrimeSystem.Investigate`: all tagged, one order for the last; the sight scan stands in for the sense list).
+  victim faction is an ally of the investigator's (`FactionRelations::isAlly`: same, or 50+) is tagged TEMP ENEMY and taken as a threat
+  (`Character::attackTarget`). **Verified** (decompile; `FUN_140354260`): the whole sense list is walked with no early exit and no can-attack test (the goal system decides who is offered the task), on every update while it walks; each qualifying entry is tagged and added to the threats list (Meitou `CrimeSystem.LookForSuspects`: all of them, the sight scan standing in for the sense list; the investigator's chooser then fights through 32 or an attack-on-sight goal, [squad memory](dialogue.md#squad-memory)).
 
 Meitou (`CrimeSystem.TownAlarm` / `AlarmFor` / `Investigate`, `AiBehaviour.Investigate`): as above (reach by `TownAlarm.Place`, the culprit's `SightMap.LocationOf`, on top of a building too, and the more-than-one-floor skip by `Floor`); alarms are not saved; the closed-building
 halving and the `+0xc2` floor skip are not modelled; "sensed" is the witnesses' sight test.
