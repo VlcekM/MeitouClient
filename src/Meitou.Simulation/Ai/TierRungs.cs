@@ -143,19 +143,20 @@ internal sealed class TierRungs : ITierRungs
     }
 
     /// <summary>
-    /// One tier's pick: in the original's order, which settles ties (<see cref="Rank"/>): the role list, then the character's own list, where
-    /// setupAI puts Self preservation before the faction's and race's goals (<c>FUN_140510d60</c>, <c>FUN_140621b70</c>, <b>Verified</b>), then the
-    /// look's sources of the priority-3 goals (the decision step's step 4) and, at priority 3, the second list's candidates still kept.
+    /// One tier's pick: in the original's order, which settles ties (<see cref="Rank"/>): at priority 3 the second list's candidates still kept
+    /// (scored into the map before the tier, <c>FUN_140510ef0</c>), then the role list, then the character's own list, where setupAI puts Self
+    /// preservation before the faction's and race's goals (<c>FUN_140510d60</c>, <c>FUN_140621b70</c>, <b>Verified</b>), then the look's sources of
+    /// the priority-3 goals (the decision step's step 4).
     /// </summary>
     public AiGoal? Tier(TaskPriority tier, ChooserRow? row, int from, int to, out int source)
     {
         var candidates = _candidates;
         candidates.Clear();
+        if (tier == TaskPriority.Urgent) AddSecondList(candidates);
         for (int k = 0; k < _roles.Count; k++) Consider(candidates, _roles[k], tier);
         if (tier == TaskPriority.Urgent) Consider(candidates, AiSystem.SelfPreservationGoal, tier);
         AddOwnLists(candidates, tier);
         AddSources(candidates, row, from, to);
-        if (tier == TaskPriority.Urgent) AddSecondList(candidates);
 
         return PickGoal(candidates, out source);
     }
@@ -235,7 +236,8 @@ internal sealed class TierRungs : ITierRungs
     }
 
     /// <summary>
-    /// The second list's candidates still kept join the priority-3 pick (a character with no jobs: no urgent pick took them).
+    /// The second list's candidates still kept join the priority-3 pick first (a character with no jobs: no urgent pick took them), so a goal of the
+    /// tier with the same score ranks above them.
     /// </summary>
     void AddSecondList(List<(AiGoal? Goal, float Score, float Desire, int Source)> candidates)
     {

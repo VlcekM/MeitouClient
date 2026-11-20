@@ -315,7 +315,7 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// The implicit job of a character whose list has none to run (docs/game/ai-tasks.md "Perma-jobs": the original's lowest keys, in this order),
-    /// with the jobs switch on, not sneaking and not a slave; Sleep and Sit not while it holds position, carries someone or is selected. <see cref="SquadAi.Ditch"/>: carried items a
+    /// with the jobs switch on and not sneaking (the tail has no slave test); Sleep and Sit not while it holds position, carries someone or is selected. <see cref="SquadAi.Ditch"/>: carried items a
     /// storage takes go there (242; only with no queued orders). <see cref="SquadAi.Sleep"/>: an injured character lies in the bed the bed search
     /// finds (153, whose target finder it is, <b>Verified</b>; <see cref="Locks.FixtureRegistry.FindBed"/>) until healed (then 257 gets it up).
     /// <see cref="SquadAi.Sit"/>: a free chair (275). The one it is on is kept while it holds (a bed within
@@ -328,9 +328,7 @@ public sealed partial class ProductionSystem
         var options = world.Player.SquadAi;
 
         // None while sneaking (FUN_1405c9750; a fighting character is not Able anyway).
-        if ((cold.Orders & CharacterOrders.Jobs) == 0 || (cold.Orders & CharacterOrders.Sneak) != 0 || cold.SlaveState != 0
-            || options == SquadAi.None)
-            return null;
+        if ((cold.Orders & CharacterOrders.Jobs) == 0 || (cold.Orders & CharacterOrders.Sneak) != 0 || options == SquadAi.None) return null;
 
         var at = table.Next[slot].Position;
         var on = PermaJobs.ListJob(cold, (CharacterTask)table.Next[slot].Task) is { Implicit: true } running ? running.Row : TaskType.None;
@@ -462,13 +460,13 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// The original's 257 "Getting out of bed once healed", above 153 in the implicit list (docs/game/ai-tasks.md "Perma-jobs"): a player character
-    /// asleep in a bed with no order, under the <see cref="SquadAi.Sleep"/> option and the jobs switch, not sneaking, not a slave, not holding
-    /// position, and rested. Engine reading: it applies to any such sleeper, not only one the 153 job put there.
+    /// of the player's faction asleep in a bed with no order, under the <see cref="SquadAi.Sleep"/> option and the jobs switch, not sneaking, not
+    /// holding position, and rested (the tail has no slave test). Engine reading: it applies to any such sleeper, not only one the 153 job put there.
     /// </summary>
     bool GetsUpHealed(World world, int slot, CharacterCold cold) =>
-        cold.IsPlayer && cold.InSomething == Locks.HeldState.Bed && world.Characters.Next[slot].Task == (byte)CharacterTask.Sleep
+        DecisionSystem.Decides(cold) && cold.InSomething == Locks.HeldState.Bed && world.Characters.Next[slot].Task == (byte)CharacterTask.Sleep
         && (world.Player.SquadAi & SquadAi.Sleep) != 0 && (cold.Orders & CharacterOrders.Jobs) != 0 && (cold.Orders & CharacterOrders.Sneak) == 0
-        && cold.SlaveState == 0 && !Orders.Holding(cold) && !PlayerOrders.Holds(world, slot) && !Unrested(cold);
+        && !Orders.Holding(cold) && !PlayerOrders.Holds(world, slot) && !Unrested(cold);
 
     /// <summary>
     /// Whether the character is on the implicit 153 job (walking to its bed or lying in it) and committed to it: its commitment

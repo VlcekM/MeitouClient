@@ -31,7 +31,8 @@ public enum DecisionStep : byte
     /// </summary>
     Jobs = 5,
     /// <summary>
-    /// 6: the priority-2 goals, then the priority-1 goals (14 Idleness), then the default task (<c>+0x190</c>).
+    /// 6: the priority-2 goals (keys 1000 + type), then the priority-1 goals (2000 + type), then the default task (<c>+0x190</c>, 3000 up: 14
+    /// Idleness).
     /// </summary>
     Fallback = 6,
 }
@@ -187,7 +188,7 @@ public sealed class DecisionSystem
     SourceSteps _steps;
 
     /// <summary>
-    /// Makes the host with its own sources: the order queue, the urgent jobs, the jobs and 14 Idleness.
+    /// Makes the host with its own sources: the order queue, the urgent jobs, the jobs and the default task 14 Idleness.
     /// </summary>
     public DecisionSystem()
     {
@@ -942,11 +943,12 @@ public sealed class DecisionSystem
     }
 
     /// <summary>
-    /// Step 6's priority-1 goal 14 Idleness (<c>Character::setupAI</c> gives it to everyone, weight 0.1): a player character stands idle, which is
-    /// its routine (player characters neither wander nor follow a leader by themselves). It runs over idling, a fight (its goal's or row's), and any
-    /// task a plan still runs (an order's, a goal's, the engine's: those end by their own rules; a stale job's ended at step 5); a wander or follow
-    /// no plan runs is given up for it. The default task (<c>+0x190</c>, tried after the priority-1 goals) is never reached: it is 14 Idleness too
-    /// unless the manoeuvre mode is STAY_CLOSE or HOLD_GROUND, which Meitou does not model (docs/game/ai-tasks.md "Precedence").
+    /// The default task (<c>+0x190</c>, picked at key 1.0 without the scorer after the priority-1 tier, <c>FUN_140510ef0</c>, <b>Verified</b>) of a
+    /// player-faction character: 14 Idleness, which every order sets (<c>FUN_14050c030</c>) while the manoeuvre mode is ROAM_FAR, the only one Meitou
+    /// models (docs/game/ai-tasks.md "Precedence"). The scored own-list 14 never gets there: the scorer drops it while its list B holds
+    /// (<c>!162 !157</c>, no act, no effect). A player character stands idle, which is its routine (player characters neither wander nor follow a
+    /// leader by themselves). It runs over idling, a fight (its goal's or row's), and any task a plan still runs (an order's, a goal's, the engine's:
+    /// those end by their own rules; a stale job's ended at the job pass); a wander or follow no plan runs is given up for it.
     /// </summary>
     sealed class Idleness : IDecisionSource
     {
@@ -960,9 +962,9 @@ public sealed class DecisionSystem
         public DecisionStep Step => DecisionStep.Fallback;
 
         /// <summary>
-        /// The priority-1 goals come after the priority-2 ones (keys 1000 + type).
+        /// The default task's rung, after the priority-1 goals (<see cref="Ladder.DefaultKeys"/>).
         /// </summary>
-        public int Key => 2000 + (int)TaskType.Idle;
+        public int Key => Ladder.DefaultKeys + (int)TaskType.Idle;
 
         /// <summary>
         /// It always answers: it starts over a wander or follow no plan runs, out of a fight; else it counts as running what the character does.
