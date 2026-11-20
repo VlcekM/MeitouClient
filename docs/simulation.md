@@ -416,7 +416,8 @@ phases, no source ever called from the think:
      first job that runs. Then the implicit jobs (`ProductionSystem.ImplicitJobs`, the squad AI options' lowest keys): over idling, a standing task or a job's task, the pick of
      `ImplicitPick` starts and runs while it is the one the character is on; one that no longer holds ends.
   6. The priority-2 goals (a player animal's race goal 233, eating a downed body, `CaptiveSystem.RaceGoals`), then the priority-1 goals (keys 2000 + type), then the default task
-     (keys 3000 up): 14 Idleness (`+0x190`, which every order sets while the manoeuvre mode is ROAM_FAR, the only one Meitou models; the scorer drops a scored 14 while `!162 !157` hold).
+     (keys 3000 up, `+0x190`, one slot by the manoeuvre mode, `DecisionSystem.Idleness`): ROAM_FAR 14 Idleness, STAY_CLOSE (NEAR) 31 Staying close standing in place, HOLD_GROUND 30 Holding
+     position walking back to the centre of movement first; the scorer drops a scored 14 while `!162 !157` hold.
      A player character stands idle, its routine (player characters neither wander nor follow a leader by themselves). Idleness runs over idling, a fight and any task a plan still runs
      (an order's, a goal's, an engine act-out's: those end by their own rules), and gives up a wander or follow no plan runs. A task that ends (`TaskEnd.Done`) or a fight's end leaves
      the character idle and asks a decision, which lands where the original's re-plan would; nothing resumes.

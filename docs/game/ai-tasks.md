@@ -1148,7 +1148,13 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
      standing orders 8 / 9, by the AI's manoeuvre mode (+0x2bc): `FUN_140599970` (a point: the order's) and `FUN_1405966a0` (a target) make it 30 Holding position for HOLD_GROUND (0),
      31 Staying close for STAY_CLOSE (1), and idleness for ROAM_FAR (2, the default). The Hold toggle (standing order 12) does not touch it. Nothing else writes it: the
      constructor leaves it null and neither spawning nor `setupAI` sets it, and while it is null the pick skips its slot (`FUN_140510650` needs a candidate) and the mover
-     reset follows.
+     reset follows. 31 and 30 are made at priority 2, weight 1.0, with the AI's repertoire (none outside it), on the order's point or target: 31 is `Task_Follow`
+     (factory `FUN_14032ebd0`, case 0x1f), whose update does nothing without a target, so NEAR's 31 at a point stands; 30 is `Task_Blank` with the effect
+     isAtLocation, so it walks back to the point and stands. FAR and NEAR first reset it to 14 (`FUN_140596680`, vfunc 4 with none). Neither the mode nor the slot is
+     saved: the character loader `FUN_140627b30` reads the AI record through `AITaskSytem` slot 2 (`FUN_1405092d0`) only, `FUN_140626f50` replays the standing
+     orders 11, 12, 13, 14, 15 and 17 only, and `AI::AI` sets ROAM_FAR, so a loaded character is ROAM_FAR with an empty slot until its next order; an NPC is always
+     ROAM_FAR (`FUN_1405caa50` returns at the top for a non-player faction). **Observed** (planner rules above): a default 14 that can run plans no task (14 neither
+     acts nor has an effect); with a weapon drawn its plan is 7 Sheathing weapon, the only provider of `!157`.
 - **Goals of a character** (`setupAI`): everyone 14 Idleness (priority 1, weight 0.1) and 32 Self preservation (priority 3, weight 1, target itself). A player-faction character
   (its faction's +0x250 set, `FUN_1407916d0`) also 243 Getting food (priority 3, weight 0.5) unless it has it; a player-faction animal also its race's `AI Goals` and 259 Picking
   up food (priority 3, 0.5), and loses 230. A character of another faction gets its race's `AI Goals`. Before that branch, any character whose platoon AI object (`FUN_140791ba0`: Character +0x658,
@@ -1184,7 +1190,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   picks among 32 Self preservation, 243 Getting food, a player animal's priority-3 race goals (277-279), 259 Picking up food, Hold's 16 and 15 Protect allies (joining a mate's or
   an ally's fight; none has a stepped plan: each is acted out by its engine system, fights by the combat system, 243 by `TownDutySystem`, 277-279 by
   `CaptiveSystem`, 259 by `FeedSystem`, as an NPC's same goal, so the NPC side's plan step has nothing to run for them either), step 5 every job in list order through its system's contributor (the switch and the repertoire first), then the implicit jobs, step 6 the priority-2 race goal 233 and
-  the default task 14 Idleness (a player character's routine: it stands; only ROAM_FAR is modelled, whose default task it is, and the scorer drops a scored 14). A task that ends leaves its character idle for the step to
+  the default task (a player character's routine: it stands; by the manoeuvre mode 14 Idleness, 31 Staying close or 30 Holding position, see step 6 above; the scorer drops a scored 14). A task that ends leaves its character idle for the step to
   re-decide (the original re-plans; nothing resumes). A follow order running its row ends when the followed character is attacked or goes down, as the original's (**Verified** below); follow and bodyguard
   jobs, and a follow order given while its target is already threatened, fight by their rows: an attacker of the followed character within 40 (16), a bodyguard also its own
   within 40 (39), as a step of the row, and follow again when the fight ends. The step runs on the replan triggers above plus an engine re-ask at the think turn (`ThinkEveryTicks`) of a character

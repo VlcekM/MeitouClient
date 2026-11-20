@@ -987,7 +987,8 @@ public sealed class CharacterCold
     public bool BedExitDone { get; set; }
 
     /// <summary>
-    /// The AI's manoeuvre mode (standing orders 8 and 9; the original's save key is unknown, so it is not saved, like <see cref="HoldPoint"/>).
+    /// The AI's manoeuvre mode (standing orders 8 and 9), which also picks the default task's row (<see cref="DecisionSystem"/>'s default task). Not
+    /// saved, as the original's (<c>AI::AI</c> sets ROAM_FAR and no load path writes it, docs/game/ai-tasks.md "Precedence").
     /// </summary>
     public ManoeuvreMode Manoeuvre { get; set; } = ManoeuvreMode.RoamFar;
 

@@ -339,7 +339,8 @@ public sealed class DecisionSystem
         if (task == CharacterTask.Attack || cold.InCombat) return false;
         if (cold.Running is not { } run || !run.Runs(task)) return true;
 
-        return run.Source == TaskSource.Job || run.Row == TaskType.Idle || SquadAutonomy.Yields(cold, run);
+        return run.Source == TaskSource.Job || run.Row == TaskType.Idle || run.Source == TaskSource.Goal && Idleness.IsDefault(run.Row)
+            || SquadAutonomy.Yields(cold, run);
     }
 
     /// <summary>
@@ -945,18 +946,20 @@ public sealed class DecisionSystem
 
     /// <summary>
     /// The default task (<c>+0x190</c>, picked at key 1.0 without the scorer after the priority-1 tier, <c>FUN_140510ef0</c>, <b>Verified</b>) of a
-    /// player-faction character: 14 Idleness, which every order sets (<c>FUN_14050c030</c>) while the manoeuvre mode is ROAM_FAR, the only one Meitou
-    /// models (docs/game/ai-tasks.md "Precedence"). The scored own-list 14 never gets there: the scorer drops it while its list B holds
-    /// (<c>!162 !157</c>, no act, no effect). A player character stands idle, which is its routine (player characters neither wander nor follow a
-    /// leader by themselves). It runs over idling, a fight (its goal's or row's), and any task a plan still runs (an order's, a goal's, the engine's:
-    /// those end by their own rules; a stale job's ended at the job pass); a wander or follow no plan runs is given up for it.
+    /// player-faction character, one slot chosen by the manoeuvre mode (<c>FUN_140599970</c> / <c>FUN_1405966a0</c>, <b>Verified</b>; the standing
+    /// orders FAR and NEAR, <see cref="ManoeuvreCommand"/>): ROAM_FAR 14 Idleness, STAY_CLOSE 31 Staying close (Task_Follow with no target, whose
+    /// update does nothing without one: it stands), HOLD_GROUND 30 Holding position (Task_Blank with the effect isAtLocation at the centre of
+    /// movement: it walks back there, then stands). The scored own-list 14 never gets there: the scorer drops it while its list B holds (<c>!162
+    /// !157</c>, no act, no effect). It runs over idling, a fight (its goal's or row's), and any task a plan still runs (an order's, a goal's, the
+    /// engine's: those end by their own rules; a stale job's ended at the job pass); a wander or follow no plan runs is given up for it, and so is
+    /// an idle of another default row.
     /// </summary>
     sealed class Idleness : IDecisionSource
     {
         /// <summary>
         /// The trace name.
         /// </summary>
-        public string Name => "14 Idleness";
+        public string Name => "Default task";
         /// <summary>
         /// Step 6, the fallback.
         /// </summary>
@@ -968,20 +971,71 @@ public sealed class DecisionSystem
         public int Key => Ladder.DefaultKeys + (int)TaskType.Idle;
 
         /// <summary>
-        /// It always answers: it starts over a wander or follow no plan runs, out of a fight; else it counts as running what the character does.
+        /// The squared flat reach and the height of <c>isAtLocation</c> for a point (<c>FUN_1405a2450</c>, <b>Verified</b>: 144 and 20).
+        /// </summary>
+        const float AtReach2 = 144, AtHeight = 20;
+
+        /// <summary>
+        /// It always answers: it starts over a wander or follow no plan runs, out of a fight, over an idle of another default row, and for HOLD_GROUND
+        /// away from the centre; else it counts as running what the character does.
         /// </summary>
         public DecisionCheck CanRun(World world, int slot)
         {
             var cold = world.Characters.Cold(slot)!;
             var task = (CharacterTask)world.Characters.Next[slot].Task;
             bool planned = cold.Running is { } run && run.Runs(task);
-            return task is CharacterTask.Wander or CharacterTask.Follow && !planned && !cold.InCombat ? DecisionCheck.Run : DecisionCheck.Runs;
+            if (cold.InCombat) return DecisionCheck.Runs;
+            if (task is CharacterTask.Wander or CharacterTask.Follow && !planned) return DecisionCheck.Run;
+            if (task != CharacterTask.Idle || cold.Manoeuvre == ManoeuvreMode.RoamFar) return DecisionCheck.Runs;
+
+            bool other = planned && !IsDefault(cold.Running!.Row);
+            if (other) return DecisionCheck.Runs;
+            bool settled = planned && cold.Running!.Row == Row(cold) && !Away(world, slot, cold);
+            return settled ? DecisionCheck.Runs : DecisionCheck.Run;
         }
 
         /// <summary>
-        /// Sets the character idle as goal 14 Idleness.
+        /// Starts the slot's task: HOLD_GROUND away from the centre walks there under row 30; else the character stands idle under the slot's row.
         /// </summary>
-        public void Start(World world, int slot) => TaskStart.Become(world, slot, CharacterTask.Idle, TaskType.Idle, TaskSource.Goal);
+        public void Start(World world, int slot)
+        {
+            var cold = world.Characters.Cold(slot)!;
+            var row = Row(cold);
+            if (row == TaskType.HoldPosition && Away(world, slot, cold) && cold.CentreOfMovement is { } centre)
+            {
+                TaskStart.Walk(world, slot, new System.Numerics.Vector2(centre.X, centre.Z), SpeedMode.Free, row, TaskSource.Goal);
+                return;
+            }
+
+            TaskStart.Become(world, slot, CharacterTask.Idle, row, TaskSource.Goal);
+        }
+
+        /// <summary>
+        /// The slot's row by the manoeuvre mode.
+        /// </summary>
+        static TaskType Row(CharacterCold cold) => cold.Manoeuvre switch
+        {
+            ManoeuvreMode.StayClose => TaskType.StayCloseToTarget,
+            ManoeuvreMode.HoldGround => TaskType.HoldPosition,
+            _ => TaskType.Idle,
+        };
+
+        /// <summary>
+        /// Whether <paramref name="row"/> is a row of the default task's slot.
+        /// </summary>
+        internal static bool IsDefault(TaskType row) => row is TaskType.Idle or TaskType.StayCloseToTarget or TaskType.HoldPosition;
+
+        /// <summary>
+        /// Whether HOLD_GROUND's effect does not hold: the character is not at its centre of movement (flat squared distance 144, height 20).
+        /// </summary>
+        static bool Away(World world, int slot, CharacterCold cold)
+        {
+            if (cold.Manoeuvre != ManoeuvreMode.HoldGround || cold.CentreOfMovement is not { } centre) return false;
+
+            var at = world.Characters.Next[slot].Position;
+            float dx = at.X - centre.X, dz = at.Z - centre.Z;
+            return dx * dx + dz * dz >= AtReach2 || MathF.Abs(at.Y - centre.Y) >= AtHeight;
+        }
     }
 
     #endregion
