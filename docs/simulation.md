@@ -368,8 +368,8 @@ and an obeying NPC's 187 Slave goals), the priority-3 tier (the second list's le
 implicit jobs, then the 187 goals), the priority-2 tier, committed above 0, the priority-1 tier, the default task (14 Idleness for the player's faction, the IDLE plan for an
 NPC), the mover reset. A tier scores the AI's goals (`TierRungs`: role list, own lists, 32) with the goal sources of its step; a goal with nothing to do now is dropped
 (`PlanContext.GivesNothingNow`, `FUN_14050df10`; of the goals base data lists with a desire only 14 and 45). The routes: a player-faction mind (`AiMind.PlayerSide`, every member
-of a player's squad) the ladder with its sources and 32 (`AiSystem.ThinkPlayer`; only 32 is acted out, the other own-list goals weigh 0 until their type is in `Ladder.OnRungs`);
-an autonomous squad's member the NPC's while the AI holds it, else the player-faction one; an NPC the ladder through `ThinkHeld` while the AI holds it, else the restricted choice
+of a player's squad of the player's faction, not a prisoner it keeps) the ladder with its sources and 32 (`AiSystem.ThinkPlayer`; only 32 is acted out, the other own-list goals weigh 0 until their type is in `Ladder.OnRungs`);
+an autonomous squad's member the NPC's while the AI holds it, else the sources' rungs alone (its package mind untouched); an NPC the ladder through `ThinkHeld` while the AI holds it, else the restricted choice
 (caged, or only the goals that pre-empt an engine duty or fight: **engine**, standing for the plan of a task Meitou's systems run); no mind (tests only) the sources' rungs. Three
 phases, no source ever called from the think:
 - **Look** (`DecisionSystem.Look`, serial, end of the schedule step): a character the chooser runs for (`TakesOrders`: a squad, not carried, out cold or dead) that a source
