@@ -908,7 +908,7 @@ holds refuses the second mod.
   stand-in's travel (not saved: find it by its tag and hold again after a load; it still unloads, and despawns as any platoon but a mod's
   spawn). `PopulationSystem.SendPlatoon` sends a held platoon's stand-in off screen toward a point or a living character (by the roads, at the
   stand-in travel speed, stopping within the roam arrival radius; null stops it; not saved, cleared when the hold ends). The hold is off screen
-  only: loaded, a held platoon's members run their package's full minds as any platoon's, and the mod steers them with orders (Ordering
+  only (**Observed**, by reading `AiSystem.MindAndCrowd` and `PopulationRoaming.StepTrip`): loaded, a held platoon's members run their package's full minds as any platoon's, and the mod steers them with orders (Ordering
   characters, below; a member whose package follows its leader follows an ordered leader), a chooser goal in the package, or a package change
   (`ChangeAi`, `StartContract`). The `EndContract(squadId)` command ends a running contract as its hours running out would (a `StartContract` of the
   same package after it starts it afresh; the game ignores a start of the contract already running), and `StartContract { AnyRange = true }`

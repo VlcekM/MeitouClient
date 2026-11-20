@@ -735,8 +735,8 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// A loaded platoon's step beside its squad's own AI: its campaign's step. Every other loaded platoon acts out its package's goals itself, one
-    /// without packages stands idle (docs/game/factions-squads-towns.md "Squads without packages"), and a code mod moves one it holds, so the
-    /// population orders no leader; the stand-in chooses afresh once it unloads.
+    /// without packages stands idle (docs/game/factions-squads-towns.md "Squads without packages"), a held one's too, so the population orders no
+    /// leader; the stand-in chooses afresh once it unloads (a held one's travel stays the mod's, <see cref="ModTravel"/>).
     /// </summary>
     void StepTrip(World world, Platoon p, Squad squad)
     {

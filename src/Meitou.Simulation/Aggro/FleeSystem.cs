@@ -223,7 +223,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
 
     /// <summary>
     /// Whether an AI-asked flight is still its goal's task (<see cref="CharacterCold.FleesAlone"/>): the runner keeps its mind, whose chooser runs on
-    /// (a squad or faction change drops the mind and leaves the run to end as a broken squad's member's does).
+    /// (a squad or faction change drops the mind, and such a run ends once no threat attacks it, <see cref="Unthreatened"/>).
     /// </summary>
     static bool GoalFlight(CharacterCold cold) => cold.Ai is not null;
 

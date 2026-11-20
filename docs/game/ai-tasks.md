@@ -1459,7 +1459,7 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   with a pick for the attack goals (`AggroSystem.FindFoe`: the looker's sensed entries and its squad mates' within 2 R, the shared sightings) and the capped fight threat for the protect
   goals, whose pick is row 13's attacker (none: the goal fails). Engine gates: a character that cannot fight, crawls, runs away under Self preservation or mans a turret wants none. One whose
   lists hold no combat goal starts no fight and joins none: it only fights back when attacked (32 in the same chooser). Nothing else starts an NPC's fight on sight or pulls a mate in.
-  - **Minds**: every non-player squad has a blackboard and full minds, a platoon a code mod holds (`HoldPlatoon`, off screen only) and one whose template
+  - **Minds** (**Observed**, by reading `AiSystem.MindAndCrowd`): every non-player squad has a blackboard and full minds, a platoon a code mod holds (`HoldPlatoon`, off screen only) and one whose template
     lists no AI packages included (empty role lists: 14, 32 and its own lists only, [squads without packages](factions-squads-towns.md#squads-without-packages)). A mind dropped by trade,
     recruitment, capture or storage is made again at the next schedule step (`AiSystem.NewMinds`, for a squad with a board); meanwhile, and for an NPC with no squad (scripted worlds only), there is no mind.
   - **In the fight** (`AiSystem.InFight`): the fight a goal started is the AI's own (`AiMind.FightFrom`), and its fighter thinks in it as anyone does. The current combat goal is kept while it is not
