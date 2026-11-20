@@ -1958,8 +1958,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// carriers are on their way to and keeps a squad with no town to its own or an ally's beds in range
     /// (<see cref="Locks.BedSystem.FindForCarrier"/>). Once the AI chose the goal and holds the character (<see cref="AiSystem.Holds"/>), a
     /// character that is free lifts that body as the player's rescue job does (row 148), as the goal's own task; a body someone lifts already is
-    /// not taken (<paramref name="taken"/>). The carried body's goals then take it on (106 lays it in a bed, <see cref="Kidnap.TownDutySystem"/>;
-    /// with no bed the body is put down).
+    /// not taken (<paramref name="taken"/>). The goal ends with the body lifted (its effect, state 48); the carrier's goals then take it on (106 lays
+    /// it in a bed, <see cref="Kidnap.TownGoals"/>; with no bed it stays on the shoulder, as in the original).
     /// </summary>
     void RescueToBeds(World world, CharacterTable table, HashSet<int> taken)
     {
@@ -2080,22 +2080,6 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// </summary>
     public void RefuseRescue(World world, CharacterId rescuer, CharacterId body) =>
         _refusedRescues.Add((rescuer, body, world.GameHours + Settings.RescueRefuseHours));
-
-    /// <summary>
-    /// Whether the character in <paramref name="slot"/> carries a body goal 148 would rescue: an NPC the AI runs whose goal lists hold 148,
-    /// carrying a body of its own or an allied faction (the rescue finder's test, <see cref="Rescues"/>) that is not its squad leader (142's carry
-    /// stays). Read from what the world holds, so it is the same after a load as before it.
-    /// </summary>
-    public bool RescuedBy148(World world, int slot)
-    {
-        var table = world.Characters;
-        if (table.Cold(slot) is not { IsPlayer: false, Ai.Engine: false, Carrying.IsNone: false } cold
-            || !table.TryResolveNext(cold.Carrying, out int b) || table.Cold(b) is not { } body)
-            return false;
-        if (world.Squads.Find(cold.SquadId)?.Leader == cold.Carrying || !Rescues(world, cold, body)) return false;
-
-        return (_ai ??= world.SystemOf<AiSystem>())?.ListsGoal(world, slot, TaskType.FindAndRescueIfTheresBeds) == true;
-    }
 
     /// <summary>
     /// A rescue goal's walk to its body (148's, or 142's to the squad leader; not a job's or an order's) is given up when the body has died (a
