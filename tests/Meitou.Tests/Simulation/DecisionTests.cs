@@ -167,6 +167,23 @@ public class DecisionTests
     }
 
     /// <summary>
+    /// A player character's own list starts with its faction's <c>AI Goals</c> (<c>setupAI</c> <c>FUN_140621b70</c>, <c>AiSystem.PlayerOwnGoals</c>):
+    /// the player's faction 204 Nameless lists 15 Protect allies (AI_TASK 957, weight 1; docs/game/ai-tasks.md "Combat goals"), so a player character's
+    /// mind holds goal 15 at weight 1, ahead of 243 Getting food. Catches the faction's list going missing from a player mind, which only the protect
+    /// fight above would show, and only as a fight not joined.
+    /// </summary>
+    [Fact]
+    public void A_player_character_holds_goal_15_from_its_factions_list()
+    {
+        using var rig = Quiet(senses: true);
+        var goals = rig.Cold(rig.Mate).Ai!.RaceGoals;
+
+        Assert.Equal(TaskType.ProtectAllies, goals[0].Task.Type);
+        Assert.Equal(1f, goals[0].Weight);
+        Assert.Single(goals, g => g.Task.Type == TaskType.ProtectAllies);
+    }
+
+    /// <summary>
     /// An order with no desire leaves the queue at the order step and the chooser goes on: a First Aid order without a medkit (desire 0,
     /// <c>FUN_140998200</c>) is dropped and its character defends itself. Catches a kitless order that keeps its character from its goals.
     /// </summary>

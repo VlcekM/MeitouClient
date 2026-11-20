@@ -60,6 +60,42 @@ public class CampaignTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// With the Fixes option "Raids keep their progress" off (<see cref="PopulationSettings.KeepCampaignClocks"/>, commit <c>86d0af2da</c>), a loaded
+    /// campaign ignores Meitou's clock keys, which are still written: its phase starts at the load's hour and its fight clock is not started, as the
+    /// original's campaign load <c>FUN_1409c5b80</c> sets them (docs/formats/save.md WAR_SAVESTATE), and its arrival and announcement are not
+    /// started either. Catches the option read nowhere (the raid going on where it was) or the keys no longer written while it is off.
+    /// </summary>
+    [Fact]
+    public void With_raids_keep_their_progress_off_a_loaded_raid_restarts_its_clocks()
+    {
+        var data = SyntheticTown.Data(SyntheticTown.Database(extra: [SyntheticTown.Rec("50-t", Data.Fcs.FcsRecordType.FactionCampaign, "Test raid")]));
+        int faction = data.FactionIndex("20-t");
+        using var a = Start(data, new PopulationSettings());
+        a.World.RunTick();
+        double h = a.World.GameHours;
+        var raid = new CampaignInstance
+        {
+            Faction = faction, Id = 1, CampaignId = "50-t", PhaseStart = h - 2, FightStart = h - 1, ArrivedAt = h - 1.5, AnnouncedAt = h - 1.75,
+        };
+        a.Population.WarOf(faction)!.Actives.Add(raid);
+        var game = SaveCapture.Capture(a.World, data, new SaveClock(1, 13, 0));
+        var state = game.Factions.Single(f => f.Id == "20-t").War!;
+
+        Assert.Equal((float)(h - 2), state.Floats["meitou phase start c0"]);
+        Assert.Equal((float)(h - 1), state.Floats["meitou fight start c0"]);
+
+        using var b = Start(data, new PopulationSettings { KeepCampaignClocks = false });
+        SaveLoader.Load(b.World, game, data, new SaveLoadOptions { ApplyRelations = false });
+        double loaded = b.World.GameHours;
+        b.World.RunTick();
+        var again = b.Population.WarOf(faction)!.Actives.Single();
+
+        Assert.Equal(1, again.Id);
+        Assert.InRange(again.PhaseStart, loaded, b.World.GameHours);
+        Assert.Equal((-1d, -1d, -1d), (again.FightStart, again.ArrivedAt, again.AnnouncedAt));
+    }
+
+    /// <summary>
     /// A raid on a player outpost from the roll to its removal, saved and loaded while it is at the target.
     /// </summary>
     [Fact, Slow]

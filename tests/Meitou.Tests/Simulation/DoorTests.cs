@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Data;
+using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.Physics;
 using Meitou.Data.World;
 using Meitou.Simulation.Movement;
@@ -7,7 +8,9 @@ using Meitou.Simulation.Navigation;
 using Meitou.Simulation;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Locks;
+using Meitou.Simulation.Player;
 using Meitou.Simulation.Population;
 using static Meitou.Tests.Bodies.BodyFixtures;
 using SimWorld = Meitou.Simulation.World;
@@ -71,6 +74,53 @@ public class DoorTests(ITestOutputHelper output)
         Assert.Equal(DoorMotion.Closed, door.Motion);
         Assert.Equal(0, door.OpenAmount);
         Assert.True(door.Lock!.Locked);
+    }
+
+    /// <summary>
+    /// A door order goes to every selected character through its queue (the giver <c>FUN_1407f9e20</c>, commit <c>9cfab8660</c>), each with the row
+    /// the door's state gave: a closed door gives both walkers 72 OPEN_DOOR. The near one opens it, and the door ends open: the far one's 72 is done
+    /// once it is, and an arriving walker on 72 leaves an open door as it is. Catches an order given to the nearest walker alone and a second
+    /// walker that closes what the first opened (the old toggle).
+    /// </summary>
+    [Fact]
+    public void Two_walkers_on_one_open_door_order_leave_the_door_open()
+    {
+        var walk = new OpenGroundWalkability((_, _) => 150);
+        var data = ArrestTests.Town();
+        using var world = new SimWorld(new WorldSettings { Seed = 31, PublishSnapshots = false, MinPartitionSize = 1 }, walk,
+                [new PlayerSystem(), new MovementSystem(new PathService(walk, true)), new LockSystem(BaseGame, BodyOptions.Default)]);
+        world.Fixtures.RegisterSite(world, data, 0);
+        world.Fixtures.Doors = new Gate();
+        world.Player.Faction = data.Relations.PlayerFaction;
+        var door = world.Fixtures.Find("0.0:house#0")!;
+        world.Fixtures.SetLocked(door, false);
+        door.Motion = DoorMotion.Closed;
+        var spot = world.Fixtures.DoorSpotOf(door)!.Value;
+        var squad = new Squad { Id = 1000, TemplateId = "p", Faction = data.Relations.PlayerFaction };
+        world.Squads.Add(squad);
+        CharacterId Walker(float distance)
+        {
+            var cold = new Combat.Combatant { Name = "walker" }.MakeCold();
+            (cold.Faction, cold.IsPlayer, cold.SquadId) = (squad.Faction, true, squad.Id);
+            var id = world.Characters.Spawn(new CharacterHot { Position = spot.Centre + spot.Normal * distance, Health = 100, MaxSpeed = 60,
+                    WalkSpeed = 15 }, cold, 0);
+            squad.Members.Add(id);
+            return id;
+        }
+        var (near, far) = (Walker(40), Walker(400));
+        world.Commands.Enqueue(new DoorOrder([near, far], door.Id) { Tick = world.Tick });
+        world.RunTick();
+        var (nearCold, farCold) = (world.Characters.Cold(near.Slot)!, world.Characters.Cold(far.Slot)!);
+
+        Assert.Equal(TaskType.OpenDoor, nearCold.OrderQueue.Front!.Row);
+        Assert.Equal(TaskType.OpenDoor, farCold.OrderQueue.Front!.Row);
+
+        // The near walker opens it; the far one's 72 is then done, and nobody closes the door again.
+        world.RunTicks(600);
+
+        Assert.Empty(nearCold.OrderQueue);
+        Assert.Empty(farCold.OrderQueue);
+        Assert.Equal(DoorMotion.Open, door.Motion);
     }
 
     [Fact]
