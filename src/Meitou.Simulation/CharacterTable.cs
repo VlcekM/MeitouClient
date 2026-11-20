@@ -1012,7 +1012,7 @@ public sealed class CharacterCold
     /// <summary>
     /// What the combat system's body step (parallel, its own slot) saw happen to the body this tick, for <see cref="Combat.BodyOrders"/>' serial pass
     /// the same tick: gone down, woken, or back to standing from staying low or crawling. A wake while carried waits here until it is put down. Not
-    /// saved or hashed.
+    /// saved; the owed wake is hashed while set (<see cref="Combat.BodyEvents.Lying"/> follows the hashed medical state).
     /// </summary>
     internal Combat.BodyEvents BodyEvents { get; set; }
 
@@ -2058,6 +2058,7 @@ public sealed class CharacterTable
         if (k.Replan) hasher.Add(0x52706C6E);
         if (k.OrderWins) hasher.Add(0x4F57696E);
         if (k.OrderRoutine != CharacterTask.Idle) hasher.Add(0x4F527400 | (int)k.OrderRoutine);
+        if ((k.BodyEvents & Combat.BodyEvents.Woke) != 0) hasher.Add(0x576F6B65);   // a wake owed while carried; the rest is told from the medical state
         if (!k.TurretTarget.IsNone)
         {
             hasher.Add(0x54725467);
