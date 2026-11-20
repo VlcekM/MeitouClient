@@ -98,10 +98,12 @@ internal sealed class ArrestGoals(ArrestSystem arrests)
     }
 
     /// <summary>
-    /// The finder's tests of the character itself: not carried, not imprisoned, no slave (state 1), no animal, of a real faction.
+    /// The finder's tests of the character itself: alive (a dead entry carries no tag the include mask takes), not carried, not imprisoned, no
+    /// slave (state 1), no animal, of a real faction. A kept pick is tested again with them, so a target that died since the look is not lifted.
     /// </summary>
     bool Findable(CharacterCold tc) =>
-        tc.CarriedBy.IsNone && !tc.IsImprisoned && tc.SlaveState != 1 && !SquadRegistry.IsAnimal(tc) && !arrests.Crimes.Factions.NotReal(tc.Faction);
+        tc.Medical is not { Dead: true } && tc.CarriedBy.IsNone && !tc.IsImprisoned && tc.SlaveState != 1 && !SquadRegistry.IsAnimal(tc)
+        && !arrests.Crimes.Factions.NotReal(tc.Faction);
 
     /// <summary>
     /// Whether the guard goes after the target: a bounty it perceives, its squad's tag 7 on it, or the target's faction is its enemy.
