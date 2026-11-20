@@ -466,8 +466,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     internal static string GoalName(AiGoal goal) => $"{(int)goal.Task.Type} {TaskDataTable.Of(goal.Task.Type)?.Text ?? goal.Task.Name}";
 
     /// <summary>
-    /// An autonomous squad's member (Meitou only, <see cref="SquadAutonomy"/>), one ladder: while the AI holds it, the NPC's (<see cref="ThinkHeld"/>:
-    /// the package's goals, Self preservation and the look's sources, acted out as an NPC's); else the sources' rungs with Self preservation alone,
+    /// An autonomous squad's member (Meitou only, <see cref="SquadAutonomy"/>), one ladder: while the AI holds it, or it obeys as a slave on its list
+    /// job's task, the NPC's (<see cref="ThinkHeld"/>: the package's goals, Self preservation and the look's sources, acted out as an NPC's); else the sources' rungs with Self preservation alone,
     /// which leave its package mind as it is (<see cref="ThinkSources"/>), on a job's task after its urgent package goals are weighed for the source
     /// that takes it off the job (<see cref="AskOffJob"/>).
     /// </summary>
@@ -475,7 +475,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         int hour, ChooserRow? row, bool replan)
     {
         ref var n = ref world.Characters.Next[i];
-        if (Holds(n, cold))
+
+        // An obeying slave on its list job's task is the 187 branch's in both job passes (FUN_14050e5b0), so the whole ladder runs over the job.
+        if (Holds(n, cold) || RunsListJob(n, cold) && ObeyedRoles(world, squad, cold) is not null)
         {
             ThinkHeld(world, i, id, cold, mind, squad, board, roles, hour, row, replan);
             return;

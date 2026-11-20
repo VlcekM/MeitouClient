@@ -377,7 +377,7 @@ of a player's squad of the player's faction, not a prisoner it keeps) the ladder
 goals (`AiSystem.ThinkPlayer`; the other own-list goals weigh 0 and stay with their sources). Its winning goal is acted out as an NPC's (`AiSystem.ActChosen`) while nothing else holds it
 (`PlayerSideHold.Free`: not fleeing, engaged, imprisoned, carried or down), and holds it (`PlayerSideHold.Holds`, the look due on its turn) until an order, a job or a higher goal
 ends it (`OrderStep.TakeOver`, `DutyEnd`); a goal over an order's or a job's task ends that task in the serial step and acts at the next tick; a source's win ends the goal (`DutyGoals.Leave`);
-an autonomous squad's member the NPC's while the AI holds it, else the sources' rungs alone (its package mind untouched); an NPC the ladder through `ThinkHeld` while the AI holds it
+an autonomous squad's member the NPC's while the AI holds it or it obeys as a slave on its list job's task (the 187 branch's), else the sources' rungs alone (its package mind untouched); an NPC the ladder through `ThinkHeld` while the AI holds it
 or it runs its list job's task free and out of a fight (`AiSystem.RunsListJob`: a job's pick leaves its goal, a goal that wins ends the job's task first, as a player-faction
 mind's), else the restricted choice (caged, or only the goals that pre-empt an engine duty or fight: **engine**, standing for the plan of a task Meitou's systems run), and
 an engine mind with nothing pre-empting the sources' rungs on its routine or job's task (`AiSystem.EngineJobs`: its job passes); no mind (tests only) the sources' rungs. Three

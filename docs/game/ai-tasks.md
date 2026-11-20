@@ -714,7 +714,8 @@ Meitou: [simulation, captives](../simulation.md#captives).
     14 Idleness (the cage wardens at weights 0.05 to 0.11), and the slave camps' workers: package "slave worker day guard" 171 at 0.1, 189 Worker 5-22 at weight 2, 190 Worker (pretend) 5-22 at 1.5, 172 at
     night (22-5) at 0.5, 14 at 0.05; "Shop" and "Shop catun" 190. Read so (**Observed**): a slave owned by a squad running that package works the town's mines by day and goes to its cage at night.
   - **The plan** (**Verified** for the targets): 171 is `Task_FollowLeader` (the same class as 141), which follows the slave **owner** if the character has one, else its squad leader
-    ([pathfinding](pathfinding.md#following)); it copies the leader's sneaking every update, so **a slave following a master who is not sneaking cannot sneak**, and escapes by sneaking only while it stands or works.
+    ([pathfinding](pathfinding.md#following)): its target (slot 5 `FUN_14033b220`) is the formation spot (`FUN_1402703f0`) the owner's platoon's blackboard gives the character
+    when the owner handle (character `+0x330`) is of type 1 or 0x22 and resolves to a platoon with a blackboard, else the spot its own platoon's gives; it copies the leader's sneaking every update, so **a slave following a master who is not sneaking cannot sneak**, and escapes by sneaking only while it stands or works.
     189 / 190 are the worker rows ([above](#slave-work-shout-and-capture)): the finder asks the **blackboard's current town** (`+0x88`) of the slave's own platoon, which the AI's rule writes from the
     platoon's leader (`FUN_1402688d0`, [AI](ai.md#package-classes)); a character whose side differs from the town's works only in slave state 1. 172 is the slave's own walk into a free cage of its
     owner's faction (finder `FUN_1408caaf0`). The crowd factor of the scorer (TaskData `+0x34`) is the default 1 for every goal the Slave lists hold (**Verified**: no registration in
