@@ -3790,9 +3790,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// then 243 Getting food unless held; an animal then its race's <c>AI Goals</c> and 259 Picking up food unless held, without 230.
     /// <c>setupAI</c> first puts 14 Idleness (priority 1, weight 0.1) and 32 Self preservation (priority 3, weight 1.0, itself) in every
     /// character's own list; Meitou weighs them outside it: 32 as every mind's urgent candidate (<see cref="SelfPreservationGoal"/>), 14 as the
-    /// default task and the mover's IDLE (<see cref="Idle"/>). The scored 14 is dropped while its list B <c>!162 !157</c> holds; it survives
-    /// while the character is prone (it would plan 65 Getting up) or holds a weapon (7 Sheathing), which the body (the get-up order) and the
-    /// combat step (sheathing an idle weapon) do in Meitou.
+    /// default task and the mover's IDLE (<see cref="Idle"/>), not as a priority-1 candidate. The scored 14 is dropped while its list B
+    /// <c>!162 !157</c> holds; it survives while the character is prone or holds a weapon (its plan gets up or sheathes).
     /// </summary>
     IReadOnlyList<AiGoal> PlayerOwnGoals(CharacterCold cold)
     {

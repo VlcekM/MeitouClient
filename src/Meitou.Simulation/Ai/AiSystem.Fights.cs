@@ -103,7 +103,8 @@ public sealed partial class AiSystem
     /// desire, finder or state of the chain tests posture but row 4's (<c>FUN_1405a4260</c>, <b>Verified</b>): a crippled character answers 0.1
     /// with a threat within 40 (Character <c>+0x2b0</c>) or when it is of the player's faction; an NPC without one 0 (unless its CharStats
     /// <c>+0x450</c> flags <c>FUN_1402b2b50</c> / <c>FUN_1402b2b90</c> or <c>FUN_140506960</c> hold, not modelled). Any other character can; a
-    /// turret's gunner too, whose turret goal or job competes with them on its rung.
+    /// turret's gunner too, whose turret goal or job competes with them on its rung. A crawling NPC is then still held off by the flight gate
+    /// (<see cref="SelfPreservation.Flees"/>).
     /// </summary>
     bool ProtectsCrawling(World world, int slot, CharacterCold cold) =>
         cold.Medical is not { Crawling: true } || DecisionSystem.Decides(cold)
