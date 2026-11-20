@@ -59,32 +59,36 @@ public static class TownExit
 
     /// <summary>
     /// <c>Town::hasGates</c> (slot 94: the gate set Town <c>+0x390</c> is not empty; false for a nest's TownBase), <b>Verified</b>: the set is filled
-    /// only by Building slot 138 (<c>FUN_140551b20</c>, from the Building constructor), which adds every building of a town owned by the player's
-    /// faction and, in another town, a building whose record has <c>is gateway</c>, built or not (docs/game/dialogue.md, conditions 49 and 58).
+    /// only by Building slot 138 (<c>FUN_140551b20</c>, run from the Building constructor), which adds a building whose record has
+    /// <c>is gateway</c>, built or not: gates and the gateway walls alike (docs/game/dialogue.md, conditions 49 and 58). An in-place upgrade
+    /// into a wall gate without <c>is gateway</c> is not tracked; the base data has none.
     /// </summary>
     public static bool HasGates(World world, PopulationData data, CampaignTown town)
     {
-        if (town.Site >= 0) return PlacedGates(world, data, town);
+        if (town.Site >= 0) return PlacedGates(data, town);
 
-        bool player = world.Buildings.FindTown(town.PlayerTown) is { } t && t.Owner == world.Player.Faction;
         foreach (var site in world.Buildings.All)
-            if (site.Town == town.PlayerTown && (player || data.Db.Find(site.Record)?.GetBool("is gateway") == true)) return true;
+            if (site.Town == town.PlayerTown && IsGateway(data, site.Record)) return true;
         return false;
     }
 
     /// <summary>
-    /// <see cref="HasGates"/> for a placed town: a nest has none, a town of the player's faction any building, another one an <c>is gateway</c> one.
+    /// <see cref="HasGates"/> for a placed town: an <c>is gateway</c> building; a nest (a TownBase) has none.
     /// </summary>
-    static bool PlacedGates(World world, PopulationData data, CampaignTown town)
+    static bool PlacedGates(PopulationData data, CampaignTown town)
     {
         var placed = data.Sites[town.Site];
         if (placed.Town.Type == Meitou.Data.Gameplay.TownType.Nest) return false;
 
-        bool player = town.Owner(world, data) is var owner && owner >= 0 && owner == world.Player.Faction;
         foreach (var b in placed.Buildings)
-            if (player || data.Db.Find(b.BuildingId)?.GetBool("is gateway") == true) return true;
+            if (IsGateway(data, b.BuildingId)) return true;
         return false;
     }
+
+    /// <summary>
+    /// Whether the BUILDING record <paramref name="id"/> has <c>is gateway</c>.
+    /// </summary>
+    static bool IsGateway(PopulationData data, string id) => data.Db.Find(id)?.GetBool("is gateway") == true;
 
     /// <summary>
     /// The centre of a town (its site's, else its player town's).
