@@ -2133,8 +2133,8 @@ the leader), and the war classes' start (`AiSystem.WarStart`) the campaign's tar
 (`Blackboard.WarLead`) and the off-screen jobs 5 / 6 (`PlatoonJobs.WarJob`); a war assault's squad roams its target town (engine choice).
 - **Current town** (`Blackboard.InTown`, on the package cadence before the choice): nearest town by X/Z, placed towns by `TownData.Radius`, player towns by their
   own (`PlayerTown.Radius`); entering one fires the leader's ENTER_TOWN; the town a squad starts in counts as entered (engine choice: no line for every squad a town makes).
-- **Trader**: as the original (stay, chooser, states, leave rule); the leader's WANDERING_TRADER goal walks to the town (`AiBehaviour.Travel`, also
-  TRAVEL_TO_TARGET_TOWN and its fast form; `atDestinationTown` is the package's town while it has one), members follow. Engine choices: a town's own squad never
+- **Trader**: as the original (stay, chooser, states, leave rule); the leader's WANDERING_TRADER goal walks to the town by its plan's 53 (`TownTravel`: the
+  squad's town, `SquadTown`, at the original's speed rule, with its detour and exits, docs/game/ai-tasks.md "Town goals"), members follow. Engine choices: a town's own squad never
   starts it (Meitou unloads a town's squads with it); a bar package of a squad that is not a town's own takes the bar of the placed town it is in, none in a player
   town. **Observed** (headless, Hub area, 150 000 ticks): a slaver squad reaches the Hub, waits 7.5 h until 06:00 and leaves for Skinne.
 - **Assault and occupation**: the squad fights the town's faction (`Squad.War`) and roams the town (its wander centre; RUN_AROUND_TOWN_LOOKING_FOR_PEOPLE acts as

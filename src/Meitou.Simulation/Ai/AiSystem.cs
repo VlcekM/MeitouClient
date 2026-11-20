@@ -130,7 +130,22 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// The population data the squads, towns and packages come from.
     /// </summary>
-    PopulationData Data => data;
+    internal PopulationData Data => data;
+
+    /// <summary>
+    /// The gate codes of the lock system (<see cref="Locks.LockSystem.Regions"/>), for the towns' waypoints; null before the serial step found it.
+    /// </summary>
+    internal Locks.IGateRegions? GateRegions => _locks?.Regions;
+
+    /// <summary>
+    /// The travel rows' act-out (53, 130, <see cref="TownTravel"/>).
+    /// </summary>
+    TownTravel? _travel;
+
+    /// <summary>
+    /// The travel rows' act-out, made on first use.
+    /// </summary>
+    TownTravel Travel => _travel ??= new TownTravel(this, data);
 
     /// <summary>
     /// The owner of the NPC orders the dialogue and a building purchase give (19, 22, 67, 101, 248, 280).
@@ -1915,6 +1930,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         mind.Walking = false;
         mind.FailedWalks = 0;
         mind.Target = null;
+        TownTravel.Leave(mind);
         mind.Announced = false;   // a new Task_MakeAnnouncement: its said flag (+0x78) and arrival line flag (+0x7a) start clear
         mind.ArrivalSaid = false;
 
@@ -2120,7 +2136,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     void ActOut(World world, int slot, AiMind mind, AiGoal goal, Blackboard board, TaskType type, AiBehaviour behaviour)
     {
         var table = world.Characters;
-        if (type != TaskType.TravelToTargetPackage) table.Cold(slot)!.PaceCap = null;   // only 215's formation caps the pace
+        // Only 215's formation and the travel steps cap the pace; a travel step's detour goes with the step.
+        if (behaviour != AiBehaviour.Travel) table.Cold(slot)!.PaceCap = null;
+        if (behaviour != AiBehaviour.Travel) TownTravel.Leave(mind);
 
         switch (behaviour)
         {
@@ -2272,32 +2290,17 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return;
         }
 
-        // To the mission town's centre; the goal is no longer wanted once inside the town (Desire), long before the centre.
-        byte mode = mind.Step is TaskType.TravelToTargetTown or TaskType.TravelToTargetTownFast
-            ? TravelMode(world.Characters.Cold(slot)!, board, mind.Step)
-            : type == TaskType.TravelToTargetTownFast ? SpeedMode.Run : SpeedMode.Walk;
-        if (DestinationCentre(world, board) is not { } town) Become(world, slot, CharacterTask.Idle);
-        else if (GoToSpot(world, slot, mind, town, GiveUp.Target, mode)) Become(world, slot, CharacterTask.Idle);
-    }
-
-    /// <summary>
-    /// <c>Task_TravelToTargetTown</c>'s speed (its functor <c>FUN_140342a30</c>, <b>Verified</b>): the running package's speed mode (package slot 3,
-    /// <see cref="PackageSpeed"/>), even its 4, else the row's own (0 for 53, 1 for 130); a carrier's 0 becomes 1; a squad that is not intact
-    /// runs (2). 1 is a jog (cap 55), 2 a run (cap 999), any other the walk. A carrier whose mode is not 0 is not raised to a jog
-    /// (<see cref="Movement.MovementSystem.CarriesOutAtWalk"/>).
-    /// </summary>
-    static byte TravelMode(CharacterCold cold, Blackboard board, TaskType type)
-    {
-        int mode = board.Current is not null ? PackageSpeed(board.Current) : type == TaskType.TravelToTargetTownFast ? 1 : 0;
-        if (mode == 0 && !cold.Carrying.IsNone) mode = 1;
-        if (!board.Intact) mode = 2;
-
-        return mode switch
+        if (mind.Step is TaskType.TravelToTargetTown or TaskType.TravelToTargetTownFast)
         {
-            1 => SpeedMode.Run,
-            2 => SpeedMode.Free,
-            _ => SpeedMode.Walk,
-        };
+            Travel.Act(world, slot, mind, board, mind.Step);
+            return;
+        }
+
+        // 215 outside a war package: to the mission town's centre; the goal is no longer wanted once inside the town (Desire).
+        world.Characters.Cold(slot)!.PaceCap = null;
+        TownTravel.Leave(mind);
+        if (DestinationCentre(world, board) is not { } town) Become(world, slot, CharacterTask.Idle);
+        else if (GoToSpot(world, slot, mind, town, GiveUp.Target, SpeedMode.Walk)) Become(world, slot, CharacterTask.Idle);
     }
 
     /// <summary>
@@ -2307,7 +2310,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// for <c>Contract_HiredAlly</c>, both base defences, the cannibal retreats and the refugee; 0 for the slaver shipping. A class Meitou does not
     /// build reads 4 (engine choice).
     /// </summary>
-    static int PackageSpeed(AiPackage package) => PackageClasses.Of(package.Signal) switch
+    internal static int PackageSpeed(AiPackage package) => PackageClasses.Of(package.Signal) switch
     {
         PackageClass.Retreat or PackageClass.PatrolRunning or PackageClass.PassingAssault => 2,
         PackageClass.WarAssault or PackageClass.WarAssaultCannibal => 2,
@@ -2323,11 +2326,27 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     };
 
     /// <summary>
-    /// Whether the character acts out a <c>Task_TravelToTargetTown</c> step (53, 130), whose speed the AI sets in full (<see cref="TravelMode"/>):
-    /// the movement's carrier jog does not apply to it. Not one an engine-acted goal carries (192's walk is the captive system's). Any thread.
+    /// The running package starts again (its vtable <c>+0x30</c>, as a travel step with no town calls it): its class's start
+    /// (<see cref="Rules.Started"/>; the base class's sets nothing Meitou keeps, its mission town being the home town).
     /// </summary>
-    internal static bool TravelsToTown(CharacterCold cold) =>
-        cold.Ai is { Engine: false, Duty: null, Step: TaskType.TravelToTargetTown or TaskType.TravelToTargetTownFast };
+    internal void RestartPackage(World world, Squad squad)
+    {
+        if (squad.Ai is not { Current: { } running } board) return;
+
+        var kind = board.Contract is not null ? PackageClasses.OfOverride(running.Signal) : PackageClasses.Of(running.Signal);
+        _rules.Bind(this, world, squad);
+        _rules.Started(board, running, kind);
+    }
+
+    /// <summary>
+    /// The running package's path-impossible call (vtable <c>+0x10</c>, <b>Verified</b> per class): the trader starts again (<c>FUN_140286730</c>, a
+    /// new town); the bar classes' (<c>FUN_140295990</c>) only move a hand between their own maps, and every other class's does nothing
+    /// (<c>FUN_140285870</c>).
+    /// </summary>
+    internal void PathImpossible(World world, Squad squad)
+    {
+        if (squad.Ai is { CurrentClass: PackageClass.WanderingTrader }) RestartPackage(world, squad);
+    }
 
     /// <summary>
     /// A patrol (<c>Task_Patrol</c>'s move, docs/game/factions-squads-towns.md "Patrol task"): the leader walks to the patrol point exactly, which
@@ -3004,7 +3023,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// Switches to a standing task (wander, follow, idle, rest), dropping a walk in progress; nothing when it is doing it already. A goal's start on
     /// the character's own slot (<see cref="TaskStart.StartOwn"/>: the think runs in parallel), as the row of the goal it acts out.
     /// </summary>
-    static void Become(World world, int slot, CharacterTask task)
+    internal static void Become(World world, int slot, CharacterTask task)
     {
         if (world.Characters.Next[slot].Task == (byte)task) return;
         TaskStart.StartOwn(world, slot, new TaskRequest(task, GoalRow(world, slot), TaskSource.Goal));
@@ -3026,7 +3045,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// walk out of a building shut by locked doors it has no way through is not planned (state 60, <see cref="Locks.LockSystem.CanLeave"/>): it
     /// stands, the walk neither arrived nor failed, so the next act-out asks again.
     /// </summary>
-    static void WalkTo(World world, int slot, Vector2 to, byte mode)
+    internal static void WalkTo(World world, int slot, Vector2 to, byte mode)
     {
         if (world.SystemOf<Locks.LockSystem>() is { } locks && !locks.CanLeave(world, slot, to))
         {
@@ -3269,6 +3288,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (Interlocked.Exchange(ref _treating, 0) != 0) (_firstAid ??= world.SystemOf<FirstAid.FirstAidSystem>())?.SendGoalTreatments(world);
         if (Interlocked.Exchange(ref _announcing, 0) != 0) SendAnnouncements(world);
 
+        _travel?.Step(world);
         _duties?.Step(world, world.Every(Settings.ThinkEveryTicks) * ModGoalBackoffThinks);
         _modGoals?.Step(world, world.Every(Settings.ThinkEveryTicks) * ModGoalBackoffThinks);
         if (Interlocked.Exchange(ref _leaving, 0) != 0) LeaveFights(world);

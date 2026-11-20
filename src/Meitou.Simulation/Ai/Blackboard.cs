@@ -1449,6 +1449,18 @@ public sealed class AiMind
     }
 
     /// <summary>
+    /// The detour nest of its running travel step (<c>Task_TravelToTargetTown</c> <c>+0x90</c>, <see cref="TownTravel"/>): set when the way to a nest
+    /// town failed; none at the step's start. Not saved (a task is not); hashed while set.
+    /// </summary>
+    public CampaignTown TravelDetour { get; internal set; } = CampaignTown.None;
+
+    /// <summary>
+    /// The package call its travel step's exit asks of the serial step of the same tick (<see cref="TownTravel.Step"/>), which clears it (not
+    /// hashed).
+    /// </summary>
+    public TravelAsk TravelAsk { get; internal set; }
+
+    /// <summary>
     /// Where the stranger a static guard stands beside is (<see cref="AiSystem"/>'s <c>GuardFactor</c>, FUN_14099edd0); null: the plain guard post.
     /// Derived by the think; hashed while set.
     /// </summary>
@@ -1620,6 +1632,12 @@ public sealed class AiMind
         }
 
         if (FightFrom != 0) hasher.Add(FightFrom);
+        if (!TravelDetour.IsNone)
+        {
+            hasher.Add(0x54726176);   // "Trav": only while a travel step walks to a detour nest
+            hasher.Add(TravelDetour.Nest);
+        }
+
         if (Announced) hasher.Add(0x416E6E63);   // "Annc": only while the running 129 has said its line
         if (ArrivalSaid) hasher.Add(0x41727253);   // "ArrS": only while the running 129 has said its arrival line
         if (ModGoalStarted)

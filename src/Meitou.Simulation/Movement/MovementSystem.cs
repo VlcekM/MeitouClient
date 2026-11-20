@@ -1935,8 +1935,9 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         if (mode == SpeedMode.Group && cold.SpeedOverride <= 0 && n.Task != (byte)CharacterTask.Follow)
             desired = MathF.Min(desired, _groupSpeeds.Of(world, i, cold, p.Position));
 
-        // A campaign member near its formation's destination keeps to the campaign leader's pace (215, Ai.MissionFormation).
-        bool formation = cold.Running is { Row: TaskType.TravelToTargetPackage };
+        // A campaign member near its formation's destination keeps to the campaign leader's pace (215, Ai.MissionFormation); a travel step to the
+        // functor's speed (Ai.TownTravel).
+        bool formation = cold.Running is { Row: TaskType.TravelToTargetPackage } || Ai.TownTravel.Runs(cold);
         if (cold.PaceCap is { } pace && formation && n.Task == (byte)CharacterTask.GoTo && !cold.InCombat) desired = MathF.Min(desired, pace);
 
         return desired;
@@ -1946,10 +1947,10 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     /// Whether the character's task is a carry-out (224 <c>Task_TakeIntruderOutside</c>, 274 <c>...OutsideTown</c>): its start sets the mover's
     /// mode itself and goes through neither reader that raises a carrier's walk to a jog, so it walks (<c>FUN_1403355e0</c>, <b>Verified</b>;
     /// <b>Observed</b>, original 1.0.65, #1024 save: mode 0 at the race's walk speed from the lift to the drop); or a travel to town, whose speed
-    /// functor raises only a mode 0 and which the AI gives its mode in full (<see cref="Ai.AiSystem.TravelsToTown"/>).
+    /// functor raises only a mode 0 and which the AI gives its mode in full (<see cref="Ai.TownTravel.Runs"/>).
     /// </summary>
     internal static bool CarriesOutAtWalk(CharacterCold cold) =>
-        cold.Running is { Row: TaskType.TakeIntruderOutside or TaskType.TakeIntruderOutsideTown } || Ai.AiSystem.TravelsToTown(cold);
+        cold.Running is { Row: TaskType.TakeIntruderOutside or TaskType.TakeIntruderOutsideTown } || Ai.TownTravel.Runs(cold);
 
     /// <summary>
     /// A follower near its aim (Think set it as the goal) steers straight at it at its desired speed, capped by its top speed, never past it.
