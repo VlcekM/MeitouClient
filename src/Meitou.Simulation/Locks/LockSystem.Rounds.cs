@@ -259,6 +259,11 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
     internal void ClearHouseLocked(string building) => _houseLocked.Remove(building);
 
     /// <summary>
+    /// Sets a home's house flag (serial: a saved squad's <c>homelok</c>, <see cref="Saving.HomeLockSave"/>).
+    /// </summary>
+    internal void MarkHouseLocked(string building) => _houseLocked.Add(building);
+
+    /// <summary>
     /// The rounds' step: the saved locked homes read once, ways opened for arrests, the gate guards' and the wardens' goals step, and on the cadence
     /// the walkers shut in are looked at.
     /// </summary>

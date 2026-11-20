@@ -799,7 +799,8 @@ Meitou-only crime keys (`Saving/CrimeSave`, `LockSystem`, `FixtureRegistry`), ea
   `floor` (`FUN_140626f50`). Meitou writes the building's save handle for `SightMap.LocationOf`, null when the save holds none.
 - GAMESTATE_CHARACTER float `age`: the character's age (1 for people, an animal's growth, [animals](../game/animals.md#ageing)); **Verified** in vanilla saves.
 - GAMESTATE_CHARACTER `meitou kidnapped` (bool, held by a kidnapper: no sentence, no bail; not the original's `kidn`), `meitou recognition` (float 0..1, bounty recognition meter). The escaped and [kidnap victim](../game/carry-loot.md#the-kidnap-victim-flag) flags are the original's `escap` and `kidn` (above; `CrimeSave` writes them always). Older Meitou saves wrote `meitou escaped` and the recently-wanted seconds as `meitou recently wanted`; each is read when the original's key (`escap`, `disguiseblown`) is missing and dropped on save.
-- GAMESTATE_BUILDING `meitou house locked` (bool, a lock-up round locked this home and nothing unlocked it since).
+- GAMESTATE_BUILDING `meitou house locked` (bool, a lock-up round locked this home and nothing unlocked it since; the residents' platoons also carry it
+  as the original's `homelok`, [platoon blackboard](#platoon-blackboard)).
 - GAMESTATE_BUILDING `meitou lock <layout index>` (int level x 4 + broken x 2 + locked) for each interior cage or container whose lock is locked or broken (their ids are not mapped, see above).
 
 Meitou-only loose-item key (`Items/ItemSlots.WriteDue`, [ground items](../simulation.md#items-and-eating); the original keeps the same fact as each placement group's own `respawn time`, [loose items](../game/factions-squads-towns.md#loose-items-in-buildings), which Meitou does not write): GAMESTATE_BUILDING `meitou slot due item<n>` (float, the absolute game hour the empty slot n of the building's interior is next due), written for each empty slot of a building whose slots are registered and that has a state record in the save, removed when the slot holds an item again; a building whose slots were not registered keeps the loaded save's keys. A loaded hour is capped at now plus the group's longest respawn time.
@@ -850,7 +851,7 @@ reads its own keys. Keys are looked up by name: **Observed**, METARU and i949 ho
 | `jobhr` | float | `+0x218` | the contract's end hour | `AiSave` |
 | `contractjob` | string | `+0x210` | the contract's AI_PACKAGE id, "" none | `AiSave` |
 | `replacementAI` | string | `+0x58` | the `change AI` package id, "" none | `AiSave` |
-| `homelok` | bool | `+0xe8` | the squad's "house locked" flag ([locks](../game/locks.md#doors)) | kept per home as `meitou house locked`; kept as read |
+| `homelok` | bool | `+0xe8` | the squad's "house locked" flag ([locks](../game/locks.md#doors)) | `HomeLockSave`, below |
 | `target <i>`, `target key <i>` | handle, int | `+0xa8` | one pair per entry of a TaskType-to-handle map, i from 0 in the map's order | not modelled; kept as read |
 
 - **Targets** (**Verified**): the map at `+0xa8` is a `boost::unordered_map<TaskType, hand>` (its allocator's type in `FUN_14026bcf0`). Its only insert,
@@ -866,6 +867,11 @@ reads its own keys. Keys are looked up by name: **Observed**, METARU and i949 ho
   does; a handle naming no town of the world (a nest) leaves the town it starts in. Other squads start in the town they stand in at the current hour
   (engine choice). **Observed** (METARU loaded headless, 1500 ticks, saved): 535 of 537 platoons written back with the same `currenttown` and
   `towntime`; with every `currenttown` made null first, the 38 loaded squads in a town are written with that town and the hour of the load.
+- **House locked**: Meitou keeps the flag on the squad's home (`LockSystem.IsHouseLocked`, the building's `meitou house locked`). `Saving/HomeLockSave`
+  writes `homelok` as its home's flag for a squad in the world with a home (its blackboard's, else its assigned one; one without keeps the record's), and
+  a save's platoon made for the first time since the load with `homelok` set sets its home's flag. **Observed** (METARU loaded headless, 1500 ticks from
+  5:38, saved): of 32 platoons with it set, 28 keep it and 4 are written false (their homes' flags cleared since); 4 more are written true, 3 of them
+  squads Meitou gives a home the save names none for.
 - **Observed** (METARU, autosave0, autosave2, i949): `runningAwayMode` and `mission data` are false and "" on every platoon; `towntime` is 0 or
   between 34 (day 1, 10:00) and the save's clock.
 

@@ -1148,6 +1148,7 @@ public static partial class SaveCapture
             bool made = sp.Wild is not null && !(p is not null && PackageSave.OwnPersistent(p));
             if (squad is not null) PackageSave.Write(platoon.Record, squad.Ai, data, made);
             if (squad is not null) CurrentTownSave.Write(platoon.Record, squad.Ai, s_memoryPass?.TownHands);
+            if (squad is not null) HomeLockSave.Write(platoon.Record, world, squad);
 
             // A wild one the AI ran: its package, persistent while it occupies a town (as the original's occupation).
             if (sp.Wild is not null && p is not null && (squad?.Ai?.Current?.Id ?? p.Package) is { } package)
@@ -1652,6 +1653,7 @@ public static partial class SaveCapture
             if (squad.MovedOut && squad.HomeBuilding is null) written.Record.Bools["persistent"] = false;
             PackageSave.Write(written.Record, squad.Ai, _data, roamer is { Pinned: false } && !PackageSave.OwnPersistent(roamer));
             CurrentTownSave.Write(written.Record, squad.Ai, s_memoryPass?.TownHands);
+            HomeLockSave.Write(written.Record, _world, squad);
             if (roamer is not null && into is null) WriteBaseTown(written.Record, roamer);
             return written;
         }
