@@ -520,6 +520,10 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         /// </summary>
         public ulong Blood;
         /// <summary>
+        /// The blood its worn items show, a byte per part as <see cref="Blood"/>: the wound's, or the stain the items kept if more (<see cref="GearBlood"/>).
+        /// </summary>
+        public ulong WornBlood;
+        /// <summary>
         /// Its weapon's blood this frame (<see cref="GearBlood"/>): the colour as 24 bits, the amount and wetness as two bytes.
         /// </summary>
         public float GearColour, GearAmounts;
@@ -1359,7 +1363,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         l.AttachBase = _attachCount;
         _attachCount += asset.AttachCount;
         l.Bones = inst.Bones;
-        l.Blood = inst.Blood;
+        l.Blood = l.WornBlood = inst.Blood;
         l.Pixels = 2 * l.Radius * _viewPixelsPerRadian / MathF.Max(1, Vector3.Distance(eye, centre));
         l.LayerStart = _layerCount;
         l.LayerCount = 0;
@@ -1420,6 +1424,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         {
             Soaked(ref l, state);
             WeaponBloodOf(ref l);
+            WornStainOf(ref l);
         }
 
         // A moving ragdoll is posed every frame: its bones move by physics, not by a clip the thinning could thin out (a frozen one hands over the
