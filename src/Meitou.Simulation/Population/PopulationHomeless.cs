@@ -49,8 +49,9 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// The distance from a loaded patrol's point (a sector point or a town's, <see cref="OutsideTown"/>) at which the next is drawn. The original
     /// sends the character to that exact point and draws the next once the move has ended (<c>CharMovement::setPatrolInput</c> mode 3,
-    /// <c>FUN_1405c6b30</c> mode 1: Verified); the leader walks there exactly (Ai.AiSystem's patrol act-out), and the arrive distance with this
-    /// step's 2 s cadence is the engine's reading of "the move has ended". The 500 of <c>FUN_1407ee790</c> is the off-screen rule only
+    /// <c>FUN_1405c6b30</c> mode 1: Verified); the leader walks there exactly (Ai.AiSystem's patrol act-out), and this step draws the next within
+    /// this distance (with the step's 2 s cadence, the engine's reading of an arrival) or once the leader's move is over short of the point
+    /// (<see cref="AiSystem.PatrolMoveOver"/>). The 500 of <c>FUN_1407ee790</c> is the off-screen rule only
     /// (<see cref="Ai.PlatoonJobs.PatrolArrive"/>).
     /// </summary>
     const float PointArrive = 100;
@@ -224,7 +225,11 @@ public sealed partial class PopulationSystem
         _patrolSeen.Add(squad.Id);
         var at = new Vector2(table.Previous[slot].Position.X, table.Previous[slot].Position.Z);
         _homelessPatrols.TryGetValue(squad.Id, out var patrol);
-        if (patrol.Picks > 0 && Vector2.DistanceSquared(at, patrol.Point) > patrol.Arrive * patrol.Arrive) return;
+
+        // The next is drawn near the point, or once the leader's move to it is over, also short of it (Task_Patrol's update, FUN_1405c6b30 mode 1).
+        bool near = Vector2.DistanceSquared(at, patrol.Point) <= patrol.Arrive * patrol.Arrive;
+        if (patrol.Picks > 0 && !near && !AiSystem.PatrolMoveOver(table.Previous[slot], patrol.Point)) return;
+
         if (PatrolPoint(world, squad, group, zone, at, patrol.Picks) is not { } next) return;
         _homelessPatrols[squad.Id] = (next.Point, patrol.Picks + 1, PointArrive);
         squad.PatrolPoint = next.Point;

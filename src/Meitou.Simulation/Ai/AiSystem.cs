@@ -2524,7 +2524,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return;
         }
 
-        if (mind.Squad.PatrolPoint is not { } point)
+        // Until the first point is drawn, and once the move to this one is over (arrived, given up or stopped: Task_Patrol's update draws the next
+        // when its mover is idle, reached or failed, FUN_1405c6b30 mode 1), it stands for the population's patrol step to draw again.
+        if (mind.Squad.PatrolPoint is not { } point || PatrolMoveOver(table.Next[slot], point))
         {
             Become(world, slot, CharacterTask.Idle);
             return;
@@ -2532,6 +2534,14 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         WalkTo(world, slot, point, board.CurrentClass == PackageClass.PatrolRunning ? SpeedMode.Run : SpeedMode.Walk);
     }
+
+    /// <summary>
+    /// Whether a patrol leader's move to <paramref name="point"/> is over: its walk went there (the goal it keeps) and it walks no more, so it
+    /// arrived, gave the walk up (no way there, blocked) or was stopped (<c>FUN_1405c6b30</c> mode 1 goes on when <c>CharMovement</c> slot
+    /// <c>0x50</c>, <c>0x60</c> or <c>0xd8</c> holds, <b>Verified</b>; read as a failed path, an arrival and no path, <b>Observed</b>).
+    /// </summary>
+    internal static bool PatrolMoveOver(in CharacterHot leader, Vector2 point) =>
+        leader.Task != (byte)CharacterTask.GoTo && Vector2.DistanceSquared(leader.Goal, point) < 1;
 
     /// <summary>
     /// The walk to its spot (a post, a bed, home; going to bed without a bed spot at home an occupier's bed of the town it holds), then resting or
