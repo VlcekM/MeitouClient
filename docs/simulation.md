@@ -430,7 +430,9 @@ phases, no source ever called from the think:
      (keys 3000 up, `+0x190`, one slot by the manoeuvre mode, `DecisionSystem.Idleness`): ROAM_FAR 14 Idleness, STAY_CLOSE (NEAR) 31 Staying close standing in place, HOLD_GROUND 30 Holding
      position walking back to the centre of movement first; the scorer drops a scored 14 while `!162 !157` hold.
      A player character stands idle, its routine (player characters neither wander nor follow a leader by themselves). Idleness runs over idling, a fight and any task a plan still runs
-     (an order's, a goal's, an engine act-out's: those end by their own rules), and gives up a wander or follow no plan runs. A task that ends (`TaskEnd.Done`) or a fight's end leaves
+     (an order's, a goal's, an engine act-out's: those end by their own rules), and gives up a wander or follow no plan runs; the task the think started for a goal
+     its player-faction mind no longer holds is no plan's (a freed slave's 171 Follow, a stand of 62 after the request lapsed), as the original's pick installs any winner
+     but the current goal (`FUN_140510650`, Verified). A task that ends (`TaskEnd.Done`) or a fight's end leaves
      the character idle and asks a decision, which lands where the original's re-plan would; nothing resumes.
 - **Triggers** (`CharacterCold.Replan`, `DecisionSystem.Request`; hashed while set; an NPC keeps the bit only while it holds an order): a task end (`TaskStart.End`, any reason), an order given or the queue cleared, a stagger outside a
   fight (not for a gunner), the melee alert while the fight is off unless the target gets up or is player-side and moving (horizontal speed above 1), a job list change or the jobs switch,

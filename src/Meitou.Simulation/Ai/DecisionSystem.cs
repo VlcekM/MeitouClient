@@ -1055,13 +1055,14 @@ public sealed class DecisionSystem
 
         /// <summary>
         /// It always answers: it starts over a wander or follow no plan runs, out of a fight, over an idle of another default row, and for HOLD_GROUND
-        /// away from the centre; else it counts as running what the character does.
+        /// away from the centre; else it counts as running what the character does. A task the think started for a goal the player-faction mind no
+        /// longer holds (<see cref="Left"/>) is no plan's.
         /// </summary>
         public DecisionCheck CanRun(World world, int slot)
         {
             var cold = world.Characters.Cold(slot)!;
             var task = (CharacterTask)world.Characters.Next[slot].Task;
-            bool planned = cold.Running is { } run && run.Runs(task);
+            bool planned = cold.Running is { } run && run.Runs(task) && !Left(cold, run);
             if (cold.InCombat) return DecisionCheck.Runs;
             if (task is CharacterTask.Wander or CharacterTask.Follow && !planned) return DecisionCheck.Run;
             if (task != CharacterTask.Idle || cold.Manoeuvre == ManoeuvreMode.RoamFar) return DecisionCheck.Runs;
@@ -1097,6 +1098,14 @@ public sealed class DecisionSystem
             ManoeuvreMode.HoldGround => TaskType.HoldPosition,
             _ => TaskType.Idle,
         };
+
+        /// <summary>
+        /// Whether <paramref name="run"/> is the task a player-faction mind's think started for a goal it holds no longer (<see cref="AiMind.Owns"/>,
+        /// no goal: its ladder left it for this default task, a Follow of 171 or a stand of 62 after the slavery or the request ended): no plan runs
+        /// it, so the default task takes it over: the original's pick keeps only the current goal's running task and plans and installs any other
+        /// winner, the default task too (<c>FUN_140510650</c>, <b>Verified</b>).
+        /// </summary>
+        static bool Left(CharacterCold cold, RunningTask run) => cold.Ai is { PlayerSide: true, Goal: null } mind && mind.Owns(run);
 
         /// <summary>
         /// Whether <paramref name="row"/> is a row of the default task's slot.
