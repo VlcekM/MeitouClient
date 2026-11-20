@@ -353,7 +353,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return;
         }
 
-        var roles = mind.Engine ? mind.EngineGoals : ObeyedRoles(world, squad, cold) ?? board.Roles[(int)RoleOf(squad, id, cold)];
+        var roles = mind.Engine ? mind.EngineGoals : board.Roles[(int)RoleOf(squad, id, cold)];
         if (cold.IsPlayer && mind.Player)
         {
             ThinkMember(world, i, id, cold, mind, squad, board, roles, hour, row);
@@ -799,14 +799,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// Job 187 Obedient Slave (<c>FUN_14050e5b0</c>, docs/game/ai-tasks.md "Obedient Slave"): a slave (state 1) not sneaking takes its owner
-    /// squad's <c>Slave AI Goals</c> instead of its own lists, whatever its squad role: a guard enslaved by its own squad stops guarding (#991).
-    /// Null: it plans with its own squad's (no master squad, an empty Slave list, or a job a split took,
-    /// <see cref="CharacterCold.ObedienceLost"/>).
+    /// Job 187 Obedient Slave of an NPC (<c>FUN_14050e5b0</c>, docs/game/ai-tasks.md "Obedient Slave"): a slave (state 1) not sneaking, the jobs
+    /// switch on, holds the job in effect (Meitou keeps no perma-job list for an NPC; <see cref="CharacterCold.ObedienceLost"/> stands for its
+    /// removal by a split), and its master squad's <c>Slave AI Goals</c> are the 187 branch's goals, which the chooser's job passes score before its
+    /// own tiers (<see cref="TierRungs.PickJobPass"/>), whatever its squad role: a guard enslaved by its own squad stops guarding while a Slave goal
+    /// plans (#991). The engine's sweeps take it as the list the slave plans with. Null: no master squad, an empty Slave list, or a job a split took.
     /// </summary>
     internal static IReadOnlyList<AiGoal>? ObeyedRoles(World world, Squad squad, CharacterCold cold) =>
-        cold.SlaveState == 1 && !cold.ObedienceLost && cold.SlaveMaster >= 0 && (cold.Orders & CharacterOrders.Sneak) == 0
-            && world.Squads.Find(cold.SlaveMaster) is { Ai: { } master } && master.Roles[(int)AiRole.Slave] is { Count: > 0 } list ? list : null;
+        !cold.ObedienceLost && Kidnap.ObedientSlave.Obeys(cold) && (cold.Orders & CharacterOrders.Jobs) != 0 && cold.SlaveMaster >= 0
+            ? Kidnap.ObedientSlave.SlaveList(world.Squads.Find(cold.SlaveMaster)) : null;
 
     /// <summary>
     /// The role list a member takes (docs/game/ai.md "Goal loading"): the squad leader the leader's, else by its squad role. Public for code mods; a

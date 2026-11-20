@@ -39,10 +39,17 @@ internal interface ITierRungs
     void ScoreSecondList(IReadOnlyList<AiGoal> list);
 
     /// <summary>
-    /// With a job list, the urgent pass's pick takes the second list's candidates (after the urgent jobs, which come first by their keys); a failed
-    /// pick clears them. The goal planned, or null.
+    /// Whether the character holds job 187 in effect (an NPC that obeys its master's Slave goals): its job passes score them, and it counts as
+    /// having a job list.
     /// </summary>
-    AiGoal? PickSecondList();
+    bool Obeys { get; }
+
+    /// <summary>
+    /// A job pass's pick over the AI's candidates: the 187 branch's goals (the master's Slave goals) after the candidates still kept, which in the
+    /// urgent pass are the second list's (the list jobs come first by their keys). Either way the candidates are cleared, as a failed pick clears
+    /// the map. The goal planned, or null.
+    /// </summary>
+    AiGoal? PickJobPass();
 
     /// <summary>
     /// One tier's pick (<c>FUN_140510d60</c>): its goals scored (the second list's candidates still kept join the priority-3 pick), with the
@@ -106,10 +113,11 @@ internal static class Ladder
         if (committed > TaskPriority.NonUrgent) return new(-1, tiers!.Committed, steps.Commitment);
         if (First(row, steps.Commitment, steps.UrgentJobs) is { } commitment) return commitment;
 
-        // 3 and 4. The second list scored, then the urgent job pass, whose pick takes the second list's candidates when there are jobs.
+        // 3 and 4. The second list scored, then the urgent job pass (with jobs: an NPC's job 187 counts), whose pick takes the second list's
+        // candidates and the 187 branch's.
         tiers?.ScoreSecondList(secondList);
         if (First(row, steps.UrgentJobs, steps.Goals) is { } urgentJob) return urgentJob;
-        if (jobs && tiers?.PickSecondList() is { } second) return new(-1, second, steps.Goals);
+        if ((jobs || tiers?.Obeys == true) && tiers?.PickJobPass() is { } second) return new(-1, second, steps.Goals);
 
         return AfterUrgentJobs(steps, row, tiers, committed);
     }
@@ -122,9 +130,10 @@ internal static class Ladder
         // 5. The priority-3 tier with the goal sources.
         if (Tier(row, tiers, TaskPriority.Urgent, steps.Goals, steps.Jobs, steps.Jobs) is { } urgent) return urgent;
 
-        // 6. Committed above priority 1, then 7. every job, the implicit jobs last.
+        // 6. Committed above priority 1, then 7. every job, the implicit jobs, then the 187 branch's goals (scores rank below the jobs' keys).
         if (committed > TaskPriority.Fluff) return new(-1, tiers!.Committed, steps.Jobs);
         if (First(row, steps.Jobs, steps.Fallback) is { } job) return job;
+        if (tiers is { Obeys: true } && tiers.PickJobPass() is { } obeyed) return new(-1, obeyed, steps.Fallback);
 
         // 8. The priority-2 tier, then its sources.
         if (Tier(row, tiers, TaskPriority.NonUrgent, 0, 0, steps.Fallback) is { } nonUrgent) return nonUrgent;

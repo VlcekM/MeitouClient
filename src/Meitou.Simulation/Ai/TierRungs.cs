@@ -82,9 +82,14 @@ internal sealed class TierRungs : ITierRungs
     /// </summary>
     readonly List<(AiGoal? Goal, float Score, float Desire, int Source)> _candidates = [];
     /// <summary>
-    /// The second list's candidates, kept for the urgent pass's pick or the priority-3 pick.
+    /// The second list's candidates, kept for the urgent pass's pick or the priority-3 pick; the job passes add the 187 branch's to them.
     /// </summary>
     readonly List<(AiGoal? Goal, float Score, float Desire, int Source)> _second = [];
+    /// <summary>
+    /// The master squad's Slave goals the job passes' 187 branch scores for the bound character (<see cref="AiSystem.ObeyedRoles"/>); null when it
+    /// does not obey, and for a player-faction mind, whose job 187 is its contributor's (<see cref="Kidnap.ObedientSlave"/>).
+    /// </summary>
+    IReadOnlyList<AiGoal>? _slaveGoals;
 
     /// <summary>
     /// Binds the rungs to one character's choice; <paramref name="only"/> limits the goals weighed.
@@ -94,6 +99,7 @@ internal sealed class TierRungs : ITierRungs
     {
         (_ai, _world, _slot, _id, _mind, _squad, _board, _roles, _hour, _only) = (ai, world, slot, id, mind, squad, board, roles, hour, only);
         _plans = AiSystem.PlanContext.Local.Bind(ai, world, slot, mind, board);
+        _slaveGoals = mind.Player || world.Characters.Cold(slot) is not { } cold ? null : AiSystem.ObeyedRoles(world, squad, cold);
         _committed = null;
         _candidates.Clear();
         _second.Clear();
@@ -133,10 +139,25 @@ internal sealed class TierRungs : ITierRungs
     }
 
     /// <summary>
-    /// The urgent pass's pick over the second list's candidates (a character with jobs); its failure clears them.
+    /// Whether the bound character holds job 187 in effect: it obeys its master's Slave goals (<see cref="_slaveGoals"/>).
     /// </summary>
-    public AiGoal? PickSecondList()
+    public bool Obeys => _slaveGoals is not null;
+
+    /// <summary>
+    /// A job pass's pick (<c>FUN_14050e5b0</c> then <c>FUN_140510650</c>): the 187 branch's goals, the master's Slave goals of priorities 1 to 3
+    /// (<c>FUN_14026b790</c> mask 0xe, <b>Verified</b>), scored after the candidates still kept (the second list's, in the urgent pass); the goal
+    /// planned, or null. Either way the candidates are cleared, as a failed pick clears the map.
+    /// </summary>
+    public AiGoal? PickJobPass()
     {
+        if (_slaveGoals is { } list)
+        {
+            for (int k = 0; k < list.Count; k++)
+            {
+                if (list[k].Task.Priority is >= TaskPriority.Fluff and <= TaskPriority.Urgent) Consider(_second, list[k], tier: null);
+            }
+        }
+
         var goal = PickGoal(_second, out _);
         _second.Clear();
         return goal;
@@ -188,12 +209,14 @@ internal sealed class TierRungs : ITierRungs
 
     /// <summary>
     /// The choice of a character the AI does not hold (<see cref="AiSystem.Preempts"/>) or that thinks in its cage (<see cref="AiSystem.Restrict.Caged"/>):
-    /// by tier (only the urgent one unless caged), the goals <see cref="_only"/> allows; null when none plans. No sources, no committed stop.
+    /// an obeying slave's job pass first (<see cref="PickJobPass"/>), then by tier (only the urgent one unless caged), the goals <see cref="_only"/>
+    /// allows; null when none plans. No sources, no committed stop.
     /// </summary>
     public AiGoal? Restricted()
     {
         bool allTiers = _only == AiSystem.Restrict.Caged;
         if (allTiers) _ai.EndStep(_world, _slot, _id, _mind, _squad, _board, _plans, _hour);
+        if (Obeys && PickJobPass() is { } obeyed) return obeyed;
 
         foreach (var tier in (ReadOnlySpan<TaskPriority>)[TaskPriority.Urgent, TaskPriority.NonUrgent, TaskPriority.Fluff])
         {

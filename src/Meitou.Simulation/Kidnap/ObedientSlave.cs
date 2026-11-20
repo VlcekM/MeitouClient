@@ -17,7 +17,8 @@ namespace Meitou.Simulation.Kidnap;
 /// after destroying its orders and perma-jobs, and removes when it stops being one. While it is a slave and not sneaking (<c>FUN_14050e5b0</c>), the
 /// job is urgent (step 3 of the decision step): the owner squad's <c>Slave AI Goals</c> are its candidates, so it follows its master, works the town
 /// it is in, gets into its cage, fights for its master or its squad, runs, or stands, instead of acting on its own goals. Only a player character's
-/// list holds the job (the AI's slaves run the same list directly, <see cref="Ai.AiSystem"/>).
+/// list holds the job; an NPC slave holds it in effect (<see cref="Ai.AiSystem.ObeyedRoles"/>), and the chooser's job passes score its master's
+/// Slave goals for it with the AI's scorer (<see cref="Ai.TierRungs.PickJobPass"/>), on the same rungs as this job's.
 /// </summary>
 public static class ObedientSlave
 {
@@ -31,6 +32,13 @@ public static class ObedientSlave
     /// (<c>Character::isStealthMode</c>, <c>FUN_1405c9750</c>, the Sneak order).
     /// </summary>
     public static bool Obeys(CharacterCold cold) => cold.SlaveState == 1 && (cold.Orders & CharacterOrders.Sneak) == 0;
+
+    /// <summary>
+    /// The goals the job pass's 187 branch syncs from the master squad (<c>FUN_14026b790</c>, role 4): its blackboard's <c>Slave AI Goals</c>; null
+    /// without a master, a blackboard or any goal. The chooser scores those of priorities 1 to 3. A pure read.
+    /// </summary>
+    internal static IReadOnlyList<AiGoal>? SlaveList(Squad? master) =>
+        master is { Ai: { } board } && board.Roles[(int)AiRole.Slave] is { Count: > 0 } list ? list : null;
 
     /// <summary>
     /// The slave state changed to <paramref name="state"/> (<c>FUN_1405a4940</c>, only when it differs): becoming a slave destroys the orders and the
@@ -332,9 +340,8 @@ sealed class ObedientJobs(CaptiveSystem captives) : IJobSource, ITaskHandler
     Choice? Choose(World world, int slot, CharacterCold cold, int k)
     {
         if (cold.Medical is { Incapacitated: true } || !cold.CarriedBy.IsNone || !cold.Carrying.IsNone) return null;
-        if (ObedientSlave.MasterOf(world, slot, cold, k) is not { Ai: { } board }) return null;
+        if (ObedientSlave.SlaveList(ObedientSlave.MasterOf(world, slot, cold, k)) is not { } list) return null;
 
-        var list = board.Roles[(int)AiRole.Slave];
         int hour = world.Hour;
         Choice? best = null;
         for (int i = 0; i < list.Count; i++)
