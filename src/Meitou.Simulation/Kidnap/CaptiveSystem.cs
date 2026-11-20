@@ -732,19 +732,6 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     }
 
     /// <summary>
-    /// The cages the player built in outpost <paramref name="number"/> (a player town's number): the cage fixtures of its buildings
-    /// (<see cref="Construction.TownLookup.PlayerTownOf"/>).
-    /// </summary>
-    static IEnumerable<Fixture> OutpostCages(World world, int number)
-    {
-        foreach (var f in world.Fixtures.All)
-        {
-            if (f.Kind != FixtureKind.Cage || f.Site >= 0 || world.Buildings.Find(f.Building) is not { } site) continue;
-            if (Construction.TownLookup.PlayerTownOf(world, site)?.Number == number) yield return f;
-        }
-    }
-
-    /// <summary>
     /// The live character held in a cage, or -1.
     /// </summary>
     internal static int OccupantSlot(World world, Fixture f)
@@ -758,7 +745,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
     /// <summary>
     /// The town the kill and eat goals read: the town the worker stands in (the character status's town, `+0x88`: the kill rate's gate and its timer
-    /// key, <b>Verified</b> `FUN_14032e9b0`), else its squad's town (<b>engine reading</b>, as <see cref="LiberateTarget"/>); -1: none.
+    /// key, <b>Verified</b> `FUN_14032e9b0`), else its squad's town (<b>engine reading</b>); -1: none.
     /// </summary>
     internal int FateTown(World world, int slot, Blackboard board) => TownAt(data, world.Characters.Next[slot].Position) is >= 0 and var here ? here
             : board.Town;
@@ -986,34 +973,59 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         item is null || data.Db.Find(item.Record)?.GetInt("stigma", 0) == SlaveStigma || clothing.Contains(item.Record);
 
     /// <summary>
-    /// The cage a liberator opens (276, <c>BuildingFinder_CagesToLiberate</c> <c>FUN_1408cf140</c>, <b>Observed</b>): a cage of a faction that is
-    /// neither the worker's nor allied to it, holding a live occupant that is not the worker's enemy and that no other job works; the nearest in the
-    /// town the worker stands in, a player outpost too (the finder scans the character's status town, <c>FUN_1409fc450</c> on <c>+0x88</c>,
-    /// <b>Verified</b>), else its squad's town.
+    /// The cage a liberator opens (276, <c>BuildingFinder_CagesToLiberate</c> <c>FUN_1408cf140</c>, <b>Verified</b> by decompile): of the cages in
+    /// the 3 x 3 zone cells round the worker (<c>FUN_1409fc450</c>, <see cref="Data.World.WorldLayout.WithinOneZone"/>) whose town is its status
+    /// town (<c>+0x88</c>, <see cref="AiSystem.StatusTownAt"/> as its next update writes it; a player outpost or a nest too), of any town when it has
+    /// none (<c>FUN_1409fb880</c>, a null town passes every building; the cage's town as <see cref="CageTown"/>), the first in list order that
+    /// <see cref="Liberable"/> passes; no distance test. The order is Meitou's (<b>engine choice</b>): the registry's, which is that of the towns'
+    /// registration and the player's buildings' (built, or read from a save); the original's is its loaded-zone map's, then each zone's
+    /// <c>set&lt;Building*&gt;</c> by address. Null: none (the finder's 0).
     /// </summary>
-    internal Fixture? LiberateTarget(World world, int slot, CharacterCold cold, Blackboard board)
+    internal Fixture? LiberateTarget(World world, int slot, CharacterCold cold)
     {
-        var table = world.Characters;
-        var at = table.Next[slot].Position;
-        int site = TownAt(data, at);
-        int outpost = site < 0 ? Ai.AiSystem.TownAt(data, world, at).PlayerTown : 0;
-        if (site < 0 && outpost <= 0) site = board.Town;
-        if (site < 0 && outpost <= 0) return null;
+        var at = world.Characters.Next[slot].Position;
+        var town = AiSystem.StatusTownAt(data, world, at, cold.StatusTown);
+        if (town.Site >= 0 && !world.Fixtures.IsRegistered(town.Site)) world.Fixtures.RegisterSite(world, data, town.Site);
 
-        Fixture? best = null;
-        float bestD = float.MaxValue;
-        foreach (var f in outpost > 0 ? OutpostCages(world, outpost) : CagesOf(world, site))
+        foreach (var f in world.Fixtures.All)
         {
-            if (f.Owner < 0 || f.Owner == cold.Faction || Allied(cold.Faction, f.Owner) || Taken(f.Id)) continue;
-            if (OccupantSlot(world, f) is not (>= 0 and var s) || Busy(table.IdOf(s))) continue;
-            if (data.Relations.Contains(cold.Faction) && AggroSystem.IsEnemy(data.Relations, cold.Faction, table.Cold(s)!.Faction))
-                continue;
-
-            float d = Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(f.Position.X, f.Position.Z));
-            if (d < bestD) (best, bestD) = (f, d);
+            if (f.Kind != FixtureKind.Cage || !Data.World.WorldLayout.WithinOneZone(at.X, at.Z, f.Position.X, f.Position.Z)) continue;
+            if (!town.IsNone && CageTown(world, f) != town) continue;
+            if (Liberable(world, cold, f)) return f;
         }
 
-        return best;
+        return null;
+    }
+
+    /// <summary>
+    /// Whether a liberator frees the cage's occupant (<c>FUN_1408db880</c>, <c>FUN_1408cf140</c>, <b>Observed</b>): a cage of a faction that is
+    /// neither the worker's nor allied to it (the relation test <c>FUN_1406b2630</c>), holding a live occupant that is not the worker's enemy and
+    /// that no other job works.
+    /// </summary>
+    bool Liberable(World world, CharacterCold cold, Fixture f)
+    {
+        var table = world.Characters;
+        if (f.Owner < 0 || f.Owner == cold.Faction || Allied(cold.Faction, f.Owner) || Taken(f.Id)) return false;
+        if (OccupantSlot(world, f) is not (>= 0 and var s) || Busy(table.IdOf(s))) return false;
+
+        return !(data.Relations.Contains(cold.Faction) && AggroSystem.IsEnemy(data.Relations, cold.Faction, table.Cold(s)!.Faction));
+    }
+
+    /// <summary>
+    /// The town a cage's building belongs to (<c>FUN_1400f6c20</c>, <see cref="Construction.TownLookup.KeyOf"/>): a placed town's cage its town, a
+    /// nest camp's its nest, a player-built one its outpost or the placed town its key names (by handle, else the nearest town); none when Meitou
+    /// cannot name it (a level building's <see cref="Construction.TownLookup.LevelOwned"/>).
+    /// </summary>
+    static CampaignTown CageTown(World world, Fixture f)
+    {
+        if (f.Site >= 0) return CampaignTown.OfSite(f.Site);
+        if (f.Wild >= 0) return CampaignTown.OfNest(f.Wild);
+        if (world.Buildings.Find(f.Building) is not { } site) return CampaignTown.None;
+
+        int key = Construction.TownLookup.KeyOf(world, site);
+        if (key > 0) return CampaignTown.OfPlayer(key);
+
+        return key is < 0 and not Construction.TownLookup.LevelOwned ? CampaignTown.OfSite(-key - 1) : CampaignTown.None;
     }
 
     /// <summary>

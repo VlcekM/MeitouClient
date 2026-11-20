@@ -403,7 +403,7 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
         TaskType.GiveAllMySlavesTo or TaskType.GiveAllMySlavesToIfItsAnImportTown =>
             captives.ReceiverHere(world, s, cold, out int town) is { } receiver ? Character(world, receiver, town) : null,
         TaskType.SlaveGetInMyMastersCage => captives.OwnCage(world, s, cold) is { } cage ? OfCage(cage) : null,
-        TaskType.LiberateAllThePrisoners => captives.LiberateTarget(world, s, cold, board) is { } freed ? Occupant(freed) : null,
+        TaskType.LiberateAllThePrisoners => captives.LiberateTarget(world, s, cold) is { } freed ? Occupant(freed) : null,
         _ => null,
     };
 
