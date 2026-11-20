@@ -192,8 +192,23 @@ public sealed partial class AiSystem
         int foe = source.BestAttackerOf(world, slot, slot, pending);
         if (foe < 0) return CharacterId.None;
         var id = new CharacterId(foe, table.Previous[foe].Generation);
-        if (SwimBarred(world, slot, id)) return CharacterId.None;
+        if (SwimBarred(world, slot, id) || !PassesHoldPost(world, slot, cold, foe, source.StateOf(id))) return CharacterId.None;
         return cold.Gunning is not null && source.StateOf(id).Ranged ? CharacterId.None : id;
+    }
+
+    /// <summary>
+    /// A character on Hold (standing order 12, <see cref="Orders.Holding"/>; only the player's have it) takes on only an attacker its post test
+    /// accepts (<see cref="Orders.HoldPost"/>), as its defence did when the decision step's source ran it (<b>engine</b>, kept with the move of 32 to
+    /// the chooser). Reads the last tick's positions.
+    /// </summary>
+    static bool PassesHoldPost(World world, int slot, CharacterCold cold, int foe, in CombatSlot state)
+    {
+        if (!Orders.Holding(cold)) return true;
+
+        var prev = world.Characters.Previous;
+        bool crawls = world.Characters.Cold(foe)?.Medical?.Crawling == true || state.AttackTech >= 0;
+        var post = Orders.HoldPointOf(cold, prev[slot].Position);
+        return Orders.HoldPost(prev[slot].Position, post, prev[foe].Position, prev[foe].Velocity, prev[foe].Yaw, crawls, true);
     }
 
     /// <summary>

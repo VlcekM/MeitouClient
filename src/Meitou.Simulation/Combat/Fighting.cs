@@ -511,8 +511,8 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
 /// worlds) gets the engine's answer here: at the alert and again every <see cref="CheckEveryTicks"/> ticks, awake, armed with a
 /// <see cref="Fighter"/>, not crawling and not fighting already, it fights its attacker at any distance (<b>engine choice</b>). Nobody else joins
 /// here: squad mates and allies come by their own protect goals in the chooser (AiSystem.Fights.cs), which the alert asks to think
-/// (<see cref="AskProtectors"/>). A player character's own defence is the decision step's 32 Self preservation (<see cref="DecisionSystem"/>; this
-/// system offers the attacker, <see cref="SelfFoe"/>), except a bodyguard's against an attacker within 40 (row 45's <c>!39</c>); followers and
+/// (<see cref="AskProtectors"/>). A player character's own defence is its chooser's 32 Self preservation (<see cref="Ai.AiSystem.SelfDefencePick"/>,
+/// asked by the alert like an NPC's), except a bodyguard's against an attacker within 40 (row 45's <c>!39</c>); followers and
 /// bodyguards fight their target's attacker within 40 of it (rows 31 / 45 / 289's <c>!16</c>, <see cref="Guards"/>). Passive keeps a character from
 /// helping others, not from defending itself. The orders go into the world's deferred list for the next tick (<see cref="World.Defer"/>) and are
 /// marked <see cref="AttackOrder.Defensive"/>. A player character's help for others (squad mates, with <see cref="SquadAi.Help"/> allied factions) is
@@ -566,8 +566,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     readonly List<(int Foe, List<CharacterId> Joiners)> _byFoe = [];
 
     /// <summary>
-    /// This tick's attacker per attacked player character (target slot, attacker slot; <see cref="OfferSelf"/>), for the decision step's
-    /// Self preservation.
+    /// This tick's attacker per attacked player character (target slot, attacker slot; <see cref="OfferSelf"/>): its own defence is its chooser's
+    /// Self preservation, so the join pass leaves it out of every other fight of the pass (<see cref="SelfFoe"/> reads it).
     /// </summary>
     readonly Dictionary<int, int> _selfFoes = [];
     /// <summary>
@@ -581,13 +581,10 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     public PopulationData? Towns { get; set; }
 
     /// <summary>
-    /// Registers the two goals the player characters fight by: 15 Protect allies and 32 Self preservation.
+    /// Registers the goal source the player characters join fights by: 15 Protect allies (32 Self preservation is the chooser's own goal,
+    /// <see cref="Ai.AiSystem.SelfPreservationGoal"/>).
     /// </summary>
-    public void RegisterSources(DecisionSystem decisions)
-    {
-        decisions.Register(new JoinFight(this));
-        decisions.Register(new SelfPreservation(this));
-    }
+    public void RegisterSources(DecisionSystem decisions) => decisions.Register(new JoinFight(this));
 
     #region Protect allies
 
@@ -813,72 +810,6 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
         }
 
         _selfFoes.Add(t, a);
-    }
-
-    /// <summary>
-    /// 32 Self preservation for a player character (priority 3, weight 1; desire <c>FUN_140599d20</c>: 1 with the attacker within
-    /// <see cref="ImmediateReach"/>, else 0.7 within <see cref="SelfDefenceReach"/>): it fights its attacker (<see cref="SelfFoe"/>) as row 13, a
-    /// defence. It runs while a defence (row 13) is its fight.
-    /// </summary>
-    sealed class SelfPreservation(RetaliationSystem owner) : IDecisionSource
-    {
-        /// <summary>
-        /// The source's name in the decision log.
-        /// </summary>
-        public string Name => "32 Self preservation";
-
-        /// <summary>
-        /// A goal: it runs in the goals step.
-        /// </summary>
-        public DecisionStep Step => DecisionStep.Goals;
-
-        /// <summary>
-        /// Goal 32.
-        /// </summary>
-        public int Key => 32;
-
-        /// <summary>
-        /// Runs while its defence (row 13) is the character's fight; else for one that can fight, is free and awake, and has this tick's attacker.
-        /// </summary>
-        public DecisionCheck CanRun(World world, int slot)
-        {
-            var table = world.Characters;
-            var cold = table.Cold(slot)!;
-            var task = (CharacterTask)table.Next[slot].Task;
-            if (task == CharacterTask.Attack && cold.Running is { Row: Data.Gameplay.Ai.TaskType.AttackAttackersOf } run && run.Runs(task))
-                return DecisionCheck.Runs;
-            if (cold is not { Fighter.CanAttack: true, Fleeing: false, IsImprisoned: false, Medical.Incapacitated: false, CarriedBy.IsNone: true })
-                return DecisionCheck.No("cannot fight");
-
-            return owner.SelfFoe(world, slot) >= 0 ? DecisionCheck.Run : DecisionCheck.No("no attacker in range");
-        }
-
-        /// <summary>
-        /// 1 with the attacker within <see cref="ImmediateReach"/>, else 0.7 (also while its fight goes on).
-        /// </summary>
-        public float Desire(World world, int slot)
-        {
-            int a = owner.SelfFoe(world, slot);
-
-            // running: its fight goes on
-            if (a < 0) return 0.7f;
-
-            var d = world.Characters.Next[a].Position - world.Characters.Next[slot].Position;
-            return d.X * d.X + d.Z * d.Z <= ImmediateReach * ImmediateReach ? 1 : 0.7f;
-        }
-
-        /// <summary>
-        /// Gives a defensive attack order on this tick's attacker for the next tick.
-        /// </summary>
-        public void Start(World world, int slot)
-        {
-            var table = world.Characters;
-            int a = owner.SelfFoe(world, slot);
-            world.Defer(new AttackOrder([table.IdOf(slot)], table.IdOf(a))
-            {
-                Tick = world.Tick + 1, Defensive = true, Source = TaskSource.Goal, Cause = "protecting an ally under attack",
-            });
-        }
     }
 
     #endregion
@@ -1149,8 +1080,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     /// <summary>
     /// Whether the attacked character itself answers here: an NPC without a mind at any distance (<b>engine choice</b>: the minimal answer of a
     /// character no chooser runs); Passive does not stop it. An NPC with a mind defends itself by its Self preservation in the AI's chooser
-    /// (<see cref="Ai.AiSystem.SelfDefencePick"/>). A player character's own defence is the decision step's Self preservation (<see cref="SelfFoe"/>,
-    /// docs/game/ai-tasks.md "Precedence": its orders outrank it, it outranks the jobs), but a bodyguard following (row 45 running) answers here as a
+    /// (<see cref="Ai.AiSystem.SelfDefencePick"/>). A player character's own defence is its chooser's Self preservation too (docs/game/ai-tasks.md
+    /// "Precedence": its orders outrank it, it outranks the jobs), but a bodyguard following (row 45 running) answers here as a
     /// step of its row against an attacker within <see cref="ImmediateReach"/> (45 needs <c>!39</c>, its own <c>+0x2b0</c>; farther ones are Self
     /// preservation's, which a Bodyguard order outranks and a Bodyguard job does not). An NPC its order holds (<see cref="DecisionSystem.Ordered"/>)
     /// answers as a player character does: its order outranks the answer, but for the bodyguard's step.

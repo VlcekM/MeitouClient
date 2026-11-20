@@ -1487,6 +1487,15 @@ public sealed class CharacterCold
     public CharacterTask OrderRoutine { get; internal set; }
 
     /// <summary>
+    /// The receiver's second list (<c>+0x70</c>, count <c>+0x78</c>; docs/game/ai-tasks.md "Precedence" source 3): goals the chooser scores after its
+    /// committed stop and before the urgent job pass (<see cref="Ladder"/>). The original's queue loader <c>FUN_1405092d0</c> fills it from a saved
+    /// order queue, its permanent givers with rows of no job kind; entries are never popped by completion (a done one is skipped) and leave only by
+    /// the clears (<c>FUN_1405074a0</c>, <c>FUN_140507530</c>) or a type removal (<c>FUN_140507090</c>). Empty in Meitou until a giver fills it.
+    /// Serial phases write it, the think reads it; hashed while not empty; not saved (the original saves the order queue, not this list).
+    /// </summary>
+    public List<Data.Gameplay.Ai.AiGoal> SecondList { get; } = [];
+
+    /// <summary>
     /// The queued orders a load read (<see cref="Saving.OrderSave"/>), until the decision step makes them the <see cref="OrderQueue"/> once the world
     /// they name is there; null: none. Not hashed.
     /// </summary>
@@ -1897,6 +1906,23 @@ public sealed class CharacterTable
     }
 
     /// <summary>
+    /// The second list (<see cref="CharacterCold.SecondList"/>): its count, then each goal's type, target, hours and weight in list order.
+    /// </summary>
+    static void HashSecondList(ref StateHasher hasher, List<Data.Gameplay.Ai.AiGoal> list)
+    {
+        hasher.Add(0x32644C73);   // "2dLs"
+        hasher.Add(list.Count);
+        foreach (var g in list)
+        {
+            hasher.Add((int)g.Task.Type);
+            hasher.Add((int)g.Task.Target);
+            hasher.Add(g.Start);
+            hasher.Add(g.End);
+            hasher.Add(g.Weight);
+        }
+    }
+
+    /// <summary>
     /// The fight and steering part of <see cref="HashColdFields"/>: in combat, the chase run, the steer or path chase, the failed targets, the
     /// steer and agent speeds (each only while set).
     /// </summary>
@@ -2058,6 +2084,7 @@ public sealed class CharacterTable
         if (k.Replan) hasher.Add(0x52706C6E);
         if (k.OrderWins) hasher.Add(0x4F57696E);
         if (k.OrderRoutine != CharacterTask.Idle) hasher.Add(0x4F527400 | (int)k.OrderRoutine);
+        if (k.SecondList.Count > 0) HashSecondList(ref hasher, k.SecondList);
 
         // a wake owed while carried; the rest is told from the medical state
         if ((k.BodyEvents & Combat.BodyEvents.Woke) != 0) hasher.Add(0x576F6B65);

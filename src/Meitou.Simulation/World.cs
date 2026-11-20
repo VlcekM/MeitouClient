@@ -262,6 +262,7 @@ public sealed partial class World : IDisposable
         foreach (var owner in this._systems.OfType<IDecisionOwner>())
             Decisions.RegisterFrom(owner, SimulationExtensions.FactoryOf((ITickSystem)owner)?.Owner);
         for (int k = 0; k < this._systems.Count; k++) if (this._systems[k] is Ai.AiSystem ai) ai.BindGoals(this._systems);
+        for (int k = 0; k < this._systems.Count; k++) if (this._systems[k] is Ai.AiSystem ai) Decisions.Bind(ai.Settings.ThinkEveryTicks);
         for (int k = 0; k < this._systems.Count; k++) if (DecidesAfter(this._systems[k])) _decideAfter = k;
 
         Characters = characters ?? new CharacterTable();
@@ -303,9 +304,9 @@ public sealed partial class World : IDisposable
     public TaskHandlers Tasks { get; } = new();
 
     /// <summary>
-    /// The decision step for the player's characters (docs/simulation.md "Decision step"): run in the slow world right after the last of retaliation,
-    /// aggro and flight (after every system when the world has none of them), and for orders between ticks. Its sources are registered by the systems
-    /// that own them (<see cref="IDecisionOwner"/>; open to later additions).
+    /// The chooser's sources (docs/simulation.md "Decision step"): their look runs at the end of the schedule step, the starts of the think's picks in
+    /// the slow world right after the last of retaliation, aggro and flight (after every system when the world has none of them), and orders alone
+    /// between ticks. Its sources are registered by the systems that own them (<see cref="IDecisionOwner"/>; open to later additions).
     /// </summary>
     public DecisionSystem Decisions { get; } = new();
     /// <summary>
@@ -768,6 +769,10 @@ public sealed partial class World : IDisposable
     /// Each partition's Stopwatch ticks (see <see cref="_timedBody"/>).
     /// </summary>
     long[] _jobTicks = [];
+    /// <summary>
+    /// The body of <see cref="ThinkWithoutMind"/> over one partition, made once.
+    /// </summary>
+    Action<int>? _thinkWithoutMind;
 
     /// <summary>
     /// One system's parallel phase over the partitions; profiled, it also sums its jobs' time and notes the slowest (<see cref="TickProfile.Jobs"/>).
@@ -895,6 +900,11 @@ public sealed partial class World : IDisposable
 
             prof?.Lap(TickProfile.Schedule, k);
         }
+
+        // The chooser's serial look, after the systems' (the minds they give), before the think reads it.
+        Decisions.Look(this);
+        prof?.Part("decision look");
+        prof?.Lap(TickProfile.Schedule);
     }
 
     /// <summary>
@@ -907,6 +917,7 @@ public sealed partial class World : IDisposable
 
         // A system that leaves a phase at its empty default is skipped there: a barrier costs more than the nothing it would wait for.
         foreach (var p in _phases) if (p.Think is { } think) RunParallel(think, prof, TickProfile.Think, p.Index);
+        ThinkWithoutMind(prof);
         foreach (var p in _phases) if (p.Move is { } move) RunParallel(move, prof, TickProfile.Move, p.Index);
         foreach (var b in _buffers) b.Reset();
 
@@ -922,6 +933,19 @@ public sealed partial class World : IDisposable
 
             RunParallel(act, prof, TickProfile.Act, p.Index);
         }
+    }
+
+    /// <summary>
+    /// The chooser's ladder for the characters the look made a row for that no think ran (no mind, or no AI; parallel, after the systems' thinks,
+    /// <see cref="DecisionSystem.ThinkWithoutMind"/>); skipped when the look made no row.
+    /// </summary>
+    void ThinkWithoutMind(TickProfile? prof)
+    {
+        if (!Decisions.AnyRow) return;
+
+        _thinkWithoutMind ??= i => Decisions.ThinkWithoutMind(this, _partitions[i]);
+        _pool.ForEach(_partitions.Length, _thinkWithoutMind);
+        prof?.Part("decision ladder without a mind");
     }
 
     /// <summary>

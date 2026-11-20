@@ -1097,10 +1097,19 @@ public sealed class AiMind
     public bool Engine { get; init; }
 
     /// <summary>
-    /// A player character's mind (a member of an autonomous squad, <see cref="SquadAutonomy"/>): it weighs its squad's package goals only; Self
-    /// preservation and its race's goals stay the decision step's (<see cref="DecisionSystem"/>).
+    /// A player-faction character's mind: a member of an autonomous squad (<see cref="SquadAutonomy"/>), which weighs its squad's package goals, or
+    /// one of <see cref="PlayerSide"/>. Its own lists' goals are weighed only once their type is on the chooser's rungs
+    /// (<see cref="Ladder.OnRungs"/>); the rest stay the sources' (<see cref="DecisionSystem"/>).
     /// </summary>
     public bool Player { get; init; }
+
+    /// <summary>
+    /// The mind <c>Character::setupAI</c> (<c>FUN_140621b70</c>, <b>Verified</b>) gives a player-faction character outside an autonomous squad's package
+    /// (with <see cref="Player"/>): no role lists (the player's platoon runs no package), its own lists in <see cref="RaceGoals"/>, and the one chooser
+    /// (<see cref="Ladder"/>) with the sources' rungs for a player character. Made each tick for any member that lacks it (<c>AiSystem</c>'s schedule
+    /// step); not saved, as the original builds it at every load.
+    /// </summary>
+    public bool PlayerSide { get; init; }
 
     /// <summary>
     /// A player character's mind wants an urgent (priority 3) package goal, as its last think found: the decision step's source
@@ -1567,6 +1576,7 @@ public sealed class AiMind
     internal void Hash(ref StateHasher hasher)
     {
         if (Engine) hasher.Add(0x456E6769);
+        if (PlayerSide) hasher.Add(0x506C5364);   // "PlSd"
         if (Player)
         {
             hasher.Add(0x506C6179);

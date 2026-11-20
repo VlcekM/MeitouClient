@@ -95,7 +95,7 @@ public sealed partial class AiSystem
     /// One character's view for the <see cref="TaskPlanner"/> (one per worker thread, bound per think): its states (docs/simulation.md "Planner"
     /// lists the stand-ins), the targets of the goals Meitou acts out, and the desires of the rows on the way.
     /// </summary>
-    sealed class PlanContext : IPlanWorld
+    internal sealed class PlanContext : IPlanWorld
     {
         /// <summary>
         /// The worker thread's context (<see cref="Local"/>).
@@ -300,6 +300,36 @@ public sealed partial class AiSystem
         /// </summary>
         bool GivesNothing(TaskDataRow row) => _scratch.Count == 1 && _scratch[0].Type == row.Type && !row.Is(TaskDataFlags.KeepsJob)
             && !row.Is(TaskDataFlags.Acts) && row.Effect is null;
+
+        /// <summary>
+        /// The scorer's nothing-to-do drop of every scored candidate (<c>FUN_14050df10</c>, <b>Verified</b>: second list, requests, roles and own
+        /// lists alike): one with a score above 0 whose row has no <c>+0x14</c>, no act and no effect is dropped while its whole list B holds
+        /// (<c>FUN_14060f940</c>). Of the goals with a behaviour this is 14 Idleness (<c>!162 !157</c>) and 45 Bodyguard (<c>!16 !39</c>: kept, as a
+        /// fight, only while its followed character or itself has a threat within 40; <see cref="FollowedThreatened"/> answers 16). An engine
+        /// goal's drop is its plan's (<see cref="GivesNothing"/>: its list B states are its system's).
+        /// </summary>
+        public bool GivesNothingNow(AiGoal goal)
+        {
+            var type = goal.Task.Type;
+            if (TaskDataTable.Of(type) is not { } row || row.Is(TaskDataFlags.KeepsJob) || row.Is(TaskDataFlags.Acts) || row.Effect is not null)
+                return false;
+            if (_system._duties?.Has(type) == true) return false;
+
+            foreach (var need in row.Needs)
+            {
+                bool holds = need.State == StateType.IsAggressionTowards ? FollowedThreatened() == need.Holds : Holds(need, default);
+                if (!holds) return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// State 16 for the scorer's drop (<see cref="GivesNothingNow"/>): the followed character (<see cref="Followed"/>) has a threat within 40 (its
+        /// <c>+0x2b0</c>, <c>FUN_14059de10</c>, <see cref="CharacterFacts.ImmediateThreat"/>).
+        /// </summary>
+        bool FollowedThreatened() =>
+            Followed() is >= 0 and var at && _system._combat is { } combat && CharacterFacts.ImmediateThreat(combat, _world, at);
 
         /// <summary>
         /// Whether goal <paramref name="type"/> is its own plan, acted out by an engine system (the assault, the combat goals, Medic, the leader

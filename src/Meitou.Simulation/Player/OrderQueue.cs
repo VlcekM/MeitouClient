@@ -325,9 +325,16 @@ public static class PlayerOrders
             else
                 cold.SavedOrders = null;
         }
-        if (!queued) q.Clear();
+        if (!queued)
+        {
+            q.Clear();
+            cold.SecondList.Clear();   // the order giver empties the second list with the queue
+        }
         else
+        {
             Settle(world, slot);
+        }
+
         q.Add(order);
         DecisionSystem.Request(cold);   // addOrder replans at once: the order's own start below, the fall-through at the decision step
         bool starts = q.Count == 1 && (DecisionSystem.Decides(cold) || DecisionSystem.TakesOrders(cold));
@@ -401,6 +408,7 @@ public static class PlayerOrders
     internal static void Wipe(CharacterCold cold)
     {
         cold.OrderQueue.Clear();
+        cold.SecondList.Clear();
         cold.SavedOrders = null;
         if (cold.Ai is not { } mind) return;
 

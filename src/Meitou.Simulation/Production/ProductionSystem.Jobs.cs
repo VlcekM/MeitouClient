@@ -23,8 +23,8 @@ namespace Meitou.Simulation.Production;
 public sealed partial class ProductionSystem
 {
     /// <summary>
-    /// How often (ticks) the decision step asks again for a player character idle or on a job's task, staggered by slot
-    /// (<see cref="DecisionSystem.ReAsked"/>; engine choice: the original re-plans when its task ends or its commitment runs out).
+    /// A job's look-again period (ticks) that callers wait out; the chooser itself runs on the think's turn (<see cref="DecisionSystem.Look"/>,
+    /// <c>AiSettings.ThinkEveryTicks</c>) or when asked.
     /// </summary>
     public const int JobCheckTicks = 10;
 
@@ -315,7 +315,7 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// The implicit job of a character whose list has none to run (docs/game/ai-tasks.md "Perma-jobs": the original's lowest keys, in this order),
-    /// with the jobs switch on, not sneaking and not a slave; Sleep and Sit not while it holds position. <see cref="SquadAi.Ditch"/>: carried items a
+    /// with the jobs switch on, not sneaking and not a slave; Sleep and Sit not while it holds position, carries someone or is selected. <see cref="SquadAi.Ditch"/>: carried items a
     /// storage takes go there (242; only with no queued orders). <see cref="SquadAi.Sleep"/>: an injured character lies in the bed the bed search
     /// finds (153, whose target finder it is, <b>Verified</b>; <see cref="Locks.FixtureRegistry.FindBed"/>) until healed (then 257 gets it up).
     /// <see cref="SquadAi.Sit"/>: a free chair (275). The one it is on is kept while it holds (a bed within
@@ -349,8 +349,9 @@ public sealed partial class ProductionSystem
                 return (TaskType.DitchAllResources, store);
         }
 
-        // Sleep and Sit not while holding position (FUN_1402b2b90) or carrying someone (+0x348; FUN_14050e5b0).
-        if (Orders.Holding(cold) || !cold.Carrying.IsNone) return null;
+        // Sleep and Sit not while holding position (FUN_1402b2b90), carrying someone (+0x348) or selected by the player (FUN_1407f4d20, the
+        // interface's selection set; FUN_14050e5b0, Verified).
+        if (Orders.Holding(cold) || !cold.Carrying.IsNone || world.Player.Selection.Contains(table.IdOf(slot))) return null;
         if ((options & SquadAi.Sleep) != 0 && WantsBed(world, slot, cold) && Beds is not null)
         {
             if (on == TaskType.GoHomeAndGoToBed && cold.OperateSite is { } bed && world.Fixtures.Find(bed) is { } kept

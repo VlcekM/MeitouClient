@@ -2983,6 +2983,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         for (int i = 0; i < _size; i++) HashSlot(ref hasher, _slots[i]);
 
         hasher.Add(Started);
+        _offers.Hash(ref hasher);
     }
 
     /// <summary>

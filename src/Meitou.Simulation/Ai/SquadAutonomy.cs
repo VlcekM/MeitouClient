@@ -126,7 +126,7 @@ public sealed class SquadAutonomy(PopulationData data)
         var table = world.Characters;
         foreach (var id in squad.Members)
         {
-            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { IsPlayer: true, Ai.Player: true } cold) continue;
+            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { IsPlayer: true, Ai: { Player: true, PlayerSide: false } } cold) continue;
             if (squad is { Autonomous: true, Ai: not null } && ReferenceEquals(cold.Ai.Squad, squad)) continue;
 
             Release(world, slot, cold);
@@ -147,10 +147,11 @@ public sealed class SquadAutonomy(PopulationData data)
     }
 
     /// <summary>
-    /// Whether the mind is its character's own squad's and that squad is autonomous (a character moved to another squad keeps its mind until the
-    /// next package step).
+    /// Whether the mind is its character's own squad's package mind and that squad is autonomous (a character moved to another squad keeps its mind
+    /// until the next package step; a player-faction mind, <see cref="AiMind.PlayerSide"/>, is no package mind).
     /// </summary>
-    static bool Active(CharacterCold cold, AiMind mind) => mind.Player && mind.Squad.Autonomous && cold.SquadId == mind.Squad.Id;
+    static bool Active(CharacterCold cold, AiMind mind) =>
+        mind is { Player: true, PlayerSide: false, Squad.Autonomous: true } && cold.SquadId == mind.Squad.Id;
 
     /// <summary>
     /// Whether the AI may hold a player character (<see cref="AiSystem.Holds"/> goes on to its own tests): its squad is autonomous and no plan
