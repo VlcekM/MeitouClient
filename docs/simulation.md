@@ -1419,7 +1419,7 @@ full mind of its own weighs each one its role, slave or race list holds in the h
 test or cap of their own. The finders run in a serial look on the member's slot turn every 15 ticks (every tick for a carrier no goal holds, which chooses at once; again after an
 act-out ends) and keep their picks by slot (hashed while any); the think reads them. An act-out walks or lifts with `TaskSource.Goal` tasks on the goal's row, steps only while
 its goal holds the member (`DutyGoals.Runs`: a fight, an order, an order on its body or a better goal ends the goal) and ends with `DutyGoals.Done` at the original's end.
-An end never drops a carried body (the original's goal ends do not unlink it) but an order's, which lets it go where the carrier stands (engine choice). A carrier thinks with
+An end never drops a carried body, an order's neither (the carry link persists whatever happens to the task, [carry-loot](game/carry-loot.md#lift-and-put-down-timing)). A carrier thinks with
 all its goals as anyone ([holding](#engine-goals)), so whoever lifted a body (a lift goal, an arrest, a kidnap, a rescue, a save) takes its carried-body goals from its own lists.
 Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game/carry-loot.md#32-goals-and-their-target-finders).
 - **Lifts 273 / 223 / 138** (plan `[67, 68, goal]`; the goal row has an empty list A, so the plan ends with the lift and the carried body's goals take the body on). Row 68's and

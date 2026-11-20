@@ -1159,9 +1159,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// A town goal ended (serial, <see cref="IDutyGoal.End"/>): its errand goes. An order lets a carried body go where the carrier stands, as at a
-    /// walk's end (engine choice, as the errands' release did); any other end leaves the body on the shoulder (the end of a goal does not unlink it,
-    /// and the carrier's next choice takes it on). A ransacker's door bash stops.
+    /// A town goal ended (serial, <see cref="IDutyGoal.End"/>): its errand goes. Every end, an order's too, leaves a carried body on the shoulder:
+    /// the carry link persists whatever happens to the task, and only a put-down task, an unlink or a knock-out release it (docs/game/carry-loot.md
+    /// "Lift and put-down timing", <b>Verified</b>). A ransacker's door bash stops.
     /// </summary>
     internal void EndGoal(World world, int slot, CharacterId id, DutyEnd why)
     {
@@ -1172,7 +1172,6 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         _duties.RemoveAt(k);
         if (why == DutyEnd.Gone || world.Characters.Cold(slot) is not { } cold) return;
 
-        if (why == DutyEnd.Order && !d.Body.IsNone && cold.Carrying == d.Body) carry.LetGo(world, slot);
         if (d.Kind == TownDutyKind.Ransack && cold.BashErrand && !cold.BashOrdered && cold.DoorWay is null)
             (cold.Bashing, cold.BashErrand, cold.BashTime) = (null, false, 0);
     }
