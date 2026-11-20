@@ -44,41 +44,6 @@ public sealed class Caging
 }
 
 /// <summary>
-/// A bounty hunter whose event 44 line answered a player character's bounty (economy.md 11.8) and set it on the target; it leaves the target alone
-/// for <see cref="Rest"/> more game seconds.
-/// </summary>
-public sealed class Hunt
-{
-    /// <summary>
-    /// The bounty hunter.
-    /// </summary>
-    public required CharacterId Hunter { get; init; }
-    /// <summary>
-    /// The player character hunted.
-    /// </summary>
-    public required CharacterId Target { get; init; }
-    /// <summary>
-    /// Game seconds since the hunter recognised the target.
-    /// </summary>
-    public float Time { get; set; }
-    /// <summary>
-    /// Game seconds the hunter still leaves this target alone.
-    /// </summary>
-    public float Rest { get; set; }
-
-    /// <summary>
-    /// Adds the hunter, target, time and rest to the world hash.
-    /// </summary>
-    internal void Hash(ref StateHasher h)
-    {
-        h.Add(Hunter);
-        h.Add(Target);
-        h.Add(Time);
-        h.Add(Rest);
-    }
-}
-
-/// <summary>
 /// The arrest system's bail, the player's put-in-cage order with its bounty claim, and the bounty hunters.
 /// </summary>
 public sealed partial class ArrestSystem : IOrderOwner
@@ -97,19 +62,11 @@ public sealed partial class ArrestSystem : IOrderOwner
     /// The running put-in-cage walks, one per carrier.
     /// </summary>
     readonly List<Caging> _cagings = [];
-    /// <summary>
-    /// The hunts, kept until their rest runs out.
-    /// </summary>
-    readonly List<Hunt> _hunts = [];
 
     /// <summary>
     /// The running put-in-cage walks.
     /// </summary>
     public IReadOnlyList<Caging> Cagings => _cagings;
-    /// <summary>
-    /// The hunts whose hunter still leaves its target alone.
-    /// </summary>
-    public IReadOnlyList<Hunt> Hunts => _hunts;
 
     /// <summary>
     /// Takes the player's bail and put-in-cage orders (the selection's carriers when the order names none).
@@ -570,10 +527,9 @@ public sealed partial class ArrestSystem : IOrderOwner
         Crimes.Factions.Hunts(looker.Faction) && HuntBounty(target, looker.Faction) > HuntLimit;
 
     /// <summary>
-    /// A hunter free to start a hunt on <paramref name="target"/>: awake, not fighting or carrying, in no arrest or hunt, and not resting from this
-    /// target.
+    /// A hunter free to act on a sighting: awake, not fighting or carrying, in no arrest, with no order.
     /// </summary>
-    bool FreeHunter(World world, int slot, CharacterId target)
+    bool FreeHunter(World world, int slot)
     {
         var table = world.Characters;
         if (!table.Next[slot].Alive || table.Next[slot].Task is (byte)CharacterTask.Attack or (byte)CharacterTask.Treat) return false;
@@ -582,17 +538,15 @@ public sealed partial class ArrestSystem : IOrderOwner
         {
             return false;
         }
-        var id = table.IdOf(slot);
-        if (Busy(id)) return false;
-        foreach (var h in _hunts) if (h.Hunter == id && h.Target == target) return false;
-        return true;
+
+        return !Busy(table.IdOf(slot));
     }
 
     /// <summary>
     /// The hunter recognised the target's bounty: it fires event 44 BOUNTY_SPOTTED at it (<c>FUN_140856f00</c>), whose bounty hunters' lines answer a
-    /// bounty above 4000 with <c>DA_ATTACK_CHASE_FOREVER</c> (6, order 101; economy.md 11.8). With no line said nothing follows, and the hunter may
-    /// recognise the target again at its next look (the event is all the original's spotting does, <c>FUN_140685660</c>, <b>Verified</b>). After a
-    /// line it leaves the target alone for <see cref="ArrestSettings.HuntRestSeconds"/> (engine).
+    /// bounty above 4000 with <c>DA_ATTACK_CHASE_FOREVER</c> (6, order 101; economy.md 11.8). With no line said nothing follows (the event is all the
+    /// original's spotting does, <c>FUN_140685660</c>, <b>Verified</b>). There is no rest after a hunt: the hunter fires again at every spotting pass
+    /// it is not fighting, and its lines' <c>repetition limit</c> (2 or 6 game hours in the base data, global per line) keeps it from repeating.
     /// </summary>
     void BeginHunt(World world, int hunter, int target)
     {
@@ -603,22 +557,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         if (!Talks || !Talk!.FireEvent(world, hunterId, targetId, BountySpotted)) return;
 
         Note(world, ArrestEventKind.Spotted, hunterId, targetId, hc.Faction, BountySpotted);
-        _hunts.Add(new Hunt { Hunter = hunterId, Target = targetId, Rest = Settings.HuntRestSeconds });
         Note(world, ArrestEventKind.Hunt, hunterId, targetId, hc.Faction, HuntBounty(table.Cold(target)!, hc.Faction));
-    }
-
-    /// <summary>
-    /// One tick of a hunt's rest; false when it ran out (the hunter may recognise the target again).
-    /// </summary>
-    bool StepHunt(World world, Hunt h)
-    {
-        float dt = world.TickSeconds;
-        h.Time += dt;
-        if ((h.Rest -= dt) > 0) return true;
-
-        int faction = world.Characters.TryResolveNext(h.Hunter, out int g) ? world.Characters.Cold(g)!.Faction : -1;
-        Note(world, ArrestEventKind.HuntOver, h.Hunter, h.Target, faction, 0);
-        return false;
     }
 
     /// <summary>
@@ -643,22 +582,15 @@ public sealed partial class ArrestSystem : IOrderOwner
     }
 
     /// <summary>
-    /// Adds the cagings and hunts to the world hash, each only while there are any.
+    /// Adds the cagings to the world hash, only while there are any.
     /// </summary>
     void HashBounties(ref StateHasher hasher)
     {
-        if (_cagings.Count > 0)
-        {
-            hasher.Add(0x43616765);
-            hasher.Add(_cagings.Count);
-            foreach (var k in _cagings) k.Hash(ref hasher);
-        }
-        if (_hunts.Count > 0)
-        {
-            hasher.Add(0x48756E74);
-            hasher.Add(_hunts.Count);
-            foreach (var h in _hunts) h.Hash(ref hasher);
-        }
+        if (_cagings.Count == 0) return;
+
+        hasher.Add(0x43616765);
+        hasher.Add(_cagings.Count);
+        foreach (var k in _cagings) k.Hash(ref hasher);
     }
 
     #endregion

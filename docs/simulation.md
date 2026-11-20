@@ -1278,8 +1278,10 @@ which an order's hold refuses. The chain's rows and states are in [AI tasks](gam
 - **Spotting talks** (`ArrestSystem.Talk`, the dialogue system, while its event lines are on): the looker fires event 44 at the target
   (`DialogueSystem.FireEvent`, a bubble now) and the data decides ([economy 11.7](game/economy.md#117-arrest)): DA 29 arrests (`ArrestFromDialogue`,
   below; an animal target, or a guard outside his town, is attacked instead: `ArrestSystem.CapturesInTown`), "Small bounty" sends the leader to talk (DA 2) and its interrupt opens the fine window (DA 8 + 49 pay and clear; the rest DA 29), others
-  say nothing more. The target is then left alone for 60 game s (`SpotRetrySeconds`, engine), longer while the guard still talks or walks up to talk (order 102 at
-  his queue's front); paying ends it.
+  say nothing more. There is no retry timer: the original's spotting (`FUN_140856f00`, **Verified**) keeps no time of its own and fires at every call
+  whose meter reads full, so a recognised target is fired at on every pass of a looker that is not fighting, and the lines' `chance temporary` and
+  `repetition limit` decide what is said (the base event-44 law roots: limit 1 or 2, 2 or 6 game hours; Shek's 6, 20 minutes; **Verified**, gamedata dump). The target is left alone only while the guard still talks or walks up to talk (order 102 at
+  his queue's front; engine); paying ends it.
 - **Arrest orders** (DA 29, `ArrestSystem.OrderArrest`): in his own town (the town his resident squad belongs to, `Ai.AiSystem.TownAt` by its radius; engine stand-in without
   town data: within 2 x the squad's home radius of its centre) a non-animal target gets the guard 240 (his queue cleared), then 112 queued behind it; otherwise 4 Attacking
   (cleared; refused with "My arm is broken!" when no arm works), his squad tagging the target TEMP_ENEMY first, so his mates join through their own attack-on-sight
@@ -1350,9 +1352,9 @@ which an order's hold refuses. The chain's rows and states are in [AI tasks](gam
   `CrimeFactions.BookingOf`); above 4000 and once recognised (the same meter) the nearest free one fires event 44 BOUNTY_SPOTTED at it
   (`FUN_140856f00`), and the data's line answers with DA 6 `ATTACK_CHASE_FOREVER`, order 101 DEFEAT_SQUAD ([economy 11.8](game/economy.md#118-bounty-spotting-and-bounty-hunters));
   with no line said (or the event lines off) nothing follows, as in the original, whose spotting only fires the event (`FUN_140856f00` ->
-  `FUN_140685660`, **Verified**). There is no hunt goal and no cage (11.8); after a line the hunter leaves that target alone for 600 game seconds
-  (`HuntRestSeconds`, engine). Hunts and cagings are hashed only while any exist; restarted after
-  a load ([Saves](#saves)).
+  `FUN_140685660`, **Verified**). There is no hunt goal and no cage (11.8), and no rest after a line: the hunter fires
+  again whenever it spots the target out of a fight, and the line's `repetition limit` (2 or 6 game hours in the base bounty hunter roots, global per
+  line) keeps it from repeating (`FUN_140856f00`, **Verified**). Cagings are hashed only while any exist; restarted after a load ([Saves](#saves)).
 - **Goal 204 Arrest bounties** (`Crime/ArrestGoals`, an [engine goal](#engine-goals); facts: [economy 11.7](game/economy.md#117-arrest)): a serial look
   every 15 ticks keeps each member's finder pick (`FUN_14099bfc0`) and its free-cage and town answers; the chooser weighs 204 like any goal of the package
   and plans it (`[4 | 262, 181, 68, 203, 204]`, the fights providing 7). The act-out is the plan's front work on its target, each with the goal's
@@ -2547,9 +2549,9 @@ between repeated loads. QuickSaveTests checks carried fields and repeatable load
 **Crime and jail** (keys in [save.md](formats/save.md#locks-cages-and-sentences)). Saved: bounty ledger (`bountyexp` written with a minute and a tick of slack over the minute-floored
 save clock, so an entry does not lose an hour per save and load; `BountySave`), held state and sentence, the escaped flag, the recently-wanted
 and recognition timers (player platoon characters, written only while set), the locks of interior cages and containers (an imprisoned character stays locked in), and the homes a
-lock-up round locked (without the flag a loaded night's locks would never be undone). **Restarted, not saved** (engine choice; the guard, hunter, releaser and warden of each job is a
+lock-up round locked (without the flag a loaded night's locks would never be undone). **Restarted, not saved** (engine choice; the guard, releaser and warden of each job is a
 town NPC the population makes again with a new id, so a saved link would dangle): arrests (a downed target lies where it fell, is spotted again once awake, the saved markers make
-that quick), cagings (the carry link is not saved: give the cage's Put in again), hunts and their rest timers, the gate guards' and wardens'
+that quick), cagings (the carry link is not saved: give the cage's Put in again), the gate guards' and wardens'
 act-outs (chosen again), the unreachable-cage memo (relearned by a failed walk), lock picking (an order), pending crimes
 (seconds long, victim id unsaveable). Spawn bounties are not saved: they are rolled when the population makes an NPC, never for a loaded character.
 

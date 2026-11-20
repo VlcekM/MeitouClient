@@ -107,6 +107,8 @@ public class JailTests
             package.References["dialogs"] = [SyntheticTown.Ref("hunt-d", ArrestSystem.BountySpotted)];
             var dialog = SyntheticTown.Rec("hunt-d", FcsRecordType.Dialogue, "Spotted");
             dialog.Bools["monologue"] = true;
+            // The base "Bounty hunter" root's repetition limit 1: said at most every 2 game hours.
+            dialog.Ints["repetition limit"] = 1;
             dialog.References["lines"] = [SyntheticTown.Ref("hunt-l")];
             var line = SyntheticTown.Rec("hunt-l", FcsRecordType.DialogueLine, "Spotted line");
             line.Strings["text0"] = "Your head is mine!";
@@ -328,7 +330,8 @@ public class JailTests
 
         Assert.Equal(5000, j.Arrest.Log.First(e => e.Kind == ArrestEventKind.Hunt).Amount);
 
-        // The line's DA 6 orders the attack (101), which ends once the target is down; the hunter then rests from it (HuntRestSeconds).
+        // The line's DA 6 orders the attack (101), which ends once the target is down. No rest follows (FUN_140856f00 has no timer): the hunter
+        // fires event 44 again whenever it spots the target, and only the line's repetition limit keeps it from saying it twice.
         j.RunUntil(() => j.Cold(hero).Medical!.Incapacitated, 3000, "the target down");
         j.World.RunTicks(300);
 
@@ -339,9 +342,8 @@ public class JailTests
         Assert.Empty(j.Arrest.Arrests);
         Assert.Empty(j.Arrest.Cagings);
 
-        var hunt = Assert.Single(j.Arrest.Hunts);
+        var hunt = Assert.Single(j.Arrest.Log, e => e.Kind == ArrestEventKind.Hunt);
 
-        Assert.Equal((hunter, hero), (hunt.Hunter, hunt.Target));
-        Assert.InRange(hunt.Rest, 1, new ArrestSettings().HuntRestSeconds);
+        Assert.Equal((hunter, hero), (hunt.Guard, hunt.Target));
     }
 }

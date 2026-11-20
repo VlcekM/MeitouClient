@@ -51,15 +51,6 @@ public sealed record ArrestSettings
     /// </summary>
     public float CageSearchRange { get; init; } = AggroSystem.OutdoorSight;
     /// <summary>
-    /// Game seconds a bounty hunter leaves a target alone after recognising it (engine stand-in for its bounty lines' repeat guard).
-    /// </summary>
-    public float HuntRestSeconds { get; init; } = 600;
-    /// <summary>
-    /// After a guard fires event 44 or 45 at a target, nobody fires again at it for this many game seconds, longer while the guard is still saying or
-    /// walking up to say it.
-    /// </summary>
-    public float SpotRetrySeconds { get; init; } = 60;
-    /// <summary>
     /// Keep a <see cref="ArrestSystem.Log"/> (tests).
     /// </summary>
     public bool RecordLog { get; init; }
@@ -225,13 +216,9 @@ public enum ArrestEventKind
     /// </summary>
     Claimed,
     /// <summary>
-    /// A bounty hunter began a hunt.
+    /// A bounty hunter said its event 44 line at a target (the amount is the target's bounty with the hunter's booking faction).
     /// </summary>
     Hunt,
-    /// <summary>
-    /// A hunt ended.
-    /// </summary>
-    HuntOver,
     /// <summary>
     /// A guard fired event 44 or 45 at the target (the amount is the event number).
     /// </summary>
@@ -392,8 +379,8 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
 
     /// <summary>
     /// The slow-world step: books the crime system's new bookings, steps the spottings; every <see cref="ArrestSettings.SpotEveryTicks"/> the
-    /// disguise, the spotting and the status-town passes; then goal 204's act-outs and look, the arrests, the cagings and the hunters' rests, each
-    /// dropping the finished ones.
+    /// disguise, the spotting and the status-town passes; then goal 204's act-outs and look, the arrests and the cagings, each dropping the finished
+    /// ones.
     /// </summary>
     public void SlowWorld(World world)
     {
@@ -423,11 +410,6 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         {
             if (StepCaging(world, _cagings[k])) k++;
             else _cagings.RemoveAt(k);
-        }
-        for (int k = 0; k < _hunts.Count;)
-        {
-            if (StepHunt(world, _hunts[k])) k++;
-            else _hunts.RemoveAt(k);
         }
     }
 
@@ -621,7 +603,6 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             bool seen = false;
             int best = -1, escapeGuard = -1, hunter = -1;
             float bestD2 = float.MaxValue, escapeD2 = float.MaxValue, hunterD2 = float.MaxValue;
-            var target = table.IdOf(s);
             for (int w = 0; w < table.HighWater; w++)
             {
                 if (w == s || !next[w].Alive) continue;
@@ -646,7 +627,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
                 if (hunts)
                 {
                     seen = true;
-                    if (d2 < hunterD2 && FreeHunter(world, w, target)) (hunter, hunterD2) = (w, d2);
+                    if (d2 < hunterD2 && FreeHunter(world, w)) (hunter, hunterD2) = (w, d2);
                 }
                 if (!spots) continue;
                 seen = true;
@@ -790,8 +771,8 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// <summary>
     /// The guard recognised the target: event <paramref name="ev"/> fired at it (<c>FUN_140856f00</c> / <c>FUN_140859680</c>, economy.md 11.8). What
     /// follows is the data's: the line said as a bubble arrests (DA 29), sends the guard to talk (DA 2 and an interrupt: the fine), or nothing. The
-    /// target is left to it for <see cref="ArrestSettings.SpotRetrySeconds"/> (engine: the original's recognition fires once; the data's own DC 18
-    /// keeps the bounty lines from repeating within 2 hours).
+    /// original has no retry timer (<c>FUN_140856f00</c>, <b>Verified</b>): it fires at every call whose meter reads full, so here at every spotting
+    /// pass the looker is free, and the lines' own <c>chance temporary</c> and <c>repetition limit</c> decide whether anything is said.
     /// </summary>
     void Spotted(World world, int g, int t, int ev)
     {
@@ -803,20 +784,19 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     }
 
     /// <summary>
-    /// Leaves the target to what <paramref name="guard"/>'s event <paramref name="ev"/> started for <see cref="ArrestSettings.SpotRetrySeconds"/>
-    /// (a <see cref="Spotting"/>), unless an arrest already works it.
+    /// Leaves the target to what <paramref name="guard"/>'s event <paramref name="ev"/> started while the guard still says it or walks up to say it
+    /// (a <see cref="Spotting"/>; <b>engine</b>, with no time of its own), unless an arrest already works it.
     /// </summary>
     void HoldSpotting(World world, CharacterId guard, CharacterId target, int ev)
     {
         if (Busy(target)) return;
 
-        long until = world.Tick + (long)MathF.Ceiling(Settings.SpotRetrySeconds / world.TickSeconds);
-        _spottings.Add(new Spotting { Guard = guard, Target = target, Event = ev, Until = until });
+        _spottings.Add(new Spotting { Guard = guard, Target = target, Event = ev, Until = world.Tick + 1 });
     }
 
     /// <summary>
-    /// One tick of a spotting; false when it is over: an arrest took the target, the bounty is paid (DA 49), or the time is up while the guard no
-    /// longer talks.
+    /// One tick of a spotting; false when it is over: an arrest took the target, the bounty is paid (DA 49), or the guard no longer talks or walks
+    /// up to talk.
     /// </summary>
     bool StepSpotting(World world, Spotting p)
     {
