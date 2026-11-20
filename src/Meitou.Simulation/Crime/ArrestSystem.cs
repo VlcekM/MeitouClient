@@ -39,7 +39,7 @@ public sealed record ArrestSettings
     /// </summary>
     public float TownSlack { get; init; } = 2;
     /// <summary>
-    /// Walks to the cage before the carrier gives up and drops the captive.
+    /// Walks to the cage before a player's Put in Cage gives up (the player's order; an NPC's 112 walks as a lost walk).
     /// </summary>
     public int CageWalks { get; init; } = 3;
     /// <summary>
@@ -143,7 +143,7 @@ public sealed class Arrest
     /// </summary>
     public float Time { get; set; }
     /// <summary>
-    /// Failed lifts (5 end the arrest), or walks to the cage (up to <see cref="ArrestSettings.CageWalks"/>).
+    /// Failed lifts (5 end the arrest).
     /// </summary>
     public int Tries { get; set; }
     /// <summary>
@@ -840,6 +840,11 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     #region Arrest orders
 
     /// <summary>
+    /// The town duties, whose cage errands reserve their cages (resolved on first use; null in a world without them).
+    /// </summary>
+    Kidnap.TownDutySystem? _townDuties;
+
+    /// <summary>
     /// The orders of <c>DA_ARREST_TARGET</c> (29, <c>FUN_140680560</c>, <b>Verified</b>), also the engine's arrest where no dialogue says the line:
     /// with <paramref name="capture"/> (<see cref="CapturesInTown"/>) the guard gets 240 Capture Target on the target, his queue cleared, then 112
     /// Find and put in cage queued behind it; otherwise 4 Attacking, his queue cleared, which the order check <c>FUN_1405d1940</c> refuses with no
@@ -1226,9 +1231,10 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
 
     /// <summary>
     /// The cage errand (112 / 108): the guard walks onto the cage's floor (a cage upstairs is reached by the stairs, not stood under:
-    /// <see cref="FixtureRegistry.AtCage"/> tests the height) and locks the captive up there. After <see cref="ArrestSettings.CageWalks"/> walks that
-    /// end short the cage counts as unreachable for his faction and the captive is dropped. A 112 whose body left the shoulder is over (its desire is
-    /// 0 with nothing carried).
+    /// <see cref="FixtureRegistry.AtCage"/> tests the height) and locks the captive up there. A walk that ends short is a lost walk, as the original's
+    /// plan step answers any running plan's idle mover away from its target (<c>FUN_14050d970</c>, <b>Verified</b>): the cage is ignored for 20 s and
+    /// the finder picks another, none ending the order with the body on the shoulder. A 112 whose body left the shoulder is over (its desire is 0
+    /// with nothing carried).
     /// </summary>
     bool StepWalk(World world, Arrest a, int g, int t)
     {
@@ -1243,18 +1249,20 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         bool walking = gn.Task == (byte)CharacterTask.GoTo;
         if (FixtureRegistry.AtCage(cage, gn.Position, walking)) return LockUp(world, a, g, t, cage);
         if (walking) return true;
-        if (++a.Tries > Settings.CageWalks)
-        {
-            world.Fixtures.MarkUnreachable(world, cage, a.Faction);
-            return Drop(world, a, g);
-        }
 
-        TaskStart.Walk(world, g, cage.Position, SpeedMode.Free, TaskType.FindCageAndPutIn, TaskSource.Order);
-        return true;
+        // A lost walk (FUN_14050d970): the cage goes into the guard's ignore map for 20 s and the finder picks again.
+        gc.Ignore(CageKey(cage), world.Tick + (long)MathF.Ceiling(Construction.ConstructionSystem.UnreachableSeconds / world.TickSeconds));
+        return ToCage(world, a, g);
     }
 
     /// <summary>
-    /// At the cage: the guard puts the captive down into it with its sentence.
+    /// The ignore-map key of a cage.
+    /// </summary>
+    static IgnoreKey CageKey(Fixture cage) => new(cage.Id, default);
+
+    /// <summary>
+    /// At the cage: the guard puts the captive down into it with its sentence, as 112's put-in row 108 does for any carrier (<c>FUN_140358670</c>,
+    /// <b>Verified</b>): the captive's squad remembers him as captor, the relation event, then the bounty claim.
     /// </summary>
     bool LockUp(World world, Arrest a, int g, int t, Fixture cage)
     {
@@ -1262,9 +1270,10 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         var tc = table.Cold(t)!;
         TaskStart.Stand(table, g);
         Carry!.LetGo(world, g);
-        if (!world.Fixtures.Imprison(world, a.Target, cage, constants.PrisonTime)) return ToCage(world, a, g);
+        if (!world.Fixtures.Imprison(world, a.Target, cage, constants.PrisonTime, a.Guard)) return ToCage(world, a, g);
 
         Deeds?.Caged(world, g, t);
+        Claim(world, g, a.Target, cage);
         tc.Recognition = 0;
         if (tc.IsPlayer) world.Post(Loc.Tr("{1} has been imprisoned by {2}", tc.Name, Crimes.Factions.NameOf(a.Faction)));
         return End(world, a, ArrestEventKind.Jailed);
@@ -1365,8 +1374,8 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
 
     /// <summary>
     /// The guard's cage (<c>FUN_1408d0770</c> over the gatherer <c>FUN_1408cbea0</c>, economy.md 11.7): the best free one among his town candidates
-    /// (<see cref="FixtureRegistry.CageCandidates"/>), the cages of arrests other than <paramref name="self"/> reserved; every cage without town
-    /// data.
+    /// (<see cref="FixtureRegistry.CageCandidates"/>), not one in his ignore map (a lost walk's), the cages of arrests other than
+    /// <paramref name="self"/> and of other carriers' town errands (112 / 281 goals) reserved; every cage without town data.
     /// </summary>
     internal Fixture? GuardCage(World world, int g, Arrest? self)
     {
@@ -1378,7 +1387,19 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         // His squad's own home, not the bar a bar package has it sitting in: the finder reads the ownerships' home (economy.md 11.7).
         string? home = FixtureRegistry.HomeOf(world, gc);
 
-        return world.Fixtures.FindCage(world, gc, at, home, f => candidate?.Invoke(f) == false || Reserved(f, self));
+        var guard = table.IdOf(g);
+        _townDuties ??= world.SystemOf<Kidnap.TownDutySystem>();
+        return world.Fixtures.FindCage(world, gc, at, home, f => candidate?.Invoke(f) == false || Reserved(f, self)
+            || gc.IsIgnored(CageKey(f), world.Tick) || _townDuties?.CageTaken(f.Id, guard) == true);
+    }
+
+    /// <summary>
+    /// Whether an arrest order takes a body to the cage <paramref name="cage"/> (the town errands' cage finder skips it).
+    /// </summary>
+    internal bool CageReserved(string cage)
+    {
+        foreach (var a in _arrests) if (a.Cage == cage) return true;
+        return false;
     }
 
     /// <summary>
