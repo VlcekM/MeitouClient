@@ -874,7 +874,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         var table = world.Characters;
         var cold = table.Cold(ask.Slot)!;
         if (cold.Carrying.IsNone || PlanTargetOf(plan) is not { Fixture: { } id } target || world.Fixtures.Find(id) is not { } cage) return false;
-        if (!FixtureRegistry.IsFree(table, cage) || CageTaken(cage.Id, ask.Id) || Arrests?.CageReserved(cage.Id) == true) return false;
+        if (!FixtureRegistry.IsFree(table, cage) || CageTaken(world, cage.Id, ask.Id, cold.SquadId)) return false;
+        if (Arrests?.CageReserved(world, cage.Id, cold.SquadId) == true) return false;
 
         _duties.Add(new TownDuty
         {
@@ -886,13 +887,14 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// Whether an errand of another member than <paramref name="member"/> takes a body to the cage <paramref name="cage"/> (an arrest order's cage
-    /// finder skips it too).
+    /// Whether an errand of another member of <paramref name="squad"/> than <paramref name="member"/> takes a body to the cage <paramref name="cage"/>
+    /// (an arrest order's cage finder skips it too): the squad's work count <c>FUN_1402690e0</c>, which reads only the asker's own platoon
+    /// blackboard (<b>Verified</b>).
     /// </summary>
-    internal bool CageTaken(string cage, CharacterId member)
+    internal bool CageTaken(World world, string cage, CharacterId member, int squad)
     {
         foreach (var d in _duties)
-            if (d.Member != member && d.Target == cage) return true;
+            if (d.Member != member && d.Target == cage && Crime.ArrestSystem.InSquad(world, d.Member, squad)) return true;
         return false;
     }
 
@@ -1875,8 +1877,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// <summary>
     /// The cage finder of 112 and 281 (<c>FUN_1408d0d30</c>, 1.0 with a free cage, <b>Verified</b>): the best free cage among the carrier's town
     /// candidates (<see cref="FixtureRegistry.CageCandidates"/>; an occupier may use the occupied town's, its use test passing for that town,
-    /// <c>FUN_140621230</c>) by <see cref="FixtureRegistry.FindCage"/>'s weights (its squad's home x100), not another member's errand's nor an arrest
-    /// order's (<see cref="Crime.ArrestSystem.CageReserved"/>).
+    /// <c>FUN_140621230</c>) by <see cref="FixtureRegistry.FindCage"/>'s weights (its squad's home x100), not another squad member's errand's nor
+    /// arrest order's (<see cref="Crime.ArrestSystem.CageReserved"/>).
     /// </summary>
     internal Fixture? Cage(World world, int slot, CharacterCold carrier, Vector3 at)
     {
@@ -1886,7 +1888,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         var id = world.Characters.IdOf(slot);
         var candidate = world.Fixtures.CageCandidates(world, data, carrier, at);
         return world.Fixtures.FindCage(world, carrier, at, FixtureRegistry.HomeOf(world, carrier),
-            f => !candidate(f) || CageTaken(f.Id, id) || Arrests?.CageReserved(f.Id) == true);
+            f => !candidate(f) || CageTaken(world, f.Id, id, carrier.SquadId) || Arrests?.CageReserved(world, f.Id, carrier.SquadId) == true);
     }
 
     #endregion

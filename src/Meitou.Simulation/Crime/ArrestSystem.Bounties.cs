@@ -310,7 +310,7 @@ public sealed partial class ArrestSystem : IOrderOwner
     Fixture? ChosenCage(World world, string chosen, CharacterId carrier)
     {
         if (world.Fixtures.Find(chosen) is not { Kind: FixtureKind.Cage } picked || !FixtureRegistry.IsFree(world.Characters, picked)) return null;
-        if (Reserved(picked, null) || _cagings.Exists(k => k.Carrier != carrier && k.Cage == picked.Id)) return null;
+        if (Reserved(world, picked, null) || _cagings.Exists(k => k.Carrier != carrier && k.Cage == picked.Id)) return null;
         return picked;
     }
 
@@ -392,7 +392,7 @@ public sealed partial class ArrestSystem : IOrderOwner
     {
         var at = world.Characters.Next[s].Position;
         var cage = world.Fixtures.FindCage(world, c, at, FixtureRegistry.HomeOf(world, c),
-            f => Reserved(f, null) || _cagings.Exists(k => !ReferenceEquals(k, self) && k.Cage == f.Id));
+            f => Reserved(world, f, null) || _cagings.Exists(k => !ReferenceEquals(k, self) && k.Cage == f.Id));
         float r = Settings.CageSearchRange;
         return cage is not null && Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(cage.Position.X, cage.Position.Z)) <= r * r
             ? cage : null;

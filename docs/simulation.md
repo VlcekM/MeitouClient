@@ -1289,7 +1289,7 @@ one starts with the order's provenance. The chain's rows and states are in [AI t
   called off (the fighters the target does not fight back leave it), and the guard goes on with his package; while the guard stands in no home town (95) he leaves the fight
   the same way and runs to his squad's home under the order (127 Retreating fast), then the capture goes on. Both only with town data.
 - **Arrest**: attack until the target is down (combat ends the fight; nobody beats a downed target), lift
-  (`CarrySystem.BeginPickUp`), `FindCage` from the guard over his town candidates (`CageCandidates`, as kidnapping and town duty; his squad's home building; other arrests' cages reserved), walk,
+  (`CarrySystem.BeginPickUp`), `FindCage` from the guard over his town candidates (`CageCandidates`, as kidnapping and town duty; his squad's home building; his squad mates' cages reserved), walk,
   and at the cage (`FixtureRegistry.AtCage`: within its `use range`, doubled standing, and under 15 above or below it) `LetGo` + `Imprison` (`prison time` CONSTANTS). The fight
   stopping with the target up (it ran off, the guard lost it) starts it again at any distance: the order stays queued and is planned again each update,
   its need 7 planning the fight anew (the order step `FUN_140510920` pops it only on its desire or done test; a failed step pops the front only when it
@@ -1301,8 +1301,9 @@ one starts with the order's provenance. The chain's rows and states are in [AI t
   queue with nothing carried or no free cage (its score is desire x finder, `FUN_14060fd80` asking the finder `FUN_1408d0d30` for a row with an effect,
   **Verified**), the guard keeping what he carries for his own goals (no drop). A walk that ends short is a lost walk, as the
   goals' ([engine goals](#engine-goals)): the cage is ignored for 20 s and the finder picks again. At the cage the put-in is 108's, as the goals' (captor memory,
-  relation event, bounty claim). The cage finders of arrest orders and of the carriers' 112 / 281 goals skip each other's cages (engine reading of the squad's
-  work count `FUN_1402690e0`, which `FUN_1408d0770` asks).
+  relation event, bounty claim). The cage finders of arrest orders and of the carriers' 112 / 281 goals skip the cages of the asker's squad mates' arrests and errands only,
+  as the squad's work count `FUN_1402690e0` that `FUN_1408d0770` asks reads the asker's own platoon blackboard (`FUN_140507070`; a member's entry names
+  the target of the plan task it starts, `FUN_140269f70`, **Verified**): another squad's carrier may head for the same cage and, finding it taken there, picks again.
 - **Cage walks** (arrest, town duty 112 / 281; engine): a walk onto the cage's floor (`TaskStart.Walk` with the cage's position, `MovementSystem.GoToFloor`), so a cage on
   an upper storey is reached by the stairs. A flat goal resolves on the walker's own storey and ends under the cage, out of `AtCage`'s height. **Observed** (#314 save, Sho-Battai
   Police Station Tower, `Outpost s-IV` `43.11:6-Newwworld-INGAME`): its 19 cages stand on the storey at y 1092, 43 above the ground floor where the guards lift raiders; the

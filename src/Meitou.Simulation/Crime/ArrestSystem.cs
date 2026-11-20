@@ -1350,8 +1350,9 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
 
     /// <summary>
     /// The guard's cage (<c>FUN_1408d0770</c> over the gatherer <c>FUN_1408cbea0</c>, economy.md 11.7): the best free one among his town candidates
-    /// (<see cref="FixtureRegistry.CageCandidates"/>), not one in his ignore map (a lost walk's), the cages of arrests other than
-    /// <paramref name="self"/> and of other carriers' town errands (112 / 281 goals) reserved; every cage without town data.
+    /// (<see cref="FixtureRegistry.CageCandidates"/>), not one in his ignore map (a lost walk's), the cages of his squad mates' arrests other than
+    /// <paramref name="self"/> and town errands (112 / 281 goals) reserved; every cage without town data. The reservation is the squad's work count
+    /// (<c>FUN_1402690e0</c> on the asker's own platoon blackboard, <c>FUN_140507070</c>), so another squad's carrier may head for the same cage.
     /// </summary>
     internal Fixture? GuardCage(World world, int g, Arrest? self)
     {
@@ -1365,27 +1366,36 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
 
         var guard = table.IdOf(g);
         _townDuties ??= world.SystemOf<Kidnap.TownDutySystem>();
-        return world.Fixtures.FindCage(world, gc, at, home, f => candidate?.Invoke(f) == false || Reserved(f, self)
-            || gc.IsIgnored(CageKey(f), world.Tick) || _townDuties?.CageTaken(f.Id, guard) == true);
+        return world.Fixtures.FindCage(world, gc, at, home, f => candidate?.Invoke(f) == false || Reserved(world, f, self, gc.SquadId)
+            || gc.IsIgnored(CageKey(f), world.Tick) || _townDuties?.CageTaken(world, f.Id, guard, gc.SquadId) == true);
     }
 
     /// <summary>
-    /// Whether an arrest order takes a body to the cage <paramref name="cage"/> (the town errands' cage finder skips it).
+    /// Whether an arrest order of a member of <paramref name="squad"/> takes a body to the cage <paramref name="cage"/> (the town errands' cage
+    /// finder skips it).
     /// </summary>
-    internal bool CageReserved(string cage)
+    internal bool CageReserved(World world, string cage, int squad)
     {
-        foreach (var a in _arrests) if (a.Cage == cage) return true;
+        foreach (var a in _arrests) if (a.Cage == cage && InSquad(world, a.Guard, squad)) return true;
         return false;
     }
 
     /// <summary>
-    /// Whether another arrest than <paramref name="self"/> has taken cage <paramref name="f"/>.
+    /// Whether another arrest than <paramref name="self"/> has taken cage <paramref name="f"/>: any guard's, or with <paramref name="squad"/> only a
+    /// member's of that squad.
     /// </summary>
-    bool Reserved(Fixture f, Arrest? self)
+    bool Reserved(World world, Fixture f, Arrest? self, int? squad = null)
     {
-        foreach (var a in _arrests) if (!ReferenceEquals(a, self) && a.Cage == f.Id) return true;
+        foreach (var a in _arrests)
+            if (!ReferenceEquals(a, self) && a.Cage == f.Id && (squad is not { } s || InSquad(world, a.Guard, s))) return true;
         return false;
     }
+
+    /// <summary>
+    /// Whether the character <paramref name="id"/> is alive in the squad <paramref name="squad"/> (squadless characters share -1).
+    /// </summary>
+    internal static bool InSquad(World world, CharacterId id, int squad) =>
+        world.Characters.TryResolveNext(id, out int s) && world.Characters.Cold(s)?.SquadId == squad;
 
     /// <summary>
     /// No free cage: the guard stands and the arrest ends as dropped. He keeps the captive, as his 112 leaves the queue when its finder finds no
