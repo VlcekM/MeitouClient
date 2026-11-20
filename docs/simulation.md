@@ -368,7 +368,9 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
 
 Every character with a squad runs one chooser, the original's `FUN_140510ef0` (`Ladder.Run`, [precedence](game/ai-tasks.md#precedence)), player or NPC, one ladder per think. Its
 rungs: the order step, committed above priority 2, the second list (`CharacterCold.SecondList`, `+0x70`: a loaded queue's orders; the look
-scores each, desire x 1, x1.25 for the one running, a done one skipped; the serial pass starts the winner through its owner, and no completion pops it; the plan step ends a running one's task as a front's,
+scores each, desire x 1, x1.25 for the one running, a done one skipped; the load appends the entries in saved order (`FUN_1405092d0` → `FUN_1405086d0`) and the scorer
+bumps a later equal score by 0.0001 (`FUN_14050df10`), so of equal desires the last saved starts first (Verified, decompile); with a job list they are picked at the urgent pass after the
+urgent jobs, before 32 and the tier; the serial pass starts the winner through its owner, and no completion pops it; the plan step ends a running one's task as a front's,
 and one whose task ended done or whose start ran nothing is spent, scoring 0, so a body order with no list A is not taken again at once (engine); emptied by an order without
 Shift, a knock-out, being picked up, a get-up's or a body order's clear, the stop `BodySystem.Stop` and enslaving; the jobs panel does not show it, as the original's reads the job list
 only), the urgent job pass (its pick takes the second list
