@@ -1501,8 +1501,8 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
   - **138** (finder `CorpseDisposal.FindCorpse`): a dead non-robot body in a cage of its faction in reach, else the nearest dead uncarried body in sight.
   - An intruder is taken only once a lift clip starts or it is carried: every member whose finder gives it walks to it and the first in reach lifts it; the others' starts are
     refused. **Observed** for 223 (original 1.0.65, the #1024 save, thralls of `ash dome mob` in their home): three thralls on the body's level converged on it and one lifted it
-    1.8 s after the load. A lift with no path to the body (`CarrySystem.LiftWalkFails`) is a lost walk on the body (ignored 20 s); one whose walk takes over
-    60 game seconds is given up by that member alone, who leaves the body for 2 game hours (`GiveUpLift`, engine choice).
+    1.8 s after the load. A lift with no path to the body (`CarrySystem.LiftWalkFails`) is a lost walk on the body (ignored 20 s); the walk to it has
+    no time limit, as `Task_LiftSomething` times only its clip (`FUN_140354ff0`, **Verified**).
 - **Carried body: 112 / 281, 274 / 224, 106, 137**, weighed by the chooser with every other goal (a higher tier first: an urgent 112 or a 224 before 274). Their desires are read
   in the look for the body carried then.
   - **112** (a living body: list B `!99`) / **281** (any body), plan `[1, 108, goal]`: `CageDesire` (`FUN_1405a1140` with `FUN_1405a0f10`, **Verified**: 0.1 outside a town,
@@ -1548,7 +1548,7 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
   stolen for it; at the cage it waits 0.8 s and confiscates as a police looter does ([NPC looting](#carrying-rescue-and-looting)).
 - **158 / 283 Shooing** (plan `[161, goal]`, list A `!108`; `AI::findStrangersInMyBuilding`; 283's desire, slot 71, is 1.0 only while the home is private): the first character in
   the squad's home building that is neither allied nor an enemy, not down, caged, its faction's slave or law enforcement, or (an NPC squad) a player character there not sneaking
-  or spotted; the member walks at it and sends event 9 (17 to an enemy) every 5 s (engine pacing; the dialogue data escalates); after 25 game minutes, once the stranger is
+  or spotted; the member walks at it and sends event 9 (17 to an enemy) every tick, as the task update fires it every character update (`FUN_14034c7c0`, **Verified**; the dialogue refuses it while the member talks, the data escalates); after 25 game minutes, once the stranger is
   getting away, event 60 and done; over once it is out.
 - **216 Ransacking town** (plan `[156, 216]`, `[6, 156, 216]` with no weapon drawn: list B 5; `AI::findRandomBuildingInTown`): one look draws a random standing house (function key 19:
   an interior, no wall, gate or functionality of its own) in the squad's town as the blackboard gives it (the override's mission town, else the running package's; a raid's is its target, a player outpost included),
@@ -1562,7 +1562,7 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
   the body ends them.
 - Occupiers' **36 / 37** town goals walk to a random complete building of the player town (`AiSystem.OccupiedSpot`, engine choice; the original's 36 scatters round the
   occupied town's centre, [town goals](game/ai-tasks.md#town-goals)), 36 drawing again after every walk.
-- Every act-out's walk that ends short (a lift with no path to its body too) is a lost walk (see "Engine goals"), the errand no goal holds (a ditch) marking its store the same way. Engine choices: sight `AggroSystem.OutdoorSight`, arrival 40 (a cage: its `use range` + 15), a lift given up after 60 game s of walking.
+- Every act-out's walk that ends short (a lift with no path to its body too) is a lost walk (see "Engine goals"), the errand no goal holds (a ditch) marking its store the same way. Engine choices: sight `AggroSystem.OutdoorSight`, arrival 40 (a cage: its `use range` + 15).
 
 ## Captives
 

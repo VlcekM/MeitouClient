@@ -544,7 +544,7 @@ eat task, animation or player command (a right click on food does nothing, [ui-s
   Self preservation's 1), acted out as an NPC's (`TownGoals`' food run); the store is one owned by its faction in its own town or one where the player owns a house, its storages too
   (`TownDutySystem.FoodStore`; engine reading of the resident set, not tied to having stood in it; #762); the occupied branch as above (`TownExit.HasGates`: the gate set's rule,
   [condition 49](dialogue.md)). Without room for the item the take picks ([state 82](ai-tasks.md#statetype-ids)) its plan ditches first (114, 93); a take that moves nothing at the
-  store ignores that store for 20 s (engine choice). Food in the worn bag counts as carried, so one meal takes one item ([244](ai-tasks.md#perma-jobs)).
+  store fails and replans, with no ignore (`Task_grabOneFood` `FUN_140340850` sets the failed flag, whose handler `FUN_14050d080` clears the target, **Verified**). Food in the worn bag counts as carried, so one meal takes one item ([244](ai-tasks.md#perma-jobs)).
 - Meitou: `FeedSystem` (checks every 30 ticks, engine choice), squad options `SquadAi.Feed` / `Share` (CAMERA
   bools `feed`, `share`, **Verified** reader `FUN_1403ebf50`; default on).
 

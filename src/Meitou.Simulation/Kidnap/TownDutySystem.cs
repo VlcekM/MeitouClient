@@ -37,15 +37,6 @@ public sealed record TownDutySettings
     /// A walk that ended within this of its goal counts as arrived (see <see cref="Arrive"/>).
     /// </summary>
     public float CageSlack { get; init; } = 200;
-    /// <summary>
-    /// Game seconds a lift may spend walking to the body before the member gives it up for itself (<see cref="TownDutySystem.GiveUpLift"/>; engine:
-    /// the original's lift has no timer, only the lost walk of a body no path reaches).
-    /// </summary>
-    public float LiftSeconds { get; init; } = 60;
-    /// <summary>
-    /// Game hours a lift given up on its timer leaves the body alone for that member.
-    /// </summary>
-    public double RefuseHours { get; init; } = 2;
 }
 
 /// <summary>
@@ -158,8 +149,7 @@ public sealed class TownDuty
     /// </summary>
     public double Since { get; set; }
     /// <summary>
-    /// A shoo's next event (game seconds of the errand), a confiscation's seconds at the cage or a lift's seconds walking to the body
-    /// (see <see cref="Since"/>).
+    /// A confiscation's seconds at the cage (see <see cref="Since"/>).
     /// </summary>
     public float Next { get; set; }
     /// <summary>
@@ -206,13 +196,9 @@ public sealed class TownDuty
             h.Add(Planned.Position);
             h.Add(Planned.Character ?? CharacterId.None);
         }
-        if (Kind == TownDutyKind.Shoo)
-        {
-            h.Add(Since);
-            h.Add(Next);
-        }
+        if (Kind == TownDutyKind.Shoo) h.Add(Since);
 
-        if (Kind is TownDutyKind.Confiscate or TownDutyKind.Lift or TownDutyKind.HomeLift or TownDutyKind.CorpseLift) h.Add(Next);
+        if (Kind == TownDutyKind.Confiscate) h.Add(Next);
         if (Kind != TownDutyKind.Fetch) return;
 
         h.Add(Rng.StableHash(Record ?? ""));
@@ -260,12 +246,6 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// The tick the bodies were last counted (-1: never).
     /// </summary>
     long _countedTick = -1;
-
-    /// <summary>
-    /// Lifts given up on the walk (<see cref="TownDutySettings.LiftSeconds"/>): the member leaves that body alone until this game hour, while the
-    /// others may still lift it.
-    /// </summary>
-    readonly List<(CharacterId Member, CharacterId Body, double Until)> _gaveUp = [];
 
     /// <summary>
     /// The lock system (resolved in the serial step), for the ransack's door bashing and the town walls.
@@ -372,20 +352,11 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         _goals?.Hash(ref hasher);
 
         // only while one runs, so worlds without them hash as before
-        if (_duties.Count == 0 && _gaveUp.Count == 0) return;
+        if (_duties.Count == 0) return;
+
         hasher.Add(0x546F776E);
         hasher.Add(_duties.Count);
         foreach (var d in _duties) d.Hash(ref hasher);
-
-        if (_gaveUp.Count == 0) return;
-
-        hasher.Add(_gaveUp.Count);
-        foreach (var (member, body, until) in _gaveUp)
-        {
-            hasher.Add(member);
-            hasher.Add(body);
-            hasher.Add(until);
-        }
     }
 
     #endregion
@@ -545,8 +516,6 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         foreach (var d in _duties)
             if (!d.Body.IsNone && !WalksToIntruder(table, d)) _reserved.Add(d.Body);
 
-        _gaveUp.RemoveAll(r => r.Until <= world.GameHours);
-
         for (int s = 0; s < table.HighWater; s++)
         {
             if (!table.Next[s].Alive || table.Cold(s) is not { } c) continue;
@@ -594,16 +563,6 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// Whether <paramref name="member"/> gave up walking to <paramref name="body"/> and still leaves it alone (<see cref="_gaveUp"/>).
-    /// </summary>
-    bool GaveUp(CharacterId member, CharacterId body)
-    {
-        foreach (var r in _gaveUp)
-            if (r.Member == member && r.Body == body) return true;
-        return false;
-    }
-
-    /// <summary>
     /// <c>Ownerships::isMyTown</c> (<c>FUN_1406211e0</c>, <b>Verified</b> by decompile): the squad's home town, the town its occupation holds
     /// (<c>Ownerships +0x80</c>, which the occupation's start declares), or a town of its faction.
     /// </summary>
@@ -636,7 +595,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// <summary>
     /// 223's finder (<c>FUN_14099c110</c>, docs/game/ai-tasks.md): the nearest knocked-out character the member senses
     /// (<see cref="CharacterFacts.Perceives"/>) within its sight inside the squad's home building, not carried, caged or in a bed (special state
-    /// 0), not one another errand lifts or carries or the member gave up on (<see cref="GaveUp"/>), and not one the member regards as friendly (the
+    /// 0), not one another errand lifts or carries, and not one the member regards as friendly (the
     /// sensed filter leaves out SENSE_ALLY; a dead one is tagged dead alone and fails it too). -1: none.
     /// </summary>
     internal int HomeIntruder(World world, int slot, CharacterCold cold, Meitou.Data.World.TownBuilding home)
@@ -651,7 +610,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             var body = table.Cold(v)!;
             if (v == slot || body.InSomething != HeldState.None || _reserved.Contains(table.IdOf(v))) continue;
             if (world.Sight.BuildingOf(v) != home.Key || carry.Friendly(cold, body)) continue;
-            if (!CharacterFacts.Perceives(world, slot, v) || GaveUp(table.IdOf(slot), table.IdOf(v))) continue;
+            if (!CharacterFacts.Perceives(world, slot, v)) continue;
 
             float d2 = Vector2.DistanceSquared(at, Flat(table.Next[v].Position));
             if (d2 <= best2) (best, best2) = (v, d2);
@@ -663,8 +622,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// <summary>
     /// 273's finder (<c>FUN_14099c250</c>, <b>Verified</b> by decompile): the nearest downed intruder the member senses
     /// (<see cref="CharacterFacts.Perceives"/>, the finder walks the sensed list) within its sight in its town inside the walls
-    /// (<see cref="InsideWalls"/>), not carried or caged, not of its faction or an ally (an engine reading of the sensed-list classes), not one it
-    /// gave up on (<see cref="GaveUp"/>); -1: none. Meitou: one in a bed is left alone (the original skips only the caged, so guards threw patients
+    /// (<see cref="InsideWalls"/>), not carried or caged, not of its faction or an ally (an engine reading of the sensed-list classes); -1: none.
+    /// Meitou: one in a bed is left alone (the original skips only the caged, so guards threw patients
     /// out of rented beds, issue 751).
     /// </summary>
     internal int Intruder(World world, int slot, CharacterCold cold, CampaignTown town)
@@ -680,7 +639,6 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             var body = table.Cold(v)!;
             if (v == slot || body.InSomething == HeldState.Bed || _reserved.Contains(table.IdOf(v))) continue;
             if (carry.Friendly(cold, body) || !CharacterFacts.Perceives(world, slot, v)) continue;
-            if (GaveUp(table.IdOf(slot), table.IdOf(v))) continue;
 
             var p = next[v].Position;
             float d2 = Vector2.DistanceSquared(at, Flat(p));
@@ -1463,15 +1421,14 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// <summary>
     /// One tick of a lift (273, 223, 138, 137's corpse): over once the pick-up is (the body on the shoulder, or fought off or pushed away: the
     /// carried body's goals take it on); a lift whose body no path reaches (<see cref="CarrySystem.LiftWalkFails"/>) is a lost walk on the body
-    /// (<see cref="Lost"/>), and one that has walked <see cref="TownDutySettings.LiftSeconds"/> is given up (<see cref="GiveUpLift"/>).
+    /// (<see cref="Lost"/>). The walk has no time limit: <c>Task_LiftSomething</c> times only its clip (<c>FUN_140354ff0</c>, <b>Verified</b>).
     /// </summary>
     bool StepLift(World world, TownDuty d, int g, CharacterCold gc)
     {
         if (world.Characters.Next[g].Task != (byte)CharacterTask.PickUp) return End(world, d);
         if (gc.LiftTime >= 0) return true;
-        if (carry.LiftWalkFails(world, g)) return Lost(world, d, g, IgnoreKey.Of(d.Body));
 
-        return (d.Next += world.TickSeconds) <= Settings.LiftSeconds || GiveUpLift(world, d, g);
+        return !carry.LiftWalkFails(world, g) || Lost(world, d, g, IgnoreKey.Of(d.Body));
     }
 
     /// <summary>
@@ -1674,18 +1631,6 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// The ignore-map key of the errand's fixture or store (<see cref="TownDuty.Target"/>); none without one.
     /// </summary>
     static IgnoreKey? TargetKey(TownDuty d) => d.Target is { } id ? new IgnoreKey(id, default) : null;
-
-    /// <summary>
-    /// The member gives up a lift whose body it cannot reach (no path gets there, <see cref="CarrySystem.LiftWalkFails"/>) or never reached
-    /// (<see cref="TownDutySettings.LiftSeconds"/>): it leaves that body alone for <see cref="TownDutySettings.RefuseHours"/>, and the body stays
-    /// free for the others.
-    /// </summary>
-    bool GiveUpLift(World world, TownDuty d, int g)
-    {
-        TaskStart.Stand(world.Characters, g);
-        _gaveUp.Add((d.Member, d.Body, world.GameHours + Settings.RefuseHours));
-        return End(world, d);
-    }
 
     /// <summary>
     /// An order takes the member (<see cref="IDutyRelease"/>): each errand no goal holds that it runs ends (a goal's errand ends with its goal,
@@ -1966,8 +1911,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             world.Machines.Touch();
 
             // No food moved although the pick found room (room lost on the walk, or a stack the move refuses, as one carrying a trade receipt):
-            // the store is ignored as a lost walk's target (engine choice), so the goal does not pick it again at once.
-            return grabbed ? End(world, d) : Lost(world, d, g, TargetKey(d));
+            // the take fails, which only asks a replan (Task_grabOneFood FUN_140340850 sets the failed flag, FUN_14050d080 clears the target and
+            // replans: no ignore, Verified).
+            return grabbed ? End(world, d) : Lost(world, d, g, key: null);
         }
 
         return walking || Lost(world, d, g, TargetKey(d));
@@ -2060,18 +2006,14 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     const int ShooEvent = 9, IntruderFound = 17, GiveUpChase = 60;
 
     /// <summary>
-    /// Game seconds between shoo events (engine choice: the original re-sends on every update and its lines' own timers pace them).
-    /// </summary>
-    const float ShooEverySeconds = 5;
-
-    /// <summary>
     /// The shoo's stranger in the squad's home building (goals 158 / 283, <see cref="TownWatchFinders.Stranger"/>); none: none.
     /// </summary>
     internal CharacterId Stranger(World world, int slot, CharacterCold cold, Squad squad) => _watch.Stranger(world, slot, cold, squad, _duties);
 
     /// <summary>
     /// A shoo (161 <c>Task_TalktoPlayer</c> with the row event 9): the shooer walks at the stranger and sends it event 9 (17 when it is an enemy)
-    /// every <see cref="ShooEverySeconds"/>; the dialogue data does the rest (lines that follow, time out and turn violent). After 25 game minutes,
+    /// every tick, as the task's update fires it at every character update (<c>FUN_14034c7c0</c>, <b>Verified</b>): the dialogue refuses it while
+    /// the shooer still talks, and the lines' own chances and limits pace the rest (lines that follow, time out and turn violent). After 25 game minutes,
     /// once the stranger is getting away (fleeing or walking off), it gives up with event 60. Over when the stranger is no longer in the home
     /// building, is down or caged.
     /// </summary>
@@ -2090,14 +2032,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
                 && (gn.Task != (byte)CharacterTask.GoTo || Vector2.Distance(gn.Goal, to) > Dialogue.DialogueSystem.TalkReach))
             TaskStart.Walk(world, g, to, SpeedMode.Walk, RowFor(d), TaskSource.Goal);
 
-        d.Next -= world.TickSeconds;
-        if (d.Next <= 0)
-        {
-            d.Next = ShooEverySeconds;
-            bool enemy = data.Relations.Contains(gc.Faction) && data.Relations.Contains(tc.Faction)
-                    && AggroSystem.IsEnemy(data.Relations, gc.Faction, tc.Faction);
-            world.Defer(new Dialogue.DialogueEvent(d.Member, d.Body, enemy ? IntruderFound : ShooEvent) { Tick = world.Tick + 1 });
-        }
+        bool enemy = data.Relations.Contains(gc.Faction) && data.Relations.Contains(tc.Faction)
+                && AggroSystem.IsEnemy(data.Relations, gc.Faction, tc.Faction);
+        world.Defer(new Dialogue.DialogueEvent(d.Member, d.Body, enemy ? IntruderFound : ShooEvent) { Tick = world.Tick + 1 });
 
         bool away = tc.Fleeing || table.Next[t].Task == (byte)CharacterTask.GoTo
                 && Vector2.Distance(table.Next[t].Goal, Flat(gn.Position)) > Vector2.Distance(to, Flat(gn.Position));
