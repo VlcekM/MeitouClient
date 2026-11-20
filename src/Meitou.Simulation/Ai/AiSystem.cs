@@ -2880,16 +2880,17 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         or TaskType.StandAtGuardNodeHomebuilding or TaskType.StandAtGuardNodeHomebuildingIndoorsOnly or TaskType.StandAtGuardNodeHometownOutside;
 
     /// <summary>
-    /// Whether a node goal of a character with a home finds no node: the home has none of the goal's type (a guard post retries with general nodes,
-    /// nothing else does), so the finder's hand is empty (<c>FUN_14099e920</c>: kind 2 retries with kind 1, <c>FUN_14038c2f0</c> matches the type
-    /// alone). A character without a home or whose home is out of reach keeps its post. 157 Static town guard is left out: it draws a post of any
-    /// building of its town (<see cref="TownPlaceClaims.ClaimTownPosts"/>), not of its home.
+    /// Whether a node goal finds no node: the character has no home building, or its home has none of the goal's type (a guard post retries with
+    /// general nodes, nothing else does), so the finder's hand is empty and the plan cannot run (<c>FUN_14099e920</c> searches the home's own node
+    /// list, which a character with no home does not have: kind 2 retries with kind 1, <c>FUN_14038c2f0</c> matches the type alone). A character
+    /// whose home is out of reach keeps its post. 157 Static town guard is left out: it draws a post of any building of its town
+    /// (<see cref="TownPlaceClaims.ClaimTownPosts"/>), not of its home.
     /// </summary>
     bool NodeGoalFindsNothing(AiMind mind, Blackboard board, TaskType type)
     {
-        if (!IsNodeGoal(type) || type == TaskType.StandAtGuardNodeHometownOutside || board.Home is not { } home
-            || mind.HomeUnreachable || GateSpot(board, mind, type) is not null)
-            return false;
+        if (!IsNodeGoal(type) || type == TaskType.StandAtGuardNodeHometownOutside || mind.HomeUnreachable) return false;
+        if (board.Home is not { } home) return true;
+        if (GateSpot(board, mind, type) is not null) return false;
 
         var kind = type switch
         {

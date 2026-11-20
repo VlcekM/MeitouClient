@@ -1606,8 +1606,8 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   - **`AI::findNode`** (`FUN_14099e920`): keeps the character's current node of the type while it is free or the character's (home
     only: still in the home). Home only: a random node of the type in the home held by no one or by the character (`FUN_14038c2f0`, the
     same holder test as the town draw below, **Verified**); for a guard post, outside indoorsOnly and when it found fewer than two,
-    also the town list's nodes whose building (`+0xd0`) is the home: the gate posts below. Then a general node. Else a uniform draw (`FUN_14038b000`) over the node manager's list for the character's town (+0x50), of the nodes held
-    by no one (holder type 11, null) or by the character; no type test. A found node is registered with the node manager
+    also the town list's nodes whose building (`+0xd0`) is the home: the gate posts below. Then a general node (guard posts only); nothing more. Not home only (157): a uniform draw (`FUN_14038b000`) over the node manager's list for the character's town (+0x50), of the nodes held
+    by no one (holder type 11, null) or by the character; no type test. The home's list is the node manager's map entry for the home's hand (`FUN_140398910`), where each node is filed under its building (`FUN_14038a2e0`, the parent the object factory `FUN_14057c860` gives it); with no home it is the null hand's entry, which no level node fills (none is placed outside a building: 0 of the merged load order's 11708 level buildings is a node record, **Verified** by a survey), so a character with no home building finds nothing (**Verified**). A found node is registered with the node manager
     (`FUN_14038a5a0`). None found: a null target, with which the plan cannot run ([planner](#planner), Can run, **Observed**).
   - **Observed** (KenshiProbe state 0.5 live check, Rebirth Gate Guards, N = 1): the 38 holders of each Defensive Gate II stand on
     3 or 4 guard posts of that gate, 60 to 120 from its centre, often two members on one post (or two close ones: the home search
@@ -1622,7 +1622,7 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
     start depends on the original's loading, not on a rule.
     The 157 holders walk to posts across the town, up to about 1400 away.
   - Meitou: 157 holds a guard post of its town ([simulation](../simulation.md#ai)); 38 and 268 take the home's posts, a gate
-    member a flank spot; branch nearestPlayer and the factors are not modelled.
+    member a flank spot, a member with no home building none (`AiSystem.NodeGoalFindsNothing`, also for 20 and 47); branch nearestPlayer and the factors are not modelled.
 - **118 Shopping** (`FUN_1409997f0`, **Verified**): a shop of the town selling an item on the character's shopping list (`FUN_1409fc070`), else, only when the faction of the
   shopper's town has no player flag (`+0x250` clear; the list loop runs first and a hit skips this test), a random building (`FUN_1409fc1b0`): a town of the player's faction gets
   no random shopping, only list hits; none found: 0. Factor 1 for a BF_SHOP building, 0.4 otherwise. Then 119 (`Task_Shopping`) at it. The town is the AI status town (`+0x88`), and with none the finder returns 0 (**Verified**, disassembly: the null test at `0x140999868` jumps to the zero return), so a shopper shops only in the town it stands in: one standing in an outpost shops there, and one away from every town does not want to shop. Both finders scan every loaded zone's
