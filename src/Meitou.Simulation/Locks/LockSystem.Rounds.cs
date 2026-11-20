@@ -174,6 +174,10 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
     /// </summary>
     WardenGoals? _wardens;
     /// <summary>
+    /// The escape goals: their act-outs.
+    /// </summary>
+    EscapeGoals? _escapes;
+    /// <summary>
     /// The arrest system, looked up once (null: none).
     /// </summary>
     Crime.ArrestSystem? _arrests;
@@ -203,9 +207,18 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
     WardenGoals Wardens => _wardens ??= new WardenGoals(this);
 
     /// <summary>
-    /// Registers the wardens' goals (<see cref="WardenGoals.Register"/>).
+    /// The escape goals, made on first use.
     /// </summary>
-    void IDutyGoalOwner.RegisterGoals(DutyGoals goals) => Wardens.Register(goals);
+    internal EscapeGoals Escapes => _escapes ??= new EscapeGoals(this);
+
+    /// <summary>
+    /// Registers the wardens' goals (<see cref="WardenGoals.Register"/>) and the escapes (<see cref="EscapeGoals.Register"/>).
+    /// </summary>
+    void IDutyGoalOwner.RegisterGoals(DutyGoals goals)
+    {
+        Wardens.Register(goals);
+        Escapes.Register(goals);
+    }
 
     /// <summary>
     /// Takes the homes a loaded save had locked up from the zones' building records (<see cref="FixtureRegistry.Saved"/>), once.
@@ -725,6 +738,7 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
         }
 
         _wardens?.Hash(ref hasher);
+        _escapes?.Hash(ref hasher);
     }
 
     #endregion

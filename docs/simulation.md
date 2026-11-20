@@ -1538,8 +1538,12 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   squad's only under 0.95) runs after the first allied animal in sight with something in its mouth. Engine: the play's first leg is random too.
 - **Crop raiding** (232, `CaptiveJobKind.EatCrops`): in a player town whose faction is its enemy (engine reading of the coexist test), a random farm with food; at it, `eat`, crime
   14 each tick, one plant per game second (`ProductionSystem.EatCrop`). NPC towns' farms are not machines in Meitou, so only the player's are eaten.
-- **Escapes** (`LockSystem.OpportunisticEscapes`, `ShackleEscapes`): an AI prisoner whose role list holds 256 or 202 in its hours walks out of a cage that is not locked
-  (`FixtureRegistry.GetOut`); every 30 ticks an AI character outside a cage wearing locked shackles with 202 listed works them off, cutting with a tool, else picking; once they are unlocked it takes the worn shackles off (219) into its inventory (else the ground; engine choice).
+- **Escapes** (`EscapeGoals`, [engine goals](#engine-goals), facts: [ai-tasks](game/ai-tasks.md)): 256 Get out of cage (`[256]`, only while its cage's lock is
+  not effectively locked), 207 Escape cage (`[207]`) and 202 Escaping (tier 3), chosen by the chooser, in a cage too ([caged](#engine-goals)). 202's plan
+  is the planner's: its own shackles picked (201) or cut with a tool (185) in place (the shackle job), taken off (219, into the inventory, else the ground; engine
+  choice), then out of the cage (133, 207 or 256, `FixtureRegistry.GetOut` / `GetOutLegit`); a locked cage plans nothing (76 and 285 are not acted out). The act-out
+  works the plan's front row and is done when that work ends; 202 is planned afresh at each think and dropped once neither chained nor caged. A cage that stays
+  shut refuses the start. Act-outs are hashed while any.
 - **Shout** (188): a worker with slaves of its squad's list up and uncaged says event 38 at a random one, walks to it and stands within 40, following it
   when it moves on; it says the event again every 8 s (engine choice) until its worker speaks (`DialogueSystem.Engages`; the row's B list
   `isDialogDelivered` is read differently, [ai-tasks](game/ai-tasks.md)), and the next sweep picks a slave again with no pause. A worker with no
@@ -2336,7 +2340,7 @@ Goals of the NPCs' packages that an engine system acts out, chosen by the one ch
 (one per world, built in `World`'s constructor by `AiSystem.BindGoals` from the `IDutyGoalOwner` systems; null when none registered) holds each registered type: a
 type of the original's that `TaskBehaviours` does not act out, registered by its own system with its `IDutyGoal` (desire, finder, states, start, end) and the rows of
 its plan the act-out carries out besides the goal's own. Built: 176 (`SmellSystem`, [blood smell](#blood-smell)); 177 and 42 (`CarrySystem` through `LootGoals`, [looting and arming](#carrying-rescue-and-looting)); 211, 155, 197, 86 and 195 (`LockSystem` through `WardenGoals`,
-[wardens' goals](#arrest-and-jail)).
+[wardens' goals](#arrest-and-jail)); 256, 207 and 202 (`LockSystem` through `EscapeGoals`, escapes).
 - **Choosing**: a registered type has `AiBehaviour.Duty`. Its desire is the system's (`DutyGoals.Desire`: the desire times the finder's factor when the TaskData row has
   a finder and an effect; 0 for a player character's mind, an engine mind and a type in back-off), scored by the package record's tier and weight with the continuity
   and no commitment (no duty goal commits). The plan is the planner's: its rows' desires and finders are asked of the system, a finder may give a character, a
@@ -2345,6 +2349,9 @@ its plan the act-out carries out besides the goal's own. Built: 176 (`SmellSyste
   whose plan is its own row alone that neither acts nor has an effect is dropped, as the scorer drops it (`FUN_14050df10`, **Verified**; not for a row with
   TaskData `+0x14`). The kept plan runs by `PlanSteps` (list A, list B, the hours), whose end ends the goal; a goal whose row neither acts nor has an effect (42,
   202, 254) is not kept and is planned afresh at each think.
+- **Caged**: an NPC in its cage with a mind of its own (`AiSystem.CagedMind`: not fleeing, fighting, carried, down or ordered) weighs its goals at every tier,
+  the planner's root row limited to the cage's repertoire (TaskData category bit 4); it acts the winner out only when it is an engine goal, else it stays held
+  with no goal. A plan step on a door way through the lock system is told from a goal's own door row by its target kind (`AiSystem.IsDoorWay`).
 - **Start**: the think stands on the goal's row and asks (`AiMind.DutyAsk`); the serial step (`SendRequests`, after the captive jobs) calls `IDutyGoal.Start` in slot
   order for each asker the AI still holds, with the plan; a start makes the goal hold the character (`AiMind.Duty`, the record, and `DutyTick`, the start tick of the
   task it left running; hashed), a refusal backs the type off for four think periods.

@@ -162,8 +162,8 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
     internal static float PickPlayRate(float skill) => 0.55f + (2.0f - 0.55f) * (skill * 0.01f);
 
     /// <summary>
-    /// The lock step: caged characters held, the doors and rounds, then the shackle, bash, forcing, door-lock and cage work, the escapes and the
-    /// lock pickers.
+    /// The lock step: caged characters held, the doors and rounds, then the shackle, bash, forcing, door-lock and cage work, the escape goals'
+    /// act-outs and the lock pickers.
     /// </summary>
     public void SlowWorld(World world)
     {
@@ -175,8 +175,7 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
         ForcedLocks(world);
         DoorLockJobs(world);
         CageWorkers(world);
-        OpportunisticEscapes(world);
-        ShackleEscapes(world);
+        Escapes.Step(world);
         LockPickers(world);
     }
 
