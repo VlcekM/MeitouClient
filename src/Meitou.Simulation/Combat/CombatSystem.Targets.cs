@@ -398,6 +398,8 @@ public sealed partial class CombatSystem
         if (a == t || (uint)t >= (uint)_read.Length || (uint)a >= (uint)table.HighWater) return;
 
         var live = Live(world);
+        if ((uint)a >= (uint)live.Length) return;
+
         int askers = 0;
         foreach (var (_, _, _, f) in _index.AttackersOf(t))
         {
