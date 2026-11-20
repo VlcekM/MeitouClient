@@ -72,6 +72,13 @@ public sealed record BodyOptions
     public float SquadXp { get; set; } = 1;
 
     /// <summary>
+    /// Meitou (Advanced settings "Squad XP", one slider per skill; none, as in the game): a skill's own multiplier for the player's side in place of
+    /// <see cref="SquadXp"/>, by stat number (<see cref="CharacterStats.SkillXpRates"/>); below 0 follows <see cref="SquadXp"/>. Settable, as
+    /// <see cref="Dismemberment"/>.
+    /// </summary>
+    public IReadOnlyList<float> SquadSkillXp { get; set; } = [];
+
+    /// <summary>
     /// Meitou (Advanced settings "Others' XP"; 1, as in the game): the same for every other character. Settable, as <see cref="Dismemberment"/>.
     /// </summary>
     public float OthersXp { get; set; } = 1;

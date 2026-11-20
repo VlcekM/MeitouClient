@@ -87,6 +87,11 @@ sealed class GamePages(SettingsMenu menu)
     Slider? _squadXpSlider, _othersXpSlider;
 
     /// <summary>
+    /// The skills' own Squad XP sliders, in <see cref="SkillXp.Skills"/>' order, made on first use.
+    /// </summary>
+    Slider[]? _skillXpSliders;
+
+    /// <summary>
     /// The dropped items kept slider, made on first use.
     /// </summary>
     Slider? _groundItemsSlider;
@@ -273,12 +278,58 @@ sealed class GamePages(SettingsMenu menu)
     /// <summary>
     /// The squad XP slider, marked at the game's rate.
     /// </summary>
-    Slider SquadXpSlider => _squadXpSlider ??= XpRate("Squad XP", () => menu.Config.SquadXp, v => menu.Config.SquadXp = v);
+    Slider SquadXpSlider => _squadXpSlider ??= XpRate("Squad XP", () => menu.Config.SquadXp, SetSquadXp);
+
+    /// <summary>
+    /// Sets Squad XP and the label that shows it (<see cref="PlayerInterface.XpLabel"/>).
+    /// </summary>
+    void SetSquadXp(float value)
+    {
+        menu.Config.SquadXp = value;
+        menu.Player.XpLabel = SkillXp.Label(menu.Config);
+    }
+
+    /// <summary>
+    /// Shows or hides the Squad XP label (<see cref="UserConfig.ShowSquadXp"/>).
+    /// </summary>
+    void ShowSquadXp(bool on)
+    {
+        menu.Config.ShowSquadXp = on;
+        menu.Player.XpLabel = SkillXp.Label(menu.Config);
+    }
 
     /// <summary>
     /// The others' XP slider, marked at the game's rate.
     /// </summary>
     Slider OthersXpSlider => _othersXpSlider ??= XpRate("Others' XP", () => menu.Config.OthersXp, v => menu.Config.OthersXp = v);
+
+    /// <summary>
+    /// The skills' own Squad XP sliders, folded under Squad XP (<see cref="FeatureGrouping.FeatureGroups"/>).
+    /// </summary>
+    Slider[] SkillXpSliders => _skillXpSliders ??= [.. SkillXp.Skills.Select(s => SkillXpRate(s.Label, SkillXp.Key(s.Stat)))];
+
+    /// <summary>
+    /// A skill's own Squad XP multiplier (<see cref="UserConfig.SquadSkillXp"/>, by its config key <paramref name="key"/>), in hundredths like
+    /// <see cref="XpRate"/>; at its left end, shown as "Squad XP", the skill follows Squad XP.
+    /// </summary>
+    Slider SkillXpRate(string label, string key) =>
+        new(SquadXpSlider.Label + " " + label, SkillXp.Follows, UserConfig.MaxXpRate,
+            () => menu.Config.SquadSkillXp.GetValueOrDefault(key, SkillXp.Follows),
+            v => SetSkillXp(key, v),
+            "0.##", Text: v => v < 0 ? "Squad XP" : $"{v:0.##}x", Faithful: SkillXp.Follows, Step: 0.25f);
+
+    /// <summary>
+    /// Sets a skill's own multiplier to <paramref name="value"/> in hundredths, or makes it follow Squad XP below 0, and applies it to the running
+    /// world at once.
+    /// </summary>
+    void SetSkillXp(string key, float value)
+    {
+        float rate = MathF.Round(value * 100) / 100;
+        if (rate < 0) menu.Config.SquadSkillXp.Remove(key);
+        else menu.Config.SquadSkillXp[key] = Math.Min(rate, UserConfig.MaxXpRate);
+
+        menu.GameplayChanged?.Invoke();
+    }
 
     /// <summary>
     /// An XP multiplier in hundredths (typed by clicking its number; the arrow keys move it in quarters), applied to the running world at once.
@@ -752,8 +803,19 @@ sealed class GamePages(SettingsMenu menu)
                 v => { menu.Config.AdvancedRagdolls = v; menu.GameplayChanged?.Invoke(); }, Remaster: true)));
         result.Add(new(SquadXpSlider.Label,
             "How fast your characters and the rest of your faction learn: every skill and stat gain is multiplied by this (the game: 1x). "
-            + "0 stops it. Click the number to type an exact value. A training dummy still stops at its level.",
-            Slider: SquadXpSlider));
+            + "0 stops it. Click the number to type an exact value. A training dummy still stops at its level. "
+            + "Open it to give single skills their own multiplier.",
+            Slider: SquadXpSlider, Raw: SquadXpSlider.Label));
+        foreach (var (slider, skill) in SkillXpSliders.Zip(SkillXp.Skills))
+        {
+            result.Add(new(slider.Label,
+                $"{skill.Label}'s own multiplier for your faction, in place of Squad XP. At the far left (Squad XP) it follows Squad XP.",
+                Slider: slider, Raw: SkillXp.Raw(skill.Stat)));
+        }
+
+        result.Add(new("Show Squad XP", "Shows the Squad XP multiplier (\"XP x10\") at the top left of the screen during play.",
+            Toggle: new("Show Squad XP", () => menu.Config.ShowSquadXp, ShowSquadXp, OnOff: true)));
+
         result.Add(new(OthersXpSlider.Label,
             "The same for everyone outside your faction: other factions, enemies and wild animals (the game: 1x).", Slider: OthersXpSlider));
         result.Add(new(FastSpeedSlider.Label, "The game speed of the second speed button (two arrows) and its key (the game: 2x).",

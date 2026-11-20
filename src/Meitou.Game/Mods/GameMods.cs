@@ -76,6 +76,7 @@ sealed class GameMods(GameHost host)
         // The world's body options were made from the config before this, so settings taken in from a mod reach them here.
         _builtInNotices = BuiltInMods.Adopt(host.Config, host.Install);
         (data.BodyOptions.SquadXp, data.BodyOptions.OthersXp) = (host.Config.SquadXp, host.Config.OthersXp);
+        data.BodyOptions.SquadSkillXp = Meitou.Game.Settings.SkillXp.Rates(host.Config.SquadSkillXp);
 
         if (host.DataPhase?.Mods is { } prepared) StartPrepared(prepared, host.DataPhase.Enabled, db, data);
         else LoadMods(db, data);
