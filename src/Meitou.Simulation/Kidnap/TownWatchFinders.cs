@@ -119,11 +119,12 @@ internal sealed class TownWatchFinders(PopulationData data)
     /// <summary>
     /// The town's houses, each by its building key and position: its buildings of function key 19 BF_SHELL_WITH_INTERIOR (a building with an
     /// interior and no functionality of its own, so no wall, gate or machine), whatever their owner. A placed town's: its standing ones
-    /// (<see cref="IsHouse"/>). An outpost's: those whose town it is (<see cref="Construction.TownLookup.PlayerTownOf"/>) that are complete and
-    /// standing (<see cref="Construction.ConstructionSystem.FunctionKey(string)"/>). <b>Verified</b> (<c>FUN_1408cb510</c> asks the town's vfunc 0x2c8,
-    /// <c>FUN_1408d10f0</c>, shared by every TownBase class, with <c>BuildingFinder_OnesWithInteriors</c> and mask 0x80000: the buildings of key 19
-    /// in the zones registered with the town whose town it is, <c>FUN_1409fb880</c>, that have an interior object and are not a WallBuilding, slot 5
-    /// <c>FUN_1408ca540</c>; the mask's bits are the function keys the factory <c>FUN_14057cc70</c> files each building under). Complete and
+    /// (<see cref="IsHouse"/>). An outpost's: those whose own town handle names it (<see cref="Construction.BuildSite.Town"/>; one that takes
+    /// the outpost only as the nearest town is left out) that are complete and standing (<see cref="Construction.ConstructionSystem.FunctionKey(string)"/>).
+    /// <b>Verified</b> (<c>FUN_1408cb510</c> asks the town's vfunc 0x2c8, <c>FUN_1408d10f0</c>, shared by every TownBase class, with
+    /// <c>BuildingFinder_OnesWithInteriors</c> and mask 0x80000: the buildings of key 19 in the zones registered with the town whose town it is,
+    /// <c>FUN_1409fb880</c>, then slot 5 <c>FUN_1408ca540</c>: the root object's stored town handle is the town's own, it has an interior object and it
+    /// is not a WallBuilding; the mask's bits are the function keys the factory <c>FUN_14057cc70</c> files each building under). Complete and
     /// standing are an engine choice: the finder has no such test, and Meitou gives an unfinished or ruined building no doors.
     /// </summary>
     List<(string Key, Vector3 At)> Houses(World world, CampaignTown town)
@@ -142,7 +143,7 @@ internal sealed class TownWatchFinders(PopulationData data)
         foreach (var site in world.Buildings.All)
         {
             if (!site.Complete || site.Destroyed || FunctionKeyOf(site.Record) != Construction.TownRefit.Shell) continue;
-            if (Construction.TownLookup.PlayerTownOf(world, site)?.Number == town.PlayerTown) houses.Add((site.Id, site.Position));
+            if (site.Town == town.PlayerTown) houses.Add((site.Id, site.Position));
         }
 
         return houses;

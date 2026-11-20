@@ -1715,7 +1715,7 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   game's `TownBuildings`, 261 towns, 9766 buildings): 1299 of key 19; 1946 walls and 125 gates with an interior are keys 20 and 21; no machine building has an
   interior. The zones scanned are those registered with the town: its own and those within one zone of it as they load (`FUN_14092d730`, `FUN_14092dbb0`). The pick
   is uniform (`FUN_1409fb020`); its position is the plan's target (156 walks in, then 216 runs inside). Meitou: `TownWatchFinders.RansackTarget`, an outpost's houses
-  from the player's complete, standing buildings.
+  from the player's complete, standing buildings whose `BuildSite.Town` names it.
 - Chairs (**Verified**, BUILDING_FUNCTIONALITY records of gamedata.base / rebirth.mod / the install's mods, dumped): BuildingFunction 17 BF_CHAIR
   `chair`, `chair-fixed`, `chair-fixed 180` (animation "sitting chair"; Stool, Old Stool, Bench, Sitting Box) and `sit on floor (no chair)`
   ("sitting idle"; Sitting Pillow, Sitting spot (invisible)); 24 BF_THRONE `throne chair` ("sitting chair"); all `max operators` 1.
