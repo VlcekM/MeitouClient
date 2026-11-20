@@ -204,7 +204,7 @@ public enum ArrestEventKind
     /// </summary>
     Jailed,
     /// <summary>
-    /// No free cage: the guard dropped the captive.
+    /// No free cage: the order ended, the guard keeping the captive.
     /// </summary>
     Dropped,
     /// <summary>
@@ -1154,7 +1154,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// </summary>
     bool StepFight(World world, Arrest a, int g, int t, CharacterCold gc, CharacterCold tc, ref CharacterHot gn, float dt)
     {
-        if (tc.Medical is { Incapacitated: true }) return StepTargetDown(world, a, g, gc, tc, dt);
+        if (tc.Medical is { Incapacitated: true }) return StepTargetDown(world, a, g, gc, dt);
         if (gn.Task != (byte)CharacterTask.Attack && !gc.InCombat && a.Time >= 1)
         {
             a.Time = 0;
@@ -1168,7 +1168,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// lifts. A guard whose left arm cannot carry gives up: the order's lift needs state 80 <c>isCarryingArmOK</c>, which no row provides
     /// (docs/game/ai-tasks.md "Arrest chain", <b>Verified</b>), so the original's plan fails there (#906).
     /// </summary>
-    bool StepTargetDown(World world, Arrest a, int g, CharacterCold gc, CharacterCold tc, float dt)
+    bool StepTargetDown(World world, Arrest a, int g, CharacterCold gc, float dt)
     {
         if (Carry is null) return End(world, a, ArrestEventKind.GaveUp);
         if (gc.Carrying == a.Target)
@@ -1179,11 +1179,8 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         if (gc.InCombat) return true;   // still trading blows (the KO tick, a squad mate): wait
         if (!CanLift(gc)) return End(world, a, ArrestEventKind.GaveUp);
 
-        // Not from an ally who carries it already, nor with no cage to take it to: a lift then would only be dropped again, and guards passed
-        // the bodies round a full station (#339; the original's arrest goal wants a free cage, docs/game/economy.md "Arrest goal").
-        if (CarriedByAlly(world, gc, tc) || !CageFor(world, a, g)) return End(world, a, ArrestEventKind.GaveUp);
-
-        // Row 240 Capture Target is the chain's lift (snatch byte set), 213 a hand-over's: it takes a body another carries too.
+        // Row 240 Capture Target is the chain's lift (snatch byte set), 213 a hand-over's: it takes a body another carries too, with no cage free
+        // as well (neither its list B nor its desire asks for one). A body his own squad carries ends the order by its desire (OrderDesire).
         if (Carry.BeginPickUp(world, g, a.Target, source: TaskSource.Order, row: a.Order.Row))
         {
             a.Phase = ArrestPhase.Lift;
@@ -1352,11 +1349,6 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     }
 
     /// <summary>
-    /// Whether a free cage the arrest could take its captive to exists (<see cref="ToCage"/>'s finder).
-    /// </summary>
-    bool CageFor(World world, Arrest a, int g) => GuardCage(world, g, a) is not null;
-
-    /// <summary>
     /// The guard's cage (<c>FUN_1408d0770</c> over the gatherer <c>FUN_1408cbea0</c>, economy.md 11.7): the best free one among his town candidates
     /// (<see cref="FixtureRegistry.CageCandidates"/>), not one in his ignore map (a lost walk's), the cages of arrests other than
     /// <paramref name="self"/> and of other carriers' town errands (112 / 281 goals) reserved; every cage without town data.
@@ -1385,13 +1377,6 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         foreach (var a in _arrests) if (a.Cage == cage) return true;
         return false;
     }
-
-    /// <summary>
-    /// Whether <paramref name="target"/> is carried by someone of the guard's faction.
-    /// </summary>
-    static bool CarriedByAlly(World world, CharacterCold guard, CharacterCold target) =>
-        world.Characters.TryResolveNext(target.CarriedBy, out int carrier) && world.Characters.Cold(carrier) is { } c && c != guard
-            && c.Faction == guard.Faction;
 
     /// <summary>
     /// Whether another arrest than <paramref name="self"/> has taken cage <paramref name="f"/>.

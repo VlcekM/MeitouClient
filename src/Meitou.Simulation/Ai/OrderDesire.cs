@@ -8,8 +8,8 @@ namespace Meitou.Simulation.Ai;
 
 /// <summary>
 /// The desire half of the order step's pop (<c>FUN_140510920</c> → <c>FUN_14060fd80</c>, docs/game/ai-tasks.md "Finished tests", <b>Verified</b>):
-/// the row's desire function (TaskData <c>+0x108</c>) of the order's target and point, times its finder's score only for a row with an effect (no
-/// order row has one). The functions, each resolved from the registration in <c>FUN_140319a60</c> through its stub to the AI vtable slot: 1 for
+/// the row's desire function (TaskData <c>+0x108</c>) of the order's target and point, times its finder's score only for a row with an effect
+/// (TaskData <c>+0x128</c>, as 112's 81: its cage finder is asked by its owner's check, <c>ArrestSystem</c>'s <c>CanRun</c>). The functions, each resolved from the registration in <c>FUN_140319a60</c> through its stub to the AI vtable slot: 1 for
 /// the rows of slots 19 and 43, 0.1 for those of slot 39 (76, 186, 201, 286), and their own for the rest below. Pure reads (serial phases).
 /// </summary>
 public static class OrderDesire
@@ -75,15 +75,28 @@ public static class OrderDesire
     }
 
     /// <summary>
-    /// 225 / 246, and the arrest's 213 / 240 (AI slot 59, <c>FUN_14059e1a0</c>): 0 while the character carries someone (<c>+0x348</c>); 0.5 for a
-    /// target that is no character; 0 for one it carries already; else 1.
+    /// 225 / 246, and the arrest's 213 / 240 (AI slot 59, <c>FUN_14059e1a0</c>, <b>Verified</b>): 0 while the character carries someone
+    /// (<c>+0x348</c>); 0.5 for a target that is no character; 0 for one a member of its own squad carries (the carrier hand's container fields
+    /// <c>+0xc</c> / <c>+0x10</c> against its own hand's, which for a character are its platoon's, docs/formats/save.md "handle"); else 1, so a
+    /// body another squad carries, of its own faction too, is lifted (snatched by 213 / 225 / 240).
     /// </summary>
     static float LiftDesire(World world, int slot, CharacterCold cold, CharacterId target)
     {
         if (!cold.Carrying.IsNone) return 0;
         if (!world.Characters.TryResolveNext(target, out int t)) return NoCharacter;
 
-        return world.Characters.Cold(t)!.CarriedBy == world.Characters.IdOf(slot) ? 0 : 1;
+        return CarriedBySquad(world, slot, cold, world.Characters.Cold(t)!) ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="target"/> is carried by the character in <paramref name="slot"/> or a member of its squad.
+    /// </summary>
+    static bool CarriedBySquad(World world, int slot, CharacterCold cold, CharacterCold target)
+    {
+        if (!world.Characters.TryResolveNext(target.CarriedBy, out int carrier)) return false;
+        if (carrier == slot) return true;
+
+        return cold.SquadId >= 0 && world.Characters.Cold(carrier)?.SquadId == cold.SquadId;
     }
 
     /// <summary>
