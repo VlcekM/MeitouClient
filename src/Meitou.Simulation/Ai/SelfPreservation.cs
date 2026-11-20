@@ -99,11 +99,4 @@ public static class SelfPreservation
     /// The value of the goal at a threat <paramref name="level"/>: the smaller of the level and the desire, plus the desire.
     /// </summary>
     static float Value(float level, float desire) => MathF.Min(level, desire) + desire;
-
-    /// <summary>
-    /// Whether this character flees under Self preservation when threatened: an NPC with an AI whose body takes the choice to 35
-    /// (<see cref="Runs"/>).
-    /// </summary>
-    public static bool Flees(CharacterCold cold, float level, bool walled = false) =>
-        !cold.IsPlayer && cold.Ai is not null && Runs(cold, level, walled);
 }
