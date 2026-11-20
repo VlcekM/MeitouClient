@@ -83,6 +83,7 @@ int cmd_wait(Command* c);
 int cmd_camera(Command* c);
 int cmd_select(Command* c);
 int cmd_standing(Command* c);
+int cmd_order(Command* c);
 
 // ---- track.c: characters' AI, recorded frame by frame -------------------------------------------------------------------
 

@@ -43,7 +43,8 @@ taskbar entry, the launcher dialog included) and muted; a hidden game still rend
 | `camera <x> <y> <z>`, `camera <character>` | Moves the camera's centre, keeping angle and zoom |
 | `select <character>...`, `select none` | The selection |
 | `standing <character> <order> [0\|1]` | Sets a standing order by its `MessageForB::StandingOrder` number (9 NEAR, 8 FAR: orders no button gives) |
-| `track <character>...`, `track dump`, `track off` | Records the characters (by name, or `@address` from `state --addr`) every frame while other commands run: a line each time one's reading changes (game clock, current goal and its text, body task, order queue front and length, default task and target, manoeuvre mode, centre of movement, stumble clip, moving, damage taken); `dump` hands the lines over |
+| `track <character>...`, `track dump`, `track off` | Records the characters (by name, or `@address` from `state --addr`) every frame while other commands run: a line each time one's reading changes (game clock, current goal and its text, body task, order queue front and length, default task and target, manoeuvre mode, centre of movement, stumble clip, moving, damage taken, the AI status others' senses read: intended target `aim` and the running task's and goal's intended aggression `aggr`, and its own threats list: count, first, aggression sum); `dump` hands the lines over |
+| `order <task type> <character> [--queue]` | Gives the selected characters an order on a character (name or `@address`) as the right click does (`PlayerInterface::addOrderSelectedCharacters`, at its position): 228 stealth KO, 5 attack (a crossbowman with Ranged on shoots) |
 | `window back [handle]`, `window front` | Gives away or takes the keyboard focus (a hidden window cannot take it) |
 | `window hide\|show` | Hides the window or shows it again (without taking the focus) |
 | `sound off\|on` | Mutes or unmutes the game in Windows' mixer |
