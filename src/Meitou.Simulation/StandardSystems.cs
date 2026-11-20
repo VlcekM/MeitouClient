@@ -698,7 +698,7 @@ public static class StandardSystems
         {
             if (Has(StandardParts.Feed)) _systems.Add(StandardParts.Feed, new FeedSystem(_data.Items, _o.Feed));
             if (Has(StandardParts.Retaliation))
-                _systems.Add(StandardParts.Retaliation, new RetaliationSystem(_combat!) { Towns = _data });
+                _systems.Add(StandardParts.Retaliation, new RetaliationSystem(_combat!));
 
             if (Has(StandardParts.Aggro))
             {

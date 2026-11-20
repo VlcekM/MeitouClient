@@ -32,7 +32,7 @@ public enum SquadAi : ushort
     Heal = 8,
     /// <summary>
     /// Help Allies (+0x111): the player's characters count allied factions' fighters in the protect-allies finder (squared;
-    /// <see cref="RetaliationSystem"/> goal 15).
+    /// goal 15, <see cref="Ai.AiSystem"/>).
     /// </summary>
     Help = 16,
     /// <summary>

@@ -408,9 +408,9 @@ phases, no source ever called from the think:
      AI's rung (the own list's entry, weight 0.5, [town duties](#town-duties)); a player animal's priority-3 race goals on the AI's rung (`Ladder.OnRungs`, [captives](#captives):
      277 limb fetch 1, 278 limb play and 279 chase by their desires, x the race entry's weight); 259 Picking up food (`FeedSystem`, animals, weight 0.5); 16 attack on sight while on Hold (`AggroSystem`, 1 here,
      listed last as Hold adds it; the enemy this tick's look or a squad mate's found; desire 0 while Passive, sneaking outside a fight or not standing; a deferred fight, row 16).
-     The player faction's 15 Protect allies (`RetaliationSystem.JoinFight`, key 15, weight 1, listed before Self preservation; finder, desire and plan in
-     [precedence](game/ai-tasks.md#precedence)): the aggro looks' allies valued by their fight threat (`CombatSystem.FightThreat`), weighted by distance, a deferred defence, row 13, against `CombatSystem.BestAttackerOf`'s pick for the ally.
-     The retaliation pass offers nothing to it; the chooser reaches it at the think turn (idle or a job's task) or any replan, so a medic or worker on its job joins, one on an order does not.
+     The player faction's 15 Protect allies on the AI's rung (the faction list's entry, weight 1; the NPC's desire, finder and plan, with the distance falloff and Help Allies of a
+     player-faction looker, [precedence](game/ai-tasks.md#precedence)): the aggro looks' allies valued by their fight threat (`CombatSystem.FightThreat`), a defence on row 13 against
+     `CombatSystem.BestAttackerOf`'s pick for the ally, acted out as an NPC's (`AskFight`). The chooser reaches it at the think turn or any replan, so a medic or worker on its job joins, one on an order does not.
      A player character woken by a failed kidnap (`CarrySystem.Kidnap`) or targeted by a failed stealth knock-out (`CarrySystem.StealthKo`) is told of the attacker (forced sense) and
      replans (`EngagedDefence.Engage`); `EngagedDefence` (key 32, desire 1 within 40 else 0.7, a deferred defence, row 13) answers for 5 s unless an order runs first (**Engine**
      stand-in for the threats list, [carry-loot](game/carry-loot.md#kidnapping), [combat](game/combat.md#stealth-knock-out)). A sleeper's kidnap also gives it order 116 with the clear flag
@@ -2026,7 +2026,7 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
     name; the older `meitou jobs enabled` is read, not written; `chase mode` is written and read as the switch. The squad AI options are the
     CAMERA bools ([squad AI options](game/ai-tasks.md#squad-ai-options)). A job's trip is not saved.
 - **Squad AI options** (`PlayerState.SquadAi`, the overview's AI tab, defaults as the owner's saves): Ditch, Sleep, Sit above; Heal Allies
-  (the medic jobs take allied factions' patients scoring ≥ 0.1), Help Allies (`RetaliationSystem.JoinFight`: the fighters of allied factions count in
+  (the medic jobs take allied factions' patients scoring ≥ 0.1), Help Allies (`AiSystem.PlayerFactionWeigh`: the fighters of allied factions count in
   goal 15's finder, their weight squared, [precedence](game/ai-tasks.md#precedence)), Rescue Allies (above), Share Food (`FeedSystem`: a player character with no food takes it from a squad mate's backpack within 200,
   only with the option), Feed Animals (off: the player's animals do not eat), Shoot first (`SquadAiRules.ShootsFirstAt`: with no enemy in its
   sights a player turret gunner also takes dangerous neutrals at weight 0.6); Meitou-only Heal Neutrals and Heal All (player medics also treat downed non-hostile
