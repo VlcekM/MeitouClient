@@ -330,8 +330,8 @@ internal sealed class DutyGoals
     }
 
     /// <summary>
-    /// Starts the engine goals the thinks chose this tick (serial, slot order), for each character the AI still holds whose current goal is that goal
-    /// and that no goal holds yet; a start is recorded (<see cref="Take"/>), a refusal backs the goal off for the character, and a character skipped
+    /// Starts the engine goals the thinks chose this tick (serial, slot order), for each character a goal may hold (<see cref="AiSystem.MayHoldDuty"/>:
+    /// the AI holds it, or it thinks in its cage) whose current goal is that goal and that no goal holds yet; a start is recorded (<see cref="Take"/>), a refusal backs the goal off for the character, and a character skipped
     /// chooses again at the next tick.
     /// </summary>
     void SendStarts(World world, int backoffTicks)
@@ -343,7 +343,8 @@ internal sealed class DutyGoals
 
             mind.DutyAsk = false;
             if (!table.Next[s].Alive) continue;
-            if (mind.Goal is not { } goal || EntryOf(goal.Task.Type) is not { } entry || mind.Duty is not null || !AiSystem.Holds(table.Next[s], cold))
+            if (mind.Goal is not { } goal || EntryOf(goal.Task.Type) is not { } entry || mind.Duty is not null
+                || !AiSystem.MayHoldDuty(table.Next[s], cold))
             {
                 mind.Replan = true;
                 continue;
@@ -421,8 +422,8 @@ internal sealed class DutyGoals
 
     /// <summary>
     /// Why a live record ended, or null while it holds: its think chose another goal (displaced); an order runs; an order on its body runs, it is
-    /// down, its mind was made anew or its plan wiped or ended (replanned); the AI no longer holds it (taken: engaged by another system, fleeing,
-    /// fighting, carried, caged, or a task another system started replaced the act-out, <see cref="AiSystem.OnDuty"/>).
+    /// down, its mind was made anew or its plan wiped or ended (replanned); no goal may hold it any more (taken: engaged by another system, fleeing,
+    /// fighting, carried, caged without its own think, or a task another system started replaced the act-out, <see cref="AiSystem.MayHoldDuty"/>).
     /// </summary>
     static DutyEnd? Ends(World world, int slot, CharacterCold cold, Held held)
     {
@@ -432,7 +433,7 @@ internal sealed class DutyGoals
         if (DecisionSystem.Ordered(cold)) return DutyEnd.Order;
         if (mind.Goal is not { } goal || !Same(goal, held.Goal)) return DutyEnd.Replanned;
 
-        return AiSystem.Holds(world.Characters.Next[slot], cold) ? null : DutyEnd.Taken;
+        return AiSystem.MayHoldDuty(world.Characters.Next[slot], cold) ? null : DutyEnd.Taken;
     }
 
     /// <summary>

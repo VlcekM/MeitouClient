@@ -321,6 +321,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 continue;
             }
 
+            if (ThinksCaged(cold))
+            {
+                ThinkCaged(world, i, id, mind, squad, board, roles, hour);
+                continue;
+            }
+
             // A character on an engine duty or in an engine fight: only the goals that pre-empt it (Preempts) are weighed.
             if (Preempts(n, cold) is not Restrict.None and var only && Choose(world, i, id, mind, squad, board, roles, hour, only) is { } urgent)
             {
@@ -349,6 +355,46 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         mind.Urgent = wanted;
         mind.Version = board.Version;
+    }
+
+    /// <summary>
+    /// Whether the character's chooser runs in its cage (<see cref="CagedMind"/>) while systems act engine goals out (<see cref="DutyGoals"/>).
+    /// </summary>
+    bool ThinksCaged(CharacterCold cold) => _duties is not null && CagedMind(cold);
+
+    /// <summary>
+    /// An NPC held in a cage whose chooser runs (docs/game/ai-tasks.md "Leaving the night cage", <b>Verified</b>: the cage sets the imprisoned or
+    /// chained repertoire, so only the rows registered for it plan): a full mind of its own, awake, not carried and held by no order.
+    /// </summary>
+    internal static bool CagedMind(CharacterCold cold) =>
+        cold is { IsImprisoned: true, IsPlayer: false, Fleeing: false, Engaged: false, Ai: { Engine: false, Player: false } }
+        && cold.CarriedBy.IsNone && cold.Medical is not { Incapacitated: true } && !DecisionSystem.Ordered(cold);
+
+    /// <summary>
+    /// Whether an engine goal may hold the character (<see cref="DutyGoals"/>): the AI runs it (<see cref="Holds"/>), or it thinks in its cage
+    /// (<see cref="CagedMind"/>) on no task but the act-out's (<see cref="OnDuty"/>), so a goal acted out from the cage (getting out, its shackles)
+    /// starts and holds there.
+    /// </summary>
+    internal static bool MayHoldDuty(in CharacterHot n, CharacterCold cold) =>
+        Holds(n, cold) || CagedMind(cold) && (cold.Ai!.Duty is null || OnDuty(cold, cold.Ai));
+
+    /// <summary>
+    /// The think of an NPC in its cage (<see cref="CagedMind"/>): it weighs its goals as anyone does (<see cref="Restrict.Caged"/>), and acts the winner
+    /// out only when a system acts it out from the cage (an engine goal); with any other winner, or none, it stays held with no goal, as the cage
+    /// leaves it nothing to do. A winner over the engine goal holding it ends that goal in the serial step. Writes only its own slot.
+    /// </summary>
+    void ThinkCaged(World world, int slot, CharacterId id, AiMind mind, Squad squad, Blackboard board, IReadOnlyList<AiGoal> roles, int hour)
+    {
+        var goal = Choose(world, slot, id, mind, squad, board, roles, hour, Restrict.Caged);
+        bool duty = goal is not null && _duties!.Has(goal.Task.Type);
+        if (mind.Duty is { } held && (!duty || !DutyGoals.Same(held, goal!)))
+        {
+            _duties!.Leave(mind);
+            return;
+        }
+
+        if (duty) Act(world, slot, mind, goal!, board);
+        else LieOnWithNoGoal(mind, board);
     }
 
     /// <summary>
@@ -397,6 +443,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         /// Fixing Legs treatment (<see cref="TreatsOwnLegs"/>).
         /// </summary>
         Urgent,
+        /// <summary>
+        /// Every tier of the lists, as for one the AI holds, for an NPC thinking in its cage (<see cref="ThinkCaged"/>), but not the goals whose plan
+        /// is the engine's own (<see cref="PlanContext.OwnPlan"/>): the planner's repertoire test, which the cage narrows, never sees them.
+        /// </summary>
+        Caged,
     }
 
     /// <summary>
@@ -677,7 +728,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         var race = mind.RaceGoals;
         var candidates = Candidates;
         var plans = PlanContext.Local.Bind(this, world, slot, mind, board);
-        if (only == Restrict.None) EndStep(world, slot, id, mind, squad, board, plans, hour);
+        bool allTiers = only is Restrict.None or Restrict.Caged;
+        if (allTiers) EndStep(world, slot, id, mind, squad, board, plans, hour);
 
         // While a goal it committed to is running, only a tier above that goal's priority may take over; if none plans, the goal and its plan stay
         // (FUN_140510ef0 in committed mode, Verified). Not past its hours: the plan step ends a goal's plan then, and the update clears a goal
@@ -686,7 +738,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             && world.GameHours < mind.CommitUntil && running.InWindow(hour) ? running : null;
         foreach (var tier in Tiers)
         {
-            if (committed is not null && tier <= committed.Task.Priority || only != Restrict.None && tier != TaskPriority.Urgent) break;
+            if (committed is not null && tier <= committed.Task.Priority || !allTiers && tier != TaskPriority.Urgent) break;
             candidates.Clear();
             void Consider(AiGoal g)
             {
@@ -698,6 +750,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 {
                     Restrict.Self => !ReferenceEquals(g, SelfPreservationGoal),
                     Restrict.Combat => TaskBehaviours.Of(g.Task.Type) != AiBehaviour.Fight && !ReferenceEquals(g, SelfPreservationGoal),
+                    Restrict.Caged => PlanContext.OwnPlan(g),
                     _ => false,
                 })
                 {

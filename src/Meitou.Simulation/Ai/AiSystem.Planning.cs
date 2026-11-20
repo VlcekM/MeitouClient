@@ -291,6 +291,18 @@ public sealed partial class AiSystem
             or AiBehaviour.RescueLeader or AiBehaviour.RescueToBed or AiBehaviour.Captive;
 
         /// <summary>
+        /// Whether goal <paramref name="goal"/>'s plan is the engine's own (<see cref="TryPlan"/>: the engine-run goals, Self preservation, a follow
+        /// aimed at the squad's mission, a type without a TaskData row), made without the repertoire test of the planner's root row.
+        /// </summary>
+        public static bool OwnPlan(AiGoal goal)
+        {
+            var type = goal.Task.Type;
+            if (EngineActs(type) || type == TaskType.SelfPreservation || TaskDataTable.Of(type) is null) return true;
+
+            return TaskBehaviours.Of(type) == AiBehaviour.Follow && goal.Task.Target == TaskTargetType.SquadMission;
+        }
+
+        /// <summary>
         /// Whether a goal's plan is the planner's, run step by step (<see cref="PlanSteps"/>): not one of the plans of its own (<see cref="TryPlan"/>:
         /// the engine-run goals, Self preservation, a follow aimed at the squad's mission), and of a row that acts or has an effect (a row with
         /// neither, Idleness among them, makes no task: the original's update drops such a goal at once, <c>FUN_140511130</c>).
