@@ -823,8 +823,8 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   `amInsideTownWalls` 0 and a door (`getDoor`), whose door point +0x3bc is moved 200 along a normalised direction (its origin is dropped
   by the decompile; outward from the town is **Observed** from the name), or another building that is a wall (`isAWall`) whose BUILDING record has `interior` references (`myInterior` +0x1f0, created only then by `Building::setup` `FUN_140551b20`), whose position
   is moved the same way; a gateway inside the walls or without a door (a ruin, [locks](locks.md#doors)) is passed over, never taken as a wall; neither: the town position. A town without gates: a door point of the object under the town position
-  (`FUN_1409b2ab0`, a ray from 1000 above), else the position. So the Hub, whose gate set holds only its two ruined `Defensive Gate IV`, gives its town position,
-  and Skinhouse HQ, which has no gateway building (its first wall with an interior, a `Defensive Wall IV` 3700 from its centre, is none), takes the gateless branch
+  (`FUN_1409b2ab0`, a ray from 1000 above), else the position. So the Hub, whose gate set holds only its two `Defensive Gate IV`, gets a point beyond one of
+  them while it has a door, else its town position, and Skinhouse HQ, which has no gateway building (its first wall with an interior, a `Defensive Wall IV` 3700 from its centre, is none), takes the gateless branch
   (**Verified**, the data).
   Meitou: `TownExit` (Town +0x38 and +0x290 alike: the patrols, the intruder errand 274, the travel rows 53 / 130, the war point and the homeward walks; placed towns by
   their level buildings in list order, a player town by its complete sites; engine readings: list order for the set's, and the town position for the door point of a
