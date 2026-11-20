@@ -3597,7 +3597,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (!cold.IsPlayer && (PlayerFactionOf(world) is var faction && (faction < 0 || cold.Faction != faction))) return;   // setupAI's branch: the faction's
         if (cold.Ai is { PlayerSide: true } held && ReferenceEquals(held.Squad, squad)) return;
 
-        if (cold.Ai?.Duty is not null) _duties?.Release(world, s, DutyEnd.Gone);
+        if (cold.Ai?.Duty is not null) _duties?.Release(world, s, DutyEnd.Replanned);
         var p = table.Next[s].Position;
         cold.Ai = new AiMind
         {

@@ -208,9 +208,9 @@ internal sealed record ModGoalClaim(IModGoal Goal, TaskType Type, ModGoalType Cl
 public interface IModGoal
 {
     /// <summary>
-    /// How much the character wants the goal now; 0 or below: not wanted. Called in the AI's parallel think, on the asker's own partition, for a
-    /// character whose lists hold the type in the hour's window: answer from <paramref name="ask"/> and from the mod's own state that only its serial
-    /// steps change. A throw or an answer that is not a finite number drops the goal for the world from the next tick.
+    /// How much the character wants the goal now; 0 or below: not wanted. Called in parallel with other characters' asks, on the asker's partition,
+    /// for a character whose lists hold the type in the hour's window: answer from <paramref name="ask"/> and from the mod's own state that only its
+    /// serial steps change. A throw or an answer that is not a finite number drops the goal for the world from the next tick.
     /// </summary>
     float Desire(in ModGoalAsk ask);
 
@@ -225,7 +225,8 @@ public interface IModGoal
     /// <summary>
     /// The goal stopped holding the character for <paramref name="why"/>: drop what the act-out holds and leave the task alone (for
     /// <see cref="ModGoalEnd.Displaced"/> the engine stops a task that is still the act-out's). Called serially, in slot order, in the tick the end
-    /// is seen or the next. Not called after <see cref="ModGoals.Done"/>, nor for a goal dropped after a fault.
+    /// is seen or the next. Not called after <see cref="ModGoals.Done"/>, nor once the goal is dropped (a fault, or its system stopped), nor at a load
+    /// (nothing held is saved).
     /// </summary>
     void End(World world, int slot, CharacterId id, TaskType type, ModGoalEnd why);
 }
@@ -246,20 +247,20 @@ public enum ModGoalEnd : byte
     /// </summary>
     Displaced,
     /// <summary>
-    /// An order's task starts on the character.
+    /// An order's task starts on the character, or it changes faction (a recruit).
     /// </summary>
     Order,
     /// <summary>
-    /// The character's plan was reset: a knock-out, death or pick-up, an order on its body (a stumble, a get-up), a new mind, or the goal left its
-    /// hours.
+    /// The character's plan was reset: a knock-out, death or pick-up (its plan wiped), an order on its body (a stumble, a get-up), a new mind, or
+    /// the goal's plan ended (it left its hours).
     /// </summary>
     Replanned,
     /// <summary>
-    /// Something else holds the character now: it flees, fights, is carried or caged, or a task another system started replaced the act-out.
+    /// Something else holds the character now: it flees, fights or is caged, or a task another system started replaced the act-out.
     /// </summary>
     Taken,
     /// <summary>
-    /// The character left the world or died.
+    /// The character left the world.
     /// </summary>
     Gone,
 }

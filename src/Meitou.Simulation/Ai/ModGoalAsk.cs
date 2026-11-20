@@ -7,9 +7,9 @@ using Meitou.Simulation.Population;
 namespace Meitou.Simulation.Ai;
 
 /// <summary>
-/// One character and a goal of a mod's type as the chooser's parallel think asks about it (<see cref="IModGoal.Desire"/>): a read-only view that
-/// offers only what is safe to read there, the asker's own state, other characters' state as of the last finished tick, its squad, faction relations,
-/// the time and the game data, as values. A <c>ref struct</c>: it lives for the one call and cannot be kept or captured.
+/// One character and a goal of a mod's type as the chooser asks about it, in parallel with other asks (<see cref="IModGoal.Desire"/>): a read-only
+/// view that offers only what is safe to read there, the asker's own state, other characters' state as of the last finished tick, its squad, faction
+/// relations, the time and the game data, as values. A <c>ref struct</c>: it lives for the one call and cannot be kept or captured.
 /// </summary>
 public readonly ref struct ModGoalAsk
 {

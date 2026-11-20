@@ -36,7 +36,7 @@ internal enum DutyEnd : byte
     /// </summary>
     Taken,
     /// <summary>
-    /// The character left the table or died.
+    /// The character left the table.
     /// </summary>
     Gone,
 }
@@ -326,12 +326,12 @@ internal sealed class DutyGoals
 
     /// <summary>
     /// Whether the goal <paramref name="type"/> holds the character at <paramref name="slot"/> and its act-out may go on now (a serial read for the
-    /// registering system's own steps): its record runs, the AI holds the character and no order on its body runs. False until the next sweep ends a
-    /// record that no longer holds.
+    /// registering system's own steps): its record runs, the AI holds the character and no order on its body runs, and a mod's goal is not dropped
+    /// (<see cref="ModGoal.Dropped"/>). False as soon as the next sweep would end the record.
     /// </summary>
     internal bool Runs(World world, int slot, TaskType type) =>
         _held.TryGetValue(slot, out var held) && held.Entry.Type == type && world.Characters.Cold(slot) is { } cold
-        && Ends(world, slot, cold, held) is null;
+        && Ends(world, slot, cold, held) is null && !(held.Entry.Goal is ModGoal goal && goal.Dropped(world));
 
     /// <summary>
     /// The act-out is over by the registering system's own rule (serial): the record goes and the goal ends on the mind, which chooses again at its
@@ -504,8 +504,9 @@ internal sealed class DutyGoals
 
     /// <summary>
     /// Why a live record ended, or null while it holds: its think chose another goal (displaced); an order runs; an order on its body runs, it is
-    /// down, its mind was made anew or its plan wiped or ended (replanned); no goal may hold it any more (taken: fleeing, fighting,
-    /// carried, caged without its own think, or a task another system started replaced the act-out, <see cref="AiSystem.MayHoldDuty"/>).
+    /// down, its mind was made anew (replanned); no goal may hold it any more (taken: fleeing, fighting, carried, caged without its own think, or a
+    /// task another system started replaced the act-out, <see cref="AiSystem.MayHoldDuty"/>), whatever goal a think over that task took up since; its
+    /// plan wiped or ended (replanned).
     /// </summary>
     static DutyEnd? Ends(World world, int slot, CharacterCold cold, Held held)
     {
@@ -513,9 +514,10 @@ internal sealed class DutyGoals
         if (mind.DutyLeave) return DutyEnd.Displaced;
         if (PlayerOrders.BodyHolds(cold) || cold.Medical is { Incapacitated: true }) return DutyEnd.Replanned;
         if (DecisionSystem.Ordered(cold)) return DutyEnd.Order;
-        if (mind.Goal is not { } goal || !Same(goal, held.Goal)) return DutyEnd.Replanned;
+        if (mind.Goal is not { } goal) return DutyEnd.Replanned;
+        if (!AiSystem.MayHoldDuty(world.Characters.Next[slot], cold)) return DutyEnd.Taken;
 
-        return AiSystem.MayHoldDuty(world.Characters.Next[slot], cold) ? null : DutyEnd.Taken;
+        return Same(goal, held.Goal) ? null : DutyEnd.Replanned;
     }
 
     /// <summary>

@@ -939,8 +939,8 @@ holds refuses the second mod.
     the slave list of the squad it obeys; a player character's own `AI Goals` and its autonomous squad's package roles. It is weighed beside the
     engine's goals by the record's tier (`classification`) and hours, the list's weight and the running goal's continuity (x1.25); the type has no
     commitment or crowding. Without the code mod the goal is inert.
-  - **`Desire(in ModGoalAsk ask)`** is the whole desire (0 or below: not wanted), asked in the AI's parallel think on the asker's own partition.
-    The ask is a read-only `ref struct` that cannot be kept or captured: `Slot`, `Id`, `Type`, `Targeting`; the asker's own state this tick
+  - **`Desire(in ModGoalAsk ask)`** is the whole desire (0 or below: not wanted), asked in parallel with other characters' asks, on the
+    asker's own partition. The ask is a read-only `ref struct` that cannot be kept or captured: `Slot`, `Id`, `Type`, `Targeting`; the asker's own state this tick
     (`Self`, `ref readonly`), `Faction`, `Role`, `PlayerSide`, `IsAnimal`, `Carrying`, `InCombat`, `Orders`, `RunningRow`, `Running` (this goal
     holds it now); another character's state as of the last finished tick (`TryPrevious`, `FactionOf`); its squad (`SquadId`, `Leader`,
     `MemberCount`, `Member(k)`, `Town`, `Package`); `Relation` and `IsHostile` of two factions; `Tick`, `Hour`, `GameHours`, `Seed` (for
@@ -954,14 +954,15 @@ holds refuses the second mod.
     its task is the act-out (the task `Start` left running, or a goal's task started since). False starts nothing: the type weighs 0 for that
     character for four think periods. The HUD's Goal line shows the AI_TASK record's name while the goal holds the character.
   - **Ends:** `End(world, slot, id, type, ModGoalEnd why)`, serial, in the tick the end is seen or the next: `Displaced` (another goal won; the
-    engine stops a task still the act-out's: a walk stands, another ends through its handler), `Order` (an order's task starts), `Replanned` (a
-    knock-out, death or pick-up, an order on the body, a new mind, the goal's hours over), `Taken` (it flees, fights, is carried or caged, or
-    another system's task replaced the act-out), `Gone` (it left the world or died). Drop what the act-out holds and leave the task alone. A fight
-    takes the character over this way: `Displaced` when Self preservation or a combat goal wins on the chooser, `Taken` when another system
-    starts the fight first. `ModGoals.Done(world, slot, type)` ends the goal
-    by the mod's rule (no `End`; a task still the act-out's stops as for `Displaced`), and `ModGoals.Holds(world, slot, type)` tells the mod's
-    serial step whether its act-out goes on; both throw in a parallel phase. Nothing is saved: after a load no goal holds anyone, and the chooser
-    starts the goal again.
+    engine stops a task still the act-out's: a walk stands, another ends through its handler), `Order` (an order's task starts, or it changes
+    faction), `Replanned` (a knock-out, death or pick-up, an order on the body, a new mind, the goal's plan over with its hours), `Taken` (it
+    flees, fights or is caged, or another system's task replaced the act-out), `Gone` (it left the world). Drop what the act-out holds and leave
+    the task alone. A fight takes the character over this way: `Displaced` when Self preservation or a combat goal wins on the chooser, `Taken`
+    when another system starts the fight first. `End` comes once per `Start` that answered true, but not after `ModGoals.Done(world, slot, type)`,
+    which ends the goal by the mod's rule (a task still the act-out's stops as for `Displaced`), nor for a dropped goal (Faults below).
+    `ModGoals.Holds(world, slot, type)` tells the mod's serial step whether its act-out goes on (false once the goal is dropped); both throw in a
+    parallel phase. Nothing is saved: after a load no goal holds anyone and no `End` comes for the goals held at the save, so a mod that saved
+    its act-outs finds them by `Holds` being false; the chooser starts the goal again.
   - **Faults:** a `Desire` that throws or answers a number that is not finite at tick T is still asked by T's other threads and not from T + 1,
     and no start of it is asked from T; a `Start` or `End` that throws stops it at once. The first fault is logged with the mod id and the goal
     type, gives the player a notice and enters the state hash. A faulted goal, and the goals of a system the world stopped (Tick systems above),
@@ -986,7 +987,7 @@ holds refuses the second mod.
   - `IDecisionOwner` with `DecisionSystem.Register(source)`: a chooser goal (`ChooserRegistry.Goal`) or an order (`World.GiveOrder`);
     `DecisionSystem.RegisterJob(type, source)`: `ChooserRegistry.Jobs(type, source)`.
   - `INpcGoalOwner.RegisterGoals(NpcGoals)` with `Register(type, goal)`: `IChooserOwner.Register` with `ChooserRegistry.Goal(type, goal)`.
-  - `INpcGoal.Desire(world, in NpcGoalAsk)`: `IModGoal.Desire(in ModGoalAsk)`, still in the parallel think, reading through the ask.
+  - `INpcGoal.Desire(world, in NpcGoalAsk)`: `IModGoal.Desire(in ModGoalAsk)`, still asked in parallel, reading through the ask.
   - `INpcGoal.Start` setting `Engaged`, walking and answering true: `IModGoal.Start` walking and answering true; the goal holds the character.
   - Done by stopping the task, clearing `Engaged` and setting `Replan`: `ModGoals.Done(world, slot, type)`.
   - Releasing for a fight: nothing to do; `End(Displaced)` or `End(Taken)` is called (Ends above).

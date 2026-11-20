@@ -2454,8 +2454,9 @@ its plan the act-out carries out besides the goal's own. Built: 135, 139, 282, 2
   [holds](game/ai-tasks.md#precedence)): it chooses with all its goals and acts the winner out (141 follows the leader with the body, a Post walks there); rows that
   need empty hands do not plan (list B `!47`: sleeping, sitting, the static guards, 36 patrolling town, the turret, assaults).
 - **End** (`IDutyGoal.End` with `DutyEnd`, then the goal and plan leave the mind, which replans): displaced; an order's start (`IDutyRelease`, a faction change too); an
-  order on the body (`AiSystem.ReplanDuty`), a knock-out or death, a wiped or ended plan, a new mind (replanned); anything else holding it (taken: fleeing,
-  fighting, carried, caged by another, a task another system started; a caged mind keeps the goal it acts out from the cage); gone. A displaced act-out whose provenance is still its own is stopped after `End` (a walk
+  order on the body (`AiSystem.ReplanDuty`), a knock-out, death or pick-up (the body's plan wiped), an ended plan, a new mind (replanned); anything else holding it,
+  whatever goal a think over its task took up since (taken: fleeing, fighting, caged by another, a task another system started; a caged mind keeps the goal it
+  acts out from the cage); gone (it left the table). A displaced act-out whose provenance is still its own is stopped after `End` (a walk
   stands, another task but idle ends through its handler), so the AI holds the character for the winner; the other ends leave the task to what ended the goal. The
   system's own end is `DutyGoals.Done` (no `End`; a task of the act-out still running stops as a displaced one's). A walk of the act-out that ends short is a lost walk
   (`DutyGoals.LostWalk`; the gate, warden and town act-outs): its target goes into `CharacterCold.Ignored` for 20 s and the goal ends for a replan, with no back-off
@@ -2471,8 +2472,8 @@ its plan the act-out carries out besides the goal's own. Built: 135, 139, 282, 2
   act-out; `End` hears the `DutyEnd` as a `ModGoalEnd`; `ModGoals.Holds` / `Done` are the mod's reads and end. A player-faction mind weighs a
   mod type of its own lists (`AiSystem.OnRungs`: the rungs or a registered mod type) and of its autonomous squad's package roles. Faults: a
   desire that throws or is not finite at tick T is still asked by T's other threads and not from T + 1, and no start of it is asked from T; a
-  start's or end's throw stops it at once; the first is logged with the mod's id, gives the player a notice (`CodeModFaults.Notice` for a mod
-  built for another version of the game) and the faulted goals are hashed (`DutyGoals.Hash`, "MGFL"). A faulted goal, or one whose registering
+  start's or end's throw stops it at once; the first is logged with the mod's id, gives the player a notice (`CodeModFaults.Tell`'s one per mod for a
+  mod built for another version of the game) and the faulted goals are hashed (`DutyGoals.Hash`, "MGFL"). A faulted goal, or one whose registering
   system the world stopped, is dropped at the AI's next serial step: the mod is called no more, its holds end with no `End` and no handler (a
   walk on the act-out is stood still) and the character chooses again (`DutyGoals.LetGoDropped`). Task rows from 1000 up have one owning mod
   (`TaskHandlers.RegisterMod`, against `SimulationExtensions.TaskOwners`).
