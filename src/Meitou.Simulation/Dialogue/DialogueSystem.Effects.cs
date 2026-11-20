@@ -162,9 +162,9 @@ public sealed partial class DialogueSystem
         {
             case DialogueActions.Trade:
                 // The window opens whatever the speaker's squad stocks (FUN_1409524f0 tests no stock); a squad with none trades from an empty one
-                // (TradeSystem.StockFor).
+                // (TradeSystem.StockFor). It opens where the conversation stands, with no order (FUN_140791830 only queues the window).
                 c.Ended = true;
-                if (mc is { SquadId: >= 0 }) world.Defer(new Trading.OpenTrade(target, me) { Tick = world.Tick + 1 });
+                if (mc is { SquadId: >= 0 }) world.Defer(new Trading.OpenTradeNow(target, me) { Tick = world.Tick + 1 });
                 return true;
             case DialogueActions.CharacterEditor:
                 c.Ended = true;

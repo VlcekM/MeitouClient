@@ -94,7 +94,8 @@ public sealed partial class World
         TaskType.GetOutOfCageLegit => Locks.FreedPrisoner.Instance,
         TaskType.RunAway => SystemOf<Aggro.FleeSystem>(),
         TaskType.GetUp or TaskType.Aoeu or TaskType.StumbleTaskForced or TaskType.GetOutOfBed => SystemOf<Combat.CombatSystem>()?.BodyOrders,
-        TaskType.SeekAndTalkAndSendSignal or TaskType.FollowWhileTalking or TaskType.TownStalker => SystemOf<Dialogue.DialogueSystem>()?.TalkOrders,
+        TaskType.PlayerTalkTo or TaskType.SeekAndTalkAndSendSignal or TaskType.FollowWhileTalking or TaskType.TownStalker
+            => SystemOf<Dialogue.DialogueSystem>()?.TalkOrders,
         TaskType.GoHomebuilding or TaskType.Patrol or TaskType.MoveOnFreeWillFast or TaskType.RunAwayForced or TaskType.DefeatSquad
             or TaskType.DefeatSquadLimitChaseRange => SystemOf<Ai.AiSystem>()?.NpcOrders,
         _ => Locks.LockSystem.OwnsRow(row) ? SystemOf<Locks.LockSystem>() : null,

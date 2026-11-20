@@ -10,8 +10,8 @@ using Meitou.Simulation.Population;
 namespace Meitou.Simulation.Dialogue;
 
 /// <summary>
-/// The player's Talk order: <see cref="Talker"/> walks up to <see cref="Target"/> and the conversation opens in reach (the original's task 12, then
-/// event 1).
+/// The player's Talk order: <see cref="Talker"/> gets order 12 Talking on <see cref="Target"/> (<see cref="PlayerTalks"/>): it walks up and the
+/// conversation opens in reach (event 1).
 /// </summary>
 public sealed record TalkOrder(CharacterId Talker, CharacterId Target) : OrderCommand;
 /// <summary>
@@ -103,10 +103,6 @@ public interface IDialogueSource
 public sealed class DialogueSettings
 {
     /// <summary>
-    /// Game seconds the talker may spend not moving on its walk to the target before the order is dropped (engine choice, <see cref="WalkUp"/>).
-    /// </summary>
-    public float ApproachSeconds { get; init; } = 60;
-    /// <summary>
     /// Characters react to those they sense with an event line (the sight pass: 3 neutral, 66 enemy, 67 ally, 27 animals and the rest) and fire the
     /// other event lines as speech bubbles (docs/game/dialogue.md "Ambient conversations"): off by default (the pinned scenarios), the game turns it
     /// on.
@@ -119,8 +115,8 @@ public sealed class DialogueSettings
 }
 
 /// <summary>
-/// Dialogue (docs/game/dialogue.md; the engine design is its "Meitou design"): the player's conversations with NPCs. A <see cref="TalkOrder"/> walks
-/// the talker up and fires event 1
+/// Dialogue (docs/game/dialogue.md; the engine design is its "Meitou design"): the player's conversations with NPCs. A <see cref="TalkOrder"/>'s
+/// order 12 walks the talker up and fires event 1
 /// (PLAYER_TALK_TO_ME) at the NPC: its event-1 dialogue is chosen (score, line checks, a random pick at the top score), the NPC's line is said (its
 /// effects run at once) and the
 /// passing replies become choices. The window pauses the game, so <see cref="DialogueChoice"/> and <see cref="EndConversation"/> apply between ticks
@@ -185,18 +181,15 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     readonly ApproachQueue _npcApproaches;
 
     /// <summary>
-    /// The owner of the talk orders 102, 164 and 165 and their act-outs.
+    /// The characters on order 12, walking up to talk or trade.
+    /// </summary>
+    readonly PlayerTalks _talks;
+
+    /// <summary>
+    /// The owner of the talk orders 12, 102, 164 and 165 and their act-outs.
     /// </summary>
     readonly DialogueOrders _orders;
 
-    /// <summary>
-    /// The approach of a Talk order: its talker and target (none: no walk).
-    /// </summary>
-    CharacterId _talker = CharacterId.None, _target = CharacterId.None;
-    /// <summary>
-    /// The walk of a Talk order's talker up to its target.
-    /// </summary>
-    readonly WalkUp _approach;
     /// <summary>
     /// The open player conversation; null: none.
     /// </summary>
@@ -254,14 +247,14 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         this._population = population;
         _dialogue = data.Dialogue;
         Settings = settings ?? new DialogueSettings();
-        _approach = new(Settings.ApproachSeconds);
+        _talks = new(this);
         _npcApproaches = new(this);
         _illegalGoods = new(data);
         _arrival = new(this, data, _dialogue);
         _characterTrading = new(this, data);
         _followers = new(this);
         _stalkers = new(this, data);
-        _orders = new(_npcApproaches, _followers, _stalkers);
+        _orders = new(_talks, _npcApproaches, _followers, _stalkers);
     }
 
     /// <summary>
@@ -270,12 +263,12 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     public DialogueSettings Settings { get; }
 
     /// <summary>
-    /// The owner of the talk orders 102, 164 and 165 (<see cref="World.OrderOwnerOf"/>).
+    /// The owner of the talk orders 12, 102, 164 and 165 (<see cref="World.OrderOwnerOf"/>).
     /// </summary>
     internal IOrderOwner TalkOrders => _orders;
 
     /// <summary>
-    /// Registers the talk act-out (orders 102 and 165).
+    /// Registers the talk act-out (orders 12, 102 and 165).
     /// </summary>
     public void RegisterTasks(TaskHandlers tasks) => tasks.Register(CharacterTask.Talk, _orders);
 
@@ -360,7 +353,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
             {
                 case TalkOrder t:
                     End(world);
-                    StartApproach(world, t);
+                    GiveTalk(world, t);
                     break;
                 case DialogueChoice c when _open is not null:
                     Choose(world, _open, c.Index);
@@ -368,7 +361,6 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
                     break;
                 case EndConversation:
                     End(world);
-                    CancelApproach(world);
                     break;
                 case ConfirmCharacterTrade confirm:
                     _characterTrading.ConfirmTrade(world, confirm.Selected);
@@ -395,8 +387,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     }
 
     /// <summary>
-    /// The slow-world step: the speech and trade window upkeep, the memory's ageing, the bubbles, the get-up events, the talk orders' act-outs
-    /// (walk-ups, followers, stalkers), then the Talk order's walk (the conversation opens in talk range). The sight events are
+    /// The slow-world step: the speech and trade window upkeep, the memory's ageing, the bubbles, the get-up events and the talk orders' act-outs
+    /// (the player's talks, walk-ups, followers, stalkers; a talk's conversation opens in talk range). The sight events are
     /// <see cref="Perception.SightSystem"/>'s.
     /// </summary>
     public void SlowWorld(World world)
@@ -409,28 +401,15 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         DropRunOutCooldowns(world);
         _starters.DropGone(world);
         _orders.Step(world);
-        if (!_talker.IsNone && _open is null)
-        {
-            var table = world.Characters;
-            if (!table.TryResolveNext(_talker, out int p) || !table.TryResolveNext(_target, out int n) || !Awake(table, p) || !Talkable(table, n))
-                CancelApproach(world);
-            else if (InTalkRange(table, p, n))
-            {
-                TaskStart.Stand(table, p);
-                var (who, whom) = (_talker, _target);
-                CancelApproach(world);
-                Start(world, whom, who, DialogueEvents.PlayerTalkToMe);
-            }
-            else if (!_approach.Follow(world, _talker, p, n)) CancelApproach(world);
-        }
         RefreshView(world);
     }
 
     /// <summary>
-    /// Starts a Talk order's walk: a player character to an awake NPC; a dumb talker refuses, and a hostile NPC without a pending interrupt is
-    /// attacked instead.
+    /// Gives a Talk order: a player character gets order 12 on an awake NPC through its queue (<see cref="PlayerOrders.Give"/>, the queue cleared
+    /// unless <see cref="OrderCommand.Queued"/>); the order check (<c>FUN_1405d1940</c>, before the giver's clear) refuses a dumb talker, and a
+    /// hostile NPC without a pending interrupt is attacked instead.
     /// </summary>
-    void StartApproach(World world, TalkOrder order)
+    void GiveTalk(World world, TalkOrder order)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(order.Talker, out int p) || table.Cold(p) is not { IsPlayer: true } pc
@@ -452,15 +431,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
             world.Defer(new Combat.AttackOrder([order.Talker], order.Target) { Tick = world.Tick + 1, Cause = "talking to a hostile character" });
             return;
         }
-        _talker = order.Talker;
-        _target = order.Target;
-        _approach.Begin(world, _talker, p, n);
+        PlayerOrders.Give(world, p, new OrderEntry(Data.Gameplay.Ai.TaskType.PlayerTalkTo, _orders) { Target = order.Target }, order.Queued);
     }
-
-    /// <summary>
-    /// Ends the Talk order's walk (nothing holds its target: docs/game/dialogue.md "Player conversation").
-    /// </summary>
-    void CancelApproach(World world) => _talker = _target = CharacterId.None;
 
     /// <summary>
     /// The talk distance beyond the target's radius while walking (7 x 3, <c>AI::isWithinChoppingRange</c> for a character, docs/game/dialogue.md
@@ -494,7 +466,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     /// Whether a Talk order's target can be talked to: alive and not incapacitated, a caged one too (the order check <c>FUN_1405d1940</c> and the
     /// conversation start <c>FUN_140684320</c> test no imprisonment; Recruitable Prisoners' cage dialogue, #737).
     /// </summary>
-    static bool Talkable(CharacterTable table, int slot) =>
+    internal static bool Talkable(CharacterTable table, int slot) =>
         table.Next[slot].Alive && table.Cold(slot) is { } c && c.Medical?.Incapacitated != true;
 
     /// <summary>
@@ -865,14 +837,14 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
 
     /// <summary>
     /// Adds the dialogue state (rolls, line uses, permanent rolls, counters, memories, followers, stalkers, interrupts, bubbles, cooldowns,
-    /// approaches, downs, starters, the open conversation and the Talk walk) to the world hash; nothing while all are empty.
+    /// approaches, downs, starters, the player's talks and the open conversation) to the world hash; nothing while all are empty.
     /// </summary>
     public void Hash(ref StateHasher hasher)
     {
         if (_lastUse.Count == 0 && _permanent.Count == 0 && _counters.Count == 0 && Memory.IsEmpty && _interrupts.Count == 0 && _bubbles.Count == 0
             && _delivered.Count == 0
             && _eventCooldown.Count == 0 && _npcApproaches.Count == 0 && _down.Count == 0 && _starters.Count == 0
-            && _followers.Count == 0 && _stalkers.Count == 0 && _open is null && _talker.IsNone)
+            && _followers.Count == 0 && _stalkers.Count == 0 && _open is null && _talks.Count == 0)
         {
             return;
         }
@@ -926,8 +898,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         _npcApproaches.Hash(ref hasher);
         foreach (var id in _down) hasher.Add(id);
         _starters.Hash(ref hasher);
-        hasher.Add(_talker);
-        hasher.Add(_target);
+        _talks.Hash(ref hasher);
         if (_open is { } c)
         {
             hasher.Add(c.Npc);

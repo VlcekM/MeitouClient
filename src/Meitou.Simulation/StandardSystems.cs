@@ -83,7 +83,7 @@ public enum StandardParts
     /// </summary>
     Crime = 8192,
     /// <summary>
-    /// Shops, prices and trading (<see cref="Meitou.Simulation.Trading.TradeSystem"/>).
+    /// Shops, prices and trading (<see cref="Meitou.Simulation.Trading.TradeSystem"/>), with the dialogue system, whose talk order the Trade order is.
     /// </summary>
     Trade = 16384,
     /// <summary>
@@ -772,11 +772,10 @@ public static class StandardSystems
                 _trade.Crimes = _crime;
             }
 
-            if (Has(StandardParts.Dialogue))
-            {
+            // The Trade order is a talk order 12 (Dialogue.DialogueOrders.Trade), acted out by the dialogue system: trade brings it along.
+            if (Has(StandardParts.Dialogue | StandardParts.Trade))
                 _systems.Add(StandardParts.Dialogue, _talk = new Dialogue.DialogueSystem(_data, _o.Dialogue, _population));
-                _systems.Add(StandardParts.Dialogue, new Perception.SightSystem(_data));
-            }
+            if (Has(StandardParts.Dialogue)) _systems.Add(StandardParts.Dialogue, new Perception.SightSystem(_data));
 
             // a captive's squad remembers its captor (MY_CAPTOR), blows their tags
             if (_deeds is not null && _talk is not null)
