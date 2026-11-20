@@ -1280,7 +1280,9 @@ which an order's hold refuses. The chain's rows and states are in [AI tasks](gam
   below; an animal target, or a guard outside his town, is attacked instead: `ArrestSystem.CapturesInTown`), "Small bounty" sends the leader to talk (DA 2) and its interrupt opens the fine window (DA 8 + 49 pay and clear; the rest DA 29), others
   say nothing more. There is no retry timer: the original's spotting (`FUN_140856f00`, **Verified**) keeps no time of its own and fires at every call
   whose meter reads full, so a recognised target is fired at on every pass of a looker that is not fighting, and the lines' `chance temporary` and
-  `repetition limit` decide what is said (the base event-44 law roots: limit 1 or 2, 2 or 6 game hours; Shek's 6, 20 minutes; **Verified**, gamedata dump). The target is left alone only while the guard still talks or walks up to talk (order 102 at
+  `repetition limit` decide what is said (each of the 14 base roots any dialogue package lists for event 44 has a limit: 1, 2 h, in 7; 2, 6 h, in 3;
+  3 and 4 in one each; 6, 20 minutes, in "police bounty spotted" and "Shek law spots bounty"; **Verified**, the packages' `dialogs` lists in the
+  gamedata dump; of the roots for events 45 and 36, which the same pass fires, "police escaping prisoner" and "slave spotting escapING" have limit 0). The target is left alone only while the guard still talks or walks up to talk (order 102 at
   his queue's front; engine); paying ends it.
 - **Arrest orders** (DA 29, `ArrestSystem.OrderArrest`): in his own town (the town his resident squad belongs to, `Ai.AiSystem.TownAt` by its radius; engine stand-in without
   town data: within 2 x the squad's home radius of its centre) a non-animal target gets the guard 240 (his queue cleared), then 112 queued behind it; otherwise 4 Attacking
@@ -1501,7 +1503,7 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
   - **138** (finder `CorpseDisposal.FindCorpse`): a dead non-robot body in a cage of its faction in reach, else the nearest dead uncarried body in sight.
   - An intruder is taken only once a lift clip starts or it is carried: every member whose finder gives it walks to it and the first in reach lifts it; the others' starts are
     refused. **Observed** for 223 (original 1.0.65, the #1024 save, thralls of `ash dome mob` in their home): three thralls on the body's level converged on it and one lifted it
-    1.8 s after the load. A lift with no path to the body (`CarrySystem.LiftWalkFails`) is a lost walk on the body (ignored 20 s); the walk to it has
+    1.8 s after the load. A lift with no path to the body, or whose walk is given up blocked past the limit (`CarrySystem.LiftWalkFails`), is a lost walk on the body (ignored 20 s); the walk to it has
     no time limit, as `Task_LiftSomething` times only its clip (`FUN_140354ff0`, **Verified**).
 - **Carried body: 112 / 281, 274 / 224, 106, 137**, weighed by the chooser with every other goal (a higher tier first: an urgent 112 or a 224 before 274). Their desires are read
   in the look for the body carried then.

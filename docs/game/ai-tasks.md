@@ -816,7 +816,11 @@ Meitou: [simulation, captives](../simulation.md#captives).
   long spells (one to three targets an hour), with order `move_on_free_will` at 72 of 75 checks and `send_dialogue_signal` at 3, and none ever
   takes `stay_in_home`. Its walk runs while the slave moves faster than 20 ([pathfinding](pathfinding.md#running-after-a-moving-target); Meitou `FollowSlave`). Meitou (engine choice): the Shout job keeps with its slave and says the event again at each think turn (the stand-in for the AI update whose plan restarts the task) until its worker speaks,
   then the next job picks a slave again ([simulation](../simulation.md)). The original's `isDialogDelivered` is not that test: it is true
-  without a Dialogue object, else whether the event was delivered in the speaker's town ([dialogue](dialogue.md)).
+  without a Dialogue object, else whether the event was delivered in the speaker's town ([dialogue](dialogue.md)). Undelivered, the plan restarts the
+  task an AI update later: row 188 has no `+0x16` (its registration in `FUN_140319a60`), so the plan step ends it on its false list B (`FUN_14050d970`) and the
+  chooser plans 159 again, whose start fires 38 (**Verified**). The delivery entry (Dialogue `+0xf8`, one per event: the town it was delivered in, written by the
+  conversation end `FUN_140674830`, compared with the current town by `FUN_140673830`) is freed only with the Dialogue (`FUN_140674ee0`, **Observed**), so once
+  a line was delivered in the worker's town, 188's list B holds there and its plan needs no 159.
 - **Capture** (167): the planner chain is 167 (effect isChained 134) <- 166 Restraining (`Task_CuffTarget`; needs 38, at location, 118 TARGET_IS_UNARMED, 7 target down) <- 181 Stripping weapons
   (`Task_StripWeapons`; effect 118). The chain needs 38 `hasOneWorkingArm` (either arm, **Verified**: rows 166 and 181) and nothing else of the arms; 167 has no B list. Only the later lift (rows 213, 240, 246, 68, 170: 80 `isCarryingArmOK`, the left arm) needs the left arm, so a one-armed capturer cuffs and then leaves the captive. **Strip** (**Observed**, `FUN_14034e7b0`): `medic` for 0.8 s, then the items of the target's `hip` and `back` sections (`FUN_140747ff0`) go to the
   stripper's inventory (else its storage), and the stripper's squad sets short-term tag 6 on the target (`FUN_1406744a0`, once per item moved; the NPC looting finder skips tag-6 targets; Meitou `CaptiveSystem.Strip` sets `MemoryTag.Looted`, [carry-loot](carry-loot.md#33-npc-looting)). **Cuff** (`FUN_14034af20`): a "Restraining" bar
