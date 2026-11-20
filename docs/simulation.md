@@ -447,7 +447,8 @@ phases, no source ever called from the think:
 - **Triggers** (`CharacterCold.Replan`, `DecisionSystem.Request`; hashed while set; an NPC keeps the bit only while it holds an order): a task end (`TaskStart.End`, any reason), an order given or the queue cleared, a stagger outside a
   fight (not for a gunner), the melee alert while the fight is off unless the target gets up or is player-side and moving (horizontal speed above 1), a job list change or the jobs switch,
   a load, a sighting for row 16 (engine: the look stands in for the sensed list's update), a mate's or ally's defence offered, a failed kidnap's, knock-out's or crime's victim and an alarm's investigator told of their threat (`Character::attackTarget`), a fight's end (a follow row then follows again,
-  `MovementSystem.FollowAgain`: for an order in `PlayerOrders.Prepare`, for a job as its contributor). Also a front whose task ended, or one not tried yet. **Engine** turn (`TurnAsks`; no
+  `MovementSystem.FollowAgain`: for an order in `PlayerOrders.Prepare`, for a job as its contributor), a running follow row (a job's, or an order's not yet running its
+  own row) whose list B fails on 16 or 39 (the plan step's end, `FollowDefence.Due`). Also a front whose task ended, or one not tried yet. **Engine** turn (`TurnAsks`; no
   periodic replan was found): a player character's think turn asks the chooser while its task is a job's, 14 Idleness's or no start's, out of a fight, or its front order runs
   its task (the original's order step tests it on every AI update); any other character's turn always asks. The job step passes
   over a job the general list tests skip (`ListTests.JobSkipped`, [finished tests](game/ai-tasks.md#finished-tests)).
@@ -458,8 +459,6 @@ phases, no source ever called from the think:
   (the request stopped the goal's task). Every other ask (sightings, a mate's fight, a duty's or a mod goal's end, a walk's end, the jobs switch, a job removed or moved, the think
   turn) thinks again with the goal kept (`AiMind.Replan`, `DecisionSystem.Request`). The goal is cleared at the think, not at the ask (engine: at most a tick later). The
   request waits while the character is carried or down: the original's update skips the AI then (`FUN_1405d00b0`), so its first update after it takes the request.
-- **Engine starts outside the step** (a step of a running row, or a reaction to another's act; the step leaves a claimed character alone that tick, `DecisionSystem.Claim`): a follow
-  job's (or a not yet running follow order's) defence of its followed character and a bodyguard's own defence within 40 (`RetaliationSystem.Guards`, `SelfDefends`; claimed).
 - **Trace** (`DecisionSystem.Tracing`, off by default): each start pass fills `CharacterCold.Decision` (`DecisionTrace`: tick, winner, one line per source asked with its answer: an
   order's failure text, "no attacker in range", a score, a job's index), published as `CharacterSnapshot.Decision` while tracing. Not saved or hashed.
 - **Player-faction characters that are not `IsPlayer`** exist only in Meitou: the sandbox's and `--crowd`'s bystanders and tests' extras (a load, a new game or a recruit makes every
@@ -740,7 +739,7 @@ the UI ([independent squads](#autonomous-player-squads) are in `IndependentSquad
 
 Passive/Hold/Block/Taunt/Jobs state belongs to the character (medic and rescue are job-list entries, [job lists](#production)) and relevant
 systems; the rules follow [combat](game/combat.md#fight-lifecycle-and-orders). A player's character defends itself (32 Self preservation, a [decision step](#decision-step) goal) only when no order of its runs or can start (a
-bodyguard following also as a step of its row; a Loot order ends under a threat within 40) and against an attacker within √33000 ≈ 182; Passive does not stop that but keeps it
+Loot order ends under a threat within 40) and against an attacker within √33000 ≈ 182; Passive does not stop that but keeps it
 from joining others' defence and from attack on sight. Hold adds attack on sight (goal 16, another decision-step goal; not Passive, sneaking outside a fight, or prone), and every target of a
 holder (sight, self-defence, re-pick) passes the post test (`Orders.HoldPost`); it walks to a target only within 80 (140 when the target is in a fight and heads for it) of
 its hold point (`CharacterCold.HoldPoint`: where Hold was turned on, then each ground move's destination and each follow step's aim at the followed character's height (`MovementSystem.CarryHoldPoint`, as `Task_Follow`, [standing orders](game/combat.md#fight-lifecycle-and-orders)); not saved: a loaded holder holds where it stands, as setStandingOrder 12 does; **Observed**: the loader replays the jobs switch through it, Verified; Hold assumed alike).
@@ -2001,9 +2000,11 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
     XP entry (`XpService.Capped`, rate 2, cap = the building's `+0x1a4`, `MachineData.OutputValue` = `output rate` x `production mult` / `max operators` when above 1, **Verified** `FUN_14029e460`; [facts](game/ai-tasks.md#perma-jobs)). Blocked while the dummy has no free place or the character has no working arm.
   - 45 Bodyguard / 31 Staying close (`PermaJob.Character`; the "Follow" and "Bodyguard" verbs with Shift, `AddOrderJob` with the target): the character follows the job's character with a follow order
     (`MovementSystem.Follow`); blocked when it is gone, for 31 also while it is down; saved with the target's handle and found again from it after a load. Defending the followed
-    character (`RetaliationSystem.Guards`; rows 45 / 31 need state 16, [precedence](game/ai-tasks.md#precedence)): a bodyguard (45, the verb always gives the job; `Guarding` is a running
-    row 45, `CharacterCold.Running`) or a follower (31, 289; job or one-shot order) joins while its row runs (it follows) against an attacker within 40 of the target, and a bodyguard
-    also against its own attacker within 40 (45's `!39`; farther ones are Self preservation's, which an order outranks). A defence or goal fight started while a follow row runs is a step of the row (`TaskStart.Start` keeps the provenance), so both follow
+    character is the row's plan ([precedence](game/ai-tasks.md#precedence)): when the row's first unmet list-B entry is 16 (the followed character threatened within 40; for 45 also 39,
+    itself), the job's contributor or the follow order's owner starts 13 on the followed character's attacker `CombatSystem.BestAttackerOf` scores best (`FollowDefence`, a defence of
+    the row's provenance, from the next tick), unless the chain's attack is worth nothing (no working arm; crawling without a threat within 40 of itself, for an NPC not of the player's side;
+    deep water; the Hold post test), when the row cannot run; a running follow whose list B fails asks the decision step (`FollowDefence.Due`). A bodyguard (45, the verb always gives the job;
+    `Guarding` is a running row 45, `CharacterCold.Running`) has its fights also score the followed character's attackers. A defence or goal fight started while a follow row runs is a step of the row (`TaskStart.Start` keeps the provenance), so both follow
     again once that fight leaves them idle (`FollowResume`; the fight's end asks the decision step, `MovementSystem.FollowAgain`); any other start in between replaces the row. The jobs run with the switch off (`IgnoresSwitch`). Bodyguard given to an animal adds 289 (animal Staying close) instead of 31 (`PermaJobs.Add`): the same
     follow with the same down test, but it is not exempt, so it runs only with the jobs switch on (the row's destination-accessible-animal state 168 is not modelled).
     Adding a follow job or a one-shot follow removes what would close a circle (`MovementSystem.BreakCircle`: the other side's follow and its 31 / 45 jobs on the chain, [facts](game/animals.md#following)); a job starting does not.

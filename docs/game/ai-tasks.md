@@ -1175,9 +1175,14 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   (`taskPriority`): 1 fluff, 2 non-urgent, 3 urgent, 4 obedience; orders are queued at 3.
 - **So, for a player character**: an order beats everything, Self preservation included (an ordered medic keeps treating while hit; each landed blow staggers it and the order
   is planned again, [combat](combat.md#fight-lifecycle-and-orders)). Self preservation (while an attacker is within 181.7), Getting food and Hold's attack on sight beat every
-  job but the urgent ones (a turret's row refuses a threat within 40 anyway). An order or job can still fight by its own rows: 31 Staying close needs `!16` and 45
-  Bodyguard `!16, !39` (16 / 39: the followed character's / its own +0x2b0, a threat within 40, `FUN_14059de10`), whose provider is 13 Attacking attackers of, so a
-  follower fights whoever threatens its leader and a bodyguard also its own attacker (**Observed**, from the row lists and the planner). A job higher in the list takes
+  job but the urgent ones (a turret's row refuses a threat within 40 anyway). An order or job can still fight by its own rows: 31 Staying close and 289 need `!16` and 45
+  Bodyguard `!16, !39` (16 / 39: the followed character's / its own +0x2b0, a threat within 40, `FUN_14059de10`), which 13 Attacking attackers of provides on the row's target,
+  so a follower fights whoever threatens its leader (**Verified**, decompile): `Task_Follow`'s update (`FUN_14033b350`) starts no fight and the melee alert (`FUN_140999f00`)
+  and the shot handler replan only the attacked character; the plan step (`FUN_14050d970`) ends a running follow whose list B fails and asks a replan (`FUN_14050d7d0`), and
+  the job pass (`FUN_14050e5b0`) skips 45 while its list B holds (it neither acts nor has an effect) and otherwise plans it, else 31, as 13 first (finder `AI::findAttackerOf`,
+  the followed character's attacker within 150) and the row after it. The chain's only test of the follower is row 4's desire (`FUN_1405a4260`): 0 with no working arm, against
+  a caged target, on Hold for a target the post test refuses, or crippled with no threat within 40 of itself for an NPC neither of the player's faction nor `unique` (0.0001 on
+  Block or Hold, else 0.1), so such a plan fails; a squad not intact halves it; Passive and sneaking (15's zeros) are not on it. 45 from the player is always a job (`FUN_1407fa650` adds 0x2d as one). A job higher in the list takes
   over at the next choice; the implicit jobs come after the list, Idleness last. Passive leaves
   Self preservation alone; the Jobs switch only gates the job passes. A fight is a task (4 `Task_MeleeAttack`) in a goal's or an order's plan; `CombatClassAI` steers it and
   chooses nothing; the fight ends with the task.
@@ -1199,8 +1204,9 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   fights by the combat system), step 5 every job in list order through its system's contributor (the switch and the repertoire first), then the implicit jobs, step 6 the priority-2 race goals 233 and 232 and
   the default task (a player character's routine: it stands; by the manoeuvre mode 14 Idleness, 31 Staying close or 30 Holding position, see step 6 above; the scorer drops a scored 14). A task that ends leaves its character idle for the step to
   re-decide (the original re-plans; nothing resumes). A follow order running its row ends when the followed character is attacked or goes down, as the original's (**Verified** below); follow and bodyguard
-  jobs, and a follow order given while its target is already threatened, fight by their rows: an attacker of the followed character within 40 (16), a bodyguard also its own
-  within 40 (39), as a step of the row, and follow again when the fight ends. The step runs on the replan triggers above plus an engine re-ask at the think turn (`ThinkEveryTicks`) of a character
+  jobs, and a follow order given while its target is already threatened, fight by their rows' plans (`FollowDefence`): the job's contributor or the order's owner starts 13 on the
+  followed character's attacker when the row's first unmet list-B entry is 16 (for 45 also 39), as a step of the row, and they follow again when the fight ends; a running follow
+  whose list B fails makes the step due at once (`FollowDefence.Due`). The step runs on the replan triggers above plus an engine re-ask at the think turn (`ThinkEveryTicks`) of a character
   idle, on a job's task or on a running order (no periodic replan was found), so a higher job takes over a running one within that period, where the original waits for its next replan. Goal 15 is
   the faction list's own goal on tier 3 (below).
 - **15 Protect allies for a player character** (**Verified**: desire `FUN_140599b90`, finder `FUN_14099ca10`, falloff `FUN_1409b2380`, constants from the exe): desire 0 when Passive or

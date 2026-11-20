@@ -148,7 +148,7 @@ public class DecisionTests
 
         // Each one's desire as it starts, before the far one has run up: the mate's threat, x1 for the near one, x0.1 for the one 40 away.
         float? nearAt = null, farAt = null, nearThreat = null, farThreat = null;
-        for (int t = 0; t < 2 * RetaliationSystem.CheckEveryTicks + 2 && (nearAt is null || farAt is null); t++)
+        for (int t = 0; t < 32 && (nearAt is null || farAt is null); t++)
         {
             rig.World.RunTick();
             if (nearAt is null && rig.Task(near) == CharacterTask.Attack)

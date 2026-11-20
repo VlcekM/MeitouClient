@@ -284,12 +284,7 @@ public sealed class DecisionSystem
 
     #endregion
 
-    #region Replan and claims
-
-    /// <summary>
-    /// The tick + 1 at which each slot was claimed by an engine start (<see cref="Claim"/>), by slot.
-    /// </summary>
-    long[] _claimed = [];
+    #region Replan
 
     /// <summary>
     /// Asks for the character to be decided again (a replan trigger): any phase, its own slot or a serial one. The player's characters keep the
@@ -319,21 +314,6 @@ public sealed class DecisionSystem
     {
         if (world.Characters.Cold(slot) is { } cold) Request(cold);
     }
-
-    /// <summary>
-    /// The engine started a task for the character this tick outside the chooser (a follow row's fight, a bodyguard's own defence within 40): the
-    /// serial pass starts nothing for it this tick and drops its replan bit. Serial phases only.
-    /// </summary>
-    public void Claim(World world, int slot)
-    {
-        if (_claimed.Length <= slot) Array.Resize(ref _claimed, Math.Max(slot + 1, _claimed.Length * 2));
-        _claimed[slot] = world.Tick + 1;
-    }
-
-    /// <summary>
-    /// Whether an engine start claimed the slot this tick (<see cref="Claim"/>).
-    /// </summary>
-    bool Claimed(World world, int slot) => slot < _claimed.Length && _claimed[slot] == world.Tick + 1;
 
     /// <summary>
     /// Whether the character's task is one the priority-3 goals come before, so a goal that can run takes it over: not a fight, and no start runs
@@ -440,12 +420,14 @@ public sealed class DecisionSystem
 
     /// <summary>
     /// Whether the character's chooser runs this tick: its think's turn (the AI's period anchored at tick + slot, as the think's), or asked (its
-    /// replan bit or its mind's, an order that held it, the order step's own asks, <see cref="Ai.OrderStep.Asks"/>).
+    /// replan bit or its mind's, an order that held it, the plan step on a running follow, <see cref="FollowDefence.Due"/>, the order step's own
+    /// asks, <see cref="Ai.OrderStep.Asks"/>).
     /// </summary>
     static bool Due(World world, int slot, CharacterCold cold, int every)
     {
         if ((world.Tick + slot) % every < world.StepTicks(slot) && TurnAsks(world, slot, cold)) return true;
         if (cold.Replan || cold.OrderWins || cold.Ai is { Replan: true }) return true;
+        if (FollowDefence.Due(world, slot, cold)) return true;
 
         return Ai.OrderStep.Asks(world, slot, cold, paused: false);
     }
@@ -666,19 +648,12 @@ public sealed class DecisionSystem
     }
 
     /// <summary>
-    /// Starts one character's pick: nothing while an engine start claimed it this tick (its replan bit dropped); else the order step is asked again
-    /// (<see cref="FreshOrders"/>: an order given or ended since the look still beats every other pick), then the other sources the ladder went
-    /// past that could not run are passed (<see cref="Pass"/>), and the picked source is started (<see cref="StartPick"/>). What its own start asks
-    /// is dropped; a pick that can no longer run asks again.
+    /// Starts one character's pick: the order step is asked again (<see cref="FreshOrders"/>: an order given or ended since the look still beats
+    /// every other pick), then the other sources the ladder went past that could not run are passed (<see cref="Pass"/>), and the picked source is
+    /// started (<see cref="StartPick"/>). What its own start asks is dropped; a pick that can no longer run asks again.
     /// </summary>
     void Apply(World world, int slot, CharacterCold cold, ChooserRow row)
     {
-        if (Claimed(world, slot))
-        {
-            cold.Replan = false;
-            return;
-        }
-
         bool asked = cold.Replan;
         var pick = row.Pick;
         int order = FreshOrders(world, slot, cold);

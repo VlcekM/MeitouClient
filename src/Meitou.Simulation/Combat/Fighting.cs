@@ -509,19 +509,12 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
 /// Everyone defends itself by its 32 Self preservation in the chooser (row 13 on its own attacker, <see cref="Ai.AiSystem.SelfDefencePick"/>),
 /// which the alert asks to think at the next tick; a character without a mind waits for one (every character has goals in the original). Nobody
 /// else joins here: squad mates and allies come by their own protect goals in the chooser (AiSystem.Fights.cs), which the alert asks to think
-/// (<see cref="AskProtectors"/>). The exception is a bodyguard's own defence against an attacker within 40 (row 45's <c>!39</c>); followers and
-/// bodyguards fight their target's attacker within 40 of it (rows 31 / 45 / 289's <c>!16</c>, <see cref="Guards"/>). Passive keeps a character from
-/// helping others, not from defending itself. The orders go into the world's deferred list for the next tick (<see cref="World.Defer"/>) and are
-/// marked <see cref="AttackOrder.Defensive"/>. A player character's help for others (squad mates, with <see cref="SquadAi.Help"/> allied factions) is
-/// its chooser's 15 Protect allies, as an NPC's (AiSystem.Fights.cs), not this pass.
+/// (<see cref="AskProtectors"/>), and followers and bodyguards by their follow rows' plans (<see cref="Ai.FollowDefence"/>: the alert reaches only
+/// the attacked character, <c>FUN_140999f00</c>). A player character's help for others (squad mates, with <see cref="SquadAi.Help"/> allied
+/// factions) is its chooser's 15 Protect allies, as an NPC's (AiSystem.Fights.cs), not this pass.
 /// </summary>
 public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem
 {
-    /// <summary>
-    /// The number of ticks between the looks at the attackers that did not just alert.
-    /// </summary>
-    public const int CheckEveryTicks = 15;
-
     /// <summary>
     /// A player's character defends itself only against an attacker within this (Self preservation's desire is 0 beyond squared 33000,
     /// docs/game/combat.md "Fight lifecycle and orders").
@@ -539,11 +532,6 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem
     public const float ProtectReach = 150;
 
     /// <summary>
-    /// The living bodyguards (characters with a follow order) in slot order, listed once per check for the guard search.
-    /// </summary>
-    readonly List<int> _guards = [];
-
-    /// <summary>
     /// Per attacker slot: the target (slot, generation) it last took, the tick it was taken, and whether that target has been alerted
     /// (<see cref="CombatSystem.Alerts"/>, or a shot for a shooter).
     /// </summary>
@@ -553,76 +541,72 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem
     /// </summary>
     long[] _alertTick = [];
     /// <summary>
-    /// Per attacker slot: whether its target has been alerted, and whether that happened this tick.
+    /// Per attacker slot: whether its target has been alerted.
     /// </summary>
-    bool[] _alerted = [], _justAlerted = [];
-
+    bool[] _alerted = [];
     /// <summary>
-    /// The joiners of a fight grouped by the attacker each takes on, in the order first chosen (scratch of the fight join).
+    /// The attackers whose target this pass alerted, in slot order (scratch of <see cref="SlowWorld"/>).
     /// </summary>
-    readonly List<(int Foe, List<CharacterId> Joiners)> _byFoe = [];
+    readonly List<int> _fresh = [];
 
     #region Alerts
 
     /// <summary>
-    /// The answer to being attacked (<c>AI::underMeleeAttack</c>, <see cref="Alert"/>): the first sweep's attacks that alert, then the periodic look
-    /// at every attacker whose target was alerted, the defenders it has in the attacked character's squad and friends (<see cref="Guards"/>, the
-    /// attacker's own defence in <see cref="SelfDefends"/>), each joining the fight of the attacker the finder scores best for it.
+    /// The answer to being attacked (<c>AI::underMeleeAttack</c>, <see cref="Alert"/>): each attack that alerts its target this pass, then the
+    /// protectors those alerts ask to think (<see cref="AskProtectors"/>).
     /// </summary>
     public void SlowWorld(World world)
     {
         var table = world.Characters;
-        var next = table.Next;
         if (_alertSlot.Length < table.HighWater) GrowAlertArrays(table.HighWater);
 
-        // A target taken (or a blow landed) alerts at once and is answered in the same pass; the rest is looked at every CheckEveryTicks.
-        bool fresh = false;
-
+        _fresh.Clear();
         for (int a = 0; a < table.HighWater; a++)
         {
-            _justAlerted[a] = false;
-            int t = next[a].Alive && next[a].Task == (byte)CharacterTask.Attack
-                ? combat.StateOf(new CharacterId(a, next[a].Generation)).TargetSlot : -1;
-            if (t < 0 || t >= table.HighWater)
+            if (TargetOf(table, a) is not { } t)
             {
                 _alertSlot[a] = -1;
                 continue;
             }
 
-            if (_alertSlot[a] != t || _alertGeneration[a] != next[t].Generation)
-            {
-                _alertSlot[a] = t;
-                _alertGeneration[a] = next[t].Generation;
-                _alertTick[a] = world.Tick;
-                _alerted[a] = false;
-            }
+            Track(world, a, t);
+            if (_alerted[a]) continue;
 
-            if (!_alerted[a])
-            {
-                var st = combat.StateOf(new CharacterId(a, next[a].Generation));
-                if (!AlertsNow(world, a, t, st)) continue;
+            var st = combat.StateOf(new CharacterId(a, table.Next[a].Generation));
+            if (!AlertsNow(world, a, t, st)) continue;
 
-                _alerted[a] = _justAlerted[a] = fresh = true;
-                Alert(world, a, t, !st.Ranged);
-            }
+            _alerted[a] = true;
+            _fresh.Add(a);
+            Alert(world, a, t, !st.Ranged);
         }
 
-        bool periodic = world.Tick % CheckEveryTicks == 0;
-        if (!periodic && !fresh) return;
+        foreach (int a in _fresh) AskProtectors(world, table, a, _alertSlot[a]);
+    }
 
-        // The bodyguards, in slot order, for Guards (each looked through the whole table per attacker before).
-        _guards.Clear();
-        for (int s = 0; s < table.HighWater; s++)
-            if (next[s].Alive && table.Cold(s) is { FollowOrder.IsNone: false }) _guards.Add(s);
+    /// <summary>
+    /// The slot of the character <paramref name="a"/> attacks (its fight's target), null when it fights no one.
+    /// </summary>
+    int? TargetOf(CharacterTable table, int a)
+    {
+        var next = table.Next;
+        if (!next[a].Alive || next[a].Task != (byte)CharacterTask.Attack) return null;
 
-        var taken = new HashSet<int>();
-        if (fresh)
-        {
-            for (int a = 0; a < table.HighWater; a++)
-                if (_justAlerted[a]) AskProtectors(world, table, a, _alertSlot[a]);
-        }
+        int t = combat.StateOf(new CharacterId(a, next[a].Generation)).TargetSlot;
+        return t >= 0 && t < table.HighWater ? t : null;
+    }
 
-        for (int a = 0; a < table.HighWater; a++) JoinAttack(world, table, a, periodic, taken);
+    /// <summary>
+    /// Notes the target <paramref name="t"/> attacker <paramref name="a"/> took: a new one (another slot or generation) is not alerted yet.
+    /// </summary>
+    void Track(World world, int a, int t)
+    {
+        int generation = world.Characters.Next[t].Generation;
+        if (_alertSlot[a] == t && _alertGeneration[a] == generation) return;
+
+        _alertSlot[a] = t;
+        _alertGeneration[a] = generation;
+        _alertTick[a] = world.Tick;
+        _alerted[a] = false;
     }
 
     /// <summary>
@@ -635,83 +619,6 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem
         Array.Resize(ref _alertGeneration, size);
         Array.Resize(ref _alertTick, size);
         Array.Resize(ref _alerted, size);
-        Array.Resize(ref _justAlerted, size);
-    }
-
-    /// <summary>
-    /// The defenders of one attacker's alerted target join its fight this pass: the target's own defence, its bodyguards and the Hold order's post
-    /// test, then one attack order per attacker the finder scores best for each joiner (<c>FUN_14099c3b0</c>, grouped in the order first chosen).
-    /// </summary>
-    void JoinAttack(World world, CharacterTable table, int a, bool periodic, HashSet<int> taken)
-    {
-        var next = table.Next;
-        if (!next[a].Alive || next[a].Task != (byte)CharacterTask.Attack) return;
-
-        var attacker = new CharacterId(a, next[a].Generation);
-        var st = combat.StateOf(attacker);
-        int t = st.TargetSlot;
-        if (t < 0 || t >= table.HighWater || !next[t].Alive || next[t].Generation != st.TargetGeneration
-            || table.Cold(a) is not { Medical.Incapacitated: false })
-            return;
-
-        // An attacker its target was not alerted to (the wall and floor filter) is left alone until a blow lands.
-        if (_alertSlot[a] != t || !_alerted[a] || !periodic && !_justAlerted[a]) return;
-
-        // A gunner leaves its turret only for a melee attacker (task 146's "!iAmBeingMeleeAttacked"); bolts do not bring it down.
-        if (st.Ranged && table.Cold(t)?.Gunning is not null) return;
-
-        var defenders = new List<CharacterId>();
-
-        // The attacked character's own defence is its chooser's 32 Self preservation, but for a bodyguard's step (SelfDefends).
-        if (SelfDefends(table, t, taken, next[a].Position))
-        {
-            defenders.Add(new(t, next[t].Generation));
-            taken.Add(t);
-        }
-
-        // Squad mates and allies come only by their own goals (143, 15, 288 in the AI's chooser, AiSystem.Fights.cs, a player character's too).
-        // Bodyguards of the attacked character come too (Bodyguard, order 45).
-        Guards(world, table, t, a, defenders, taken, _guards);
-
-        // The Hold order takes on only an attacker its post test accepts (Orders.HoldPost).
-        var from = next[a].Position;
-        bool attackerCrawls = table.Cold(a)?.Medical?.Crawling == true || st.AttackTech >= 0;
-        for (int k = defenders.Count - 1; k >= 0; k--)
-        {
-            int ds = defenders[k].Slot;
-            if (table.Cold(ds) is { } dc && Orders.Holding(dc)
-                && !Orders.HoldPost(next[ds].Position, Orders.HoldPointOf(dc, next[ds].Position), from, next[a].Velocity,
-                    next[a].Yaw, attackerCrawls, true))
-                defenders.RemoveAt(k);
-        }
-
-        if (defenders.Count == 0) return;
-
-        // The engine started these this tick (a follow row's fight, a bodyguard's own defence): the decision step leaves the player's alone
-        // this tick.
-        foreach (var d in defenders)
-        {
-            if (table.Cold(d.Slot) is { IsPlayer: true }) world.Decisions.Claim(world, d.Slot);
-        }
-
-        // Each one joining the attacked character's fight takes the attacker AI::findAttackerOf scores best for it (FUN_14099c3b0, Verified): grouped
-        // by that attacker, in the order first chosen. The attacked character itself answers this attacker.
-        _byFoe.Clear();
-        foreach (var d in defenders)
-        {
-            int foe = d.Slot == t ? a : combat.BestAttackerOf(world, t, d.Slot);
-            if (foe < 0) foe = a;
-
-            int at = _byFoe.FindIndex(g => g.Foe == foe);
-            if (at < 0) _byFoe.Add((foe, [d]));
-            else _byFoe[at].Joiners.Add(d);
-        }
-
-        foreach (var (foe, joiners) in _byFoe)
-            world.Defer(new AttackOrder(joiners, new CharacterId(foe, next[foe].Generation))
-            {
-                Tick = world.Tick + 1, Defensive = true, Cause = "joining its squad's fight",
-            });
     }
 
     /// <summary>
@@ -770,38 +677,6 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem
     }
 
     /// <summary>
-    /// The characters whose follow row (31 Staying close, 45 Bodyguard, 289) runs on <paramref name="slot"/> defend it against
-    /// <paramref name="attacker"/> within <see cref="ImmediateReach"/> of it, in slot order, never against a character of their own faction: the rows
-    /// need state 16 (no threat within 40 of the followed character, <c>FUN_14059de10</c> on its <c>+0x2b0</c>), which 13 "Attacking attackers of"
-    /// provides (docs/game/ai-tasks.md "Precedence"); the fight is a step of the row, which the decision step follows again after it
-    /// (<see cref="MovementSystem.FollowAgain"/>). A follow order running its own row is not one: the threat ends it
-    /// (<see cref="PlayerOrders.FollowRowRuns"/>). A bodyguard's own attacker within 40 (45's <c>!39</c>) is <see cref="SelfDefends"/>.
-    /// </summary>
-    static void Guards(World world, CharacterTable table, int slot, int attacker, List<CharacterId> defenders, HashSet<int> taken, List<int> guards)
-    {
-        var next = table.Next;
-        var target = new CharacterId(slot, next[slot].Generation);
-        var reach = next[attacker].Position - next[slot].Position;
-        if (reach.X * reach.X + reach.Z * reach.Z > ImmediateReach * ImmediateReach) return;
-
-        foreach (int s in guards)
-        {
-            if (!next[s].Alive || s == attacker || table.Cold(s) is not { } c || c.FollowOrder != target
-                || table.Cold(attacker)?.Faction == c.Faction)
-            {
-                continue;
-            }
-            if (next[s].Task != (byte)CharacterTask.Follow || c.Running is not { } run || !Production.PermaJobs.Follows(run.Row)
-                || !run.Runs(CharacterTask.Follow) || PlayerOrders.FollowRowRuns(c)
-                || !Helps(table, s, taken))
-                continue;
-
-            defenders.Add(new CharacterId(s, next[s].Generation));
-            taken.Add(s);
-        }
-    }
-
-    /// <summary>
     /// An alert asks the squad mates of the attacked character and of the attacker that have a mind to think at the next tick
     /// (<see cref="Ai.AiMind.Replan"/>; a replan trigger, engine stand-in for the original's), whatever their goals: their protect goals then decide
     /// in the chooser (AiSystem.Fights.cs). Others that sense the fight (15, 288) weigh it at their next think. Not those fighting already.
@@ -820,46 +695,6 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem
 
         Mates(attacked);
         Mates(attacker);
-    }
-
-    /// <summary>
-    /// Whether the attacked character itself answers here. Everyone's own defence is its chooser's Self preservation
-    /// (<see cref="Ai.AiSystem.SelfDefencePick"/>; docs/game/ai-tasks.md "Precedence": orders outrank it, it outranks the jobs), but a bodyguard
-    /// following (row 45 running) answers here as a step of its row against an attacker within <see cref="ImmediateReach"/> (45 needs <c>!39</c>, its
-    /// own <c>+0x2b0</c>; farther ones are Self preservation's, which a Bodyguard order outranks and a Bodyguard job does not): a player character, or
-    /// an NPC its order holds (<see cref="DecisionSystem.Ordered"/>).
-    /// </summary>
-    static bool SelfDefends(CharacterTable table, int slot, HashSet<int> taken, Vector3 attacker)
-    {
-        if (!Able(table, slot, taken, out var cold, out byte task)) return false;
-        if (!cold.IsPlayer && !DecisionSystem.Ordered(cold)) return false;
-
-        var d = attacker - table.Next[slot].Position;
-        return cold.Guarding && task == (byte)CharacterTask.Follow && d.X * d.X + d.Z * d.Z <= ImmediateReach * ImmediateReach;
-    }
-
-    /// <summary>
-    /// Able, not Passive, not sneaking outside a fight (<c>scoreProtectAllies</c>'s zero), for anyone.
-    /// </summary>
-    static bool Helps(CharacterTable table, int slot, HashSet<int> taken) =>
-        Able(table, slot, taken, out var cold, out _) && (cold.Orders & CharacterOrders.Passive) == 0
-            && ((cold.Orders & CharacterOrders.Sneak) == 0 || cold.InCombat);
-
-    /// <summary>
-    /// Whether the character can answer a fight: not taken yet, not already attacking, a fighter that is free, awake and not fleeing; an NPC also not
-    /// crawling and not about to flee.
-    /// </summary>
-    static bool Able(CharacterTable table, int slot, HashSet<int> taken, out CharacterCold cold, out byte task)
-    {
-        task = table.Next[slot].Task;
-        cold = table.Cold(slot)!;
-        if (taken.Contains(slot) || task == (byte)CharacterTask.Attack) return false;
-
-        // a carried mate does not answer; a carrier does (no attack goal of the original's tests carrying, docs/game/carry-loot.md "A carrier in a
-        // fight"). A crippled NPC (a leg down, crawling) does not either (with a mind its Self preservation runs, FUN_1405a34e0 against
-        // FUN_1405a4260, Verified); a player character still fights.
-        return cold is { Fighter.CanAttack: true, Fleeing: false, IsImprisoned: false, Medical.Incapacitated: false, CarriedBy.IsNone: true }
-            && (cold.IsPlayer || cold.Medical is not { Crawling: true } && !Ai.SelfPreservation.Flees(cold, 1));
     }
 
     #endregion

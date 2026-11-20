@@ -136,11 +136,16 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         if (!table.TryResolveNext(order.Target, out int led) || led == slot) return OrderCheck.Gone;
 
         bool free = table.Cold(slot) is { IsImprisoned: false, Medical.Incapacitated: false, CarriedBy.IsNone: true };
-        return free ? OrderCheck.Run : OrderCheck.Blocked();
+        if (!free) return OrderCheck.Blocked();
+
+        // A follow row whose plan starts with 13 and finds no attacker to fight fails its plan: the order waits (FollowDefence).
+        bool fails = FollowDefence.Wanted(world, slot, order.Row, order.Target) && FollowDefence.Foe(world, slot, order.Row, order.Target).IsNone;
+        return fails ? OrderCheck.Blocked() : OrderCheck.Run;
     }
 
     /// <summary>
-    /// A sleeper gets up first; then the move's walk or the follow starts (<see cref="ITaskHandler.Start"/>).
+    /// A sleeper gets up first; then the move's walk or the follow starts (<see cref="ITaskHandler.Start"/>), and a follow whose plan starts with
+    /// 13 fights the attacker from the next tick (<see cref="FollowDefence.Start"/>).
     /// </summary>
     void IOrderOwner.Start(World world, int slot, OrderEntry order)
     {
@@ -150,7 +155,19 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         TaskStart.Start(world, slot, order.IsMove
             ? new TaskRequest(CharacterTask.GoTo, TaskType.MoveCusOrdered, TaskSource.Order) { Point = order.Point }
             : new TaskRequest(CharacterTask.Follow, order.Row, TaskSource.Order) { Target = order.Target });
+        if (order.IsMove) return;
+
+        var foe = FollowDefence.Foe(world, slot, order.Row, order.Target);
+        if (!foe.IsNone) FollowDefence.Start(world, slot, foe, order.Row, TaskSource.Order);
     }
+
+    /// <summary>
+    /// A started follow order not yet running its own row (<see cref="PlayerOrders.FollowRowRuns"/>: given while its character was threatened) is
+    /// planned again once its follow runs and its list B fails on 16 or 39 (<see cref="FollowDefence.Due"/>): its task ends and it starts again,
+    /// with 13 first.
+    /// </summary>
+    bool IOrderOwner.StillHolds(World world, int slot, OrderEntry order) =>
+        order.IsMove || !FollowDefence.Due(world, slot, world.Characters.Cold(slot)!);
 
     /// <summary>
     /// A move order's walk (row 29: <see cref="CharacterCold.OrderMove"/>, the Hold point follows it) to <see cref="TaskRequest.Point"/>'s floor, or

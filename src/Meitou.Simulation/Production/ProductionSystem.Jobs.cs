@@ -177,11 +177,29 @@ public sealed partial class ProductionSystem
                 return DecisionCheck.No("a melee threat within 40 (146 needs !158)");
 
             if (!owner.Runnable(world, slot, cold, k)) return DecisionCheck.No("blocked");
+            if (PermaJobs.Follows(type) && Defends(world, slot, cold, k) is { } foe)
+                return foe.IsNone ? DecisionCheck.No("its plan's 13 finds no attacker to fight") : DecisionCheck.Run;
+
             return runs ? DecisionCheck.Runs : DecisionCheck.Run;
         }
 
         /// <summary>
-        /// Starts list job <paramref name="k"/> for the character (a follow job whose fight is over follows again).
+        /// A follow job whose row's plan starts with 13 (<see cref="FollowDefence"/>: its character threatened within 40, for 45 also itself): the
+        /// attacker it fights, <see cref="CharacterId.None"/> when the plan fails; null when the row plans no fight.
+        /// </summary>
+        static CharacterId? Defends(World world, int slot, CharacterCold cold, int k)
+        {
+            if (FollowedBy(world, slot, cold, k) is not { } charge) return null;
+
+            var type = cold.Jobs[k].Type;
+            if (!FollowDefence.Wanted(world, slot, type, charge)) return null;
+
+            return FollowDefence.Foe(world, slot, type, charge);
+        }
+
+        /// <summary>
+        /// Starts list job <paramref name="k"/> for the character: a follow job whose fight is over follows again, one whose plan starts with 13
+        /// follows (unless it does already) and fights the attacker from the next tick (<see cref="FollowDefence.Start"/>).
         /// </summary>
         public void Start(World world, int slot, int k)
         {
@@ -191,7 +209,16 @@ public sealed partial class ProductionSystem
                 && MovementSystem.FollowAgain(world, slot, cold))
                 return;
 
-            owner.StartJob(world, slot, k);
+            var type = cold.Jobs[k].Type;
+            if (!PermaJobs.Follows(type) || Defends(world, slot, cold, k) is not { IsNone: false } foe)
+            {
+                owner.StartJob(world, slot, k);
+                return;
+            }
+
+            bool follows = cold.Running is { Source: TaskSource.Job, Task: CharacterTask.Follow } on && on.Job == k;
+            if (!follows) owner.StartJob(world, slot, k);
+            FollowDefence.Start(world, slot, foe, type, TaskSource.Job, k);
         }
 
         /// <summary>
@@ -816,7 +843,8 @@ public sealed partial class ProductionSystem
             if (FollowedBy(world, slot, cold, k) is not { } target) return;
             End(world, slot);
 
-            // The Bodyguard job guards (row 45, RetaliationSystem.Guards); the verb always gives the job. The circle was broken when the job was added.
+            // The Bodyguard job's follow runs row 45, whose fights the contributor plans (FollowDefence); the verb always gives the job. The circle was
+            // broken when the job was added.
             MovementSystem.Follow(world, new FollowOrder([table.IdOf(slot)], target) { Tick = world.Tick }, TaskSource.Job, k, job.Type);
             return;
         }

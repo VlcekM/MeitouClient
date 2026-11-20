@@ -186,8 +186,8 @@ public sealed class CharacterCold
     public CharacterId FollowOrder { get; set; } = CharacterId.None;
 
     /// <summary>
-    /// The <see cref="FollowOrder"/> runs row 45 Bodyguard (order or job; <see cref="Running"/>): the follower also defends its target
-    /// (<see cref="RetaliationSystem"/>). Hashed with <see cref="FollowOrder"/>.
+    /// The <see cref="FollowOrder"/> runs row 45 Bodyguard (order or job; <see cref="Running"/>): its fights also score its target's attackers (the
+    /// protectee of the fight's target choice, the AI task's target of goal 45). Hashed with <see cref="FollowOrder"/>.
     /// </summary>
     public bool Guarding => Running is { Row: Data.Gameplay.Ai.TaskType.Bodyguard };
 
