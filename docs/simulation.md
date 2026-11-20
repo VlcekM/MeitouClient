@@ -2357,7 +2357,9 @@ its plan the act-out carries out besides the goal's own. Built: 176 (`SmellSyste
   task it left running; hashed), a refusal backs the type off for four think periods.
 - **Holding**: the goal, not `Engaged`, holds the character. `AiSystem.Holds` is true while the provenance is the act-out (`AiSystem.OnDuty`: that task, or a goal's
   task started since; carrying included, not in a fight), so the think keeps choosing; another goal that wins sets `AiMind.DutyLeave`, the serial step ends the act-out
-  and the next tick acts the winner out.
+  and the next tick acts the winner out. A carrier no goal holds (`AiSystem.CarrierMind`: a full mind, on its routine, not engaged, fighting, fleeing or ordered) thinks
+  too (`ThinkCarrying`, all tiers): an engine goal that wins starts as above (`MayHoldDuty` admits it), any other winner leaves it standing with no goal and Self
+  preservation is weighed next as for any character the AI does not hold.
 - **End** (`IDutyGoal.End` with `DutyEnd`, then the goal and plan leave the mind, which replans): displaced; an order's start (`IDutyRelease`, a faction change too); an
   order on the body (`AiSystem.ReplanDuty`), a knock-out or death, a wiped or ended plan, a new mind (replanned); anything else holding it (taken: engaged by another
   system, fleeing, fighting, carried, caged by another, a task another system started; a caged mind keeps the goal it acts out from the cage); gone. A displaced act-out whose provenance is still its own is stopped after `End` (a walk
