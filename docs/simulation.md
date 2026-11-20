@@ -991,11 +991,12 @@ not down; Trade on an own animal too) ends above the grid ([animals](game/animal
   carrying: once 148 outscores its sleep goal (the resident package's 239 scores 1 x 1 x1.25 = 1.25 against 148's 1.0 while it commits, and at most
   0.05 once its commitment has passed, [ai-tasks](game/ai-tasks.md) "Desire and commitment") its think gets it out of bed and the next beat lifts; a
   body goal 106 would not lay in a bed (a grudge tag, a bounty owed to a police-like rescuer, not regarded as friendly; `BedSystem.WouldPutIn`) is not
-  lifted; a walk to the body that has not reached it in 60 game seconds (`CarrySettings.RescueWalkSeconds`) is given up and that rescuer leaves the
-  body alone for 2 game hours (`RescueRefuseHours`, hashed while set), as the town goals' lifts do; a body that dies while the rescuer walks to it
+  lifted; a walk to the body that no path reaches (`CarrySystem.LiftWalkFails`) is a lost walk: the body goes into the rescuer's ignore map for 20 s and the
+  goal replans (**Verified**, the plan step `FUN_14050d970`); the rescue finders (`FUN_1408cd2d0`, 142's `FUN_140598540`) do not read that map, so the
+  same body is taken again, and a walk still under way is never given up; a body that dies while the rescuer walks to it
   ends the walk, so this goal lifts no body that is already dead when the lift clip starts (one that comes round ends it as any lift's); a body this
   goal lifted that no carried-body goal takes on (no bed found after the lift, or a package without 106) stays on the shoulder, as any goal's end leaves it
-  ([town duties](#town-duties)). The leader rescue (142) takes the same ability test, hold test and walk give-up.
+  ([town duties](#town-duties)). The leader rescue (142) takes the same ability test, hold test and lost walk.
 - **NPC looting** (`LootGoals`, the finder `CarrySystem.LootTarget`, facts: [carry-loot 3.3](game/carry-loot.md#33-npc-looting)): goal 177 is an [engine goal](#engine-goals) of the
   chooser (desire 1 at posture 0, times its finder's factor; plan `[1, 3, 177]`, row 3 the loot). Every `AutoEveryTicks` on its slot's turn (slot mod the period, so the looks spread over the ticks, as the original's AI updates run 8 characters a frame in turn, [game loop](game/game-loop.md#the-character-update-budget)), an NPC with a mind of its own that weighs 177 (`AiSystem.WeighsGoal`) keeps its finder's pick for the think
   (engine: the original's finder runs at each score); the pick is the nearest dead body (not of its faction), else downed living one of a non-allied faction, within 100 and reachable (no shut gate route between, no building without an open door around it unless the looter is in it, `CarrySystem.Reachable`): the player's only with
