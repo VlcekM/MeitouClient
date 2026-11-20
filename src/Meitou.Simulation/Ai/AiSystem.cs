@@ -398,9 +398,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// The think of a carrier no goal holds (<see cref="CarrierMind"/>): it weighs all its goals; an engine goal that wins is acted out (the serial
-    /// step starts it), any other winner leaves it with no goal, as before the carried-body goals were the chooser's: the AI does not run a carrier's
-    /// other act-outs. False then, so the goals that pre-empt a character the AI does not hold (<see cref="Preempts"/>, Self preservation) are weighed
-    /// next. Writes only its own slot.
+    /// step starts it). Any other winner becomes its current goal with its plan (its followers read it, <see cref="FollowMe"/>) but is not acted out:
+    /// the AI does not run a carrier's other act-outs, so it keeps standing, following or wandering with the body as before. False then, so the
+    /// goals that pre-empt a character the AI does not hold (<see cref="Preempts"/>, Self preservation) are weighed next. Writes only its own slot.
     /// </summary>
     bool ThinkCarrying(World world, int slot, CharacterId id, AiMind mind, Squad squad, Blackboard board, IReadOnlyList<AiGoal> roles, int hour)
     {
@@ -411,7 +411,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return true;
         }
 
-        LieOnWithNoGoal(mind, board);
+        mind.Goal = goal;
+        mind.Version = board.Version;
         return false;
     }
 
@@ -1922,8 +1923,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// The character goes on with no goal (one lying in a bed, one in a cage or carrying whose winner the AI does not act out): its plan, goal and
-    /// behaviour cleared, as of the board's version.
+    /// The character goes on with no goal (one lying in a bed, one in a cage whose winner the AI does not act out): its plan, goal and behaviour
+    /// cleared, as of the board's version.
     /// </summary>
     static void LieOnWithNoGoal(AiMind mind, Blackboard board)
     {

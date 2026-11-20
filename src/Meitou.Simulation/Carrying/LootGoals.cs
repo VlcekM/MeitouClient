@@ -231,10 +231,12 @@ internal sealed class LootGoals
     /// <summary>
     /// The act-out's start (serial): the loot of the plan's body (row <paramref name="goal"/>, so the carry system's loot runs it), or the pick-up
     /// of the plan's ground weapon (row 3); false when the target is gone or another member already works it (the original's finders skip a
-    /// target a squad mate works, <c>FUN_1402690e0</c>).
+    /// target a squad mate works, <c>FUN_1402690e0</c>). A carrier refuses (engine choice: the loot and the pick-up need free hands, and a
+    /// carrier's body goals are its own, <see cref="AiSystem.CarrierMind"/>).
     /// </summary>
     bool Start(World world, in DutyAsk ask, IReadOnlyList<PlanStep> plan, TaskType goal, SortedDictionary<int, Pick> picks)
     {
+        if (!world.Characters.Cold(ask.Slot)!.Carrying.IsNone) return false;
         if (PlanTargetOf(plan) is not { } target) return false;
 
         var body = target.Character ?? CharacterId.None;
