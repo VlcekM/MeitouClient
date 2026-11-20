@@ -112,6 +112,15 @@ public sealed partial class AiSystem
         /// </summary>
         readonly List<PlanStep> _scratch = [];
         /// <summary>
+        /// The engine-acted goal being planned, or whose kept plan runs (<see cref="DutyGoals"/>): the desires, finders and states of its plan's rows
+        /// are asked of its system; null for any other goal.
+        /// </summary>
+        DutyGoals.Entry? _duty;
+        /// <summary>
+        /// The goal record <see cref="_duty"/> plans for (its targeting goes into the asks).
+        /// </summary>
+        AiGoal? _dutyGoal;
+        /// <summary>
         /// The worker thread's functionality cache for the gate test of state 131 (<see cref="TownExit.HasGates"/>).
         /// </summary>
         readonly Dictionary<string, Meitou.Data.GameRecord?> _gateFunctions = new(StringComparer.Ordinal);
@@ -162,8 +171,18 @@ public sealed partial class AiSystem
             var cold = w.Characters.Cold(at);
             _playerSide = cold is not null && (cold.IsPlayer || player >= 0 && cold.Faction == player);
             _restrictedOpen = cold is not null && !_playerSide;
+
+            // The kept plan's step tests (PlanSteps) ask an engine goal's system about its rows.
+            _dutyGoal = m.Goal;
+            _duty = m.Goal is { } goal ? s._duties?.EntryOf(goal.Task.Type) : null;
             return this;
         }
+
+        /// <summary>
+        /// The ask of the engine goal being planned (<see cref="_duty"/>) about <paramref name="row"/> and its target.
+        /// </summary>
+        DutyAsk AskDuty(TaskType row, in PlanTarget target) => new(_slot, _world.Characters.IdOf(_slot), _mind.Squad, _duty!.Type,
+            _dutyGoal?.Task.Target ?? TaskTargetType.Specific, row, target);
 
         /// <summary>
         /// Plans a goal; true (and the plan in <see cref="AiMind.Plan"/>) when it has one whose first step the engine carries out; a failed plan leaves
@@ -171,6 +190,19 @@ public sealed partial class AiSystem
         /// finished test agrees (the scorer's done test), but for the <paramref name="current"/> goal, which the scorer does not test.
         /// </summary>
         public bool TryPlan(AiGoal goal, float desire, bool current = false)
+        {
+            // An engine-acted goal's plan asks its system about its rows (Desire, Find, BodyOrTownHolds); the bound goal's is put back after.
+            var (duty, dutyGoal) = (_duty, _dutyGoal);
+            (_duty, _dutyGoal) = (_system._duties?.EntryOf(goal.Task.Type), goal);
+            bool planned = Plan(goal, desire, current);
+            (_duty, _dutyGoal) = (duty, dutyGoal);
+            return planned;
+        }
+
+        /// <summary>
+        /// <see cref="TryPlan"/>'s plan.
+        /// </summary>
+        bool Plan(AiGoal goal, float desire, bool current)
         {
             var type = goal.Task.Type;
 
@@ -236,7 +268,7 @@ public sealed partial class AiSystem
                 return false;
             }
             if (TaskPlanner.Local.Plan(row, desire, target, this, _mind.Plan, _scratch) <= 0) return false;
-            if (_scratch[0].Type != type && !Carried(_scratch[0].Type)) return false;
+            if (_scratch[0].Type != type && !Carried(_scratch[0].Type) && _duty?.Acts(_scratch[0].Type) != true) return false;
             _mind.Plan.Clear();
             _mind.Plan.AddRange(_scratch);
             return true;
@@ -351,6 +383,9 @@ public sealed partial class AiSystem
         /// </summary>
         public float Desire(TaskDataRow row, in PlanTarget target)
         {
+            // A row an engine-acted goal's act-out carries out: its system's desire.
+            if (_duty is { } duty && duty.Acts(row.Type)) return duty.Goal.Desire(_world, AskDuty(row.Type, target));
+
             // row 98: AI slot 30 (FUN_1405a0880); 0 drops the node
             if (row.Type == TaskType.UseBed) return _system.SleepingDesire(_world, _board, _slot);
             float d = TaskProfiles.Of(row.Type).Desire;
@@ -570,8 +605,15 @@ public sealed partial class AiSystem
             StateType.StrangersInHouseP => _system.StrangersInHouseP(_world, _board, _slot),
             StateType.StrangersInHouse => _system.StrangersInHouse(_world, _board, _slot),
             StateType.AtPackageTarget => AtPackageTarget(),
-            _ => HeldTrue(state),
+            _ => DutyState(state, target) ?? HeldTrue(state),
         };
+
+        /// <summary>
+        /// A state the planner does not evaluate, as the engine-acted goal being planned answers it for its rows (<see cref="IDutyGoal.State"/>); null
+        /// for any other goal or a state its system does not know.
+        /// </summary>
+        bool? DutyState(StateType state, in PlanTarget target) =>
+            _duty is { } duty ? duty.Goal.State(_world, AskDuty(duty.Type, target), state) : null;
 
         /// <summary>
         /// States held true (moving, standing up, power, buildings, doors); an unlisted state is false.
@@ -602,6 +644,10 @@ public sealed partial class AiSystem
         public PlanTarget Find(TaskDataRow row, in PlanTarget from)
         {
             var type = row.Type;
+
+            // A row an engine-acted goal's act-out carries out: its system's finder, which may find a character or a fixture.
+            if (_duty is { } duty && duty.Acts(type)) return duty.Goal.Find(_world, AskDuty(type, from), out var found) > 0 ? found : default;
+
             switch (type)
             {
                 case TaskType.StandAtShopkeeperNode or TaskType.StandAtGuardNodeHomebuilding or TaskType.StandAtGuardNodeHomebuildingIndoorsOnly

@@ -261,7 +261,7 @@ public sealed partial class World : IDisposable
         }
         foreach (var owner in this._systems.OfType<IDecisionOwner>())
             Decisions.RegisterFrom(owner, SimulationExtensions.FactoryOf((ITickSystem)owner)?.Owner);
-        for (int k = 0; k < this._systems.Count; k++) if (this._systems[k] is Ai.AiSystem ai) ai.BindModGoals(this._systems);
+        for (int k = 0; k < this._systems.Count; k++) if (this._systems[k] is Ai.AiSystem ai) ai.BindGoals(this._systems);
         for (int k = 0; k < this._systems.Count; k++) if (DecidesAfter(this._systems[k])) _decideAfter = k;
 
         Characters = characters ?? new CharacterTable();

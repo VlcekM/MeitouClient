@@ -30,8 +30,8 @@ public sealed partial class AiSystem
     const int EnterTown = 49, TakenOverPlayerTown = 73;
 
     /// <summary>
-    /// The faction assault clocks once there is one (worlds without a passing-by assault hash as before), and the code mods' faulted NPC goals once
-    /// one faulted.
+    /// The faction assault clocks once there is one (worlds without a passing-by assault hash as before), the characters the engine goals hold while
+    /// any, and the code mods' faulted NPC goals once one faulted.
     /// </summary>
     public void Hash(ref StateHasher hasher)
     {
@@ -41,6 +41,7 @@ public sealed partial class AiSystem
             hasher.Add(end);
         }
 
+        _duties?.Hash(ref hasher);
         _modGoals?.Hash(ref hasher);
     }
 

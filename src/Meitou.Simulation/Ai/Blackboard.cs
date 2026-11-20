@@ -1317,6 +1317,30 @@ public sealed class AiMind
     public List<(TaskType Type, long Until)>? ModGoalBackoff { get; internal set; }
 
     /// <summary>
+    /// The goal record whose act-out an engine system runs for this character (<see cref="DutyGoals"/>): the goal, not
+    /// <see cref="CharacterCold.Engaged"/>, holds the character, so the AI keeps thinking for it (<see cref="AiSystem.Holds"/>) and a goal that scores
+    /// higher takes it over. Null when none. Set and cleared by the AI's serial step; hashed while set.
+    /// </summary>
+    public AiGoal? Duty { get; internal set; }
+
+    /// <summary>
+    /// The start tick of the task the engine goal's start left running (<see cref="Duty"/>): that task, or a goal's task started since, is the
+    /// act-out (<see cref="AiSystem.OnDuty"/>).
+    /// </summary>
+    public long DutyTick { get; internal set; }
+
+    /// <summary>
+    /// The think chose an engine goal (<see cref="AiBehaviour.Duty"/>): the serial step of the same tick starts it (<see cref="DutyGoals"/>) and clears
+    /// it (not hashed).
+    /// </summary>
+    public bool DutyAsk { get; internal set; }
+
+    /// <summary>
+    /// The think chose another goal over the running <see cref="Duty"/>: the serial step of the same tick ends it and clears this (not hashed).
+    /// </summary>
+    public bool DutyLeave { get; internal set; }
+
+    /// <summary>
     /// Whether goal <paramref name="type"/> is backed off at <paramref name="tick"/> (<see cref="ModGoalBackoff"/>).
     /// </summary>
     internal bool BackedOff(TaskType type, long tick)
@@ -1484,6 +1508,8 @@ public sealed class AiMind
             hasher.Add((int)step.Type);
             hasher.Add(step.Target.Kind);
             hasher.Add(step.Target.Position);
+            if (step.Target.Character is { } character) hasher.Add(character);   // a finder's character or fixture: only while set
+            if (step.Target.Fixture is { } fixture) hasher.Add(Rng.StableHash(fixture));
         }
         hasher.Add((int)Behaviour);
         hasher.Add(Version);
@@ -1547,6 +1573,14 @@ public sealed class AiMind
             hasher.Add(0x4D6F6447);   // "ModG": only while a mod's goal runs
             hasher.Add((int)ModGoalRow);
             hasher.Add(ModGoalTick);
+        }
+
+        if (Duty is { } duty)
+        {
+            hasher.Add(0x44757479);   // "Duty": only while an engine goal holds the character
+            hasher.Add((int)duty.Task.Type);
+            hasher.Add((int)duty.Task.Target);
+            hasher.Add(DutyTick);
         }
 
         if (ModGoalBackoff is { } backoff)

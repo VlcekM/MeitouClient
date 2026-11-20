@@ -159,6 +159,12 @@ public enum AiBehaviour : byte
     /// while the serial step asks the mod to start it (<see cref="AiMind.ModGoalAsk"/>, <see cref="INpcGoal.Start"/>).
     /// </summary>
     Mod = 28,
+    /// <summary>
+    /// A goal an engine system acts out (a type no entry of this table acts out, registered by that system, <see cref="DutyGoals"/>): it stands on
+    /// the goal's row while the serial step asks the system to start the act-out (<see cref="AiMind.DutyAsk"/>, <see cref="IDutyGoal.Start"/>), and
+    /// the goal then holds the character (<see cref="AiMind.Duty"/>).
+    /// </summary>
+    Duty = 29,
 }
 
 /// <summary>
@@ -298,14 +304,16 @@ public static class TaskBehaviours
     };
 
     /// <summary>
-    /// The game's display text of a type the engine acts out or a captive goal; the enum name for the rest.
+    /// The game's display text of a type the engine acts out or a captive goal; for the rest its TaskData row's (an engine-acted goal's,
+    /// <see cref="DutyGoals"/>), else the enum name.
     /// </summary>
     public static string Text(TaskType type)
     {
         if (Table.TryGetValue(type, out var e)) return e.Text;
         if (CaptiveTexts.TryGetValue(type, out string? captive)) return captive;
+        if (type == TaskType.StumbleTaskForced) return "Stumbling";
 
-        return type == TaskType.StumbleTaskForced ? "Stumbling" : type.ToString();
+        return TaskDataTable.Of(type)?.Text ?? type.ToString();
     }
 
     /// <summary>

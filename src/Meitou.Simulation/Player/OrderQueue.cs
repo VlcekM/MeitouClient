@@ -524,12 +524,13 @@ public static class PlayerOrders
                 return check;
             }
             // an NPC keeps its routine for after the order, and its engine duties let go, so no holder's step stops or redirects the order's task;
-            // an act on its body interrupts them only
+            // an act on its body interrupts the duty sweeps only, and ends an engine goal, as the original's update after it plans anew
             var cold = world.Characters.Cold(slot)!;
             if (!DecisionSystem.Decides(cold))
             {
                 DecisionSystem.KeepRoutine(world.Characters, slot, cold);
                 if (!front.Interrupts) world.ReleaseDuties(slot, front.Keeps);
+                else world.SystemOf<Ai.AiSystem>()?.ReplanDuty(world, slot);
             }
 
             front.Started = true;
