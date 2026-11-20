@@ -344,10 +344,11 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
 - The failure text is said only for a character of the player's faction that is not an animal (`PlayerOrders.Show`; the order step's vfunc `0x2d8` call in `FUN_140510920`,
   [precedence](game/ai-tasks.md#precedence)); anyone else's blocked order waits silently.
 - Owners that take a player character's order only (an NPC's leaves the queue, `Gone`), their act-outs being the player's: build, repair and dismantle (the sites, doors and
-  towns they take are the player faction's, and the start's "I don't have any building materials." is said for anyone), the machine orders and prospecting (87, 97, 124,
-  146, 150: a worked bench advances the player's research, hauls go to the player faction's storages, prospecting fills the player's prospecting window, the
-  turret's gunner is the interface's), a container's (26, 76: the player's container window) and a door walk (72, 73, 76 on a door: the interface's one door target,
-  `PlayerState.DoorTarget`). Moves, follows, attacks, first aid, splint and rest, the Medic, Robotics and Rescue buttons' one look (58 / 57 / 148 as plain orders: the
+  towns they take are the player faction's, and the start's "I don't have any building materials." is said for anyone), a container's (26, 76: the player's
+  container window) and a door walk (72, 73, 76 on a door: the interface's one door target,
+  `PlayerState.DoorTarget`). Moves, follows, attacks, the machine orders and prospecting (87, 97, 124, 146, 150: a bench counts for the research only
+  when the player owns it, the storages are the worker's faction's, `ProductionSystem.StoresFor`, and a prospect's result goes to the Prospecting window, as
+  `Task_Prospecting`'s does), first aid, splint and rest, the Medic, Robotics and Rescue buttons' one look (58 / 57 / 148 as plain orders: the
   order giver `FUN_1405d20d0` tests the faction only on its permanent path, **Verified**), lifts, kidnap, loot (opening an inventory opens the loot window for a player character only; anyone
   else's is the plain 26 and loots the body), stealth KO, put down, beds, a ground pick-up (3), the rest of the lock work, put in cage (108) and the arrest orders
   (240, 213, 112, 4), 133 and 35 take any character; their
@@ -1941,7 +1942,7 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
 - **Hauling** (`ProductionSystem.Hauling.cs`, `ProductionSettings.AutoHaul`, default on; facts in
   [buildings-production](game/buildings-production.md#hauling)). An operator at its machine first puts carried items
   into empty input room. It takes a full output only when a storage will accept it (else the machine stays full) and
-  carries it to the nearest player storage (function 2 or 13) that accepts it and has room; or it fetches an empty input's item from the nearest storage holding it or machine whose output holds it (a well's water for a farm). A
+  carries it to the nearest storage (function 2 or 13) of the worker's faction (the player's too for one of its side, `FUN_14059acd0`, `StoresFor`) that accepts it and has room; or it fetches an empty input's item from the nearest storage holding it or machine whose output holds it (a well's water for a farm). A
   storage accepts an item when `itemtype limit` matches and `limit inventory` (a function 2 storage's only) is empty or lists it; `stackable bonus
   mult` scales its stacks. The player's drops into a storage follow the same rule ("does not take").
   Excess fetched inputs stay with the operator. A fetch's source and a storage taking output are within squared distance 4.246733e7 (3D)

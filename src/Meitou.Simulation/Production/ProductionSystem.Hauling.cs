@@ -53,14 +53,14 @@ public sealed partial class ProductionSystem
         // A full output is taken only when some storage takes it; without one the machine stays full.
         bool took = false;
         if (m.Output is { Full: true } output && _items.Create(output.Recipe.Item, output.Count) is { } made
-            && StorageFor(world, site, made) is not null)
+            && StorageFor(world, site, made, cold) is not null)
         {
             int moved = Placed(inv, made);
             if (moved > 0) { output.Count -= moved; changed = took = true; }
         }
 
         // A bench full on its first craft: its finished items a storage takes (#762).
-        if (m.Craft is { } craft && CraftFull(craft) && TakeDone(craft, inv, i => StorageFor(world, site, i) is not null))
+        if (m.Craft is { } craft && CraftFull(craft) && TakeDone(craft, inv, i => StorageFor(world, site, i, cold) is not null))
             changed = took = true;
 
         if (changed) world.Machines.Touch();
@@ -70,7 +70,7 @@ public sealed partial class ProductionSystem
         bool full = m.Output is { Full: true } || m.Craft is { } c && CraftFull(c);
         string? into = took || full
             ? CarriedMade(inv, m)
-                .Select(i => StorageFor(world, site, i))
+                .Select(i => StorageFor(world, site, i, cold))
                 .FirstOrDefault(s => s is not null)
             : null;
         if (into is not null) return Go(cold, into, null);
@@ -227,11 +227,11 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The nearest player storage within <see cref="InFinderRange"/> of <paramref name="site"/> that takes <paramref name="item"/> and has room
-    /// for it.
+    /// The nearest storage <paramref name="by"/> uses within <see cref="InFinderRange"/> of <paramref name="site"/> that takes <paramref name="item"/>
+    /// and has room for it.
     /// </summary>
-    string? StorageFor(World world, BuildSite site, ItemInstance item) =>
-        NearestStorage(world, site, s => s.Data.Accepts(item.Record, item.Type) && Fits(s.Storage!, item));
+    string? StorageFor(World world, BuildSite site, ItemInstance item, CharacterCold by) =>
+        NearestStorage(world, site, by, s => s.Data.Accepts(item.Record, item.Type) && Fits(s.Storage!, item));
 
     /// <summary>
     /// Whether some of an item fits: a stack of it with room, or a free cell.
@@ -263,18 +263,18 @@ public sealed partial class ProductionSystem
                 : m.Output is { Count: > 0 } o && o.Recipe.Item == record && (o.Full || by?.OperateSite != s.Id)));
 
     /// <summary>
-    /// The player's nearest complete storage within <see cref="InFinderRange"/> of a machine that passes <paramref name="ok"/> (ties: the lower
-    /// site id). The original's per-item storage finder (<c>FUN_14059acd0</c>) measures from the character, who stands at the machine (#965: a
-    /// storage 3000 or more away was missed).
+    /// The nearest complete storage <paramref name="by"/> uses (<see cref="StoresFor"/>) within <see cref="InFinderRange"/> of a machine that passes
+    /// <paramref name="ok"/> (ties: the lower site id). The original's per-item storage finder (<c>FUN_14059acd0</c>) measures from the character,
+    /// who stands at the machine (#965: a storage 3000 or more away was missed).
     /// </summary>
-    string? NearestStorage(World world, BuildSite from, Func<Machine, bool> ok)
+    string? NearestStorage(World world, BuildSite from, CharacterCold by, Func<Machine, bool> ok)
     {
         string? best = null;
         float bestGap = float.MaxValue;
         foreach (var s in world.Machines.All)
         {
             if (!s.Data.IsStorage || s.Storage is null || s.Site == from.Id || Site(world, s.Site) is not { Complete: true } site
-                || site.Owner != world.Player.Faction)
+                || !StoresFor(world, by, site))
                 continue;
 
             float gap = Gap(site.Position, from.Position);
@@ -287,6 +287,13 @@ public sealed partial class ProductionSystem
 
         return best;
     }
+
+    /// <summary>
+    /// The storage finder's owner test (<c>FUN_14059acd0</c>, <b>Verified</b>): a storage of the character's own faction, or, for one of the player's
+    /// side (<c>FUN_140856bc0</c>: the player's faction, or a squad whose AI contract the player's faction runs), of the player's faction.
+    /// </summary>
+    static bool StoresFor(World world, CharacterCold by, BuildSite storage) =>
+        storage.Owner == by.Faction || storage.Owner == world.Player.Faction && world.Player.Faction >= 0 && Ai.DecisionSystem.Decides(by);
 
     /// <summary>
     /// Whether two points are within the squared 3D distance the original's storage and fill finders take in the default ROAM_FAR range mode

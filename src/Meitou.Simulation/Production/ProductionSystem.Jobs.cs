@@ -666,7 +666,7 @@ public sealed partial class ProductionSystem
         if (m.Farm is { } f)
         {
             if (f.Death >= m.Data.Farm!.DeathThreshold) return true;
-            if (f.Growth >= 1) return f.Harvested < f.Plants.Length && Room(world, site, m);
+            if (f.Growth >= 1) return f.Harvested < f.Plants.Length && Room(world, site, m, cold);
 
             // A growing crop is no work while it holds water: the original's operate row needs a free operator place, false while the farm's
             // status is 3 (growing), so a farmer goes on to his next job (#913). Its status is 0 once an input runs empty (state 62), and he
@@ -674,11 +674,11 @@ public sealed partial class ProductionSystem
             return m.HasEmptyInputs && Supplied(world, site, m, cold);
         }
 
-        if (m.Craft is not { } craft) return Supplied(world, site, m, cold) && Room(world, site, m);
+        if (m.Craft is not { } craft) return Supplied(world, site, m, cold) && Room(world, site, m, cold);
         if (craft.Queue.Count == 0 || !Supplied(world, site, m, cold)) return false;
 
         // A bench held by its first craft's store works again once its finished items can go to a storage (#762).
-        return !CraftFull(craft) || Settings.AutoHaul && craft.Done.Any(i => StorageFor(world, site, i) is not null);
+        return !CraftFull(craft) || Settings.AutoHaul && craft.Done.Any(i => StorageFor(world, site, i, cold) is not null);
     }
 
     /// <summary>
@@ -715,15 +715,15 @@ public sealed partial class ProductionSystem
 
         if (!fetch || m.Output is not { } output || _items.Create(output.Recipe.Item, 1) is not { } one) return false;
         if (!output.Full && !Carried(inv, one.Record).Any()) return false;
-        return NearestStorage(world, site, s => s.Data.Accepts(one.Record, one.Type) && Fits(s.Storage!, one)) is not null;
+        return NearestStorage(world, site, cold, s => s.Data.Accepts(one.Record, one.Type) && Fits(s.Storage!, one)) is not null;
     }
 
     /// <summary>
-    /// The output has room, or with AutoHaul a storage takes it.
+    /// The output has room, or with AutoHaul a storage <paramref name="cold"/> uses takes it.
     /// </summary>
-    bool Room(World world, BuildSite site, Machine m) =>
+    bool Room(World world, BuildSite site, Machine m, CharacterCold cold) =>
         m.Output is { } o && (!o.Full || Settings.AutoHaul && _items.Create(o.Recipe.Item, 1) is { } one
-            && NearestStorage(world, site, s => s.Data.Accepts(one.Record, one.Type) && Fits(s.Storage!, one)) is not null);
+            && NearestStorage(world, site, cold, s => s.Data.Accepts(one.Record, one.Type) && Fits(s.Storage!, one)) is not null);
 
     /// <summary>
     /// A carried item a "Hauling to" job takes to its storage: a loose stack of something a player machine makes or crafts (not the character's own

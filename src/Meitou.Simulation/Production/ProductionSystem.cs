@@ -460,7 +460,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         float bestGap = float.MaxValue;
         foreach (var id in Who(world, order.Characters))
         {
-            if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { IsPlayer: true } cold && AbleToMan(cold)
+            if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { } cold && AbleToMan(cold)
                 && TaskStart.Eligible(world, cold, TaskType.UseTurret) && Gap(table.Next[slot].Position, spot) is var gap && gap < bestGap)
                 (best, bestGap) = (slot, gap);
         }
@@ -476,16 +476,16 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         new(row, this) { Site = site.Id, TaskPoint = OrderEntry.AtBuilding(world, order, site.Position) };
 
     /// <summary>
-    /// The orders of machines (operate 87, training 97, turret gunner 146, a haul trip to a storage 124) and prospecting (150): a player character's
-    /// (else the order leaves the queue) on a complete site that has its machine (or a turret's post); one already working that machine needs nothing
-    /// more; the character must be able to work (<see cref="Able"/>; a gunner <see cref="AbleToMan"/>), the machine have a free operator place
+    /// The orders of machines (operate 87, training 97, turret gunner 146, a haul trip to a storage 124) and prospecting (150), anyone's (the order
+    /// giver and the tasks test no faction: a worked bench counts for the player's research only when the player owns it, the storages are the
+    /// worker's faction's, <see cref="StoresFor"/>, and a prospect's result goes to the Prospecting window, <c>Task_Prospecting</c>): on a complete
+    /// site that has its machine (or a turret's post), else the order leaves the queue; one already working that machine needs nothing more; the character must be able to work (<see cref="Able"/>; a gunner <see cref="AbleToMan"/>), the machine have a free operator place
     /// ("is already in use", posted) and, to operate or man it (rows 87 and 146), power (state 93, <see cref="Powered"/>; its text "It needs
     /// electricity." said); a prospector must not swim.
     /// </summary>
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
         var cold = world.Characters.Cold(slot)!;
-        if (!cold.IsPlayer) return OrderCheck.Gone;
         if (order.Row == TaskType.Prospecting) return Able(cold) && cold.WaterState != 3 ? OrderCheck.Run : OrderCheck.Blocked();
         if (order.Site is not { } id || Site(world, id) is not { Complete: true } site || world.Machines.Find(id) is not { } m
             || order.Row == TaskType.UseTurret && TurretPostOf(site) is null) return OrderCheck.Gone;
