@@ -962,10 +962,11 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
                 // cage) waits for it: its goal lists decide whether it treats.
                 if (MindPending(world, cold)) continue;
 
-                // An NPC the AI does not run (an engine mind, or none) treats when idle: no task, following, wandering or an implicit job.
+                // An NPC the AI does not run (an engine mind, or none) treats when idle: no task, following, wandering or an implicit job; not
+                // while its order holds it.
                 bool idle = next[i].Task is (byte)CharacterTask.Idle or (byte)CharacterTask.Wander or (byte)CharacterTask.Follow
                         || Production.PermaJobs.ListJob(cold, (CharacterTask)next[i].Task) is { Implicit: true };
-                if (!idle) continue;
+                if (!idle || DecisionSystem.Ordered(cold)) continue;
                 if (taken is null)
                 {
                     taken = SquadGoals.Of(world);
