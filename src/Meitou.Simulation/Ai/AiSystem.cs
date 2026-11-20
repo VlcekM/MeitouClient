@@ -296,13 +296,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// The serial schedule step: drops the blackboards' lapsed requests (<see cref="BoardRequests"/>), stamps every character's <c>followMe</c>
-    /// before the parallel think, and gives every member of a player's squad that lacks one its player-faction mind (<see cref="PlayerSideMinds"/>).
+    /// before the parallel think, gives every member of a player's squad that lacks one its player-faction mind (<see cref="PlayerSideMinds"/>) and
+    /// every new member of a squad with a board its mind (<see cref="NewMinds"/>).
     /// </summary>
     public void Schedule(World world)
     {
         BoardRequests.LapseAll(world);
         _followMe.Stamp(world);
         PlayerSideMinds(world);
+        NewMinds(world);
     }
 
     /// <summary>
@@ -3625,7 +3627,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         // Every loaded platoon acts out its package's goals in the original, so its members get full minds, a campaign's too. One a code mod
         // holds stays on the engine's routine while its package does not travel (the mod moves it).
-        bool populationMoves = platoon is not null && PopulationRuns(platoon) && !BoardMoves(board);
+        bool populationMoves = PopulationMoves(platoon, board);
         if (populationMoves) EngineMinds(world, squad, board);
 
         for (int k = 0; k < squad.Members.Count; k++) MindAndCrowd(world, squad, board, k, populationMoves);
@@ -3715,6 +3717,40 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             Resume = squad.Resume,
             Shopping = ShoppingList.Make(data.Db, cold.RecordId, world.Seed, Rng.Key(table.IdOf(s))),
         };
+    }
+
+    /// <summary>
+    /// The members of a squad move with the population and run an engine mind (<see cref="EngineMinds"/>): a loaded platoon a code mod holds whose
+    /// package does not travel.
+    /// </summary>
+    bool PopulationMoves(Platoon? platoon, Blackboard board) => platoon is not null && PopulationRuns(platoon) && !BoardMoves(board);
+
+    /// <summary>
+    /// A character that joined a squad with a board since that squad's last cadence (spawned, split off, recruited) gets the mind the cadence would
+    /// give it (<see cref="MindAndCrowd"/>, <see cref="EngineMind"/>) at once: the original builds every character's AI at its creation and sets it
+    /// up at its spawn (<c>FUN_14062af50</c>; <c>setupAI</c> <c>FUN_140621b70</c> from <c>FUN_140581770</c>, <b>Verified</b>), so it reacts to a
+    /// hit from its first update. Serial, in the schedule step before the look and the think, squads and members in order; its goal counts in the
+    /// crowd from the next cadence.
+    /// </summary>
+    void NewMinds(World world)
+    {
+        var table = world.Characters;
+        foreach (var squad in world.Squads.All)
+        {
+            if (squad.Ai is not { } board) continue;
+
+            bool? populationMoves = null;
+            for (int k = 0; k < squad.Members.Count; k++)
+            {
+                if (!table.TryResolveNext(squad.Members[k], out int s) || !table.Next[s].Alive || table.Cold(s) is not { Ai: null } cold) continue;
+                if (squad.Autonomous && !cold.IsPlayer) continue;
+
+                populationMoves ??= PopulationMoves(PlatoonOf(world, squad), board);
+                bool full = !populationMoves.Value || ObeyedRoles(world, squad, cold) is not null;
+                if (full) GiveMind(world, squad, board, k, s, squad.Autonomous && cold.IsPlayer);
+                else EngineMind(world, squad, board, k);
+            }
+        }
     }
 
     #endregion
@@ -4068,41 +4104,45 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// </summary>
     void EngineMinds(World world, Squad squad, Blackboard board)
     {
+        for (int k = 0; k < squad.Members.Count; k++) EngineMind(world, squad, board, k);
+    }
+
+    /// <summary>
+    /// Member <paramref name="k"/>'s engine mind (<see cref="EngineMinds"/>): none for a player character, nor for a slave obeying its master, which
+    /// takes the master's Slave list with a full mind (<see cref="MindAndCrowd"/>), not its own squad's routine.
+    /// </summary>
+    void EngineMind(World world, Squad squad, Blackboard board, int k)
+    {
         var table = world.Characters;
-        var package = board.Current;
-        for (int k = 0; k < squad.Members.Count; k++)
+        if (!table.TryResolveNext(squad.Members[k], out int s) || table.Cold(s) is not { IsPlayer: false } cold) return;
+        if (ObeyedRoles(world, squad, cold) is not null) return;
+
+        if (cold.Ai is { Engine: false })
         {
-            if (!table.TryResolveNext(squad.Members[k], out int s) || table.Cold(s) is not { IsPlayer: false } cold) continue;
-
-            // A slave obeying its master takes the master's Slave list with a full mind (MindAndCrowd), not its own squad's routine.
-            if (ObeyedRoles(world, squad, cold) is not null) continue;
-
-            if (cold.Ai is { Engine: false })
-            {
-                ToRoutine(world, squad, s, cold);
-                cold.Ai = null;
-            }
-
-            if (cold.Ai is null || !ReferenceEquals(cold.Ai.Squad, squad))
-            {
-                var p = table.Next[s].Position;
-                cold.Ai = new AiMind
-                {
-                    Squad = squad,
-                    MemberIndex = k,
-                    Post = new Vector2(p.X, p.Z),
-                    Engine = true,
-                    Version = EngineBoard.Version,
-                    RaceGoals = OwnGoals(squad, board, cold),
-                };
-            }
-
-            cold.Ai.EngineGoals = package is null ? [] : CombatGoalsOf(package, RoleOf(squad, squad.Members[k], cold));
-
-            // A follower of a squad a code mod holds that stands idle (it came round, its fight ended, the swap found it held by something else:
-            // ToRoutine) follows its leader again (engine choice: the mod moves the leader).
-            if (Rejoins(world, squad, s, cold)) TaskStart.Become(world, s, CharacterTask.Follow, TaskType.FollowSquadleader, TaskSource.Goal);
+            ToRoutine(world, squad, s, cold);
+            cold.Ai = null;
         }
+
+        if (cold.Ai is null || !ReferenceEquals(cold.Ai.Squad, squad))
+        {
+            var p = table.Next[s].Position;
+            cold.Ai = new AiMind
+            {
+                Squad = squad,
+                MemberIndex = k,
+                Post = new Vector2(p.X, p.Z),
+                Engine = true,
+                Version = EngineBoard.Version,
+                RaceGoals = OwnGoals(squad, board, cold),
+            };
+        }
+
+        var package = board.Current;
+        cold.Ai.EngineGoals = package is null ? [] : CombatGoalsOf(package, RoleOf(squad, squad.Members[k], cold));
+
+        // A follower of a squad a code mod holds that stands idle (it came round, its fight ended, the swap found it held by something else:
+        // ToRoutine) follows its leader again (engine choice: the mod moves the leader).
+        if (Rejoins(world, squad, s, cold)) TaskStart.Become(world, s, CharacterTask.Follow, TaskType.FollowSquadleader, TaskSource.Goal);
     }
 
     /// <summary>
