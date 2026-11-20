@@ -44,8 +44,8 @@ public sealed class Caging
 }
 
 /// <summary>
-/// A bounty hunter that recognised a player character's bounty (economy.md 11.8): its event 44 line, or the engine's order where no dialogue says
-/// it, sets it on the target; it leaves the target alone for <see cref="Rest"/> more game seconds.
+/// A bounty hunter whose event 44 line answered a player character's bounty (economy.md 11.8) and set it on the target; it leaves the target alone
+/// for <see cref="Rest"/> more game seconds.
 /// </summary>
 public sealed class Hunt
 {
@@ -590,8 +590,9 @@ public sealed partial class ArrestSystem : IOrderOwner
 
     /// <summary>
     /// The hunter recognised the target's bounty: it fires event 44 BOUNTY_SPOTTED at it (<c>FUN_140856f00</c>), whose bounty hunters' lines answer a
-    /// bounty above 4000 with <c>DA_ATTACK_CHASE_FOREVER</c> (6, order 101; economy.md 11.8); without dialogue events the engine orders it 101 itself
-    /// (<see cref="OrderChase"/>). It then leaves the target alone for <see cref="ArrestSettings.HuntRestSeconds"/>.
+    /// bounty above 4000 with <c>DA_ATTACK_CHASE_FOREVER</c> (6, order 101; economy.md 11.8). With no line said nothing follows, and the hunter may
+    /// recognise the target again at its next look (the event is all the original's spotting does, <c>FUN_140685660</c>, <b>Verified</b>). After a
+    /// line it leaves the target alone for <see cref="ArrestSettings.HuntRestSeconds"/> (engine).
     /// </summary>
     void BeginHunt(World world, int hunter, int target)
     {
@@ -599,17 +600,9 @@ public sealed partial class ArrestSystem : IOrderOwner
         var hc = table.Cold(hunter)!;
         var hunterId = table.IdOf(hunter);
         var targetId = table.IdOf(target);
-        if (Talks)
-        {
-            if (Talk!.FireEvent(world, hunterId, targetId, BountySpotted))
-                Note(world, ArrestEventKind.Spotted, hunterId, targetId, hc.Faction, BountySpotted);
-        }
-        else
-        {
-            OrderChase(world, hunter, target);
-            world.Post(Loc.Tr("{1} is after the bounty on {2}!", hc.Name, table.Cold(target)!.Name));
-        }
+        if (!Talks || !Talk!.FireEvent(world, hunterId, targetId, BountySpotted)) return;
 
+        Note(world, ArrestEventKind.Spotted, hunterId, targetId, hc.Faction, BountySpotted);
         _hunts.Add(new Hunt { Hunter = hunterId, Target = targetId, Rest = Settings.HuntRestSeconds });
         Note(world, ArrestEventKind.Hunt, hunterId, targetId, hc.Faction, HuntBounty(table.Cold(target)!, hc.Faction));
     }

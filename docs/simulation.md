@@ -1290,8 +1290,9 @@ one starts with the order's provenance. The chain's rows and states are in [AI t
   Bounty Hunters): in the spotting sweep they see the player's entry for their faction's booking faction (`legal system`,
   `CrimeFactions.BookingOf`); above 4000 and once recognised (the same meter) the nearest free one fires event 44 BOUNTY_SPOTTED at it
   (`FUN_140856f00`), and the data's line answers with DA 6 `ATTACK_CHASE_FOREVER`, order 101 DEFEAT_SQUAD ([economy 11.8](game/economy.md#118-bounty-spotting-and-bounty-hunters));
-  without dialogue events the engine gives him that order itself (`ArrestSystem.OrderChase`). There is no hunt goal and no cage (11.8); the hunter
-  then leaves that target alone for 600 game seconds (`HuntRestSeconds`, engine). Hunts and cagings are hashed only while any exist; restarted after
+  with no line said (or the event lines off) nothing follows, as in the original, whose spotting only fires the event (`FUN_140856f00` ->
+  `FUN_140685660`, **Verified**). There is no hunt goal and no cage (11.8); after a line the hunter leaves that target alone for 600 game seconds
+  (`HuntRestSeconds`, engine). Hunts and cagings are hashed only while any exist; restarted after
   a load ([Saves](#saves)).
 - **Goal 204 Arrest bounties** (`Crime/ArrestGoals`, an [engine goal](#engine-goals); facts: [economy 11.7](game/economy.md#117-arrest)): a serial look
   every 15 ticks keeps each member's finder pick (`FUN_14099bfc0`) and its free-cage and town answers; the chooser weighs 204 like any goal of the package
@@ -1337,8 +1338,8 @@ one starts with the order's provenance. The chain's rows and states are in [AI t
   shackles worn, walking a move order away from its master (its point farther than 250 from the owner and than the slave, not heading at it, and outdoors, past 433 or not
   looking like a slave), or fighting the looker's ally; the looker's own-town gate is the engine's, and so is tagging a slave whose master Meitou does not know when it
   stands outside that town. At an escaping slave the nearest police-like or slaver one fires event 36 ESCAPING_SLAVE_SPOTTED (the sight pass
-  fires it itself), whose line's DA 6 `ATTACK_CHASE_FOREVER` orders it 101 DEFEAT_SQUAD; without dialogue events the engine gives that order
-  (`OrderChase`). The capture after the fight is the catchers' own package goals: 167 cuffs (chains) it, 168 lifts it and 112 cages it, the caging
+  fires it itself), whose line's DA 6 `ATTACK_CHASE_FOREVER` orders it 101 DEFEAT_SQUAD; with no line nothing follows (as for event 44).
+  The capture after the fight is the catchers' own package goals: 167 cuffs (chains) it, 168 lifts it and 112 cages it, the caging
   making it a slave (1) again ([captives](#captives)). A town here is `InOwnTown`'s extent, else no farther
   from its centre than its gate nearest the point plus 100 (Rebirth's gates stand about 1500 out, its radius is 184); without gates, the extent only. A caged slave's master is
   the resident squad of its cage's building when loaded (engine stand-in for `FUN_140330600` assigning the cage's owner handle). **Observed** (probe `obey`, #813 save, Rebirth):

@@ -710,9 +710,9 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// sees a slave (state 1; its daylight sight test, full range) with a view factor above <see cref="EscapingSlave.SpotValue"/> tags it escaping
     /// when <see cref="Escapes"/> holds, unless the sight pass runs, which tags it and fires event 36 itself (<see cref="SightCrimes"/>). Without
     /// the sight pass the nearest such police-like or slaver NPC says event 36 ESCAPING_SLAVE_SPOTTED at an escaping slave (state 2), whose line's
-    /// <c>DA_ATTACK_CHASE_FOREVER</c> orders it 101; without dialogue events it is ordered 101 itself (<see cref="OrderChase"/>, engine). The
-    /// capture after the fight is the catchers' own goals' (167 cuffs, 168 lifts, 112 cages). True when a catcher sees the escaping slave (it is
-    /// then left out of the bounty spotting).
+    /// <c>DA_ATTACK_CHASE_FOREVER</c> orders it 101; with no line said nothing follows (the event is all the original's spotting does,
+    /// <c>FUN_140685660</c>, <b>Verified</b>). The capture after the fight is the catchers' own goals' (167 cuffs, 168 lifts, 112 cages). True when
+    /// a catcher sees the escaping slave (it is then left out of the bounty spotting).
     /// </summary>
     bool CatchSlave(World world, int s, CharacterCold c)
     {
@@ -745,26 +745,8 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         }
         if (catcher < 0) return false;
 
-        if (!Talks)
-        {
-            OrderChase(world, catcher, s);
-            HoldSpotting(world, table.IdOf(catcher), table.IdOf(s), EscapingSlaveSpotted);
-        }
-        else if (!sight) Spotted(world, catcher, s, EscapingSlaveSpotted);
-
+        if (Talks && !sight) Spotted(world, catcher, s, EscapingSlaveSpotted);
         return true;
-    }
-
-    /// <summary>
-    /// The engine's stand-in for an event line's <c>DA_ATTACK_CHASE_FOREVER</c> (6) where no dialogue says it (<see cref="Talks"/> off): the looker
-    /// is stopped and ordered 101 Assault on the target, its queue cleared (<c>FUN_140680560</c>, <b>Verified</b>, docs/game/dialogue.md).
-    /// </summary>
-    static void OrderChase(World world, int g, int t)
-    {
-        if (world.OrderOwnerOf(TaskType.DefeatSquad) is not { } owner) return;
-
-        Bodies.BodySystem.Stop(world, g);
-        PlayerOrders.Give(world, g, new OrderEntry(TaskType.DefeatSquad, owner) { Target = world.Characters.IdOf(t) }, queued: false);
     }
 
     /// <summary>
