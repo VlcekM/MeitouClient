@@ -1064,7 +1064,8 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   branch ([order givers](#order-givers)).
 - **When**: the chooser runs on every AI update (**Verified**, disassembly: `AI` update `FUN_1405112b0` calls `FUN_140511130` whenever the AI's `+0x10` is non-null, which at `14051114a` tests the
   replan request +0x1b0 and either way reaches the chooser call at `14051121f`). AI `+0x10` is the platoon (Character `+0x658` → `+0x78`; `FUN_140507070` reads its Blackboard
-  at `+0xf8`, **Verified**), so a character without one runs no chooser. Nor does a carried, knocked-out or dead one: the character tick `FUN_1405d00b0` then runs only
+  at `+0xf8`, **Verified**), so a character without one runs no chooser. It still takes orders (the order giver `FUN_1405d20d0` and the push `FUN_140508380` have no
+  platoon test): they wait in the deque unplanned, but for 147, whose insert sets the body task itself, and whose end the task-ended handling pops (slot 27 → `FUN_14050d920`). Nor does a carried, knocked-out or dead one: the character tick `FUN_1405d00b0` then runs only
   `FUN_14050c7c0` (`FUN_140859220` and AI slot 9, no chooser) instead of the AI update, while carried (`+0x3d4`) or unconscious or dead (`+0x5b9` / `+0x5bc`) and not able to get up (`FUN_140598c20`);
   a dead one skips the rest of the update, and Character slot 27 `FUN_1405c7c30` skips the task-ended (`+0x26c`) and failed (`+0x26d`) handling while down (**Verified**).
   Without a request it first runs the plan step `FUN_14050d970` and the pick keeps the running plan; with one it deletes the driver's task (CharBody slot 12 `FUN_1405c6770`)
