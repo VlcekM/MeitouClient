@@ -2232,8 +2232,8 @@ Meitou only (the original's AI plans for no player squad; asked for as the RE_Ke
   (`AiSystem.ThinkPlayer`); only the role list is the package's (`AiSystem.PlayerSideRoles`) and the board the squad's (`PlayerSideBoard`). The
   switch, either way, drops the members' minds and the schedule step gives fresh ones; off also drops board and saved AI. An AI-started task ends
   (one in a bed lies on).
-- **Precedence**: the one ladder's ([precedence](game/ai-tasks.md#precedence)): orders, committed stops, the second list, jobs, tiers 3/2/1,
-  the default task. A package goal is held while its task is the think's own (`PlayerSideHold.Holds`, `AiMind.Owns`) and ends at an order, an
+- **Precedence**: the one ladder's ([precedence](game/ai-tasks.md#precedence)): orders, a committed stop above priority 2, the second list,
+  the urgent job pass, tier 3, a committed stop above 1, the full job pass, tier 2, a committed stop above 0, tier 1, the default task. A package goal is held while its task is the think's own (`PlayerSideHold.Holds`, `AiMind.Owns`) and ends at an order, an
   urgent job or a higher goal; a code mod's goal type in the package's role list is weighed too ([engine goals](#engine-goals)). Not reached this way: the goals whose
   looks take NPC minds only: 204 (`ArrestGoals`), the warden goals (`WardenGoals`), the kidnap goals (`KidnapGoals`), the loot goals
   (`LootGoals`), the cage escapes (`AiSystem.CagedMind`); the race goals off the chooser's rungs (`Ladder.OnRungs`).
