@@ -66,7 +66,8 @@ public sealed record ArrestSettings
 }
 
 /// <summary>
-/// Where an arrest is: the guard fighting until the target is down, stripping it, lifting it, carrying it to a cage.
+/// Where an arrest is: the guard fighting until the target is down, lifting it, carrying it to a cage. No strip: the orders' list B (240, 213) has
+/// no 118, which 181 alone provides (docs/game/ai-tasks.md "Arrest chain").
 /// </summary>
 public enum ArrestPhase : byte
 {
@@ -82,10 +83,6 @@ public enum ArrestPhase : byte
     /// The guard carries the target to the cage.
     /// </summary>
     Walk,
-    /// <summary>
-    /// Row 181 Stripping weapons between the fight (7) and the lift (240); appended so the earlier numbers keep their meaning.
-    /// </summary>
-    Strip,
 }
 
 /// <summary>
@@ -162,14 +159,6 @@ public sealed class Arrest
     /// </summary>
     public bool Enslave { get; init; }
     /// <summary>
-    /// A dialogue's hand-over (DA 30 / 40): the guard takes a body over, so the planner chain's strip (181) is not part of it.
-    /// </summary>
-    public bool Takeover { get; init; }
-    /// <summary>
-    /// Row 181 ran: once per arrest (a locked weapon item stays on the target, which the strip does not move).
-    /// </summary>
-    public bool Stripped { get; set; }
-    /// <summary>
     /// The guard's order this arrest acts out (240 Capture Target, 213 Lifting/Snatching, 112 Find and put in cage). The record lives while that
     /// order is the guard's started front.
     /// </summary>
@@ -189,8 +178,6 @@ public sealed class Arrest
         h.Add(Waited);
         h.Add(Cage is { } c ? Rng.StableHash(c) : 0UL);
         if (Enslave) h.Add(0x536C6176);
-        if (Takeover) h.Add(0x54616B65);
-        if (Stripped) h.Add(0x53747270);
         h.Add((int)Order.Row);
     }
 }
@@ -304,7 +291,7 @@ public readonly record struct ArrestEvent(long Tick, ArrestEventKind Kind, Chara
 /// one already fighting arrests at once.</item>
 /// <item><b>Arrest orders</b> (11.7, DA 29): in his own town the guard is ordered 240 Capture Target, then 112 Find and put in cage; elsewhere, or
 /// for an animal, 4 Attacking (<see cref="OrderArrest"/>; the engine gives the same orders for a world without dialogue events). The orders' act-out
-/// is an <see cref="Arrest"/>: he fights until the target is down, strips and lifts it (<see cref="Carrying.CarrySystem"/>), carries it to the best
+/// is an <see cref="Arrest"/>: he fights until the target is down, lifts it (<see cref="Carrying.CarrySystem"/>; no strip), carries it to the best
 /// free cage (<see cref="FixtureRegistry.FindCage"/>) and imprisons it with its sentence.</item>
 /// <item><b>Goal 204</b> Arrest bounties (11.7): a goal of the one chooser (<see cref="ArrestGoals"/>), acted out to the lift.</item>
 /// <item><b>Release</b> (11.5, goal 211): a player character whose sentence is served and who is awake is freed by the jail's faction (an NPC of it
@@ -962,8 +949,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         bool capture = order.Row == TaskType.LiftPersonSnatchingAllowedInTownOnly;
         var arrest = new Arrest
         {
-            Guard = table.IdOf(slot), Target = order.Target, Faction = gc.Faction, Order = order, Takeover = !capture,
-            Enslave = ReferenceEquals(order.Detail, Enslaving),
+            Guard = table.IdOf(slot), Target = order.Target, Faction = gc.Faction, Order = order, Enslave = ReferenceEquals(order.Detail, Enslaving),
         };
         _arrests.Add(arrest);
         if (!table.TryResolveNext(order.Target, out int t)) return;
@@ -1084,7 +1070,6 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         switch (a.Phase)
         {
             case ArrestPhase.Fight: return StepFight(world, a, g, t, gc, tc, ref gn, gap, dt);
-            case ArrestPhase.Strip: return StepStrip(world, a, g, t);
             case ArrestPhase.Lift: return StepLift(world, a, g, gc, ref gn);
             case ArrestPhase.Walk: return StepWalk(world, a, g, t);
         }
@@ -1203,10 +1188,9 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     }
 
     /// <summary>
-    /// The target is down: the guard strips it when it must, then lifts it, giving up after 10 s of failed lifts. A guard whose left arm cannot carry
-    /// gives up once nothing comes before the lift: the arrest plan needs the target carried, whose only provider (68 Lifting) needs state 80
-    /// <c>isCarryingArmOK</c>, which no row provides (docs/game/ai-tasks.md "Arrest chain", <b>Verified</b>), so the original's plan fails there
-    /// (#906).
+    /// The target is down: the guard lifts it, weapons and all (the order's list B has no 118 TARGET_IS_UNARMED), giving up after 10 s of failed
+    /// lifts. A guard whose left arm cannot carry gives up: the order's lift needs state 80 <c>isCarryingArmOK</c>, which no row provides
+    /// (docs/game/ai-tasks.md "Arrest chain", <b>Verified</b>), so the original's plan fails there (#906).
     /// </summary>
     bool StepTargetDown(World world, Arrest a, int g, CharacterCold gc, CharacterCold tc, float dt)
     {
@@ -1217,14 +1201,6 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             return true;
         }
         if (gc.InCombat) return true;   // still trading blows (the KO tick, a squad mate): wait
-
-        // 203 needs 118 target unarmed: its provider 181 comes before the lift
-        if (NeedsStrip(a, tc))
-        {
-            BeginStrip(a);
-            return true;
-        }
-
         if (!CanLift(gc)) return End(world, a, ArrestEventKind.GaveUp);
 
         // Not from an ally who carries it already, nor with no cage to take it to: a lift then would only be dropped again, and guards passed
@@ -1308,61 +1284,13 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     }
 
     /// <summary>
-    /// Row 181's step: 118 does not hold (the target wields or holds a weapon in its weapon sections) and the strip can run (needs the tool,
-    /// <see cref="Captives"/>); a hand-over (213) has none, and it runs once per arrest.
-    /// </summary>
-    bool NeedsStrip(Arrest a, CharacterCold target) =>
-        Captives is not null && !a.Takeover && !a.Stripped && target.CarriedBy.IsNone && !CharacterFacts.TargetUnarmed(target);
-
-    /// <summary>
     /// Game seconds the guard may take to reach the target to strip it (engine choice).
     /// </summary>
     internal const float StripWalkSeconds = 60;
 
     /// <summary>
-    /// Puts the arrest in its strip phase.
-    /// </summary>
-    void BeginStrip(Arrest a)
-    {
-        a.Phase = ArrestPhase.Strip;
-        a.Time = 0;
-    }
-
-    /// <summary>
-    /// The arrest's strip (<see cref="Strip"/>); then the chain goes on to the lift. A guard without a working arm, or one that took too long to walk
-    /// up, gives the arrest up; a target that got up is fought again.
-    /// </summary>
-    bool StepStrip(World world, Arrest a, int g, int t)
-    {
-        switch (Strip(world, g, t, a.Time, TaskSource.Order))
-        {
-            case StripStep.TargetUp:
-                a.Phase = ArrestPhase.Fight;
-                a.Time = 0;
-                return true;
-            case StripStep.GaveUp:
-                return End(world, a, ArrestEventKind.GaveUp);
-            case StripStep.Walk:
-                a.Time = 0;
-                a.Waited += world.TickSeconds;   // the walk up: the lift's patience
-                return a.Waited <= StripWalkSeconds || End(world, a, ArrestEventKind.GaveUp);
-            case StripStep.Kneel:
-                a.Time = 0;
-                return true;
-            case StripStep.Stripped:
-                a.Stripped = true;
-                a.Phase = ArrestPhase.Fight;
-                a.Time = 0;
-                a.Waited = 0;
-                return true;
-            default:
-                return true;
-        }
-    }
-
-    /// <summary>
-    /// One tick of row 181 Stripping weapons (needs 38 one working arm, at location, 7 target down; <c>Task_StripWeapons</c>), for an arrest order
-    /// and for goal 204 (<see cref="ArrestGoals"/>), its walks of <paramref name="source"/>: the guard walks up to within
+    /// One tick of row 181 Stripping weapons (needs 38 one working arm, at location, 7 target down; <c>Task_StripWeapons</c>), a step of goal 204's
+    /// plan (<see cref="ArrestGoals"/>, its 203 needing 118), its walks of <paramref name="source"/>: the guard walks up to within
     /// <see cref="Kidnap.CaptiveSettings.Reach"/>, plays <c>medic</c> for the strip's seconds (<paramref name="time"/>, the kneel's so far), and the
     /// target's weapon sections go to him (<see cref="Kidnap.CaptiveSystem.StripWeapons"/>).
     /// </summary>

@@ -1216,7 +1216,7 @@ unload, hashed only once non-empty. Facts: [locks](game/locks.md), [economy 11.5
 Arrests, the recognition meter and the marker are hashed only while set. What a save keeps of them: [Saves](#saves).
 An arrest (`Crime.Arrest`) is the act-out of the guard's running order 240 Capture Target, 213 Lifting/Snatching or 112 Find and put in cage (`Arrest.Order`; the record
 lives while that order is his started front; nothing else holds him, and another order's start leaves the arrest's carry alone). **Engine choice**: the act-out runs
-the original's plan (fight 4 for state 7, strip 181, lift 240 or 213; then 112's cage walk and 108's put-in) as serial phases, not through the AI planner; each task of an ordered
+the original's plan (fight 4 for state 7, lift 240 or 213; then 112's cage walk and 108's put-in; no strip: 240's and 213's list B have no 118) as serial phases, not through the AI planner; each task of an ordered
 one starts with the order's provenance. The chain's rows and states are in [AI tasks](game/ai-tasks.md#arrest-and-prison-rows). Goal 204 is an [engine goal](#engine-goals) (below); goals 203, 112 and 281 are not in `TaskBehaviours.Table`.
 - **Triggers**: a police-like witness that books a crime acts at once (`CrimeSystem.BookingsOf`, the witnessed-crime
   events); every 15 ticks an awake NPC within 400 that sees a player character (`Visibility`/`SneakVisibility`) whose
@@ -1297,8 +1297,7 @@ one starts with the order's provenance. The chain's rows and states are in [AI t
 - **Goal 204 Arrest bounties** (`Crime/ArrestGoals`, an [engine goal](#engine-goals); facts: [economy 11.7](game/economy.md#117-arrest)): a serial look
   every 15 ticks keeps each member's finder pick (`FUN_14099bfc0`) and its free-cage and town answers; the chooser weighs 204 like any goal of the package
   and plans it (`[4 | 262, 181, 68, 203, 204]`, the fights providing 7). The act-out is the plan's front work on its target, each with the goal's
-  provenance: the fight (4 or 262, deferred to the next tick; combat then takes the guard, `DutyEnd.Taken`), the strip (181, `ArrestSystem.Strip`, shared
-  with ordered arrests) or the lift (68); a strip walk that ends short of the target or a lift with no path to it is a lost walk on the target. Each ends the act-out (`Done`), as the original's plan ends at row 203, which does not act: the chooser plans
+  provenance: the fight (4 or 262, deferred to the next tick; combat then takes the guard, `DutyEnd.Taken`), the strip (181, `ArrestSystem.Strip`) or the lift (68); a strip walk that ends short of the target or a lift with no path to it is a lost walk on the target. Each ends the act-out (`Done`), as the original's plan ends at row 203, which does not act: the chooser plans
   afresh, and a lifted target is 129 (carried by another faction), so the carrier's own goals (112 / 281) cage it. A body that leaves the shoulder before a
   cage ends 129, and the next score finds it again (uncarried, down, a bounty: `FUN_14099bfc0`): with 7 and 118 holding the new plan is the lift, so the guard
   lifts it again as a fresh 204 (**Verified**, `FUN_14059a380`, `FUN_14099bfc0`). A target another act-out or an ordered arrest works is refused. In
