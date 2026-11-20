@@ -213,7 +213,7 @@ delivering, fetching and dismantling are steps of one act-out (`TaskStart.ActOut
   (job, button, NPC leaders), kidnappers' and guards' lifts (`BeginPickUp`), foraging, NPC scavenging and arming, the operate, turret, haul and prospect orders, the production list jobs
   (87, 97, 124, 152, 234, the engineer 125) and implicit jobs (242, 153, 275), the build, repair, door repair and dismantle orders, the bed orders and job 106, the lock, shackle, cage,
   door and force orders, the wardens' rounds, item pick-up and container walks, put in cage; the engine's starts: crime, arrest and dialogue fights (`AttackOrder.Source`: `Npc`, a kidnap
-  victim's `Reaction`, an NPC's attack on sight `Npc`), arrest and takeover walks and lifts (203, 205, 206), kidnappers' walks to the cage (112) and lifts (132, 168), captive jobs'
+  victim's `Reaction`; an NPC's attack on sight is its AI's goal fight, `Goal`), arrest and takeover walks and lifts (203, 205, 206), kidnappers' walks to the cage (112) and lifts (132, 168), captive jobs'
   walks (the row of their task, `CaptiveSystem.RowOf`), town duties' walks, lifts and drops (the goal of their kind, `TownDutySystem.RowOf`), smell hunts (176), dialogue acts (run away
   280, go home 19, summon 67, follow while talking 164, stalk 165, approach 126, a bought slave's way out 1), a trade's close (wander 24), flight (35, then wander 24), food on the ground
   (259) and limbs (277), NPC arming walks (42), roaming and campaign leaders' walks (53, 215) and mills (24). Engine walks go through `TaskStart.Walk` (`TaskRequest.Goal`: as given, or
@@ -308,9 +308,10 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   while it holds an order.
 - The failure text is said only for a character of the player's faction that is not an animal (`PlayerOrders.Show`; the order step's vfunc `0x2d8` call in `FUN_140510920`,
   [precedence](game/ai-tasks.md#precedence)); anyone else's blocked order waits silently.
-- Owners that take a player character's order only (an NPC's leaves the queue, `Gone`), their act-outs being the player's: build, repair and dismantle (sites and doors of the
-  player's faction only, materials from its stores, the "construction complete" message), the machine orders and prospecting (87, 97, 124, 146, 150: the player faction's
-  machines and research, posted results), a container's (26, 76: the player's container window), opening an inventory (26 with the inventory detail: the player's loot window)
+- Owners that take a player character's order only (an NPC's leaves the queue, `Gone`), their act-outs being the player's: build, repair and dismantle (the sites, doors and
+  towns they take are the player faction's, and the start's "I don't have any building materials." is said for anyone), the machine orders and prospecting (87, 97, 124,
+  146, 150: a worked bench advances the player's research, hauls go to the player faction's storages, prospecting fills the player's prospecting window, the
+  turret's gunner is the interface's), a container's (26, 76: the player's container window), opening an inventory (26 with the inventory detail: the player's loot window)
   and a door walk (72, 73, 76 on a door: the interface's one door target, `PlayerState.DoorTarget`), and the Medic, Robotics and Rescue buttons. Moves, follows, attacks,
   first aid, splint and rest, lifts, kidnap, loot, stealth KO, put down, beds, a ground pick-up (3), the rest of the lock work and put in cage (108) take any character; their
   act-outs post and say the worker's own messages for the player's side only.
