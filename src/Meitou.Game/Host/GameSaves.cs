@@ -531,6 +531,7 @@ sealed class GameSaves(GameHost host)
         }
         host.PlayerSquad = world.Squads.Find(world.Player.Squad);
         foreach (var note in loaded.Notes) Console.WriteLine($"load      {note}");
+        foreach (var problem in read.Result.Problems) Console.WriteLine($"load      save: {problem}");
 
         // The saved camera (FUN_1407ade60, docs/formats/camera.md "Saved camera"): pivot, orientation and boom, a pivot out of bounds moved to the
         // loader's fallback. A save without a view (an older Meitou one) puts the camera on the leader, keeping the view's heading, pitch and boom.

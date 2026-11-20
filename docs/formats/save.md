@@ -28,10 +28,25 @@ outside 8..17 ([fcs-mod](fcs-mod.md#files-that-fail-to-load)); the load goes on 
   `FUN_14036b5d0` → `FUN_1406c29a0`) and on a failure makes nothing from it: the squad is loaded with no characters, its loaded flag (+8) left clear.
 - Zone file: `FUN_1409ffad0` stores the failure in ZoneMapContent +0xA8, as for a zone with no file, and makes the zone with that flag.
 
+Both are read only when the platoon or zone is made in the session, and a save rewrites neither file otherwise (**Verified**, decompile 1.0.68):
+an unloaded platoon's file is written only with its loaded flag set (`FUN_14036bad0`), an active one's only when it has members or +0xe8
+(`FUN_1404ff410` → `FUN_14036bc90`); the PLATOON record is rewritten from the kept state either way (`FUN_140372ef0`). Saving into another
+folder copies the loaded save's folder without overwriting, then the working folder over it (`FUN_140473720` queues, `FUN_140472ac0` →
+`FUN_1404726a0`), so a file the session did not rewrite reaches the new save byte for byte. An NPC platoon made with no members is declared dead
+on its next step ([declareDead](../game/factions-squads-towns.md)); a zone made fresh is written from its state.
+
+Meitou: `SaveGame.Load` keeps a platoon or zone file whose type is outside 8..17 or that is under 4 bytes in `RejectedFiles`, adds the
+`Problems` entry "File rejected, loaded as none (...): <name>" and loads the platoon or zone as having no file. A file of type 8..17 that does
+not parse (types 8..14, or damage further in) still throws `FcsFormatException`, its message prefixed with the file name. A write carries each
+rejected file on unchanged (`SaveGame.CarriedRejects`) while a PLATOON record without a file still names it, or while its zone has no file
+(a visited zone gets a fresh one, [Zone files](#zone-files)); a carried zone the CAMERA `zones` list named stays in it. The game logs the
+`Problems` entries as `load      save: ...`.
+
 **Observed** (one user save, "the great adventure 240"): 703 of 1362 `.platoon` and 287 of 407 `.zone` files are zero bytes for their whole
 length (type 0) at an ordinary size; `quick.save` is whole, and 62 of them have a twin of the same size and write time, whole, in an
-earlier save of the playthrough. Meitou does not load such a save: `SaveGame.Load` throws `FcsFormatException` "Unknown file type 0" at
-the first such platoon or zone file (`FcsReader` reads types 15..17), where a missing platoon file is only a `Problems` entry.
+earlier save of the playthrough. **Verified** (headless `probe <save> wars resave <folder>`, then the folders compared): 942 files rejected
+(655 platoon files named by a record, 287 zone files; the other 48 zero-filled platoon files no record names), all 942 written back byte for
+byte, the 222 rejected zones the CAMERA list named still in it, the 655 PLATOON records with the same `content file` and `char count`.
 
 ## Folder and state mapping
 
