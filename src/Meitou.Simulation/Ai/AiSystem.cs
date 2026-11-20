@@ -614,7 +614,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// The winner over a task an engine system runs (the AI does not hold the NPC, <see cref="Holds"/>). In a fight it did not start: a combat goal
     /// or Self preservation becomes the fight's goal (<see cref="InFight"/>: the fight goes on, its run asks the flee step); any other winner leaves
     /// the fight to its starter. Elsewhere: a combat goal's fight or a run is asked of the serial steps, whose start replaces the task
-    /// (<see cref="ActOverTask"/>); the goal whose act-out runs goes on; on its own Fixing Legs treatment a goal below the urgent tier leaves it (the
+    /// (<see cref="ActOverTask"/>), a run's goal taken up first (<see cref="Install"/>); the goal whose act-out runs goes on; on its own Fixing Legs treatment a goal below the urgent tier leaves it (the
     /// treatment runs until the leg is bandaged, <b>Observed</b>); another winner over a treatment ends it in the serial step and acts at the next
     /// tick (<see cref="LeaveTask"/>); over the engine's other tasks it waits (<see cref="TakenOver"/>). Whether the winner was taken up as the
     /// current goal (its plan stays).
@@ -632,10 +632,14 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return fights;
         }
 
+        // A run is its goal's task from its first tick (FleeSystem.FlightGoes), so the goal becomes current first, as the chooser installs it with its
+        // plan's task; the run's start replaces the engine's task as any start does.
         if (fights)
         {
+            bool runs = AsksRun(mind, behaviour);
+            if (runs) behaviour = Install(world, i, mind, goal, board, type, behaviour);
             ActOverTask(world, i, mind, type, behaviour);
-            return false;
+            return runs;
         }
 
         if (mind.Goal is { } current && DutyGoals.Same(current, goal)) return true;
@@ -780,7 +784,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         mind.Goal = goal;
         mind.Behaviour = behaviour;
         mind.Version = board.Version;
-        if (behaviour == AiBehaviour.Flee || behaviour == AiBehaviour.SelfPreserve && mind.Step == TaskType.RunAway)
+        if (AsksRun(mind, behaviour))
             mind.FleeRequest = behaviour == AiBehaviour.SelfPreserve ? FleeAsk.Threat : FleeAsk.Enemies;
     }
 
@@ -2036,10 +2040,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (behaviour == AiBehaviour.None && _duties is not null && _duties.Has(type)) behaviour = AiBehaviour.Duty;
         if (behaviour == AiBehaviour.None && _modGoals is not null && _modGoals.Has(type)) behaviour = AiBehaviour.Mod;
 
-        var profile = TaskProfiles.Of(type);
-        bool fresh = TakeUp(world, slot, mind, goal, type, profile);
-        behaviour = Adopt(world, slot, mind, goal, board, type, behaviour, fresh);
-        if (fresh) PlanAnew(world, slot, mind, goal, board, profile);
+        behaviour = Install(world, slot, mind, goal, board, type, behaviour);
 
         // A player-faction character on a task that is not the AI's (a job's, the engine's), an NPC on its job's: the think starts nothing over it
         // on its own slot.
@@ -2073,6 +2074,25 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         ActOut(world, slot, mind, goal, board, type, behaviour);
     }
+
+    /// <summary>
+    /// The goal becomes the mind's current one (<see cref="TakeUp"/>, <see cref="Adopt"/>), planned again when taken up anew
+    /// (<see cref="PlanAnew"/>). Returns the behaviour.
+    /// </summary>
+    AiBehaviour Install(World world, int slot, AiMind mind, AiGoal goal, Blackboard board, TaskType type, AiBehaviour behaviour)
+    {
+        var profile = TaskProfiles.Of(type);
+        bool fresh = TakeUp(world, slot, mind, goal, type, profile);
+        behaviour = Adopt(world, slot, mind, goal, board, type, behaviour, fresh);
+        if (fresh) PlanAnew(world, slot, mind, goal, board, profile);
+        return behaviour;
+    }
+
+    /// <summary>
+    /// Whether the goal's act-out is a run (<see cref="FleeSystem"/>): a goal 35, or Self preservation on its step 35.
+    /// </summary>
+    static bool AsksRun(AiMind mind, AiBehaviour behaviour) =>
+        behaviour == AiBehaviour.Flee || behaviour == AiBehaviour.SelfPreserve && mind.Step == TaskType.RunAway;
 
     /// <summary>
     /// A player-faction character's goal over a task that is not the AI's, an NPC's over its job's (<see cref="PlayerSideHold.OwnsTask"/>; the

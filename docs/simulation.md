@@ -2341,7 +2341,7 @@ as attackers (the original's choosers run one after another). That fight is the 
 Every NPC with a mind runs the full ladder on whatever task (`AiSystem.ThinkNpc`): whatever it is on competes at its own rung (a duty or Medic goal
 at its tier with its continuity, a job at its rung, the fight's 32). Over a task an engine system runs (`ActOverEngineTask`; the AI does not hold it): in a fight it did not
 start (a dialogue's, an assault's, a duty's, aggro's) a combat goal or 32 becomes the fight's goal (`InFight`), any other winner leaves it to its starter; elsewhere a combat
-goal's fight or a run replaces the task, the goal whose act-out it is goes on, and a treatment (a medic job's or a Medic, splint or Fixing Legs goal's) ends for any other
+goal's fight or a run replaces the task (a run's goal becoming the current one first, `Install`, so the flight goes on as its goal's), the goal whose act-out it is goes on, and a treatment (a medic job's or a Medic, splint or Fixing Legs goal's) ends for any other
 winner (`LeaveTask`; on its own Fixing Legs treatment only for an urgent one, **Observed**); the engine's other tasks (a crime's, a lift, a dialogue's, an errand's walk)
 stand for orders or goals not put on a rung, so they wait, and a job or second-list entry that wins starts nothing over them; a winner not taken up leaves the
 current goal's plan as it was (`KeepPlan`). **Meitou holds** (`MeitouHolds`, until the mod contract changes): an NPC a code mod's goal engages and an engine

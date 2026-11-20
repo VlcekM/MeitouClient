@@ -1466,7 +1466,8 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
     fighter also thinks on the 15-tick cadence, where the original only replans on triggers and lets the plan step end the goal.
   - **Over the engine's tasks** (`AiSystem.ActOverEngineTask`, [AI](../simulation.md#ai)): an NPC on a task an engine system runs still runs the full ladder (the original's chooser
     has no task test, `FUN_140510ef0`); a combat goal or 32 takes it over by its fight or run (a fight's start ends the task through its handler: `FirstAidSystem` lets the patient
-    go, `TownDutySystem` waits and walks on, `CaptiveSystem` gives the job up); in a fight the AI did not start the winner becomes the fight's goal and any other leaves it; a
+    go, `TownDutySystem` waits and walks on, `CaptiveSystem` gives the job up); a run's goal (32 on its step 35, a goal 35) becomes the current one at once, as the chooser
+    installs a goal with its plan's task, so the run is that goal's from its first tick (`AiSystem.Install`, `FleeSystem.FlightGoes`); in a fight the AI did not start the winner becomes the fight's goal and any other leaves it; a
     treatment yields to any winner. Nothing for one fleeing, carried or down.
   - **Same-tick starts** (`AiSystem.SendFights`): the original's choosers run one after another and a fight's start puts the fighter on its target's engaged list at once, which the next
     chooser's target score counts (`FUN_14059e300`: minus manliness per attacker; **Observed**). Meitou's thinks read the last tick, so the serial step picks again, in slot order, for a starter
