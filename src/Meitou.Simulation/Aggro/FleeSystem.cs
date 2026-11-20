@@ -165,9 +165,10 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
             ref var n = ref table.Next[i];
             if (!n.Alive || table.Cold(i) is not { Fleeing: true } cold) continue;
 
-            // An order beats the flight (Self preservation's run included): it stops, as for a player character. So does an order on the body (a
-            // stumble, a get-up): its body task replaces Task_Runaway (FUN_1405c6ec0), and the replan after it chooses again, a new run starting
-            // from its first leg (FUN_14034b440).
+            // An order beats the flight (Self preservation's run included): it stops, as for a player character. So does an order on the body: the
+            // stumble's front insert sets its body task at once, replacing Task_Runaway (FUN_140507cd0 -> FUN_1405c6ec0); a get-up 65 / 52 is an
+            // ordinary push with the clear flag (FUN_140508380: queue and goal wiped, a replan), whose order step plans it over the run. The replan
+            // after either chooses again, a new run starting from its first leg (FUN_14034b440).
             if (cold.Medical is { Incapacitated: true } || cold.IsPlayer || DecisionSystem.Ordered(cold) || PlayerOrders.BodyHolds(cold))
             {
                 cold.Fleeing = cold.FleesAlone = false;

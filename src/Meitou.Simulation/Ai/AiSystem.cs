@@ -3788,7 +3788,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// A player-faction character's own lists (<c>setupAI</c>, <b>Verified</b>): its faction's <c>AI Goals</c> (the player platoon runs no contract),
     /// then 243 Getting food unless held; an animal then its race's <c>AI Goals</c> and 259 Picking up food unless held, without 230.
-    /// 14 Idleness is the default task and 32 Self preservation the engine's own goal, both outside the list.
+    /// <c>setupAI</c> first puts 14 Idleness (priority 1, weight 0.1) and 32 Self preservation (priority 3, weight 1.0, itself) in every
+    /// character's own list; Meitou weighs them outside it: 32 as every mind's urgent candidate (<see cref="SelfPreservationGoal"/>), 14 as the
+    /// default task and the mover's IDLE (<see cref="Idle"/>). The scored 14 is dropped while its list B <c>!162 !157</c> holds; it survives
+    /// while the character is prone (it would plan 65 Getting up) or holds a weapon (7 Sheathing), which the body (the get-up order) and the
+    /// combat step (sheathing an idle weapon) do in Meitou.
     /// </summary>
     IReadOnlyList<AiGoal> PlayerOwnGoals(CharacterCold cold)
     {

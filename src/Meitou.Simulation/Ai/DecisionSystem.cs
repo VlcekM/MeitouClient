@@ -1026,8 +1026,9 @@ public sealed class DecisionSystem
     /// player-faction character, one slot chosen by the manoeuvre mode (<c>FUN_140599970</c> / <c>FUN_1405966a0</c>, <b>Verified</b>; the standing
     /// orders FAR and NEAR, <see cref="ManoeuvreCommand"/>): ROAM_FAR 14 Idleness, STAY_CLOSE 31 Staying close (Task_Follow with no target, whose
     /// update does nothing without one: it stands), HOLD_GROUND 30 Holding position (Task_Blank with the effect isAtLocation at the centre of
-    /// movement: it walks back there, then stands). The scored own-list 14 never gets there: the scorer drops it while its list B holds (<c>!162
-    /// !157</c>, no act, no effect). It runs over idling, a fight (its goal's or row's), and any task a plan still runs (an order's, a goal's, the
+    /// movement: it walks back there, then stands; no input of 1.0.68 sets HOLD_GROUND, only standing orders 8 FAR and 9 NEAR set the mode, so this
+    /// slot is reached only by a mod). The own-list 14 (setupAI, priority 1, weight 0.1) is dropped by the scorer while its list B holds (<c>!162
+    /// !157</c>, no act, no effect): it is kept while the character is prone or holds a weapon. It runs over idling, a fight (its goal's or row's), and any task a plan still runs (an order's, a goal's, the
     /// engine's: those end by their own rules; a stale job's ended at the job pass); a wander or follow no plan runs is given up for it, and so is
     /// an idle of another default row.
     /// </summary>

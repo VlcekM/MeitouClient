@@ -433,7 +433,9 @@ phases, no source ever called from the think:
      `ImplicitPick` starts and runs while it is the one the character is on; one that no longer holds ends.
   6. The priority-2 goals (a player animal's race goals 233, eating a downed body, and 232, on the AI's rung), then the priority-1 goals (keys 2000 + type), then the default task
      (keys 3000 up, `+0x190`, one slot by the manoeuvre mode, `DecisionSystem.Idleness`): ROAM_FAR 14 Idleness, STAY_CLOSE (NEAR) 31 Staying close standing in place, HOLD_GROUND 30 Holding
-     position walking back to the centre of movement first; the scorer drops a scored 14 while `!162 !157` hold.
+     position walking back to the centre of movement first (no 1.0.68 input sets HOLD_GROUND: the mode's setter `FUN_140596680` is reached only from standing
+     orders 8 FAR and 9 NEAR, and a load or spawn leaves ROAM_FAR, **Verified**); the scorer drops the own-list 14 (setupAI gives every character 14 at priority 1,
+     weight 0.1, and 32 at priority 3, weight 1.0) while `!162 !157` hold, so it is kept while the character is prone or holds a weapon.
      A player character stands idle, its routine (player characters neither wander nor follow a leader by themselves). Idleness runs over idling, a fight and any task a plan still runs
      (an order's, a goal's, an engine act-out's: those end by their own rules), and gives up a wander or follow no plan runs; the task the think started for a goal
      its player-faction mind no longer holds is no plan's (a freed slave's 171 Follow, a stand of 62 after the request lapsed), as the original's pick installs any winner

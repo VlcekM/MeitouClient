@@ -1145,7 +1145,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   6. Priority-2 goals; committed with the running priority above 0: stop; priority-1 goals; the default task (+0x190, at key 1.0); else the mover reset (vfunc 0x98 of the movement object at Character `+0x640`, `FUN_14065fc70`). The default task (**Verified**:
      setter `OrdersReceiver` vfunc 4 `FUN_14050c030`, a fresh 14 Idleness with no target when given none) is reset by every order on `FUN_1405d20d0`'s queue path (not by its
      permanent-job branch), by the move order `FUN_1405d22b0` and by
-     standing orders 8 / 9, by the AI's manoeuvre mode (+0x2bc): `FUN_140599970` (a point: the order's) and `FUN_1405966a0` (a target) make it 30 Holding position for HOLD_GROUND (0),
+     standing orders 8 / 9, by the AI's manoeuvre mode (+0x2bc): `FUN_140599970` (a point: the order's) and `FUN_1405966a0` (a target) make it 30 Holding position for HOLD_GROUND (0; no 1.0.68 input sets it: the setter `FUN_140596680` is reached only from standing orders 8 and 9, **Verified**),
      31 Staying close for STAY_CLOSE (1), and idleness for ROAM_FAR (2, the default). The Hold toggle (standing order 12) does not touch it. Nothing else writes it: the
      constructor leaves it null and neither spawning nor `setupAI` sets it, and while it is null the pick skips its slot (`FUN_140510650` needs a candidate) and the mover
      reset follows. 31 and 30 are made at priority 2, weight 1.0, with the AI's repertoire (none outside it), on the order's point or target: 31 is `Task_Follow`
