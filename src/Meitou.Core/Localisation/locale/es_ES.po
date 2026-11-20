@@ -1,0 +1,4341 @@
+# Meitou's own texts (launcher, title menu, settings menu, notices) in Spanish.
+# Kenshi's own texts come from locale/es_ES/LC_MESSAGES/main.mo; this file only adds what Meitou shows.
+# Machine-translated; a native speaker's corrections are welcome (locale/es_ES/meitou.po overrides without a rebuild).
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: es_ES\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid " (Vulkan loader missing)"
+msgstr " (falta el cargador de Vulkan)"
+
+msgid " (as the game)"
+msgstr " (como el juego)"
+
+msgid " (no upscaler: plain scaling)"
+msgstr " (sin reescalador: escalado simple)"
+
+msgid " (not enabled above it: {1})"
+msgstr " (no activado encima: {1})"
+
+msgid " Continuing '{1}'."
+msgstr " Continuando '{1}'."
+
+msgid " Not on disk: {1}."
+msgstr " No está en el disco: {1}."
+
+msgid " Start the game once to write it again; nothing is changed here until then."
+msgstr " Inicia el juego una vez para volver a escribirlo; aquí no se cambia nada hasta entonces."
+
+msgid " Steam would not download {1}."
+msgstr " Steam no quiso descargar {1}."
+
+msgid "(started with Play), and a change here creates it. Until then the game uses its defaults."
+msgstr "(al iniciar con Jugar), y un cambio aquí lo crea. Hasta entonces el juego usa sus valores predeterminados."
+
+msgid "-Avg. Price"
+msgstr "-Precio medio"
+
+msgid "-Combat skills bonus"
+msgstr "-Bonificación a habilidades de combate"
+
+msgid "-Dodge skill effect"
+msgstr "-Efecto de la habilidad Esquivar"
+
+msgid "-Encumbrance reduction"
+msgstr "-Reducción de carga"
+
+msgid "-Max HP"
+msgstr "-PV máx."
+
+msgid "-Price mark-up"
+msgstr "-Recargo de precio"
+
+msgid "-Sell value"
+msgstr "-Valor de venta"
+
+msgid "-Stealth skill effect"
+msgstr "-Efecto de la habilidad Sigilo"
+
+msgid "-Unarmed damage bonus"
+msgstr "-Bonificación de daño sin armas"
+
+msgid "0 (off)"
+msgstr "0 (desactivado)"
+
+msgid "0 (true slant)"
+msgstr "0 (inclinación real)"
+
+msgid "0 off"
+msgstr "0 desactivado"
+
+msgid "1 change from the game"
+msgstr "1 cambio respecto al juego"
+
+msgid "1 landscape"
+msgstr "1 paisaje"
+
+msgid "1 post"
+msgstr "1 publicación"
+
+msgid "1 unsaved change"
+msgstr "1 cambio sin guardar"
+
+msgid "2 characters"
+msgstr "2 personajes"
+
+msgid "3 buildings"
+msgstr "3 edificios"
+
+msgid "32 rays"
+msgstr "32 rayos"
+
+msgid "4 everything"
+msgstr "4 todo"
+
+msgid "64 rays"
+msgstr "64 rayos"
+
+msgid "8 nearest"
+msgstr "8 más cercanas"
+
+msgid ": error px"
+msgstr ": error px"
+
+msgid ": technique"
+msgstr ": técnica"
+
+msgid "; showing the last list"
+msgstr "; mostrando la última lista"
+
+msgid "; showing what was read before"
+msgstr "; mostrando lo que se leyó antes"
+
+msgid "A biome whose sounds were not loaded yet starts its day or night ambience by the time of day. The game plays the opposite one (night sounds by day) until the next biome or day change."
+msgstr "Un bioma cuyos sonidos aún no se habían cargado empieza su ambiente de día o de noche según la hora. El juego reproduce el contrario (sonidos nocturnos de día) hasta el siguiente cambio de bioma o de día."
+
+msgid "A blow that destroys a character's head cuts it off, by the same rule the Dismemberment setting cuts off limbs. In the game a destroyed head only kills."
+msgstr "Un golpe que destruye la cabeza de un personaje la corta, con la misma regla con la que el ajuste Desmembramiento corta extremidades. En el juego una cabeza destruida solo mata."
+
+msgid "A character knocked down or killed by a blow falls with its own momentum and is pushed away from the hit, harder the heavier the blow and most at the part that was struck, its arms and legs flung by it, and a cut-off head flies the same way. Limp bodies have joints that ease to a stop and a slight muscle tone, so they settle into natural poses. In the game a body drops where it stood, its joints stopping hard."
+msgstr "Un personaje derribado o muerto por un golpe cae con su propio impulso y sale despedido lejos del impacto, más fuerte cuanto más pesado es el golpe y sobre todo en la parte golpeada, con brazos y piernas sacudidos, y una cabeza cortada vuela del mismo modo. Los cuerpos inertes tienen articulaciones que se detienen suavemente y un ligero tono muscular, así que adoptan posturas naturales. En el juego un cuerpo cae donde estaba, con las articulaciones frenando en seco."
+
+msgid "A character on a bench with the table behind it sits facing away from the table. The game mirrors the bench's look point through the middle of the world map, so the sitter faces an unrelated direction."
+msgstr "Un personaje en un banco con la mesa detrás se sienta de espaldas a la mesa. El juego refleja el punto de mirada del banco por el centro del mapa del mundo, así que quien se sienta mira en una dirección cualquiera."
+
+msgid "A character that takes a fatal hit explodes, covers everything around in blood and sends bones flying everywhere. Its gear falls to the ground around the spot."
+msgstr "Un personaje que recibe un golpe mortal explota, cubre de sangre todo a su alrededor y lanza huesos por todas partes. Su equipo cae al suelo alrededor del lugar."
+
+msgid "A character that turned its head toward what it was talking to or watching looks ahead again once it stops looking. In the game the head stays turned until the next thing it looks at."
+msgstr "Un personaje que giró la cabeza hacia aquello con lo que hablaba o que observaba vuelve a mirar al frente cuando deja de mirar. En el juego la cabeza sigue girada hasta lo siguiente que mire."
+
+msgid "A character's bag window opens with their inventory until you close it with OPEN BAG. In the game every bag stays shut after loading until OPEN BAG is pressed for it."
+msgstr "La ventana de la bolsa de un personaje se abre con su inventario hasta que la cierres con ABRIR BOLSA. En el juego cada bolsa queda cerrada tras cargar hasta que se pulsa ABRIR BOLSA para ella."
+
+msgid "A double click on a squad member far from the view (or a double tap of their number) flies the camera there in an arc instead of cutting."
+msgstr "Un doble clic en un miembro del escuadrón lejos de la vista (o pulsar dos veces su número) lleva la cámara volando en arco en lugar de cortar."
+
+msgid "A key of the mod {1}: {2}."
+msgstr "Una tecla del mod {1}: {2}."
+
+msgid "A left click on the ground ends the selection of the selected building and closes its panels. In the game the building stays selected."
+msgstr "Un clic izquierdo en el suelo termina la selección del edificio seleccionado y cierra sus paneles. En el juego el edificio sigue seleccionado."
+
+msgid "A mod"
+msgstr "Un mod"
+
+msgid "A robot race: no skin scattering unless turned on."
+msgstr "Una raza robótica: sin dispersión en la piel salvo que se active."
+
+msgid "A save starts paused once it has loaded, so nothing happens before you look around. In the game it runs at once."
+msgstr "Una partida empieza en pausa al cargar, para que no pase nada antes de que mires alrededor. En el juego se ejecuta enseguida."
+
+msgid "A small catchlight on the eyes instead of a mirror of the landscape."
+msgstr "Un pequeño brillo en los ojos en lugar de un reflejo del paisaje."
+
+msgid "A soft GPU allocation budget, not a hard reservation. Higher values keep more textures and draw distance resident; Metal uses unified memory shared with macOS and other apps."
+msgstr "Un presupuesto flexible de asignación de GPU, no una reserva fija. Valores más altos mantienen más texturas y distancia de dibujado en memoria; Metal usa memoria unificada compartida con macOS y otras apps."
+
+msgid "A soft sheen on the edges of cloth, a little on leather."
+msgstr "Un brillo suave en los bordes de la tela, un poco en el cuero."
+
+msgid "A squad coming back into the area around your squads has healed for the time it was away. In the game it comes back as it left."
+msgstr "Un escuadrón que vuelve a la zona de tus escuadrones se ha curado durante el tiempo que estuvo fuera. En el juego vuelve tal como se fue."
+
+msgid "A swamp turtle butts and bites when it fights. In the game it fights with a sword or club drawn for it, whose moves its body cannot play, so its blows land without any motion."
+msgstr "Una tortuga del pantano embiste y muerde cuando lucha. En el juego lucha con una espada o un garrote desenvainado para ella, cuyos movimientos su cuerpo no puede reproducir, así que sus golpes impactan sin ningún movimiento."
+
+msgid "A town far from your squads is taken over or destroyed as soon as its story calls for it, so the map and the factions show it at once. In the game it changes only when you come near."
+msgstr "Una ciudad lejos de tus escuadrones es tomada o destruida en cuanto su historia lo pide, así que el mapa y las facciones lo muestran enseguida. En el juego solo cambia cuando te acercas."
+
+msgid "A traced cache adds fine indirect light near the camera."
+msgstr "Una caché trazada añade luz indirecta fina cerca de la cámara."
+
+msgid "A trader or anyone else checking your squad for an item, a race or a carried body never turns the conversation to one of your animals. In the game a pack animal carrying the item takes over the talk, so trade and the other answers do nothing."
+msgstr "Un comerciante o cualquier otro que revise tu escuadrón buscando un objeto, una raza o un cuerpo cargado nunca desvía la conversación a uno de tus animales. En el juego un animal de carga con el objeto se queda con la conversación, y el comercio y las demás respuestas no hacen nada."
+
+msgid "A turret's gunner turns with the gun, facing where it aims. In the game the gunner keeps facing the turret, so once the gun swings toward a target the gunner looks off to the side."
+msgstr "El artillero de una torreta gira con el arma, mirando hacia donde apunta. En el juego el artillero sigue mirando a la torreta, así que cuando el arma gira hacia un objetivo, mira hacia un lado."
+
+msgid "A wounded prisoner on a pole or in a cage keeps the pole's or cage's pose. In the game it clutches its wounds there instead."
+msgstr "Un prisionero herido en un poste o en una jaula mantiene la pose del poste o la jaula. En el juego se agarra las heridas allí."
+
+msgid "ADD SQUAD"
+msgstr "AÑADIR ESCUADRÓN"
+
+msgid ""
+"Activates sneak mode so the character will try to go unnoticed.\n"
+"If the character is unconscious, when he wakes up he will stay down on the ground and crawl to avoid detection."
+msgstr ""
+"Activa el modo sigilo para que el personaje intente pasar desapercibido.\n"
+"Si el personaje está inconsciente, al despertar se quedará en el suelo y se arrastrará para evitar ser detectado."
+
+msgid "Add airglow to the night haze."
+msgstr "Añade luminiscencia nocturna a la bruma de la noche."
+
+msgid "Add animated waves and shoreline surf."
+msgstr "Añade olas animadas y oleaje en la costa."
+
+msgid "Add contact shading around nearby surfaces and creases."
+msgstr "Añade sombreado de contacto alrededor de superficies cercanas y pliegues."
+
+msgid "Add to jobs"
+msgstr "Añadir a trabajos"
+
+msgid "Adds a generated frame between rendered ones: nearly twice the frame rate, a little more input delay."
+msgstr "Añade un fotograma generado entre los renderizados: casi el doble de fotogramas por segundo, algo más de retraso de entrada."
+
+msgid "Adds a generated frame between rendered ones: nearly twice the frame rate, a little more input delay. Now: {1}"
+msgstr "Añade un fotograma generado entre los renderizados: casi el doble de fotogramas por segundo, algo más de retraso de entrada. Ahora: {1}"
+
+msgid "Adjust the blue shift of colours in low light."
+msgstr "Ajusta el desplazamiento al azul de los colores con poca luz."
+
+msgid "Adjust the brightness of light scattered through the air."
+msgstr "Ajusta el brillo de la luz dispersada en el aire."
+
+msgid "Adjust underwater visibility at a distance."
+msgstr "Ajusta la visibilidad bajo el agua a distancia."
+
+msgid "Adjust visibility beneath the water surface."
+msgstr "Ajusta la visibilidad bajo la superficie del agua."
+
+msgid "Advanced materials"
+msgstr "Materiales avanzados"
+
+msgid "Advanced ragdolls"
+msgstr "Ragdolls avanzados"
+
+msgid "Air scattering density; zero removes air scattering."
+msgstr "Densidad de la dispersión del aire; cero la elimina."
+
+msgid "All"
+msgstr "Todo"
+
+msgid "All Faithful"
+msgstr "Todo Original"
+
+msgid "All Meitou"
+msgstr "Todo Meitou"
+
+msgid "All fixes"
+msgstr "Todas las correcciones"
+
+msgid "All gameplay changes"
+msgstr "Todos los cambios de jugabilidad"
+
+msgid "Also keeps the surroundings of your other squads' members loaded, not only the squad on the squad bar. Costs more video memory."
+msgstr "Mantiene también cargados los alrededores de los miembros de tus otros escuadrones, no solo del escuadrón de la barra de escuadrones. Cuesta más memoria de vídeo."
+
+msgid "Always on"
+msgstr "Siempre activado"
+
+msgid "Ambience after loading"
+msgstr "Ambiente tras cargar"
+
+msgid "Ambient"
+msgstr "Ambiental"
+
+msgid "Ambient light"
+msgstr "Luz ambiental"
+
+msgid "Ambient light strength"
+msgstr "Intensidad de la luz ambiental"
+
+msgid "Ambient light strength (1 = game)"
+msgstr "Intensidad de la luz ambiental (1 = juego)"
+
+msgid "Ambient occlusion"
+msgstr "Oclusión ambiental"
+
+msgid "Ambient occlusion quality"
+msgstr "Calidad de la oclusión ambiental"
+
+msgid "Ambient occlusion quality (GTAO)"
+msgstr "Calidad de la oclusión ambiental (GTAO)"
+
+msgid "Ambient occlusion technique"
+msgstr "Técnica de oclusión ambiental"
+
+msgid "Ambient occlusion type"
+msgstr "Tipo de oclusión ambiental"
+
+msgid "An HDR10 picture for an HDR display (turn HDR on in Windows first). Not with frame generation."
+msgstr "Una imagen HDR10 para una pantalla HDR (activa antes el HDR en Windows). No con generación de fotogramas."
+
+msgid "An animal in a cage or on a pole breathes, looks around and lies down when knocked out. In the game it stands frozen there, since the cage's poses are for people only."
+msgstr "Un animal en una jaula o en un poste respira, mira alrededor y se tumba cuando queda inconsciente. En el juego se queda congelado, porque las poses de la jaula son solo para personas."
+
+msgid "Animals pick up items"
+msgstr "Los animales recogen objetos"
+
+msgid "Animals stay out of talks"
+msgstr "Los animales quedan fuera de las conversaciones"
+
+msgid "Animals, bandits and other wild squads keep their characters, wounds and places when the area around them unloads, and are there again when you come back. In the game they are removed and new ones are made."
+msgstr "Animales, bandidos y otros escuadrones salvajes conservan sus personajes, heridas y lugares cuando la zona a su alrededor se descarga, y vuelven a estar allí cuando regresas. En el juego se eliminan y se crean otros nuevos."
+
+msgid "Anisotropic filtering"
+msgstr "Filtrado anisotrópico"
+
+msgid "Anisotropic filtering (texture filtering)"
+msgstr "Filtrado anisotrópico (filtrado de texturas)"
+
+msgid "Anti-aliasing: 0 off 1 FXAA 2 SMAA 3 TAA 4 FSR 5 DLSS"
+msgstr "Antialiasing: 0 desactivado 1 FXAA 2 SMAA 3 TAA 4 FSR 5 DLSS"
+
+msgid "Aperture"
+msgstr "Apertura"
+
+msgid "Apply"
+msgstr "Aplicar"
+
+msgid "Apply the scene's colour and contrast adjustments."
+msgstr "Aplica los ajustes de color y contraste de la escena."
+
+msgid "Armour plates shine as bare metal wherever they have any gloss. Off: dull, painted or rusty plate stays dull. An armour a mod gives its own metalness keeps it."
+msgstr "Las placas de armadura brillan como metal desnudo siempre que tengan algo de brillo. Desactivado: las placas mates, pintadas u oxidadas siguen mates. Una armadura a la que un mod da su propia metalicidad la conserva."
+
+msgid "Arrange mods"
+msgstr "Ordenar mods"
+
+msgid "As in the game, the camera (the free camera too) cannot go farther than 2250 units from the nearest of your characters. Off, it can fly anywhere in the world."
+msgstr "Como en el juego, la cámara (también la libre) no puede alejarse más de 2250 unidades de tu personaje más cercano. Desactivado, puede volar a cualquier parte del mundo."
+
+msgid "Ask the running Steam client to download or update your subscribed Kenshi workshop mods; subscribe in Steam"
+msgstr "Pide al cliente de Steam en ejecución que descargue o actualice los mods de Kenshi del Workshop a los que estás suscrito; suscríbete en Steam"
+
+msgid "Asking Steam for your workshop mods..."
+msgstr "Pidiendo a Steam tus mods del Workshop..."
+
+msgid "Asking Steam to subscribe..."
+msgstr "Pidiendo a Steam la suscripción..."
+
+msgid "Assign a control"
+msgstr "Asignar un control"
+
+msgid "At startup, install a new launcher version and restart into it."
+msgstr "Al iniciar, instalar una nueva versión del lanzador y reiniciar en ella."
+
+msgid "Attach a navmesh screenshot (only in a game)"
+msgstr "Adjuntar captura del navmesh (solo en partida)"
+
+msgid "Attach a screenshot (none was taken)"
+msgstr "Adjuntar captura de pantalla (no se tomó ninguna)"
+
+msgid "Attach a screenshot of the game"
+msgstr "Adjuntar captura de pantalla del juego"
+
+msgid "Attach a screenshot with the navmesh drawn over it"
+msgstr "Adjuntar captura con el navmesh dibujado encima"
+
+msgid "Attach the action and dialogue logs (what characters did and said)"
+msgstr "Adjuntar los registros de acciones y diálogos (lo que hicieron y dijeron los personajes)"
+
+msgid "Attackers per target"
+msgstr "Atacantes por objetivo"
+
+msgid "Auto"
+msgstr "Auto"
+
+msgid "Auto (recommended)"
+msgstr "Auto (recomendado)"
+
+msgid "Auto uses Vulkan when MoltenVK is installed, otherwise Metal."
+msgstr "Auto usa Vulkan cuando MoltenVK está instalado; si no, Metal."
+
+msgid "Auto uses Vulkan when MoltenVK is installed, otherwise Metal. This overrides --renderer in Launch arguments."
+msgstr "Auto usa Vulkan cuando MoltenVK está instalado; si no, Metal. Esto sustituye --renderer en los argumentos de inicio."
+
+msgid "Auto: about a third of this Mac's memory, from 5120 to 10240 MB, so a larger Mac keeps more resident."
+msgstr "Auto: cerca de un tercio de la memoria de este Mac, de 5120 a 10240 MB, para que un Mac más grande mantenga más en memoria."
+
+msgid "Auto: {1} (Vulkan loader found)."
+msgstr "Auto: {1} (cargador de Vulkan encontrado)."
+
+msgid "Auto: {1} (no Vulkan loader)."
+msgstr "Auto: {1} (sin cargador de Vulkan)."
+
+msgid "Auto: {1}."
+msgstr "Auto: {1}."
+
+msgid "Automatic"
+msgstr "Automático"
+
+msgid "Automatic ({1})"
+msgstr "Automático ({1})"
+
+msgid "Average minutes of silence between pieces of biome music."
+msgstr "Minutos medios de silencio entre piezas de música del bioma."
+
+msgid "BACKPACK"
+msgstr "MOCHILA"
+
+msgid "BUILDING"
+msgstr "EDIFICIO"
+
+msgid "Back to the game's value."
+msgstr "Volver al valor del juego."
+
+msgid "Back to the look's value"
+msgstr "Volver al valor del estilo"
+
+msgid "Bags in the inventory"
+msgstr "Bolsas en el inventario"
+
+msgid "Balance change: a dodge or block that succeeds its roll but starts a moment late still works, instead of failing as in the game. Makes skilled fighters much harder to wear down when several enemies attack at once."
+msgstr "Cambio de equilibrio: una esquiva o un bloqueo que supera su tirada pero empieza un instante tarde sigue funcionando, en lugar de fallar como en el juego. Hace que los luchadores hábiles sean mucho más difíciles de desgastar cuando varios enemigos atacan a la vez."
+
+msgid "Balanced"
+msgstr "Equilibrado"
+
+msgid "Balanced — 6144 MB"
+msgstr "Equilibrado — 6144 MB"
+
+msgid "Balanced: more resident detail than Safe, with some headroom for macOS and other apps."
+msgstr "Equilibrado: más detalle en memoria que Seguro, con algo de margen para macOS y otras apps."
+
+msgid "Being dismantled"
+msgstr "Siendo desmantelado"
+
+msgid "Bench facing"
+msgstr "Orientación en bancos"
+
+msgid "Beyond it the terrain shows flat ground colour instead of textures. Shorter is cheaper."
+msgstr "Más allá, el terreno muestra un color de suelo plano en lugar de texturas. Más corto es más barato."
+
+msgid "Billboard transition distance for large foliage."
+msgstr "Distancia de transición a billboards para la vegetación grande."
+
+msgid "Binding cleared."
+msgstr "Asignación borrada."
+
+msgid "Blades keep the blood of what they wound and dry dark; armour and clothing show the wounds under them."
+msgstr "Las hojas conservan la sangre de lo que hieren y se secan oscuras; armaduras y ropa muestran las heridas debajo."
+
+msgid "Blend more ACES into the hybrid tone mapping curve."
+msgstr "Mezcla más ACES en la curva de mapeo tonal híbrida."
+
+msgid "Blood --"
+msgstr "Sangre --"
+
+msgid "Blood cells"
+msgstr "Células de sangre"
+
+msgid "Blood decals drawn"
+msgstr "Calcomanías de sangre dibujadas"
+
+msgid "Blood on surfaces"
+msgstr "Sangre en superficies"
+
+msgid "Blood on weapons and gear"
+msgstr "Sangre en armas y equipo"
+
+msgid "Bloody footprints"
+msgstr "Huellas de sangre"
+
+msgid "Bloom"
+msgstr "Bloom"
+
+msgid "Bloom strength"
+msgstr "Intensidad del bloom"
+
+msgid "Bloom strength (0 = game)"
+msgstr "Intensidad del bloom (0 = juego)"
+
+msgid "Blur what is out of focus, as a lens does, in the free and cinematic cameras."
+msgstr "Desenfoca lo que está fuera de foco, como una lente, en las cámaras libre y cinemática."
+
+msgid "Body --"
+msgstr "Cuerpo --"
+
+msgid "Bolt tracers"
+msgstr "Trazadoras de virotes"
+
+msgid "Borderless"
+msgstr "Sin bordes"
+
+msgid "Bounced light indoors too."
+msgstr "Luz rebotada también en interiores."
+
+msgid "Bounced light: the game's flat ambient, ray-traced probes, or probes with a fine cache near the camera. Needs ray tracing."
+msgstr "Luz rebotada: el ambiente plano del juego, sondas con trazado de rayos, o sondas con una caché fina cerca de la cámara. Requiere trazado de rayos."
+
+msgid "Brighten or darken nights further, on top of Ambient light strength."
+msgstr "Aclara u oscurece más las noches, además de la intensidad de la luz ambiental."
+
+msgid "Brightness of white, in nits. Automatic matches the Windows desktop."
+msgstr "Brillo del blanco, en nits. Automático coincide con el escritorio de Windows."
+
+msgid "Browse"
+msgstr "Examinar"
+
+msgid "Build keys take a key, not a mouse button. Choose a key, or Esc to cancel."
+msgstr "Las teclas de construcción usan una tecla, no un botón del ratón. Elige una tecla, o Esc para cancelar."
+
+msgid "Building outline"
+msgstr "Contorno de edificios"
+
+msgid "Buildings, rocks and characters block the lamps' light. Needs ray tracing."
+msgstr "Edificios, rocas y personajes bloquean la luz de las lámparas. Requiere trazado de rayos."
+
+msgid "Built for Meitou {1} (checked when the game starts)"
+msgstr "Hecho para Meitou {1} (se comprueba al iniciar el juego)"
+
+msgid "Built in"
+msgstr "Integrado"
+
+msgid "Built into Meitou: {1}; this mod is not run"
+msgstr "Integrado en Meitou: {1}; este mod no se ejecuta"
+
+msgid "CANCEL"
+msgstr "CANCELAR"
+
+msgid "CHARACTER STATS"
+msgstr "ESTADÍSTICAS DEL PERSONAJE"
+
+msgid "CONTAINER"
+msgstr "CONTENEDOR"
+
+msgid "COPY LINK"
+msgstr "COPIAR ENLACE"
+
+msgid "CREDITS"
+msgstr "CRÉDITOS"
+
+msgid "Cage"
+msgstr "Jaula"
+
+msgid "Caged animals idle"
+msgstr "Animales enjaulados en reposo"
+
+msgid "Camera"
+msgstr "Cámara"
+
+msgid "Camera effects in the strategy camera"
+msgstr "Efectos de cámara en la cámara de estrategia"
+
+msgid "Camera move speed"
+msgstr "Velocidad de movimiento de la cámara"
+
+msgid "Camera rotation speed"
+msgstr "Velocidad de rotación de la cámara"
+
+msgid "Camera smoothing"
+msgstr "Suavizado de la cámara"
+
+msgid "Camera stays near your squads"
+msgstr "La cámara se queda cerca de tus escuadrones"
+
+msgid "Camera zoom speed"
+msgstr "Velocidad de zoom de la cámara"
+
+msgid "Camera: you hear the world where the camera is. Character: you hear it where your first selected character stands (from the camera while nobody is selected)."
+msgstr "Cámara: oyes el mundo donde está la cámara. Personaje: lo oyes donde está tu primer personaje seleccionado (desde la cámara si no hay nadie seleccionado)."
+
+msgid "Cancel Construction"
+msgstr "Cancelar construcción"
+
+msgid "Cancel the download of {1}"
+msgstr "Cancelar la descarga de {1}"
+
+msgid "Cascades past traced shadows"
+msgstr "Cascadas más allá de las sombras trazadas"
+
+msgid "Censorship"
+msgstr "Censura"
+
+msgid "Centre the camera on the selected character."
+msgstr "Centra la cámara en el personaje seleccionado."
+
+msgid "Change the Kenshi folder"
+msgstr "Cambiar la carpeta de Kenshi"
+
+msgid "Character"
+msgstr "Personaje"
+
+msgid "Character draw distance"
+msgstr "Distancia de dibujado de personajes"
+
+msgid "Character editor bar"
+msgstr "Bar del editor de personajes"
+
+msgid "Character flight time"
+msgstr "Duración del vuelo a un personaje"
+
+msgid "Character flights"
+msgstr "Vuelos a personajes"
+
+msgid "Character levels"
+msgstr "Niveles de detalle de personajes"
+
+msgid "Character {1} of {2} tried to spawn inside walls!"
+msgstr "¡El personaje {1} de {2} intentó aparecer dentro de paredes!"
+
+msgid "Characters with the medic job will also heal downed characters of factions that are not hostile"
+msgstr "Los personajes con el trabajo de médico también curan a personajes caídos de facciones no hostiles"
+
+msgid "Characters with the medic job will heal any downed character, enemies included"
+msgstr "Los personajes con el trabajo de médico curan a cualquier personaje caído, enemigos incluidos"
+
+msgid "Charge:"
+msgstr "Carga:"
+
+msgid "Chase"
+msgstr "Perseguir"
+
+msgid "Check"
+msgstr "Comprobar"
+
+msgid "Check again for a Vulkan loader"
+msgstr "Volver a buscar un cargador de Vulkan"
+
+msgid "Check for releases"
+msgstr "Buscar versiones"
+
+msgid "Checking GitHub for releases..."
+msgstr "Buscando versiones en GitHub..."
+
+msgid "Chinese"
+msgstr "Chino"
+
+msgid "Choose a character"
+msgstr "Elegir un personaje"
+
+msgid "Choose a character first: click one, or use the arrows"
+msgstr "Elige primero un personaje: haz clic en uno o usa las flechas"
+
+msgid "Choose a full path for the install folder."
+msgstr "Elige una ruta completa para la carpeta de instalación."
+
+msgid "Choose how bright scene colours fit the display range."
+msgstr "Elige cómo encajan los colores brillantes de la escena en el rango de la pantalla."
+
+msgid "Choose original Kenshi skins or Meitou materials."
+msgstr "Elige las apariencias originales de Kenshi o los materiales de Meitou."
+
+msgid "Choose the original Kenshi title screen or the Meitou main menu over a live world scene, whatever the UI style."
+msgstr "Elige la pantalla de título original de Kenshi o el menú principal de Meitou sobre una escena viva del mundo, sea cual sea el estilo de interfaz."
+
+msgid "Choose the preset for this computer's graphics card, memory and processor."
+msgstr "Elige el preajuste para la tarjeta gráfica, la memoria y el procesador de este equipo."
+
+msgid "Choose the version to play"
+msgstr "Elige la versión para jugar"
+
+msgid "Choose which parts of the scene appear in reflections."
+msgstr "Elige qué partes de la escena aparecen en los reflejos."
+
+msgid "Clear cache"
+msgstr "Vaciar caché"
+
+msgid "Clear cached files?"
+msgstr "¿Borrar los archivos en caché?"
+
+msgid "Click a character to choose it    Drag the chosen one to move it    Ctrl + click sets the focus point    The arrows step through those in view    Drag an arrow to move, a ring to turn"
+msgstr "Haz clic en un personaje para elegirlo    Arrastra el elegido para moverlo    Ctrl + clic fija el punto de enfoque    Las flechas recorren los que están a la vista    Arrastra una flecha para mover, un anillo para girar"
+
+msgid "Click a preset to use it    Right click to rename it    Wheel or the arrows to see the others"
+msgstr "Haz clic en un preajuste para usarlo    Clic derecho para renombrarlo    Rueda o flechas para ver los demás"
+
+msgid "Click again"
+msgstr "Haz clic otra vez"
+
+msgid "Click away deselects"
+msgstr "Clic fuera deselecciona"
+
+msgid "Click to install"
+msgstr "Haz clic para instalar"
+
+msgid "Close Doors"
+msgstr "Cerrar puertas"
+
+msgid "Cloth sheen"
+msgstr "Brillo de la tela"
+
+msgid "Cloud height"
+msgstr "Altura de las nubes"
+
+msgid "Cloud height (Meitou)"
+msgstr "Altura de las nubes (Meitou)"
+
+msgid "Cloud shadows"
+msgstr "Sombras de nubes"
+
+msgid "Cloud shadows in fog"
+msgstr "Sombras de nubes en la niebla"
+
+msgid "Clouds"
+msgstr "Nubes"
+
+msgid "Clouds shade the bounced light and the light shafts."
+msgstr "Las nubes sombrean la luz rebotada y los rayos de luz."
+
+msgid "Code mod: runs C# code of its own"
+msgstr "Mod de código: ejecuta su propio código C#"
+
+msgid "Collapse all"
+msgstr "Contraer todo"
+
+msgid "Colour grading"
+msgstr "Gradación de color"
+
+msgid "Composition"
+msgstr "Composición"
+
+msgid "Cone"
+msgstr "Cono"
+
+msgid "Conscious"
+msgstr "Consciente"
+
+msgid "Contact shadows"
+msgstr "Sombras de contacto"
+
+msgid "Contrast"
+msgstr "Contraste"
+
+msgid "Cooldown {1,num} seconds"
+msgstr "Enfriamiento de {1,num} segundos"
+
+msgid "Copied '{1}' and opened brew.sh; install Homebrew, run it in Terminal, then press Check."
+msgstr "Se copió '{1}' y se abrió brew.sh; instala Homebrew, ejecútalo en Terminal y pulsa Comprobar."
+
+msgid "Copied to the clipboard."
+msgstr "Copiado al portapapeles."
+
+msgid "Copy"
+msgstr "Copiar"
+
+msgid "Copy all problems"
+msgstr "Copiar todos los problemas"
+
+msgid "Copy the Homebrew command for Vulkan, or open brew.sh"
+msgstr "Copiar el comando de Homebrew para Vulkan o abrir brew.sh"
+
+msgid "Could not delete the preset: {1}"
+msgstr "No se pudo borrar el preajuste: {1}"
+
+msgid "Could not detect the hardware: {1}"
+msgstr "No se pudo detectar el hardware: {1}"
+
+msgid "Could not move the versions to {1}: {2}"
+msgstr "No se pudieron mover las versiones a {1}: {2}"
+
+msgid "Could not read the last save: {1}"
+msgstr "No se pudo leer la última partida: {1}"
+
+msgid "Could not read the mods: {1}"
+msgstr "No se pudieron leer los mods: {1}"
+
+msgid "Could not read the save '{1}': {2}"
+msgstr "No se pudo leer la partida '{1}': {2}"
+
+msgid "Could not remove {1}: {2}"
+msgstr "No se pudo eliminar {1}: {2}"
+
+msgid "Could not save the mod list: {1}"
+msgstr "No se pudo guardar la lista de mods: {1}"
+
+msgid "Could not start Meitou {1}: {2}"
+msgstr "No se pudo iniciar Meitou {1}: {2}"
+
+msgid "Could not update Kenshi's language setting: {1}"
+msgstr "No se pudo actualizar el idioma de Kenshi: {1}"
+
+msgid "Could not use {1}: {2}"
+msgstr "No se pudo usar {1}: {2}"
+
+msgid "Could not write the preset: "
+msgstr "No se pudo escribir el preajuste: "
+
+msgid "Could not write the preset: {1}"
+msgstr "No se pudo escribir el preajuste: {1}"
+
+msgid "Could not write {1}: {2}"
+msgstr "No se pudo escribir {1}: {2}"
+
+msgid "Custom"
+msgstr "Personalizado"
+
+msgid "Custom value"
+msgstr "Valor personalizado"
+
+msgid "Cycle GPU, CPU and hidden profiler views."
+msgstr "Alterna entre las vistas de GPU, CPU y oculta del perfilador."
+
+msgid "DLSS preset"
+msgstr "Preajuste de DLSS"
+
+msgid "Damage floaters"
+msgstr "Daño flotante"
+
+msgid "Darken the picture towards its corners, as a camera lens does, in every camera."
+msgstr "Oscurece la imagen hacia las esquinas, como una lente de cámara, en todas las cámaras."
+
+msgid "Darkening in creases and under objects: screen-space (SSAO) or ground-truth (GTAO, more accurate)."
+msgstr "Oscurecimiento en pliegues y bajo objetos: en espacio de pantalla (SSAO) o realista (GTAO, más preciso)."
+
+msgid "Data folder"
+msgstr "Carpeta de datos"
+
+msgid "Debug build"
+msgstr "Compilación de depuración"
+
+msgid "Decapitation"
+msgstr "Decapitación"
+
+msgid "Default"
+msgstr "Predeterminado"
+
+msgid "Default settings restored."
+msgstr "Ajustes predeterminados restaurados."
+
+msgid "Delete billboard cache"
+msgstr "Borrar caché de billboards"
+
+msgid "Delete cached billboards; they are rebuilt when needed."
+msgstr "Borra los billboards en caché; se reconstruyen cuando hace falta."
+
+msgid "Delete preset?"
+msgstr "¿Borrar el preajuste?"
+
+msgid "Delivering materials"
+msgstr "Entregando materiales"
+
+msgid "Depth of field"
+msgstr "Profundidad de campo"
+
+msgid "Depth of field aperture"
+msgstr "Apertura de la profundidad de campo"
+
+msgid "Depth of field aperture (f-number)"
+msgstr "Apertura de la profundidad de campo (número f)"
+
+msgid "Depth on the ground and smoother rocks and hills, from tessellation and parallax."
+msgstr "Profundidad en el suelo y rocas y colinas más suaves, mediante teselado y paralaje."
+
+msgid "Detail"
+msgstr "Detalle"
+
+msgid "Detect"
+msgstr "Detectar"
+
+msgid "Detected: {1}"
+msgstr "Detectado: {1}"
+
+msgid "Detecting"
+msgstr "Detectando"
+
+msgid "Dismantling"
+msgstr "Desmantelando"
+
+msgid "Display"
+msgstr "Pantalla"
+
+msgid "Distance over which submerged scenery stays visible."
+msgstr "Distancia a la que el paisaje sumergido sigue visible."
+
+msgid "Distance where foliage changes to billboard images."
+msgstr "Distancia a la que la vegetación pasa a imágenes billboard."
+
+msgid "Distances"
+msgstr "Distancias"
+
+msgid "Distances, shadows, detail and Meitou's effects together, by class of graphics card. Low is the same as --low-end."
+msgstr "Distancias, sombras, detalle y efectos de Meitou juntos, por clase de tarjeta gráfica. Bajo equivale a --low-end."
+
+msgid "Distant towns"
+msgstr "Ciudades lejanas"
+
+msgid "Distant towns (zones)"
+msgstr "Ciudades lejanas (zonas)"
+
+msgid "Dithering"
+msgstr "Tramado"
+
+msgid "Do you want to subscribe now?"
+msgstr "¿Quieres suscribirte ahora?"
+
+msgid "Don't offer this version again; a newer one will be"
+msgstr "No volver a ofrecer esta versión; se ofrecerá una más nueva"
+
+msgid "Door"
+msgstr "Puerta"
+
+msgid "Door break sound"
+msgstr "Sonido de puerta rota"
+
+msgid "Doors and gates make their breaking sound when they are bashed or broken open. The game never picks which breaking sound to play, so it plays none."
+msgstr "Puertas y portones hacen su sonido de rotura al ser golpeados o forzados. El juego nunca elige qué sonido de rotura reproducir, así que no reproduce ninguno."
+
+msgid "Download and install {1}"
+msgstr "Descargar e instalar {1}"
+
+msgid "Download and install {1}; the arrow plays an installed version"
+msgstr "Descargar e instalar {1}; la flecha juega una versión instalada"
+
+msgid "Download of {1} cancelled."
+msgstr "Descarga de {1} cancelada."
+
+msgid "Download the new launcher and restart into it"
+msgstr "Descargar el nuevo lanzador y reiniciar en él"
+
+msgid "Downloading {1}"
+msgstr "Descargando {1}"
+
+msgid "Downloading {1}..."
+msgstr "Descargando {1}..."
+
+msgid "Drag to change the load order; Ctrl+click or Shift+click selects several mods to move together"
+msgstr "Arrastra para cambiar el orden de carga; Ctrl+clic o Mayús+clic selecciona varios mods para moverlos juntos"
+
+msgid "Draw a faint streak behind a crossbow bolt in flight."
+msgstr "Dibuja una estela tenue tras un virote de ballesta en vuelo."
+
+msgid "Draw blood on every terrain cell within decal range, not only the 8 nearest."
+msgstr "Dibuja sangre en cada celda de terreno dentro del alcance de las calcomanías, no solo en las 8 más cercanas."
+
+msgid "Draw distances"
+msgstr "Distancias de dibujado"
+
+msgid "Draw distant foliage using baked billboard images."
+msgstr "Dibuja la vegetación lejana con imágenes billboard prerrenderizadas."
+
+msgid "Draw individual stars instead of a starfield texture."
+msgstr "Dibuja estrellas individuales en lugar de una textura de cielo estrellado."
+
+msgid "Draw inventory item icons supersampled, without jagged edges."
+msgstr "Dibuja los iconos de objetos del inventario con supermuestreo, sin bordes dentados."
+
+msgid "Draw the game's yellow-green ceiling lamps, spotlights and searchlights amber, as bright as they were."
+msgstr "Dibuja en ámbar las lámparas de techo, focos y reflectores amarillo verdosos del juego, igual de brillantes."
+
+msgid "Draw the interface at the screen's size over a stretched picture (virtual Retina pixels, or a smaller render resolution), so it stays sharp. Off: it is drawn at the render size with the picture."
+msgstr "Dibuja la interfaz al tamaño de la pantalla sobre una imagen estirada (píxeles Retina virtuales o una resolución de renderizado menor), para que siga nítida. Desactivado: se dibuja al tamaño de renderizado con la imagen."
+
+msgid "Dropped items kept"
+msgstr "Objetos soltados conservados"
+
+msgid "Drops of water stand on wet skin, leather and metal, in the rain and after a swim."
+msgstr "Gotas de agua quedan sobre piel, cuero y metal mojados, con lluvia y tras nadar."
+
+msgid "ENTER"
+msgstr "ENTRAR"
+
+msgid "EXIT"
+msgstr "SALIR"
+
+msgid "Each has a port for Meitou on the Steam workshop, kept up by its maintainer and endorsed by Meitou:"
+msgstr "Cada uno tiene una adaptación para Meitou en el Workshop de Steam, mantenida por su autor y respaldada por Meitou:"
+
+msgid "Each light probe traces 64 rays instead of 32: less noise in bounced light, about twice the probe cost."
+msgstr "Cada sonda de luz traza 64 rayos en lugar de 32: menos ruido en la luz rebotada, cerca del doble de coste de las sondas."
+
+msgid "Edit characters in a bar at night instead of on the platform."
+msgstr "Edita personajes en un bar de noche en lugar de en la plataforma."
+
+msgid "Empties file paths in {1} records of {2}: it likely belongs above them"
+msgstr "Vacía rutas de archivo en {1} registros de {2}: probablemente deba ir por encima"
+
+msgid "English"
+msgstr "Inglés"
+
+msgid "Enhanced hardware mouse"
+msgstr "Ratón por hardware mejorado"
+
+msgid "Enter a valid number, or press Esc to cancel."
+msgstr "Escribe un número válido o pulsa Esc para cancelar."
+
+msgid "Every bug on this page as the game ships it, or every fix."
+msgstr "Todos los errores de esta página tal como viene el juego, o todas las correcciones."
+
+msgid "Every change on this page as the game plays, or every Meitou change."
+msgstr "Todos los cambios de esta página tal como se juega el juego, o todos los cambios de Meitou."
+
+msgid "Every graphics setting back to the game's defaults, also those only in the game's Tab panel."
+msgstr "Todos los ajustes gráficos vuelven a los valores predeterminados del juego, también los que solo están en el panel Tab del juego."
+
+msgid "Every tutorial can show again, the ones already seen included."
+msgstr "Todos los tutoriales pueden volver a mostrarse, incluidos los ya vistos."
+
+msgid "Example"
+msgstr "Ejemplo"
+
+msgid "Execution"
+msgstr "Ejecución"
+
+msgid "Expand all"
+msgstr "Expandir todo"
+
+msgid "Exposure"
+msgstr "Exposición"
+
+msgid "Extreme"
+msgstr "Extremo"
+
+msgid "Eye catchlights"
+msgstr "Brillos en los ojos"
+
+msgid "FAITHFUL"
+msgstr "ORIGINAL"
+
+msgid "FENCING CHANCE:"
+msgstr "PROBABILIDAD DE PERISTA:"
+
+msgid "FENCING ITEM"
+msgstr "OBJETO PARA PERISTA"
+
+msgid "FSR 3"
+msgstr "FSR 3"
+
+msgid "FSR 3: any GPU, needs the FidelityFX library. DLSS: Windows with an RTX 40 or later, needs Streamline's frame generation DLLs."
+msgstr "FSR 3: cualquier GPU, requiere la biblioteca FidelityFX. DLSS: Windows con una RTX 40 o posterior, requiere las DLL de generación de fotogramas de Streamline."
+
+msgid "Fade cloud shadows in fog, so foggy places stay lit."
+msgstr "Atenúa las sombras de nubes en la niebla, para que los lugares con niebla sigan iluminados."
+
+msgid "Fade surface bumps where the sun only grazes, so the ground does not break into bright and black patches."
+msgstr "Atenúa los relieves de la superficie donde el sol solo roza, para que el suelo no se rompa en manchas claras y negras."
+
+msgid "Faithful"
+msgstr "Original"
+
+msgid "Faithful (in series)"
+msgstr "Original (en serie)"
+
+msgid "Faithful (off)"
+msgstr "Original (desactivado)"
+
+msgid "Faithful cascades"
+msgstr "Cascadas originales"
+
+msgid "Faithful shows the game's logos at startup (Faithful UI); a key or a click skips each one. Meitou shows the menu as soon as the game has loaded."
+msgstr "Original muestra los logotipos del juego al iniciar (interfaz original); una tecla o un clic salta cada uno. Meitou muestra el menú en cuanto el juego ha cargado."
+
+msgid "Faithful, as in the game: when the camera comes to places that are not loaded yet (a jump to a squad far away), the game pauses and shows Loading... until they are. Meitou: the game runs on while they load."
+msgstr "Original, como en el juego: cuando la cámara llega a lugares aún no cargados (un salto a un escuadrón lejano), el juego se pausa y muestra Cargando... hasta que lo están. Meitou: el juego sigue mientras cargan."
+
+msgid "Faithful, as in the game: your pack animals pick up an item you point them at, into the bag they wear (or wear a bag they pick up). Meitou: only people pick items up, and an animal only a limb to carry in its mouth."
+msgstr "Original, como en el juego: tus animales de carga recogen el objeto al que los diriges, en la bolsa que llevan (o se ponen una bolsa que recogen). Meitou: solo las personas recogen objetos, y un animal solo una extremidad para llevar en la boca."
+
+msgid "Faithful: every graphics feature as the game ships it."
+msgstr "Original: cada función gráfica tal como viene el juego."
+
+msgid "Far grass cover"
+msgstr "Cobertura de hierba lejana"
+
+msgid "Far impostors"
+msgstr "Impostores lejanos"
+
+msgid "Far water"
+msgstr "Agua lejana"
+
+msgid "Far water clarity"
+msgstr "Claridad del agua lejana"
+
+msgid "Far water clarity (Meitou)"
+msgstr "Claridad del agua lejana (Meitou)"
+
+msgid "Farms, mines, wells and generators away from your squads keep working. In the game they stop while their area is unloaded, and only farms catch up when you come back."
+msgstr "Granjas, minas, pozos y generadores lejos de tus escuadrones siguen funcionando. En el juego se detienen mientras su zona está descargada, y solo las granjas recuperan cuando vuelves."
+
+msgid "Fast speed"
+msgstr "Velocidad rápida"
+
+msgid "Faster with Meitou"
+msgstr "Más rápido con Meitou"
+
+msgid "Fastest speed"
+msgstr "Velocidad máxima"
+
+msgid "Feedback"
+msgstr "Comentarios"
+
+msgid "Feedback button"
+msgstr "Botón de comentarios"
+
+msgid "Field of view"
+msgstr "Campo de visión"
+
+msgid "Fights far away"
+msgstr "Combates lejanos"
+
+msgid "Fill the monitor with a borderless game window."
+msgstr "Llena el monitor con una ventana de juego sin bordes."
+
+msgid "Film grain"
+msgstr "Grano de película"
+
+msgid "Film grain strength"
+msgstr "Intensidad del grano de película"
+
+msgid "Filter"
+msgstr "Filtro"
+
+msgid "Filter strength"
+msgstr "Intensidad del filtro"
+
+msgid "Find"
+msgstr "Buscar"
+
+msgid "Finer shading of hair, cloth, skin, eyes and metal on characters. Each part has its own switch."
+msgstr "Sombreado más fino del pelo, la tela, la piel, los ojos y el metal de los personajes. Cada parte tiene su propio interruptor."
+
+msgid "Fixes"
+msgstr "Correcciones"
+
+msgid "Fly speed"
+msgstr "Velocidad de vuelo"
+
+msgid "Foam clings to rocks, posts and legs; wading characters leave ripples and wakes."
+msgstr "La espuma se pega a rocas, postes y piernas; los personajes que vadean dejan ondas y estelas."
+
+msgid "Focus"
+msgstr "Enfoque"
+
+msgid "Focus distance"
+msgstr "Distancia de enfoque"
+
+msgid "Focus point set"
+msgstr "Punto de enfoque fijado"
+
+msgid "Fog"
+msgstr "Niebla"
+
+msgid "Foliage"
+msgstr "Vegetación"
+
+msgid "Foliage LOD distance multiplier"
+msgstr "Multiplicador de distancia de LOD de la vegetación"
+
+msgid "Foliage LOD distance x (lod Meitou)"
+msgstr "Distancia de LOD de la vegetación x (lod Meitou)"
+
+msgid "Foliage draw distance multiplier"
+msgstr "Multiplicador de distancia de dibujado de la vegetación"
+
+msgid "Foliage draw distance x"
+msgstr "Distancia de dibujado de la vegetación x"
+
+msgid "Foliage levels"
+msgstr "Niveles de la vegetación"
+
+msgid "Foliage ranges"
+msgstr "Alcances de la vegetación"
+
+msgid "Follow camera head lock"
+msgstr "Cámara de seguimiento fija a la cabeza"
+
+msgid "Follow camera height"
+msgstr "Altura de la cámara de seguimiento"
+
+msgid "Follow camera offset"
+msgstr "Desplazamiento de la cámara de seguimiento"
+
+msgid "Follow camera side"
+msgstr "Lado de la cámara de seguimiento"
+
+msgid "Font size"
+msgstr "Tamaño de fuente"
+
+msgid "Footprints and drag marks in sand, mud and snow; wind and rain wear them away."
+msgstr "Huellas y marcas de arrastre en arena, barro y nieve; el viento y la lluvia las borran."
+
+msgid "For a window: on renders in its real pixels. Off renders in virtual Retina pixels, one per point (a quarter of the pixels on a 2x display) and stretches to the window. No effect on a display without Retina. Full screen has Render resolution."
+msgstr "Para una ventana: activado renderiza en sus píxeles reales. Desactivado renderiza en píxeles Retina virtuales, uno por punto (un cuarto de los píxeles en una pantalla 2x), y estira a la ventana. Sin efecto en una pantalla sin Retina. La pantalla completa tiene Resolución de renderizado."
+
+msgid "Forward"
+msgstr "Adelante"
+
+msgid "Frame generation"
+msgstr "Generación de fotogramas"
+
+msgid "Frame limit"
+msgstr "Límite de fotogramas"
+
+msgid "Frames per second while vertical sync is off."
+msgstr "Fotogramas por segundo con la sincronización vertical desactivada."
+
+msgid "French"
+msgstr "Francés"
+
+msgid "From save"
+msgstr "De una partida"
+
+msgid "Full Retina resolution"
+msgstr "Resolución Retina completa"
+
+msgid "Full haze distance"
+msgstr "Distancia de bruma total"
+
+msgid "Full resolution"
+msgstr "Resolución completa"
+
+msgid "Full screen"
+msgstr "Pantalla completa"
+
+msgid "Full video"
+msgstr "Vídeo completo"
+
+msgid "GI 64 probe rays"
+msgstr "GI con 64 rayos por sonda"
+
+msgid "GI cloud shadows"
+msgstr "Sombras de nubes en la GI"
+
+msgid "GI probes out of walls"
+msgstr "Sondas de GI fuera de las paredes"
+
+msgid "GI radiance cache"
+msgstr "Caché de radiancia de la GI"
+
+msgid "GI traced on characters"
+msgstr "GI trazada en personajes"
+
+msgid "GRAPHICS"
+msgstr "GRÁFICOS"
+
+msgid "Gallery"
+msgstr "Galería"
+
+msgid "Game language set to {1}. It applies when the game starts."
+msgstr "Idioma del juego establecido en {1}. Se aplica al iniciar el juego."
+
+msgid "Game speed"
+msgstr "Velocidad del juego"
+
+msgid "Game time"
+msgstr "Hora del juego"
+
+msgid "Gear sway"
+msgstr "Balanceo del equipo"
+
+msgid "German"
+msgstr "Alemán"
+
+msgid "Get launcher {1}"
+msgstr "Obtener lanzador {1}"
+
+msgid "Get the port"
+msgstr "Obtener la adaptación"
+
+msgid "GitHub answered {1} {2}"
+msgstr "GitHub respondió {1} {2}"
+
+msgid "GitHub not reachable ({1})"
+msgstr "GitHub no accesible ({1})"
+
+msgid "Give orders and open menus (the game's right button)."
+msgstr "Dar órdenes y abrir menús (el botón derecho del juego)."
+
+msgid "Give the ground texture depth."
+msgstr "Da profundidad a la textura del suelo."
+
+msgid "Giving first aid"
+msgstr "Prestando primeros auxilios"
+
+msgid "Glass bottles"
+msgstr "Botellas de vidrio"
+
+msgid "Global illumination"
+msgstr "Iluminación global"
+
+msgid "Global population multiplier"
+msgstr "Multiplicador global de población"
+
+msgid "Glossy and wet surfaces mirror their surroundings instead of one sky picture."
+msgstr "Las superficies brillantes y mojadas reflejan su entorno en lugar de una imagen del cielo."
+
+msgid "Grading"
+msgstr "Gradación"
+
+msgid "Grading (0 = game)"
+msgstr "Gradación (0 = juego)"
+
+msgid "Grain strength"
+msgstr "Intensidad del grano"
+
+msgid "Graphics settings saved; the game reads them when it starts."
+msgstr "Ajustes gráficos guardados; el juego los lee al iniciar."
+
+msgid "Grass"
+msgstr "Hierba"
+
+msgid "Grass casts ray-traced shadows on the ground: the larger part of the traced shadows' cost in grassland."
+msgstr "La hierba proyecta sombras con trazado de rayos en el suelo: la mayor parte del coste de las sombras trazadas en praderas."
+
+msgid "Grass density multiplier"
+msgstr "Multiplicador de densidad de la hierba"
+
+msgid "Grass density x"
+msgstr "Densidad de la hierba x"
+
+msgid "Grass draw"
+msgstr "Dibujado de la hierba"
+
+msgid "Grass draw distance multiplier"
+msgstr "Multiplicador de distancia de dibujado de la hierba"
+
+msgid "Grass draw distance x"
+msgstr "Distancia de dibujado de la hierba x"
+
+msgid "Grid"
+msgstr "Cuadrícula"
+
+msgid "Ground"
+msgstr "Suelo"
+
+msgid "Ground displacement (tessellation)"
+msgstr "Desplazamiento del suelo (teselado)"
+
+msgid "Ground displacement distance (m)"
+msgstr "Distancia de desplazamiento del suelo (m)"
+
+msgid "Ground in buried ruins"
+msgstr "Suelo en ruinas enterradas"
+
+msgid "Ground parallax"
+msgstr "Paralaje del suelo"
+
+msgid "Ground parallax depth (% of relief depth)"
+msgstr "Profundidad del paralaje del suelo (% de la profundidad del relieve)"
+
+msgid "Ground parallax distance (m)"
+msgstr "Distancia del paralaje del suelo (m)"
+
+msgid "Ground relief depth (cm, typical ground)"
+msgstr "Profundidad del relieve del suelo (cm, suelo típico)"
+
+msgid "Ground relief quality"
+msgstr "Calidad del relieve del suelo"
+
+msgid "Ground trails"
+msgstr "Rastros en el suelo"
+
+msgid "Ground-truth occlusion"
+msgstr "Oclusión realista"
+
+msgid "Guards searching for smuggled or stolen goods and bandits after food or loot also look inside bags carried in the inventory, and guards confiscating stolen goods inside the worn backpack. The game misses those bags, so goods hidden in them are never found."
+msgstr "Los guardias que buscan mercancía de contrabando o robada y los bandidos que buscan comida o botín también miran dentro de las bolsas llevadas en el inventario, y los guardias que confiscan bienes robados dentro de la mochila puesta. El juego pasa por alto esas bolsas, así que lo escondido en ellas nunca se encuentra."
+
+msgid "Guards spare their own"
+msgstr "Los guardias perdonan a los suyos"
+
+msgid "HDR output"
+msgstr "Salida HDR"
+
+msgid "HOME"
+msgstr "INICIO"
+
+msgid "Hair highlights"
+msgstr "Brillos del pelo"
+
+msgid "Half resolution"
+msgstr "Media resolución"
+
+msgid "Hardware mouse"
+msgstr "Ratón por hardware"
+
+msgid "Hauling"
+msgstr "Acarreando"
+
+msgid "Haze"
+msgstr "Bruma"
+
+msgid "Haze strength"
+msgstr "Intensidad de la bruma"
+
+msgid "Haze strength (1 = game)"
+msgstr "Intensidad de la bruma (1 = juego)"
+
+msgid "Head turns back"
+msgstr "La cabeza vuelve"
+
+msgid "Heal All"
+msgstr "Curar a todos"
+
+msgid "Heal Neutrals"
+msgstr "Curar a neutrales"
+
+msgid "Healing far away"
+msgstr "Curación a distancia"
+
+msgid "Hear from"
+msgstr "Oír desde"
+
+msgid "Heat haze"
+msgstr "Distorsión por calor"
+
+msgid "Heat haze strength"
+msgstr "Intensidad de la distorsión por calor"
+
+msgid "Heat haze strength (1 = game)"
+msgstr "Intensidad de la distorsión por calor (1 = juego)"
+
+msgid "Height"
+msgstr "Altura"
+
+msgid "Help"
+msgstr "Ayuda"
+
+msgid "Hide hats"
+msgstr "Ocultar sombreros"
+
+msgid "Hide or show the whole interface."
+msgstr "Oculta o muestra toda la interfaz."
+
+msgid "Hide other factions' hats"
+msgstr "Ocultar sombreros de otras facciones"
+
+msgid "High impact"
+msgstr "Impacto alto"
+
+msgid "High — 8120 MB (16 GB Macs)"
+msgstr "Alto — 8120 MB (Mac de 16 GB)"
+
+msgid "High: keeps the most textures, terrain and objects resident. Best on a 16 GB-or-larger Mac with other memory-heavy apps closed."
+msgstr "Alto: mantiene en memoria la mayor cantidad de texturas, terreno y objetos. Mejor en un Mac de 16 GB o más, con otras apps pesadas cerradas."
+
+msgid "Higher resolution gives sharper shadow detail."
+msgstr "Más resolución da sombras más detalladas."
+
+msgid "Higher values make the camera ascend and descend faster."
+msgstr "Valores más altos hacen que la cámara suba y baje más rápido."
+
+msgid "Higher values retain detailed foliage farther away."
+msgstr "Valores más altos mantienen la vegetación detallada más lejos."
+
+msgid "Higher values retain detailed object meshes farther away."
+msgstr "Valores más altos mantienen los modelos de objetos detallados más lejos."
+
+msgid "Higher values smooth shadow edges with more samples."
+msgstr "Valores más altos suavizan los bordes de las sombras con más muestras."
+
+msgid "Hold and move the mouse to turn the camera."
+msgstr "Mantén pulsado y mueve el ratón para girar la cámara."
+
+msgid "Hold to highlight building signs and outline the characters about."
+msgstr "Mantén pulsado para resaltar los letreros de los edificios y perfilar a los personajes cercanos."
+
+msgid "Holding Shift with the camera move keys pans the camera faster (the game has no such boost)."
+msgstr "Mantener Mayús con las teclas de movimiento de la cámara la desplaza más rápido (el juego no tiene este impulso)."
+
+msgid "Holes and needles in the ground"
+msgstr "Agujeros y agujas en el suelo"
+
+msgid "Hostile squads that meet far from your squads fight it out by strength; the loser is wiped out. In the game nothing happens far away."
+msgstr "Los escuadrones hostiles que se encuentran lejos de tus escuadrones luchan según su fuerza; el perdedor es aniquilado. En el juego no pasa nada a lo lejos."
+
+msgid "Hot and dry"
+msgstr "Cálido y seco"
+
+msgid "Hover outline"
+msgstr "Contorno al pasar el cursor"
+
+msgid "How edges are smoothed."
+msgstr "Cómo se suavizan los bordes."
+
+msgid "How far above the game's point the camera looks: 0 is the game's height, about 17 a person's head."
+msgstr "Cuánto por encima del punto del juego mira la cámara: 0 es la altura del juego, unos 17 la cabeza de una persona."
+
+msgid "How far away characters are drawn (the game's NPC View Range)."
+msgstr "A qué distancia se dibujan los personajes (el alcance de visión de PNJ del juego)."
+
+msgid "How far away sounds are heard: 1x is the original, 4x hears fights, footsteps and machines four times as far. Higher values mix more sounds at once."
+msgstr "A qué distancia se oyen los sonidos: 1x es el original, 4x oye combates, pasos y máquinas cuatro veces más lejos. Valores más altos mezclan más sonidos a la vez."
+
+msgid "How far shadows are drawn; zero disables them."
+msgstr "Hasta dónde se dibujan las sombras; cero las desactiva."
+
+msgid "How fast the arrow keys and the screen edge pan the camera (the game: 500; faster the higher the camera)."
+msgstr "Qué tan rápido las flechas y el borde de la pantalla desplazan la cámara (el juego: 500; más rápido cuanto más alta la cámara)."
+
+msgid "How fast the rotate and tilt keys and the mouse turn the camera (the game: 6)."
+msgstr "Qué tan rápido las teclas de rotación e inclinación y el ratón giran la cámara (el juego: 6)."
+
+msgid "How fast the wheel and the zoom keys move the camera in and out (the game: 125)."
+msgstr "Qué tan rápido la rueda y las teclas de zoom acercan y alejan la cámara (el juego: 125)."
+
+msgid "How fast your characters and the rest of your faction learn: every skill and stat gain is multiplied by this (the game: 1x). 0 stops it. Click the number to type an exact value. A training dummy still stops at its level."
+msgstr "Qué tan rápido aprenden tus personajes y el resto de tu facción: cada ganancia de habilidad y atributo se multiplica por esto (el juego: 1x). 0 lo detiene. Haz clic en el número para escribir un valor exacto. Un muñeco de entrenamiento sigue deteniéndose en su nivel."
+
+msgid "How finely the ground's shape and its textures are drawn with distance."
+msgstr "Con qué detalle se dibujan la forma del suelo y sus texturas según la distancia."
+
+msgid "How finely the terrain follows the ground."
+msgstr "Con qué precisión el terreno sigue al suelo."
+
+msgid "How high the clouds' base sits above the ground."
+msgstr "A qué altura sobre el suelo está la base de las nubes."
+
+msgid "How long a faction waits between attacks on your towns by squads passing by (the game: Normal). Never stops them."
+msgstr "Cuánto espera una facción entre ataques a tus ciudades por escuadrones de paso (el juego: Normal). Nunca los impide."
+
+msgid "How many bolts and harpoons stay stuck in the ground and buildings, per kind of bolt; past it the one that flew longest disappears (the game: 60)."
+msgstr "Cuántos virotes y arpones quedan clavados en el suelo y los edificios, por tipo de virote; por encima, desaparece el que voló hace más tiempo (el juego: 60)."
+
+msgid "How many enemies may swing at one character at once (the game: 1, plus its race's extra slots); the others wait at reach or circle."
+msgstr "Cuántos enemigos pueden atacar a la vez a un personaje (el juego: 1, más las plazas extra de su raza); los demás esperan a distancia o rodean."
+
+msgid "How many fighters a raid on your towns gathers (the game: 1)."
+msgstr "Cuántos combatientes reúne un asalto a tus ciudades (el juego: 1)."
+
+msgid "How many items dropped during play (severed limbs, luckyren Mode's gear) stay on the ground; past it the oldest disappears. Items that were on the ground in the save always stay."
+msgstr "Cuántos objetos soltados durante la partida (extremidades cortadas, equipo del modo luckyren) se quedan en el suelo; por encima, desaparece el más antiguo. Los objetos que estaban en el suelo en la partida guardada siempre se quedan."
+
+msgid "How many maps the shadows are split over, nearest to farthest: more keeps near and far shadows sharper, fewer is cheaper."
+msgstr "En cuántos mapas se dividen las sombras, del más cercano al más lejano: más mantiene nítidas las sombras cercanas y lejanas, menos es más barato."
+
+msgid "How many squads roam and live in the wild (the game: 1). Affects performance."
+msgstr "Cuántos escuadrones vagan y viven en la naturaleza (el juego: 1). Afecta al rendimiento."
+
+msgid "How many surrounding zones can display distant towns."
+msgstr "Cuántas zonas alrededor pueden mostrar ciudades lejanas."
+
+msgid "How much of each pixel's light glows into its surroundings."
+msgstr "Cuánta luz de cada píxel brilla a su alrededor."
+
+msgid "How often factions start raids on your towns (the game: 1)."
+msgstr "Con qué frecuencia las facciones inician asaltos a tus ciudades (el juego: 1)."
+
+msgid "How to get Kenshi on macOS"
+msgstr "Cómo conseguir Kenshi en macOS"
+
+msgid "How to get Kenshi on this Mac"
+msgstr "Cómo conseguir Kenshi en este Mac"
+
+msgid "How?"
+msgstr "¿Cómo?"
+
+msgid "Hybrid"
+msgstr "Híbrido"
+
+msgid "Hybrid GI"
+msgstr "GI híbrida"
+
+msgid "Hybrid tone map: ACES share"
+msgstr "Mapeo tonal híbrido: proporción de ACES"
+
+msgid "IMPORT GAME"
+msgstr "IMPORTAR PARTIDA"
+
+msgid "INVENTORY"
+msgstr "INVENTARIO"
+
+msgid "Idle"
+msgstr "Inactivo"
+
+msgid "Import this save into a new game? Unsaved progress will be lost."
+msgstr "¿Importar esta partida en una nueva? Se perderá el progreso no guardado."
+
+msgid "Impostor"
+msgstr "Impostor"
+
+msgid "Impostor distance"
+msgstr "Distancia de impostores"
+
+msgid "Impostor distance (F7 Meitou)"
+msgstr "Distancia de impostores (F7 Meitou)"
+
+msgid "Impostor memory budget"
+msgstr "Presupuesto de memoria de impostores"
+
+msgid "Impostor memory budget (MB)"
+msgstr "Presupuesto de memoria de impostores (MB)"
+
+msgid "In-game scene transitions"
+msgstr "Transiciones de escena en el juego"
+
+msgid "In-game transition speed"
+msgstr "Velocidad de transición en el juego"
+
+msgid "Include my Discord name"
+msgstr "Incluir mi nombre de Discord"
+
+msgid "Incompatible with {1}"
+msgstr "Incompatible con {1}"
+
+msgid "Indirect light"
+msgstr "Luz indirecta"
+
+msgid "Indirect light technique"
+msgstr "Técnica de luz indirecta"
+
+msgid "Indoor GI"
+msgstr "GI en interiores"
+
+msgid "Indoors"
+msgstr "Interiores"
+
+msgid "Inputs"
+msgstr "Entradas"
+
+msgid "Install"
+msgstr "Instalar"
+
+msgid "Install a version first (Versions)."
+msgstr "Instala primero una versión (Versiones)."
+
+msgid "Install a version first (Versions): its settings are shown here."
+msgstr "Instala primero una versión (Versiones): aquí se muestran sus ajustes."
+
+msgid "Install failed: {1}"
+msgstr "Error de instalación: {1}"
+
+msgid "Install folder"
+msgstr "Carpeta de instalación"
+
+msgid "Install latest"
+msgstr "Instalar la más reciente"
+
+msgid "Install v{1} (skipped)"
+msgstr "Instalar v{1} (omitida)"
+
+msgid "Install {1}"
+msgstr "Instalar {1}"
+
+msgid "Installed"
+msgstr "Instalada"
+
+msgid "Installed · Play"
+msgstr "Instalada · Jugar"
+
+msgid "Installing"
+msgstr "Instalando"
+
+msgid "Interface"
+msgstr "Interfaz"
+
+msgid "Interface scale"
+msgstr "Escala de la interfaz"
+
+msgid "Interior lamps"
+msgstr "Lámparas interiores"
+
+msgid "Internal rendering resolution relative to the window."
+msgstr "Resolución de renderizado interna respecto a la ventana."
+
+msgid "Italian"
+msgstr "Italiano"
+
+msgid "Item icons"
+msgstr "Iconos de objetos"
+
+msgid "Item rotation"
+msgstr "Rotación de objetos"
+
+msgid "Japanese"
+msgstr "Japonés"
+
+msgid "Keep large wrecks, towers and landmarks visible farther away."
+msgstr "Mantiene visibles más lejos los grandes restos, torres y puntos de referencia."
+
+msgid "Keep textures at all squads"
+msgstr "Mantener texturas en todos los escuadrones"
+
+msgid "Keep textures at characters"
+msgstr "Mantener texturas en los personajes"
+
+msgid "Keep textures sharp when viewed at an angle."
+msgstr "Mantiene las texturas nítidas al verlas en ángulo."
+
+msgid "Keep the lamps of building interiors lit by day too. Stealth counts their light."
+msgstr "Mantiene encendidas también de día las lámparas de los interiores. El sigilo cuenta su luz."
+
+msgid "Keep them"
+msgstr "Conservarlos"
+
+msgid "Keeps a larger area loaded round each of your characters, so switching between distant ones skips most of the loading (the game: off; uses more memory)."
+msgstr "Mantiene cargada una zona más grande alrededor de cada personaje tuyo, así que cambiar entre personajes lejanos se salta la mayor parte de la carga (el juego: desactivado; usa más memoria)."
+
+msgid "Keeps the meshes and textures around every squad member loaded, not only around the camera, so a flight or jump to them lands on finished detail. Costs video memory."
+msgstr "Mantiene cargados los modelos y texturas alrededor de cada miembro del escuadrón, no solo alrededor de la cámara, para que un vuelo o salto hacia ellos llegue con el detalle terminado. Cuesta memoria de vídeo."
+
+msgid "Kenshi folder"
+msgstr "Carpeta de Kenshi"
+
+msgid "Kenshi not found: set its folder in Settings"
+msgstr "Kenshi no encontrado: indica su carpeta en Ajustes"
+
+msgid "Kind"
+msgstr "Tipo"
+
+msgid "Korean"
+msgstr "Coreano"
+
+msgid "LIMBS"
+msgstr "EXTREMIDADES"
+
+msgid "LOAD GAME"
+msgstr "CARGAR PARTIDA"
+
+msgid "Lamp shadows"
+msgstr "Sombras de lámparas"
+
+msgid "Lamp warmth"
+msgstr "Calidez de las lámparas"
+
+msgid "Landmark"
+msgstr "Punto de referencia"
+
+msgid "Landmark distance"
+msgstr "Distancia de puntos de referencia"
+
+msgid "Landmark distance (Meitou)"
+msgstr "Distancia de puntos de referencia (Meitou)"
+
+msgid "Language"
+msgstr "Idioma"
+
+msgid "Large "
+msgstr "Grande "
+
+msgid "Large foliage"
+msgstr "Vegetación grande"
+
+msgid "Large foliage range"
+msgstr "Alcance de la vegetación grande"
+
+msgid "Large foliage range (F6 Meitou)"
+msgstr "Alcance de la vegetación grande (F6 Meitou)"
+
+msgid "Large impostor"
+msgstr "Impostor grande"
+
+msgid "Large impostor distance"
+msgstr "Distancia de impostores grandes"
+
+msgid "Large impostor distance (F7 Meitou)"
+msgstr "Distancia de impostores grandes (F7 Meitou)"
+
+msgid "Late dodges and blocks"
+msgstr "Esquivas y bloqueos tardíos"
+
+msgid "Latest"
+msgstr "Más reciente"
+
+msgid "Latest (update to {1})"
+msgstr "Más reciente (actualizar a {1})"
+
+msgid "Latest ({1})"
+msgstr "Más reciente ({1})"
+
+msgid "Launch arguments"
+msgstr "Argumentos de inicio"
+
+msgid "Launch arguments have {1}, which picks the start itself: remove it to continue a save."
+msgstr "Los argumentos de inicio tienen {1}, que ya elige el inicio: quítalo para continuar una partida."
+
+msgid "Launch as Kenshi on Steam"
+msgstr "Iniciar como Kenshi en Steam"
+
+msgid "Launcher"
+msgstr "Lanzador"
+
+msgid "Launcher update failed: {1}"
+msgstr "Error al actualizar el lanzador: {1}"
+
+msgid "Launcher {1} is available."
+msgstr "El lanzador {1} está disponible."
+
+msgid "Lay a fine film grain over the picture, in every camera."
+msgstr "Añade un grano de película fino sobre la imagen, en todas las cámaras."
+
+msgid "Layers and steps of the ground relief; lower is cheaper."
+msgstr "Capas y pasos del relieve del suelo; menos es más barato."
+
+msgid "Leave fading tracks on the ground after walking through fresh blood."
+msgstr "Deja rastros que se desvanecen en el suelo tras pisar sangre fresca."
+
+msgid "Leaves the hats and helmets of your characters out of the picture, so their faces and hair show; they stay worn and protect as before. Portraits only: in the interface's portraits. On: in the world too. Off: hats are drawn everywhere, as in the game."
+msgstr "Deja fuera de la imagen los sombreros y cascos de tus personajes, para que se vean sus caras y pelo; siguen puestos y protegen como antes. Solo retratos: en los retratos de la interfaz. Activado: también en el mundo. Desactivado: los sombreros se dibujan en todas partes, como en el juego."
+
+msgid "Let bright light glow softly into its surroundings, as in the eye."
+msgstr "Hace que la luz intensa brille suavemente a su alrededor, como en el ojo."
+
+msgid "Let clouds cast shadows across land and water."
+msgstr "Deja que las nubes proyecten sombras sobre tierra y agua."
+
+msgid "Let shadows shape the light scattered through haze."
+msgstr "Deja que las sombras den forma a la luz dispersada en la bruma."
+
+msgid "Let sunlight soften and warm under bare skin instead of ending at a hard edge."
+msgstr "Deja que la luz del sol se suavice y caliente bajo la piel desnuda en lugar de terminar en un borde duro."
+
+msgid "Level:"
+msgstr "Nivel:"
+
+msgid "Light"
+msgstr "Luz"
+
+msgid "Light portraits and the character editor with a fixed warm sun and its shadows."
+msgstr "Ilumina los retratos y el editor de personajes con un sol cálido fijo y sus sombras."
+
+msgid "Light shafts"
+msgstr "Rayos de luz"
+
+msgid "Light shafts air"
+msgstr "Aire de los rayos de luz"
+
+msgid "Light shafts air (0 = none)"
+msgstr "Aire de los rayos de luz (0 = ninguno)"
+
+msgid "Light shafts air at dawn and dusk"
+msgstr "Aire de los rayos de luz al amanecer y al anochecer"
+
+msgid "Light shafts air at dawn and dusk (x)"
+msgstr "Aire de los rayos de luz al amanecer y al anochecer (x)"
+
+msgid "Light shafts quality"
+msgstr "Calidad de los rayos de luz"
+
+msgid "Light shafts strength"
+msgstr "Intensidad de los rayos de luz"
+
+msgid "Light the night scene from the planet and moon."
+msgstr "Ilumina la escena nocturna con el planeta y la luna."
+
+msgid "Lighting"
+msgstr "Iluminación"
+
+msgid "List the mods folder and the Steam workshop items again"
+msgstr "Volver a listar la carpeta de mods y los elementos del Workshop de Steam"
+
+msgid "Load button"
+msgstr "Botón Cargar"
+
+msgid "Load the game from the quicksave slot."
+msgstr "Cargar la partida desde la ranura de guardado rápido."
+
+msgid "Load the newest save, {1} ({2}); its mods must be the enabled ones"
+msgstr "Cargar la partida más reciente, {1} ({2}); sus mods deben ser los activados"
+
+msgid "Load this save? Unsaved progress will be lost."
+msgstr "¿Cargar esta partida? Se perderá el progreso no guardado."
+
+msgid "Loaded; the save was made with mods not loaded now: {1}"
+msgstr "Cargada; la partida se hizo con mods que ahora no están cargados: {1}"
+
+msgid "Loaded; the save was made with {1} mod(s) not loaded now (listed in the messages)"
+msgstr "Cargada; la partida se hizo con {1} mod(s) que ahora no están cargados (listados en los mensajes)"
+
+msgid "Loads after {1}"
+msgstr "Carga después de {1}"
+
+msgid "Local mod"
+msgstr "Mod local"
+
+msgid "Lock Doors"
+msgstr "Cerrar puertas con llave"
+
+msgid "Look"
+msgstr "Estilo"
+
+msgid "Look at camera"
+msgstr "Mirar a la cámara"
+
+msgid "Loot into backpack"
+msgstr "Botín a la mochila"
+
+msgid "Low holds off: {1}."
+msgstr "Bajo mantiene desactivado: {1}."
+
+msgid "Low impact"
+msgstr "Impacto bajo"
+
+msgid "Low power"
+msgstr "Poca energía"
+
+msgid "Low quality applied: {1} off until you keep them on."
+msgstr "Calidad Baja aplicada: {1} desactivados hasta que los mantengas activados."
+
+msgid "Lower is cheaper and softer."
+msgstr "Menos es más barato y más suave."
+
+msgid "Lower the camera in free camera mode."
+msgstr "Baja la cámara en el modo de cámara libre."
+
+msgid "MAIN MENU"
+msgstr "MENÚ PRINCIPAL"
+
+msgid "MEITOU"
+msgstr "MEITOU"
+
+msgid "MEITOU LAUNCHER"
+msgstr "LANZADOR DE MEITOU"
+
+msgid "MODS"
+msgstr "MODS"
+
+msgid "Main menu"
+msgstr "Menú principal"
+
+msgid "Main menu scene transitions"
+msgstr "Transiciones de escena del menú principal"
+
+msgid "Main menu style"
+msgstr "Estilo del menú principal"
+
+msgid "Main menu transition speed"
+msgstr "Velocidad de transición del menú principal"
+
+msgid "Maintained by"
+msgstr "Mantenido por"
+
+msgid "Match the display refresh rate to prevent tearing."
+msgstr "Ajusta a la frecuencia de la pantalla para evitar el desgarro."
+
+msgid "Maximise"
+msgstr "Maximizar"
+
+msgid "Maximum"
+msgstr "Máximo"
+
+msgid "Maximum distance at which objects remain visible."
+msgstr "Distancia máxima a la que los objetos siguen visibles."
+
+msgid "Maximum visibility range for medium-sized foliage."
+msgstr "Alcance de visibilidad máximo de la vegetación mediana."
+
+msgid "Maximum visibility range for small foliage."
+msgstr "Alcance de visibilidad máximo de la vegetación pequeña."
+
+msgid "Maximum visibility range for the largest foliage."
+msgstr "Alcance de visibilidad máximo de la vegetación más grande."
+
+msgid "Measure that shading from each pixel's horizon. Needs Ambient occlusion."
+msgstr "Mide ese sombreado desde el horizonte de cada píxel. Requiere oclusión ambiental."
+
+msgid "Medium foliage"
+msgstr "Vegetación mediana"
+
+msgid "Medium foliage range"
+msgstr "Alcance de la vegetación mediana"
+
+msgid "Medium impact"
+msgstr "Impacto medio"
+
+msgid "Meitou (on)"
+msgstr "Meitou (activado)"
+
+msgid "Meitou (when busy)"
+msgstr "Meitou (con carga)"
+
+msgid "Meitou - Faithful UI"
+msgstr "Meitou - Interfaz original"
+
+msgid "Meitou Launcher"
+msgstr "Lanzador de Meitou"
+
+msgid "Meitou cascades"
+msgstr "Cascadas de Meitou"
+
+msgid "Meitou improvements (unticked: as the game)"
+msgstr "Mejoras de Meitou (sin marcar: como el juego)"
+
+msgid "Meitou is already running: close it before starting it again."
+msgstr "Meitou ya está en ejecución: ciérralo antes de volver a iniciarlo."
+
+msgid "Meitou needs Kenshi: it does not include Kenshi's data. You must own Kenshi and point Meitou at its folder."
+msgstr "Meitou necesita Kenshi: no incluye los datos de Kenshi. Debes tener Kenshi e indicar su carpeta a Meitou."
+
+msgid "Meitou port"
+msgstr "Adaptación a Meitou"
+
+msgid "Meitou port on the Steam workshop, endorsed by Meitou: {1} by {2}"
+msgstr "Adaptación a Meitou en el Workshop de Steam, respaldada por Meitou: {1} de {2}"
+
+msgid "Meitou port, endorsed by Meitou: {1} by {2} (installed)"
+msgstr "Adaptación a Meitou, respaldada por Meitou: {1} de {2} (instalada)"
+
+msgid "Meitou ports of your mods"
+msgstr "Adaptaciones a Meitou de tus mods"
+
+msgid "Meitou {1} is not installed any more."
+msgstr "Meitou {1} ya no está instalado."
+
+msgid "Meitou {1} started with {2}{3}."
+msgstr "Meitou {1} iniciado con {2}{3}."
+
+msgid "Meitou {1} started."
+msgstr "Meitou {1} iniciado."
+
+msgid "Meitou {1} stopped with an error (exit code {2}); its log is {3}"
+msgstr "Meitou {1} se detuvo con un error (código de salida {2}); su registro es {3}"
+
+msgid "Meitou: "
+msgstr "Meitou: "
+
+msgid "Meitou: on"
+msgstr "Meitou: activado"
+
+msgid "Mesh welding"
+msgstr "Soldadura de mallas"
+
+msgid "Metal (native)"
+msgstr "Metal (nativo)"
+
+msgid "Metal (native)."
+msgstr "Metal (nativo)."
+
+msgid "Metal is not available on this Mac; Auto uses Vulkan."
+msgstr "Metal no está disponible en este Mac; Auto usa Vulkan."
+
+msgid "Metal memory budget"
+msgstr "Presupuesto de memoria de Metal"
+
+msgid "Metal memory budget: automatic."
+msgstr "Presupuesto de memoria de Metal: automático."
+
+msgid "Metal memory budget: {1} MB."
+msgstr "Presupuesto de memoria de Metal: {1} MB."
+
+msgid "Metal needs an Apple-silicon Mac; choose Auto or Vulkan."
+msgstr "Metal requiere un Mac con Apple Silicon; elige Auto o Vulkan."
+
+msgid "Metal on buildings"
+msgstr "Metal en edificios"
+
+msgid "Metal on characters"
+msgstr "Metal en personajes"
+
+msgid "Metal render scale"
+msgstr "Escala de renderizado de Metal"
+
+msgid "Metal upscaling preset"
+msgstr "Preajuste de reescalado de Metal"
+
+msgid "MetalFX Balanced 0.59"
+msgstr "MetalFX Equilibrado 0.59"
+
+msgid "MetalFX Performance 0.50"
+msgstr "MetalFX Rendimiento 0.50"
+
+msgid "MetalFX Quality 0.67"
+msgstr "MetalFX Calidad 0.67"
+
+msgid "MetalFX Spatial 0.40 (alternative)"
+msgstr "MetalFX Espacial 0.40 (alternativa)"
+
+msgid "MetalFX Spatial 0.50 (alternative)"
+msgstr "MetalFX Espacial 0.50 (alternativa)"
+
+msgid "MetalFX Super Quality 0.77"
+msgstr "MetalFX Supercalidad 0.77"
+
+msgid "MetalFX Temporal 0.40"
+msgstr "MetalFX Temporal 0.40"
+
+msgid "MetalFX spatial"
+msgstr "MetalFX espacial"
+
+msgid "MetalFX temporal"
+msgstr "MetalFX temporal"
+
+msgid "MetalFX temporal is the default at every tier; spatial rows are explicit alternatives. The preset sets the render scale, and the render scale slider fine-tunes it (Custom)."
+msgstr "MetalFX temporal es el predeterminado en todos los niveles; las filas espaciales son alternativas explícitas. El preajuste fija la escala de renderizado y el control deslizante de escala la afina (Personalizado)."
+
+msgid "Mine"
+msgstr "Minar"
+
+msgid "Mine · Meitou {1}"
+msgstr "Mío · Meitou {1}"
+
+msgid "Minimise"
+msgstr "Minimizar"
+
+msgid "Minutes of unpaused play between autosaves (the game: 10)."
+msgstr "Minutos de juego sin pausa entre guardados automáticos (el juego: 10)."
+
+msgid "Mod Warning"
+msgstr "Aviso de mod"
+
+msgid "Mod list saved: {1} enabled."
+msgstr "Lista de mods guardada: {1} activados."
+
+msgid "Modifications to the GLOBAL_CONSTANTS will be lost, you'll have to set them again, sorry!"
+msgstr "Las modificaciones de GLOBAL_CONSTANTS se perderán, tendrás que volver a definirlas, ¡lo sentimos!"
+
+msgid "Mods arranged by their dependencies."
+msgstr "Mods ordenados según sus dependencias."
+
+msgid "Mods arranged by their dependencies; {1} still need attention."
+msgstr "Mods ordenados según sus dependencias; {1} aún requieren atención."
+
+msgid "Mods from a save"
+msgstr "Mods de una partida"
+
+msgid "Mods of the save '{1}' applied."
+msgstr "Mods de la partida '{1}' aplicados."
+
+msgid "Mods: {1} loaded"
+msgstr "Mods: {1} cargados"
+
+msgid "Mods: {1} of {2} loaded"
+msgstr "Mods: {1} de {2} cargados"
+
+msgid "Move the camera backward."
+msgstr "Mover la cámara hacia atrás."
+
+msgid "Move the camera forward."
+msgstr "Mover la cámara hacia delante."
+
+msgid "Move the camera left."
+msgstr "Mover la cámara a la izquierda."
+
+msgid "Move the camera right."
+msgstr "Mover la cámara a la derecha."
+
+msgid "Move the installed versions from {1} to {2}? Kept, they stay where they are and the new folder lists only its own."
+msgstr "¿Mover las versiones instaladas de {1} a {2}? Si se conservan, se quedan donde están y la nueva carpeta solo lista las suyas."
+
+msgid "Move the light probes out of walls."
+msgstr "Saca las sondas de luz de las paredes."
+
+msgid "Move the view closer."
+msgstr "Acercar la vista."
+
+msgid "Move the view farther away."
+msgstr "Alejar la vista."
+
+msgid "Move them"
+msgstr "Moverlas"
+
+msgid "Moves the point the camera looks at sideways: above 0 the character stands left of the middle (a view over the right shoulder), below 0 right of it. It shows less the farther the camera is."
+msgstr "Desplaza a un lado el punto al que mira la cámara: por encima de 0 el personaje queda a la izquierda del centro (vista por encima del hombro derecho), por debajo de 0 a la derecha. Se nota menos cuanto más lejos está la cámara."
+
+msgid "Moving installed versions…"
+msgstr "Moviendo las versiones instaladas…"
+
+msgid "Music frequency"
+msgstr "Frecuencia de la música"
+
+msgid "My look"
+msgstr "Mi estilo"
+
+msgid "NEW GAME"
+msgstr "NUEVA PARTIDA"
+
+msgid "NONE"
+msgstr "NINGUNO"
+
+msgid "Near tree fade"
+msgstr "Desvanecer árboles cercanos"
+
+msgid "Needs first aid"
+msgstr "Necesita primeros auxilios"
+
+msgid "Needs research"
+msgstr "Requiere investigación"
+
+msgid "Needs restart"
+msgstr "Requiere reiniciar"
+
+msgid "Needs {1}"
+msgstr "Requiere {1}"
+
+msgid "New version {1}"
+msgstr "Nueva versión {1}"
+
+msgid "Newer version out"
+msgstr "Hay una versión más reciente"
+
+msgid "News"
+msgstr "Noticias"
+
+msgid "News video sound"
+msgstr "Sonido de los vídeos de noticias"
+
+msgid "News: GitHub answered {1}"
+msgstr "Noticias: GitHub respondió {1}"
+
+msgid "News: GitHub not reachable"
+msgstr "Noticias: GitHub no accesible"
+
+msgid "Night air"
+msgstr "Aire nocturno"
+
+msgid "Night ambient"
+msgstr "Ambiente nocturno"
+
+msgid "Night ambient light strength"
+msgstr "Intensidad de la luz ambiental nocturna"
+
+msgid "Night ambient light strength (1 = 1.2x game)"
+msgstr "Intensidad de la luz ambiental nocturna (1 = 1,2x juego)"
+
+msgid "Night grading"
+msgstr "Gradación nocturna"
+
+msgid "Night grading strength"
+msgstr "Intensidad de la gradación nocturna"
+
+msgid "Night grading strength (0 = game)"
+msgstr "Intensidad de la gradación nocturna (0 = juego)"
+
+msgid "Night sky"
+msgstr "Cielo nocturno"
+
+msgid "Nightly builds"
+msgstr "Versiones nightly"
+
+msgid ""
+"Nightly builds are made twice a day from the newest code and are not tested. They may be unstable, crash, and corrupt your save files: back up your saves before playing one.\n"
+"\n"
+"Continue with nightly builds?"
+msgstr ""
+"Las versiones nightly se compilan dos veces al día a partir del código más reciente y no se prueban. Pueden ser inestables, fallar y corromper tus partidas guardadas: haz copia de seguridad antes de jugar una.\n"
+"\n"
+"¿Continuar con versiones nightly?"
+
+msgid "No character selected"
+msgstr "Ningún personaje seleccionado"
+
+msgid "No free bed to take anyone to."
+msgstr "No hay ninguna cama libre a la que llevar a nadie."
+
+msgid "No game data loaded."
+msgstr "No hay datos del juego cargados."
+
+msgid "No impact"
+msgstr "Sin impacto"
+
+msgid "No mods found in Kenshi's mods folder or among its Steam workshop items."
+msgstr "No se encontraron mods en la carpeta de mods de Kenshi ni entre sus elementos del Workshop de Steam."
+
+msgid "No mods match the search."
+msgstr "Ningún mod coincide con la búsqueda."
+
+msgid "No news yet."
+msgstr "Aún no hay noticias."
+
+msgid "No preset yet. Save preset keeps the settings of every tab."
+msgstr "Aún no hay preajustes. Guardar preajuste guarda los ajustes de todas las pestañas."
+
+msgid "No release with a {1} build found yet"
+msgstr "Aún no se encontró ninguna versión con compilación para {1}"
+
+msgid "No releases listed yet. Check for releases below."
+msgstr "Aún no hay versiones listadas. Busca versiones abajo."
+
+msgid "No save to continue."
+msgstr "No hay partida para continuar."
+
+msgid "No saves found."
+msgstr "No se encontraron partidas."
+
+msgid "No setting matches the search."
+msgstr "Ningún ajuste coincide con la búsqueda."
+
+msgid "No thanks"
+msgstr "No, gracias"
+
+msgid "No water"
+msgstr "Sin agua"
+
+msgid "No {1} found"
+msgstr "No se encontró {1}"
+
+msgid "Nobody here to bail out."
+msgstr "No hay nadie aquí a quien sacar bajo fianza."
+
+msgid "Not enough money: the bail is c.{1}."
+msgstr "No hay dinero suficiente: la fianza es c.{1}."
+
+msgid "Numbers that float over a character when a blow lands, with the damage armour stopped in brackets. Simple shows the total, Full one number per damage type and the part hit."
+msgstr "Números que flotan sobre un personaje cuando un golpe acierta, con el daño que detuvo la armadura entre corchetes. Simple muestra el total; Completo, un número por tipo de daño y la parte golpeada."
+
+msgid "OPTIONS"
+msgstr "OPCIONES"
+
+msgid "OVERWRITE SAVE"
+msgstr "SOBRESCRIBIR PARTIDA"
+
+msgid "Object LOD"
+msgstr "LOD de objetos"
+
+msgid "Object LOD distance multiplier"
+msgstr "Multiplicador de distancia de LOD de objetos"
+
+msgid "Object LOD distance x"
+msgstr "Distancia de LOD de objetos x"
+
+msgid "Object draw distance"
+msgstr "Distancia de dibujado de objetos"
+
+msgid "Objects"
+msgstr "Objetos"
+
+msgid "Off (flat ambient)"
+msgstr "Desactivado (ambiente plano)"
+
+msgid "Off at Low quality. Choose Meitou to keep it on at Low."
+msgstr "Desactivado en calidad Baja. Elige Meitou para mantenerlo activado en Baja."
+
+msgid "Offline: saved posts"
+msgstr "Sin conexión: publicaciones guardadas"
+
+msgid "On"
+msgstr "Activado"
+
+msgid "On: render below the screen's size and upscale (MetalFX or TAA), with a render scale to choose. Off: render at the screen's size, or in full screen at a fraction of it with a resolution to choose."
+msgstr "Activado: renderiza por debajo del tamaño de la pantalla y reescala (MetalFX o TAA), con una escala de renderizado a elegir. Desactivado: renderiza al tamaño de la pantalla, o en pantalla completa a una fracción con una resolución a elegir."
+
+msgid "Only for:"
+msgstr "Solo para:"
+
+msgid "Only nightly builds so far: tick Nightly builds beside Play to list them."
+msgstr "Por ahora solo hay versiones nightly: marca Versiones nightly junto a Jugar para listarlas."
+
+msgid "Open Doors"
+msgstr "Abrir puertas"
+
+msgid "Open bags at once"
+msgstr "Abrir bolsas de inmediato"
+
+msgid "Open folder"
+msgstr "Abrir carpeta"
+
+msgid "Open its Steam workshop page"
+msgstr "Abrir su página del Workshop de Steam"
+
+msgid "Open its page"
+msgstr "Abrir su página"
+
+msgid "Open or close the build menu."
+msgstr "Abre o cierra el menú de construcción."
+
+msgid "Open or close the debug menu: teleport, spawn, items, money, heal and damage."
+msgstr "Abre o cierra el menú de depuración: teletransporte, aparición, objetos, dinero, curación y daño."
+
+msgid "Open or close the selected character's inventory."
+msgstr "Abre o cierra el inventario del personaje seleccionado."
+
+msgid "Open or close the selected character's stats window."
+msgstr "Abre o cierra la ventana de estadísticas del personaje seleccionado."
+
+msgid "Open or close this settings dialog."
+msgstr "Abre o cierra este diálogo de ajustes."
+
+msgid "Open the Tutorials window, or close it."
+msgstr "Abre o cierra la ventana de tutoriales."
+
+msgid "Open the crafting page, or close it."
+msgstr "Abre o cierra la página de fabricación."
+
+msgid "Open the faction page, or close it."
+msgstr "Abre o cierra la página de facción."
+
+msgid "Open the installed version's folder"
+msgstr "Abrir la carpeta de la versión instalada"
+
+msgid "Open the launcher's release page"
+msgstr "Abrir la página de versiones del lanzador"
+
+msgid "Open the public wishlist of RE_Kenshi mods for Meitou, where you can ask for this one"
+msgstr "Abrir la lista pública de deseos de mods de RE_Kenshi para Meitou, donde puedes pedir este"
+
+msgid "Open the research page, or close it."
+msgstr "Abre o cierra la página de investigación."
+
+msgid "Open the world map, or close it."
+msgstr "Abre o cierra el mapa del mundo."
+
+msgid "Open {1} pages"
+msgstr "Abrir {1} páginas"
+
+msgid "Orbit the camera to the left round its target."
+msgstr "Orbitar la cámara a la izquierda alrededor de su objetivo."
+
+msgid "Orbit the camera to the right round its target."
+msgstr "Orbitar la cámara a la derecha alrededor de su objetivo."
+
+msgid "Others"
+msgstr "Otros"
+
+msgid "Others' XP"
+msgstr "XP de los demás"
+
+msgid "Outdoors"
+msgstr "Exteriores"
+
+msgid "Outline and tint the character under the cursor, in the colour of what a right click would do."
+msgstr "Perfila y tiñe al personaje bajo el cursor, con el color de lo que haría un clic derecho."
+
+msgid "Outline and tint the selected building, and the building under the cursor in the colour of what a right click would do, like a character under the cursor, except while its interior is shown."
+msgstr "Perfila y tiñe el edificio seleccionado, y el edificio bajo el cursor con el color de lo que haría un clic derecho, como un personaje bajo el cursor, salvo mientras se muestra su interior."
+
+msgid "Output:"
+msgstr "Producción:"
+
+msgid "Overlaymaps"
+msgstr "Mapas superpuestos"
+
+msgid "PROSPECTING RESULTS"
+msgstr "RESULTADOS DE PROSPECCIÓN"
+
+msgid "Particle density multiplier"
+msgstr "Multiplicador de densidad de partículas"
+
+msgid "Particle density x"
+msgstr "Densidad de partículas x"
+
+msgid "Passed to the game, e.g. --faithful or --windowed."
+msgstr "Se pasa al juego, p. ej. --faithful o --windowed."
+
+msgid "Paste"
+msgstr "Pegar"
+
+msgid "Pause after loading"
+msgstr "Pausar tras cargar"
+
+msgid "Pause or resume the simulation."
+msgstr "Pausa o reanuda la simulación."
+
+msgid "Pause while loading"
+msgstr "Pausar al cargar"
+
+msgid "Paused"
+msgstr "En pausa"
+
+msgid "Peak brightness"
+msgstr "Brillo máximo"
+
+msgid "Performance"
+msgstr "Rendimiento"
+
+msgid "Photo mode"
+msgstr "Modo foto"
+
+msgid "Photo mode: the simulation pauses, the interface hides, and a free camera with a lens, roll, exposure, time of day and composition guides takes pictures."
+msgstr "Modo foto: la simulación se pausa, la interfaz se oculta, y una cámara libre con lente, alabeo, exposición, hora del día y guías de composición toma fotos."
+
+msgid "Picked-up and looted items go into the character's backpack first, then its slots and inventory (the game: only while the bag window is open)."
+msgstr "Los objetos recogidos y saqueados van primero a la mochila del personaje, luego a sus ranuras e inventario (el juego: solo con la ventana de la bolsa abierta)."
+
+msgid "Picking up"
+msgstr "Recogiendo"
+
+msgid "Picture size"
+msgstr "Tamaño de la imagen"
+
+msgid "Pictures"
+msgstr "Imágenes"
+
+msgid "Place here"
+msgstr "Colocar aquí"
+
+msgid "Planetshine"
+msgstr "Brillo planetario"
+
+msgid "Planetshine strength"
+msgstr "Intensidad del brillo planetario"
+
+msgid "Planetshine strength (x physical)"
+msgstr "Intensidad del brillo planetario (x físico)"
+
+msgid "Plate, tanks and machinery read as metal; rust and paint stay matte."
+msgstr "Chapas, tanques y maquinaria parecen metal; el óxido y la pintura siguen mates."
+
+msgid "Play latest"
+msgstr "Jugar la más reciente"
+
+msgid "Play starts Meitou {1}."
+msgstr "Jugar inicia Meitou {1}."
+
+msgid "Play starts the latest installed version."
+msgstr "Jugar inicia la versión instalada más reciente."
+
+msgid "Play this version"
+msgstr "Jugar esta versión"
+
+msgid "Play {1}"
+msgstr "Jugar {1}"
+
+msgid "Playback"
+msgstr "Reproducción"
+
+msgid "Points added to every interface font's default height (the game: 3)."
+msgstr "Puntos que se suman a la altura predeterminada de cada fuente de la interfaz (el juego: 3)."
+
+msgid "Polished armour"
+msgstr "Armadura pulida"
+
+msgid "Portrait and editor sun"
+msgstr "Sol de retratos y editor"
+
+msgid "Portraits only"
+msgstr "Solo retratos"
+
+msgid "Portuguese (Brazil)"
+msgstr "Portugués (Brasil)"
+
+msgid "Pose"
+msgstr "Pose"
+
+msgid "Pose moment"
+msgstr "Momento de la pose"
+
+msgid "Pose speed"
+msgstr "Velocidad de la pose"
+
+msgid "Post FX"
+msgstr "Posprocesado"
+
+msgid "Preset '{1}' applied."
+msgstr "Preajuste '{1}' aplicado."
+
+msgid "Preset '{1}' deleted."
+msgstr "Preajuste '{1}' borrado."
+
+msgid "Preset '{1}' saved."
+msgstr "Preajuste '{1}' guardado."
+
+msgid "Preset name"
+msgstr "Nombre del preajuste"
+
+msgid "Presets"
+msgstr "Preajustes"
+
+msgid "Prisoners hold still"
+msgstr "Los prisioneros se quedan quietos"
+
+msgid "Probes"
+msgstr "Sondas"
+
+msgid "Probes (ray tracing)"
+msgstr "Sondas (trazado de rayos)"
+
+msgid "Probes + hybrid cache"
+msgstr "Sondas + caché híbrida"
+
+msgid "Probes and cache"
+msgstr "Sondas y caché"
+
+msgid "Probes move out of walls, clouds shade bounced light, a traced cache adds fine detail."
+msgstr "Las sondas salen de las paredes, las nubes sombrean la luz rebotada y una caché trazada añade detalle fino."
+
+msgid "Problems in no mod's file:"
+msgstr "Problemas fuera del archivo de cualquier mod:"
+
+msgid "Production far away"
+msgstr "Producción a distancia"
+
+msgid "Propose an order where each enabled mod loads after the mods it needs; nothing moves until you accept"
+msgstr "Propone un orden en el que cada mod activado carga después de los mods que necesita; nada se mueve hasta que aceptes"
+
+msgid "Proposed moves:"
+msgstr "Movimientos propuestos:"
+
+msgid "Prospect the ground with the selected character nearest the camera."
+msgstr "Prospecta el suelo con el personaje seleccionado más cercano a la cámara."
+
+msgid "Proving Grounds"
+msgstr "Campo de pruebas"
+
+msgid "Put on Shackles"
+msgstr "Poner grilletes"
+
+msgid "QUIT"
+msgstr "SALIR DEL JUEGO"
+
+msgid "Quality preset"
+msgstr "Preajuste de calidad"
+
+msgid "Quarter resolution"
+msgstr "Un cuarto de resolución"
+
+msgid "RE_Kenshi file rebinds: applied to the map files"
+msgstr "Reasignaciones de archivos de RE_Kenshi: aplicadas a los archivos del mapa"
+
+msgid "RE_Kenshi mod"
+msgstr "Mod de RE_Kenshi"
+
+msgid "RE_Kenshi plugin: its DLLs are ignored in Meitou"
+msgstr "Plugin de RE_Kenshi: sus DLL se ignoran en Meitou"
+
+msgid "RE_Kenshi sound banks: loaded before the game's"
+msgstr "Bancos de sonido de RE_Kenshi: cargados antes que los del juego"
+
+msgid "Raid and campaign data that builds on a base campaign counts the base's squads and follow-up campaigns once. The game counts them twice, so inherited squads come up more often and follow-up raids are about twice as likely."
+msgstr "Los datos de asaltos y campañas que se basan en una campaña base cuentan una sola vez los escuadrones y las campañas de seguimiento de la base. El juego los cuenta dos veces, así que los escuadrones heredados salen más a menudo y los asaltos de seguimiento son casi el doble de probables."
+
+msgid "Raids as written"
+msgstr "Asaltos tal como están escritos"
+
+msgid "Rain drops and puddles"
+msgstr "Gotas de lluvia y charcos"
+
+msgid "Rain in open buildings"
+msgstr "Lluvia en edificios abiertos"
+
+msgid "Rain shows on the world: water runs down walls, drops stand on metal and stone, puddles gather on the ground. Off: as the original."
+msgstr "La lluvia se ve en el mundo: el agua corre por las paredes, las gotas quedan sobre el metal y la piedra, los charcos se forman en el suelo. Desactivado: como el original."
+
+msgid "Raise the camera in free camera mode."
+msgstr "Sube la cámara en el modo de cámara libre."
+
+msgid "Raise the nearby ground into real bumps and ridges that cast shadows."
+msgstr "Eleva el suelo cercano en bultos y crestas reales que proyectan sombras."
+
+msgid "Ray traced"
+msgstr "Trazado de rayos"
+
+msgid "Ray traced + cascades"
+msgstr "Trazado de rayos + cascadas"
+
+msgid "Ray-traced probes, or the probes moved out of walls with a fine cache of traced rays near the camera."
+msgstr "Sondas con trazado de rayos, o las sondas sacadas de las paredes con una caché fina de rayos trazados cerca de la cámara."
+
+msgid "Ray-traced shadows near the camera only; four soft cascades take over further away, where distant trees and buildings keep their shadows."
+msgstr "Sombras con trazado de rayos solo cerca de la cámara; cuatro cascadas suaves toman el relevo más lejos, donde los árboles y edificios lejanos conservan sus sombras."
+
+msgid "Ray-traced sun shadows: sharp at contact, soft with distance. Needs ray tracing."
+msgstr "Sombras del sol con trazado de rayos: nítidas en el contacto, suaves con la distancia. Requiere trazado de rayos."
+
+msgid "Rays gather the bounced light on each character instead of the probes'. Needs GTAO."
+msgstr "Los rayos recogen la luz rebotada en cada personaje en lugar de la de las sondas. Requiere GTAO."
+
+msgid "Reach"
+msgstr "Alcance"
+
+msgid "Ready to harvest"
+msgstr "Listo para cosechar"
+
+msgid "Reduce visible colour bands in smooth gradients."
+msgstr "Reduce las bandas de color visibles en degradados suaves."
+
+msgid "Reflection range"
+msgstr "Alcance de los reflejos"
+
+msgid "Reflection range multiplier"
+msgstr "Multiplicador de alcance de los reflejos"
+
+msgid "Reflection range x (game 0.6)"
+msgstr "Alcance de los reflejos x (juego 0.6)"
+
+msgid "Reflection samples"
+msgstr "Muestras de reflejo"
+
+msgid "Reflections"
+msgstr "Reflejos"
+
+msgid "Refresh"
+msgstr "Actualizar"
+
+msgid "Release page"
+msgstr "Página de la versión"
+
+msgid "Render UI in screen resolution"
+msgstr "Renderizar la interfaz a la resolución de pantalla"
+
+msgid "Render clouds with volume and depth."
+msgstr "Renderiza las nubes con volumen y profundidad."
+
+msgid "Render resolution"
+msgstr "Resolución de renderizado"
+
+msgid "Render scale"
+msgstr "Escala de renderizado"
+
+msgid "Render scale (upscaler)"
+msgstr "Escala de renderizado (reescalador)"
+
+msgid "Render weather at an adaptive lower resolution."
+msgstr "Renderiza el clima a una resolución menor adaptativa."
+
+msgid "Renderer"
+msgstr "Renderizador"
+
+msgid "Renderer: {1}; Play starts the game with it."
+msgstr "Renderizador: {1}; Jugar inicia el juego con él."
+
+msgid "Rendering resolution as a share of the window's pixels, under the upscaler the preset chose (MetalFX at 0.40 at least). Only with Use Metal upscaling on."
+msgstr "Resolución de renderizado como proporción de los píxeles de la ventana, bajo el reescalador que eligió el preajuste (MetalFX a 0.40 como mínimo). Solo con Usar reescalado de Metal activado."
+
+msgid "Rendering resolution for rain, dust and other weather particles."
+msgstr "Resolución de renderizado de la lluvia, el polvo y otras partículas del clima."
+
+msgid "Request it"
+msgstr "Pedirlo"
+
+msgid "Requires {1}"
+msgstr "Requiere {1}"
+
+msgid "Reset "
+msgstr "Restablecer "
+
+msgid "Reset character"
+msgstr "Restablecer personaje"
+
+msgid "Reset graphics"
+msgstr "Restablecer gráficos"
+
+msgid "Restart to apply"
+msgstr "Reinicia para aplicar"
+
+msgid "Resting"
+msgstr "Descansando"
+
+msgid "Restore all preferences, controls and the look to their defaults?"
+msgstr "¿Restaurar todas las preferencias, controles y el estilo a sus valores predeterminados?"
+
+msgid "Restore defaults"
+msgstr "Restaurar valores predeterminados"
+
+msgid "Restore defaults?"
+msgstr "¿Restaurar valores predeterminados?"
+
+msgid "Return to the main menu or quit the game?"
+msgstr "¿Volver al menú principal o salir del juego?"
+
+msgid "Return to the main menu or quit the game? Unsaved progress will be lost."
+msgstr "¿Volver al menú principal o salir del juego? Se perderá el progreso no guardado."
+
+msgid "Reverses the camera's tilt, for the mouse and the keys (the game: on)."
+msgstr "Invierte la inclinación de la cámara, para el ratón y las teclas (el juego: activado)."
+
+msgid "Reverses the camera's turn, for the mouse and the keys (the game: off)."
+msgstr "Invierte el giro de la cámara, para el ratón y las teclas (el juego: desactivado)."
+
+msgid "Roaming squads keep their characters when they leave the area around your squads, and travel on as themselves. In the game they are removed and new ones are made later."
+msgstr "Los escuadrones errantes conservan sus personajes al salir de la zona de tus escuadrones y siguen su viaje tal cual. En el juego se eliminan y más tarde se crean otros nuevos."
+
+msgid "Rock smoothing (tessellation)"
+msgstr "Suavizado de rocas (teselado)"
+
+msgid "Round off the flat facets of rocks and cliffs up close."
+msgstr "Redondea de cerca las caras planas de rocas y acantilados."
+
+msgid "Run the simulation at double speed."
+msgstr "Ejecuta la simulación a doble velocidad."
+
+msgid "Run the simulation at five times normal speed."
+msgstr "Ejecuta la simulación a cinco veces la velocidad normal."
+
+msgid "Run the simulation at normal speed."
+msgstr "Ejecuta la simulación a velocidad normal."
+
+msgid "Runs the next world tick while the frame draws: higher frame rates in big fights and crowds, up to 33 ms more input delay."
+msgstr "Ejecuta el siguiente tic del mundo mientras se dibuja el fotograma: más fotogramas por segundo en grandes combates y multitudes, hasta 33 ms más de retraso de entrada."
+
+msgid "Russian"
+msgstr "Ruso"
+
+msgid "SETTINGS"
+msgstr "AJUSTES"
+
+msgid "SSAO is a cheap estimate; GTAO measures how much sky each pixel sees and keeps the colour of the light bounced in corners. Costs more."
+msgstr "SSAO es una estimación barata; GTAO mide cuánto cielo ve cada píxel y conserva el color de la luz rebotada en las esquinas. Cuesta más."
+
+msgid "STEALING CHANCE:"
+msgstr "PROBABILIDAD DE ROBO:"
+
+msgid "Safe — 5120 MB"
+msgstr "Seguro — 5120 MB"
+
+msgid "Safe: a fixed 5120 MB; the guard shortens ranges and evicts caches sooner."
+msgstr "Seguro: 5120 MB fijos; la protección acorta alcances y vacía cachés antes."
+
+msgid "Sake and rum bottles look like glass: they bend and tint what is behind them, catch reflections and show the drink inside."
+msgstr "Las botellas de sake y ron parecen de vidrio: deforman y tiñen lo que hay detrás, captan reflejos y muestran la bebida dentro."
+
+msgid "Samples of the shading in creases: lower is cheaper and noisier."
+msgstr "Muestras del sombreado en pliegues: menos es más barato y con más ruido."
+
+msgid "Samples per pixel of the water's reflection: smoother edges, more video memory."
+msgstr "Muestras por píxel del reflejo del agua: bordes más suaves, más memoria de vídeo."
+
+msgid "Save an image of the current view."
+msgstr "Guarda una imagen de la vista actual."
+
+msgid "Save as"
+msgstr "Guardar como"
+
+msgid "Save as a new preset"
+msgstr "Guardar como nuevo preajuste"
+
+msgid "Save as preset"
+msgstr "Guardar como preajuste"
+
+msgid "Save failed: {1}"
+msgstr "Error al guardar: {1}"
+
+msgid "Save or load still in progress"
+msgstr "Guardado o carga aún en curso"
+
+msgid "Save preset"
+msgstr "Guardar preajuste"
+
+msgid "Save the game now and attach the save"
+msgstr "Guardar la partida ahora y adjuntarla"
+
+msgid "Save the game to the quicksave slot."
+msgstr "Guarda la partida en la ranura de guardado rápido."
+
+msgid "Saves the game on its own every few minutes of unpaused play, into three slots in turn (autosave0 to autosave2)."
+msgstr "Guarda la partida automáticamente cada pocos minutos de juego sin pausa, en tres ranuras por turnos (autosave0 a autosave2)."
+
+msgid "Scale air scattering around sunrise and sunset."
+msgstr "Escala la dispersión del aire al amanecer y al atardecer."
+
+msgid "Scale how far away reflected objects are drawn."
+msgstr "Escala a qué distancia se dibujan los objetos reflejados."
+
+msgid "Scale how far trees and other foliage remain visible."
+msgstr "Escala hasta dónde siguen visibles los árboles y demás vegetación."
+
+msgid "Scale night lighting from the planet and moon."
+msgstr "Escala la iluminación nocturna del planeta y la luna."
+
+msgid "Scale the amount of atmospheric haze."
+msgstr "Escala la cantidad de bruma atmosférica."
+
+msgid "Scale the distance at which grass disappears."
+msgstr "Escala la distancia a la que desaparece la hierba."
+
+msgid "Scale the distortion caused by hot air."
+msgstr "Escala la distorsión causada por el aire caliente."
+
+msgid "Scale the number of grass instances drawn."
+msgstr "Escala el número de matas de hierba dibujadas."
+
+msgid "Scale the number of weather particles emitted."
+msgstr "Escala el número de partículas del clima emitidas."
+
+msgid "Scale the sky's light in shade, at night and indoors."
+msgstr "Escala la luz del cielo en sombra, de noche y en interiores."
+
+msgid "Screen resolution"
+msgstr "Resolución de pantalla"
+
+msgid "Search"
+msgstr "Buscar"
+
+msgid "Search results"
+msgstr "Resultados de la búsqueda"
+
+msgid "Search settings"
+msgstr "Buscar ajustes"
+
+msgid "Seen into a building with its roof hidden, no rain, dust or ash falls over the open room. The game leaves out only what falls inside it, so with the camera pulled back the rain in front still streaks across the room."
+msgstr "Al ver dentro de un edificio con el techo oculto, no cae lluvia, polvo ni ceniza sobre la habitación abierta. El juego solo omite lo que cae dentro, así que con la cámara alejada la lluvia de delante sigue cruzando la habitación."
+
+msgid "Seen into a building your characters are in, parts of other buildings that run through it are left out, such as the Hub's town wall in the Shinobi Thieves tower. The game's world places them there and draws them inside the room."
+msgstr "Al ver dentro de un edificio donde están tus personajes, se omiten las partes de otros edificios que lo atraviesan, como la muralla del Hub en la torre de los Shinobi Thieves. El mundo del juego las coloca ahí y las dibuja dentro de la habitación."
+
+msgid "Segments of the water mesh: fewer is cheaper, far waves lose shape."
+msgstr "Segmentos de la malla del agua: menos es más barato, las olas lejanas pierden forma."
+
+msgid "Select"
+msgstr "Seleccionar"
+
+msgid "Select a mod to see its author, description and problems."
+msgstr "Selecciona un mod para ver su autor, descripción y problemas."
+
+msgid "Select a release to read its notes."
+msgstr "Selecciona una versión para leer sus notas."
+
+msgid "Select all"
+msgstr "Seleccionar todo"
+
+msgid "Select characters and press the interface (the game's left button). Binding it elsewhere moves the other buttons along."
+msgstr "Selecciona personajes y pulsa la interfaz (el botón izquierdo del juego). Asignarlo a otro sitio desplaza los demás botones."
+
+msgid "Select none"
+msgstr "No seleccionar nada"
+
+msgid "Select the next member of the character's squad."
+msgstr "Selecciona el siguiente miembro del escuadrón del personaje."
+
+msgid "Select the previous member of the character's squad."
+msgstr "Selecciona el miembro anterior del escuadrón del personaje."
+
+msgid "Select the whole squad (Shift adds it to the selection)."
+msgstr "Selecciona todo el escuadrón (Mayús lo añade a la selección)."
+
+msgid "Select this member of the squad bar (Shift adds them to the selection; press twice to centre on them)."
+msgstr "Selecciona este miembro de la barra de escuadrón (Mayús lo añade a la selección; pulsa dos veces para centrarte en él)."
+
+msgid "Selected"
+msgstr "Seleccionado"
+
+msgid "Send"
+msgstr "Enviar"
+
+msgid "Send anyway"
+msgstr "Enviar de todos modos"
+
+msgid "Send feedback"
+msgstr "Enviar comentarios"
+
+msgid "Sending"
+msgstr "Enviando"
+
+msgid "Set foliage visibility by mesh size rather than layer."
+msgstr "Fija la visibilidad de la vegetación por tamaño de malla en lugar de por capa."
+
+msgid "Set the Kenshi folder first (Settings)."
+msgstr "Indica primero la carpeta de Kenshi (Ajustes)."
+
+msgid "Set the Kenshi folder in Settings to list its mods."
+msgstr "Indica la carpeta de Kenshi en Ajustes para listar sus mods."
+
+msgid "Set up Meitou"
+msgstr "Configurar Meitou"
+
+msgid "Sets the upscaler and the render scale. MetalFX temporal by default; spatial is an alternative."
+msgstr "Fija el reescalador y la escala de renderizado. MetalFX temporal por defecto; el espacial es una alternativa."
+
+msgid "Settings"
+msgstr "Ajustes"
+
+msgid "Settings   (Tab hides this)"
+msgstr "Ajustes   (Tab oculta esto)"
+
+msgid "Setup"
+msgstr "Configuración"
+
+msgid "Sfx volume"
+msgstr "Volumen de efectos"
+
+msgid "Shadow"
+msgstr "Sombra"
+
+msgid "Shadow cascades"
+msgstr "Cascadas de sombras"
+
+msgid "Shadow cascades (Meitou)"
+msgstr "Cascadas de sombras (Meitou)"
+
+msgid "Shadow distance"
+msgstr "Distancia de sombras"
+
+msgid "Shadow distance (game 1k-9k, 0 off)"
+msgstr "Distancia de sombras (juego 1k-9k, 0 desactivado)"
+
+msgid "Shadow filter"
+msgstr "Filtro de sombras"
+
+msgid "Shadow filter 0-2 (Meitou; 0 low-end)"
+msgstr "Filtro de sombras 0-2 (Meitou; 0 equipos modestos)"
+
+msgid "Shadow map size"
+msgstr "Tamaño del mapa de sombras"
+
+msgid "Shadow map size (game quality 0-2)"
+msgstr "Tamaño del mapa de sombras (calidad del juego 0-2)"
+
+msgid "Share"
+msgstr "Compartir"
+
+msgid "Sharp zone"
+msgstr "Zona nítida"
+
+msgid "Sharpen the image after resolution reconstruction."
+msgstr "Enfoca la imagen tras la reconstrucción de resolución."
+
+msgid "Shift dark scenes toward the blue of night vision."
+msgstr "Desplaza las escenas oscuras hacia el azul de la visión nocturna."
+
+msgid "Shift pan boost"
+msgstr "Impulso de desplazamiento con Mayús"
+
+msgid "Shift pan speed"
+msgstr "Velocidad de desplazamiento con Mayús"
+
+msgid "Short sharp sun shadows where small things touch a surface."
+msgstr "Sombras de sol cortas y nítidas donde cosas pequeñas tocan una superficie."
+
+msgid "Shoulder"
+msgstr "Hombro"
+
+msgid "Show names"
+msgstr "Mostrar nombres"
+
+msgid "Show only the mods whose name or author holds this text"
+msgstr "Mostrar solo los mods cuyo nombre o autor contiene este texto"
+
+msgid "Show or hide frame statistics."
+msgstr "Muestra u oculta las estadísticas de fotogramas."
+
+msgid "Show the next squad in the squad bar."
+msgstr "Muestra el siguiente escuadrón en la barra de escuadrones."
+
+msgid "Shows the tutorial hints as you play (the game: on)."
+msgstr "Muestra las pistas del tutorial mientras juegas (el juego: activado)."
+
+msgid "Sideways"
+msgstr "Lateral"
+
+msgid "Simulation"
+msgstr "Simulación"
+
+msgid "Size of the squads made from now on: townspeople, roaming squads and raids (the game: 1). Affects performance."
+msgstr "Tamaño de los escuadrones creados a partir de ahora: habitantes, escuadrones errantes y asaltos (el juego: 1). Afecta al rendimiento."
+
+msgid "Size of the wave simulation: smaller is cheaper and coarser."
+msgstr "Tamaño de la simulación de olas: menor es más barato y más tosco."
+
+msgid "Skin"
+msgstr "Piel"
+
+msgid "Skin scatters light on this race (the default)."
+msgstr "La piel dispersa la luz en esta raza (predeterminado)."
+
+msgid "Skin sheen and glow"
+msgstr "Brillo y resplandor de la piel"
+
+msgid "Skin's oily sheen, a soft bright edge, and light through ears and fingers."
+msgstr "El brillo graso de la piel, un borde claro suave y la luz a través de orejas y dedos."
+
+msgid "Skip v{1}"
+msgstr "Omitir v{1}"
+
+msgid "Skipped {1}: the arrow's menu can still install it."
+msgstr "{1} omitida: el menú de la flecha aún puede instalarla."
+
+msgid "Sky"
+msgstr "Cielo"
+
+msgid "Sky & weather"
+msgstr "Cielo y clima"
+
+msgid "Slavers and other cage guards leave their own faction's people in their cages alone instead of making them slaves. In the game they enslave them too. Arrests that end in slavery are not affected."
+msgstr "Los esclavistas y otros guardias de jaulas dejan en paz a la gente de su propia facción que está en sus jaulas en lugar de esclavizarla. En el juego también la esclavizan. Las detenciones que acaban en esclavitud no se ven afectadas."
+
+msgid "Small foliage"
+msgstr "Vegetación pequeña"
+
+msgid "Small foliage range"
+msgstr "Alcance de la vegetación pequeña"
+
+msgid "Small pits in the ground are filled and thin needles of ground standing above flat land are lowered, such as the pit near the Dead Workshop and some needles in the Crater. Off, the ground is exactly as the game's map file has it."
+msgstr "Los pequeños hoyos del suelo se rellenan y las finas agujas de terreno sobre el suelo llano se rebajan, como el hoyo cerca del Dead Workshop y algunas agujas en el Crater. Desactivado, el suelo queda exactamente como en el archivo de mapa del juego."
+
+msgid "Smooth the outline of hills and crests against the sky."
+msgstr "Suaviza el contorno de colinas y crestas contra el cielo."
+
+msgid "Smooths edges and upscales the render. Active: {1}"
+msgstr "Suaviza los bordes y reescala el renderizado. Activo: {1}"
+
+msgid "Sneak attack"
+msgstr "Ataque furtivo"
+
+msgid "Soft cascaded maps to the horizon, or a ray to the sun from every pixel: as sharp as the caster is close, grass shadows too (needs ray tracing, turns on indirect light); or rays near the camera and soft cascades further away."
+msgstr "Mapas en cascada suaves hasta el horizonte, o un rayo al sol desde cada píxel: tan nítido como cercano está quien proyecta, también la hierba (requiere trazado de rayos, activa la luz indirecta); o rayos cerca de la cámara y cascadas suaves más lejos."
+
+msgid "Soft cascades"
+msgstr "Cascadas suaves"
+
+msgid "Soft grazing sun"
+msgstr "Sol rasante suave"
+
+msgid "Soften dust and fog where they meet the ground, and light them by the sun and its shadows."
+msgstr "Suaviza el polvo y la niebla donde tocan el suelo, y los ilumina con el sol y sus sombras."
+
+msgid "Sound range"
+msgstr "Alcance del sonido"
+
+msgid "Sound voices"
+msgstr "Voces"
+
+msgid "Spanish"
+msgstr "Español"
+
+msgid "Speed units"
+msgstr "Unidades de velocidad"
+
+msgid "Splash blood on walls, buildings and rocks as well as the ground; pools stay on floors."
+msgstr "Salpica sangre en paredes, edificios y rocas además del suelo; los charcos quedan en los suelos."
+
+msgid "Splash screens"
+msgstr "Pantallas de inicio"
+
+msgid "Squad XP"
+msgstr "XP del escuadrón"
+
+msgid "Squad XP in the Advanced settings"
+msgstr "XP del escuadrón en los ajustes Avanzados"
+
+msgid "Squads keep their people"
+msgstr "Los escuadrones conservan a su gente"
+
+msgid "Start Meitou {1}"
+msgstr "Iniciar Meitou {1}"
+
+msgid "Start Meitou {1} at the main menu"
+msgstr "Iniciar Meitou {1} en el menú principal"
+
+msgid "Start a new game? Unsaved progress will be lost."
+msgstr "¿Empezar una nueva partida? Se perderá el progreso no guardado."
+
+msgid "Started {1}"
+msgstr "Iniciado {1}"
+
+msgid "Stays"
+msgstr "Se queda"
+
+msgid "Steam could not subscribe"
+msgstr "Steam no pudo suscribirse"
+
+msgid "Steam did not answer in time."
+msgstr "Steam no respondió a tiempo."
+
+msgid "Steam did not subscribe to anything."
+msgstr "Steam no se suscribió a nada."
+
+msgid "Steam gave no answer."
+msgstr "Steam no dio respuesta."
+
+msgid "Steam is downloading your workshop mods: {1} of {2} installed."
+msgstr "Steam está descargando tus mods del Workshop: {1} de {2} instalados."
+
+msgid "Steam is still downloading; press Refresh when it is done."
+msgstr "Steam sigue descargando; pulsa Actualizar cuando termine."
+
+msgid "Steam sees the game as Kenshi: the overlay, play time and Steam's screenshot key. Needs the Steam copy of Kenshi."
+msgstr "Steam ve el juego como Kenshi: la superposición, el tiempo de juego y la tecla de captura de Steam. Requiere la copia de Kenshi de Steam."
+
+msgid "Steam workshop"
+msgstr "Workshop de Steam"
+
+msgid "Step down to the previous simulation speed."
+msgstr "Baja a la velocidad de simulación anterior."
+
+msgid "Step the selection's movement speed: walk, jog, run, group."
+msgstr "Cambia la velocidad de movimiento de la selección: caminar, trotar, correr, grupo."
+
+msgid "Step up to the next simulation speed."
+msgstr "Sube a la siguiente velocidad de simulación."
+
+msgid "Stop syncing"
+msgstr "Detener sincronización"
+
+msgid "Stop the selected characters."
+msgstr "Detiene a los personajes seleccionados."
+
+msgid "Store the game's models more compactly: about half the video memory, the same look."
+msgstr "Guarda los modelos del juego de forma más compacta: cerca de la mitad de memoria de vídeo, el mismo aspecto."
+
+msgid "Subscribe"
+msgstr "Suscribirse"
+
+msgid "Subscribe to this mod's Meitou port on the Steam workshop, or open its page"
+msgstr "Suscribirse a la adaptación a Meitou de este mod en el Workshop de Steam, o abrir su página"
+
+msgid "Subscribed on Steam: {1}."
+msgstr "Suscrito en Steam: {1}."
+
+msgid "Subscribing could not be started."
+msgstr "No se pudo iniciar la suscripción."
+
+msgid "Sun shadow technique"
+msgstr "Técnica de sombras del sol"
+
+msgid "Sun shadows"
+msgstr "Sombras del sol"
+
+msgid "Super quality"
+msgstr "Supercalidad"
+
+msgid "Support me on Ko-fi"
+msgstr "Apóyame en Ko-fi"
+
+msgid "Swamp turtle attacks"
+msgstr "Ataques de la tortuga del pantano"
+
+msgid "Swamp turtle attacks on the Fixes page"
+msgstr "Ataques de la tortuga del pantano en la página Correcciones"
+
+msgid "Swamp turtle attacks on the Fixes page is on"
+msgstr "Ataques de la tortuga del pantano en la página Correcciones está activado"
+
+msgid "Swap the left and right mouse buttons (the game: off; the game view follows, as in the original)."
+msgstr "Intercambia los botones izquierdo y derecho del ratón (el juego: desactivado; la vista del juego también, como en el original)."
+
+msgid "Swaps a few strong words in the dialogue for milder ones (the game's censorship option)."
+msgstr "Cambia algunas palabras fuertes del diálogo por otras más suaves (la opción de censura del juego)."
+
+msgid "Switch between orbit and free camera movement."
+msgstr "Alterna entre el movimiento de cámara en órbita y libre."
+
+msgid "Sync stopped with {1} of {2} workshop mods installed; Steam keeps downloading in the background."
+msgstr "La sincronización se detuvo con {1} de {2} mods del Workshop instalados; Steam sigue descargando en segundo plano."
+
+msgid "Sync workshop"
+msgstr "Sincronizar Workshop"
+
+msgid "TAA (experimental)"
+msgstr "TAA (experimental)"
+
+msgid "TAA 0.50 (experimental)"
+msgstr "TAA 0.50 (experimental)"
+
+msgid "THANK YOU"
+msgstr "GRACIAS"
+
+msgid "TRADER"
+msgstr "COMERCIANTE"
+
+msgid "Take picture"
+msgstr "Hacer foto"
+
+msgid "Take the mod list and load order a save was made with"
+msgstr "Tomar la lista de mods y el orden de carga con los que se hizo una partida"
+
+msgid "Take the mods and their load order from this save:"
+msgstr "Tomar los mods y su orden de carga de esta partida:"
+
+msgid "Tech level:"
+msgstr "Nivel tecnológico:"
+
+msgid "Tell us what went wrong or what you think. It becomes a public issue on GitHub, with your Meitou version and load order."
+msgstr "Cuéntanos qué ha fallado o qué opinas. Se convierte en una incidencia pública en GitHub, con tu versión de Meitou y tu orden de carga."
+
+msgid "Temperature"
+msgstr "Temperatura"
+
+msgid "Terrain"
+msgstr "Terreno"
+
+msgid "Terrain detail"
+msgstr "Detalle del terreno"
+
+msgid "Terrain detail: error px (less = finer)"
+msgstr "Detalle del terreno: error en px (menos = más fino)"
+
+msgid "Terrain material distance"
+msgstr "Distancia de materiales del terreno"
+
+msgid "Terrain outline refinement (tessellation)"
+msgstr "Refinado del contorno del terreno (teselado)"
+
+msgid "Terrain relief"
+msgstr "Relieve del terreno"
+
+msgid "Texture filtering"
+msgstr "Filtrado de texturas"
+
+msgid "Texture quality"
+msgstr "Calidad de texturas"
+
+msgid "Texture quality 0-4 (game)"
+msgstr "Calidad de texturas 0-4 (juego)"
+
+msgid "Texture resolution; terrain changes need a restart."
+msgstr "Resolución de las texturas; los cambios del terreno requieren reiniciar."
+
+msgid "That key is reserved. Choose another key, or Esc to cancel."
+msgstr "Esa tecla está reservada. Elige otra tecla, o Esc para cancelar."
+
+msgid "The DLSS model. Default picks by render scale; L and M ghost less than K and cost more."
+msgstr "El modelo de DLSS. Predeterminado elige según la escala de renderizado; L y M dejan menos estelas que K y cuestan más."
+
+msgid "The FEEDBACK button at the top right during play. Off, it still shows on the title screen and in the Esc menu."
+msgstr "El botón COMENTARIOS arriba a la derecha durante la partida. Desactivado, sigue apareciendo en la pantalla de título y en el menú Esc."
+
+msgid "The Rotate item control (the middle mouse button by default, Controls page) turns the inventory item on the mouse a quarter, or the item under the pointer in a character's grid, so long items fit across. Worn items are never turned. In the game items cannot be turned. From ErasmianFolly's GetRotatedIdiot."
+msgstr "El control Girar objeto (por defecto el botón central del ratón, página Controles) gira un cuarto de vuelta el objeto del inventario que llevas en el ratón, o el que está bajo el puntero en la cuadrícula de un personaje, para que los objetos largos quepan de través. Los objetos equipados nunca se giran. En el juego los objetos no se pueden girar. De GetRotatedIdiot de ErasmianFolly."
+
+msgid "The Vulkan loader is already installed. Select Vulkan to use it."
+msgstr "El cargador de Vulkan ya está instalado. Selecciona Vulkan para usarlo."
+
+msgid "The Vulkan loader is not installed: run 'brew install molten-vk vulkan-loader' in a terminal, then Play again."
+msgstr "El cargador de Vulkan no está instalado: ejecuta 'brew install molten-vk vulkan-loader' en un terminal y luego pulsa Jugar de nuevo."
+
+msgid "The Workshop sync could not be started."
+msgstr "No se pudo iniciar la sincronización del Workshop."
+
+msgid "The ash filling a half-buried Ash Dome ruin stays drawn while your characters are in it, and they are ordered onto it. The game hides the ground inside the ruin, showing buried floors nobody can reach under characters that seem to walk on air."
+msgstr "La ceniza que llena una ruina de Cúpula de Ceniza medio enterrada se sigue dibujando mientras tus personajes están en ella, y se les ordena sobre ella. El juego oculta el suelo dentro de la ruina y muestra suelos enterrados inalcanzables bajo personajes que parecen caminar en el aire."
+
+msgid "The bounty will expire in {1,num} hrs"
+msgstr "La recompensa caducará en {1,num} h"
+
+msgid "The cage is locked."
+msgstr "La jaula está cerrada con llave."
+
+msgid "The camera following a character looks higher than the game's point 10 units above its feet, and to one side if wanted, for a view from head height or over the shoulder. The free camera and the unlocked camera are not changed. From ErasmianFolly's Camera Tweaks."
+msgstr "La cámara que sigue a un personaje mira más arriba que el punto del juego, 10 unidades sobre sus pies, y hacia un lado si se quiere, para una vista a la altura de la cabeza o por encima del hombro. La cámara libre y la cámara desbloqueada no cambian. De Camera Tweaks de ErasmianFolly."
+
+msgid "The camera moves when the pointer is at the edge of the screen."
+msgstr "La cámara se mueve cuando el puntero está en el borde de la pantalla."
+
+msgid "The camera's height follows the character's head as it crouches, sits or lies down. On, the height slider is not used."
+msgstr "La altura de la cámara sigue la cabeza del personaje cuando se agacha, se sienta o se tumba. Activado, no se usa el control de altura."
+
+msgid "The camera's pan speed while Shift is held, of its normal speed."
+msgstr "La velocidad de desplazamiento de la cámara con Mayús pulsada, respecto a la normal."
+
+msgid "The camera's turn and tilt ease in and out (the game: always on). Off: they follow the mouse and the keys at once."
+msgstr "El giro y la inclinación de la cámara se suavizan al empezar y al parar (el juego: siempre activado). Desactivado: siguen al ratón y a las teclas al instante."
+
+msgid "The clipboard holds no preset code (MT1:...). Copy one with Share first."
+msgstr "El portapapeles no contiene ningún código de preajuste (MT1:...). Copia uno primero con Compartir."
+
+msgid "The clipboard holds no preset code (MT1:…). Copy one with Share first."
+msgstr "El portapapeles no contiene ningún código de preajuste (MT1:…). Copia uno primero con Compartir."
+
+msgid "The door will lock when it closes."
+msgstr "La puerta se cerrará con llave al cerrarse."
+
+msgid "The game as it ships, or Meitou with a look preset."
+msgstr "El juego tal como viene, o Meitou con un preajuste de estilo."
+
+msgid "The game is running: close it before detecting the preset."
+msgstr "El juego se está ejecutando: ciérralo antes de detectar el preajuste."
+
+msgid "The game is running: it saves its settings when it closes, over changes made here."
+msgstr "El juego se está ejecutando: guarda sus ajustes al cerrarse, sobrescribiendo los cambios hechos aquí."
+
+msgid "The game speed of the second speed button (two arrows) and its key (the game: 2x)."
+msgstr "La velocidad del segundo botón de velocidad (dos flechas) y su tecla (el juego: 2x)."
+
+msgid "The game speed of the third speed button (three arrows) and its key (the game: 5x). High speeds need a fast processor; when it cannot keep up the game runs slower than chosen."
+msgstr "La velocidad del tercer botón de velocidad (tres flechas) y su tecla (el juego: 5x). Las velocidades altas necesitan un procesador rápido; cuando no da abasto, el juego va más lento de lo elegido."
+
+msgid "The game's cascades, Meitou's soft cascades to the horizon, ray-traced shadows, or ray-traced near and soft cascades further away (both need ray tracing and turn on global illumination)."
+msgstr "Las cascadas del juego, las cascadas suaves de Meitou hasta el horizonte, sombras con trazado de rayos, o trazado de rayos cerca y cascadas suaves más lejos (ambas requieren trazado de rayos y activan la iluminación global)."
+
+msgid "The green marker on the camera's pivot while you turn it (the game: on)."
+msgstr "El marcador verde en el pivote de la cámara mientras la giras (el juego: activado)."
+
+msgid "The green marker where a move order sends your characters (the game: on)."
+msgstr "El marcador verde donde una orden de movimiento envía a tus personajes (el juego: activado)."
+
+msgid "The hats of every other character are left out the same way, not only your own characters'."
+msgstr "Los sombreros de todos los demás personajes se omiten del mismo modo, no solo los de tus personajes."
+
+msgid "The icon of what a right click would do beside the Windows cursor (none for a walk), and the hand over buttons and targets."
+msgstr "El icono de lo que haría un clic derecho junto al cursor de Windows (ninguno para caminar), y la mano sobre botones y objetivos."
+
+msgid "The launch arguments have --benchmark-baseline: the game ignores the graphics sliders while it is set."
+msgstr "Los argumentos de inicio incluyen --benchmark-baseline: el juego ignora los controles gráficos mientras esté puesto."
+
+msgid "The launch arguments have --low-end: the game ignores the graphics sliders while it is set."
+msgstr "Los argumentos de inicio incluyen --low-end: el juego ignora los controles gráficos mientras esté puesto."
+
+msgid "The launcher's and the game's settings: {1}"
+msgstr "Los ajustes del lanzador y del juego: {1}"
+
+msgid "The lens's f-number: lower blurs more. A cinema key can set its own."
+msgstr "El número f del objetivo: más bajo desenfoca más. Una clave de cine puede fijar el suyo."
+
+msgid "The load window's Load button works only once a save that can be read is selected. The game keeps it live: with nothing selected a click does nothing, and an unreadable save fails to load."
+msgstr "El botón Cargar de la ventana de carga solo funciona cuando hay seleccionada una partida que se puede leer. El juego lo deja activo: sin nada seleccionado un clic no hace nada, y una partida ilegible no se carga."
+
+msgid "The mod list is still loading; try again in a moment."
+msgstr "La lista de mods aún se está cargando; inténtalo de nuevo en un momento."
+
+msgid "The mod order already meets every dependency."
+msgstr "El orden de los mods ya cumple todas las dependencias."
+
+msgid "The most blood marks on walls and objects and bloody footprints drawn in a frame, the ones that look largest first."
+msgstr "El máximo de manchas de sangre en paredes y objetos y huellas ensangrentadas dibujadas por fotograma, primero las que se ven más grandes."
+
+msgid "The most sounds heard at once: the loudest play, quieter ones wait silently and come back when they are loud enough. Lower it if big fights stutter; All mixes every sound."
+msgstr "El máximo de sonidos oídos a la vez: suenan los más fuertes, los más débiles esperan en silencio y vuelven cuando suenan lo bastante. Bájalo si las grandes peleas dan tirones; Todos mezcla todos los sonidos."
+
+msgid "The name over each of your characters (the game's Show names option). Off, only the stealth and light icons stay."
+msgstr "El nombre sobre cada uno de tus personajes (la opción Mostrar nombres del juego). Desactivado, solo quedan los iconos de sigilo y de luz."
+
+msgid "The plugins of these RE_Kenshi mods do not run in Meitou."
+msgstr "Los plugins de estos mods de RE_Kenshi no funcionan en Meitou."
+
+msgid "The same for everyone outside your faction: other factions, enemies and wild animals (the game: 1x)."
+msgstr "Lo mismo para todos los que no son de tu facción: otras facciones, enemigos y animales salvajes (el juego: 1x)."
+
+msgid "The save '{1}' has no mod list."
+msgstr "La partida '{1}' no tiene lista de mods."
+
+msgid "The save '{1}' was made with other mods ({2}); Mods > From save applies its list."
+msgstr "La partida '{1}' se hizo con otros mods ({2}); Mods > De una partida aplica su lista."
+
+msgid "The selected carriers put their bodies down."
+msgstr "Los portadores seleccionados sueltan los cuerpos."
+
+msgid "The selection looks for someone to rescue (Shift: add the rescue job)."
+msgstr "La selección busca a alguien a quien rescatar (Mayús: añadir el trabajo de rescate)."
+
+msgid "The selection looks for someone to treat (Shift: add the medic job)."
+msgstr "La selección busca a alguien a quien curar (Mayús: añadir el trabajo de médico)."
+
+msgid "The selection sits down to rest."
+msgstr "La selección se sienta a descansar."
+
+msgid "The size of the whole interface: text, buttons and windows (100%: as the window's height makes it)."
+msgstr "El tamaño de toda la interfaz: texto, botones y ventanas (100%: según la altura de la ventana)."
+
+msgid "The size the scene renders at in full screen, stretched to the screen with the nearest pixel. In a window it is the window's size."
+msgstr "El tamaño al que se renderiza la escena en pantalla completa, estirado a la pantalla con el píxel más cercano. En ventana es el tamaño de la ventana."
+
+msgid "The sky's light in shade, at night and indoors."
+msgstr "La luz del cielo a la sombra, de noche y en interiores."
+
+msgid "The sun's shadows: off, the game's cascades, or Meitou's, soft and to the horizon or ray traced. The lamps' shadows are inside."
+msgstr "Las sombras del sol: desactivadas, las cascadas del juego, o las de Meitou, suaves y hasta el horizonte o con trazado de rayos. Las sombras de las lámparas están en Interior."
+
+msgid "The unit of the run speed in the character's information panel (the game: mph)."
+msgstr "La unidad de la velocidad de carrera en el panel de información del personaje (el juego: mph)."
+
+msgid "The wind's sound ends when the wind dies down. The game asks for a stop sound that does not exist, so once the wind has blown it never goes quiet."
+msgstr "El sonido del viento termina cuando el viento amaina. El juego pide un sonido de parada que no existe, así que una vez que el viento ha soplado nunca se calla."
+
+msgid "There are no problems to copy."
+msgstr "No hay problemas que copiar."
+
+msgid "These can be changed later in Settings. You can install Meitou now and add Kenshi afterwards."
+msgstr "Se pueden cambiar después en Ajustes. Puedes instalar Meitou ahora y añadir Kenshi más tarde."
+
+msgid "These dependencies contradict each other, so nothing was moved:"
+msgstr "Estas dependencias se contradicen, así que no se movió nada:"
+
+msgid "Thin grass stays visible far away instead of fading out. Off: as the original."
+msgstr "La hierba fina sigue visible a lo lejos en lugar de desvanecerse. Desactivado: como el original."
+
+msgid "This Meitou version does not include Metal; choose Vulkan or install a newer version."
+msgstr "Esta versión de Meitou no incluye Metal; elige Vulkan o instala una versión más reciente."
+
+msgid "This Meitou version has no Metal renderer and no Vulkan loader; install a newer version or MoltenVK."
+msgstr "Esta versión de Meitou no tiene renderizador Metal ni cargador de Vulkan; instala una versión más reciente o MoltenVK."
+
+msgid "This machine is switched Off"
+msgstr "Esta máquina está apagada"
+
+msgid "This save file is currently in use and cannot be deleted"
+msgstr "Este archivo de partida está en uso y no se puede eliminar"
+
+msgid "Tick every mod the search shows"
+msgstr "Marcar todos los mods que muestra la búsqueda"
+
+msgid "Tilt the view downward: the camera rises."
+msgstr "Inclinar la vista hacia abajo: la cámara sube."
+
+msgid "Tilt the view upward: the camera comes down."
+msgstr "Inclinar la vista hacia arriba: la cámara baja."
+
+msgid "Time"
+msgstr "Hora"
+
+msgid "Time of day"
+msgstr "Hora del día"
+
+msgid "Time speed"
+msgstr "Velocidad del tiempo"
+
+msgid "Time:"
+msgstr "Hora:"
+
+msgid "Tint"
+msgstr "Tinte"
+
+msgid "Tone map"
+msgstr "Mapeo de tonos"
+
+msgid "Tone map (0 = game)"
+msgstr "Mapeo de tonos (0 = juego)"
+
+msgid "Tone map and grade"
+msgstr "Mapeo de tonos y gradación"
+
+msgid "Towns change far away"
+msgstr "Las ciudades cambian a lo lejos"
+
+msgid "Towns keep their schedule"
+msgstr "Las ciudades siguen su horario"
+
+msgid "Townspeople you come back to after an hour or more are where their day puts them: in bed at night, at the counter, at their posts and seats. In the game they are where they stood when you left."
+msgstr "Los habitantes a los que vuelves tras una hora o más están donde los pone su día: en la cama de noche, en el mostrador, en sus puestos y asientos. En el juego están donde estaban cuando te fuiste."
+
+msgid "Traced (ray tracing)"
+msgstr "Trazado (trazado de rayos)"
+
+msgid "Traced grass shadows"
+msgstr "Sombras de hierba con trazado de rayos"
+
+msgid "Traced near, cascades far"
+msgstr "Trazado de rayos cerca, cascadas lejos"
+
+msgid "Traced sun shadows"
+msgstr "Sombras del sol con trazado de rayos"
+
+msgid "Trees close to the camera fade out round the middle of the view (not in the free camera). Off: as the original."
+msgstr "Los árboles cercanos a la cámara se desvanecen hacia el centro de la vista (no en la cámara libre). Desactivado: como el original."
+
+msgid "Turn"
+msgstr "Girar"
+
+msgid "Turn sneaking of the selection on or off."
+msgstr "Activa o desactiva el sigilo de la selección."
+
+msgid "Turn the Block order of the selection on or off."
+msgstr "Activa o desactiva la orden Bloquear de la selección."
+
+msgid "Turn the Hold position order of the selection on or off."
+msgstr "Activa o desactiva la orden Mantener posición de la selección."
+
+msgid "Turn the Jobs order of the selection on or off."
+msgstr "Activa o desactiva la orden Trabajos de la selección."
+
+msgid "Turn the Passive order of the selection on or off."
+msgstr "Activa o desactiva la orden Pasivo de la selección."
+
+msgid "Turn the Ranged order of the selection on or off."
+msgstr "Activa o desactiva la orden A distancia de la selección."
+
+msgid "Turn the Taunt order of the selection on or off."
+msgstr "Activa o desactiva la orden Provocar de la selección."
+
+msgid "Turning"
+msgstr "Giro"
+
+msgid "Turns the inventory item on the mouse, or the one under the pointer, a quarter (needs Item rotation on the Advanced page)."
+msgstr "Gira un cuarto de vuelta el objeto del inventario que llevas en el ratón, o el que está bajo el puntero (requiere Rotación de objetos en la página Avanzado)."
+
+msgid "Turret gunners turn"
+msgstr "Los artilleros de torreta giran"
+
+msgid "Two highlights along the strands of hair and beards."
+msgstr "Dos brillos a lo largo de los mechones de pelo y las barbas."
+
+msgid "Type a name for the preset."
+msgstr "Escribe un nombre para el preajuste."
+
+msgid "Type a name, or press Esc to cancel."
+msgstr "Escribe un nombre, o pulsa Esc para cancelar."
+
+msgid "Type a value    Enter applies it    Esc cancels    Time of day as 13:30"
+msgstr "Escribe un valor    Intro lo aplica    Esc cancela    Hora del día como 13:30"
+
+msgid "Type the preset's name, Enter keeps it, Esc cancels."
+msgstr "Escribe el nombre del preajuste, Intro lo guarda, Esc cancela."
+
+msgid "UI style"
+msgstr "Estilo de interfaz"
+
+msgid "Ultra"
+msgstr "Ultra"
+
+msgid "Ultra performance"
+msgstr "Ultra rendimiento"
+
+msgid "Ultra quality"
+msgstr "Ultra calidad"
+
+msgid "Unable to read save:\n"
+msgstr "No se puede leer la partida:\n"
+
+msgid "Unavailable"
+msgstr "No disponible"
+
+msgid "Unbound"
+msgstr "Sin asignar"
+
+msgid "Uninstall"
+msgstr "Desinstalar"
+
+msgid "Unlimited"
+msgstr "Ilimitado"
+
+msgid "Unlock Doors"
+msgstr "Abrir puertas"
+
+msgid "Unpacking {1}..."
+msgstr "Descomprimiendo {1}..."
+
+msgid "Unstable: daily builds of the newest code, untested. They may crash or corrupt save files; off, only full releases are offered."
+msgstr "Inestable: compilaciones diarias del código más nuevo, sin probar. Pueden fallar o corromper partidas; desactivado, solo se ofrecen versiones completas."
+
+msgid "Untick every mod the search shows"
+msgstr "Desmarcar todos los mods que muestra la búsqueda"
+
+msgid "Update launcher to {1}"
+msgstr "Actualizar el lanzador a {1}"
+
+msgid "Update the launcher automatically"
+msgstr "Actualizar el lanzador automáticamente"
+
+msgid "Update to {1}"
+msgstr "Actualizar a {1}"
+
+msgid "Updated on the workshop on {1}, after Meitou last checked it: some new features may be missing"
+msgstr "Actualizado en el Workshop el {1}, después de la última comprobación de Meitou: pueden faltar algunas funciones nuevas"
+
+msgid "Updating the launcher: {1}%"
+msgstr "Actualizando el lanzador: {1}%"
+
+msgid "Upscaler sharpness"
+msgstr "Nitidez del reescalador"
+
+msgid "Upscaling"
+msgstr "Reescalado"
+
+msgid "Use Meitou's atmospheric haze tuning."
+msgstr "Usar el ajuste de neblina atmosférica de Meitou."
+
+msgid "Use Meitou's reduced heat distortion strength."
+msgstr "Usar la intensidad reducida de distorsión por calor de Meitou."
+
+msgid "Use Metal upscaling"
+msgstr "Usar el reescalado de Metal"
+
+msgid "Use extended object and landmark visibility ranges."
+msgstr "Usar distancias de visibilidad ampliadas para objetos y puntos de referencia."
+
+msgid "Use generated simpler meshes for distant characters."
+msgstr "Usar mallas simplificadas generadas para personajes lejanos."
+
+msgid "Use generated simpler meshes for distant foliage."
+msgstr "Usar mallas simplificadas generadas para vegetación lejana."
+
+msgid "Use hybrid tone mapping and scene colour grading."
+msgstr "Usar mapeo de tonos híbrido y gradación de color de la escena."
+
+msgid "Use light probes for bounced and ambient lighting."
+msgstr "Usar sondas de luz para la iluminación rebotada y ambiental."
+
+msgid "Use soft shadows and include distant terrain."
+msgstr "Usar sombras suaves e incluir el terreno lejano."
+
+msgid "Use temporal smoothing and upscaling instead of FXAA."
+msgstr "Usar suavizado temporal y reescalado en lugar de FXAA."
+
+msgid "Use the Windows cursor instead of the game's drawn pointer (no hover pointers unless Enhanced hardware mouse is on)."
+msgstr "Usar el cursor de Windows en lugar del puntero dibujado del juego (sin punteros al pasar por encima salvo que Ratón por hardware mejorado esté activado)."
+
+msgid "Use the depth of field in the strategy camera too."
+msgstr "Usar la profundidad de campo también en la cámara de estrategia."
+
+msgid "VERSIONS"
+msgstr "VERSIONES"
+
+msgid "Vanilla colours"
+msgstr "Colores originales"
+
+msgid "Vegetation"
+msgstr "Vegetación"
+
+msgid "Version {1} for {2}. Not installed by its Setup, so updates open the release page."
+msgstr "Versión {1} para {2}. No se instaló con su instalador, así que las actualizaciones abren la página de la versión."
+
+msgid "Version {1} for {2}. Updates itself from GitHub."
+msgstr "Versión {1} para {2}. Se actualiza sola desde GitHub."
+
+msgid "Version {1}. The update check failed: {2}"
+msgstr "Versión {1}. La comprobación de actualizaciones falló: {2}"
+
+msgid "Versions"
+msgstr "Versiones"
+
+msgid "Video memory for billboard images. Automatic follows the card's memory."
+msgstr "Memoria de vídeo para las imágenes de billboards. Automático sigue la memoria de la tarjeta."
+
+msgid "View the next higher building floor."
+msgstr "Ver la siguiente planta superior del edificio."
+
+msgid "View the next lower building floor."
+msgstr "Ver la siguiente planta inferior del edificio."
+
+msgid "Vignette"
+msgstr "Viñeta"
+
+msgid "Vignette strength"
+msgstr "Intensidad de la viñeta"
+
+msgid "Volume of combat, building and other sound effects."
+msgstr "Volumen del combate, la construcción y otros efectos de sonido."
+
+msgid "Volume of footsteps."
+msgstr "Volumen de los pasos."
+
+msgid "Volume of the biome music and the main theme."
+msgstr "Volumen de la música de los biomas y del tema principal."
+
+msgid "Volume of the interface sounds."
+msgstr "Volumen de los sonidos de la interfaz."
+
+msgid "Volume of the voices."
+msgstr "Volumen de las voces."
+
+msgid "Volume of the weather and the world's ambience."
+msgstr "Volumen del clima y del ambiente del mundo."
+
+msgid "Vulkan (MoltenVK loader found)."
+msgstr "Vulkan (cargador de MoltenVK encontrado)."
+
+msgid "Vulkan (MoltenVK)"
+msgstr "Vulkan (MoltenVK)"
+
+msgid "Vulkan loader found. Select Vulkan to use it."
+msgstr "Cargador de Vulkan encontrado. Selecciona Vulkan para usarlo."
+
+msgid "Wait for the download to finish first."
+msgstr "Espera primero a que termine la descarga."
+
+msgid "Walls inside buildings"
+msgstr "Paredes dentro de edificios"
+
+msgid "Want to look at them on Steam?"
+msgstr "¿Quieres verlos en Steam?"
+
+msgid "Water & reflections"
+msgstr "Agua y reflejos"
+
+msgid "Water beads"
+msgstr "Gotas de agua"
+
+msgid "Water clarity multiplier"
+msgstr "Multiplicador de claridad del agua"
+
+msgid "Water clarity x (Meitou)"
+msgstr "Claridad del agua x (Meitou)"
+
+msgid "Water contact foam, wakes and ripples"
+msgstr "Espuma de contacto, estelas y ondas del agua"
+
+msgid "Water grid segments"
+msgstr "Segmentos de la malla de agua"
+
+msgid "Water reflection 0-4 (game)"
+msgstr "Reflejos del agua 0-4 (juego)"
+
+msgid "Water see-through distance"
+msgstr "Distancia de visión a través del agua"
+
+msgid "Water see-through distance (Meitou, game 4000)"
+msgstr "Distancia de visión a través del agua (Meitou, juego 4000)"
+
+msgid "Water wave resolution"
+msgstr "Resolución de las olas"
+
+msgid "Water wave resolution (FFT size)"
+msgstr "Resolución de las olas (tamaño de FFT)"
+
+msgid "Weak punch reach"
+msgstr "Alcance del puñetazo débil"
+
+msgid "Weapon"
+msgstr "Arma"
+
+msgid "Weapons, armour plates, prosthetics and robots read as metal."
+msgstr "Las armas, placas de armadura, prótesis y robots se ven metálicos."
+
+msgid "Weather Protections"
+msgstr "Protección contra el clima"
+
+msgid "Weather particles"
+msgstr "Partículas del clima"
+
+msgid "Weather particles: 0 off 1 quarter 2 half 3 auto 4 full"
+msgstr "Partículas del clima: 0 desactivadas 1 cuarto 2 mitad 3 auto 4 completas"
+
+msgid "What happened"
+msgstr "Qué ha pasado"
+
+msgid "When a destroyed limb is cut off: Rare only by a single heavy blow, Frequent also when a wound worsens (the game: Rare)."
+msgstr "Cuándo se corta una extremidad destruida: Raro solo con un único golpe fuerte, Frecuente también cuando una herida empeora (el juego: Raro)."
+
+msgid "Where game versions are downloaded and installed (in its versions folder)."
+msgstr "Dónde se descargan e instalan las versiones del juego (en su carpeta versions)."
+
+msgid "Where the haze is complete: farther shows more land."
+msgstr "Dónde la neblina es total: más lejos muestra más terreno."
+
+msgid "Where versions are installed; changing it asks whether they move."
+msgstr "Dónde se instalan las versiones; al cambiarlo se pregunta si se mueven."
+
+msgid "While building: drop the wall line being laid, else the last queued building."
+msgstr "Al construir: descartar la línea de muro que se está trazando, si no el último edificio en cola."
+
+msgid "While building: lower the held building (Shift: slowly)."
+msgstr "Al construir: bajar el edificio que sostienes (Mayús: despacio)."
+
+msgid "While building: queue the held building where it stands, as a left click does."
+msgstr "Al construir: poner en cola el edificio que sostienes donde está, como hace un clic izquierdo."
+
+msgid "While building: raise the held building (Shift: slowly)."
+msgstr "Al construir: subir el edificio que sostienes (Mayús: despacio)."
+
+msgid "While building: tilt the held building less, towards level."
+msgstr "Al construir: inclinar menos el edificio que sostienes, hacia la horizontal."
+
+msgid "While building: tilt the held building more to the slope of the ground."
+msgstr "Al construir: inclinar más el edificio que sostienes según la pendiente del suelo."
+
+msgid "While building: turn the held building left. Build keys may share keys with the others."
+msgstr "Al construir: girar a la izquierda el edificio que sostienes. Las teclas de construcción pueden compartir teclas con las demás."
+
+msgid "While building: turn the held building right."
+msgstr "Al construir: girar a la derecha el edificio que sostienes."
+
+msgid "White brightness"
+msgstr "Brillo del blanco"
+
+msgid "Wild squads stay"
+msgstr "Los escuadrones errantes se quedan"
+
+msgid "Will not load: {1}"
+msgstr "No se cargará: {1}"
+
+msgid "Wind stops"
+msgstr "El viento se detiene"
+
+msgid "Window"
+msgstr "Ventana"
+
+msgid "Workers"
+msgstr "Trabajadores"
+
+msgid "Workshop synchronised: {1} of {2} mods installed."
+msgstr "Workshop sincronizado: {1} de {2} mods instalados."
+
+msgid "World tick alongside drawing"
+msgstr "Tick del mundo en paralelo al dibujado"
+
+msgid "You can only hire {1} more characters"
+msgstr "Solo puedes contratar {1} personajes más"
+
+msgid "You can subscribe on the Steam workshop page instead."
+msgstr "En su lugar puedes suscribirte en la página del Workshop de Steam."
+
+msgid "You have no subscribed Kenshi workshop mods."
+msgstr "No tienes ningún mod de Kenshi suscrito en el Workshop."
+
+msgid "You will die at {1}"
+msgstr "Morirás a {1}"
+
+msgid "Your display's brightest level, in nits."
+msgstr "El nivel más brillante de tu pantalla, en nits."
+
+msgid "[Crafted by {1}]"
+msgstr "[Fabricado por {1}]"
+
+msgid "[Location already known]"
+msgstr "[Lugar ya conocido]"
+
+msgid ""
+"[Right-click to learn new map locations]\n"
+"Towns:\n"
+msgstr ""
+"[Clic derecho para conocer nuevos lugares del mapa]\n"
+"Ciudades:\n"
+
+msgid "a file field without a value"
+msgstr "un campo de archivo sin valor"
+
+msgid "a string field without a value"
+msgstr "un campo de texto sin valor"
+
+msgid "against banding in smooth gradients; the game has none"
+msgstr "contra el bandeado en degradados suaves; el juego no tiene"
+
+msgid "an image is named by a path relative to the mod's folder"
+msgstr "una imagen se nombra con una ruta relativa a la carpeta del mod"
+
+msgid "an instance without an id or target"
+msgstr "una instancia sin id ni destino"
+
+msgid "assembly, so its EditData does not run (declare IModDataPhase on the entry type)"
+msgstr "ensamblado, así que su EditData no se ejecuta (declara IModDataPhase en el tipo de entrada)"
+
+msgid "auto (centre)"
+msgstr "auto (centro)"
+
+msgid "black & white"
+msgstr "blanco y negro"
+
+msgid "black haze"
+msgstr "neblina negra"
+
+msgid "blades, armour, clothing"
+msgstr "hojas, armadura, ropa"
+
+msgid "bounced light"
+msgstr "luz rebotada"
+
+msgid "built in"
+msgstr "integrado"
+
+msgid "bumps fade"
+msgstr "los relieves se desvanecen"
+
+msgid "by size"
+msgstr "por tamaño"
+
+msgid "clamp (as the game)"
+msgstr "recorte (como el juego)"
+
+msgid "click to cancel"
+msgstr "clic para cancelar"
+
+msgid "darker corners"
+msgstr "esquinas más oscuras"
+
+msgid "day and night"
+msgstr "día y noche"
+
+msgid "fixed sun"
+msgstr "sol fijo"
+
+msgid "flat ambient"
+msgstr "ambiente plano"
+
+msgid "flat haze"
+msgstr "neblina plana"
+
+msgid "flat night"
+msgstr "noche plana"
+
+msgid "foam, waves"
+msgstr "espuma, olas"
+
+msgid "full detail"
+msgstr "detalle completo"
+
+msgid "full size"
+msgstr "tamaño completo"
+
+msgid "game data"
+msgstr "datos del juego"
+
+msgid "gameplay change"
+msgstr "cambio de jugabilidad"
+
+msgid "generated levels"
+msgstr "niveles generados"
+
+msgid "hair, cloth, skin, eyes, metal"
+msgstr "pelo, tela, piel, ojos, metal"
+
+msgid "hard-edged, flat"
+msgstr "bordes duros, plano"
+
+msgid "head turning"
+msgstr "giro de la cabeza"
+
+msgid "hybrid (clamp + ACES)"
+msgstr "híbrido (recorte + ACES)"
+
+msgid "hybrid, graded"
+msgstr "híbrido, con gradación"
+
+msgid "its game data changes failed to apply"
+msgstr "no se pudieron aplicar sus cambios en los datos del juego"
+
+msgid "its multiplier is now Squad XP in the Advanced settings (per-skill multipliers are not kept)"
+msgstr "su multiplicador ahora es XP del escuadrón en los ajustes Avanzados (no se conservan los multiplicadores por habilidad)"
+
+msgid "key light"
+msgstr "luz principal"
+
+msgid "latest nightly"
+msgstr "última nightly"
+
+msgid "lighter haze keeps far mountains visible"
+msgstr "una neblina más ligera mantiene visibles las montañas lejanas"
+
+msgid "low resolution"
+msgstr "baja resolución"
+
+msgid "luckyren Mode"
+msgstr "Modo luckyren"
+
+msgid "metal textures"
+msgstr "texturas metálicas"
+
+msgid "near, cascades far"
+msgstr "cerca, cascadas lejos"
+
+msgid "night only"
+msgstr "solo de noche"
+
+msgid "nightly"
+msgstr "nightly"
+
+msgid "no name"
+msgstr "sin nombre"
+
+msgid "no string id"
+msgstr "sin id de texto"
+
+msgid "no {1} build"
+msgstr "no hay compilación para {1}"
+
+msgid "not enabled: {1}"
+msgstr "no activado: {1}"
+
+msgid "not in the save: {1}"
+msgstr "no está en la partida: {1}"
+
+msgid "off (as the game)"
+msgstr "desactivado (como el juego)"
+
+msgid "off (uncapped)"
+msgstr "desactivado (sin límite)"
+
+msgid "off while the HDR output is on"
+msgstr "desactivado mientras la salida HDR esté activada"
+
+msgid "on the land"
+msgstr "en tierra"
+
+msgid "original ambient"
+msgstr "ambiente original"
+
+msgid "own animation"
+msgstr "animación propia"
+
+msgid "per layer"
+msgstr "por capa"
+
+msgid "per-face tangents"
+msgstr "tangentes por cara"
+
+msgid "planet light"
+msgstr "luz planetaria"
+
+msgid "ray-traced probes"
+msgstr "sondas con trazado de rayos"
+
+msgid "relief march"
+msgstr "relief march"
+
+msgid "scotopic blue"
+msgstr "azul escotópico"
+
+msgid "shadowed haze"
+msgstr "neblina sombreada"
+
+msgid "sky only"
+msgstr "solo cielo"
+
+msgid "soft, far terrain"
+msgstr "suaves, terreno lejano"
+
+msgid "soft, lit"
+msgstr "suave, iluminado"
+
+msgid "starfield texture"
+msgstr "textura de campo de estrellas"
+
+msgid "strength 1"
+msgstr "intensidad 1"
+
+msgid "terrain only"
+msgstr "solo terreno"
+
+msgid "the Ambient occlusion switch's method (it needs that switch on): Meitou's SSAO is a cheap estimate; GTAO searches each pixel's horizon, measures how much sky it really sees, and keeps the colour of the light that bounces in a corner. Costs more; off by default"
+msgstr "el método del interruptor Oclusión ambiental (requiere ese interruptor activado): el SSAO de Meitou es una estimación barata; GTAO recorre el horizonte de cada píxel, mide cuánto cielo ve realmente y conserva el color de la luz que rebota en una esquina. Cuesta más; desactivado por defecto"
+
+msgid "the extension belongs to no mod folder"
+msgstr "la extensión no pertenece a ninguna carpeta de mod"
+
+msgid "the file could not be opened: "
+msgstr "no se pudo abrir el archivo: "
+
+msgid "the file could not be read as an image"
+msgstr "no se pudo leer el archivo como imagen"
+
+msgid "the file does not exist"
+msgstr "el archivo no existe"
+
+msgid "the file is not a PNG or DDS image"
+msgstr "el archivo no es una imagen PNG o DDS"
+
+msgid "the file is too short to be an image"
+msgstr "el archivo es demasiado corto para ser una imagen"
+
+msgid "the game draws every dust, ash and rain sprite at the full picture size, which is a fill-rate cost when big sprites pile up (a dust storm); Meitou draws the alpha and additive ones into a quarter-area (half per axis) target and blends it back, depth-aware, for a fraction of the cost"
+msgstr "el juego dibuja cada sprite de polvo, ceniza y lluvia al tamaño completo de la imagen, lo que cuesta tasa de relleno cuando se acumulan sprites grandes (una tormenta de polvo); Meitou dibuja los alfa y aditivos en un destino de un cuarto del área (la mitad por eje) y lo mezcla de vuelta teniendo en cuenta la profundidad, por una fracción del coste"
+
+msgid "the game draws every foliage mesh at full detail, and TERRAIN-mode rocks and plants (some thousands of triangles each) have no LOD levels; Meitou makes coarser levels at load (quadric edge collapse, kept in a disk cache) and picks one per instance by how many pixels (shadow texels) its deviation would show"
+msgstr "el juego dibuja cada malla de vegetación con detalle completo, y las rocas y plantas del modo TERRAIN (unos miles de triángulos cada una) no tienen niveles de LOD; Meitou crea niveles más toscos al cargar (quadric edge collapse, guardados en una caché en disco) y elige uno por instancia según cuántos píxeles (texels de sombra) mostraría su desviación"
+
+msgid "the game draws every foliage mesh in full out to its range; Meitou draws large and medium meshes beyond the impostor distance (Tab slider) as baked billboards, crossfaded, which also stand in as shadow casters far out"
+msgstr "el juego dibuja cada malla de vegetación completa hasta su alcance; Meitou dibuja las mallas grandes y medianas más allá de la distancia de impostores (control Tab) como billboards precalculados, con fundido, que también hacen de proyectores de sombra a lo lejos"
+
+msgid "the game draws hard-edged cascades that end abruptly at the shadow range; Meitou fits them to the view, filters them softly with contact-hardening penumbrae, blends the cascades, and lets mountains shadow the land out to the horizon"
+msgstr "el juego dibuja cascadas de bordes duros que terminan de golpe en el alcance de las sombras; Meitou las ajusta a la vista, las filtra suavemente con penumbras que se endurecen en el contacto, mezcla las cascadas y deja que las montañas sombreen el terreno hasta el horizonte"
+
+msgid "the game ends all of a layer's meshes at one range (1000 x foliage range for most: trees, ruins, junk and litter alike); Meitou draws large meshes (trees, ruins, wrecks, rock stacks) far, medium ones (junk, boulders, bushes) midway and small ones (litter, small plants) near, each class with its own Tab slider"
+msgstr "el juego termina todas las mallas de una capa en un solo alcance (1000 x alcance de vegetación en la mayoría: árboles, ruinas, chatarra y basura por igual); Meitou dibuja las mallas grandes (árboles, ruinas, restos, pilas de rocas) lejos, las medianas (chatarra, rocas, arbustos) a media distancia y las pequeñas (basura, plantas pequeñas) cerca, cada clase con su propio control Tab"
+
+msgid "the game has no grading, so night is the day's saturated browns and oranges, darkened; Meitou shifts dim colour towards the rods' blue-grey as the scene's adapted luminance falls (the Purkinje shift), keeping lamps, fires and the moon in colour (the Tab slider sets the strength)"
+msgstr "el juego no tiene gradación, así que la noche son los marrones y naranjas saturados del día, oscurecidos; Meitou desplaza los colores tenues hacia el gris azulado de los bastones a medida que baja la luminancia adaptada de la escena (el efecto Purkinje), manteniendo en color las lámparas, los fuegos y la luna (el control Tab fija la intensidad)"
+
+msgid "the game has no tone curve (bright skies and sunlit sand clip flat at white) and no grading; Meitou blends the clip with ACES (the Tab slider sets the share, 0.75) so highlights roll off, then grades saturation 1.06 and contrast 1.05"
+msgstr "el juego no tiene curva tonal (los cielos brillantes y la arena soleada se recortan planos en blanco) ni gradación; Meitou mezcla el recorte con ACES (el control Tab fija la proporción, 0.75) para que las luces altas se suavicen, y luego gradúa la saturación a 1.06 y el contraste a 1.05"
+
+msgid "the game lights every bump of a normal map as if nothing stood between it and the sun, so ground and walls the sun only grazes break into bright and black patches, and bumps stay lit on a surface facing away; Meitou fades the normal map out of the sun's light as the sun nears the surface's own plane (from 24 degrees down to 6), where the bumps would shadow each other"
+msgstr "el juego ilumina cada relieve de un normal map como si nada se interpusiera entre él y el sol, así que el suelo y las paredes que el sol solo roza se rompen en manchas claras y negras, y los relieves siguen iluminados en una superficie orientada al lado contrario; Meitou desvanece el normal map de la luz del sol a medida que el sol se acerca al plano de la superficie (de 24 a 6 grados), donde los relieves se sombrearían entre sí"
+
+msgid "the game ships SSAO but has it disabled"
+msgstr "el juego incluye SSAO pero lo tiene desactivado"
+
+msgid "the game stands the character being edited on a platform over bare ground; Meitou can stand it in a bar at night instead, drawn with your graphics settings"
+msgstr "el juego coloca al personaje que se edita sobre una plataforma encima de suelo desnudo; Meitou puede colocarlo en un bar de noche, dibujado con tus ajustes gráficos"
+
+msgid "the game uses FXAA; Meitou uses a temporal method (TAA, FSR or DLSS: the Tab panel chooses, FSR and DLSS need their libraries)"
+msgstr "el juego usa FXAA; Meitou usa un método temporal (TAA, FSR o DLSS: el panel Tab elige, FSR y DLSS necesitan sus bibliotecas)"
+
+msgid "the game's"
+msgstr "las del juego"
+
+msgid "the game's buildings are matte unless a material names a metalness map, and few do; Meitou treats the textures of plate, tank and machinery as metal where they have no colour of their own, so rust and paint stay matte"
+msgstr "los edificios del juego son mates salvo que un material indique un mapa de metalicidad, y pocos lo hacen; Meitou trata como metal las texturas de chapa, tanques y maquinaria donde no tienen color propio, así que el óxido y la pintura siguen mates"
+
+msgid "the game's colours"
+msgstr "los colores del juego"
+
+msgid "the game's glossy and rain-wet surfaces reflect one fixed sky picture, indoors and under a roof too; Meitou replaces it with what they really mirror (the screen, then a traced ray where the device has them, the sky past both), fading with roughness, and darkens the sky's reflection where the probes see no sky. Water keeps its own reflection. Off by default: not yet seen on a GPU"
+msgstr "las superficies brillantes y mojadas por la lluvia del juego reflejan una imagen fija del cielo, también en interiores y bajo techo; Meitou la sustituye por lo que realmente reflejan (la pantalla, luego un rayo trazado donde el dispositivo los tiene, el cielo más allá de ambos), atenuándose con la rugosidad, y oscurece el reflejo del cielo donde las sondas no ven cielo. El agua conserva su propio reflejo. Desactivado por defecto: aún no visto en una GPU"
+
+msgid "the game's ground is its height map's mesh; Meitou tessellates the ground near the eye and raises it by the same relief (needs tessellation shaders; visual only: characters walk on the undisplaced ground)"
+msgstr "el suelo del juego es la malla de su mapa de alturas; Meitou tesela el suelo cerca del ojo y lo eleva con el mismo relieve (requiere shaders de teselado; solo visual: los personajes caminan sobre el suelo sin desplazar)"
+
+msgid "the game's heat haze shifts distant objects by several pixels in hot weather, which reads as blur; Meitou halves it (the Tab slider sets any strength)"
+msgstr "la distorsión por calor del juego desplaza los objetos lejanos varios píxeles cuando hace calor, lo que parece desenfoque; Meitou la reduce a la mitad (el control Tab fija cualquier intensidad)"
+
+msgid "the game's shadows stop at the cascades' resolution, so small objects float; Meitou adds short sun shadows from the depth, at full resolution, with no noise, on characters too (armour plates, straps, feet on the ground). Off by default: what the screen does not show casts nothing; for the cascades, the Traced sun shadows hold theirs"
+msgstr "las sombras del juego se quedan en la resolución de las cascadas, así que los objetos pequeños flotan; Meitou añade sombras cortas del sol a partir de la profundidad, a resolución completa, sin ruido, también en los personajes (placas de armadura, correas, pies en el suelo). Desactivado por defecto: lo que la pantalla no muestra no proyecta nada; para las cascadas, las Sombras del sol con trazado de rayos mantienen las suyas"
+
+msgid "the game's sun shadows come from cascaded maps, soft or blocky by their texels; Meitou traces a ray to the sun from every lit pixel at every distance, softened by the sun's real size, the same every frame: a shadow is as sharp as it is close to its caster, characters shadow themselves exactly and grass shadows the ground (needs a GPU with ray tracing and Indirect light; off by default)"
+msgstr "las sombras del sol del juego vienen de mapas en cascada, suaves o pixeladas según sus texels; Meitou traza un rayo hacia el sol desde cada píxel iluminado a cualquier distancia, suavizado por el tamaño real del sol, igual en cada fotograma: una sombra es tan nítida como cerca está de su proyector, los personajes se sombrean a sí mismos con exactitud y la hierba sombrea el suelo (requiere una GPU con trazado de rayos y Luz indirecta; desactivado por defecto)"
+
+msgid "the game's water is a flat plane with scrolled normal maps; Meitou adds wind-driven waves, breakers that roll in along the depth, break into foam and run up the beach, and foam on the crests (visual only: the water stays at its height for the game)"
+msgstr "el agua del juego es un plano liso con normal maps en movimiento; Meitou añade olas impulsadas por el viento, rompientes que llegan según la profundidad, rompen en espuma y suben por la playa, y espuma en las crestas (solo visual: el agua se queda a su altura para el juego)"
+
+msgid "the meshes' own"
+msgstr "las propias de las mallas"
+
+msgid "thin lens"
+msgstr "lente delgada"
+
+msgid "this interface shows no image markers"
+msgstr "esta interfaz no muestra marcadores de imagen"
+
+msgid "type to search"
+msgstr "escribe para buscar"
+
+msgid "unavailable (see the log), plain swapchain in use"
+msgstr "no disponible (ver el registro), se usa una swapchain simple"
+
+msgid "walls, floors, objects"
+msgstr "paredes, suelos, objetos"
+
+msgid "waves and surf"
+msgstr "olas y oleaje"
+
+msgid "welded, averaged tangents"
+msgstr "tangentes soldadas y promediadas"
+
+msgid "where placed"
+msgstr "donde se coloca"
+
+msgid "whether it still happens before sending."
+msgstr "si todavía ocurre antes de enviarlo."
+
+msgid "with Indirect light enabled, use bounced light indoors; turn this off to keep the original ambient on room surfaces, furniture and indoor characters while outdoor GI stays enabled"
+msgstr "con Luz indirecta activada, usar luz rebotada en interiores; desactívalo para mantener el ambiente original en las superficies de las habitaciones, los muebles y los personajes de interior mientras la GI exterior sigue activada"
+
+msgid "with camera"
+msgstr "con la cámara"
+
+msgid "{1,num} hrs"
+msgstr "{1,num} h"
+
+msgid "{1,num} secs"
+msgstr "{1,num} s"
+
+msgid "{1,num}h {2,num}m left"
+msgstr "quedan {1,num} h {2,num} min"
+
+msgid "{1,num}m left"
+msgstr "quedan {1,num} min"
+
+msgid "{1} after {2} ({3})"
+msgstr "{1} después de {2} ({3})"
+
+msgid "{1} already wears something in that slot"
+msgstr "{1} ya lleva algo en esa ranura"
+
+msgid "{1} and {2} more"
+msgstr "{1} y {2} más"
+
+msgid "{1} bought {2} for c.{3}"
+msgstr "{1} compró {2} por {3} c."
+
+msgid "{1} cannot pay the fine of c.{2}"
+msgstr "{1} no puede pagar la multa de {2} c."
+
+msgid "{1} changes from the game"
+msgstr "{1} cambios respecto al juego"
+
+msgid "{1} could not put the captive in the cage"
+msgstr "{1} no pudo meter al cautivo en la jaula"
+
+msgid "{1} deleted; the look is Meitou."
+msgstr "{1} eliminado; el estilo es Meitou."
+
+msgid "{1} found no free cage for {2}"
+msgstr "{1} no encontró ninguna jaula libre para {2}"
+
+msgid "{1} got out of the cage"
+msgstr "{1} salió de la jaula"
+
+msgid "{1} has been caught committing {2}!"
+msgstr "¡{1} ha sido sorprendido cometiendo {2}!"
+
+msgid "{1} has been imprisoned by {2}"
+msgstr "{1} ha sido encarcelado por {2}"
+
+msgid "{1} installed."
+msgstr "{1} instalado."
+
+msgid "{1} is after the bounty on {2}!"
+msgstr "¡{1} va tras la recompensa por {2}!"
+
+msgid "{1} is arresting {2}!"
+msgstr "¡{1} está arrestando a {2}!"
+
+msgid "{1} is no longer wanted by {2}"
+msgstr "{1} ya no es buscado por {2}"
+
+msgid "{1} is not installed."
+msgstr "{1} no está instalado."
+
+msgid "{1} is wanted by {2} for {3}: bounty c.{4}"
+msgstr "{1} es buscado por {2} por {3}: recompensa de {4} c."
+
+msgid "{1} issue"
+msgid_plural "{1} issues"
+msgstr[0] "{1} problema"
+msgstr[1] "{1} problemas"
+
+msgid "{1} issues"
+msgstr "{1} problemas"
+
+msgid "{1} item stack(s) of a closed shop were left on the ground."
+msgstr "Se dejaron en el suelo {1} montones de objetos de una tienda cerrada."
+
+msgid "{1} paid a bail of c.{2} for {3}"
+msgstr "{1} pagó una fianza de {2} c. por {3}"
+
+msgid "{1} paid a fine of c.{2} to {3}; the bounty is cleared"
+msgstr "{1} pagó una multa de {2} c. a {3}; la recompensa queda anulada"
+
+msgid "{1} pasted and loaded (made on Meitou {2})."
+msgstr "{1} pegado y cargado (hecho con Meitou {2})."
+
+msgid "{1} posts"
+msgstr "{1} publicaciones"
+
+msgid "{1} put {2} on {3}"
+msgstr "{1} le puso {2} a {3}"
+
+msgid "{1} quality applied."
+msgstr "Calidad {1} aplicada."
+
+msgid "{1} releases · {2} installed"
+msgstr "{1} versiones · {2} instaladas"
+
+msgid "{1} saved."
+msgstr "{1} guardado."
+
+msgid "{1} second"
+msgstr "{1} segundo"
+
+msgid "{1} seconds"
+msgstr "{1} segundos"
+
+msgid "{1} sold {2} for c.{3}"
+msgstr "{1} vendió {2} por {3} c."
+
+msgid "{1} uninstalled."
+msgstr "{1} desinstalado."
+
+msgid "{1} unsaved changes"
+msgstr "{1} cambios sin guardar"
+
+msgid "{1}'s code is on the clipboard: paste it on Discord, or with Paste."
+msgstr "El código de {1} está en el portapapeles: pégalo en Discord, o con Pegar."
+
+msgid "{1}-{2} seconds"
+msgstr "{1}-{2} segundos"
+
+msgid "{1}: no free cage nearby"
+msgstr "{1}: no hay ninguna jaula libre cerca"
+
+msgid "{1}: {2} settings"
+msgstr "{1}: {2} ajustes"
+
+msgid "Image"
+msgstr "Imagen"
+
+msgid "Show or hide the selected mod's details beside the list"
+msgstr "Mostrar u ocultar los detalles del mod seleccionado junto a la lista"
+
+msgid "Details"
+msgstr "Detalles"
+
+msgid "Save the mod list and load order as a preset of this name"
+msgstr "Guardar la lista de mods y el orden de carga como un preajuste con este nombre"
+
+msgid "Take the chosen preset's mod list and load order"
+msgstr "Tomar la lista de mods y el orden de carga del preajuste elegido"
+
+msgid "Delete the chosen preset"
+msgstr "Eliminar el preajuste elegido"
+
+msgid "{1} mods, {2} enabled"
+msgstr "{1} mods, {2} activados"
+
+msgid "{1} of {2} mods shown, {3} enabled"
+msgstr "{1} de {2} mods mostrados, {3} activados"
+
+msgid "Not enabled: the game does not load it"
+msgstr "No activado: el juego no lo carga"
+
+msgid "Needs"
+msgstr "Requiere"
+
+msgid "not enabled above it"
+msgstr "no activado por encima"
+
+msgid "No description"
+msgstr "Sin descripción"
+
+msgid "Hover outline in the Advanced settings"
+msgstr "Contorno al pasar el cursor en los ajustes Avanzados"
+
+msgid "Hover outline in the Advanced settings is on"
+msgstr "Contorno al pasar el cursor en los ajustes Avanzados está activado"
+
+msgid "Lit dust"
+msgstr "Polvo iluminado"
+
+msgid "Light the dust and spray kicked up by running feet like the ground around them, instead of glowing at night."
+msgstr "Ilumina el polvo y las salpicaduras que levantan los pies al correr como el suelo que los rodea, en lugar de brillar de noche."

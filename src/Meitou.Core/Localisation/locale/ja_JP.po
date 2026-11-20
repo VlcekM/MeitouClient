@@ -1,0 +1,4340 @@
+# Meitou's own texts (launcher, title menu, settings menu, notices) in Japanese.
+# Kenshi's own texts come from locale/ja_JP/LC_MESSAGES/main.mo; this file only adds what Meitou shows.
+# Machine-translated; a native speaker's corrections are welcome (locale/ja_JP/meitou.po overrides without a rebuild).
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ja_JP\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid " (Vulkan loader missing)"
+msgstr " （Vulkan ローダーがありません）"
+
+msgid " (as the game)"
+msgstr " （ゲームと同じ）"
+
+msgid " (no upscaler: plain scaling)"
+msgstr " （アップスケーラーなし：単純な拡大）"
+
+msgid " (not enabled above it: {1})"
+msgstr " （上で有効化されていません：{1}）"
+
+msgid " Continuing '{1}'."
+msgstr " 「{1}」を続行します。"
+
+msgid " Not on disk: {1}."
+msgstr " ディスクにありません：{1}。"
+
+msgid " Start the game once to write it again; nothing is changed here until then."
+msgstr " 一度ゲームを起動すると再び書き込まれます。それまでここでは何も変更されません。"
+
+msgid " Steam would not download {1}."
+msgstr " Steam は {1} をダウンロードしませんでした。"
+
+msgid "(started with Play), and a change here creates it. Until then the game uses its defaults."
+msgstr "（「プレイ」で起動したとき作成）。ここで変更すると作成されます。それまではゲームの既定値が使われます。"
+
+msgid "-Avg. Price"
+msgstr "-平均価格"
+
+msgid "-Combat skills bonus"
+msgstr "-戦闘スキルボーナス"
+
+msgid "-Dodge skill effect"
+msgstr "-回避スキルの効果"
+
+msgid "-Encumbrance reduction"
+msgstr "-重量軽減"
+
+msgid "-Max HP"
+msgstr "-最大HP"
+
+msgid "-Price mark-up"
+msgstr "-価格の上乗せ"
+
+msgid "-Sell value"
+msgstr "-売値"
+
+msgid "-Stealth skill effect"
+msgstr "-隠密スキルの効果"
+
+msgid "-Unarmed damage bonus"
+msgstr "-素手ダメージボーナス"
+
+msgid "0 (off)"
+msgstr "0（オフ）"
+
+msgid "0 (true slant)"
+msgstr "0（実際の傾き）"
+
+msgid "0 off"
+msgstr "0 オフ"
+
+msgid "1 change from the game"
+msgstr "ゲームからの変更 1 件"
+
+msgid "1 landscape"
+msgstr "1 風景"
+
+msgid "1 post"
+msgstr "1 件の投稿"
+
+msgid "1 unsaved change"
+msgstr "未保存の変更 1 件"
+
+msgid "2 characters"
+msgstr "2 キャラクター"
+
+msgid "3 buildings"
+msgstr "3 建物"
+
+msgid "32 rays"
+msgstr "32 本のレイ"
+
+msgid "4 everything"
+msgstr "4 すべて"
+
+msgid "64 rays"
+msgstr "64 本のレイ"
+
+msgid "8 nearest"
+msgstr "最寄りの 8 つ"
+
+msgid ": error px"
+msgstr "：誤差 px"
+
+msgid ": technique"
+msgstr "：手法"
+
+msgid "; showing the last list"
+msgstr "；最後のリストを表示中"
+
+msgid "; showing what was read before"
+msgstr "；以前に読み込んだ内容を表示中"
+
+msgid "A biome whose sounds were not loaded yet starts its day or night ambience by the time of day. The game plays the opposite one (night sounds by day) until the next biome or day change."
+msgstr "まだサウンドが読み込まれていないバイオームは、時刻に合わせて昼か夜の環境音を始めます。ゲームでは次のバイオームか昼夜が切り替わるまで逆の環境音（昼に夜の音）が流れます。"
+
+msgid "A blow that destroys a character's head cuts it off, by the same rule the Dismemberment setting cuts off limbs. In the game a destroyed head only kills."
+msgstr "キャラクターの頭部を破壊する一撃は頭を切り落とします。手足を切り落とす「部位切断」設定と同じ規則です。ゲームでは破壊された頭部は死をもたらすだけです。"
+
+msgid "A character knocked down or killed by a blow falls with its own momentum and is pushed away from the hit, harder the heavier the blow and most at the part that was struck, its arms and legs flung by it, and a cut-off head flies the same way. Limp bodies have joints that ease to a stop and a slight muscle tone, so they settle into natural poses. In the game a body drops where it stood, its joints stopping hard."
+msgstr "一撃で倒されたり殺されたりしたキャラクターは自身の勢いで倒れ、打撃から押しのけられます。打撃が重いほど強く、打たれた部位ほど大きく、腕や脚も振り回され、切り落とされた頭も同じ方向に飛びます。力の抜けた体は関節がゆっくり止まり、わずかな筋緊張があるので自然な姿勢に落ち着きます。ゲームでは体はその場に崩れ落ち、関節が急に止まります。"
+
+msgid "A character on a bench with the table behind it sits facing away from the table. The game mirrors the bench's look point through the middle of the world map, so the sitter faces an unrelated direction."
+msgstr "テーブルを背にしたベンチのキャラクターはテーブルに背を向けて座ります。ゲームはベンチの視点をワールドマップの中央で反転させるため、座った者は無関係な方向を向きます。"
+
+msgid "A character that takes a fatal hit explodes, covers everything around in blood and sends bones flying everywhere. Its gear falls to the ground around the spot."
+msgstr "致命傷を受けたキャラクターは爆発し、周囲を血まみれにして骨を四方に飛ばします。装備はその場所の周りの地面に落ちます。"
+
+msgid "A character that turned its head toward what it was talking to or watching looks ahead again once it stops looking. In the game the head stays turned until the next thing it looks at."
+msgstr "話し相手や見ていたものに頭を向けたキャラクターは、見るのをやめると再び前を向きます。ゲームでは次に何かを見るまで頭が向いたままです。"
+
+msgid "A character's bag window opens with their inventory until you close it with OPEN BAG. In the game every bag stays shut after loading until OPEN BAG is pressed for it."
+msgstr "キャラクターのバッグウィンドウはインベントリと一緒に開き、「バッグを開く」で閉じるまで開いたままです。ゲームではロード後、各バッグは「バッグを開く」を押すまで閉じています。"
+
+msgid "A double click on a squad member far from the view (or a double tap of their number) flies the camera there in an arc instead of cutting."
+msgstr "視界から離れた部隊メンバーをダブルクリック（または番号を2回押す）すると、カメラが切り替わらずに弧を描いてそこへ飛びます。"
+
+msgid "A key of the mod {1}: {2}."
+msgstr "MOD {1} のキー：{2}。"
+
+msgid "A left click on the ground ends the selection of the selected building and closes its panels. In the game the building stays selected."
+msgstr "地面を左クリックすると選択中の建物の選択が解除され、パネルが閉じます。ゲームでは建物は選択されたままです。"
+
+msgid "A mod"
+msgstr "MOD"
+
+msgid "A robot race: no skin scattering unless turned on."
+msgstr "ロボット種族：オンにしない限り肌の散乱なし。"
+
+msgid "A save starts paused once it has loaded, so nothing happens before you look around. In the game it runs at once."
+msgstr "セーブはロード後一時停止した状態で始まるので、周りを見る前に何も起きません。ゲームではすぐに進行します。"
+
+msgid "A small catchlight on the eyes instead of a mirror of the landscape."
+msgstr "風景の映り込みの代わりに、目に小さなキャッチライト。"
+
+msgid "A soft GPU allocation budget, not a hard reservation. Higher values keep more textures and draw distance resident; Metal uses unified memory shared with macOS and other apps."
+msgstr "固定の予約ではなく、柔軟な GPU 割り当て予算。値が高いほど多くのテクスチャと描画距離を常駐させます。Metal は macOS や他のアプリと共有する統合メモリを使います。"
+
+msgid "A soft sheen on the edges of cloth, a little on leather."
+msgstr "布の縁に柔らかな光沢、革にも少し。"
+
+msgid "A squad coming back into the area around your squads has healed for the time it was away. In the game it comes back as it left."
+msgstr "部隊の周辺に戻ってきた部隊は、離れていた間の分だけ回復しています。ゲームでは出て行ったときのままで戻ってきます。"
+
+msgid "A swamp turtle butts and bites when it fights. In the game it fights with a sword or club drawn for it, whose moves its body cannot play, so its blows land without any motion."
+msgstr "沼ガメは戦うとき頭突きと噛みつきをします。ゲームでは用意された剣や棍棒で戦いますが、その動きを体で再生できないため、攻撃が何の動作もなく当たります。"
+
+msgid "A town far from your squads is taken over or destroyed as soon as its story calls for it, so the map and the factions show it at once. In the game it changes only when you come near."
+msgstr "部隊から遠く離れた町は、ストーリーが求めるとすぐに占領または破壊されるので、マップと勢力にすぐ反映されます。ゲームでは近づいたときにしか変わりません。"
+
+msgid "A traced cache adds fine indirect light near the camera."
+msgstr "トレースしたキャッシュがカメラ付近に細かな間接光を加えます。"
+
+msgid "A trader or anyone else checking your squad for an item, a race or a carried body never turns the conversation to one of your animals. In the game a pack animal carrying the item takes over the talk, so trade and the other answers do nothing."
+msgstr "アイテム、種族、運ばれている体について部隊を調べる商人などが、会話をあなたの動物に向けることはありません。ゲームではそのアイテムを運ぶ荷役動物が会話を引き継ぎ、取引や他の返答が何も起こしません。"
+
+msgid "A turret's gunner turns with the gun, facing where it aims. In the game the gunner keeps facing the turret, so once the gun swings toward a target the gunner looks off to the side."
+msgstr "砲塔の射手は銃と一緒に回転し、狙う方向を向きます。ゲームでは射手は砲塔の方を向いたままなので、銃が標的に向くと横を見てしまいます。"
+
+msgid "A wounded prisoner on a pole or in a cage keeps the pole's or cage's pose. In the game it clutches its wounds there instead."
+msgstr "柱や檻の中の負傷した囚人は、柱や檻のポーズを保ちます。ゲームではそこで傷を押さえています。"
+
+msgid "ADD SQUAD"
+msgstr "部隊を追加"
+
+msgid ""
+"Activates sneak mode so the character will try to go unnoticed.\n"
+"If the character is unconscious, when he wakes up he will stay down on the ground and crawl to avoid detection."
+msgstr ""
+"隠密モードを有効にし、キャラクターは気付かれないよう行動します。\n"
+"キャラクターが気絶している場合、目覚めた後も地面に伏せたまま這って発見を避けます。"
+
+msgid "Add airglow to the night haze."
+msgstr "夜のもやに大気光を加えます。"
+
+msgid "Add animated waves and shoreline surf."
+msgstr "アニメーションする波と海岸の打ち寄せる波を加えます。"
+
+msgid "Add contact shading around nearby surfaces and creases."
+msgstr "近くの面やくぼみの周りに接触陰影を加えます。"
+
+msgid "Add to jobs"
+msgstr "仕事に追加"
+
+msgid "Adds a generated frame between rendered ones: nearly twice the frame rate, a little more input delay."
+msgstr "描画したフレームの間に生成フレームを挿入します：フレームレートがほぼ倍に、入力遅延がわずかに増えます。"
+
+msgid "Adds a generated frame between rendered ones: nearly twice the frame rate, a little more input delay. Now: {1}"
+msgstr "描画したフレームの間に生成フレームを挿入します：フレームレートがほぼ倍に、入力遅延がわずかに増えます。現在：{1}"
+
+msgid "Adjust the blue shift of colours in low light."
+msgstr "暗所での色の青方偏移を調整します。"
+
+msgid "Adjust the brightness of light scattered through the air."
+msgstr "空気中で散乱する光の明るさを調整します。"
+
+msgid "Adjust underwater visibility at a distance."
+msgstr "遠くの水中の見通しを調整します。"
+
+msgid "Adjust visibility beneath the water surface."
+msgstr "水面下の見通しを調整します。"
+
+msgid "Advanced materials"
+msgstr "高度なマテリアル"
+
+msgid "Advanced ragdolls"
+msgstr "高度なラグドール"
+
+msgid "Air scattering density; zero removes air scattering."
+msgstr "大気散乱の密度。ゼロで大気散乱をなくします。"
+
+msgid "All"
+msgstr "すべて"
+
+msgid "All Faithful"
+msgstr "すべてオリジナル"
+
+msgid "All Meitou"
+msgstr "すべて Meitou"
+
+msgid "All fixes"
+msgstr "すべての修正"
+
+msgid "All gameplay changes"
+msgstr "すべてのゲームプレイ変更"
+
+msgid "Also keeps the surroundings of your other squads' members loaded, not only the squad on the squad bar. Costs more video memory."
+msgstr "部隊バーの部隊だけでなく、他の部隊のメンバーの周辺も読み込んだままにします。ビデオメモリを多く使います。"
+
+msgid "Always on"
+msgstr "常にオン"
+
+msgid "Ambience after loading"
+msgstr "ロード後の環境音"
+
+msgid "Ambient"
+msgstr "環境光"
+
+msgid "Ambient light"
+msgstr "環境光"
+
+msgid "Ambient light strength"
+msgstr "環境光の強さ"
+
+msgid "Ambient light strength (1 = game)"
+msgstr "環境光の強さ（1 = ゲーム）"
+
+msgid "Ambient occlusion"
+msgstr "アンビエントオクルージョン"
+
+msgid "Ambient occlusion quality"
+msgstr "アンビエントオクルージョンの品質"
+
+msgid "Ambient occlusion quality (GTAO)"
+msgstr "アンビエントオクルージョンの品質（GTAO）"
+
+msgid "Ambient occlusion technique"
+msgstr "アンビエントオクルージョンの手法"
+
+msgid "Ambient occlusion type"
+msgstr "アンビエントオクルージョンの種類"
+
+msgid "An HDR10 picture for an HDR display (turn HDR on in Windows first). Not with frame generation."
+msgstr "HDR ディスプレイ用の HDR10 映像（先に Windows で HDR をオンに）。フレーム生成とは併用不可。"
+
+msgid "An animal in a cage or on a pole breathes, looks around and lies down when knocked out. In the game it stands frozen there, since the cage's poses are for people only."
+msgstr "檻や柱の動物は呼吸し、周りを見回し、気絶すると横たわります。ゲームでは檻のポーズが人間専用のため、そこで固まって立っています。"
+
+msgid "Animals pick up items"
+msgstr "動物がアイテムを拾う"
+
+msgid "Animals stay out of talks"
+msgstr "動物を会話に入れない"
+
+msgid "Animals, bandits and other wild squads keep their characters, wounds and places when the area around them unloads, and are there again when you come back. In the game they are removed and new ones are made."
+msgstr "動物、盗賊などの野生の部隊は、周囲のエリアがアンロードされてもキャラクター、傷、位置を保ち、戻ってきたときにまたそこにいます。ゲームでは削除され、新しいものが作られます。"
+
+msgid "Anisotropic filtering"
+msgstr "異方性フィルタリング"
+
+msgid "Anisotropic filtering (texture filtering)"
+msgstr "異方性フィルタリング（テクスチャフィルタリング）"
+
+msgid "Anti-aliasing: 0 off 1 FXAA 2 SMAA 3 TAA 4 FSR 5 DLSS"
+msgstr "アンチエイリアス：0 オフ 1 FXAA 2 SMAA 3 TAA 4 FSR 5 DLSS"
+
+msgid "Aperture"
+msgstr "絞り"
+
+msgid "Apply"
+msgstr "適用"
+
+msgid "Apply the scene's colour and contrast adjustments."
+msgstr "シーンの色とコントラストの調整を適用します。"
+
+msgid "Armour plates shine as bare metal wherever they have any gloss. Off: dull, painted or rusty plate stays dull. An armour a mod gives its own metalness keeps it."
+msgstr "鎧の板は少しでも光沢があれば地金のように輝きます。オフ：くすんだ、塗装された、錆びた板はくすんだまま。MOD が独自の金属度を与えた鎧はそれを保ちます。"
+
+msgid "Arrange mods"
+msgstr "MOD を並べる"
+
+msgid "As in the game, the camera (the free camera too) cannot go farther than 2250 units from the nearest of your characters. Off, it can fly anywhere in the world."
+msgstr "ゲームと同じく、カメラ（フリーカメラも）は最も近いキャラクターから 2250 単位より遠くへは行けません。オフにするとワールドのどこへでも飛べます。"
+
+msgid "Ask the running Steam client to download or update your subscribed Kenshi workshop mods; subscribe in Steam"
+msgstr "起動中の Steam クライアントに、サブスクライブ済みの Kenshi ワークショップ MOD のダウンロードまたは更新を依頼します。サブスクライブは Steam で"
+
+msgid "Asking Steam for your workshop mods..."
+msgstr "Steam にワークショップ MOD を問い合わせ中..."
+
+msgid "Asking Steam to subscribe..."
+msgstr "Steam にサブスクライブを依頼中..."
+
+msgid "Assign a control"
+msgstr "操作を割り当て"
+
+msgid "At startup, install a new launcher version and restart into it."
+msgstr "起動時に新しいランチャーをインストールして再起動します。"
+
+msgid "Attach a navmesh screenshot (only in a game)"
+msgstr "ナビメッシュのスクリーンショットを添付（ゲーム中のみ）"
+
+msgid "Attach a screenshot (none was taken)"
+msgstr "スクリーンショットを添付（撮影されていません）"
+
+msgid "Attach a screenshot of the game"
+msgstr "ゲームのスクリーンショットを添付"
+
+msgid "Attach a screenshot with the navmesh drawn over it"
+msgstr "ナビメッシュを重ねたスクリーンショットを添付"
+
+msgid "Attach the action and dialogue logs (what characters did and said)"
+msgstr "行動と会話のログを添付（キャラクターの行動と発言）"
+
+msgid "Attackers per target"
+msgstr "1 体あたりの攻撃者数"
+
+msgid "Auto"
+msgstr "自動"
+
+msgid "Auto (recommended)"
+msgstr "自動（推奨）"
+
+msgid "Auto uses Vulkan when MoltenVK is installed, otherwise Metal."
+msgstr "自動は MoltenVK がインストールされていれば Vulkan、そうでなければ Metal を使います。"
+
+msgid "Auto uses Vulkan when MoltenVK is installed, otherwise Metal. This overrides --renderer in Launch arguments."
+msgstr "自動は MoltenVK がインストールされていれば Vulkan、そうでなければ Metal を使います。起動引数の --renderer より優先されます。"
+
+msgid "Auto: about a third of this Mac's memory, from 5120 to 10240 MB, so a larger Mac keeps more resident."
+msgstr "自動：この Mac のメモリの約 3 分の 1、5120〜10240 MB。大きな Mac ほど多くを常駐させます。"
+
+msgid "Auto: {1} (Vulkan loader found)."
+msgstr "自動：{1}（Vulkan ローダーあり）。"
+
+msgid "Auto: {1} (no Vulkan loader)."
+msgstr "自動：{1}（Vulkan ローダーなし）。"
+
+msgid "Auto: {1}."
+msgstr "自動：{1}。"
+
+msgid "Automatic"
+msgstr "自動"
+
+msgid "Automatic ({1})"
+msgstr "自動（{1}）"
+
+msgid "Average minutes of silence between pieces of biome music."
+msgstr "バイオーム音楽の曲間の平均無音時間（分）。"
+
+msgid "BACKPACK"
+msgstr "バックパック"
+
+msgid "BUILDING"
+msgstr "建物"
+
+msgid "Back to the game's value."
+msgstr "ゲームの値に戻します。"
+
+msgid "Back to the look's value"
+msgstr "ルックの値に戻す"
+
+msgid "Bags in the inventory"
+msgstr "インベントリ内のバッグ"
+
+msgid "Balance change: a dodge or block that succeeds its roll but starts a moment late still works, instead of failing as in the game. Makes skilled fighters much harder to wear down when several enemies attack at once."
+msgstr "バランス変更：判定に成功したが一瞬遅れて始まった回避や防御も、ゲームのように失敗せずに機能します。複数の敵に同時に攻撃されたとき、熟練の戦士がはるかに消耗しにくくなります。"
+
+msgid "Balanced"
+msgstr "バランス"
+
+msgid "Balanced — 6144 MB"
+msgstr "バランス — 6144 MB"
+
+msgid "Balanced: more resident detail than Safe, with some headroom for macOS and other apps."
+msgstr "バランス：セーフより多くの詳細を常駐させ、macOS や他のアプリにも余裕を残します。"
+
+msgid "Being dismantled"
+msgstr "解体中"
+
+msgid "Bench facing"
+msgstr "ベンチの向き"
+
+msgid "Beyond it the terrain shows flat ground colour instead of textures. Shorter is cheaper."
+msgstr "これより先の地形はテクスチャの代わりに平坦な地面色になります。短いほど軽くなります。"
+
+msgid "Billboard transition distance for large foliage."
+msgstr "大きな植生のビルボードへの切り替え距離。"
+
+msgid "Binding cleared."
+msgstr "割り当てを解除しました。"
+
+msgid "Blades keep the blood of what they wound and dry dark; armour and clothing show the wounds under them."
+msgstr "刃は傷つけたものの血を残し、黒く乾きます。鎧や服はその下の傷を示します。"
+
+msgid "Blend more ACES into the hybrid tone mapping curve."
+msgstr "ハイブリッドトーンマッピング曲線に ACES をより多く混ぜます。"
+
+msgid "Blood --"
+msgstr "血液 --"
+
+msgid "Blood cells"
+msgstr "血痕セル"
+
+msgid "Blood decals drawn"
+msgstr "描画する血痕デカール"
+
+msgid "Blood on surfaces"
+msgstr "表面の血"
+
+msgid "Blood on weapons and gear"
+msgstr "武器と装備の血"
+
+msgid "Bloody footprints"
+msgstr "血の足跡"
+
+msgid "Bloom"
+msgstr "ブルーム"
+
+msgid "Bloom strength"
+msgstr "ブルームの強さ"
+
+msgid "Bloom strength (0 = game)"
+msgstr "ブルームの強さ（0 = ゲーム）"
+
+msgid "Blur what is out of focus, as a lens does, in the free and cinematic cameras."
+msgstr "フリーカメラとシネマカメラで、ピントの外れた部分をレンズのようにぼかします。"
+
+msgid "Body --"
+msgstr "身体 --"
+
+msgid "Bolt tracers"
+msgstr "ボルトの曳光"
+
+msgid "Borderless"
+msgstr "ボーダーレス"
+
+msgid "Bounced light indoors too."
+msgstr "室内でも反射光を使います。"
+
+msgid "Bounced light: the game's flat ambient, ray-traced probes, or probes with a fine cache near the camera. Needs ray tracing."
+msgstr "反射光：ゲームの平坦な環境光、レイトレースのプローブ、またはカメラ付近に細かなキャッシュを持つプローブ。レイトレーシングが必要です。"
+
+msgid "Brighten or darken nights further, on top of Ambient light strength."
+msgstr "環境光の強さに加えて、夜をさらに明るくまたは暗くします。"
+
+msgid "Brightness of white, in nits. Automatic matches the Windows desktop."
+msgstr "白の明るさ（ニト）。自動は Windows デスクトップに合わせます。"
+
+msgid "Browse"
+msgstr "参照"
+
+msgid "Build keys take a key, not a mouse button. Choose a key, or Esc to cancel."
+msgstr "建築キーにはマウスボタンではなくキーを割り当てます。キーを選ぶか、Esc でキャンセル。"
+
+msgid "Building outline"
+msgstr "建物の輪郭"
+
+msgid "Buildings, rocks and characters block the lamps' light. Needs ray tracing."
+msgstr "建物、岩、キャラクターがランプの光を遮ります。レイトレーシングが必要です。"
+
+msgid "Built for Meitou {1} (checked when the game starts)"
+msgstr "Meitou {1} 用（ゲーム起動時に確認）"
+
+msgid "Built in"
+msgstr "組み込み"
+
+msgid "Built into Meitou: {1}; this mod is not run"
+msgstr "Meitou に組み込み済み：{1}。この MOD は実行されません"
+
+msgid "CANCEL"
+msgstr "キャンセル"
+
+msgid "CHARACTER STATS"
+msgstr "キャラクターステータス"
+
+msgid "CONTAINER"
+msgstr "コンテナ"
+
+msgid "COPY LINK"
+msgstr "リンクをコピー"
+
+msgid "CREDITS"
+msgstr "クレジット"
+
+msgid "Cage"
+msgstr "檻"
+
+msgid "Caged animals idle"
+msgstr "檻の動物の待機"
+
+msgid "Camera"
+msgstr "カメラ"
+
+msgid "Camera effects in the strategy camera"
+msgstr "戦略カメラでのカメラ効果"
+
+msgid "Camera move speed"
+msgstr "カメラの移動速度"
+
+msgid "Camera rotation speed"
+msgstr "カメラの回転速度"
+
+msgid "Camera smoothing"
+msgstr "カメラのスムージング"
+
+msgid "Camera stays near your squads"
+msgstr "カメラを部隊の近くに留める"
+
+msgid "Camera zoom speed"
+msgstr "カメラのズーム速度"
+
+msgid "Camera: you hear the world where the camera is. Character: you hear it where your first selected character stands (from the camera while nobody is selected)."
+msgstr "カメラ：カメラの位置で世界の音を聞きます。キャラクター：最初に選択したキャラクターの位置で聞きます（誰も選択していないときはカメラから）。"
+
+msgid "Cancel Construction"
+msgstr "建設をキャンセル"
+
+msgid "Cancel the download of {1}"
+msgstr "{1} のダウンロードをキャンセル"
+
+msgid "Cascades past traced shadows"
+msgstr "トレース影の先のカスケード"
+
+msgid "Censorship"
+msgstr "検閲"
+
+msgid "Centre the camera on the selected character."
+msgstr "選択したキャラクターにカメラを合わせます。"
+
+msgid "Change the Kenshi folder"
+msgstr "Kenshi フォルダーを変更"
+
+msgid "Character"
+msgstr "キャラクター"
+
+msgid "Character draw distance"
+msgstr "キャラクターの描画距離"
+
+msgid "Character editor bar"
+msgstr "キャラクターエディターのバー"
+
+msgid "Character flight time"
+msgstr "キャラクターへの移動時間"
+
+msgid "Character flights"
+msgstr "キャラクターへのカメラ移動"
+
+msgid "Character levels"
+msgstr "キャラクターの詳細レベル"
+
+msgid "Character {1} of {2} tried to spawn inside walls!"
+msgstr "{2} 人中 {1} 人目のキャラクターが壁の中に出現しようとしました！"
+
+msgid "Characters with the medic job will also heal downed characters of factions that are not hostile"
+msgstr "医療の仕事を持つキャラクターは、敵対していない勢力の倒れたキャラクターも治療します"
+
+msgid "Characters with the medic job will heal any downed character, enemies included"
+msgstr "医療の仕事を持つキャラクターは、敵を含むあらゆる倒れたキャラクターを治療します"
+
+msgid "Charge:"
+msgstr "充電："
+
+msgid "Chase"
+msgstr "追跡"
+
+msgid "Check"
+msgstr "確認"
+
+msgid "Check again for a Vulkan loader"
+msgstr "Vulkan ローダーを再確認"
+
+msgid "Check for releases"
+msgstr "リリースを確認"
+
+msgid "Checking GitHub for releases..."
+msgstr "GitHub でリリースを確認中..."
+
+msgid "Chinese"
+msgstr "中国語"
+
+msgid "Choose a character"
+msgstr "キャラクターを選択"
+
+msgid "Choose a character first: click one, or use the arrows"
+msgstr "先にキャラクターを選んでください：クリックするか矢印を使います"
+
+msgid "Choose a full path for the install folder."
+msgstr "インストールフォルダーのフルパスを選んでください。"
+
+msgid "Choose how bright scene colours fit the display range."
+msgstr "シーンの明るい色をディスプレイの範囲にどう収めるかを選びます。"
+
+msgid "Choose original Kenshi skins or Meitou materials."
+msgstr "Kenshi オリジナルのスキンか Meitou のマテリアルかを選びます。"
+
+msgid "Choose the original Kenshi title screen or the Meitou main menu over a live world scene, whatever the UI style."
+msgstr "UI スタイルに関係なく、Kenshi オリジナルのタイトル画面か、生きたワールドを背景にした Meitou のメインメニューを選びます。"
+
+msgid "Choose the preset for this computer's graphics card, memory and processor."
+msgstr "このコンピューターのグラフィックカード、メモリ、プロセッサーに合うプリセットを選びます。"
+
+msgid "Choose the version to play"
+msgstr "プレイするバージョンを選択"
+
+msgid "Choose which parts of the scene appear in reflections."
+msgstr "反射に映るシーンの部分を選びます。"
+
+msgid "Clear cache"
+msgstr "キャッシュを消去"
+
+msgid "Clear cached files?"
+msgstr "キャッシュファイルを消去しますか？"
+
+msgid "Click a character to choose it    Drag the chosen one to move it    Ctrl + click sets the focus point    The arrows step through those in view    Drag an arrow to move, a ring to turn"
+msgstr "キャラクターをクリックして選択    選んだキャラクターをドラッグで移動    Ctrl + クリックでピント位置を設定    矢印で画面内のキャラクターを順に選択    矢印をドラッグで移動、リングをドラッグで回転"
+
+msgid "Click a preset to use it    Right click to rename it    Wheel or the arrows to see the others"
+msgstr "プリセットをクリックで使用    右クリックで名前変更    ホイールか矢印で他を表示"
+
+msgid "Click again"
+msgstr "もう一度クリック"
+
+msgid "Click away deselects"
+msgstr "他をクリックで選択解除"
+
+msgid "Click to install"
+msgstr "クリックしてインストール"
+
+msgid "Close Doors"
+msgstr "扉を閉める"
+
+msgid "Cloth sheen"
+msgstr "布の光沢"
+
+msgid "Cloud height"
+msgstr "雲の高さ"
+
+msgid "Cloud height (Meitou)"
+msgstr "雲の高さ（Meitou）"
+
+msgid "Cloud shadows"
+msgstr "雲の影"
+
+msgid "Cloud shadows in fog"
+msgstr "霧の中の雲の影"
+
+msgid "Clouds"
+msgstr "雲"
+
+msgid "Clouds shade the bounced light and the light shafts."
+msgstr "雲が反射光と光芒を遮ります。"
+
+msgid "Code mod: runs C# code of its own"
+msgstr "コード MOD：独自の C# コードを実行します"
+
+msgid "Collapse all"
+msgstr "すべて折りたたむ"
+
+msgid "Colour grading"
+msgstr "カラーグレーディング"
+
+msgid "Composition"
+msgstr "構図"
+
+msgid "Cone"
+msgstr "円錐"
+
+msgid "Conscious"
+msgstr "意識あり"
+
+msgid "Contact shadows"
+msgstr "接触影"
+
+msgid "Contrast"
+msgstr "コントラスト"
+
+msgid "Cooldown {1,num} seconds"
+msgstr "クールダウン {1,num} 秒"
+
+msgid "Copied '{1}' and opened brew.sh; install Homebrew, run it in Terminal, then press Check."
+msgstr "「{1}」をコピーし brew.sh を開きました。Homebrew をインストールしてターミナルで実行し、「確認」を押してください。"
+
+msgid "Copied to the clipboard."
+msgstr "クリップボードにコピーしました。"
+
+msgid "Copy"
+msgstr "コピー"
+
+msgid "Copy all problems"
+msgstr "すべての問題をコピー"
+
+msgid "Copy the Homebrew command for Vulkan, or open brew.sh"
+msgstr "Vulkan 用の Homebrew コマンドをコピー、または brew.sh を開く"
+
+msgid "Could not delete the preset: {1}"
+msgstr "プリセットを削除できませんでした：{1}"
+
+msgid "Could not detect the hardware: {1}"
+msgstr "ハードウェアを検出できませんでした：{1}"
+
+msgid "Could not move the versions to {1}: {2}"
+msgstr "バージョンを {1} に移動できませんでした：{2}"
+
+msgid "Could not read the last save: {1}"
+msgstr "最後のセーブを読み込めませんでした：{1}"
+
+msgid "Could not read the mods: {1}"
+msgstr "MOD を読み込めませんでした：{1}"
+
+msgid "Could not read the save '{1}': {2}"
+msgstr "セーブ「{1}」を読み込めませんでした：{2}"
+
+msgid "Could not remove {1}: {2}"
+msgstr "{1} を削除できませんでした：{2}"
+
+msgid "Could not save the mod list: {1}"
+msgstr "MOD リストを保存できませんでした：{1}"
+
+msgid "Could not start Meitou {1}: {2}"
+msgstr "Meitou {1} を起動できませんでした：{2}"
+
+msgid "Could not update Kenshi's language setting: {1}"
+msgstr "Kenshi の言語設定を更新できませんでした：{1}"
+
+msgid "Could not use {1}: {2}"
+msgstr "{1} を使用できませんでした：{2}"
+
+msgid "Could not write the preset: "
+msgstr "プリセットを書き込めませんでした： "
+
+msgid "Could not write the preset: {1}"
+msgstr "プリセットを書き込めませんでした：{1}"
+
+msgid "Could not write {1}: {2}"
+msgstr "{1} を書き込めませんでした：{2}"
+
+msgid "Custom"
+msgstr "カスタム"
+
+msgid "Custom value"
+msgstr "カスタム値"
+
+msgid "Cycle GPU, CPU and hidden profiler views."
+msgstr "GPU、CPU、非表示のプロファイラー表示を切り替えます。"
+
+msgid "DLSS preset"
+msgstr "DLSS プリセット"
+
+msgid "Damage floaters"
+msgstr "ダメージ表示"
+
+msgid "Darken the picture towards its corners, as a camera lens does, in every camera."
+msgstr "すべてのカメラで、カメラレンズのように画像の四隅を暗くします。"
+
+msgid "Darkening in creases and under objects: screen-space (SSAO) or ground-truth (GTAO, more accurate)."
+msgstr "くぼみや物の下の暗がり：スクリーンスペース（SSAO）またはグラウンドトゥルース（GTAO、より正確）。"
+
+msgid "Data folder"
+msgstr "データフォルダー"
+
+msgid "Debug build"
+msgstr "デバッグビルド"
+
+msgid "Decapitation"
+msgstr "斬首"
+
+msgid "Default"
+msgstr "既定"
+
+msgid "Default settings restored."
+msgstr "既定の設定に戻しました。"
+
+msgid "Delete billboard cache"
+msgstr "ビルボードキャッシュを削除"
+
+msgid "Delete cached billboards; they are rebuilt when needed."
+msgstr "キャッシュされたビルボードを削除します。必要なときに再作成されます。"
+
+msgid "Delete preset?"
+msgstr "プリセットを削除しますか？"
+
+msgid "Delivering materials"
+msgstr "資材を運搬中"
+
+msgid "Depth of field"
+msgstr "被写界深度"
+
+msgid "Depth of field aperture"
+msgstr "被写界深度の絞り"
+
+msgid "Depth of field aperture (f-number)"
+msgstr "被写界深度の絞り（F 値）"
+
+msgid "Depth on the ground and smoother rocks and hills, from tessellation and parallax."
+msgstr "テッセレーションと視差による地面の奥行きと、より滑らかな岩や丘。"
+
+msgid "Detail"
+msgstr "詳細"
+
+msgid "Detect"
+msgstr "検出"
+
+msgid "Detected: {1}"
+msgstr "検出：{1}"
+
+msgid "Detecting"
+msgstr "検出中"
+
+msgid "Dismantling"
+msgstr "解体中"
+
+msgid "Display"
+msgstr "ディスプレイ"
+
+msgid "Distance over which submerged scenery stays visible."
+msgstr "水没した景色が見える距離。"
+
+msgid "Distance where foliage changes to billboard images."
+msgstr "植生がビルボード画像に切り替わる距離。"
+
+msgid "Distances"
+msgstr "距離"
+
+msgid "Distances, shadows, detail and Meitou's effects together, by class of graphics card. Low is the same as --low-end."
+msgstr "距離、影、詳細、Meitou のエフェクトをまとめて、グラフィックカードのクラスごとに設定します。低は --low-end と同じです。"
+
+msgid "Distant towns"
+msgstr "遠くの町"
+
+msgid "Distant towns (zones)"
+msgstr "遠くの町（ゾーン）"
+
+msgid "Dithering"
+msgstr "ディザリング"
+
+msgid "Do you want to subscribe now?"
+msgstr "今すぐサブスクライブしますか？"
+
+msgid "Don't offer this version again; a newer one will be"
+msgstr "このバージョンを今後提示しない。新しいバージョンは提示されます"
+
+msgid "Door"
+msgstr "扉"
+
+msgid "Door break sound"
+msgstr "扉の破壊音"
+
+msgid "Doors and gates make their breaking sound when they are bashed or broken open. The game never picks which breaking sound to play, so it plays none."
+msgstr "扉や門は叩かれたりこじ開けられたりすると破壊音を出します。ゲームはどの破壊音を鳴らすか選ばないため、何も鳴らしません。"
+
+msgid "Download and install {1}"
+msgstr "{1} をダウンロードしてインストール"
+
+msgid "Download and install {1}; the arrow plays an installed version"
+msgstr "{1} をダウンロードしてインストール。矢印でインストール済みのバージョンをプレイ"
+
+msgid "Download of {1} cancelled."
+msgstr "{1} のダウンロードをキャンセルしました。"
+
+msgid "Download the new launcher and restart into it"
+msgstr "新しいランチャーをダウンロードして再起動"
+
+msgid "Downloading {1}"
+msgstr "{1} をダウンロード中"
+
+msgid "Downloading {1}..."
+msgstr "{1} をダウンロード中..."
+
+msgid "Drag to change the load order; Ctrl+click or Shift+click selects several mods to move together"
+msgstr "ドラッグでロード順を変更。Ctrl+クリックまたは Shift+クリックで複数の MOD を選択してまとめて移動"
+
+msgid "Draw a faint streak behind a crossbow bolt in flight."
+msgstr "飛んでいるクロスボウのボルトの後ろにかすかな軌跡を描きます。"
+
+msgid "Draw blood on every terrain cell within decal range, not only the 8 nearest."
+msgstr "最寄りの 8 つだけでなく、デカール範囲内のすべての地形セルに血を描きます。"
+
+msgid "Draw distances"
+msgstr "描画距離"
+
+msgid "Draw distant foliage using baked billboard images."
+msgstr "遠くの植生を事前生成したビルボード画像で描きます。"
+
+msgid "Draw individual stars instead of a starfield texture."
+msgstr "星空テクスチャの代わりに個々の星を描きます。"
+
+msgid "Draw inventory item icons supersampled, without jagged edges."
+msgstr "インベントリのアイテムアイコンをスーパーサンプリングで描き、ギザギザをなくします。"
+
+msgid "Draw the game's yellow-green ceiling lamps, spotlights and searchlights amber, as bright as they were."
+msgstr "ゲームの黄緑色の天井灯、スポットライト、サーチライトを同じ明るさのまま琥珀色で描きます。"
+
+msgid "Draw the interface at the screen's size over a stretched picture (virtual Retina pixels, or a smaller render resolution), so it stays sharp. Off: it is drawn at the render size with the picture."
+msgstr "引き伸ばした画像の上に画面サイズでインターフェースを描き、くっきり保ちます（仮想 Retina ピクセルまたは小さい描画解像度）。オフ：画像と一緒に描画サイズで描きます。"
+
+msgid "Dropped items kept"
+msgstr "落としたアイテムの保持数"
+
+msgid "Drops of water stand on wet skin, leather and metal, in the rain and after a swim."
+msgstr "雨の中や泳いだ後、濡れた肌、革、金属に水滴が付きます。"
+
+msgid "ENTER"
+msgstr "入る"
+
+msgid "EXIT"
+msgstr "終了"
+
+msgid "Each has a port for Meitou on the Steam workshop, kept up by its maintainer and endorsed by Meitou:"
+msgstr "それぞれ Steam ワークショップに Meitou 用の移植版があり、メンテナーが管理し Meitou が推奨しています："
+
+msgid "Each light probe traces 64 rays instead of 32: less noise in bounced light, about twice the probe cost."
+msgstr "各ライトプローブが 32 本ではなく 64 本のレイをトレースします：反射光のノイズが減り、プローブのコストは約 2 倍。"
+
+msgid "Edit characters in a bar at night instead of on the platform."
+msgstr "プラットフォームではなく夜のバーでキャラクターを編集します。"
+
+msgid "Empties file paths in {1} records of {2}: it likely belongs above them"
+msgstr "{2} の {1} 件のレコードのファイルパスを空にします：それらより上に置くべきでしょう"
+
+msgid "English"
+msgstr "英語"
+
+msgid "Enhanced hardware mouse"
+msgstr "拡張ハードウェアマウス"
+
+msgid "Enter a valid number, or press Esc to cancel."
+msgstr "有効な数値を入力するか、Esc でキャンセルしてください。"
+
+msgid "Every bug on this page as the game ships it, or every fix."
+msgstr "このページのバグをすべて出荷時のゲームのままにするか、すべて修正します。"
+
+msgid "Every change on this page as the game plays, or every Meitou change."
+msgstr "このページの変更をすべてゲームのままにするか、すべて Meitou の変更にします。"
+
+msgid "Every graphics setting back to the game's defaults, also those only in the game's Tab panel."
+msgstr "すべてのグラフィック設定をゲームの既定値に戻します。ゲームの Tab パネルにしかない設定も含みます。"
+
+msgid "Every tutorial can show again, the ones already seen included."
+msgstr "既に見たものも含め、すべてのチュートリアルを再び表示できます。"
+
+msgid "Example"
+msgstr "例"
+
+msgid "Execution"
+msgstr "処刑"
+
+msgid "Expand all"
+msgstr "すべて展開"
+
+msgid "Exposure"
+msgstr "露出"
+
+msgid "Extreme"
+msgstr "エクストリーム"
+
+msgid "Eye catchlights"
+msgstr "瞳のキャッチライト"
+
+msgid "FAITHFUL"
+msgstr "オリジナル"
+
+msgid "FENCING CHANCE:"
+msgstr "盗品売却の成功率："
+
+msgid "FENCING ITEM"
+msgstr "盗品として売るアイテム"
+
+msgid "FSR 3"
+msgstr "FSR 3"
+
+msgid "FSR 3: any GPU, needs the FidelityFX library. DLSS: Windows with an RTX 40 or later, needs Streamline's frame generation DLLs."
+msgstr "FSR 3：どの GPU でも可、FidelityFX ライブラリが必要。DLSS：Windows で RTX 40 以降、Streamline のフレーム生成 DLL が必要。"
+
+msgid "Fade cloud shadows in fog, so foggy places stay lit."
+msgstr "霧の中では雲の影を弱め、霧の場所が明るいままになるようにします。"
+
+msgid "Fade surface bumps where the sun only grazes, so the ground does not break into bright and black patches."
+msgstr "太陽がかすめるだけの場所では表面の凹凸を弱め、地面が明暗のまだらにならないようにします。"
+
+msgid "Faithful"
+msgstr "オリジナル"
+
+msgid "Faithful (in series)"
+msgstr "オリジナル（直列）"
+
+msgid "Faithful (off)"
+msgstr "オリジナル（オフ）"
+
+msgid "Faithful cascades"
+msgstr "オリジナルのカスケード"
+
+msgid "Faithful shows the game's logos at startup (Faithful UI); a key or a click skips each one. Meitou shows the menu as soon as the game has loaded."
+msgstr "オリジナルは起動時にゲームのロゴを表示します（オリジナル UI）。キーかクリックでそれぞれスキップできます。Meitou はゲームの読み込みが終わるとすぐにメニューを表示します。"
+
+msgid "Faithful, as in the game: when the camera comes to places that are not loaded yet (a jump to a squad far away), the game pauses and shows Loading... until they are. Meitou: the game runs on while they load."
+msgstr "オリジナル（ゲームと同じ）：まだ読み込まれていない場所にカメラが来ると（遠くの部隊へのジャンプなど）、ゲームは一時停止し、読み込みが終わるまで「読み込み中...」を表示します。Meitou：読み込み中もゲームは進みます。"
+
+msgid "Faithful, as in the game: your pack animals pick up an item you point them at, into the bag they wear (or wear a bag they pick up). Meitou: only people pick items up, and an animal only a limb to carry in its mouth."
+msgstr "オリジナル（ゲームと同じ）：荷役動物は指示したアイテムを背負ったバッグに拾います（または拾ったバッグを背負います）。Meitou：アイテムを拾うのは人だけで、動物は口にくわえる手足だけです。"
+
+msgid "Faithful: every graphics feature as the game ships it."
+msgstr "オリジナル：すべてのグラフィック機能を出荷時のゲームのままにします。"
+
+msgid "Far grass cover"
+msgstr "遠くの草の被覆"
+
+msgid "Far impostors"
+msgstr "遠くのインポスター"
+
+msgid "Far water"
+msgstr "遠くの水"
+
+msgid "Far water clarity"
+msgstr "遠くの水の透明度"
+
+msgid "Far water clarity (Meitou)"
+msgstr "遠くの水の透明度（Meitou）"
+
+msgid "Farms, mines, wells and generators away from your squads keep working. In the game they stop while their area is unloaded, and only farms catch up when you come back."
+msgstr "部隊から離れた農場、鉱山、井戸、発電機は動き続けます。ゲームではエリアがアンロードされている間は止まり、戻ったときに追いつくのは農場だけです。"
+
+msgid "Fast speed"
+msgstr "高速"
+
+msgid "Faster with Meitou"
+msgstr "Meitou でより高速"
+
+msgid "Fastest speed"
+msgstr "最高速"
+
+msgid "Feedback"
+msgstr "フィードバック"
+
+msgid "Feedback button"
+msgstr "フィードバックボタン"
+
+msgid "Field of view"
+msgstr "視野"
+
+msgid "Fights far away"
+msgstr "遠くの戦闘"
+
+msgid "Fill the monitor with a borderless game window."
+msgstr "ボーダーレスのゲームウィンドウでモニターを埋めます。"
+
+msgid "Film grain"
+msgstr "フィルムグレイン"
+
+msgid "Film grain strength"
+msgstr "フィルムグレインの強さ"
+
+msgid "Filter"
+msgstr "フィルター"
+
+msgid "Filter strength"
+msgstr "フィルターの強さ"
+
+msgid "Find"
+msgstr "検索"
+
+msgid "Finer shading of hair, cloth, skin, eyes and metal on characters. Each part has its own switch."
+msgstr "キャラクターの髪、布、肌、目、金属をより細かく陰影付けします。各部分に個別のスイッチがあります。"
+
+msgid "Fixes"
+msgstr "修正"
+
+msgid "Fly speed"
+msgstr "飛行速度"
+
+msgid "Foam clings to rocks, posts and legs; wading characters leave ripples and wakes."
+msgstr "泡が岩、杭、脚にまとわりつき、水の中を歩くキャラクターは波紋と航跡を残します。"
+
+msgid "Focus"
+msgstr "ピント"
+
+msgid "Focus distance"
+msgstr "ピント距離"
+
+msgid "Focus point set"
+msgstr "ピント位置を設定しました"
+
+msgid "Fog"
+msgstr "霧"
+
+msgid "Foliage"
+msgstr "植生"
+
+msgid "Foliage LOD distance multiplier"
+msgstr "植生の LOD 距離の倍率"
+
+msgid "Foliage LOD distance x (lod Meitou)"
+msgstr "植生の LOD 距離 x（lod Meitou）"
+
+msgid "Foliage draw distance multiplier"
+msgstr "植生の描画距離の倍率"
+
+msgid "Foliage draw distance x"
+msgstr "植生の描画距離 x"
+
+msgid "Foliage levels"
+msgstr "植生の詳細レベル"
+
+msgid "Foliage ranges"
+msgstr "植生の範囲"
+
+msgid "Follow camera head lock"
+msgstr "追従カメラを頭に固定"
+
+msgid "Follow camera height"
+msgstr "追従カメラの高さ"
+
+msgid "Follow camera offset"
+msgstr "追従カメラのオフセット"
+
+msgid "Follow camera side"
+msgstr "追従カメラの横位置"
+
+msgid "Font size"
+msgstr "フォントサイズ"
+
+msgid "Footprints and drag marks in sand, mud and snow; wind and rain wear them away."
+msgstr "砂、泥、雪の上の足跡と引きずり跡。風雨で消えていきます。"
+
+msgid "For a window: on renders in its real pixels. Off renders in virtual Retina pixels, one per point (a quarter of the pixels on a 2x display) and stretches to the window. No effect on a display without Retina. Full screen has Render resolution."
+msgstr "ウィンドウの場合：オンで実ピクセルで描画します。オフで仮想 Retina ピクセル（1 ポイントに 1 つ、2x ディスプレイではピクセルの 4 分の 1）で描画してウィンドウに引き伸ばします。Retina でないディスプレイでは効果なし。フルスクリーンには「描画解像度」があります。"
+
+msgid "Forward"
+msgstr "前後"
+
+msgid "Frame generation"
+msgstr "フレーム生成"
+
+msgid "Frame limit"
+msgstr "フレーム制限"
+
+msgid "Frames per second while vertical sync is off."
+msgstr "垂直同期がオフのときの毎秒フレーム数。"
+
+msgid "French"
+msgstr "フランス語"
+
+msgid "From save"
+msgstr "セーブから"
+
+msgid "Full Retina resolution"
+msgstr "フル Retina 解像度"
+
+msgid "Full haze distance"
+msgstr "完全なもやの距離"
+
+msgid "Full resolution"
+msgstr "フル解像度"
+
+msgid "Full screen"
+msgstr "フルスクリーン"
+
+msgid "Full video"
+msgstr "フル動画"
+
+msgid "GI 64 probe rays"
+msgstr "GI 64 本のプローブレイ"
+
+msgid "GI cloud shadows"
+msgstr "GI 雲の影"
+
+msgid "GI probes out of walls"
+msgstr "GI プローブを壁の外へ"
+
+msgid "GI radiance cache"
+msgstr "GI 放射輝度キャッシュ"
+
+msgid "GI traced on characters"
+msgstr "キャラクターに GI をトレース"
+
+msgid "GRAPHICS"
+msgstr "グラフィック"
+
+msgid "Gallery"
+msgstr "ギャラリー"
+
+msgid "Game language set to {1}. It applies when the game starts."
+msgstr "ゲームの言語を {1} に設定しました。ゲーム起動時に反映されます。"
+
+msgid "Game speed"
+msgstr "ゲーム速度"
+
+msgid "Game time"
+msgstr "ゲーム内時間"
+
+msgid "Gear sway"
+msgstr "装備の揺れ"
+
+msgid "German"
+msgstr "ドイツ語"
+
+msgid "Get launcher {1}"
+msgstr "ランチャー {1} を入手"
+
+msgid "Get the port"
+msgstr "移植版を入手"
+
+msgid "GitHub answered {1} {2}"
+msgstr "GitHub の応答：{1} {2}"
+
+msgid "GitHub not reachable ({1})"
+msgstr "GitHub に接続できません（{1}）"
+
+msgid "Give orders and open menus (the game's right button)."
+msgstr "命令を出しメニューを開きます（ゲームの右ボタン）。"
+
+msgid "Give the ground texture depth."
+msgstr "地面のテクスチャに奥行きを与えます。"
+
+msgid "Giving first aid"
+msgstr "応急手当中"
+
+msgid "Glass bottles"
+msgstr "ガラス瓶"
+
+msgid "Global illumination"
+msgstr "グローバルイルミネーション"
+
+msgid "Global population multiplier"
+msgstr "全体の人口倍率"
+
+msgid "Glossy and wet surfaces mirror their surroundings instead of one sky picture."
+msgstr "光沢のある濡れた表面は、空の画像ではなく周囲を映します。"
+
+msgid "Grading"
+msgstr "グレーディング"
+
+msgid "Grading (0 = game)"
+msgstr "グレーディング（0 = ゲーム）"
+
+msgid "Grain strength"
+msgstr "グレインの強さ"
+
+msgid "Graphics settings saved; the game reads them when it starts."
+msgstr "グラフィック設定を保存しました。ゲームは起動時に読み込みます。"
+
+msgid "Grass"
+msgstr "草"
+
+msgid "Grass casts ray-traced shadows on the ground: the larger part of the traced shadows' cost in grassland."
+msgstr "草が地面にレイトレースの影を落とします：草原でのトレース影のコストの大部分です。"
+
+msgid "Grass density multiplier"
+msgstr "草の密度の倍率"
+
+msgid "Grass density x"
+msgstr "草の密度 x"
+
+msgid "Grass draw"
+msgstr "草の描画"
+
+msgid "Grass draw distance multiplier"
+msgstr "草の描画距離の倍率"
+
+msgid "Grass draw distance x"
+msgstr "草の描画距離 x"
+
+msgid "Grid"
+msgstr "グリッド"
+
+msgid "Ground"
+msgstr "地面"
+
+msgid "Ground displacement (tessellation)"
+msgstr "地面の変位（テッセレーション）"
+
+msgid "Ground displacement distance (m)"
+msgstr "地面の変位距離（m）"
+
+msgid "Ground in buried ruins"
+msgstr "埋もれた遺跡の地面"
+
+msgid "Ground parallax"
+msgstr "地面の視差"
+
+msgid "Ground parallax depth (% of relief depth)"
+msgstr "地面の視差の深さ（起伏の深さの %）"
+
+msgid "Ground parallax distance (m)"
+msgstr "地面の視差の距離（m）"
+
+msgid "Ground relief depth (cm, typical ground)"
+msgstr "地面の起伏の深さ（cm、一般的な地面）"
+
+msgid "Ground relief quality"
+msgstr "地面の起伏の品質"
+
+msgid "Ground trails"
+msgstr "地面の跡"
+
+msgid "Ground-truth occlusion"
+msgstr "グラウンドトゥルースオクルージョン"
+
+msgid "Guards searching for smuggled or stolen goods and bandits after food or loot also look inside bags carried in the inventory, and guards confiscating stolen goods inside the worn backpack. The game misses those bags, so goods hidden in them are never found."
+msgstr "密輸品や盗品を捜す衛兵や、食料や略奪品を狙う盗賊は、インベントリで運ばれているバッグの中も調べ、盗品を没収する衛兵は背負ったバックパックの中も調べます。ゲームではこれらのバッグを見逃すため、中に隠した品は決して見つかりません。"
+
+msgid "Guards spare their own"
+msgstr "衛兵は身内を見逃す"
+
+msgid "HDR output"
+msgstr "HDR 出力"
+
+msgid "HOME"
+msgstr "ホーム"
+
+msgid "Hair highlights"
+msgstr "髪のハイライト"
+
+msgid "Half resolution"
+msgstr "半分の解像度"
+
+msgid "Hardware mouse"
+msgstr "ハードウェアマウス"
+
+msgid "Hauling"
+msgstr "運搬中"
+
+msgid "Haze"
+msgstr "もや"
+
+msgid "Haze strength"
+msgstr "もやの強さ"
+
+msgid "Haze strength (1 = game)"
+msgstr "もやの強さ（1 = ゲーム）"
+
+msgid "Head turns back"
+msgstr "頭を戻す"
+
+msgid "Heal All"
+msgstr "全員を治療"
+
+msgid "Heal Neutrals"
+msgstr "中立を治療"
+
+msgid "Healing far away"
+msgstr "遠くでの回復"
+
+msgid "Hear from"
+msgstr "聞く位置"
+
+msgid "Heat haze"
+msgstr "陽炎"
+
+msgid "Heat haze strength"
+msgstr "陽炎の強さ"
+
+msgid "Heat haze strength (1 = game)"
+msgstr "陽炎の強さ（1 = ゲーム）"
+
+msgid "Height"
+msgstr "高さ"
+
+msgid "Help"
+msgstr "ヘルプ"
+
+msgid "Hide hats"
+msgstr "帽子を隠す"
+
+msgid "Hide or show the whole interface."
+msgstr "インターフェース全体を隠す、または表示します。"
+
+msgid "Hide other factions' hats"
+msgstr "他勢力の帽子を隠す"
+
+msgid "High impact"
+msgstr "影響大"
+
+msgid "High — 8120 MB (16 GB Macs)"
+msgstr "高 — 8120 MB（16 GB の Mac）"
+
+msgid "High: keeps the most textures, terrain and objects resident. Best on a 16 GB-or-larger Mac with other memory-heavy apps closed."
+msgstr "高：テクスチャ、地形、オブジェクトを最も多く常駐させます。16 GB 以上の Mac で、メモリを多く使う他のアプリを閉じたときに最適です。"
+
+msgid "Higher resolution gives sharper shadow detail."
+msgstr "解像度が高いほど影の細部が鮮明になります。"
+
+msgid "Higher values make the camera ascend and descend faster."
+msgstr "値が高いほどカメラの上昇と下降が速くなります。"
+
+msgid "Higher values retain detailed foliage farther away."
+msgstr "値が高いほど詳細な植生をより遠くまで保ちます。"
+
+msgid "Higher values retain detailed object meshes farther away."
+msgstr "値が高いほど詳細なオブジェクトメッシュをより遠くまで保ちます。"
+
+msgid "Higher values smooth shadow edges with more samples."
+msgstr "値が高いほど多くのサンプルで影の縁を滑らかにします。"
+
+msgid "Hold and move the mouse to turn the camera."
+msgstr "押したままマウスを動かしてカメラを回します。"
+
+msgid "Hold to highlight building signs and outline the characters about."
+msgstr "押している間、建物の看板を強調し、周りのキャラクターに輪郭を付けます。"
+
+msgid "Holding Shift with the camera move keys pans the camera faster (the game has no such boost)."
+msgstr "カメラ移動キーと一緒に Shift を押すとカメラが速く移動します（ゲームにはこの加速はありません）。"
+
+msgid "Holes and needles in the ground"
+msgstr "地面の穴と針"
+
+msgid "Hostile squads that meet far from your squads fight it out by strength; the loser is wiped out. In the game nothing happens far away."
+msgstr "部隊から遠く離れて出会った敵対部隊は戦力で決着をつけ、負けた方は全滅します。ゲームでは遠くでは何も起きません。"
+
+msgid "Hot and dry"
+msgstr "暑く乾燥"
+
+msgid "Hover outline"
+msgstr "ホバー時の輪郭"
+
+msgid "How edges are smoothed."
+msgstr "縁の滑らかにし方。"
+
+msgid "How far above the game's point the camera looks: 0 is the game's height, about 17 a person's head."
+msgstr "ゲームの注視点からどれだけ上をカメラが見るか：0 はゲームの高さ、約 17 で人の頭の高さ。"
+
+msgid "How far away characters are drawn (the game's NPC View Range)."
+msgstr "キャラクターを描画する距離（ゲームの NPC 視認距離）。"
+
+msgid "How far away sounds are heard: 1x is the original, 4x hears fights, footsteps and machines four times as far. Higher values mix more sounds at once."
+msgstr "音が聞こえる距離：1x はオリジナル、4x では戦闘、足音、機械の音が 4 倍遠くまで聞こえます。値が高いほど同時に多くの音を混ぜます。"
+
+msgid "How far shadows are drawn; zero disables them."
+msgstr "影を描画する距離。ゼロで影を無効にします。"
+
+msgid "How fast the arrow keys and the screen edge pan the camera (the game: 500; faster the higher the camera)."
+msgstr "矢印キーと画面端でカメラが移動する速さ（ゲーム：500。カメラが高いほど速い）。"
+
+msgid "How fast the rotate and tilt keys and the mouse turn the camera (the game: 6)."
+msgstr "回転・傾斜キーとマウスでカメラが回る速さ（ゲーム：6）。"
+
+msgid "How fast the wheel and the zoom keys move the camera in and out (the game: 125)."
+msgstr "ホイールとズームキーでカメラが寄り引きする速さ（ゲーム：125）。"
+
+msgid "How fast your characters and the rest of your faction learn: every skill and stat gain is multiplied by this (the game: 1x). 0 stops it. Click the number to type an exact value. A training dummy still stops at its level."
+msgstr "あなたのキャラクターと勢力の他の者が学ぶ速さ：スキルと能力値の上昇はすべてこの倍率になります（ゲーム：1x）。0 で停止。数字をクリックすると正確な値を入力できます。訓練用人形は引き続きその上限で止まります。"
+
+msgid "How finely the ground's shape and its textures are drawn with distance."
+msgstr "距離に応じて地面の形とテクスチャをどれだけ細かく描くか。"
+
+msgid "How finely the terrain follows the ground."
+msgstr "地形がどれだけ細かく地面に沿うか。"
+
+msgid "How high the clouds' base sits above the ground."
+msgstr "雲の底が地面からどれだけ高いか。"
+
+msgid "How long a faction waits between attacks on your towns by squads passing by (the game: Normal). Never stops them."
+msgstr "通りがかりの部隊があなたの町を襲う間隔として勢力が待つ時間（ゲーム：普通）。襲撃を止めることはありません。"
+
+msgid "How many bolts and harpoons stay stuck in the ground and buildings, per kind of bolt; past it the one that flew longest disappears (the game: 60)."
+msgstr "地面や建物に刺さったまま残るボルトと銛の数（ボルトの種類ごと）。超えると最も長く残っていたものが消えます（ゲーム：60）。"
+
+msgid "How many enemies may swing at one character at once (the game: 1, plus its race's extra slots); the others wait at reach or circle."
+msgstr "1 人のキャラクターに同時に攻撃できる敵の数（ゲーム：1、種族の追加枠を加える）。他の敵は間合いで待つか周りを回ります。"
+
+msgid "How many fighters a raid on your towns gathers (the game: 1)."
+msgstr "あなたの町への襲撃に集まる戦闘員の数（ゲーム：1）。"
+
+msgid "How many items dropped during play (severed limbs, luckyren Mode's gear) stay on the ground; past it the oldest disappears. Items that were on the ground in the save always stay."
+msgstr "プレイ中に落ちたアイテム（切断された手足、luckyren モードの装備）が地面に残る数。超えると最も古いものが消えます。セーブ時に地面にあったアイテムは常に残ります。"
+
+msgid "How many maps the shadows are split over, nearest to farthest: more keeps near and far shadows sharper, fewer is cheaper."
+msgstr "影を近くから遠くまで何枚のマップに分けるか：多いほど近くと遠くの影が鮮明に、少ないほど軽くなります。"
+
+msgid "How many squads roam and live in the wild (the game: 1). Affects performance."
+msgstr "荒野を放浪し暮らす部隊の数（ゲーム：1）。パフォーマンスに影響します。"
+
+msgid "How many surrounding zones can display distant towns."
+msgstr "周囲の何ゾーンまで遠くの町を表示できるか。"
+
+msgid "How much of each pixel's light glows into its surroundings."
+msgstr "各ピクセルの光がどれだけ周囲ににじむか。"
+
+msgid "How often factions start raids on your towns (the game: 1)."
+msgstr "勢力があなたの町への襲撃を始める頻度（ゲーム：1）。"
+
+msgid "How to get Kenshi on macOS"
+msgstr "macOS で Kenshi を入手する方法"
+
+msgid "How to get Kenshi on this Mac"
+msgstr "この Mac で Kenshi を入手する方法"
+
+msgid "How?"
+msgstr "方法は？"
+
+msgid "Hybrid"
+msgstr "ハイブリッド"
+
+msgid "Hybrid GI"
+msgstr "ハイブリッド GI"
+
+msgid "Hybrid tone map: ACES share"
+msgstr "ハイブリッドトーンマップ：ACES の割合"
+
+msgid "IMPORT GAME"
+msgstr "ゲームをインポート"
+
+msgid "INVENTORY"
+msgstr "インベントリ"
+
+msgid "Idle"
+msgstr "待機"
+
+msgid "Import this save into a new game? Unsaved progress will be lost."
+msgstr "このセーブを新しいゲームにインポートしますか？未保存の進行状況は失われます。"
+
+msgid "Impostor"
+msgstr "インポスター"
+
+msgid "Impostor distance"
+msgstr "インポスター距離"
+
+msgid "Impostor distance (F7 Meitou)"
+msgstr "インポスター距離（F7 Meitou）"
+
+msgid "Impostor memory budget"
+msgstr "インポスターのメモリ予算"
+
+msgid "Impostor memory budget (MB)"
+msgstr "インポスターのメモリ予算（MB）"
+
+msgid "In-game scene transitions"
+msgstr "ゲーム内のシーン遷移"
+
+msgid "In-game transition speed"
+msgstr "ゲーム内の遷移速度"
+
+msgid "Include my Discord name"
+msgstr "Discord の名前を含める"
+
+msgid "Incompatible with {1}"
+msgstr "{1} と互換性なし"
+
+msgid "Indirect light"
+msgstr "間接光"
+
+msgid "Indirect light technique"
+msgstr "間接光の手法"
+
+msgid "Indoor GI"
+msgstr "室内 GI"
+
+msgid "Indoors"
+msgstr "室内"
+
+msgid "Inputs"
+msgstr "入力"
+
+msgid "Install"
+msgstr "インストール"
+
+msgid "Install a version first (Versions)."
+msgstr "先にバージョンをインストールしてください（バージョン）。"
+
+msgid "Install a version first (Versions): its settings are shown here."
+msgstr "先にバージョンをインストールしてください（バージョン）：その設定がここに表示されます。"
+
+msgid "Install failed: {1}"
+msgstr "インストールに失敗しました：{1}"
+
+msgid "Install folder"
+msgstr "インストールフォルダー"
+
+msgid "Install latest"
+msgstr "最新版をインストール"
+
+msgid "Install v{1} (skipped)"
+msgstr "v{1} をインストール（スキップ済み）"
+
+msgid "Install {1}"
+msgstr "{1} をインストール"
+
+msgid "Installed"
+msgstr "インストール済み"
+
+msgid "Installed · Play"
+msgstr "インストール済み · プレイ"
+
+msgid "Installing"
+msgstr "インストール中"
+
+msgid "Interface"
+msgstr "インターフェース"
+
+msgid "Interface scale"
+msgstr "インターフェースの拡大率"
+
+msgid "Interior lamps"
+msgstr "室内のランプ"
+
+msgid "Internal rendering resolution relative to the window."
+msgstr "ウィンドウに対する内部描画解像度。"
+
+msgid "Italian"
+msgstr "イタリア語"
+
+msgid "Item icons"
+msgstr "アイテムアイコン"
+
+msgid "Item rotation"
+msgstr "アイテムの回転"
+
+msgid "Japanese"
+msgstr "日本語"
+
+msgid "Keep large wrecks, towers and landmarks visible farther away."
+msgstr "大きな残骸、塔、ランドマークをより遠くまで表示します。"
+
+msgid "Keep textures at all squads"
+msgstr "すべての部隊でテクスチャを保持"
+
+msgid "Keep textures at characters"
+msgstr "キャラクターの周りでテクスチャを保持"
+
+msgid "Keep textures sharp when viewed at an angle."
+msgstr "斜めから見てもテクスチャをくっきり保ちます。"
+
+msgid "Keep the lamps of building interiors lit by day too. Stealth counts their light."
+msgstr "建物内のランプを昼間も灯したままにします。隠密はその光を計算に入れます。"
+
+msgid "Keep them"
+msgstr "そのままにする"
+
+msgid "Keeps a larger area loaded round each of your characters, so switching between distant ones skips most of the loading (the game: off; uses more memory)."
+msgstr "各キャラクターの周りのより広いエリアを読み込んだままにし、遠く離れたキャラクター間の切り替えで読み込みをほぼ省きます（ゲーム：オフ。メモリを多く使います）。"
+
+msgid "Keeps the meshes and textures around every squad member loaded, not only around the camera, so a flight or jump to them lands on finished detail. Costs video memory."
+msgstr "カメラの周りだけでなく、各部隊メンバーの周りのメッシュとテクスチャも読み込んだままにし、そこへ飛んだりジャンプしたりしたとき詳細が揃った状態になります。ビデオメモリを使います。"
+
+msgid "Kenshi folder"
+msgstr "Kenshi フォルダー"
+
+msgid "Kenshi not found: set its folder in Settings"
+msgstr "Kenshi が見つかりません：設定でフォルダーを指定してください"
+
+msgid "Kind"
+msgstr "種類"
+
+msgid "Korean"
+msgstr "韓国語"
+
+msgid "LIMBS"
+msgstr "手足"
+
+msgid "LOAD GAME"
+msgstr "ゲームをロード"
+
+msgid "Lamp shadows"
+msgstr "ランプの影"
+
+msgid "Lamp warmth"
+msgstr "ランプの暖かさ"
+
+msgid "Landmark"
+msgstr "ランドマーク"
+
+msgid "Landmark distance"
+msgstr "ランドマーク距離"
+
+msgid "Landmark distance (Meitou)"
+msgstr "ランドマーク距離（Meitou）"
+
+msgid "Language"
+msgstr "言語"
+
+msgid "Large "
+msgstr "大 "
+
+msgid "Large foliage"
+msgstr "大きな植生"
+
+msgid "Large foliage range"
+msgstr "大きな植生の範囲"
+
+msgid "Large foliage range (F6 Meitou)"
+msgstr "大きな植生の範囲（F6 Meitou）"
+
+msgid "Large impostor"
+msgstr "大きなインポスター"
+
+msgid "Large impostor distance"
+msgstr "大きなインポスターの距離"
+
+msgid "Large impostor distance (F7 Meitou)"
+msgstr "大きなインポスターの距離（F7 Meitou）"
+
+msgid "Late dodges and blocks"
+msgstr "遅れた回避と防御"
+
+msgid "Latest"
+msgstr "最新"
+
+msgid "Latest (update to {1})"
+msgstr "最新（{1} に更新）"
+
+msgid "Latest ({1})"
+msgstr "最新（{1}）"
+
+msgid "Launch arguments"
+msgstr "起動引数"
+
+msgid "Launch arguments have {1}, which picks the start itself: remove it to continue a save."
+msgstr "起動引数に {1} があり、それ自体が開始方法を選びます：セーブを続けるには削除してください。"
+
+msgid "Launch as Kenshi on Steam"
+msgstr "Steam で Kenshi として起動"
+
+msgid "Launcher"
+msgstr "ランチャー"
+
+msgid "Launcher update failed: {1}"
+msgstr "ランチャーの更新に失敗しました：{1}"
+
+msgid "Launcher {1} is available."
+msgstr "ランチャー {1} が利用可能です。"
+
+msgid "Lay a fine film grain over the picture, in every camera."
+msgstr "すべてのカメラで、画像に細かなフィルムグレインを重ねます。"
+
+msgid "Layers and steps of the ground relief; lower is cheaper."
+msgstr "地面の起伏のレイヤー数とステップ数。低いほど軽くなります。"
+
+msgid "Leave fading tracks on the ground after walking through fresh blood."
+msgstr "新しい血の上を歩いた後、地面に消えていく跡を残します。"
+
+msgid "Leaves the hats and helmets of your characters out of the picture, so their faces and hair show; they stay worn and protect as before. Portraits only: in the interface's portraits. On: in the world too. Off: hats are drawn everywhere, as in the game."
+msgstr "キャラクターの帽子とヘルメットを画面から省き、顔と髪を見せます。装備したままで防御力も変わりません。肖像のみ：インターフェースの肖像で。オン：ワールドでも。オフ：ゲームと同じくどこでも帽子を描きます。"
+
+msgid "Let bright light glow softly into its surroundings, as in the eye."
+msgstr "目のように、明るい光を周囲に柔らかくにじませます。"
+
+msgid "Let clouds cast shadows across land and water."
+msgstr "雲が陸と水に影を落とすようにします。"
+
+msgid "Let shadows shape the light scattered through haze."
+msgstr "もやの中で散乱する光を影が形作るようにします。"
+
+msgid "Let sunlight soften and warm under bare skin instead of ending at a hard edge."
+msgstr "日光を硬い縁で終わらせず、素肌の下で柔らかく暖かくします。"
+
+msgid "Level:"
+msgstr "レベル："
+
+msgid "Light"
+msgstr "ライト"
+
+msgid "Light portraits and the character editor with a fixed warm sun and its shadows."
+msgstr "肖像とキャラクターエディターを、固定の暖かい太陽とその影で照らします。"
+
+msgid "Light shafts"
+msgstr "光芒"
+
+msgid "Light shafts air"
+msgstr "光芒の大気"
+
+msgid "Light shafts air (0 = none)"
+msgstr "光芒の大気（0 = なし）"
+
+msgid "Light shafts air at dawn and dusk"
+msgstr "夜明けと夕暮れの光芒の大気"
+
+msgid "Light shafts air at dawn and dusk (x)"
+msgstr "夜明けと夕暮れの光芒の大気（x）"
+
+msgid "Light shafts quality"
+msgstr "光芒の品質"
+
+msgid "Light shafts strength"
+msgstr "光芒の強さ"
+
+msgid "Light the night scene from the planet and moon."
+msgstr "惑星と月で夜の景色を照らします。"
+
+msgid "Lighting"
+msgstr "ライティング"
+
+msgid "List the mods folder and the Steam workshop items again"
+msgstr "MOD フォルダーと Steam ワークショップのアイテムを再度一覧表示"
+
+msgid "Load button"
+msgstr "ロードボタン"
+
+msgid "Load the game from the quicksave slot."
+msgstr "クイックセーブスロットからゲームをロードします。"
+
+msgid "Load the newest save, {1} ({2}); its mods must be the enabled ones"
+msgstr "最新のセーブ {1}（{2}）をロード。その MOD が有効になっている必要があります"
+
+msgid "Load this save? Unsaved progress will be lost."
+msgstr "このセーブをロードしますか？未保存の進行状況は失われます。"
+
+msgid "Loaded; the save was made with mods not loaded now: {1}"
+msgstr "ロードしました。このセーブは現在読み込まれていない MOD で作成されています：{1}"
+
+msgid "Loaded; the save was made with {1} mod(s) not loaded now (listed in the messages)"
+msgstr "ロードしました。このセーブは現在読み込まれていない {1} 個の MOD で作成されています（メッセージに一覧）"
+
+msgid "Loads after {1}"
+msgstr "{1} の後にロード"
+
+msgid "Local mod"
+msgstr "ローカル MOD"
+
+msgid "Lock Doors"
+msgstr "扉に鍵をかける"
+
+msgid "Look"
+msgstr "ルック"
+
+msgid "Look at camera"
+msgstr "カメラを見る"
+
+msgid "Loot into backpack"
+msgstr "略奪品をバックパックへ"
+
+msgid "Low holds off: {1}."
+msgstr "低ではオフのまま：{1}。"
+
+msgid "Low impact"
+msgstr "影響小"
+
+msgid "Low power"
+msgstr "電力不足"
+
+msgid "Low quality applied: {1} off until you keep them on."
+msgstr "低品質を適用しました：オンに保つまで {1} はオフです。"
+
+msgid "Lower is cheaper and softer."
+msgstr "低いほど軽く柔らかくなります。"
+
+msgid "Lower the camera in free camera mode."
+msgstr "フリーカメラモードでカメラを下げます。"
+
+msgid "MAIN MENU"
+msgstr "メインメニュー"
+
+msgid "MEITOU"
+msgstr "MEITOU"
+
+msgid "MEITOU LAUNCHER"
+msgstr "MEITOU ランチャー"
+
+msgid "MODS"
+msgstr "MOD"
+
+msgid "Main menu"
+msgstr "メインメニュー"
+
+msgid "Main menu scene transitions"
+msgstr "メインメニューのシーン遷移"
+
+msgid "Main menu style"
+msgstr "メインメニューのスタイル"
+
+msgid "Main menu transition speed"
+msgstr "メインメニューの遷移速度"
+
+msgid "Maintained by"
+msgstr "メンテナー"
+
+msgid "Match the display refresh rate to prevent tearing."
+msgstr "画面のリフレッシュレートに合わせてティアリングを防ぎます。"
+
+msgid "Maximise"
+msgstr "最大化"
+
+msgid "Maximum"
+msgstr "最大"
+
+msgid "Maximum distance at which objects remain visible."
+msgstr "オブジェクトが表示される最大距離。"
+
+msgid "Maximum visibility range for medium-sized foliage."
+msgstr "中くらいの植生の最大表示範囲。"
+
+msgid "Maximum visibility range for small foliage."
+msgstr "小さな植生の最大表示範囲。"
+
+msgid "Maximum visibility range for the largest foliage."
+msgstr "最も大きな植生の最大表示範囲。"
+
+msgid "Measure that shading from each pixel's horizon. Needs Ambient occlusion."
+msgstr "その陰影を各ピクセルの地平線から測ります。アンビエントオクルージョンが必要です。"
+
+msgid "Medium foliage"
+msgstr "中くらいの植生"
+
+msgid "Medium foliage range"
+msgstr "中くらいの植生の範囲"
+
+msgid "Medium impact"
+msgstr "影響中"
+
+msgid "Meitou (on)"
+msgstr "Meitou（オン）"
+
+msgid "Meitou (when busy)"
+msgstr "Meitou（負荷時）"
+
+msgid "Meitou - Faithful UI"
+msgstr "Meitou - オリジナル UI"
+
+msgid "Meitou Launcher"
+msgstr "Meitou ランチャー"
+
+msgid "Meitou cascades"
+msgstr "Meitou のカスケード"
+
+msgid "Meitou improvements (unticked: as the game)"
+msgstr "Meitou の改善（チェックなし：ゲームと同じ）"
+
+msgid "Meitou is already running: close it before starting it again."
+msgstr "Meitou は既に実行中です：閉じてから再度起動してください。"
+
+msgid "Meitou needs Kenshi: it does not include Kenshi's data. You must own Kenshi and point Meitou at its folder."
+msgstr "Meitou には Kenshi が必要です：Kenshi のデータは含まれていません。Kenshi を所有し、Meitou にそのフォルダーを指定してください。"
+
+msgid "Meitou port"
+msgstr "Meitou 移植版"
+
+msgid "Meitou port on the Steam workshop, endorsed by Meitou: {1} by {2}"
+msgstr "Steam ワークショップの Meitou 移植版（Meitou 推奨）：{2} による {1}"
+
+msgid "Meitou port, endorsed by Meitou: {1} by {2} (installed)"
+msgstr "Meitou 移植版（Meitou 推奨）：{2} による {1}（インストール済み）"
+
+msgid "Meitou ports of your mods"
+msgstr "あなたの MOD の Meitou 移植版"
+
+msgid "Meitou {1} is not installed any more."
+msgstr "Meitou {1} はもうインストールされていません。"
+
+msgid "Meitou {1} started with {2}{3}."
+msgstr "Meitou {1} を {2}{3} で起動しました。"
+
+msgid "Meitou {1} started."
+msgstr "Meitou {1} を起動しました。"
+
+msgid "Meitou {1} stopped with an error (exit code {2}); its log is {3}"
+msgstr "Meitou {1} がエラーで終了しました（終了コード {2}）。ログは {3} です"
+
+msgid "Meitou: "
+msgstr "Meitou： "
+
+msgid "Meitou: on"
+msgstr "Meitou：オン"
+
+msgid "Mesh welding"
+msgstr "メッシュの溶接"
+
+msgid "Metal (native)"
+msgstr "Metal（ネイティブ）"
+
+msgid "Metal (native)."
+msgstr "Metal（ネイティブ）。"
+
+msgid "Metal is not available on this Mac; Auto uses Vulkan."
+msgstr "この Mac では Metal を使えません。自動は Vulkan を使います。"
+
+msgid "Metal memory budget"
+msgstr "Metal のメモリ予算"
+
+msgid "Metal memory budget: automatic."
+msgstr "Metal のメモリ予算：自動。"
+
+msgid "Metal memory budget: {1} MB."
+msgstr "Metal のメモリ予算：{1} MB。"
+
+msgid "Metal needs an Apple-silicon Mac; choose Auto or Vulkan."
+msgstr "Metal には Apple シリコンの Mac が必要です。自動か Vulkan を選んでください。"
+
+msgid "Metal on buildings"
+msgstr "建物の金属"
+
+msgid "Metal on characters"
+msgstr "キャラクターの金属"
+
+msgid "Metal render scale"
+msgstr "Metal の描画スケール"
+
+msgid "Metal upscaling preset"
+msgstr "Metal アップスケーリングのプリセット"
+
+msgid "MetalFX Balanced 0.59"
+msgstr "MetalFX バランス 0.59"
+
+msgid "MetalFX Performance 0.50"
+msgstr "MetalFX パフォーマンス 0.50"
+
+msgid "MetalFX Quality 0.67"
+msgstr "MetalFX 品質 0.67"
+
+msgid "MetalFX Spatial 0.40 (alternative)"
+msgstr "MetalFX 空間 0.40（代替）"
+
+msgid "MetalFX Spatial 0.50 (alternative)"
+msgstr "MetalFX 空間 0.50（代替）"
+
+msgid "MetalFX Super Quality 0.77"
+msgstr "MetalFX 最高品質 0.77"
+
+msgid "MetalFX Temporal 0.40"
+msgstr "MetalFX 時間 0.40"
+
+msgid "MetalFX spatial"
+msgstr "MetalFX 空間"
+
+msgid "MetalFX temporal"
+msgstr "MetalFX 時間"
+
+msgid "MetalFX temporal is the default at every tier; spatial rows are explicit alternatives. The preset sets the render scale, and the render scale slider fine-tunes it (Custom)."
+msgstr "MetalFX 時間がどの段階でも既定で、空間の行は明示的な代替です。プリセットが描画スケールを決め、描画スケールのスライダーで微調整します（カスタム）。"
+
+msgid "Mine"
+msgstr "採掘"
+
+msgid "Mine · Meitou {1}"
+msgstr "自分 · Meitou {1}"
+
+msgid "Minimise"
+msgstr "最小化"
+
+msgid "Minutes of unpaused play between autosaves (the game: 10)."
+msgstr "オートセーブ間の一時停止していないプレイ時間（分）（ゲーム：10）。"
+
+msgid "Mod Warning"
+msgstr "MOD の警告"
+
+msgid "Mod list saved: {1} enabled."
+msgstr "MOD リストを保存しました：{1} 個が有効。"
+
+msgid "Modifications to the GLOBAL_CONSTANTS will be lost, you'll have to set them again, sorry!"
+msgstr "GLOBAL_CONSTANTS への変更は失われます。もう一度設定する必要があります、すみません！"
+
+msgid "Mods arranged by their dependencies."
+msgstr "依存関係に従って MOD を並べました。"
+
+msgid "Mods arranged by their dependencies; {1} still need attention."
+msgstr "依存関係に従って MOD を並べました。{1} 個はまだ対応が必要です。"
+
+msgid "Mods from a save"
+msgstr "セーブの MOD"
+
+msgid "Mods of the save '{1}' applied."
+msgstr "セーブ「{1}」の MOD を適用しました。"
+
+msgid "Mods: {1} loaded"
+msgstr "MOD：{1} 個読み込み済み"
+
+msgid "Mods: {1} of {2} loaded"
+msgstr "MOD：{2} 個中 {1} 個読み込み済み"
+
+msgid "Move the camera backward."
+msgstr "カメラを後ろへ動かします。"
+
+msgid "Move the camera forward."
+msgstr "カメラを前へ動かします。"
+
+msgid "Move the camera left."
+msgstr "カメラを左へ動かします。"
+
+msgid "Move the camera right."
+msgstr "カメラを右へ動かします。"
+
+msgid "Move the installed versions from {1} to {2}? Kept, they stay where they are and the new folder lists only its own."
+msgstr "インストール済みのバージョンを {1} から {2} に移動しますか？そのままにすると元の場所に残り、新しいフォルダーには自分のものだけが表示されます。"
+
+msgid "Move the light probes out of walls."
+msgstr "ライトプローブを壁の外へ移動します。"
+
+msgid "Move the view closer."
+msgstr "視点を近づけます。"
+
+msgid "Move the view farther away."
+msgstr "視点を遠ざけます。"
+
+msgid "Move them"
+msgstr "移動する"
+
+msgid "Moves the point the camera looks at sideways: above 0 the character stands left of the middle (a view over the right shoulder), below 0 right of it. It shows less the farther the camera is."
+msgstr "カメラが見る点を横にずらします：0 より大きいとキャラクターは中央の左に立ち（右肩越しの視点）、0 より小さいと右に立ちます。カメラが遠いほど効果は小さくなります。"
+
+msgid "Moving installed versions…"
+msgstr "インストール済みのバージョンを移動中…"
+
+msgid "Music frequency"
+msgstr "音楽の頻度"
+
+msgid "My look"
+msgstr "自分のルック"
+
+msgid "NEW GAME"
+msgstr "ニューゲーム"
+
+msgid "NONE"
+msgstr "なし"
+
+msgid "Near tree fade"
+msgstr "近くの木のフェード"
+
+msgid "Needs first aid"
+msgstr "応急手当が必要"
+
+msgid "Needs research"
+msgstr "研究が必要"
+
+msgid "Needs restart"
+msgstr "再起動が必要"
+
+msgid "Needs {1}"
+msgstr "{1} が必要"
+
+msgid "New version {1}"
+msgstr "新しいバージョン {1}"
+
+msgid "Newer version out"
+msgstr "新しいバージョンがあります"
+
+msgid "News"
+msgstr "ニュース"
+
+msgid "News video sound"
+msgstr "ニュース動画の音声"
+
+msgid "News: GitHub answered {1}"
+msgstr "ニュース：GitHub の応答 {1}"
+
+msgid "News: GitHub not reachable"
+msgstr "ニュース：GitHub に接続できません"
+
+msgid "Night air"
+msgstr "夜の大気"
+
+msgid "Night ambient"
+msgstr "夜の環境光"
+
+msgid "Night ambient light strength"
+msgstr "夜の環境光の強さ"
+
+msgid "Night ambient light strength (1 = 1.2x game)"
+msgstr "夜の環境光の強さ（1 = ゲームの 1.2 倍）"
+
+msgid "Night grading"
+msgstr "夜のグレーディング"
+
+msgid "Night grading strength"
+msgstr "夜のグレーディングの強さ"
+
+msgid "Night grading strength (0 = game)"
+msgstr "夜のグレーディングの強さ（0 = ゲーム）"
+
+msgid "Night sky"
+msgstr "夜空"
+
+msgid "Nightly builds"
+msgstr "ナイトリービルド"
+
+msgid ""
+"Nightly builds are made twice a day from the newest code and are not tested. They may be unstable, crash, and corrupt your save files: back up your saves before playing one.\n"
+"\n"
+"Continue with nightly builds?"
+msgstr ""
+"ナイトリービルドは最新のコードから 1 日 2 回作られ、テストされていません。不安定だったり、クラッシュしたり、セーブファイルを壊したりすることがあります：プレイする前にセーブをバックアップしてください。\n"
+"\n"
+"ナイトリービルドを使いますか？"
+
+msgid "No character selected"
+msgstr "キャラクターが選択されていません"
+
+msgid "No free bed to take anyone to."
+msgstr "誰かを運べる空きベッドがありません。"
+
+msgid "No game data loaded."
+msgstr "ゲームデータが読み込まれていません。"
+
+msgid "No impact"
+msgstr "影響なし"
+
+msgid "No mods found in Kenshi's mods folder or among its Steam workshop items."
+msgstr "Kenshi の MOD フォルダーにも Steam ワークショップのアイテムにも MOD が見つかりません。"
+
+msgid "No mods match the search."
+msgstr "検索に一致する MOD はありません。"
+
+msgid "No news yet."
+msgstr "ニュースはまだありません。"
+
+msgid "No preset yet. Save preset keeps the settings of every tab."
+msgstr "プリセットはまだありません。「プリセットを保存」ですべてのタブの設定を保存します。"
+
+msgid "No release with a {1} build found yet"
+msgstr "{1} 用のビルドがあるリリースはまだ見つかりません"
+
+msgid "No releases listed yet. Check for releases below."
+msgstr "リリースはまだ一覧にありません。下でリリースを確認してください。"
+
+msgid "No save to continue."
+msgstr "続行できるセーブがありません。"
+
+msgid "No saves found."
+msgstr "セーブが見つかりません。"
+
+msgid "No setting matches the search."
+msgstr "検索に一致する設定はありません。"
+
+msgid "No thanks"
+msgstr "いいえ、結構です"
+
+msgid "No water"
+msgstr "水なし"
+
+msgid "No {1} found"
+msgstr "{1} が見つかりません"
+
+msgid "Nobody here to bail out."
+msgstr "ここには保釈できる人はいません。"
+
+msgid "Not enough money: the bail is c.{1}."
+msgstr "お金が足りません：保釈金は c.{1} です。"
+
+msgid "Numbers that float over a character when a blow lands, with the damage armour stopped in brackets. Simple shows the total, Full one number per damage type and the part hit."
+msgstr "攻撃が当たるとキャラクターの上に浮かぶ数字。鎧が防いだダメージを括弧内に表示します。シンプルは合計、フルはダメージの種類ごとの数字と命中部位を表示します。"
+
+msgid "OPTIONS"
+msgstr "オプション"
+
+msgid "OVERWRITE SAVE"
+msgstr "セーブを上書き"
+
+msgid "Object LOD"
+msgstr "オブジェクトの LOD"
+
+msgid "Object LOD distance multiplier"
+msgstr "オブジェクトの LOD 距離の倍率"
+
+msgid "Object LOD distance x"
+msgstr "オブジェクトの LOD 距離 x"
+
+msgid "Object draw distance"
+msgstr "オブジェクトの描画距離"
+
+msgid "Objects"
+msgstr "オブジェクト"
+
+msgid "Off (flat ambient)"
+msgstr "オフ（平坦な環境光）"
+
+msgid "Off at Low quality. Choose Meitou to keep it on at Low."
+msgstr "低品質ではオフ。低でもオンにするには Meitou を選んでください。"
+
+msgid "Offline: saved posts"
+msgstr "オフライン：保存済みの投稿"
+
+msgid "On"
+msgstr "オン"
+
+msgid "On: render below the screen's size and upscale (MetalFX or TAA), with a render scale to choose. Off: render at the screen's size, or in full screen at a fraction of it with a resolution to choose."
+msgstr "オン：画面より小さいサイズで描画して拡大します（MetalFX または TAA）。描画スケールを選べます。オフ：画面サイズで描画するか、フルスクリーンではその一部の解像度で描画します（解像度を選べます）。"
+
+msgid "Only for:"
+msgstr "対象："
+
+msgid "Only nightly builds so far: tick Nightly builds beside Play to list them."
+msgstr "今のところナイトリービルドのみ：「プレイ」の横の「ナイトリービルド」にチェックすると一覧に表示されます。"
+
+msgid "Open Doors"
+msgstr "扉を開ける"
+
+msgid "Open bags at once"
+msgstr "バッグをすぐ開く"
+
+msgid "Open folder"
+msgstr "フォルダーを開く"
+
+msgid "Open its Steam workshop page"
+msgstr "Steam ワークショップのページを開く"
+
+msgid "Open its page"
+msgstr "ページを開く"
+
+msgid "Open or close the build menu."
+msgstr "建築メニューを開閉します。"
+
+msgid "Open or close the debug menu: teleport, spawn, items, money, heal and damage."
+msgstr "デバッグメニューを開閉します：テレポート、出現、アイテム、お金、回復、ダメージ。"
+
+msgid "Open or close the selected character's inventory."
+msgstr "選択したキャラクターのインベントリを開閉します。"
+
+msgid "Open or close the selected character's stats window."
+msgstr "選択したキャラクターのステータスウィンドウを開閉します。"
+
+msgid "Open or close this settings dialog."
+msgstr "この設定ダイアログを開閉します。"
+
+msgid "Open the Tutorials window, or close it."
+msgstr "チュートリアルウィンドウを開閉します。"
+
+msgid "Open the crafting page, or close it."
+msgstr "クラフトページを開閉します。"
+
+msgid "Open the faction page, or close it."
+msgstr "勢力ページを開閉します。"
+
+msgid "Open the installed version's folder"
+msgstr "インストール済みバージョンのフォルダーを開く"
+
+msgid "Open the launcher's release page"
+msgstr "ランチャーのリリースページを開く"
+
+msgid "Open the public wishlist of RE_Kenshi mods for Meitou, where you can ask for this one"
+msgstr "Meitou 向け RE_Kenshi MOD の公開ウィッシュリストを開き、この MOD をリクエストできます"
+
+msgid "Open the research page, or close it."
+msgstr "研究ページを開閉します。"
+
+msgid "Open the world map, or close it."
+msgstr "ワールドマップを開閉します。"
+
+msgid "Open {1} pages"
+msgstr "{1} 件のページを開く"
+
+msgid "Orbit the camera to the left round its target."
+msgstr "カメラを対象の周りで左に旋回させます。"
+
+msgid "Orbit the camera to the right round its target."
+msgstr "カメラを対象の周りで右に旋回させます。"
+
+msgid "Others"
+msgstr "その他"
+
+msgid "Others' XP"
+msgstr "他者の経験値"
+
+msgid "Outdoors"
+msgstr "屋外"
+
+msgid "Outline and tint the character under the cursor, in the colour of what a right click would do."
+msgstr "カーソル下のキャラクターに、右クリックで行う操作の色で輪郭と色付けをします。"
+
+msgid "Outline and tint the selected building, and the building under the cursor in the colour of what a right click would do, like a character under the cursor, except while its interior is shown."
+msgstr "選択中の建物と、カーソル下の建物に右クリックで行う操作の色で輪郭と色付けをします。カーソル下のキャラクターと同様ですが、内部表示中は除きます。"
+
+msgid "Output:"
+msgstr "出力："
+
+msgid "Overlaymaps"
+msgstr "オーバーレイマップ"
+
+msgid "PROSPECTING RESULTS"
+msgstr "探鉱結果"
+
+msgid "Particle density multiplier"
+msgstr "パーティクル密度の倍率"
+
+msgid "Particle density x"
+msgstr "パーティクル密度 x"
+
+msgid "Passed to the game, e.g. --faithful or --windowed."
+msgstr "ゲームに渡されます。例：--faithful または --windowed。"
+
+msgid "Paste"
+msgstr "貼り付け"
+
+msgid "Pause after loading"
+msgstr "ロード後に一時停止"
+
+msgid "Pause or resume the simulation."
+msgstr "シミュレーションを一時停止または再開します。"
+
+msgid "Pause while loading"
+msgstr "読み込み中に一時停止"
+
+msgid "Paused"
+msgstr "一時停止中"
+
+msgid "Peak brightness"
+msgstr "ピーク輝度"
+
+msgid "Performance"
+msgstr "パフォーマンス"
+
+msgid "Photo mode"
+msgstr "フォトモード"
+
+msgid "Photo mode: the simulation pauses, the interface hides, and a free camera with a lens, roll, exposure, time of day and composition guides takes pictures."
+msgstr "フォトモード：シミュレーションが一時停止し、インターフェースが隠れ、レンズ、ロール、露出、時刻、構図ガイド付きのフリーカメラで写真を撮ります。"
+
+msgid "Picked-up and looted items go into the character's backpack first, then its slots and inventory (the game: only while the bag window is open)."
+msgstr "拾ったアイテムや略奪品はまずキャラクターのバックパックに入り、その後スロットとインベントリに入ります（ゲーム：バッグウィンドウが開いているときのみ）。"
+
+msgid "Picking up"
+msgstr "拾っています"
+
+msgid "Picture size"
+msgstr "画像サイズ"
+
+msgid "Pictures"
+msgstr "画像"
+
+msgid "Place here"
+msgstr "ここに配置"
+
+msgid "Planetshine"
+msgstr "惑星光"
+
+msgid "Planetshine strength"
+msgstr "惑星光の強さ"
+
+msgid "Planetshine strength (x physical)"
+msgstr "惑星光の強さ（物理値の x 倍）"
+
+msgid "Plate, tanks and machinery read as metal; rust and paint stay matte."
+msgstr "鉄板、タンク、機械は金属に見え、錆や塗装はつや消しのままです。"
+
+msgid "Play latest"
+msgstr "最新版をプレイ"
+
+msgid "Play starts Meitou {1}."
+msgstr "「プレイ」で Meitou {1} を起動します。"
+
+msgid "Play starts the latest installed version."
+msgstr "「プレイ」で最新のインストール済みバージョンを起動します。"
+
+msgid "Play this version"
+msgstr "このバージョンをプレイ"
+
+msgid "Play {1}"
+msgstr "{1} をプレイ"
+
+msgid "Playback"
+msgstr "再生"
+
+msgid "Points added to every interface font's default height (the game: 3)."
+msgstr "インターフェースの各フォントの既定の高さに加えるポイント数（ゲーム：3）。"
+
+msgid "Polished armour"
+msgstr "磨かれた鎧"
+
+msgid "Portrait and editor sun"
+msgstr "肖像とエディターの太陽"
+
+msgid "Portraits only"
+msgstr "肖像のみ"
+
+msgid "Portuguese (Brazil)"
+msgstr "ポルトガル語（ブラジル）"
+
+msgid "Pose"
+msgstr "ポーズ"
+
+msgid "Pose moment"
+msgstr "ポーズの瞬間"
+
+msgid "Pose speed"
+msgstr "ポーズの速さ"
+
+msgid "Post FX"
+msgstr "ポストエフェクト"
+
+msgid "Preset '{1}' applied."
+msgstr "プリセット「{1}」を適用しました。"
+
+msgid "Preset '{1}' deleted."
+msgstr "プリセット「{1}」を削除しました。"
+
+msgid "Preset '{1}' saved."
+msgstr "プリセット「{1}」を保存しました。"
+
+msgid "Preset name"
+msgstr "プリセット名"
+
+msgid "Presets"
+msgstr "プリセット"
+
+msgid "Prisoners hold still"
+msgstr "囚人はじっとしている"
+
+msgid "Probes"
+msgstr "プローブ"
+
+msgid "Probes (ray tracing)"
+msgstr "プローブ（レイトレーシング）"
+
+msgid "Probes + hybrid cache"
+msgstr "プローブ + ハイブリッドキャッシュ"
+
+msgid "Probes and cache"
+msgstr "プローブとキャッシュ"
+
+msgid "Probes move out of walls, clouds shade bounced light, a traced cache adds fine detail."
+msgstr "プローブが壁の外へ出て、雲が反射光を遮り、トレースしたキャッシュが細部を加えます。"
+
+msgid "Problems in no mod's file:"
+msgstr "どの MOD のファイルにも属さない問題："
+
+msgid "Production far away"
+msgstr "遠くでの生産"
+
+msgid "Propose an order where each enabled mod loads after the mods it needs; nothing moves until you accept"
+msgstr "有効な各 MOD が必要な MOD の後にロードされる順序を提案します。承認するまで何も動きません"
+
+msgid "Proposed moves:"
+msgstr "提案された移動："
+
+msgid "Prospect the ground with the selected character nearest the camera."
+msgstr "カメラに最も近い選択中のキャラクターで地面を探鉱します。"
+
+msgid "Proving Grounds"
+msgstr "試練場"
+
+msgid "Put on Shackles"
+msgstr "枷をはめる"
+
+msgid "QUIT"
+msgstr "ゲーム終了"
+
+msgid "Quality preset"
+msgstr "品質プリセット"
+
+msgid "Quarter resolution"
+msgstr "4 分の 1 の解像度"
+
+msgid "RE_Kenshi file rebinds: applied to the map files"
+msgstr "RE_Kenshi のファイル差し替え：マップファイルに適用"
+
+msgid "RE_Kenshi mod"
+msgstr "RE_Kenshi MOD"
+
+msgid "RE_Kenshi plugin: its DLLs are ignored in Meitou"
+msgstr "RE_Kenshi プラグイン：その DLL は Meitou では無視されます"
+
+msgid "RE_Kenshi sound banks: loaded before the game's"
+msgstr "RE_Kenshi のサウンドバンク：ゲームのものより先に読み込み"
+
+msgid "Raid and campaign data that builds on a base campaign counts the base's squads and follow-up campaigns once. The game counts them twice, so inherited squads come up more often and follow-up raids are about twice as likely."
+msgstr "基本キャンペーンを土台にした襲撃・キャンペーンのデータは、基本の部隊と後続キャンペーンを 1 回だけ数えます。ゲームは 2 回数えるため、継承された部隊がより頻繁に現れ、後続の襲撃が約 2 倍起こりやすくなります。"
+
+msgid "Raids as written"
+msgstr "記述どおりの襲撃"
+
+msgid "Rain drops and puddles"
+msgstr "雨粒と水たまり"
+
+msgid "Rain in open buildings"
+msgstr "開いた建物の中の雨"
+
+msgid "Rain shows on the world: water runs down walls, drops stand on metal and stone, puddles gather on the ground. Off: as the original."
+msgstr "雨が世界に現れます：水が壁を伝い、金属や石に水滴が付き、地面に水たまりができます。オフ：オリジナルと同じ。"
+
+msgid "Raise the camera in free camera mode."
+msgstr "フリーカメラモードでカメラを上げます。"
+
+msgid "Raise the nearby ground into real bumps and ridges that cast shadows."
+msgstr "近くの地面を、影を落とす実際の凹凸や尾根に盛り上げます。"
+
+msgid "Ray traced"
+msgstr "レイトレーシング"
+
+msgid "Ray traced + cascades"
+msgstr "レイトレーシング + カスケード"
+
+msgid "Ray-traced probes, or the probes moved out of walls with a fine cache of traced rays near the camera."
+msgstr "レイトレースのプローブ、またはカメラ付近にトレースしたレイの細かなキャッシュを持つ、壁の外へ移したプローブ。"
+
+msgid "Ray-traced shadows near the camera only; four soft cascades take over further away, where distant trees and buildings keep their shadows."
+msgstr "レイトレースの影はカメラの近くのみ。遠くでは 4 つの柔らかいカスケードが引き継ぎ、遠くの木や建物も影を保ちます。"
+
+msgid "Ray-traced sun shadows: sharp at contact, soft with distance. Needs ray tracing."
+msgstr "レイトレースの太陽の影：接触部ではくっきり、距離とともに柔らかく。レイトレーシングが必要です。"
+
+msgid "Rays gather the bounced light on each character instead of the probes'. Needs GTAO."
+msgstr "プローブの代わりにレイで各キャラクターの反射光を集めます。GTAO が必要です。"
+
+msgid "Reach"
+msgstr "範囲"
+
+msgid "Ready to harvest"
+msgstr "収穫可能"
+
+msgid "Reduce visible colour bands in smooth gradients."
+msgstr "滑らかなグラデーションに見える色の帯を減らします。"
+
+msgid "Reflection range"
+msgstr "反射範囲"
+
+msgid "Reflection range multiplier"
+msgstr "反射範囲の倍率"
+
+msgid "Reflection range x (game 0.6)"
+msgstr "反射範囲 x（ゲーム 0.6）"
+
+msgid "Reflection samples"
+msgstr "反射のサンプル数"
+
+msgid "Reflections"
+msgstr "反射"
+
+msgid "Refresh"
+msgstr "更新"
+
+msgid "Release page"
+msgstr "リリースページ"
+
+msgid "Render UI in screen resolution"
+msgstr "インターフェースを画面解像度で描画"
+
+msgid "Render clouds with volume and depth."
+msgstr "雲を体積と奥行きのあるものとして描画します。"
+
+msgid "Render resolution"
+msgstr "描画解像度"
+
+msgid "Render scale"
+msgstr "描画スケール"
+
+msgid "Render scale (upscaler)"
+msgstr "描画スケール（アップスケーラー）"
+
+msgid "Render weather at an adaptive lower resolution."
+msgstr "天候を適応的に下げた解像度で描画します。"
+
+msgid "Renderer"
+msgstr "レンダラー"
+
+msgid "Renderer: {1}; Play starts the game with it."
+msgstr "レンダラー：{1}。「プレイ」でこれを使ってゲームを起動します。"
+
+msgid "Rendering resolution as a share of the window's pixels, under the upscaler the preset chose (MetalFX at 0.40 at least). Only with Use Metal upscaling on."
+msgstr "ウィンドウのピクセルに対する描画解像度の割合。プリセットが選んだアップスケーラーの下で使われます（MetalFX は最低 0.40）。「Metal アップスケーリングを使う」がオンのときのみ。"
+
+msgid "Rendering resolution for rain, dust and other weather particles."
+msgstr "雨、砂ぼこり、その他の天候パーティクルの描画解像度。"
+
+msgid "Request it"
+msgstr "リクエストする"
+
+msgid "Requires {1}"
+msgstr "{1} が必要"
+
+msgid "Reset "
+msgstr "リセット "
+
+msgid "Reset character"
+msgstr "キャラクターをリセット"
+
+msgid "Reset graphics"
+msgstr "グラフィックをリセット"
+
+msgid "Restart to apply"
+msgstr "再起動で反映"
+
+msgid "Resting"
+msgstr "休憩中"
+
+msgid "Restore all preferences, controls and the look to their defaults?"
+msgstr "すべての設定、操作、ルックを既定に戻しますか？"
+
+msgid "Restore defaults"
+msgstr "既定に戻す"
+
+msgid "Restore defaults?"
+msgstr "既定に戻しますか？"
+
+msgid "Return to the main menu or quit the game?"
+msgstr "メインメニューに戻るか、ゲームを終了しますか？"
+
+msgid "Return to the main menu or quit the game? Unsaved progress will be lost."
+msgstr "メインメニューに戻るか、ゲームを終了しますか？未保存の進行状況は失われます。"
+
+msgid "Reverses the camera's tilt, for the mouse and the keys (the game: on)."
+msgstr "マウスとキーでのカメラの傾きを反転します（ゲーム：オン）。"
+
+msgid "Reverses the camera's turn, for the mouse and the keys (the game: off)."
+msgstr "マウスとキーでのカメラの回転を反転します（ゲーム：オフ）。"
+
+msgid "Roaming squads keep their characters when they leave the area around your squads, and travel on as themselves. In the game they are removed and new ones are made later."
+msgstr "放浪する部隊は、あなたの部隊の周辺エリアを離れてもキャラクターを保ち、そのまま旅を続けます。ゲームでは削除され、後で新しいものが作られます。"
+
+msgid "Rock smoothing (tessellation)"
+msgstr "岩の平滑化（テッセレーション）"
+
+msgid "Round off the flat facets of rocks and cliffs up close."
+msgstr "近くで見る岩や崖の平らな面を丸めます。"
+
+msgid "Run the simulation at double speed."
+msgstr "シミュレーションを 2 倍速で進めます。"
+
+msgid "Run the simulation at five times normal speed."
+msgstr "シミュレーションを通常の 5 倍速で進めます。"
+
+msgid "Run the simulation at normal speed."
+msgstr "シミュレーションを通常速度で進めます。"
+
+msgid "Runs the next world tick while the frame draws: higher frame rates in big fights and crowds, up to 33 ms more input delay."
+msgstr "フレームを描く間に次のワールドティックを実行します：大規模な戦闘や群衆でフレームレートが上がり、入力遅延が最大 33 ms 増えます。"
+
+msgid "Russian"
+msgstr "ロシア語"
+
+msgid "SETTINGS"
+msgstr "設定"
+
+msgid "SSAO is a cheap estimate; GTAO measures how much sky each pixel sees and keeps the colour of the light bounced in corners. Costs more."
+msgstr "SSAO は安価な推定です。GTAO は各ピクセルが見る空の量を測り、隅で反射した光の色を保ちます。コストが高めです。"
+
+msgid "STEALING CHANCE:"
+msgstr "窃盗の成功率："
+
+msgid "Safe — 5120 MB"
+msgstr "セーフ — 5120 MB"
+
+msgid "Safe: a fixed 5120 MB; the guard shortens ranges and evicts caches sooner."
+msgstr "セーフ：固定 5120 MB。保護機能が範囲を短くし、キャッシュを早めに解放します。"
+
+msgid "Sake and rum bottles look like glass: they bend and tint what is behind them, catch reflections and show the drink inside."
+msgstr "酒やラム酒の瓶がガラスのように見えます：後ろのものを屈折させて色づけ、反射を捉え、中の酒を見せます。"
+
+msgid "Samples of the shading in creases: lower is cheaper and noisier."
+msgstr "くぼみの陰影のサンプル数：低いほど軽く、ノイズが増えます。"
+
+msgid "Samples per pixel of the water's reflection: smoother edges, more video memory."
+msgstr "水の反射のピクセルあたりのサンプル数：縁が滑らかに、ビデオメモリが増えます。"
+
+msgid "Save an image of the current view."
+msgstr "現在の視点の画像を保存します。"
+
+msgid "Save as"
+msgstr "名前を付けて保存"
+
+msgid "Save as a new preset"
+msgstr "新しいプリセットとして保存"
+
+msgid "Save as preset"
+msgstr "プリセットとして保存"
+
+msgid "Save failed: {1}"
+msgstr "保存に失敗しました：{1}"
+
+msgid "Save or load still in progress"
+msgstr "保存またはロードがまだ進行中です"
+
+msgid "Save preset"
+msgstr "プリセットを保存"
+
+msgid "Save the game now and attach the save"
+msgstr "今すぐゲームを保存してセーブを添付"
+
+msgid "Save the game to the quicksave slot."
+msgstr "クイックセーブスロットにゲームを保存します。"
+
+msgid "Saves the game on its own every few minutes of unpaused play, into three slots in turn (autosave0 to autosave2)."
+msgstr "一時停止していないプレイ中、数分ごとに自動でゲームを保存し、3 つのスロットを順に使います（autosave0〜autosave2）。"
+
+msgid "Scale air scattering around sunrise and sunset."
+msgstr "日の出と日の入りの頃の大気散乱を調整します。"
+
+msgid "Scale how far away reflected objects are drawn."
+msgstr "反射するオブジェクトを描く距離を調整します。"
+
+msgid "Scale how far trees and other foliage remain visible."
+msgstr "木などの植生が見える距離を調整します。"
+
+msgid "Scale night lighting from the planet and moon."
+msgstr "惑星と月による夜の照明を調整します。"
+
+msgid "Scale the amount of atmospheric haze."
+msgstr "大気のもやの量を調整します。"
+
+msgid "Scale the distance at which grass disappears."
+msgstr "草が消える距離を調整します。"
+
+msgid "Scale the distortion caused by hot air."
+msgstr "熱気による歪みを調整します。"
+
+msgid "Scale the number of grass instances drawn."
+msgstr "描画する草の数を調整します。"
+
+msgid "Scale the number of weather particles emitted."
+msgstr "放出する天候パーティクルの数を調整します。"
+
+msgid "Scale the sky's light in shade, at night and indoors."
+msgstr "日陰、夜、室内での空の光を調整します。"
+
+msgid "Screen resolution"
+msgstr "画面解像度"
+
+msgid "Search"
+msgstr "検索"
+
+msgid "Search results"
+msgstr "検索結果"
+
+msgid "Search settings"
+msgstr "設定を検索"
+
+msgid "Seen into a building with its roof hidden, no rain, dust or ash falls over the open room. The game leaves out only what falls inside it, so with the camera pulled back the rain in front still streaks across the room."
+msgstr "屋根を隠した建物の中を見ると、開いた部屋の上には雨、砂ぼこり、灰が降りません。ゲームは中に落ちるものだけを省くため、カメラを引くと手前の雨がまだ部屋を横切ります。"
+
+msgid "Seen into a building your characters are in, parts of other buildings that run through it are left out, such as the Hub's town wall in the Shinobi Thieves tower. The game's world places them there and draws them inside the room."
+msgstr "キャラクターがいる建物の中を見ると、そこを貫く他の建物の部分が省かれます。例えば Shinobi Thieves の塔の中の Hub の町の壁です。ゲームの世界はそれらをそこに置き、部屋の中に描いてしまいます。"
+
+msgid "Segments of the water mesh: fewer is cheaper, far waves lose shape."
+msgstr "水のメッシュの分割数：少ないほど軽く、遠くの波は形を失います。"
+
+msgid "Select"
+msgstr "選択"
+
+msgid "Select a mod to see its author, description and problems."
+msgstr "MOD を選ぶと作者、説明、問題が表示されます。"
+
+msgid "Select a release to read its notes."
+msgstr "リリースを選ぶとそのノートが表示されます。"
+
+msgid "Select all"
+msgstr "すべて選択"
+
+msgid "Select characters and press the interface (the game's left button). Binding it elsewhere moves the other buttons along."
+msgstr "キャラクターを選択し、インターフェースを操作します（ゲームの左ボタン）。別に割り当てると他のボタンもずれます。"
+
+msgid "Select none"
+msgstr "選択なし"
+
+msgid "Select the next member of the character's squad."
+msgstr "キャラクターの部隊の次のメンバーを選択します。"
+
+msgid "Select the previous member of the character's squad."
+msgstr "キャラクターの部隊の前のメンバーを選択します。"
+
+msgid "Select the whole squad (Shift adds it to the selection)."
+msgstr "部隊全体を選択します（Shift で選択に追加）。"
+
+msgid "Select this member of the squad bar (Shift adds them to the selection; press twice to centre on them)."
+msgstr "部隊バーのこのメンバーを選択します（Shift で選択に追加、2 回押すとそのメンバーにカメラを合わせます）。"
+
+msgid "Selected"
+msgstr "選択中"
+
+msgid "Send"
+msgstr "送信"
+
+msgid "Send anyway"
+msgstr "それでも送信"
+
+msgid "Send feedback"
+msgstr "フィードバックを送信"
+
+msgid "Sending"
+msgstr "送信中"
+
+msgid "Set foliage visibility by mesh size rather than layer."
+msgstr "植生の表示をレイヤーではなくメッシュのサイズで決めます。"
+
+msgid "Set the Kenshi folder first (Settings)."
+msgstr "先に Kenshi フォルダーを設定してください（設定）。"
+
+msgid "Set the Kenshi folder in Settings to list its mods."
+msgstr "MOD を一覧表示するには、設定で Kenshi フォルダーを指定してください。"
+
+msgid "Set up Meitou"
+msgstr "Meitou をセットアップ"
+
+msgid "Sets the upscaler and the render scale. MetalFX temporal by default; spatial is an alternative."
+msgstr "アップスケーラーと描画スケールを設定します。既定は MetalFX 時間、空間は代替です。"
+
+msgid "Settings"
+msgstr "設定"
+
+msgid "Settings   (Tab hides this)"
+msgstr "設定   （Tab で非表示）"
+
+msgid "Setup"
+msgstr "セットアップ"
+
+msgid "Sfx volume"
+msgstr "効果音の音量"
+
+msgid "Shadow"
+msgstr "影"
+
+msgid "Shadow cascades"
+msgstr "影のカスケード"
+
+msgid "Shadow cascades (Meitou)"
+msgstr "影のカスケード（Meitou）"
+
+msgid "Shadow distance"
+msgstr "影の距離"
+
+msgid "Shadow distance (game 1k-9k, 0 off)"
+msgstr "影の距離（ゲーム 1k-9k、0 でオフ）"
+
+msgid "Shadow filter"
+msgstr "影のフィルター"
+
+msgid "Shadow filter 0-2 (Meitou; 0 low-end)"
+msgstr "影のフィルター 0-2（Meitou、0 は低スペック）"
+
+msgid "Shadow map size"
+msgstr "シャドウマップのサイズ"
+
+msgid "Shadow map size (game quality 0-2)"
+msgstr "シャドウマップのサイズ（ゲームの品質 0-2）"
+
+msgid "Share"
+msgstr "共有"
+
+msgid "Sharp zone"
+msgstr "シャープゾーン"
+
+msgid "Sharpen the image after resolution reconstruction."
+msgstr "解像度再構成の後に画像をシャープにします。"
+
+msgid "Shift dark scenes toward the blue of night vision."
+msgstr "暗い場面を夜間視力の青へ寄せます。"
+
+msgid "Shift pan boost"
+msgstr "Shift での移動加速"
+
+msgid "Shift pan speed"
+msgstr "Shift での移動速度"
+
+msgid "Short sharp sun shadows where small things touch a surface."
+msgstr "小さなものが表面に触れるところの短くくっきりした太陽の影。"
+
+msgid "Shoulder"
+msgstr "肩"
+
+msgid "Show names"
+msgstr "名前を表示"
+
+msgid "Show only the mods whose name or author holds this text"
+msgstr "名前か作者にこの文字列を含む MOD だけを表示"
+
+msgid "Show or hide frame statistics."
+msgstr "フレーム統計を表示または非表示にします。"
+
+msgid "Show the next squad in the squad bar."
+msgstr "部隊バーで次の部隊を表示します。"
+
+msgid "Shows the tutorial hints as you play (the game: on)."
+msgstr "プレイ中にチュートリアルのヒントを表示します（ゲーム：オン）。"
+
+msgid "Sideways"
+msgstr "左右"
+
+msgid "Simulation"
+msgstr "シミュレーション"
+
+msgid "Size of the squads made from now on: townspeople, roaming squads and raids (the game: 1). Affects performance."
+msgstr "今後作られる部隊の規模：町の住人、放浪部隊、襲撃（ゲーム：1）。パフォーマンスに影響します。"
+
+msgid "Size of the wave simulation: smaller is cheaper and coarser."
+msgstr "波のシミュレーションのサイズ：小さいほど軽く、粗くなります。"
+
+msgid "Skin"
+msgstr "肌"
+
+msgid "Skin scatters light on this race (the default)."
+msgstr "この種族では肌が光を散乱します（既定）。"
+
+msgid "Skin sheen and glow"
+msgstr "肌の光沢と輝き"
+
+msgid "Skin's oily sheen, a soft bright edge, and light through ears and fingers."
+msgstr "肌の油っぽい光沢、柔らかく明るい縁、耳や指を透ける光。"
+
+msgid "Skip v{1}"
+msgstr "v{1} をスキップ"
+
+msgid "Skipped {1}: the arrow's menu can still install it."
+msgstr "{1} をスキップしました：矢印のメニューからまだインストールできます。"
+
+msgid "Sky"
+msgstr "空"
+
+msgid "Sky & weather"
+msgstr "空と天候"
+
+msgid "Slavers and other cage guards leave their own faction's people in their cages alone instead of making them slaves. In the game they enslave them too. Arrests that end in slavery are not affected."
+msgstr "奴隷商人などの檻の番人は、檻の中の自勢力の者を奴隷にせず放っておきます。ゲームではそれらも奴隷にします。奴隷化で終わる逮捕には影響しません。"
+
+msgid "Small foliage"
+msgstr "小さな植生"
+
+msgid "Small foliage range"
+msgstr "小さな植生の範囲"
+
+msgid "Small pits in the ground are filled and thin needles of ground standing above flat land are lowered, such as the pit near the Dead Workshop and some needles in the Crater. Off, the ground is exactly as the game's map file has it."
+msgstr "地面の小さな穴を埋め、平地の上に突き出た細い針状の地面を低くします。Dead Workshop 近くの穴や Crater の針などです。オフにすると地面はゲームのマップファイルのままです。"
+
+msgid "Smooth the outline of hills and crests against the sky."
+msgstr "空を背景にした丘や尾根の輪郭を滑らかにします。"
+
+msgid "Smooths edges and upscales the render. Active: {1}"
+msgstr "縁を滑らかにし、描画を拡大します。有効：{1}"
+
+msgid "Sneak attack"
+msgstr "不意打ち"
+
+msgid "Soft cascaded maps to the horizon, or a ray to the sun from every pixel: as sharp as the caster is close, grass shadows too (needs ray tracing, turns on indirect light); or rays near the camera and soft cascades further away."
+msgstr "地平線まで届く柔らかいカスケードマップ、または各ピクセルから太陽へのレイ：投影元に近いほどくっきり、草の影も（レイトレーシングが必要、間接光をオン）。またはカメラ付近はレイ、遠くは柔らかいカスケード。"
+
+msgid "Soft cascades"
+msgstr "柔らかいカスケード"
+
+msgid "Soft grazing sun"
+msgstr "柔らかな斜光"
+
+msgid "Soften dust and fog where they meet the ground, and light them by the sun and its shadows."
+msgstr "地面と接するところで砂ぼこりや霧を柔らかくし、太陽とその影で照らします。"
+
+msgid "Sound range"
+msgstr "音の範囲"
+
+msgid "Sound voices"
+msgstr "声"
+
+msgid "Spanish"
+msgstr "スペイン語"
+
+msgid "Speed units"
+msgstr "速度の単位"
+
+msgid "Splash blood on walls, buildings and rocks as well as the ground; pools stay on floors."
+msgstr "地面だけでなく壁、建物、岩にも血を飛び散らせます。血だまりは床に残ります。"
+
+msgid "Splash screens"
+msgstr "スプラッシュ画面"
+
+msgid "Squad XP"
+msgstr "部隊の経験値"
+
+msgid "Squad XP in the Advanced settings"
+msgstr "詳細設定の部隊の経験値"
+
+msgid "Squads keep their people"
+msgstr "部隊がメンバーを保つ"
+
+msgid "Start Meitou {1}"
+msgstr "Meitou {1} を起動"
+
+msgid "Start Meitou {1} at the main menu"
+msgstr "Meitou {1} をメインメニューで起動"
+
+msgid "Start a new game? Unsaved progress will be lost."
+msgstr "新しいゲームを始めますか？未保存の進行状況は失われます。"
+
+msgid "Started {1}"
+msgstr "開始 {1}"
+
+msgid "Stays"
+msgstr "留まる"
+
+msgid "Steam could not subscribe"
+msgstr "Steam がサブスクライブできませんでした"
+
+msgid "Steam did not answer in time."
+msgstr "Steam が時間内に応答しませんでした。"
+
+msgid "Steam did not subscribe to anything."
+msgstr "Steam は何もサブスクライブしませんでした。"
+
+msgid "Steam gave no answer."
+msgstr "Steam から応答がありませんでした。"
+
+msgid "Steam is downloading your workshop mods: {1} of {2} installed."
+msgstr "Steam がワークショップ MOD をダウンロード中：{2} 個中 {1} 個インストール済み。"
+
+msgid "Steam is still downloading; press Refresh when it is done."
+msgstr "Steam はまだダウンロード中です。完了したら「更新」を押してください。"
+
+msgid "Steam sees the game as Kenshi: the overlay, play time and Steam's screenshot key. Needs the Steam copy of Kenshi."
+msgstr "Steam はゲームを Kenshi と認識します：オーバーレイ、プレイ時間、Steam のスクリーンショットキー。Steam 版の Kenshi が必要です。"
+
+msgid "Steam workshop"
+msgstr "Steam ワークショップ"
+
+msgid "Step down to the previous simulation speed."
+msgstr "前のシミュレーション速度に下げます。"
+
+msgid "Step the selection's movement speed: walk, jog, run, group."
+msgstr "選択中の移動速度を切り替えます：歩く、小走り、走る、集団。"
+
+msgid "Step up to the next simulation speed."
+msgstr "次のシミュレーション速度に上げます。"
+
+msgid "Stop syncing"
+msgstr "同期を停止"
+
+msgid "Stop the selected characters."
+msgstr "選択中のキャラクターを止めます。"
+
+msgid "Store the game's models more compactly: about half the video memory, the same look."
+msgstr "ゲームのモデルをより小さく保存します：ビデオメモリは約半分、見た目は同じ。"
+
+msgid "Subscribe"
+msgstr "サブスクライブ"
+
+msgid "Subscribe to this mod's Meitou port on the Steam workshop, or open its page"
+msgstr "この MOD の Meitou 移植版を Steam ワークショップでサブスクライブ、またはページを開く"
+
+msgid "Subscribed on Steam: {1}."
+msgstr "Steam でサブスクライブしました：{1}。"
+
+msgid "Subscribing could not be started."
+msgstr "サブスクライブを開始できませんでした。"
+
+msgid "Sun shadow technique"
+msgstr "太陽の影の手法"
+
+msgid "Sun shadows"
+msgstr "太陽の影"
+
+msgid "Super quality"
+msgstr "最高品質"
+
+msgid "Support me on Ko-fi"
+msgstr "Ko-fi で支援する"
+
+msgid "Swamp turtle attacks"
+msgstr "沼ガメの攻撃"
+
+msgid "Swamp turtle attacks on the Fixes page"
+msgstr "修正ページの沼ガメの攻撃"
+
+msgid "Swamp turtle attacks on the Fixes page is on"
+msgstr "修正ページの沼ガメの攻撃がオン"
+
+msgid "Swap the left and right mouse buttons (the game: off; the game view follows, as in the original)."
+msgstr "マウスの左右のボタンを入れ替えます（ゲーム：オフ。ゲーム画面の操作もオリジナルと同様に追従します）。"
+
+msgid "Swaps a few strong words in the dialogue for milder ones (the game's censorship option)."
+msgstr "会話中のいくつかの強い言葉を穏やかな言葉に置き換えます（ゲームの検閲オプション）。"
+
+msgid "Switch between orbit and free camera movement."
+msgstr "カメラの移動をオービットとフリーで切り替えます。"
+
+msgid "Sync stopped with {1} of {2} workshop mods installed; Steam keeps downloading in the background."
+msgstr "ワークショップ MOD {2} 個中 {1} 個をインストールした時点で同期が停止しました。Steam はバックグラウンドでダウンロードを続けます。"
+
+msgid "Sync workshop"
+msgstr "ワークショップ を同期"
+
+msgid "TAA (experimental)"
+msgstr "TAA（実験的）"
+
+msgid "TAA 0.50 (experimental)"
+msgstr "TAA 0.50（実験的）"
+
+msgid "THANK YOU"
+msgstr "ありがとう"
+
+msgid "TRADER"
+msgstr "商人"
+
+msgid "Take picture"
+msgstr "写真を撮る"
+
+msgid "Take the mod list and load order a save was made with"
+msgstr "セーブ作成時の MOD リストとロード順を使う"
+
+msgid "Take the mods and their load order from this save:"
+msgstr "このセーブから MOD とそのロード順を取り込む："
+
+msgid "Tech level:"
+msgstr "技術レベル："
+
+msgid "Tell us what went wrong or what you think. It becomes a public issue on GitHub, with your Meitou version and load order."
+msgstr "何がうまくいかなかったか、ご意見をお聞かせください。Meitou のバージョンとロード順を添えて、GitHub の公開 Issue になります。"
+
+msgid "Temperature"
+msgstr "気温"
+
+msgid "Terrain"
+msgstr "地形"
+
+msgid "Terrain detail"
+msgstr "地形の詳細度"
+
+msgid "Terrain detail: error px (less = finer)"
+msgstr "地形の詳細度：誤差 px（小さいほど細かい）"
+
+msgid "Terrain material distance"
+msgstr "地形マテリアルの距離"
+
+msgid "Terrain outline refinement (tessellation)"
+msgstr "地形輪郭の細分化（テッセレーション）"
+
+msgid "Terrain relief"
+msgstr "地形の起伏"
+
+msgid "Texture filtering"
+msgstr "テクスチャフィルタリング"
+
+msgid "Texture quality"
+msgstr "テクスチャ品質"
+
+msgid "Texture quality 0-4 (game)"
+msgstr "テクスチャ品質 0-4（ゲーム）"
+
+msgid "Texture resolution; terrain changes need a restart."
+msgstr "テクスチャ解像度。地形の変更は再起動が必要です。"
+
+msgid "That key is reserved. Choose another key, or Esc to cancel."
+msgstr "そのキーは予約されています。別のキーを選ぶか、Esc でキャンセルしてください。"
+
+msgid "The DLSS model. Default picks by render scale; L and M ghost less than K and cost more."
+msgstr "DLSS のモデル。デフォルトは描画スケールに応じて選びます。L と M は K より残像が少ない代わりに負荷が高くなります。"
+
+msgid "The FEEDBACK button at the top right during play. Off, it still shows on the title screen and in the Esc menu."
+msgstr "プレイ中に右上に表示されるフィードバックボタン。オフでも、タイトル画面と Esc メニューには表示されます。"
+
+msgid "The Rotate item control (the middle mouse button by default, Controls page) turns the inventory item on the mouse a quarter, or the item under the pointer in a character's grid, so long items fit across. Worn items are never turned. In the game items cannot be turned. From ErasmianFolly's GetRotatedIdiot."
+msgstr "アイテム回転の操作（デフォルトはマウス中ボタン、操作ページ）で、マウスで持っているインベントリのアイテム、またはキャラクターのグリッドでポインター下にあるアイテムを 90 度回転させ、長いアイテムを横向きに収めます。装備中のアイテムは回転しません。ゲームではアイテムを回転できません。ErasmianFolly の GetRotatedIdiot より。"
+
+msgid "The Vulkan loader is already installed. Select Vulkan to use it."
+msgstr "Vulkan ローダーはすでにインストールされています。使うには Vulkan を選択してください。"
+
+msgid "The Vulkan loader is not installed: run 'brew install molten-vk vulkan-loader' in a terminal, then Play again."
+msgstr "Vulkan ローダーがインストールされていません。ターミナルで 'brew install molten-vk vulkan-loader' を実行してから、もう一度プレイを押してください。"
+
+msgid "The Workshop sync could not be started."
+msgstr "ワークショップ の同期を開始できませんでした。"
+
+msgid "The ash filling a half-buried Ash Dome ruin stays drawn while your characters are in it, and they are ordered onto it. The game hides the ground inside the ruin, showing buried floors nobody can reach under characters that seem to walk on air."
+msgstr "半分埋もれた灰のドームの遺跡を満たす灰は、キャラクターが中にいる間も描画され、キャラクターはその上に移動します。ゲームは遺跡内の地面を隠すため、誰も届かない埋もれた床が見え、キャラクターが宙を歩いているように見えます。"
+
+msgid "The bounty will expire in {1,num} hrs"
+msgstr "賞金はあと {1,num} 時間で失効します"
+
+msgid "The cage is locked."
+msgstr "檻には鍵がかかっています。"
+
+msgid "The camera following a character looks higher than the game's point 10 units above its feet, and to one side if wanted, for a view from head height or over the shoulder. The free camera and the unlocked camera are not changed. From ErasmianFolly's Camera Tweaks."
+msgstr "キャラクターを追うカメラが、ゲームの基準点（足元から 10 ユニット上）より高い位置を、必要なら横にずらして見ます。頭の高さや肩越しの視点になります。フリーカメラとロック解除カメラは変わりません。ErasmianFolly の Camera Tweaks より。"
+
+msgid "The camera moves when the pointer is at the edge of the screen."
+msgstr "ポインターが画面の端にあるとカメラが動きます。"
+
+msgid "The camera's height follows the character's head as it crouches, sits or lies down. On, the height slider is not used."
+msgstr "キャラクターがしゃがむ、座る、横になるときに、カメラの高さが頭に追従します。オンの間は高さスライダーは使われません。"
+
+msgid "The camera's pan speed while Shift is held, of its normal speed."
+msgstr "Shift を押している間のカメラのパン速度（通常速度に対する割合）。"
+
+msgid "The camera's turn and tilt ease in and out (the game: always on). Off: they follow the mouse and the keys at once."
+msgstr "カメラの回転と傾きが滑らかに加減速します（ゲーム：常にオン）。オフ：マウスとキーに即座に追従します。"
+
+msgid "The clipboard holds no preset code (MT1:...). Copy one with Share first."
+msgstr "クリップボードにプリセットコード（MT1:...）がありません。先に共有でコピーしてください。"
+
+msgid "The clipboard holds no preset code (MT1:…). Copy one with Share first."
+msgstr "クリップボードにプリセットコード（MT1:…）がありません。先に共有でコピーしてください。"
+
+msgid "The door will lock when it closes."
+msgstr "扉は閉まると施錠されます。"
+
+msgid "The game as it ships, or Meitou with a look preset."
+msgstr "出荷時のままのゲーム、またはルックプリセットを適用した Meitou。"
+
+msgid "The game is running: close it before detecting the preset."
+msgstr "ゲームが実行中です。プリセットを検出する前に閉じてください。"
+
+msgid "The game is running: it saves its settings when it closes, over changes made here."
+msgstr "ゲームが実行中です。ゲームは終了時に設定を保存し、ここでの変更を上書きします。"
+
+msgid "The game speed of the second speed button (two arrows) and its key (the game: 2x)."
+msgstr "2 番目の速度ボタン（矢印 2 つ）とそのキーのゲーム速度（ゲーム：2x）。"
+
+msgid "The game speed of the third speed button (three arrows) and its key (the game: 5x). High speeds need a fast processor; when it cannot keep up the game runs slower than chosen."
+msgstr "3 番目の速度ボタン（矢印 3 つ）とそのキーのゲーム速度（ゲーム：5x）。高速には高性能なプロセッサーが必要です。処理が追いつかない場合、ゲームは選んだ速度より遅くなります。"
+
+msgid "The game's cascades, Meitou's soft cascades to the horizon, ray-traced shadows, or ray-traced near and soft cascades further away (both need ray tracing and turn on global illumination)."
+msgstr "ゲームのカスケード、地平線まで届く Meitou の柔らかいカスケード、レイトレーシングの影、または近くはレイトレーシングで遠くは柔らかいカスケード（どちらもレイトレーシングが必要で、グローバルイルミネーションをオンにします）。"
+
+msgid "The green marker on the camera's pivot while you turn it (the game: on)."
+msgstr "カメラを回転させている間、その回転軸に表示される緑のマーカー（ゲーム：オン）。"
+
+msgid "The green marker where a move order sends your characters (the game: on)."
+msgstr "移動命令でキャラクターが向かう先の緑のマーカー（ゲーム：オン）。"
+
+msgid "The hats of every other character are left out the same way, not only your own characters'."
+msgstr "自分のキャラクターだけでなく、他のすべてのキャラクターの帽子も同じように省きます。"
+
+msgid "The icon of what a right click would do beside the Windows cursor (none for a walk), and the hand over buttons and targets."
+msgstr "右クリックで行う動作のアイコンを Windows カーソルの横に表示し（歩くときはなし）、ボタンや対象の上では手のカーソルにします。"
+
+msgid "The launch arguments have --benchmark-baseline: the game ignores the graphics sliders while it is set."
+msgstr "起動引数に --benchmark-baseline があります。設定されている間、ゲームはグラフィックのスライダーを無視します。"
+
+msgid "The launch arguments have --low-end: the game ignores the graphics sliders while it is set."
+msgstr "起動引数に --low-end があります。設定されている間、ゲームはグラフィックのスライダーを無視します。"
+
+msgid "The launcher's and the game's settings: {1}"
+msgstr "ランチャーとゲームの設定：{1}"
+
+msgid "The lens's f-number: lower blurs more. A cinema key can set its own."
+msgstr "レンズの F 値。低いほど強くぼけます。シネマキーで独自の値を設定できます。"
+
+msgid "The load window's Load button works only once a save that can be read is selected. The game keeps it live: with nothing selected a click does nothing, and an unreadable save fails to load."
+msgstr "ロード画面のロードボタンは、読み込めるセーブを選択したときだけ機能します。ゲームでは常に有効で、何も選択していなければクリックしても何も起きず、読めないセーブはロードに失敗します。"
+
+msgid "The mod list is still loading; try again in a moment."
+msgstr "MOD リストはまだ読み込み中です。少ししてからもう一度お試しください。"
+
+msgid "The mod order already meets every dependency."
+msgstr "MOD の順序はすでにすべての依存関係を満たしています。"
+
+msgid "The most blood marks on walls and objects and bloody footprints drawn in a frame, the ones that look largest first."
+msgstr "1 フレームに描画する壁や物体の血痕と血の足跡の最大数。大きく見えるものから優先します。"
+
+msgid "The most sounds heard at once: the loudest play, quieter ones wait silently and come back when they are loud enough. Lower it if big fights stutter; All mixes every sound."
+msgstr "同時に聞こえる音の最大数。大きな音が鳴り、小さな音は静かに待機して十分大きくなると戻ります。大規模な戦闘でカクつく場合は下げてください。すべてはあらゆる音をミックスします。"
+
+msgid "The name over each of your characters (the game's Show names option). Off, only the stealth and light icons stay."
+msgstr "自分の各キャラクターの上に表示される名前（ゲームの名前表示オプション）。オフでは隠密と明るさのアイコンだけが残ります。"
+
+msgid "The plugins of these RE_Kenshi mods do not run in Meitou."
+msgstr "これらの RE_Kenshi MOD のプラグインは Meitou では動作しません。"
+
+msgid "The same for everyone outside your faction: other factions, enemies and wild animals (the game: 1x)."
+msgstr "自分の勢力以外のすべて（他の勢力、敵、野生動物）にも同じ設定（ゲーム：1x）。"
+
+msgid "The save '{1}' has no mod list."
+msgstr "セーブ '{1}' には MOD リストがありません。"
+
+msgid "The save '{1}' was made with other mods ({2}); Mods > From save applies its list."
+msgstr "セーブ '{1}' は別の MOD（{2}）で作成されました。MOD > セーブから でそのリストを適用します。"
+
+msgid "The selected carriers put their bodies down."
+msgstr "選択した運搬者が担いでいる体を下ろします。"
+
+msgid "The selection looks for someone to rescue (Shift: add the rescue job)."
+msgstr "選択中のキャラクターが救助する相手を探します（Shift：救助の仕事を追加）。"
+
+msgid "The selection looks for someone to treat (Shift: add the medic job)."
+msgstr "選択中のキャラクターが治療する相手を探します（Shift：医療の仕事を追加）。"
+
+msgid "The selection sits down to rest."
+msgstr "選択中のキャラクターが座って休みます。"
+
+msgid "The size of the whole interface: text, buttons and windows (100%: as the window's height makes it)."
+msgstr "インターフェース全体のサイズ：文字、ボタン、ウィンドウ（100%：ウィンドウの高さに合わせたサイズ）。"
+
+msgid "The size the scene renders at in full screen, stretched to the screen with the nearest pixel. In a window it is the window's size."
+msgstr "フルスクリーンでシーンを描画するサイズ。ニアレストネイバーで画面に引き伸ばします。ウィンドウ表示ではウィンドウのサイズです。"
+
+msgid "The sky's light in shade, at night and indoors."
+msgstr "日陰、夜間、屋内での空の光。"
+
+msgid "The sun's shadows: off, the game's cascades, or Meitou's, soft and to the horizon or ray traced. The lamps' shadows are inside."
+msgstr "太陽の影：オフ、ゲームのカスケード、または Meitou の影（地平線まで届く柔らかい影かレイトレーシング）。ランプの影は屋内にあります。"
+
+msgid "The unit of the run speed in the character's information panel (the game: mph)."
+msgstr "キャラクター情報パネルの走行速度の単位（ゲーム：mph）。"
+
+msgid "The wind's sound ends when the wind dies down. The game asks for a stop sound that does not exist, so once the wind has blown it never goes quiet."
+msgstr "風がやむと風の音も止まります。ゲームは存在しない停止音を要求するため、一度風が吹くと決して静かになりません。"
+
+msgid "There are no problems to copy."
+msgstr "コピーする問題はありません。"
+
+msgid "These can be changed later in Settings. You can install Meitou now and add Kenshi afterwards."
+msgstr "これらは後で設定から変更できます。Meitou を今インストールして、Kenshi は後から追加できます。"
+
+msgid "These dependencies contradict each other, so nothing was moved:"
+msgstr "これらの依存関係は互いに矛盾しているため、何も移動しませんでした："
+
+msgid "Thin grass stays visible far away instead of fading out. Off: as the original."
+msgstr "細い草がフェードアウトせず遠くまで見えます。オフ：オリジナルどおり。"
+
+msgid "This Meitou version does not include Metal; choose Vulkan or install a newer version."
+msgstr "この Meitou のバージョンには Metal が含まれていません。Vulkan を選ぶか、新しいバージョンをインストールしてください。"
+
+msgid "This Meitou version has no Metal renderer and no Vulkan loader; install a newer version or MoltenVK."
+msgstr "この Meitou のバージョンには Metal レンダラーも Vulkan ローダーもありません。新しいバージョンか MoltenVK をインストールしてください。"
+
+msgid "This machine is switched Off"
+msgstr "この機械の電源はオフです"
+
+msgid "This save file is currently in use and cannot be deleted"
+msgstr "このセーブファイルは使用中のため削除できません"
+
+msgid "Tick every mod the search shows"
+msgstr "検索に表示されたすべての MOD にチェックを入れる"
+
+msgid "Tilt the view downward: the camera rises."
+msgstr "視点を下に傾ける：カメラが上がります。"
+
+msgid "Tilt the view upward: the camera comes down."
+msgstr "視点を上に傾ける：カメラが下がります。"
+
+msgid "Time"
+msgstr "時間"
+
+msgid "Time of day"
+msgstr "時刻"
+
+msgid "Time speed"
+msgstr "時間の速さ"
+
+msgid "Time:"
+msgstr "時刻："
+
+msgid "Tint"
+msgstr "色調"
+
+msgid "Tone map"
+msgstr "トーンマップ"
+
+msgid "Tone map (0 = game)"
+msgstr "トーンマップ（0 = ゲーム）"
+
+msgid "Tone map and grade"
+msgstr "トーンマップとグレーディング"
+
+msgid "Towns change far away"
+msgstr "遠くの町も変化する"
+
+msgid "Towns keep their schedule"
+msgstr "町は予定どおりに動く"
+
+msgid "Townspeople you come back to after an hour or more are where their day puts them: in bed at night, at the counter, at their posts and seats. In the game they are where they stood when you left."
+msgstr "1 時間以上たってから戻ると、町の人々はその日の予定どおりの場所にいます。夜はベッド、カウンター、持ち場や席に。ゲームでは立ち去ったときの場所にいます。"
+
+msgid "Traced (ray tracing)"
+msgstr "トレース（レイトレーシング）"
+
+msgid "Traced grass shadows"
+msgstr "レイトレーシングによる草の影"
+
+msgid "Traced near, cascades far"
+msgstr "近くはレイトレーシング、遠くはカスケード"
+
+msgid "Traced sun shadows"
+msgstr "レイトレーシングによる太陽の影"
+
+msgid "Trees close to the camera fade out round the middle of the view (not in the free camera). Off: as the original."
+msgstr "カメラに近い木が画面中央付近でフェードアウトします（フリーカメラ以外）。オフ：オリジナルどおり。"
+
+msgid "Turn"
+msgstr "回転"
+
+msgid "Turn sneaking of the selection on or off."
+msgstr "選択中のキャラクターの隠密をオン・オフします。"
+
+msgid "Turn the Block order of the selection on or off."
+msgstr "選択中のキャラクターのブロック命令をオン・オフします。"
+
+msgid "Turn the Hold position order of the selection on or off."
+msgstr "選択中のキャラクターの位置維持命令をオン・オフします。"
+
+msgid "Turn the Jobs order of the selection on or off."
+msgstr "選択中のキャラクターの仕事命令をオン・オフします。"
+
+msgid "Turn the Passive order of the selection on or off."
+msgstr "選択中のキャラクターのパッシブ命令をオン・オフします。"
+
+msgid "Turn the Ranged order of the selection on or off."
+msgstr "選択中のキャラクターの遠距離命令をオン・オフします。"
+
+msgid "Turn the Taunt order of the selection on or off."
+msgstr "選択中のキャラクターの挑発命令をオン・オフします。"
+
+msgid "Turning"
+msgstr "回転"
+
+msgid "Turns the inventory item on the mouse, or the one under the pointer, a quarter (needs Item rotation on the Advanced page)."
+msgstr "マウスで持っているインベントリのアイテム、またはポインター下のアイテムを 90 度回転させます（詳細ページのアイテムの回転が必要）。"
+
+msgid "Turret gunners turn"
+msgstr "砲塔の射手が回転する"
+
+msgid "Two highlights along the strands of hair and beards."
+msgstr "髪とひげの房に沿った 2 つのハイライト。"
+
+msgid "Type a name for the preset."
+msgstr "プリセットの名前を入力してください。"
+
+msgid "Type a name, or press Esc to cancel."
+msgstr "名前を入力するか、Esc でキャンセルしてください。"
+
+msgid "Type a value    Enter applies it    Esc cancels    Time of day as 13:30"
+msgstr "値を入力    Enter で適用    Esc でキャンセル    時刻は 13:30 の形式"
+
+msgid "Type the preset's name, Enter keeps it, Esc cancels."
+msgstr "プリセットの名前を入力、Enter で確定、Esc でキャンセル。"
+
+msgid "UI style"
+msgstr "UI スタイル"
+
+msgid "Ultra"
+msgstr "ウルトラ"
+
+msgid "Ultra performance"
+msgstr "ウルトラパフォーマンス"
+
+msgid "Ultra quality"
+msgstr "ウルトラクオリティ"
+
+msgid "Unable to read save:\n"
+msgstr "セーブを読み込めません：\n"
+
+msgid "Unavailable"
+msgstr "利用不可"
+
+msgid "Unbound"
+msgstr "未割り当て"
+
+msgid "Uninstall"
+msgstr "アンインストール"
+
+msgid "Unlimited"
+msgstr "無制限"
+
+msgid "Unlock Doors"
+msgstr "扉を解錠"
+
+msgid "Unpacking {1}..."
+msgstr "{1} を展開中..."
+
+msgid "Unstable: daily builds of the newest code, untested. They may crash or corrupt save files; off, only full releases are offered."
+msgstr "不安定版：最新コードの毎日のビルドで、テストされていません。クラッシュやセーブファイルの破損の恐れがあります。オフでは正式リリースのみ提供されます。"
+
+msgid "Untick every mod the search shows"
+msgstr "検索に表示されたすべての MOD のチェックを外す"
+
+msgid "Update launcher to {1}"
+msgstr "ランチャーを {1} に更新"
+
+msgid "Update the launcher automatically"
+msgstr "ランチャーを自動的に更新する"
+
+msgid "Update to {1}"
+msgstr "{1} に更新"
+
+msgid "Updated on the workshop on {1}, after Meitou last checked it: some new features may be missing"
+msgstr "Meitou の最終確認後の {1} に ワークショップ で更新されました：一部の新機能が欠けている可能性があります"
+
+msgid "Updating the launcher: {1}%"
+msgstr "ランチャーを更新中：{1}%"
+
+msgid "Upscaler sharpness"
+msgstr "アップスケーラーのシャープネス"
+
+msgid "Upscaling"
+msgstr "アップスケーリング"
+
+msgid "Use Meitou's atmospheric haze tuning."
+msgstr "Meitou の大気のもや調整を使う。"
+
+msgid "Use Meitou's reduced heat distortion strength."
+msgstr "Meitou の弱めた陽炎の強さを使う。"
+
+msgid "Use Metal upscaling"
+msgstr "Metal アップスケーリングを使う"
+
+msgid "Use extended object and landmark visibility ranges."
+msgstr "物体とランドマークの拡張された表示距離を使う。"
+
+msgid "Use generated simpler meshes for distant characters."
+msgstr "遠くのキャラクターに生成した簡易メッシュを使う。"
+
+msgid "Use generated simpler meshes for distant foliage."
+msgstr "遠くの植物に生成した簡易メッシュを使う。"
+
+msgid "Use hybrid tone mapping and scene colour grading."
+msgstr "ハイブリッドトーンマッピングとシーンのカラーグレーディングを使う。"
+
+msgid "Use light probes for bounced and ambient lighting."
+msgstr "反射光と環境光にライトプローブを使う。"
+
+msgid "Use soft shadows and include distant terrain."
+msgstr "柔らかい影を使い、遠くの地形も含める。"
+
+msgid "Use temporal smoothing and upscaling instead of FXAA."
+msgstr "FXAA の代わりに時間的スムージングとアップスケーリングを使う。"
+
+msgid "Use the Windows cursor instead of the game's drawn pointer (no hover pointers unless Enhanced hardware mouse is on)."
+msgstr "ゲームが描くポインターの代わりに Windows カーソルを使う（拡張ハードウェアマウスがオンでない限り、ホバー時のポインターはなし）。"
+
+msgid "Use the depth of field in the strategy camera too."
+msgstr "ストラテジーカメラでも被写界深度を使う。"
+
+msgid "VERSIONS"
+msgstr "バージョン"
+
+msgid "Vanilla colours"
+msgstr "バニラの色"
+
+msgid "Vegetation"
+msgstr "植生"
+
+msgid "Version {1} for {2}. Not installed by its Setup, so updates open the release page."
+msgstr "{2} 用バージョン {1}。セットアップでインストールされていないため、更新はリリースページを開きます。"
+
+msgid "Version {1} for {2}. Updates itself from GitHub."
+msgstr "{2} 用バージョン {1}。GitHub から自動で更新します。"
+
+msgid "Version {1}. The update check failed: {2}"
+msgstr "バージョン {1}。更新の確認に失敗しました：{2}"
+
+msgid "Versions"
+msgstr "バージョン"
+
+msgid "Video memory for billboard images. Automatic follows the card's memory."
+msgstr "ビルボード画像用のビデオメモリ。自動はグラフィックカードのメモリに合わせます。"
+
+msgid "View the next higher building floor."
+msgstr "建物の 1 つ上の階を表示します。"
+
+msgid "View the next lower building floor."
+msgstr "建物の 1 つ下の階を表示します。"
+
+msgid "Vignette"
+msgstr "ビネット"
+
+msgid "Vignette strength"
+msgstr "ビネットの強さ"
+
+msgid "Volume of combat, building and other sound effects."
+msgstr "戦闘、建築などの効果音の音量。"
+
+msgid "Volume of footsteps."
+msgstr "足音の音量。"
+
+msgid "Volume of the biome music and the main theme."
+msgstr "バイオームの音楽とメインテーマの音量。"
+
+msgid "Volume of the interface sounds."
+msgstr "インターフェースの音の音量。"
+
+msgid "Volume of the voices."
+msgstr "声の音量。"
+
+msgid "Volume of the weather and the world's ambience."
+msgstr "天候と世界の環境音の音量。"
+
+msgid "Vulkan (MoltenVK loader found)."
+msgstr "Vulkan（MoltenVK ローダーが見つかりました）。"
+
+msgid "Vulkan (MoltenVK)"
+msgstr "Vulkan（MoltenVK）"
+
+msgid "Vulkan loader found. Select Vulkan to use it."
+msgstr "Vulkan ローダーが見つかりました。使うには Vulkan を選択してください。"
+
+msgid "Wait for the download to finish first."
+msgstr "先にダウンロードが終わるまでお待ちください。"
+
+msgid "Walls inside buildings"
+msgstr "建物内の壁"
+
+msgid "Want to look at them on Steam?"
+msgstr "Steam で見てみますか？"
+
+msgid "Water & reflections"
+msgstr "水と反射"
+
+msgid "Water beads"
+msgstr "水滴"
+
+msgid "Water clarity multiplier"
+msgstr "水の透明度の倍率"
+
+msgid "Water clarity x (Meitou)"
+msgstr "水の透明度 x（Meitou）"
+
+msgid "Water contact foam, wakes and ripples"
+msgstr "水の接触泡、航跡、波紋"
+
+msgid "Water grid segments"
+msgstr "水のグリッド分割数"
+
+msgid "Water reflection 0-4 (game)"
+msgstr "水の反射 0-4（ゲーム）"
+
+msgid "Water see-through distance"
+msgstr "水中の見通し距離"
+
+msgid "Water see-through distance (Meitou, game 4000)"
+msgstr "水中の見通し距離（Meitou、ゲーム 4000）"
+
+msgid "Water wave resolution"
+msgstr "波の解像度"
+
+msgid "Water wave resolution (FFT size)"
+msgstr "波の解像度（FFT サイズ）"
+
+msgid "Weak punch reach"
+msgstr "弱いパンチの届く距離"
+
+msgid "Weapon"
+msgstr "武器"
+
+msgid "Weapons, armour plates, prosthetics and robots read as metal."
+msgstr "武器、装甲板、義肢、ロボットが金属らしく見えます。"
+
+msgid "Weather Protections"
+msgstr "天候からの保護"
+
+msgid "Weather particles"
+msgstr "天候パーティクル"
+
+msgid "Weather particles: 0 off 1 quarter 2 half 3 auto 4 full"
+msgstr "天候パーティクル：0 オフ 1 4 分の 1 2 半分 3 自動 4 フル"
+
+msgid "What happened"
+msgstr "何が起きたか"
+
+msgid "When a destroyed limb is cut off: Rare only by a single heavy blow, Frequent also when a wound worsens (the game: Rare)."
+msgstr "破壊された手足が切断されるとき：まれ は一撃の重い攻撃のみ、頻繁 は傷が悪化したときも（ゲーム：まれ）。"
+
+msgid "Where game versions are downloaded and installed (in its versions folder)."
+msgstr "ゲームのバージョンをダウンロードしてインストールする場所（その versions フォルダー内）。"
+
+msgid "Where the haze is complete: farther shows more land."
+msgstr "もやが完全になる距離：遠いほど多くの土地が見えます。"
+
+msgid "Where versions are installed; changing it asks whether they move."
+msgstr "バージョンのインストール先。変更すると移動するかどうかを尋ねます。"
+
+msgid "While building: drop the wall line being laid, else the last queued building."
+msgstr "建築中：引いている途中の壁のラインを取り消し、なければ最後に予約した建物を取り消します。"
+
+msgid "While building: lower the held building (Shift: slowly)."
+msgstr "建築中：持っている建物を下げる（Shift：ゆっくり）。"
+
+msgid "While building: queue the held building where it stands, as a left click does."
+msgstr "建築中：持っている建物をその場所に予約します。左クリックと同じです。"
+
+msgid "While building: raise the held building (Shift: slowly)."
+msgstr "建築中：持っている建物を上げる（Shift：ゆっくり）。"
+
+msgid "While building: tilt the held building less, towards level."
+msgstr "建築中：持っている建物の傾きを減らし、水平に近づけます。"
+
+msgid "While building: tilt the held building more to the slope of the ground."
+msgstr "建築中：持っている建物を地面の傾斜にさらに合わせて傾けます。"
+
+msgid "While building: turn the held building left. Build keys may share keys with the others."
+msgstr "建築中：持っている建物を左に回転します。建築キーは他のキーと重複してもかまいません。"
+
+msgid "While building: turn the held building right."
+msgstr "建築中：持っている建物を右に回転します。"
+
+msgid "White brightness"
+msgstr "白の明るさ"
+
+msgid "Wild squads stay"
+msgstr "放浪部隊が残る"
+
+msgid "Will not load: {1}"
+msgstr "読み込まれません：{1}"
+
+msgid "Wind stops"
+msgstr "風がやむ"
+
+msgid "Window"
+msgstr "ウィンドウ"
+
+msgid "Workers"
+msgstr "作業者"
+
+msgid "Workshop synchronised: {1} of {2} mods installed."
+msgstr "ワークショップを同期しました：{2} 個中 {1} 個の MOD をインストール済み。"
+
+msgid "World tick alongside drawing"
+msgstr "描画と並行してワールドを更新"
+
+msgid "You can only hire {1} more characters"
+msgstr "あと {1} 人しか雇えません"
+
+msgid "You can subscribe on the Steam workshop page instead."
+msgstr "代わりに Steam ワークショップのページでサブスクライブできます。"
+
+msgid "You have no subscribed Kenshi workshop mods."
+msgstr "サブスクライブ中の Kenshi ワークショップ MOD はありません。"
+
+msgid "You will die at {1}"
+msgstr "{1} で死亡します"
+
+msgid "Your display's brightest level, in nits."
+msgstr "ディスプレイの最大輝度（nit）。"
+
+msgid "[Crafted by {1}]"
+msgstr "［{1} 作］"
+
+msgid "[Location already known]"
+msgstr "［既知の場所］"
+
+msgid ""
+"[Right-click to learn new map locations]\n"
+"Towns:\n"
+msgstr ""
+"［右クリックで新しい地図の場所を覚える］\n"
+"町：\n"
+
+msgid "a file field without a value"
+msgstr "値のないファイルフィールド"
+
+msgid "a string field without a value"
+msgstr "値のない文字列フィールド"
+
+msgid "against banding in smooth gradients; the game has none"
+msgstr "滑らかなグラデーションのバンディング対策。ゲームにはありません"
+
+msgid "an image is named by a path relative to the mod's folder"
+msgstr "画像は MOD のフォルダーからの相対パスで指定します"
+
+msgid "an instance without an id or target"
+msgstr "ID もターゲットもないインスタンス"
+
+msgid "assembly, so its EditData does not run (declare IModDataPhase on the entry type)"
+msgstr "アセンブリのため、その EditData は実行されません（エントリー型に IModDataPhase を宣言してください）"
+
+msgid "auto (centre)"
+msgstr "自動（中央）"
+
+msgid "black & white"
+msgstr "白黒"
+
+msgid "black haze"
+msgstr "黒いもや"
+
+msgid "blades, armour, clothing"
+msgstr "刃物、防具、衣服"
+
+msgid "bounced light"
+msgstr "反射光"
+
+msgid "built in"
+msgstr "内蔵"
+
+msgid "bumps fade"
+msgstr "凹凸が薄れる"
+
+msgid "by size"
+msgstr "サイズ順"
+
+msgid "clamp (as the game)"
+msgstr "クランプ（ゲームと同じ）"
+
+msgid "click to cancel"
+msgstr "クリックでキャンセル"
+
+msgid "darker corners"
+msgstr "暗い四隅"
+
+msgid "day and night"
+msgstr "昼と夜"
+
+msgid "fixed sun"
+msgstr "固定の太陽"
+
+msgid "flat ambient"
+msgstr "均一な環境光"
+
+msgid "flat haze"
+msgstr "均一なもや"
+
+msgid "flat night"
+msgstr "均一な夜"
+
+msgid "foam, waves"
+msgstr "泡、波"
+
+msgid "full detail"
+msgstr "フルディテール"
+
+msgid "full size"
+msgstr "フルサイズ"
+
+msgid "game data"
+msgstr "ゲームデータ"
+
+msgid "gameplay change"
+msgstr "ゲームプレイの変更"
+
+msgid "generated levels"
+msgstr "生成したレベル"
+
+msgid "hair, cloth, skin, eyes, metal"
+msgstr "髪、布、肌、目、金属"
+
+msgid "hard-edged, flat"
+msgstr "輪郭がくっきり、平坦"
+
+msgid "head turning"
+msgstr "頭の向き"
+
+msgid "hybrid (clamp + ACES)"
+msgstr "ハイブリッド（クランプ + ACES）"
+
+msgid "hybrid, graded"
+msgstr "ハイブリッド、グレーディングあり"
+
+msgid "its game data changes failed to apply"
+msgstr "ゲームデータの変更を適用できませんでした"
+
+msgid "its multiplier is now Squad XP in the Advanced settings (per-skill multipliers are not kept)"
+msgstr "その倍率は現在、詳細設定の部隊の経験値です（スキルごとの倍率は引き継がれません）"
+
+msgid "key light"
+msgstr "キーライト"
+
+msgid "latest nightly"
+msgstr "最新のナイトリー"
+
+msgid "lighter haze keeps far mountains visible"
+msgstr "薄いもやで遠くの山が見えたままになります"
+
+msgid "low resolution"
+msgstr "低解像度"
+
+msgid "luckyren Mode"
+msgstr "luckyren モード"
+
+msgid "metal textures"
+msgstr "金属テクスチャ"
+
+msgid "near, cascades far"
+msgstr "近く、遠くはカスケード"
+
+msgid "night only"
+msgstr "夜のみ"
+
+msgid "nightly"
+msgstr "ナイトリー"
+
+msgid "no name"
+msgstr "名前なし"
+
+msgid "no string id"
+msgstr "文字列 ID なし"
+
+msgid "no {1} build"
+msgstr "{1} 用のビルドなし"
+
+msgid "not enabled: {1}"
+msgstr "未有効：{1}"
+
+msgid "not in the save: {1}"
+msgstr "セーブにない：{1}"
+
+msgid "off (as the game)"
+msgstr "オフ（ゲームと同じ）"
+
+msgid "off (uncapped)"
+msgstr "オフ（上限なし）"
+
+msgid "off while the HDR output is on"
+msgstr "HDR 出力がオンの間はオフ"
+
+msgid "on the land"
+msgstr "陸上"
+
+msgid "original ambient"
+msgstr "オリジナルの環境光"
+
+msgid "own animation"
+msgstr "独自のアニメーション"
+
+msgid "per layer"
+msgstr "レイヤーごと"
+
+msgid "per-face tangents"
+msgstr "面ごとの接線"
+
+msgid "planet light"
+msgstr "惑星光"
+
+msgid "ray-traced probes"
+msgstr "レイトレーシングのプローブ"
+
+msgid "relief march"
+msgstr "レリーフマーチ"
+
+msgid "scotopic blue"
+msgstr "暗所視の青"
+
+msgid "shadowed haze"
+msgstr "影のあるもや"
+
+msgid "sky only"
+msgstr "空のみ"
+
+msgid "soft, far terrain"
+msgstr "柔らかい、遠くの地形"
+
+msgid "soft, lit"
+msgstr "柔らかい、照明あり"
+
+msgid "starfield texture"
+msgstr "星空テクスチャ"
+
+msgid "strength 1"
+msgstr "強さ 1"
+
+msgid "terrain only"
+msgstr "地形のみ"
+
+msgid "the Ambient occlusion switch's method (it needs that switch on): Meitou's SSAO is a cheap estimate; GTAO searches each pixel's horizon, measures how much sky it really sees, and keeps the colour of the light that bounces in a corner. Costs more; off by default"
+msgstr "アンビエントオクルージョンスイッチの方式（そのスイッチがオンである必要があります）：Meitou の SSAO は軽い推定です。GTAO は各ピクセルの地平線を探索し、実際に見える空の量を測り、隅で跳ね返る光の色を保ちます。負荷が高め。デフォルトはオフ"
+
+msgid "the extension belongs to no mod folder"
+msgstr "その拡張子はどの MOD フォルダーにも属していません"
+
+msgid "the file could not be opened: "
+msgstr "ファイルを開けませんでした： "
+
+msgid "the file could not be read as an image"
+msgstr "ファイルを画像として読めませんでした"
+
+msgid "the file does not exist"
+msgstr "ファイルが存在しません"
+
+msgid "the file is not a PNG or DDS image"
+msgstr "ファイルが PNG または DDS 画像ではありません"
+
+msgid "the file is too short to be an image"
+msgstr "ファイルが短すぎて画像になりません"
+
+msgid "the game draws every dust, ash and rain sprite at the full picture size, which is a fill-rate cost when big sprites pile up (a dust storm); Meitou draws the alpha and additive ones into a quarter-area (half per axis) target and blends it back, depth-aware, for a fraction of the cost"
+msgstr "ゲームは砂ぼこり、灰、雨のスプライトをすべて画面のフルサイズで描くため、大きなスプライトが重なると（砂嵐など）フィルレートの負荷になります。Meitou はアルファと加算のスプライトを 4 分の 1 の面積（各軸半分）のターゲットに描き、深度を考慮して合成し直すことで、わずかな負荷に抑えます"
+
+msgid "the game draws every foliage mesh at full detail, and TERRAIN-mode rocks and plants (some thousands of triangles each) have no LOD levels; Meitou makes coarser levels at load (quadric edge collapse, kept in a disk cache) and picks one per instance by how many pixels (shadow texels) its deviation would show"
+msgstr "ゲームは植生のメッシュをすべてフルディテールで描き、TERRAIN モードの岩や植物（それぞれ数千ポリゴン）には LOD レベルがありません。Meitou は読み込み時に粗いレベルを作り（Quadric Edge Collapse、ディスクキャッシュに保存）、インスタンスごとに、その誤差が何ピクセル（影のテクセル）に見えるかで 1 つを選びます"
+
+msgid "the game draws every foliage mesh in full out to its range; Meitou draws large and medium meshes beyond the impostor distance (Tab slider) as baked billboards, crossfaded, which also stand in as shadow casters far out"
+msgstr "ゲームは植生のメッシュをすべて表示距離までフルで描きます。Meitou はインポスター距離（Tab のスライダー）より遠い大・中サイズのメッシュを、クロスフェードする事前生成のビルボードとして描き、遠方では影を落とす役目も担わせます"
+
+msgid "the game draws hard-edged cascades that end abruptly at the shadow range; Meitou fits them to the view, filters them softly with contact-hardening penumbrae, blends the cascades, and lets mountains shadow the land out to the horizon"
+msgstr "ゲームは影の距離でぶつりと終わる輪郭のくっきりしたカスケードを描きます。Meitou はカスケードを視界に合わせ、接触部で硬くなる半影で柔らかくフィルタリングし、カスケード同士をブレンドして、山が地平線まで土地に影を落とすようにします"
+
+msgid "the game ends all of a layer's meshes at one range (1000 x foliage range for most: trees, ruins, junk and litter alike); Meitou draws large meshes (trees, ruins, wrecks, rock stacks) far, medium ones (junk, boulders, bushes) midway and small ones (litter, small plants) near, each class with its own Tab slider"
+msgstr "ゲームはレイヤーのメッシュをすべて 1 つの距離で打ち切ります（大半は植生の表示距離の 1000 倍：木も遺跡もがらくたもごみも同じ）。Meitou は大きなメッシュ（木、遺跡、残骸、岩の山）を遠くまで、中くらいのもの（がらくた、岩、茂み）を中間まで、小さなもの（ごみ、小さな植物）を近くまで描き、それぞれのクラスに Tab のスライダーがあります"
+
+msgid "the game has no grading, so night is the day's saturated browns and oranges, darkened; Meitou shifts dim colour towards the rods' blue-grey as the scene's adapted luminance falls (the Purkinje shift), keeping lamps, fires and the moon in colour (the Tab slider sets the strength)"
+msgstr "ゲームにはグレーディングがないため、夜は昼の彩度の高い茶色やオレンジを暗くしただけです。Meitou はシーンの順応輝度が下がるにつれて暗い色を桿体の青灰色へずらし（プルキンエ現象）、ランプ、火、月の色は残します（Tab のスライダーで強さを設定）"
+
+msgid "the game has no tone curve (bright skies and sunlit sand clip flat at white) and no grading; Meitou blends the clip with ACES (the Tab slider sets the share, 0.75) so highlights roll off, then grades saturation 1.06 and contrast 1.05"
+msgstr "ゲームにはトーンカーブ（明るい空や日なたの砂は白で平らにクリップされます）もグレーディングもありません。Meitou はクリップと ACES をブレンドし（Tab のスライダーで割合を設定、0.75）ハイライトを滑らかに落とし、その後に彩度 1.06、コントラスト 1.05 でグレーディングします"
+
+msgid "the game lights every bump of a normal map as if nothing stood between it and the sun, so ground and walls the sun only grazes break into bright and black patches, and bumps stay lit on a surface facing away; Meitou fades the normal map out of the sun's light as the sun nears the surface's own plane (from 24 degrees down to 6), where the bumps would shadow each other"
+msgstr "ゲームはノーマルマップの凹凸をすべて、太陽との間に何もないかのように照らすため、太陽がかすめるだけの地面や壁が明るい斑点と黒い斑点に割れ、反対を向いた面でも凹凸が照らされたままになります。Meitou は太陽が面そのものの平面に近づくにつれて（24 度から 6 度まで）、凹凸が互いに影を落とすはずの範囲で、ノーマルマップを日光から薄れさせます"
+
+msgid "the game ships SSAO but has it disabled"
+msgstr "ゲームは SSAO を同梱していますが無効になっています"
+
+msgid "the game stands the character being edited on a platform over bare ground; Meitou can stand it in a bar at night instead, drawn with your graphics settings"
+msgstr "ゲームは編集中のキャラクターを何もない地面の上の台に立たせます。Meitou は代わりに夜のバーに立たせ、あなたのグラフィック設定で描くことができます"
+
+msgid "the game uses FXAA; Meitou uses a temporal method (TAA, FSR or DLSS: the Tab panel chooses, FSR and DLSS need their libraries)"
+msgstr "ゲームは FXAA を使います。Meitou は時間的な手法を使います（TAA、FSR、DLSS：Tab のパネルで選択、FSR と DLSS はそれぞれのライブラリが必要）"
+
+msgid "the game's"
+msgstr "ゲームのもの"
+
+msgid "the game's buildings are matte unless a material names a metalness map, and few do; Meitou treats the textures of plate, tank and machinery as metal where they have no colour of their own, so rust and paint stay matte"
+msgstr "ゲームの建物は、マテリアルがメタルネスマップを指定しない限りつや消しで、指定しているものはわずかです。Meitou は板金、タンク、機械のテクスチャで固有の色がない部分を金属として扱うため、錆や塗装はつや消しのままです"
+
+msgid "the game's colours"
+msgstr "ゲームの色"
+
+msgid "the game's glossy and rain-wet surfaces reflect one fixed sky picture, indoors and under a roof too; Meitou replaces it with what they really mirror (the screen, then a traced ray where the device has them, the sky past both), fading with roughness, and darkens the sky's reflection where the probes see no sky. Water keeps its own reflection. Off by default: not yet seen on a GPU"
+msgstr "ゲームの光沢面や雨に濡れた面は、屋内や屋根の下でも固定の空の画像を映します。Meitou はそれを実際に映るもの（画面、次にデバイスが対応していればトレースした光線、その先は空）に置き換え、粗さに応じて薄れさせ、プローブから空が見えない場所では空の反射を暗くします。水は独自の反射を保ちます。デフォルトはオフ：まだ GPU で確認されていません"
+
+msgid "the game's ground is its height map's mesh; Meitou tessellates the ground near the eye and raises it by the same relief (needs tessellation shaders; visual only: characters walk on the undisplaced ground)"
+msgstr "ゲームの地面はハイトマップのメッシュです。Meitou は視点近くの地面をテッセレーションし、同じ起伏で持ち上げます（テッセレーションシェーダーが必要。見た目のみ：キャラクターは変位していない地面を歩きます）"
+
+msgid "the game's heat haze shifts distant objects by several pixels in hot weather, which reads as blur; Meitou halves it (the Tab slider sets any strength)"
+msgstr "ゲームの陽炎は暑い天候で遠くの物体を数ピクセルずらすため、ぼやけて見えます。Meitou はそれを半分にします（Tab のスライダーで任意の強さに設定）"
+
+msgid "the game's shadows stop at the cascades' resolution, so small objects float; Meitou adds short sun shadows from the depth, at full resolution, with no noise, on characters too (armour plates, straps, feet on the ground). Off by default: what the screen does not show casts nothing; for the cascades, the Traced sun shadows hold theirs"
+msgstr "ゲームの影はカスケードの解像度で止まるため、小さな物体が浮いて見えます。Meitou は深度から短い太陽の影をフル解像度、ノイズなしで加え、キャラクターにも適用します（装甲板、ストラップ、地面の足）。デフォルトはオフ：画面に映らないものは影を落としません。カスケードについては、レイトレーシングによる太陽の影がそのまま保ちます"
+
+msgid "the game's sun shadows come from cascaded maps, soft or blocky by their texels; Meitou traces a ray to the sun from every lit pixel at every distance, softened by the sun's real size, the same every frame: a shadow is as sharp as it is close to its caster, characters shadow themselves exactly and grass shadows the ground (needs a GPU with ray tracing and Indirect light; off by default)"
+msgstr "ゲームの太陽の影はカスケードマップから作られ、テクセル次第で柔らかくもブロック状にもなります。Meitou はあらゆる距離の照らされた各ピクセルから太陽へ光線をトレースし、太陽の実際の大きさでぼかし、毎フレーム同じ結果にします。影は落とす物体に近いほど鋭く、キャラクターは自分自身に正確に影を落とし、草は地面に影を落とします（レイトレーシング対応 GPU と間接光が必要。デフォルトはオフ）"
+
+msgid "the game's water is a flat plane with scrolled normal maps; Meitou adds wind-driven waves, breakers that roll in along the depth, break into foam and run up the beach, and foam on the crests (visual only: the water stays at its height for the game)"
+msgstr "ゲームの水はノーマルマップをスクロールさせた平らな面です。Meitou は風による波、深さに沿って押し寄せ泡となって砕け浜を駆け上がる砕波、波頭の泡を加えます（見た目のみ：ゲーム上の水の高さは変わりません）"
+
+msgid "the meshes' own"
+msgstr "メッシュ自身のもの"
+
+msgid "thin lens"
+msgstr "薄レンズ"
+
+msgid "this interface shows no image markers"
+msgstr "このインターフェースは画像マーカーを表示しません"
+
+msgid "type to search"
+msgstr "入力して検索"
+
+msgid "unavailable (see the log), plain swapchain in use"
+msgstr "利用不可（ログを参照）、通常のスワップチェーンを使用中"
+
+msgid "walls, floors, objects"
+msgstr "壁、床、物体"
+
+msgid "waves and surf"
+msgstr "波と磯波"
+
+msgid "welded, averaged tangents"
+msgstr "溶接・平均化した接線"
+
+msgid "where placed"
+msgstr "配置した場所"
+
+msgid "whether it still happens before sending."
+msgstr "送信前にまだ起きるかどうか。"
+
+msgid "with Indirect light enabled, use bounced light indoors; turn this off to keep the original ambient on room surfaces, furniture and indoor characters while outdoor GI stays enabled"
+msgstr "間接光が有効なとき、屋内で反射光を使います。オフにすると、屋外の GI は有効のまま、部屋の表面、家具、屋内のキャラクターにはオリジナルの環境光を保ちます"
+
+msgid "with camera"
+msgstr "カメラと一緒"
+
+msgid "{1,num} hrs"
+msgstr "{1,num} 時間"
+
+msgid "{1,num} secs"
+msgstr "{1,num} 秒"
+
+msgid "{1,num}h {2,num}m left"
+msgstr "残り {1,num} 時間 {2,num} 分"
+
+msgid "{1,num}m left"
+msgstr "残り {1,num} 分"
+
+msgid "{1} after {2} ({3})"
+msgstr "{2} の後に {1}（{3}）"
+
+msgid "{1} already wears something in that slot"
+msgstr "{1} はすでにその枠に何かを装備しています"
+
+msgid "{1} and {2} more"
+msgstr "{1} ほか {2} 件"
+
+msgid "{1} bought {2} for c.{3}"
+msgstr "{1} が {2} を {3} c. で購入しました"
+
+msgid "{1} cannot pay the fine of c.{2}"
+msgstr "{1} は罰金 {2} c. を払えません"
+
+msgid "{1} changes from the game"
+msgstr "ゲームからの変更 {1} 件"
+
+msgid "{1} could not put the captive in the cage"
+msgstr "{1} は捕虜を檻に入れられませんでした"
+
+msgid "{1} deleted; the look is Meitou."
+msgstr "{1} を削除しました。ルックは Meitou です。"
+
+msgid "{1} found no free cage for {2}"
+msgstr "{1} は {2} を入れる空いた檻を見つけられませんでした"
+
+msgid "{1} got out of the cage"
+msgstr "{1} が檻から出ました"
+
+msgid "{1} has been caught committing {2}!"
+msgstr "{1} が {2} の現場を押さえられました！"
+
+msgid "{1} has been imprisoned by {2}"
+msgstr "{1} が {2} に投獄されました"
+
+msgid "{1} installed."
+msgstr "{1} をインストールしました。"
+
+msgid "{1} is after the bounty on {2}!"
+msgstr "{1} が {2} の賞金を狙っています！"
+
+msgid "{1} is arresting {2}!"
+msgstr "{1} が {2} を逮捕しています！"
+
+msgid "{1} is no longer wanted by {2}"
+msgstr "{1} はもう {2} に指名手配されていません"
+
+msgid "{1} is not installed."
+msgstr "{1} はインストールされていません。"
+
+msgid "{1} is wanted by {2} for {3}: bounty c.{4}"
+msgstr "{1} は {3} の罪で {2} に指名手配されています：賞金 {4} c."
+
+msgid "{1} issue"
+msgid_plural "{1} issues"
+msgstr[0] "{1} 件の問題"
+
+msgid "{1} issues"
+msgstr "{1} 件の問題"
+
+msgid "{1} item stack(s) of a closed shop were left on the ground."
+msgstr "閉店した店のアイテムの山 {1} 個が地面に残されました。"
+
+msgid "{1} paid a bail of c.{2} for {3}"
+msgstr "{1} が {3} の保釈金 {2} c. を支払いました"
+
+msgid "{1} paid a fine of c.{2} to {3}; the bounty is cleared"
+msgstr "{1} が {3} に罰金 {2} c. を支払いました。賞金は取り消されました"
+
+msgid "{1} pasted and loaded (made on Meitou {2})."
+msgstr "{1} を貼り付けて読み込みました（Meitou {2} で作成）。"
+
+msgid "{1} posts"
+msgstr "{1} 件の投稿"
+
+msgid "{1} put {2} on {3}"
+msgstr "{1} が {3} に {2} を付けました"
+
+msgid "{1} quality applied."
+msgstr "{1} の品質を適用しました。"
+
+msgid "{1} releases · {2} installed"
+msgstr "{1} 個のリリース · {2} 個インストール済み"
+
+msgid "{1} saved."
+msgstr "{1} を保存しました。"
+
+msgid "{1} second"
+msgstr "{1} 秒"
+
+msgid "{1} seconds"
+msgstr "{1} 秒"
+
+msgid "{1} sold {2} for c.{3}"
+msgstr "{1} が {2} を {3} c. で売却しました"
+
+msgid "{1} uninstalled."
+msgstr "{1} をアンインストールしました。"
+
+msgid "{1} unsaved changes"
+msgstr "未保存の変更 {1} 件"
+
+msgid "{1}'s code is on the clipboard: paste it on Discord, or with Paste."
+msgstr "{1} のコードをクリップボードにコピーしました：Discord に貼り付けるか、貼り付けで使ってください。"
+
+msgid "{1}-{2} seconds"
+msgstr "{1}-{2} 秒"
+
+msgid "{1}: no free cage nearby"
+msgstr "{1}：近くに空いた檻がありません"
+
+msgid "{1}: {2} settings"
+msgstr "{1}：{2} 個の設定"
+
+msgid "Image"
+msgstr "画像"
+
+msgid "Show or hide the selected mod's details beside the list"
+msgstr "選択した MOD の詳細をリストの横に表示または非表示"
+
+msgid "Details"
+msgstr "詳細"
+
+msgid "Save the mod list and load order as a preset of this name"
+msgstr "MOD リストとロード順をこの名前のプリセットとして保存"
+
+msgid "Take the chosen preset's mod list and load order"
+msgstr "選んだプリセットの MOD リストとロード順を使う"
+
+msgid "Delete the chosen preset"
+msgstr "選んだプリセットを削除"
+
+msgid "{1} mods, {2} enabled"
+msgstr "{1} 個の MOD、{2} 個有効"
+
+msgid "{1} of {2} mods shown, {3} enabled"
+msgstr "{2} 個中 {1} 個の MOD を表示、{3} 個有効"
+
+msgid "Not enabled: the game does not load it"
+msgstr "無効：ゲームは読み込みません"
+
+msgid "Needs"
+msgstr "必要"
+
+msgid "not enabled above it"
+msgstr "上で有効になっていません"
+
+msgid "No description"
+msgstr "説明なし"
+
+msgid "Hover outline in the Advanced settings"
+msgstr "詳細設定のホバー時の輪郭"
+
+msgid "Hover outline in the Advanced settings is on"
+msgstr "詳細設定のホバー時の輪郭がオン"
+
+msgid "Lit dust"
+msgstr "照らされる砂ぼこり"
+
+msgid "Light the dust and spray kicked up by running feet like the ground around them, instead of glowing at night."
+msgstr "走る足が巻き上げる砂ぼこりやしぶきを、夜に光らせず周囲の地面と同じように照らします。"
