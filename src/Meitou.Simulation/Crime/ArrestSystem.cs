@@ -155,10 +155,6 @@ public sealed class Arrest
     /// </summary>
     public string? Cage { get; set; }
     /// <summary>
-    /// A slaver's take-over (<c>DA_ENSLAVE_TARGETS_CARRIED_PERSON</c>): the captive becomes the guard faction's slave when caged.
-    /// </summary>
-    public bool Enslave { get; init; }
-    /// <summary>
     /// The guard's order this arrest acts out (240 Capture Target, 213 Lifting/Snatching, 112 Find and put in cage). The record lives while that
     /// order is the guard's started front.
     /// </summary>
@@ -177,7 +173,6 @@ public sealed class Arrest
         h.Add(Tries);
         h.Add(Waited);
         h.Add(Cage is { } c ? Rng.StableHash(c) : 0UL);
-        if (Enslave) h.Add(0x536C6176);
         h.Add((int)Order.Row);
     }
 }
@@ -845,11 +840,6 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     #region Arrest orders
 
     /// <summary>
-    /// The detail of a 112 that DA 40 gives: its caging makes the body the guard faction's slave.
-    /// </summary>
-    static readonly object Enslaving = new();
-
-    /// <summary>
     /// The orders of <c>DA_ARREST_TARGET</c> (29, <c>FUN_140680560</c>, <b>Verified</b>), also the engine's arrest where no dialogue says the line:
     /// with <paramref name="capture"/> (<see cref="CapturesInTown"/>) the guard gets 240 Capture Target on the target, his queue cleared, then 112
     /// Find and put in cage queued behind it; otherwise 4 Attacking, his queue cleared, which the order check <c>FUN_1405d1940</c> refuses with no
@@ -864,7 +854,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         if (capture)
         {
             PlayerOrders.Give(world, g, new OrderEntry(TaskType.LiftPersonSnatchingAllowedInTownOnly, this) { Target = target }, queued: false);
-            PlayerOrders.Give(world, g, CageOrder(target, enslave: false), queued: true);
+            PlayerOrders.Give(world, g, CageOrder(target), queued: true);
             return;
         }
 
@@ -882,11 +872,9 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     }
 
     /// <summary>
-    /// Order 112 Find and put in cage on <paramref name="body"/> (the body the guard carries stays carried through its start);
-    /// <paramref name="enslave"/>: DA 40's.
+    /// Order 112 Find and put in cage on <paramref name="body"/> (the body the guard carries stays carried through its start).
     /// </summary>
-    OrderEntry CageOrder(CharacterId body, bool enslave) =>
-        new(TaskType.FindCageAndPutIn, this) { Target = body, Detail = enslave ? Enslaving : null };
+    OrderEntry CageOrder(CharacterId body) => new(TaskType.FindCageAndPutIn, this) { Target = body };
 
     /// <summary>
     /// The arrest orders' checks; 108 is the player's put in cage (<see cref="CanCage"/>). 240 and 213 need their target there and not caged (240
@@ -949,7 +937,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         bool capture = order.Row == TaskType.LiftPersonSnatchingAllowedInTownOnly;
         var arrest = new Arrest
         {
-            Guard = table.IdOf(slot), Target = order.Target, Faction = gc.Faction, Order = order, Enslave = ReferenceEquals(order.Detail, Enslaving),
+            Guard = table.IdOf(slot), Target = order.Target, Faction = gc.Faction, Order = order,
         };
         _arrests.Add(arrest);
         if (!table.TryResolveNext(order.Target, out int t)) return;
@@ -1266,7 +1254,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     }
 
     /// <summary>
-    /// At the cage: the guard puts the captive down into it with its sentence (DA 40's take-over enslaves it instead of posting the arrest).
+    /// At the cage: the guard puts the captive down into it with its sentence.
     /// </summary>
     bool LockUp(World world, Arrest a, int g, int t, Fixture cage)
     {
@@ -1278,8 +1266,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
 
         Deeds?.Caged(world, g, t);
         tc.Recognition = 0;
-        if (a.Enslave) FixtureRegistry.Enslave(world, tc, a.Faction, table.Cold(g)?.SquadId ?? -1);
-        else if (tc.IsPlayer) world.Post(Loc.Tr("{1} has been imprisoned by {2}", tc.Name, Crimes.Factions.NameOf(a.Faction)));
+        if (tc.IsPlayer) world.Post(Loc.Tr("{1} has been imprisoned by {2}", tc.Name, Crimes.Factions.NameOf(a.Faction)));
         return End(world, a, ArrestEventKind.Jailed);
     }
 

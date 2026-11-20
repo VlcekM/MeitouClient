@@ -89,7 +89,7 @@ public sealed partial class DialogueSystem
     /// </summary>
     bool RunActions(World world, Conversation c, DialogueNode line, CharacterId me, CharacterCold? mc, CharacterId target, CharacterCold? tc)
     {
-        bool takeOver = false, enslave = false;
+        bool takeOver = false;
         foreach (var effect in line.Effects)
         {
             switch (effect.Action)
@@ -113,7 +113,7 @@ public sealed partial class DialogueSystem
                     break;
                 case DialogueActions.AssignBounty or DialogueActions.CrimeAlarm or DialogueActions.PayBounty
                     or DialogueActions.ArrestTargetsCarriedPerson or DialogueActions.EnslaveTargetsCarriedPerson or DialogueActions.ClearBounty:
-                    LawEffect(world, effect, me, mc, target, tc, ref takeOver, ref enslave);
+                    LawEffect(world, effect, me, mc, target, tc, ref takeOver);
                     break;
                 case DialogueActions.ArrestTarget:
                     if (tc is not null) ArrestEffect(world, me, mc, target, tc);
@@ -136,7 +136,7 @@ public sealed partial class DialogueSystem
             }
         }
 
-        if (takeOver) Arrests?.TakeOver(world, me, target, enslave);
+        if (takeOver) Arrests?.TakeOver(world, me, target);
         return true;
     }
 
@@ -278,10 +278,9 @@ public sealed partial class DialogueSystem
 
     /// <summary>
     /// The law effects: bounties assigned, paid and cleared, the crime alarm, arrests, and the carried person handed over (set in
-    /// <paramref name="takeOver"/> and <paramref name="enslave"/>, done after the line's other effects).
+    /// <paramref name="takeOver"/>, done after the line's other effects).
     /// </summary>
-    void LawEffect(World world, DialogueEffect effect, CharacterId me, CharacterCold? mc, CharacterId target, CharacterCold? tc, ref bool takeOver,
-        ref bool enslave)
+    void LawEffect(World world, DialogueEffect effect, CharacterId me, CharacterCold? mc, CharacterId target, CharacterCold? tc, ref bool takeOver)
     {
         switch (effect.Action)
         {
@@ -313,7 +312,8 @@ public sealed partial class DialogueSystem
                 takeOver = true;
                 break;
             case DialogueActions.EnslaveTargetsCarriedPerson when tc is { Carrying.IsNone: false }:
-                takeOver = enslave = true;
+                // the same 213 and 112 as DA 30, any town: the caged body is a captive for the town's slavers (183), not enslaved here
+                takeOver = true;
                 break;
             case DialogueActions.ClearBounty when tc?.Bounties is { } ledger && mc is not null
                 && world.Characters.TryResolveNext(target, out int wanted):
