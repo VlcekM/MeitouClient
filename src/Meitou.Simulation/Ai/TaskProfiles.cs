@@ -60,6 +60,8 @@ public static class TaskProfiles
         [TaskType.GoHomeAndGoToBed] = new(Special, 2, 8, true),
         [TaskType.GoHomeAndGoToBedSecure] = new(Special, 2, 8, true),
         [TaskType.RunAwayHometown] = new(Special, 0.05f, 0.15f, true),   // 127 Retreating fast (FUN_140319a60: 0.05 + 0.15 r, +0x20 set, a2-003)
+        // 35 Running away, a goal of its own (FUN_140319a60: +0x18 0.05, +0x1c 0.1, +0x20 set; 280 registers the same, but is only ever an order).
+        [TaskType.RunAway] = new(Special, 0.05f, 0.1f, true),
         // Home territory aggression: AI slot 41, 0.5 (docs/game/ai-tasks.md "Combat goals", Observed). 16, 21, 34, 143 desire 1 (slot 19, 16's own
         // zeros apart); 15 / 288 their own (AiSystem.Fights.cs).
         [TaskType.TerritorialAggressionButDontLeaveHome] = new(0.5f),

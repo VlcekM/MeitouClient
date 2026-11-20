@@ -451,7 +451,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (row is not null && world.Decisions.Tracing) row.Winner = GoalName(goal);
 
         if (mind.Duty is { } duty && !DutyGoals.Same(duty, goal)) _duties!.Leave(mind);
-        else if (cold.InCombat) InFight(mind, goal, board);
+        else if (cold.InCombat) InFight(world, i, mind, goal, board);
         else Act(world, i, mind, goal, board);
     }
 
@@ -628,7 +628,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         bool fights = behaviour is AiBehaviour.Fight or AiBehaviour.SelfPreserve or AiBehaviour.Flee;
         if (cold.InCombat)
         {
-            if (fights) InFight(mind, goal, board);
+            if (fights) InFight(world, i, mind, goal, board);
             return fights;
         }
 
@@ -723,7 +723,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
             // Its own fight, with nothing but its combat goals and Self preservation to weigh: none wanted ends the fight, and the engine's routine
             // takes it back.
-            if (Choose(world, i, id, mind, squad, board, roles, hour, MeitouHold.Combat) is { } kept) InFight(mind, kept, board);
+            if (Choose(world, i, id, mind, squad, board, roles, hour, MeitouHold.Combat) is { } kept) InFight(world, i, mind, kept, board);
             else
             {
                 mind.LeaveFight = true;
@@ -762,10 +762,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// The choice of a character in its own fight (<see cref="OwnsFight"/>): a combat goal or Self preservation's fight (row 13) keeps the fight
     /// running (the fight is its plan's task, already queued: no new start, whichever of them is current now; the combat system re-targets); Self
-    /// preservation's run (35) or a goal 35 asks the flee step, which stops the fight; any other goal ends the fight in the serial step, and the
-    /// character thinks again at the next tick to act it out (docs/game/ai-tasks.md "Combat goals"). Writes only its own mind.
+    /// preservation's run (35) or a goal 35 asks the flee step, which stops the fight (a new goal 35 rolls its commitment); any other goal ends the
+    /// fight in the serial step, and the character thinks again at the next tick to act it out (docs/game/ai-tasks.md "Combat goals"). Writes only
+    /// its own mind.
     /// </summary>
-    void InFight(AiMind mind, AiGoal goal, Blackboard board)
+    void InFight(World world, int slot, AiMind mind, AiGoal goal, Blackboard board)
     {
         var behaviour = TaskBehaviours.Of(goal.Task.Type);
         if (behaviour is not (AiBehaviour.Fight or AiBehaviour.SelfPreserve or AiBehaviour.Flee))
@@ -775,6 +776,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return;
         }
 
+        CommitInFight(world, slot, mind, goal);
         mind.Goal = goal;
         mind.Behaviour = behaviour;
         mind.Version = board.Version;
@@ -2140,14 +2142,33 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         mind.HomeUnreachable = false;
         if (type is not (TaskType.RelaxInTownPackage or TaskType.SitAround or TaskType.SitOnThrone)) mind.SeatUnreachable = false;
 
-        if (profile.Commits)
-        {
-            ulong roll = Rng.Hash(world.Seed, Rng.Key(table.IdOf(slot)), RngPurpose.Think,
-                SeedSalts.AiCommit ^ (ulong)world.Tick << 9 ^ (ulong)type);
-            mind.CommitUntil = world.GameHours + profile.CommitMin + Rng.Float(roll) * profile.CommitRange;
-        }
-
+        if (profile.Commits) Commit(world, slot, mind, type, profile);
         return true;
+    }
+
+    /// <summary>
+    /// A committing goal becomes current: its commitment ends <see cref="TaskProfile.CommitMin"/> plus a uniform share of
+    /// <see cref="TaskProfile.CommitRange"/> game hours from now (docs/game/ai-tasks.md "Desire and commitment").
+    /// </summary>
+    static void Commit(World world, int slot, AiMind mind, TaskType type, TaskProfile profile)
+    {
+        ulong roll = Rng.Hash(world.Seed, Rng.Key(world.Characters.IdOf(slot)), RngPurpose.Think,
+            SeedSalts.AiCommit ^ (ulong)world.Tick << 9 ^ (ulong)type);
+        mind.CommitUntil = world.GameHours + profile.CommitMin + Rng.Float(roll) * profile.CommitRange;
+    }
+
+    /// <summary>
+    /// A goal installed in a fight (<see cref="InFight"/>) that commits and was not the current one rolls its commitment, as one acted out does
+    /// (<see cref="TakeUp"/>): the original sets it whenever a committing goal becomes current.
+    /// </summary>
+    static void CommitInFight(World world, int slot, AiMind mind, AiGoal goal)
+    {
+        var type = goal.Task.Type;
+        var profile = TaskProfiles.Of(type);
+        if (!profile.Commits) return;
+        if (mind.Goal is { } before && before.Task.Type == type && before.Task.Target == goal.Task.Target) return;
+
+        Commit(world, slot, mind, type, profile);
     }
 
     /// <summary>

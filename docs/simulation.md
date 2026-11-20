@@ -402,7 +402,8 @@ phases, no source ever called from the think:
   (`IDecisionOwner`), later code may add more (`DecisionSystem.Register`). The first source that can run starts; one that runs the character's task already ends the step. Step 4 picks
   the best desire x weight (x1.25 for the goal running now, again below 1 while its task is not [finished](game/ai-tasks.md#finished-tests); a tie goes to the later-listed).
   1. Orders: the front of the queue ([order queue](#order-queue)): runs, starts, or (blocked) shows its text once (`Tried`), stays queued and the step goes on.
-  2. Commitment: no source at this step (no player goal above priority 2 has the commit flag). The priority-2 stop before step 5 is the implicit 153
+  2. Commitment: no source at this step; the one player goal above priority 2 with the commit flag is 35 Running away (a Slave-list goal an obedient
+     player slave takes in the job pass, [captives](#captives)), held by `TierRungs.Begin` as any mind's. The priority-2 stop before step 5 is the implicit 153
      job's (`ProductionSystem.BedCommitment`, key -1 of step 5; [implicit jobs](game/ai-tasks.md#perma-jobs)).
   3. Urgent jobs: the job list as in step 5, asking only the jobs urgent now: kind-2 234 Turret guard while the character senses an enemy (AI `+0xbc`,
      `SenseBlock.Enemies`). It beats Self preservation until a melee attacker comes within 40 (234's effect is planned through 146, `!158`). 187 Obedient

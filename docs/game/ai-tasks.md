@@ -902,6 +902,7 @@ there (`FUN_14060f570` answers false), so for 180 Man the gate the byte changes 
 | 153, 239 Going to bed | 2 + r x 8 | 1 |
 | 190 Worker, 221 Operating machine | 0.5 + r x 2 | 1 |
 | 240 Capture Target | 0.05 + r x 0.5 | 1 |
+| 35, 280 Running away | 0.05 + r x 0.1 (+0x20 set; **Verified**, the registrations in `FUN_140319a60`; Meitou `TaskProfiles`, 280 being only an order there) | 1 |
 | 248 Attacking Squad | 0.3 + r x 2 (+0x20 and +0x21 set; **Verified**, the registration in `FUN_140319a60`; Meitou `TaskProfiles`) | 1 |
 | 45 Bodyguard | - | 0.9 |
 | 57, 58, 125, 237, 250 | - | 0.8 |
@@ -1414,7 +1415,10 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   `Task_Runaway` (35, 280): start `FUN_14034b440` (first run: from the mean position of the sensed threats with positive aggression, by 2000 + 400 r, mover speed field `+0xbc` set to 999); update `FUN_140336820`
   (when the mover stops or is within 200 of its destination: a hop of 1000 + 400 r from where it stands, x and z uniform in [-1, 1] normalised). It has no end of its own: the planner drops it when its goal does
   (under 32, when the threat level falls to 0; as a goal of its own, when its list A `!39, 6` holds, **Observed**). 35 is also a goal of the package `Leader flees while guards fight` (Leader: `Go Home (Run away)`,
-  `Run away!`) and of the Slave lists of four police-station packages (0.001 for an NPC).
+  `Run away!`) and of the Slave lists of four police-station packages (0.001 for an NPC). As a goal of its own it [commits](#desire-and-commitment) (0.05 + r x 0.1 h):
+  priority 3, so until then only an order (a stagger's 147 among them), a replan request (a blow, the melee alert: it stops the task, and the update clears a goal
+  left with none) or its list A (the update's plan step) ends it, and 32 at 0.7 or 1 does not take over ([committed mode](#precedence)); then it no longer holds (the
+  frame step asks a replan for a commit row whose commitment passed; Meitou: the score cap 0.05). Committed mode reads the current goal, so it does not hold a run under 32.
   Meitou: `SelfPreservation` (the two desires, the choice), `CombatSystem.ThreatLevel` (slot 17), goal 32 as `AiSystem.SelfPreservationGoal` (once per NPC mind, the list entries ignored), a priority-3
   goal of the chooser like the combat goals: its plan is `[35, 32]` when `SelfPreservation.Runs` (a crippled NPC, or one with no working arm), else `[13, 32]` when row 13 finds an attacker of its own
   (`AiSystem.SelfDefencePick`: `CombatSystem.BestAttackerOf` with the NPC as subject and looker, its engaged list, threats and own target at any distance; a turret gunner takes no shooter, engine), else none
@@ -1422,7 +1426,8 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   0.7, standing for list A `!159`, engine), left for a higher goal. 35 is acted out by
   `FleeSystem` (the squads' run: first run from the threats' centre, hops, `CharacterCold.Fleeing`): the AI asks (`AiMind.FleeRequest`), a fighter is stopped first. The run is the goal's task (row 35,
   a goal's provenance, `FleeSystem.GoalFlight`) and the runner's chooser runs on (`AiSystem.RunsOwnFlight` holds it): the flight ends when 32 or the goal 35 does (another winner's task replaces the run,
-  or no goal of the run is current: `FleeSystem.FlightGoes`). An engine mind's or a code mod's goal's runner stops, as before, when no threat attacks it within 181.7; a broken squad's (the optional
+  or no goal of the run is current: `FleeSystem.FlightGoes`). A goal 35 commits (`TaskProfiles`; rolled in `AiSystem.TakeUp`, and in `InFight` when it becomes current
+  in a fight): its committed stop (`TierRungs.Begin`) keeps the run while its hours last. An engine mind's or a code mod's goal's runner stops, as before, when no threat attacks it within 181.7; a broken squad's (the optional
   `FleeSystem.SquadBreak`, which the original has no equivalent of: [perception](perception.md#retreat-and-memory)) when no enemy is in sight and nobody attacks it. Not modelled: the player faction's branch of slot 55 (the
   player's characters never run), the locked-gate zero of 60, 4's ranged and squad factors, standing up first for a character staying low. An NPC without a mind (no squad, or until its next package
   cadence) has no 32 and does not answer: every character has goals in the original.
