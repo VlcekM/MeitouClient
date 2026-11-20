@@ -3,7 +3,7 @@ using Meitou.Game.Rendering.Frame;
 namespace Meitou.Game.Settings;
 
 /// <summary>
-/// The Graphics tabs as features (docs/native-ui.md "Settings"): each feature is one header row (its switch, or a title when it has none) with its
+/// The Graphics tabs (and Advanced's Squad XP) as features (docs/native-ui.md "Settings"): each feature is one header row (its switch, or a title when it has none) with its
 /// own settings folded under it, closed until opened. Settings in no group stay rows of their own.
 /// </summary>
 sealed class FeatureGrouping(SettingsMenu menu)

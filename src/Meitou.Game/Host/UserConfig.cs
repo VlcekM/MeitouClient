@@ -436,7 +436,8 @@ sealed class UserConfig
     /// </summary>
     public const float MinXpRate = 0, MaxXpRate = 1000;
     /// <summary>
-    /// The mods (by <c>mods.cfg</c> name) whose settings Meitou has taken into its own built-in feature, once each (<c>BuiltInMods</c>).
+    /// The mods (by <c>mods.cfg</c> name) whose settings Meitou has taken into its own built-in feature, once each (<c>BuiltInMods</c>); a name
+    /// followed by " (again)" marks a second takeover, of settings a later Meitou added to the feature.
     /// </summary>
     public List<string> AdoptedMods { get; set; } = [];
     /// <summary>

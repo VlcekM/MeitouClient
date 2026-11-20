@@ -326,7 +326,7 @@ sealed class GamePages(SettingsMenu menu)
     {
         float rate = MathF.Round(value * 100) / 100;
         if (rate < 0) menu.Config.SquadSkillXp.Remove(key);
-        else menu.Config.SquadSkillXp[key] = Math.Min(rate, UserConfig.MaxXpRate);
+        else menu.Config.SquadSkillXp[key] = rate == 0 ? 0 : Math.Min(rate, UserConfig.MaxXpRate);   // a typed -0 is kept as 0
 
         menu.GameplayChanged?.Invoke();
     }
@@ -809,7 +809,7 @@ sealed class GamePages(SettingsMenu menu)
         foreach (var (slider, skill) in SkillXpSliders.Zip(SkillXp.Skills))
         {
             result.Add(new(slider.Label,
-                $"{skill.Label}'s own multiplier for your faction, in place of Squad XP. At the far left (Squad XP) it follows Squad XP.",
+                "This skill's own multiplier for your faction, in place of Squad XP. At the far left (Squad XP) it follows Squad XP.",
                 Slider: slider, Raw: SkillXp.Raw(skill.Stat)));
         }
 
