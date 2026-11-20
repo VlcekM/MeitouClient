@@ -1240,7 +1240,10 @@ makes `Task_EmptyMachine` (flag 0) for a building source and `Task_Pickup` for a
 **Take** (**Verified**, `Task_EmptyMachine` flag 0, `FUN_14033cd10`; its slot 5 `FUN_140356db0`): the source lists its records (a storage its
 distinct records in item order, `FUN_140299990`; a producer its output); the first whose count is above 0 is taken, a unit at a time up to the
 count while the character has room (Character slot `0x170`), and the task ends; none wanted fails it. The machine the plan fills is not asked, so
-a mixed storage can hand over another record than the one the finder looked for. The count is computed at the take, nothing is kept: over the
+a mixed storage can hand over another record than the one the finder looked for, and the trip repeats: row 92's done state 66 at a
+storage is "carries its item" (`FUN_140597530`; `StorageBuilding` slot `0x550`, `FUN_14029ba60`: the record at `+0x448`, none for an ITEM
+storage), so 93 at the machine still lacks 67 and the next plan runs 92 at the same source again; the player's haul repeats it alike
+(**Observed**, headless: a farmer at a tank holding fuel before water takes the fuel a generator wants, trip by trip, before any water). The count is computed at the take, nothing is kept: over the
 buildings of mask `0x4002436` round the character's town (`FUN_1408cbea0`, a player outpost alike) that are complete (slot `0x228`, `+0x160`),
 not the source and not of its record, each that takes the item (slot `0x4a0`) adds the room of its input of it (`max` - count; 1 for `max`
 -1 with room) when that is its first input; a storage (its entry 0 is empty) or a machine whose input of it comes later makes the count 5 at
