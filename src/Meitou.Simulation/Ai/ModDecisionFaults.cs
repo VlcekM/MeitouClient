@@ -78,9 +78,8 @@ sealed class ModDecisionFaults
             owner._faults++;
 
             Console.Error.WriteLine($"mod       {mod}: {what} dropped for this world, its {call} threw at tick {world.Tick}: {e}");
-            world.ModFaults.Notify(CodeModFaults.BuiltForAnother(e)
-                ? CodeModFaults.Notice(mod)
-                : $"Mod {mod}: its {what} stopped after an error ({e.GetType().Name}); the rest of the game goes on.");
+            if (!CodeModFaults.Tell(mod, e))
+                world.ModFaults.Notify($"Mod {mod}: its {what} stopped after an error ({e.GetType().Name}); the rest of the game goes on.");
         }
     }
 

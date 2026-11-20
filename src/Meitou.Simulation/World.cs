@@ -277,7 +277,7 @@ public sealed partial class World : IDisposable
 
         if (SimulationExtensions.FactoryOf(system) is not { } made)
         {
-            owner.RegisterTasks(Tasks);
+            Tasks.RegisterEngine(owner);
             return;
         }
 
@@ -371,8 +371,8 @@ public sealed partial class World : IDisposable
 
     /// <summary>
     /// Tells every <see cref="IWorldReady"/> system, in system order, that the world is ready to run (<paramref name="fromSave"/>: loaded from a
-    /// save, else a new game); one that throws is logged and the rest are still told, and a mod's built for another version of the game is stopped
-    /// with the player's notice (<see cref="ModSystemFaults.Fault"/>). Between ticks, before the first.
+    /// save, else a new game); one that throws is logged and the rest are still told, and a mod's is stopped with the player's notice
+    /// (<see cref="ModSystemFaults.Fault"/>). Between ticks, before the first.
     /// </summary>
     public void TellReady(bool fromSave)
     {
@@ -392,8 +392,8 @@ public sealed partial class World : IDisposable
     }
 
     /// <summary>
-    /// System <paramref name="index"/>'s <see cref="IWorldReady.Ready"/> threw <paramref name="e"/>: a log line; a mod's built for another version of
-    /// the game is stopped.
+    /// System <paramref name="index"/>'s <see cref="IWorldReady.Ready"/> threw <paramref name="e"/>: a log line; a mod's system is stopped as for a
+    /// throw of one of its phases.
     /// </summary>
     void ReadyFailed(int index, IWorldReady ready, Exception e)
     {
@@ -405,7 +405,7 @@ public sealed partial class World : IDisposable
         }
 
         Console.Error.WriteLine($"mod       {factory.Owner}: world ready of '{factory.Name}' failed: {fault}");
-        if (Content.CodeModFaults.BuiltForAnother(e)) ModFaults.Fault(index, "world ready", e);
+        ModFaults.Fault(index, "world ready", e);
     }
 
     /// <summary>
@@ -733,7 +733,8 @@ public sealed partial class World : IDisposable
     public WorldSnapshot PreviousSnapshot { get; private set; } = WorldSnapshot.Empty;
 
     /// <summary>
-    /// Adds a system after the existing ones; before the first tick.
+    /// Adds a system after the existing ones, its hooks and task handlers registered as the made world's are (chooser goals excepted); before the
+    /// first tick.
     /// </summary>
     public void AddSystem(ITickSystem system)
     {
@@ -758,6 +759,7 @@ public sealed partial class World : IDisposable
         DeathObservers.Register(system, _systems.Count - 1);
         ExperienceFilters.Register(system, _systems.Count - 1);
         CrimeObservers.Register(system, _systems.Count - 1);
+        RegisterTasks(system, _systems.Count - 1);
         if (system is IDecisionOwner owner) Decisions.RegisterFrom(owner);
         Ai.ChooserRegistry.Collect(this, system, _systems.Count - 1, Extensions(), [], goalsOpen: false);
         if (DecidesAfter(system)) _decideAfter = _systems.Count - 1;

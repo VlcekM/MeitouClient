@@ -126,12 +126,6 @@ public sealed class ModHost
     public IReadOnlyList<string> Notices => _notices;
 
     /// <summary>
-    /// The next notice for the player about a mod whose system factory failed while a world was made (built for another version of the game), if
-    /// any; each is given once.
-    /// </summary>
-    public bool TryTakeFactoryNotice(out string notice) => _registry.TryTakeNotice(out notice);
-
-    /// <summary>
     /// The reason each refused code mod was not loaded, by mod name (the <c>.mod</c> file's stem, as in mods.cfg).
     /// </summary>
     public IReadOnlyDictionary<string, string> Refused => _pass.Refusals;
@@ -177,6 +171,7 @@ public sealed class ModHost
             {
                 feed.Faulted = true;
                 Console.Error.WriteLine($"mod       {feed.Owner}: combat hit feed disabled: {e.GetType().Name}: {e.Message}");
+                CodeModFaults.Tell(feed.Owner, e);
             }
         }
     }
@@ -204,6 +199,7 @@ public sealed class ModHost
             {
                 list.Faulted = true;
                 Console.Error.WriteLine($"mod       {list.Owner}: faction list arranger disabled: {e.GetType().Name}: {e.Message}");
+                CodeModFaults.Tell(list.Owner, e);
             }
         }
         return rows;
@@ -680,6 +676,7 @@ public sealed class ModHost
             catch (Exception e)
             {
                 Console.Error.WriteLine($"mod       {dependency.Manifest.Id}: cleanup after {mod.Manifest.Id} failed: {e}");
+                CodeModFaults.Tell(dependency.Manifest.Id, e);
             }
         }
     }
@@ -742,6 +739,7 @@ public sealed class ModHost
         catch (Exception e)
         {
             Console.Error.WriteLine($"mod       {mod}: save data not written: {e}");
+            CodeModFaults.Tell(mod, e);
             return null;
         }
     }
@@ -786,6 +784,7 @@ public sealed class ModHost
         catch (Exception e)
         {
             Console.Error.WriteLine($"mod       {mod}: save data not read: {e}");
+            CodeModFaults.Tell(mod, e);
         }
     }
 
@@ -899,6 +898,7 @@ public sealed class ModHost
             catch (Exception e)
             {
                 Console.Error.WriteLine($"mod       interface extension {extension.Id} not registered: {e}");
+                if (_registry.UiOwners.GetValueOrDefault(extension) is { } owner) CodeModFaults.Tell(owner, e);
             }
         }
         return registrations;

@@ -107,6 +107,7 @@ sealed class ExperienceFilters
         catch (Exception e)
         {
             fault = $"{e.GetType().Name}: {e.Message}";
+            SimulationExtensions.TellOutdated(_filters![i].Filter, e);
         }
 
         Fault(i, gain.Tick, fault);

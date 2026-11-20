@@ -210,6 +210,15 @@ public sealed class SimulationExtensions
     public static SystemFactory? FactoryOf(ITickSystem system) => MadeBy.TryGetValue(system, out var factory) ? factory : null;
 
     /// <summary>
+    /// The player's one notice for a mod built for another version of the game (<see cref="Content.CodeModFaults.Tell"/>) when
+    /// <paramref name="system"/>, whose hook threw <paramref name="e"/>, was made by a mod; nothing for a standard system. Any thread.
+    /// </summary>
+    internal static void TellOutdated(ITickSystem system, Exception e)
+    {
+        if (FactoryOf(system) is { } factory) Content.CodeModFaults.Tell(factory.Owner, e);
+    }
+
+    /// <summary>
     /// Notes the factory an extra system was made by.
     /// </summary>
     internal static void Made(ITickSystem system, SystemFactory factory) => MadeBy.AddOrUpdate(system, factory);

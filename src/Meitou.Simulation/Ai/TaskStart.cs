@@ -294,11 +294,17 @@ public sealed class TaskHandlers
     List<Action>? _undo;
 
     /// <summary>
-    /// Registers the handler of <paramref name="task"/>.
+    /// Whether a system's <see cref="ITaskOwner.RegisterTasks"/> runs now: registering is allowed only then.
+    /// </summary>
+    bool _open;
+
+    /// <summary>
+    /// Registers the handler of <paramref name="task"/>. Only inside <see cref="ITaskOwner.RegisterTasks"/>, as the registrations below.
     /// </summary>
     public void Register(CharacterTask task, ITaskHandler handler)
     {
         ArgumentNullException.ThrowIfNull(handler);
+        CheckOpen();
         handler = Guarded(handler);
         if (_undo is not null)
         {
@@ -316,6 +322,7 @@ public sealed class TaskHandlers
     public void Register(TaskType row, ITaskHandler handler)
     {
         ArgumentNullException.ThrowIfNull(handler);
+        CheckOpen();
         handler = Guarded(handler);
         if (_mod is not null) Own(row, _rows);
 
@@ -329,6 +336,7 @@ public sealed class TaskHandlers
     public void RegisterOnSite(TaskType row, ITaskHandler handler)
     {
         ArgumentNullException.ThrowIfNull(handler);
+        CheckOpen();
         handler = Guarded(handler);
         if (_mod is not null) Own(row, _siteRows);
 
@@ -336,14 +344,30 @@ public sealed class TaskHandlers
     }
 
     /// <summary>
+    /// An engine system's <see cref="ITaskOwner.RegisterTasks"/>, its handlers as they are.
+    /// </summary>
+    internal void RegisterEngine(ITaskOwner owner)
+    {
+        _open = true;
+        try
+        {
+            owner.RegisterTasks(this);
+        }
+        finally
+        {
+            _open = false;
+        }
+    }
+
+    /// <summary>
     /// A mod system's <see cref="ITaskOwner.RegisterTasks"/>, with its rows from 1000 up checked against <paramref name="claimed"/> and the rows
     /// other mods registered, and its handlers guarded (<see cref="ModTaskHandler"/>: a throw stops system <paramref name="system"/>). A throw of the
-    /// registration (a refused row among them) undoes that system's registrations and is logged, and the world is made without them; a mod built for
-    /// another version of the game (<see cref="CodeModFaults.BuiltForAnother"/>) also has its system stopped, with the player's notice.
+    /// registration (a refused row among them) undoes that system's registrations and is logged, the world is made without them, and the system is
+    /// stopped as for a throw of one of its phases, with the player's notice (<see cref="ModSystemFaults.Fault"/>).
     /// </summary>
     internal void RegisterMod(ITaskOwner owner, string mod, IReadOnlyDictionary<TaskType, string>? claimed, ModSystemFaults faults, int system)
     {
-        (_mod, _claimed, _undo, _guard) = (mod, claimed, [], (faults, system));
+        (_mod, _claimed, _undo, _guard, _open) = (mod, claimed, [], (faults, system), true);
         try
         {
             owner.RegisterTasks(this);
@@ -352,12 +376,20 @@ public sealed class TaskHandlers
         {
             for (int i = _undo.Count - 1; i >= 0; i--) _undo[i]();
             Console.Error.WriteLine($"mod       {mod}: task handlers not registered for this world: {e}");
-            if (CodeModFaults.BuiltForAnother(e)) faults.Fault(system, "task registration", e);
+            faults.Fault(system, "task registration", e);
         }
         finally
         {
-            (_mod, _claimed, _undo, _guard) = (null, null, null, null);
+            (_mod, _claimed, _undo, _guard, _open) = (null, null, null, null, false);
         }
+    }
+
+    /// <summary>
+    /// Throws outside <see cref="ITaskOwner.RegisterTasks"/>: a handler registered later would not be guarded or owned.
+    /// </summary>
+    void CheckOpen()
+    {
+        if (!_open) throw new InvalidOperationException("Task handlers are registered only in ITaskOwner.RegisterTasks.");
     }
 
     /// <summary>

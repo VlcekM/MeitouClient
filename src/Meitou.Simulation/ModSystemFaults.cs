@@ -7,9 +7,10 @@ namespace Meitou.Simulation;
 /// The world's tick systems made by a mod (<see cref="SimulationExtensions.FactoryOf"/>) and the ones stopped after a fault (docs/modding.md
 /// "Tick systems"): a phase of a mod system that throws is caught and logged once with the mod and the system's name, the player gets a notice
 /// (<see cref="TryTakeNotice"/>), the system's tick phases stop from the next serial step on (a parallel phase's other partitions still finish
-/// that phase; its effects of that tick are not applied), and the fault enters the state hash. Its task handlers fault it too
-/// (<see cref="Ai.ModTaskHandler"/>); its other hooks (observers, filters, chooser goals and jobs) keep their own rules. The standard systems are
-/// called as they are, never caught.
+/// that phase; its effects of that tick are not applied), and the fault enters the state hash. Its task handlers, its registrations (task handlers,
+/// chooser goals and jobs) and its world ready fault it too (<see cref="Ai.ModTaskHandler"/>, <see cref="Fault"/>); its other hooks (observers,
+/// filters, the goals and job contributors it registered) keep their own rules. A mod built for another version of the game gets the one notice of
+/// <see cref="CodeModFaults.Tell"/> instead. The standard systems are called as they are, never caught.
 /// </summary>
 sealed class ModSystemFaults
 {
@@ -145,8 +146,8 @@ sealed class ModSystemFaults
     }
 
     /// <summary>
-    /// Marks mod system <paramref name="index"/> faulted the first time one of its phases or hooks (a task handler, a chooser registration) throws,
-    /// with a log line naming the mod, the system and the phase, and a notice; later throws are not logged again.
+    /// Marks mod system <paramref name="index"/> faulted the first time one of its phases or hooks (a task handler, a registration, its world ready)
+    /// throws, with a log line naming the mod, the system and the phase, and a notice; later throws are not logged again.
     /// </summary>
     public void Fault(int index, string phase, Exception e)
     {
@@ -156,8 +157,7 @@ sealed class ModSystemFaults
 
         var factory = _factories[index]!;
         Console.Error.WriteLine($"mod       {factory.Owner}: system '{factory.Name}' stopped for this world, its {phase} threw: {e}");
-        _notices.Enqueue(CodeModFaults.BuiltForAnother(e)
-            ? CodeModFaults.Notice(factory.Owner)
-            : $"Mod {factory.Owner}: its {factory.Name} stopped after an error ({e.GetType().Name}); the rest of the game goes on.");
+        if (!CodeModFaults.Tell(factory.Owner, e))
+            _notices.Enqueue($"Mod {factory.Owner}: its {factory.Name} stopped after an error ({e.GetType().Name}); the rest of the game goes on.");
     }
 }

@@ -1,4 +1,3 @@
-using Meitou.Content;
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Simulation.Factions;
 
@@ -18,7 +17,7 @@ public interface IChooserOwner
 
 /// <summary>
 /// Where a system registers its goals and job contributors (only inside <see cref="IChooserOwner.Register"/>). A type its mod did not claim, another
-/// mod's, or one registered twice throws, and a throw drops everything that system registered, with a log line.
+/// mod's, or one registered twice throws, and a throw drops everything that system registered, with a log line, and stops a mod's system.
 /// </summary>
 public sealed class ChooserRegistry
 {
@@ -110,8 +109,7 @@ public sealed class ChooserRegistry
     /// <summary>
     /// Has the <see cref="IChooserOwner"/> system at <paramref name="index"/> of <paramref name="world"/> register (goals only while the world is
     /// made, <paramref name="goalsOpen"/>) into <paramref name="goals"/> and the world's chooser host. A throw drops what that system registered and
-    /// is logged; one of a mod built for another version of the game also stops the system, with the player's notice
-    /// (<see cref="ModSystemFaults.Fault"/>).
+    /// is logged; a mod's system is also stopped, with the player's notice, as for a throw of one of its phases (<see cref="ModSystemFaults.Fault"/>).
     /// </summary>
     internal static void Collect(World world, ITickSystem system, int index, SimulationExtensions? extensions, List<ModGoalClaim> goals,
         bool goalsOpen)
@@ -128,7 +126,7 @@ public sealed class ChooserRegistry
         {
             string who = factory is null ? system.GetType().FullName ?? "?" : $"{factory.Owner} '{factory.Name}'";
             Console.Error.WriteLine($"mod       {who}: chooser goals and jobs not registered for this world: {e}");
-            if (factory is not null && CodeModFaults.BuiltForAnother(e)) world.ModFaults.Fault(index, "chooser registration", e);
+            if (factory is not null) world.ModFaults.Fault(index, "chooser registration", e);
         }
     }
 

@@ -153,9 +153,7 @@ internal sealed class ModGoal(ModGoalClaim claim, PopulationData data, ModGoalFa
         string what = $"goal {(int)claim.Type} '{name}'";
         Console.Error.WriteLine($"mod       {owner}: {what} dropped for this world, its {call} failed at tick {world.Tick}: {e}");
 
-        string text = CodeModFaults.BuiltForAnother(e)
-            ? CodeModFaults.Notice(owner)
-            : $"Mod {owner}: its goal {name} stopped after an error ({e.GetType().Name}); the rest of the game goes on.";
-        world.ModFaults.Notify(text);
+        if (!CodeModFaults.Tell(owner, e))
+            world.ModFaults.Notify($"Mod {owner}: its goal {name} stopped after an error ({e.GetType().Name}); the rest of the game goes on.");
     }
 }

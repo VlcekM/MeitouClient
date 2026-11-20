@@ -196,8 +196,8 @@ holds refuses the second mod.
   logged once with the mod id, the system's name and the phase, and the player gets a notice; the system's tick phases (paused orders'
   `Inputs` too) stop from the next serial step, and the fault enters the state hash (`ModSystemFaults`). A throw in a parallel phase lets
   that phase's other partitions finish, so that tick's partial work depends on the thread count, and none of the system's effects of that
-  tick are applied. A throw from one of its task handlers stops it the same way; its other hooks (observers, filters, chooser goals and job
-  contributors) keep their own rules. `IStateHashed` puts a
+  tick are applied. A throw from one of its task handlers, its `RegisterTasks`, its `IChooserOwner.Register` or its `IWorldReady.Ready` stops
+  it the same way; its other hooks (observers, filters, the goals and job contributors it registered) keep their own rules. `IStateHashed` puts a
   system's state into `World.StateHash`. A mod system implementing a source interface `World` looks
   up by first match (`IAnimationSource`, `IProjectileSource`...) and placed before the standard one would replace it.
 - **Resolved combat:** a registered system implementing `ICombatHitObserver` receives `HitResolved(World, in CombatHit)` once per
@@ -243,8 +243,8 @@ holds refuses the second mod.
   first: after a save has loaded (`IModSaveData.Read` done and settings of mods no longer running dropped; an import counts as a save) or a
   new game has placed the player's characters (`fromSave` false). Systems are told in system order (mods in load order); one may change
   the world as a serial phase does, so a mod sets its unsaved runtime settings (a held platoon, a sleeping town) back on here, also for a
-  save made without its own saved state. One that throws is logged and the others are still told; a mod system built for another version of
-  the game is also stopped, with the notice ([Versioning](#versioning)). Engine API, not in the original.
+  save made without its own saved state. One that throws is logged and the others are still told; a mod's system is also stopped, with a
+  notice, as for a throw of one of its phases (Tick systems above). Engine API, not in the original.
 - **Goods taken:** a registered system implementing `IGoodsTakenObserver` (`Meitou.Simulation.Crime`) receives
   `GoodsTaken(World, in GoodsTaken)` when one of the player's characters takes goods that are not its own by hand: a held item dragged or
   given out of an owned container or another character, a click take out of an owned container or a town machine, a right-click loot take off
@@ -545,9 +545,10 @@ holds refuses the second mod.
   it to keep it. `Register(CharacterTask, handler)` replaces the engine's handler of that task for every row; a mod registers rows only. A row
   from 1000 up has one owning mod: claim every number you use as a row (`AddJobType` or `AddGoalType`; one number may be both of one mod's); a
   mod's `Register(row)` or `RegisterOnSite(row)` of a row another mod claimed, or registered first, throws. Handlers run in the serial phases
-  only (`TaskStart.Start` throws in a parallel one). A throw from a mod system's `RegisterTasks` (a refused row included) is logged, and that
-  system's registrations are undone; the world is still made; one of a mod built for another version of the game also stops the system, with
-  the notice ([Versioning](#versioning)). The handlers a mod system registers in `RegisterTasks` are guarded (`ModTaskHandler`): a throw from
+  only (`TaskStart.Start` throws in a parallel one). Handlers are registered only inside `RegisterTasks` (a `Register` elsewhere throws; a system
+  added by `World.AddSystem` gets its `RegisterTasks` too). A throw from a mod system's `RegisterTasks` (a refused row included) is logged, that
+  system's registrations are undone and the system is stopped (Tick systems above); the world is still made. The handlers a mod system
+  registers in `RegisterTasks` are guarded (`ModTaskHandler`): a throw from
   one, whichever system started or ended the task, the engine's included, is a fault of the registering system (it stops, Tick systems above),
   and the task starts or ends without the handler from then on (**Observed**, by reading `TaskHandlers.RegisterMod`).
 - **Goal claims** (`IGoalSource`, [claims](game/ai-tasks.md#perma-jobs) "Claims"): a registered system implementing it adds the (worker, target)
@@ -933,7 +934,7 @@ holds refuses the second mod.
   is for log lines, notices and the HUD. A registered system implementing `IChooserOwner` gets `Register(ChooserRegistry)` once when the world is
   made, in system order, and calls `Goal(type, IModGoal)` for a goal type and `Jobs(type, IJobSource)` for a job type its mod claimed. A type not
   claimed, another mod's or registered twice, or a call outside `Register`, throws, and a throw drops everything that system registered, with a
-  log line. A system added later (`World.AddSystem`) registers job contributors only.
+  log line, and stops the system (Tick systems above). A system added later (`World.AddSystem`) registers job contributors only.
   - **Who weighs a goal:** a character whose lists hold an AI_TASK of that `enum`: an NPC's running package role list, its race's `AI Goals` or
     the slave list of the squad it obeys; a player character's own `AI Goals` and its autonomous squad's package roles. It is weighed beside the
     engine's goals by the record's tier (`classification`) and hours, the list's weight and the running goal's continuity (x1.25); the type has no
@@ -1120,13 +1121,14 @@ difference it runs the game without mods: if that differs too, the fault is the 
 ## Versioning
 
 - A mod compiled against a member or type the game removed or made internal fails where the runtime binds it (a `MissingMemberException`,
-  `MemberAccessException`, `TypeLoadException` or `ReflectionTypeLoadException`, unwrapped from a reflection call or a static constructor): at
-  load (its types, its `IMod`, `Initialize`, its data phase), in a system factory, or at the first call that uses it (a system phase, a task
-  handler, a chooser registration, a goal, a job contributor, `IWorldReady`). Each ends in one notice, `Mod <name> was built for another version
-  of the game and needs an update; it is stopped and the rest of the game goes on.`: the mod is refused, or its system stopped, or its goal or
-  job contributor dropped, and the game runs on (`CodeModFaults`; **Observed**, by reading `ModHost`, `ModRegistry`, `ModSystemFaults`,
-  `ModTaskHandler`, `ChooserRegistry`, `ModGoal`, `ModDecisionFaults` and `World.TellReady`). Observers and filters drop themselves with their
-  own log line, as for any fault.
+  `MemberAccessException`, `TypeLoadException` or `ReflectionTypeLoadException`, unwrapped from a reflection call, a static constructor or a
+  parallel loop's `AggregateException`): at load (its types, its `IMod`, `Initialize`, its data phase), in a system factory, or at the first
+  call that uses it: a system phase, a task handler, a registration, `IWorldReady`, a goal, a job contributor, an observer or filter, a combat
+  move, an item use, a dialogue code, a wear rule or look hook, a hit feed, a faction list arranger, a key action, a debug row, a setting, its
+  save data, an interface extension's registration. The mod gets one notice for the session, `Mod <name> was built for another version of the
+  game and needs an update; it is stopped and the rest of the game goes on.` (`CodeModFaults.Tell`), in place of the fault's own notice; what
+  faulted is refused, stopped, dropped or skipped by its own rule, and the game runs on (**Observed**, by reading `CodeModFaults.Tell` and its
+  callers).
 - The manifest's `apiVersion` must lie in `ModApi.MinimumVersion` (1) to `ModApi.Version` (3); otherwise the mod is refused at load with a
   message. 2 added `version`, `dependencies`, `loadAfter`, `incompatible`, `gameVersion`, `ModContext.Dependency<T>` and
   `IModDependents`. 3 added the chooser surface ("Chooser goals and jobs", `World.GiveOrder`) and removed `CharacterCold.Engaged`,

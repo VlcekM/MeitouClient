@@ -73,6 +73,7 @@ sealed class TownSwitchObservers
     static void LogFault(ITownSwitchObserver observer, Exception e)
     {
         string fault = $"{e.GetType().Name}: {e.Message}";
+        SimulationExtensions.TellOutdated(observer, e);
         if (SimulationExtensions.FactoryOf(observer) is { } factory)
             Console.Error.WriteLine($"mod       {factory.Owner}: town switch observer '{factory.Name}' disabled for this world: {fault}");
         else
