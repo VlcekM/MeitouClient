@@ -69,14 +69,26 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
     bool StartWork(World world, int slot, CharacterTask task, TaskType row, string? site, CharacterId? target = null, object? detail = null,
             bool queued = false, Vector3 point = default)
     {
-        var order = new OrderEntry(row, this)
-        {
-            Site = site, Target = target ?? CharacterId.None, Detail = new LockWork(task, detail), TaskPoint = point,
-        };
+        var order = WorkOrder(task, row, site, target, detail, point);
         if (!PlayerOrders.CanRun(world, slot, order).CanRun) return false;
         PlayerOrders.Give(world, slot, order, queued);
         return true;
     }
+
+    /// <summary>
+    /// Gives the character a lock order's work whether or not it can run yet (<see cref="PlayerOrders.Give"/>: it waits queued until it can), as the
+    /// original's giver does.
+    /// </summary>
+    void GiveWork(World world, int slot, CharacterTask task, TaskType row, string? site, bool queued, Vector3 point) =>
+        PlayerOrders.Give(world, slot, WorkOrder(task, row, site, null, null, point), queued);
+
+    /// <summary>
+    /// A lock order's entry: its row, fixture or character, act-out and the work's parameter, and its <see cref="OrderEntry.TaskPoint"/>.
+    /// </summary>
+    OrderEntry WorkOrder(CharacterTask task, TaskType row, string? site, CharacterId? target, object? detail, Vector3 point) => new(row, this)
+    {
+        Site = site, Target = target ?? CharacterId.None, Detail = new LockWork(task, detail), TaskPoint = point,
+    };
 
     /// <summary>
     /// Lock work done where the character stands (<see cref="CharacterTask.Idle"/>: a prisoner on its own cage or shackles, a worker at its lock) is

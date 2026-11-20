@@ -1193,7 +1193,8 @@ unload, hashed only once non-empty. Facts: [locks](game/locks.md), [economy 11.5
   The player's finished buildings register their doors (`RegisterPlayerBuilding`, site -1, unregistered when no longer finished;
   keys written by `BuildingSave`), and a cage or `has lock` building its own lock ([player-built locks](game/locks.md#lock-object)); the site menu has Open/Close Doors (`ToggleDoorsOrder`) and Lock/Unlock Doors
   (`ToggleDoorLocksOrder`), the door panel's buttons for all doors at once. Any door: `DoorOrder` (a quick right click,
-  [ui-input](game/ui-input.md)) walks the nearest selected to the leaf's near side (12 out, reach 20) and opens or closes it, or picks another
+  [ui-input](game/ui-input.md)) gives every selected character its row (72 open, 73 close, 76 pick; the queue's lists decide when it runs, list A 52 / !52 ends
+  72 / 73 once the door is so) and walks each to the leaf's near side (12 out, reach 20) to open or close it as its row says, or picks another
   faction's locked lock (`PickingLock` on the door; a door is worked from that spot). `WorldSnapshot.DoorPicks` lists every door's leaf for picking
   (rebuilt when buildings register or go); `WorldSnapshot.Doors` publishes the player's doors and every door that is not closed and unlocked; the object renderer slides door parts by `DoorLeaf.LocalOffset` ([render-objects](render-objects.md)).
 - **Containers** (`OpenContainerOrder`, [locks](game/locks.md) "Containers"): the opener opens it only within 20 of its height (engine); the window's Take and Put move items for any opener, an NPC too (`ContainerAccess.ContainerFor`; `Task_Loot_Order`'s start queues the window with no faction test, **Verified** `FUN_140354dc0`).
