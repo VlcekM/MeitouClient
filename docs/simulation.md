@@ -308,7 +308,8 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   gets the order, none when nobody can run it. Per-character orders (move, follow, attack, first aid, splint, rest, the Medic and Rescue buttons, put down, operate, haul, prospect,
   build, repair, dismantle, beds, put in cage) queue blocked for whoever cannot run them.
 - **Talk and Trade** are order 12 Talking (`DialogueOrders`, act-out `PlayerTalks`; [player conversation](game/dialogue.md#player-conversation)): `TalkOrder` gives it, Meitou's
-  `OpenTrade` gives it with the detail `DialogueOrders.Trade` (saved as `meitou tjobK` 1). Its walk runs on its own Talk task, re-aimed on a moving target; in talk range the
+  `OpenTrade` gives it with the detail `DialogueOrders.Trade` (saved as `meitou tjobK` 1). Its walk runs on its own Talk task, re-aimed on a moving target (a sleeper gets up first; a caged talker, whose repertoire has
+  no row 29, waits blocked until the target is in talk range, row 12 being in the 0x45 repertoires); in talk range the
   queue and second list are emptied, the task ends and event 1 fires (or the trade opens). The interface gives both clearing the queue, Shift or not, as the original's givers do
   ([order givers](game/ai-tasks.md#order-givers)); `World.GiveOrder(queued: true)` appends one. DA_TRADE opens its window with no order (`OpenTradeNow`).
 - Not queued (they act at once): Shoot At (sets the turret's target), Get Out, Dispose Corpse (an errand), Stop (clears the queue).

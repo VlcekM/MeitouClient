@@ -412,9 +412,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         bool trades = Accepts(world, order.Customer, order.Trader, out int c);
         Close(world);
 
-        if (trades)
+        // A world without the dialogue system has no talk order to give (StandardParts.Trade builds it).
+        if (trades && world.OrderOwnerOf(TaskType.PlayerTalkTo) is { } owner)
         {
-            var owner = world.OrderOwnerOf(TaskType.PlayerTalkTo)!;
             var entry = new OrderEntry(TaskType.PlayerTalkTo, owner) { Target = order.Trader, Detail = Dialogue.DialogueOrders.Trade };
             PlayerOrders.Give(world, c, entry, order.Queued);
             return;

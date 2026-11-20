@@ -24,22 +24,35 @@ sealed class DialogueOrders(PlayerTalks talks, ApproachQueue approaches, TalkFol
 
     /// <summary>
     /// A talk order needs a target that is there and is not the character itself, and 12 one that can be talked to (alive, not out cold): else it
-    /// leaves the queue. The repertoire test is the queue's.
+    /// leaves the queue. A 12 whose talker cannot walk (a prisoner: row 29 is not in its repertoire, so the plan has no walk to the target) waits
+    /// blocked until the target is in talk range. The repertoire test is the queue's.
     /// </summary>
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(order.Target, out int t) || t == slot) return OrderCheck.Gone;
-        if (order.Row == TaskType.PlayerTalkTo && !DialogueSystem.Talkable(table, t)) return OrderCheck.Gone;
+        if (order.Row != TaskType.PlayerTalkTo) return OrderCheck.Run;
+        if (!DialogueSystem.Talkable(table, t)) return OrderCheck.Gone;
 
-        return OrderCheck.Run;
+        bool walks = TaskStart.Eligible(world, table.Cold(slot)!, TaskType.MoveCusOrdered);
+        return walks || DialogueSystem.InTalkRange(table, slot, t) ? OrderCheck.Run : OrderCheck.Blocked();
     }
 
     /// <summary>
+    /// A running 12 whose talker cannot walk ends and waits blocked once its target is out of talk range (its plan fails again).
+    /// </summary>
+    bool IOrderOwner.StillHolds(World world, int slot, OrderEntry order) =>
+        order.Row != TaskType.PlayerTalkTo || ((IOrderOwner)this).CanRun(world, slot, order).CanRun;
+
+    /// <summary>
     /// Starts the order's task: 164 the follow of its target (the shared follow task, <c>Task_FollowAndTalk</c>), 12, 102 and 165 the talk act-out.
+    /// A sleeper given a 12 gets up first, as for a move.
     /// </summary>
     void IOrderOwner.Start(World world, int slot, OrderEntry order)
     {
+        var cold = world.Characters.Cold(slot)!;
+        if (order.Row == TaskType.PlayerTalkTo && cold.InSomething == Locks.HeldState.Bed) world.Fixtures.LeaveBed(world, world.Characters.IdOf(slot));
+
         if (order.Row != TaskType.FollowWhileTalking)
         {
             var talk = new TaskRequest(CharacterTask.Talk, order.Row, TaskSource.Order) { Target = order.Target, Detail = order.Detail };
