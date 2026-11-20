@@ -163,8 +163,12 @@ public static class OrderSave
             string? site = null;
             if ((o.Site ?? o.InstanceKey) is not null && (site = SiteOf(world, o)) is null) continue;
 
+            // A body order is built as the body gives it (Combat.BodyOrders): it lets no duty go, and its stumble is forced.
+            bool body = Combat.BodyOrders.Rows.Contains(row);
             var entry = new OrderEntry(row, owner)
             {
+                Interrupts = body,
+                Forced = body && row == TaskType.StumbleTaskForced,
                 Target = target,
                 Site = site,
                 Point = o.Point,

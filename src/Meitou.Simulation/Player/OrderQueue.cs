@@ -203,8 +203,8 @@ public sealed class OrderEntry(TaskType row, IOrderOwner owner)
     /// </summary>
     public bool RowRuns { get; internal set; }
     /// <summary>
-    /// A second-list entry whose task ended done (<b>engine</b>: the original keeps the entry, and a row with no list A, a body order, would be
-    /// picked again at once): it scores 0 until the list is cleared.
+    /// A second-list entry whose task ended done, or whose start left nothing running (<b>engine</b>: the original keeps the entry, and a row with
+    /// no list A, a body order, would be picked again at once): it scores 0 until the list is cleared, even a row whose list A fails again.
     /// </summary>
     public bool Spent { get; internal set; }
     /// <summary>
@@ -758,6 +758,11 @@ public static class PlayerOrders
         entry.Started = entry.Tried = true;
         entry.RowRuns = ListTests.OrderNeedsFailNow(world, slot, entry) == false;
         entry.Owner.Start(world, slot, entry);
+
+        // A start that left nothing running (a get-up in a bed) is over, as such a front leaves the queue.
+        if (Runs(world, slot, entry)) return;
+        entry.Started = false;
+        entry.Spent = true;
     }
 
     /// <summary>
