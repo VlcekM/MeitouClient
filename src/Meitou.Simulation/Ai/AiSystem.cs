@@ -2312,10 +2312,61 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
 
         // To the mission town's centre; the goal is no longer wanted once inside the town (Desire), long before the centre.
+        byte mode = mind.Step is TaskType.TravelToTargetTown or TaskType.TravelToTargetTownFast
+            ? TravelMode(world.Characters.Cold(slot)!, board, mind.Step)
+            : type == TaskType.TravelToTargetTownFast ? SpeedMode.Run : SpeedMode.Walk;
         if (DestinationCentre(world, board) is not { } town) Become(world, slot, CharacterTask.Idle);
-        else if (GoToSpot(world, slot, mind, town, GiveUp.Target, type == TaskType.TravelToTargetTownFast ? SpeedMode.Run : SpeedMode.Walk))
-            Become(world, slot, CharacterTask.Idle);
+        else if (GoToSpot(world, slot, mind, town, GiveUp.Target, mode)) Become(world, slot, CharacterTask.Idle);
     }
+
+    /// <summary>
+    /// <c>Task_TravelToTargetTown</c>'s speed (its functor <c>FUN_140342a30</c>, <b>Verified</b>): the running package's speed mode (package slot 3,
+    /// <see cref="PackageSpeed"/>), even its 4, else the row's own (0 for 53, 1 for 130); a carrier's 0 becomes 1; a squad that is not intact
+    /// runs (2). 1 is a jog (cap 55), 2 a run (cap 999), any other the walk. A carrier whose mode is not 0 is not raised to a jog
+    /// (<see cref="Movement.MovementSystem.CarriesOutAtWalk"/>).
+    /// </summary>
+    static byte TravelMode(CharacterCold cold, Blackboard board, TaskType type)
+    {
+        int mode = board.Current is not null ? PackageSpeed(board.Current) : type == TaskType.TravelToTargetTownFast ? 1 : 0;
+        if (mode == 0 && !cold.Carrying.IsNone) mode = 1;
+        if (!board.Intact) mode = 2;
+
+        return mode switch
+        {
+            1 => SpeedMode.Run,
+            2 => SpeedMode.Free,
+            _ => SpeedMode.Walk,
+        };
+    }
+
+    /// <summary>
+    /// A package's speed mode (vtable slot 3, <b>Verified</b> per class): 4 (no change) for the base package, patrols, bars, cannibals at home,
+    /// prisoner gathering, the trader, occupation, the war base and <c>Contract_Timed</c>; 2 for <c>RetreatAndRefresh</c>,
+    /// <c>GoOutOnPatrol_Running</c>, <c>Contract_UntilExSlave</c>, <c>Contract_UntilOutOfDanger</c>, the passing assault and the war assaults; 1
+    /// for <c>Contract_HiredAlly</c>, both base defences, the cannibal retreats and the refugee; 0 for the slaver shipping. A class Meitou does not
+    /// build reads 4 (engine choice).
+    /// </summary>
+    static int PackageSpeed(AiPackage package) => PackageClasses.Of(package.Signal) switch
+    {
+        PackageClass.Retreat or PackageClass.PatrolRunning or PackageClass.PassingAssault => 2,
+        PackageClass.WarAssault or PackageClass.WarAssaultCannibal => 2,
+        PackageClass.CannibalRetreat or PackageClass.Refugee or PackageClass.CampaignDefend => 1,
+        PackageClass.SlaverShipping => 0,
+        PackageClass.Contract => package.Signal switch
+        {
+            12 or 15 => 1,
+            13 or 14 => 2,
+            _ => 4,
+        },
+        _ => 4,
+    };
+
+    /// <summary>
+    /// Whether the character acts out a <c>Task_TravelToTargetTown</c> step (53, 130), whose speed the AI sets in full (<see cref="TravelMode"/>):
+    /// the movement's carrier jog does not apply to it. Not one an engine-acted goal carries (192's walk is the captive system's). Any thread.
+    /// </summary>
+    internal static bool TravelsToTown(CharacterCold cold) =>
+        cold.Ai is { Engine: false, Duty: null, Step: TaskType.TravelToTargetTown or TaskType.TravelToTargetTownFast };
 
     /// <summary>
     /// A patrol (<c>Task_Patrol</c>'s move, docs/game/factions-squads-towns.md "Patrol task"): the leader walks to the patrol point exactly, which
