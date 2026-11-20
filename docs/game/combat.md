@@ -776,7 +776,9 @@ on screen with a body. Meitou: `CombatSystem.IsParry` decides (armed attacker, r
 
 ## Ranged and turrets
 
-**Shoot At** (context-menu order 235, offered when the lead mans a turret; [ui-input](ui-input.md#context-menu-verbs)): Meitou's `ShootAtOrder` sets `CharacterCold.TurretTarget` on each selected gunner; the turret's target choice then returns that character while it lives and is free (not down: row 235's list A is state 7 `isTargetDown`, so a knocked-out, dead, carried, caged or crawling target ends the order, **Verified** row table), instead of scoring candidates, and the gunner does not regard it as friendly (`vfunc 0x3f0`, `FUN_140437f40`, **Verified**; otherwise the order is dropped and the gunner chooses normally), and waits while it is out of range or blocked. The order ends when the gunner stops manning. Engine reading.
+**Shoot At** (context-menu order 235, offered when the lead mans a turret; [ui-input](ui-input.md#context-menu-verbs)). **Verified** givers: the original gives 235 through
+`FUN_1407f9e20` to every selected character, the menu's clearing the queue and the quick click on a character (`FUN_1407fb410`) appending it; row 235 is a `Task_UseTurret`
+row as 146 is (list B `using any turret`). Meitou's `ShootAtOrder` sets `CharacterCold.TurretTarget` on each selected gunner; the turret's target choice then returns that character while it lives and is free (not down: row 235's list A is state 7 `isTargetDown`, so a knocked-out, dead, carried, caged or crawling target ends the order, **Verified** row table), instead of scoring candidates, and the gunner does not regard it as friendly (`vfunc 0x3f0`, `FUN_140437f40`, **Verified**; otherwise the order is dropped and the gunner chooses normally), and waits while it is out of range or blocked. The order ends when the gunner stops manning. Engine reading.
 
 Controller phases reload → steady aim → fire; target motion/range, skill/injury, equipment and
 line of sight determine timing/spread. Bolts retain launch/direction/velocity/impact/friendly-hit

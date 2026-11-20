@@ -659,7 +659,8 @@ attack verbs when the lead mans a turret; `ShootAtOrder` makes every selected gu
 Engine additions: Trade with a trader (also with a member of an independent squad a code mod gave a shop, [faction shops](../simulation.md#shopkeepers-of-the-players-faction-meitou-only)), Put on Shackles, Cancel Construction, the door buttons, Mine. Training (97) sets the training job on a dummy. Stand Up (28) on a selected character staying low. **Throw out of home** (223) on another faction's character that is down or asleep in one of the player's
 complete buildings with doors (Meitou's stand-in for the target's building handle, slot `0x1d8`, being the player's) adds the Remove Home Intruder job and its companion 224. **Throw out of town** (273, always the job `PICKUP_INTRUDERS_TOWN`) instead when the town the target stands in (`AiSystem.TownAt`) is the player's, its position is inside
 the walls (`TownDutySystem.AmInsideTownWalls`: gate code, else the built-up area) and the lead (the last selected, as for the turret test) does not regard it as friendly; no 223 there.
-**Corpse Disposal** (136) on the player's corpse machine (function 11): with Shift the Corpse disposal job (137, finder 138), else each selected character carrying a dead body
+**Corpse Disposal** (136) on the player's corpse machine (function 11). **Verified**: the original gives 136 (menu and quick click alike, `FUN_1407fa650` with 0) through
+`FUN_1407f9e20` to every selected character, its queue cleared; row 136's list A (100, nothing carried) makes it done at once for one carrying nothing. Meitou: with Shift the Corpse disposal job (137, finder 138), else each selected character carrying a dead body
 takes it to the nearest free incinerator (`DisposeCorpseOrder`; the order's condition 99 read as carrying a dead body, **engine reading**). Not built: item menus beyond a ground item's Pick Up / Steal, the occupant's second menu and the unconscious message.
 
 ### Edit boxes and keyboard focus
