@@ -348,7 +348,7 @@ internal sealed class WardenGoals(LockSystem locks)
 
         return ask.Type switch
         {
-            TaskType.LockAllMyDoors or TaskType.LockAllMyDoorsFromOutside when NeedsLock(f) && !f.DoorBroken => new Round
+            TaskType.LockAllMyDoors or TaskType.LockAllMyDoorsFromOutside when NeedsLock(f) => new Round
             {
                 Kind = RoundKind.LockDoors, Worker = id, Faction = faction, Targets = [f.Id], Building = f.Building, Reach = LockSystem.DoorReach,
                 FromOutside = ask.Type == TaskType.LockAllMyDoorsFromOutside,

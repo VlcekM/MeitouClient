@@ -685,14 +685,17 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
     /// <summary>
     /// Task_LockDoor's end on a door (<c>FUN_140337670</c>): an open door starts to swing shut and the lock is set at once; each locked door whose
     /// lock is the worker's faction's sets the house flag while no door of the home is open or opening (<c>FUN_1407933a0</c>, <b>Verified</b>: one
-    /// locked door is enough, the others may just be closed).
+    /// locked door is enough, the others may just be closed). A smashed door neither closes nor takes the lock (<b>engine choice</b>: the original
+    /// sets the locked byte, which a smashed door ignores), but the flag test still runs, so a home with one stops its lock-up as the original's does.
     /// </summary>
     void LockDoor(World world, Round r, Fixture f, CharacterCold worker)
     {
-        if (f.DoorBroken) return;
+        if (!f.DoorBroken)
+        {
+            FixtureRegistry.CloseDoor(f);
+            world.Fixtures.SetLocked(f, true);
+        }
 
-        FixtureRegistry.CloseDoor(f);
-        world.Fixtures.SetLocked(f, true);
         if (r.Building is not { } home || worker.Faction != f.Owner) return;
 
         foreach (var d in world.Fixtures.OfBuilding(home))
