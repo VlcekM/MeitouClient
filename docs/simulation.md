@@ -214,7 +214,7 @@ delivering, fetching and dismantling are steps of one act-out (`TaskStart.ActOut
   (87, 97, 124, 152, 234, the engineer 125) and implicit jobs (242, 153, 275), the build, repair, door repair and dismantle orders, the bed orders and job 106, the lock, shackle, cage,
   door and force orders, the gate rounds, item pick-up and container walks, put in cage; the engine's starts: crime fights and the arrest mates' and hunters' fights
   (`AttackOrder.Source`: `Npc`; an NPC's attack on sight is its AI's goal fight, `Goal`), an engine arrest's walks and lifts (goal 204, slave catching), kidnappers' lifts (68) and hauls' walks to the cage (112) and lifts (168), captive jobs'
-  walks (the row of their task, `CaptiveSystem.RowOf`), town duties' walks, lifts and drops (the goal of their kind, `TownDutySystem.RowOf`), the [engine goals'](#engine-goals) act-outs (smell hunts 176, NPC looting and arming, the wardens' goals, escapes), flight (35, then wander 24), food on the ground
+  walks (the row of their task, `CaptiveSystem.RowOf`), the ditch's and the player side's food runs' walks (`TownDutySystem.RowOf`), the [engine goals'](#engine-goals) act-outs on their goal's row (smell hunts 176, NPC looting and arming, the wardens' goals, escapes, town goals), flight (35, then wander 24), food on the ground
   (259) and limbs (277), NPC arming walks (42), roaming leaders' walks (53) and mills (24); the engine's orders' act-outs start with `TaskSource.Order` ([order queue](#order-queue)). Engine walks go through `TaskStart.Walk` (`TaskRequest.Goal`: as given, or
   `Point` onto the floor, at `Mode`; one to a building shut to the walker is refused, `StartResult.Inaccessible`, as the original's plan walk:
   [locks](game/locks.md#doors)); engine standing tasks (idle, wander, a follow of the squad's leader) through `TaskStart.Become` (the movement's handler stops the character on it).
@@ -229,7 +229,7 @@ delivering, fetching and dismantling are steps of one act-out (`TaskStart.ActOut
   stand-down back to its routine (`AggroSystem`), a knock-out (`BodySystem`), a caged character held
   in place (`FixtureRegistry`).
 - Engine starts end the fight and the task before as any start does (a flight's run stops the fight at once, a dialogue act's walk ends it). An errand's own walks would end a fight
-  its character is in, so they wait for it: a town duty steps nothing while its member fights (a player character's food run ends instead; engine choice, the
+  its character is in, so they wait for it: a ditch steps nothing while its member fights (a player character's food run ends instead; engine choice, the
   original's priority-3 reactions beat these goals).
 - Provenance is the only job mark: `PermaJobs.ListJob` is the production pick's list job (its index) or implicit job it runs (not a follow row's fight step), which the implicit jobs, an NPC's rescue rank test and the circle
   break read; a list edit moves any job provenance's index (one whose job left the list keeps running with index -1). The task an act-out goes back to is `RunningTask.Resume`, for the
@@ -265,8 +265,8 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   going down (knocked out or dead) wipes the queue, a loaded queue not restored yet and an AI's plan and goal, the jobs kept (`PlayerOrders.Wipe`; being picked up
   does the same in `CarrySystem.Link`); waking gives 65 Getting up (an animal, or waking standing) or 52 (waking staying low or crawling) with the clear flag,
   none in a bed or cage and, while carried, only once put down; a return to standing from staying low or crawling (Stand Up, a leg back up; not at a
-  kneeling treatment; not in a bed or cage, engine) gives 65 with the clear flag unless one is queued. A town duty's errand, a haul, a flight, an engine arrest and a bounty hunt
-  wait while one of these runs (engine: the original's replan after it drops an uncommitted goal) (`PlayerOrders.BodyHolds`) and go on after it; a gate round ends;
+  kneeling treatment; not in a bed or cage, engine) gives 65 with the clear flag unless one is queued. A haul, a flight, an engine arrest and a bounty hunt
+  wait while one of these runs (engine: the original's replan after it drops an uncommitted goal) (`PlayerOrders.BodyHolds`) and go on after it; a gate round, a ditch and a player-side food run end;
   an [engine goal](#engine-goals) ends when one starts (`AiSystem.ReplanDuty`, as the original's replan; no duty goal commits). A stagger outside a fight (`CombatSystem.Stagger`, not getting up, not at a turret;
   a squadless NPC too, whose ended front leaves the queue without a chooser, `PlayerOrders.DropEnded`, **Verified** slot 27 `FUN_1405c7c30` → `FUN_14050d920`) pushes 147 Stumbling to the front (`PlayerOrders.GiveFront`): the running front waits behind it unstarted and is started again from its
   start afterwards; 147 starts with no repertoire or list test (`OrderEntry.Forced`, `TaskRequest.Forced`); a blow during a running stumble adds another front
@@ -315,7 +315,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   step decides), and `DecisionSystem.Ordered` (the flag while the queue holds an order) keeps everything else off the character, as the original's order step comes before every
   goal, 32 and committed goals included ([precedence](game/ai-tasks.md#precedence)): the AI (`AiSystem.Holds`, `Preempts`, `TaskStart.StartOwn`); a goal's or reaction's start
   ([task starts](#task-starts): the AI's, retaliation's, the duties' and the victims' deferred fights and walks); retaliation's own defence (it answers as a player character
-  does); the flight step, which also ends a running flight; the stand-down after a fight; the free tests of the duty sweeps and routines (town duties and the player faction's
+  does); the flight step, which also ends a running flight; the stand-down after a fight; the free tests of the duty sweeps and routines (the ditch and the player faction's
   food runs, the player animals' race goals, 259, hauls, arrests and bounty hunters, the shut-in release, NPC healing, arming and scavenging, rejoining the leader); the
   population's leader walk and arrival; and two engine reactions that are no order (`TaskSource.Npc`): a crime victim's attack on its culprit and a caught thief's
   watcher getting up from rest. The dialogue's acts ([dialogue](#dialogue)), the body's orders above and the arrest orders are orders of the receiver's queue. An
@@ -325,8 +325,8 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   while it holds an order.
 - **Duties let go** when an NPC's front starts, but for the body's orders (engine design; `PlayerOrders.TryFront`, serial, before the owner's `Start`): `World.ReleaseDuties` asks every system that
   is an `IDutyRelease` (found on the world's systems, nothing registered) but the order's `OrderEntry.Keeps`, its giver, to let the character go through its own give-up.
-  Town duties, hauls, arrests and bounty hunts, gate rounds and the mod NPC goals (`NpcGoals`) drop their record and clear `Engaged`; a body carried
-  for one is let go where it stands (the unlink, no knock-out); an [engine goal](#engine-goals) ends (`DutyEnd.Order`, through the AI); a door way is dropped and a bash
+  The ditch and food runs, hauls, arrests and bounty hunts, gate rounds and the mod NPC goals (`NpcGoals`) drop their record and clear `Engaged`; a body carried
+  for one is let go where it stands (the unlink, no knock-out); an [engine goal](#engine-goals) ends (`DutyEnd.Order`, through the AI; a town goal lets its carried body go the same way); a door way is dropped and a bash
   errand stopped. Neither the dialogue nor a trade holds anyone. The giver's own `Engaged` (one shared bit) is put back after the others let go. The duty sweeps take no
   ordered character again (`DecisionSystem.Ordered` or `AiSystem.Holds` in their free tests).
 - **Routine after an order** (engine design): an NPC its AI does not fully run (a held platoon's engine mind, or none: no squad) keeps the routine it was on at the start, wandering or
@@ -440,7 +440,7 @@ crime sees deeds and final positions/carry links. Game combat uses `SelfApproach
 
 Engine choice: a periodic per-character pass looks at each character on its slot's turn (`World.Turn`: `Tick - slot` a multiple of the period, within the far cadence's step; the AI's think anchors at `Tick + slot`, so a slot's look and think interleave), as the original runs its AI
 updates 8 characters a frame in turn ([game loop](game/game-loop.md#the-character-update-budget)), instead of all on one tick: Aggro, Crime,
-FirstAid, NPC looting, Captive (`SweepEveryTicks` 30, the goals' look), Town duty and Kidnap (`LookEveryTicks` 15).
+FirstAid, NPC looting, Captive (`SweepEveryTicks` 30, the goals' look), the town goals' finders and Kidnap (`LookEveryTicks` 15).
 
 ## Population
 
@@ -992,13 +992,10 @@ not down; Trade on an own animal too) ends above the grid ([animals](game/animal
   0.05 once its commitment has passed, [ai-tasks](game/ai-tasks.md) "Desire and commitment") its think gets it out of bed and the next beat lifts; a
   body goal 106 would not lay in a bed (a grudge tag, a bounty owed to a police-like rescuer, not regarded as friendly; `BedSystem.WouldPutIn`) is not
   lifted; a walk to the body that has not reached it in 60 game seconds (`CarrySettings.RescueWalkSeconds`) is given up and that rescuer leaves the
-  body alone for 2 game hours (`RescueRefuseHours`, hashed while set), as the town duties' lifts do; a body that dies while the rescuer walks to it
+  body alone for 2 game hours (`RescueRefuseHours`, hashed while set), as the town goals' lifts do; a body that dies while the rescuer walks to it
   ends the walk, so this goal lifts no body that is already dead when the lift clip starts (one that comes round ends it as any lift's); a body this
-  goal lifted that no carried-body goal takes on (no bed found after the lift: another rescuer reserved the last one, or sleepers filled them; or a
-  package without 106) is put down at the carrier's next look and left to that rescuer for those 2 hours (`RefuseRescue`). Which carries this applies
-  to is read from what the world holds, not remembered (`CarrySystem.RescuedBy148`: an NPC the AI runs whose goal lists hold 148, carrying a body of
-  its own or an allied faction that is not its squad leader), so it holds after a load too. The leader rescue (142) takes the same ability test, hold
-  test and walk give-up, but not the put-down: its carrier keeps the leader.
+  goal lifted that no carried-body goal takes on (no bed found after the lift, or a package without 106) stays on the shoulder, as any goal's end leaves it
+  ([town duties](#town-duties)). The leader rescue (142) takes the same ability test, hold test and walk give-up.
 - **NPC looting** (`LootGoals`, the finder `CarrySystem.LootTarget`, facts: [carry-loot 3.3](game/carry-loot.md#33-npc-looting)): goal 177 is an [engine goal](#engine-goals) of the
   chooser (desire 1 at posture 0, times its finder's factor; plan `[1, 3, 177]`, row 3 the loot). Every `AutoEveryTicks` on its slot's turn (slot mod the period, so the looks spread over the ticks, as the original's AI updates run 8 characters a frame in turn, [game loop](game/game-loop.md#the-character-update-budget)), an NPC with a mind of its own that weighs 177 (`AiSystem.WeighsGoal`) keeps its finder's pick for the think
   (engine: the original's finder runs at each score); the pick is the nearest dead body (not of its faction), else downed living one of a non-allied faction, within 100 and reachable (no shut gate route between, no building without an open door around it unless the looter is in it, `CarrySystem.Reachable`): the player's only with
@@ -1176,7 +1173,7 @@ unload, hashed only once non-empty. Facts: [locks](game/locks.md), [economy 11.5
   bed's clip, `Sleeping` on the HUD); any other task gets it up (`GetUp`; a knock-out or death in bed keeps it there). The player's bed search `FindBed`
   follows the original's weights over beds within `BedSearchRange` 3953 (engine, for the town). Job 106 (in the list with the rescue job; the decision step's, `BedSystem.PutInJob`): a carrier of
   a friendly, non-hostile body with no grudge tag against it, and no bounty owed to a police-like carrier, lays it in the searched bed. An NPC
-  carrier's goal 106 is ranked with its other carried-body goals ([town duties](#town-duties)), with the same desire and search. Lifting a sleeper
+  carrier's goal 106 is weighed with its other goals ([town duties](#town-duties)), with the same desire and search. Lifting a sleeper
   takes it out. The bed search tests no power, nor does the original's place test (**Observed**, [locks](game/locks.md#beds)). An unpowered bed
   refuses the sleeper or the carrier at the bed (`BedSystem.HasPower`); a bed that refuses an NPC carrier (power or rent) counts for its faction as
   one it cannot get to (`FixtureRegistry.MarkUnreachable`, 24 game hours), so the next search moves on (engine choice). The rescue job (148) and the
@@ -1368,7 +1365,7 @@ what it wore there going into its inventory (engine choice; `DialogueSystem.Chai
   and raises the alarm).
 - **Act-out**: plan `[1, 68, 132, 254]`; the start lifts the plan's victim (`CarrySystem.BeginPickUp`, row 68, back to standing) unless another member works it; the goal is done
   (`DutyGoals.Done`) when the pick-up ends, with the body on the shoulder or not. A player victim's message "is carrying X away". The carrier then chooses again
-  (`AiSystem.CarrierMind`): its goals 112 / 281 (town duties) cage the body; a squad member whose lists hold 141 follows its leader with the body meanwhile (engine stand-in: a
+  (`AiSystem.CarrierMind`): its goals 112 / 281 ([town goals](#town-duties)) cage the body; a squad member whose lists hold 141 follows its leader with the body meanwhile (engine stand-in: a
   carrier's chooser acts out only engine goals). A kidnapper stumbling or getting up loses the goal (replanned) and chooses again.
 - **Caging**: a victim that leaves its 254 carrier's shoulder into a cage (seen at the next kidnap step, `KidnapGoals`' lift record) is `CharacterCold.Kidnapped` in a cage of
   the carrier's own faction, and a player victim gets "has been kidnapped by F".
@@ -1380,7 +1377,7 @@ what it wore there going into its inventory (engine choice; `DialogueSystem.Chai
 - **Prisoner**: `Kidnapped` = held without a sentence: it is never served (no release round), no bail is offered, and getting out is no escape crime. Set only in a cage of the kidnapper's own faction: in another faction's cage (one `canIUseThisBuilding` lets it use, a public barracks') the victim is that faction's prisoner and its goal-211 jailers free it once served, as the original, which has no such hold (#628; a prisoner with a slave state is never served there either, `FUN_1405c9f00`). The cage is locked; rescue is the usual
   lock work, or a lift out of an unlocked cage ([Cages](#cages-beds-and-locks)).
 - **Save**: the cage state is the existing `in something` / `in what` (an interior cage's entry, written with its house's interior when the save has none, plus Meitou's keys), and `meitou kidnapped` ([save](formats/save.md)). Carry links are saved and restored
-  (`CarrySystem.RestoreLinks`); the goal records, lifts and carries are not, so a loaded carrier chooses again and its town duty cages the body. Hashed only while any exist.
+  (`CarrySystem.RestoreLinks`); the goal records, lifts and carries are not, so a loaded carrier chooses again and its town goal cages the body. Hashed only while any exist.
 - What happens to the captive next: [Captives](#captives).
 - An NPC kidnapping is no crime for witnesses, as in the original (its lift is 68, not `Task_Kidnapping`; [carry-loot](game/carry-loot.md#the-kidnap-victim-flag)),
   but for a sleeper taken from a bed, which the engine lifts through the kidnap roll.
@@ -1407,73 +1404,81 @@ stands for the asker's.
 
 ### Town duties
 
-`Kidnap/TownDutySystem` (serial `SlowWorld`, after the kidnapping; with the population and the AI): goals of an AI squad's running package that no act-out covers, per member,
-every 15 ticks, by `PopulationSystem.GoalDuty` (facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game/carry-loot.md#32-goals-and-their-target-finders)).
-Duties are priority-2 goals (**Observed**: `FUN_140510ef0` tries orders, jobs, urgent perma-jobs and priority-3 goals first): a member running a job or perma-job (a task other than idle, wander, follow, go-to) or whose AI holds an urgent goal takes none (`TownDutySystem.Free`). Stand-in: the duties do not compete by key with the package's other priority-2 goals.
-- **273 Remove Intruder**: a free member standing in its home town, the town its occupation holds or a town of its faction lifts the nearest knocked-out character in that town's
-  walls (`amInsideTownWalls` > 0: its [gate code](game/pathfinding.md#gate-codes) is a walled region, so an unwalled town removes none; where the codes are unknown, the built-up area: a
-  placed town's radius, a player town's farthest building from its centre), not carried or caged (a body in a bed is lifted, `FUN_14099c250`), not of its faction or an ally.
-  A body that dies on the way is caged only with **281** listed (else let go); one being thrown out is carried on (none of 274's task slots 2, 3, 5,
-  6, 7 tests death, **Verified** by decompile). Any free member carrying a body it holds no errand for (a kidnapper's victim once goal 254's lift ends; a hauler's or arrester's victim that died:
-  they end their errand without letting go when 281 is listed; a carry a save restored) with 281 (any body), 112 (a living one) or 106 (a body it
-  would lay in a bed) in its package takes it to a cage, lays it in a bed or throws it out the same way (`LookCarriers`, **Verified** `FUN_1405a1140`
-  and `FUN_1405a13a0`: no dead test; an animal's cage desire is 0, so it is thrown out; issue 783: guards held knocked-out skimmers forever); with
-  none of them it keeps the body. **Observed** (#314 save): a Sho-Battai police guard loaded carrying a raider cages it.
-  Carrying it, the disposal goals are ranked as the goal chooser ranks them (`TownDutySystem.RankDisposals`, **Verified** `FUN_14050df10`): a higher tier first (an urgent cage before 274), then desire x package weight, of equal scores the later-listed goal; the first that starts wins. Cage: with **112** (a living body) or **281** (any body) listed and the carried-body desire above 0 (`CageDesire`: 0 for an animal or one the carrier regards as friendly, 0.1 outside a town, 1.4 police with a bounty-free slave, 0.5 dead, 2.0 alive; [ai-tasks](game/ai-tasks.md)), the best free cage in that town (the occupied town's cages are usable), where it is locked up with the usual put-in sentence (108 `Task_PutInSomething`
-  sets none without a bounty, [economy 11.5](game/economy.md#115-bail-and-sentence); not `Kidnapped`, **Verified** `FUN_140358670`). Throw out: with
-  **274** listed (desire 2.0 unless the carrier regards the body as friendly), to the town's exit point (`TownExit`: 200 outward from the first gate
-  outside the walls or wall with an interior, the same for every carrier; no walkability test, **Verified** `FUN_140927120`), let go there (below). Bed: with
-  **106** listed and its desire above 0 (`BedSystem.PutInDesire`: 2.0 for a body the carrier regards as friendly, no animal, of a faction not hostile
-  to its own, with no grudge tag against it and no bounty owed to a police-like carrier, [carry-loot
-  3.2](game/carry-loot.md#32-goals-and-their-target-finders)), the bed the bed search finds for the carrier (`BedSystem.FindForCarrier`: no bed
-  another carrier is on its way to; a squad with no town only its own or an ally's within `BedSearchRange`, never the player's), where the bed system
-  walks it and lays the body in as the player's put-in does (`BedSystem.PutIn`, row 106, `TaskSource.Goal`); the errand (`TownDutyKind.Bed`) holds the
-  carrier while the walk runs, starts it again with a fresh search after a fight or a stop, at most 4 restarts (5 walks), then lets the carrier keep
-  the body for the next look; a body that dies on the way is carried on (106's desire, its friendly test and row 99's list B test no death). 106 is
-  weighed only for a carrier whose body no errand's plan holds (`LookCarriers`): after an errand's own lift (273, 223, 138 / 137) the goal that lifted
-  goes on, as the original runs a goal's plan task by task and chooses again only when it ends ([ai-tasks](game/ai-tasks.md), "The plan's lifecycle",
-  **Verified**), so a corpse lifted for the disposal goes on to it while that errand lasts, waiting while the disposal is busy (below). A carrier left
-  with a corpse and no errand weighs 106 with the others and, with a bed found, lays a friendly corpse in it (for the police packages 1.5 x 2.0
-  against the disposal's 2 x 1.0): a carry restored from a save (no errand is saved), a walk to the disposal that failed (the machine noted
-  unreachable), a 148 or 142 carrier whose body died on the shoulder (a dead leader under "Retreat and refresh" or "campaign victory occupy town",
-  which list 106). That follows the original's chooser by the decompiled desire when it chooses afresh. With none of them, put down. A body put down
-  short of its goal is left alone for 2 game hours.
-  A lift is given up by that member alone, who leaves the body for those 2 hours (`GiveUpLift`), when no path gets it to the body (`CarrySystem.LiftWalkFails`: none found, or one whose navmesh part ends out of reach of the body and goes on provisionally) or its walk takes over 60 game seconds (engine choice: a body the carrier cannot reach would hold it forever).
-  224 and 274 end with the task's own unlink, not the put-down task (`FUN_1403356e0` calls `FUN_1405ce1e0`, **Verified**): the body falls where the carrier stands and is not knocked out again (`TownDutySystem.LetGo`; **Observed**, original 1.0.65, #1024 save: the body came round on the shoulder and stayed conscious where it was dropped at the exit).
-  They carry at a walk: the start sets the mover's mode to 0 for a character of no player faction, and a player's keeps its own (`FUN_1403355e0`, **Verified**; `TownDutySystem.CarryOutMode`); the carrier's raise to a jog is not theirs ([force speed](game/pathfinding.md#force-speed)).
-  An intruder (273, 223) is taken only once a lift clip starts or it is carried: every free member that senses it (`CharacterFacts.Perceives`, the finders walk the sensed list and skip only a carried body) walks to it and the first in reach lifts it; the others' lifts end. **Observed** for 223 (original 1.0.65, the #1024 save, thralls of `ash dome mob` in their home): three thralls on the body's level converged on it and one lifted it 1.8 s after the load; for 273 it follows from the finder alone.
-- **223 Remove Home Intruder** (checked before 273): a free member of a squad with a home building lifts the nearest knocked-out, carriable character inside that building
-  (`SightMap.BuildingOf`), not carried, caged or in a bed, not of its faction or an ally, sensed and within its sight. With **224** listed it carries it to the point past the
-  home's first door (`AiSystem.LeavePoint`, the same point as Leave Building's) and lets it go there; a home with no door has its town's exit point (274's, **Verified** `FUN_140335480`; **Observed**, original 1.0.65, #1024 save: the thrall put the body down at 105525, 125662, Meitou's exit point of that town is 105520, 125641). Without 224, or with neither door nor town, it goes on as a 273 body (engine choice: the original's
-  carrier keeps it). A body that dies on the way is still carried out. Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs".
-- **138 Find corpses / 137 Corpse disposal** (`TownDutySystem.LiftsCorpse`, finders in `CorpseDisposal`): a free member listing 138 (not on Hold), or
-  137 while a disposal is found, lifts the corpse 138's finder gives (a dead non-robot body in a cage of its faction in reach, else the nearest dead
-  uncarried body in sight). The body is then ranked like any carried one (137 for a dead body: 1.0 x disposal found x weight; 106 is not weighed
-  here); when 137 is listed in the hour and the only disposals in reach are busy (their operator places held by other errands), the member keeps the
-  body under its lift errand and tries again on each look turn, as the original's 137 plan holds its machine (`TownDutySystem.WaitsForDisposal`); 137
-  walks it to the disposal and feeds it in (removed with its items, the machine's label floats up). With no disposal goal the carrier keeps it.
-  Disposals: the player's function-11 machines, the registered towns' placed function-11 buildings and their interiors' (`TownBuilding.Disposals`);
-  chosen by the cage finder's rules (town reach, `canIUseThisBuilding`, weight x100 own / home, x1e-5 police in a private building), skipping one
-  whose operator places other errands hold or whose walk failed (20 s). **Verified** desires and finders: [ai-tasks](game/ai-tasks.md#perma-jobs).
-- **243 Getting food**: a member holding no food walks to the nearest store with food in the town (a player town's complete storage, else an unlocked container) and takes one item.
-  Meitou's NPCs are fed by their hunger floor, so the food is not eaten.
-- **158 / 283 Shooing** (`AI::findStrangersInMyBuilding`; 283 only while the home is private): the first character in the squad's home building that is neither allied nor an
-  enemy, not down, caged, its faction's slave or law enforcement, or (an NPC squad) a player character there not sneaking or spotted; the member walks at it and sends event 9
-  (17 to an enemy) every 5 s (engine pacing; the dialogue data escalates); after 25 game minutes, once the stranger is getting away, event 60 and done; over once it is out.
-- **216 Ransacking town** (`AI::findRandomBuildingInTown`): a member draws a random standing building with an interior in its mission town (blackboard, else the campaign's
-  destination, else where it stands) among those the planner gets it into (row 156's B list 59 `hasAnOpenDoor` and 90, **Observed**): `DoorPlan.PlansEntry` plans goal 216 with the exact state 59, so a closed unlocked door is opened (72: the walk opens it) or, for a character that wants to (`AggressiveTowards`; a bandit 1.1 beats 72), bashed first (81: `LockSystem.BashForErrand`, the door basher with `CharacterCold.BashErrand`, no attack needed, ending when the door opens; no Burglary is booked yet); a locked door nobody will bash or unlock leaves the building out of the draw. A closed gate on the route is planned the same way (`LockSystem.GateEntry`, `GatePlan.PlansEntry`: a locked gate the character wants to bash is bashed first with rows 123 / 290, an unlocked one is passed, row 122; no gate leading there leaves the building out). It draws its weapon and runs into it; inside, the errand ends and the next look draws another.
-- **131 Looting food** (`AI::findSomethingToLootFoodFrom`, shared with 243): a member holding no food in any town (not only its own) walks to the nearest such store, not a
-  container of its own faction (engine reading of the own-shop skip), and takes up to 10 units of the first food record it lists (`Task_EmptyMachine` 284 with flag 1, `FUN_14033cd10`, **Verified**: one unit per pass while the store still holds the record and there is room; the record is the first one the store's inventory lists, food or not, **Verified** `FUN_140299990`: distinct records in item order).
-- **212 Confiscating goods** (`AI::findPrisonerWithContraband`): in its town, the first occupied cage (list order) whose prisoner's inventory (not its bag) holds an item stolen for it; at the cage it waits 0.8 s and
-  confiscates as a police looter does ([NPC looting](#carrying-rescue-and-looting)); engine choice: whatever the runner's class (base data: only law-enforcement packages list 212).
-- **184 Ditching loot** (`FUN_14059b040`, [rules](game/ai-tasks.md#arrest-and-prison-rows)): a member carrying an item stolen for it (state 121: inventory or worn backpack; none for a lawless faction) walks to the nearest
-  storage (function 2 or 13) of its town within 6517 that takes one, and puts in every stolen item that fits. A member with a home town standing in a TOWN-type town reads the home town's storages, any owner;
-  else the current town's, owned by its faction or the town's (a player town's complete storage machine, else a container fixture, locked or not). Engine choice: only the stolen items go in, and the stolen mark stays on them. The planner's state 121 (`PlanContext.Holds`) reads the same items.
+The town goals are [engine goals](#engine-goals) of the one chooser (`Kidnap/TownGoals`, act-outs in `Kidnap/TownDutySystem`, serial `SlowWorld` after the kidnapping): an NPC with a
+full mind of its own weighs each one its role, slave or race list holds in the hour by the original's desire, finder, tier and weight against all its other goals; no sweep, free
+test or cap of their own. The finders run in a serial look on the member's slot turn every 15 ticks (every tick for a carrier no goal holds, which chooses at once; again after an
+act-out ends) and keep their picks by slot (hashed while any); the think reads them. An act-out walks or lifts with `TaskSource.Goal` tasks on the goal's row, steps only while
+its goal holds the member (`DutyGoals.Runs`: a fight, an order, an order on its body or a better goal ends the goal) and ends with `DutyGoals.Done` at the original's end.
+An end never drops a carried body (the original's goal ends do not unlink it) but an order's, which lets it go where the carrier stands (engine choice). A carrier no goal holds
+thinks with all its goals (`AiSystem.ThinkCarrying`), so whoever lifted a body (a lift goal, an arrest, a kidnap, a rescue, a save) takes its carried-body goals from its own lists.
+Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game/carry-loot.md#32-goals-and-their-target-finders).
+- **Lifts 273 / 223 / 138** (plan `[67, 68, goal]`; the goal row has an empty list A, so the plan ends with the lift and the carried body's goals take the body on). Row 68's and
+  223's desire is AI slot 59 (`FUN_14059e1a0`, **Verified**): 0 while carrying, 1.0 for a character target, 0.5 for any other (`DAT_14167e8d8`); the scorer clears a fresh
+  candidate's target, so a new 273 or 223 scores 0.5 and the one held 1.0. 273's (slot 60 `FUN_140597f20`, **Verified**) is that, 0 in a current town that is no Town (an
+  outpost, camp or nest: vfunc `0x268` null for a TownBase), has no gates (`Town::hasGates`) or has its walls locked up (Town slot 96, `LockSystem.TownLockedUp`) for a member of
+  the player's faction. 138's is 1.0, 0 on Hold or while carrying (**Verified**).
+  - **273** (finder `FUN_14099c250`): in its home town, the town its occupation holds or a town of its faction (`Ownerships::isMyTown`), the nearest knocked-out character it
+    senses within its sight in that town inside its walls (`amInsideTownWalls` > 0: its [gate code](game/pathfinding.md#gate-codes) is a walled region; where the codes are
+    unknown, the built-up area: a placed town's radius, a player town's farthest building from its centre), not carried or caged (Meitou: nor in a bed; the original lifts a
+    patient, issue 751), not of its faction or an ally.
+  - **223** (finder `FUN_14099c110`): a knocked-out, carriable character inside the squad's home building (`SightMap.BuildingOf`), not carried, caged or in a bed, not friendly,
+    sensed and within its sight.
+  - **138** (finder `CorpseDisposal.FindCorpse`): a dead non-robot body in a cage of its faction in reach, else the nearest dead uncarried body in sight.
+  - An intruder is taken only once a lift clip starts or it is carried: every member whose finder gives it walks to it and the first in reach lifts it; the others' starts are
+    refused. **Observed** for 223 (original 1.0.65, the #1024 save, thralls of `ash dome mob` in their home): three thralls on the body's level converged on it and one lifted it
+    1.8 s after the load. A lift is given up by that member alone, who leaves the body for 2 game hours (`GiveUpLift`), when no path gets it to the body
+    (`CarrySystem.LiftWalkFails`) or its walk takes over 60 game seconds (engine choice).
+- **Carried body: 112 / 281, 274 / 224, 106, 137**, weighed by the chooser with every other goal (a higher tier first: an urgent 112 or a 224 before 274). Their desires are read
+  in the look for the body carried then.
+  - **112** (a living body: list B `!99`) / **281** (any body), plan `[1, 108, goal]`: `CageDesire` (`FUN_1405a1140` with `FUN_1405a0f10`, **Verified**: 0.1 outside a town,
+    0 while the squad's mission town is another, 0 for an animal, 1.4 police with a bounty-free slave or escapee, 0 friendly, 0.5 dead, 2.0 alive) times the cage finder's 1.0
+    with a free cage (`FUN_1408d0d30`: the best free cage of its town candidates, an occupier's occupied town included, not another errand's). At the cage it is locked up with
+    the usual put-in sentence (108 `Task_PutInSomething` sets none without a bounty, [economy 11.5](game/economy.md#115-bail-and-sentence); not `Kidnapped`, **Verified**
+    `FUN_140358670`), with the relation event and the bounty claim. A cage taken or walks that keep failing (the cage is marked unreachable for the faction) end the goal with
+    the body on the shoulder. **Observed** (#314 save): a Sho-Battai police guard loaded carrying a raider cages it.
+  - **274** (plan `[274]`, list A 164) and **224** (plan `[224]`, list A 137): desire 2.0 unless the carrier regards the body as friendly (`FUN_1405a13a0`, **Verified**; no
+    town, animal or death test). 274 walks to its town's exit point (`TownExit`: 200 outward from the first gate outside the walls or wall with an interior, the same for every
+    carrier, **Verified** `FUN_140927120`), 224 to the point past the home's first door (`AiSystem.LeavePoint`; a home with no door: its town's exit point, **Verified**
+    `FUN_140335480`; **Observed**, original 1.0.65, #1024 save: the thrall put the body down at 105525, 125662, Meitou's exit point is 105520, 125641). States 164
+    INTRUDER_IS_OUTSIDE_GATES (`FUN_140598fa0`) and 137 INTRUDER_IS_OUTSIDE (`FUN_140598ef0`), **Verified**: true with no intruder or a friendly one, false while the asker carries
+    it. Both end with the task's own unlink (`FUN_1403356e0` calls `FUN_1405ce1e0`, **Verified**): the body falls where the carrier stands and is not knocked out again
+    (**Observed**, original 1.0.65, #1024 save). They carry at a walk (`FUN_1403355e0`, **Verified**; `TownDutySystem.CarryOutMode`; [force speed](game/pathfinding.md#force-speed)).
+    Walks that keep ending short let it go there, left alone for 2 game hours.
+  - **106** (plan `[1, 99, 106]`): `BedSystem.PutInDesire` (2.0 for a body the carrier would lay in a bed, [carry-loot 3.2](game/carry-loot.md#32-goals-and-their-target-finders))
+    times the bed search's (`BedSystem.FindForCarrier`); the bed system walks the carrier and lays the body in (`BedSystem.PutIn`, row 106, `TaskSource.Goal`).
+  - **137** (list B 99 a dead body carried; plan `[1, 136, 137]`, else `[67, 68, 138, 137]`): desire 1.0 (slot 43, **Verified**) times the disposal finder's (`FUN_1408d1090`:
+    `CorpseDisposal.Find`, skipping one whose operator places other errands hold or whose walk failed, 20 s). A member carrying no corpse lifts row 138's first; the plan ends
+    with the lift and 137 is weighed again with it on the shoulder. At the disposal the body is fed in (removed with its items, the machine's label floats up). Disposals: the
+    player's function-11 machines, the registered towns' placed function-11 buildings and their interiors' (`TownBuilding.Disposals`); chosen by the cage finder's rules (town
+    reach, `canIUseThisBuilding`, weight x100 own / home, x1e-5 police in a private building). **Verified** desires and finders: [ai-tasks](game/ai-tasks.md#perma-jobs).
+  - With none of them wanted the carrier keeps the body.
+- **243 Getting food** (plan `[1, 244, 243]`; a ditch first when 244's room test 82 fails, the planner's 114 and 93): the desire of AI slots 26, 24, 25 ([eating](game/character-stats.md#eating):
+  0 outside a town, in another faction's town, carrying food; the occupied branch; else hungry with an empty stomach), so an NPC fed by its hunger floor (3; a malnourished
+  squad's 1 to 2.2) wants none. The finder: the nearest store with food of the blackboard's target town, else the current one, else the 3 x 3 zone cells round it (a player
+  town's complete storage, else an unlocked container); 244 takes one item, not while a sensed ally fights (state 12). The player side's runs: [decision step](#decision-step).
+- **131 Looting food** (plan `[1, 284, 131]`, desire 1.0): the same finder, not a container of its own faction (engine reading of the own-shop skip); 284 takes up to 10 units of
+  the first record the store lists (`Task_EmptyMachine` with flag 1, `FUN_14033cd10`, **Verified**: one unit per pass while the store holds the record and there is room; the
+  record is the first the store's inventory lists, food or not, **Verified** `FUN_140299990`). Engine reading: state 68 is food carried.
+- **184 Ditching loot** (desire 2.0, list A `!121`, plan `[1, 93, 184]`; `FUN_14059b040`, [rules](game/ai-tasks.md#arrest-and-prison-rows)): carrying an item stolen for it (state
+  121: inventory or worn backpack; none for a lawless faction), the nearest storage (function 2 or 13) of its town within 6517 that takes one, where every stolen item that fits
+  goes in. A member with a home town standing in a TOWN-type town reads the home town's storages, any owner; else the current town's, owned by its faction or the town's.
+  Engine choice: only the stolen items go in, and the stolen mark stays on them.
+- **212 Confiscating goods** (plan `[1, 3, 212]`; `AI::findPrisonerWithContraband`): in its own town, the first occupied cage (list order) whose prisoner's inventory holds an item
+  stolen for it; at the cage it waits 0.8 s and confiscates as a police looter does ([NPC looting](#carrying-rescue-and-looting)).
+- **158 / 283 Shooing** (plan `[161, goal]`, list A `!108`; `AI::findStrangersInMyBuilding`; 283's desire, slot 71, is 1.0 only while the home is private): the first character in
+  the squad's home building that is neither allied nor an enemy, not down, caged, its faction's slave or law enforcement, or (an NPC squad) a player character there not sneaking
+  or spotted; the member walks at it and sends event 9 (17 to an enemy) every 5 s (engine pacing; the dialogue data escalates); after 25 game minutes, once the stranger is
+  getting away, event 60 and done; over once it is out.
+- **216 Ransacking town** (plan `[156, 216]`, `[6, 156, 216]` with no weapon drawn: list B 5; `AI::findRandomBuildingInTown`): one look draws a random standing building with an
+  interior in the squad's town as the blackboard gives it (the override's mission town, else the running package's), else where it stands, among those the planner gets it into
+  (row 156's B list 59 `hasAnOpenDoor` and 90, **Observed**): `DoorPlan.PlansEntry` plans 216 with the exact state 59, so a closed unlocked door is opened (72) or, for a
+  character that wants to (`AggressiveTowards`), bashed first (81: `LockSystem.BashForErrand`); a locked door nobody will bash or unlock leaves the building out. A closed gate on
+  the route is planned the same way (`LockSystem.GateEntry`, `GatePlan.PlansEntry`). It runs into the building and the goal is done once inside.
+- Not goals: the ditch the plan's step 93 asks for (rows 113, 114, 242; `AiMind.DitchRequest`) and the player side's food runs hold their member with `Engaged`; a fight
+  interrupts their walk (`TownDutySystem.IsErrandRow`), an order on the body ends them.
 - Occupiers' **36 / 37** town goals walk to a random complete building of the player town (`AiSystem.OccupiedSpot`, engine choice; the original's 36 scatters round the
   occupied town's centre, [town goals](game/ai-tasks.md#town-goals)), 36 drawing again after every walk.
-- Engine choices: sight `AggroSystem.OutdoorSight`, arrival 40 (a cage: its `use range` + 15), 4 short walks before giving up; nothing is hashed until one runs.
-- **Observed** (headless, an owner save, Starving Bandits occupying an outpost whose buildings reach 253 from its centre): the knocked-out player character lying 566 out is left alone; moved
-  into the base, one bandit lifts it and puts it down 413 out, nobody lifts it again in 6000 ticks; with two food items in a storage, two bandits take one each.
+- Engine choices: sight `AggroSystem.OutdoorSight`, arrival 40 (a cage: its `use range` + 15), 4 short walks before an act-out gives up.
 
 ## Captives
 
@@ -2355,7 +2360,7 @@ type of the original's that `TaskBehaviours` does not act out, registered by its
 its plan the act-out carries out besides the goal's own. Built: 135, 139, 282, 230, 232, 233, 237, 277, 278, 279, 260, 183, 167, 168, 173, 245, 217,
 188, 192, 194, 218, 172 and 276 (`CaptiveSystem` through `CaptiveGoals`, [captives](#captives)); 176 (`SmellSystem`, [blood smell](#blood-smell)); 177 and 42 (`CarrySystem` through `LootGoals`, [looting and arming](#carrying-rescue-and-looting)); 211, 155, 197, 86 and 195 (`LockSystem` through `WardenGoals`,
 [wardens' goals](#arrest-and-jail)); 256, 207 and 202 (`LockSystem` through `EscapeGoals`, [escapes](#captives)); 254 (`KidnapSystem` through
-`KidnapGoals`, [kidnapping](#kidnapping)).
+`KidnapGoals`, [kidnapping](#kidnapping)); 273, 223, 138, 137, 112, 281, 224, 274, 106, 243, 131, 184, 212, 158, 283 and 216 (`TownDutySystem` through `TownGoals`, [town duties](#town-duties)).
 - **Choosing**: a registered type has `AiBehaviour.Duty`. Its desire is the system's (`DutyGoals.Desire`: the desire times the finder's factor when the TaskData row has
   a finder and an effect; 0 for a player character's mind, an engine mind and a type in back-off), scored by the package record's tier and weight with the continuity
   and no commitment (no duty goal commits). The plan is the planner's: its rows' desires and finders are asked of the system, a finder may give a character, a

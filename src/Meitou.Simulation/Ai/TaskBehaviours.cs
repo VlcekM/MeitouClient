@@ -223,8 +223,6 @@ public static class TaskBehaviours
         // walk to the package target (MissionFormation).
         [TaskType.TravelToTargetPackage] = (AiBehaviour.Travel, "Mission formation"),
         [TaskType.MakeAnnouncementFast] = (AiBehaviour.Announce, "Approaching fast"),
-        // Its Task_PatrolTownViolent is not decoded (engine choice): it roams the town it assaults, as patrolling does without a patrol package.
-        [TaskType.RunAroundTownLookingForPeople] = (AiBehaviour.Patrol, "Ransacking town"),
         [TaskType.InvestigateAlarms] = (AiBehaviour.Investigate, "Investigating"),
         [TaskType.InvestigateAlarmsAlliesOnly] = (AiBehaviour.Investigate, "Investigating"),
         [TaskType.DefeatSquad] = (AiBehaviour.Assault, "Assault"),

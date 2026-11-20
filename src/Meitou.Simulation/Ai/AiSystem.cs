@@ -507,8 +507,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// interrupt it, the combat goals and Self preservation; on any other (and in a fight it did not start: a dialogue's, an assault's, a duty's),
     /// Self preservation alone, whose fight or run (<see cref="SelfPreservation.Runs"/>) ends the duty's task as any fight's start does (in a fight,
     /// only its run changes anything). The duties a fight may interrupt: treating (<see cref="FirstAid.FirstAidSystem"/> lets go of the patient at
-    /// the fight's start), a town errand's walk but the cage walk (<see cref="Kidnap.TownDutySystem"/> waits for the fight to end and walks on; one
-    /// carrying an intruder out fights with the body on its shoulder, as the original's carrier does), a captive job's walk carrying nothing and its meal
+    /// the fight's start), the walk of a town errand no goal holds (a ditch, a player-side food run: <see cref="Kidnap.TownDutySystem"/> waits for
+    /// the fight to end and walks on), a captive job's walk carrying nothing and its meal
     /// (<see cref="InterruptibleDuty"/>), a code mod's goal below the urgent tier (<see cref="InterruptibleModGoal"/>), and the routine of an
     /// <see cref="AiMind.Engine"/> mind (<see cref="EngineRoutine"/>).
     /// Nothing for one fleeing, imprisoned, carried or down, nor for a gunner or a carrier in a fight, nor for one its order holds: the order beats
@@ -549,8 +549,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// A duty holding the character (<see cref="CharacterCold.Engaged"/>) that a fight may interrupt: a town errand's walk but the cage walk
-    /// (<see cref="Kidnap.TownDutySystem"/> waits for the fight's end and walks on; a carrier fights with the body on its shoulder), a captive job's
+    /// A duty holding the character (<see cref="CharacterCold.Engaged"/>) that a fight may interrupt: the walk of a town errand no goal holds
+    /// (<see cref="Kidnap.TownDutySystem.IsErrandRow"/>: it waits for the fight's end and walks on), a captive job's
     /// walk carrying nothing (<see cref="Kidnap.CaptiveSystem"/> gives the job up at the fight's start), or the meal it stands at (220 Eating is a
     /// priority-2 goal's task, below the combat goals; a vampiric meal lasts minutes, #623).
     /// </summary>
