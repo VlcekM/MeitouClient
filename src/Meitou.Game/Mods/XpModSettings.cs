@@ -1,5 +1,6 @@
 using System.Globalization;
 using Meitou.Content;
+using Meitou.Data.Gameplay.Bodies;
 using Meitou.Game.Host;
 using Meitou.Game.Settings;
 
@@ -17,57 +18,71 @@ static class XpModSettings
     const float DefaultXpMod = 10;
 
     /// <summary>
-    /// The port's id, under which its settings are saved (<see cref="UserConfig.ModSettings"/>).
+    /// Takes in the RE_Kenshi plugin's settings from its file in <paramref name="folder"/>, its defaults where the file (which the original game
+    /// writes on its first run) has none. Without <paramref name="main"/> the main multiplier is left as it is (<see cref="BuiltInMods"/>' second
+    /// takeover, for a player whose first one copied only that).
     /// </summary>
-    const string PortId = "player-only-xp";
-
-    /// <summary>
-    /// Takes in the RE_Kenshi plugin's settings from its file in <paramref name="folder"/>; its defaults when there is none (the original game
-    /// writes the file on its first run).
-    /// </summary>
-    internal static void AdoptPlugin(UserConfig config, string folder) => AdoptFile(config, PluginFile(folder) ?? []);
-
-    /// <summary>
-    /// Takes in the port's settings: the plugin's file when the plugin is installed and has one (the port shares it), else the port's saved
-    /// settings, else its defaults.
-    /// </summary>
-    internal static void AdoptPort(UserConfig config, IReadOnlyDictionary<string, ModInfo> onDisk)
+    internal static void AdoptPlugin(UserConfig config, string folder, bool main = true)
     {
+        Defaults(config, main);
+        if (PluginFile(folder) is { } file) AdoptFile(config, file, main);
+    }
+
+    /// <summary>
+    /// Takes in the port's settings as it ran with them: its saved settings, over them the plugin's file when the plugin is installed (the port
+    /// read the shared file at start), its defaults where neither has a value. <paramref name="main"/> as in <see cref="AdoptPlugin"/>.
+    /// </summary>
+    internal static void AdoptPort(UserConfig config, IReadOnlyDictionary<string, ModInfo> onDisk, bool main = true)
+    {
+        Defaults(config, main);
+        AdoptSaved(config, config.ModSettings.GetValueOrDefault(CoveredMods.XpPort.CodeId!) ?? [], main);
         if (onDisk.GetValueOrDefault(CoveredMods.RekenshiXp.ModName!) is { } plugin && PluginFile(plugin.Folder) is { } shared)
-        {
-            AdoptFile(config, shared);
-            return;
-        }
-
-        var saved = config.ModSettings.GetValueOrDefault(PortId) ?? [];
-        config.SquadXp = Clamped(Number(saved.GetValueOrDefault("Multiplier")) ?? DefaultXpMod);
-        foreach (var (_, stat, portSetting, _) in SkillXp.Skills)
-            SetSkill(config, stat, Number(saved.GetValueOrDefault(portSetting)), lowest: 0);
-
-        config.ShowSquadXp = !bool.TryParse(saved.GetValueOrDefault("ShowIndicator"), out bool show) || show;
+            AdoptFile(config, shared, main);
     }
 
     /// <summary>
-    /// Takes in the plugin's file: <c>xp_multiplier</c>, each skill's <c>stat_&lt;SKILL&gt;</c> (a value below 1, outside the plugin's own range,
-    /// follows Squad XP) and <c>show_hud</c> (on unless 0); a missing key keeps the mod's default.
+    /// The mods' defaults: the main multiplier 10 (when <paramref name="main"/>), every skill following it, the label on.
     /// </summary>
-    static void AdoptFile(UserConfig config, Dictionary<string, float> file)
+    static void Defaults(UserConfig config, bool main)
     {
-        config.SquadXp = Clamped(file.TryGetValue("xp_multiplier", out float main) ? main : DefaultXpMod);
-        foreach (var (_, stat, _, pluginKey) in SkillXp.Skills)
-            SetSkill(config, stat, file.TryGetValue("stat_" + pluginKey, out float own) ? own : null, lowest: 1);
-
-        config.ShowSquadXp = !file.TryGetValue("show_hud", out float show) || show != 0;
+        if (main) config.SquadXp = DefaultXpMod;
+        config.SquadSkillXp.Clear();
+        config.ShowSquadXp = true;
     }
 
     /// <summary>
-    /// Gives <paramref name="stat"/> its own multiplier <paramref name="value"/> when it is a number at <paramref name="lowest"/> or above, else
-    /// lets it follow Squad XP.
+    /// Takes in the port's saved settings where they have a value: <c>Multiplier</c>, each skill's own (0 or more; below follows) and
+    /// <c>ShowIndicator</c>.
     /// </summary>
-    static void SetSkill(UserConfig config, Data.Gameplay.Bodies.StatsEnumerated stat, float? value, float lowest)
+    static void AdoptSaved(UserConfig config, Dictionary<string, string> saved, bool main)
+    {
+        if (main && Number(saved.GetValueOrDefault("Multiplier")) is { } multiplier) config.SquadXp = Clamped(multiplier);
+        foreach (var (_, stat, portSetting, _) in SkillXp.Skills)
+            if (Number(saved.GetValueOrDefault(portSetting)) is { } own) SetSkill(config, stat, own);
+
+        if (bool.TryParse(saved.GetValueOrDefault("ShowIndicator"), out bool show)) config.ShowSquadXp = show;
+    }
+
+    /// <summary>
+    /// Takes in the plugin's file where it has a value: <c>xp_multiplier</c>, each skill's <c>stat_&lt;SKILL&gt;</c> (0 or more, as the port wrote
+    /// them; below follows) and <c>show_hud</c> (0 is off).
+    /// </summary>
+    static void AdoptFile(UserConfig config, Dictionary<string, float> file, bool main)
+    {
+        if (main && file.TryGetValue("xp_multiplier", out float multiplier)) config.SquadXp = Clamped(multiplier);
+        foreach (var (_, stat, _, pluginKey) in SkillXp.Skills)
+            if (file.TryGetValue("stat_" + pluginKey, out float own)) SetSkill(config, stat, own);
+
+        if (file.TryGetValue("show_hud", out float show)) config.ShowSquadXp = show != 0;
+    }
+
+    /// <summary>
+    /// Gives <paramref name="stat"/> its own multiplier <paramref name="value"/> when it is a number of 0 or more, else lets it follow Squad XP.
+    /// </summary>
+    static void SetSkill(UserConfig config, StatsEnumerated stat, float value)
     {
         string key = SkillXp.Key(stat);
-        if (value is { } own && float.IsFinite(own) && own >= lowest) config.SquadSkillXp[key] = Math.Min(own, UserConfig.MaxXpRate);
+        if (float.IsFinite(value) && value >= 0) config.SquadSkillXp[key] = value == 0 ? 0 : Math.Min(value, UserConfig.MaxXpRate);
         else config.SquadSkillXp.Remove(key);
     }
 

@@ -12,9 +12,16 @@ static class BuiltInMods
 {
     /// <summary>
     /// A mod Meitou covers (its entry in <see cref="CoveredMods.BuiltIn"/>), what the notice says became of its settings, and how they are taken in
-    /// (from the mod and the mods on disk by name).
+    /// (from the mod and the mods on disk by name). <see cref="Again"/>: what a later Meitou takes in from a mod already taken in, once (a feature
+    /// grown since: the XP mods' per-skill settings), and <see cref="AgainTaken"/> its notice.
     /// </summary>
-    sealed record Covered(BuiltInMod Mod, string Taken, Action<UserConfig, ModInfo, IReadOnlyDictionary<string, ModInfo>> Adopt);
+    sealed record Covered(BuiltInMod Mod, string Taken, Action<UserConfig, ModInfo, IReadOnlyDictionary<string, ModInfo>> Adopt,
+        Action<UserConfig, ModInfo, IReadOnlyDictionary<string, ModInfo>>? Again = null, string AgainTaken = "");
+
+    /// <summary>
+    /// What marks a mod's second takeover (<see cref="Covered.Again"/>) in <see cref="UserConfig.AdoptedMods"/>, after its name.
+    /// </summary>
+    const string AgainMark = " (again)";
 
     /// <summary>
     /// What the XP mods' notice says became of their settings.
@@ -22,13 +29,20 @@ static class BuiltInMods
     const string XpTaken = "its multipliers are now Squad XP in the Advanced settings (open it for each skill's own) and Show Squad XP";
 
     /// <summary>
+    /// What the XP mods' second notice says (their settings were taken in before Squad XP had a multiplier per skill).
+    /// </summary>
+    const string XpTakenAgain = "its per-skill multipliers are now under Squad XP in the Advanced settings, and its XP label is Show Squad XP";
+
+    /// <summary>
     /// The mods Meitou covers.
     /// </summary>
     static readonly Covered[] All =
     [
-        new(CoveredMods.RekenshiXp, XpTaken, (config, mod, _) => XpModSettings.AdoptPlugin(config, mod.Folder)),
+        new(CoveredMods.RekenshiXp, XpTaken, (config, mod, _) => XpModSettings.AdoptPlugin(config, mod.Folder),
+            (config, mod, _) => XpModSettings.AdoptPlugin(config, mod.Folder, main: false), XpTakenAgain),
         // The port uses the plugin's file over its own saved settings when the plugin is installed.
-        new(CoveredMods.XpPort, XpTaken, (config, _, onDisk) => XpModSettings.AdoptPort(config, onDisk)),
+        new(CoveredMods.XpPort, XpTaken, (config, _, onDisk) => XpModSettings.AdoptPort(config, onDisk),
+            (config, _, onDisk) => XpModSettings.AdoptPort(config, onDisk, main: false), XpTakenAgain),
         new(CoveredMods.SwampTurtleFix, "Swamp turtle attacks on the Fixes page is on", (config, _, _) => config.FixAnimalMoves = true),
         new(CoveredMods.CharacterHighlight, "Hover outline in the Advanced settings is on", (config, _, _) => config.HoverOutline = true),
     ];
@@ -43,17 +57,37 @@ static class BuiltInMods
         var onDisk = ModsOnDisk(install);
         foreach (var mod in ModList.ReadEnabled(install).Select(onDisk.GetValueOrDefault).OfType<ModInfo>())
         {
-            if (CoveredOf(mod) is not { } covered || config.AdoptedMods.Contains(mod.Name)) continue;
+            if (CoveredOf(mod) is not { } covered || AdoptOnce(config, covered, mod, onDisk) is not { } taken) continue;
 
-            covered.Adopt(config, mod, onDisk);
-            config.AdoptedMods.Add(mod.Name);
-            Console.WriteLine($"mods      {mod.Name} is built into Meitou: {covered.Taken}");
-            notices.Add($"{mod.Name} is built into Meitou now: {covered.Taken}.");
+            Console.WriteLine($"mods      {mod.Name} is built into Meitou: {taken}");
+            notices.Add($"{mod.Name} is built into Meitou now: {taken}.");
         }
 
         if (notices.Count > 0) config.Save();
 
         return notices;
+    }
+
+    /// <summary>
+    /// Takes in <paramref name="mod"/>'s settings if they were not taken in before, else what <see cref="Covered.Again"/> takes if that was not;
+    /// marks it in <see cref="UserConfig.AdoptedMods"/> and returns the notice's text, or null when there was nothing to take.
+    /// </summary>
+    static string? AdoptOnce(UserConfig config, Covered covered, ModInfo mod, IReadOnlyDictionary<string, ModInfo> onDisk)
+    {
+        string again = mod.Name + AgainMark;
+        if (!config.AdoptedMods.Contains(mod.Name))
+        {
+            covered.Adopt(config, mod, onDisk);
+            config.AdoptedMods.Add(mod.Name);
+            if (covered.Again is not null) config.AdoptedMods.Add(again);
+            return covered.Taken;
+        }
+
+        if (covered.Again is not { } adoptAgain || config.AdoptedMods.Contains(again)) return null;
+
+        adoptAgain(config, mod, onDisk);
+        config.AdoptedMods.Add(again);
+        return covered.AgainTaken;
     }
 
     /// <summary>

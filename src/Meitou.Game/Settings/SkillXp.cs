@@ -50,9 +50,9 @@ static class SkillXp
     ];
 
     /// <summary>
-    /// The lowest slider value: below 0 a skill follows Squad XP.
+    /// The lowest slider value, one arrow-key step below 0: below 0 a skill follows Squad XP.
     /// </summary>
-    internal const float Follows = -1;
+    internal const float Follows = -0.25f;
 
     /// <summary>
     /// The config's key of a skill: its STATS field name (<c>strength</c>, <c>attack</c>, <c>ff</c>...).
@@ -82,7 +82,7 @@ static class SkillXp
         {
             string key = Key(stat);
             if (saved.TryGetValue(key, out float value) && float.IsFinite(value) && value >= 0)
-                kept[key] = Math.Min(value, Host.UserConfig.MaxXpRate);
+                kept[key] = value == 0 ? 0 : Math.Min(value, Host.UserConfig.MaxXpRate);   // -0 kept as 0
         }
 
         return kept;
