@@ -53,7 +53,7 @@ public sealed partial class AiSystem
     /// player-faction character (the protect allies desire, <c>FUN_140599b90</c>) is not modelled: a player character the AI plans for takes the
     /// non-player branch (engine choice, as <see cref="SleepingDesire"/>).
     /// </summary>
-    float SleepDanger(World world, Blackboard board, int slot, CharacterCold me)
+    internal float SleepDanger(World world, Blackboard board, int slot, CharacterCold me)
     {
         if (_aggro?.SensesOf(slot) is { } senses && (senses.Enemies > 0 || senses.Threats.Count > 0)) return 2;
         if (AlarmOf(world, slot, TaskType.InvestigateAlarms, board) is not null) return 1.5f;

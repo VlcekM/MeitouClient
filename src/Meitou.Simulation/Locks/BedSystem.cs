@@ -104,7 +104,7 @@ public sealed class BedSettings
 /// system).
 /// </summary>
 public sealed class BedSystem(PopulationData data, BedSettings? settings = null) : ITickSystem, IStateHashed, ITaskOwner, ITaskHandler, IOrderOwner,
-        IDecisionOwner
+        IDecisionOwner, IDutyGoalOwner
 {
     /// <summary>
     /// The bed settings.
@@ -255,6 +255,11 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     /// The order detail of a saved kind: kind 1 is a put-in that named its bed.
     /// </summary>
     object? IOrderOwner.LoadDetail(World world, CharacterId self, TaskType row, int kind, CharacterId target) => kind == 1 ? Named : null;
+
+    /// <summary>
+    /// Registers goal 208 Getting out of bed! (<see cref="WakeGoals"/>).
+    /// </summary>
+    void IDutyGoalOwner.RegisterGoals(DutyGoals goals) => new WakeGoals().Register(goals);
 
     /// <summary>
     /// Registers the bed's act-outs: sleeping and the put-in rows.
