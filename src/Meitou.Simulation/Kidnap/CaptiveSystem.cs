@@ -50,10 +50,6 @@ public sealed record CaptiveSettings
     /// </summary>
     public float BlowAt { get; init; } = 0.55f;
     /// <summary>
-    /// A liberator opens the cage after this long at it (<b>engine choice</b>: the release task's timing is not documented).
-    /// </summary>
-    public float ReleaseSeconds { get; init; } = 3;
-    /// <summary>
     /// The slave processing kneels this long before the captive is stripped and enslaved (<b>Observed</b>: 3 s, <c>Task_ProcessNewSlave</c>).
     /// </summary>
     public float ProcessSeconds { get; init; } = 3;
@@ -1107,11 +1103,11 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// </summary>
     bool Step(World world, CaptiveJob j)
     {
-        // No job timer: a job ends by its own rule or when the chooser's goal no longer holds the worker (StepJobs).
         var table = world.Characters;
         float dt = world.TickSeconds;
         j.Time += dt;
 
+        // No job timer: a job ends by its own rule or when the chooser's goal no longer holds the worker (StepJobs).
         if (!table.TryResolveNext(j.Worker, out int w) || table.Cold(w) is not { } wc || wc.Medical is { Incapacitated: true } || wc.InCombat
             || wc.Fleeing || !wc.CarriedBy.IsNone)
         {
@@ -1214,7 +1210,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                 }
             case CaptiveJobKind.Liberate:
                 {
-                    if (j.Time < Settings.ReleaseSeconds) return true;
+                    // At once: Task_ReleasePrisoner frees the prisoner in its start and its update ends it (FUN_1403570a0 / FUN_140337c90, Verified).
                     world.Fixtures.Release(world, j.Captive);
                     Note(world, CaptiveEventKind.Liberated, j);
                     return End(world, j, null);

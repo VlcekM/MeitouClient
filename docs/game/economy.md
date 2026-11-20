@@ -668,8 +668,17 @@ decompile's `DialogActionEnum` / `DialogConditionEnum` / `EventTriggerEnum`, com
 - **Spotting** (`FUN_140856f00`, **Observed**): a non-player looker within 400 units (160000 squared) recognises a player-faction
   character whose bounty with the looker's faction is at least a class threshold (`FUN_1408520c0`: LAW_ENFORCEMENT 1, MILITARY 4000
   or 2000, ADVENTURER 1000, SLAVE never, others 10000), immediately while `+0x110 > 0`, else through a recognition meter
-  (`FUN_140856cb0`, fires above 1.0; rate `5 + 40 * k`, `k` a 1..2 value from the target's stats scaled by status factors 0.5 / 0.6 /
-  0.75 and x2, not decoded); not while the target is carried or imprisoned. Recognition fires `EV_BOUNTY_SPOTTED` (44) at every call, with no
+  (`FUN_140856cb0`, the looker's per-target map, fires above 1.0): fill time T = lerp(v, 5a, a) x lerp(f, 4, 1) seconds, v the looker's view
+  factor of the target (v <= 0 drops the entry), f 0.5 (a float of the looker's at `+0x648 -> +0x68 -> +0x70 -> +0x3c` when that is set; 0
+  while the looker is held, down or a slave), a = 5 + 40 k, k = (1 + clamp(`stealth` / 100, 0, 1)) x d x 0.5 when the target is in the
+  looker's give-up list (`FUN_1405995d0`) x 0.6 when its `+0x108` faction is the looker's x 0.5 when its slave owner (`+0xe0`) is x 0.75
+  inside the walls (vfunc 0x118) of a town whose vfunc 0x298 is false x 2 unless the looker stands in a town of a non-player faction not
+  hostile to it (town `+0xd8` set, faction `+0x1d0` clear); d is 1 (the disguise level `+0x100` with a disguise; for a slave of state 2 or
+  3 whose line condition 0x24 / 0x28 the looker holds, 1 - `+0xf4`, and 1 instead of 5 in a), 0 caged (`FUN_140856f00`; `FUN_140884850` reads stat `+0xa4` STAT_STEALTH;
+  literals 5, 40, 4, 0.6, 0.75 `data_values.txt`, **Verified**; the meter's own step, `FUN_140855e80`, **Observed** as for a sneaker,
+  [perception](perception.md)). So a stealth-0 target in full view of an awake guard in his town takes 45 x 2.5 = 112.5 s. Meitou
+  (`ArrestSettings.RecognitionSeconds` 45): one meter per suspect filling in 45 s while any looker sees it (engine); not while the target is
+  carried or imprisoned. Recognition fires `EV_BOUNTY_SPOTTED` (44) at every call, with no
   timer, while the looker is not in combat mode (`FUN_140436610`), its squad does not love the target (`FUN_140599590`) and it does not regard it as
   friendly (vfunc `0x3f0`); a bounty below 1 sets the target's `+0x110` to 250 instead (**Verified**, decompile). Repeats are the lines' own
   `repetition limit`. Meitou: the love and friendly gates are not modelled. The escaping-slave

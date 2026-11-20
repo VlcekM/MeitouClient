@@ -308,7 +308,8 @@ internal sealed class ArrestGoals(ArrestSystem arrests)
     /// <summary>
     /// The strip (<see cref="ArrestSystem.Strip"/>); false when it is over: the weapons taken (181's list A holds, and the plan's next row 203 does
     /// not act, so the original's plan is over and the chooser plans afresh: <c>FUN_14050d540</c>), the target got up or was taken, the guard has no
-    /// working arm, the walk up took too long, or it ended short of the target (a lost walk).
+    /// working arm, or the walk up ended short of the target (a lost walk). The walk has no time limit: the plan step ends it only as a lost walk
+    /// (<c>FUN_14050d970</c>, <b>Verified</b>).
     /// </summary>
     bool StepStrip(World world, int g, int t, ActOut act)
     {
@@ -323,7 +324,7 @@ internal sealed class ArrestGoals(ArrestSystem arrests)
             case StripStep.Walk:
                 act.Time = 0;
                 act.Walked += world.TickSeconds;
-                return act.Walked <= ArrestSystem.StripWalkSeconds;
+                return true;
             case StripStep.Kneel:
                 act.Time = 0;
                 return true;

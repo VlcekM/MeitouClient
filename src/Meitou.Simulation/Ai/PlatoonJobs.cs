@@ -39,7 +39,9 @@ public enum PlatoonJob : byte
 public static class PlatoonJobs
 {
     /// <summary>
-    /// The engine's range for a short-range patrol point round the home town, in units (the original's is <b>Unknown</b>).
+    /// The engine's range for a short-range patrol point round the home town, in units (engine choice, part of the walking stand-in: the original's
+    /// PATROL_SHORTRANGE draws a point in a neighbouring 4608 sector with the loaded patrol's picker, <c>FUN_1407ee790</c>, <b>Verified</b>, but its
+    /// mover gets no speed, so it stands still, <b>Observed</b>; docs/game/factions-squads-towns.md "Off-screen world").
     /// </summary>
     public const float PatrolRange = 3000;
 

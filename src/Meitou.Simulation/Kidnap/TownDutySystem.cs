@@ -25,7 +25,9 @@ public sealed record TownDutySettings
     /// </summary>
     public int LookEveryTicks { get; init; } = 15;
     /// <summary>
-    /// A member looks for an intruder within its sight (the sensed list's size is <b>Unknown</b>).
+    /// A member looks for an intruder within its sight: the finders walk its sensed list, which holds what its vision range sees (1500 x the race's
+    /// <c>vision range mult</c>, <c>FUN_140851bc0</c>, <b>Verified</b>; <see cref="AggroSystem.RangeOf"/> with <see cref="CharacterFacts.Perceives"/>
+    /// standing in for the list).
     /// </summary>
     public float Sight { get; init; } = AggroSystem.OutdoorSight;
 }

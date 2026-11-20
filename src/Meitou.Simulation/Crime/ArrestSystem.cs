@@ -28,9 +28,9 @@ public sealed record ArrestSettings
     /// </summary>
     public float SpotRange { get; init; } = 400;
     /// <summary>
-    /// Game seconds of being seen that fill the recognition meter (<b>engine</b>: the original runs the per-looker spot meter with a = 5 + 40 k,
-    /// docs/game/perception.md "Disguise", which bounties do not use here; read as 45 s). A booked or witnessed crime skips it
-    /// (<see cref="CharacterCold.RecentlyWanted"/>).
+    /// Game seconds of being seen that fill the recognition meter (<b>engine</b>: one meter per suspect; the original's per-looker meter fills in
+    /// lerp(v, 5a, a) x lerp(f, 4, 1) s with a = 5 + 40 k, docs/game/economy.md 11.8, <b>Verified</b>; 45 is a for a stealth-0 target in the
+    /// looker's town, without the view and looker terms). A booked or witnessed crime skips it (<see cref="CharacterCold.RecentlyWanted"/>).
     /// </summary>
     public float RecognitionSeconds { get; init; } = 45;
     /// <summary>
@@ -1274,11 +1274,6 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         else if (tc.IsPlayer) world.Post(Loc.Tr("{1} has been imprisoned by {2}", tc.Name, Crimes.Factions.NameOf(a.Faction)));
         return End(world, a, ArrestEventKind.Jailed);
     }
-
-    /// <summary>
-    /// Game seconds the guard may take to reach the target to strip it (engine choice).
-    /// </summary>
-    internal const float StripWalkSeconds = 60;
 
     /// <summary>
     /// One tick of row 181 Stripping weapons (needs 38 one working arm, at location, 7 target down; <c>Task_StripWeapons</c>), a step of goal 204's
