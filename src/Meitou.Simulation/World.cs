@@ -246,6 +246,8 @@ public sealed partial class World : IDisposable
             RegisterCombatHitObserver(this._systems[k], k);
             CombatHitFilters.Register(this._systems[k], k);
             TradePriceFilters.Register(this._systems[k], k);
+            TradeObservers.Register(this._systems[k], k);
+            StorageFilters.Register(this._systems[k], k);
             ItemUseObservers.Register(this._systems[k], k);
             GoodsTakenObservers.Register(this._systems[k], k);
             TownSwitchObservers.Register(this._systems[k], k);
@@ -505,6 +507,14 @@ public sealed partial class World : IDisposable
     /// </summary>
     internal Trading.TradePriceFilters TradePriceFilters { get; } = new();
     /// <summary>
+    /// The systems hearing of completed deals (<see cref="Trading.ITradeObserver"/>).
+    /// </summary>
+    internal Trading.TradeObservers TradeObservers { get; } = new();
+    /// <summary>
+    /// The systems asked about a storage the game picks for a character (<see cref="Items.IStorageFilter"/>).
+    /// </summary>
+    internal Items.StorageFilters StorageFilters { get; } = new();
+    /// <summary>
     /// The systems observing changed faction relations (<see cref="IRelationChangeObserver"/>).
     /// </summary>
     internal RelationObservers RelationObservers { get; } = new();
@@ -630,6 +640,14 @@ public sealed partial class World : IDisposable
     /// independent items: each call may change only its own item). The result must not depend on the order the items run in.
     /// </summary>
     internal void ParallelFor(int count, Action<int> body) => _pool.ForEach(count, body);
+
+    /// <summary>
+    /// Whether the storage filters let <paramref name="who"/> use <paramref name="storage"/> for <paramref name="record"/> (null: not one item,
+    /// such as any food); true without a filter. Thread-safe, for the game's own storage searches.
+    /// </summary>
+    internal bool StorageAllows(CharacterCold who, string storage, Items.StorageUse use, string? record) =>
+        !StorageFilters.Active || StorageFilters.Allows(this, who.Id, storage, use, record);
+
     /// <summary>
     /// Game seconds per game hour (docs/game/game-loop.md "The clock", Verified; the engine's <c>GameClock</c> has the same).
     /// </summary>
@@ -752,6 +770,8 @@ public sealed partial class World : IDisposable
         RegisterCombatHitObserver(system, _systems.Count - 1);
         CombatHitFilters.Register(system, _systems.Count - 1);
         TradePriceFilters.Register(system, _systems.Count - 1);
+        TradeObservers.Register(system, _systems.Count - 1);
+        StorageFilters.Register(system, _systems.Count - 1);
         ItemUseObservers.Register(system, _systems.Count - 1);
         GoodsTakenObservers.Register(system, _systems.Count - 1);
         TownSwitchObservers.Register(system, _systems.Count - 1);
@@ -1334,6 +1354,8 @@ public sealed partial class World : IDisposable
         HashCombatHitObserverFaults(ref h);
         CombatHitFilters.HashFaults(ref h);
         TradePriceFilters.HashFaults(ref h);
+        TradeObservers.HashFaults(ref h);
+        StorageFilters.HashFaults(ref h);
         ItemUseObservers.HashFaults(ref h);
         GoodsTakenObservers.HashFaults(ref h);
         TownSwitchObservers.HashFaults(ref h);

@@ -559,6 +559,7 @@ sealed class HeldItems(PopulationData? data)
         if (item.Quantity <= 0) world.Player.Held = null;
         else
             Undo(in p, item);
+        if (buy || sell) p.Trade!.ReportHeld(world);
         if (p.Changes) HeldItemTheft.LeftLoot(world, held, p.Death);
         if (p.Changes) HeldItemTheft.ReportTake(world, held, n, caught: false);
         Touched(world, held, target);
@@ -583,6 +584,7 @@ sealed class HeldItems(PopulationData? data)
             target.Owner?.Medical?.RemoveReplacement(fitted);
         Put(target, item, p.X, p.Y);
         HoldOther(in p, other);
+        if (buy || sell) p.Trade!.ReportHeld(world);
         if (p.Changes) HeldItemTheft.LeftLoot(world, held, p.Death);
         if (p.Changes) HeldItemTheft.ReportTake(world, held, item.Quantity, caught: false);
         Touched(world, held, target);
@@ -658,6 +660,7 @@ sealed class HeldItems(PopulationData? data)
         if (ReferenceEquals(unit, item)) world.Player.Held = null;
         else
             Undo(in p, item);
+        if (buy || sell) p.Trade!.ReportHeld(world);
         if (p.Changes) HeldItemTheft.LeftLoot(world, held, p.Death);
         if (p.Changes) HeldItemTheft.ReportTake(world, held, n, caught: false);
         Touched(world, held, target);
