@@ -133,13 +133,6 @@ public enum AiBehaviour : byte
     /// </summary>
     Crouch = 24,
     /// <summary>
-    /// A captive goal (slave work, gathering, processing, the prisoner's fate and the rest that <see cref="Kidnap.CaptiveSystem"/> runs as jobs;
-    /// docs/simulation.md "Captives"): its sweep starts the job for a member the AI holds that stands free. Any other member awake weighs the goal at
-    /// the desire its last sweep turn or job's end kept (<see cref="AiMind.CaptiveOffers"/>), as the original's chooser weighs it against its other
-    /// goals; the think asks for the job (<see cref="AiMind.CaptiveAsk"/>) and the serial step starts it.
-    /// </summary>
-    Captive = 25,
-    /// <summary>
     /// Find and rescue if there's beds (148, finder <c>FUN_1408cd550</c>, desire <c>FUN_1405994c0</c>, effect 48 <c>IS_CARRYING_TARGET</c>): wanted
     /// while the character is not on Hold, carries nothing, is able to lift, the bed search finds a bed for it and the rescue finder finds a downed
     /// ally (<see cref="Carrying.CarrySystem"/>'s serial sweep keeps that in <see cref="AiMind.BedRescueWant"/>); once the goal is chosen the sweep
@@ -267,15 +260,12 @@ public static class TaskBehaviours
     static readonly AiBehaviour[] Behaviours = BuildBehaviours();
 
     /// <summary>
-    /// Builds <see cref="Behaviours"/> from <see cref="Table"/> and the captive goals.
+    /// Builds <see cref="Behaviours"/> from <see cref="Table"/>.
     /// </summary>
     static AiBehaviour[] BuildBehaviours()
     {
         var a = new AiBehaviour[TypeCount];
         foreach (var (type, e) in Table) a[(int)type] = e.Behaviour;
-
-        // The captive goals: acted out by their jobs; their display texts are CaptiveTexts.
-        foreach (var type in Kidnap.CaptiveSystem.GoalTypes) a[(int)type] = AiBehaviour.Captive;
         return a;
     }
 
@@ -285,41 +275,12 @@ public static class TaskBehaviours
     public static AiBehaviour Of(TaskType type) => (uint)type < TypeCount ? Behaviours[(int)type] : AiBehaviour.None;
 
     /// <summary>
-    /// The game's display text (TaskData) of the captive goals, which their jobs act out (<see cref="Kidnap.CaptiveSystem.GoalTypes"/>).
-    /// </summary>
-    static readonly Dictionary<TaskType, string> CaptiveTexts = new()
-    {
-        [TaskType.KillARandomCageOccupant] = "Kill random prisoner",
-        [TaskType.EatARandomCageOccupant] = "Eat random prisoner",
-        [TaskType.EatARandomCageOccupantMeasuredRate] = "Dinner time",
-        [TaskType.EatARandomDeadBody] = "Eat corpse",
-        [TaskType.EatARandomKoBody] = "Eat body",
-        [TaskType.FindCropsToEat] = "Find crops",
-        [TaskType.FogmanWorshipVictim] = "Worshiping",
-        [TaskType.AnimalFetchALimb] = "Fetch",
-        [TaskType.PlayBecauseIHaveALimbInMouth] = "Playing 'Limbs'",
-        [TaskType.ChaseAllyDogsWithMouthLimbs] = "Limb Jealousy",
-        [TaskType.NewSlaveProcessing] = "Watching for new slaves",
-        [TaskType.SlaveWatching] = "Watching slaves",
-        [TaskType.LiberateAllThePrisoners] = "Liberating prisoners",
-        [TaskType.CaptureNewSlaves] = "Capturing slave",
-        [TaskType.CarryWoundedSlaves] = "Carrying slaves",
-        [TaskType.WorkTheSlaves] = "Working the slaves",
-        [TaskType.GatherSlavesFromCages] = "Gathering slaves",
-        [TaskType.GatherSlavesFromCagesIfFemaleOrBeast] = "Gathering unholy slaves",
-        [TaskType.GatherSlavesFromCagesIfItsAnExportTown] = "Gathering slaves for shipping",
-        [TaskType.GoToSomewhereForDeliveringSlaves] = "Delivering slaves",
-        [TaskType.SlaveGetInMyMastersCage] = "Getting in my cage",
-    };
-
-    /// <summary>
-    /// The game's display text of a type the engine acts out or a captive goal; for the rest its TaskData row's (an engine-acted goal's,
+    /// The game's display text of a type the engine acts out; for the rest its TaskData row's (an engine-acted goal's,
     /// <see cref="DutyGoals"/>), else the enum name.
     /// </summary>
     public static string Text(TaskType type)
     {
         if (Table.TryGetValue(type, out var e)) return e.Text;
-        if (CaptiveTexts.TryGetValue(type, out string? captive)) return captive;
         if (type == TaskType.StumbleTaskForced) return "Stumbling";
 
         return TaskDataTable.Of(type)?.Text ?? type.ToString();

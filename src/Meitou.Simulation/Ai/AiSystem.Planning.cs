@@ -217,8 +217,7 @@ public sealed partial class AiSystem
             // (engine choice): the desire already holds the finder's pick (and for the protect goals row 13's attacker), and the fight is the combat
             // system's. And the Medic goal: its desire holds the patient finder's score, and the treatment is the first aid system's. And the leader
             // rescue (142: its finder and its done state, the leader down, are the desire's; the lift is the carry system's), and the rescue to a bed
-            // (148: its desire and finder are kept by the carry system's sweep, which lifts the body). And a captive goal: its desire holds what the
-            // job start found, and the job is the captive system's.
+            // (148: its desire and finder are kept by the carry system's sweep, which lifts the body).
             if (EngineActs(type))
             {
                 _mind.Plan.Clear();
@@ -291,10 +290,10 @@ public sealed partial class AiSystem
 
         /// <summary>
         /// Whether goal <paramref name="type"/> is its own plan, acted out by an engine system (the assault, the combat goals, Medic, the leader
-        /// rescue, the rescue to a bed, the captive goals: <see cref="TryPlan"/>).
+        /// rescue, the rescue to a bed: <see cref="TryPlan"/>).
         /// </summary>
         static bool EngineActs(TaskType type) => TaskBehaviours.Of(type) is AiBehaviour.Assault or AiBehaviour.Fight or AiBehaviour.Medic
-            or AiBehaviour.RescueLeader or AiBehaviour.RescueToBed or AiBehaviour.Captive;
+            or AiBehaviour.RescueLeader or AiBehaviour.RescueToBed;
 
         /// <summary>
         /// Whether goal <paramref name="goal"/>'s plan is the engine's own (<see cref="TryPlan"/>: the engine-run goals, Self preservation, a follow

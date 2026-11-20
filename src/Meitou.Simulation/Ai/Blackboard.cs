@@ -1329,17 +1329,10 @@ public sealed class AiMind
     public bool AnnounceAsk { get; set; }
 
     /// <summary>
-    /// The captive goals (<see cref="AiBehaviour.Captive"/>) whose job would start, each with the original's desire, found on the character's last
-    /// captive sweep turn or at the end of its job (<see cref="Kidnap.CaptiveSystem"/>). Kept for a character awake that the sweep does not take
-    /// (seated, in a job, on a duty), so its think weighs them. Not saved; hashed while set.
+    /// No longer filled: the captive goals are engine goals of the one chooser, their picks kept by <see cref="Kidnap.CaptiveSystem"/>. Always
+    /// empty; not saved or hashed.
     /// </summary>
     public List<(TaskType Type, float Desire)> CaptiveOffers { get; } = [];
-
-    /// <summary>
-    /// The think chose a captive goal: the serial step of the same tick starts its job (<see cref="Kidnap.CaptiveSystem.SendGoalJobs"/>) and clears
-    /// it (not hashed).
-    /// </summary>
-    public bool CaptiveAsk { get; set; }
 
     /// <summary>
     /// The think chose a code mod's goal (<see cref="AiBehaviour.Mod"/>): the serial step of the same tick asks the mod to start it
@@ -1430,16 +1423,6 @@ public sealed class AiMind
 
         list.RemoveAll(e => e.Until <= tick);
         if (list.Count == 0) ModGoalBackoff = null;
-    }
-
-    /// <summary>
-    /// The desire kept for the captive goal <paramref name="type"/> (<see cref="CaptiveOffers"/>); 0 without one.
-    /// </summary>
-    public float CaptiveDesire(TaskType type)
-    {
-        foreach (var (t, d) in CaptiveOffers)
-            if (t == type) return d;
-        return 0;
     }
 
     /// <summary>
@@ -1605,16 +1588,6 @@ public sealed class AiMind
         {
             hasher.Add(0x42526573);   // "BRes"
             hasher.Add(BedRescueWant);
-        }
-
-        if (CaptiveOffers.Count > 0)
-        {
-            hasher.Add(0x434F6666);   // "COff"
-            foreach (var (t, d) in CaptiveOffers)
-            {
-                hasher.Add((int)t);
-                hasher.Add(d);
-            }
         }
 
         if (GuardVisitorAt is { } visitor)

@@ -604,15 +604,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// The HUD's Goal text: the goal's name while the AI holds the character; "Running away" (35's name, <c>Task_Runaway</c>) for an NPC on the flee
     /// step, whichever of Self preservation, a goal 35 or a broken squad started it, rather than its walk's "Moving"; "Stumbling" while a stagger's
-    /// order 147 runs its stumble (<see cref="Combat.BodyOrders"/>); the captive goal's name on its job (<see cref="TakeCaptiveGoal"/>: "Eat
-    /// body"); "Fixing Legs" on its own Fixing Legs treatment (<see cref="TreatsOwnLegs"/>); a code mod's goal by its AI_TASK record's name
+    /// order 147 runs its stumble (<see cref="Combat.BodyOrders"/>); "Fixing Legs" on its own Fixing Legs treatment (<see cref="TreatsOwnLegs"/>); a code mod's goal by its AI_TASK record's name
     /// while the AI holds the character and while it is engaged on the act-out the mod started (<see cref="OnModTask"/>: walking or standing
     /// on that act-out's row); null for the rest (the HUD then names the movement task).
     /// </summary>
     public static string? ActivityText(in CharacterHot n, CharacterCold cold, long tick = 0) =>
         Combat.BodyOrders.Stumbles(cold, tick) ? TaskBehaviours.Text(TaskType.StumbleTaskForced)
         : cold is { Fleeing: true, IsPlayer: false, Medical.Incapacitated: not true } ? TaskBehaviours.Text(TaskType.RunAway)
-        : cold is { Engaged: true, InCombat: false, Ai: { Behaviour: AiBehaviour.Captive, Goal: { } job } } ? TaskBehaviours.Text(job.Task.Type)
         : cold.Ai is not null && TreatsOwnLegs(n, cold) ? TaskBehaviours.Text(TaskType.HealMyLegs)
         : cold is { Engaged: true, InCombat: false, Ai: { ModGoalStarted: true, Goal: { } modGoal } modMind } && OnModTask(cold, modMind)
             ? GoalText(modGoal)
@@ -1060,9 +1058,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             AiBehaviour.Medic => world.Characters.IsAlive(mind.MedicPatient) ? mind.MedicScore * MedicDesire(world, self.Slot) : 0,
             // Fixing Legs (269) has no finder: its own desire (FUN_1409983b0); the planner tests its list B (kit, arm, water, threat, weapon).
             AiBehaviour.HealLegs => HealLegsDesire(world, self.Slot),
-            // A captive goal: the desire its job start kept on the sweep turn of a seated character (0 for the rest, whose jobs the sweep starts
-            // itself; Kidnap/CaptiveSystem.Offers.cs).
-            AiBehaviour.Captive => mind.CaptiveDesire(type),
             _ => 1,
         };
     }
@@ -2196,9 +2191,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             case AiBehaviour.HealLegs:
                 ActHealLegs(world, slot, mind);
                 break;
-            case AiBehaviour.Captive:
-                AskCaptiveJob(world, slot, mind);
-                break;
             case AiBehaviour.Mod:
                 // A code mod's goal: it stands while the serial step asks the mod to start the act-out (NpcGoals.SendStarts).
                 StandForModGoal(world, slot);
@@ -3250,7 +3242,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (Interlocked.Exchange(ref _treating, 0) != 0) (_firstAid ??= world.SystemOf<FirstAid.FirstAidSystem>())?.SendGoalTreatments(world);
         if (Interlocked.Exchange(ref _announcing, 0) != 0) SendAnnouncements(world);
 
-        SendCaptiveJobs(world);
         _duties?.Step(world, world.Every(Settings.ThinkEveryTicks) * ModGoalBackoffThinks);
         _modGoals?.Step(world, world.Every(Settings.ThinkEveryTicks) * ModGoalBackoffThinks);
         if (Interlocked.Exchange(ref _leaving, 0) != 0) LeaveFights(world);

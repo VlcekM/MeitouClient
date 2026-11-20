@@ -26,11 +26,9 @@ namespace Meitou.Simulation.Kidnap;
 /// (<c>FUN_1407b65b0</c> kind 5 -> <c>FUN_14032e590</c>, <b>Verified</b>): the captive becomes the gatherer's faction's slave, owned by the
 /// gatherer, and stays in its own squad, planning with the owner squad's Slave AI Goals (job 187, <see cref="Ai.AiSystem.ObeyedRoles"/>). The
 /// cage is opened (<b>engine reading</b>: which task does it in the original is <b>Unknown</b>). A player character is gathered too.</item>
-/// <item><b>Deliver</b> (192 "Delivering slaves", wanted at 0.25 per slave, AI slot 65; then 194 / 218 "Selling slaves", 218 only in a prison or
-/// slave camp, AI slot 66): the leader walks to the shipping package's town (<see cref="Blackboard.MissionTown"/>); there it says event 39
-/// SLAVE_DELIVERY to the nearest member of an allied squad of the town and hands its slaves over: each leaves the squad for a squad of its own, owned
-/// by the town's faction and put into a free cage of the town (<b>engine choice</b>: the original's handover goes through that dialogue, and no
-/// base-game dialogue answers event 39, <b>Unknown</b>).</item>
+/// <item><b>Deliver</b> (192 "Delivering slaves", wanted at 0.25 per slave, AI slot 65): the leader walks to the shipping package's town
+/// (<see cref="Blackboard.MissionTown"/>). <b>Sell</b> (194 / 218 "Selling slaves", 218 only in a prison or slave camp, AI slot 66): in the town it
+/// stands in it says event 39 SLAVE_DELIVERY to a receiver of the town and hands its slaves over (<see cref="HandOverSlaves"/>).</item>
 /// <item><b>Get in the cage</b> (172 "Getting in my cage", a Slave AI Goal; <c>FUN_1408caaf0</c>, <b>Observed</b>): a slave not held walks to the
 /// nearest free cage of its owner's faction in the 3x3 zone cells round it, in any town, and gets in (<c>Task_UseCage</c>).</item>
 /// </list>
@@ -75,53 +73,6 @@ public sealed partial class CaptiveSystem
     }
 
     /// <summary>
-    /// Starts a slave logistics job of goal <paramref name="type"/> (gathering slaves from cages, caging oneself or a delivery) for the worker at
-    /// <paramref name="slot"/>; null when it finds nothing to do.
-    /// </summary>
-    CaptiveJob? TryStartLogistics(World world, Squad squad, Blackboard board, int slot, CharacterCold cold, TaskType type)
-    {
-        var table = world.Characters;
-        var worker = table.IdOf(slot);
-        switch (type)
-        {
-            case TaskType.GatherSlavesFromCages:
-            case TaskType.GatherSlavesFromCagesIfFemaleOrBeast:
-            case TaskType.GatherSlavesFromCagesIfItsAnExportTown:
-                {
-                    int site = TownAt(data, table.Next[slot].Position);
-                    bool export = type == TaskType.GatherSlavesFromCagesIfItsAnExportTown;
-                    if (export ? !ExportTown(world, cold, site)
-                            : SlavesOf(world, squad).Count(s => table.Cold(s)!.InSomething == HeldState.None
-                                    && table.Cold(s)!.Medical is not { Incapacitated: true }) > 3)
-                        return null;
-
-                    var cages = export ? CagesOf(world, site) : NearbyCages(world, site, table.Next[slot].Position, cold.Faction);
-                    return GatherTarget(world, slot, cold, cages, type) is { } cage
-                        ? new CaptiveJob { Kind = CaptiveJobKind.Gather, Worker = worker, Captive = cage.Occupant, Cage = cage.Id,
-                                Faction = cold.Faction, Site = cage.Site }
-                        : null;
-                }
-            case TaskType.GoToSomewhereForDeliveringSlaves:
-                {
-                    if (board.MissionTown < 0 || squad.Leader != worker || DeliverDesire(world, squad) <= 0)
-                        return null;
-
-                    return new CaptiveJob { Kind = CaptiveJobKind.Deliver, Worker = worker, Captive = CharacterId.None, Cage = "",
-                            Faction = cold.Faction, Site = board.MissionTown };
-                }
-            case TaskType.SlaveGetInMyMastersCage:
-                {
-                    // A player character's 172 is its Obedient Slave job's (ObedientSlave.cs).
-                    if (cold.IsPlayer || OwnCage(world, slot, cold) is not { } best) return null;
-                    return new CaptiveJob { Kind = CaptiveJobKind.CageSelf, Worker = worker, Captive = worker, Cage = best.Id, Faction = cold.Faction,
-                            Site = best.Site };
-                }
-        }
-
-        return null;
-    }
-
-    /// <summary>
     /// The finder of 172 Getting in my cage (<c>FUN_1408caaf0</c>, <b>Verified</b>): for a character with an owner, whatever its slave state (the
     /// finder tests the owner handle only, so an escaped or ex-slave that keeps its owner finds a cage too), not held in anything, the nearest free
     /// cage of the owner's faction in the 3x3 zone cells round it, whatever the town (the finder's town argument is 0), that no job heads for; null:
@@ -149,7 +100,7 @@ public sealed partial class CaptiveSystem
     /// The desire of 217 (AI slot 64, <c>FUN_140597b80</c>): the gatherer stands in a town or outpost, and when its owner is the player's faction or
     /// an anti-slavery one, is an ally of it.
     /// </summary>
-    bool ExportTown(World world, CharacterCold cold, int site)
+    internal bool ExportTown(World world, CharacterCold cold, int site)
     {
         if (site < 0 || data.Sites[site].Town.Type is not (TownType.Town or TownType.Outpost)) return false;
         int owner = site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
@@ -162,7 +113,7 @@ public sealed partial class CaptiveSystem
     /// the 3x3 zone cells round it, of that town when it is in one, of any town when not (the finder's town is only a filter, null passes
     /// everything). Only fixtures of towns already registered exist.
     /// </summary>
-    IEnumerable<Fixture> NearbyCages(World world, int site, Vector3 at, int faction)
+    internal IEnumerable<Fixture> NearbyCages(World world, int site, Vector3 at, int faction)
     {
         IEnumerable<Fixture> all = site >= 0 ? CagesOf(world, site) : world.Fixtures.All.Where(f => f.Kind == FixtureKind.Cage);
         foreach (var f in all)
@@ -176,7 +127,7 @@ public sealed partial class CaptiveSystem
     /// finder's order whose occupant is a woman or of another race (<c>FUN_1408d1410</c>, <b>Verified</b>: no distance sort, and no test of the
     /// occupant being a player character, down or busy).
     /// </summary>
-    Fixture? GatherTarget(World world, int slot, CharacterCold cold, IEnumerable<Fixture> cages, TaskType type)
+    internal Fixture? GatherTarget(World world, int slot, CharacterCold cold, IEnumerable<Fixture> cages, TaskType type)
     {
         var table = world.Characters;
         var at = table.Next[slot].Position;
@@ -275,13 +226,14 @@ public sealed partial class CaptiveSystem
                     if (!Walk(world, j, w, cage, out bool arrived)) return End(world, j, CaptiveEventKind.GaveUp);
                     if (!arrived) return true;
                     TaskStart.Stand(table, w);
-                    wc.Engaged = false;
                     bool caged = world.Fixtures.Imprison(world, j.Worker, cage);
                     if (caged) Note(world, CaptiveEventKind.Caged, j);
                     return End(world, j, caged ? null : CaptiveEventKind.GaveUp);
                 }
             case CaptiveJobKind.Deliver:
-                return StepDeliver(world, j, w, wc);
+                return StepDeliver(world, j, w);
+            case CaptiveJobKind.Sell:
+                return StepSell(world, j, w, wc);
         }
 
         return End(world, j, CaptiveEventKind.GaveUp);
@@ -293,89 +245,119 @@ public sealed partial class CaptiveSystem
     public const float DeliverDesirePerSlave = 0.25f;
 
     /// <summary>
-    /// Goal 192's desire (AI slot 65, <c>FUN_14059a0a0</c>, <b>Verified</b>): 0.25 per entry of the platoon's slave list; 0 with no slaves. The sweep
-    /// starts the goal when it is above 0 and takes the first goal in its hours (with one candidate, the usual package, the scoring against the
-    /// member's other goals changes nothing observable, so no scorer is modelled).
+    /// Goal 192's desire (AI slot 65, <c>FUN_14059a0a0</c>, <b>Verified</b>): 0.25 per entry of the platoon's slave list; 0 with no slaves. 188 and
+    /// 194 share it; 218 has it only in a prison or slave camp (AI slot 66).
     /// </summary>
     public float DeliverDesire(World world, Squad squad) => DeliverDesirePerSlave * SlavesOf(world, squad).Count();
 
     /// <summary>
-    /// The leader walks to the shipping town (re-sent whenever its walk ended outside it, at most <see cref="CaptiveSettings.Walks"/> times plus one
-    /// per 1000 units), then hands its slaves over.
+    /// 192's act-out (its plan's 53 Travelling, the only provider of state 36): the leader walks to the shipping town (re-sent whenever its walk
+    /// ended outside it, at most <see cref="CaptiveSettings.Walks"/> times plus one per 1000 units) and is done once inside it, where the goal's
+    /// plan is its own row alone and 194 / 218 hand the slaves over.
     /// </summary>
-    bool StepDeliver(World world, CaptiveJob j, int w, CharacterCold wc)
+    bool StepDeliver(World world, CaptiveJob j, int w)
     {
         var table = world.Characters;
-        if (world.Squads.Find(wc.SquadId) is not { Ai: { } board } squad || board.MissionTown != j.Site || !SlavesOf(world, squad).Any())
-            return End(world, j, CaptiveEventKind.GaveUp);
-
         var site = data.Sites[j.Site];
         var centre = new Vector2(site.Position.X, site.Position.Z);
         ref var n = ref table.Next[w];
         float r = MathF.Max(site.Town.Radius, 100);
-        if (Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), centre) > r)
-        {
-            if (WalksOwn(table, w, j)) return true;
-            if (++j.Walks > Settings.Walks + 1 + (int)(Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), centre) / 1000))
-                return End(world, j, CaptiveEventKind.GaveUp);
+        float d = Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), centre);
+        if (d <= r) return End(world, j, null);
+        if (WalksOwn(table, w, j)) return true;
+        if (++j.Walks > Settings.Walks + 1 + (int)(d / 1000)) return End(world, j, CaptiveEventKind.GaveUp);
 
-            TaskStart.Walk(world, w, centre, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
+        TaskStart.Walk(world, w, centre, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
+        return true;
+    }
+
+    /// <summary>
+    /// The receiver 194 / 218 hand the slaves to (<c>FUN_1408ca950</c>, <b>Verified</b>: the finder searches the town the leader stands in, its status
+    /// town, and keeps a target it has): in the town at <paramref name="w"/>'s feet, the live NPC of the town's faction or an ally nearest to the
+    /// leader (<see cref="Receiver"/>); null outside a town or with nobody there.
+    /// </summary>
+    internal CharacterId? ReceiverHere(World world, int w, CharacterCold cold, out int site)
+    {
+        site = TownAt(data, world.Characters.Next[w].Position);
+        if (site < 0) return null;
+
+        var town = data.Sites[site];
+        int owner = site < data.SiteFactions.Count && data.SiteFactions[site] >= 0 ? data.SiteFactions[site] : cold.Faction;
+        return Receiver(world, w, owner, new Vector2(town.Position.X, town.Position.Z), MathF.Max(town.Town.Radius, 100));
+    }
+
+    /// <summary>
+    /// 194 / 218's act-out (159 Talking on the receiver, event 39 SLAVE_DELIVERY): the leader walks to within <see cref="CaptiveSettings.ShoutReach"/>
+    /// of the receiver, says the event and hands its slaves over (<see cref="HandOverSlaves"/>); done then. Nothing while it crouches or lies (row
+    /// 192's !26; engine reading for the handover).
+    /// </summary>
+    bool StepSell(World world, CaptiveJob j, int w, CharacterCold wc)
+    {
+        var table = world.Characters;
+        if (world.Squads.Find(wc.SquadId) is not { } squad || !SlavesOf(world, squad).Any() || !table.TryResolveNext(j.Captive, out int r))
+            return End(world, j, CaptiveEventKind.GaveUp);
+
+        var to = new Vector2(table.Next[r].Position.X, table.Next[r].Position.Z);
+        if (Vector2.Distance(new Vector2(table.Next[w].Position.X, table.Next[w].Position.Z), to) > Settings.ShoutReach)
+        {
+            if (WalksOwn(table, w, j) && Vector2.Distance(table.Next[w].Goal, to) <= 5) return true;
+            if (++j.Walks > Settings.Walks) return End(world, j, CaptiveEventKind.GaveUp);
+
+            TaskStart.Walk(world, w, to, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
             return true;
         }
 
-        if (CharacterFacts.CrouchingOrLying(wc)) return true;   // row 192's B list needs !26: it does nothing while its leader crouches or lies
+        if (CharacterFacts.CrouchingOrLying(wc)) return true;
         TaskStart.Stand(table, w);
+        world.Defer(new Dialogue.DialogueEvent(j.Worker, j.Captive, SlaveDelivery) { Tick = world.Tick + 1 });
+        HandOverSlaves(world, j, squad, table.Cold(r)!);
+        return End(world, j, null);
+    }
 
-        // 218 only in a prison or a slave camp; 194 anywhere (AI slot 66 FUN_140597c70, 65).
-        int hour = world.Hour;
-        var roles = board.Roles[(int)AiSystem.RoleOf(squad, j.Worker, wc)];
-        bool hands = false;
-        foreach (var g in roles)
-        {
-            if (g.InWindow(hour) && (g.Task.Type == TaskType.GiveAllMySlavesTo
-                || g.Task.Type == TaskType.GiveAllMySlavesToIfItsAnImportTown && site.Town.Type is TownType.Prison
-                        or TownType.SlaveCamp)) hands = true;
-        }
-
-        if (!hands) return End(world, j, CaptiveEventKind.GaveUp);
-        int owner = j.Site < data.SiteFactions.Count && data.SiteFactions[j.Site] >= 0 ? data.SiteFactions[j.Site] : wc.Faction;
-
-        // The receiver finder (FUN_1408ca950) finding nobody makes the goal unwanted: nothing is handed over, the next sweep retries.
-        if (Receiver(world, w, owner, centre, r) is not { } to) return End(world, j, CaptiveEventKind.GaveUp);
-        world.Defer(new Dialogue.DialogueEvent(j.Worker, to, SlaveDelivery) { Tick = world.Tick + 1 });
-        int master = table.Cold(to.Slot) is { } rc ? rc.SquadId : -1;
+    /// <summary>
+    /// The handover (<b>engine choice</b>: the original's goes through the event 39 dialogue, and no base-game dialogue answers it): each slave of the
+    /// squad leaves it for a squad of its own, owned by the town's faction and obeying the receiver's squad, and goes into the nearest free cage of
+    /// that faction or an ally in the town.
+    /// </summary>
+    void HandOverSlaves(World world, CaptiveJob j, Squad squad, CharacterCold receiver)
+    {
+        var table = world.Characters;
+        int owner = j.Site < data.SiteFactions.Count && data.SiteFactions[j.Site] >= 0 ? data.SiteFactions[j.Site] : receiver.Faction;
         foreach (int s in SlavesOf(world, squad).ToList())
         {
             var sc = table.Cold(s)!;
             var id = table.IdOf(s);
             Join(world, id, sc, NewSquad(world, sc, table.Next[s].Position), SquadRole.Leader);
-            FixtureRegistry.Enslave(world, sc, owner, master);
-            Fixture? best = null;
-            float bestD = float.MaxValue;
-            foreach (var f in CagesOf(world, j.Site))
-            {
-                if (f.Owner != owner && !Allied(owner, f.Owner) || !FixtureRegistry.IsFree(table, f) || Taken(f.Id))
-                    continue;
-
-                float d = Vector2.DistanceSquared(new Vector2(table.Next[s].Position.X, table.Next[s].Position.Z),
-                        new Vector2(f.Position.X, f.Position.Z));
-                if (d < bestD) (best, bestD) = (f, d);
-            }
-
-            if (best is not null) world.Fixtures.Imprison(world, id, best);
-            if (Settings.RecordLog)
-                _log.Add(new CaptiveEvent(world.Tick, CaptiveEventKind.Delivered, j.Kind, j.Worker, id));
+            FixtureRegistry.Enslave(world, sc, owner, receiver.SquadId);
+            if (FreeCageNear(world, j.Site, owner, table.Next[s].Position) is { } best) world.Fixtures.Imprison(world, id, best);
+            if (Settings.RecordLog) _log.Add(new CaptiveEvent(world.Tick, CaptiveEventKind.Delivered, j.Kind, j.Worker, id));
         }
-
-        return End(world, j, null);
     }
 
     /// <summary>
-    /// The live NPC of <paramref name="faction"/> or an ally within <paramref name="radius"/> of the shipping town's
-    /// <paramref name="centre"/> nearest to the leader (the original's designated-building finder, <c>FUN_1408ca950</c>, reduced to its owner hand;
-    /// its acceptance test is <b>Unknown</b>, s07-d083).
+    /// The free cage of <paramref name="owner"/> or an ally in the town <paramref name="site"/> nearest to <paramref name="at"/>, that no job heads
+    /// for; null: none.
     /// </summary>
-    CharacterId? Receiver(World world, int w, int faction, Vector2 centre, float radius)
+    Fixture? FreeCageNear(World world, int site, int owner, Vector3 at)
+    {
+        Fixture? best = null;
+        float bestD = float.MaxValue;
+        foreach (var f in CagesOf(world, site))
+        {
+            if (f.Owner != owner && !Allied(owner, f.Owner) || !FixtureRegistry.IsFree(world.Characters, f) || Taken(f.Id)) continue;
+
+            float d = Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(f.Position.X, f.Position.Z));
+            if (d < bestD) (best, bestD) = (f, d);
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// The live NPC of <paramref name="faction"/> or an ally within <paramref name="radius"/> of the town's <paramref name="centre"/> nearest to the
+    /// leader (the original's designated-building finder, <c>FUN_1408ca950</c>, reduced to its owner hand: <b>engine reading</b>).
+    /// </summary>
+    internal CharacterId? Receiver(World world, int w, int faction, Vector2 centre, float radius)
     {
         var table = world.Characters;
         var at = table.Next[w].Position;
