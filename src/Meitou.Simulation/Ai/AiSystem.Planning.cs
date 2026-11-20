@@ -330,11 +330,10 @@ public sealed partial class AiSystem
             Followed() is >= 0 and var at && _system._combat is { } combat && CharacterFacts.ImmediateThreat(combat, _world, at);
 
         /// <summary>
-        /// Whether goal <paramref name="type"/> is its own plan, acted out by an engine system (the assault, the combat goals, Medic, the leader
-        /// rescue, the rescue to a bed: <see cref="TryPlan"/>).
+        /// Whether goal <paramref name="type"/> is its own plan, acted out by an engine system (the assault, the combat goals, Medic:
+        /// <see cref="TryPlan"/>).
         /// </summary>
-        static bool EngineActs(TaskType type) => TaskBehaviours.Of(type) is AiBehaviour.Assault or AiBehaviour.Fight or AiBehaviour.Medic
-            or AiBehaviour.RescueLeader or AiBehaviour.RescueToBed;
+        static bool EngineActs(TaskType type) => TaskBehaviours.Of(type) is AiBehaviour.Assault or AiBehaviour.Fight or AiBehaviour.Medic;
 
         /// <summary>
         /// Whether goal <paramref name="goal"/>'s plan is the engine's own (<see cref="TryPlan"/>: the engine-run goals, Self preservation, a follow
@@ -663,7 +662,7 @@ public sealed partial class AiSystem
             StateType.IsFullyRested => RowStates.FullyRested(_world, cold),
             StateType.HasOneWorkingArm => cold.Medical is not { } arms || arms.ArmWorks(left: true) || arms.ArmWorks(left: false),
             // 80 (evaluator 1405c7930, Verified): the medical left-arm byte +0x166; the lift rows 213, 240, 225, 246, 68 and 170 need it. States
-            // 7 and 48 are not wired: no goal reaches those rows.
+            // 7 and 48 of those rows are the engine goals' that plan them (IDutyGoal.State).
             StateType.IsCarryingArmOk => cold.Medical is not { } carrier || Carrying.CarrySystem.LeftArmUsable(carrier),
             StateType.HasTwoWorkingArm => cold.Medical is not { } arms2 || arms2.BothArmsWork,
             // The turret goals' done test (149, 222, 234: list A "6*"): no enemy sensed, so guards man the turrets only while enemies come

@@ -107,6 +107,7 @@ internal static class Ladder
     [
         TaskType.AquireFoodAtHomebase, TaskType.FindCropsToEat, TaskType.EatARandomKoBody, TaskType.AnimalFetchALimb,
         TaskType.PlayBecauseIHaveALimbInMouth, TaskType.ChaseAllyDogsWithMouthLimbs, TaskType.ProtectAllies, TaskType.EatFoodOnGround,
+        TaskType.FindAndRescueIfTheresBeds, TaskType.FindAndRescueLeader,
     ];
 
     /// <summary>

@@ -121,25 +121,11 @@ public enum AiBehaviour : byte
     /// </summary>
     PatrolTown = 22,
     /// <summary>
-    /// Find and rescue leader (142, finder <c>FUN_140598540</c>, list B 101 <c>isLeaderDown</c>): wanted while the squad's leader (not the character,
-    /// not dead) is down and can be lifted (<see cref="Carrying.CarrySystem.LeaderToRescue"/>); the serial carry sweep lifts it (row 213, the snatch
-    /// lift) once the goal is chosen.
-    /// </summary>
-    RescueLeader = 23,
-    /// <summary>
     /// Crouches (CROUCH 27, <c>Task_Crouch</c>) or stands up from a crouch (STAND_UP 28, <c>Task_UnCrouch</c>) where it stands: the <c>squat T</c>
     /// clip plays forwards or backwards and the animation stance's crouched byte is set once it passes 0.9 or cleared under 0.1
     /// (<see cref="AnimationSystem"/>). The base data lists neither goal; modded packages may.
     /// </summary>
     Crouch = 24,
-    /// <summary>
-    /// Find and rescue if there's beds (148, finder <c>FUN_1408cd550</c>, desire <c>FUN_1405994c0</c>, effect 48 <c>IS_CARRYING_TARGET</c>): wanted
-    /// while the character is not on Hold, carries nothing, is able to lift, the bed search finds a bed for it and the rescue finder finds a downed
-    /// ally (<see cref="Carrying.CarrySystem"/>'s serial sweep keeps that in <see cref="AiMind.BedRescueWant"/>); once the goal is chosen the sweep
-    /// lifts the body (row 148, as the player's rescue job does), and the carried body's goals then take it on (106 lays it in a bed,
-    /// <see cref="Kidnap.TownDutySystem"/>).
-    /// </summary>
-    RescueToBed = 26,
     /// <summary>
     /// HEAL_MY_LEGS (269 Fixing Legs, a race goal; <c>Task_FirstAid</c> on the character itself, docs/game/ai-tasks.md "Medic jobs"): wanted while its
     /// legs are messed up (<see cref="AiSystem.HealLegsDesire"/>); planned by the planner from its list B (an arm, a first aid kit, not swimming, no
@@ -228,8 +214,6 @@ public static class TaskBehaviours
         // 248 Attacking Squad: the same finder as 101 (FUN_140793eb0, stub LAB_140006d25), the same flags and effect; no base package lists it, a mod
         // can.
         [TaskType.DefeatSquadLimitChaseRange] = (AiBehaviour.Assault, "Attacking squad"),
-        [TaskType.FindAndRescueLeader] = (AiBehaviour.RescueLeader, "Rescuing leader"),
-        [TaskType.FindAndRescueIfTheresBeds] = (AiBehaviour.RescueToBed, "Find and rescue"),
         [TaskType.Crouch] = (AiBehaviour.Crouch, "Crouching"),
         [TaskType.StandUp] = (AiBehaviour.Crouch, "Standing"),
         [TaskType.SelfPreservation] = (AiBehaviour.SelfPreserve, "Self preservation"),

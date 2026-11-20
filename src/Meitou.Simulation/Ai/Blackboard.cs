@@ -970,7 +970,7 @@ public enum FleeAsk : byte
 }
 
 /// <summary>
-/// Where goal 148 Find and rescue if there's beds stood for a character whose goal lists hold it, at the carry system's last rescue beat
+/// Where goal 148 Find and rescue if there's beds stood for a character whose goal lists weigh it, at the carry system's last rescue beat
 /// (<see cref="AiMind.BedRescueNote"/>): a debugging aid the action log writes (docs/simulation.md "Action log").
 /// </summary>
 public enum BedRescueNote : byte
@@ -999,14 +999,6 @@ public enum BedRescueNote : byte
     /// Wanted, not chosen: its think chose another goal.
     /// </summary>
     NotChosen = 5,
-    /// <summary>
-    /// Chosen, but not free to lift now (not idle, wandering or following, or the AI does not hold it: a talk, a trade, an arrest).
-    /// </summary>
-    NotFree = 6,
-    /// <summary>
-    /// Chosen and free, but the lift would not start.
-    /// </summary>
-    Refused = 7,
     /// <summary>
     /// The lift started (row 148).
     /// </summary>
@@ -1501,21 +1493,8 @@ public sealed class AiMind
     public CharacterId FightTarget { get; set; } = CharacterId.None;
 
     /// <summary>
-    /// The leader rescue goal's factor (<see cref="AiBehaviour.RescueLeader"/>): 1 while the squad leader is down and can be lifted, kept by the
-    /// carry system's serial sweep (the think reads it).
-    /// </summary>
-    public float RescueWant { get; set; }
-
-    /// <summary>
-    /// The factor of goal 148 Find and rescue if there's beds (<see cref="AiBehaviour.RescueToBed"/>): 1 while its desire holds (not on Hold,
-    /// carrying nothing, a bed found), the character is able to lift (an arm, its repertoire) and the rescue finder finds a downed ally, else 0.
-    /// Kept by the carry system's serial sweep for a character whose goal lists hold 148 (the think reads it). Not saved; hashed while set.
-    /// </summary>
-    public float BedRescueWant { get; set; }
-
-    /// <summary>
-    /// Where goal 148 stood at the last rescue beat (a debugging aid for the action log; written by the carry system's serial sweep, read only by the
-    /// log, so it changes nothing in the world). Not saved, not hashed.
+    /// Where goal 148 stood at the last rescue beat (a debugging aid for the action log; written by the rescue goals' serial look,
+    /// <see cref="Carrying.RescueGoals"/>, read only by the log, so it changes nothing in the world). Not saved, not hashed.
     /// </summary>
     public BedRescueNote BedRescueNote { get; set; }
 
@@ -1653,12 +1632,6 @@ public sealed class AiMind
         {
             hasher.Add(MedicPatient);
             hasher.Add(MedicScore);
-        }
-
-        if (BedRescueWant != 0)
-        {
-            hasher.Add(0x42526573);   // "BRes"
-            hasher.Add(BedRescueWant);
         }
 
         if (GuardVisitorAt is { } visitor)

@@ -1008,27 +1008,23 @@ main grid, grid size from its `inventory w` / `inventory h`; **Observed** in the
 a Pack Beast, an Iron Spider and a Bonedog of the player's squad). A live animal's window (the player's own, or another faction's
 not down; Trade on an own animal too) ends above the grid ([animals](game/animals.md#death-items)). It also runs the stealth knock-out
 (`StealthKo` task, reusing `CarryTarget`/`LiftTime`): [combat](game/combat.md#stealth-knock-out).
-- **NPC rescue to a bed** (goal 148 Find and rescue if there's beds, facts: [carry-loot 3.2](game/carry-loot.md#32-goals-and-their-target-finders)):
-  on the `AutoEveryTicks` beat, after the leader rescue, an NPC the AI runs (not an engine mind, not a player character) whose
-  goal lists hold 148 keeps the goal's factor for its think (`CarrySystem.RescueToBeds`, `AiMind.BedRescueWant`, hashed while set): 1 while it is not
-  on Hold, carries nothing, the rescue finder (`FindRescue`) finds a downed ally and the bed search a bed for it, else 0. The bed search is the
-  carrier's (`BedSystem.FindForCarrier`): it leaves out beds other carriers are on their way to, and a squad with no town takes only its own or an
-  ally's beds within `BedSearchRange`, as its sleep search does, and none of the player's (engine choice). The think weighs 148 at that factor times
-  its package weight as any goal (`AiBehaviour.RescueToBed`, its own plan) and stands while it is chosen; the sweep then lifts the body as row 148
-  (`TaskSource.Goal`) once the AI holds the character (not in a talk, a trade or an arrest), unless someone lifts it already. The carrier's goals then
-  take the body on ([town duties](#town-duties)): with 106 listed it lays it in a bed. Engine choices: the factor and the lift wait for the beat (up
-  to 15 ticks); the finder runs only while anyone is down, and before the bed search (the same result); a character not able to lift at all
-  (`CarrySystem.CouldLift`: no usable left arm, or the row not in its repertoire) does not want the goal, while a fight, a crouch or lying down only
-  delay the lift (`CarrySystem.Free`, `CanCarry`), so a resident asleep in its bed wants it too, as the original's desire tests only Hold and
-  carrying: once 148 outscores its sleep goal (the resident package's 239 scores 1 x 1 x1.25 = 1.25 against 148's 1.0 while it commits, and at most
-  0.05 once its commitment has passed, [ai-tasks](game/ai-tasks.md) "Desire and commitment") its think gets it out of bed and the next beat lifts; a
-  body goal 106 would not lay in a bed (a grudge tag, a bounty owed to a police-like rescuer, not regarded as friendly; `BedSystem.WouldPutIn`) is not
-  lifted; a walk to the body that no path reaches (`CarrySystem.LiftWalkFails`) is a lost walk: the body goes into the rescuer's ignore map for 20 s and the
-  goal replans (**Verified**, the plan step `FUN_14050d970`); the rescue finders (`FUN_1408cd2d0`, 142's `FUN_140598540`) do not read that map, so the
-  same body is taken again, and a walk still under way is never given up; a body that dies while the rescuer walks to it
-  ends the walk, so this goal lifts no body that is already dead when the lift clip starts (one that comes round ends it as any lift's); a body this
-  goal lifted that no carried-body goal takes on (no bed found after the lift, or a package without 106) stays on the shoulder, as any goal's end leaves it
-  ([town duties](#town-duties)). The leader rescue (142) takes the same ability test, hold test and lost walk.
+- **Rescue goals** (148 Find and rescue if there's beds, 142 Find and rescue leader; facts: [carry-loot 3.2](game/carry-loot.md#32-goals-and-their-target-finders)):
+  [engine goals](#engine-goals) of the chooser for anyone whose lists weigh them (`RescueGoals`, `AiSystem.WeighsGoal`; both on the ladder's
+  rungs, `Ladder.OnRungs`, so a player-faction mind's own lists weigh them too). Both are `Task_Blank` rows with effect 48, so the plan is
+  `[1, 68, goal]` (68 Lifting is 48's only provider). On the `AutoEveryTicks` beat a serial look keeps each one's finder pick for the think (hashed):
+  148's the body the rescue finder (`CarrySystem.FindRescue`) finds while it is not on Hold, carries nothing, goal 106 would lay that body in a bed
+  (`BedSystem.WouldPutIn`: no grudge tag, no bounty owed to a police-like rescuer, regarded as friendly) and the carrier's bed search finds a bed
+  (`BedSystem.FindForCarrier`: it leaves out beds other carriers are on their way to, and a squad with no town takes only its own or an ally's beds
+  within `BedSearchRange`, none of the player's; engine choice); 142's the squad leader `CarrySystem.LeaderToRescue` finds down. Engine choices: the
+  picks wait for the beat (up to 15 ticks), the finder runs only while anyone is down, and one not able to lift at all (`CarrySystem.CouldLift`: no
+  usable left arm, or the row not in its repertoire) has no pick, while a fight, a crouch or lying down do not change the pick: a resident asleep
+  in its bed wants 148 too, as the original's desire tests only Hold and carrying, and once 148 outscores its sleep goal (239 scores 1.25 against
+  148's 1.0 while it commits, at most 0.05 after) it gets up. Desire: 148's 1.0 off Hold and carrying nothing, 142's 1.0, row 68's 1.0 while
+  carrying nothing; row 68's states 1, 46, 7 and 48 are the body's. The chooser's start lifts the plan's body (`BeginPickUp`, the goal's row,
+  `TaskSource.Goal`) unless another lift goes for it; the goal is done when the lift ends (the body on the shoulder, or given up) or the body dies
+  (the walk stops), and a walk no path reaches (`CarrySystem.LiftWalkFails`) is a lost walk: 20 s ignore and a replan (**Verified**, the plan step
+  `FUN_14050d970`); the rescue finders (`FUN_1408cd2d0`, `FUN_140598540`) read no ignore map, so the same body is taken again. The carrier's goals
+  then take the body on ([town duties](#town-duties)): with 106 listed it lays it in a bed, else it stays on the shoulder.
 - **NPC looting** (`LootGoals`, the finder `CarrySystem.LootTarget`, facts: [carry-loot 3.3](game/carry-loot.md#33-npc-looting)): goal 177 is an [engine goal](#engine-goals) of the
   chooser (desire 1 at posture 0, times its finder's factor; plan `[1, 3, 177]`, row 3 the loot). Every `AutoEveryTicks` on its slot's turn (slot mod the period, so the looks spread over the ticks, as the original's AI updates run 8 characters a frame in turn, [game loop](game/game-loop.md#the-character-update-budget)), an NPC with a mind of its own that weighs 177 (`AiSystem.WeighsGoal`) keeps its finder's pick for the think
   (engine: the original's finder runs at each score); the pick is the nearest dead body (not of its faction), else downed living one of a non-allied faction, within 100 and reachable (no shut gate route between, no building without an open door around it unless the looter is in it, `CarrySystem.Reachable`): the player's only with
@@ -2419,7 +2415,7 @@ Goals of the NPCs' packages that an engine system acts out, chosen by the one ch
 (one per world, built in `World`'s constructor by `AiSystem.BindGoals` from the `IDutyGoalOwner` systems; null when none registered) holds each registered type: a
 type of the original's that `TaskBehaviours` does not act out, registered by its own system with its `IDutyGoal` (desire, finder, states, start, end) and the rows of
 its plan the act-out carries out besides the goal's own. Built: 135, 139, 282, 230, 232, 233, 237, 277, 278, 279, 259, 260, 183, 167, 168, 173, 245, 217,
-188, 192, 194, 218, 172 and 276 (`CaptiveSystem` through `CaptiveGoals`, [captives](#captives)); 176 (`SmellSystem`, [blood smell](#blood-smell)); 177 and 42 (`CarrySystem` through `LootGoals`, [looting and arming](#carrying-rescue-and-looting)); 211, 155, 197, 86 and 195 (`LockSystem` through `WardenGoals`,
+188, 192, 194, 218, 172 and 276 (`CaptiveSystem` through `CaptiveGoals`, [captives](#captives)); 176 (`SmellSystem`, [blood smell](#blood-smell)); 177 and 42 (`CarrySystem` through `LootGoals`, [looting and arming](#carrying-rescue-and-looting)); 148 and 142 (`CarrySystem` through `RescueGoals`, [rescue](#carrying-rescue-and-looting)); 211, 155, 197, 86 and 195 (`LockSystem` through `WardenGoals`,
 [wardens' goals](#arrest-and-jail)); 180 (`LockSystem` through `GateGoals`, gates in [arrest and jail](#arrest-and-jail)); 204 (`ArrestSystem` through `ArrestGoals`, [arrest and jail](#arrest-and-jail)); 256, 207 and 202 (`LockSystem` through `EscapeGoals`, [escapes](#captives)); 254 (`KidnapSystem` through
 `KidnapGoals`, [kidnapping](#kidnapping)); 273, 223, 138, 137, 112, 281, 224, 274, 106, 243, 131, 184, 212, 158, 283 and 216 (`TownDutySystem` through `TownGoals`, [town duties](#town-duties)).
 - **Choosing**: a registered type has `AiBehaviour.Duty`. Its desire is the system's (`DutyGoals.Desire`: the desire times the finder's factor when the TaskData row has
@@ -2587,10 +2583,10 @@ beside log.txt, so a log sent with a report has it at hand, kept like log.txt (`
 (`CharacterCold.Running`) changed gets a line: the task left, why (`TaskStart.End`'s reason,
 else replaced, or ended by its own system), the task taken up and the start's source, row, job, target and site. Squad follows the player's
 characters and adds the decision step's trace of that tick (it turns `DecisionSystem.Tracing` on); everyone adds every NPC and animal (in a town,
-about 650 lines a minute), and for each NPC whose goal lists hold 148 a line whenever where that goal stands changes at a rescue beat
-(`AiMind.BedRescueNote`, set by `CarrySystem.RescueToBeds`, neither saved nor hashed): "rescue 148, not eligible: ..." (not able to lift, nobody is
-down, no downed ally its finder takes, the ally found is one it would not lay in a bed, no bed for it), "wanted, not chosen: its goal is ...",
-"chosen, not free to lift: task ...", "chosen, the lift would not start" or "chosen, lifting". It only reads the world. Its lines, like
+about 650 lines a minute), and for each character whose goal lists weigh 148 a line whenever where that goal stands changes at a rescue beat
+(`AiMind.BedRescueNote`, set by `RescueGoals`' look, neither saved nor hashed): "rescue 148, not eligible: ..." (not able to lift, nobody is
+down, no downed ally its finder takes, the ally found is one it would not lay in a bed, no bed for it), "wanted, not chosen: its goal is ..." or
+"chosen, lifting". It only reads the world. Its lines, like
 log_dialogue.txt's, only join a queue that a thread of its own writes to the file (`QueuedLog`), so the tick never waits on the disk; as the game ends
 on an exception, the queue is written at once.
 

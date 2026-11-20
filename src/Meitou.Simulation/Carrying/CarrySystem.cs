@@ -31,7 +31,7 @@ namespace Meitou.Simulation.Carrying;
 /// (<see cref="WakesIntoPutDown"/>); any other rides on awake (a player-side body that is no friend is knocked out again on the shoulder, engine
 /// choice); a player-side carrier sets only a friendly one down. A squad mate lifted awake (<see cref="CharacterCold.CarriedAwake"/>) rides until
 /// put down.</item>
-/// <item><b>Rescue</b>: the rescue job, and NPC squads' knocked-out leaders (<see cref="RescueLeaders"/>).</item>
+/// <item><b>Rescue</b>: the rescue job, and the rescue goals 148 and 142 of anyone whose lists weigh them (<see cref="RescueGoals"/>).</item>
 /// <item><b>Loot</b> (<see cref="CharacterTask.Loot"/>): the walk, then everything of the main inventory and the backpack that fits moves to the
 /// looter (<see cref="LootOrder"/>), or the body's inventory opens in a window to take from (<see cref="OpenLootOrder"/>); a member of the victim's
 /// faction who sees it makes it a theft. NPCs with goal 177 loot by the original's rules (<see cref="LootGoals"/>).</item>
@@ -100,6 +100,12 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// NPC looting (177) and arming (42) as chooser goals: the finders' picks and the act-outs.
     /// </summary>
     readonly LootGoals _lootGoals = new();
+
+    /// <summary>
+    /// The rescue goals 148 and 142 (<see cref="RescueGoals"/>).
+    /// </summary>
+    readonly RescueGoals _rescueGoals = new();
+
     /// <summary>
     /// The body options (the put-down knock-out reads them).
     /// </summary>
@@ -885,7 +891,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             switch ((CharacterTask)next[i].Task)
             {
                 case CharacterTask.PickUp:
-                    if (!GivesUpRescue(world, i)) Lift(world, table, i, dt);
+                    Lift(world, table, i, dt);
                     break;
                 case CharacterTask.PutDown:
                     PutDown(world, i, dt);
@@ -902,10 +908,11 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         LootWindow(world);
         KeepLinks(world);
         _lootGoals.Step(world, this);
+        _rescueGoals.Step(world, this);
         if (Settings.AutoEveryTicks > 0)
         {
             int every = world.Every(Settings.AutoEveryTicks);
-            if (world.Tick % every == 0) Rescue(world, table);
+            if (world.Tick % every == 0) _rescueGoals.Look(world, this);
             _lootGoals.Look(world, this, every);   // each character on its slot's turn
         }
     }
@@ -1709,26 +1716,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     #region Rescue
 
     /// <summary>
-    /// Resolved on the first rescue beat: whose goal lists hold goal 148 (<see cref="RescueToBeds"/>).
-    /// </summary>
-    AiSystem? _ai;
-
-    /// <summary>
     /// Resolved on the first rescue beat: goal 148's bed search (<see cref="Locks.BedSystem.FindForCarrier"/>).
     /// </summary>
     Locks.BedSystem? _beds;
-
-    /// <summary>
-    /// Every <see cref="CarrySettings.AutoEveryTicks"/> ticks (serial, slot order): the NPCs whose AI chose the leader rescue goal (142) lift their
-    /// knocked-out squad leader (<see cref="RescueLeaders"/>), and those whose AI chose goal 148 the body its finder gives (<see cref="RescueToBeds"/>).
-    /// A rescue job is the chooser's job passes' for anyone (<see cref="RegisterSources"/>).
-    /// </summary>
-    void Rescue(World world, CharacterTable table)
-    {
-        var taken = Lifting(table);
-        RescueLeaders(world, table, taken);
-        RescueToBeds(world, table, taken);
-    }
 
     /// <summary>
     /// The rescue (148) and foraging (238) jobs as the decision step's contributor (step 5): a character not fleeing and able to carry, with no fight
@@ -1792,7 +1782,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// <summary>
     /// The bodies being picked up now (by slot).
     /// </summary>
-    static HashSet<int> Lifting(CharacterTable table)
+    internal static HashSet<int> Lifting(CharacterTable table)
     {
         var taken = new HashSet<int>();
         for (int i = 0; i < table.HighWater; i++)
@@ -1812,7 +1802,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// <summary>
     /// The bed-free part of <see cref="MayRescue"/>: not on Hold and not carrying.
     /// </summary>
-    static bool Rescuing(CharacterCold cold) => (cold.Orders & CharacterOrders.Hold) == 0 && cold.Carrying.IsNone;
+    internal static bool Rescuing(CharacterCold cold) => (cold.Orders & CharacterOrders.Hold) == 0 && cold.Carrying.IsNone;
 
     /// <summary>
     /// One look for a body (an NPC's rescue job, and the Rescue button without Shift once): the character picks up the body <see cref="FindRescue"/>
@@ -1896,66 +1886,11 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     }
 
     /// <summary>
-    /// The leader rescue goal (142) of an NPC the AI runs: its factor for the think (<see cref="AiMind.RescueWant"/>) is 1 while
-    /// <see cref="LeaderToRescue"/> finds the leader, the character is able to lift (<see cref="CouldLift"/>, so one with no usable arm does not
-    /// choose a goal it cannot act out). Once the AI chose the goal (the package
-    /// lists it in this hour) and holds the character (<see cref="AiSystem.Holds"/>: not in a talk, a trade or an arrest), a character that is free
-    /// lifts the leader as row 213 (the snatch lift) does, unless someone lifts it already.
-    /// </summary>
-    void RescueLeaders(World world, CharacterTable table, HashSet<int> taken)
-    {
-        for (int i = 0; i < table.HighWater; i++)
-        {
-            if (!table.Next[i].Alive || table.Cold(i) is not { IsPlayer: false, Ai: { Engine: false } mind } cold) continue;
-            int leader = LeaderToRescue(world, i);
-            if (leader >= 0 && !CouldLift(world, cold)) leader = -1;
-            mind.RescueWant = leader >= 0 ? 1 : 0;   // the think's desire for goal 142 reads it
-
-            if (leader < 0 || mind.Goal is not { Task.Type: TaskType.FindAndRescueLeader } || !Starts(world, i, cold) || taken.Contains(leader))
-                continue;
-            if (BeginPickUp(world, i, table.IdOf(leader), (CharacterTask)table.Next[i].Task, source: TaskSource.Npc,
-                row: TaskType.LiftPersonSnatchingAllowed))
-                taken.Add(leader);
-        }
-    }
-
-    /// <summary>
-    /// Goal 148 Find and rescue if there's beds of an NPC the AI runs (not an engine mind), whose goal lists hold it
-    /// (<see cref="AiSystem.ListsGoal"/>): on each beat its factor for the think (<see cref="AiMind.BedRescueWant"/>) is 1 when its desire
-    /// (<c>FUN_1405994c0</c>, <b>Verified</b>: not on Hold, carrying nothing, the bed search finds a bed for it) and its finder
-    /// (<c>FUN_1408cd550</c>, the rescue finder <see cref="FindRescue"/>) both hold and the character is able to lift (<see cref="CouldLift"/>),
-    /// else 0. The finder runs only while someone is down at all, and first, so the bed search runs only with a body found; the bed search leaves
-    /// out the beds other
-    /// carriers are on their way to and keeps a squad with no town to its own or an ally's beds in range
-    /// (<see cref="Locks.BedSystem.FindForCarrier"/>). Once the AI chose the goal and holds the character (<see cref="AiSystem.Holds"/>), a
-    /// character that is free lifts that body as the player's rescue job does (row 148), as the goal's own task; a body someone lifts already is
-    /// not taken (<paramref name="taken"/>). The goal ends with the body lifted (its effect, state 48); the carrier's goals then take it on (106 lays
-    /// it in a bed, <see cref="Kidnap.TownGoals"/>; with no bed it stays on the shoulder, as in the original).
-    /// </summary>
-    void RescueToBeds(World world, CharacterTable table, HashSet<int> taken)
-    {
-        bool? down = null;
-        for (int i = 0; i < table.HighWater; i++)
-        {
-            if (!table.Next[i].Alive || table.Cold(i) is not { IsPlayer: false, Ai: { Engine: false } mind } cold) continue;
-            if ((_ai ??= world.SystemOf<AiSystem>())?.ListsGoal(world, i, TaskType.FindAndRescueIfTheresBeds) != true)
-            {
-                (mind.BedRescueWant, mind.BedRescueNote) = (0, BedRescueNote.None);
-                continue;
-            }
-
-            int body = RescueTarget(world, i, cold, taken, ref down, out var note);
-            mind.BedRescueWant = body >= 0 ? 1 : 0;   // the think's factor for goal 148 reads it
-            mind.BedRescueNote = body < 0 ? note : StartRescue(world, i, cold, mind, body, taken);
-        }
-    }
-
-    /// <summary>
     /// Goal 148's body for the rescuer in <paramref name="i"/>: the finder's when the rescuer could lift, someone is down (<paramref name="down"/>,
     /// asked once per beat), goal 106 would lay that body in a bed (<see cref="Locks.BedSystem.WouldPutIn"/>; engine choice, so no body is lifted
     /// only to be put down again) and the bed search finds it a bed; else -1, with why in <paramref name="note"/>.
     /// </summary>
-    int RescueTarget(World world, int i, CharacterCold cold, HashSet<int> taken, ref bool? down, out BedRescueNote note)
+    internal int RescueTarget(World world, int i, CharacterCold cold, HashSet<int> taken, ref bool? down, out BedRescueNote note)
     {
         note = BedRescueNote.NotChosen;
         if (!Rescuing(cold) || !CouldLift(world, cold))
@@ -1975,18 +1910,6 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         else if ((_beds ??= world.SystemOf<Locks.BedSystem>())?.WouldPutIn(world, i, body) == false) (body, note) = (-1, BedRescueNote.NoPutIn);
         else if (RescueBed(world, i) is null) (body, note) = (-1, BedRescueNote.NoBed);
         return body;
-    }
-
-    /// <summary>
-    /// Goal 148's lift of <paramref name="body"/>, once the AI chose the goal and holds the character and it is free (<see cref="Starts"/>), as the
-    /// player's rescue job lifts (row 148), as the goal's own task. Returns where the goal stands for the action log.
-    /// </summary>
-    BedRescueNote StartRescue(World world, int i, CharacterCold cold, AiMind mind, int body, HashSet<int> taken)
-    {
-        if (mind.Goal is not { Task.Type: TaskType.FindAndRescueIfTheresBeds }) return BedRescueNote.NotChosen;
-        if (!Starts(world, i, cold)) return BedRescueNote.NotFree;
-
-        return LiftRescued(world, i, body, taken, TaskSource.Goal) ? BedRescueNote.Lifting : BedRescueNote.Refused;
     }
 
     /// <summary>
@@ -2011,72 +1934,31 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// <summary>
     /// Whether the character is able to lift at all (the lasting part of <see cref="CanCarry"/>): awake, of a race, with a usable left arm, carrying
     /// nothing and not carried, and the rescue row is in its repertoire. A fight, a crouch or lying down pass, so they do not change the rescue
-    /// goals' factors; the lift itself waits for them (<see cref="Free"/>).
+    /// goals' picks; the lift itself waits for them (the chooser starts it, <see cref="RescueGoals"/>).
     /// </summary>
-    static bool CouldLift(World world, CharacterCold cold) =>
+    internal static bool CouldLift(World world, CharacterCold cold) =>
         cold is { Medical: { Incapacitated: false } m, Race: not null } && cold.Carrying.IsNone && cold.CarriedBy.IsNone && LeftArmUsable(m)
         && TaskStart.Eligible(world, cold, TaskType.FindAndRescueIfTheresBeds);
 
     /// <summary>
-    /// A rescue goal's lift may start now: the character is free (<see cref="Free"/>) and the AI holds it (<see cref="AiSystem.Holds"/>), so one a
-    /// talk, a trade or an arrest holds is not walked off.
+    /// Registers the looting and arming goals 177 and 42 and the rescue goals 148 and 142 with the chooser (<see cref="LootGoals"/>,
+    /// <see cref="RescueGoals"/>).
     /// </summary>
-    static bool Starts(World world, int slot, CharacterCold cold) => Free(world, slot) && AiSystem.Holds(world.Characters.Next[slot], cold);
-
-    /// <summary>
-    /// A rescue goal's walk to its body (148's, or 142's to the squad leader; not a job's or an order's) ends when the body has died (a corpse is
-    /// nobody to rescue), or as a lost walk once no path gets the rescuer there (<see cref="LiftWalkFails"/>): as the original's plan step answers an
-    /// idle mover away from its target (<c>FUN_14050d970</c>, <b>Verified</b>), the body goes into the rescuer's ignore map for 20 s and the goal
-    /// replans. The rescue finders (<c>FUN_1408cd2d0</c>, <c>FUN_140598540</c>) do not read that map, so the same body is taken again; a walk that
-    /// still goes on is never given up. A body that comes round ends the walk already (<see cref="Schedule"/>). True when the walk ended (serial).
-    /// </summary>
-    bool GivesUpRescue(World world, int i)
+    void IDutyGoalOwner.RegisterGoals(DutyGoals goals)
     {
-        var table = world.Characters;
-        var cold = table.Cold(i)!;
-        if (cold.LiftTime >= 0 || !cold.Carrying.IsNone || !RescueWalk(world, cold)) return false;
-
-        bool dead = table.TryResolveNext(cold.CarryTarget, out int b) && table.Cold(b) is { Medical.Dead: true };
-        bool lost = !dead && LiftWalkFails(world, i);
-        if (!dead && !lost) return false;
-
-        long until = world.Tick + (long)MathF.Ceiling(Construction.ConstructionSystem.UnreachableSeconds / world.TickSeconds);
-        if (lost) cold.Ignore(IgnoreKey.Of(cold.CarryTarget), until);
-
-        End(world, i);
-        return true;
+        _lootGoals.Register(goals);
+        _rescueGoals.Register(goals);
     }
 
     /// <summary>
-    /// Whether the character's pick-up is a rescue goal's (148's own lift, or 142's lift of its squad leader while its goal is 142).
+    /// Adds the looting, arming and rescue goals' picks and act-outs to the world's state hash, while there are any.
     /// </summary>
-    static bool RescueWalk(World world, CharacterCold cold)
+    public void Hash(ref StateHasher hasher)
     {
-        if (cold.Running is not { Task: CharacterTask.PickUp } run) return false;
-
-        return run is { Source: TaskSource.Goal, Row: TaskType.FindAndRescueIfTheresBeds }
-            || run is { Source: TaskSource.Npc, Row: TaskType.LiftPersonSnatchingAllowed }
-                && cold.Ai?.Goal is { Task.Type: TaskType.FindAndRescueLeader }
-                && world.Squads.Find(cold.SquadId)?.Leader == cold.CarryTarget;
+        _lootGoals.Hash(ref hasher);
+        _rescueGoals.Hash(ref hasher);
     }
 
-    /// <summary>
-    /// Registers the looting and arming goals 177 and 42 with the chooser (<see cref="LootGoals"/>).
-    /// </summary>
-    void IDutyGoalOwner.RegisterGoals(DutyGoals goals) => _lootGoals.Register(goals);
-
-    /// <summary>
-    /// Adds the looting and arming goals' picks and act-outs to the world's state hash, while there are any.
-    /// </summary>
-    public void Hash(ref StateHasher hasher) => _lootGoals.Hash(ref hasher);
-
-    /// <summary>
-    /// A character free to start a rescue: alive, idle, wandering or following, not fleeing, able to carry.
-    /// </summary>
-    static bool Free(World world, int slot) =>
-        world.Characters.Next[slot].Alive
-            && world.Characters.Next[slot].Task is (byte)CharacterTask.Idle or (byte)CharacterTask.Wander or (byte)CharacterTask.Follow
-        && world.Characters.Cold(slot) is { Fleeing: false } cold && CanCarry(world, cold, TaskType.FindAndRescueIfTheresBeds);
     #endregion
 
 }
