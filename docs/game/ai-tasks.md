@@ -855,7 +855,7 @@ there (`FUN_14060f570` answers false), so for 180 Man the gate the byte changes 
   weight 1 (val2 0, **Verified** data) scores 1.25 as the current goal, so this never applies to it in the base data. The job and order passes have no x1.25 at all (their
   keys are list places, `FUN_14050e5b0`, `FUN_140510920`). Meitou: [finished tests](#finished-tests).
 - Commitment: when a committing task becomes current, end = now + min + rand x range. A candidate that is not the current task has its finder hand
-  (Tasker `+0x38`) reset to none before it is scored, and a candidate whose plan fails has it reset in the pick; its target `+0x10` stays in both (**Verified**,
+  (Tasker `+0x38`) reset to none once it scores above 0, before it is chosen, and a candidate whose plan fails has it reset in the pick; its target `+0x10` stays in both (**Verified**,
   `FUN_14050df10`, `FUN_140510650`). So a newly chosen goal gets a fresh finder result. Only rows 35, 37, 38, 43, 47, 52, 65, 118, 127, 153, 157, 190,
   221, 239, 240, 248, 255, 268, 275 and 280 write the commitment fields in their registration; every other row keeps the constructor's 0 and never
   commits (**Verified**, `FUN_140319a60`, `FUN_14061d350`), so no town or captive duty goal commits.
@@ -1197,7 +1197,7 @@ except where said.
   current goal (the job list is kept). Then a permanent order whose row has a job kind (`+4`) goes to the job list with the [job add](#perma-jobs)'s remap and duplicate
   test; any other is refused when it has a zero point and an equal entry (type, target, point; `FUN_14050be30`) is queued, else appended at the back. Then a replan.
 - **General giver** `FUN_1405d20d0(character, building, type, target, permanent, clear, point)`: (a) a permanent order of a player-faction character whose repertoire
-  has the type and whose row has a job kind goes to `FUN_1405c8da0` (not clear: `FUN_1405074a0`, `FUN_140507530`, the [immediate update](#immediate-update); then the job
+  has the type and whose row has a job kind goes to `FUN_1405c8da0` (with clear: `FUN_1405074a0`, `FUN_140507530`, the [immediate update](#immediate-update); then the job
   add; 45 and 31 also run the circle break `FUN_1405c8c10`). (b) Else the check `FUN_1405d1940` may refuse it (below). (c) With clear: `FUN_1405074a0`, `FUN_140507530` and
   the immediate update. (d) `FUN_140791df0` stores where the order leads (Character `+0x428`..`+0x440`: the building given, else the target's building, else the point's
   gate code), the push, and the default task reset `FUN_140599970` ([precedence](#precedence) source 6).
@@ -1216,14 +1216,14 @@ except where said.
 | `FUN_1405c9130` (slot 98) → `FUN_140508990` | Shift-queued moves of a player-faction character (`FUN_1407f5f50`, `FUN_1407fa850`) | the same | 29 at the back, only when the queue is not empty (else only a replan) | 0 | 0 |
 | Posture setter `FUN_1405c7e20` | posture to 0 from another, not crippled, no 65 queued; a direct push (no check, no immediate update, no default reset) | itself | 65 | 1 | 0 |
 | Character tick `FUN_1405d00b0` | every tick while ragdolled WHOLE and able to get up (`FUN_140598c20`), with no queued test ([staying low](ragdolls.md#staying-low)) | itself | 65 (an animal, or posture 0), 52 (posture 1, 2), none (3) | 1 | 0 |
-| Take hit `FUN_1404391f0` → `FUN_140507cd0` | a landed blow, the fight off, not getting up, not shackled ([stagger](combat.md#fight-lifecycle-and-orders)) | itself | 147 at the front | 0 | 0 |
+| Take hit `FUN_1404391f0` → `FUN_140507cd0` | a landed blow, the fight off, not getting up, unless a shackled defender's 25% knock-out took it ([stagger](combat.md#fight-lifecycle-and-orders)) | itself | 147 at the front | 0 | 0 |
 | `Task_Kidnapping` start `FUN_14034ffa0` | the roll failed and the victim is in a bed (`+0x2f8` 1) ([kidnapping](carry-loot.md#kidnapping)) | the victim | 116 | 1 | 0 |
 | `Task_EatPrisoner` update `FUN_140353c50` | the target is not a robot, not in a cage (`+0x2f8` ≠ 2) and getting up (`+0x278`), after one bite | the eater | 35 Running away, target the prisoner | 1 | 0 |
 | `Task_ReleasePrisoner` start `FUN_1403570a0` | the releaser's faction has `+0x40`, or it is of the player's faction ([release](economy.md#115-bail-and-sentence)) | the prisoner | 133 | 1 | 0 |
 | Slave purchase `FUN_1406add20` (DA 42's window) | each ticked bought character ([buying](economy.md#12-slaves-prisoners-animals)) | it | 133 | 1 | 0 |
 | Bail `FUN_1406ae170` (DA 43's window) | each bailed prisoner: 128 only when its event-51 call returned 0, then always 133, which wipes the 128 | the prisoner | 128, 133 | 1 | 0 |
 | Building bought `FUN_1407ad6c0` (slot 81, action 2) | each member of the owner faction's platoons housed there, after the platoon's new home is picked ([ui-screens](ui-screens.md)) | it | 19 on the new home; with none 22, and the platoon's `+0x115` = 0 (`FUN_1407ebdd0`) | 1 | 0 |
-| Prospect button `FUN_140721800` | the Prospecting window closed; the check passes | the selected character | 150 | 1 | 0 |
+| Prospect button `FUN_140721800` | the Prospecting window closed; the check passes | the character `FUN_1407f4ba0` gives | 150 | 1 | 0 |
 | Slave state to 1 `FUN_14032e0d0`, `setChainedMode` `FUN_14032e590`, processing end `FUN_14035aa20` | after `FUN_140507530` and `FUN_140507280` (the job list destroyed); the order queue is kept ([Obedient Slave](#slave-work-shout-and-capture)) | the slave | job 187 toward the owner `+0x328` | - | 1 |
 | CharacterHuman setup `FUN_14062ef70` (slot 111) | race `is robot` (`+0x7c`), not of the player's faction | itself | job 57 through `FUN_1405c8da0` (kept queue) | 0 | 1 |
 | Loaders `FUN_140508e10`, `FUN_1405092d0` | save load ([save](../formats/save.md#order-queue)) | itself | the saved jobs; the saved queue into the second list | - | 1 / 0 |

@@ -283,7 +283,7 @@ NPC answers an event's lines like any other; the rule is also in [Arrival banter
   (`FUN_140727820` → `FUN_140787fb0(world, 1)`) when `DAT_142133970` is 0, its close (`FUN_140721f20`) resumes, and while the world is paused no AI, mover or chooser
   runs ([held characters](ai-tasks.md#held-characters)). At the start the dialogue owner is turned once to face the other party (its mover, Dialogue `+0x180`), unless it is
   ragdolled or carried (`FUN_1407d1440`) or talks to itself; its mover is not stopped and its AI is not touched, and the other party is never turned by the dialogue code.
-  While the window is visible the key handler ignores the pause key and the speed keys. The end resets nobody's AI, so a resumed NPC goes on with its plan.
+  While the window is visible the key handler ignores the pause key and the speed keys. The end resets nobody's AI.
 - **A caged target** (**Observed**: neither the order check `FUN_1405d1940` nor `FUN_140684320` tests the target's imprisonment; the caged-occupant
   menu offers Talk To, order 12; mods such as Recruitable Prisoners hold their dialogue on DC 14 / 63 and recruit from the cage, #737): a prisoner
   is talked to, hostile or not.

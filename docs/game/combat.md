@@ -545,7 +545,7 @@ Meitou (`CombatSystem.HasSlot` / `MayJoin`, `Fighting.Steer`):
   instead 25% of the time (`FUN_140644980` with factor 0.002, the leg-loss KO shape, so its 3 s floor). Otherwise the movement stops, and when the defender's fight is off: one
   getting up is left alone; else, unless it is shooting at a live target, its current task ends (`FUN_1400522c0`), and task 147
   `STUMBLE_TASK_FORCED` ("Stumbling") is pushed to the front of its order queue (`AI::forceOrderInsert`, which also replans), after an [immediate update](ai-tasks.md#immediate-update)
-  request at the back of that queue whatever the faction (**Verified**, `FUN_1404391f0`, `FUN_140507cd0`): a second 147 becomes the current goal at priority 3 and the body task
+  request, queued at the back of the immediate-update queue whatever the faction (**Verified**, `FUN_1404391f0`, `FUN_140507cd0`): a second 147 becomes the current goal at priority 3 and the body task
   (CharBody slot 3 `FUN_1405c6ec0`), which ends the running one. There is no "already queued" test: a hit during a stumble pushes another 147, while the body task keeps the
   running stumble (same type and hand) and deletes the new one. `Task_Stumble` locks the mover at its start (`FUN_14065e240`) and unlocks it at its end (`FUN_140335040`).
   `Task_Stumble` tracks the clip's root motion until `Character::stumbleState` reports the clip done (`AnimationClass::isLinearAnimationDone`),
