@@ -535,12 +535,11 @@ eat task, animation or player command (a right click on food does nothing, [ui-s
   (`+0x128`, the size of the `occupiers` set) while the character senses an enemy (`SensoryData::numEnemies` > 0): 0.2 inside the walls (`amInsideTownWalls` > 0), whatever its
   hunger; else 0 when the town has gates (`Town::hasGates`, `+0x3b0` set; always false for TownBase); else 259's desire (slot 25, above). **Verified**, decompile of `AI::vfunc_24`
   `FUN_14059bbd0` and the Town slots. The finder and the take (244, one item): [ai-tasks](ai-tasks.md#arrest-and-prison-rows).
-  Meitou (`TownDutySystem.FoodWant`): for a player character a step-4 source of the [decision step](../simulation.md#decision-step) (after its orders, before its jobs; weight 0.5 against
-  Self preservation's 1 and Hold's attack on sight), for the other player-faction characters a pass over those idle or on a job's task; a store owned by their faction in their own town or
-  one where the player owns a house, its storages too (engine reading of the resident set, not tied to having stood in it; #762); the occupied branch as above (`TownExit.HasGates`: the gate set's rule, [condition 49](dialogue.md)). A fight
-  that replaces a player character's food run ends it. No run starts without room for the item the take picks ([state 82](ai-tasks.md#statetype-ids)):
-  the step's reason is "no room for the food" and the character keeps its job. Food in the worn bag counts as carried, so one meal takes one item
-  ([244](ai-tasks.md#perma-jobs)).
+  Meitou: a player-faction character's 243 is its own list's goal on the chooser's priority-3 rung ([decision step](../simulation.md#decision-step); weight 0.5 against
+  Self preservation's 1), acted out as an NPC's (`TownGoals`' food run); the store is one owned by its faction in its own town or one where the player owns a house, its storages too
+  (`TownDutySystem.FoodStore`; engine reading of the resident set, not tied to having stood in it; #762); the occupied branch as above (`TownExit.HasGates`: the gate set's rule,
+  [condition 49](dialogue.md)). Without room for the item the take picks ([state 82](ai-tasks.md#statetype-ids)) its plan ditches first (114, 93); a take that moves nothing at the
+  store ignores that store for 20 s (engine choice). Food in the worn bag counts as carried, so one meal takes one item ([244](ai-tasks.md#perma-jobs)).
 - Meitou: `FeedSystem` (checks every 30 ticks, engine choice), squad options `SquadAi.Feed` / `Share` (CAMERA
   bools `feed`, `share`, **Verified** reader `FUN_1403ebf50`; default on).
 

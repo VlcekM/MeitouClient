@@ -1199,8 +1199,8 @@ it with them. Meitou: `MachineData.Accepts` (AI) and `TakesByHand` (player).
   whose type (`+0x440`) is 4 (ITEM), the character's vfunc `0x300` asked with the machine (it carries resources from it) and then its output item (vfunc `0x550`) passing the per-item storage
   finder `FUN_14059acd0` (the nearest building of the query mask `0x4002436` with a StorageBuilding cast, complete, of the character's faction or, for a character `FUN_140856bc0` holds for, a
   player-flagged one, whose slot `0x4a0` takes the item, within the range mode's bound; **Verified**); so it holds while the character carries the machine's output and a storage takes it, and
-  row 87's `!89` is met by 113 (A `!89`, effect `!62` at the ditch finder's storage), then 93 into that storage: an operator puts the output away before operating again. Meitou: the obedient
-  player slaves' 189 (`ObedientJobs.ErrandFor`, the storage from the ditch finder's search); the NPC planner holds 89 false.
+  row 87's `!89` is met by 113 (A `!89`, effect `!62` at the ditch finder's storage), then 93 into that storage: an operator puts the output away before operating again. Meitou: the planner
+  holds 89 false, for NPC and player-faction workers alike.
 - **Made with the zone** (**Verified**, decompile: the building factory `FUN_14057cc70` switches on the functionality's `function`, 1 and 4 constructing through the ProductionBuilding
   constructor `FUN_1402a3750`, a farm through `FUN_1400e8420`): every building of a loaded zone is made as the class of its functionality, so every NPC mine, well, refinery and farm has its
   sections and progress from the start, loaded from its saved GAMESTATE_BUILDING and INVENTORY_STATE ([production](#production) save keys; **Observed** in two saves: NPC quarry mines with

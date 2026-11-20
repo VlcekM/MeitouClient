@@ -374,7 +374,10 @@ and an obeying NPC's 187 Slave goals), the priority-3 tier (the second list's le
 implicit jobs, then the 187 goals), the priority-2 tier, committed above 0, the priority-1 tier, the default task (14 Idleness for the player's faction, the IDLE plan for an
 NPC), the mover reset. A tier scores the AI's goals (`TierRungs`: role list, own lists, 32) with the goal sources of its step; a goal with nothing to do now is dropped
 (`PlanContext.GivesNothingNow`, `FUN_14050df10`; of the goals base data lists with a desire only 14 and 45). The routes: a player-faction mind (`AiMind.PlayerSide`, every member
-of a player's squad of the player's faction, not a prisoner it keeps) the ladder with its sources and 32 (`AiSystem.ThinkPlayer`; only 32 is acted out, the other own-list goals weigh 0 until their type is in `Ladder.OnRungs`);
+of a player's squad of the player's faction, not a prisoner it keeps) the ladder with its sources, 32, the own-list types in `Ladder.OnRungs` (243) and, obeying, its master's Slave
+goals (`AiSystem.ThinkPlayer`; the other own-list goals weigh 0 and stay with their sources). Its winning goal is acted out as an NPC's (`AiSystem.ActChosen`) while nothing else holds it
+(`PlayerSideHold.Free`: not fleeing, engaged, imprisoned, carried or down), and holds it (`PlayerSideHold.Holds`, the look due on its turn) until an order, a job or a higher goal
+ends it (`OrderStep.TakeOver`, `DutyEnd`); a goal over an order's or a job's task ends that task in the serial step and acts at the next tick; a source's win ends the goal (`DutyGoals.Leave`);
 an autonomous squad's member the NPC's while the AI holds it, else the sources' rungs alone (its package mind untouched); an NPC the ladder through `ThinkHeld` while the AI holds it, else the restricted choice
 (caged, or only the goals that pre-empt an engine duty or fight: **engine**, standing for the plan of a task Meitou's systems run); no mind (tests only) the sources' rungs. Three
 phases, no source ever called from the think:
@@ -397,10 +400,10 @@ phases, no source ever called from the think:
      job's (`ProductionSystem.BedCommitment`, key -1 of step 5; [implicit jobs](game/ai-tasks.md#perma-jobs)).
   3. Urgent jobs: the job list as in step 5, asking only the jobs urgent now: kind-2 234 Turret guard while the character senses an enemy (AI `+0xbc`,
      `SenseBlock.Enemies`). It beats Self preservation until a melee attacker comes within 40 (234's effect is planned through 146, `!158`). 187 Obedient
-     Slave of an enslaved player character (slave state 1, not sneaking) is urgent at all times: the master squad's Slave goals decide it ([captives](#captives)).
+     Slave has no source: the job pass's branch scores the master squad's Slave goals (`TierRungs.PickJobPass`, [captives](#captives)).
   4. Priority-3 goals: 32 Self preservation is the AI's rung (`AiSystem.SelfPreservationGoal` in every player-faction mind: the attacker that took the character as target
-     within 181.7, not shooting at a gunner, passing a holder's post test, `SelfDefencePick`; desire 1 within 40, else 0.7; a deferred defence, row 13); 243 Getting food (`TownDutySystem`, weight 0.5, the
-     [eating](game/character-stats.md#eating) desire; a food run); a player animal's priority-3 race goals (`CaptiveSystem.RaceGoals`: 277 limb fetch 1, 278 limb play and 279 chase by
+     within 181.7, not shooting at a gunner, passing a holder's post test, `SelfDefencePick`; desire 1 within 40, else 0.7; a deferred defence, row 13); 243 Getting food on the
+     AI's rung (the own list's entry, weight 0.5, [town duties](#town-duties)); a player animal's priority-3 race goals (`CaptiveSystem.RaceGoals`: 277 limb fetch 1, 278 limb play and 279 chase by
      their desires, x the race entry's weight); 259 Picking up food (`FeedSystem`, animals, weight 0.5); 16 attack on sight while on Hold (`AggroSystem`, 1 here,
      listed last as Hold adds it; the enemy this tick's look or a squad mate's found; desire 0 while Passive, sneaking outside a fight or not standing; a deferred fight, row 16).
      The player faction's 15 Protect allies (`RetaliationSystem.JoinFight`, key 15, weight 1, listed before Self preservation; finder, desire and plan in
@@ -440,11 +443,9 @@ phases, no source ever called from the think:
 - **Player-faction characters that are not `IsPlayer`** exist only in Meitou: the sandbox's and `--crowd`'s bystanders and tests' extras (a load, a new game or a recruit makes every
   other player-faction character `IsPlayer`; the original has no player-faction character the player does not command). One with a squad gets a player-faction mind (`AiMind.PlayerSide`,
   `AiSystem.PlayerSideMinds`: setupAI's own lists, the faction goals and 243; an animal its race goals and 259, not 230), which thinks only with its look's row, and is decided as a
-  player character is (`DecisionSystem.Decides`): every source, no order hold, no routine resumed, no chase given up. Own-list goals whose type is not in `Ladder.OnRungs` (none yet)
-  weigh 0 there and stay with their adapters. One with no squad runs no chooser (as in the original) and keeps the idle-only passes of the player faction's goals: 243
-  (`TownDutySystem.LookPlayerFood`), 259 (`FeedSystem`, an animal idle or following) and the animals' race goals (`CaptiveSystem.RunPlayerAnimalGoals`, list order).
-- Engine choices: errands' walks wait out a fight (NPC duties, the dialogue approach), while a player character's food run ends when a fight replaces it; the step's starts act from
-  the next tick (deferred fights) or at once (walks).
+  player character is (`DecisionSystem.Decides`): every source, no order hold, no routine resumed, no chase given up. One with no squad runs no chooser (as in the original) and
+  keeps the idle-only passes of 259 (`FeedSystem`, an animal idle or following) and the animals' race goals (`CaptiveSystem.RunPlayerAnimalGoals`, list order); it gets no 243.
+- Engine choices: errands' walks wait out a fight (duties, the dialogue approach); the step's starts act from the next tick (deferred fights) or at once (walks).
 
 ## Systems and their order
 
@@ -942,7 +943,7 @@ default): the turret step sets the gunner's yaw along the barrel every tick; off
 animals use faction hostility and carrying/damage rules where eligible. They age and grow, pack beasts spawn with their
 bag on, DA 48 sells them, and the context menu's Follow keeps any player character beside another
 ([animals](game/animals.md#ageing)). Player animals feed themselves: food on the ground (259, `FeedSystem.GroundFood`), food from their outpost's stores
-(243, also for people, `TownDutySystem.FoodWant`, [rules](game/character-stats.md#eating); both decision-step goals for player characters) and their race goals: limbs (277), limb play and chase
+(243, also for people: the chooser's goal, [rules](game/character-stats.md#eating); 259 a decision-step goal) and their race goals: limbs (277), limb play and chase
 (278, 279) and eating downed non-allies (233) as [captive jobs](#captives) (`CaptiveSystem.RaceGoals`: decision-step goals, priority 3 at step 4, 233 priority 2 at step 6, by the original's desires x the entry's weight), ended by an order that runs. Corpses (230) are dropped from the player's animals by the original;
 crops (232) find nothing for them (only the player's farms are machines, and the eater must not get along with the town). Unarmed humans use
 martial-arts category 5. [animals.md](game/animals.md), [characters.md](characters.md).
@@ -1493,12 +1494,13 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
     reach, `canIUseThisBuilding`, weight x100 own / home, x1e-5 police in a private building). **Verified** desires and finders: [ai-tasks](game/ai-tasks.md#perma-jobs).
   - With none of them wanted the carrier keeps the body.
 - **243 Getting food** (plan `[1, 244, 243]`; a ditch first when 244's room test 82 fails, the planner's 114 and 93): the desire of AI slots 26, 24, 25 ([eating](game/character-stats.md#eating):
-  0 outside a town, in another faction's town, carrying food; the occupied branch; else an empty stomach and hunger below 2.1 for an NPC that is no slave, at most 2.4; 0.1 in a
-  fight below 1.2). An NPC on the ordinary hunger floor 3 wants none; a `malnourished` squad's floor (1 + 1.2 x rand) is below 2.1 on most rolls and the free food refills only an
+  0 outside a town, in another faction's town, carrying food; the occupied branch; else wanting food, hunger at most 2.4 and: with no threat to it (AI `+0xb0`) nor to its allies
+  (`+0xb4`) 1.0 on an empty stomach; with its allies threatened and hunger below 1.2, 0.1; else 0; wanting food is always true for a slave (state 1) or a player-faction
+  character (`+0x250`), else hunger below 2.1 (`FUN_1405c9d90`). Meitou reads both threats as being in a fight (`InCombat`). An NPC on the ordinary hunger floor 3 wants none; a `malnourished` squad's floor (1 + 1.2 x rand) is below 2.1 on most rolls and the free food refills only an
   empty stomach, so it wants food for part of every cycle: starving raiders occupying a town (`hostile occupy town`, `campaign victory occupy town` list 243) take food from its
   storages and eat it (**Verified**, `FUN_140597d30`, `FUN_1405c9d90`, the free food `FUN_1407ee2d0`, `gamedata_base.txt`). The finder: the nearest store with food of
   the blackboard's target town, else the current one, else the 3 x 3 zone cells round it (a player town's complete storage, else an unlocked container); 244 takes one item, not while a sensed ally
-  fights (state 12). The player side's runs: [decision step](#decision-step).
+  fights (state 12). A player-faction character's store: [eating](game/character-stats.md#eating).
 - **131 Looting food** (plan `[1, 284, 131]`, desire 1.0): the same finder, not a container of its own faction (engine reading of the own-shop skip); 284 takes up to 10 units of
   the first record the store lists (`Task_EmptyMachine` with flag 1, `FUN_14033cd10`, **Verified**: one unit per pass while the store holds the record and there is room; the
   record is the first the store's inventory lists, food or not, **Verified** `FUN_140299990`). State 68 is state 66's evaluator (**Verified**,
@@ -1621,17 +1623,15 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   `max operators` slots, `AiMind.WorkPost`) to within its functionality's `use range` of its position, or twice that once stopped (30 without one; `AiSystem.AtWork`, [work distance](game/buildings-production.md#work-distance)), faces it and plays its functionality's clip (`stonemine` by default) as
   `ActionClip` and operates the building's town machine ([NPC town machines](game/buildings-production.md#npc-town-machines)); the worker takes the building's `hunger rate` (`AiMind.WorkHungerRate`). **Observed** (probe, Rebirth, real data): 35 workers, slaves among them, stand at the mines of the Holy Nation's towns by day.
 - **Obedient Slave** (187, [facts](game/ai-tasks.md#slave-work-shout-and-capture)): an AI slave holds the job in effect (`AiSystem.ObeyedRoles`: state 1, not sneaking, the jobs switch on, not `ObedienceLost`), and the chooser's job passes score the Slave role list of the squad it obeys, `CharacterCold.SlaveMaster` (after a load, the squad of the owner character its `slaver` handle names, [save](formats/save.md)), priorities 1 to 3, before its own tiers: the urgent pass with the second list, the full pass after the list and implicit jobs (`TierRungs.PickJobPass`, also first in a caged or pre-empted choice); its own role's list is weighed only when none plans, whether the master squad is another or its own. The engine's sweeps read the Slave list as the list it plans with, for its captive goals too (so a slave whose own package lists Slave get in Cage all day goes to its cage only in its master's hours).
-  **A player character** has the job in its list (`Kidnap/ObedientSlave.cs`, `CaptiveSystem`): `FixtureRegistry.SetSlave` (every route to slave state 1: sale, arrest, processing, a cage, a delivery) destroys its jobs and order
+  **A player character** has the job in its list (`Kidnap/ObedientSlave.cs`): `FixtureRegistry.SetSlave` (every route to slave state 1: sale, arrest, processing, a cage, a delivery) destroys its jobs and order
   queue and adds the job toward the master squad's leader (`CharacterCold.SlaveMaster`; handing a slave to another master resets it, engine choice), and removes it when the state leaves 1 (freed, escaped, bail).
-  While it is a slave and not sneaking, the job is urgent (step 3, `IJobSource.Urgent`): the best goal of the master squad's Slave list in its hour and repertoire by desire x finder x weight x crowd (x1.25 the one running) starts through `TaskStart` --
-  **171** follows the owner (`MovementSystem.Follow`, row 171; the follower sets its sneaking from the leader's every update, **Verified**, so a following slave cannot sneak away), **189 / 190** walk to a random workplace of the town
-  the slave's squad leader stands in (`AiSystem.WorkAt`, the AI's pick, 189 only one it can run) and stand at it at the work clip (`CharacterCold.SlaveWork`; a handler of rows 189 / 190 clears both when another task takes
-  the slave), holding one of its operator slots meanwhile: both take the functionality's `hunger rate` (`BodySystem`), 189 works the town machine as the AI's plan does (`ProductionSystem.ObedientWorkers`: a full output into the inventory, else an empty input
-  filled from what it carries, else operating; `ObedientJobs.ErrandFor`: walks to make room, to fetch an input from another machine's output, and to put the machine's carried output into a storage,
-  [ai-tasks](game/ai-tasks.md#slave-work-shout-and-capture)), 190 operates it as 189's row 87 does whatever it holds (row 221 is `Task_OperateMachine` too: the work step and the operating XP, `ProductionSystem.ObedientWorkers`),
-  **172** walks into the nearest free cage of the owner's faction (`CaptiveSystem.OwnCage`, `FixtureRegistry.Imprison`) and stays there until let out (the original has no own release: caged, its 171 / 189 / 190 plan nothing, **Verified**), **41** / **143** fight as the AI's combat goals (`AiSystem.ObedientFight`, a job fight),
-  **35** runs from the sensed enemies (`FleeSystem.EnemyRunPoint`; only with no working arm, the player-faction veto), **14** stands. An order beats it (step 1) and it beats Self preservation and the other goals; the Jobs switch
-  off stops it (as any job). Its senses side with the master (`AggroSystem.MasterSpares`, [sense tags](game/perception.md#sense-tags-who-is-an-enemy)): never the master's faction, nor anyone the master calls friendly; chained, the master's side never picks it as a fight target (`TargetScore.SparesSlave`).
+  While it holds the job (`ObedientSlave.HasJob`), is a slave and does not sneak, its player-faction mind obeys as an NPC slave does: `ObeyedRoles` names the master squad's Slave list, the job passes
+  score it (no job source answers for 187), and the winner is acted out on the NPC's path (`AiSystem.ActChosen`): **171** follows the owner (the follower sets its sneaking from the leader's every update, **Verified**, so a following
+  slave cannot sneak away), **189 / 190** work the town its squad's leader stands in
+  (`AiMind.WorkTown`, stamped by the schedule; the operator slot claimed on the cadence, `AiSystem.ClaimSlaveWork`; production by the AI's workers' pass and the planner, 89 held false),
+  **172** is the captive goals' cage walk, **41** / **143** the AI's combat goals, **35** the run with the player-faction vetoes (`AiSystem.PlayerSideRunDesire`), **14** stands. An order beats
+  it (step 1) and it beats Self preservation and the other goals; the Jobs switch off stops it (as any job). Its senses side with the master (`AggroSystem.MasterSpares`, [sense tags](game/perception.md#sense-tags-who-is-an-enemy)):
+  never the master's faction, nor anyone the master calls friendly; chained, the master's side never picks it as a fight target (`TargetScore.SparesSlave`).
   `SlaveMaster` is runtime only, so after a load the master comes back from the save's `slaver` handle or the job's saved handle (a character, `CaptiveSystem.RestoreSlavers`), else the slave obeys nobody; 41's finder and the senses read it.
 - **Eaten**: a meal still awake gains toughness XP (`XpService.Continuous`, amount 10). **Process** (183) re-processes a slave of an allied owner that is not shaven or does not look like one (`CaptiveSystem.LooksLikeASlave`: the watcher's
   faction's slave clothing or garments on torso and legs, locked shackles or a locked torso piece on a shaven head), or an escaped or ex-slave (state 2, 3).

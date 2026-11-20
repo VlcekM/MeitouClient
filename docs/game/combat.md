@@ -496,7 +496,7 @@ Meitou (`CombatSystem.HasSlot` / `MayJoin`, `Fighting.Steer`):
   (the character's `+0x2f0` object, read as ranged mode, has its flag `+0x36` set and the hand it names resolves to something not down), or when an
   item of its `hip` section (`FUN_140747ff0` with the section name "hip") is a weapon whose `skill category` (Weapon `+0x234`, which the weapon
   constructor `FUN_140898830` reads from "skill category"; Weapon vfunc `0x2e8` returns the weapon itself) is not 3 Heavy, 6 crossbow or 8 polearm
-  (Meitou: `AiSystem.ObedientRunDesire`, the Obedient Slave job's goal 35, [ai-tasks](ai-tasks.md#slave-work-shout-and-capture)); then, for every character, 1.0 when Character vslot `0x360` (byte `+0x5b8`, `FUN_1405e1ef0`) is set; else
+  (Meitou: `AiSystem.PlayerSideRunDesire`, a player-faction slave's goal 35, [ai-tasks](ai-tasks.md#slave-work-shout-and-capture)); then, for every character, 1.0 when Character vslot `0x360` (byte `+0x5b8`, `FUN_1405e1ef0`) is set; else
   0.001 when it can get out (`AI::isLocationAccessible` `FUN_1405a2710`: a null location hand, i.e. outdoors, or a building with no doors, a door open or
   one opening, `Building::hasAnOpenDoor` `FUN_1405499a0`) unless it stands inside town walls (its [gate code](pathfinding.md#gate-codes) above 0) whose gate state to code 0 (`FUN_1402eb070`; the states 1 a gate open or broken, 2 closed, 3 locked, a route as bad as its worst gate and the best route kept, **Observed**) is 3, i.e. every way out passes a locked gate; else 0).
   <a id="crippled-flag"></a>Byte `+0x5b8` is the **crippled flag** (**Verified**): `Character` embeds its `MedicalSystem` at `+0x458` (KenshiLib 1ce4a16 layout), so `+0x5b8` is medical `+0x160`, which the medical

@@ -733,25 +733,17 @@ Meitou: [simulation, captives](../simulation.md#captives).
     already returned for a looker in any slave state but 0. A character in state 0 holds no job 187 (only a change to 1, chaining or processing adds it, after clearing the list; every
     change away from 1 removes it), so the test is false there and the job exempts no slave ([escaping slave spotted](#slave-work-shout-and-capture) below).
   - The status tooltip tells the player: "Your character will have a permanent job assigned called [Obedient slave]. While this is active he will automatically work for his master."
-  - **Meitou**: the AI's slaves take the Slave list of the squad they obey, their own squad included whatever their squad role there (a guard enslaved by its own squad drops its guard goals and its turret, seat and sitting claims, #991), `CharacterCold.SlaveMaster`: the owner squad of
-    the squad factory's slaves, the slaver who bought or processed it, the arresting guard's squad, the receiver of a delivery) run it through the AI ([ai](ai.md#goal-loading)). A **player character** gets the job in
-    its list (`ObedientSlave`, step 3 of the decision step): the gate as above; the best goal of the master squad's Slave list in its hour, eligible in its repertoire (`TaskStart.Eligible`: caged,
-    only 172 and 14), by desire x finder x weight x crowd (the row's `TaskProfile.Crowd` to the power of its own squad board's entries on the goal; x1.25 the one running, a tie
-    to the later-listed) among **171** (the owner, else the master squad's leader); **189 / 190** (the AI's finder, `AiSystem.WorkAt`: a random workplace of the town the
-    slave's squad leader stands in with a free operator slot, its own counting as free, 189 only one it can run; walked to and stood at at its work clip; standing there it holds an operator
-    slot as `Task_OperateMachine` does, counted with the members' kept slots, `AiSystem.ReserveObedientWork`), at which both take the functionality's `hunger rate`. 189 works the town building's
-    machine as the AI's plan does (87's list B in order, `ObedientJobs.ErrandFor`): at the building a full output is emptied into the inventory (92), else an empty input filled from what it
-    carries (93), else the machine operated (87; `ProductionSystem.ObedientWorkers`); it first walks away for a full output with no room (the ditch, 114 then 93, `TownDutySystem.DitchStore`), an
-    empty input with none of its items carried (row 94's source, `ProductionSystem.InputSource`, emptied there by 92, the ditch first without room for its item) and carried output of the machine a
-    storage takes (state 89, 113 then 93, `TownDutySystem.StoreTaking` / `PutAway`); with no source or no storage to make room in, the next start picks another workplace (engine choice: the
-    original's finder rolls a fresh target each think). **172** (the finder above, `CaptiveSystem.OwnCage`; walked to and got into, `FixtureRegistry.Imprison`, as the AI slave's
-    own walk; done once it is held; it stays until let out, as above); **41** and **143** (the AI's desires and finders, `AiSystem.ObedientFight`, 143's mates being the slave's own squad; the fight a job fight, 41's as a goal's
-    attack with its alert voice, 143's as a defence); **35** (done while its list A holds, no immediate threat and no enemy sensed; else row 35's desire with the player-faction vetoes,
-    `AiSystem.ObedientRunDesire`, [combat](combat.md#fight-lifecycle-and-orders) "Self-defence"; acted out as `Task_Runaway`'s run from the sensed enemies, `FleeSystem.EnemyRunPoint`, again when a run ends) and
-    **14**. A faction owner with no squad has no master: the job is held but nothing runs. The job names the master squad's leader (the original's handle names a character or a squad). `SlaveMaster` is
-    runtime only: after a load it is the squad of the owner character the save's `slaver` handle names ([save](../formats/save.md)), else of the one the job's saved handle names
-    (`CaptiveSystem.RestoreSlavers`, both once that character is loaded; the escape far from the owner waits for either, a job whose owner the decision step found first too,
-    `ObedientSlave.PendingOwnerJob`), so 41's finder and the senses read it as the original's owner handle.
+  - **Meitou**: a slave obeys through `AiSystem.ObeyedRoles` (the gate above; an NPC holds the job in effect, `CharacterCold.ObedienceLost` standing for a split,
+    a **player character** holds it in its list), with the Slave list of the squad it obeys, `CharacterCold.SlaveMaster` (the owner squad of the squad factory's slaves, the slaver who bought or
+    processed it, the arresting guard's squad, the receiver of a delivery), its own squad included whatever its squad role there (a guard enslaved by its own squad drops its guard goals and its
+    turret, seat and sitting claims, #991). The chooser's job passes score those goals (`TierRungs.PickJobPass`) for an NPC and a player-faction mind alike, and the winner is acted out as any
+    goal of theirs ([simulation](../simulation.md#captives)): **171** follows the owner, else the master squad's leader; **189 / 190** work a random workplace of the town the AI's
+    worker finder reads (an NPC's board's town; a player-faction slave's the one its squad's leader stands in, `AiMind.WorkTown`), holding one of its `max operators` slots (`AiMind.WorkPost`),
+    189's plan making room and fetching inputs (the planner holds 89 false, [buildings](buildings-production.md#npc-town-machines)); **172** walks into the nearest free cage of the owner's faction (`CaptiveSystem.OwnCage`) and stays until let out;
+    **41** / **143** are the AI's combat goals; **35** (for a player-faction slave the player-faction vetoes, `AiSystem.PlayerSideRunDesire`, [combat](combat.md#fight-lifecycle-and-orders)
+    "Self-defence"); **14** stands. A faction owner with no squad has no master: nothing runs. `SlaveMaster` is runtime only: after a load it is the squad of the owner character the save's
+    `slaver` handle names ([save](../formats/save.md)), else of the one the job's saved handle names (`CaptiveSystem.RestoreSlavers`, once that character is loaded; the escape far from the owner
+    waits for either, `ObedientSlave.PendingOwnerJob`), so 41's finder and the senses read it as the original's owner handle.
 - **Escaping slave spotted** (**Verified**, decompile and disassembly of `FUN_140859680`, `FUN_140856b50`, `FUN_140855a80`, `FUN_140852750`, `FUN_140852700`,
   `FUN_140853620`, `FUN_1405c8a10`, `FUN_140998790`, constants from the data dump): the sight pass of an NPC looker in slave state 0, whose faction has no player flag and no `anti slavery` (faction `+8`, the FACTION bool, loader `FUN_1407fe270`), that does
   not take the target for an enemy (slot 125; a slave owned by the looker's faction never is), asks the test for a target in slave state 1, not caged, whose owner faction is the
@@ -1094,7 +1086,9 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   `ListTests.OrderNeedsFail` on the running front order, once its list B has held since the start (`OrderEntry.RowRuns`, standing for the provider steps being
   over, or list B held at the start): a list B entry `RowStates` evaluates fails (the walk's `isAtLocation` and a follow row's fight step left out); the task ends with `TaskEnd.Done`. The end (`FUN_14050d7d0`) then starts the next queued task (`FUN_14050d540`: a row that acts starts; one that does not is
   skipped while `FUN_14060f0c0` holds, all of list A and a list A or an effect, else a replan is asked), else asks a replan and clears the goal unless it commits and has not
-  expired. The pick (`FUN_140510650`) keeps a candidate that is the current goal (`FUN_140506c00`: same type, both hands) while a task runs, without planning it again; the
+  expired. The pick (`FUN_140510650`) keeps a candidate that is the current goal (`FUN_140506c00`: same type, both hands) while a task runs, without planning it again; any other
+  it plans (`FUN_14050fe10`): a plan installs its queue (`FUN_14050d2e0`) and the goal, a failed one resets that candidate's finder hand and the next is tried, and with none
+  planned it returns 0 and the caller clears the map; it starts no task itself (**Verified**, decompile). The
   scorer (`FUN_14050df10`) gives the current goal x1.25, the commitment floor 0.4 or cap 0.05 and, below 1 while the running task's slot 4 says not finished, x1.25 again, and
   drops a candidate that is not current (its finder hand reset first, [commitment](#desire-and-commitment)) when its fresh slot 4 and list A hold, or when it can run but neither acts nor has an effect. After the
   chooser the update clears `currentGoal` when no task runs. So a walk ends as it arrives (its list A, `isAtLocation`) and the next task or a new plan follows at once; an
