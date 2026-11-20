@@ -811,8 +811,7 @@ Meitou-only loose-item key (`Items/ItemSlots.WriteDue`, [ground items](../simula
   `FUN_1409a1080`) and `squad mem type`; the order queue (`AITaskSytem`, [order queue](#order-queue)) only for a player-faction character. Not saved: the
   current goal and its plan (the task queue), the commitment, the chooser's path-failure map (`+0x218`, 20 s entries, `FUN_140796ed0`) and every task
   object, with a travel task's detour (`Task_TravelToTargetTown` `+0x90`) and a goal's act-out progress. A loaded NPC chooses with no current goal.
-- **Platoon blackboard** (`FUN_14026c2d0` / `FUN_140272c20`): `runningAwayMode`, `currentPackage`, `target town`, `towntime`, `mission data`, `currenttown`,
-  `jobhr`, `contractjob`, `replacementAI`, `homelok`, `target <i>` / `target key <i>`, then the running package's own keys (vfunc `+0x20`): the base class's
+- **Platoon blackboard**: its keys are in [platoon blackboard](#platoon-blackboard). The running package's own keys (vfunc `+0x20`) are the base class's
   `mission target` / `mission town` / `mission employer` (`FUN_140269640`), plus `persist` for OccupyTown and `done`, `started`, `enemy` for
   PassingByTownAssault; the war classes add none. `persist` (bool, `FUN_140295f90` / `FUN_140296070`): the occupation's start (`FUN_140288fe0`) found
   the platoon not persistent and made it so, and its end (`FUN_140296150`) makes it not persistent again. `done` (bool): the assault is spent (its
@@ -829,6 +828,39 @@ Meitou-only loose-item key (`Items/ItemSlots.WriteDue`, [ground items](../simula
 - Meitou saves no goal, plan, commitment, path failure, task, act-out, war-start copy or delivered announcement either: a load builds new minds and
   blackboards, starts each running package (`Blackboard.Start`) and puts the saved hands back (`AiSave`); a campaign platoon linked once the war states
   load (`PopulationSystem.EnsureWars`, after the squad's start) takes the war start's copies then (`AiSystem.WarLinked`).
+
+### Platoon blackboard
+
+The squad AI's Blackboard (constructor `FUN_14026bcf0`) is written on its PLATOON record by `FUN_14026c2d0` and read by `FUN_140272c20` (**Verified**,
+decompile). Writer order: `runningAwayMode`, `currentPackage`, `target town`, `towntime`, the package's own keys (the contract's while one runs, else
+the current package's; [NPC goals across a load](#npc-goals-across-a-load)), `mission data`, `currenttown`, `jobhr`, `contractjob`, `replacementAI`,
+`homelok`, then `target <i>` / `target key <i>`. Reader order: `runningAwayMode`, `currentPackage`, `homelok`, `contractjob` (a contract found starts
+at once, `FUN_140272240`), `jobhr`, `towntime`, `currenttown`, `target town` (only a non-null one), `mission data`, the targets, `replacementAI`;
+then the current package is activated and started (`FUN_1402721a0`; with a `replacementAI`, `FUN_140272430`) and the package's load (vfunc `+0x28`)
+reads its own keys. Keys are looked up by name: **Observed**, METARU and i949 hold each type's keys in the reverse of autosave0's and autosave2's order.
+
+| Key | Type | Blackboard | Meaning | Meitou |
+|---|---|---|---|---|
+| `runningAwayMode` | bool | `+0x14c` | set by `FUN_140269320`; while set the update `FUN_1402732b0` makes no package choice or package update; only the constructor and the load clear it | not modelled; kept as read |
+| `currentPackage` | string | `+0x48` | the running package's AI_PACKAGE id, "" none | written ([NPC platoons](#npc-platoons-meitou-mapping)) |
+| `target town` | handle | `+0xf0` | the null handle for none | `AiSave`, with a contract |
+| `towntime` | float | `+0x140` | the game hour (day x 24 + hour) the squad came into `currenttown` (`FUN_1402688d0`) | kept as read |
+| `mission data` | string | `+0x100` | a record id (looked up as type 71), "" none | kept as read |
+| `currenttown` | handle | `+0x138` | the town the squad is in (`FUN_1402688d0`, [ai](../game/ai.md#package-classes)), the null handle for none | kept as read |
+| `jobhr` | float | `+0x218` | the contract's end hour | `AiSave` |
+| `contractjob` | string | `+0x210` | the contract's AI_PACKAGE id, "" none | `AiSave` |
+| `replacementAI` | string | `+0x58` | the `change AI` package id, "" none | `AiSave` |
+| `homelok` | bool | `+0xe8` | the squad's "house locked" flag ([locks](../game/locks.md#doors)) | kept per home as `meitou house locked`; kept as read |
+| `target <i>`, `target key <i>` | handle, int | `+0xa8` | one pair per entry of a TaskType-to-handle map, i from 0 in the map's order | not modelled; kept as read |
+
+- **Targets** (**Verified**): the map at `+0xa8` is a `boost::unordered_map<TaskType, hand>` (its allocator's type in `FUN_14026bcf0`). Its only insert,
+  `FUN_140282240`, is called by the load alone; besides the writer only the debug panel `FUN_14026a520` reads it (its "TARGETS" list names each key by
+  the task table `DAT_141ce90f0`). So nothing at run time fills or uses it, and a save holds the keys only when the save it was loaded from did. The
+  load reads pairs until a `target <i>` is missing; the writer numbers them from 0 again. **Observed**: none in the 1933 platoons of seven original saves
+  (METARU, autosave0, autosave2, i949 and three archived games). Meitou writes the loaded record back, so the keys keep their values (**Observed**:
+  METARU given a pair or two on each of its 538 platoons, loaded headless and saved: every platoon written back keeps them).
+- **Observed** (METARU, autosave0, autosave2, i949): `runningAwayMode` and `mission data` are false and "" on every platoon; `towntime` is 0 or
+  between 34 (day 1, 10:00) and the save's clock.
 
 ### Player outposts
 
