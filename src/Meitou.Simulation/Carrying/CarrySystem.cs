@@ -787,6 +787,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         n.TaskTime = 0;
         cold.CarryTarget = target;
         cold.LiftTime = -1;
+        cold.PathFailed = false;   // a failure from before is not this walk's (LiftWalkFails, LootWalkFails)
         cold.Kidnapping = false;
         cold.Snatching = false;
         cold.Foraging = false;

@@ -253,7 +253,9 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   building's door on its side (the paths stop at the shut doors), unlocks its own (3.3 s), bashes another's (Burglary booked, the blows of the
   attackers' bash; never a gate, which its own rows bash, [gates](#doors)) or, on its way in where the restricted rows are offered (an NPC, a
   player's character on an order: `LockSystem.Restricted`), cuts (`Lockpicking.CutLock`) or picks it (`Lockpicking.Step`, the pick's clip and
-  floaters), and walks on once it is open; anyone else stops at the door ("It's locked." for the player). An NPC on 36
+  floaters), and walks on once it is open; anyone else stops at the door ("It's locked." for the player), except a lift's or a talk's own walk
+  that no order runs, which fails there as one blocked past the limit does (`MovementSystem.FailOwnWalk`): its goal takes it as a lost walk (the body ignored 20 s,
+  `FUN_14050d970` answers any failed mover so, **Verified**). An NPC on 36
   Patrolling town stops at a locked gate, its own faction's too: the patrol's move goes straight to the movement (`FUN_1405c6b30`,
   **Verified**), and row 36's list B has 60 but not 90, whose provider 122 Open gate (after 78) is what opens a gate on the way (**Verified**,
   row table); Meitou `LockSystem.PatrolsPast`. Row 36's list B has no 59 either (**Verified**, row table), so the patroller has no way in

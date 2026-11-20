@@ -995,12 +995,10 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     {
         if (n.Task == (byte)CharacterTask.Follow) cold.FollowPathTime = FollowPathSeconds;
 
+        if (FailOwnWalk(ref n, cold)) return;
+
         n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.HasPath);
         n.TaskTime = FailedPathWait;
-
-        // a talk act-out's or a lift's walk fails as a walk does: its owner reads the failure (Dialogue.DialogueOrders.WalkTo,
-        // CarrySystem.LiftWalkFails; the original's plan step takes any failed mover as a lost walk, FUN_14050d970)
-        if (n.Task is (byte)CharacterTask.Talk or (byte)CharacterTask.PickUp) cold.PathFailed = true;
         if (n.Task != (byte)CharacterTask.GoTo) return;
 
         string why = n.PathCursor >= cold.PathExact
@@ -1011,6 +1009,22 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         EndWalk(cold, WalkEnd.Failed);
         PlayerOrders.WalkFailed(cold);
         TaskStart.Step(world.Characters, slot, CharacterTask.Idle);
+    }
+
+    /// <summary>
+    /// A talk act-out's or a lift's own walk given up (blocked past the limit, stopped at a locked door) fails as a walk does: the path is dropped,
+    /// the walker waits before asking again, and its owner reads the failure (<see cref="Dialogue.DialogueOrders"/>,
+    /// <see cref="Carrying.CarrySystem.LiftWalkFails"/>; the original's plan step takes any failed mover as a lost walk, <c>FUN_14050d970</c>,
+    /// <b>Verified</b>). False for any other task.
+    /// </summary>
+    internal static bool FailOwnWalk(ref CharacterHot n, CharacterCold cold)
+    {
+        if (n.Task is not ((byte)CharacterTask.Talk or (byte)CharacterTask.PickUp)) return false;
+
+        n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.HasPath);
+        n.TaskTime = FailedPathWait;
+        cold.PathFailed = true;
+        return true;
     }
 
     /// <summary>

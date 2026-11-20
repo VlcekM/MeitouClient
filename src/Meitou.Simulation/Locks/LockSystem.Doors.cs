@@ -484,7 +484,8 @@ public sealed partial class LockSystem
     /// The walkers at a locked door (docs/game/locks.md "Locked doors on the way"): the planner's way through (<see cref="WayThrough"/>: out, 80
     /// unlocking its own or 287 bashing; in, 81 bashing, 78 / 140 unlocking its own, or where the restricted rows are offered 285 cutting or 76
     /// picking), then 72 / 74 opening it, so the first with a way goes through (<see cref="StartDoorWay"/>) unless someone already works the door;
-    /// the others stop there, a player's character saying "It's locked.". A patroller has no way through a gate and no way in
+    /// the others stop there, a player's character saying "It's locked." (a lift's or a talk's own walk that no order runs fails instead, its owner
+    /// taking it as a lost walk, <see cref="MovementSystem.FailOwnWalk"/>). A patroller has no way through a gate and no way in
     /// (<see cref="PatrolsPast"/>), nor has a member of an AI-run squad living in an outpost through a door of the player's on a walk of the
     /// AI's (<see cref="WayThrough"/>): it stops there, saying nothing.
     /// </summary>
@@ -506,8 +507,13 @@ public sealed partial class LockSystem
                 continue;
             }
 
-            TaskStart.Stand(table, slot);
-            c.WalkEnd = WalkEnd.Failed;
+            // An order's lift or talk ends at the door as before (the order queue reads no failed path); any other one fails as a walk.
+            if (c.Running is { Source: TaskSource.Order } || !MovementSystem.FailOwnWalk(ref n, c))
+            {
+                TaskStart.Stand(table, slot);
+                c.WalkEnd = WalkEnd.Failed;
+            }
+
             if (c.IsPlayer && !SquadAutonomy.KeepsPlayerLocks(c)) SayLocked(world, c, door, n.Position);
         }
     }
