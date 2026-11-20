@@ -529,7 +529,7 @@ Meitou (`CombatSystem.HasSlot` / `MayJoin`, `Fighting.Steer`):
   task. So a character with an order does not defend itself: a hit staggers it (below) and the queue's first order then runs again, unless its row needs no melee threat
   (146 Turret gunner's `!158`: that plan fails, the order stays queued and Self preservation runs; [precedence](ai-tasks.md#precedence)); one on a job
   (not urgent) does ([precedence](ai-tasks.md#precedence)).
-  `Character::addOrder` without Shift clears the order queue and the jobs, sets the AI's centre of movement to the order
+  `Character::addOrder` without Shift clears the order queue and the second list (the job list stays, [order givers](ai-tasks.md#order-givers)), sets the AI's centre of movement to the order
   point ([area](perception.md#the-attack-on-sight-tests)), queues the order at priority 3 and replans at once.
 - **Right click elsewhere mid-fight.** Ground: `PlayerInterface::playerMove` gives each selected character order 29 Move order. At the replan
   its fight task ends (above): it no longer blocks or dodges, since a target whose fight is off always answers an ask with "attack"
@@ -544,7 +544,10 @@ Meitou (`CombatSystem.HasSlot` / `MayJoin`, `Fighting.Steer`):
 - **Stagger outside a fight** (`Character::_startStumble` `FUN_1404391f0`, from every landed blow). A shackled defender is knocked out
   instead 25% of the time (`FUN_140644980` with factor 0.002, the leg-loss KO shape, so its 3 s floor). Otherwise the movement stops, and when the defender's fight is off: one
   getting up is left alone; else, unless it is shooting at a live target, its current task ends (`FUN_1400522c0`), and task 147
-  `STUMBLE_TASK_FORCED` ("Stumbling") is pushed to the front of its order queue (`AI::forceOrderInsert`, which also replans).
+  `STUMBLE_TASK_FORCED` ("Stumbling") is pushed to the front of its order queue (`AI::forceOrderInsert`, which also replans), after an [immediate update](ai-tasks.md#immediate-update)
+  request at the back of that queue whatever the faction (**Verified**, `FUN_1404391f0`, `FUN_140507cd0`): a second 147 becomes the current goal at priority 3 and the body task
+  (CharBody slot 3 `FUN_1405c6ec0`), which ends the running one. There is no "already queued" test: a hit during a stumble pushes another 147, while the body task keeps the
+  running stumble (same type and hand) and deletes the new one. `Task_Stumble` locks the mover at its start (`FUN_14065e240`) and unlocks it at its end (`FUN_140335040`).
   `Task_Stumble` tracks the clip's root motion until `Character::stumbleState` reports the clip done (`AnimationClass::isLinearAnimationDone`),
   then ends and is popped (`AITaskSytem::bodyTaskComplete` pops the front order when it is the finished task). The interrupted order stays
   queued behind it and is planned again from its start. The clip itself is picked only for a humanoid that is not a ragdoll, not KO'd or dead

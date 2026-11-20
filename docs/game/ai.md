@@ -16,8 +16,8 @@ Do not assume every factory Task_Blank goal has no behaviour outside that factor
 dialogue event and already-satisfied A. score=desire*weight*crowdFactor^n*m, n same type/target
 mates, m1.25 for current type/target/second hand. Effect-state evaluation can scale positive
 desire. Sticky current task floors0.4 before commitment expiry, caps0.05 after; while the
-running task's own finished test (slot 4) fails, x1.25 again when score<1 ([finished tests](ai-tasks.md#finished-tests)). Drop nonpositive candidates; a candidate that is not current has its target cleared, and is dropped when its fresh slot 4 and list A hold or
-when it can run but neither acts nor has an effect (**Verified**). Candidates are keyed by score in an ordered map; while a key is taken the score gets +0.0001 (**Verified**, `FUN_14050df10`), so of equal scores the later-listed goal ranks first (tried highest first, `FUN_140510650`). The default task (IDLE, desire key 0.1, hours 0-100; set by `FUN_14050c030`) is no candidate: `FUN_140510ef0` tries it, at key 1.0, only after priorities 3, 2 and 1 all failed (**Observed**). Desire, commitment and crowd factor per
+running task's own finished test (slot 4) fails, x1.25 again when score<1 ([finished tests](ai-tasks.md#finished-tests)). Drop nonpositive candidates; a candidate that is not current has its finder hand reset (its target stays, [commitment](ai-tasks.md#desire-and-commitment)), and is dropped when its fresh slot 4 and list A hold or
+when it can run but neither acts nor has an effect (**Verified**). Candidates are keyed by score in an ordered map; while a key is taken the score gets +0.0001 (**Verified**, `FUN_14050df10`), so of equal scores the later-listed goal ranks first (tried highest first, `FUN_140510650`). The default task (IDLE, desire key 0.1, hours 0-100; set by `FUN_14050c030`) is no candidate: `FUN_140510ef0` tries it, at key 1.0, only after priorities 3, 2 and 1 all failed, and it is null until a setter wrote it ([precedence](ai-tasks.md#precedence) source 6). Desire, commitment and crowd factor per
 type: [ai-tasks](ai-tasks.md#desire-and-commitment); exact A/B meanings remain unresolved.
 
 The planner (`TaskPathfinder`, [ai-tasks](ai-tasks.md#planner), Observed) chains rows from a goal's effect and unmet B states to the
@@ -34,7 +34,7 @@ routing use [perception](perception.md), [population](factions-squads-towns.md),
 | Field | Values | Label |
 |---|---|---|
 | `enum` | `taskType` 0..288 (289 names in `fcs_enums.def`); 108 distinct types are used | **Verified**: probe over all 124 records, every value is a valid index. The record `Name` is free text (101 of the 124 are descriptive phrases, not the enum name) that reads as matching its enum, except rebirth record 1532845 "Find and kidnap (raider) urgent" (255 SIT_ON_THRONE) and "eating food on the ground" (14 IDLE), which are **Observed** mod quirks |
-| `classification` | TP_FLUFF 5 records, TP_NON_URGENT 82, TP_URGENT 37 | **Verified** |
+| `classification` | TP_FLUFF 5 records, TP_NON_URGENT 82, TP_URGENT 37. The priority is the record's, not the type's: 112 has an urgent record (`Find and put in cage - urgent`, rebirth 1531905) and a non-urgent one (2620), 58 `Medic` / `Medic non-urgent` and 143 `Protect squad` / `non-urgent` likewise. Urgent records of goals a town or captive squad acts out: 224 `take intruder outside`, 131 `Looting food from base(desperate)`, the urgent 112, 204, 254, 202, 58 `Medic`, 269, 277-279, 35, 41, 143 `Protect squad`, 209, 210 | **Verified** (base data) |
 | `targeting` | SPECIFIC 99, SELF 11, LEADER 4, SQUAD_MISSION 9, HOME_GATE 1 | **Verified** (counts). Behaviour **Observed** (goal reader `FUN_1402704e0`): LEADER takes the squad leader's hand (`FUN_14079aea0`), SQUAD_MISSION the Blackboard's mission target (`FUN_140269b60`), HOME_GATE a Blackboard lookup (`FUN_14026b410`); SPECIFIC and SELF set nothing at load time (SELF is filled with the character's own hand where the task is created) |
 | `ending` (TaskEndEvent) | NOTHING 115, REMOVE_MINE_ONLY 8, REMOVE_WHOLE_SQUADS 1 | **Verified** (counts), behaviour **Unknown** |
 
@@ -244,8 +244,9 @@ A Blackboard also holds requests one character makes of another (map at +0x158, 
 countdown, `FUN_140269240` reader): an entry has the asker, a task type, a subject hand, a target hand, a tier, a float and a time to live of 3.0 s; the asker
 asking itself adds nothing, asking again renews the entry, and the Blackboard update counts the time down by its dt and erases it below 0. The tier pass
 (`FUN_140510d60`, [precedence](ai-tasks.md#precedence) step 4) adds the entries of its tier whose subject is none or the character itself as candidates.
-The float (1.4 in both callers) is read as the candidate's weight (**Observed**). Callers: `FUN_1403346d0` (`Task_MakeTargetStandStill`, and every update of
-the first aid tasks, [medic jobs](ai-tasks.md#medic-jobs)) asks 62 Standing still of the target at tier 3 on the target's platoon Blackboard (`FUN_140791ba0`).
+The float (1.4 in both callers) is read as the candidate's weight (**Observed**). The add has two callers (**Verified**, caller scan): `FUN_1403346d0` (every update of `Task_MakeTargetStandStill` and of
+the first aid tasks, [medic jobs](ai-tasks.md#medic-jobs)) asks 62 Standing still of the target at tier 3 on the target's platoon Blackboard (`FUN_140791ba0`); the splint
+update `FUN_14034ef20` posts the same entry on the medic's own platoon's Blackboard.
 Meitou models only that caller ([medic jobs](ai-tasks.md#medic-jobs)).
 
 ### Update cadence and scope (engine choices)

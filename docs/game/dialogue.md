@@ -279,6 +279,11 @@ NPC answers an event's lines like any other; the rule is also in [Arrival banter
 - Plays Wwise `Initiate_Conversation`. Chooses the root and its best child, says it.
 - Opens the DialogueWindow when the said line has passing children; **the window pauses the game** (clock speed 0, the previous speed
   restored on close, `FUN_140787fb0`).
+- **What holds the two** (**Verified**, `FUN_140684320`, `FUN_1406746a0`, `FUN_140788100`, `FUN_140674830`): the pause alone; the window's open calls the pause
+  (`FUN_140727820` → `FUN_140787fb0(world, 1)`) when `DAT_142133970` is 0, its close (`FUN_140721f20`) resumes, and while the world is paused no AI, mover or chooser
+  runs ([held characters](ai-tasks.md#held-characters)). At the start the dialogue owner is turned once to face the other party (its mover, Dialogue `+0x180`), unless it is
+  ragdolled or carried (`FUN_1407d1440`) or talks to itself; its mover is not stopped and its AI is not touched, and the other party is never turned by the dialogue code.
+  While the window is visible the key handler ignores the pause key and the speed keys. The end resets nobody's AI, so a resumed NPC goes on with its plan.
 - **A caged target** (**Observed**: neither the order check `FUN_1405d1940` nor `FUN_140684320` tests the target's imprisonment; the caged-occupant
   menu offers Talk To, order 12; mods such as Recruitable Prisoners hold their dialogue on DC 14 / 63 and recruit from the cage, #737): a prisoner
   is talked to, hostile or not.
@@ -310,7 +315,8 @@ reply used, **runs its effects**, then chooses and says the reply's best child.
 
 `FUN_140683f90(dialogue, target, line, event, force)`: a monologue root outside event 1 shows a **speech bubble**, no window; a root
 says its best child (as in [Choosing a line](#choosing-a-line)), any other line is said as given. Large font for events 2, 11, 17, 26,
-31, 34, 36, 40, 45, 74 (`FUN_1406713a0`, **Verified**), medium for the others.
+31, 34, 36, 40, 45, 74 (`FUN_1406713a0`, **Verified**), medium for the others. The owner faces the target once (as in a [player conversation](#player-conversation)); chained speakers (`FUN_140684720`) are not turned; there is
+no stop, pause or AI call, so both sides keep running their AI and walking (**Verified**, `FUN_140683f90`, the update `FUN_140685090`, which has no distance or fight test).
 
 **Chain** (`FUN_140684720`, **Observed**): when a bubble ends, the owner's state picks the best child of the said line with full
 speaker resolution (owner, target, interjector), copies its target to that speaker's state, and that speaker says it; a line said by
@@ -408,11 +414,15 @@ went on after the window closed: its later lines walked the guard back to the pl
 its last line started an attack (#707).
 
 **AI tasks 102/159/161** (`Task_TalktoPlayer`, **Verified** decompile): fire `AITaskSytem+0x264` at the target (0 means 1), which the planner sets from the TaskData event of any
-row on the chosen plan (188: 38, 194 / 218: 39, 158 / 283: 9); event 9 repeats every update (17 at an enemy, or with blackboard `+0xe8` at a non-ally); walks at the target;
+row on the chosen plan (188: 38, 194 / 218: 39, 158 / 283: 9). The start (`FUN_14034c5a0`) stops the speaker's mover, stamps the start time and fires; with event 1
+the task is done at once (the window's pause holds from there). The update (`FUN_14034c7c0`) does not walk: each update it faces the target (Character vfunc `0x3b0`,
+`FUN_1405c9e70`: mover slot `0x38` unless the mover's byte `+0x24`); event 9 repeats every update (17 at an enemy, or with blackboard `+0xe8` at a non-ally);
 after 25 game minutes, once the target is getting away (`FUN_140331ee0`: its task is 35 or 127, or a move order (29) to a non-zero spot farther
-from the NPC than the target stands), resets its plan (`FUN_1405074a0`), ends the task and fires event 60; until then it walks on; done when the conversation has ended. 159 provides
+from the NPC than the target stands), empties its order queue (`FUN_1405074a0`), ends the task and fires event 60; done, emptying its order queue, once its dialogue is
+free (`FUN_140671c60`). The walk to the target is the plan's walk row before it (159 has a walk provider, 102 `isAtLocation`); the rows have `+0x16`, so the plan step does
+not end them by hours or list B, and only a replan replaces one. 159 provides
 state 109 (with a walk first) for 188 / 194 / 218, 161 provides 110 (no walk) for 158 / 283.
-DA 2 gives the squad leader task 102 with event 1 (`+0x264`) for a player-faction target. **Verified** (probe, 124 AI_TASK records):
+DA 2 gives the squad leader task 102 for a player-faction target and writes `+0x264` = 1 on the speaker's own receiver, not the leader's (**Verified**, `FUN_140680560`). **Verified** (probe, 124 AI_TASK records):
 no base-data task uses the enums 102, 159 or 161. `isDialogDelivered` (109 / 110, evaluator `140792140`, **Verified**): true without a Dialogue object, else whether
 the event was delivered in the speaker's current town (the per-event map the conversation end increments).
 
@@ -599,6 +609,10 @@ Talk menu's dry run is picking.
 
 A recruit into a full player squad ends the conversation with "It looks like your squad is a little full." and skips the rest.
 
+Every order a DA gives goes through `FUN_1405d20d0` with permanent 0 and the zero point but DA 56's, so it lands in the order queue (**Verified**, disassembly of
+the 16 calls; [order givers](ai-tasks.md#order-givers)); each has the clear flag but the 112 queued behind a 213 or 240 and DA 56's 29. The check `FUN_1405d1940` can
+refuse only the 4 (an arm) and the 213 (the carrying arm); a refused 213 still lets its 112 through. None of these tests the receiver's faction but DA 6, 55 and 57.
+
 ### Recruiting
 
 DA 3 / 18 with a player-faction target (**Observed**, `FUN_140680560` → `FUN_140692820` → `FUN_1407ff8b0`; a non-player target's
@@ -628,22 +642,22 @@ squad simply takes the speaker in, unless a target flag at +0x1d0 is set):
 | DA | Effect |
 |---|---|
 | 1 TRADE | ends the conversation, opens trade with the speaker whatever its squad stocks (**Verified**, `FUN_140680560` case 1 → `FUN_1409524f0`: it tests only that the speaker, the target and the speaker's purse holder (its platoon, else its faction's, `FUN_140791b10`) exist; [who trades](economy.md#who-trades)) |
-| 2 TALK_TO_LEADER | a player target: the speaker's squad leader gets task 102 on the target |
+| 2 TALK_TO_LEADER | a player target: the speaker's squad leader (`FUN_140792b90`, may be the speaker) gets order 102 on the target ([above](#ambient-conversations)) |
 | 3 / 18 JOIN_SQUAD_WITH_EDIT / FAST | the speaker joins the target's squad (player: recruited, its package becomes `dialogue package player`; 3 opens the editor, [characters](../characters.md)) |
 | 4 AFFECT_RELATIONS, 5 AFFECT_REPUTATION | speaker's faction toward the target's: relation += val0 (clamp ±100) / the speaker's faction's global trust += val0, no clamp, whoever the target is (slot 9, `FUN_1406b2530`) |
-| 6 ATTACK_CHASE_FOREVER, 55 ATTACK_STAY_NEAR_HOME, 57 ATTACK_IF_NO_COEXIST | the speaker notices a character target (`FUN_140858f40`), is stopped with its task queue cleared (`FUN_1405c8330`), its squad tags the target TEMP ENEMY (`FUN_1406744a0`); task 101 (55: 248) goes to the speaker alone (`FUN_1405d20d0` without its squad fan-out): mates join only through the tag and their own enemy scan (**Verified**, `FUN_140680560`); 57 only without coexistence |
-| 7 GO_HOME | its tasks cleared, task 19 with the target, the squad tags the target AGGRESSOR |
+| 6 ATTACK_CHASE_FOREVER, 55 ATTACK_STAY_NEAR_HOME, 57 ATTACK_IF_NO_COEXIST | the speaker notices a character target (`FUN_140858f40`), is stopped (`FUN_1405c8330`, which keeps the order queue, [what clears the queue](ai-tasks.md#what-clears-the-queue)), its squad tags the target TEMP ENEMY (`FUN_1406744a0`); task 101 (55: 248) goes to the speaker alone, but not to a player-faction speaker with an order queued (the tag is set anyway) (`FUN_1405d20d0` without its squad fan-out): mates join only through the tag and their own enemy scan (**Verified**, `FUN_140680560`); 57 only without coexistence |
+| 7 GO_HOME | stopped (`FUN_1405c8330`), order 19 with the target (its clear empties the queue), the squad tags the target AGGRESSOR |
 | 8 TAKE_MONEY | the target's faction pays val0, no balance check ("Paid c.{1}") |
 | 9 GIVE_MONEY | the target's faction gets val0 |
-| 10 PAY_BOUNTY, 30 ARREST_TARGETS_CARRIED_PERSON, 49 CLEAR_BOUNTY | [economy 11.4-11.7](economy.md#114-claiming); 30 only when the speaker has a town and the target is in it; 49 erases two ledger entries (the speaker's and the target's town's or jailer's booking faction) |
-| 29 ARREST_TARGET | target in the speaker's town and not an animal: the speaker gets tasks 240 (capture) and 112 (find a cage), the target squad remembers the speaker (flag 5); else the speaker squad's memory flag 4 and task 4 (attack) on the target. One predicate picks both (the speaker's ownership town is set and equals the town he stands in, and the target's vfunc `0x248` is 0), so an animal in town is attacked, **Verified** (`FUN_140680560` case 0x1d). Meitou: `ArrestSystem.CapturesInTown` (`InOwnTown` and no animal; engine reading of the town test) is asked once by `DialogueSystem` and drives the memory and `ArrestFromDialogue` alike. **Verified** (probe): 176 uses ("You're under arrest!", "Thief!") |
+| 10 PAY_BOUNTY, 30 ARREST_TARGETS_CARRIED_PERSON, 49 CLEAR_BOUNTY | [economy 11.4-11.7](economy.md#114-claiming); 30 only when the speaker stands in its own ownership town (no test of where the target is, **Verified** disassembly `1406828d3`-`14068290e`); 30, 40 and 10 give the speaker order 213 on the carried body (clear), then 112 queued behind it; 49 erases two ledger entries (the speaker's and the target's town's or jailer's booking faction) |
+| 29 ARREST_TARGET | speaker in its own town and the target not an animal: the speaker gets orders 240 (capture, clear) and 112 (find a cage, queued behind it), the target squad remembers the speaker (flag 5); else the speaker squad's memory flag 4 and task 4 (attack) on the target. One predicate picks both (the speaker's ownership town is set and equals the town he stands in, and the target's vfunc `0x248` is 0), so an animal in town is attacked, **Verified** (`FUN_140680560` case 0x1d). Meitou: `ArrestSystem.CapturesInTown` (`InOwnTown` and no animal; engine reading of the town test) is asked once by `DialogueSystem` and drives the memory and `ArrestFromDialogue` alike. **Verified** (probe): 176 uses ("You're under arrest!", "Thief!") |
 | 11 CHARACTER_EDITOR | ends the conversation, opens the editor on the target |
 | 12 FORCE_SPEECH_TIMER | the second speech timer (`+0x234`) = val0 ([Timing](#ambient-conversations)) |
 | 13 DECLARE_WAR, 14 END_WAR | the speaker's faction's table, slots 8 / 7, about the target's ([factions 3.4](factions-squads-towns.md#34-changing-relations-observed-the-event-table-cross-checked-with-the-dialogue-action-numbers)) |
 | 15 CLEAR_AI | the speaker platoon's AI object: `+0x130` = 1 and four lists emptied  |
-| 16 FOLLOW_WHILE_TALKING, 17 THUG_HUNTER | orders 164 ("Following and talking": `Task_FollowAndTalk` only changes the vtable of the shared follow task `FUN_140333400`, so it follows with the stand-off 20 to 40 on the follower's side and the follow speed profile, [pathfinding](pathfinding.md#following), **Verified**; Meitou starts the movement follow task, `TalkFollowers.StartFollowing`, and when the conversation ends drops the follow target, unless an order or job has since given a follow of the same character, and stands the speaker if it still follows), 165 ("Stalking", `Task_TownStalker`) given to the speaker on the target. 165 (**Verified**, `FUN_14034c430`, `FUN_140340360`, `FUN_14033bd60`): while the speaker has a [status town](carry-loot.md#the-status-town) it waits 300 outside that town's first gate (gateway or wall with gate, outside gate code not > 0) on the line from the centre, facing the target, while the target has a status town and is no farther from that town's centre; in a town with no such gate it follows the target without sending anything. Otherwise (the target out of its town or farther out, or the speaker in none) it follows the target and once sends event 26; done when both dialogues are free after that. Meitou: `TownStalkers.StepStalkers`; the outside code is the gate building's from the last labelling ([gate codes](pathfinding.md#gate-codes)), so before one no gate is skipped |
-| 34 RUN_AWAY | its tasks cleared, task 280 from the target, the squad tags the target AGGRESSOR |
-| 52 SUMMON_MY_SQUAD | every other member of the speaker's squad gets task 67 |
+| 16 FOLLOW_WHILE_TALKING, 17 THUG_HUNTER | orders 164 ("Following and talking": `Task_FollowAndTalk` only changes the vtable of the shared follow task `FUN_140333400`, so it follows with the stand-off 20 to 40 on the follower's side and the follow speed profile, [pathfinding](pathfinding.md#following), **Verified**; done once it and its target are both free of conversation or it is threatened, `+0x2b0`, slot 4 `FUN_14033bc90`, **Verified**; Meitou starts the movement follow task, `TalkFollowers.StartFollowing`, and when the conversation ends drops the follow target, unless an order or job has since given a follow of the same character, and stands the speaker if it still follows), 165 ("Stalking", `Task_TownStalker`) given to the speaker on the target. 165 (**Verified**, `FUN_14034c430`, `FUN_140340360`, `FUN_14033bd60`): while the speaker has a [status town](carry-loot.md#the-status-town) it waits 300 outside that town's first gate (gateway or wall with gate, outside gate code not > 0) on the line from the centre, facing the target, while the target has a status town and is no farther from that town's centre; in a town with no such gate it follows the target without sending anything. Otherwise (the target out of its town or farther out, or the speaker in none) it follows the target and once sends event 26; done when both dialogues are free after that. Meitou: `TownStalkers.StepStalkers`; the outside code is the gate building's from the last labelling ([gate codes](pathfinding.md#gate-codes)), so before one no gate is skipped |
+| 34 RUN_AWAY | its own goal lists emptied and rebuilt (`FUN_140621f80`), stopped (`FUN_1405c8330`), order 280 from the target (clear), the squad tags the target AGGRESSOR |
+| 52 SUMMON_MY_SQUAD | every other member of the speaker's squad gets order 67 on the speaker (clear; no target, faction, distance or state test) |
 | 19 REMEMBER_CHARACTER, 20 FLAG_TEMP_ALLY, 21 FLAG_TEMP_ENEMY | [squad memory](#squad-memory): long-term tag 0 / short-term 3 / 4 on the target |
 | 23 MAKE_TARGET_RUN_FASTER | the target's speed mode = 2 |
 | 25 TAG_ESCAPED_SLAVE | the target's slave state 2, its AI reset (9 uses) |
@@ -653,13 +667,13 @@ squad simply takes the speaker in, unless a target flag at +0x1d0 is set):
 | 40 ENSLAVE_TARGETS_CARRIED_PERSON | slavery ([carry-loot](carry-loot.md)) |
 | 28 SEPARATE_TO_MY_OWN_SQUAD | the speaker (the target when the speaker is of the player's faction), unless alone, gets a new platoon of its faction (`FUN_1407f4420`, the old one's template field `+0x108`) where it stands; first its member type (`+0x25c`, 4 a slave) is set to 0 and its perma-jobs destroyed (`FUN_140507280`, **Verified** `FUN_1405ce4e0`), so a slave loses job 187 and stops obeying its master while keeping its state and owner ([Obedient Slave](ai-tasks.md#slave-work-shout-and-capture)); the new squad copies the old one's memory (`FUN_1405e85e0`). Meitou, **Observed** (probe, a Rebirth slave released from its cage with its shackles off): its event 13 "I'm free..." lines carry DA 20 and DA 28, and it then plans with its new squad's escape goals |
 | 32 ASSIGN_BOUNTY | bounty += val0 for the speaker's faction; without an amount, a speaker whose CHARACTER has `assigns bounties` (59 base records) books the target's pending crime (`Character::canAssignBounties` `FUN_1405a4470`, **Verified**); others do nothing |
-| 33 CRIME_ALARM | the speaker notices the target (the forced sense `FUN_140858f40` with its alarm flag: seen, alert 5 s; **Verified** `FUN_140680560`: no attack order and no squad tag, so the Hub's Holy Citizen crying "SKELETONS!" (DA 33 + 34) only runs, #648; Meitou `CrimeSystem.Alarm` → `AggroSystem.Alarm`); the target's crime timer 30 s and "recently wanted"; with a town (speaker not hostile to its faction): Trespassing on a target with no crime pending inside the speaker's non-public home, then the [town alarm](economy.md#town-alarms) at the target for its pending crime ("Alarm raised", at most every 30 s), [economy 11.2](economy.md#112-how-a-bounty-is-gained) |
+| 33 CRIME_ALARM | the speaker notices the target (the forced sense `FUN_140858f40` with its alarm flag: seen, alert 5 s; **Verified** `FUN_140680560`: no attack order and no squad tag; after the town alarm, when byte `+0x70` of the speaker's `+0x648` object is set, order 67 to the target with the target's building (clear), so the Hub's Holy Citizen crying "SKELETONS!" (DA 33 + 34) only runs, #648; Meitou `CrimeSystem.Alarm` → `AggroSystem.Alarm`); the target's crime timer 30 s and "recently wanted"; with a town (speaker not hostile to its faction): Trespassing on a target with no crime pending inside the speaker's non-public home, then the [town alarm](economy.md#town-alarms) at the target for its pending crime ("Alarm raised", at most every 30 s), [economy 11.2](economy.md#112-how-a-bounty-is-gained) |
 | 35 INCREASE_FACTION_RANK | the speaker's faction's rank +1 while below val0 (0: no cap) (**Verified** by code) |
 | 36 LOCK_THIS_DIALOG | locks the current dialogue |
 | 37 / 38 / 39 ASSAULT / RETREAT / VICTORY_PHASE | the speaker's campaign phase: 1 (2 without a pt2 leader package), 2, 3 ([campaigns](factions-squads-towns.md#campaigns); 39 has no use in the data) |
 | 41, 42, 43, 48 CHOOSE_* | the character trading window (slaves sold / bought, bail, animals; val0 price override), the speaker as the slaver; 41 / 42 do nothing when the target is the speaker ([economy 12](economy.md#12-slaves-prisoners-animals)). Base data: "trade slaves" (slaver bosses) and "Wandering slave trader" carry 41 and 42, Rebirth's boss 41, "Empire pro-slave" 42 with val0 1000 (**Verified** by probe) |
 | 54 OPEN_NEAREST_GATE | the speaker's current town's gate nearest it (town slot 97) has its door opened (`FUN_140297040`) |
-| 56 MASSIVE_ALARM | in a town: every member of every active squad of the speaker's faction perceives the target, tags it TEMP ENEMY (`FUN_1405cb0a0`), fires event 66 at it and gets task 29 to its position |
+| 56 MASSIVE_ALARM | in a town: every member of every active squad of the speaker's faction perceives the target, tags it TEMP ENEMY (`FUN_1405cb0a0`), fires event 66 at it and gets order 29 to its position, appended behind its queued orders (clear 0); the speaker is among them |
 | 58 KNOCKOUT | speaker `+0x4f8` = val0 (1 use) |
 | 22 (empty), 26, 27, 31, 44, 45, 46, 50, 51, 59 | nothing in this executor |
 

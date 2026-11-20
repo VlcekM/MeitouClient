@@ -108,7 +108,8 @@ character: within `HeldItems.GiveRange` 1000 of its window's owner, `StealRange`
 
 - `IS_A_TRADER` (dialogue condition 9, `FUN_1405cff70`) and the stock are the squad's: they read the SQUAD_TEMPLATE `is trader` through the character's platoon (**Observed**, `uses_is_trader`).
   The CHARACTER field `is trader` (fcs.def) is read by no function through its string (**Observed**: string xrefs list only the three platoon readers).
-- A trade is opened by a dialogue line with effect 1 (DA_TRADE). In the data only the shopkeeper's dialogue has one (**Observed**, walk of the dialogue references): Thieves Guild, Shinobi
+- A trade is opened by a dialogue line with effect 1 (DA_TRADE). It ends the conversation (the game resumes) and queues the window's open on the player interface (`FUN_140791830`);
+  neither the opener (`FUN_1407918a0`) nor the trade windows make a mover, order, AI or pause call, so the trader runs its own AI while the window is open (**Verified**, `FUN_1409524f0`). In the data only the shopkeeper's dialogue has one (**Observed**, walk of the dialogue references): Thieves Guild, Shinobi
   Trader 3 lines, Thief Boss, Thief, Ninja Guard and the squad's `dialog squad` (TOUGH 1234) none; Skeleton Barman, Smuggler Barman, Stone Camp Trader yes; Shop Guard, Traders Guard, Slaver,
   Samurai no. Of 125 trader templates with vendors in the probe load order, 89 mark a member CHARACTER `is trader`.
 - DA_TRADE needs no stock: the window shows the trader's squad stock, for a squad with no home building its members' worn bags merged ([trader window](ui-screens.md#6-inventory-trade-dialogue-build)),
@@ -537,7 +538,7 @@ money, mark the entry claimed (it never pays twice) and show "Received c.{1} rew
   cage is unlocked and status `+0xea = 1`; then, if the releaser's faction has `+0x40`, the prisoner's entries for the releaser's booking faction and for the
   jail's booking faction are **erased** (`FUN_1408539f0`), the releaser says `EV_PRISONER_FREE_TO_GO`; if the releaser is a player
   (non-`+0x40` player faction), the prisoner says `EV_UNLOCK_MY_CAGE_OR_SHACKLES`. In those two cases the prisoner gets 133
-  `GET_OUT_OF_CAGE_LEGIT` (queue cleared), which finds the hold cleared by the release that follows and does nothing ([locks](locks.md#cages-and-beds); so the release writes
+  `GET_OUT_OF_CAGE_LEGIT` (queue cleared; **Verified**, disassembly of the call), which finds the hold cleared by the release that follows and does nothing ([locks](locks.md#cages-and-beds); so the release writes
   no escaped flag, **Verified**). Meitou `LockSystem.FreeBy` does the mark and both events for the Set Free walk and the goal-211 rounds alike (the mark is set for every prisoner, a kidnapped one included, **Verified** `FUN_1403570a0`: byte `+0xea` set with no test; the status update clears it outside towns). Always: the restraint is freed; "{1} has been released from prison." for a player-faction prisoner of status type 0 (not a slave, `FUN_1405c8aa0`; **Verified**). Only this task posts it: bail, trade, recruiting and liberators do not (Meitou `FixtureRegistry.Release` with `jailer`).
 - **Bail** (dialogue action 43 `CHOOSE_PRISONER_BAIL` opens `CharacterTrading_PrisonerBailout` `FUN_1406ab890`, "Pay Bounty", **Observed**): the list
   is the living occupants of `BF_CAGE` furniture in the speaker's home town's buildings that are player-faction, or not hostile to
@@ -631,12 +632,12 @@ decompile's `DialogActionEnum` / `DialogConditionEnum` / `EventTriggerEnum`, com
   (`who` 0, a data slip: it never shows for a guard without a bounty). Paying needs `DC_PLAYERMONEY > fine` (strict) and runs
   `DA_TAKE_MONEY` (8, the fine) + `DA_CLEAR_BOUNTY` (49); the 1100 line also runs `DA_PAY_BOUNTY` (10). 49 erases two entries, the speaker's booking faction's and the target's town's (or jailer's) ([dialogue](dialogue.md#effects));
   As built: [simulation](../simulation.md#arrest-and-jail).
-- **`DA_ARREST_TARGET`** (`FUN_140680560` case 0x1d, **Observed**): when the speaker's ownership town (`Character+0x658 -> +0x30`) is set
-  and equals the speaker's status `+0x88` by pointer (**Verified**: `+0x88` is the character's current town, `vfunc 0x78` = `FUN_1405c89b0`, written as "the town the status stands in"; "he is standing in his own town", no distance; event 45 in `FUN_140859680` makes the same compare, plus further tests not modelled), and the target is not an animal (slot `0x248` is `asAnimal`): the speaker gets tasks 240 `LIFT_PERSON_SNATCHING_ALLOWED_IN_TOWN_ONLY`
-  ("Capture Target", needs `isTargetDown`) and 112 `FIND_CAGE_AND_PUT_IN` on the target, and the target's squad marks the speaker
+- **`DA_ARREST_TARGET`** (`FUN_140680560` case 0x1d, **Verified**, the calls' flags by disassembly): when the speaker's ownership town (`Character+0x658 -> +0x30`) is set
+  and equals the speaker's status `+0x88` by pointer (**Verified**: `+0x88` is the character's current town, `vfunc 0x78` = `FUN_1405c89b0`, written as "the town the status stands in"; "he is standing in his own town", no distance; event 45 in `FUN_140859680` makes the same compare, plus further tests not modelled), and the target is not an animal (slot `0x248` is `asAnimal`): the speaker gets orders 240 `LIFT_PERSON_SNATCHING_ALLOWED_IN_TOWN_ONLY` (clearing its queue)
+  ("Capture Target", needs `isTargetDown`) and 112 `FIND_CAGE_AND_PUT_IN` (queued behind) on the target, and the target's squad marks the speaker
   (flag 5). Otherwise the speaker's squad marks the target (flag 4) and the speaker attacks it (task 4 `MELEE_ATTACK`). Either way the
-  guard fights until the target is down, then carries it. `DA_ARREST_TARGETS_CARRIED_PERSON` (30, case 0x1e) does the same for the body
-  the target carries (it is dropped and taken over), but only when the speaker's ownership town is set and equals the town it stands in (cases 0x1d and 0x1e share the test; **Verified**), else nothing happens;
+  guard fights until the target is down, then carries it. `DA_ARREST_TARGETS_CARRIED_PERSON` (30, case 0x1e) gives the speaker orders 213 `LIFT_PERSON_SNATCHING_ALLOWED` (clearing its queue) and then 112 on the body
+  the target carries, the body first split into a squad of its own (`FUN_1405ce4e0`), but only when the speaker's ownership town is set and equals the town it stands in (cases 0x1d and 0x1e share the test; **Verified**), else nothing happens;
   `DA_ENSLAVE_TARGETS_CARRIED_PERSON` (40, case 0x28) takes the same tail with no town test (**Verified**). Meitou: the town test is `ArrestSystem.InOwnTown`. `DA_ASSIGN_BOUNTY` (32) adds its value as a bounty with the speaker's booking
   faction, or books the pending crime when the value is 0.
 - **Arrest goal** (AI_TASK "Arrest bounties", enum 204 `HUNT_BOUNTIES`, in "addon- law enforcement" and the "Gate guard ... -arrests"
@@ -745,7 +746,7 @@ Meitou's reading: [simulation, slave trading](../simulation.md#arrest-and-jail).
 - **How a pending crime's timer counts down** (`+0x90`; set by `FUN_140851f40` / `FUN_140852e10`, the decrement was not found), and so how long an unseen crime stays pending.
 - **Arrest and jail gaps** (11.5, 11.7, 11.8): what a guard carrying a captive does when no cage is free (`CAGES_ARE_ALL_FULL` 97 is
   registered but no TaskData row uses it); how `+0x110` decays;
-  whether NPC bounty hunters ever cage or hand in a captive; what the speaker-in-own-town branch of `DA_ARREST_TARGET` tests exactly.
+  whether NPC bounty hunters ever cage or hand in a captive.
 - **Research cost** beyond the bench queue cost, crafting costs, building purchase price, bed cost.
 
 ## Expression reference
