@@ -375,7 +375,8 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
         TaskType.FindCropsToEat => Farm(world, s, cold, board),
         TaskType.FogmanWorshipVictim => captives.WorshipTarget(world, s) is { } shrine ? OfCage(shrine) : null,
         TaskType.AnimalFetchALimb => CaptiveSystem.LimbFor(world, s, cold) is { } limb ? OfItem(limb) : null,
-        TaskType.EatFoodOnGround => Items.FeedSystem.GroundFood(world, s, cold) is { } food ? OfItem(food) : null,
+        TaskType.EatFoodOnGround => Items.FeedSystem.GroundFood(world, s, cold) is { } food ? OfItem(food)
+            : OfCharacter(world, Items.FeedSystem.FoodBody(world, s, cold)),
         TaskType.ChaseAllyDogsWithMouthLimbs => OfCharacter(world, captives.MouthfulAlly(world, s, cold)),
         TaskType.NewSlaveProcessing or TaskType.SlaveWatching => ToProcess(world, s, cold, board, type),
         TaskType.CaptureNewSlaves => OfCharacter(world, captives.NearestDown(world, s, cold, capture: true)),
@@ -574,6 +575,8 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
             StateType.IsTargetEscapee => c is { SlaveState: not 1 },
             StateType.TargetIsConscious => c is not null && CharacterFacts.Conscious(c),
             StateType.IsChained => LockSystem.Chained(c),
+            StateType.IsItemLootable when ask.Type == TaskType.EatFoodOnGround => c is not null && CarrySystem.CanBeLooted(c) && c.CarriedBy.IsNone,
+            StateType.IsSubjectInInventory when ask.Type == TaskType.EatFoodOnGround => false,
             StateType.IsTargetRestrainedOrKo => c is not null && (c.Medical is { Dead: true } || CharacterFacts.Down(c) || c.InSomething != HeldState.None),
             _ => null,
         };
@@ -700,7 +703,8 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
         TaskType.EatARandomDeadBody or TaskType.EatARandomKoBody => LooseJob(world, ask, cold, target, CaptiveJobKind.EatBody),
         TaskType.FindCropsToEat => CropJob(world, ask, cold, target),
         TaskType.FogmanWorshipVictim => CageOnlyJob(world, ask, cold, target, CaptiveJobKind.Worship),
-        TaskType.AnimalFetchALimb or TaskType.EatFoodOnGround => FetchJob(world, ask, cold, target),
+        TaskType.AnimalFetchALimb => FetchJob(world, ask, cold, target),
+        TaskType.EatFoodOnGround => target.Character is null ? FetchJob(world, ask, cold, target) : LootFoodJob(world, ask, cold, target),
         TaskType.PlayBecauseIHaveALimbInMouth => cold.Mouth is null ? null : New(ask, cold, CaptiveJobKind.DogPlay, CharacterId.None, "", -1, target),
         TaskType.ChaseAllyDogsWithMouthLimbs => LooseJob(world, ask, cold, target, CaptiveJobKind.DogChase),
         TaskType.NewSlaveProcessing or TaskType.SlaveWatching => ProcessJob(world, ask, cold, target),
@@ -825,6 +829,22 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
         cold.FetchingFood = ask.Type == TaskType.EatFoodOnGround;
 
         return New(ask, cold, CaptiveJobKind.Fetch, CharacterId.None, "", -1, target, item);
+    }
+
+    /// <summary>
+    /// 259's job on a body its finder's pass 2 found: row 3 on a character is <c>Task_Loot_AI</c>, so the body is looted
+    /// (<see cref="CharacterTask.Loot"/> on row 259, the NPC loot's take: weapons it has room for, then food); null when the body is gone, no longer
+    /// lootable, carried or another job works it, or the loot does not start.
+    /// </summary>
+    CaptiveJob? LootFoodJob(World world, in DutyAsk ask, CharacterCold cold, in PlanTarget target)
+    {
+        var table = world.Characters;
+        if (target.Character is not { } body || !table.TryResolveNext(body, out int b) || table.Cold(b) is not { } victim
+            || !CarrySystem.CanBeLooted(victim) || !victim.CarriedBy.IsNone || captives.Busy(body))
+            return null;
+        if (!CarrySystem.Start(world, ask.Slot, CharacterTask.Loot, TaskType.EatFoodOnGround, TaskSource.Goal, body, CharacterTask.Idle)) return null;
+
+        return New(ask, cold, CaptiveJobKind.LootFood, body, "", -1, target);
     }
 
     /// <summary>

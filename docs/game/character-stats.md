@@ -522,8 +522,13 @@ eat task, animation or player command (a right click on food does nothing, [ui-s
   (`FeedSystem.HasMouth`: its look's attachment points; none without a look) leaves the limb (`PlayerSystem.TakeInMouth`). Engine choices: a held limb is neither saved nor carried
   across a load; it goes with the animal if the animal dies or is removed.
 - **Food on the ground** (**Verified**, decompile): `Character::setupAI` gives every animal of a player squad goal 259 EAT_FOOD_ON_GROUND (priority 3, weight 0.5; it drops race goal 230)
-  and every player character 243. 259's desire is AI slot 25 (above; the registration's stub jumps to it). Finder `FUN_14099a930`: the nearest food it may eat (function 3, 15 for an animal or a race that lists it) on
-  the ground within 100 in its own location, accessible, passing the stealing check; else a sensed corpse within 100 with such food. Meitou: 259 is a [captive goal](../simulation.md#captives) on the chooser's rung (`CaptiveGoals`: desire `FeedSystem.EatDesire`, finder `FeedSystem.GroundFood`, the ground pass only; act-out row 3's pick-up).
+  and every player character 243. 259's desire is AI slot 25 (above; the registration's stub jumps to it). Finder `FUN_14099a930`: pass 1 the nearest food it may eat (function 3, 15 for an animal or a race that lists it) on
+  the ground strictly within 100 (3D) in its own location (building or outdoors), not behind a closed gate (`FUN_140597160`), accessible (`FUN_140597030`) and passing `FUN_140997d80`:
+  an owned item must be of its faction, except for a player-faction looker on an item outdoors or in a player-faction building. Pass 2, with none: the first sensed dead body (mask 0x10)
+  not carried, not in a bed or cage, within 100, worked by no squad mate (`FUN_1402690e0`), reachable (both tests) and holding such food (`FUN_1407465d0`: function 15 the looker eats, plus 3);
+  row 3 on that body is `Task_Loot_AI` ([NPC looting](carry-loot.md#33-npc-looting)). Meitou: 259 is a [captive goal](../simulation.md#captives) on the chooser's rung (`CaptiveGoals`:
+  desire `FeedSystem.EatDesire`, finder `FeedSystem.GroundFood` then `FoodBody` over the sense entries in slot order; act-out row 3's pick-up, or the NPC loot of the body,
+  `CaptiveJobKind.LootFood`, a goal's loot taking the NPC loot's path for a player-side looter too).
   The player's bonedog with no bag picks up Raw Meat dropped beside it and eats it (**Observed** in the original, 2026-11-14). Meitou: fetched food (`CharacterCold.FetchingFood`) may go into the animal's
   [shut](animals.md#pack-animals) grid and is eaten from there (engine choice); with Feed Animals off it still fetches (slot 25 reads no option) but does not eat, so
   the carried food ends the want. It checks the food again on arrival (`FeedSystem.FreeFood`): after a load a shop slot claims its loose items only once its building is set up, so food that looked free

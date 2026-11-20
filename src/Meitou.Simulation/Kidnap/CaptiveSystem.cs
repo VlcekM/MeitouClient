@@ -175,6 +175,10 @@ public enum CaptiveJobKind : byte
     /// into a cage there.
     /// </summary>
     Sell,
+    /// <summary>
+    /// Goal 259 by way of 3 on a body (<c>Task_Loot_AI</c>): the food on a dead body its finder's second pass found is looted.
+    /// </summary>
+    LootFood,
 }
 
 /// <summary>
@@ -652,7 +656,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         CaptiveJobKind.EatCrops => TaskType.EatCrops,
         CaptiveJobKind.Worship => TaskType.WorshipTarget,
         CaptiveJobKind.DogPlay => TaskType.PlayBecauseIHaveALimbInMouth,
-        CaptiveJobKind.Fetch => TaskType.Pickup,
+        CaptiveJobKind.Fetch or CaptiveJobKind.LootFood => TaskType.Pickup,
         _ => TaskType.ChaseAllyDogsWithMouthLimbs,
     };
 
@@ -1063,6 +1067,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             return StepLogistics(world, j, w, wc);
 
         if (j.Kind == CaptiveJobKind.Fetch) return wc.PickingUpItem == j.Item || End(world, j, null);
+        if (j.Kind == CaptiveJobKind.LootFood) return world.Characters.Next[w].Task == (byte)CharacterTask.Loot || End(world, j, null);
 
         if (j.Kind is CaptiveJobKind.Capture or CaptiveJobKind.Carry or CaptiveJobKind.Shout)
             return StepSlaveWork(world, j, w, wc);

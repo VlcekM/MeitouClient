@@ -2,6 +2,7 @@ using System.Numerics;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Carrying;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
 
@@ -152,29 +153,84 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
         PlayerSide(world, c) || c.SlaveState == 1 || med.Hunger < NpcWantsBelow;
 
     /// <summary>
-    /// 259's finder (<c>FUN_14099a930</c>; the goal's look and act-out are <see cref="Kidnap.CaptiveGoals"/>): the nearest food item on the ground within
-    /// <see cref="FoodOnGroundRange"/> it may eat (function 3, or 15 for an animal), nobody else's (engine reading of the stealing check); null when
-    /// none. Engine choices: the original's pass 2 (a sensed body carrying such food) and same-location test are not done.
+    /// 259's finder, pass 1 (<c>FUN_14099a930</c>, <b>Verified</b>; the goal's look and act-out are <see cref="Kidnap.CaptiveGoals"/>): the nearest food
+    /// item on the ground strictly within <see cref="FoodOnGroundRange"/> (3D) it may eat (function 3, or 15 for an animal), lying where the character
+    /// stands (the same building, or both outdoors), not behind a closed gate (<c>FUN_140597160</c>), and passing the ownership test
+    /// (<see cref="MayTake"/>); null when none. Pass 2 is <see cref="FoodBody"/>. Serial (the captive look).
     /// </summary>
     internal static GroundItem? GroundFood(World world, int slot, CharacterCold cold)
     {
         var at = world.Characters.Next[slot].Position;
+        int place = world.Sight.PlaceOf(slot);
+        var locks = world.SystemOf<Locks.LockSystem>();
         GroundItem? best = null;
         float d2Best = FoodOnGroundRange * FoodOnGroundRange;
         foreach (var g in world.GroundItems.All)
         {
-            if (!FreeFood(g, cold)) continue;
+            if (!FreeFood(g, cold) || world.Sight.PlaceAt(g.Position) != place) continue;
+
             float d2 = Vector3.DistanceSquared(at, g.Position);
-            if (d2 < d2Best) (best, d2Best) = (g, d2);
+            if (d2 >= d2Best || locks is not null && !locks.NotBlocked(world, at, g.Position) || !MayTake(world, cold, g, place)) continue;
+
+            (best, d2Best) = (g, d2);
         }
+
         return best;
     }
 
     /// <summary>
-    /// Food the character may take to eat: a loose food item (function 3 or 15) in no shop slot and of no other faction.
+    /// 259's finder, pass 2 (<c>FUN_14099a930</c>, <b>Verified</b>), asked when pass 1 finds nothing: the first character the looker senses (its sense
+    /// entries in slot order; the original's mask 0x10, the dead bit) that is dead, not carried, held in nothing, within
+    /// <see cref="FoodOnGroundRange"/> (3D, inclusive), worked by no squad mate (<c>FUN_1402690e0</c>), reachable (<c>FUN_140597160</c>,
+    /// <c>FUN_140597030</c>: <see cref="CarrySystem.Reachable"/>) and holding food among its items (function 3, or 15 the looker may eat,
+    /// <c>FUN_1407465d0</c>); -1 when none. Serial.
     /// </summary>
-    internal static bool FreeFood(GroundItem g, CharacterCold cold) =>
-        IsFood(g.Item) && g.Slot is null && (g.OwnedBy < 0 || g.OwnedBy == cold.Faction);
+    internal static int FoodBody(World world, int slot, CharacterCold cold)
+    {
+        if (CharacterFacts.Senses(world, slot) is not { } senses) return -1;
+
+        var table = world.Characters;
+        var at = table.Next[slot].Position;
+        SquadGoals? goals = null;
+        foreach (var e in senses.Entries)
+        {
+            int b = e.Target;
+            if (b == slot || !table.Next[b].Alive || table.Next[b].Generation != e.Generation) continue;
+            if (table.Cold(b) is not { Medical.Dead: true, CarriedBy.IsNone: true, InSomething: Locks.HeldState.None, Inventory: { } inv }) continue;
+            if (Vector3.DistanceSquared(at, table.Next[b].Position) > FoodOnGroundRange * FoodOnGroundRange) continue;
+
+            goals ??= SquadGoals.Of(world);
+            if (goals.Working(cold.SquadId, table.IdOf(slot), GoalTarget.Of(table.IdOf(b))) > 0 || !CarrySystem.Reachable(world, slot, b)) continue;
+            if (inv.Items.Exists(item => IsFood(item) && Edible(cold, item))) return b;
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// Whether the character may eat <paramref name="item"/> (<c>FUN_14042ee50</c>): food (function 3) always, raw food (15) for an animal or when its
+    /// race's <c>special food</c> lists it.
+    /// </summary>
+    static bool Edible(CharacterCold cold, ItemInstance item) =>
+        item.ItemFunction == FoodFunction || cold.Medical is { HasStatsObject: false } || cold.Race?.SpecialFood.Contains(item.Record) == true;
+
+    /// <summary>
+    /// The ownership test of 259's ground pass (<c>FUN_140997d80</c>, <b>Verified</b>): an item that has an owner must be of the looker's faction,
+    /// but for a player-faction looker on an item outdoors or in a building of the player's faction, which it may take whoever owns it.
+    /// </summary>
+    static bool MayTake(World world, CharacterCold cold, GroundItem g, int place)
+    {
+        if (g.OwnedBy < 0 || g.OwnedBy == cold.Faction) return true;
+        if (world.Player.Faction < 0 || cold.Faction != world.Player.Faction) return false;
+        if (place < 0) return true;
+
+        return world.Buildings.Find(world.Sight.PlaceKey(place)) is { } building && building.Owner == world.Player.Faction;
+    }
+
+    /// <summary>
+    /// Food the character may take to eat: a loose food item (function 3, or 15 it may eat) in no shop slot.
+    /// </summary>
+    internal static bool FreeFood(GroundItem g, CharacterCold cold) => IsFood(g.Item) && Edible(cold, g.Item) && g.Slot is null;
 
     /// <summary>
     /// Food or raw food (<c>item function</c> 3 or 15).

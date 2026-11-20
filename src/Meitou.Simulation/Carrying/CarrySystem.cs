@@ -1303,7 +1303,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             ForageTake(world, table, i, t, dt);
             return;
         }
-        if (!cold.IsPlayer && !opening)
+        // A goal's loot is Task_Loot_AI for anyone (a player animal's 259 on a body); the player's own loot is an order's take-all.
+        if ((!cold.IsPlayer || cold.Running is { Source: Ai.TaskSource.Goal }) && !opening)
         {
             NpcLoot(world, table, i, t, dt);
             return;

@@ -121,7 +121,7 @@ public sealed partial class CarrySystem
     /// not in needs that building to have an open door, <c>Building::hasAnOpenDoor</c>; a human looter's "may use it" test, slot 0x328, is always
     /// true). Not modelled: the building-link branch of the first, the animal looter's slot 0x328, a body in a part building with a parent.
     /// </summary>
-    static bool Reachable(World world, int looter, int body)
+    internal static bool Reachable(World world, int looter, int body)
     {
         var next = world.Characters.Next;
         if (world.SystemOf<Locks.LockSystem>() is { } locks && !locks.NotBlocked(world, next[looter].Position, next[body].Position)) return false;
