@@ -254,6 +254,11 @@ public class ProductionTests
         public List<string> Sites { get; } = [];
 
         /// <summary>
+        /// The id of the workers' squad (<see cref="PlayerSquad"/>), -1 before the first worker.
+        /// </summary>
+        int _squad = -1;
+
+        /// <summary>
         /// Creates machines on town 1 so power fixtures use a shared grid; town 0 models furniture without a player outpost.
         /// </summary>
         public Rig(GameDatabase db, GameConstants constants, string[] records, int threads = 1, bool snapshots = false, int town = 1,
@@ -296,7 +301,28 @@ public class ProductionTests
             var cold = new CharacterCold { Name = "worker" + site, Race = Human, Stats = stats, Medical = MedicalState.Create(Human, 50),
                     Inventory = inventory, IsPlayer = true, Faction = PlayerFaction };
             var p = World.Buildings.Find(Sites[site])!.Position + new Vector3(0, 0, 10) + offset;
-            return World.Characters.Spawn(new CharacterHot { Position = p, MaxSpeed = 40, WalkSpeed = 15, Task = (byte)CharacterTask.Idle }, cold, 0);
+
+            // A character with no squad runs no chooser, so it would take no job or order (OrderStep.Runs).
+            var squad = PlayerSquad();
+            cold.SquadId = squad.Id;
+            var hot = new CharacterHot { Position = p, MaxSpeed = 40, WalkSpeed = 15, Task = (byte)CharacterTask.Idle };
+            var id = World.Characters.Spawn(hot, cold, 0);
+            squad.Members.Add(id);
+            if (squad.Leader.IsNone) squad.Leader = id;
+            return id;
+        }
+
+        /// <summary>
+        /// The workers' squad, of the player's faction, made with the first worker.
+        /// </summary>
+        Squad PlayerSquad()
+        {
+            if (World.Squads.Find(_squad) is { } squad) return squad;
+
+            squad = new Squad { Id = World.Squads.NextId(), TemplateId = "t", Faction = PlayerFaction };
+            World.Squads.Add(squad);
+            _squad = squad.Id;
+            return squad;
         }
 
         public Inventory Carried(CharacterId id) => World.Characters.Cold(id.Slot)!.Inventory!;

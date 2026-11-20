@@ -45,6 +45,11 @@ public class OrderSaveTests
 
     static TaskType[] Rows(SimWorld world, CharacterId id) => [.. world.Characters.Cold(id.Slot)!.OrderQueue.Select(e => e.Row)];
 
+    /// <summary>
+    /// The rows of the character's second list (<see cref="CharacterCold.SecondList"/>), where a load puts its orders.
+    /// </summary>
+    static TaskType[] SecondRows(SimWorld world, CharacterId id) => [.. world.Characters.Cold(id.Slot)!.SecondList.Select(e => e.Row)];
+
     static FcsRecord AiOf(SaveGame save, int member) => save.Platoons.Single(p => p.FactionId == save.PlayerFaction!.Id).Characters[member].Ai!;
 
     static IEnumerable<string> OrderKeys(FcsRecord ai) =>
@@ -56,9 +61,10 @@ public class OrderSaveTests
 
     /// <summary>
     /// A Shift-queued move, Rest and First Aid are written as the original's <c>tjob&lt;i&gt;</c> / <c>tjobP&lt;i&gt;</c> / <c>tjobT&lt;i&gt;</c>
-    /// (front first, the started move too), read back as an unstarted queue the decision step starts through the normal path, and written again
-    /// unchanged; a target that is no longer in the world drops its order. Catches orders lost by a save, a front restored as running without a task,
-    /// a character target found by the wrong handle, and a queue that does not round-trip.
+    /// (front first, the started move too) and read back into the second list as the original's loader adds them (<c>FUN_1405092d0</c> through
+    /// <c>FUN_1405086d0</c>: First Aid 25 as its job form 58 Medic), the first started by the chooser; a later save writes the deque alone
+    /// (<c>FUN_1405090b0</c>), so none of them; the Medic entry stays when its patient is gone (its finder picks). Catches orders lost by a load,
+    /// a front restored as running without a task, a character target found by the wrong handle, and loaded orders written again.
     /// </summary>
     [Fact]
     public void A_queued_move_rest_and_first_aid_survive_a_save_and_a_load_and_are_started_from_the_front()
@@ -80,7 +86,7 @@ public class OrderSaveTests
         {
             first.Write(folder);
             var save = SaveGame.Load(folder);
-            var (ai, patientHand) = AssertTheSaveHoldsTheQueue(save);
+            AssertTheSaveHoldsTheQueue(save);
 
             using var b = NewGame(start: false);
             var loaded = SaveLoader.Load(b.World, save, b.Data);
@@ -95,26 +101,25 @@ public class OrderSaveTests
             b.World.RunTicks(2);
 
             Assert.Null(cold.SavedOrders);
-            Assert.Equal([TaskType.MoveCusOrdered, TaskType.MoveCusOrdered, TaskType.Rest, TaskType.FirstAidOrder], Rows(b.World, medicB));
-            Assert.Equal([true, false, false, false], cold.OrderQueue.Select(e => e.Started));
-            Assert.Equal([First, Second], cold.OrderQueue.Take(2).Select(e => e.Point));
-            Assert.Equal(squad.Members[1], cold.OrderQueue[3].Target);
+            Assert.Empty(cold.OrderQueue);
+            Assert.Equal([TaskType.MoveCusOrdered, TaskType.MoveCusOrdered, TaskType.Rest, TaskType.JobMedic], SecondRows(b.World, medicB));
+            Assert.Equal([true, false, false, false], cold.SecondList.Select(e => e.Started));
+            Assert.Equal([First, Second], cold.SecondList.Take(2).Select(e => e.Point));
+            Assert.Equal(squad.Members[1], cold.SecondList[3].Target);
             Assert.Equal(CharacterTask.GoTo, (CharacterTask)b.World.Characters.Next[medicB.Slot].Task);
 
-            // Written again: the same order keys.
+            // Written again: the deque alone, which the load left empty.
             var second = SaveCapture.Capture(b.World, b.Data, loaded.Clock, loaded);
-            var again = AiOf(second, 0);
 
-            Assert.Equal(OrderKeys(ai), OrderKeys(again));
-            Assert.Equal(patientHand, Hand.Read(again, "tjobT3"));
+            Assert.Empty(OrderKeys(AiOf(second, 0)));
 
-            // A load that is captured before any tick keeps the orders it read.
+            // A load that is captured before any tick writes none of the orders it read either.
             using var c = NewGame(start: false);
             var loadedC = SaveLoader.Load(c.World, save, c.Data);
 
-            Assert.Equal(OrderKeys(ai), OrderKeys(AiOf(SaveCapture.Capture(c.World, c.Data, loadedC.Clock, loadedC), 0)));
+            Assert.Empty(OrderKeys(AiOf(SaveCapture.Capture(c.World, c.Data, loadedC.Clock, loadedC), 0)));
 
-            // The patient is not in the world any more: its order is left out and the rest stay.
+            // The patient is not in the world any more: the Medic entry stays all the same, as its saved hand only feeds its finder.
             var other = SaveGame.Load(folder);
             Hand.Null.Write(AiOf(other, 0), "tjobT3");
             AiOf(other, 0).Ints["tjobT3I"] = 999;
@@ -123,8 +128,8 @@ public class OrderSaveTests
             SaveLoader.Load(d.World, other, d.Data);
             d.World.RunTicks(2);
 
-            Assert.Equal([TaskType.MoveCusOrdered, TaskType.MoveCusOrdered, TaskType.Rest],
-                    Rows(d.World, d.World.Squads.Find(d.World.Player.Squad)!.Members[0]));
+            Assert.Equal([TaskType.MoveCusOrdered, TaskType.MoveCusOrdered, TaskType.Rest, TaskType.JobMedic],
+                    SecondRows(d.World, d.World.Squads.Find(d.World.Player.Squad)!.Members[0]));
         }
         finally
         {
@@ -134,9 +139,9 @@ public class OrderSaveTests
 
     /// <summary>
     /// The medic's queue in the save: its four jobs, the two points and the patient's handle as the last one's target; the patient holds no
-    /// order. Returns the medic's AI record and the patient's handle.
+    /// order.
     /// </summary>
-    static (FcsRecord Ai, Hand PatientHand) AssertTheSaveHoldsTheQueue(SaveGame save)
+    static void AssertTheSaveHoldsTheQueue(SaveGame save)
     {
         var ai = AiOf(save, 0);
 
@@ -151,8 +156,6 @@ public class OrderSaveTests
         Assert.Equal(patientHand, Hand.Read(ai, "tjobT3"));
         Assert.True(Hand.Read(ai, "tjobT0").IsNull);
         Assert.DoesNotContain(AiOf(save, 1).Ints.Keys, k => k.StartsWith("tjob", StringComparison.Ordinal));   // the patient holds no order
-
-        return (ai, patientHand);
     }
 
     /// <summary>

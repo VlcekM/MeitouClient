@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Simulation;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Movement;
 using SimWorld = Meitou.Simulation.World;
 
@@ -18,7 +19,14 @@ public class MovementTests
             byte mode = SpeedMode.Free)
     {
         var hot = new CharacterHot { Position = at, Health = 100, Task = (byte)task, MaxSpeed = max, WalkSpeed = walk, Mode = mode };
-        return w.Characters.Spawn(hot, new CharacterCold(), 0);
+        var squad = new Squad { Id = w.Squads.NextId(), TemplateId = "t" };
+        w.Squads.Add(squad);
+
+        // A character with no squad runs no chooser, so it would start no order (OrderStep.Runs).
+        var id = w.Characters.Spawn(hot, new CharacterCold { SquadId = squad.Id }, 0);
+        squad.Members.Add(id);
+        squad.Leader = id;
+        return id;
     }
 
     static Vector3 Where(SimWorld w, CharacterId id) => w.Characters.Previous[id.Slot].Position;
