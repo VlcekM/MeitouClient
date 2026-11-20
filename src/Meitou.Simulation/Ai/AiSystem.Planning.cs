@@ -609,6 +609,8 @@ public sealed partial class AiSystem
                 StateType.HasWeaponEquipped => cold.DrawnWeapon != WeaponKinds.None && cold.DrawnWeapon != BowHold,
                 StateType.HasWeaponEquipped156 => cold.DrawnWeapon == BowHold,
                 StateType.HasWeaponEquipped157 => cold.DrawnWeapon != WeaponKinds.None,
+                // 162 iAmProne (FUN_140598bf0, Verified): the posture (vfunc 0x368) is not 0.
+                StateType.IAmProne => !CharacterFacts.PostureZero(cold),
                 StateType.HasWeapon => cold.Fighter is { Weapon: not null, Unarmed: false },
                 StateType.IsCarryingSomething => !cold.Carrying.IsNone,
                 _ => BodyOrTownHolds(condition.State, target, cold),

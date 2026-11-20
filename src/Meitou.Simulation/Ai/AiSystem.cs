@@ -394,8 +394,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// roles, else none, <see cref="PlayerSideRoles"/>; the own lists' types on the rungs, 32): a source's pick is started in the serial pass and
     /// ends the AI's goal (<see cref="LeaveChoice"/>); a goal's is acted out as an NPC's is (<see cref="ActChosen"/>) while nothing else holds the
     /// character (<see cref="PlayerSideHold.Free"/>), else only Self preservation acts (<see cref="ActSelfPreservation"/>). The default task and
-    /// the mover reset leave its task as it is (the Idleness source stands for them). None while it is down (no chooser runs) or without this
-    /// tick's look.
+    /// the mover reset leave its task as it is (the Idleness source stands for them); own-list 14 with a plan (sheathing) is acted out. None while it
+    /// is down (no chooser runs) or without this tick's look.
     /// </summary>
     void ThinkPlayer(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, ChooserRow? row, int hour,
         bool replan)
@@ -406,10 +406,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         var tiers = TierRungs.Local.Bind(this, world, i, id, mind, squad, board, roles, hour, MeitouHold.None, replan);
         var pick = Ladder.Run(world.Decisions.Steps, row, tiers, cold.Jobs.Count > 0);
         row.Pick = pick;
-        if (pick.Goal is not { } goal || ReferenceEquals(goal, Idle)) LeaveChoice(cold, mind);
+        if (pick.Goal is not { } goal || ReferenceEquals(goal, Idle) && !StepsBeforeIdle(mind)) LeaveChoice(cold, mind);
         else if (PlayerSideHold.Free(cold)) ActChosen(world, i, cold, mind, goal, board, row);
         else ActSelfPreservation(world, i, cold, mind, goal, board);
     }
+
+    /// <summary>
+    /// The mind's plan for 14 Idleness runs a step before its own row (7 Sheathing weapon): the default task and the mover reset plan none.
+    /// </summary>
+    static bool StepsBeforeIdle(AiMind mind) => mind.Plan.Count > 0 && mind.Plan[0].Type != TaskType.Idle;
 
     /// <summary>
     /// A source of the look won over a player-faction mind's goal, or nothing did: the engine goal holding it ends in the serial step of the same

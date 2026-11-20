@@ -560,7 +560,7 @@ shackles locked); 123 and 136 false; 16 `FUN_14059de10` (the target's immediate-
 | 159 | `iAmBeingMeleeAttacked general` |
 | 160 | `isWithinMyBowRange` |
 | 161 | `hasTwoWorkingArm` |
-| 162 | `iAmProne` |
+| 162 | `iAmProne` (`FUN_140598bf0`, **Verified**): the posture (Character vfunc `0x368`) is not 0 |
 | 163 | `isBuildingDestroyed` |
 | 164 | `INTRUDER_IS_OUTSIDE_GATES` (`FUN_140598fa0`, **Verified**): the intruder as 137's; true with none, for an ally or one in no town; in a town only when its `amInsideTownWalls` < 1 and the asker no longer carries it (274's list A) |
 | 165 | `crowdLimit8` |
@@ -1155,7 +1155,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
      orders 11, 12, 13, 14, 15 and 17 only, and `AI::AI` sets ROAM_FAR, so a loaded character is ROAM_FAR with an empty slot until its next order; an NPC is always
      ROAM_FAR (`FUN_1405caa50` returns at the top for a non-player faction). **Observed** (planner rules above): a default 14 that can run plans no task (14 neither
      acts nor has an effect); with a weapon drawn its plan is 7 Sheathing weapon, the only provider of `!157`.
-- **Goals of a character** (`setupAI`): everyone 14 Idleness (priority 1, weight 0.1) and 32 Self preservation (priority 3, weight 1, target itself). A player-faction character
+- **Goals of a character** (`setupAI`): everyone 14 Idleness (priority 1, weight 0.1) and 32 Self preservation (priority 3, weight 1, target itself). The scorer drops the own 14 while its list B `!162 !157` holds (it neither acts nor has an effect); prone or armed it is a tier-1 candidate whose plan is 65 Getting up or 7 Sheathing weapon (**Observed**, planner rules). Meitou (`TierRungs.AddOwnLists`, `AiSystem.Idle`, the same goal as the default task, so a tier-1 pick of it ends the ladder and the default is not tried again): a player-faction mind acts the sheathing out (`AiSystem.StepsBeforeIdle`); 65 is not a step Meitou carries out (`AiSystem.Carried`), so a prone 14 plans nothing. A player-faction character
   (its faction's +0x250 set, `FUN_1407916d0`) also 243 Getting food (priority 3, weight 0.5) unless it has it; a player-faction animal also its race's `AI Goals` and 259 Picking
   up food (priority 3, 0.5), and loses 230. A character of another faction gets its race's `AI Goals`. Before that branch, any character whose platoon AI object (`FUN_140791ba0`: Character +0x658,
   +0x78, +0xf8) has +0x210 null gets its FACTION record's `AI Goals` (**Verified**, code; +0x210 read as the AI contract slot, null for an ordinary squad, **Observed**). The player faction
