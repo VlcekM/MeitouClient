@@ -123,7 +123,7 @@ internal sealed class TownWatchFinders(PopulationData data)
     /// standing (<see cref="Construction.ConstructionSystem.FunctionKey(string)"/>). <b>Verified</b> (<c>FUN_1408cb510</c> asks the town's vfunc 0x2c8,
     /// <c>FUN_1408d10f0</c>, shared by every TownBase class, with <c>BuildingFinder_OnesWithInteriors</c> and mask 0x80000: the buildings of key 19
     /// in the zones registered with the town whose town it is, <c>FUN_1409fb880</c>, that have an interior object and are not a WallBuilding, slot 5
-    /// <c>FUN_1408ca540</c>). Complete and standing are an engine choice: the finder has no such test, and Meitou gives an unfinished or ruined
+    /// <c>FUN_1408ca540</c>; the mask's bit read as the function key, <b>Observed</b>). Complete and standing are an engine choice: the finder has no such test, and Meitou gives an unfinished or ruined
     /// building no doors.
     /// </summary>
     List<(string Key, Vector3 At)> Houses(World world, CampaignTown town)
