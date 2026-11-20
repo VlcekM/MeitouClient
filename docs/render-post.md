@@ -365,11 +365,11 @@ Each writes its own target: the upscaler's output is the next frame's history. T
 
 It runs only in a whole view of a scene (`PostOptions.CameraEffectsHeld`, `ViewWindow`), in the free camera, on a camera the cinema holds, with its editor (F6) open
 or recording (`PostOptions.CinematicView`, set per frame by the game), never over the title. "Camera effects in the strategy camera" (`CameraEffectsEverywhere`, off)
-adds that camera. Vulkan only; Metal ignores the options.
+adds that camera. Both backends run the depth of field, the vignette, the grain and photo mode's filter.
 
 ## Depth of field
 
-Optional (`dof`, `PostOptions.DepthOfField`, off in every look). Port of KenshiNative's `docs/features/dof-rewrite.md`, without its sparkle, `PostProcess.DepthOfField.cs`:
+Optional (`dof`, `PostOptions.DepthOfField`, off in every look). Port of KenshiNative's `docs/features/dof-rewrite.md`, without its sparkle, `DepthOfField.cs` (one implementation recorded through `IGpuContext`, run by both `PostProcess` and `MetalPostChain`):
 at the picture's size after the upscaler, in linear light, no history. Half-size prepare (RGBA16F, CoC in alpha, the nearest depth of four), near CoC tiles and dilation, far
 gather, near gather (premultiplied), full-size composite: far field by the full-size CoC with a CoC-weighted upsample, near field over it. Four rings at most.
 
@@ -391,6 +391,15 @@ Focus and aperture come from the key the cinema holds (`Focus`, `Aperture`, [vie
 compute the lens from it. On sky alone it falls back to the camera target's distance. The target's distance alone focused behind a close face (the head's bone), **Observed**. A sharp zone (`PostOptions.LensSharpZone`, photo mode's Sharp zone, world units each side of the focus) is taken out of the distance from the focus before the CoC: what lies in it is wholly sharp. The far gather weighs each sample by one over its own disc's area (its light is spread over that disc); weighed alike, a blurred figure before a more blurred background kept a sharp outline (**Observed** in play). A 5 x 5 binomial (`DofFarFilter`, step a quarter texel in focus to one texel from a CoC of 4, taps weighed by their blur) then removes the grain the gather's few taps leave. Water writes no depth, so it takes the CoC of what lies under it. Particles take the surface's behind them.
 The depth is jittered: the composite shifts its tap by the jitter, and an edge may still shimmer a render pixel.
 
+**Backends.** Both run `DepthOfField` after the upscaler and before the exposure's measure (Metal: `MetalPostChain.End` after the temporal resolve or MetalFX), with the lens in `ThinLens`.
+On top-down targets (Metal's: `RenderTargetsBottomUp` false) its passes draw with `PostProcessShaders.VertexRowsDown`, so `vUv` runs from row 0 as on Vulkan; the rows then run down with the
+picture, so the jitter's y is negated (the jitter is along clip y, as MetalFX's `JitterOffsetY` takes it). The autofocus spot is given from the picture's top: it is the row on top-down targets and
+one minus it on bottom-up ones (Vulkan's, whose row 0 is the bottom).
+**Observed** (2026-11-20, photo mode, 1280x720, Wanderer start, f/0.5): with the focus at 15 m the figure stays sharp and the ground above and below it blurs, on Metal (MetalFX temporal) and on
+Vulkan (MoltenVK, Apple M6; the same picture before and after `DepthOfField` replaced the Vulkan passes). With the autofocus point set by Ctrl click at 10 % from the top, both keep the far ground
+sharp and blur the figure and the near ground; at 90 % Vulkan keeps the near ground sharp and blurs the far one. Before 2026-11-20 Vulkan used the spot as a row unchanged, so its point was
+mirrored vertically (**Observed**: 10 % focused the near ground).
+
 ## Vignette and film grain
 
 Optional Meitou switches `vignette` and `grain` (Post FX tab, off in every look; `PostOptions.Vignette`, `VignetteStrength` 0.35, `FilmGrain`, `GrainStrength` 0.3);
@@ -403,6 +412,10 @@ grade and photo mode's filter, before the dither, in every camera of a whole sce
   `0.2 x strength x (0.3 + 2.8 l (1 - l))`, l the pixel's luminance: strongest in the mid-tones.
 
 **Observed** (`t_desert_gold`, photo mode): the corners darken at strength 0.8; the grain shows over sepia and noir pictures.
+
+**Metal:** the same composite shader. `CompositeLook.Of` makes the filter, vignette and grain uniforms for both backends (`PostProcess.SetLook`, `PostComposite.SetLook`); the Metal chain
+says whether a scene was drawn (`SceneInputs.HaveScene`), as Vulkan's `_haveScene`. **Observed** (2026-11-20, `--renderer metal`, photo mode, 1280x720 MetalFX temporal): sepia at 100 %, vignette 0.8 and
+grain 0.6 together darken the corners, tint the picture and show the grain.
 
 ## SMAA
 

@@ -124,7 +124,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         _merged.Dispose();
         _upscaleExposure.Dispose();
         _bloom.Dispose();
-        DisposeDepthOfField();
+        _depthOfField?.Dispose();
         DisposeGtao();
         DisposeLampShadows();
         Hiz?.Dispose();
@@ -782,7 +782,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         _characterVisibility = _characterGatherLast = _characterGatherPooled = _roomMask = null;
         _shafts.Free();
         _bloom.Free();
-        FreeDepthOfField();
+        _depthOfField?.Free();
+        _dofPicture = null;
         _adaptedValid = _historyValid = _softDepthReady = false;
         _adaptedFrames = 0;
     }
@@ -1163,6 +1164,34 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     Target2D _postColour = null!;
 
     /// <summary>
+    /// The depth of field, made the first time it runs (<see cref="DepthOfField"/>).
+    /// </summary>
+    DepthOfField? _depthOfField;
+
+    /// <summary>
+    /// The depth of field's output as a target the rest of the chain reads (made again only when the output texture is).
+    /// </summary>
+    Target2D? _dofPicture;
+
+    /// <summary>
+    /// The picture through the lens, or <paramref name="scene"/> when the depth of field does not run: it is off, or the camera is not one of the
+    /// camera effects' (<see cref="PostOptions.CameraEffectsAllowed"/>), or the view is not a whole view of a scene.
+    /// </summary>
+    Target2D RunDepthOfField(Target2D scene)
+    {
+        if (!Options.DepthOfFieldOn || !_haveScene || !ViewWindow.Current.IsWhole || !Options.CameraEffectsAllowed) return scene;
+
+        _depthOfField ??= new DepthOfField(Gpu);
+        var camera = new DepthOfField.Camera(_fovNow, _planes.X, _planes.Y, JitterPixels);
+        var picture = _depthOfField.Run(Segment(), scene.Texture, _sceneDepth!.Texture, Options, camera);
+        Stamp("dof");
+
+        if (_dofPicture?.Texture != picture) _dofPicture = new Target2D(picture, TextureMinFilter.Linear, TextureMagFilter.Linear);
+
+        return _dofPicture;
+    }
+
+    /// <summary>
     /// Binds the scene framebuffer (recreating it when the size or the upscaler changed) and clears nothing: the caller does.
     /// </summary>
     public void Begin(int w, int h)
@@ -1321,40 +1350,18 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     }
 
     /// <summary>
-    /// The composite's look after the grade: photo mode's filter, the vignette and the film grain (docs/render-post.md "Vignette and film grain").
-    /// The vignette and the grain need a whole view of a scene (not a tiled shot's tile, not the title), in any camera; the grain's size grows with a
-    /// picture drawn larger than the window, so it looks the same in it.
+    /// The composite's look after the grade: photo mode's filter, the vignette and the film grain (<see cref="CompositeLook"/>).
     /// </summary>
     void SetLook(CompositePass c, PostOptions o)
     {
-        var filter = o.PhotoFilter;
-        c.P.Set(c.FilterR, filter?.Red ?? Vector4.Zero);
-        c.P.Set(c.FilterG, filter?.Green ?? Vector4.Zero);
-        c.P.Set(c.FilterB, filter?.Blue ?? Vector4.Zero);
-        c.P.Set(c.FilterContrast, filter?.Contrast ?? 0f);
-
         bool whole = _haveScene && ViewWindow.Current.IsWhole && !o.CameraEffectsHeld;
-        var (centre, corner) = VignetteWindow(_displayWidth, _displayHeight, o.VignetteAspect);
-        c.P.Set(c.Vignette, new Vector4(centre, corner, whole && o.Vignette ? Math.Clamp(o.VignetteStrength, 0, 1) : 0));
-        float grainSize = 1.5f * MathF.Max(o.PictureScale, 1);
-        c.P.Set(c.Grain, whole && o.FilmGrain ? Math.Clamp(o.GrainStrength, 0, 1) : 0f, grainSize, Gpu.Frame.Number % 997);
-    }
-
-    /// <summary>
-    /// The centre of the part of a <paramref name="width"/> x <paramref name="height"/> picture the vignette darkens towards, and the distance from it
-    /// to its corner (pixels): the whole picture, or the centred window of <paramref name="aspect"/> photo mode's frame leaves (as
-    /// <c>PhotoGuides.Window</c>).
-    /// </summary>
-    static (Vector2 Centre, float Corner) VignetteWindow(int width, int height, float aspect)
-    {
-        float w = width, h = height;
-        if (aspect > 0)
-        {
-            if (aspect > w / MathF.Max(h, 1)) h = w / aspect;
-            else w = h * aspect;
-        }
-
-        return (new Vector2(width, height) * 0.5f, new Vector2(w, h).Length() * 0.5f);
+        var look = CompositeLook.Of(o, whole, _displayWidth, _displayHeight, Gpu.Frame.Number);
+        c.P.Set(c.FilterR, look.FilterR);
+        c.P.Set(c.FilterG, look.FilterG);
+        c.P.Set(c.FilterB, look.FilterB);
+        c.P.Set(c.FilterContrast, look.FilterContrast);
+        c.P.Set(c.Vignette, look.Vignette);
+        c.P.Set(c.Grain, look.Grain);
     }
 
     /// <summary>
