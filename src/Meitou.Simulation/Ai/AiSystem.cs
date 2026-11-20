@@ -1065,7 +1065,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             // The finder's factor follows its pick: 1 for a shop, 0.4 for any other public building, 0 when it finds none (FUN_1409997f0).
             AiBehaviour.Shop => ShopDesire(world, self, mind, board.Town),
             // A worker needs a mine, bench or refinery in its town (the finders return 0 without one).
-            AiBehaviour.Work => WorkWanted(world, self, mind, WorkTownOf(mind, board), type) ? 1 : 0,
+            AiBehaviour.Work => WorkWanted(world, self, mind, WorkTownOf(mind), type) ? 1 : 0,
             // Relaxing needs a free seat of the package's bar, sitting around a free chair of the home (claimed in
             // <see cref="TownPlaceClaims.ClaimSeats"/>); the original's finder returns 0 without one (FUN_1408caf00).
             AiBehaviour.Relax => board.BarTable >= 0 && board.SeatClaims.ContainsKey(self.Slot) && !mind.SeatUnreachable ? 1 : 0,
@@ -1742,20 +1742,22 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// The operator slots of 189 / 190 (docs/game/ai-tasks.md "Worker"): a member whose goal is one of them keeps the workplace it holds while that
     /// is still one its goal may work at, else holds one with a free slot drawn as <see cref="PickWork"/> draws; a member on another goal lets its
-    /// slot go. Serial, on the package cadence, after every squad's kept slots are reserved (<see cref="ReserveWork"/>).
+    /// slot go. Serial, on the package cadence, after every squad's kept slots are reserved (<see cref="ReserveWork"/>); an NPC mind's work town is
+    /// stamped first (<see cref="WorkTownAt"/>; a player-faction mind's every tick, <see cref="StampWorkTown"/>).
     /// </summary>
-    void ClaimWork(World world, Blackboard board, Squad squad)
+    void ClaimWork(World world, Squad squad)
     {
         foreach (var id in squad.Members)
         {
             if (!world.Characters.TryResolveNext(id, out int s) || world.Characters.Cold(s) is not { Ai: { } mind } cold)
                 continue;
+            if (!mind.PlayerSide) mind.WorkTown = WorkTownAt(world, s, cold);
             var type = mind.Goal?.Task.Type;
 
             // A player-faction member on a player job holds no AI work slot (its job's machine counts it).
             bool onJob = mind.Player && OnJobTask(world.Characters.Next[s], cold);
             bool works = type is TaskType.AutoLabouringMines or TaskType.AutoLabouringMinesPretend && !onJob;
-            var town = WorkTownOf(mind, board);
+            var town = WorkTownOf(mind);
             if (works && HoldsWork(mind, town, type!.Value)) continue;
             if (mind.WorkPost is { } left) _workTaken[left] = _workTaken.GetValueOrDefault(left) - 1;
             mind.WorkPost = works ? PickWork(world, id, town, mind.WorkEpoch, type!.Value) : null;
@@ -2706,7 +2708,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (mind.WorkPost is { } post && mind.Target is { } aim && (aim.X != post.Position.X || aim.Z != post.Position.Z)) mind.Target = null;
         if (mind.Target is null) PickWorkplace(world, slot, mind, board, type);
 
-        var stepAt = StepBuilding(mind, WorkTownOf(mind, board));
+        var stepAt = StepBuilding(mind, WorkTownOf(mind));
         Vector3? working = stepAt is not null && stepAt != mind.WorkBuilding
             ? new Vector3(stepAt.Position.X, float.NaN, stepAt.Position.Z) : mind.Target;
         var aimed = stepAt is not null && stepAt != mind.WorkBuilding ? stepAt : mind.WorkBuilding;
@@ -2747,7 +2749,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (mind.WorkActive) mind.WorkEpoch++;
 
         mind.WorkActive = true;
-        var town = WorkTownOf(mind, board);
+        var town = WorkTownOf(mind);
         if ((mind.WorkPost ?? PickWork(world, table.IdOf(slot), town, mind.WorkEpoch, type)) is not { } building) return;
 
         mind.Target = new Vector3(building.Position.X, float.NaN, building.Position.Z);
@@ -3577,7 +3579,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         _claims.ClaimTurrets(world, board, squad);
         _claims.ClaimSeats(world, board, squad);
         _claims.ClaimSitting(world, board, squad, _townPlaces);
-        ClaimWork(world, board, squad);
+        ClaimWork(world, squad);
         _claims.ClaimTownPosts(world, board, squad, _townPlaces);
         FindGate(world, board, squad);
     }

@@ -13,10 +13,18 @@ public sealed partial class AiSystem
     #region Work town
 
     /// <summary>
-    /// The town whose workplaces the worker goals 189 / 190 find for <paramref name="mind"/>: a player-faction mind's stamped town
-    /// (<see cref="AiMind.WorkTown"/>), else its board's home town.
+    /// The town whose workplaces the worker goals 189 / 190 find for <paramref name="mind"/>: its stamped town (<see cref="AiMind.WorkTown"/>).
     /// </summary>
-    static CampaignTown WorkTownOf(AiMind mind, Blackboard board) => mind.PlayerSide ? mind.WorkTown : board.HomeTown;
+    static CampaignTown WorkTownOf(AiMind mind) => mind.WorkTown;
+
+    /// <summary>
+    /// The worker's own status town (<c>FUN_1408cac60</c> / <c>FUN_1408cadb0</c> ask the town of the character's status, AI <c>+0x18</c>
+    /// <c>+0x88</c>, the same field 135's desire and the 173 and 276 finders read, <b>Verified</b>; not its platoon's blackboard, whose town is
+    /// <c>+0x138</c>): <see cref="StatusTownAt"/> from where it stands and its last status town. None outside every town (the original then searches
+    /// every town's workplaces in the 3 x 3 zone cells round it: not modelled, Meitou finds none).
+    /// </summary>
+    CampaignTown WorkTownAt(World world, int slot, CharacterCold cold) =>
+        StatusTownAt(data, world, world.Characters.Next[slot].Position, cold.StatusTown);
 
     /// <summary>
     /// The worker goals' finder factor (<c>FUN_1408cac60</c> / <c>FUN_1408cadb0</c>): a workplace of <paramref name="town"/> the character may work at,
@@ -26,25 +34,14 @@ public sealed partial class AiSystem
         WorkAllowed(world, self.Slot, town) && (HoldsWork(mind, town, type) || PickWork(world, self, town, mind.WorkEpoch, type) is not null);
 
     /// <summary>
-    /// Stamps member <paramref name="k"/>'s work town when it has a player-faction mind: while it obeys, the placed town its squad's leader stands in
-    /// (itself without a leader), as the AI's rule writes the platoon's current town from the leader (docs/game/ai.md); else none. Serial.
+    /// Stamps member <paramref name="k"/>'s work town (<see cref="WorkTownAt"/>) when it has a player-faction mind. Serial.
     /// </summary>
     void StampWorkTown(World world, Squad squad, int k)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(squad.Members[k], out int s) || table.Cold(s) is not { Ai: { PlayerSide: true } mind } cold) return;
 
-        mind.WorkTown = ObeyedRoles(world, squad, cold) is null ? CampaignTown.None : LeaderTown(world, squad, s);
-    }
-
-    /// <summary>
-    /// The placed town the squad's leader stands in (the character at <paramref name="slot"/> without a living leader); none outside a town.
-    /// </summary>
-    CampaignTown LeaderTown(World world, Squad squad, int slot)
-    {
-        var table = world.Characters;
-        int at = !squad.Leader.IsNone && table.TryResolveNext(squad.Leader, out int leader) ? leader : slot;
-        return TownAt(table.Next[at].Position) is >= 0 and var site ? CampaignTown.OfSite(site) : CampaignTown.None;
+        mind.WorkTown = WorkTownAt(world, s, cold);
     }
 
     /// <summary>
@@ -54,7 +51,7 @@ public sealed partial class AiSystem
     /// </summary>
     void ClaimSlaveWork(World world, Squad squad)
     {
-        if (IsPlayers(world, squad)) ClaimWork(world, EmptyBoard, squad);
+        if (IsPlayers(world, squad)) ClaimWork(world, squad);
     }
 
     #endregion

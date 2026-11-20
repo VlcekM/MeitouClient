@@ -1253,9 +1253,9 @@ public sealed class AiMind
     public TownBuilding? WorkPost { get; set; }
 
     /// <summary>
-    /// The town a player-faction slave's worker goals (189, 190) find their workplaces in: the one its squad's leader stands in, as their finders read
-    /// the platoon's current town (<c>FUN_1408cac60</c>, <c>+0x88</c>); stamped by the serial schedule while it obeys, else none. Any other mind's is
-    /// its board's home town (derived, not hashed).
+    /// The town the worker goals (189, 190) find their workplaces in: the character's own status town, as their finders read it
+    /// (<c>FUN_1408cac60</c>, status <c>+0x88</c>); stamped by the serial schedule, a player-faction mind's every tick, an NPC mind's on the package
+    /// cadence (derived, not hashed).
     /// </summary>
     public CampaignTown WorkTown { get; set; } = CampaignTown.None;
 

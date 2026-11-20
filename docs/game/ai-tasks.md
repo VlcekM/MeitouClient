@@ -662,8 +662,8 @@ Meitou: [simulation, captives](../simulation.md#captives).
 Meitou: [simulation, captives](../simulation.md#captives).
 - **Worker** (189 `AUTO_LABOURING_MINES`, 190 `..._PRETEND`; **Verified** registrations in `FUN_140319a60`: effects 0x7b IS_WORKING and 0x88 IS_WORKING_PRETEND, finders `FUN_1408cac60` /
   `FUN_1408cadb0`; only 190 commits, 0.5 + r x 2 h, crowd 1). They are not slave-only: the data lists them in "worker fighter indie resident", "Shop" (slave list), "working mines and farms",
-  "Work, Protect, Capture", "South drone sacrifice farmer" and, in the Slave role list, "slave worker day guard" (171 at 0.1, 189, 172 at night, 190). The finder asks the platoon's town
-  (`Blackboard +0x88`) for a building through `BuildingFinder_SpecialFunction` (mask 0x41a read as bits, **Observed**: 1 MINE, 3 RESEARCH, 4 REFINERY, 10 CRAFTING) and takes one at random
+  "Work, Protect, Capture", "South drone sacrifice farmer" and, in the Slave role list, "slave worker day guard" (171 at 0.1, 189, 172 at night, 190). The finder asks the worker's own status town
+  (AI `+0x18` `+0x88`, the field 135's desire and the 173 and 276 finders read, **Verified** `FUN_1408cac60` / `FUN_1408cadb0`; the blackboard's town is `+0x138`; with none, every town's buildings in the 3x3 zone cells round it, not modelled: Meitou finds none) for a building through `BuildingFinder_SpecialFunction` (mask 0x41a read as bits, **Observed**: 1 MINE, 3 RESEARCH, 4 REFINERY, 10 CRAFTING) and takes one at random
   (slot 2 `FUN_1409fb020`: index `FUN_1409b3b40(0, n - 1)`); the town test is the one in the table above. Acting out is 87 (real: needs the machine's inputs and output room, power, a free operator slot) or
   221 (pretend); both `Task_OperateMachine` ([sitting and the held tool](ai-tasks.md#town-goals), [production](buildings-production.md#production)). So a pretending worker
   operates the building as a real one does (**Verified**: the factory fills the task alike for both rows and the update `FUN_14035bc90` reads no row: once `tryOperate` (slot `0x4f8`) passes, whatever the machine holds,
@@ -716,8 +716,8 @@ Meitou: [simulation, captives](../simulation.md#captives).
   - **The plan** (**Verified** for the targets): 171 is `Task_FollowLeader` (the same class as 141), which follows the slave **owner** if the character has one, else (no owner handle, or
     one that resolves to nothing) its own platoon's leader ([pathfinding](pathfinding.md#following); Meitou: a master squad with no living leader falls to the own squad's leader, `FollowFactor`): its target (slot 5 `FUN_14033b220`) is the formation spot (`FUN_1402703f0`) the owner's platoon's blackboard gives the character
     when the owner handle (character `+0x330`) is of type 1 or 0x22 and resolves to a platoon with a blackboard, else the spot its own platoon's gives; it copies the leader's sneaking every update, so **a slave following a master who is not sneaking cannot sneak**, and escapes by sneaking only while it stands or works.
-    189 / 190 are the worker rows ([above](#slave-work-shout-and-capture)): the finder asks the **blackboard's current town** (`+0x88`) of the slave's own platoon, which the AI's rule writes from the
-    platoon's leader (`FUN_1402688d0`, [AI](ai.md#package-classes)); a character whose side differs from the town's works only in slave state 1. 172 is the slave's own walk into a free cage of its
+    189 / 190 are the worker rows ([above](#slave-work-shout-and-capture)): the finder asks the slave's **own status town** (`+0x88` of its status, not its platoon's blackboard, whose town `+0x138` the AI's rule writes from the
+    platoon's leader (`FUN_1402688d0`, [AI](ai.md#package-classes))); a character whose side differs from the town's works only in slave state 1. 172 is the slave's own walk into a free cage of its
     owner's faction (finder `FUN_1408caaf0`). The crowd factor of the scorer (TaskData `+0x34`) is the default 1 for every goal the Slave lists hold (**Verified**: no registration in
     `FUN_140319a60` writes it for 14, 35, 41, 143, 171, 172, 189 or 190, and AI_TASK records carry no such field), so the master squad's mates on the same goal change no score.
   - **Leaving the night cage** (**Verified**, `FUN_14026b790`, `FUN_14032ebd0`, `FUN_14050f800`, `FUN_14050fe10`, `TaskRepertoire` slot 1 `FUN_14032dbf0`): there is no own release. Getting in
@@ -739,7 +739,7 @@ Meitou: [simulation, captives](../simulation.md#captives).
     processed it, the arresting guard's squad, the receiver of a delivery), its own squad included whatever its squad role there (a guard enslaved by its own squad drops its guard goals and its
     turret, seat and sitting claims, #991). The chooser's job passes score those goals (`TierRungs.PickJobPass`) for an NPC and a player-faction mind alike, and the winner is acted out as any
     goal of theirs ([simulation](../simulation.md#captives)): **171** follows the owner, else the master squad's leader; **189 / 190** work a random workplace of the town the AI's
-    worker finder reads (an NPC's board's town; a player-faction slave's the one its squad's leader stands in, `AiMind.WorkTown`), holding one of its `max operators` slots (`AiMind.WorkPost`),
+    worker finder reads (the worker's own status town, `AiMind.WorkTown`, `AiSystem.WorkTownAt`), holding one of its `max operators` slots (`AiMind.WorkPost`),
     189's plan making room and fetching inputs (the planner holds 89 false, [buildings](buildings-production.md#npc-town-machines)); **172** walks into the nearest free cage of the owner's faction (`CaptiveSystem.OwnCage`) and stays until let out;
     **41** / **143** are the AI's combat goals; **35** (for a player-faction slave the player-faction vetoes, `AiSystem.PlayerSideRunDesire`, [combat](combat.md#fight-lifecycle-and-orders)
     "Self-defence"); **14** stands. A faction owner with no squad has no master: nothing runs. `SlaveMaster` is runtime only: after a load it is the squad of the owner character the save's
