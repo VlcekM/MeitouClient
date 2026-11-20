@@ -981,6 +981,11 @@ campaign is not hostile, or that is not active (slot 70); a redirected request d
   parents counted; the 13 ally defences also set `retreat AI others`; the `pt2` "Loot food then run away (non violent)" is signal 0, so a 24 h
   `Contract_Timed`; **Verified** by record dump, base files merged with inheritance). Goals (**Observed**, data): pt1 leader 215 TRAVEL_TO_TARGET_PACKAGE, 143, 129 MAKE_ANNOUNCEMENT_FAST; pt1
   others 215, 15; pt2 16 (attack enemies), 15, 216, 270, 276 or 131; cannibal 216, 254, 270.
+  - Phase 1 has no approach of its own: the members stand where the package change finds them (the leader within 0.8 × radius) and only their goals
+    take them in: 216 to a house of the target town, an outpost's too ([216](ai-tasks.md#town-goals)), 270 to a gate or wall, 276 to a cage, 131 to a
+    store, 254 to a downed one, 16 and 15 at what they sense (1500 × the race's `vision range mult`, [perception](perception.md)). With none of them a
+    member has only 14 and 32, and an NPC's default task is empty, so it stands (**Observed**, from the rows and [precedence](ai-tasks.md#precedence)).
+    A reassessed outpost's radius is max(1250, farthest building + 200), so its stop line is at least 1000 from the centre.
   - Kidnapping (**Verified**, data query of the install's AI_PACKAGE records for task enum 254 "Find and kidnap (with cages) urgent"; 132 and 246 are in no
     base package): the leader goal list of `Cannibal Raid Retreat` (the `retreat AI leader` of "BASE Basic Invasion", "slave raider silent", its
     "non slave trade" copy and "BASE- standard cannibal raid"), `Cannibal raid assault town` (the pt2 leader of the cannibal raid), `Cannibals at home`, the squad
