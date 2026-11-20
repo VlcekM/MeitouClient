@@ -353,7 +353,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             row!.Pick = order;
 
             // No continuity for its goal at the next choice; an engine goal holding it ends at the order's start (OrderStep.TakeOver).
-            if (mind.PlayerSide && mind.Duty is null) LeaveGoal(mind);
+            if (mind.PlayerSide && mind.Duty is null) LeaveGoal(cold, mind);
             return;
         }
 
@@ -388,7 +388,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         var tiers = TierRungs.Local.Bind(this, world, i, id, mind, squad, board, [], hour, Restrict.None);
         var pick = Ladder.Run(world.Decisions.Steps, row, tiers, cold.Jobs.Count > 0);
         row.Pick = pick;
-        if (pick.Goal is not { } goal || ReferenceEquals(goal, Idle)) LeaveChoice(mind);
+        if (pick.Goal is not { } goal || ReferenceEquals(goal, Idle)) LeaveChoice(cold, mind);
         else if (PlayerSideHold.Free(cold)) ActChosen(world, i, cold, mind, goal, board, row);
         else ActSelfPreservation(world, i, cold, mind, goal, board);
     }
@@ -398,17 +398,18 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// tick (<see cref="DutyGoals.Leave"/>: its act-out stops, before the serial pass starts the source), and the goal is no longer the current one
     /// (no continuity at the next choice).
     /// </summary>
-    void LeaveChoice(AiMind mind)
+    void LeaveChoice(CharacterCold cold, AiMind mind)
     {
         if (mind.Duty is not null) _duties!.Leave(mind);
-        LeaveGoal(mind);
+        LeaveGoal(cold, mind);
     }
 
     /// <summary>
-    /// The goal is no longer the mind's current one: goal, plan and behaviour cleared.
+    /// The goal is no longer the mind's current one: its work stops (<see cref="StopWork"/>), goal, plan and behaviour cleared.
     /// </summary>
-    static void LeaveGoal(AiMind mind)
+    static void LeaveGoal(CharacterCold cold, AiMind mind)
     {
+        if (mind.WorkActive) StopWork(cold, mind);
         if (mind.Goal is null) return;
 
         mind.Goal = null;
@@ -441,7 +442,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     {
         if (!ReferenceEquals(goal, SelfPreservationGoal))
         {
-            LeaveGoal(mind);
+            LeaveGoal(cold, mind);
             return;
         }
 
@@ -2147,24 +2148,28 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         mind.SitClip = null;   // set again below while it stays on its chair
         mind.SitHungerRate = 1;
 
-        if (mind.WorkActive && behaviour != AiBehaviour.Work && !PretendsAtHome(board, slot, behaviour, type))
-        {
-            // It stopped working: the next pick is a new one and the work clip goes.
-            mind.WorkActive = false;
-            mind.WorkEpoch++;
-
-            if (table.Cold(slot) is { } worker && mind.WorkClip is not null && worker.ActionClip == mind.WorkClip)
-            {
-                worker.ActionClip = null;
-                worker.ActionWork = null;
-            }
-
-            mind.WorkClip = null;
-            mind.WorkFunctionality = null;
-        }
+        if (mind.WorkActive && behaviour != AiBehaviour.Work && !PretendsAtHome(board, slot, behaviour, type)) StopWork(table.Cold(slot), mind);
 
         mind.FollowTarget = CharacterId.None;   // set again below for a follow goal aimed at the squad's mission
         return behaviour;
+    }
+
+    /// <summary>
+    /// It stopped working: the next pick is a new one, and the work clip (with its work events and the body's work hunger rate) goes.
+    /// </summary>
+    static void StopWork(CharacterCold? worker, AiMind mind)
+    {
+        mind.WorkActive = false;
+        mind.WorkEpoch++;
+
+        if (worker is not null && mind.WorkClip is not null && worker.ActionClip == mind.WorkClip)
+        {
+            worker.ActionClip = null;
+            worker.ActionWork = null;
+        }
+
+        mind.WorkClip = null;
+        mind.WorkFunctionality = null;
     }
 
     /// <summary>
