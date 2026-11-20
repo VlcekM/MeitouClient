@@ -1278,7 +1278,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// free cell). Same test as <see cref="Production.ProductionSystem.Stores"/> for a machine; a building shop's stock containers hold its goods, so
     /// what goes into one is for sale.
     /// </summary>
-    bool Takes(Fixture f, ItemInstance item)
+    internal bool Takes(Fixture f, ItemInstance item)
     {
         if (!Accepts(f, item)) return false;
 
@@ -1535,7 +1535,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (gap > Settings.Arrive && (walking || gap > Settings.CageSlack)) return walking || FetchFailed(world, d, gc, lost: true);
 
         TaskStart.Stand(table, g);
-        return TakeAt(world, d, gc) > 0 ? FetchTaken(world, d, gc) : FetchFailed(world, d, gc, lost: false);
+        return TakeAt(world, d, gc, gn.Position) > 0 ? FetchTaken(world, d, gc) : FetchFailed(world, d, gc, lost: false);
     }
 
     /// <summary>
@@ -1549,30 +1549,18 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// A fetch's take at its storage: the record, up to what the machine the plan fills next has room for (<see cref="AiSystem.FillTargetOf"/>,
-    /// <see cref="Production.ProductionSystem.InputRoom"/>), with the player's haul take (<see cref="Production.ProductionSystem.TakeStored"/>); the
-    /// units moved. Engine choice: the original's <c>Task_EmptyMachine</c> takes the first record the storage lists that its slot 5
-    /// (<c>FUN_140356db0</c>) counts above 0, up to that count (docs/game/buildings-production.md "NPC town machines").
+    /// A fetch's take at its storage, the player's haul take (<see cref="Production.FillDemand.TakeStored"/>, <c>Task_EmptyMachine</c> with flag 0):
+    /// the first record the storage lists that the town wants, up to that count, whatever the machine the plan fills next needs; the units moved.
     /// </summary>
-    int TakeAt(World world, TownDuty d, CharacterCold gc)
+    int TakeAt(World world, TownDuty d, CharacterCold gc, Vector3 at)
     {
         if (d.Target is not { } id || StoreInventory(world, id) is not { } store || gc.Inventory is not { } inv) return 0;
-        if (AiSystem.FillTargetOf(gc) is not { } at || FillMachineAt(world, at) is not { } machine) return 0;
 
-        int taken = Production.ProductionSystem.TakeStored(store, inv, d.Record!, Production.ProductionSystem.InputRoom(machine, d.Record!));
-        if (taken > 0 && world.Machines.Find(id) is not null) world.Machines.Touch();
+        var machine = world.Machines.Find(id);
+        string record = machine?.Data.Id ?? world.Fixtures.Find(id)?.RecordId ?? "";
+        int taken = Production.FillDemand.TakeStored(world, data, gc, at, store, id, record, inv);
+        if (taken > 0 && machine is not null) world.Machines.Touch();
         return taken;
-    }
-
-    /// <summary>
-    /// The machine standing at a plan's work target (matched on the ground plane).
-    /// </summary>
-    static Production.Machine? FillMachineAt(World world, Vector3 at)
-    {
-        foreach (var m in world.Machines.All)
-            if (m.Position.X == at.X && m.Position.Z == at.Z) return m;
-
-        return null;
     }
 
     /// <summary>

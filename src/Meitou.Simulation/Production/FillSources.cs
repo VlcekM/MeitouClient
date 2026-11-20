@@ -40,17 +40,18 @@ public readonly record struct FillSource(FillSourceKind Kind, Vector3 Position, 
 internal static class FillSources
 {
     /// <summary>
-    /// For each input of <paramref name="target"/> in list order, the first source of its item (the first input with one decides): a loose item
-    /// (<see cref="LooseSource.Nearest"/>), else the nearest storage holding it, else the nearest producer; null when no input has one. The
-    /// buildings are those of the character's town (<see cref="Locks.FixtureRegistry.RegisteredTownCandidates"/>) of the query mask's functions
-    /// (<see cref="InMask"/>), within <see cref="ConstructionSystem.SourceRangeSquared"/> of <paramref name="at"/> (3D, inclusive). Engine choices:
-    /// the exact record (the original lets any record of the same type stand in for a non-ITEM one); the producers are the work town's workplaces.
+    /// For each input of <paramref name="target"/>'s <see cref="Machine.FillOrder"/>, the first source of its item (the first input with one
+    /// decides): a loose item (<see cref="LooseSource.Nearest"/>), else the nearest storage holding it, else the nearest producer; null when no
+    /// input has one. The buildings are those of the character's town (<see cref="Locks.FixtureRegistry.RegisteredTownCandidates"/>) of the query
+    /// mask's functions (<see cref="InMask"/>), within <see cref="ConstructionSystem.SourceRangeSquared"/> of <paramref name="at"/> (3D, inclusive).
+    /// Engine choices: the exact record (the original lets any record of the same type stand in for a non-ITEM one); the producers are the work
+    /// town's workplaces.
     /// </summary>
     public static FillSource? Find(World world, PopulationData? data, Machine target, CharacterCold cold, Vector3 at,
         IEnumerable<TownBuilding> workplaces)
     {
         var inTown = data is not null ? world.Fixtures.RegisteredTownCandidates(world, data, cold, at) : null;
-        foreach (var input in target.Inputs)
+        foreach (var input in target.FillOrder)
         {
             string record = input.Item;
             if (LooseSource.Nearest(world, data, cold, at, record) is { } loose)
@@ -68,7 +69,7 @@ internal static class FillSources
     /// bed search's <c>0x40</c> is function 6, the cage finders' <c>0x100</c> function 8): 1 mines, wells and farms, 2 resource storage, 4 refinery,
     /// 5 generator, 10 crafting, 13 general storage, 26 rain collector.
     /// </summary>
-    static bool InMask(int function) => function is MachineData.MineFunction or MachineData.ResourceStorageFunction or MachineData.RefineryFunction
+    internal static bool InMask(int function) => function is MachineData.MineFunction or MachineData.ResourceStorageFunction or MachineData.RefineryFunction
         or MachineData.GeneratorFunction or CraftBench.CraftingFunction or MachineData.GeneralStorageFunction or MachineData.RainCollectorFunction;
 
     /// <summary>

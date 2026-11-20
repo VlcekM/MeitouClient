@@ -76,6 +76,8 @@ public sealed partial class ProductionSystem
         if (into is not null) return Go(cold, into, null);
 
         if (m.Craft is { Queue.Count: 0 }) return false;
+
+        // The fill finder's walk with an empty input (Machine.FillOrder): the empty inputs in list order, the first with a source decides.
         foreach (var input in m.Inputs)
         {
             if (input.Rate > 0 && input.Count == 0 && NearestSource(world, site, input.Item) is { } from)
@@ -96,25 +98,13 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// At the storage: puts the carried output in, or takes what the machine's empty inputs hold room for (from a producer, out of its output); then
-    /// the trip ends.
+    /// At the storage, where the character stands at <paramref name="at"/>: puts the carried output in, or fetches as an NPC worker's fetch does
+    /// (<see cref="FetchAt"/>); then the trip ends.
     /// </summary>
-    void HaulAt(World world, CharacterCold cold, Machine machine, Machine store)
+    void HaulAt(World world, CharacterCold cold, Vector3 at, Machine machine, Machine store)
     {
         var inv = cold.Inventory;
-        if (inv is not null && cold.HaulFetch is { } want)
-        {
-            int room = InputRoom(machine, want);
-
-            // A producer (a well): out of its output.
-            if (!store.Data.IsStorage)
-            {
-                if (store.Output is { } from && from.Recipe.Item == want && Math.Min(room, from.Count) is > 0 and var take
-                    && _items.Create(want, take) is { } made)
-                    from.Count -= Placed(inv, made);
-            }
-            else if (store.Storage is { } storage) TakeStored(storage, inv, want, room);
-        }
+        if (inv is not null && cold.HaulFetch is { } want) FetchAt(world, cold, at, store, want, inv);
         else if (inv is not null && store.Storage is { } into)
         {
             foreach (var item in CarriedMade(inv, machine).ToList())
@@ -132,6 +122,24 @@ public sealed partial class ProductionSystem
         cold.HaulSite = null;
         cold.HaulFetch = null;
         world.Machines.Touch();
+    }
+
+    /// <summary>
+    /// A haul fetch's take (<c>Task_EmptyMachine</c> with flag 0, <see cref="FillDemand"/>): out of a producer's output (a well) what the town wants
+    /// of it (<see cref="FillDemand.Count"/>), else the storage's first record the town wants, up to that count; not bounded by the machine's room.
+    /// </summary>
+    void FetchAt(World world, CharacterCold cold, Vector3 at, Machine store, string want, Inventory inv)
+    {
+        if (store.Data.IsStorage)
+        {
+            if (store.Storage is { } storage) FillDemand.TakeStored(world, _towns, cold, at, storage, store.Site, store.Data.Id, inv);
+            return;
+        }
+
+        if (store.Output is not { } from || from.Recipe.Item != want || _items.Create(want, 1) is not { } unit) return;
+
+        int take = Math.Min(FillDemand.Count(world, _towns, cold, at, unit, store.Site, store.Data.Id), from.Count);
+        if (take > 0 && _items.Create(want, take) is { } made) from.Count -= Placed(inv, made);
     }
 
     /// <summary>
@@ -169,18 +177,6 @@ public sealed partial class ProductionSystem
         }
 
         return moved;
-    }
-
-    /// <summary>
-    /// The units of <paramref name="record"/> a machine's inputs have room for (the haul fetch's take, <see cref="HaulAt"/>).
-    /// </summary>
-    internal static int InputRoom(Machine machine, string record)
-    {
-        int room = 0;
-        foreach (var input in machine.Inputs)
-            if (input.Takes(record)) room += Math.Max(0, input.Recipe.Capacity - input.Count);
-
-        return room;
     }
 
     /// <summary>

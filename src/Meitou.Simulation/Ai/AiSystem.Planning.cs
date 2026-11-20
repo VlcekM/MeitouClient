@@ -78,19 +78,6 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// Where the machine stands that the kept plan fills after its fetch (its step 93 on a work target); null with none.
-    /// </summary>
-    internal static Vector3? FillTargetOf(CharacterCold cold)
-    {
-        if (cold.Ai is not { } mind) return null;
-
-        foreach (var step in mind.Plan)
-            if (step.Type == TaskType.FillMachine && step.Target.Kind == Targets.Work) return step.Target.Position;
-
-        return null;
-    }
-
-    /// <summary>
     /// Whether a plan step is a way through a door (<see cref="TakeDoorStep"/>): one of its rows on a <see cref="Targets.Door"/> target. The same row
     /// planned by an engine goal on its finder's door (86 Opening up's 78 Unlocking door, a <see cref="PlanTarget.Found"/> target) is that goal's.
     /// </summary>

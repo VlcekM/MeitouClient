@@ -1102,7 +1102,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (Hauling(world, cold) is { } haul)
         {
             cold.OperateToolHeld = false;
-            if (AtSite(world, n, haul.Site, haul.Machine)) HaulAt(world, cold, m, haul.Machine);
+            if (AtSite(world, n, haul.Site, haul.Machine)) HaulAt(world, cold, n.Position, m, haul.Machine);
             return;
         }
 

@@ -1966,7 +1966,7 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
   Excess fetched inputs stay with the operator. A fetch's source and a storage taking output are within squared distance 4.246733e7 (3D)
   of the machine, the bound of the original's fill and per-item storage finders in the default ROAM_FAR mode (`FUN_14059d000`,
   `FUN_14059acd0`, [material delivery](game/buildings-production.md#material-delivery); they measure from the character, who stands at the
-  machine) (#963, #965). Engine choices: ties by site id, a fetch takes what the inputs have room for; the trip is not saved. A crafting bench's output is its finished items: an operator
+  machine) (#963, #965). A fetch takes what the town wants, the NPC fetch's take (`FillDemand`, [NPC town machines](game/buildings-production.md#npc-town-machines)), not what this machine's inputs have room for. Engine choices: ties by site id; the trip is not saved. A crafting bench's output is its finished items: an operator
   takes those a storage accepts once the first craft's store is full, and a full bench whose items no storage takes is no work (the job passes
   on); a "Hauling to" job fetches finished items as it does a producer's output, the instances themselves (quality and model kept) (#762). Carried output
   goes only with a full output just taken, or while the output stays full: a stray unit sends no one on a trip (#388). A walker
