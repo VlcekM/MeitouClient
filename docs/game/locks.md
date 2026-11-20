@@ -270,8 +270,9 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   out of a shut building is refused the same way (the walk's 60, `LockSystem.CanLeave`, as the AI's own walks test it). The
   way through the door is a step of the NPC's plan (80 / 78 unlock, 287 / 81 bash, 76 pick, 285 cut, the providers of 59 / 60 the planner
   inserts; `AiSystem.TakeDoorStep`): ended by its list A on the door (52 open, 54 locked, 56 broken) or when the lock system's way ends, and
-  replaced as any running step, which drops the way (**Verified**, the providers in the row table). An NPC without a stepped plan (an engine
-  walk, an engine-run goal) is still left alone until the door opens (`Engaged`, engine).
+  replaced as any running step, which drops the way (**Verified**, the providers in the row table). An engine goal's act-out walk takes it as
+  a step of the act-out, held by the goal (`AiMind.Duty`; the goal's end drops it); an NPC with neither (an engine mind, no mind, a goal that is its own
+  plan) is still left alone until the door opens (`Engaged`, engine).
   **Observed** (headless, #807 save at 3 h): a Civilian solo UC woken in its locked Storm House and ordered
   out unlocked the door and walked out; with its way forced to the bash, it swung for 3.3 s, broke the door and walked out; with no way forced,
   its move order stayed queued and it did not move. #803's save at 8.00: the UC town racists' boss (United Heroes League, in the United Cities

@@ -534,14 +534,17 @@ public sealed partial class LockSystem
     /// <summary>
     /// Sends a walker through <paramref name="door"/> (<see cref="DoorWayStep"/>): it walks to the door on its own side, unlocks or bashes it, then
     /// takes its walk to <paramref name="goal"/> up again; the walk's task stays on. An NPC with a kept plan takes the way as its plan's step
-    /// (<see cref="AiSystem.TakeDoorStep"/>), which its AI ends and may replace as any running step; the AI leaves any other NPC alone meanwhile.
+    /// (<see cref="AiSystem.TakeDoorStep"/>), which its AI ends and may replace as any running step; one an engine goal holds takes it as a step of
+    /// its act-out, the goal holding it (<see cref="AiMind.Duty"/>); the AI leaves any other NPC (an engine mind, no mind, a goal that is its own plan)
+    /// alone meanwhile (<see cref="CharacterCold.Engaged"/>).
     /// </summary>
     internal static void StartDoorWay(World world, int s, Fixture door, Vector2 goal, byte mode)
     {
         var c = world.Characters.Cold(s)!;
         (c.Bashing, c.BashErrand, c.BashTime, c.DoorWay) = (door.Id, true, DoorWayFresh, (goal, mode));
         var leaf = world.Fixtures.DoorSpotOf(door)?.Centre ?? door.Position;
-        if (!c.IsPlayer && !AiSystem.TakeDoorStep(c, DoorStepRow(world, s, door), leaf)) c.Engaged = true;
+        if (!c.IsPlayer && !AiSystem.TakeDoorStep(c, DoorStepRow(world, s, door), leaf) && c.Ai?.Duty is null)
+            c.Engaged = true;
 
         ref var n = ref world.Characters.Next[s];
         n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.AnyPath);
@@ -570,13 +573,13 @@ public sealed partial class LockSystem
     /// <summary>
     /// One tick of a walker's way through its door (<see cref="ReachDoor"/>): a basher draws first (<see cref="DrawForBash"/>); at the door, one no
     /// longer locked is opened (74 / 72); else the way works it (<see cref="WorkOnTheWay"/>); once the door is open, broken or gone the walk goes on.
-    /// An NPC whose AI took the way as its plan's step works it only while that step runs (<see cref="AiSystem.RunsDoorStep"/>): a step ended or
-    /// replaced drops the way, the movement left as the AI set it.
+    /// An NPC whose AI took the way as its plan's step works it only while that step runs (<see cref="AiSystem.RunsDoorStep"/>), one an engine goal
+    /// holds while the goal does: a step ended or replaced, or the goal gone, drops the way, the movement left as the AI set it.
     /// </summary>
     void DoorWayStep(World world, Span<CharacterHot> next, int s, CharacterCold c, Fixture? door)
     {
         var table = world.Characters;
-        if (!c.IsPlayer && !c.Engaged && !AiSystem.RunsDoorStep(c))
+        if (!c.IsPlayer && !c.Engaged && !AiSystem.RunsDoorStep(c) && c.Ai?.Duty is null)
         {
             DropDoorWay(c);
             return;

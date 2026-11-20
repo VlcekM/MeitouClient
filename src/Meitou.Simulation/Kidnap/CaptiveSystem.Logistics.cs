@@ -212,7 +212,6 @@ public sealed partial class CaptiveSystem
                     world.Fixtures.LiftOut(world, j.Captive, w, stepOut: true);
                     cc.Escaped = false;
                     FixtureRegistry.Enslave(world, cc, wc.Faction, squad.Id);
-                    cc.Engaged = false;
                     cc.Kidnapped = false;
                     Note(world, CaptiveEventKind.Gathered, j);
                     return End(world, j, null);
