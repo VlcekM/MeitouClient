@@ -141,7 +141,8 @@ public static class RowStates
     /// <summary>
     /// 73 machineHasFreeOperatorSlot (<c>FUN_140598de0</c> → <c>UseableStuff</c> slot 158 <c>FUN_1400f7bf0</c>, <b>Verified</b>) of a bed target:
     /// true for a character among its users, else while its users are fewer than its places (one; Meitou reads the users as the bed's occupant).
-    /// Null for a target that is no bed (a machine's or a cage's slots are their systems' own tests).
+    /// The hand asked is read as the character's own (AI <c>+0x300</c> through <c>FUN_1405c6ae0</c>, <b>Observed</b>). Null for a target that is no
+    /// bed (a machine's or a cage's slots are their systems' own tests).
     /// </summary>
     static bool? BedSlotFree(World world, int slot, string? site)
     {
