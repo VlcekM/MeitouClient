@@ -342,7 +342,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         for (int s = 0; s < table.Next.Length; s++)
         {
             ref var c = ref table.Next[s];
-            if (!c.Alive || c.Task != (byte)CharacterTask.GoTo || (c.Flags & (ushort)(MoveFlags.Pending | MoveFlags.HasPath)) == 0)
+            if (!c.Alive || !Walks(c.Task) || (c.Flags & (ushort)(MoveFlags.Pending | MoveFlags.HasPath)) == 0)
                 continue;
 
             // A walker whose way on does not lead through a changed zone keeps its path (a long walk loads zones ahead all the way, and each
@@ -746,12 +746,16 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     static void TakeOlderAnswer(IWalkability walk, ref CharacterHot n, CharacterCold cold, PathAnswer answer)
     {
         bool waiting = (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0;
-        if (!answer.Path.Found || !waiting || n.Task != (byte)CharacterTask.GoTo || answer.Id <= cold.PathApplied || answer.Id == cold.LastSplice)
-            return;
+        if (!answer.Path.Found || !waiting || !Walks(n.Task) || answer.Id <= cold.PathApplied || answer.Id == cold.LastSplice) return;
 
         TakePath(walk, ref n, cold, answer.Path);
         cold.PathApplied = answer.Id;
     }
+
+    /// <summary>
+    /// Whether the task walks a path to a goal of its own: a walk, or a talk act-out walking up to its target (<see cref="Aim"/>).
+    /// </summary>
+    static bool Walks(byte task) => task is (byte)CharacterTask.GoTo or (byte)CharacterTask.Talk;
 
     /// <summary>
     /// The latest request found no path: a player's short order walks straight at its goal, any other walk is dropped and waits.
@@ -936,6 +940,9 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
         n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.HasPath);
         n.TaskTime = FailedPathWait;
+
+        // a talk act-out's walk fails as a walk does: its owner reads the failure (Dialogue.DialogueOrders.WalkTo)
+        if (n.Task == (byte)CharacterTask.Talk) cold.PathFailed = true;
         if (n.Task != (byte)CharacterTask.GoTo) return;
 
         string why = n.PathCursor >= cold.PathExact
