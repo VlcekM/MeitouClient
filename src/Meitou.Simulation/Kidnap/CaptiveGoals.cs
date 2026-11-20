@@ -14,7 +14,7 @@ namespace Meitou.Simulation.Kidnap;
 
 /// <summary>
 /// The captive and slave goals as goals of the one chooser (docs/simulation.md "Captives", "Engine goals"): the prisoner's fate (135, 139, 282), the
-/// eaters and worshippers (230, 232, 233, 237), the dogs' limb play (277, 278, 279), the slavers' processing, capture, carry and shouting (167, 168,
+/// eaters and worshippers (230, 232, 233, 237), the dogs' limb play (277, 278, 279), an animal's food pick-up (259), the slavers' processing, capture, carry and shouting (167, 168,
 /// 183, 188, 260), their logistics (172, 173, 192, 194, 217, 218, 245) and the liberators (276). A serial look keeps what each member's finder
 /// finds and the desires that read other characters or the town timers; the think's desire, finder and states read the picks; a chosen goal is
 /// acted out as a <see cref="CaptiveJob"/> of its worker (<see cref="CaptiveSystem"/>), done at the original's own end.
@@ -34,6 +34,7 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
         TaskType.CaptureNewSlaves, TaskType.CarryWoundedSlaves, TaskType.GatherSlavesFromCages, TaskType.GatherSlavesFromCagesIfFemaleOrBeast,
         TaskType.GatherSlavesFromCagesIfItsAnExportTown, TaskType.WorkTheSlaves, TaskType.GoToSomewhereForDeliveringSlaves,
         TaskType.GiveAllMySlavesTo, TaskType.GiveAllMySlavesToIfItsAnImportTown, TaskType.SlaveGetInMyMastersCage, TaskType.LiberateAllThePrisoners,
+        TaskType.EatFoodOnGround,
     ];
 
     /// <summary>
@@ -53,7 +54,7 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
 
     /// <summary>
     /// Registers each goal with the rows of its plan its job carries out (<see cref="DutyGoals.Register"/>; leaf rows from the TaskData providers:
-    /// 134 Kill prisoner, 220 Eat prisoner, 231 Eating crops, 236 Worshiping, 3 the limb's pick-up, 40 the chase, 182 / 166 / 181 the processing,
+    /// 134 Kill prisoner, 220 Eat prisoner, 231 Eating crops, 236 Worshiping, 3 the limb's or the food's pick-up, 40 the chase, 182 / 166 / 181 the processing,
     /// cuff and strip, 170 / 25 the lift and its first aid, 174 Ordering slaves, 159 Talking, 53 the trip, 107 Imprisoned, 110 the release).
     /// </summary>
     internal void Register(DutyGoals goals)
@@ -66,6 +67,7 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
         goals.Register(TaskType.FindCropsToEat, GoalOf(TaskType.FindCropsToEat), TaskType.EatCrops);
         goals.Register(TaskType.FogmanWorshipVictim, GoalOf(TaskType.FogmanWorshipVictim), TaskType.WorshipTarget);
         goals.Register(TaskType.AnimalFetchALimb, GoalOf(TaskType.AnimalFetchALimb), TaskType.Pickup);
+        goals.Register(TaskType.EatFoodOnGround, GoalOf(TaskType.EatFoodOnGround), TaskType.Pickup);
         goals.Register(TaskType.PlayBecauseIHaveALimbInMouth, GoalOf(TaskType.PlayBecauseIHaveALimbInMouth));
         goals.Register(TaskType.ChaseAllyDogsWithMouthLimbs, GoalOf(TaskType.ChaseAllyDogsWithMouthLimbs), TaskType.GetNearTo);
         foreach (var watch in new[] { TaskType.NewSlaveProcessing, TaskType.SlaveWatching })
@@ -231,7 +233,8 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
         IndexOfType[(int)ask.Type] is >= 0 and var k && _picks[k].TryGetValue(ask.Slot, out var pick) && pick.Id == ask.Id ? pick : null;
 
     /// <summary>
-    /// Adds the picks to the state hash, only while there are any.
+    /// Adds the picks to the state hash, only while there are any; 259's (<see cref="Types"/>' last) only while it has some, as no base race lists it
+    /// (only a player-faction animal holds it), so a world without one hashes as before it was a goal.
     /// </summary>
     internal void Hash(ref StateHasher hasher)
     {
@@ -240,6 +243,8 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
         hasher.Add(0x43617047);   // "CapG"
         foreach (var picks in _picks)
         {
+            if (picks.Count == 0 && ReferenceEquals(picks, _picks[^1])) continue;
+
             hasher.Add(picks.Count);
             foreach (var (slot, pick) in picks)
             {
@@ -277,6 +282,8 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
                 return 1;
             case TaskType.ChaseAllyDogsWithMouthLimbs:
                 return CaptiveSystem.ChaseDesire(world, cold);
+            case TaskType.EatFoodOnGround:
+                return Items.FeedSystem.EatDesire(world, s, cold);
             case TaskType.GatherSlavesFromCages or TaskType.GatherSlavesFromCagesIfFemaleOrBeast:
                 return SlavesUp(world, squad) <= 3 ? 1 : 0;
             case TaskType.GatherSlavesFromCagesIfItsAnExportTown:
@@ -319,6 +326,7 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
         {
             TaskType.PlayBecauseIHaveALimbInMouth => CaptiveSystem.PlayDesire(world, cold),
             TaskType.ChaseAllyDogsWithMouthLimbs => PickOf(ask) is null ? 0 : CaptiveSystem.ChaseDesire(world, cold),
+            TaskType.EatFoodOnGround => PickOf(ask) is null ? 0 : Items.FeedSystem.EatDesire(world, ask.Slot, cold),
             TaskType.NewSlaveProcessing or TaskType.SlaveWatching or TaskType.CaptureNewSlaves => PickOf(ask) is null ? 0 : WatchDesire(ask, cold),
             TaskType.CarryWoundedSlaves => PickOf(ask) is null ? 0 : RescueDesire(cold),
             _ => PickOf(ask)?.Desire ?? 0,
@@ -366,7 +374,8 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
             OfCharacter(world, captives.BodyToEat(world, s, cold, dead: type == TaskType.EatARandomDeadBody)),
         TaskType.FindCropsToEat => Farm(world, s, cold, board),
         TaskType.FogmanWorshipVictim => captives.WorshipTarget(world, s) is { } shrine ? OfCage(shrine) : null,
-        TaskType.AnimalFetchALimb => CaptiveSystem.LimbFor(world, s, cold) is { } limb ? new Found(PlanTarget.OfPlace(limb.Position), "", limb.Id, -1) : null,
+        TaskType.AnimalFetchALimb => CaptiveSystem.LimbFor(world, s, cold) is { } limb ? OfItem(limb) : null,
+        TaskType.EatFoodOnGround => Items.FeedSystem.GroundFood(world, s, cold) is { } food ? OfItem(food) : null,
         TaskType.ChaseAllyDogsWithMouthLimbs => OfCharacter(world, captives.MouthfulAlly(world, s, cold)),
         TaskType.NewSlaveProcessing or TaskType.SlaveWatching => ToProcess(world, s, cold, board, type),
         TaskType.CaptureNewSlaves => OfCharacter(world, captives.NearestDown(world, s, cold, capture: true)),
@@ -467,6 +476,11 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
     /// A cage's occupant, at the cage.
     /// </summary>
     static Found Occupant(Fixture cage) => new(PlanTarget.OfCharacter(cage.Occupant, cage.Position), cage.Id, -1, cage.Site);
+
+    /// <summary>
+    /// A ground item where it lies.
+    /// </summary>
+    static Found OfItem(Items.GroundItem item) => new(PlanTarget.OfPlace(item.Position), "", item.Id, -1);
 
     /// <summary>
     /// A cage itself.
@@ -627,7 +641,7 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
     }
 
     /// <summary>
-    /// The states of row 3 for 277's limb: 1 within the pick-up's reach, 15 still on the ground, 3 no longer on it.
+    /// The states of row 3 for 277's limb or 259's food: 1 within the pick-up's reach, 15 still on the ground, 3 no longer on it.
     /// </summary>
     bool? LimbState(World world, in DutyAsk ask, StateType state)
     {
@@ -686,7 +700,7 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
         TaskType.EatARandomDeadBody or TaskType.EatARandomKoBody => LooseJob(world, ask, cold, target, CaptiveJobKind.EatBody),
         TaskType.FindCropsToEat => CropJob(world, ask, cold, target),
         TaskType.FogmanWorshipVictim => CageOnlyJob(world, ask, cold, target, CaptiveJobKind.Worship),
-        TaskType.AnimalFetchALimb => FetchJob(world, ask, cold, target),
+        TaskType.AnimalFetchALimb or TaskType.EatFoodOnGround => FetchJob(world, ask, cold, target),
         TaskType.PlayBecauseIHaveALimbInMouth => cold.Mouth is null ? null : New(ask, cold, CaptiveJobKind.DogPlay, CharacterId.None, "", -1, target),
         TaskType.ChaseAllyDogsWithMouthLimbs => LooseJob(world, ask, cold, target, CaptiveJobKind.DogChase),
         TaskType.NewSlaveProcessing or TaskType.SlaveWatching => ProcessJob(world, ask, cold, target),
@@ -794,8 +808,9 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
     }
 
     /// <summary>
-    /// 277's job: the pick-up (row 3, <see cref="Items.PickUps"/>) of the pick's limb, a walk to it or the take where the animal stands within reach;
-    /// null when the limb is gone, another character fetches it or the row is not the animal's.
+    /// 277's and 259's job: the pick-up (row 3, <see cref="Items.PickUps"/>) of the pick's limb or food, a walk to it or the take where the animal
+    /// stands within reach, 259's food marked fetched to eat (<see cref="CharacterCold.FetchingFood"/>); null when the item is gone, another character
+    /// fetches it or the row is not the animal's.
     /// </summary>
     CaptiveJob? FetchJob(World world, in DutyAsk ask, CharacterCold cold, in PlanTarget target)
     {
@@ -806,6 +821,8 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
         var task = Items.PickUps.InReach(table.Next[ask.Slot].Position, target.Position) ? CharacterTask.Idle : CharacterTask.GoTo;
         var request = new TaskRequest(task, TaskType.Pickup, TaskSource.Goal) { Point = target.Position, Detail = item };
         if (TaskStart.Start(world, ask.Slot, request) != StartResult.Started) return null;
+
+        cold.FetchingFood = ask.Type == TaskType.EatFoodOnGround;
 
         return New(ask, cold, CaptiveJobKind.Fetch, CharacterId.None, "", -1, target, item);
     }

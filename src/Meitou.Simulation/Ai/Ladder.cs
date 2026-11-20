@@ -106,7 +106,7 @@ internal static class Ladder
     internal static readonly HashSet<TaskType> OnRungs =
     [
         TaskType.AquireFoodAtHomebase, TaskType.FindCropsToEat, TaskType.EatARandomKoBody, TaskType.AnimalFetchALimb,
-        TaskType.PlayBecauseIHaveALimbInMouth, TaskType.ChaseAllyDogsWithMouthLimbs, TaskType.ProtectAllies,
+        TaskType.PlayBecauseIHaveALimbInMouth, TaskType.ChaseAllyDogsWithMouthLimbs, TaskType.ProtectAllies, TaskType.EatFoodOnGround,
     ];
 
     /// <summary>

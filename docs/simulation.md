@@ -214,8 +214,7 @@ delivering, fetching and dismantling are steps of one act-out (`TaskStart.ActOut
   (87, 97, 124, 152, 234, the engineer 125) and implicit jobs (242, 153, 275), the build, repair, door repair and dismantle orders, the bed orders and job 106, the lock, shackle, cage,
   door and force orders, item pick-up and container walks, put in cage; the engine's starts: crime fights and the arrest mates' fights
   (`AttackOrder.Source`: `Npc`; an NPC's attack on sight is its AI's goal fight, `Goal`), kidnappers' lifts (68) and 168's lifts (170), captive jobs'
-  walks (the row of their task, `CaptiveSystem.RowOf`), the ditch's and the player side's food runs' walks (`TownDutySystem.RowOf`), the [engine goals'](#engine-goals) act-outs on their goal's row (smell hunts 176, NPC looting and arming, the wardens' goals, arrests 204, escapes, town goals), flight (35, then wander 24), food on the ground
-  (259) and limbs (277), NPC arming walks (42), roaming leaders' walks (53) and mills (24); the engine's orders' act-outs start with `TaskSource.Order` ([order queue](#order-queue)). Engine walks go through `TaskStart.Walk` (`TaskRequest.Goal`: as given, or
+  walks (the row of their task, `CaptiveSystem.RowOf`), the ditch's and the player side's food runs' walks (`TownDutySystem.RowOf`), the [engine goals'](#engine-goals) act-outs on their goal's row (smell hunts 176, NPC looting and arming, the wardens' goals, arrests 204, escapes, town goals), flight (35, then wander 24), NPC arming walks (42), roaming leaders' walks (53) and mills (24); the engine's orders' act-outs start with `TaskSource.Order` ([order queue](#order-queue)). Engine walks go through `TaskStart.Walk` (`TaskRequest.Goal`: as given, or
   `Point` onto the floor, at `Mode`; one to a building shut to the walker is refused, `StartResult.Inaccessible`, as the original's plan walk:
   [locks](game/locks.md#doors)); engine standing tasks (idle, wander, a follow of the squad's leader) through `TaskStart.Become` (the movement's handler stops the character on it).
   Sources: a package goal's act-out (town duties, captive jobs, kidnap, smell, food, population) `Goal`; an engine rule (flight, crime) `Npc`.
@@ -316,7 +315,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   goal, 32 and committed goals included ([precedence](game/ai-tasks.md#precedence)): the AI (`AiSystem.Holds`, `Preempts`, `TaskStart.StartOwn`); a goal's or reaction's start
   ([task starts](#task-starts): the AI's, retaliation's, the duties' and the victims' deferred fights and walks); retaliation's own defence (it answers as a player character
   does); the flight step, which also ends a running flight; the stand-down after a fight; the free tests of the duty sweeps and routines (the ditch and the player faction's
-  food runs, 259, the shut-in release, NPC healing, arming and scavenging, rejoining the leader); the
+  food runs, the shut-in release, NPC healing, arming and scavenging, rejoining the leader); the
   population's leader walk and arrival; and two engine reactions that are no order (`TaskSource.Npc`): a crime victim's attack on its culprit and a caught thief's
   watcher getting up from rest. The dialogue's acts ([dialogue](#dialogue)), the body's orders above and the arrest orders are orders of the receiver's queue. An
   owner's order may repeat (`IOrderOwner.Repeats`): when its task ends it waits unstarted at the front for its next step instead of leaving (22, 101, 248), until its
@@ -407,7 +406,7 @@ phases, no source ever called from the think:
   4. Priority-3 goals: 32 Self preservation is the AI's rung (`AiSystem.SelfPreservationGoal` in every player-faction mind: the attacker that took the character as target
      within 181.7, not shooting at a gunner, passing a holder's post test, `SelfDefencePick`; desire 1 within 40, else 0.7; a deferred defence, row 13); 243 Getting food on the
      AI's rung (the own list's entry, weight 0.5, [town duties](#town-duties)); a player animal's priority-3 race goals on the AI's rung (`Ladder.OnRungs`, [captives](#captives):
-     277 limb fetch 1, 278 limb play and 279 chase by their desires, x the race entry's weight); 259 Picking up food (`FeedSystem`, animals, weight 0.5); 16 attack on sight while on Hold (`AggroSystem`, 1 here,
+     277 limb fetch 1, 278 limb play and 279 chase by their desires, x the race entry's weight); 259 Picking up food on the AI's rung (`CaptiveGoals`, animals, weight 0.5); 16 attack on sight while on Hold (`AggroSystem`, 1 here,
      listed last as Hold adds it; the enemy this tick's look or a squad mate's found; desire 0 while Passive, sneaking outside a fight or not standing; a deferred fight, row 16).
      The player faction's 15 Protect allies on the AI's rung (the faction list's entry, weight 1; the NPC's desire, finder and plan, with the distance falloff and Help Allies of a
      player-faction looker, [precedence](game/ai-tasks.md#precedence)): the aggro looks' allies valued by their fight threat (`CombatSystem.FightThreat`), a defence on row 13 against
@@ -951,8 +950,8 @@ default): the turret step sets the gunner's yaw along the barrel every tick; off
 `ANIMAL_CHARACTER`, animal body/stats/size/fists and creature techniques come from typed data;
 animals use faction hostility and carrying/damage rules where eligible. They age and grow, pack beasts spawn with their
 bag on, DA 48 sells them, and the context menu's Follow keeps any player character beside another
-([animals](game/animals.md#ageing)). Player animals feed themselves: food on the ground (259, `FeedSystem.GroundFood`), food from their outpost's stores
-(243, also for people: the chooser's goal, [rules](game/character-stats.md#eating); 259 a decision-step goal) and their race goals: limbs (277), limb play and chase
+([animals](game/animals.md#ageing)). Player animals feed themselves: food on the ground (259, a [captive goal](#captives): finder `FeedSystem.GroundFood`, act-out row 3's pick-up), food from their outpost's stores
+(243, also for people; both the chooser's goals by AI slot 25, [rules](game/character-stats.md#eating)) and their race goals: limbs (277), limb play and chase
 (278, 279) and eating downed non-allies (233) as [captive jobs](#captives) (the chooser's goals on its rungs, as an NPC animal's, by the original's desires x the entry's weight), ended by an order. Corpses (230) are dropped from the player's animals by the original;
 crops (232) find nothing for them (only the player's farms are machines, and the eater must not get along with the town). Unarmed humans use
 martial-arts category 5. [animals.md](game/animals.md), [characters.md](characters.md).
@@ -1613,6 +1612,8 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
 - **Dogs' limb play** (race goals 277-279): 277 sends an animal with an empty mouth (an adult only when its stomach is empty and hunger at most 2.75) to the nearest limb within
   200, which the pick-up takes into its mouth; 278 (a mouthful, not a player squad's adult over 0.95) sprints in random 1000-1400 legs while it holds it; 279 (any NPC animal, a player
   squad's only under 0.95) runs after the first allied animal in sight with something in its mouth. Engine: the play's first leg is random too. An NPC's 277 is the pick-up (row 3, `TaskSource.Goal`), done once it ends.
+- **Food on the ground** (259, a player-faction animal's own goal, [eating](game/character-stats.md#eating)): AI slot 25's desire, the nearest free food within 100, then 277's
+  pick-up of it, marked fetched to eat (`CharacterCold.FetchingFood`), done once it ends.
 - **Crop raiding** (232, `CaptiveJobKind.EatCrops`): in a player town whose faction is its enemy (engine reading of the coexist test), a random farm with food; at it, `eat`, crime
   14 each tick, one plant per game second (`ProductionSystem.EatCrop`). NPC towns' farms are not machines in Meitou, so only the player's are eaten.
 - **Escapes** (`EscapeGoals`, [engine goals](#engine-goals), facts: [ai-tasks](game/ai-tasks.md)): 256 Get out of cage (`[256]`, only while its cage's lock is
@@ -2417,7 +2418,7 @@ enemy (`numEnemies`, `SenseBlock.Enemies`), so guards man the turrets only while
 Goals of the NPCs' packages that an engine system acts out, chosen by the one chooser as the original's (docs/game/ai-tasks.md "Precedence"). `DutyGoals`
 (one per world, built in `World`'s constructor by `AiSystem.BindGoals` from the `IDutyGoalOwner` systems; null when none registered) holds each registered type: a
 type of the original's that `TaskBehaviours` does not act out, registered by its own system with its `IDutyGoal` (desire, finder, states, start, end) and the rows of
-its plan the act-out carries out besides the goal's own. Built: 135, 139, 282, 230, 232, 233, 237, 277, 278, 279, 260, 183, 167, 168, 173, 245, 217,
+its plan the act-out carries out besides the goal's own. Built: 135, 139, 282, 230, 232, 233, 237, 277, 278, 279, 259, 260, 183, 167, 168, 173, 245, 217,
 188, 192, 194, 218, 172 and 276 (`CaptiveSystem` through `CaptiveGoals`, [captives](#captives)); 176 (`SmellSystem`, [blood smell](#blood-smell)); 177 and 42 (`CarrySystem` through `LootGoals`, [looting and arming](#carrying-rescue-and-looting)); 211, 155, 197, 86 and 195 (`LockSystem` through `WardenGoals`,
 [wardens' goals](#arrest-and-jail)); 180 (`LockSystem` through `GateGoals`, gates in [arrest and jail](#arrest-and-jail)); 204 (`ArrestSystem` through `ArrestGoals`, [arrest and jail](#arrest-and-jail)); 256, 207 and 202 (`LockSystem` through `EscapeGoals`, [escapes](#captives)); 254 (`KidnapSystem` through
 `KidnapGoals`, [kidnapping](#kidnapping)); 273, 223, 138, 137, 112, 281, 224, 274, 106, 243, 131, 184, 212, 158, 283 and 216 (`TownDutySystem` through `TownGoals`, [town duties](#town-duties)).

@@ -204,7 +204,8 @@ is set; the player faction's lists "Protect allies"), then:
 - the player's faction: AQUIRE_FOOD_AT_HOMEBASE (243) at 0.5 unless present; an animal also gets its RACE's `AI Goals`, EAT_FOOD_ON_GROUND (259)
   at 0.5, and loses EAT_A_RANDOM_DEAD_BODY (230).
 
-Animal races list their feeding goals (**Verified**, probe): goats, bulls, garru, turtles "eating food on the ground"; bonedogs and boneyard wolves
+Animal races list their feeding goals (**Verified**, probe): goats, bulls, garru, turtles "eating food on the ground" (AI_TASK enum 14, IDLE, not 259: no RACE
+lists 259, only setupAI gives it; **Verified**, `gamedata_base.txt`); bonedogs and boneyard wolves
 also "eating corpses" and the three limb games; beak things and spiders "eating any bodies"; raptors "eating crops". The ANIMAL_CHARACTER's own
 `AI Goals` (Follow leader on Pet Dog, Settler's Pup, Cornelius) is not read: the exe's only references to the string are this function and the two
 package loaders (**Observed**). 243's desire and what Meitou runs of these for the player's animals: [eating](character-stats.md#eating),

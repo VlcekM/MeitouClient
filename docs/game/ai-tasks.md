@@ -1185,7 +1185,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   ([simulation](../simulation.md#order-queue); one that cannot run stays queued with its text and the step goes on; a turret gunner's 146 ends under a melee threat and is taken up again
   once it is gone), step 2 has no source (no player goal Meitou runs commits), step 3 the urgent jobs (234 while an enemy is sensed; 187 Obedient Slave of an enslaved player character: its master squad's Slave goals 171, 189 / 190, 172, 41, 143, 35, 14, [Obedient Slave](#slave-work-shout-and-capture)), step 4
   picks among 32 Self preservation, 243 Getting food, a player animal's priority-3 race goals (277-279), 259 Picking up food, Hold's 16 and 15 Protect allies (joining a mate's or
-  an ally's fight; 243 and the race goals are the AI's own-list goals, acted out as an NPC's: 243 by `TownGoals`, 277-279 by `CaptiveGoals`; 259 by `FeedSystem`;
+  an ally's fight; 243 and the race goals are the AI's own-list goals, acted out as an NPC's: 243 by `TownGoals`, 277-279 and 259 by `CaptiveGoals`;
   fights by the combat system), step 5 every job in list order through its system's contributor (the switch and the repertoire first), then the implicit jobs, step 6 the priority-2 race goals 233 and 232 and
   the default task (a player character's routine: it stands; by the manoeuvre mode 14 Idleness, 31 Staying close or 30 Holding position, see step 6 above; the scorer drops a scored 14). A task that ends leaves its character idle for the step to
   re-decide (the original re-plans; nothing resumes). A follow order running its row ends when the followed character is attacked or goes down, as the original's (**Verified** below); follow and bodyguard

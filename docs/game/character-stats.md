@@ -523,10 +523,10 @@ eat task, animation or player command (a right click on food does nothing, [ui-s
   across a load; it goes with the animal if the animal dies or is removed.
 - **Food on the ground** (**Verified**, decompile): `Character::setupAI` gives every animal of a player squad goal 259 EAT_FOOD_ON_GROUND (priority 3, weight 0.5; it drops race goal 230)
   and every player character 243. 259's desire is AI slot 25 (above; the registration's stub jumps to it). Finder `FUN_14099a930`: the nearest food it may eat (function 3, 15 for an animal or a race that lists it) on
-  the ground within 100 in its own location, accessible, passing the stealing check; else a sensed corpse within 100 with such food. Meitou (`FeedSystem.GroundFood`): the ground pass only; a player character's 259 is a source of the [decision step](../simulation.md#decision-step).
+  the ground within 100 in its own location, accessible, passing the stealing check; else a sensed corpse within 100 with such food. Meitou: 259 is a [captive goal](../simulation.md#captives) on the chooser's rung (`CaptiveGoals`: desire `FeedSystem.EatDesire`, finder `FeedSystem.GroundFood`, the ground pass only; act-out row 3's pick-up).
   The player's bonedog with no bag picks up Raw Meat dropped beside it and eats it (**Observed** in the original, 2026-11-14). Meitou: fetched food (`CharacterCold.FetchingFood`) may go into the animal's
-  [shut](animals.md#pack-animals) grid and is eaten from there (engine choice); the animal fetches only while Feed Animals is on, and checks the food
-  again on arrival (`FeedSystem.FreeFood`): after a load a shop slot claims its loose items only once its building is set up, so food that looked free
+  [shut](animals.md#pack-animals) grid and is eaten from there (engine choice); with Feed Animals off it still fetches (slot 25 reads no option) but does not eat, so
+  the carried food ends the want. It checks the food again on arrival (`FeedSystem.FreeFood`): after a load a shop slot claims its loose items only once its building is set up, so food that looked free
   can turn out to be the shop's.
 - **Food from storage** (**Verified**, decompile; registration of 243 in `FUN_140319a60`, desire `AI` slot 26 → 24 → 25): 243's desire is 0 for an animal while a global
   byte (`DAT_142134690+0x114`) is clear, the byte the eating rule `FUN_1405d29c0` tests for animals, so the squad option Feed Animals (**Observed**: writer not traced); 0 outside a town (status `+0x88`); 0 in a town of another faction unless town slot
