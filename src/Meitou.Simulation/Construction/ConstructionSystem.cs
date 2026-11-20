@@ -914,14 +914,18 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// <c>FUN_140551b20</c>, <c>FUN_140563140</c>, <c>FUN_140592570</c>): 21 for a wall gate, 20 for a wall piece, the functionality's
     /// <c>function</c> when it names one other than 0 and 18, 19 for a building with an interior, else 18.
     /// </summary>
-    public int FunctionKey(string record)
+    public int FunctionKey(string record) => FunctionKey(_db, Data(record), record);
+
+    /// <summary>
+    /// <see cref="FunctionKey(string)"/> of <paramref name="record"/> with its build data <paramref name="data"/> (null: not a BUILDING).
+    /// </summary>
+    internal static int FunctionKey(GameDatabase db, BuildingBuildData? data, string record)
     {
-        var data = Data(record);
         if (data is null) return TownRefit.Fluff;
         if (data.IsWallGate) return TownRefit.Gate;
         if (data.LinksTogether) return TownRefit.Wall;
 
-        int function = _db.Find(record) is { } r && TownBuildings.FunctionOf(_db, r, []) is { } f ? f.GetInt("function") : 0;
+        int function = db.Find(record) is { } r && TownBuildings.FunctionOf(db, r, []) is { } f ? f.GetInt("function") : 0;
         if (function is not (0 or TownRefit.Fluff)) return function;
 
         return data.HasInterior ? TownRefit.Shell : TownRefit.Fluff;

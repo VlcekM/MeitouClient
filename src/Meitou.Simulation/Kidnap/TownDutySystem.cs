@@ -2123,7 +2123,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// <summary>
     /// The ransack's building (goal 216, <see cref="TownWatchFinders.RansackTarget"/>); null: none.
     /// </summary>
-    internal (Meitou.Data.World.TownBuilding Building, string? Door)? RansackTarget(World world, Squad squad, int slot)
+    internal (string Key, Vector3 At, string? Door)? RansackTarget(World world, Squad squad, int slot)
     {
         _locks ??= world.Systems.OfType<LockSystem>().FirstOrDefault();
         return _watch.RansackTarget(world, squad, slot, _locks);

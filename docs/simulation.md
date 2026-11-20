@@ -1533,7 +1533,8 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
   or spotted; the member walks at it and sends event 9 (17 to an enemy) every 5 s (engine pacing; the dialogue data escalates); after 25 game minutes, once the stranger is
   getting away, event 60 and done; over once it is out.
 - **216 Ransacking town** (plan `[156, 216]`, `[6, 156, 216]` with no weapon drawn: list B 5; `AI::findRandomBuildingInTown`): one look draws a random standing building with an
-  interior in the squad's town as the blackboard gives it (the override's mission town, else the running package's), else where it stands, among those the planner gets it into
+  interior in the squad's town as the blackboard gives it (the override's mission town, else the running package's; a raid's is its target, a player outpost included),
+  else where it stands; an outpost's are the player's complete, standing houses ([216](game/ai-tasks.md#town-goals)); among those the planner gets it into
   (row 156's B list 59 `hasAnOpenDoor` and 90, **Observed**): `DoorPlan.PlansEntry` plans 216 with the exact state 59, so a closed unlocked door is opened (72) or, for a
   character that wants to (`AggressiveTowards`), bashed first (81: `LockSystem.BashForErrand`); a locked door nobody will bash or unlock leaves the building out. A closed gate on
   the route is planned the same way (`LockSystem.GateEntry`, `GatePlan.PlansEntry`). It runs into the building and the goal is done once inside.

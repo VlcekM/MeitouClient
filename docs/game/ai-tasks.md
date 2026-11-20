@@ -1704,6 +1704,14 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
     the original takes the first of an arbitrary order). A dummy is stood at, facing its way, and pretend-operated like a home workstation (221 `Task_OperateMachine`: the functionality's
     clip, hunger rate and `animation events`; `AiSystem.PretendOperate`). Not modelled: the finder's usability and avoid-set filters (slot 0), a piece's own owner
     (the building's is used).
+- **216 Ransacking town** (`AI::findRandomBuildingInTown` `FUN_1408cb510`, **Verified** by decompile): the squad's town (`FUN_140269cd0` flag 1: a war package's mission
+  town is the campaign's target, a player outpost or a placed town alike), only when that hand does not resolve the town the character is in (vfunc `0x78`); a resolved town
+  with no candidate gives 0, with no second town tried. Candidates: the town's vfunc `0x2c8` scan (as 275's, shared by `TownBase`, `Town`, `Nest` and `TownNull`) with
+  `BuildingFinder_OnesWithInteriors`, mask 0x80000: the buildings of function key 19 BF_SHELL_WITH_INTERIOR (a building with an `interior` and no functionality of its own;
+  walls are 20, gates 21, machines their function, [construction](buildings-production.md)) whose town it is, with an interior object and not a `WallBuilding` (slot 5
+  `FUN_1408ca540`); no owner, public, complete or ruin test. The zones scanned are those registered with the town: its own and those within one zone of it as they load
+  (`FUN_14092d730`, `FUN_14092dbb0`). The pick is uniform (`FUN_1409fb020`); its position is the plan's target (156 walks in, then 216 runs inside). Meitou:
+  `TownWatchFinders.RansackTarget`, an outpost's houses from the player's complete, standing buildings.
 - Chairs (**Verified**, BUILDING_FUNCTIONALITY records of gamedata.base / rebirth.mod / the install's mods, dumped): BuildingFunction 17 BF_CHAIR
   `chair`, `chair-fixed`, `chair-fixed 180` (animation "sitting chair"; Stool, Old Stool, Bench, Sitting Box) and `sit on floor (no chair)`
   ("sitting idle"; Sitting Pillow, Sitting spot (invisible)); 24 BF_THRONE `throne chair` ("sitting chair"); all `max operators` 1.

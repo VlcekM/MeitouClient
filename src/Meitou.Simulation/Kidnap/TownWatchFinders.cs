@@ -1,3 +1,5 @@
+using System.Numerics;
+using Meitou.Data.Gameplay.Construction;
 using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Factions;
@@ -39,6 +41,11 @@ internal sealed class TownWatchFinders(PopulationData data)
     readonly DoorPlan _doorPlan = new();
 
     /// <summary>
+    /// The function key of each BUILDING record the ransack finder weighed (<see cref="FunctionKeyOf"/>); derived from the data, not hashed.
+    /// </summary>
+    readonly Dictionary<string, int> _functionKeys = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// <c>AI::findStrangersInMyBuilding</c> (<c>FUN_1408ced70</c>, goals 158 / 283): in the squad's home building, the first character (slot order,
     /// the original takes its sensed-list order) neither of an allied faction nor an enemy, not down, dead or caged, not a slave of the shooer's
     /// faction and not law enforcement (AUTHORITY_FIGURE, engine reading); for an NPC squad also any of the player's characters there that is not
@@ -67,27 +74,89 @@ internal sealed class TownWatchFinders(PopulationData data)
     }
 
     /// <summary>
-    /// <c>AI::findRandomBuildingInTown</c> (<c>FUN_1408cb510</c>, goal 216): the squad's town as <c>FUN_140269cd0</c> gives it (the override's mission
-    /// town, a campaign's war package's the campaign target, <see cref="Blackboard.ContractMissionTown"/>; else the running package's mission town),
-    /// else the town the member stands in; a player town is not drawn from; one of its standing buildings with an interior, drawn uniformly at random
-    /// among those the planner would reach: row 156 Entering building (the only provider of effect 107, which goal 216 wants) needs
-    /// DESTINATION_IS_ACCESSIBLE (59: <c>hasAnOpenDoor</c>) and DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS (90: no closed gate between), <b>Observed</b>.
-    /// The door sub-steps are planned (<see cref="EntryTo"/>: open the door, row 72, or bash it, row 81); a building with no way in is left out of
-    /// the draw. A closed gate on the route is planned as for an attacker (<see cref="LockSystem.GateEntry"/>: bash it, row 123 / 290, or pass an
-    /// unlocked one, row 122). Null: none.
+    /// <c>AI::findRandomBuildingInTown</c> (<c>FUN_1408cb510</c>, goal 216): the squad's town (<see cref="SquadTown"/>), a placed town or a player
+    /// outpost alike; one of its houses (<see cref="Houses"/>), drawn uniformly at random among those the planner would reach: row 156 Entering
+    /// building (the only provider of effect 107, which goal 216 wants) needs DESTINATION_IS_ACCESSIBLE (59: <c>hasAnOpenDoor</c>) and
+    /// DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS (90: no closed gate between), <b>Observed</b>. The door sub-steps are planned (<see cref="EntryTo"/>:
+    /// open the door, row 72, or bash it, row 81); a building with no way in is left out of the draw. A closed gate on the route is planned as for
+    /// an attacker (<see cref="LockSystem.GateEntry"/>: bash it, row 123 / 290, or pass an unlocked one, row 122). Null: none, also when the squad's
+    /// town has no house (the finder does not fall back to another town then).
     /// </summary>
-    public (Meitou.Data.World.TownBuilding Building, string? Door)? RansackTarget(World world, Squad squad, int slot, LockSystem? locks)
+    public (string Key, Vector3 At, string? Door)? RansackTarget(World world, Squad squad, int slot, LockSystem? locks)
     {
-        int site = squad.Ai is { ContractMissionTown.Site: >= 0 } b ? b.ContractMissionTown.Site
-            : squad.Ai is { Destination: { Site: >= 0 } dest } ? dest.Site
-            : AiSystem.TownAt(data, world, world.Characters.Next[slot].Position).Site;
-        if (site < 0) return null;
+        var town = SquadTown(world, squad, slot);
+        if (town.IsNone) return null;
 
-        var rooms = WaysIn(world, slot, site, locks);
+        var rooms = WaysIn(world, slot, Houses(world, town), locks);
         if (rooms.Count == 0) return null;
 
         var roll = Rng.Hash(world.Seed, (ulong)Rng.Key(world.Characters.IdOf(slot)) ^ (ulong)world.Tick, RngPurpose.Slow, RansackSalt);
         return rooms[Rng.Int(roll, rooms.Count)];
+    }
+
+    /// <summary>
+    /// The squad's town as <c>FUN_140269cd0</c> gives it, when it resolves (<c>FUN_1409f9100</c>): the override's mission town (a campaign's war
+    /// package's is the campaign target, a player outpost or a placed town, <see cref="Blackboard.ContractMissionTown"/>), else the running package's
+    /// mission town; else (character vfunc 0x78) the town the member stands in. None: no town.
+    /// </summary>
+    CampaignTown SquadTown(World world, Squad squad, int slot)
+    {
+        if (squad.Ai is { } board)
+        {
+            if (Resolves(world, board.ContractMissionTown)) return board.ContractMissionTown;
+            if (Resolves(world, board.Destination)) return board.Destination;
+        }
+
+        return AiSystem.TownAt(data, world, world.Characters.Next[slot].Position);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="town"/> names a placed town or a player outpost that still stands.
+    /// </summary>
+    static bool Resolves(World world, CampaignTown town) =>
+        town.Site >= 0 || town.PlayerTown > 0 && world.Buildings.FindTown(town.PlayerTown) is not null;
+
+    /// <summary>
+    /// The town's houses, each by its building key and position. A placed town's: its standing buildings with an interior. An outpost's: the
+    /// buildings whose town it is (<see cref="Construction.TownLookup.PlayerTownOf"/>) that are complete and standing, of function key 19
+    /// BF_SHELL_WITH_INTERIOR (<see cref="Construction.ConstructionSystem.FunctionKey(string)"/>: a building with an interior and no functionality
+    /// of its own, so no wall, gate or machine), whatever their owner. <b>Verified</b> (<c>FUN_1408cb510</c> asks the town's vfunc 0x2c8,
+    /// <c>FUN_1408d10f0</c>, shared by every TownBase class, with <c>BuildingFinder_OnesWithInteriors</c> and mask 0x80000: the buildings of key 19
+    /// in the zones registered with the town whose town it is, <c>FUN_1409fb880</c>, that have an interior object and are not a WallBuilding, slot 5
+    /// <c>FUN_1408ca540</c>). Complete and standing are an engine choice: the finder has no such test, and Meitou gives an unfinished or ruined
+    /// player building no doors.
+    /// </summary>
+    List<(string Key, Vector3 At)> Houses(World world, CampaignTown town)
+    {
+        var houses = new List<(string, Vector3)>();
+        if (town.Site >= 0)
+        {
+            foreach (var x in data.Sites[town.Site].Buildings)
+            {
+                if (!world.Fixtures.IsDestroyed(x) && (x.InteriorLayout.Length > 0 || x.InteriorLayouts.Count > 0)) houses.Add((x.Key, x.Position));
+            }
+
+            return houses;
+        }
+
+        foreach (var site in world.Buildings.All)
+        {
+            if (!site.Complete || site.Destroyed || FunctionKeyOf(site.Record) != Construction.TownRefit.Shell) continue;
+            if (Construction.TownLookup.PlayerTownOf(world, site)?.Number == town.PlayerTown) houses.Add((site.Id, site.Position));
+        }
+
+        return houses;
+    }
+
+    /// <summary>
+    /// The function key of a BUILDING record (<see cref="Construction.ConstructionSystem.FunctionKey(string)"/>), read once.
+    /// </summary>
+    int FunctionKeyOf(string record)
+    {
+        if (_functionKeys.TryGetValue(record, out int key)) return key;
+
+        var building = data.Db.Find(record) is { Type: Data.Fcs.FcsRecordType.Building } r ? BuildingBuildData.From(r) : null;
+        return _functionKeys[record] = Construction.ConstructionSystem.FunctionKey(data.Db, building, record);
     }
 
     /// <summary>
@@ -131,34 +200,33 @@ internal sealed class TownWatchFinders(PopulationData data)
     }
 
     /// <summary>
-    /// The town's standing buildings with an interior the member gets into, each with the door (or gate) it bashes first.
+    /// The houses the member gets into, each with the door (or gate) it bashes first.
     /// </summary>
-    List<(Meitou.Data.World.TownBuilding, string?)> WaysIn(World world, int slot, int site, LockSystem? locks)
+    List<(string Key, Vector3 At, string? Door)> WaysIn(World world, int slot, List<(string Key, Vector3 At)> houses, LockSystem? locks)
     {
         var from = world.Characters.Next[slot].Position;
-        var rooms = new List<(Meitou.Data.World.TownBuilding, string?)>();
-        foreach (var x in data.Sites[site].Buildings)
+        var rooms = new List<(string, Vector3, string?)>();
+        foreach (var (key, at) in houses)
         {
-            if (world.Fixtures.IsDestroyed(x) || x.InteriorLayout.Length == 0 && x.InteriorLayouts.Count == 0) continue;
-            var gate = locks?.GateEntry(world, slot, from, x.Position) ?? (DoorPlan.Entry.Walk, null);
+            var gate = locks?.GateEntry(world, slot, from, at) ?? (DoorPlan.Entry.Walk, null);
             if (gate.Entry == DoorPlan.Entry.Blocked) continue;
-            if (gate.Door is not null) rooms.Add((x, gate.Door));   // the gate is bashed first (rows 123 / 290)
-            else if (EntryTo(world, slot, x, locks) is { } door) rooms.Add((x, door.Length == 0 ? null : door));
+            if (gate.Door is not null) rooms.Add((key, at, gate.Door));   // the gate is bashed first (rows 123 / 290)
+            else if (EntryTo(world, slot, key, locks) is { } door) rooms.Add((key, at, door.Length == 0 ? null : door));
         }
 
         return rooms;
     }
 
     /// <summary>
-    /// How the member gets into a building, by the planner (row 156's state 59 <c>hasAnOpenDoor</c>, <see cref="DoorPlan.PlansEntry"/>): "" to
-    /// walk in (a door open, none, or a closed one the character opens as it passes, row 72), the id of the door it bashes first (row 81, a locked
-    /// door of a building it is aggressive towards), null when the planner finds no way in.
+    /// How the member gets into the building <paramref name="key"/>, by the planner (row 156's state 59 <c>hasAnOpenDoor</c>,
+    /// <see cref="DoorPlan.PlansEntry"/>): "" to walk in (a door open, none, or a closed one the character opens as it passes, row 72), the id of
+    /// the door it bashes first (row 81, a locked door of a building it is aggressive towards), null when the planner finds no way in.
     /// </summary>
-    string? EntryTo(World world, int slot, Meitou.Data.World.TownBuilding building, LockSystem? locks)
+    string? EntryTo(World world, int slot, string key, LockSystem? locks)
     {
-        if (world.Fixtures.HasOpenDoor(building.Key)) return "";
-        if (LockSystem.MainGateDoor(world, building.Key) is not { } main) return "";
-        var entry = _doorPlan.PlansEntry(world, world.SystemOf<Combat.CombatSystem>(), slot, building.Key, main.Door, main.Spot, locks);
+        if (world.Fixtures.HasOpenDoor(key)) return "";
+        if (LockSystem.MainGateDoor(world, key) is not { } main) return "";
+        var entry = _doorPlan.PlansEntry(world, world.SystemOf<Combat.CombatSystem>(), slot, key, main.Door, main.Spot, locks);
         return entry switch { DoorPlan.Entry.Walk => "", DoorPlan.Entry.Bash => main.Door.Id, _ => null };
     }
 }

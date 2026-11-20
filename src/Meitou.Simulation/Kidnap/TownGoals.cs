@@ -297,8 +297,8 @@ internal sealed class TownGoals(TownDutySystem owner)
         if (!stranger.IsNone) _strangers[slot] = new WatchPick(id, stranger, world.Characters.Next[stranger.Slot].Position, null, null);
         else _strangers.Remove(slot);
 
-        if (AiSystem.WeighsGoal(world, slot, TaskType.RunAroundTownLookingForPeople) && owner.RansackTarget(world, squad, slot) is var (raid, door))
-            _raids[slot] = new WatchPick(id, CharacterId.None, raid.Position, raid.Key, door);
+        if (AiSystem.WeighsGoal(world, slot, TaskType.RunAroundTownLookingForPeople) && owner.RansackTarget(world, squad, slot) is var (key, raid, door))
+            _raids[slot] = new WatchPick(id, CharacterId.None, raid, key, door);
         else _raids.Remove(slot);
     }
 
