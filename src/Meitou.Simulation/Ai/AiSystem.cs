@@ -1997,12 +1997,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// The steps of the plan before the goal's own act-out: getting out of bed, sheathing and drawing (one think each), the walks home, out of the
     /// home and near the target, the ditch request, and a way through a locked door (the lock system's, <see cref="TakeDoorStep"/>). False when the
     /// step took the think (the act-out waits); <paramref name="behaviour"/> may become the walk home. A row the engine goal <paramref name="type"/>'s
-    /// system registered (<see cref="DutyGoals.Register"/>: 78, 156, 200, 93 in some goals' plans) is that act-out's, never one of these.
+    /// system registered (<see cref="DutyGoals.Register"/>: 78, 156, 200, 93 in some goals' plans) is that act-out's, never one of these, but a way
+    /// through a door the lock system put in front of the plan (<see cref="IsDoorWay"/>).
     /// </summary>
     bool PlanStep(World world, int slot, AiMind mind, TaskType type, ref AiBehaviour behaviour)
     {
         var table = world.Characters;
-        if (behaviour == AiBehaviour.Duty && _duties!.EntryOf(type)?.Acts(mind.Step) == true) return true;
+        if (behaviour == AiBehaviour.Duty && _duties!.EntryOf(type)?.Acts(mind.Step) == true && !IsDoorWay(mind.Plan[0])) return true;
 
         // Steps of the plan before the goal's own act-out: getting out of bed, sheathing (one think each); the walk and the rest are the goal's.
         switch (mind.Step)

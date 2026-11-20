@@ -25,14 +25,20 @@ public sealed partial class AiSystem
         if (row == TaskType.None || cold.Ai is not { Engine: false, Goal: { } goal } mind) return false;
         if (mind.Plan.Count == 0 || !PlanContext.Stepped(goal)) return false;
 
-        if (!IsDoorStep(mind.Plan[0].Type)) mind.Plan.Insert(0, new PlanStep(row, new PlanTarget(Targets.Door, door)));
+        if (!IsDoorWay(mind.Plan[0])) mind.Plan.Insert(0, new PlanStep(row, new PlanTarget(Targets.Door, door)));
         return true;
     }
 
     /// <summary>
     /// Whether the NPC's kept plan runs a door step now (<see cref="TakeDoorStep"/>): the lock system works the way only while it does.
     /// </summary>
-    internal static bool RunsDoorStep(CharacterCold cold) => cold.Ai is { Plan: [var step, ..] } && IsDoorStep(step.Type);
+    internal static bool RunsDoorStep(CharacterCold cold) => cold.Ai is { Plan: [var step, ..] } && IsDoorWay(step);
+
+    /// <summary>
+    /// Whether a plan step is a way through a door (<see cref="TakeDoorStep"/>): one of its rows on a <see cref="Targets.Door"/> target. The same row
+    /// planned by an engine goal on its finder's door (86 Opening up's 78 Unlocking door, a <see cref="PlanTarget.Found"/> target) is that goal's.
+    /// </summary>
+    static bool IsDoorWay(in PlanStep step) => IsDoorStep(step.Type) && step.Target.Kind == Targets.Door;
 
     /// <summary>
     /// The rows of a way through a door (<see cref="TakeDoorStep"/>).
