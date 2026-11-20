@@ -312,7 +312,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   runs the task system only with a platoon (`FUN_1405112b0`) and not while carried or down (`FUN_1405d00b0`); `Give` starts its front at once only then, else it waits queued.
   While the front runs (`PlayerOrders.Wins`) `CharacterCold.OrderWins` is set (by the decision step and `Give`, serial; hashed while set, not saved; cleared for a character the
   step decides), and `DecisionSystem.Ordered` (the flag while the queue holds an order) keeps everything else off the character, as the original's order step comes before every
-  goal, 32 and committed goals included ([precedence](game/ai-tasks.md#precedence)): the AI (`AiSystem.Holds`, `Preempts`, `TaskStart.StartOwn`); a goal's or reaction's start
+  goal, 32 and committed goals included ([precedence](game/ai-tasks.md#precedence)): the AI (`AiSystem.Holds`, `ChooserRuns`, `TaskStart.StartOwn`); a goal's or reaction's start
   ([task starts](#task-starts): the AI's, retaliation's, the duties' and the victims' deferred fights and walks); retaliation's own defence (it answers as a player character
   does); the flight step, which also ends a running flight; the stand-down after a fight; the free tests of the duty sweeps and routines (the ditch and the player faction's
   food runs, the shut-in release, NPC healing, arming and scavenging, rejoining the leader); the
@@ -377,10 +377,11 @@ of a player's squad of the player's faction, not a prisoner it keeps) the ladder
 goals (`AiSystem.ThinkPlayer`; the other own-list goals weigh 0 and stay with their sources). Its winning goal is acted out as an NPC's (`AiSystem.ActChosen`) while nothing else holds it
 (`PlayerSideHold.Free`: not fleeing, engaged, imprisoned, carried or down), and holds it (`PlayerSideHold.Holds`, the look due on its turn) until an order, a job or a higher goal
 ends it (`OrderStep.TakeOver`, `DutyEnd`); a goal over an order's or a job's task ends that task in the serial step and acts at the next tick; a source's win ends the goal (`DutyGoals.Leave`);
-an autonomous squad's member the NPC's while the AI holds it or it obeys as a slave on its list job's task (the 187 branch's), else the sources' rungs alone (its package mind untouched); an NPC the ladder through `ThinkHeld` while the AI holds it
-or it runs its list job's task free and out of a fight (`AiSystem.RunsListJob`: a job's pick leaves its goal, a goal that wins ends the job's task first, as a player-faction
-mind's), else the restricted choice (caged, or only the goals that pre-empt an engine duty or fight: **engine**, standing for the plan of a task Meitou's systems run), and
-an engine mind with nothing pre-empting the sources' rungs on its routine or job's task (`AiSystem.EngineJobs`: its job passes); no mind (tests only) the sources' rungs. Three
+an autonomous squad's member the NPC's while the AI holds it or it obeys as a slave on its list job's task (the 187 branch's), else the sources' rungs alone (its package mind untouched); an NPC the full ladder (`AiSystem.ThinkNpc`)
+on whatever task, in a fight it did not start and in its cage, but while it flees, is carried or down or its order holds it (`ChooserRuns`); the winner is acted out on a task the
+AI runs, or on its list job's (`AiSystem.RunsListJob`: a job's pick leaves its goal, a goal that wins ends the job's task first, as a player-faction mind's), from the cage, or over
+a task an engine system runs (`ActOverEngineTask`, [AI](#ai)); the two holds only Meitou has keep their own choice (`MeitouHolds`, [AI](#ai)), and an engine mind with nothing
+taking it over the sources' rungs on its routine or job's task (`AiSystem.EngineJobs`: its job passes); no mind (tests only) the sources' rungs. Three
 phases, no source ever called from the think:
 - **Look** (`DecisionSystem.Look`, serial, end of the schedule step): a character the chooser runs for (`TakesOrders`: a squad, not carried, out cold or dead) that a source
   concerns (a player character, a player-faction mind, an order or a job list) and that is due (its think turn, `ThinkEveryTicks` anchored at tick + slot, for a player
@@ -2217,7 +2218,7 @@ Meitou only (the original's AI plans for no player squad; asked for as the RE_Ke
 - **Precedence** (the chooser's order, [precedence](game/ai-tasks.md#precedence)): orders, urgent package goals, jobs, the other package goals.
   `AiSystem.Holds` takes a player character only when no plan runs its task or the plan is 14 Idleness's or the think's own (`AiMind.Owns`: the
   tick and row of its last start; its own fight), so an order's, job's or reaction's task is never touched. On a job's task the think weighs the
-  urgent tier only (`Restrict.Urgent`); a goal that plans sets `AiMind.Urgent` and the step-4 source `SquadAutonomy.PackageGoals` frees the
+  urgent tier only (`MeitouHold.Urgent`); a goal that plans sets `AiMind.Urgent` and the step-4 source `SquadAutonomy.PackageGoals` frees the
   character (idle; the next think acts the goal out) and counts as running, so step 5 does not take it back. A task for a goal that is not urgent
   yields to the jobs at the engine re-ask (`DecisionSystem.GoalsComeFirst`). **Engine choices**: the source's weight 0.5 and desire 1 (Self
   preservation wins); implicit jobs take only a standing character, as before.
@@ -2286,7 +2287,7 @@ Meitou only (the original's AI plans for no player squad; asked for as the RE_Ke
 
 `TaskPlanner` runs the original's search ([ai-tasks](game/ai-tasks.md#planner)) over `TaskDataTable` (all 253 rows) for the
 goals the engine acts out. The think orders each tier's goals by score, leaves out one whose list A holds, and takes the first
-whose plan succeeds (`AiSystem.Choose`); `AiMind.Plan` holds it leaf first (hashed) and `AiMind.Step` its first step. A goal planned by
+whose plan succeeds (`TierRungs`); `AiMind.Plan` holds it leaf first (hashed) and `AiMind.Step` its first step. A goal planned by
 steps (`PlanContext.Stepped`: one whose row acts or has an effect, not acted out by an engine system) keeps its plan as the original does
 ([precedence](game/ai-tasks.md#precedence)): each think first runs the plan step (`PlanSteps.Run`: the running step ends by its class's finished
 test and its list A, a walk once the next step can run, else by the goal's hours or its own list B; the next starts, a row that does not act
@@ -2326,8 +2327,15 @@ mind's request (`AiMind.FightGoal`, `FightTarget`) and stands, and `SendFights` 
 the protect goals and 32), logs it with the aggro system's fights (not 32's) and asks the starter's squad mates to think; a later starter of the same pass picks again with the fights started so far counted
 as attackers (the original's choosers run one after another). That fight is the AI's own (`AiMind.FightFrom`): `Holds` keeps its fighter, which thinks in it but acts nothing out
 (`InFight`): a combat goal or 32's fight keeps the fight, Self preservation's run or a goal 35 asks the flee step, any other goal makes `LeaveFights` (serial) end the fight, and the next tick acts it out.
-An engine duty a fight may interrupt (treating, a town errand's walk, a captive job's walk and its meal at a body, #623) is weighed by `Choose` with only the combat goals and 32; any other duty, and a fight the AI did not
-start (a dialogue's, an assault's, a duty's), with 32 alone (`Preempts`; in a fight only its run changes anything); the fight's start ends the duty's task through its handler. Think-again asks
+Every NPC with a mind runs the full ladder on whatever task (`AiSystem.ThinkNpc`): whatever it is on competes at its own rung (a duty or Medic goal
+at its tier with its continuity, a job at its rung, the fight's 32). Over a task an engine system runs (`ActOverEngineTask`; the AI does not hold it): in a fight it did not
+start (a dialogue's, an assault's, a duty's, aggro's) a combat goal or 32 becomes the fight's goal (`InFight`), any other winner leaves it to its starter; elsewhere a combat
+goal's fight or a run replaces the task, the goal whose act-out it is goes on, and a treatment (a medic job's or a Medic, splint or Fixing Legs goal's) ends for any other
+winner (`LeaveTask`; on its own Fixing Legs treatment only for an urgent one, **Observed**); the engine's other tasks (a crime's, a lift, a dialogue's, an errand's walk)
+stand for orders or goals not put on a rung, so they wait, and a job or second-list entry that wins starts nothing over them; a winner not taken up leaves the
+current goal's plan as it was (`KeepPlan`). **Meitou holds** (`MeitouHolds`, until the mod contract changes): an NPC a code mod's goal engages and an engine
+mind weigh only the urgent tier's goals their hold lets through (`TierRungs.HeldChoice`: 32 alone, or the combat goals and 32 on a mod's walk below the urgent tier and on an
+engine mind's routine), with no sources and no committed stop. Think-again asks
 (`AiMind.Replan`, engine stand-ins; the original's replan requests are the [decision step](#decision-step)'s): a sighting of the look (the looker and its mates within 2 R), a new enemy sensed by a fighter in its own fight, an alert (the attacked NPC with its fight
 off, the squad mates of the attacker and the attacked), a mate's fight start, the end of its own fight (`CombatSystem.EndFight`) and of its walk (`MovementSystem.EndWalk`); else
 the 15-tick cadence. A new enemy is acted on one tick after the look that sensed it (look at T, think at T+1, fight from T+2); so is an attack (alert at T, the attacker a threat at once). Any
@@ -2426,9 +2434,10 @@ its plan the act-out carries out besides the goal's own. Built: 135, 139, 282, 2
   whose plan is its own row alone that neither acts nor has an effect is dropped, as the scorer drops it (`FUN_14050df10`, **Verified**; not for a row with
   TaskData `+0x14`). The kept plan runs by `PlanSteps` (list A, list B, the hours), whose end ends the goal; a goal whose row neither acts nor has an effect (42,
   202, 254) is not kept and is planned afresh at each think.
-- **Caged**: an NPC in its cage with a mind of its own (`AiSystem.CagedMind`: not fleeing, fighting, carried, down or ordered) weighs its goals at every tier,
-  the planner's root row limited to the cage's repertoire (TaskData category bit 4); it acts the winner out only when it is an engine goal, else it stays held
-  with no goal. A plan step on a door way through the lock system is told from a goal's own door row by its target kind (`AiSystem.IsDoorWay`).
+- **Caged**: an NPC in its cage with a mind of its own (`AiSystem.CagedMind`: not fleeing, fighting, carried, down or ordered) runs the full ladder; what plans is
+  the cage's repertoire (TaskData category bit 4), for the engine's own plans too (`PlanContext.InRepertoire`: 32's providers 13 and 35 are not registered for it, a mod's
+  row-less goal plans nowhere from a cage); it acts the winner out only when it is an engine goal, else it stays held with no goal; a job or second-list entry that wins starts nothing (its start would
+  bypass the repertoire). A plan step on a door way through the lock system is told from a goal's own door row by its target kind (`AiSystem.IsDoorWay`).
 - **Start**: the think stands on the goal's row and asks (`AiMind.DutyAsk`); the serial step (`SendRequests`) calls `IDutyGoal.Start` in slot
   order for each asker the AI still holds, with the plan; a start makes the goal hold the character (`AiMind.Duty`, the record, and `DutyTick`, the start tick of the
   task it left running; hashed), a refusal backs the type off for four think periods.
@@ -2465,7 +2474,7 @@ a fight's since or none. Last, `INpcGoal.Start` is called in slot order for each
 the character and sets `AiMind.ModGoalStarted`, `ModGoalRow` and `ModGoalTick`; a refusal backs that type off for four think periods
 (`world.Every(ThinkEveryTicks)` x 4) and replans. `AiSystem.OnModTask` tells the act-out from another hold: the provenance is a goal's, of that row
 (from 1000 up), started at or after that tick. With it, `ActivityText` names the goal by its AI_TASK record while the character walks or stands
-on it, and `Preempts` lets the combat goals take over a goal below the urgent tier while the character walks on the act-out's walk carrying
+on it, and its hold (`MeitouHolds.Of`) lets the combat goals take over a goal below the urgent tier while the character walks on the act-out's walk carrying
 nothing (as a captive job's walk; not while it stands, which a conversation's or trade's hold does not change). The first think that holds the
 character again also ends the goal (goal and plan cleared, so no continuity) and drops the ended back-offs. Faults: a desire's fault at tick T stops
 asking the desire from T + 1 (the threads of T still ask it, so the cut does not depend on the thread count) and its starts from T; a start's

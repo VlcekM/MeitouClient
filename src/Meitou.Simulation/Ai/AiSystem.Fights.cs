@@ -73,7 +73,7 @@ public sealed partial class AiSystem
     /// A combat goal's desire before its finder (docs/game/ai-tasks.md "Combat goals" and "Desire and commitment"): 16 <c>scoreAttackEnemies</c> is 0
     /// while Passive, sneaking outside a fight or not standing; 15 / 288 <c>scoreProtectAllies</c> (<c>FUN_140599b90</c>, <b>Verified</b>) 0 while
     /// Passive (even in a fight), while sneaking and not in combat mode and for a slave holding job 187 (<see cref="HoldsJob187"/>), x0.5 while
-    /// carrying (a carrier on a town errand, <see cref="Preempts"/>); the desire of 15 / 288 is the finder's first ally above 0,
+    /// carrying (a carrier on a town errand); the desire of 15 / 288 is the finder's first ally above 0,
     /// uncapped (<see cref="ProtectScan"/>), the rest 1 (144's 0.5 is its profile's). The finder's factor multiplies it (<see cref="FightPick"/>).
     /// Engine gates for all: a character that cannot fight (no working fighter, crawling, or one Self preservation runs away with,
     /// <see cref="SelfPreservation.Flees"/>) and a turret's gunner (it keeps to its turret) want none.
@@ -687,12 +687,13 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// Whether the task the think asked to leave is still there to end: a fight, its own Fixing Legs treatment, or a player-faction character's task
-    /// that is not the AI's, an NPC's job's task (an order given since stays).
+    /// Whether the task the think asked to leave is still there to end: a fight, its own Fixing Legs treatment, an NPC's treatment an engine system
+    /// runs (<see cref="TakenOver"/>), or a player-faction character's task that is not the AI's, an NPC's job's task (an order given since stays).
     /// </summary>
     static bool Leaves(in CharacterHot n, CharacterCold cold, AiMind mind)
     {
         if (cold.InCombat || TreatsOwnLegs(n, cold)) return true;
+        if (!mind.PlayerSide && TakenOver(n, cold) && cold.Running is not { Source: TaskSource.Order }) return true;
 
         bool foreign = mind.PlayerSide || cold.Running is { Source: TaskSource.Job };
         return foreign && cold.Running is not { Source: TaskSource.Order } && !PlayerSideHold.OwnsTask(n, cold, mind);

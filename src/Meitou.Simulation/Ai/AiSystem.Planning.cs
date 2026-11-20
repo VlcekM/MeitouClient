@@ -224,6 +224,7 @@ public sealed partial class AiSystem
         bool Plan(AiGoal goal, float desire, bool current)
         {
             var type = goal.Task.Type;
+            if (OwnPlan(goal) && !InRepertoire(type)) return false;
 
             // The assault is its own plan (engine choice): its finder's target is not a plan target, the combat system draws weapons and closes in,
             // and its only list B entry (!47, not carrying) is what Holds already requires of a character the AI runs. So are the combat goals
@@ -244,6 +245,7 @@ public sealed partial class AiSystem
             if (type == TaskType.SelfPreservation)
             {
                 if (!_system.SelfPreservationPlans(_world, _slot, desire, out bool runs)) return false;
+                if (!InRepertoire(runs ? TaskType.RunAway : TaskType.AttackAttackersOf)) return false;
                 _mind.Plan.Clear();
                 _mind.Plan.Add(new PlanStep(runs ? TaskType.RunAway : TaskType.AttackAttackersOf, default));
                 _mind.Plan.Add(new PlanStep(type, default));
@@ -289,6 +291,20 @@ public sealed partial class AiSystem
             _mind.Plan.Clear();
             _mind.Plan.AddRange(_scratch);
             return true;
+        }
+
+        /// <summary>
+        /// Whether the character's repertoire (<see cref="Category"/>) registers <paramref name="type"/>'s row: the planner's root test, which a plan of
+        /// the engine's own (<see cref="OwnPlan"/>) passes too (docs/game/ai-tasks.md "Leaving the night cage": a cage's repertoire leaves out every
+        /// fight and run row, 13 and 35 included, so a caged character plans no Self preservation). A type with no row (a code mod's) plans only
+        /// outside the cage's repertoires (Meitou: a mod's goal is not acted out from a cage).
+        /// </summary>
+        bool InRepertoire(TaskType type)
+        {
+            int category = Category;
+            if (TaskDataTable.Of(type) is { } row) return (row.Category & category) != 0;
+
+            return (category & (Repertoire.Imprisoned | Repertoire.Chained)) == 0;
         }
 
         /// <summary>

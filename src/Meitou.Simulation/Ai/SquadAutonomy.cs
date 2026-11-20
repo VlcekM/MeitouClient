@@ -168,7 +168,7 @@ public sealed class SquadAutonomy(PopulationData data)
 
     /// <summary>
     /// Whether a player character of an autonomous squad is on a job's task and able: the think then weighs its urgent package goals only
-    /// (<see cref="AiSystem.Restrict.Urgent"/>).
+    /// (<see cref="MeitouHold.Urgent"/>).
     /// </summary>
     internal static bool OnJob(in CharacterHot n, CharacterCold cold, AiMind mind) =>
         Active(cold, mind) && cold is { InCombat: false, Fleeing: false, IsImprisoned: false } && cold.CarriedBy.IsNone && cold.Carrying.IsNone

@@ -84,11 +84,11 @@ public sealed record VisitTown(int SquadId, int PlayerTown, float Hours) : SimCo
 /// it scores the goals of its role list, its own <c>AI Goals</c> (race and faction) and the default idle goal by tier (urgent, then non-urgent, then fluff; the first tier with a positive score wins), weight, hour window,
 /// crowding and continuity, acts out the winner through <see cref="TaskBehaviours"/> (in its home building's nodes and beds where it has one); its
 /// combat goals are goals of the same choice (AiSystem.Fights.cs), which <see cref="AggroSystem"/>'s look asks it to weigh again when it senses a new
-/// enemy. The AI runs only characters that nothing else holds: not the player's (but those of a squad made autonomous, below their orders and jobs,
-/// <see cref="SquadAutonomy"/>), not in a fight it did not start, fleeing, down, carrying, carried,
-/// treating, looting or trading; in its own fight it chooses but acts out nothing (<see cref="InFight"/>), and an engine duty or fight is taken over
-/// only by the goals that pre-empt it (<see cref="Preempts"/>). The members of a platoon a code mod holds get a mind that weighs only their combat
-/// goals (<see cref="AiMind.Engine"/>, <see cref="EngineMinds"/>). Off screen a platoon's stand-in follows its package's job
+/// enemy. Every NPC with a mind runs the whole chooser on its turn, whatever it is doing, but fleeing, carried, down or held by its order
+/// (<see cref="ThinkNpc"/>); in its own fight it chooses but acts out nothing (<see cref="InFight"/>), and over a task an engine system runs the
+/// winner takes it over by that task's rules (<see cref="ActOverEngineTask"/>). A code mod's goal and a platoon a code mod holds keep a choice of
+/// their own (<see cref="MeitouHolds"/>): the latter's members get a mind that weighs only their combat goals (<see cref="AiMind.Engine"/>,
+/// <see cref="EngineMinds"/>). Off screen a platoon's stand-in follows its package's job
 /// (<see cref="PopulationSystem"/>, <see cref="PlatoonJobs"/>).
 /// <list type="bullet">
 /// <item><c>Think</c> (parallel): the choice and the act-out write only the character's own state (its task, goal, path flags and
@@ -390,7 +390,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     {
         if (DecisionSystem.Down(cold) || row is null) return;
 
-        var tiers = TierRungs.Local.Bind(this, world, i, id, mind, squad, board, [], hour, Restrict.None, replan);
+        var tiers = TierRungs.Local.Bind(this, world, i, id, mind, squad, board, [], hour, MeitouHold.None, replan);
         var pick = Ladder.Run(world.Decisions.Steps, row, tiers, cold.Jobs.Count > 0);
         row.Pick = pick;
         if (pick.Goal is not { } goal || ReferenceEquals(goal, Idle)) LeaveChoice(cold, mind);
@@ -515,12 +515,75 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// An NPC's think after the order step: held by the AI or on its list job's task (<see cref="RunsListJob"/>), the ladder
-    /// (<see cref="ThinkHeld"/>); in its cage, its caged choice; on an engine duty or fight, only the goals that pre-empt it, then an engine mind's
-    /// job passes (<see cref="EngineJobs"/>).
+    /// An NPC's think after the order step: the full ladder (<see cref="ChooseOnLadder"/>) whatever task it is on, as the original's chooser runs on
+    /// every AI update of a character with a platoon (<c>FUN_1405112b0</c>, <b>Verified</b>), but while no chooser runs (<see cref="ChooserRuns"/>).
+    /// The winner is acted out as the AI's (<see cref="ActChosen"/>) on a task the AI runs, from the cage (<see cref="ActCaged"/>), or over a task an
+    /// engine system runs (<see cref="ActOverEngineTask"/>). The two holds only Meitou has keep their own choice (<see cref="ThinkMeitouHeld"/>).
     /// </summary>
     void ThinkNpc(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, IReadOnlyList<AiGoal> roles,
         int hour, ChooserRow? row, bool replan)
+    {
+        ref var n = ref world.Characters.Next[i];
+        if (mind.Engine || cold.Engaged)
+        {
+            ThinkMeitouHeld(world, i, id, cold, mind, squad, board, roles, hour, row, replan);
+            return;
+        }
+
+        bool caged = ThinksCaged(cold);
+        if (!caged && !ChooserRuns(cold)) return;
+
+        // Whether the AI runs its task, asked before the ladder: a replan request's clear changes the goal the hold reads.
+        bool held = !caged && (Holds(n, cold) || RunsListJob(n, cold));
+        if (!held) KeepPlan(mind);
+
+        var pick = ChooseOnLadder(world, i, id, cold, mind, squad, board, roles, hour, row, replan);
+        if (pick.Goal is not { } goal)
+        {
+            if (pick.Source >= 0 || pick.Second >= 0) TakeSource(cold, mind, row, pick, !caged && (held || TakenOver(n, cold)));
+            if (!held) RestorePlan(mind);
+            return;
+        }
+
+        if (held) ActChosen(world, i, cold, mind, goal, board, row);
+        else if (caged ? !ActCaged(world, i, mind, goal, board) : !ActOverEngineTask(world, i, cold, mind, goal, board, row)) RestorePlan(mind);
+    }
+
+    /// <summary>
+    /// Keeps the plan of the current goal before the ladder of a character the AI does not hold: the ladder plans its winner into the mind
+    /// (<see cref="PlanContext.TryPlan"/>), and a winner not acted out (<see cref="ActOverEngineTask"/>, <see cref="ActCaged"/>) must not leave its
+    /// plan under the goal that goes on.
+    /// </summary>
+    static void KeepPlan(AiMind mind)
+    {
+        var kept = PlanScratch;
+        kept.Clear();
+        kept.AddRange(mind.Plan);
+    }
+
+    /// <summary>
+    /// Puts back the plan <see cref="KeepPlan"/> kept: the winner was not taken up.
+    /// </summary>
+    static void RestorePlan(AiMind mind)
+    {
+        mind.Plan.Clear();
+        mind.Plan.AddRange(PlanScratch);
+    }
+
+    /// <summary>
+    /// Whether an NPC's chooser runs out of a cage: not while carried, knocked out or dead (<c>FUN_1405d00b0</c>, <b>Verified</b>); Meitou: not while
+    /// it flees (<see cref="FleeSystem"/>'s run stands for the plan of 35 or 32), nor while its order holds it (the order step picked it).
+    /// </summary>
+    static bool ChooserRuns(CharacterCold cold) =>
+        !cold.Fleeing && !cold.IsImprisoned && cold.CarriedBy.IsNone && cold.Medical is not { Incapacitated: true } && !DecisionSystem.Ordered(cold);
+
+    /// <summary>
+    /// The two holds only Meitou has (<see cref="MeitouHolds"/>), as they were: an engine mind or a mod's goal the AI runs thinks as held
+    /// (<see cref="ThinkHeld"/>); one it does not weighs only the goals that may take it over (<see cref="MeitouHolds.Of"/>); else an engine mind's
+    /// job passes (<see cref="EngineJobs"/>).
+    /// </summary>
+    void ThinkMeitouHeld(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board,
+        IReadOnlyList<AiGoal> roles, int hour, ChooserRow? row, bool replan)
     {
         ref var n = ref world.Characters.Next[i];
         if (Holds(n, cold) || !mind.Engine && RunsListJob(n, cold))
@@ -529,20 +592,108 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return;
         }
 
-        if (ThinksCaged(cold))
-        {
-            ThinkCaged(world, i, id, mind, squad, board, roles, hour);
-            return;
-        }
-
-        // A character on an engine duty or in an engine fight: only the goals that pre-empt it (Preempts) are weighed.
-        if (Preempts(n, cold) is not Restrict.None and var only && Choose(world, i, id, mind, squad, board, roles, hour, only) is { } urgent)
+        if (MeitouHolds.Of(n, cold) is not MeitouHold.None and var only && Choose(world, i, id, mind, squad, board, roles, hour, only) is { } urgent)
         {
             ActPreempting(world, i, cold, mind, urgent, only);
             return;
         }
 
         EngineJobs(world, n, cold, mind, row);
+    }
+
+    /// <summary>
+    /// The full ladder for a mind (<see cref="Ladder.Run"/> with its look's sources and the AI's rungs): a mod's goal that let it go ends first; the
+    /// pick is the row's for the serial pass.
+    /// </summary>
+    LadderPick ChooseOnLadder(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board,
+        IReadOnlyList<AiGoal> roles, int hour, ChooserRow? row, bool replan)
+    {
+        if (mind.ModGoalStarted) EndModGoal(mind);   // the mod let it go: its act-out is over
+        if (mind.ModGoalBackoff is not null) mind.PruneBackoff(world.Tick);
+
+        var tiers = TierRungs.Local.Bind(this, world, i, id, mind, squad, board, roles, hour, MeitouHold.None, replan);
+        var pick = Ladder.Run(world.Decisions.Steps, row, tiers, cold.Jobs.Count > 0);
+        if (row is not null) row.Pick = pick;
+        return pick;
+    }
+
+    /// <summary>
+    /// A source's or a second-list entry's pick: with <paramref name="takes"/> the serial pass starts it, and after a source's the goal is no longer
+    /// the current one (the original's update clears a goal that runs no task after the choice, <c>FUN_140511130</c>); else it starts nothing and the
+    /// task goes on: an engine's task (<see cref="TakenOver"/>), or the cage, where the start would bypass the cage's repertoire.
+    /// </summary>
+    void TakeSource(CharacterCold cold, AiMind mind, ChooserRow? row, LadderPick pick, bool takes)
+    {
+        if (!takes)
+        {
+            if (row is not null) row.Pick = LadderPick.None(0);
+            return;
+        }
+
+        if (pick.Source >= 0) LeaveChoice(cold, mind);
+    }
+
+    /// <summary>
+    /// Whether any winner of the ladder may take over the task an engine system runs for the NPC: a treatment out of a fight (a medic job's at its
+    /// rung, or the act-out of its Medic, splint or Fixing Legs goal). The engine's other tasks (a fight it did not start, a crime's, a lift, a
+    /// dialogue's, an errand's walk) stand for an order or a goal Meitou does not put on a rung, so only a combat goal or Self preservation takes them
+    /// over (<see cref="ActOverEngineTask"/>).
+    /// </summary>
+    static bool TakenOver(in CharacterHot n, CharacterCold cold) => !cold.InCombat && n.Task == (byte)CharacterTask.Treat;
+
+    /// <summary>
+    /// The winner over a task an engine system runs (the AI does not hold the NPC, <see cref="Holds"/>). In a fight it did not start: a combat goal
+    /// or Self preservation becomes the fight's goal (<see cref="InFight"/>: the fight goes on, its run asks the flee step); any other winner leaves
+    /// the fight to its starter. Elsewhere: a combat goal's fight or a run is asked of the serial steps, whose start replaces the task
+    /// (<see cref="ActOverTask"/>); the goal whose act-out runs goes on; on its own Fixing Legs treatment a goal below the urgent tier leaves it (the
+    /// treatment runs until the leg is bandaged, <b>Observed</b>); another winner over a treatment ends it in the serial step and acts at the next
+    /// tick (<see cref="LeaveTask"/>); over the engine's other tasks it waits (<see cref="TakenOver"/>). Whether the winner was taken up as the
+    /// current goal (its plan stays).
+    /// </summary>
+    bool ActOverEngineTask(World world, int i, CharacterCold cold, AiMind mind, AiGoal goal, Blackboard board, ChooserRow? row)
+    {
+        if (row is not null && world.Decisions.Tracing) row.Winner = GoalName(goal);
+
+        var type = goal.Task.Type;
+        var behaviour = TaskBehaviours.Of(type);
+        bool fights = behaviour is AiBehaviour.Fight or AiBehaviour.SelfPreserve or AiBehaviour.Flee;
+        if (cold.InCombat)
+        {
+            if (fights) InFight(mind, goal, board);
+            return fights;
+        }
+
+        if (fights)
+        {
+            ActOverTask(world, i, mind, type, behaviour);
+            return false;
+        }
+
+        if (mind.Goal is { } current && DutyGoals.Same(current, goal)) return true;
+
+        ref var n = ref world.Characters.Next[i];
+        if (TakenOver(n, cold) && !(TreatsOwnLegs(n, cold) && goal.Task.Priority < TaskPriority.Urgent)) LeaveTask(mind);
+        return false;
+    }
+
+    /// <summary>
+    /// The winner of an NPC in its cage (<see cref="CagedMind"/>; the cage's repertoire limits what plans, <see cref="PlanContext.TryPlan"/>): acted
+    /// out only when a system acts it out from the cage (an engine goal); with any other winner it stays held with no goal, as the cage leaves it
+    /// nothing to do. A winner over the engine goal holding it ends that goal in the serial step. Writes only its own slot. Whether the winner was
+    /// taken up (or the goal cleared).
+    /// </summary>
+    bool ActCaged(World world, int slot, AiMind mind, AiGoal goal, Blackboard board)
+    {
+        bool duty = _duties!.Has(goal.Task.Type);
+        if (mind.Duty is { } held && (!duty || !DutyGoals.Same(held, goal)))
+        {
+            _duties.Leave(mind);
+            return false;
+        }
+
+        if (duty) Act(world, slot, mind, goal, board);
+        else LieOnWithNoGoal(mind, board);
+        return true;
     }
 
     /// <summary>
@@ -570,40 +721,40 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     static void EngineJobs(World world, in CharacterHot n, CharacterCold cold, AiMind mind, ChooserRow? row)
     {
         if (!mind.Engine || row is null || cold.Jobs.Count == 0 || !FreeForJobs(cold)) return;
-        if (!EngineRoutine(n) && !OnJobTask(n, cold)) return;
+        if (!MeitouHolds.EngineRoutine(n) && !OnJobTask(n, cold)) return;
 
         row.Pick = Ladder.Run(world.Decisions.Steps, row, null, jobs: true);
     }
 
     /// <summary>
-    /// A pre-empting goal's act-out: Self preservation's run; or a fight (its own defence, a combat goal's), which a character already fighting does
+    /// The act-out of a goal that took over a character a Meitou hold keeps (<see cref="MeitouHolds.Of"/>): Self preservation's run; or a fight (its own defence, a combat goal's), which a character already fighting does
     /// not start again. On its Fixing Legs treatment: the goal itself goes on; any other urgent goal that won ends the treatment in the serial step
     /// and is acted out at the next think.
     /// </summary>
-    void ActPreempting(World world, int i, CharacterCold cold, AiMind mind, AiGoal urgent, Restrict only)
+    void ActPreempting(World world, int i, CharacterCold cold, AiMind mind, AiGoal urgent, MeitouHold only)
     {
         if (ReferenceEquals(urgent, SelfPreservationGoal) && mind.Step == TaskType.RunAway) mind.FleeRequest = FleeAsk.Threat;
-        else if (only == Restrict.Urgent && urgent.Task.Type == TaskType.HealMyLegs) return;
-        else if (only == Restrict.Urgent && TaskBehaviours.Of(urgent.Task.Type) is not (AiBehaviour.Fight or AiBehaviour.SelfPreserve))
+        else if (only == MeitouHold.Urgent && urgent.Task.Type == TaskType.HealMyLegs) return;
+        else if (only == MeitouHold.Urgent && TaskBehaviours.Of(urgent.Task.Type) is not (AiBehaviour.Fight or AiBehaviour.SelfPreserve))
             LeaveTreatment(mind);
         else if (!cold.InCombat) AskFight(world, i, urgent.Task.Type, mind);
     }
 
     /// <summary>
-    /// The think of a character the AI holds (<see cref="Holds"/>): an engine mind weighs its combat goals in its own fight; any other runs the
-    /// ladder (<see cref="Ladder.Run"/>, <paramref name="row"/>'s sources: an NPC's job passes) and acts the goal out, or leaves a source's pick
-    /// to the serial pass.
+    /// The think of an autonomous squad's member or a Meitou-held NPC the AI holds (<see cref="Holds"/>): an engine mind weighs its combat goals in
+    /// its own fight; any other runs the ladder (<see cref="ChooseOnLadder"/>) and acts the goal out, or leaves a source's pick to the serial pass.
     /// </summary>
     void ThinkHeld(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, IReadOnlyList<AiGoal> roles,
         int hour, ChooserRow? row, bool replan)
     {
-        if (mind.ModGoalStarted) EndModGoal(mind);   // the mod let it go: its act-out is over
-        if (mind.ModGoalBackoff is not null) mind.PruneBackoff(world.Tick);
         if (mind.Engine)
         {
+            if (mind.ModGoalStarted) EndModGoal(mind);   // the mod let it go: its act-out is over
+            if (mind.ModGoalBackoff is not null) mind.PruneBackoff(world.Tick);
+
             // Its own fight, with nothing but its combat goals and Self preservation to weigh: none wanted ends the fight, and the engine's routine
             // takes it back.
-            if (Choose(world, i, id, mind, squad, board, roles, hour, Restrict.Combat) is { } kept) InFight(mind, kept, board);
+            if (Choose(world, i, id, mind, squad, board, roles, hour, MeitouHold.Combat) is { } kept) InFight(mind, kept, board);
             else
             {
                 mind.LeaveFight = true;
@@ -613,14 +764,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return;
         }
 
-        var tiers = TierRungs.Local.Bind(this, world, i, id, mind, squad, board, roles, hour, Restrict.None, replan);
-        var pick = Ladder.Run(world.Decisions.Steps, row, tiers, cold.Jobs.Count > 0);
-        if (row is not null) row.Pick = pick;
-
-        // A source's pick is started in the serial pass, and an NPC's goal is no longer the current one (the original's update clears a goal that
-        // runs no task after the choice, FUN_140511130).
+        var pick = ChooseOnLadder(world, i, id, cold, mind, squad, board, roles, hour, row, replan);
         if (pick.Goal is { } goal) ActChosen(world, i, cold, mind, goal, board, row);
-        else if (!cold.IsPlayer && pick.Source >= 0) LeaveChoice(cold, mind);
+        else if (!cold.IsPlayer && pick.Source >= 0) TakeSource(cold, mind, row, pick, takes: true);
     }
 
     /// <summary>
@@ -631,7 +777,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     void AskOffJob(World world, int slot, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board,
         IReadOnlyList<AiGoal> roles, int hour)
     {
-        bool wanted = Choose(world, slot, id, mind, squad, board, roles, hour, Restrict.Urgent) is not null;
+        bool wanted = Choose(world, slot, id, mind, squad, board, roles, hour, MeitouHold.Urgent) is not null;
         if (wanted && !mind.Urgent) DecisionSystem.Request(cold);
 
         mind.Urgent = wanted;
@@ -660,25 +806,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         Holds(n, cold) || CagedMind(cold) && (cold.Ai!.Duty is null || OnDuty(cold, cold.Ai));
 
     /// <summary>
-    /// The think of an NPC in its cage (<see cref="CagedMind"/>): it weighs its goals as anyone does (<see cref="Restrict.Caged"/>), and acts the winner
-    /// out only when a system acts it out from the cage (an engine goal); with any other winner, or none, it stays held with no goal, as the cage
-    /// leaves it nothing to do. A winner over the engine goal holding it ends that goal in the serial step. Writes only its own slot.
-    /// </summary>
-    void ThinkCaged(World world, int slot, CharacterId id, AiMind mind, Squad squad, Blackboard board, IReadOnlyList<AiGoal> roles, int hour)
-    {
-        var goal = Choose(world, slot, id, mind, squad, board, roles, hour, Restrict.Caged);
-        bool duty = goal is not null && _duties!.Has(goal.Task.Type);
-        if (mind.Duty is { } held && (!duty || !DutyGoals.Same(held, goal!)))
-        {
-            _duties!.Leave(mind);
-            return;
-        }
-
-        if (duty) Act(world, slot, mind, goal!, board);
-        else LieOnWithNoGoal(mind, board);
-    }
-
-    /// <summary>
     /// The choice of a character in its own fight (<see cref="OwnsFight"/>): a combat goal or Self preservation's fight (row 13) keeps the fight
     /// running (the fight is its plan's task, already queued: no new start, whichever of them is current now; the combat system re-targets); Self
     /// preservation's run (35) or a goal 35 asks the flee step, which stops the fight; any other goal ends the fight in the serial step, and the
@@ -702,67 +829,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// Which goals of a character the AI does not hold may still take it over (<see cref="Preempts"/>).
-    /// </summary>
-    internal enum Restrict : byte
-    {
-        /// <summary>
-        /// No restriction: every goal may take it over.
-        /// </summary>
-        None,
-        /// <summary>
-        /// Self preservation alone (its run, or its fight through row 13 against its own attacker).
-        /// </summary>
-        Self,
-        /// <summary>
-        /// The combat goals and Self preservation (priority 3): a fight they start ends an engine duty through its task's end; what an
-        /// <see cref="AiMind.Engine"/> mind weighs on its routine and in its own fight.
-        /// </summary>
-        Combat,
-        /// <summary>
-        /// Every urgent (priority 3) goal of the lists: what a player character on a job weighs (<see cref="AskOffJob"/>), and an NPC on its own
-        /// Fixing Legs treatment (<see cref="TreatsOwnLegs"/>).
-        /// </summary>
-        Urgent,
-        /// <summary>
-        /// Every tier of the lists, as for one the AI holds, for an NPC thinking in its cage (<see cref="ThinkCaged"/>), but not the goals whose plan
-        /// is the engine's own (<see cref="PlanContext.OwnPlan"/>): the planner's repertoire test, which the cage narrows, never sees them.
-        /// </summary>
-        Caged,
-    }
-
-    /// <summary>
-    /// What may take over an NPC with a mind that the AI does not hold (<see cref="Holds"/>), as the original's chooser would (its engine duties are
-    /// goals and jobs of the same chooser, below a priority-3 goal, docs/game/ai-tasks.md "Precedence"): on an engine duty whose system lets a fight
-    /// interrupt it, the combat goals and Self preservation; on any other (and in a fight it did not start: a dialogue's, an assault's, a duty's),
-    /// Self preservation alone, whose fight or run (<see cref="SelfPreservation.Runs"/>) ends the duty's task as any fight's start does (in a fight,
-    /// only its run changes anything). The duties a fight may interrupt: treating (<see cref="FirstAid.FirstAidSystem"/> lets go of the patient at
-    /// the fight's start), the walk of the town errand no goal holds (a ditch: <see cref="Kidnap.TownDutySystem"/> waits for
-    /// the fight to end and walks on), a captive job's walk carrying nothing and its meal
-    /// (<see cref="InterruptibleDuty"/>), a code mod's goal below the urgent tier (<see cref="InterruptibleModGoal"/>), and the routine of an
-    /// <see cref="AiMind.Engine"/> mind (<see cref="EngineRoutine"/>).
-    /// Nothing for one fleeing, imprisoned, carried or down, nor for a gunner or a carrier in a fight, nor for one its order holds: the order beats
-    /// every goal, Self preservation included (<see cref="DecisionSystem.Ordered"/>).
-    /// </summary>
-    internal static Restrict Preempts(in CharacterHot n, CharacterCold cold)
-    {
-        if (cold.Ai is not { PlayerSide: false } mind || cold.IsPlayer || cold.Fleeing || cold.IsImprisoned || !cold.CarriedBy.IsNone
-            || cold.Medical is { Incapacitated: true } || DecisionSystem.Ordered(cold))
-            return Restrict.None;
-
-        if (cold.InCombat) return cold.Gunning is null && cold.Carrying.IsNone ? Restrict.Self : Restrict.None;
-        if (cold.Engaged) return InterruptibleDuty(n, cold) || InterruptibleModGoal(n, cold, mind) ? Restrict.Combat : Restrict.Self;
-        if (mind.Engine && EngineRoutine(n)) return Restrict.Combat;
-
-        // Fixing Legs' own treatment: the original's chooser weighs every goal on each update, and while the urgent goal is wanted only an urgent
-        // goal can outscore it; once the legs work the treatment still runs until the leg is fully bandaged (Observed in the original), and only
-        // an urgent goal that plans takes over.
-        if (TreatsOwnLegs(n, cold)) return Restrict.Urgent;
-
-        return n.Task == (byte)CharacterTask.Treat || InterruptibleDuty(n, cold) ? Restrict.Combat : Restrict.Self;
-    }
-
-    /// <summary>
     /// Whether the character is on the treatment of itself that its Fixing Legs goal started (row 269, <see cref="AiBehaviour.HealLegs"/>).
     /// </summary>
     internal static bool TreatsOwnLegs(in CharacterHot n, CharacterCold cold) =>
@@ -777,31 +843,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         mind.LeaveFight = true;
         Interlocked.Exchange(ref _leaving, 1);
     }
-
-    /// <summary>
-    /// A duty holding the character (<see cref="CharacterCold.Engaged"/>) that a fight may interrupt: the walk of a town errand no goal holds
-    /// (<see cref="Kidnap.TownDutySystem.IsErrandRow"/>: it waits for the fight's end and walks on), a captive job's
-    /// walk carrying nothing (<see cref="Kidnap.CaptiveSystem"/> gives the job up at the fight's start), or the meal it stands at (220 Eating is a
-    /// priority-2 goal's task, below the combat goals; a vampiric meal lasts minutes, #623).
-    /// </summary>
-    static bool InterruptibleDuty(in CharacterHot n, CharacterCold cold)
-    {
-        if (n.Task == (byte)CharacterTask.Idle) return cold.Carrying.IsNone && cold.ActionClip == Kidnap.CaptiveSystem.EatClip;
-        if (n.Task != (byte)CharacterTask.GoTo || cold.Running is not { Source: TaskSource.Goal, Task: CharacterTask.GoTo } run) return false;
-
-        return Kidnap.TownDutySystem.IsErrandRow(run.Row) || cold.Carrying.IsNone && Kidnap.CaptiveSystem.IsJobRow(run.Row);
-    }
-
-    /// <summary>
-    /// A code mod's goal below the urgent tier walking on its act-out's own walk, carrying nothing (as a captive job's walk): the combat goals, a
-    /// tier above it, may take the character over as they take over the engine's own priority-2 duties; the fight's start ends the mod's task through its
-    /// handler. Not while it stands: a trade or an open conversation holds a standing character with its task and provenance as they were, so only
-    /// the walk tells the mod's act-out from such a hold. (A Talk order's approach does not stand a walking NPC, so the walk may still be taken over
-    /// until the conversation opens and stands it.)
-    /// </summary>
-    static bool InterruptibleModGoal(in CharacterHot n, CharacterCold cold, AiMind mind) =>
-        mind.Goal is { Task.Priority: < TaskPriority.Urgent } && n.Task == (byte)CharacterTask.GoTo && cold.Carrying.IsNone
-        && OnModTask(cold, mind) && cold.Running!.Runs(CharacterTask.GoTo);
 
     /// <summary>
     /// Whether the character's provenance is the act-out a mod's goal started (<see cref="AiMind.ModGoalStarted"/>): a goal's
@@ -830,12 +871,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         mind.Goal = null;
         mind.Plan.Clear();
     }
-
-    /// <summary>
-    /// The engine's routine of an <see cref="AiMind.Engine"/> mind, which a fight its combat goals start interrupts: standing, wandering or
-    /// following its leader.
-    /// </summary>
-    static bool EngineRoutine(in CharacterHot n) => (CharacterTask)n.Task is CharacterTask.Idle or CharacterTask.Wander or CharacterTask.Follow;
 
     /// <summary>
     /// Whether the character's fight is the AI's own: the one the serial step started for its combat goal (<see cref="AiMind.FightFrom"/>), still
@@ -994,14 +1029,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     const float FollowShare = 0.5f;
 
     /// <summary>
-    /// The choice of a character the AI does not hold, limited by <paramref name="only"/> (<see cref="Preempts"/>, <see cref="Restrict.Caged"/>,
-    /// <see cref="Restrict.Urgent"/> on a job, <see cref="Restrict.Combat"/> for an engine mind): by tier, the goals with a positive score highest
-    /// first, leaving out one whose list A already holds; the current goal with a step running is kept as it is, else the first whose plan succeeds
-    /// wins (<see cref="TierRungs.Restricted"/>); null when none plans. A held character runs the whole ladder instead (<see cref="ThinkHeld"/>).
+    /// The choice of a character a Meitou hold keeps (<see cref="MeitouHolds"/>), limited by <paramref name="only"/>: the urgent tier's goals it
+    /// lets through, highest score first; the current goal with a step running is kept as it is, else the first whose plan succeeds wins
+    /// (<see cref="TierRungs.HeldChoice"/>); null when none plans. Every other character runs the whole ladder (<see cref="ChooseOnLadder"/>).
     /// </summary>
     AiGoal? Choose(World world, int slot, CharacterId id, AiMind mind, Squad squad, Blackboard board, IReadOnlyList<AiGoal> roles,
-        int hour, Restrict only) =>
-        TierRungs.Local.Bind(this, world, slot, id, mind, squad, board, roles, hour, only, replan: false).Restricted();
+        int hour, MeitouHold only) =>
+        TierRungs.Local.Bind(this, world, slot, id, mind, squad, board, roles, hour, only, replan: false).HeldChoice();
 
     /// <summary>
     /// The plan step before the choice (<see cref="PlanSteps"/>): the current goal's running step ends by its own tests and the next starts; with no
