@@ -1,5 +1,6 @@
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Simulation.Factions;
+using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Ai;
@@ -82,9 +83,11 @@ internal interface IDutyGoal
     bool Start(World world, in DutyAsk ask, IReadOnlyList<PlanStep> plan);
 
     /// <summary>
-    /// The goal ended (serial): drop the act-out's own record and anything it holds (a carried body, a claimed fixture). The character's task is left
-    /// as it is: whatever ended the goal (the next goal, the order, the body) replaces it. <paramref name="id"/> is the character it was started for
-    /// (for <see cref="DutyEnd.Gone"/> the slot may already hold another).
+    /// The goal ended (serial): drop the act-out's own record and anything it holds (a carried body, a claimed fixture), and leave the task alone.
+    /// For <see cref="DutyEnd.Displaced"/> the foundation then stops the act-out while its provenance is still the act-out's (a walk stands, another
+    /// task but idle ends through its handler), so the AI acts the winner out; for the other ends whatever ended the goal (the order, the body, the
+    /// system that took it) replaces the task. <paramref name="id"/> is the character it was started for (for <see cref="DutyEnd.Gone"/> the slot may
+    /// already hold another).
     /// </summary>
     void End(World world, int slot, CharacterId id, DutyEnd why);
 }
@@ -298,14 +301,19 @@ internal sealed class DutyGoals
 
     /// <summary>
     /// The act-out is over by the registering system's own rule (serial): the record goes and the goal ends on the mind, which chooses again at its
-    /// next think. <see cref="IDutyGoal.End"/> is not called (the system ended it itself). Nothing when the goal does not hold the character.
+    /// next think. <see cref="IDutyGoal.End"/> is not called (the system ended it itself); a walk of the act-out still under way stands, so the AI
+    /// holds the character. Nothing when the goal does not hold the character.
     /// </summary>
     internal void Done(World world, int slot, TaskType type)
     {
         if (!_held.TryGetValue(slot, out var held) || held.Entry.Type != type) return;
 
         _held.Remove(slot);
-        if (world.Characters.Cold(slot)?.Ai is { } mind) EndOnMind(mind, held);
+        if (world.Characters.Cold(slot) is not { Ai: { } mind } cold) return;
+
+        bool walks = world.Characters.Next[slot].Task == (byte)CharacterTask.GoTo && AiSystem.OnDuty(cold, mind);
+        if (walks) TaskStart.Stand(world.Characters, slot);
+        EndOnMind(mind, held);
     }
 
     /// <summary>
@@ -391,9 +399,23 @@ internal sealed class DutyGoals
         foreach (var (slot, why) in _ended)
         {
             _held.Remove(slot, out var held);
+            var cold = why == DutyEnd.Gone ? null : table.Cold(slot);
+            bool own = why == DutyEnd.Displaced && cold?.Ai is { } owner && AiSystem.OnDuty(cold, owner);
             held!.Entry.Goal.End(world, slot, held.Id, why);
-            if (why != DutyEnd.Gone && table.Cold(slot)?.Ai is { } mind) EndOnMind(mind, held);
+            if (own) StopActOut(world, slot);
+            if (cold?.Ai is { } mind) EndOnMind(mind, held);
         }
+    }
+
+    /// <summary>
+    /// A displaced goal's act-out stops (its provenance still the act-out's: nothing else replaced it), so the AI holds the character for the winner
+    /// at the next think, as a fight it leaves ends (<c>LeaveFights</c>): a walk stands, any other task but standing idle ends through its handler.
+    /// </summary>
+    static void StopActOut(World world, int slot)
+    {
+        var task = (CharacterTask)world.Characters.Next[slot].Task;
+        if (task == CharacterTask.GoTo) TaskStart.Stand(world.Characters, slot);
+        else if (task != CharacterTask.Idle) TaskStart.End(world, slot, TaskEnd.Stopped);
     }
 
     /// <summary>

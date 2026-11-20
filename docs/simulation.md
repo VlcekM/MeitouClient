@@ -2344,7 +2344,9 @@ its plan the act-out carries out besides the goal's own. Built: 176 (`SmellSyste
   and the next tick acts the winner out.
 - **End** (`IDutyGoal.End` with `DutyEnd`, then the goal and plan leave the mind, which replans): displaced; an order's start (`IDutyRelease`, a faction change too); an
   order on the body (`AiSystem.ReplanDuty`), a knock-out or death, a wiped or ended plan, a new mind (replanned); anything else holding it (taken: engaged by another
-  system, fleeing, fighting, carried, caged, a task another system started); gone. The system's own end is `DutyGoals.Done`. Records are hashed while any.
+  system, fleeing, fighting, carried, caged, a task another system started); gone. A displaced act-out whose provenance is still its own is stopped after `End` (a walk
+  stands, another task but idle ends through its handler), so the AI holds the character for the winner; the other ends leave the task to what ended the goal. The
+  system's own end is `DutyGoals.Done` (no `End`; a walk of the act-out still under way stands). Records are hashed while any.
 
 ### Mod goals
 
