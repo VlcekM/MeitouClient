@@ -1263,7 +1263,9 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
 An arrest (`Crime.Arrest`) is the act-out of the guard's running order 240 Capture Target, 213 Lifting/Snatching or 112 Find and put in cage (`Arrest.Order`; the record
 lives while that order is his started front; nothing else holds him, and another order's start leaves the arrest's carry alone). **Engine choice**: the act-out runs
 the original's plan (fight 4 for state 7, lift 240 or 213; then 112's cage walk and 108's put-in; no strip: 240's and 213's list B have no 118) as serial phases, not through the AI planner; each task of an ordered
-one starts with the order's provenance. The chain's rows and states are in [AI tasks](game/ai-tasks.md#arrest-and-prison-rows). Goal 204 is an [engine goal](#engine-goals) (below); goals 203, 112 and 281 are not in `TaskBehaviours.Table`.
+one starts with the order's provenance. The phases stay because Meitou's order step plans no order: every order is acted out by its owner (`IOrderOwner.Start`,
+`IOrderSteps.Between`), and the duty goals' body act-outs (112 / 108 in `TownGoals`, 204's in `ArrestGoals`) start only from a mind's chosen goal (`DutyGoals.Ask`),
+which an order's hold refuses. The chain's rows and states are in [AI tasks](game/ai-tasks.md#arrest-and-prison-rows). Goal 204 is an [engine goal](#engine-goals) (below); goals 203, 112 and 281 are not in `TaskBehaviours.Table`.
 - **Triggers**: a police-like witness that books a crime acts at once (`CrimeSystem.BookingsOf`, the witnessed-crime
   events); every 15 ticks an awake NPC within 400 that sees a player character (`Visibility`/`SneakVisibility`) whose
   bounty with its faction reaches its class threshold spots it, at once while `RecentlyWanted` > 0 (250 game seconds after
