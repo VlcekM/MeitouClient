@@ -337,6 +337,7 @@ public static class PlayerOrders
         }
 
         q.Add(order);
+        SetCentre(world, cold, order);
         DecisionSystem.Replan(cold);   // addOrder replans at once: the order's own start below, the fall-through at the decision step
         bool starts = q.Count == 1 && (DecisionSystem.Decides(cold) || DecisionSystem.TakesOrders(cold));
         var check = starts ? TryFront(world, slot, show) : OrderCheck.Run;
@@ -375,6 +376,22 @@ public static class PlayerOrders
         }
 
         DecisionSystem.Hold(world, slot);
+    }
+
+    /// <summary>
+    /// The order's point becomes the centre of movement (<c>addOrder</c> <c>FUN_1405d20d0</c> -> <c>AI::setCenterOfMovement</c> <c>FUN_140599970</c>,
+    /// <b>Verified</b>: on the queue path, not the permanent-job one, nor a body's front push): it writes <c>+0x2c0</c>, clears the centre target and
+    /// makes the default task 31 / 30 on that point by the manoeuvre mode, 14 under ROAM_FAR (Meitou reads the row from the mode,
+    /// <see cref="CharacterCold.Manoeuvre"/>, and keeps no centre under ROAM_FAR, where nothing reads it). Engine reading: an order on a character
+    /// takes the character's position as its point.
+    /// </summary>
+    static void SetCentre(World world, CharacterCold cold, OrderEntry order)
+    {
+        if (cold.Manoeuvre == ManoeuvreMode.RoamFar) return;
+
+        var table = world.Characters;
+        if (order.Point != default) cold.CentreOfMovement = order.Point;
+        else if (table.TryResolveNext(order.Target, out int t)) cold.CentreOfMovement = table.Next[t].Position;
     }
 
     /// <summary>
