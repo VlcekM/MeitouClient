@@ -243,7 +243,8 @@ holds refuses the second mod.
   first: after a save has loaded (`IModSaveData.Read` done and settings of mods no longer running dropped; an import counts as a save) or a
   new game has placed the player's characters (`fromSave` false). Systems are told in system order (mods in load order); one may change
   the world as a serial phase does, so a mod sets its unsaved runtime settings (a held platoon, a sleeping town) back on here, also for a
-  save made without its own saved state. One that throws is logged and the others are still told. Engine API, not in the original.
+  save made without its own saved state. One that throws is logged and the others are still told; a mod system built for another version of
+  the game is also stopped, with the notice ([Versioning](#versioning)). Engine API, not in the original.
 - **Goods taken:** a registered system implementing `IGoodsTakenObserver` (`Meitou.Simulation.Crime`) receives
   `GoodsTaken(World, in GoodsTaken)` when one of the player's characters takes goods that are not its own by hand: a held item dragged or
   given out of an owned container or another character, a click take out of an owned container or a town machine, a right-click loot take off
@@ -545,8 +546,10 @@ holds refuses the second mod.
   from 1000 up has one owning mod: claim every number you use as a row (`AddJobType` or `AddGoalType`; one number may be both of one mod's); a
   mod's `Register(row)` or `RegisterOnSite(row)` of a row another mod claimed, or registered first, throws. Handlers run in the serial phases
   only (`TaskStart.Start` throws in a parallel one). A throw from a mod system's `RegisterTasks` (a refused row included) is logged, and that
-  system's registrations are undone; the world is still made. A throw from a handler is caught as a fault of the mod system whose phase started
-  or ended the task, which may be another mod's (that system stops), and is not caught when an engine system did.
+  system's registrations are undone; the world is still made; one of a mod built for another version of the game also stops the system, with
+  the notice ([Versioning](#versioning)). The handlers a mod system registers in `RegisterTasks` are guarded (`ModTaskHandler`): a throw from
+  one, whichever system started or ended the task, the engine's included, is a fault of the registering system (it stops, Tick systems above),
+  and the task starts or ends without the handler from then on (**Observed**, by reading `TaskHandlers.RegisterMod`).
 - **Goal claims** (`IGoalSource`, [claims](game/ai-tasks.md#perma-jobs) "Claims"): a registered system implementing it adds the (worker, target)
   pairs it acts out now in `Publish(World, SquadGoals)` with `goals.Add(squad, worker, GoalTarget.Of(body) or GoalTarget.At(site id))`. It is
   asked serially, in system order, each time a finder takes a snapshot (`SquadGoals.Of`) and once at the end of every tick; a pair stays claimed
@@ -959,7 +962,8 @@ holds refuses the second mod.
     engine stops a task still the act-out's: a walk stands, another ends through its handler), `Order` (an order's task starts), `Replanned` (a
     knock-out, death or pick-up, an order on the body, a new mind, the goal's hours over), `Taken` (it flees, fights, is carried or caged, or
     another system's task replaced the act-out), `Gone` (it left the world or died). Drop what the act-out holds and leave the task alone. A fight
-    takes the character over this way: Self preservation or a combat goal wins on the chooser. `ModGoals.Done(world, slot, type)` ends the goal
+    takes the character over this way: `Displaced` when Self preservation or a combat goal wins on the chooser, `Taken` when another system
+    starts the fight first. `ModGoals.Done(world, slot, type)` ends the goal
     by the mod's rule (no `End`; a task still the act-out's stops as for `Displaced`), and `ModGoals.Holds(world, slot, type)` tells the mod's
     serial step whether its act-out goes on; both throw in a parallel phase. Nothing is saved: after a load no goal holds anyone, and the chooser
     starts the goal again.
@@ -986,7 +990,7 @@ holds refuses the second mod.
   - `INpcGoal.Desire(world, in NpcGoalAsk)`: `IModGoal.Desire(in ModGoalAsk)`, still in the parallel think, reading through the ask.
   - `INpcGoal.Start` setting `Engaged`, walking and answering true: `IModGoal.Start` walking and answering true; the goal holds the character.
   - Done by stopping the task, clearing `Engaged` and setting `Replan`: `ModGoals.Done(world, slot, type)`.
-  - Releasing for a fight: nothing to do; the fight's goal wins and `End(Displaced)` is called.
+  - Releasing for a fight: nothing to do; `End(Displaced)` or `End(Taken)` is called (Ends above).
   - Player characters weigh a mod's goal type in their own lists and their autonomous squad's package.
 - **Seats** (`Meitou.Simulation.Production`; the system from `SystemBuildContext.Find<ProductionSystem>()` or `world.Systems`):
   `SitOn(world, slot, seat, row, source)` puts a character, the player's or an NPC, on a chair or throne through the player's Use order's

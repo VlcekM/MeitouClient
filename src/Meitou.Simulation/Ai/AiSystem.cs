@@ -385,7 +385,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// The ladder of a player-faction character (<see cref="Ladder.Run"/> with its look's sources and the AI's rungs: its autonomous squad's package
-    /// roles, else none, <see cref="PlayerSideRoles"/>; the own lists' types on the rungs, 32): a source's pick is started in the serial pass and
+    /// roles, else none, <see cref="PlayerSideRoles"/>; the own lists' types on the rungs or of a code mod, 32): a source's pick is started in the serial pass and
     /// ends the AI's goal (<see cref="LeaveChoice"/>); a goal's is acted out as an NPC's is (<see cref="ActChosen"/>) while nothing else holds the
     /// character (<see cref="PlayerSideHold.Free"/>), else only Self preservation acts (<see cref="ActSelfPreservation"/>). The default task and
     /// the mover reset leave its task as it is (the Idleness source stands for them); own-list 14 with a plan (sheathing) is acted out. None while it

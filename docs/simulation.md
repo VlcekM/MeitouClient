@@ -2344,9 +2344,9 @@ start (a dialogue's, an assault's, a duty's, aggro's) a combat goal or 32 become
 goal's fight or a run replaces the task (a run's goal becoming the current one first, `Install`, so the flight goes on as its goal's), the goal whose act-out it is goes on, and a treatment (a medic job's or a Medic, splint or Fixing Legs goal's) ends for any other
 winner (`LeaveTask`; on its own Fixing Legs treatment only for an urgent one, **Observed**); the engine's other tasks (a crime's, a lift, a dialogue's, an errand's walk)
 stand for orders or goals not put on a rung, so they wait, and a job or second-list entry that wins starts nothing over them; a winner not taken up leaves the
-current goal's plan as it was (`KeepPlan`). **Meitou holds** (`MeitouHolds`, until the mod contract changes): an NPC a code mod's goal engages and an engine
-mind weigh only the urgent tier's goals their hold lets through (`TierRungs.HeldChoice`: 32 alone, or the combat goals and 32 on a mod's walk below the urgent tier and on an
-engine mind's routine), with no sources and no committed stop. Think-again asks
+current goal's plan as it was (`KeepPlan`). **Meitou holds** (`MeitouHolds`, until the mod contract changes): an NPC a code mod engaged (`CharacterCold.Engaged`) and an engine
+mind weigh only the urgent tier's goals their hold lets through (`TierRungs.HeldChoice`: 32 alone, or the combat goals and 32 on the engine's errand or captive
+walk and on an engine mind's routine), with no sources and no committed stop. Think-again asks
 (`AiMind.Replan`, engine stand-ins; the original's replan requests are the [decision step](#decision-step)'s): a sighting of the look (the looker and its mates within 2 R), a new enemy sensed by a fighter in its own fight, an alert (the attacked NPC with its fight
 off, the squad mates of the attacker and the attacked), a mate's fight start, the end of its own fight (`CombatSystem.EndFight`) and of its walk (`MovementSystem.EndWalk`); else
 the 15-tick cadence. A new enemy is acted on one tick after the look that sensed it (look at T, think at T+1, fight from T+2); so is an attack (alert at T, the attacker a threat at once). Any
