@@ -2330,7 +2330,9 @@ skipped while its list A holds; with none left the goal goes), and the current g
 step of the plan (`TaskFinished.EngineRow`, `AiSystem.Displaced`) ends the goal, gives it no continuity and is the running task the finished
 tests read, as the original's own goal and job for it would be. The goal's
 act-out does the walk and the goal's own action; steps of their own are getting out of bed, sheathing and drawing a weapon (one think each,
-then dropped from the plan, so a plan a committed goal keeps goes on to its next step instead of repeating it), going home (19, the GoHome walk),
+then dropped from the plan, so a plan a committed goal keeps goes on to its next step instead of repeating it), putting a carried body down (69
+`Task_PutDownObject`, the only provider of `!47`: the serial step starts the put-down order's task, `AiSystem.PutDownForSteps`; the step ends by
+its list A once the hands are empty), going home (19, the GoHome walk),
 entering its home building (156, the same walk), leaving it (200, to A + (A − B) × 1.1 of the home's first door,
 the outer point taken as the side away from the building's origin, until outside), getting near a target (40, a walk to within 10) and the way
 through a locked door the walk meets (80 / 78 unlock, 287 / 81 bash, 76 pick, 285 cut; `AiSystem.TakeDoorStep`, worked by the lock system, its list A
@@ -2472,8 +2474,10 @@ its plan the act-out carries out besides the goal's own. Built: 135, 139, 282, 2
 - **Holding**: the goal holds the character. `AiSystem.Holds` is true while the provenance is the act-out (`AiSystem.OnDuty`: that task, or a goal's
   task started since; carrying included, not in a fight), so the think keeps choosing; another goal that wins sets `AiMind.DutyLeave`, the serial step ends the act-out
   and the next tick acts the winner out. An NPC carrying a body is held as anyone outside a fight (`Holds`; the original takes the chooser only from the carried one,
-  [holds](game/ai-tasks.md#precedence)): it chooses with all its goals and acts the winner out (141 follows the leader with the body, a Post walks there); rows that
-  need empty hands do not plan (list B `!47`: sleeping, sitting, the static guards, 36 patrolling town, the turret, assaults).
+  [holds](game/ai-tasks.md#precedence)): it chooses with all its goals and acts the winner out (141 follows the leader with the body); a goal
+  that needs empty hands (list B `!47`: the static guards, 36 patrolling town, 275 sitting around, the lift goals 223 / 273, the turret) puts the body
+  down first, its plan's step 69 (**Verified**, the row table: 69 is the only provider of `!47`), as in the original; the sleep rows' `!47` never plans
+  there, their desire being 0 while carrying (AI slot 30). The assaults 101 / 248 are plans of their own (the combat system's fight).
 - **End** (`IDutyGoal.End` with `DutyEnd`, then the goal and plan leave the mind, which replans): displaced; an order's start (`IDutyRelease`, a faction change too); an
   order on the body (`AiSystem.ReplanDuty`), a knock-out, death or pick-up (the body's plan wiped), an ended plan, a new mind (replanned); anything else holding it,
   whatever goal a think over its task took up since (taken: fleeing, fighting, caged by another, a task another system started; a caged mind keeps the goal it

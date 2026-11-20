@@ -750,8 +750,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         // An engine goal holds it (DutyGoals): the AI runs it while its act-out runs, carrying included (the act-out's own body), not in a fight.
         if (mind.Duty is not null) return !cold.InCombat && OnDuty(cold, mind);
 
-        // An NPC carrying a body is the AI's as anyone is (only the carried one loses its chooser, docs/game/ai-tasks.md "Precedence"): its plans
-        // leave out the rows that need empty hands (list B !47); not in a fight.
+        // An NPC carrying a body is the AI's as anyone is (only the carried one loses its chooser, docs/game/ai-tasks.md "Precedence"): a goal
+        // that needs empty hands (list B !47) puts the body down first (plan step 69); not in a fight.
         if (cold.InCombat) return cold.Carrying.IsNone && n.Task == (byte)CharacterTask.Attack && OwnsFight(cold, mind);
         return (CharacterTask)n.Task switch
         {
@@ -2104,8 +2104,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// The steps of the plan before the goal's own act-out: getting out of bed, sheathing and drawing (one think each), the walks home, out of the
-    /// home and near the target, the ditch request, and a way through a locked door (the lock system's, <see cref="TakeDoorStep"/>). False when the
+    /// The steps of the plan before the goal's own act-out: getting out of bed, sheathing and drawing (one think each), putting a carried body
+    /// down, the walks home, out of the home and near the target, the ditch request, and a way through a locked door (the lock system's, <see cref="TakeDoorStep"/>). False when the
     /// step took the think (the act-out waits); <paramref name="behaviour"/> may become the walk home. A row the engine goal <paramref name="type"/>'s
     /// system registered (<see cref="DutyGoals.Register"/>: 78, 156, 200, 93 in some goals' plans) is that act-out's, never one of these, but a way
     /// through a door the lock system put in front of the plan (<see cref="IsDoorWay"/>).
@@ -2128,6 +2128,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 return false;
             case TaskType.EquipWeapon or TaskType.EquipCrossbow:
                 EquipStep(world, slot, mind);
+                return false;
+            case TaskType.PutDownObject:
+                // 69 Putting down before a goal that needs empty hands (list B !47): the serial step has the carry system put the body down
+                // (PutDownForSteps); the step ends by its list A (!48 !47) once the hands are empty.
+                Become(world, slot, CharacterTask.Idle);
+                mind.PutDownRequest = true;
+                Interlocked.Exchange(ref _puttingDown, 1);
                 return false;
             case TaskType.GoHomebuilding:
                 // 19 Going home before the goal (43 Staying home and the like away from home): the walk home of the GoHome act-out.
@@ -3192,6 +3199,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     int _bedding;
 
     /// <summary>
+    /// Set by a think whose plan's step 69 Putting down is due (<see cref="AiMind.PutDownRequest"/>).
+    /// </summary>
+    int _puttingDown;
+
+    /// <summary>
     /// How far (X/Z) from where it stands a sleeper takes another free bed of its home when its own is taken (units; engine choice).
     /// </summary>
     const float BedReach = 30;
@@ -3209,6 +3221,25 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             ref var n = ref table.Next[s];
             n.Position = at;
             n.Velocity = Vector3.Zero;
+        }
+    }
+
+    /// <summary>
+    /// The plan steps 69 Putting down the thinks asked (<see cref="AiMind.PutDownRequest"/>; serial, slot order): the carry system puts the body
+    /// down (<c>Task_PutDownObject</c>, the put-down order's task) for a carrier the AI still holds with that step at its plan's front.
+    /// </summary>
+    static void PutDownForSteps(World world)
+    {
+        var table = world.Characters;
+        var carry = world.SystemOf<Carrying.CarrySystem>();
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (table.Cold(s) is not { Ai: { PutDownRequest: true } mind } cold) continue;
+            mind.PutDownRequest = false;
+            if (carry is null || !table.Next[s].Alive || !Holds(table.Next[s], cold)) continue;
+            if (mind.Plan is not [{ Type: TaskType.PutDownObject }, ..]) continue;
+
+            carry.BeginPutDown(world, s, TaskSource.Goal);
         }
     }
 
@@ -3381,6 +3412,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         var table = world.Characters;
         if (Interlocked.Exchange(ref _placing, 0) != 0) Place(table);
         if (Interlocked.Exchange(ref _bedding, 0) != 0) LieDown(world);
+        if (Interlocked.Exchange(ref _puttingDown, 0) != 0) PutDownForSteps(world);
         if (Interlocked.Exchange(ref _shopping, 0) != 0) BuyForShoppers(world);
 
         _combat ??= world.SystemOf<Combat.CombatSystem>();

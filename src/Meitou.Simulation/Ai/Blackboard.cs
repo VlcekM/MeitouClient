@@ -1232,6 +1232,11 @@ public sealed class AiMind
     /// </summary>
     public bool FetchRequest { get; set; }
     /// <summary>
+    /// The plan's step 69 Putting down is due: the think sets it, the AI's serial step has the carry system put the body down and clears it
+    /// (derived, not hashed).
+    /// </summary>
+    public bool PutDownRequest { get; set; }
+    /// <summary>
     /// The faction owning the machine of <see cref="WorkOperate"/> (-1: none; derived, not hashed).
     /// </summary>
     public int WorkOwner { get; set; }
