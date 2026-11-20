@@ -332,21 +332,31 @@ internal sealed class TownTravel(PopulationData data)
     }
 
     /// <summary>
-    /// The detour finder <c>FUN_140927ad0</c> (<b>Verified</b>): over the town list's second list, the nests (<see cref="PopulationSystem.PlacedNests"/>),
-    /// the one nearest the character (X/Z) whose faction (Town vfunc 0x58) is the character's (AI slot 1), the target left out; none without one.
+    /// The detour: the nest nearest the character (<see cref="NearestNest"/>) of its faction (AI slot 1), the target left out.
     /// </summary>
     static CampaignTown Detour(World world, int slot, CampaignTown target)
     {
-        if (world.SystemOf<PopulationSystem>() is not { } population) return CampaignTown.None;
-
         int faction = world.Characters.Cold(slot)!.Faction;
         var at = new Vector2(world.Characters.Previous[slot].Position.X, world.Characters.Previous[slot].Position.Z);
+
+        return NearestNest(world, at, faction, target);
+    }
+
+    /// <summary>
+    /// <c>FUN_140927ad0</c> (<b>Verified</b>): over the town list's second list, the nests (<see cref="PopulationSystem.PlacedNests"/>), the one
+    /// nearest <paramref name="at"/> (X/Z) whose faction (Town vfunc 0x58) is <paramref name="faction"/>, <paramref name="skip"/> left out; none
+    /// without one.
+    /// </summary>
+    internal static CampaignTown NearestNest(World world, Vector2 at, int faction, CampaignTown skip)
+    {
+        if (world.SystemOf<PopulationSystem>() is not { } population) return CampaignTown.None;
+
         var best = CampaignTown.None;
         float bestD = float.MaxValue;
         foreach (var nest in population.PlacedNests)
         {
             var town = CampaignTown.OfNest(nest.Site);
-            if (town == target || population.NestFaction(nest.Site) != faction) continue;
+            if (town == skip || population.NestFaction(nest.Site) != faction) continue;
 
             float d = Vector2.DistanceSquared(at, nest.Centre);
             if (d < bestD) (best, bestD) = (town, d);

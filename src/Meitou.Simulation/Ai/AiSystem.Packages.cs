@@ -929,25 +929,18 @@ public sealed partial class AiSystem
         world.Characters.TryResolveNext(squad.Leader, out int leader) && world.Characters.Cold(leader)!.SlaveState > 0 && Living(world, squad) < 3;
 
     /// <summary>
-    /// The refugee's start (vtable +0x30, <c>FUN_140287760</c>): "broken" when the squad is not intact, no target squad yet, and the nearest town of
-    /// its faction other than its home as the mission town (<c>FUN_140927ad0</c>; nest markers are not left out, as there). The original also makes
-    /// the platoon not persistent and, with a destroyed home, re-homes it to that town.
+    /// The refugee's start (vtable +0x30, <c>FUN_140287760</c>, <b>Verified</b>): "broken" when the squad is not intact, no target squad yet, and
+    /// as the mission town the nest of its faction nearest the leader, its home town left out (<c>FUN_140927ad0</c>, the second town list only,
+    /// <see cref="TownTravel.NearestNest"/>), none without one. The original also makes the platoon not persistent and, with a destroyed home,
+    /// re-homes it to that nest.
     /// </summary>
-    void RefugeeStarted(World world, Squad squad, Blackboard board)
+    static void RefugeeStarted(World world, Squad squad, Blackboard board)
     {
         board.RefugeeBroken = !board.Intact;
         board.RefugeeTarget = -1;
         if (LeaderPosition(world, squad) is not { } at) return;
-        int best = -1;
-        float bestD = float.MaxValue;
-        foreach (var site in data.Sites)
-        {
-            if (site.Index == board.Town || site.Index >= data.SiteFactions.Count || data.SiteFactions[site.Index] != squad.Faction) continue;
-            float d = Vector2.DistanceSquared(Flat(at), Flat(site.Position));
-            if (d < bestD) (best, bestD) = (site.Index, d);
-        }
 
-        board.Destination = best >= 0 ? CampaignTown.OfSite(best) : CampaignTown.None;
+        board.Destination = TownTravel.NearestNest(world, Flat(at), squad.Faction, SquadTown.Home(world, squad, board));
     }
 
     /// <summary>

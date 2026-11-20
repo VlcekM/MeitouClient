@@ -1483,7 +1483,7 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   drawn town (`FUN_140286740`); the patrols none (`FUN_140287060` only stamps the hour); the shippings the platoon's slot-`0x98` hand `+0x60` (`FUN_140287520`); the cannibal
   retreat, when the base start left none, the nearest town of its faction over both town lists (`FUN_140927bb0`), its nearest-nest kind that always (`FUN_140289b50`); the
   bars their bar town (`FUN_1402916b0`); `Contract_HiredAlly` and both base defences the player's town nearest the squad (`FUN_140289490`, `FUN_14028a170`); the war packages
-  (`FUN_14028fc80`) the campaign's target hand (campaign vfunc `0xa0` `FUN_1409d4370`: its `+0x48` while `+0x6c` is 0, else none), with no campaign the home town. Meitou: `SquadTown` (a nest squad's home town is its nest,
+  (`FUN_14028fc80`) the campaign's target hand (campaign vfunc `0xa0` `FUN_1409d4370`: its `+0x48` while `+0x6c` is 0, else none; `+0x6c` is 1 when the target hand is a character, kind 1, set as the instance is made, `StartInvasionData` vfunc 3 `FUN_1409d65e0`, **Verified**; Meitou's campaigns target only towns and nests), with no campaign the home town. Meitou: `SquadTown` (a nest squad's home town is its nest,
   `PopulationSystem.NestSiteOf`).
 - **`Task_TravelToTargetTown`** (53 / 130; **Verified**, ctor `FUN_14033ace0`, start `FUN_14033ad80`, update `FUN_14033ae40`, speed functor `FUN_140342a30`; rows 53 and 130
   leave `+0x15` clear, so the base slot 4 calls them finished and their list A ends them on arrival, handing 36's plan `[130, 36]` over to 36):

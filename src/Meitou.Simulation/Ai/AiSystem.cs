@@ -4184,7 +4184,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                     _system.OccupyStarted(_world, _squad, board);
                     break;
                 case PackageClass.Refugee:
-                    _system.RefugeeStarted(_world, _squad, board);
+                    RefugeeStarted(_world, _squad, board);
                     break;
                 case PackageClass.Contract when package.Signal is HiredAllySignal or DefendBaseSignal:
                     _system.ContractStart(_world, _squad, board, package);

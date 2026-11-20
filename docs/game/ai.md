@@ -186,8 +186,8 @@ A slave's Slave role list runs through the Obedient Slave job (187): [role lists
   215 TRAVEL_TO_TARGET_PACKAGE to the mission, 15, 22, 127 RUN_AWAY_HOMETOWN, 36). **Verified** by decompile (vtable `Package_Refugee` 0x1416adf38; the package's +0x88 is its platoon):
   - Can start (`FUN_140288ed0`): the home town's vfunc 0x288 (`TownBase +0xe0 → +8`, read as destroyed), or the platoon's leader is a slave
     (the status object at Character +0x1a0, its first int = `slavestate` 1 slave / 2 escaped, `FUN_1405c8aa0`; [carry-loot](carry-loot.md#unknowns)) and its squad (platoon +0x1d8 → +0x58) has fewer than 3 members.
-  - Start (`FUN_140287760`): platoon +0x115 cleared (not persistent), flag `broken` (+0xb0) = the platoon is not intact (`FUN_1407ac7b0`), mission target cleared, mission town = the nearest town of the platoon's
-    faction other than its home (`FUN_140927ad0`, X/Z), and with the home destroyed the platoon is re-homed there (`FUN_1407ec8d0`).
+  - Start (`FUN_140287760`): platoon +0x115 cleared (not persistent), flag `broken` (+0xb0) = the platoon is not intact (`FUN_1407ac7b0`), mission target cleared, mission town = the nearest nest of the platoon's
+    faction other than its home (`FUN_140927ad0`, X/Z: the town manager's second list only, `+0x88`/`+0x90`; **Verified**; Meitou `TownTravel.NearestNest`), none without one, and with the home destroyed the platoon is re-homed there (`FUN_1407ec8d0`).
   - Update (`FUN_14028d190`; only for a broken one): with no target it takes the nearest other platoon of its faction in its 4608-wide grid cell (`FUN_1408f56b0`/`FUN_1408f60f0`) that is intact and
     has more than 2 members (`FUN_1407ec0c0`: `FUN_1407ac7b0` and platoon +0xa4 > 2) as mission target (type 1 handle); the travel goal walks there; within 1000 (squared 1e6 `<`) of the target
     every member of its squad is added to the target's squad (squad vfunc 0x10), a target running the same package id forgets its own mission target, and the platoon is removed from its faction
