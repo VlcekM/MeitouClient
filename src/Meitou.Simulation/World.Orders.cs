@@ -62,4 +62,16 @@ public sealed partial class World
         TaskType.PutInCage => SystemOf<Crime.ArrestSystem>(),
         _ => Locks.LockSystem.OwnsRow(row) ? SystemOf<Locks.LockSystem>() : null,
     };
+
+    /// <summary>
+    /// An order's task is about to start on the NPC in <paramref name="slot"/> (serial): every system holding it on an engine duty lets it go
+    /// (<see cref="IDutyRelease.ReleaseForOrder"/>), in system order, all but <paramref name="keeps"/>, the order's giver.
+    /// </summary>
+    internal void ReleaseDuties(int slot, IDutyRelease? keeps)
+    {
+        foreach (var system in _systems)
+        {
+            if (system is IDutyRelease holder && !ReferenceEquals(holder, keeps)) holder.ReleaseForOrder(this, slot);
+        }
+    }
 }

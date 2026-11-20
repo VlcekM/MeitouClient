@@ -136,7 +136,7 @@ public sealed class DialogueSettings
 /// interrupts, the open conversation. The characters' dialogue locks are on <see cref="CharacterCold.DialogueLocks"/>.</item>
 /// </list>
 /// </summary>
-public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogueSource
+public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogueSource, IDutyRelease
 {
     /// <summary>
     /// The world's data: dialogue, factions, towns and the game database.
@@ -505,6 +505,21 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         table.Cold(slot)!.Engaged = true;
         if (table.Cold(slot)!.IsImprisoned) return;
         if (table.Next[slot].Task is (byte)CharacterTask.Wander or (byte)CharacterTask.Idle) TaskStart.Stand(table, slot);
+    }
+
+    /// <summary>
+    /// An order takes the NPC (<see cref="IDutyRelease"/>): its walk up to a player character, its stalk and its follow while talking end as when
+    /// one of the pair is gone; a Talk order's walk to it ends (<see cref="CancelApproach"/>); in the open conversation it is let go, the window
+    /// staying open (its own end would run under a choice's effects).
+    /// </summary>
+    void IDutyRelease.ReleaseForOrder(World world, int slot)
+    {
+        var id = world.Characters.IdOf(slot);
+        _npcApproaches.Drop(world, id);
+        _stalkers.Drop(world, id);
+        _followers.Drop(world, id);
+        if (_target == id && _open?.Npc != id) CancelApproach(world);
+        if (_open?.Npc == id) Release(world, id);
     }
 
     /// <summary>

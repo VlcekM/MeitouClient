@@ -23,7 +23,7 @@ public readonly record struct ZoneBlood(float Value, Vector2 Position);
 /// while the value stays at the threshold, and runs to its position. Engine choices: every loaded zone is a candidate (the original's active zone
 /// island); all zones step together, the original one zone per kick in a cycle.
 /// </summary>
-public sealed class SmellSystem(PopulationData data, PopulationSystem? population) : ITickSystem, IStateHashed
+public sealed class SmellSystem(PopulationData data, PopulationSystem? population) : ITickSystem, IStateHashed, Player.IDutyRelease
 {
     #region Zone smell
 
@@ -232,6 +232,15 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
         bool goingThere = n.Task == (byte)CharacterTask.GoTo && !(Vector2.Distance(n.Goal, to) > HuntArrive);
         if (far && !goingThere)
             TaskStart.Walk(world, s, to, SpeedMode.Run, TaskType.HuntingBloodsmell, TaskSource.Goal);
+    }
+
+    /// <summary>
+    /// An order takes a member of a hunting squad (<see cref="Player.IDutyRelease"/>): the member is let go as at the hunt's end (<see cref="Release"/>);
+    /// the squad's hunt goes on with the others, and it re-engages the member only once the AI holds it again.
+    /// </summary>
+    void Player.IDutyRelease.ReleaseForOrder(World world, int slot)
+    {
+        if (world.Characters.Cold(slot) is { Engaged: true } c && _hunts.ContainsKey(c.SquadId)) c.Engaged = false;
     }
 
     /// <summary>

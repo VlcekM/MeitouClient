@@ -115,6 +115,20 @@ public interface IOrderOwner
 }
 
 /// <summary>
+/// A system that holds NPCs on an engine duty (<see cref="CharacterCold.Engaged"/>, or a record of its own that steers them): when an order's task is
+/// about to start on an NPC (<see cref="PlayerOrders"/>' front start, serial), the world asks every such system but the order's
+/// <see cref="OrderEntry.Keeps"/> to let the character go (<see cref="World.ReleaseDuties"/>). Found on the world's systems, nothing to register.
+/// </summary>
+internal interface IDutyRelease
+{
+    /// <summary>
+    /// Lets the character in <paramref name="slot"/> go through the duty's own give-up: its record dropped, its <see cref="CharacterCold.Engaged"/>
+    /// cleared, what it carried let go; nothing when the system holds it on nothing. Its task is replaced right after, so it need not stand it.
+    /// </summary>
+    void ReleaseForOrder(World world, int slot);
+}
+
+/// <summary>
 /// One order of a character's queue (the original's <c>+0x40</c> deque entry): its row, owner, target, site, point and the owner's
 /// <see cref="Detail"/>. <see cref="Started"/> once its start ran; it then stands for the character's task while that task's provenance is an order's
 /// (<see cref="PlayerOrders.Runs"/>). Only the order itself is saved, never <see cref="Started"/> (<see cref="Saving.OrderSave"/>).
@@ -167,6 +181,11 @@ public sealed class OrderEntry(TaskType row, IOrderOwner owner)
     /// row's fight, 13) being over; the original runs its row only then, so only then does a failing list B end it.
     /// </summary>
     public bool RowRuns { get; internal set; }
+    /// <summary>
+    /// The duty holder that gave the order and keeps its own record when it starts (<see cref="IDutyRelease"/>; null: every holder lets go). Not
+    /// saved: a loaded order releases its giver too.
+    /// </summary>
+    internal IDutyRelease? Keeps { get; init; }
 
     /// <summary>
     /// Whether the order is a move (row <c>MoveCusOrdered</c>).
@@ -378,6 +397,9 @@ public static class PlayerOrders
                 if (show && first) Show(world, slot, check);
                 return check;
             }
+            // an NPC's engine duties let go first, so no holder's step stops or redirects the order's task
+            if (!DecisionSystem.Decides(world.Characters.Cold(slot)!)) world.ReleaseDuties(slot, front.Keeps);
+
             front.Started = true;
             front.RowRuns = ListTests.OrderNeedsFailNow(world, slot, front) == false;   // else a step of its plan comes first
             front.Owner.Start(world, slot, front);

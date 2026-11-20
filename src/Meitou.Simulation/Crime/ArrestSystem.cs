@@ -319,7 +319,7 @@ public readonly record struct ArrestEvent(long Tick, ArrestEventKind Kind, Chara
 /// </list>
 /// </summary>
 public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants constants, ArrestSettings? settings = null) : ITickSystem, IStateHashed,
-    ITaskOwner, ITaskHandler
+    ITaskOwner, ITaskHandler, IDutyRelease
 {
     /// <summary>
     /// Bounties below this are fined (the "Small bounty" dialogue's <c>0 &lt; b &lt; 1050</c>, <b>Verified</b> by probe).
@@ -1386,6 +1386,27 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         if (world.Characters.TryResolveNext(a.Target, out int t) && world.Characters.Cold(t) is { IsPlayer: true } tc)
             world.Post(Loc.Tr("{1} found no free cage for {2}", world.Characters.Cold(g)!.Name, tc.Name));
         return End(world, a, ArrestEventKind.Dropped);
+    }
+
+    /// <summary>
+    /// An order takes the guard or bounty hunter (<see cref="IDutyRelease"/>): each arrest he makes ends as given up, a target he carries let go
+    /// where he stands, as when no cage is found; his hunt is over and rests (<see cref="ReleaseHunts"/>).
+    /// </summary>
+    void IDutyRelease.ReleaseForOrder(World world, int slot)
+    {
+        var table = world.Characters;
+        var id = table.IdOf(slot);
+        for (int k = _arrests.Count - 1; k >= 0; k--)
+        {
+            var a = _arrests[k];
+            if (a.Guard != id) continue;
+
+            if (table.Cold(slot)?.Carrying == a.Target) Carry?.LetGo(world, slot);
+            End(world, a, ArrestEventKind.GaveUp);
+            _arrests.RemoveAt(k);
+        }
+
+        ReleaseHunts(world, slot);
     }
 
     /// <summary>

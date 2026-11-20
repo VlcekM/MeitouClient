@@ -97,7 +97,8 @@ public sealed record VisitTown(int SquadId, int PlayerTown, float Hours) : SimCo
 /// intact test, the package choice, the patrol's progress and the crowding counts.</item>
 /// </list>
 /// </summary>
-public sealed partial class AiSystem(PopulationData data, AiSettings? settings = null) : ITickSystem, IStateHashed, IDecisionOwner
+public sealed partial class AiSystem(PopulationData data, AiSettings? settings = null) : ITickSystem, IStateHashed, IDecisionOwner,
+        IDutyRelease
 {
     #region Settings and wiring
 
@@ -178,6 +179,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// is built when no mod claimed a goal type.
     /// </summary>
     internal void BindModGoals(IReadOnlyList<ITickSystem> systems) => _modGoals = NpcGoals.Build(Extensions, systems);
+
+    /// <summary>
+    /// An order takes the character (<see cref="IDutyRelease"/>): a code mod's goal holding it lets it go (<see cref="NpcGoals.ReleaseForOrder"/>).
+    /// </summary>
+    void IDutyRelease.ReleaseForOrder(World world, int slot) => _modGoals?.ReleaseForOrder(world, slot);
 
     #endregion
 

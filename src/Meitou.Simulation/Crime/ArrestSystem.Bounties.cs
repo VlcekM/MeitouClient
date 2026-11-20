@@ -662,10 +662,32 @@ public sealed partial class ArrestSystem : IOrderOwner
             }
         }
         if (!over) return true;
+        EndHunt(world, h, gc);
+        return true;
+    }
+
+    /// <summary>
+    /// A hunt is over: the hunter goes back to the AI and the hunt rests for <see cref="ArrestSettings.HuntRestSeconds"/>.
+    /// </summary>
+    void EndHunt(World world, Hunt h, CharacterCold gc)
+    {
         gc.Engaged = false;
         h.Rest = Settings.HuntRestSeconds;
         Note(world, ArrestEventKind.HuntOver, h.Hunter, h.Target, gc.Faction, 0);
-        return true;
+    }
+
+    /// <summary>
+    /// An order takes the hunter in <paramref name="slot"/>: each hunt of his under way is over (<see cref="EndHunt"/>).
+    /// </summary>
+    void ReleaseHunts(World world, int slot)
+    {
+        if (_hunts.Count == 0 || world.Characters.Cold(slot) is not { } gc) return;
+
+        var id = world.Characters.IdOf(slot);
+        foreach (var h in _hunts)
+        {
+            if (h.Hunter == id && h.Rest <= 0) EndHunt(world, h, gc);
+        }
     }
 
     /// <summary>

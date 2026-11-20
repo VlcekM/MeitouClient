@@ -64,6 +64,14 @@ sealed class TownStalkers(DialogueSystem system, PopulationData data)
     public void Add(CharacterId who, CharacterId target) => _stalkers[who] = new Stalk(target);
 
     /// <summary>
+    /// <paramref name="who"/>'s stalk ends as when either is gone: dropped and the stalker released.
+    /// </summary>
+    public void Drop(World world, CharacterId who)
+    {
+        if (_stalkers.Remove(who)) DialogueSystem.Release(world, who);
+    }
+
+    /// <summary>
     /// DA_THUG_HUNTER (17, order 165 <c>Task_TownStalker</c>, docs/game/dialogue.md): while the stalker has a status town, it waits
     /// <see cref="StalkPastGate"/> outside that town's first gate (on the line from the town centre through it), facing its victim, while the victim
     /// has a status town and is no farther from that town's centre than the waypoint; in a town with no gate it follows the victim without

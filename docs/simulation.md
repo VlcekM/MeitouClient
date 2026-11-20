@@ -306,6 +306,13 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   queue (order 116). A blocked front waits, the AI going on with its goals meanwhile, and is tried again on the re-ask (every `ProductionSystem.JobCheckTicks`). Once the
   front no longer runs the mind chooses again at once; when it starts the mind's plan, goal and commitment go. An NPC's queue is not saved, and an NPC keeps a replan bit only
   while it holds an order.
+- **Duties let go** when an NPC's front starts (engine design; `PlayerOrders.TryFront`, serial, before the owner's `Start`): `World.ReleaseDuties` asks every system that
+  is an `IDutyRelease` (found on the world's systems, nothing registered) but the order's `OrderEntry.Keeps`, its giver, to let the character go through its own give-up.
+  Town duties, kidnaps, captive jobs, arrests and bounty hunts, lock rounds, the mod NPC goals (`NpcGoals`), the dialogue's walk-ups, stalkers and follows while
+  talking, a Talk order's walk to it and a trade's walk to its trader drop their record and clear `Engaged`; a body carried for one is let go where it stands (the unlink,
+  no knock-out); a smell hunt lets the member go while the squad hunts on; a door way is dropped and a bash errand stopped; in the open conversation the NPC is only
+  let go, the window staying open. A giver that keeps its record sets `Engaged` again after `Give` (the bit is shared). The duty sweeps take no ordered character again
+  (`DecisionSystem.Ordered` or `AiSystem.Holds` in their free tests); a dialogue act that starts a walk-up is an engine act on the body and replaces the front.
 - The failure text is said only for a character of the player's faction that is not an animal (`PlayerOrders.Show`; the order step's vfunc `0x2d8` call in `FUN_140510920`,
   [precedence](game/ai-tasks.md#precedence)); anyone else's blocked order waits silently.
 - Owners that take a player character's order only (an NPC's leaves the queue, `Gone`), their act-outs being the player's: build, repair and dismantle (the sites, doors and

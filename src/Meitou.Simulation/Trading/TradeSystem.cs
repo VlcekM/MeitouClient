@@ -276,7 +276,7 @@ public sealed class TradeSettings
 /// The open trade is not, but the buyback receipts it leaves on items are, and they are not saved: a save made mid-trade reloads with a different
 /// hash (docs/simulation.md, trading).
 /// </summary>
-public sealed class TradeSystem : ITickSystem, ITradeSource
+public sealed class TradeSystem : ITickSystem, ITradeSource, IDutyRelease
 {
     /// <summary>
     /// The world's data: shops, templates, factions and the game database.
@@ -555,6 +555,15 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         if (n.Task == (byte)CharacterTask.Wander) _traderWandered = true;
         if (n.Task is (byte)CharacterTask.Wander or (byte)CharacterTask.Idle || travelling)
             TaskStart.Stand(world.Characters, t);
+    }
+
+    /// <summary>
+    /// An order takes the trader a customer walks up to (<see cref="IDutyRelease"/>): the trade ends as when the customer's walk fails
+    /// (<see cref="Close"/>). An open trade holds no trader (<see cref="Open"/> released it) and goes on.
+    /// </summary>
+    void IDutyRelease.ReleaseForOrder(World world, int slot)
+    {
+        if (!_open && !_trader.IsNone && _trader == world.Characters.IdOf(slot)) Close(world);
     }
 
     /// <summary>

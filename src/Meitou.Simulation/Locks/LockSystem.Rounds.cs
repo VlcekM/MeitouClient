@@ -171,7 +171,7 @@ public sealed class Round
 /// faction's shut doors has them opened at once.</item>
 /// </list>
 /// </summary>
-public sealed partial class LockSystem : IStateHashed
+public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease
 {
     #region The rounds step
 
@@ -966,6 +966,24 @@ public sealed partial class LockSystem : IStateHashed
 
                 break;
         }
+    }
+
+    /// <summary>
+    /// An order takes the worker (<see cref="Player.IDutyRelease"/>): each round it works ends as one taken by something else does (no fallback: a
+    /// release round's prisoner stays for the next sweep), and its way through a door is dropped (<see cref="ReleaseDoorWay"/>).
+    /// </summary>
+    void Player.IDutyRelease.ReleaseForOrder(World world, int slot)
+    {
+        var id = world.Characters.IdOf(slot);
+        for (int k = _rounds.Count - 1; k >= 0; k--)
+        {
+            if (_rounds[k].Worker != id) continue;
+
+            End(world, _rounds[k], fallback: false);
+            _rounds.RemoveAt(k);
+        }
+
+        if (world.Characters.Cold(slot) is { } c) ReleaseDoorWay(world.Characters, slot, c);
     }
 
     /// <summary>

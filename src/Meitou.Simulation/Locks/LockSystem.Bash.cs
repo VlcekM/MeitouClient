@@ -782,6 +782,17 @@ public sealed partial class LockSystem
     }
 
     /// <summary>
+    /// An order takes the NPC: a bash errand on its way stops (<see cref="StopBashing"/>), else its way through a door is dropped
+    /// (<see cref="DropDoorWay"/>); a bash the player ordered is left to its order.
+    /// </summary>
+    static void ReleaseDoorWay(CharacterTable table, int s, CharacterCold c)
+    {
+        if (c.BashErrand && !c.BashOrdered) StopBashing(table, s, c);
+        else
+            DropDoorWay(c);
+    }
+
+    /// <summary>
     /// Ends a walker's way through its door, leaving its movement as it is (the AI has an NPC again).
     /// </summary>
     static void DropDoorWay(CharacterCold c)

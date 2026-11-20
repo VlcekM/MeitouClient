@@ -54,6 +54,14 @@ sealed class ApproachQueue(DialogueSystem dialogue)
         _approaches.Add(new Approach(npc, target, world.GameHours + ApproachGiveUpHours));
 
     /// <summary>
+    /// <paramref name="npc"/>'s approaches end as when one of the pair is gone: dropped, the NPC released, no event fired.
+    /// </summary>
+    internal void Drop(World world, CharacterId npc)
+    {
+        if (_approaches.RemoveAll(a => a.Npc == npc) > 0) DialogueSystem.Release(world, npc);
+    }
+
+    /// <summary>
     /// The NPC approaches (serial): it walks to the target and, in talk range (<see cref="DialogueSystem.InTalkRange"/>) while no conversation is
     /// open, fires event 1 at it (the player's conversation window opens with it); after 25 game minutes it gives up (plan dropped, event 60 at the
     /// target) once the target is getting away, else it walks on; a target or NPC gone or down ends it.

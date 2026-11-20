@@ -231,7 +231,7 @@ public sealed class TownDuty
 /// </list>
 /// </summary>
 public sealed class TownDutySystem(PopulationData data, PopulationSystem population, CarrySystem carry, TownDutySettings? settings = null)
-        : ITickSystem, IStateHashed, IDecisionOwner
+        : ITickSystem, IStateHashed, IDecisionOwner, IDutyRelease
 {
     #region State and wiring
 
@@ -1990,6 +1990,24 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         TaskStart.Stand(world.Characters, g);
         _gaveUp.Add((d.Member, d.Body, world.GameHours + Settings.RefuseHours));
         return End(world, d);
+    }
+
+    /// <summary>
+    /// An order takes the member (<see cref="IDutyRelease"/>): each errand it runs ends, a body it carries let go where it stands as at a walk's end
+    /// (<see cref="LetGo"/>).
+    /// </summary>
+    void IDutyRelease.ReleaseForOrder(World world, int slot)
+    {
+        var id = world.Characters.IdOf(slot);
+        for (int k = _duties.Count - 1; k >= 0; k--)
+        {
+            var d = _duties[k];
+            if (d.Member != id) continue;
+
+            if (!d.Body.IsNone && world.Characters.Cold(slot)?.Carrying == d.Body) carry.LetGo(world, slot);
+            End(world, d);
+            _duties.RemoveAt(k);
+        }
     }
 
     /// <summary>

@@ -29,6 +29,16 @@ sealed class TalkFollowers(DialogueSystem system)
     }
 
     /// <summary>
+    /// <paramref name="who"/>'s follow while talking ends without standing it (an order takes its task): dropped, its follow target cleared when it
+    /// is still the talk's.
+    /// </summary>
+    public void Drop(World world, CharacterId who)
+    {
+        if (!_followers.Remove(who, out var whom) || !world.Characters.TryResolveNext(who, out int s)) return;
+        if (world.Characters.Cold(s) is { } cold && cold.FollowOrder == whom) cold.FollowOrder = CharacterId.None;
+    }
+
+    /// <summary>
     /// The follow lasts while the conversation does: when it is over (or the speaker or target is gone) the speaker stops following, and stands if it
     /// still is. The follow target goes whatever the speaker is doing then (#883: one whose task had changed kept it, and its next follow of its
     /// leader followed the talk's target instead).

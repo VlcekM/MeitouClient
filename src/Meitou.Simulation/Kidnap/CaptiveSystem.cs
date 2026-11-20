@@ -375,7 +375,7 @@ public readonly record struct CaptiveEvent(long Tick, CaptiveEventKind Kind, Cap
 /// any exist.
 /// </summary>
 public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? combat, CaptiveSettings? settings = null) : ITickSystem, IStateHashed,
-        IDecisionOwner, IGoalSource
+        IDecisionOwner, IGoalSource, IDutyRelease
 {
     #region State and the serial step
 
@@ -1618,6 +1618,24 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     {
         if (died && j.Site >= 0) _killAt[j.Site] = NextKill(world, j.Site);
         return End(world, j, died ? j.Kind == CaptiveJobKind.Eat ? CaptiveEventKind.Eaten : CaptiveEventKind.Killed : CaptiveEventKind.GaveUp);
+    }
+
+    /// <summary>
+    /// An order takes the worker (<see cref="IDutyRelease"/>): each job it works ends as given up and the worker is offered anew, as at the end of
+    /// the job loop (<see cref="StepJobs"/>).
+    /// </summary>
+    void IDutyRelease.ReleaseForOrder(World world, int slot)
+    {
+        var id = world.Characters.IdOf(slot);
+        for (int k = _jobs.Count - 1; k >= 0; k--)
+        {
+            var j = _jobs[k];
+            if (j.Worker != id) continue;
+
+            End(world, j, CaptiveEventKind.GaveUp);
+            _jobs.RemoveAt(k);
+            _ended.Add(id);
+        }
     }
 
     /// <summary>
