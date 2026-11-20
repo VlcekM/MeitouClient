@@ -2688,7 +2688,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         // Staying home is in the squad's own home, whatever building a bar package made its home (FUN_1408cbc00 lists the home building's furniture).
         var at = type == TaskType.StayInHome ? board.OwnHome : board.Home;
-        if (at is not { } home || mind.HomeUnreachable || type is TaskType.HoldPosition or TaskType.ManTheGate)
+        if (at is not { } home || mind.HomeUnreachable || type == TaskType.HoldPosition)
             return (mind.Post, false, null, null, false);
 
         HomeSpotKind kind = behaviour == AiBehaviour.Sleep ? HomeSpotKind.Bed : type switch
@@ -3484,16 +3484,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// Where a gate's guards stand: the gate guard 15 out from its leaf; a member whose node goal finds no node in a gate it lives in flanks the
-    /// opening on that side, beyond the leaf's edges, alternately left and right in two rows (engine choice: it stands in for the original's gate
-    /// posts, which no layout holds). Null for other goals, and for 157 while it holds a town post.
+    /// Where a gate's other guards stand (the gate guard stands at <see cref="FrontOf"/>, <see cref="Locks.GateGoals"/>): a member whose node goal
+    /// finds no node in a gate it lives in flanks the opening on that side, beyond the leaf's edges, alternately left and right in two rows (engine
+    /// choice: it stands in for the original's gate posts, which no layout holds). Null for other goals, and for 157 while it holds a town post.
     /// </summary>
     static Vector3? GateSpot(Blackboard board, AiMind mind, TaskType type)
     {
         if (board.Gate is not { } gate) return null;
         if (type == TaskType.StandAtGuardNodeHometownOutside && mind.TownPost is not null) return null;
         var front = FrontOf(gate);
-        if (type == TaskType.ManTheGate) return front;
         if (type is not (TaskType.StandAtGuardNodeHomebuilding or TaskType.StandAtGuardNodeHomebuildingIndoorsOnly
             or TaskType.StandAtGuardNodeHometownOutside or TaskType.StandAtGeneralNode) || board.Home != gate.Building)
             return null;

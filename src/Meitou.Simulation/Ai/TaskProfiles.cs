@@ -51,7 +51,6 @@ public static class TaskProfiles
         // Worker: AI slot 19 (1); only the pretend row commits, 0.5 + r x 2 hours (docs/game/ai-tasks.md "Desire and commitment").
         [TaskType.AutoLabouringMines] = new(1),
         [TaskType.AutoLabouringMinesPretend] = new(1, 0.5f, 2, true),
-        [TaskType.ManTheGate] = new(1),
         [TaskType.FollowSlavemaster] = new(1),
         [TaskType.Bodyguard] = new(Special, Crowd: 0.9f),
         // Medic: the desire function's 1 times the finder's score (FUN_140998410); crowd factor 0.8 (FUN_140319a60, Observed).

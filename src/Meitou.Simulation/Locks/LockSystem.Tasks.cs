@@ -184,7 +184,7 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
         var c = table.Cold(slot)!;
         if (request.Detail is Round round)
         {
-            StartRound(world, slot, round, world.Fixtures.Find(request.Site!)!, request.Source);
+            StartRound(world, slot, round, world.Fixtures.Find(request.Site!)!);
             return;
         }
 

@@ -218,7 +218,7 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   `6475-Newwworld-INGAME` Makeshift Gate) stands open once its guard plans. The five `Gate guard` packages give the leader Man the gate 0-24 and
   hold no lock goal (**Verified**, data), and the door's state `+0x380` is set only by the open (`FUN_140297040`), close (`FUN_140298c50`) and
   update functions, a snap shut (`FUN_1402991c0`) and `FUN_140299000`, which the initial door state (`FUN_140553210`) calls (**Observed**, the
-  field writers and callers): no relation to the player closes a gate. Meitou: `LockSystem.OpenGate`
+  field writers and callers): no relation to the player closes a gate. Meitou: `GateGoals` (goal 180's act-out)
   ([simulation](../simulation.md#arrest-and-jail) "Gates"; #816).
 - **Door panel** (player's building, the HUD lines of a selected house: [ui-screens](ui-screens.md#selected-building)): open/close button `FUN_140546fb0`: an open door closes; otherwise an effectively locked
   one is unlocked first, then opened (**Verified**). Meitou: a door still moving counts by where it heads and turns back (an opening one closes, a

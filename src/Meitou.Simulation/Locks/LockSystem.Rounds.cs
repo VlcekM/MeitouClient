@@ -122,8 +122,8 @@ public sealed class Round
 /// <list type="bullet">
 /// <item><b>Wardens' goals</b> (211 freeing prisoners, 155 and 197 locking up, 86 opening up, 195 locking cages): goals of the one chooser
 /// (<see cref="WardenGoals"/>), each act-out a <see cref="Round"/> of one target.</item>
-/// <item><b>Gates</b> (180): a free member whose current goal is Man the gate unlocks and opens its shut gate (<see cref="OpenGate"/>), held by
-/// <see cref="CharacterCold.Engaged"/> meanwhile.</item>
+/// <item><b>Gates</b> (180 Man the gate): a goal of the one chooser (<see cref="GateGoals"/>) whose act-out unlocks and opens the guard's shut gate
+/// (a <see cref="Round"/> of its doors) and stands at the gate.</item>
 /// <item><b>Leaving</b> (state 60, rows 84, 74, 80, 287): a character standing in a shut building whose walk leads out unlocks its own door or
 /// bashes another's when it wants to, then walks on (<see cref="LeaveSweep"/>); one without a way stays in.</item>
 /// <item><b>Arrests</b> (<b>engine choice</b>): an arrest's guard carrying a captive to a cage behind its own faction's shut doors has them opened at
@@ -139,7 +139,7 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
     /// </summary>
     public const float LockWorkSeconds = 1 / 0.3f;
     /// <summary>
-    /// How often the gate guards and the walkers shut in are looked at (ticks, engine choice).
+    /// How often the walkers shut in are looked at (ticks, engine choice).
     /// </summary>
     public const int RoundEveryTicks = 30;
     /// <summary>
@@ -161,11 +161,6 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
     const int MaxNewDoorWays = 4;
 
     /// <summary>
-    /// The gate guards' rounds running, in the order they started.
-    /// </summary>
-    readonly List<Round> _gates = [];
-
-    /// <summary>
     /// Homes whose door a lock-up locked (the squad's "house locked" flag), by building instance id; sorted so the hash has a fixed order.
     /// </summary>
     readonly SortedSet<string> _houseLocked = new(StringComparer.Ordinal);
@@ -177,6 +172,10 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
     /// The escape goals: their act-outs.
     /// </summary>
     EscapeGoals? _escapes;
+    /// <summary>
+    /// The gate guards' goal: its act-outs.
+    /// </summary>
+    GateGoals? _gateGoals;
     /// <summary>
     /// The arrest system, looked up once (null: none).
     /// </summary>
@@ -199,7 +198,7 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
     /// <summary>
     /// The rounds running: the gate guards' and the wardens' act-outs.
     /// </summary>
-    public IReadOnlyList<Round> ActiveRounds => [.. _gates, .. Wardens.Acting];
+    public IReadOnlyList<Round> ActiveRounds => [.. Gates.Rounds, .. Wardens.Acting];
 
     /// <summary>
     /// The wardens' goals, made on first use.
@@ -212,12 +211,19 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
     internal EscapeGoals Escapes => _escapes ??= new EscapeGoals(this);
 
     /// <summary>
-    /// Registers the wardens' goals (<see cref="WardenGoals.Register"/>) and the escapes (<see cref="EscapeGoals.Register"/>).
+    /// The gate guards' goal, made on first use.
+    /// </summary>
+    GateGoals Gates => _gateGoals ??= new GateGoals(this);
+
+    /// <summary>
+    /// Registers the wardens' goals (<see cref="WardenGoals.Register"/>), the escapes (<see cref="EscapeGoals.Register"/>) and the gate guards'
+    /// (<see cref="GateGoals.Register"/>).
     /// </summary>
     void IDutyGoalOwner.RegisterGoals(DutyGoals goals)
     {
         Wardens.Register(goals);
         Escapes.Register(goals);
+        Gates.Register(goals);
     }
 
     /// <summary>
@@ -252,19 +258,18 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
     internal void ClearHouseLocked(string building) => _houseLocked.Remove(building);
 
     /// <summary>
-    /// The rounds' step: the saved locked homes read once, ways opened for arrests, the gate rounds and the wardens' goals step, and on the cadence the
-    /// gate guards and the walkers shut in are looked at.
+    /// The rounds' step: the saved locked homes read once, ways opened for arrests, the gate guards' and the wardens' goals step, and on the cadence
+    /// the walkers shut in are looked at.
     /// </summary>
     void Rounds(World world)
     {
         ReadSaved(world);
         OpenArrestWays(world);
-        StepGates(world);
+        Gates.Step(world);
         Wardens.Look(world);
         Wardens.Step(world);
         if (world.Tick % RoundEveryTicks != 0) return;
 
-        GateSweep(world);
         LeaveSweep(world);
     }
 
@@ -280,17 +285,6 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
         }
 
         return _arrests;
-    }
-
-    /// <summary>
-    /// Whether <paramref name="id"/> is an arrest's guard or target.
-    /// </summary>
-    bool InArrest(World world, CharacterId id)
-    {
-        if (Arrests(world) is not { } a) return false;
-        foreach (var x in a.Arrests)
-            if (x.Guard == id || x.Target == id) return true;
-        return false;
     }
 
     /// <summary>
@@ -320,7 +314,7 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
     /// <summary>
     /// Whether a round works fixture or building <paramref name="id"/>.
     /// </summary>
-    bool Targeted(string id)
+    internal bool Targeted(string id)
     {
         foreach (var r in ActiveRounds)
         {
@@ -330,126 +324,6 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
         }
 
         return false;
-    }
-
-    #endregion
-
-    #region Gate guards
-
-    /// <summary>
-    /// Each gate round moves on; one taken by something else or ended is dropped and its guard let go.
-    /// </summary>
-    void StepGates(World world)
-    {
-        for (int k = 0; k < _gates.Count;)
-        {
-            if (StepGate(world, _gates[k])) k++;
-            else
-            {
-                EndGate(world, _gates[k]);
-                _gates.RemoveAt(k);
-            }
-        }
-    }
-
-    /// <summary>
-    /// One tick of a gate round; false when it is over: its guard taken by anything else (a fight, a flight, a carry, a task of another, an arrest,
-    /// a stumble's order on its body), or its doors done.
-    /// </summary>
-    bool StepGate(World world, Round r)
-    {
-        var table = world.Characters;
-        if (!table.TryResolveNext(r.Worker, out int w)
-                || table.Cold(w) is not { Medical.Incapacitated: false, InCombat: false, Fleeing: false, IsImprisoned: false, Carrying.IsNone: true,
-                        CarriedBy.IsNone: true } wc
-            || table.Next[w].Task is not ((byte)CharacterTask.Idle or (byte)CharacterTask.GoTo) || InArrest(world, r.Worker)
-            || Player.PlayerOrders.BodyHolds(wc))
-            return false;
-
-        return !Advance(world, r, w);
-    }
-
-    /// <summary>
-    /// A gate round ends: its guard goes back to its routine.
-    /// </summary>
-    void EndGate(World world, Round r)
-    {
-        var table = world.Characters;
-        if (!table.TryResolveNext(r.Worker, out int w) || table.Cold(w) is not { } wc || InArrest(world, r.Worker)) return;
-
-        wc.Engaged = false;
-        if (table.Next[w].Task == (byte)CharacterTask.GoTo) TaskStart.Stand(table, w);
-    }
-
-    /// <summary>
-    /// A worker the AI holds and nothing else: idle, wandering or at its post, not in a round or an arrest.
-    /// </summary>
-    bool Free(World world, int slot)
-    {
-        var table = world.Characters;
-        return table.Next[slot].Alive && table.Cold(slot) is { } c && AiSystem.Holds(table.Next[slot], c) && !Busy(table.IdOf(slot))
-                && !InArrest(world, table.IdOf(slot));
-    }
-
-    /// <summary>
-    /// The squads' gate guards: each squad's first free member whose current goal is 180 Man the gate opens its gate (<see cref="OpenGate"/>).
-    /// </summary>
-    void GateSweep(World world)
-    {
-        var table = world.Characters;
-        foreach (var squad in world.Squads.All)
-        {
-            if (squad.Ai is not { } board) continue;
-
-            foreach (var m in squad.Members)
-            {
-                if (!table.TryResolveNext(m, out int s) || table.Cold(s)?.Ai?.Goal?.Task.Type != TaskType.ManTheGate || !Free(world, s)) continue;
-
-                OpenGate(world, board, s);
-                break;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Row 180 Man the gate needs its gate's door open (list B 52 DOOR_IS_OPEN on its HOME_GATE target, <b>Verified</b>), which the planner gets
-    /// from 72 Opening door, after 78 Unlocking door when it is locked (78 needs 70 isObjectMine: the gate's faction is the guard's). So the gate
-    /// guard on that goal unlocks and opens its shut gate, through an unlock round (docs/game/locks.md "Doors").
-    /// </summary>
-    void OpenGate(World world, Blackboard board, int worker)
-    {
-        var gate = board.Gate?.Building ?? (board.GateHome is { IsGate: true } home ? home : null);
-        if (gate is null || Targeted(gate.Key) || Busy(world.Characters.IdOf(worker))) return;
-        if (world.Fixtures.OwnsBuilding(gate.Key, world.Player.Faction)) return;
-
-        // DOOR_IS_OPEN (FUN_1405a3ad0) holds for an open door or one opening past 0.8; an opening one gets there by itself.
-        var door = FirstDoor(world, gate.Key);
-        if (door is null || door.DoorBroken || door.Motion is not (DoorMotion.Closed or DoorMotion.Closing)) return;
-        if (door.Lock is { EffectivelyLocked: true } && door.Owner != world.Characters.Cold(worker)!.Faction) return;
-
-        StartGateRound(world, worker, gate.Key);
-    }
-
-    /// <summary>
-    /// Starts an unlock round on every door of a gate building (none: nothing).
-    /// </summary>
-    void StartGateRound(World world, int worker, string building)
-    {
-        var doors = new List<string>();
-        foreach (var f in world.Fixtures.OfBuilding(building))
-            if (f.Kind == FixtureKind.Door) doors.Add(f.Id);
-        if (doors.Count == 0) return;
-
-        var round = new Round
-        {
-            Kind = RoundKind.UnlockDoors,
-            Worker = world.Characters.IdOf(worker),
-            Faction = world.Characters.Cold(worker)!.Faction,
-            Targets = [.. doors],
-            Building = building,
-            Reach = DoorWorkReach,
-        };
-        Start(world, worker, round, world.Fixtures.Find(doors[0])!, TaskSource.Npc);
     }
 
     #endregion
@@ -542,18 +416,12 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
     }
 
     /// <summary>
-    /// The round's start (<see cref="Start"/>): the worker gets up and walks to the first target; a gate guard's is the lock system's until it ends,
-    /// a goal's act-out its goal's (<see cref="WardenGoals"/>).
+    /// The round's start (<see cref="Start"/>), a goal's act-out (<see cref="WardenGoals"/>, <see cref="GateGoals"/>): the worker gets up and walks to
+    /// the first target.
     /// </summary>
-    void StartRound(World world, int worker, Round round, Fixture first, TaskSource source)
+    void StartRound(World world, int worker, Round round, Fixture first)
     {
         var table = world.Characters;
-        if (source != TaskSource.Goal)
-        {
-            table.Cold(worker)!.Engaged = true;   // the AI leaves the gate guard alone until the round ends
-            _gates.Add(round);
-        }
-
         TaskStart.Stand(table, worker);   // up from its bed or post
         Walk(world, worker, round, first);
     }
@@ -708,38 +576,28 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
     #region Orders and the hash
 
     /// <summary>
-    /// An order takes the worker (<see cref="Player.IDutyRelease"/>): a gate round it works ends, and its way through a door is dropped
-    /// (<see cref="ReleaseDoorWay"/>). A warden goal's act-out ends with its goal, which the AI releases.
+    /// An order takes the worker (<see cref="Player.IDutyRelease"/>): its way through a door is dropped (<see cref="ReleaseDoorWay"/>). A goal's
+    /// act-out (a warden's, a gate guard's) ends with its goal, which the AI releases.
     /// </summary>
     void Player.IDutyRelease.ReleaseForOrder(World world, int slot)
     {
-        var id = world.Characters.IdOf(slot);
-        for (int k = _gates.Count - 1; k >= 0; k--)
-        {
-            if (_gates[k].Worker != id) continue;
-
-            EndGate(world, _gates[k]);
-            _gates.RemoveAt(k);
-        }
-
         if (world.Characters.Cold(slot) is { } c) ReleaseDoorWay(world.Characters, slot, c);
     }
 
     /// <summary>
-    /// Adds the gate rounds, the locked homes and the wardens' goals to the world's state hash, while there are any.
+    /// Adds the locked homes and the gate guards', wardens' and escapes' goals to the world's state hash, while there are any.
     /// </summary>
     public void Hash(ref StateHasher hasher)
     {
-        // only while a round runs or a home is locked up, so worlds without them hash as before
-        if (_gates.Count > 0 || _houseLocked.Count > 0)
+        // only while a home is locked up, so worlds without them hash as before
+        if (_houseLocked.Count > 0)
         {
             hasher.Add(0x526F756E);
-            hasher.Add(_gates.Count);
-            foreach (var r in _gates) r.Hash(ref hasher);
             hasher.Add(_houseLocked.Count);
             foreach (var b in _houseLocked) hasher.Add(Rng.StableHash(b));
         }
 
+        _gateGoals?.Hash(ref hasher);
         _wardens?.Hash(ref hasher);
         _escapes?.Hash(ref hasher);
     }

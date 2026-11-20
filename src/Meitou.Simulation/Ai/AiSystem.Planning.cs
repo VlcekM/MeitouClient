@@ -690,7 +690,7 @@ public sealed partial class AiSystem
                         ? new PlanTarget(Targets.Town, new Vector3(place.Centre.X, float.NaN, place.Centre.Y)) : default;
                 case TaskType.StandAtShopkeeperNode or TaskType.StandAtGuardNodeHomebuilding or TaskType.StandAtGuardNodeHomebuildingIndoorsOnly
                     or TaskType.StandAtGuardNodeHometownOutside or TaskType.StandAtGeneralNode or TaskType.StayInHome
-                    or TaskType.HoldPosition or TaskType.ManTheGate:
+                    or TaskType.HoldPosition:
                     // Staying home on its claimed chair, else at home.
                     if (type == TaskType.StayInHome && _board.SeatClaims.TryGetValue(_slot, out var chair) && !_mind.SeatUnreachable)
                         return new PlanTarget(Targets.Seat, chair.Position);

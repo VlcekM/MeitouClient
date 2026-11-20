@@ -190,7 +190,6 @@ public static class TaskBehaviours
         [TaskType.StandAtGeneralNode] = (AiBehaviour.Post, "general node"),
         [TaskType.HoldPosition] = (AiBehaviour.Post, "Holding position"),
         [TaskType.StayInHome] = (AiBehaviour.Post, "Staying home"),
-        [TaskType.ManTheGate] = (AiBehaviour.Post, "Gate guard"),
         [TaskType.ManATurret] = (AiBehaviour.Turret, "Turret guard"),
         [TaskType.ManATurretOnBuilding] = (AiBehaviour.Turret, "Turret home guard"),
         [TaskType.ManATurretPlayerJob] = (AiBehaviour.Turret, "Turret guard"),

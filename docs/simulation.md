@@ -212,7 +212,7 @@ delivering, fetching and dismantling are steps of one act-out (`TaskStart.ActOut
   button, medic, robotics and splint jobs, NPC healing, Rest, pick up, kidnap, loot, open inventory, stealth KO and put down orders, the lifts and drops of errands and town duties, rescue
   (job, button, NPC leaders), kidnappers' and guards' lifts (`BeginPickUp`), foraging, NPC scavenging and arming, the operate, turret, haul and prospect orders, the production list jobs
   (87, 97, 124, 152, 234, the engineer 125) and implicit jobs (242, 153, 275), the build, repair, door repair and dismantle orders, the bed orders and job 106, the lock, shackle, cage,
-  door and force orders, the gate rounds, item pick-up and container walks, put in cage; the engine's starts: crime fights and the arrest mates' and hunters' fights
+  door and force orders, item pick-up and container walks, put in cage; the engine's starts: crime fights and the arrest mates' and hunters' fights
   (`AttackOrder.Source`: `Npc`; an NPC's attack on sight is its AI's goal fight, `Goal`), an engine arrest's walks and lifts (goal 204, slave catching), kidnappers' lifts (68) and 168's lifts (170), captive jobs'
   walks (the row of their task, `CaptiveSystem.RowOf`), the ditch's and the player side's food runs' walks (`TownDutySystem.RowOf`), the [engine goals'](#engine-goals) act-outs on their goal's row (smell hunts 176, NPC looting and arming, the wardens' goals, escapes, town goals), flight (35, then wander 24), food on the ground
   (259) and limbs (277), NPC arming walks (42), roaming leaders' walks (53) and mills (24); the engine's orders' act-outs start with `TaskSource.Order` ([order queue](#order-queue)). Engine walks go through `TaskStart.Walk` (`TaskRequest.Goal`: as given, or
@@ -266,7 +266,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   does the same in `CarrySystem.Link`); waking gives 65 Getting up (an animal, or waking standing) or 52 (waking staying low or crawling) with the clear flag,
   none in a bed or cage and, while carried, only once put down; a return to standing from staying low or crawling (Stand Up, a leg back up; not at a
   kneeling treatment; not in a bed or cage, engine) gives 65 with the clear flag unless one is queued. A flight, an engine arrest and a bounty hunt
-  wait while one of these runs (engine: the original's replan after it drops an uncommitted goal) (`PlayerOrders.BodyHolds`) and go on after it; a gate round, a ditch and a player-side food run end;
+  wait while one of these runs (engine: the original's replan after it drops an uncommitted goal) (`PlayerOrders.BodyHolds`) and go on after it; a ditch and a player-side food run end;
   an [engine goal](#engine-goals) ends when one starts (`AiSystem.ReplanDuty`, as the original's replan; no duty goal commits). A stagger outside a fight (`CombatSystem.Stagger`, not getting up, not at a turret;
   a squadless NPC too, whose ended front leaves the queue without a chooser, `PlayerOrders.DropEnded`, **Verified** slot 27 `FUN_1405c7c30` → `FUN_14050d920`) pushes 147 Stumbling to the front (`PlayerOrders.GiveFront`): the running front waits behind it unstarted and is started again from its
   start afterwards; 147 starts with no repertoire or list test (`OrderEntry.Forced`, `TaskRequest.Forced`); a blow during a running stumble adds another front
@@ -325,7 +325,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   while it holds an order.
 - **Duties let go** when an NPC's front starts, but for the body's orders (engine design; `PlayerOrders.TryFront`, serial, before the owner's `Start`): `World.ReleaseDuties` asks every system that
   is an `IDutyRelease` (found on the world's systems, nothing registered) but the order's `OrderEntry.Keeps`, its giver, to let the character go through its own give-up.
-  The ditch and food runs, arrests and bounty hunts, gate rounds and the mod NPC goals (`NpcGoals`) drop their record and clear `Engaged`; a body carried
+  The ditch and food runs, arrests and bounty hunts and the mod NPC goals (`NpcGoals`) drop their record and clear `Engaged`; a body carried
   for one is let go where it stands (the unlink, no knock-out); an [engine goal](#engine-goals) ends (`DutyEnd.Order`, through the AI; a town goal lets its carried body go the same way); a door way is dropped and a bash
   errand stopped. Neither the dialogue nor a trade holds anyone. The giver's own `Engaged` (one shared bit) is put back after the others let go. The duty sweeps take no
   ordered character again (`DecisionSystem.Ordered` or `AiSystem.Holds` in their free tests).
@@ -1260,10 +1260,12 @@ one starts with the order's provenance. The chain's rows and states are in [AI t
   from its inner / outer point (setting the house flag once no door of the home is open), 86 unlocks and opens it (clearing the flag when its finder finds
   none), 195 locks the cage. A round asks `DutyGoals.Runs` before each step and ends with `Done`; a failed walk ends it too, and the next think picks again.
   A target another member's act-out works is refused. 197's members inside the home get no plan (its !107 provider 200 needs a target). A loaded night's
-  locked homes come back flagged (`meitou house locked`). **Gates** (`OpenGate`, row 180's need of an open gate, [locks](game/locks.md#doors)):
-  a free member whose current goal is 180 Man the gate runs the unlock round on its gate (`Blackboard.Gate`, else a gate home) while the gate's first
-  door is closed or closing and whole; a locked one only when the door is its faction's (78 needs isObjectMine) (#816); the gate worker is `Engaged`.
-  An arrest's guard walking to a cage behind its faction's shut doors has them opened at once. Act-outs, gate rounds and locked homes are hashed only while any exist.
+  locked homes come back flagged (`meitou house locked`). **Gates** (180 Man the gate, `GateGoals`, desire 1,
+  [locks](game/locks.md#doors)): a chooser goal held as any engine goal; its act-out runs the unlock round on its gate (`Blackboard.Gate`, else a gate home)
+  while the gate's first door is closed or closing and whole (52, met by 72 and 78; the planner holds 52 true, so the act-out folds them in); a locked
+  one only when the door is its faction's (78 needs isObjectMine) (#816); then it walks to the gate guard's place (`AiSystem.FrontOf`; its post
+  without a gate) and stands; a gate shut again is opened again; three rounds or walks that leave it short in a row leave it standing (engine choice).
+  An arrest's guard walking to a cage behind its faction's shut doors has them opened at once. Act-outs and locked homes are hashed only while any exist.
 - **Lock orders** (`LockSystem`, context-menu verbs on a caged character): `PickLockOrder` (the prisoner its own cage, a mate
   walks to it; `Lockpicking.Step` each tick in reach, floaters "Pick success!"/"Pick failed"), `GetOutOrder` (refused while
   locked; any other than a kidnap victim whose sentence is not served, or whose cage owner is not real or a bandit faction, books a pending Escaping Prison (refused for a
@@ -2354,7 +2356,7 @@ Goals of the NPCs' packages that an engine system acts out, chosen by the one ch
 type of the original's that `TaskBehaviours` does not act out, registered by its own system with its `IDutyGoal` (desire, finder, states, start, end) and the rows of
 its plan the act-out carries out besides the goal's own. Built: 135, 139, 282, 230, 232, 233, 237, 277, 278, 279, 260, 183, 167, 168, 173, 245, 217,
 188, 192, 194, 218, 172 and 276 (`CaptiveSystem` through `CaptiveGoals`, [captives](#captives)); 176 (`SmellSystem`, [blood smell](#blood-smell)); 177 and 42 (`CarrySystem` through `LootGoals`, [looting and arming](#carrying-rescue-and-looting)); 211, 155, 197, 86 and 195 (`LockSystem` through `WardenGoals`,
-[wardens' goals](#arrest-and-jail)); 256, 207 and 202 (`LockSystem` through `EscapeGoals`, [escapes](#captives)); 254 (`KidnapSystem` through
+[wardens' goals](#arrest-and-jail)); 180 (`LockSystem` through `GateGoals`, gates in [arrest and jail](#arrest-and-jail)); 256, 207 and 202 (`LockSystem` through `EscapeGoals`, [escapes](#captives)); 254 (`KidnapSystem` through
 `KidnapGoals`, [kidnapping](#kidnapping)); 273, 223, 138, 137, 112, 281, 224, 274, 106, 243, 131, 184, 212, 158, 283 and 216 (`TownDutySystem` through `TownGoals`, [town duties](#town-duties)).
 - **Choosing**: a registered type has `AiBehaviour.Duty`. Its desire is the system's (`DutyGoals.Desire`: the desire times the finder's factor when the TaskData row has
   a finder and an effect; 0 for a player character's mind, an engine mind and a type in back-off), scored by the package record's tier and weight with the continuity
@@ -2452,8 +2454,8 @@ save clock, so an entry does not lose an hour per save and load; `BountySave`), 
 and recognition timers (player platoon characters, written only while set), the locks of interior cages and containers (an imprisoned character stays locked in), and the homes a
 lock-up round locked (without the flag a loaded night's locks would never be undone). **Restarted, not saved** (engine choice; the guard, hunter, releaser and warden of each job is a
 town NPC the population makes again with a new id, so a saved link would dangle): arrests (a downed target lies where it fell, is spotted again once awake, the saved markers make
-that quick), cagings (the carry link is not saved: give the cage's Put in again), hunts and their rest timers, gate rounds (the 30-tick sweep finds
-them again) and the wardens' act-outs (chosen again), the unreachable-cage memo (relearned by a failed walk), lock picking (an order), pending crimes
+that quick), cagings (the carry link is not saved: give the cage's Put in again), hunts and their rest timers, the gate guards' and wardens'
+act-outs (chosen again), the unreachable-cage memo (relearned by a failed walk), lock picking (an order), pending crimes
 (seconds long, victim id unsaveable). Spawn bounties are not saved: they are rolled when the population makes an NPC, never for a loaded character.
 
 ## Sandbox
