@@ -894,7 +894,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// </summary>
     static bool RunsOwnFlight(CharacterCold cold, AiMind mind) =>
         cold is { Fleeing: true, Running: { Source: TaskSource.Goal, Row: TaskType.RunAway } }
-        && mind.Behaviour is AiBehaviour.SelfPreserve or AiBehaviour.Flee;
+        && mind is { Goal: not null, Behaviour: AiBehaviour.SelfPreserve or AiBehaviour.Flee };
 
     /// <summary>
     /// Job 187 Obedient Slave (<c>FUN_14050e5b0</c>, docs/game/ai-tasks.md "Obedient Slave"): a slave (state 1) not sneaking, the jobs switch on,

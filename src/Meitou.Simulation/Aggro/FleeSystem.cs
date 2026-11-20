@@ -233,7 +233,9 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     /// </summary>
     static bool FlightGoes(in CharacterHot n, CharacterCold cold)
     {
-        if (cold.Ai is not ({ Behaviour: AiBehaviour.Flee } or { Behaviour: AiBehaviour.SelfPreserve, Step: Data.Gameplay.Ai.TaskType.RunAway }))
+        // The plan step clears a goal whose plan is over (35's list A !39 6 held) and leaves the behaviour: the goal tells.
+        if (cold.Ai is not { Goal: not null } mind) return false;
+        if (mind is not ({ Behaviour: AiBehaviour.Flee } or { Behaviour: AiBehaviour.SelfPreserve, Step: Data.Gameplay.Ai.TaskType.RunAway }))
             return false;
 
         return cold.Running is not { } run || !run.Runs((CharacterTask)n.Task) || run.Row == Data.Gameplay.Ai.TaskType.RunAway;

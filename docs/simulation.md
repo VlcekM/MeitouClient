@@ -2229,8 +2229,9 @@ Meitou only (the original's AI plans for no player squad; asked for as the RE_Ke
   (one in a bed lies on).
 - **Precedence**: the one ladder's ([precedence](game/ai-tasks.md#precedence)): orders, committed stops, the second list, jobs, tiers 3/2/1,
   the default task. A package goal is held while its task is the think's own (`PlayerSideHold.Holds`, `AiMind.Owns`) and ends at an order, an
-  urgent job or a higher goal. Not reached this way: code mods' NPC goals (a player-faction mind weighs none, `ModDesire`), and the race goals
-  off the chooser's rungs (`Ladder.OnRungs`).
+  urgent job or a higher goal. Not reached this way: code mods' NPC goals (a player-faction mind weighs none, `ModDesire`); the goals whose
+  looks take NPC minds only: 204 (`ArrestGoals`), the warden goals (`WardenGoals`), the kidnap goals (`KidnapGoals`), the loot goals
+  (`LootGoals`), the cage escapes (`AiSystem.CagedMind`); the race goals off the chooser's rungs (`Ladder.OnRungs`).
 - **Home** (`SetSquadHome`, `Squad.AssignedHome`): a town building (its town becomes `Blackboard.Town`, so town goals, turrets and workplaces are
   that town's) or a player-built building, stood in for by a `TownBuilding` with `RuntimeKey` = the site id and no spots. A player-built home that
   is not complete counts as none; one removed is forgotten. A purchase does not evict an autonomous squad. Beds: the home's layout beds, else the
