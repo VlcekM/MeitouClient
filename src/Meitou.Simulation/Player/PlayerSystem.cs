@@ -132,7 +132,7 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
         Construction.BuildOrder o => o.Characters,
         // Every other right-click verb that names characters goes through the same dispatcher (FUN_1407f9e20 :96 sets the flag before any
         // order-specific code); only the job giver's orders (45, 0x111, 0xdf) skip it.
-        Dialogue.TalkOrder o => o.Talkers,
+        Dialogue.TalkOrder o => [o.Talker],
         FirstAid.RestOrder o => o.Characters,
         Items.OpenContainerOrder o => o.Characters,
         Items.PickUpItemOrder o => o.Characters,

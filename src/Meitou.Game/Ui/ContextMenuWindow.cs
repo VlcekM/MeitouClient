@@ -151,19 +151,21 @@ sealed class ContextMenuWindow(PlayerInterface player)
         NearestSelected(at, player.Selected()) is { } lead ? Lockpicking.Chance(level, lead.LockpickSkill) : null;
 
     /// <summary>
-    /// A trader's customer: the selected character nearest it that stands and is no animal; null when none does.
+    /// A trader's customer, or a talker's: the selected character nearest it that stands and is no animal; null when none does.
     /// </summary>
     CharacterSnapshot? Customer(CharacterSnapshot trader) => NearestSelected(trader.Position, player.Selected().Where(c => !c.Down && !c.Animal));
 
     /// <summary>
-    /// Talk To (12) when the target has something to say to the first selected character that is no animal; the order goes to every selected
-    /// character (the menu's dispatch <c>FUN_1407fa650</c> → <c>FUN_1407f9e20</c>, whose order check refuses a dumb one, <b>Verified</b>).
+    /// Talk To (12) when the target has something to say to the talker: the selected character nearest it that stands and is no animal, as the
+    /// quick click picks it. The original's menu (<c>FUN_1407fa650</c> → <c>FUN_1407f9e20</c>, <b>Verified</b>) orders every selected character;
+    /// Meitou orders only that one by the owner's choice, and the others keep their queues.
     /// </summary>
-    void AddTalkVerb(List<(string, Action)> verbs, CharacterId id)
+    void AddTalkVerb(List<(string, Action)> verbs, CharacterSnapshot target)
     {
-        if (player.Selected().FirstOrDefault(c => !c.Animal) is not { } talker || !player.Session.World.CanTalk(id, talker.Id)) return;
+        var id = target.Id;
+        if (Customer(target) is not { } talker || !player.Session.World.CanTalk(id, talker.Id)) return;
 
-        verbs.Add(("Talk To", () => player.Say(new Simulation.Dialogue.TalkOrder(player.SelectedIds(), id) { Tick = player.Session.World.Tick })));
+        verbs.Add(("Talk To", () => player.Say(new Simulation.Dialogue.TalkOrder(talker.Id, id) { Tick = player.Session.World.Tick })));
     }
 
     /// <summary>
@@ -296,7 +298,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
     void PrisonerVerbs(List<(string, Action)> verbs, CharacterSnapshot target, PrisonView prison, IReadOnlyList<CharacterId> selection, bool down)
     {
         var id = target.Id;
-        if (!down) AddTalkVerb(verbs, id);
+        if (!down) AddTalkVerb(verbs, target);
 
         // 26 unless it is the player's and selected: Trade for the player's own, else Loot (a pickpocket while it is awake).
         if (target.CanOpenInventory && !(target.IsPlayer && selection.Contains(id))) verbs.Add(InventoryVerb(target));
@@ -503,7 +505,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
         verbs.Add(("Attack Unprovoked",
             () => player.Say(new AttackOrder(selection, id) { Tick = player.Session.World.Tick, Picked = true, Unprovoked = true })));
         verbs.Add(("Bodyguard", () => player.Say(new FollowOrder(selection, id) { Guard = true, Tick = player.Session.World.Tick })));
-        AddTalkVerb(verbs, id);
+        AddTalkVerb(verbs, target);
     }
 
     /// <summary>
@@ -515,7 +517,7 @@ sealed class ContextMenuWindow(PlayerInterface player)
         var id = target.Id;
         bool onTurret = player.Selected().LastOrDefault() is { Turret: not null };
         bool hostile = player.PointerPanel.Hostile(target);
-        AddTalkVerb(verbs, id);
+        AddTalkVerb(verbs, target);
 
         // The customer is the selected character nearest the trader that stands (as the quick order's lead), not the first selected.
         if (target.IsTrader && !hostile && Customer(target) is { } customer)

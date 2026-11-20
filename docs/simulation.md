@@ -310,8 +310,8 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
 - **Talk and Trade** are order 12 Talking (`DialogueOrders`, act-out `PlayerTalks`; [player conversation](game/dialogue.md#player-conversation)): `TalkOrder` gives it, Meitou's
   `OpenTrade` gives it with the detail `DialogueOrders.Trade` (saved as `meitou tjobK` 1). Its walk runs on its own Talk task, re-aimed on a moving target (a sleeper gets up first; a caged talker, whose repertoire has
   no row 29, waits blocked until the target is in talk range, row 12 being in the 0x45 repertoires); in talk range the
-  queue and second list are emptied, the task ends and event 1 fires (or the trade opens). The menu's Talk To gives it to every selected character (`TalkOrder.Talkers`,
-  each vetted, as `FUN_1407f9e20`), the quick click to the nearest. The interface gives both clearing the queue, Shift or not, as the original's givers do
+  queue and second list are emptied, the task ends and event 1 fires (or the trade opens). The menu's Talk To and the quick click give it to the nearest selected character that stands and is
+  no animal (the original's menu gives it to every selected one through `FUN_1407f9e20`; one talker is the owner's choice). The interface gives both clearing the queue, Shift or not, as the original's givers do
   ([order givers](game/ai-tasks.md#order-givers)); `World.GiveOrder(queued: true)` appends one. DA_TRADE opens its window with no order (`OpenTradeNow`).
 - **Escape** (the caged character's menu verb) is order 207 Escape cage (`GetOutOrder` → `Locks.CageEscape`) for every selected character, the queue cleared, as the
   original's giver: done for one in no cage (list A `!79`), held while the cage is locked (list B `!54`), else Task_GetOutOfCage's leave with the escape flag.
