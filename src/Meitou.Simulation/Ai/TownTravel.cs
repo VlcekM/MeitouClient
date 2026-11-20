@@ -33,9 +33,28 @@ public enum TravelAsk : byte
 /// detour nest at the functor's speed, and the task's two exits. The think acts it out on the character's own mind; the package calls of the exits
 /// are made by the serial step in slot order (<see cref="Step"/>).
 /// </summary>
-internal sealed class TownTravel(AiSystem system, PopulationData data)
+internal sealed class TownTravel(PopulationData data)
 {
     #region The walk
+
+    /// <summary>
+    /// How the last walk stands (<see cref="WalkOver"/>).
+    /// </summary>
+    enum WalkOutcome : byte
+    {
+        /// <summary>
+        /// Still walking, or not walking for this task.
+        /// </summary>
+        Walking,
+        /// <summary>
+        /// Over: at its goal, or stopped by another system.
+        /// </summary>
+        Over,
+        /// <summary>
+        /// Over with no path to the goal.
+        /// </summary>
+        NoPath,
+    }
 
     /// <summary>
     /// The worker thread's functionality cache for the town's gates (<see cref="TownExit.Of"/>).
@@ -49,6 +68,13 @@ internal sealed class TownTravel(AiSystem system, PopulationData data)
     const float JogCap = 55, RunCap = 999, SlowerShare = 0.9f;
 
     /// <summary>
+    /// How far from its goal a finished walk may end and still have reached it: the goal's snap onto the navmesh and the movement's arrival radius.
+    /// Farther, the path was the partial one toward an unreachable goal (<see cref="Navigation.NavQuery.FindPathToward"/>), which the original's
+    /// path state 3 reports as no path (engine choice).
+    /// </summary>
+    const float ShortEnd = Navigation.NavQuery.GoalSnap + MovementSystem.ArriveRadius;
+
+    /// <summary>
     /// Whether the character acts out a travel step (53, 130) the AI walks in full: not one an engine-acted goal carries (192's walk is the captive
     /// system's). The movement's carrier jog does not apply to it (<see cref="MovementSystem.CarriesOutAtWalk"/>) and its pace cap does
     /// (<see cref="CharacterCold.PaceCap"/>). Any thread.
@@ -60,7 +86,7 @@ internal sealed class TownTravel(AiSystem system, PopulationData data)
     /// The update on the think (own slot only): the town, else the restart exit; the walk's end read (the detour or the path-impossible exit); then
     /// the walk to the town's waypoint at the functor's mode and cap, standing once there.
     /// </summary>
-    public void Act(World world, int slot, AiMind mind, Blackboard board, TaskType row)
+    public void Act(AiSystem system, World world, int slot, AiMind mind, Blackboard board, TaskType row)
     {
         var cold = world.Characters.Cold(slot)!;
         cold.PaceCap = null;
@@ -70,10 +96,10 @@ internal sealed class TownTravel(AiSystem system, PopulationData data)
             return;
         }
 
-        if (WalkOver(world, slot, mind, cold) && !Failed(world, slot, mind, town)) return;
+        if (WalkOver(world, slot, mind, cold) == WalkOutcome.NoPath && !Detoured(world, slot, mind, town)) return;
         if (Town(world, mind, board) is not { } aim) return;
 
-        Walk(world, slot, mind, cold, board, aim, row);
+        Walk(system, world, slot, mind, cold, board, aim, row);
     }
 
     /// <summary>
@@ -87,31 +113,38 @@ internal sealed class TownTravel(AiSystem system, PopulationData data)
     }
 
     /// <summary>
-    /// Whether the last walk is over; a finished one marks the waypoint reached (<see cref="AiMind.ArrivedAt"/>).
+    /// How the last walk stands: one with no path (CharMovement slots 0x50 and 0x48, path state 3: <see cref="CharacterCold.PathFailed"/>, or a
+    /// finished walk that ended <see cref="ShortEnd"/> away from its goal) is <see cref="WalkOutcome.NoPath"/>; one finished at its goal marks the
+    /// waypoint reached (<see cref="AiMind.ArrivedAt"/>).
     /// </summary>
-    static bool WalkOver(World world, int slot, AiMind mind, CharacterCold cold)
+    static WalkOutcome WalkOver(World world, int slot, AiMind mind, CharacterCold cold)
     {
         ref var n = ref world.Characters.Next[slot];
-        if (!mind.Walking || n.Task == (byte)CharacterTask.GoTo) return false;
+        if (!mind.Walking || n.Task == (byte)CharacterTask.GoTo) return WalkOutcome.Walking;
 
         mind.Walking = false;
-        if (cold.WalkEnd == WalkEnd.Finished)
+        var here = new Vector2(n.Position.X, n.Position.Z);
+        bool finished = cold.WalkEnd == WalkEnd.Finished;
+        bool shortOf = finished && Vector2.DistanceSquared(here, n.Goal) > ShortEnd * ShortEnd;
+        if (cold.PathFailed || shortOf) return WalkOutcome.NoPath;
+
+        if (finished)
         {
             mind.ArrivedAt = n.Goal;
-            mind.ArrivedFrom = new Vector2(n.Position.X, n.Position.Z);
+            mind.ArrivedFrom = here;
         }
 
-        return true;
+        return WalkOutcome.Over;
     }
 
     /// <summary>
     /// The walk to the town's waypoint (<c>FUN_1405c68a0</c> with <c>getPosWithinChoppingRange</c> <c>FUN_14059bf30</c>: a town's vfunc 0x38,
     /// <see cref="TownExit"/>; a nest's centre) at the functor's mode and cap; standing once its walk ended there.
     /// </summary>
-    void Walk(World world, int slot, AiMind mind, CharacterCold cold, Blackboard board, CampaignTown town, TaskType row)
+    void Walk(AiSystem system, World world, int slot, AiMind mind, CharacterCold cold, Blackboard board, CampaignTown town, TaskType row)
     {
         ref var n = ref world.Characters.Next[slot];
-        var point = Waypoint(world, town);
+        var point = Waypoint(system, world, town);
         var here = new Vector2(n.Position.X, n.Position.Z);
         if (mind.ArrivedThere(point, here) || Vector2.DistanceSquared(here, point) <= system.Settings.PostSlack * system.Settings.PostSlack)
         {
@@ -131,7 +164,7 @@ internal sealed class TownTravel(AiSystem system, PopulationData data)
     /// <summary>
     /// The town's waypoint: a nest's centre, any other town's point outside its gates (Town vfunc 0x38, <see cref="TownExit.Of"/>).
     /// </summary>
-    Vector2 Waypoint(World world, CampaignTown town)
+    Vector2 Waypoint(AiSystem system, World world, CampaignTown town)
     {
         var (centre, _) = AiSystem.TownCircle(data, world, town)!.Value;
         if (town.Nest > 0) return centre;
@@ -202,16 +235,12 @@ internal sealed class TownTravel(AiSystem system, PopulationData data)
     int _asked;
 
     /// <summary>
-    /// A walk that ended with no path to the town (CharMovement slots 0x50 and 0x48, path state 3: <see cref="CharacterCold.PathFailed"/>): to a
-    /// town of type 0 (a nest, Town <c>+0xd8</c> the TOWN record's <c>type</c>, <c>FUN_1409353c0</c>) with no detour yet it takes the nearest nest
-    /// of its faction for one (<see cref="Detour"/>; none: it stands and tries again); otherwise the path-impossible exit. True when the walk goes
-    /// on.
+    /// A walk that ended with no path to the town (<see cref="WalkOutcome.NoPath"/>): to a town of type 0 (a nest, Town <c>+0xd8</c> the TOWN
+    /// record's <c>type</c>, <c>FUN_1409353c0</c>) with no detour yet it takes the nearest nest of its faction for one (<see cref="Detour"/>; none:
+    /// it stands and tries again); otherwise the path-impossible exit. True when the walk goes on.
     /// </summary>
-    bool Failed(World world, int slot, AiMind mind, CampaignTown town)
+    bool Detoured(World world, int slot, AiMind mind, CampaignTown town)
     {
-        var cold = world.Characters.Cold(slot)!;
-        if (!cold.PathFailed) return true;
-
         if (mind.TravelDetour.IsNone && IsNest(world, town))
         {
             mind.TravelDetour = Detour(world, slot, town);
@@ -277,7 +306,7 @@ internal sealed class TownTravel(AiSystem system, PopulationData data)
     /// with the town) and again with an empty hand, which only the trader's (<c>FUN_140286730</c>, a new start: a new town) changes anything for
     /// (<see cref="AiSystem.PathImpossible"/>).
     /// </summary>
-    public void Step(World world)
+    public void Step(AiSystem system, World world)
     {
         if (Interlocked.Exchange(ref _asked, 0) == 0) return;
 

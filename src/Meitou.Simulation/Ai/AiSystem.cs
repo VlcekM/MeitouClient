@@ -140,12 +140,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// The travel rows' act-out (53, 130, <see cref="TownTravel"/>).
     /// </summary>
-    TownTravel? _travel;
-
-    /// <summary>
-    /// The travel rows' act-out, made on first use.
-    /// </summary>
-    TownTravel Travel => _travel ??= new TownTravel(this, data);
+    readonly TownTravel _travel = new(data);
 
     /// <summary>
     /// The owner of the NPC orders the dialogue and a building purchase give (19, 22, 67, 101, 248, 280).
@@ -2300,7 +2295,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         if (mind.Step is TaskType.TravelToTargetTown or TaskType.TravelToTargetTownFast)
         {
-            Travel.Act(world, slot, mind, board, mind.Step);
+            _travel.Act(this, world, slot, mind, board, mind.Step);
             return;
         }
 
@@ -3305,7 +3300,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (Interlocked.Exchange(ref _treating, 0) != 0) (_firstAid ??= world.SystemOf<FirstAid.FirstAidSystem>())?.SendGoalTreatments(world);
         if (Interlocked.Exchange(ref _announcing, 0) != 0) SendAnnouncements(world);
 
-        _travel?.Step(world);
+        _travel.Step(this, world);
         _duties?.Step(world, world.Every(Settings.ThinkEveryTicks) * ModGoalBackoffThinks);
         _modGoals?.Step(world, world.Every(Settings.ThinkEveryTicks) * ModGoalBackoffThinks);
         if (Interlocked.Exchange(ref _leaving, 0) != 0) LeaveFights(world);

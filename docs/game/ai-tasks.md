@@ -1464,7 +1464,7 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   `LAB_140046371`, shared with 215); 53 achieves state 36 and 130 state 94, both `atDestinationTown` (one evaluator, `FUN_140507610`); 36 is in list B of
   39 and 192, 94 in 36 Patrolling town's, and no other row has either in list A, so 39 and 192 plan 53 and 36 plans 130. The evaluator: true without squad data; the squad's
   town (below, with the home fallback) against the character's status town (`+0x88`, none: false); no town: AI slot 11 (`FUN_1405a2450`) with the row's own target, false
-  for one with neither hand nor point, which 39, 192, 36, 53 and 130 all are. State 32 `hasDestinationTown` (`FUN_1405075d0`): the squad's town without the fallback is set
+  for one with neither hand nor point, which 39, 192, 36, 53 and 130 all are (their base AI_TASK records' `targeting` is 0, SPECIFIC). State 32 `hasDestinationTown` (`FUN_1405075d0`): the squad's town without the fallback is set
   (no row provides 32). So a squad with no override, campaign or running package has no 32, plans neither travel row and goes home by none; the fallback only lets 36 stroll
   round the home town while it stands in it. Meitou: `SquadTown.Reached`, `SquadTown.Of`.
   39 Wandering trader (desire AI slot 19, 1.0, stub `LAB_1400215ee`; the factory's default `Task_Blank`; registered without the act flag, `+0x14` and `+0x15` set):
@@ -1475,9 +1475,12 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   (0x55); else the running package's (`+0x48`) mission town, set or not; only with no running package and the caller's flag the platoon's Ownerships home town (`+0x30`).
   What each class's start (vtable `+0x30`) leaves in the mission town: the base start `FUN_1402856c0` the home town when there is one (the base package,
   `Contract_Timed`, `Contract_UntilExSlave`, `RetreatAndRefresh`, both prisoner gatherings, `Contract_UntilOutOfDanger`; occupation, the passing assault and the cannibal
-  retreat run it first); the trader its drawn town (`FUN_140286740`); the patrols none (`FUN_140287060` only stamps the hour); the shippings the platoon's slot-`0x98` hand
-  `+0x60` (`FUN_140287520`); the cannibal retreat, when the base start left none, the nearest town of its faction over both town lists (`FUN_140927bb0`), its nearest-nest
-  kind that always (`FUN_140289b50`); the bars their bar town (`FUN_1402916b0`). Meitou: `SquadTown` (a nest squad's home town is its nest, `PopulationSystem.NestSiteOf`).
+  retreat run it first; occupation (`FUN_140288fe0`) and the passing assault (`FUN_1402900c0`) then the town their leader stands in, when it stands in one); the trader its
+  drawn town (`FUN_140286740`); the patrols none (`FUN_140287060` only stamps the hour); the shippings the platoon's slot-`0x98` hand `+0x60` (`FUN_140287520`); the cannibal
+  retreat, when the base start left none, the nearest town of its faction over both town lists (`FUN_140927bb0`), its nearest-nest kind that always (`FUN_140289b50`); the
+  bars their bar town (`FUN_1402916b0`); `Contract_HiredAlly` and both base defences the player's town nearest the squad (`FUN_140289490`, `FUN_14028a170`); the war packages
+  (`FUN_14028fc80`) the campaign's target (campaign vfunc `0xa0`), with no campaign the home town. Meitou: `SquadTown` (a nest squad's home town is its nest,
+  `PopulationSystem.NestSiteOf`).
 - **`Task_TravelToTargetTown`** (53 / 130; **Verified**, ctor `FUN_14033ace0`, start `FUN_14033ad80`, update `FUN_14033ae40`, speed functor `FUN_140342a30`; rows 53 and 130
   leave `+0x15` clear, so the base slot 4 calls them finished and their list A ends them on arrival, handing 36's plan `[130, 36]` over to 36):
   - Speed: the ctor's mode is 0 for 53, 1 for 130; the start replaces it with the running package's speed mode (package slot 3, even 4: 4 for the base class, the patrols,
@@ -1494,17 +1497,18 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
     `FUN_1405c6810`: AITaskSytem `+0x26d`, which the update turns into a replan, [finished tests](#finished-tests)).
   - No path for good (CharMovement `0x50`: path state 3 past the goal-offset retries, [pathfinding](pathfinding.md#walls)) to a town of type 0 (Town `+0xd8` is the TOWN
     record's `type`, read by `FUN_1409353c0`; 0 is a nest or camp) with no detour yet: the detour becomes the nest `FUN_140927ad0` returns, the nearest (X/Z) of the town
-    list's second list, the nests, whose faction (vfunc `0x58`) is the character's (AI slot 1), the target left out; none found leaves the detour unset, so the update
+    list's second list (the nests, **Observed**), whose faction (vfunc `0x58`) is the character's (AI slot 1), the target left out; none found leaves the detour unset, so the update
     tries again. The time stamped beside it (`+0x88`) has no reader in the class. A detour reached does not end the task (list A tests the squad's town).
   - Otherwise no path (`0x48` false, state 3): `notifyPathImpossible` (`FUN_1405c6840` → `FUN_140796ed0`) puts the town in the character's own `pathFailures`
     (AITaskSytem `+0x218`, 20.0 s; each frame `FUN_14050f0b0` counts it down and, at 0, drops it once the navmesh links the character's polygon to the town's waypoint
     (`FUN_14065db60`), else re-arms 20 s) and calls the override's and the running package's vtable `+0x10` with the town (`FUN_140268a20`); then a replan request and the
     running package's `+0x10` again with an empty hand. `+0x10` is nothing for most classes (`FUN_140285870`), a new start for the trader (`FUN_140286730`, so a new
-    town), and for the bars (`FUN_140295990`) a hand moved between their own reservation maps, which hold tables. The map's readers (`isPathImpossible` `FUN_1405b0290`)
+    town), and for the bars (`FUN_140295990`) a hand moved between their own reservation maps, which hold tables (**Observed**). The map's readers (`isPathImpossible` `FUN_1405b0290`)
     are finders of characters, buildings, furniture and items (**Observed**: none is asked with a town), so the mark changes nothing for travel.
   - Meitou: `TownTravel` (the walk, the functor, both exits, the detour in `AiMind.TravelDetour`; the package calls in the serial step, `AiSystem.RestartPackage`,
     `AiSystem.PathImpossible`; the cap as `CharacterCold.PaceCap`, members in squad order; the town mark is not kept, having no reader; the movement's carrier jog is
-    skipped, `MovementSystem.CarriesOutAtWalk`). A walk Meitou gives up for another reason (blocked, a door) is sent again, as the original's update re-sends its move.
+    skipped, `MovementSystem.CarriesOutAtWalk`). A finished walk that ends farther from the waypoint than the goal snap plus the arrival radius (40) followed the
+    partial path toward an unreachable goal and counts as no path (engine choice). A walk Meitou gives up for another reason (blocked, a door) is sent again, as the original's update re-sends its move.
 - **129 Approaching fast**: desire AI
   slot 19 (`FUN_140641550`, 1.0; stub `LAB_1400215ee`), so at its target it ties with 215.
 - **37 Wandering town** (`FUN_140999a60`): keeps a target that is still a general node; else one building drawn uniformly from the **public**

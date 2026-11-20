@@ -11,14 +11,14 @@ namespace Meitou.Simulation.Ai;
 internal static class SquadTown
 {
     /// <summary>
-    /// <c>FUN_140269cd0</c>: the override package's mission town, set or not (a contract or a campaign's phase package,
-    /// <see cref="Blackboard.ContractMissionTown"/>); else the campaign's target when it is a town or nest; else, with a running package, that
-    /// package's mission town, set or not (<see cref="RunningTown"/>); only with no running package and <paramref name="homeFallback"/> the
-    /// squad's home town (<see cref="Home"/>); else none. States 36 and 94 and the travel task ask with the fallback, state 32 without.
+    /// <c>FUN_140269cd0</c>: the override package's mission town, set or not (a contract or a campaign's phase package, the running package while
+    /// it runs, <see cref="RunningTown"/>); else the campaign's target when it is a town or nest; else, with a running package, that package's
+    /// mission town, set or not; only with no running package and <paramref name="homeFallback"/> the squad's home town (<see cref="Home"/>); else
+    /// none. States 36 and 94 and the travel task ask with the fallback, state 32 without.
     /// </summary>
     public static CampaignTown Of(World world, Squad squad, Blackboard board, bool homeFallback)
     {
-        if (board.Contract is not null) return board.ContractMissionTown;
+        if (board.Contract is not null) return RunningTown(world, squad, board);
         if (CampaignTarget(world, squad) is { IsNone: false } target) return target;
         if (board.Current is not null) return RunningTown(world, squad, board);
 
@@ -54,19 +54,43 @@ internal static class SquadTown
 
     /// <summary>
     /// The running package's mission town (its hand <c>+0x8</c>) as its class's start (vtable <c>+0x30</c>, <b>Verified</b> per class) leaves it:
-    /// the trader's drawn town, the refugee's, the passing assault's and the occupation's town (<see cref="Blackboard.Destination"/>); the shipping's
+    /// the trader's drawn town and the refugee's (<see cref="Blackboard.Destination"/>); the passing assault's and the occupation's the town their
+    /// leader stands in, else the home town the base start they run first set (<c>FUN_1402900c0</c>, <c>FUN_140288fe0</c>); the shipping's
     /// and the cannibal retreat's town (<see cref="Blackboard.MissionTown"/>, the retreat's else the home town); none for the patrols, whose start
     /// (<c>FUN_140287060</c>) only stamps its hour; the bar classes' bar town (<c>FUN_1402916b0</c>: the town of the home building, else the home
-    /// town); for every other class the base start (<c>FUN_1402856c0</c>) makes it the home town.
+    /// town); the war packages' campaign target (<c>FUN_14028fc80</c>, the campaign's vfunc 0xa0; with no campaign the home town); the contracts'
+    /// as <see cref="ContractHand"/>; for every other class the base start (<c>FUN_1402856c0</c>) makes it the home town.
     /// </summary>
     static CampaignTown RunningTown(World world, Squad squad, Blackboard board) => board.CurrentClass switch
     {
-        PackageClass.WanderingTrader or PackageClass.Refugee or PackageClass.PassingAssault or PackageClass.OccupyTown => board.Destination,
+        PackageClass.WanderingTrader or PackageClass.Refugee => board.Destination,
+        PackageClass.PassingAssault or PackageClass.OccupyTown => board.Destination.IsNone ? Home(world, squad, board) : board.Destination,
         PackageClass.SlaverShipping => board.MissionTown >= 0 ? CampaignTown.OfSite(board.MissionTown) : CampaignTown.None,
         PackageClass.CannibalRetreat => board.MissionTown >= 0 ? CampaignTown.OfSite(board.MissionTown) : Home(world, squad, board),
         PackageClass.Patrol or PackageClass.PatrolRunning => CampaignTown.None,
+        PackageClass.WarBase or PackageClass.WarAssault or PackageClass.WarAssaultCannibal => WarTown(world, squad, board),
+        PackageClass.Contract or PackageClass.CampaignDefend => ContractHand(world, squad, board),
         _ => Home(world, squad, board),
     };
+
+    /// <summary>
+    /// A war package's mission town: the campaign's target, else the home town.
+    /// </summary>
+    static CampaignTown WarTown(World world, Squad squad, Blackboard board) =>
+        CampaignTarget(world, squad) is { IsNone: false } target ? target : Home(world, squad, board);
+
+    /// <summary>
+    /// A contract's mission town: the one its start or its save set (<see cref="Blackboard.ContractTown"/>; <c>Contract_HiredAlly</c> 12,
+    /// <c>Contract_DefendPlayerBase</c> 15 and <c>Campaign_DefendPlayerBase</c> 31 the player's town nearest the squad, none without one); else for
+    /// the classes on the base start (<c>Contract_UntilExSlave</c> 13, <c>Contract_UntilOutOfDanger</c> 14, <c>Contract_Timed</c> 33, vtable
+    /// <c>+0x30</c> <c>FUN_1402856c0</c>, <b>Verified</b>) the home town.
+    /// </summary>
+    static CampaignTown ContractHand(World world, Squad squad, Blackboard board)
+    {
+        if (!board.ContractTown.IsNone) return board.ContractTown;
+
+        return board.Current?.Signal is 13 or 14 or 33 ? Home(world, squad, board) : CampaignTown.None;
+    }
 
     /// <summary>
     /// The platoon's Ownerships home town (<c>+0x30</c>): the squad's site or outpost (<see cref="Blackboard.HomeTown"/>), else the nest a nest squad
