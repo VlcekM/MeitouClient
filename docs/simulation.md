@@ -329,8 +329,8 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   errand stopped. Neither the dialogue nor a trade holds anyone. The duty sweeps take no
   ordered character again (`DecisionSystem.Ordered` or `AiSystem.Holds` in their free tests).
 - **Routine after an order** (engine design): an NPC its AI does not fully run (a held platoon's engine mind, or none: no squad) keeps the routine it was on at the start, wandering or
-  following its leader (`CharacterCold.OrderRoutine`, `DecisionSystem.KeepRoutine`), and takes it up again once its order no longer holds it, if it then stands idle,
-  awake and held by nothing (`DecisionSystem.BackToRoutine`; it waits while the order's task goes on, a move's walk after the move left the
+  following its leader (`CharacterCold.OrderRoutine`, `OrderStep.KeepRoutine`), and takes it up again once its order no longer holds it, if it then stands idle,
+  awake and held by nothing (`OrderStep.BackToRoutine`; it waits while the order's task goes on, a move's walk after the move left the
   queue). A full mind chooses again instead.
 - **Orders of several steps** (`IOrderSteps`, the arrest orders 240, 213, 112): the original plans the front again on every update, so the end of one task of its plan
   is not the order's. While the owner's act-out goes on between two tasks the front still runs (`PlayerOrders.Runs`), and the plan step asks the order row's list B
