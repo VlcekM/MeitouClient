@@ -10,6 +10,7 @@ using Meitou.Simulation.Factions;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
 using Meitou.Simulation.Population;
+using Meitou.Simulation.Production;
 using Meitou.Simulation.Saving;
 using Meitou.Tests.Save;
 using SimWorld = Meitou.Simulation.World;
@@ -71,9 +72,10 @@ public class SquadAutonomyTests
     }
 
     /// <summary>
-    /// Starts a job's standing task (row 87, a job's provenance) for one character at its first slow world.
+    /// Gives one character a job at its first slow world: row 87 in its job list, with a contributor that can always run it (the chooser keeps a
+    /// job's task only for a job of the list, docs/game/ai-tasks.md "Precedence" step 5), and starts its standing task (a job's provenance).
     /// </summary>
-    sealed class JobStarter(Func<CharacterId> who) : ITickSystem
+    sealed class JobStarter(Func<CharacterId> who) : ITickSystem, IJobSource
     {
         bool _done;
 
@@ -82,8 +84,16 @@ public class SquadAutonomyTests
             if (_done || !world.Characters.TryResolveNext(who(), out int slot)) return;
 
             _done = true;
-            TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Idle, TaskType.OperateMachinery, TaskSource.Job) { Job = 0 });
+            world.Decisions.RegisterJob(TaskType.OperateMachinery, this);
+            world.Characters.Cold(slot)!.Jobs.Add(new PermaJob(TaskType.OperateMachinery, null, default));
+            Start(world, slot, 0);
         }
+
+        public DecisionCheck CanRun(SimWorld world, int slot, int k) =>
+            world.Characters.Cold(slot)!.Running is { Source: TaskSource.Job } ? DecisionCheck.Runs : DecisionCheck.Run;
+
+        public void Start(SimWorld world, int slot, int k) =>
+            TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Idle, TaskType.OperateMachinery, TaskSource.Job) { Job = k });
     }
 
     static FcsRecord PlayerPlatoon(SaveGame save) => save.Platoons.Single(p => p.FactionId == save.PlayerFaction!.Id).Record;

@@ -28,7 +28,7 @@ public class DecisionTests
     /// </summary>
     static TaskStartTests.Rig Quiet(bool senses = false, FactionRelations? relations = null)
     {
-        var rig = new TaskStartTests.Rig(carrying: false, decide: true, senses: senses, relations: relations);
+        var rig = new TaskStartTests.Rig(carrying: false, decide: true, senses: senses, relations: relations, ai: true);
         rig.World.RunTicks(3);
         rig.Say(new StopCommand([rig.Fighter]) { Tick = rig.World.Tick });
         rig.World.RunTick();
@@ -100,7 +100,21 @@ public class DecisionTests
         Assert.Equal(foe.Slot, rig.Combat.StateOf(f).TargetSlot);
         Assert.Equal("32 Self preservation", rig.Cold(f).Decision!.Winner);
     }
-    static IDecisionSource ProtectAllies(TaskStartTests.Rig rig) => rig.World.Decisions.Sources.Single(s => s.Name == "15 Protect allies");
+
+    /// <summary>
+    /// The desire of goal 15 Protect allies on the character's chooser rung (the player faction's <c>AI Goals</c> entry): its first ally above 0
+    /// times its finder's best (<see cref="AiSystem.Desire"/>, as the tier scores it).
+    /// </summary>
+    static float ProtectDesire(TaskStartTests.Rig rig, CharacterId who)
+    {
+        const TaskType type = TaskType.ProtectAllies;
+        var cold = rig.Cold(who);
+        var squad = rig.World.Squads.Find(cold.SquadId)!;
+        var ai = rig.World.SystemOf<AiSystem>()!;
+
+        return ai.Desire(rig.World, TaskBehaviours.Of(type), type, TaskProfiles.Of(type), squad, AiSystem.PlayerSideBoard(squad), cold.Ai!, who,
+                TaskTargetType.Specific);
+    }
 
     /// <summary>
     /// A fight on the mate: an NPC of the enemy's faction beside it attacks it; the mate (a player's character) fights back.
@@ -124,11 +138,11 @@ public class DecisionTests
         using var rig = Quiet(senses: true);
         var (far, mate) = (rig.Fighter, rig.Mate);   // 40 units apart
         var at = rig.World.Characters.Next[mate.Slot].Position;
-        var near = rig.Add(at.X + 2, at.Z, player: true);   // in no squad
+        var near = rig.Add(at.X + 2, at.Z, player: true);
+        rig.Join(near, null);   // in a squad of its own, not the mate's
         // the rig's own enemy still attacks the fighter: the fighter would be an ally under attack too
         rig.Cold(rig.Enemy).Medical!.KnockOut(100000);
         AttackMate(rig);
-        var goal = ProtectAllies(rig);
         var senses = rig.World.SystemOf<AggroSystem>()!;
         float Threat() => rig.Combat.FightThreat(rig.World, mate.Slot, senses.SensesOf(mate.Slot));
 
@@ -138,9 +152,9 @@ public class DecisionTests
         {
             rig.World.RunTick();
             if (nearAt is null && rig.Task(near) == CharacterTask.Attack)
-                (nearAt, nearThreat) = (goal.Desire(rig.World, near.Slot), Threat());
+                (nearAt, nearThreat) = (ProtectDesire(rig, near), Threat());
             if (farAt is null && rig.Task(far) == CharacterTask.Attack)
-                (farAt, farThreat) = (goal.Desire(rig.World, far.Slot), Threat());
+                (farAt, farThreat) = (ProtectDesire(rig, far), Threat());
         }
 
         Assert.True(nearAt is not null && farAt is not null, "both join the mate's fight");
