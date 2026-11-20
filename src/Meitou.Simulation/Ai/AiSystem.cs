@@ -536,10 +536,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// Whether an NPC's chooser runs out of a cage: not while carried, knocked out or dead (<c>FUN_1405d00b0</c>, <b>Verified</b>); Meitou: not while
-    /// it flees (<see cref="FleeSystem"/>'s run stands for the plan of 35 or 32), nor while its order holds it (the order step picked it).
+    /// its order holds it (the order step picked it). A runner's chooser runs: its run is its goal's task (<see cref="FleeSystem"/>).
     /// </summary>
     static bool ChooserRuns(CharacterCold cold) =>
-        !cold.Fleeing && !cold.IsImprisoned && cold.CarriedBy.IsNone && cold.Medical is not { Incapacitated: true } && !DecisionSystem.Ordered(cold);
+        !cold.IsImprisoned && cold.CarriedBy.IsNone && cold.Medical is not { Incapacitated: true } && !DecisionSystem.Ordered(cold);
 
     /// <summary>
     /// The two holds only Meitou has (<see cref="MeitouHolds"/>), as they were: an engine mind or a mod's goal the AI runs thinks as held
@@ -743,7 +743,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// chained repertoire, so only the rows registered for it plan): a full mind of its own, awake, not carried and held by no order.
     /// </summary>
     internal static bool CagedMind(CharacterCold cold) =>
-        cold is { IsImprisoned: true, IsPlayer: false, Fleeing: false, Engaged: false, Ai: { Engine: false, Player: false } }
+        cold is { IsImprisoned: true, IsPlayer: false, Engaged: false, Ai: { Engine: false, Player: false } }
         && cold.CarriedBy.IsNone && cold.Medical is not { Incapacitated: true } && !DecisionSystem.Ordered(cold);
 
     /// <summary>
@@ -851,16 +851,18 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         (int)goal.Task.Type >= SimulationExtensions.FirstModCode && goal.Task.Name.Length > 0 ? goal.Task.Name : TaskBehaviours.Text(goal.Task.Type);
 
     /// <summary>
-    /// Whether the AI runs the character now: it has a mind and nothing else holds it (a fight it did not start, a flight, an order, being carried,
-    /// a trade, a knock-out). In its own fight it thinks as anyone does (on the cadence and the replan triggers) and may leave it for another goal
-    /// (<see cref="InFight"/>). An NPC's order that runs holds it (<see cref="DecisionSystem.Ordered"/>); one that is blocked does not. An NPC
-    /// carrying a body is held as anyone outside a fight, and an engine goal's act-out (<see cref="AiMind.Duty"/>) is the AI's own: it runs the
-    /// character while that act-out runs. A player-faction mind (<see cref="AiMind.PlayerSide"/>) is held only by the goal its chooser picked, on a
-    /// task that is the AI's own (<see cref="PlayerSideHold.Holds"/>): a source's pick, an order's task or a job's is not the AI's.
+    /// Whether the AI runs the character now: it has a mind and nothing else holds it (a fight it did not start, a flight its goal did not start, an
+    /// order, being carried, a trade, a knock-out). In its own fight it thinks as anyone does (on the cadence and the replan triggers) and may leave
+    /// it for another goal (<see cref="InFight"/>); on its own flight too (<see cref="RunsOwnFlight"/>). An NPC's order that runs holds it
+    /// (<see cref="DecisionSystem.Ordered"/>); one that is blocked does not. An NPC carrying a body is held as anyone outside a fight, and an engine
+    /// goal's act-out (<see cref="AiMind.Duty"/>) is the AI's own: it runs the character while that act-out runs. A player-faction mind
+    /// (<see cref="AiMind.PlayerSide"/>) is held only by the goal its chooser picked, on a task that is the AI's own (<see cref="PlayerSideHold.Holds"/>):
+    /// a source's pick, an order's task or a job's is not the AI's.
     /// </summary>
     public static bool Holds(in CharacterHot n, CharacterCold cold)
     {
         if (cold.Ai is not { } mind || !PlayerSideHold.Free(cold) || DecisionSystem.Ordered(cold)) return false;
+        if (cold.Fleeing && !RunsOwnFlight(cold, mind)) return false;   // a broken squad's run, or a Meitou hold's: the engine's
         if (mind.PlayerSide) return PlayerSideHold.Holds(n, cold, mind);
 
         // An engine goal holds it (DutyGoals): the AI runs it while its act-out runs, carrying included (the act-out's own body), not in a fight.
@@ -877,7 +879,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             CharacterTask.GoTo => mind.Behaviour is AiBehaviour.Post or AiBehaviour.Sleep or AiBehaviour.Sit or AiBehaviour.GoHome
                 or AiBehaviour.Patrol or AiBehaviour.Turret or AiBehaviour.TownNode or AiBehaviour.Shop or AiBehaviour.Relax
                 or AiBehaviour.ToTown or AiBehaviour.Travel or AiBehaviour.Work or AiBehaviour.Investigate
-                or AiBehaviour.PatrolTown || RunsDitchStep(cold),
+                or AiBehaviour.PatrolTown || RunsDitchStep(cold) || RunsOwnFlight(cold, mind),
             CharacterTask.Rest => mind.Behaviour is AiBehaviour.Sleep or AiBehaviour.Sit or AiBehaviour.Relax,
             // In the bed it went to (or lying in one when loaded, before its first think, or laid in by a carrier while it was down: no task of
             // its own keeps it there, and its goal of before then is stale), its think lets it lie on or gets it out (Act).
@@ -886,6 +888,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             _ => false,
         };
     }
+
+    /// <summary>
+    /// Whether the character runs the flight its goal started (<see cref="FleeSystem"/>: row 35 of a goal's provenance, under 32 or a goal 35).
+    /// </summary>
+    static bool RunsOwnFlight(CharacterCold cold, AiMind mind) =>
+        cold is { Fleeing: true, Running: { Source: TaskSource.Goal, Row: TaskType.RunAway } }
+        && mind.Behaviour is AiBehaviour.SelfPreserve or AiBehaviour.Flee;
 
     /// <summary>
     /// Job 187 Obedient Slave (<c>FUN_14050e5b0</c>, docs/game/ai-tasks.md "Obedient Slave"): a slave (state 1) not sneaking, the jobs switch on,

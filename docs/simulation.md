@@ -379,10 +379,10 @@ NPC), the mover reset. A tier scores the AI's goals (`TierRungs`: the squad blac
 (`PlanContext.GivesNothingNow`, `FUN_14050df10`; of the goals base data lists with a desire only 14 and 45). The routes: a player-faction mind (`AiMind.PlayerSide`, every member
 of a player's squad of the player's faction, not a prisoner it keeps) the ladder with its sources, 32, the own-list types in `Ladder.OnRungs` (243) and, obeying, its master's Slave
 goals (`AiSystem.ThinkPlayer`; the other own-list goals weigh 0 and stay with their sources). Its winning goal is acted out as an NPC's (`AiSystem.ActChosen`) while nothing else holds it
-(`PlayerSideHold.Free`: not fleeing, engaged, imprisoned, carried or down), and holds it (`PlayerSideHold.Holds`, the look due on its turn) until an order, a job or a higher goal
+(`PlayerSideHold.Free`: not engaged, imprisoned, carried or down), and holds it (`PlayerSideHold.Holds`, the look due on its turn) until an order, a job or a higher goal
 ends it (`OrderStep.TakeOver`, `DutyEnd`); a goal over an order's or a job's task ends that task in the serial step and acts at the next tick; a source's win ends the goal (`DutyGoals.Leave`);
 an autonomous squad's member the same, its role list its package's (`AiSystem.PlayerSideRoles`); an NPC the full ladder (`AiSystem.ThinkNpc`)
-on whatever task, in a fight it did not start and in its cage, but while it flees, is carried or down or its order holds it (`ChooserRuns`); the winner is acted out on a task the
+on whatever task, in a fight it did not start, on a flight and in its cage, but while it is carried or down or its order holds it (`ChooserRuns`); the winner is acted out on a task the
 AI runs, or on its list job's (`AiSystem.RunsListJob`: a job's pick leaves its goal, a goal that wins ends the job's task first, as a player-faction mind's), from the cage, or over
 a task an engine system runs (`ActOverEngineTask`, [AI](#ai)); the two holds only Meitou has keep their own choice (`MeitouHolds`, [AI](#ai)), and an engine mind with nothing
 taking it over the sources' rungs on its routine or job's task (`AiSystem.EngineJobs`: its job passes); no mind (tests only) the sources' rungs. Three
@@ -2321,7 +2321,7 @@ whose first step is neither the goal nor a step the engine carries out (`AiSyste
   so such goals do not plan. Rows on the way have their `TaskProfiles` desire, else 1. The exception is DEFEAT_SQUAD 101, whose plan is the goal alone: the finder's
   pick (`AiSystem.AssaultTargetFor`, [ai-tasks](game/ai-tasks.md#combat-goals)) is sent as an `AttackOrder` by the serial step and the combat system fights it.
   SELF_PRESERVATION 32 is the other exception: its plan is `[35, 32]` when `SelfPreservation.Runs` (a crippled NPC, or one with no working arm, under a threat), else `[13, 32]` on its own attacker (row 13 on itself, `AiSystem.SelfDefencePick`, started as the combat goals' fights below), else none;
-  35 is acted out by `FleeSystem` on the AI's request ([ai-tasks](game/ai-tasks.md#combat-goals)). State 26 is wired (staying low, playing dead, in a bed; not crippled).
+  35 is acted out by `FleeSystem` on the AI's request as the goal's task, which ends with the goal ([ai-tasks](game/ai-tasks.md#combat-goals)). State 26 is wired (staying low, playing dead, in a bed; not crippled).
 - States (`PlanContext.Holds`): location, distance, bed, sitting, home (within 20 of the home), home town, town, weapon drawn, weapon carried
   (`hasWeapon`), carrying, a first aid kit carried (23), the immediate threat (39, `CombatSystem.ImmediateThreat`), deep water (139), a leg down that could be fixed (103, `MedicalState.LegsMessedUp`), inside the home building (107, `AI::iAmInsideTargetBuilding` for a non-building target) and strangers in a private home (141, so a resident does not
   go to bed with one inside; [stranger states](game/ai-tasks.md#stranger-states)) are evaluated; power (93) is the target machine's (`ProductionSystem.MachinePowered`: a town's machine by its level town's generators;
@@ -2348,7 +2348,7 @@ engine mind's routine), with no sources and no committed stop. Think-again asks
 (`AiMind.Replan`, engine stand-ins; the original's replan requests are the [decision step](#decision-step)'s): a sighting of the look (the looker and its mates within 2 R), a new enemy sensed by a fighter in its own fight, an alert (the attacked NPC with its fight
 off, the squad mates of the attacker and the attacked), a mate's fight start, the end of its own fight (`CombatSystem.EndFight`) and of its walk (`MovementSystem.EndWalk`); else
 the 15-tick cadence. A new enemy is acted on one tick after the look that sensed it (look at T, think at T+1, fight from T+2); so is an attack (alert at T, the attacker a threat at once). Any
-other character the AI does not hold (fleeing, carried) starts no fight. The members of a loaded platoon a code mod holds (see "Platoon blackboards" below)
+other character the AI does not hold (on an engine's flight, carried) starts no fight. The members of a loaded platoon a code mod holds (see "Platoon blackboards" below)
 get an engine-run mind (`AiMind.Engine`, `AiSystem.EngineMinds`): the combat goals of their package for their role and of their own lists, and Self preservation, weighed on their routine and
 in their own fights; nothing else is acted out ([combat goals](game/ai-tasks.md#combat-goals)). Every other non-player squad has full minds, one whose template lists no AI packages
 included: its members weigh 14, 32 and their race's and faction's lists and stand idle otherwise ([squads without packages](game/factions-squads-towns.md#squads-without-packages)). An NPC without a mind (no squad, or between a dropped mind and the next schedule step) runs
@@ -2443,7 +2443,7 @@ its plan the act-out carries out besides the goal's own. Built: 135, 139, 282, 2
   whose plan is its own row alone that neither acts nor has an effect is dropped, as the scorer drops it (`FUN_14050df10`, **Verified**; not for a row with
   TaskData `+0x14`). The kept plan runs by `PlanSteps` (list A, list B, the hours), whose end ends the goal; a goal whose row neither acts nor has an effect (42,
   202, 254) is not kept and is planned afresh at each think.
-- **Caged**: an NPC in its cage with a mind of its own (`AiSystem.CagedMind`: not fleeing, fighting, carried, down or ordered) runs the full ladder; what plans is
+- **Caged**: an NPC in its cage with a mind of its own (`AiSystem.CagedMind`: not fighting, carried, down or ordered) runs the full ladder; what plans is
   the cage's repertoire (TaskData category bit 4), for the engine's own plans too (`PlanContext.InRepertoire`: 32's providers 13 and 35 are not registered for it, a mod's
   row-less goal plans nowhere from a cage); it acts the winner out only when it is an engine goal, else it stays held with no goal; a job or second-list entry that wins starts nothing (its start would
   bypass the repertoire). A plan step on a door way through the lock system is told from a goal's own door row by its target kind (`AiSystem.IsDoorWay`).

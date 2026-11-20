@@ -749,9 +749,9 @@ public sealed class CharacterCold
     public bool Fleeing { get; set; }
 
     /// <summary>
-    /// The flight is Self preservation's (goal 32 through row 35, <see cref="Ai.SelfPreservation"/>), not a squad's: it ends when no threat attacks
-    /// the character within reach, not when no enemy is in sight. Meaningful while <see cref="Fleeing"/>; set and cleared with it by the
-    /// <see cref="FleeSystem"/>.
+    /// The flight is one the AI asked for (32 through row 35, <see cref="Ai.SelfPreservation"/>, or a goal 35), not a broken squad's: for a mind of
+    /// its own its goal's task, which ends with the goal; for a Meitou hold's mind it ends, from the threats, when no threat attacks the character
+    /// within reach. Meaningful while <see cref="Fleeing"/>; set and cleared with it by the <see cref="FleeSystem"/>.
     /// </summary>
     public bool FleesAlone { get; set; }
 

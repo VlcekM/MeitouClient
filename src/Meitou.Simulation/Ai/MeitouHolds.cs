@@ -23,8 +23,7 @@ internal enum MeitouHold : byte
     /// </summary>
     Combat,
     /// <summary>
-    /// Every urgent (priority 3) goal: what an autonomous squad's member on a job weighs (<see cref="SquadAutonomy"/>), and a held character on its
-    /// own Fixing Legs treatment.
+    /// Every urgent (priority 3) goal: what a held character on its own Fixing Legs treatment weighs.
     /// </summary>
     Urgent,
 }

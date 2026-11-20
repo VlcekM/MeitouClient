@@ -1420,8 +1420,10 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   (`AiSystem.SelfDefencePick`: `CombatSystem.BestAttackerOf` with the NPC as subject and looker, its engaged list, threats and own target at any distance; a turret gunner takes no shooter, engine), else none
   and the next goal is tried. The fight starts as a goal fight (`SendFights`, a defence, not in the aggro log) and is the AI's own: kept while 32 is chosen (a threat on its list beyond 181.7 keeps it at
   0.7, standing for list A `!159`, engine), left for a higher goal. 35 is acted out by
-  `FleeSystem` (the squads' run: first run from the threats' centre, hops, `CharacterCold.Fleeing`): the AI asks (`AiMind.FleeRequest`), a fighter is stopped first. A lone runner stops when no threat attacks it
-  within 181.7 or its body takes the choice back to fighting; a goal-35 runner (and a broken squad's, with the optional `FleeSystem.SquadBreak`, which the original has no equivalent of: [perception](perception.md#retreat-and-memory)) stops when no enemy is in sight and nobody attacks it. Not modelled: the player faction's branch of slot 55 (the
+  `FleeSystem` (the squads' run: first run from the threats' centre, hops, `CharacterCold.Fleeing`): the AI asks (`AiMind.FleeRequest`), a fighter is stopped first. The run is the goal's task (row 35,
+  a goal's provenance, `FleeSystem.GoalFlight`) and the runner's chooser runs on (`AiSystem.RunsOwnFlight` holds it): the flight ends when 32 or the goal 35 does (another winner's task replaces the run,
+  or no goal of the run is current: `FleeSystem.FlightGoes`). An engine mind's or a code mod's goal's runner stops, as before, when no threat attacks it within 181.7; a broken squad's (the optional
+  `FleeSystem.SquadBreak`, which the original has no equivalent of: [perception](perception.md#retreat-and-memory)) when no enemy is in sight and nobody attacks it. Not modelled: the player faction's branch of slot 55 (the
   player's characters never run), the locked-gate zero of 60, 4's ranged and squad factors, standing up first for a character staying low. An NPC without a mind (no squad, or until its next package
   cadence) has no 32 and does not answer: every character has goals in the original.
   - **Timing**: the original replans an attacked character whose fight is off (`underMeleeAttack` `FUN_140999f00`, the shot handler `FUN_140999d50`) and chooses at its next AI update
