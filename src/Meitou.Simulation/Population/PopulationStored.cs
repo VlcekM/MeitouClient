@@ -89,7 +89,6 @@ public sealed partial class PopulationSystem
         c.Ordered = false;
         c.InCombat = false;
         c.Fleeing = false;
-        c.Engaged = false;
         c.Watchers = null;
         c.StealthExposure = default;
         c.StealthExposureTick = long.MinValue;

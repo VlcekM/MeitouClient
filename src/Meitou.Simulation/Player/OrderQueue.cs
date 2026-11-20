@@ -122,15 +122,14 @@ public interface IOrderOwner
 }
 
 /// <summary>
-/// A system that holds NPCs on an engine duty (<see cref="CharacterCold.Engaged"/>, or a record of its own that steers them): when an order's task is
-/// about to start on an NPC (<see cref="PlayerOrders"/>' front start, serial), the world asks every such system to let the character go
-/// (<see cref="World.ReleaseDuties"/>). Found on the world's systems, nothing to register.
+/// A system that holds NPCs on an engine duty (a record of its own that steers them): when an order's task is about to start on an NPC
+/// (<see cref="PlayerOrders"/>' front start, serial), the world asks every such system to let the character go (<see cref="World.ReleaseDuties"/>). Found on the world's systems, nothing to register.
 /// </summary>
 internal interface IDutyRelease
 {
     /// <summary>
-    /// Lets the character in <paramref name="slot"/> go through the duty's own give-up: its record dropped, its <see cref="CharacterCold.Engaged"/>
-    /// cleared, what it carried let go; nothing when the system holds it on nothing. Its task is replaced right after, so it need not stand it.
+    /// Lets the character in <paramref name="slot"/> go through the duty's own give-up: its record dropped, what it carried let go; nothing when the
+    /// system holds it on nothing. Its task is replaced right after, so it need not stand it.
     /// </summary>
     void ReleaseForOrder(World world, int slot);
 }

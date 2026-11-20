@@ -12,11 +12,10 @@ namespace Meitou.Simulation.Ai;
 internal static class PlayerSideHold
 {
     /// <summary>
-    /// Whether nothing outside the chooser holds the character: not engaged by a code mod (<see cref="CharacterCold.Engaged"/>), not imprisoned, not
-    /// carried and not knocked out. The same exits as an NPC's (<see cref="AiSystem.Holds"/>); a flight is its goal's task, no exit.
+    /// Whether nothing outside the chooser holds the character: not imprisoned, not carried and not knocked out. The same exits as an NPC's
+    /// (<see cref="AiSystem.Holds"/>); a flight is its goal's task, no exit.
     /// </summary>
-    public static bool Free(CharacterCold cold) =>
-        !cold.Engaged && !cold.IsImprisoned && cold.CarriedBy.IsNone && cold.Medical is not { Incapacitated: true };
+    public static bool Free(CharacterCold cold) => !cold.IsImprisoned && cold.CarriedBy.IsNone && cold.Medical is not { Incapacitated: true };
 
     /// <summary>
     /// Whether the goal its chooser picked holds the character now: it has one (a source's pick leaves none), and the task is the AI's own: an engine

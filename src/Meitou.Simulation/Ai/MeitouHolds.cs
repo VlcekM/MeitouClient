@@ -29,16 +29,15 @@ internal enum MeitouHold : byte
 }
 
 /// <summary>
-/// The two holds only Meitou has, which keep their own choice (docs/simulation.md "AI"): an NPC a code mod engaged
-/// (<see cref="CharacterCold.Engaged"/>) and a platoon a code mod holds (<see cref="AiMind.Engine"/> minds, whose routine is the engine's). Every
-/// other NPC runs the full ladder (<see cref="Ladder.Run"/>). Pure reads of the character's own state.
+/// The hold only Meitou has, which keeps its own choice (docs/simulation.md "AI"): a platoon a code mod holds (<see cref="AiMind.Engine"/> minds,
+/// whose routine is the engine's). Every other NPC runs the full ladder (<see cref="Ladder.Run"/>). Pure reads of the character's own state.
 /// </summary>
 internal static class MeitouHolds
 {
     /// <summary>
-    /// What may take over a character a Meitou hold keeps that the AI does not run now (<see cref="AiSystem.Holds"/>): engaged on the engine's own
-    /// walk of an errand or captive job, the combat goals and Self preservation, else Self preservation alone; on an engine mind's routine, the combat
-    /// goals; on its own Fixing Legs treatment every urgent goal; in a fight it did not start Self preservation (nothing for a gunner or a carrier).
+    /// What may take over a character a Meitou hold keeps that the AI does not run now (<see cref="AiSystem.Holds"/>): on an engine mind's routine,
+    /// the combat goals; on its own Fixing Legs treatment every urgent goal; in a fight it did not start Self preservation (nothing for a gunner or a
+    /// carrier).
     /// Nothing for one fleeing, imprisoned, carried, down or held by its order.
     /// </summary>
     public static MeitouHold Of(in CharacterHot n, CharacterCold cold)
@@ -48,7 +47,6 @@ internal static class MeitouHolds
             return MeitouHold.None;
 
         if (cold.InCombat) return cold.Gunning is null && cold.Carrying.IsNone ? MeitouHold.Self : MeitouHold.None;
-        if (cold.Engaged) return InterruptibleDuty(n, cold) ? MeitouHold.Combat : MeitouHold.Self;
         if (mind.Engine && EngineRoutine(n)) return MeitouHold.Combat;
         if (AiSystem.TreatsOwnLegs(n, cold)) return MeitouHold.Urgent;
 

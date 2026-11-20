@@ -156,7 +156,6 @@ public sealed partial class DialogueSystem
         mc.NpcClass = FundamentalType.Adventurer;   // every player-faction character's class
         mc.Orders = Orders.PlayerDefaults;
         mc.Ai = null;
-        mc.Engaged = false;
         mc.Fleeing = false;
         Crime.CrimeSystem.DropPending(world, slot, mc);
         mc.Jobs.Clear();   // an NPC's list, if any, does not carry over

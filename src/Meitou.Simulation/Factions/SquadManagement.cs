@@ -651,7 +651,6 @@ public static class SquadManagement
         cold.IsPlayer = false;
         cold.Orders = CharacterOrders.None;
         cold.Ai = null;
-        cold.Engaged = false;
         cold.Fleeing = false;
         Crime.CrimeSystem.DropPending(world, slot, cold);
         cold.Jobs.Clear();

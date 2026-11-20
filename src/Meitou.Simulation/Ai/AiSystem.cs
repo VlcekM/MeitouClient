@@ -480,14 +480,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// An NPC's think after the order step: the full ladder (<see cref="ChooseOnLadder"/>) whatever task it is on, as the original's chooser runs on
     /// every AI update of a character with a platoon (<c>FUN_1405112b0</c>, <b>Verified</b>), but while no chooser runs (<see cref="ChooserRuns"/>).
     /// The winner is acted out as the AI's (<see cref="ActChosen"/>) on a task the AI runs, from the cage (<see cref="ActCaged"/>), or over a task an
-    /// engine system runs (<see cref="ActOverEngineTask"/>). An engine mind and an NPC a code mod engaged
-    /// (<see cref="CharacterCold.Engaged"/>) keep their own choice (<see cref="ThinkMeitouHeld"/>).
+    /// engine system runs (<see cref="ActOverEngineTask"/>). An engine mind keeps its own choice (<see cref="ThinkMeitouHeld"/>).
     /// </summary>
     void ThinkNpc(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, IReadOnlyList<AiGoal> roles,
         int hour, ChooserRow? row, bool replan)
     {
         ref var n = ref world.Characters.Next[i];
-        if (mind.Engine || cold.Engaged)
+        if (mind.Engine)
         {
             ThinkMeitouHeld(world, i, id, cold, mind, squad, board, roles, hour, row, replan);
             return;
@@ -542,7 +541,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         !cold.IsImprisoned && cold.CarriedBy.IsNone && cold.Medical is not { Incapacitated: true } && !DecisionSystem.Ordered(cold);
 
     /// <summary>
-    /// The two holds only Meitou has (<see cref="MeitouHolds"/>), as they were: an engine mind or an engaged NPC the AI runs thinks as held
+    /// The hold only Meitou has (<see cref="MeitouHolds"/>), as it was: an engine mind the AI runs thinks as held
     /// (<see cref="ThinkHeld"/>); one it does not weighs only the goals that may take it over (<see cref="MeitouHolds.Of"/>); else an engine mind's
     /// job passes (<see cref="EngineJobs"/>).
     /// </summary>
@@ -745,7 +744,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// chained repertoire, so only the rows registered for it plan): a full mind of its own, awake, not carried and held by no order.
     /// </summary>
     internal static bool CagedMind(CharacterCold cold) =>
-        cold is { IsImprisoned: true, IsPlayer: false, Engaged: false, Ai: { Engine: false, Player: false } }
+        cold is { IsImprisoned: true, IsPlayer: false, Ai: { Engine: false, Player: false } }
         && cold.CarriedBy.IsNone && cold.Medical is not { Incapacitated: true } && !DecisionSystem.Ordered(cold);
 
     /// <summary>
@@ -4102,7 +4101,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         ref readonly var n = ref table.Next[s];
         return n.Alive && n.Task == (byte)CharacterTask.Idle && table.IdOf(s) != squad.Leader
             && table.TryResolveNext(squad.Leader, out int led) && table.Next[led].Alive
-            && cold is { InCombat: false, Engaged: false, Fleeing: false, IsImprisoned: false, CarriedBy.IsNone: true, Carrying.IsNone: true }
+            && cold is { InCombat: false, Fleeing: false, IsImprisoned: false, CarriedBy.IsNone: true, Carrying.IsNone: true }
             && cold.Medical is not { Incapacitated: true } && cold.InSomething == Locks.HeldState.None && !DecisionSystem.Ordered(cold);
     }
 

@@ -1366,9 +1366,8 @@ public sealed class AiMind
     public List<(TaskType Type, long Until)>? Backoffs { get; internal set; }
 
     /// <summary>
-    /// The goal record whose act-out an engine system runs for this character (<see cref="DutyGoals"/>): the goal, not
-    /// <see cref="CharacterCold.Engaged"/>, holds the character, so the AI keeps thinking for it (<see cref="AiSystem.Holds"/>) and a goal that scores
-    /// higher takes it over. Null when none. Set and cleared by the AI's serial step; hashed while set.
+    /// The goal record whose act-out an engine system runs for this character (<see cref="DutyGoals"/>): the goal holds the character, so the AI
+    /// keeps thinking for it (<see cref="AiSystem.Holds"/>) and a goal that scores higher takes it over. Null when none. Set and cleared by the AI's serial step; hashed while set.
     /// </summary>
     public AiGoal? Duty { get; internal set; }
 

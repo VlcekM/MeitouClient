@@ -137,11 +137,11 @@ internal static class OrderStep
     }
 
     /// <summary>
-    /// Whether the NPC stands idle, awake and held by nothing (no fight, duty, flight, carry, bed or cage), so its routine may start.
+    /// Whether the NPC stands idle, awake and held by nothing (no fight, flight, carry, bed or cage), so its routine may start.
     /// </summary>
     static bool Free(CharacterTable table, int slot, CharacterCold cold) =>
         table.Next[slot].Alive && table.Next[slot].Task == (byte)CharacterTask.Idle
-        && cold is { InCombat: false, Engaged: false, Fleeing: false, IsImprisoned: false, CarriedBy.IsNone: true, Carrying.IsNone: true }
+        && cold is { InCombat: false, Fleeing: false, IsImprisoned: false, CarriedBy.IsNone: true, Carrying.IsNone: true }
         && cold.Medical is not { Incapacitated: true } && cold.InSomething == Locks.HeldState.None;
 
     /// <summary>

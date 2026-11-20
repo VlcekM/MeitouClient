@@ -32,8 +32,7 @@ internal enum DutyEnd : byte
     /// </summary>
     Replanned,
     /// <summary>
-    /// Something else holds the character now: another system engaged it, it flees, fights, is carried or caged, or a task another system started
-    /// replaced the act-out.
+    /// Something else holds the character now: it flees, fights, is carried or caged, or a task another system started replaced the act-out.
     /// </summary>
     Taken,
     /// <summary>
@@ -505,8 +504,8 @@ internal sealed class DutyGoals
 
     /// <summary>
     /// Why a live record ended, or null while it holds: its think chose another goal (displaced); an order runs; an order on its body runs, it is
-    /// down, its mind was made anew or its plan wiped or ended (replanned); no goal may hold it any more (taken: engaged by another system, fleeing,
-    /// fighting, carried, caged without its own think, or a task another system started replaced the act-out, <see cref="AiSystem.MayHoldDuty"/>).
+    /// down, its mind was made anew or its plan wiped or ended (replanned); no goal may hold it any more (taken: fleeing, fighting,
+    /// carried, caged without its own think, or a task another system started replaced the act-out, <see cref="AiSystem.MayHoldDuty"/>).
     /// </summary>
     static DutyEnd? Ends(World world, int slot, CharacterCold cold, Held held)
     {

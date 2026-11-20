@@ -101,7 +101,6 @@ public class SlaveListTests
             if (_done || !world.Characters.TryResolveNext(who(), out int slot)) return;
             _done = true;
             TaskStart.Walk(world, slot, to, SpeedMode.Walk, TaskType.StayInHome, TaskSource.Goal);
-            world.Characters.Cold(slot)!.Engaged = false;
         }
     }
 
@@ -124,7 +123,7 @@ public class SlaveListTests
         var master = NewSquad(world, city, Board([], [], [Goal(TaskType.GatherSlavesFromCages)], [], []));
 
         // Held off the sweep until it walks home (HomeWalker), a walk the AI holds (43's act-out).
-        worker = Member(world, master, cage.Position + new Vector3(150, 0, 0), c => (c.Ai!.Behaviour, c.Engaged) = (AiBehaviour.Post, true));
+        worker = Member(world, master, cage.Position + new Vector3(150, 0, 0), c => c.Ai!.Behaviour = AiBehaviour.Post);
         var prisoner = Member(world, NewSquad(world, city, Board([], [], [], [], [])), cage.Position);
 
         Assert.True(world.Fixtures.Imprison(world, prisoner, cage));
@@ -270,7 +269,6 @@ public class SlaveListTests
             {
                 _seated = true;
                 TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Rest, TaskType.StayInHome, TaskSource.Goal));
-                world.Characters.Cold(slot)!.Engaged = false;
             }
             else if (Up && !_stood)
             {
@@ -300,7 +298,7 @@ public class SlaveListTests
 
         // Held off the sweep until it sits (HomeSitter).
         eater = Member(world, squad, cage.Position + new Vector3(60, 0, 0),
-            c => (c.Ai!.Behaviour, c.DrawnWeapon, c.Engaged) = (AiBehaviour.Sit, Data.Gameplay.WeaponKinds.Katana, true));
+            c => (c.Ai!.Behaviour, c.DrawnWeapon) = (AiBehaviour.Sit, Data.Gameplay.WeaponKinds.Katana));
         var cold = world.Characters.Cold(eater.Slot)!;
         for (int t = 0; t < 61; t++)
         {

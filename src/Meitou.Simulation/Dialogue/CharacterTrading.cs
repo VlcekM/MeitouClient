@@ -379,7 +379,6 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
         Locks.FixtureRegistry.ClearSlave(world, c);
         c.Freed = true;   // status +0xea = 1 (FUN_1406add20, Verified)
         c.Ai = null;
-        c.Engaged = false;
         c.Fleeing = false;
         Crime.CrimeSystem.DropPending(world, slot, c);
         if (Locks.LockSystem.WornShackles(c)?.Lock is { } l) l.Locked = false;

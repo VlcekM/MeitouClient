@@ -27,7 +27,7 @@ namespace Meitou.Simulation.Aggro;
 /// crippled one, or one with no working arm, under attack: <see cref="Ai.SelfPreservation"/>) runs from the centre of its threats; a goal 35 of its
 /// lists from the enemies it senses. The run is the task of that goal (<see cref="CharacterCold.FleesAlone"/>, row 35, a goal's provenance): the
 /// runner's chooser runs on, and the flight ends when the goal does (another winner's task replaces the run, or no goal of the run is current).
-/// A mind a Meitou hold keeps (an engine mind, an engaged NPC) runs as a broken squad's member and stops when no threat is left.</item>
+/// A mind a Meitou hold keeps (an engine mind) runs as a broken squad's member and stops when no threat is left.</item>
 /// </list>
 /// </summary>
 public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, float sightRange = AggroSystem.OutdoorSight)
@@ -223,9 +223,9 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
 
     /// <summary>
     /// Whether an AI-asked flight is its goal's task (<see cref="CharacterCold.FleesAlone"/>): the runner's own chooser runs, not a Meitou hold's
-    /// (<see cref="Ai.MeitouHolds"/>: an engine mind, an engaged NPC).
+    /// (<see cref="Ai.MeitouHolds"/>: an engine mind).
     /// </summary>
-    static bool GoalFlight(CharacterCold cold) => cold.Ai is { Engine: false } && !cold.Engaged;
+    static bool GoalFlight(CharacterCold cold) => cold.Ai is { Engine: false };
 
     /// <summary>
     /// Whether a goal's run goes on: its goal is current (32 on its step 35, or a goal of the Flee behaviour, 35) and no other start replaced the

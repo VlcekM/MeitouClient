@@ -326,7 +326,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   while it holds an order.
 - **Duties let go** when an NPC's front starts, but for the body's orders (engine design; `PlayerOrders.TryFront`, serial, before the owner's `Start`): `World.ReleaseDuties` asks every system that
   is an `IDutyRelease` (found on the world's systems, nothing registered) to let the character go through its own give-up.
-  The ditch (its record) and the player side's food runs drop their record and clear `Engaged`; a body carried
+  The ditch drops its record; a body carried
   for one is let go where it stands (the unlink, no knock-out); an [engine goal](#engine-goals) ends (`DutyEnd.Order`, through the AI; a town goal lets its carried body go the same way); a door way is dropped and a bash
   errand stopped. Neither the dialogue nor a trade holds anyone. The duty sweeps take no
   ordered character again (`DecisionSystem.Ordered` or `AiSystem.Holds` in their free tests).
@@ -379,7 +379,7 @@ NPC), the mover reset. A tier scores the AI's goals (`TierRungs`: the squad blac
 (`PlanContext.GivesNothingNow`, `FUN_14050df10`; of the goals base data lists with a desire only 14 and 45). The routes: a player-faction mind (`AiMind.PlayerSide`, every member
 of a player's squad of the player's faction, not a prisoner it keeps) the ladder with its sources, 32, the own-list types in `Ladder.OnRungs` (243) and, obeying, its master's Slave
 goals (`AiSystem.ThinkPlayer`; the other own-list goals weigh 0 and stay with their sources). Its winning goal is acted out as an NPC's (`AiSystem.ActChosen`) while nothing else holds it
-(`PlayerSideHold.Free`: not engaged, imprisoned, carried or down), and holds it (`PlayerSideHold.Holds`, the look due on its turn) until an order, a job or a higher goal
+(`PlayerSideHold.Free`: not imprisoned, carried or down), and holds it (`PlayerSideHold.Holds`, the look due on its turn) until an order, a job or a higher goal
 ends it (`OrderStep.TakeOver`, `DutyEnd`); a goal over an order's or a job's task ends that task in the serial step and acts at the next tick; a source's win ends the goal (`DutyGoals.Leave`);
 an autonomous squad's member the same, its role list its package's (`AiSystem.PlayerSideRoles`); an NPC the full ladder (`AiSystem.ThinkNpc`)
 on whatever task, in a fight it did not start, on a flight and in its cage, but while it is carried or down or its order holds it (`ChooserRuns`); the winner is acted out on a task the
@@ -1539,8 +1539,8 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
   character that wants to (`AggressiveTowards`), bashed first (81: `LockSystem.BashForErrand`); a locked door nobody will bash or unlock leaves the building out. A closed gate on
   the route is planned the same way (`LockSystem.GateEntry`, `GatePlan.PlansEntry`). It runs into the building and the goal is done once inside.
 - Not goals: the ditch the plan's step 93 asks for (rows 113, 114, 242; `AiMind.DitchRequest`) is held by that step (`AiSystem.RunsDitchStep`: the AI
-  holds its walk and may choose another goal over it, which ends it); the player side's food runs hold their member with `Engaged`. A fight interrupts their walk
-  (`TownDutySystem.IsErrandRow`), an order on the body ends them.
+  holds its walk and may choose another goal over it, which ends it). A fight interrupts its walk (`TownDutySystem.IsErrandRow`), an order on the body
+  ends it.
 - Occupiers' **36 / 37** town goals walk to a random complete building of the player town (`AiSystem.OccupiedSpot`, engine choice; the original's 36 scatters round the
   occupied town's centre, [town goals](game/ai-tasks.md#town-goals)), 36 drawing again after every walk.
 - Every act-out's walk that ends short (a lift with no path to its body too) is a lost walk (see "Engine goals"), the errands no goal holds (a ditch, a player-side food run) marking their store the same way. Engine choices: sight `AggroSystem.OutdoorSight`, arrival 40 (a cage: its `use range` + 15), a lift given up after 60 game s of walking.
@@ -2344,9 +2344,8 @@ start (a dialogue's, an assault's, a duty's, aggro's) a combat goal or 32 become
 goal's fight or a run replaces the task (a run's goal becoming the current one first, `Install`, so the flight goes on as its goal's), the goal whose act-out it is goes on, and a treatment (a medic job's or a Medic, splint or Fixing Legs goal's) ends for any other
 winner (`LeaveTask`; on its own Fixing Legs treatment only for an urgent one, **Observed**); the engine's other tasks (a crime's, a lift, a dialogue's, an errand's walk)
 stand for orders or goals not put on a rung, so they wait, and a job or second-list entry that wins starts nothing over them; a winner not taken up leaves the
-current goal's plan as it was (`KeepPlan`). **Meitou holds** (`MeitouHolds`, until the mod contract changes): an NPC a code mod engaged (`CharacterCold.Engaged`) and an engine
-mind weigh only the urgent tier's goals their hold lets through (`TierRungs.HeldChoice`: 32 alone, or the combat goals and 32 on the engine's errand or captive
-walk and on an engine mind's routine), with no sources and no committed stop. Think-again asks
+current goal's plan as it was (`KeepPlan`). **Meitou hold** (`MeitouHolds`): an engine mind weighs only the urgent tier's goals its hold lets through (`TierRungs.HeldChoice`:
+32 alone, or the combat goals and 32 on its routine), with no sources and no committed stop. Think-again asks
 (`AiMind.Replan`, engine stand-ins; the original's replan requests are the [decision step](#decision-step)'s): a sighting of the look (the looker and its mates within 2 R), a new enemy sensed by a fighter in its own fight, an alert (the attacked NPC with its fight
 off, the squad mates of the attacker and the attacked), a mate's fight start, the end of its own fight (`CombatSystem.EndFight`) and of its walk (`MovementSystem.EndWalk`); else
 the 15-tick cadence. A new enemy is acted on one tick after the look that sensed it (look at T, think at T+1, fight from T+2); so is an attack (alert at T, the attacker a threat at once). Any
@@ -2452,14 +2451,14 @@ its plan the act-out carries out besides the goal's own. Built: 135, 139, 282, 2
 - **Start**: the think stands on the goal's row and asks (`AiMind.DutyAsk`); the serial step (`SendRequests`) calls `IDutyGoal.Start` in slot
   order for each asker the AI still holds, with the plan; a start makes the goal hold the character (`AiMind.Duty`, the record, and `DutyTick`, the start tick of the
   task it left running; hashed), a refusal backs the type off for four think periods.
-- **Holding**: the goal, not `Engaged`, holds the character. `AiSystem.Holds` is true while the provenance is the act-out (`AiSystem.OnDuty`: that task, or a goal's
+- **Holding**: the goal holds the character. `AiSystem.Holds` is true while the provenance is the act-out (`AiSystem.OnDuty`: that task, or a goal's
   task started since; carrying included, not in a fight), so the think keeps choosing; another goal that wins sets `AiMind.DutyLeave`, the serial step ends the act-out
   and the next tick acts the winner out. An NPC carrying a body is held as anyone outside a fight (`Holds`; the original takes the chooser only from the carried one,
   [holds](game/ai-tasks.md#precedence)): it chooses with all its goals and acts the winner out (141 follows the leader with the body, a Post walks there); rows that
   need empty hands do not plan (list B `!47`: sleeping, sitting, the static guards, 36 patrolling town, the turret, assaults).
 - **End** (`IDutyGoal.End` with `DutyEnd`, then the goal and plan leave the mind, which replans): displaced; an order's start (`IDutyRelease`, a faction change too); an
-  order on the body (`AiSystem.ReplanDuty`), a knock-out or death, a wiped or ended plan, a new mind (replanned); anything else holding it (taken: engaged by another
-  system, fleeing, fighting, carried, caged by another, a task another system started; a caged mind keeps the goal it acts out from the cage); gone. A displaced act-out whose provenance is still its own is stopped after `End` (a walk
+  order on the body (`AiSystem.ReplanDuty`), a knock-out or death, a wiped or ended plan, a new mind (replanned); anything else holding it (taken: fleeing,
+  fighting, carried, caged by another, a task another system started; a caged mind keeps the goal it acts out from the cage); gone. A displaced act-out whose provenance is still its own is stopped after `End` (a walk
   stands, another task but idle ends through its handler), so the AI holds the character for the winner; the other ends leave the task to what ended the goal. The
   system's own end is `DutyGoals.Done` (no `End`; a task of the act-out still running stops as a displaced one's). A walk of the act-out that ends short is a lost walk
   (`DutyGoals.LostWalk`; the gate, warden and town act-outs): its target goes into `CharacterCold.Ignored` for 20 s and the goal ends for a replan, with no back-off

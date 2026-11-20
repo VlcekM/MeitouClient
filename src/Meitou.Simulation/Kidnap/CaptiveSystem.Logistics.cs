@@ -422,7 +422,6 @@ public sealed partial class CaptiveSystem
         c.SquadId = squad.Id;
         c.Role = (int)role;
         c.Ai = null;
-        c.Engaged = false;
         c.Kidnapped = false;
         squad.Members.Add(id);
         if (squad.Leader.IsNone || role == SquadRole.Leader) squad.Leader = id;

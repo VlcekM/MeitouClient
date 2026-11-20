@@ -294,7 +294,6 @@ public class JailTests
         Assert.DoesNotContain(j.Arrest.Log, e => e.Kind is ArrestEventKind.Arrest or ArrestEventKind.Lifted or ArrestEventKind.Jailed);
         Assert.Empty(j.Arrest.Arrests);
         Assert.Empty(j.Arrest.Cagings);
-        Assert.False(j.Cold(hunter).Engaged);
 
         var hunt = Assert.Single(j.Arrest.Hunts);
 

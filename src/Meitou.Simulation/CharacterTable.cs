@@ -1051,12 +1051,6 @@ public sealed class CharacterCold
     public AiMind? Ai { get; set; }
 
     /// <summary>
-    /// Held by a code mod's system that steers it (Meitou only, no engine system sets it): the chooser weighs only what may take it over
-    /// (<see cref="Ai.MeitouHolds"/>). Serial phases only.
-    /// </summary>
-    public bool Engaged { get; set; }
-
-    /// <summary>
     /// A hunger level a code mod keeps the character at for free (engine API; null: the game's rule alone, <c>BodySystem.HungerFloor</c>), so one
     /// a mod's squad carries off does not starve on the way. Not saved: the mod sets it again after a load. Serial phases only.
     /// </summary>
@@ -2072,7 +2066,6 @@ public sealed class CharacterTable
             mind.Hash(ref hasher);
         }
 
-        if (k.Engaged) hasher.Add(0x456E6761);
         if (k.FedTo is { } fed) hasher.Add(fed);
         if (!k.FollowOrder.IsNone)
         {

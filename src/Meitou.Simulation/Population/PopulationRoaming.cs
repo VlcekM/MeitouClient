@@ -1487,8 +1487,7 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// A code mod takes over a platoon's movement, or gives it back (engine API, <see cref="Platoon.Held"/>): held, it gets no trip orders and its
-    /// stand-in stays where it is, so the mod can walk its members itself (<see cref="CharacterCold.Engaged"/> keeps the AI off a member; its
-    /// self-preservation still answers an attack). False for an unknown platoon, a town's own or a campaign's. Serial phases only.
+    /// stand-in stays where it is, so the mod can walk its members itself. False for an unknown platoon, a town's own or a campaign's. Serial phases only.
     /// </summary>
     public static bool HoldPlatoon(World world, int platoon, bool held)
     {

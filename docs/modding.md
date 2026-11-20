@@ -912,27 +912,20 @@ holds refuses the second mod.
   same package after it starts it afresh; the game ignores a start of the contract already running), and `StartContract { AnyRange = true }`
   lets the contract's assault take its target wherever it is, not only within the manoeuvre mode's reach (about 6517 units for ROAM_FAR;
   saved with the contract). **Verified** by `ModHookTests` (synthetic world): a held stand-in, travel to a point, the contract's end and restart,
-  and an any-range target taken past the reach. `CharacterCold.Engaged` keeps the AI
-  off one member (self-preservation still answers an attack); the mod then drives it with what the engine's own duties use: `TaskStart.Walk`,
+  and an any-range target taken past the reach. A chooser goal's act-out (below) drives its character with what the engine's own duties use:
+  `TaskStart.Walk`,
   `CharacterOrders.Sneak` on `Orders` (speed, sight and spot meters follow it for any faction), `LockSystem.Picking.Step` (books the Burglary
   a witness answers), `CrimeSystem.Pickpocket`, `CarrySystem.BeginPickUp` / `BeginPutDown`, `ArrestSystem.TakeOver(enslave: true)` (a guard
   takes the carried body to a cage as its faction's slave), `AggroSystem.Spotted` / `Unseen`. `CharacterCold.FedTo` is a free hunger level
   that comes before the game's rule (not saved), for a captive the mod's squad carries.
-  `Engaged` is one shared switch with no owner: dialogue, trading, arrests, kidnapping, captive jobs, town duties and lock rounds set and clear
-  it too. So engage only a character the AI holds now (`AiSystem.Holds(table.Next[slot], cold)`, public), clear only an `Engaged` your mod set
-  (then set `cold.Ai.Replan` so it chooses at once), and take characters back after a load: `Engaged` is hashed but not saved, and neither are
-  the AI's minds.
-- **NPC behaviors without the chooser** (what upstream's town duties, kidnappers and lock rounds do; the duty route): a data mod lists an
-  AI_TASK whose `enum` is a number of the mod's own (1000 up) in its AI_PACKAGE records. Without the code mod such a goal loads (`AiTask.From`
-  keeps any number) and is never chosen: it has no behaviour, so its desire is 0. The code mod's system, in a serial step, finds who has the
-  goal now: `AiSystem.WeighsGoal(world, slot, type)` (the lists the chooser weighs: the role's list of the running package, the obeyed squad's
+- **Goal types in data**: a data mod lists an AI_TASK whose `enum` is a number of the mod's own (1000 up) in its AI_PACKAGE records. Without
+  the code mod such a goal loads (`AiTask.From` keeps any number) and is never chosen: it has no behaviour, so its desire is 0. The code mod's
+  system, in a serial step, finds who has the goal now:
+  `AiSystem.WeighsGoal(world, slot, type)` (the lists the chooser weighs: the role's list of the running package, the obeyed squad's
   slave list, the race's `AI Goals`, in the hour's window), or per squad `PopulationSystem.GoalDuty(world, squad, role, type)` (public, from
   `world.Systems`; the running package's role list in the hour's window, a campaign squad's phase package included) or `GoalsOf`, the role from
-  `AiSystem.RoleOf(squad, id, cold)`. It takes members the AI holds as above, walks them with a row of its own
-  (`TaskStart.Walk(world, slot, point, mode, row, TaskSource.Goal)`, `TaskStart.Become` to stand; not a goal type's row its chooser goals act out
-  on), optionally with a task handler of that row, publishes its targets as goal claims, releases them when done,
-  and keeps its state in `IModSaveData`. Such a duty does not weigh against the package's other goals (weight, tier, hours):
-  the mod decides when to take a member; chooser goals (below) let the chooser decide.
+  `AiSystem.RoleOf(squad, id, cold)`. Only the chooser moves them: a chooser goal of that type (below), which the chooser weighs against the
+  package's other goals, or an order (Ordering characters, below).
 - **Chooser goals and jobs** (`Meitou.Simulation.Ai`, [rules](simulation.md#engine-goals) "Code mods' goals"; **Observed**, by reading
   `ChooserRegistry`, `ModGoal`, `DutyGoals` and `AiSystem`): `AddGoalType(type, name)` and `AddJobType(type, name)` claim task type numbers from
   1000 up, one owning mod per number across both (a mod may claim one number as both, so it can be its goal type and its act-out's row); `name`
@@ -991,6 +984,10 @@ holds refuses the second mod.
   - `INpcGoal.Start` setting `Engaged`, walking and answering true: `IModGoal.Start` walking and answering true; the goal holds the character.
   - Done by stopping the task, clearing `Engaged` and setting `Replan`: `ModGoals.Done(world, slot, type)`.
   - Releasing for a fight: nothing to do; `End(Displaced)` or `End(Taken)` is called (Ends above).
+  - `CharacterCold.Engaged` to keep the AI off an NPC while the mod walks it: an order (`world.GiveOrder(id, TaskType.MoveCusOrdered, point: p)`)
+    or a chooser goal whose `Start` walks it; the order or the goal holds the character.
+  - A serial step taking a package's members for a goal of the mod's type (the duty route): a chooser goal of that type in the package's role
+    list; the chooser decides when it wins.
   - Player characters weigh a mod's goal type in their own lists and their autonomous squad's package.
 - **Seats** (`Meitou.Simulation.Production`; the system from `SystemBuildContext.Find<ProductionSystem>()` or `world.Systems`):
   `SitOn(world, slot, seat, row, source)` puts a character, the player's or an NPC, on a chair or throne through the player's Use order's
@@ -1011,10 +1008,10 @@ holds refuses the second mod.
   parallel one: a mod's serial step or `Inputs`, a chooser goal's `Start`, `IWorldReady`; never a goal's `Desire`, so
   work free seats out in the mod's serial step and keep them in its state. A character in a fight leaves it, as for any start (it may be drawn
   back in at once).
-  Who may be seated: a player character, an NPC the AI holds now (`AiSystem.Holds(table.Next[slot], cold)`), one the mod engaged itself, or one
+  Who may be seated: a player character, an NPC the AI holds now (`AiSystem.Holds(table.Next[slot], cold)`), or one
   its chooser goal's `Start` seats (the goal then holds the sitter). A character another system holds (a conversation, a trade, an arrest, a
-  duty, another mod's goal) is taken from it and may be left engaged with no owner, so do not seat one. Outside a goal the AI holds no
-  character on the operate task, so a seated NPC stays seated without `Engaged`, only Self preservation takes it over, and the AI takes it back
+  duty, another mod's goal) is taken from it, so do not seat one. Outside a goal the AI holds no
+  character on the operate task, so a seated NPC stays seated, only Self preservation takes it over, and the AI takes it back
   once the seat ends; a goal's sitter is the goal's until another goal wins (`End(Displaced)`, the seat stopped). A squad the population moves
   walks its leader on (its seat ends `Replaced`) while its other members stay seated, so hold the platoon first (`HoldPlatoon`). A player character seated
   outside a goal is decided again at its next choice (an order, a job, a goal that wins); one a goal seated stays while the goal holds it.
