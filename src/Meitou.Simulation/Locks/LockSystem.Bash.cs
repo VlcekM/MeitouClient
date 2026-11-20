@@ -566,11 +566,12 @@ public sealed partial class LockSystem
 
     /// <summary>
     /// Whether the plan the walker's way through its door is a step of still runs (<see cref="CharacterCold.DoorWayHold"/>): its kept plan's door
-    /// step, the engine goal, or the walk's task under the provenance the way began on.
+    /// step (or the engine goal whose plan it is, while it holds the character), the engine goal, or the walk's task under the provenance the way
+    /// began on.
     /// </summary>
     static bool WayHeld(CharacterCold c) => c.DoorWayHold.By switch
     {
-        DoorWayHolder.Plan => AiSystem.RunsDoorStep(c),
+        DoorWayHolder.Plan => AiSystem.RunsDoorStep(c) || c.Ai?.Duty is not null,
         DoorWayHolder.Goal => c.Ai?.Duty is not null,
         _ => SameWalk(c.Running, c.DoorWayHold.Walk),
     };
