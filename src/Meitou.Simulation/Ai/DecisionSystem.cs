@@ -1062,10 +1062,15 @@ public sealed class DecisionSystem
         {
             var cold = world.Characters.Cold(slot)!;
             var task = (CharacterTask)world.Characters.Next[slot].Task;
-            bool planned = cold.Running is { } run && run.Runs(task) && !Left(cold, run);
+            bool runs = cold.Running is { } run && run.Runs(task);
+            bool left = runs && Left(cold, cold.Running!);
+            bool planned = runs && !left;
             if (cold.InCombat) return DecisionCheck.Runs;
             if (task is CharacterTask.Wander or CharacterTask.Follow && !planned) return DecisionCheck.Run;
-            if (task != CharacterTask.Idle || cold.Manoeuvre == ManoeuvreMode.RoamFar) return DecisionCheck.Runs;
+            if (task != CharacterTask.Idle) return DecisionCheck.Runs;
+
+            // ROAM_FAR stands as it is, but a left goal's stand is taken over (its row then the default task's, which the think's turn asks again).
+            if (cold.Manoeuvre == ManoeuvreMode.RoamFar) return left ? DecisionCheck.Run : DecisionCheck.Runs;
 
             bool other = planned && !IsDefault(cold.Running!.Row);
             if (other) return DecisionCheck.Runs;
