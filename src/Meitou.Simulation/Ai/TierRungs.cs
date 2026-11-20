@@ -269,7 +269,8 @@ internal sealed class TierRungs : ITierRungs
 
     /// <summary>
     /// The own lists' goals of the tier: everyone's 14 Idleness first (<c>Character::setupAI</c>, priority 1, weight 0.1, <b>Verified</b>; the scorer
-    /// drops it unless its list B <c>!162 !157</c> fails, so it is weighed only prone or armed, when its plan gets up or sheathes), then for a
+    /// drops it unless its list B <c>!162 !157</c> fails, so it is weighed only prone or armed; it plans only armed and standing, sheathing: prone
+    /// the crippled repertoire has no 65), then for a
     /// player-faction mind only the types on the ladder's rungs or of a code mod (<see cref="AiSystem.OnRungs"/>; the rest are their sources'),
     /// then the Hold entry last (<see cref="AiSystem.HoldGoalOf"/>).
     /// </summary>
