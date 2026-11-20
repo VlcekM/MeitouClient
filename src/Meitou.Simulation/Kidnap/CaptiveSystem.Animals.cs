@@ -81,7 +81,7 @@ public sealed partial class CaptiveSystem
     /// <summary>
     /// <c>Task_WorshipTarget</c> (236 on 237's target): farther than <see cref="WorshipReach"/> from the cage it walks there; within, it stops, faces
     /// it, bows, and every 3-14 game seconds barks event 53 (with no target: the cage resolves to no character). The original never ends it while the
-    /// cage stands; Meitou ends it once nobody is held there or the job grows old.
+    /// cage stands; Meitou ends it once nobody is held there. A walk there the movement gave up is a lost walk on the cage (<see cref="OwnWalkLost"/>).
     /// </summary>
     bool StepWorship(World world, CaptiveJob j, int w, CharacterCold wc)
     {
@@ -92,8 +92,8 @@ public sealed partial class CaptiveSystem
         if (Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), to) > WorshipReach)
         {
             wc.ActionClip = null;
-            if (n.Task != (byte)CharacterTask.GoTo || Vector2.Distance(n.Goal, to) > WorshipReach)
-                TaskStart.Walk(world, w, to, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
+            if (OwnWalkLost(table, w, j, new IgnoreKey(cage.Id, default))) return End(world, j, CaptiveEventKind.GaveUp);
+            if (n.Task != (byte)CharacterTask.GoTo || Vector2.Distance(n.Goal, to) > WorshipReach) WalkFor(world, j, w, to, SpeedMode.Walk);
 
             return true;
         }
@@ -176,7 +176,7 @@ public sealed partial class CaptiveSystem
 
     /// <summary>
     /// <c>Task_DogLimbRunningPlay</c> (278): while it holds the limb the dog sprints in random legs of 1000-1400, a new one when under 200 is left or
-    /// it stopped. Over when its mouth is empty (A !149) or the job grows old. Engine choice: the first leg too is random (the original runs it
+    /// it stopped. Over when its mouth is empty (A !149). Engine choice: the first leg too is random (the original runs it
     /// 80-180 past the centroid of who it senses, away from them).
     /// </summary>
     bool StepPlay(World world, CaptiveJob j, int w, CharacterCold wc)
@@ -196,7 +196,7 @@ public sealed partial class CaptiveSystem
 
     /// <summary>
     /// 279 Limb Jealousy (44 / 253 / 40 Following to its target): the dog runs after the mouthful ally until near it (10); over when the ally's mouth
-    /// is empty or the job grows old.
+    /// is empty; a walk after it the movement gave up is a lost walk on the ally (<see cref="OwnWalkLost"/>).
     /// </summary>
     bool StepChase(World world, CaptiveJob j, int w)
     {
@@ -206,10 +206,10 @@ public sealed partial class CaptiveSystem
 
         ref var n = ref table.Next[w];
         var to = new Vector2(table.Next[t].Position.X, table.Next[t].Position.Z);
-        if (Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), to) > 10
-                && (n.Task != (byte)CharacterTask.GoTo || Vector2.Distance(n.Goal, to) > 20))
-            TaskStart.Walk(world, w, to, SpeedMode.Run, RowOf(j.Kind), TaskSource.Goal);
+        if (Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), to) <= 10) return true;
+        if (OwnWalkLost(table, w, j, IgnoreKey.Of(j.Captive))) return End(world, j, CaptiveEventKind.GaveUp);
 
+        if (n.Task != (byte)CharacterTask.GoTo || Vector2.Distance(n.Goal, to) > 20) WalkFor(world, j, w, to, SpeedMode.Run);
         return true;
     }
 }

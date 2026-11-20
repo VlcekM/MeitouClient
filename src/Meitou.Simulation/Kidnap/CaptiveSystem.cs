@@ -6,6 +6,7 @@ using Meitou.Data.Gameplay.Bodies;
 using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Carrying;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Items;
@@ -39,10 +40,6 @@ public sealed record CaptiveSettings
     /// Walks that end away from the cage before the job is given up.
     /// </summary>
     public int Walks { get; init; } = 3;
-    /// <summary>
-    /// Game seconds a job may last before it is given up.
-    /// </summary>
-    public float GiveUpSeconds { get; init; } = 600;
     /// <summary>
     /// The length of the kill clip <c>chop down static</c> (the system builder passes the data's), and the share of it at which its blow lands
     /// (<b>Observed</b>: 0.55).
@@ -82,10 +79,6 @@ public sealed record CaptiveSettings
     /// It stands within this distance of its slave and follows it when the slave moves on.
     /// </summary>
     public float ShoutReach { get; init; } = 40;
-    /// <summary>
-    /// Game hours a target stays on a worker's give-up list after a job on it failed (<b>engine choice</b>).
-    /// </summary>
-    public double GiveUpHours { get; init; } = 1;
     /// <summary>
     /// The eater and its meal say their lines at most this often (game seconds); the original fires them every frame and its dialogue throttles them.
     /// </summary>
@@ -229,13 +222,9 @@ public sealed class CaptiveJob
     /// </summary>
     public CaptivePhase Phase { get; set; }
     /// <summary>
-    /// Game seconds in the phase and of the whole job.
+    /// Game seconds in the phase.
     /// </summary>
     public float Time { get; set; }
-    /// <summary>
-    /// Game seconds of the whole job (<see cref="Time"/>).
-    /// </summary>
-    public float Age { get; set; }
     /// <summary>
     /// Walks started so far: a walk that ends short after the first is a lost walk (<see cref="CaptiveSystem.Lost"/>).
     /// </summary>
@@ -288,7 +277,6 @@ public sealed class CaptiveJob
         h.Add(Site);
         h.Add((int)Phase);
         h.Add(Time);
-        h.Add(Age);
         h.Add(Walks);
         h.Add(Blows);
         h.Add(NextBark);
@@ -451,9 +439,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
 
         // Each character is looked at once in SweepEveryTicks, on its slot's turn (slot mod the period), so the looks spread over the ticks
         // (docs/simulation.md "Spread sweeps"; the original runs its AI updates 8 characters a frame in turn, FUN_140786e30).
-        int every = world.Every(Settings.SweepEveryTicks), phase = (int)(world.Tick % every);
-        if (phase == 0) ExpireWaits(world.GameHours);
-        Goals.Look(world, every);
+        Goals.Look(world, world.Every(Settings.SweepEveryTicks));
     }
 
     /// <summary>
@@ -510,6 +496,43 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     }
 
     /// <summary>
+    /// Whether the job's last walk (<see cref="WalkFor"/>) is over and the movement gave it up (no way there, blocked, a locked door:
+    /// <see cref="WalkEnd.Failed"/>): then marked a lost walk on <paramref name="key"/> (<see cref="Lost"/>; false before its first walk).
+    /// </summary>
+    internal static bool OwnWalkLost(CharacterTable table, int w, CaptiveJob j, IgnoreKey? key) =>
+        table.Next[w].Task != (byte)CharacterTask.GoTo && table.Cold(w)!.WalkEnd == WalkEnd.Failed && Lost(j, key);
+
+    /// <summary>
+    /// A walk of the job's worker on the job's row, counted in <see cref="CaptiveJob.Walks"/>.
+    /// </summary>
+    internal static void WalkFor(World world, CaptiveJob j, int w, Vector2 to, byte mode)
+    {
+        TaskStart.Walk(world, w, to, mode, RowOf(j.Kind), TaskSource.Goal);
+        j.Walks++;
+    }
+
+    /// <summary>
+    /// A job whose own task's walk found no way (a lift's or a loot's, <see cref="CarrySystem.LiftWalkFails"/>): ends it (false, for the step) as a
+    /// lost walk on <paramref name="key"/>, as the original's plan step answers any failed mover (<c>FUN_14050d970</c>, <b>Verified</b>).
+    /// </summary>
+    bool LostOwnWalk(World world, CaptiveJob j, IgnoreKey? key)
+    {
+        (j.LostWalk, j.LostKey) = (true, key);
+        return End(world, j, CaptiveEventKind.GaveUp);
+    }
+
+    /// <summary>
+    /// One tick of a loot run (<see cref="CaptiveJobKind.LootFood"/>): over once the loot task ends; a lost walk when no path gets the looter to its
+    /// body (<see cref="CarrySystem.LootWalkFails"/>).
+    /// </summary>
+    bool StepLootFood(World world, CaptiveJob j, int w)
+    {
+        if (world.Characters.Next[w].Task != (byte)CharacterTask.Loot) return End(world, j, null);
+
+        return world.SystemOf<CarrySystem>()?.LootWalkFails(world, w) != true || LostOwnWalk(world, j, IgnoreKey.Of(j.Captive));
+    }
+
+    /// <summary>
     /// The job a goal's act-out runs for <paramref name="worker"/> (null: none).
     /// </summary>
     internal CaptiveJob? JobOf(CharacterId worker, TaskType goal)
@@ -553,12 +576,12 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     }
 
     /// <summary>
-    /// Hashes the goals' picks, the jobs, the kill timers and the waits (each only once any exist).
+    /// Hashes the goals' picks, the jobs and the kill timers (each only once any exist).
     /// </summary>
     public void Hash(ref StateHasher hasher)
     {
         _goalsOfChooser?.Hash(ref hasher);
-        if (_jobs.Count == 0 && _killAt.Count == 0 && GivenUp.Count == 0) return;   // only once in use, so worlds without captives hash as before
+        if (_jobs.Count == 0 && _killAt.Count == 0) return;   // only once in use, so worlds without captives hash as before
         hasher.Add(0x43617074);
         hasher.Add(_jobs.Count);
         foreach (var j in _jobs) j.Hash(ref hasher);
@@ -570,7 +593,6 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         }
 
         hasher.Add(_timerRolls);
-        if (GivenUp.Count > 0) HashWaits(ref hasher);
     }
 
     #endregion
@@ -869,7 +891,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// The first pass of the watchers' finder (183, <c>FUN_1408cd630</c>, <b>Verified</b>: it walks the watcher's sensed list, masks 0x60 / 0x110):
     /// the nearest (engine choice; the original takes the first) live character within sight range that the watcher senses
     /// (<see cref="CharacterFacts.Perceives"/>: one it has not seen or heard, a sneaking one or one in another building, is none, #649), in slave
-    /// state 1 or 2, free (not carried, caged or held), no animal, not another job's or given up, and <see cref="NeedsProcessing"/>. No distance
+    /// state 1 or 2, free (not carried, caged or held), no animal, not another job's, and <see cref="NeedsProcessing"/>. No distance
     /// bound, no cage. -1: none.
     /// </summary>
     internal int FreeSlaveToProcess(World world, int slot, CharacterCold me)
@@ -883,8 +905,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                     || !c.CarriedBy.IsNone || c.InSomething != HeldState.None
                 || c.Fighter is { IsAnimal: true } || c.Appearance?.Animal is not null) return;
             var id = table.IdOf(v);
-            if (st.System.Busy(id) || st.System.Waiting(st.System.GivenUp, id, st.World.GameHours) || !st.System.NeedsProcessing(st.Me, c))
-                return;
+            if (st.System.Busy(id) || !st.System.NeedsProcessing(st.Me, c)) return;
 
             if (!CharacterFacts.Perceives(st.World, st.Self, v)) return;
 
@@ -1086,18 +1107,16 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// </summary>
     bool Step(World world, CaptiveJob j)
     {
+        // No job timer: a job ends by its own rule or when the chooser's goal no longer holds the worker (StepJobs).
         var table = world.Characters;
         float dt = world.TickSeconds;
         j.Time += dt;
-        j.Age += dt;
 
         if (!table.TryResolveNext(j.Worker, out int w) || table.Cold(w) is not { } wc || wc.Medical is { Incapacitated: true } || wc.InCombat
             || wc.Fleeing || !wc.CarriedBy.IsNone)
         {
             return End(world, j, CaptiveEventKind.GaveUp);
         }
-
-        if (j.Age > Settings.GiveUpSeconds) return End(world, j, CaptiveEventKind.GaveUp);
 
         return StepUncaged(world, j, w, wc) ?? StepAtCage(world, j, w, wc, dt);
     }
@@ -1112,7 +1131,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             return StepLogistics(world, j, w, wc);
 
         if (j.Kind == CaptiveJobKind.Fetch) return wc.PickingUpItem == j.Item || End(world, j, null);
-        if (j.Kind == CaptiveJobKind.LootFood) return world.Characters.Next[w].Task == (byte)CharacterTask.Loot || End(world, j, null);
+        if (j.Kind == CaptiveJobKind.LootFood) return StepLootFood(world, j, w);
 
         if (j.Kind is CaptiveJobKind.Capture or CaptiveJobKind.Carry or CaptiveJobKind.Shout)
             return StepSlaveWork(world, j, w, wc);
@@ -1237,11 +1256,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             {
                 if (walking && Vector2.Distance(n.Goal, to) <= 5) return true;
                 if (!walking && Lost(j, IgnoreKey.Of(j.Captive))) return End(world, j, CaptiveEventKind.GaveUp);
-                if (!walking && ++j.Walks > Settings.Walks)
-                {
-                    SetWait(GivenUp, j.Captive, world.GameHours + Settings.GiveUpHours);
-                    return End(world, j, CaptiveEventKind.GaveUp);
-                }
+                if (!walking && ++j.Walks > Settings.Walks) return End(world, j, CaptiveEventKind.GaveUp);
 
                 TaskStart.Walk(world, w, to, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
                 return true;

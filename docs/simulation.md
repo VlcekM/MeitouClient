@@ -1683,8 +1683,10 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
 - **Shout** (188): a worker with slaves of its squad's list up and uncaged says event 38 at a random one, walks to it and stands within 40, following it
   when it moves on; it says the event again at each of its think turns until its worker speaks (the task fires it only at its start and ends once the dialogue is free, `FUN_14034c5a0` / `FUN_14034c7c0`, **Verified**, so the next plan, an AI update later, fires it again) (`DialogueSystem.Engages`; the row's B list
   `isDialogDelivered` is read differently, [ai-tasks](game/ai-tasks.md)), and the chooser then picks a slave again with no pause. A worker with no
-  event-38 line, or with the event lines off, never speaks: its job then ends only at `CaptiveSettings.GiveUpSeconds` (600 s) or when the slave goes
-  (engine choice).
+  event-38 line, or with the event lines off, never speaks: it shouts on while 188 holds it, as the original restarts 159 at every plan, and its job
+  ends when the slave goes or the chooser takes another goal. Captive jobs have no timer and leave no wait on their target: the original's give-up list
+  (AI task system `+0x218`, 20 s) is written only by lost walks (`FUN_140796ed0`; Meitou `DutyGoals.LostWalk`), and the capture, carry, shout and watch
+  finders (`FUN_1408cdd00`, `FUN_1408cdf50`, `FUN_1408cd940`, `FUN_1408cd630`) read only the squad's claims (`FUN_1402690e0`), **Verified**.
 - **Work** (189, 190; `AiBehaviour.Work` in the AI, not a job: it competes by score like any goal): a worker of a town with a mine, research bench, refinery or crafting bench (BuildingFunction 1, 3, 4,
   10) walks to a random one (a pick of the character and `AiMind.WorkEpoch`, kept while it works there; 189 only one it can run, `AiSystem.RealWork`: a mine,
   or a machine running there with its inputs, [ai-tasks](game/ai-tasks.md#slave-work-shout-and-capture); each holds one of the workplace's

@@ -455,19 +455,16 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
     }
 
     /// <summary>
-    /// 188's slave (<c>FUN_1408cd940</c>): a random live slave of the platoon's list, uncarried, held in nothing, not on the give-up list and no other
-    /// job's.
+    /// 188's slave (<c>FUN_1408cd940</c>): a random live slave of the platoon's list, uncarried, held in nothing and no other job's (the squad's
+    /// claims, <c>FUN_1402690e0</c>; no give-up list, <b>Verified</b>).
     /// </summary>
     Found? SlaveToShout(World world, int s, Squad squad)
     {
         var table = world.Characters;
-        double now = world.GameHours;
         var slaves = new List<int>();
         foreach (int slave in CaptiveSystem.SlavesOf(world, squad))
         {
-            var id = table.IdOf(slave);
-            if (table.Cold(slave) is { CarriedBy.IsNone: true, InSomething: HeldState.None } && !captives.Waiting(captives.GivenUp, id, now)
-                && !captives.Busy(id))
+            if (table.Cold(slave) is { CarriedBy.IsNone: true, InSomething: HeldState.None } && !captives.Busy(table.IdOf(slave)))
                 slaves.Add(slave);
         }
 

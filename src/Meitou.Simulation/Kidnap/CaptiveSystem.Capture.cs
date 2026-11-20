@@ -34,17 +34,14 @@ namespace Meitou.Simulation.Kidnap;
 /// <c>isDialogDelivered</c>, and the original's worker stays on 188 with one slave as target for long spells (<b>Observed</b>). The chooser then
 /// picks a slave again, with no pause between.</item>
 /// </list>
-/// A job that gives up puts its target on the capturer's give-up list for <see cref="CaptiveSettings.GiveUpHours"/> (engine: the writer of the
-/// original's list is not traced).
+/// A job that gives up leaves no wait on its target: the original's give-up list (AI task system <c>+0x218</c>, 20 s) has lost walks as its only
+/// writer (<c>FUN_140796ed0</c>), <see cref="Lost"/> here, and the capture, carry, shout and watch finders (<c>FUN_1408cdd00</c>,
+/// <c>FUN_1408cdf50</c>, <c>FUN_1408cd940</c>, <c>FUN_1408cd630</c>) read neither it nor its reader <c>FUN_1405b0290</c>, only the squad's claims
+/// (<c>FUN_1402690e0</c>, <b>Verified</b>).
 /// </summary>
 public sealed partial class CaptiveSystem
 {
-    #region Give-up waits and tests
-
-    /// <summary>
-    /// The downed and cuffed or carried: the AI's give-up list entries (hashed while any exist).
-    /// </summary>
-    internal readonly List<(CharacterId Who, double Until)> GivenUp = [];
+    #region Capture data and tests
 
     /// <summary>
     /// The world's kidnapping system (null: a world that carries no captives, so 168 finds no slave to lift and captives are cuffed and left).
@@ -66,41 +63,6 @@ public sealed partial class CaptiveSystem
     /// <b>Observed</b>).
     /// </summary>
     static bool IsWeaponSection(string section) => section is "hip" or "back";
-
-    /// <summary>
-    /// Whether <paramref name="who"/> is in <paramref name="list"/> with a wait that runs past <paramref name="now"/>.
-    /// </summary>
-    internal bool Waiting(List<(CharacterId Who, double Until)> list, CharacterId who, double now)
-    {
-        for (int k = 0; k < list.Count; k++)
-            if (list[k].Who == who) return list[k].Until > now;
-        return false;
-    }
-
-    /// <summary>
-    /// Sets <paramref name="who"/>'s wait in <paramref name="list"/> to <paramref name="until"/>, adding it when absent.
-    /// </summary>
-    void SetWait(List<(CharacterId Who, double Until)> list, CharacterId who, double until)
-    {
-        for (int k = 0; k < list.Count; k++)
-        {
-            if (list[k].Who == who)
-            {
-                list[k] = (who, until);
-                return;
-            }
-        }
-
-        list.Add((who, until));
-    }
-
-    /// <summary>
-    /// Drops the given-up waits that ran out by <paramref name="now"/>.
-    /// </summary>
-    void ExpireWaits(double now)
-    {
-        GivenUp.RemoveAll(e => e.Until <= now);
-    }
 
     /// <summary>
     /// Down for the capture and carry finders (<c>FUN_1408cdd00</c> / <c>FUN_1408cdf50</c>, <b>Verified</b>): alive, and unconscious or, out of
@@ -171,7 +133,7 @@ public sealed partial class CaptiveSystem
     /// <summary>
     /// The nearest character the capturer takes (see the class remarks) among those on its sensed list (the finders walk it with no range limit,
     /// <b>Verified</b>; so only one it saw, which needs the same building or the open unless either stands on top, docs/game/perception.md "Sight"):
-    /// <see cref="Down"/>, uncarried and uncaged, no animal, not already a job's or given up; for a capture not of its own side, no slave of state 1,
+    /// <see cref="Down"/>, uncarried and uncaged, no animal, not already a job's; for a capture not of its own side, no slave of state 1,
     /// not law enforcement, trader or diplomat, not <see cref="Maimed"/>, not shackled (an engine guard so it is never cuffed twice); for a carry a
     /// slave of its faction that is not just staying low (the carry finder refuses posture 1). The entries its mask keeps
     /// (<see cref="ConsiderSensed"/>) come first, then whoever within its sight the capped block lacks (<see cref="CharacterFacts.Perceives"/>);
@@ -238,7 +200,7 @@ public sealed partial class CaptiveSystem
             return false;
 
         var id = table.IdOf(v);
-        if (Busy(id) || Waiting(GivenUp, id, world.GameHours)) return false;
+        if (Busy(id)) return false;
 
         if (!capture)
             return c.SlaveState != 0 && c.SlaveOwner == me.Faction && c.Medical is not { Unconscious: false, Crawling: false, StayingLow: true };
@@ -270,7 +232,7 @@ public sealed partial class CaptiveSystem
     /// event no line answered is fired again by the next plan, an AI update later (the think, <see cref="Ai.DecisionSystem.ThinkSeconds"/>). The job ends
     /// once the worker speaks after an event went out (engine choice, see <c>docs/simulation.md</c>: the original's B list <c>isDialogDelivered</c>
     /// is true without a Dialogue object, else the event delivered in its town), so a line still showing from the last job neither ends this one nor
-    /// is talked over. A worker with no line never ends it: <see cref="CaptiveSettings.GiveUpSeconds"/> does.
+    /// is talked over. A worker with no line shouts on while its goal holds it, as the original's 188 restarts 159 at every plan (no timer).
     /// </summary>
     bool StepShout(World world, CaptiveJob j, int w, int c, Vector2 to)
     {
@@ -284,15 +246,15 @@ public sealed partial class CaptiveSystem
             world.Defer(new Dialogue.DialogueEvent(j.Worker, j.Captive, ShoutAtSlaveWorker) { Tick = world.Tick + 1 });
         }
 
-        FollowSlave(world, j, w, c, to);
-        return true;
+        return FollowSlave(world, j, w, c, to);
     }
 
     /// <summary>
     /// The worker walks to its slave and stands within <see cref="CaptiveSettings.ShoutReach"/> of it, walking on when the slave moves off; it runs
-    /// while the slave moves faster than <see cref="SpeedMode.ChaseRunAbove"/> (<see cref="SpeedMode.Chasing"/>).
+    /// while the slave moves faster than <see cref="SpeedMode.ChaseRunAbove"/> (<see cref="SpeedMode.Chasing"/>). A walk the movement gave up ends the
+    /// job as a lost walk on the slave (<see cref="OwnWalkLost"/>); false then.
     /// </summary>
-    void FollowSlave(World world, CaptiveJob j, int w, int slave, Vector2 to)
+    bool FollowSlave(World world, CaptiveJob j, int w, int slave, Vector2 to)
     {
         var table = world.Characters;
         var here = new Vector2(table.Next[w].Position.X, table.Next[w].Position.Z);
@@ -301,18 +263,22 @@ public sealed partial class CaptiveSystem
         if (Vector2.Distance(here, to) <= Settings.ShoutReach)
         {
             if (walking) TaskStart.Stand(table, w);
-            return;
+            return true;
         }
+
+        if (OwnWalkLost(table, w, j, IgnoreKey.Of(j.Captive))) return End(world, j, CaptiveEventKind.GaveUp);
 
         byte mode = SpeedMode.Chasing(table, slave, SpeedMode.Walk);
         if (!walking || Vector2.Distance(table.Next[w].Goal, to) > 5)
         {
-            TaskStart.Walk(world, w, to, mode, RowOf(j.Kind), TaskSource.Goal);
+            WalkFor(world, j, w, to, mode);
         }
         else
         {
             table.Next[w].Mode = mode;
         }
+
+        return true;
     }
 
     /// <summary>
@@ -326,13 +292,7 @@ public sealed partial class CaptiveSystem
             return End(world, j, CaptiveEventKind.GaveUp);
         if (j.Phase == CaptivePhase.Lift) return Lifting(world, j, w, wc);
 
-        if (!cc.CarriedBy.IsNone || cc.IsImprisoned)
-        {
-            // A capture whose target someone else took (a guard carrying it to jail): left alone for a while, so the next look does not send the
-            // worker after it again at once (engine choice).
-            if (j.Kind == CaptiveJobKind.Capture) SetWait(GivenUp, j.Captive, world.GameHours + Settings.GiveUpHours);
-            return End(world, j, CaptiveEventKind.GaveUp);
-        }
+        if (!cc.CarriedBy.IsNone || cc.IsImprisoned) return End(world, j, CaptiveEventKind.GaveUp);   // someone else took it
 
         var to = new Vector2(table.Next[c].Position.X, table.Next[c].Position.Z);
         if (j.Kind == CaptiveJobKind.Shout) return StepShout(world, j, w, c, to);
@@ -351,11 +311,7 @@ public sealed partial class CaptiveSystem
             {
                 if (walking && Vector2.Distance(table.Next[w].Goal, to) <= 5) return true;
                 if (!walking && Lost(j, IgnoreKey.Of(j.Captive))) return End(world, j, CaptiveEventKind.GaveUp);
-                if (!walking && ++j.Walks > Settings.Walks)
-                {
-                    SetWait(GivenUp, j.Captive, world.GameHours + Settings.GiveUpHours);
-                    return End(world, j, CaptiveEventKind.GaveUp);
-                }
+                if (!walking && ++j.Walks > Settings.Walks) return End(world, j, CaptiveEventKind.GaveUp);
 
                 TaskStart.Walk(world, w, to, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
                 return true;
@@ -390,17 +346,13 @@ public sealed partial class CaptiveSystem
 
     /// <summary>
     /// 170 Lifting and healing (<c>Task_LiftObjectButHealFirst</c>) of the slave, a goal's lift back to standing: the job waits for it
-    /// (<see cref="Lifting"/>); one that cannot start gives the slave up for a while.
+    /// (<see cref="Lifting"/>); one that cannot start gives up.
     /// </summary>
     bool StartLift(World world, CaptiveJob j, int w)
     {
         var lifts = world.SystemOf<CarrySystem>()?.BeginPickUp(world, w, j.Captive, CharacterTask.Idle, kidnap: true, source: TaskSource.Goal,
             row: TaskType.LiftObjectButHealFirst);
-        if (lifts != true)
-        {
-            SetWait(GivenUp, j.Captive, world.GameHours + Settings.GiveUpHours);
-            return End(world, j, CaptiveEventKind.GaveUp);
-        }
+        if (lifts != true) return End(world, j, CaptiveEventKind.GaveUp);
 
         j.Phase = CaptivePhase.Lift;
         return true;
@@ -408,19 +360,19 @@ public sealed partial class CaptiveSystem
 
     /// <summary>
     /// The lift of 168 running: once it ends the job is over and the goal with it (168's desire is 0 while carrying, <c>FUN_140599480</c>). With the
-    /// slave on its shoulder the carrier's own goals take it on (112 cages it, 141 follows the leader); a lift that ended without it gives the slave
-    /// up for a while.
+    /// slave on its shoulder the carrier's own goals take it on (112 cages it, 141 follows the leader); a lift that ended without it gives up, one
+    /// whose walk no path gets there is a lost walk (<see cref="CarrySystem.LiftWalkFails"/>, <see cref="LostOwnWalk"/>).
     /// </summary>
     bool Lifting(World world, CaptiveJob j, int w, CharacterCold wc)
     {
-        if (world.Characters.Next[w].Task == (byte)CharacterTask.PickUp) return true;
+        if (world.Characters.Next[w].Task == (byte)CharacterTask.PickUp)
+            return world.SystemOf<CarrySystem>()?.LiftWalkFails(world, w) != true || LostOwnWalk(world, j, IgnoreKey.Of(j.Captive));
         if (wc.Carrying == j.Captive)
         {
             Note(world, CaptiveEventKind.Captured, j);
             return End(world, j, null);
         }
 
-        SetWait(GivenUp, j.Captive, world.GameHours + Settings.GiveUpHours);
         return End(world, j, CaptiveEventKind.GaveUp);
     }
 
@@ -571,19 +523,6 @@ public sealed partial class CaptiveSystem
 
         Items.InventoryCommands.TryEquip(inv, shackles);
         _assembly.RefreshEquipment(cc);
-    }
-
-    /// <summary>
-    /// Adds the given-up waits to the world's state hash.
-    /// </summary>
-    void HashWaits(ref StateHasher hasher)
-    {
-        hasher.Add(GivenUp.Count);
-        foreach (var (who, until) in GivenUp)
-        {
-            hasher.Add(who);
-            hasher.Add(until);
-        }
     }
 
     #endregion
