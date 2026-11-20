@@ -704,7 +704,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// the sight pass the nearest such police-like or slaver NPC says event 36 ESCAPING_SLAVE_SPOTTED at an escaping slave (state 2), whose line's
     /// <c>DA_ATTACK_CHASE_FOREVER</c> orders it 101; with no line said nothing follows (the event is all the original's spotting does,
     /// <c>FUN_140685660</c>, <b>Verified</b>). The capture after the fight is the catchers' own goals' (167 cuffs, 168 lifts, 112 cages). True when
-    /// a catcher sees the escaping slave (it is then left out of the bounty spotting).
+    /// a catcher sees the escaping slave (it is then left out of the bounty spotting): a free police-like NPC, or without the sight pass a free slaver.
     /// </summary>
     bool CatchSlave(World world, int s, CharacterCold c)
     {
@@ -730,7 +730,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
 
             if (!sight && c.SlaveState == 1 && view > EscapingSlave.SpotValue && Escapes(world, w, s, c, at)) FixtureRegistry.TagEscaped(world, c);
             if (c.SlaveState == 2 && d2 < catcherD2
-                && (Crimes.IsPoliceLike(world, wc) || wc.NpcClass == FundamentalType.Slaver) && Free(world, w))
+                && (FreeGuard(world, w) || !sight && wc.NpcClass == FundamentalType.Slaver && Free(world, w)))
             {
                 (catcher, catcherD2) = (w, d2);
             }
