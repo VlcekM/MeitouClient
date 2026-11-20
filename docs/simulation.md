@@ -337,7 +337,8 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   only while a task of that row runs (a provider step's, or none between steps, is not asked).
 - **Engine order givers** (rows, receivers and clear flags as the original's, [order givers](game/ai-tasks.md#order-givers)): DA 29 (`ArrestSystem.OrderArrest`: 240 then 112
   queued, else 4, which `CombatSystem` owns), DA 10 / 30 / 40 (`ArrestSystem.TakeOver`: 213 then 112 queued); the arrest system also gives DA 29's orders for its engine
-  arrest in a world without dialogue events. Each is given through `PlayerOrders.Give`.
+  arrest in a world without dialogue events; 133 to a bailed, bought or released prisoner (`Locks.FreedPrisoner`, the release's only when the releaser's faction books bounties
+  or is the player's; the bail's 128 is not given, [economy 11.5](game/economy.md#115-bail-and-sentence)). Each is given through `PlayerOrders.Give`.
 - The failure text is said only for a character of the player's faction that is not an animal (`PlayerOrders.Show`; the order step's vfunc `0x2d8` call in `FUN_140510920`,
   [precedence](game/ai-tasks.md#precedence)); anyone else's blocked order waits silently.
 - Owners that take a player character's order only (an NPC's leaves the queue, `Gone`), their act-outs being the player's: build, repair and dismantle (the sites, doors and
@@ -346,7 +347,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   turret's gunner is the interface's), a container's (26, 76: the player's container window), opening an inventory (26 with the inventory detail: the player's loot window)
   and a door walk (72, 73, 76 on a door: the interface's one door target, `PlayerState.DoorTarget`), and the Medic, Robotics and Rescue buttons. Moves, follows, attacks,
   first aid, splint and rest, lifts, kidnap, loot, stealth KO, put down, beds, a ground pick-up (3), the rest of the lock work, put in cage (108) and the arrest orders
-  (240, 213, 112, 4) take any character; their
+  (240, 213, 112, 4), 133 take any character; their
   act-outs post and say the worker's own messages for the player's side only.
 - Saved for player characters (`Saving/OrderSave`, in the character's GAMESTATE_AI record next to the perma-jobs; format and evidence: [save](formats/save.md#order-queue)): the queue front first,
   started or not, as the original saves its deque as `tjob<i>`. A load reads the orders into `CharacterCold.SavedOrders` and starts nothing; `DecisionSystem.Run` makes them the queue (nothing
@@ -1337,7 +1338,7 @@ one starts with the order's provenance. The chain's rows and states are in [AI t
   buyer's money is the slaver's squad purse (`Squad.Money`, a trader's shop money); the confirm re-checks the window's gate (a row ticked, total within the buyer's money) and
   does nothing otherwise; a slave bought free out of a squad of others leads a new squad of the old one's template with a copy of its memory (`DialogueSystem.Separate`, as DA 28), or a new player
   squad for one of the player's; event 51 fires after it is out of its cage; the window closes when the slaver or the customer is no longer awake. It is neither saved nor hashed.
-- A bought slave stands at its cage's exit spot, its order queue cleared (the task 133 the original gives finds the hold already cleared:
+- A bought slave stands at its cage's exit spot, ordered 133 with its queue cleared (`Locks.FreedPrisoner`; its leave finds the hold already cleared:
   [locks](game/locks.md#cages-and-beds)). DA 48 opens the same window for animals ([buying animals](game/animals.md#buying-animals)). A sold character obeys the slaver's squad (187, [below](#captives)) and is chained: `Character::setChainedMode` (`FUN_14032e590`,
 **Verified** by decompile) puts the ARMOUR `SHACKLES` (boots) on one wearing no locked shackles, `SHACKLES-BODY` when its boots section is disabled (Meitou: the race's `no shoes`),
 what it wore there going into its inventory (engine choice; `DialogueSystem.Chain`). Its other callers (a dialogue action, `FUN_1405dbd80`, `FUN_1405dc310`, `FUN_140583a10`) are not traced.

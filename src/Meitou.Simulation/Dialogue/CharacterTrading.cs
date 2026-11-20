@@ -367,7 +367,7 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
     /// (<c>FUN_1405ce4e0</c>, <see cref="DialogueSystem.Separate"/>; it does not join the player); its cage unlocked and left; slave state 0; its AI
     /// reset; its worn shackles unlocked (still worn); event 51 at it with the player character as the target; relations toward the player's faction:
     /// the slaver's +1, its own +4. Engine choice: event 51 fires after it is out of its cage (the original fires it first; Meitou's events need a
-    /// free speaker). The task 133 the confirm gives (queue cleared) finds the hold already cleared and does
+    /// free speaker). The order 133 the confirm gives (queue cleared, <see cref="Locks.FreedPrisoner"/>) finds the hold already cleared and does
     /// nothing (<see cref="Locks.FixtureRegistry.GetOutLegit"/>), so the bought one stands at the cage's exit spot and its own AI goes on.
     /// </summary>
     void BuyFree(World world, int slot, CharacterCold c, CharacterCold slaver, CharacterId player)
@@ -382,9 +382,8 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
         c.Engaged = false;
         c.Fleeing = false;
         Crime.CrimeSystem.DropPending(world, slot, c);
-        c.OrderQueue.Clear();
-        TaskStart.Stand(table, slot);
         if (Locks.LockSystem.WornShackles(c)?.Lock is { } l) l.Locked = false;
+        Locks.FreedPrisoner.Give(world, slot);   // 133, its queue cleared: the hold is cleared already, so the leave does nothing
 
         // its (new) squad remembers the buyer as the one who freed it (FUN_1406add20, Observed)
         system.Memory.Remember(world, c.SquadId, player, MemoryTag.FreedMe);

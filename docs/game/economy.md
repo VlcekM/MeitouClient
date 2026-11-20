@@ -549,7 +549,8 @@ money, mark the entry claimed (it never pays twice) and show "Received c.{1} rew
   its squad's memory also takes the payer as FREED_ME (long tag 3, `FUN_140673930`; **Verified**), for every freed prisoner whose character resolved. Meitou: `ArrestSystem.Bail`
   writes both. Both gives clear the order queue first (**Verified** by disassembly: `FUN_1405d20d0` with its clear argument 1), so 133 replaces 128; the bail only unlocks
   the cage, and 133's leave takes the prisoner out at its exit spot, an escape only for a `not real` or bandit cage owner ([locks](locks.md#cages-and-beds)). Meitou
-  `ArrestSystem.SendOut` (`FixtureRegistry.GetOutLegit`), before event 51 (Meitou's events need a free speaker). Only two base dialogues carry DA 43 (**Verified** by probe, 2026-10-21): "Shek law
+  gives 133 (`Locks.FreedPrisoner`, its act-out `FixtureRegistry.GetOutLegit`) before event 51, as Meitou's events need a speaker out of its cage; so 128, which 133
+  wipes unrun, is not given (**engine order**). Only two base dialogues carry DA 43 (**Verified** by probe, 2026-10-21): "Shek law
   bounty" (shek bounty desk, the reply "I'm here to bail out a friend.") and "Inquisitor heretic bounty" (Holy Nation Inquisitor); no United Cities law
   dialogue offers bail.
 - **Escape**: leaving by 207/256 gives a pending Escaping Prison (0xc) and the escaped flag; being lifted out gives the flag only (the crime call is refused while still held, [locks](locks.md#cages-and-beds)) ([locks](locks.md#cages-and-beds));

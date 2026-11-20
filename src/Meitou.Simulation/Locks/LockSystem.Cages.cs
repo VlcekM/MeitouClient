@@ -273,7 +273,8 @@ public sealed partial class LockSystem
     /// <summary>
     /// The start of Task_ReleasePrisoner (<c>FUN_1403570a0</c>, Verified): the prisoner is marked freed (status <c>+0xea</c>, set unconditionally;
     /// the status update drops it outside every town, <see cref="Crime.ArrestSystem"/>), released, then a releaser of a faction that books bounties
-    /// tells it it may go (event 46 from the releaser), else a releaser of the player's faction is thanked (event 13 from the prisoner).
+    /// tells it it may go (event 46 from the releaser), else a releaser of the player's faction is thanked (event 13 from the prisoner); in those two
+    /// cases the prisoner gets order 133 (<see cref="FreedPrisoner"/>).
     /// </summary>
     bool FreeBy(World world, CharacterId releaser, int faction, CharacterId prisoner)
     {
@@ -290,10 +291,14 @@ public sealed partial class LockSystem
             if (Crimes?.Factions.Books(faction) == true) talk.Forgive(world, r, prisoner);
         }
 
-        if (Crimes?.Factions.Books(faction) == true)
+        bool books = Crimes?.Factions.Books(faction) == true;
+        if (books)
             world.Defer(new Dialogue.DialogueEvent(releaser, prisoner, PrisonerFreeToGo) { Tick = world.Tick + 1 });
         else if (faction == world.Player.Faction)
             world.Defer(new Dialogue.DialogueEvent(prisoner, releaser, UnlockMyCageOrShackles) { Tick = world.Tick + 1 });
+
+        // In those two cases the prisoner is also ordered 133 (queue cleared); the hold is cleared already, so its leave finds no cage.
+        if (books || faction == world.Player.Faction) FreedPrisoner.Give(world, p);
 
         return true;
     }

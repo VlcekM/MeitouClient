@@ -61,6 +61,7 @@ public sealed partial class World
         TaskType.UseBed or TaskType.PutSomeoneInBed => SystemOf<Locks.BedSystem>(),
         TaskType.PutInCage or TaskType.LiftPersonSnatchingAllowed or TaskType.LiftPersonSnatchingAllowedInTownOnly or TaskType.FindCageAndPutIn
             => SystemOf<Crime.ArrestSystem>(),
+        TaskType.GetOutOfCageLegit => Locks.FreedPrisoner.Instance,
         TaskType.GetUp or TaskType.Aoeu or TaskType.StumbleTaskForced or TaskType.GetOutOfBed => SystemOf<Combat.CombatSystem>()?.BodyOrders,
         _ => Locks.LockSystem.OwnsRow(row) ? SystemOf<Locks.LockSystem>() : null,
     };

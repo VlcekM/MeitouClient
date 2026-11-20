@@ -275,17 +275,13 @@ public sealed partial class ArrestSystem : IOrderOwner
     /// The end of each freed prisoner's block in <c>FUN_1406ae170</c> (<b>Verified</b> by disassembly): one that could not speak (event 51 returned
     /// 0) is given 128 Retreat to hometown, then every one 133 Get out of cage (legit); both gives clear the order queue first (<c>FUN_1405d20d0</c>
     /// with its clear argument 1: <c>FUN_1405074a0</c> and <c>FUN_140507530</c>), so 133 replaces 128 and the prisoner only steps out of its
-    /// unlocked cage (<see cref="FixtureRegistry.GetOutLegit"/>); its own AI goes on from there. Engine order: out before event 51, since Meitou's
-    /// events need a free speaker.
+    /// unlocked cage (<see cref="FixtureRegistry.GetOutLegit"/>); its own AI goes on from there. <b>Engine order</b>: 133 is given before event 51,
+    /// since Meitou's events need a speaker out of its cage, so whether the event would fail is not known before it and 128, which 133 wipes
+    /// unrun, is not given. A prisoner whose chooser does not run (no squad, out cold) keeps the order queued in its unlocked cage until it does.
     /// </summary>
     void SendOut(World world, CharacterId prisoner)
     {
-        var table = world.Characters;
-        if (!table.TryResolveNext(prisoner, out int p)) return;
-
-        table.Cold(p)!.OrderQueue.Clear();
-        world.Fixtures.GetOutLegit(world, prisoner, Crimes);
-        TaskStart.Stand(table, p);
+        if (world.Characters.TryResolveNext(prisoner, out int p)) FreedPrisoner.Give(world, p);
     }
 
     #endregion
