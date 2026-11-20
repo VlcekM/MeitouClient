@@ -1023,9 +1023,10 @@ public sealed class DecisionSystem
     sealed class Idleness : IDecisionSource
     {
         /// <summary>
-        /// The trace name.
+        /// The trace name: the default task's for ROAM_FAR, every NPC's and a loaded character's mode (STAY_CLOSE and HOLD_GROUND run 31 and 30
+        /// under it).
         /// </summary>
-        public string Name => "Default task";
+        public string Name => "14 Idleness";
         /// <summary>
         /// Step 6, the fallback.
         /// </summary>
