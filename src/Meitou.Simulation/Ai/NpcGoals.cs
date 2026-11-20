@@ -529,10 +529,10 @@ public sealed class NpcGoals
     }
 
     /// <summary>
-    /// Whether an open conversation (a bubble or the player's) or a trade holds the character, which a release must not break.
+    /// Whether an open conversation (a bubble or the player's) holds the character, which a release must not break.
     /// </summary>
     static bool HeldElsewhere(World world, CharacterId id) =>
-        world.SystemOf<Dialogue.DialogueSystem>()?.Talking(id) == true || world.SystemOf<Trading.TradeSystem>()?.HoldsTrader(id) == true;
+        world.SystemOf<Dialogue.DialogueSystem>()?.Talking(id) == true;
 
     /// <summary>
     /// An order takes a held character (<see cref="Player.IDutyRelease"/>, through the AI): its record ends with the goal on its mind, and it is no

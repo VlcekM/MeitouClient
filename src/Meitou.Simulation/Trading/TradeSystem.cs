@@ -276,7 +276,7 @@ public sealed class TradeSettings
 /// The open trade is not, but the buyback receipts it leaves on items are, and they are not saved: a save made mid-trade reloads with a different
 /// hash (docs/simulation.md, trading).
 /// </summary>
-public sealed class TradeSystem : ITickSystem, ITradeSource, IDutyRelease
+public sealed class TradeSystem : ITickSystem, ITradeSource
 {
     /// <summary>
     /// The world's data: shops, templates, factions and the game database.
@@ -295,9 +295,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource, IDutyRelease
     /// </summary>
     CharacterId _customer = CharacterId.None, _trader = CharacterId.None;
     /// <summary>
-    /// Whether the trade window is open (the customer reached the trader), and whether the trader was wandering when held.
+    /// Whether the trade window is open (the customer reached the trader).
     /// </summary>
-    bool _open, _traderWandered;
+    bool _open;
     /// <summary>
     /// The open trade's session (its buy-back receipts); closed and replaced when the trade closes.
     /// </summary>
@@ -374,7 +374,6 @@ public sealed class TradeSystem : ITickSystem, ITradeSource, IDutyRelease
                         break;
                     }
 
-                    Hold(world, t);
                     _approach.Begin(world, _customer, c, t);
                     break;
                 case CloseTrade:
@@ -426,8 +425,8 @@ public sealed class TradeSystem : ITickSystem, ITradeSource, IDutyRelease
     }
 
     /// <summary>
-    /// The customer's walk to the trader, who is held for it: in talk range the trade opens; it closes when either party cannot trade or the walk is
-    /// given up (another order, or stuck).
+    /// The customer's walk to the trader, who goes on with what it does (the original holds no trader for a trade): in talk range the trade opens;
+    /// it closes when either party cannot trade or the walk is given up (another order, or stuck).
     /// </summary>
     void Approach(World world)
     {
@@ -443,20 +442,18 @@ public sealed class TradeSystem : ITickSystem, ITradeSource, IDutyRelease
             return;
         }
 
-        if (_approach.Follow(world, _customer, c, t)) Hold(world, t);
-        else Close(world);
+        if (!_approach.Follow(world, _customer, c, t)) Close(world);
     }
 
     /// <summary>
-    /// Opens the trade: the customer stops where it stands (not at the trader's spot behind a counter) and the trader goes back to its AI, as the
-    /// original holds no trader for a trade (the Trade effect <c>FUN_1409524f0</c> only queues the windows, docs/game/economy.md "Trading range").
+    /// Opens the trade: the customer stops where it stands (not at the trader's spot behind a counter); the trader is not held, as the original
+    /// holds none for a trade (the Trade effect <c>FUN_1409524f0</c> only queues the windows, docs/game/economy.md "Trading range").
     /// </summary>
     void Open(World world, int c)
     {
         TaskStart.Stand(world.Characters, c);
         BuildView(world);
         _open = true;
-        Release(world);
     }
 
     /// <summary>
@@ -494,11 +491,6 @@ public sealed class TradeSystem : ITickSystem, ITradeSource, IDutyRelease
         world.Post("Out of trading range.");
         return false;
     }
-
-    /// <summary>
-    /// Whether <paramref name="who"/> is the trader the trade holds (walked up to or open; <see cref="Hold"/>), which nothing else may let go of.
-    /// </summary>
-    internal bool HoldsTrader(CharacterId who) => !_trader.IsNone && _trader == who;
 
     /// <summary>
     /// Passes the open trade to the player's character <paramref name="who"/> whose window the stock is dropped on or taken from (the customer's
@@ -543,44 +535,6 @@ public sealed class TradeSystem : ITickSystem, ITradeSource, IDutyRelease
     public TradeView? PublishTrade() => _view;
 
     /// <summary>
-    /// Keeps the trader standing while the customer walks up (residents wander; the original's shopkeepers stand at their node). Its wander
-    /// resumes when the trade opens or closes (<see cref="Release"/>); a travelling trader (a caravan's boss) stops too and its AI walks on after
-    /// (<see cref="TaskStart.OnAiWalk"/>). A walk another system holds it for is left alone.
-    /// </summary>
-    void Hold(World world, int t)
-    {
-        ref var n = ref world.Characters.Next[t];
-        bool travelling = TaskStart.OnAiWalk(world.Characters, t);
-        world.Characters.Cold(t)!.Engaged = true;   // the AI leaves it alone until it is released
-        if (n.Task == (byte)CharacterTask.Wander) _traderWandered = true;
-        if (n.Task is (byte)CharacterTask.Wander or (byte)CharacterTask.Idle || travelling)
-            TaskStart.Stand(world.Characters, t);
-    }
-
-    /// <summary>
-    /// An order takes the trader a customer walks up to (<see cref="IDutyRelease"/>): the trade ends as when the customer's walk fails
-    /// (<see cref="Close"/>). An open trade holds no trader (<see cref="Open"/> released it) and goes on.
-    /// </summary>
-    void IDutyRelease.ReleaseForOrder(World world, int slot)
-    {
-        if (!_open && !_trader.IsNone && _trader == world.Characters.IdOf(slot)) Close(world);
-    }
-
-    /// <summary>
-    /// Gives the held trader back to its AI, wandering again when it was.
-    /// </summary>
-    void Release(World world)
-    {
-        if (!world.Characters.TryResolveNext(_trader, out int t)) return;
-
-        world.Characters.Cold(t)!.Engaged = false;
-        if (_traderWandered && world.Characters.Next[t].Task == (byte)CharacterTask.Idle)
-            TaskStart.Become(world, t, CharacterTask.Wander, Data.Gameplay.Ai.TaskType.Wanderer, TaskSource.Npc);
-
-        _traderWandered = false;
-    }
-
-    /// <summary>
     /// Ends the open trade with every inventory window (<see cref="World.CloseInventories"/>); a customer walking up to a trader goes on.
     /// </summary>
     internal void EndTrade(World world)
@@ -592,16 +546,15 @@ public sealed class TradeSystem : ITickSystem, ITradeSource, IDutyRelease
     }
 
     /// <summary>
-    /// Closes the open trade: its session ends, the trader is released (<see cref="Release"/>), and the view goes.
+    /// Closes the open trade: its session ends and the view goes.
     /// </summary>
     void Close(World world)
     {
         _session.Active = false;
         _session = new();
-        if (!_open) Release(world);
 
         _customer = _trader = CharacterId.None;
-        _open = _traderWandered = false;
+        _open = false;
         _view = null;
     }
 

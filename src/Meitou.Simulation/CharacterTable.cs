@@ -1057,7 +1057,7 @@ public sealed class CharacterCold
     public AiMind? Ai { get; set; }
 
     /// <summary>
-    /// Held still by an interaction (a trader in an open trade, <see cref="Trading.TradeSystem"/>): the AI leaves it alone. Serial phases only.
+    /// Held on an engine duty by a system that steers it (<see cref="Player.IDutyRelease"/>): the AI leaves it alone. Serial phases only.
     /// </summary>
     public bool Engaged { get; set; }
 
