@@ -362,19 +362,27 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
 
 ### Decision step
 
-Every character with a squad runs one chooser, the original's `FUN_140510ef0` (`Ladder.Run`, [precedence](game/ai-tasks.md#precedence)), player or NPC. Its rungs: the order step,
-committed above priority 2, the second list (`CharacterCold.SecondList`, `+0x70`; nothing fills it yet), the urgent job pass, the priority-3 tier, committed above 1, the full job
-pass (the implicit jobs last), the priority-2 tier, committed above 0, the priority-1 tier, the default task, the mover reset. A tier scores the AI's goals (`TierRungs`: role
-list, own lists, 32) with the goal sources of its step; a goal with nothing to do now is dropped (`PlanContext.GivesNothingNow`, `FUN_14050df10`). Three phases, no source ever
-called from the think:
+Every character with a squad runs one chooser, the original's `FUN_140510ef0` (`Ladder.Run`, [precedence](game/ai-tasks.md#precedence)), player or NPC, one ladder per think. Its
+rungs: the order step, committed above priority 2, the second list (`CharacterCold.SecondList`, `+0x70`; nothing fills it yet), the urgent job pass (its pick takes the second list
+and an obeying NPC's 187 Slave goals), the priority-3 tier (the second list's leftovers first, so a tie goes to the tier's goals), committed above 1, the full job pass (list jobs,
+implicit jobs, then the 187 goals), the priority-2 tier, committed above 0, the priority-1 tier, the default task (14 Idleness for the player's faction, the IDLE plan for an
+NPC), the mover reset. A tier scores the AI's goals (`TierRungs`: role list, own lists, 32) with the goal sources of its step; a goal with nothing to do now is dropped
+(`PlanContext.GivesNothingNow`, `FUN_14050df10`; of the goals base data lists with a desire only 14 and 45). The routes: a player-faction mind (`AiMind.PlayerSide`, every member
+of a player's squad) the ladder with its sources and 32 (`AiSystem.ThinkPlayer`; only 32 is acted out, the other own-list goals weigh 0 until their type is in `Ladder.OnRungs`);
+an autonomous squad's member the NPC's while the AI holds it, else the player-faction one; an NPC the ladder through `ThinkHeld` while the AI holds it, else the restricted choice
+(caged, or only the goals that pre-empt an engine duty or fight: **engine**, standing for the plan of a task Meitou's systems run); no mind (tests only) the sources' rungs. Three
+phases, no source ever called from the think:
 - **Look** (`DecisionSystem.Look`, serial, end of the schedule step): a character the chooser runs for (`TakesOrders`: a squad, not carried, out cold or dead) that a source
   concerns (a player character, a player-faction mind, an order or a job list) and that is due (its think turn, `ThinkEveryTicks` anchored at tick + slot, for a player
   character only while `TurnAsks`; its replan bit, used up here; its mind's; an order that held it; a front not tried, ended or leaving now) gets a `ChooserRow`: the order
-  pops (`PlayerOrders.Prepare`), then each source's `CanRun` and a goal source's score. A player character is asked every source, any other the order step and the job passes.
+  pops (`PlayerOrders.Prepare`), then each source's `CanRun` and a goal source's score. A character of the player's faction (`DecisionSystem.Decides`: `IsPlayer` or a
+  player-faction mind) is asked every source, any other the order step and the job passes.
 - **Think** (parallel, `AiSystem.Think`, or `DecisionSystem.ThinkWithoutMind` for a row with no mind): the ladder over the row; writes only its own row and mind.
 - **Starts** (`DecisionSystem.Run`, serial, slot order, the slow world right after the last of retaliation, aggro and flight): the order step asked again (an order given or
   ended since the look still wins), the sources the ladder went past passed, the pick asked again next to its `Start`. A start's own asks are dropped; a character downed since its
-  look keeps the ask. Between ticks orders alone run serially (`ApplyPausedInterfaceCommands`; the bit stays).
+  look keeps the ask. Between ticks orders alone run serially (`ApplyPausedInterfaceCommands`; the bit stays). **Engine** latency (the phases): an ask raised before the look
+  (inputs, schedule) starts in that tick; one raised after it (the think to the slow world: a blow, an alert, a sight offer) at the next tick's look and starts; a fight the
+  chooser picks is a deferred attack for the tick after its start, so a player character's 32 fights two ticks after the blow, as an NPC's (the original answers in the same update).
 - **Sources** (`IDecisionSource`: `CanRun` and `Desire` pure reads, `Start`): an open list sorted by step, then `Key` (the original's list order); systems register theirs
   (`IDecisionOwner`), later code may add more (`DecisionSystem.Register`). The first source that can run starts; one that runs the character's task already ends the step. Step 4 picks
   the best desire x weight (x1.25 for the goal running now, again below 1 while its task is not [finished](game/ai-tasks.md#finished-tests); a tie goes to the later-listed).
@@ -406,11 +414,11 @@ called from the think:
      250; the finders, a treatment runs until it ends), carry (148, 238), beds (106), aggro (16; the enemy the look offered this tick, the row's desire). Finders are asked only up to the
      first job that runs. Then the implicit jobs (`ProductionSystem.ImplicitJobs`, the squad AI options' lowest keys): over idling, a standing task or a job's task, the pick of
      `ImplicitPick` starts and runs while it is the one the character is on; one that no longer holds ends.
-  6. The priority-2 goals (a player animal's race goal 233, eating a downed body, `CaptiveSystem.RaceGoals`), then 14 Idleness (priority 1): a player character stands idle, its routine
-     (player characters neither wander nor follow a leader by themselves). Idleness runs over idling, a fight and any task a plan still runs (an order's, a goal's, an engine act-out's:
-     those end by their own rules), and gives up a wander or follow no plan runs. A task that ends (`TaskEnd.Done`) or a fight's end leaves the character idle and asks a decision, which
-     lands where the original's re-plan would; nothing resumes. The default task (`+0x190`, tried after the priority-1 goals) is never reached: Meitou models no manoeuvre mode but
-     ROAM_FAR, whose default task is idleness.
+  6. The priority-2 goals (a player animal's race goal 233, eating a downed body, `CaptiveSystem.RaceGoals`), then the priority-1 goals (keys 2000 + type), then the default task
+     (keys 3000 up): 14 Idleness (`+0x190`, which every order sets while the manoeuvre mode is ROAM_FAR, the only one Meitou models; the scorer drops a scored 14 while `!162 !157` hold).
+     A player character stands idle, its routine (player characters neither wander nor follow a leader by themselves). Idleness runs over idling, a fight and any task a plan still runs
+     (an order's, a goal's, an engine act-out's: those end by their own rules), and gives up a wander or follow no plan runs. A task that ends (`TaskEnd.Done`) or a fight's end leaves
+     the character idle and asks a decision, which lands where the original's re-plan would; nothing resumes.
 - **Triggers** (`CharacterCold.Replan`, `DecisionSystem.Request`; hashed while set; an NPC keeps the bit only while it holds an order): a task end (`TaskStart.End`, any reason), an order given or the queue cleared, a stagger outside a
   fight (not for a gunner), the melee alert while the fight is off unless the target gets up or is player-side and moving (horizontal speed above 1), a job list change or the jobs switch,
   a load, a sighting for row 16 (engine: the look stands in for the sensed list's update), a mate's or ally's defence offered, a failed kidnap's or knock-out's victim told of its attacker, a fight's end (a follow row then follows again,
@@ -423,13 +431,11 @@ called from the think:
 - **Trace** (`DecisionSystem.Tracing`, off by default): each start pass fills `CharacterCold.Decision` (`DecisionTrace`: tick, winner, one line per source asked with its answer: an
   order's failure text, "no attacker in range", a score, a job's index), published as `CharacterSnapshot.Decision` while tracing. Not saved or hashed.
 - **Player-faction characters that are not `IsPlayer`** exist only in Meitou: the sandbox's and `--crowd`'s bystanders and tests' extras (a load, a new game or a recruit makes every
-  other player-faction character `IsPlayer`; the original has no player-faction character the player does not command). Each gets a player-faction mind (`AiMind.PlayerSide`,
-  `AiSystem.PlayerSideMinds`: setupAI's own lists, the faction goals and 243; an animal its race goals and 259, not 230), which thinks only with its look's row. Own-list goals
-  whose type is not in `Ladder.OnRungs` (none yet) weigh 0 there and stay with their adapters. They hold no jobs and get no orders from the interface, so
-  the chooser leaves them to the NPC rules (retaliation's own defence, the attack-on-sight look) and the player faction's goals as idle-only passes: 243 (`TownDutySystem.LookPlayerFood`),
-  259 (`FeedSystem`, an animal idle or following) and the animals' race goals (`CaptiveSystem.RunPlayerAnimalGoals`, list order). A follow order of theirs (one a script gives)
-  follows again after its fight step at the decision step's order pass (`PlayerOrders.Prepare`, `MovementSystem.FollowAgain`), or at the NPC stand-down (`AggroSystem`) while
-  the order does not hold it.
+  other player-faction character `IsPlayer`; the original has no player-faction character the player does not command). One with a squad gets a player-faction mind (`AiMind.PlayerSide`,
+  `AiSystem.PlayerSideMinds`: setupAI's own lists, the faction goals and 243; an animal its race goals and 259, not 230), which thinks only with its look's row, and is decided as a
+  player character is (`DecisionSystem.Decides`): every source, no order hold, no routine resumed, no chase given up. Own-list goals whose type is not in `Ladder.OnRungs` (none yet)
+  weigh 0 there and stay with their adapters. One with no squad runs no chooser (as in the original) and keeps the idle-only passes of the player faction's goals: 243
+  (`TownDutySystem.LookPlayerFood`), 259 (`FeedSystem`, an animal idle or following) and the animals' race goals (`CaptiveSystem.RunPlayerAnimalGoals`, list order).
 - Engine choices: errands' walks wait out a fight (NPC duties, the dialogue approach), while a player character's food run ends when a fight replaces it; the step's starts act from
   the next tick (deferred fights) or at once (walks).
 
@@ -1607,7 +1613,7 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   or a machine running there with its inputs, [ai-tasks](game/ai-tasks.md#slave-work-shout-and-capture); each holds one of the workplace's
   `max operators` slots, `AiMind.WorkPost`) to within its functionality's `use range` of its position, or twice that once stopped (30 without one; `AiSystem.AtWork`, [work distance](game/buildings-production.md#work-distance)), faces it and plays its functionality's clip (`stonemine` by default) as
   `ActionClip` and operates the building's town machine ([NPC town machines](game/buildings-production.md#npc-town-machines)); the worker takes the building's `hunger rate` (`AiMind.WorkHungerRate`). **Observed** (probe, Rebirth, real data): 35 workers, slaves among them, stand at the mines of the Holy Nation's towns by day.
-- **Obedient Slave** (187, [facts](game/ai-tasks.md#slave-work-shout-and-capture)): for the AI's slaves the Slave role list of the squad they obey, `CharacterCold.SlaveMaster` (after a load, the squad of the owner character its `slaver` handle names, [save](formats/save.md)), in place of their own role's list, whether that squad is another or their own (an empty Slave list leaves them their own role's), for its captive goals too (their look reads the same list, so a slave whose own package lists Slave get in Cage all day goes to its cage only in its master's hours).
+- **Obedient Slave** (187, [facts](game/ai-tasks.md#slave-work-shout-and-capture)): an AI slave holds the job in effect (`AiSystem.ObeyedRoles`: state 1, not sneaking, the jobs switch on, not `ObedienceLost`), and the chooser's job passes score the Slave role list of the squad it obeys, `CharacterCold.SlaveMaster` (after a load, the squad of the owner character its `slaver` handle names, [save](formats/save.md)), priorities 1 to 3, before its own tiers: the urgent pass with the second list, the full pass after the list and implicit jobs (`TierRungs.PickJobPass`, also first in a caged or pre-empted choice); its own role's list is weighed only when none plans, whether the master squad is another or its own. The engine's sweeps read the Slave list as the list it plans with, for its captive goals too (so a slave whose own package lists Slave get in Cage all day goes to its cage only in its master's hours).
   **A player character** has the job in its list (`Kidnap/ObedientSlave.cs`, `CaptiveSystem`): `FixtureRegistry.SetSlave` (every route to slave state 1: sale, arrest, processing, a cage, a delivery) destroys its jobs and order
   queue and adds the job toward the master squad's leader (`CharacterCold.SlaveMaster`; handing a slave to another master resets it, engine choice), and removes it when the state leaves 1 (freed, escaped, bail).
   While it is a slave and not sneaking, the job is urgent (step 3, `IJobSource.Urgent`): the best goal of the master squad's Slave list in its hour and repertoire by desire x finder x weight x crowd (x1.25 the one running) starts through `TaskStart` --

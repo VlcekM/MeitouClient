@@ -1184,7 +1184,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   picks among 32 Self preservation, 243 Getting food, a player animal's priority-3 race goals (277-279), 259 Picking up food, Hold's 16 and 15 Protect allies (joining a mate's or
   an ally's fight; none has a stepped plan: each is acted out by its engine system, fights by the combat system, 243 by `TownDutySystem`, 277-279 by
   `CaptiveSystem`, 259 by `FeedSystem`, as an NPC's same goal, so the NPC side's plan step has nothing to run for them either), step 5 every job in list order through its system's contributor (the switch and the repertoire first), then the implicit jobs, step 6 the priority-2 race goal 233 and
-  14 Idleness (a player character's routine: it stands; the default task is never reached, as only ROAM_FAR is modelled). A task that ends leaves its character idle for the step to
+  the default task 14 Idleness (a player character's routine: it stands; only ROAM_FAR is modelled, whose default task it is, and the scorer drops a scored 14). A task that ends leaves its character idle for the step to
   re-decide (the original re-plans; nothing resumes). A follow order running its row ends when the followed character is attacked or goes down, as the original's (**Verified** below); follow and bodyguard
   jobs, and a follow order given while its target is already threatened, fight by their rows: an attacker of the followed character within 40 (16), a bodyguard also its own
   within 40 (39), as a step of the row, and follow again when the fight ends. The step runs on the replan triggers above plus an engine re-ask at the think turn (`ThinkEveryTicks`) of a character
