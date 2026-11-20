@@ -346,9 +346,9 @@ public class CarryTests
     }
 
     [Fact]
-    public void A_carried_body_that_came_round_is_put_down_unless_it_is_chained_and_the_carriers_enemy()
+    public void A_carried_body_that_came_round_is_put_down_unless_it_is_an_unchained_enemy_of_the_carrier()
     {
-        // Goal 169's desire (FUN_1405a0710): 1 unless the body is chained and the carrier's enemy (FUN_14079c950).
+        // Goal 169's desire (FUN_1405a0710): 1 when the body is chained (+0x320) or the carrier does not regard it as an enemy (FUN_14079c950).
         var table = FactionRelations.Build([new FactionData { Id = "a", Name = "a", DefaultRelation = 50 },
                 new FactionData { Id = "b", Name = "b", DefaultRelation = -50 }, new FactionData { Id = "c", Name = "c", DefaultRelation = 50 }]);
         var carry = new CarrySystem(BaseGame, BodyOptions.Default, 1) { Relations = table };
@@ -363,8 +363,8 @@ public class CarryTests
             return c;
         }
 
-        Assert.True(carry.WakesIntoPutDown(Make(0, false), Make(1, false)));
-        Assert.False(carry.WakesIntoPutDown(Make(0, false), Make(1, true)));
+        Assert.False(carry.WakesIntoPutDown(Make(0, false), Make(1, false)));
+        Assert.True(carry.WakesIntoPutDown(Make(0, false), Make(1, true)));
         Assert.True(carry.WakesIntoPutDown(Make(0, false), Make(2, true)));
         Assert.True(carry.WakesIntoPutDown(Make(0, false), Make(0, true)));
     }
@@ -372,19 +372,26 @@ public class CarryTests
     [Fact]
     public void Goal_169_puts_a_woken_body_down_only_for_a_carrier_whose_goal_lists_hold_it()
     {
-        // The AI scores only the goals of its lists: a carrier whose race goals (or package) lack 169 keeps the awake body on its shoulder.
-        using var rig = new Rig(1, minPartition: 1, seed: 21);
-        var carrier = rig.Add(1000, 2000, player: false, squad: 1, faction: 0);
-        var goal = new Meitou.Data.Gameplay.Ai.AiGoal(new Meitou.Data.Gameplay.Ai.AiTask("169", "Putting down",
-                Data.Gameplay.Ai.TaskType.PutDownCarriedDudeIfTheyCanWalk, Data.Gameplay.Ai.TaskPriority.Urgent, Data.Gameplay.Ai.TaskTargetType.Self,
-                Data.Gameplay.Ai.TaskEndEvent.Nothing), 0, 24, 1);
-        var squad = rig.World.Squads.Find(1)!;
-        rig.Cold(carrier).Ai = new Meitou.Simulation.Ai.AiMind { Squad = squad };
+        // The AI scores only the goals of its lists: a carrier whose package lacks 169 keeps the awake body on its shoulder; one whose package lists it
+        // puts it down through its plan [69, 169] (FUN_1405a0710's desire; 69 the only provider of !47).
+        foreach (bool listed in new[] { false, true })
+        {
+            using var rig = new Rig(1, minPartition: 1, seed: 21, ai: true);
+            var carrier = rig.Add(1000, 2000, player: false, squad: 1, faction: 0, leader: true);
+            var body = rig.Add(1050, 2000, player: false, squad: 1, faction: 0);
+            var goal = new AiGoal(new AiTask("169", "Putting down", TaskType.PutDownCarriedDudeIfTheyCanWalk, TaskPriority.Urgent,
+                    TaskTargetType.Self, TaskEndEvent.Nothing), 0, 24, 1);
+            var board = new Blackboard([new(0, new AiPackage { Id = "p", Name = "p", Roles = [[], [], listed ? [goal] : [], [], []] })]);
+            board.Update();
+            rig.World.Squads.Find(1)!.Ai = board;
+            rig.Body(body).KnockOut(10);
+            rig.World.RunTick();
+            rig.PickUp(carrier, body);
 
-        Assert.False(rig.Carry.ListsPutDown(rig.World, carrier.Slot, rig.Cold(carrier)));
+            for (int t = 0; t < 1500 && (rig.Body(body).Incapacitated || !rig.Cold(body).CarriedBy.IsNone); t++) rig.World.RunTick();
 
-        rig.Cold(carrier).Ai = new Meitou.Simulation.Ai.AiMind { Squad = squad, RaceGoals = [goal] };
-
-        Assert.True(rig.Carry.ListsPutDown(rig.World, carrier.Slot, rig.Cold(carrier)));
+            Assert.False(rig.Body(body).Incapacitated);
+            Assert.Equal(listed, rig.Cold(body).CarriedBy.IsNone);
+        }
     }
 }

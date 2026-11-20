@@ -26,10 +26,10 @@ namespace Meitou.Simulation.Carrying;
 /// <item><b>Pick up</b> (<see cref="CharacterTask.PickUp"/>): the walk to the body (the first aid pattern), then the <c>shoulder lift left</c> clip:
 /// attached at 0.4 of it, done at 0.95. <b>Put down</b> (<see cref="CharacterTask.PutDown"/>): the clip backwards, let go below 0.2; a body the
 /// carrier does not regard as friendly is knocked out again.</item>
-/// <item><b>Dropped</b> at once when the carrier is knocked out or dies or its left arm fails or is cut off. A body that comes round is put down by
-/// an NPC carrier when the carrier's lists hold goal 169 (<see cref="ListsPutDown"/>) unless it is chained and the carrier's enemy
-/// (<see cref="WakesIntoPutDown"/>); any other rides on awake (a player-side body that is no friend is knocked out again on the shoulder, engine
-/// choice); a player-side carrier sets only a friendly one down. A squad mate lifted awake (<see cref="CharacterCold.CarriedAwake"/>) rides until
+/// <item><b>Dropped</b> at once when the carrier is knocked out or dies or its left arm fails or is cut off. A body that comes round on an NPC
+/// carrier rides on awake until a goal of the carrier's puts it down (169, <see cref="PutDownGoals"/>, or any goal that needs empty hands: the
+/// plan's step 69); a player-side carrier sets only a friendly one down (one that is no friend is knocked out again on the shoulder, engine
+/// choice). A squad mate lifted awake (<see cref="CharacterCold.CarriedAwake"/>) rides until
 /// put down.</item>
 /// <item><b>Rescue</b>: the rescue job, and the rescue goals 148 and 142 of anyone whose lists weigh them (<see cref="RescueGoals"/>).</item>
 /// <item><b>Loot</b> (<see cref="CharacterTask.Loot"/>): the walk, then everything of the main inventory and the backpack that fits moves to the
@@ -1174,31 +1174,16 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     }
 
     /// <summary>
-    /// Whether a carried body that came round is put down (goal 169's desire <c>FUN_1405a0710</c>, <b>Verified</b>: 1 for a living, awake carried
-    /// body unless it is chained and the carrier's enemy, <c>FUN_14079c950</c>; its <c>+0x5b8</c> condition is not modelled). A player-side carrier
-    /// has no such goal (its AI goals are the faction's): it keeps the older rule, friendly bodies are set down at once.
+    /// Goal 169's chained and enemy test (<c>FUN_1405a0710</c>, <b>Verified</b>: 1.0 when the body is chained, <c>+0x320</c>, or the carrier does not
+    /// regard it as an enemy, vfunc <c>0x3e8</c> <c>FUN_14079c950</c>, its faction part: another faction it is hostile to; <see cref="PutDownGoals"/>):
+    /// so only an unchained enemy stays on the shoulder.
     /// </summary>
     internal bool WakesIntoPutDown(CharacterCold carrier, CharacterCold body)
     {
         bool chained = Locks.LockSystem.WornShackles(body) is not null;
         bool enemy = carrier.Faction != body.Faction && Relations is { } r && r.Contains(carrier.Faction) && r.Contains(body.Faction)
             && r.IsHostile(carrier.Faction, body.Faction);
-        return !chained || !enemy;
-    }
-
-    /// <summary>
-    /// Whether the carrier's goal lists hold goal 169 now (<b>Verified</b>, the AI scores only the goals of its lists: the role list of its squad's
-    /// running package, or its campaign phase's, and its race's <c>AI Goals</c>, in the goal's hour window; docs/game/carry-loot.md "Goal 169"). A
-    /// character with no squad or AI lists none.
-    /// </summary>
-    internal bool ListsPutDown(World world, int slot, CharacterCold carrier)
-    {
-        int hour = world.Hour;
-        foreach (var g in carrier.Ai?.RaceGoals ?? [])
-            if (g.Task.Type == TaskType.PutDownCarriedDudeIfTheyCanWalk && g.InWindow(hour)) return true;
-        return world.SystemOf<PopulationSystem>() is { } population && world.Squads.Find(carrier.SquadId) is { } squad
-            && population.GoalDuty(world, squad, AiSystem.RoleOf(squad, world.Characters.IdOf(slot), carrier),
-                TaskType.PutDownCarriedDudeIfTheyCanWalk);
+        return chained || !enemy;
     }
 
     /// <summary>
@@ -1247,9 +1232,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             if (body.Medical is { Incapacitated: true }) body.CarriedAwake = false;   // knocked out on the shoulder: set down when it comes round
             else if (body.Medical is not null && !body.CarriedAwake)
             {
-                // The body came round. The AI's goal 169 PUT_DOWN_CARRIED_DUDE_IF_THEY_CAN_WALK puts it down when the carrier's package lists it,
-                // unless the body is chained and the carrier's enemy (see WakesIntoPutDown); the put-down task knocks a body the carrier does not
-                // regard as friendly out again on the ground. Any other awake body rides on (no goal puts it down).
+                // The body came round. An NPC carrier's goals put it down through the chooser (169 PUT_DOWN_CARRIED_DUDE_IF_THEY_CAN_WALK,
+                // PutDownGoals, or a goal that needs empty hands: the plan's step 69); until then it rides on awake. The put-down task knocks a
+                // body the carrier does not regard as friendly out again on the ground.
                 if (PlayerSide(world, cold))
                 {
                     if (RegardsBody(world, i, b))
@@ -1260,8 +1245,6 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
                     KnockOutHeld(cold, body);
                 }
-                else if (!ListsPutDown(world, i, cold)) body.CarriedAwake = true;
-                else if (WakesIntoPutDown(cold, body)) BeginPutDown(world, i);
                 else body.CarriedAwake = true;
             }
             ref var bn = ref next[b];
@@ -1946,13 +1929,14 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         && TaskStart.Eligible(world, cold, TaskType.FindAndRescueIfTheresBeds);
 
     /// <summary>
-    /// Registers the looting and arming goals 177 and 42 and the rescue goals 148 and 142 with the chooser (<see cref="LootGoals"/>,
-    /// <see cref="RescueGoals"/>).
+    /// Registers the looting and arming goals 177 and 42, the rescue goals 148 and 142 and the put-down goal 169 with the chooser
+    /// (<see cref="LootGoals"/>, <see cref="RescueGoals"/>, <see cref="PutDownGoals"/>).
     /// </summary>
     void IDutyGoalOwner.RegisterGoals(DutyGoals goals)
     {
         _lootGoals.Register(goals);
         _rescueGoals.Register(goals);
+        new PutDownGoals(this).Register(goals);
     }
 
     /// <summary>
