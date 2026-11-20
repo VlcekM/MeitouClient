@@ -673,7 +673,7 @@ squad simply takes the speaker in, unless a target flag at +0x1d0 is set):
 | 19 REMEMBER_CHARACTER, 20 FLAG_TEMP_ALLY, 21 FLAG_TEMP_ENEMY | [squad memory](#squad-memory): long-term tag 0 / short-term 3 / 4 on the target |
 | 23 MAKE_TARGET_RUN_FASTER | the target's speed mode = 2 |
 | 25 TAG_ESCAPED_SLAVE | the target's slave state 2, its AI reset (9 uses) |
-| 53 REMOVE_SLAVE_STATUS | a target in shackles or slave state: "Free!" floated in green over it and `Character_Unlock_Success`; slave state 0, AI reset, worn shackles unlocked (2 uses) |
+| 53 REMOVE_SLAVE_STATUS | a target in shackles or slave state: "Free!" floated in green over it and `Character_Unlock_Success`; then any target: slave state 0 through the setter (the owner handle kept), its perma-jobs destroyed (`FUN_140507280`), its worn shackles' lock broken (`FUN_140297db0`: lock `+0x21`) (**Verified**, `FUN_140680560` case 0x35; 2 uses) |
 | 24 GIVE_TARGET_MY_SLAVES | each character on the speaker platoon's slave list is put down by its carrier if carried (`FUN_1405ce1e0`), then goes from that list to the target's platoon's list with the target's faction as owner (`FUN_14032e430`: no squad change, no cage release, slave state kept); the speaker's list is cleared (**Verified**, `FUN_140680560` case 0x18). All 5 uses are under event-39 roots |
 | 47 SURRENDER_NON_HUMANS | members of the target's faction within 100 of the speaker whose race does not match the speaker's (`FUN_14042ecd0`: the same race or one of the member's RACE_GROUP) become slaves (`FUN_14032e590`: slave state 1, the owner handle stored) and remembered by its squad; the tests are only partly read (8 uses, Holy Nation) |
 | 40 ENSLAVE_TARGETS_CARRIED_PERSON | slavery ([carry-loot](carry-loot.md)) |

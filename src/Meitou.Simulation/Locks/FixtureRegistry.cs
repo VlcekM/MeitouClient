@@ -2216,17 +2216,24 @@ public sealed partial class FixtureRegistry
     public static void TagEscaped(World world, CharacterCold c) => SetSlave(world, c, 2, c.SlaveOwner);
 
     /// <summary>
-    /// <c>DA_REMOVE_SLAVE_STATUS</c> (53, <c>FUN_140680560</c>): a character in shackles or slave state is freed with "Free!" (the original floats it
-    /// in green over the head) and <c>Character_Unlock_Success</c>; its slave state is cleared and its worn shackles unlocked.
+    /// <c>DA_REMOVE_SLAVE_STATUS</c> (53, <c>FUN_140680560</c> case 0x35, <b>Verified</b>): a character in shackles or slave state is told "Free!"
+    /// (the original floats it in green over the head) with <c>Character_Unlock_Success</c>; then, whoever it is, its slave state is set to 0
+    /// (the setter: job 187 removed), its perma-jobs are destroyed (<c>FUN_140507280</c>) and its worn shackles' lock is broken (<c>FUN_140297db0</c>
+    /// sets the lock's broken flag <c>+0x21</c>, as a cut does). The setter leaves the owner handle; Meitou clears it with the state (engine choice,
+    /// <see cref="LayLow"/>).
     /// </summary>
     public static void FreeSlave(World world, int slot, CharacterCold c)
     {
         var shackles = LockSystem.WornShackles(c);
-        if (shackles is null && c.SlaveState == 0) return;
-        world.Bark(world.Characters.IdOf(slot), Loc.Tr("Free!"));
-        world.EmitSound(SoundKind.Unlocked, slot, world.Characters.Next[slot].Position);
+        if (shackles is not null || c.SlaveState != 0)
+        {
+            world.Bark(world.Characters.IdOf(slot), Loc.Tr("Free!"));
+            world.EmitSound(SoundKind.Unlocked, slot, world.Characters.Next[slot].Position);
+        }
+
         SetSlave(world, c, 0, -1);
-        if (shackles?.Lock is { } l) l.Locked = false;
+        Kidnap.ObedientSlave.DropJobs(world, c);
+        if (shackles?.Lock is { } l) l.Broken = true;
     }
 
     /// <summary>
