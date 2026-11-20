@@ -108,7 +108,7 @@ public sealed partial class CarrySystem
     /// <c>FUN_14059acd0</c>, <b>Verified</b> decompile): a complete storage building of the forager's faction within the AI's range
     /// (<see cref="Construction.ConstructionSystem.SourceRangeSquared"/>, 3D) that takes it
     /// (<see cref="Meitou.Data.Gameplay.Construction.MachineData.Accepts"/>, engine stand-in for its <c>canHaveSomeOfThese</c>: free room is not
-    /// tested); null: none.
+    /// tested) and the storage filters let the forager put it in (<see cref="IStorageFilter"/>); null: none.
     /// </summary>
     static ItemInstance? Storable(World world, CharacterCold forager, Vector3 at, CharacterCold animal)
     {
@@ -117,7 +117,8 @@ public sealed partial class CarrySystem
             foreach (var m in world.Machines.All)
                 if (m.Data.IsStorage && m.Storage is not null && m.Data.Accepts(item.Record, item.Type)
                     && Vector3.DistanceSquared(m.Position, at) <= Construction.ConstructionSystem.SourceRangeSquared
-                    && world.Buildings.Find(m.Site) is { Complete: true } site && site.Owner == forager.Faction)
+                    && world.Buildings.Find(m.Site) is { Complete: true } site && site.Owner == forager.Faction
+                    && world.StorageAllows(forager, m.Site, StorageUse.Put, item.Record))
                     return item;
         return null;
     }
