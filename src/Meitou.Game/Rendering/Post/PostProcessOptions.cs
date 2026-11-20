@@ -441,6 +441,12 @@ public sealed class PostOptions
     public bool CameraEffectsHeld;
 
     /// <summary>
+    /// Whether the camera effects may run on this frame's camera: not a frame that is no world, and the free or a cinematic camera or the strategy
+    /// camera by the player's choice. The caller adds that the view is a whole view of a scene.
+    /// </summary>
+    public bool CameraEffectsAllowed => !CameraEffectsHeld && (CinematicView || CameraEffectsEverywhere);
+
+    /// <summary>
     /// Meitou switch (<c>lampshadows</c>; docs/render-lights.md "Traced lamp shadows"), off by default even in the Meitou look; Faithful is the
     /// game's: lamps cast no shadows.
     /// </summary>
@@ -461,6 +467,11 @@ public sealed class PostOptions
     /// Photo mode's depth of field: on or off whatever <see cref="DepthOfField"/> says; null outside it.
     /// </summary>
     public bool? PhotoDepthOfField;
+
+    /// <summary>
+    /// Whether the depth of field is asked for: photo mode's choice where it has one, else the <c>dof</c> switch.
+    /// </summary>
+    public bool DepthOfFieldOn => PhotoDepthOfField ?? DepthOfField;
 
     /// <summary>
     /// How many times larger than the window the picture being drawn is (photo mode's Picture size; 1 otherwise): the depth of field's largest CoC
