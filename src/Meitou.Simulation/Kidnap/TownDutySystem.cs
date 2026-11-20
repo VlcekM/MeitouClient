@@ -2161,19 +2161,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     #region Shooing and ransacking
 
     /// <summary>
-    /// The senses (resolved on first use), for the shoo finder.
+    /// The finders of the shoo's stranger and the ransack's building.
     /// </summary>
-    AggroSystem? _aggro;
-
-    /// <summary>
-    /// Who is inside each building, by building key, as of <see cref="_insidersTick"/> (the shoo finder's pass).
-    /// </summary>
-    readonly Dictionary<string, List<int>> _insiders = new(StringComparer.Ordinal);
-
-    /// <summary>
-    /// The tick <see cref="_insiders"/> was taken (-1: never).
-    /// </summary>
-    long _insidersTick = -1;
+    readonly TownWatchFinders _watch = new(data);
 
     /// <summary>
     /// Event 9 EV_SHOO_FROM_MY_BUILDING, 17 EV_INTRUDER_FOUND (for an enemy), 60 EV_GIVE_UP_CHASE (docs/game/dialogue.md "Enums").
@@ -2186,53 +2176,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     const float ShooEverySeconds = 5;
 
     /// <summary>
-    /// The door planner of the ransack's way in (<see cref="EntryTo"/>).
+    /// The shoo's stranger in the squad's home building (goals 158 / 283, <see cref="TownWatchFinders.Stranger"/>); none: none.
     /// </summary>
-    readonly DoorPlan _doorPlan = new();
-
-    /// <summary>
-    /// The salt of the ransack's target roll.
-    /// </summary>
-    const ulong RansackSalt = 0x5261_6E73_6163_6B21;
-
-    /// <summary>
-    /// <c>AI::findStrangersInMyBuilding</c> (<c>FUN_1408ced70</c>, goals 158 / 283): in the squad's home building, the first character (slot order,
-    /// the original takes its sensed-list order) neither of an allied faction nor an enemy, not down, dead or caged, not a slave of the shooer's
-    /// faction and not law enforcement (AUTHORITY_FIGURE, engine reading); for an NPC squad also any of the player's characters there that is not
-    /// sneaking or that the shooer has spotted. Not one another errand shoos. None: none.
-    /// </summary>
-    internal CharacterId Stranger(World world, int slot, CharacterCold cold, Squad squad)
-    {
-        if (squad.HomeBuilding is not { } home) return CharacterId.None;
-        var table = world.Characters;
-        _aggro ??= world.Systems.OfType<AggroSystem>().FirstOrDefault();
-        if (_insidersTick != world.Tick)
-        {
-            _insidersTick = world.Tick;
-            _insiders.Clear();
-            for (int s = 0; s < table.HighWater; s++)
-            {
-                if (table.Next[s].Alive && world.Sight.BuildingOf(s) is { } key)
-                    (_insiders.TryGetValue(key, out var list) ? list : _insiders[key] = []).Add(s);
-            }
-        }
-
-        if (!_insiders.TryGetValue(home.Key, out var inside)) return CharacterId.None;
-        foreach (int s in inside)
-        {
-            if (s == slot || table.Cold(s) is not { Medical.Incapacitated: false } c || c.IsImprisoned) continue;
-            if (c.SlaveState == 1 && c.SlaveOwner == cold.Faction) continue;
-            var id = table.IdOf(s);
-            if (_duties.Any(o => o.Kind == TownDutyKind.Shoo && o.Body == id)) continue;
-            bool neutral = c.Faction != cold.Faction && !(data.Relations.Contains(cold.Faction) && data.Relations.Contains(c.Faction)
-                && (data.Relations.IsAlly(cold.Faction, c.Faction) || AggroSystem.IsEnemy(data.Relations, cold.Faction, c.Faction)));
-            if (neutral && c.NpcClass != Data.Gameplay.FundamentalType.LawEnforcement) return id;
-            if (!cold.IsPlayer && c.IsPlayer && ((c.Orders & CharacterOrders.Sneak) == 0 || _aggro?.Spotted(slot, id) == true))
-                return id;
-        }
-
-        return CharacterId.None;
-    }
+    internal CharacterId Stranger(World world, int slot, CharacterCold cold, Squad squad) => _watch.Stranger(world, slot, cold, squad, _duties);
 
     /// <summary>
     /// A shoo (161 <c>Task_TalktoPlayer</c> with the row event 9): the shooer walks at the stranger and sends it event 9 (17 when it is an enemy)
@@ -2276,49 +2222,12 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// <c>AI::findRandomBuildingInTown</c> (<c>FUN_1408cb510</c>, goal 216): the squad's town as <c>FUN_140269cd0</c> gives it (the override's mission
-    /// town, a campaign's war package's the campaign target, <see cref="Blackboard.ContractMissionTown"/>; else the running package's mission town),
-    /// else the town the member stands in; a player town is not drawn from; one of its standing buildings with an interior, drawn uniformly at random among those the
-    /// planner would reach: row 156 Entering building (the only provider of effect 107, which goal 216 wants) needs DESTINATION_IS_ACCESSIBLE (59:
-    /// <c>hasAnOpenDoor</c>) and DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS (90: no closed gate between), <b>Observed</b>. The door sub-steps are
-    /// planned (<see cref="EntryTo"/>: open the door, row 72, or bash it, row 81); a building with no way in is left out of the draw. A closed gate
-    /// on the route is planned as for an attacker (<see cref="Locks.LockSystem.GateEntry"/>: bash it, row 123 / 290, or pass an unlocked one, row
-    /// 122). Null: none.
+    /// The ransack's building (goal 216, <see cref="TownWatchFinders.RansackTarget"/>); null: none.
     /// </summary>
     internal (Meitou.Data.World.TownBuilding Building, string? Door)? RansackTarget(World world, Squad squad, int slot)
     {
-        int site = squad.Ai is { ContractMissionTown.Site: >= 0 } b ? b.ContractMissionTown.Site
-            : squad.Ai is { Destination: { Site: >= 0 } dest } ? dest.Site
-            : AiSystem.TownAt(data, world, world.Characters.Next[slot].Position).Site;
-        if (site < 0) return null;
         _locks ??= world.Systems.OfType<LockSystem>().FirstOrDefault();
-        var from = world.Characters.Next[slot].Position;
-        var rooms = new List<(Meitou.Data.World.TownBuilding, string?)>();
-        foreach (var x in data.Sites[site].Buildings)
-        {
-            if (world.Fixtures.IsDestroyed(x) || x.InteriorLayout.Length == 0 && x.InteriorLayouts.Count == 0) continue;
-            var gate = _locks?.GateEntry(world, slot, from, x.Position) ?? (DoorPlan.Entry.Walk, null);
-            if (gate.Entry == DoorPlan.Entry.Blocked) continue;
-            if (gate.Door is not null) rooms.Add((x, gate.Door));   // the gate is bashed first (rows 123 / 290)
-            else if (EntryTo(world, slot, x) is { } door) rooms.Add((x, door.Length == 0 ? null : door));
-        }
-
-        if (rooms.Count == 0) return null;
-        return rooms[Rng.Int(Rng.Hash(world.Seed, (ulong)Rng.Key(world.Characters.IdOf(slot)) ^ (ulong)world.Tick, RngPurpose.Slow, RansackSalt),
-                rooms.Count)];
-    }
-
-    /// <summary>
-    /// How the member gets into a building, by the planner (row 156's state 59 <c>hasAnOpenDoor</c>, <see cref="Locks.DoorPlan.PlansEntry"/>): "" to
-    /// walk in (a door open, none, or a closed one the character opens as it passes, row 72), the id of the door it bashes first (row 81, a locked
-    /// door of a building it is aggressive towards), null when the planner finds no way in.
-    /// </summary>
-    string? EntryTo(World world, int slot, Meitou.Data.World.TownBuilding building)
-    {
-        if (world.Fixtures.HasOpenDoor(building.Key)) return "";
-        if (LockSystem.MainGateDoor(world, building.Key) is not { } main) return "";
-        var entry = _doorPlan.PlansEntry(world, world.SystemOf<Combat.CombatSystem>(), slot, building.Key, main.Door, main.Spot, _locks);
-        return entry switch { DoorPlan.Entry.Walk => "", DoorPlan.Entry.Bash => main.Door.Id, _ => null };
+        return _watch.RansackTarget(world, squad, slot, _locks);
     }
 
     /// <summary>
