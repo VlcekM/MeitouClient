@@ -103,11 +103,28 @@ public sealed class SenseBlock
     /// The threats sensed at the last look.
     /// </summary>
     internal readonly List<CharacterId> ThreatList = [];
+    /// <summary>
+    /// The characters <c>FUN_1405cb0a0</c> put on the threats list (<see cref="Aggro.AggroSystem.Threaten"/>), apart from it: the original's logic
+    /// tick takes the immediate-threat flag from the list (<c>FUN_1404378f0</c>, Character <c>+0x2b0</c>) before its AI update's sense pass clears
+    /// it and the chooser runs (<c>FUN_1405d00b0</c>, <b>Verified</b>), so a push raises that flag for the next think and is in no list a chooser
+    /// reads (<see cref="Pushes"/>).
+    /// </summary>
+    internal readonly List<CharacterId> Pushed = [];
+    /// <summary>
+    /// The tick of the last push into <see cref="Pushed"/>.
+    /// </summary>
+    internal long PushedTick = -1;
 
     /// <summary>
     /// The entries, by target slot.
     /// </summary>
     public IReadOnlyList<SenseEntry> Entries => EntryList;
+
+    /// <summary>
+    /// The pushed threats (<see cref="Pushed"/>) that still raise the immediate-threat flag at <paramref name="tick"/>: until the tick after the
+    /// push, whose think stands for the immediate AI update the push asks for.
+    /// </summary>
+    internal IReadOnlyList<CharacterId> Pushes(long tick) => tick <= PushedTick + 1 ? Pushed : [];
 
     /// <summary>
     /// The threats list (+0x50): the characters of another faction sensed at the last look whose fight targets this one.
@@ -248,6 +265,12 @@ public sealed class SenseBlock
         {
             h.Add(t.Slot);
             h.Add(t.Generation);
+        }
+
+        if (Pushed.Count > 0)
+        {
+            h.Add(PushedTick);
+            foreach (var t in Pushed) h.Add(t);
         }
 
         h.Add(Enemies);

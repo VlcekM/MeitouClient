@@ -15,7 +15,7 @@ public sealed partial class CombatSystem
     /// immediate</c>), else 0.7 while one of positive aggression stands within <see cref="RetaliationSystem.SelfDefenceReach"/>, else 0. The threats
     /// are the senses' threats list (<see cref="SenseBlock.Threats"/>, <c>SensoryData</c> +0x50: characters of another faction sensed at the last
     /// look whose fight targets this one; each counts as of positive aggression) that still stand, at their places now; the immediate ones are those
-    /// <see cref="ImmediateThreat"/> counts. <paramref name="centre"/> is the mean position of the threats within reach (the origin
+    /// <see cref="ImmediateThreat"/> counts, a pushed threat too (<see cref="SenseBlock.Pushes"/>). <paramref name="centre"/> is the mean position of the threats within reach (the origin
     /// <c>Task_Runaway</c> flees from, <c>FUN_14034b440</c>). Reads the last tick's state, so any thread after Schedule.
     /// </summary>
     public float ThreatLevel(World world, int self, out Vector3 centre)
@@ -53,6 +53,9 @@ public sealed partial class CombatSystem
         }
 
         if (count > 0) centre = sum / count;
+
+        // A FUN_1405cb0a0 push raises only the immediate flag, at the think after it (the sense pass clears the list before the chooser).
+        if (level < 1 && AnyImmediate(world, self, senses.Pushes(world.Tick))) level = 1;
 
         return level;
     }

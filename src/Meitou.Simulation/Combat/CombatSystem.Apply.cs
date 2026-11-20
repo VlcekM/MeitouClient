@@ -108,6 +108,7 @@ public sealed partial class CombatSystem
         // asks again before its next swing.
         if (outcome is BlowOutcome.Hit or BlowOutcome.Blocked && dSlot.TargetSlot == a && dSlot.TargetGeneration == prev[a].Generation)
             dSlot.Engaged = false;
+        if (outcome is BlowOutcome.Hit or BlowOutcome.Blocked) _alerted.Remove(a, table.IdOf(d));
 
         switch (outcome)
         {

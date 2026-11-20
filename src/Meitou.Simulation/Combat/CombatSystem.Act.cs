@@ -1164,13 +1164,22 @@ public sealed partial class CombatSystem
     /// Whether <paramref name="i"/> may join the fighters its target lets close in (<see cref="MaxEngaged"/>, <c>FUN_140666e20</c>): it joins while
     /// fewer are in. The ones that are not in yet ask whenever they decide; those with a lower slot ask first (engine choice for the original's
     /// update order), counted only when they may decide this tick (not staggered, blocking or dodging, or swinging past the point where it could
-    /// still give the swing up) and not on a path chase, so a fighter is not left out for one that does not ask.
+    /// still give the swing up) and not on a path chase, so a fighter is not left out for one that does not ask. The melee alert's entries
+    /// (<see cref="AlertedAttackers"/>) that do not fight <paramref name="t"/> take room too, and one the alert put there already is in
+    /// (<c>FUN_140666e20</c>'s contains test comes first).
     /// </summary>
     bool MayJoin(World world, int i, int t, int now)
     {
         var prev = world.Characters.Previous;
-        var range = world.Grid.Range(prev[t].Position.X, prev[t].Position.Z, CombatTuning.EngageScanRadius);
         int generation = prev[t].Generation, count = 0;
+        for (int k = 0; k < _alerted.Count(t); k++)
+        {
+            int a = AlertedAt(world, t, k);
+            if (a == i) return true;
+            if (a >= 0 && !(_read[a].TargetSlot == t && _read[a].TargetGeneration == generation)) count++;
+        }
+
+        var range = world.Grid.Range(prev[t].Position.X, prev[t].Position.Z, CombatTuning.EngageScanRadius);
         foreach (var (_, x, z, other) in _index.AttackersOf(t))
         {
             if (other == i || !range.Holds((x, z))) continue;
@@ -1179,6 +1188,7 @@ public sealed partial class CombatSystem
             if (!Listed(in o, in _read[t]) && (other > i || !MayDecide(in o, now) || ChasesOnPath(world, other, t))) continue;
             if (++count >= MaxEngaged) return false;
         }
+
         return count < MaxEngaged;
     }
 

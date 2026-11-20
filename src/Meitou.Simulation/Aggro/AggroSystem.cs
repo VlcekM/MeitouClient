@@ -1084,6 +1084,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     {
         var b = s.Block;
         b.ThreatList.Clear();
+        if (b.PushedTick + 1 < s.World.Tick) b.Pushed.Clear();
         b.Enemies = b.CagedEnemies = b.Neutrals = b.Allies = b.AlliesDown = 0;
         b.ThreatToMe = b.ThreatToAllies = b.Aggression = 0;
         b.Faded = false;
@@ -1199,18 +1200,21 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
 
     /// <summary>
     /// <c>FUN_1405cb0a0</c>'s threat (<b>Verified</b>: it appends the target to the AI's <c>+0x78</c> list, SensoryData <c>+0x50</c>, the threats
-    /// list, and forces the sense): <paramref name="target"/> is sensed by <paramref name="looker"/> (<see cref="Force"/>) and on its threats list
-    /// (<see cref="SenseBlock.Threats"/>) until the looker's next look rebuilds it (the original's sense pass at its next AI update clears it after
-    /// <c>FUN_1404378f0</c> took its immediate-threat flag from it). Adds nothing to <see cref="SenseBlock.ThreatToMe"/> (the push adds no
-    /// aggression). Serial phases only.
+    /// list, and forces the sense): <paramref name="target"/> is sensed by <paramref name="looker"/> (<see cref="Force"/>) and pushed
+    /// (<see cref="SenseBlock.Pushed"/>): the original's next logic tick takes its immediate-threat flag from the list (<c>FUN_1404378f0</c>) and
+    /// its AI update's sense pass then clears it before the chooser, so the push raises that flag at the looker's next think and no chooser finds
+    /// the target on the list. Adds nothing to <see cref="SenseBlock.ThreatToMe"/> (the push adds no aggression). Serial phases only.
     /// </summary>
     internal void Threaten(World world, int looker, int target)
     {
         Force(world, looker, target);
         if ((uint)looker >= (uint)_slots.Length || _slots[looker].Senses is not { } b) return;
 
+        if (b.PushedTick + 1 < world.Tick) b.Pushed.Clear();
+        b.PushedTick = world.Tick;
+
         var id = world.Characters.IdOf(target);
-        if (!b.ThreatList.Contains(id)) b.ThreatList.Add(id);
+        if (!b.Pushed.Contains(id)) b.Pushed.Add(id);
     }
 
     /// <summary>

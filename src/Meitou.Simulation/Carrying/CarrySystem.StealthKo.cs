@@ -402,8 +402,9 @@ public sealed partial class CarrySystem
     /// <c>FUN_1405cb0a0</c> (<b>Verified</b>; a failed stealth knock-out's and a woken kidnap victim's): <paramref name="attacker"/> goes on
     /// <paramref name="victim"/>'s threats list (SensoryData <c>+0x50</c>, <see cref="AggroSystem.Threaten"/>: forced sense, the entry), its squad
     /// tags the attacker TEMP_ENEMY, and the victim's AI is updated at once (the immediate-update queue; Meitou: the think at the next tick, asked by
-    /// the replan bits). The entry stands until the victim's next look rebuilds the list: 32 Self preservation's desire reads it (1 within 40) and
-    /// its row 13 finds the attacker there (<see cref="CombatSystem.BestAttackerOf"/>). No faction test. Serial.
+    /// the replan bits). The push raises the immediate-threat flag at the victim's next think (32 Self preservation's desire 1 within 40) and is in
+    /// no list its chooser reads; row 13 (<see cref="CombatSystem.BestAttackerOf"/>) finds a failed knock-out's attacker on the victim's engaged
+    /// list, where the melee alert put it, and a kidnapper nowhere. No faction test. Serial.
     /// </summary>
     void Threaten(World world, int victim, int attacker)
     {

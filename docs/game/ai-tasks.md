@@ -1356,9 +1356,9 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   (`FUN_14099c3b0`, **Observed**): the protected one's attackers that it or the looker senses, within 150 of it (outdoors), are taken when either regards
   the other an enemy (slot 125) or the attacker's AI +0x2a4 equals the goal target's id (read as "it is attacking the protected one"),
   and never one the looker regards an ally (slot 126). On that reading relations do not matter (a neutral attacking an ally is fought), which agrees with
-  the owner's report that the original's guards fight skimmers. Candidates (`FUN_1405cb150`): the subject's attackers plus its own target while it fights;
-  only when that list is empty its threats. All passing ones go to `chooseBestAttackTarget` (`FUN_14059e300`, the target score): the best is taken
-  (**Verified**). Meitou: `CombatSystem.BestAttackerOf` picks each joiner's attacker (the sense tests left out; it reads the subject's threats list too); a player character's own 15 is in [Precedence](#precedence).
+  the owner's report that the original's guards fight skimmers. Candidates (`FUN_1405cb150`, **Verified**): the subject's engaged list, then its threats list, then its own target while
+  in combat mode, all appended; when that is empty the finder copies the same threats list again. All passing ones go to `chooseBestAttackTarget` (`FUN_14059e300`, the target score): the best is taken
+  (**Verified**). Meitou: `CombatSystem.BestAttackerOf` picks each joiner's attacker (the sense tests left out; the engaged list is the fighters whose target the subject is, then `AlertedAttackers`); a player character's own 15 is in [Precedence](#precedence).
   Once in the fight, the joiner re-targets by the fight's own lists and then any sensed enemy (the aggro mode that would stop that is 0 for every character, **Verified**: no code writes it), so
   no leash holds it near the one it protected. Gate guards (`Gate guard -no turrets`
   and those inheriting it) list 15, `Gate guard stay in town -no turrets` 288 (**Verified**, package dump).
@@ -1417,7 +1417,7 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   `Run away!`) and of the Slave lists of four police-station packages (0.001 for an NPC).
   Meitou: `SelfPreservation` (the two desires, the choice), `CombatSystem.ThreatLevel` (slot 17), goal 32 as `AiSystem.SelfPreservationGoal` (once per NPC mind, the list entries ignored), a priority-3
   goal of the chooser like the combat goals: its plan is `[35, 32]` when `SelfPreservation.Runs` (a crippled NPC, or one with no working arm), else `[13, 32]` when row 13 finds an attacker of its own
-  (`AiSystem.SelfDefencePick`: `CombatSystem.BestAttackerOf` with the NPC as subject and looker, its attackers and its own target at any distance; a turret gunner takes no shooter, engine), else none
+  (`AiSystem.SelfDefencePick`: `CombatSystem.BestAttackerOf` with the NPC as subject and looker, its engaged list, threats and own target at any distance; a turret gunner takes no shooter, engine), else none
   and the next goal is tried. The fight starts as a goal fight (`SendFights`, a defence, not in the aggro log) and is the AI's own: kept while 32 is chosen (a threat on its list beyond 181.7 keeps it at
   0.7, standing for list A `!159`, engine), left for a higher goal. 35 is acted out by
   `FleeSystem` (the squads' run: first run from the threats' centre, hops, `CharacterCold.Fleeing`): the AI asks (`AiMind.FleeRequest`), a fighter is stopped first. A lone runner stops when no threat attacks it

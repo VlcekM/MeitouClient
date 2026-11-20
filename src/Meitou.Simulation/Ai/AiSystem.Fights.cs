@@ -224,8 +224,8 @@ public sealed partial class AiSystem
 
     /// <summary>
     /// Row 13 Attacking attackers of under 32 Self preservation (<c>AI::findAttackerOf</c> on the character itself, <c>FUN_14099c3b0</c>,
-    /// <b>Verified</b>; <see cref="Combat.CombatSystem.BestAttackerOf"/> with the character as both subject and looker: its attackers and its own
-    /// target, at any distance, best by the target score): the attacker it fights, <see cref="CharacterId.None"/> when none, when it cannot fight
+    /// <b>Verified</b>; <see cref="Combat.CombatSystem.BestAttackerOf"/> with the character as both subject and looker: its engaged list, its threats
+    /// list and its own target, at any distance, best by the target score): the attacker it fights, <see cref="CharacterId.None"/> when none, when it cannot fight
     /// (no working fighter, crawling) or when deep water bars the fight (<see cref="SwimBarred(World, int, CharacterId)"/>). A turret's gunner
     /// takes no shooter (its turret row wants only a melee threat gone; <b>engine</b>, kept from the old answer). <paramref name="pending"/>: the
     /// fights the serial step started this tick. Reads only the last tick's state (any thread in the think).

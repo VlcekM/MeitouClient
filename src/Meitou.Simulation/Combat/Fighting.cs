@@ -752,6 +752,10 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem
         bool gettingUp = CharacterFacts.GettingUp(tc, world.Tick);
         if (melee)
         {
+            // The attacker goes on the target's engaged list (FUN_140666e20), where its row 13 and its fight's target choice find it. The shot
+            // handler pushes the shooter too and takes it off when it aims elsewhere (FUN_1404371f0), which the fighters whose target it is stand for.
+            combat.PushAlerted(world, t, a);
+
             // Under melee attack (Character +0x2b0) one staying low stands.
             if (tc.Medical is { } medical) medical.StayingLow = false;
             combat.UnderAttackGettingUp(world, t, tc, (ulong)(uint)a);

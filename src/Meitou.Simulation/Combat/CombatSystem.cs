@@ -89,6 +89,10 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     /// The tick whose slow world swapped the state arrays last.
     /// </summary>
     long _swappedTick = -1;
+    /// <summary>
+    /// The entries the alerts put on the engaged lists (<see cref="PushAlerted"/>).
+    /// </summary>
+    readonly AlertedAttackers _alerted = new();
 
     #region Configuration
 
@@ -319,6 +323,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         }
 
         hasher.Add(_log.Count);
+        _alerted.Hash(ref hasher);
         _projectiles.Hash(ref hasher);
         _turretManning.Hash(ref hasher);
         _modMoves?.Hash(ref hasher);

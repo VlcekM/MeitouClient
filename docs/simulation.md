@@ -418,9 +418,10 @@ phases, no source ever called from the think:
      player-faction looker, [precedence](game/ai-tasks.md#precedence)): the aggro looks' allies valued by their fight threat (`CombatSystem.FightThreat`), a defence on row 13 against
      `CombatSystem.BestAttackerOf`'s pick for the ally, acted out as an NPC's (`AskFight`). The chooser reaches it at the think turn or any replan, so a medic or worker on its job joins, one on an order does not.
      A character woken by a failed kidnap (`CarrySystem.Kidnap`) or targeted by a failed stealth knock-out (`CarrySystem.StealthKo`), of any faction, gets no fight pushed: the
-     attacker goes on its threats list (`CarrySystem.Threaten`, `AggroSystem.Threaten`: `FUN_1405cb0a0`), after the knock-out's melee alert (`RetaliationSystem.UnderMeleeAttack`),
-     and it thinks at the next tick, where 32 Self preservation (desire 1 within 40) finds the attacker on that list (`SelfDefencePick` → `CombatSystem.BestAttackerOf`) unless an
-     order runs first ([carry-loot](game/carry-loot.md#kidnapping), [combat](game/combat.md#stealth-knock-out)). A sleeper's kidnap also gives it order 116 with the clear flag
+     attacker is pushed on its threats list (`CarrySystem.Threaten`, `AggroSystem.Threaten`: `FUN_1405cb0a0`, `SenseBlock.Pushed`: the immediate-threat flag at the next think,
+     no chooser's list), after the knock-out's melee alert (`RetaliationSystem.UnderMeleeAttack`: the attacker on its engaged list, `AlertedAttackers`), and it thinks at the
+     next tick, where 32 Self preservation (desire 1 within 40) finds a knock-out's attacker on the engaged list (`SelfDefencePick` → `CombatSystem.BestAttackerOf`) and a
+     kidnapper nowhere, unless an order runs first ([carry-loot](game/carry-loot.md#kidnapping), [combat](game/combat.md#stealth-knock-out)). A sleeper's kidnap also gives it order 116 with the clear flag
      ([order queue](#order-queue)). An autonomous squad's urgent package goals: `SquadAutonomy.PackageGoals`
      ([autonomous player squads](#autonomous-player-squads)).
   5. Jobs: the job list in order (`IJobSource` contributors by type, `DecisionSystem.RegisterJob`; the original's keys N+8, N+7, ...): the jobs switch gates every type but 16, 31,
