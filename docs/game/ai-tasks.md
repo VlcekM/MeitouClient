@@ -470,7 +470,7 @@ shackles locked); 123 and 136 false; 16 `FUN_14059de10` (the target's immediate-
 | 65 | `isAnyMachineJammed` (`FUN_1405a2f00`, **Verified**): the 64 test over a hand list of the AI ; not wired in Meitou |
 | 66 | `haveSomeResourcesFrom` |
 | 67 | `haveSomeResourcesFor` |
-| 68 | `HAVE_SOME_LOOT_FROM` |
+| 68 | `HAVE_SOME_LOOT_FROM` (evaluator `FUN_140597530`, state 66's, **Verified** `FUN_140610250`: [state evaluators](buildings-production.md)) |
 | 69 | `isRouteTraceBlocked` |
 | 70 | `isObjectMine` |
 | 71 | `isBuildingDamaged` |

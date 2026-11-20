@@ -1193,7 +1193,7 @@ it with them. Meitou: `MachineData.Accepts` (AI) and `TakesByHand` (player).
   (pretend, row 221, which asks nothing of the machine) is what the NPC does.
 - **Task_EmptyMachine** (`FUN_14033cd10`, **Verified**): at the building, takes its output item types in order and moves units into the character's inventory while there is room
   (backpack included); a production building at status 1 goes to 2 after a take; ends when nothing is left.
-- **State evaluators** (**Observed**, read from the decompile, meanings of the virtual calls inferred): 66 `FUN_140597530` the character carries the machine's output item; 67 `FUN_1405a45f0` it carries an item the machine (an input) or storage accepts;
+- **State evaluators** (**Observed**, read from the decompile, meanings of the virtual calls inferred): 66 `FUN_140597530` the character carries the machine's output item (a building with no `StorageBuilding` cast: false; 68 has the same evaluator, **Verified** `FUN_140610250`); 67 `FUN_1405a45f0` it carries an item the machine (an input) or storage accepts;
   82 `FUN_14059bd80` inventory or worn backpack has room for the target's item (a machine: its output item); 105 `FUN_1405a2c40` machine output empty; 169 `FUN_1405975d0` input invalid
   (production type 6 flag). 89 `haveSomeResourcesFromThisMachineButWantThemGoneIfPossible` (`FUN_1405a2c90`, registered in `FUN_140610250`): for a target with a StorageBuilding cast
   whose type (`+0x440`) is 4 (ITEM), the character's vfunc `0x300` asked with the machine (it carries resources from it) and then its output item (vfunc `0x550`) passing the per-item storage

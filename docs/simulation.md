@@ -1467,7 +1467,8 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
   town's complete storage, else an unlocked container); 244 takes one item, not while a sensed ally fights (state 12). The player side's runs: [decision step](#decision-step).
 - **131 Looting food** (plan `[1, 284, 131]`, desire 1.0): the same finder, not a container of its own faction (engine reading of the own-shop skip); 284 takes up to 10 units of
   the first record the store lists (`Task_EmptyMachine` with flag 1, `FUN_14033cd10`, **Verified**: one unit per pass while the store holds the record and there is room; the
-  record is the first the store's inventory lists, food or not, **Verified** `FUN_140299990`). Engine reading: state 68 is food carried.
+  record is the first the store's inventory lists, food or not, **Verified** `FUN_140299990`). State 68 is state 66's evaluator (**Verified**,
+  `FUN_140610250`): the looter carries the store's output item, never for a container.
 - **184 Ditching loot** (desire 2.0, list A `!121`, plan `[1, 93, 184]`; `FUN_14059b040`, [rules](game/ai-tasks.md#arrest-and-prison-rows)): carrying an item stolen for it (state
   121: inventory or worn backpack; none for a lawless faction), the nearest storage (function 2 or 13) of its town within 6517 that takes one, where every stolen item that fits
   goes in. A member with a home town standing in a TOWN-type town reads the home town's storages, any owner; else the current town's, owned by its faction or the town's.

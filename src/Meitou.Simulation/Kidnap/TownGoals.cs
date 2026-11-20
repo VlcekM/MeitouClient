@@ -888,11 +888,11 @@ internal sealed class TownGoals(TownDutySystem owner)
         public float Find(World world, in DutyAsk ask, out PlanTarget target) => goals.FindStore(goals._loot, ask, out target);
 
         /// <summary>
-        /// At the store (1), loot taken (68: read as food carried, engine reading) and room (82) as of the look.
+        /// At the store (1), loot taken (68, <see cref="LootFrom"/>) and room (82) as of the look.
         /// </summary>
         public bool? State(World world, in DutyAsk ask, StateType state) => state switch
         {
-            StateType.HaveSomeLootFrom => world.Characters.Cold(ask.Slot) is { } cold && TownDutySystem.HoldsFood(cold),
+            StateType.HaveSomeLootFrom => LootFrom(world, ask),
             StateType.GotInventoryRoomForResources => PickOf(goals._loot, ask, p => p.Id)?.Room ?? true,
             _ => goals.StoreState(world, ask, state),
         };
@@ -902,6 +902,15 @@ internal sealed class TownGoals(TownDutySystem owner)
         /// </summary>
         public bool Start(World world, in DutyAsk ask, IReadOnlyList<PlanStep> plan) =>
             goals.Owner.StartStoreRun(world, ask, plan, TownDutyKind.LootFood, goals.StoreOf(goals._loot, ask));
+
+        /// <summary>
+        /// State 68 <c>HAVE_SOME_LOOT_FROM</c>: the evaluator of state 66 (<c>FUN_140597530</c>, the same function in the state table
+        /// <c>FUN_140610250</c>, <b>Verified</b>), the looter carries the store's output item
+        /// (<see cref="Production.ProductionSystem.CarriesOutputOf"/>); a container, with no storage cast, has none, so false.
+        /// </summary>
+        bool LootFrom(World world, in DutyAsk ask) =>
+            goals.StoreOf(goals._loot, ask) is { } store && world.Machines.Find(store.Id) is { } machine
+            && world.Characters.Cold(ask.Slot) is { } cold && Production.ProductionSystem.CarriesOutputOf(cold, machine);
 
         /// <summary>
         /// The member is no longer held.
