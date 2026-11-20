@@ -120,8 +120,8 @@ public sealed class FactionRelations
     }
 
     /// <summary>
-    /// Back to the FACTION records' start values: every relation, no war flag, every rank 0 (an imported game that does not take the save's
-    /// relations, docs/formats/save.md "Importing a game").
+    /// Back to the FACTION records' start values: every relation, no war flag, every rank and global trust 0 (a new game, and an imported game that
+    /// does not take the save's relations, docs/formats/save.md "Importing a game").
     /// </summary>
     public void Reset()
     {
@@ -129,6 +129,7 @@ public sealed class FactionRelations
         Defaults(Factions, _index, _relation, _coexist);
         Array.Clear(_war);
         Array.Clear(_rank);
+        Array.Clear(_trust);
         Changes = 0;
     }
 
