@@ -212,14 +212,13 @@ delivering, fetching and dismantling are steps of one act-out (`TaskStart.ActOut
   button, medic, robotics and splint jobs, NPC healing, Rest, pick up, kidnap, loot, open inventory, stealth KO and put down orders, the lifts and drops of errands and town duties, rescue
   (job, button, NPC leaders), kidnappers' and guards' lifts (`BeginPickUp`), foraging, NPC scavenging and arming, the operate, turret, haul and prospect orders, the production list jobs
   (87, 97, 124, 152, 234, the engineer 125) and implicit jobs (242, 153, 275), the build, repair, door repair and dismantle orders, the bed orders and job 106, the lock, shackle, cage,
-  door and force orders, the wardens' rounds, item pick-up and container walks, put in cage; the engine's starts: crime, arrest and dialogue fights (`AttackOrder.Source`: `Npc`, a kidnap
-  victim's `Reaction`; an NPC's attack on sight is its AI's goal fight, `Goal`), arrest and takeover walks and lifts (203, 205, 206), kidnappers' walks to the cage (112) and lifts (132, 168), captive jobs'
-  walks (the row of their task, `CaptiveSystem.RowOf`), town duties' walks, lifts and drops (the goal of their kind, `TownDutySystem.RowOf`), smell hunts (176), dialogue acts (run away
-  280, go home 19, summon 67, follow while talking 164, stalk 165, approach 126, a bought slave's way out 1), a trade's close (wander 24), flight (35, then wander 24), food on the ground
-  (259) and limbs (277), NPC arming walks (42), roaming and campaign leaders' walks (53, 215) and mills (24). Engine walks go through `TaskStart.Walk` (`TaskRequest.Goal`: as given, or
+  door and force orders, the wardens' rounds, item pick-up and container walks, put in cage; the engine's starts: crime fights and the arrest mates' and hunters' fights
+  (`AttackOrder.Source`: `Npc`; an NPC's attack on sight is its AI's goal fight, `Goal`), an engine arrest's walks and lifts (goal 204, slave catching), kidnappers' walks to the cage (112) and lifts (132, 168), captive jobs'
+  walks (the row of their task, `CaptiveSystem.RowOf`), town duties' walks, lifts and drops (the goal of their kind, `TownDutySystem.RowOf`), smell hunts (176), flight (35, then wander 24), food on the ground
+  (259) and limbs (277), NPC arming walks (42), roaming and campaign leaders' walks (53, 215) and mills (24); the engine's orders' act-outs start with `TaskSource.Order` ([order queue](#order-queue)). Engine walks go through `TaskStart.Walk` (`TaskRequest.Goal`: as given, or
   `Point` onto the floor, at `Mode`; one to a building shut to the walker is refused, `StartResult.Inaccessible`, as the original's plan walk:
   [locks](game/locks.md#doors)); engine standing tasks (idle, wander, a follow of the squad's leader) through `TaskStart.Become` (the movement's handler stops the character on it).
-  Sources: a package goal's act-out (town duties, captive jobs, kidnap, smell, food, population) `Goal`; an engine rule or dialogue act (arrest, flight, dialogue, trade) `Npc`.
+  Sources: a package goal's act-out (town duties, captive jobs, kidnap, smell, food, population) `Goal`; an engine rule (an engine arrest, flight, crime) `Npc`.
 - Not serial: the AI's think (parallel, its own slot) starts its goals' walks and standing tasks with `TaskStart.StartOwn`: the provenance (row: the goal's, source `Goal`) and the
   walk or stand are written on the slot only; no fight or task before it is ended and no handler runs (the AI acts out nothing for a fighting character, and its tasks hold nothing). Its repertoire
   is not tested (the AI's planner chose the row). It does nothing while the character's order holds it. Same timing as before at any thread count.
@@ -230,7 +229,7 @@ delivering, fetching and dismantling are steps of one act-out (`TaskStart.ActOut
   stand-down back to its routine (`AggroSystem`), a knock-out (`BodySystem`), a caged character held
   in place (`FixtureRegistry`).
 - Engine starts end the fight and the task before as any start does (a flight's run stops the fight at once, a dialogue act's walk ends it). An errand's own walks would end a fight
-  its character is in, so they wait for it: a town duty steps nothing while its member fights (a player character's food run ends instead), an approaching, following or stalking talker does not walk (engine choice; the
+  its character is in, so they wait for it: a town duty steps nothing while its member fights (a player character's food run ends instead; engine choice, the
   original's priority-3 reactions beat these goals).
 - Provenance is the only job mark: `PermaJobs.ListJob` is the production pick's list job (its index) or implicit job it runs (not a follow row's fight step), which the implicit jobs, an NPC's rescue rank test and the circle
   break read; a list edit moves any job provenance's index (one whose job left the list keeps running with index -1). The task an act-out goes back to is `RunningTask.Resume`, for the
