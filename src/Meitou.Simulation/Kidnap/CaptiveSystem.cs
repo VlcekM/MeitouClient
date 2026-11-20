@@ -978,29 +978,54 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         var town = AiSystem.StatusTownAt(data, world, at, cold.StatusTown);
         if (town.Site >= 0 && !world.Fixtures.IsRegistered(town.Site)) world.Fixtures.RegisterSite(world, data, town.Site);
 
+        var asker = world.Characters.IdOf(slot);
+        var goals = SquadGoals.Of(world);
         foreach (var f in world.Fixtures.All)
         {
             if (f.Kind != FixtureKind.Cage || !Data.World.WorldLayout.WithinOneZone(at.X, at.Z, f.Position.X, f.Position.Z)) continue;
             if (!town.IsNone && CageTown(world, f) != town) continue;
-            if (Liberable(world, cold, f)) return f;
+            if (Liberable(world, asker, cold, f, goals)) return f;
         }
 
         return null;
     }
 
     /// <summary>
-    /// Whether a liberator frees the cage's occupant (<c>FUN_1408db880</c>, <c>FUN_1408cf140</c>, <b>Observed</b>): a cage of a faction that is
-    /// neither the worker's nor allied to it (the relation test <c>FUN_1406b2630</c>), holding a live occupant that is not the worker's enemy and
-    /// that no other job works.
+    /// Whether a liberator frees the cage's occupant (<c>FUN_1408db880</c>, <c>FUN_1408cf140</c>, <b>Verified</b> by decompile): a cage whose
+    /// faction fails the relation test <c>FUN_1406b2630</c> (neither the worker's nor allied to it; a cage of no faction fails it too), not on
+    /// the worker's path-impossible list (<c>FUN_1405b0290</c>, its lost walks), holding a live occupant that is not the worker's enemy, that its
+    /// squad's long-term tags do not mark hated (<c>FUN_1405995d0</c>, & 0x2b0) and that no squad mate works (<c>FUN_1402690e0</c> on the squad's
+    /// own blackboard; another squad's liberator may head for the same captive).
     /// </summary>
-    bool Liberable(World world, CharacterCold cold, Fixture f)
+    bool Liberable(World world, CharacterId asker, CharacterCold cold, Fixture f, SquadGoals goals)
     {
         var table = world.Characters;
-        if (f.Owner < 0 || f.Owner == cold.Faction || Allied(cold.Faction, f.Owner) || Taken(f.Id)) return false;
-        if (OccupantSlot(world, f) is not (>= 0 and var s) || Busy(table.IdOf(s))) return false;
+        if (f.Owner >= 0 && (f.Owner == cold.Faction || Allied(cold.Faction, f.Owner))) return false;
+        if (cold.IsIgnored(new IgnoreKey(f.Id, default), world.Tick)) return false;
+        if (OccupantSlot(world, f) is not (>= 0 and var s)) return false;
 
-        return !(data.Relations.Contains(cold.Faction) && AggroSystem.IsEnemy(data.Relations, cold.Faction, table.Cold(s)!.Faction));
+        var occupant = table.IdOf(s);
+        if (data.Relations.Contains(cold.Faction) && AggroSystem.IsEnemy(data.Relations, cold.Faction, table.Cold(s)!.Faction)) return false;
+        if (Hates(world, cold, occupant)) return false;
+
+        return goals.Working(cold.SquadId, asker, GoalTarget.Of(occupant)) == 0;
     }
+
+    /// <summary>
+    /// Whether the squad's long-term tags on <paramref name="who"/> mark it hated (<c>FUN_1405995d0</c>: STOLE_FROM_ME, MY_CAPTOR,
+    /// DEFEATED_MY_SQUAD_ONCE or KILLED_MY_FRIEND).
+    /// </summary>
+    bool Hates(World world, CharacterCold cold, CharacterId who)
+    {
+        var memory = (_talk ??= world.SystemOf<Dialogue.DialogueSystem>())?.Memory.Find(world, cold.SquadId, who);
+        return (memory?.Long & Dialogue.MemoryTag.HateMask) is > 0;
+    }
+
+    /// <summary>
+    /// Whether a squad mate of the liberator works <paramref name="occupant"/> (276's start, as its finder's test).
+    /// </summary>
+    internal bool LiberateClaimed(World world, CharacterId asker, CharacterCold cold, CharacterId occupant) =>
+        SquadGoals.Of(world).Working(cold.SquadId, asker, GoalTarget.Of(occupant)) > 0;
 
     /// <summary>
     /// The town a cage's building belongs to (<c>FUN_1400f6c20</c>, <see cref="Construction.TownLookup.KeyOf"/>): a placed town's cage its town, a

@@ -733,7 +733,7 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
             ? New(ask, cold, CaptiveJobKind.Deliver, CharacterId.None, "", trip.Found.Site, target) : null,
         TaskType.GiveAllMySlavesTo or TaskType.GiveAllMySlavesToIfItsAnImportTown => SellJob(world, ask, cold, target),
         TaskType.SlaveGetInMyMastersCage => CageOnlyJob(world, ask, cold, target, CaptiveJobKind.CageSelf),
-        TaskType.LiberateAllThePrisoners => CagedJob(world, ask, cold, target, CaptiveJobKind.Liberate, claims: true),
+        TaskType.LiberateAllThePrisoners => LiberateJob(world, ask, cold, target),
         _ => null,
     };
 
@@ -773,6 +773,16 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
 
         if (claims && (captives.Taken(cage.Id) || captives.Busy(captive))) return null;
         return New(ask, cold, kind, captive, cage.Id, cage.Site, target);
+    }
+
+    /// <summary>
+    /// 276's job on a caged captive no squad mate of the liberator works (its finder's claim, <c>FUN_1402690e0</c> on the squad's own blackboard:
+    /// liberators of other squads and other goals' jobs on the captive do not count).
+    /// </summary>
+    CaptiveJob? LiberateJob(World world, in DutyAsk ask, CharacterCold cold, in PlanTarget target)
+    {
+        if (CagedJob(world, ask, cold, target, CaptiveJobKind.Liberate, claims: false) is not { } job) return null;
+        return captives.LiberateClaimed(world, ask.Id, cold, job.Captive) ? null : job;
     }
 
     /// <summary>
