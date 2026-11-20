@@ -267,6 +267,7 @@ internal sealed class LootGoals
         var body = target.Character ?? CharacterId.None;
         int item = body.IsNone ? ItemAt(picks, ask, target) ?? -1 : -1;
         if (body.IsNone && item < 0 || Worked(ask.Slot, body, item)) return false;
+        if (goal == TaskType.LootTheDead && TaggedLooted(world, ask.Slot, body)) return false;
 
         bool started = !body.IsNone ? StartLoot(world, ask.Slot, goal, body) : StartPickUp(world, ask.Slot, item, target.Position);
         if (!started) return false;
@@ -284,6 +285,14 @@ internal sealed class LootGoals
             if (step.Type == TaskType.Pickup && !step.Target.IsNone) return step.Target;
         return null;
     }
+
+    /// <summary>
+    /// Whether the looter's squad tagged <paramref name="body"/> <see cref="MemoryTag.Looted"/>: 177's finder skips such a body
+    /// (<see cref="CarrySystem.LootTarget"/>), so a pick made before a squad mate's loot tagged it is refused at the start.
+    /// </summary>
+    static bool TaggedLooted(World world, int slot, CharacterId body) =>
+        world.Characters.Cold(slot) is { SquadId: >= 0 } looter
+        && world.SystemOf<DialogueSystem>()?.Memory.HasShort(world, looter.SquadId, body, MemoryTag.Looted) == true;
 
     /// <summary>
     /// Whether another member's act-out works the body <paramref name="body"/> or the ground item <paramref name="item"/>.

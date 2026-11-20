@@ -1045,7 +1045,8 @@ not down; Trade on an own animal too) ends above the grid ([animals](game/animal
   [looting crime](game/carry-loot.md#33-npc-looting)), which its witnesses answer as any NPC culprit's ([crimes](#crimes-and-bounties)). A police-like looter (`CrimeSystem.IsPoliceLike`) confiscates instead: past 0.8 s one unit of each stolen item of the body's inventory (`CarrySystem.Confiscate`), tagging it only when there was none. Engine choices: nearest per pass, the tag never expires.
   The chosen goal's start loots the plan's body (row 177's loot task, a goal's task); a body another member's act-out works is refused, and the goal is done when the loot
   ends (`DutyGoals.Done`); a loot whose body no path reaches (`CarrySystem.LootWalkFails`), or a pick-up whose walk ended short of its item, is a lost walk
-  ([engine goals](#engine-goals)). At either end the member's finders look again at once, so the think after it never takes the body just tagged.
+  ([engine goals](#engine-goals)). At either end the member's finders look again at once, so the think after it never takes the body just tagged,
+  and a start on a body its squad tagged (a squad mate's pick from before the tag) is refused, as the finder skips it at the score.
 - **Unarmed NPCs** (`LootGoals`, the finder `CarrySystem.FindWeapon`, goal 42 "Don't be unarmed" with step 8 FIND_WEAPON, `AI::findWeapon`): an [engine goal](#engine-goals) too,
   desire 2.0, plan `[1, 3, 8, 42]` while the planner's state 4 (a weapon) fails, the finder on row 8; with a weapon the scorer drops it. On the same look an NPC without a
   weapon that weighs 42 keeps row 8's pick: the nearest free ground weapon within 100 (in a town only an unowned or enemy-owned one), else a dead body with a weapon,
@@ -1560,8 +1561,8 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   target (the job's while the goal holds the member: the original keeps the running goal's finder hand); the think reads only those picks and its own state; hashed
   while any. While the member is committed (`TierRungs.CommittedTo`) the look keeps only that goal and those of a tier above its priority, and of an obeyed
   master's Slave list all unless the commitment is above priority 2: committed mode scores no other goal (`FUN_140510ef0`, **Verified**; the urgent job pass
-  `FUN_14050e5b0` scores job 187's Slave goals before that return), so no other finder runs: 139's finder `FUN_1408d0d90` says event 10 to its occupant on a
-  fresh pick (**Verified**), which a seated eater committed to 43 never hears. Desires (**Verified**): 135 and 282 1 once the kill timer is due (read first, creating it); 173 and 245 1 while the platoon has at most 3 slaves
+  `FUN_14050e5b0` scores job 187's Slave goals before that return), so no other finder runs: on a fresh pick 139's finder `FUN_1408d0d90` has the occupant say
+  event 10 at the picker (**Verified**), which never happens for a seated eater committed to 43. Desires (**Verified**): 135 and 282 1 once the kill timer is due (read first, creating it); 173 and 245 1 while the platoon has at most 3 slaves
   neither down nor held in anything (slot 63, `FUN_14059b940`); 217 in an export town; 188, 192 and 194 0.25 x the platoon's slave list; 218 that only in a
   prison or slave camp the leader stands in (slot 66, `FUN_140597c70`); 167, 183 and 260 1 while carrying nothing at posture 0, once on the job while carrying nothing (slot 61, then 59); 168 the rescue desire;
   278 and 279 their own; the rest 1. Of the rows on the way, 3 is 0 while down and 170 while carrying. The finder's factor is 1 with a target.
