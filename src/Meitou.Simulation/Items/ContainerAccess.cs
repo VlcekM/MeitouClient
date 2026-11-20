@@ -60,7 +60,7 @@ public static class ContainerAccess
         foreach (var id in order.Characters.Count > 0 ? order.Characters : world.Player.Selection.ToArray())
         {
             if (!table.TryResolveNext(id, out int s)
-                    || table.Cold(s) is not { IsPlayer: true, Medical.Incapacitated: false, Inventory: not null, IsImprisoned: false } c
+                    || table.Cold(s) is not { Medical.Incapacitated: false, Inventory: not null, IsImprisoned: false } c
                             || !c.CarriedBy.IsNone
                 || !TaskStart.Eligible(world, c, row)) continue;
             float d = Vector2.Distance(Flat(table.Next[s].Position), Flat(fixture.Position));

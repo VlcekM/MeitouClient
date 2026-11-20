@@ -159,14 +159,15 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
 
     /// <summary>
     /// Collecting an item (row 3) or opening (26) or picking (76) a container: the item or container is still there (else the order leaves the
-    /// queue), and a character that is awake, not caged or carried and has an inventory takes it. A container's order is a player character's only
-    /// (else it leaves the queue): its act-out opens the player's container window (<see cref="ContainerAccess.StartContainer"/>).
+    /// queue), and a character that is awake, not caged or carried and has an inventory takes it. A container's order is anyone's: its act-out opens
+    /// the container window (<see cref="ContainerAccess.StartContainer"/>) for whoever runs it, as <c>Task_Loot_Order</c>'s start opens the
+    /// interface's loot window with no faction test (<c>FUN_140354dc0</c>, <b>Verified</b>).
     /// </summary>
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
         var c = world.Characters.Cold(slot)!;
         if (order.Detail is GroundPick pick ? world.GroundItems.Find(pick.Id) is null
-                : !c.IsPlayer || world.Fixtures.Find(order.Site!) is not { Contents: not null })
+                : world.Fixtures.Find(order.Site!) is not { Contents: not null })
             return OrderCheck.Gone;
         return c is { Medical.Incapacitated: false, Inventory: not null, IsImprisoned: false } && c.CarriedBy.IsNone ? OrderCheck.Run
                 : OrderCheck.Blocked();
