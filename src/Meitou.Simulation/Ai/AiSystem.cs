@@ -1025,7 +1025,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             AiBehaviour.ToTown => TownAt(world.Characters.Previous[self.Slot].Position) >= 0 ? 0 : 1,
             // 215 under a war package: AI slot 57, the constant 1 (FUN_140319a60, Verified); its list A ends it (the planner's 131).
             AiBehaviour.Travel when type == TaskType.TravelToTargetPackage && MissionFormation.Runs(board, PlatoonOf(world, squad)) => 1,
-            // To the package's mission town while not in it.
+            // 39 (AI slot 19), 53 and 130 (slot 57): the constant 1 and no finder (FUN_140319a60, Verified); their plans decide (states 32, 36, 94).
+            AiBehaviour.Travel when type != TaskType.TravelToTargetPackage => 1,
+            // 215 elsewhere: to the package's mission town while not in it.
             AiBehaviour.Travel => board.RefugeeTarget >= 0 ? 1
                 : board.Destination.IsNone || CurrentTown(world, world.Characters.Previous[self.Slot].Position) == board.Destination ? 0 : 1,
             // Only while an alarm of its town is in reach (the row's done state !ALARMS_IN_THE_VICINITY).
@@ -2043,6 +2045,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 // 19 Going home before the goal (43 Staying home and the like away from home): the walk home of the GoHome act-out.
                 behaviour = AiBehaviour.GoHome;
                 break;
+            case TaskType.TravelToTargetTown or TaskType.TravelToTargetTownFast:
+                // 53 / 130 Task_TravelToTargetTown before the goal (39's and 36's plans): the travel walk (TownTravel), until its list A holds.
+                behaviour = AiBehaviour.Travel;
+                break;
             case TaskType.EnterBuilding:
                 // 156 Task_EnterBuilding: the walk into its home building (the GoHome walk), done once inside.
                 behaviour = AiBehaviour.GoHome;
@@ -2280,7 +2286,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// A trip to the mission town's centre; 215 under a campaign's war package is the formation's walk (<see cref="ActFormation"/>).
+    /// The travel goals: a travel step (53, 130: 39's, 36's and the travel goals' own plans) is <see cref="TownTravel"/>'s walk; 39 in its town
+    /// stands; 215 under a campaign's war package is the formation's walk (<see cref="ActFormation"/>), elsewhere a trip to the mission town's
+    /// centre.
     /// </summary>
     void ActTravel(World world, int slot, AiMind mind, Blackboard board, TaskType type)
     {
@@ -2293,6 +2301,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (mind.Step is TaskType.TravelToTargetTown or TaskType.TravelToTargetTownFast)
         {
             Travel.Act(world, slot, mind, board, mind.Step);
+            return;
+        }
+
+        // 39 in its town: its plan is the row alone, which neither acts nor has an effect, so no task starts (FUN_14050d540) and it stands.
+        if (type == TaskType.WanderingTrader)
+        {
+            world.Characters.Cold(slot)!.PaceCap = null;
+            TownTravel.Leave(mind);
+            Become(world, slot, CharacterTask.Idle);
             return;
         }
 

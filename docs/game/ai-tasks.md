@@ -1467,6 +1467,10 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   for one with neither hand nor point, which 39, 192, 36, 53 and 130 all are. State 32 `hasDestinationTown` (`FUN_1405075d0`): the squad's town without the fallback is set
   (no row provides 32). So a squad with no override, campaign or running package has no 32, plans neither travel row and goes home by none; the fallback only lets 36 stroll
   round the home town while it stands in it. Meitou: `SquadTown.Reached`, `SquadTown.Of`.
+  39 Wandering trader (desire AI slot 19, 1.0, stub `LAB_1400215ee`; the factory's default `Task_Blank`; registered without the act flag, `+0x14` and `+0x15` set):
+  away from the squad's town its plan is `[53, 39]`; in it `[39]` alone, which can run and which the scorer keeps (`+0x14`), but it starts no task (`FUN_14050d540`)
+  and the plan ends at once, so a leader whose best goal is still 39 stands in the town. 36's plan `[130, 36]` turns to 36 when 130's list A holds. Meitou: the plan
+  steps 53 / 130 are `TownTravel`'s walk (`AiSystem.PlanStep`), 39 alone stands (`AiSystem.ActTravel`).
 - **The squad's town** (`FUN_140269cd0`, **Verified**): the override's (`+0x210`) mission town, set or not; else the campaign's target when a town (hand type 0xd) or nest
   (0x55); else the running package's (`+0x48`) mission town, set or not; only with no running package and the caller's flag the platoon's Ownerships home town (`+0x30`).
   What each class's start (vtable `+0x30`) leaves in the mission town: the base start `FUN_1402856c0` the home town when there is one (the base package,

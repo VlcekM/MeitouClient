@@ -2290,7 +2290,7 @@ the original computes in a function of its own counts as 1. A committed goal hol
 wandering in town walks to a general node of a public town building in the walker's zone
 (public: the residents' template's `public day`, else the level state's `is public day`, else public; drawn
 among those with a general node, engine choice), patrolling town from one random point round the town's centre to the next
-(`AiSystem.Patrol`, as `Task_PatrolTown`), shopping to a node of a
+(`AiSystem.Patrol`, as `Task_PatrolTown`; away from the squad's town its plan's 130 walks there first, `TownTravel`), shopping to a node of a
 public shop that sells what the character's shopping list wants, else (not in a town of the player's faction) to a random public building, the desire being 1 for a shop and 0.4 for another building (as the original's finders, [ai-tasks](game/ai-tasks.md#town-goals); no faction test), then buys from its stock one unit a second ([NPC purchases](game/economy.md#npc-purchases)), relaxing under a bar package, sitting around (275) and staying home (43; the home is the bar under a bar package) sit on a seat claimed per
 member on the package cadence, and the wanderer walks to the nearest town. A bar package (both kinds) reserves
 one table per squad as the original (`AiSystem.PickTable`: public bars tried from a random one, first table no

@@ -66,9 +66,9 @@ public enum AiBehaviour : byte
     /// </summary>
     ToTown = 13,
     /// <summary>
-    /// The leader walks (runs for the fast one) to the running package's mission town (<see cref="Blackboard.Destination"/>); wanted only while it
-    /// has one and is not in it (WANDERING_TRADER and the travelling rows, whose plan is <c>Task_TravelToTargetTown</c> to <c>atDestinationTown</c>,
-    /// docs/game/ai-tasks.md).
+    /// WANDERING_TRADER 39 and the travelling rows 53 and 130 (desire 1): their plan's <c>Task_TravelToTargetTown</c> step walks to the squad's town
+    /// (<see cref="TownTravel"/>) until <c>atDestinationTown</c> holds; 39 then stands. 215 Mission formation: the refugee's walk to its mission, a
+    /// war package's formation (docs/game/ai-tasks.md "Town goals").
     /// </summary>
     Travel = 14,
     /// <summary>
@@ -115,9 +115,9 @@ public enum AiBehaviour : byte
     /// </summary>
     Medic = 21,
     /// <summary>
-    /// PATROL_TOWN (36, <c>Task_PatrolTown</c>, docs/game/ai-tasks.md "Town goals"): walks to a random point round its town's centre, and draws the
-    /// next one each time a walk is over, so it keeps strolling about the town (its squad's mission town, else its home; an occupier: the player town
-    /// it holds).
+    /// PATROL_TOWN (36, <c>Task_PatrolTown</c>, docs/game/ai-tasks.md "Town goals"): away from the squad's town (<see cref="SquadTown"/>) its plan's
+    /// 130 walks there (<see cref="TownTravel"/>); in it, it walks to a random point round the town's centre and draws the next one each time a walk
+    /// is over, so it keeps strolling about the town.
     /// </summary>
     PatrolTown = 22,
     /// <summary>
@@ -215,8 +215,6 @@ public static class TaskBehaviours
         [TaskType.RunAwayHometown] = (AiBehaviour.GoHome, "Retreating fast"),
         [TaskType.WanderingTrader] = (AiBehaviour.Travel, "Wandering trader"),
         [TaskType.TravelToTargetTown] = (AiBehaviour.Travel, "Travelling"),
-        // To the running package's destination (Blackboard.Destination): the trader's next town; under the retreat packages that list it (signals 1
-        // and 25) the squad's home town (AiSystem.Captives.cs, engine reading).
         [TaskType.TravelToTargetTownFast] = (AiBehaviour.Travel, "Travelling quickly"),
         // Row 215: the refugee package's walk to its mission, the town or the squad it is to join; under a campaign's war package the formation's
         // walk to the package target (MissionFormation).
