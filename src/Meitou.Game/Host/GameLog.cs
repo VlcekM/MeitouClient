@@ -5,6 +5,8 @@ namespace Meitou.Game.Host;
 /// <summary>
 /// log.txt next to MeitouClient.exe: everything the game writes to its output and error, appended across runs. Past <see cref="Cap"/> the
 /// oldest lines are cut, down to <see cref="Keep"/>. Only one running game writes it; a second one started from the same folder logs nothing.
+/// Text is written with the player's user name hidden (<see cref="UserName"/>), and lines an older game wrote are hidden when it opens; a piece
+/// shorter than the home folder (a single character) is written as it is.
 /// </summary>
 sealed class GameLog : TextWriter
 {
@@ -87,6 +89,7 @@ sealed class GameLog : TextWriter
             string path = Path.Combine(AppContext.BaseDirectory, name);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var file = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read);
+            HideEarlier(file);
             file.Seek(0, SeekOrigin.End);
             var log = new GameLog(file);
             log.WriteLine($"==== {DateTime.Now:yyyy-MM-dd HH:mm:ss} meitou{Arguments(name)}");
@@ -104,6 +107,25 @@ sealed class GameLog : TextWriter
     /// </summary>
     static string Arguments(string name) => name == "log.txt" ? " " + string.Join(' ', Environment.GetCommandLineArgs().Skip(1)) : "";
 
+    /// <summary>
+    /// Rewrites the lines earlier runs left in <paramref name="file"/> with the user name hidden (<see cref="UserName"/>) when they hold it: a game
+    /// from before the logs hid it wrote it, and the file is kept across runs until it passes <see cref="Cap"/>.
+    /// </summary>
+    static void HideEarlier(FileStream file)
+    {
+        if (file.Length == 0) return;
+
+        string text;
+        using (var reader = new StreamReader(file, new UTF8Encoding(false), detectEncodingFromByteOrderMarks: false, leaveOpen: true))
+            text = reader.ReadToEnd();
+        string hidden = UserName.Hide(text);
+        if (ReferenceEquals(hidden, text)) return;
+
+        file.SetLength(0);
+        file.Write(new UTF8Encoding(false).GetBytes(hidden));
+    }
+
+    /// <inheritdoc/>
     public override void Write(char value)
     {
         lock (_gate)
@@ -113,17 +135,25 @@ sealed class GameLog : TextWriter
         }
     }
 
+    /// <inheritdoc/>
     public override void Write(string? value)
     {
         lock (_gate)
         {
-            _writer.Write(value);
+            _writer.Write(value is null ? null : UserName.Hide(value));
             Trim(value is { Length: > 0 } && value[^1] == '\n');
         }
     }
 
+    /// <inheritdoc/>
     public override void Write(char[] buffer, int index, int count)
     {
+        if (UserName.Shortest is > 0 and var shortest && count >= shortest)
+        {
+            Write(new string(buffer, index, count));
+            return;
+        }
+
         lock (_gate)
         {
             _writer.Write(buffer, index, count);
@@ -131,14 +161,18 @@ sealed class GameLog : TextWriter
         }
     }
 
+    /// <inheritdoc/>
     public override void WriteLine(string? value)
     {
         lock (_gate)
         {
-            _writer.WriteLine(value);
+            _writer.WriteLine(value is null ? null : UserName.Hide(value));
             Trim(true);
         }
     }
+
+    /// <inheritdoc/>
+    public override void Write(StringBuilder? value) => Write(value?.ToString());
 
     /// <summary>
     /// Wakes the flushing thread at a line's end, and past <see cref="Cap"/> keeps only the last <see cref="Keep"/> bytes from a whole line.

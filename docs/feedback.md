@@ -30,9 +30,10 @@ on by default), and the player's Discord name (64 chars, ticked by default). The
 panel, debug overlays and pointer; PNG (rows filtered), scaled to at most 2560 × 1440 and then by 0.75 until under 4.5 MB: GitHub's image proxy refuses images over 5 MB (**Verified** on a feedback issue: a 7.7 MB screenshot showed "Content length exceeded"; that 1440p frame is 5.6 MB filtered, 3.3 MB at 1080p), so the service links a picture over 5,000,000 bytes (from older games) instead of embedding it. The save is made only when Send is pressed (only
 in a game), into a temporary folder, zipped and deleted after; over 95 MB zipped it is refused before anything is sent. The logs ticked go as the
 service's one log attachment, gzipped: a single file as it is, several one after another, each after a `======== <file> ========` line
-(each is kept under 10 MiB, `GameLog`). In the sent copy the player's home folder
-(`Environment.SpecialFolder.UserProfile`) is written with its last part, the user name, as `<username>` (`C:\Users\<username>`, either slash, any
-case); the files on disk keep it. Opening the form also asks the service's `GET /latest` for the newest game versions (`LatestRelease.cs`, the answer reused for 15
+(each is kept under 10 MiB, `GameLog`). The logs are written with the player's home folder (`Environment.SpecialFolder.UserProfile`)
+shown with its last part, the user name, as `<username>` (`C:\Users\<username>`, either slash, any case; `UserName`), since players share the
+files by hand too; lines an older game wrote are rewritten so when the log opens, and the sent copy is hidden the same way.
+Opening the form also asks the service's `GET /latest` for the newest game versions (`LatestRelease.cs`, the answer reused for 15
 minutes; the service reads GitHub's releases at most every 10 minutes, so players never meet GitHub's rate limit); a nightly compares with
 the newest release of any kind, a release with the newest full release (SemVer, `CodeModVersion`). When a
 newer one is out, the form says so in red and Send first asks the player to update and check there ("Send anyway" sends); offline, rate-limited or
