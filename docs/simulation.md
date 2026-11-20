@@ -1367,8 +1367,8 @@ what it wore there going into its inventory (engine choice; `DialogueSystem.Chai
 - **Goal 254** "Find and kidnap (with cages) urgent" is an [engine goal](#engine-goals) (`KidnapGoals`), registered with its plan rows 132 and 68. A member weighs it when its
   role, slave or race list holds it in the hour (`AiSystem.WeighsGoal`: an AI squad's running package, a campaign platoon's phase package: the cannibal raid's assault and
   retreat; no race or faction list holds it); a platoon a code mod holds and a squadless character never kidnap.
-- **Desire** (**Verified**): 254 and 132 are 0 while the member carries or two squad mates do; 254 in its squad's home town is 0 while the mission town is set elsewhere
-  (**Observed** reading of the blackboard hand), else 1 with a free cage it may use (`HasCage`, the town candidates below) and 0 without; elsewhere 1. 68 is the lift desire
+- **Desire** (**Verified**): 254 and 132 are 0 while the member carries or two squad mates do; 254 in its squad's home town is 0 while its running package's mission town is set elsewhere
+  (`SquadTown.MissionTown`), else 1 with a free cage it may use (`HasCage`, the town candidates below) and 0 without; elsewhere 1. 68 is the lift desire
   (slot 59).
 - **Victim** (132's finder, the serial look every 15 ticks on the slot's turn; `IsVictim`): the nearest within sight (`RangeOf`, the rescue range) that is alive, down, of a carriable
   race, not carried, caged or in a bed, not an animal, nobody's pick-up, and not of the kidnapper's faction or an ally. Player characters included; so is anyone lying in a
@@ -1437,7 +1437,7 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
 - **Carried body: 112 / 281, 274 / 224, 106, 137**, weighed by the chooser with every other goal (a higher tier first: an urgent 112 or a 224 before 274). Their desires are read
   in the look for the body carried then.
   - **112** (a living body: list B `!99`) / **281** (any body), plan `[1, 108, goal]`: `CageDesire` (`FUN_1405a1140` with `FUN_1405a0f10`, **Verified**: 0.1 outside a town,
-    0 while the squad's mission town is another, 0 for an animal, 1.4 police with a bounty-free slave or escapee, 0 friendly, 0.5 dead, 2.0 alive) times the cage finder's 1.0
+    0 while the running package's mission town is another (`SquadTown.MissionTown`: a plain package's is the home town), 0 for an animal, 1.4 police with a bounty-free slave or escapee, 0 friendly, 0.5 dead, 2.0 alive) times the cage finder's 1.0
     with a free cage (`FUN_1408d0d30`: the best free cage of its town candidates, an occupier's occupied town included, not another errand's). At the cage it is locked up with
     the usual put-in sentence (108 `Task_PutInSomething` sets none without a bounty, [economy 11.5](game/economy.md#115-bail-and-sentence); not `Kidnapped`, **Verified**
     `FUN_140358670`), with the relation event and the bounty claim. A cage taken or walks that keep failing (the cage is marked unreachable for the faction) end the goal with

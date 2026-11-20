@@ -26,6 +26,13 @@ internal static class SquadTown
     }
 
     /// <summary>
+    /// The running package's mission town (the blackboard's current package <c>+0x48</c>, its hand <c>+0x8</c>), the hand the carried-body cage
+    /// desire tests (<c>FUN_1405a0f10</c>, <b>Verified</b>): none without a running package or with its hand unset.
+    /// </summary>
+    public static CampaignTown MissionTown(World world, Squad squad, Blackboard board) =>
+        board.Contract is null && board.Current is null ? CampaignTown.None : RunningTown(world, squad, board);
+
+    /// <summary>
     /// States 36 and 94 <c>atDestinationTown</c> (<c>FUN_140507610</c>, <b>Verified</b>): the squad's town with the home fallback is the character's
     /// status town (<see cref="CharacterCold.StatusTown"/>, worked out from where it stands for one that holds none, as the status pass does on
     /// entering a town); no town: false (the evaluator then asks AI slot 11, the reach test of the row's own target, and the rows that need these

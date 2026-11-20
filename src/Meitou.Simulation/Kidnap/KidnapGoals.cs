@@ -141,16 +141,16 @@ internal sealed class KidnapGoals(KidnapSystem kidnap, CarrySystem carry, Popula
 
     /// <summary>
     /// 254's desire factor of the town the member stands in (<c>FUN_1405a1280</c>, <b>Verified</b>): in its squad's home town the cage desire of an
-    /// empty target (<c>FUN_1405a0f10</c>: 0 while the blackboard's <c>+0x48</c> town is set and is not this town, read as the mission town as
-    /// <see cref="TownDutySystem.CageDesire"/> does, <b>Observed</b>; else 1.0) times the free-cage finder
-    /// (<c>FUN_1408d0d30</c>: 1.0 with a free cage it may use, <see cref="KidnapSystem.HasCage"/>, else 0); anywhere else 1.0.
+    /// empty target (<c>FUN_1405a0f10</c>: 0 while the running package's mission town is set and is not this town,
+    /// <see cref="TownDutySystem.OtherMissionTown"/>; else 1.0) times the free-cage finder (<c>FUN_1408d0d30</c>: 1.0 with a free cage it may use,
+    /// <see cref="KidnapSystem.HasCage"/>, else 0); anywhere else 1.0.
     /// </summary>
     float TownFactor(World world, int slot, CharacterCold cold, Blackboard board)
     {
         var at = world.Characters.Next[slot].Position;
         var here = AiSystem.TownAt(data, world, at);
         if (here.IsNone || here != board.HomeTown) return 1;
-        if (!board.Destination.IsNone && board.Destination != here) return 0;
+        if (TownDutySystem.OtherMissionTown(world, cold.SquadId, here)) return 0;
 
         return kidnap.HasCage(world, at, cold) ? 1 : 0;
     }
