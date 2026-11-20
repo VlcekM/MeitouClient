@@ -529,9 +529,10 @@ public sealed partial class ArrestSystem : IOrderOwner
     /// (<c>FUN_140680560</c>, <b>Verified</b>): <paramref name="carrier"/> drops the body it carries and <paramref name="guard"/> is ordered 213
     /// Lifting/Snatching on it, his queue cleared, then 112 Find and put in cage queued behind it, so he carries it to a free cage. The order check
     /// <c>FUN_1405d1940</c> refuses 213 to a guard whose left arm cannot carry ("I can't carry anyone with this arm."), and 112 is given all the same.
-    /// DA 40 gives the same orders: the caged body is enslaved only by the town's slavers' processing (183). False: no body.
+    /// DA 40 gives the same orders: the caged body is enslaved only by the town's slavers' processing (183). <paramref name="enslave"/> (code mods'
+    /// call, docs/modding.md; no dialogue action sets it) makes the caging enslave the body to the guard's faction. False: no body.
     /// </summary>
-    public bool TakeOver(World world, CharacterId guard, CharacterId carrier)
+    public bool TakeOver(World world, CharacterId guard, CharacterId carrier, bool enslave = false)
     {
         var table = world.Characters;
         if (Carry is null || !table.TryResolveNext(guard, out int g) || table.Cold(g) is not { } gc) return false;
@@ -545,7 +546,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         else
             world.Bark(guard, Loc.Tr("I can't carry anyone with this arm."));
 
-        PlayerOrders.Give(world, g, CageOrder(body), queued: true);
+        PlayerOrders.Give(world, g, CageOrder(body, enslave), queued: true);
         int bounty = table.Cold(t)!.Bounties?.BookedAmount(Crimes.Factions.Relations, gc.Faction) ?? 0;
         Note(world, ArrestEventKind.Arrest, guard, body, gc.Faction, bounty);
         return true;

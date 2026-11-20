@@ -155,6 +155,10 @@ public sealed class Arrest
     /// </summary>
     public string? Cage { get; set; }
     /// <summary>
+    /// A code mod's take-over with its enslave flag (<see cref="ArrestSystem.TakeOver"/>): the captive becomes the guard faction's slave when caged.
+    /// </summary>
+    public bool Enslave { get; init; }
+    /// <summary>
     /// The guard's order this arrest acts out (240 Capture Target, 213 Lifting/Snatching, 112 Find and put in cage). The record lives while that
     /// order is the guard's started front.
     /// </summary>
@@ -173,6 +177,7 @@ public sealed class Arrest
         h.Add(Tries);
         h.Add(Waited);
         h.Add(Cage is { } c ? Rng.StableHash(c) : 0UL);
+        if (Enslave) h.Add(0x536C6176);
         h.Add((int)Order.Row);
     }
 }
@@ -845,6 +850,11 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     #region Arrest orders
 
     /// <summary>
+    /// The detail of a 112 a code mod's <see cref="TakeOver"/> gives with its enslave flag: its caging makes the body the guard faction's slave.
+    /// </summary>
+    static readonly object Enslaving = new();
+
+    /// <summary>
     /// The town duties, whose cage errands reserve their cages (resolved on first use; null in a world without them).
     /// </summary>
     Kidnap.TownDutySystem? _townDuties;
@@ -882,9 +892,11 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     }
 
     /// <summary>
-    /// Order 112 Find and put in cage on <paramref name="body"/> (the body the guard carries stays carried through its start).
+    /// Order 112 Find and put in cage on <paramref name="body"/> (the body the guard carries stays carried through its start);
+    /// <paramref name="enslave"/>: a code mod's <see cref="TakeOver"/>.
     /// </summary>
-    OrderEntry CageOrder(CharacterId body) => new(TaskType.FindCageAndPutIn, this) { Target = body };
+    OrderEntry CageOrder(CharacterId body, bool enslave = false) =>
+        new(TaskType.FindCageAndPutIn, this) { Target = body, Detail = enslave ? Enslaving : null };
 
     /// <summary>
     /// The arrest orders' checks; 108 is the player's put in cage (<see cref="CanCage"/>). 240 and 213 need their target there and not caged (240
@@ -947,7 +959,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         bool capture = order.Row == TaskType.LiftPersonSnatchingAllowedInTownOnly;
         var arrest = new Arrest
         {
-            Guard = table.IdOf(slot), Target = order.Target, Faction = gc.Faction, Order = order,
+            Guard = table.IdOf(slot), Target = order.Target, Faction = gc.Faction, Order = order, Enslave = ReferenceEquals(order.Detail, Enslaving),
         };
         _arrests.Add(arrest);
         if (!table.TryResolveNext(order.Target, out int t)) return;
@@ -1280,7 +1292,8 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         Deeds?.Caged(world, g, t);
         Claim(world, g, a.Target, cage);
         tc.Recognition = 0;
-        if (tc.IsPlayer) world.Post(Loc.Tr("{1} has been imprisoned by {2}", tc.Name, Crimes.Factions.NameOf(a.Faction)));
+        if (a.Enslave) FixtureRegistry.Enslave(world, tc, a.Faction, table.Cold(g)?.SquadId ?? -1);
+        else if (tc.IsPlayer) world.Post(Loc.Tr("{1} has been imprisoned by {2}", tc.Name, Crimes.Factions.NameOf(a.Faction)));
         return End(world, a, ArrestEventKind.Jailed);
     }
 

@@ -1327,7 +1327,7 @@ one starts with the order's provenance. The chain's rows and states are in [AI t
   (re-locking is an engine choice); what the target wears in that slot goes into its inventory. No crime is booked. Prisoner Shackles take the boots slot.
 - **Slave state** (`CharacterCold.SlaveState` 0/1/2, `SlaveOwner`; facts: [carry-loot](game/carry-loot.md#unknowns) item 3): `DA_ENSLAVE_TARGETS_CARRIED_PERSON` (40) is the
   hand-over of DA 30 with no town test (`ArrestSystem.TakeOver`: orders 213 and 112, nothing else, **Verified** `FUN_140680560`); the caged captive is enslaved by the
-  town's slavers' processing (183), not by the caging. A slave's
+  town's slavers' processing (183), not by the caging. Only a code mod's `TakeOver(enslave: true)` enslaves at the caging. A slave's
   sentence is never served; getting out of the cage makes it an escaped slave (2, recently wanted 250); a release or bail frees it (0); an owned slave caged in another owner's cage
   changes owner, except in a police station ([locks](game/locks.md#cages-and-beds)). Dialogue conditions 59, 61, 62 and 64 read it. Saved as `slavestate` and `meitou slave owner` (`SlaveSave`). The slavers' own processing (182) of caged
   captives is [Captives](#captives). CHARACTER `slave` ("sets initial slave state"; **Verified**: fcs.def and the editor's `SlaveStateEnum` NOT_SLAVE 0, IS_SLAVE 1, ESCAPING_SLAVE 2, EX_SLAVE 3) is
