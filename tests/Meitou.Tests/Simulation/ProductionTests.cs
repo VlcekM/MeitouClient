@@ -29,7 +29,7 @@ public class ProductionTests
 {
     const string Water = "50-t", Crop = "51-t", Book = "52-t", Gadget = "53-t", Well = "60-t", Farm = "61-t", Bench = "62-t", Workshop = "63-t",
         Study = "70-t", Fuel = "54-t", Generator = "64-t", Battery = "65-t", Lamp = "66-t", BigLamp = "67-t", PoweredWorkshop = "68-t",
-        Tank = "69-t";
+        Tank = "69-t", Mill = "90-t", Bin = "91-t";
     /// <summary>
     /// The stat that gives skill factor 1: lerp(0.5, 1.4, x/100) = 1.
     /// </summary>
@@ -242,6 +242,27 @@ public class ProductionTests
     }
 
     /// <summary>
+    /// A refinery taking crops then water (10 of each, rate 1) and a 4 x 4 resource storage that keeps books, crops and water, its stacks x 10.
+    /// </summary>
+    static GameDatabase MillDatabase()
+    {
+        var db = Database();
+        var mill = Function("89-t", MachineData.RefineryFunction, 0);
+        mill.References["consumes"] = [new FcsReference(Crop, 10, 100, 0), new FcsReference(Water, 10, 100, 0)];
+        mill.References["produces"] = [new FcsReference(Gadget, 10, 0, 0)];
+        var bin = Building(Bin, "Test Bin", "88-t");
+        bin.Bools["has inventory"] = true;
+        bin.Ints["storage size width"] = 4;
+        bin.Ints["storage size height"] = 4;
+        bin.Floats["stackable bonus mult"] = 10;
+        bin.References["limit inventory"] = [new FcsReference(Book, 0, 0, 0), new FcsReference(Crop, 0, 0, 0), new FcsReference(Water, 0, 0, 0)];
+        var file = new FcsFile();
+        file.Records.AddRange([mill, Building(Mill, "Test Mill", "89-t"), bin]);
+        db.Apply(file, "mill.mod");
+        return db;
+    }
+
+    /// <summary>
     /// The record of the installed Wind Generator, by name; null when the data set has none.
     /// </summary>
     static string? WindGeneratorId(GameDatabase db) => db.OfType(FcsRecordType.Building).FirstOrDefault(r => r.Name == "Wind Generator")?.StringId;
@@ -449,6 +470,76 @@ public class ProductionTests
         Assert.Equal(made - wanted, machine.Output.Count);
         Assert.Equal(2, machine.Status);
         Assert.Equal(wanted, cold.Inventory!.All().Where(i => i.Record == Water).Sum(i => i.Quantity));
+    }
+
+    /// <summary>
+    /// An NPC worker's 92 at a producer whose output nothing in the town wants takes nothing (<c>Task_EmptyMachine</c> with flag 0,
+    /// <c>FUN_14033cd10</c>: its slot 5 count <c>FUN_140356db0</c> is 0 with the farm's water input full; cf736b2ac): the output stays, the worker
+    /// carries no water, and the task is over (its collect target cleared). Catches the take that emptied the whole output whatever the town
+    /// wanted.
+    /// </summary>
+    [Fact]
+    public void An_npc_worker_takes_nothing_from_an_output_nothing_in_the_town_wants()
+    {
+        using var rig = new Rig(Database(), Constants, [Farm]);
+        const int town = 7;
+        var building = new TownBuilding("well", Well, "Well", At, 0, false, false, []);
+        var stats = new CharacterStats();
+        stats[StatsEnumerated.Labouring] = Unit;
+        var squad = new Squad { Id = 1, TemplateId = "t", Faction = town };
+        var cold = new CharacterCold { Name = "miner", Race = Human, Stats = stats, Medical = MedicalState.Create(Human, 50),
+                Inventory = new Inventory(), Faction = town };
+        cold.Ai = new Meitou.Simulation.Ai.AiMind { Squad = squad, Behaviour = Meitou.Simulation.Ai.AiBehaviour.Work, WorkOperate = building,
+                WorkOwner = town };
+        rig.World.Characters.Spawn(new CharacterHot { Position = At + new Vector3(0, 0, 10), MaxSpeed = 40, WalkSpeed = 15,
+                Task = (byte)CharacterTask.Idle }, cold, 0);
+        rig.World.RunTicks(600);
+        var machine = rig.World.Machines.Find(ProductionSystem.TownWorkId(building))!;
+        int made = machine.Output!.Count;
+
+        Assert.True(made > 0);
+
+        var farmWater = rig.Machine(0).Inputs[0];
+        farmWater.Count = farmWater.Recipe.Capacity;
+        machine.Status = 1;
+        cold.Ai.WorkOperate = null;
+        cold.Ai.CollectFrom = building;
+        rig.World.RunTicks(2);
+
+        Assert.Null(cold.Ai.CollectFrom);
+        Assert.Equal(made, machine.Output.Count);
+        Assert.Equal(0, cold.Inventory!.All().Where(i => i.Record == Water).Sum(i => i.Quantity));
+    }
+
+    /// <summary>
+    /// The fill fetch (row 94's finder <c>FUN_14059d9b0</c>, 6f851ab42; docs/game/buildings-production.md "NPC town machines"): for a mill with
+    /// crops in its first input and its second empty, the finder walks the empty input first, so it fetches water. At the storage, which lists
+    /// books, crops and water in that order, the take (<c>Task_EmptyMachine</c> flag 0, <c>FUN_140356db0</c>) is the first record the town wants:
+    /// the crops the mill's first input has room for (7), not the water looked for and not the books nobody wants. Catches the finder that took the
+    /// inputs in list order and the take bounded to the looked-for record.
+    /// </summary>
+    [Fact]
+    public void A_fill_fetch_walks_the_empty_input_first_and_takes_the_storages_first_wanted_record()
+    {
+        using var rig = new Rig(MillDatabase(), Constants, [Mill, Bin]);
+        var worker = rig.Add(0, StatsEnumerated.Labouring, Unit);
+        rig.World.RunTick();
+        var (mill, bin) = (rig.Machine(0), rig.Machine(1).Storage!);
+        mill.Inputs[0].Count = 3;
+        foreach (string item in new[] { Book, Crop, Water }) Assert.True(bin.Add(rig.Items.Create(item, 20)!));
+        var cold = rig.World.Characters.Cold(worker.Slot)!;
+        var at = rig.World.Characters.Next[worker.Slot].Position;
+
+        Assert.Equal([Book, Crop, Water], bin.Items.Select(i => i.Record).Distinct());
+
+        var source = FillSources.Find(rig.World, null, mill, cold, at, []);
+
+        Assert.Equal((FillSourceKind.Storage, Water, rig.Sites[1]), (source?.Kind, source?.Record, source?.Store));
+
+        int taken = FillDemand.TakeStored(rig.World, null, cold, at, bin, rig.Sites[1], Bin, cold.Inventory!);
+
+        Assert.Equal(7, taken);
+        Assert.Equal((0, 7, 0), (rig.Count(worker, Book), rig.Count(worker, Crop), rig.Count(worker, Water)));
     }
 
     // ------------------------------------------------------------------ items and research costs

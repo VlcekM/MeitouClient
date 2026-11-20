@@ -376,6 +376,73 @@ public class KidnapTests
 
         Assert.Equal((0, -1), (loaded.SlaveState, loaded.SlaveOwner));
     }
+
+    /// <summary>
+    /// The house's first door has its leaf at the house's position, facing +Z; the second has none.
+    /// </summary>
+    sealed class HouseDoor : IDoorGate
+    {
+        public void SetDoorsBlocked(string buildingInstance, bool blocked) { }
+        public void ResetDoors() { }
+        public DoorSpot? DoorSpotOf(string buildingRecordId, int doorIndex) => doorIndex == 0 ? new(Vector3.Zero, Vector3.UnitZ, 15) : null;
+    }
+
+    /// <summary>
+    /// A lift walk stopped at a locked door fails as a walk does (a361e0a03; docs/game/locks.md "Doors": <c>MovementSystem.FailOwnWalk</c>, the plan
+    /// step taking any failed mover as a lost walk, <c>FUN_14050d970</c>): a raider of another faction than the house's, with no way through its
+    /// locked door (not its own, no bash in its own squad's town, no tools, a lock far above its skill), walks to lift a downed player character
+    /// beyond it; its 254 takes the walk as lost, so the victim is on its ignore map and nobody carries it. Catches the walker that only stood at the
+    /// door, its goal holding the lift.
+    /// </summary>
+    [Fact]
+    public void A_lift_walk_stopped_at_a_locked_door_is_a_lost_walk_for_its_goal()
+    {
+        var data = ArrestTests.Town([SyntheticTown.Rec("60-a", FcsRecordType.Faction, "raiders")]);
+        var carry = new CarrySystem(BaseGame, BodyOptions.Default, 1) { Relations = data.Relations };
+        using var population = new PopulationSystem(data);
+        var kidnap = new KidnapSystem(data, population, carry, new KidnapSettings { RecordLog = true });
+        var walk = new OpenGroundWalkability((_, _) => 150);
+        using var world = new SimWorld(new WorldSettings { Seed = 31, PublishSnapshots = false, MinPartitionSize = 1 }, walk,
+            [new PlayerSystem(), new AiSystem(data), new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), carry, kidnap,
+                    new TownDutySystem(data, population, carry), new LockSystem(BaseGame, BodyOptions.Default)]);
+        world.Fixtures.RegisterSite(world, data, 0);
+        world.Fixtures.Doors = new HouseDoor();
+        var door = world.Fixtures.Find("0.0:house#0")!;
+        door.Lock!.Level = 80;
+        world.Fixtures.SetLocked(door, true);
+        var leaf = world.Fixtures.DoorSpotOf(door)!.Value;
+        var house = new Vector2(leaf.Centre.X - Centre.X, leaf.Centre.Z - Centre.Z);
+
+        var board = new Blackboard([new(0, Kidnapping())]);
+        board.Update();
+        board.Town = 0;
+        var raiders = new Squad { Id = world.Squads.NextId(), TemplateId = "t", Faction = data.FactionIndex("60-a"), Town = 0, Ai = board,
+                HomeCentre = new Vector2(Centre.X, Centre.Z), HomeRadius = 500 };
+        world.Squads.Add(raiders);
+        var raider = new Combatant { Name = "raider" }.MakeCold();
+        raider.Faction = raiders.Faction;
+        var lifter = Add(world, raider, house - new Vector2(0, 60), raiders);
+
+        var players = new Squad { Id = world.Squads.NextId(), TemplateId = "p", Faction = data.Relations.PlayerFaction };
+        world.Squads.Add(players);
+        var hero = new Combatant { Name = "hero" }.MakeCold();
+        hero.Faction = data.Relations.PlayerFaction;
+        hero.IsPlayer = true;
+        var victim = Add(world, hero, house + new Vector2(0, 60), players);
+        hero.Medical!.KnockOut(100000);
+
+        bool walked = false;
+        for (int t = 0; t < 900 && !raider.IsIgnored(IgnoreKey.Of(victim), world.Tick); t++)
+        {
+            world.RunTick();
+            walked |= world.Characters.Next[lifter.Slot].Task == (byte)CharacterTask.PickUp;
+        }
+
+        Assert.True(walked);
+        Assert.True(raider.IsIgnored(IgnoreKey.Of(victim), world.Tick));
+        Assert.True(door.Lock.Locked);
+        Assert.True(hero.CarriedBy.IsNone);
+    }
 }
 
 /// <summary>
