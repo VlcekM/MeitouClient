@@ -1288,6 +1288,12 @@ public sealed class CharacterCold
     public Locks.DoorLockJob? DoorJob { get; set; }
 
     /// <summary>
+    /// The door (<see cref="Locks.Fixture.Id"/>) this character walks to open or close (72 / 73, <see cref="Locks.DoorOrder"/>; null: none), each its
+    /// own as the original's door tasks are. Hashed only while set; not saved (the order is).
+    /// </summary>
+    public string? DoorWalk { get; set; }
+
+    /// <summary>
     /// Game seconds since the last swing at <see cref="Bashing"/>' door (-1: walking there).
     /// </summary>
     public float BashTime { get; set; }
@@ -2205,6 +2211,12 @@ public sealed class CharacterTable
             hasher.Add(0x466F7263);
             hasher.Add(Rng.StableHash(force));
             hasher.Add((int)k.Force);
+        }
+
+        if (k.DoorWalk is { } doorWalk)
+        {
+            hasher.Add(0x446F6F57);
+            hasher.Add(Rng.StableHash(doorWalk));
         }
 
         if (k.DoorJob is { } doorJob)

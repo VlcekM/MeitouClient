@@ -342,15 +342,15 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   ground](#captives)). Each is given through `PlayerOrders.Give`.
 - The failure text is said only for a character of the player's faction that is not an animal (`PlayerOrders.Show`; the order step's vfunc `0x2d8` call in `FUN_140510920`,
   [precedence](game/ai-tasks.md#precedence)); anyone else's blocked order waits silently.
-- Owners that take a player character's order only (an NPC's leaves the queue, `Gone`), their act-outs being the player's: build, repair and dismantle (the sites, doors and
-  towns they take are the player faction's, and the start's "I don't have any building materials." is said for anyone) and a door walk (72, 73, 76 on a door:
-  the interface's one door target, `PlayerState.DoorTarget`). Moves, follows, attacks, the machine orders and prospecting (87, 97, 124, 146, 150: a bench counts for the research only
-  when the player owns it, the storages are the worker's faction's, `ProductionSystem.StoresFor`, and a prospect's result goes to the Prospecting window, as
-  `Task_Prospecting`'s does), first aid, splint and rest, the Medic, Robotics and Rescue buttons' one look (58 / 57 / 148 as plain orders: the
-  order giver `FUN_1405d20d0` tests the faction only on its permanent path, **Verified**), lifts, kidnap, loot, opening an inventory or a container (26, 76: the
-  window opens for whoever runs it, as `Task_Loot_Order`'s start `FUN_140354dc0` opens the interface's with no faction test, **Verified**), stealth KO, put down, beds, a ground pick-up (3), the rest of the lock work, put in cage (108) and the arrest orders
-  (240, 213, 112, 4), 133 and 35 take any character; their
-  act-outs post and say the worker's own messages for the player's side only.
+- Every owner takes any character's order (the order giver `FUN_1405d20d0` tests the faction only on its permanent path and the tasks none, **Verified**): moves,
+  follows, attacks, build, repair and dismantle (the site, door and town are the site's own; the materials the builder's faction's stores), the machine orders and
+  prospecting (87, 97, 124, 146, 150: a bench counts for the research only when the player owns it, the storages are the worker's faction's,
+  `ProductionSystem.StoresFor`, and a prospect's result goes to the Prospecting window, as `Task_Prospecting`'s does), first aid, splint and rest, the Medic, Robotics
+  and Rescue buttons' one look (58 / 57 / 148 as plain orders), lifts, kidnap, loot, opening an inventory or a container (26, 76: the window opens for whoever runs it,
+  as `Task_Loot_Order`'s start `FUN_140354dc0` opens the interface's with no faction test, **Verified**), a door walk (72, 73, 76 on a door: the walker's own
+  `CharacterCold.DoorWalk`), stealth KO, put down, beds, a ground pick-up (3), the rest of the lock work, put in cage (108), the arrest orders (240, 213, 112, 4), 133
+  and 35. Their act-outs post and say the worker's own messages for the player's side only. The interface's pickers take the characters a command names, else the
+  player's selection.
 - Saved for player characters (`Saving/OrderSave`, in the character's GAMESTATE_AI record next to the perma-jobs; format and evidence: [save](formats/save.md#order-queue)): the queue front first,
   started or not, body orders too, as the original saves its deque as `tjob<i>`; only the queue, so the second list and a loaded queue not put in it yet are not written. A load reads
   the orders into `CharacterCold.SavedOrders` and starts nothing; the look puts them in the second list (`OrderSave.Restore`, as the loader `FUN_1405092d0` adds each through

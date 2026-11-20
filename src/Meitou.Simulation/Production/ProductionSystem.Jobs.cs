@@ -37,7 +37,7 @@ public sealed partial class ProductionSystem
         var table = world.Characters;
         foreach (var id in Who(world, add.Characters))
         {
-            if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { IsPlayer: true } cold)
+            if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { } cold)
                 PermaJobs.Give(cold, add.Type, new PermaJob(add.Type, add.Site));
         }
     }
@@ -59,7 +59,7 @@ public sealed partial class ProductionSystem
         bool onCharacter = ordered is TaskType.Bodyguard or TaskType.StayCloseToTarget;
         foreach (var id in Who(world, add.Characters))
         {
-            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { IsPlayer: true } cold) continue;
+            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { } cold) continue;
             if (!onCharacter) PermaJobs.Give(cold, ordered, PermaJob.Untargeted(ordered));
             else if (id != add.Target && table.IsAlive(add.Target))
             {

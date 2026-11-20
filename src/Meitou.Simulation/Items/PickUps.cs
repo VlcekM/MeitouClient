@@ -139,7 +139,7 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
         foreach (var id in order.Characters.Count > 0 ? order.Characters : world.Player.Selection.ToArray())
         {
             if (!table.TryResolveNext(id, out int s)
-                    || table.Cold(s) is not { IsPlayer: true, Medical.Incapacitated: false, Inventory: not null, IsImprisoned: false } c
+                    || table.Cold(s) is not { Medical.Incapacitated: false, Inventory: not null, IsImprisoned: false } c
                             || !c.CarriedBy.IsNone
                 || !TaskStart.Eligible(world, c, Meitou.Data.Gameplay.Ai.TaskType.Pickup) || !MayPickUp(c, item.Item)) continue;
             float d = Vector2.Distance(Flat(table.Next[s].Position), Flat(item.Position));

@@ -299,14 +299,15 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
 
     /// <summary>
     /// The site orders: building 2 (a site of the player's that needs work), repairing 95 (a door of the player's that needs work) and demolishing 96
-    /// (a whole building of the player's that nothing blocks); else the order leaves the queue. A player character that can work
-    /// (<see cref="Able"/>), and for 2 has a working arm (state 38).
+    /// (a whole building of the player's that nothing blocks); else the order leaves the queue. Any character that can work (<see cref="Able"/>), and
+    /// for 2 has a working arm (state 38): the order and <c>Task_Build</c> test no owner or faction (docs/game/ui-input.md, <b>Verified</b>), the
+    /// site's town is its own and the materials come from the builder's faction's stores (<see cref="Source"/>).
     /// </summary>
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
         var cold = world.Characters.Cold(slot)!;
         var reg = world.Buildings;
-        if (!cold.IsPlayer || order.Site is not { } id) return OrderCheck.Gone;
+        if (order.Site is not { } id) return OrderCheck.Gone;
         switch (order.Row)
         {
             case TaskType.Repair:

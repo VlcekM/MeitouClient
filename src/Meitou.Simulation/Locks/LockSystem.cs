@@ -122,7 +122,7 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
         if (cage is null) return;
         foreach (var id in Who(world, pick.Characters))
         {
-            if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { IsPlayer: true, Medical.Incapacitated: false } c
+            if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { Medical.Incapacitated: false } c
                     || !c.CarriedBy.IsNone)
                 continue;
 
