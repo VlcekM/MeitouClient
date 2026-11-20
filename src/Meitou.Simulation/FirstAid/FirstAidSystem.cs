@@ -981,6 +981,19 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     }
 
     /// <summary>
+    /// A loaded 58 Medic entry's score in the second list (<c>FUN_14060fd80</c>, <b>Verified</b>): the row's desire (<see cref="AiSystem.MedicDesire"/>,
+    /// <c>FUN_140998410</c>) times its finder's value (<see cref="FindPatient"/>, <c>FUN_14099e240</c>) while the desire is above 0. The finder's
+    /// pick goes into a scratch hand the scorer drops: the entry keeps its saved patient.
+    /// </summary>
+    internal float MedicEntryScore(World world, int slot)
+    {
+        float desire = AiSystem.MedicDesire(world, slot);
+        if (desire <= 0) return desire;
+
+        return desire * FindPatient(world, slot, SquadGoals.Of(world), robotics: false).Score;
+    }
+
+    /// <summary>
     /// The Medic goal's finder result for the think (<see cref="AiMind.MedicPatient"/>, <see cref="AiMind.MedicScore"/>; none and 0 without a
     /// patient).
     /// </summary>

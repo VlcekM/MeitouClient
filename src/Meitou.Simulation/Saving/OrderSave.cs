@@ -184,11 +184,15 @@ public static class OrderSave
 
     /// <summary>
     /// The queue row of a saved order: the original's sleep order 258 is Meitou's 98; a container order an older Meitou wrote as row 3 on a site is 26
-    /// (kind 0, opening it), and one that only walked there (kind 1) is left out (<see cref="TaskType.None"/>).
+    /// (kind 0, opening it), and one that only walked there (kind 1) is left out (<see cref="TaskType.None"/>). The loader's add takes a row's job
+    /// remap (<c>FUN_1405086d0</c>, TaskData <c>+0xc</c>, <b>Verified</b>): 25 First aid loads as 58 Medic and 26 Loot on a character as 238 Foraging
+    /// animals, each on its saved target.
     /// </summary>
     static TaskType LoadedRow(SavedOrder o, bool onSite) => o.Row switch
     {
         TaskType.UseBedOrder => TaskType.UseBed,
+        TaskType.FirstAidOrder => TaskType.JobMedic,
+        TaskType.LootTarget when !onSite => TaskType.LootAnimalsJob,
         TaskType.Pickup when onSite => o.Kind == 0 ? TaskType.LootTarget : TaskType.None,
         _ => o.Row,
     };

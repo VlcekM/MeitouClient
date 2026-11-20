@@ -203,8 +203,9 @@ public sealed class OrderEntry(TaskType row, IOrderOwner owner)
     /// </summary>
     public bool RowRuns { get; internal set; }
     /// <summary>
-    /// A second-list entry whose task ended done, or whose start left nothing running (<b>engine</b>: the original keeps the entry, and a row with
-    /// no list A, a body order, would be picked again at once): it scores 0 until the list is cleared, even a row whose list A fails again.
+    /// A second-list entry of a row with no TaskData row (Meitou's own orders, 54 Rest: no finished test to ask) whose task ended done, or any entry
+    /// whose start left nothing running (engine choice): it scores 0 until the list is cleared. Every other entry is tested again at each look, as the original's scorer
+    /// does (<see cref="ListTests.OrderDone"/>), so one that turns unfinished again (a walk pushed off its spot) is picked again.
     /// </summary>
     public bool Spent { get; internal set; }
     /// <summary>
@@ -597,7 +598,7 @@ public static class PlayerOrders
     /// </summary>
     internal static void Ending(World world, int slot, TaskEnd reason)
     {
-        if (reason == TaskEnd.Done && RunningSecond(world, slot) is { } second) second.Spent = true;
+        if (reason == TaskEnd.Done && RunningSecond(world, slot) is { } second) MarkSpent(second);
         if (reason == TaskEnd.Replaced) return;
         var q = world.Characters.Cold(slot)!.OrderQueue;
         if (q.Front is not { } front || !Runs(world, slot, front)) return;
@@ -759,10 +760,19 @@ public static class PlayerOrders
         entry.RowRuns = ListTests.OrderNeedsFailNow(world, slot, entry) == false;
         entry.Owner.Start(world, slot, entry);
 
-        // A start that left nothing running (a get-up in a bed) is over, as such a front leaves the queue.
+        // A start that left nothing running (a get-up in a bed) is over, as such a front leaves the queue. Engine choice: it is spent whatever its
+        // row, as a body order (GetUp, Aoeu, StumbleTaskForced, GetOutOfBed) whose list A still holds would win every look and start nothing.
         if (Runs(world, slot, entry)) return;
         entry.Started = false;
         entry.Spent = true;
+    }
+
+    /// <summary>
+    /// Marks a second-list entry <see cref="OrderEntry.Spent"/> when its row has no finished test to ask again (no TaskData row).
+    /// </summary>
+    static void MarkSpent(OrderEntry entry)
+    {
+        if (TaskDataTable.Of(Saving.OrderSave.SavedRow(entry.Row)) is null) entry.Spent = true;
     }
 
     /// <summary>
@@ -778,14 +788,14 @@ public static class PlayerOrders
 
     /// <summary>
     /// The plan step on a running second-list entry, as on a running front (<see cref="Step"/>): its task ends when its row is done or its list B
-    /// fails, a move's walk going on; the entry stays in the list, spent. False when it goes on.
+    /// fails, a move's walk going on; the entry stays in the list, tested again at the next look. False when it goes on.
     /// </summary>
     internal static bool EndSecond(World world, int slot, OrderEntry entry)
     {
         bool ends = ListTests.OrderDone(world, slot, entry, true) || RowEnds(world, slot, entry);
         if (!ends) return false;
 
-        entry.Spent = true;
+        MarkSpent(entry);
         if (!entry.IsMove) TaskStart.End(world, slot, TaskEnd.Done);
         entry.Started = false;
         return true;

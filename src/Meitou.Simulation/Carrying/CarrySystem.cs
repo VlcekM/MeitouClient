@@ -524,6 +524,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                 // Opening an inventory opens the loot window (OpenWindow).
                 if (order.Detail == OpenInventory ? !Openable(table, target) : !CanBeLooted(tc)) return OrderCheck.Gone;
                 return cold is { Medical.Incapacitated: false, Inventory: not null } && cold.CarriedBy.IsNone ? OrderCheck.Run : OrderCheck.Blocked();
+            case TaskType.LootAnimalsJob:
+                if (!CanBeLooted(tc)) return OrderCheck.Gone;
+                return cold is { Medical.Incapacitated: false, Inventory: not null } && cold.CarriedBy.IsNone ? OrderCheck.Run : OrderCheck.Blocked();
             case TaskType.StealthKnockout:
                 if (!CanBeKnockedOut(tc)) return OrderCheck.Gone;
                 return CanRunKnockOut(cold) ? OrderCheck.Run : OrderCheck.Blocked();
@@ -561,6 +564,11 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             case TaskType.LootTarget:
                 if (world.Player.LootWalker == table.IdOf(slot)) world.Player.OpeningLoot = CharacterId.None;
                 Start(world, slot, CharacterTask.Loot, TaskType.LootTarget, TaskSource.Order, order.Target, CharacterTask.Idle);
+                break;
+            case TaskType.LootAnimalsJob:
+                // a loaded 26 on a character (OrderSave): the forage loot of its saved body
+                if (Start(world, slot, CharacterTask.Loot, TaskType.LootAnimalsJob, TaskSource.Order, order.Target, CharacterTask.Idle))
+                    cold.Foraging = true;
                 break;
             case TaskType.StealthKnockout:
                 Start(world, slot, CharacterTask.StealthKo, TaskType.StealthKnockout, TaskSource.Order, order.Target, CharacterTask.Idle);

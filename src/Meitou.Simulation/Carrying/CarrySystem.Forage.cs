@@ -123,6 +123,19 @@ public sealed partial class CarrySystem
     }
 
     /// <summary>
+    /// A loaded 238 Foraging animals entry's score in the second list (<c>FUN_14060fd80</c>, <b>Verified</b>): the row's desire (AI slot 62
+    /// <c>FUN_140597ae0</c>: 1 while the posture is 0, else 0) times its finder's value (<c>FUN_1408ce3a0</c>: 1.0 with a body found, else 0;
+    /// <see cref="FindForage"/>). The finder's pick goes into a scratch hand the scorer drops: the entry keeps its saved body.
+    /// </summary>
+    internal float ForageEntryScore(World world, int slot)
+    {
+        var cold = world.Characters.Cold(slot)!;
+        if (!CharacterFacts.PostureZero(cold)) return 0;
+
+        return cold.Inventory is not null && FindForage(world, slot, Looting(world.Characters)) >= 0 ? 1 : 0;
+    }
+
+    /// <summary>
     /// The bodies being looted now (by slot).
     /// </summary>
     internal static HashSet<int> Looting(CharacterTable table)

@@ -51,12 +51,12 @@ public sealed partial class World
         TaskType.LootTarget when onSite => SystemOf<PlayerSystem>()?.PickUps,
         TaskType.MoveCusOrdered or TaskType.StayCloseToTarget or TaskType.Bodyguard => SystemOf<MovementSystem>(),
         TaskType.LiftPersonPlayerOrder or TaskType.KidnapOrder or TaskType.LootTarget or TaskType.StealthKnockout or TaskType.PutDownObject
-            => SystemOf<Carrying.CarrySystem>(),
+            or TaskType.LootAnimalsJob => SystemOf<Carrying.CarrySystem>(),
         TaskType.FocusedMeleeAttack or TaskType.UnprovokedFocusedMeleeAttack or TaskType.MeleeAttack => SystemOf<Combat.CombatSystem>(),
         TaskType.Build or TaskType.Repair or TaskType.Dismantle => SystemOf<Construction.ConstructionSystem>(),
         TaskType.OperateMachinery or TaskType.OperateAutomaticMachinery or TaskType.OperateStorage or TaskType.UseTrainingDummy
             or TaskType.UseTurret or TaskType.Prospecting => SystemOf<Production.ProductionSystem>(),
-        TaskType.FirstAidOrder or TaskType.SplintOrder or TaskType.Rest => SystemOf<FirstAid.FirstAidSystem>(),
+        TaskType.FirstAidOrder or TaskType.SplintOrder or TaskType.Rest or TaskType.JobMedic => SystemOf<FirstAid.FirstAidSystem>(),
         TaskType.Pickup => SystemOf<PlayerSystem>()?.PickUps,
         TaskType.UseBed or TaskType.PutSomeoneInBed => SystemOf<Locks.BedSystem>(),
         TaskType.PutInCage or TaskType.LiftPersonSnatchingAllowed or TaskType.LiftPersonSnatchingAllowedInTownOnly or TaskType.FindCageAndPutIn
