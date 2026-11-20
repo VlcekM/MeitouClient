@@ -1117,8 +1117,9 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
     same goal again extends it. Row 153 registers 2, 8 and the commit flag (`FUN_140319a60`).
   - **Observed** (KenshiOracle state 0.5 hold, Rebirth, N = 1): 24 garrison sleepers on 153 (23 to 11) had no goal and no order from
     11:00 and lay on in bed to the hold's end at 11.6 h.
-  - Why they lie on (**Verified**, decompile): the plan step ends row 98's task at the hours' end; `Task_UseBed`'s end (slot 6 `FUN_140347ba0`)
-    resets the mover and clears status `+0xb4` but leaves `+0x2f8` (no call of the bed leave `FUN_14032e2f0` with 0; its callers are other paths).
+  - Why they lie on (**Verified**, decompile): the plan step ends row 98's task at the hours' end; none of `Task_UseBed`'s slots calls the bed
+    leave (`FUN_14032e2f0` with 0, called only from `FUN_1402a2860`, `FUN_1405ced90` and `FUN_1407ad6c0`), so `+0x2f8` stays 1 (its slot 6
+    `FUN_140347ba0` resets the mover and clears status `+0xb4`).
     A goal still committed stops the chooser at its tier, plans nothing and is cleared by the update; the next chooser with only 14 left takes
     the default 14 at key 1.0, whose list B (`!162 !157`) holds in a bed and whose row neither acts nor has an effect, so nothing needs `!83`
     and no Getting out of bed (116, 208, 257) is planned; then the mover reset (`FUN_14065fc70`), which writes only mover fields. So the sleeper
@@ -1365,8 +1366,9 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   resolves to a character whose AI-side object is set and byte +0x2b0 is set). Finder `FUN_14099d510` scores
   each squad mate (the platoon's active members, the looker included) that passes `FUN_140855960(sense, mate, 1)` (**Verified**: the looker itself; else a mate in its own sensed map that is seen or
   heard now; a mate missing from the map falls to a hand comparison; a far mate never counts) by its fight threat `FUN_14099a190` (below), the best capped at 1.2
-  (`DAT_1416852f0`); with none above 0 it falls back to the looker character's Ownerships list (`FUN_1407956a0(+0x2f8)`, types 1 and 0x5b) at 0.1 x the threat, sensed now, no state filter (**Verified**; Meitou `AiSystem.OwnedFallback`: the slaves of the squad, `SlaveMaster`). The desire is that value (slot 19 = 1 x the finder): a weak pull for one attacker, a strong
-  one for a gang. Achieved by 13 "Attacking attackers of" (list A `!16, !39, !12*`).
+  (`DAT_1416852f0`); with none above 0 it falls back to the looker character's Ownerships list (`FUN_1407956a0(+0x2f8)`, types 1 and 0x5b) at 0.1 x the threat, sensed now, no state filter (**Verified**; Meitou `AiSystem.OwnedFallback`: the slaves of the squad, `SlaveMaster`). The desire is not 1: the registration's stub `LAB_140021436` jumps to
+  `FUN_1403184a0`, AI vtable `+0x70` (slot 14 `FUN_140599b90`, 15's desire, **Verified** by disassembly), so the score is 15's sensed-ally value x this
+  finder's: a weak pull for one attacker, a strong one for a gang. Achieved by 13 "Attacking attackers of" (list A `!16, !39, !12*`).
 - The fight threat `FUN_14099a190` (**Verified**, disassembly; constants read from the exe), on the character's `CombatClassAI`: 0 when it is down (vfunc 0x30); 0.01 when exactly one attacker is
   on its engaged list (askers, at most 5) and that attacker's own list plus its refused-askers counter is above 1 (someone else fights it); else 0.25 n - 0.2 for n listed attackers (0 for none:
   1 gives 0.05, 2 0.30, 5 1.05), raised to 0.1 x its senses' threat sum towards it (AI +0xb0); then 0.01 when it is in a fight task and the value is 0 or less. So an ally counts while it is
