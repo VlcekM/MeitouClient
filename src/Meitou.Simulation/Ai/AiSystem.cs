@@ -1012,9 +1012,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         return behaviour switch
         {
             AiBehaviour.Follow => FollowFactor(world, squad, board, self, targeting, type),
-            // Sleeping on the ground has row 98's desire (AI slot 30): the registry gives rows 98, 153, 175, 239 and 261 the same desire
-            // (FUN_140319a60, Verified).
-            AiBehaviour.Sleep when type == TaskType.SleepOnFloor => SleepingDesire(world, board, self.Slot),
+            // Going to bed and sleeping on the ground have row 98's desire (AI slot 30): the registry gives rows 98, 153, 175, 239 and 261 the same
+            // desire (FUN_140319a60, Verified); 153's and 239's bed finder (FUN_1408cfe00) gives 1 with a bed, the gate above 0 without.
+            AiBehaviour.Sleep => SleepingDesire(world, board, self.Slot),
             AiBehaviour.GoHome => AtHomeTown(world, squad, board, self) ? 0 : GoHomeDesire(world, self),
             // Static guard's finder (FUN_14099edd0, Verified; 38 and 268 both register it, 268 with the indoors flag; 157 has its own, FUN_14099f1a0)
             // returns 0.5 on its normal exit; only its visitor branch (a node beside a neutral stranger, not modelled) returns 1. Staying home needs

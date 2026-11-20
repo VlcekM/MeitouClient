@@ -876,7 +876,7 @@ there (`FUN_14060f570` answers false), so for 180 Man the gate the byte changes 
   packs (`animal agressive patrol nocturnal`, whose Squad list holds Animal Sleep from its sleep add-on and Follow leader at the same weight) sleep with
   their sleeping leader, while members follow a patrolling one. Meitou: `AiSystem.FollowDesire` with `FollowMe` (each character's value stamped in the
   serial schedule step from its mind's goal, else the row of its running order, job or goal; `TaskDataTable.FollowMeWeight`) and
-  `AiSystem.SleepingDesire` for 175. `AiSystem.FollowFactor` checks the resolved mission target, slave owner or squad leader, as movement does;
+  `AiSystem.SleepingDesire` for 153, 239 and 175 (153 / 239 times their bed finder's 1, 0 without a bed). `AiSystem.FollowFactor` checks the resolved mission target, slave owner or squad leader, as movement does;
   leading its own squad does not prevent a slave from following its owner.
 - More desire stubs (**Verified**, the registration stubs' bytes in the 1.0.68 exe, `jmp` to an `AI` vtable slot): 184, 202, 219 and 41 share slot 47 `FUN_1406415d0`
   (2.0); 155 and 197 slot 31 `FUN_140795f80` (1 while the squad's house-locked flag `+0xe8` is clear); 283 slot 71 `FUN_1405998b0` (1 while the home building resolves and
