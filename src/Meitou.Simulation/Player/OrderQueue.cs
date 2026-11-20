@@ -381,8 +381,9 @@ public static class PlayerOrders
     /// The order's point becomes the centre of movement (<c>addOrder</c> <c>FUN_1405d20d0</c> -> <c>AI::setCenterOfMovement</c> <c>FUN_140599970</c>,
     /// <b>Verified</b>: on the queue path, not the permanent-job one, nor a body's front push): it writes <c>+0x2c0</c>, clears the centre target and
     /// makes the default task 31 / 30 on that point by the manoeuvre mode, 14 under ROAM_FAR (Meitou reads the row from the mode,
-    /// <see cref="CharacterCold.Manoeuvre"/>, and keeps no centre under ROAM_FAR, where nothing reads it). Engine reading: an order on a character
-    /// takes the character's position as its point.
+    /// <see cref="CharacterCold.Manoeuvre"/>, and keeps no centre under ROAM_FAR, where nothing reads it). Engine choice: an order on a character
+    /// with no point takes the character's position; the original writes the point as given, the world origin for the menu's Follow (<b>Observed</b>,
+    /// harness), which only STAY_CLOSE and HOLD_GROUND read, and in 1.0.68 only a mod sets either (every character starts and loads ROAM_FAR).
     /// </summary>
     static void SetCentre(World world, CharacterCold cold, OrderEntry order)
     {

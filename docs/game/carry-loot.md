@@ -465,7 +465,8 @@ What state 3 does elsewhere (**Observed**, the 64 callers of the getter `FUN_140
 test is `!= 0` / `> 0` (a police carrier's cage desire 1.4 `FUN_1405a0f10`, the refugee package `FUN_140288ed0`, slave processing `FUN_1408cd630`, prison hunger 1.15 `FUN_1405c9ca0`) and as
 neither slave nor escapee elsewhere. Its own branches: the looks-like-slave level is kept at least 0.01 (`FUN_1405a51e0`, [UI](ui-screens.md)); the status panel shows "Ex-slave"
 (`FUN_1405d4260`); a looker that recognises one while the status `+0x110` is above 0 fires event 40 ESCAPED_EX_SLAVE_SPOTTED (`FUN_140859680`) and then sees through it as through an escapee
-(`FUN_140856f00`, with the line test 40 in place of 36). Meitou does not model event 40 or that recognition.
+(`FUN_140856f00`, with the line test 40 in place of 36). Meitou fires event 40 from its sight pass (`SightCrimes.Slaves`); the see-through of an escaped or
+ex-slave (`FUN_140856f00`'s branch with m = 1 - looks-like-slave) is not modelled.
 
 Meitou: `FixtureRegistry.LayLow` runs from the crime sweep (engine choice) and also clears the owner on the first path. The stamp is `CharacterCold.SlaveSince`, and `SlaveSave` reads and writes `ssct`.
 
