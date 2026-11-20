@@ -1110,11 +1110,11 @@ public sealed partial class World : IDisposable
     public int DeferredCount => _deferred.Count;
 
     /// <summary>
-    /// The commands due this tick: the deferred ones due, then the host's.
+    /// The commands due this tick: the deferred ones due, then the host's, the order giver's skip applied to those (<see cref="Simulation.Player.OrderGiver"/>).
     /// </summary>
     IReadOnlyList<SimCommand> TakeDue()
     {
-        var external = Commands.TakeDue(Tick);
+        var external = Simulation.Player.OrderGiver.SkipGettingUp(this, Commands.TakeDue(Tick));
         if (_deferred.Count == 0) return external;
 
         var due = new List<SimCommand>(_deferred.Count + external.Count);

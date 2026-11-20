@@ -130,7 +130,7 @@ is the consent, as in RimWorld: the game loads every enabled code mod's code, wi
 - Worlds are built again for every new game and load, so systems are registered as factories and made per world.
 - `ModContext`: `Id`, `Name`, `Folder`, `Manifest`, the merged `Data` (`GameDatabase`), `Population` (`PopulationData`), `Log`/`LogError`,
   `RngPurpose`, `Harmony`, `Tick`, `Enqueue(SimCommand)` and the `PostSound` calls ("Sounds" below) for the running world (a command dropped
-  and logged before the first world),
+  and logged before the first world; a queued order is the player's, so it leaves out the player's characters getting up, `OrderGiver`),
   `Dependency<T>(id)` and `HasDependency(id)` for declared dependencies ([dependencies](modding-dependencies.md#using-a-dependency)).
 - `RngPurpose` is `StableHash(id) | 0x80000000` cast to `RngPurpose`, so it never equals a vanilla purpose.
 

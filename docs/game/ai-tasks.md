@@ -1311,7 +1311,7 @@ except where said.
 | Dialogue effects `FUN_140680560` | 16 calls, all permanent 0 and building 0 but DA 33's; details in [dialogue effects](dialogue.md#effects) | see there | DA 52: 67; 40, 30, 10: 213 then 112; 29: 240 then 112, else 4; 33: 67; 56: 29; 2: 102; 16: 164; 17: 165; 34: 280; 7: 19; 55: 248; 6, 57: 101 | 1, but 0 for each 112 and DA 56's 29 | 0 |
 
 Interface givers: `FUN_1407f9e20` gives every selected player-faction character that is not getting up (`+0x278`) the order, with Shift as the permanent flag and clear
-unless its sixth argument is set, and sets its `+0xec` ([staying low](ragdolls.md#staying-low)); `FUN_1407fae70` the nearest such character, clear; `FUN_1407fb410` the
+unless its sixth argument is set, and sets its `+0xec` ([staying low](ragdolls.md#staying-low)); `FUN_1407fae70` the nearest such character, clear (Meitou: `OrderGiver.SkipGettingUp` takes the player's characters getting up out of every interface order, dropping one left with nobody); `FUN_1407fb410` the
 quick right click on a character (26 Looting, 12 Talking on a standing NPC that talks); `FUN_1407f5a90` the Shift job giver ([perma-jobs](#perma-jobs)). **Verified**
 (disassembly): the held menu's verbs (`FUN_1407a7f10` → `FUN_1407fa650`) pass 0, so a verb whose row has no job kind clears the queue with or without Shift (12 Talk
 To among them: its registration in `FUN_140319a60` sets no `+4`). The building quick click `FUN_1407fc6e0` passes 0 to `FUN_1407fa650` for its slot-131 order, Build, Repair

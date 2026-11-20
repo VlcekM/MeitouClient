@@ -163,7 +163,7 @@ and keeps those leg ragdoll bits on; the character tick `FUN_1405d00b0` sets pos
   3/4 character whose AI can get up becomes 3 when `Character::isItSafeToGetUp` fails, else 1 when sneaking (`+0xd4`),
   else 0. `playerWantsMeToGetUp` (`+0xec`, set for each selected character by every player order, `FUN_1407f9e20`,
   cleared each tick) turns that into 0 (1 only from 3 while sneaking). The exe tooltip says the same: a sneaker who wakes
-  stays down and crawls. No other setter of 1 was found. Meitou (`PlayerState.Ordered`): every order command that names characters sets it, the job giver's orders (45, 0x111, 0xdf) excepted; the original loops over the whole selection (the flag is set before any order-specific code, `FUN_1407f9e20`:96), Meitou only over the recipients.
+  stays down and crawls. No other setter of 1 was found. **Verified** (`FUN_1407f9e20`): the giver sets it only on a selected player's character that is not getting up (`+0x278`, set by Task_GetUp's start `FUN_14033ca10`, cleared at its end), which gets no order either; so an order given during the get-up leaves a waker staying low. Meitou (`PlayerSystem.WantsToGetUp`): every order command that names characters sets it, the job giver's orders (45, 0x111, 0xdf) excepted, after `OrderGiver.SkipGettingUp` took the characters getting up (`GettingUpUntil`) out of the host's commands; the original loops over the whole selection (the flag is set before any order-specific code, `FUN_1407f9e20`:96), Meitou only over the recipients.
 - Standing (not WHOLE): crippled (vfunc 0x360) gives 2; otherwise 1 is kept, anything else becomes 0, and 1 becomes 0
   too while `_isLiterallyUnderMeleeAttackRightNowForSure` (`+0x2b0`). So the forced crawl ends a voluntary one.
 - Standing orders: run, jog, walk, group speed (0, 1, 2, 16) on a posture-1 uncrippled character set 0 instead (the speed arrows do not step while anyone selected is in posture 1, **Verified** `FUN_1407f3a20`, [ui-screens](ui-screens.md)); stealth
@@ -182,8 +182,7 @@ and keeps those leg ragdoll bits on; the character tick `FUN_1405d00b0` sets pos
 - The posture is not saved: neither the character writer (`FUN_1406280a0`) nor the medical writer (`FUN_14064ea50`) has a
   key for it; the health panel (`MedicalSystem::getMedicalGUIData`) shows "Staying low" for 1 and "Playing dead..." for 3.
 - Meitou: `MedicalState.StayingLow` (not saved), `MedicalState.Prone` (posture ≠ 0) read wherever posture ≠ 0 is; set on
-  waking in `CombatSystem.Act`, cleared by a leg down, a speed order, sneak off, Stand Up (`StandUpCommand`, `CharacterCold.StandingUp`: `squat T` backwards, see below), the melee alert (`Fighting`, `AI::underMeleeAttack`), a caught thief's watcher (`CrimeSystem.Steal`) and a
-  player order to a selected character still getting up (`PlayerSystem.WantsToGetUp`, the orders that name characters).
+  waking in `CombatSystem.Act`, cleared by a leg down, a speed order, sneak off, Stand Up (`StandUpCommand`, `CharacterCold.StandingUp`: `squat T` backwards, see below), the melee alert (`Fighting`, `AI::underMeleeAttack`) and a caught thief's watcher (`CrimeSystem.Steal`).
 
 ### Playing dead
 
