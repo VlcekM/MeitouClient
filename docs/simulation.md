@@ -714,7 +714,8 @@ the player has one and stands in it; requests (victory/loss chains, ally help) c
 - **Save**: WAR_SAVESTATE read and written with the original's keys (unknown keys kept; numbered keys past the new counts removed); a
   characterless campaign stand-in is written as a PLATOON with content file `platoon/` so `p<i>` resolves; a loaded campaign platoon travels.
   The phase, fight, arrival, announcement and carry clocks are Meitou keys ([WAR_SAVESTATE](formats/save.md#war_savestate-type-9-faction-campaigns)), so
-  a loaded campaign goes on where it was (the original restarts its phase); the trail is laid again, the announcer is not kept.
+  a loaded campaign goes on where it was; Fixes option **Raids keep their progress** (on by default) off ignores them on load and the clocks
+  restart as the original's do (the keys are still written); the trail is laid again, the announcer is not kept.
 - **Observed** (headless, real data, `raidFrequencyMult` 1000): Dust Bandits "Invasion with demands" against an outpost 1500 from Dust King
   Tower gathers 1 squad of 12 for 10 men, arrives after 0.28 h, survives a save and load in phase 1 (campaign, id, phase, squads), wins at 4 h,
   is removed 3 h later and queues its follow-up. The 9 owner saves' 103 war states each come out with the same keys and values.

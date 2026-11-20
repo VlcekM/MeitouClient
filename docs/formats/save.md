@@ -901,8 +901,14 @@ world writes its war managers over the loaded state (unknown keys kept, numbered
 faction the save has none for (an imported save has none: the import drops them). **Observed** (headless `probe wars`, #952's imported save):
 without that, a running Bandit Demands raid was gone after a save and load and its squad came back as a plain roaming one. Meitou also writes floats
 `meitou phase start c<i>`, `meitou fight start c<i>`, `meitou arrived c<i>`, `meitou announced c<i>` (absolute game hours; absent:
-not started) and, per campaign platoon, `meitou carry start p<i>` (beside `p<i>`; a cannibal assault's carrier stamp), and reads them back (a missing phase start is the load's hour, as the original; the
-older campaign-wide `meitou carry start c<i>` is read onto each platoon and dropped on the next write). **Observed** (headless, real data): the four campaign floats come back equal.
+not started) and, per campaign platoon, `meitou carry start p<i>` (beside `p<i>`; a cannibal assault's carrier stamp), always, and reads them back
+while the Fixes option **Raids keep their progress** (`PopulationSettings.KeepCampaignClocks`, on by default, read at load) is on (the older
+campaign-wide `meitou carry start c<i>` is read onto each platoon and dropped on the next write). A missing key, or every key with the option off, is
+the original's clock after a load: the phase starts at the load's hour, the fight clock is not started (**Verified**, decompile: the campaign load
+`FUN_1409c5b80` sets both the phase start `+0x18` and the fight clock `+0x20` to the current time, and `FUN_1409c70f0` reads the two equal as no
+fight yet); the arrival and announcement hours (Meitou's own, read by nothing but the state hash) and the carry stamps are not started, as a
+new campaign's (**Observed**, decompile: the load reads no other clock, and the original's carry stamp lives in the assault package, which it
+saves nothing of). **Observed** (headless, real data): the four campaign floats come back equal.
 
 Campaign platoons the game has not made yet: the original's saver (`FUN_140372ef0`) writes a platoon that was never active with no file (content
 file `platoon/`), `never been activated` and its size as `char count`, and every platoon its faction's war manager holds with bool `campaign` true; its

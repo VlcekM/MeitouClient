@@ -1044,6 +1044,12 @@ public sealed class PopulationSettings
     public bool CampaignAncestorsOnce { get; init; } = true;
 
     /// <summary>
+    /// Fixes option: a loaded campaign takes its phase, fight, arrival, announcement and carry clocks from Meitou's WAR_SAVESTATE keys. Off: they are
+    /// ignored and each clock starts as the original's after a load (the phase at the load's hour, the rest not started); they are written either way.
+    /// </summary>
+    public bool KeepCampaignClocks { get; init; } = true;
+
+    /// <summary>
     /// Meitou: a wild site keeps its squads' characters while it is unloaded and makes the same ones again. Faithful: they are dropped (and a save's
     /// wild platoon despawned on leaving), as the original.
     /// </summary>

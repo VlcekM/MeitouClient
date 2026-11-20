@@ -729,6 +729,7 @@ sealed class GameSaves(GameHost host)
                 OffscreenFights = host.Config.OffscreenFights,
                 OffscreenHealing = host.Config.OffscreenHealing,
                 CampaignAncestorsOnce = host.Config.CampaignAncestorsOnce,
+                KeepCampaignClocks = host.Config.FixRaidClocks,
                 KeepWild = host.Config.KeepWild,
                 ResidentSchedule = host.Config.ResidentSchedule,
                 OffscreenOverrides = host.Config.OffscreenOverrides,

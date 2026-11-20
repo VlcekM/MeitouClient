@@ -91,7 +91,8 @@ public sealed class CampaignInstance
     /// </summary>
     public int Phase { get; set; }
     /// <summary>
-    /// The game hour the phase began (not saved: the phase starts again at load, as the original).
+    /// The game hour the phase began (saved by Meitou only; the original starts the phase again at load, as Meitou does with
+    /// <see cref="PopulationSettings.KeepCampaignClocks"/> off).
     /// </summary>
     public double PhaseStart { get; set; }
     /// <summary>
@@ -140,7 +141,7 @@ public sealed class CampaignInstance
     /// </summary>
     public double AnnouncedAt { get; set; } = -1;
     /// <summary>
-    /// The game hour its leader reached the target (-1: not yet). Not saved.
+    /// The game hour its leader reached the target (-1: not yet). Saved by Meitou only.
     /// </summary>
     public double ArrivedAt { get; set; } = -1;
     /// <summary>
