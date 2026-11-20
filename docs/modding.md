@@ -972,12 +972,16 @@ holds refuses the second mod.
     and the fault enters the state hash.
 - **Ordering characters** (`Meitou.Simulation`, [order queue](simulation.md#order-queue); **Observed**, by reading `World.GiveOrder` and
   `PlayerOrders.Give`): `world.GiveOrder(actor, row, target, site, point, queued)` gives a player character or an NPC an order through the one
-  queue the player's orders use, with the parts the menu's verbs give (`TaskType.MoveCusOrdered` to `point` is a walk). The row is one a system
-  owns as an order (the rows `World.CanOrder` answers for; a mod's own row is not one). Without `queued` it replaces the queue. Serial phases
-  only (it throws in a parallel one). It answers the front's `OrderCheck`: `Run`, `Blocked` (with the text the player's order would show),
-  `Gone` (the actor is not in the world, or no system owns the row: nothing queued). An NPC's front starts only while its chooser runs, else it
-  waits queued; its start ends a goal holding the character (`ModGoalEnd.Order`), and the chooser takes the character back once the queue is
-  empty. `CanOrder` asks the same without giving.
+  queue the player's orders use, with the parts the menu's verbs give. The row is one a system owns as an order (the rows `World.CanOrder`
+  answers for; a mod's own row is not one). `TaskType.MoveCusOrdered` to `point` is the player's move command for that one character (a
+  prisoner's waits queued in its cage, a sleeper gets up, a follow order ends, an animal a building keeps out goes past its first door); any
+  other row is given as a saved order of that row is loaded, with its owner's detail (an attack is the player's pick, a lock order a walk to its
+  row's work) and readying (`IOrderOwner.LoadDetail`, `Restored`). Without `queued` it replaces the queue. Serial phases only (it throws in a
+  parallel one). It answers the check of the order's start when it is the only order queued and the character takes orders now: `Run`,
+  `Blocked` (with the text the player's order would show) or `Gone` (it left the queue); else `Run` (queued). `Gone` too for an actor not in the
+  world or a row no system owns (nothing queued). An NPC's front starts only while its chooser runs (it has a squad and is not carried, out
+  cold or dead), else it waits queued; its start ends a goal holding the character (`ModGoalEnd.Order`), and the chooser takes the character
+  back once the queue is empty. `CanOrder` asks the same without giving.
 - **Moving from the old hooks** (the hooks are gone; a mod built on them gets the notice under [Versioning](#versioning)):
   - `IDecisionOwner` with `DecisionSystem.Register(source)`: a chooser goal (`ChooserRegistry.Goal`) or an order (`World.GiveOrder`);
     `DecisionSystem.RegisterJob(type, source)`: `ChooserRegistry.Jobs(type, source)`.

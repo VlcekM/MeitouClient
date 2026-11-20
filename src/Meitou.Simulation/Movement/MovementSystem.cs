@@ -438,33 +438,47 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         foreach (var id in who)
         {
             if (!table.TryResolveNext(id, out int found)) continue;
-
-            if (!TaskStart.Eligible(world, table.Cold(found)!, TaskType.MoveCusOrdered))
-            {
-                // A prisoner stays in its cage (row 29 is not registered for the imprisoned or chained): the order waits in its queue.
-                PlayerOrders.Give(world, found, new OrderEntry(TaskType.MoveCusOrdered, this) { Point = order.Target, TaskPoint = order.Target },
-                        order.Queued);
-                continue;
-            }
-
-            if (table.Cold(found)!.InSomething == Locks.HeldState.Bed)
-                world.Fixtures.LeaveBed(world, id);   // an order gets a sleeper up
-
-            slots.Add(found);
+            if (WaitsInCage(world, found, order.Target, order.Queued) is null) slots.Add(found);
         }
 
         var points = MovePoints(world, slots, order.Target);
 
-        for (int k = 0; k < slots.Count; k++)
-        {
-            int slot = slots[k];
-            table.Cold(slot)!.FollowOrder = CharacterId.None;
-
-            // Shift + right click: after the order in hand.
-            var entry = new OrderEntry(TaskType.MoveCusOrdered, this) { Point = points[k], TaskPoint = points[k] };
-            PlayerOrders.Give(world, slot, entry, order.Queued);
-        }
+        for (int k = 0; k < slots.Count; k++) GiveMoveTo(world, slots[k], points[k], order.Queued);
     }
+
+    /// <summary>
+    /// One character's move order to <paramref name="target"/> as <see cref="MoveOrder"/> gives it (<see cref="World.GiveOrder"/>): queued in its
+    /// cage, or out of its bed and on to its point; the check <see cref="PlayerOrders.Give"/> answers.
+    /// </summary>
+    internal OrderCheck GiveMove(World world, int slot, Vector3 target, bool queued) =>
+        WaitsInCage(world, slot, target, queued) ?? GiveMoveTo(world, slot, MovePoints(world, [slot], target)[0], queued);
+
+    /// <summary>
+    /// A prisoner stays in its cage (row 29 is not registered for the imprisoned or chained): the order waits in its queue, and its check is
+    /// returned. Null for any other character, which gets out of its bed first (an order gets a sleeper up).
+    /// </summary>
+    OrderCheck? WaitsInCage(World world, int slot, Vector3 target, bool queued)
+    {
+        var cold = world.Characters.Cold(slot)!;
+        if (!TaskStart.Eligible(world, cold, TaskType.MoveCusOrdered)) return PlayerOrders.Give(world, slot, MoveEntry(target), queued);
+
+        if (cold.InSomething == Locks.HeldState.Bed) world.Fixtures.LeaveBed(world, world.Characters.IdOf(slot));
+        return null;
+    }
+
+    /// <summary>
+    /// The move to <paramref name="point"/> (shift + right click: after the order in hand); the character follows no one from then.
+    /// </summary>
+    OrderCheck GiveMoveTo(World world, int slot, Vector3 point, bool queued)
+    {
+        world.Characters.Cold(slot)!.FollowOrder = CharacterId.None;
+        return PlayerOrders.Give(world, slot, MoveEntry(point), queued);
+    }
+
+    /// <summary>
+    /// A move order's entry: the point is both its goal and its task point.
+    /// </summary>
+    OrderEntry MoveEntry(Vector3 point) => new(TaskType.MoveCusOrdered, this) { Point = point, TaskPoint = point };
 
     /// <summary>
     /// The characters' points of a move order (order 0x1d in <c>FUN_1407f9e20</c>, <b>Verified</b>): an animal that the building the order is on

@@ -41,12 +41,6 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
     internal static bool OwnsRow(TaskType row) => row != TaskType.None && Array.IndexOf(Rows, row) >= 0;
 
     /// <summary>
-    /// The detail a lock order carries when a walk to its work starts it
-    /// (<see cref="World.CanOrder(TaskType, CharacterId, CharacterId, string?, System.Numerics.Vector3)"/>).
-    /// </summary>
-    internal object WorkDetail() => new LockWork(CharacterTask.GoTo, null);
-
-    /// <summary>
     /// The row of a shackle job.
     /// </summary>
     static TaskType RowOf(ShackleWork work) => work switch
