@@ -57,9 +57,14 @@ internal sealed class TownTravel(PopulationData data)
     }
 
     /// <summary>
-    /// The worker thread's functionality cache for the town's gates (<see cref="TownExit.Of"/>).
+    /// The worker thread's functionality cache for the town's gates (<see cref="TownExit.Of"/>), of the records of <see cref="s_gatesOf"/>.
     /// </summary>
     [ThreadStatic] static Dictionary<string, GameRecord?>? s_gates;
+
+    /// <summary>
+    /// The database <see cref="s_gates"/> holds records of: a thread outlives a world, and another world's data may differ.
+    /// </summary>
+    [ThreadStatic] static GameDatabase? s_gatesOf;
 
     /// <summary>
     /// The functor's caps of modes 1 (<c>DAT_1416b3ac4</c>) and 2 (<c>DAT_1416b9a58</c>), and the share of a slower member's speed it lowers to
@@ -166,7 +171,17 @@ internal sealed class TownTravel(PopulationData data)
         var (centre, _) = AiSystem.TownCircle(data, world, town)!.Value;
         if (town.Nest > 0) return centre;
 
-        return TownExit.Of(world, data, system.GateRegions, town, s_gates ??= new(StringComparer.Ordinal));
+        return TownExit.Of(world, data, system.GateRegions, town, Gates());
+    }
+
+    /// <summary>
+    /// This thread's gate cache for the world's data, made anew for another database.
+    /// </summary>
+    Dictionary<string, GameRecord?> Gates()
+    {
+        if (s_gates is null || !ReferenceEquals(s_gatesOf, data.Db)) (s_gates, s_gatesOf) = (new(StringComparer.Ordinal), data.Db);
+
+        return s_gates;
     }
 
     #endregion
