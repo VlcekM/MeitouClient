@@ -250,17 +250,33 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// Where an input's item is fetched from: the player's nearest complete storage holding it in its main grid, or machine whose output holds it (a
-    /// well's water), within the original fill finder's <see cref="ConstructionSystem.SourceRangeSquared"/> (3D) of the machine (ties: the lower
-    /// site id). The finder measures from the character, who stands at the machine when it fetches (#963: a well 3000 or more away was missed).
-    /// A producer <paramref name="by"/> operates counts once its output is full, so it fills the well before it leaves with the water.
+    /// Where an input's item is fetched from (the fill finder <c>FUN_14059d9b0</c> -> <c>FUN_14059d000</c>, <b>Verified</b>): the player's nearest
+    /// complete storage holding it in its main grid, else its nearest machine whose output holds it (a well's water; the split is the building's
+    /// vfunc <c>0x3b0</c>, null for a <c>StorageBuilding</c>), each within <see cref="ConstructionSystem.SourceRangeSquared"/> (3D, inclusive) of
+    /// the machine (ties: the lower site id); no building of the machine's own record (vfunc <c>0x18</c>, the record, against the excluded target's).
+    /// The finder measures from the character, who stands at the machine when it fetches (#963: a well 3000 or more away was missed). A producer
+    /// <paramref name="by"/> operates counts once its output is full, so it fills the well before it leaves with the water.
     /// </summary>
-    string? NearestSource(World world, BuildSite from, string record, CharacterCold? by = null) =>
-        NearestSite(world, from.Position, float.MaxValue, (s, m) => s.Id != from.Id
-            && InFinderRange(s.Position, from.Position)
-            && (m.Data.IsStorage
-                ? m.Storage is { } st && st.Items.Any(i => i.Record == record && i.Quantity > 0 && i.Section == "main")
-                : m.Output is { Count: > 0 } o && o.Recipe.Item == record && (o.Full || by?.OperateSite != s.Id)));
+    string? NearestSource(World world, BuildSite from, string record, CharacterCold? by = null)
+    {
+        string? own = world.Machines.Find(from.Id)?.Data.Id;
+        bool Fetchable(BuildSite s, Machine m) => s.Id != from.Id && m.Data.Id != own && InSourceRange(s.Position, from.Position);
+
+        return NearestSite(world, from.Position, float.MaxValue, (s, m) => m.Data.IsStorage && Fetchable(s, m) && StorageHolds(m, record))
+            ?? NearestSite(world, from.Position, float.MaxValue, (s, m) => !m.Data.IsStorage && Fetchable(s, m) && OutputHolds(m, s, record, by));
+    }
+
+    /// <summary>
+    /// A storage holding <paramref name="record"/> in its main grid.
+    /// </summary>
+    static bool StorageHolds(Machine m, string record) =>
+        m.Storage is { } st && st.Items.Any(i => i.Record == record && i.Quantity > 0 && i.Section == "main");
+
+    /// <summary>
+    /// A producer whose output holds <paramref name="record"/>: one <paramref name="by"/> operates only once its output is full.
+    /// </summary>
+    static bool OutputHolds(Machine m, BuildSite s, string record, CharacterCold? by) =>
+        m.Output is { Count: > 0 } o && o.Recipe.Item == record && (o.Full || by?.OperateSite != s.Id);
 
     /// <summary>
     /// The nearest complete storage <paramref name="by"/> uses (<see cref="StoresFor"/>) within <see cref="InFinderRange"/> of a machine that passes
@@ -300,4 +316,9 @@ public sealed partial class ProductionSystem
     /// (<see cref="ConstructionSystem.SourceRangeSquared"/>, about 6517; docs/game/buildings-production.md "Material delivery").
     /// </summary>
     static bool InFinderRange(Vector3 a, Vector3 b) => Vector3.DistanceSquared(a, b) < ConstructionSystem.SourceRangeSquared;
+
+    /// <summary>
+    /// Whether two points are within the source finder's range (<c>FUN_14059d000</c> keeps a building at the bound: <c>&lt;=</c>).
+    /// </summary>
+    static bool InSourceRange(Vector3 a, Vector3 b) => Vector3.DistanceSquared(a, b) <= ConstructionSystem.SourceRangeSquared;
 }

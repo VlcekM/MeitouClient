@@ -497,9 +497,10 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// The finder of row 94 (<c>FUN_14059d9b0</c>, scored by <c>FUN_14059d000</c>, <b>Verified</b>): for each item type the target machine's inputs
-    /// take, in list order, the nearest other machine whose output holds that item and has some; the first item with one decides. <b>Not
-    /// modelled</b>: the cached earlier pick, loose items on the ground (searched first by the original), and the split of buildings by the owner
-    /// test of vfunc <c>0x3b0</c> (<b>Unknown</b>); the candidates are the town's workplaces (the original's building mask is not decoded).
+    /// take, in list order, the nearest machine of another record (<c>FUN_14059d000</c> skips the excluded target's record) whose output holds that
+    /// item and has some; the first item with one decides. Engine choices: the candidates are the town's workplaces, so no storage and no loose
+    /// item is a source (the original's loose items come first and its storages before the producers; docs/game/buildings-production.md "NPC town
+    /// machines").
     /// </summary>
     public static TownBuilding? InputSource(World world, Machine target, IEnumerable<TownBuilding> candidates, Vector3 from)
     {
@@ -509,7 +510,7 @@ public sealed partial class ProductionSystem
             float bestD = float.MaxValue;
             foreach (var b in candidates)
             {
-                if (TownWorkOf(world, b) is not { Output: { Count: > 0 } o } other || ReferenceEquals(other, target) || o.Recipe.Item != input.Item)
+                if (TownWorkOf(world, b) is not { Output: { Count: > 0 } o } other || other.Data.Id == target.Data.Id || o.Recipe.Item != input.Item)
                     continue;
 
                 float d = Vector3.DistanceSquared(new Vector3(from.X, 0, from.Z), new Vector3(b.Position.X, 0, b.Position.Z));

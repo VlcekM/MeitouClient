@@ -1738,15 +1738,16 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// <see cref="SourceRangeSquared"/>, else the nearest player machine whose output holds it. The buildings are those of the builder's town
     /// (<see cref="FixtureRegistry.TownCandidates"/>). Engine choices: the nearest loose item (the original takes the first its grid search meets),
     /// no per-material memory of the last source (the original's is a cache emptied at each AI update, so it changes no answer), the exact record
-    /// (the original also lets any record of the same type stand in for a non-ITEM material); a loose item another faction owns (a town interior's,
-    /// <see cref="Items.ItemSlots"/>) is left, as the original leaves items lying in another faction's building.
+    /// (the original also lets any record of the same type stand in for a non-ITEM material). A loose item must pass the ownership test
+    /// (<see cref="ItemOwnership.MayTake"/>, <c>FUN_140997d80</c>).
     /// </summary>
     MaterialSource? Source(World world, int slot, CharacterCold cold, BuildSite site)
     {
         var at = world.Characters.Next[slot].Position;
 
         // The buildings are those of the builder's town (FUN_1408cbea0); a world with no town data has no such limit.
-        var inTown = world.SystemOf<PopulationSystem>()?.Data is { } data ? world.Fixtures.TownCandidates(world, data, cold, at) : null;
+        var data = world.SystemOf<PopulationSystem>()?.Data;
+        var inTown = data is not null ? world.Fixtures.TownCandidates(world, data, cold, at) : null;
         foreach (var material in site.Materials)
         {
             if (material.Required <= material.Delivered) continue;
@@ -1756,7 +1757,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             foreach (var g in world.GroundItems.All)
             {
                 if (IsUnreachable(world, cold, ItemKey(g.Id))) continue;   // before the ownership test (FUN_14059d000)
-                if (g.Item.Record != want || g.Item.Quantity <= 0 || g.Item.Contents is not null || g.OwnedBy >= 0 && g.OwnedBy != cold.Faction)
+                if (g.Item.Record != want || g.Item.Quantity <= 0 || g.Item.Contents is not null || !ItemOwnership.MayTake(world, data, cold, at, g))
                     continue;
 
                 float d = Vector3.DistanceSquared(g.Position, at);
