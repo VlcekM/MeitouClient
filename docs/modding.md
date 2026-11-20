@@ -999,6 +999,14 @@ holds refuses the second mod.
     `SendPlatoon`); loaded members run their package, and the mod orders them (`World.GiveOrder`), adds a chooser goal to the package, or
     changes the package (`ChangeAi`, `StartContract`).
   - Player characters weigh a mod's goal type in their own lists and their autonomous squad's package.
+  - `AiMind.ModGoalAsk`, `ModGoalStarted`, `ModGoalRow`, `ModGoalTick`, `ModGoalBackoff` and `AiBehaviour.Mod`: `ModGoals.Holds(world, slot,
+    type)`.
+  - `IDecisionSource`, `DecisionStep`, `DecisionSystem.Sources` and `JobSourceOf` are internal: a job type's contributor is the mod's own
+    `IJobSource` (`ChooserRegistry.Jobs`).
+  - `AiMind.Engine` and `EngineGoals`: gone with the engine minds (`HoldPlatoon` above).
+  - Gone with nothing in their place: `PopulationSystem.PendingTalk` and `AnnouncementPatience`, `FirstAidSettings.AutoReach`,
+    `Platoon.OrderCooldown`, `AiMind.CaptiveOffers`, `LockSystem.ReleaseTimeout`; the host's `ModHost.TryTakeFactoryNotice` is
+    `CodeModFaults.TryTakeNotice`.
 - **Seats** (`Meitou.Simulation.Production`; the system from `SystemBuildContext.Find<ProductionSystem>()` or `world.Systems`):
   `SitOn(world, slot, seat, row, source)` puts a character, the player's or an NPC, on a chair or throne through the player's Use order's
   act-out (the original's sitting is its operate task, [chairs](game/ai-tasks.md#town-goals)): it starts `CharacterTask.Operate` through
