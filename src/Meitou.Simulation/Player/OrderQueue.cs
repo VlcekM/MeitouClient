@@ -129,6 +129,20 @@ internal interface IDutyRelease
 }
 
 /// <summary>
+/// An order owner whose order's plan runs several tasks one after another (the arrest's fight, strip, lift and cage walk): the original plans the
+/// front again on every update, so the end of one step is not the order's. While the owner's act-out is between two steps the front still runs
+/// (<see cref="PlayerOrders.Runs"/>), and the plan step asks no list B of the order's row while a step of another row runs.
+/// </summary>
+internal interface IOrderSteps
+{
+    /// <summary>
+    /// Whether the owner's act-out of <paramref name="order"/> goes on for the character in <paramref name="slot"/> though no task of the order runs
+    /// now (a pure read, any serial phase).
+    /// </summary>
+    bool Between(World world, int slot, OrderEntry order);
+}
+
+/// <summary>
 /// One order of a character's queue (the original's <c>+0x40</c> deque entry): its row, owner, target, site, point and the owner's
 /// <see cref="Detail"/>. <see cref="Started"/> once its start ran; it then stands for the character's task while that task's provenance is an order's
 /// (<see cref="PlayerOrders.Runs"/>). Only the order itself is saved, never <see cref="Started"/> (<see cref="Saving.OrderSave"/>).
@@ -409,7 +423,8 @@ public static class PlayerOrders
 
     /// <summary>
     /// Whether the front order started and its task still runs: the task's provenance is an order's for it (<see cref="RunningTask.Runs"/>; a move's
-    /// walk is the order's move) and its handler has more to do.
+    /// walk is the order's move) and its handler has more to do, or its owner's act-out is between two steps of its plan
+    /// (<see cref="IOrderSteps.Between"/>).
     /// </summary>
     public static bool Runs(World world, int slot, OrderEntry order)
     {
@@ -417,9 +432,10 @@ public static class PlayerOrders
         var table = world.Characters;
         var cold = table.Cold(slot)!;
         var task = (CharacterTask)table.Next[slot].Task;
-        if (cold.Running is not { Source: TaskSource.Order } run || !run.Runs(task) || order.IsMove && !cold.OrderMove)
-            return false;
-        return world.Tasks.Of(cold, task) is not { } handler || !handler.Done(world, slot, task);
+        bool between = order.Owner is IOrderSteps steps && steps.Between(world, slot, order);
+        if (cold.Running is not { Source: TaskSource.Order } run || !run.Runs(task) || order.IsMove && !cold.OrderMove) return between;
+
+        return world.Tasks.Of(cold, task) is not { } handler || !handler.Done(world, slot, task) || between;
     }
 
     /// <summary>
@@ -647,10 +663,13 @@ public static class PlayerOrders
 
     /// <summary>
     /// Whether the running front's row ends by its list B now (<see cref="ListTests.OrderNeedsFail"/>), after it held since the start
-    /// (<see cref="OrderEntry.RowRuns"/>, recorded here).
+    /// (<see cref="OrderEntry.RowRuns"/>, recorded here). While a step of another row runs for an owner of several steps (<see cref="IOrderSteps"/>:
+    /// a provider of the plan, the arrest's fight or strip), or none between two steps, the row's own list B is not asked.
     /// </summary>
     static bool RowEnds(World world, int slot, OrderEntry front)
     {
+        var cold = world.Characters.Cold(slot)!;
+        if (front.Owner is IOrderSteps && cold.Running?.Row != front.Row) return false;
         if (ListTests.OrderNeedsFail(world, slot, front) is not { } fails) return false;
         if (!fails) front.RowRuns = true;
 

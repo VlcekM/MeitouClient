@@ -486,7 +486,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
             : order.Defensive
                 ? (TaskType.AttackAttackersOf, TaskSource.Reaction)
                 : (TaskType.AttackEnemies, TaskSource.Goal);
-        var request = new TaskRequest(CharacterTask.Attack, row, order.Source ?? source) { Target = target, Job = order.Job };
+        var request = new TaskRequest(CharacterTask.Attack, order.Row ?? row, order.Source ?? source) { Target = target, Job = order.Job };
         bool again = table.Next[a].Task == (byte)CharacterTask.Attack && cold.Running?.Target == target;   // a fight re-ordered: not news
 
         if (TaskStart.Start(world, a, request) != StartResult.Started) return false;
@@ -534,12 +534,19 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     /// The save kind of an order: Saved: the pick is rebuilt from its attacker and target; the victim's combat mode is read when the order starts (a
     /// tick that is never the world's).
     /// </summary>
-    int IOrderOwner.SaveKind(OrderEntry order) => order.Detail is PickedAttack ? 0 : -1;
+    int IOrderOwner.SaveKind(OrderEntry order) => order.Detail is PickedAttack or null ? 0 : -1;
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// The detail of a saved attack order: the pick rebuilt for 5 and 61; none for 4, an engine order's attack.
+    /// </summary>
     object? IOrderOwner.LoadDetail(World world, CharacterId self, TaskType row, int kind, CharacterId target) =>
-        new PickedAttack(new AttackOrder([self], target) { Picked = true, Unprovoked = row == TaskType.UnprovokedFocusedMeleeAttack,
-            Tick = world.Tick }, false, -1);
+        row == TaskType.MeleeAttack ? null : Picked(world, self, row, target);
+
+    /// <summary>
+    /// The pick of a saved attack order (5, 61), rebuilt from its attacker and target.
+    /// </summary>
+    static PickedAttack Picked(World world, CharacterId self, TaskType row, CharacterId target) =>
+        new(new AttackOrder([self], target) { Picked = true, Unprovoked = row == TaskType.UnprovokedFocusedMeleeAttack, Tick = world.Tick }, false, -1);
 
     /// <summary>
     /// The attack order (row 5) needs a target that is there, awake and has a body (else it leaves the queue), and an attacker able to fight: a
@@ -569,12 +576,25 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         return !table.TryResolveNext(order.Target, out int t) || !SwimBarred(table.Cold(slot)!, table.Cold(t), focused: true);
     }
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// Starts the attack order: the player's pick (5, 61) as it was given; an engine order's 4 Attacking (DA 29 outside the speaker's town) as a fight
+    /// of that row with the order's provenance.
+    /// </summary>
     void IOrderOwner.Start(World world, int slot, OrderEntry order)
     {
         var table = world.Characters;
-        var picked = (PickedAttack)order.Detail!;
         var id = table.IdOf(slot);
+        if (order.Detail is not PickedAttack picked)
+        {
+            Sync(table);
+            var attack = new AttackOrder([id], order.Target)
+            {
+                Tick = world.Tick, Source = TaskSource.Order, Row = order.Row, Cause = "an order to attack",
+            };
+            Engage(world, table, id, attack, (int)world.Tick);
+            return;
+        }
+
         bool victimFighting = picked.Tick == world.Tick ? picked.VictimFighting : VictimFighting(table, order.Target);
         Sync(table);
         if (Engage(world, table, id, picked.Order, (int)world.Tick)) Assaulted(world, table, id, picked.Order, victimFighting);

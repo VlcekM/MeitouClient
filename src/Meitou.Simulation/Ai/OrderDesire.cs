@@ -49,7 +49,8 @@ public static class OrderDesire
 
             // AI slot 44 (FUN_1405991c0): 0 for the character itself as target, which its own senses never list.
             TaskType.Bodyguard => order.Target == world.Characters.IdOf(slot) ? 0 : 1,
-            TaskType.LiftPersonPlayerOrder or TaskType.KidnapOrder => LiftDesire(world, slot, cold, order.Target),
+            TaskType.LiftPersonPlayerOrder or TaskType.KidnapOrder or TaskType.LiftPersonSnatchingAllowed
+                or TaskType.LiftPersonSnatchingAllowedInTownOnly => LiftDesire(world, slot, cold, order.Target),
             TaskType.UseTurret => TurretDesire(world, slot, cold),
             TaskType.FirstAidOrder => world.SystemOf<FirstAidSystem>()?.TreatOrderDesire(world, slot, order.Target, robot: false),
             TaskType.FirstAidRobot => world.SystemOf<FirstAidSystem>()?.TreatOrderDesire(world, slot, order.Target, robot: true),
@@ -70,8 +71,8 @@ public static class OrderDesire
     }
 
     /// <summary>
-    /// 225 / 246 (AI slot 59, <c>FUN_14059e1a0</c>): 0 while the character carries someone (<c>+0x348</c>); 0.5 for a target that is no character;
-    /// 0 for one it carries already; else 1.
+    /// 225 / 246, and the arrest's 213 / 240 (AI slot 59, <c>FUN_14059e1a0</c>): 0 while the character carries someone (<c>+0x348</c>); 0.5 for a
+    /// target that is no character; 0 for one it carries already; else 1.
     /// </summary>
     static float LiftDesire(World world, int slot, CharacterCold cold, CharacterId target)
     {

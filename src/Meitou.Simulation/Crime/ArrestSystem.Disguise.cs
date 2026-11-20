@@ -182,7 +182,7 @@ public sealed partial class ArrestSystem
         {
             if (!FreeGuard(world, w)) return;
             if (Talks) Spotted(world, w, s, BountySpotted);
-            else Start(world, w, s, force: false);
+            else OrderArrest(world, w, s, CapturesInTown(world, world.Characters.IdOf(w), c));
             return;
         }
         c.RecentlyWanted = CrimeSystem.RecentlyWantedSeconds;

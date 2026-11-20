@@ -20,7 +20,7 @@ public sealed partial class ArrestSystem
     /// Goal 204 HUNT_BOUNTIES, "Arrest bounties" (<b>Verified</b>, docs/game/economy.md 11.8): a character whose running package lists it (law
     /// enforcement add-ons, gate guards) and that is free to act wants it while a free cage exists (AI slot 33, <c>FUN_140598a90</c>); its target is
     /// <see cref="BountyTarget"/> (<c>FUN_14099bfc0</c>). The plan 203 Arresting (list B: 7 target down, 118 unarmed, 48 carrying) leads to the
-    /// fight, the lift and the cage goals, which the arrest state machine carries out (engine choice, as for the dialogue's DA 29).
+    /// fight, the lift and the cage goals, which an engine arrest carries out (<see cref="StartDuty"/>; engine choice).
     /// </summary>
     void BountyDuty(World world)
     {
@@ -46,7 +46,7 @@ public sealed partial class ArrestSystem
                 // (#906, StepTargetDown).
                 bool leftToLift = table.Cold(t) is { Medical.Incapacitated: true } tc && !CanStripFurther(gc, tc);
                 if (leftToLift && !CanLift(gc)) continue;
-                Start(world, g, t, force: true, leashed: false);   // goal 204 lifts with row 68, which has no town needs
+                StartDuty(world, g, t);   // goal 204 lifts with row 68, which has no town needs
             }
         }
     }

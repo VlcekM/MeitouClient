@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Data.Gameplay;
+using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Gameplay.Combat;
 using Meitou.Simulation.Ai;
@@ -37,6 +38,12 @@ public sealed record AttackOrder(IReadOnlyList<CharacterId> Attackers, Character
     /// <see cref="Defensive"/>, else a goal.
     /// </summary>
     public TaskSource? Source { get; init; }
+
+    /// <summary>
+    /// The row the fight runs (<see cref="TaskRequest.Row"/>; null: told from <see cref="Picked"/> and <see cref="Defensive"/>): an engine order's own
+    /// attack row, 4 Attacking.
+    /// </summary>
+    public TaskType? Row { get; init; }
 
     /// <summary>
     /// The job of the attackers' lists the fight runs (<see cref="TaskRequest.Job"/>; -1: none).

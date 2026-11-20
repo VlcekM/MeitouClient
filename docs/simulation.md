@@ -317,7 +317,8 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   does); the flight step, which also ends a running flight; the stand-down after a fight; the free tests of the duty sweeps and routines (town duties and the player faction's
   food runs, captive jobs and race goals, 259, kidnap, arrests and bounty hunters, the shut-in release, NPC healing, arming and scavenging, rejoining the leader); the
   population's leader walk, arrival and campaign march; and two engine reactions that are no order (`TaskSource.Npc`): a crime victim's attack on its culprit and a caught thief's
-  watcher getting up from rest. The engine acts the original gives as orders (dialogue acts, an arrest) still replace the front; the body's orders above are orders. A blocked front waits, the AI going on with its goals meanwhile, and is tried again on the re-ask (every `ProductionSystem.JobCheckTicks`). Once the
+  watcher getting up from rest. The engine acts the original gives as orders that Meitou does not yet give as orders (some dialogue acts) still replace the front; the body's
+  orders above and the arrest orders are orders. A blocked front waits, the AI going on with its goals meanwhile, and is tried again on the re-ask (every `ProductionSystem.JobCheckTicks`). Once the
   front no longer runs the mind chooses again at once; when it starts the mind's plan, goal and commitment go. An NPC's queue is not saved, and an NPC keeps a replan bit only
   while it holds an order.
 - **Duties let go** when an NPC's front starts, but for the body's orders (engine design; `PlayerOrders.TryFront`, serial, before the owner's `Start`): `World.ReleaseDuties` asks every system that
@@ -331,6 +332,12 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   following its leader (`CharacterCold.OrderRoutine`, `DecisionSystem.KeepRoutine`), and takes it up again once its order no longer holds it, if it then stands idle,
   awake and held by nothing (`DecisionSystem.BackToRoutine`; it waits while the order's task goes on, a move's walk after the move left the
   queue); a roaming leader's trip goes on by the population's own walk. A full mind chooses again instead.
+- **Orders of several steps** (`IOrderSteps`, the arrest orders 240, 213, 112): the original plans the front again on every update, so the end of one task of its plan
+  is not the order's. While the owner's act-out goes on between two tasks the front still runs (`PlayerOrders.Runs`), and the plan step asks the order row's list B
+  only while a task of that row runs (a provider step's, or none between steps, is not asked).
+- **Engine order givers** (rows, receivers and clear flags as the original's, [order givers](game/ai-tasks.md#order-givers)): DA 29 (`ArrestSystem.OrderArrest`: 240 then 112
+  queued, else 4, which `CombatSystem` owns), DA 10 / 30 / 40 (`ArrestSystem.TakeOver`: 213 then 112 queued); the arrest system also gives DA 29's orders for its engine
+  arrest in a world without dialogue events. Each is given through `PlayerOrders.Give`.
 - The failure text is said only for a character of the player's faction that is not an animal (`PlayerOrders.Show`; the order step's vfunc `0x2d8` call in `FUN_140510920`,
   [precedence](game/ai-tasks.md#precedence)); anyone else's blocked order waits silently.
 - Owners that take a player character's order only (an NPC's leaves the queue, `Gone`), their act-outs being the player's: build, repair and dismantle (the sites, doors and
@@ -338,7 +345,8 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   146, 150: a worked bench advances the player's research, hauls go to the player faction's storages, prospecting fills the player's prospecting window, the
   turret's gunner is the interface's), a container's (26, 76: the player's container window), opening an inventory (26 with the inventory detail: the player's loot window)
   and a door walk (72, 73, 76 on a door: the interface's one door target, `PlayerState.DoorTarget`), and the Medic, Robotics and Rescue buttons. Moves, follows, attacks,
-  first aid, splint and rest, lifts, kidnap, loot, stealth KO, put down, beds, a ground pick-up (3), the rest of the lock work and put in cage (108) take any character; their
+  first aid, splint and rest, lifts, kidnap, loot, stealth KO, put down, beds, a ground pick-up (3), the rest of the lock work, put in cage (108) and the arrest orders
+  (240, 213, 112, 4) take any character; their
   act-outs post and say the worker's own messages for the player's side only.
 - Saved for player characters (`Saving/OrderSave`, in the character's GAMESTATE_AI record next to the perma-jobs; format and evidence: [save](formats/save.md#order-queue)): the queue front first,
   started or not, as the original saves its deque as `tjob<i>`. A load reads the orders into `CharacterCold.SavedOrders` and starts nothing; `DecisionSystem.Run` makes them the queue (nothing
@@ -1196,7 +1204,10 @@ unload, hashed only once non-empty. Facts: [locks](game/locks.md), [economy 11.5
 
 `Crime/ArrestSystem` (serial `SlowWorld`, after `CrimeSystem`) and `Locks/LockSystem`. Facts: [economy 11.5, 11.7, 11.8](game/economy.md#117-arrest).
 Arrests, the recognition meter and the marker are hashed only while set. What a save keeps of them: [Saves](#saves).
-**Engine choice**: the arrest (`ArrestSystem`) runs the original's chain (fight 7, strip 181, lift 240, then the cage errand of 112) as its serial phases, not through the AI planner, because dialogue, bounty-duty and slave arrests all start it; the chain's rows and states are in [AI tasks](game/ai-tasks.md#arrest-and-prison-rows). Goals 203, 112 and 281 are not in `TaskBehaviours.Table`.
+An arrest (`Crime.Arrest`) is the act-out of the guard's running order 240 Capture Target, 213 Lifting/Snatching or 112 Find and put in cage (`Arrest.Order`; the record
+lives while that order is his started front), or an engine arrest that holds him by `Engaged`: goal 204's (`BountyDuty`) and slave catching. **Engine choice**: the act-out runs
+the original's plan (fight 4 for state 7, strip 181, lift 240 or 213; then 112's cage walk and 108's put-in) as serial phases, not through the AI planner; each task of an ordered
+one starts with the order's provenance. The chain's rows and states are in [AI tasks](game/ai-tasks.md#arrest-and-prison-rows). Goals 203, 112 and 281 are not in `TaskBehaviours.Table`.
 - **Triggers**: a police-like witness that books a crime acts at once (`CrimeSystem.BookingsOf`, the witnessed-crime
   events); every 15 ticks an awake NPC within 400 that sees a player character (`Visibility`/`SneakVisibility`) whose
   bounty with its faction reaches its class threshold spots it, at once while `RecentlyWanted` > 0 (250 game seconds after
@@ -1209,19 +1220,23 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
 - **Spotting talks** (`ArrestSystem.Talk`, the dialogue system, while its event lines are on): the looker fires event 44 at the target
   (`DialogueSystem.FireEvent`, a bubble now) and the data decides ([economy 11.7](game/economy.md#117-arrest)): DA 29 arrests (`ArrestFromDialogue`,
   below; an animal target, or a guard outside his town, is attacked instead: `ArrestSystem.CapturesInTown`), "Small bounty" sends the leader to talk (DA 2) and its interrupt opens the fine window (DA 8 + 49 pay and clear; the rest DA 29), others
-  say nothing more. The target is then left alone for 60 game s (`SpotRetrySeconds`, engine), longer while the guard still talks or walks up; paying ends it.
-- **Fine or arrest** (engine fallback, only without dialogue events, e.g. headless tests; with them a booking witness is left to its witness
-  event unless it is already fighting, then it arrests at once): outside his town (not in the town his resident squad belongs to, `Ai.AiSystem.TownAt` by its radius; engine stand-in
-  without town data: farther than 2 x the squad's home radius from its centre) the guard and his free squad mates attack. In it, 1..1049 is fined (`FineFor`; 300 up to 250
-  is engine, the data's line being unreachable): he walks up
-  (`Engaged`, so the AI leaves him alone), and within 40 takes the fine when the player's money is above it, erasing his
-  faction's entry; else, when the target runs past 800 or after 60 s, and for any bigger bounty: arrest.
-- **Town leash** (`ArrestSystem.OffLeash`, [arrest chain](game/ai-tasks.md#arrest-and-prison-rows)): a dialogue capture ends when its guard stands in no home town or its target in no town.
+  say nothing more. The target is then left alone for 60 game s (`SpotRetrySeconds`, engine), longer while the guard still talks or walks up to talk (order 102 at
+  his queue's front); paying ends it.
+- **Arrest orders** (DA 29, `ArrestSystem.OrderArrest`): in his own town (the town his resident squad belongs to, `Ai.AiSystem.TownAt` by its radius; engine stand-in without
+  town data: within 2 x the squad's home radius of its centre) a non-animal target gets the guard 240 (his queue cleared), then 112 queued behind it; otherwise 4 Attacking
+  (cleared; refused with "My arm is broken!" when no arm works), and his free squad mates near the target attack it too (engine reading). Without dialogue events (e.g.
+  headless tests) the engine gives the same orders where a spotting, an escapee seen or a booking witness would have fired its event; with them a booking witness is left to
+  its witness event unless it is already fighting, then it is ordered at once. There is no engine fine: a fine is the dialogue's (DA 2's talk and its window).
+- **Town needs of 240** ([arrest chain](game/ai-tasks.md#arrest-and-prison-rows)): while the target stands in no town (113) the order waits queued, its task ended and the fight
+  called off (the fighters the target does not fight back leave it), and the guard goes on with his package; while the guard stands in no home town (95) he leaves the fight
+  the same way and runs to his squad's home under the order (127 Retreating fast), then the capture goes on. Both only with town data.
 - **Arrest**: attack until the target is down (combat ends the fight; nobody beats a downed target), lift
   (`CarrySystem.BeginPickUp`), `FindCage` from the guard over his town candidates (`CageCandidates`, as kidnapping and town duty; his squad's home building; other arrests' cages reserved), walk,
   and at the cage (`FixtureRegistry.AtCage`: within its `use range`, doubled standing, and under 15 above or below it) `LetGo` + `Imprison` (`prison time` CONSTANTS). The fight
-  stopping with the target up re-orders it within 800, else he gives up; no free cage: he drops the captive (engine); a downed target is not lifted at all with no free cage, nor from an ally who carries it (engine: guards passed bodies round a full station, #339). After 3 walks that end short the cage is
-  unreachable for his faction for 24 game hours (`MarkUnreachable`, as the kidnapper's and the town duty's) and he drops the captive (engine).
+  stopping with the target up re-orders it within 800, else he gives up; a downed target is not lifted at all with no free cage, nor from an ally who carries it (engine: guards passed bodies round a full station, #339). Once the guard
+  carries the target, 240 leaves the queue (its desire, AI slot 59, is 0 while carrying) and 112 starts (it keeps the arrest's carry: `OrderEntry.Keeps`); 112 leaves the
+  queue with nothing carried or no free cage (its finder), the guard keeping what he carries for his own goals. After 3 walks that end short the cage is
+  unreachable for his faction for 24 game hours (`MarkUnreachable`, as the kidnapper's and the town duty's). An engine arrest drops the captive when it finds no free cage (engine).
 - **Cage walks** (arrest, kidnap, town duty 112 / 281; engine): a walk onto the cage's floor (`TaskStart.Walk` with the cage's position, `MovementSystem.GoToFloor`), so a cage on
   an upper storey is reached by the stairs. A flat goal resolves on the walker's own storey and ends under the cage, out of `AtCage`'s height. **Observed** (#314 save, Sho-Battai
   Police Station Tower, `Outpost s-IV` `43.11:6-Newwworld-INGAME`): its 19 cages stand on the storey at y 1092, 43 above the ground floor where the guards lift raiders; the
@@ -1268,9 +1283,9 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
   ends: no cage (11.8), and that hunter leaves that target alone for 600 game seconds (engine). Hunts and cagings are
   hashed only while any exist; restarted after a load ([Saves](#saves)).
 - **Bounty desk** (dialogue, [economy 11.4](game/economy.md#114-claiming)): `DA_PAY_BOUNTY` (`ArrestSystem.PayBounty`) pays the carried body's
-  unclaimed entry for the speaker's booking faction (halved dead) and marks it claimed; `DA_ARREST_TARGETS_CARRIED_PERSON` (`TakeOver`) runs
-  after the line's other effects (data lists them in either order): the carrier lets go and the speaker starts an arrest in the lift
-  phase, so it carries the body to a cage as above (none: dropped).
+  unclaimed entry for the speaker's booking faction (halved dead) and marks it claimed; the hand-over of DA 10, 30 and 40 (`TakeOver`) runs
+  after the line's other effects (data lists them in either order): the carrier lets go and the speaker is ordered 213 on the body (cleared; refused with "I can't carry anyone
+  with this arm." when his left arm cannot carry) and 112 queued behind it, so he lifts it and carries it to a cage as above; a dead body's 112 waits queued (its `!99`).
 - **Shackles** (`Locks/LockSystem.Shackles.cs`, [locks](game/locks.md)): ARMOUR `is locked` items get a `LockState` (`ItemInstance.Lock`);
   `LockedOn` (effectively locked, worn) refuses moving, unequipping and selling. `ShackleOrder` (verbs Unlock Shackles / Use Tools /
   Use Strength) sends the first eligible worker (the wearer or a mate within 25): pick (`Lockpicking.Step` rules), cut (needs a tool,
