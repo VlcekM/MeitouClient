@@ -183,7 +183,9 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
             return;
         }
 
-        var found = captives.JobOf(id, type) is { } job ? new Found(job.Target, job.Cage, job.Item, job.Site) : FindFor(world, s, cold, squad, board, type, site);
+        var found = captives.JobOf(id, type) is { } job
+            ? new Found(job.Target, job.Cage, job.Item, job.Site)
+            : FindFor(world, s, cold, squad, board, type, site);
         if (found is { } f) _picks[k][s] = new Pick(id, desire, f);
         else _picks[k].Remove(s);
     }
@@ -685,7 +687,10 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
     /// </summary>
     static CaptiveJob New(in DutyAsk ask, CharacterCold cold, CaptiveJobKind kind, CharacterId captive, string cage, int site, in PlanTarget target,
         int item = -1) =>
-        new() { Kind = kind, Worker = ask.Id, Captive = captive, Cage = cage, Faction = cold.Faction, Site = site, Goal = ask.Type, Target = target, Item = item };
+        new()
+        {
+            Kind = kind, Worker = ask.Id, Captive = captive, Cage = cage, Faction = cold.Faction, Site = site, Goal = ask.Type, Target = target, Item = item,
+        };
 
     /// <summary>
     /// A kill or a meal on a caged captive: the kill draws its weapon (refused with none: row 134 needs it), the eater sheathes (220's

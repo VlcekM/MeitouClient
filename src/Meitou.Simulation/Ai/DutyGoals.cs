@@ -357,8 +357,8 @@ internal sealed class DutyGoals
 
     /// <summary>
     /// Starts the engine goals the thinks chose this tick (serial, slot order), for each character a goal may hold (<see cref="AiSystem.MayHoldDuty"/>:
-    /// the AI holds it, or it thinks in its cage) whose current goal is that goal and that no goal holds yet; a start is recorded (<see cref="Take"/>), a refusal backs the goal off for the character, and a character skipped
-    /// chooses again at the next tick.
+    /// the AI holds it, or it thinks in its cage) whose current goal is that goal and that no goal holds yet; a start is recorded (<see cref="Take"/>),
+    /// a refusal backs the goal off for the character, and a character skipped chooses again at the next tick.
     /// </summary>
     void SendStarts(World world, int backoffTicks)
     {

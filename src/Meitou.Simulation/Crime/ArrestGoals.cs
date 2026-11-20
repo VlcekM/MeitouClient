@@ -548,8 +548,8 @@ internal sealed class ArrestGoals(ArrestSystem arrests)
     /// <summary>
     /// The states of the rows for the target (parallel: <c>Previous</c> places, cold state only serial steps write): 1 / 46 within the strip's and
     /// lift's reach, 7 down (<see cref="CharacterFacts.TargetDown"/>), 48 carried by the guard, 118 unarmed
-    /// (<see cref="CharacterFacts.TargetUnarmed"/>), 129 arrested (<c>FUN_14059a380</c>, <b>Verified</b>: caged, or carried by a character of another faction than its own), 140 swimming
-    /// (water state 3); null for the rest.
+    /// (<see cref="CharacterFacts.TargetUnarmed"/>), 129 arrested (<c>FUN_14059a380</c>, <b>Verified</b>: caged, or carried by a character of another
+    /// faction than its own), 140 swimming (water state 3); null for the rest.
     /// </summary>
     bool? State(World world, in DutyAsk ask, StateType state)
     {
