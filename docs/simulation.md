@@ -1259,7 +1259,7 @@ one starts with the order's provenance. The chain's rows and states are in [AI t
   owner's 3.3 s lock time; a door unlocked already only opens): 211 unlocks the cage and `Release`s in its faction's name, 155 / 197 close and lock the door
   from its inner / outer point (setting the house flag once no door of the home is open), 86 unlocks and opens it (clearing the flag when its finder finds
   none), 195 locks the cage. A round asks `DutyGoals.Runs` before each step and ends with `Done`; a failed walk ends it too, and the next think picks again.
-  A target another member's act-out works is refused. 197's members inside the home get no plan (its !107 provider 200 needs a target). A loaded night's
+  A target another member's act-out works is refused. 197's members inside the home get no plan, as in the original (its !107 provider 200 needs a target, which list B gets only from the goal's own empty hand, [locks](game/locks.md#doors) "Lock up from outside"). A loaded night's
   locked homes come back flagged (`meitou house locked`). **Gates** (180 Man the gate, `GateGoals`, desire 1,
   [locks](game/locks.md#doors)): a chooser goal held as any engine goal; its act-out runs the unlock round on its gate (`Blackboard.Gate`, else a gate home)
   while the gate's first door is closed or closing and whole (52, met by 72 and 78; the planner holds 52 true, so the act-out folds them in); a locked

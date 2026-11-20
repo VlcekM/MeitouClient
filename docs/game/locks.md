@@ -306,9 +306,12 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
 
 - **Lock up from outside** (197; **Verified** rows, `FUN_140596e90`): list B is `!strangers in house` and `!107` (107 I_AM_INSIDE_TARGET_BUILDING), and the lock row 198 needs state 126 AT_LOCATION_BUILDING_DOOR_OUTSIDE
   (**Verified**, `FUN_140596e90`: true when the character's X/Z distance to the door's outer point is below its reach range, 45 for a door; the outer point is the door record's point `+0x3bc` pushed out
-  by 1.1 times (`DAT_14169bb44`) its distance to the other point `+0x3c8`; the two points lie 15 either side of the leaf, so about 48 from the leaf), so a 197 worker inside first
-  leaves (row 200) and locks each door from its outer side. Row 200's own TaskData row needs a target, which the planner's finder root does not give, so in Meitou a
-  197 member inside the home has no plan ([wardens' goals](#wardens-goals)).
+  by 1.1 times (`DAT_14169bb44`) its distance to the other point `+0x3c8`; the two points lie 15 either side of the leaf, so about 48 from the leaf).
+  107 without a target is "inside the squad's home" (`FUN_14059a4b0`, **Verified**: the current building against the target's building, else against the
+  home `FUN_1407956a0` `+0x38`). A member inside the home has no plan for 197 (**Verified**, `FUN_14051bae0`, `FUN_14050f800`, `FUN_14060fd80`): the
+  node expansion gives a list-B entry's providers the node's own target, for the root the goal's hand, empty for 197 (`targeting` 0, SPECIFIC; the
+  finder's door goes only to the effect's child), and skips a provider that needs a target (row 200) on an empty hand, so `!107` has no provider.
+  Meitou plans the same ([wardens' goals](#wardens-goals)).
 - **Opening up** (86 `OPEN_UP_SHOP_DOORS`, Task_Blank, finder `FUN_1408cb360`, **Verified** decompile): the building the character stands in when
   its owner matches the AI's (an owner test, **Observed**), else its home; the target is the first door that is closed and not opening (the plan unlocks, then opens it). With none left
   the finder clears the squad's "house locked" flag. A = !87, so it scores only while the home counts as locked. Only squads whose packages list

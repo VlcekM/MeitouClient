@@ -570,7 +570,8 @@ internal sealed class WardenGoals(LockSystem locks)
 
     /// <summary>
     /// Goals 155 LOCK_ALL_MY_DOORS (<c>[163, 162, 155]</c>) and 197 LOCK_ALL_MY_DOORS_FROM_OUTSIDE (<c>[199, 198, 197]</c>) on the finder's door; a
-    /// member of a 197 squad standing inside its home has no plan (list B !107's provider 200 needs a target, which a finder row's list B lacks).
+    /// member of a 197 squad standing inside its home has no plan, as in the original (list B !107's provider 200 needs a target, and list B gets
+    /// only the goal's own hand, empty for 197: <c>FUN_14051bae0</c>).
     /// </summary>
     sealed class LockingUp(WardenGoals goals) : IDutyGoal
     {

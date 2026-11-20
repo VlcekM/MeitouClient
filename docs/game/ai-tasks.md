@@ -507,7 +507,7 @@ shackles locked); 123 and 136 false; 16 `FUN_14059de10` (the target's immediate-
 | 104 | `using target turret` |
 | 105 | `isMachineOutputEmpty` |
 | 106 | `machineHasFullInputs` |
-| 107 | `I_AM_INSIDE_TARGET_BUILDING` |
+| 107 | `I_AM_INSIDE_TARGET_BUILDING` (`FUN_14059a4b0`, **Verified**): false outdoors; else the building the character stands in is the target's (an object target, a door or part by its building), with no object target its squad's home (`FUN_1407956a0` `+0x38`) |
 | 108 | `strangers in house` (`FUN_14060e5e0`, **Verified**): the stranger finder above 0, see [stranger states](#stranger-states); not wired in Meitou |
 | 109 | `isDialogDelivered` |
 | 110 | `isDialogDelivered` |
