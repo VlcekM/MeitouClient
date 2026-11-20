@@ -1420,8 +1420,8 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   0.7, standing for list A `!159`, engine), left for a higher goal. 35 is acted out by
   `FleeSystem` (the squads' run: first run from the threats' centre, hops, `CharacterCold.Fleeing`): the AI asks (`AiMind.FleeRequest`), a fighter is stopped first. A lone runner stops when no threat attacks it
   within 181.7 or its body takes the choice back to fighting; a goal-35 runner (and a broken squad's, with the optional `FleeSystem.SquadBreak`, which the original has no equivalent of: [perception](perception.md#retreat-and-memory)) stops when no enemy is in sight and nobody attacks it. Not modelled: the player faction's branch of slot 55 (the
-  player's characters never run), the locked-gate zero of 60, 4's ranged and squad factors, standing up first for a character staying low. An NPC without a mind (no squad: scripted and test worlds) gets
-  an engine answer instead (`RetaliationSystem.SelfDefends`, **engine choice**): it fights its attacker at any distance at the alert and every 15 ticks; a crawling one neither fights back nor runs.
+  player's characters never run), the locked-gate zero of 60, 4's ranged and squad factors, standing up first for a character staying low. An NPC without a mind (no squad, or until its next package
+  cadence) has no 32 and does not answer: every character has goals in the original.
   - **Timing**: the original replans an attacked character whose fight is off (`underMeleeAttack` `FUN_140999f00`, the shot handler `FUN_140999d50`) and chooses at its next AI update
     (`FUN_1405112b0`, **Verified**: its sense pass `FUN_14085a8d0` runs first, so the threats list is current, then the task system's update `FUN_140511130`), 8 characters a frame in turn
     ([game loop](game-loop.md#the-character-update-budget)). Meitou: the alert (tick T) puts the attacker on the threats list at once (`AggroSystem.Force`) and asks the NPC to think; it thinks

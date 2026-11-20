@@ -507,7 +507,7 @@ Meitou (`CombatSystem.HasSlot` / `MayJoin`, `Fighting.Steer`):
   Rows 13 and 35 both carry the crippled-repertoire bit (flags `0x61`). The planner takes 35 when 13's chain is worth less: 35 is worth 1 to a crippled character and 4 only 0.1 under a threat within 40, so a
   crippled NPC runs; with no working arm 4 is 0 and 35 (0.001) is all that is left; anyone else fights back, 35 being worth 0.001 (details: [Self preservation](ai-tasks.md#combat-goals)).
   An attacker beyond 181.7 (a shooter) leaves the desire at 0: only another goal answers it ([shot from afar](ai-tasks.md#combat-goals)).
-  Meitou: `SelfPreservation`, goal 32 in the AI's chooser (both plans; `FleeSystem` runs), `RetaliationSystem` only for an NPC without a mind; Passive does not touch this path (exe tooltip: "Passive
+  Meitou: `SelfPreservation`, goal 32 in the AI's chooser (both plans; `FleeSystem` runs), `RetaliationSystem` only for a bodyguard's step; Passive does not touch this path (exe tooltip: "Passive
   focuses on non-combat unless attacked first"). Meitou: [order toggles](../simulation.md#order-toggles).
 - **Melee or shooting.** Row 4 Attacking (`AI::scoreMeleeAttack`, slot 53): 1, ×0.1 with Ranged on, ×0.5 when its squad is not intact (`Platoon::isIntact`);
   0 against a caged target; a crippled fighter 0.1 (0.0001 in Block or Hold with no threat within 40; 0 for a non-player non-unique); on Hold

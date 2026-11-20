@@ -506,13 +506,10 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
 /// The answer to being attacked: at once when an attacker takes it as its target and that alerts it (<see cref="CombatSystem.Alerts"/>: not through a
 /// wall or from another floor for the player's side, until a blow lands; the alert ends its sneaking, puts the attacker in its senses as a threat
 /// (<see cref="AggroSystem.Force"/>) and, with the target's fight off, asks it to be decided again unless it gets up or is player-side and moving).
-/// An NPC with a mind defends itself by its 32 Self preservation in the AI's chooser (row 13 on its own attacker,
-/// <see cref="Ai.AiSystem.SelfDefencePick"/>), which the alert asks to think at the next tick. One without a mind (no squad: scripted and test
-/// worlds) gets the engine's answer here: at the alert and again every <see cref="CheckEveryTicks"/> ticks, awake, armed with a
-/// <see cref="Fighter"/>, not crawling and not fighting already, it fights its attacker at any distance (<b>engine choice</b>). Nobody else joins
-/// here: squad mates and allies come by their own protect goals in the chooser (AiSystem.Fights.cs), which the alert asks to think
-/// (<see cref="AskProtectors"/>). A player character's own defence is its chooser's 32 Self preservation (<see cref="Ai.AiSystem.SelfDefencePick"/>,
-/// asked by the alert like an NPC's), except a bodyguard's against an attacker within 40 (row 45's <c>!39</c>); followers and
+/// Everyone defends itself by its 32 Self preservation in the chooser (row 13 on its own attacker, <see cref="Ai.AiSystem.SelfDefencePick"/>),
+/// which the alert asks to think at the next tick; a character without a mind waits for one (every character has goals in the original). Nobody
+/// else joins here: squad mates and allies come by their own protect goals in the chooser (AiSystem.Fights.cs), which the alert asks to think
+/// (<see cref="AskProtectors"/>). The exception is a bodyguard's own defence against an attacker within 40 (row 45's <c>!39</c>); followers and
 /// bodyguards fight their target's attacker within 40 of it (rows 31 / 45 / 289's <c>!16</c>, <see cref="Guards"/>). Passive keeps a character from
 /// helping others, not from defending itself. The orders go into the world's deferred list for the next tick (<see cref="World.Defer"/>) and are
 /// marked <see cref="AttackOrder.Defensive"/>. A player character's help for others (squad mates, with <see cref="SquadAi.Help"/> allied factions) is
@@ -565,60 +562,6 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem
     /// </summary>
     readonly List<(int Foe, List<CharacterId> Joiners)> _byFoe = [];
 
-    /// <summary>
-    /// This tick's attacker per attacked player character (target slot, attacker slot; <see cref="OfferSelf"/>): its own defence is its chooser's
-    /// Self preservation, so the join pass leaves it out of every other fight of the pass (<see cref="SelfFoe"/> reads it).
-    /// </summary>
-    readonly Dictionary<int, int> _selfFoes = [];
-    /// <summary>
-    /// The tick <see cref="_selfFoes"/> was made at; it holds nothing on any other tick.
-    /// </summary>
-    long _selfFoesTick = -1;
-
-    #region Self defence
-
-    /// <summary>
-    /// The attacker player character <paramref name="slot"/> defends itself against this tick, -1 for none (a pure read): the first, in slot order,
-    /// that took it as its target and alerted it, still awake, within <see cref="SelfDefenceReach"/> (Self preservation's desire is 0 beyond,
-    /// docs/game/combat.md "Self-defence"), not shooting at a gunner (146 leaves its turret only for a melee attacker) and, on Hold, passing its post
-    /// test (<see cref="Orders.HoldPost"/>).
-    /// </summary>
-    public int SelfFoe(World world, int slot)
-    {
-        if (_selfFoesTick != world.Tick || !_selfFoes.TryGetValue(slot, out int a)) return -1;
-
-        return world.Characters.Next[a].Alive && world.Characters.Cold(a) is { Medical.Incapacitated: false } ? a : -1;
-    }
-
-    /// <summary>
-    /// Records <paramref name="a"/> as this tick's attacker of player character <paramref name="t"/> (the first one only) when it targets it, is not
-    /// incapacitated, is within <see cref="SelfDefenceReach"/> (a gunning character does not take a ranged attacker) and passes a holding character's
-    /// post test.
-    /// </summary>
-    void OfferSelf(CharacterTable table, int a, int t)
-    {
-        var next = table.Next;
-        if (table.Cold(t) is not { IsPlayer: true } tc || _selfFoes.ContainsKey(t)) return;
-
-        var st = combat.StateOf(new CharacterId(a, next[a].Generation));
-        if (!next[t].Alive || next[t].Generation != st.TargetGeneration || table.Cold(a) is not { Medical.Incapacitated: false } ac) return;
-        if (st.Ranged && tc.Gunning is not null) return;
-
-        var d = next[a].Position - next[t].Position;
-        if (d.X * d.X + d.Z * d.Z > SelfDefenceReach * SelfDefenceReach) return;
-
-        if (Orders.Holding(tc))
-        {
-            var post = Orders.HoldPointOf(tc, next[t].Position);
-            bool attackerCrawls = ac.Medical?.Crawling == true || st.AttackTech >= 0;
-            if (!Orders.HoldPost(next[t].Position, post, next[a].Position, next[a].Velocity, next[a].Yaw, attackerCrawls, true)) return;
-        }
-
-        _selfFoes.Add(t, a);
-    }
-
-    #endregion
-
     #region Alerts
 
     /// <summary>
@@ -634,11 +577,6 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem
 
         // A target taken (or a blow landed) alerts at once and is answered in the same pass; the rest is looked at every CheckEveryTicks.
         bool fresh = false;
-        if (_selfFoesTick != world.Tick)
-        {
-            _selfFoes.Clear();
-            _selfFoesTick = world.Tick;
-        }
 
         for (int a = 0; a < table.HighWater; a++)
         {
@@ -667,8 +605,6 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem
                 _alerted[a] = _justAlerted[a] = fresh = true;
                 Alert(world, a, t, !st.Ranged);
             }
-
-            OfferSelf(table, a, t);
         }
 
         bool periodic = world.Tick % CheckEveryTicks == 0;
@@ -726,15 +662,10 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem
 
         var defenders = new List<CharacterId>();
 
-        // A player character's own defence is the decision step's (Self preservation, OfferSelf); it is taken here, so it joins no other fight of
-        // this pass.
+        // The attacked character's own defence is its chooser's 32 Self preservation, but for a bodyguard's step (SelfDefends).
         if (SelfDefends(table, t, taken, next[a].Position))
         {
             defenders.Add(new(t, next[t].Generation));
-            taken.Add(t);
-        }
-        else if (_selfFoes.TryGetValue(t, out int own) && own == a)
-        {
             taken.Add(t);
         }
 
@@ -756,7 +687,7 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem
 
         if (defenders.Count == 0) return;
 
-        // The engine started these this tick (a follow row's fight, a bodyguard's own defence, an NPC's): the decision step leaves the player's alone
+        // The engine started these this tick (a follow row's fight, a bodyguard's own defence): the decision step leaves the player's alone
         // this tick.
         foreach (var d in defenders)
         {
@@ -888,18 +819,16 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem
     }
 
     /// <summary>
-    /// Whether the attacked character itself answers here: an NPC without a mind at any distance (<b>engine choice</b>: the minimal answer of a
-    /// character no chooser runs); Passive does not stop it. An NPC with a mind defends itself by its Self preservation in the AI's chooser
-    /// (<see cref="Ai.AiSystem.SelfDefencePick"/>). A player character's own defence is its chooser's Self preservation too (docs/game/ai-tasks.md
-    /// "Precedence": its orders outrank it, it outranks the jobs), but a bodyguard following (row 45 running) answers here as a
-    /// step of its row against an attacker within <see cref="ImmediateReach"/> (45 needs <c>!39</c>, its own <c>+0x2b0</c>; farther ones are Self
-    /// preservation's, which a Bodyguard order outranks and a Bodyguard job does not). An NPC its order holds (<see cref="DecisionSystem.Ordered"/>)
-    /// answers as a player character does: its order outranks the answer, but for the bodyguard's step.
+    /// Whether the attacked character itself answers here. Everyone's own defence is its chooser's Self preservation
+    /// (<see cref="Ai.AiSystem.SelfDefencePick"/>; docs/game/ai-tasks.md "Precedence": orders outrank it, it outranks the jobs), but a bodyguard
+    /// following (row 45 running) answers here as a step of its row against an attacker within <see cref="ImmediateReach"/> (45 needs <c>!39</c>, its
+    /// own <c>+0x2b0</c>; farther ones are Self preservation's, which a Bodyguard order outranks and a Bodyguard job does not): a player character, or
+    /// an NPC its order holds (<see cref="DecisionSystem.Ordered"/>).
     /// </summary>
     static bool SelfDefends(CharacterTable table, int slot, HashSet<int> taken, Vector3 attacker)
     {
         if (!Able(table, slot, taken, out var cold, out byte task)) return false;
-        if (!cold.IsPlayer && !DecisionSystem.Ordered(cold)) return cold.Ai is null;
+        if (!cold.IsPlayer && !DecisionSystem.Ordered(cold)) return false;
 
         var d = attacker - table.Next[slot].Position;
         return cold.Guarding && task == (byte)CharacterTask.Follow && d.X * d.X + d.Z * d.Z <= ImmediateReach * ImmediateReach;
@@ -924,7 +853,7 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem
 
         // a carried mate does not answer; a carrier does (no attack goal of the original's tests carrying, docs/game/carry-loot.md "A carrier in a
         // fight"). A crippled NPC (a leg down, crawling) does not either (with a mind its Self preservation runs, FUN_1405a34e0 against
-        // FUN_1405a4260, Verified; without one it neither fights nor runs); a player character still fights.
+        // FUN_1405a4260, Verified); a player character still fights.
         return cold is { Fighter.CanAttack: true, Fleeing: false, IsImprisoned: false, Medical.Incapacitated: false, CarriedBy.IsNone: true }
             && (cold.IsPlayer || cold.Medical is not { Crawling: true } && !Ai.SelfPreservation.Flees(cold, 1));
     }
