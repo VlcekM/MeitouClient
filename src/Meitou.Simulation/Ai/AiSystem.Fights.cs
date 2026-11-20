@@ -74,7 +74,8 @@ public sealed partial class AiSystem
     /// while Passive, sneaking outside a fight or not standing; 15 / 288 <c>scoreProtectAllies</c> (<c>FUN_140599b90</c>, <b>Verified</b>) 0 while
     /// Passive (even in a fight), while sneaking and not in combat mode and for a slave holding job 187 (<see cref="HoldsJob187"/>), x0.5 while
     /// carrying (a carrier on a town errand); the desire of 15 / 288 is the finder's first ally above 0,
-    /// uncapped (<see cref="ProtectScan"/>), the rest 1 (144's 0.5 is its profile's). The finder's factor multiplies it (<see cref="FightPick"/>).
+    /// uncapped (<see cref="ProtectScan"/>), and 143's the same (AI slot 14 asks 15's finder whatever the row; 143's own finder only multiplies),
+    /// the rest 1 (144's 0.5 is its profile's). The finder's factor multiplies it (<see cref="FightPick"/>).
     /// A character that cannot fight wants none: no working fighter, or no working arm (row 4's desire 0, <see cref="SelfPreservation.AttackDesire"/>:
     /// every combat goal plans through 4); a crawler and a turret's gunner none but a protect goal, on row 4's terms (<see cref="ProtectsCrawling"/>).
     /// </summary>
@@ -91,6 +92,8 @@ public sealed partial class AiSystem
         {
             TaskType.AttackEnemies => passive || sneaking || medical.Prone ? 0 : 1,
             TaskType.ProtectAllies or TaskType.ProtectAlliesStayInTown => ProtectGoalDesire(world, slot, type, squad, cold, passive || sneaking),
+            // 143 registers the same desire, AI slot 14 (FUN_140599b90, Verified): it asks 15's finder, not 143's own squad scan.
+            TaskType.ProtectOwnSquad => ProtectGoalDesire(world, slot, TaskType.ProtectAllies, squad, cold, passive || sneaking),
             // 41's desire is the constant 2 (AI slot 0x178, FUN_1406415d0, Verified): the slave's Slave list weighs it above the other fighting goals.
             TaskType.AttackEnemiesOfMySlavemaster => MasterDesire,
             TaskType.Bodyguard => BodyguardDesire(world, slot, squad),

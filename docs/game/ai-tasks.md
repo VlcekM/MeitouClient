@@ -1484,7 +1484,8 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   never attacked over 13 game minutes, while a Fogman of a `fog squad wandering` squad (21, attack enemies and neutrals) attacked it; in a fresh
   Wanderer game a naturally spawned squad's Prince and Heavies 0-150 from the player walked on, by day and by night.
 - **Meitou, NPCs** (`AiSystem.Fights.cs`, [AI](../simulation.md#ai)): 16, 21, 144, 34, 143, 15 and 288 are priority-3 goals of the chooser (`TierRungs`), scored like every goal (desire x finder
-  factor x weight x crowding, x1.25 for the current one; in their hours). Desires: 16 1 (0 Passive, sneaking outside a fight, prone), 21 / 34 / 143 1, 144 0.5, 15 / 288 as above; the factor is 1
+  factor x weight x crowding, x1.25 for the current one; in their hours). Desires: 16 1 (0 Passive, sneaking outside a fight, prone), 21 / 34 1, 144 0.5, 15 / 288 as above, 143 the same as 15's (its registration's
+  desire is AI slot 14 `FUN_140599b90`, which asks 15's finder `FUN_14099ca10` whatever the row, **Verified**; 143's own finder then multiplies); the factor is 1
   with a pick for the attack goals (`AggroSystem.FindFoe`: the looker's sensed entries and its squad mates' within 2 R, the shared sightings) and the capped fight threat for the protect
   goals, whose pick is row 13's attacker (none: the goal fails). Engine gates: a character that cannot fight, crawls, runs away under Self preservation or mans a turret wants none. One whose
   lists hold no combat goal starts no fight and joins none: it only fights back when attacked (32 in the same chooser). Nothing else starts an NPC's fight on sight or pulls a mate in.

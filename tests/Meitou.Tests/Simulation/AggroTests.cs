@@ -932,9 +932,10 @@ public class AggroTests
 
     /// <summary>
     /// A crossbowman shooting from 400, beyond Self preservation's 181.7 (desire 0, <c>FUN_140599d20</c>), is not fought back by an NPC whose lists
-    /// hold no combat goal: nothing in its chooser covers it (the original's too, docs/game/combat.md "Self-defence"). With 143 Protect close allies
-    /// the NPC counts itself (its own fight threat, <c>FUN_14099d510</c>) and row 13 takes its own attacker at any distance, so it goes for the
-    /// shooter. Catches the old engine answer at any distance, and a 143 that never covers its own holder.
+    /// hold no combat goal: nothing in its chooser covers it (the original's too, docs/game/combat.md "Self-defence"). Nor through 143 Protect close
+    /// allies: its finder counts the holder itself (<c>FUN_14099d510</c>), but its desire is AI slot 14 <c>FUN_140599b90</c>, which asks 15's finder
+    /// <c>FUN_14099ca10</c>: sensed allies only, and the mate beside it is under no threat, so the desire is 0 and the finder is not asked. Catches
+    /// the old engine answer at any distance, and a 143 weighed at 1.
     /// </summary>
     [Theory, InlineData(false), InlineData(true)]
     public void A_shooter_beyond_self_preservations_reach_is_fought_back_only_through_another_goal(bool protects)
@@ -958,14 +959,12 @@ public class AggroTests
         }
 
         Assert.True(a.Combat.StateOf(shooter).Ranged, "it shoots");
-        Assert.Equal(protects, a.Fighting(member));
+        Assert.True(shot, "it was shot at");
+        Assert.False(a.Fighting(member));
 
-        if (protects) Assert.Equal(shooter.Slot, a.Combat.StateOf(member).TargetSlot);
-        else
-        {
-            Assert.True(shot, "it was shot at");
-            Assert.NotEqual(TaskType.SelfPreservation, table.Cold(member.Slot)!.Ai!.Goal?.Task.Type);
-        }
+        var goal = table.Cold(member.Slot)!.Ai!.Goal?.Task.Type;
+        Assert.NotEqual(TaskType.SelfPreservation, goal);
+        if (protects) Assert.NotEqual(TaskType.ProtectOwnSquad, goal);
     }
 
     /// <summary>

@@ -459,7 +459,8 @@ Meitou (`CombatSystem.HasSlot` / `MayJoin`, `Fighting.Steer`):
   Rows 15, 13 and the attack 4 are in the crippled repertoire (0x40) and nothing in that chain tests posture but row 4's desire (`FUN_1405a4260`, **Verified**): a crippled character gives 0.1 with a threat within 40 or when it is of the player's faction, an NPC without one 0; so a player-faction crawler joins through 15, and a turret gunner's 15 competes with its turret goal on score (`AiSystem.ProtectsCrawling`); a crawling NPC still wants none, as Meitou's flight gate takes it (`SelfPreservation.Flees`: 35 is worth 1 against row 4's 0.1).
   Meitou: `AiSystem.FightDesire` for every character; job 187 is a player character's list entry, an NPC's `SlaveMaster` with `ObedienceLost` clear (`HoldsJob187`).
 - **Joining a fight** (**Observed**: fights are plan rows of priority-3 goals, `chooseGoal` `FUN_140510ef0`). No rule outside the goals adds an NPC to a fight: it joins only by a combat
-  goal of its lists in their hours, each with its own finder ([combat goals](ai-tasks.md#combat-goals)): 16 / 21 / 144 attack on sight, 143 for a squad mate in a fight, 15 / 288 for a
+  goal of its lists in their hours, each with its own finder ([combat goals](ai-tasks.md#combat-goals)): 16 / 21 / 144 attack on sight, 143 for a squad mate in a fight (while a sensed ally is under threat: its desire is 15's, AI slot 14 `FUN_140599b90`, so
+  143 never covers its holder alone, **Verified**), 15 / 288 for a
   sensed ally in one (valued by its fight threat, through row 13 within 150 of the one protected), 34 against an aggressive enemy, or a neutral attacking an ally, in the looker's town. A squad
   shares sightings ([perception](perception.md), `FUN_140857b10`), not attacks. So a vanilla shopkeeper (143 only) follows its guards (143 and 34) into a fight only once one of them is in it,
   against that guard's foe within 150 of it.
