@@ -301,8 +301,9 @@ internal sealed class DutyGoals
 
     /// <summary>
     /// The act-out is over by the registering system's own rule (serial): the record goes and the goal ends on the mind, which chooses again at its
-    /// next think. <see cref="IDutyGoal.End"/> is not called (the system ended it itself); a walk of the act-out still under way stands, so the AI
-    /// holds the character. Nothing when the goal does not hold the character.
+    /// next think. <see cref="IDutyGoal.End"/> is not called (the system ended it itself). A task of the act-out still running stops as a displaced
+    /// one's does (<see cref="StopActOut"/>: a walk stands, another ends through its handler), so no tick leaves the character on a task the AI does
+    /// not hold. Nothing when the goal does not hold the character.
     /// </summary>
     internal void Done(World world, int slot, TaskType type)
     {
@@ -311,8 +312,7 @@ internal sealed class DutyGoals
         _held.Remove(slot);
         if (world.Characters.Cold(slot) is not { Ai: { } mind } cold) return;
 
-        bool walks = world.Characters.Next[slot].Task == (byte)CharacterTask.GoTo && AiSystem.OnDuty(cold, mind);
-        if (walks) TaskStart.Stand(world.Characters, slot);
+        if (AiSystem.OnDuty(cold, mind)) StopActOut(world, slot);
         EndOnMind(mind, held);
     }
 
