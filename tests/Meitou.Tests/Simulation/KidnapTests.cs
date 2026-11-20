@@ -390,6 +390,19 @@ public class KidnapInstallTests(ITestOutputHelper output)
     const float CageFloorRadius = 40;
 
     /// <summary>
+    /// How far east of the raiders' town the outpost stands: the raid is drafted within 700 of its town, so it starts outside the outpost's arrival
+    /// circle (0.8 of a player town's radius 2500) and marches there under its travel package.
+    /// </summary>
+    const float OutpostDistance = 4200;
+
+    /// <summary>
+    /// How far short of the outpost's centre, towards the raiders' town, the heroes stand: just inside the arrival circle, where the raid stops and
+    /// its assault package starts. An outpost with no building gives that package nothing else to go to (216 no building to ransack, 270 no gate or
+    /// wall), so the raiders reach only characters they see from there.
+    /// </summary>
+    const float HeroesInset = 1850;
+
+    /// <summary>
     /// The Skin Bandits' small raid on an outpost of four player characters: the raiders lift the downed and cage them in their town, and a save
     /// and a load keep them caged and kidnapped.
     /// </summary>
@@ -425,22 +438,22 @@ public class KidnapInstallTests(ITestOutputHelper output)
 
         Assert.Contains(data.Factions[faction].Campaigns, l => population.CampaignOf(l.Id)?.Name == "skin bandit standard raid small");
 
-        // A town of theirs with cages, and an outpost 1500 east of it with four player characters.
+        // A town of theirs with cages, and an outpost east of it with four player characters at its edge.
         var home = TownWithCages(world, data, faction);
 
         Assert.NotNull(home);
 
         cageFloors.AddRange(world.Fixtures.All.Where(x => x.Kind == FixtureKind.Cage && x.Site == home.Index));
-        var outpost = world.Buildings.AddTown(home.Position + new Vector3(1500, 0, 0), data.PlayerFaction);
+        var outpost = world.Buildings.AddTown(home.Position + new Vector3(OutpostDistance, 0, 0), data.PlayerFaction);
         world.RunTicks(15);
         var war = population.Wars[faction];
         foreach (var m in population.Wars) m.UpdateTime = m == war ? 0 : 1e9;
-        var heroes = SpawnHeroes(world, population, db, data, outpost);
+        var heroes = SpawnHeroes(world, population, db, data, new Vector2(outpost.Position.X - HeroesInset, outpost.Position.Z));
         var table = world.Characters;
         foreach (var h in heroes) table.Cold(h.Slot)!.IsPlayer = true;
 
-        // The assault is won once nobody fights 0.2 h in, which the lifts themselves can bring about, so not every hero need be downed; the
-        // leader's captive goes to the campaign's home, which has no free cage. The carriers of the rest walk home and cage them.
+        // The assault is won once nobody fights 0.2 h in, which the lifts themselves can bring about, so not every hero need be downed. The
+        // carriers walk their captives to their platoon's home town under the retreat package and cage them there.
         for (int i = 0; i < 60 && Caged(world, heroes) < 2; i++) world.RunTicks(150);
         output.WriteLine($"tick {world.Tick}: caged {Caged(world, heroes)}, lifted {set.Kidnap!.Log.Count(e => e.Kind == KidnapEventKind.Lifted)}");
 
@@ -488,14 +501,12 @@ public class KidnapInstallTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Four Greenlander player characters at the outpost, side by side.
+    /// Four Greenlander player characters of the outpost at <paramref name="at"/>, side by side.
     /// </summary>
-    static List<CharacterId> SpawnHeroes(SimWorld world, PopulationSystem population, GameDatabase db, PopulationData data,
-            Meitou.Simulation.Construction.PlayerTown outpost)
+    static List<CharacterId> SpawnHeroes(SimWorld world, PopulationSystem population, GameDatabase db, PopulationData data, Vector2 at)
     {
         string human = db.OfType(FcsRecordType.Character).First(r => r.GetReferences("race").Any(x => x.Values.Value0 > 0
                 && db.Find(x.TargetStringId)?.Name == "Greenlander") && r.GetReferences("stats").Count > 0).StringId;
-        var at = new Vector2(outpost.Position.X, outpost.Position.Z);
         var heroes = new List<CharacterId> { population.SpawnSandbox(world, human, at, player: true) };
         for (int k = 1; k < 4; k++)
         {
