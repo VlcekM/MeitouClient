@@ -336,7 +336,7 @@ public class DecisionTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void The_target_of_a_failed_stealth_ko_defends_itself_unless_an_order_runs(bool resting)
+    public void The_target_of_a_failed_stealth_ko_does_not_fight_an_attacker_that_stands_idle_and_keeps_its_order(bool resting)
     {
         using var rig = Quiet();
         var target = Victim(rig, 1300, 2300);
