@@ -186,6 +186,16 @@ public sealed class OrderEntry(TaskType row, IOrderOwner owner)
     /// saved: a loaded order releases its giver too.
     /// </summary>
     internal IDutyRelease? Keeps { get; init; }
+    /// <summary>
+    /// An engine act on the character's body (getting up, stumbling, getting out of bed, <see cref="Combat.BodyOrders"/>): its start lets no duty
+    /// go (<see cref="IDutyRelease"/>), as the original's goals are planned again once it is over.
+    /// </summary>
+    internal bool Interrupts { get; init; }
+    /// <summary>
+    /// The engine starts the order's task itself, with no plan (the stagger's 147, <c>AI::forceOrderInsert</c> <c>FUN_140507cd0</c>, which sets the
+    /// body task directly): the queue tests only its owner's check, not the repertoire, the threat rule or list B.
+    /// </summary>
+    internal bool Forced { get; init; }
 
     /// <summary>
     /// Whether the order is a move (row <c>MoveCusOrdered</c>).
@@ -233,6 +243,10 @@ public sealed class OrderQueue : IReadOnlyList<OrderEntry>
     /// Adds an order at the back.
     /// </summary>
     internal void Add(OrderEntry entry) => _entries.Add(entry);
+    /// <summary>
+    /// Adds an order at the front.
+    /// </summary>
+    internal void AddFront(OrderEntry entry) => _entries.Insert(0, entry);
     /// <summary>
     /// Removes the front order.
     /// </summary>
@@ -308,6 +322,62 @@ public static class PlayerOrders
     }
 
     /// <summary>
+    /// Pushes an order to the front of the character's queue (serial phases; <c>AI::forceOrderInsert</c> <c>FUN_140507cd0</c> → <c>FUN_14050b6a0</c>,
+    /// docs/game/combat.md "Fight lifecycle and orders"): a front whose task ended leaves first; a running front stays queued behind it, to be
+    /// planned again from its start once the new one is over. A running front of the same row keeps its task and the new entry takes it over (the
+    /// body task keeps the running stumble, <c>FUN_1405c6ec0</c>), the old one waiting behind it; else the new front starts as <see cref="Give"/>'s.
+    /// </summary>
+    internal static void GiveFront(World world, int slot, OrderEntry order)
+    {
+        var cold = world.Characters.Cold(slot)!;
+        var q = cold.OrderQueue;
+        Settle(world, slot);
+        bool adopts = q.Front is { } running && running.Row == order.Row && Runs(world, slot, running);
+        Interrupt(cold);
+        q.AddFront(order);
+        DecisionSystem.Request(cold);
+
+        if (adopts)
+        {
+            order.Started = true;
+            order.Tried = true;
+        }
+        else if (DecisionSystem.Decides(cold) || DecisionSystem.TakesOrders(cold))
+        {
+            TryFront(world, slot, show: false);
+        }
+
+        DecisionSystem.Hold(world, slot);
+    }
+
+    /// <summary>
+    /// The running front's task is ended from outside while the order stays queued (the stagger's front insert, the leg collapse's stop
+    /// <c>FUN_1405c8330</c>): it waits unstarted and is planned again from its start (serial phases, or the character's own slot).
+    /// </summary>
+    internal static void Interrupt(CharacterCold cold)
+    {
+        if (cold.OrderQueue.Front is not { Started: true } front) return;
+
+        front.Started = false;
+        front.RowRuns = false;
+    }
+
+    /// <summary>
+    /// The ragdoll setter's wipe (<c>FUN_1405d0db0</c> turning WHOLE or CARRY on → <c>FUN_1405074a0</c>, <c>FUN_14050d1b0</c>; a knock-out, death or
+    /// being picked up, docs/game/ai-tasks.md "What clears the queue"): the order queue and the second list (a loaded queue not restored yet) are
+    /// emptied and an AI's plan and goal dropped; the job list stays (serial phases).
+    /// </summary>
+    internal static void Wipe(CharacterCold cold)
+    {
+        cold.OrderQueue.Clear();
+        cold.SavedOrders = null;
+        if (cold.Ai is not { } mind) return;
+
+        mind.ResetPlan();
+        mind.Goal = null;
+    }
+
+    /// <summary>
     /// Whether the order can start for the character now (a pure read; the M6 <c>World.CanOrder</c> rests on it): the row is in the character's
     /// repertoire (<see cref="TaskStart.Eligible"/>), its owner's check, a row needing no melee threat (<see cref="NeedsNoThreat"/>) has none
     /// (<see cref="Threatened"/>), and no failing list B entry leaves its plan without a step (<see cref="ListTests.OrderBlocked"/>).
@@ -315,6 +385,7 @@ public static class PlayerOrders
     public static OrderCheck CanRun(World world, int slot, OrderEntry order)
     {
         var cold = world.Characters.Cold(slot)!;
+        if (order.Forced) return order.Owner.CanRun(world, slot, order);
         if (!TaskStart.Eligible(world, cold, order.Row)) return OrderCheck.Blocked();
         var own = order.Owner.CanRun(world, slot, order);
         if (!own.CanRun) return own;
@@ -397,12 +468,13 @@ public static class PlayerOrders
                 if (show && first) Show(world, slot, check);
                 return check;
             }
-            // an NPC keeps its routine for after the order, and its engine duties let go, so no holder's step stops or redirects the order's task
+            // an NPC keeps its routine for after the order, and its engine duties let go, so no holder's step stops or redirects the order's task;
+            // an act on its body interrupts them only
             var cold = world.Characters.Cold(slot)!;
             if (!DecisionSystem.Decides(cold))
             {
                 DecisionSystem.KeepRoutine(world.Characters, slot, cold);
-                world.ReleaseDuties(slot, front.Keeps);
+                if (!front.Interrupts) world.ReleaseDuties(slot, front.Keeps);
             }
 
             front.Started = true;

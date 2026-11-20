@@ -177,6 +177,11 @@ public readonly record struct TaskRequest(CharacterTask Task, TaskType Row, Task
     /// The speed mode of a walk (null: the character's run speed).
     /// </summary>
     public byte? Mode { get; init; }
+
+    /// <summary>
+    /// The engine sets the task itself, with no plan (the stagger's 147, <see cref="Player.OrderEntry.Forced"/>): the repertoire is not tested.
+    /// </summary>
+    public bool Forced { get; init; }
 }
 
 /// <summary>
@@ -409,7 +414,7 @@ public static class TaskStart
         && (row is TaskType.Idle or TaskType.Aoeu || !Repertoire.StuckInBed(world, cold));
 
     /// <summary>
-    /// Starts a task (serial phases only): the row must be <see cref="Eligible"/>; then a fight ends (a new task drops the fight task,
+    /// Starts a task (serial phases only): the row must be <see cref="Eligible"/> (unless <see cref="TaskRequest.Forced"/>); then a fight ends (a new task drops the fight task,
     /// docs/game/combat.md "Fight lifecycle and orders"), the task before ends through its handler, the provenance is recorded
     /// (<see cref="CharacterCold.Running"/>) and the act-out starts. A fight the character did not take up by an order or a job, while it runs a
     /// follow row (31, 45, 289), is a step of that row (31 and 45 need state 16, which 13 "Attacking attackers of" gives; docs/game/ai-tasks.md
@@ -421,7 +426,7 @@ public static class TaskStart
         var table = world.Characters;
         if (table.Phase == TablePhase.Parallel) throw new InvalidOperationException("tasks start in the serial phases only");
         var cold = table.Cold(slot)!;
-        if (!Eligible(world, cold, request.Row)) return StartResult.NotEligible;
+        if (!request.Forced && !Eligible(world, cold, request.Row)) return StartResult.NotEligible;
         var current = (CharacterTask)table.Next[slot].Task;
         var handler = world.Tasks.Of(request.Task, request.Row, request.Site);
         bool step = cold.Running is { } kept && Step(cold, kept, current, request);

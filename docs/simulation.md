@@ -198,15 +198,15 @@ A fight is row 5 when the player picked the target, 13 for a defence, else 16 (1
 [combat](game/combat.md#fight-lifecycle-and-orders)); the task before ends through its handler (`TaskEnd.Replaced`: it lets go of its target, while the movement, the task and
 the task it goes back to are the new start's); the provenance is recorded in `CharacterCold.Running` (`RunningTask`: act-out, row, `TaskSource`, job index or implicit flag,
 target, site, tick, resume task); the act-out starts.
-`TaskStart.End(world, slot, reason)` ends a task and drops its provenance: `TaskEnd.Stopped` from outside the act-out (the Stop order, a squad mate lifted awake, a leg giving out: `BodySystem.Collapse` also clears the order queue, [ragdolls](game/ragdolls.md#forced-crawl); then idle);
+`TaskStart.End(world, slot, reason)` ends a task and drops its provenance: `TaskEnd.Stopped` from outside the act-out (the Stop order, a squad mate lifted awake, a leg giving out: `BodySystem.Collapse` keeps the order queue, its front waiting to start again, [ragdolls](game/ragdolls.md#forced-crawl); then idle);
 `TaskEnd.Done` the act-out's own end (a treatment, carry, site's or machine's work, haul trip, prospecting, a job's follow: the handler lets go, then the character takes up
 `RunningTask.Resume`, engine; one the [decision step](#decision-step) decides stands idle; every end also sets the replan bit). Walks (bed, item work) end by standing; their provenance then no longer runs the task. A lock order's worker (lock, shackle, cage, door, force work)
 stands at its work and its provenance runs `Idle` from then (`LockSystem.AtWork`), so the next start ends the work through the lock handler (a move order given at a cage walks away). Each `CharacterTask` has one
 `ITaskHandler` (Start, End, Done), registered by its system (`ITaskOwner`) in `World.Tasks`, an open list later code may add to or replace; a task without one is set as is. Owners: movement
 (GoTo, Follow, Idle, Wander), combat (Attack), first aid (Treat, Rest), carry (PickUp, PutDown, Loot, StealthKo), production (Operate, Haul, Prospect), construction (Build, Dismantle,
 DeliverMaterials, FetchMaterials), beds (Sleep). A row may have its own handler, which takes that row's starts and ends whatever its act-out (the task before is ended through its running row's
-handler): the lock system's rows (lock, shackle, cage, door and round work), the beds' put-in rows 99 / 106, the player system's rows 3 (item pick-up) and 26 on a site (container work) and the arrest system's
-put in cage 108, all acted out by a walk (`GoTo`) or in place (`Idle`). `TaskRequest.Detail` carries an act-out's own parameters (a shackle job, a ground item, a round). A builder's
+handler): the lock system's rows (lock, shackle, cage, door and round work), the beds' put-in rows 99 / 106, the player system's rows 3 (item pick-up) and 26 on a site (container work), the arrest system's
+put in cage 108 and combat's body orders 65, 52, 147 and 116 ([order queue](#order-queue)), all acted out by a walk (`GoTo`) or in place (`Idle`). `TaskRequest.Detail` carries an act-out's own parameters (a shackle job, a ground item, a round). A builder's
 delivering, fetching and dismantling are steps of one act-out (`TaskStart.ActOut`): `RunningTask.Runs` and the debug check treat them as Build.
 - Routed through it: move, follow and bodyguard (order and job), stop, every fight (`AttackOrder`: picked is an order, `Defensive` a reaction, else a goal), First Aid, Splint, the Medic
   button, medic, robotics and splint jobs, NPC healing, Rest, pick up, kidnap, loot, open inventory, stealth KO and put down orders, the lifts and drops of errands and town duties, rescue
@@ -258,7 +258,21 @@ first step, `ListTests.OrderBlocked`: the first list B entry `RowStates` evaluat
 repertoire blocks it with that state's line, `StateFailureLines`, so a Follow on a downed character waits silently until it is up; one with a provider is a step
 the act-out carries out first, the row's list B tested once it held: `OrderEntry.RowRuns`).
 - A blocked front shows its text (a bark, or a posted message) and stays queued; the character's task is left alone, so its jobs, goals and reactions go on (S5). `Gone` pops it.
-  A move (29) or follow given to a character out cold is blocked and waits until it wakes (engine choice: the chooser does not run while the character is down).
+  An order given to a character out cold waits queued (the chooser does not run while it is carried, out cold or dead, `DecisionSystem.Down`, for the player's
+  characters too) and is wiped when it wakes outside a bed or cage (the wake's get-up order has the clear flag, below).
+- **The body's orders** (`Combat.BodyOrders`, the original's engine order givers, [order givers](game/ai-tasks.md#order-givers); any character, the player's
+  included; owner and row handler for 65, 52, 147 and 116; not saved; they release no duty, `OrderEntry.Interrupts`, and keep an NPC's routine). The combat body
+  step (parallel, own slot) notes in `CharacterCold.BodyEvents` what the body did, and `BodyOrders.Pass` (combat's slow world, serial) acts on it:
+  going down (knocked out or dead) wipes the queue, a loaded queue not restored yet and an AI's plan and goal, the jobs kept (`PlayerOrders.Wipe`; being picked up
+  does the same in `CarrySystem.Link`); waking gives 65 Getting up (an animal, or waking standing) or 52 (waking staying low or crawling) with the clear flag,
+  none in a bed or cage and, while carried, only once put down; a return to standing from staying low or crawling (Stand Up, a leg back up; not at a
+  kneeling treatment) gives 65 with the clear flag unless one is queued. A stagger outside a fight (`CombatSystem.Stagger`, not getting up, not at a turret,
+  not a squadless NPC) pushes 147 Stumbling to the front (`PlayerOrders.GiveFront`): the running front waits behind it unstarted and is started again from its
+  start afterwards; 147 starts with no repertoire or list test (`OrderEntry.Forced`, `TaskRequest.Forced`); a blow during a running stumble adds another front
+  147 that takes the running stumble over, the older one ending at once after it. A failed kidnap of a sleeper gives 116 with the clear flag
+  (`CarrySystem.Kidnap`), which leaves the queue at once as the kidnap has got it out of bed. Each acts out standing in place (`Idle` under its row) until the
+  body's hold ends: 65 / 52 the get-up's `GettingUpUntil` (set at the wake by the body step), 147 the stumble's `StaggeredUntil` (at once without a clip);
+  65 and 52 start nothing in a bed or cage and leave.
 - `PlayerOrders.Runs`: the front started and its task's provenance is an order's that runs the task (a move also needs `OrderMove`) and the handler is not `Done`. Lock work and item or
   container work done in place (`Idle`) report `Done` once the character holds no work.
 - A front whose task ended leaves the queue (a move's arrival in the character's own partition, `PlayerOrders.Arrived`, which also starts a queued move at once as the move-only
@@ -303,11 +317,10 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   does); the flight step, which also ends a running flight; the stand-down after a fight; the free tests of the duty sweeps and routines (town duties and the player faction's
   food runs, captive jobs and race goals, 259, kidnap, arrests and bounty hunters, the shut-in release, NPC healing, arming and scavenging, rejoining the leader); the
   population's leader walk, arrival and campaign march; and two engine reactions that are no order (`TaskSource.Npc`): a crime victim's attack on its culprit and a caught thief's
-  watcher getting up from rest. The engine acts the original gives as orders (dialogue acts, an arrest) still replace the front; a failed kidnap of a sleeper clears any victim's
-  queue (order 116). A blocked front waits, the AI going on with its goals meanwhile, and is tried again on the re-ask (every `ProductionSystem.JobCheckTicks`). Once the
+  watcher getting up from rest. The engine acts the original gives as orders (dialogue acts, an arrest) still replace the front; the body's orders above are orders. A blocked front waits, the AI going on with its goals meanwhile, and is tried again on the re-ask (every `ProductionSystem.JobCheckTicks`). Once the
   front no longer runs the mind chooses again at once; when it starts the mind's plan, goal and commitment go. An NPC's queue is not saved, and an NPC keeps a replan bit only
   while it holds an order.
-- **Duties let go** when an NPC's front starts (engine design; `PlayerOrders.TryFront`, serial, before the owner's `Start`): `World.ReleaseDuties` asks every system that
+- **Duties let go** when an NPC's front starts, but for the body's orders (engine design; `PlayerOrders.TryFront`, serial, before the owner's `Start`): `World.ReleaseDuties` asks every system that
   is an `IDutyRelease` (found on the world's systems, nothing registered) but the order's `OrderEntry.Keeps`, its giver, to let the character go through its own give-up.
   Town duties, kidnaps, captive jobs, arrests and bounty hunts, lock rounds, the mod NPC goals (`NpcGoals`), the dialogue's walk-ups, stalkers and follows while
   talking, a Talk order's walk to it and a trade's walk to its trader drop their record and clear `Engaged`; a body carried for one is let go where it stands (the unlink,
@@ -341,7 +354,8 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
 `World.Decisions` (`DecisionSystem`) chooses every task of the characters it decides (`DecisionSystem.Decides`: `IsPlayer`) as the original's chooser does
 ([precedence](game/ai-tasks.md#precedence)); NPCs keep the AI ([AI](#ai)) for every source but the first: an NPC that holds an order is asked its queue here, source 1
 alone, when due as a player character is, and a blocked front also on the re-ask ([order queue](#order-queue)). Serial, in slot order: in the slow world right after the last of retaliation, aggro and flight (after every
-system when the world has none), and between ticks for orders only (`ApplyPausedInterfaceCommands`; the bit stays for the next tick).
+system when the world has none), and between ticks for orders only (`ApplyPausedInterfaceCommands`; the bit stays for the next tick). Nobody is decided while carried, out
+cold or dead (`DecisionSystem.Down`, the character tick `FUN_1405d00b0` runs no chooser then); the replan bit waits.
 - **Sources** (`IDecisionSource`: `CanRun` and `Desire` pure reads, `Start`): an open list sorted by step, then `Key` (the original's list order); systems register theirs
   (`IDecisionOwner`), later code may add more (`DecisionSystem.Register`). The first source that can run starts; one that runs the character's task already ends the step. Step 4 picks
   the best desire x weight (x1.25 for the goal running now, again below 1 while its task is not [finished](game/ai-tasks.md#finished-tests); a tie goes to the later-listed).
@@ -361,8 +375,8 @@ system when the world has none), and between ticks for orders only (`ApplyPaused
      The retaliation pass offers nothing to it; the step reaches it at the engine re-ask (idle or a job's task, every `JobCheckTicks`) or any replan, so a medic or worker on its job joins, one on an order does not.
      A player character woken by a failed kidnap (`CarrySystem.Kidnap`) or targeted by a failed stealth knock-out (`CarrySystem.StealthKo`) is told of the attacker (forced sense) and
      replans (`EngagedDefence.Engage`); `EngagedDefence` (key 32, desire 1 within 40 else 0.7, a deferred defence, row 13) answers for 5 s unless an order runs first (**Engine**
-     stand-in for the threats list, [carry-loot](game/carry-loot.md#kidnapping), [combat](game/combat.md#stealth-knock-out)). A sleeper's kidnap also clears its queue (order 116). NPC victims
-     keep their deferred defensive attack (the AI is stage 9). An autonomous squad's urgent package goals: `SquadAutonomy.PackageGoals`
+     stand-in for the threats list, [carry-loot](game/carry-loot.md#kidnapping), [combat](game/combat.md#stealth-knock-out)). A sleeper's kidnap also gives it order 116 with the clear flag
+     ([order queue](#order-queue)). NPC victims keep their deferred defensive attack (engine stand-in: the original pushes no fight, its chooser fights). An autonomous squad's urgent package goals: `SquadAutonomy.PackageGoals`
      ([autonomous player squads](#autonomous-player-squads)).
   5. Jobs: the job list in order (`IJobSource` contributors by type, `DecisionSystem.RegisterJob`; the original's keys N+8, N+7, ...): the jobs switch gates every type but 16, 31,
      45, 57, 58, 250 (`FUN_14050c1c0`, both passes; 289 is gated), a row the repertoire does not register is skipped, the first that can run starts and one that runs the task ends the
@@ -845,10 +859,10 @@ not fight back that has under 2 attackers); a crippled one is left out of these 
 A squad mate's attackers are no candidates. With none, the enemies its senses saw or heard at their last look (`CharacterFacts.Senses`, perception.md "Senses"), the current target
 among them with its stubbornness; an NPC's chase may give it up sooner (`AggroSystem`, 24 s unsensed). "Intended aggression ≤ 0" is a fight-off candidate not counting the chooser's faction an enemy (engine
 reading); getting up is `CharacterCold.GettingUpUntil`, from waking for the ragdoll blend (only after a whole-body ragdoll) plus `CombatSystem.GetUpClipSeconds` (`standing up 3` to `GetUpEnd` at its play speed; none when carried or in a bed),
-during which it neither walks, works nor fights (Task_GetUp; it counts as staggered for the work systems).
+during which it neither walks, works nor fights (Task_GetUp, the act-out of the get-up order 65 / 52, [order queue](#order-queue); it counts as staggered for the work systems).
 Only a fighter blocks or dodges. A landed blow on a shackled defender knocks it out 25% of the time (`PutDownKoSeconds` with 0.002: 3 s). A hit on a
-character outside a fight that is getting up does nothing more; on any other (not a gunner) it restarts the task (timer, lift or knock-out swing, and a
-new path from where it stands; a lock's, site's or machine's progress stays with the object), and a picked stumble clip stops its walking and its work
+character outside a fight that is getting up does nothing more; on any other (not a gunner) its task ends behind the Stumbling order 147 and starts again
+afterwards (a lock's, site's or machine's progress stays with the object), and a picked stumble clip stops its walking and its work
 (first aid, lockpicking, building, operating) until the clip ends (`CharacterCold.StaggeredUntil`). A fight's end puts no weapon away: a player's character sheathes once it is neither walking nor following on an order,
 an NPC by its planner's UNEQUIP_WEAPON step (one without an AI at once).
 
@@ -1137,7 +1151,7 @@ unload, hashed only once non-empty. Facts: [locks](game/locks.md), [economy 11.5
   right click on a bed, or its held menu's "Sleep") sends every awake, non-carrying selected character (as the original; the first there takes it, the rest are refused); `PutInBedOrder` (99: "Put in Bed" on the bed's menu;
   a quick click while carrying, engine) sends carriers, the cheaper rent paid, the body let go
   and laid in. In reach (`use range` + 15, on the bed's floor within 20, or a walk ended within 60) it pays the rent (`Cost`/`Pay`, player only; the 24 h memo
-  is engine state, not saved) and enters, its orders dropped; the Sleep order (258) keeps running while it lies there, until replaced, also for a
+  is engine state, not saved) and enters, its queued orders kept (as for a cage, [what clears the queue](game/ai-tasks.md#what-clears-the-queue)); the Sleep order (258) keeps running while it lies there, until replaced, also for a
   sleeper loaded lying in that bed (#684: else its follow job got it up); 3 short walks give the bed up (`MarkUnreachable`). In a bed the task is `CharacterTask.Sleep` (held still, the
   bed's clip, `Sleeping` on the HUD); any other task gets it up (`GetUp`; a knock-out or death in bed keeps it there). The player's bed search `FindBed`
   follows the original's weights over beds within `BedSearchRange` 3953 (engine, for the town). Job 106 (in the list with the rescue job; the decision step's, `BedSystem.PutInJob`): a carrier of

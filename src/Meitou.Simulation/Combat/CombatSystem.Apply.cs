@@ -438,27 +438,34 @@ public sealed partial class CombatSystem
         if (world.Player.NoStumble && dc.IsPlayer) return;
 
         // Outside a fight (docs/game/combat.md "Stagger outside a fight"): one getting up is left alone; any other drops its task, which is planned
-        // again from its start, unless it mans a turret (shooting at a live target).
+        // again from its start behind the Stumbling order 147, unless it mans a turret (shooting at a live target).
         bool outsideFight = dSlot.TargetSlot < 0 && !dc.InCombat;
-        if (outsideFight)
+        if (outsideFight && CharacterFacts.GettingUp(dc, now))
         {
-            if (CharacterFacts.GettingUp(dc, now))
-            {
-                if (!bolt) UnderAttackGettingUp(world, d, dc, counter);
-                return;
-            }
-
-            if (dc.Gunning is null)
-            {
-                // a put-down is finished by the hit, a lift past its attach keeps the body
-                world.SystemOf<Carrying.CarrySystem>()?.Interrupted(world, d);
-                Restart(world.Characters, d, dc);
-
-                // forceOrderInsert replans (the stumble is not modelled as an order)
-                DecisionSystem.Request(dc);
-            }
+            if (!bolt) UnderAttackGettingUp(world, d, dc, counter);
+            return;
         }
 
+        bool stumbles = outsideFight && dc.Gunning is null;
+        if (stumbles)
+        {
+            // a put-down is finished by the hit, a lift past its attach keeps the body
+            world.SystemOf<Carrying.CarrySystem>()?.Interrupted(world, d);
+            Restart(world.Characters, d, dc);
+        }
+
+        HitReaction(world, ref dSlot, d, dc, heavy, now, counter);
+
+        // forceOrderInsert pushes 147 to the front and replans, after the clip set the stumble's hold (its task ends with it)
+        if (stumbles) BodyOrders.Stumble(world, d);
+    }
+
+    /// <summary>
+    /// The clip of a hit's reaction (<see cref="Stagger"/>): a light hit while a stumble plays changes nothing; else the swing and reaction are
+    /// cancelled and a stumble clip, when one is picked, holds the character until it ends.
+    /// </summary>
+    void HitReaction(World world, ref CombatSlot dSlot, int d, CharacterCold dc, bool heavy, int now, ulong counter)
+    {
         bool stumbling = dSlot.StumbleClip >= 0 && now < dSlot.StunUntil;
         dSlot.HitHeavy = heavy && !stumbling;
         if (stumbling && !heavy) return;
@@ -479,9 +486,6 @@ public sealed partial class CombatSystem
             // the stumble state (8) ends the pause (FUN_14060cf60 clears +0x144)
             dSlot.PauseUntil = 0;
             dc.StaggeredUntil = dSlot.StunUntil;
-
-            // reported as Stumbling (147) meanwhile
-            if (outsideFight && dc.Gunning is null) dc.StumbleTaskUntil = dSlot.StunUntil;
             dSlot.ReadyTick = Math.Max(dSlot.ReadyTick, dSlot.StunUntil);
         }
         else

@@ -1969,14 +1969,14 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
-    /// Puts a character into its fixture: placed there, standing, its path and orders dropped.
+    /// Puts a character into its fixture: placed there, standing, its path dropped. Its queued orders stay (the cage or bed entry
+    /// <c>FUN_140330600</c> wipes no queue, docs/game/ai-tasks.md "What clears the queue").
     /// </summary>
     static void Hold(CharacterTable table, int slot, CharacterCold c, Vector3 at, float yaw)
     {
         table.Place(slot, at, yaw);
         TaskStart.Step(table, slot, CharacterTask.Idle);   // the teleport stands it
         c.Path = [];
-        c.OrderQueue.Clear();
     }
 
     /// <summary>

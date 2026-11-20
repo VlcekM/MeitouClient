@@ -1247,6 +1247,8 @@ Not cleared by: the stop `FUN_1405c8330` (leg collapse, DA 6 / 7 / 34 / 55 / 57:
 `FUN_140272740`: they destroy only the members' job lists), or the body attach `FUN_1405ced90` (carry flag `+0x3d4` set, `+0x2f8` cleared, the running task marked done).
 A queued order also leaves when it is popped ([source 1](#precedence)) or when its task ends: the plan end (`FUN_14050d7d0`) and the failed flag's handler (`FUN_14050d080`:
 the target unreachable, the next task cannot start) pop the front when it matches the running task.
+Meitou: the same for every character (`PlayerOrders.Wipe` at going down and being picked up, the body's orders' clear flag; the leg collapse, enslaving and bed or
+cage entry keep the queue; [simulation](../simulation.md#order-queue)).
 
 ### Immediate update
 

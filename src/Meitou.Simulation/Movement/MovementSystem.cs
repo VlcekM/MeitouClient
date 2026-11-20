@@ -93,7 +93,8 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     }
 
     /// <summary>
-    /// A move order (29) needs an awake character (one out cold keeps it queued until it wakes); out of a building shut by locked doors, a way
+    /// A move order (29) needs an awake character (one out cold keeps it queued, and the wake's get-up order wipes it, <see cref="Combat.BodyOrders"/>);
+    /// out of a building shut by locked doors, a way
     /// out (state 60, <see cref="Locks.LockSystem.CanLeave"/>: "I can't get out of here."), and into one, a way in (state 59,
     /// <see cref="Locks.LockSystem.CanEnter"/>: "I can't get there."), the states' failure texts in the condition table <c>FUN_140610250</c>, in the
     /// order the move row lists them; a follow order (31, 45) a target that is there, and an awake, free character (not caged or carried).

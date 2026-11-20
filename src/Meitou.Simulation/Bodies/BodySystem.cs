@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Gameplay;
+using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Ai;
@@ -760,20 +761,28 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     }
 
     /// <summary>
-    /// The first tick a leg is down (<see cref="MedicalState.CollapseOnset"/>): <c>FUN_1405c8330</c> stops the character and clears its orders and
-    /// tasks (<b>Observed</b>, docs/game/ragdolls.md "Forced crawl"), so the running task and fight end (<see cref="TaskStart.End"/>, which asks for
-    /// a new decision; an NPC's AI picks again from idle), and the queued orders go. Not for one carried or in a bed or cage (the original tests
-    /// both), nor while its current task is Stumbling (147), Getting up (65) or Standing (28; Meitou has no such task: Stand Up is at once), which
-    /// the original's current-task test spares. Runs in the serial slow world, the tick the medical tick set it (the update itself is parallel).
+    /// The first tick a leg is down (<see cref="MedicalState.CollapseOnset"/>): <c>FUN_1405c8330</c> (<b>Verified</b>, docs/game/ragdolls.md "Forced
+    /// crawl") deletes the running task, empties the plan and runs <c>FUN_140507530</c> (the second list and the current goal), so the running task
+    /// and fight end (<see cref="TaskStart.End"/>, which asks for a new decision) while the order queue stays: its front is planned again from its
+    /// start (<see cref="PlayerOrders.Interrupt"/>); a loaded queue not restored yet goes, and an AI's plan and goal. Not for one carried or in a bed
+    /// or cage (the original tests both), nor while its task is a running Stumbling (147) or Getting up (65), rows with TaskData <c>+0x22</c> (28
+    /// Standing too; Meitou has no such task: Stand Up is at once). Runs in the serial slow world, the tick the medical tick set it.
     /// </summary>
     static void Collapse(World world, int slot, CharacterCold cold)
     {
         cold.Medical!.CollapseOnset = false;
-        var table = world.Characters;
-        long now = world.Tick;
-        bool stumbling = cold.StaggeredUntil > now;
-        if (cold.InSomething != Locks.HeldState.None || !cold.CarriedBy.IsNone || stumbling || CharacterFacts.GettingUp(cold, now)) return;
-        cold.OrderQueue.Clear();
+        var task = (CharacterTask)world.Characters.Next[slot].Task;
+        bool spared = cold.Running is { Source: TaskSource.Order, Row: TaskType.GetUp or TaskType.StumbleTaskForced } run && run.Runs(task);
+        if (cold.InSomething != Locks.HeldState.None || !cold.CarriedBy.IsNone || spared) return;
+
+        PlayerOrders.Interrupt(cold);
+        cold.SavedOrders = null;
+        if (cold.Ai is { } mind)
+        {
+            mind.ResetPlan();
+            mind.Goal = null;
+        }
+
         TaskStart.End(world, slot, TaskEnd.Stopped);
     }
 

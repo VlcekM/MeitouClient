@@ -125,21 +125,6 @@ public static class CharacterFacts
     public static bool GettingUp(CharacterCold cold, long tick) => cold.GettingUpUntil > tick;
 
     /// <summary>
-    /// The goals a character that can rise posts as its current task (<c>FUN_1405d00b0</c> ~148-232, <b>Verified</b>): 65 GET_UP_STAND_UP, 52
-    /// GET_UP_STAY_DOWN_THOUGH.
-    /// </summary>
-    public const int GetUpStandUpGoal = 65, GetUpStayDownGoal = 52;
-
-    /// <summary>
-    /// The goal a character rising from a knock-down has as its task (0: none). Animals always post 65 (single branch, no posture computation);
-    /// another character posts 52 when it ends staying low or crawling (posture 1 or 2) and 65 when it ends standing.
-    /// </summary>
-    public static int GetUpGoal(CharacterCold cold, long tick) =>
-        !GettingUp(cold, tick) ? 0
-            : cold.Fighter?.IsAnimal == true || cold.Medical is not { } m || !(m.StayingLow || m.Crawling) ? GetUpStandUpGoal
-            : GetUpStayDownGoal;
-
-    /// <summary>
     /// Whether a waking character stands through the get-up clip: not one carried, and not one waking in a bed (it lies on; <c>AnimationSystem</c>
     /// plays no clip, so nothing holds it).
     /// </summary>

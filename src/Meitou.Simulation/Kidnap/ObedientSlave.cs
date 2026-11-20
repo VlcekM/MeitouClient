@@ -85,15 +85,13 @@ public static class ObedientSlave
     }
 
     /// <summary>
-    /// Destroys the character's perma-jobs and order queue (<c>FUN_140507280</c>, <c>FUN_140507530</c>).
+    /// Destroys the character's perma-jobs and second list (<c>FUN_140507280</c>, <c>FUN_140507530</c>: a loaded queue not restored yet); the order
+    /// queue is kept (docs/game/ai-tasks.md "What clears the queue").
     /// </summary>
     static void Destroy(World world, CharacterCold cold)
     {
-        int slot = SlotOf(world, cold);
-        DestroyJobs(world, cold, slot);
-        cold.OrderQueue.Clear();
-        if (slot >= 0 && cold.OrderMove && world.Characters.Next[slot].Task == (byte)CharacterTask.GoTo)
-            TaskStart.Stand(world.Characters, slot);
+        DestroyJobs(world, cold, SlotOf(world, cold));
+        cold.SavedOrders = null;
     }
 
     /// <summary>

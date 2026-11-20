@@ -60,6 +60,7 @@ public sealed partial class World
         TaskType.Pickup => SystemOf<PlayerSystem>()?.PickUps,
         TaskType.UseBed or TaskType.PutSomeoneInBed => SystemOf<Locks.BedSystem>(),
         TaskType.PutInCage => SystemOf<Crime.ArrestSystem>(),
+        TaskType.GetUp or TaskType.Aoeu or TaskType.StumbleTaskForced or TaskType.GetOutOfBed => SystemOf<Combat.CombatSystem>()?.BodyOrders,
         _ => Locks.LockSystem.OwnsRow(row) ? SystemOf<Locks.LockSystem>() : null,
     };
 

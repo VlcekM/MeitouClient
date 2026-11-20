@@ -213,8 +213,13 @@ public sealed class DecisionSystem
     /// "Precedence"): it has a squad, is not carried and is neither out cold nor dead; one playing dead (posture 3) is awake to its AI and takes them.
     /// Its mind plays no part. A pure read.
     /// </summary>
-    internal static bool TakesOrders(CharacterCold cold) =>
-        cold.SquadId >= 0 && cold.CarriedBy.IsNone && cold.Medical is not ({ Dead: true } or { Unconscious: true, PlayingDead: false });
+    internal static bool TakesOrders(CharacterCold cold) => cold.SquadId >= 0 && !Down(cold);
+
+    /// <summary>
+    /// Whether the chooser is off for the character (<c>FUN_1405d00b0</c>): it is carried, or out cold (not playing dead) or dead. A pure read.
+    /// </summary>
+    internal static bool Down(CharacterCold cold) =>
+        !cold.CarriedBy.IsNone || cold.Medical is { Dead: true } or { Unconscious: true, PlayingDead: false };
 
     /// <summary>
     /// Whether an NPC's order holds it now (<see cref="CharacterCold.OrderWins"/>, its queue not emptied since, and the step does not decide it):
@@ -357,11 +362,13 @@ public sealed class DecisionSystem
     }
 
     /// <summary>
-    /// A player character's turn of <see cref="Run"/>: its saved queue is restored once, and it is decided when due.
+    /// A player character's turn of <see cref="Run"/>: its saved queue is restored once, and it is decided when due; not while it is carried, out
+    /// cold or dead (<see cref="Down"/>: the character tick runs no chooser then, <c>FUN_1405d00b0</c>), its replan bit kept for when it is up.
     /// </summary>
     void RunPlayer(World world, int slot, CharacterCold cold, bool paused)
     {
         if (cold.SavedOrders is not null) Saving.OrderSave.Restore(world, slot, cold);
+        if (Down(cold)) return;
         bool due = !paused && (world.Tick + slot) % Production.ProductionSystem.JobCheckTicks == 0 && ReAsked(world, slot, cold);
         if (!Due(world, slot, cold, paused, due) || DropsClaimed(world, slot, cold, paused)) return;
 

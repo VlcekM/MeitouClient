@@ -119,14 +119,12 @@ public sealed partial class CarrySystem
         Aggro?.Alarm(world, victimId, kidnapperId);
         if (asleep)
         {
+            // The kidnap clears the in-bed state itself, then gives any victim order 116 Getting out of bed with the clear flag (FUN_1405d20d0, no
+            // faction test): its list A (not in bed) holds, so it leaves the queue at once and no order holds the victim any more.
             if (victim.InSomething == Locks.HeldState.Bed) world.Fixtures.LeaveBed(world, victimId);
-
-            // Order 116 clears any victim's queue (FUN_1405d20d0, no faction test): an NPC's first, so its order holds it no more.
-            if (!decides) victim.OrderQueue.Clear();
-            TaskStart.Become(world, b, CharacterTask.Idle, Meitou.Data.Gameplay.Ai.TaskType.Idle, TaskSource.Reaction);
+            OutOfBed(world, b);
             if (decides)
             {
-                victim.OrderQueue.Clear();   // order 116 Getting out of bed replaces the whole queue (FUN_1405d20d0, clear flag 1)
                 _engaged.Engage(world, Aggro, b, i);
             }
             else
@@ -138,6 +136,16 @@ public sealed partial class CarrySystem
             }
         }
         return false;
+    }
+
+    /// <summary>
+    /// A woken sleeper's order 116 (<see cref="Combat.BodyOrders.OutOfBed"/>), whose act-out stands it; one whose 116 does not start (an animal,
+    /// whose repertoire lacks the row, or a character without a squad) stands from its sleep where it lies.
+    /// </summary>
+    static void OutOfBed(World world, int victim)
+    {
+        world.SystemOf<Combat.CombatSystem>()?.BodyOrders.OutOfBed(world, victim);
+        if (world.Characters.Next[victim].Task == (byte)CharacterTask.Sleep) TaskStart.Stand(world.Characters, victim);
     }
 
     /// <summary>

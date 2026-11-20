@@ -1010,10 +1010,11 @@ public sealed class CharacterCold
     public long StaggeredUntil { get; set; }
 
     /// <summary>
-    /// Until when a stagger outside a fight reports the Stumbling task (147, <c>Character::_startStumble</c> queues it in front of the character's
-    /// own task, which replans afterwards): set with the stumble clip's stun, display only. Not saved.
+    /// What the combat system's body step (parallel, its own slot) saw happen to the body this tick, for <see cref="Combat.BodyOrders"/>' serial pass
+    /// the same tick: gone down, woken, or back to standing from staying low or crawling. A wake while carried waits here until it is put down. Not
+    /// saved or hashed.
     /// </summary>
-    public long StumbleTaskUntil { get; set; }
+    internal Combat.BodyEvents BodyEvents { get; set; }
 
     /// <summary>
     /// The tick its get-up after a knockout ends (<see cref="Combat.CombatSystem.GetUpClipSeconds"/> from waking, after the clip; Character +0x278

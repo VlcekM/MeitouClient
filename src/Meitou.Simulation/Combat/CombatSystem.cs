@@ -616,9 +616,18 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     #region Fight task
 
     /// <summary>
-    /// Registers this system as the handler of the attack task.
+    /// The orders the engine gives a body (get-up, stumble, out of bed), their owner and act-out.
     /// </summary>
-    public void RegisterTasks(TaskHandlers tasks) => tasks.Register(CharacterTask.Attack, this);
+    public BodyOrders BodyOrders { get; } = new();
+
+    /// <summary>
+    /// Registers this system as the handler of the attack task, and the body orders' rows.
+    /// </summary>
+    public void RegisterTasks(TaskHandlers tasks)
+    {
+        tasks.Register(CharacterTask.Attack, this);
+        foreach (var row in BodyOrders.Rows) tasks.Register(row, BodyOrders);
+    }
 
     /// <summary>
     /// The fight's start (<c>initCombatMode</c>): the target set, kept by a player's pick (row 5 or 61), the weapon drawn.
@@ -851,10 +860,12 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         };
 
     /// <summary>
-    /// The serial slow world: the unprovoked attacks' assaults booked again, then the state arrays swapped.
+    /// The serial slow world: the body orders of what the body step saw, the unprovoked attacks' assaults booked again, then the state arrays
+    /// swapped.
     /// </summary>
     public void SlowWorld(World world)
     {
+        BodyOrders.Pass(world);
         RepeatAssaults(world);
         (_read, _write) = (_write, _read);
         _zones.Swap();
