@@ -455,11 +455,25 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     }
 
     /// <summary>
+    /// The fight of an Assault order (101, 248: <see cref="Ai.EngineOrders"/>, serial): the character in <paramref name="slot"/> attacks the member
+    /// its finder picked, the task's row the order's. False when it cannot fight.
+    /// </summary>
+    internal bool EngageOrder(World world, int slot, CharacterId pick, TaskType row, string cause)
+    {
+        var table = world.Characters;
+        Sync(table);
+        var me = table.IdOf(slot);
+        var order = new AttackOrder([me], pick) { Tick = world.Tick, Source = TaskSource.Order, Cause = cause };
+
+        return Engage(world, table, me, order, (int)world.Tick, row);
+    }
+
+    /// <summary>
     /// Starts the fight of <paramref name="attacker"/> on the order's target through <see cref="TaskStart.Start"/>: row 5 (a target the player
     /// picked: the order), 13 Attacking attackers of (a defence: a reaction) or 16 Attacking enemies (a goal's fight; an NPC's engine fight,
-    /// <see cref="AttackOrder.Source"/>). False when it cannot fight.
+    /// <see cref="AttackOrder.Source"/>), or <paramref name="ordered"/>, an NPC order's row. False when it cannot fight.
     /// </summary>
-    bool Engage(World world, CharacterTable table, CharacterId attacker, AttackOrder order, int now)
+    bool Engage(World world, CharacterTable table, CharacterId attacker, AttackOrder order, int now, TaskType? ordered = null)
     {
         var target = order.Target;
         if (!table.TryResolveNext(attacker, out int a) || !table.TryResolveNext(target, out int t) || a == t) return false;
@@ -481,7 +495,9 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         // No melee row runs on a target in deep water, nor row 4 for a fighter in it (SwimBarred).
         if (SwimBarred(cold, tc, order.Picked)) return false;
 
-        var (row, source) = order.Picked
+        var (row, source) = ordered is { } own
+            ? (own, TaskSource.Order)
+            : order.Picked
             ? (order.Unprovoked ? TaskType.UnprovokedFocusedMeleeAttack : TaskType.FocusedMeleeAttack, TaskSource.Order)
             : order.Defensive
                 ? (TaskType.AttackAttackersOf, TaskSource.Reaction)

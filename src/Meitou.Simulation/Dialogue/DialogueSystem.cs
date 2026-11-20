@@ -136,7 +136,7 @@ public sealed class DialogueSettings
 /// interrupts, the open conversation. The characters' dialogue locks are on <see cref="CharacterCold.DialogueLocks"/>.</item>
 /// </list>
 /// </summary>
-public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogueSource, IDutyRelease
+public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogueSource, ITaskOwner
 {
     /// <summary>
     /// The world's data: dialogue, factions, towns and the game database.
@@ -174,9 +174,14 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     long _requestId;
 
     /// <summary>
-    /// The NPCs walking up to a player character to talk (<c>DA_TALK_TO_LEADER</c>).
+    /// The NPCs on order 102, walking up to a player character to talk (<c>DA_TALK_TO_LEADER</c>).
     /// </summary>
     readonly ApproachQueue _npcApproaches;
+
+    /// <summary>
+    /// The owner of the talk orders 102, 164 and 165 and their act-outs.
+    /// </summary>
+    readonly DialogueOrders _orders;
 
     /// <summary>
     /// The approach of a Talk order: its talker and target (none: no walk).
@@ -250,12 +255,23 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         _characterTrading = new(this, data);
         _followers = new(this);
         _stalkers = new(this, data);
+        _orders = new(_npcApproaches, _followers, _stalkers);
     }
 
     /// <summary>
     /// The settings.
     /// </summary>
     public DialogueSettings Settings { get; }
+
+    /// <summary>
+    /// The owner of the talk orders 102, 164 and 165 (<see cref="World.OrderOwnerOf"/>).
+    /// </summary>
+    internal IOrderOwner TalkOrders => _orders;
+
+    /// <summary>
+    /// Registers the talk act-out (orders 102 and 165).
+    /// </summary>
+    public void RegisterTasks(TaskHandlers tasks) => tasks.Register(CharacterTask.Talk, _orders);
 
     /// <summary>
     /// The result of the last arrival try (<see cref="AreaArrivalDialogue.ArrivalResult"/>).
@@ -373,8 +389,9 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     }
 
     /// <summary>
-    /// The slow-world step: the speech and trade window upkeep, the memory's ageing, the bubbles, the get-up events, the NPC approaches, followers
-    /// and stalkers, then the Talk order's walk (the conversation opens in talk range). The sight events are <see cref="Perception.SightSystem"/>'s.
+    /// The slow-world step: the speech and trade window upkeep, the memory's ageing, the bubbles, the get-up events, the talk orders' act-outs
+    /// (walk-ups, followers, stalkers), then the Talk order's walk (the conversation opens in talk range). The sight events are
+    /// <see cref="Perception.SightSystem"/>'s.
     /// </summary>
     public void SlowWorld(World world)
     {
@@ -385,9 +402,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         if (Settings.AmbientEvents) SeeGettingUp(world);
         DropRunOutCooldowns(world);
         _starters.DropGone(world);
-        if (_npcApproaches.Count > 0) _npcApproaches.Step(world);
-        _followers.StepFollowers(world);
-        _stalkers.StepStalkers(world);
+        _orders.Step(world);
         if (!_talker.IsNone && _open is null)
         {
             var table = world.Characters;
@@ -401,7 +416,6 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
                 Start(world, whom, who, DialogueEvents.PlayerTalkToMe);
             }
             else if (!_approach.Follow(world, _talker, p, n)) CancelApproach(world);
-            else Hold(world, n);
         }
         RefreshView(world);
     }
@@ -434,18 +448,13 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         }
         _talker = order.Talker;
         _target = order.Target;
-        Hold(world, n);
         _approach.Begin(world, _talker, p, n);
     }
 
     /// <summary>
-    /// Ends the Talk order's walk and releases its target unless it is in the open conversation.
+    /// Ends the Talk order's walk (nothing holds its target: docs/game/dialogue.md "Player conversation").
     /// </summary>
-    void CancelApproach(World world)
-    {
-        if (!_target.IsNone && _open?.Npc != _target) Release(world, _target);
-        _talker = _target = CharacterId.None;
-    }
+    void CancelApproach(World world) => _talker = _target = CharacterId.None;
 
     /// <summary>
     /// The talk distance beyond the target's radius while walking (7 x 3, <c>AI::isWithinChoppingRange</c> for a character, docs/game/dialogue.md
@@ -495,40 +504,6 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     /// </summary>
     internal static bool SleepsThrough(CharacterTable table, int slot, int ev) =>
         (AsleepEvents >> (ev & 31) & 1) == 0 && Carrying.CarrySystem.Asleep(table, slot);
-
-    /// <summary>
-    /// Keeps the NPC standing while the talker comes and talks (as the trader in a trade); released when it ends. A caged NPC is left on its task.
-    /// </summary>
-    static void Hold(World world, int slot)
-    {
-        var table = world.Characters;
-        table.Cold(slot)!.Engaged = true;
-        if (table.Cold(slot)!.IsImprisoned) return;
-        if (table.Next[slot].Task is (byte)CharacterTask.Wander or (byte)CharacterTask.Idle) TaskStart.Stand(table, slot);
-    }
-
-    /// <summary>
-    /// An order takes the NPC (<see cref="IDutyRelease"/>): its walk up to a player character, its stalk and its follow while talking end as when
-    /// one of the pair is gone; a Talk order's walk to it ends (<see cref="CancelApproach"/>); in the open conversation it is let go, the window
-    /// staying open (its own end would run under a choice's effects).
-    /// </summary>
-    void IDutyRelease.ReleaseForOrder(World world, int slot)
-    {
-        var id = world.Characters.IdOf(slot);
-        _npcApproaches.Drop(world, id);
-        _stalkers.Drop(world, id);
-        _followers.Drop(world, id);
-        if (_target == id && _open?.Npc != id) CancelApproach(world);
-        if (_open?.Npc == id) Release(world, id);
-    }
-
-    /// <summary>
-    /// Lets the character's AI take it again (<see cref="CharacterCold.Engaged"/> off).
-    /// </summary>
-    internal static void Release(World world, CharacterId id)
-    {
-        if (world.Characters.TryResolveNext(id, out int slot) && world.Characters.Cold(slot) is { } c) c.Engaged = false;
-    }
 
     /// <summary>
     /// A player conversation is open.
@@ -592,12 +567,25 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         _starters.Started(npc, player);
         world.DialogueLines.Line(world, "talk", $"{pair}: conversation opens with {DialogueLog.Node(p.Root ?? p.Line)} (from {from})");
         _open = c;
-        Hold(world, n);
-        if (TaskStart.OnAiWalk(table, n)) TaskStart.Stand(table, n);   // a walking NPC stops to talk (engine choice); the approach chased it
+        FaceOnce(world, n, player);
         c.Root = p.Root;
         if (IsNpcSide(p.Line.Speaker)) Say(world, c, p.Line, p.Speaker);
         else Offer(world, c, p.Root ?? p.Line);
         if (c.Ended) End(world);
+    }
+
+    /// <summary>
+    /// A conversation's start turns its owner once to face the other party (<c>FUN_140684320</c> for the player's, <c>FUN_140683f90</c> for a
+    /// bubble's: the owner's mover, Dialogue <c>+0x180</c>, <b>Verified</b>), unless the owner is down or carried (<c>FUN_1407d1440</c>) or talks to
+    /// itself; nobody is stopped and the other party is not turned.
+    /// </summary>
+    static void FaceOnce(World world, int owner, CharacterId other)
+    {
+        var table = world.Characters;
+        if (table.Cold(owner) is not { CarriedBy.IsNone: true } oc || oc.Medical is { Incapacitated: true }) return;
+        if (!table.TryResolveNext(other, out int o) || o == owner) return;
+
+        DialogueOrders.Face(table, owner, table.Next[o].Position);
     }
 
     /// <summary>
@@ -754,8 +742,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     }
 
     /// <summary>
-    /// Ends the open conversation (<c>FUN_140674830</c>): the event counter and its time, the speaker squad's memory of the partner, the NPC
-    /// released.
+    /// Ends the open conversation (<c>FUN_140674830</c>): the event counter and its time, the speaker squad's memory of the partner; nobody's AI is
+    /// reset.
     /// </summary>
     void End(World world)
     {
@@ -769,7 +757,6 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         if (_bailList is not null)
         {
             _bailList = null;
-            Release(world, c.Npc);
             return;
         }
         var key = (c.Npc, c.Event);
@@ -779,8 +766,6 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         if (c.Event == DialogueEvents.PlayerTalkToMe && world.Characters.TryResolveNext(c.Npc, out int n)
             && world.Characters.Cold(n) is { SquadId: >= 0 } nc)
             Memory.Remember(world, nc.SquadId, c.Player, MemoryTag.None);
-        // An arrest the conversation started (DA 29, 30) keeps the guard held.
-        if (Arrests?.Arrests.Any(a => a.Guard == c.Npc) != true) Release(world, c.Npc);
         OpenBail(world);
         _characterTrading.OpenCharacterTrade(world);
     }

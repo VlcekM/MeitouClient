@@ -318,17 +318,17 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   does); the flight step, which also ends a running flight; the stand-down after a fight; the free tests of the duty sweeps and routines (town duties and the player faction's
   food runs, captive jobs and race goals, 259, kidnap, arrests and bounty hunters, the shut-in release, NPC healing, arming and scavenging, rejoining the leader); the
   population's leader walk, arrival and campaign march; and two engine reactions that are no order (`TaskSource.Npc`): a crime victim's attack on its culprit and a caught thief's
-  watcher getting up from rest. The engine acts the original gives as orders that Meitou does not yet give as orders (some dialogue acts) still replace the front; the body's
-  orders above and the arrest orders are orders. A blocked front waits, the AI going on with its goals meanwhile, and is tried again on the re-ask (every `ProductionSystem.JobCheckTicks`). Once the
+  watcher getting up from rest. The dialogue's acts ([dialogue](#dialogue)), the body's orders above and the arrest orders are orders of the receiver's queue. An
+  owner's order may repeat (`IOrderOwner.Repeats`): when its task ends it waits unstarted at the front for its next step instead of leaving (22, 101, 248), until its
+  row's done test, its desire or its owner's check ends it. A blocked front waits, the AI going on with its goals meanwhile, and is tried again on the re-ask (every `ProductionSystem.JobCheckTicks`). Once the
   front no longer runs the mind chooses again at once; when it starts the mind's plan, goal and commitment go. An NPC's queue is not saved, and an NPC keeps a replan bit only
   while it holds an order.
 - **Duties let go** when an NPC's front starts, but for the body's orders (engine design; `PlayerOrders.TryFront`, serial, before the owner's `Start`): `World.ReleaseDuties` asks every system that
   is an `IDutyRelease` (found on the world's systems, nothing registered) but the order's `OrderEntry.Keeps`, its giver, to let the character go through its own give-up.
-  Town duties, kidnaps, captive jobs, arrests and bounty hunts, lock rounds, the mod NPC goals (`NpcGoals`), the dialogue's walk-ups, stalkers and follows while
-  talking, a Talk order's walk to it and a trade's walk to its trader drop their record and clear `Engaged`; a body carried for one is let go where it stands (the unlink,
-  no knock-out); a smell hunt lets the member go while the squad hunts on; a door way is dropped and a bash errand stopped; in the open conversation the NPC is only
-  let go, the window staying open. The giver's own `Engaged` (one shared bit) is put back after the others let go. The duty sweeps take no ordered character again
-  (`DecisionSystem.Ordered` or `AiSystem.Holds` in their free tests); a dialogue act that starts a walk-up is an engine act on the body and replaces the front.
+  Town duties, kidnaps, captive jobs, arrests and bounty hunts, lock rounds and the mod NPC goals (`NpcGoals`) drop their record and clear `Engaged`; a body carried
+  for one is let go where it stands (the unlink, no knock-out); a smell hunt lets the member go while the squad hunts on; a door way is dropped and a bash errand
+  stopped. Neither the dialogue nor a trade holds anyone. The giver's own `Engaged` (one shared bit) is put back after the others let go. The duty sweeps take no
+  ordered character again (`DecisionSystem.Ordered` or `AiSystem.Holds` in their free tests).
 - **Routine after an order** (engine design): an NPC its AI does not fully run (an engine mind or none) keeps the routine it was on at the start, wandering or
   following its leader (`CharacterCold.OrderRoutine`, `DecisionSystem.KeepRoutine`), and takes it up again once its order no longer holds it, if it then stands idle,
   awake and held by nothing (`DecisionSystem.BackToRoutine`; it waits while the order's task goes on, a move's walk after the move left the
@@ -2037,7 +2037,7 @@ contract a mod relies on, the money rule included: [modding](modding.md#registra
 ## Dialogue
 
 `DialogueSystem` (game facts: [dialogue](game/dialogue.md)). The context menu's Talk To (only when a dry run of the line pick, dice and memo put back, finds something to say) sends `TalkOrder`: the
-talker walks up (60 units, engine choice; 60 s to arrive), the NPC is held, then event 1 fires and the NPC's dialogue set (record, squad
+talker walks up (60 units, engine choice; 60 s to arrive), the NPC going on with what it does, then it is turned once to face the talker, event 1 fires and the NPC's dialogue set (record, squad
 template, leader role; `DialogueDatabase`) is chosen from by score, line checks and a seeded pick. The NPC line is said (text, tokens and
 word swaps, effects at once); passing replies become choices, an NPC-side child a single `[...]`. The host opens `Kenshi_ConversationPanel`
 modal, which pauses the game; `DialogueChoice` and `EndConversation` apply between ticks at speed 0; effects that order fights are deferred
@@ -2048,7 +2048,15 @@ to the next tick. A free hostile target is attacked instead; a caged one, hostil
   [campaigns](game/factions-squads-towns.md#campaigns); `world state` conditions read the live states), recruiting (DA 3 / 18, `DialogueSystem.Recruit`), crowd
   triggers, `give item`, `change AI` and `AI contract` (`Ai.ChangeAi`, `Ai.StartContract` with the target: `Blackboard.MissionTarget`, followed by goals aimed at the
   squad mission through `AiMind.FollowTarget`; on its end the leader's `contract end talk passive`), DA 25 / 53 (`FixtureRegistry.TagEscaped` / `FreeSlave`) and DA 29
-  (`ArrestSystem.ArrestFromDialogue`), DA 43 (the bail list, [Arrest and jail](#arrest-and-jail)), DA 7, 13, 14, 19-21, 23, 28, 33, 34, 52, 54, 56 (`DialogueSystem.Acts`), DA 16 (`TalkFollowers`); the rest is listed in [dialogue](game/dialogue.md#meitou-design).
+  (`ArrestSystem.ArrestFromDialogue`), DA 43 (the bail list, [Arrest and jail](#arrest-and-jail)), DA 13, 14, 19-21, 23, 28, 54 (`DialogueSystem.Acts`); the rest is listed in [dialogue](game/dialogue.md#meitou-design).
+- **Orders** (`DialogueSystem.Acts.Order`, `PlayerOrders.Give`, one-shot, the receiver's queue cleared unless noted; rows and receivers in
+  [dialogue](game/dialogue.md#effects)): DA 2 gives the speaker squad's leader 102, DA 16 / 17 the speaker 164 / 165 and DA 34 / 7 280 / 19 (`Dialogue.DialogueOrders`,
+  `Ai.EngineOrders`); DA 6 / 57 101 and DA 55 248, none to a player-faction speaker holding an order (`PlayerOrders.Holds`); DA 33 67 to the target when the speaker's
+  task is idle, DA 52 67 to the speaker for each other member, DA 56 29 to the target's position queued behind each member's orders. 102 and 165 act out as
+  `CharacterTask.Talk` (`ApproachQueue`, `TownStalkers`: one task through the walk and the stand), 164 as the follow (`TalkFollowers`); 101 / 248 fight the member
+  `AiSystem.AssaultTargetFor` picks (`CombatSystem.EngageOrder`) and repeat for the next until none is left. A building purchase gives each resident of the squads
+  moving out 19 to the new home, or 22 without one (`AiSystem.Rehome`; the leader walks the patrol step's points, the others follow it).
+  A conversation's or bubble's start turns its NPC or speaker once to face the other and stops no one.
 - **Events from other systems**: `DialogueEvent` (deferred to the next tick) fires an event at an NPC as bubbles, or a given DIALOGUE (the contract end talk);
   first aid, shackles and the release rounds send them. The police's spotting fires 44 at once (`FireEvent`, which says whether a line was said).
 - **Sight pass** (`Perception.SightSystem`, its own system after the dialogue, run while its event lines are on; [sight](game/dialogue.md#ambient-conversations)):

@@ -107,6 +107,7 @@ public sealed partial class DialogueSystem
         var c = new Conversation { Npc = npc, Player = whom, Event = ev, Root = root };
         if (Pick(world, c, root.Children) is not { } first || !force && Busy(first.Speaker, c)) return false;
         _starters.Started(npc, whom);
+        FaceOnce(world, n, whom);
         _bubbles.Add(new Bubble(c, first.Line, world.Tick, first.Speaker));
         if (now) StepBubbles(world);
         return true;
@@ -142,6 +143,7 @@ public sealed partial class DialogueSystem
 
         c.Root = picked.Root;
         _starters.Started(npc, whom);
+        FaceOnce(world, n, whom);
         _bubbles.Add(new Bubble(c, picked.Line, world.Tick, picked.Speaker));
         StepBubbles(world);
         if (ev is 3 or 4 or SeeAnimalSquad or 66 or 67) _eventCooldown[(npc, ev)] = world.Tick + CooldownTicks(world);
@@ -176,7 +178,7 @@ public sealed partial class DialogueSystem
     /// Whether the character's dialogue state is free (<c>FUN_140671c60</c>): it says no line, has none on show and is not the NPC of the open
     /// player conversation.
     /// </summary>
-    bool Free(CharacterId who) => !BubbleOf(who) && _open?.Npc != who;
+    internal bool Free(CharacterId who) =>!BubbleOf(who) && _open?.Npc != who;
 
     /// <summary>
     /// A crime event of the sight pass (<c>FUN_140685730</c> -> <c>FUN_140685660</c>, <b>Verified</b>: events 45, 36, 40, 17 and 9): fired as any

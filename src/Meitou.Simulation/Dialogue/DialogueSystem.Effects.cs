@@ -1,11 +1,13 @@
 using System.Globalization;
 using System.Numerics;
 using System.Text;
+using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.Gameplay.Dialogue;
 using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Dialogue;
 
@@ -237,12 +239,12 @@ public sealed partial class DialogueSystem
             case DialogueActions.AttackChaseForever or DialogueActions.AttackStayNearHome:
                 if (mc is not null && tc is not null) FlagFrom(world, mc, me, target, tc, MemoryTag.TempEnemy);
                 Aggro?.Notice(world, me, target);
-                Attack(world, me, target);
+                Attack(world, me, mc, target, effect.Action == DialogueActions.AttackStayNearHome);
                 break;
             case DialogueActions.AttackIfNoCoexist when mc is not null && tc is not null && !_data.Relations.Coexists(mc.Faction, tc.Faction):
                 FlagFrom(world, mc, me, target, tc, MemoryTag.TempEnemy);
                 Aggro?.Notice(world, me, target);
-                Attack(world, me, target);
+                Attack(world, me, mc, target, nearHome: false);
                 break;
             case DialogueActions.RememberCharacter when mc is not null && tc is not null:
                 Memory.Remember(world, mc.SquadId, target, MemoryTag.None);
@@ -296,6 +298,7 @@ public sealed partial class DialogueSystem
             case DialogueActions.CrimeAlarm when tc is not null && mc is not null && Arrests is { } law
                 && world.Characters.TryResolveNext(me, out int alarmer) && world.Characters.TryResolveNext(target, out int alarmed):
                 law.Crimes.Alarm(world, alarmer, alarmed);
+                AlarmRun(world, me, mc, alarmer, alarmed, target);
                 break;
             case DialogueActions.PayBounty:
                 Arrests?.PayBounty(world, me, target);
@@ -394,11 +397,11 @@ public sealed partial class DialogueSystem
             case DialogueActions.TalkToLeader when tc is not null && mc is not null:
                 TalkToLeader(world, c, mc, target, tc);
                 break;
-            case DialogueActions.FollowWhileTalking when !target.IsNone && mc is { IsPlayer: false }:
-                _followers.Add(world, me, target);
+            case DialogueActions.FollowWhileTalking when !target.IsNone && mc is not null:
+                Order(world, me, TaskType.FollowWhileTalking, target);
                 break;
-            case DialogueActions.ThugHunter when !target.IsNone && mc is { IsPlayer: false }:
-                _stalkers.Add(me, target);
+            case DialogueActions.ThugHunter when !target.IsNone && mc is not null:
+                Order(world, me, TaskType.TownStalker, target);
                 break;
             case DialogueActions.RunAway when mc is not null && tc is not null:
                 RunAway(world, me, mc, target, tc);
@@ -464,7 +467,7 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// <c>DA_TALK_TO_LEADER</c> (2, <c>FUN_140680560</c>): for a player-faction target, the speaker squad's leader gets task 102 on it with event 1,
+    /// <c>DA_TALK_TO_LEADER</c> (2, <c>FUN_140680560</c>): for a player-faction target, the speaker squad's leader gets order 102 on it (clear),
     /// so it walks up and opens a conversation (<see cref="ApproachQueue"/>). Nothing when the leader is already in the open player conversation
     /// (its line would send it again); a bubble speaker that leads still walks up.
     /// </summary>
@@ -472,16 +475,16 @@ public sealed partial class DialogueSystem
     {
         if ((tc.Faction != world.Player.Faction && !tc.IsPlayer) || mc.SquadId < 0) return;
         if (world.Squads.Find(mc.SquadId) is not { Leader: { IsNone: false } leader }) return;
+
         string who = $"{EventLog.Who(world, leader)} to {EventLog.Who(world, target)}";
-        if (_open?.Npc == leader || _npcApproaches.Has(leader))
+        if (_open?.Npc == leader)
         {
-            world.DialogueLines.Line(world, "walkup", $"{who}: DA 2 ignored, " + (_open?.Npc == leader ? "already talking" : "already walking up"));
+            world.DialogueLines.Line(world, "walkup", $"{who}: DA 2 ignored, already talking");
             return;
         }
-        if (!world.Characters.TryResolveNext(leader, out int l) || !Awake(world.Characters, l)) return;
-        world.DialogueLines.Line(world, "walkup", $"{who}: starts walking up (DA 2)");
-        _npcApproaches.Add(world, leader, target);
-        Hold(world, l);
+
+        world.DialogueLines.Line(world, "walkup", $"{who}: ordered to walk up (DA 2)");
+        Order(world, leader, TaskType.SeekAndTalkAndSendSignal, target);
     }
 
     /// <summary>
@@ -517,22 +520,18 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// The speaker alone is stopped (orders cleared) and attacks the target from the next tick (DA 6/55/57, docs/game/dialogue.md).
-    /// Its squad mates are not ordered: they follow through the TEMP ENEMY tag the caller writes.
+    /// DA 6 / 55 / 57's order (<c>FUN_140680560</c>, <b>Verified</b>): the speaker alone gets order 101 Assault (55: 248 Attacking squad) on the
+    /// target (clear), but a speaker of the player's faction holding any order gets none (its squad's tag, written by the caller, stands either
+    /// way). Its mates follow through that tag. The original's stop before it (<c>FUN_1405c8330</c>) keeps the queue, whose front is then planned
+    /// again, so a refused speaker's order goes on.
     /// </summary>
-    static void Attack(World world, CharacterId me, CharacterId target)
+    static void Attack(World world, CharacterId me, CharacterCold? mc, CharacterId target, bool nearHome)
     {
         var table = world.Characters;
-        if (!table.TryResolveNext(target, out _) || !table.TryResolveNext(me, out int s) || !table.Next[s].Alive) return;
-        TaskStart.Stand(table, s);
-        if (world.SystemOf<AiSystem>() is { } ai
-            && table.Cold(s) is { IsPlayer: false, IsImprisoned: false, Medical.Incapacitated: false, Fighter.CanAttack: true }
-            && ai.OrderAssault(world, me, target))
-        {
-            return;
-        }
-        if (table.Cold(s) is { IsPlayer: false, IsImprisoned: false, Medical.Incapacitated: false, Fighter.CanAttack: true })
-            world.Defer(new Combat.AttackOrder([me], target) { Tick = world.Tick + 1, Source = TaskSource.Npc, Cause = "a dialogue line (attack)" });
+        if (mc is null || !table.TryResolveNext(target, out _) || !table.TryResolveNext(me, out int s)) return;
+        if ((mc.IsPlayer || mc.Faction == world.Player.Faction) && PlayerOrders.Holds(world, s)) return;
+
+        Order(world, me, nearHome ? TaskType.DefeatSquadLimitChaseRange : TaskType.DefeatSquad, target);
     }
 
     #endregion

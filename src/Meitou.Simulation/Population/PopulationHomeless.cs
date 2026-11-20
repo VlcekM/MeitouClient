@@ -200,7 +200,7 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// One squad's patrol (<c>Task_Patrol</c>): when its leader acts a PATROL goal that is not under a mission town (a trader on its way, an
+    /// One squad's patrol (<c>Task_Patrol</c>): when its leader acts a PATROL goal or order (<see cref="Patrols"/>) that is not under a mission town (a trader on its way, an
     /// assault or occupation roaming the town it took), it draws the next point once it has reached the last
     /// (<see cref="PatrolPoint"/>) and walks to it. Every squad does, homeless or not: the picker's only caller is the patrol task
     /// (<c>FUN_1408fd6c0</c>, <c>FUN_1408fe0d0</c>, <b>Verified</b>).
@@ -208,7 +208,7 @@ public sealed partial class PopulationSystem
     void PatrolStep(World world, Squad squad, int slot, int group, ZoneCoordinate zone)
     {
         var table = world.Characters;
-        if (table.Cold(slot)?.Ai is not { Goal.Task.Type: TaskType.Patrol } || squad.Ai is { Destination.IsNone: false }) return;
+        if (!Patrols(table.Cold(slot)) || squad.Ai is { Destination.IsNone: false }) return;
         _patrolSeen.Add(squad.Id);
         var at = new Vector2(table.Previous[slot].Position.X, table.Previous[slot].Position.Z);
         _homelessPatrols.TryGetValue(squad.Id, out var patrol);
@@ -218,6 +218,12 @@ public sealed partial class PopulationSystem
         squad.HomeCentre = next.Point;
         squad.HomeRadius = PointRadius;
     }
+
+    /// <summary>
+    /// Whether the leader acts a PATROL goal, or runs order 22 (a squad that moved out of a bought building, <see cref="Ai.EngineOrders"/>).
+    /// </summary>
+    static bool Patrols(CharacterCold? leader) =>
+        leader?.Ai is { Goal.Task.Type: TaskType.Patrol } || leader?.Running is { Source: TaskSource.Order, Row: TaskType.Patrol };
 
     /// <summary>
     /// The loaded squads outside the homeless sectors (a town's, a platoon's) whose leader acts a PATROL goal walk from sector to sector as well

@@ -7,7 +7,7 @@ using Meitou.Simulation.Player;
 namespace Meitou.Simulation.Ai;
 
 /// <summary>
-/// The AI's assault orders: a dialogue's Assault order and the assaults a think picks, started in the serial step.
+/// The AI's assaults: the finder of the Assault orders (101, 248) and the assaults a think picks, started in the serial step.
 /// </summary>
 public sealed partial class AiSystem
 {
@@ -20,28 +20,6 @@ public sealed partial class AiSystem
     /// Set by a think that picked someone to assault (<see cref="AiMind.AssaultTarget"/>).
     /// </summary>
     int _assaulting;
-
-    /// <summary>
-    /// Characters holding a dialogue's Assault order (AiMind.ForcedAssault): SendAssaults keeps running while any is left.
-    /// </summary>
-    int _forcedAssaults;
-
-    /// <summary>
-    /// A dialogue attack effect's Assault order for the speaker (<c>FUN_140680560</c> cases 6, 0x37 and 0x39: <c>FUN_1405d20d0(speaker, 0, 0x65 |
-    /// 0xf8, target)</c>, <b>Verified</b>; goal 101, 248 for 0x37, whose extra list-B <c>!159</c> and commitment are not modelled): the speaker
-    /// attacks the best known, in-area, standing member of the target's squad. Given only to a speaker of a faction that is not the player's. False
-    /// when the speaker has no AI mind (the caller then attacks the target itself).
-    /// </summary>
-    public bool OrderAssault(World world, CharacterId speaker, CharacterId target)
-    {
-        if (!world.Characters.TryResolveNext(speaker, out int s) || world.Characters.Cold(s)?.Ai is not { } mind)
-            return false;
-
-        if (world.Characters.Cold(s)!.Faction == world.Player.Faction) return true;   // the player's faction's speaker gets no order
-        mind.ForcedAssault = target;
-        Interlocked.Exchange(ref _forcedAssaults, 1);
-        return true;
-    }
 
     /// <summary>
     /// The finder of DEFEAT_SQUAD 101 (<c>FUN_140793eb0</c>, docs/game/ai-tasks.md "Combat goals"): of the squad of the contract's mission target,
@@ -120,24 +98,8 @@ public sealed partial class AiSystem
     void SendAssaults(World world)
     {
         var table = world.Characters;
-        int left = 0;
         for (int s = 0; s < table.HighWater; s++)
         {
-            if (table.Cold(s) is { Ai: { ForcedAssault.IsNone: false } } counted) left++;
-            if (table.Cold(s) is { Ai: { ForcedAssault.IsNone: false } forced } busy && !busy.InCombat && table.Next[s].Alive)
-            {
-                // A dialogue's Assault order: the squad's best member now, until none is left or the target is gone.
-                var pick = AssaultTargetFor(world, s, forced.Squad.Ai, forced.ForcedAssault);
-                if (pick.IsNone) forced.ForcedAssault = CharacterId.None;
-                else
-                {
-                    world.Defer(new AttackOrder([table.IdOf(s)], pick)
-                    {
-                        Tick = world.Tick + 1, Source = TaskSource.Npc, Cause = "its squad's ordered assault (dialogue)",
-                    });
-                }
-            }
-
             if (table.Cold(s)?.Ai is not { } mind || mind.AssaultTarget.IsNone) continue;
 
             var foe = mind.AssaultTarget;
@@ -145,7 +107,5 @@ public sealed partial class AiSystem
             if (table.Next[s].Alive && table.TryResolveNext(foe, out _))
                 world.Defer(new AttackOrder([table.IdOf(s)], foe) { Tick = world.Tick + 1, Cause = "its squad's ordered assault (dialogue)" });
         }
-
-        Interlocked.Exchange(ref _forcedAssaults, left);
     }
 }

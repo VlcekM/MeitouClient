@@ -133,6 +133,16 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     PopulationData Data => data;
 
     /// <summary>
+    /// The owner of the NPC orders the dialogue and a building purchase give (19, 22, 67, 101, 248, 280).
+    /// </summary>
+    EngineOrders? _npcOrders;
+
+    /// <summary>
+    /// The owner of the NPC orders the dialogue and a building purchase give (<see cref="EngineOrders"/>).
+    /// </summary>
+    internal IOrderOwner NpcOrders => _npcOrders ??= new EngineOrders(this, data);
+
+    /// <summary>
     /// The towns' alarms the investigators answer (<see cref="AiBehaviour.Investigate"/>); null: none are raised.
     /// </summary>
     public Crime.CrimeSystem? Crimes { get; set; }
@@ -3059,7 +3069,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         _aggro ??= world.SystemOf<AggroSystem>();
         _locks ??= world.SystemOf<Locks.LockSystem>();
 
-        if (Interlocked.Exchange(ref _assaulting, 0) != 0 | Volatile.Read(ref _forcedAssaults) != 0) SendAssaults(world);
+        if (Interlocked.Exchange(ref _assaulting, 0) != 0) SendAssaults(world);
         if (Interlocked.Exchange(ref _fighting, 0) != 0) SendFights(world);
         if (Interlocked.Exchange(ref _treating, 0) != 0) (_firstAid ??= world.SystemOf<FirstAid.FirstAidSystem>())?.SendGoalTreatments(world);
 
@@ -3777,25 +3787,38 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// Gives a squad moving out another house of its town that is for sale (<see cref="HouseForSale"/>, else none) as its own home and its home in
-    /// use, and has its members think again.
+    /// use, and its members their orders (<see cref="OrderMovedOut"/>).
     /// </summary>
     void Rehome(World world, Squad squad)
     {
         var home = HouseForSale(world, squad);
         squad.HomeBuilding = home;
         squad.MovedOut = home is null;
-        if (squad.Ai is not { } board) return;
-        var old = board.OwnHome;
-        board.OwnHome = home;
-        if (board.Home == old) board.Home = home;
-        board.Touch();
-        foreach (var id in squad.Members)
+        if (squad.Ai is { } board)
         {
-            if (world.Characters.TryResolveNext(id, out int slot) && world.Characters.Cold(slot)?.Ai is { } mind)
-            {
-                mind.HomeUnreachable = false;
-                mind.Replan = true;
-            }
+            var old = board.OwnHome;
+            board.OwnHome = home;
+            if (board.Home == old) board.Home = home;
+            board.Touch();
+        }
+
+        OrderMovedOut(world, squad, home);
+    }
+
+    /// <summary>
+    /// The purchase's orders (<c>FUN_1407ad6c0</c>, <b>Verified</b>): each member of the squad moving out gets 19 Going home to its new home, or 22
+    /// Patrolling without one, clearing its queue; its mind thinks again once the order is over.
+    /// </summary>
+    void OrderMovedOut(World world, Squad squad, TownBuilding? home)
+    {
+        var table = world.Characters;
+        var row = home is not null ? TaskType.GoHomebuilding : TaskType.Patrol;
+        foreach (var id in squad.Members.ToList())
+        {
+            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { } cold) continue;
+            if (cold.Ai is { } mind) mind.HomeUnreachable = false;
+
+            PlayerOrders.Give(world, slot, new OrderEntry(row, NpcOrders) { Site = home?.Key }, queued: false);
         }
     }
 

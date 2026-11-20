@@ -225,6 +225,15 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     /// </summary>
     public static void GoTo(CharacterTable table, int slot, Vector2 target, byte mode)
     {
+        Aim(table, slot, target, mode);
+        table.Next[slot].Task = (byte)CharacterTask.GoTo;
+    }
+
+    /// <summary>
+    /// <see cref="GoTo"/> without the task (serial phases only): an act-out with a task of its own walks on it (<see cref="CharacterTask.Talk"/>).
+    /// </summary>
+    public static void Aim(CharacterTable table, int slot, Vector2 target, byte mode)
+    {
         ref var n = ref table.Next[slot];
         var cold = table.Cold(slot)!;
         cold.OrderMove = false;
@@ -232,7 +241,6 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         cold.BlockedRepaths = 0;
         cold.BlockedRetryTick = 0;
         cold.WalkEnd = WalkEnd.None;
-        n.Task = (byte)CharacterTask.GoTo;
         n.Goal = target;
         n.Mode = mode;
         n.Flags = (ushort)((n.Flags & ~(ushort)MoveFlags.Pending) | (ushort)MoveFlags.NeedPath);

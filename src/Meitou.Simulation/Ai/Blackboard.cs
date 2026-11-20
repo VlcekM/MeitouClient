@@ -1363,13 +1363,6 @@ public sealed class AiMind
     }
 
     /// <summary>
-    /// The Assault order a dialogue attack effect gave this character (<c>FUN_140680560</c> cases 6, 0x37 and 0x39 order goal 101, or 248 for 0x37,
-    /// on the effect's target): the member of the target's squad it attacks, picked again whenever it is free
-    /// (<see cref="AiSystem.AssaultTargetFor"/>); none when it has no such order. Not saved; hashed while set.
-    /// </summary>
-    public CharacterId ForcedAssault { get; set; } = CharacterId.None;
-
-    /// <summary>
     /// Where the stranger a static guard stands beside is (<see cref="AiSystem"/>'s <c>GuardFactor</c>, FUN_14099edd0); null: the plain guard post.
     /// Derived by the think; hashed while set.
     /// </summary>
@@ -1540,12 +1533,6 @@ public sealed class AiMind
                 hasher.Add((int)t);
                 hasher.Add(d);
             }
-        }
-
-        if (!ForcedAssault.IsNone)
-        {
-            hasher.Add(0x466F7241);
-            hasher.Add(ForcedAssault);
         }
 
         if (GuardVisitorAt is { } visitor)

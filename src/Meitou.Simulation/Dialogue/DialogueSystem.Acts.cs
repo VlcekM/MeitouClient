@@ -5,11 +5,12 @@ using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Dialogue;
 
 /// <summary>
-/// The dialogue system's regard and memory tags, and the AI acts its lines start.
+/// The dialogue system's regard and memory tags, and the orders and acts its lines give.
 /// </summary>
 public sealed partial class DialogueSystem
 {
@@ -231,7 +232,7 @@ public sealed partial class DialogueSystem
 
     #endregion
 
-    #region AI acts
+    #region Orders and acts
 
     /// <summary>
     /// The original's <c>Task_Runaway</c> first run (task 280, DA 34): 2000 + 400 x random units away from the threat (as
@@ -240,49 +241,75 @@ public sealed partial class DialogueSystem
     const float RunAwayDistance = FleeSystem.FirstRun, RunAwaySpread = FleeSystem.RunSpread;
 
     /// <summary>
-    /// DA_RUN_AWAY (34): the speaker drops what it does and runs from the target (task 280, <c>Task_Runaway</c>'s first run; engine: one run at full
-    /// speed, then its AI takes over), and its squad tags the target AGGRESSOR.
+    /// Gives <paramref name="who"/> the dialogue's one-shot order <paramref name="row"/> on <paramref name="target"/> (<c>FUN_1405d20d0</c>, permanent
+    /// 0, the clear flag, docs/game/dialogue.md "Effects"); nothing when no system owns the row. No faction, distance or state test: the queue's gate
+    /// (<see cref="DecisionSystem.TakesOrders"/>) and the row's check decide when it starts.
+    /// </summary>
+    static void Order(World world, CharacterId who, TaskType row, CharacterId target, Vector3 point = default, string? site = null)
+    {
+        if (!world.Characters.TryResolveNext(who, out int s) || world.OrderOwnerOf(row) is not { } owner) return;
+
+        PlayerOrders.Give(world, s, new OrderEntry(row, owner) { Target = target, Point = point, Site = site }, queued: false);
+    }
+
+    /// <summary>
+    /// DA_RUN_AWAY (34): the speaker gets order 280 from the target (clear; its goals reset and its task stopped by the order's start), run as
+    /// <c>Task_Runaway</c>'s first run to a point drawn here (engine: one run at full speed), and its squad tags the target AGGRESSOR.
     /// </summary>
     void RunAway(World world, CharacterId me, CharacterCold mc, CharacterId target, CharacterCold tc)
     {
-        FlagFrom(world, mc, me, target, tc, MemoryTag.Aggressor);
         var table = world.Characters;
-        if (mc.IsPlayer || !table.TryResolveNext(me, out int s) || Position(world, target) is not { } from) return;
-        var here = table.Next[s].Position;
-        var away = new Vector2(here.X - from.X, here.Z - from.Z);
-        away = away.LengthSquared() > 1e-6f ? Vector2.Normalize(away) : Vector2.UnitX;
-        float r = Rng.Float(NextRoll(world, me));
-        TaskStart.Walk(world, s, new Vector2(from.X, from.Z) + away * (RunAwayDistance + RunAwaySpread * r), SpeedMode.Free,
-            TaskType.RunAwayForced, TaskSource.Npc);
+        if (table.TryResolveNext(me, out int s) && Position(world, target) is { } from)
+        {
+            var here = table.Next[s].Position;
+            var away = new Vector2(here.X - from.X, here.Z - from.Z);
+            away = away.LengthSquared() > 1e-6f ? Vector2.Normalize(away) : Vector2.UnitX;
+            float r = Rng.Float(NextRoll(world, me));
+            var to = new Vector2(from.X, from.Z) + away * (RunAwayDistance + RunAwaySpread * r);
+            Order(world, me, TaskType.RunAwayForced, target, new Vector3(to.X, from.Y, to.Y));
+        }
+
+        FlagFrom(world, mc, me, target, tc, MemoryTag.Aggressor);
     }
 
     /// <summary>
-    /// DA_GO_HOME (7): the speaker walks home (task 19; Meitou: its squad's home building, else its town, else its home centre, as the AI's going
-    /// home) and its squad tags the target AGGRESSOR.
+    /// DA_GO_HOME (7): the speaker gets order 19 with the target (clear; walked as <see cref="Ai.EngineOrders"/> does) and its squad tags the target
+    /// AGGRESSOR.
     /// </summary>
     void GoHome(World world, CharacterId me, CharacterCold mc, CharacterId target, CharacterCold? tc)
     {
+        Order(world, me, TaskType.GoHomebuilding, target);
         if (tc is not null) FlagFrom(world, mc, me, target, tc, MemoryTag.Aggressor);
-        var table = world.Characters;
-        if (mc.IsPlayer || !table.TryResolveNext(me, out int s) || world.Squads.Find(mc.SquadId) is not { } squad) return;
-        Vector2 home = squad.Ai?.Home is { } h ? new(h.Position.X, h.Position.Z)
-            : squad.Ai is { Town: >= 0 } board && board.Town < _data.Sites.Count
-                ? new(_data.Sites[board.Town].Position.X, _data.Sites[board.Town].Position.Z)
-            : squad.HomeCentre;
-        TaskStart.Walk(world, s, home, SpeedMode.Walk, TaskType.GoHomebuilding, TaskSource.Npc);
     }
 
     /// <summary>
-    /// DA_SUMMON_MY_SQUAD (52): the speaker's squadmates run to it (task 67, "Running").
+    /// DA_SUMMON_MY_SQUAD (52): every other member of the speaker's squad gets order 67 on the speaker (clear; no target, faction, distance or state
+    /// test).
     /// </summary>
     void Summon(World world, CharacterId me)
     {
-        var table = world.Characters;
-        if (Position(world, me) is not { } at) return;
         foreach (var m in SquadOf(world, me))
-            if (m != me && table.TryResolveNext(m, out int s) && Awake(table, s) && table.Cold(s) is { IsPlayer: false, InCombat: false })
-                TaskStart.Walk(world, s, new Vector2(at.X, at.Z), SpeedMode.Free, TaskType.MoveOnFreeWillFast, TaskSource.Npc);
+            if (m != me) Order(world, m, TaskType.MoveOnFreeWillFast, me);
     }
+
+    /// <summary>
+    /// DA_CRIME_ALARM's order (33, after the town alarm, <c>FUN_140680560</c>, <b>Verified</b>): a speaker of a town whose body ran no task at its
+    /// last update (<see cref="NoTask"/>) gets order 67 on the target with the building the target is in (clear).
+    /// </summary>
+    void AlarmRun(World world, CharacterId me, CharacterCold mc, int alarmer, int alarmed, CharacterId target)
+    {
+        if (world.Squads.Find(mc.SquadId) is not { Town: >= 0 } || !NoTask(world.Characters, alarmer)) return;
+
+        Order(world, me, TaskType.MoveOnFreeWillFast, target, site: world.Sight.BuildingOf(alarmed));
+    }
+
+    /// <summary>
+    /// The body's no-task byte (CharBody <c>+0x70</c>, <b>Verified</b>: written only by its per-frame update, slot 1 <c>FUN_1405c6d20</c> from
+    /// Character slot 27 <c>FUN_1405c7c30</c>, 1 when no task is installed at <c>+0x68</c>, 0 when one is, left alone while ragdolled or carried):
+    /// Meitou, the character stands idle on no start's task.
+    /// </summary>
+    static bool NoTask(CharacterTable table, int slot) =>
+        table.Next[slot].Task == (byte)CharacterTask.Idle && table.Cold(slot)!.Running?.Runs(CharacterTask.Idle) != true;
 
     /// <summary>
     /// DA_SEPARATE_TO_MY_OWN_SQUAD (28, <c>FUN_1405ce4e0</c>): the speaker (the target when the speaker is of the player's faction) leaves for a new
@@ -324,33 +351,28 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// DA_MASSIVE_ALARM (56): when the speaker is in a town, every member of its faction's squads tags the target TEMP_ENEMY, fires event 66 at it
-    /// and goes for it (task 29 to its position; Meitou: an attack order), and its hearing of the target is alarmed for 5 s (<c>FUN_1405cb0a0</c>
-    /// over <c>FUN_140858f40</c>). Engine: only loaded squads.
+    /// DA_MASSIVE_ALARM (56): when the speaker has a status town, every member of every squad of its faction, the speaker included, tags the target
+    /// TEMP_ENEMY and has its hearing of the target alarmed for 5 s (<c>FUN_1405cb0a0</c> over <c>FUN_140858f40</c>), fires event 66 at it and gets
+    /// order 29 to the target's position, added behind its queued orders (clear 0, <b>Verified</b>). No distance, state or faction-of-member test.
+    /// Engine: only loaded squads.
     /// </summary>
     void MassiveAlarm(World world, CharacterId me, CharacterCold mc, CharacterId target, CharacterCold tc)
     {
-        if (Position(world, target) is null || Position(world, me) is not { } here || TownAt(here) < 0) return;
+        if (mc.StatusTown.IsNone || Position(world, target) is not { } at || world.OrderOwnerOf(TaskType.MoveCusOrdered) is not { } movement) return;
+
         var table = world.Characters;
-        var fighters = new List<CharacterId>();
-        foreach (var squad in world.Squads.All)
+        foreach (var squad in world.Squads.All.Where(q => q.Faction == mc.Faction).ToList())
         {
-            if (squad.Faction != mc.Faction) continue;
-            foreach (var m in squad.Members)
+            foreach (var m in squad.Members.ToList())
             {
-                if (!table.TryResolveNext(m, out int s) || !Awake(table, s) || table.Cold(s) is not { IsPlayer: false } c) continue;
+                if (!table.TryResolveNext(m, out int s) || !table.Next[s].Alive || table.Cold(s) is not { } c) continue;
+
                 FlagFrom(world, c, m, target, tc, MemoryTag.TempEnemy);
                 Aggro?.Alarm(world, m, target);
                 world.Defer(new DialogueEvent(m, target, 66) { Tick = world.Tick + 1 });
-                if (c.Fighter?.CanAttack == true) fighters.Add(m);
+                var move = new OrderEntry(TaskType.MoveCusOrdered, movement) { Target = target, Point = at, TaskPoint = at };
+                PlayerOrders.Give(world, s, move, queued: true);
             }
-        }
-        if (fighters.Count > 0)
-        {
-            world.Defer(new Combat.AttackOrder(fighters, target)
-            {
-                Tick = world.Tick + 1, Source = TaskSource.Npc, Cause = "a town-wide alarm (dialogue)",
-            });
         }
     }
 

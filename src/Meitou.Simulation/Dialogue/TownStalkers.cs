@@ -7,7 +7,8 @@ using Meitou.Simulation.Population;
 namespace Meitou.Simulation.Dialogue;
 
 /// <summary>
-/// DA_THUG_HUNTER: the town stalkers and their victims (hashed).
+/// The act-out of order 165 (DA_THUG_HUNTER, <c>Task_TownStalker</c>, <see cref="DialogueOrders"/>): the town stalkers and their victims (hashed),
+/// each record dropped once its stalker no longer runs the order.
 /// </summary>
 sealed class TownStalkers(DialogueSystem system, PopulationData data)
 {
@@ -59,17 +60,14 @@ sealed class TownStalkers(DialogueSystem system, PopulationData data)
     public int Count => _stalkers.Count;
 
     /// <summary>
-    /// <paramref name="who"/> starts stalking <paramref name="target"/> (<see cref="StepStalkers"/>).
+    /// <paramref name="who"/>'s order 165 starts on <paramref name="target"/> (<see cref="Step(World)"/>).
     /// </summary>
     public void Add(CharacterId who, CharacterId target) => _stalkers[who] = new Stalk(target);
 
     /// <summary>
-    /// <paramref name="who"/>'s stalk ends as when either is gone: dropped and the stalker released.
+    /// <paramref name="who"/>'s record goes (its task ended).
     /// </summary>
-    public void Drop(World world, CharacterId who)
-    {
-        if (_stalkers.Remove(who)) DialogueSystem.Release(world, who);
-    }
+    public void Drop(CharacterId who) => _stalkers.Remove(who);
 
     /// <summary>
     /// DA_THUG_HUNTER (17, order 165 <c>Task_TownStalker</c>, docs/game/dialogue.md): while the stalker has a status town, it waits
@@ -79,29 +77,33 @@ sealed class TownStalkers(DialogueSystem system, PopulationData data)
     /// talking. Engine choices: re-aimed every 15 ticks; the first gate is the town's first outer gate door in fixture order (a player town's: the
     /// first within its radius).
     /// </summary>
-    public void StepStalkers(World world)
+    public void Step(World world)
     {
         if (_stalkers.Count == 0) return;
         foreach (var (who, stalk) in _stalkers.ToArray()) Step(world, who, stalk);
     }
 
     /// <summary>
-    /// One stalker's tick of <see cref="StepStalkers"/>: done when either is gone or, after the harassment, neither talks; in its status town it
-    /// waits past the gate or, with no gate, follows; else it follows and harasses.
+    /// One stalker's tick of <see cref="Step(World)"/>: dropped once it no longer runs the order; done when the victim is gone or down or, after the
+    /// harassment, neither talks; in its status town it waits past the gate or, with no gate, follows; else it follows and harasses.
     /// </summary>
     void Step(World world, CharacterId who, Stalk stalk)
     {
         var table = world.Characters;
-        if (!table.TryResolveNext(who, out int s) || !DialogueSystem.Awake(table, s) || !table.TryResolveNext(stalk.Target, out int t)
-            || !DialogueSystem.Awake(table, t) || Finished(who, stalk))
+        if (!table.TryResolveNext(who, out int s) || !DialogueOrders.Runs(table, s, TaskType.TownStalker, stalk.Target))
         {
             _stalkers.Remove(who);
-            DialogueSystem.Release(world, who);
             return;
         }
 
-        table.Cold(s)!.Engaged = true;   // the order holds it, not the AI
-        if (table.Cold(s)!.InCombat) return;   // its walks would end the fight it is in (a new task drops the fight task)
+        // a walk that found no way there ends the task, as a walk step's failure ends its plan
+        bool over = !table.TryResolveNext(stalk.Target, out int t) || !DialogueSystem.Awake(table, t) || table.Cold(s)!.PathFailed;
+        if (over || Finished(who, stalk))
+        {
+            _stalkers.Remove(who);
+            TaskStart.End(world, s, TaskEnd.Done);
+            return;
+        }
 
         var town = table.Cold(s)!.StatusTown;
         if (!town.IsNone && InTown(world, s, t, stalk, town)) return;
@@ -194,16 +196,14 @@ sealed class TownStalkers(DialogueSystem system, PopulationData data)
         var table = world.Characters;
         ref var sn = ref table.Next[s];
         bool away = Vector2.Distance(new Vector2(sn.Position.X, sn.Position.Z), waypoint) > DialogueSystem.TalkReach;
-        bool notHeading = sn.Task != (byte)CharacterTask.GoTo || Vector2.Distance(sn.Goal, waypoint) > DialogueSystem.TalkReach;
-        if (world.Tick % 15 == 0 && away && notHeading)
+        if (world.Tick % 15 == 0 && away)
         {
-            TaskStart.Walk(world, s, waypoint, SpeedMode.Walk, TaskType.TownStalker, TaskSource.Npc);
+            DialogueOrders.WalkTo(table, s, waypoint, SpeedMode.Walk);
             return;
         }
-        if (sn.Task == (byte)CharacterTask.GoTo) return;
+        if ((sn.Flags & (ushort)MoveFlags.AnyPath) != 0) return;
 
-        var to = table.Next[t].Position - sn.Position;
-        if (to.X * to.X + to.Z * to.Z > 1e-4f) sn.Yaw = MathF.Atan2(to.X, to.Z);
+        DialogueOrders.Face(table, s, table.Next[t].Position);
     }
 
     /// <summary>
@@ -225,8 +225,7 @@ sealed class TownStalkers(DialogueSystem system, PopulationData data)
         var table = world.Characters;
         var at = new Vector2(table.Next[s].Position.X, table.Next[s].Position.Z);
         var victim = new Vector2(table.Next[t].Position.X, table.Next[t].Position.Z);
-        if (world.Tick % 15 == 0 && Vector2.Distance(at, victim) > DialogueSystem.TalkReach)
-            TaskStart.Walk(world, s, victim, SpeedMode.Walk, TaskType.TownStalker, TaskSource.Npc);
+        if (world.Tick % 15 == 0 && Vector2.Distance(at, victim) > DialogueSystem.TalkReach) DialogueOrders.WalkTo(table, s, victim, SpeedMode.Walk);
     }
 
     /// <summary>

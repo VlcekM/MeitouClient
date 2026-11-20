@@ -116,6 +116,12 @@ public enum CharacterTask : byte
     /// in a bed (<see cref="Locks.HeldState.Bed"/>) with any other task, the character gets up: another order replaced it.
     /// </summary>
     Sleep = 18,
+
+    /// <summary>
+    /// Walks up to, after or near its target and stands facing it while it talks to it or stalks it (<see cref="Dialogue.DialogueOrders"/> steers
+    /// it; the original's <c>Task_TalktoPlayer</c> 102 with its walk, <c>Task_TownStalker</c> 165).
+    /// </summary>
+    Talk = 19,
 }
 
 /// <summary>

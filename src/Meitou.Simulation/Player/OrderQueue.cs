@@ -94,6 +94,13 @@ public interface IOrderOwner
     bool StillHolds(World world, int slot, OrderEntry order) => true;
 
     /// <summary>
+    /// Whether the order stays at the front when its task ends, planned again for its next step (a pure read): the original's order leaves only by
+    /// its row's done test or its desire, so an order whose act-out ends one step at a time (101 and 248 on each member of the squad its finder
+    /// picks, 22's walks) is started again until its owner's check says it is gone.
+    /// </summary>
+    bool Repeats(World world, int slot, OrderEntry order) => false;
+
+    /// <summary>
     /// The code of the order's <see cref="OrderEntry.Detail"/> in a save (<see cref="Saving.OrderSave"/>; 0: no detail), or -1 when the order cannot
     /// be saved (a detail that names a runtime object). An owner whose orders carry a detail overrides it together with <see cref="LoadDetail"/>.
     /// </summary>
@@ -452,7 +459,7 @@ public static class PlayerOrders
     {
         var q = world.Characters.Cold(slot)!.OrderQueue;
         if (q.Front is not { } front) return false;
-        if (!front.Started || Runs(world, slot, front)) return true;
+        if (!front.Started || Runs(world, slot, front) || front.Owner.Repeats(world, slot, front)) return true;
         return !front.IsMove && q.Count > 1;   // what Settle keeps
     }
 
@@ -463,6 +470,23 @@ public static class PlayerOrders
     {
         var q = world.Characters.Cold(slot)!.OrderQueue;
         if (q.Front is not { Started: true } front || Runs(world, slot, front)) return;
+
+        Leave(world, slot, front);
+    }
+
+    /// <summary>
+    /// The front's task ended: a repeating order (<see cref="IOrderOwner.Repeats"/>) waits unstarted at the front for its next step; else a move
+    /// leaves with the moves queued after it, any other order alone.
+    /// </summary>
+    static void Leave(World world, int slot, OrderEntry front)
+    {
+        var q = world.Characters.Cold(slot)!.OrderQueue;
+        if (front.Owner.Repeats(world, slot, front))
+        {
+            front.Started = front.Tried = false;
+            return;
+        }
+
         if (front.IsMove) q.Clear();
         else
             q.PopFront();
@@ -549,9 +573,8 @@ public static class PlayerOrders
         if (request.Source == TaskSource.Order || step) return;
         var q = world.Characters.Cold(slot)!.OrderQueue;
         if (q.Front is not { } front || !Runs(world, slot, front)) return;
-        if (front.IsMove) q.Clear();
-        else
-            q.PopFront();
+
+        Leave(world, slot, front);
     }
 
     /// <summary>
@@ -564,9 +587,10 @@ public static class PlayerOrders
         if (reason == TaskEnd.Replaced) return;
         var q = world.Characters.Cold(slot)!.OrderQueue;
         if (q.Front is not { } front || !Runs(world, slot, front)) return;
-        if (reason == TaskEnd.Stopped || front.IsMove) q.Clear();
+
+        if (reason == TaskEnd.Stopped) q.Clear();
         else
-            q.PopFront();
+            Leave(world, slot, front);
     }
 
     /// <summary>

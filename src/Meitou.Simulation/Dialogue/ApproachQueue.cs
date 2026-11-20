@@ -1,4 +1,5 @@
 using System.Numerics;
+using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.Gameplay.Dialogue;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Movement;
@@ -6,16 +7,33 @@ using Meitou.Simulation.Movement;
 namespace Meitou.Simulation.Dialogue;
 
 /// <summary>
-/// The NPCs walking up to a player character to talk (the original's task 102 <c>Task_TalktoPlayer</c>, started by <c>DA_TALK_TO_LEADER</c>):
-/// each walks to its target and opens the player's conversation in talk range, or gives up after 25 game minutes once the target is getting away.
-/// Serial state of the <see cref="DialogueSystem"/>, which owns it.
+/// The act-out of order 102 (<c>Task_TalktoPlayer</c>, given by <c>DA_TALK_TO_LEADER</c>, <see cref="DialogueOrders"/>): the NPC walks up to its
+/// target (the walk the row's <c>isAtLocation</c> puts before the task, re-aimed as the target moves on) and, in talk range while no conversation is
+/// open, stops and fires event 1 at it; it then stands facing its target while its conversation lasts and is done when its dialogue is free. Serial
+/// state of the <see cref="DialogueSystem"/>, which owns it.
 /// </summary>
 sealed class ApproachQueue(DialogueSystem dialogue)
 {
     /// <summary>
-    /// An NPC walking up to a player character to talk (the original's task 102 <c>Task_TalktoPlayer</c>), and the game hours it gives up at.
+    /// An NPC on order 102: its target, and whether it has fired its event (it talks).
     /// </summary>
-    sealed record Approach(CharacterId Npc, CharacterId Target, double GiveUpHours);
+    sealed class Approach(CharacterId npc, CharacterId target)
+    {
+        /// <summary>
+        /// The NPC walking up.
+        /// </summary>
+        public CharacterId Npc { get; } = npc;
+
+        /// <summary>
+        /// The character it walks up to.
+        /// </summary>
+        public CharacterId Target { get; } = target;
+
+        /// <summary>
+        /// It has fired event 1 at its target.
+        /// </summary>
+        public bool Talks { get; set; }
+    }
 
     /// <summary>
     /// The approaches in the order they began.
@@ -23,24 +41,14 @@ sealed class ApproachQueue(DialogueSystem dialogue)
     readonly List<Approach> _approaches = [];
 
     /// <summary>
-    /// Game hours an approach may take before the NPC gives up with event 60 (<c>Task_TalktoPlayer</c>: 25 game minutes, <b>Observed</b>).
-    /// </summary>
-    const double ApproachGiveUpHours = 25.0 / 60;
-
-    /// <summary>
-    /// EV_GIVE_UP_CHASE.
-    /// </summary>
-    const int GiveUpChase = 60;
-
-    /// <summary>
     /// The approaches under way.
     /// </summary>
     internal int Count => _approaches.Count;
 
     /// <summary>
-    /// Whether <paramref name="npc"/> is already walking up to someone.
+    /// Whether <paramref name="npc"/> is walking up to someone or talks on its order 102.
     /// </summary>
-    internal bool Has(CharacterId npc) => _approaches.Any(a => a.Npc == npc);
+    internal bool Has(CharacterId npc) => _approaches.Exists(a => a.Npc == npc);
 
     /// <summary>
     /// Each approaching NPC and its target (read only).
@@ -48,61 +56,101 @@ sealed class ApproachQueue(DialogueSystem dialogue)
     internal IEnumerable<(CharacterId Npc, CharacterId Target)> Pairs => _approaches.Select(a => (a.Npc, a.Target));
 
     /// <summary>
-    /// <paramref name="npc"/> starts walking up to <paramref name="target"/>; it gives up after <see cref="ApproachGiveUpHours"/>.
+    /// <paramref name="npc"/>'s order 102 starts on <paramref name="target"/> (a record of an earlier one goes).
     /// </summary>
-    internal void Add(World world, CharacterId npc, CharacterId target) =>
-        _approaches.Add(new Approach(npc, target, world.GameHours + ApproachGiveUpHours));
-
-    /// <summary>
-    /// <paramref name="npc"/>'s approaches end as when one of the pair is gone: dropped, the NPC released, no event fired.
-    /// </summary>
-    internal void Drop(World world, CharacterId npc)
+    internal void Add(CharacterId npc, CharacterId target)
     {
-        if (_approaches.RemoveAll(a => a.Npc == npc) > 0) DialogueSystem.Release(world, npc);
+        Drop(npc);
+        _approaches.Add(new Approach(npc, target));
     }
 
     /// <summary>
-    /// The NPC approaches (serial): it walks to the target and, in talk range (<see cref="DialogueSystem.InTalkRange"/>) while no conversation is
-    /// open, fires event 1 at it (the player's conversation window opens with it); after 25 game minutes it gives up (plan dropped, event 60 at the
-    /// target) once the target is getting away, else it walks on; a target or NPC gone or down ends it.
+    /// <paramref name="npc"/>'s record goes (its task ended).
+    /// </summary>
+    internal void Drop(CharacterId npc) => _approaches.RemoveAll(a => a.Npc == npc);
+
+    /// <summary>
+    /// Each approach's step (serial), on a copy: firing the event runs the line's effects, which may give orders.
     /// </summary>
     internal void Step(World world)
     {
+        if (_approaches.Count == 0) return;
+
+        foreach (var a in _approaches.ToArray()) StepOne(world, a);
+    }
+
+    /// <summary>
+    /// One approach: dropped once its NPC no longer runs the order; a target gone or down ends the task; talking, it faces the target until its
+    /// dialogue is free; walking, it fires its event in talk range while no conversation is open, else walks on (a walk with no way there ends the
+    /// task).
+    /// </summary>
+    void StepOne(World world, Approach a)
+    {
         var table = world.Characters;
-        for (int k = 0; k < _approaches.Count; k++)
+        if (!table.TryResolveNext(a.Npc, out int n) || !DialogueOrders.Runs(table, n, TaskType.SeekAndTalkAndSendSignal, a.Target))
         {
-            var a = _approaches[k];
-            int n = -1, t = -1;
-            bool done = !table.TryResolveNext(a.Npc, out n) || !DialogueSystem.Awake(table, n)
-                || !table.TryResolveNext(a.Target, out t) || !DialogueSystem.Awake(table, t);
-            if (!done && !dialogue.InConversation && DialogueSystem.InTalkRange(table, n, t))
-            {
-                TaskStart.Stand(table, n);
-                _approaches.RemoveAt(k--);
-                LogWalkUp(world, a, "arrived, fires event 1");
-                dialogue.Start(world, a.Npc, a.Target, DialogueEvents.PlayerTalkToMe, quiet: true);
-                if (!dialogue.TalksWith(a.Npc)) DialogueSystem.Release(world, a.Npc);
-                continue;
-            }
-
-            if (!done && world.GameHours >= a.GiveUpHours && GettingAway(table, n, t))
-            {
-                LogWalkUp(world, a, "gives up (event 60)");
-                GiveUp(world, table, a, n);
-                done = true;
-            }
-            else if (done)
-                LogWalkUp(world, a, "dropped (one is gone or down)");
-
-            if (done)
-            {
-                _approaches.RemoveAt(k--);
-                DialogueSystem.Release(world, a.Npc);
-                continue;
-            }
-
-            WalkOn(world, table, n, t);
+            Drop(a.Npc);
+            return;
         }
+
+        if (a.Talks)
+        {
+            Converse(world, a, n);
+            return;
+        }
+
+        if (!table.TryResolveNext(a.Target, out int t) || !DialogueSystem.Awake(table, t))
+        {
+            Finish(world, a, n, "dropped (the target is gone or down)");
+            return;
+        }
+
+        if (!dialogue.InConversation && DialogueSystem.InTalkRange(table, n, t))
+        {
+            Fire(world, a, n);
+            return;
+        }
+
+        var to = new Vector2(table.Next[t].Position.X, table.Next[t].Position.Z);
+        if (!DialogueOrders.WalkTo(table, n, to, SpeedMode.Free)) Finish(world, a, n, "gives up (no way to the target)");
+    }
+
+    /// <summary>
+    /// The task's start in talk range (<c>FUN_14034c5a0</c>): the NPC stops and fires event 1 from its own dialogue at its target (the player's
+    /// conversation opens, the NPC turned to face its partner).
+    /// </summary>
+    void Fire(World world, Approach a, int n)
+    {
+        DialogueOrders.Halt(world.Characters, n);
+        a.Talks = true;
+        LogWalkUp(world, a, "arrived, fires event 1");
+        dialogue.Start(world, a.Npc, a.Target, DialogueEvents.PlayerTalkToMe, quiet: true);
+    }
+
+    /// <summary>
+    /// The task's update after the start (<c>FUN_14034c7c0</c>): the NPC faces its target each update and is done once its dialogue is free
+    /// (<c>FUN_140671c60</c>); a target gone ends it too.
+    /// </summary>
+    void Converse(World world, Approach a, int n)
+    {
+        var table = world.Characters;
+        if (dialogue.Free(a.Npc) ||!table.TryResolveNext(a.Target, out int t))
+        {
+            Finish(world, a, n, "done (its conversation is over)");
+            return;
+        }
+
+        DialogueOrders.Face(table, n, table.Next[t].Position);
+    }
+
+    /// <summary>
+    /// The order's task is done (the plan end pops the order): the record goes and the NPC stands.
+    /// </summary>
+    void Finish(World world, Approach a, int n, string why)
+    {
+        LogWalkUp(world, a, why);
+        Drop(a.Npc);
+        TaskStart.End(world, n, TaskEnd.Done);
     }
 
     /// <summary>
@@ -112,54 +160,7 @@ sealed class ApproachQueue(DialogueSystem dialogue)
         world.DialogueLines.Line(world, "walkup", $"{EventLog.Who(world, a.Npc)} to {EventLog.Who(world, a.Target)}: {what}");
 
     /// <summary>
-    /// Walking: towards where the target stands, again when it has moved on.
-    /// </summary>
-    static void WalkOn(World world, CharacterTable table, int n, int t)
-    {
-        var to = new Vector2(table.Next[t].Position.X, table.Next[t].Position.Z);
-        ref var nh = ref table.Next[n];
-        table.Cold(n)!.Engaged = true;
-
-        // Its walk would end the fight it is in (a new task drops the fight task).
-        if (table.Cold(n)!.InCombat) return;
-        if (nh.Task != (byte)CharacterTask.GoTo || Vector2.Distance(nh.Goal, to) > DialogueSystem.TalkReach)
-        {
-            TaskStart.Walk(world, n, to, SpeedMode.Free, Data.Gameplay.Ai.TaskType.SeekAndTalkAndSendSignal, TaskSource.Npc);
-        }
-    }
-
-    /// <summary>
-    /// The NPC drops its plan and the approach, and event 60 fires at the target.
-    /// </summary>
-    static void GiveUp(World world, CharacterTable table, Approach a, int n)
-    {
-        if (table.Cold(n)?.Ai is { } mind)
-        {
-            mind.Plan.Clear();
-            mind.Goal = null;
-            mind.Version = -1;
-        }
-
-        TaskStart.Stand(table, n);
-        world.Defer(new DialogueEvent(a.Npc, a.Target, GiveUpChase) { Tick = world.Tick + 1 });
-    }
-
-    /// <summary>
-    /// Whether the target is getting away from the NPC (<c>FUN_140331ee0</c>): it runs away (task 35 or 127), or it walks to a move goal farther from
-    /// the NPC than it stands.
-    /// </summary>
-    static bool GettingAway(CharacterTable table, int npc, int target)
-    {
-        var tc = table.Cold(target);
-        if (tc is { Fleeing: true } || tc?.Ai?.Step is Data.Gameplay.Ai.TaskType.RunAway or Data.Gameplay.Ai.TaskType.RunAwayHometown) return true;
-        ref readonly var tn = ref table.Next[target];
-        if (tn.Task != (byte)CharacterTask.GoTo || tn.Goal == Vector2.Zero) return false;
-        var me = new Vector2(table.Next[npc].Position.X, table.Next[npc].Position.Z);
-        return Vector2.DistanceSquared(tn.Goal, me) > Vector2.DistanceSquared(new Vector2(tn.Position.X, tn.Position.Z), me);
-    }
-
-    /// <summary>
-    /// Adds each approach's NPC, target and give-up time, in order.
+    /// Adds each approach's NPC, target and talk mark, in order.
     /// </summary>
     internal void Hash(ref StateHasher hasher)
     {
@@ -167,7 +168,7 @@ sealed class ApproachQueue(DialogueSystem dialogue)
         {
             hasher.Add(a.Npc);
             hasher.Add(a.Target);
-            hasher.Add(a.GiveUpHours);
+            hasher.Add(a.Talks);
         }
     }
 }
