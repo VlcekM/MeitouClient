@@ -60,7 +60,8 @@ sealed class TalkFollowers(DialogueSystem system)
     static void ForgetTarget(CharacterCold cold, CharacterId whom)
     {
         if (cold.FollowOrder != whom) return;
-        if (cold.Running is { Task: Movement.CharacterTask.Follow, Row: not TaskType.FollowWhileTalking } run && run.Target == whom) return;
+        bool laterFollow = cold.Running is { Task: Movement.CharacterTask.Follow, Row: not TaskType.FollowWhileTalking } run && run.Target == whom;
+        if (laterFollow) return;
 
         cold.FollowOrder = CharacterId.None;
     }

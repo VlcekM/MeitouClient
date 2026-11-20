@@ -746,7 +746,8 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     static void TakeOlderAnswer(IWalkability walk, ref CharacterHot n, CharacterCold cold, PathAnswer answer)
     {
         bool waiting = (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0;
-        if (!answer.Path.Found || !waiting || !Walks(n.Task) || answer.Id <= cold.PathApplied || answer.Id == cold.LastSplice) return;
+        if (!answer.Path.Found || !waiting || !Walks(n.Task) || answer.Id <= cold.PathApplied || answer.Id == cold.LastSplice)
+            return;
 
         TakePath(walk, ref n, cold, answer.Path);
         cold.PathApplied = answer.Id;

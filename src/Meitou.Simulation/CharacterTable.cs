@@ -2058,7 +2058,10 @@ public sealed class CharacterTable
         if (k.Replan) hasher.Add(0x52706C6E);
         if (k.OrderWins) hasher.Add(0x4F57696E);
         if (k.OrderRoutine != CharacterTask.Idle) hasher.Add(0x4F527400 | (int)k.OrderRoutine);
-        if ((k.BodyEvents & Combat.BodyEvents.Woke) != 0) hasher.Add(0x576F6B65);   // a wake owed while carried; the rest is told from the medical state
+
+        // a wake owed while carried; the rest is told from the medical state
+        if ((k.BodyEvents & Combat.BodyEvents.Woke) != 0) hasher.Add(0x576F6B65);
+
         if (!k.TurretTarget.IsNone)
         {
             hasher.Add(0x54725467);
