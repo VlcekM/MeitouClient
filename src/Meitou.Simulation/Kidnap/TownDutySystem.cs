@@ -38,16 +38,12 @@ public sealed record TownDutySettings
     /// </summary>
     public float CageSlack { get; init; } = 200;
     /// <summary>
-    /// Walks that end short before the member gives up (an intruder is then put down where it is).
-    /// </summary>
-    public int Walks { get; init; } = 4;
-    /// <summary>
-    /// Game seconds a lift may spend walking to the body before the member gives it up for itself (<see cref="TownDutySystem.GiveUpLift"/>; no
-    /// timer of the original's is known; a body it cannot reach would hold it forever).
+    /// Game seconds a lift may spend walking to the body before the member gives it up for itself (<see cref="TownDutySystem.GiveUpLift"/>; engine:
+    /// the original's lift has no timer, only the lost walk of a body no path reaches).
     /// </summary>
     public float LiftSeconds { get; init; } = 60;
     /// <summary>
-    /// Game hours a body put down short of its goal is left alone.
+    /// Game hours a lift given up on its timer leaves the body alone for that member, and a player-side food run that found no room waits.
     /// </summary>
     public double RefuseHours { get; init; } = 2;
 }
@@ -153,10 +149,6 @@ public sealed class TownDuty
     /// </summary>
     public string? Target { get; set; }
     /// <summary>
-    /// Walks that ended short so far (<see cref="TownDutySettings.Walks"/> give up).
-    /// </summary>
-    public int Tries { get; set; }
-    /// <summary>
     /// A shoo's start (game hours) and its next event (game seconds of the errand); a confiscation's seconds at the cage; a lift's seconds walking to
     /// the body.
     /// </summary>
@@ -199,7 +191,6 @@ public sealed class TownDuty
         h.Add(Town.PlayerTown);
         h.Add((int)Kind);
         h.Add(Goal);
-        h.Add(Tries);
         h.Add(Target is { } t ? Rng.StableHash(t) : 0UL);
         if (Chosen != TaskType.None)
         {
@@ -259,11 +250,6 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// The tick the bodies were last counted (-1: never).
     /// </summary>
     long _countedTick = -1;
-
-    /// <summary>
-    /// Bodies put down short of their goal: left alone until this game hour, in the order they were put down.
-    /// </summary>
-    readonly List<(CharacterId Body, double Until)> _refused = [];
 
     /// <summary>
     /// Lifts given up on the walk (<see cref="TownDutySettings.LiftSeconds"/>): the member leaves that body alone until this game hour, while the
@@ -382,16 +368,10 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         _goals?.Hash(ref hasher);
 
         // only while one runs, so worlds without them hash as before
-        if (_duties.Count == 0 && _refused.Count == 0 && _foodWaits.Count == 0 && _gaveUp.Count == 0) return;
+        if (_duties.Count == 0 && _foodWaits.Count == 0 && _gaveUp.Count == 0) return;
         hasher.Add(0x546F776E);
         hasher.Add(_duties.Count);
         foreach (var d in _duties) d.Hash(ref hasher);
-        hasher.Add(_refused.Count);
-        foreach (var (body, until) in _refused)
-        {
-            hasher.Add(body);
-            hasher.Add(until);
-        }
 
         if (_foodWaits.Count > 0)
         {
@@ -713,9 +693,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         foreach (var d in _duties)
             if (!d.Body.IsNone && !WalksToIntruder(table, d)) _reserved.Add(d.Body);
 
-        _refused.RemoveAll(r => r.Until <= world.GameHours);
         _gaveUp.RemoveAll(r => r.Until <= world.GameHours);
-        foreach (var r in _refused) _reserved.Add(r.Body);
 
         for (int s = 0; s < table.HighWater; s++)
         {
@@ -870,7 +848,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         var at = world.Characters.Next[slot].Position;
         var inReach = world.Fixtures.TownCandidates(world, data, cold, at);
         float sight = AggroSystem.RangeOf(cold, Settings.Sight);
-        var body = CorpseDisposal.FindCorpse(world, slot, f => inReach(f.Position), sight, id => _reserved.Contains(id) || Refused(id));
+        var body = CorpseDisposal.FindCorpse(world, slot, f => inReach(f.Position), sight, _reserved.Contains);
         return body.IsNone ? -1 : body.Slot;
     }
 
@@ -1600,31 +1578,28 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
 
     /// <summary>
     /// One tick of a lift (273, 223, 138, 137's corpse): over once the pick-up is (the body on the shoulder, or fought off or pushed away: the
-    /// carried body's goals take it on); a lift whose body no path reaches (<see cref="CarrySystem.LiftWalkFails"/>) or that has walked
-    /// <see cref="TownDutySettings.LiftSeconds"/> is given up (<see cref="GiveUpLift"/>).
+    /// carried body's goals take it on); a lift whose body no path reaches (<see cref="CarrySystem.LiftWalkFails"/>) is a lost walk on the body
+    /// (<see cref="Lost"/>), and one that has walked <see cref="TownDutySettings.LiftSeconds"/> is given up (<see cref="GiveUpLift"/>).
     /// </summary>
     bool StepLift(World world, TownDuty d, int g, CharacterCold gc)
     {
         if (world.Characters.Next[g].Task != (byte)CharacterTask.PickUp) return End(world, d);
+        if (gc.LiftTime >= 0) return true;
+        if (carry.LiftWalkFails(world, g)) return Lost(world, d, g, IgnoreKey.Of(d.Body));
 
-        bool reaches = !carry.LiftWalkFails(world, g) && (d.Next += world.TickSeconds) <= Settings.LiftSeconds;
-        return gc.LiftTime >= 0 || reaches || GiveUpLift(world, d, g);
+        return (d.Next += world.TickSeconds) <= Settings.LiftSeconds || GiveUpLift(world, d, g);
     }
 
     /// <summary>
-    /// One tick of 224 or 274's walk: at its point the body is let go (<see cref="LetGo"/>); walks that keep ending short let it go there and leave
-    /// it alone for a while.
+    /// One tick of 224 or 274's walk: at its point the body is let go (<see cref="LetGo"/>); a walk that ends short is a lost walk with no target
+    /// (the rows have none, <see cref="Lost"/>), the body kept on the shoulder.
     /// </summary>
     bool StepOut(World world, TownDuty d, int g)
     {
         ref var gn = ref world.Characters.Next[g];
-        bool walking = gn.Task == (byte)CharacterTask.GoTo;
-        if (Vector2.Distance(Flat(gn.Position), d.Goal) <= Settings.Arrive) return LetGo(world, d, g, refuse: false);
-        if (walking) return true;
-        if (++d.Tries > Settings.Walks) return LetGo(world, d, g, refuse: true);
+        if (Vector2.Distance(Flat(gn.Position), d.Goal) <= Settings.Arrive) return LetGo(world, d, g);
 
-        TaskStart.Walk(world, g, d.Goal, CarryOutMode, RowFor(d), TaskSource.Goal);
-        return true;
+        return gn.Task == (byte)CharacterTask.GoTo || Lost(world, d, g, null);
     }
 
     /// <summary>
@@ -1650,19 +1625,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             return End(world, d);
         }
 
-        if (walking) return true;
-        if (++d.Tries > Settings.Walks)
-        {
-            // The walk failed for good: the store goes on the AI's give-up list (pathFailures, 20 s) the finders skip (FUN_1405b0290 in
-            // FUN_1408dac20).
-            if (d.Target is { } failed)
-                gc.NoteUnreachable(failed, world.Tick + (long)MathF.Ceiling(Construction.ConstructionSystem.UnreachableSeconds / world.TickSeconds));
-
-            return End(world, d);
-        }
-
-        TaskStart.Walk(world, g, d.Goal, ErrandMode(world, gc), RowFor(d), TaskSource.Goal);
-        return true;
+        // A walk that ends short puts the store on the ignore map (20 s) the finders skip (FUN_1405b0290 in FUN_1408dac20).
+        return walking || Lost(world, d, g, TargetKey(d));
     }
 
     /// <summary>
@@ -1707,8 +1671,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
 
     /// <summary>
     /// One tick of the cage errand (112 / 281, then 108): the carrier walks onto the cage's floor (<see cref="WalkToCage"/>) and locks the body up
-    /// there. A cage gone or taken, or walks that keep ending short (they mark the cage unreachable for its faction), end it with the body on the
-    /// shoulder: the carrier's next choice takes it on. The goal's desire drop is the chooser's (another goal displaces it).
+    /// there. A cage gone or taken, or a walk that ends short (a lost walk: the cage is ignored for 20 s, <see cref="Lost"/>), ends it with the body
+    /// on the shoulder: the carrier's next choice takes it on. The goal's desire drop is the chooser's (another goal displaces it).
     /// </summary>
     bool StepCage(World world, TownDuty d, int g, int b)
     {
@@ -1719,15 +1683,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
 
         bool walking = gn.Task == (byte)CharacterTask.GoTo;
         if (FixtureRegistry.AtCage(cage, gn.Position, walking)) return LockUp(world, d, g, b, cage);
-        if (walking) return true;
-        if (++d.Tries > Settings.Walks)
-        {
-            world.Fixtures.MarkUnreachable(world, cage, d.Faction);
-            return End(world, d);
-        }
 
-        WalkToCage(world, g, cage, RowFor(d));
-        return true;
+        return walking || Lost(world, d, g, TargetKey(d));
     }
 
     /// <summary>
@@ -1758,16 +1715,33 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// <summary>
     /// 224 and 274 at the end of their walk: the body is let go where the carrier stands, without the put-down task and its knock-out (their update
     /// <c>FUN_1403356e0</c> calls the unlink <c>FUN_1405ce1e0</c>, <b>Verified</b>; <b>Observed</b>, original 1.0.65, #1024: a body that came round
-    /// on the shoulder stayed conscious where it was dropped at the exit). <paramref name="refuse"/>: the walk ended short of its goal, and the body
-    /// is left alone for <see cref="TownDutySettings.RefuseHours"/>.
+    /// on the shoulder stayed conscious where it was dropped at the exit).
     /// </summary>
-    bool LetGo(World world, TownDuty d, int g, bool refuse)
+    bool LetGo(World world, TownDuty d, int g)
     {
         carry.LetGo(world, g);
-        if (refuse) _refused.Add((d.Body, world.GameHours + Settings.RefuseHours));
+        return End(world, d);
+    }
+
+    /// <summary>
+    /// The errand's walk ended short of its place (or its lift found no path): as the original's plan step answers a running step whose mover is
+    /// idle away from its target (<c>FUN_14050d970</c>, <b>Verified</b>), the target goes into the member's ignore map for 20 s and the goal ends
+    /// for a replan (<see cref="DutyGoals.LostWalk"/>; no tries, no back-off). An errand no goal holds (a ditch, a player-side food run) marks its
+    /// target the same way and ends. A carried body stays on the shoulder. False, for the step.
+    /// </summary>
+    bool Lost(World world, TownDuty d, int g, IgnoreKey? key)
+    {
+        if (d.Chosen != TaskType.None) _goalDuties?.LostWalk(world, g, d.Chosen, key);
+        else if (key is { } k && world.Characters.Cold(g) is { } cold)
+            cold.Ignore(k, world.Tick + (long)MathF.Ceiling(Construction.ConstructionSystem.UnreachableSeconds / world.TickSeconds));
 
         return End(world, d);
     }
+
+    /// <summary>
+    /// The ignore-map key of the errand's fixture or store (<see cref="TownDuty.Target"/>); none without one.
+    /// </summary>
+    static IgnoreKey? TargetKey(TownDuty d) => d.Target is { } id ? new IgnoreKey(id, default) : null;
 
     /// <summary>
     /// The member gives up a lift whose body it cannot reach (no path gets there, <see cref="CarrySystem.LiftWalkFails"/>) or never reached
@@ -1832,16 +1806,6 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     CorpseMachineCache? _disposals;
 
     /// <summary>
-    /// Whether a body was put down short of its goal and is left alone for now.
-    /// </summary>
-    bool Refused(CharacterId body)
-    {
-        foreach (var r in _refused)
-            if (r.Body == body) return true;
-        return false;
-    }
-
-    /// <summary>
     /// 137's finder (<c>FUN_1408d1090</c>, <b>Verified</b>: 1.0 when <see cref="CorpseDisposal.Find"/> finds a disposal, else 0): the disposal the
     /// member in slot <paramref name="g"/> takes a body to, leaving out one it cannot get to (its path-failure list, 20 s) and one whose operator
     /// places other errands hold (the squad blackboard's claims, <c>FUN_1402690e0</c>).
@@ -1884,8 +1848,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
 
     /// <summary>
     /// One tick of 137's walk (136 at the machine, its list B <c>isAtLocation</c>): at the disposal the body is fed in
-    /// (<see cref="CorpseDisposal.Feed"/>); walks that keep ending short put the machine on the carrier's path-failure list for 20 s (the original's
-    /// ignore map, <c>FUN_1405b0290</c>) and the carrier keeps the body for its next choice.
+    /// (<see cref="CorpseDisposal.Feed"/>); a walk that ends short puts the machine on the carrier's ignore map for 20 s (<c>FUN_1405b0290</c>,
+    /// <see cref="Lost"/>) and the carrier keeps the body for its next choice.
     /// </summary>
     bool StepCorpse(World world, TownDuty d, int g)
     {
@@ -1902,16 +1866,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             return End(world, d);
         }
 
-        if (walking) return true;
-        if (++d.Tries > Settings.Walks)
-        {
-            long until = world.Tick + (long)MathF.Ceiling(Construction.ConstructionSystem.UnreachableSeconds / world.TickSeconds);
-            table.Cold(g)!.NoteUnreachable(machine.Id, until);
-            return End(world, d);
-        }
-
-        WalkToDisposal(world, g, machine, RowFor(d));
-        return true;
+        return walking || Lost(world, d, g, new IgnoreKey(machine.Id, default));
     }
 
     /// <summary>
@@ -2098,10 +2053,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             return End(world, d);
         }
 
-        if (walking) return true;
-        if (++d.Tries > Settings.Walks) return End(world, d);
-        TaskStart.Walk(world, g, d.Goal, ErrandMode(world, gc), RowFor(d), TaskSource.Goal);
-        return true;
+        return walking || Lost(world, d, g, TargetKey(d));
     }
 
     /// <summary>
@@ -2173,10 +2125,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             return End(world, d);
         }
 
-        if (walking) return true;
-        if (++d.Tries > Settings.Walks) return End(world, d);
-        TaskStart.Walk(world, g, d.Goal, SpeedMode.Walk, RowFor(d), TaskSource.Goal);
-        return true;
+        return walking || Lost(world, d, g, DutyGoals.KeyOf(d.Planned));
     }
 
     #endregion
@@ -2267,10 +2216,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (world.Sight.BuildingOf(g) == d.Target || !walking && Vector2.Distance(Flat(gn.Position), d.Goal) <= Settings.CageSlack)
             return End(world, d);
 
-        if (walking) return true;
-        if (++d.Tries > Settings.Walks) return End(world, d);
-        TaskStart.Walk(world, g, d.Goal, SpeedMode.Run, RowFor(d), TaskSource.Goal);
-        return true;
+        return walking || Lost(world, d, g, TargetKey(d));
     }
 
     #endregion

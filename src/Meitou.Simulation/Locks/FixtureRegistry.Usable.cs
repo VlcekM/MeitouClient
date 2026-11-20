@@ -62,13 +62,16 @@ public sealed partial class FixtureRegistry
     /// (squared 1.5625e7; nest markers, town type 8, left out), the cages within <see cref="TownReach"/> x that town's radius of its centre; plus
     /// those of the town of its squad's home when that differs. With no town at all every cage of the world qualifies. The towns' fixtures are
     /// registered (a town no one has loaded has its cages all the same). A nest building's cage of the carrier's faction always qualifies
-    /// (<see cref="Fixture.Nest"/>; the original's nest is a town of its own, which the town lookup here does not list: engine reading). Pass the
-    /// result to <see cref="FindCage"/> as part of its skip test; serial phases only.
+    /// (<see cref="Fixture.Nest"/>; the original's nest is a town of its own, which the town lookup here does not list: engine reading). A cage in
+    /// the carrier's ignore map (a lost walk's 20 s, <see cref="CharacterCold.IsIgnored"/>) does not qualify (<c>FUN_1408d0770</c> asks
+    /// <c>FUN_1405b0290</c> of each cage's hand, <b>Verified</b>). Pass the result to <see cref="FindCage"/> as part of its skip test; serial phases
+    /// only.
     /// </summary>
     public Func<Fixture, bool> CageCandidates(World world, PopulationData data, CharacterCold carrier, Vector3 at)
     {
         var inReach = TownCandidates(world, data, carrier, at);
-        return f => f.Nest && f.Owner == carrier.Faction || inReach(f.Position);
+        long tick = world.Tick;
+        return f => (f.Nest && f.Owner == carrier.Faction || inReach(f.Position)) && !carrier.IsIgnored(new IgnoreKey(f.Id, default), tick);
     }
 
     /// <summary>

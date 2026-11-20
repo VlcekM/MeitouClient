@@ -1432,15 +1432,15 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
   - **138** (finder `CorpseDisposal.FindCorpse`): a dead non-robot body in a cage of its faction in reach, else the nearest dead uncarried body in sight.
   - An intruder is taken only once a lift clip starts or it is carried: every member whose finder gives it walks to it and the first in reach lifts it; the others' starts are
     refused. **Observed** for 223 (original 1.0.65, the #1024 save, thralls of `ash dome mob` in their home): three thralls on the body's level converged on it and one lifted it
-    1.8 s after the load. A lift is given up by that member alone, who leaves the body for 2 game hours (`GiveUpLift`), when no path gets it to the body
-    (`CarrySystem.LiftWalkFails`) or its walk takes over 60 game seconds (engine choice).
+    1.8 s after the load. A lift with no path to the body (`CarrySystem.LiftWalkFails`) is a lost walk on the body (ignored 20 s); one whose walk takes over
+    60 game seconds is given up by that member alone, who leaves the body for 2 game hours (`GiveUpLift`, engine choice).
 - **Carried body: 112 / 281, 274 / 224, 106, 137**, weighed by the chooser with every other goal (a higher tier first: an urgent 112 or a 224 before 274). Their desires are read
   in the look for the body carried then.
   - **112** (a living body: list B `!99`) / **281** (any body), plan `[1, 108, goal]`: `CageDesire` (`FUN_1405a1140` with `FUN_1405a0f10`, **Verified**: 0.1 outside a town,
     0 while the running package's mission town is another (`SquadTown.MissionTown`: a plain package's is the home town), 0 for an animal, 1.4 police with a bounty-free slave or escapee, 0 friendly, 0.5 dead, 2.0 alive) times the cage finder's 1.0
     with a free cage (`FUN_1408d0d30`: the best free cage of its town candidates, an occupier's occupied town included, not another errand's). At the cage it is locked up with
     the usual put-in sentence (108 `Task_PutInSomething` sets none without a bounty, [economy 11.5](game/economy.md#115-bail-and-sentence); not `Kidnapped`, **Verified**
-    `FUN_140358670`), with the relation event and the bounty claim. A cage taken or walks that keep failing (the cage is marked unreachable for the faction) end the goal with
+    `FUN_140358670`), with the relation event and the bounty claim. A cage taken or a lost walk (the cage ignored for 20 s, which the cage finder skips: `FUN_1408d0770` asks `FUN_1405b0290`) end the goal with
     the body on the shoulder. **Observed** (#314 save): a Sho-Battai police guard loaded carrying a raider cages it.
   - **274** (plan `[274]`, list A 164) and **224** (plan `[224]`, list A 137): desire 2.0 unless the carrier regards the body as friendly (`FUN_1405a13a0`, **Verified**; no
     town, animal or death test). 274 walks to its town's exit point (`TownExit`: 200 outward from the first gate outside the walls or wall with an interior, the same for every
@@ -1449,7 +1449,7 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
     INTRUDER_IS_OUTSIDE_GATES (`FUN_140598fa0`) and 137 INTRUDER_IS_OUTSIDE (`FUN_140598ef0`), **Verified**: true with no intruder or a friendly one, false while the asker carries
     it. Both end with the task's own unlink (`FUN_1403356e0` calls `FUN_1405ce1e0`, **Verified**): the body falls where the carrier stands and is not knocked out again
     (**Observed**, original 1.0.65, #1024 save). They carry at a walk (`FUN_1403355e0`, **Verified**; `TownDutySystem.CarryOutMode`; [force speed](game/pathfinding.md#force-speed)).
-    Walks that keep ending short let it go there, left alone for 2 game hours.
+    A walk that ends short is a lost walk with no target: the body stays on the shoulder and the carrier chooses again.
   - **106** (plan `[1, 99, 106]`): `BedSystem.PutInDesire` (2.0 for a body the carrier would lay in a bed, [carry-loot 3.2](game/carry-loot.md#32-goals-and-their-target-finders))
     times the bed search's (`BedSystem.FindForCarrier`); the bed system walks the carrier and lays the body in (`BedSystem.PutIn`, row 106, `TaskSource.Goal`).
   - **137** (list B 99 a dead body carried; plan `[1, 136, 137]`, else `[67, 68, 138, 137]`): desire 1.0 (slot 43, **Verified**) times the disposal finder's (`FUN_1408d1090`:
@@ -1485,7 +1485,7 @@ Facts: [ai-tasks](game/ai-tasks.md) "Finders of the jobs", [carry-loot 3.2](game
   (`TownDutySystem.IsErrandRow`), an order on the body ends them.
 - Occupiers' **36 / 37** town goals walk to a random complete building of the player town (`AiSystem.OccupiedSpot`, engine choice; the original's 36 scatters round the
   occupied town's centre, [town goals](game/ai-tasks.md#town-goals)), 36 drawing again after every walk.
-- Engine choices: sight `AggroSystem.OutdoorSight`, arrival 40 (a cage: its `use range` + 15), 4 short walks before an act-out gives up.
+- Every act-out's walk that ends short (a lift with no path to its body too) is a lost walk (see "Engine goals"), the errands no goal holds (a ditch, a player-side food run) marking their store the same way. Engine choices: sight `AggroSystem.OutdoorSight`, arrival 40 (a cage: its `use range` + 15), a lift given up after 60 game s of walking.
 
 ## Captives
 
@@ -2392,7 +2392,7 @@ its plan the act-out carries out besides the goal's own. Built: 135, 139, 282, 2
   system, fleeing, fighting, carried, caged by another, a task another system started; a caged mind keeps the goal it acts out from the cage); gone. A displaced act-out whose provenance is still its own is stopped after `End` (a walk
   stands, another task but idle ends through its handler), so the AI holds the character for the winner; the other ends leave the task to what ended the goal. The
   system's own end is `DutyGoals.Done` (no `End`; a task of the act-out still running stops as a displaced one's). A walk of the act-out that ends short is a lost walk
-  (`DutyGoals.LostWalk`, the gate and warden act-outs): its target goes into `CharacterCold.Ignored` for 20 s and the goal ends for a replan, with no back-off
+  (`DutyGoals.LostWalk`; the gate, warden and town act-outs): its target goes into `CharacterCold.Ignored` for 20 s and the goal ends for a replan, with no back-off
   and no limit on tries (**Verified**, plan step `FUN_14050d970` → `notifyPathImpossible` `FUN_140796ed0`; only the finders that read `pathFailures` skip the
   target, not the warden ones `FUN_1408cf3c0`, `FUN_1408cb1c0`, `FUN_1408cb360`, `FUN_1408cc2a0`, nor 180, which has none). Records are hashed while any.
 
