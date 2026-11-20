@@ -199,10 +199,12 @@ public sealed class DecisionSystem
     }
 
     /// <summary>
-    /// The characters every source is asked for: the player's (<see cref="CharacterCold.IsPlayer"/>); the others are asked the order step and the
-    /// engine's job passes alone (docs/simulation.md "Decision step").
+    /// The characters every source is asked for: those of the player's faction, the player's own (<see cref="CharacterCold.IsPlayer"/>) and the ones
+    /// Meitou makes without that flag, which hold a player-faction mind (<see cref="AiMind.PlayerSide"/>). The sources stand for the original's
+    /// player-faction branches (setupAI's own lists, the job pass's implicit jobs, the standing orders); any other character is asked the order step
+    /// and the job passes alone (docs/simulation.md "Decision step"). A pure read of the character's own state.
     /// </summary>
-    public static bool Decides(CharacterCold cold) => cold.IsPlayer;
+    public static bool Decides(CharacterCold cold) => cold.IsPlayer || cold.Ai is { PlayerSide: true };
 
     /// <summary>
     /// Whether the chooser runs for the character, so its order queue is asked (<see cref="Ai.OrderStep.Runs"/>). A pure read.
@@ -345,11 +347,6 @@ public sealed class DecisionSystem
     /// </summary>
     internal static void Hold(World world, int slot) => Ai.OrderStep.Hold(world, slot);
 
-    /// <summary>
-    /// An order is about to take an NPC its AI does not fully run (<see cref="Ai.OrderStep.KeepRoutine"/>; serial).
-    /// </summary>
-    internal static void KeepRoutine(CharacterTable table, int slot, CharacterCold cold) => Ai.OrderStep.KeepRoutine(table, slot, cold);
-
     #endregion
 
     #region Look
@@ -423,14 +420,15 @@ public sealed class DecisionSystem
     }
 
     /// <summary>
-    /// Whether the look makes a row for the character: its chooser runs (<see cref="TakesOrders"/>) and a source concerns it: a player character,
-    /// a player-faction mind (whose chooser runs only with its row), or one with an order or a job list.
+    /// Whether the look makes a row for the character: its chooser runs (<see cref="TakesOrders"/>) and a source concerns it: a character of the
+    /// player's faction (<see cref="Decides"/>; a player-faction mind's chooser runs only with its row), one the order step concerns
+    /// (<see cref="Ai.OrderStep.Concerns"/>), or one with a job list.
     /// </summary>
     static bool Concerns(CharacterCold cold)
     {
         if (!TakesOrders(cold)) return false;
 
-        return Decides(cold) || cold.Ai is { PlayerSide: true } || cold.OrderQueue.Count > 0 || cold.OrderWins || cold.Jobs.Count > 0;
+        return Decides(cold) || Ai.OrderStep.Concerns(cold) || cold.Jobs.Count > 0;
     }
 
     /// <summary>
@@ -489,13 +487,14 @@ public sealed class DecisionSystem
     }
 
     /// <summary>
-    /// Whether <paramref name="source"/> is asked for the character: every source for a player character; for any other the order step while it
-    /// holds an order, and the engine's job passes while it has a job list (they have no faction test, <c>FUN_14050e5b0</c>).
+    /// Whether <paramref name="source"/> is asked for the character: every source for one of the player's faction (<see cref="Decides"/>); for any
+    /// other the order step while it holds an order, and the engine's job passes while it has a job list (they have no faction test,
+    /// <c>FUN_14050e5b0</c>).
     /// </summary>
     static bool Asks(IDecisionSource source, CharacterCold cold)
     {
         if (Decides(cold)) return true;
-        if (source.Step == DecisionStep.Orders) return cold.OrderQueue.Count > 0 || cold.OrderWins;
+        if (source.Step == DecisionStep.Orders) return Ai.OrderStep.Concerns(cold);
 
         return source is JobSource && cold.Jobs.Count > 0;
     }
@@ -603,8 +602,7 @@ public sealed class DecisionSystem
     /// </summary>
     static void HoldNpc(World world, int slot, CharacterCold cold)
     {
-        if (Decides(cold)) return;
-        if (cold.OrderQueue.Count > 0 || cold.OrderWins || cold.OrderRoutine != CharacterTask.Idle) Hold(world, slot);
+        if (!Decides(cold) && Ai.OrderStep.HoldDue(cold)) Hold(world, slot);
     }
 
     /// <summary>
@@ -741,8 +739,8 @@ public sealed class DecisionSystem
             if (Decides(cold) && cold.OrderWins) Hold(world, i);
 
             if (Decides(cold)) PausedPlayer(world, i, cold);
-            else if (cold.OrderQueue.Count > 0 || cold.OrderWins) PausedNpc(world, i, cold);
-            else if (cold.OrderRoutine != CharacterTask.Idle) Hold(world, i);   // its routine waits for the order's last walk
+            else if (Ai.OrderStep.Concerns(cold)) PausedNpc(world, i, cold);
+            else if (Ai.OrderStep.HoldDue(cold)) Hold(world, i);   // its routine waits for the order's last walk
         }
     }
 

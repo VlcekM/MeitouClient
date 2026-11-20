@@ -102,9 +102,9 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
             }
 
             // Goal 259 Picking up food (every player animal has it, Character::setupAI): hungry with no food on it, it fetches food from the ground.
-            // A player character's is the decision step's (PickingUpFood); this pass runs it for the other animals of the player's faction, idle or
-            // following, not while an order holds one (a follow order).
-            if (animal && playerSide && !cold.IsPlayer && !Ai.DecisionSystem.Ordered(cold) && WantsGroundFood(cold, race, med, own, options)
+            // One the chooser decides has it from the chooser (PickingUpFood, DecisionSystem.Decides); this pass runs it for the other animals of the
+            // player's faction (no squad), idle or following, not while an order holds one (a follow order).
+            if (animal && playerSide && !Ai.DecisionSystem.Decides(cold) && !Ai.DecisionSystem.Ordered(cold) && WantsGroundFood(cold, race, med, own, options)
                     && world.Characters.Next[i].Task is (byte)CharacterTask.Idle or (byte)CharacterTask.Follow
                 && GroundFood(world, i, cold) is { } ground)
                 FetchFood(world, i, cold, ground);

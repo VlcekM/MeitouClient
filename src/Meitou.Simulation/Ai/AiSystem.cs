@@ -333,9 +333,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     static Blackboard? BoardOf(AiMind mind, Squad squad) => mind.Engine || mind.PlayerSide ? EngineBoard : squad.Ai;
 
     /// <summary>
-    /// One character's chooser (<see cref="Ladder"/>): first the order step for everyone, whose pick (an order that runs or can start) ends it; then a
-    /// player-faction mind's ladder with the sources (<see cref="ThinkPlayer"/>), an autonomous squad's member's package think and its sources'
-    /// ladder, or an NPC's (<see cref="ThinkNpc"/>).
+    /// One character's chooser (<see cref="Ladder"/>), one ladder per think: first the order step for everyone, whose pick (an order that runs or can
+    /// start) ends it; then a player-faction mind's ladder with the sources (<see cref="ThinkPlayer"/>), an autonomous squad's member's
+    /// (<see cref="ThinkMember"/>), or an NPC's (<see cref="ThinkNpc"/>).
     /// </summary>
     void ThinkOne(World world, int i, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, ChooserRow? row, int hour)
     {
@@ -349,15 +349,14 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         var id = world.Characters.IdOf(i);
         if (mind.PlayerSide)
         {
-            ThinkPlayer(world, i, id, cold, mind, squad, board, row, hour, withTiers: true);
+            ThinkPlayer(world, i, id, cold, mind, squad, board, row, hour);
             return;
         }
 
         var roles = mind.Engine ? mind.EngineGoals : ObeyedRoles(world, squad, cold) ?? board.Roles[(int)RoleOf(squad, id, cold)];
         if (cold.IsPlayer && mind.Player)
         {
-            ThinkPackage(world, i, id, cold, mind, squad, board, roles, hour);
-            ThinkPlayer(world, i, id, cold, mind, squad, board, row, hour, withTiers: false);
+            ThinkMember(world, i, id, cold, mind, squad, board, roles, hour, row);
             return;
         }
 
@@ -365,20 +364,17 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// The ladder of a player-faction character (<see cref="Ladder.Run"/> with its look's sources): a source's pick is started in the serial pass
-    /// and ends the AI's goal; a goal's is acted out by <see cref="ActPlayerGoal"/>. <paramref name="withTiers"/> false (an autonomous squad's member,
-    /// whose package goals its package think weighs): the sources alone, as the decision step had them. None while it is down (no chooser runs) or without this tick's look.
+    /// The ladder of a player-faction character (<see cref="Ladder.Run"/> with its look's sources and the AI's rungs: no role list, the own lists'
+    /// types on the rungs, 32): a source's pick is started in the serial pass and ends the AI's goal; a goal's is acted out by
+    /// <see cref="ActPlayerGoal"/>. None while it is down (no chooser runs) or without this tick's look.
     /// </summary>
-    void ThinkPlayer(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, ChooserRow? row, int hour,
-        bool withTiers)
+    void ThinkPlayer(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, ChooserRow? row, int hour)
     {
         if (DecisionSystem.Down(cold) || row is null) return;
 
-        var tiers = withTiers ? TierRungs.Local.Bind(this, world, i, id, mind, squad, board, [], hour, Restrict.None) : null;
+        var tiers = TierRungs.Local.Bind(this, world, i, id, mind, squad, board, [], hour, Restrict.None);
         var pick = Ladder.Run(world.Decisions.Steps, row, tiers, cold.Jobs.Count > 0, cold.SecondList);
         row.Pick = pick;
-        if (!withTiers) return;
-
         if (pick.Source >= 0) LeaveGoal(mind);
         else if (pick.Goal is { } goal) ActPlayerGoal(world, i, cold, mind, goal, board, row);
     }
@@ -424,20 +420,22 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     internal static string GoalName(AiGoal goal) => $"{(int)goal.Task.Type} {TaskDataTable.Of(goal.Task.Type)?.Text ?? goal.Task.Name}";
 
     /// <summary>
-    /// An autonomous squad's member's package think (Meitou only, <see cref="SquadAutonomy"/>): on a job's task only its urgent package goals
-    /// (<see cref="AskOffJob"/>); while the AI holds it, the package's goals and Self preservation, acted out as an NPC's.
+    /// An autonomous squad's member (Meitou only, <see cref="SquadAutonomy"/>), one ladder: while the AI holds it, the NPC's (<see cref="ThinkHeld"/>:
+    /// the package's goals, Self preservation and the look's sources, acted out as an NPC's); else the player-faction one (<see cref="ThinkPlayer"/>),
+    /// on a job's task after its urgent package goals are weighed for the source that takes it off the job (<see cref="AskOffJob"/>).
     /// </summary>
-    void ThinkPackage(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, IReadOnlyList<AiGoal> roles,
-        int hour)
+    void ThinkMember(World world, int i, CharacterId id, CharacterCold cold, AiMind mind, Squad squad, Blackboard board, IReadOnlyList<AiGoal> roles,
+        int hour, ChooserRow? row)
     {
         ref var n = ref world.Characters.Next[i];
-        if (SquadAutonomy.OnJob(n, cold, mind))
+        if (Holds(n, cold))
         {
-            AskOffJob(world, i, id, cold, mind, squad, board, roles, hour);
+            ThinkHeld(world, i, id, cold, mind, squad, board, roles, hour, row);
             return;
         }
 
-        if (Holds(n, cold)) ThinkHeld(world, i, id, cold, mind, squad, board, roles, hour, row: null);
+        if (SquadAutonomy.OnJob(n, cold, mind)) AskOffJob(world, i, id, cold, mind, squad, board, roles, hour);
+        ThinkPlayer(world, i, id, cold, mind, squad, board, row, hour);
     }
 
     /// <summary>

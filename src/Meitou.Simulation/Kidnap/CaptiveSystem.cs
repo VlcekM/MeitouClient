@@ -635,8 +635,9 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// (277, <see cref="Fetch"/>; the limb goes into the mouth and is eaten, <see cref="Items.FeedSystem"/>), the limb play (278) and chase (279) by
     /// their player-side desires, and eating a downed body not of an ally (233). Crop raiding (232) finds nothing for them: its farms are those of a
     /// town the eater does not get along with, and its finder looks only in player towns (<see cref="CropsToEat"/>). A player character's are the
-    /// decision step's (<see cref="RaceGoals"/>: priority 3 at step 4, priority 2 at step 6); this pass runs them in list order for the other
-    /// animals of the player's faction, idle only (engine). An order that runs ends one (<see cref="CaptiveJob.PlayerSide"/>).
+    /// chooser's for every one with a squad (<see cref="RaceGoals"/>: priority 3 at step 4, priority 2 at step 6; <see cref="DecisionSystem.Decides"/>);
+    /// this pass runs them in list order for the other animals of the player's faction (no squad, so no chooser), idle only (engine). An order that
+    /// runs ends one (<see cref="CaptiveJob.PlayerSide"/>).
     /// </summary>
     void RunPlayerAnimalGoals(World world, int every)
     {

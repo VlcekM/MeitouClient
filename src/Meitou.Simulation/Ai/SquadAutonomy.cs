@@ -379,14 +379,15 @@ public sealed class SquadAutonomy(PopulationData data)
         public float Weight => 0.5f;
 
         /// <summary>
-        /// Whether the character's think wants an urgent package goal: it starts for one on a job, and runs for any other.
+        /// Whether the character's think wants an urgent package goal while it is on a job's task: it starts. Off a job the AI's own ladder weighs
+        /// the package goals (<see cref="AiSystem"/>'s held think), the urgent ones before the jobs, so this source has nothing to add there.
         /// </summary>
         public DecisionCheck CanRun(World world, int slot)
         {
             var cold = world.Characters.Cold(slot)!;
             if (cold.Ai is not { Urgent: true } mind || !Active(cold, mind)) return DecisionCheck.No("no urgent package goal");
 
-            return OnJob(world.Characters.Next[slot], cold, mind) ? DecisionCheck.Run : DecisionCheck.Runs;
+            return OnJob(world.Characters.Next[slot], cold, mind) ? DecisionCheck.Run : DecisionCheck.No("not on a job");
         }
 
         /// <summary>

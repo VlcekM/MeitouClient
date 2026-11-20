@@ -474,8 +474,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// hunger (desire 0.2), outside them in a town with gates not at all; else the 259 desire (slot 25): stomach empty, hunger at most 2.4, no food
     /// it would bite on it, not fighting unless hunger is below 1.2. It walks to the nearest store of the town owned by its faction with food in it
     /// and takes one item, which the eating rule then eats; without room for that item (state 82, <see cref="TakeFits"/>) it starts no run. A player
-    /// character's goal is the decision step's (<see cref="GettingFood"/>, priority 3, weight 0.5); this pass runs it for the other characters of
-    /// the player's faction while idle (they hold no jobs; engine choice).
+    /// character's goal is the chooser's (<see cref="GettingFood"/>, priority 3, weight 0.5, every character of the player's faction with a squad:
+    /// <see cref="DecisionSystem.Decides"/>); this pass runs it for the others of the player's faction while idle (no squad, so no chooser; engine
+    /// choice).
     /// </summary>
     void LookPlayerFood(World world, int every)
     {
@@ -485,7 +486,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         var table = world.Characters;
         for (int s = 0; s < table.HighWater; s++)
         {
-            if (!table.Next[s].Alive || !world.Turn(s, every) || table.Cold(s) is not { IsPlayer: false } c || c.Faction != faction)
+            if (!table.Next[s].Alive || !world.Turn(s, every) || table.Cold(s) is not { } c || DecisionSystem.Decides(c) || c.Faction != faction)
                 continue;
 
             // An order beats the goal: one its order holds (an order in place runs on Idle) starts no run.
