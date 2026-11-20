@@ -429,6 +429,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         if (world.Tick % RestoreEveryTicks == 0) RestoreSlavers(world);
         StepRacks(world);
         StepJobs(world);
+        OrderRunsFromRisers(world);
         OfferAfterJobs(world);
 
         // Each character is looked at once in SweepEveryTicks, on its slot's turn (slot mod the period), so the sweep spreads over the ticks instead
@@ -1683,6 +1684,11 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     const float CropReach = 30;
 
     /// <summary>
+    /// The eaters whose meal got up this tick, with it (<see cref="StepEatBody"/>), given order 35 after the job loop.
+    /// </summary>
+    readonly List<(CharacterId Eater, CharacterId Meal)> _risers = [];
+
+    /// <summary>
     /// The meals of 230 and 233 (<c>AI::findCorpse_onGround</c> <c>FUN_1408cfde0</c> / <c>AI::findDeadOrKOBody_onGround</c> <c>FUN_1408ce680</c>,
     /// docs/game/ai-tasks.md), the nearest within the eater's sight (engine reading of its sensed list): 230 a dead body of a <c>carriable</c> race
     /// lying down, for an animal eater not a robot and not of its own race; 233 a dead or downed one not of an allied faction, not a robot and not of
@@ -1721,15 +1727,18 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// <summary>
     /// A meal on the ground (220 on a 230 / 233 target): the eater walks to the body, then eats it with the <c>eat</c> clip as a caged one is eaten
     /// (<see cref="Eat"/>), barking event 52. The action has no dead test (<c>FUN_140353c50</c>, <b>Verified</b>): a corpse is bitten like a living
-    /// body until its parts are gone and the passes run out, when it is removed; a living body until it dies. Carried away, caged or gone: over.
+    /// body until its parts are gone and the passes run out, when it is removed; a living body until it dies. Carried away, caged or gone: over. A
+    /// meal getting up (not a robot) is bitten once more, then the eater is ordered 35 Running away on it (<see cref="RunFrom"/>).
     /// </summary>
     bool StepEatBody(World world, CaptiveJob j, int w, CharacterCold wc)
     {
         var table = world.Characters;
-        if (!table.TryResolveNext(j.Captive, out int c) || table.Cold(c) is not { Medical: { } m, Race: { } } cc || !cc.CarriedBy.IsNone
-                || cc.InSomething != HeldState.None
-            || !m.Dead && !m.Incapacitated)
+        if (!table.TryResolveNext(j.Captive, out int c) || table.Cold(c) is not { Medical: { } m, Race: { } race } cc || !cc.CarriedBy.IsNone
+                || cc.InSomething != HeldState.None)
             return End(world, j, CaptiveEventKind.GaveUp);
+
+        bool rising = !m.Dead && j.Phase == CaptivePhase.Work && !race.IsRobot && CharacterFacts.GettingUp(cc, world.Tick);
+        if (!m.Dead && !m.Incapacitated && !rising) return End(world, j, CaptiveEventKind.GaveUp);
 
         ref var n = ref table.Next[w];
         var body = table.Next[c].Position;
@@ -1761,7 +1770,9 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         }
 
         bool corpse = m.Dead;
-        if (!Eat(world, j, c, cc, world.TickSeconds)) return true;
+        bool eaten = Eat(world, j, c, cc, world.TickSeconds);
+        if (rising && !m.Dead) return RunFrom(world, j);
+        if (!eaten) return true;
         bool over = End(world, j, CaptiveEventKind.Eaten);
 
         // The meal over, the original destroys the character with the reason "eaten" (FUN_140799af0): the corpse goes at once, as the body system
@@ -1774,6 +1785,33 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         }
 
         return over;
+    }
+
+    /// <summary>
+    /// <c>Task_EatPrisoner</c>'s update (<c>FUN_140353c50</c>, <b>Verified</b>) on a meal that is not a robot, not in a cage and getting up: after
+    /// the bite the eater is given 35 on it, its queue cleared. The job ends here; the order is given after the job loop, as its clear lets every
+    /// duty go.
+    /// </summary>
+    bool RunFrom(World world, CaptiveJob j)
+    {
+        _risers.Add((j.Worker, j.Captive));
+        return End(world, j, CaptiveEventKind.GaveUp);
+    }
+
+    /// <summary>
+    /// Gives each eater of <see cref="_risers"/> still in the world order 35 on its meal (serial, after the job loop).
+    /// </summary>
+    void OrderRunsFromRisers(World world)
+    {
+        if (_risers.Count == 0) return;
+
+        var flee = world.SystemOf<FleeSystem>();
+        foreach (var (eater, meal) in _risers)
+        {
+            if (flee is not null && world.Characters.TryResolveNext(eater, out int s)) flee.GiveRun(world, s, meal);
+        }
+
+        _risers.Clear();
     }
 
     /// <summary>

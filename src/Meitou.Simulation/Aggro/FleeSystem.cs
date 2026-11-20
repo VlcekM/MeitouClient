@@ -5,6 +5,7 @@ using Meitou.Simulation.Combat;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Perception;
+using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Aggro;
 
@@ -27,7 +28,8 @@ namespace Meitou.Simulation.Aggro;
 /// attacks it within reach (<see cref="CharacterCold.FleesAlone"/>); a goal 35 of its lists starts the squads' run for one character.</item>
 /// </list>
 /// </summary>
-public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, float sightRange = AggroSystem.OutdoorSight) : ITickSystem, IStateHashed
+public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, float sightRange = AggroSystem.OutdoorSight)
+    : ITickSystem, IStateHashed, IOrderOwner, IOrderSteps
 {
     /// <summary>
     /// How often squads in a fight are checked, and fleeing characters tested for safety (engine choice, as retaliation's).
@@ -132,6 +134,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
 
         StartRequestedFlights(world, table);
         ContinueFlights(world, table, check);
+        ContinueOrderedRuns(world, table);
         if (!check || !SquadBreak) return;
 
         BreakSquads(world, table);
@@ -574,6 +577,89 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
         var start = from ?? new Vector2(n.Position.X, n.Position.Z);
         return start + direction * (distance + RunSpread * r);
     }
+
+    #endregion
+
+    #region Run-away orders
+
+    /// <summary>
+    /// The characters running under order 35 (<see cref="IOrderOwner.Start"/>), in the order they started: their hops go on here.
+    /// </summary>
+    readonly List<CharacterId> _ordered = [];
+
+    /// <summary>
+    /// Gives the character in <paramref name="slot"/> order 35 Running away on <paramref name="target"/>, clearing its queue (serial phases; the
+    /// eater of a prisoner getting up, docs/game/ai-tasks.md "Order givers").
+    /// </summary>
+    internal void GiveRun(World world, int slot, CharacterId target)
+    {
+        var order = new OrderEntry(Data.Gameplay.Ai.TaskType.RunAway, this) { Target = target };
+        PlayerOrders.Give(world, slot, order, queued: false);
+    }
+
+    /// <summary>
+    /// 35's list A (<c>!39 6</c>): while no melee threat is on the runner and no enemy in its senses the order leaves the queue, as the original pops
+    /// a front whose row is done (a runner without senses senses none).
+    /// </summary>
+    OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order) => RunDone(world, slot) ? OrderCheck.Gone : OrderCheck.Run;
+
+    /// <summary>
+    /// A started run whose list A came to hold ends, the order then leaving by <see cref="IOrderOwner.CanRun"/>.
+    /// </summary>
+    bool IOrderOwner.StillHolds(World world, int slot, OrderEntry order) => !RunDone(world, slot);
+
+    /// <summary>
+    /// <c>Task_Runaway</c>'s start: the first run from the enemies it senses (<see cref="EnemyRunPoint"/>; the order's target is not used), at full
+    /// speed.
+    /// </summary>
+    void IOrderOwner.Start(World world, int slot, OrderEntry order)
+    {
+        TaskStart.Walk(world, slot, EnemyRunPoint(world, slot), SpeedMode.Free, Data.Gameplay.Ai.TaskType.RunAway, TaskSource.Order);
+
+        var id = world.Characters.IdOf(slot);
+        if (!_ordered.Contains(id)) _ordered.Add(id);
+    }
+
+    /// <summary>
+    /// The run has no end of its own: between two hops (the last one arrived, the next not yet started on this system's step) the order still runs.
+    /// </summary>
+    bool IOrderSteps.Between(World world, int slot, OrderEntry order) => _ordered.Contains(world.Characters.IdOf(slot));
+
+    /// <summary>
+    /// The hops of the ordered runs (<c>Task_Runaway</c>'s update, as <see cref="ContinueFlights"/>): a run that stopped or is within
+    /// <see cref="Arrived"/> of its end goes on <see cref="Hop"/> in a random direction. A runner whose front is no longer a started 35 of this
+    /// system leaves the list.
+    /// </summary>
+    void ContinueOrderedRuns(World world, CharacterTable table)
+    {
+        for (int k = _ordered.Count - 1; k >= 0; k--)
+        {
+            if (!table.TryResolveNext(_ordered[k], out int s) || !RunsOrder(table.Cold(s)!))
+            {
+                _ordered.RemoveAt(k);
+                continue;
+            }
+
+            ref var n = ref table.Next[s];
+            bool running = n.Task == (byte)CharacterTask.GoTo && table.Cold(s)!.Running is { Row: Data.Gameplay.Ai.TaskType.RunAway };
+            if (running && Vector2.DistanceSquared(new Vector2(n.Position.X, n.Position.Z), n.Goal) > Arrived * Arrived) continue;
+
+            var hop = RunPoint(world, table, s, RandomDirection(world, s, 1), Hop);
+            TaskStart.Walk(world, s, hop, SpeedMode.Free, Data.Gameplay.Ai.TaskType.RunAway, TaskSource.Order);
+        }
+    }
+
+    /// <summary>
+    /// Whether the character's queue front is a started 35 of this system.
+    /// </summary>
+    bool RunsOrder(CharacterCold cold) =>
+        cold.OrderQueue.Front is { Row: Data.Gameplay.Ai.TaskType.RunAway, Started: true } front && ReferenceEquals(front.Owner, this);
+
+    /// <summary>
+    /// 35's list A for the character in <paramref name="slot"/> (a pure read).
+    /// </summary>
+    bool RunDone(World world, int slot) =>
+        !Bodies.CharacterFacts.ImmediateThreat(combat, world, slot) && Bodies.CharacterFacts.Senses(world, slot) is not { Enemies: > 0 };
 
     #endregion
 

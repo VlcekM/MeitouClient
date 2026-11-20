@@ -339,7 +339,8 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
 - **Engine order givers** (rows, receivers and clear flags as the original's, [order givers](game/ai-tasks.md#order-givers)): DA 29 (`ArrestSystem.OrderArrest`: 240 then 112
   queued, else 4, which `CombatSystem` owns), DA 10 / 30 / 40 (`ArrestSystem.TakeOver`: 213 then 112 queued); the arrest system also gives DA 29's orders for its engine
   arrest in a world without dialogue events; 133 to a bailed, bought or released prisoner (`Locks.FreedPrisoner`, the release's only when the releaser's faction books bounties
-  or is the player's; the bail's 128 is not given, [economy 11.5](game/economy.md#115-bail-and-sentence)). Each is given through `PlayerOrders.Give`.
+  or is the player's; the bail's 128 is not given, [economy 11.5](game/economy.md#115-bail-and-sentence)); 35 to the eater of a meal getting up ([eating on the
+  ground](#captives)). Each is given through `PlayerOrders.Give`.
 - The failure text is said only for a character of the player's faction that is not an animal (`PlayerOrders.Show`; the order step's vfunc `0x2d8` call in `FUN_140510920`,
   [precedence](game/ai-tasks.md#precedence)); anyone else's blocked order waits silently.
 - Owners that take a player character's order only (an NPC's leaves the queue, `Gone`), their act-outs being the player's: build, repair and dismantle (the sites, doors and
@@ -348,7 +349,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   turret's gunner is the interface's), a container's (26, 76: the player's container window), opening an inventory (26 with the inventory detail: the player's loot window)
   and a door walk (72, 73, 76 on a door: the interface's one door target, `PlayerState.DoorTarget`), and the Medic, Robotics and Rescue buttons. Moves, follows, attacks,
   first aid, splint and rest, lifts, kidnap, loot, stealth KO, put down, beds, a ground pick-up (3), the rest of the lock work, put in cage (108) and the arrest orders
-  (240, 213, 112, 4), 133 take any character; their
+  (240, 213, 112, 4), 133 and 35 take any character; their
   act-outs post and say the worker's own messages for the player's side only.
 - Saved for player characters (`Saving/OrderSave`, in the character's GAMESTATE_AI record next to the perma-jobs; format and evidence: [save](formats/save.md#order-queue)): the queue front first,
   started or not, as the original saves its deque as `tjob<i>`. A load reads the orders into `CharacterCold.SavedOrders` and starts nothing; `DecisionSystem.Run` makes them the queue (nothing
@@ -1516,7 +1517,10 @@ gather jobs while walking home under 43, and a job that waited on that walk reac
   enemy. 3 s of `medic` at the cage (engine), then `FixtureRegistry.Release` (no crime is booked for an NPC liberator).
 - **Eating on the ground** (230 / 233, `CaptiveJobKind.EatBody`; also from the race's `AI Goals`, which the sweep reads after the role list): the nearest body within sight that
   the finder takes; the eater walks to it and eats it as a caged meal is eaten (`eat`, event 52, `MedicalState.BeingEaten`, which can kill a living one). The eat action has no dead test (`FUN_140353c50`, `FUN_1404356f0`, `FUN_140650370`, **Verified**): a corpse is bitten the
-  same way until no part is left to eat and the passes run out (more than 5), when the original destroys the character with the reason "eaten" (`FUN_140799af0`); Meitou removes the corpse at once (`CaptiveSystem.StepEatBody`, as the body system removes a decayed one). A living one eaten away is not removed but left dead (**not modelled**).
+  same way until no part is left to eat and the passes run out (more than 5), when the original destroys the character with the reason "eaten" (`FUN_140799af0`); Meitou removes the corpse at once (`CaptiveSystem.StepEatBody`, as the body system removes a decayed one). A living one eaten away is not removed but left dead (**not modelled**). A meal that
+  gets up (not a robot; the bite wakes one playing dead) is bitten once more, then the job ends and the eater is ordered 35 Running away on it, its queue cleared
+  ([order givers](game/ai-tasks.md#order-givers); `CaptiveSystem.RunFrom`, given after the job loop): `FleeSystem` owns 35, runs it as `Task_Runaway` (from the sensed
+  enemies, then hops) and drops it once its list A holds (no melee threat, no enemy sensed).
 - **Fogman worship** (237 / 236, `CaptiveJobKind.Worship`): in the town nearest it (a standing nest counts, nest markers do not), the first cage whose occupant is being eaten (a running Eat job); within 60 it faces the cage,
   plays `bowing` and barks event 53 every 3-14 game s; ends once the cage is empty or the job grows old (the original runs on while the cage stands).
 - **Dogs' limb play** (race goals 277-279): 277 sends an animal with an empty mouth (an adult only when its stomach is empty and hunger at most 2.75) to the nearest limb within

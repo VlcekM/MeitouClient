@@ -646,7 +646,8 @@ Meitou: [simulation, captives](../simulation.md#captives).
   medical update `FUN_140650370`: rate = 1 x lerp(2, 0.4, toughness x stat scale x 0.01) per second (x5 instead when medical `+0x164`); parts from the last down:
   the first with h - 1.1 s > -M loses rate x dt from flesh and from the treated pool and the update ends; a limb part (arm or leg) is handled only when its limb slot reads original (`FUN_1400cd450` 0; a stump, prosthetic or crushed limb is skipped, **Verified**); a limb with nothing left to bite has its whole limb slot cut (`FUN_14064edc0`, no per-part severance flag, and with its item flag 0: no severed limb item drops, **Verified**) when the global `DAT_142133504`
   is set (Meitou: `MedicalState.BeingEaten`); with nothing left, a counter `+0x15c` rises, and past 5 the character dies ("eaten"; "{1} has been eaten alive." for the player's). A robot is never eaten; the first update with nothing left to bite, when the eaten character's faction has the player flag `+0x250`, posts a type 0xc message to the global event list `DAT_1421346d8`. The end
-  of the task resets the town's kill time as Kill's does. A target not imprisoned and with `+0x278` set is bitten once and the eater re-ordered (order 0x23).
+  of the task resets the town's kill time as Kill's does. A target not imprisoned and with `+0x278` set is bitten once and the eater re-ordered (order 0x23; Meitou: `CaptiveSystem.RunFrom`,
+  the order `FleeSystem`'s).
 
 ### Slave work, shout and capture
 
