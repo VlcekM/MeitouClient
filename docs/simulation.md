@@ -378,7 +378,7 @@ of a player's squad of the player's faction, not a prisoner it keeps) the ladder
 goals (`AiSystem.ThinkPlayer`; the other own-list goals weigh 0 and stay with their sources). Its winning goal is acted out as an NPC's (`AiSystem.ActChosen`) while nothing else holds it
 (`PlayerSideHold.Free`: not fleeing, engaged, imprisoned, carried or down), and holds it (`PlayerSideHold.Holds`, the look due on its turn) until an order, a job or a higher goal
 ends it (`OrderStep.TakeOver`, `DutyEnd`); a goal over an order's or a job's task ends that task in the serial step and acts at the next tick; a source's win ends the goal (`DutyGoals.Leave`);
-an autonomous squad's member the NPC's while the AI holds it or it obeys as a slave on its list job's task (the 187 branch's), else the sources' rungs alone (its package mind untouched); an NPC the full ladder (`AiSystem.ThinkNpc`)
+an autonomous squad's member the NPC's while the AI holds it or it obeys as a slave on its list job's task (the 187 branch's), else the sources' rungs, 32 and its second list (`SelfPreservationRung`; its package mind untouched); an NPC the full ladder (`AiSystem.ThinkNpc`)
 on whatever task, in a fight it did not start and in its cage, but while it flees, is carried or down or its order holds it (`ChooserRuns`); the winner is acted out on a task the
 AI runs, or on its list job's (`AiSystem.RunsListJob`: a job's pick leaves its goal, a goal that wins ends the job's task first, as a player-faction mind's), from the cage, or over
 a task an engine system runs (`ActOverEngineTask`, [AI](#ai)); the two holds only Meitou has keep their own choice (`MeitouHolds`, [AI](#ai)), and an engine mind with nothing
@@ -2216,8 +2216,8 @@ the leader), and the war classes' start (`AiSystem.WarStart`) the campaign's tar
 
 Meitou only (the original's AI plans for no player squad; asked for as the RE_Kenshi "Squad Autonomy" plugin's base). `Squad.Autonomous`
 (`SetSquadAutonomy`) opens a player's squad to `ChangeAi` / `StartContract` (dialogue's `change AI` on it too); `SquadAutonomy` holds the rules.
-- **Minds**: only its `IsPlayer` members get one (`AiMind.Player`), of the package's role goals alone: Self preservation and race goals stay the
-  [decision step](#decision-step)'s. A member moved to another squad loses its mind at the next package step. Off: board, saved AI and minds go,
+- **Minds**: only its `IsPlayer` members get one (`AiMind.Player`), of the package's role goals; while the AI does not hold it, the
+  [decision step](#decision-step)'s sources, 32 and its second list (`SelfPreservationRung`). A member moved to another squad loses its mind at the next package step. Off: board, saved AI and minds go,
   an AI-started task ends (one in a bed lies on).
 - **Precedence** (the chooser's order, [precedence](game/ai-tasks.md#precedence)): orders, urgent package goals, jobs, the other package goals.
   `AiSystem.Holds` takes a player character only when no plan runs its task or the plan is 14 Idleness's or the think's own (`AiMind.Owns`: the

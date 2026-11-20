@@ -6,9 +6,10 @@ namespace Meitou.Simulation.Ai;
 /// <summary>
 /// The AI's rungs of the chooser (<see cref="ITierRungs"/>) for an autonomous squad's member the AI does not hold (<see cref="SquadAutonomy"/>):
 /// 32 Self preservation alone, the goal <c>Character::setupAI</c> gives every character (<c>FUN_140621b70</c>, <b>Verified</b>), scored at priority 3
-/// among the look's goal sources as <see cref="TierRungs"/> scores it. No plan step, no committed stop, no second list, no default task and no
-/// mover reset, and its plan is tested without being kept: the member's package goal and plan stay for when the AI holds it again. One per worker
-/// thread (<see cref="Local"/>), bound to the member before each choice; it writes nothing.
+/// among the look's goal sources as <see cref="TierRungs"/> scores it, and the second list's entries at its rungs (the urgent job pass, the
+/// priority-3 pick), which the serial pass starts. No plan step, no committed stop, no default task and no mover reset, and its plan is tested
+/// without being kept: the member's package goal and plan stay for when the AI holds it again. One per worker thread (<see cref="Local"/>), bound
+/// to the member before each choice; it writes nothing.
 /// </summary>
 internal sealed class SelfPreservationRung : ITierRungs
 {
@@ -54,6 +55,12 @@ internal sealed class SelfPreservationRung : ITierRungs
     Blackboard _board = null!;
 
     /// <summary>
+    /// The best second-list entry of the look still kept for the next pick: its candidate code (<see cref="LadderPick.SecondCode"/>; -1: none) and
+    /// score.
+    /// </summary>
+    (int Code, float Score) _second = (-1, 0);
+
+    /// <summary>
     /// Whether the last pick's plan runs (35 Running away) rather than fights its attacker (13), as <c>SelfPreservation.Runs</c> chooses between the
     /// two providers.
     /// </summary>
@@ -66,6 +73,7 @@ internal sealed class SelfPreservationRung : ITierRungs
     {
         (_ai, _world, _slot, _id, _mind, _squad, _board) = (ai, world, slot, id, mind, squad, board);
         Runs = false;
+        _second = (-1, 0);
         return this;
     }
 
@@ -84,9 +92,19 @@ internal sealed class SelfPreservationRung : ITierRungs
     public AiGoal? Committed => null;
 
     /// <summary>
-    /// The second list is no goal of this rung.
+    /// Keeps the look's best second-list entry (<c>FUN_14050df10</c> over <c>+0x70</c>; of equal scores the later-listed, as the scorer's keys rank
+    /// them) for the urgent job pass or the priority-3 pick; the serial pass starts it as it does any character's.
     /// </summary>
-    public void ScoreSecondList(ChooserRow? row) { }
+    public void ScoreSecondList(ChooserRow? row)
+    {
+        _second = (-1, 0);
+        if (row is null) return;
+
+        for (int k = 0; k < row.SecondCount; k++)
+        {
+            if (row.SecondScores[k] > 0 && row.SecondScores[k] >= _second.Score) _second = (LadderPick.SecondCode(k), row.SecondScores[k]);
+        }
+    }
 
     /// <summary>
     /// No 187 branch (its job is the member's list's).
@@ -94,26 +112,37 @@ internal sealed class SelfPreservationRung : ITierRungs
     public bool Obeys => false;
 
     /// <summary>
-    /// No goal of a job pass.
+    /// The urgent job pass's pick over the second list kept: its best entry (in <paramref name="code"/>, the goal null), or nothing; either way the
+    /// entries are cleared, as a failed pick clears the map. No goal of the 187 branch.
     /// </summary>
     public AiGoal? PickJobPass(out int code)
     {
-        code = -1;
+        code = _second.Code;
+        _second = (-1, 0);
         return null;
     }
 
     /// <summary>
-    /// The priority-3 tier: Self preservation against the look's goal sources of <paramref name="from"/> to <paramref name="to"/>, the higher score
-    /// first and a tie to the source (listed after the own goals); Self preservation only when its plan has a provider (a run, or an attacker of its
-    /// own to fight). Nothing at the other tiers.
+    /// The priority-3 tier: the second list's entry still kept (scored first, so it loses a tie), Self preservation, then the look's goal sources of
+    /// <paramref name="from"/> to <paramref name="to"/>, the higher score first and a tie to the later (a source is listed after the own goals);
+    /// Self preservation only when its plan has a provider (a run, or an attacker of its own to fight). Nothing at the other tiers.
     /// </summary>
     public AiGoal? Tier(TaskPriority tier, ChooserRow? row, int from, int to, out int source)
     {
         source = -1;
         if (tier != TaskPriority.Urgent) return null;
 
+        var second = _second;
+        _second = (-1, 0);
         bool wanted = Wanted(out float score);
         int best = Ladder.BestSource(row, from, to);
+        float top = MathF.Max(wanted ? score : 0, best >= 0 ? row!.Scores[best] : 0);
+        if (second.Code != -1 && second.Score > top)
+        {
+            source = second.Code;
+            return null;
+        }
+
         if (best >= 0 && (!wanted || row!.Scores[best] >= score))
         {
             source = best;
