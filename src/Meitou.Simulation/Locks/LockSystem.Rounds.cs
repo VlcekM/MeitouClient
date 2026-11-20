@@ -117,7 +117,7 @@ public sealed class Round
         h.Add((int)Phase);
         h.Add(Time);
         h.Add(FromOutside ? 1 : 0);
-        h.Add(Lost ? 1 : 0);
+        if (Lost) h.Add(0x4C6F7374);   // "Lost": its callers drop the round in that step, so only while set
     }
 }
 
