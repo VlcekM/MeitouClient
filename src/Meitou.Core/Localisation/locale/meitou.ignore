@@ -25,10 +25,12 @@ Acid Rain ({1} protection)
 Acid!
 Active:
 Actual Growth Time:
+Add squad
 Advanced
 Advanced options
 Age:
 Aim speed:
+Aiming...
 Aimless
 Alarm raised
 All necessary materials are ready.
@@ -39,15 +41,18 @@ Are you sure you want to delete this save game?
 Are you sure you want to exit?
 Are you sure?
 Area Size:
+Armour Smithing
 Armour penetration
 Armour smith
 Armour/equipment:
 Arrange
+Assassination
 Assault to {1} canceled due to faction weakness
 Ate {1}
 Athletics
 Athletics Skill:
 Athletics XP:
+Attack
 Attack All
 Attack Target
 Attack Unprovoked
@@ -58,6 +63,7 @@ Audio
 Auto save
 Auto save time (minutes)
 BEING EATEN ALIVE!!
+Backpack
 Backspace
 Bandits loot the player
 Base Accuracy Deviation:
@@ -75,6 +81,7 @@ Blood loss KO
 Blood loss trauma:
 Blood loss:
 Blown!
+Blunt
 Blunt damage
 Blunt weapon class
 Blunt weapon damage:
@@ -92,6 +99,7 @@ Building speed
 Buildings
 Burning
 Burning ({1} protection)
+Buy
 Buyback
 Buyer's money:
 CONTINUE
@@ -136,6 +144,7 @@ Condition:
 Confirm
 Continue
 Controls
+Cooking
 Cooldown {1,num} second
 Copper
 Copper Quality:
@@ -154,10 +163,13 @@ Crippled right arm:
 Critical
 Critical injuries will continue to degenerate without medical attention.
 Critical wounds:
+Crop Theft
 Crop Yield
 Crop yield:
+Crossbow Smithing
 Crossbow class
 Crossbow smith
+Crossbows
 Current Swim Speed:
 Current goal of this character.
 Current work:
@@ -178,6 +190,7 @@ Dead
 Default aim speed:
 Default damage:
 Default range:
+Defence
 Defence bonus
 Defensive
 Defensive combat mode:
@@ -185,6 +198,7 @@ Defensive mode:
 Delete
 Delete Save
 Deviation:
+Dexterity
 Dialogue
 Difficulty:
 Diplomatic Status
@@ -201,7 +215,10 @@ Dismiss character '{1}'?
 Ditch items
 Do you want to buy this building for c.{1,num}?
 Dodge skill:
+Dodging
 Door Condition
+Downgrade
+Downgrade To:
 Draining
 Dust Storm ({1} protection)
 Duststorms
@@ -218,6 +235,7 @@ Encumbrance effect:
 Encumbrance penalty:
 Encumbrance:
 Engineer
+Engineering
 Environment Effect:
 Environment:
 Equipment penalty:
@@ -227,8 +245,10 @@ Esc
 Escape
 Escaped Prisoner
 Escaped slave
+Escaping Prison
 Estimated build time:
 Everything
+Ex-slave
 Exit
 Expired
 FINISH
@@ -236,14 +256,17 @@ FOREVER
 FXAA
 Faction Name
 Faction name
+Failed
 Failed to learn from blueprint: Technology requirements not met
 Failed to load the core '{1}' file.
 Failed to load the following mod(s):
 Failed!
 Farmers Skill:
+Farming
 Fast zone hopping
 Feed Animals
 Feet Burning!
+Female
 Fencing chance:
 Fertility
 Fewer
@@ -279,6 +302,7 @@ Growing
 Growth Rate
 HOLD POSITION means that the selected character won't run off to fight enemies, even to protect his allies.  He will hold his position and only attack any enemy that comes into close range.  He will still use a crossbow normally, but won't move around obstacles to get a shot.  Use this setting to tactically position fighters, or just to keep non-combatants away from the fighting.
 Hacker class
+Hackers
 Harpoon limit
 Heal Allies
 Healing bonus:
@@ -302,6 +326,7 @@ Hunger Rate:
 Hunger time
 Hunger:
 Hungry
+I can't carry anyone with this arm.
 I can't get out of here.
 I can't get there.
 I don't have any building materials.
@@ -351,11 +376,13 @@ It will no longer close and needs to be repaired.
 Jobs
 KO point:
 Katana class
+Katanas
 Keep your [Looks Like A Slave] level as low as possible, wear clothing or disguises and find a plastic surgeon to restore your hair. Don't get spotted.
 Keep your [Looks Like A Slave] level as low as possible, wear clothing or disguises and find a plastic surgeon to restore your hair. You should be safe if you stay out of towns.
 Kidnap
 Kidnapped
 Knocked out cold.
+Labouring
 Landscape
 Leader
 Left-Click
@@ -371,13 +398,16 @@ Loading
 Loading...
 Location
 Lock
+Locked
 Locked (lvl: {1,num})
+Lockpicking
 Lockpicking (Chance {1}%)
 Looks like slave:
 Loot
 Looting
 Losing blood, will collapse if blood goes below 0.
 Low
+Male
 Malnourished
 Man Turret
 Manufactured by
@@ -406,6 +436,7 @@ Money:
 Move
 Moving
 Music volume
+My arm is broken!
 Name
 Name:
 Nameless
@@ -477,8 +508,12 @@ Paid c.{1} for bed rental.
 Paid c.{1}k
 Passive
 Pay Bounty
+Pay c.{1,num}
+Perception
 Pick Lock
 Pick Up
+Pick failed
+Pick success!
 Place Building:
 Plant Condition
 Play Style:
@@ -493,6 +528,7 @@ Power output is at maximum.
 Power output is running at reduced efficiency due to damage.
 Power supply:
 Power:
+Precision Shooting
 Precision shooting
 Press
 Pressing this button will order your selected characters to automatically heal everyone else in the squad, including themselves. They will need a medkit in their inventory.
@@ -517,12 +553,14 @@ Range:
 Ranged
 Rare
 Rebooting
+Received
 Received c.{1} reward.
 Recovery coma
 Recovery rate: {1}x
 Relations with {1} decreased by {2}
 Relations with {1} improved by {2}
 Reload time:
+Reloading...
 Repair
 Repairs
 Required skill:
@@ -549,12 +587,15 @@ Run speed:
 SKIP
 STORAGE
 Sabre class
+Sabres
 Same faction:
 Saturation
 Save
 Save game
+Science
 Sciences
 Security:
+Sell
 Set Free
 Severe limb damage has now led to critical blood loss. You will die without medical attention.
 Shadows
@@ -598,16 +639,20 @@ Stone
 Stone Richness:
 Stone under ground:
 Stored
+Strength
 Strength XP rate:
 Strength XP:
 Strength:
 Swap mouse buttons
+Swimming
 Switched off
 Switching on will incinerate the entire inventory!
 TUTORIALS
 Talk To
+Talking
 Taunt
 Tech Level
+Terrorism
 The additional bonus to range, speed and power that resulted from having a height difference of {1} above the last target.
 The additional penalty to range, speed and power that resulted from having a height difference of {1} below the last target.
 The amount of accuracy error, in degrees. Higher numbers are poor, 0 is perfect accuracy.
@@ -666,6 +711,7 @@ This is the rate at which your athletics skill is increasing while running.
 This is the rate at which your strength is increasing.
 This is the rate at which your toughness increases when you get hurt.
 This isn't mine
+This limb is gone forever.
 This limb is severely damaged and in need of repairs. Luckily though skeleton limbs don't degenerate.
 This machine has broken down as a result of damage. Send one of your engineers to repair it.
 This machine is currently under construction.
@@ -694,6 +740,7 @@ Total equipment bonuses:
 Total range:
 Total speed:
 Total:
+Toughness
 Toughness XP rate:
 Toughness XP:
 Town attacks frequency
@@ -704,6 +751,7 @@ Trade
 Trades
 Training
 Training:
+Turrets
 Tutorials
 Type:
 UI volume
@@ -712,9 +760,13 @@ Unconscious from blood loss and bleeding to death. Hope that the bleeding stops 
 Unconscious from blood loss. It will recover over time, bed rest will help.
 Under construction
 Undo:
+Uniform Theft
 Unlock
 Unlock Shackles
+Unlocked
+Upgrade
 Upgrade required
+Upgrades To:
 Use
 Use Strength
 Use Tools
@@ -725,6 +777,7 @@ User Skill:
 VO volume
 Value
 Velocity:
+Vet
 WARNING! Crop yield is too low to be productive, probably the crop is not suitable for this area.
 WARNING: Character will become a slave!
 Waiting to be released
@@ -739,9 +792,12 @@ Water Available:
 Water reflection
 Water under ground:
 Weapon Accuracy:
+Weapon Smithing
 Weapon cutting damage:
 Weapon indoors penalty:
 Weapon smith
+Weapon weight:
+Weaponry
 Weapons
 Weather penalty:
 Weather:
@@ -845,23 +901,9 @@ when finished
 {1} squad has been removed from {2}
 {1} to {2} has failed
 {1} was defeated on their way to {2}
-Failed
-Talking
-My arm is broken!
-This limb is gone forever.
-I can't carry anyone with this arm.
 
 # Not shown as Meitou's text: widget, skin and icon names, alignments, formats, fonts, record names (translated by .translation files), Workshop mod titles, editor fields.
  d MMM
-[Meitou Client] Disarm Port
-[Meitou Client] It. Tickles. Me. Port
-[Meitou Client] Kill Counter Port
-[Meitou Client] Level Up Notify Port
-[Meitou Client] Speed Menu Port
-[Meitou Client] Stack Sort Port
-[Meitou Client] Taunt Expansion Port
-[Meitou] Proving Grounds
-[MeitouClient] Execution
 ACES
 Alert
 Ancient
@@ -869,7 +911,6 @@ Background
 Bad
 Bottom
 Brass
-brew install molten-vk vulkan-loader
 Button
 Camp
 Cascadia Mono, Consolas, DejaVu Sans Mono, Menlo, monospace
@@ -879,43 +920,36 @@ Character Highlight
 Choice
 Client
 Crushed
-d MMMM yyyy
+DLAA
+DLSS
 Datapanel
 Debug
 Disarm
 Disguises
-DLAA
-DLSS
 Drifter's Boots
 Drifter's Leather Pants
 Dust Bandit
 Dust Bandits
 Dustcoat
 Eaten
-enable armour
-enable buildings
-enable item
-enable weapon model
-enable weapon type
-exterior layout name
+Enter
 Field
-fonts:Kenshi#Exo 2, $Default
 Frame
+GTAO
 Generator
 Good
 Greyed
 Group
-GTAO
 HCenter VCenter
 Hover
 Hurt
-interior layout name
 Iron Hat
 It. Tickles. Me
 Jame
 Jog
-Katana
 KENSHI
+Katana
+Kenshi
 Label
 Left
 Left Bottom
@@ -924,13 +958,11 @@ Left VCenter
 Main
 Meitou
 Meitou Level Editor
-meitou world states
 Metal
 Mg
 Movement
 Nest
 Notifications
-npc range
 Outpost
 Paladin
 Panel
@@ -946,22 +978,22 @@ Right VCenter
 Robot
 Ruin
 Run
+SMAA
+SSAO
 Secondary
 Slider
-SMAA
 Small Backpack
 Speed Menu
-SSAO
 Stretch
 Swamp Turtle FIX
 Tab
+Tab / H
 The Holy Nation
 Title
 Title dust
 Tooltip
 Top
 Town
-town panel line 
 Track
 Village
 Visible
@@ -971,6 +1003,28 @@ Watchtower
 White
 Widget
 Workcamp
-world Y pos
 Yellow
+[Meitou Client] Disarm Port
+[Meitou Client] It. Tickles. Me. Port
+[Meitou Client] Kill Counter Port
+[Meitou Client] Level Up Notify Port
+[Meitou Client] Speed Menu Port
+[Meitou Client] Stack Sort Port
+[Meitou Client] Taunt Expansion Port
+[MeitouClient] Execution
+[Meitou] Proving Grounds
+brew install molten-vk vulkan-loader
+d MMMM yyyy
+enable armour
+enable buildings
+enable item
+enable weapon model
+enable weapon type
+exterior layout name
+fonts:Kenshi#Exo 2, $Default
+interior layout name
+meitou world states
+npc range
+town panel line 
+world Y pos
 yyyy-MM-dd HH:mm

@@ -31,6 +31,10 @@ msgstr ""
 msgid " Steam would not download {1}."
 msgstr ""
 
+#: launcher/Meitou.Launcher/MainWindow.axaml.cs
+msgid "'{1}' is not a Kenshi folder (data/gamedata.base not found)."
+msgstr ""
+
 #: launcher/Meitou.Launcher/GraphicsPage.cs
 msgid "(started with Play), and a change here creates it. Until then the game uses its defaults."
 msgstr ""
@@ -85,6 +89,10 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/GraphicsPage.cs src/Meitou.Game/Settings/LookBar.cs
 msgid "1 change from the game"
+msgstr ""
+
+#: src/Meitou.Game/Title/TitleMenu.cs
+msgid "1 game data problem, see log.txt"
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/WorldFrame.cs
@@ -381,6 +389,10 @@ msgstr ""
 msgid "Anisotropic filtering (texture filtering)"
 msgstr ""
 
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
+msgid "Anti-aliasing"
+msgstr ""
+
 #: src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/LookPresets.cs
 msgid "Anti-aliasing: 0 off 1 FXAA 2 SMAA 3 TAA 4 FSR 5 DLSS"
 msgstr ""
@@ -399,6 +411,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Armour plates shine as bare metal wherever they have any gloss. Off: dull, painted or rusty plate stays dull. An armour a mod gives its own metalness keeps it."
+msgstr ""
+
+#: launcher/Meitou.Launcher/MainWindow.axaml
+msgid "Arrange"
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
@@ -446,11 +462,19 @@ msgid "Attach a screenshot with the navmesh drawn over it"
 msgstr ""
 
 #: src/Meitou.Game/Ui/FeedbackPanel.cs
+msgid "Attach log.txt (it shows folder names; your user name is hidden)"
+msgstr ""
+
+#: src/Meitou.Game/Ui/FeedbackPanel.cs
 msgid "Attach the action and dialogue logs (what characters did and said)"
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "Attackers per target"
+msgstr ""
+
+#: src/Meitou.Game/Settings/ModsPage.cs
+msgid "Author"
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
@@ -717,6 +741,10 @@ msgstr ""
 msgid "Camera: you hear the world where the camera is. Character: you hear it where your first selected character stands (from the camera while nobody is selected)."
 msgstr ""
 
+#: launcher/Meitou.Launcher/GraphicsPage.cs launcher/Meitou.Launcher/MainWindow.axaml.cs launcher/Meitou.Launcher/ModsFromSave.cs src/Meitou.Game/Editor/EditorBodyFiles.cs src/Meitou.Game/Host/Photo/PhotoPanel.cs src/Meitou.Game/Settings/PresetNamingDialog.cs src/Meitou.Game/Settings/SettingsCanvas.cs src/Meitou.Game/Title/FrontendScreens.cs src/Meitou.Game/Ui/FeedbackPanel.cs src/Meitou.Game/Ui/TradeWindows.cs
+msgid "Cancel"
+msgstr ""
+
 #: src/Meitou.Game/Building/BuildMode.cs
 msgid "Cancel Construction"
 msgstr ""
@@ -869,6 +897,10 @@ msgstr ""
 msgid "Click to install"
 msgstr ""
 
+#: launcher/Meitou.Launcher/MainWindow.axaml src/Meitou.Game/SettingsMenu.cs src/Meitou.Game/Ui/ContextMenuWindow.cs src/Meitou.Game/Ui/FeedbackPanel.cs
+msgid "Close"
+msgstr ""
+
 #: src/Meitou.Game/Building/BuildMode.cs
 msgid "Close Doors"
 msgstr ""
@@ -927,6 +959,10 @@ msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Contact shadows"
+msgstr ""
+
+#: launcher/Meitou.Launcher/MainWindow.axaml launcher/Meitou.Launcher/SetupOverlay.axaml src/Meitou.Game/Title/TitleMenu.cs
+msgid "Continue"
 msgstr ""
 
 #: src/Meitou.Game/Host/Photo/PhotoMode.cs
@@ -1017,6 +1053,10 @@ msgstr ""
 msgid "Custom"
 msgstr ""
 
+#: src/Meitou.Game/Settings/ModsPage.cs
+msgid "Custom list"
+msgstr ""
+
 #: launcher/Meitou.Launcher/GraphicsPage.cs src/Meitou.Game/Settings/SettingModes.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Custom value"
 msgstr ""
@@ -1045,10 +1085,6 @@ msgstr ""
 msgid "Data folder"
 msgstr ""
 
-#: launcher/Meitou.Launcher/MainWindow.axaml.cs
-msgid "Debug build"
-msgstr ""
-
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "Decapitation"
 msgstr ""
@@ -1059,6 +1095,10 @@ msgstr ""
 
 #: src/Meitou.Game/SettingsMenu.cs
 msgid "Default settings restored."
+msgstr ""
+
+#: launcher/Meitou.Launcher/GraphicsPage.cs launcher/Meitou.Launcher/MainWindow.axaml src/Meitou.Game/Settings/LookBar.cs
+msgid "Delete"
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/WorldFrame.cs
@@ -1345,7 +1385,7 @@ msgstr ""
 msgid "Fade surface bumps where the sun only grazes, so the ground does not break into bright and black patches."
 msgstr ""
 
-#: launcher/Meitou.Launcher/GraphicsPage.cs src/Meitou.Game/Settings/GamePages.cs src/Meitou.Game/Settings/SettingsCanvas.cs src/Meitou.Game/SettingsMenu.cs
+#: launcher/Meitou.Launcher/GraphicsPage.cs src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/GamePages.cs src/Meitou.Game/Settings/SettingsCanvas.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Faithful"
 msgstr ""
 
@@ -1687,6 +1727,10 @@ msgstr ""
 
 #: src/Meitou.Game/Host/Photo/PhotoMode.cs
 msgid "Grain strength"
+msgstr ""
+
+#: launcher/Meitou.Launcher/MainWindow.axaml src/Meitou.Game/SettingsMenu.cs
+msgid "Graphics"
 msgstr ""
 
 #: launcher/Meitou.Launcher/GraphicsPage.cs
@@ -2117,10 +2161,6 @@ msgstr ""
 msgid "Indoors"
 msgstr ""
 
-#: src/Meitou.Game/Ui/ProductionWindows.cs
-msgid "Inputs"
-msgstr ""
-
 #: launcher/Meitou.Launcher/MainWindow.axaml launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "Install"
 msgstr ""
@@ -2179,6 +2219,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Internal rendering resolution relative to the window."
+msgstr ""
+
+#: launcher/Meitou.Launcher/MainWindow.axaml
+msgid "It supports me in the development of Meitou. ko-fi.com/martinvlcek"
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
@@ -2454,11 +2498,20 @@ msgid "Load this save? Unsaved progress will be lost."
 msgstr ""
 
 #: src/Meitou.Game/Host/GameSaves.cs
+msgctxt "save notice"
+msgid "Loaded"
+msgstr ""
+
+#: src/Meitou.Game/Host/GameSaves.cs
 msgid "Loaded; the save was made with mods not loaded now: {1}"
 msgstr ""
 
 #: src/Meitou.Game/Host/GameSaves.cs
 msgid "Loaded; the save was made with {1} mod(s) not loaded now (listed in the messages)"
+msgstr ""
+
+#: launcher/Meitou.Launcher/MainWindow.axaml.cs src/Meitou.Game/Host/LoadingScreen.cs
+msgid "Loading"
 msgstr ""
 
 #: launcher/Meitou.Launcher/Rows.cs
@@ -2653,6 +2706,10 @@ msgstr ""
 msgid "Meitou {1} stopped with an error (exit code {2}); its log is {3}"
 msgstr ""
 
+#: launcher/Meitou.Launcher/MainWindow.axaml.cs
+msgid "Meitou's texts not yet translated"
+msgstr ""
+
 #: src/Meitou.Game/SettingsMenu.cs
 msgid "Meitou: "
 msgstr ""
@@ -2777,6 +2834,10 @@ msgstr ""
 msgid "Modifications to the GLOBAL_CONSTANTS will be lost, you'll have to set them again, sorry!"
 msgstr ""
 
+#: launcher/Meitou.Launcher/MainWindow.axaml src/Meitou.Game/SettingsMenu.cs
+msgid "Mods"
+msgstr ""
+
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "Mods arranged by their dependencies."
 msgstr ""
@@ -2879,6 +2940,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs src/Meitou.Game/SettingsMenu.cs
 msgid "Needs restart"
+msgstr ""
+
+#: launcher/Meitou.Launcher/MainWindow.axaml
+msgid "New preset name"
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
@@ -3020,6 +3085,10 @@ msgstr ""
 msgid "Nobody here to bail out."
 msgstr ""
 
+#: launcher/Meitou.Launcher/SetupOverlay.axaml.cs
+msgid "Not a Kenshi folder: data/gamedata.base not found."
+msgstr ""
+
 #: launcher/Meitou.Launcher/ModDetailsView.cs
 msgid "Not enabled: the game does not load it"
 msgstr ""
@@ -3028,8 +3097,20 @@ msgstr ""
 msgid "Not enough money: the bail is c.{1}."
 msgstr ""
 
+#: launcher/Meitou.Launcher/SetupOverlay.axaml.cs
+msgid "Not found. Browse to your Kenshi folder (it contains data/gamedata.base)."
+msgstr ""
+
+#: launcher/Meitou.Launcher/MainWindow.axaml.cs
+msgid "Not found: browse to the folder with data/gamedata.base."
+msgstr ""
+
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "Numbers that float over a character when a blow lands, with the damage armour stopped in brackets. Simple shows the total, Full one number per damage type and the part hit."
+msgstr ""
+
+#: launcher/Meitou.Launcher/MainWindow.axaml.cs src/Meitou.Game/Ui/FarmPanel.cs src/Meitou.Game/Ui/ProductionWindows.cs
+msgid "OK"
 msgstr ""
 
 #: src/Meitou.Game/Title/TitleMenu.cs
@@ -3060,6 +3141,10 @@ msgstr ""
 msgid "Objects"
 msgstr ""
 
+#: launcher/Meitou.Launcher/MainWindow.axaml
+msgid "Of the game (written to Kenshi's settings.cfg) and of the launcher. Kenshi's own translations, plus Meitou's where they exist."
+msgstr ""
+
 #: src/Meitou.Game/Settings/LauncherSchema.cs
 msgid "Off (flat ambient)"
 msgstr ""
@@ -3086,6 +3171,10 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "Only nightly builds so far: tick Nightly builds beside Play to list them."
+msgstr ""
+
+#: launcher/Meitou.Launcher/MainWindow.axaml src/Meitou.Game/Ui/ContextMenuWindow.cs
+msgid "Open"
 msgstr ""
 
 #: src/Meitou.Game/Building/BuildMode.cs
@@ -3364,7 +3453,7 @@ msgstr ""
 msgid "Preset name"
 msgstr ""
 
-#: src/Meitou.Game/Host/Photo/PhotoMode.cs
+#: launcher/Meitou.Launcher/MainWindow.axaml src/Meitou.Game/Host/Photo/PhotoMode.cs
 msgid "Presets"
 msgstr ""
 
@@ -3588,6 +3677,10 @@ msgstr ""
 msgid "Requires {1}"
 msgstr ""
 
+#: launcher/Meitou.Launcher/GraphicsPage.cs src/Meitou.Game/Host/Photo/PhotoPanel.cs src/Meitou.Game/Settings/GamePages.cs src/Meitou.Game/Settings/SettingsCanvas.cs
+msgid "Reset"
+msgstr ""
+
 #: src/Meitou.Game/Settings/SettingsCanvas.cs
 msgid "Reset "
 msgstr ""
@@ -3700,6 +3793,10 @@ msgstr ""
 msgid "Samples per pixel of the water's reflection: smoother edges, more video memory."
 msgstr ""
 
+#: launcher/Meitou.Launcher/GraphicsPage.cs src/Meitou.Game/Settings/LookBar.cs src/Meitou.Game/SettingsMenu.cs src/Meitou.Game/Title/FrontendScreens.cs
+msgid "Save"
+msgstr ""
+
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Save an image of the current view."
 msgstr ""
@@ -3788,8 +3885,16 @@ msgstr ""
 msgid "Screen resolution"
 msgstr ""
 
+#: src/Meitou.Game/Mods/ModReport.cs
+msgid "Script mod not loaded"
+msgstr ""
+
 #: src/Meitou.Game/Settings/SettingsSearch.cs
 msgid "Search"
+msgstr ""
+
+#: launcher/Meitou.Launcher/MainWindow.axaml
+msgid "Search mods"
 msgstr ""
 
 #: src/Meitou.Game/SettingsMenu.cs
@@ -3798,6 +3903,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/SettingsSearch.cs
 msgid "Search settings"
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Seconds a character flight takes, and each hop of the squad tour (numpad /)."
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
@@ -4046,6 +4155,14 @@ msgstr ""
 
 #: src/Meitou.Game/SettingsMenu.cs
 msgid "Sky & weather"
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Sky flight for save loads/new games during play (Meitou UI)."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Sky flight to/from the main menu (Meitou main menu)."
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
@@ -4376,6 +4493,10 @@ msgstr ""
 msgid "The Vulkan loader is not installed: run 'brew install molten-vk vulkan-loader' in a terminal, then Play again."
 msgstr ""
 
+#: launcher/Meitou.Launcher/MainWindow.axaml.cs
+msgid "The Vulkan loader is not installed: use Auto/Metal, or install MoltenVK from Settings > Setup."
+msgstr ""
+
 #: launcher/Meitou.Launcher/WorkshopSyncRunner.cs
 msgid "The Workshop sync could not be started."
 msgstr ""
@@ -4422,6 +4543,14 @@ msgstr ""
 
 #: src/Meitou.Game/Building/BuildingSelection.cs
 msgid "The door will lock when it closes."
+msgstr ""
+
+#: launcher/Meitou.Launcher/MainWindow.axaml.cs launcher/Meitou.Launcher/SetupOverlay.axaml.cs
+msgid "The folder with data/gamedata.base."
+msgstr ""
+
+#: launcher/Meitou.Launcher/MainWindow.axaml.cs
+msgid "The folder with data/gamedata.base; Steam workshop mods found."
 msgstr ""
 
 #: src/Meitou.Game/Settings/LookPresets.cs
@@ -4586,6 +4715,10 @@ msgstr ""
 
 #: src/Meitou.Game/Ui/ProductionWindows.cs
 msgid "This machine is switched Off"
+msgstr ""
+
+#: src/Meitou.Game/Ui/TooltipRuntime.cs
+msgid "This machine needs electricity to function. You either need to build generators, or you are out of fuel / there is no wind."
 msgstr ""
 
 #: src/Meitou.Game/Title/FrontendScreens.cs
@@ -4872,6 +5005,10 @@ msgstr ""
 msgid "Vegetation"
 msgstr ""
 
+#: src/Meitou.Game/Settings/ModsPage.cs
+msgid "Version"
+msgstr ""
+
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "Version {1} for {2}. Not installed by its Setup, so updates open the release page."
 msgstr ""
@@ -4942,6 +5079,22 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "Vulkan loader found. Select Vulkan to use it."
+msgstr ""
+
+#: launcher/Meitou.Launcher/MainWindow.axaml.cs
+msgid "Vulkan loader not found. Install Homebrew and MoltenVK, or use Auto/Metal."
+msgstr ""
+
+#: launcher/Meitou.Launcher/MainWindow.axaml.cs
+msgid "Vulkan loader not found. Use Auto/Metal or install it with Setup."
+msgstr ""
+
+#: launcher/Meitou.Launcher/SetupOverlay.axaml.cs
+msgid "Vulkan loader not found; choose Auto/Metal, or install it later in Settings."
+msgstr ""
+
+#: src/Meitou.Game/Host/Photo/PhotoPanel.cs
+msgid "WASD move    Q / E down, up    Right mouse look    Ctrl + left click focus    Wheel zoom    Alt + wheel fly speed    Shift fast    Ctrl slow    Z / X roll    V level    "
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
@@ -5162,6 +5315,10 @@ msgstr ""
 msgid "an instance without an id or target"
 msgstr ""
 
+#: launcher/Meitou.Launcher/MainWindow.axaml.cs
+msgid "and {1} more"
+msgstr ""
+
 #: src/Meitou.Game/Mods/ModHost.cs
 msgid "assembly, so its EditData does not run (declare IModDataPhase on the entry type)"
 msgstr ""
@@ -5342,6 +5499,10 @@ msgstr ""
 msgid "not in the save: {1}"
 msgstr ""
 
+#: src/Meitou.Game/SettingsMenu.cs
+msgid "off"
+msgstr ""
+
 #: src/Meitou.Game/Rendering/Frame/WorldFrame.cs
 msgid "off (as the game)"
 msgstr ""
@@ -5411,6 +5572,10 @@ msgid "starfield texture"
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "stores the game's 3D models more compactly, so they take about half the video memory and look practically the same; in detail, the game's meshes store most corners once for every triangle that uses them, each copy with its own triangle's tangent; Meitou merges the copies that differ only in that tangent into one vertex with their averaged tangent, so meshes keep about 60% fewer vertices (object meshes at The Hub take 50 MB of video memory instead of 98) and the bump lighting barely changes (tangents move 4° on average); applies to meshes loaded after the change (docs/render-objects.md)"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
 msgid "strength 1"
 msgstr ""
 
@@ -5447,6 +5612,18 @@ msgid "the file is too short to be an image"
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game draws a bolt in flight as its mesh alone, stretched a little with its speed, which is hard to follow at a distance; Meitou draws a faint streak behind it that grows out of the crossbow and shrinks into where the bolt stops; drawn with the particles, so none with --no-particles (docs/game/combat.md \"Bolt visuals\")"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game draws a character's meshes with their files' own LOD levels (one reduced level at 200 or 400 units for some, none for most: human_female, hair cuts, weapons) by the distance_sphere rule; Meitou makes four reductions of every mesh at load and picks one by how many pixels its deviation would show, with coarser levels in the shadow maps (docs/characters.md \"LOD of character meshes\")"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game draws an inventory item's icon from its mesh with one sample a pixel (jagged edges, shimmering fine detail) and shows the pictures it saved before; Meitou draws each one supersampled 4 x 4, as the enhanced portraits, and keeps its own pictures (docs/game/ui-screens.md \"Item icons\")"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
 msgid "the game draws every dust, ash and rain sprite at the full picture size, which is a fill-rate cost when big sprites pile up (a dust storm); Meitou draws the alpha and additive ones into a quarter-area (half per axis) target and blends it back, depth-aware, for a fraction of the cost"
 msgstr ""
 
@@ -5463,7 +5640,19 @@ msgid "the game draws hard-edged cascades that end abruptly at the shadow range;
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game draws its sake and rum bottles solid; Meitou draws them as glass: the scene behind bent and tinted through the walls, reflections of the sun, sky and lamps brighter towards the edges, the drink inside up to its level, the neck or cork solid (docs/render-objects.md \"See-through items\")"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game draws the dust and the spray a running foot throws up as glowing sprites, as bright by night as by day and in shade as in the sun; Meitou lights them as the ground is lit: the sun through its shadows, the sky, the lamps, the same as the game's by day (docs/render-post.md \"Lit dust\")"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
 msgid "the game ends all of a layer's meshes at one range (1000 x foliage range for most: trees, ruins, junk and litter alike); Meitou draws large meshes (trees, ruins, wrecks, rock stacks) far, medium ones (junk, boulders, bushes) midway and small ones (litter, small plants) near, each class with its own Tab slider"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game fixes a sheathed weapon, its scabbard and a crossbow on the back to their bone, and a backpack to the spine, so they move as one block with the hip or the back; Meitou lets them swing a little behind the body's motion (a damped spring on each hanging point, stepped in game time: at most 22 degrees for a weapon, 7 for a backpack, which never swings into the back and whose straps stay on the chest) for people near enough to see it (docs/character-renderer.md \"Gear sway\")"
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs
@@ -5475,7 +5664,51 @@ msgid "the game has no tone curve (bright skies and sunlit sand clip flat at whi
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game keeps everything in focus; Meitou blurs what is away from the focus as a real lens does, by the field of view, the f-number and the distance, for the free and cinematic cameras (the cinema's keys can set focus and aperture; docs/render-post.md \"Depth of field\")"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game lays one 4096 pixel starfield texture over the dome (blobby purple stars, a smeared brown nebula, blurred when it is magnified); Meitou draws point stars (a few thousand naked-eye ones and a faint background, colours from blackbody temperatures, one or two pixels wide at any resolution), turning about the sun's axis once a game day, dimming and reddening towards the horizon, the low ones twinkling (docs/formats/sky.md, \"Meitou night sky\")"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game leaves blood only on the terrain, so a fight beside a wall or inside a building marks nothing there; Meitou also sprays splashes over walls, buildings, rocks and other static objects, and leaves pools and drips on floors, never up a wall (docs/game/blood-decals.md \"Blood on surfaces\")"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game leaves no tracks; Meitou lets a character who walks through a wet pool or splash carry its colour and leave a few fading prints on the terrain (docs/game/blood-decals.md \"Bloody footprints\")"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
 msgid "the game lights every bump of a normal map as if nothing stood between it and the sun, so ground and walls the sun only grazes break into bright and black patches, and bumps stay lit on a surface facing away; Meitou fades the normal map out of the sun's light as the sun nears the surface's own plane (from 24 degrees down to 6), where the bumps would shadow each other"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game lights every surface's shadow side with one flat sky ambient per biome; Meitou traces rays from a grid of probes around the camera (needs a GPU with ray tracing; --no-gi leaves it out), so corners, interiors and the ground under overhangs darken and sunlit ground lights what faces it (docs/render-gi.md)"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game lights hair and cloth as it lights stone; Meitou draws two highlights along the strands and a soft sheen on the edges of cloth and a little on leather, and skin glows past its shadows and through ears and fingers held against the light, eyes show a small catchlight instead of a mirror of the landscape, robots and held weapons read as metal, and everything wets in the rain, in the sun and under lamps (docs/character-renderer.md \"Hair, cloth, skin and eyes\")"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game lights its ceiling lamps and other light buildings only at night, indoors too, so rooms are dim by day; Meitou keeps the lamps of buildings' interior layouts lit all day, outdoor lamps stay night-only (docs/render-lights.md)"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game lights its haze and weather fog the same everywhere, so shadows end at the ground; Meitou darkens the air the sun does not reach (a froxel grid of shadow samples along the view), so mountains, rock stacks and buildings cast shafts through the haze and the fog (docs/render-shafts.md)"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game lights its portraits and the character editor with a plain key light and nothing else; Meitou sets a fixed warm sun high on one side, a cool sky over warm sand, the sun's shadow on the character itself and the occlusion of its folds, the same whatever the hour (with Meitou's tone map, grade or anti-aliasing on; docs/character-renderer.md \"Meitou stage and portraits\")"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game lights skin as it lights stone, so the sun's terminator on a face or arm is a hard grey edge; Meitou lets the light spread under bare skin (pre-integrated scattering from a measured skin profile, by how tightly the surface curves), so the edge softens and warms to red, in the world and on the Meitou stage and portraits; clothing, hair, animals and robots stay as they were (docs/character-renderer.md \"Skin\")"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game lights the night land with a flat, directionless ambient; Meitou lets the big planet light it, as a sunlit sphere would (its phase, colour and size decide how much; the Tab slider scales it), from its fixed direction, with the shadows, the water's glint and the probes' light following (docs/formats/sky.md \"Planetshine\")"
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs
@@ -5491,7 +5724,15 @@ msgid "the game uses FXAA; Meitou uses a temporal method (TAA, FSR or DLSS: the 
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game uses a flat cloud texture; Meitou ray marches a procedural cloud volume with rounded shapes, light absorption, sunlit edges and shaded interiors, lit by the sun and by the planet at night; coverage and wind follow the existing weather, with separate temporal histories for the sky and water reflections (docs/render-clouds.md)"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
 msgid "the game's"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game's blood stays on the skin: a blade that has just cut a man is clean, and a coat over a bleeding wound shows nothing; Meitou lets a weapon take the blood of what it wounds on its blade (wet and bright, then dried and dark, then flaking off; washed away in water and rain) and lets worn armour and clothing show the splatter of the body part under them, as the skin does (docs/game/blood-decals.md \"On weapons and gear\")"
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs
@@ -5499,7 +5740,23 @@ msgid "the game's buildings are matte unless a material names a metalness map, a
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game's ceiling lamps, spotlights and searchlights are a pale yellow with more green than red, which reads as a sickly yellow-green on walls and skin; Meitou draws such lamps a warm yellow, halfway to the game's own torch colour and as bright as they were; torches, fires and the blue-green street lamps stay as they are (docs/render-lights.md)"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game's characters leave nothing on the ground; Meitou presses footprints and drag marks into sand, mud, snow and, lightly, dirt near the camera, shaded as a normal and a height with the ground relief; wind and rain wear them away (visual only: not saved; docs/render-terrain.md \"Ground trails\")"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game's clouds cast no shadows; Meitou anchors the cloud layer to the world (1.2 km up, so the clouds also drift past as the camera moves) and dims the sun on the land and the water under it, the shadows sweeping over the ground with the wind (docs/formats/clouds.md, \"Meitou cloud shadows\")"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
 msgid "the game's colours"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game's dust and smoke sprites cut straight into the ground and walls they cross (all but its mist and steam, which fade; Faithful draws those hard-edged too); Meitou fades each sprite out over the last stretch before a surface (a quarter of its size, 0.2 to 30 m), so dust clouds meet the ground softly; the game's sprites are also flat and not fogged (one brightness in sun and shade, near and far, seen through fog banks), Meitou darkens dust and smoke where the sun is shadowed, brightens them towards the sun and puts the haze and the fog volumes in front of them over them; and it fades each effect out before the distance it stops being simulated at, where its whole cloud popped in and out (docs/render-post.md \"Fog\")"
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs
@@ -5507,11 +5764,31 @@ msgid "the game's glossy and rain-wet surfaces reflect one fixed sky picture, in
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game's ground is flat, its normal maps only shading it; Meitou marches the view ray through a height made from each layer's normal map near the eye, and toward the sun for a self-shadow (docs/render-terrain.md \"Ground relief\")"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
 msgid "the game's ground is its height map's mesh; Meitou tessellates the ground near the eye and raises it by the same relief (needs tessellation shaders; visual only: characters walk on the undisplaced ground)"
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game's haze takes the sky's sunlit colour, which is black at night, so everything a few thousand units away fades to black against a black sky and only the land round the camera stays lit; Meitou gives the air a faint glow of its own (airglow, and the planet's light scattered by the air, darker when the planet is a crescent): the far land fades into it, and the sky shows the same glow above the horizon, falling off with height, so ridges stand against it and the stars keep their contrast (docs/formats/sky.md, \"Night air\")"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
 msgid "the game's heat haze shifts distant objects by several pixels in hot weather, which reads as blur; Meitou halves it (the Tab slider sets any strength)"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game's lamps shine through walls and everything else that stands in their way; Meitou traces a ray from each surface to the lamps that light it most and takes the light of the blocked ones back off, so buildings, rocks, plants, grass and characters cast lamp shadows (needs a GPU with ray tracing and Indirect light on; characters cast them but do not receive them; docs/render-lights.md \"Traced lamp shadows\")"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game's picture is as bright at its corners as at its centre; Meitou can darken it towards the corners as a camera lens does, by the Vignette strength, in every camera (photo mode's Look tab is this same switch; docs/render-post.md \"Vignette and film grain\")"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game's picture is clean; Meitou can lay a fine film grain over it, new each frame and strongest in the mid-tones, by the Film grain strength, in every camera (photo mode's Look tab is this same switch; docs/render-post.md \"Vignette and film grain\")"
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs
@@ -5527,7 +5804,15 @@ msgid "the game's water is a flat plane with scrolled normal maps; Meitou adds w
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game's water meets what stands in it without a mark; Meitou clings foam to rocks, posts and legs at the waterline, from the scene's depth behind the surface, and the posed bodies of the characters and animals in the water near the camera push a simulated surface: legs raise bow waves and ripples that spread, slow in the shallows, stop at the shore and leave a wake with foam behind (Vulkan; needs the depth the refraction copies; docs/render-water.md \"Contact foam, wakes and ripples\")"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
 msgid "the meshes' own"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the probes' grid leaves many probes inside walls, where they only go dark; Meitou moves them out of the geometry, lets the clouds shade the bounced light and the light shafts, and adds a world-space cache of short traced rays, small cells near the eye, for the fine indirect light the probes are too coarse for (corners, under tables) (--gi-hybrid picks the parts; docs/render-gi.md \"Hybrid GI\")"
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs
@@ -5540,6 +5825,10 @@ msgstr ""
 
 #: src/Meitou.Game/Host/Photo/PhotoPanel.cs
 msgid "type to search"
+msgstr ""
+
+#: src/Meitou.Game/SettingsMenu.cs
+msgid "unavailable"
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Upscalers/FrameGenerationSetup.cs
@@ -5567,6 +5856,10 @@ msgid "whether it still happens before sending."
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "with Cloud shadows on, Meitou weakens them as the camera nears a placed fog volume and drops them inside one; otherwise the cloud shadows darken the already dim fog, and places like the swamp or the Deadlands get too dark (docs/render-clouds.md)"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
 msgid "with Indirect light enabled, use bounced light indoors; turn this off to keep the original ambient on room surfaces, furniture and indoor characters while outdoor GI stays enabled"
 msgstr ""
 
@@ -5574,7 +5867,7 @@ msgstr ""
 msgid "with camera"
 msgstr ""
 
-#: src/Meitou.Game/Building/BuildMenu.cs src/Meitou.Game/Ui/FarmPanel.cs src/Meitou.Game/Ui/ProductionWindows.cs src/Meitou.Game/Ui/TooltipRuntime.cs
+#: src/Meitou.Game/Ui/ProductionWindows.cs src/Meitou.Game/Ui/TooltipRuntime.cs
 msgid "{1,num} hrs"
 msgstr ""
 
@@ -5664,10 +5957,6 @@ msgid_plural "{1} issues"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/Meitou.Game/Settings/ModsPage.cs
-msgid "{1} issues"
-msgstr ""
-
 #: src/Meitou.Simulation/Factions/SquadManagement.cs src/Meitou.Simulation/Trading/TradeSystem.cs
 msgid "{1} item stack(s) of a closed shop were left on the ground."
 msgstr ""
@@ -5691,6 +5980,12 @@ msgstr ""
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "{1} posts"
 msgstr ""
+
+#: src/Meitou.Game/Mods/ModReport.cs
+msgid "{1} problem"
+msgid_plural "{1} problems"
+msgstr[0] ""
+msgstr[1] ""
 
 #: src/Meitou.Simulation/Locks/LockSystem.Shackles.cs
 msgid "{1} put {2} on {3}"

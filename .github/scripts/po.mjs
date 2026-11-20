@@ -21,7 +21,8 @@ export function parsePo(text) {
 
     const m = line.match(/^(msgctxt|msgid_plural|msgid|msgstr(?:\[(\d+)\])?)\s+"(.*)"$/);
     if (m) {
-      if (m[1] === 'msgid' && entry.msgid !== null) flush();
+      const starts = m[1] === 'msgctxt' || m[1] === 'msgid';
+      if (starts && entry.msgid !== null) flush();
       field = m[1];
       set(entry, field, m[2], unquote(m[3]), false);
     } else if (line.startsWith('"') && field) set(entry, field, null, unquote(line.slice(1, -1)), true);

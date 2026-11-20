@@ -4338,3 +4338,233 @@ msgstr "조명받는 먼지"
 
 msgid "Light the dust and spray kicked up by running feet like the ground around them, instead of glowing at night."
 msgstr "달리는 발이 일으키는 먼지와 물보라를 밤에 빛나게 하지 않고 주변 지면처럼 비춥니다."
+
+msgid "Save"
+msgstr "저장"
+
+msgid "Cancel"
+msgstr "취소"
+
+msgid "Reset"
+msgstr "초기화"
+
+msgid "Delete"
+msgstr "삭제"
+
+msgid "Close"
+msgstr "닫기"
+
+msgid "Continue"
+msgstr "계속"
+
+msgid "It supports me in the development of Meitou. ko-fi.com/martinvlcek"
+msgstr "Meitou 개발을 후원해 주세요. ko-fi.com/martinvlcek"
+
+msgid "Mods"
+msgstr "모드"
+
+msgid "New preset name"
+msgstr "새 프리셋 이름"
+
+msgid "Arrange"
+msgstr "정렬"
+
+msgid "Search mods"
+msgstr "모드 검색"
+
+msgid "Graphics"
+msgstr "그래픽"
+
+msgid "Of the game (written to Kenshi's settings.cfg) and of the launcher. Kenshi's own translations, plus Meitou's where they exist."
+msgstr "게임(Kenshi의 settings.cfg에 기록)과 런처의 언어. Kenshi 자체 번역에 더해, 있는 경우 Meitou의 번역."
+
+msgid "Open"
+msgstr "열기"
+
+msgid "Meitou's texts not yet translated"
+msgstr "아직 번역되지 않은 Meitou 텍스트"
+
+msgid "Loading"
+msgstr "불러오는 중"
+
+msgid "'{1}' is not a Kenshi folder (data/gamedata.base not found)."
+msgstr "'{1}'은(는) Kenshi 폴더가 아닙니다(data/gamedata.base 없음)."
+
+msgid "OK"
+msgstr "확인"
+
+msgid "and {1} more"
+msgstr "외 {1}개"
+
+msgid "Not found: browse to the folder with data/gamedata.base."
+msgstr "찾을 수 없음: data/gamedata.base가 있는 폴더를 선택하세요."
+
+msgid "The folder with data/gamedata.base."
+msgstr "data/gamedata.base가 있는 폴더."
+
+msgid "The folder with data/gamedata.base; Steam workshop mods found."
+msgstr "data/gamedata.base가 있는 폴더. Steam 창작마당 모드를 찾았습니다."
+
+msgid "Vulkan loader not found. Use Auto/Metal or install it with Setup."
+msgstr "Vulkan 로더를 찾을 수 없습니다. Auto/Metal을 사용하거나 설정에서 설치하세요."
+
+msgid "Vulkan loader not found. Install Homebrew and MoltenVK, or use Auto/Metal."
+msgstr "Vulkan 로더를 찾을 수 없습니다. Homebrew와 MoltenVK를 설치하거나 Auto/Metal을 사용하세요."
+
+msgid "The Vulkan loader is not installed: use Auto/Metal, or install MoltenVK from Settings > Setup."
+msgstr "Vulkan 로더가 설치되어 있지 않습니다: Auto/Metal을 사용하거나 설정 > 설정에서 MoltenVK를 설치하세요."
+
+msgid "Not found. Browse to your Kenshi folder (it contains data/gamedata.base)."
+msgstr "찾을 수 없음. Kenshi 폴더(data/gamedata.base가 있는 곳)를 선택하세요."
+
+msgid "Not a Kenshi folder: data/gamedata.base not found."
+msgstr "Kenshi 폴더가 아닙니다: data/gamedata.base 없음."
+
+msgid "Vulkan loader not found; choose Auto/Metal, or install it later in Settings."
+msgstr "Vulkan 로더를 찾을 수 없습니다. Auto/Metal을 선택하거나 나중에 설정에서 설치하세요."
+
+msgctxt "save notice"
+msgid "Loaded"
+msgstr "불러옴"
+
+msgid "WASD move    Q / E down, up    Right mouse look    Ctrl + left click focus    Wheel zoom    Alt + wheel fly speed    Shift fast    Ctrl slow    Z / X roll    V level    "
+msgstr "WASD 이동    Q / E 아래, 위    오른쪽 마우스 둘러보기    Ctrl + 왼쪽 클릭 초점    휠 줌    Alt + 휠 비행 속도    Shift 빠르게    Ctrl 느리게    Z / X 롤    V 수평    "
+
+msgid "Script mod not loaded"
+msgstr "스크립트 모드가 로드되지 않음"
+
+msgid "{1} problem"
+msgid_plural "{1} problems"
+msgstr[0] "문제 {1}개"
+
+msgid "Anti-aliasing"
+msgstr "안티에일리어싱"
+
+msgid "the game lights every surface's shadow side with one flat sky ambient per biome; Meitou traces rays from a grid of probes around the camera (needs a GPU with ray tracing; --no-gi leaves it out), so corners, interiors and the ground under overhangs darken and sunlit ground lights what faces it (docs/render-gi.md)"
+msgstr "게임은 모든 표면의 그늘진 면을 바이옴마다 하나의 평평한 하늘 환경광으로 비춥니다. Meitou는 카메라 주변의 프로브 격자에서 광선을 추적하여(레이 트레이싱 GPU 필요, --no-gi로 끔) 모서리, 실내, 돌출부 아래의 땅이 어두워지고 햇빛 받는 땅이 마주한 것을 비춥니다 (docs/render-gi.md)"
+
+msgid "the game lights its haze and weather fog the same everywhere, so shadows end at the ground; Meitou darkens the air the sun does not reach (a froxel grid of shadow samples along the view), so mountains, rock stacks and buildings cast shafts through the haze and the fog (docs/render-shafts.md)"
+msgstr "게임은 안개와 날씨 안개를 어디서나 똑같이 비춰서 그림자가 땅에서 끝납니다. Meitou는 해가 닿지 않는 공기를 어둡게 하여(시선을 따라 그림자 샘플을 담은 프록셀 격자) 산, 바위 기둥, 건물이 안개 속으로 빛줄기를 드리웁니다 (docs/render-shafts.md)"
+
+msgid "the game's haze takes the sky's sunlit colour, which is black at night, so everything a few thousand units away fades to black against a black sky and only the land round the camera stays lit; Meitou gives the air a faint glow of its own (airglow, and the planet's light scattered by the air, darker when the planet is a crescent): the far land fades into it, and the sky shows the same glow above the horizon, falling off with height, so ridges stand against it and the stars keep their contrast (docs/formats/sky.md, \"Night air\")"
+msgstr "게임의 연무는 하늘의 햇빛 색을 쓰는데 밤에는 검은색이라, 수천 유닛 떨어진 모든 것이 검은 하늘에 검게 사라지고 카메라 주변 땅만 밝게 남습니다. Meitou는 공기에 고유한 희미한 빛을 줍니다(대기광, 그리고 공기에 산란된 행성의 빛. 행성이 초승달 모양이면 더 어두움). 먼 땅은 그 빛에 녹아들고, 하늘은 지평선 위로 같은 빛을 보이며 높이에 따라 약해지므로 능선이 그 빛에 도드라지고 별은 대비를 유지합니다 (docs/formats/sky.md, \"Night air\")"
+
+msgid "the game lights the night land with a flat, directionless ambient; Meitou lets the big planet light it, as a sunlit sphere would (its phase, colour and size decide how much; the Tab slider scales it), from its fixed direction, with the shadows, the water's glint and the probes' light following (docs/formats/sky.md \"Planetshine\")"
+msgstr "게임은 밤의 땅을 평평하고 방향 없는 환경광으로 비춥니다. Meitou는 햇빛 받는 구체처럼 큰 행성이 땅을 비추게 합니다(위상, 색, 크기가 세기를 정하고 Tab 슬라이더로 조절). 빛은 고정된 방향에서 오며, 그림자, 물의 반짝임, 프로브의 빛도 이를 따릅니다 (docs/formats/sky.md \"Planetshine\")"
+
+msgid "the game lays one 4096 pixel starfield texture over the dome (blobby purple stars, a smeared brown nebula, blurred when it is magnified); Meitou draws point stars (a few thousand naked-eye ones and a faint background, colours from blackbody temperatures, one or two pixels wide at any resolution), turning about the sun's axis once a game day, dimming and reddening towards the horizon, the low ones twinkling (docs/formats/sky.md, \"Meitou night sky\")"
+msgstr "게임은 돔 위에 4096 픽셀 별밭 텍스처 하나를 덮습니다(번진 보라색 별, 얼룩진 갈색 성운, 확대하면 흐려짐). Meitou는 점 별을 그립니다(맨눈으로 보이는 수천 개와 희미한 배경, 흑체 온도에서 얻은 색, 어떤 해상도에서도 1~2 픽셀 폭). 별은 게임 하루에 한 번 태양의 축을 따라 돌고, 지평선 쪽으로 갈수록 어둡고 붉어지며, 낮은 별은 반짝입니다 (docs/formats/sky.md, \"Meitou night sky\")"
+
+msgid "the game uses a flat cloud texture; Meitou ray marches a procedural cloud volume with rounded shapes, light absorption, sunlit edges and shaded interiors, lit by the sun and by the planet at night; coverage and wind follow the existing weather, with separate temporal histories for the sky and water reflections (docs/render-clouds.md)"
+msgstr "게임은 평평한 구름 텍스처를 씁니다. Meitou는 둥근 형태, 빛 흡수, 햇빛 받는 가장자리, 그늘진 내부를 가진 절차적 구름 볼륨을 레이 마칭으로 그리며, 태양과 밤에는 행성이 비춥니다. 구름양과 바람은 기존 날씨를 따르고, 하늘과 물 반사에는 별도의 시간 기록을 둡니다 (docs/render-clouds.md)"
+
+msgid "the game's clouds cast no shadows; Meitou anchors the cloud layer to the world (1.2 km up, so the clouds also drift past as the camera moves) and dims the sun on the land and the water under it, the shadows sweeping over the ground with the wind (docs/formats/clouds.md, \"Meitou cloud shadows\")"
+msgstr "게임의 구름은 그림자를 드리우지 않습니다. Meitou는 구름층을 세계에 고정하고(1.2 km 높이, 카메라가 움직이면 구름도 지나감) 그 아래 땅과 물의 햇빛을 약하게 하며, 그림자가 바람을 따라 땅 위를 쓸고 지나갑니다 (docs/formats/clouds.md, \"Meitou cloud shadows\")"
+
+msgid "with Cloud shadows on, Meitou weakens them as the camera nears a placed fog volume and drops them inside one; otherwise the cloud shadows darken the already dim fog, and places like the swamp or the Deadlands get too dark (docs/render-clouds.md)"
+msgstr "구름 그림자가 켜져 있을 때, Meitou는 카메라가 배치된 안개 볼륨에 다가가면 그림자를 약하게 하고 그 안에서는 없앱니다. 그렇지 않으면 구름 그림자가 이미 흐린 안개를 더 어둡게 해서 늪이나 Deadlands 같은 곳이 너무 어두워집니다 (docs/render-clouds.md)"
+
+msgid "the game draws a character's meshes with their files' own LOD levels (one reduced level at 200 or 400 units for some, none for most: human_female, hair cuts, weapons) by the distance_sphere rule; Meitou makes four reductions of every mesh at load and picks one by how many pixels its deviation would show, with coarser levels in the shadow maps (docs/characters.md \"LOD of character meshes\")"
+msgstr "게임은 캐릭터의 메시를 파일 자체의 LOD 단계로 distance_sphere 규칙에 따라 그립니다(일부는 200 또는 400 유닛에서 축소 단계 하나, 대부분은 없음: human_female, 헤어스타일, 무기). Meitou는 로드할 때 모든 메시의 축소본 네 개를 만들고 그 편차가 몇 픽셀로 보일지에 따라 하나를 고르며, 그림자 맵에는 더 거친 단계를 씁니다 (docs/characters.md \"LOD of character meshes\")"
+
+msgid "the game lights skin as it lights stone, so the sun's terminator on a face or arm is a hard grey edge; Meitou lets the light spread under bare skin (pre-integrated scattering from a measured skin profile, by how tightly the surface curves), so the edge softens and warms to red, in the world and on the Meitou stage and portraits; clothing, hair, animals and robots stay as they were (docs/character-renderer.md \"Skin\")"
+msgstr "게임은 피부를 돌처럼 비추므로 얼굴이나 팔에 생기는 햇빛의 명암 경계가 딱딱한 회색 선이 됩니다. Meitou는 맨살 아래로 빛이 퍼지게 하여(측정된 피부 프로필에서, 표면의 굽은 정도에 따른 사전 적분 산란) 경계가 부드러워지고 붉게 따뜻해집니다. 세계에서도, Meitou 무대와 초상화에서도 마찬가지입니다. 옷, 머리카락, 동물, 로봇은 그대로입니다 (docs/character-renderer.md \"Skin\")"
+
+msgid "the game lights its ceiling lamps and other light buildings only at night, indoors too, so rooms are dim by day; Meitou keeps the lamps of buildings' interior layouts lit all day, outdoor lamps stay night-only (docs/render-lights.md)"
+msgstr "게임은 천장 등과 다른 조명 건물을 밤에만, 실내에서도 켜서 낮에는 방이 어둡습니다. Meitou는 건물 실내 배치의 등을 하루 종일 켜 두며, 실외 등은 밤에만 켜집니다 (docs/render-lights.md)"
+
+msgid "the game draws an inventory item's icon from its mesh with one sample a pixel (jagged edges, shimmering fine detail) and shows the pictures it saved before; Meitou draws each one supersampled 4 x 4, as the enhanced portraits, and keeps its own pictures (docs/game/ui-screens.md \"Item icons\")"
+msgstr "게임은 인벤토리 아이템의 아이콘을 메시에서 픽셀당 샘플 하나로 그리고(들쭉날쭉한 가장자리, 깜박이는 세부) 이전에 저장한 그림을 보여 줍니다. Meitou는 향상된 초상화처럼 4 x 4 슈퍼샘플링으로 각각을 그리고 자체 그림을 보관합니다 (docs/game/ui-screens.md \"Item icons\")"
+
+msgid "the game leaves blood only on the terrain, so a fight beside a wall or inside a building marks nothing there; Meitou also sprays splashes over walls, buildings, rocks and other static objects, and leaves pools and drips on floors, never up a wall (docs/game/blood-decals.md \"Blood on surfaces\")"
+msgstr "게임은 피를 지형에만 남겨서 벽 옆이나 건물 안에서 싸워도 그곳에는 아무 흔적이 없습니다. Meitou는 벽, 건물, 바위 및 기타 정적 오브젝트에도 피를 튀기고, 바닥에는 웅덩이와 방울을 남기지만 벽을 타고 오르지는 않습니다 (docs/game/blood-decals.md \"Blood on surfaces\")"
+
+msgid "the game leaves no tracks; Meitou lets a character who walks through a wet pool or splash carry its colour and leave a few fading prints on the terrain (docs/game/blood-decals.md \"Bloody footprints\")"
+msgstr "게임은 발자국을 남기지 않습니다. Meitou는 젖은 웅덩이나 튄 자국을 밟은 캐릭터가 그 색을 묻혀 지형에 희미해지는 발자국 몇 개를 남기게 합니다 (docs/game/blood-decals.md \"Bloody footprints\")"
+
+msgid "the game's ground is flat, its normal maps only shading it; Meitou marches the view ray through a height made from each layer's normal map near the eye, and toward the sun for a self-shadow (docs/render-terrain.md \"Ground relief\")"
+msgstr "게임의 땅은 평평하고 노멀 맵은 음영만 줍니다. Meitou는 눈 가까이에서 각 레이어의 노멀 맵으로 만든 높이를 따라 시선 광선을 진행시키고, 자체 그림자를 위해 태양 쪽으로도 진행시킵니다 (docs/render-terrain.md \"Ground relief\")"
+
+msgid "stores the game's 3D models more compactly, so they take about half the video memory and look practically the same; in detail, the game's meshes store most corners once for every triangle that uses them, each copy with its own triangle's tangent; Meitou merges the copies that differ only in that tangent into one vertex with their averaged tangent, so meshes keep about 60% fewer vertices (object meshes at The Hub take 50 MB of video memory instead of 98) and the bump lighting barely changes (tangents move 4° on average); applies to meshes loaded after the change (docs/render-objects.md)"
+msgstr "게임의 3D 모델을 더 압축해 저장하여 비디오 메모리를 절반 정도만 쓰면서 거의 똑같아 보입니다. 자세히 말하면, 게임의 메시는 대부분의 꼭짓점을 그것을 쓰는 삼각형마다 한 번씩 저장하고, 각 사본은 자기 삼각형의 탄젠트를 가집니다. Meitou는 그 탄젠트만 다른 사본들을 평균 탄젠트를 가진 꼭짓점 하나로 합쳐 메시의 꼭짓점이 약 60% 줄고(The Hub의 오브젝트 메시는 비디오 메모리 98 MB 대신 50 MB 사용) 범프 조명은 거의 변하지 않습니다(탄젠트가 평균 4° 이동). 변경 후 로드된 메시에 적용됩니다 (docs/render-objects.md)"
+
+msgid "the game draws a bolt in flight as its mesh alone, stretched a little with its speed, which is hard to follow at a distance; Meitou draws a faint streak behind it that grows out of the crossbow and shrinks into where the bolt stops; drawn with the particles, so none with --no-particles (docs/game/combat.md \"Bolt visuals\")"
+msgstr "게임은 날아가는 볼트를 속도에 따라 조금 늘린 메시만으로 그려서 멀리서는 따라가기 어렵습니다. Meitou는 그 뒤에 희미한 궤적을 그리는데, 궤적은 석궁에서 자라나 볼트가 멈춘 곳으로 줄어듭니다. 파티클과 함께 그려지므로 --no-particles에서는 없습니다 (docs/game/combat.md \"Bolt visuals\")"
+
+msgid "the game's dust and smoke sprites cut straight into the ground and walls they cross (all but its mist and steam, which fade; Faithful draws those hard-edged too); Meitou fades each sprite out over the last stretch before a surface (a quarter of its size, 0.2 to 30 m), so dust clouds meet the ground softly; the game's sprites are also flat and not fogged (one brightness in sun and shade, near and far, seen through fog banks), Meitou darkens dust and smoke where the sun is shadowed, brightens them towards the sun and puts the haze and the fog volumes in front of them over them; and it fades each effect out before the distance it stops being simulated at, where its whole cloud popped in and out (docs/render-post.md \"Fog\")"
+msgstr "게임의 먼지와 연기 스프라이트는 지나가는 땅과 벽에 그대로 잘려 들어갑니다(안개와 증기만 페이드됨. Faithful은 그것들도 딱딱한 가장자리로 그림). Meitou는 각 스프라이트를 표면 바로 앞의 마지막 구간(크기의 4분의 1, 0.2~30 m)에서 페이드하여 먼지 구름이 땅에 부드럽게 닿습니다. 게임의 스프라이트는 또한 평평하고 안개가 끼지 않습니다(양지와 음지, 가까이와 멀리, 안개 띠 너머에서도 같은 밝기). Meitou는 해가 가려진 곳에서 먼지와 연기를 어둡게 하고, 태양 쪽으로는 밝게 하며, 그 앞에 있는 연무와 안개 볼륨을 위에 덮습니다. 또 각 효과를 시뮬레이션이 멈추는 거리 전에 페이드하는데, 그곳에서는 구름 전체가 갑자기 나타났다 사라졌습니다 (docs/render-post.md \"Fog\")"
+
+msgid "the probes' grid leaves many probes inside walls, where they only go dark; Meitou moves them out of the geometry, lets the clouds shade the bounced light and the light shafts, and adds a world-space cache of short traced rays, small cells near the eye, for the fine indirect light the probes are too coarse for (corners, under tables) (--gi-hybrid picks the parts; docs/render-gi.md \"Hybrid GI\")"
+msgstr "프로브 격자는 많은 프로브를 벽 안에 남겨 두며, 그곳에서는 어두워지기만 합니다. Meitou는 프로브를 지오메트리 밖으로 옮기고, 구름이 반사광과 빛줄기를 가리게 하며, 눈 가까이에는 작은 셀을 둔 짧은 추적 광선의 월드 공간 캐시를 더해 프로브로는 너무 거친 섬세한 간접광(모서리, 탁자 밑)을 채웁니다(--gi-hybrid로 부분 선택. docs/render-gi.md \"Hybrid GI\")"
+
+msgid "the game lights hair and cloth as it lights stone; Meitou draws two highlights along the strands and a soft sheen on the edges of cloth and a little on leather, and skin glows past its shadows and through ears and fingers held against the light, eyes show a small catchlight instead of a mirror of the landscape, robots and held weapons read as metal, and everything wets in the rain, in the sun and under lamps (docs/character-renderer.md \"Hair, cloth, skin and eyes\")"
+msgstr "게임은 머리카락과 천을 돌처럼 비춥니다. Meitou는 머리 가닥을 따라 하이라이트 두 개를, 천의 가장자리와 가죽에 조금 부드러운 광택을 그립니다. 피부는 그림자 너머로, 빛에 비친 귀와 손가락을 통해 빛나고, 눈에는 풍경의 거울 대신 작은 캐치라이트가 보이며, 로봇과 손에 든 무기는 금속처럼 보이고, 비와 햇빛과 등불 아래에서 모든 것이 젖습니다 (docs/character-renderer.md \"Hair, cloth, skin and eyes\")"
+
+msgid "the game's characters leave nothing on the ground; Meitou presses footprints and drag marks into sand, mud, snow and, lightly, dirt near the camera, shaded as a normal and a height with the ground relief; wind and rain wear them away (visual only: not saved; docs/render-terrain.md \"Ground trails\")"
+msgstr "게임의 캐릭터는 땅에 아무것도 남기지 않습니다. Meitou는 카메라 근처의 모래, 진흙, 눈, 그리고 가볍게 흙에 발자국과 끌린 자국을 새기고, 지면 요철과 함께 노멀과 높이로 음영을 줍니다. 바람과 비가 그것을 지웁니다(시각 효과만: 저장되지 않음. docs/render-terrain.md \"Ground trails\")"
+
+msgid "the game's water meets what stands in it without a mark; Meitou clings foam to rocks, posts and legs at the waterline, from the scene's depth behind the surface, and the posed bodies of the characters and animals in the water near the camera push a simulated surface: legs raise bow waves and ripples that spread, slow in the shallows, stop at the shore and leave a wake with foam behind (Vulkan; needs the depth the refraction copies; docs/render-water.md \"Contact foam, wakes and ripples\")"
+msgstr "게임의 물은 그 안에 선 것과 아무 흔적 없이 만납니다. Meitou는 수면 뒤 장면의 깊이로 물가의 바위, 기둥, 다리에 거품을 붙이고, 카메라 근처 물속 캐릭터와 동물의 자세 잡힌 몸이 시뮬레이션된 수면을 밉니다. 다리가 뱃머리 물결과 잔물결을 일으키고, 물결은 퍼지며 얕은 곳에서 느려지고 기슭에서 멈추며 뒤에 거품 섞인 항적을 남깁니다(Vulkan. 굴절이 복사하는 깊이 필요. docs/render-water.md \"Contact foam, wakes and ripples\")"
+
+msgid "the game's blood stays on the skin: a blade that has just cut a man is clean, and a coat over a bleeding wound shows nothing; Meitou lets a weapon take the blood of what it wounds on its blade (wet and bright, then dried and dark, then flaking off; washed away in water and rain) and lets worn armour and clothing show the splatter of the body part under them, as the skin does (docs/game/blood-decals.md \"On weapons and gear\")"
+msgstr "게임의 피는 피부에만 남습니다. 방금 사람을 벤 칼날은 깨끗하고, 피 흘리는 상처 위의 코트에는 아무것도 보이지 않습니다. Meitou는 무기의 칼날에 그것이 상처 입힌 대상의 피가 묻게 하고(젖고 선명했다가, 마르고 검어졌다가, 벗겨짐. 물과 비에 씻김), 입은 갑옷과 옷에는 피부처럼 그 아래 신체 부위의 튄 자국이 보이게 합니다 (docs/game/blood-decals.md \"On weapons and gear\")"
+
+msgid "the game fixes a sheathed weapon, its scabbard and a crossbow on the back to their bone, and a backpack to the spine, so they move as one block with the hip or the back; Meitou lets them swing a little behind the body's motion (a damped spring on each hanging point, stepped in game time: at most 22 degrees for a weapon, 7 for a backpack, which never swings into the back and whose straps stay on the chest) for people near enough to see it (docs/character-renderer.md \"Gear sway\")"
+msgstr "게임은 칼집에 든 무기, 그 칼집, 등에 멘 석궁을 각자의 뼈에, 배낭을 척추에 고정하여 엉덩이나 등과 한 덩어리로 움직입니다. Meitou는 몸의 움직임보다 조금 늦게 흔들리게 합니다(매달린 지점마다 감쇠 스프링, 게임 시간으로 계산: 무기는 최대 22도, 배낭은 7도. 배낭은 등으로 파고들지 않고 끈은 가슴에 머무름). 볼 수 있을 만큼 가까운 사람에게 적용됩니다 (docs/character-renderer.md \"Gear sway\")"
+
+msgid "the game keeps everything in focus; Meitou blurs what is away from the focus as a real lens does, by the field of view, the f-number and the distance, for the free and cinematic cameras (the cinema's keys can set focus and aperture; docs/render-post.md \"Depth of field\")"
+msgstr "게임은 모든 것에 초점을 맞춥니다. Meitou는 실제 렌즈처럼 시야각, F값, 거리에 따라 초점에서 벗어난 것을 흐리게 하며, 자유 카메라와 시네마틱 카메라에 적용됩니다(시네마의 키로 초점과 조리개 설정 가능. docs/render-post.md \"Depth of field\")"
+
+msgid "the game's picture is as bright at its corners as at its centre; Meitou can darken it towards the corners as a camera lens does, by the Vignette strength, in every camera (photo mode's Look tab is this same switch; docs/render-post.md \"Vignette and film grain\")"
+msgstr "게임의 화면은 모서리도 가운데만큼 밝습니다. Meitou는 카메라 렌즈처럼 모서리 쪽으로 어둡게 할 수 있으며, 세기는 비네트 값에 따르고 모든 카메라에 적용됩니다(사진 모드의 룩 탭이 바로 이 스위치. docs/render-post.md \"Vignette and film grain\")"
+
+msgid "the game's picture is clean; Meitou can lay a fine film grain over it, new each frame and strongest in the mid-tones, by the Film grain strength, in every camera (photo mode's Look tab is this same switch; docs/render-post.md \"Vignette and film grain\")"
+msgstr "게임의 화면은 깨끗합니다. Meitou는 고운 필름 그레인을 덧씌울 수 있으며, 매 프레임 새로 생기고 중간 톤에서 가장 강하며, 세기는 필름 그레인 값에 따르고 모든 카메라에 적용됩니다(사진 모드의 룩 탭이 바로 이 스위치. docs/render-post.md \"Vignette and film grain\")"
+
+msgid "the game's lamps shine through walls and everything else that stands in their way; Meitou traces a ray from each surface to the lamps that light it most and takes the light of the blocked ones back off, so buildings, rocks, plants, grass and characters cast lamp shadows (needs a GPU with ray tracing and Indirect light on; characters cast them but do not receive them; docs/render-lights.md \"Traced lamp shadows\")"
+msgstr "게임의 등불은 벽과 앞을 가로막는 모든 것을 뚫고 비춥니다. Meitou는 각 표면에서 그것을 가장 많이 비추는 등불로 광선을 추적하고 가려진 등불의 빛을 다시 빼서, 건물, 바위, 식물, 풀, 캐릭터가 등불 그림자를 드리웁니다(레이 트레이싱 GPU와 간접광 켜기 필요. 캐릭터는 그림자를 드리우지만 받지는 않음. docs/render-lights.md \"Traced lamp shadows\")"
+
+msgid "the game lights its portraits and the character editor with a plain key light and nothing else; Meitou sets a fixed warm sun high on one side, a cool sky over warm sand, the sun's shadow on the character itself and the occlusion of its folds, the same whatever the hour (with Meitou's tone map, grade or anti-aliasing on; docs/character-renderer.md \"Meitou stage and portraits\")"
+msgstr "게임은 초상화와 캐릭터 편집기를 단순한 키 라이트 하나로만 비춥니다. Meitou는 한쪽 높이 고정된 따뜻한 태양, 따뜻한 모래 위의 서늘한 하늘, 캐릭터 자신에 드리운 햇빛 그림자와 옷 주름의 차폐를 두며, 시간과 상관없이 같습니다(Meitou의 톤 맵, 그레이딩 또는 안티에일리어싱이 켜져 있을 때. docs/character-renderer.md \"Meitou stage and portraits\")"
+
+msgid "the game's ceiling lamps, spotlights and searchlights are a pale yellow with more green than red, which reads as a sickly yellow-green on walls and skin; Meitou draws such lamps a warm yellow, halfway to the game's own torch colour and as bright as they were; torches, fires and the blue-green street lamps stay as they are (docs/render-lights.md)"
+msgstr "게임의 천장 등, 스포트라이트, 탐조등은 빨강보다 초록이 많은 옅은 노란색이라 벽과 피부에서 병든 듯한 황록색으로 보입니다. Meitou는 그런 등을 게임 자체의 횃불 색과의 중간인 따뜻한 노란색으로, 원래와 같은 밝기로 그립니다. 횃불, 불, 청록색 가로등은 그대로입니다 (docs/render-lights.md)"
+
+msgid "the game draws its sake and rum bottles solid; Meitou draws them as glass: the scene behind bent and tinted through the walls, reflections of the sun, sky and lamps brighter towards the edges, the drink inside up to its level, the neck or cork solid (docs/render-objects.md \"See-through items\")"
+msgstr "게임은 사케와 럼 병을 불투명하게 그립니다. Meitou는 유리로 그립니다: 뒤의 장면이 벽을 통해 굴절되고 물들며, 태양, 하늘, 등불의 반사는 가장자리로 갈수록 밝고, 안의 술은 그 높이까지 차 있으며, 병목이나 코르크는 불투명합니다 (docs/render-objects.md \"See-through items\")"
+
+msgid "Sky flight to/from the main menu (Meitou main menu)."
+msgstr "메인 메뉴로/에서 하늘 비행(Meitou 메인 메뉴)."
+
+msgid "Sky flight for save loads/new games during play (Meitou UI)."
+msgstr "플레이 중 저장 불러오기/새 게임 시 하늘 비행(Meitou UI)."
+
+msgid "Seconds a character flight takes, and each hop of the squad tour (numpad /)."
+msgstr "캐릭터로 날아가는 시간과 분대 순회의 각 이동 시간(초)(숫자패드 /)."
+
+msgid "Version"
+msgstr "버전"
+
+msgid "Author"
+msgstr "제작자"
+
+msgid "Custom list"
+msgstr "사용자 목록"
+
+msgid "off"
+msgstr "끔"
+
+msgid "unavailable"
+msgstr "사용 불가"
+
+msgid "Attach log.txt (it shows folder names; your user name is hidden)"
+msgstr "log.txt 첨부(폴더 이름이 보입니다. 사용자 이름은 가려집니다)"
+
+msgid "This machine needs electricity to function. You either need to build generators, or you are out of fuel / there is no wind."
+msgstr "이 기계가 작동하려면 전기가 필요합니다. 발전기를 지어야 하거나, 연료가 떨어졌거나 바람이 없습니다."
+
+msgid "the game draws the dust and the spray a running foot throws up as glowing sprites, as bright by night as by day and in shade as in the sun; Meitou lights them as the ground is lit: the sun through its shadows, the sky, the lamps, the same as the game's by day (docs/render-post.md \"Lit dust\")"
+msgstr "게임은 달리는 발이 일으키는 먼지와 물보라를 빛나는 스프라이트로 그려서, 밤에도 낮처럼, 그늘에서도 햇빛 아래처럼 밝습니다. Meitou는 땅이 비춰지는 것처럼 비춥니다: 그림자를 통한 태양, 하늘, 등불. 낮에는 게임과 같습니다 (docs/render-post.md \"Lit dust\")"
+
+msgid "1 game data problem, see log.txt"
+msgstr "게임 데이터 문제 1개, log.txt 참조"
