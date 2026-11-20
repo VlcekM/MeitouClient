@@ -346,18 +346,23 @@ channels: blood (rise 1/60, decay 1/240 per second) and eggs (rise 1/240, decay 
 non-zero, body state 0), 3 eggs. The zone update (`FUN_14090cef0`, **Verified** by disassembly) accumulates only kinds 1 and 3, so bleeders count for nothing: blood target =
 corpses (the 0.25 bleeder share multiplies a count that stays 0); position = the corpses' centroid, else the zero vector (a hunter still on such a zone runs to the world origin
 until the value falls below its threshold). A zone record is freed when its zone is not loaded and both channels' targets are 0 (`FUN_1408f85f0`). The value moves toward the target at the rates, clamped. Corpse flies: [character-stats](character-stats.md#corpses).
-176 HUNTING_BLOODSMELL (`AI::scoreHuntingBlood` `FUN_140794b60`, `Task_HuntingSmell`): animals only; the blackboard keeps a zone (`+0xf8`) while its blood is at least the animal's
 Cadence (`FUN_1408f85f0`, **Verified**): a timer collects the speed-scaled frame time until 10 s; each kick then steps ONE zone record (cursor `DAT_1421352f8`) with dt = the frozen timer (10 s plus the overshoot), and when the cursor passes the last record timer and cursor reset. So a zone steps about once per cycle with dt >= 10 game seconds, in lumps of 10 s x rate, and the posted-entry map is cleared after each step. Meitou (`SmellSystem`): all zones step together every 10 game seconds with the time gathered since the last step.
-ANIMAL_CHARACTER `smell blood` (`smell eggs` is the eggs threshold); else the best of its zone and its active island's, x0.8 for a neighbour, x0.5 otherwise, above the threshold;
-desire 1 with one; picked anew when the kept zone falls below the threshold, the pick (`FUN_1408f58e0`) stored even when it found none (**Verified**,
-`FUN_140794b60`). The task runs (movement mode 2) to the smell's position; no end of its own. Data (**Verified**, `gamedata_base.txt`): the AI_TASK "Smell Hunter" (176,
-classification 2) is listed only in the `Leader AI Goals` of `Blood Hunter day` and `Blood Hunter nocturnal` (`Smell Hunter=0,23,4`: hours 0 to 23, weight 0.04; the
-packages' `Squad AI Goals` have Follow leader 141 instead), used by the templates `Lone Wolf`, `Mountain Wolf Pack`, `Wolf Pack nocturnal` and `Wolf pack patrol day`; no
-other package, race or faction list names it. The same Leader lists hold `Patrol=0,50,50` (22, classification 2, desire 0.25, weight 0.5). So by the scorer
-([desire and commitment](ai-tasks.md#desire-and-commitment)) Patrol (0.125) outscores Smell Hunter (0.04, at most 0.0625 as the current goal) in tier 2 whenever
-Patrol plans (its list B !26, 60, !157 holds for a wolf), and the leader hunts blood only when it does not (**Observed**: from the data and the scorer, not checked in
-the running game). SQUAD_TEMPLATE `blood smell mult`
-is read into the platoon's patrol settings; its consumer was not traced.
+176 HUNTING_BLOODSMELL (`AI::scoreHuntingBlood` `FUN_140794b60`, AI slot 49, `Task_HuntingSmell`; **Verified**, decompile): 0 for a character that is not an animal;
+the squad blackboard's zone (`+0xf8`) is kept while its blood is at least the animal's ANIMAL_CHARACTER `smell blood` (`smell eggs` is the eggs threshold), else
+the best of its zone and its active island's, x0.8 for a neighbour, x0.5 otherwise, above the threshold, is picked (`FUN_1408f58e0`) and stored even when it found
+none; the desire is then 1.0 (`DAT_14167c308`) with a zone, else 0, never more. The desire runs whenever the chooser scores the goal, so it rewrites the zone
+whether 176 wins or not; the zone is read only by the two smell desires (176's and the eggs' `FUN_140794ce0`, slot 50) and by `Task_HuntingSmell`'s start
+(`FUN_140333bd0`), which runs (movement mode 2) to the smell's position and has no end of its own (**Verified**: every function that reads the blackboard through its
+accessors `FUN_140507070` and `FUN_140791ba0` and then its `+0xf8`). Data (**Verified**, `gamedata_base.txt`): the AI_TASK "Smell Hunter" (176, classification 2)
+is listed only in the `Leader AI Goals` of `Blood Hunter day` and `Blood Hunter nocturnal` (`Smell Hunter=0,23,4`: hours 0 to 23, weight 0.04; their `Squad AI
+Goals` have Follow leader 141 instead), used by the templates `Lone Wolf`, `Mountain Wolf Pack`, `Wolf Pack nocturnal` and `Wolf pack patrol day`; no other
+package, race or faction list names it. The same Leader lists hold `Patrol=0,50,50` (22 Patrol, classification 2, weight 0.5); Patrol's desire is AI slot 40
+`FUN_140641570`, 0.25 (`DAT_141696c80`), its row has no finder and its list B is !26, 60, !157 (**Verified**). So in tier 2 Patrol scores 0.125 and Smell Hunter
+0.04, at most 0.0625 as the current goal with both x1.25 ([desire and commitment](ai-tasks.md#desire-and-commitment)): the leader hunts blood only when Patrol does
+not plan (its list B fails), and its members follow it (**Verified** from these functions and the data; not checked in the running game).
+Patrol's own walk does not seek blood: its sector weight adds the zone's smell x PatrolInfo `+0x34` (`FUN_1408f5ad0`), which the platoon fills from the
+template's `blood smell mult` looked up in the boolean fields (`FUN_1407ecdc0`, `FUN_1407ee130`; `FUN_14006c7c0` is the boolean fields' lookup, which adds a
+false entry for a name it lacks), and the base data has the field only as a number (0, or 4 on `Mountain Wolf Pack`), so the factor is 0 (**Verified**).
 
 ## Unknowns
 

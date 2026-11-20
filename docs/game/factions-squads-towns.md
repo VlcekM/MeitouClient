@@ -773,7 +773,8 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   2. Weight (`FUN_1408f5ad0`): 1 for a sector whose zone is not active. Active: n = its counted platoons + 0.5 × the others (the area
      tick's sets: non-persistent platoons not homed to a nest are counted); 10 when n = 0, a flat 5 when n < 2, 1 at n = 2, 1 / n above
      (**Verified**: constants and branches of the `FUN_1408f5ad0` disassembly). Plus the zone's smell × the smell factor, but that factor
-     is `blood smell mult` read from the template's bool fields, so it is always 0 (**Observed**). With a home town, × 5 when the
+     is `blood smell mult` read from the template's bool fields, where the data never has it (it is a number), so it is always 0
+     (**Verified**, [blood smell](perception.md#blood-smell)). With a home town, × 5 when the
      sector's Chebyshev distance d from the home's sector equals near or far, × 10 between, × 0 outside: a homed patrol stays within one
      sector of its home's sector, and homeless squads have one (above).
   3. With `patrol approaches towns` and the drawn sector's town flag +0x30 (above), the towns in it (`TownList::getTownsInArea`): each
