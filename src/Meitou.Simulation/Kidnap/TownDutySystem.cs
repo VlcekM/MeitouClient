@@ -675,19 +675,15 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// 243's desire for an NPC (AI slots 26, 24, 25, <b>Verified</b>, docs/game/character-stats.md "Food from storage"): 0 for an animal while Feed
-    /// Animals is off, outside a town, in a town neither of its faction nor the player's faction's nor one where the player lives, and while it
-    /// carries food; in a town with occupiers while it senses an enemy 0.2 inside the walls whatever its hunger, 0 outside them when the town has
-    /// gates; else slot 25 (<c>FUN_140597d30</c>): 0 unless it wants food (a slave or one of the player's faction always, anyone else below
-    /// hunger 2.1, character slot <c>0x340</c>), its stomach is empty and its hunger at most 2.4; then 1.0, in a fight 0.1 below hunger 1.2, else 0.
+    /// 243's desire (AI slots 26, 24, 25, <b>Verified</b>, docs/game/character-stats.md "Food from storage"): 0 for an animal while Feed Animals is
+    /// off, outside a town, and in a town neither of its faction nor the player's faction's nor one where the player lives; in a town with occupiers
+    /// while it senses an enemy 0.2 inside the walls whatever its hunger, 0 outside them when the town has gates; else slot 25
+    /// (<see cref="FeedSystem.EatDesire"/>).
     /// </summary>
     float NpcFoodDesire(World world, int slot, CharacterCold c, Vector3 at)
     {
-        if (c is not { Medical: { Dead: false, Incapacitated: false } med, Race: { } race }) return 0;
-
-        bool animal = !med.HasStatsObject;
-        if (animal && (world.Player.SquadAi & SquadAi.Feed) == 0) return 0;
-        if (FeedSystem.CarriesFood(c, race, animal)) return 0;
+        if (c is not { Medical: { Dead: false } med }) return 0;
+        if (!med.HasStatsObject && (world.Player.SquadAi & SquadAi.Feed) == 0) return 0;
 
         var town = AiSystem.TownAt(data, world, at);
         if (town.IsNone) return 0;
@@ -701,11 +697,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             if (HasGates(world, town)) return 0;
         }
 
-        bool wants = c.Faction == player || c.SlaveState == 1 || med.Hunger < FeedSystem.NpcWantsBelow;
-        if (!wants || med.Fed > 0 || med.Hunger > FeedSystem.FoodOnGroundBelow) return 0;
-        if (!c.InCombat) return 1;
-
-        return med.Hunger < FeedSystem.FoodOnGroundInFight ? 0.1f : 0;
+        return FeedSystem.EatDesire(world, slot, c);
     }
 
     #endregion

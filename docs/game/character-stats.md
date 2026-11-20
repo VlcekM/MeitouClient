@@ -500,8 +500,9 @@ eat task, animation or player command (a right click on food does nothing, [ui-s
   Consume=Eat and `Character_Consume` within 200 units of the camera. The stomach then digests (hunger tick).
 - Food records do not stack (`stackable` 1 on all 15 base food items, **Verified** by probe). `vampiric`
   (spiders, land bats, skimmers) is read only by the loader here; it concerns eating downed bodies.
-- AI slot 25 (`FUN_140597d30`, the AI's eat desire) is 1 when hungry (hunger <= 2.4), AI +0xb0 and +0xb4 not
-  above 0 and no food in the inventory; 0.1 when +0xb4 > 0 and hunger < 1.2.
+- AI slot 25 (`FUN_140597d30`, the AI's eat desire): 0 unless hungry (`FUN_1405c7f70`, above) with hunger <= 2.4; then 0 while AI +0xb0
+  (threat to it) is above 0; else 0.1 when +0xb4 (threat to its allies) > 0 and hunger < 1.2, 0 above; else 1 with no food (types 15, 3) in the
+  inventory's own list (`FUN_1403344c0`, the bag not read), else 0. It reads no Feed Animals option.
 - **Mouth** (**Verified**, decompile of `FUN_14034f340`, `FUN_1405d0b50`, `FUN_1405c8240`, `FUN_1405d0d20`, `FUN_1405dc650`; the attach point is the string `mouth`,
   `FUN_141534950`). Only a **limb** (item function 17, item `+0x124`) picked up by an animal (vfunc 0x248 non-null) goes to the mouth; any other item, and a limb picked up
   by a person, goes into the inventory (the pickup task, below). Taking it: the limb held before is let go (`FUN_1405c8240`), the new one is flagged held (`+0xd8` = 1), attached to the
@@ -521,8 +522,7 @@ eat task, animation or player command (a right click on food does nothing, [ui-s
   (`FeedSystem.HasMouth`: its look's attachment points; none without a look) leaves the limb (`PlayerSystem.TakeInMouth`). Engine choices: a held limb is neither saved nor carried
   across a load; it goes with the animal if the animal dies or is removed.
 - **Food on the ground** (**Verified**, decompile): `Character::setupAI` gives every animal of a player squad goal 259 EAT_FOOD_ON_GROUND (priority 3, weight 0.5; it drops race goal 230)
-  and every player character 243. 259's desire: 0 unless the character wants to eat now (needs food, stomach empty, hunger < 2.5) and medical hunger <= 2.4; then 1.0 with no food in
-  its inventory and no enemies, 0.1 with enemies only below 1.2. Finder `FUN_14099a930`: the nearest food it may eat (function 3, 15 for an animal or a race that lists it) on
+  and every player character 243. 259's desire is AI slot 25 (above; the registration's stub jumps to it). Finder `FUN_14099a930`: the nearest food it may eat (function 3, 15 for an animal or a race that lists it) on
   the ground within 100 in its own location, accessible, passing the stealing check; else a sensed corpse within 100 with such food. Meitou (`FeedSystem.GroundFood`): the ground pass only; a player character's 259 is a source of the [decision step](../simulation.md#decision-step).
   The player's bonedog with no bag picks up Raw Meat dropped beside it and eats it (**Observed** in the original, 2026-11-14). Meitou: fetched food (`CharacterCold.FetchingFood`) may go into the animal's
   [shut](animals.md#pack-animals) grid and is eaten from there (engine choice); the animal fetches only while Feed Animals is on, and checks the food

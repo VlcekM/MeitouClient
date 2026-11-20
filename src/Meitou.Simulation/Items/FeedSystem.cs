@@ -109,8 +109,7 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
                 && GroundFood(world, i, cold) is { } ground)
                 FetchFood(world, i, cold, ground);
             if (animal && (options & SquadAi.Feed) == 0) continue;
-            bool wants = playerSide || cold.SlaveState == 1 || med.Hunger < NpcWantsBelow;
-            if (!wants || med.Fed > 0 || !(med.Hunger < HungryBelow)) continue;
+            if (!WantsFood(world, cold, med) || med.Fed > 0 || !(med.Hunger < HungryBelow)) continue;
             Inventory? from = own;
             var food = Best(own.Items, race, animal);
             if (food is null && own.Backpack?.Contents is { } bag && Best(bag.Items, race, animal) is { } packed)
@@ -123,10 +122,37 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
     }
 
     /// <summary>
-    /// The hunger at or under which a player animal looks for food on the ground (259's desire, medical hunger
-    /// &lt;= 2.4, <b>Verified</b>), and under which it does so in a fight (1.2).
+    /// The hunger at or under which the eating desire wants food (AI slot 25, medical hunger &lt;= 2.4, <b>Verified</b>), and under which it still
+    /// does at 0.1 while its allies are threatened (1.2).
     /// </summary>
     public const float FoodOnGroundBelow = 2.4f, FoodOnGroundInFight = 1.2f;
+
+    /// <summary>
+    /// AI slot 25 (<c>FUN_140597d30</c>, <b>Verified</b>), the eating desire of 243 (after slots 26 and 24) and of 259: 0 unless the character is
+    /// hungry (<c>FUN_1405c7f70</c>: it wants food, its stomach is empty, hunger below <see cref="HungryBelow"/>) with hunger at most
+    /// <see cref="FoodOnGroundBelow"/>; then 0 under a threat to it (AI <c>+0xb0</c>, <see cref="Perception.SenseBlock.ThreatToMe"/>); with its allies
+    /// threatened (<c>+0xb4</c>, <see cref="Perception.SenseBlock.ThreatToAllies"/>) 0.1 below hunger <see cref="FoodOnGroundInFight"/>, else 0; with
+    /// neither 1.0 while it carries no food (<c>FUN_1403344c0</c>: item types 15 and 3), else 0. Meitou counts its bag's food too
+    /// (<see cref="CarriesFood"/>), as state 149 does, so a take that goes into the bag is counted before the bite.
+    /// </summary>
+    internal static float EatDesire(World world, int slot, CharacterCold c)
+    {
+        if (c is not { Medical: { Dead: false } med, Race: { } race }) return 0;
+        if (!WantsFood(world, c, med) || med.Fed > 0 || !(med.Hunger < HungryBelow) || med.Hunger > FoodOnGroundBelow) return 0;
+
+        var senses = CharacterFacts.Senses(world, slot);
+        if (senses is { ThreatToMe: > 0 }) return 0;
+        if (senses is { ThreatToAllies: > 0 }) return med.Hunger < FoodOnGroundInFight ? 0.1f : 0;
+
+        return CarriesFood(c, race, !med.HasStatsObject) ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Whether the character wants food (character slot <c>0x340</c>, <b>Verified</b>): one of the player's side or a slave always, anyone else below
+    /// <see cref="NpcWantsBelow"/>.
+    /// </summary>
+    static bool WantsFood(World world, CharacterCold c, MedicalState med) =>
+        PlayerSide(world, c) || c.SlaveState == 1 || med.Hunger < NpcWantsBelow;
     /// <summary>
     /// How far it looks (<c>FUN_14099a930</c>: squared distance 10000, <b>Verified</b>).
     /// </summary>
