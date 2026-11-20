@@ -312,11 +312,12 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   Town duties, kidnaps, captive jobs, arrests and bounty hunts, lock rounds, the mod NPC goals (`NpcGoals`), the dialogue's walk-ups, stalkers and follows while
   talking, a Talk order's walk to it and a trade's walk to its trader drop their record and clear `Engaged`; a body carried for one is let go where it stands (the unlink,
   no knock-out); a smell hunt lets the member go while the squad hunts on; a door way is dropped and a bash errand stopped; in the open conversation the NPC is only
-  let go, the window staying open. A giver that keeps its record sets `Engaged` again after `Give` (the bit is shared). The duty sweeps take no ordered character again
+  let go, the window staying open. The giver's own `Engaged` (one shared bit) is put back after the others let go. The duty sweeps take no ordered character again
   (`DecisionSystem.Ordered` or `AiSystem.Holds` in their free tests); a dialogue act that starts a walk-up is an engine act on the body and replaces the front.
 - **Routine after an order** (engine design): an NPC its AI does not fully run (an engine mind or none) keeps the routine it was on at the start, wandering or
   following its leader (`CharacterCold.OrderRoutine`, `DecisionSystem.KeepRoutine`), and takes it up again once its order no longer holds it, if it then stands idle,
-  awake and held by nothing (`DecisionSystem.BackToRoutine`); a roaming leader's trip goes on by the population's own walk. A full mind chooses again instead.
+  awake and held by nothing (`DecisionSystem.BackToRoutine`; it waits while the order's task goes on, a move's walk after the move left the
+  queue); a roaming leader's trip goes on by the population's own walk. A full mind chooses again instead.
 - The failure text is said only for a character of the player's faction that is not an animal (`PlayerOrders.Show`; the order step's vfunc `0x2d8` call in `FUN_140510920`,
   [precedence](game/ai-tasks.md#precedence)); anyone else's blocked order waits silently.
 - Owners that take a player character's order only (an NPC's leaves the queue, `Gone`), their act-outs being the player's: build, repair and dismantle (the sites, doors and

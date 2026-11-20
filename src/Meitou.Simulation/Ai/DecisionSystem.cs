@@ -352,6 +352,7 @@ public sealed class DecisionSystem
             if (Decides(cold) && cold.OrderWins) Hold(world, i);   // made a player character while its order held it
             if (Decides(cold)) RunPlayer(world, i, cold, paused);
             else if (cold.OrderQueue.Count > 0 || cold.OrderWins) RunOrders(world, i, cold, paused);
+            else if (cold.OrderRoutine != CharacterTask.Idle) Hold(world, i);   // its routine waits for the order's last walk
         }
     }
 
@@ -451,13 +452,14 @@ public sealed class DecisionSystem
     }
 
     /// <summary>
-    /// The order no longer holds the NPC: one standing idle, awake and held by nothing takes its kept routine up again (a follow only while its
-    /// leader is there); the kept routine goes either way.
+    /// The order no longer holds the NPC: the kept routine waits while the order's task goes on (a move leaves the queue near its point and its walk
+    /// goes on); then one standing idle, awake and held by nothing takes it up again (a follow only while its leader is there); it goes either way.
     /// </summary>
     static void BackToRoutine(World world, int slot, CharacterCold cold)
     {
         var routine = cold.OrderRoutine;
         if (routine == CharacterTask.Idle) return;
+        if (world.Characters.Next[slot].Task != (byte)CharacterTask.Idle && cold.Running is { Source: TaskSource.Order }) return;
 
         cold.OrderRoutine = CharacterTask.Idle;
         if (!Free(world.Characters, slot, cold)) return;

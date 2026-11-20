@@ -65,13 +65,18 @@ public sealed partial class World
 
     /// <summary>
     /// An order's task is about to start on the NPC in <paramref name="slot"/> (serial): every system holding it on an engine duty lets it go
-    /// (<see cref="IDutyRelease.ReleaseForOrder"/>), in system order, all but <paramref name="keeps"/>, the order's giver.
+    /// (<see cref="IDutyRelease.ReleaseForOrder"/>), in system order, all but <paramref name="keeps"/>, the order's giver, whose hold on
+    /// <see cref="CharacterCold.Engaged"/> (one bit all holders share) stays as it was.
     /// </summary>
     internal void ReleaseDuties(int slot, IDutyRelease? keeps)
     {
+        var cold = Characters.Cold(slot)!;
+        bool engaged = cold.Engaged;
         foreach (var system in _systems)
         {
             if (system is IDutyRelease holder && !ReferenceEquals(holder, keeps)) holder.ReleaseForOrder(this, slot);
         }
+
+        if (keeps is not null) cold.Engaged = engaged;
     }
 }
