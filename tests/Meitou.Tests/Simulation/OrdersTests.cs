@@ -127,6 +127,42 @@ public class OrdersTests
         Assert.Equal(0, combat.StateOf(player).Thrown);
     }
 
+    /// <summary>
+    /// A follower copies its leader's sneaking each update (<c>FUN_14033b350</c>), and dropping it leaves the posture alone (the setter
+    /// <c>FUN_1405ca9a0</c> resets the mover, not the posture; docs/game/combat.md standing orders): a player character staying low that follows a
+    /// sneaking mate, when the mate stops sneaking and walks off, stops sneaking itself but stays low, keeps its follow order at the front of its
+    /// queue and walks after the mate. Catches the copy standing the follower up, whose get-up order (65, with the clear flag) wipes the follow.
+    /// </summary>
+    [Fact]
+    public void A_sneaking_follower_stays_low_and_keeps_its_follow_order_when_its_leader_stops_sneaking()
+    {
+        using var rig = new TaskStartTests.Rig(carrying: false);
+        var (follower, leader) = (rig.Fighter, rig.Mate);
+        rig.Say(new StopCommand([follower]) { Tick = 0 });
+        rig.World.RunTicks(3);
+        rig.Cold(follower).Medical!.StayingLow = true;
+        rig.Cold(leader).Orders |= CharacterOrders.Sneak;
+        rig.Say(new FollowOrder([follower], leader) { Tick = rig.World.Tick });
+        rig.World.RunTicks(15);
+
+        Assert.True(Orders.Has(rig.Cold(follower), CharacterOrders.Sneak), "it sneaks with its leader");
+        Assert.Equal(CharacterTask.Follow, rig.Task(follower));
+
+        rig.Say(new OrdersCommand([leader], CharacterOrders.Sneak, false) { Tick = rig.World.Tick });
+        rig.Say(new MoveOrder([leader], new Vector3(1040, 300, 2400)) { Tick = rig.World.Tick });
+        float startZ = rig.World.Characters.Next[follower.Slot].Position.Z;
+        rig.World.RunTicks(10 * 30);
+        var cold = rig.Cold(follower);
+
+        float walked = rig.World.Characters.Next[follower.Slot].Position.Z - startZ;
+
+        Assert.False(Orders.Has(cold, CharacterOrders.Sneak), "it stops sneaking with its leader");
+        Assert.True(cold.Medical!.StayingLow, "it stays low");
+        Assert.Equal(TaskType.StayCloseToTarget, cold.OrderQueue.Front?.Row);
+        Assert.Equal(CharacterTask.Follow, rig.Task(follower));
+        Assert.True(walked > 40, $"it went only {walked:0} after its leader");
+    }
+
     [Fact]
     public void Orders_go_to_the_originals_state_keys_and_back()
     {

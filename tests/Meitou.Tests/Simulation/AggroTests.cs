@@ -888,6 +888,49 @@ public class AggroTests
     }
 
     /// <summary>
+    /// The attacker's targeting alert asks the goal-clearing replan at any distance (<c>FUN_140999f00</c>, docs/game/combat.md "Being targeted"), which
+    /// takes the follow's two x1.25 continuity factors (0.6 against Self preservation's 0.7 at 120, <c>FUN_140599d20</c>): a member following its
+    /// leader at weight 12 that a bandit targets from 120 fights back three ticks after the order (the order and alert, the think, the fight's
+    /// start), with the bandit still beyond 110, far from the 40 where 32 outranks the follow on its own. Catches an alert that no longer clears the
+    /// current goal, so the follow keeps its 0.94 until the bandit is within 40.
+    /// </summary>
+    [Fact]
+    public void An_npc_attacked_from_120_while_it_follows_fights_back_at_once()
+    {
+        using var a = Make(24, 1, TownRelations(), ai: true);
+        a.Aggro.Combat = a.Combat;
+        var o = new Vector2(2000, 2000);
+        var squad = a.SquadOf(Town, o, true, (o, 0f), (o + new Vector2(10, 0), 0f));
+        CharacterId member = squad.Members[1];
+        Lists(squad, [], [Goal(TaskType.FollowSquadleader, 12f, target: TaskTargetType.Leader)]);
+        Think(a);
+        var bandit = a.SquadOf(Bandits, o, true, (o + new Vector2(10, 120), MathF.PI)).Members[0];
+        a.World.RunTicks(15);
+        var table = a.World.Characters;
+
+        Assert.Equal(TaskType.FollowSquadleader, table.Cold(member.Slot)!.Ai!.Goal!.Task.Type);
+
+        a.World.Commands.Enqueue(new AttackOrder([bandit], member) { Tick = a.World.Tick });
+        long ordered = a.World.Tick;
+        for (int k = 0; k < 15 && !a.Fighting(member); k++) a.World.RunTicks(1);
+
+        Assert.True(a.Fighting(member), "it fights back within half a second of the order");
+        Assert.InRange(a.World.Tick - ordered, 0, 3);
+        Assert.True(Gap(table, member, bandit) > 110, $"it fought back only from {Gap(table, member, bandit):0}");
+        Assert.Equal(TaskType.SelfPreservation, table.Cold(member.Slot)!.Ai!.Goal!.Task.Type);
+    }
+
+    /// <summary>
+    /// The ground distance between two characters at the last tick's positions.
+    /// </summary>
+    static float Gap(CharacterTable table, CharacterId one, CharacterId other)
+    {
+        var p = table.Previous[one.Slot].Position;
+        var q = table.Previous[other.Slot].Position;
+        return Vector2.Distance(new(p.X, p.Z), new(q.X, q.Z));
+    }
+
+    /// <summary>
     /// A crossbowman shooting from 400, beyond Self preservation's 181.7 (desire 0, <c>FUN_140599d20</c>), is not fought back by an NPC whose lists
     /// hold no combat goal: nothing in its chooser covers it (the original's too, docs/game/combat.md "Self-defence"). With 143 Protect close allies
     /// the NPC counts itself (its own fight threat, <c>FUN_14099d510</c>) and row 13 takes its own attacker at any distance, so it goes for the
