@@ -1874,9 +1874,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         var table = world.Characters;
 
         // Nothing but the default task for one lying in its bed: it lies on with no goal, as one loaded there (Holds). The original's update
-        // clears a goal left with no plan (FUN_140511130, Verified), and its sleepers whose hours ended lie on with no goal or order
-        // (docs/game/ai-tasks.md "Precedence", Observed; why its Idleness does not take over is Unknown). A first aid's request to stand still
-        // (62) plans no getting up either (its list B, !swim and !39, holds no bed state, TaskDataTable): the patient lies on.
+        // clears a goal left with no plan (FUN_140511130), and its default 14 plans no task in a bed (its list B !162 !157 holds and the row
+        // neither acts nor has an effect, so no row needs !83 and Getting out of bed is never planned; then the mover reset, which leaves the bed
+        // alone): its sleepers whose hours ended lie on with no goal or order (docs/game/ai-tasks.md "Precedence", Verified). A first aid's request
+        // to stand still (62) plans no getting up either (its list B, !swim and !39, holds no bed state, TaskDataTable): the patient lies on.
         bool staysPut = ReferenceEquals(goal, Idle) || goal.Task.Type == TaskType.StandStill;
         if (staysPut && table.Cold(slot)!.InSomething == Locks.HeldState.Bed)
         {

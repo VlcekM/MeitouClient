@@ -296,7 +296,8 @@ internal sealed class RescueGoals
         /// <summary>
         /// Row 68's desire (AI slot 59, <b>Verified</b>): 0 while the asker carries something, else 1.0 (a character target). 148's
         /// (<c>FUN_1405994c0</c>, <b>Verified</b>): 0 on Hold or while carrying, else the bed search's factor, which the look folds into the pick.
-        /// 142 has no desire of its own: 1.0.
+        /// 142's (<c>FUN_1405993f0</c>, <b>Verified</b>): 0 while carrying, else 1.0 for a squad leader that is not the asker, not in a bed and down
+        /// or crippled; the finder (<see cref="CarrySystem.LeaderToRescue"/>) refuses every such case already, so 1.0 here.
         /// </summary>
         public float Desire(World world, in DutyAsk ask)
         {

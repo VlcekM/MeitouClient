@@ -862,8 +862,9 @@ there (`FUN_14060f570` answers false), so for 180 Man the gate the byte changes 
   221, 239, 240, 248, 255, 268, 275 and 280 write the commitment fields in their registration; every other row keeps the constructor's 0 and never
   commits (**Verified**, `FUN_140319a60`, `FUN_14061d350`), so no town or captive duty goal commits.
 - Desires (`AI` vtable slots): 19 = 1, 39 = 0.1 (Idleness), 40 = 0.25 (Patrolling, Patrolling town), 41 = 0.5 (Stand at node, Shopkeeper, Static guard,
-  general node), 48 = 0.01 + 0.4 x rand (Wandering town, Staying home, Sitting around, Static town guard, Shopping 119). 125 rows desire 1; 102 call a
-  function of their own (sleeping, following, retreating, turrets, Shopping 118: 1 until the shopping list is done, see its entry below).
+  general node), 48 = 0.01 + 0.4 x rand (Wandering town, Staying home, Sitting around, Static town guard, Shopping 119), 43 and 57 = 1, 47 and 58 = 2, 46 = 1.5. Of the 253 rows 123 desire 1.0 (111 on slot
+  19, 10 on 57, 2 on 43) and 104 call a function that reads state (sleeping, following, retreating, turrets, Shopping 118: 1 until the shopping list is
+  done, see its entry below; **Verified**, every registration's stub followed to its function in the exe bytes).
 - Shared desires (**Verified**: the desire member of each registration in `FUN_140319a60`, the thunks' AI vtable slots, `FUN_1405a33f0` decompiled):
   rows 98, 153, 175, 239 and 261 have Sleeping's desire (AI slot 30, [row 98](#slave-work-shout-and-capture)), so Sleeping on ground weighs danger and the last sleep
   as a bed does. Rows 31, 40, 44, 141 and 289 have Following's (AI slot 15): 0.5 (`DAT_14167e8d8`) times the followed character's StateBroadcastData
@@ -1112,6 +1113,12 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
     same goal again extends it. Row 153 registers 2, 8 and the commit flag (`FUN_140319a60`).
   - **Observed** (KenshiOracle state 0.5 hold, Rebirth, N = 1): 24 garrison sleepers on 153 (23 to 11) had no goal and no order from
     11:00 and lay on in bed to the hold's end at 11.6 h.
+  - Why they lie on (**Verified**, decompile): the plan step ends row 98's task at the hours' end; `Task_UseBed`'s end (slot 6 `FUN_140347ba0`)
+    resets the mover and clears status `+0xb4` but leaves `+0x2f8` (no call of the bed leave `FUN_14032e2f0` with 0; its callers are other paths).
+    A goal still committed stops the chooser at its tier, plans nothing and is cleared by the update; the next chooser with only 14 left takes
+    the default 14 at key 1.0, whose list B (`!162 !157`) holds in a bed and whose row neither acts nor has an effect, so nothing needs `!83`
+    and no Getting out of bed (116, 208, 257) is planned; then the mover reset (`FUN_14065fc70`), which writes only mover fields. So the sleeper
+    stays in its bed with no goal until a goal that needs `!83` wins (Meitou `AiSystem.Act`, the same).
   - Rebirth's `Guard town shifts -base` (55117) gives its Squad role nothing from 11:00 to 12:00: bed 153 runs 23 to 11, static guard, patrol
     and turrets 12 to 22 (**Verified**, record dump). Its town guards still walking to bed at 11:00 (#959: back from a fight off town) stand
     where they are until 12:00, then walk to their posts (**Observed**, headless probe of the #959 save).
