@@ -447,7 +447,7 @@ Meitou (`CombatSystem.HasSlot` / `MayJoin`, `Fighting.Steer`):
 **Observed** (decompile of kenshi_x64 1.0.68; class/method/field names KenshiLib 1ce4a16, **Observed**; literals **Verified** in the decompile).
 
 - **Who has fight goals.** `Character::setupAI` gives every character goals 14 Idleness (priority 1) and 32 Self preservation (priority 3,
-  urgent, target itself); player-faction characters also 243 Getting food (animals 259), others their race's goals ([precedence](ai-tasks.md#precedence)). Attack on sight is goal 16 ([combat goals](ai-tasks.md#combat-goals)):
+  urgent, target itself); player-faction characters also 243 Getting food (animals also their race's goals and 259), others their race's goals ([precedence](ai-tasks.md#precedence)). Attack on sight is goal 16 ([combat goals](ai-tasks.md#combat-goals)):
   NPCs get it from packages, a player character only while on Hold. Its desire (`AI::scoreAttackEnemies`) is 1, but 0 while sneaking outside a
   fight (`Character::isStealthMode`), Passive, or not standing (prone state ≠ 0); `scoreProtectAllies` (`FUN_140599b90`, **Verified**) is 0 when sneaking and not in combat mode, when Passive (in a fight
   too), and for a slave (state 1) whose AI holds a job of type 187 Obedient Slave (`FUN_140597380` scans the job list); otherwise the finder's score, x0.5 while carrying.

@@ -238,7 +238,7 @@ public sealed class CaptiveJob
     /// </summary>
     public float Age { get; set; }
     /// <summary>
-    /// Walks started so far; a job whose walks keep ending short gives up past <see cref="CaptiveSettings.Walks"/>.
+    /// Walks started so far: a walk that ends short after the first is a lost walk (<see cref="CaptiveSystem.Lost"/>).
     /// </summary>
     public int Walks { get; set; }
     /// <summary>
