@@ -270,9 +270,14 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   out of a shut building is refused the same way (the walk's 60, `LockSystem.CanLeave`, as the AI's own walks test it). The
   way through the door is a step of the NPC's plan (80 / 78 unlock, 287 / 81 bash, 76 pick, 285 cut, the providers of 59 / 60 the planner
   inserts; `AiSystem.TakeDoorStep`): ended by its list A on the door (52 open, 54 locked, 56 broken) or when the lock system's way ends, and
-  replaced as any running step, which drops the way (**Verified**, the providers in the row table). An engine goal's act-out walk takes it as
-  a step of the act-out, held by the goal (`AiMind.Duty`; the goal's end drops it); an NPC with neither (an engine mind, no mind, a goal that is its own
-  plan) is still left alone until the door opens (`Engaged`, engine).
+  replaced as any running step, which drops the way (**Verified**, the providers in the row table). Nothing but that plan holds the walker
+  (**Verified**): the door rows come only from the planner, the plan step (`FUN_14050d970`) ends a step whose list B fails (no `+0x16`) and on a
+  failed path short of the target ignores it 20 s and asks a replan, the chooser keeps choosing, and the door opener (`FUN_140297040`) is called
+  only by Task_OpenDoor (`FUN_140337000` / `FUN_1403370f0`), the door's break, its panel button (`FUN_140546fb0`), a dialogue action
+  (`FUN_140680560`) and a building's purchase (`FUN_1407ad6c0`), never the mover. An order's walk (a player's 29, an NPC's) has the same rows,
+  so the way is the order's step. Meitou (`LockSystem.StartDoorWay`, `DoorWayHolder`): the way is a step of the kept plan, else of the engine
+  goal's act-out (`AiMind.Duty`), else of the task running the walk (an order's, a player's source's, an engine system's, a mod's, a held
+  platoon's or a squadless character's), and ends with it (another task's start).
   **Observed** (headless, #807 save at 3 h): a Civilian solo UC woken in its locked Storm House and ordered
   out unlocked the door and walked out; with its way forced to the bash, it swung for 3.3 s, broke the door and walked out; with no way forced,
   its move order stayed queued and it did not move. #803's save at 8.00: the UC town racists' boss (United Heroes League, in the United Cities

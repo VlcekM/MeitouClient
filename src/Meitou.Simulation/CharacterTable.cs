@@ -1273,6 +1273,12 @@ public sealed class CharacterCold
     public (System.Numerics.Vector2 Goal, byte Mode)? DoorWay { get; set; }
 
     /// <summary>
+    /// What holds the walker on its <see cref="DoorWay"/>, and the provenance of the walk it began on (<see cref="Running"/> then): the way is a step of
+    /// that plan and ends with it (<see cref="Locks.LockSystem.StartDoorWay"/>). Set with <see cref="DoorWay"/>; hashed with it.
+    /// </summary>
+    internal (Locks.DoorWayHolder By, RunningTask? Walk) DoorWayHold { get; set; }
+
+    /// <summary>
     /// The fixture whose lock this character cuts or breaks by order (Use Tools 285, Use Strength 286; <see cref="Locks.LockSystem"/>; null: none).
     /// Hashed only while set.
     /// </summary>
@@ -2202,6 +2208,8 @@ public sealed class CharacterTable
                 hasher.Add(way.Goal.X);
                 hasher.Add(way.Goal.Y);
                 hasher.Add((int)way.Mode);
+                hasher.Add((int)k.DoorWayHold.By);
+                if (Locks.LockSystem.SameWalk(k.Running, k.DoorWayHold.Walk)) hasher.Add(0x57616C6B);
             }
         }
 

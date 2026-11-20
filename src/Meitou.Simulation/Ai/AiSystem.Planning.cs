@@ -17,8 +17,8 @@ public sealed partial class AiSystem
     /// Puts the way through a locked door (the lock system's, <see cref="Locks.LockSystem.StartDoorWay"/>) at the front of the NPC's kept plan as the
     /// step the original's planner adds there (docs/game/locks.md "Locked doors on the way": 78 / 80 unlocking, 81 / 287 bashing, 76 picking, 285
     /// cutting), on the door at <paramref name="door"/>: the plan step ends it by its finished test and list A and any choice may take over
-    /// (<see cref="PlanSteps"/>). False when the character has no kept plan to put it in (an engine-run mind, a goal that is its own plan): the lock
-    /// system then holds it.
+    /// (<see cref="PlanSteps"/>). False when the character has no kept plan to put it in (an engine-run mind, a goal that is its own plan): the way is
+    /// then a step of the task that runs its walk (<see cref="Locks.DoorWayHolder"/>).
     /// </summary>
     internal static bool TakeDoorStep(CharacterCold cold, TaskType row, Vector3 door)
     {

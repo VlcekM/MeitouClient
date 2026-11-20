@@ -359,13 +359,14 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
     /// <summary>
     /// The door of the shut building a walker wants out of (<c>Building::getDoor</c>, the one of lowest index with a known leaf): it stands in it,
     /// no round works its doors, it has a way through them (<see cref="WayThrough"/>), and its walk (under way or just failed) goes to a point the
-    /// building does not cover. Null for anyone else.
+    /// building does not cover, whatever runs that walk (state 60 is in every walk row's list B, so any plan's walk gets the way out as its step,
+    /// <see cref="StartDoorWay"/>). Null for anyone else.
     /// </summary>
     Fixture? ShutIn(World world, int s)
     {
         var table = world.Characters;
         ref var n = ref table.Next[s];
-        if (!n.Alive || table.Cold(s) is not { IsImprisoned: false, Engaged: false, Bashing: null, Medical.Incapacitated: false } c) return null;
+        if (!n.Alive || table.Cold(s) is not { IsImprisoned: false, Bashing: null, Medical.Incapacitated: false } c) return null;
         if (!c.CarriedBy.IsNone || Busy(table.IdOf(s)) || DecisionSystem.Ordered(c) || world.Sight.BuildingOf(s) is not { } building)
             return null;
         if (!world.Fixtures.IsShut(building) || Targeted(building)) return null;

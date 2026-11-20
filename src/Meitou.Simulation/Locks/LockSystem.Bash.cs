@@ -533,24 +533,55 @@ public sealed partial class LockSystem
 
     /// <summary>
     /// Sends a walker through <paramref name="door"/> (<see cref="DoorWayStep"/>): it walks to the door on its own side, unlocks or bashes it, then
-    /// takes its walk to <paramref name="goal"/> up again; the walk's task stays on. An NPC with a kept plan takes the way as its plan's step
-    /// (<see cref="AiSystem.TakeDoorStep"/>), which its AI ends and may replace as any running step; one an engine goal holds takes it as a step of
-    /// its act-out, the goal holding it (<see cref="AiMind.Duty"/>); the AI leaves any other NPC (an engine mind, no mind, a goal that is its own plan)
-    /// alone meanwhile (<see cref="CharacterCold.Engaged"/>).
+    /// takes its walk to <paramref name="goal"/> up again; the walk's task stays on. The way is a step of the plan the walk belongs to, as the
+    /// original's planner puts the door rows in front of the walk (docs/game/locks.md "Locked doors on the way"), held by it alone
+    /// (<see cref="DoorWayHolder"/>): an NPC with a kept plan takes it as its plan's step (<see cref="AiSystem.TakeDoorStep"/>), which its AI ends and
+    /// may replace as any running step; one an engine goal holds as a step of its act-out (<see cref="AiMind.Duty"/>); anyone else (a player's
+    /// character, an NPC on an order, on a goal that is its own plan, of an engine mind or of none) as a step of the task that runs its walk, until
+    /// another task starts.
     /// </summary>
     internal static void StartDoorWay(World world, int s, Fixture door, Vector2 goal, byte mode)
     {
         var c = world.Characters.Cold(s)!;
         (c.Bashing, c.BashErrand, c.BashTime, c.DoorWay) = (door.Id, true, DoorWayFresh, (goal, mode));
-        var leaf = world.Fixtures.DoorSpotOf(door)?.Centre ?? door.Position;
-        if (!c.IsPlayer && !AiSystem.TakeDoorStep(c, DoorStepRow(world, s, door), leaf) && c.Ai?.Duty is null)
-            c.Engaged = true;
+        c.DoorWayHold = (HolderOf(world, s, c, door), c.Running);
 
         ref var n = ref world.Characters.Next[s];
         n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.AnyPath);
         n.PathCursor = 0;
         c.PathRequest = 0;
     }
+
+    /// <summary>
+    /// The plan a new way through <paramref name="door"/> is a step of (<see cref="StartDoorWay"/>): an NPC's kept plan when it takes the step
+    /// (<see cref="AiSystem.TakeDoorStep"/>, never for the player's faction, whose sources decide), else the engine goal holding it, else its walk.
+    /// </summary>
+    static DoorWayHolder HolderOf(World world, int s, CharacterCold c, Fixture door)
+    {
+        var leaf = world.Fixtures.DoorSpotOf(door)?.Centre ?? door.Position;
+        if (!DecisionSystem.Decides(c) && AiSystem.TakeDoorStep(c, DoorStepRow(world, s, door), leaf)) return DoorWayHolder.Plan;
+
+        return c.Ai?.Duty is not null ? DoorWayHolder.Goal : DoorWayHolder.Walk;
+    }
+
+    /// <summary>
+    /// Whether the plan the walker's way through its door is a step of still runs (<see cref="CharacterCold.DoorWayHold"/>): its kept plan's door
+    /// step, the engine goal, or the walk's task under the provenance the way began on.
+    /// </summary>
+    static bool WayHeld(CharacterCold c) => c.DoorWayHold.By switch
+    {
+        DoorWayHolder.Plan => AiSystem.RunsDoorStep(c),
+        DoorWayHolder.Goal => c.Ai?.Duty is not null,
+        _ => SameWalk(c.Running, c.DoorWayHold.Walk),
+    };
+
+    /// <summary>
+    /// Whether provenance <paramref name="now"/> is still the walk <paramref name="began"/> (both none, or the same source, row, task and start tick: a
+    /// job index renumbered by a list edit is the same walk, a task started anew is not).
+    /// </summary>
+    internal static bool SameWalk(RunningTask? now, RunningTask? began) =>
+        now is null ? began is null
+        : began is not null && now.Source == began.Source && now.Row == began.Row && now.Task == began.Task && now.Tick == began.Tick;
 
     /// <summary>
     /// The row of the way through <paramref name="door"/> its walker takes (<see cref="WayThrough"/>; docs/game/locks.md "Locked doors on the way"):
@@ -573,13 +604,13 @@ public sealed partial class LockSystem
     /// <summary>
     /// One tick of a walker's way through its door (<see cref="ReachDoor"/>): a basher draws first (<see cref="DrawForBash"/>); at the door, one no
     /// longer locked is opened (74 / 72); else the way works it (<see cref="WorkOnTheWay"/>); once the door is open, broken or gone the walk goes on.
-    /// An NPC whose AI took the way as its plan's step works it only while that step runs (<see cref="AiSystem.RunsDoorStep"/>), one an engine goal
-    /// holds while the goal does: a step ended or replaced, or the goal gone, drops the way, the movement left as the AI set it.
+    /// It runs only while the plan it is a step of does (<see cref="WayHeld"/>): a step ended or replaced, the goal gone or another task started
+    /// drops the way, the movement left as that left it.
     /// </summary>
     void DoorWayStep(World world, Span<CharacterHot> next, int s, CharacterCold c, Fixture? door)
     {
         var table = world.Characters;
-        if (!c.IsPlayer && !c.Engaged && !AiSystem.RunsDoorStep(c) && c.Ai?.Duty is null)
+        if (!WayHeld(c))
         {
             DropDoorWay(c);
             return;
@@ -796,14 +827,14 @@ public sealed partial class LockSystem
     }
 
     /// <summary>
-    /// Ends a walker's way through its door, leaving its movement as it is (the AI has an NPC again).
+    /// Ends a walker's way through its door, leaving its movement as it is.
     /// </summary>
     static void DropDoorWay(CharacterCold c)
     {
         if (c.DoorWay is null) return;
 
         (c.DoorWay, c.Bashing, c.BashErrand, c.BashTime) = (null, null, false, 0);
-        if (!c.IsPlayer) c.Engaged = false;
+        c.DoorWayHold = default;
     }
 
     /// <summary>
