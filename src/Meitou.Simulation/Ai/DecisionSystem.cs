@@ -468,11 +468,13 @@ public sealed class DecisionSystem
     }
 
     /// <summary>
-    /// One character's look: the order step's pops, then its sources, the trace lines kept while tracing.
+    /// One character's look: a stagger's stumble ended by the update's replan, the order step's pops, then its sources, the trace lines kept while
+    /// tracing.
     /// </summary>
     void LookAt(World world, int slot, CharacterCold cold, ChooserRow row)
     {
         _lines.Clear();
+        Combat.BodyOrders.UpdateEnds(world, slot);
         PlayerOrders.Prepare(world, slot);
         Ask(world, slot, cold, row);
         LookSecond(world, slot, cold, row);

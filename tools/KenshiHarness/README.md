@@ -42,6 +42,8 @@ taskbar entry, the launcher dialog included) and muted; a hidden game still rend
 | `wait <seconds>`, `wait frames <n>`, `wait hours <game hours>` | Lets the game run |
 | `camera <x> <y> <z>`, `camera <character>` | Moves the camera's centre, keeping angle and zoom |
 | `select <character>...`, `select none` | The selection |
+| `standing <character> <order> [0\|1]` | Sets a standing order by its `MessageForB::StandingOrder` number (9 NEAR, 8 FAR: orders no button gives) |
+| `track <character>...`, `track dump`, `track off` | Records the characters (by name, or `@address` from `state --addr`) every frame while other commands run: a line each time one's reading changes (game clock, current goal and its text, body task, order queue front and length, default task and target, manoeuvre mode, centre of movement, stumble clip, moving, damage taken); `dump` hands the lines over |
 | `window back [handle]`, `window front` | Gives away or takes the keyboard focus (a hidden window cannot take it) |
 | `window hide\|show` | Hides the window or shows it again (without taking the focus) |
 | `sound off\|on` | Mutes or unmutes the game in Windows' mixer |
@@ -84,6 +86,7 @@ are the raw skill levels.
 - `src/input.c`: input is not sent through Windows. Events are built and handed to the listeners the game's OIS
   keyboard and mouse call, so the game's own handlers do the rest.
 - `src/ui.c`: MyGUI's widget tree through `MyGUIEngine_x64.dll`'s exports and RTTI.
+- `src/track.c`: the per-frame recorder, sampled from the frame listener before the command step.
 - `src/game.c`, `state.c`, `control.c`: the game through `KenshiLib.dll`'s exports (the game's functions by C++ name),
   with member offsets from KenshiLib's headers, each checked with `kh peek`.
 - `src/sound.c`: the mute is the process's audio session (`ISimpleAudioVolume`). Windows keeps it after the game exits, per

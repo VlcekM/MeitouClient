@@ -40,7 +40,8 @@ public enum BodyEvents : byte
 /// "Order queue"): getting up 65 and waking low 52 (<c>FUN_1405d00b0</c>, <c>FUN_1405c7e20</c>), stumbling 147 (<c>FUN_1404391f0</c> →
 /// <c>FUN_140507cd0</c>) and getting out of bed 116 (a failed kidnap, <c>FUN_14034ffa0</c>). Their act-out is standing in place (<see cref="CharacterTask.Idle"/>
 /// under the order's row) while the body's own hold lasts: the get-up's (<see cref="CharacterCold.GettingUpUntil"/>) and the stumble's
-/// (<see cref="CharacterCold.StaggeredUntil"/>), which the body step and the hit set; the stumble's ends with its task. They release no duty (<see cref="OrderEntry.Interrupts"/>).
+/// (<see cref="CharacterCold.StaggeredUntil"/>), which the body step and the hit set; the stumble's ends with its task, which the character's next
+/// AI update ends (<see cref="UpdateEnds"/>). They release no duty (<see cref="OrderEntry.Interrupts"/>).
 /// Saved as any queued order (the writer <c>FUN_1405090b0</c> has no row filter), their holds not. Serial phases, but <see cref="Stumbles"/>.
 /// </summary>
 public sealed class BodyOrders : IOrderOwner, ITaskHandler
@@ -119,6 +120,20 @@ public sealed class BodyOrders : IOrderOwner, ITaskHandler
     /// </summary>
     internal void Stumble(World world, int slot) =>
         PlayerOrders.GiveFront(world, slot, new OrderEntry(TaskType.StumbleTaskForced, this) { Interrupts = true, Forced = true });
+
+    /// <summary>
+    /// The character's AI update after the stagger (the look, before the order step's pops): the front insert asked a replan, and an update with
+    /// one pending stops the running task before its chooser (<c>FUN_140511130</c> → CharBody slot 12 <c>FUN_1405c6770</c>, <b>Verified</b>), so
+    /// a running stumble ends there, its clip with it, and the order step starts the interrupted order again (<b>Observed</b>, docs/game/combat.md
+    /// "Stagger outside a fight"). A character no update runs for keeps the clip's hold. Serial phases.
+    /// </summary>
+    internal static void UpdateEnds(World world, int slot)
+    {
+        var cold = world.Characters.Cold(slot)!;
+        if (cold.OrderQueue.Front is not { Row: TaskType.StumbleTaskForced } front || !PlayerOrders.Runs(world, slot, front)) return;
+
+        TaskStart.End(world, slot, TaskEnd.Done);
+    }
 
     /// <summary>
     /// A failed kidnap of a sleeper (<c>FUN_14034ffa0</c>, <b>Verified</b>): 116 Getting out of bed with the clear flag (<c>FUN_1405d20d0</c>). The

@@ -20,6 +20,7 @@ static const GameString* (*getCurrentSave)(void* saves);
 static void (*teleportCamera)(void* rig, const V3* position);
 static void (*selectObject)(void* player, void* object, char add);
 static void (*unselectAll)(void* player);
+static void (*setStandingOrder)(void* character, int order, char on);
 
 int control_init(void)
 {
@@ -36,9 +37,10 @@ int control_init(void)
     teleportCamera = sym(lib, "?teleport@CameraClass@@QEAAXAEBVVector3@Ogre@@@Z");
     selectObject = sym(lib, "?selectObject@PlayerInterface@@QEAAXPEAVRootObject@@_N@Z");
     unselectAll = sym(lib, "?unselectAll@PlayerInterface@@QEAAXXZ");
+    setStandingOrder = sym(lib, "?setStandingOrder@Character@@UEAAXW4StandingOrder@MessageForB@@_N@Z");
 
     return isPaused && getSpeed && setSpeed && userPause && getSaves && getSavePath && loadSave && getCurrentSave && teleportCamera
-        && selectObject && unselectAll;
+        && selectObject && unselectAll && setStandingOrder;
 }
 
 // ---- What state.c reports -----------------------------------------------------------------------------------------------
@@ -76,6 +78,7 @@ int cmd_load(Command* c)
     if (!save_exists(name, folder, sizeof folder)) return fail(c, "no save named '%s' in %s", name, folder);
 
     GameString save = gs_view(name);
+    track_reset();
     loadSave(getSaves(), &save);
 
     text_add(&c->reply, "{\"loading\":");
@@ -160,6 +163,21 @@ int cmd_camera(Command* c)
     V3 centre = game_camera_centre();
     text_add(&c->reply, "{\"cameraCentre\":[%.2f,%.2f,%.2f]}", centre.x, centre.y, centre.z);
     return 1;
+}
+
+// standing <character> <order> [0|1]: sets one of the character's standing orders (MessageForB::StandingOrder by number, e.g. 9
+// M_SET_ORDER_NEAR) through Character::setStandingOrder, as the orders panel would, including orders no button gives.
+int cmd_standing(Command* c)
+{
+    const char* name = arg(c, 0, NULL);
+    const char* order = arg(c, 1, NULL);
+    if (!name || !order) return fail(c, "usage: standing <character or @address> <order number> [0|1]");
+
+    void* character = name[0] == '@' ? (void*)(uintptr_t)strtoull(name + 1, NULL, 16) : game_find_character(name, NAME_RADIUS);
+    if (!character) return fail(c, "no character named '%s' in the squad or near the camera", name);
+
+    setStandingOrder(character, atoi(order), (char)atoi(arg(c, 2, "1")));
+    return reply_clock(c);
 }
 
 // select <character>... | select none: the selection, as clicking portraits would make it.

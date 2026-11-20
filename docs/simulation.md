@@ -275,7 +275,8 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   147 that takes the running stumble over, the older one ending at once after it. A failed kidnap of a sleeper gives 116 with the clear flag
   (`CarrySystem.Kidnap`), which leaves the queue at once as the kidnap has got it out of bed. Each acts out standing in place (`Idle` under its row) until the
   body's hold ends: 65 / 52 the get-up's `GettingUpUntil` (set at the wake by the body step), 147 the stumble's `StaggeredUntil` (at once without a clip), which any end of the stumble's task cuts short with the clip (`BodyOrders` `End`,
-  `CombatSystem.EndStumble`: an order that clears the queue, a task that replaces it, a wipe);
+  `CombatSystem.EndStumble`: an order that clears the queue, a task that replaces it, a wipe, and above all the character's next look, which ends a
+  running stumble before the order step, `BodyOrders.UpdateEnds`: [stagger outside a fight](game/combat.md#fight-lifecycle-and-orders));
   65 and 52 start nothing in a bed or cage and leave.
 - `PlayerOrders.Runs`: the front started and its task's provenance is an order's that runs the task (a move also needs `OrderMove`) and the handler is not `Done`. Lock work and item or
   container work done in place (`Idle`) report `Done` once the character holds no work.
@@ -920,7 +921,8 @@ during which it neither walks, works nor fights (Task_GetUp, the act-out of the 
 Only a fighter blocks or dodges. A landed blow on a shackled defender knocks it out 25% of the time (`PutDownKoSeconds` with 0.002: 3 s). A hit on a
 character outside a fight that is getting up does nothing more; on any other (not a gunner) its task ends behind the Stumbling order 147 and starts again
 afterwards (a lock's, site's or machine's progress stays with the object), and a picked stumble clip stops its walking and its work
-(first aid, lockpicking, building, operating) until the clip ends (`CharacterCold.StaggeredUntil`). A fight's end puts no weapon away: a player's character sheathes once it is neither walking nor following on an order,
+(first aid, lockpicking, building, operating) until the stumble ends (`CharacterCold.StaggeredUntil`): at the character's next look, or the clip's end for
+one whose chooser does not run. A fight's end puts no weapon away: a player's character sheathes once it is neither walking nor following on an order,
 an NPC by its planner's UNEQUIP_WEAPON step (one without an AI at once).
 
 ### Ranged

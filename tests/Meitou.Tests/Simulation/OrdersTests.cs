@@ -86,11 +86,12 @@ public class OrdersTests
     }
 
     /// <summary>
-    /// A stagger outside a fight (docs/game/combat.md "Fight lifecycle and orders"): a character walking on a move order and hit from behind stops
-    /// while its stumble clip plays, does not fight back (its order outranks self-defence), and walks on to the same goal afterwards.
+    /// A stagger outside a fight (docs/game/combat.md "Stagger outside a fight"): a character walking on a move order and hit from behind gets the
+    /// stumble order 147, which its next AI update ends whatever the clip's length (here 0.5 s): one tick, then the move is planned again from its
+    /// start and it walks on to the same goal, without fighting back (its order outranks self-defence).
     /// </summary>
     [Fact]
-    public void A_hit_walker_stands_through_its_stumble_and_walks_on()
+    public void A_hit_walker_stumbles_until_its_next_update_and_walks_on()
     {
         var (world, combat, player, _) = Attacked(CharacterOrders.None, distance: 15);
         using var w = world;
@@ -98,31 +99,40 @@ public class OrdersTests
         world.Characters.Cold(player.Slot)!.RunSpeed = SpeedMode.Walk;   // the raider catches it
         var goal = new Vector3(1000, 150, 3000);
         world.Commands.Enqueue(new MoveOrder([player], goal) { Tick = 0 });
-        bool stood = false, walkedOn = false, ordered = false;
+        int stumbles = 0, walkedOn = 0;
+        bool ordered = false;
         TaskType? lastRow = null;
-        for (int k = 0; k < 900 && !(stood && walkedOn); k++)
+        for (int k = 0; k < 900 && walkedOn < 3; k++)
         {
             world.RunTicks(1);
             var cold = world.Characters.Cold(player.Slot)!;
             ref readonly var n = ref world.Characters.Next[player.Slot];
             if (cold.Medical!.Incapacitated) break;
             ordered |= n.Task == (byte)CharacterTask.GoTo;
-
-            // The stagger ends the walk and its order 147 stands in for it, its act-out the tick after it starts; once it is popped the move is
-            // planned again from its start (docs/game/combat.md "Stagger outside a fight").
-            var expected = lastRow == TaskType.StumbleTaskForced ? CharacterTask.Idle : CharacterTask.GoTo;
-            lastRow = cold.Running?.Row;
+            var row = cold.Running?.Row;
             if (!ordered) continue;
 
+            // The stagger ends the walk and its order 147 stands in for it; the tick after, its update has ended it, the hold cut short of the
+            // clip, and the move is planned again from its start, its walk the tick after (docs/game/combat.md "Stagger outside a fight").
+            var expected = lastRow == TaskType.StumbleTaskForced ? CharacterTask.Idle : CharacterTask.GoTo;
             Assert.Equal((byte)expected, n.Task);
+            if (row == TaskType.StumbleTaskForced)
+            {
+                stumbles++;
+                Assert.NotEqual(TaskType.StumbleTaskForced, lastRow);
+            }
+            else if (lastRow == TaskType.StumbleTaskForced)
+            {
+                Assert.Equal(TaskType.MoveCusOrdered, row);
+                Assert.True(cold.StaggeredUntil <= world.Tick, "the update ends the stumble's hold with it");
+                walkedOn++;
+            }
 
-            float speed = new Vector2(n.Velocity.X, n.Velocity.Z).Length();
-            if (cold.StaggeredUntil > world.Tick) { if (speed == 0) stood = true; }
-            else if (stood && speed > 1) walkedOn = true;
+            lastRow = row;
         }
 
-        Assert.True(stood, "it stands while its stumble clip plays");
-        Assert.True(walkedOn, "it walks on afterwards");
+        Assert.True(walkedOn > 0, "it is staggered and walks on afterwards");
+        Assert.Equal(stumbles, walkedOn + (lastRow == TaskType.StumbleTaskForced ? 1 : 0));
         Assert.Equal(new Vector2(goal.X, goal.Z), world.Characters.Next[player.Slot].Goal);
         Assert.Equal(0, combat.StateOf(player).Thrown);
     }
