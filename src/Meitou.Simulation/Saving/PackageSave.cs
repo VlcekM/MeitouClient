@@ -1,5 +1,6 @@
 using Meitou.Data.Fcs;
 using Meitou.Simulation.Ai;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Saving;
@@ -21,13 +22,13 @@ public sealed record PackageSave(bool Persist, bool Done, float Started, string?
 
     /// <summary>
     /// Writes the keys of the package <paramref name="board"/> runs, and removes those of a class it does not run (the record may hold an older
-    /// package's). <paramref name="roaming"/>: the platoon is a roaming one, which only an occupation makes persistent (a town's platoon is so
-    /// already, so its occupation's <c>persist</c> is false).
+    /// package's). <paramref name="madePersistent"/>: only the occupation makes the platoon persistent (a roaming one not persistent on its own,
+    /// <see cref="OwnPersistent"/>; a town's platoon is so already, so its occupation's <c>persist</c> is false).
     /// </summary>
-    public static void Write(FcsRecord platoon, Blackboard? board, PopulationData data, bool roaming)
+    public static void Write(FcsRecord platoon, Blackboard? board, PopulationData data, bool madePersistent)
     {
         var kind = board?.Current is null ? (PackageClass?)null : board.CurrentClass;
-        if (kind == PackageClass.OccupyTown) platoon.Bools[PersistKey] = roaming;
+        if (kind == PackageClass.OccupyTown) platoon.Bools[PersistKey] = madePersistent;
         else platoon.Bools.Remove(PersistKey);
 
         if (kind != PackageClass.PassingAssault)
@@ -42,6 +43,18 @@ public sealed record PackageSave(bool Persist, bool Done, float Started, string?
         platoon.Floats[StartedKey] = (float)board.AssaultStart;
         if (data.FactionId(board.AssaultEnemy) is { } enemy) platoon.Strings[EnemyKey] = enemy;
         else platoon.Strings.Remove(EnemyKey);
+    }
+
+    /// <summary>
+    /// Whether the platoon is persistent on its own: its flag, or its save's <c>persistent</c> that no occupation set (one with <c>persist</c> is
+    /// the occupation's, which its end takes off again, <c>FUN_140296070</c>).
+    /// </summary>
+    public static bool OwnPersistent(Platoon p)
+    {
+        if (p.Persistent) return true;
+        if (p.Saved?.Source.Record is not { } record) return false;
+
+        return record.Bools.GetValueOrDefault("persistent") && !record.Bools.GetValueOrDefault(PersistKey);
     }
 
     /// <summary>

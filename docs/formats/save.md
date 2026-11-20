@@ -817,8 +817,9 @@ Meitou-only loose-item key (`Items/ItemSlots.WriteDue`, [ground items](../simula
   finished test `FUN_14028eca0` sets it while it is the current package; its start test `FUN_140290450` then refuses it); `started` (float, the game
   hour its start `FUN_1402900c0` stamped); `enemy` (string, the id of the town owner's faction it attacks, `FUN_1402963a0` / `FUN_1402965a0`, written
   only with one). Meitou (`Saving/PackageSave`) writes them for a squad in the world; a load resumes a saved running passing-by assault in the player
-  town the squad stands in and puts the three over its start, else keeps only `done`; `persist` is read by nothing, as Meitou makes a roaming
-  platoon persistent while it occupies and not after. The load activates the package (`FUN_1402721a0`, which calls its start, vfunc `+0x30`, at once) and then
+  town the squad stands in and puts the three over its start, else keeps only `done`. It writes `persist` true for a roaming platoon not persistent on its
+  own, and a saved `persistent` beside a true `persist` is the occupation's, so it does not keep the platoon once the occupation ends; Meitou keeps
+  an occupier while it occupies. The load activates the package (`FUN_1402721a0`, which calls its start, vfunc `+0x30`, at once) and then
   its load (vfunc `+0x28`) puts the saved hands over the start's. So the war start (`FUN_14028fc80`, [ai](../game/ai.md#package-classes)) runs again and
   its copies of the lead platoon, pace and point are made from the loaded state.
 - **Announcement**: state 76 `isMessageDelivered` (`FUN_140792190`) reads the speaker's Dialogue per-event map (`+0xf8`, `FUN_140673830`); the character's

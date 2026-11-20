@@ -237,7 +237,7 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// Whether a platoon is persistent: set by the engine or its saved record, unless cleared since.
     /// </summary>
-    bool PersistentPlatoon(Platoon p) => !p.PersistentCleared && (p.Persistent || p.Saved?.Source.Record.Bools.GetValueOrDefault("persistent") == true);
+    bool PersistentPlatoon(Platoon p) => !p.PersistentCleared && Saving.PackageSave.OwnPersistent(p);
 
     /// <summary>
     /// The id of the AI_PACKAGE the original looks up by name (<c>FUN_1406bfe60</c>); null when the data has none.
