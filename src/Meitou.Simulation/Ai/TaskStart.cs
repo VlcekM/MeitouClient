@@ -603,7 +603,7 @@ public static class TaskStart
     /// following when it does that, else idle; idle for a character the decision step decides (its routine is the step's, step 6).
     /// </summary>
     public static CharacterTask Standing(CharacterCold cold, CharacterTask task) =>
-        !DecisionSystem.Decides(cold) && task is CharacterTask.Wander or CharacterTask.Follow ? task : CharacterTask.Idle;
+        OrderStep.ResumesRoutine(cold) && task is CharacterTask.Wander or CharacterTask.Follow ? task : CharacterTask.Idle;
 
     /// <summary>
     /// Whether the request is a step of the running task: a goal's or reaction's attack while a follow row runs its follow or attack, unless it is
@@ -663,7 +663,7 @@ public static class TaskStart
         var cold = table.Cold(slot)!;
         PlayerOrders.Ending(world, slot, reason);
         var current = (CharacterTask)table.Next[slot].Task;
-        var resume = !DecisionSystem.Decides(cold) && cold.Running is { } run && run.Runs(current) ? run.Resume : CharacterTask.Idle;
+        var resume = OrderStep.ResumesRoutine(cold) && cold.Running is { } run && run.Runs(current) ? run.Resume : CharacterTask.Idle;
         if (reason != TaskEnd.Done) world.Tasks.Of(CharacterTask.Attack)?.End(world, slot, CharacterTask.Attack, reason);
         if (current != CharacterTask.Attack) world.Tasks.Of(cold, current)?.End(world, slot, current, reason);
         if (reason != TaskEnd.Replaced) MovementSystem.Stop(table, slot);

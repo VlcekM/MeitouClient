@@ -39,6 +39,39 @@ internal static class OrderStep
     public static bool ResumesRoutine(CharacterCold cold) => !DecisionSystem.Decides(cold);
 
     /// <summary>
+    /// Whether an order holds the character now for the engine's sweeps and walks: for a character the sources decide, any order in its queue; for an
+    /// NPC, its order hold (<see cref="Ordered"/>). A pure read.
+    /// </summary>
+    public static bool HoldsOrder(CharacterCold cold) => DecisionSystem.Decides(cold) ? cold.OrderQueue.Count > 0 : Ordered(cold);
+
+    /// <summary>
+    /// Whether the order step concerns the character: an order in its queue, or the hold of one it just lost (<see cref="CharacterCold.OrderWins"/>,
+    /// set anew at the next starts). A pure read.
+    /// </summary>
+    public static bool Concerns(CharacterCold cold) => cold.OrderQueue.Count > 0 || cold.OrderWins;
+
+    /// <summary>
+    /// Whether the starts set the NPC's order hold anew (<see cref="Hold"/>): the order step concerns it, or its kept routine waits for the order's
+    /// last walk.
+    /// </summary>
+    public static bool HoldDue(CharacterCold cold) => Concerns(cold) || cold.OrderRoutine != CharacterTask.Idle;
+
+    /// <summary>
+    /// The front order is about to start (serial, <see cref="PlayerOrders"/>): a character its AI runs (<see cref="ResumesRoutine"/>) keeps the
+    /// routine it is on for after the order (<see cref="KeepRoutine"/>), and its engine duties let go, so no holder's step stops or redirects the
+    /// order's task; an order on its body (<paramref name="interrupts"/>: a stumble, a get-up) interrupts the duty sweeps only, and ends an engine
+    /// goal, as the original's update after it plans anew.
+    /// </summary>
+    public static void TakeOver(World world, int slot, CharacterCold cold, bool interrupts)
+    {
+        if (!ResumesRoutine(cold)) return;
+
+        KeepRoutine(world.Characters, slot, cold);
+        if (!interrupts) world.ReleaseDuties(slot);
+        else world.SystemOf<AiSystem>()?.ReplanDuty(world, slot);
+    }
+
+    /// <summary>
     /// Sets an NPC's <see cref="CharacterCold.OrderWins"/> from its queue (serial phases): its front runs (<see cref="PlayerOrders.Wins"/>; a front
     /// that could start has started by now) while the chooser runs for it. When it turns on, the AI's plan, goal and commitment go (the order's plan
     /// replaces them); when it turns off, the AI chooses again at once. While it is off a routine kept at the order's start is taken up again

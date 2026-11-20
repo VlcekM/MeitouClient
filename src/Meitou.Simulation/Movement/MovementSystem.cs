@@ -2350,11 +2350,11 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     /// Whether a medic's ask to stand still holds the character (<see cref="CharacterCold.StandStillUntil"/>): the original's patient takes 62
     /// Standing still as an urgent goal (a tier 3 request, docs/game/ai-tasks.md "Stand still"), which the front of its order queue outranks (the
     /// chooser's source 1) and which beats its jobs and routine (sources 5 and 6); its row needs no attack on it (<c>!isAggressionTowardsMe</c>).
-    /// So a player's character with no order in hand, or an NPC its order does not hold (<see cref="DecisionSystem.Ordered"/>), is held; not one
-    /// fighting or fleeing.
+    /// So a character no order holds (<see cref="Ai.OrderStep.HoldsOrder"/>: a player-faction one with no order in hand, an NPC its order does not
+    /// hold) is held; not one fighting or fleeing.
     /// </summary>
     static bool AskedToStandStill(in CharacterHot n, CharacterCold cold, long tick) =>
-        cold.StandStillUntil > tick && (cold.IsPlayer ? cold.OrderQueue.Count == 0 : !DecisionSystem.Ordered(cold)) && !cold.InCombat && !cold.Fleeing
+        cold.StandStillUntil > tick && !Ai.OrderStep.HoldsOrder(cold) && !cold.InCombat && !cold.Fleeing
         && cold.CarriedBy.IsNone && n.Task != (byte)CharacterTask.Attack;
 
     /// <summary>

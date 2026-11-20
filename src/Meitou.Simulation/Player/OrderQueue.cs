@@ -526,16 +526,7 @@ public static class PlayerOrders
                 if (show && first) Show(world, slot, check);
                 return check;
             }
-            // an NPC keeps its routine for after the order, and its engine duties let go, so no holder's step stops or redirects the order's task;
-            // an act on its body interrupts the duty sweeps only, and ends an engine goal, as the original's update after it plans anew
-            var cold = world.Characters.Cold(slot)!;
-            if (!DecisionSystem.Decides(cold))
-            {
-                DecisionSystem.KeepRoutine(world.Characters, slot, cold);
-                if (!front.Interrupts) world.ReleaseDuties(slot);
-                else world.SystemOf<Ai.AiSystem>()?.ReplanDuty(world, slot);
-            }
-
+            Ai.OrderStep.TakeOver(world, slot, world.Characters.Cold(slot)!, front.Interrupts);
             front.Started = true;
             front.RowRuns = ListTests.OrderNeedsFailNow(world, slot, front) == false;   // else a step of its plan comes first
             front.Owner.Start(world, slot, front);
