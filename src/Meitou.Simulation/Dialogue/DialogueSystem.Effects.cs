@@ -317,7 +317,7 @@ public sealed partial class DialogueSystem
                 break;
             case DialogueActions.ClearBounty when tc?.Bounties is { } ledger && mc is not null
                 && world.Characters.TryResolveNext(target, out int wanted):
-                ClearBounties(world, mc, target, wanted, tc, ledger);
+                ClearBounties(world, me, mc, target, wanted, tc, ledger);
                 break;
         }
     }
@@ -342,9 +342,12 @@ public sealed partial class DialogueSystem
 
     /// <summary>
     /// <c>DA_CLEAR_BOUNTY</c>: the target's entries of the speaker's faction and of the town it stands in go (each reported as cleared,
-    /// <see cref="Crime.CrimeEventKind.Cleared"/>), and its recognition.
+    /// <see cref="Crime.CrimeEventKind.Cleared"/>), and its recognition. Engine choice, no counterpart known in the original: the speaker then
+    /// forgives the target (<see cref="Forgive"/>), so a TEMP_ENEMY tag its faction's guards still hold from an arrest attempt (DA 29 marks the
+    /// target when it attacks, and the tag is saved) does not send them at a character who just paid. Without it, paying the fine near those
+    /// guards led to a fight, and each police blow then booked the squad for Assault (<see cref="Crime.CrimeSystem.Hit"/>).
     /// </summary>
-    void ClearBounties(World world, CharacterCold mc, CharacterId target, int wanted, CharacterCold tc, Crime.BountyLedger ledger)
+    void ClearBounties(World world, CharacterId me, CharacterCold mc, CharacterId target, int wanted, CharacterCold tc, Crime.BountyLedger ledger)
     {
         if (ledger.BookedFor(_data.Relations, mc.Faction) is { } entry)
             Crime.CrimeSystem.ClearBounty(world, wanted, tc, ledger, entry);
@@ -352,6 +355,8 @@ public sealed partial class DialogueSystem
             && ledger.BookedFor(_data.Relations, _data.SiteFactions[town]) is { } local)
             Crime.CrimeSystem.ClearBounty(world, wanted, tc, ledger, local);
         tc.Recognition = 0;
+
+        if (world.Characters.TryResolveNext(me, out int speaker)) Forgive(world, speaker, target);
     }
 
     /// <summary>

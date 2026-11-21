@@ -111,6 +111,24 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
+    /// A bounty of <paramref name="faction"/> on <paramref name="target"/> expired (<see cref="Crime.BountyBook.Expire"/>). Engine choice, no
+    /// counterpart known in the original: every squad of that faction drops its short-term TEMP_ENEMY, criminal and aggressor tags on the target,
+    /// as <see cref="Forgive"/> does for a paid fine. A tag a guard wrote in an arrest attempt within the bounty's last 6 game hours would otherwise
+    /// outlive it and send the guards at a character no longer wanted, and each police blow books an Assault (<see cref="Crime.CrimeSystem.Hit"/>).
+    /// </summary>
+    public void ForgiveExpired(World world, int faction, CharacterId target)
+    {
+        foreach (var squad in world.Squads.All)
+        {
+            if (squad.Faction != faction) continue;
+
+            Memory.ClearShort(squad.Id, target, MemoryTag.TempEnemy);
+            Memory.ClearShort(squad.Id, target, MemoryTag.Criminal);
+            Memory.ClearShort(squad.Id, target, MemoryTag.Aggressor);
+        }
+    }
+
+    /// <summary>
     /// Whether factions <paramref name="a"/> and <paramref name="b"/> are the same or allied (false for a missing one).
     /// </summary>
     bool AlliedFactions(int a, int b) =>

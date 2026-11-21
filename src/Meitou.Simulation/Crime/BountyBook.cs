@@ -75,6 +75,7 @@ sealed class BountyBook
     /// <summary>
     /// Removes entries whose lifetime since their last raise is over (<c>FUN_1405cbb80</c>, <b>Verified</b>): the original removes the first expired
     /// entry it meets and stops, once per character tick; this sweep runs every <paramref name="ticks"/> ticks, so it removes at most that many.
+    /// The faction's squads then forgive the character (<see cref="Dialogue.DialogueSystem.ForgiveExpired"/>, engine choice).
     /// </summary>
     internal static void Expire(CrimeSystem crimes, World world, int slot, CharacterCold c, BountyLedger ledger, double hoursPerTick, int ticks)
     {
@@ -88,6 +89,7 @@ sealed class BountyBook
             if (ledger.Count == 0) c.Bounties = null;
             ticks--;
             crimes.Note(world, CrimeEventKind.Expired, slot, CrimeCode.None, e.Faction, e.Amount, CharacterId.None);
+            world.SystemOf<Dialogue.DialogueSystem>()?.ForgiveExpired(world, e.Faction, world.Characters.IdOf(slot));
             if (c.IsPlayer) world.Post(Loc.Tr("{1} is no longer wanted by {2}", c.Name, e.FactionName));
         }
         if (ledger.Count == 0) c.Bounties = null;
