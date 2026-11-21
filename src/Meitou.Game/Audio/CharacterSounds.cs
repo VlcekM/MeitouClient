@@ -822,15 +822,22 @@ public sealed class CharacterSounds
     }
 
     /// <summary>
-    /// A turret fired, its muzzle at <paramref name="at"/> (<c>FUN_14043a730</c>): <c>Attack</c> with <c>Weapons</c> = <c>Turret</c>. The exe posts
-    /// it on the building's object; here on a pooled object at the muzzle (<b>engine choice</b>).
+    /// The <c>Weapons</c> values of a turret gun by GUN_DATA <c>shoot sound</c> (<c>GunSounds</c>, <c>TurretBuilding::setup</c> <c>0x14043b9f0</c>,
+    /// table <c>0x141d91598</c>, <b>Verified</b>).
     /// </summary>
-    public void TurretShot(Vector3 at)
+    static readonly string[] GunSounds = ["Crossbow", "Harpoon", "Crossbow_Turret", "Harpoon_Turret"];
+
+    /// <summary>
+    /// A turret fired, its muzzle at <paramref name="at"/> (<c>FUN_14043a730</c>): <c>Attack</c> with <c>Weapons</c> from the gun's <c>shoot sound</c>
+    /// (<see cref="GunSounds"/>; set on the building's object in <c>TurretBuilding::setup</c>). The exe posts it on the building's object; here on
+    /// a pooled object at the muzzle (<b>engine choice</b>).
+    /// </summary>
+    public void TurretShot(Vector3 at, int shootSound = 3)
     {
         if (_player.HeardDistanceSquared(at, _camera) >= EventLimit) return;
         ulong id = NextPooled();
         _player.SetPosition(id, at);
-        _player.SetSwitch("Weapons", "Turret", id);
+        if ((uint)shootSound < GunSounds.Length) _player.SetSwitch("Weapons", GunSounds[shootSound], id);
         _player.Post("Attack", id);
         Swings++;
     }

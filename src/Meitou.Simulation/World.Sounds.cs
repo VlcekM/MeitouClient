@@ -67,8 +67,8 @@ public enum SoundKind : byte
     /// </summary>
     DismantleDone,
     /// <summary>
-    /// A turret fired (<see cref="SoundEvent.Position"/> its muzzle, the subject its gunner): <c>Attack</c> with <c>Weapons</c> = <c>Turret</c> on
-    /// the turret (<c>FUN_14043a730</c>).
+    /// A turret fired (<see cref="SoundEvent.Position"/> its muzzle, the subject its gunner, <see cref="SoundEvent.ShootSound"/> the gun's
+    /// <c>shoot sound</c>): <c>Attack</c> with the gun's <c>Weapons</c> switch on the turret (<c>FUN_14043a730</c>, <c>TurretBuilding::setup</c>).
     /// </summary>
     TurretShot,
     /// <summary>
@@ -128,9 +128,10 @@ public sealed record PostedSound(string Event, string? SwitchGroup = null, strin
 /// <param name="Item">An item's record id (<see cref="SoundKind.ShacklesOn"/>: the shackles).</param>
 /// <param name="Armour">The subject's body armour <c>material type</c> (0 cloth .. 3 plate) when it happened
 /// (<see cref="SoundKind.FedToMachine"/>).</param>
+/// <param name="ShootSound">A turret gun's <c>shoot sound</c> (<c>GunSounds</c> 0..3; <see cref="SoundKind.TurretShot"/>).</param>
 public readonly record struct SoundEvent(SoundKind Kind, CharacterId Subject, CharacterId Other, Vector3 Position,
     bool Heavy = false, bool AttackerUnarmed = false, bool AttackerRobot = false, bool Armoured = false, bool Fatal = false, string? Item = null,
-    int Armour = 0)
+    int Armour = 0, int ShootSound = 3)
 {
     /// <summary>
     /// A code mod's event (<see cref="SoundKind.Posted"/>, <see cref="SoundKind.PostedInterface"/>); null for the game's own kinds.
