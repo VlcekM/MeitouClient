@@ -1431,6 +1431,13 @@ which an order's hold refuses. The chain's rows and states are in [AI tasks](gam
   slave (state 1), player or NPC, outside every town (its status town, `CharacterCold.StatusTown`, [rule](game/carry-loot.md#the-status-town), as for `Freed`) and farther than about 3 536 from its owner becomes an escaped slave. The owner is the
   master squad's leader (`ObedientSlave.OwnerOf`); without a master squad or pending saved owner handle, a slave becomes escaped even inside town. Not one held in a cage that has an owner (`ArrestSystem.CagedByOwner`): the original's cage entry gives it the cage's owner handle (`FUN_140330600`), and Meitou's stand-in, the resident squad, is missing for a cage with none (Rebirth's Prisoner Poles; **Observed**, #647 save: the start prisoner turned escaped slave in its cage within 30 ticks).
   A master squad or saved owner still waiting to load is kept; measuring to an unloaded platoon's position is not modelled.
+- **Escape from beaten masters** (`Kidnap.SlaveEscape`, on the same cadence after the far rule; facts: [carry-loot](game/carry-loot.md#a-slave-whose-masters-are-beaten-escapes)):
+  a slave (state 1), player or NPC, not caged, not down, with a master squad, escapes (state 2) when every member of that squad is down or not upright,
+  saying event 54 at the owner's defeater (`CharacterCold.DefeatedBy`, set by a melee blow that leaves its victim down) when the slave knows it, else 55; or
+  when the owner (the squad's leader) is down and no effective leader stands, saying 55; or 45 simulation seconds after its master squad or the squad's leader
+  left the world (`CharacterCold.MasterLostTick`), saying 55. The lines' `change AI` gives it an escaping package (`Escaping slave- run away solo`, goal 202).
+  Engine choices: the owner is the squad's leader, so the original's hand-over to the effective leader changes nothing and the savior is always the
+  leader's defeater; the 45 s are simulation seconds, where the original counts wall-clock seconds (unscaled by game speed).
 - **Slave trading** (DA 41 / 42, `CharacterTrading`; facts: [economy 12](game/economy.md#12-slaves-prisoners-animals)): the line ends the conversation and the window
   opens as it closes (a speech-bubble line opens it at once; only for a player-character target). Rows, prices and the confirm's effects as in the original, with these **engine**
   choices: the buying list is every character in slave state 1, not dead, that obeys the slaver's squad (the original's platoon ownership set), and, standing in for the

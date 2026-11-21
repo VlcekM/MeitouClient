@@ -432,7 +432,36 @@ A cage or a carry is not tested. Meitou keeps an unloaded master squad or pendin
 ([save](../formats/save.md) "Slave state") until it finds one. A saved handle (or job 187's) whose platoon is not in the world, the owner's squad gone before the save,
 names no registered object: it is dropped and the slave escapes (`CaptiveSystem.OwnerGone`; **Observed** on #1073's save, whose Reaver owner platoon was no longer saved).
 
+A master squad that left the world is no longer kept by the next rule: 45 s on, the slave escapes ([below](#a-slave-whose-masters-are-beaten-escapes)).
+
 Since the setter removes job 187 Obedient Slave, the slave then plans with its own lists. In the Rebirth hold (**Observed**, one slave), a slave sent to a workplace about 4 000 from its owner became an escaped slave and took its own 172 Getting in my cage, whose finder (`FUN_1408caaf0`) has no slave state test.
+
+### A slave whose masters are beaten escapes
+
+AI vfunc `0x30` (1.0.68 `FUN_1405a4ae0`, **Verified** by decompile) runs in each AI update, for player and NPC characters alike. It acts on a slave (state 1)
+that is not held in a cage (Character `+0x2f8` not 2) and not down (vfunc `0x30`). Its owner platoon is the platoon (`+0x1d8`) of the character the owner handle
+(`+0x330`) names (`FUN_1407928c0`: handle types 1 and 0x22 only; a cage's building handle gives none, but a caged slave is skipped first).
+- **No owner platoon**: the first update stamps AI `+0x2f0` with the clock; a later one more than 45 s (`DAT_1416a1b84`) after the stamp makes it escaped
+  alone. The clock is the wall-clock stopwatch (`FUN_14025b3b0` on `DAT_1421349b0` x 1e-6 s), so game speed does not scale it. The stamp is cleared only
+  when an owner platoon is found, not by the escape.
+- **An owner platoon not active** (`+0xf0` clear: `ActivePlatoon::destroyCharacters` `FUN_1404feed0` clears it, its update `FUN_1405003c0` sets it): nothing.
+- **Every member beaten** (`FUN_140793160(platoon, 0)`: no member both not down and of posture 0, vfunc `0x368`; member type is not tested): escaped. The savior is
+  the owner's defeater (Character `+0x2c0`, written only by the melee take-hit `FUN_1404394f0` when its victim ends knocked out or dead; the bolt hit
+  `FUN_140439c90` does not write it), dropped when its faction is not real (`+0x1d0`) or the slave does not know it (`FUN_140855960` on its senses, flag 0).
+  Event 54 SLAVE_ESCAPE_OPPORTUNITY_SAVIOR at the savior, else 55 SLAVE_ESCAPE_OPPORTUNITY_ALONE at nobody.
+- **Otherwise**: nothing while the owner is not down. A downed owner whose platoon's effective leader (`FUN_140792b90`) is not down hands the slave to that
+  member (the owner setter `FUN_14032e430`), nothing more. With neither, escaped alone (55).
+
+Escaped means the setter with state 2 (`FUN_1405a4940`: status `+0x110` = 250, the hour stamp, job 187 removed by `FUN_14032e0d0`); the events go through the
+cut-in sender `FUN_140685660` ([dialogue](dialogue.md)). The base lines (**Verified**, `re/gamedata_base.txt`): `Escape opportunity civ` (54) and
+`Escape opp alone civ` (55), listed by the civilian, tough, military, ninja, noble, priest, Reaver, Valamon and Tengu's Vault Guard dialogue packages,
+and Rebirth's `slave escape opportunity` / `... alone` (package `base slave`); lines of them ("I'm free!", "Run for it!") carry `AI contract` or `change AI`
+`Escaping slave- run away solo` (signal 23,
+inheriting `Escaping slave- base`: Escape 202, get out of cage, don't be unarmed, protect squad, loot), so the freed slave frees itself of its shackles and runs.
+
+Meitou: `Kidnap.SlaveEscape`, serially on the arrest system's spotting cadence. The owner is the master squad's leader ([above](#a-slave-far-from-its-owner-escapes)),
+so the hand-over changes nothing and the savior is the leader's defeater (`CharacterCold.DefeatedBy`, set in `CombatSystem.BlowConsequences`); a master squad
+not found, or its leader gone, runs the 45 s stamp in simulation seconds (`CharacterCold.MasterLostTick`). A slave without a master squad is left to the far rule.
 
 ### The status town
 

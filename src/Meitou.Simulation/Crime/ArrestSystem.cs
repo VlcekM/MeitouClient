@@ -403,6 +403,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             DropTownStatusOutsideTowns(world);
             UpdateKidnapVictims(world);
             EscapeFarFromOwner(world);
+            Kidnap.SlaveEscape.Step(world);
         }
         _goals?.Step(world);
         _goals?.Look(world, world.Every(DutyEveryTicks));

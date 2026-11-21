@@ -1182,6 +1182,19 @@ public sealed class CharacterCold
     public int SlaveOwner { get; set; } = -1;
 
     /// <summary>
+    /// The last character whose melee blow left this one knocked out or dead (Character <c>+0x2c0</c>, written only by the melee take-hit
+    /// <c>FUN_1404394f0</c>, <b>Verified</b>; the bolt hit <c>FUN_140439c90</c> has no write to it). Read by a slave's escape as its savior
+    /// (<see cref="Kidnap.SlaveEscape"/>). Not saved; hashed while set.
+    /// </summary>
+    public CharacterId DefeatedBy { get; set; } = CharacterId.None;
+
+    /// <summary>
+    /// The tick since which a slave's owner is not in the world (AI <c>+0x2f0</c>, stamped by <c>FUN_1405a4ae0</c>; -1: not running). Not saved;
+    /// hashed while running.
+    /// </summary>
+    public long MasterLostTick { get; set; } = -1;
+
+    /// <summary>
     /// The squad a slave obeys (the original's owner handle naming a platoon; -1 none): job 187 Obedient Slave runs that squad's <c>Slave AI
     /// Goals</c> (<see cref="Ai.AiSystem"/>). Runtime only (not saved, not hashed): set where the slave is made or sold.
     /// </summary>
@@ -2189,6 +2202,14 @@ public sealed class CharacterTable
             hasher.Add(k.SlaveOwner);
             if (k.SlaveState > 1) hasher.Add(k.SlaveSince);
         }
+
+        if (!k.DefeatedBy.IsNone)
+        {
+            hasher.Add(0x44656662);
+            hasher.Add(k.DefeatedBy);
+        }
+
+        if (k.MasterLostTick >= 0) hasher.Add(k.MasterLostTick);
 
         if (k.Shaved) hasher.Add(0x53686176);
         if (k.Crouched) hasher.Add(0x43726F63);

@@ -230,10 +230,14 @@ public sealed partial class DialogueSystem
     /// event when the looker is free; else, when the conversation it is in runs another event and it has a line for this one, that conversation
     /// ends (<c>FUN_140674830</c>) and the event fires; the same event again does nothing. Returns whether a line was said.
     /// </summary>
-    internal bool CutIn(World world, int slot, int target, int ev)
+    internal bool CutIn(World world, int slot, int target, int ev) => CutIn(world, slot, world.Characters.IdOf(target), ev);
+
+    /// <summary>
+    /// <see cref="CutIn(World, int, int, int)"/> with a partner given by id, none for an event said to nobody (a slave's escape, 55).
+    /// </summary>
+    internal bool CutIn(World world, int slot, CharacterId whom, int ev)
     {
-        var table = world.Characters;
-        var (npc, whom) = (table.IdOf(slot), table.IdOf(target));
+        var npc = world.Characters.IdOf(slot);
         if (Free(npc)) return Fire(world, npc, whom, ev);
         if (RunningEvent(npc) == ev || SetOf(world, slot).For(ev).Count == 0) return false;
 
