@@ -776,8 +776,8 @@ public sealed partial class AiSystem
     /// <summary>
     /// The search's turret inputs (<see cref="SelfPreservation.Choose"/>): row 234's desire (slot 35 on the character itself, <see cref="TurretDesire"/>;
     /// a repertoire without 234 or 146 makes none), its list B 38, the turret its finder takes (<see cref="GuardTurretPick"/>), row 146's desire
-    /// on that turret and its list B <c>!158</c>. Not for the player's faction: its pick (best over the sensed enemies, else random) and its manning
-    /// through the operate task are not built, so its 234 is not made.
+    /// on that turret and its list B <c>!158</c>. Not for the player's faction: its finder filters by the player's Ownerships home
+    /// (<c>FUN_1407ec9e0</c> fills it), which Meitou does not keep, so its 234 is not made.
     /// </summary>
     SelfNodes GuardNodes(World world, int slot, AiMind mind, CharacterCold me, Bodies.MedicalState medical, SelfNodes nodes, out GuardTurret? turret)
     {
