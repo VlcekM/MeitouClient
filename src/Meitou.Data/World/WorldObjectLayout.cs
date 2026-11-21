@@ -460,7 +460,7 @@ public static class WorldObjectLayout
     public static IReadOnlyList<PlacedSnapNode> SnapNodes(GameDatabase db, GameRecord building)
     {
         var nodes = new List<PlacedSnapNode>();
-        AddBuilding(db, building, building.StringId, Vector3.Zero, Quaternion.Identity, new BuildingState(), [], null, null, snapNodes: nodes);
+        AddBuilding(db, building, building.StringId, Vector3.Zero, Quaternion.Identity, new BuildingState { WithInterior = true }, [], null, null, snapNodes: nodes);
         return nodes;
     }
 

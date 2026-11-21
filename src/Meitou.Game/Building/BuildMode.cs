@@ -127,6 +127,14 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     readonly List<Vector3> _blueNodes = [];
     /// <summary>
+    /// Scratch list of matching <c>is node</c> snap targets collected once per frame for both ghost snapping and blue node markers.
+    /// </summary>
+    readonly List<SnapTarget> _nodeTargets = [];
+    /// <summary>
+    /// Scratch set of site ids seen while collecting <see cref="_nodeTargets"/>, reused across frames.
+    /// </summary>
+    readonly HashSet<string> _snapHostSeen = new(StringComparer.Ordinal);
+    /// <summary>
     /// Whether blue snap nodes were handed to the marker renderer last frame, so leaving clears them once.
     /// </summary>
     bool _blueNodesDrawn;
@@ -391,6 +399,8 @@ sealed class BuildMode(PlayerInterface player)
         _ghostSnappedOn = null;
         if (WallLine is { } line && line.Master != CurrentBuilding()) WallLine = null;
 
+        UpdateBlueNodes(host);
+
         if (WallLine is { } active && !player.PointerPanel.PointerOverUi && player.Ray(player.Mouse) is { } lineRay
             && player.Picking.GroundHit(lineRay.Origin, lineRay.Direction) is { } lineEnd)
         {
@@ -405,7 +415,6 @@ sealed class BuildMode(PlayerInterface player)
         _buildMessage = Ghost is { Failure: not PlacementFailure.None } g ? PlacementCheck.Message(g.Failure)
             : WallPieces.FirstOrDefault(p => p.Failure != PlacementFailure.None) is { Piece.Data: not null } bad
                 ? PlacementCheck.Message(bad.Failure) : null;
-        UpdateBlueNodes(host);
         ShowGhosts();
     }
 
@@ -520,6 +529,7 @@ sealed class BuildMode(PlayerInterface player)
                 Floor = 0,
                 On = null,
                 Surface = null,
+                PassThrough = null,
                 Snapped = true,
                 SnappedOn = hostBuilding,
                 NeedsSnap = needsSnap,
@@ -552,38 +562,49 @@ sealed class BuildMode(PlayerInterface player)
     }
 
     /// <summary>
+    /// Whether any <c>snaps to</c> target of <paramref name="building"/> is a standalone (non-node) BUILDING record.
+    /// </summary>
+    static bool SnapsToStandalone(BuildServices host, BuildingBuildData building)
+    {
+        foreach (string id in building.SnapsTo)
+            if (!host.Placement.IsNodeRecord(id)) return true;
+        return false;
+    }
+
+    /// <summary>
     /// What <paramref name="building"/> may snap to round <paramref name="near"/>: standalone building targets (queued ghosts, player sites, level
-    /// buildings) and, when <paramref name="snapsToNode"/> is set, matching <c>is node</c> instances carried by player sites and owned level
-    /// buildings.
+    /// buildings) and, when <paramref name="snapsToNode"/> is set, matching <c>is node</c> instances already collected for this frame.
     /// </summary>
     IEnumerable<SnapTarget> SnapTargets(BuildServices host, BuildingBuildData building, Vector3 near, bool snapsToNode)
     {
-        if (snapsToNode)
-            return NodeSnapTargets(host, building, new Vector2(near.X, near.Z), GhostSnap.NodeReach + LevelWallReach);
+        if (snapsToNode && !SnapsToStandalone(host, building)) return _nodeTargets;
 
         var sites = player.Session.CurrentSnapshot.Buildings;
         var known = sites.Select(s => s.Id).ToHashSet(StringComparer.Ordinal);
         var level = host.Placement.PlacedAround(new Vector2(near.X, near.Z), GhostSnap.Reach + LevelWallReach, building.SnapsTo.Contains)
             .Where(b => !known.Contains(b.Key));
-        return BuildQueue.Select(g => new SnapTarget(g.Building.Id, g.Position, g.Rotation))
+        var standalone = BuildQueue.Select(g => new SnapTarget(g.Building.Id, g.Position, g.Rotation))
             .Concat(sites.Select(s => new SnapTarget(s.Record, s.Position, s.Rotation)))
             .Concat(level.Select(b => new SnapTarget(b.Record, b.Position, b.Rotation)));
+        return snapsToNode ? _nodeTargets.Concat(standalone) : standalone;
     }
 
     /// <summary>
-    /// Matching <c>is node</c> snap points within <paramref name="radius"/> of <paramref name="centre"/> on player sites and owned level buildings
-    /// (all non-destroyed buildings while the level editor builds, matching <c>showBlueNodes</c> <c>0x14038cdf0</c>).
+    /// Collects matching <c>is node</c> snap points within <paramref name="radius"/> of <paramref name="centre"/> on player sites and owned level
+    /// buildings (all non-destroyed buildings while the level editor builds, matching <c>showBlueNodes</c> <c>0x14038cdf0</c>) into
+    /// <see cref="_nodeTargets"/>.
     /// </summary>
-    IEnumerable<SnapTarget> NodeSnapTargets(BuildServices host, BuildingBuildData building, Vector2 centre, float radius)
+    void FillNodeSnapTargets(BuildServices host, BuildingBuildData building, Vector2 centre, float radius)
     {
+        _nodeTargets.Clear();
+        _snapHostSeen.Clear();
         bool levelBuild = player.LevelEditorPanel.LevelBuild;
         int playerFaction = player.Session.World.Player.Faction;
         var sites = player.Session.CurrentSnapshot.Buildings;
-        var known = new HashSet<string>(StringComparer.Ordinal);
         float maxDistSq = radius * radius;
         foreach (var s in sites)
         {
-            known.Add(s.Id);
+            _snapHostSeen.Add(s.Id);
             if (s.Destroyed || !levelBuild && s.Owner != playerFaction) continue;
             if (Vector2.DistanceSquared(new Vector2(s.Position.X, s.Position.Z), centre) > maxDistSq) continue;
 
@@ -592,29 +613,31 @@ sealed class BuildMode(PlayerInterface player)
 
             var snapHost = new SnapHost(s.Id, s.LevelPlacement?.InstanceId ?? s.Id, s.LevelPlacement is not null, true, s.Destroyed, false);
             var rot = NormalizeQuaternion(s.Rotation);
-            foreach (var n in nodes)
+            for (int i = 0; i < nodes.Count; i++)
             {
+                var n = nodes[i];
                 if (!building.SnapsTo.Contains(n.Record)) continue;
                 var worldPos = s.Position + Vector3.Transform(n.Position, rot);
                 var worldRot = NormalizeQuaternion(rot * n.Rotation);
-                yield return new SnapTarget(n.Record, worldPos, worldRot, snapHost);
+                _nodeTargets.Add(new SnapTarget(n.Record, worldPos, worldRot, snapHost));
             }
         }
 
         foreach (var b in host.Placement.SnapHostsAround(centre, radius, building.SnapsTo.Contains))
         {
-            if (known.Contains(b.Key) || b.Host.Destroyed || !levelBuild && !b.Host.Owned) continue;
+            if (_snapHostSeen.Contains(b.Key) || b.Host.Destroyed || !levelBuild && !b.Host.Owned) continue;
 
             var nodes = host.Placement.SnapNodesOf(b.Record);
             if (nodes.Count == 0) continue;
 
             var rot = NormalizeQuaternion(b.Rotation);
-            foreach (var n in nodes)
+            for (int i = 0; i < nodes.Count; i++)
             {
+                var n = nodes[i];
                 if (!building.SnapsTo.Contains(n.Record)) continue;
                 var worldPos = b.Position + Vector3.Transform(n.Position, rot);
                 var worldRot = NormalizeQuaternion(rot * n.Rotation);
-                yield return new SnapTarget(n.Record, worldPos, worldRot, b.Host);
+                _nodeTargets.Add(new SnapTarget(n.Record, worldPos, worldRot, b.Host));
             }
         }
     }
@@ -625,21 +648,24 @@ sealed class BuildMode(PlayerInterface player)
     static Quaternion NormalizeQuaternion(Quaternion q) => q.LengthSquared() > 1e-10f ? Quaternion.Normalize(q) : Quaternion.Identity;
 
     /// <summary>
-    /// Updates the blue snap node spheres in <see cref="PlayerInterface.Markers"/> while holding a node-snapping ghost.
+    /// Collects matching <c>is node</c> snap targets once per frame and updates the blue snap node spheres in <see cref="PlayerInterface.Markers"/>
+    /// while holding a node-snapping ghost.
     /// </summary>
     void UpdateBlueNodes(BuildServices host)
     {
-        if (player.Markers is not { } markers) return;
         if (WallLine is not null || CurrentBuilding() is not { } building || !SnapsToNode(host, building))
         {
+            _nodeTargets.Clear();
             if (_blueNodesDrawn) ClearBlueNodes();
             return;
         }
 
-        _blueNodes.Clear();
         var cam = player.Session.Camera.Current.Target;
-        var centre = Ghost is { } g ? new Vector2(g.Position.X, g.Position.Z) : new Vector2(cam.X, cam.Z);
-        foreach (var target in NodeSnapTargets(host, building, centre, BlueNodeDrawReach)) _blueNodes.Add(target.Position);
+        FillNodeSnapTargets(host, building, new Vector2(cam.X, cam.Z), BlueNodeDrawReach);
+        if (player.Markers is not { } markers) return;
+
+        _blueNodes.Clear();
+        for (int i = 0; i < _nodeTargets.Count; i++) _blueNodes.Add(_nodeTargets[i].Position);
         markers.BlueNodes = _blueNodes.Count == 0 ? [] : [.. _blueNodes];
         _blueNodesDrawn = _blueNodes.Count > 0;
     }
@@ -651,6 +677,7 @@ sealed class BuildMode(PlayerInterface player)
     {
         if (player.Markers is { } markers) markers.BlueNodes = [];
         _blueNodes.Clear();
+        _nodeTargets.Clear();
         _blueNodesDrawn = false;
     }
 

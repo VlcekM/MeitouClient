@@ -1302,9 +1302,15 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// </summary>
     internal CharacterSnapshot Carrier(CharacterSnapshot c)
     {
+        var characters = Session.CurrentSnapshot.Characters;
         for (int depth = 0; depth < 8 && !c.CarriedBy.IsNone; depth++)
         {
-            if (Session.CurrentSnapshot.Characters.FirstOrDefault(k => k.Id == c.CarriedBy) is not { } carrier) break;
+            CharacterSnapshot? carrier = null;
+            foreach (var k in characters)
+            {
+                if (k.Id == c.CarriedBy) { carrier = k; break; }
+            }
+            if (carrier is null) break;
 
             c = carrier;
         }

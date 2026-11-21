@@ -837,7 +837,7 @@ public sealed class CharacterSounds
         if (_player.HeardDistanceSquared(at, _camera) >= EventLimit) return;
         ulong id = NextPooled();
         _player.SetPosition(id, at);
-        if ((uint)shootSound < GunSounds.Length) _player.SetSwitch("Weapons", GunSounds[shootSound], id);
+        _player.SetSwitch("Weapons", (uint)shootSound < GunSounds.Length ? GunSounds[shootSound] : "", id);
         _player.Post("Attack", id);
         Swings++;
     }

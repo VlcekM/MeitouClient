@@ -50,5 +50,5 @@ public static class SiteReach
     /// (a ceiling light hangs up to about 50 over its floor, #592).
     /// </summary>
     public static bool AtHeight(in CharacterHot n, BuildSite site, float floorY, bool door) =>
-        MathF.Abs(n.Position.Y - floorY) < HeightLimit(door, site.Parent is not null);
+        MathF.Abs(n.Position.Y - floorY) < HeightLimit(door, site.Parent is not null && !site.Outside);
 }

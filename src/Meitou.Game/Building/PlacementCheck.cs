@@ -272,6 +272,9 @@ public static class PlacementCheck
     /// </summary>
     public static PlacementFailure Evaluate(PlacementQuery q)
     {
+        // PreviewBuilding_Snapping overrides the placement test and rejects unsnapped snap-only buildings first (0x1404d0ff0).
+        if (q.NeedsSnap && !q.Snapped) return PlacementFailure.NeedsSnapNode;
+
         var b = q.Building;
         var at = new Vector2(q.Position.X, q.Position.Z);
         // A site floor (or a player site's snap node) counts as ours; a level building as PlacementRules.MayBuildIn has it.
@@ -296,8 +299,6 @@ public static class PlacementCheck
         // A site of ours, or an owned town house being repaired (a level building that is also a site).
         if ((q.On is not null || q.SnappedOn is not null) && q.Sites.FirstOrDefault(s => s.Id == parent) is { Complete: false })
             return PlacementFailure.InsideIncomplete;
-        // A snap-only building (such as an exterior wall light) that is not snapped to a node refuses placement (0x1404d0ff0).
-        if (q.NeedsSnap && !q.Snapped) return PlacementFailure.NeedsSnapNode;
         var centre = CentreBlock(q, at, parent);
         if (centre != PlacementFailure.None) return centre;
 
@@ -326,7 +327,7 @@ public static class PlacementCheck
                 && !OtherFloor(q, parent, site.Parent, site.Floor)
                 && !q.Passes(site.Record, site.Position, site.Rotation)
                 && q.Services.Footprint(site.Record) is { } siteFootprint
-                && (q.SnappedOn is null || OverlapsHeight(q.Position.Y, ghostFootprint, q.Building.BuildingHeight, site.Position.Y, siteFootprint))
+                && (q.SnappedOn is null && !site.Outside || OverlapsHeight(q.Position.Y, ghostFootprint, q.Building.BuildingHeight, site.Position.Y, siteFootprint))
                 && Contains(siteFootprint.Place(site.Position, site.Rotation), at))
                 return site.Complete ? PlacementFailure.TooCloseToBuilding : PlacementFailure.InsideIncomplete;
         }
@@ -362,7 +363,7 @@ public static class PlacementCheck
                 && !OtherFloor(q, parent, site.Parent, site.Floor)
                 && !q.Passes(site.Record, site.Position, site.Rotation)
                 && q.Services.Footprint(site.Record) is { } f
-                && (q.SnappedOn is null || OverlapsHeight(q.Position.Y, ghostFootprint, q.Building.BuildingHeight, site.Position.Y, f))
+                && (q.SnappedOn is null && !site.Outside || OverlapsHeight(q.Position.Y, ghostFootprint, q.Building.BuildingHeight, site.Position.Y, f))
                 && Overlap(hull, f.Place(site.Position, site.Rotation)))
                 return PlacementFailure.TooCloseToBuilding;
         }
@@ -371,7 +372,7 @@ public static class PlacementCheck
             if (queued.Hull is not null
                 && !OtherFloor(q, parent, queued.Parent, queued.Floor)
                 && !q.Passes(queued.Building.Id, queued.Position, queued.Rotation)
-                && (q.SnappedOn is null || OverlapsHeight(q.Position.Y, ghostFootprint, q.Building.BuildingHeight, queued.Position.Y,
+                && (q.SnappedOn is null && !queued.Outside || OverlapsHeight(q.Position.Y, ghostFootprint, q.Building.BuildingHeight, queued.Position.Y,
                     q.Services.Footprint(queued.Building.Id), queued.Building.BuildingHeight))
                 && Overlap(hull, queued.Hull))
                 return PlacementFailure.TooCloseToBuilding;
