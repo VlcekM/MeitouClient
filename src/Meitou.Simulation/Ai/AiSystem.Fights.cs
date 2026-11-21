@@ -874,7 +874,8 @@ public sealed partial class AiSystem
 
     /// <summary>
     /// <see cref="GuardCandidate"/>'s tests for a placed turret of the player town the character's status names: a finished building that
-    /// stands, of that town (<see cref="PlacedTurrets.Entry.Town"/>); its container the building it was placed in or on (<see cref="Construction.BuildSite.Parent"/>). A broken one
+    /// stands, of that town (<see cref="PlacedTurrets.Entry.Town"/>); its container the building it stands in or is mounted on
+    /// (<see cref="Construction.BuildSite.Container"/>). A broken one
     /// passes: the original's accept test reads no broken flag.
     /// </summary>
     bool PlacedCandidate(World world, int slot, CharacterCold me, AiMind mind, CampaignTown status, int owner, PlacedTurrets.Entry t)
@@ -911,11 +912,11 @@ public sealed partial class AiSystem
         site is { Complete: true, Destroyed: false } && ReferenceEquals(world.Buildings.Find(site.Id), site);
 
     /// <summary>
-    /// Whether a placed building was placed in or on building <paramref name="home"/> (a placed building's id, a level building's instance id
-    /// or a town building's key).
+    /// Whether a placed building stands in or is mounted on building <paramref name="home"/> (a placed building's id, a level building's
+    /// instance id or a town building's key).
     /// </summary>
     static bool PlacedIn(World world, Construction.BuildSite site, string home) =>
-        site.Parent is { } parent && (parent == home || world.Buildings.Find(home)?.LevelPlacement?.InstanceId == parent);
+        site.Container is { } parent && (parent == home || world.Buildings.Find(home)?.LevelPlacement?.InstanceId == parent);
 
     /// <summary>
     /// The key of the home building a character's Ownerships names (<c>Character::getOwnerships</c> <c>FUN_1407956a0</c>, its <c>+0x38</c> hand,
@@ -982,7 +983,7 @@ public sealed partial class AiSystem
         if (!world.Sight.Inside(foe)) return TurretBehind;
 
         var site = t.Building is null ? world.Buildings.Find(t.Key) : null;
-        string? container = t.Building is { } b ? b.InsideOf ?? t.Post.MountedOn : site?.Parent;
+        string? container = t.Building is { } b ? b.InsideOf ?? t.Post.MountedOn : site?.Container;
         if (container is null || world.Sight.BuildingOf(foe) != container) return 0;
 
         int floor = site?.Floor ?? world.Sight.FloorAt(container, t.Position);

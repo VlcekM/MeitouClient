@@ -70,6 +70,17 @@ public sealed class BuildSite
     /// </summary>
     public string? Parent { get; set; }
     /// <summary>
+    /// The id of the building a loaded turret is mounted on (the save's <c>mounted</c> handle, TurretBuilding <c>+0x478</c>; a placed building's
+    /// id or a town building's key), null with none. One placed in Meitou names what it stands on as <see cref="Parent"/>.
+    /// </summary>
+    public string? MountedOn { get; init; }
+
+    /// <summary>
+    /// The building this one is in or on (Building slot 59 <c>FUN_140547530</c>: the building it stands in, else for a turret the one it is
+    /// mounted on); null with neither.
+    /// </summary>
+    public string? Container => Parent ?? MountedOn;
+    /// <summary>
     /// The id of the wall this short piece, connector or wedge is attached to (the original's WallBuilding+0x368): work, deliveries and orders go to
     /// that wall and its progress sets this one's (<see cref="ConstructionSystem.AttachWalls"/>). Rebuilt when placed or loaded; not saved, not
     /// hashed.
@@ -191,6 +202,7 @@ public sealed class BuildSite
         h.Add(Rotation.W);
         h.Add(Floor);
         h.Add(Parent is null ? 0UL : Rng.StableHash(Parent));
+        if (MountedOn is not null) { h.Add(0x4d6f756e); h.Add(Rng.StableHash(MountedOn)); }
         h.Add(Owner);
         h.Add(Progress);
         h.Add(Target);

@@ -200,7 +200,7 @@ static class SaveProbe
 
             bool accepts = construction?.Data(site.Record) is { } data && Meitou.Simulation.Player.PlayerHome.Accepts(data);
             bool turret = Meitou.Simulation.Combat.PlacedTurrets.PostOf(probe.Db, site) is not null;
-            Console.WriteLine($"  site {site.Id} {site.Record} {site.Name} town={site.Town} accepts={accepts} parent={site.Parent ?? "-"} turret={turret}");
+            Console.WriteLine($"  site {site.Id} {site.Record} {site.Name} town={site.Town} accepts={accepts} parent={site.Parent ?? "-"} mount={site.MountedOn ?? "-"} turret={turret}");
         }
     }
 
@@ -2239,7 +2239,7 @@ static class SaveProbe
               obey <name> <stand|sneak|walk> [rounds] [x z]  an enslaved player character stands, sneaks or walks to x z: state, owner, order, who sees it (#813)
               cages <name> [carrier]   fixtures within 300 of a character, with owners, occupants and building designation; a container's lock, grid
                                        and items; with a carrier, the cage that character would take a captive lifted there to
-              home                     the player's home building, then its faction's town houses and placed buildings: whether each can be it, what it stands in, whether it is a turret
+              home                     the player's home building, then its faction's town houses and placed buildings: whether each can be it, what it stands in or is mounted on, whether it is a turret
               owners                   town buildings whose saved owner is not the housing rule's (the residents' faction, else the town's), and the counts
               sleeper <name>           the bed a character lies in: record, yaw, use node yaws, lie spot and the sleeper's own yaw
               force <name> <tools|strength> [fixture id]  a character cuts or breaks a fixture's lock (a prisoner its own cage's); 120 ticks of it

@@ -120,6 +120,7 @@ public static class BuildingSave
                     : state.Bools.GetValueOrDefault("is inside building") && handles.Building(Hand.Read(state, "isInsideBuilding")) is { } building
                         ? idOf.GetValueOrDefault(building)
                         : null;
+                string? mount = handles.Building(Hand.Read(state, "mounted")) is { } stoodOn ? idOf.GetValueOrDefault(stoodOn) : null;
                 float y = state.Floats.TryGetValue("world Y pos", out float absolute) ? absolute : instance.Position.Y;
                 var townHand = Hand.Read(state, "town");
                 int town = townHand.IsNull ? 0 : townOf.GetValueOrDefault((townHand.C, CS: townHand.Cs));
@@ -133,6 +134,7 @@ public static class BuildingSave
                     Rotation = instance.Rotation,
                     Floor = state.Ints.GetValueOrDefault("floornum"),
                     Parent = parent,
+                    MountedOn = mount,
                     Town = town,
                     ForeignTown = live ? townHand : null,
                     InNoTown = live && foreign[(townHand.C, townHand.Cs)],

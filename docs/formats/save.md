@@ -1057,7 +1057,7 @@ yet, is left out. Round trip checked with a throwaway probe (write, read, clear)
   (`GunClass::serialise` `FUN_1404390a0` / `loadFromSerialise` `FUN_140439140`): int `current shots` (the gun's `+0x20` loaded harpoons) into the same state, read back as
   min(saved, `+0x1c` the gun's shots), a missing key as 0 (**Verified** by decompile). The reload timer (the gunner's controller), aim and rotation error are **not** saved,
   so a loaded turret keeps its harpoons, starts a fresh reload and re-acquires its target. Meitou writes `current shots` for each turret manned since loading (the others keep the
-  loaded value; `CombatSystem.WriteTurretShots`) and a turret's first manning reads it (capped at max(`num shots`, 1)); it writes no `mounted` link and adds no key.
+  loaded value; `CombatSystem.WriteTurretShots`) and a turret's first manning reads it (capped at max(`num shots`, 1)); it writes no `mounted` link and adds no key. It reads the `mounted` handle of a player-built turret as the building it is mounted on (`BuildSite.MountedOn`, `BuildingSave`), for the turret finder's building filter ([ai-tasks](../game/ai-tasks.md#combat-goals)).
 
 ### Cross-checks against base data (the sample vs `GameDatabase` of the four base files)
 
