@@ -205,7 +205,8 @@ public sealed partial class ArrestSystem : IOrderOwner
     }
 
     /// <summary>
-    /// Paying (<c>FUN_1406ae170</c>, economy.md 11.5): the money, the jail's entry erased, the cage unlocked and the prisoner out through order 133.
+    /// Paying (<c>FUN_1406ae170</c>, economy.md 11.5): the money, the jail's entry erased, the cage unlocked, the prisoner split from a squad of others
+    /// into one of its own (<see cref="Dialogue.DialogueSystem.Separate"/>) and out through order 133.
     /// The end of each freed prisoner's block (<b>Verified</b> by disassembly): one that could not speak (event 51 returned 0) is given 128 Retreat
     /// to hometown, then every one 133 Get out of cage (legit); both gives clear the order queue first (<c>FUN_1405d20d0</c> with its clear argument
     /// 1: <c>FUN_1405074a0</c> and <c>FUN_140507530</c>), so 133 replaces 128 and the prisoner only steps out of its unlocked cage
@@ -225,6 +226,10 @@ public sealed partial class ArrestSystem : IOrderOwner
         FixtureRegistry.ClearSlave(world, pc);   // bail frees a slave (FUN_1406ae170)
         pc.Freed = true;
         pc.Recognition = 0;
+
+        // Out of a squad of others into a squad of its own, as a slave bought free (FUN_1406ae170 calls FUN_1405ce4e0 before event 51, for a
+        // player's character too; Verified), so the payer below is tagged in the new squad's memory.
+        Talk?.Separate(world, prisoner);
         // Its squad remembers the payer as the one who freed it, and it says event 51 at the payer (FUN_1406ae170: FUN_140673930 tag 3, FUN_140684990
         // event 0x33; Verified).
         var payerId = table.IdOf(payer);
