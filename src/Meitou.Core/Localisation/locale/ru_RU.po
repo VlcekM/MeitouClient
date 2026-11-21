@@ -3897,11 +3897,6 @@ msgstr "тёмные углы"
 msgid "day and night"
 msgstr "день и ночь"
 
-
-
-
-
-
 msgid "fixed sun"
 msgstr "неподвижное солнце"
 
@@ -4612,3 +4607,11 @@ msgstr "Взять"
 #. machine-translated
 msgid "Take {1} of {2}"
 msgstr "Взять {1} из {2}"
+
+#. machine-translated
+msgid "Talk across shop counters"
+msgstr "Разговор через прилавок"
+
+#. machine-translated
+msgid "Faithful, as in the game: to talk or trade with a shopkeeper behind a counter, your character often walks round the counter to stand behind them. Meitou: shopkeepers can be reached from the customer's side of the counter."
+msgstr "Оригинал, как в игре: чтобы поговорить или поторговать с торговцем за прилавком, ваш персонаж часто обходит прилавок и встаёт позади него. Meitou: к торговцам можно обратиться со стороны покупателя."

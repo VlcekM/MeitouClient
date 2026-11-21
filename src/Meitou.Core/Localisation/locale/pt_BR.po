@@ -4667,11 +4667,6 @@ msgstr "-Efeito da habilidade Furtividade"
 msgid "-Dodge skill effect"
 msgstr "-Efeito da habilidade Esquiva"
 
-
-
-
-
-
 msgid "Only for:"
 msgstr "Só para:"
 
@@ -5049,3 +5044,11 @@ msgstr "Pegar"
 #. machine-translated
 msgid "Take {1} of {2}"
 msgstr "Pegar {1} de {2}"
+
+#. machine-translated
+msgid "Talk across shop counters"
+msgstr "Conversar por cima do balcão"
+
+#. machine-translated
+msgid "Faithful, as in the game: to talk or trade with a shopkeeper behind a counter, your character often walks round the counter to stand behind them. Meitou: shopkeepers can be reached from the customer's side of the counter."
+msgstr "Faithful, como no jogo: para conversar ou negociar com um lojista atrás de um balcão, seu personagem muitas vezes contorna o balcão para ficar atrás dele. Meitou: os lojistas podem ser alcançados pelo lado do cliente no balcão."

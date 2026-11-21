@@ -1418,6 +1418,10 @@ msgid "Faithful shows the game's logos at startup (Faithful UI); a key or a clic
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
+msgid "Faithful, as in the game: to talk or trade with a shopkeeper behind a counter, your character often walks round the counter to stand behind them. Meitou: shopkeepers can be reached from the customer's side of the counter."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
 msgid "Faithful, as in the game: when the camera comes to places that are not loaded yet (a jump to a squad far away), the game pauses and shows Loading... until they are. Meitou: the game runs on while they load."
 msgstr ""
 
@@ -4451,6 +4455,10 @@ msgstr ""
 
 #: src/Meitou.Game/Ui/StackSplitDialog.cs
 msgid "Take {1} of {2}"
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Talk across shop counters"
 msgstr ""
 
 #: src/Meitou.Game/Ui/ProductionWindows.cs

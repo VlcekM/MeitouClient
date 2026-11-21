@@ -5181,11 +5181,6 @@ msgstr "-潜行技能效果"
 msgid "-Dodge skill effect"
 msgstr "-闪避技能效果"
 
-
-
-
-
-
 msgid "STEALING CHANCE:"
 msgstr "偷窃几率："
 
@@ -5456,3 +5451,11 @@ msgstr "拿取"
 #. machine-translated
 msgid "Take {1} of {2}"
 msgstr "拿取 {1} / {2}"
+
+#. machine-translated
+msgid "Talk across shop counters"
+msgstr "隔着柜台交谈"
+
+#. machine-translated
+msgid "Faithful, as in the game: to talk or trade with a shopkeeper behind a counter, your character often walks round the counter to stand behind them. Meitou: shopkeepers can be reached from the customer's side of the counter."
+msgstr "忠实，与原版游戏一致：要与柜台后的店主交谈或交易时，你的角色常常会绕过柜台走到店主身后。Meitou：可以从柜台的顾客一侧与店主交谈。"

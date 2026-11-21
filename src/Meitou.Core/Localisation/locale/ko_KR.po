@@ -4603,3 +4603,11 @@ msgstr "가져가기"
 #. machine-translated
 msgid "Take {1} of {2}"
 msgstr "{2}개 중 {1}개 가져가기"
+
+#. machine-translated
+msgid "Talk across shop counters"
+msgstr "상점 카운터 너머로 대화"
+
+#. machine-translated
+msgid "Faithful, as in the game: to talk or trade with a shopkeeper behind a counter, your character often walks round the counter to stand behind them. Meitou: shopkeepers can be reached from the customer's side of the counter."
+msgstr "원작(게임과 동일): 카운터 뒤의 상인과 대화하거나 거래하려면 캐릭터가 종종 카운터를 돌아 상인 뒤에 섭니다. Meitou: 카운터의 손님 쪽에서도 상인에게 닿을 수 있습니다."
