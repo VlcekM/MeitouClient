@@ -9,7 +9,7 @@ param(
   [double]$Scale = 1.5,
   [int]$Width = 480,
   [string]$Out = (Join-Path $PSScriptRoot 'labels'),
-  [string]$Game = 'E:\Kenshi_RE\data\gui',
+  [string]$Game = 'C:\Games\Kenshi_RE\data\gui',
   [ValidateSet('Center', 'Left')][string]$Align = 'Center',
   [double]$Padding = 40,      # space beside the text, in source pixels (x Scale)
   [double]$HeightScale = 1,  # squash or stretch the banner vertically
