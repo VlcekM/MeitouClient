@@ -199,21 +199,38 @@ sealed class TurretManning
     }
 
     /// <summary>
-    /// The post of an NPC gunner standing at the turret its squad gave it (<see cref="Manning"/>).
+    /// The post of an NPC gunner standing at the turret its squad gave it (a turret goal, <see cref="Ai.AiBehaviour.Turret"/>), or at the turret
+    /// Self preservation's 146 holds (<see cref="Ai.AiMind.Guard"/>) (<see cref="Manning"/>).
     /// </summary>
     Post? NpcPost(World world, TurretCatalog catalog, int i, CharacterCold cold)
     {
         var n = world.Characters.Next[i];
-        if (cold.Ai is not { Behaviour: Ai.AiBehaviour.Turret, Squad.Ai: { } board } || n.Task != (byte)CharacterTask.Idle
-            || !Ai.AiSystem.Holds(n, cold))
-            return null;
-        if (!board.TurretClaims.TryGetValue(i, out int claimed) || (uint)claimed >= (uint)board.Turrets.Count) return null;
-        if (board.Turrets[claimed] is not { Turret: { } post } building) return null;
+        if (cold.Ai is not { Squad.Ai: { } board } mind || n.Task != (byte)CharacterTask.Idle || !Ai.AiSystem.Holds(n, cold)) return null;
+        if (!NpcTurret(i, mind, board, out int site, out var building) || building.Turret is not { } post) return null;
 
         float reach = post.UseRange + Ai.AiSystem.TurretSlack;
         if (Vector2.DistanceSquared(new(n.Position.X, n.Position.Z), new(post.Position.X, post.Position.Z)) > reach * reach) return null;
 
-        return TownPost(world, catalog, board.Town, building, post);
+        return TownPost(world, catalog, site, building, post);
+    }
+
+    /// <summary>
+    /// The town turret an NPC's goal mans: Self preservation's held turret while it plans 146, else its squad's turret claim under a turret goal.
+    /// </summary>
+    static bool NpcTurret(int i, Ai.AiMind mind, Ai.Blackboard board, out int site, [NotNullWhen(true)] out TownBuilding? building)
+    {
+        (site, building) = (-1, null);
+        if (Ai.AiSystem.GuardsTurret(mind) && mind.Guard is { } guard)
+        {
+            (site, building) = (guard.Site, guard.Building);
+            return true;
+        }
+
+        if (mind.Behaviour != Ai.AiBehaviour.Turret || !board.TurretClaims.TryGetValue(i, out int claimed)) return false;
+        if ((uint)claimed >= (uint)board.Turrets.Count) return false;
+
+        (site, building) = (board.Town, board.Turrets[claimed]);
+        return true;
     }
 
     /// <summary>

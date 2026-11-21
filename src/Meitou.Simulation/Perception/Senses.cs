@@ -144,6 +144,12 @@ public sealed class SenseBlock
     public int Enemies { get; internal set; }
 
     /// <summary>
+    /// The squared distance of the nearest of <see cref="Enemies"/> (SensoryData <c>+0x0</c>, the AI's <c>+0x28</c>; <c>FUN_1408593d0</c>, the
+    /// pass sets it to the float maximum first, <c>FUN_14085a070</c>, <b>Verified</b>), from the looker to where that character stands.
+    /// </summary>
+    public float NearestEnemy { get; internal set; } = float.MaxValue;
+
+    /// <summary>
     /// Those of <see cref="Enemies"/> that are in a cage: nobody can fight them, so no fight waits on them
     /// (<see cref="Combat.CombatSystem.NothingLeft"/>, <b>engine</b>).
     /// </summary>

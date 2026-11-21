@@ -1086,6 +1086,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         b.ThreatList.Clear();
         if (b.PushedTick + 1 < s.World.Tick) b.Pushed.Clear();
         b.Enemies = b.CagedEnemies = b.Neutrals = b.Allies = b.AlliesDown = 0;
+        b.NearestEnemy = float.MaxValue;
         b.ThreatToMe = b.ThreatToAllies = b.Aggression = 0;
         b.Faded = false;
         var table = s.Table;
@@ -1130,6 +1131,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         var b = s.Block;
         b.ThreatList.Clear();
         b.Enemies = b.CagedEnemies = b.Neutrals = b.Allies = b.AlliesDown = 0;
+        b.NearestEnemy = float.MaxValue;
         b.ThreatToMe = b.ThreatToAllies = b.Aggression = 0;
         b.Faded = true;
         var table = s.Table;
@@ -1769,8 +1771,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     public const int FreedHostility = -30;
 
     /// <summary>
-    /// The counts of the pass (<c>FUN_1408593d0</c>): an entry tagged ENEMY whose character is not down, dead or carried adds to <c>numEnemies</c>,
-    /// one tagged NEUTRAL to <c>numNeutrals</c>. The enemies in a cage are counted apart as well (<see cref="SenseBlock.CagedEnemies"/>).
+    /// The counts of the pass (<c>FUN_1408593d0</c>): an entry tagged ENEMY whose character is not down, dead or carried adds to <c>numEnemies</c>
+    /// (its squared distance kept in <see cref="SenseBlock.NearestEnemy"/> when nearer), one tagged NEUTRAL to <c>numNeutrals</c>. The enemies in a cage are counted apart as well (<see cref="SenseBlock.CagedEnemies"/>).
     /// </summary>
     static void Count(ref Scan s, in SenseEntry e, CharacterCold c)
     {
@@ -1780,6 +1782,10 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         {
             s.Block.Enemies++;
             if (c.IsImprisoned) s.Block.CagedEnemies++;
+
+            var prev = s.Table.Previous;
+            float d2 = Vector3.DistanceSquared(prev[e.Target].Position, prev[s.Self].Position);
+            if (d2 < s.Block.NearestEnemy) s.Block.NearestEnemy = d2;
         }
         else if ((e.Tags & SenseTag.Neutral) != 0) s.Block.Neutrals++;
     }

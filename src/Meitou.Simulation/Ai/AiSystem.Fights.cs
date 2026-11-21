@@ -1,4 +1,6 @@
+using System.Numerics;
 using Meitou.Data.Gameplay.Ai;
+using Meitou.Data.World;
 using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
@@ -264,40 +266,44 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// Whether 32 Self preservation's plan has a provider (the planner's search from 32's effect <c>!39</c>, docs/game/ai-tasks.md "Combat goals",
-    /// <b>Verified</b>): <paramref name="runs"/> when 35 wins (<see cref="SelfPreservation.RunsAt"/> at row 35's desire, a player-faction mind's
-    /// with its vetoes; with row 4 worth nothing it wins whenever it can run), else 13 on an attacker of its own, else 35 when row 13's finder takes
-    /// no one (the chain through 13 dead-ends; 35 is made at any desire above 0); false when none of them plans. Reads only the last tick's state.
+    /// 32 Self preservation's plan (the planner's search from 32's effect <c>!39</c>, <see cref="SelfPreservation.Choose"/>, docs/game/ai-tasks.md
+    /// "Combat goals", <b>Verified</b>): 13's fight on an attacker of its own, 35's run, 146's turret that 234's finder took
+    /// (<see cref="GuardTurretPick"/>, asked of the serial claim through <see cref="AiMind.GuardAsk"/>), or none. Reads only the last tick's state.
     /// </summary>
-    internal bool SelfPreservationPlans(World world, int slot, AiMind mind, float desire, out bool runs)
+    internal SelfPlan SelfPreservationPlan(World world, int slot, AiMind mind, float desire)
     {
-        runs = false;
-        if (world.Characters.Cold(slot) is not { Medical: { } medical } me) return false;
+        mind.GuardAsk = null;
+        if (world.Characters.Cold(slot) is not { Medical: { } medical } me) return SelfPlan.None;
 
-        float run = mind.PlayerSide
-            ? PlayerSideRowRunDesire(world, slot, me, medical)
-            : SelfPreservation.RunDesire(me, SelfPreservation.Walled(world, slot));
-        runs = SelfPreservation.RunsAt(me, desire, run);
-        if (runs) return true;
-
-        // Row 4 worth nothing: 13 dead-ends, and 35 cannot run either (RunsAt would have taken it).
-        if (!AttackRowWanted(me, medical, mind, desire)) return false;
-
-        if (!SelfDefencePick(world, slot, null, out bool noneFound).IsNone) return true;
-
-        runs = noneFound && SelfPreservation.CanRunAt(me, run);
-        return runs;
+        var nodes = FightNodes(world, slot, mind, me, medical, desire);
+        nodes = GuardNodes(world, slot, mind, me, medical, nodes, out var turret);
+        var plan = SelfPreservation.Choose(nodes);
+        if (plan == SelfPlan.Turret) AskGuard(mind, turret!);
+        return plan;
     }
 
     /// <summary>
-    /// Whether row 4 under 13 is worth anything (AI slot 53 <c>FUN_1405a4260</c>, <b>Verified</b>; <see cref="SelfPreservation.AttackDesire"/>): a
-    /// player-faction mind's crippled character with a working arm is worth 0.1 whether or not a threat is within 40.
+    /// The search's fight and run inputs: the level, 13's attacker (<see cref="SelfDefencePick(World, int, IReadOnlyDictionary{int, int}?, out bool)"/>),
+    /// rows 4 and 262 (none in deep water: their <c>!me swim</c>; an animal's 227 has no such test) and row 35 (a player-faction mind's with its
+    /// vetoes, <see cref="PlayerSideRowRunDesire"/>).
     /// </summary>
-    static bool AttackRowWanted(CharacterCold me, Bodies.MedicalState medical, AiMind mind, float desire)
+    SelfNodes FightNodes(World world, int slot, AiMind mind, CharacterCold me, Bodies.MedicalState medical, float desire)
     {
-        if (SelfPreservation.AttackDesire(me, desire >= 1) > 0) return true;
+        float run = mind.PlayerSide ? PlayerSideRowRunDesire(world, slot, me, medical) : SelfPreservation.RunDesire(me, SelfPreservation.Walled(world, slot));
+        bool swimming = me is { WaterState: 3, InSomething: Locks.HeldState.None } && me.Fighter?.IsAnimal != true;
+        bool immediate = desire >= 1, intact = mind.Squad.Ai is not { Intact: false };
+        var pick = SelfDefencePick(world, slot, null, out bool noneFound);
 
-        return mind.PlayerSide && medical.Crawling && (medical.ArmWorks(left: true) || medical.ArmWorks(left: false));
+        return new SelfNodes
+        {
+            Level = desire,
+            Attacker = !noneFound,
+            Refused = pick.IsNone && !noneFound,
+            Melee = swimming ? 0 : SelfPreservation.MeleeDesire(me, immediate, mind.PlayerSide, intact),
+            Shoot = swimming ? 0 : SelfPreservation.ShootDesire(me, immediate, intact),
+            Run = run,
+            CanRun = SelfPreservation.CanRunAt(me, run),
+        };
     }
 
     /// <summary>
@@ -750,6 +756,183 @@ public sealed partial class AiSystem
 
         bool foreign = mind.PlayerSide || cold.Running is { Source: TaskSource.Job };
         return foreign && cold.Running is not { Source: TaskSource.Order } && !PlayerSideHold.OwnsTask(n, cold, mind);
+    }
+
+    #endregion
+
+    #region Turret guard
+
+    /// <summary>
+    /// Set by a think that asked for a turret (<see cref="AiMind.GuardAsk"/>), so the serial step claims them (<see cref="ClaimGuards"/>).
+    /// </summary>
+    int _guarding;
+
+    /// <summary>
+    /// How many minds hold a turret (<see cref="AiMind.Guard"/>; serial, derived from the minds): while any does, the serial step looks for the
+    /// ones whose plan left it.
+    /// </summary>
+    int _guards;
+
+    /// <summary>
+    /// The search's turret inputs (<see cref="SelfPreservation.Choose"/>): row 234's desire (slot 35 on the character itself, <see cref="TurretDesire"/>;
+    /// a repertoire without 234 or 146 makes none), its list B 38, the turret its finder takes (<see cref="GuardTurretPick"/>), row 146's desire
+    /// on that turret and its list B <c>!158</c>. Not for the player's faction: its pick (best over the sensed enemies, else random) and its manning
+    /// through the operate task are not built, so its 234 is not made.
+    /// </summary>
+    SelfNodes GuardNodes(World world, int slot, AiMind mind, CharacterCold me, Bodies.MedicalState medical, SelfNodes nodes, out GuardTurret? turret)
+    {
+        turret = null;
+        if (me.Faction == PlayerFactionOf(world)) return nodes;
+        if (!TaskStart.Eligible(world, me, TaskType.ManATurretPlayerJob) || !TaskStart.Eligible(world, me, TaskType.UseTurret)) return nodes;
+
+        float guard = TurretDesire(world, slot);
+        if (guard <= 0) return nodes;
+
+        bool arm = SelfPreservation.OneArm(medical);
+        turret = arm ? GuardTurretPick(world, slot, me, mind) : null;
+        float gunner = turret is { } t ? TurretDesire(world, slot, t.Building.Position) : 0;
+        bool immediate = (ThreatSource ?? _combat)?.ImmediateThreat(world, slot) == true;
+        return nodes with { Guard = guard, GuardArm = arm, TurretFound = turret is not null, Gunner = gunner, GunnerRuns = !immediate };
+    }
+
+    /// <summary>
+    /// Row 234's finder for a character outside the player's faction (<c>FUN_1408ccfa0</c> on the character itself, <b>Verified</b>;
+    /// docs/game/ai-tasks.md "Combat goals"): the nearest turret (<c>FUN_1409faf80</c>) of its status town (<see cref="CharacterCold.StatusTown"/>,
+    /// worked out from where it stands when it holds none) that <see cref="GuardCandidate"/> accepts; null with none. Reads only the last tick's
+    /// state and the serial claims.
+    /// </summary>
+    GuardTurret? GuardTurretPick(World world, int slot, CharacterCold me, AiMind mind)
+    {
+        var here = world.Characters.Previous[slot].Position;
+        var status = me.StatusTown.IsNone ? StatusTownAt(data, world, here, CampaignTown.None) : me.StatusTown;
+        if (status.Site < 0) return null;
+
+        GuardTurret? best = null;
+        float bestD = float.MaxValue;
+        int owner = status.Owner(world, data);
+        foreach (var b in data.Turrets(status.Site))
+        {
+            if (!GuardCandidate(world, slot, me, mind, status, owner, b)) continue;
+
+            float d = Vector3.DistanceSquared(here, b.Position);
+            if (d < bestD) (best, bestD) = (new GuardTurret(status.Site, b), d);
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// Whether 234's finder takes turret <paramref name="b"/> of the status town (<c>FUN_1408daf70</c>, <b>Verified</b>): in the zone cells within
+    /// one of the character's (<c>FUN_1409fc450</c>); inside or mounted on the squad's home building when it has one (Building slot 59
+    /// <c>FUN_140547530</c> against the Ownerships <c>+0x38</c> hand); manned by nobody else (<c>FUN_1400f7c90</c>); its path not impossible
+    /// (<c>FUN_1405b0290</c>); held by no squad mate (<c>FUN_1402690e0</c>, <see cref="HeldByMate"/>); usable (the town is of its faction, or
+    /// <c>canIUseThisBuilding</c>, <see cref="Locks.FixtureRegistry.CanUse(World, CharacterCold, int, Locks.FixtureRegistry.UsedBuilding?)"/>).
+    /// </summary>
+    bool GuardCandidate(World world, int slot, CharacterCold me, AiMind mind, CampaignTown status, int owner, TownBuilding b)
+    {
+        if (b.Turret is not { } post) return false;
+
+        var here = world.Characters.Previous[slot].Position;
+        var cell = WorldLayout.ZoneOf(here.X, here.Z);
+        var at = WorldLayout.ZoneOf(b.Position.X, b.Position.Z);
+        if (Math.Abs(at.X - cell.X) > 1 || Math.Abs(at.Y - cell.Y) > 1) return false;
+
+        if (mind.Squad.Ai?.Home?.Key is { } home && (b.InsideOf ?? post.MountedOn) != home) return false;
+        if (_combat?.TurretTakenByOther(b.Key, slot) == true || me.IsUnreachable(b.Key, world.Tick)) return false;
+        if (HeldByMate(world, slot, mind, status.Site, b)) return false;
+        if (owner == me.Faction) return true;
+
+        var used = new Locks.FixtureRegistry.UsedBuilding(status, status.Site, b.Key, b.InsideOf is not null, false);
+        return world.Fixtures.CanUse(world, me, BuildingOwner(world, b, owner), used);
+    }
+
+    /// <summary>
+    /// Whether a squad mate holds turret <paramref name="b"/>: its town turret claim (<see cref="Blackboard.TurretClaims"/>) or its Self
+    /// preservation turret (<see cref="AiMind.Guard"/>, written by the serial claim only).
+    /// </summary>
+    static bool HeldByMate(World world, int slot, AiMind mind, int site, TownBuilding b)
+    {
+        if (mind.Squad.Ai is { } board && board.Town == site)
+        {
+            foreach (var (s, t) in board.TurretClaims)
+                if (s != slot && (uint)t < (uint)board.Turrets.Count && ReferenceEquals(board.Turrets[t], b)) return true;
+        }
+
+        foreach (var m in mind.Squad.Members)
+        {
+            if (m.Slot == slot || world.Characters.Cold(m.Slot) is not { Ai: { } mate }) continue;
+            if (mate.Guard is { } held && ReferenceEquals(held.Building, b)) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Asks the serial step to claim the turret for the mind's plan [146, 234, 32]. Writes only its own mind.
+    /// </summary>
+    void AskGuard(AiMind mind, GuardTurret turret)
+    {
+        mind.GuardAsk = turret;
+        Interlocked.Exchange(ref _guarding, 1);
+    }
+
+    /// <summary>
+    /// Runs the serial claim (<see cref="ClaimGuards"/>) when a think asked for a turret or a mind holds one.
+    /// </summary>
+    void ClaimGuardsIfAny(World world)
+    {
+        if (Interlocked.Exchange(ref _guarding, 0) != 0 || _guards > 0) ClaimGuards(world);
+    }
+
+    /// <summary>
+    /// The serial claim (slot order; the original's AI updates run one character after another, so a later squad mate's finder sees the earlier
+    /// one's blackboard entry): a turret asked for and held by no squad mate is the mind's (<see cref="AiMind.Guard"/>), else none (its next think
+    /// picks again); a held turret whose mind no longer plans 146 under 32 is let go.
+    /// </summary>
+    void ClaimGuards(World world)
+    {
+        var table = world.Characters;
+        int held = 0;
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (table.Cold(s) is not { Ai: { } mind }) continue;
+            if (mind.Guard is not null && !GuardsTurret(mind)) mind.Guard = null;
+
+            if (mind.GuardAsk is { } ask)
+            {
+                mind.GuardAsk = null;
+                mind.Guard = HeldByMate(world, s, mind, ask.Site, ask.Building) ? null : ask;
+            }
+
+            if (mind.Guard is not null) held++;
+        }
+
+        _guards = held;
+    }
+
+    /// <summary>
+    /// Whether the mind's current plan is Self preservation's turret: [146, 234, 32].
+    /// </summary>
+    internal static bool GuardsTurret(AiMind mind) => mind is { Behaviour: AiBehaviour.SelfPreserve, Step: TaskType.UseTurret };
+
+    /// <summary>
+    /// Self preservation's 146: runs to the gun of the turret the claim gave it and stands there facing its way, where the turret step mans it
+    /// (an NPC's post in <see cref="Combat.CombatSystem"/>); without one yet it stands. The move to a turret building runs (mode 2; the move-task
+    /// start <c>FUN_140332390</c>, as <see cref="ActTurret"/>).
+    /// </summary>
+    void ActGuardTurret(World world, int slot, AiMind mind)
+    {
+        if (mind.Guard is not { Building.Turret: { } turret })
+        {
+            Become(world, slot, CharacterTask.Idle);
+            return;
+        }
+
+        var spot = TurretSpot(world, turret);
+        if (!GoToSpot(world, slot, mind, Flat(spot), GiveUp.Post, SpeedMode.Free, TurretSlack, spot.Y)) return;
+
+        world.Characters.Next[slot].Yaw = turret.Yaw;
+        Become(world, slot, CharacterTask.Idle);
     }
 
     #endregion

@@ -114,6 +114,12 @@ public sealed partial class CombatSystem
     public TurretView? TurretOf(string? key) => _turretManning.TurretOf(key);
 
     /// <summary>
+    /// Whether another character than <paramref name="slot"/> mans the turret <paramref name="key"/> as of the serial turret step (its accept test,
+    /// <c>FUN_1400f7c90</c>: a user already, or fewer users than its one operator).
+    /// </summary>
+    internal bool TurretTakenByOther(string key, int slot) => _turretManning.TryGet(key, out var t) && t.Manned && t.Gunner != slot;
+
+    /// <summary>
     /// The gun numbers of a turret building for its panel (<see cref="TurretManning.TurretPanelOf"/>).
     /// </summary>
     public TurretPanelView? TurretPanelOf(World world, string? instance) => _turretManning.TurretPanelOf(world, instance);

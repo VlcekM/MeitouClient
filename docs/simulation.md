@@ -2497,7 +2497,7 @@ gun, facing its way (**Verified**: the move-task start `FUN_140332390` sets a no
 use task, vfunc `0x418`, is 146, which `TurretBuilding` returns, `FUN_140440550`; `AiSystem.ActTurret`, `SpeedMode.Free`); the home-building goal (222) takes only a turret mounted on its home (the
 state's `mounted` handle). Claim order and gunner spot are engine choices. The goals are done while
 no enemy is sensed (list A `isNoEnemiesInVicinity`, [combat.md](game/combat.md#turrets)): false while the character's senses count an
-enemy (`numEnemies`, `SenseBlock.Enemies`), so guards man the turrets only while enemies come. A guard at its turret fires it ([Ranged](#ranged)).
+enemy (`numEnemies`, `SenseBlock.Enemies`), so guards man the turrets only while enemies come. A guard at its turret fires it ([Ranged](#ranged)). Self preservation's turret (234 then 146 under 32, [ai-tasks](game/ai-tasks.md#combat-goals)) is held per character (`AiMind.Guard`), claimed in the AI's serial step after the fights, and manned as a guard's.
 
 ### Engine goals
 

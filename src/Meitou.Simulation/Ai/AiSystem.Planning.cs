@@ -289,18 +289,10 @@ public sealed partial class AiSystem
                 return true;
             }
 
-            // Self preservation (the planner's choice between its providers 13 and 35, AiSystem.SelfPreservationPlans): [35, 32] when 35 wins or
-            // the chain through 13 dead-ends, else [13, 32] on an attacker of its own (AI::findAttackerOf on itself, AiSystem.SelfDefencePick; the
-            // fight is the combat system's, as the combat goals'); with neither the next goal is tried.
-            if (type == TaskType.SelfPreservation)
-            {
-                if (!_system.SelfPreservationPlans(_world, _slot, _mind, desire, out bool runs)) return false;
-                if (!InRepertoire(runs ? TaskType.RunAway : TaskType.AttackAttackersOf)) return false;
-                _mind.Plan.Clear();
-                _mind.Plan.Add(new PlanStep(runs ? TaskType.RunAway : TaskType.AttackAttackersOf, default));
-                _mind.Plan.Add(new PlanStep(type, default));
-                return true;
-            }
+            // Self preservation (the planner's search over its providers 13, 35 and 234, AiSystem.SelfPreservationPlan): [35, 32] for the run,
+            // [13, 32] on an attacker of its own (AI::findAttackerOf on itself, AiSystem.SelfDefencePick; the fight is the combat system's, as the
+            // combat goals'), [146, 234, 32] on the turret 234's finder took (claimed in the serial step); with none the next goal is tried.
+            if (type == TaskType.SelfPreservation) return PlanSelfPreservation(desire);
 
             // A follow goal aimed at the squad's mission (44 of a bodyguard contract) is its own plan too (engine choice): the row needs a target
             // and has no finder, its target being the goal's own, the contract's mission target, which is a character and no place to plan a
@@ -400,6 +392,35 @@ public sealed partial class AiSystem
         /// <see cref="TryPlan"/>).
         /// </summary>
         static bool EngineActs(TaskType type) => TaskBehaviours.Of(type) is AiBehaviour.Assault or AiBehaviour.Fight or AiBehaviour.Medic;
+
+        /// <summary>
+        /// Self preservation's plan (<see cref="AiSystem.SelfPreservationPlan"/>), its steps leaf first, each in the repertoire.
+        /// </summary>
+        bool PlanSelfPreservation(float desire)
+        {
+            var plan = _system.SelfPreservationPlan(_world, _slot, _mind, desire);
+            TaskType[] steps = plan switch
+            {
+                SelfPlan.Run => [TaskType.RunAway],
+                SelfPlan.Fight => [TaskType.AttackAttackersOf],
+                SelfPlan.Turret => [TaskType.UseTurret, TaskType.ManATurretPlayerJob],
+                _ => [],
+            };
+            if (steps.Length == 0 || !Array.TrueForAll(steps, InRepertoire)) return false;
+
+            _mind.Plan.Clear();
+            foreach (var step in steps) _mind.Plan.Add(new PlanStep(step, StepTarget(step)));
+            _mind.Plan.Add(new PlanStep(TaskType.SelfPreservation, default));
+            return true;
+        }
+
+        /// <summary>
+        /// A Self preservation step's target: 146's the gun spot of the turret asked for; the others none.
+        /// </summary>
+        PlanTarget StepTarget(TaskType step) =>
+            step == TaskType.UseTurret && _mind.GuardAsk is { Building.Turret: { } turret }
+                ? new PlanTarget(Targets.Turret, TurretSpot(_world, turret))
+                : default;
 
         /// <summary>
         /// Whether goal <paramref name="goal"/>'s plan is the engine's own (<see cref="TryPlan"/>: the engine-run goals, Self preservation, a follow

@@ -1466,6 +1466,18 @@ public sealed class AiMind
     public CharacterId FightTarget { get; set; } = CharacterId.None;
 
     /// <summary>
+    /// The turret 234's finder took for Self preservation's plan [146, 234, 32] at this tick's think (<see cref="AiSystem"/>'s
+    /// <c>GuardTurretPick</c>), for the serial claim of the same tick (<c>ClaimGuards</c>), which clears it; never set between ticks (not hashed).
+    /// </summary>
+    public GuardTurret? GuardAsk { get; set; }
+
+    /// <summary>
+    /// The turret Self preservation's 146 mans, as the serial claim granted it (no squad mate holds it); cleared when the plan leaves it. Hashed
+    /// while set; not saved (a plan is not).
+    /// </summary>
+    public GuardTurret? Guard { get; set; }
+
+    /// <summary>
     /// Where goal 148 stood at the last rescue beat (a debugging aid for the action log; written by the rescue goals' serial look,
     /// <see cref="Carrying.RescueGoals"/>, read only by the log, so it changes nothing in the world). Not saved, not hashed.
     /// </summary>
@@ -1616,6 +1628,13 @@ public sealed class AiMind
         }
 
         if (FightFrom != 0) hasher.Add(FightFrom);
+        if (Guard is { } guard)
+        {
+            hasher.Add(0x47726454);   // "GrdT": only while Self preservation holds a turret
+            hasher.Add(guard.Site);
+            hasher.Add(Rng.StableHash(guard.Building.Key));
+        }
+
         if (!TravelDetour.IsNone)
         {
             hasher.Add(0x54726176);   // "Trav": only while a travel step walks to a detour nest
@@ -1650,3 +1669,8 @@ public sealed class AiMind
         Shopping.Hash(ref hasher);
     }
 }
+
+/// <summary>
+/// A town turret Self preservation's 234 took (<see cref="AiMind.Guard"/>): the town site and the turret building.
+/// </summary>
+public sealed record GuardTurret(int Site, TownBuilding Building);
