@@ -432,8 +432,9 @@ public static class Orders
                         continue;
                     }
                     SetRunSpeed(table, slot, cold, (byte)mode.Value);
-                    // Group speed gives the characters set together one speed group (PlayerInterface::assignSpeedGroup), keyed by the first one.
-                    group = mode == SpeedMode.Group ? group < 0 ? slot : group : -1;
+                    // Group speed gives the characters set together a new speed group of their own, one character alone included
+                    // (PlayerInterface::assignSpeedGroup, docs/game/pathfinding.md "Speed groups").
+                    group = mode == SpeedMode.Group ? group < 0 ? world.Player.NextSpeedGroup++ : group : -1;
                     cold.SpeedGroup = group;
                 }
                 break;
