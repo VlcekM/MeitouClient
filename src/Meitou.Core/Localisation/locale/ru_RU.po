@@ -4592,3 +4592,23 @@ msgstr "Стражники перестают передавать тела"
 
 msgid "A guard picks up a knocked-out prisoner only when a cage is free for them, and never takes one from a guard of his own faction. The game lets guards lift and grab prisoners anyway, so at a full prison they hand the same body round without end."
 msgstr "Стражник поднимает оглушённого пленника, только когда для него есть свободная клетка, и никогда не забирает его у стражника своей фракции. Игра всё равно позволяет стражникам поднимать и хватать пленников, поэтому в полной тюрьме они без конца передают друг другу одно и то же тело."
+
+#. machine-translated
+msgid "Split stacks"
+msgstr "Разделение стопок"
+
+#. machine-translated
+msgid "A click on a stack picks up all of it, Shift+click half, Alt+click one item, and Shift+Alt+click asks how many with a slider. In the game a click picks up one item and Shift or Ctrl the whole stack."
+msgstr "Щелчок по стопке берёт её целиком, Shift+щелчок - половину, Alt+щелчок - один предмет, а Shift+Alt+щелчок открывает ползунок для выбора количества. В игре щелчок берёт один предмет, а Shift или Ctrl - всю стопку."
+
+#. machine-translated
+msgid "Split stack"
+msgstr "Разделить стопку"
+
+#. machine-translated
+msgid "Take"
+msgstr "Взять"
+
+#. machine-translated
+msgid "Take {1} of {2}"
+msgstr "Взять {1} из {2}"

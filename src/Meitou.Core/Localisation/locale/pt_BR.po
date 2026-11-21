@@ -5029,3 +5029,23 @@ msgstr "Guardas param de passar corpos"
 
 msgid "A guard picks up a knocked-out prisoner only when a cage is free for them, and never takes one from a guard of his own faction. The game lets guards lift and grab prisoners anyway, so at a full prison they hand the same body round without end."
 msgstr "Um guarda só pega um prisioneiro desacordado quando há uma jaula livre para ele, e nunca tira um de um guarda da própria facção. O jogo deixa os guardas levantarem e agarrarem prisioneiros mesmo assim, então numa prisão cheia eles passam o mesmo corpo de mão em mão sem fim."
+
+#. machine-translated
+msgid "Split stacks"
+msgstr "Dividir pilhas"
+
+#. machine-translated
+msgid "A click on a stack picks up all of it, Shift+click half, Alt+click one item, and Shift+Alt+click asks how many with a slider. In the game a click picks up one item and Shift or Ctrl the whole stack."
+msgstr "Um clique em uma pilha pega tudo, Shift+clique pega metade, Alt+clique pega um item e Shift+Alt+clique pergunta quantos com um controle deslizante. No jogo, um clique pega um item e Shift ou Ctrl pega a pilha inteira."
+
+#. machine-translated
+msgid "Split stack"
+msgstr "Dividir pilha"
+
+#. machine-translated
+msgid "Take"
+msgstr "Pegar"
+
+#. machine-translated
+msgid "Take {1} of {2}"
+msgstr "Pegar {1} de {2}"

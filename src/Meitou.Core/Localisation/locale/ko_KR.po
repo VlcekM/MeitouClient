@@ -4583,3 +4583,23 @@ msgstr "경비병이 몸을 주고받지 않음"
 
 msgid "A guard picks up a knocked-out prisoner only when a cage is free for them, and never takes one from a guard of his own faction. The game lets guards lift and grab prisoners anyway, so at a full prison they hand the same body round without end."
 msgstr "경비병은 빈 우리가 있을 때만 기절한 죄수를 들어 올리며, 같은 세력의 경비병에게서 빼앗지 않습니다. 게임은 경비병이 그래도 죄수를 들어 올리고 붙잡게 해서, 꽉 찬 감옥에서는 같은 몸을 끝없이 주고받습니다."
+
+#. machine-translated
+msgid "Split stacks"
+msgstr "스택 분할"
+
+#. machine-translated
+msgid "A click on a stack picks up all of it, Shift+click half, Alt+click one item, and Shift+Alt+click asks how many with a slider. In the game a click picks up one item and Shift or Ctrl the whole stack."
+msgstr "스택을 클릭하면 전체를, Shift+클릭으로 절반을, Alt+클릭으로 1개를 집으며, Shift+Alt+클릭은 슬라이더로 수량을 묻습니다. 원작에서는 클릭으로 1개, Shift 또는 Ctrl로 스택 전체를 집습니다."
+
+#. machine-translated
+msgid "Split stack"
+msgstr "스택 분할"
+
+#. machine-translated
+msgid "Take"
+msgstr "가져가기"
+
+#. machine-translated
+msgid "Take {1} of {2}"
+msgstr "{2}개 중 {1}개 가져가기"

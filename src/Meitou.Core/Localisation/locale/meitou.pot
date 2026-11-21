@@ -176,6 +176,10 @@ msgid "A character's bag window opens with their inventory until you close it wi
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
+msgid "A click on a stack picks up all of it, Shift+click half, Alt+click one item, and Shift+Alt+click asks how many with a slider. In the game a click picks up one item and Shift or Ctrl the whole stack."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
 msgid "A double click on a squad member far from the view (or a double tap of their number) flies the camera there in an arc instead of cutting."
 msgstr ""
 
@@ -689,7 +693,7 @@ msgstr ""
 msgid "Built into Meitou: {1}; this mod is not run"
 msgstr ""
 
-#: src/Meitou.Game/PlayerInterface.cs src/Meitou.Game/Title/FrontendScreens.cs
+#: src/Meitou.Game/PlayerInterface.cs src/Meitou.Game/Title/FrontendScreens.cs src/Meitou.Game/Ui/StackSplitDialog.cs
 msgid "CANCEL"
 msgstr ""
 
@@ -4249,6 +4253,14 @@ msgstr ""
 msgid "Splash screens"
 msgstr ""
 
+#: src/Meitou.Game/Ui/StackSplitDialog.cs
+msgid "Split stack"
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Split stacks"
+msgstr ""
+
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "Squad XP"
 msgstr ""
@@ -4417,6 +4429,10 @@ msgstr ""
 msgid "TRADER"
 msgstr ""
 
+#: src/Meitou.Game/Ui/StackSplitDialog.cs
+msgid "Take"
+msgstr ""
+
 #: src/Meitou.Game/Host/Photo/PhotoPanel.cs
 msgid "Take picture"
 msgstr ""
@@ -4431,6 +4447,10 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/ModsFromSave.cs
 msgid "Take the mods and their load order from this save:"
+msgstr ""
+
+#: src/Meitou.Game/Ui/StackSplitDialog.cs
+msgid "Take {1} of {2}"
 msgstr ""
 
 #: src/Meitou.Game/Ui/ProductionWindows.cs
