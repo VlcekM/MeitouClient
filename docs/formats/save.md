@@ -814,7 +814,7 @@ A player character's order queue (the deque at `AITaskSytem` +0x40, [order queue
   [precedence](../game/ai-tasks.md#precedence), not in the deque; a row with a job form is replaced by it; priority 3, weight 1.0; one the repertoire lacks is not made), then a replan
   is asked. The writer saves the deque alone, so orders loaded into the second list are not written by a later save. Meitou: a load reads the orders into `CharacterCold.SavedOrders`;
   the look puts them in the second list once every character and building exists (the job-form remap: 2 and 95 as 125, 4, 5 and 61 as 16, 25 as 58, 60 as 57, 249 as
-  250, 26 as 238; 146 and 136 are not remapped; 258 has none and stays a rest order on its bed, [second list](../game/ai-tasks.md#precedence)); a save writes the queue alone.
+  250, 26 as 238, 136 as 137 (no loaded 137 entry in Meitou yet: dropped); 146 is not remapped; 258 has none and stays a rest order on its bed, [second list](../game/ai-tasks.md#precedence)); a save writes the queue alone.
   The add makes the entry whatever its hand names (**Verified**: the maker `FUN_14032ebd0` copies the hand into the entry and tests only its type, after the repertoire
   test). The entry is never dropped for its hand: the second list loses entries only to the clears (`FUN_1405074a0`, `FUN_140507530`) and the remove-by-type `FUN_140507090`
   (**Verified**, every write of its count `+0x78` in `re/field_writes.txt` and the decrement in `FUN_140507090`), and its scorer weighs each entry alone ([second list](../game/ai-tasks.md#precedence)), so the entries

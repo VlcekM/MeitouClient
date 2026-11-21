@@ -311,8 +311,8 @@ public static class OrderSave
     /// walked there (kind 1) is left out (<see cref="TaskType.None"/>). Then the loader's add takes the row's job remap whatever the hand names
     /// (<c>FUN_1405086d0</c>, TaskData <c>+4</c> and <c>+0xc</c>, <b>Verified</b>; <see cref="PermaJobs.Remapped"/>), the saved hand kept: 2 and 95
     /// load as 125 Engineer, 4, 5 and 61 as 16 Attacking enemies, 25 as 58 Medic, 60 as 57 Robotics, 249 as 250 Splint Rigging, 26 as 238
-    /// Foraging animals; Meitou leaves 146 and 136 as they are (<see cref="Unremapped"/>). Last, the original's sleep order 258 (no job form, so it
-    /// loads as itself) is Meitou's 98.
+    /// Foraging animals, 136 as 137 Corpse disposal (which no system owns as a loaded order yet, so it is dropped); Meitou leaves 146 as it is
+    /// (<see cref="Unremapped"/>). Last, the original's sleep order 258 (no job form, so it loads as itself) is Meitou's 98.
     /// </summary>
     static TaskType LoadedRow(SavedOrder o, bool onSite)
     {
@@ -325,12 +325,10 @@ public static class OrderSave
     }
 
     /// <summary>
-    /// The remaps Meitou does not take: 146 Turret gunner to 234 Turret guard (234's player-faction desire and its unused-turret finder,
-    /// <c>BuildingFinderTurrets_Unused</c> in <c>FUN_1408ccfa0</c>, are not built) and 136 Disposing of corpse to 137 Corpse disposal (137's plan
-    /// runs the corpse chain, 138's find and lift before 136 at the machine, which Meitou has only as a list job and its companion). They load as
-    /// the order of their own row.
+    /// The remap Meitou does not take: 146 Turret gunner to 234 Turret guard (234's player-faction desire and its unused-turret finder,
+    /// <c>BuildingFinderTurrets_Unused</c> in <c>FUN_1408ccfa0</c>, are not built). It loads as the order of its own row.
     /// </summary>
-    static bool Unremapped(TaskType row) => row is TaskType.UseTurret or TaskType.FeedCorpseIntoMachine;
+    static bool Unremapped(TaskType row) => row is TaskType.UseTurret;
 
     /// <summary>
     /// The world character whose saved handle is <paramref name="hand"/>; <see cref="CharacterId.None"/> when none is.

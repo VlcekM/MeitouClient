@@ -57,6 +57,7 @@ public static class OrderGiver
         Crime.PutInCageOrder o => o.Carriers,
         Construction.DismantleOrder o => o.Characters,
         Production.ProspectOrder o => [o.Character],
+        Production.DisposeCorpseOrder o => o.Characters,
         _ => null,
     };
 
@@ -96,6 +97,7 @@ public static class OrderGiver
         Crime.PutInCageOrder o => o with { Carriers = keep },
         Construction.DismantleOrder o => o with { Characters = keep },
         Production.UseTurretOrder o => o with { Characters = keep },
+        Production.DisposeCorpseOrder o => o with { Characters = keep },
         _ => null,
     };
 

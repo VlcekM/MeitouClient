@@ -315,7 +315,11 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   ([order givers](game/ai-tasks.md#order-givers)); `World.GiveOrder(queued: true)` appends one. DA_TRADE opens its window with no order (`OpenTradeNow`).
 - **Escape** (the caged character's menu verb, and Alt + the quick click on it in another faction's unlocked cage, `CageClickOrder`) is order 207 Escape cage (`GetOutOrder` → `Locks.CageEscape`) for every selected character, the queue cleared, as the
   original's giver: done for one in no cage (list A `!79`), held while the cage is locked (list B `!54`), else Task_GetOutOfCage's leave with the escape flag.
-- Not queued (they act at once): Shoot At (sets the turret's target), Dispose Corpse (an errand). **Stop** is no order in the original either
+- Not queued (it acts at once): Shoot At (sets the turret's target).
+- **Corpse Disposal** is order 136 (`DisposeCorpseOrder` → `ProductionSystem.CorpseOrders`) on the clicked machine for every selected character (menu and quick click,
+  the queue cleared): done at once for one carrying nothing (list A 100), held for one carrying a living body (99 fails), else the walk to that machine is its task and
+  the corpse errand feeds the body in there; a walk that ends short ends it.
+- **Stop** is no order in the original either
   (`FUN_1407f6470`, [what clears the queue](game/ai-tasks.md#what-clears-the-queue)): it wipes the queue, the second list and the goal (`PlayerOrders.Wipe`) and ends the task.
 - `World.CanOrder(row, actor, target, site, point)` / `CanOrder(OrderEntry, actor)` -> `(Can, Why)` is `PlayerOrders.CanRun` as a pure read between ticks (a `Gone` verdict is `false` with no text); the queue's start and bark use the same read. It is not a menu filter (decision D5): the original's menu offers its verbs (operate, build, dismantle, prospect, ...) without testing the character and lets the order fail with its text, so Meitou's does too; no verb is greyed. Planned native multiplayer can call it on the host to gate guest commands.
 - Every `OrderCommand` also applies while paused (`World.ApplyPausedInterfaceCommands`, through every `IOrderOwner`'s inputs).
@@ -369,7 +373,7 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   ([decision step](#decision-step)). Left out: a row no system owns, a target character or site that is not in the world, a handle that names nothing, ground-item pick-ups (a runtime
   item id) and the Medic / Rescue buttons' one-shot looks. An owner with a detail (`IOrderOwner.SaveKind` / `LoadDetail`) codes it in Meitou's own key. Before an order is first checked,
   its owner readies what its live command would (`IOrderOwner.Restored`): production makes the machine of a rock, town dummy or seat, which no save holds (without it the operate order
-  was `Gone` and a miner stood idle after a load, #598). Of the add function's job-form remaps Meitou makes all but 146 → 234 and 136 → 137 (`OrderSave.LoadedRow`, [loaded entries](game/ai-tasks.md#precedence)). Hashed as the move-only
+  was `Gone` and a miner stood idle after a load, #598). Of the add function's job-form remaps Meitou makes all but 146 → 234 (`OrderSave.LoadedRow`; 136 → 137 has no loaded 137 entry yet, so it is dropped, [loaded entries](game/ai-tasks.md#precedence)). Hashed as the move-only
   queue was while it holds only that (nothing, a started order alone, started moves), else under its own mark.
 
 ### Decision step

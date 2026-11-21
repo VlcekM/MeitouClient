@@ -406,7 +406,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
                 case ProspectOrder prospect: ProspectBegin(world, prospect); break;
                 case AddJob add: AddJobs(world, add); break;
                 case AddOrderJob add: AddOrderJobs(world, add); break;
-                case DisposeCorpseOrder dispose: DisposeCarried(world, dispose); break;
+                case DisposeCorpseOrder dispose: GiveDisposal(world, dispose); break;
                 case RemoveJob remove: RemoveJobAt(world, remove); break;
                 case MoveJob move: MoveJobTo(world, move); break;
                 case PutInMachine put: Put(world, put); break;
@@ -739,13 +739,14 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     }
 
     /// <summary>
-    /// Registers the operate, haul and prospect tasks with the task step.
+    /// Registers the operate, haul and prospect tasks with the task step, and the walk of order 136 (<see cref="CorpseOrders"/>).
     /// </summary>
     public void RegisterTasks(TaskHandlers tasks)
     {
         tasks.Register(CharacterTask.Operate, this);
         tasks.Register(CharacterTask.Haul, this);
         tasks.Register(CharacterTask.Prospect, this);
+        tasks.Register(TaskType.FeedCorpseIntoMachine, (ITaskHandler)CorpseOrders);
     }
 
     /// <summary>
