@@ -65,6 +65,11 @@ public sealed class StrategyCamera
     /// The pivot's climb or descent per second towards <see cref="_heightGoal"/>; 0 once there.
     /// </summary>
     float _heightSpeed;
+    /// <summary>
+    /// The height the last placement gave (<see cref="Place"/>): the feature ray starts above it as well as above the pivot until the pivot is
+    /// panned, so a feature whose collision was still being read at the placement is found once it is there; negative infinity for none.
+    /// </summary>
+    float _placedHeight = float.NegativeInfinity;
 
     /// <summary>
     /// A camera at the start view (<see cref="KenshiCamera.InitialDistance"/>, <see cref="KenshiCamera.InitialPitchDegrees"/>), its pivot
@@ -136,6 +141,7 @@ public sealed class StrategyCamera
     public void Place(Vector2 pivotXz, float yaw, float pitch, float distance, float? height = null)
     {
         PivotXz = pivotXz;
+        _placedHeight = height ?? float.NegativeInfinity;
         Yaw = Interp.WrapAngle(yaw);
         Pitch = Math.Clamp(pitch, MinPitch, MaxPitch);
         Distance = Math.Clamp(distance, KenshiCamera.MinDistance, KenshiCamera.MaxDistance);
@@ -192,6 +198,7 @@ public sealed class StrategyCamera
         var f = new Vector2(-MathF.Sin(Yaw), -MathF.Cos(Yaw));
         var r = new Vector2(MathF.Cos(Yaw), -MathF.Sin(Yaw));
         PivotXz += f * forward + r * right;
+        _placedHeight = float.NegativeInfinity;
         State = Compute();
     }
 
@@ -300,6 +307,7 @@ public sealed class StrategyCamera
         var direction = f * (forward * MathF.Cos(Pitch)) + r * right;
         if (direction.LengthSquared() < 1e-12f) return;
         PivotXz += Vector2.Normalize(direction) * (KenshiCamera.PanSpeed(_settings.MoveSpeed, Distance) * h);
+        _placedHeight = float.NegativeInfinity;
     }
 
     /// <summary>
@@ -308,7 +316,7 @@ public sealed class StrategyCamera
     float HeightGoal(float y)
     {
         var eye = CameraState.EyeFor(new Vector3(PivotXz.X, y, PivotXz.Y), Yaw, Pitch, Distance);
-        float groundAtPivot = _ground(PivotXz.X, PivotXz.Y, y + KenshiCamera.FeatureRayLift);
+        float groundAtPivot = _ground(PivotXz.X, PivotXz.Y, MathF.Max(y, _placedHeight) + KenshiCamera.FeatureRayLift);
         float groundAtEye = EyeGround(eye);
         float drop = MathF.Min(0, groundAtEye - y);   // a pivot above the ground under the eye comes down to it ...
         float required = groundAtEye + KenshiCamera.EyeClearance(Distance);

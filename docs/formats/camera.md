@@ -96,8 +96,10 @@ not the game speed, so the camera works while the game is paused. Several inputs
   (`features.dat` placements whose record has a `collision`, placed in the point's zone and its eight neighbours) are the group-14 ray: the highest
   feature surface at or under 100 above the pivot raises the pivot's ground (engine: also over a building, and no walkable foliage). Engine:
   the eye's group-14 ray starts 100 above the eye and at the eye's own (x, z), so the eye keeps out of a feature beside the pivot too. Placing the
-  camera starts that ray 100 above the height it is given (a character's, a save's pivot, the free camera's look point), else 100 above the
-  ground without features; panning and the leash start it from the pivot's height. Without the feature ray the pivot sank into a mod
+  camera starts that ray 100 above the height it is given (a character's, a save's pivot, the free camera's look point), and keeps doing so
+  until the pivot is panned (a feature still being read at the placement is found once it is there), else 100 above the ground without
+  features; following and the leash place it at the pivot's height. A placement without a height, or panning in from more than 100 below a
+  feature's top, stays under it as the game's ray does. Without the feature ray the pivot sank into a mod
   cliff block's street (`Canyonland_Zone_Cliffblock_02` in 42.22, top 1562.9 over terrain 1508.7, **Verified** headless against
   Newwworld.mod and `features.dat`). A building's or feature's collision is read on a worker, so the first frames near it keep to the terrain; a runtime placement
   added or removed (a building; not a ground item's drop or pick-up, which leaves the lists alone, issue #204, **Observed** by code, not measured) lists the zone's buildings again while the known floors keep answering
