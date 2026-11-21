@@ -4759,3 +4759,18 @@ msgstr "요리"
 #. machine-translated
 msgid "{1} is built into Meitou now: {2}."
 msgstr "{1}은(는) 이제 Meitou에 내장되어 있습니다: {2}."
+
+msgid "Adaptive exposure"
+msgstr "적응형 노출"
+
+msgid "the game's band"
+msgstr "게임의 범위"
+
+msgid "follows the shade"
+msgstr "그늘을 따름"
+
+msgid "the game's exposure follows the picture's brightness only down to a daytime minimum, so a canyon or a street in a cliff's shadow at noon stays dark; Meitou lets it adapt by day to halfway between the game's day and night minimums (up to 1.7 times brighter in deep shade); nights, open sunny views and rooms are as before (docs/render-post.md \"Adaptive exposure\")"
+msgstr "게임의 노출은 화면 밝기를 낮 최솟값까지만 따라가므로 정오에도 협곡이나 절벽 그늘의 거리는 어둡게 남습니다. Meitou는 낮에 게임의 낮과 밤 최솟값의 중간까지 노출을 맞춥니다(깊은 그늘에서 최대 1.7배 밝게). 밤, 탁 트인 맑은 풍경, 실내는 이전과 같습니다 (docs/render-post.md \"Adaptive exposure\")"
+
+msgid "Brighten the picture in deep shade by day, such as a canyon at noon; nights and sunny views stay as they are."
+msgstr "낮의 깊은 그늘(정오의 협곡 등)에서 화면을 밝게 합니다. 밤과 맑은 풍경은 그대로입니다."

@@ -208,6 +208,11 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     /// The sky's exposure band; cleared at each <see cref="Begin"/>.
     /// </summary>
     public (float Min, float Max)? AutoExposure { get; set; }
+
+    /// <summary>
+    /// Adaptive exposure's scale and floor (<see cref="IWorldPostChain.ShadeExposure"/>).
+    /// </summary>
+    public (float Scale, float Floor) ShadeExposure { get; set; }
     /// <summary>
     /// The water plane the fog volumes and SSAO reconstruct against (null: no water); cleared at each <see cref="Begin"/>.
     /// </summary>
@@ -460,7 +465,8 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         }
         resolved = RunDepthOfField(resolved);
         var cmd = (MetalCommandList)_ctx.BeginNative("post composite");
-        _composite.Draw(cmd, resolved, _ctx.Depth, target, Options, AutoExposure ?? (0f, 0f), Inputs, temporal: !_noTaa());
+        _composite.Draw(cmd, resolved, _ctx.Depth, target, Options, AutoExposure ?? (0f, 0f), Inputs, temporal: !_noTaa(),
+            shade: ShadeExposure);
         _ctx.EndNative(cmd);
     }
 

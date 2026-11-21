@@ -1099,6 +1099,7 @@ static class PostProcessShaders
         uniform float uLevel, uBlend;   // the luminance target's 1 × 1 level; the share of the new mean (1: no smoothing)
         uniform vec2 uBand;             // MIN_LUMINANCE, MAX_LUMINANCE
         uniform vec2 uIndoor;           // x above 0, an interior in view: the minimum follows the mean times x down, to no less than y of itself (PostProcess.IndoorExposure)
+        uniform vec2 uShade;            // x above 0 (Adaptive exposure): under the minimum the target is the mean times x, no lower than y (PostProcess.ShadeExposure)
         void main()
         {
             float mean = textureLod(uLuminance, vec2(0.5), uLevel).r;
@@ -1107,7 +1108,15 @@ static class PostProcessShaders
             // G: the same smoothing of the mean without the band (Meitou's night grading reads it; equal to the mean when the blend is 1)
             float smoothMean = mix(texture(uLast, vec2(0.5)).g, mean, uBlend);
             float low = uIndoor.x > 0.0 ? clamp(smoothMean * uIndoor.x, uBand.x * uIndoor.y, uBand.x) : uBand.x;
-            fragColour = vec4(clamp(adapted, low, max(low, uBand.y)), smoothMean, 0.0, 1.0);
+            adapted = clamp(adapted, low, max(low, uBand.y));
+
+            // Adaptive exposure: the target is the band's own above its minimum, the mean scaled under it; smoothed towards, not clamped after.
+            if (uShade.x > 0.0 && uIndoor.x <= 0.0)
+            {
+                float target = mean >= uBand.x ? min(mean, uBand.y) : clamp(mean * uShade.x, uShade.y, uBand.x);
+                adapted = mix(last, target, uBlend);
+            }
+            fragColour = vec4(adapted, smoothMean, 0.0, 1.0);
         }
         """;
 

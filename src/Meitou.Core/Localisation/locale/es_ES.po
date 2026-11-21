@@ -4761,3 +4761,18 @@ msgstr "COCINA"
 #. machine-translated
 msgid "{1} is built into Meitou now: {2}."
 msgstr "{1} ya viene integrado en Meitou: {2}."
+
+msgid "Adaptive exposure"
+msgstr "Exposición adaptativa"
+
+msgid "the game's band"
+msgstr "banda del juego"
+
+msgid "follows the shade"
+msgstr "sigue la sombra"
+
+msgid "the game's exposure follows the picture's brightness only down to a daytime minimum, so a canyon or a street in a cliff's shadow at noon stays dark; Meitou lets it adapt by day to halfway between the game's day and night minimums (up to 1.7 times brighter in deep shade); nights, open sunny views and rooms are as before (docs/render-post.md \"Adaptive exposure\")"
+msgstr "la exposición del juego sigue el brillo de la imagen solo hasta un mínimo diurno, así que un cañón o una calle a la sombra de un acantilado sigue oscura a mediodía; Meitou la deja adaptarse de día hasta la mitad entre los mínimos diurno y nocturno del juego (hasta 1,7 veces más brillante en sombra profunda); las noches, las vistas abiertas y soleadas y las habitaciones quedan como antes (docs/render-post.md \"Adaptive exposure\")"
+
+msgid "Brighten the picture in deep shade by day, such as a canyon at noon; nights and sunny views stay as they are."
+msgstr "Aclara la imagen de día en sombra profunda, como un cañón a mediodía; las noches y las vistas soleadas no cambian."

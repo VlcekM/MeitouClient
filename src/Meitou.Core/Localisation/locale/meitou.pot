@@ -265,6 +265,10 @@ msgid ""
 "If the character is unconscious, when he wakes up he will stay down on the ground and crawl to avoid detection."
 msgstr ""
 
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
+msgid "Adaptive exposure"
+msgstr ""
+
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Add airglow to the night haze."
 msgstr ""
@@ -675,6 +679,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Brighten or darken nights further, on top of Ambient light strength."
+msgstr ""
+
+#: src/Meitou.Game/Settings/SettingHints.cs
+msgid "Brighten the picture in deep shade by day, such as a canyon at noon; nights and sunny views stay as they are."
 msgstr ""
 
 #: src/Meitou.Game/SettingsMenu.cs
@@ -5572,6 +5580,10 @@ msgid "foam, waves"
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "follows the shade"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
 msgid "full detail"
 msgstr ""
 
@@ -5916,6 +5928,10 @@ msgid "the game's"
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game's band"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
 msgid "the game's blood stays on the skin: a blade that has just cut a man is clean, and a coat over a bleeding wound shows nothing; Meitou lets a weapon take the blood of what it wounds on its blade (wet and bright, then dried and dark, then flaking off; washed away in water and rain) and lets worn armour and clothing show the splatter of the body part under them, as the skin does (docs/game/blood-decals.md \"On weapons and gear\")"
 msgstr ""
 
@@ -5941,6 +5957,10 @@ msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs
 msgid "the game's dust and smoke sprites cut straight into the ground and walls they cross (all but its mist and steam, which fade; Faithful draws those hard-edged too); Meitou fades each sprite out over the last stretch before a surface (a quarter of its size, 0.2 to 30 m), so dust clouds meet the ground softly; the game's sprites are also flat and not fogged (one brightness in sun and shade, near and far, seen through fog banks), Meitou darkens dust and smoke where the sun is shadowed, brightens them towards the sun and puts the haze and the fog volumes in front of them over them; and it fades each effect out before the distance it stops being simulated at, where its whole cloud popped in and out (docs/render-post.md \"Fog\")"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/Enhancements.cs
+msgid "the game's exposure follows the picture's brightness only down to a daytime minimum, so a canyon or a street in a cliff's shadow at noon stays dark; Meitou lets it adapt by day to halfway between the game's day and night minimums (up to 1.7 times brighter in deep shade); nights, open sunny views and rooms are as before (docs/render-post.md \"Adaptive exposure\")"
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs

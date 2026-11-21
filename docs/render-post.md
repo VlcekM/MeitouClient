@@ -339,6 +339,21 @@ as it is, capped at 0.9 (AMD's guidance); the rest as it is. Rain and fire stay 
 **Observed** (FSR and TAA at 1080p): 30x on every sprite leaves the scene behind dust grainy under TAA and blurred under FSR;
 without its gain rain's streaks fade; a distant torch a few pixels high flickers at 30x.
 
+### Adaptive exposure
+
+`exposure` switch (Meitou, on; Graphics > Colour; `PostOptions.AdaptiveExposure`, `WorldFrame.ShadeExposure`). The game's daytime band
+minimum 0.8 holds nearly every daytime view: the new game's open desert at 10:00 measures a mean of 0.567 (0.574 all Faithful), save
+`dark` (a cliff canyon at 12:02) 0.276 (0.311 with Indirect light off), so the game shows both at one fixed exposure and the canyon is
+near black (**Observed**, `ReadExposure` after offscreen shots). Meitou's adaptation target under the band's minimum is the mean times
+`Exposure.Min / ShadeExposureReference` (0.8 / 0.57: a scene darker than that desert is shown as bright as it), no lower than the geometric
+mean of the game's day and night minimums (0.47 with night darkness 0.35: at most 1.7x), the band's own at or above its minimum; the
+adaptation is smoothed towards the target, not clamped after it (`PostProcessShaders.Adapt` `uShade`, `MergedKernels` `ShadeScale`,
+`PostComposite` on Metal). A held exposure and the unmerged pass with an interior in view keep the game's rule; the rooms' own exposure is
+unchanged. **Observed** (offscreen 1280x720, Meitou against `--faithful exposure`): new game at 10:00, 17:00 and 23:00 pixel-identical;
+at 18:30 (mean 0.457, band still 0.8 until sunY 0.2) 1.25x; `dark` and the shaded `quicksave` lifted 1.7x. The night minimum as the floor
+(2.9x in `dark`) showed the canyon brighter than an open sunny view, the sunlit wall blown; a floor without the reference lifted the open
+desert 1.4x too.
+
 ## Bloom
 
 An optional effect (`PostOptions.Bloom`, Off | On), off in the Meitou look as in the game (magnitude 0), with its strength under it, 0..0.25 (0.13 by

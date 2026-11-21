@@ -166,6 +166,12 @@ sealed unsafe class MergedKernels(PostProcess post)
         /// The most an interior's pixels are scaled by (<see cref="PostProcess.IndoorExposureMaxGain"/>).
         /// </summary>
         public float MaxGain;
+
+        /// <summary>
+        /// Adaptive exposure (<see cref="PostProcess.ShadeExposure"/>): under the band's minimum the target is the mean times this scale, no lower
+        /// than the floor; scale 0 keeps the game's band.
+        /// </summary>
+        public float ShadeScale, ShadeFloor;
     }
 
     /// <summary>
@@ -177,8 +183,9 @@ sealed unsafe class MergedKernels(PostProcess post)
     /// <param name="rooms">With <paramref name="indoor"/> above 0: the rooms in view (<see cref="Gi.RoomMaskPass"/>: 1 on a room's pixel). The
     /// rest alone sets the adapted luminance, by the game's rule; the rooms' own mean sets what their pixels are scaled by before the upscaler
     /// (<see cref="InteriorGain"/>, kept in the state buffer), so a room is read at its own exposure and the street at the street's.</param>
+    /// <param name="shade">Adaptive exposure's scale and floor (<see cref="PostProcess.ShadeExposure"/>); scale 0: the game's band.</param>
     public void Exposure(float blend, (float Min, float Max) band, Target2D scene, Target2D adaptA, Target2D adaptB, float indoor = 0,
-        float indoorFloor = PostProcess.IndoorExposureFloor, Target2D? rooms = null)
+        float indoorFloor = PostProcess.IndoorExposureFloor, Target2D? rooms = null, (float Scale, float Floor) shade = default)
     {
         bool weighted = indoor > 0 && rooms is not null;
         ref var program = ref weighted ? ref _exposureWeightedProgram : ref _exposureProgram;
@@ -211,7 +218,7 @@ sealed unsafe class MergedKernels(PostProcess post)
         cmd.BindPipeline(pipeline!.Value);
         cmd.BindProgramResources(program!.Value, 0, new ReadOnlySpan<GpuBinding>(bindings, weighted ? 5 : 4));
         var push = new ExposurePush { Blend = blend, BandMin = band.Min, BandMax = band.Max, Indoor = indoor, IndoorFloor = indoorFloor,
-            MaxGain = PostProcess.IndoorExposureMaxGain };
+            MaxGain = PostProcess.IndoorExposureMaxGain, ShadeScale = shade.Scale, ShadeFloor = shade.Floor };
         cmd.PushConstants(program!.Value, GpuStage.Compute, in push);
         cmd.Dispatch(16, 16);
         cmd.Order();
@@ -344,7 +351,8 @@ static class MergedShaders
         layout(set = 0, binding = 2, rg32f) writeonly uniform image2D uAdapted;
         layout(std430, set = 0, binding = 3) coherent buffer State { uint counter; float room; float roomMean; float gain; vec4 tiles[256]; } st;
         //WEIGHT-BINDING
-        layout(push_constant) uniform Push { float blend; float bandMin; float bandMax; float indoor; float indoorFloor; float maxGain; } pc;
+        layout(push_constant) uniform Push { float blend; float bandMin; float bandMax; float indoor; float indoorFloor; float maxGain;
+            float shadeScale; float shadeFloor; } pc;
         shared vec4 tile[256];
         shared uint finished;
 
@@ -401,8 +409,17 @@ static class MergedShaders
                 vec2 last = imageLoad(uLast, ivec2(0)).rg;
                 // What is no room's sets the adapted luminance, by the game's rule (next to none of it in view: held); the whole picture, as its fragments
                 // were lit, the smoothed mean (the night grading reads it).
-                float outside = pooled.y > 0.02 ? pooled.x / pooled.y : last.r;
+                bool seen = pooled.y > 0.02;
+                float outside = seen ? pooled.x / pooled.y : last.r;
                 float adapted = clamp(mix(last.r, outside, pc.blend), pc.bandMin, pc.bandMax);
+
+                // Adaptive exposure (PostProcess.ShadeExposure): the target is the band's own above its minimum, the mean scaled under it; smoothed
+                // towards, not clamped after.
+                if (pc.shadeScale > 0.0)
+                {
+                    float target = outside >= pc.bandMin ? min(outside, pc.bandMax) : clamp(outside * pc.shadeScale, pc.shadeFloor, pc.bandMin);
+                    adapted = seen ? mix(last.r, target, pc.blend) : last.r;
+                }
                 float smoothMean = mix(last.g, (pooled.x + pooled.z) / max(pooled.y + pooled.w, 1e-6), pc.blend);
                 // The rooms in view: their own adapted luminance goes down with their mean, under the game's minimum (PostProcess.IndoorExposure), and
                 // their pixels are scaled by the adapted luminance over it.

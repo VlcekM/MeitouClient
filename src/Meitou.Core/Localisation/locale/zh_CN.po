@@ -5607,3 +5607,18 @@ msgstr "烹饪"
 #. machine-translated
 msgid "{1} is built into Meitou now: {2}."
 msgstr "{1} 现已内置于 Meitou：{2}。"
+
+msgid "Adaptive exposure"
+msgstr "自适应曝光"
+
+msgid "the game's band"
+msgstr "游戏的范围"
+
+msgid "follows the shade"
+msgstr "随阴影调整"
+
+msgid "the game's exposure follows the picture's brightness only down to a daytime minimum, so a canyon or a street in a cliff's shadow at noon stays dark; Meitou lets it adapt by day to halfway between the game's day and night minimums (up to 1.7 times brighter in deep shade); nights, open sunny views and rooms are as before (docs/render-post.md \"Adaptive exposure\")"
+msgstr "游戏的曝光只会随画面亮度降到白天的最小值，因此正午时峡谷或悬崖阴影中的街道仍然很暗；Meitou 让它在白天降到游戏白天与夜晚最小值的中间（深阴影中最多亮 1.7 倍）；夜晚、开阔的晴天景色和室内保持不变 (docs/render-post.md \"Adaptive exposure\")"
+
+msgid "Brighten the picture in deep shade by day, such as a canyon at noon; nights and sunny views stay as they are."
+msgstr "白天在深阴影中（如正午的峡谷）提亮画面；夜晚和晴天景色保持不变。"

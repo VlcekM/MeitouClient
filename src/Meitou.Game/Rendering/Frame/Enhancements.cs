@@ -504,6 +504,11 @@ public static class Enhancements
             "the game draws its sake and rum bottles solid; Meitou draws them as glass: the scene behind bent and tinted through the walls, "
                 + "reflections of the sun, sky and lamps brighter towards the edges, the drink inside up to its level, the neck or cork solid "
                 + "(docs/render-objects.md \"See-through items\")"),
+        new("exposure", "Adaptive exposure", "the game's band", "follows the shade",
+            () => post.AdaptiveExposure, v => post.AdaptiveExposure = v,
+            "the game's exposure follows the picture's brightness only down to a daytime minimum, so a canyon or a street in a cliff's shadow at "
+                + "noon stays dark; Meitou lets it adapt by day to halfway between the game's day and night minimums (up to 1.7 times brighter in "
+                + "deep shade); nights, open sunny views and rooms are as before (docs/render-post.md \"Adaptive exposure\")"),
     ];
 
     #endregion

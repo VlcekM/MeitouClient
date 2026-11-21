@@ -89,6 +89,12 @@ public sealed class PostOptions
     public bool LitDust = true;
 
     /// <summary>
+    /// Meitou switch (<c>exposure</c>; docs/render-post.md "Adaptive exposure"): by day the exposure adapts below the game's daytime minimum, so a
+    /// scene in deep shade is exposed up to 1.7 times brighter; Faithful keeps the game's band, which leaves such a scene dark.
+    /// </summary>
+    public bool AdaptiveExposure = true;
+
+    /// <summary>
     /// Meitou switch (<c>gihybrid</c>; docs/render-gi.md "Hybrid GI"), off by default: nothing it holds has been seen on a GPU.
     /// <c>--gi-hybrid</c> picks among its parts.
     /// </summary>
@@ -683,12 +689,12 @@ public sealed class PostOptions
                 o.Fxaa = o.HeatHaze = false;
                 o.ContactShadows = false;
                 o.Ssao = o.Dither = o.LowResParticles = o.LightShafts = o.MeitouFog = false;
-                o.MeitouHeatHaze = o.ToneMapping = o.NightGrade = o.Bloom = o.LampShadows = false;
+                o.MeitouHeatHaze = o.ToneMapping = o.NightGrade = o.Bloom = o.LampShadows = o.AdaptiveExposure = false;
                 break;
             case "kenshi":
                 o.ContactShadows = false;
                 o.Ssao = o.Dither = o.LowResParticles = o.LightShafts = o.MeitouFog = false;
-                o.MeitouHeatHaze = o.ToneMapping = o.NightGrade = o.Bloom = o.LampShadows = false;
+                o.MeitouHeatHaze = o.ToneMapping = o.NightGrade = o.Bloom = o.LampShadows = o.AdaptiveExposure = false;
 
                 // Kenshi's chain with the shipped settings: exposure only (no curve, bloom magnitude 0, SSAO commented
                 // out), and FXAA then the heat haze on the final image.
@@ -731,6 +737,7 @@ public sealed class PostOptions
         ShaftAirDawn = other.ShaftAirDawn;
         ParticleDivisor = other.ParticleDivisor;
         Exposure = other.Exposure;
+        AdaptiveExposure = other.AdaptiveExposure;
         ToneMap = other.ToneMap;
         ToneMix = other.ToneMix;
         Grade = other.Grade;

@@ -650,7 +650,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             "Foliage ranges" or "Foliage levels" or "Far impostors" or WorldFrame.GrassCoverSwitch or WorldFrame.NearTreeFadeSwitch => "Vegetation",
             "Haze" or "Night air" or "Night sky" or "Clouds" or "Cloud shadows" or "Cloud shadows in fog" or "Fog" or "Lit dust"
                 or WorldFrame.WetWorldSwitch => "Sky & weather",
-            "Tone map and grade" or "Night grading" or "Dithering" => "Colour",
+            "Tone map and grade" or "Adaptive exposure" or "Night grading" or "Dithering" => "Colour",
             "Heat haze" or WorldFrame.BloomSwitch or WorldFrame.DepthOfFieldSwitch or WorldFrame.CameraEffectsSwitch or WorldFrame.VignetteSwitch
                 or WorldFrame.FilmGrainSwitch => "Post FX",
             "Skin" or "Character levels" or "Advanced materials" or "Blood on weapons and gear" or "Blood cells" or "Blood on surfaces"

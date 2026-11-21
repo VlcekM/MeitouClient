@@ -51,9 +51,9 @@ sealed class PostComposite : IDisposable
     /// </summary>
     readonly UniformHandle _filterR, _filterG, _filterB, _filterContrast, _vignette, _grain;
     /// <summary>
-    /// The luminance program's cell size, and the adaptation program's level, blend and band.
+    /// The luminance program's cell size, and the adaptation program's level, blend, band and Adaptive exposure's scale and floor.
     /// </summary>
-    readonly UniformHandle _lumCell, _adaptLevel, _adaptBlend, _adaptBand;
+    readonly UniformHandle _lumCell, _adaptLevel, _adaptBlend, _adaptBand, _adaptShade;
     /// <summary>
     /// The samplers: the composite's scene, occlusion and adapted luminance, the luminance pass's scene, the adaptation pass's luminance and last
     /// value.
@@ -272,6 +272,7 @@ sealed class PostComposite : IDisposable
         _adaptLevel = _adapt.Uniform("uLevel");
         _adaptBlend = _adapt.Uniform("uBlend");
         _adaptBand = _adapt.Uniform("uBand");
+        _adaptShade = _adapt.Uniform("uShade");
         _sceneSampler = Sample(TextureMinFilter.Linear, TextureMagFilter.Linear);
         _luminanceSampler = Sample(TextureMinFilter.LinearMipmapNearest, TextureMagFilter.Linear);
         _plainSampler = Sample(TextureMinFilter.Linear, TextureMagFilter.Linear);
@@ -342,15 +343,16 @@ sealed class PostComposite : IDisposable
     public bool ShaftsPending => _pendingShafts is not null;
 
     /// <summary>
-    /// Draws the scene through exposure and the tone map, then FXAA and the heat haze, into <paramref name="target"/>.
+    /// Draws the scene through exposure and the tone map, then FXAA and the heat haze, into <paramref name="target"/>. <paramref name="shade"/>:
+    /// Adaptive exposure's scale and floor (<see cref="IWorldPostChain.ShadeExposure"/>).
     /// </summary>
     public void Draw(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, GpuTexture target, PostOptions o, (float Min, float Max) band,
-        in SceneInputs inputs, bool temporal = false)
+        in SceneInputs inputs, bool temporal = false, (float Scale, float Floor) shade = default)
     {
         EnsureDisplay(target.Desc.Width, target.Desc.Height);
         MakeTargets(o, temporal);
         RunLuminance(cmd, scene);
-        RunAdaptation(cmd, band);
+        RunAdaptation(cmd, band, shade);
 
         // The composite: auto exposure (0.55 / adapted), the game's tone map, grade and dither.
         bool smaaOn = o.Smaa && !temporal && _ldr is not null;
@@ -396,7 +398,7 @@ sealed class PostComposite : IDisposable
     /// The adaptation: this frame's mean against the last output, blended at the game's rate (instant for a still)
     /// inside the band. adaptB is the target written last frame; the swap below makes it adaptA.
     /// </summary>
-    void RunAdaptation(IGpuCommandList cmd, (float Min, float Max) band)
+    void RunAdaptation(IGpuCommandList cmd, (float Min, float Max) band, (float Scale, float Floor) shade)
     {
         var previous = _adaptB;
         (_adaptA, _adaptB) = (_adaptB, _adaptA);
@@ -412,6 +414,7 @@ sealed class PostComposite : IDisposable
         _adapt.Set(_adaptLevel, MathF.Log2(LuminanceSize));
         _adapt.Set(_adaptBlend, blend);
         _adapt.Set(_adaptBand, band.Min, band.Max);
+        _adapt.Set(_adaptShade, shade.Scale, shade.Floor);
         Fullscreen(cmd, _adapt, _adaptB!, 1, 1);
         _adaptedValid = true;
         _adaptedFrames = Math.Min(_adaptedFrames + 1, 2);

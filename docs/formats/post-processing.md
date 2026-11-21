@@ -54,7 +54,7 @@ surveyed post/compositor files. Absence is scoped to those sources, not all poss
 | Stage | Faithful (`--post kenshi`, `--faithful all`) | Meitou (the default) | Basis |
 | --- | --- | --- | --- |
 | Scene buffer | RGBA16F, single-sample | none | Kenshi: R11G11B10F, no FSAA |
-| Exposure | Kenshi's auto exposure (game sky) | exposure multiplier (Tab slider, keys) | Kenshi: 0.55 / adapted, band from CONSTANTS |
+| Exposure | Kenshi's auto exposure (game sky) | exposure multiplier (Tab slider, keys); `exposure` switch: shade adapts under the band ([render-post.md](../render-post.md#adaptive-exposure)) | Kenshi: 0.55 / adapted, band from CONSTANTS |
 | Curve | clamp at 1 | clamp at 1; shoulder or aces (the Tab slider; the `--tonemap` options were removed) as options (not a switch) | Kenshi: none (clip) |
 | SSAO | off | on (12 taps, half resolution, from depth) | Kenshi: shipped, disabled |
 | SSAO on characters | n/a (no SSAO) | the occlusion is scaled to 0.25 on the characters' own pixels (`PostOptions.SsaoCharacterStrength`, a constant; Meitou feature, no game counterpart; **Observed** on a `--crowd` view, no game reference) | Kenshi: none |

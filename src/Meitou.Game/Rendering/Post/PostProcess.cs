@@ -277,9 +277,9 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         /// </summary>
         public readonly SamplerSlot Luminance, Last;
         /// <summary>
-        /// The program's uniforms <c>uLevel</c>, <c>uBlend</c>, <c>uBand</c>.
+        /// The program's uniforms <c>uLevel</c>, <c>uBlend</c>, <c>uBand</c>, <c>uIndoor</c>, <c>uShade</c>.
         /// </summary>
-        public readonly UniformHandle Level, Blend, Band, Indoor;
+        public readonly UniformHandle Level, Blend, Band, Indoor, Shade;
         /// <summary>
         /// Compiles the program and resolves its handles.
         /// </summary>
@@ -287,6 +287,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         {
             (Luminance, Last) = (P.Sampler("uLuminance"), P.Sampler("uLast"));
             (Level, Blend, Band, Indoor) = (P.Uniform("uLevel"), P.Uniform("uBlend"), P.Uniform("uBand"), P.Uniform("uIndoor"));
+            Shade = P.Uniform("uShade");
         }
     }
 
@@ -2960,6 +2961,16 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// </summary>
     public (float Min, float Max)? AutoExposure { get; set; }
     /// <summary>
+    /// Adaptive exposure (<see cref="IWorldPostChain.ShadeExposure"/>): under the band's minimum the adaptation's target is the mean times Scale,
+    /// no lower than Floor; Scale 0 keeps the game's band. Not applied while an exposure is held.
+    /// </summary>
+    public (float Scale, float Floor) ShadeExposure { get; set; }
+    /// <summary>
+    /// The mean luminance of an open desert by day, which a darker scene is exposed as (<see cref="ShadeExposure"/>): 0.567, the new game's
+    /// start at 10:00 (0.574 with every switch Faithful), under the game's daytime minimum 0.8 like most daytime views.
+    /// </summary>
+    public const float ShadeExposureReference = 0.57f;
+    /// <summary>
     /// Above 0 (an interior is in view, lit by its probes): the band's minimum follows the scene down, to the mean luminance times this, and no
     /// lower than <see cref="IndoorExposureFloor"/> of itself. The game's minimum is set for a room lit evenly by its ambient; a room lit by
     /// its lamps alone is several times darker and stayed under it, at one fixed exposure.
@@ -3039,7 +3050,9 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             (_adaptA, _adaptB) = (_adaptB, _adaptA);
             var mband = ExposureBand();
             var rooms = RoomMaskNow;
-            _merged.Exposure(mblend, mband, _postColour, _adaptA!, _adaptB!, rooms is null ? 0 : IndoorExposure, IndoorFloorShare(mband.Min), rooms);
+            var mshade = _exposureHold is null ? ShadeExposure : default;
+            float indoor = rooms is null ? 0 : IndoorExposure;
+            _merged.Exposure(mblend, mband, _postColour, _adaptA!, _adaptB!, indoor, IndoorFloorShare(mband.Min), rooms, mshade);
             _adaptedValid = true;
             _adaptedFrames = Math.Min(_adaptedFrames + 1, 2);
             return;
@@ -3066,6 +3079,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         var band = ExposureBand();
         ap.P.Set(ap.Band, band.Min, band.Max);
         ap.P.Set(ap.Indoor, pinned ? 0 : IndoorExposure, IndoorFloorShare(band.Min));
+        var shade = pinned ? default : ShadeExposure;
+        ap.P.Set(ap.Shade, shade.Scale, shade.Floor);
         Draw(ap.P, _adaptB!);
         _adaptedValid = true;
         _adaptedFrames = Math.Min(_adaptedFrames + 1, 2);

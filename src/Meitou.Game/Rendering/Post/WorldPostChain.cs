@@ -89,6 +89,12 @@ interface IWorldPostChain
     (float Min, float Max)? AutoExposure { get; set; }
 
     /// <summary>
+    /// Adaptive exposure (Meitou; docs/render-post.md "Adaptive exposure"): a mean under the band's minimum adapts to itself times Scale, no
+    /// lower than Floor; Scale 0 keeps the game's band.
+    /// </summary>
+    (float Scale, float Floor) ShadeExposure { get; set; }
+
+    /// <summary>
     /// The water plane the fog volumes and SSAO reconstruct against (null: no water).
     /// </summary>
     float? WaterHeight { get; set; }

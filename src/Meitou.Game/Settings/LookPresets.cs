@@ -248,7 +248,7 @@ sealed class LookPresets(SettingsMenu menu)
         "Anti-aliasing" or "Weather particles" => "Hidden",
         "Shadows" or "Indirect light" or "Indoor GI" or "Ambient occlusion" or "Light shafts" or "Planetshine" => "Light",
         "Haze" or "Night air" or "Night sky" or "Clouds" or "Cloud shadows" or "Cloud shadows in fog" or "Heat haze" or "Fog" or "Lit dust" => "Sky",
-        "Tone map and grade" or "Night grading" or "Dithering" or WorldFrame.BloomSwitch
+        "Tone map and grade" or "Adaptive exposure" or "Night grading" or "Dithering" or WorldFrame.BloomSwitch
             or WorldFrame.DepthOfFieldSwitch or WorldFrame.CameraEffectsSwitch or WorldFrame.VignetteSwitch or WorldFrame.FilmGrainSwitch => "Colour",
         "Water" => "Water",
         "Skin" => "Skin",
