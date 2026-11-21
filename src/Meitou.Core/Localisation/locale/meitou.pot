@@ -6119,6 +6119,10 @@ msgstr ""
 msgid "{1} is arresting {2}!"
 msgstr ""
 
+#: src/Meitou.Game/Mods/BuiltInMods.cs
+msgid "{1} is built into Meitou now: {2}."
+msgstr ""
+
 #: src/Meitou.Simulation/Crime/BountyBook.cs
 msgid "{1} is no longer wanted by {2}"
 msgstr ""

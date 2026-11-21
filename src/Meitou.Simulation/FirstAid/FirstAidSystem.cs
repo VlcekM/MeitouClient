@@ -50,9 +50,14 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     /// </summary>
     public const int EffectTreat = 1;
     /// <summary>
-    /// Untreated damage (HP) under which a treatment in progress counts as finished.
+    /// Untreated damage (HP) under which a treatment in progress counts as finished (<see cref="RoomLeft"/>).
     /// </summary>
     const float Done = 1e-3f;
+    /// <summary>
+    /// The share of each part's maximum that <see cref="RoomLeft"/> leaves out (engine choice): a growing Skin Spider's parts gain about 2.5e-6 of
+    /// their maximum a tick (its size, docs/game/animals.md), and only float dust is smaller.
+    /// </summary>
+    const float GrowthShare = 1e-4f;
     /// <summary>
     /// The kit quality closing a wound without a kit (<c>FUN_14064d800</c>).
     /// </summary>
@@ -678,9 +683,9 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         // The first aid kit phase while an organic part has room and a first aid kit is found, else the robot repair kit phase (Task_FirstAid
         // FUN_1403563a0: a search that finds no first aid kit goes on to the robot phase, #884). Treatment runs until the last bit is bandaged (the
         // start threshold is MedicalState.FirstAidThreshold).
-        bool organic = body.BandageRoom(race, false) > Done;
+        bool organic = RoomLeft(body, race, false) > Done;
         bool robot = !organic || KitOf(world, m, medicCold, FunctionOf(false)) is null;
-        if (robot && body.BandageRoom(race, true) <= Done)
+        if (robot && RoomLeft(body, race, true) <= Done)
         {
             if (organic) Say(world, m, medicCold.TreatTarget, KitEmpty);   // organic parts left, no first aid kit
             else Say(world, m, medicCold.TreatTarget, HealingOtherFinished, BeingHealedFinished);
@@ -729,6 +734,23 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     static float SkillOf(CharacterStats stats, bool self, bool robotKit) => stats[StatOf(robotKit)] * (self ? 0.8f : 1);
 
     /// <summary>
+    /// What a kit of this kind still has to bandage: <see cref="MedicalState.BandageRoom"/> less <see cref="GrowthShare"/> of each part's
+    /// maximum. A growing animal's parts gain HP every tick, so the whole room always held a new sliver over <see cref="Done"/> and its medic
+    /// treated it for ever, draining kit after kit.
+    /// </summary>
+    static float RoomLeft(MedicalState body, RaceData race, bool robotKit)
+    {
+        float total = 0;
+        foreach (var p in body.Parts)
+        {
+            if (p.IsRobotic(race) != robotKit) continue;
+            total += MathF.Max(0, p.MaxHp * (1 - GrowthShare) - p.Flesh - p.Bandage);
+        }
+
+        return total;
+    }
+
+    /// <summary>
     /// One update of an open wound: closed with a kit matching the patient's race (none: quality 5), the kit drained, the medic's skill and XP.
     /// </summary>
     void CloseWound(World world, int m, int p, CharacterCold medicCold, CharacterStats stats, RaceData medicRace, MedicalState body, RaceData race,
@@ -761,7 +783,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         // Without a kit 1 HP a second goes to the parts, organic or robotic alike, in part order as with a kit, and nothing drains (FUN_140649a00).
         // Done as with a kit: once the parts are bandaged up, healing turns bandage into flesh and float dust leaves a sliver of room every update,
         // which would keep the treatment going for ever.
-        if (body.BandageRoom(race, false) + body.BandageRoom(race, true) <= Done || body.Bandage(dt, null, race, out _) <= 0)
+        if (RoomLeft(body, race, false) + RoomLeft(body, race, true) <= Done || body.Bandage(dt, null, race, out _) <= 0)
         {
             Say(world, m, medicCold.TreatTarget, HealingOtherFinished, BeingHealedFinished);
             End(world, m);
@@ -819,7 +841,13 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         float spent = MathF.Min(amount, MathF.Max(kit.Item.Charges, 0));
         kit.Item.Charges -= amount;
         bool finished = kit.Item.Charges <= 0;
-        if (finished) kit.Owner.RemoveOne(kit.Item);
+        if (finished)
+        {
+            // A stack loses the used-up unit; the next one starts full, as an eaten stack's does (FeedSystem.Eat).
+            bool more = kit.Item.Quantity > 1;
+            kit.Owner.RemoveOne(kit.Item);
+            if (more) kit.Item.Charges = kit.Item.MaxCharges;
+        }
 
         ItemUseObservers.Report(world, ItemUseKind.FirstAid, kit.Item.Record, world.Characters.IdOf(m), null, spent, finished);
     }

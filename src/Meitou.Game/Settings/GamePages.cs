@@ -826,7 +826,7 @@ sealed class GamePages(SettingsMenu menu)
             Slider: FastestSpeedSlider));
         result.Add(new("Pause after loading",
             "A save starts paused once it has loaded, so nothing happens before you look around. In the game it runs at once.",
-            Toggle: new("Pause after loading", () => menu.Config.PauseOnLoad, v => menu.Config.PauseOnLoad = v, Remaster: true, OnOff: true)));
+            Toggle: new("Pause after loading", () => menu.Config.PauseOnLoad, v => menu.Config.PauseOnLoad = v)));
         result.Add(new("Pause while loading",
             "Faithful, as in the game: when the camera comes to places that are not loaded yet (a jump to a squad far away), the game pauses and "
             + "shows Loading... until they are. Meitou: the game runs on while they load.",
@@ -989,19 +989,19 @@ sealed class GamePages(SettingsMenu menu)
         result.Add(new("Character flights",
             "A double click on a squad member far from the view (or a double tap of their number) flies the camera there in an arc instead of "
             + "cutting.",
-            Toggle: new("Character flights", () => menu.Config.CharacterFlights, v => menu.Config.CharacterFlights = v, Remaster: true, OnOff: true)));
+            Toggle: new("Character flights", () => menu.Config.CharacterFlights, v => menu.Config.CharacterFlights = v)));
         result.Add(new("Keep textures at characters",
             "Keeps the meshes and textures around every squad member loaded, not only around the camera, so a flight or jump to them lands on finished "
             + "detail. "
             + "Costs video memory.",
             Toggle: new("Keep textures at characters", () => menu.Config.KeepTexturesAtCharacters,
-                v => menu.Config.KeepTexturesAtCharacters = v, Remaster: true, OnOff: true)));
+                v => menu.Config.KeepTexturesAtCharacters = v)));
         if (menu.Config.KeepTexturesAtCharacters)
         {
             result.Add(new("Keep textures at all squads",
                 "Also keeps the surroundings of your other squads' members loaded, not only the squad on the squad bar. Costs more video memory.",
                 Toggle: new("Keep textures at all squads", () => menu.Config.KeepTexturesAtAllSquads,
-                    v => menu.Config.KeepTexturesAtAllSquads = v, OnOff: true)));
+                    v => menu.Config.KeepTexturesAtAllSquads = v)));
         }
 
         result.Add(new(_characterFlightTime.Label, "Seconds a character flight takes, and each hop of the squad tour (numpad /).",

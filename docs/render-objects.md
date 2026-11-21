@@ -95,7 +95,7 @@ and the next frame tries again (`PostProcess.Unallocated`). Before this, a 3840 
 
 ## Kept points
 
-Advanced "Keep textures at characters" (Meitou, default on, `UserConfig.KeepTexturesAtCharacters`): the host sets `WorldFrame` `Kept` to
+Advanced "Keep textures at characters" (default on, `UserConfig.KeepTexturesAtCharacters`): the host sets `WorldFrame` `Kept` to
 the drawn position of every squad bar member each frame; its sub-option "Keep textures at all squads" (default off, shown only while the
 main one is on, `KeepTexturesAtAllSquads`) takes every player squad's members instead. `ObjectStreamer.Near` / zone layout count the nearest of eye, `Ahead` and `Kept`,
 so object meshes and texture mips stay loaded round each character (a resolving instance's first texture need is measured the same way, else

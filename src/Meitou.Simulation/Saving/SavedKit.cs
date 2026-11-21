@@ -179,6 +179,7 @@ public static class SavedKit
         if (s.ColourId.Length > 0) item.ColourId = s.ColourId;
 
         item.Charges = s.Charges;
+        DropSpentUnit(item);
         item.Death = s.Death;
         item.Unique = s.Unique;
         (item.LimbDamage, item.LimbWear, item.LimbStun) = (s.Damage, s.Wear, s.Stun);
@@ -194,6 +195,19 @@ public static class SavedKit
 
         item.Saved = s.Source;
         return item;
+    }
+
+    /// <summary>
+    /// A stack of an item with charges saved at none left loses that used-up unit and the next starts full, as a stack drained now does
+    /// (<c>FirstAidSystem.Drain</c>, <c>FeedSystem.Eat</c>): older Meitou saves keep first aid kit stacks below zero, which the kit finder
+    /// skips (#1144). The original removes a kit with no charges (<c>FUN_14032dff0</c>), so its saves hold none.
+    /// </summary>
+    static void DropSpentUnit(ItemInstance item)
+    {
+        if (item.Type != FcsRecordType.Item || item.MaxCharges <= 0 || item.Charges > 0 || item.Quantity <= 1) return;
+
+        item.Quantity--;
+        item.Charges = item.MaxCharges;
     }
 
     /// <summary>

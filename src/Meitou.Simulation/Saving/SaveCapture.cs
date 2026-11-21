@@ -2055,7 +2055,7 @@ public static partial class SaveCapture
 
                 placements ??= levels.Buildings().GroupBy(p => p.Key, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(),
                     StringComparer.Ordinal);
-                if (!placements.TryGetValue(b, out var placement) || AddPlacedState(game, placement) is not { } added) continue;
+                if (!placements.TryGetValue(b, out var placement) || AddPlacedState(game, placement, levels) is not { } added) continue;
 
                 buildings[b] = state = added;
             }
@@ -2075,7 +2075,7 @@ public static partial class SaveCapture
     /// the building's fixtures read back (completeness, damage and height). Null when the zone has no file. The state has no handle, as a level
     /// building's state in the level data has none.
     /// </summary>
-    static FcsRecord? AddPlacedState(SaveGame game, BuildingPlacement placement)
+    static FcsRecord? AddPlacedState(SaveGame game, BuildingPlacement placement, WorldLevelData? levels)
     {
         if (!game.Zones.TryGetValue(placement.Zone, out var zone)) return null;
 
@@ -2096,8 +2096,11 @@ public static partial class SaveCapture
         state.Ints["flags"] = 1;   // bit 0: outside
 
         // as the level edits write the same placement
-        if (placement.InteriorLayout is { Length: > 0 } interior) state.Strings["interior layout name"] = interior;
-        if (placement.ExteriorLayout is { Length: > 0 } exterior) state.Strings["exterior layout name"] = exterior;
+        var levelState = placement.StateId is not null ? levels?.Zones.GetValueOrDefault(placement.Zone)?.Find(placement.StateId) : null;
+        string interior = placement.LayoutName(levelState, exterior: false);
+        string exterior = placement.LayoutName(levelState, exterior: true);
+        if (interior.Length > 0) state.Strings["interior layout name"] = interior;
+        if (exterior.Length > 0) state.Strings["exterior layout name"] = exterior;
         file.Records.Add(state);
         list.Instances.RemoveAll(i => i.Id == placement.InstanceId);
         var instance = new FcsInstance

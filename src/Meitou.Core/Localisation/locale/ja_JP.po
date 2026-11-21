@@ -4763,3 +4763,6 @@ msgstr "服に血痕が残る"
 #. machine-translated
 msgid "With Blood on weapons and gear on, blood soaks into worn clothes and armour slowly, stays when the wound heals, and washes out in water and rain or fades with time. Off, the clothes show only the blood of the wound under them."
 msgstr "「武器と装備の血」がオンのとき、血は着ている服や防具にゆっくり染み込み、傷が治っても残り、水や雨で洗い流されるか時間とともに薄れます。オフでは、服にはその下の傷の血だけが表示されます。"
+
+msgid "{1} is built into Meitou now: {2}."
+msgstr "{1} は Meitou に組み込まれました: {2}。"

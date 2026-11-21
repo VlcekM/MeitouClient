@@ -5204,3 +5204,6 @@ msgstr "Roupas mantêm manchas de sangue"
 #. machine-translated
 msgid "With Blood on weapons and gear on, blood soaks into worn clothes and armour slowly, stays when the wound heals, and washes out in water and rain or fades with time. Off, the clothes show only the blood of the wound under them."
 msgstr "Com \"Sangue em armas e equipamento\" ligado, o sangue encharca aos poucos as roupas e armaduras vestidas, fica quando o ferimento sara e sai na água e na chuva ou desbota com o tempo. Desligado, as roupas mostram só o sangue do ferimento por baixo."
+
+msgid "{1} is built into Meitou now: {2}."
+msgstr "{1} agora vem integrado ao Meitou: {2}."

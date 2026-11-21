@@ -879,7 +879,7 @@ random for `random yaw`, owned by the building's faction (`GroundItem.OwnedBy`) 
 loose items (`ownedby` null); an empty slot's due game hour is saved as `meitou slot due item<n>` in its building's GAMESTATE_BUILDING (`ItemSlots.WriteDue`,
 [save keys](formats/save.md)), and a slot saved empty waits for it (capped at its longest respawn time from the load) and claims nothing; on a reload each other slot
 takes the nearest saved item of its group's records lying within 2 of it in XZ and 10 in height, and nearer to it in 3D than to the building's other slots (shelf spots
-lie closer than 2, two in the Hub's bar 1.6 apart, **Observed**, and shelves stand above one another); a save from the original has no such key, so a slot emptied in
+lie closer than 2, two in the Hub's bar 1.6 apart, **Observed**, and shelves stand above one another); unclaimed saved items lying within 0.1 in 3D of an inactive interior layout's slot of a non-emptied town building (matching that slot's group) are dropped on registration so items from an older or replaced layout do not float in mid-air (#1077); a save from the original has no such key, so a slot emptied in
 it is due at once after the load; upper-floor items are not hidden when a lower floor is viewed. The original, loading such a save, generates the interiors again beside those items.
 
 ## Items and eating
