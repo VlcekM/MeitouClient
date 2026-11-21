@@ -2840,8 +2840,8 @@ msgstr "Результаты поиска"
 msgid "Search settings"
 msgstr "Поиск настроек"
 
-msgid "Seen into a building with its roof hidden, no rain, dust or ash falls over the open room. The game leaves out only what falls inside it, so with the camera pulled back the rain in front still streaks across the room."
-msgstr "Если смотреть внутрь здания со скрытой крышей, дождь, пыль и пепел не падают в открытую комнату. Оригинальная игра убирает только то, что падает внутри, поэтому при отдалённой камере дождь перед зданием всё равно проходит через комнату."
+msgid "Seen into a building with its roof hidden, no rain or ash falls over the open room. The game leaves out only what falls inside it, so with the camera pulled back the rain in front still streaks across the room."
+msgstr "Если смотреть внутрь здания со скрытой крышей, дождь и пепел не падают в открытую комнату. Оригинальная игра убирает только то, что падает внутри, поэтому при отдалённой камере дождь перед зданием всё равно проходит через комнату."
 
 msgid "Seen into a building your characters are in, parts of other buildings that run through it are left out, such as the Hub's town wall in the Shinobi Thieves tower. The game's world places them there and draws them inside the room."
 msgstr "Если смотреть внутрь здания, где находятся ваши персонажи, части других зданий, проходящие сквозь него, не рисуются — например, городская стена Хаба в башне Воров Шиноби. Мир игры ставит их туда и рисует внутри комнаты."

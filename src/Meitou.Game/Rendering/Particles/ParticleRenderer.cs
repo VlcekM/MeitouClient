@@ -197,18 +197,27 @@ public sealed unsafe class ParticleRenderer : IDisposable
         uniform float uCoverageMax, uCoverageGain;
         uniform int uCoverage;                      // 0: colour; 1: the particle's alpha, 2: its brightest channel (the upscalers' reactive mask); 3 / 4: the low-resolution target's premultiplied alpha / additive
         uniform sampler2D uInteriorMask;            // the interior cut's depth range (InteriorMaskRenderer): r the nearest mask face's depth + 1, a the farthest's, b minus the farthest open building's
-        uniform vec4 uInterior;                     // x 1: the material clips inside buildings (CLIP_INTERIOR); y, z: the mask's pixels per pixel of this target
+        uniform vec4 uInterior;                     // x 1: the material clips inside buildings (CLIP_INTERIOR); y, z: the mask's pixels per pixel of this target; w 1: also cut in front of open buildings (full-size camera rain/ash)
         """ + DepthConvention.Glsl + """
         void main()
         {
             // basic.hlsl under CLIP_INTERIOR: a fragment between the nearest and the farthest interior-mask face is left out (rain in a building).
             if (uInterior.x > 0.5)
             {
-                vec4 interiorRange = texelFetch(uInteriorMask, ivec2(gl_FragCoord.xy * uInterior.yz), 0);
+                ivec2 maskCoord = clamp(ivec2(gl_FragCoord.xy * uInterior.yz), ivec2(0), textureSize(uInteriorMask, 0) - 1);
+                vec4 interiorRange = texelFetch(uInteriorMask, maskCoord, 0);
                 float interiorDepth = 1.0 / gl_FragCoord.w;
                 if (interiorDepth < interiorRange.a && interiorDepth > interiorRange.r) discard;
-                // Meitou: in front of a building whose roof is hidden too, so no streaks fall over the open room (b is 0 where there is none).
-                if (interiorDepth < -interiorRange.b) discard;
+                // Meitou: camera rain and ash in front of a building whose roof is hidden too, so no streaks fall over the open room (b is 0 where
+                // there is none). When the scene depth is available, keep streaks over surfaces clearly in front of the building (its outer wall or
+                // a foreground structure) or behind it (sky or distant terrain seen through a hidden upper floor's mask).
+                if (uInterior.w > 0.5 && interiorRange.b < 0.0 && interiorDepth < -interiorRange.b)
+                {
+                    if (uSoft.x <= 0.0) discard;
+                    float sceneZ = depthViewZ(texelFetch(uSoftDepth, ivec2(gl_FragCoord.xy), 0).r, uSoft.yz);
+                    float frontMargin = 2.0 + 0.002 * interiorRange.r;
+                    if (sceneZ >= interiorRange.r - frontMargin && sceneZ <= -interiorRange.b + 24.0) discard;
+                }
             }
             // basic.hlsl: texture * colour * vertex colour. A recoloured burst (negative vertex rgb, Burst's recolour) takes that colour instead of the texture's hue, keeping its brightness.
             vec4 t = texture(uTexture, vUv);
@@ -358,9 +367,9 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// </summary>
     readonly List<EffectUnit> _simulationWork = [];
     /// <summary>
-    /// Scratch: the units drawn this frame, with whether each is rain and whether it is placed.
+    /// Scratch: the units drawn this frame, with whether each is rain, a camera-box weather effect, and whether it is placed.
     /// </summary>
-    readonly List<(EffectUnit Unit, bool Rain, bool Placed)> _drawUnits = [];
+    readonly List<(EffectUnit Unit, bool Rain, bool Camera, bool Placed)> _drawUnits = [];
     /// <summary>
     /// This frame's draws (<see cref="Prepare"/>).
     /// </summary>
@@ -523,10 +532,12 @@ public sealed unsafe class ParticleRenderer : IDisposable
         /// </summary>
         public float Fill;
         /// <summary>
-        /// Rain (a <c>CAMERA_RAIN</c> or <c>CAMERA_ACID_RAIN</c> effect's draw) and fire (a placed effect's additive draw: flames, sparks): full size
-        /// at every setting, each with its own coverage (RecordDraws).
+        /// Rain (a <c>CAMERA_RAIN</c> or <c>CAMERA_ACID_RAIN</c> effect's draw), camera-box weather (<c>CAMERA</c>, <c>CAMERA_RAIN</c>,
+        /// <c>CAMERA_ACID_RAIN</c>, whose particles sit in a box ahead of the eye) and fire (a placed effect's additive draw: flames, sparks): rain
+        /// and fire stay full size at every setting, each with its own coverage; full-size camera draws take the open-building front cut
+        /// (RecordDraws).
         /// </summary>
-        public bool Rain, Fire;
+        public bool Rain, Camera, Fire;
         /// <summary>
         /// The draw of a unit whose particles scatter the light they are in (<see cref="EffectUnit.Scatters"/>): lit as the scene is with
         /// <see cref="LitDust"/>.
@@ -1014,7 +1025,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         var frame = _gpu.Frame;
         var forward = -new Vector3(view.M13, view.M23, view.M33);   // the view's -Z axis in the world
         CollectUnits(WorldCamera.FrustumPlanes(viewProjectionMatrix), eye);   // eye-relative: tested with positions less the eye
-        foreach (var (u, rain, placed) in _drawUnits)
+        foreach (var (u, rain, camera, placed) in _drawUnits)
         {
             var offset = u.Anchor - eye;
             if (u.Simulation is not { } sim || u.CatchingUp) continue;
@@ -1061,7 +1072,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
                     _nextDivisors[(u, t)] = divisor;
                 }
                 _draws.Add(new DrawItem { Instances = instances, Count = written, Close = close, Technique = def, Material = material,
-                    Texture = texture, Divisor = divisor, Fill = fill, Rain = rain, Fire = fire, Scatter = scatter });
+                    Texture = texture, Divisor = divisor, Fill = fill, Rain = rain, Camera = camera, Fire = fire, Scatter = scatter });
                 _drawnParticles += written;
             }
         }
@@ -1098,7 +1109,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
                     if (!InFrustum(planes, u.Position - eye, u.Radius)) continue;
                 }
 
-                units.Add((u, g.Effect.Type is EffectType.CameraRain or EffectType.CameraAcidRain, g.Entry is null));
+                units.Add((u, g.Effect.Type is EffectType.CameraRain or EffectType.CameraAcidRain, g.Effect.IsCameraGroup, g.Entry is null));
             }
         }
 
@@ -1332,7 +1343,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 _program.Set(_colourScale, m.ColourScale.X * lit, m.ColourScale.Y * lit, m.ColourScale.Z * lit, m.ColourScale.W);
                 _program.Bind(_textureSlot, d.Texture.Sampled());
                 SetSoftAndLight(m, coverage, softDepth, d.Scatter);
-                SetInteriorCut(m, targets);
+                SetInteriorCut(d, m, targets, divisor);
                 RecordPass(cmd, state, targets, d, first, count);
             }
         }
@@ -1396,9 +1407,12 @@ public sealed unsafe class ParticleRenderer : IDisposable
 
     /// <summary>
     /// The interior cut of a material's sprites: on when it clips inside buildings (<see cref="ParticleMaterial.ClipInterior"/>) and the mask drew
-    /// this frame, read at the mask's size whatever the target's (the low-resolution ones, after the upscale).
+    /// this frame, read at the mask's size whatever the target's (the low-resolution ones, after the upscale). The open-building front cut
+    /// (<c>uInterior.w</c>, Fixes settings <c>Rain in open buildings</c>) applies only to full-size camera-box effects (rain and ash flakes, which
+    /// stay ahead of the eye so the game's rule misses them when zoomed out): world-space duststorms are already cut inside buildings by the game's
+    /// rule, and cutting them in front of an open building punches a blocky hole through the dust between the camera and the building.
     /// </summary>
-    void SetInteriorCut(ParticleMaterial m, in PassTargets targets)
+    void SetInteriorCut(in DrawItem d, ParticleMaterial m, in PassTargets targets, int divisor)
     {
         var viewport = targets.Viewport;
         if (!m.ClipInterior || InteriorCut?.DepthRange is not { } range || viewport.Width <= 0 || viewport.Height <= 0)
@@ -1408,7 +1422,8 @@ public sealed unsafe class ParticleRenderer : IDisposable
             return;
         }
 
-        _program.Set(_interior, 1f, (float)range.Width / viewport.Width, (float)range.Height / viewport.Height, 0f);
+        float frontCut = d.Camera && divisor == 1 ? 1f : 0f;
+        _program.Set(_interior, 1f, (float)range.Width / viewport.Width, (float)range.Height / viewport.Height, frontCut);
         _program.Bind(_interiorSlot, range.Texture);
     }
 

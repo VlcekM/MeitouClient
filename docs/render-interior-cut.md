@@ -57,9 +57,14 @@ grows through a bar's floorboards. `InteriorMaskRenderer`; consumers: terrain, f
   - particles: materials whose fragment program defines `CLIP_INTERIOR` (`ParticleMaterial.ClipInterior`), the game's rule alone (no
     under-floor reach), in the colour, low-resolution and reactive-mask draws (`ParticleRenderer.SetInteriorCut`);
     **Rain in open buildings** (Fixes settings, on; off: the game's rule alone): the mask pass also writes B = -(depth + 1) of the farthest face
-    of a building in the interior view (min blend), and those particles are cut anywhere nearer than it, so rain in front of a room with its
-    roof hidden no longer streaks over it. The game's camera rain lies 30..190 ahead of the eye (`Kenshi_Heavy_Rain`'s 120 cube), so from
-    a camera pulled back further than that its rule cuts none of it (issue #945). Rain off the building's screen footprint is unchanged;
+    of a building in the interior view (min blend), and full-size camera-box `CLIP_INTERIOR` particles (`EffectType.Camera`, `CameraRain`,
+    `CameraAcidRain`: rain and ash flakes) are cut anywhere nearer than it (`uInterior.w`), so rain in front of a room with its roof hidden no
+    longer streaks over it. The game's camera rain lies 30..190 ahead of the eye (`Kenshi_Heavy_Rain`'s 120 cube), so from a camera pulled back
+    further than that its rule cuts none of it (issue #945). World-space duststorms and placed smoke/beams keep the game's rule alone (cutting
+    them in front of an open building punches a hole through dust between the camera and the building with low-resolution block edges). When
+    `uSoftDepth` is bound, the front cut also requires the scene depth behind the pixel to lie within the open building's mask span
+    (`r - (2 + 0.002 r)` to `-b + 24`), keeping streaks over foreground occluders and over sky or distant terrain seen through a hidden roof.
+    Rain off the building's screen footprint is unchanged;
   - TERRAIN-mode features and rocks (the terrain's mesh path): placements over a box are drawn with the meshes' full
     colour program with `TerrainConstants.interiorCut` on (features and CPU-culled rocks in their own list; GPU-culled
     rocks get the fade 1.5 too and are drawn by the fading draw).

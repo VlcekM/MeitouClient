@@ -655,7 +655,7 @@ sealed class GamePages(SettingsMenu menu)
             Toggle: new("Walls inside buildings", () => menu.Config.FixPartsInBuildings, v => menu.Config.FixPartsInBuildings = v,
                 Remaster: true, OnOff: true)));
         result.Add(new("Rain in open buildings",
-            "Seen into a building with its roof hidden, no rain, dust or ash falls over the open room. "
+            "Seen into a building with its roof hidden, no rain or ash falls over the open room. "
             + "The game leaves out only what falls inside it, so with the camera pulled back the rain in front still streaks across the room.",
             Toggle: new("Rain in open buildings", () => menu.Config.FixRainInBuildings, v => menu.Config.FixRainInBuildings = v,
                 Remaster: true, OnOff: true)));

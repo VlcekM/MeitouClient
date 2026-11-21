@@ -4050,7 +4050,7 @@ msgid "Seconds a character flight takes, and each hop of the squad tour (numpad 
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
-msgid "Seen into a building with its roof hidden, no rain, dust or ash falls over the open room. The game leaves out only what falls inside it, so with the camera pulled back the rain in front still streaks across the room."
+msgid "Seen into a building with its roof hidden, no rain or ash falls over the open room. The game leaves out only what falls inside it, so with the camera pulled back the rain in front still streaks across the room."
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs

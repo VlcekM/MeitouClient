@@ -2840,8 +2840,8 @@ msgstr "검색 결과"
 msgid "Search settings"
 msgstr "설정 검색"
 
-msgid "Seen into a building with its roof hidden, no rain, dust or ash falls over the open room. The game leaves out only what falls inside it, so with the camera pulled back the rain in front still streaks across the room."
-msgstr "지붕을 숨긴 건물 안을 볼 때 열린 방 위로 비, 먼지, 재가 내리지 않습니다. 게임은 안에 떨어지는 것만 빼기 때문에 카메라를 뒤로 빼면 앞쪽 비가 여전히 방을 가로지릅니다."
+msgid "Seen into a building with its roof hidden, no rain or ash falls over the open room. The game leaves out only what falls inside it, so with the camera pulled back the rain in front still streaks across the room."
+msgstr "지붕을 숨긴 건물 안을 볼 때 열린 방 위로 비나 재가 내리지 않습니다. 게임은 안에 떨어지는 것만 빼기 때문에 카메라를 뒤로 빼면 앞쪽 비가 여전히 방을 가로지릅니다."
 
 msgid "Seen into a building your characters are in, parts of other buildings that run through it are left out, such as the Hub's town wall in the Shinobi Thieves tower. The game's world places them there and draws them inside the room."
 msgstr "캐릭터가 있는 건물 안을 볼 때 그 건물을 관통하는 다른 건물의 부분을 뺍니다. 예를 들어 Shinobi Thieves 탑 안의 Hub 성벽입니다. 게임의 세계는 그것을 그곳에 두고 방 안에 그립니다."

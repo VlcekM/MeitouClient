@@ -3497,8 +3497,8 @@ msgstr "Ao ver dentro de uma construção onde estão seus personagens, partes d
 msgid "Rain in open buildings"
 msgstr "Chuva em construções abertas"
 
-msgid "Seen into a building with its roof hidden, no rain, dust or ash falls over the open room. The game leaves out only what falls inside it, so with the camera pulled back the rain in front still streaks across the room."
-msgstr "Ao ver dentro de uma construção com o telhado oculto, não cai chuva, poeira nem cinza sobre o cômodo aberto. O jogo omite só o que cai dentro dela, então com a câmera afastada a chuva da frente ainda risca o cômodo."
+msgid "Seen into a building with its roof hidden, no rain or ash falls over the open room. The game leaves out only what falls inside it, so with the camera pulled back the rain in front still streaks across the room."
+msgstr "Ao ver dentro de uma construção com o telhado oculto, não cai chuva nem cinza sobre o cômodo aberto. O jogo omite só o que cai dentro dela, então com a câmera afastada a chuva da frente ainda risca o cômodo."
 
 msgid "Ground in buried ruins"
 msgstr "Solo em ruínas enterradas"

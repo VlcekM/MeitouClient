@@ -4249,8 +4249,8 @@ msgstr "笼子里或柱子上的动物会呼吸、四处张望，被击倒时会
 msgid "Rain in open buildings"
 msgstr "开放建筑中的雨"
 
-msgid "Seen into a building with its roof hidden, no rain, dust or ash falls over the open room. The game leaves out only what falls inside it, so with the camera pulled back the rain in front still streaks across the room."
-msgstr "看进隐藏了屋顶的建筑时，开放的房间上方不会落下雨、尘土或灰烬。游戏只去掉落在建筑内的部分，所以镜头拉远时前方的雨仍会划过房间。"
+msgid "Seen into a building with its roof hidden, no rain or ash falls over the open room. The game leaves out only what falls inside it, so with the camera pulled back the rain in front still streaks across the room."
+msgstr "看进隐藏了屋顶的建筑时，开放的房间上方不会落下雨或灰烬。游戏只去掉落在建筑内的部分，所以镜头拉远时前方的雨仍会划过房间。"
 
 msgid "Ground in buried ruins"
 msgstr "掩埋废墟中的地面"

@@ -2840,8 +2840,8 @@ msgstr "Resultados de la búsqueda"
 msgid "Search settings"
 msgstr "Buscar ajustes"
 
-msgid "Seen into a building with its roof hidden, no rain, dust or ash falls over the open room. The game leaves out only what falls inside it, so with the camera pulled back the rain in front still streaks across the room."
-msgstr "Al ver dentro de un edificio con el techo oculto, no cae lluvia, polvo ni ceniza sobre la habitación abierta. El juego solo omite lo que cae dentro, así que con la cámara alejada la lluvia de delante sigue cruzando la habitación."
+msgid "Seen into a building with its roof hidden, no rain or ash falls over the open room. The game leaves out only what falls inside it, so with the camera pulled back the rain in front still streaks across the room."
+msgstr "Al ver dentro de un edificio con el techo oculto, no cae lluvia ni ceniza sobre la habitación abierta. El juego solo omite lo que cae dentro, así que con la cámara alejada la lluvia de delante sigue cruzando la habitación."
 
 msgid "Seen into a building your characters are in, parts of other buildings that run through it are left out, such as the Hub's town wall in the Shinobi Thieves tower. The game's world places them there and draws them inside the room."
 msgstr "Al ver dentro de un edificio donde están tus personajes, se omiten las partes de otros edificios que lo atraviesan, como la muralla del Hub en la torre de los Shinobi Thieves. El mundo del juego las coloca ahí y las dibuja dentro de la habitación."
