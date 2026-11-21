@@ -1073,6 +1073,39 @@ public class AiTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// A loaded roaming squad runs its travelling package itself (docs/simulation.md "Platoon blackboards", <c>FUN_1402732b0</c>): under a wandering
+    /// trader package (signal 16, <c>Package_WanderingTrader</c>: the next town drawn from where its leader stands, not the town it is in), its
+    /// squad's destination is Faraway and its leader walks over 100 nearer to it in 10 s. Catches a loaded roaming squad that stands about under a
+    /// travel package.
+    /// </summary>
+    [Fact]
+    public void A_roaming_squad_with_a_travel_package_heads_for_its_target_town()
+    {
+        var trader = Rec("118-t", FcsRecordType.AiPackage, "Wandering trader");
+        trader.Ints["signal func"] = 16;
+        trader.References["Leader AI Goals"] = [Ref("119-t", 0, 100, 0)];
+        trader.References["Squad AI Goals"] = [Ref("121-t", 0, 100, 0)];
+        var travel = Task("119-t", TaskType.WanderingTrader, TaskPriority.NonUrgent);
+        var data = SyntheticTown.Data(SyntheticTown.Database(roaming: true, extra: [.. Records(), travel, trader],
+                changeFolk: t => t.References["AI packages"] = [Ref("118-t", 0)]));
+        using var world = Town(1, out _, data, null);
+        world.RunTicks(700);
+        var faraway = AiSystem.TownAt(data, world, Far);
+        var roamers = world.Platoons.All
+            .Where(p => !p.Pinned && p.State == PlatoonState.Loaded)
+            .Select(p => world.Squads.Find(p.SquadId)!)
+            .ToList();
+        float Gap(Squad s) => Off(world, s.Leader, Far);
+        var before = roamers.ToDictionary(s => s, Gap);
+        world.RunTicks(600);
+
+        Assert.False(faraway.IsNone);
+        Assert.NotEmpty(roamers);
+        Assert.All(roamers, s => Assert.Equal(faraway, s.Ai!.Destination));
+        Assert.All(roamers, s => Assert.True(Gap(s) < before[s] - 100, $"{before[s]:0} to {Gap(s):0} from Faraway"));
+    }
+
+    /// <summary>
     /// A node goal of a member with no home building finds no node (its finder searches only the home's node list, <c>FUN_14099e920</c> →
     /// <c>FUN_14038c2f0</c>; docs/simulation.md "Platoon blackboards"), so its plan cannot run: in a town whose resident leader keeps the shop of
     /// its home on 20 Shopkeeper node, the leader of a loaded roaming squad listing only 20 stays on 14 Idleness. Catches a homeless member that
