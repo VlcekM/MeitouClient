@@ -341,8 +341,9 @@ public class JailTests
         Assert.Equal(2000, j.World.Player.Money);
         Assert.Null(j.Cold(captive).Bounties);
 
-        // The bail unlocks the cage and gives 133 Get out of cage (economy.md 11.5): the captive, out cold, steps out once it comes round.
-        Assert.False(j.CageA.Lock!.Locked);
+        // The bail leaves the cage locked (FUN_1406ae170 writes no cage lock, unlike the buy) and gives 133 Get out of cage (economy.md 11.5): the
+        // captive, out cold, steps out once it comes round.
+        Assert.True(j.CageA.Lock!.Locked);
 
         j.Cold(captive).Medical!.KoTimer = 0;
         j.RunUntil(() => !j.Cold(captive).IsImprisoned, 60, "the way out");

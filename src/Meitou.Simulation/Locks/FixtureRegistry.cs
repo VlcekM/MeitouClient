@@ -2063,8 +2063,8 @@ public sealed partial class FixtureRegistry
     /// Task 133 Get out of cage (legit, flag 0; <see cref="LeaveCage"/>), given with the queue cleared to a prisoner bailed out
     /// (<c>FUN_1406ae170</c>), bought free (<c>FUN_1406add20</c>) or released by a jailer (<c>FUN_1403570a0</c>). The bought and the released are out
     /// of their cage before the task runs (both clear the hold themselves, <c>FUN_140330600</c>, right after the give), so its leave finds no cage and
-    /// does nothing (<b>Verified</b>: the leave tests the held building's handle, which the clear set to none); only a bailed prisoner, whose cage
-    /// the bail merely unlocks, leaves through it. False when the character is in no cage (nothing to do).
+    /// does nothing (<b>Verified</b>: the leave tests the held building's handle, which the clear set to none); only a bailed prisoner, whose hold
+    /// the bail leaves (its cage stays locked), leaves through it. False when the character is in no cage (nothing to do).
     /// </summary>
     public bool GetOutLegit(World world, CharacterId prisoner, CrimeSystem? crimes = null)
     {
