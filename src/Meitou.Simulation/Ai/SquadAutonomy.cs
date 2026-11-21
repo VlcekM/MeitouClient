@@ -81,6 +81,8 @@ public sealed class SquadAutonomy(PopulationData data)
         DropMinds(world, squad);
         if (on) return;
 
+        // The town it is in and its hour stay with the squad (the original's platoon keeps its one blackboard).
+        if (squad.Ai is { } board) (squad.StayTown, squad.StaySince) = (board.InTown, board.InTownSince);
         squad.Ai = null;
         squad.SavedAi = null;
     }

@@ -915,6 +915,13 @@ reads its own keys. Keys are looked up by name: **Observed**, METARU and i949 ho
   and their arrival hour. Meitou writes the handle the nest is saved with (`PopulationSystem.NestSaveId`, after the nests are written; the
   null handle for a nest the save does not hold) and loads it as that nest (`CurrentTownSave.TownOf`). **Observed** (autosave0 loaded headless,
   300 ticks, saved): its four Wolves platoons are written back with the `currenttown` and `towntime` they were read with.
+- **Player platoons**: the blackboard update `FUN_1402732b0` (town step `FUN_1402688d0` first) is slot 27 of `Platoon`'s vtable (`FUN_1407ebcc0`,
+  on the platoon's `+0xf8` blackboard), the one class holding it (**Verified**, decompile and vtable list). The player's platoons run it too
+  (**Observed**): METARU's player platoon holds a town and 196.69; autosave2, the same game 3 hours on and out of town, the null handle and 196.69
+  kept; autosave0 and i949 a town and 34.0; a platoon made since (autosave2's second) the null handle and 0. Meitou: a squad the AI does not run
+  holds the pair itself (`Squad.StayTown` / `StaySince`, hashed) and takes the same step on the package cadence, ENTER_TOWN included; it hands it
+  to the board the AI attaches to an autonomous squad and takes it back when the board is dropped. A loaded player platoon's pair waits on its
+  squad (`Squad.SavedTown`, hashed) until the AI first looks at it; until then the record keeps what it read.
 - **House locked**: Meitou keeps the flag on the squad's home (`LockSystem.IsHouseLocked`, the building's `meitou house locked`). `Saving/HomeLockSave`
   writes `homelok` as the flag of the home the platoon's `homebuilding` names (`Squad.HomeBuilding`; a save's platoon out of the world, from the same
   building), and a save's platoon made for the first time since the load with `homelok` set sets its home's flag; a platoon without a home keeps the

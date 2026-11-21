@@ -296,17 +296,36 @@ public sealed partial class AiSystem
     /// </summary>
     void UpdateInTown(World world, Squad squad, Blackboard board)
     {
-        if (TownPosition(world, squad) is not { } at) return;
-        var town = LeaderStatusTown(world, squad) is { IsNone: false } status ? status : CurrentTown(world, at);
-        if (board.InTown.IsNone && !town.IsNone)
-        {
-            board.InTownSince = world.GameHours;
-            if (world.Characters.IsAlive(squad.Leader))
-                world.Defer(new Dialogue.DialogueEvent(squad.Leader, CharacterId.None, EnterTown) { Tick = world.Tick + 1 });
-        }
+        if (InTownStep(world, squad, board.InTown, board.InTownSince) is not { } now) return;
 
-        board.InTown = town;
-        if (town.Site >= 0 && !_townPlaces.Has(town.Site)) _townPlaces.Refresh(world, this);
+        (board.InTown, board.InTownSince) = now;
+        if (now.Town.Site >= 0 && !_townPlaces.Has(now.Town.Site)) _townPlaces.Refresh(world, this);
+    }
+
+    /// <summary>
+    /// The same step for a squad without a board (<see cref="Squad.StayTown"/>; a player's: the original's player platoon runs its blackboard's
+    /// update too, <b>Observed</b> in saves).
+    /// </summary>
+    void UpdateStay(World world, Squad squad)
+    {
+        if (InTownStep(world, squad, squad.StayTown, squad.StaySince) is { } now) (squad.StayTown, squad.StaySince) = now;
+    }
+
+    /// <summary>
+    /// The town step of <c>FUN_1402688d0</c> from the squad's <paramref name="town"/> and arrival hour <paramref name="since"/>: the town it is in
+    /// now, with the hour stamped and ENTER_TOWN said on coming in from none; null when the squad has no one to stand anywhere.
+    /// </summary>
+    (CampaignTown Town, double Since)? InTownStep(World world, Squad squad, CampaignTown town, double since)
+    {
+        if (TownPosition(world, squad) is not { } at) return null;
+
+        var now = LeaderStatusTown(world, squad) is { IsNone: false } status ? status : CurrentTown(world, at);
+        if (!town.IsNone || now.IsNone) return (now, since);
+
+        if (world.Characters.IsAlive(squad.Leader))
+            world.Defer(new Dialogue.DialogueEvent(squad.Leader, CharacterId.None, EnterTown) { Tick = world.Tick + 1 });
+
+        return (now, world.GameHours);
     }
 
     /// <summary>

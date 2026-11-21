@@ -369,14 +369,22 @@ public static partial class SaveCapture
 
     /// <summary>
     /// Writes a squad's town and arrival hour on its platoon record (<see cref="CurrentTownSave"/>); a nest's handle waits for the nests
-    /// (<see cref="WriteNestTowns"/>).
+    /// (<see cref="WriteNestTowns"/>). A record written without a blackboard keeps what it holds.
     /// </summary>
     static void WriteCurrentTown(FcsRecord record, Ai.Blackboard? board)
     {
+        if (board is not null) WriteCurrentTown(record, board.InTown, board.InTownSince);
+    }
+
+    /// <summary>
+    /// Writes the town a squad is in and its arrival hour on its platoon record (see the overload above).
+    /// </summary>
+    static void WriteCurrentTown(FcsRecord record, CampaignTown town, double since)
+    {
         if (s_memoryPass is not { TownHands: { } hands } pass) return;
 
-        CurrentTownSave.Write(record, board, hands);
-        if (board is { InTown.Nest: > 0 }) pass.NestTowns.Add((record, board.InTown.Nest - 1));
+        CurrentTownSave.Write(record, town, since, hands);
+        if (town.Nest > 0) pass.NestTowns.Add((record, town.Nest - 1));
     }
 
     /// <summary>
@@ -788,6 +796,12 @@ public static partial class SaveCapture
         ModSquadSave.Write(platoon.Record, squad);
         ShopSave.WritePlayer(platoon.Record, squad, world);
         ModTagSave.Write(platoon.Record, squad.ModTags);
+
+        // Its town and arrival hour, as every platoon's blackboard writes them (FUN_14026c2d0): its board's while the AI runs it; a save's pair the
+        // AI has not taken yet stays as read.
+        if (squad.Ai is { } board) WriteCurrentTown(platoon.Record, board);
+        else if (squad.SavedTown is null) WriteCurrentTown(platoon.Record, squad.StayTown, squad.StaySince);
+
         if (index >= 0)
         {
             // The name the tabs show is the record's name; the string id stays the file's (Observed: rename writes the record's name,

@@ -3476,7 +3476,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             if (squad.Ai is null)
             {
                 if (cadence) ClaimSlaveWork(world, squad);
-                if (!AttachNew(world, squad, cadence)) continue;
+                if (AttachNew(world, squad, cadence)) UpdateSquad(world, squad);
+                else StepStay(world, squad, cadence);
+
+                continue;
             }
             else if (!cadence) continue;   // the rest is looked at on the package cadence only (and when the squad appears)
 
@@ -3539,6 +3542,22 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (squad.Ai!.Town >= 0 && !_townPlaces.Has(squad.Ai.Town)) _townPlaces.Refresh(world, this);
 
         return true;
+    }
+
+    /// <summary>
+    /// A squad the AI does not run (a player's): the town and hour its save held, the first time it is looked at since the load (as
+    /// <c>FUN_140272c20</c> reads them into every platoon's blackboard), then its town step on the cadence.
+    /// </summary>
+    void StepStay(World world, Squad squad, bool cadence)
+    {
+        if (squad.SavedTown is { } saved)
+        {
+            if (world.Saved is { } placed)
+                (squad.StayTown, squad.StaySince) = saved.Applied(squad.StayTown, h => Saving.CurrentTownSave.TownOf(world, placed, h));
+            squad.SavedTown = null;
+        }
+
+        if (cadence) UpdateStay(world, squad);
     }
 
     /// <summary>
@@ -3976,6 +3995,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         // The town it starts in (a nest too), taken as already entered (engine choice: no ENTER_TOWN line for every squad a town or nest makes);
         // a saved squad then takes its saved town.
         if (TownPosition(world, squad) is { } at) (squad.Ai.InTown, squad.Ai.InTownSince) = (StartTown(world, at), world.GameHours);
+
+        // A player's squad the AI starts to run keeps the town it was in and its hour (the original's platoon has one blackboard throughout).
+        if (IsPlayers(world, squad))
+        {
+            StepStay(world, squad, false);
+            (squad.Ai.InTown, squad.Ai.InTownSince) = (squad.StayTown, squad.StaySince);
+        }
 
         // The town and arrival hour its platoon's save record held, for the first squad in it since the load, made from the save's characters or
         // from its template (FUN_140272c20 reads currenttown and towntime into the platoon's blackboard).

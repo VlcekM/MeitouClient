@@ -29,19 +29,17 @@ public sealed record CurrentTownSave(Hand Town, double Since)
     }
 
     /// <summary>
-    /// Writes the arrival hour and the town <paramref name="board"/> has the squad in, by <paramref name="townHand"/> (a town's save handle). A nest's
-    /// handle is written once the nests are (<see cref="WriteNest"/>); a town with no save handle keeps the handle the record holds, as does a record
-    /// written without a blackboard; no town over a null handle keeps it as it was read (its other parts are stale values).
+    /// Writes the arrival hour <paramref name="since"/> and the town the squad is in, by <paramref name="townHand"/> (a town's save handle). A nest's
+    /// handle is written once the nests are (<see cref="WriteNest"/>); a town with no save handle keeps the handle the record holds; no town over a
+    /// null handle keeps it as it was read (its other parts are stale values).
     /// </summary>
-    public static void Write(FcsRecord platoon, Blackboard? board, Func<CampaignTown, Hand>? townHand)
+    public static void Write(FcsRecord platoon, CampaignTown town, double since, Func<CampaignTown, Hand> townHand)
     {
-        if (board is null || townHand is null) return;
+        platoon.Floats[SinceKey] = (float)since;
+        if (town.Nest > 0) return;
 
-        platoon.Floats[SinceKey] = (float)board.InTownSince;
-        if (board.InTown.Nest > 0) return;
-
-        var hand = board.InTown.IsNone ? Hand.Null : townHand(board.InTown);
-        bool keep = hand.IsNull && (!board.InTown.IsNone || Hand.Read(platoon, TownKey).IsNull);
+        var hand = town.IsNone ? Hand.Null : townHand(town);
+        bool keep = hand.IsNull && (!town.IsNone || Hand.Read(platoon, TownKey).IsNull);
         if (!keep) hand.Write(platoon, TownKey);
     }
 
@@ -52,20 +50,20 @@ public sealed record CurrentTownSave(Hand Town, double Since)
     public static void WriteNest(FcsRecord platoon, Hand nest) => nest.Write(platoon, TownKey);
 
     /// <summary>
-    /// Puts the saved town and hour on a squad's new blackboard, as the original's load: no town for the null handle (the next in-town step then
-    /// stamps the hour and says ENTER_TOWN, as <c>FUN_1402688d0</c> does), the town or nest <paramref name="townOf"/> finds (<c>FUN_1409f9100</c>
-    /// resolves a town's and a nest's handle), else (a town the world does not hold) the one the blackboard was started in.
+    /// Puts the saved town and hour on a squad's new blackboard, as the original's load (<see cref="Applied"/>).
     /// </summary>
-    public void Apply(Blackboard board, Func<Hand, CampaignTown> townOf)
-    {
-        board.InTownSince = Since;
-        if (Town.IsNull)
-        {
-            board.InTown = CampaignTown.None;
-            return;
-        }
+    public void Apply(Blackboard board, Func<Hand, CampaignTown> townOf) => (board.InTown, board.InTownSince) = Applied(board.InTown, townOf);
 
-        if (townOf(Town) is { IsNone: false } town) board.InTown = town;
+    /// <summary>
+    /// The town and hour a squad has after the load: no town for the null handle (the next in-town step then stamps the hour and says ENTER_TOWN, as
+    /// <c>FUN_1402688d0</c> does), the town or nest <paramref name="townOf"/> finds (<c>FUN_1409f9100</c> resolves a town's and a nest's handle), else
+    /// (a town the world does not hold) <paramref name="started"/>, the one the squad was started in.
+    /// </summary>
+    public (CampaignTown Town, double Since) Applied(CampaignTown started, Func<Hand, CampaignTown> townOf)
+    {
+        if (Town.IsNull) return (CampaignTown.None, Since);
+
+        return (townOf(Town) is { IsNone: false } town ? town : started, Since);
     }
 
     /// <summary>
