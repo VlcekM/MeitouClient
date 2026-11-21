@@ -40,15 +40,16 @@ public static class BorderlessFullScreen
         : window.WindowState == WindowState.Fullscreen;
 
     /// <summary>
-    /// Full screen on the primary monitor at its current video mode, keeping the windowed place to go back to. Auto-iconify off on Linux: GLFW
-    /// otherwise minimizes a full-screen window when it loses focus (Alt+Tab), which borderless full screen on Windows never does, and the window
-    /// manager keeps only the focused full-screen window on top. Not on macOS, where GLFW raises a full-screen window above the menu bar and
-    /// minimizing is what gets it out of the way.
+    /// Full screen on the requested monitor, or the primary monitor when none was requested, at its current video mode, keeping the windowed place to
+    /// go back to. Auto-iconify off on Linux: GLFW otherwise minimizes a full-screen window when it loses focus (Alt+Tab), which borderless full
+    /// screen on Windows never does, and the window manager keeps only the focused full-screen window on top. Not on macOS, where GLFW raises a
+    /// full-screen window above the menu bar and minimizing is what gets it out of the way.
     /// </summary>
-    static unsafe Vector2D<int>? EnterFullScreen(IWindow window, nint handle)
+    static unsafe Vector2D<int>? EnterFullScreen(IWindow window, nint handle, int? monitorIndex)
     {
         var glfw = GlfwProvider.GLFW.Value;
-        var monitor = glfw.GetPrimaryMonitor();
+        var monitor = RequestedMonitor(glfw, monitorIndex);
+        if (monitor == null) monitor = glfw.GetPrimaryMonitor();
         if (monitor == null) return null;
         var mode = glfw.GetVideoMode(monitor);
         if (mode == null) return null;
@@ -58,6 +59,17 @@ public static class BorderlessFullScreen
             glfw.SetWindowAttrib((WindowHandle*)handle, WindowAttributeSetter.AutoIconify, false);
         glfw.SetWindowMonitor((WindowHandle*)handle, monitor, 0, 0, mode->Width, mode->Height, mode->RefreshRate);
         return new Vector2D<int>(mode->Width, mode->Height);
+    }
+
+    /// <summary>
+    /// The 1-based requested GLFW monitor, or null when <paramref name="monitorIndex"/> is absent or outside the current monitor list.
+    /// </summary>
+    static unsafe Silk.NET.GLFW.Monitor* RequestedMonitor(Glfw glfw, int? monitorIndex)
+    {
+        if (monitorIndex is not { } index || index < 1) return null;
+
+        var monitors = glfw.GetMonitors(out int count);
+        return index <= count ? monitors[index - 1] : null;
     }
 
     /// <summary>
@@ -87,7 +99,7 @@ public static class BorderlessFullScreen
     /// <summary>
     /// Switches the window between borderless full screen on its monitor and the bordered, maximized window.
     /// </summary>
-    public static void Toggle(IWindow window)
+    public static void Toggle(IWindow window, int? monitorIndex = null)
     {
         if (IsOn(window))
         {
@@ -112,7 +124,7 @@ public static class BorderlessFullScreen
             // Shown first on Wayland: GLFW ignores showing a full-screen window, and there going full screen doesn't show it either (X11 maps it
             // itself).
             if (window.Native?.Wayland is not null) window.IsVisible = true;
-            if (window.Native?.Glfw is { } handle) size = EnterFullScreen(window, handle) ?? size;
+            if (window.Native?.Glfw is { } handle) size = EnterFullScreen(window, handle, monitorIndex) ?? size;
             else window.WindowState = WindowState.Fullscreen;
             Console.WriteLine($"window    full screen {size.X} x {size.Y}, asked of the window manager");
             return;
