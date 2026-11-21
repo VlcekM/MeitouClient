@@ -1057,9 +1057,22 @@ public sealed class AiMind
     public Vector2 Post { get; set; }
 
     /// <summary>
-    /// The game hours (<see cref="World.GameHours"/>) until which it is committed to its goal (docs/game/ai.md "Packages and goals").
+    /// The game hours (<see cref="World.GameHours"/>) until which it is committed to its goal: the goal's timer (<c>AITaskSytem</c> <c>+0x280</c>,
+    /// docs/game/ai-tasks.md "Desire and commitment"). Not saved.
     /// </summary>
     public double CommitUntil { get; set; }
+
+    /// <summary>
+    /// The task's timer (<c>AITaskSytem</c> <c>+0x288</c>, <c>FUN_14050d130</c>, <b>Verified</b>): rolled from now at each start of a step whose
+    /// commit step commits (<see cref="AiSystem.CommitStep"/>); a row with TaskData <c>+0x21</c> ends when it passes. Not saved.
+    /// </summary>
+    public double TaskCommitUntil { get; set; }
+
+    /// <summary>
+    /// Its <c>+0x21</c> commitment ended at this think (<see cref="TierRungs.Begin"/>): the serial looks that skip a committed character look at it
+    /// again before its next choice (<see cref="Kidnap.CaptiveGoals"/>). Cleared by its next think; hashed while set.
+    /// </summary>
+    public bool CommitEnded { get; set; }
 
     /// <summary>
     /// The tick its current goal was taken up (<see cref="AiSystem"/>'s act-out): an engine task started before it does not displace that goal's plan.
@@ -1453,6 +1466,18 @@ public sealed class AiMind
     public CharacterId FightTarget { get; set; } = CharacterId.None;
 
     /// <summary>
+    /// The turret 234's finder took for Self preservation's plan [146, 234, 32] at this tick's think (<see cref="AiSystem"/>'s
+    /// <c>GuardTurretPick</c>), for the serial claim of the same tick (<c>ClaimGuards</c>), which clears it; never set between ticks (not hashed).
+    /// </summary>
+    public GuardTurret? GuardAsk { get; set; }
+
+    /// <summary>
+    /// The turret Self preservation's 146 mans, as the serial claim granted it (no squad mate holds it); cleared when the plan leaves it. Hashed
+    /// while set; not saved (a plan is not).
+    /// </summary>
+    public GuardTurret? Guard { get; set; }
+
+    /// <summary>
     /// Where goal 148 stood at the last rescue beat (a debugging aid for the action log; written by the rescue goals' serial look,
     /// <see cref="Carrying.RescueGoals"/>, read only by the log, so it changes nothing in the world). Not saved, not hashed.
     /// </summary>
@@ -1575,6 +1600,8 @@ public sealed class AiMind
         hasher.Add(HomeUnreachable);
         hasher.Add(SeatUnreachable);
         hasher.Add(CommitUntil);
+        if (TaskCommitUntil != 0) hasher.Add(TaskCommitUntil);
+        if (CommitEnded) hasher.Add(0x436D4564);   // "CmEd": only between the think that ended an +0x21 commitment and the next
         hasher.Add(Target ?? new Vector3(float.NaN));
         if (WorkActive || WorkEpoch != 0)
         {
@@ -1601,6 +1628,13 @@ public sealed class AiMind
         }
 
         if (FightFrom != 0) hasher.Add(FightFrom);
+        if (Guard is { } guard)
+        {
+            hasher.Add(0x47726454);   // "GrdT": only while Self preservation holds a turret
+            hasher.Add(guard.Site);
+            hasher.Add(Rng.StableHash(guard.Key));
+        }
+
         if (!TravelDetour.IsNone)
         {
             hasher.Add(0x54726176);   // "Trav": only while a travel step walks to a detour nest
@@ -1634,4 +1668,16 @@ public sealed class AiMind
         if (FateCage is { } fateCage) hasher.Add(Rng.StableHash(fateCage));
         Shopping.Hash(ref hasher);
     }
+}
+
+/// <summary>
+/// A turret Self preservation's 234 took (<see cref="AiMind.Guard"/>): a town's (its site and building) or a placed one (site -1, no town
+/// building), with its key (a town building's key, a placed building's id) and its post.
+/// </summary>
+public sealed record GuardTurret(int Site, string Key, TurretPost Post, TownBuilding? Building)
+{
+    /// <summary>
+    /// Where the turret building stands.
+    /// </summary>
+    public Vector3 Position => Building?.Position ?? Post.Position;
 }

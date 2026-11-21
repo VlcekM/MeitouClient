@@ -114,6 +114,13 @@ public sealed class SenseBlock
     /// The tick of the last push into <see cref="Pushed"/>.
     /// </summary>
     internal long PushedTick = -1;
+    /// <summary>
+    /// The culprits this character, the victim of their crime, witnesses (<see cref="Aggro.AggroSystem.Witness"/>) and the tick until which each
+    /// witnessing holds: the original's witness function pushes the culprit from the victim's own perception update inside the sense pass, after
+    /// the clear (<c>FUN_14085a070</c> → <c>FUN_1408593d0</c> → <c>FUN_1408580d0</c> → <c>FUN_140854d10</c>, <b>Verified</b>), so the look puts it
+    /// back on <see cref="ThreatList"/> while the crime sweep renews it. Serial writes; hashed while set; not saved (the list is the look's).
+    /// </summary>
+    internal readonly List<(CharacterId Id, long Until)> Witnessed = [];
 
     /// <summary>
     /// The entries, by target slot.
@@ -135,6 +142,12 @@ public sealed class SenseBlock
     /// <c>numEnemies</c> (+0x94, the AI's +0xbc): entries tagged enemy whose character is not down, dead or carried.
     /// </summary>
     public int Enemies { get; internal set; }
+
+    /// <summary>
+    /// The squared distance of the nearest of <see cref="Enemies"/> (SensoryData <c>+0x0</c>, the AI's <c>+0x28</c>; <c>FUN_1408593d0</c>, the
+    /// pass sets it to the float maximum first, <c>FUN_14085a070</c>, <b>Verified</b>), from the looker to where that character stands.
+    /// </summary>
+    public float NearestEnemy { get; internal set; } = float.MaxValue;
 
     /// <summary>
     /// Those of <see cref="Enemies"/> that are in a cage: nobody can fight them, so no fight waits on them
@@ -271,6 +284,16 @@ public sealed class SenseBlock
         {
             h.Add(PushedTick);
             foreach (var t in Pushed) h.Add(t);
+        }
+
+        if (Witnessed.Count > 0)
+        {
+            h.Add(Witnessed.Count);
+            foreach (var (id, until) in Witnessed)
+            {
+                h.Add(id);
+                h.Add(until);
+            }
         }
 
         h.Add(Enemies);

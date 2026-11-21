@@ -39,6 +39,13 @@ public sealed class PlayerState
     public long Money { get; set; }
 
     /// <summary>
+    /// The key of the player faction's home building (the faction Ownerships' home hand, <c>+0x38</c>, which a player character's
+    /// <c>getOwnerships</c> <c>FUN_1407956a0</c> reads; docs/game/factions-squads-towns.md "The player's home"), or null while it has none. Set by
+    /// <see cref="PlayerHome"/>; it keeps naming a building that is gone. Hashed only while set; not saved: every load finds it again.
+    /// </summary>
+    public string? Home { get; set; }
+
+    /// <summary>
     /// The squad AI options of the overview's AI tab that Meitou runs (<see cref="Meitou.Simulation.Player.SquadAi"/>); saved as CAMERA bools
     /// (<see cref="SquadAiKeys"/>).
     /// </summary>
@@ -113,6 +120,12 @@ public sealed class PlayerState
     /// The selected characters, in the order they were selected.
     /// </summary>
     public List<CharacterId> Selection { get; } = [];
+
+    /// <summary>
+    /// The key the next Group speed order gives its characters' new speed group (<see cref="CharacterCold.SpeedGroup"/>). Runtime only, like the
+    /// groups: not saved and not hashed.
+    /// </summary>
+    public int NextSpeedGroup { get; set; }
 
     /// <summary>
     /// The active squad (the original's cached squad, <c>FUN_1407f5520</c>): the one the squad bar shows and recruits join. The start's squad at
@@ -333,7 +346,7 @@ public sealed class PlayerState
     #region State hash
 
     /// <summary>
-    /// Adds the hashed state: faction, money, squad, a changed squad AI, the rename, the held item and the selection.
+    /// Adds the hashed state: faction, money, squad, a changed squad AI, the rename, the home, the held item and the selection.
     /// </summary>
     internal void Hash(ref StateHasher h)
     {
@@ -345,6 +358,11 @@ public sealed class PlayerState
         {
             h.Add(0x464E616D);
             h.Add(Rng.StableHash(renamed));
+        }
+        if (Home is { } home)
+        {
+            h.Add(0x486f6d65);
+            h.Add(Rng.StableHash(home));
         }
         if (Held is { } held)
         {

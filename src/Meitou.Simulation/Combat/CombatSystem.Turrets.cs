@@ -114,6 +114,12 @@ public sealed partial class CombatSystem
     public TurretView? TurretOf(string? key) => _turretManning.TurretOf(key);
 
     /// <summary>
+    /// Whether another character than <paramref name="slot"/> mans the turret <paramref name="key"/> as of the serial turret step (its accept test,
+    /// <c>FUN_1400f7c90</c>: a user already, or fewer users than its one operator).
+    /// </summary>
+    internal bool TurretTakenByOther(string key, int slot) => _turretManning.TryGet(key, out var t) && t.Manned && t.Gunner != slot;
+
+    /// <summary>
     /// The gun numbers of a turret building for its panel (<see cref="TurretManning.TurretPanelOf"/>).
     /// </summary>
     public TurretPanelView? TurretPanelOf(World world, string? instance) => _turretManning.TurretPanelOf(world, instance);
@@ -307,17 +313,16 @@ public sealed partial class CombatSystem
         int generation = prev[g].Generation;
         var choice = new TurretChoice(world, Towns, _read, t, g, gc, at, range, facing, generation, found);
 
-        // Shoot At (FUN_140437f40, Verified): the ordered target is kept while it scores above 0 (closeness x arc: in range and not blocked) and the
-        // gunner does not regard it as friendly; otherwise the order is dropped and the gunner chooses as it always does. A target out of range still
-        // scores 0.001 (kept, never fired at); one blocked (inside elsewhere) scores 0.
-        if (!gc.TurretTarget.IsNone)
+        // Shoot At (FUN_140437f40, Verified): the ordered target is taken while it scores above 0 (closeness x arc: in range and not blocked) and the
+        // gunner does not regard it as friendly; otherwise the gunner chooses as it always does this tick, the order going on. A target out of range
+        // still scores 0.001 (kept, never fired at); one blocked (inside elsewhere) scores 0.
+        var shootAt = ShootAt.TargetOf(gc);
+        if (!shootAt.IsNone)
         {
             var talk = world.SystemOf<Dialogue.DialogueSystem>();
-            if (table.TryResolveNext(gc.TurretTarget, out int ordered) && prev[ordered].Alive
+            if (table.TryResolveNext(shootAt, out int ordered) && prev[ordered].Alive
                 && choice.Score(ordered, TurretFormulas.FullRange, current) > 0 && (talk is null || !talk.RegardsFriendly(world, g, ordered)))
                 return ordered;
-
-            gc.TurretTarget = CharacterId.None;
         }
 
         // The current target is dropped when it no longer scores.
@@ -333,22 +338,22 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// Shoot At (<c>FUN_140437f40</c>, <b>Verified</b>): the ordered target is kept while it lives, is free, is not down and the gunner does not
-    /// regard it as friendly; otherwise the order is dropped and the gunner chooses as it always does (row 235 list A state 7, which counts a
-    /// crawler; out of range or blocked, the turret waits). Returns the ordered target kept, else -1.
+    /// Shoot At (<c>FUN_140437f40</c>, <b>Verified</b>): the target of the gunner's running order 235 (<see cref="ShootAt.TargetOf"/>) is kept while it
+    /// lives, is free, is not down and the gunner does not regard it as friendly; otherwise the gunner chooses as it always does (row 235 list A state
+    /// 7, which counts a crawler, ends the order; out of range or blocked, the turret waits). Returns the ordered target kept, else -1.
     /// </summary>
     static int KeptTurretOrder(World world, PopulationData? towns, int g, CharacterCold gc)
     {
-        if (gc.TurretTarget.IsNone) return -1;
+        var shootAt = ShootAt.TargetOf(gc);
+        if (shootAt.IsNone) return -1;
 
         var table = world.Characters;
         var prev = table.Previous;
         var talk = world.SystemOf<Dialogue.DialogueSystem>();
-        if (table.TryResolveNext(gc.TurretTarget, out int ordered) && prev[ordered].Alive && !ScoresZero(world, towns, gc, ordered)
+        if (table.TryResolveNext(shootAt, out int ordered) && prev[ordered].Alive && !ScoresZero(world, towns, gc, ordered)
             && !CharacterFacts.TargetDown(table.Cold(ordered)) && (talk is null || !talk.RegardsFriendly(world, g, ordered)))
-            return ordered;   // row 235 ends on state 7 (isTargetDown: crawling too)
+            return ordered;
 
-        gc.TurretTarget = CharacterId.None;
         return -1;
     }
 

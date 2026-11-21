@@ -48,6 +48,10 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// </summary>
     internal const int GraphicsPageIndex = 1;
     /// <summary>
+    /// The Advanced page (its Squad XP folds the skills' own multipliers).
+    /// </summary>
+    internal const int AdvancedPageIndex = 4;
+    /// <summary>
     /// The MODS page (<see cref="Settings.ModsPage"/>): the loaded mods, each with the settings its code registered.
     /// </summary>
     internal const int ModsPageIndex = 8;
@@ -449,6 +453,11 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// Applies the bag search fix (<see cref="UserConfig.FixBagSearch"/>).
     /// </summary>
     public Action<bool>? BagSearchChanged { get; init; }
+
+    /// <summary>
+    /// Applies the shop counter talk reach (<see cref="UserConfig.CounterTalk"/>).
+    /// </summary>
+    public Action<bool>? CounterTalkChanged { get; init; }
 
     /// <summary>
     /// Called when an off-screen switch changes (the config holds the new values).
@@ -918,7 +927,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
-    /// The rows shown: the search's results while it has a query, else the page's, the Display and Graphics ones folded into features
+    /// The rows shown: the search's results while it has a query, else the page's, the Display, Graphics and Advanced ones folded into features
     /// (on Display, the upscaler's and the HDR output's settings under their rows).
     /// </summary>
     internal List<Entry> Entries()
@@ -927,7 +936,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
 
         var rows = PageRows(Page, GraphicsPage);
 
-        return Page is 0 or GraphicsPageIndex ? Grouping.Grouped(rows) : rows;
+        return Page is 0 or GraphicsPageIndex or AdvancedPageIndex ? Grouping.Grouped(rows) : rows;
     }
 
     /// <summary>
@@ -1093,7 +1102,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// </summary>
     string HdrPaperText(float v) =>
         v < UserConfig.HdrPaperAuto
-            ? Loc.Tr("Automatic ({0})", Config.HdrPaperNitsNow.ToString("0", CultureInfo.InvariantCulture))
+            ? Loc.Tr("Automatic ({1})", Config.HdrPaperNitsNow.ToString("0", CultureInfo.InvariantCulture))
             : v.ToString("0", CultureInfo.InvariantCulture);
 
     /// <summary>
@@ -1547,8 +1556,11 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.PauseOnLoad = true;
         Config.LoadingPause = false;
         Player.InventoryWindows.AutoOpenBags = Config.AutoOpenBags = true;
+        Player.InventoryWindows.SplitStacks = Config.SplitStacks = true;
         Config.AnimalsPickUp = false;
         AnimalsPickUpChanged?.Invoke(false);
+        Config.CounterTalk = true;
+        CounterTalkChanged?.Invoke(true);
         Config.CagesSpareOwn = false;
         Config.FixDoorBreak = Config.FixAmbienceSuffix = Config.FixWindStop = true;
         Player.Frontend.FixLoadButton = Config.FixLoadButton = true;

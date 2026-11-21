@@ -317,7 +317,7 @@ public sealed partial class DialogueSystem
                 break;
             case DialogueActions.ClearBounty when tc?.Bounties is { } ledger && mc is not null
                 && world.Characters.TryResolveNext(target, out int wanted):
-                ClearBounties(world, mc, target, wanted, tc, ledger);
+                ClearBounties(world, me, mc, target, wanted, tc, ledger);
                 break;
         }
     }
@@ -342,16 +342,33 @@ public sealed partial class DialogueSystem
 
     /// <summary>
     /// <c>DA_CLEAR_BOUNTY</c>: the target's entries of the speaker's faction and of the town it stands in go (each reported as cleared,
-    /// <see cref="Crime.CrimeEventKind.Cleared"/>), and its recognition.
+    /// <see cref="Crime.CrimeEventKind.Cleared"/>), and its recognition. Engine choice, no counterpart known in the original: each cleared booking
+    /// faction (and any faction sharing its legal system) and the speaker then forgive the target (<see cref="ForgiveBookingFaction"/>,
+    /// <see cref="Forgive"/>), and the target's squad drops TEMP_ENEMY on them, so tags left by an arrest attempt do not start a fight after the fine
+    /// is paid.
     /// </summary>
-    void ClearBounties(World world, CharacterCold mc, CharacterId target, int wanted, CharacterCold tc, Crime.BountyLedger ledger)
+    void ClearBounties(World world, CharacterId me, CharacterCold mc, CharacterId target, int wanted, CharacterCold tc, Crime.BountyLedger ledger)
     {
+        int clearedSpeaker = -1;
         if (ledger.BookedFor(_data.Relations, mc.Faction) is { } entry)
+        {
+            clearedSpeaker = entry.Faction;
             Crime.CrimeSystem.ClearBounty(world, wanted, tc, ledger, entry);
+            ForgiveBookingFaction(world, entry.Faction, target);
+        }
+
         if (Position(world, target) is { } at && TownAt(at) is >= 0 and var town && town < _data.SiteFactions.Count
             && ledger.BookedFor(_data.Relations, _data.SiteFactions[town]) is { } local)
+        {
             Crime.CrimeSystem.ClearBounty(world, wanted, tc, ledger, local);
+            if (local.Faction != clearedSpeaker) ForgiveBookingFaction(world, local.Faction, target);
+        }
+
         tc.Recognition = 0;
+
+        if (world.Characters.TryResolveNext(me, out int speaker)) Forgive(world, speaker, target);
+        if (tc.SquadId >= 0 && mc.Faction != clearedSpeaker)
+            Memory.ClearShortOfFaction(world, tc.SquadId, mc.Faction, MemoryTag.TempEnemy);
     }
 
     /// <summary>

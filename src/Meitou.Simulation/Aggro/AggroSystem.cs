@@ -1086,6 +1086,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         b.ThreatList.Clear();
         if (b.PushedTick + 1 < s.World.Tick) b.Pushed.Clear();
         b.Enemies = b.CagedEnemies = b.Neutrals = b.Allies = b.AlliesDown = 0;
+        b.NearestEnemy = float.MaxValue;
         b.ThreatToMe = b.ThreatToAllies = b.Aggression = 0;
         b.Faded = false;
         var table = s.Table;
@@ -1109,6 +1110,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         }
 
         list.RemoveRange(w, list.Count - w);
+        if (b.Witnessed.Count > 0) Rewitness(b, s.World);
         VisitKin(ref s);
         VisitFighters(ref s);
         s.Gathered = 0;
@@ -1129,6 +1131,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         var b = s.Block;
         b.ThreatList.Clear();
         b.Enemies = b.CagedEnemies = b.Neutrals = b.Allies = b.AlliesDown = 0;
+        b.NearestEnemy = float.MaxValue;
         b.ThreatToMe = b.ThreatToAllies = b.Aggression = 0;
         b.Faded = true;
         var table = s.Table;
@@ -1154,7 +1157,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// (<c>AI::underMeleeAttack</c>, a massive alarm): a new entry is made as seen (tags, threats and counts as at a look), an existing one is marked
     /// seen. An existing entry's threat is also taken at once when the target's fight targets the looker (<b>engine</b>: the original's AI update
     /// runs its sense pass right before the chooser, <c>FUN_1405112b0</c>, so the replan an attack asks for reads a current threats list; Meitou's
-    /// look runs once in <see cref="AggroSettings.ScanEveryTicks"/>). Serial phases only.
+    /// look runs once in <see cref="AggroSettings.ScanEveryTicks"/>). A new entry's perception update runs the witness function
+    /// (<see cref="Crime.CrimeSystem.Sensed"/>). Serial phases only.
     /// </summary>
     public void Force(World world, int looker, int target)
     {
@@ -1196,6 +1200,9 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         Refresh(ref scan, ref entry, target, tc, true, false);
         Count(ref scan, entry, tc);
         Insert(b, b.LowerBound(target), entry, world.Tick);
+
+        // The new entry's perception update runs the witness function (FUN_140858f40 → FUN_1408580d0 → FUN_140854d10).
+        world.SystemOf<Crime.CrimeSystem>()?.Sensed(world, looker, target);
     }
 
     /// <summary>
@@ -1215,6 +1222,50 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
 
         var id = world.Characters.IdOf(target);
         if (!b.Pushed.Contains(id)) b.Pushed.Add(id);
+    }
+
+    /// <summary>
+    /// The crime victim <paramref name="looker"/> witnesses <paramref name="target"/>'s crime (<c>FUN_140854d10</c>'s <c>FUN_1405cb0a0</c> call,
+    /// <b>Verified</b>): pushed as <see cref="Threaten"/> does, and since the original's push comes from the victim's own perception update after its
+    /// sense pass cleared the list, every look until <paramref name="until"/> that senses the target puts it back on the threats list its chooser
+    /// reads (<see cref="SenseBlock.Witnessed"/>); a look that does not sense it leaves it off. Adds nothing to <see cref="SenseBlock.ThreatToMe"/>.
+    /// Serial phases only.
+    /// </summary>
+    internal void Witness(World world, int looker, int target, long until)
+    {
+        Threaten(world, looker, target);
+        if ((uint)looker >= (uint)_slots.Length || _slots[looker].Senses is not { } b) return;
+
+        var id = world.Characters.IdOf(target);
+        int k = b.Witnessed.FindIndex(w => w.Id == id);
+
+        if (k >= 0) b.Witnessed[k] = (id, until);
+        else
+            b.Witnessed.Add((id, until));
+    }
+
+    /// <summary>
+    /// The witnessed culprits still held (<see cref="SenseBlock.Witnessed"/>) that this look senses and whose crime is still pending go back on the
+    /// threats list after the look refilled it; a lapsed or dead one, or one whose crime ended, is dropped.
+    /// </summary>
+    static void Rewitness(SenseBlock b, World world)
+    {
+        var prev = world.Characters.Previous;
+        int kept = 0;
+        for (int k = 0; k < b.Witnessed.Count; k++)
+        {
+            var (id, until) = b.Witnessed[k];
+            bool stands = until >= world.Tick && (uint)id.Slot < (uint)prev.Length && prev[id.Slot].Alive && prev[id.Slot].Generation == id.Generation;
+            if (!stands || world.Characters.Cold(id.Slot) is not { Pending: not null }) continue;
+
+            // The witness function runs only for an entry this pass senses (FUN_1408593d0 calls FUN_1408580d0 when seen or heard).
+            if (!b.TryGet(id, out var entry) || !entry.Now) continue;
+
+            b.Witnessed[kept++] = (id, until);
+            if (!b.ThreatList.Contains(id)) b.ThreatList.Add(id);
+        }
+
+        b.Witnessed.RemoveRange(kept, b.Witnessed.Count - kept);
     }
 
     /// <summary>
@@ -1720,8 +1771,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     public const int FreedHostility = -30;
 
     /// <summary>
-    /// The counts of the pass (<c>FUN_1408593d0</c>): an entry tagged ENEMY whose character is not down, dead or carried adds to <c>numEnemies</c>,
-    /// one tagged NEUTRAL to <c>numNeutrals</c>. The enemies in a cage are counted apart as well (<see cref="SenseBlock.CagedEnemies"/>).
+    /// The counts of the pass (<c>FUN_1408593d0</c>): an entry tagged ENEMY whose character is not down, dead or carried adds to <c>numEnemies</c>
+    /// (its squared distance kept in <see cref="SenseBlock.NearestEnemy"/> when nearer), one tagged NEUTRAL to <c>numNeutrals</c>. The enemies in a cage are counted apart as well (<see cref="SenseBlock.CagedEnemies"/>).
     /// </summary>
     static void Count(ref Scan s, in SenseEntry e, CharacterCold c)
     {
@@ -1731,6 +1782,10 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         {
             s.Block.Enemies++;
             if (c.IsImprisoned) s.Block.CagedEnemies++;
+
+            var prev = s.Table.Previous;
+            float d2 = Vector3.DistanceSquared(prev[e.Target].Position, prev[s.Self].Position);
+            if (d2 < s.Block.NearestEnemy) s.Block.NearestEnemy = d2;
         }
         else if ((e.Tags & SenseTag.Neutral) != 0) s.Block.Neutrals++;
     }

@@ -413,6 +413,49 @@ public class QuickSaveTests
     }
 
     /// <summary>
+    /// The original's save METARU loaded headless and saved again writes each platoon's <c>currenttown</c>, <c>towntime</c> and <c>mission
+    /// target</c> as it read them (docs/formats/save.md "Platoon blackboard": the platoon constructor <c>FUN_1407ee2d0</c> reads them for every
+    /// platoon, and <c>FUN_1402688d0</c> stamps <c>towntime</c> only for a squad coming into a town from none). Skips without the install or the
+    /// save. Catches a squad made from its template into a saved platoon (never made, regenerated, a characterless stand-in) that starts with the
+    /// load's hour instead of its platoon's.
+    /// </summary>
+    [Fact, Slow]
+    public void An_original_save_loaded_and_saved_again_keeps_each_platoons_town_its_hour_and_its_mission_target()
+    {
+        var install = GameInstall.Locate();
+        string? folder = install?.UserSaveDirectories.Select(root => Path.Combine(root, "METARU")).FirstOrDefault(Directory.Exists);
+
+        Assert.SkipWhen(install is null || folder is null, "Kenshi install or the save METARU not found");
+
+        var db = InstallData.BaseGame!;
+        var levels = InstallData.Levels!;
+        var data = PopulationData.Create(db, levels.Towns(), new GeneratedAppearances(db, install!.Root));
+        var walk = new OpenGroundWalkability((_, _) => 300);
+        var options = new StandardSystemOptions { SynchronousPaths = true, Population = new PopulationSettings { Background = false } };
+        using var world = new SimWorld(new WorldSettings { Seed = 1, PublishSnapshots = false }, walk, StandardSystems.Build(data, walk, options).Systems);
+        var save = SaveGame.Load(folder!);
+        var loaded = SaveLoader.Load(world, save, data, new SaveLoadOptions { Appearances = data.Appearances });
+        world.RunTicks(300);
+        var again = SaveCapture.Capture(world, data, loaded.Clock, loaded, new SaveCaptureOptions { Placements = levels.Towns().ToList() });
+
+        var read = save.Platoons.ToDictionary(p => p.Name, StringComparer.Ordinal);
+        var changed = again.Platoons
+            .Where(p => read.TryGetValue(p.Name, out var before) && Blackboard(before.Record) != Blackboard(p.Record))
+            .Select(p => $"{p.Name}: {Blackboard(read[p.Name].Record)} -> {Blackboard(p.Record)}")
+            .ToList();
+
+        Assert.True(world.Squads.All.Count(s => s.Ai is not null) > 0, "the load made squads");
+        Assert.Empty(changed);
+        foreach (var s in world.Systems) (s as IDisposable)?.Dispose();
+    }
+
+    /// <summary>
+    /// A platoon record's current town, arrival hour and mission target, as one comparable text.
+    /// </summary>
+    static string Blackboard(Meitou.Data.Fcs.FcsRecord platoon) =>
+        $"{Hand.Read(platoon, "currenttown")} {platoon.Floats.GetValueOrDefault("towntime")} {Hand.Read(platoon, "mission target")}";
+
+    /// <summary>
     /// A world of the install's data with trade, bodies, animation and ragdolls, paths found at once.
     /// </summary>
     static SimWorld MakeInstallWorld(PopulationData data, OpenGroundWalkability walk, Meitou.Data.Characters.CharacterRigs rigs,

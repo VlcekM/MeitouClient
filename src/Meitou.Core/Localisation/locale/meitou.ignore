@@ -1,0 +1,1030 @@
+# Texts loc-strings.mjs finds that are not Meitou's to translate. One per line, \n for a line break.
+
+# Shown as text, but Kenshi's own catalog (locale/<code>/LC_MESSAGES/main.mo) translates them; Meitou's catalog cannot override it.
+ (No XP)
+ (skill: {1,num}{2})
+ degrees
+(Unlocked...)
+(at 1x rate)
+*Thunk*
+---Upcoming Events---
+-Critical Success Chance:
+-Current Smith:
+-End total:
+-Material Costs:
+-Predicted Result:
+-Wanted For:
+2 Broken Arms!
+A masterful weapon crafted by the renowned smith {1} of {2}.
+A slave belonging to {1}. Not considered a person with rights, a slave works for his master until death and nothing more. {2}
+A slave of {1} that has been seen escaping. Needs to lay low for a day and avoid getting spotted. {2}
+ACTIVATE
+Accuracy deviation:
+Acid
+Acid Rain ({1} protection)
+Acid!
+Active:
+Actual Growth Time:
+Add squad
+Advanced
+Advanced options
+Age:
+Aim speed:
+Aiming...
+Aimless
+Alarm raised
+All necessary materials are ready.
+Altitude:
+Ambient volume
+Ammunition type:
+Are you sure you want to delete this save game?
+Are you sure you want to exit?
+Are you sure?
+Area Size:
+Armour Smithing
+Armour penetration
+Armour smith
+Armour/equipment:
+Arrange
+Assassination
+Assault to {1} canceled due to faction weakness
+Ate {1}
+Athletics
+Athletics Skill:
+Athletics XP:
+Attack
+Attack All
+Attack Target
+Attack Unprovoked
+Attack bonus
+Attack speed:
+Attacking
+Audio
+Auto save
+Auto save time (minutes)
+BEING EATEN ALIVE!!
+Backpack
+Backspace
+Bandits loot the player
+Base Accuracy Deviation:
+Base Reload Speed:
+Base hit chance:
+Battery
+Begin
+Bleeding
+Bleeding out
+Block
+Block speed:
+Blood
+Blood loss
+Blood loss KO
+Blood loss trauma:
+Blood loss:
+Blown!
+Blunt
+Blunt damage
+Blunt weapon class
+Blunt weapon damage:
+Bodyguard
+Bombardment
+Bounty:
+Brightness
+Broken
+Build
+Building
+Building '{1}' construction complete.
+Building Condition
+Building is in good condition.
+Building speed
+Buildings
+Burning
+Burning ({1} protection)
+Buy
+Buyback
+Buyer's money:
+CONTINUE
+Can't afford c.{1} for bed rental.
+Cancel
+Cancel All:
+Cannot dismiss the only remaining character in the faction.
+Cannot find any towns from the game start town list.
+Cannot learn this yet
+Caravan
+Carbon
+Carbon Quality:
+Carbon under ground:
+Carrying somebody:
+Carrying something:
+Cash:
+Chance of death
+Change Height:
+Change Slope:
+Change the selected floor, use to move to a certain floor of a building, 0 is ground floor (also: Page Down key)
+Change the selected floor, use to move to a certain floor of a building, 0 is ground floor (also: Page Up key)
+Character '{1}' exported to file {2}
+Characters
+Characters in a squad will automatically share any of their food that is in a backpack (if in range).
+Characters will automatically go to bed if they are injured and have nothing else to do
+Characters will help out characters from other allied factions if they are under attack
+Characters with the medic job will also heal characters of allied factions
+Characters with the rescue job will also rescue allied characters from other factions
+Charges
+Charging
+Choose your beginning
+Clear Building:
+Close
+Clothing disguise:
+Collecting
+Collecting resource
+Colour
+Combat
+Committing Crime!
+Condition
+Condition:
+Confirm
+Continue
+Controls
+Cooking
+Cooldown {1,num} second
+Copper
+Copper Quality:
+Copper under ground:
+Corpse Disposal
+Cost to use:
+Cost:
+Crafted by the smith {1} of {2}.
+Crafted by {1}
+Crawling:
+Credits
+Crippled
+Crippled arm
+Crippled left arm:
+Crippled right arm:
+Critical
+Critical injuries will continue to degenerate without medical attention.
+Critical wounds:
+Crop Theft
+Crop Yield
+Crop yield:
+Crossbow Smithing
+Crossbow class
+Crossbow smith
+Crossbows
+Current Swim Speed:
+Current goal of this character.
+Current work:
+Currently not enough wind to generate any power
+Cutting damage
+Cutting: {1,num}
+DISMISS
+Damage resistance:
+Damage vs
+Damage vs animals
+Damage vs humans
+Damage vs robots
+Damage:
+Date
+Day
+Day: {1,num}
+Dead
+Default aim speed:
+Default damage:
+Default range:
+Defence
+Defence bonus
+Defensive
+Defensive combat mode:
+Defensive mode:
+Delete
+Delete Save
+Deviation:
+Dexterity
+Dialogue
+Difficulty:
+Diplomatic Status
+Discovered {1}
+Discovered!
+Disguise Blown!
+Disguise blown:
+Disguise:
+Dismantle
+Dismantling this building will destroy all furniture.\nDo you want to continue?
+Dismemberment
+Dismiss character
+Dismiss character '{1}'?
+Ditch items
+Do you want to buy this building for c.{1,num}?
+Dodge skill:
+Dodging
+Door Condition
+Downgrade
+Downgrade To:
+Draining
+Dust Storm ({1} protection)
+Duststorms
+Dying
+ETA:
+Easy prospecting
+Edge scrolling
+Efficiency:
+Empty
+Empty!
+Encumbrance
+Encumbrance bonus:
+Encumbrance effect:
+Encumbrance penalty:
+Encumbrance:
+Engineer
+Engineering
+Environment Effect:
+Environment:
+Equipment penalty:
+Error loading appearance file '{1}'. The file is in an old format or invalid.
+Error!
+Esc
+Escape
+Escaped Prisoner
+Escaped slave
+Escaping Prison
+Estimated build time:
+Everything
+Ex-slave
+Exit
+Expired
+FINISH
+FOREVER
+FXAA
+Faction Name
+Faction name
+Failed
+Failed to learn from blueprint: Technology requirements not met
+Failed to load the core '{1}' file.
+Failed to load the following mod(s):
+Failed!
+Farmers Skill:
+Farming
+Fast zone hopping
+Feed Animals
+Feet Burning!
+Female
+Fencing chance:
+Fertility
+Fewer
+Field medic
+File version
+First Aid
+Floor {1,num}
+Follow
+Follow Formation
+Following
+Footstep volume
+For sale:
+Formation used when squad members are following a leader
+Free!
+Frequent
+Fuel Consumption
+Fugly
+Full info
+Full speed bonus:
+Fully Charged
+Funds
+Gameplay
+Gas
+Gender:
+Get in
+Global damage multiplier
+Goal:
+Gone forever. RIP.
+Graphics
+Green
+Ground Fertility:
+Growing
+Growth Rate
+HOLD POSITION means that the selected character won't run off to fight enemies, even to protect his allies.  He will hold his position and only attack any enemy that comes into close range.  He will still use a crossbow normally, but won't move around obstacles to get a shot.  Use this setting to tactically position fighters, or just to keep non-combatants away from the fighting.
+Hacker class
+Hackers
+Harpoon limit
+Heal Allies
+Healing bonus:
+Health KO point:
+Heavy
+Heavy weapons
+Heavy weapons class
+Height advantage:
+Height bonus:
+Height:
+Help Allies
+Hidden
+High
+High quality armour crafted by the renowned smith {1} of {2}.
+Hit Points:
+Hold
+Hold middle mouse button to rotate the camera
+How much you look like an escaped slave. Based on how you are dressed/undressed. Wearing shackles and rags is a big giveaway. Try to avoid hanging around too long near people who may recognise you.
+Hunger
+Hunger Rate:
+Hunger time
+Hunger:
+Hungry
+I can't carry anyone with this arm.
+I can't get out of here.
+I can't get there.
+I don't have any building materials.
+ILLEGAL GOODS!
+Idle characters at home will sit down on chairs and benches, if you have any
+Idle:
+If enabled then the character will prioritise ranged attacks, melee will be a last resort.
+If food is running low, you can elect not to feed your animals.
+If they have nothing else to do, characters will automatically put any excess materials they are carrying into storage.  This can help to un-block the base AI when things grind to a halt from over-filled inventories.
+If this is disabled then the character won't do any of the jobs listed.
+If you don't get medical attention, you will die.
+Illegal goods?
+Import
+Import Buildings
+Import Dead NPCs
+Import Relations
+Import Research
+Import game
+Imprisoned
+Imprisoned, sentence time remaining:
+Imprisoned, sentence time:
+In Disguise
+In defensive combat mode the character will not even try to attack, focusing entirely on defense for a +20 skill bonus.
+In non-combat mode a character will never initiate combat, even if his allies are fighting or need help. He will only fight when directly attacked, and is less likely to be targeted by enemies.
+In production...
+In secure location:
+Indoors bonus
+Indoors bonus:
+Indoors penalty
+Ingredients
+Injuries
+Injuries:
+Input
+Inventory
+Invert mouse X
+Invert mouse Y
+Iron
+Iron Quality:
+Iron under ground:
+It has ran out of fuel. Find some more fuel and fill it up.
+It is currently raining acid, and you aren't wearing anything to protect your skin.  Best to find shelter soon.
+It is currently raining acid, but your gear is providing you with total protection.
+It is currently raining acid, your gear is providing you with {1} protection.
+It is not raining. Nothing to collect.
+It needs electricity.
+It will no longer close and needs to be repaired.
+Jobs
+KO point:
+Katana class
+Katanas
+Keep your [Looks Like A Slave] level as low as possible, wear clothing or disguises and find a plastic surgeon to restore your hair. Don't get spotted.
+Keep your [Looks Like A Slave] level as low as possible, wear clothing or disguises and find a plastic surgeon to restore your hair. You should be safe if you stay out of towns.
+Kidnap
+Kidnapped
+Knocked out cold.
+Labouring
+Landscape
+Leader
+Left-Click
+Leg injury penalty:
+Leg injury:
+Lightweight
+Limb trauma
+Limbs disabled:
+Load
+Load game
+Loaded
+Loading
+Loading...
+Location
+Lock
+Locked
+Locked (lvl: {1,num})
+Lockpicking
+Lockpicking (Chance {1}%)
+Looks like slave:
+Loot
+Looting
+Losing blood, will collapse if blood goes below 0.
+Low
+Male
+Malnourished
+Man Turret
+Manufactured by
+Martial arts
+Materials cost:
+Max Skill Level:
+Max Swim Speed:
+Max carry weight:
+Max efficiency:
+Max possible efficiency:
+Max possible speed:
+Max speed:
+Medium
+Melee Attack:
+Melee attack
+Melee defence
+Members size
+Military
+Missing arm penalty:
+Mod error(s) (Ignored files)
+Model ##
+Moderate
+Mods
+Money
+Money:
+Move
+Moving
+Music volume
+My arm is broken!
+Name
+Name:
+Nameless
+Needs research bench level {1,num}
+Never
+New Armour Type:
+New Backpacks:
+New Building:
+New Crossbows:
+New Items:
+New Robot Limbs:
+New Weapon Class:
+New Weapons Grade:
+New game
+No
+No Power!
+No Water:
+No Wind
+No bleeding
+No jobs assigned
+No power
+No problem!
+No workers
+No workers required until the crop is ready to harvest.
+Nobody is working at this farm at the present moment, you need to hurry up and harvest them before they die.
+Nobody is working at this machine at the present moment, so nothing is getting done.
+None
+Normal
+Normal Growth Time:
+Not Raining
+Not currently in disguise.
+Nothing
+Notorious: The bounty will never expire.
+Now create your first character. Use the 'Confirm' button when finished.
+Num workers:
+Number of Plants
+Number of nests multiplier
+Nutrition
+OK
+Off
+Oil
+Ok
+Once the plants have grown 100% you can begin to harvest them. Until then all you have to do is make sure the farm has water.
+One or more limbs have been seriously crippled by critical injury.
+Open
+Open character inventory
+Open character status window
+Open help window
+Open research window
+Open squad management window
+Open to public:
+Open world map
+Opens the BUILD menu.  Here you can place buildings and start your own outpost anywhere in the world, but you should choose a safe area and check availability of resources using the PROSPECT button. You will also need building materials to finish construction.
+Operating machine
+Operating wind speed is between {1,num=fix,p=2} mph and {2,num=fix,p=2} mph.
+Options
+Out of fuel
+Out of resource
+Out of resources
+Out of water. Growth rate will be significantly reduced and your plants may die.
+Output
+Output full
+Overloaded
+Overwrite save '{1}'?
+PAUSE CONSTRUCTION
+Paid
+Paid c.{1}
+Paid c.{1} for bed rental.
+Paid c.{1}k
+Passive
+Pay Bounty
+Pay c.{1,num}
+Perception
+Pick Lock
+Pick Up
+Pick failed
+Pick success!
+Place Building:
+Plant Condition
+Play Style:
+Playing dead...
+Poison Gas ({1} protection)
+Polearm class
+Possibly Edible
+Power
+Power Output
+Power is switched off.
+Power output is at maximum.
+Power output is running at reduced efficiency due to damage.
+Power supply:
+Power:
+Precision Shooting
+Precision shooting
+Press
+Pressing this button will order your selected characters to automatically heal everyone else in the squad, including themselves. They will need a medkit in their inventory.
+Private
+Production speed
+Prospecting
+Prospector Skill:
+Public
+Put Down
+Put in
+Put in Bed
+Putting down
+Quality
+RESEARCH - LEVEL {1,num} (CURRENT RATE: {2,num=fix,p=2}x)
+Racial bleed rate multiplier: x{1,num=fix,p=2}
+Racial hunger rate:
+Rain
+Rain is being collected.
+Rain strength:
+Random
+Range:
+Ranged
+Rare
+Rebooting
+Received
+Received c.{1} reward.
+Recovery coma
+Recovery rate: {1}x
+Relations with {1} decreased by {2}
+Relations with {1} improved by {2}
+Reload time:
+Reloading...
+Repair
+Repairs
+Required skill:
+Requirements:
+Rescue Allies
+Research Blueprint
+Research already known
+Research complete: {1}
+Research speed
+Reset
+Reset Tutorials
+Reset squad positions
+Resting/KO state:
+Resulting Accuracy Deviation:
+Revert
+Right-Click
+Right-click to learn tech
+Robotics
+Robotics:
+Roll
+Rotate:
+Run Speed Penalty:
+Run speed:
+SKIP
+STORAGE
+Sabre class
+Sabres
+Same faction:
+Saturation
+Save
+Save game
+Science
+Sciences
+Security:
+Sell
+Set Free
+Severe limb damage has now led to critical blood loss. You will die without medical attention.
+Shadows
+Share Food
+Shoot At
+Shoot first, ask later
+Show movement marker
+Show rotation marker
+Simple info
+Sit when idle
+Skill:
+Slave
+Slave of:
+Slave owner recognition:
+Sleep
+Sleep when injured
+Sleeping
+Sleeping...
+Slightly Injured
+Smash
+Sneak
+Sneaking
+Someone knows me personally:
+Something is eating you alive! AAAAAAHHHHHHHHHH!!
+Splint Injuries
+Squad size multiplier
+Stand Up
+Starving
+Stat Multiplier:
+State:
+Staying low
+Stealth
+Stealth KO
+Stealth Penalty:
+Stealth mode:
+Stealth skill:
+Stolen
+Stolen from:
+Stolen goods?
+Stone
+Stone Richness:
+Stone under ground:
+Stored
+Strength
+Strength XP rate:
+Strength XP:
+Strength:
+Swap mouse buttons
+Swimming
+Switched off
+Switching on will incinerate the entire inventory!
+TUTORIALS
+Talk To
+Talking
+Taunt
+Tech Level
+Terrorism
+The additional bonus to range, speed and power that resulted from having a height difference of {1} above the last target.
+The additional penalty to range, speed and power that resulted from having a height difference of {1} below the last target.
+The amount of accuracy error, in degrees. Higher numbers are poor, 0 is perfect accuracy.
+The bounty will expire in {1,num} hr
+The building is damaged.
+The building is in good condition.
+The building is under construction and at {1,num}% completion.
+The cage you are in is UNLOCKED.\nNobody knows this but you, you can escape any time you want.
+The character will make himself offensive, noisy and conspicuous in an attempt to draw more of the enemy to attack him. Using this enables your experienced and well armoured characters to draw trouble away from your more vulnerable ones.
+The current amount of wind.
+The current wind speed
+The door is broken
+The door is closed
+The door is in good condition.
+The door is locked and will keep out intruders.
+The door is open
+The door is unlocked.
+The faction that owns you.
+The ground here is acidic and burns your feet, find some footwear!
+The health of the plants, it will start to degenerate once they are fully grown, or if they run out of water. If it reaches 0 then the dead plants will have to be cleared and re-planted.
+The machine has run out of raw materials to work with. Find some more and fill it up.
+The machine is fully staffed.
+The machine is under-staffed.
+The machine output is full. Empty out the items and put them in a storage box or something.
+The number of plants remaining. This number will decrease when you harvest them, or if some pest starts eating them.
+The output is full. Empty out the items and put them in a storage box or something.
+The richness of natural {1} present in this location. Anything over 50% is considered good.
+The turrets height above the last target we aimed at.
+There is currently not enough wind to drive the machine.
+Thievery
+This battery is being charged.
+This battery is flat, it needs to be charged up.
+This battery is fully charged.
+This battery is in use and being drained of its power.
+This battery is not in use.
+This bed needs power to operate.
+This character broke out of prison, if he gets spotted by any guards he is in trouble. Leave town to clear this status. Expires in {1}
+This character has been caught committing {1}! He might end up with a bounty on his head if he can't vanish.
+This character has been caught committing {1}! He might end up with a bounty on his head if he can't vanish. Current bounty is c.{2,num}
+This character has been kidnapped, law enforcers will try to help
+This character is currently committing {1}, make sure nobody witnesses it.
+This character is not wanted by the local faction
+This character is wanted by the authorities. Turn them in for a reward.
+This faction name already exists
+This guy is dead and gone.
+This guy is unconscious and probably needs medical attention and rest.
+This is a critical wound. If it doesn't get medical treatment you will die.
+This is a dangerous wound and is getting worse. Get some medical attention fast.  Death at {1}
+This is a dangerous wound and is getting worse. If you can regain consciousness before it goes below {1,num} then you could save yourself.\nIf it goes below that then you will have to hope you get rescued by somebody else.\n
+This is a special person with diplomatic importance. Anyone who attacks this guy will be in serious trouble with his faction.
+This is the Commander in charge of an entire army.
+This is the leader of this group.
+This is the maximum skill a person can train up to using this equipment. For anyone higher it is a waste of time.
+This is the percentage yield of the farm. A lower number means that you get less crops from a harvest. Skillful farmers are important.
+This is the rate at which your athletics skill is increasing while running.
+This is the rate at which your strength is increasing.
+This is the rate at which your toughness increases when you get hurt.
+This isn't mine
+This limb is gone forever.
+This limb is severely damaged and in need of repairs. Luckily though skeleton limbs don't degenerate.
+This machine has broken down as a result of damage. Send one of your engineers to repair it.
+This machine is currently under construction.
+This machine is fully automatic.
+This machine is switched On
+This machine is switched off.
+This machine is working fine, but due to low power is only operating at {1}{2,num}% {3}of its full potential.
+This machine is working fine.
+This machine will NOT run off of battery power if the main generators should run low or break down.
+This machine will run off of battery power if the main generators should run low or break down.
+This person has regained consciousness but is staying down, waiting for all the enemies to leave the area.
+This save file is invalid
+This will give you information on the richness of resources at your location. Stone, iron, water, fertility... It's important to check for these things before building an outpost.
+This will order your selected characters to pick up all your wounded allies. If you own any buildings nearby, they will take the wounded and put them in beds. Make sure to heal their wounds first.
+This will toggle the selected characters into defensive combat mode. When in defensive mode, a character will focus purely on staying alive and will gain 20 to his melee defense skill. However he will not attempt to make any attacks. This is handy for keeping your weaker characters alive when they are outclassed.
+This wound is getting worse. You need first aid.
+Throw out of home
+Throw out of town
+Time left to harvest
+Time left to harvest all plants before they go bad.
+To add jobs, hold shift key when giving an order
+Total Metals:
+Total Weight:
+Total damage:
+Total equipment bonuses:
+Total range:
+Total speed:
+Total:
+Toughness
+Toughness XP rate:
+Toughness XP:
+Town attacks frequency
+Town raid events: frequency
+Town raid events: size
+Town:
+Trade
+Trades
+Training
+Training:
+Turrets
+Tutorials
+Type:
+UI volume
+Unconscious
+Unconscious from blood loss and bleeding to death. Hope that the bleeding stops before it's too late.
+Unconscious from blood loss. It will recover over time, bed rest will help.
+Under construction
+Undo:
+Uniform Theft
+Unlock
+Unlock Shackles
+Unlocked
+Upgrade
+Upgrade required
+Upgrades To:
+Use
+Use Strength
+Use Tools
+Use mouse wheel to zoom
+User Accuracy Deviation:
+User Reload Speed:
+User Skill:
+VO volume
+Value
+Velocity:
+Vet
+WARNING! Crop yield is too low to be productive, probably the crop is not suitable for this area.
+WARNING: Character will become a slave!
+Waiting to be released
+Wall bonus:
+War Leader
+War breaks out between {1} and {2}
+Warning:
+Warning: {1} moving towards {2}
+Was once a slave of {1} but has now escaped. The heat has died down but he still needs to avoid getting found out. {2}
+Water
+Water Available:
+Water reflection
+Water under ground:
+Weapon Accuracy:
+Weapon Smithing
+Weapon cutting damage:
+Weapon indoors penalty:
+Weapon smith
+Weapon weight:
+Weaponry
+Weapons
+Weather penalty:
+Weather:
+Weight
+Weightless
+When an injury to a body part goes below your KO point of {1,num} then you are down for good. Your body will enter a coma and won't regain consciousness until all critical body parts have healed above 0.
+Wind
+Wind Speed
+Wind Speed:
+Workers:
+Working
+Working in darkness:
+Wound degeneration speed:
+Wounded
+XP rate:
+Yes
+You are a free person.
+You are currently breathing in poison gas, your gear is providing you with {1} protection.
+You are currently breathing in poison gas.
+You are currently disguised as {1}
+You are currently on fire, your gear is providing you with {1} protection.
+You are currently on fire.
+You are currently submersed in acid, get out of there as soon as you can.
+You are hungry and suffering from malnutrition, but you are fed and slowly recovering. Your stats and strength will be affected until you recover fully.
+You are hungry and suffering from malnutrition. Your stats and strength will be affected, you need to get some food as soon as possible.
+You are in a dust storm, it affects your accuracy in combat.
+You are in a dust storm, your gear is providing you with {1} protection.
+You are kind of healthy for now.
+You are locked in a cage.\nThe lock has a difficulty level of {1,num}.
+You are no slave.
+You are starving to death. Get some food fast.
+You are staying down, hoping to avoid drawing attention.
+You are well fed and currently have no problem.
+You can only hire {1} more character
+You can't afford that.
+You cannot hire any more characters
+You currently have no research facilities. Build a research bench and assign someone to work there.
+You have a {1}% chance of getting caught selling this stolen item.\nFence it anyway?
+You have passed out from starvation. One of your squad mates will have to feed you or you're going to die.
+You have passed out from starvation. You're all alone and going to die. Nobody cares.
+You have {1} points of wear damage, this detracts from your max health and can be fixed at a Skeleton Bed.
+You have {1} points of wear damage. The manual recommends you find a Skeleton Bed for maintenance.
+You've been discovered, somebody has noticed that you are an escaped slave.
+You've been discovered, somebody has seen through your disguise.
+You've suffered too much damage. You won't be getting up again until all critical body parts have recovered above 0.
+Your character will have a permanent job assigned called [Obedient slave]. While this is active he will automatically work for his master. You can remove this job, but beware of the consequences...
+Your crops are growing nicely. You don't have to do anything.
+Your defense skill is your chance of blocking enemy attacks.
+Your gear is protecting you from being horribly burnt.
+Your gear is protecting you from breathing in any poisons.
+Your gear is protecting you from the storm.
+Your legs are incapable of supporting you.
+Your stats will be negatively affected.
+Your sword arm is crippled and you are unable to fight.
+Your turret gunners will shoot at any potentially dangerous but neutral targets, such as wild animals or bandits, without waiting for them to attack the base first.
+Your {1} is in the process of healing.
+Your {1} is okay.
+Your {1} is totally destroyed. It's probably the reason you are dead.
+Your {1} is totally destroyed. Lucky it's not something you need to live.
+Your {1} needs bandaging, but it's not urgent.
+Your {1} needs bandaging, it's slowly getting worse.
+Your {1} needs bandaging.
+Zone:
+[PAUSED]
+empty
+lvl {1,num}
+max:
+someone
+when finished
+{1,num=fix,p=1} mph
+{1,num} Days, {2,num}hrs
+{1,num} hr
+{1,num} kg
+{1,num} mins
+{1,num} mph
+{1,num} sec
+{1,num}hrs
+{1} Grade
+{1} against {2} has been defeated
+{1} against {2} has ended
+{1} and {2}
+{1} are no longer hostile towards you
+{1} are no longer your ally
+{1} are now hostile towards you
+{1} are now your allies
+{1} can't talk to people
+{1} has arrived at {2}
+{1} has been discovered smuggling {2}
+{1} has been eaten alive.
+{1} has been enslaved
+{1} has been released from prison.
+{1} has been wiped out
+{1} has died from blood loss.
+{1} has died from starvation.
+{1} has redirected to {2}
+{1} is dead.
+{1} more 'Building Materials' will be needed to complete this construction.
+{1} on the way to {2}
+{1} or {2} keys
+{1} skill:
+{1} squad has been removed from {2}
+{1} to {2} has failed
+{1} was defeated on their way to {2}
+
+# Not shown as Meitou's text: widget, skin and icon names, alignments, formats, fonts, record names (translated by .translation files), Workshop mod titles, editor fields.
+ d MMM
+ACES
+Alert
+Ancient
+Background
+Bad
+Bottom
+Brass
+Button
+Camp
+Cascadia Mono, Consolas, DejaVu Sans Mono, Menlo, monospace
+Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace
+Center
+Character Highlight
+Choice
+Client
+Crushed
+DLAA
+DLSS
+Datapanel
+Debug
+Disarm
+Disguises
+Drifter's Boots
+Drifter's Leather Pants
+Dust Bandit
+Dust Bandits
+Dustcoat
+Eaten
+Enter
+Field
+Frame
+GTAO
+Generator
+Good
+Greyed
+Group
+HCenter VCenter
+Hover
+Hurt
+Iron Hat
+It. Tickles. Me
+Jame
+Jog
+KENSHI
+Katana
+Kenshi
+Label
+Left
+Left Bottom
+Left Top
+Left VCenter
+Main
+Meitou
+Meitou Level Editor
+Metal
+Mg
+Movement
+Nest
+Notifications
+Outpost
+Paladin
+Panel
+Password
+Player XP Only x10 RE
+Portrait
+Prison
+Quiet
+Red
+Right
+Right Top
+Right VCenter
+Robot
+Ruin
+Run
+SMAA
+SSAO
+Secondary
+Slider
+Small Backpack
+Speed Menu
+Stretch
+Swamp Turtle FIX
+Tab
+Tab / H
+The Holy Nation
+Title
+Title dust
+Tooltip
+Top
+Town
+Track
+Village
+Visible
+Vulkan
+Walk
+Watchtower
+White
+Widget
+Workcamp
+Yellow
+[Meitou Client] Disarm Port
+[Meitou Client] It. Tickles. Me. Port
+[Meitou Client] Kill Counter Port
+[Meitou Client] Level Up Notify Port
+[Meitou Client] Speed Menu Port
+[Meitou Client] Stack Sort Port
+[Meitou Client] Taunt Expansion Port
+[MeitouClient] Execution
+[Meitou] Proving Grounds
+brew install molten-vk vulkan-loader
+d MMMM yyyy
+enable armour
+enable buildings
+enable item
+enable weapon model
+enable weapon type
+exterior layout name
+fonts:Kenshi#Exo 2, $Default
+interior layout name
+meitou world states
+npc range
+town panel line 
+world Y pos
+yyyy-MM-dd HH:mm

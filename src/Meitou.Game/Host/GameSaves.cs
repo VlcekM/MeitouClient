@@ -694,6 +694,7 @@ sealed class GameSaves(GameHost host)
             (data.BodyOptions.Dismemberment, data.BodyOptions.Decapitation, data.BodyOptions.AdvancedRagdolls) =
                 (gameplay.Dismemberment, host.Config.Decapitation, host.Config.AdvancedRagdolls);
             (data.BodyOptions.SquadXp, data.BodyOptions.OthersXp) = (host.Config.SquadXp, host.Config.OthersXp);
+            data.BodyOptions.SquadSkillXp = SkillXp.Rates(host.Config.SquadSkillXp);
         }
 
         foreach (var population in host.Session.World.Systems.OfType<PopulationSystem>())

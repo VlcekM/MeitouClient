@@ -333,7 +333,9 @@ the NPC platoons. A save older than 0.90.0 drops the reset, buildings, research 
 `SaveLoader` recognizes an original save's `imported` marker and excludes that zone from `World.SavedZones`, so NPC
 generators use fresh construction and switch defaults while player-owned generators retain their state. Meitou's own
 import filter does not yet write that marker (the NPC platoons are left out, so every town makes its residents anyway). The relation table is shared by the
-data, so an import without Relations first sets it back to the FACTION values (`FactionRelations.Reset`).
+data, so an import without Relations first sets it back to the FACTION values (`FactionRelations.Reset`), and every other load that applies the save's
+relations starts its change count again (`FactionRelations.RestartChanges`): the state hash reads that count, so it would otherwise depend on the
+games played before in the session.
 
 ### Object handles and slot lists
 
@@ -814,8 +816,17 @@ A player character's order queue (the deque at `AITaskSytem` +0x40, [order queue
   [precedence](../game/ai-tasks.md#precedence), not in the deque; a row with a job form is replaced by it; priority 3, weight 1.0; one the repertoire lacks is not made), then a replan
   is asked. The writer saves the deque alone, so orders loaded into the second list are not written by a later save. Meitou: a load reads the orders into `CharacterCold.SavedOrders`;
   the look puts them in the second list once every character and building exists (the job-form remap: 2 and 95 as 125, 4, 5 and 61 as 16, 25 as 58, 60 as 57, 249 as
-  250, 26 as 238; 146 and 136 are not remapped; 258 has none and stays a rest order on its bed, [second list](../game/ai-tasks.md#precedence)); a save writes the queue alone.
-  An order is dropped when no system owns its row, its target character or building is not in the world, or its handle names nothing the save holds; an entry of a finder row
+  250, 26 as 238, 136 as 137 (no loaded 137 entry in Meitou yet: dropped); 146 is not remapped; 258 has none and stays a rest order on its bed, [second list](../game/ai-tasks.md#precedence)); a save writes the queue alone.
+  The add makes the entry whatever its hand names (**Verified**: the maker `FUN_14032ebd0` copies the hand into the entry and tests only its type, after the repertoire
+  test). The entry is never dropped for its hand: the second list loses entries only to the clears (`FUN_1405074a0`, `FUN_140507530`) and the remove-by-type `FUN_140507090`
+  (**Verified**, every write of its count `+0x78` in `re/field_writes.txt` and the decrement in `FUN_140507090`), and its scorer weighs each entry alone ([second list](../game/ai-tasks.md#precedence)), so the entries
+  around one whose hand names nothing are scored as usual; the hand is looked up in the handle registry each time it is read (`FUN_140284510`), so it names the character
+  once that is made (**Observed**), a dead one too (**Verified**: a character hand is looked up in its platoon's list, then in the dead characters' map at `DAT_142134110`
+  `+0x708`, which `FUN_140623920` fills for a character with the dead byte `+0x5bc`). Meitou: an order on a character of one of the save's NPC platoons not made yet (a
+  dead member too, whose body comes back with its platoon), or on a fixture of a town whose fixtures are not registered
+  yet (both come in on later ticks), waits in its place in the second list as no candidate (`OrderEntry.Awaits`) and is made on the first look that finds its target; one whose
+  target will come no more stays there spent (`OrderEntry.Spent`: no candidate until the list is cleared). An order is dropped when no system owns its row, its target
+  character or site is neither in the world nor still to come, or its handle names nothing the save holds; an entry of a finder row
   (125, 16, 58, 57, 250, 238) is kept whatever its hand names, as its finder picks the target. A building handle is the building's instance (a build site, or a fixture whose id is the building's own, a bed too); a CHARACTER handle finds the character by its saved handle.
 - **Meitou keys**: string `meitou tjob<i>` (the order's site id: a build site, fixture or rock, which wins on load over a building handle, as `meitou pjob<i>`), int `meitou tjobK<i>` (the owner's
   detail code, `IOrderOwner.SaveKind`: a loot that opens the window, a bed named by a put-in order, a lock order done in place), each written only when set. Ground-item
@@ -891,12 +902,30 @@ reads its own keys. Keys are looked up by name: **Observed**, METARU and i949 ho
   (METARU, autosave0, autosave2, i949 and three archived games). Meitou writes the loaded record back, so the keys keep their values (**Observed**:
   METARU given a pair or two on each of its 538 platoons, loaded headless and saved: every platoon written back keeps them).
 - **Current town**: the update `FUN_1402688d0` stamps `towntime` and says ENTER_TOWN only when `currenttown` was none, so a loaded squad still in its
-  saved town keeps its saved hour. Meitou (`Saving/CurrentTownSave`, `Blackboard.InTown` / `InTownSince`) writes both for a squad in the world (a
-  nest, which has no town handle here, keeps the record's handle); a save's platoon made for the first time since the load takes them (`Squad.SavedTown`,
-  hashed, until its blackboard is made): the null handle as no town, so its next in-town step stamps the hour and says ENTER_TOWN as the original's
-  does; a handle naming no town of the world (a nest) leaves the town it starts in. Other squads start in the town they stand in at the current hour
-  (engine choice). **Observed** (METARU loaded headless, 1500 ticks, saved): 535 of 537 platoons written back with the same `currenttown` and
-  `towntime`; with every `currenttown` made null first, the 38 loaded squads in a town are written with that town and the hour of the load.
+  saved town keeps its saved hour. Meitou (`Saving/CurrentTownSave`, `Blackboard.InTown` / `InTownSince`) writes both for a squad in the world, the wild squads the population made too.
+  The faction's platoon load (`FUN_1407f88c0`) passes every saved PLATOON record,
+  never activated or not, through `FUN_1407f85f0` and `FUN_14057c6f0` to the platoon constructor `FUN_1407ee2d0`, which reads the blackboard from
+  it (`FUN_140272c20`; **Verified**, decompile), so a squad built from its template into the platoon (`FUN_1404ffad0`) has the saved town too. Meitou: every loaded platoon holds them (`Platoon.SavedTown`, hashed) until the first squad in it since the load gets its
+  blackboard, made from the save's characters or from its template (never made, regenerated, a characterless stand-in): the null handle as no town,
+  so its next in-town step stamps the hour and says ENTER_TOWN as the original's does; a handle naming no town or nest of the world leaves the town
+  it starts in. Other squads start in the town they stand in at the current hour (engine choice). **Observed** (METARU loaded headless, 300 ticks,
+  saved, `QuickSaveTests`): every platoon written back has the `currenttown`, `towntime` and `mission target` it was read with. **Observed**
+  (METARU loaded headless, 1500 ticks, saved): with every `currenttown` made null first, the 38 loaded squads in a town are written with that town
+  and the hour of the load.
+- **Nest as current town** (**Verified**, decompile): `FUN_1402688d0` takes the nearest town of the town manager's list of any type but 8 (nest
+  marker, `FUN_140927f10`) whose radius holds the squad, so a squad in a nest has the nest as `currenttown`; the load resolves a type-13 or type-85
+  handle through the handle table (`FUN_1409f9100`), and `loadGame` (`FUN_140373f00`) loads the town list (`FUN_1403728c0`) before the platoons
+  (`FUN_1409eee70`), so a saved nest handle names its nest. **Observed** (autosave0, i949): nest squads hold the nest state's type-85 `hand`
+  and their arrival hour. Meitou writes the handle the nest is saved with (`PopulationSystem.NestSaveId`, after the nests are written; the
+  null handle for a nest the save does not hold) and loads it as that nest (`CurrentTownSave.TownOf`). **Observed** (autosave0 loaded headless,
+  300 ticks, saved): its four Wolves platoons are written back with the `currenttown` and `towntime` they were read with.
+- **Player platoons**: the blackboard update `FUN_1402732b0` (town step `FUN_1402688d0` first) is slot 27 of `Platoon`'s vtable (`FUN_1407ebcc0`,
+  on the platoon's `+0xf8` blackboard), the one class holding it (**Verified**, decompile and vtable list). The player's platoons run it too
+  (**Observed**): METARU's player platoon holds a town and 196.69; autosave2, the same game 3 hours on and out of town, the null handle and 196.69
+  kept; autosave0 and i949 a town and 34.0; a platoon made since (autosave2's second) the null handle and 0. Meitou: a squad the AI does not run
+  holds the pair itself (`Squad.StayTown` / `StaySince`, hashed) and takes the same step on the package cadence, ENTER_TOWN included; it hands it
+  to the board the AI attaches to an autonomous squad and takes it back when the board is dropped. A loaded player platoon's pair waits on its
+  squad (`Squad.SavedTown`, hashed) until the AI first looks at it; until then the record keeps what it read.
 - **House locked**: Meitou keeps the flag on the squad's home (`LockSystem.IsHouseLocked`, the building's `meitou house locked`). `Saving/HomeLockSave`
   writes `homelok` as the flag of the home the platoon's `homebuilding` names (`Squad.HomeBuilding`; a save's platoon out of the world, from the same
   building), and a save's platoon made for the first time since the load with `homelok` set sets its home's flag; a platoon without a home keeps the
@@ -1028,7 +1057,7 @@ yet, is left out. Round trip checked with a throwaway probe (write, read, clear)
   (`GunClass::serialise` `FUN_1404390a0` / `loadFromSerialise` `FUN_140439140`): int `current shots` (the gun's `+0x20` loaded harpoons) into the same state, read back as
   min(saved, `+0x1c` the gun's shots), a missing key as 0 (**Verified** by decompile). The reload timer (the gunner's controller), aim and rotation error are **not** saved,
   so a loaded turret keeps its harpoons, starts a fresh reload and re-acquires its target. Meitou writes `current shots` for each turret manned since loading (the others keep the
-  loaded value; `CombatSystem.WriteTurretShots`) and a turret's first manning reads it (capped at max(`num shots`, 1)); it writes no `mounted` link and adds no key.
+  loaded value; `CombatSystem.WriteTurretShots`) and a turret's first manning reads it (capped at max(`num shots`, 1)); it writes no `mounted` link and adds no key. It reads the `mounted` handle of a player-built turret as the building it is mounted on (`BuildSite.MountedOn`, `BuildingSave`), for the turret finder's building filter ([ai-tasks](../game/ai-tasks.md#combat-goals)).
 
 ### Cross-checks against base data (the sample vs `GameDatabase` of the four base files)
 

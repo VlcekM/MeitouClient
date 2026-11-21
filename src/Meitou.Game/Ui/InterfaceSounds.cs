@@ -294,6 +294,7 @@ sealed class InterfaceSounds(PlayerInterface player)
         if (UiSound is null || e.Action.StartsWith("inventory-scroll", StringComparison.Ordinal)) return;
 
         if (e.Screen is "new-game" or "import" && SoundForAdvancedSlider(e)) return;
+        if (e.Screen == "message" && SoundForSplitSlider(e)) return;
 
         switch (InventoryWindows.ScreenKind(e.Screen))
         {
@@ -332,6 +333,19 @@ sealed class InterfaceSounds(PlayerInterface player)
         bool track = e.Action.StartsWith("advanced-slider:", StringComparison.Ordinal);
         bool arrow = e.Action.StartsWith("advanced-less:", StringComparison.Ordinal)
             || e.Action.StartsWith("advanced-more:", StringComparison.Ordinal);
+        if (!track && !arrow) return false;
+
+        if (arrow || e.Press) Sound("Slider");
+        return true;
+    }
+
+    /// <summary>
+    /// The split stack dialog's slider (<see cref="StackSplitDialog"/>): a press on the track or an arrow sounds <c>Slider</c> once and the drag
+    /// after it is silent, as the advanced options' sliders do. False for another event.
+    /// </summary>
+    bool SoundForSplitSlider(MyGuiEvent e)
+    {
+        bool track = e.Action == "split-slider", arrow = e.Action is "split-less" or "split-more";
         if (!track && !arrow) return false;
 
         if (arrow || e.Press) Sound("Slider");

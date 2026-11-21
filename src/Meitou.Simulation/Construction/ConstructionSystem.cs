@@ -154,6 +154,10 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// Some character may still hold a site that is gone (the sweep in Schedule ends its task).
     /// </summary>
     bool _sweep;
+    /// <summary>
+    /// The search for the player's home building, run at each serial step's start (<see cref="PlayerHome.Find"/>).
+    /// </summary>
+    readonly PlayerHome _home = new();
 
     /// <summary>
     /// BuildingFunction 19 SHELL_WITH_INTERIOR (a house): its functionality's <c>function</c>.
@@ -1369,6 +1373,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     public void SlowWorld(World world)
     {
         var reg = world.Buildings;
+        _home.Find(world, this);
         if (reg.Count == 0 && !_sweep) return;
 
         _doorBuilders.Clear();
@@ -1736,11 +1741,11 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// <summary>
     /// The material finder (<b>Verified</b>, the 115 "Finding building mats" target finder <c>FUN_1405a2a60</c> -> <c>FUN_14059d000</c>;
     /// docs/game/buildings-production.md "Material delivery"): for each material still owed, in the site's order, the first that has a source wins: a
-    /// loose item of it (<see cref="LooseSource.Nearest"/>), else the nearest player storage holding it within <see cref="SourceRangeSquared"/>,
-    /// else the nearest player machine whose output holds it. The buildings are those of the builder's town
-    /// (<see cref="FixtureRegistry.TownCandidates"/>). Engine choices: no per-material memory of the last source (the original's is a cache emptied
-    /// at each AI update, so it changes no answer), the exact record (the original also lets any record of the same type stand in for a non-ITEM
-    /// material).
+    /// loose item of it (<see cref="LooseSource.Nearest"/>), else the nearest player storage holding it within <see cref="SourceRangeSquared"/> that
+    /// the storage filters let the builder take it from (<see cref="Items.IStorageFilter"/>), else the nearest player machine whose output holds it.
+    /// The buildings are those of the builder's town (<see cref="FixtureRegistry.TownCandidates"/>). Engine choices: no per-material memory of the
+    /// last source (the original's is a cache emptied at each AI update, so it changes no answer), the exact record (the original also lets any
+    /// record of the same type stand in for a non-ITEM material).
     /// </summary>
     MaterialSource? Source(World world, int slot, CharacterCold cold, BuildSite site)
     {
@@ -1764,7 +1769,8 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
                 if (d > SourceRangeSquared || inTown is not null && !inTown(building.Position)) continue;
                 if (m.Data.IsStorage)
                 {
-                    if (d < storeGap && m.Storage is { } inv && Stack(inv, want) is not null) (store, storeGap) = (m.Site, d);
+                    bool holds = d < storeGap && m.Storage is { } inv && Stack(inv, want) is not null;
+                    if (holds && world.StorageAllows(cold, m.Site, Items.StorageUse.Take, want)) (store, storeGap) = (m.Site, d);
                 }
                 else if (d < machineGap && m.Output is { Count: > 0 } output && output.Recipe.Item == want) (machine, machineGap) = (m.Site, d);
             }
@@ -1948,25 +1954,27 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
 
     /// <summary>
     /// The turrets mounted on a building go with it when its dismantle completes, without a refund (<b>Verified</b>, <c>FUN_1402a2860</c>:
-    /// <c>BuildingFinderTurretsOnCertainBuilding</c> and the destroy routine <c>FUN_140799af0</c> with the reason "dismantled"). A gunner's Operate
-    /// task ends because its site is gone.
+    /// <c>BuildingFinderTurretsOnCertainBuilding</c> and the destroy routine <c>FUN_140799af0</c> with the reason "dismantled"): the turrets that
+    /// stand on it or, loaded from a save, name it as their mount (<see cref="BuildSite.Container"/>). A gunner's Operate task ends because its
+    /// site is gone.
     /// </summary>
     void DestroyMountedTurrets(World world, BuildSite site)
     {
-        foreach (var child in world.Buildings.All.Where(o => o.Parent == site.Id).ToList())
-            if (world.Machines.Find(child.Id) is { Data.Function: ObjectRanges.TurretFunction }) Remove(world, child);
+        foreach (var child in world.Buildings.All.Where(o => o.Container == site.Id).ToList())
+            if (Combat.PlacedTurrets.PostOf(_db, child) is not null) Remove(world, child);
     }
 
     /// <summary>
     /// The panel's Dismantle after its confirmation (<c>Building::confirmDismantle</c> <c>FUN_14054fea0</c>, <b>Observed</b>): refused with
-    /// <see cref="MountedRefusal"/> while a building other than furniture stands in it (the panel's own test, engine reading: Meitou's mounted
-    /// buildings are the non-furniture children); otherwise its furniture is destroyed (no refund) and the dismantle step runs with an endless amount
+    /// <see cref="MountedRefusal"/> while a building other than furniture stands in it or is mounted on it (the panel's own test, engine
+    /// reading: Meitou's mounted buildings are the non-furniture children and the loaded turrets that name it as their mount); otherwise its
+    /// furniture is destroyed (no refund) and the dismantle step runs with an endless amount
     /// (slot 73 with <c>FLT_MAX</c>), so the site goes at once with the usual refund.
     /// </summary>
     void DismantleAtOnce(World world, BuildSite site)
     {
         var reg = world.Buildings;
-        var children = reg.All.Where(o => o.Parent == site.Id).ToList();
+        var children = reg.All.Where(o => o.Container == site.Id).ToList();
         if (children.Any(o => Data(o.Record) is not ({ IsInteriorFurniture: true } or { IsNode: true })))
         {
             world.Post(MountedRefusal);

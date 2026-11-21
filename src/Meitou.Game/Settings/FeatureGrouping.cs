@@ -3,7 +3,7 @@ using Meitou.Game.Rendering.Frame;
 namespace Meitou.Game.Settings;
 
 /// <summary>
-/// The Graphics tabs as features (docs/native-ui.md "Settings"): each feature is one header row (its switch, or a title when it has none) with its
+/// The Graphics tabs (and Advanced's Squad XP) as features (docs/native-ui.md "Settings"): each feature is one header row (its switch, or a title when it has none) with its
 /// own settings folded under it, closed until opened. Settings in no group stay rows of their own.
 /// </summary>
 sealed class FeatureGrouping(SettingsMenu menu)
@@ -24,7 +24,7 @@ sealed class FeatureGrouping(SettingsMenu menu)
     const string SkinGroup = "Skin";
 
     /// <summary>
-    /// The features, in the Graphics tabs' order: each group's id, heading setting, members, title and hint.
+    /// The features, in the Graphics tabs' order (then the Advanced page's): each group's id, heading setting, members, title and hint.
     /// </summary>
     internal static readonly FeatureGroup[] FeatureGroups =
     [
@@ -106,6 +106,9 @@ sealed class FeatureGrouping(SettingsMenu menu)
         new(WorldFrame.VignetteSwitch, WorldFrame.VignetteSwitch, [WorldFrame.VignetteStrengthSlider]),
         new(WorldFrame.FilmGrainSwitch, WorldFrame.FilmGrainSwitch, [WorldFrame.GrainStrengthSlider]),
         new("Heat haze", "Heat haze", ["Heat haze strength (1 = game)"]),
+
+        // Advanced: each skill's own multiplier under Squad XP
+        new("Squad XP", "Squad XP", SkillXp.Rows),
     ];
 
     /// <summary>

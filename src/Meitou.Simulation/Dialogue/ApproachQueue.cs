@@ -107,7 +107,7 @@ sealed class ApproachQueue(DialogueSystem dialogue)
             return;
         }
 
-        if (!dialogue.InConversation && DialogueSystem.InTalkRange(table, n, t))
+        if (!dialogue.InConversation && DialogueSystem.InTalkRange(world, n, t))
         {
             Fire(world, a, n);
             return;

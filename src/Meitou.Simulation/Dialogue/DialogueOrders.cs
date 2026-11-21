@@ -35,7 +35,7 @@ sealed class DialogueOrders(PlayerTalks talks, ApproachQueue approaches, TalkFol
         if (!DialogueSystem.Talkable(table, t)) return OrderCheck.Gone;
 
         bool walks = TaskStart.Eligible(world, table.Cold(slot)!, TaskType.MoveCusOrdered);
-        return walks || DialogueSystem.InTalkRange(table, slot, t) ? OrderCheck.Run : OrderCheck.Blocked();
+        return walks || DialogueSystem.InTalkRange(world, slot, t) ? OrderCheck.Run : OrderCheck.Blocked();
     }
 
     /// <summary>

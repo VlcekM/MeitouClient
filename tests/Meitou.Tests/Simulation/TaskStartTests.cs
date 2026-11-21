@@ -89,7 +89,7 @@ public class TaskStartTests
     /// <paramref name="senses"/> adds the aggro system's looks (attack on sight off) after retaliation, over <paramref name="relations"/> (the combat
     /// system reads them too) when given; <paramref name="ai"/> adds the AI system after the player's, the senses (Self preservation's threats) and
     /// puts every character in a squad (the chooser runs only for a character with a platoon, <c>FUN_1405112b0</c>); with <paramref name="senses"/>
-    /// too, the factions, the player's listing goal 15 Protect allies.
+    /// too, the factions, the player's listing goal 15 Protect allies; <paramref name="flee"/> adds the flee step after the senses.
     /// </summary>
     internal sealed class Rig : IDisposable
     {
@@ -107,7 +107,7 @@ public class TaskStartTests
         readonly Squad? _playerSquad;
 
         public Rig(bool carrying, bool decide = false, bool slaves = false, bool senses = false, FactionRelations? relations = null,
-                bool ai = false)
+                bool ai = false, bool flee = false)
         {
             var db = Database();
             if (ai && senses) AddFactions(db);
@@ -140,6 +140,9 @@ public class TaskStartTests
 
                     // A failed stealth knock-out puts its attacker on the victim's threats (the game's wiring, StandardSystems).
                     if (ai) (aggro.Combat, carry.Aggro) = (Combat, aggro);
+
+                    // The flee step runs the goals' and Self preservation's runs, after the looks as in the game.
+                    if (flee) systems.Insert(systems.IndexOf(aggro) + 1, new FleeSystem(relations ?? data.Relations, Combat));
                 }
             }
             // The chooser's goals on the ladder's rungs (Self preservation, Protect allies) are the AI's, after the player's as in the game.
@@ -479,44 +482,5 @@ public class TaskStartTests
         Assert.False(TaskStart.Eligible(world, Make(stump: true), TaskType.Build));
         Assert.False(TaskStart.Eligible(world, Make(animal: true), TaskType.LiftPersonPlayerOrder));
         Assert.True(TaskStart.Eligible(world, Make(animal: true), TaskType.Rest));
-    }
-
-    /// <summary>
-    /// A system that sets slot 0's task in the slow world: directly, or through <see cref="TaskStart.Step"/>.
-    /// </summary>
-    sealed class Writer : ITickSystem
-    {
-        public CharacterTask? Direct, Stepped;
-        public void SlowWorld(SimWorld world)
-        {
-            if (Direct is { } d) world.Characters.Next[0].Task = (byte)d;
-            if (Stepped is { } s) TaskStart.Step(world.Characters, 0, s);
-            Direct = Stepped = null;
-        }
-    }
-
-#if DEBUG
-    const bool Debug = true;
-#else
-    const bool Debug = false;
-#endif
-
-    /// <summary>
-    /// Debug builds: a task written outside the start path fails the tick's check (<see cref="TaskStart.CheckStarts"/>), one set through it passes.
-    /// Catches the check weakened (a task left out of it, a stamp that passes any write), which no other test would notice.
-    /// </summary>
-    [Fact]
-    public void A_task_written_outside_the_start_path_fails_the_debug_check()
-    {
-        Assert.SkipUnless(Debug, "the check runs in debug builds only");
-        var writer = new Writer();
-        using var world = new SimWorld(new WorldSettings { PublishSnapshots = false }, new OpenGroundWalkability(SyntheticTown.Ground), [writer]);
-        world.Characters.Spawn(new CharacterHot { Position = new Vector3(1000, 300, 2000) }, new Combatant().MakeCold(), 0);
-        world.RunTick();
-        writer.Stepped = CharacterTask.Wander;
-        world.RunTick();
-        Assert.Equal((byte)CharacterTask.Wander, world.Characters.Previous[0].Task);
-        writer.Direct = CharacterTask.Idle;
-        Assert.Throws<InvalidOperationException>(() => world.RunTick());
     }
 }

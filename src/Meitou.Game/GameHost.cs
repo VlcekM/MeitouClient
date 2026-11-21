@@ -651,6 +651,7 @@ sealed partial class GameHost(
         Session.World.PrisonPoseFix = Config.FixPrisonPose;
         Session.World.CagedAnimalFix = Config.FixCagedAnimals;
         Session.World.BagSearchFix = Config.FixBagSearch;
+        Session.World.CounterTalk = Config.CounterTalk;
         Session.World.TakeIntoBackpack = Config.TakeIntoBackpack;
         Session.World.ActionLog = ActionLogs.Log;
         Session.Simulation.SetFastSpeeds(Config.FastSpeed, Config.FastestSpeed);
@@ -724,6 +725,7 @@ sealed partial class GameHost(
                 Decapitation = Config.Decapitation,
                 AdvancedRagdolls = Config.AdvancedRagdolls,
                 SquadXp = Config.SquadXp,
+                SquadSkillXp = SkillXp.Rates(Config.SquadSkillXp),
                 OthersXp = Config.OthersXp,
             },
             ZoneReady = ready =>
@@ -847,6 +849,7 @@ sealed partial class GameHost(
         Player.ShowNames = Config.ShowNames;
         Player.Floaters = Config.Floaters;
         Player.FeedbackButtonInPlay = Config.FeedbackButton;
+        Player.XpLabel = SkillXp.Label(Config);
         Player.Frontend.FixLoadButton = Config.FixLoadButton;
         Player.BuildingSelection.DeselectBuildings = Config.DeselectBuildings;
         Player.InventoryWindows.RotateItems = Config.RotateItems;
@@ -1065,6 +1068,7 @@ sealed partial class GameHost(
     {
         Modding.ConnectModUi(ui);
         ConnectSaves(ui);
+        ui.InventoryWindows.SplitStacks = Config.SplitStacks;
 
         // The region (BIOME_GROUP) under a point, for the biome banner.
         ui.BiomeBanner.RegionAt = (x, z) => ActiveWeather?.World.RegionAt(x, z).Def is { } def ? (def.StringId, def.Name) : null;

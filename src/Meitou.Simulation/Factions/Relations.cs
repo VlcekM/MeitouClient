@@ -171,22 +171,6 @@ public sealed class FactionDeeds(FactionRelations relations, PopulationData? dat
     public FactionRelations Relations { get; } = relations;
 
     /// <summary>
-    /// The striker's rating the blows' events test against 0.1 and 0.15 (<c>FUN_140999f00</c>, <c>FUN_1404394f0</c>, <b>Verified</b>): its status
-    /// float <c>+0xac</c>, the intended aggression of its current goal (<see cref="Ai.TaskAggression"/>; the rows hold 1, 0.5, 0 or less). The goal
-    /// of a fight its AI started is the mind's (16, 21, 144 rate 1; 34 and the protect goals 0), not the fight's row. Any other fight rates by its
-    /// row (an order's 5 rates 0, 61 rates 1), but a defence (row 13) rates 0: the original plans it under Self preservation (32) or a protect
-    /// goal, which rate 0. Not fighting (a bolt still in flight), the goal as elsewhere.
-    /// </summary>
-    static float Rating(CharacterCold striker)
-    {
-        if (striker.Running is not { Task: Movement.CharacterTask.Attack } fight) return Ai.TaskAggression.OfGoal(striker);
-        if (striker.Ai is { Goal: { } goal } mind && Ai.AiSystem.OwnsFight(striker, mind))
-            return Ai.TaskAggression.Of(goal.Task.Type);
-
-        return fight.Row == Data.Gameplay.Ai.TaskType.AttackAttackersOf ? 0 : Ai.TaskAggression.Of(fight.Row);
-    }
-
-    /// <summary>
     /// The amount of a deed against <paramref name="victim"/> (<c>FUN_140796020</c>, <b>Observed</b>): its CHARACTER <c>faction importance</c> times
     /// 1 inside its own squad's town, 0.6 inside a town whose faction is allied with (or is) the victim's, else 0.025 (outside every town too). The
     /// town is the one the victim stands in (the status object's <c>+0x88</c>, read here as <see cref="PopulationData.TownAt"/>); its own town is its
@@ -221,7 +205,7 @@ public sealed class FactionDeeds(FactionRelations relations, PopulationData? dat
     /// A blow that landed on <paramref name="victim"/> (the melee hit <c>FUN_1404394f0</c> and the bolt hit <c>FUN_140439c90</c>, through
     /// <c>FUN_140999f00</c> / <c>FUN_140999d50</c>): in this order: <see cref="RelationEventKind.Killed"/> when the blow killed (the death function
     /// runs inside the damage, <c>FUN_1407a6200</c>, crediting the killer); <see cref="RelationEventKind.Hit"/> when the striker rates above 0.1
-    /// (<see cref="Rating"/>); when the victim is now down, <see cref="RelationEventKind.Knockout"/>
+    /// (<see cref="Ai.TaskAggression.OfGoal"/>); when the victim is now down, <see cref="RelationEventKind.Knockout"/>
     /// (<see cref="RelationEventKind.KnockoutMinor"/> for a striker rated 0.15 or less, 0.1 or less for a bolt, and for a bolt not aimed at the
     /// victim) and, dead, <see cref="RelationEventKind.KillingBlow"/>. A stray bolt never counts as a hit. The test is the victim's state after the
     /// blow, so a blow on one already down counts again.
@@ -232,7 +216,7 @@ public sealed class FactionDeeds(FactionRelations relations, PopulationData? dat
         float x = Weight(world, victim);
         if (x == 0 || world.Characters.Cold(striker) is not { } doer) return;
 
-        float rating = Rating(doer);
+        float rating = Ai.TaskAggression.OfGoal(doer);
         if (dead) Apply(world, striker, victim, RelationEventKind.Killed, x);
         if (aimed && rating > 0.1f) Apply(world, striker, victim, RelationEventKind.Hit, x);
         if (!down && !dead) return;

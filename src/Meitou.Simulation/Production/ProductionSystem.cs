@@ -406,7 +406,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
                 case ProspectOrder prospect: ProspectBegin(world, prospect); break;
                 case AddJob add: AddJobs(world, add); break;
                 case AddOrderJob add: AddOrderJobs(world, add); break;
-                case DisposeCorpseOrder dispose: DisposeCarried(world, dispose); break;
+                case DisposeCorpseOrder dispose: GiveDisposal(world, dispose); break;
                 case RemoveJob remove: RemoveJobAt(world, remove); break;
                 case MoveJob move: MoveJobTo(world, move); break;
                 case PutInMachine put: Put(world, put); break;
@@ -479,7 +479,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// The orders of machines (operate 87, training 97, turret gunner 146, a haul trip to a storage 124) and prospecting (150), anyone's (the order
     /// giver and the tasks test no faction: a worked bench counts for the player's research only when the player owns it, the storages are the
     /// worker's faction's, <see cref="StoresFor"/>, and a prospect's result goes to the Prospecting window, <c>Task_Prospecting</c>): on a complete
-    /// site that has its machine (or a turret's post), else the order leaves the queue; one already working that machine needs nothing more; the character must be able to work (<see cref="Able"/>; a gunner <see cref="AbleToMan"/>), the machine have a free operator place
+    /// site that has its machine (or a turret's post), else the order is gone (<see cref="OrderVerdict.Gone"/>); one already working that machine needs nothing more; the character must be able to work (<see cref="Able"/>; a gunner <see cref="AbleToMan"/>), the machine have a free operator place
     /// ("is already in use", posted) and, to operate or man it (rows 87 and 146), power (state 93, <see cref="Powered"/>; its text "It needs
     /// electricity." said); a prospector must not swim.
     /// </summary>
@@ -540,15 +540,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// <summary>
     /// A player turret's post (its functionality's <c>use range</c> and <c>gun turret</c>), null for a building that is no turret.
     /// </summary>
-    Meitou.Data.World.TurretPost? TurretPostOf(BuildSite site)
-    {
-        if (_db.Find(site.Record) is not { } record
-            || (record.GetReferences("functionality") is [var link, ..] ? _db.Find(link.TargetStringId) : null) is not { } fn
-            || fn.GetInt("function") != Meitou.Data.World.ObjectRanges.TurretFunction) return null;
-        var forward = Vector3.Transform(Vector3.UnitZ, site.Rotation);
-        return new Meitou.Data.World.TurretPost(site.Position, MathF.Atan2(forward.X, forward.Z), fn.GetFloat("use range", 10),
-            record.GetReferences("gun turret").Select(r => r.TargetStringId).FirstOrDefault() ?? "", null);
-    }
+    Meitou.Data.World.TurretPost? TurretPostOf(BuildSite site) => PlacedTurrets.PostOf(_db, site);
 
     /// <summary>
     /// Where an operator walks to: a turret's gunner spot (<see cref="Ai.AiSystem.TurretSpot"/>), else the floor point at or next to the building's
@@ -739,13 +731,14 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     }
 
     /// <summary>
-    /// Registers the operate, haul and prospect tasks with the task step.
+    /// Registers the operate, haul and prospect tasks with the task step, and the walk of order 136 (<see cref="CorpseOrders"/>).
     /// </summary>
     public void RegisterTasks(TaskHandlers tasks)
     {
         tasks.Register(CharacterTask.Operate, this);
         tasks.Register(CharacterTask.Haul, this);
         tasks.Register(CharacterTask.Prospect, this);
+        tasks.Register(TaskType.FeedCorpseIntoMachine, (ITaskHandler)CorpseOrders);
     }
 
     /// <summary>

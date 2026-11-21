@@ -111,7 +111,7 @@ public sealed partial class AiSystem
     /// <summary>
     /// Kinds of <see cref="PlanTarget"/> the finders give.
     /// </summary>
-    static class Targets
+    internal static class Targets
     {
         /// <summary>
         /// The target kinds: a spot, bed, seat, turret, town, work place, machine and store; the character a follow goal follows (its place is read
@@ -289,18 +289,10 @@ public sealed partial class AiSystem
                 return true;
             }
 
-            // Self preservation (the planner's choice between its providers 13 and 35, AiSystem.SelfPreservationPlans): [35, 32] when 35 wins or
-            // the chain through 13 dead-ends, else [13, 32] on an attacker of its own (AI::findAttackerOf on itself, AiSystem.SelfDefencePick; the
-            // fight is the combat system's, as the combat goals'); with neither the next goal is tried.
-            if (type == TaskType.SelfPreservation)
-            {
-                if (!_system.SelfPreservationPlans(_world, _slot, _mind, desire, out bool runs)) return false;
-                if (!InRepertoire(runs ? TaskType.RunAway : TaskType.AttackAttackersOf)) return false;
-                _mind.Plan.Clear();
-                _mind.Plan.Add(new PlanStep(runs ? TaskType.RunAway : TaskType.AttackAttackersOf, default));
-                _mind.Plan.Add(new PlanStep(type, default));
-                return true;
-            }
+            // Self preservation (the planner's search over its providers 13, 35 and 234, AiSystem.SelfPreservationPlan): [35, 32] for the run,
+            // [13, 32] on an attacker of its own (AI::findAttackerOf on itself, AiSystem.SelfDefencePick; the fight is the combat system's, as the
+            // combat goals'), [146, 234, 32] on the turret 234's finder took (claimed in the serial step); with none the next goal is tried.
+            if (type == TaskType.SelfPreservation) return PlanSelfPreservation(desire);
 
             // A follow goal aimed at the squad's mission (44 of a bodyguard contract) is its own plan too (engine choice): the row needs a target
             // and has no finder, its target being the goal's own, the contract's mission target, which is a character and no place to plan a
@@ -400,6 +392,35 @@ public sealed partial class AiSystem
         /// <see cref="TryPlan"/>).
         /// </summary>
         static bool EngineActs(TaskType type) => TaskBehaviours.Of(type) is AiBehaviour.Assault or AiBehaviour.Fight or AiBehaviour.Medic;
+
+        /// <summary>
+        /// Self preservation's plan (<see cref="AiSystem.SelfPreservationPlan"/>), its steps leaf first, each in the repertoire.
+        /// </summary>
+        bool PlanSelfPreservation(float desire)
+        {
+            var plan = _system.SelfPreservationPlan(_world, _slot, _mind, desire);
+            TaskType[] steps = plan switch
+            {
+                SelfPlan.Run => [TaskType.RunAway],
+                SelfPlan.Fight => [TaskType.AttackAttackersOf],
+                SelfPlan.Turret => [TaskType.UseTurret, TaskType.ManATurretPlayerJob],
+                _ => [],
+            };
+            if (steps.Length == 0 || !Array.TrueForAll(steps, InRepertoire)) return false;
+
+            _mind.Plan.Clear();
+            foreach (var step in steps) _mind.Plan.Add(new PlanStep(step, StepTarget(step)));
+            _mind.Plan.Add(new PlanStep(TaskType.SelfPreservation, default));
+            return true;
+        }
+
+        /// <summary>
+        /// A Self preservation step's target: 146's the gun spot of the turret asked for; the others none.
+        /// </summary>
+        PlanTarget StepTarget(TaskType step) =>
+            step == TaskType.UseTurret && _mind.GuardAsk is { Post: var turret }
+                ? new PlanTarget(Targets.Turret, TurretSpot(_world, turret))
+                : default;
 
         /// <summary>
         /// Whether goal <paramref name="goal"/>'s plan is the engine's own (<see cref="TryPlan"/>: the engine-run goals, Self preservation, a follow
@@ -513,18 +534,15 @@ public sealed partial class AiSystem
         }
 
         /// <summary>
-        /// The desire of a row on the way: the sleeping desire for UseBed (0 drops the node), else the row's task profile desire, 1 for a random or
-        /// own desire function.
+        /// The desire of a row on the way (0 drops the node): a row an engine-acted goal's act-out carries out its system's (each computes the
+        /// row's registered desire), else the row's registered desire (<see cref="RowDesires"/>: a constant, AI slot 48's roll or its own function).
         /// </summary>
         public float Desire(TaskDataRow row, in PlanTarget target)
         {
-            // A row an engine-acted goal's act-out carries out: its system's desire.
             if (_duty is { } duty && duty.Acts(row.Type)) return duty.Goal.Desire(_world, AskDuty(row.Type, target));
 
-            // row 98: AI slot 30 (FUN_1405a0880); 0 drops the node
-            if (row.Type == TaskType.UseBed) return _system.SleepingDesire(_world, _board, _slot);
-            float d = TaskProfiles.Of(row.Type).Desire;
-            return d >= 0 ? d : 1;   // a random or own desire function counts as 1 on the way
+            var ask = new RowAsk(_slot, _world.Characters.Cold(_slot)!, _mind, _mind.Squad, _board, row.Type, target);
+            return _system.Rows.Of(_world, this, ask);
         }
 
         /// <summary>
@@ -573,7 +591,7 @@ public sealed partial class AiSystem
         /// workplace's real machine (its site id), else the town work machine there (matched by position; read-only, the production tick is the only
         /// writer).
         /// </summary>
-        Production.Machine? MachineAt(in PlanTarget t)
+        internal Production.Machine? MachineAt(in PlanTarget t)
         {
             if (t.Kind is not (Targets.Machine or Targets.Work)) return null;
             if (t.Kind == Targets.Work && OutpostWorkplaceAt(t.Position) is { RuntimeKey: { } site })
@@ -682,7 +700,7 @@ public sealed partial class AiSystem
         bool RoomForResources(in PlanTarget target, CharacterCold cold)
         {
             string? record = target.Kind is Targets.Loose or Targets.Supply ? target.Record : MachineAt(target)?.Output?.Recipe.Item;
-            return record is not null && cold.Inventory is { } bag && _system.Data.Items.Create(record, 1) is { } unit && bag.HasRoomFor(unit);
+            return record is not null && _system.Rows.RoomFor(cold, record);
         }
 
         /// <summary>

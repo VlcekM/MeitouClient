@@ -575,21 +575,26 @@ internal sealed class WardenGoals(LockSystem locks)
     /// member of a 197 squad standing inside its home has no plan, as in the original (list B !107's provider 200 needs a target, and list B gets
     /// only the goal's own hand, empty for 197: <c>FUN_14051bae0</c>).
     /// </summary>
+    /// <summary>
+    /// 155's and 197's desire, AI slot 31 <c>FUN_140795f80</c> (<b>Verified</b>): 1.0 while the squad's house flag is clear (no squad or home: 1.0);
+    /// with it set, 1.0 for a member standing outdoors whose home's first door is open or broken (<c>FUN_1402ea2f0</c>), else 0.
+    /// </summary>
+    internal static float LockingUpDesire(World world, int slot, Squad? squad)
+    {
+        if (squad?.Ai?.OwnHome is not { } home || world.SystemOf<LockSystem>() is not { } locks) return 1;
+        if (!locks.HouseLocked(home.Key)) return 1;
+        if (world.Sight.BuildingOf(slot) is not null) return 0;
+
+        return LockSystem.FirstDoor(world, home.Key) is { } door && (door.DoorBroken || door.Motion == DoorMotion.Open) ? 1 : 0;
+    }
+
     sealed class LockingUp(WardenGoals goals) : IDutyGoal
     {
         /// <summary>
         /// The goal's own row: AI slot 31 <c>FUN_140795f80</c> (<b>Verified</b>): 1.0 while the squad's house flag is clear; with it set, 1.0 for a
         /// member standing outdoors whose home's first door is open or broken (<c>FUN_1402ea2f0</c>), else 0. The rows on the way: 1.0 (slots 19, 57).
         /// </summary>
-        public float Desire(World world, in DutyAsk ask)
-        {
-            if (ask.Row != ask.Type) return 1;
-            if (ask.Squad.Ai?.OwnHome is not { } home) return 1;
-            if (!goals._locks.HouseLocked(home.Key)) return 1;
-            if (world.Sight.BuildingOf(ask.Slot) is not null) return 0;
-
-            return LockSystem.FirstDoor(world, home.Key) is { } door && (door.DoorBroken || door.Motion == DoorMotion.Open) ? 1 : 0;
-        }
+        public float Desire(World world, in DutyAsk ask) => ask.Row != ask.Type ? 1 : LockingUpDesire(world, ask.Slot, ask.Squad);
 
         /// <summary>
         /// The shared finder of 155 and 197 (<see cref="DoorToLock"/>).

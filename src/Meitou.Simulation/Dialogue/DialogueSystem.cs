@@ -441,21 +441,40 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     /// </summary>
     public const float TalkReach = 21;
     /// <summary>
+    /// The reach that replaces <see cref="TalkReach"/> for a shopkeeper at its counter while <see cref="World.CounterTalk"/> is on (Meitou): the
+    /// customer talks from the counter's front instead of walking round behind it (docs/game/dialogue.md "Player conversation", counter reach).
+    /// </summary>
+    public const float CounterTalkReach = 31;
+    /// <summary>
     /// The largest height difference to talk across (the original's on the same floor; engine choice, the sim has no floors here).
     /// </summary>
     public const float TalkHeight = 35;
 
     /// <summary>
     /// Whether <paramref name="talker"/> is near enough <paramref name="target"/> to talk: X/Z within the target's scaled radius (footprint x body
-    /// scale) + <see cref="TalkReach"/>, twice the reach once the talker has stopped, and within <see cref="TalkHeight"/> in height.
+    /// scale) + <see cref="TalkReach"/> while walking (<see cref="CounterTalkReach"/> for a shopkeeper standing at its counter,
+    /// <see cref="CounterReach"/>), or twice <see cref="TalkReach"/> once the talker has stopped, and within <see cref="TalkHeight"/> in height.
     /// </summary>
-    internal static bool InTalkRange(CharacterTable table, int talker, int target)
+    internal static bool InTalkRange(World world, int talker, int target)
     {
+        var table = world.Characters;
         var (a, b) = (table.Next[talker].Position, table.Next[target].Position);
-        float reach =
-            Combat.CombatSteering.Radius(table.Cold(target)) + TalkReach * ((table.Next[talker].Flags & (ushort)MoveFlags.AnyPath) == 0 ? 2 : 1);
+        bool stopped = (table.Next[talker].Flags & (ushort)MoveFlags.AnyPath) == 0;
+        float stride = stopped ? TalkReach * 2
+            : CounterReach(world, target) ? CounterTalkReach
+            : TalkReach;
+        float reach = Combat.CombatSteering.Radius(table.Cold(target)) + stride;
         return Vector2.Distance(new(a.X, a.Z), new(b.X, b.Z)) < reach && MathF.Abs(a.Y - b.Y) < TalkHeight;
     }
+
+    /// <summary>
+    /// Whether the character in <paramref name="target"/> is talked to across a shop counter: <see cref="World.CounterTalk"/> is on, it is not
+    /// walking, and its AI goal is standing at a shopkeeper node (row 20, the node behind the counter).
+    /// </summary>
+    static bool CounterReach(World world, int target) =>
+        world.CounterTalk
+        && (world.Characters.Next[target].Flags & (ushort)MoveFlags.AnyPath) == 0
+        && world.Characters.Cold(target)?.Ai?.Goal?.Task.Type == Data.Gameplay.Ai.TaskType.StandAtShopkeeperNode;
 
     /// <summary>
     /// Whether the character is alive, not imprisoned and not incapacitated.
@@ -531,8 +550,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         }
 
         var c = new Conversation { Npc = npc, Player = player, Event = ev };
-        IReadOnlyList<DialogueNode> roots = _interrupts.Remove(npc, out var pending) && _dialogue.Node(pending) is { IsRoot: true } interrupt
-            ? [interrupt] : SetOf(world, n).For(ev);
+        var interrupt = _interrupts.Remove(npc, out var pending) && _dialogue.Node(pending) is { IsRoot: true } root ? root : null;
+        IReadOnlyList<DialogueNode> roots = interrupt is not null ? [interrupt] : SetOf(world, n).For(ev);
         string from = pending is null ? $"{roots.Count} root(s) of the event" : $"pending interrupt {pending}";
         var picked = Pick(world, c, roots);
         if (picked is not { } p)
@@ -549,9 +568,18 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         _open = c;
         FaceOnce(world, n, player);
         c.Root = p.Root;
+
+        // A Talk's opening line is picked before the start, which sets the talker as the target before saying it (FUN_140684990, FUN_140684320,
+        // Verified): a squad search during the pick moves nothing. A pending interrupt's line is picked inside the start, after that reset.
+        if (interrupt is null) c.Player = player;
+
         if (IsNpcSide(p.Line.Speaker)) Say(world, c, p.Line, p.Speaker);
         else Offer(world, c, p.Root ?? p.Line);
+
+        // The start ends by writing the talker back (FUN_140684320, Verified): a search while the line's replies were checked moved the target for
+        // those checks only; the window, the replies and Trade stay with the talker. A search in a line reached by a reply keeps its move.
         if (c.Ended) End(world);
+        else c.Player = player;
     }
 
     /// <summary>

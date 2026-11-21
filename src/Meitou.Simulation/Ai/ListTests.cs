@@ -60,29 +60,116 @@ public static class ListTests
     }
 
     /// <summary>
-    /// The start of an order whose list B fails (the orders step's plan, <c>FUN_140510920</c> → <c>FUN_140510650</c>, docs/game/ai-tasks.md
-    /// "Precedence"): the first entry that fails (<see cref="RowStates.FirstUnmet"/>) has no provider in the character's repertoire
-    /// (<see cref="TaskDataTable.Providers"/>; restricted ones count, the orders step's search allows them), so the plan fails and the order stays
-    /// queued with that state's line (<see cref="StateFailureLines"/>, null: none). False when list B holds or a provider plans a step first, which
-    /// the act-out carries out (the walk, getting up, a follow row's fight, <see cref="OrderEntry.RowRuns"/>).
+    /// The start of an order whose list B fails (the orders step's plan, <c>FUN_140510920</c> → <c>FUN_14050fe10</c>, docs/game/ai-tasks.md
+    /// "Planner"): the planner follows only the first entry that fails (<see cref="RowStates.FirstUnmet"/>, <c>FUN_14051b630</c>), and the plan fails
+    /// when none of that state's providers leads to a step (<see cref="Provided"/>), so the order stays queued with that state's line
+    /// (<see cref="StateFailureLines"/>, null: none). The front is planned with the search flag, which offers the restricted providers; the second
+    /// list without it, so they count there only for a character not of the player's faction (<c>FUN_14051bae0</c>). False when list B holds or a
+    /// provider plans a step first, which the act-out carries out (the walk, getting up, a follow row's fight, <see cref="OrderEntry.Planned"/>).
     /// </summary>
     public static bool OrderBlocked(World world, int slot, OrderEntry order, out string? line)
     {
         line = null;
         var type = Saving.OrderSave.SavedRow(order.Row);
-        if (TaskDataTable.Of(type) is not { } row || RowStates.FirstUnmet(world, slot, row, Target(order)) is not { } unmet) return false;
+        var target = Target(order);
+        if (TaskDataTable.Of(type) is not { } row || RowStates.FirstUnmet(world, slot, row, target) is not { } unmet) return false;
 
-        int repertoire = Repertoire.Of(world, world.Characters.Cold(slot)!);
-        if (TaskDataTable.Providers(repertoire, unmet).Count > 0) return false;
+        var cold = world.Characters.Cold(slot)!;
+        bool restricted = !cold.SecondList.Contains(order) || !DestinationAccess.PlayerSide(world, cold);
+        var search = new ProviderSearch(world, slot, Repertoire.Of(world, cold), restricted, target);
+        if (search.Provided(unmet, [type])) return false;
 
         line = StateFailureLines.Of(unmet.State);
         return true;
     }
 
     /// <summary>
+    /// Whether the order names a character or site that resolves to nothing now (<see cref="RowStates.Gone"/>) and its plan fails on that
+    /// (<see cref="OrderBlocked"/>): the original's order keeps its hand, and the order step plans it again on every update with the hand looked up
+    /// anew (<c>FUN_140510920</c>, <c>FUN_140284510</c>), so it stays queued with that state's line where its list B fails on a state no provider
+    /// gives (a follow's <c>!7</c>, a bed's or machine's <c>73</c>, a lock's <c>70</c>). Its desire and list A were asked first (the order step's
+    /// pop).
+    /// </summary>
+    public static bool BlockedOnGone(World world, int slot, OrderEntry order, out string? line)
+    {
+        line = null;
+        return RowStates.Gone(world, Target(order)) && OrderBlocked(world, slot, order, out line);
+    }
+
+    /// <summary>
+    /// The list B entry the first step of the order's plan provides (<see cref="RowStates.FirstUnmet"/> at its start, <c>FUN_14051b630</c>); null when
+    /// its list B held, or where the plan step does not ask it (<see cref="OrderNeedsFailNow"/>).
+    /// </summary>
+    public static TaskCondition? PlannedNeed(World world, int slot, OrderEntry order)
+    {
+        var type = Saving.OrderSave.SavedRow(order.Row);
+        if (TaskDataTable.Of(type) is not { } row || PlanSteps.KeepsHours(type)) return null;
+
+        return RowStates.FirstUnmet(world, slot, row, Target(order));
+    }
+
+    /// <summary>
+    /// Whether the steps of the order's plan are over, so its own row runs and a failing list B ends it (<c>FUN_14050d540</c> starts the row once the
+    /// last provider step ended, without testing its list B; the next plan step's (e), <c>FUN_14050d970</c>, then does): the entry the first step
+    /// provided (<see cref="OrderEntry.Planned"/>) holds; with none recorded (a queued move started by an arrival), list B holds
+    /// (<paramref name="fails"/> false).
+    /// </summary>
+    public static bool StepsOver(World world, int slot, OrderEntry order, bool fails)
+    {
+        if (order.Planned is not { } need) return !fails;
+
+        return RowStates.Holds(world, slot, need.State, Target(order)) == need.Holds;
+    }
+
+    /// <summary>
     /// The row target of an order.
     /// </summary>
     static RowTarget Target(OrderEntry order) => new(order.Target, order.Site, order.TaskPoint, order.Detail as Items.GroundPick);
+
+    /// <summary>
+    /// The planner's search below an order's first unmet entry (<c>FUN_14050f800</c>, node expansion <c>FUN_14051bae0</c>, <b>Verified</b>; acceptance
+    /// read in docs/game/ai-tasks.md "Planner"), on the states <see cref="RowStates"/> evaluates (one it does not evaluate counts as holding): a
+    /// provider leads to a step when its own first unmet entry has a provider that does, down to one whose list B holds. A restricted provider counts
+    /// only with <c>Restricted</c>, one that needs a target only when the order names one; every child takes the order's target. A finder row counts
+    /// (its finder's pick is not evaluated here), so does one repeating an ancestor (accepted). A provider's desire is not asked (engine stand-in).
+    /// </summary>
+    readonly record struct ProviderSearch(World World, int Slot, int Repertoire, bool Restricted, RowTarget Target)
+    {
+        /// <summary>
+        /// Whether a provider of <paramref name="need"/> leads to a step; <paramref name="chain"/> holds the rows above it.
+        /// </summary>
+        public bool Provided(TaskCondition need, List<TaskType> chain)
+        {
+            foreach (var provider in TaskDataTable.Providers(Repertoire, need))
+                if (Offered(provider) && Leads(provider, chain)) return true;
+
+            return false;
+        }
+
+        /// <summary>
+        /// Whether the provider is a child the node expansion makes: restricted only when offered, needing a target only with one.
+        /// </summary>
+        bool Offered(TaskDataRow provider)
+        {
+            if (provider.Is(TaskDataFlags.Restricted) && !Restricted) return false;
+
+            return !provider.Is(TaskDataFlags.NeedsTarget) || !Target.Character.IsNone || Target.Site is not null || Target.Item is not null;
+        }
+
+        /// <summary>
+        /// Whether the provider is accepted, or its own first unmet entry is provided in turn.
+        /// </summary>
+        bool Leads(TaskDataRow provider, List<TaskType> chain)
+        {
+            if (provider.Is(TaskDataFlags.Finder) || chain.Contains(provider.Type)) return true;
+            if (RowStates.FirstUnmet(World, Slot, provider, Target) is not { } unmet) return true;
+
+            chain.Add(provider.Type);
+            bool provided = Provided(unmet, chain);
+            chain.RemoveAt(chain.Count - 1);
+            return provided;
+        }
+    }
 
     /// <summary>
     /// <c>FUN_14050e5b0</c>'s skips of job <paramref name="job"/>, after the jobs switch: a row without +0x14 (<see cref="TaskDataFlags.KeepsJob"/>)

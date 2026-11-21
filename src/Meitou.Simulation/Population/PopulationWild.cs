@@ -321,6 +321,17 @@ public sealed partial class PopulationSystem
     internal void RememberNest(int site, string instance, Data.Save.Hand handle) => _nestSaveIds[site] = (instance, handle);
 
     /// <summary>
+    /// The nest site whose remembered handle is <paramref name="handle"/> (by its container and serial, as handles are matched); -1 for none.
+    /// </summary>
+    internal int NestSiteOf(Data.Save.Hand handle)
+    {
+        foreach (var (site, id) in _nestSaveIds)
+            if (id.Handle.C == handle.C && id.Handle.Cs == handle.Cs) return site;
+
+        return -1;
+    }
+
+    /// <summary>
     /// What a wild site holds already when it loads: the save's platoons bound to it that still have someone (squads, members, squads per template).
     /// </summary>
     sealed record WildHold(int Squads, int Members, Dictionary<string, int> Templates);

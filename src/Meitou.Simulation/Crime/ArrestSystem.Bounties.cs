@@ -205,13 +205,15 @@ public sealed partial class ArrestSystem : IOrderOwner
     }
 
     /// <summary>
-    /// Paying (<c>FUN_1406ae170</c>, economy.md 11.5): the money, the jail's entry erased, the cage unlocked and the prisoner out through order 133.
+    /// Paying (<c>FUN_1406ae170</c>, economy.md 11.5): the money, the jail's entry erased, the prisoner split from a squad of others
+    /// into one of its own (<see cref="Dialogue.DialogueSystem.Separate"/>), its worn shackles unlocked and out through order 133.
     /// The end of each freed prisoner's block (<b>Verified</b> by disassembly): one that could not speak (event 51 returned 0) is given 128 Retreat
     /// to hometown, then every one 133 Get out of cage (legit); both gives clear the order queue first (<c>FUN_1405d20d0</c> with its clear argument
-    /// 1: <c>FUN_1405074a0</c> and <c>FUN_140507530</c>), so 133 replaces 128 and the prisoner only steps out of its unlocked cage
+    /// 1: <c>FUN_1405074a0</c> and <c>FUN_140507530</c>), so 133 replaces 128 and the prisoner only steps out of its cage
     /// (<see cref="FixtureRegistry.GetOutLegit"/>); its own AI goes on from there. <b>Engine order</b>: 133 is given (and started) before event 51,
     /// since Meitou's events need a speaker out of its cage, so whether the event would fail is not known before it and 128, which 133 wipes unrun,
-    /// is not given. A prisoner whose chooser does not run (no squad, out cold) keeps the order queued in its unlocked cage until it does.
+    /// is not given. A prisoner whose chooser does not run (no squad, out cold) keeps the order queued in its cage until it does. The cage stays locked: unlike the buy, the bail
+    /// writes no cage lock (<b>Verified</b>).
     /// </summary>
     void Bail(World world, int p, CharacterCold pc, Fixture cage, int price, int payer)
     {
@@ -221,10 +223,17 @@ public sealed partial class ArrestSystem : IOrderOwner
         if (pc.Bounties is { } ledger && ledger.BookedFor(Crimes.Factions.Relations, cage.Owner) is { } entry)
             CrimeSystem.ClearBounty(world, p, pc, ledger, entry);
         world.Post(Loc.Tr("{1} paid a bail of c.{2} for {3}", table.Cold(payer)!.Name, price, pc.Name));
-        world.Fixtures.SetLocked(cage, false);
         FixtureRegistry.ClearSlave(world, pc);   // bail frees a slave (FUN_1406ae170)
         pc.Freed = true;
         pc.Recognition = 0;
+
+        // Out of a squad of others into a squad of its own, as a slave bought free (FUN_1406ae170 calls FUN_1405ce4e0 before event 51, for a
+        // player's character too; Verified), so the payer below is tagged in the new squad's memory.
+        Talk?.Separate(world, prisoner);
+
+        // Its worn shackles are unlocked, still worn (FUN_1406ae170: FUN_1405c8a10's locked armour, lock byte +0x20 = 0; Verified, as the buy).
+        if (LockSystem.WornShackles(pc)?.Lock is { } shackles) shackles.Locked = false;
+
         // Its squad remembers the payer as the one who freed it, and it says event 51 at the payer (FUN_1406ae170: FUN_140673930 tag 3, FUN_140684990
         // event 0x33; Verified).
         var payerId = table.IdOf(payer);

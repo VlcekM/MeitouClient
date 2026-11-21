@@ -36,6 +36,10 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     /// </summary>
     readonly PostTaa _taa;
     /// <summary>
+    /// The depth of field, made the first time it runs (docs/render-post.md "Depth of field").
+    /// </summary>
+    DepthOfField? _depthOfField;
+    /// <summary>
     /// The post options the chain reads.
     /// </summary>
     readonly PostOptions _options;
@@ -93,6 +97,10 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     /// Whether <see cref="RunFogVolumes"/> asked for the fog volumes, until <see cref="ApplySsao"/> draws them.
     /// </summary>
     bool _volumesPending;
+    /// <summary>
+    /// Whether <see cref="BeginScene"/> ran this frame: a frame that drew no scene gets no vignette or film grain.
+    /// </summary>
+    bool _haveScene;
 
     /// <summary>
     /// One low-resolution particle size: its accumulation and depth targets, drawn against each block's nearest and farthest depth.
@@ -278,6 +286,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         AutoExposure = null;
         WaterHeight = null;
         CharactersDrawn = true;
+        _haveScene = false;
     }
 
     /// <summary>
@@ -300,6 +309,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         _farPlane = far;
         _fov = fieldOfView;
         this._aspect = aspect;
+        _haveScene = true;
     }
 
     /// <summary>
@@ -432,7 +442,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     public void MarkParticles() { }
 
     /// <summary>
-    /// Runs TAA (unless it is off), then the composite into <see cref="Target"/>.
+    /// Runs TAA (unless it is off), the depth of field when it is on, then the composite into <see cref="Target"/>.
     /// </summary>
     public void End()
     {
@@ -448,9 +458,28 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
                 _displayWidth, _displayHeight, DeltaSeconds(), WaterHeight);
             _ctx.EndNative(taaCmd);
         }
+        resolved = RunDepthOfField(resolved);
         var cmd = (MetalCommandList)_ctx.BeginNative("post composite");
         _composite.Draw(cmd, resolved, _ctx.Depth, target, Options, AutoExposure ?? (0f, 0f), Inputs, temporal: !_noTaa());
         _ctx.EndNative(cmd);
+    }
+
+    /// <summary>
+    /// The picture through the lens, or <paramref name="picture"/> when the depth of field does not run: it is off, or the camera is not one of the
+    /// camera effects' (the free and the cinematic cameras, the strategy camera by the player's choice), or the view is a tile of a screenshot.
+    /// It comes after the upscaler and before the exposure's measure, as on Vulkan.
+    /// </summary>
+    GpuTexture RunDepthOfField(GpuTexture picture)
+    {
+        if (!Options.DepthOfFieldOn || !Options.CameraEffectsAllowed || !ViewWindow.Current.IsWhole) return picture;
+
+        _depthOfField ??= new DepthOfField(_ctx);
+        var cmd = (MetalCommandList)_ctx.BeginNative("post dof");
+        var camera = new DepthOfField.Camera(_fov, _nearPlane, _farPlane, JitterPixels);
+        var result = _depthOfField.Run(cmd, picture, _ctx.Depth, Options, camera);
+        _ctx.EndNative(cmd);
+
+        return result;
     }
 
     /// <summary>
@@ -484,7 +513,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     /// <summary>
     /// The scene inputs the composite reads: the camera, projection, characters and water.
     /// </summary>
-    PostComposite.SceneInputs Inputs => new(_eye, _view, _fov, _aspect, _nearPlane, _farPlane, CharactersDrawn, WaterHeight, Options.SsaoTaps);
+    PostComposite.SceneInputs Inputs => new(_eye, _view, _fov, _aspect, _nearPlane, _farPlane, CharactersDrawn, WaterHeight, Options.SsaoTaps, _haveScene);
 
     /// <summary>
     /// The seconds since the last call, for the exposure adaptation.
@@ -498,10 +527,11 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     }
 
     /// <summary>
-    /// Releases the scene colour and the low-resolution targets.
+    /// Releases the scene colour, the depth of field and the low-resolution targets.
     /// </summary>
     public void Dispose()
     {
+        _depthOfField?.Dispose();
         _sceneColour?.Dispose();
         foreach (var low in _lowTargets)
         {

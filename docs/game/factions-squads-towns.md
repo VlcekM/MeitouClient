@@ -256,7 +256,7 @@ platoon's `+0xa0` member does not fit the `declareDead` reading above; unresolve
 | +8 | float | accumulated positive trust |
 | +0xc | float | accumulated negative trust |
 
-On the faction's FactionRelations object itself: +0x10 int rank, +0x18 float **global trust** (starts 0; slot 9 adds, DC_REPUTATION reads it as an int; not saved, **Observed**; the player table's saved `global trust` is read and written at +0x14). Meitou: `FactionRelations.GlobalTrust` / `AddGlobalTrust`.
+On the faction's FactionRelations object itself: +0x10 int rank, +0x18 float **global trust** (starts 0; slot 9 adds, DC_REPUTATION reads it as an int; not saved, **Observed**; the player table's saved `global trust` is read and written at +0x14). Meitou: `FactionRelations.GlobalTrust` / `AddGlobalTrust`; a new game and an import without Relations start it at 0 again (`FactionRelations.Reset`, `SaveImport.FilterFactions`).
 
 ### 3.2 Faction rank
 
@@ -583,6 +583,33 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   one passing unchecked; four base start entries are CHARACTERs, none with `AI Goals`; an empty list falls back to `45550-gamedata.base`'s
   "startoff- Wanderer squad"); `FUN_1404ffad0` (the platoon's own template +0x108, from its constructor's argument or, at load, a typed 0x34
   `squad template` lookup in `FUN_1407ed0f0`). Three early returns of `FUN_14095b210` (**Observed**, constructors `FUN_14055ca90`, `FUN_14029fb40`, factory `FUN_14057cc70`): the building's location hand `+0x88` must be null (type 0xb; the base constructor copies it from a parent object or a door's parent building), its parent `+0x238` null (a turret mounted on a building has one) and its byte `+0x1a0` clear (set only by `DoorStuff`); so only a child object is refused, never a level-data home. Meitou: `TradeSystem.StockHome` refuses a turret post, for the squad path and `StockEmptyHome` alike. `FUN_14057f4c0` stamps its template's designation on the building even when the template makes no squad (`NoteMade` for every home).
+
+### The player's home
+
+**Verified** (decompile). An `Ownerships` holds money (`+0x88`), a home town (`+0x30`), a home building hand (`+0x38`), an occupied town (`+0x80`), a
+slave list (`+0x8`) and an owned list (`+0x58`). Each platoon has one inline (`+0x148`, Platoon vfunc `0x98` `FUN_1407f2320`), saved in its record
+(`money`, `hometown`, `homebuilding`, `occupied`, `slave<i>`, `owned<i>`; writer `FUN_140624120`, reader `FUN_140624640`, called only by the platoon
+writer `FUN_140372ef0` and loader `FUN_1407ed0f0`). Each faction has one more (`+0x80`, made with the faction, `FUN_1407fe270`), never saved but for
+the player's money (`player money`, `FUN_140375360`). `Character::getOwnerships` (`FUN_1407956a0`) returns the player faction's for a character of a
+player faction (faction `+0x250`), else its platoon's, else an empty static one. So every reader of a character's Ownerships home (the turret
+finder's filter, [combat goals](ai-tasks.md#combat-goals); the medic's and the cage finders' home tests) reads one building for all the player's
+characters, whatever their squad.
+
+That home is taken by `Ownerships::addOwned` (`FUN_1407ecb00`: a BUILDING hand, type 0, while the home hand is null, type 11, goes to `setHome`;
+then the hand joins the owned list unless there). `setHome` (`FUN_1407ec9e0`) does nothing when the home already is that hand (**Observed**: the home hand's vfunc 8, the equality `addOwned` calls with the hand, shown without its argument), and for a building
+takes it only when it is a gateway (Building slot 123 non-null: the factory's GatewayBuilding, record `is wall gate`) or has an interior object
+(`+0x1f0`) and is no wall (slot 89: WallBuilding, `links together`). The player faction's Ownerships is given a building in two places: the building
+factory (`FUN_14057cc70`, placed or loaded) gives it every building whose faction is a player faction and that is no door (`+0x1a0`; a loaded one's faction is its state's `owner faction ID`, which the factory resolves before it makes the building), unless the
+player object's `+0x298` is set (**Observed**: an object with a road list that `FUN_1407f3720` makes and frees, taken as the in-game editor); and the purchase of a town house (`FUN_1407ad6c0`) takes the house out of its old faction's
+(`FUN_1407ec0f0`, which nulls a home that was it) and gives it to the player's. Nothing takes a dismantled or destroyed building out, so a home that
+is gone stays as a hand that resolves to nothing, and a filter on it passes no building, until the next load makes the factions and their
+Ownerships again. The character factory (`FUN_140581770`) also calls `setHome` with a spawn's home building on the character's Ownerships;
+**Observed**: no player character is made with one.
+
+Meitou: `PlayerState.Home` (a building key; hashed, not saved), taken while null by `PlayerHome.Find` at the construction step's start from the first
+building of the player's faction that `PlayerHome.Accepts`. The original's order is the order its zones make their buildings; Meitou's is its town
+houses by key, then the placed buildings in the registry's order (**engine choice**). `AiSystem.OwnershipsHome` is the getter; of the readers only the
+turret finder uses it so far (the others read the squad's home, which a player squad has none of). Check on a save: `meitou-tools probe <save> home`.
 
 ### Squads without packages
 

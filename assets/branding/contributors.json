@@ -48,23 +48,31 @@
     "areas": "Mod settings"
   },
   "teppum": {
-    "commits": 241,
-    "areas": "Code mods, NPC goals, Navmesh"
+    "commits": 252,
+    "areas": "Code mod hooks, NPC goals"
   },
   "robgreen490": {
     "commits": 4,
     "areas": "UI scaling, Inventory rendering"
   },
   "deseven": {
-    "commits": 32,
-    "areas": "Metal rendering, Debug menu"
+    "commits": 34,
+    "areas": "Metal rendering, debug menu"
   },
   "mattresspad": {
     "commits": 3,
     "areas": "Benchmarks, Homepage"
   },
   "pza-mods-bot": {
+    "commits": 5,
+    "areas": "Group speed, mod settings"
+  },
+  "dk853": {
+    "commits": 2,
+    "areas": ""
+  },
+  "protocol-nyx": {
     "commits": 1,
-    "areas": "Mod settings"
+    "areas": "Monitor start option"
   }
 }

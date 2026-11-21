@@ -1254,6 +1254,9 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
     `gui_notrade`). Cell = (pointer - grid origin) / cell, clamped. Locked (shackles) items do not lift. In a trade an item flagged equipped on a non-player owner: "That's not for sale.".
     A single unit, or Shift or Ctrl held: the whole stack lifts; otherwise one unit is split off and the rest stays. `Item_Lift`; the grab offset is kept, clamped so the pointer stays at
     least half a cell inside the footprint (`FUN_140713560`).
+    Meitou option `SplitStacks` (Advanced page, "Split stacks", on by default, Meitou side of the Faithful / Meitou switch): a press lifts the whole stack, Shift half of it
+    (rounded up), Alt (the Highlight key) one unit, Shift + Alt opens the message box ("SPLIT STACK") with a slider from one unit to the whole stack, at half to start (`StackSplitDialog`; TAKE lifts
+    that many, the item then stays on the mouse for the next press). `LiftItem.Count` carries the units; right clicks are unchanged.
   - Release, or a press while holding: the target is the window under the pointer, else under the item's centre. Over a window's section: placed; over a window elsewhere: back to its
     origin; over no window: given or dropped (below). After a swap or a partial place the other item or the rest stays on the mouse for the next press.
   - Place (`FUN_140715560`): the cell is round((item top-left - grid origin) / cell), clamped, then slid left, up and diagonally toward 0,0 until the footprint is inside

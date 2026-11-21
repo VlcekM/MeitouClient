@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Data;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Locks;
@@ -326,6 +327,22 @@ public sealed partial class LockSystem
         if (gate is not { } g || MainGateDoor(world, g.Building) is not { } main) return (DoorPlan.Entry.Blocked, null);
         var entry = _gatePlan.PlansEntry(world, Combat, this, s, to, g.Building, main.Door, main.Spot);
         return (entry, entry == DoorPlan.Entry.Bash ? main.Door.Id : null);
+    }
+
+    /// <summary>
+    /// How many members of <paramref name="squad"/> but the one in slot <paramref name="self"/> work on the door or wall <paramref name="doorId"/>
+    /// (<c>howManyGuysWorkingOnThisSubTarget</c> <c>FUN_1402690e0</c>, the squad's count of the sub-target).
+    /// </summary>
+    internal static int MatesBashing(World world, Squad squad, string doorId, int self)
+    {
+        int n = 0;
+        var table = world.Characters;
+        foreach (var member in squad.Members)
+        {
+            if (member.Slot != self && table.IsAlive(member) && table.Cold(member.Slot) is { Bashing: { } id } && id == doorId) n++;
+        }
+
+        return n;
     }
 
     /// <summary>

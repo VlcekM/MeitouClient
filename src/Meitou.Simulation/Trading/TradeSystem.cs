@@ -1345,12 +1345,6 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     /// <summary>
-    /// Whether the customer is near enough to open the trade: the talk range (<see cref="Dialogue.DialogueSystem.InTalkRange"/>), as the original
-    /// opens a dialogue's trade where the conversation stands, with no distance test (<c>FUN_1407918a0</c>, docs/game/economy.md "Opening a trade").
-    /// </summary>
-    static bool InReach(World world, int c, int t) => Dialogue.DialogueSystem.InTalkRange(world.Characters, c, t);
-
-    /// <summary>
     /// Whether <paramref name="c"/> and <paramref name="t"/> are within <paramref name="range"/> of each other in X/Z.
     /// </summary>
     static bool InReach(World world, int c, int t, float range)
@@ -1375,6 +1369,11 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     #endregion
 
     #region The held item (HeldItems, Player/HeldItems.cs)
+
+    /// <summary>
+    /// The deal <see cref="PayHeld"/> paid for, told to the trade observers once the item lands (<see cref="ReportHeld"/>); null with none.
+    /// </summary>
+    HeldDeal? _heldDeal;
 
     /// <summary>
     /// The open trade's stock and its customer while the trade's windows show; null when no trade is open.
@@ -1462,15 +1461,18 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     /// <summary>
     /// Pays for the first <paramref name="units"/> of a held item that changed hands (priced before it moves, a buyback at its receipt's coins): the
     /// price goes from the buyer's purse to the seller's. Returns the moved units' receipt (null when this undid an earlier trade of this window).
+    /// The caller places the item, then calls <see cref="ReportHeld"/>.
     /// </summary>
     internal TradeReceipt? PayHeld(World world, ItemInstance item, int units, bool sell)
     {
+        _heldDeal = null;
         if (units <= 0 || !Resolve(world, out int c, out int t, out var shop)) return null;
 
         var cold = world.Characters.Cold(c)!;
         var squad = world.Squads.Find(world.Characters.Cold(t)!.SquadId)!;
         var m = Market(world);
         int holder = sell ? cold.Faction : squad.Faction;
+        bool buyback = IsBuyback(item, sell);
         var receipt = Receipt(world, m, item, units, sell, shop!.Terms, holder);
         long price = Price(world, m, item, units, sell, shop.Terms, holder);
 
@@ -1486,8 +1488,26 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         }
 
         world.Post(Loc.Tr(sell ? "{1} sold {2} for c.{3}" : "{1} bought {2} for c.{3}", cold.Name, Units(units, item.Name), price));
+        _heldDeal = world.TradeObservers.Active ? new HeldDeal(c, t, sell, item.Record, units, price, buyback) : null;
         return receipt;
     }
+
+    /// <summary>
+    /// Tells the trade observers of the deal <see cref="PayHeld"/> paid for, once the held item has landed; nothing when it paid none.
+    /// </summary>
+    internal void ReportHeld(World world)
+    {
+        if (_heldDeal is not { } d) return;
+
+        _heldDeal = null;
+        ReportDeal(world, d.Customer, d.Trader, d.Sell, d.Record, d.Units, d.Price, d.Buyback);
+    }
+
+    /// <summary>
+    /// A held item's deal waiting for the item to land: the customer's and trader's slots, the direction, the item, the units, the price and whether
+    /// it undid an earlier trade of the window.
+    /// </summary>
+    readonly record struct HeldDeal(int Customer, int Trader, bool Sell, string Record, int Units, long Price, bool Buyback);
 
     #endregion
 
@@ -1524,6 +1544,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             return;
         }
 
+        bool buyback = IsBuyback(item, false);
         var receipt = Receipt(world, m, item, units, false, shop.Terms, squad.Faction);
         var bought = item.WithQuantity(units);
         bought.Buyback = receipt;
@@ -1542,6 +1563,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         world.Player.Money -= price;
         squad.Money += price;
         world.Post(Loc.Tr("{1} bought {2} for c.{3}", cold.Name, Units(placed, item.Name), price));
+        ReportDeal(world, c, t, false, item.Record, placed, price, buyback);
     }
 
     /// <summary>
@@ -1653,6 +1675,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
 
         if (Smuggling(world, c, item, shop.Terms)) return;
 
+        bool buyback = IsBuyback(item, true);
         var receipt = Receipt(world, m, item, units, true, shop.Terms, cold.Faction);
         var sold = item.WithQuantity(units);
         sold.Buyback = receipt;
@@ -1676,6 +1699,21 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         squad.Money -= price;
         world.Player.Money += price;
         world.Post(Loc.Tr("{1} sold {2} for c.{3}", cold.Name, Units(placed, item.Name), price));
+        ReportDeal(world, c, t, true, item.Record, placed, price, buyback);
+    }
+
+    /// <summary>
+    /// Tells the trade observers of a deal of the window (<see cref="ITradeObserver"/>) between the customer <paramref name="c"/> and the trader
+    /// <paramref name="t"/>, once its money and goods moved; the window's stock is the trader's shop, so no site.
+    /// </summary>
+    static void ReportDeal(World world, int c, int t, bool sell, string record, int units, long price, bool buyback)
+    {
+        if (!world.TradeObservers.Active) return;
+
+        var customer = TradeObservers.Party(world, c);
+        var trader = TradeObservers.Party(world, t);
+        var kind = sell ? TradeSaleKind.WindowSell : TradeSaleKind.WindowBuy;
+        TradeObservers.Report(world, kind, record, units, price, sell ? trader : customer, sell ? customer : trader, buyback: buyback);
     }
 
     #endregion

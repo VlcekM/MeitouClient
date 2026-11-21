@@ -35,6 +35,7 @@ public class JailTests
 
     /// <summary>
     /// The town's cages are at +200 (A) and -200 (B) on X. <paramref name="locks"/>: the lock system's rounds run (they free a served prisoner).
+    /// <paramref name="liftFix"/>: the Fixes option "Guards stop passing bodies" (<see cref="ArrestSettings.LiftFix"/>).
     /// </summary>
     sealed class Jail : IDisposable
     {
@@ -53,7 +54,7 @@ public class JailTests
         /// </summary>
         public const string HunterRecord = "hunter-c";
 
-        public Jail(bool locks = false, bool ai = false, bool talk = false)
+        public Jail(bool locks = false, bool ai = false, bool talk = false, bool liftFix = true)
         {
             var hunters = SyntheticTown.Rec("56-a", FcsRecordType.Faction, "hunters");
             hunters.Ints["fundamental type"] = (int)FundamentalType.Adventurer;
@@ -68,7 +69,7 @@ public class JailTests
             var crime = new CrimeSystem(_relations);
             combat.Crimes = crime;
             carry.Crimes = crime;
-            Arrest = new ArrestSystem(crime, BaseGame, new ArrestSettings { RecordLog = true }) { Carry = carry };
+            Arrest = new ArrestSystem(crime, BaseGame, new ArrestSettings { RecordLog = true, LiftFix = liftFix }) { Carry = carry };
             var walk = new OpenGroundWalkability((_, _) => 150);
             var systems = new List<ITickSystem>
             {
@@ -266,6 +267,43 @@ public class JailTests
         Assert.True(j.CageA.Occupant.IsNone);
     }
 
+    /// <summary>
+    /// The arrest's lift with both cages full (docs/simulation.md "Arrest and jail"): with the Fixes option "Guards stop passing bodies" off, the
+    /// policeman lifts the wanted player character he downed though no cage is free, as the original's 240 does (its list B and desire ask for
+    /// none, bd6358b66); with it on (<see cref="ArrestSystem.LiftHeld"/>, 678b24b9e, #339) he does not. Catches the option not holding the lift
+    /// back, and the lift held back with the option off.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_guard_lifts_his_downed_arrest_target_with_both_cages_full_only_with_the_fix_off(bool liftFix)
+    {
+        using var j = new Jail(liftFix: liftFix);
+        var police = j.Npc(new Vector2(0, 60), j.City, FundamentalType.LawEnforcement, Strong, face: Vector2.Zero);
+        var hero = j.Hero(new Vector2(0, 0), "hero", Weak, bounty: 5000);
+        j.Cold(hero).RecentlyWanted = CrimeSystem.RecentlyWantedSeconds;   // just booked: recognised at once
+        foreach (var cage in new[] { j.CageA, j.CageB })
+        {
+            var prisoner = j.Npc(new Vector2(cage.Position.X - Centre.X, 0), j.City, FundamentalType.Civilian, new Combatant());
+
+            Assert.True(j.World.Fixtures.Imprison(j.World, prisoner, cage));
+        }
+
+        j.RunUntil(() => j.Cold(hero).Medical!.Incapacitated, 3000, "the target down");
+
+        // No cage takes him, so a lifted body does not stay on the shoulder: any tick it was carried counts.
+        bool lifted = false;
+        for (int t = 0; t < 600; t++)
+        {
+            j.World.RunTick();
+            lifted |= j.Cold(police).Carrying == hero;
+        }
+
+        Assert.Contains(j.Arrest.Log, e => e.Kind == ArrestEventKind.Arrest && e.Guard == police && e.Target == hero);
+        Assert.True(j.Cold(hero).Medical!.Incapacitated);
+        Assert.Equal(!liftFix, lifted);
+    }
+
     // ------------------------------------------------------------------ the claim and the bail
 
     [Fact]
@@ -303,8 +341,9 @@ public class JailTests
         Assert.Equal(2000, j.World.Player.Money);
         Assert.Null(j.Cold(captive).Bounties);
 
-        // The bail unlocks the cage and gives 133 Get out of cage (economy.md 11.5): the captive, out cold, steps out once it comes round.
-        Assert.False(j.CageA.Lock!.Locked);
+        // The bail leaves the cage locked (FUN_1406ae170 writes no cage lock, unlike the buy) and gives 133 Get out of cage (economy.md 11.5): the
+        // captive, out cold, steps out once it comes round.
+        Assert.True(j.CageA.Lock!.Locked);
 
         j.Cold(captive).Medical!.KoTimer = 0;
         j.RunUntil(() => !j.Cold(captive).IsImprisoned, 60, "the way out");

@@ -176,7 +176,7 @@ internal sealed class EscapeGoals(LockSystem locks)
     /// 256's desire (AI slot 38, <c>FUN_140599260</c>, <b>Verified</b>): 1.0 for a prisoner that is not chained (<c>+0x320</c>) whose cage has a
     /// lock not effectively locked; else 0.
     /// </summary>
-    static float OpportunityDesire(World world, int slot)
+    internal static float OpportunityDesire(World world, int slot)
     {
         if (world.Characters.Cold(slot) is not { InSomething: HeldState.Imprisoned } c || LockSystem.Chained(c)) return 0;
 

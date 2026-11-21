@@ -235,6 +235,10 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// UI modes.
     /// </summary>
     internal TradeWindows TradeWindows => field ??= new(this);
+    /// <summary>
+    /// The split stack dialog of Meitou's stack splitting (Shift + Alt on a stack, <see cref="InventoryWindows.SplitStacks"/>).
+    /// </summary>
+    internal StackSplitDialog StackSplitDialog => field ??= new(this);
 
     #endregion
 
@@ -355,6 +359,11 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// The button during play (<see cref="UserConfig.FeedbackButton"/>); off, it still shows on the title and with the game menu open.
     /// </summary>
     public bool FeedbackButtonInPlay { get; set; } = true;
+
+    /// <summary>
+    /// The Squad XP label during play ("XP x10", <see cref="Settings.SkillXp.Label"/>); null while Show Squad XP is off.
+    /// </summary>
+    public string? XpLabel { get; set; }
 
     /// <summary>
     /// The original's <c>Show names</c> option (<c>FUN_1406e2fd0</c>): off, the name tag keeps only its icons.
@@ -846,7 +855,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     {
         Mouse = p;
         UiInput++;
-        (InventoryWindows.PressShift, InventoryWindows.PressCtrl) = (shift, ctrl);
+        (InventoryWindows.PressShift, InventoryWindows.PressCtrl, InventoryWindows.PressAlt) = (shift, ctrl, alt);
         TooltipRuntime.HideTooltip();   // a press captures the mouse, which hides a tooltip (MyGUI)
         if (button == MouseButton.Left && FeedbackPanel.FeedbackButtonDown(p)) return true;
         if (CharacterEditor.EditorPointerDown(button, p)) return true;
@@ -1061,7 +1070,8 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
                 bool defence = c.FightsPlayer;
                 return ("attk", id, Do(() =>
                 {
-                    if (lead.Turret is not null) Say(new Simulation.Combat.ShootAtOrder(selection, id) { Tick = tick });
+                    // The quick click appends 235 to every selected character's queue, Shift or not (FUN_1407fb410 passes 1 to FUN_1407f9e20).
+                    if (lead.Turret is not null) Say(new Simulation.Combat.ShootAtOrder(selection, id) { Tick = tick, Queued = true });
                     else SquadWindows.OrderOrJob(Data.Gameplay.Ai.TaskType.MeleeAttack, id,
                         () => Say(new Simulation.Combat.AttackOrder(selection, id) { Tick = tick, Picked = true, Defensive = defence }));
                 }));

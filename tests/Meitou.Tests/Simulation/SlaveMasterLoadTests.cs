@@ -172,4 +172,28 @@ public class SlaveMasterLoadTests
         Assert.DoesNotContain(captive.Log, e => e.Worker == obeying);
         Assert.Contains(captive.Log, e => e.Worker == masterless && e.Kind == CaptiveEventKind.Started && e.Job == CaptiveJobKind.CageSelf);
     }
+
+    /// <summary>
+    /// An obeying slave runs the captive goals of its master's Slave AI Goals (job 187, the urgent job pass <c>FUN_14050e5b0</c> scores the owner
+    /// platoon's Slave list; docs/simulation.md "Obedient Slave"): with no goal of its own, it starts 172's cage job at noon because its master
+    /// lists Slave get in Cage all day. Catches a slave whose captive goals' look reads only its own lists, so it stood idle under its master.
+    /// </summary>
+    [Fact]
+    public void An_obeying_slave_runs_the_captive_goals_of_its_masters_slave_list()
+    {
+        var data = ArrestTests.Town();
+        int city = data.FactionIndex("50-a");
+        var captive = new CaptiveSystem(data, null, new CaptiveSettings { RecordLog = true });
+        var walk = new OpenGroundWalkability((_, _) => 150);
+        using var world = new SimWorld(new WorldSettings { PublishSnapshots = false, StartHours = 24 + 12 }, walk, [new AiSystem(data), captive]);
+        world.Fixtures.RegisterSite(world, data, 0);
+        var cage = world.Fixtures.Find("0.0:cageA")!;
+
+        var master = NewSquad(world, city);
+        master.Ai = Board([[], [], [], [], [CageGoal(0, 24)]]);
+        var obeying = Slave(world, city, Board([[], [], [], [], []]), cage, master.Id);
+        world.RunTicks(61);
+
+        Assert.Contains(captive.Log, e => e.Worker == obeying && e.Kind == CaptiveEventKind.Started && e.Job == CaptiveJobKind.CageSelf);
+    }
 }

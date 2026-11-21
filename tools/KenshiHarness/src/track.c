@@ -15,6 +15,18 @@
 #define AI_MANOEUVRE 0x2BC
 #define AI_CENTRE 0x2C0
 #define AI_CENTRE_TARGET 0x2D0
+// Character's SensoryData (its vfunc 0x68): the threats list (lektor<hand> of the characters whose intended target is the looker,
+// hands 0x20 bytes each) and their aggression sum, both refilled by each AI update's sense pass (addToThreatsAndFlockingList).
+#define CHARACTER_SENSES_SLOT (0x68 / 8)
+#define SENSES_THREATS 0x50
+#define SENSES_THREAT_SUM 0x88
+#define HAND_SIZE 0x20
+// Character's AI status, what others' sense passes read of it: the intended target (a hand), the running task's intended
+// aggression and the current goal's (written by the AI's state broadcast).
+#define CHARACTER_STATUS 0x1A0
+#define STATUS_TARGET 0x68
+#define STATUS_TASK_AGGRESSION 0xA0
+#define STATUS_GOAL_AGGRESSION 0xAC
 // AnimationData::dataName: the ANIMATION record's name of a clip.
 #define ANIMATION_NAME 0x08
 // OrdersReceiver::orders' std::deque (VC++ 2010: proxy, map, map size, offset, size; two pointers a block),
@@ -163,10 +175,22 @@ static void read_character(void* character, char* out, size_t size)
     const GameString* clipName = stumble ? (const GameString*)((char*)stumble + ANIMATION_NAME) : NULL;
     if (clipName) snprintf(clip, sizeof clip, "%.*s", (int)clipName->size, gs_text(clipName));
 
-    snprintf(out, size, "goal=%d \"%s\" act=%d front=%d/%d default=%d:%s mode=%d centre=%.0f,%.0f:%s stumble=%s moving=%d damage=%.0f%s%s",
+    typedef char* (*SensesGetter)(void* self);
+    SensesGetter getSenses = (*(SensesGetter**)character)[CHARACTER_SENSES_SLOT];
+    const char* senses = getSenses(character);
+    const Lektor* threats = (const Lektor*)(senses + SENSES_THREATS);
+    char threat[64] = "-";
+    if (threats->count > 0 && threats->count < 64) hand_name((const char*)threats->items, threat, sizeof threat);
+    const char* status = *(const char* const*)((const char*)character + CHARACTER_STATUS);
+    char aim[64];
+    hand_name(status + STATUS_TARGET, aim, sizeof aim);
+
+    snprintf(out, size, "goal=%d \"%s\" act=%d front=%d/%d default=%d:%s mode=%d centre=%.0f,%.0f:%s stumble=%s moving=%d damage=%.0f%s%s"
+             " aim=%s aggr=%.2f/%.2f threats=%u:%s/%.2f",
              goal, goalText, action, front, length, task_type(standing), standingTarget, *(const int*)(ai + AI_MANOEUVRE), centre->x,
              centre->z, centreTarget, clip, speed > 5, damage_taken(medical), medical[MEDICAL_UNCONSCIOUS] ? " KO" : "",
-             medical[MEDICAL_DEAD] ? " DEAD" : "");
+             medical[MEDICAL_DEAD] ? " DEAD" : "", aim, *(const float*)(status + STATUS_TASK_AGGRESSION),
+             *(const float*)(status + STATUS_GOAL_AGGRESSION), threats->count, threat, *(const float*)(senses + SENSES_THREAT_SUM));
 }
 
 // ---- Each frame ---------------------------------------------------------------------------------------------------------

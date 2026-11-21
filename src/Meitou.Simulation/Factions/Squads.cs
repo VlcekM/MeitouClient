@@ -180,8 +180,19 @@ public sealed class Squad
     /// </summary>
     public Saving.PackageSave? SavedPackage { get; set; }
     /// <summary>
-    /// The town and arrival hour a save held for its blackboard (<see cref="Saving.CurrentTownSave"/>), until the AI attaches a blackboard and applies
-    /// them (then null).
+    /// The town a squad without a board is in (a player's: the original's player platoon runs its blackboard's town step too, <c>FUN_1402688d0</c>)
+    /// and the game hour it came in, as <see cref="Ai.Blackboard.InTown"/> and <see cref="Ai.Blackboard.InTownSince"/> hold them for a squad with
+    /// one; handed to its board when the AI attaches one and back when it drops it. Saved as <c>currenttown</c> / <c>towntime</c>, hashed while
+    /// set.
+    /// </summary>
+    public CampaignTown StayTown { get; set; } = CampaignTown.None;
+    /// <summary>
+    /// The game hour the squad came into <see cref="StayTown"/>; kept on leaving it, as the original's +0x140 is.
+    /// </summary>
+    public double StaySince { get; set; }
+    /// <summary>
+    /// The town and arrival hour a player platoon's save record held (<see cref="Saving.CurrentTownSave"/>), until the AI first looks at the squad
+    /// and applies them (then null); hashed while held.
     /// </summary>
     public Saving.CurrentTownSave? SavedTown { get; set; }
     /// <summary>
@@ -445,7 +456,7 @@ public sealed class SquadRegistry
             if (s.Dead) hasher.Add(0x44656164);
             if (s.Autonomous) hasher.Add(0x4175746F);
             if (s.SavedPackage is { } saved) HashSavedPackage(ref hasher, saved);
-            if (s.SavedTown is { } stay) HashSavedTown(ref hasher, stay);
+            HashStay(ref hasher, s);
             if (s.LeftPackage is { } left) hasher.Add(0x4C667450 ^ Rng.StableHash(left));   // "LftP": only until the AI attaches a blackboard
             if (s.Independent) hasher.Add(0x496E6470);
             if (s.HomeInteriorShown) hasher.Add(0x496E7472);
@@ -487,6 +498,30 @@ public sealed class SquadRegistry
     }
 
     /// <summary>
+    /// Hashes a board-less squad's town and arrival hour while set, and the ones a save held while the AI has not applied them, so worlds without
+    /// them hash as before.
+    /// </summary>
+    static void HashStay(ref StateHasher hasher, Squad s)
+    {
+        if (!s.StayTown.IsNone || s.StaySince != 0)
+        {
+            hasher.Add(0x53746179);   // "Stay"
+            hasher.Add(s.StayTown.Site);
+            hasher.Add(s.StayTown.PlayerTown);
+            hasher.Add(s.StayTown.Nest);
+            hasher.Add(s.StaySince);
+        }
+
+        if (s.SavedTown is not { } saved) return;
+
+        hasher.Add(0x54776E53);   // "TwnS"
+        hasher.Add(saved.Town.Type);
+        hasher.Add(saved.Town.C);
+        hasher.Add(saved.Town.Cs);
+        hasher.Add(saved.Since);
+    }
+
+    /// <summary>
     /// Hashes the running package's keys a save held, while the AI has not applied them yet.
     /// </summary>
     static void HashSavedPackage(ref StateHasher hasher, Saving.PackageSave saved)
@@ -496,17 +531,5 @@ public sealed class SquadRegistry
         hasher.Add(saved.Done);
         hasher.Add(saved.Started);
         if (saved.Enemy is { } enemy) hasher.Add(Rng.StableHash(enemy));
-    }
-
-    /// <summary>
-    /// Hashes the town and arrival hour a save held, while the AI has not applied them yet.
-    /// </summary>
-    static void HashSavedTown(ref StateHasher hasher, Saving.CurrentTownSave saved)
-    {
-        hasher.Add(0x54776E53);   // "TwnS"
-        hasher.Add(saved.Town.Type);
-        hasher.Add(saved.Town.C);
-        hasher.Add(saved.Town.Cs);
-        hasher.Add(saved.Since);
     }
 }

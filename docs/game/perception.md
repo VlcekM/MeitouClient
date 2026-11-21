@@ -134,7 +134,7 @@ State on the character's status object (Character `+0x1a0`): level `+0x100`, uni
 - **Seeing through** (`SensoryData::disguiseMods` `FUN_140856f00`, **Observed**; literals **Verified**): per looker and frame, nothing when the looker is asleep, the target is
   farther than 400, or two flags (looker slot `0x248`, target `+0x3d4`) or target `+0x2f8` = 2 are set. A working disguise starts the check with m = level and
   b = 5 (two other branches: an escaped / ex-slave with m = 1 - looks-like-slave and b = 1, and an undisguised character the looker's faction has crimes on with m = 1, b = 5;
-  [economy](economy.md) 11.8). Then x 0.5 when the looker's squad has a grudge on it (long tag & 0x2b0, mark 2), x 0.6 when the uniform is the looker's faction's (mark 0), x 0.5
+  [economy](economy.md) 11.8); a partial or blown disguise matches none and gets nothing (**Verified**). Then x 0.5 when the looker's squad has a grudge on it (long tag & 0x2b0, mark 2), x 0.6 when the uniform is the looker's faction's (mark 0), x 0.5
   when the looker's faction owns it as a slave (mark 1), x 0.75 inside the walls of a town that is not public, x 2 unless the looker stands in a town (no nest) of a real faction other
   than the player's that it is not hostile to; k = lerp(stealth, 1, 2) x m x those (stealth = the raw stat / 100). a = 40 k + b feeds the spot meter of [spotting a sneaker](#spotting-a-sneaker)
   (`FUN_140856cb0` with a and 4a: T = lerp(v, 5a, a) x lerp(f, 4, 1)), the same per-looker map. Once it is full (or the cooldown already runs), and the looker is awake, not
@@ -147,7 +147,7 @@ State on the character's status object (Character `+0x1a0`): level `+0x100`, uni
 
 Meitou (`ArrestSystem.Disguise.cs`, every spot sweep): the level and faction from the worn head, armour and legs; lookers are awake NPCs not of the player's faction within 400 that see
 the character (`SightMap.Sees`), with their own meter per pair (not shared with the sneak meters, engine choice), the looker's alertness as above; the town tests read the town the point stands in
-(engine reading of the status object's hysteresis), inside the walls by the gate regions. The slave and bounty branches stay the arrest system's (a working disguise hides the bounty
+(engine reading of the status object's hysteresis), inside the walls by the gate regions. The slave and bounty branches stay the arrest system's (any uniform piece hides the bounty
 from its spotting); `AggroSystem` and the arrest spotting take `ArrestSystem.SeenFaction`.
 
 ## Hearing

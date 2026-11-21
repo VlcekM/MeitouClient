@@ -362,7 +362,7 @@ sealed class GameLoop(GameHost host)
             IsVisible = false,
             FramesPerSecond = 0,
             UpdatesPerSecond = 0,
-        }, _vsync, dlss: true, frameGeneration: _frameGenerationAsked, hdr: _hdrAtStart);
+        }, _vsync, dlss: true, frameGeneration: _frameGenerationAsked, hdr: _hdrAtStart, monitor: host.WorldOptions.Monitor);
         _frameGenerationLoaded = FrameGenerationSetup.Available(_display, _frameGenerationAsked) ? _frameGenerationAsked : FrameGenerationMethod.Off;
         host.Streamline = _display.Streamline;
         host.Ngx = _display.Ngx;
@@ -384,7 +384,7 @@ sealed class GameLoop(GameHost host)
         bool fullScreen = host.Config.FullScreen && !host.WorldOptions.Windowed && !_headless;
         (_savedVSync, _savedFullScreen) = (_vsync, fullScreen);
         if (_window is null) { }
-        else if (fullScreen) BorderlessFullScreen.Toggle(_window);
+        else if (fullScreen) BorderlessFullScreen.Toggle(_window, _display.Monitor);
         else if (!host.WorldOptions.SizeGiven && !host.WorldOptions.HiddenWindow)
             _window.WindowState = WindowState.Maximized;   // maximising would show a hidden window
         host.BeginLoadingScreen(_display);   // its textures and fonts are made before the window shows
@@ -517,6 +517,7 @@ sealed class GameLoop(GameHost host)
             PrisonPoseChanged = on => host.Session.World.PrisonPoseFix = on,
             CagedAnimalsChanged = on => host.Session.World.CagedAnimalFix = on,
             BagSearchChanged = on => host.Session.World.BagSearchFix = on,
+            CounterTalkChanged = on => host.Session.World.CounterTalk = on,
             TakeIntoBackpackChanged = on => host.Session.World.TakeIntoBackpack = on,
             TimeSpeedsChanged = () => host.Session.Simulation.SetFastSpeeds(host.Config.FastSpeed, host.Config.FastestSpeed),
             AnimalsPickUpChanged = on => EachSystem<Simulation.Player.PlayerSystem>(players => players.AnimalsPickUp = on),
@@ -803,7 +804,7 @@ sealed class GameLoop(GameHost host)
     /// </summary>
     void ToggleFullScreen()
     {
-        if (_window is not null) BorderlessFullScreen.Toggle(_window);
+        if (_window is not null) BorderlessFullScreen.Toggle(_window, _display.Monitor);
     }
 
     /// <summary>

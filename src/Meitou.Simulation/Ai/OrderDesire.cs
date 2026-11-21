@@ -9,8 +9,9 @@ namespace Meitou.Simulation.Ai;
 /// <summary>
 /// The desire half of the order step's pop (<c>FUN_140510920</c> → <c>FUN_14060fd80</c>, docs/game/ai-tasks.md "Finished tests", <b>Verified</b>):
 /// the row's desire function (TaskData <c>+0x108</c>) of the order's target and point, times its finder's score only for a row with an effect
-/// (TaskData <c>+0x128</c>, as 112's 81: its cage finder is asked by its owner's check, <c>ArrestSystem</c>'s <c>CanRun</c>). The functions, each resolved from the registration in <c>FUN_140319a60</c> through its stub to the AI vtable slot: 1 for
-/// the rows of slots 19 and 43, 0.1 for those of slot 39 (76, 186, 201, 286), and their own for the rest below. Pure reads (serial phases).
+/// (TaskData <c>+0x128</c>, as 112's 81: its cage finder is asked by its owner's check, <c>ArrestSystem</c>'s <c>CanRun</c>). The functions, each
+/// resolved from the registration in <c>FUN_140319a60</c> through its stub to the AI vtable slot: the rows below their own (slot 39's 0.1 for 76,
+/// 186, 201 and 286), every other row its registered desire (<see cref="RowDesires.ForOrder"/>). Pure reads (serial phases).
 /// </summary>
 public static class OrderDesire
 {
@@ -44,6 +45,9 @@ public static class OrderDesire
             TaskType.StayCloseToTarget or TaskType.Unnamed289 => FollowDesire(world, order.Target),
             TaskType.PickLock or TaskType.PickLockOnShackles or TaskType.BruteForceShackles or TaskType.BruteForceLock => Low,
 
+            // The sleep order is the original's 258 (slot 19's 1.0), which Meitou gives as 98 (OrderSave.SavedRow), not 98's AI slot 30.
+            TaskType.UseBed => 1,
+
             // AI slot 72 (FUN_140792650): 0 while the character itself is down (Character slot 6 FUN_1405c9e10).
             TaskType.Pickup => CharacterFacts.Down(cold) ? 0 : 1,
 
@@ -64,8 +68,19 @@ public static class OrderDesire
             TaskType.AttackEnemies => world.SystemOf<Aggro.AggroSystem>()?.AttackEntryScore(world, slot),
             TaskType.JobBuilder => world.SystemOf<Construction.ConstructionSystem>()?.EngineerEntryScore(world, slot),
             TaskType.LootAnimalsJob => world.SystemOf<Carrying.CarrySystem>()?.ForageEntryScore(world, slot),
-            _ => 1,
+            _ => Registered(world, slot, order),
         };
+    }
+
+    /// <summary>
+    /// Any other row's registered desire (<see cref="RowDesires.ForOrder"/>: its constant, AI slot 48's roll or its function); a world without the AI
+    /// system weighs no minds: a constant row's value, any other 1.
+    /// </summary>
+    static float Registered(World world, int slot, OrderEntry order)
+    {
+        if (world.SystemOf<AiSystem>() is { } ai) return ai.Rows.ForOrder(world, slot, order);
+
+        return TaskDesires.Of(order.Row) is { Kind: TaskDesireKind.Constant } d ? d.Value : 1;
     }
 
     /// <summary>
@@ -86,7 +101,7 @@ public static class OrderDesire
     /// container is its platoon, docs/formats/save.md "Object handles"); else 1, so a body another squad carries, of its own faction too, is
     /// lifted (snatched by 213 / 225 / 240).
     /// </summary>
-    static float LiftDesire(World world, int slot, CharacterCold cold, CharacterId target)
+    internal static float LiftDesire(World world, int slot, CharacterCold cold, CharacterId target)
     {
         if (!cold.Carrying.IsNone) return 0;
         if (!world.Characters.TryResolveNext(target, out int t)) return NoCharacter;

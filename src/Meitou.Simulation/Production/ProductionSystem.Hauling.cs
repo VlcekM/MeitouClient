@@ -80,7 +80,7 @@ public sealed partial class ProductionSystem
         // The fill finder's walk with an empty input (Machine.FillOrder): the empty inputs in list order, the first with a source decides.
         foreach (var input in m.Inputs)
         {
-            if (input.Rate > 0 && input.Count == 0 && NearestSource(world, site, input.Item) is { } from)
+            if (input.Rate > 0 && input.Count == 0 && NearestSource(world, site, input.Item, cold) is { } from)
                 return Go(cold, from, input.Item);
         }
 
@@ -250,7 +250,7 @@ public sealed partial class ProductionSystem
     /// and has room for it.
     /// </summary>
     string? StorageFor(World world, BuildSite site, ItemInstance item, CharacterCold by) =>
-        NearestStorage(world, site, by, s => s.Data.Accepts(item.Record, item.Type) && Fits(s.Storage!, item));
+        NearestStorage(world, site, by, item.Record, s => s.Data.Accepts(item.Record, item.Type) && Fits(s.Storage!, item));
 
     /// <summary>
     /// Whether some of an item fits: a stack of it with room, or a free cell.
@@ -274,16 +274,18 @@ public sealed partial class ProductionSystem
     /// vfunc <c>0x3b0</c>, null for a <c>StorageBuilding</c>), each within <see cref="ConstructionSystem.SourceRangeSquared"/> (3D, inclusive) of
     /// the machine (ties: the lower site id); no building of the machine's own record (vfunc <c>0x18</c>, the record, against the excluded target's).
     /// The finder measures from the character, who stands at the machine when it fetches (#963: a well 3000 or more away was missed). A producer
-    /// <paramref name="by"/> operates counts once its output is full, so it fills the well before it leaves with the water.
+    /// <paramref name="operating"/> operates counts once its output is full, so it fills the well before it leaves with the water. A storage is
+    /// taken only when the storage filters let <paramref name="fetcher"/> take the item from it (<see cref="IStorageFilter"/>).
     /// </summary>
-    string? NearestSource(World world, BuildSite from, string record, CharacterCold? by = null)
+    string? NearestSource(World world, BuildSite from, string record, CharacterCold fetcher, CharacterCold? operating = null)
     {
         string? own = world.Machines.Find(from.Id)?.Data.Id;
         bool Fetchable(BuildSite s, Machine m) => s.Id != from.Id && m.Data.Id != own && InSourceRange(s.Position, from.Position);
+        bool Stored(BuildSite s, Machine m) => m.Data.IsStorage && Fetchable(s, m) && m.Storage is { } st && StorageHolds(st, record)
+            && world.StorageAllows(fetcher, s.Id, StorageUse.Take, record);
+        bool Made(BuildSite s, Machine m) => !m.Data.IsStorage && Fetchable(s, m) && OutputHolds(m, s, record, operating);
 
-        return NearestSite(world, from.Position, float.MaxValue, (s, m) => m.Data.IsStorage && Fetchable(s, m) && m.Storage is { } st
-                && StorageHolds(st, record))
-            ?? NearestSite(world, from.Position, float.MaxValue, (s, m) => !m.Data.IsStorage && Fetchable(s, m) && OutputHolds(m, s, record, by));
+        return NearestSite(world, from.Position, float.MaxValue, Stored) ?? NearestSite(world, from.Position, float.MaxValue, Made);
     }
 
     /// <summary>
@@ -300,10 +302,11 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// The nearest complete storage <paramref name="by"/> uses (<see cref="StoresFor"/>) within <see cref="InFinderRange"/> of a machine that passes
-    /// <paramref name="ok"/> (ties: the lower site id). The original's per-item storage finder (<c>FUN_14059acd0</c>) measures from the character,
-    /// who stands at the machine (#965: a storage 3000 or more away was missed).
+    /// <paramref name="ok"/> and the storage filters for putting <paramref name="record"/> in (<see cref="IStorageFilter"/>; ties: the lower
+    /// site id). The original's per-item storage finder (<c>FUN_14059acd0</c>) measures from the character, who stands at the machine (#965: a
+    /// storage 3000 or more away was missed).
     /// </summary>
-    string? NearestStorage(World world, BuildSite from, CharacterCold by, Func<Machine, bool> ok)
+    string? NearestStorage(World world, BuildSite from, CharacterCold by, string record, Func<Machine, bool> ok)
     {
         string? best = null;
         float bestGap = float.MaxValue;
@@ -316,6 +319,7 @@ public sealed partial class ProductionSystem
             float gap = Gap(site.Position, from.Position);
             if (gap > bestGap || (gap == bestGap && string.CompareOrdinal(s.Site, best) > 0)) continue;
             if (!InFinderRange(site.Position, from.Position) || !ok(s)) continue;
+            if (!world.StorageAllows(by, s.Site, StorageUse.Put, record)) continue;
 
             best = s.Site;
             bestGap = gap;

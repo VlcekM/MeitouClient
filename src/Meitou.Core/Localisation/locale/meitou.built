@@ -1,0 +1,181 @@
+# Texts the code builds with $"..." (or hands to Loc.Tr built) in player-facing places, which no catalog can match. The check
+# fails on any built text not listed here: give new text to Loc.Tr with {1}, {2} placeholders instead. --write only removes lines.
+ [c{cascade.Index}: texel {cascade.Texel:0.0}, 
+ rendered, x{FramesShownPerRendered(generator)} shown
+ strength {HeatHazeScale:0.##}
+ with {changes} change{(changes == 1 ? "" : "s")}
+ · {bitsPerSecond / 1e6,5:0.0} Mbps
+'{Entry}' is no value for {p.Label}
+({Loc.Tr("Pay c.{1,num}", bed.Cost)})
+, eye {Fmt(_host.Camera.Eye.X)} {Fmt(_host.Camera.Eye.Y)} {Fmt(_host.Camera.Eye.Z)}
+... {issues.Count - cap} more
+; meitou: {shadow.DescribeMeitou()}
+<MyGUI type="Layout">\n  <Widget type="Window" skin="Kenshi_WindowCX" position_real="0 0 0.36 {height.ToString(System.Globalization.CultureInfo.InvariantCulture)}" layer="Window" name="Root">\n    <Property key="Caption" value="SEND FEEDBACK"/>\n    <Widget type="TextBox" skin="Kenshi_TextboxStandardText" position_real="0.03 {F(0.02)} 0.94 {F(0.1)}" name="lbIntro"><Property key="WordWrap" value="true"/><Property key="TextAlign" value="Left Top"/></Widget>\n    <Widget type="TextBox" skin="Kenshi_TextboxStandardText" position_real="0.03 {F(0.13)} 0.94 {F(0.045)}" name="lbTitleBox"><Property key="TextAlign" value="Left VCenter"/></Widget>\n    <Widget type="EditBox" skin="Kenshi_EditBox" position_real="0.03 {F(0.175)} 0.94 {F(0.065)}" name="{FeedbackTitleBox}"><Property key="MaxTextLength" value="100"/></Widget>\n    <Widget type="TextBox" skin="Kenshi_TextboxStandardText" position_real="0.03 {F(0.255)} 0.94 {F(0.045)}" name="lbBodyBox"><Property key="TextAlign" value="Left VCenter"/></Widget>\n    <Widget type="EditBox" skin="Kenshi_WordWrap" position_real="0.03 {F(0.3)} 0.94 {F(0.25)}" name="{FeedbackBodyBox}">\n      <Property key="Static" value="false"/><Property key="MaxTextLength" value="5000"/><Property key="MultiLine" value="true"/><Property key="WordWrap" value="true"/><Property key="TextAlign" value="Left Top"/>\n    </Widget>\n    {Tick(FeedbackShotTick, 0.57)}\n    {Tick(FeedbackNavTick, 0.57 + row)}\n    {Tick(FeedbackSaveTick, 0.57 + 2 * row)}\n    {Tick(FeedbackLogTick, 0.57 + 3 * row)}\n    {Tick(FeedbackGameLogsTick, 0.57 + 4 * row)}\n    <Widget type="Button" skin="Kenshi_TickBoxSkin" position_real="0.03 {F(0.57 + 5 * row)} 0.05 {F(0.054)}" name="{FeedbackDiscordTick}"/>\n    <Widget type="TextBox" skin="Kenshi_TextboxStandardText" position_real="0.09 {F(0.57 + 5 * row)} 0.4 {F(0.054)}" name="lb{FeedbackDiscordTick}"><Property key="TextAlign" value="Left VCenter"/></Widget>\n    <Widget type="EditBox" skin="Kenshi_EditBox" position_real="0.5 {F(0.565 + 5 * row)} 0.47 {F(0.065)}" name="{FeedbackDiscordBox}"><Property key="MaxTextLength" value="64"/></Widget>\n    <Widget type="TextBox" skin="Kenshi_TextboxStandardText" position_real="0.03 {F(0.8 + 2 * row)} 0.94 {F(0.085)}" name="StatusText"><Property key="WordWrap" value="true"/><Property key="TextAlign" value="Left Top"/></Widget>\n    <Widget type="Button" skin="Kenshi_Button1" position_real="0.53 {F(0.895 + 2 * row)} 0.215 {F(0.08)}" name="SendButton"><Property key="DefaultAction" value="true"/></Widget>\n    <Widget type="Button" skin="Kenshi_Button1" position_real="0.765 {F(0.895 + 2 * row)} 0.215 {F(0.08)}" name="CancelButton"/>\n  </Widget>\n</MyGUI>
+<MyGUI type="Layout"><Widget type="Button" skin="Kenshi_Button1" position_real="0.9 0 0.1 0.03" layer="Info" name="{FeedbackButton}"/></MyGUI>
+<MyGUI type="Layout"><Widget type="ProgressBar" skin="Kenshi_ProgressBarFill" position_real="0 0 1 1" name="{BarName}"/></MyGUI>
+<Widget type="Button" skin="Kenshi_TickBoxSkin" position_real="0.03 {F(y)} 0.05 {F(0.054)}" name="{tick}"/>\n<Widget type="TextBox" skin="Kenshi_TextboxStandardText" position_real="0.09 {F(y)} 0.88 {F(0.054)}" name="lb{tick}"><Property key="TextAlign" value="Left VCenter"/></Widget>
+A map marker needs a known group or an image, a finite point and tint, and a size: {added[bad]}.
+Adjust {SettingsMenu.Label(label).ToLowerInvariant()}.
+Attach a save ({_feedbackSaveMissing})
+Back to {ActiveLook.Name}'s value.
+Back to {look.Name}.
+Blood   {blood.Blood * 100:0}%
+Cannot open {folder}: {e.Message}
+Cannot save to {path}: {e.Message}
+Cannot save {path}
+Choose the control for {SettingsMenu.ActionLabel(action).ToLowerInvariant()}.
+Could not read {FileName}: {e.Message}
+Day {i.Day}
+Debug: local news/, {posts.Count} posts
+Delete {files} billboard atlases ({bytes / 1048576.0:0} MB) in {cache.Root}?
+Delete {look.Name}? Its file goes; the look goes back to Meitou.
+Deleted {files} atlases ({bytes / 1048576.0:0} MB); they are baked again when next needed.
+Deleted {name}
+Enable {SettingsMenu.Label(label).ToLowerInvariant()}.
+Every {what} is Meitou.
+Every {what} is as the game ships it.
+Faithful ({Faithful})
+Faithful keeps the viewer's old defaults (objects at full detail to {FaithfulObjectDistance:0}, 
+Faithful: {e.Faithful}
+Feedback not sent: {text}
+File version: {info.Version}\nFaction name: {info.Faction}\n
+Funds: c.{info.Funds.ToString("N0", CultureInfo.InvariantCulture)}\nMembers size: {info.Members}\nLocation: {info.Area}
+Hunger {hungry.Hunger:0.00} / 3
+Light {Chosen + 1}{(Current.On ? "" : " (off)")}
+Max Capacity: {capacity}
+Meitou ({Meitou})
+Meitou draws every cell within Decal Range, up to {TerrainDecalRenderer.MaxSlots} (docs/game/blood-decals.md)
+Meitou draws objects to {MeitouObjectDistance:0}, 
+Meitou look: {ActiveLook.Name}.
+Meitou {DateTime.Now:yyyy-MM-dd HH-mm-ss}
+Meitou {version} describes its settings in a newer way than this launcher reads: update the launcher (Settings).
+Meitou {version} is not installed any more.
+Meitou {version} is older than the Graphics page: change its settings in the game's Tab panel, or play a newer version.
+Meitou: {e.Meitou}
+Mine · Meitou {look.Made}
+Mod codes start at {SimulationExtensions.FirstModCode}; lower numbers are the game's.
+Mod goal types start at {SimulationExtensions.FirstModCode}; lower numbers are the game's tasks.
+Mod job types start at {SimulationExtensions.FirstModCode}; lower numbers are the game's tasks.
+Mod {mod} not loaded: {reason}
+Moving {Lights.ChosenName}
+Moving {Poses.SelectedName}
+News: {name} could not be read
+No {GameSettings.FileName} in {LauncherConfig.DataDirectory} yet: the game writes it when it first saves its settings 
+Preset {i}
+Renamed to {name}
+Saved as {saved.Name}.
+Saved {name}
+Saved {path}
+Saving picture, {pictureWidth} x {pictureHeight} ...
+Screen / {d}
+Subscribing could not be started: {e.Message}
+Subscribing ended unexpectedly (exit code {child.ExitCode}).
+Thanks for the feedback! It is now issue #{number} on GitHub.
+The Workshop sync could not be started: {e.Message}
+The Workshop sync ended unexpectedly (exit code {child.ExitCode}).
+The mod named '{path}' is out of date. Re-save it in the construction set.\n
+The mod {mod}
+The settings are from an older Meitou: start v{PlayVersion} once to update them, then change them here.
+The settings were saved by a newer Meitou than v{PlayVersion}: play that version, or change them in the game.
+Worst body part   {worst.WorstPart * 100:0}%
+X {x0:0}..{x1:0}, Z {z0:0}..{z1:0} (zones {WorldLayout.ZoneOf(x0, z0)} .. {WorldLayout.ZoneOf(x1 - 1, z1 - 1)}) 
+You are on {BuildVersion.Tag}; {FeedbackNewer} is out. Please check whether this still happens there first.
+You are playing {BuildVersion.Tag}, and {newer} is out. It may already be fixed there: please update and check 
+Your look as it is now: {menu.LookPresets.ActiveLook.Name}{suffix}. What it does not set keeps following Meitou.
+[Meitou] {line}
+[Mods] Failed to load core mod: {ModName(entry)}
+[Mods] Failed to load mod: {ModName(entry)}{(IsWorkshop(entry, install) ? " (*)" : "")}
+a game data change it made cannot be applied: {problem}
+a {type.Name} can't be a setting (bool, int, float, double, an enum, or a string with Options).
+and {dropped} stack(s) lie on the ground by the squads.
+bloom {bloom}, depth of field {focus}, lamp shadows {lamps}, gi hybrid {(GiHybrid ? GiHybridParts : "off")}, 
+building panel button {a.Caption}
+change {i + 1} ({changes[i].StringId ?? "no id"}): {problem}
+character {Poses.SelectedName} at {at.X:0} {at.Y:0} {at.Z:0}, pose {pose} ({Poses.PoseTime.Length:0.###} s, {Poses.RootKeys} root keys)
+cooler {-v * 100:0}
+cpu terrain {phase[0]:0.00}, objects {phase[1]:0.00}, foliage {phase[2]:0.00} ms;{_cascades}
+data phase {modId} {Convert.ToHexString(hash)}
+failed to change the game data: {e.GetBaseException().Message}
+failed to start: {e.GetBaseException().Message}
+foliage {foliageInstances} in {foliageCalls} calls {(t3 - t2) * ms:0.00} ms ({gpu.Foliage?.DepthDetail})]
+green {-v * 100:0}
+gtao {GtaoSlices}x{GtaoSteps}{(GtaoFullSize ? " full" : "")}
+instance '{instance.Id}' has a null state
+item {item.Id} {(item.Installed ? 1 : 0)} {item.Problem}
+landmarks (giant wrecks, skeletons, towers) out to {MeitouLandmarkDistance:0} (Tab sliders; the landmarks need Meitou at start)
+lets the terrain be coarser ({MeitouTerrainPixelError:0} px) and draws huge 
+magenta {v * 100:0}
+meitou title ridge {placed.Count}
+meitou title {name}
+mod {name}
+more than {MaxPerMod} different image files
+no world yet: dropped {command.GetType().Name}
+objects {objectInstances} in {objectCalls} calls {(t2 - t1) * ms:0.00} ms, 
+problem {problem}
+reference list '{list}' has an entry without a target
+reference list '{list}' is null
+saturation {PostOptions.Saturation:0.00}, contrast {PostOptions.Contrast:0.00}
+saturation {Saturation:0.##} contrast {Contrast:0.##}
+saved setting '{key}' is not a value of a setting; ignored
+shadow c{i}
+slow sky {step}
+so a big battle's blood ends at a straight cell edge and the cells past it dry up unseen; 
+squad AI option {o.Caption}
+strength {MeitouHazeStrength}
+strength {MeitouHeatHazeStrength}
+terrain error {WorldRenderOptions.DefaultTerrainPixelError:0} px); 
+terrain {(terrain.DepthTriangles - triangles) / 1000}k tri {(t1 - t0) * ms:0.00} ms, 
+the file is larger than {MaxBytes >> 20} MB
+the game draws the blood of only the 8 terrain cells (288 units square) nearest the camera, 
+the image is {width} by {height} pixels; a side may be at most {MaxSide}
+traced sun {traced}, shafts {shafts}, exposure x{Exposure:0.##}, tonemap {tonemap}{mix}, grade {grade}, night grade {nightGrade}, 
+upscaler {Upscale.Describe()}
+v{ParseVersion(version).Number} nightly
+warmer {v * 100:0}
+world grid {coarseSize}² every {CoarseStep * WorldLayout.SampleSpacing} units; 
+{BuildQueue.Count} placed
+{DataProblems} game data problems, see log.txt
+{FileName} is not a JSON object.
+{Keys("", InputAction.TogglePhotoMode)} / Esc leave
+{Keys("Tab / H", InputAction.ToggleInterface)} hide    {Keys("Enter", InputAction.Screenshot)} picture    
+{Label(action)} bound to {binding}, taken from {string.Join(", ", conflicts.Select(Label))}.
+{Label(action)} bound to {binding}.
+{Label(action)} bound to {binding}; {Label(other)} moved to {previous}.
+{Label(binding)}: press a key or mouse button.\nDelete clears the binding. Esc cancels.
+{Lights.ChosenName} placed here
+{Lights.ChosenName}, mark at {at.X:0} {at.Y:0}
+{Loc.Tr("{1,num}", (int)(unitsPerSecond * factor))} {suffix}
+{Loc.Tr(locked ? "Locked" : "Unlocked")} ({Loc.Tr("lvl {1,num}", door.Level)})
+{PlayerCharacters().Count} members | {Selected().Count} selected
+{Prefix}problem {problem.ReplaceLineEndings(" ")}
+{Prefix}result {result.Total} {result.Installed} {result.Refused}
+{Preset}: aa {aa}, heat haze {heatHaze}, ssao {ssao}, contact {contact}, reflections {reflections}, 
+{TooltipRuntime.MainTag}{Loc.Tr("{1,num}", (int)total)}%
+{by} replaces the ground, so its map is used as it is and this fix does nothing.
+{changes} changes from the game
+{changes} unsaved changes
+{counted} squad(s) a mod that is not loaded kept out of your faction size count are counted again.
+{dropped} squad(s) run by a mod that is not loaded are yours again.
+{gpu.Terrain.DepthTriangles:N0} terrain triangles, {_objects} objects, {_foliage} foliage meshes (over the cascades); 
+{labels[level]} (terrain at start)
+{look.Name} deleted; the look is Meitou.
+{look.Name} loaded.
+{look.Name} pasted and loaded (made on Meitou {look.Made}).
+{look.Name} saved.
+{look.Name}'s code is on the clipboard: paste it on Discord, or in Paste.
+{name} exists already
+{name} is a built-in preset: choose another name.
+{pause} pause    
+{purses} squad purse(s) of a mod that is not loaded went into your money.
+{rendered * shown:0} fps  ({rendered:0} rendered, {ms:0.0} ms)
+{rendered:0} fps  ({ms:0.0} ms)
+{shops} shop(s) a mod that is not loaded gave your squads are closed; their goods went to the squads' members where they fit, 
+{shops} shop(s) a mod that is not loaded gave your squads are closed; their goods went to the squads' members.
+{stamp} ({n}).png
+{text}, {Loc.Plural("{1} problem", "{1} problems", Problems, Problems)}
+{v:+0;-0;0} deg
+{v:0.#} game h / min
+{v:0.0} deg
+{v:0} deg
+{v:0} min
+{woken} squad(s) a mod that is not loaded put to sleep are awake again.

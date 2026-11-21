@@ -30,9 +30,9 @@ public sealed record AddOrderJob(IReadOnlyList<CharacterId> Characters, Meitou.D
 public sealed record UseTurretOrder(IReadOnlyList<CharacterId> Characters, string Site) : OrderCommand;
 
 /// <summary>
-/// The original's order 136 FEED_CORPSE_INTO_MACHINE without Shift (Corpse Disposal on a corpse machine): each of the characters carrying a dead body
-/// takes it to an incinerator as the corpse disposal job does. <b>Engine reading</b>: the order's condition 99 is taken as carrying a dead body, and
-/// the body goes to the nearest free incinerator, as the job's.
+/// The original's order 136 FEED_CORPSE_INTO_MACHINE without Shift (Corpse Disposal on a corpse machine): each character listed (the selection when
+/// empty) gets order 136 on <see cref="Site"/> through its queue; one carrying a dead body takes it to that machine and feeds it in, one carrying
+/// nothing is done at once.
 /// </summary>
 public sealed record DisposeCorpseOrder(IReadOnlyList<CharacterId> Characters, string Site) : OrderCommand;
 

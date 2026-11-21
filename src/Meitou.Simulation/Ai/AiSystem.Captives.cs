@@ -160,9 +160,7 @@ public sealed partial class AiSystem
 
     /// <summary>
     /// The activation: a cannibal retreat (1) goes to the squad's home town, else the nearest town of its faction (<c>FUN_140288580</c>); the
-    /// nearest-nest kind (25) always to the nearest (<c>FUN_140289b50</c>). Slave shipping goes to the nearest slave camp of a faction not hostile to
-    /// the squad (<c>FUN_1402873a0</c>); the anywhere kind (28) takes a nearer town (a TOWN within 0.7 x that squared distance, <c>FUN_140289f90</c>)
-    /// only when its flag bit 10 is set, whose meaning is <b>Unknown</b>: Meitou takes the camp.
+    /// nearest-nest kind (25) always to the nearest (<c>FUN_140289b50</c>). Slave shipping goes to <see cref="SlaveShipping.Town"/>.
     /// </summary>
     internal void CaptiveStarted(World world, Squad squad, Blackboard board, AiPackage package, PackageClass kind)
     {
@@ -175,25 +173,8 @@ public sealed partial class AiSystem
                 board.MissionTown = package.Signal == 1 && board.Town >= 0 ? board.Town : NearestTownOf(at, squad.Faction);
                 break;
             case PackageClass.SlaverShipping:
-                {
-                    int best = -1;
-                    float bestD = float.MaxValue;
-                    foreach (var site in data.Sites)
-                    {
-                        if (site.Town.Type != TownType.SlaveCamp || site.Index >= data.SiteFactions.Count) continue;
-
-                        int f = data.SiteFactions[site.Index];
-                        if (f >= 0 && squad.Faction >= 0 && data.Relations.Contains(f) && data.Relations.Contains(squad.Faction)
-                            && data.Relations.IsHostile(f, squad.Faction))
-                            continue;
-
-                        float d = Vector2.DistanceSquared(Flat(at), Flat(site.Position));
-                        if (d < bestD) (best, bestD) = (site.Index, d);
-                    }
-
-                    board.MissionTown = best;
-                    break;
-                }
+                board.MissionTown = SlaveShipping.Town(data, at, squad.Faction, package.Signal);
+                break;
         }
 
         // The travel goals (TRAVEL_TO_TARGET_TOWN_FAST) walk to the running package's destination.

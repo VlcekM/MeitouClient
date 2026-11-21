@@ -5,8 +5,10 @@ using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.Save;
 using Meitou.Simulation;
+using Meitou.Simulation.Dialogue;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.FirstAid;
+using Meitou.Simulation.Locks;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
 using Meitou.Simulation.Population;
@@ -32,12 +34,15 @@ public class OrderSaveTests
         public void Dispose() => World.Dispose();
     }
 
-    static Game NewGame(bool start = true)
+    /// <summary>
+    /// A new game of the synthetic town with the rig's systems and <paramref name="extra"/>; with <paramref name="start"/> the player's squad starts.
+    /// </summary>
+    static Game NewGame(bool start = true, StandardParts extra = StandardParts.None)
     {
         var db = SyntheticTown.Database(anatomy: true);
         var data = SyntheticTown.Data(db);
         var walk = new OpenGroundWalkability(SyntheticTown.Ground);
-        var systems = SyntheticTown.Standard(data, walk, Parts, new PopulationSettings { CheckEveryTicks = 1 });
+        var systems = SyntheticTown.Standard(data, walk, Parts | extra, new PopulationSettings { CheckEveryTicks = 1 });
         var world = new SimWorld(new WorldSettings { Seed = 11, PublishSnapshots = false }, walk, systems.Systems);
         var squad = start ? systems.Population!.StartPlayer(world, NewGameStart.From(db.Find("40-t")!)) : null!;
         return new Game(world, data, squad);
@@ -156,6 +161,135 @@ public class OrderSaveTests
         Assert.Equal(patientHand, Hand.Read(ai, "tjobT3"));
         Assert.True(Hand.Read(ai, "tjobT0").IsNull);
         Assert.DoesNotContain(AiOf(save, 1).Ints.Keys, k => k.StartsWith("tjob", StringComparison.Ordinal));   // the patient holds no order
+    }
+
+    /// <summary>
+    /// A loaded order takes its row's job remap (the loader's add <c>FUN_1405086d0</c>, TaskData <c>+4</c> / <c>+0xc</c>, commit <c>43d188020</c>): a
+    /// queued 60 First aid robot loads as 57 Robotics and a 26 Loot on a container (a building handle) as 238 Foraging animals. Both are finder rows,
+    /// so each entry stays in the second list though its hand names nothing the save holds (a gone character, a building no record is). Catches a
+    /// load that keeps the raw rows (60 was dropped with no owner, a 26 on a container loaded as the container order) or drops a finder row's entry
+    /// over its hand.
+    /// </summary>
+    [Fact]
+    public void A_saved_60_loads_as_57_and_a_26_on_a_container_as_238_and_both_stay_when_their_hands_name_nothing()
+    {
+        using var a = NewGame();
+        var medic = a.Squad.Members[0];
+        long t = a.World.Tick;
+        a.World.Commands.Enqueue(new MoveOrder([medic], First) { Tick = t });
+        a.World.Commands.Enqueue(new MoveOrder([medic], Second) { Tick = t, Queued = true });
+        a.World.RunTicks(3);
+        var save = SaveCapture.Capture(a.World, a.Data, new SaveClock(1, 12, 0));
+
+        // The two saved moves become a 60 on a character and a 26 on a building, neither of which the save holds.
+        var ai = AiOf(save, 0);
+        ai.Ints["tjob0"] = (int)TaskType.FirstAidRobot;
+        new Hand((int)FcsRecordType.Character, 0, 0, 999, 0).Write(ai, "tjobT0");
+        ai.Ints["tjob1"] = (int)TaskType.LootTarget;
+        new Hand((int)FcsRecordType.Building, 0, 0, 999, 0).Write(ai, "tjobT1");
+
+        using var b = NewGame(start: false, extra: StandardParts.Carry);
+        SaveLoader.Load(b.World, save, b.Data);
+        b.World.RunTicks(2);
+
+        Assert.Equal([TaskType.JobRepairRobot, TaskType.LootAnimalsJob], SecondRows(b.World, b.World.Squads.Find(b.World.Player.Squad)!.Members[0]));
+    }
+
+    /// <summary>
+    /// A Talk order (12, commit <c>9991b0e0f</c>) given over a queued move replaces it, is saved as <c>tjob0</c> on the NPC's handle, and after a load
+    /// waits in the second list until that NPC's platoon is in the world, then is made on it: the loader's add makes the entry whatever its hand
+    /// names (<c>FUN_1405086d0</c>). Catches a Talk that does not clear the queue, and a loaded order dropped because its target's platoon is made after
+    /// the first look.
+    /// </summary>
+    [Fact]
+    public void A_talk_order_replaces_a_queued_move_and_survives_a_save_and_a_load()
+    {
+        using var a = NewGame(extra: StandardParts.Dialogue);
+        for (int i = 0; i < 600 && NpcLeader(a) is null; i++) a.World.RunTick();
+        var hero = a.Squad.Members[0];
+        var npc = NpcLeader(a)!.Value;
+        long t = a.World.Tick;
+        a.World.Commands.Enqueue(new MoveOrder([hero], First) { Tick = t });
+        a.World.Commands.Enqueue(new MoveOrder([hero], Second) { Tick = t, Queued = true });
+        a.World.RunTicks(2);
+        a.World.Commands.Enqueue(new TalkOrder(hero, npc) { Tick = a.World.Tick });
+        a.World.RunTicks(2);
+
+        Assert.Equal([TaskType.PlayerTalkTo], Rows(a.World, hero));
+
+        var save = SaveCapture.Capture(a.World, a.Data, new SaveClock(1, 12, 0));
+        var ai = AiOf(save, 0);
+
+        Assert.Equal((int)TaskType.PlayerTalkTo, ai.Ints["tjob0"]);
+        Assert.False(ai.Ints.ContainsKey("tjob1"));
+        Assert.Equal((int)FcsRecordType.Character, Hand.Read(ai, "tjobT0").Type);
+
+        using var b = NewGame(start: false, extra: StandardParts.Dialogue);
+        SaveLoader.Load(b.World, save, b.Data);
+        var heroB = b.World.Squads.Find(b.World.Player.Squad)!.Members[0];
+        var cold = b.World.Characters.Cold(heroB.Slot)!;
+        b.World.RunTicks(2);
+
+        // The NPC's platoon is not made yet: the order waits in the second list as no candidate (FUN_14050df10 scores each entry alone).
+        Assert.NotNull(Assert.Single(cold.SecondList).Awaits);
+        Assert.Null(cold.SavedOrders);
+
+        for (int i = 0; i < 600 && cold.SecondList[0].Awaits is not null; i++) b.World.RunTick();
+        var entry = Assert.Single(cold.SecondList);
+        var target = b.World.Characters.Cold(entry.Target.Slot);
+
+        Assert.Equal(TaskType.PlayerTalkTo, entry.Row);
+        Assert.Equal(Hand.Read(ai, "tjobT0"), target?.Save?.Source.Handle);
+        Assert.Null(cold.SavedOrders);
+    }
+
+    /// <summary>
+    /// The leader of an NPC squad in the world; null while there is none.
+    /// </summary>
+    static CharacterId? NpcLeader(Game g) =>
+        g.World.Squads.All.FirstOrDefault(s => s.Id != g.World.Player.Squad && !s.Leader.IsNone && g.World.Characters.IsAlive(s.Leader))?.Leader;
+
+    /// <summary>
+    /// A saved Sleep order is 258 <c>USE_BED_ORDER</c> on its bed, which has no job form: it loads as a second-list entry, Meitou's sleep order 98
+    /// (commit <c>9672b163c</c>, docs/game/ai-tasks.md "Precedence", loaded entries). With its bed taken, 258's list B state 73
+    /// <c>machineHasFreeOperatorSlot</c> (<c>FUN_140598de0</c>) fails, so the entry waits unstarted and is not spent; once the bed is free the character
+    /// goes to it and lies down (commit <c>28d6cbdbc</c>). Catches a loaded 258 dropped or remapped, and a start on a taken bed that stands and so
+    /// spends the entry.
+    /// </summary>
+    [Fact]
+    public void A_saved_sleep_order_loads_into_the_second_list_and_waits_for_its_taken_bed()
+    {
+        using var rig = new TaskStartTests.Rig(carrying: false, decide: true, ai: true);
+        rig.World.RunTicks(3);
+        rig.Say(new StopCommand([rig.Fighter]) { Tick = rig.World.Tick });
+        rig.World.RunTick();
+        var mate = rig.Cold(rig.Mate);
+
+        // The mate takes the bed on a Sleep order of its own.
+        rig.Say(new UseBedOrder([rig.Mate], rig.BedFixture) { Tick = rig.World.Tick });
+        for (int i = 0; i < 1200 && mate.InSomething != HeldState.Bed; i++) rig.World.RunTick();
+
+        Assert.Equal(HeldState.Bed, mate.InSomething);
+
+        // The loader's read of tjob0 258 with its point and Meitou's site key (OrderSave.Read).
+        var cold = rig.Cold(rig.Fighter);
+        var bed = rig.World.Fixtures.Find(rig.BedFixture)!;
+        cold.SavedOrders = [new SavedOrder(TaskType.UseBedOrder, bed.Position, Hand.Null, rig.BedFixture, null, 0, false)];
+        rig.World.RunTicks(300);
+        var entry = Assert.Single(cold.SecondList);
+
+        Assert.Equal(TaskType.UseBed, entry.Row);
+        Assert.Equal(rig.BedFixture, entry.Site);
+        Assert.False(entry.Started);
+        Assert.False(entry.Spent);
+        Assert.Equal(HeldState.None, cold.InSomething);
+
+        // The mate gets up: the bed is free.
+        rig.Say(new StopCommand([rig.Mate]) { Tick = rig.World.Tick });
+
+        for (int i = 0; i < 1200 && cold.InSomething != HeldState.Bed; i++) rig.World.RunTick();
+
+        Assert.Equal((HeldState.Bed, rig.BedFixture), (cold.InSomething, cold.InWhat));
     }
 
     /// <summary>

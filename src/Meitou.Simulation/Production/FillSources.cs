@@ -81,7 +81,8 @@ internal static class FillSources
     /// <summary>
     /// The nearest storage holding <paramref name="record"/> that the character may use (<c>canIUseThisBuilding</c>,
     /// <see cref="Locks.FixtureRegistry.CanUse(World, CharacterCold, int, Locks.Fixture?)"/>: a storage, holding an inventory, only of its own
-    /// faction): a container fixture, then a complete player storage machine; null with none.
+    /// faction) and the storage filters let it take the item from (<see cref="Items.IStorageFilter"/>): a container fixture, then a complete player
+    /// storage machine; null with none.
     /// </summary>
     static FillSource? Storage(World world, CharacterCold cold, Vector3 at, string record, Func<Vector3, bool>? inTown)
     {
@@ -93,6 +94,7 @@ internal static class FillSources
 
             float d = Vector3.DistanceSquared(f.Position, at);
             if (!Closer(d, bestD) || inTown is not null && !inTown(f.Position) || !world.Fixtures.CanUse(world, cold, f)) continue;
+            if (!world.StorageAllows(cold, f.Id, Items.StorageUse.Take, record)) continue;
 
             (best, bestD) = (new FillSource(FillSourceKind.Storage, f.Position, record, f.Id), d);
         }
@@ -105,6 +107,7 @@ internal static class FillSources
             float d = Vector3.DistanceSquared(site.Position, at);
             if (!Closer(d, bestD) || inTown is not null && !inTown(site.Position)) continue;
             if (!world.Fixtures.CanUse(world, cold, site.Owner, (Locks.Fixture?)null)) continue;
+            if (!world.StorageAllows(cold, m.Site, Items.StorageUse.Take, record)) continue;
 
             (best, bestD) = (new FillSource(FillSourceKind.Storage, site.Position, record, m.Site), d);
         }

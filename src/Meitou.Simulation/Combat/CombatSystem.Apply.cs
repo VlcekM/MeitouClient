@@ -345,6 +345,9 @@ public sealed partial class CombatSystem
 
         Deeds?.Blow(world, a, d, medical.Incapacitated, death);
 
+        // A blow that leaves the victim out cold or dead names the striker its defeater (FUN_1404394f0, Character +0x2c0)
+        if (medical.Incapacitated) dc.DefeatedBy = table.IdOf(a);
+
         // A unique killed: dead in the registry, with the player flag when the killer is the player's (the body pass would mark it dead without).
         if (death && world.Uniques.RecordOf(world.Characters.IdOf(d)) is { } unique) world.Uniques.Died(unique, ac.IsPlayer, dc.Faction);
     }

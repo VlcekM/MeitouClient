@@ -644,6 +644,43 @@ public class AiTests(ITestOutputHelper output)
         Assert.All(held.Keys, id => Assert.Null(world.Characters.Cold(id.Slot)!.Ai!.TownPost));
     }
 
+    /// <summary>
+    /// A goal that needs empty hands (list B <c>!47</c>, 157 Static town guard among them) puts a carried body down first, its plan's step 69
+    /// Putting down (<c>Task_PutDownObject</c>, the only provider of <c>!47</c> in the row table; docs/simulation.md "Planner"): a town guard 100
+    /// from its post with a body on its shoulder plans step 69, sets the body down and walks back to its post on 157. Catches a carrier whose
+    /// guard goal does not plan, or that walks to its post with the body.
+    /// </summary>
+    [Fact]
+    public void A_carrying_town_guard_puts_the_body_down_first_and_then_guards_its_post()
+    {
+        using var world = Town(1, out _, WithPosts(2, 1, out _), null, more: StandardParts.Carry);
+        world.RunTicks(600);
+        var (guard, mind) = TownGuards(world).First(g => g.Mind.TownPost is not null);
+        var post = mind.TownPost!.Value.Spot.Position;
+        var cold = world.Characters.Cold(guard.Slot)!;
+        var away = post + new Vector3(100, 0, 0);
+        world.Characters.Place(guard.Slot, away, 0);
+        var body = new Combat.Combatant { Name = "body" }.MakeCold();
+        body.Medical!.KnockOut(100000);
+        var carried = world.Characters.Spawn(new CharacterHot { Position = away, Health = 100 }, body, world.Tick);
+        (cold.Carrying, body.CarriedBy) = (carried, guard);
+        mind.Replan = true;
+        bool planned = false;
+        for (int t = 0; t < 300 && !cold.Carrying.IsNone; t++)
+        {
+            world.RunTicks(1);
+            planned |= mind.Plan is [{ Type: TaskType.PutDownObject }, ..];
+        }
+
+        Assert.True(planned, "step 69 planned");
+        Assert.True(cold.Carrying.IsNone && body.CarriedBy.IsNone, "the body put down");
+
+        world.RunTicks(600);
+
+        Assert.Equal(TaskType.StandAtGuardNodeHometownOutside, mind.Goal?.Task.Type);
+        Assert.InRange(Off(world, guard, post), 0, 13);
+    }
+
     #endregion
 
     #region Beds and workmasters
@@ -849,6 +886,52 @@ public class AiTests(ITestOutputHelper output)
         Assert.All(minds, m => Assert.Equal(TaskType.GoHomeAndGoToBed, m.Goal!.Task.Type));
     }
 
+    /// <summary>
+    /// 253 Following (urgent escape) weighs its own desire (AI slot 16, <c>FUN_140597900</c>; docs/game/ai-tasks.md "253 Following (urgent
+    /// escape)"): clamp((d - 70 f) / (130 f), 0, 1) of the follower's distance d to its target, f 1 while the target runs away from it
+    /// (<c>FUN_14065ee70</c>: above 0.85 of its top speed, heading over 50 away) and 2 otherwise: 0, 0.5 and 1 at 70, 135 and 200 from a runner, at
+    /// 140, 270 and 400 from one standing. Catches the follow rows' flat desire, or a ramp that ignores how the target moves.
+    /// </summary>
+    [Fact]
+    public void Goal_253_ramps_with_the_distance_from_70_to_200_doubled_unless_the_target_runs_away()
+    {
+        var relations = Data.Gameplay.FactionRelations.Build([]);
+        var data = new PopulationData { Db = new GameDatabase(), Sites = [], Factions = [], Relations = relations };
+        var ai = new AiSystem(data);
+        using var world = new SimWorld(new WorldSettings { PublishSnapshots = false }, new OpenGroundWalkability(Ground), [ai]);
+
+        Assert.Equal([0, 0.5f, 1], EscapeDesires(world, ai, runs: true, [70, 135, 200]));
+        Assert.Equal([0, 0.5f, 1], EscapeDesires(world, ai, runs: false, [140, 270, 400]));
+    }
+
+    /// <summary>
+    /// 253's desire (rounded to 0.001) of a follower at each of <paramref name="distances"/> behind a squad leader that walks off at its top speed
+    /// to a point 3000 ahead (<paramref name="runs"/>) or stands.
+    /// </summary>
+    static float[] EscapeDesires(SimWorld world, AiSystem ai, bool runs, float[] distances)
+    {
+        const TaskType type = TaskType.FollowUrgentEscape;
+        var at = new Vector3(Centre.X, 300, Centre.Z);
+        var board = new Blackboard([]);
+        var squad = new Squad { Id = world.Squads.NextId(), TemplateId = "t", Ai = board };
+        world.Squads.Add(squad);
+        var leader = new CharacterHot { Position = at, MaxSpeed = 40, Velocity = runs ? new Vector3(40, 0, 0) : default,
+                Goal = new Vector2(at.X + 3000, at.Z) };
+        squad.Leader = world.Characters.Spawn(leader, new Combat.Combatant { Name = "leader" }.MakeCold(), 0);
+
+        float Desire(float d)
+        {
+            var cold = new Combat.Combatant { Name = "follower" }.MakeCold();
+            cold.SquadId = squad.Id;
+            var mind = new AiMind { Squad = squad };
+            var self = world.Characters.Spawn(new CharacterHot { Position = at - new Vector3(d, 0, 0), MaxSpeed = 40 }, cold, 0);
+            float want = ai.Desire(world, TaskBehaviours.Of(type), type, TaskProfiles.Of(type), squad, board, mind, self, TaskTargetType.Leader);
+            return MathF.Round(want, 3);
+        }
+
+        return [.. distances.Select(Desire)];
+    }
+
     [Fact]
     public void Residents_back_after_hours_away_are_where_their_schedule_puts_them_only_with_the_switch()
     {
@@ -987,6 +1070,68 @@ public class AiTests(ITestOutputHelper output)
             Assert.Null(squad.Ai!.OwnHome);
             Assert.False(AiSystem.BoardMoves(squad.Ai));
         }
+    }
+
+    /// <summary>
+    /// A loaded roaming squad runs its travelling package itself (docs/simulation.md "Platoon blackboards", <c>FUN_1402732b0</c>): under a wandering
+    /// trader package (signal 16, <c>Package_WanderingTrader</c>: the next town drawn from where its leader stands, not the town it is in), its
+    /// squad's destination is Faraway and its leader walks over 100 nearer to it in 10 s. Catches a loaded roaming squad that stands about under a
+    /// travel package.
+    /// </summary>
+    [Fact]
+    public void A_roaming_squad_with_a_travel_package_heads_for_its_target_town()
+    {
+        var trader = Rec("118-t", FcsRecordType.AiPackage, "Wandering trader");
+        trader.Ints["signal func"] = 16;
+        trader.References["Leader AI Goals"] = [Ref("119-t", 0, 100, 0)];
+        trader.References["Squad AI Goals"] = [Ref("121-t", 0, 100, 0)];
+        var travel = Task("119-t", TaskType.WanderingTrader, TaskPriority.NonUrgent);
+        var data = SyntheticTown.Data(SyntheticTown.Database(roaming: true, extra: [.. Records(), travel, trader],
+                changeFolk: t => t.References["AI packages"] = [Ref("118-t", 0)]));
+        using var world = Town(1, out _, data, null);
+        world.RunTicks(700);
+        var faraway = AiSystem.TownAt(data, world, Far);
+        var roamers = world.Platoons.All
+            .Where(p => !p.Pinned && p.State == PlatoonState.Loaded)
+            .Select(p => world.Squads.Find(p.SquadId)!)
+            .ToList();
+        float Gap(Squad s) => Off(world, s.Leader, Far);
+        var before = roamers.ToDictionary(s => s, Gap);
+        world.RunTicks(600);
+
+        Assert.False(faraway.IsNone);
+        Assert.NotEmpty(roamers);
+        Assert.All(roamers, s => Assert.Equal(faraway, s.Ai!.Destination));
+        Assert.All(roamers, s => Assert.True(Gap(s) < before[s] - 100, $"{before[s]:0} to {Gap(s):0} from Faraway"));
+    }
+
+    /// <summary>
+    /// A node goal of a member with no home building finds no node (its finder searches only the home's node list, <c>FUN_14099e920</c> →
+    /// <c>FUN_14038c2f0</c>; docs/simulation.md "Platoon blackboards"), so its plan cannot run: in a town whose resident leader keeps the shop of
+    /// its home on 20 Shopkeeper node, the leader of a loaded roaming squad listing only 20 stays on 14 Idleness. Catches a homeless member that
+    /// takes the node goal up and stands about on it.
+    /// </summary>
+    [Fact]
+    public void A_squad_with_no_home_building_does_not_run_a_node_goal()
+    {
+        var keeper = Rec("118-t", FcsRecordType.AiPackage, "Keep shop");
+        keeper.References["Leader AI Goals"] = [Ref("100-t", 0, 100, 0)];
+        keeper.References["Squad AI Goals"] = [Ref("121-t", 0, 100, 0)];
+        var data = WithHomes(SyntheticTown.Database(roaming: true, extra: [.. Records(), keeper],
+                changePatrol: p => p.References["AI packages"] = [Ref("111-t", 0), Ref("112-t", 1)],
+                changeFolk: t => t.References["AI packages"] = [Ref("118-t", 0)]), out _, out _);
+        using var world = Town(1, out _, data, null);
+        world.RunTicks(700);
+        TaskType? GoalOf(Squad s) => world.Characters.Cold(s.Leader.Slot)!.Ai?.Goal?.Task.Type;
+        var roamers = world.Platoons.All
+            .Where(p => !p.Pinned && p.State == PlatoonState.Loaded)
+            .Select(p => world.Squads.Find(p.SquadId)!)
+            .ToList();
+
+        Assert.Contains(world.Squads.All, s => s.TemplateId == "10-t" && s.Ai?.Home is not null && GoalOf(s) == TaskType.StandAtShopkeeperNode);
+        Assert.NotEmpty(roamers);
+        Assert.All(roamers, s => Assert.Null(s.Ai!.Home));
+        Assert.All(roamers, s => Assert.Equal(TaskType.Idle, GoalOf(s)));
     }
 
     #endregion

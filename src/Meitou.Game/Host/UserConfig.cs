@@ -419,6 +419,15 @@ sealed class UserConfig
     /// </summary>
     public float SquadXp { get; set; } = 1;
     /// <summary>
+    /// A skill's own multiplier in place of <see cref="SquadXp"/> (Advanced settings, under "Squad XP"), by its STATS field name
+    /// (<c>strength</c>, <c>attack</c>...; <see cref="SkillXp"/>); a skill not listed follows Squad XP.
+    /// </summary>
+    public Dictionary<string, float> SquadSkillXp { get; set; } = [];
+    /// <summary>
+    /// The Squad XP multiplier ("XP x10") at the top left of the screen during play (Advanced settings "Show Squad XP"; off).
+    /// </summary>
+    public bool ShowSquadXp { get; set; }
+    /// <summary>
     /// What every other character's XP gains are multiplied by (Advanced settings "Others' XP"; 1, as in the game).
     /// </summary>
     public float OthersXp { get; set; } = 1;
@@ -427,7 +436,8 @@ sealed class UserConfig
     /// </summary>
     public const float MinXpRate = 0, MaxXpRate = 1000;
     /// <summary>
-    /// The mods (by <c>mods.cfg</c> name) whose settings Meitou has taken into its own built-in feature, once each (<c>BuiltInMods</c>).
+    /// The mods (by <c>mods.cfg</c> name) whose settings Meitou has taken into its own built-in feature, once each (<c>BuiltInMods</c>); a name
+    /// followed by " (again)" marks a second takeover, of settings a later Meitou added to the feature.
     /// </summary>
     public List<string> AdoptedMods { get; set; } = [];
     /// <summary>
@@ -445,6 +455,11 @@ sealed class UserConfig
     /// Meitou: in the game each bag stays shut until OPEN BAG is pressed once per session).
     /// </summary>
     public bool AutoOpenBags { get; set; } = true;
+    /// <summary>
+    /// Meitou's stack splitting (Advanced settings, a Faithful / Meitou switch; on by default, Meitou): a left press lifts the whole stack, Shift
+    /// half, Alt one unit, Shift + Alt asks how many. Off, as in the game: one unit, the whole stack with Shift or Ctrl.
+    /// </summary>
+    public bool SplitStacks { get; set; } = true;
     /// <summary>
     /// The player's animals pick up loose items into their bags (Advanced settings, a Faithful / Meitou switch whose
     /// Faithful side is on, as the game lets animals pick up; off by default, Meitou;
@@ -505,6 +520,11 @@ sealed class UserConfig
     /// and the worn backpack, as the game does; docs/game/dialogue.md "Conditions").
     /// </summary>
     public bool FixBagSearch { get; set; } = true;
+    /// <summary>
+    /// A shopkeeper at its counter is talked to from the counter's front (Gameplay settings, Meitou; off: the game's talk reach, so the customer
+    /// walks round behind the counter; <c>World.CounterTalk</c>).
+    /// </summary>
+    public bool CounterTalk { get; set; } = true;
     /// <summary>
     /// Other buildings' parts (the Hub's wall in the Shinobi Thieves tower) are cut inside a building in the interior view (Fixes settings; off:
     /// drawn, as the game does; docs/render-interior-cut.md).
@@ -1050,6 +1070,7 @@ sealed class UserConfig
         AdoptedMods ??= [];
         SquadXp = float.IsFinite(SquadXp) ? Math.Clamp(SquadXp, MinXpRate, MaxXpRate) : 1;
         OthersXp = float.IsFinite(OthersXp) ? Math.Clamp(OthersXp, MinXpRate, MaxXpRate) : 1;
+        SquadSkillXp = SkillXp.Kept(SquadSkillXp);
         foreach (var (mod, saved) in ModSettings.ToList())
             if (saved is null) ModSettings.Remove(mod);
     }

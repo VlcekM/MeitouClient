@@ -62,6 +62,13 @@ public sealed class CharacterStats
     public float XpRate { get; set; } = 1;
 
     /// <summary>
+    /// What each stat's XP gains are multiplied by in place of <see cref="XpRate"/>, by stat number (Advanced settings "Squad XP", one per skill,
+    /// <see cref="BodyOptions.SquadSkillXp"/>); a number below 0, or a stat past the list's end, follows <see cref="XpRate"/>. Set with it; null
+    /// for none.
+    /// </summary>
+    public IReadOnlyList<float>? SkillXpRates { get; set; }
+
+    /// <summary>
     /// Stats that read as 1 for a character built without data (the editor's default of a STATS field).
     /// </summary>
     public CharacterStats()
@@ -260,7 +267,7 @@ public sealed class CharacterStats
         if (s == StatsEnumerated.None) return Bodies.ModSkills.Of(stat)?.Gain(this, amount, cap) ?? 0;
         float value = _values[(int)s];
         if (float.IsNaN(value)) return value;
-        return _values[(int)s] = CoreGain(value, Filtered(stat, value, Rated(value, amount, cap), cap, source), cap);
+        return _values[(int)s] = CoreGain(value, Filtered(stat, value, Rated(s, value, amount, cap), cap, source), cap);
     }
 
     /// <summary>
@@ -324,12 +331,31 @@ public sealed class CharacterStats
     }
 
     /// <summary>
-    /// A gain times <see cref="XpRate"/>, held to the core's limit of 20 so a multiplied gain is never dropped. An amount the core ignores stays as it
-    /// is, and a stat at or past the gain's cap (a training dummy's level) takes no raise, so a dummy's limit stands.
+    /// What <paramref name="stat"/>'s XP gains are multiplied by: its own rate (<see cref="SkillXpRates"/>, by its storage) when it has one, else
+    /// <see cref="XpRate"/>.
     /// </summary>
-    internal float Rated(float stat, float amount, float cap)
+    internal float RateOf(StatsEnumerated stat)
     {
-        float rate = XpRate;
+        int s = (int)StatsInfo.StorageOf(stat);
+        return SkillXpRates is { } rates && s > 0 && s < rates.Count && rates[s] >= 0 ? rates[s] : XpRate;
+    }
+
+    /// <summary>
+    /// A gain of a skill no stat number holds (a code mod's) times <see cref="XpRate"/> (<see cref="RatedBy"/>).
+    /// </summary>
+    internal float Rated(float stat, float amount, float cap) => RatedBy(XpRate, stat, amount, cap);
+
+    /// <summary>
+    /// A gain of <paramref name="which"/> times its rate (<see cref="RateOf"/>, <see cref="RatedBy"/>).
+    /// </summary>
+    internal float Rated(StatsEnumerated which, float stat, float amount, float cap) => RatedBy(RateOf(which), stat, amount, cap);
+
+    /// <summary>
+    /// A gain times <paramref name="rate"/>, held to the core's limit of 20 so a multiplied gain is never dropped. An amount the core ignores stays as
+    /// it is, and a stat at or past the gain's cap (a training dummy's level) takes no raise, so a dummy's limit stands.
+    /// </summary>
+    static float RatedBy(float rate, float stat, float amount, float cap)
+    {
         if (rate == 1 || !(amount > 0 && amount <= MaxCoreGain)) return amount;
         if (rate > 1 && stat >= cap) return amount;
 

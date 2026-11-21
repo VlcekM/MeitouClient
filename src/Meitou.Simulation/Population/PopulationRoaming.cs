@@ -394,11 +394,11 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// The slave camp a kept stand-in ships its slaves to, -1 when it does not (docs/simulation.md "Captives", off screen): its package is a shipping
+    /// The town (a slave camp, or the anywhere kind's town with pens) a kept stand-in ships its slaves to, -1 when it does not (docs/simulation.md "Captives", off screen): its package is a shipping
     /// one (signal 11 or 28, whose <c>unloaded func</c> is 5 TRAVEL_TARGET in the data) and someone of it is a living slave (state 1). The original's
     /// unloaded TRAVEL_TARGET heads for the package's mission target and does not move inside it (docs/game/factions-squads-towns.md "Off-screen
-    /// world"): the camp chosen when the package started (kept in <see cref="Platoon.Target"/> as the squad unloads), else the nearest slave camp not
-    /// hostile to it, the loaded package's rule. A save's platoon not made yet reads its members from the save (slave role, <c>slavestate</c> 1, not
+    /// world"): the town chosen when the package started (kept in <see cref="Platoon.Target"/> as the squad unloads), else the loaded package's rule
+    /// (<see cref="Ai.SlaveShipping.Town(PopulationData, Vector2, int, int)"/>). A save's platoon not made yet reads its members from the save (slave role, <c>slavestate</c> 1, not
     /// dead). Any thread: reads the data and this platoon only.
     /// </summary>
     int ShippingCamp(Platoon p)
@@ -430,22 +430,10 @@ public sealed partial class PopulationSystem
         }
 
         if (!slaves) return -1;
-        if (p.Target >= 0 && p.Target < _data.Sites.Count && _data.Sites[p.Target].Town.Type == TownType.SlaveCamp) return p.Target;
-        int best = -1;
-        float bestD = float.MaxValue;
-        foreach (var site in _data.Sites)
-        {
-            if (site.Town.Type != TownType.SlaveCamp || site.Index >= _data.SiteFactions.Count) continue;
-            int f = _data.SiteFactions[site.Index];
-            if (f >= 0 && p.Faction >= 0 && _data.Relations.Contains(f) && _data.Relations.Contains(p.Faction)
-                && _data.Relations.IsHostile(f, p.Faction))
-                continue;
 
-            float d = Vector2.DistanceSquared(p.Position, SiteCentre(site.Index));
-            if (d < bestD) (best, bestD) = (site.Index, d);
-        }
-
-        return best;
+        int signal = _data.Ai.Package(id)!.Signal;
+        if (Ai.SlaveShipping.IsDestination(_data, p.Target, signal)) return p.Target;
+        return Ai.SlaveShipping.Town(_data, p.Position, p.Faction, signal);
     }
 
     /// <summary>

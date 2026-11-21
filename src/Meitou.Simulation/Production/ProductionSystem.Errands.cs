@@ -5,6 +5,7 @@ using Meitou.Simulation.Carrying;
 using Meitou.Simulation.Construction;
 using Meitou.Simulation.Locks;
 using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Production;
 
@@ -88,7 +89,8 @@ public sealed partial class ProductionSystem
         /// </summary>
         public double? StoppedAt;
         /// <summary>
-        /// The player's Corpse Disposal order started it: the delivery needs no job in the list.
+        /// Order 136 started it (<see cref="CorpseOrder"/>): it needs no job in the list, its machine is the order's (<see cref="Site"/>), and its walk
+        /// ending short of it ends it.
         /// </summary>
         public bool Ordered;
         /// <summary>
@@ -267,27 +269,13 @@ public sealed partial class ProductionSystem
         /// </summary>
         static bool Free(World world, CharacterCold cold) =>
             cold.Carrying.IsNone && CarrySystem.CanCarry(world, cold, TaskType.DeadGuysGoInThePot) && !cold.Fleeing;
-
-        /// <summary>
-        /// State 99 isCarriedDudeDead (<c>FUN_1405a14e0</c>, <b>Verified</b>): the character carries a body whose dead byte (+0x5bc) is set.
-        /// </summary>
-        static bool CarriesCorpse(World world, CharacterCold cold) =>
-            world.Characters.TryResolveNext(cold.Carrying, out int b) && world.Characters.Cold(b)?.Medical is { Dead: true };
     }
 
     /// <summary>
-    /// The Corpse Disposal order (<see cref="DisposeCorpseOrder"/>): a corpse errand for each of its characters that carries a dead body.
+    /// State 99 isCarriedDudeDead (<c>FUN_1405a14e0</c>, <b>Verified</b>): the character carries a body whose dead byte (+0x5bc) is set.
     /// </summary>
-    void DisposeCarried(World world, DisposeCorpseOrder order)
-    {
-        var table = world.Characters;
-        foreach (var id in order.Characters)
-        {
-            if (!table.TryResolveNext(id, out int i) || table.Cold(i) is not { } cold || cold.Carrying.IsNone) continue;
-            if (!table.TryResolveNext(cold.Carrying, out int b) || table.Cold(b)?.Medical is not { Dead: true }) continue;
-            _errands[id] = new Errand { Kind = ErrandKind.Corpse, Body = cold.Carrying, Ordered = true, Delivering = true };
-        }
-    }
+    static bool CarriesCorpse(World world, CharacterCold cold) =>
+        world.Characters.TryResolveNext(cold.Carrying, out int b) && world.Characters.Cold(b)?.Medical is { Dead: true };
 
     /// <summary>
     /// The bodies a finder of a character of squad <paramref name="squad"/> skips: every body carried (the carried byte, global), and the bodies its
@@ -354,34 +342,7 @@ public sealed partial class ProductionSystem
         bool wasWalking = e.Walking;
         if (task != CharacterTask.GoTo) e.Walking = false;
         if (e.Kind == ErrandKind.Corpse && wasWalking && task != CharacterTask.GoTo) NoteWalkEnd(world, cold, n, e);
-        Vector2 goal = e.Goal;
-        CorpseMachine? machine = null;
-        if (e.Kind != ErrandKind.Corpse && !DeliveryReady(cold, e.Kind)) return;
-        if (e.Kind == ErrandKind.Corpse)
-        {
-            // A corpse job's lift is over once the body is held; its delivery is 137's (or the order's), decided anew.
-            if (!e.Delivering)
-            {
-                _errands.Remove(id);
-                return;
-            }
-
-            if (NearestIncinerator(world, n.Position, id, cold.SquadId) is not { } found) return;   // the carrier keeps the body, the errand waits
-            machine = found;
-            (e.Site, e.Machine) = (machine.Id, machine);
-            goal = DisposalGoal(world, machine);
-        }
-
-        bool arrived = machine is not null
-            ? AtDisposal(world, n, machine)
-            : Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), goal) <= ErrandArrive;
-        if (arrived)
-        {
-            if (machine is not null) Incinerate(world, i, machine);
-            else Carry!.LetGo(world, i);   // a carry-out at its goal: the task's own unlink, as below
-            _errands.Remove(id);
-            return;
-        }
+        if (!ErrandGoal(world, i, cold, e, out var machine, out var goal) || Delivered(world, i, machine, goal)) return;
 
         if (task == CharacterTask.GoTo)
         {
@@ -389,16 +350,81 @@ public sealed partial class ProductionSystem
             return;   // on its way
         }
 
-        if (e.Kind != ErrandKind.Corpse && CarryOutOver(world, e, wasWalking))
-        {
-            Carry!.LetGo(world, i);   // the task's own unlink (FUN_1405ce1e0), not the put-down task
-            _errands.Remove(id);
-            return;
-        }
+        if (GivenUp(world, i, e, wasWalking)) return;
 
         e.Goal = goal;
         e.Walking = true;
         TaskStart.StepTo(table, i, goal, cold.RunSpeed);
+    }
+
+    /// <summary>
+    /// The goal of an errand's walk: a carry-out's own (while its delivery job is listed, <see cref="DeliveryReady"/>), a corpse delivery's machine
+    /// (the order's, else the one <see cref="NearestIncinerator"/> finds). False when the step goes no further: a corpse lift is over once the body
+    /// is held, a delivery with no machine keeps the body.
+    /// </summary>
+    bool ErrandGoal(World world, int i, CharacterCold cold, Errand e, out CorpseMachine? machine, out Vector2 goal)
+    {
+        (machine, goal) = (null, e.Goal);
+        if (e.Kind != ErrandKind.Corpse) return DeliveryReady(cold, e.Kind);
+
+        // A corpse job's lift is over once the body is held; its delivery is 137's (or the order's), decided anew.
+        var id = world.Characters.IdOf(i);
+        if (!e.Delivering)
+        {
+            _errands.Remove(id);
+            return false;
+        }
+
+        machine = e.Ordered ? OrderedMachine(world, e.Site) : NearestIncinerator(world, world.Characters.Next[i].Position, id, cold.SquadId);
+        if (machine is null)
+        {
+            // The carrier keeps the body: a job's errand waits for a machine, the order's is over with its machine.
+            if (e.Ordered) _errands.Remove(id);
+            return false;
+        }
+
+        (e.Site, e.Machine) = (machine.Id, machine);
+        goal = DisposalGoal(world, machine);
+        return true;
+    }
+
+    /// <summary>
+    /// The carrier at its goal feeds the body to <paramref name="machine"/>, or lets it go at a carry-out's goal, and the errand is over; false when
+    /// it is not there yet.
+    /// </summary>
+    bool Delivered(World world, int i, CorpseMachine? machine, Vector2 goal)
+    {
+        ref readonly var n = ref world.Characters.Next[i];
+        bool arrived = machine is not null
+            ? AtDisposal(world, n, machine)
+            : Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), goal) <= ErrandArrive;
+        if (!arrived) return false;
+
+        if (machine is not null) Incinerate(world, i, machine);
+        else Carry!.LetGo(world, i);   // a carry-out at its goal: the task's own unlink, as below
+
+        _errands.Remove(world.Characters.IdOf(i));
+        return true;
+    }
+
+    /// <summary>
+    /// A carrier standing short of its goal gives up: the order's walk that ended short (the path failed, which ends the order: the failed flag's
+    /// pop, <c>FUN_14050d080</c>), or a carry-out whose stand is over (<see cref="CarryOutOver"/>, the body let go). False when it walks on.
+    /// </summary>
+    bool GivenUp(World world, int i, Errand e, bool wasWalking)
+    {
+        var id = world.Characters.IdOf(i);
+        if (e.Ordered && wasWalking)
+        {
+            _errands.Remove(id);
+            return true;
+        }
+
+        if (e.Kind == ErrandKind.Corpse || !CarryOutOver(world, e, wasWalking)) return false;
+
+        Carry!.LetGo(world, i);   // the task's own unlink (FUN_1405ce1e0), not the put-down task
+        _errands.Remove(id);
+        return true;
     }
 
     /// <summary>
@@ -510,6 +536,115 @@ public sealed partial class ProductionSystem
     /// goal list, <b>Verified</b>): not offered, even before it operates it.
     /// </summary>
     static bool MachineClaimed(SquadGoals goals, CharacterId self, int squad, string site) => goals.Working(squad, self, GoalTarget.At(site)) > 0;
+
+    #endregion
+
+    #region Corpse Disposal order (136)
+
+    /// <summary>
+    /// The owner of order 136 (null until asked).
+    /// </summary>
+    CorpseOrder? _corpseOrder;
+
+    /// <summary>
+    /// The owner of order 136 Disposing of corpse (<see cref="World.OrderOwnerOf"/>).
+    /// </summary>
+    internal IOrderOwner CorpseOrders => _corpseOrder ??= new CorpseOrder(this);
+
+    /// <summary>
+    /// The Corpse Disposal order without Shift (<see cref="DisposeCorpseOrder"/>): each character listed gets order 136 on the machine through its
+    /// queue (the giver <c>FUN_1407f9e20</c>), the queue cleared unless <see cref="OrderCommand.Queued"/>.
+    /// </summary>
+    void GiveDisposal(World world, DisposeCorpseOrder order)
+    {
+        var table = world.Characters;
+        var at = Site(world, order.Site) is { } site ? OrderEntry.AtBuilding(world, order, site.Position) : default;
+        foreach (var id in Who(world, order.Characters))
+        {
+            if (!table.TryResolveNext(id, out int slot)) continue;
+
+            var entry = new OrderEntry(TaskType.FeedCorpseIntoMachine, CorpseOrders) { Site = order.Site, TaskPoint = at };
+            PlayerOrders.Give(world, slot, entry, order.Queued);
+        }
+    }
+
+    /// <summary>
+    /// The corpse disposal of id <paramref name="site"/> (<see cref="CorpseDisposal.Machines"/>), null when there is none.
+    /// </summary>
+    CorpseMachine? OrderedMachine(World world, string? site)
+    {
+        if (site is null) return null;
+
+        foreach (var m in (_disposals ??= new CorpseMachineCache(ErrandEveryTicks)).Get(world, _towns))
+            if (m.Id == site) return m;
+
+        return null;
+    }
+
+    /// <summary>
+    /// Order 136 Disposing of corpse (docs/game/ui-input.md "Context menu verbs", <b>Verified</b>: the giver <c>FUN_1407f9e20</c> gives it to every
+    /// selected character, its queue cleared): row 136's list A 100 (carrying nothing) makes it done at once, its list B 99 (a dead body carried) and
+    /// <c>isAtLocation</c> take the carrier to the order's machine, where <c>Task_FeedCorpseIntoMachine</c> feeds the body in. Its act-out is a
+    /// corpse errand on that machine (<see cref="Errand.Ordered"/>), whose walk is the order's task and whose feed waits for the errand step.
+    /// </summary>
+    sealed class CorpseOrder(ProductionSystem owner) : IOrderOwner, IOrderSteps, ITaskHandler
+    {
+        /// <summary>
+        /// Gone when the machine is gone or nothing is carried (list A 100 holds); blocked while the body carried is not dead (99 fails, and its
+        /// provider 138 has desire 0 while carrying, <c>FUN_140599480</c>) or the character is carried; else it runs.
+        /// </summary>
+        public OrderCheck CanRun(World world, int slot, OrderEntry order)
+        {
+            var cold = world.Characters.Cold(slot)!;
+            if (owner.OrderedMachine(world, order.Site) is null || cold.Carrying.IsNone) return OrderCheck.Gone;
+
+            return CarriesCorpse(world, cold) && cold.CarriedBy.IsNone ? OrderCheck.Run : OrderCheck.Blocked();
+        }
+
+        /// <summary>
+        /// Starts the walk to the machine as the order's task (<see cref="ITaskHandler.Start"/> below).
+        /// </summary>
+        public void Start(World world, int slot, OrderEntry order) =>
+            TaskStart.Start(world, slot, new TaskRequest(CharacterTask.GoTo, TaskType.FeedCorpseIntoMachine, TaskSource.Order) { Site = order.Site });
+
+        /// <summary>
+        /// The errand goes on while the walk is over and the feed waits for the errand step.
+        /// </summary>
+        public bool Between(World world, int slot, OrderEntry order) => Ordered(world, slot);
+
+        /// <summary>
+        /// The order's errand on its machine: the carrier stands, then walks the body there (or feeds it in at once when it stands there).
+        /// </summary>
+        void ITaskHandler.Start(World world, int slot, in TaskRequest request)
+        {
+            var table = world.Characters;
+            var cold = table.Cold(slot)!;
+            TaskStart.Stand(table, slot);
+            if (cold.Carrying.IsNone) return;
+
+            var errand = new Errand { Kind = ErrandKind.Corpse, Body = cold.Carrying, Ordered = true, Delivering = true, Site = request.Site };
+            owner._errands[table.IdOf(slot)] = errand;
+            owner.StepErrand(world, slot, cold, errand);
+        }
+
+        /// <summary>
+        /// Another task or the Stop ends the order's errand; the body stays with the carrier.
+        /// </summary>
+        void ITaskHandler.End(World world, int slot, CharacterTask task, TaskEnd reason)
+        {
+            if (Ordered(world, slot)) owner._errands.Remove(world.Characters.IdOf(slot));
+        }
+
+        /// <summary>
+        /// The walk is done once the order's errand is over.
+        /// </summary>
+        bool ITaskHandler.Done(World world, int slot, CharacterTask task) => !Ordered(world, slot);
+
+        /// <summary>
+        /// Whether the character's errand is the order's.
+        /// </summary>
+        bool Ordered(World world, int slot) => owner._errands.TryGetValue(world.Characters.IdOf(slot), out var e) && e.Ordered;
+    }
 
     #endregion
 

@@ -61,7 +61,7 @@ Addresses are `kenshi_x64.exe` (1.0.68).
   captions the original leaves English stay English.
 - **Meitou's own texts** (`MeitouTranslations`): the launcher, the title menu (`UpperTr`) and the settings menu's drawn captions, hints and choices
   are not in Kenshi's catalog, so after it `Loc.Tr` looks them up in a second gettext catalog: `src/Meitou.Core/Localisation/locale/<code>.po`
-  (embedded; `pt_BR` and `zh_CN` so far). Over it go `locale/<code>/meitou.po` of the Kenshi folder, then of each loaded mod in load order, a
+  (embedded; one per Kenshi language: `de_DE`, `es_ES`, `fr_FR`, `it_IT`, `ja_JP`, `ko_KR`, `pt_BR`, `ru_RU`, `zh_CN`). Over it go `locale/<code>/meitou.po` of the Kenshi folder, then of each loaded mod in load order, a
   later file winning a message as a later resource location wins a file (`GameLanguage.MeitouFiles`; `<code>` is the active code, a translation
   mod's too), so a user or mod adds a language or overrides a string without a rebuild. Meitou's rule: the original has no such file. Same format
   and rules as the game's catalog, exact lookups, English msgids; the launcher reads the built-in and Kenshi folder files for its own labels.
@@ -73,6 +73,17 @@ Addresses are `kenshi_x64.exe` (1.0.68).
   Where the game's sense is wrong, the code asks under a `msgctxt` (`Loc.TrIn`; without a context entry it falls back to `Tr`): the load notice
   "Loaded" is `msgctxt "save notice"`, since the game's "Loaded" is the ranged-weapon label (`getGUIData.cpp`, zh "已装载"; **Verified** in
   en_GB `main.pot`, zh_CN `main.po`).
+- **Keeping Meitou's catalogs complete**: `.github/scripts/loc-strings.mjs` finds Meitou's texts in the code (literal arguments of `Loc.Tr`,
+  `Loc.TrIn` (with its context), `Loc.Plural` (as a pair), `Loc.Mark`, `Loc.TrCaption`, `LauncherText.Translate`, `UpperTr` and the launcher's
+  `Tr` anywhere, inside ternaries and interpolation holes too, but not a literal used as a key, switch pattern or comparison; prose literals in
+  the player-facing files its `SCOPE` lists; captions of the launcher's `.axaml` files) and writes them to `locale/meitou.pot` (`--write`).
+  Without arguments it fails when the template is stale, when a built-in `.po` lacks a usable translation (no entry, fuzzy, empty or wrong
+  number of plural forms, placeholders or leading and trailing whitespace that differ from the English), on duplicate entries, and on interpolated prose (`$"..."`, which no catalog can match)
+  not in `locale/meitou.built`, the baseline of built texts still to convert (`--write` only removes lines from it). `locale/meitou.ignore`
+  lists prose that is not Meitou's to translate in two sections: texts Kenshi's own catalog translates (a Meitou entry cannot override a game
+  msgid), which still need an entry when the launcher shows them, since it reads no game catalog; and widget, skin, icon, font, brand and
+  record names. `loc-fill.mjs` translates the gaps with Claude (a failed batch is split and retried, an unusable entry replaced) and marks each
+  entry `#. machine-translated`; the Translations workflow runs it when an `ANTHROPIC_API_KEY` secret exists, then the check.
 - **Fonts, tips, names**: through the overlay folder (`OgreScriptResources.ForInstall`) and `Loc.FindTextFile`.
 - **New-game option help**: `NewGameHelpCatalog` reads the installed English `main.pot` source references and passes the exact msgid through `Loc.Tr`; no paraphrases or translated paragraphs are embedded. Missing translations fall back to the original English; a missing template leaves help empty. Font resources use the active locale overlay.
 - All text files are read and written as UTF-8, except `settings.cfg`: without a byte order mark it is edited as Latin-1, so its bytes are kept.

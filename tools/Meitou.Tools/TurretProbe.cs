@@ -31,11 +31,33 @@ static class TurretProbe
             foreach (var squad in probe.World.Squads.All)
                 if (IsTurretSquad(probe, squad, at)) PrintSquad(probe, squad);
 
+            PrintPlayers(probe, at);
+
             foreach (int i in probe.Near(new Vector3(at.X, probe.LeaderPosition.Y, at.Y), 1500))
                 if (probe.Characters.Cold(i) is { Name: var name } c && name.Equals(record, StringComparison.OrdinalIgnoreCase))
                     Console.WriteLine($"  spawn {probe.Who(i)} goal={c.Ai?.Goal?.Task.Type} fight={c.Ai?.FightGoal} down={c.Medical?.Incapacitated}");
 
             probe.PrintMessages();
+        }
+    }
+
+    /// <summary>
+    /// The player faction's characters within 3000 of <paramref name="at"/> that sense an enemy, hold a turret under Self preservation or man
+    /// one: task, goal, plan step, held turret and gunned turret.
+    /// </summary>
+    static void PrintPlayers(ProbeWorld probe, Vector2 at)
+    {
+        var t = probe.Characters;
+        foreach (var m in probe.World.Squads.All.Where(q => q.Faction == probe.World.Player.Faction).SelectMany(q => q.Members))
+        {
+            if (!t.TryResolveNext(m, out int s) || t.Cold(s) is not { Ai: { } mind } c) continue;
+
+            var p = t.Next[s].Position;
+            int enemies = Meitou.Simulation.Bodies.CharacterFacts.Senses(probe.World, s)?.Enemies ?? 0;
+            if (Vector2.Distance(new Vector2(p.X, p.Z), at) > 3000 || enemies == 0 && mind.Guard is null && c.Gunning is null) continue;
+
+            Console.WriteLine($"  player {probe.Who(s)} behaviour={mind.Behaviour} goal={mind.Goal?.Task.Type} step={mind.Step} "
+                + $"guard={mind.Guard?.Key ?? "-"} gunning={c.Gunning ?? "-"} enemies={enemies}");
         }
     }
 
