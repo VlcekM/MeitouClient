@@ -485,6 +485,22 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
+    /// Whether <paramref name="id"/> names a building of a town not registered yet (<see cref="RegisterSite"/>), or a fixture of one (its ids start
+    /// with the building's key): it is there once the town comes into the world.
+    /// </summary>
+    internal bool Unregistered(PopulationData data, string id)
+    {
+        for (int s = 0; s < data.Sites.Count; s++)
+        {
+            if (_sites.Contains(s)) continue;
+            foreach (var b in data.Sites[s].Buildings)
+                if (b.Key.Length > 0 && id.StartsWith(b.Key, StringComparison.Ordinal) || b.Fixtures.Any(f => f.Id == id)) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Registers a town building and adds it to the sight's occluders. A gate the last labelling listed gets its first code back on its first door.
     /// </summary>
     void RegisterWithSight(World world, PopulationData data, int site, TownBuilding b, int townFaction)

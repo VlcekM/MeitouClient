@@ -138,10 +138,32 @@ public static class OrderSave
     }
 
     /// <summary>
+    /// What <see cref="Restore"/> did with one loaded order.
+    /// </summary>
+    enum Restored
+    {
+        /// <summary>
+        /// Put in the second list.
+        /// </summary>
+        Added,
+        /// <summary>
+        /// Kept loaded: its target character or fixture is still to come into the world.
+        /// </summary>
+        Waits,
+        /// <summary>
+        /// Left out.
+        /// </summary>
+        Dropped,
+    }
+
+    /// <summary>
     /// Puts the orders a load read in the character's second list (serial phases, from the decision step or a queued order,
     /// <see cref="PlayerOrders.Give"/>): nothing is started, its owner readies it (<see cref="IOrderOwner.Restored"/>), and the chooser scores it
-    /// from its next look. An order whose row no system owns, whose target character or site is not in the world, or whose handle named nothing is
-    /// left out.
+    /// from its next look. The loader's add makes an entry whatever its hand names (<c>FUN_1405086d0</c> → <c>FUN_14032ebd0</c> copies the hand
+    /// and tests only its type), so an order whose target character is in one of the save's NPC platoons not made yet, or whose fixture is a town's
+    /// not registered yet, stays loaded with every order after it (the second list keeps the saved order) and is put in once it is there (a later
+    /// look). An order whose row no system owns, whose target character or site is neither in the world nor still to come, or whose handle named
+    /// nothing is left out.
     /// </summary>
     internal static void Restore(World world, int slot, CharacterCold cold)
     {
@@ -149,41 +171,79 @@ public static class OrderSave
         cold.SavedOrders = null;
         if (saved is null) return;
 
-        var table = world.Characters;
-        var self = table.IdOf(slot);
-        foreach (var o in saved)
+        bool added = false;
+        for (int i = 0; i < saved.Count; i++)
         {
-            bool onSite = (o.Site ?? o.InstanceKey) is not null;
-            var row = LoadedRow(o, onSite);
-            if (row == TaskType.None || world.OrderOwnerOf(row, onSite) is not { } owner) continue;
+            var step = RestoreOne(world, slot, cold, saved[i]);
+            added |= step == Restored.Added;
+            if (step != Restored.Waits) continue;
 
-            // A finder row's saved hand only feeds its finder (the plan treats the finder's pick): its entry stays when the hand names nothing.
-            var target = CharacterId.None;
-            bool finder = TaskDataTable.Of(row)?.Is(TaskDataFlags.Finder) == true;
-            if (o.Lost && !finder) continue;
-            if (o is { Hand: { IsNull: false, Type: (int)FcsRecordType.Character } } && (target = Find(table, o.Hand)).IsNone && !finder) continue;
-
-            string? site = null;
-            if ((o.Site ?? o.InstanceKey) is not null && (site = SiteOf(world, o)) is null && !finder) continue;
-
-            // A body order is built as the body gives it (Combat.BodyOrders): it lets no duty go, and its stumble is forced.
-            bool body = Combat.BodyOrders.Rows.Contains(row);
-            var entry = new OrderEntry(row, owner)
-            {
-                Interrupts = body,
-                Forced = body && row == TaskType.StumbleTaskForced,
-                Target = target,
-                Site = site,
-                Point = o.Point,
-                TaskPoint = ObjectRow(row) ? default : o.Point,
-                Detail = owner.LoadDetail(world, self, row, o.Kind, target),
-            };
-            owner.Restored(world, entry);
-            cold.SecondList.Add(entry);
+            // It and those after it wait, so the second list keeps the saved order.
+            cold.SavedOrders = saved.Skip(i).ToList();
+            break;
         }
 
-        DecisionSystem.Replan(cold);   // each second-list add replans (FUN_1405086d0)
+        if (added) DecisionSystem.Replan(cold);   // each second-list add replans (FUN_1405086d0)
     }
+
+    /// <summary>
+    /// Puts one loaded order in the second list when its row has an owner and what it names is there; says what became of it.
+    /// </summary>
+    static Restored RestoreOne(World world, int slot, CharacterCold cold, SavedOrder o)
+    {
+        bool onSite = (o.Site ?? o.InstanceKey) is not null;
+        var row = LoadedRow(o, onSite);
+        if (row == TaskType.None || world.OrderOwnerOf(row, onSite) is not { } owner) return Restored.Dropped;
+
+        // A finder row's saved hand only feeds its finder (the plan treats the finder's pick): its entry stays when the hand names nothing.
+        var target = CharacterId.None;
+        bool finder = TaskDataTable.Of(row)?.Is(TaskDataFlags.Finder) == true;
+        if (o.Lost && !finder) return Restored.Dropped;
+        if (o is { Hand: { IsNull: false, Type: (int)FcsRecordType.Character } } && (target = Find(world.Characters, o.Hand)).IsNone && !finder)
+            return Awaited(world, o.Hand) ? Restored.Waits : Restored.Dropped;
+
+        string? site = null;
+        if (onSite && (site = SiteOf(world, o)) is null && !finder) return SiteAwaited(world, o) ? Restored.Waits : Restored.Dropped;
+
+        var entry = Entry(world, slot, o, row, owner, target, site);
+        owner.Restored(world, entry);
+        cold.SecondList.Add(entry);
+        return Restored.Added;
+    }
+
+    /// <summary>
+    /// The second-list entry of a loaded order. A body order is built as the body gives it (<see cref="Combat.BodyOrders"/>): it lets no duty go,
+    /// and its stumble is forced.
+    /// </summary>
+    static OrderEntry Entry(World world, int slot, SavedOrder o, TaskType row, IOrderOwner owner, CharacterId target, string? site)
+    {
+        bool body = Combat.BodyOrders.Rows.Contains(row);
+        return new OrderEntry(row, owner)
+        {
+            Interrupts = body,
+            Forced = body && row == TaskType.StumbleTaskForced,
+            Target = target,
+            Site = site,
+            Point = o.Point,
+            TaskPoint = ObjectRow(row) ? default : o.Point,
+            Detail = owner.LoadDetail(world, world.Characters.IdOf(slot), row, o.Kind, target),
+        };
+    }
+
+    /// <summary>
+    /// Whether a character the save holds with <paramref name="hand"/> is still to come into the world: a living member of one of its NPC platoons
+    /// (<see cref="SavedPopulation.Platoons"/>) that is not wiped out, not despawned and not made yet, or out of the world since.
+    /// </summary>
+    static bool Awaited(World world, Hand hand) =>
+        world.Saved is { } saved
+        && saved.Platoons.Exists(sp => sp.PlatoonId >= 0 && !sp.Despawned && sp.Members.Exists(m => !m.Gone && !m.Dead && m.Source.Handle == hand));
+
+    /// <summary>
+    /// Whether the fixture an order names (its site id, else the instance a building handle named) is one of a town's whose fixtures are registered
+    /// only when the town comes into the world (<see cref="Locks.FixtureRegistry.Unregistered"/>).
+    /// </summary>
+    static bool SiteAwaited(World world, SavedOrder o) =>
+        world.SystemOf<Population.PopulationSystem>()?.Data is { } data && (o.Site ?? o.InstanceKey) is { } id && world.Fixtures.Unregistered(data, id);
 
     /// <summary>
     /// The queue row of a saved order. A container order an older Meitou wrote as row 3 on a site is 26 (kind 0, opening it), and one that only

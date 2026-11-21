@@ -5,6 +5,7 @@ using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.Save;
 using Meitou.Simulation;
+using Meitou.Simulation.Dialogue;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.FirstAid;
 using Meitou.Simulation.Locks;
@@ -193,6 +194,60 @@ public class OrderSaveTests
 
         Assert.Equal([TaskType.JobRepairRobot, TaskType.LootAnimalsJob], SecondRows(b.World, b.World.Squads.Find(b.World.Player.Squad)!.Members[0]));
     }
+
+    /// <summary>
+    /// A Talk order (12, commit <c>9991b0e0f</c>) given over a queued move replaces it, is saved as <c>tjob0</c> on the NPC's handle, and after a load
+    /// waits until that NPC's platoon is in the world, then goes into the second list on it: the loader's add makes the entry whatever its hand names
+    /// (<c>FUN_1405086d0</c>). Catches a Talk that does not clear the queue, and a loaded order dropped because its target's platoon is made after
+    /// the first look.
+    /// </summary>
+    [Fact]
+    public void A_talk_order_replaces_a_queued_move_and_survives_a_save_and_a_load()
+    {
+        using var a = NewGame(extra: StandardParts.Dialogue);
+        for (int i = 0; i < 600 && NpcLeader(a) is null; i++) a.World.RunTick();
+        var hero = a.Squad.Members[0];
+        var npc = NpcLeader(a)!.Value;
+        long t = a.World.Tick;
+        a.World.Commands.Enqueue(new MoveOrder([hero], First) { Tick = t });
+        a.World.Commands.Enqueue(new MoveOrder([hero], Second) { Tick = t, Queued = true });
+        a.World.RunTicks(2);
+        a.World.Commands.Enqueue(new TalkOrder(hero, npc) { Tick = a.World.Tick });
+        a.World.RunTicks(2);
+
+        Assert.Equal([TaskType.PlayerTalkTo], Rows(a.World, hero));
+
+        var save = SaveCapture.Capture(a.World, a.Data, new SaveClock(1, 12, 0));
+        var ai = AiOf(save, 0);
+
+        Assert.Equal((int)TaskType.PlayerTalkTo, ai.Ints["tjob0"]);
+        Assert.False(ai.Ints.ContainsKey("tjob1"));
+        Assert.Equal((int)FcsRecordType.Character, Hand.Read(ai, "tjobT0").Type);
+
+        using var b = NewGame(start: false, extra: StandardParts.Dialogue);
+        SaveLoader.Load(b.World, save, b.Data);
+        var heroB = b.World.Squads.Find(b.World.Player.Squad)!.Members[0];
+        var cold = b.World.Characters.Cold(heroB.Slot)!;
+        b.World.RunTicks(2);
+
+        // The NPC's platoon is not made yet: the order waits loaded.
+        Assert.Empty(cold.SecondList);
+        Assert.Single(cold.SavedOrders!);
+
+        for (int i = 0; i < 600 && cold.SecondList.Count == 0; i++) b.World.RunTick();
+        var entry = Assert.Single(cold.SecondList);
+        var target = b.World.Characters.Cold(entry.Target.Slot);
+
+        Assert.Equal(TaskType.PlayerTalkTo, entry.Row);
+        Assert.Equal(Hand.Read(ai, "tjobT0"), target?.Save?.Source.Handle);
+        Assert.Null(cold.SavedOrders);
+    }
+
+    /// <summary>
+    /// The leader of an NPC squad in the world; null while there is none.
+    /// </summary>
+    static CharacterId? NpcLeader(Game g) =>
+        g.World.Squads.All.FirstOrDefault(s => s.Id != g.World.Player.Squad && !s.Leader.IsNone && g.World.Characters.IsAlive(s.Leader))?.Leader;
 
     /// <summary>
     /// A saved Sleep order is 258 <c>USE_BED_ORDER</c> on its bed, which has no job form: it loads as a second-list entry, Meitou's sleep order 98

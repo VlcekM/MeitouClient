@@ -1491,7 +1491,8 @@ public sealed class CharacterCold
 
     /// <summary>
     /// The queued orders a load read (<see cref="Saving.OrderSave"/>), until the decision step puts them in the <see cref="SecondList"/> once the
-    /// world they name is there; null: none. Not hashed.
+    /// world they name is there (those from the first whose target is still to come wait, <see cref="Saving.OrderSave.Restore"/>); null: none.
+    /// Hashed by count while set.
     /// </summary>
     public IReadOnlyList<Saving.SavedOrder>? SavedOrders { get; set; }
 
@@ -2101,6 +2102,7 @@ public sealed class CharacterTable
         if (k.OrderWins) hasher.Add(0x4F57696E);
         if (k.OrderRoutine != CharacterTask.Idle) hasher.Add(0x4F527400 | (int)k.OrderRoutine);
         if (k.SecondList.Count > 0) HashSecondList(ref hasher, k.SecondList);
+        if (k.SavedOrders is { } waiting) hasher.Add(0x53764F72 + waiting.Count);   // "SvOr": only while a load's orders wait
 
         // a wake owed while carried; the rest is told from the medical state
         if ((k.BodyEvents & Combat.BodyEvents.Woke) != 0) hasher.Add(0x576F6B65);
