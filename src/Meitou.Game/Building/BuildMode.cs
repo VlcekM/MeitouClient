@@ -1097,6 +1097,9 @@ sealed class BuildMode(PlayerInterface player)
         var hits = new List<(BuildingSnapshot Site, float T)>();
         foreach (var site in player.Session.CurrentSnapshot.Buildings)
         {
+            // Not drawn above the viewed floor of an opened house, so not picked there, as a bed or a container (FurnitureUse).
+            if (player.Furniture.AboveViewedFloor?.Invoke(site.Position) == true) continue;
+
             var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, PlacementCheck.YawOf(site.Rotation));
 
             // No selectable geometry: an invisible sitting node must leave the click to ground movement.

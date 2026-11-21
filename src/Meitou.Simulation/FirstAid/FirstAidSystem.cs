@@ -819,7 +819,13 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         float spent = MathF.Min(amount, MathF.Max(kit.Item.Charges, 0));
         kit.Item.Charges -= amount;
         bool finished = kit.Item.Charges <= 0;
-        if (finished) kit.Owner.RemoveOne(kit.Item);
+        if (finished)
+        {
+            // A stack loses the used-up unit; the next one starts full, as an eaten stack's does (FeedSystem.Eat).
+            bool more = kit.Item.Quantity > 1;
+            kit.Owner.RemoveOne(kit.Item);
+            if (more) kit.Item.Charges = kit.Item.MaxCharges;
+        }
 
         ItemUseObservers.Report(world, ItemUseKind.FirstAid, kit.Item.Record, world.Characters.IdOf(m), null, spent, finished);
     }
