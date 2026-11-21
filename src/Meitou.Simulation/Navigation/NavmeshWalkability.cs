@@ -736,14 +736,19 @@ public sealed partial class NavmeshWalkability : IWalkability
     public const float SteppableReach = 10;
 
     /// <summary>
-    /// Whether some mesh layer lies under <paramref name="p"/> (X/Z).
+    /// Whether a mesh layer lies under <paramref name="p"/> (X/Z) within the stand limits of its height. A layer only beyond them is not its
+    /// own: a walker on the ground under a ramp's slope 12.4 above (save "butt", -56098,1079,-12942) started its paths on the slope and walked
+    /// into the ramp for good.
     /// </summary>
     static bool IsOnMesh(NavWorld w, Vector3 p)
     {
         var heights = s_scratch ??= [];
         heights.Clear();
         w.HeightsAt(p.X, p.Z, heights);
-        return heights.Count > 0;
+        foreach (float h in heights)
+            if (h - p.Y <= StandRise && p.Y - h <= StandDrop) return true;
+
+        return false;
     }
 
     /// <summary>

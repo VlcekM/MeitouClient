@@ -289,7 +289,11 @@ which it walks out of the hole to (start polygons score 4 × plan distance + hei
 the nearest starts were all on the hut's ramp and floor 32 above (score 52 against the ground edge's ~80, 20 away); it stood for good and its attackers on the floor
 over it never reached it. Now it walks out to the ground and the fight goes on. The original (**Observed**, Kenshi 1.0.65 through `kh`, the issue's save,
 2026-11-15): loaded, the cannibal already stood at -96838,138,-52567, on the ground at its own height 21 from its saved spot (not on the ramp), fought and was
-knocked out within 30 game seconds; the spot is inside the hut's rock (the camera's centre snaps to its top at 193), so a live teleport there could not be tried. Movement turns early for the next waypoint (within 5) only where it can stand along
+knocked out within 30 game seconds; the spot is inside the hut's rock (the camera's centre snaps to its top at 193), so a live teleport there could not be tried.
+Off the mesh means no layer over the spot within `StandRise`/`StandDrop` of the walker's height (`NavmeshWalkability.IsOnMesh`); a layer only beyond them does
+not count. **Observed** (save "butt", Holy Nation patrol followers on the ground at -56098,1079,-12942 under a ramp whose slope polygon lies 12.4 above,
+`meitou-tools probe watch --nav`): counted on the mesh, every path started on the slope and ran into the ramp, so they stood for good while their squad left;
+now the next start, the ground 5 east, takes them round the ramp's foot. Movement turns early for the next waypoint (within 5) only where it can stand along
 the first 10 units of the straight line to it, else it walks to within 2 of the corner. A step blocked on the navmesh part asks for the path again from where the walker
 stands, up to 3 times since its last waypoint more than a stride (`ArriveRadius` 10) from where the count began (`CharacterCold.BlockedAt`) or order (`BlockedRepathLimit`), before the path and an engine GoTo are dropped (a player's move order is kept and
 asks again every 5 s, [walls](#blocked-walkers)); a GoTo sent again to the goal of a walk given up (blocked past the limits, or no path) asks for its path only 5 s after
