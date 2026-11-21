@@ -2179,6 +2179,12 @@ msgstr "模组列表已保存：已启用 {1} 个。"
 msgid "{1} of {2} enabled"
 msgstr "已启用 {1} / {2}"
 
+msgid "Needs {1}"
+msgstr "需要 {1}"
+
+msgid " (not enabled above it: {1})"
+msgstr "（未在上方启用：{1}）"
+
 msgid "Preset '{1}' saved."
 msgstr "预设「{1}」已保存。"
 
@@ -3086,11 +3092,2154 @@ msgstr "勾选搜索显示的所有模组"
 msgid "Untick every mod the search shows"
 msgstr "取消勾选搜索显示的所有模组"
 
-msgid "Details"
-msgstr "详情"
+# Added by the first full pass (machine-translated, awaiting review by a native speaker).
+
+msgid "(started with Play), and a change here creates it. Until then the game uses its defaults."
+msgstr "（点击“开始游戏”时创建），在此处更改也会创建它。在此之前游戏使用默认值。"
+
+msgid " Start the game once to write it again; nothing is changed here until then."
+msgstr " 启动一次游戏即可重新写入；在此之前这里不会更改任何内容。"
+
+msgid "built in"
+msgstr "内置"
+
+msgid "My look"
+msgstr "我的外观"
+
+msgid "Meitou Launcher"
+msgstr "Meitou 启动器"
+
+msgid "MEITOU LAUNCHER"
+msgstr "MEITOU 启动器"
+
+msgid "Ask the running Steam client to download or update your subscribed Kenshi workshop mods; subscribe in Steam"
+msgstr "让正在运行的 Steam 客户端下载或更新你订阅的 Kenshi 创意工坊模组；请在 Steam 中订阅"
+
+msgid "Sync workshop"
+msgstr "同步创意工坊"
+
+msgid "List the mods folder and the Steam workshop items again"
+msgstr "重新列出模组文件夹和 Steam 创意工坊物品"
+
+msgid "Propose an order where each enabled mod loads after the mods it needs; nothing moves until you accept"
+msgstr "建议一个顺序，让每个已启用的模组在其依赖的模组之后加载；在你接受之前不会移动任何模组"
+
+msgid "English"
+msgstr "英语"
+
+msgid "German"
+msgstr "德语"
+
+msgid "French"
+msgstr "法语"
+
+msgid "Russian"
+msgstr "俄语"
+
+msgid "Italian"
+msgstr "意大利语"
+
+msgid "Portuguese (Brazil)"
+msgstr "葡萄牙语（巴西）"
+
+msgid "Spanish"
+msgstr "西班牙语"
+
+msgid "Chinese"
+msgstr "中文"
+
+msgid "Japanese"
+msgstr "日语"
+
+msgid "Korean"
+msgstr "韩语"
+
+msgid "Vulkan loader found. Select Vulkan to use it."
+msgstr "已找到 Vulkan 加载器。选择 Vulkan 即可使用。"
+
+msgid "Auto"
+msgstr "自动"
+
+msgid "The mod order already meets every dependency."
+msgstr "模组顺序已满足所有依赖。"
+
+msgid "Arrange mods"
+msgstr "整理模组"
+
+msgid "Proposed moves:"
+msgstr "建议的移动："
+
+msgid "Mods arranged by their dependencies."
+msgstr "已按依赖整理模组。"
+
+msgid "Mods arranged by their dependencies; {1} still need attention."
+msgstr "已按依赖整理模组；仍有 {1} 个需要处理。"
+
+msgid "{1} after {2} ({3})"
+msgstr "{1} 在 {2} 之后（{3}）"
+
+msgid "These dependencies contradict each other, so nothing was moved:"
+msgstr "这些依赖相互矛盾，因此没有移动任何模组："
+
+msgid "The mod list is still loading; try again in a moment."
+msgstr "模组列表仍在加载；请稍后再试。"
+
+msgid "Stop syncing"
+msgstr "停止同步"
+
+msgid "Asking Steam for your workshop mods..."
+msgstr "正在向 Steam 请求你的创意工坊模组……"
+
+msgid "Steam is downloading your workshop mods: {1} of {2} installed."
+msgstr "Steam 正在下载你的创意工坊模组：已安装 {1}/{2}。"
+
+msgid "You have no subscribed Kenshi workshop mods."
+msgstr "你没有订阅任何 Kenshi 创意工坊模组。"
+
+msgid "Sync stopped with {1} of {2} workshop mods installed; Steam keeps downloading in the background."
+msgstr "同步已停止，已安装 {1}/{2} 个创意工坊模组；Steam 会在后台继续下载。"
+
+msgid "Workshop synchronised: {1} of {2} mods installed."
+msgstr "创意工坊已同步：已安装 {1}/{2} 个模组。"
+
+msgid " Steam would not download {1}."
+msgstr " Steam 无法下载 {1}。"
+
+msgid "Download the new launcher and restart into it"
+msgstr "下载新启动器并重启进入"
+
+msgid "Open the launcher's release page"
+msgstr "打开启动器的发布页面"
+
+msgid " (Vulkan loader missing)"
+msgstr " （缺少 Vulkan 加载器）"
+
+msgid "Debug build"
+msgstr "调试版本"
+
+msgid "This Meitou version does not include Metal; choose Vulkan or install a newer version."
+msgstr "此 Meitou 版本不包含 Metal；请选择 Vulkan 或安装更新的版本。"
+
+msgid "Metal needs an Apple-silicon Mac; choose Auto or Vulkan."
+msgstr "Metal 需要 Apple 芯片的 Mac；请选择“自动”或 Vulkan。"
+
+msgid "This Meitou version has no Metal renderer and no Vulkan loader; install a newer version or MoltenVK."
+msgstr "此 Meitou 版本没有 Metal 渲染器，也没有 Vulkan 加载器；请安装更新的版本或 MoltenVK。"
+
+msgid "The Vulkan loader is not installed: run 'brew install molten-vk vulkan-loader' in a terminal, then Play again."
+msgstr "未安装 Vulkan 加载器：请在终端中运行 'brew install molten-vk vulkan-loader'，然后再次开始游戏。"
+
+msgid "Open its Steam workshop page"
+msgstr "打开其 Steam 创意工坊页面"
+
+msgid "RE_Kenshi file rebinds: applied to the map files"
+msgstr "RE_Kenshi 文件重绑定：已应用到地图文件"
+
+msgid "RE_Kenshi sound banks: loaded before the game's"
+msgstr "RE_Kenshi 音效库：在游戏的音效库之前加载"
+
+msgid "Requires {1}"
+msgstr "需要 {1}"
+
+msgid "Loads after {1}"
+msgstr "在 {1} 之后加载"
+
+msgid "Incompatible with {1}"
+msgstr "与 {1} 不兼容"
+
+msgid "Built for Meitou {1} (checked when the game starts)"
+msgstr "为 Meitou {1} 构建（游戏启动时检查）"
+
+msgid "Will not load: {1}"
+msgstr "不会加载：{1}"
+
+msgid "{1} and {2} more"
+msgstr "{1} 及另外 {2} 个"
+
+msgid "Empties file paths in {1} records of {2}: it likely belongs above them"
+msgstr "清空了 {2} 中 {1} 条记录的文件路径：它可能应该排在它们之上"
+
+msgid "News video sound"
+msgstr "新闻视频声音"
+
+msgid "Full video"
+msgstr "完整视频"
+
+msgid "Subscribing could not be started."
+msgstr "无法开始订阅。"
+
+msgid "Steam did not answer in time."
+msgstr "Steam 未及时响应。"
+
+msgid "The Workshop sync could not be started."
+msgstr "无法开始创意工坊同步。"
+
+msgid "Swamp turtle attacks on the Fixes page"
+msgstr "“修复”页面中的沼泽龟袭击"
+
+msgid "Execution"
+msgstr "处决"
+
+msgid "Proving Grounds"
+msgstr "试炼场"
+
+msgid "Overlaymaps"
+msgstr "叠加图"
+
+msgid "{1,num} hrs"
+msgstr "{1,num} 小时"
+
+msgid "Outdoors"
+msgstr "室外"
+
+msgid "Indoors"
+msgstr "室内"
+
+msgid "Cancel Construction"
+msgstr "取消建造"
+
+msgid "Close Doors"
+msgstr "关门"
+
+msgid "Open Doors"
+msgstr "开门"
+
+msgid "Unlock Doors"
+msgstr "解锁门"
+
+msgid "Lock Doors"
+msgstr "锁门"
+
+msgid "Being dismantled"
+msgstr "正在拆除"
+
+msgid "Paused"
+msgstr "已暂停"
+
+msgid "The door will lock when it closes."
+msgstr "门关上时会上锁。"
+
+msgid "{1} second"
+msgstr "{1} 秒"
+
+msgid "{1} seconds"
+msgstr "{1} 秒"
+
+msgid "Focus"
+msgstr "对焦"
+
+msgid "Composition"
+msgstr "构图"
+
+msgid "Pose"
+msgstr "姿势"
+
+msgid "Time"
+msgstr "时间"
+
+msgid "Field of view"
+msgstr "视野"
+
+msgid "Depth of field"
+msgstr "景深"
+
+msgid "auto (centre)"
+msgstr "自动（中心）"
+
+msgid "Focus distance"
+msgstr "对焦距离"
+
+msgid "Aperture"
+msgstr "光圈"
+
+msgid "Sharp zone"
+msgstr "清晰范围"
+
+msgid "Exposure"
+msgstr "曝光"
+
+msgid "Time of day"
+msgstr "一天中的时间"
+
+msgid "Grid"
+msgstr "网格"
+
+msgid "Picture size"
+msgstr "图片尺寸"
+
+msgid "Fly speed"
+msgstr "飞行速度"
+
+msgid "Simulation"
+msgstr "模拟"
+
+msgid "Game speed"
+msgstr "游戏速度"
+
+msgid "Stays"
+msgstr "停留"
+
+msgid "where placed"
+msgstr "放置处"
+
+msgid "with camera"
+msgstr "跟随镜头"
+
+msgid "Kind"
+msgstr "类型"
+
+msgid "Reach"
+msgstr "范围"
+
+msgid "Cone"
+msgstr "锥角"
+
+msgid "Filter"
+msgstr "滤镜"
+
+msgid "black & white"
+msgstr "黑白"
+
+msgid "Filter strength"
+msgstr "滤镜强度"
+
+msgid "Contrast"
+msgstr "对比度"
+
+msgid "Temperature"
+msgstr "色温"
+
+msgid "Tint"
+msgstr "色调"
+
+msgid "Vignette"
+msgstr "暗角"
+
+msgid "Vignette strength"
+msgstr "暗角强度"
+
+msgid "Film grain"
+msgstr "胶片颗粒"
+
+msgid "Grain strength"
+msgstr "颗粒强度"
+
+msgid "Pose moment"
+msgstr "姿势时刻"
+
+msgid "Playback"
+msgstr "播放"
+
+msgid "Pose speed"
+msgstr "姿势速度"
+
+msgid "Forward"
+msgstr "前后"
+
+msgid "Sideways"
+msgstr "左右"
+
+msgid "Height"
+msgstr "高度"
+
+msgid "Turn"
+msgstr "转向"
+
+msgid "Look at camera"
+msgstr "看向镜头"
+
+msgid "Weapon"
+msgstr "武器"
+
+msgid "Character"
+msgstr "角色"
+
+msgid "Others"
+msgstr "其他"
+
+msgid "Photo mode"
+msgstr "拍照模式"
+
+msgid "Turning"
+msgstr "转身"
+
+msgid "Focus point set"
+msgstr "已设置对焦点"
+
+msgid "Choose a character first: click one, or use the arrows"
+msgstr "请先选择角色：点击一个，或使用箭头"
+
+msgid "Pictures"
+msgstr "图片"
+
+msgid "Click a preset to use it    Right click to rename it    Wheel or the arrows to see the others"
+msgstr "点击预设以使用    右键重命名    滚轮或箭头查看其他预设"
+
+msgid "Type a value    Enter applies it    Esc cancels    Time of day as 13:30"
+msgstr "输入数值    Enter 应用    Esc 取消    一天中的时间格式为 13:30"
+
+msgid "Click a character to choose it    Drag the chosen one to move it    Ctrl + click sets the focus point    The arrows step through those in view    Drag an arrow to move, a ring to turn"
+msgstr "点击角色以选中    拖动选中的角色以移动    Ctrl + 点击设置对焦点    箭头在视野内的角色间切换    拖动箭头移动，拖动圆环转向"
+
+msgid "Take picture"
+msgstr "拍照"
+
+msgid "Gallery"
+msgstr "相册"
+
+msgid "Game time"
+msgstr "游戏时间"
+
+msgid "Place here"
+msgstr "放在这里"
+
+msgid "Reset character"
+msgstr "重置角色"
+
+msgid "Choose a character"
+msgstr "选择角色"
+
+msgid "type to search"
+msgstr "输入以搜索"
+
+msgid "No preset yet. Save preset keeps the settings of every tab."
+msgstr "还没有预设。“保存预设”会保存所有标签页的设置。"
+
+msgid "Type the preset's name, Enter keeps it, Esc cancels."
+msgstr "输入预设名称，Enter 保存，Esc 取消。"
+
+msgid "head turning"
+msgstr "转头"
+
+msgid "own animation"
+msgstr "自身动画"
+
+msgid "its multiplier is now Squad XP in the Advanced settings (per-skill multipliers are not kept)"
+msgstr "其倍率现在是高级设置中的“小队经验”（不再保留每项技能的倍率）"
+
+msgid "Swamp turtle attacks on the Fixes page is on"
+msgstr "“修复”页面中的沼泽龟袭击已开启"
+
+msgid "no string id"
+msgstr "没有字符串 ID"
+
+msgid "no name"
+msgstr "没有名称"
+
+msgid "a string field without a value"
+msgstr "没有值的字符串字段"
+
+msgid "a file field without a value"
+msgstr "没有值的文件字段"
+
+msgid "an instance without an id or target"
+msgstr "没有 ID 或目标的实例"
+
+msgid "assembly, so its EditData does not run (declare IModDataPhase on the entry type)"
+msgstr "程序集，因此其 EditData 不会运行（请在入口类型上声明 IModDataPhase）"
+
+msgid "its game data changes failed to apply"
+msgstr "其游戏数据更改未能应用"
+
+msgid "Mods: {1} loaded"
+msgstr "模组：已加载 {1} 个"
+
+msgid "Mods: {1} of {2} loaded"
+msgstr "模组：已加载 {1}/{2} 个"
+
+msgid "No character selected"
+msgstr "未选择角色"
+
+msgid "Needs first aid"
+msgstr "需要急救"
+
+msgid "Conscious"
+msgstr "清醒"
+
+msgid "Blood --"
+msgstr "血量 --"
+
+msgid "Body --"
+msgstr "身体 --"
+
+msgid "CANCEL"
+msgstr "取消"
+
+msgid "the game ships SSAO but has it disabled"
+msgstr "游戏自带 SSAO 但已禁用"
+
+msgid "against banding in smooth gradients; the game has none"
+msgstr "防止平滑渐变中的色带；游戏没有此功能"
+
+msgid "strength 1"
+msgstr "强度 1"
+
+msgid "lighter haze keeps far mountains visible"
+msgstr "较淡的雾霾让远山保持可见"
+
+msgid "the game uses FXAA; Meitou uses a temporal method (TAA, FSR or DLSS: the Tab panel chooses, FSR and DLSS need their libraries)"
+msgstr "游戏使用 FXAA；Meitou 使用时间性方法（TAA、FSR 或 DLSS：在 Tab 面板中选择，FSR 和 DLSS 需要对应的库）"
+
+msgid "soft, far terrain"
+msgstr "柔和，远处地形"
+
+msgid "the game draws hard-edged cascades that end abruptly at the shadow range; Meitou fits them to the view, filters them softly with contact-hardening penumbrae, blends the cascades, and lets mountains shadow the land out to the horizon"
+msgstr "游戏绘制边缘生硬的级联阴影，并在阴影范围处突然结束；Meitou 让级联贴合视野，以接触硬化半影柔和过滤、混合各级联，并让山脉的阴影一直投到地平线"
+
+msgid "per layer"
+msgstr "按图层"
+
+msgid "by size"
+msgstr "按大小"
+
+msgid "the game ends all of a layer's meshes at one range (1000 x foliage range for most: trees, ruins, junk and litter alike); Meitou draws large meshes (trees, ruins, wrecks, rock stacks) far, medium ones (junk, boulders, bushes) midway and small ones (litter, small plants) near, each class with its own Tab slider"
+msgstr "游戏让一个图层的所有网格在同一距离结束（大多数为 1000 x 植被距离：树木、废墟、杂物和垃圾都一样）；Meitou 将大型网格（树木、废墟、残骸、岩堆）画得远，中型网格（杂物、巨石、灌木）画到中距离，小型网格（垃圾、小植物）画得近，每一类都有自己的 Tab 滑块"
+
+msgid "the game draws every foliage mesh in full out to its range; Meitou draws large and medium meshes beyond the impostor distance (Tab slider) as baked billboards, crossfaded, which also stand in as shadow casters far out"
+msgstr "游戏将每个植被网格完整绘制到其距离；Meitou 在替身距离（Tab 滑块）之外将大型和中型网格绘制为烘焙的广告牌，并交叉淡化，它们在远处也充当阴影投射物"
+
+msgid "waves and surf"
+msgstr "波浪和浪花"
+
+msgid "the game's water is a flat plane with scrolled normal maps; Meitou adds wind-driven waves, breakers that roll in along the depth, break into foam and run up the beach, and foam on the crests (visual only: the water stays at its height for the game)"
+msgstr "游戏的水是带有滚动法线贴图的平面；Meitou 加入风驱动的波浪、随水深涌来并碎成泡沫冲上海滩的碎浪，以及浪峰上的泡沫（仅视觉效果：对游戏而言水面高度不变）"
+
+msgid "full size"
+msgstr "全尺寸"
+
+msgid "low resolution"
+msgstr "低分辨率"
+
+msgid "the game draws every dust, ash and rain sprite at the full picture size, which is a fill-rate cost when big sprites pile up (a dust storm); Meitou draws the alpha and additive ones into a quarter-area (half per axis) target and blends it back, depth-aware, for a fraction of the cost"
+msgstr "游戏以完整画面尺寸绘制每个尘土、灰烬和雨滴精灵，大精灵堆积时（如沙尘暴）会消耗大量填充率；Meitou 将 alpha 和叠加精灵绘制到四分之一面积（每轴一半）的目标中，再按深度混合回去，开销只有一小部分"
+
+msgid "full detail"
+msgstr "完整细节"
+
+msgid "generated levels"
+msgstr "生成的层级"
+
+msgid "the game draws every foliage mesh at full detail, and TERRAIN-mode rocks and plants (some thousands of triangles each) have no LOD levels; Meitou makes coarser levels at load (quadric edge collapse, kept in a disk cache) and picks one per instance by how many pixels (shadow texels) its deviation would show"
+msgstr "游戏以完整细节绘制每个植被网格，TERRAIN 模式的岩石和植物（每个数千个三角形）没有 LOD 层级；Meitou 在加载时生成较粗的层级（二次误差边折叠，保存在磁盘缓存中），并根据其偏差会显示多少像素（阴影纹素）为每个实例选择一级"
+
+msgid "flat ambient"
+msgstr "平坦环境光"
+
+msgid "ray-traced probes"
+msgstr "光线追踪探针"
+
+msgid "hybrid, graded"
+msgstr "混合，调色"
+
+msgid "the game has no tone curve (bright skies and sunlit sand clip flat at white) and no grading; Meitou blends the clip with ACES (the Tab slider sets the share, 0.75) so highlights roll off, then grades saturation 1.06 and contrast 1.05"
+msgstr "游戏没有色调曲线（明亮的天空和阳光下的沙地会平平地截断为白色），也没有调色；Meitou 将截断与 ACES 混合（Tab 滑块设置比例，0.75），让高光柔和过渡，再将饱和度调为 1.06、对比度调为 1.05"
+
+msgid "flat haze"
+msgstr "平坦雾霾"
+
+msgid "shadowed haze"
+msgstr "带阴影的雾霾"
+
+msgid "the game's heat haze shifts distant objects by several pixels in hot weather, which reads as blur; Meitou halves it (the Tab slider sets any strength)"
+msgstr "游戏的热浪扭曲在炎热天气中会让远处物体偏移数个像素，看起来像模糊；Meitou 将其减半（Tab 滑块可设置任意强度）"
+
+msgid "black haze"
+msgstr "黑色雾霾"
+
+msgid "flat night"
+msgstr "平坦夜晚"
+
+msgid "planet light"
+msgstr "行星光"
+
+msgid "starfield texture"
+msgstr "星空纹理"
+
+msgid "scotopic blue"
+msgstr "暗视蓝"
+
+msgid "the game has no grading, so night is the day's saturated browns and oranges, darkened; Meitou shifts dim colour towards the rods' blue-grey as the scene's adapted luminance falls (the Purkinje shift), keeping lamps, fires and the moon in colour (the Tab slider sets the strength)"
+msgstr "游戏没有调色，所以夜晚只是白天饱和的棕色和橙色变暗；Meitou 随着场景适应亮度下降，将暗色向视杆细胞的蓝灰色偏移（浦肯野效应），同时让灯、火和月亮保持色彩（Tab 滑块设置强度）"
+
+msgid "on the land"
+msgstr "在地面上"
+
+msgid "original ambient"
+msgstr "原始环境光"
+
+msgid "bounced light"
+msgstr "反弹光"
+
+msgid "with Indirect light enabled, use bounced light indoors; turn this off to keep the original ambient on room surfaces, furniture and indoor characters while outdoor GI stays enabled"
+msgstr "启用间接光时，在室内使用反弹光；关闭此项可让房间表面、家具和室内角色保持原始环境光，而室外全局光照仍然启用"
+
+msgid "the meshes' own"
+msgstr "网格自带的"
+
+msgid "night only"
+msgstr "仅夜晚"
+
+msgid "day and night"
+msgstr "白天和夜晚"
+
+msgid "the game's"
+msgstr "游戏的"
+
+msgid "8 nearest"
+msgstr "最近 8 个"
+
+msgid "terrain only"
+msgstr "仅地形"
+
+msgid "walls, floors, objects"
+msgstr "墙壁、地板、物体"
+
+msgid "Bloody footprints"
+msgstr "血脚印"
+
+msgid "relief march"
+msgstr "浮雕步进"
+
+msgid "the game's ground is its height map's mesh; Meitou tessellates the ground near the eye and raises it by the same relief (needs tessellation shaders; visual only: characters walk on the undisplaced ground)"
+msgstr "游戏的地面就是其高度图的网格；Meitou 在视点附近细分地面，并以相同的浮雕抬高它（需要曲面细分着色器；仅视觉效果：角色在未位移的地面上行走）"
+
+msgid "per-face tangents"
+msgstr "逐面切线"
+
+msgid "welded, averaged tangents"
+msgstr "焊接、平均的切线"
+
+msgid "hard-edged, flat"
+msgstr "边缘生硬，平坦"
+
+msgid "soft, lit"
+msgstr "柔和，受光"
+
+msgid "Contact shadows"
+msgstr "接触阴影"
+
+msgid "the game's shadows stop at the cascades' resolution, so small objects float; Meitou adds short sun shadows from the depth, at full resolution, with no noise, on characters too (armour plates, straps, feet on the ground). Off by default: what the screen does not show casts nothing; for the cascades, the Traced sun shadows hold theirs"
+msgstr "游戏的阴影受级联分辨率限制，所以小物体看起来像漂浮；Meitou 根据深度添加短的阳光阴影，全分辨率、无噪点，角色也有（护甲片、带子、脚踩地面）。默认关闭：屏幕上看不到的东西不会投射阴影；对于级联，“光线追踪阳光阴影”会保留它们"
+
+msgid "Hybrid GI"
+msgstr "混合全局光照"
+
+msgid "Advanced materials"
+msgstr "高级材质"
+
+msgid "hair, cloth, skin, eyes, metal"
+msgstr "头发、布料、皮肤、眼睛、金属"
+
+msgid "Ground trails"
+msgstr "地面痕迹"
+
+msgid "Water contact foam, wakes and ripples"
+msgstr "水面接触泡沫、尾迹和涟漪"
+
+msgid "foam, waves"
+msgstr "泡沫、波浪"
+
+msgid "Metal on buildings"
+msgstr "建筑上的金属"
+
+msgid "metal textures"
+msgstr "金属纹理"
+
+msgid "the game's buildings are matte unless a material names a metalness map, and few do; Meitou treats the textures of plate, tank and machinery as metal where they have no colour of their own, so rust and paint stay matte"
+msgstr "游戏的建筑都是哑光的，除非材质指定了金属度贴图，而这样的很少；Meitou 将板材、水箱和机械的纹理在没有自身颜色处视为金属，因此锈迹和油漆保持哑光"
+
+msgid "Blood on weapons and gear"
+msgstr "武器和装备上的血迹"
+
+msgid "blades, armour, clothing"
+msgstr "刀刃、护甲、衣物"
+
+msgid "Gear sway"
+msgstr "装备摆动"
+
+msgid "Soft grazing sun"
+msgstr "柔和掠射阳光"
+
+msgid "bumps fade"
+msgstr "凹凸淡出"
+
+msgid "the game lights every bump of a normal map as if nothing stood between it and the sun, so ground and walls the sun only grazes break into bright and black patches, and bumps stay lit on a surface facing away; Meitou fades the normal map out of the sun's light as the sun nears the surface's own plane (from 24 degrees down to 6), where the bumps would shadow each other"
+msgstr "游戏将法线贴图的每个凹凸都当作与太阳之间毫无遮挡来照亮，所以太阳仅掠过的地面和墙壁会碎成明暗斑块，背向的表面上凹凸也保持明亮；Meitou 在太阳接近表面自身平面时（从 24 度到 6 度）让法线贴图淡出阳光照明，那时凹凸本应相互遮挡"
+
+msgid "thin lens"
+msgstr "薄透镜"
+
+msgid "darker corners"
+msgstr "较暗的角落"
+
+msgid "Ground-truth occlusion"
+msgstr "真实环境光遮蔽"
+
+msgid "the Ambient occlusion switch's method (it needs that switch on): Meitou's SSAO is a cheap estimate; GTAO searches each pixel's horizon, measures how much sky it really sees, and keeps the colour of the light that bounces in a corner. Costs more; off by default"
+msgstr "“环境光遮蔽”开关的方法（需要打开该开关）：Meitou 的 SSAO 是廉价的估算；GTAO 搜索每个像素的地平线，测量它真正看到多少天空，并保留在角落中反弹的光的颜色。开销更大；默认关闭"
+
+msgid "Lamp shadows"
+msgstr "灯光阴影"
+
+msgid "Reflections"
+msgstr "反射"
+
+msgid "sky only"
+msgstr "仅天空"
+
+msgid "the game's glossy and rain-wet surfaces reflect one fixed sky picture, indoors and under a roof too; Meitou replaces it with what they really mirror (the screen, then a traced ray where the device has them, the sky past both), fading with roughness, and darkens the sky's reflection where the probes see no sky. Water keeps its own reflection. Off by default: not yet seen on a GPU"
+msgstr "游戏中光滑和被雨打湿的表面都反射同一张固定的天空图片，在室内和屋顶下也是如此；Meitou 将其替换为它们真正映出的内容（先是屏幕，在设备支持时再用追踪光线，两者之外是天空），随粗糙度淡化，并在探针看不到天空的地方调暗天空反射。水保留自身的反射。默认关闭：尚未在 GPU 上验证"
+
+msgid "Traced sun shadows"
+msgstr "光线追踪阳光阴影"
+
+msgid "the game's sun shadows come from cascaded maps, soft or blocky by their texels; Meitou traces a ray to the sun from every lit pixel at every distance, softened by the sun's real size, the same every frame: a shadow is as sharp as it is close to its caster, characters shadow themselves exactly and grass shadows the ground (needs a GPU with ray tracing and Indirect light; off by default)"
+msgstr "游戏的阳光阴影来自级联贴图，因纹素而柔和或呈块状；Meitou 在每个距离上从每个受光像素向太阳追踪一条光线，按太阳的真实大小柔化，每帧都相同：阴影离投射物越近就越清晰，角色精确地投射自身阴影，草也会在地面上投下阴影（需要支持光线追踪的 GPU 和间接光；默认关闭）"
+
+msgid "Portrait and editor sun"
+msgstr "肖像和编辑器阳光"
+
+msgid "key light"
+msgstr "主光"
+
+msgid "fixed sun"
+msgstr "固定阳光"
+
+msgid "Character editor bar"
+msgstr "角色编辑器酒吧"
+
+msgid "the game stands the character being edited on a platform over bare ground; Meitou can stand it in a bar at night instead, drawn with your graphics settings"
+msgstr "游戏让正在编辑的角色站在空地上的平台上；Meitou 可以改为让它站在夜晚的酒吧里，并用你的图形设置绘制"
+
+msgid "Lamp warmth"
+msgstr "灯光暖度"
+
+msgid "the game's colours"
+msgstr "游戏的颜色"
+
+msgid "Glass bottles"
+msgstr "玻璃瓶"
+
+msgid "game data"
+msgstr "游戏数据"
+
+msgid "Anti-aliasing: 0 off 1 FXAA 2 SMAA 3 TAA 4 FSR 5 DLSS"
+msgstr "抗锯齿：0 关 1 FXAA 2 SMAA 3 TAA 4 FSR 5 DLSS"
+
+msgid "Render scale (upscaler)"
+msgstr "渲染比例（超分辨率）"
+
+msgid "Anisotropic filtering (texture filtering)"
+msgstr "各向异性过滤（纹理过滤）"
+
+msgid "Texture quality 0-4 (game)"
+msgstr "纹理质量 0-4（游戏）"
+
+msgid "Water grid segments"
+msgstr "水面网格分段"
+
+msgid "Water wave resolution (FFT size)"
+msgstr "水波分辨率（FFT 大小）"
+
+msgid "Reflection samples"
+msgstr "反射采样数"
+
+msgid "Full haze distance"
+msgstr "完全雾霾距离"
+
+msgid "Terrain material distance"
+msgstr "地形材质距离"
+
+msgid "Impostor memory budget (MB)"
+msgstr "替身内存预算（MB）"
+
+msgid "Hair highlights"
+msgstr "头发高光"
+
+msgid "Cloth sheen"
+msgstr "布料光泽"
+
+msgid "Skin sheen and glow"
+msgstr "皮肤光泽与透光"
+
+msgid "Eye catchlights"
+msgstr "眼神光"
+
+msgid "Metal on characters"
+msgstr "角色身上的金属"
+
+msgid "Polished armour"
+msgstr "抛光护甲"
+
+msgid "Water beads"
+msgstr "水珠"
+
+msgid "Far grass cover"
+msgstr "远处草地覆盖"
+
+msgid "Near tree fade"
+msgstr "近处树木淡化"
+
+msgid "Rain drops and puddles"
+msgstr "雨滴和水洼"
+
+msgid "Traced grass shadows"
+msgstr "光线追踪草地阴影"
+
+msgid "Cascades past traced shadows"
+msgstr "光线追踪阴影之外的级联"
+
+msgid "GI probes out of walls"
+msgstr "全局光照探针移出墙体"
+
+msgid "GI cloud shadows"
+msgstr "全局光照云影"
+
+msgid "GI radiance cache"
+msgstr "全局光照辐射缓存"
+
+msgid "GI 64 probe rays"
+msgstr "全局光照 64 条探针光线"
+
+msgid "GI traced on characters"
+msgstr "角色上的光线追踪全局光照"
+
+msgid "Weather particles: 0 off 1 quarter 2 half 3 auto 4 full"
+msgstr "天气粒子：0 关 1 四分之一 2 一半 3 自动 4 完整"
+
+msgid "Particle density x"
+msgstr "粒子密度 x"
+
+msgid "Grass density x"
+msgstr "草地密度 x"
+
+msgid "Water reflection 0-4 (game)"
+msgstr "水面反射 0-4（游戏）"
+
+msgid "Shadow distance (game 1k-9k, 0 off)"
+msgstr "阴影距离（游戏 1k-9k，0 关）"
+
+msgid "Shadow map size (game quality 0-2)"
+msgstr "阴影贴图大小（游戏质量 0-2）"
+
+msgid "Ambient occlusion quality (GTAO)"
+msgstr "环境光遮蔽质量（GTAO）"
+
+msgid "Shadow cascades (Meitou)"
+msgstr "阴影级联（Meitou）"
+
+msgid "Landmark distance (Meitou)"
+msgstr "地标距离（Meitou）"
+
+msgid "Distant towns (zones)"
+msgstr "远处城镇（区域）"
+
+msgid "Character draw distance"
+msgstr "角色绘制距离"
+
+msgid "Object LOD distance x"
+msgstr "物体 LOD 距离 x"
+
+msgid "Foliage draw distance x"
+msgstr "植被绘制距离 x"
+
+msgid "Foliage LOD distance x (lod Meitou)"
+msgstr "植被 LOD 距离 x（lod Meitou）"
+
+msgid "Large foliage range (F6 Meitou)"
+msgstr "大型植被范围（F6 Meitou）"
+
+msgid "Impostor distance (F7 Meitou)"
+msgstr "替身距离（F7 Meitou）"
+
+msgid "Large impostor distance (F7 Meitou)"
+msgstr "大型替身距离（F7 Meitou）"
+
+msgid "Grass draw distance x"
+msgstr "草地绘制距离 x"
+
+msgid "Reflection range x (game 0.6)"
+msgstr "反射范围 x（游戏 0.6）"
+
+msgid "Water clarity x (Meitou)"
+msgstr "水体清澈度 x（Meitou）"
+
+msgid "Far water clarity (Meitou)"
+msgstr "远处水体清澈度（Meitou）"
+
+msgid "Water see-through distance (Meitou, game 4000)"
+msgstr "水体透视距离（Meitou，游戏 4000）"
+
+msgid "Terrain detail: error px (less = finer)"
+msgstr "地形细节：误差像素（越小越精细）"
+
+msgid "Ground relief depth (cm, typical ground)"
+msgstr "地面浮雕深度（厘米，典型地面）"
+
+msgid "Ground displacement distance (m)"
+msgstr "地面位移距离（米）"
+
+msgid "Ground parallax distance (m)"
+msgstr "地面视差距离（米）"
+
+msgid "Ground parallax depth (% of relief depth)"
+msgstr "地面视差深度（浮雕深度的 %）"
+
+msgid "Blood decals drawn"
+msgstr "绘制的血迹贴花"
+
+msgid "Shadow filter 0-2 (Meitou; 0 low-end)"
+msgstr "阴影过滤 0-2（Meitou；0 低端）"
+
+msgid "Haze strength (1 = game)"
+msgstr "雾霾强度（1 = 游戏）"
+
+msgid "Planetshine strength (x physical)"
+msgstr "行星反照强度（x 物理值）"
+
+msgid "Cloud height (Meitou)"
+msgstr "云层高度（Meitou）"
+
+msgid "Ambient light strength (1 = game)"
+msgstr "环境光强度（1 = 游戏）"
+
+msgid "Night ambient light strength (1 = 1.2x game)"
+msgstr "夜间环境光强度（1 = 游戏的 1.2 倍）"
+
+msgid "Tone map (0 = game)"
+msgstr "色调映射（0 = 游戏）"
+
+msgid "Grading (0 = game)"
+msgstr "调色（0 = 游戏）"
+
+msgid "Heat haze strength (1 = game)"
+msgstr "热浪扭曲强度（1 = 游戏）"
+
+msgid "Bloom strength (0 = game)"
+msgstr "泛光强度（0 = 游戏）"
+
+msgid "Depth of field aperture (f-number)"
+msgstr "景深光圈（f 值）"
+
+msgid "Film grain strength"
+msgstr "胶片颗粒强度"
+
+msgid "Night grading strength (0 = game)"
+msgstr "夜间调色强度（0 = 游戏）"
+
+msgid "Light shafts air (0 = none)"
+msgstr "光束空气（0 = 无）"
+
+msgid "Light shafts air at dawn and dusk (x)"
+msgstr "黎明和黄昏的光束空气（x）"
+
+msgid "Camera effects in the strategy camera"
+msgstr "战略镜头中的镜头效果"
+
+msgid "Rock smoothing (tessellation)"
+msgstr "岩石平滑（曲面细分）"
+
+msgid "Terrain outline refinement (tessellation)"
+msgstr "地形轮廓细化（曲面细分）"
+
+msgid "Sun shadows"
+msgstr "阳光阴影"
+
+msgid "Ambient occlusion type"
+msgstr "环境光遮蔽类型"
+
+msgid "Global illumination"
+msgstr "全局光照"
+
+msgid " (as the game)"
+msgstr " （与游戏相同）"
+
+msgid "Settings   (Tab hides this)"
+msgstr "设置   （Tab 隐藏此面板）"
+
+msgid "Meitou improvements (unticked: as the game)"
+msgstr "Meitou 改进（未勾选：与游戏相同）"
+
+msgid "Time speed"
+msgstr "时间速度"
+
+msgid "off (uncapped)"
+msgstr "关（不限制）"
+
+msgid "0 off"
+msgstr "0 关"
+
+msgid "1 landscape"
+msgstr "1 地形"
+
+msgid "2 characters"
+msgstr "2 角色"
+
+msgid "3 buildings"
+msgstr "3 建筑"
+
+msgid "4 everything"
+msgstr "4 全部"
+
+msgid "0 (true slant)"
+msgstr "0（真实倾斜）"
+
+msgid "0 (off)"
+msgstr "0（关）"
+
+msgid " (no upscaler: plain scaling)"
+msgstr " （无超分辨率：普通缩放）"
+
+msgid "hybrid (clamp + ACES)"
+msgstr "混合（截断 + ACES）"
+
+msgid "clamp (as the game)"
+msgstr "截断（与游戏相同）"
+
+msgid "off (as the game)"
+msgstr "关（与游戏相同）"
+
+msgid "near, cascades far"
+msgstr "近处，远处用级联"
+
+msgid "off while the HDR output is on"
+msgstr "HDR 输出开启时关闭"
+
+msgid "FSR 3"
+msgstr "FSR 3"
+
+msgid "Upscaling"
+msgstr "超分辨率"
+
+msgid "HDR output"
+msgstr "HDR 输出"
+
+msgid "How finely the ground's shape and its textures are drawn with distance."
+msgstr "地面形状及其纹理随距离绘制的精细程度。"
+
+msgid "Camera move speed"
+msgstr "镜头移动速度"
+
+msgid "Camera zoom speed"
+msgstr "镜头缩放速度"
+
+msgid "Shift pan speed"
+msgstr "Shift 平移速度"
+
+msgid "Squad XP"
+msgstr "小队经验"
+
+msgid "Others' XP"
+msgstr "他人经验"
+
+msgid "Fast speed"
+msgstr "快速"
+
+msgid "Fastest speed"
+msgstr "最快速度"
+
+msgid "Main menu style"
+msgstr "主菜单样式"
+
+msgid "Choose the original Kenshi title screen or the Meitou main menu over a live world scene, whatever the UI style."
+msgstr "选择原版 Kenshi 标题画面，或以实时世界场景为背景的 Meitou 主菜单，与界面样式无关。"
+
+msgid "Numbers that float over a character when a blow lands, with the damage armour stopped in brackets. Simple shows the total, Full one number per damage type and the part hit."
+msgstr "击中时在角色上方浮现的数字，括号中为护甲挡下的伤害。简单显示总数，完整则按伤害类型和命中部位各显示一个数字。"
+
+msgid "Font size"
+msgstr "字体大小"
+
+msgid "Points added to every interface font's default height (the game: 3)."
+msgstr "加到每种界面字体默认高度上的点数（游戏：3）。"
+
+msgid "Interface scale"
+msgstr "界面缩放"
+
+msgid "The size of the whole interface: text, buttons and windows (100%: as the window's height makes it)."
+msgstr "整个界面的大小：文字、按钮和窗口（100%：由窗口高度决定）。"
+
+msgid "Show names"
+msgstr "显示名字"
+
+msgid "The name over each of your characters (the game's Show names option). Off, only the stealth and light icons stay."
+msgstr "你每个角色头上的名字（游戏的“显示名字”选项）。关闭时只保留潜行和光照图标。"
+
+msgid "The green marker where a move order sends your characters (the game: on)."
+msgstr "移动命令将角色派往之处的绿色标记（游戏：开）。"
+
+msgid "The green marker on the camera's pivot while you turn it (the game: on)."
+msgstr "旋转镜头时镜头轴心上的绿色标记（游戏：开）。"
+
+msgid "Censorship"
+msgstr "审查"
+
+msgid "Swaps a few strong words in the dialogue for milder ones (the game's censorship option)."
+msgstr "将对话中的一些粗话换成较温和的词（游戏的审查选项）。"
+
+msgid "Use the Windows cursor instead of the game's drawn pointer (no hover pointers unless Enhanced hardware mouse is on)."
+msgstr "使用 Windows 光标代替游戏绘制的指针（除非开启增强硬件鼠标，否则没有悬停指针）。"
+
+msgid "Enhanced hardware mouse"
+msgstr "增强硬件鼠标"
+
+msgid "The icon of what a right click would do beside the Windows cursor (none for a walk), and the hand over buttons and targets."
+msgstr "在 Windows 光标旁显示右键将执行的操作图标（行走时不显示），以及按钮和目标上的手形。"
+
+msgid "How fast the arrow keys and the screen edge pan the camera (the game: 500; faster the higher the camera)."
+msgstr "方向键和屏幕边缘平移镜头的速度（游戏：500；镜头越高越快）。"
+
+msgid "How fast the wheel and the zoom keys move the camera in and out (the game: 125)."
+msgstr "滚轮和缩放键推拉镜头的速度（游戏：125）。"
+
+msgid "Shift pan boost"
+msgstr "Shift 平移加速"
+
+msgid "Holding Shift with the camera move keys pans the camera faster (the game has no such boost)."
+msgstr "按住 Shift 和镜头移动键可更快地平移镜头（游戏没有这种加速）。"
+
+msgid "The camera's pan speed while Shift is held, of its normal speed."
+msgstr "按住 Shift 时镜头的平移速度，相对于正常速度。"
+
+msgid "Reverses the camera's turn, for the mouse and the keys (the game: off)."
+msgstr "反转镜头的旋转，对鼠标和按键都有效（游戏：关）。"
+
+msgid "Reverses the camera's tilt, for the mouse and the keys (the game: on)."
+msgstr "反转镜头的俯仰，对鼠标和按键都有效（游戏：开）。"
+
+msgid "Swap the left and right mouse buttons (the game: off; the game view follows, as in the original)."
+msgstr "交换鼠标左右键（游戏：关；游戏视图随之改变，与原版相同）。"
+
+msgid "Camera smoothing"
+msgstr "镜头平滑"
+
+msgid "The camera's turn and tilt ease in and out (the game: always on). Off: they follow the mouse and the keys at once."
+msgstr "镜头的旋转和俯仰会缓入缓出（游戏：始终开启）。关闭：立即跟随鼠标和按键。"
+
+msgid "Loot into backpack"
+msgstr "拾取到背包"
+
+msgid "Picked-up and looted items go into the character's backpack first, then its slots and inventory (the game: only while the bag window is open)."
+msgstr "拾取和搜刮的物品先放入角色的背包，然后才是装备栏和物品栏（游戏：仅在背包窗口打开时）。"
+
+msgid "A key of the mod {1}: {2}."
+msgstr "模组 {1} 的按键：{2}。"
+
+msgid "Keeps a larger area loaded round each of your characters, so switching between distant ones skips most of the loading (the game: off; uses more memory)."
+msgstr "在你每个角色周围保持更大的已加载区域，因此在相距很远的角色间切换时可跳过大部分加载（游戏：关；占用更多内存）。"
+
+msgid "Swamp turtle attacks"
+msgstr "沼泽龟攻击"
+
+msgid "A swamp turtle butts and bites when it fights. In the game it fights with a sword or club drawn for it, whose moves its body cannot play, so its blows land without any motion."
+msgstr "沼泽龟战斗时会撞击和撕咬。在游戏中它拿着为它准备的刀或棍战斗，而它的身体无法播放这些动作，所以它的攻击毫无动作地命中。"
+
+msgid "Prisoners hold still"
+msgstr "囚犯保持静止"
+
+msgid "A wounded prisoner on a pole or in a cage keeps the pole's or cage's pose. In the game it clutches its wounds there instead."
+msgstr "被绑在柱子上或关在笼子里的受伤囚犯会保持柱子或笼子的姿势。在游戏中它会在那里捂住伤口。"
+
+msgid "Caged animals idle"
+msgstr "笼中动物待机"
+
+msgid "An animal in a cage or on a pole breathes, looks around and lies down when knocked out. In the game it stands frozen there, since the cage's poses are for people only."
+msgstr "笼子里或柱子上的动物会呼吸、四处张望，被击倒时会躺下。在游戏中它僵立在那里，因为笼子的姿势只适用于人。"
+
+msgid "Rain in open buildings"
+msgstr "开放建筑中的雨"
+
+msgid "Seen into a building with its roof hidden, no rain, dust or ash falls over the open room. The game leaves out only what falls inside it, so with the camera pulled back the rain in front still streaks across the room."
+msgstr "看进隐藏了屋顶的建筑时，开放的房间上方不会落下雨、尘土或灰烬。游戏只去掉落在建筑内的部分，所以镜头拉远时前方的雨仍会划过房间。"
+
+msgid "Ground in buried ruins"
+msgstr "掩埋废墟中的地面"
+
+msgid "The ash filling a half-buried Ash Dome ruin stays drawn while your characters are in it, and they are ordered onto it. The game hides the ground inside the ruin, showing buried floors nobody can reach under characters that seem to walk on air."
+msgstr "你的角色在半掩埋的灰烬穹顶废墟中时，填满废墟的灰烬仍然被绘制，角色也会被命令站到上面。游戏会隐藏废墟内的地面，露出无人能到达的掩埋地板，角色看起来像在空中行走。"
+
+msgid "Bags in the inventory"
+msgstr "物品栏中的包"
+
+msgid "Guards searching for smuggled or stolen goods and bandits after food or loot also look inside bags carried in the inventory, and guards confiscating stolen goods inside the worn backpack. The game misses those bags, so goods hidden in them are never found."
+msgstr "搜查走私或赃物的守卫，以及搜刮食物或战利品的强盗，也会检查物品栏中携带的包；没收赃物的守卫也会检查身上背着的背包。游戏会漏掉这些包，所以藏在里面的物品永远不会被发现。"
+
+msgid "Animals stay out of talks"
+msgstr "动物不参与对话"
+
+msgid "A trader or anyone else checking your squad for an item, a race or a carried body never turns the conversation to one of your animals. In the game a pack animal carrying the item takes over the talk, so trade and the other answers do nothing."
+msgstr "商人或其他人检查你的小队是否有某件物品、某个种族或被背着的身体时，不会把对话转到你的某只动物身上。在游戏中，携带该物品的驮兽会接管对话，导致交易和其他回答都无效。"
+
+msgid "Guards spare their own"
+msgstr "守卫放过自己人"
+
+msgid "Slavers and other cage guards leave their own faction's people in their cages alone instead of making them slaves. In the game they enslave them too. Arrests that end in slavery are not affected."
+msgstr "奴隶贩子和其他笼子守卫不会把笼中属于自己派系的人变成奴隶。在游戏中他们也会奴役这些人。以奴役告终的逮捕不受影响。"
+
+msgid "Head turns back"
+msgstr "转回头部"
+
+msgid "A character that turned its head toward what it was talking to or watching looks ahead again once it stops looking. In the game the head stays turned until the next thing it looks at."
+msgstr "角色把头转向交谈或注视的对象后，一旦停止注视就会重新看向前方。在游戏中头会一直转着，直到看向下一个东西。"
+
+msgid "Holes and needles in the ground"
+msgstr "地面上的坑洞和尖刺"
+
+msgid "A mod"
+msgstr "一个模组"
+
+msgid "Small pits in the ground are filled and thin needles of ground standing above flat land are lowered, such as the pit near the Dead Workshop and some needles in the Crater. Off, the ground is exactly as the game's map file has it."
+msgstr "地面上的小坑被填平，平地上突起的细尖地面被压低，例如死亡工坊附近的坑和陨坑中的一些尖刺。关闭时地面与游戏地图文件完全一致。"
+
+msgid "Restart to apply"
+msgstr "重启后生效"
+
+msgid "Needs restart"
+msgstr "需要重启"
+
+msgid "gameplay change"
+msgstr "玩法改动"
+
+msgid "Towns change far away"
+msgstr "远处城镇会变化"
+
+msgid "A town far from your squads is taken over or destroyed as soon as its story calls for it, so the map and the factions show it at once. In the game it changes only when you come near."
+msgstr "远离你小队的城镇在剧情需要时立即被占领或摧毁，所以地图和派系会立刻显示变化。在游戏中，只有你靠近时才会变化。"
+
+msgid "A character knocked down or killed by a blow falls with its own momentum and is pushed away from the hit, harder the heavier the blow and most at the part that was struck, its arms and legs flung by it, and a cut-off head flies the same way. Limp bodies have joints that ease to a stop and a slight muscle tone, so they settle into natural poses. In the game a body drops where it stood, its joints stopping hard."
+msgstr "被攻击击倒或杀死的角色会带着自身的动量倒下，并被推离击中点，攻击越重推得越猛，被击中的部位最明显，四肢随之甩动，被砍下的头也会朝同一方向飞出。瘫软的身体关节会缓缓停住并带有轻微的肌肉张力，因此会落成自然的姿势。在游戏中，身体在原地倒下，关节生硬地停住。"
+
+msgid "How fast your characters and the rest of your faction learn: every skill and stat gain is multiplied by this (the game: 1x). 0 stops it. Click the number to type an exact value. A training dummy still stops at its level."
+msgstr "你的角色和你派系其他成员的学习速度：每项技能和属性的提升都乘以此值（游戏：1x）。0 会停止成长。点击数字可输入精确值。训练假人仍会在其等级处停止。"
+
+msgid "The same for everyone outside your faction: other factions, enemies and wild animals (the game: 1x)."
+msgstr "对你派系之外的所有人同样适用：其他派系、敌人和野生动物（游戏：1x）。"
+
+msgid "The game speed of the second speed button (two arrows) and its key (the game: 2x)."
+msgstr "第二个速度按钮（两个箭头）及其按键的游戏速度（游戏：2x）。"
+
+msgid "The game speed of the third speed button (three arrows) and its key (the game: 5x). High speeds need a fast processor; when it cannot keep up the game runs slower than chosen."
+msgstr "第三个速度按钮（三个箭头）及其按键的游戏速度（游戏：5x）。高速需要快速的处理器；处理器跟不上时，游戏会比所选速度慢。"
+
+msgid "Pause while loading"
+msgstr "加载时暂停"
+
+msgid "Faithful, as in the game: when the camera comes to places that are not loaded yet (a jump to a squad far away), the game pauses and shows Loading... until they are. Meitou: the game runs on while they load."
+msgstr "忠实，与游戏相同：当镜头来到尚未加载的地方（跳到远处的小队）时，游戏会暂停并显示“加载中...”直到加载完成。Meitou：加载时游戏继续运行。"
+
+msgid "Camera stays near your squads"
+msgstr "镜头停留在小队附近"
+
+msgid "As in the game, the camera (the free camera too) cannot go farther than 2250 units from the nearest of your characters. Off, it can fly anywhere in the world."
+msgstr "与游戏相同，镜头（包括自由镜头）不能离你最近的角色超过 2250 单位。关闭时可飞往世界任何地方。"
+
+msgid "Open bags at once"
+msgstr "立即打开背包"
+
+msgid "A character's bag window opens with their inventory until you close it with OPEN BAG. In the game every bag stays shut after loading until OPEN BAG is pressed for it."
+msgstr "角色的背包窗口会随其物品栏一起打开，直到你用“打开背包”关闭它。在游戏中，每个背包在读档后都保持关闭，直到为它按下“打开背包”。"
+
+msgid "Animals pick up items"
+msgstr "动物拾取物品"
+
+msgid "Faithful, as in the game: your pack animals pick up an item you point them at, into the bag they wear (or wear a bag they pick up). Meitou: only people pick items up, and an animal only a limb to carry in its mouth."
+msgstr "忠实，与游戏相同：你的驮兽会把你指向的物品捡进它背着的包里（或背上它捡起的包）。Meitou：只有人会拾取物品，动物只会用嘴叼一条肢体。"
+
+msgid "Outline and tint the selected building, and the building under the cursor in the colour of what a right click would do, like a character under the cursor, except while its interior is shown."
+msgstr "为选中的建筑描边和着色，并用右键将执行的操作的颜色为光标下的建筑描边和着色，与光标下的角色一样，显示其内部时除外。"
+
+msgid "Click away deselects"
+msgstr "点击别处取消选择"
+
+msgid "A left click on the ground ends the selection of the selected building and closes its panels. In the game the building stays selected."
+msgstr "在地面上左键点击会取消对选中建筑的选择并关闭其面板。在游戏中建筑会保持选中。"
+
+msgid "Follow camera height"
+msgstr "跟随镜头高度"
+
+msgid "Follow camera side"
+msgstr "跟随镜头侧移"
+
+msgid "Follow camera offset"
+msgstr "跟随镜头偏移"
+
+msgid "The camera following a character looks higher than the game's point 10 units above its feet, and to one side if wanted, for a view from head height or over the shoulder. The free camera and the unlocked camera are not changed. From ErasmianFolly's Camera Tweaks."
+msgstr "跟随角色的镜头看向高于游戏所用的脚上方 10 单位的点，如有需要还可偏向一侧，以获得头部高度或越肩视角。自由镜头和解锁镜头不受影响。来自 ErasmianFolly 的 Camera Tweaks。"
+
+msgid "Item rotation"
+msgstr "物品旋转"
+
+msgid "The Rotate item control (the middle mouse button by default, Controls page) turns the inventory item on the mouse a quarter, or the item under the pointer in a character's grid, so long items fit across. Worn items are never turned. In the game items cannot be turned. From ErasmianFolly's GetRotatedIdiot."
+msgstr "“旋转物品”控制（默认为鼠标中键，见“控制”页面）会将鼠标上的物品，或角色格子中指针下的物品，转动四分之一圈，让长物品可以横放。身上穿戴的物品不会转动。在游戏中物品无法转动。来自 ErasmianFolly 的 GetRotatedIdiot。"
+
+msgid "Hide hats"
+msgstr "隐藏帽子"
+
+msgid "Leaves the hats and helmets of your characters out of the picture, so their faces and hair show; they stay worn and protect as before. Portraits only: in the interface's portraits. On: in the world too. Off: hats are drawn everywhere, as in the game."
+msgstr "在画面中省去你角色的帽子和头盔，以露出脸和头发；它们仍被穿戴，防护照旧。仅肖像：在界面的肖像中。开：在世界中也是。关：帽子到处都画出，与游戏相同。"
+
+msgid "Portraits only"
+msgstr "仅肖像"
+
+msgid "Hide other factions' hats"
+msgstr "隐藏其他派系的帽子"
+
+msgid "The hats of every other character are left out the same way, not only your own characters'."
+msgstr "其他所有角色的帽子也以同样方式省去，而不只是你自己的角色。"
+
+msgid "Follow camera head lock"
+msgstr "跟随镜头锁定头部"
+
+msgid "The camera's height follows the character's head as it crouches, sits or lies down. On, the height slider is not used."
+msgstr "镜头高度随角色蹲下、坐下或躺下时的头部而变化。开启时不使用高度滑块。"
+
+msgid "How far above the game's point the camera looks: 0 is the game's height, about 17 a person's head."
+msgstr "镜头看向的点比游戏所用的点高多少：0 为游戏的高度，约 17 为人的头部。"
+
+msgid "Moves the point the camera looks at sideways: above 0 the character stands left of the middle (a view over the right shoulder), below 0 right of it. It shows less the farther the camera is."
+msgstr "将镜头看向的点向侧面移动：大于 0 时角色站在中间偏左（越过右肩的视角），小于 0 时偏右。镜头越远，效果越不明显。"
+
+msgid "Water wave resolution"
+msgstr "水波分辨率"
+
+msgid "Faithful cascades"
+msgstr "忠实级联"
+
+msgid "Meitou cascades"
+msgstr "Meitou 级联"
+
+msgid "Traced (ray tracing)"
+msgstr "追踪（光线追踪）"
+
+msgid "Traced near, cascades far"
+msgstr "近处光线追踪，远处级联"
+
+msgid "Off (flat ambient)"
+msgstr "关（平坦环境光）"
+
+msgid "Probes (ray tracing)"
+msgstr "探针（光线追踪）"
+
+msgid "Probes + hybrid cache"
+msgstr "探针 + 混合缓存"
+
+msgid "Balanced"
+msgstr "平衡"
+
+msgid "Super quality"
+msgstr "超级质量"
+
+msgid "32 rays"
+msgstr "32 条光线"
+
+msgid "64 rays"
+msgstr "64 条光线"
+
+msgid "Adds a generated frame between rendered ones: nearly twice the frame rate, a little more input delay."
+msgstr "在渲染的帧之间加入生成的帧：帧率接近翻倍，输入延迟略有增加。"
+
+msgid "FSR 3: any GPU, needs the FidelityFX library. DLSS: Windows with an RTX 40 or later, needs Streamline's frame generation DLLs."
+msgstr "FSR 3：任何 GPU，需要 FidelityFX 库。DLSS：Windows 和 RTX 40 系或更新的显卡，需要 Streamline 的帧生成 DLL。"
+
+msgid "MetalFX temporal"
+msgstr "MetalFX 时间性"
+
+msgid "MetalFX spatial"
+msgstr "MetalFX 空间性"
+
+msgid "TAA (experimental)"
+msgstr "TAA（实验性）"
+
+msgid "Screen resolution"
+msgstr "屏幕分辨率"
+
+msgid "Unlimited"
+msgstr "无限制"
+
+msgid "Delete preset?"
+msgstr "删除预设？"
+
+msgid "Hot and dry"
+msgstr "炎热干燥"
+
+msgid "Vanilla colours"
+msgstr "原版颜色"
+
+msgid "Detail"
+msgstr "细节"
+
+msgid "Ambient"
+msgstr "环境光"
+
+msgid "Night ambient"
+msgstr "夜间环境光"
+
+msgid "Landmark"
+msgstr "地标"
+
+msgid "Object LOD"
+msgstr "物体 LOD"
+
+msgid "Foliage"
+msgstr "植被"
+
+msgid "Large "
+msgstr "大型 "
+
+msgid "Medium foliage"
+msgstr "中型植被"
+
+msgid "Small foliage"
+msgstr "小型植被"
+
+msgid "Impostor"
+msgstr "替身"
+
+msgid "Grass draw"
+msgstr "草地绘制"
+
+msgid "Reflection range"
+msgstr "反射范围"
+
+msgid "The clipboard holds no preset code (MT1:…). Copy one with Share first."
+msgstr "剪贴板中没有预设代码（MT1:…）。请先用“分享”复制一个。"
+
+msgid "Could not write the preset: "
+msgstr "无法写入预设： "
+
+msgid "Copy"
+msgstr "复制"
+
+msgid "Copy all problems"
+msgstr "复制所有问题"
+
+msgid "{1} issue"
+msgid_plural "{1} issues"
+msgstr[0] "{1} 个问题"
+
+msgid "{1} issues"
+msgstr "{1} 个问题"
+
+msgid "No game data loaded."
+msgstr "未加载游戏数据。"
+
+msgid "Select a mod to see its author, description and problems."
+msgstr "选择一个模组以查看其作者、描述和问题。"
+
+msgid "Problems in no mod's file:"
+msgstr "不属于任何模组文件的问题："
+
+msgid "Copied to the clipboard."
+msgstr "已复制到剪贴板。"
+
+msgid "There are no problems to copy."
+msgstr "没有可复制的问题。"
+
+msgid "Extreme"
+msgstr "极高"
+
+msgid "Distances, shadows, detail and Meitou's effects together, by class of graphics card. Low is the same as --low-end."
+msgstr "距离、阴影、细节和 Meitou 的效果一起设置，按显卡档次划分。低与 --low-end 相同。"
+
+msgid "The most blood marks on walls and objects and bloody footprints drawn in a frame, the ones that look largest first."
+msgstr "一帧中绘制的墙壁和物体上的血迹及血脚印的最大数量，看起来最大的优先。"
+
+msgid "Use Metal upscaling"
+msgstr "使用 Metal 超分辨率"
+
+msgid "On: render below the screen's size and upscale (MetalFX or TAA), with a render scale to choose. Off: render at the screen's size, or in full screen at a fraction of it with a resolution to choose."
+msgstr "开：以低于屏幕的尺寸渲染再放大（MetalFX 或 TAA），可选择渲染比例。关：以屏幕尺寸渲染，或在全屏时以其一部分渲染，可选择分辨率。"
+
+msgid "Metal upscaling preset"
+msgstr "Metal 超分辨率预设"
+
+msgid "Sets the upscaler and the render scale. MetalFX temporal by default; spatial is an alternative."
+msgstr "设置超分辨率方式和渲染比例。默认为 MetalFX 时间性；空间性为备选。"
+
+msgid "Full Retina resolution"
+msgstr "完整 Retina 分辨率"
+
+msgid "For a window: on renders in its real pixels. Off renders in virtual Retina pixels, one per point (a quarter of the pixels on a 2x display) and stretches to the window. No effect on a display without Retina. Full screen has Render resolution."
+msgstr "对于窗口：开启时以真实像素渲染。关闭时以虚拟 Retina 像素渲染，每点一个（在 2x 显示器上为四分之一的像素）并拉伸到窗口。在非 Retina 显示器上无效。全屏使用“渲染分辨率”。"
+
+msgid "Render resolution"
+msgstr "渲染分辨率"
+
+msgid "The size the scene renders at in full screen, stretched to the screen with the nearest pixel. In a window it is the window's size."
+msgstr "全屏时场景渲染的尺寸，以最近像素拉伸到屏幕。在窗口中为窗口的尺寸。"
+
+msgid "Render UI in screen resolution"
+msgstr "以屏幕分辨率渲染界面"
+
+msgid "Draw the interface at the screen's size over a stretched picture (virtual Retina pixels, or a smaller render resolution), so it stays sharp. Off: it is drawn at the render size with the picture."
+msgstr "以屏幕尺寸在拉伸的画面上绘制界面（虚拟 Retina 像素或较小的渲染分辨率），使其保持清晰。关：界面随画面以渲染尺寸绘制。"
+
+msgid "Metal render scale"
+msgstr "Metal 渲染比例"
+
+msgid "Rendering resolution as a share of the window's pixels, under the upscaler the preset chose (MetalFX at 0.40 at least). Only with Use Metal upscaling on."
+msgstr "渲染分辨率占窗口像素的比例，在预设选择的超分辨率之下（MetalFX 至少 0.40）。仅在开启“使用 Metal 超分辨率”时有效。"
+
+msgid "The DLSS model. Default picks by render scale; L and M ghost less than K and cost more."
+msgstr "DLSS 模型。默认按渲染比例选择；L 和 M 的拖影比 K 少，开销更大。"
+
+msgid "How far away characters are drawn (the game's NPC View Range)."
+msgstr "角色被绘制的距离（游戏的 NPC 视野范围）。"
+
+msgid "Impostor memory budget"
+msgstr "替身内存预算"
+
+msgid "Video memory for billboard images. Automatic follows the card's memory."
+msgstr "用于广告牌图像的显存。自动则跟随显卡的显存。"
+
+msgid "Beyond it the terrain shows flat ground colour instead of textures. Shorter is cheaper."
+msgstr "超过此距离，地形显示平坦的地面颜色而不是纹理。越短开销越小。"
+
+msgid "Layers and steps of the ground relief; lower is cheaper."
+msgstr "地面浮雕的层数和步数；越低开销越小。"
+
+msgid "Samples per pixel of the water's reflection: smoother edges, more video memory."
+msgstr "水面反射每像素的采样数：边缘更平滑，显存占用更多。"
+
+msgid "Segments of the water mesh: fewer is cheaper, far waves lose shape."
+msgstr "水面网格的分段数：越少开销越小，远处波浪会失去形状。"
+
+msgid "Size of the wave simulation: smaller is cheaper and coarser."
+msgstr "波浪模拟的大小：越小开销越小也越粗糙。"
+
+msgid "The game's cascades, Meitou's soft cascades to the horizon, ray-traced shadows, or ray-traced near and soft cascades further away (both need ray tracing and turn on global illumination)."
+msgstr "游戏的级联、Meitou 延伸到地平线的柔和级联、光线追踪阴影，或近处光线追踪、远处柔和级联（后两者需要光线追踪并会开启全局光照）。"
+
+msgid "Darkening in creases and under objects: screen-space (SSAO) or ground-truth (GTAO, more accurate)."
+msgstr "褶皱处和物体下方的暗化：屏幕空间（SSAO）或真实（GTAO，更准确）。"
+
+msgid "Bounced light: the game's flat ambient, ray-traced probes, or probes with a fine cache near the camera. Needs ray tracing."
+msgstr "反弹光：游戏的平坦环境光、光线追踪探针，或在镜头附近带有精细缓存的探针。需要光线追踪。"
+
+msgid "Shadow cascades"
+msgstr "阴影级联"
+
+msgid "How many maps the shadows are split over, nearest to farthest: more keeps near and far shadows sharper, fewer is cheaper."
+msgstr "阴影由近到远分成多少张贴图：越多则近处和远处的阴影越清晰，越少开销越小。"
+
+msgid "Ambient occlusion quality"
+msgstr "环境光遮蔽质量"
+
+msgid "Samples of the shading in creases: lower is cheaper and noisier."
+msgstr "褶皱处阴影的采样数：越低开销越小，噪点越多。"
+
+msgid "Where the haze is complete: farther shows more land."
+msgstr "雾霾完全遮蔽之处：越远显示的地面越多。"
+
+msgid "Depth of field aperture"
+msgstr "景深光圈"
+
+msgid "The lens's f-number: lower blurs more. A cinema key can set its own."
+msgstr "镜头的 f 值：越低越模糊。电影按键可以设置自己的值。"
+
+msgid "Measure that shading from each pixel's horizon. Needs Ambient occlusion."
+msgstr "从每个像素的地平线测量这种阴影。需要环境光遮蔽。"
+
+msgid "Foam clings to rocks, posts and legs; wading characters leave ripples and wakes."
+msgstr "泡沫附着在岩石、柱子和腿上；涉水的角色会留下涟漪和尾迹。"
+
+msgid "Soften dust and fog where they meet the ground, and light them by the sun and its shadows."
+msgstr "柔化尘土和雾与地面相接处，并用阳光及其阴影照亮它们。"
+
+msgid "Probes move out of walls, clouds shade bounced light, a traced cache adds fine detail."
+msgstr "探针移出墙体，云遮挡反弹光，追踪缓存增加精细细节。"
+
+msgid "Move the light probes out of walls."
+msgstr "将光照探针移出墙体。"
+
+msgid "Clouds shade the bounced light and the light shafts."
+msgstr "云遮挡反弹光和光束。"
+
+msgid "A traced cache adds fine indirect light near the camera."
+msgstr "追踪缓存在镜头附近增加精细的间接光。"
+
+msgid "Rays gather the bounced light on each character instead of the probes'. Needs GTAO."
+msgstr "用光线收集每个角色上的反弹光，代替探针的光照。需要 GTAO。"
+
+msgid "Each light probe traces 64 rays instead of 32: less noise in bounced light, about twice the probe cost."
+msgstr "每个光照探针追踪 64 条光线而不是 32 条：反弹光噪点更少，探针开销约为两倍。"
+
+msgid "Blur what is out of focus, as a lens does, in the free and cinematic cameras."
+msgstr "在自由镜头和电影镜头中，像镜头一样模糊焦外的部分。"
+
+msgid "Use the depth of field in the strategy camera too."
+msgstr "在战略镜头中也使用景深。"
+
+msgid "Darken the picture towards its corners, as a camera lens does, in every camera."
+msgstr "像相机镜头一样让画面向四角变暗，在所有镜头中。"
+
+msgid "Lay a fine film grain over the picture, in every camera."
+msgstr "在画面上覆盖一层细腻的胶片颗粒，在所有镜头中。"
+
+msgid "Buildings, rocks and characters block the lamps' light. Needs ray tracing."
+msgstr "建筑、岩石和角色会遮挡灯光。需要光线追踪。"
+
+msgid "Leave fading tracks on the ground after walking through fresh blood."
+msgstr "走过新鲜血液后在地面上留下逐渐消退的痕迹。"
+
+msgid "Footprints and drag marks in sand, mud and snow; wind and rain wear them away."
+msgstr "沙地、泥地和雪地上的脚印和拖痕；风雨会将其磨灭。"
+
+msgid "Draw the game's yellow-green ceiling lamps, spotlights and searchlights amber, as bright as they were."
+msgstr "将游戏中黄绿色的天花板灯、聚光灯和探照灯绘制为琥珀色，亮度不变。"
+
+msgid "Store the game's models more compactly: about half the video memory, the same look."
+msgstr "更紧凑地存储游戏的模型：显存约减半，外观不变。"
+
+msgid "Draw a faint streak behind a crossbow bolt in flight."
+msgstr "在飞行中的弩箭后面绘制一道淡淡的尾迹。"
+
+msgid "Short sharp sun shadows where small things touch a surface."
+msgstr "小物体接触表面处短而清晰的阳光阴影。"
+
+msgid "Finer shading of hair, cloth, skin, eyes and metal on characters. Each part has its own switch."
+msgstr "更精细地着色角色的头发、布料、皮肤、眼睛和金属。每部分都有自己的开关。"
+
+msgid "Two highlights along the strands of hair and beards."
+msgstr "头发和胡须发丝上的两道高光。"
+
+msgid "A soft sheen on the edges of cloth, a little on leather."
+msgstr "布料边缘的柔和光泽，皮革上略有一些。"
+
+msgid "Skin's oily sheen, a soft bright edge, and light through ears and fingers."
+msgstr "皮肤的油光、柔和明亮的边缘，以及透过耳朵和手指的光。"
+
+msgid "A small catchlight on the eyes instead of a mirror of the landscape."
+msgstr "眼睛上的小眼神光，而不是映出风景。"
+
+msgid "Weapons, armour plates, prosthetics and robots read as metal."
+msgstr "武器、护甲片、义肢和机器人看起来像金属。"
+
+msgid "Armour plates shine as bare metal wherever they have any gloss. Off: dull, painted or rusty plate stays dull. An armour a mod gives its own metalness keeps it."
+msgstr "护甲片只要有光泽就像裸金属一样发亮。关：暗淡、涂漆或生锈的护甲保持暗淡。模组为护甲指定了自身金属度的则保留。"
+
+msgid "Drops of water stand on wet skin, leather and metal, in the rain and after a swim."
+msgstr "在雨中和游泳后，湿润的皮肤、皮革和金属上挂着水珠。"
+
+msgid "Rain shows on the world: water runs down walls, drops stand on metal and stone, puddles gather on the ground. Off: as the original."
+msgstr "雨会在世界中显现：水顺着墙壁流下，水珠挂在金属和石头上，地面积起水洼。关：与原版相同。"
+
+msgid "Grass casts ray-traced shadows on the ground: the larger part of the traced shadows' cost in grassland."
+msgstr "草会在地面上投下光线追踪阴影：在草原上这是光线追踪阴影开销的主要部分。"
+
+msgid "Ray-traced shadows near the camera only; four soft cascades take over further away, where distant trees and buildings keep their shadows."
+msgstr "仅在镜头附近使用光线追踪阴影；更远处由四个柔和级联接管，远处的树木和建筑保留阴影。"
+
+msgid "Thin grass stays visible far away instead of fading out. Off: as the original."
+msgstr "细草在远处仍然可见，而不是淡出。关：与原版相同。"
+
+msgid "Trees close to the camera fade out round the middle of the view (not in the free camera). Off: as the original."
+msgstr "靠近镜头的树木在视野中间附近淡出（自由镜头中不会）。关：与原版相同。"
+
+msgid "Plate, tanks and machinery read as metal; rust and paint stay matte."
+msgstr "板材、水箱和机械看起来像金属；锈迹和油漆保持哑光。"
+
+msgid "Sake and rum bottles look like glass: they bend and tint what is behind them, catch reflections and show the drink inside."
+msgstr "清酒和朗姆酒瓶看起来像玻璃：会折射并染色其后的东西，映出反射并显示里面的酒。"
+
+msgid "Blades keep the blood of what they wound and dry dark; armour and clothing show the wounds under them."
+msgstr "刀刃会沾上所伤之物的血并干成暗色；护甲和衣物会显示其下的伤口。"
+
+msgid "Fade surface bumps where the sun only grazes, so the ground does not break into bright and black patches."
+msgstr "在阳光仅掠过之处淡化表面凹凸，使地面不会碎成明暗斑块。"
+
+msgid "Glossy and wet surfaces mirror their surroundings instead of one sky picture."
+msgstr "光滑和潮湿的表面映出周围的环境，而不是一张天空图片。"
+
+msgid "Ray-traced sun shadows: sharp at contact, soft with distance. Needs ray tracing."
+msgstr "光线追踪阳光阴影：接触处清晰，随距离变柔和。需要光线追踪。"
+
+msgid "Light portraits and the character editor with a fixed warm sun and its shadows."
+msgstr "用固定的暖色阳光及其阴影照亮肖像和角色编辑器。"
+
+msgid "Edit characters in a bar at night instead of on the platform."
+msgstr "在夜晚的酒吧里而不是平台上编辑角色。"
+
+msgid "While building: turn the held building left. Build keys may share keys with the others."
+msgstr "建造时：将手持的建筑向左转。建造按键可以与其他按键共用。"
+
+msgid "While building: turn the held building right."
+msgstr "建造时：将手持的建筑向右转。"
+
+msgid "While building: raise the held building (Shift: slowly)."
+msgstr "建造时：升高手持的建筑（Shift：缓慢）。"
+
+msgid "While building: lower the held building (Shift: slowly)."
+msgstr "建造时：降低手持的建筑（Shift：缓慢）。"
+
+msgid "While building: tilt the held building more to the slope of the ground."
+msgstr "建造时：让手持的建筑更贴合地面坡度。"
+
+msgid "While building: tilt the held building less, towards level."
+msgstr "建造时：让手持的建筑少倾斜一些，趋向水平。"
+
+msgid "While building: drop the wall line being laid, else the last queued building."
+msgstr "建造时：放弃正在铺设的墙线，否则取消最后排队的建筑。"
+
+msgid "While building: queue the held building where it stands, as a left click does."
+msgstr "建造时：将手持的建筑在当前位置排队，与左键点击相同。"
+
+msgid "Turns the inventory item on the mouse, or the one under the pointer, a quarter (needs Item rotation on the Advanced page)."
+msgstr "将鼠标上的物品或指针下的物品转动四分之一圈（需要在高级页面开启“物品旋转”）。"
+
+msgid "Photo mode: the simulation pauses, the interface hides, and a free camera with a lens, roll, exposure, time of day and composition guides takes pictures."
+msgstr "拍照模式：模拟暂停，界面隐藏，一个带有镜头、滚转、曝光、一天中的时间和构图辅助线的自由镜头用于拍照。"
+
+msgid "Collapse all"
+msgstr "全部折叠"
+
+msgid "Expand all"
+msgstr "全部展开"
+
+msgid "Reset "
+msgstr "重置 "
+
+msgid "No setting matches the search."
+msgstr "没有符合搜索的设置。"
+
+msgid "Search settings"
+msgstr "搜索设置"
+
+msgid "Water & reflections"
+msgstr "水面与反射"
+
+msgid "Terrain"
+msgstr "地形"
+
+msgid "Vegetation"
+msgstr "植被"
+
+msgid "Post FX"
+msgstr "后期效果"
+
+msgid "Meitou: "
+msgstr "Meitou： "
+
+msgid "Runs the next world tick while the frame draws: higher frame rates in big fights and crowds, up to 33 ms more input delay."
+msgstr "在绘制帧的同时运行下一个世界刻：在大型战斗和人群中帧率更高，输入延迟最多增加 33 毫秒。"
+
+msgid "Adds a generated frame between rendered ones: nearly twice the frame rate, a little more input delay. Now: {1}"
+msgstr "在渲染的帧之间加入生成的帧：帧率接近翻倍，输入延迟略有增加。当前：{1}"
+
+msgid "White brightness"
+msgstr "白色亮度"
+
+msgid "Peak brightness"
+msgstr "峰值亮度"
+
+msgid "An HDR10 picture for an HDR display (turn HDR on in Windows first). Not with frame generation."
+msgstr "用于 HDR 显示器的 HDR10 画面（请先在 Windows 中开启 HDR）。不能与帧生成同时使用。"
+
+msgid "Brightness of white, in nits. Automatic matches the Windows desktop."
+msgstr "白色的亮度，单位为尼特。自动则与 Windows 桌面一致。"
+
+msgid "Your display's brightest level, in nits."
+msgstr "你的显示器的最高亮度，单位为尼特。"
+
+msgid "Sun shadow technique"
+msgstr "阳光阴影技术"
+
+msgid "Soft cascades"
+msgstr "柔和级联"
+
+msgid "Ray traced"
+msgstr "光线追踪"
+
+msgid "Ray traced + cascades"
+msgstr "光线追踪 + 级联"
+
+msgid "Soft cascaded maps to the horizon, or a ray to the sun from every pixel: as sharp as the caster is close, grass shadows too (needs ray tracing, turns on indirect light); or rays near the camera and soft cascades further away."
+msgstr "延伸到地平线的柔和级联贴图，或从每个像素向太阳发出一条光线：离投射物越近越清晰，草也有阴影（需要光线追踪，会开启间接光）；或在镜头附近使用光线，更远处使用柔和级联。"
+
+msgid "Ambient occlusion technique"
+msgstr "环境光遮蔽技术"
+
+msgid "SSAO is a cheap estimate; GTAO measures how much sky each pixel sees and keeps the colour of the light bounced in corners. Costs more."
+msgstr "SSAO 是廉价的估算；GTAO 测量每个像素看到多少天空，并保留角落中反弹光的颜色。开销更大。"
+
+msgid "Indirect light technique"
+msgstr "间接光技术"
+
+msgid "Probes"
+msgstr "探针"
+
+msgid "Probes and cache"
+msgstr "探针和缓存"
+
+msgid "Ray-traced probes, or the probes moved out of walls with a fine cache of traced rays near the camera."
+msgstr "光线追踪探针，或移出墙体的探针，并在镜头附近使用精细的追踪光线缓存。"
+
+msgid ": error px"
+msgstr "：误差像素"
+
+msgid "Shadow"
+msgstr "阴影"
+
+msgid "Far water"
+msgstr "远处水面"
+
+msgid "Ground"
+msgstr "地面"
+
+msgid "Large foliage"
+msgstr "大型植被"
+
+msgid "Grass"
+msgstr "草地"
+
+msgid "Large impostor"
+msgstr "大型替身"
+
+msgid "MetalFX Super Quality 0.77"
+msgstr "MetalFX 超级质量 0.77"
+
+msgid "MetalFX Quality 0.67"
+msgstr "MetalFX 质量 0.67"
+
+msgid "MetalFX Balanced 0.59"
+msgstr "MetalFX 平衡 0.59"
+
+msgid "MetalFX Performance 0.50"
+msgstr "MetalFX 性能 0.50"
+
+msgid "MetalFX Temporal 0.40"
+msgstr "MetalFX 时间性 0.40"
+
+msgid "MetalFX Spatial 0.50 (alternative)"
+msgstr "MetalFX 空间性 0.50（备选）"
+
+msgid "MetalFX Spatial 0.40 (alternative)"
+msgstr "MetalFX 空间性 0.40（备选）"
+
+msgid "TAA 0.50 (experimental)"
+msgstr "TAA 0.50（实验性）"
+
+msgid "MetalFX temporal is the default at every tier; spatial rows are explicit alternatives. The preset sets the render scale, and the render scale slider fine-tunes it (Custom)."
+msgstr "每个档次默认都是 MetalFX 时间性；空间性的行是明确的备选。预设设置渲染比例，渲染比例滑块可微调（自定义）。"
+
+msgid ": technique"
+msgstr "：技术"
+
+msgid "The sun's shadows: off, the game's cascades, or Meitou's, soft and to the horizon or ray traced. The lamps' shadows are inside."
+msgstr "阳光阴影：关闭、游戏的级联，或 Meitou 的阴影，柔和延伸到地平线或光线追踪。灯光阴影在其中。"
+
+msgid "Automatic ({1})"
+msgstr "自动（{1}）"
+
+msgid "Build keys take a key, not a mouse button. Choose a key, or Esc to cancel."
+msgstr "建造按键只能用键盘按键，不能用鼠标按钮。请选择一个按键，或按 Esc 取消。"
+
+msgid "MEITOU"
+msgstr "MEITOU"
+
+msgid "Search results"
+msgstr "搜索结果"
+
+msgid "Restore all preferences, controls and the look to their defaults?"
+msgstr "将所有偏好、控制和外观恢复为默认值？"
+
+msgid "Mod Warning"
+msgstr "模组警告"
+
+msgid "Modifications to the GLOBAL_CONSTANTS will be lost, you'll have to set them again, sorry!"
+msgstr "对 GLOBAL_CONSTANTS 的修改将会丢失，你需要重新设置，抱歉！"
+
+msgid "Unable to read save:\n"
+msgstr "无法读取存档：\n"
+
+msgid "This save file is currently in use and cannot be deleted"
+msgstr "此存档文件正在使用中，无法删除"
+
+msgid "EXIT"
+msgstr "退出"
+
+msgid "Return to the main menu or quit the game?"
+msgstr "返回主菜单还是退出游戏？"
+
+msgid "NEW GAME"
+msgstr "新游戏"
+
+msgid "Start a new game? Unsaved progress will be lost."
+msgstr "开始新游戏？未保存的进度将会丢失。"
+
+msgid "IMPORT GAME"
+msgstr "导入游戏"
+
+msgid "Import this save into a new game? Unsaved progress will be lost."
+msgstr "将此存档导入新游戏？未保存的进度将会丢失。"
+
+msgid "LOAD GAME"
+msgstr "读取游戏"
+
+msgid "Load this save? Unsaved progress will be lost."
+msgstr "读取此存档？未保存的进度将会丢失。"
+
+msgid "OVERWRITE SAVE"
+msgstr "覆盖存档"
+
+msgid "Meitou - Faithful UI"
+msgstr "Meitou - 忠实界面"
+
+msgid "Save or load still in progress"
+msgstr "保存或读取仍在进行中"
+
+msgid "OPTIONS"
+msgstr "选项"
+
+msgid "CREDITS"
+msgstr "制作人员"
+
+msgid "ENTER"
+msgstr "进入"
+
+msgid "Workers"
+msgstr "工人"
+
+msgid "NONE"
+msgstr "无"
+
+msgid "Put on Shackles"
+msgstr "戴上镣铐"
+
+msgid "THANK YOU"
+msgstr "谢谢"
+
+msgid "COPY LINK"
+msgstr "复制链接"
+
+msgid "Tell us what went wrong or what you think. It becomes a public issue on GitHub, with your Meitou version and load order."
+msgstr "告诉我们出了什么问题或你的想法。它会成为 GitHub 上的公开 issue，附带你的 Meitou 版本和加载顺序。"
+
+msgid "What happened"
+msgstr "发生了什么"
+
+msgid "Attach a screenshot of the game"
+msgstr "附上游戏截图"
+
+msgid "Attach a screenshot (none was taken)"
+msgstr "附上截图（未截取）"
+
+msgid "Attach a screenshot with the navmesh drawn over it"
+msgstr "附上叠加导航网格的截图"
+
+msgid "Attach a navmesh screenshot (only in a game)"
+msgstr "附上导航网格截图（仅在游戏中）"
+
+msgid "Save the game now and attach the save"
+msgstr "立即保存游戏并附上存档"
+
+msgid "Attach the action and dialogue logs (what characters did and said)"
+msgstr "附上行动和对话日志（角色做了什么、说了什么）"
+
+msgid "Include my Discord name"
+msgstr "包含我的 Discord 名称"
+
+msgid "whether it still happens before sending."
+msgstr "发送前是否仍会发生。"
+
+msgid "Newer version out"
+msgstr "有更新的版本"
+
+msgid "Send anyway"
+msgstr "仍然发送"
+
+msgid "Mine"
+msgstr "开采"
+
+msgid "Add to jobs"
+msgstr "加入工作"
+
+msgid "{1,num}h {2,num}m left"
+msgstr "剩余 {1,num} 小时 {2,num} 分钟"
+
+msgid "{1,num}m left"
+msgstr "剩余 {1,num} 分钟"
+
+msgid "Cooldown {1,num} seconds"
+msgstr "冷却 {1,num} 秒"
+
+msgid "{1,num} secs"
+msgstr "{1,num} 秒"
+
+msgid "FENCING ITEM"
+msgstr "销赃物品"
+
+msgid "the file does not exist"
+msgstr "文件不存在"
+
+msgid "the file is too short to be an image"
+msgstr "文件太短，不是图像"
+
+msgid "the file could not be opened: "
+msgstr "无法打开文件： "
+
+msgid "the file is not a PNG or DDS image"
+msgstr "文件不是 PNG 或 DDS 图像"
+
+msgid "this interface shows no image markers"
+msgstr "此界面不显示图像标记"
+
+msgid "the extension belongs to no mod folder"
+msgstr "该扩展不属于任何模组文件夹"
+
+msgid "an image is named by a path relative to the mod's folder"
+msgstr "图像以相对于模组文件夹的路径命名"
+
+msgid "the file could not be read as an image"
+msgstr "无法将文件读取为图像"
+
+msgid "Chase"
+msgstr "追击"
+
+msgid "CONTAINER"
+msgstr "容器"
+
+msgid "BUILDING"
+msgstr "建筑"
+
+msgid "Inputs"
+msgstr "输入"
+
+msgid "Tech level:"
+msgstr "科技等级："
+
+msgid "No water"
+msgstr "没有水"
+
+msgid "Ready to harvest"
+msgstr "可以收获"
+
+msgid "Idle"
+msgstr "闲置"
+
+msgid "Output:"
+msgstr "产出："
+
+msgid "Charge:"
+msgstr "电量："
+
+msgid "Low power"
+msgstr "电力不足"
+
+msgid "This machine is switched Off"
+msgstr "此机器已关闭"
+
+msgid "Time:"
+msgstr "时间："
+
+msgid "Level:"
+msgstr "等级："
+
+msgid "Needs research"
+msgstr "需要研究"
+
+msgid "PROSPECTING RESULTS"
+msgstr "勘探结果"
+
+msgid "CHARACTER STATS"
+msgstr "角色属性"
+
+msgid "BACKPACK"
+msgstr "背包"
+
+msgid "LIMBS"
+msgstr "肢体"
+
+msgid "INVENTORY"
+msgstr "物品栏"
+
+msgid "ADD SQUAD"
+msgstr "添加小队"
+
+msgid ""
+"Activates sneak mode so the character will try to go unnoticed.\n"
+"If the character is unconscious, when he wakes up he will stay down on the ground and crawl to avoid detection."
+msgstr ""
+"开启潜行模式，角色会尽量不被发现。\n"
+"如果角色昏迷，醒来后会留在地上并爬行以避免被发现。"
+
+msgid "-Max HP"
+msgstr "-最大生命值"
+
+msgid "-Unarmed damage bonus"
+msgstr "-徒手伤害加成"
+
+msgid "-Encumbrance reduction"
+msgstr "-负重减轻"
+
+msgid "-Combat skills bonus"
+msgstr "-战斗技能加成"
+
+msgid "-Stealth skill effect"
+msgstr "-潜行技能效果"
+
+msgid "-Dodge skill effect"
+msgstr "-闪避技能效果"
+
+
+
+
+
+
+msgid "STEALING CHANCE:"
+msgstr "偷窃几率："
+
+msgid "FENCING CHANCE:"
+msgstr "销赃几率："
+
+msgid "-Sell value"
+msgstr "-售价"
+
+msgid "-Avg. Price"
+msgstr "-平均价格"
+
+msgid "-Price mark-up"
+msgstr "-加价"
+
+msgid "TRADER"
+msgstr "商人"
+
+msgid "[Location already known]"
+msgstr "[位置已知]"
+
+msgid ""
+"[Right-click to learn new map locations]\n"
+"Towns:\n"
+msgstr ""
+"[右键点击以了解新的地图位置]\n"
+"城镇：\n"
+
+msgid "The cage is locked."
+msgstr "笼子已上锁。"
+
+msgid "No free bed to take anyone to."
+msgstr "没有空床可以安置任何人。"
+
+msgid "You can only hire {1} more characters"
+msgstr "你只能再雇佣 {1} 个角色"
+
+msgid "Nobody here to bail out."
+msgstr "这里没有可以保释的人。"
+
+msgid "{1} item stack(s) of a closed shop were left on the ground."
+msgstr "已关闭商店的 {1} 堆物品被留在了地上。"
+
+msgid "Character {1} of {2} tried to spawn inside walls!"
+msgstr "{2} 个角色中的第 {1} 个试图在墙内生成！"
+
+msgid "Image"
+msgstr "图片"
 
 msgid "Show or hide the selected mod's details beside the list"
 msgstr "在列表旁显示或隐藏所选模组的详情"
+
+msgid "Details"
+msgstr "详情"
 
 msgid "Save the mod list and load order as a preset of this name"
 msgstr "将模组列表和加载顺序保存为此名称的预设"
@@ -3101,23 +5250,32 @@ msgstr "采用所选预设的模组列表和加载顺序"
 msgid "Delete the chosen preset"
 msgstr "删除所选预设"
 
-msgid "Needs"
-msgstr "需要"
-
-msgid "not enabled above it"
-msgstr "未在上方启用"
-
-msgid "No description"
-msgstr "无描述"
-
-msgid "Not enabled: the game does not load it"
-msgstr "未启用：游戏不会加载它"
-
-msgid "Image"
-msgstr "图片"
-
 msgid "{1} mods, {2} enabled"
 msgstr "{1} 个模组，{2} 个已启用"
 
 msgid "{1} of {2} mods shown, {3} enabled"
 msgstr "显示 {2} 个模组中的 {1} 个，{3} 个已启用"
+
+msgid "Not enabled: the game does not load it"
+msgstr "未启用：游戏不会加载它"
+
+msgid "Needs"
+msgstr "需要"
+
+msgid "not enabled above it"
+msgstr "未在其上方启用"
+
+msgid "No description"
+msgstr "无描述"
+
+msgid "Hover outline in the Advanced settings"
+msgstr "高级设置中的悬停描边"
+
+msgid "Hover outline in the Advanced settings is on"
+msgstr "高级设置中的悬停描边已开启"
+
+msgid "Lit dust"
+msgstr "受光照的尘土"
+
+msgid "Light the dust and spray kicked up by running feet like the ground around them, instead of glowing at night."
+msgstr "奔跑的脚扬起的尘土和水花像周围地面一样受光照，而不是在夜里发光。"

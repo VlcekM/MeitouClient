@@ -1,0 +1,4347 @@
+# Meitou's own texts (launcher, title menu, settings menu, notices) in Russian.
+# Kenshi's own texts come from locale/ru_RU/LC_MESSAGES/main.mo; this file only adds what Meitou shows.
+# Machine-translated; a native speaker's corrections are welcome (locale/ru_RU/meitou.po overrides without a rebuild).
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ru_RU\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+msgid " (Vulkan loader missing)"
+msgstr " (нет загрузчика Vulkan)"
+
+msgid " (as the game)"
+msgstr " (как в игре)"
+
+msgid " (no upscaler: plain scaling)"
+msgstr " (без апскейлера: простое масштабирование)"
+
+msgid " (not enabled above it: {1})"
+msgstr " (не включено над ним: {1})"
+
+msgid " Continuing '{1}'."
+msgstr " Продолжение «{1}»."
+
+msgid " Not on disk: {1}."
+msgstr " Нет на диске: {1}."
+
+msgid " Start the game once to write it again; nothing is changed here until then."
+msgstr " Запустите игру один раз, чтобы записать его снова; до этого здесь ничего не меняется."
+
+msgid " Steam would not download {1}."
+msgstr " Steam не стал загружать {1}."
+
+msgid "(started with Play), and a change here creates it. Until then the game uses its defaults."
+msgstr "(создаётся при запуске через «Играть»), а изменение здесь создаёт его. До тех пор игра использует значения по умолчанию."
+
+msgid "-Avg. Price"
+msgstr "-Средн. цена"
+
+msgid "-Combat skills bonus"
+msgstr "-Бонус боевых навыков"
+
+msgid "-Dodge skill effect"
+msgstr "-Эффект навыка уклонения"
+
+msgid "-Encumbrance reduction"
+msgstr "-Снижение нагрузки"
+
+msgid "-Max HP"
+msgstr "-Макс. здоровье"
+
+msgid "-Price mark-up"
+msgstr "-Наценка"
+
+msgid "-Sell value"
+msgstr "-Цена продажи"
+
+msgid "-Stealth skill effect"
+msgstr "-Эффект навыка скрытности"
+
+msgid "-Unarmed damage bonus"
+msgstr "-Бонус урона без оружия"
+
+msgid "0 (off)"
+msgstr "0 (выкл)"
+
+msgid "0 (true slant)"
+msgstr "0 (истинный наклон)"
+
+msgid "0 off"
+msgstr "0 выкл"
+
+msgid "1 change from the game"
+msgstr "1 отличие от игры"
+
+msgid "1 landscape"
+msgstr "1 ландшафт"
+
+msgid "1 post"
+msgstr "1 постобработка"
+
+msgid "1 unsaved change"
+msgstr "1 несохранённое изменение"
+
+msgid "2 characters"
+msgstr "2 персонажи"
+
+msgid "3 buildings"
+msgstr "3 здания"
+
+msgid "32 rays"
+msgstr "32 луча"
+
+msgid "4 everything"
+msgstr "4 всё"
+
+msgid "64 rays"
+msgstr "64 луча"
+
+msgid "8 nearest"
+msgstr "8 ближайших"
+
+msgid ": error px"
+msgstr ": ошибка в пикселях"
+
+msgid ": technique"
+msgstr ": техника"
+
+msgid "; showing the last list"
+msgstr "; показан последний список"
+
+msgid "; showing what was read before"
+msgstr "; показано то, что было прочитано раньше"
+
+msgid "A biome whose sounds were not loaded yet starts its day or night ambience by the time of day. The game plays the opposite one (night sounds by day) until the next biome or day change."
+msgstr "Биом, звуки которого ещё не загружены, начинает дневную или ночную атмосферу по времени суток. В оригинальной игре играет противоположная (ночные звуки днём) до следующей смены биома или суток."
+
+msgid "A blow that destroys a character's head cuts it off, by the same rule the Dismemberment setting cuts off limbs. In the game a destroyed head only kills."
+msgstr "Удар, разрушающий голову персонажа, отсекает её по тому же правилу, по которому настройка расчленения отсекает конечности. В оригинальной игре разрушенная голова только убивает."
+
+msgid "A character knocked down or killed by a blow falls with its own momentum and is pushed away from the hit, harder the heavier the blow and most at the part that was struck, its arms and legs flung by it, and a cut-off head flies the same way. Limp bodies have joints that ease to a stop and a slight muscle tone, so they settle into natural poses. In the game a body drops where it stood, its joints stopping hard."
+msgstr "Персонаж, сбитый с ног или убитый ударом, падает по инерции и отбрасывается от удара: тем сильнее, чем тяжелее удар, и больше всего в месте попадания; руки и ноги разлетаются от него, а отрубленная голова летит так же. У обмякших тел суставы плавно останавливаются и сохраняют лёгкий мышечный тонус, поэтому тела принимают естественные позы. В оригинальной игре тело падает там, где стояло, а суставы резко замирают."
+
+msgid "A character on a bench with the table behind it sits facing away from the table. The game mirrors the bench's look point through the middle of the world map, so the sitter faces an unrelated direction."
+msgstr "Персонаж на скамье со столом за спиной садится спиной к столу. Оригинальная игра отражает точку взгляда скамьи через центр карты мира, и сидящий смотрит в случайную сторону."
+
+msgid "A character that takes a fatal hit explodes, covers everything around in blood and sends bones flying everywhere. Its gear falls to the ground around the spot."
+msgstr "Персонаж, получивший смертельный удар, взрывается, заливает всё вокруг кровью и разбрасывает кости. Его снаряжение падает на землю вокруг."
+
+msgid "A character that turned its head toward what it was talking to or watching looks ahead again once it stops looking. In the game the head stays turned until the next thing it looks at."
+msgstr "Персонаж, повернувший голову к собеседнику или к тому, на что смотрел, снова смотрит вперёд, когда перестаёт смотреть. В оригинальной игре голова остаётся повёрнутой до следующего объекта внимания."
+
+msgid "A character's bag window opens with their inventory until you close it with OPEN BAG. In the game every bag stays shut after loading until OPEN BAG is pressed for it."
+msgstr "Окно сумки персонажа открывается вместе с его инвентарём, пока вы не закроете его кнопкой ОТКРЫТЬ СУМКУ. В оригинальной игре после загрузки каждая сумка закрыта, пока для неё не нажмут ОТКРЫТЬ СУМКУ."
+
+msgid "A double click on a squad member far from the view (or a double tap of their number) flies the camera there in an arc instead of cutting."
+msgstr "Двойной щелчок по бойцу отряда далеко от камеры (или двойное нажатие его номера) переносит камеру к нему по дуге, а не мгновенно."
+
+msgid "A key of the mod {1}: {2}."
+msgstr "Ключ мода {1}: {2}."
+
+msgid "A left click on the ground ends the selection of the selected building and closes its panels. In the game the building stays selected."
+msgstr "Щелчок левой кнопкой по земле снимает выделение со здания и закрывает его панели. В оригинальной игре здание остаётся выделенным."
+
+msgid "A mod"
+msgstr "Мод"
+
+msgid "A robot race: no skin scattering unless turned on."
+msgstr "Раса роботов: без подповерхностного рассеивания, если его не включить."
+
+msgid "A save starts paused once it has loaded, so nothing happens before you look around. In the game it runs at once."
+msgstr "Сохранение после загрузки начинается на паузе, чтобы ничего не случилось, пока вы осматриваетесь. В оригинальной игре оно сразу идёт."
+
+msgid "A small catchlight on the eyes instead of a mirror of the landscape."
+msgstr "Маленький блик в глазах вместо отражения пейзажа."
+
+msgid "A soft GPU allocation budget, not a hard reservation. Higher values keep more textures and draw distance resident; Metal uses unified memory shared with macOS and other apps."
+msgstr "Мягкий лимит выделения памяти GPU, а не жёсткий резерв. Большие значения держат в памяти больше текстур и дальность прорисовки; Metal использует общую с macOS и другими приложениями память."
+
+msgid "A soft sheen on the edges of cloth, a little on leather."
+msgstr "Мягкий блеск по краям ткани, немного на коже."
+
+msgid "A squad coming back into the area around your squads has healed for the time it was away. In the game it comes back as it left."
+msgstr "Отряд, возвращающийся в область вокруг ваших отрядов, успевает подлечиться за время отсутствия. В оригинальной игре он возвращается таким же, каким ушёл."
+
+msgid "A swamp turtle butts and bites when it fights. In the game it fights with a sword or club drawn for it, whose moves its body cannot play, so its blows land without any motion."
+msgstr "Болотная черепаха в бою бодается и кусается. В оригинальной игре она дерётся выданным ей мечом или дубиной, движения которых её тело не может исполнить, поэтому удары наносятся без всякой анимации."
+
+msgid "A town far from your squads is taken over or destroyed as soon as its story calls for it, so the map and the factions show it at once. In the game it changes only when you come near."
+msgstr "Город далеко от ваших отрядов захватывается или уничтожается, как только этого требует его история, и карта и фракции сразу это показывают. В оригинальной игре он меняется только когда вы подходите близко."
+
+msgid "A traced cache adds fine indirect light near the camera."
+msgstr "Трассированный кэш добавляет мелкий непрямой свет рядом с камерой."
+
+msgid "A trader or anyone else checking your squad for an item, a race or a carried body never turns the conversation to one of your animals. In the game a pack animal carrying the item takes over the talk, so trade and the other answers do nothing."
+msgstr "Торговец или кто-то ещё, проверяющий ваш отряд на предмет, расу или переносимое тело, никогда не переводит разговор на ваших животных. В оригинальной игре вьючное животное с предметом перехватывает разговор, и торговля и другие ответы не работают."
+
+msgid "A turret's gunner turns with the gun, facing where it aims. In the game the gunner keeps facing the turret, so once the gun swings toward a target the gunner looks off to the side."
+msgstr "Стрелок турели поворачивается вместе с орудием, глядя туда, куда целится. В оригинальной игре стрелок смотрит на турель, и когда орудие поворачивается к цели, он смотрит в сторону."
+
+msgid "A wounded prisoner on a pole or in a cage keeps the pole's or cage's pose. In the game it clutches its wounds there instead."
+msgstr "Раненый пленник на столбе или в клетке сохраняет позу столба или клетки. В оригинальной игре он вместо этого держится за раны."
+
+msgid "ADD SQUAD"
+msgstr "ДОБАВИТЬ ОТРЯД"
+
+msgid ""
+"Activates sneak mode so the character will try to go unnoticed.\n"
+"If the character is unconscious, when he wakes up he will stay down on the ground and crawl to avoid detection."
+msgstr ""
+"Включает режим скрытности: персонаж будет стараться остаться незамеченным.\n"
+"Если персонаж без сознания, то, очнувшись, он останется лежать и будет ползти, чтобы его не заметили."
+
+msgid "Add airglow to the night haze."
+msgstr "Добавить ночное свечение неба в дымку."
+
+msgid "Add animated waves and shoreline surf."
+msgstr "Добавить анимированные волны и прибой у берега."
+
+msgid "Add contact shading around nearby surfaces and creases."
+msgstr "Добавить контактное затенение вокруг близких поверхностей и в складках."
+
+msgid "Add to jobs"
+msgstr "Добавить в работы"
+
+msgid "Adds a generated frame between rendered ones: nearly twice the frame rate, a little more input delay."
+msgstr "Добавляет сгенерированный кадр между отрисованными: почти вдвое больше кадров в секунду, чуть больше задержка ввода."
+
+msgid "Adds a generated frame between rendered ones: nearly twice the frame rate, a little more input delay. Now: {1}"
+msgstr "Добавляет сгенерированный кадр между отрисованными: почти вдвое больше кадров в секунду, чуть больше задержка ввода. Сейчас: {1}"
+
+msgid "Adjust the blue shift of colours in low light."
+msgstr "Настроить синий сдвиг цветов при слабом освещении."
+
+msgid "Adjust the brightness of light scattered through the air."
+msgstr "Настроить яркость света, рассеянного в воздухе."
+
+msgid "Adjust underwater visibility at a distance."
+msgstr "Настроить видимость под водой на расстоянии."
+
+msgid "Adjust visibility beneath the water surface."
+msgstr "Настроить видимость под поверхностью воды."
+
+msgid "Advanced materials"
+msgstr "Улучшенные материалы"
+
+msgid "Advanced ragdolls"
+msgstr "Улучшенная физика тел"
+
+msgid "Air scattering density; zero removes air scattering."
+msgstr "Плотность рассеивания в воздухе; ноль убирает рассеивание."
+
+msgid "All"
+msgstr "Все"
+
+msgid "All Faithful"
+msgstr "Всё как в оригинале"
+
+msgid "All Meitou"
+msgstr "Всё от Meitou"
+
+msgid "All fixes"
+msgstr "Все исправления"
+
+msgid "All gameplay changes"
+msgstr "Все изменения геймплея"
+
+msgid "Also keeps the surroundings of your other squads' members loaded, not only the squad on the squad bar. Costs more video memory."
+msgstr "Также держит загруженным окружение бойцов других ваших отрядов, а не только отряда на панели отрядов. Требует больше видеопамяти."
+
+msgid "Always on"
+msgstr "Всегда включено"
+
+msgid "Ambience after loading"
+msgstr "Атмосфера после загрузки"
+
+msgid "Ambient"
+msgstr "Окружающий свет"
+
+msgid "Ambient light"
+msgstr "Окружающий свет"
+
+msgid "Ambient light strength"
+msgstr "Сила окружающего света"
+
+msgid "Ambient light strength (1 = game)"
+msgstr "Сила окружающего света (1 = игра)"
+
+msgid "Ambient occlusion"
+msgstr "Затенение окружения"
+
+msgid "Ambient occlusion quality"
+msgstr "Качество затенения окружения"
+
+msgid "Ambient occlusion quality (GTAO)"
+msgstr "Качество затенения окружения (GTAO)"
+
+msgid "Ambient occlusion technique"
+msgstr "Техника затенения окружения"
+
+msgid "Ambient occlusion type"
+msgstr "Тип затенения окружения"
+
+msgid "An HDR10 picture for an HDR display (turn HDR on in Windows first). Not with frame generation."
+msgstr "Изображение HDR10 для HDR-дисплея (сначала включите HDR в Windows). Не работает с генерацией кадров."
+
+msgid "An animal in a cage or on a pole breathes, looks around and lies down when knocked out. In the game it stands frozen there, since the cage's poses are for people only."
+msgstr "Животное в клетке или на столбе дышит, оглядывается и ложится, когда его вырубают. В оригинальной игре оно стоит там неподвижно, так как позы клетки рассчитаны только на людей."
+
+msgid "Animals pick up items"
+msgstr "Животные подбирают предметы"
+
+msgid "Animals stay out of talks"
+msgstr "Животные не вмешиваются в разговоры"
+
+msgid "Animals, bandits and other wild squads keep their characters, wounds and places when the area around them unloads, and are there again when you come back. In the game they are removed and new ones are made."
+msgstr "Животные, бандиты и другие дикие отряды сохраняют своих персонажей, раны и места, когда область вокруг них выгружается, и оказываются там снова, когда вы возвращаетесь. В оригинальной игре они удаляются и создаются новые."
+
+msgid "Anisotropic filtering"
+msgstr "Анизотропная фильтрация"
+
+msgid "Anisotropic filtering (texture filtering)"
+msgstr "Анизотропная фильтрация (фильтрация текстур)"
+
+msgid "Anti-aliasing: 0 off 1 FXAA 2 SMAA 3 TAA 4 FSR 5 DLSS"
+msgstr "Сглаживание: 0 выкл 1 FXAA 2 SMAA 3 TAA 4 FSR 5 DLSS"
+
+msgid "Aperture"
+msgstr "Диафрагма"
+
+msgid "Apply"
+msgstr "Применить"
+
+msgid "Apply the scene's colour and contrast adjustments."
+msgstr "Применить корректировку цвета и контраста сцены."
+
+msgid "Armour plates shine as bare metal wherever they have any gloss. Off: dull, painted or rusty plate stays dull. An armour a mod gives its own metalness keeps it."
+msgstr "Броневые пластины блестят как голый металл там, где у них есть хоть какой-то глянец. Выкл: тусклые, крашеные или ржавые пластины остаются тусклыми. Броня, которой мод задал свою металличность, сохраняет её."
+
+msgid "Arrange mods"
+msgstr "Упорядочить моды"
+
+msgid "As in the game, the camera (the free camera too) cannot go farther than 2250 units from the nearest of your characters. Off, it can fly anywhere in the world."
+msgstr "Как в оригинальной игре, камера (и свободная тоже) не может удаляться дальше 2250 единиц от ближайшего вашего персонажа. Выкл: она может лететь куда угодно."
+
+msgid "Ask the running Steam client to download or update your subscribed Kenshi workshop mods; subscribe in Steam"
+msgstr "Попросить запущенный клиент Steam загрузить или обновить моды мастерской Kenshi, на которые вы подписаны; подпишитесь в Steam"
+
+msgid "Asking Steam for your workshop mods..."
+msgstr "Запрос модов мастерской у Steam..."
+
+msgid "Asking Steam to subscribe..."
+msgstr "Запрос подписки у Steam..."
+
+msgid "Assign a control"
+msgstr "Назначить управление"
+
+msgid "At startup, install a new launcher version and restart into it."
+msgstr "При запуске устанавливать новую версию лаунчера и перезапускаться в неё."
+
+msgid "Attach a navmesh screenshot (only in a game)"
+msgstr "Приложить снимок навигационной сетки (только в игре)"
+
+msgid "Attach a screenshot (none was taken)"
+msgstr "Приложить снимок экрана (снимок не сделан)"
+
+msgid "Attach a screenshot of the game"
+msgstr "Приложить снимок экрана игры"
+
+msgid "Attach a screenshot with the navmesh drawn over it"
+msgstr "Приложить снимок экрана с навигационной сеткой поверх"
+
+msgid "Attach the action and dialogue logs (what characters did and said)"
+msgstr "Приложить журналы действий и диалогов (что персонажи делали и говорили)"
+
+msgid "Attackers per target"
+msgstr "Нападающих на цель"
+
+msgid "Auto"
+msgstr "Авто"
+
+msgid "Auto (recommended)"
+msgstr "Авто (рекомендуется)"
+
+msgid "Auto uses Vulkan when MoltenVK is installed, otherwise Metal."
+msgstr "«Авто» использует Vulkan, если установлен MoltenVK, иначе Metal."
+
+msgid "Auto uses Vulkan when MoltenVK is installed, otherwise Metal. This overrides --renderer in Launch arguments."
+msgstr "«Авто» использует Vulkan, если установлен MoltenVK, иначе Metal. Это переопределяет --renderer в аргументах запуска."
+
+msgid "Auto: about a third of this Mac's memory, from 5120 to 10240 MB, so a larger Mac keeps more resident."
+msgstr "Авто: около трети памяти этого Mac, от 5120 до 10240 МБ, поэтому Mac с большим объёмом памяти держит больше данных."
+
+msgid "Auto: {1} (Vulkan loader found)."
+msgstr "Авто: {1} (загрузчик Vulkan найден)."
+
+msgid "Auto: {1} (no Vulkan loader)."
+msgstr "Авто: {1} (нет загрузчика Vulkan)."
+
+msgid "Auto: {1}."
+msgstr "Авто: {1}."
+
+msgid "Automatic"
+msgstr "Автоматически"
+
+msgid "Automatic ({1})"
+msgstr "Автоматически ({1})"
+
+msgid "Average minutes of silence between pieces of biome music."
+msgstr "Среднее время тишины в минутах между мелодиями биома."
+
+msgid "BACKPACK"
+msgstr "РЮКЗАК"
+
+msgid "BUILDING"
+msgstr "ЗДАНИЕ"
+
+msgid "Back to the game's value."
+msgstr "Вернуть значение игры."
+
+msgid "Back to the look's value"
+msgstr "Вернуть значение стиля"
+
+msgid "Bags in the inventory"
+msgstr "Сумки в инвентаре"
+
+msgid "Balance change: a dodge or block that succeeds its roll but starts a moment late still works, instead of failing as in the game. Makes skilled fighters much harder to wear down when several enemies attack at once."
+msgstr "Изменение баланса: уклонение или блок, успешно прошедшие проверку, но начатые с небольшим опозданием, всё равно срабатывают, а не проваливаются, как в оригинальной игре. Опытных бойцов становится гораздо труднее измотать, когда нападают сразу несколько врагов."
+
+msgid "Balanced"
+msgstr "Сбалансированно"
+
+msgid "Balanced — 6144 MB"
+msgstr "Сбалансированно — 6144 МБ"
+
+msgid "Balanced: more resident detail than Safe, with some headroom for macOS and other apps."
+msgstr "Сбалансированно: больше деталей в памяти, чем в «Безопасно», с запасом для macOS и других приложений."
+
+msgid "Being dismantled"
+msgstr "Разбирается"
+
+msgid "Bench facing"
+msgstr "Посадка на скамье"
+
+msgid "Beyond it the terrain shows flat ground colour instead of textures. Shorter is cheaper."
+msgstr "Дальше этого расстояния местность показывает плоский цвет земли вместо текстур. Ближе — дешевле."
+
+msgid "Billboard transition distance for large foliage."
+msgstr "Расстояние перехода к билбордам для крупной растительности."
+
+msgid "Binding cleared."
+msgstr "Привязка снята."
+
+msgid "Blades keep the blood of what they wound and dry dark; armour and clothing show the wounds under them."
+msgstr "Клинки сохраняют кровь тех, кого ранят, и она темнеет, высыхая; броня и одежда показывают раны под ними."
+
+msgid "Blend more ACES into the hybrid tone mapping curve."
+msgstr "Добавить больше ACES в кривую гибридной тональной компрессии."
+
+msgid "Blood --"
+msgstr "Кровь --"
+
+msgid "Blood cells"
+msgstr "Клетки крови"
+
+msgid "Blood decals drawn"
+msgstr "Отрисовываемые пятна крови"
+
+msgid "Blood on surfaces"
+msgstr "Кровь на поверхностях"
+
+msgid "Blood on weapons and gear"
+msgstr "Кровь на оружии и снаряжении"
+
+msgid "Bloody footprints"
+msgstr "Кровавые следы"
+
+msgid "Bloom"
+msgstr "Свечение"
+
+msgid "Bloom strength"
+msgstr "Сила свечения"
+
+msgid "Bloom strength (0 = game)"
+msgstr "Сила свечения (0 = игра)"
+
+msgid "Blur what is out of focus, as a lens does, in the free and cinematic cameras."
+msgstr "Размывать то, что не в фокусе, как объектив, в свободной и кинематографической камерах."
+
+msgid "Body --"
+msgstr "Тело --"
+
+msgid "Bolt tracers"
+msgstr "Трассеры болтов"
+
+msgid "Borderless"
+msgstr "Без рамки"
+
+msgid "Bounced light indoors too."
+msgstr "Отражённый свет и в помещениях."
+
+msgid "Bounced light: the game's flat ambient, ray-traced probes, or probes with a fine cache near the camera. Needs ray tracing."
+msgstr "Отражённый свет: плоский окружающий свет игры, трассированные пробы или пробы с точным кэшем у камеры. Требуется трассировка лучей."
+
+msgid "Brighten or darken nights further, on top of Ambient light strength."
+msgstr "Сделать ночи ещё светлее или темнее, поверх силы окружающего света."
+
+msgid "Brightness of white, in nits. Automatic matches the Windows desktop."
+msgstr "Яркость белого в нитах. «Автоматически» совпадает с рабочим столом Windows."
+
+msgid "Browse"
+msgstr "Обзор"
+
+msgid "Build keys take a key, not a mouse button. Choose a key, or Esc to cancel."
+msgstr "Клавиши строительства принимают клавишу, а не кнопку мыши. Выберите клавишу или нажмите Esc для отмены."
+
+msgid "Building outline"
+msgstr "Контур здания"
+
+msgid "Buildings, rocks and characters block the lamps' light. Needs ray tracing."
+msgstr "Здания, скалы и персонажи заслоняют свет ламп. Требуется трассировка лучей."
+
+msgid "Built for Meitou {1} (checked when the game starts)"
+msgstr "Создан для Meitou {1} (проверяется при запуске игры)"
+
+msgid "Built in"
+msgstr "Встроенный"
+
+msgid "Built into Meitou: {1}; this mod is not run"
+msgstr "Встроен в Meitou: {1}; этот мод не запускается"
+
+msgid "CANCEL"
+msgstr "ОТМЕНА"
+
+msgid "CHARACTER STATS"
+msgstr "ХАРАКТЕРИСТИКИ ПЕРСОНАЖА"
+
+msgid "CONTAINER"
+msgstr "КОНТЕЙНЕР"
+
+msgid "COPY LINK"
+msgstr "КОПИРОВАТЬ ССЫЛКУ"
+
+msgid "CREDITS"
+msgstr "АВТОРЫ"
+
+msgid "Cage"
+msgstr "Клетка"
+
+msgid "Caged animals idle"
+msgstr "Животные в клетках не стоят на месте"
+
+msgid "Camera"
+msgstr "Камера"
+
+msgid "Camera effects in the strategy camera"
+msgstr "Эффекты камеры в стратегической камере"
+
+msgid "Camera move speed"
+msgstr "Скорость движения камеры"
+
+msgid "Camera rotation speed"
+msgstr "Скорость вращения камеры"
+
+msgid "Camera smoothing"
+msgstr "Сглаживание камеры"
+
+msgid "Camera stays near your squads"
+msgstr "Камера остаётся рядом с отрядами"
+
+msgid "Camera zoom speed"
+msgstr "Скорость приближения камеры"
+
+msgid "Camera: you hear the world where the camera is. Character: you hear it where your first selected character stands (from the camera while nobody is selected)."
+msgstr "Камера: вы слышите мир там, где находится камера. Персонаж: вы слышите его там, где стоит первый выбранный персонаж (из камеры, пока никто не выбран)."
+
+msgid "Cancel Construction"
+msgstr "Отменить строительство"
+
+msgid "Cancel the download of {1}"
+msgstr "Отменить загрузку {1}"
+
+msgid "Cascades past traced shadows"
+msgstr "Каскады после трассированных теней"
+
+msgid "Censorship"
+msgstr "Цензура"
+
+msgid "Centre the camera on the selected character."
+msgstr "Отцентрировать камеру на выбранном персонаже."
+
+msgid "Change the Kenshi folder"
+msgstr "Сменить папку Kenshi"
+
+msgid "Character"
+msgstr "Персонаж"
+
+msgid "Character draw distance"
+msgstr "Дальность прорисовки персонажей"
+
+msgid "Character editor bar"
+msgstr "Панель редактора персонажа"
+
+msgid "Character flight time"
+msgstr "Время полёта к персонажу"
+
+msgid "Character flights"
+msgstr "Полёты к персонажам"
+
+msgid "Character levels"
+msgstr "Уровни персонажей"
+
+msgid "Character {1} of {2} tried to spawn inside walls!"
+msgstr "Персонаж {1} из {2} пытался появиться внутри стен!"
+
+msgid "Characters with the medic job will also heal downed characters of factions that are not hostile"
+msgstr "Персонажи с работой медика будут лечить и упавших персонажей невраждебных фракций"
+
+msgid "Characters with the medic job will heal any downed character, enemies included"
+msgstr "Персонажи с работой медика будут лечить любого упавшего персонажа, включая врагов"
+
+msgid "Charge:"
+msgstr "Заряд:"
+
+msgid "Chase"
+msgstr "Преследовать"
+
+msgid "Check"
+msgstr "Проверить"
+
+msgid "Check again for a Vulkan loader"
+msgstr "Проверить ещё раз наличие загрузчика Vulkan"
+
+msgid "Check for releases"
+msgstr "Проверить выпуски"
+
+msgid "Checking GitHub for releases..."
+msgstr "Проверка выпусков на GitHub..."
+
+msgid "Chinese"
+msgstr "Китайский"
+
+msgid "Choose a character"
+msgstr "Выберите персонажа"
+
+msgid "Choose a character first: click one, or use the arrows"
+msgstr "Сначала выберите персонажа: щёлкните по нему или используйте стрелки"
+
+msgid "Choose a full path for the install folder."
+msgstr "Укажите полный путь к папке установки."
+
+msgid "Choose how bright scene colours fit the display range."
+msgstr "Выберите, как яркие цвета сцены укладываются в диапазон дисплея."
+
+msgid "Choose original Kenshi skins or Meitou materials."
+msgstr "Выберите оригинальные облики Kenshi или материалы Meitou."
+
+msgid "Choose the original Kenshi title screen or the Meitou main menu over a live world scene, whatever the UI style."
+msgstr "Выберите оригинальный титульный экран Kenshi или главное меню Meitou на фоне живой сцены мира, при любом стиле интерфейса."
+
+msgid "Choose the preset for this computer's graphics card, memory and processor."
+msgstr "Выберите пресет для видеокарты, памяти и процессора этого компьютера."
+
+msgid "Choose the version to play"
+msgstr "Выберите версию для игры"
+
+msgid "Choose which parts of the scene appear in reflections."
+msgstr "Выберите, какие части сцены видны в отражениях."
+
+msgid "Clear cache"
+msgstr "Очистить кэш"
+
+msgid "Clear cached files?"
+msgstr "Очистить кэшированные файлы?"
+
+msgid "Click a character to choose it    Drag the chosen one to move it    Ctrl + click sets the focus point    The arrows step through those in view    Drag an arrow to move, a ring to turn"
+msgstr "Щёлкните по персонажу, чтобы выбрать его    Перетащите выбранного, чтобы переместить    Ctrl + щелчок задаёт точку фокуса    Стрелки перебирают видимых    Тяните стрелку, чтобы двигать, кольцо — чтобы поворачивать"
+
+msgid "Click a preset to use it    Right click to rename it    Wheel or the arrows to see the others"
+msgstr "Щёлкните по пресету, чтобы применить его    Правый щелчок — переименовать    Колесо или стрелки — показать остальные"
+
+msgid "Click again"
+msgstr "Щёлкните ещё раз"
+
+msgid "Click away deselects"
+msgstr "Щелчок мимо снимает выделение"
+
+msgid "Click to install"
+msgstr "Щёлкните, чтобы установить"
+
+msgid "Close Doors"
+msgstr "Закрыть двери"
+
+msgid "Cloth sheen"
+msgstr "Блеск ткани"
+
+msgid "Cloud height"
+msgstr "Высота облаков"
+
+msgid "Cloud height (Meitou)"
+msgstr "Высота облаков (Meitou)"
+
+msgid "Cloud shadows"
+msgstr "Тени облаков"
+
+msgid "Cloud shadows in fog"
+msgstr "Тени облаков в тумане"
+
+msgid "Clouds"
+msgstr "Облака"
+
+msgid "Clouds shade the bounced light and the light shafts."
+msgstr "Облака затеняют отражённый свет и лучи света."
+
+msgid "Code mod: runs C# code of its own"
+msgstr "Мод с кодом: запускает собственный код на C#"
+
+msgid "Collapse all"
+msgstr "Свернуть все"
+
+msgid "Colour grading"
+msgstr "Цветокоррекция"
+
+msgid "Composition"
+msgstr "Композиция"
+
+msgid "Cone"
+msgstr "Конус"
+
+msgid "Conscious"
+msgstr "В сознании"
+
+msgid "Contact shadows"
+msgstr "Контактные тени"
+
+msgid "Contrast"
+msgstr "Контраст"
+
+msgid "Cooldown {1,num} seconds"
+msgstr "Перезарядка {1,num} с"
+
+msgid "Copied '{1}' and opened brew.sh; install Homebrew, run it in Terminal, then press Check."
+msgstr "Скопировано «{1}» и открыт brew.sh; установите Homebrew, выполните команду в Терминале, затем нажмите «Проверить»."
+
+msgid "Copied to the clipboard."
+msgstr "Скопировано в буфер обмена."
+
+msgid "Copy"
+msgstr "Копировать"
+
+msgid "Copy all problems"
+msgstr "Копировать все проблемы"
+
+msgid "Copy the Homebrew command for Vulkan, or open brew.sh"
+msgstr "Скопировать команду Homebrew для Vulkan или открыть brew.sh"
+
+msgid "Could not delete the preset: {1}"
+msgstr "Не удалось удалить пресет: {1}"
+
+msgid "Could not detect the hardware: {1}"
+msgstr "Не удалось определить оборудование: {1}"
+
+msgid "Could not move the versions to {1}: {2}"
+msgstr "Не удалось переместить версии в {1}: {2}"
+
+msgid "Could not read the last save: {1}"
+msgstr "Не удалось прочитать последнее сохранение: {1}"
+
+msgid "Could not read the mods: {1}"
+msgstr "Не удалось прочитать моды: {1}"
+
+msgid "Could not read the save '{1}': {2}"
+msgstr "Не удалось прочитать сохранение «{1}»: {2}"
+
+msgid "Could not remove {1}: {2}"
+msgstr "Не удалось удалить {1}: {2}"
+
+msgid "Could not save the mod list: {1}"
+msgstr "Не удалось сохранить список модов: {1}"
+
+msgid "Could not start Meitou {1}: {2}"
+msgstr "Не удалось запустить Meitou {1}: {2}"
+
+msgid "Could not update Kenshi's language setting: {1}"
+msgstr "Не удалось обновить настройку языка Kenshi: {1}"
+
+msgid "Could not use {1}: {2}"
+msgstr "Не удалось использовать {1}: {2}"
+
+msgid "Could not write the preset: "
+msgstr "Не удалось записать пресет: "
+
+msgid "Could not write the preset: {1}"
+msgstr "Не удалось записать пресет: {1}"
+
+msgid "Could not write {1}: {2}"
+msgstr "Не удалось записать {1}: {2}"
+
+msgid "Custom"
+msgstr "Свой"
+
+msgid "Custom value"
+msgstr "Своё значение"
+
+msgid "Cycle GPU, CPU and hidden profiler views."
+msgstr "Переключить профилировщик GPU, CPU или скрыть его."
+
+msgid "DLSS preset"
+msgstr "Пресет DLSS"
+
+msgid "Damage floaters"
+msgstr "Всплывающие цифры урона"
+
+msgid "Darken the picture towards its corners, as a camera lens does, in every camera."
+msgstr "Затемнять изображение к углам, как объектив камеры, во всех камерах."
+
+msgid "Darkening in creases and under objects: screen-space (SSAO) or ground-truth (GTAO, more accurate)."
+msgstr "Затемнение в складках и под объектами: экранное (SSAO) или физически точное (GTAO, аккуратнее)."
+
+msgid "Data folder"
+msgstr "Папка данных"
+
+msgid "Debug build"
+msgstr "Отладочная сборка"
+
+msgid "Decapitation"
+msgstr "Обезглавливание"
+
+msgid "Default"
+msgstr "По умолчанию"
+
+msgid "Default settings restored."
+msgstr "Настройки по умолчанию восстановлены."
+
+msgid "Delete billboard cache"
+msgstr "Удалить кэш билбордов"
+
+msgid "Delete cached billboards; they are rebuilt when needed."
+msgstr "Удалить кэшированные билборды; они будут созданы заново при необходимости."
+
+msgid "Delete preset?"
+msgstr "Удалить пресет?"
+
+msgid "Delivering materials"
+msgstr "Доставка материалов"
+
+msgid "Depth of field"
+msgstr "Глубина резкости"
+
+msgid "Depth of field aperture"
+msgstr "Диафрагма глубины резкости"
+
+msgid "Depth of field aperture (f-number)"
+msgstr "Диафрагма глубины резкости (f-число)"
+
+msgid "Depth on the ground and smoother rocks and hills, from tessellation and parallax."
+msgstr "Объём земли и более гладкие скалы и холмы за счёт тесселяции и параллакса."
+
+msgid "Detail"
+msgstr "Детали"
+
+msgid "Detect"
+msgstr "Определить"
+
+msgid "Detected: {1}"
+msgstr "Определено: {1}"
+
+msgid "Detecting"
+msgstr "Определение"
+
+msgid "Dismantling"
+msgstr "Разборка"
+
+msgid "Display"
+msgstr "Экран"
+
+msgid "Distance over which submerged scenery stays visible."
+msgstr "Расстояние, на котором видна подводная обстановка."
+
+msgid "Distance where foliage changes to billboard images."
+msgstr "Расстояние, на котором растительность сменяется билбордами."
+
+msgid "Distances"
+msgstr "Расстояния"
+
+msgid "Distances, shadows, detail and Meitou's effects together, by class of graphics card. Low is the same as --low-end."
+msgstr "Расстояния, тени, детализация и эффекты Meitou вместе, по классу видеокарты. «Низкие» — то же, что --low-end."
+
+msgid "Distant towns"
+msgstr "Далёкие города"
+
+msgid "Distant towns (zones)"
+msgstr "Далёкие города (зоны)"
+
+msgid "Dithering"
+msgstr "Дизеринг"
+
+msgid "Do you want to subscribe now?"
+msgstr "Подписаться сейчас?"
+
+msgid "Don't offer this version again; a newer one will be"
+msgstr "Больше не предлагать эту версию; будет предложена более новая"
+
+msgid "Door"
+msgstr "Дверь"
+
+msgid "Door break sound"
+msgstr "Звук взлома двери"
+
+msgid "Doors and gates make their breaking sound when they are bashed or broken open. The game never picks which breaking sound to play, so it plays none."
+msgstr "Двери и ворота издают звук взлома, когда их выбивают или ломают. Оригинальная игра никогда не выбирает, какой звук играть, поэтому не играет никакого."
+
+msgid "Download and install {1}"
+msgstr "Скачать и установить {1}"
+
+msgid "Download and install {1}; the arrow plays an installed version"
+msgstr "Скачать и установить {1}; стрелка запускает установленную версию"
+
+msgid "Download of {1} cancelled."
+msgstr "Загрузка {1} отменена."
+
+msgid "Download the new launcher and restart into it"
+msgstr "Скачать новый лаунчер и перезапуститься в него"
+
+msgid "Downloading {1}"
+msgstr "Загрузка {1}"
+
+msgid "Downloading {1}..."
+msgstr "Загрузка {1}..."
+
+msgid "Drag to change the load order; Ctrl+click or Shift+click selects several mods to move together"
+msgstr "Перетаскивайте, чтобы изменить порядок загрузки; Ctrl+щелчок или Shift+щелчок выбирает несколько модов для совместного перемещения"
+
+msgid "Draw a faint streak behind a crossbow bolt in flight."
+msgstr "Рисовать слабый след за летящим арбалетным болтом."
+
+msgid "Draw blood on every terrain cell within decal range, not only the 8 nearest."
+msgstr "Рисовать кровь на каждой клетке местности в радиусе пятен, а не только на 8 ближайших."
+
+msgid "Draw distances"
+msgstr "Дальность прорисовки"
+
+msgid "Draw distant foliage using baked billboard images."
+msgstr "Рисовать далёкую растительность запечёнными билбордами."
+
+msgid "Draw individual stars instead of a starfield texture."
+msgstr "Рисовать отдельные звёзды вместо текстуры звёздного неба."
+
+msgid "Draw inventory item icons supersampled, without jagged edges."
+msgstr "Рисовать значки предметов инвентаря с суперсэмплингом, без зубчатых краёв."
+
+msgid "Draw the game's yellow-green ceiling lamps, spotlights and searchlights amber, as bright as they were."
+msgstr "Рисовать жёлто-зелёные потолочные лампы, прожекторы и поисковые прожекторы игры янтарными, с прежней яркостью."
+
+msgid "Draw the interface at the screen's size over a stretched picture (virtual Retina pixels, or a smaller render resolution), so it stays sharp. Off: it is drawn at the render size with the picture."
+msgstr "Рисовать интерфейс в размере экрана поверх растянутой картинки (виртуальные пиксели Retina или меньшее разрешение рендера), чтобы он оставался чётким. Выкл: он рисуется в размере рендера вместе с картинкой."
+
+msgid "Dropped items kept"
+msgstr "Выброшенные предметы сохраняются"
+
+msgid "Drops of water stand on wet skin, leather and metal, in the rain and after a swim."
+msgstr "Капли воды держатся на мокрой коже, кожаных вещах и металле — под дождём и после купания."
+
+msgid "ENTER"
+msgstr "ВОЙТИ"
+
+msgid "EXIT"
+msgstr "ВЫЙТИ"
+
+msgid "Each has a port for Meitou on the Steam workshop, kept up by its maintainer and endorsed by Meitou:"
+msgstr "У каждого есть порт для Meitou в мастерской Steam, который поддерживает его автор и одобряет Meitou:"
+
+msgid "Each light probe traces 64 rays instead of 32: less noise in bounced light, about twice the probe cost."
+msgstr "Каждая световая проба трассирует 64 луча вместо 32: меньше шума в отражённом свете, примерно вдвое дороже."
+
+msgid "Edit characters in a bar at night instead of on the platform."
+msgstr "Редактировать персонажей ночью в баре, а не на платформе."
+
+msgid "Empties file paths in {1} records of {2}: it likely belongs above them"
+msgstr "Очищает пути к файлам в {1} записях {2}: вероятно, он должен стоять выше них"
+
+msgid "English"
+msgstr "Английский"
+
+msgid "Enhanced hardware mouse"
+msgstr "Улучшенная аппаратная мышь"
+
+msgid "Enter a valid number, or press Esc to cancel."
+msgstr "Введите правильное число или нажмите Esc для отмены."
+
+msgid "Every bug on this page as the game ships it, or every fix."
+msgstr "Все ошибки на этой странице как в оригинальной игре или все исправления."
+
+msgid "Every change on this page as the game plays, or every Meitou change."
+msgstr "Все изменения на этой странице как в оригинальной игре или все изменения Meitou."
+
+msgid "Every graphics setting back to the game's defaults, also those only in the game's Tab panel."
+msgstr "Все настройки графики к значениям игры по умолчанию, включая те, что есть только в панели Tab игры."
+
+msgid "Every tutorial can show again, the ones already seen included."
+msgstr "Все обучающие подсказки снова могут показываться, включая уже просмотренные."
+
+msgid "Example"
+msgstr "Пример"
+
+msgid "Execution"
+msgstr "Казнь"
+
+msgid "Expand all"
+msgstr "Развернуть все"
+
+msgid "Exposure"
+msgstr "Экспозиция"
+
+msgid "Extreme"
+msgstr "Экстремальные"
+
+msgid "Eye catchlights"
+msgstr "Блики в глазах"
+
+msgid "FAITHFUL"
+msgstr "ОРИГИНАЛ"
+
+msgid "FENCING CHANCE:"
+msgstr "ШАНС СБЫТА:"
+
+msgid "FENCING ITEM"
+msgstr "СБЫТ ПРЕДМЕТА"
+
+msgid "FSR 3"
+msgstr "FSR 3"
+
+msgid "FSR 3: any GPU, needs the FidelityFX library. DLSS: Windows with an RTX 40 or later, needs Streamline's frame generation DLLs."
+msgstr "FSR 3: любой GPU, нужна библиотека FidelityFX. DLSS: Windows с RTX 40 или новее, нужны DLL генерации кадров Streamline."
+
+msgid "Fade cloud shadows in fog, so foggy places stay lit."
+msgstr "Ослаблять тени облаков в тумане, чтобы туманные места оставались освещёнными."
+
+msgid "Fade surface bumps where the sun only grazes, so the ground does not break into bright and black patches."
+msgstr "Сглаживать неровности поверхности там, где солнце светит вскользь, чтобы земля не распадалась на яркие и чёрные пятна."
+
+msgid "Faithful"
+msgstr "Оригинал"
+
+msgid "Faithful (in series)"
+msgstr "Оригинал (последовательно)"
+
+msgid "Faithful (off)"
+msgstr "Оригинал (выкл)"
+
+msgid "Faithful cascades"
+msgstr "Каскады оригинала"
+
+msgid "Faithful shows the game's logos at startup (Faithful UI); a key or a click skips each one. Meitou shows the menu as soon as the game has loaded."
+msgstr "«Оригинал» показывает логотипы игры при запуске (оригинальный интерфейс); клавиша или щелчок пропускает каждый. Meitou показывает меню, как только игра загрузилась."
+
+msgid "Faithful, as in the game: when the camera comes to places that are not loaded yet (a jump to a squad far away), the game pauses and shows Loading... until they are. Meitou: the game runs on while they load."
+msgstr "«Оригинал», как в игре: когда камера попадает в ещё не загруженные места (переход к далёкому отряду), игра встаёт на паузу и показывает «Загрузка...», пока они не загрузятся. Meitou: игра продолжает идти, пока они загружаются."
+
+msgid "Faithful, as in the game: your pack animals pick up an item you point them at, into the bag they wear (or wear a bag they pick up). Meitou: only people pick items up, and an animal only a limb to carry in its mouth."
+msgstr "«Оригинал», как в игре: ваши вьючные животные подбирают указанный предмет в надетую сумку (или надевают подобранную сумку). Meitou: предметы подбирают только люди, а животное — только конечность, чтобы нести её в зубах."
+
+msgid "Faithful: every graphics feature as the game ships it."
+msgstr "Оригинал: все графические функции как в оригинальной игре."
+
+msgid "Far grass cover"
+msgstr "Дальний травяной покров"
+
+msgid "Far impostors"
+msgstr "Дальние импостеры"
+
+msgid "Far water"
+msgstr "Дальняя вода"
+
+msgid "Far water clarity"
+msgstr "Прозрачность дальней воды"
+
+msgid "Far water clarity (Meitou)"
+msgstr "Прозрачность дальней воды (Meitou)"
+
+msgid "Farms, mines, wells and generators away from your squads keep working. In the game they stop while their area is unloaded, and only farms catch up when you come back."
+msgstr "Фермы, шахты, колодцы и генераторы вдали от ваших отрядов продолжают работать. В оригинальной игре они останавливаются, пока их область выгружена, и только фермы наверстывают, когда вы возвращаетесь."
+
+msgid "Fast speed"
+msgstr "Быстрая скорость"
+
+msgid "Faster with Meitou"
+msgstr "Быстрее с Meitou"
+
+msgid "Fastest speed"
+msgstr "Самая быстрая скорость"
+
+msgid "Feedback"
+msgstr "Отзыв"
+
+msgid "Feedback button"
+msgstr "Кнопка отзыва"
+
+msgid "Field of view"
+msgstr "Поле зрения"
+
+msgid "Fights far away"
+msgstr "Бои вдали"
+
+msgid "Fill the monitor with a borderless game window."
+msgstr "Заполнить монитор окном игры без рамки."
+
+msgid "Film grain"
+msgstr "Зернистость плёнки"
+
+msgid "Film grain strength"
+msgstr "Сила зернистости плёнки"
+
+msgid "Filter"
+msgstr "Фильтр"
+
+msgid "Filter strength"
+msgstr "Сила фильтра"
+
+msgid "Find"
+msgstr "Найти"
+
+msgid "Finer shading of hair, cloth, skin, eyes and metal on characters. Each part has its own switch."
+msgstr "Более тонкое затенение волос, ткани, кожи, глаз и металла на персонажах. У каждой части свой переключатель."
+
+msgid "Fixes"
+msgstr "Исправления"
+
+msgid "Fly speed"
+msgstr "Скорость полёта"
+
+msgid "Foam clings to rocks, posts and legs; wading characters leave ripples and wakes."
+msgstr "Пена липнет к камням, столбам и ногам; персонажи, идущие вброд, оставляют рябь и следы на воде."
+
+msgid "Focus"
+msgstr "Фокус"
+
+msgid "Focus distance"
+msgstr "Расстояние фокусировки"
+
+msgid "Focus point set"
+msgstr "Точка фокуса задана"
+
+msgid "Fog"
+msgstr "Туман"
+
+msgid "Foliage"
+msgstr "Растительность"
+
+msgid "Foliage LOD distance multiplier"
+msgstr "Множитель дальности LOD растительности"
+
+msgid "Foliage LOD distance x (lod Meitou)"
+msgstr "Множитель дальности LOD растительности (lod Meitou)"
+
+msgid "Foliage draw distance multiplier"
+msgstr "Множитель дальности прорисовки растительности"
+
+msgid "Foliage draw distance x"
+msgstr "Множитель дальности прорисовки растительности"
+
+msgid "Foliage levels"
+msgstr "Уровни растительности"
+
+msgid "Foliage ranges"
+msgstr "Дальности растительности"
+
+msgid "Follow camera head lock"
+msgstr "Камера следования: фиксация по голове"
+
+msgid "Follow camera height"
+msgstr "Камера следования: высота"
+
+msgid "Follow camera offset"
+msgstr "Камера следования: смещение"
+
+msgid "Follow camera side"
+msgstr "Камера следования: сторона"
+
+msgid "Font size"
+msgstr "Размер шрифта"
+
+msgid "Footprints and drag marks in sand, mud and snow; wind and rain wear them away."
+msgstr "Следы и борозды от волочения на песке, в грязи и снегу; ветер и дождь стирают их."
+
+msgid "For a window: on renders in its real pixels. Off renders in virtual Retina pixels, one per point (a quarter of the pixels on a 2x display) and stretches to the window. No effect on a display without Retina. Full screen has Render resolution."
+msgstr "Для окна: вкл рендерит в его реальных пикселях. Выкл рендерит в виртуальных пикселях Retina, по одному на точку (четверть пикселей на дисплее 2x), и растягивает до окна. Без эффекта на дисплее без Retina. В полноэкранном режиме есть «Разрешение рендера»."
+
+msgid "Forward"
+msgstr "Вперёд"
+
+msgid "Frame generation"
+msgstr "Генерация кадров"
+
+msgid "Frame limit"
+msgstr "Ограничение кадров"
+
+msgid "Frames per second while vertical sync is off."
+msgstr "Кадров в секунду, пока вертикальная синхронизация выключена."
+
+msgid "French"
+msgstr "Французский"
+
+msgid "From save"
+msgstr "Из сохранения"
+
+msgid "Full Retina resolution"
+msgstr "Полное разрешение Retina"
+
+msgid "Full haze distance"
+msgstr "Расстояние полной дымки"
+
+msgid "Full resolution"
+msgstr "Полное разрешение"
+
+msgid "Full screen"
+msgstr "Полный экран"
+
+msgid "Full video"
+msgstr "Полное видео"
+
+msgid "GI 64 probe rays"
+msgstr "GI: 64 луча на пробу"
+
+msgid "GI cloud shadows"
+msgstr "GI: тени облаков"
+
+msgid "GI probes out of walls"
+msgstr "GI: пробы вне стен"
+
+msgid "GI radiance cache"
+msgstr "GI: кэш излучения"
+
+msgid "GI traced on characters"
+msgstr "GI: трассировка на персонажах"
+
+msgid "GRAPHICS"
+msgstr "ГРАФИКА"
+
+msgid "Gallery"
+msgstr "Галерея"
+
+msgid "Game language set to {1}. It applies when the game starts."
+msgstr "Язык игры: {1}. Применится при запуске игры."
+
+msgid "Game speed"
+msgstr "Скорость игры"
+
+msgid "Game time"
+msgstr "Игровое время"
+
+msgid "Gear sway"
+msgstr "Покачивание снаряжения"
+
+msgid "German"
+msgstr "Немецкий"
+
+msgid "Get launcher {1}"
+msgstr "Получить лаунчер {1}"
+
+msgid "Get the port"
+msgstr "Получить порт"
+
+msgid "GitHub answered {1} {2}"
+msgstr "GitHub ответил {1} {2}"
+
+msgid "GitHub not reachable ({1})"
+msgstr "GitHub недоступен ({1})"
+
+msgid "Give orders and open menus (the game's right button)."
+msgstr "Отдавать приказы и открывать меню (правая кнопка в игре)."
+
+msgid "Give the ground texture depth."
+msgstr "Придать текстуре земли объём."
+
+msgid "Giving first aid"
+msgstr "Оказание первой помощи"
+
+msgid "Glass bottles"
+msgstr "Стеклянные бутылки"
+
+msgid "Global illumination"
+msgstr "Глобальное освещение"
+
+msgid "Global population multiplier"
+msgstr "Глобальный множитель населения"
+
+msgid "Glossy and wet surfaces mirror their surroundings instead of one sky picture."
+msgstr "Глянцевые и мокрые поверхности отражают окружение, а не одну картинку неба."
+
+msgid "Grading"
+msgstr "Цветокоррекция"
+
+msgid "Grading (0 = game)"
+msgstr "Цветокоррекция (0 = игра)"
+
+msgid "Grain strength"
+msgstr "Сила зернистости"
+
+msgid "Graphics settings saved; the game reads them when it starts."
+msgstr "Настройки графики сохранены; игра прочитает их при запуске."
+
+msgid "Grass"
+msgstr "Трава"
+
+msgid "Grass casts ray-traced shadows on the ground: the larger part of the traced shadows' cost in grassland."
+msgstr "Трава отбрасывает трассированные тени на землю: это большая часть стоимости трассированных теней на лугах."
+
+msgid "Grass density multiplier"
+msgstr "Множитель густоты травы"
+
+msgid "Grass density x"
+msgstr "Множитель густоты травы"
+
+msgid "Grass draw"
+msgstr "Прорисовка травы"
+
+msgid "Grass draw distance multiplier"
+msgstr "Множитель дальности прорисовки травы"
+
+msgid "Grass draw distance x"
+msgstr "Множитель дальности прорисовки травы"
+
+msgid "Grid"
+msgstr "Сетка"
+
+msgid "Ground"
+msgstr "Земля"
+
+msgid "Ground displacement (tessellation)"
+msgstr "Смещение земли (тесселяция)"
+
+msgid "Ground displacement distance (m)"
+msgstr "Дальность смещения земли (м)"
+
+msgid "Ground in buried ruins"
+msgstr "Земля в засыпанных руинах"
+
+msgid "Ground parallax"
+msgstr "Параллакс земли"
+
+msgid "Ground parallax depth (% of relief depth)"
+msgstr "Глубина параллакса земли (% от глубины рельефа)"
+
+msgid "Ground parallax distance (m)"
+msgstr "Дальность параллакса земли (м)"
+
+msgid "Ground relief depth (cm, typical ground)"
+msgstr "Глубина рельефа земли (см, обычная земля)"
+
+msgid "Ground relief quality"
+msgstr "Качество рельефа земли"
+
+msgid "Ground trails"
+msgstr "Следы на земле"
+
+msgid "Ground-truth occlusion"
+msgstr "Физически точное затенение"
+
+msgid "Guards searching for smuggled or stolen goods and bandits after food or loot also look inside bags carried in the inventory, and guards confiscating stolen goods inside the worn backpack. The game misses those bags, so goods hidden in them are never found."
+msgstr "Стражники, ищущие контрабанду или краденое, и бандиты в поисках еды или добычи заглядывают и в сумки в инвентаре, а стражники, конфискующие краденое, — в надетый рюкзак. Оригинальная игра пропускает эти сумки, и спрятанное в них никогда не находят."
+
+msgid "Guards spare their own"
+msgstr "Стража щадит своих"
+
+msgid "HDR output"
+msgstr "Вывод HDR"
+
+msgid "HOME"
+msgstr "ГЛАВНАЯ"
+
+msgid "Hair highlights"
+msgstr "Блики на волосах"
+
+msgid "Half resolution"
+msgstr "Половинное разрешение"
+
+msgid "Hardware mouse"
+msgstr "Аппаратная мышь"
+
+msgid "Hauling"
+msgstr "Перевозка"
+
+msgid "Haze"
+msgstr "Дымка"
+
+msgid "Haze strength"
+msgstr "Сила дымки"
+
+msgid "Haze strength (1 = game)"
+msgstr "Сила дымки (1 = игра)"
+
+msgid "Head turns back"
+msgstr "Голова поворачивается обратно"
+
+msgid "Heal All"
+msgstr "Лечить всех"
+
+msgid "Heal Neutrals"
+msgstr "Лечить нейтральных"
+
+msgid "Healing far away"
+msgstr "Лечение вдали"
+
+msgid "Hear from"
+msgstr "Слушать от"
+
+msgid "Heat haze"
+msgstr "Марево"
+
+msgid "Heat haze strength"
+msgstr "Сила марева"
+
+msgid "Heat haze strength (1 = game)"
+msgstr "Сила марева (1 = игра)"
+
+msgid "Height"
+msgstr "Высота"
+
+msgid "Help"
+msgstr "Справка"
+
+msgid "Hide hats"
+msgstr "Скрыть шляпы"
+
+msgid "Hide or show the whole interface."
+msgstr "Скрыть или показать весь интерфейс."
+
+msgid "Hide other factions' hats"
+msgstr "Скрыть шляпы других фракций"
+
+msgid "High impact"
+msgstr "Сильная нагрузка"
+
+msgid "High — 8120 MB (16 GB Macs)"
+msgstr "Высокий — 8120 МБ (Mac с 16 ГБ)"
+
+msgid "High: keeps the most textures, terrain and objects resident. Best on a 16 GB-or-larger Mac with other memory-heavy apps closed."
+msgstr "Высокий: держит в памяти больше всего текстур, местности и объектов. Лучше всего на Mac с 16 ГБ и больше при закрытых тяжёлых приложениях."
+
+msgid "Higher resolution gives sharper shadow detail."
+msgstr "Большее разрешение даёт более чёткие тени."
+
+msgid "Higher values make the camera ascend and descend faster."
+msgstr "Большие значения заставляют камеру быстрее подниматься и опускаться."
+
+msgid "Higher values retain detailed foliage farther away."
+msgstr "Большие значения сохраняют детальную растительность дальше."
+
+msgid "Higher values retain detailed object meshes farther away."
+msgstr "Большие значения сохраняют детальные модели объектов дальше."
+
+msgid "Higher values smooth shadow edges with more samples."
+msgstr "Большие значения сглаживают края теней большим числом выборок."
+
+msgid "Hold and move the mouse to turn the camera."
+msgstr "Удерживайте и двигайте мышь, чтобы поворачивать камеру."
+
+msgid "Hold to highlight building signs and outline the characters about."
+msgstr "Удерживайте, чтобы подсветить вывески зданий и обвести персонажей вокруг."
+
+msgid "Holding Shift with the camera move keys pans the camera faster (the game has no such boost)."
+msgstr "Shift вместе с клавишами движения камеры ускоряет её перемещение (в оригинальной игре такого ускорения нет)."
+
+msgid "Holes and needles in the ground"
+msgstr "Ямы и иглы на земле"
+
+msgid "Hostile squads that meet far from your squads fight it out by strength; the loser is wiped out. In the game nothing happens far away."
+msgstr "Враждебные отряды, встретившиеся далеко от ваших отрядов, сражаются по силе; проигравший уничтожается. В оригинальной игре вдали ничего не происходит."
+
+msgid "Hot and dry"
+msgstr "Жарко и сухо"
+
+msgid "Hover outline"
+msgstr "Контур при наведении"
+
+msgid "How edges are smoothed."
+msgstr "Как сглаживаются края."
+
+msgid "How far above the game's point the camera looks: 0 is the game's height, about 17 a person's head."
+msgstr "Насколько выше точки игры смотрит камера: 0 — высота игры, около 17 — голова человека."
+
+msgid "How far away characters are drawn (the game's NPC View Range)."
+msgstr "Как далеко рисуются персонажи (дальность обзора NPC в игре)."
+
+msgid "How far away sounds are heard: 1x is the original, 4x hears fights, footsteps and machines four times as far. Higher values mix more sounds at once."
+msgstr "Как далеко слышны звуки: 1x — оригинал, 4x — бои, шаги и механизмы слышны вчетверо дальше. Большие значения смешивают больше звуков одновременно."
+
+msgid "How far shadows are drawn; zero disables them."
+msgstr "Как далеко рисуются тени; ноль отключает их."
+
+msgid "How fast the arrow keys and the screen edge pan the camera (the game: 500; faster the higher the camera)."
+msgstr "Как быстро стрелки и край экрана двигают камеру (в игре: 500; чем выше камера, тем быстрее)."
+
+msgid "How fast the rotate and tilt keys and the mouse turn the camera (the game: 6)."
+msgstr "Как быстро клавиши поворота и наклона и мышь поворачивают камеру (в игре: 6)."
+
+msgid "How fast the wheel and the zoom keys move the camera in and out (the game: 125)."
+msgstr "Как быстро колесо и клавиши масштаба приближают и отдаляют камеру (в игре: 125)."
+
+msgid "How fast your characters and the rest of your faction learn: every skill and stat gain is multiplied by this (the game: 1x). 0 stops it. Click the number to type an exact value. A training dummy still stops at its level."
+msgstr "Как быстро учатся ваши персонажи и остальная фракция: каждый прирост навыка и характеристики умножается на это значение (в игре: 1x). 0 останавливает рост. Щёлкните по числу, чтобы ввести точное значение. Тренировочный манекен всё равно ограничен своим уровнем."
+
+msgid "How finely the ground's shape and its textures are drawn with distance."
+msgstr "Насколько детально рисуются форма земли и её текстуры с расстоянием."
+
+msgid "How finely the terrain follows the ground."
+msgstr "Насколько точно местность повторяет землю."
+
+msgid "How high the clouds' base sits above the ground."
+msgstr "Как высоко над землёй находится нижняя граница облаков."
+
+msgid "How long a faction waits between attacks on your towns by squads passing by (the game: Normal). Never stops them."
+msgstr "Как долго фракция ждёт между нападениями проходящих отрядов на ваши города (в игре: «Обычно»). Никогда не прекращает их."
+
+msgid "How many bolts and harpoons stay stuck in the ground and buildings, per kind of bolt; past it the one that flew longest disappears (the game: 60)."
+msgstr "Сколько болтов и гарпунов остаётся торчать в земле и зданиях на каждый вид болта; сверх этого исчезает тот, что летел дольше всех (в игре: 60)."
+
+msgid "How many enemies may swing at one character at once (the game: 1, plus its race's extra slots); the others wait at reach or circle."
+msgstr "Сколько врагов может одновременно атаковать одного персонажа (в игре: 1 плюс дополнительные места его расы); остальные ждут на дистанции или кружат."
+
+msgid "How many fighters a raid on your towns gathers (the game: 1)."
+msgstr "Сколько бойцов собирает набег на ваши города (в игре: 1)."
+
+msgid "How many items dropped during play (severed limbs, luckyren Mode's gear) stay on the ground; past it the oldest disappears. Items that were on the ground in the save always stay."
+msgstr "Сколько выброшенных во время игры предметов (отрубленные конечности, снаряжение режима luckyren) остаётся на земле; сверх этого исчезают самые старые. Предметы, лежавшие на земле в сохранении, остаются всегда."
+
+msgid "How many maps the shadows are split over, nearest to farthest: more keeps near and far shadows sharper, fewer is cheaper."
+msgstr "На сколько карт делятся тени от ближних к дальним: больше — чётче ближние и дальние тени, меньше — дешевле."
+
+msgid "How many squads roam and live in the wild (the game: 1). Affects performance."
+msgstr "Сколько отрядов бродит и живёт в дикой местности (в игре: 1). Влияет на производительность."
+
+msgid "How many surrounding zones can display distant towns."
+msgstr "Сколько окружающих зон могут показывать далёкие города."
+
+msgid "How much of each pixel's light glows into its surroundings."
+msgstr "Какая часть света каждого пикселя светится вокруг."
+
+msgid "How often factions start raids on your towns (the game: 1)."
+msgstr "Как часто фракции начинают набеги на ваши города (в игре: 1)."
+
+msgid "How to get Kenshi on macOS"
+msgstr "Как установить Kenshi на macOS"
+
+msgid "How to get Kenshi on this Mac"
+msgstr "Как установить Kenshi на этот Mac"
+
+msgid "How?"
+msgstr "Как?"
+
+msgid "Hybrid"
+msgstr "Гибрид"
+
+msgid "Hybrid GI"
+msgstr "Гибридное GI"
+
+msgid "Hybrid tone map: ACES share"
+msgstr "Гибридная тональная компрессия: доля ACES"
+
+msgid "IMPORT GAME"
+msgstr "ИМПОРТ ИГРЫ"
+
+msgid "INVENTORY"
+msgstr "ИНВЕНТАРЬ"
+
+msgid "Idle"
+msgstr "Простаивает"
+
+msgid "Import this save into a new game? Unsaved progress will be lost."
+msgstr "Импортировать это сохранение в новую игру? Несохранённый прогресс будет потерян."
+
+msgid "Impostor"
+msgstr "Импостер"
+
+msgid "Impostor distance"
+msgstr "Дальность импостеров"
+
+msgid "Impostor distance (F7 Meitou)"
+msgstr "Дальность импостеров (F7 Meitou)"
+
+msgid "Impostor memory budget"
+msgstr "Бюджет памяти импостеров"
+
+msgid "Impostor memory budget (MB)"
+msgstr "Бюджет памяти импостеров (МБ)"
+
+msgid "In-game scene transitions"
+msgstr "Переходы между сценами в игре"
+
+msgid "In-game transition speed"
+msgstr "Скорость переходов в игре"
+
+msgid "Include my Discord name"
+msgstr "Указать моё имя в Discord"
+
+msgid "Incompatible with {1}"
+msgstr "Несовместим с {1}"
+
+msgid "Indirect light"
+msgstr "Непрямой свет"
+
+msgid "Indirect light technique"
+msgstr "Техника непрямого света"
+
+msgid "Indoor GI"
+msgstr "GI в помещениях"
+
+msgid "Indoors"
+msgstr "В помещении"
+
+msgid "Inputs"
+msgstr "Входы"
+
+msgid "Install"
+msgstr "Установить"
+
+msgid "Install a version first (Versions)."
+msgstr "Сначала установите версию (Версии)."
+
+msgid "Install a version first (Versions): its settings are shown here."
+msgstr "Сначала установите версию (Версии): здесь показаны её настройки."
+
+msgid "Install failed: {1}"
+msgstr "Ошибка установки: {1}"
+
+msgid "Install folder"
+msgstr "Папка установки"
+
+msgid "Install latest"
+msgstr "Установить последнюю"
+
+msgid "Install v{1} (skipped)"
+msgstr "Установить v{1} (пропущена)"
+
+msgid "Install {1}"
+msgstr "Установить {1}"
+
+msgid "Installed"
+msgstr "Установлено"
+
+msgid "Installed · Play"
+msgstr "Установлено · Играть"
+
+msgid "Installing"
+msgstr "Установка"
+
+msgid "Interface"
+msgstr "Интерфейс"
+
+msgid "Interface scale"
+msgstr "Масштаб интерфейса"
+
+msgid "Interior lamps"
+msgstr "Лампы в помещениях"
+
+msgid "Internal rendering resolution relative to the window."
+msgstr "Внутреннее разрешение рендера относительно окна."
+
+msgid "Italian"
+msgstr "Итальянский"
+
+msgid "Item icons"
+msgstr "Значки предметов"
+
+msgid "Item rotation"
+msgstr "Вращение предметов"
+
+msgid "Japanese"
+msgstr "Японский"
+
+msgid "Keep large wrecks, towers and landmarks visible farther away."
+msgstr "Держать большие обломки, башни и ориентиры видимыми дальше."
+
+msgid "Keep textures at all squads"
+msgstr "Держать текстуры у всех отрядов"
+
+msgid "Keep textures at characters"
+msgstr "Держать текстуры у персонажей"
+
+msgid "Keep textures sharp when viewed at an angle."
+msgstr "Сохранять чёткость текстур под углом."
+
+msgid "Keep the lamps of building interiors lit by day too. Stealth counts their light."
+msgstr "Лампы в зданиях горят и днём. Скрытность учитывает их свет."
+
+msgid "Keep them"
+msgstr "Оставить их"
+
+msgid "Keeps a larger area loaded round each of your characters, so switching between distant ones skips most of the loading (the game: off; uses more memory)."
+msgstr "Держит загруженной большую область вокруг каждого вашего персонажа, поэтому переключение между далёкими почти не требует загрузки (в игре: выкл; требует больше памяти)."
+
+msgid "Keeps the meshes and textures around every squad member loaded, not only around the camera, so a flight or jump to them lands on finished detail. Costs video memory."
+msgstr "Держит загруженными модели и текстуры вокруг каждого бойца отряда, а не только вокруг камеры, поэтому полёт или переход к ним приходит к уже готовой детализации. Требует видеопамяти."
+
+msgid "Kenshi folder"
+msgstr "Папка Kenshi"
+
+msgid "Kenshi not found: set its folder in Settings"
+msgstr "Kenshi не найдена: укажите её папку в настройках"
+
+msgid "Kind"
+msgstr "Вид"
+
+msgid "Korean"
+msgstr "Корейский"
+
+msgid "LIMBS"
+msgstr "КОНЕЧНОСТИ"
+
+msgid "LOAD GAME"
+msgstr "ЗАГРУЗИТЬ ИГРУ"
+
+msgid "Lamp shadows"
+msgstr "Тени от ламп"
+
+msgid "Lamp warmth"
+msgstr "Тёплые лампы"
+
+msgid "Landmark"
+msgstr "Ориентир"
+
+msgid "Landmark distance"
+msgstr "Дальность ориентиров"
+
+msgid "Landmark distance (Meitou)"
+msgstr "Дальность ориентиров (Meitou)"
+
+msgid "Language"
+msgstr "Язык"
+
+msgid "Large "
+msgstr "Крупная "
+
+msgid "Large foliage"
+msgstr "Крупная растительность"
+
+msgid "Large foliage range"
+msgstr "Дальность крупной растительности"
+
+msgid "Large foliage range (F6 Meitou)"
+msgstr "Дальность крупной растительности (F6 Meitou)"
+
+msgid "Large impostor"
+msgstr "Крупный импостер"
+
+msgid "Large impostor distance"
+msgstr "Дальность крупных импостеров"
+
+msgid "Large impostor distance (F7 Meitou)"
+msgstr "Дальность крупных импостеров (F7 Meitou)"
+
+msgid "Late dodges and blocks"
+msgstr "Поздние уклонения и блоки"
+
+msgid "Latest"
+msgstr "Последняя"
+
+msgid "Latest (update to {1})"
+msgstr "Последняя (обновить до {1})"
+
+msgid "Latest ({1})"
+msgstr "Последняя ({1})"
+
+msgid "Launch arguments"
+msgstr "Аргументы запуска"
+
+msgid "Launch arguments have {1}, which picks the start itself: remove it to continue a save."
+msgstr "В аргументах запуска есть {1}, который сам выбирает старт: уберите его, чтобы продолжить сохранение."
+
+msgid "Launch as Kenshi on Steam"
+msgstr "Запускать как Kenshi в Steam"
+
+msgid "Launcher"
+msgstr "Лаунчер"
+
+msgid "Launcher update failed: {1}"
+msgstr "Ошибка обновления лаунчера: {1}"
+
+msgid "Launcher {1} is available."
+msgstr "Доступен лаунчер {1}."
+
+msgid "Lay a fine film grain over the picture, in every camera."
+msgstr "Накладывать мелкое плёночное зерно на изображение во всех камерах."
+
+msgid "Layers and steps of the ground relief; lower is cheaper."
+msgstr "Слои и шаги рельефа земли; меньше — дешевле."
+
+msgid "Leave fading tracks on the ground after walking through fresh blood."
+msgstr "Оставлять на земле исчезающие следы после прохода по свежей крови."
+
+msgid "Leaves the hats and helmets of your characters out of the picture, so their faces and hair show; they stay worn and protect as before. Portraits only: in the interface's portraits. On: in the world too. Off: hats are drawn everywhere, as in the game."
+msgstr "Убирает шляпы и шлемы ваших персонажей из изображения, чтобы были видны лица и волосы; они остаются надетыми и защищают как прежде. «Только портреты»: на портретах интерфейса. Вкл: и в мире. Выкл: шляпы рисуются везде, как в игре."
+
+msgid "Let bright light glow softly into its surroundings, as in the eye."
+msgstr "Яркий свет мягко светится вокруг, как в глазу."
+
+msgid "Let clouds cast shadows across land and water."
+msgstr "Облака отбрасывают тени на сушу и воду."
+
+msgid "Let shadows shape the light scattered through haze."
+msgstr "Тени формируют свет, рассеянный в дымке."
+
+msgid "Let sunlight soften and warm under bare skin instead of ending at a hard edge."
+msgstr "Солнечный свет смягчается и теплеет под открытой кожей, а не обрывается жёсткой границей."
+
+msgid "Level:"
+msgstr "Уровень:"
+
+msgid "Light"
+msgstr "Свет"
+
+msgid "Light portraits and the character editor with a fixed warm sun and its shadows."
+msgstr "Освещать портреты и редактор персонажа неподвижным тёплым солнцем с тенями."
+
+msgid "Light shafts"
+msgstr "Лучи света"
+
+msgid "Light shafts air"
+msgstr "Воздух для лучей света"
+
+msgid "Light shafts air (0 = none)"
+msgstr "Воздух для лучей света (0 = нет)"
+
+msgid "Light shafts air at dawn and dusk"
+msgstr "Воздух для лучей света на рассвете и закате"
+
+msgid "Light shafts air at dawn and dusk (x)"
+msgstr "Воздух для лучей света на рассвете и закате (x)"
+
+msgid "Light shafts quality"
+msgstr "Качество лучей света"
+
+msgid "Light shafts strength"
+msgstr "Сила лучей света"
+
+msgid "Light the night scene from the planet and moon."
+msgstr "Освещать ночную сцену светом планеты и луны."
+
+msgid "Lighting"
+msgstr "Освещение"
+
+msgid "List the mods folder and the Steam workshop items again"
+msgstr "Заново прочитать папку модов и предметы мастерской Steam"
+
+msgid "Load button"
+msgstr "Кнопка загрузки"
+
+msgid "Load the game from the quicksave slot."
+msgstr "Загрузить игру из слота быстрого сохранения."
+
+msgid "Load the newest save, {1} ({2}); its mods must be the enabled ones"
+msgstr "Загрузить последнее сохранение, {1} ({2}); его моды должны быть включены"
+
+msgid "Load this save? Unsaved progress will be lost."
+msgstr "Загрузить это сохранение? Несохранённый прогресс будет потерян."
+
+msgid "Loaded; the save was made with mods not loaded now: {1}"
+msgstr "Загружено; сохранение сделано с модами, которые сейчас не загружены: {1}"
+
+msgid "Loaded; the save was made with {1} mod(s) not loaded now (listed in the messages)"
+msgstr "Загружено; сохранение сделано с модами ({1}), которые сейчас не загружены (перечислены в сообщениях)"
+
+msgid "Loads after {1}"
+msgstr "Загружается после {1}"
+
+msgid "Local mod"
+msgstr "Локальный мод"
+
+msgid "Lock Doors"
+msgstr "Запереть двери"
+
+msgid "Look"
+msgstr "Стиль"
+
+msgid "Look at camera"
+msgstr "Смотреть в камеру"
+
+msgid "Loot into backpack"
+msgstr "Добыча в рюкзак"
+
+msgid "Low holds off: {1}."
+msgstr "«Низкие» не трогают: {1}."
+
+msgid "Low impact"
+msgstr "Слабая нагрузка"
+
+msgid "Low power"
+msgstr "Мало энергии"
+
+msgid "Low quality applied: {1} off until you keep them on."
+msgstr "Применено низкое качество: {1} выключено, пока вы их не включите."
+
+msgid "Lower is cheaper and softer."
+msgstr "Меньше — дешевле и мягче."
+
+msgid "Lower the camera in free camera mode."
+msgstr "Опустить камеру в режиме свободной камеры."
+
+msgid "MAIN MENU"
+msgstr "ГЛАВНОЕ МЕНЮ"
+
+msgid "MEITOU"
+msgstr "MEITOU"
+
+msgid "MEITOU LAUNCHER"
+msgstr "ЛАУНЧЕР MEITOU"
+
+msgid "MODS"
+msgstr "МОДЫ"
+
+msgid "Main menu"
+msgstr "Главное меню"
+
+msgid "Main menu scene transitions"
+msgstr "Переходы между сценами в главном меню"
+
+msgid "Main menu style"
+msgstr "Стиль главного меню"
+
+msgid "Main menu transition speed"
+msgstr "Скорость переходов в главном меню"
+
+msgid "Maintained by"
+msgstr "Поддерживает"
+
+msgid "Match the display refresh rate to prevent tearing."
+msgstr "Синхронизировать с частотой обновления дисплея, чтобы избежать разрывов."
+
+msgid "Maximise"
+msgstr "Развернуть"
+
+msgid "Maximum"
+msgstr "Максимум"
+
+msgid "Maximum distance at which objects remain visible."
+msgstr "Максимальное расстояние, на котором объекты остаются видимыми."
+
+msgid "Maximum visibility range for medium-sized foliage."
+msgstr "Максимальная дальность видимости растительности среднего размера."
+
+msgid "Maximum visibility range for small foliage."
+msgstr "Максимальная дальность видимости мелкой растительности."
+
+msgid "Maximum visibility range for the largest foliage."
+msgstr "Максимальная дальность видимости самой крупной растительности."
+
+msgid "Measure that shading from each pixel's horizon. Needs Ambient occlusion."
+msgstr "Вычислять это затенение от горизонта каждого пикселя. Требуется затенение окружения."
+
+msgid "Medium foliage"
+msgstr "Средняя растительность"
+
+msgid "Medium foliage range"
+msgstr "Дальность средней растительности"
+
+msgid "Medium impact"
+msgstr "Средняя нагрузка"
+
+msgid "Meitou (on)"
+msgstr "Meitou (вкл)"
+
+msgid "Meitou (when busy)"
+msgstr "Meitou (при нагрузке)"
+
+msgid "Meitou - Faithful UI"
+msgstr "Meitou - оригинальный интерфейс"
+
+msgid "Meitou Launcher"
+msgstr "Лаунчер Meitou"
+
+msgid "Meitou cascades"
+msgstr "Каскады Meitou"
+
+msgid "Meitou improvements (unticked: as the game)"
+msgstr "Улучшения Meitou (без галочки: как в игре)"
+
+msgid "Meitou is already running: close it before starting it again."
+msgstr "Meitou уже запущен: закройте его, прежде чем запускать снова."
+
+msgid "Meitou needs Kenshi: it does not include Kenshi's data. You must own Kenshi and point Meitou at its folder."
+msgstr "Meitou нужна Kenshi: данных Kenshi в нём нет. У вас должна быть Kenshi, и Meitou нужно указать её папку."
+
+msgid "Meitou port"
+msgstr "Порт для Meitou"
+
+msgid "Meitou port on the Steam workshop, endorsed by Meitou: {1} by {2}"
+msgstr "Порт для Meitou в мастерской Steam, одобренный Meitou: {1} от {2}"
+
+msgid "Meitou port, endorsed by Meitou: {1} by {2} (installed)"
+msgstr "Порт для Meitou, одобренный Meitou: {1} от {2} (установлен)"
+
+msgid "Meitou ports of your mods"
+msgstr "Порты ваших модов для Meitou"
+
+msgid "Meitou {1} is not installed any more."
+msgstr "Meitou {1} больше не установлен."
+
+msgid "Meitou {1} started with {2}{3}."
+msgstr "Meitou {1} запущен с {2}{3}."
+
+msgid "Meitou {1} started."
+msgstr "Meitou {1} запущен."
+
+msgid "Meitou {1} stopped with an error (exit code {2}); its log is {3}"
+msgstr "Meitou {1} завершился с ошибкой (код выхода {2}); его журнал: {3}"
+
+msgid "Meitou: "
+msgstr "Meitou: "
+
+msgid "Meitou: on"
+msgstr "Meitou: вкл"
+
+msgid "Mesh welding"
+msgstr "Сварка сеток"
+
+msgid "Metal (native)"
+msgstr "Metal (нативный)"
+
+msgid "Metal (native)."
+msgstr "Metal (нативный)."
+
+msgid "Metal is not available on this Mac; Auto uses Vulkan."
+msgstr "Metal недоступен на этом Mac; «Авто» использует Vulkan."
+
+msgid "Metal memory budget"
+msgstr "Бюджет памяти Metal"
+
+msgid "Metal memory budget: automatic."
+msgstr "Бюджет памяти Metal: автоматически."
+
+msgid "Metal memory budget: {1} MB."
+msgstr "Бюджет памяти Metal: {1} МБ."
+
+msgid "Metal needs an Apple-silicon Mac; choose Auto or Vulkan."
+msgstr "Metal требует Mac на Apple silicon; выберите «Авто» или Vulkan."
+
+msgid "Metal on buildings"
+msgstr "Металл на зданиях"
+
+msgid "Metal on characters"
+msgstr "Металл на персонажах"
+
+msgid "Metal render scale"
+msgstr "Масштаб рендера Metal"
+
+msgid "Metal upscaling preset"
+msgstr "Пресет апскейлинга Metal"
+
+msgid "MetalFX Balanced 0.59"
+msgstr "MetalFX Сбалансированный 0.59"
+
+msgid "MetalFX Performance 0.50"
+msgstr "MetalFX Производительность 0.50"
+
+msgid "MetalFX Quality 0.67"
+msgstr "MetalFX Качество 0.67"
+
+msgid "MetalFX Spatial 0.40 (alternative)"
+msgstr "MetalFX Пространственный 0.40 (альтернатива)"
+
+msgid "MetalFX Spatial 0.50 (alternative)"
+msgstr "MetalFX Пространственный 0.50 (альтернатива)"
+
+msgid "MetalFX Super Quality 0.77"
+msgstr "MetalFX Сверхкачество 0.77"
+
+msgid "MetalFX Temporal 0.40"
+msgstr "MetalFX Временной 0.40"
+
+msgid "MetalFX spatial"
+msgstr "MetalFX пространственный"
+
+msgid "MetalFX temporal"
+msgstr "MetalFX временной"
+
+msgid "MetalFX temporal is the default at every tier; spatial rows are explicit alternatives. The preset sets the render scale, and the render scale slider fine-tunes it (Custom)."
+msgstr "Временной MetalFX используется по умолчанию на всех уровнях; пространственные варианты — явная альтернатива. Пресет задаёт масштаб рендера, а ползунок масштаба рендера уточняет его («Свой»)."
+
+msgid "Mine"
+msgstr "Добывать"
+
+msgid "Mine · Meitou {1}"
+msgstr "Моя · Meitou {1}"
+
+msgid "Minimise"
+msgstr "Свернуть"
+
+msgid "Minutes of unpaused play between autosaves (the game: 10)."
+msgstr "Минут игры без паузы между автосохранениями (в игре: 10)."
+
+msgid "Mod Warning"
+msgstr "Предупреждение мода"
+
+msgid "Mod list saved: {1} enabled."
+msgstr "Список модов сохранён: включено {1}."
+
+msgid "Modifications to the GLOBAL_CONSTANTS will be lost, you'll have to set them again, sorry!"
+msgstr "Изменения GLOBAL_CONSTANTS будут потеряны, их придётся задать заново, извините!"
+
+msgid "Mods arranged by their dependencies."
+msgstr "Моды упорядочены по зависимостям."
+
+msgid "Mods arranged by their dependencies; {1} still need attention."
+msgstr "Моды упорядочены по зависимостям; {1} всё ещё требуют внимания."
+
+msgid "Mods from a save"
+msgstr "Моды из сохранения"
+
+msgid "Mods of the save '{1}' applied."
+msgstr "Моды сохранения «{1}» применены."
+
+msgid "Mods: {1} loaded"
+msgstr "Моды: загружено {1}"
+
+msgid "Mods: {1} of {2} loaded"
+msgstr "Моды: загружено {1} из {2}"
+
+msgid "Move the camera backward."
+msgstr "Камера назад."
+
+msgid "Move the camera forward."
+msgstr "Камера вперёд."
+
+msgid "Move the camera left."
+msgstr "Камера влево."
+
+msgid "Move the camera right."
+msgstr "Камера вправо."
+
+msgid "Move the installed versions from {1} to {2}? Kept, they stay where they are and the new folder lists only its own."
+msgstr "Переместить установленные версии из {1} в {2}? Если оставить, они останутся на месте, а новая папка покажет только свои."
+
+msgid "Move the light probes out of walls."
+msgstr "Выносить световые пробы из стен."
+
+msgid "Move the view closer."
+msgstr "Приблизить вид."
+
+msgid "Move the view farther away."
+msgstr "Отдалить вид."
+
+msgid "Move them"
+msgstr "Переместить"
+
+msgid "Moves the point the camera looks at sideways: above 0 the character stands left of the middle (a view over the right shoulder), below 0 right of it. It shows less the farther the camera is."
+msgstr "Смещает точку взгляда камеры вбок: выше 0 персонаж стоит левее центра (вид из-за правого плеча), ниже 0 — правее. Чем дальше камера, тем меньше заметно."
+
+msgid "Moving installed versions…"
+msgstr "Перемещение установленных версий…"
+
+msgid "Music frequency"
+msgstr "Частота музыки"
+
+msgid "My look"
+msgstr "Мой стиль"
+
+msgid "NEW GAME"
+msgstr "НОВАЯ ИГРА"
+
+msgid "NONE"
+msgstr "НЕТ"
+
+msgid "Near tree fade"
+msgstr "Растворение близких деревьев"
+
+msgid "Needs first aid"
+msgstr "Нужна первая помощь"
+
+msgid "Needs research"
+msgstr "Нужно исследование"
+
+msgid "Needs restart"
+msgstr "Нужен перезапуск"
+
+msgid "Needs {1}"
+msgstr "Нужно: {1}"
+
+msgid "New version {1}"
+msgstr "Новая версия {1}"
+
+msgid "Newer version out"
+msgstr "Вышла новая версия"
+
+msgid "News"
+msgstr "Новости"
+
+msgid "News video sound"
+msgstr "Звук видео в новостях"
+
+msgid "News: GitHub answered {1}"
+msgstr "Новости: GitHub ответил {1}"
+
+msgid "News: GitHub not reachable"
+msgstr "Новости: GitHub недоступен"
+
+msgid "Night air"
+msgstr "Ночной воздух"
+
+msgid "Night ambient"
+msgstr "Ночное освещение"
+
+msgid "Night ambient light strength"
+msgstr "Сила ночного окружающего света"
+
+msgid "Night ambient light strength (1 = 1.2x game)"
+msgstr "Сила ночного окружающего света (1 = 1.2x игры)"
+
+msgid "Night grading"
+msgstr "Ночная цветокоррекция"
+
+msgid "Night grading strength"
+msgstr "Сила ночной цветокоррекции"
+
+msgid "Night grading strength (0 = game)"
+msgstr "Сила ночной цветокоррекции (0 = игра)"
+
+msgid "Night sky"
+msgstr "Ночное небо"
+
+msgid "Nightly builds"
+msgstr "Ночные сборки"
+
+msgid ""
+"Nightly builds are made twice a day from the newest code and are not tested. They may be unstable, crash, and corrupt your save files: back up your saves before playing one.\n"
+"\n"
+"Continue with nightly builds?"
+msgstr ""
+"Ночные сборки собираются дважды в день из самого нового кода и не тестируются. Они могут быть нестабильны, вылетать и портить сохранения: сделайте резервную копию сохранений перед игрой.\n"
+"\n"
+"Продолжить с ночными сборками?"
+
+msgid "No character selected"
+msgstr "Персонаж не выбран"
+
+msgid "No free bed to take anyone to."
+msgstr "Нет свободной кровати, куда отнести."
+
+msgid "No game data loaded."
+msgstr "Игровые данные не загружены."
+
+msgid "No impact"
+msgstr "Без нагрузки"
+
+msgid "No mods found in Kenshi's mods folder or among its Steam workshop items."
+msgstr "В папке модов Kenshi и среди предметов мастерской Steam моды не найдены."
+
+msgid "No mods match the search."
+msgstr "Ни один мод не подходит под поиск."
+
+msgid "No news yet."
+msgstr "Новостей пока нет."
+
+msgid "No preset yet. Save preset keeps the settings of every tab."
+msgstr "Пресетов пока нет. «Сохранить пресет» сохраняет настройки всех вкладок."
+
+msgid "No release with a {1} build found yet"
+msgstr "Выпуск со сборкой {1} пока не найден"
+
+msgid "No releases listed yet. Check for releases below."
+msgstr "Выпусков пока нет. Проверьте выпуски ниже."
+
+msgid "No save to continue."
+msgstr "Нет сохранения для продолжения."
+
+msgid "No saves found."
+msgstr "Сохранения не найдены."
+
+msgid "No setting matches the search."
+msgstr "Ни одна настройка не подходит под поиск."
+
+msgid "No thanks"
+msgstr "Нет, спасибо"
+
+msgid "No water"
+msgstr "Без воды"
+
+msgid "No {1} found"
+msgstr "{1} не найден"
+
+msgid "Nobody here to bail out."
+msgstr "Здесь некого выкупать."
+
+msgid "Not enough money: the bail is c.{1}."
+msgstr "Не хватает денег: залог c.{1}."
+
+msgid "Numbers that float over a character when a blow lands, with the damage armour stopped in brackets. Simple shows the total, Full one number per damage type and the part hit."
+msgstr "Числа, всплывающие над персонажем при ударе, с поглощённым бронёй уроном в скобках. «Простые» показывают итог, «Полные» — по числу на каждый тип урона и поражённую часть тела."
+
+msgid "OPTIONS"
+msgstr "НАСТРОЙКИ"
+
+msgid "OVERWRITE SAVE"
+msgstr "ПЕРЕЗАПИСАТЬ СОХРАНЕНИЕ"
+
+msgid "Object LOD"
+msgstr "LOD объектов"
+
+msgid "Object LOD distance multiplier"
+msgstr "Множитель дальности LOD объектов"
+
+msgid "Object LOD distance x"
+msgstr "Множитель дальности LOD объектов"
+
+msgid "Object draw distance"
+msgstr "Дальность прорисовки объектов"
+
+msgid "Objects"
+msgstr "Объекты"
+
+msgid "Off (flat ambient)"
+msgstr "Выкл (плоский окружающий свет)"
+
+msgid "Off at Low quality. Choose Meitou to keep it on at Low."
+msgstr "Выключено при низком качестве. Выберите Meitou, чтобы оставить включённым."
+
+msgid "Offline: saved posts"
+msgstr "Офлайн: сохранённые записи"
+
+msgid "On"
+msgstr "Вкл"
+
+msgid "On: render below the screen's size and upscale (MetalFX or TAA), with a render scale to choose. Off: render at the screen's size, or in full screen at a fraction of it with a resolution to choose."
+msgstr "Вкл: рендерить ниже размера экрана и масштабировать (MetalFX или TAA) с выбором масштаба рендера. Выкл: рендерить в размере экрана или в полноэкранном режиме в его доле с выбором разрешения."
+
+msgid "Only for:"
+msgstr "Только для:"
+
+msgid "Only nightly builds so far: tick Nightly builds beside Play to list them."
+msgstr "Пока есть только ночные сборки: отметьте «Ночные сборки» рядом с «Играть», чтобы увидеть их."
+
+msgid "Open Doors"
+msgstr "Открыть двери"
+
+msgid "Open bags at once"
+msgstr "Сразу открывать сумки"
+
+msgid "Open folder"
+msgstr "Открыть папку"
+
+msgid "Open its Steam workshop page"
+msgstr "Открыть его страницу в мастерской Steam"
+
+msgid "Open its page"
+msgstr "Открыть его страницу"
+
+msgid "Open or close the build menu."
+msgstr "Открыть или закрыть меню строительства."
+
+msgid "Open or close the debug menu: teleport, spawn, items, money, heal and damage."
+msgstr "Открыть или закрыть меню отладки: телепорт, появление, предметы, деньги, лечение и урон."
+
+msgid "Open or close the selected character's inventory."
+msgstr "Открыть или закрыть инвентарь выбранного персонажа."
+
+msgid "Open or close the selected character's stats window."
+msgstr "Открыть или закрыть окно характеристик выбранного персонажа."
+
+msgid "Open or close this settings dialog."
+msgstr "Открыть или закрыть это окно настроек."
+
+msgid "Open the Tutorials window, or close it."
+msgstr "Открыть или закрыть окно обучения."
+
+msgid "Open the crafting page, or close it."
+msgstr "Открыть или закрыть страницу ремесла."
+
+msgid "Open the faction page, or close it."
+msgstr "Открыть или закрыть страницу фракции."
+
+msgid "Open the installed version's folder"
+msgstr "Открыть папку установленной версии"
+
+msgid "Open the launcher's release page"
+msgstr "Открыть страницу выпусков лаунчера"
+
+msgid "Open the public wishlist of RE_Kenshi mods for Meitou, where you can ask for this one"
+msgstr "Открыть общий список пожеланий модов RE_Kenshi для Meitou, где можно попросить этот"
+
+msgid "Open the research page, or close it."
+msgstr "Открыть или закрыть страницу исследований."
+
+msgid "Open the world map, or close it."
+msgstr "Открыть или закрыть карту мира."
+
+msgid "Open {1} pages"
+msgstr "Открыть страницы: {1}"
+
+msgid "Orbit the camera to the left round its target."
+msgstr "Облететь камерой цель влево."
+
+msgid "Orbit the camera to the right round its target."
+msgstr "Облететь камерой цель вправо."
+
+msgid "Others"
+msgstr "Прочее"
+
+msgid "Others' XP"
+msgstr "Опыт остальных"
+
+msgid "Outdoors"
+msgstr "Снаружи"
+
+msgid "Outline and tint the character under the cursor, in the colour of what a right click would do."
+msgstr "Обводить и подсвечивать персонажа под курсором цветом действия правой кнопки."
+
+msgid "Outline and tint the selected building, and the building under the cursor in the colour of what a right click would do, like a character under the cursor, except while its interior is shown."
+msgstr "Обводить и подсвечивать выбранное здание и здание под курсором цветом действия правой кнопки, как персонажа под курсором, кроме случаев, когда показан его интерьер."
+
+msgid "Output:"
+msgstr "Выход:"
+
+msgid "Overlaymaps"
+msgstr "Наложенные карты"
+
+msgid "PROSPECTING RESULTS"
+msgstr "РЕЗУЛЬТАТЫ РАЗВЕДКИ"
+
+msgid "Particle density multiplier"
+msgstr "Множитель плотности частиц"
+
+msgid "Particle density x"
+msgstr "Множитель плотности частиц"
+
+msgid "Passed to the game, e.g. --faithful or --windowed."
+msgstr "Передаются игре, например --faithful или --windowed."
+
+msgid "Paste"
+msgstr "Вставить"
+
+msgid "Pause after loading"
+msgstr "Пауза после загрузки"
+
+msgid "Pause or resume the simulation."
+msgstr "Поставить на паузу или продолжить симуляцию."
+
+msgid "Pause while loading"
+msgstr "Пауза во время загрузки"
+
+msgid "Paused"
+msgstr "На паузе"
+
+msgid "Peak brightness"
+msgstr "Пиковая яркость"
+
+msgid "Performance"
+msgstr "Производительность"
+
+msgid "Photo mode"
+msgstr "Фоторежим"
+
+msgid "Photo mode: the simulation pauses, the interface hides, and a free camera with a lens, roll, exposure, time of day and composition guides takes pictures."
+msgstr "Фоторежим: симуляция встаёт на паузу, интерфейс скрывается, а свободная камера с объективом, креном, экспозицией, временем суток и сетками композиции делает снимки."
+
+msgid "Picked-up and looted items go into the character's backpack first, then its slots and inventory (the game: only while the bag window is open)."
+msgstr "Подобранные и снятые с тел предметы сначала идут в рюкзак персонажа, затем в слоты и инвентарь (в игре: только пока открыто окно сумки)."
+
+msgid "Picking up"
+msgstr "Подбирание"
+
+msgid "Picture size"
+msgstr "Размер снимка"
+
+msgid "Pictures"
+msgstr "Снимки"
+
+msgid "Place here"
+msgstr "Поставить сюда"
+
+msgid "Planetshine"
+msgstr "Свет планеты"
+
+msgid "Planetshine strength"
+msgstr "Сила света планеты"
+
+msgid "Planetshine strength (x physical)"
+msgstr "Сила света планеты (x физической)"
+
+msgid "Plate, tanks and machinery read as metal; rust and paint stay matte."
+msgstr "Пластины, баки и механизмы выглядят металлом; ржавчина и краска остаются матовыми."
+
+msgid "Play latest"
+msgstr "Играть в последнюю"
+
+msgid "Play starts Meitou {1}."
+msgstr "«Играть» запускает Meitou {1}."
+
+msgid "Play starts the latest installed version."
+msgstr "«Играть» запускает последнюю установленную версию."
+
+msgid "Play this version"
+msgstr "Играть в эту версию"
+
+msgid "Play {1}"
+msgstr "Играть в {1}"
+
+msgid "Playback"
+msgstr "Воспроизведение"
+
+msgid "Points added to every interface font's default height (the game: 3)."
+msgstr "Пункты, добавляемые к высоте каждого шрифта интерфейса по умолчанию (в игре: 3)."
+
+msgid "Polished armour"
+msgstr "Полированная броня"
+
+msgid "Portrait and editor sun"
+msgstr "Солнце для портретов и редактора"
+
+msgid "Portraits only"
+msgstr "Только портреты"
+
+msgid "Portuguese (Brazil)"
+msgstr "Португальский (Бразилия)"
+
+msgid "Pose"
+msgstr "Поза"
+
+msgid "Pose moment"
+msgstr "Момент позы"
+
+msgid "Pose speed"
+msgstr "Скорость позы"
+
+msgid "Post FX"
+msgstr "Постобработка"
+
+msgid "Preset '{1}' applied."
+msgstr "Пресет «{1}» применён."
+
+msgid "Preset '{1}' deleted."
+msgstr "Пресет «{1}» удалён."
+
+msgid "Preset '{1}' saved."
+msgstr "Пресет «{1}» сохранён."
+
+msgid "Preset name"
+msgstr "Название пресета"
+
+msgid "Presets"
+msgstr "Пресеты"
+
+msgid "Prisoners hold still"
+msgstr "Пленники не двигаются"
+
+msgid "Probes"
+msgstr "Пробы"
+
+msgid "Probes (ray tracing)"
+msgstr "Пробы (трассировка лучей)"
+
+msgid "Probes + hybrid cache"
+msgstr "Пробы + гибридный кэш"
+
+msgid "Probes and cache"
+msgstr "Пробы и кэш"
+
+msgid "Probes move out of walls, clouds shade bounced light, a traced cache adds fine detail."
+msgstr "Пробы выносятся из стен, облака затеняют отражённый свет, трассированный кэш добавляет мелкие детали."
+
+msgid "Problems in no mod's file:"
+msgstr "Проблемы вне файлов модов:"
+
+msgid "Production far away"
+msgstr "Производство вдали"
+
+msgid "Propose an order where each enabled mod loads after the mods it needs; nothing moves until you accept"
+msgstr "Предложить порядок, при котором каждый включённый мод загружается после нужных ему модов; ничего не сдвинется, пока вы не согласитесь"
+
+msgid "Proposed moves:"
+msgstr "Предлагаемые перемещения:"
+
+msgid "Prospect the ground with the selected character nearest the camera."
+msgstr "Разведать землю ближайшим к камере выбранным персонажем."
+
+msgid "Proving Grounds"
+msgstr "Полигон"
+
+msgid "Put on Shackles"
+msgstr "Надеть кандалы"
+
+msgid "QUIT"
+msgstr "ВЫХОД"
+
+msgid "Quality preset"
+msgstr "Пресет качества"
+
+msgid "Quarter resolution"
+msgstr "Четверть разрешения"
+
+msgid "RE_Kenshi file rebinds: applied to the map files"
+msgstr "Переназначения файлов RE_Kenshi: применяются к файлам карт"
+
+msgid "RE_Kenshi mod"
+msgstr "Мод RE_Kenshi"
+
+msgid "RE_Kenshi plugin: its DLLs are ignored in Meitou"
+msgstr "Плагин RE_Kenshi: его DLL в Meitou игнорируются"
+
+msgid "RE_Kenshi sound banks: loaded before the game's"
+msgstr "Звуковые банки RE_Kenshi: загружаются перед банками игры"
+
+msgid "Raid and campaign data that builds on a base campaign counts the base's squads and follow-up campaigns once. The game counts them twice, so inherited squads come up more often and follow-up raids are about twice as likely."
+msgstr "Данные набегов и кампаний, основанные на базовой кампании, учитывают отряды базы и последующие кампании один раз. Оригинальная игра считает их дважды, поэтому унаследованные отряды появляются чаще, а последующие набеги примерно вдвое вероятнее."
+
+msgid "Raids as written"
+msgstr "Набеги как задуманы"
+
+msgid "Rain drops and puddles"
+msgstr "Капли дождя и лужи"
+
+msgid "Rain in open buildings"
+msgstr "Дождь в открытых зданиях"
+
+msgid "Rain shows on the world: water runs down walls, drops stand on metal and stone, puddles gather on the ground. Off: as the original."
+msgstr "Дождь виден в мире: вода стекает по стенам, капли держатся на металле и камне, на земле собираются лужи. Выкл: как в оригинале."
+
+msgid "Raise the camera in free camera mode."
+msgstr "Поднять камеру в режиме свободной камеры."
+
+msgid "Raise the nearby ground into real bumps and ridges that cast shadows."
+msgstr "Поднять ближнюю землю настоящими буграми и гребнями, отбрасывающими тени."
+
+msgid "Ray traced"
+msgstr "Трассировка лучей"
+
+msgid "Ray traced + cascades"
+msgstr "Трассировка лучей + каскады"
+
+msgid "Ray-traced probes, or the probes moved out of walls with a fine cache of traced rays near the camera."
+msgstr "Трассированные пробы или пробы, вынесенные из стен, с точным кэшем трассированных лучей у камеры."
+
+msgid "Ray-traced shadows near the camera only; four soft cascades take over further away, where distant trees and buildings keep their shadows."
+msgstr "Трассированные тени только рядом с камерой; дальше их сменяют четыре мягких каскада, и далёкие деревья и здания сохраняют тени."
+
+msgid "Ray-traced sun shadows: sharp at contact, soft with distance. Needs ray tracing."
+msgstr "Трассированные тени от солнца: резкие в месте контакта, мягкие с расстоянием. Требуется трассировка лучей."
+
+msgid "Rays gather the bounced light on each character instead of the probes'. Needs GTAO."
+msgstr "Лучи собирают отражённый свет на каждом персонаже вместо проб. Требуется GTAO."
+
+msgid "Reach"
+msgstr "Досягаемость"
+
+msgid "Ready to harvest"
+msgstr "Готово к сбору"
+
+msgid "Reduce visible colour bands in smooth gradients."
+msgstr "Уменьшить заметные цветовые полосы в плавных градиентах."
+
+msgid "Reflection range"
+msgstr "Дальность отражений"
+
+msgid "Reflection range multiplier"
+msgstr "Множитель дальности отражений"
+
+msgid "Reflection range x (game 0.6)"
+msgstr "Множитель дальности отражений (в игре 0.6)"
+
+msgid "Reflection samples"
+msgstr "Выборки отражений"
+
+msgid "Reflections"
+msgstr "Отражения"
+
+msgid "Refresh"
+msgstr "Обновить"
+
+msgid "Release page"
+msgstr "Страница выпуска"
+
+msgid "Render UI in screen resolution"
+msgstr "Интерфейс в разрешении экрана"
+
+msgid "Render clouds with volume and depth."
+msgstr "Рисовать облака с объёмом и глубиной."
+
+msgid "Render resolution"
+msgstr "Разрешение рендера"
+
+msgid "Render scale"
+msgstr "Масштаб рендера"
+
+msgid "Render scale (upscaler)"
+msgstr "Масштаб рендера (апскейлер)"
+
+msgid "Render weather at an adaptive lower resolution."
+msgstr "Рисовать погоду в адаптивном пониженном разрешении."
+
+msgid "Renderer"
+msgstr "Рендерер"
+
+msgid "Renderer: {1}; Play starts the game with it."
+msgstr "Рендерер: {1}; «Играть» запускает игру с ним."
+
+msgid "Rendering resolution as a share of the window's pixels, under the upscaler the preset chose (MetalFX at 0.40 at least). Only with Use Metal upscaling on."
+msgstr "Разрешение рендера как доля пикселей окна, под апскейлером, выбранным пресетом (MetalFX не меньше 0.40). Только при включённом апскейлинге Metal."
+
+msgid "Rendering resolution for rain, dust and other weather particles."
+msgstr "Разрешение рендера для дождя, пыли и других частиц погоды."
+
+msgid "Request it"
+msgstr "Попросить"
+
+msgid "Requires {1}"
+msgstr "Требует {1}"
+
+msgid "Reset "
+msgstr "Сбросить "
+
+msgid "Reset character"
+msgstr "Сбросить персонажа"
+
+msgid "Reset graphics"
+msgstr "Сбросить графику"
+
+msgid "Restart to apply"
+msgstr "Перезапустите для применения"
+
+msgid "Resting"
+msgstr "Отдых"
+
+msgid "Restore all preferences, controls and the look to their defaults?"
+msgstr "Вернуть все параметры, управление и стиль к значениям по умолчанию?"
+
+msgid "Restore defaults"
+msgstr "Сбросить настройки"
+
+msgid "Restore defaults?"
+msgstr "Сбросить настройки?"
+
+msgid "Return to the main menu or quit the game?"
+msgstr "Вернуться в главное меню или выйти из игры?"
+
+msgid "Return to the main menu or quit the game? Unsaved progress will be lost."
+msgstr "Вернуться в главное меню или выйти из игры? Несохранённый прогресс будет потерян."
+
+msgid "Reverses the camera's tilt, for the mouse and the keys (the game: on)."
+msgstr "Инвертирует наклон камеры для мыши и клавиш (в игре: вкл)."
+
+msgid "Reverses the camera's turn, for the mouse and the keys (the game: off)."
+msgstr "Инвертирует поворот камеры для мыши и клавиш (в игре: выкл)."
+
+msgid "Roaming squads keep their characters when they leave the area around your squads, and travel on as themselves. In the game they are removed and new ones are made later."
+msgstr "Бродячие отряды сохраняют своих персонажей, покидая область вокруг ваших отрядов, и путешествуют дальше сами. В оригинальной игре они удаляются, а позже создаются новые."
+
+msgid "Rock smoothing (tessellation)"
+msgstr "Сглаживание скал (тесселяция)"
+
+msgid "Round off the flat facets of rocks and cliffs up close."
+msgstr "Скруглить плоские грани скал и утёсов вблизи."
+
+msgid "Run the simulation at double speed."
+msgstr "Запустить симуляцию на двойной скорости."
+
+msgid "Run the simulation at five times normal speed."
+msgstr "Запустить симуляцию на пятикратной скорости."
+
+msgid "Run the simulation at normal speed."
+msgstr "Запустить симуляцию на обычной скорости."
+
+msgid "Runs the next world tick while the frame draws: higher frame rates in big fights and crowds, up to 33 ms more input delay."
+msgstr "Выполняет следующий такт мира, пока рисуется кадр: выше частота кадров в больших боях и толпах, до 33 мс больше задержка ввода."
+
+msgid "Russian"
+msgstr "Русский"
+
+msgid "SETTINGS"
+msgstr "НАСТРОЙКИ"
+
+msgid "SSAO is a cheap estimate; GTAO measures how much sky each pixel sees and keeps the colour of the light bounced in corners. Costs more."
+msgstr "SSAO — дешёвая оценка; GTAO измеряет, сколько неба видит каждый пиксель, и сохраняет цвет света, отражённого в углах. Дороже."
+
+msgid "STEALING CHANCE:"
+msgstr "ШАНС КРАЖИ:"
+
+msgid "Safe — 5120 MB"
+msgstr "Безопасно — 5120 МБ"
+
+msgid "Safe: a fixed 5120 MB; the guard shortens ranges and evicts caches sooner."
+msgstr "Безопасно: фиксированные 5120 МБ; защита сокращает дальности и раньше освобождает кэши."
+
+msgid "Sake and rum bottles look like glass: they bend and tint what is behind them, catch reflections and show the drink inside."
+msgstr "Бутылки саке и рома выглядят как стекло: преломляют и окрашивают то, что за ними, ловят отражения и показывают напиток внутри."
+
+msgid "Samples of the shading in creases: lower is cheaper and noisier."
+msgstr "Выборки затенения в складках: меньше — дешевле и шумнее."
+
+msgid "Samples per pixel of the water's reflection: smoother edges, more video memory."
+msgstr "Выборки на пиксель для отражения воды: более гладкие края, больше видеопамяти."
+
+msgid "Save an image of the current view."
+msgstr "Сохранить изображение текущего вида."
+
+msgid "Save as"
+msgstr "Сохранить как"
+
+msgid "Save as a new preset"
+msgstr "Сохранить как новый пресет"
+
+msgid "Save as preset"
+msgstr "Сохранить как пресет"
+
+msgid "Save failed: {1}"
+msgstr "Ошибка сохранения: {1}"
+
+msgid "Save or load still in progress"
+msgstr "Сохранение или загрузка ещё идёт"
+
+msgid "Save preset"
+msgstr "Сохранить пресет"
+
+msgid "Save the game now and attach the save"
+msgstr "Сохранить игру сейчас и приложить сохранение"
+
+msgid "Save the game to the quicksave slot."
+msgstr "Сохранить игру в слот быстрого сохранения."
+
+msgid "Saves the game on its own every few minutes of unpaused play, into three slots in turn (autosave0 to autosave2)."
+msgstr "Сохраняет игру сама каждые несколько минут игры без паузы, по очереди в три слота (autosave0 — autosave2)."
+
+msgid "Scale air scattering around sunrise and sunset."
+msgstr "Масштабировать рассеивание в воздухе около восхода и заката."
+
+msgid "Scale how far away reflected objects are drawn."
+msgstr "Масштабировать, как далеко рисуются отражённые объекты."
+
+msgid "Scale how far trees and other foliage remain visible."
+msgstr "Масштабировать, как далеко видны деревья и другая растительность."
+
+msgid "Scale night lighting from the planet and moon."
+msgstr "Масштабировать ночное освещение от планеты и луны."
+
+msgid "Scale the amount of atmospheric haze."
+msgstr "Масштабировать количество атмосферной дымки."
+
+msgid "Scale the distance at which grass disappears."
+msgstr "Масштабировать расстояние, на котором исчезает трава."
+
+msgid "Scale the distortion caused by hot air."
+msgstr "Масштабировать искажения от горячего воздуха."
+
+msgid "Scale the number of grass instances drawn."
+msgstr "Масштабировать количество рисуемых пучков травы."
+
+msgid "Scale the number of weather particles emitted."
+msgstr "Масштабировать количество частиц погоды."
+
+msgid "Scale the sky's light in shade, at night and indoors."
+msgstr "Масштабировать свет неба в тени, ночью и в помещениях."
+
+msgid "Screen resolution"
+msgstr "Разрешение экрана"
+
+msgid "Search"
+msgstr "Поиск"
+
+msgid "Search results"
+msgstr "Результаты поиска"
+
+msgid "Search settings"
+msgstr "Поиск настроек"
+
+msgid "Seen into a building with its roof hidden, no rain, dust or ash falls over the open room. The game leaves out only what falls inside it, so with the camera pulled back the rain in front still streaks across the room."
+msgstr "Если смотреть внутрь здания со скрытой крышей, дождь, пыль и пепел не падают в открытую комнату. Оригинальная игра убирает только то, что падает внутри, поэтому при отдалённой камере дождь перед зданием всё равно проходит через комнату."
+
+msgid "Seen into a building your characters are in, parts of other buildings that run through it are left out, such as the Hub's town wall in the Shinobi Thieves tower. The game's world places them there and draws them inside the room."
+msgstr "Если смотреть внутрь здания, где находятся ваши персонажи, части других зданий, проходящие сквозь него, не рисуются — например, городская стена Хаба в башне Воров Шиноби. Мир игры ставит их туда и рисует внутри комнаты."
+
+msgid "Segments of the water mesh: fewer is cheaper, far waves lose shape."
+msgstr "Сегменты сетки воды: меньше — дешевле, дальние волны теряют форму."
+
+msgid "Select"
+msgstr "Выбрать"
+
+msgid "Select a mod to see its author, description and problems."
+msgstr "Выберите мод, чтобы увидеть автора, описание и проблемы."
+
+msgid "Select a release to read its notes."
+msgstr "Выберите выпуск, чтобы прочитать заметки."
+
+msgid "Select all"
+msgstr "Выбрать все"
+
+msgid "Select characters and press the interface (the game's left button). Binding it elsewhere moves the other buttons along."
+msgstr "Выберите персонажей и нажмите интерфейс (левая кнопка в игре). Если назначить её на другое, остальные кнопки сдвинутся."
+
+msgid "Select none"
+msgstr "Снять выбор"
+
+msgid "Select the next member of the character's squad."
+msgstr "Выбрать следующего бойца отряда персонажа."
+
+msgid "Select the previous member of the character's squad."
+msgstr "Выбрать предыдущего бойца отряда персонажа."
+
+msgid "Select the whole squad (Shift adds it to the selection)."
+msgstr "Выбрать весь отряд (Shift добавляет к выделению)."
+
+msgid "Select this member of the squad bar (Shift adds them to the selection; press twice to centre on them)."
+msgstr "Выбрать этого бойца на панели отряда (Shift добавляет к выделению; двойное нажатие центрирует на нём)."
+
+msgid "Selected"
+msgstr "Выбрано"
+
+msgid "Send"
+msgstr "Отправить"
+
+msgid "Send anyway"
+msgstr "Всё равно отправить"
+
+msgid "Send feedback"
+msgstr "Отправить отзыв"
+
+msgid "Sending"
+msgstr "Отправка"
+
+msgid "Set foliage visibility by mesh size rather than layer."
+msgstr "Задавать видимость растительности по размеру модели, а не по слою."
+
+msgid "Set the Kenshi folder first (Settings)."
+msgstr "Сначала укажите папку Kenshi (Настройки)."
+
+msgid "Set the Kenshi folder in Settings to list its mods."
+msgstr "Укажите папку Kenshi в настройках, чтобы увидеть её моды."
+
+msgid "Set up Meitou"
+msgstr "Настроить Meitou"
+
+msgid "Sets the upscaler and the render scale. MetalFX temporal by default; spatial is an alternative."
+msgstr "Задаёт апскейлер и масштаб рендера. По умолчанию временной MetalFX; пространственный — альтернатива."
+
+msgid "Settings"
+msgstr "Настройки"
+
+msgid "Settings   (Tab hides this)"
+msgstr "Настройки   (Tab скрывает это)"
+
+msgid "Setup"
+msgstr "Установка"
+
+msgid "Sfx volume"
+msgstr "Громкость эффектов"
+
+msgid "Shadow"
+msgstr "Тени"
+
+msgid "Shadow cascades"
+msgstr "Каскады теней"
+
+msgid "Shadow cascades (Meitou)"
+msgstr "Каскады теней (Meitou)"
+
+msgid "Shadow distance"
+msgstr "Дальность теней"
+
+msgid "Shadow distance (game 1k-9k, 0 off)"
+msgstr "Дальность теней (в игре 1k-9k, 0 выкл)"
+
+msgid "Shadow filter"
+msgstr "Фильтр теней"
+
+msgid "Shadow filter 0-2 (Meitou; 0 low-end)"
+msgstr "Фильтр теней 0-2 (Meitou; 0 для слабых ПК)"
+
+msgid "Shadow map size"
+msgstr "Размер карты теней"
+
+msgid "Shadow map size (game quality 0-2)"
+msgstr "Размер карты теней (качество игры 0-2)"
+
+msgid "Share"
+msgstr "Поделиться"
+
+msgid "Sharp zone"
+msgstr "Зона резкости"
+
+msgid "Sharpen the image after resolution reconstruction."
+msgstr "Повысить резкость изображения после восстановления разрешения."
+
+msgid "Shift dark scenes toward the blue of night vision."
+msgstr "Сдвигать тёмные сцены к синеве ночного зрения."
+
+msgid "Shift pan boost"
+msgstr "Ускорение панорамы с Shift"
+
+msgid "Shift pan speed"
+msgstr "Скорость панорамы с Shift"
+
+msgid "Short sharp sun shadows where small things touch a surface."
+msgstr "Короткие резкие тени от солнца там, где мелкие предметы касаются поверхности."
+
+msgid "Shoulder"
+msgstr "Плечо"
+
+msgid "Show names"
+msgstr "Показывать имена"
+
+msgid "Show only the mods whose name or author holds this text"
+msgstr "Показывать только моды, в имени или авторе которых есть этот текст"
+
+msgid "Show or hide frame statistics."
+msgstr "Показать или скрыть статистику кадров."
+
+msgid "Show the next squad in the squad bar."
+msgstr "Показать следующий отряд на панели отрядов."
+
+msgid "Shows the tutorial hints as you play (the game: on)."
+msgstr "Показывает обучающие подсказки во время игры (в игре: вкл)."
+
+msgid "Sideways"
+msgstr "Вбок"
+
+msgid "Simulation"
+msgstr "Симуляция"
+
+msgid "Size of the squads made from now on: townspeople, roaming squads and raids (the game: 1). Affects performance."
+msgstr "Размер отрядов, создаваемых с этого момента: горожане, бродячие отряды и набеги (в игре: 1). Влияет на производительность."
+
+msgid "Size of the wave simulation: smaller is cheaper and coarser."
+msgstr "Размер симуляции волн: меньше — дешевле и грубее."
+
+msgid "Skin"
+msgstr "Кожа"
+
+msgid "Skin scatters light on this race (the default)."
+msgstr "Кожа этой расы рассеивает свет (по умолчанию)."
+
+msgid "Skin sheen and glow"
+msgstr "Блеск и свечение кожи"
+
+msgid "Skin's oily sheen, a soft bright edge, and light through ears and fingers."
+msgstr "Жирный блеск кожи, мягкий светлый край и свет сквозь уши и пальцы."
+
+msgid "Skip v{1}"
+msgstr "Пропустить v{1}"
+
+msgid "Skipped {1}: the arrow's menu can still install it."
+msgstr "Пропущена {1}: её всё ещё можно установить из меню стрелки."
+
+msgid "Sky"
+msgstr "Небо"
+
+msgid "Sky & weather"
+msgstr "Небо и погода"
+
+msgid "Slavers and other cage guards leave their own faction's people in their cages alone instead of making them slaves. In the game they enslave them too. Arrests that end in slavery are not affected."
+msgstr "Работорговцы и другие охранники клеток оставляют людей своей фракции в клетках в покое, а не делают их рабами. В оригинальной игре они порабощают и их. Аресты, заканчивающиеся рабством, не затрагиваются."
+
+msgid "Small foliage"
+msgstr "Мелкая растительность"
+
+msgid "Small foliage range"
+msgstr "Дальность мелкой растительности"
+
+msgid "Small pits in the ground are filled and thin needles of ground standing above flat land are lowered, such as the pit near the Dead Workshop and some needles in the Crater. Off, the ground is exactly as the game's map file has it."
+msgstr "Мелкие ямы в земле засыпаются, а тонкие иглы земли над ровной местностью опускаются — например, яма у Мёртвой мастерской и некоторые иглы в Кратере. Выкл: земля точно такая, как в файле карты игры."
+
+msgid "Smooth the outline of hills and crests against the sky."
+msgstr "Сглаживать контуры холмов и гребней на фоне неба."
+
+msgid "Smooths edges and upscales the render. Active: {1}"
+msgstr "Сглаживает края и масштабирует рендер. Активно: {1}"
+
+msgid "Sneak attack"
+msgstr "Скрытная атака"
+
+msgid "Soft cascaded maps to the horizon, or a ray to the sun from every pixel: as sharp as the caster is close, grass shadows too (needs ray tracing, turns on indirect light); or rays near the camera and soft cascades further away."
+msgstr "Мягкие каскадные карты до горизонта или луч к солнцу из каждого пикселя: тень тем резче, чем ближе объект, включая тени травы (нужна трассировка лучей, включает непрямой свет); или лучи у камеры и мягкие каскады дальше."
+
+msgid "Soft cascades"
+msgstr "Мягкие каскады"
+
+msgid "Soft grazing sun"
+msgstr "Мягкое скользящее солнце"
+
+msgid "Soften dust and fog where they meet the ground, and light them by the sun and its shadows."
+msgstr "Смягчать пыль и туман у земли и освещать их солнцем и его тенями."
+
+msgid "Sound range"
+msgstr "Дальность звука"
+
+msgid "Sound voices"
+msgstr "Звуковые голоса"
+
+msgid "Spanish"
+msgstr "Испанский"
+
+msgid "Speed units"
+msgstr "Единицы скорости"
+
+msgid "Splash blood on walls, buildings and rocks as well as the ground; pools stay on floors."
+msgstr "Брызги крови на стенах, зданиях и скалах, а не только на земле; лужи остаются на полу."
+
+msgid "Splash screens"
+msgstr "Заставки"
+
+msgid "Squad XP"
+msgstr "Опыт отряда"
+
+msgid "Squad XP in the Advanced settings"
+msgstr "Опыт отряда в расширенных настройках"
+
+msgid "Squads keep their people"
+msgstr "Отряды сохраняют своих людей"
+
+msgid "Start Meitou {1}"
+msgstr "Запустить Meitou {1}"
+
+msgid "Start Meitou {1} at the main menu"
+msgstr "Запустить Meitou {1} в главном меню"
+
+msgid "Start a new game? Unsaved progress will be lost."
+msgstr "Начать новую игру? Несохранённый прогресс будет потерян."
+
+msgid "Started {1}"
+msgstr "Запущено: {1}"
+
+msgid "Stays"
+msgstr "Остаётся"
+
+msgid "Steam could not subscribe"
+msgstr "Steam не смог оформить подписку"
+
+msgid "Steam did not answer in time."
+msgstr "Steam не ответил вовремя."
+
+msgid "Steam did not subscribe to anything."
+msgstr "Steam ни на что не подписался."
+
+msgid "Steam gave no answer."
+msgstr "Steam не ответил."
+
+msgid "Steam is downloading your workshop mods: {1} of {2} installed."
+msgstr "Steam загружает ваши моды мастерской: установлено {1} из {2}."
+
+msgid "Steam is still downloading; press Refresh when it is done."
+msgstr "Steam всё ещё загружает; нажмите «Обновить», когда он закончит."
+
+msgid "Steam sees the game as Kenshi: the overlay, play time and Steam's screenshot key. Needs the Steam copy of Kenshi."
+msgstr "Steam считает игру Kenshi: оверлей, время в игре и клавиша скриншотов Steam. Нужна копия Kenshi из Steam."
+
+msgid "Steam workshop"
+msgstr "Мастерская Steam"
+
+msgid "Step down to the previous simulation speed."
+msgstr "Снизить скорость симуляции на шаг."
+
+msgid "Step the selection's movement speed: walk, jog, run, group."
+msgstr "Переключить скорость движения выделенных: шаг, бег трусцой, бег, строем."
+
+msgid "Step up to the next simulation speed."
+msgstr "Повысить скорость симуляции на шаг."
+
+msgid "Stop syncing"
+msgstr "Остановить синхронизацию"
+
+msgid "Stop the selected characters."
+msgstr "Остановить выбранных персонажей."
+
+msgid "Store the game's models more compactly: about half the video memory, the same look."
+msgstr "Хранить модели игры компактнее: примерно вдвое меньше видеопамяти, тот же вид."
+
+msgid "Subscribe"
+msgstr "Подписаться"
+
+msgid "Subscribe to this mod's Meitou port on the Steam workshop, or open its page"
+msgstr "Подписаться на порт этого мода для Meitou в мастерской Steam или открыть его страницу"
+
+msgid "Subscribed on Steam: {1}."
+msgstr "Подписка в Steam оформлена: {1}."
+
+msgid "Subscribing could not be started."
+msgstr "Не удалось начать подписку."
+
+msgid "Sun shadow technique"
+msgstr "Техника теней от солнца"
+
+msgid "Sun shadows"
+msgstr "Тени от солнца"
+
+msgid "Super quality"
+msgstr "Сверхкачество"
+
+msgid "Support me on Ko-fi"
+msgstr "Поддержите меня на Ko-fi"
+
+msgid "Swamp turtle attacks"
+msgstr "Атаки болотной черепахи"
+
+msgid "Swamp turtle attacks on the Fixes page"
+msgstr "Атаки болотной черепахи на странице «Исправления»"
+
+msgid "Swamp turtle attacks on the Fixes page is on"
+msgstr "Атаки болотной черепахи на странице «Исправления» включены"
+
+msgid "Swap the left and right mouse buttons (the game: off; the game view follows, as in the original)."
+msgstr "Поменять местами левую и правую кнопки мыши (в игре: выкл; вид игры следует за этим, как в оригинале)."
+
+msgid "Swaps a few strong words in the dialogue for milder ones (the game's censorship option)."
+msgstr "Заменяет несколько грубых слов в диалогах на более мягкие (опция цензуры игры)."
+
+msgid "Switch between orbit and free camera movement."
+msgstr "Переключить камеру между облётом и свободным движением."
+
+msgid "Sync stopped with {1} of {2} workshop mods installed; Steam keeps downloading in the background."
+msgstr "Синхронизация остановлена, установлено {1} из {2} модов мастерской; Steam продолжает загрузку в фоне."
+
+msgid "Sync workshop"
+msgstr "Синхронизировать мастерскую"
+
+msgid "TAA (experimental)"
+msgstr "TAA (экспериментально)"
+
+msgid "TAA 0.50 (experimental)"
+msgstr "TAA 0.50 (экспериментально)"
+
+msgid "THANK YOU"
+msgstr "СПАСИБО"
+
+msgid "TRADER"
+msgstr "ТОРГОВЕЦ"
+
+msgid "Take picture"
+msgstr "Сделать снимок"
+
+msgid "Take the mod list and load order a save was made with"
+msgstr "Взять список модов и порядок загрузки, с которыми было сделано сохранение"
+
+msgid "Take the mods and their load order from this save:"
+msgstr "Взять моды и их порядок загрузки из этого сохранения:"
+
+msgid "Tech level:"
+msgstr "Тех. уровень:"
+
+msgid "Tell us what went wrong or what you think. It becomes a public issue on GitHub, with your Meitou version and load order."
+msgstr "Расскажите, что пошло не так или что вы думаете. Это станет публичной задачей на GitHub с вашей версией Meitou и порядком загрузки."
+
+msgid "Temperature"
+msgstr "Температура"
+
+msgid "Terrain"
+msgstr "Местность"
+
+msgid "Terrain detail"
+msgstr "Детализация местности"
+
+msgid "Terrain detail: error px (less = finer)"
+msgstr "Детализация местности: ошибка в пикселях (меньше = точнее)"
+
+msgid "Terrain material distance"
+msgstr "Дальность материалов местности"
+
+msgid "Terrain outline refinement (tessellation)"
+msgstr "Уточнение контура местности (тесселяция)"
+
+msgid "Terrain relief"
+msgstr "Рельеф местности"
+
+msgid "Texture filtering"
+msgstr "Фильтрация текстур"
+
+msgid "Texture quality"
+msgstr "Качество текстур"
+
+msgid "Texture quality 0-4 (game)"
+msgstr "Качество текстур 0-4 (игра)"
+
+msgid "Texture resolution; terrain changes need a restart."
+msgstr "Разрешение текстур; изменения местности требуют перезапуска."
+
+msgid "That key is reserved. Choose another key, or Esc to cancel."
+msgstr "Эта клавиша зарезервирована. Выберите другую или нажмите Esc для отмены."
+
+msgid "The DLSS model. Default picks by render scale; L and M ghost less than K and cost more."
+msgstr "Модель DLSS. «По умолчанию» выбирает по масштабу рендера; L и M дают меньше шлейфов, чем K, и дороже."
+
+msgid "The FEEDBACK button at the top right during play. Off, it still shows on the title screen and in the Esc menu."
+msgstr "Кнопка ОТЗЫВ справа вверху во время игры. Если выключить, она всё равно показывается на титульном экране и в меню Esc."
+
+msgid "The Rotate item control (the middle mouse button by default, Controls page) turns the inventory item on the mouse a quarter, or the item under the pointer in a character's grid, so long items fit across. Worn items are never turned. In the game items cannot be turned. From ErasmianFolly's GetRotatedIdiot."
+msgstr "Управление «Повернуть предмет» (по умолчанию средняя кнопка мыши, страница «Управление») поворачивает предмет на курсоре на четверть оборота или предмет под курсором в сетке персонажа, чтобы длинные предметы помещались поперёк. Надетые предметы не поворачиваются. В оригинальной игре предметы нельзя поворачивать. Из GetRotatedIdiot от ErasmianFolly."
+
+msgid "The Vulkan loader is already installed. Select Vulkan to use it."
+msgstr "Загрузчик Vulkan уже установлен. Выберите Vulkan, чтобы использовать его."
+
+msgid "The Vulkan loader is not installed: run 'brew install molten-vk vulkan-loader' in a terminal, then Play again."
+msgstr "Загрузчик Vulkan не установлен: выполните 'brew install molten-vk vulkan-loader' в терминале, затем снова нажмите «Играть»."
+
+msgid "The Workshop sync could not be started."
+msgstr "Не удалось начать синхронизацию мастерской."
+
+msgid "The ash filling a half-buried Ash Dome ruin stays drawn while your characters are in it, and they are ordered onto it. The game hides the ground inside the ruin, showing buried floors nobody can reach under characters that seem to walk on air."
+msgstr "Пепел, заполняющий полузасыпанные руины Пепельного купола, остаётся видимым, пока там ваши персонажи, и им приказывают идти по нему. Оригинальная игра скрывает землю внутри руин, показывая недоступные засыпанные полы под персонажами, которые будто идут по воздуху."
+
+msgid "The bounty will expire in {1,num} hrs"
+msgstr "Награда истечёт через {1,num} ч"
+
+msgid "The cage is locked."
+msgstr "Клетка заперта."
+
+msgid "The camera following a character looks higher than the game's point 10 units above its feet, and to one side if wanted, for a view from head height or over the shoulder. The free camera and the unlocked camera are not changed. From ErasmianFolly's Camera Tweaks."
+msgstr "Камера, следящая за персонажем, смотрит выше точки игры в 10 единицах над его ногами и при желании сбоку — для вида с высоты головы или из-за плеча. Свободная и разблокированная камеры не меняются. Из Camera Tweaks от ErasmianFolly."
+
+msgid "The camera moves when the pointer is at the edge of the screen."
+msgstr "Камера движется, когда курсор у края экрана."
+
+msgid "The camera's height follows the character's head as it crouches, sits or lies down. On, the height slider is not used."
+msgstr "Высота камеры следует за головой персонажа, когда он приседает, садится или ложится. Если вкл, ползунок высоты не используется."
+
+msgid "The camera's pan speed while Shift is held, of its normal speed."
+msgstr "Скорость панорамы камеры с зажатым Shift относительно обычной."
+
+msgid "The camera's turn and tilt ease in and out (the game: always on). Off: they follow the mouse and the keys at once."
+msgstr "Поворот и наклон камеры плавно ускоряются и замедляются (в игре: всегда вкл). Выкл: они сразу следуют за мышью и клавишами."
+
+msgid "The clipboard holds no preset code (MT1:...). Copy one with Share first."
+msgstr "В буфере обмена нет кода пресета (MT1:...). Сначала скопируйте его кнопкой «Поделиться»."
+
+msgid "The clipboard holds no preset code (MT1:…). Copy one with Share first."
+msgstr "В буфере обмена нет кода пресета (MT1:…). Сначала скопируйте его кнопкой «Поделиться»."
+
+msgid "The door will lock when it closes."
+msgstr "Дверь запрётся, когда закроется."
+
+msgid "The game as it ships, or Meitou with a look preset."
+msgstr "Игра как в оригинале или Meitou со стилем."
+
+msgid "The game is running: close it before detecting the preset."
+msgstr "Игра запущена: закройте её, прежде чем определять пресет."
+
+msgid "The game is running: it saves its settings when it closes, over changes made here."
+msgstr "Игра запущена: при закрытии она сохранит свои настройки поверх изменений, сделанных здесь."
+
+msgid "The game speed of the second speed button (two arrows) and its key (the game: 2x)."
+msgstr "Скорость игры второй кнопки скорости (две стрелки) и её клавиши (в игре: 2x)."
+
+msgid "The game speed of the third speed button (three arrows) and its key (the game: 5x). High speeds need a fast processor; when it cannot keep up the game runs slower than chosen."
+msgstr "Скорость игры третьей кнопки скорости (три стрелки) и её клавиши (в игре: 5x). Высокие скорости требуют быстрого процессора; если он не успевает, игра идёт медленнее выбранного."
+
+msgid "The game's cascades, Meitou's soft cascades to the horizon, ray-traced shadows, or ray-traced near and soft cascades further away (both need ray tracing and turn on global illumination)."
+msgstr "Каскады игры, мягкие каскады Meitou до горизонта, трассированные тени или трассировка вблизи и мягкие каскады дальше (обоим нужна трассировка лучей, и они включают глобальное освещение)."
+
+msgid "The green marker on the camera's pivot while you turn it (the game: on)."
+msgstr "Зелёная метка на оси камеры во время поворота (в игре: вкл)."
+
+msgid "The green marker where a move order sends your characters (the game: on)."
+msgstr "Зелёная метка, куда приказ движения отправляет ваших персонажей (в игре: вкл)."
+
+msgid "The hats of every other character are left out the same way, not only your own characters'."
+msgstr "Шляпы всех остальных персонажей тоже убираются, а не только у ваших."
+
+msgid "The icon of what a right click would do beside the Windows cursor (none for a walk), and the hand over buttons and targets."
+msgstr "Значок действия правой кнопки рядом с курсором Windows (нет для ходьбы) и рука над кнопками и целями."
+
+msgid "The launch arguments have --benchmark-baseline: the game ignores the graphics sliders while it is set."
+msgstr "В аргументах запуска есть --benchmark-baseline: пока он задан, игра игнорирует ползунки графики."
+
+msgid "The launch arguments have --low-end: the game ignores the graphics sliders while it is set."
+msgstr "В аргументах запуска есть --low-end: пока он задан, игра игнорирует ползунки графики."
+
+msgid "The launcher's and the game's settings: {1}"
+msgstr "Настройки лаунчера и игры: {1}"
+
+msgid "The lens's f-number: lower blurs more. A cinema key can set its own."
+msgstr "Диафрагменное число объектива: меньше — сильнее размытие. Ключ кинокамеры может задать своё."
+
+msgid "The load window's Load button works only once a save that can be read is selected. The game keeps it live: with nothing selected a click does nothing, and an unreadable save fails to load."
+msgstr "Кнопка «Загрузить» в окне загрузки работает только при выбранном читаемом сохранении. В оригинальной игре она всегда активна: без выбора щелчок ничего не делает, а нечитаемое сохранение не загружается."
+
+msgid "The mod list is still loading; try again in a moment."
+msgstr "Список модов ещё загружается; попробуйте через минуту."
+
+msgid "The mod order already meets every dependency."
+msgstr "Порядок модов уже удовлетворяет всем зависимостям."
+
+msgid "The most blood marks on walls and objects and bloody footprints drawn in a frame, the ones that look largest first."
+msgstr "Наибольшее число пятен крови на стенах и объектах и кровавых следов, рисуемых за кадр, начиная с самых крупных на вид."
+
+msgid "The most sounds heard at once: the loudest play, quieter ones wait silently and come back when they are loud enough. Lower it if big fights stutter; All mixes every sound."
+msgstr "Наибольшее число одновременно слышимых звуков: играют самые громкие, тихие ждут беззвучно и возвращаются, когда становятся достаточно громкими. Уменьшите, если большие бои подтормаживают; «Все» смешивает все звуки."
+
+msgid "The name over each of your characters (the game's Show names option). Off, only the stealth and light icons stay."
+msgstr "Имя над каждым вашим персонажем (опция игры «Показывать имена»). Выкл: остаются только значки скрытности и освещённости."
+
+msgid "The plugins of these RE_Kenshi mods do not run in Meitou."
+msgstr "Плагины этих модов RE_Kenshi не работают в Meitou."
+
+msgid "The same for everyone outside your faction: other factions, enemies and wild animals (the game: 1x)."
+msgstr "То же для всех вне вашей фракции: других фракций, врагов и диких животных (в игре: 1x)."
+
+msgid "The save '{1}' has no mod list."
+msgstr "В сохранении «{1}» нет списка модов."
+
+msgid "The save '{1}' was made with other mods ({2}); Mods > From save applies its list."
+msgstr "Сохранение «{1}» сделано с другими модами ({2}); «Моды > Из сохранения» применяет его список."
+
+msgid "The selected carriers put their bodies down."
+msgstr "Выбранные носильщики кладут тела."
+
+msgid "The selection looks for someone to rescue (Shift: add the rescue job)."
+msgstr "Выделенные ищут, кого спасти (Shift: добавить работу спасателя)."
+
+msgid "The selection looks for someone to treat (Shift: add the medic job)."
+msgstr "Выделенные ищут, кого лечить (Shift: добавить работу медика)."
+
+msgid "The selection sits down to rest."
+msgstr "Выделенные садятся отдохнуть."
+
+msgid "The size of the whole interface: text, buttons and windows (100%: as the window's height makes it)."
+msgstr "Размер всего интерфейса: текст, кнопки и окна (100%: как задаёт высота окна)."
+
+msgid "The size the scene renders at in full screen, stretched to the screen with the nearest pixel. In a window it is the window's size."
+msgstr "Размер рендера сцены в полноэкранном режиме, растянутого на экран по ближайшему пикселю. В окне это размер окна."
+
+msgid "The sky's light in shade, at night and indoors."
+msgstr "Свет неба в тени, ночью и в помещениях."
+
+msgid "The sun's shadows: off, the game's cascades, or Meitou's, soft and to the horizon or ray traced. The lamps' shadows are inside."
+msgstr "Тени от солнца: выкл, каскады игры или Meitou — мягкие до горизонта или трассированные. Тени ламп — на вкладке помещений."
+
+msgid "The unit of the run speed in the character's information panel (the game: mph)."
+msgstr "Единица скорости бега в информационной панели персонажа (в игре: mph)."
+
+msgid "The wind's sound ends when the wind dies down. The game asks for a stop sound that does not exist, so once the wind has blown it never goes quiet."
+msgstr "Звук ветра стихает, когда ветер утихает. Оригинальная игра запрашивает несуществующий звук остановки, поэтому однажды подувший ветер никогда не затихает."
+
+msgid "There are no problems to copy."
+msgstr "Нет проблем для копирования."
+
+msgid "These can be changed later in Settings. You can install Meitou now and add Kenshi afterwards."
+msgstr "Это можно изменить позже в настройках. Можно установить Meitou сейчас, а Kenshi добавить потом."
+
+msgid "These dependencies contradict each other, so nothing was moved:"
+msgstr "Эти зависимости противоречат друг другу, поэтому ничего не перемещено:"
+
+msgid "Thin grass stays visible far away instead of fading out. Off: as the original."
+msgstr "Тонкая трава остаётся видимой вдали, а не исчезает. Выкл: как в оригинале."
+
+msgid "This Meitou version does not include Metal; choose Vulkan or install a newer version."
+msgstr "Эта версия Meitou не включает Metal; выберите Vulkan или установите более новую версию."
+
+msgid "This Meitou version has no Metal renderer and no Vulkan loader; install a newer version or MoltenVK."
+msgstr "В этой версии Meitou нет рендерера Metal и нет загрузчика Vulkan; установите более новую версию или MoltenVK."
+
+msgid "This machine is switched Off"
+msgstr "Этот механизм выключен"
+
+msgid "This save file is currently in use and cannot be deleted"
+msgstr "Этот файл сохранения сейчас используется и не может быть удалён"
+
+msgid "Tick every mod the search shows"
+msgstr "Отметить все моды, показанные поиском"
+
+msgid "Tilt the view downward: the camera rises."
+msgstr "Наклонить вид вниз: камера поднимается."
+
+msgid "Tilt the view upward: the camera comes down."
+msgstr "Наклонить вид вверх: камера опускается."
+
+msgid "Time"
+msgstr "Время"
+
+msgid "Time of day"
+msgstr "Время суток"
+
+msgid "Time speed"
+msgstr "Скорость времени"
+
+msgid "Time:"
+msgstr "Время:"
+
+msgid "Tint"
+msgstr "Оттенок"
+
+msgid "Tone map"
+msgstr "Тональная компрессия"
+
+msgid "Tone map (0 = game)"
+msgstr "Тональная компрессия (0 = игра)"
+
+msgid "Tone map and grade"
+msgstr "Тональная компрессия и цветокоррекция"
+
+msgid "Towns change far away"
+msgstr "Города меняются вдали"
+
+msgid "Towns keep their schedule"
+msgstr "Города живут по расписанию"
+
+msgid "Townspeople you come back to after an hour or more are where their day puts them: in bed at night, at the counter, at their posts and seats. In the game they are where they stood when you left."
+msgstr "Горожане, к которым вы возвращаетесь через час и больше, находятся там, куда их привёл распорядок дня: ночью в постели, за прилавком, на постах и местах. В оригинальной игре они там, где стояли, когда вы ушли."
+
+msgid "Traced (ray tracing)"
+msgstr "Трассировка (трассировка лучей)"
+
+msgid "Traced grass shadows"
+msgstr "Трассированные тени травы"
+
+msgid "Traced near, cascades far"
+msgstr "Трассировка вблизи, каскады вдали"
+
+msgid "Traced sun shadows"
+msgstr "Трассированные тени от солнца"
+
+msgid "Trees close to the camera fade out round the middle of the view (not in the free camera). Off: as the original."
+msgstr "Деревья рядом с камерой растворяются около центра вида (не в свободной камере). Выкл: как в оригинале."
+
+msgid "Turn"
+msgstr "Поворот"
+
+msgid "Turn sneaking of the selection on or off."
+msgstr "Включить или выключить скрытность выделенных."
+
+msgid "Turn the Block order of the selection on or off."
+msgstr "Включить или выключить приказ «Блок» для выделенных."
+
+msgid "Turn the Hold position order of the selection on or off."
+msgstr "Включить или выключить приказ «Удерживать позицию» для выделенных."
+
+msgid "Turn the Jobs order of the selection on or off."
+msgstr "Включить или выключить приказ «Работы» для выделенных."
+
+msgid "Turn the Passive order of the selection on or off."
+msgstr "Включить или выключить приказ «Пассивно» для выделенных."
+
+msgid "Turn the Ranged order of the selection on or off."
+msgstr "Включить или выключить приказ «Дальний бой» для выделенных."
+
+msgid "Turn the Taunt order of the selection on or off."
+msgstr "Включить или выключить приказ «Провокация» для выделенных."
+
+msgid "Turning"
+msgstr "Поворот"
+
+msgid "Turns the inventory item on the mouse, or the one under the pointer, a quarter (needs Item rotation on the Advanced page)."
+msgstr "Поворачивает предмет инвентаря на курсоре или под курсором на четверть оборота (нужно «Вращение предметов» на странице расширенных настроек)."
+
+msgid "Turret gunners turn"
+msgstr "Стрелки турелей поворачиваются"
+
+msgid "Two highlights along the strands of hair and beards."
+msgstr "Два блика вдоль прядей волос и бород."
+
+msgid "Type a name for the preset."
+msgstr "Введите название пресета."
+
+msgid "Type a name, or press Esc to cancel."
+msgstr "Введите имя или нажмите Esc для отмены."
+
+msgid "Type a value    Enter applies it    Esc cancels    Time of day as 13:30"
+msgstr "Введите значение    Enter применяет    Esc отменяет    Время суток в виде 13:30"
+
+msgid "Type the preset's name, Enter keeps it, Esc cancels."
+msgstr "Введите название пресета, Enter сохраняет, Esc отменяет."
+
+msgid "UI style"
+msgstr "Стиль интерфейса"
+
+msgid "Ultra"
+msgstr "Ультра"
+
+msgid "Ultra performance"
+msgstr "Ультрапроизводительность"
+
+msgid "Ultra quality"
+msgstr "Ультракачество"
+
+msgid "Unable to read save:\n"
+msgstr "Не удалось прочитать сохранение:\n"
+
+msgid "Unavailable"
+msgstr "Недоступно"
+
+msgid "Unbound"
+msgstr "Не назначено"
+
+msgid "Uninstall"
+msgstr "Удалить"
+
+msgid "Unlimited"
+msgstr "Без ограничений"
+
+msgid "Unlock Doors"
+msgstr "Отпереть двери"
+
+msgid "Unpacking {1}..."
+msgstr "Распаковка {1}..."
+
+msgid "Unstable: daily builds of the newest code, untested. They may crash or corrupt save files; off, only full releases are offered."
+msgstr "Нестабильно: ежедневные сборки самого нового кода, без тестирования. Могут вылетать или портить сохранения; если выключено, предлагаются только полные выпуски."
+
+msgid "Untick every mod the search shows"
+msgstr "Снять отметку со всех модов, показанных поиском"
+
+msgid "Update launcher to {1}"
+msgstr "Обновить лаунчер до {1}"
+
+msgid "Update the launcher automatically"
+msgstr "Обновлять лаунчер автоматически"
+
+msgid "Update to {1}"
+msgstr "Обновить до {1}"
+
+msgid "Updated on the workshop on {1}, after Meitou last checked it: some new features may be missing"
+msgstr "Обновлён в мастерской {1}, после последней проверки Meitou: некоторые новые функции могут отсутствовать"
+
+msgid "Updating the launcher: {1}%"
+msgstr "Обновление лаунчера: {1}%"
+
+msgid "Upscaler sharpness"
+msgstr "Резкость апскейлера"
+
+msgid "Upscaling"
+msgstr "Апскейлинг"
+
+msgid "Use Meitou's atmospheric haze tuning."
+msgstr "Использовать настройку атмосферной дымки Meitou."
+
+msgid "Use Meitou's reduced heat distortion strength."
+msgstr "Использовать уменьшенную силу теплового искажения Meitou."
+
+msgid "Use Metal upscaling"
+msgstr "Использовать апскейлинг Metal"
+
+msgid "Use extended object and landmark visibility ranges."
+msgstr "Использовать увеличенную дальность видимости объектов и ориентиров."
+
+msgid "Use generated simpler meshes for distant characters."
+msgstr "Использовать сгенерированные упрощённые модели для далёких персонажей."
+
+msgid "Use generated simpler meshes for distant foliage."
+msgstr "Использовать сгенерированные упрощённые модели для далёкой растительности."
+
+msgid "Use hybrid tone mapping and scene colour grading."
+msgstr "Использовать гибридную тональную компрессию и цветокоррекцию сцены."
+
+msgid "Use light probes for bounced and ambient lighting."
+msgstr "Использовать световые пробы для отражённого и окружающего света."
+
+msgid "Use soft shadows and include distant terrain."
+msgstr "Использовать мягкие тени и включать далёкую местность."
+
+msgid "Use temporal smoothing and upscaling instead of FXAA."
+msgstr "Использовать временное сглаживание и апскейлинг вместо FXAA."
+
+msgid "Use the Windows cursor instead of the game's drawn pointer (no hover pointers unless Enhanced hardware mouse is on)."
+msgstr "Использовать курсор Windows вместо рисованного указателя игры (без указателей при наведении, если не включена улучшенная аппаратная мышь)."
+
+msgid "Use the depth of field in the strategy camera too."
+msgstr "Использовать глубину резкости и в стратегической камере."
+
+msgid "VERSIONS"
+msgstr "ВЕРСИИ"
+
+msgid "Vanilla colours"
+msgstr "Ванильные цвета"
+
+msgid "Vegetation"
+msgstr "Растительность"
+
+msgid "Version {1} for {2}. Not installed by its Setup, so updates open the release page."
+msgstr "Версия {1} для {2}. Установлена не через свой установщик, поэтому обновления открывают страницу выпуска."
+
+msgid "Version {1} for {2}. Updates itself from GitHub."
+msgstr "Версия {1} для {2}. Обновляется с GitHub."
+
+msgid "Version {1}. The update check failed: {2}"
+msgstr "Версия {1}. Не удалось проверить обновления: {2}"
+
+msgid "Versions"
+msgstr "Версии"
+
+msgid "Video memory for billboard images. Automatic follows the card's memory."
+msgstr "Видеопамять для билбордов. «Автоматически» следует объёму памяти видеокарты."
+
+msgid "View the next higher building floor."
+msgstr "Показать следующий этаж здания выше."
+
+msgid "View the next lower building floor."
+msgstr "Показать следующий этаж здания ниже."
+
+msgid "Vignette"
+msgstr "Виньетка"
+
+msgid "Vignette strength"
+msgstr "Сила виньетки"
+
+msgid "Volume of combat, building and other sound effects."
+msgstr "Громкость боя, строительства и других звуковых эффектов."
+
+msgid "Volume of footsteps."
+msgstr "Громкость шагов."
+
+msgid "Volume of the biome music and the main theme."
+msgstr "Громкость музыки биомов и главной темы."
+
+msgid "Volume of the interface sounds."
+msgstr "Громкость звуков интерфейса."
+
+msgid "Volume of the voices."
+msgstr "Громкость голосов."
+
+msgid "Volume of the weather and the world's ambience."
+msgstr "Громкость погоды и окружения мира."
+
+msgid "Vulkan (MoltenVK loader found)."
+msgstr "Vulkan (найден загрузчик MoltenVK)."
+
+msgid "Vulkan (MoltenVK)"
+msgstr "Vulkan (MoltenVK)"
+
+msgid "Vulkan loader found. Select Vulkan to use it."
+msgstr "Найден загрузчик Vulkan. Выберите Vulkan, чтобы использовать его."
+
+msgid "Wait for the download to finish first."
+msgstr "Сначала дождитесь окончания загрузки."
+
+msgid "Walls inside buildings"
+msgstr "Стены внутри зданий"
+
+msgid "Want to look at them on Steam?"
+msgstr "Хотите посмотреть их в Steam?"
+
+msgid "Water & reflections"
+msgstr "Вода и отражения"
+
+msgid "Water beads"
+msgstr "Капли воды"
+
+msgid "Water clarity multiplier"
+msgstr "Множитель прозрачности воды"
+
+msgid "Water clarity x (Meitou)"
+msgstr "Множитель прозрачности воды (Meitou)"
+
+msgid "Water contact foam, wakes and ripples"
+msgstr "Пена, следы и рябь при контакте с водой"
+
+msgid "Water grid segments"
+msgstr "Сегменты сетки воды"
+
+msgid "Water reflection 0-4 (game)"
+msgstr "Отражения воды 0-4 (игра)"
+
+msgid "Water see-through distance"
+msgstr "Видимость сквозь воду"
+
+msgid "Water see-through distance (Meitou, game 4000)"
+msgstr "Видимость сквозь воду (Meitou, в игре 4000)"
+
+msgid "Water wave resolution"
+msgstr "Разрешение волн воды"
+
+msgid "Water wave resolution (FFT size)"
+msgstr "Разрешение волн воды (размер FFT)"
+
+msgid "Weak punch reach"
+msgstr "Дальность слабого удара"
+
+msgid "Weapon"
+msgstr "Оружие"
+
+msgid "Weapons, armour plates, prosthetics and robots read as metal."
+msgstr "Оружие, броневые пластины, протезы и роботы выглядят металлом."
+
+msgid "Weather Protections"
+msgstr "Защита от погоды"
+
+msgid "Weather particles"
+msgstr "Частицы погоды"
+
+msgid "Weather particles: 0 off 1 quarter 2 half 3 auto 4 full"
+msgstr "Частицы погоды: 0 выкл 1 четверть 2 половина 3 авто 4 полные"
+
+msgid "What happened"
+msgstr "Что случилось"
+
+msgid "When a destroyed limb is cut off: Rare only by a single heavy blow, Frequent also when a wound worsens (the game: Rare)."
+msgstr "Когда разрушенная конечность отсекается: «Редко» — только одним тяжёлым ударом, «Часто» — ещё и при ухудшении раны (в игре: «Редко»)."
+
+msgid "Where game versions are downloaded and installed (in its versions folder)."
+msgstr "Куда загружаются и устанавливаются версии игры (в её папку versions)."
+
+msgid "Where the haze is complete: farther shows more land."
+msgstr "Где дымка становится полной: дальше — видно больше земли."
+
+msgid "Where versions are installed; changing it asks whether they move."
+msgstr "Куда устанавливаются версии; при изменении спросит, переносить ли их."
+
+msgid "While building: drop the wall line being laid, else the last queued building."
+msgstr "При строительстве: отменить прокладываемую линию стены, иначе последнее здание в очереди."
+
+msgid "While building: lower the held building (Shift: slowly)."
+msgstr "При строительстве: опустить удерживаемое здание (Shift: медленно)."
+
+msgid "While building: queue the held building where it stands, as a left click does."
+msgstr "При строительстве: поставить удерживаемое здание в очередь на месте, как левый щелчок."
+
+msgid "While building: raise the held building (Shift: slowly)."
+msgstr "При строительстве: поднять удерживаемое здание (Shift: медленно)."
+
+msgid "While building: tilt the held building less, towards level."
+msgstr "При строительстве: наклонить удерживаемое здание меньше, к горизонтали."
+
+msgid "While building: tilt the held building more to the slope of the ground."
+msgstr "При строительстве: наклонить удерживаемое здание сильнее, по склону земли."
+
+msgid "While building: turn the held building left. Build keys may share keys with the others."
+msgstr "При строительстве: повернуть удерживаемое здание влево. Клавиши строительства могут совпадать с другими."
+
+msgid "While building: turn the held building right."
+msgstr "При строительстве: повернуть удерживаемое здание вправо."
+
+msgid "White brightness"
+msgstr "Яркость белого"
+
+msgid "Wild squads stay"
+msgstr "Дикие отряды остаются"
+
+msgid "Will not load: {1}"
+msgstr "Не загрузится: {1}"
+
+msgid "Wind stops"
+msgstr "Ветер стихает"
+
+msgid "Window"
+msgstr "Окно"
+
+msgid "Workers"
+msgstr "Рабочие"
+
+msgid "Workshop synchronised: {1} of {2} mods installed."
+msgstr "Мастерская синхронизирована: установлено {1} из {2} модов."
+
+msgid "World tick alongside drawing"
+msgstr "Такт мира во время отрисовки"
+
+msgid "You can only hire {1} more characters"
+msgstr "Можно нанять ещё только {1} персонажей"
+
+msgid "You can subscribe on the Steam workshop page instead."
+msgstr "Вместо этого можно подписаться на странице мастерской Steam."
+
+msgid "You have no subscribed Kenshi workshop mods."
+msgstr "У вас нет подписок на моды Kenshi в мастерской."
+
+msgid "You will die at {1}"
+msgstr "Вы умрёте при {1}"
+
+msgid "Your display's brightest level, in nits."
+msgstr "Максимальная яркость вашего дисплея в нитах."
+
+msgid "[Crafted by {1}]"
+msgstr "[Изготовил {1}]"
+
+msgid "[Location already known]"
+msgstr "[Место уже известно]"
+
+msgid ""
+"[Right-click to learn new map locations]\n"
+"Towns:\n"
+msgstr ""
+"[Правый щелчок, чтобы узнать новые места на карте]\n"
+"Города:\n"
+
+msgid "a file field without a value"
+msgstr "файловое поле без значения"
+
+msgid "a string field without a value"
+msgstr "строковое поле без значения"
+
+msgid "against banding in smooth gradients; the game has none"
+msgstr "против полос в плавных градиентах; в игре его нет"
+
+msgid "an image is named by a path relative to the mod's folder"
+msgstr "изображение задаётся путём относительно папки мода"
+
+msgid "an instance without an id or target"
+msgstr "экземпляр без id или цели"
+
+msgid "assembly, so its EditData does not run (declare IModDataPhase on the entry type)"
+msgstr "сборке, поэтому его EditData не выполняется (объявите IModDataPhase на входном типе)"
+
+msgid "auto (centre)"
+msgstr "авто (центр)"
+
+msgid "black & white"
+msgstr "чёрно-белый"
+
+msgid "black haze"
+msgstr "чёрная дымка"
+
+msgid "blades, armour, clothing"
+msgstr "клинки, броня, одежда"
+
+msgid "bounced light"
+msgstr "отражённый свет"
+
+msgid "built in"
+msgstr "встроенный"
+
+msgid "bumps fade"
+msgstr "неровности сглаживаются"
+
+msgid "by size"
+msgstr "по размеру"
+
+msgid "clamp (as the game)"
+msgstr "обрезка (как в игре)"
+
+msgid "click to cancel"
+msgstr "щёлкните для отмены"
+
+msgid "darker corners"
+msgstr "тёмные углы"
+
+msgid "day and night"
+msgstr "день и ночь"
+
+
+
+
+
+
+msgid "fixed sun"
+msgstr "неподвижное солнце"
+
+msgid "flat ambient"
+msgstr "плоский окружающий свет"
+
+msgid "flat haze"
+msgstr "плоская дымка"
+
+msgid "flat night"
+msgstr "плоская ночь"
+
+msgid "foam, waves"
+msgstr "пена, волны"
+
+msgid "full detail"
+msgstr "полная детализация"
+
+msgid "full size"
+msgstr "полный размер"
+
+msgid "game data"
+msgstr "игровые данные"
+
+msgid "gameplay change"
+msgstr "изменение геймплея"
+
+msgid "generated levels"
+msgstr "сгенерированные уровни"
+
+msgid "hair, cloth, skin, eyes, metal"
+msgstr "волосы, ткань, кожа, глаза, металл"
+
+msgid "hard-edged, flat"
+msgstr "жёсткие края, плоско"
+
+msgid "head turning"
+msgstr "поворот головы"
+
+msgid "hybrid (clamp + ACES)"
+msgstr "гибрид (обрезка + ACES)"
+
+msgid "hybrid, graded"
+msgstr "гибрид с цветокоррекцией"
+
+msgid "its game data changes failed to apply"
+msgstr "не удалось применить его изменения игровых данных"
+
+msgid "its multiplier is now Squad XP in the Advanced settings (per-skill multipliers are not kept)"
+msgstr "его множитель теперь — «Опыт отряда» в расширенных настройках (множители отдельных навыков не сохраняются)"
+
+msgid "key light"
+msgstr "ключевой свет"
+
+msgid "latest nightly"
+msgstr "последняя ночная"
+
+msgid "lighter haze keeps far mountains visible"
+msgstr "более светлая дымка оставляет видимыми далёкие горы"
+
+msgid "low resolution"
+msgstr "низкое разрешение"
+
+msgid "luckyren Mode"
+msgstr "режим luckyren"
+
+msgid "metal textures"
+msgstr "металлические текстуры"
+
+msgid "near, cascades far"
+msgstr "вблизи, каскады вдали"
+
+msgid "night only"
+msgstr "только ночью"
+
+msgid "nightly"
+msgstr "ночная"
+
+msgid "no name"
+msgstr "без имени"
+
+msgid "no string id"
+msgstr "без строкового id"
+
+msgid "no {1} build"
+msgstr "нет сборки {1}"
+
+msgid "not enabled: {1}"
+msgstr "не включён: {1}"
+
+msgid "not in the save: {1}"
+msgstr "нет в сохранении: {1}"
+
+msgid "off (as the game)"
+msgstr "выкл (как в игре)"
+
+msgid "off (uncapped)"
+msgstr "выкл (без ограничения)"
+
+msgid "off while the HDR output is on"
+msgstr "выкл, пока включён вывод HDR"
+
+msgid "on the land"
+msgstr "на суше"
+
+msgid "original ambient"
+msgstr "оригинальный окружающий свет"
+
+msgid "own animation"
+msgstr "своя анимация"
+
+msgid "per layer"
+msgstr "по слоям"
+
+msgid "per-face tangents"
+msgstr "касательные по граням"
+
+msgid "planet light"
+msgstr "свет планеты"
+
+msgid "ray-traced probes"
+msgstr "трассированные пробы"
+
+msgid "relief march"
+msgstr "марширование по рельефу"
+
+msgid "scotopic blue"
+msgstr "скотопический синий"
+
+msgid "shadowed haze"
+msgstr "дымка с тенями"
+
+msgid "sky only"
+msgstr "только небо"
+
+msgid "soft, far terrain"
+msgstr "мягкие, далёкая местность"
+
+msgid "soft, lit"
+msgstr "мягкие, освещённые"
+
+msgid "starfield texture"
+msgstr "текстура звёздного неба"
+
+msgid "strength 1"
+msgstr "сила 1"
+
+msgid "terrain only"
+msgstr "только местность"
+
+msgid "the Ambient occlusion switch's method (it needs that switch on): Meitou's SSAO is a cheap estimate; GTAO searches each pixel's horizon, measures how much sky it really sees, and keeps the colour of the light that bounces in a corner. Costs more; off by default"
+msgstr "метод переключателя затенения окружения (нужен включённый переключатель): SSAO от Meitou — дешёвая оценка; GTAO ищет горизонт каждого пикселя, измеряет, сколько неба он на самом деле видит, и сохраняет цвет света, отражённого в углу. Дороже; по умолчанию выключено"
+
+msgid "the extension belongs to no mod folder"
+msgstr "расширение не принадлежит ни одной папке мода"
+
+msgid "the file could not be opened: "
+msgstr "не удалось открыть файл: "
+
+msgid "the file could not be read as an image"
+msgstr "файл не удалось прочитать как изображение"
+
+msgid "the file does not exist"
+msgstr "файл не существует"
+
+msgid "the file is not a PNG or DDS image"
+msgstr "файл не является изображением PNG или DDS"
+
+msgid "the file is too short to be an image"
+msgstr "файл слишком короткий для изображения"
+
+msgid "the game draws every dust, ash and rain sprite at the full picture size, which is a fill-rate cost when big sprites pile up (a dust storm); Meitou draws the alpha and additive ones into a quarter-area (half per axis) target and blends it back, depth-aware, for a fraction of the cost"
+msgstr "игра рисует каждый спрайт пыли, пепла и дождя в полном размере изображения, что дорого по заполнению, когда большие спрайты накладываются (пыльная буря); Meitou рисует альфа- и аддитивные в цель четверти площади (половина по каждой оси) и смешивает обратно с учётом глубины, за долю стоимости"
+
+msgid "the game draws every foliage mesh at full detail, and TERRAIN-mode rocks and plants (some thousands of triangles each) have no LOD levels; Meitou makes coarser levels at load (quadric edge collapse, kept in a disk cache) and picks one per instance by how many pixels (shadow texels) its deviation would show"
+msgstr "игра рисует каждую модель растительности с полной детализацией, а скалы и растения режима TERRAIN (тысячи треугольников каждое) не имеют уровней LOD; Meitou создаёт более грубые уровни при загрузке (схлопывание рёбер по квадрикам, хранится в дисковом кэше) и выбирает уровень для каждого экземпляра по тому, сколько пикселей (текселей тени) покажет отклонение"
+
+msgid "the game draws every foliage mesh in full out to its range; Meitou draws large and medium meshes beyond the impostor distance (Tab slider) as baked billboards, crossfaded, which also stand in as shadow casters far out"
+msgstr "игра рисует каждую модель растительности полностью до её дальности; Meitou рисует крупные и средние модели дальше дальности импостеров (ползунок Tab) запечёнными билбордами с плавным переходом, которые также отбрасывают тени вдали"
+
+msgid "the game draws hard-edged cascades that end abruptly at the shadow range; Meitou fits them to the view, filters them softly with contact-hardening penumbrae, blends the cascades, and lets mountains shadow the land out to the horizon"
+msgstr "игра рисует каскады с жёсткими краями, резко обрывающиеся на дальности теней; Meitou подгоняет их под вид, мягко фильтрует с полутенями, твердеющими у контакта, смешивает каскады и позволяет горам отбрасывать тень на землю до горизонта"
+
+msgid "the game ends all of a layer's meshes at one range (1000 x foliage range for most: trees, ruins, junk and litter alike); Meitou draws large meshes (trees, ruins, wrecks, rock stacks) far, medium ones (junk, boulders, bushes) midway and small ones (litter, small plants) near, each class with its own Tab slider"
+msgstr "игра обрывает все модели слоя на одной дальности (1000 x дальность растительности для большинства: деревья, руины, хлам и мусор одинаково); Meitou рисует крупные модели (деревья, руины, обломки, груды камней) далеко, средние (хлам, валуны, кусты) на средней дистанции и мелкие (мусор, мелкие растения) вблизи, у каждого класса свой ползунок Tab"
+
+msgid "the game has no grading, so night is the day's saturated browns and oranges, darkened; Meitou shifts dim colour towards the rods' blue-grey as the scene's adapted luminance falls (the Purkinje shift), keeping lamps, fires and the moon in colour (the Tab slider sets the strength)"
+msgstr "в игре нет цветокоррекции, поэтому ночь — это насыщенные коричневые и оранжевые цвета дня, затемнённые; Meitou сдвигает тусклые цвета к сине-серому цвету палочек по мере падения адаптированной яркости сцены (сдвиг Пуркинье), сохраняя цвет ламп, костров и луны (ползунок Tab задаёт силу)"
+
+msgid "the game has no tone curve (bright skies and sunlit sand clip flat at white) and no grading; Meitou blends the clip with ACES (the Tab slider sets the share, 0.75) so highlights roll off, then grades saturation 1.06 and contrast 1.05"
+msgstr "в игре нет тональной кривой (яркое небо и освещённый песок обрезаются до белого) и нет цветокоррекции; Meitou смешивает обрезку с ACES (ползунок Tab задаёт долю, 0.75), чтобы блики плавно спадали, затем задаёт насыщенность 1.06 и контраст 1.05"
+
+msgid "the game lights every bump of a normal map as if nothing stood between it and the sun, so ground and walls the sun only grazes break into bright and black patches, and bumps stay lit on a surface facing away; Meitou fades the normal map out of the sun's light as the sun nears the surface's own plane (from 24 degrees down to 6), where the bumps would shadow each other"
+msgstr "игра освещает каждую неровность карты нормалей так, будто между ней и солнцем ничего нет, поэтому земля и стены, освещённые вскользь, распадаются на яркие и чёрные пятна, а неровности остаются освещёнными на поверхности, отвернутой от солнца; Meitou убирает карту нормалей из солнечного света, когда солнце приближается к плоскости поверхности (от 24 градусов до 6), где неровности затеняли бы друг друга"
+
+msgid "the game ships SSAO but has it disabled"
+msgstr "игра содержит SSAO, но он отключён"
+
+msgid "the game stands the character being edited on a platform over bare ground; Meitou can stand it in a bar at night instead, drawn with your graphics settings"
+msgstr "игра ставит редактируемого персонажа на платформу над голой землёй; Meitou может поставить его ночью в баре, нарисованном с вашими настройками графики"
+
+msgid "the game uses FXAA; Meitou uses a temporal method (TAA, FSR or DLSS: the Tab panel chooses, FSR and DLSS need their libraries)"
+msgstr "игра использует FXAA; Meitou использует временной метод (TAA, FSR или DLSS: выбирается в панели Tab, FSR и DLSS требуют своих библиотек)"
+
+msgid "the game's"
+msgstr "как в игре"
+
+msgid "the game's buildings are matte unless a material names a metalness map, and few do; Meitou treats the textures of plate, tank and machinery as metal where they have no colour of their own, so rust and paint stay matte"
+msgstr "цвета игры"
+
+msgid "the game's colours"
+msgstr "здания игры матовые, если материал не указывает карту металличности, а таких мало; Meitou считает текстуры пластин, баков и механизмов металлом там, где у них нет своего цвета, поэтому ржавчина и краска остаются матовыми"
+
+msgid "the game's glossy and rain-wet surfaces reflect one fixed sky picture, indoors and under a roof too; Meitou replaces it with what they really mirror (the screen, then a traced ray where the device has them, the sky past both), fading with roughness, and darkens the sky's reflection where the probes see no sky. Water keeps its own reflection. Off by default: not yet seen on a GPU"
+msgstr "глянцевые и мокрые от дождя поверхности игры отражают одну неподвижную картинку неба, даже в помещениях и под крышей; Meitou заменяет её тем, что они действительно отражают (экран, затем трассированный луч, где устройство это умеет, небо за ними), с ослаблением по шероховатости, и затемняет отражение неба там, где пробы не видят неба. Вода сохраняет своё отражение. По умолчанию выключено: ещё не проверено на GPU"
+
+msgid "the game's ground is its height map's mesh; Meitou tessellates the ground near the eye and raises it by the same relief (needs tessellation shaders; visual only: characters walk on the undisplaced ground)"
+msgstr "земля игры — это сетка её карты высот; Meitou тесселирует землю у глаза и поднимает её на тот же рельеф (нужны шейдеры тесселяции; только визуально: персонажи ходят по несмещённой земле)"
+
+msgid "the game's heat haze shifts distant objects by several pixels in hot weather, which reads as blur; Meitou halves it (the Tab slider sets any strength)"
+msgstr "марево игры в жаркую погоду смещает далёкие объекты на несколько пикселей, что выглядит как размытие; Meitou уменьшает его вдвое (ползунок Tab задаёт любую силу)"
+
+msgid "the game's shadows stop at the cascades' resolution, so small objects float; Meitou adds short sun shadows from the depth, at full resolution, with no noise, on characters too (armour plates, straps, feet on the ground). Off by default: what the screen does not show casts nothing; for the cascades, the Traced sun shadows hold theirs"
+msgstr "тени игры ограничены разрешением каскадов, поэтому мелкие объекты парят; Meitou добавляет короткие тени от солнца по глубине, в полном разрешении, без шума, и на персонажах (броневые пластины, ремни, ноги на земле). По умолчанию выключено: то, чего нет на экране, тени не отбрасывает; для каскадов свои тени держат трассированные тени от солнца"
+
+msgid "the game's sun shadows come from cascaded maps, soft or blocky by their texels; Meitou traces a ray to the sun from every lit pixel at every distance, softened by the sun's real size, the same every frame: a shadow is as sharp as it is close to its caster, characters shadow themselves exactly and grass shadows the ground (needs a GPU with ray tracing and Indirect light; off by default)"
+msgstr "тени от солнца в игре берутся из каскадных карт, мягких или блочных из-за текселей; Meitou трассирует луч к солнцу из каждого освещённого пикселя на любом расстоянии, смягчённый реальным размером солнца, одинаково в каждом кадре: тень тем резче, чем ближе к объекту, персонажи точно затеняют сами себя, а трава отбрасывает тень на землю (нужен GPU с трассировкой лучей и непрямой свет; по умолчанию выключено)"
+
+msgid "the game's water is a flat plane with scrolled normal maps; Meitou adds wind-driven waves, breakers that roll in along the depth, break into foam and run up the beach, and foam on the crests (visual only: the water stays at its height for the game)"
+msgstr "вода в игре — плоскость с прокручивающимися картами нормалей; Meitou добавляет волны от ветра, буруны, которые накатывают по глубине, разбиваются в пену и взбегают на пляж, и пену на гребнях (только визуально: для игры вода остаётся на своей высоте)"
+
+msgid "the meshes' own"
+msgstr "собственные у моделей"
+
+msgid "thin lens"
+msgstr "тонкая линза"
+
+msgid "this interface shows no image markers"
+msgstr "этот интерфейс не показывает маркеры-изображения"
+
+msgid "type to search"
+msgstr "введите для поиска"
+
+msgid "unavailable (see the log), plain swapchain in use"
+msgstr "недоступно (см. журнал), используется простая цепочка буферов"
+
+msgid "walls, floors, objects"
+msgstr "стены, полы, объекты"
+
+msgid "waves and surf"
+msgstr "волны и прибой"
+
+msgid "welded, averaged tangents"
+msgstr "сваренные, усреднённые касательные"
+
+msgid "where placed"
+msgstr "где поставлен"
+
+msgid "whether it still happens before sending."
+msgstr "проверьте перед отправкой, повторяется ли это."
+
+msgid "with Indirect light enabled, use bounced light indoors; turn this off to keep the original ambient on room surfaces, furniture and indoor characters while outdoor GI stays enabled"
+msgstr "при включённом непрямом свете использовать отражённый свет в помещениях; выключите, чтобы сохранить оригинальный окружающий свет на поверхностях комнат, мебели и персонажах в помещениях, оставив GI снаружи"
+
+msgid "with camera"
+msgstr "с камерой"
+
+msgid "{1,num} hrs"
+msgstr "{1,num} ч"
+
+msgid "{1,num} secs"
+msgstr "{1,num} с"
+
+msgid "{1,num}h {2,num}m left"
+msgstr "осталось {1,num} ч {2,num} мин"
+
+msgid "{1,num}m left"
+msgstr "осталось {1,num} мин"
+
+msgid "{1} after {2} ({3})"
+msgstr "{1} после {2} ({3})"
+
+msgid "{1} already wears something in that slot"
+msgstr "{1} уже носит что-то в этом слоте"
+
+msgid "{1} and {2} more"
+msgstr "{1} и ещё {2}"
+
+msgid "{1} bought {2} for c.{3}"
+msgstr "{1} купил {2} за c.{3}"
+
+msgid "{1} cannot pay the fine of c.{2}"
+msgstr "{1} не может заплатить штраф c.{2}"
+
+msgid "{1} changes from the game"
+msgstr "Отличий от игры: {1}"
+
+msgid "{1} could not put the captive in the cage"
+msgstr "{1} не смог посадить пленника в клетку"
+
+msgid "{1} deleted; the look is Meitou."
+msgstr "{1} удалён; стиль — Meitou."
+
+msgid "{1} found no free cage for {2}"
+msgstr "{1} не нашёл свободной клетки для {2}"
+
+msgid "{1} got out of the cage"
+msgstr "{1} выбрался из клетки"
+
+msgid "{1} has been caught committing {2}!"
+msgstr "{1} пойман на преступлении: {2}!"
+
+msgid "{1} has been imprisoned by {2}"
+msgstr "{1} заключён в тюрьму фракцией {2}"
+
+msgid "{1} installed."
+msgstr "{1} установлен."
+
+msgid "{1} is after the bounty on {2}!"
+msgstr "{1} охотится за наградой за {2}!"
+
+msgid "{1} is arresting {2}!"
+msgstr "{1} арестовывает {2}!"
+
+msgid "{1} is no longer wanted by {2}"
+msgstr "{1} больше не разыскивается фракцией {2}"
+
+msgid "{1} is not installed."
+msgstr "{1} не установлен."
+
+msgid "{1} is wanted by {2} for {3}: bounty c.{4}"
+msgstr "{1} разыскивается фракцией {2} за {3}: награда c.{4}"
+
+msgid "{1} issue"
+msgid_plural "{1} issues"
+msgstr[0] "{1} проблема"
+msgstr[1] "{1} проблемы"
+msgstr[2] "{1} проблем"
+
+msgid "{1} issues"
+msgstr "Проблем: {1}"
+
+msgid "{1} item stack(s) of a closed shop were left on the ground."
+msgstr "Стопок предметов закрытой лавки, оставленных на земле: {1}."
+
+msgid "{1} paid a bail of c.{2} for {3}"
+msgstr "{1} заплатил залог c.{2} за {3}"
+
+msgid "{1} paid a fine of c.{2} to {3}; the bounty is cleared"
+msgstr "{1} заплатил штраф c.{2} фракции {3}; награда снята"
+
+msgid "{1} pasted and loaded (made on Meitou {2})."
+msgstr "{1} вставлен и загружен (создан в Meitou {2})."
+
+msgid "{1} posts"
+msgstr "Записей: {1}"
+
+msgid "{1} put {2} on {3}"
+msgstr "{1} надел {2} на {3}"
+
+msgid "{1} quality applied."
+msgstr "Применено качество «{1}»."
+
+msgid "{1} releases · {2} installed"
+msgstr "Выпусков: {1} · установлено: {2}"
+
+msgid "{1} saved."
+msgstr "{1} сохранён."
+
+msgid "{1} second"
+msgstr "{1} с"
+
+msgid "{1} seconds"
+msgstr "{1} с"
+
+msgid "{1} sold {2} for c.{3}"
+msgstr "{1} продал {2} за c.{3}"
+
+msgid "{1} uninstalled."
+msgstr "{1} удалён."
+
+msgid "{1} unsaved changes"
+msgstr "Несохранённых изменений: {1}"
+
+msgid "{1}'s code is on the clipboard: paste it on Discord, or with Paste."
+msgstr "Код «{1}» в буфере обмена: вставьте его в Discord или кнопкой «Вставить»."
+
+msgid "{1}-{2} seconds"
+msgstr "{1}-{2} с"
+
+msgid "{1}: no free cage nearby"
+msgstr "{1}: рядом нет свободной клетки"
+
+msgid "{1}: {2} settings"
+msgstr "{1}: настройки {2}"
+
+msgid "Image"
+msgstr "Изображение"
+
+msgid "Show or hide the selected mod's details beside the list"
+msgstr "Показать или скрыть подробности выбранного мода рядом со списком"
+
+msgid "Details"
+msgstr "Подробности"
+
+msgid "Save the mod list and load order as a preset of this name"
+msgstr "Сохранить список модов и порядок загрузки как пресет с этим именем"
+
+msgid "Take the chosen preset's mod list and load order"
+msgstr "Взять список модов и порядок загрузки из выбранного пресета"
+
+msgid "Delete the chosen preset"
+msgstr "Удалить выбранный пресет"
+
+msgid "{1} mods, {2} enabled"
+msgstr "Модов: {1}, включено: {2}"
+
+msgid "{1} of {2} mods shown, {3} enabled"
+msgstr "Показано модов: {1} из {2}, включено: {3}"
+
+msgid "Not enabled: the game does not load it"
+msgstr "Не включён: игра его не загружает"
+
+msgid "Needs"
+msgstr "Требует"
+
+msgid "not enabled above it"
+msgstr "не включён выше него"
+
+msgid "No description"
+msgstr "Нет описания"
+
+msgid "Hover outline in the Advanced settings"
+msgstr "Контур при наведении в расширенных настройках"
+
+msgid "Hover outline in the Advanced settings is on"
+msgstr "Контур при наведении в расширенных настройках включён"
+
+msgid "Lit dust"
+msgstr "Освещённая пыль"
+
+msgid "Light the dust and spray kicked up by running feet like the ground around them, instead of glowing at night."
+msgstr "Пыль и брызги из-под бегущих ног освещаются как земля вокруг, а не светятся ночью."

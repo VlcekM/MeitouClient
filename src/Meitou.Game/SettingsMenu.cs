@@ -1093,7 +1093,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// </summary>
     string HdrPaperText(float v) =>
         v < UserConfig.HdrPaperAuto
-            ? Loc.Tr("Automatic ({0})", Config.HdrPaperNitsNow.ToString("0", CultureInfo.InvariantCulture))
+            ? Loc.Tr("Automatic ({1})", Config.HdrPaperNitsNow.ToString("0", CultureInfo.InvariantCulture))
             : v.ToString("0", CultureInfo.InvariantCulture);
 
     /// <summary>
