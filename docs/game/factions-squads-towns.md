@@ -256,7 +256,7 @@ platoon's `+0xa0` member does not fit the `declareDead` reading above; unresolve
 | +8 | float | accumulated positive trust |
 | +0xc | float | accumulated negative trust |
 
-On the faction's FactionRelations object itself: +0x10 int rank, +0x18 float **global trust** (starts 0; slot 9 adds, DC_REPUTATION reads it as an int; not saved, **Observed**; the player table's saved `global trust` is read and written at +0x14). Meitou: `FactionRelations.GlobalTrust` / `AddGlobalTrust`; a new game starts it at 0 again (`FactionRelations.Reset`, the table is shared by the data).
+On the faction's FactionRelations object itself: +0x10 int rank, +0x18 float **global trust** (starts 0; slot 9 adds, DC_REPUTATION reads it as an int; not saved, **Observed**; the player table's saved `global trust` is read and written at +0x14). Meitou: `FactionRelations.GlobalTrust` / `AddGlobalTrust`; a new game and an import without Relations start it at 0 again (`FactionRelations.Reset`, `SaveImport.FilterFactions`).
 
 ### 3.2 Faction rank
 
