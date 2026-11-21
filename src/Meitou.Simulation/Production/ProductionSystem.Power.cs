@@ -480,15 +480,26 @@ public sealed partial class ProductionSystem
     /// The machine the panel shows for the level building or layout object <paramref name="key"/> when it is a town's generator, research bench or
     /// crafting bench: the original makes every town building and layout object as its class at load and draws their Workers, Efficiency and power
     /// lines with no owner test (docs/game/ui-screens.md "Who shows it"), but here such a building gets its machine only when a worker or the
-    /// player's order comes (<see cref="IsTownMachine"/>). Its machine once made, else <see cref="LevelMachine"/>, a machine that never joins the
-    /// world. Null for any other key. Read only; runs once per publish while such a building is selected.
+    /// player's order comes (<see cref="IsTownMachine"/>). <see cref="LevelMachine"/>, a machine that never joins the world; once its own machine is
+    /// made, that one's operators, inputs and state with the level machine's power and wind, since the power step leaves a town's own machine out
+    /// of the frames and the town's output counts its generators (<see cref="NpcOutput"/>). Null for any other key. Read only; runs once per publish
+    /// while such a building is selected.
     /// </summary>
     public MachineSnapshot? TownMachineOf(World world, string? key)
     {
         if (key is null || LevelPiece(world, key) is not { } found || PanelData(found.Record) is not { } data) return null;
-        if (world.Machines.Find(TownWorkPrefix + key) is { } own) return MachineSnapshot.Of(own, Items);
+        if (world.SystemOf<PopulationSystem>()?.Data.Sites is not { } sites || SiteOf(sites, found.Town) is not { } town) return null;
 
-        return MachineSnapshot.Of(LevelMachine(world, key, found, data), Items);
+        var level = MachineSnapshot.Of(LevelMachine(world, key, town, found, data), Items);
+        if (world.Machines.Find(TownWorkPrefix + key) is not { } own) return level;
+
+        var mine = MachineSnapshot.Of(own, Items);
+        return mine with
+        {
+            Power = level.Power is { } power && mine.Power is { } fuel ? power with { Fueled = fuel.Fueled } : level.Power,
+            Wind = level.Wind,
+            Efficiency = mine.Efficiency is { } e && level.Efficiency is { } l ? e with { Health = l.Health, Power = l.Power } : mine.Efficiency,
+        };
     }
 
     /// <summary>
@@ -499,47 +510,62 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// The standing level building of a town or object of its layout named by <paramref name="key"/> (as <see cref="LevelObject"/> reads it), with
-    /// its town and record; null for any other.
+    /// its town's index and record; null for any other.
     /// </summary>
-    (TownSite Town, TownBuilding Building, TownLayoutBuilding? Piece, string Record)? LevelPiece(World world, string key)
+    (int Town, TownBuilding Building, TownLayoutBuilding? Piece, string Record)? LevelPiece(World world, string key)
     {
         int end = key.IndexOf('/');
         if (LevelBuilding(world, end > 0 ? key[..end] : key) is not { Building.Destroyed: false } found) return null;
-        if (world.SystemOf<PopulationSystem>()?.Data.Sites.FirstOrDefault(t => t.Index == found.Town) is not { } town) return null;
-        if (end <= 0) return (town, found.Building, null, found.Building.BuildingId);
+        if (end <= 0) return (found.Town, found.Building, null, found.Building.BuildingId);
 
         // A ruin holds no layout objects (FUN_140557280).
         if (world.Fixtures.IsDestroyed(found.Building)) return null;
 
-        var piece = found.Building.LayoutBuildings.FirstOrDefault(i => i.Id == key);
-        return piece is null ? null : (town, found.Building, piece, piece.RecordId);
+        foreach (var piece in found.Building.LayoutBuildings)
+            if (piece.Id == key) return (found.Town, found.Building, piece, piece.RecordId);
+        return null;
     }
 
     /// <summary>
-    /// The machine of <paramref name="key"/>'s building with no machine, as its panel reads it, kept for the next publish while the same building
-    /// stays selected: no operators, complete, a generator switched and built as its save or level state has it with the output, wind and load the
-    /// town's frame counts (<see cref="NpcOutput"/>, fuelled), a consumer granted what the frame gives it (<see cref="LevelPowerOf"/>). It never joins
-    /// the world, so nothing simulated, hashed or saved changes.
+    /// The town site of index <paramref name="index"/>, or null.
     /// </summary>
-    Machine LevelMachine(World world, string key, (TownSite Town, TownBuilding Building, TownLayoutBuilding? Piece, string Record) found,
+    static TownSite? SiteOf(IReadOnlyList<TownSite> sites, int index)
+    {
+        foreach (var site in sites)
+            if (site.Index == index) return site;
+        return null;
+    }
+
+    /// <summary>
+    /// The machine of <paramref name="key"/>'s building as its panel reads it, made once and kept while the same building stays selected: no
+    /// operators, complete, its inputs and production state from the save as a town machine takes them (<see cref="RestoreTownMachine"/>); a
+    /// generator switched and built as its save or level state has it with the output, wind and load the town's frame counts
+    /// (<see cref="NpcOutput"/>, which ignores an empty tank), a consumer granted what the frame gives it (<see cref="LevelPowerOf"/>). It never
+    /// joins the world, so nothing simulated, hashed or saved changes.
+    /// </summary>
+    Machine LevelMachine(World world, string key, TownSite town, (int Town, TownBuilding Building, TownLayoutBuilding? Piece, string Record) found,
         MachineData data)
     {
-        if (_levelMachine is not { } kept || kept.Key != key || kept.Machine.Data != data)
+        var at = found.Piece?.Position ?? found.Building.Position;
+        if (_levelMachine is not { } kept || kept.Key != key || kept.Machine.Data != data || kept.Machine.Position != at)
         {
-            var site = new BuildSite
-            {
-                Id = TownWorkPrefix + key,
-                Record = found.Record,
-                Position = found.Piece?.Position ?? found.Building.Position,
-                Materials = [],
-                Complete = true,
-            };
-            _levelMachine = kept = (key, Create(world, site)!);
+            var site = new BuildSite { Id = TownWorkPrefix + key, Record = found.Record, Position = at, Materials = [], Complete = true };
+            var made = Create(world, site)!;
+            if (found.Piece is not { } piece) RestoreTownMachine?.Invoke(found.Building, made);
+            else if (!_piecesDestroyed.Contains(piece.Id)) RestorePieceMachine?.Invoke(piece, made);
+            _levelMachine = kept = (key, made);
         }
 
         var m = kept.Machine;
-        if (data.IsGenerator) LevelGenerator(world, m, found.Town, found.Building, found.Piece);
-        else if (LevelPowerOf(world, key) is { Demand: > 0 } power) (m.Demand, m.Granted, m.Power) = (power.Demand, power.Granted, power.Granted / power.Demand);
+        if (data.IsGenerator)
+        {
+            LevelGenerator(world, m, town, found.Building, found.Piece);
+        }
+        else
+        {
+            var power = LevelPowerOf(world, key);
+            (m.Demand, m.Granted, m.Power) = power is { Demand: > 0 } p ? (p.Demand, p.Granted, p.Granted / p.Demand) : (0, 0, 1);
+        }
 
         return m;
     }
@@ -557,9 +583,6 @@ public sealed partial class ProductionSystem
             m.WindSpeed = world.Weather?.At(m.Position.X, m.Position.Z) is { } here ? here.WindSpeed : 0;
             (m.Wind, m.WindRated) = (piece is null ? NpcWind(world, b) : PieceWind(world, piece), m.Data.PowerOutput);
         }
-
-        // NpcOutput counts a town's generators fuelled.
-        foreach (var input in m.Inputs) input.Level = 1;
 
         m.Demand = Generated(m.Data, m.PowerOn ? m.Health : 0, m.Wind);
         int grid = -(town.Index + 1);
