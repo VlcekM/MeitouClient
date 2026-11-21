@@ -690,12 +690,13 @@ which its next update (`FUN_14050d920` → `FUN_14050d7d0`) consumes by dropping
   15 Protect allies, row 13) also ends without a target once nobody attacks it and no threat is sensed on it or its allies, whatever `Enemies` holds
   (`CombatSystem.GoalSpent`): the original ends it through the goal, whose desire falls to 0 and whose replacement takes over. **Observed** (original 1.0.65,
   harness, #695): after a fight with a spawned Dust Bandit squad the character went Aimless with a crawling, conscious bandit 45 away, which
-  `numEnemies` counts (`FUN_1408593d0` skips only down, dead `+0x5bc` or carried). The fight a follow job or order plans for its charge (the 13 step of
-  31 / 45 / 289, [precedence](ai-tasks.md#precedence)) skips `Enemies` the same way: without a target it ends on its task target alone (down, gone or no
-  longer sensed), and the job pass plans the row again, which fights the charge's next attacker or follows (`CombatSystem.FollowStep`; engine reading of
-  the plan step ending a targetless row 4 on its list A's 7 `isTargetDown`, [finished tests](ai-tasks.md#finished-tests)). **Observed** (Meitou, headless, a Dust
-  bandit raid on a squad on Bodyguard jobs): without it three followers stood without a target in combat mode for over a minute, neither following nor
-  helping, while a Dust King unseen 170-200 away still counted (its entry not decayed). Engine choice: an enemy in a cage is not counted (`SenseBlock.CagedEnemies`)
+  `numEnemies` counts (`FUN_1408593d0` skips only down, dead `+0x5bc` or carried). The fight a follow job or order runs as its step (31 / 45 / 289,
+  [precedence](ai-tasks.md#precedence)) skips `Enemies` the same way: without a target it ends on its task target alone (down, gone or no longer sensed),
+  and the job pass or order step resumes the follow and plans the row again, which fights the charge's next attacker or follows
+  (`CombatSystem.FollowStep`; engine choice - for a 45 Bodyguard job the original leaves the fight through the job pass skipping 45 once `!16 !39` holds
+  and taking up companion 31, [finished tests](ai-tasks.md#finished-tests)). **Observed** (Meitou, headless, a Dust bandit raid on a squad on Bodyguard
+  jobs): without it three followers stood without a target in combat mode for over a minute, neither following nor helping, while a Dust King unseen
+  170-200 away still counted (its entry not decayed). Engine choice: an enemy in a cage is not counted (`SenseBlock.CagedEnemies`)
   and a task target in a cage counts as gone. The original ends such a fight through its goal ([arrest chain](ai-tasks.md): effect 129 holds once the target is
   imprisoned), which the engine's own fights (an arrest's, a joiner's) lack. **Observed** (Meitou, headless The Slaves start, a player slave put in a cage
   mid-arrest): without it the guards stayed in combat mode while they sensed the prisoner and turned on it when it was let out (#629).

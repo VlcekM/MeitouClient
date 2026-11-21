@@ -214,9 +214,10 @@ public sealed partial class CombatSystem
         && senses is not { ThreatToMe: > 0 };
 
     /// <summary>
-    /// Whether the fight is the 13 step a follow row (45 Bodyguard, 31 Staying close, 289) planned for its job or order (<see cref="Ai.FollowDefence"/>).
-    /// Such a fight without a target ends on its task target alone (down, gone or no longer sensed), whatever <see cref="SenseBlock.Enemies"/> still
-    /// counts: the job pass then plans the row again, which fights the charge's next attacker or follows (docs/game/combat.md "Leaving a fight").
+    /// Whether the fight is a step of a follow row (45 Bodyguard, 31 Staying close, 289) for its job or order (<see cref="Ai.FollowDefence"/>). Such a
+    /// fight without a target ends on its task target alone (down, gone or no longer sensed), whatever <see cref="SenseBlock.Enemies"/> still counts: the
+    /// job pass or order step then resumes the follow and plans the row again, fighting the charge's next attacker or following (docs/game/combat.md
+    /// "Leaving a fight").
     /// </summary>
     static bool FollowStep(CharacterCold cold) =>
         cold.Running is { Source: Ai.TaskSource.Job or Ai.TaskSource.Order, Task: Movement.CharacterTask.Attack } run
