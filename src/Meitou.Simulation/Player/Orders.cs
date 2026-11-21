@@ -425,16 +425,16 @@ public static class Orders
                     if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { IsPlayer: true } cold) continue;
                     // The lead's mode is the one shown, even when the lead is the one staying low.
                     mode ??= ((cold.RunSpeed + step) % SpeedMode.Count + SpeedMode.Count) % SpeedMode.Count;
-                    // One staying low (not crippled) stands up instead of changing speed (setStandingOrder 0, 1, 2, 16).
+                    // One staying low (not crippled) stands up instead of changing speed (setStandingOrder 0, 1, 2, 16); a Group order still
+                    // groups it with the rest of the selection.
                     if (cold.Medical is { StayingLow: true, Crawling: false } low && low.Prone)
                     {
                         low.StayingLow = false;
+                        if (mode == SpeedMode.Group) cold.SpeedGroup = GroupKey(world, ref group);
                         continue;
                     }
                     SetRunSpeed(table, slot, cold, (byte)mode.Value);
-                    // Group speed gives the characters set together one speed group (PlayerInterface::assignSpeedGroup), keyed by the first one.
-                    group = mode == SpeedMode.Group ? group < 0 ? slot : group : -1;
-                    cold.SpeedGroup = group;
+                    cold.SpeedGroup = mode == SpeedMode.Group ? GroupKey(world, ref group) : -1;
                 }
                 break;
             case ManoeuvreCommand manoeuvre:
@@ -453,6 +453,17 @@ public static class Orders
                         staying.StandingUp = true;
                 break;
         }
+    }
+
+    /// <summary>
+    /// The speed group key of one Group speed order: the first call takes a new key, the rest of the order's characters share it, so the
+    /// characters set together get a new speed group of their own, one character alone included (PlayerInterface::assignSpeedGroup,
+    /// docs/game/pathfinding.md "Speed groups").
+    /// </summary>
+    static int GroupKey(World world, ref int group)
+    {
+        if (group < 0) group = world.Player.NextSpeedGroup++;
+        return group;
     }
 
     /// <summary>

@@ -115,6 +115,12 @@ public sealed class PlayerState
     public List<CharacterId> Selection { get; } = [];
 
     /// <summary>
+    /// The key the next Group speed order gives its characters' new speed group (<see cref="CharacterCold.SpeedGroup"/>). Runtime only, like the
+    /// groups: not saved and not hashed.
+    /// </summary>
+    public int NextSpeedGroup { get; set; }
+
+    /// <summary>
     /// The active squad (the original's cached squad, <c>FUN_1407f5520</c>): the one the squad bar shows and recruits join. The start's squad at
     /// first; the squad tabs, Tab (<see cref="ActiveSquadCommand"/>) and selecting a character of another squad change it
     /// (<see cref="SquadManagement"/>).
