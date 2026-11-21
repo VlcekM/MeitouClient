@@ -154,9 +154,18 @@ public sealed class SavedPlatoon
     /// </summary>
     public Trading.Shop? Shop { get; set; }
     /// <summary>
-    /// Its contract and <c>change AI</c>: the save's until its squad first leaves the world, then the squad's.
+    /// Its contract and <c>change AI</c>: the save's until its squad first leaves the world (<see cref="SavedAi"/>), then the squad's. Read in
+    /// parallel by the off-screen step.
     /// </summary>
-    public AiSave? Ai { get => _aiSet ? _ai : AiSave.Read(Source.Record); set { _ai = value; _aiSet = true; } }
+    public AiSave? Ai
+    {
+        get => Volatile.Read(ref _aiSet) ? _ai : SavedAi();
+        set
+        {
+            _ai = value;
+            Volatile.Write(ref _aiSet, true);
+        }
+    }
     /// <summary>
     /// The AI written over the save's (see <see cref="Ai"/>).
     /// </summary>
@@ -166,6 +175,14 @@ public sealed class SavedPlatoon
     /// </summary>
     bool _aiSet;
     /// <summary>
+    /// The save's AI once read from the record (<see cref="SavedAi"/>); kept apart from <see cref="_ai"/> so a read racing a write never covers it.
+    /// </summary>
+    AiSave? _savedAi;
+    /// <summary>
+    /// Whether <see cref="_savedAi"/> was read.
+    /// </summary>
+    bool _savedAiRead;
+    /// <summary>
     /// What its squad remembered when it last left the world (<see cref="MemorySet"/>; else the record's keys are the memory, read when its squad is
     /// made).
     /// </summary>
@@ -174,6 +191,20 @@ public sealed class SavedPlatoon
     /// Whether <see cref="Memory"/> holds the squad's memory (else the record's keys do).
     /// </summary>
     public bool MemorySet { get; set; }
+
+    /// <summary>
+    /// The save's AI (<see cref="AiSave.Read"/>), read once: the running game writes its AI keys only on the copy a save is captured into, so the
+    /// record's never change. Two first readers at once read equal values.
+    /// </summary>
+    AiSave? SavedAi()
+    {
+        if (Volatile.Read(ref _savedAiRead)) return _savedAi;
+
+        var read = AiSave.Read(Source.Record);
+        _savedAi = read;
+        Volatile.Write(ref _savedAiRead, true);
+        return read;
+    }
 }
 
 /// <summary>

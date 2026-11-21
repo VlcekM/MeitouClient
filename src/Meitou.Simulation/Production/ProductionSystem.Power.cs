@@ -146,6 +146,23 @@ public sealed partial class ProductionSystem
     /// A hash of the player towns' numbers and centres this tick; a cached <see cref="_powerTowns"/> entry is valid for one layout.
     /// </summary>
     int _townLayout;
+    /// <summary>
+    /// The town-less buildings by their grid (<see cref="TownlessGrid"/>), each list in the order of <see cref="PopulationData.Townless"/>, with the
+    /// player towns' layout and the list it was built for; null until first built (<see cref="TownlessByGrid"/>). Replaced whole, never changed.
+    /// </summary>
+    (int Layout, IReadOnlyList<TownlessBuilding> Source, Dictionary<int, List<TownlessBuilding>> ByGrid)? _townlessByGrid;
+    /// <summary>
+    /// The grids with machines this tick in ascending key (<see cref="ShareOneTown"/>). A scratch list.
+    /// </summary>
+    readonly List<int> _framedTowns = [];
+    /// <summary>
+    /// The towns whose totals or supply <see cref="ShareOneTown"/> drops this tick. A scratch list.
+    /// </summary>
+    readonly List<int> _goneTowns = [];
+    /// <summary>
+    /// The consumers of the frame <see cref="Share"/> runs. A scratch list.
+    /// </summary>
+    readonly List<Machine> _shareConsumers = [];
 
     /// <summary>
     /// The town whose power frame a site's machine joins (<c>FUN_140296940</c> and <c>FUN_1409f9180</c>, <b>Observed</b>): the town of its building,
@@ -301,14 +318,37 @@ public sealed partial class ProductionSystem
     List<PseudoDraw> TownlessDraws(World world, int grid)
     {
         var draws = new List<PseudoDraw>();
-        foreach (var b in world.SystemOf<PopulationSystem>()?.Data.Townless ?? [])
+        if (!TownlessByGrid(world).TryGetValue(grid, out var near)) return draws;
+
+        foreach (var b in near)
         {
-            if (b.Destroyed || TownlessGrid(world, b) != grid) continue;
+            if (b.Destroyed) continue;
 
             if (Draw(world, b.RecordId, outdoors: true) is { } draw) draws.Add(new PseudoDraw(b.Key, draw, TownlessGetsBattery(world, b)));
         }
 
         return draws;
+    }
+
+    /// <summary>
+    /// The town-less buildings by their grid (<see cref="_townlessByGrid"/>), built again when the player towns' layout or the list changes; a
+    /// grid's buildings keep the list's order, so the frame's draws come in the order a scan of the whole list gives.
+    /// </summary>
+    Dictionary<int, List<TownlessBuilding>> TownlessByGrid(World world)
+    {
+        var all = world.SystemOf<PopulationSystem>()?.Data.Townless ?? [];
+        if (_townlessByGrid is { } known && known.Layout == _townLayout && ReferenceEquals(known.Source, all)) return known.ByGrid;
+
+        var byGrid = new Dictionary<int, List<TownlessBuilding>>();
+        foreach (var b in all)
+        {
+            int grid = TownlessGrid(world, b);
+            if (!byGrid.TryGetValue(grid, out var list)) byGrid[grid] = list = [];
+            list.Add(b);
+        }
+
+        _townlessByGrid = (_townLayout, all, byGrid);
+        return byGrid;
     }
 
     /// <summary>
@@ -677,11 +717,11 @@ public sealed partial class ProductionSystem
     /// </summary>
     void ShareOneTown(World world, float dt)
     {
-        var towns = _grids.Where(g => g.Value.Count > 0).Select(g => g.Key).Order().ToList();
-        foreach (var gone in _townPower.Keys.Where(t => !towns.Contains(t)).ToList()) _townPower.Remove(gone);
+        var towns = FramedTowns();
+        DropUnframed(_townPower);
 
         // A town whose frame has gone reads its generators again (TownHasPower), not the supply of its last frame.
-        foreach (var gone in _townSupply.Keys.Where(t => !towns.Contains(t)).ToList()) _townSupply.Remove(gone);
+        DropUnframed(_townSupply);
 
         if (towns.Count == 0)
         {
@@ -696,6 +736,31 @@ public sealed partial class ProductionSystem
         foreach (var m in _grids[picked]) m.Power = 1;
         Share(world, picked, _grids[picked]);
         foreach (var town in towns) ChargeBatteries(world, town, _grids[town], dt);
+    }
+
+    /// <summary>
+    /// The grids that hold a machine this tick, in ascending key (<see cref="_framedTowns"/>).
+    /// </summary>
+    List<int> FramedTowns()
+    {
+        _framedTowns.Clear();
+        foreach (var (town, grid) in _grids)
+            if (grid.Count > 0) _framedTowns.Add(town);
+
+        _framedTowns.Sort();
+        return _framedTowns;
+    }
+
+    /// <summary>
+    /// Removes the towns that have no frame this tick (not in <see cref="_framedTowns"/>) from <paramref name="byTown"/>, in its key order.
+    /// </summary>
+    void DropUnframed<T>(Dictionary<int, T> byTown)
+    {
+        _goneTowns.Clear();
+        foreach (int town in byTown.Keys)
+            if (_framedTowns.BinarySearch(town) < 0) _goneTowns.Add(town);
+
+        foreach (int town in _goneTowns) byTown.Remove(town);
     }
 
     /// <summary>
@@ -831,7 +896,8 @@ public sealed partial class ProductionSystem
     {
         bool mode = _batteryMode.GetValueOrDefault(town);
         float supply = 0, batteries = 0, demandTotal = 0;
-        var consumers = new List<Machine>();
+        var consumers = _shareConsumers;
+        consumers.Clear();
         foreach (var m in grid)
         {
             m.Granted = 0;
