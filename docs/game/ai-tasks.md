@@ -504,7 +504,7 @@ shackles locked); 123 and 136 false; 16 `FUN_14059de10` (the target's immediate-
 | 101 | `isLeaderDown` |
 | 102 | `isSquadmatesFighting` |
 | 103 | `myLegsAreMessedUp`: false when a leg slot is a stump; else true when a leg part is down (`FUN_140644450`) and the KO point is under its max health less stun (`FUN_1409980c0`, **Verified**; the two leg parts, Meitou: parts with a leg collapse part) |
-| 104 | `using target turret` |
+| 104 | `using target turret` (`FUN_140997d30`, **Verified** by disassembly): always false |
 | 105 | `isMachineOutputEmpty` |
 | 106 | `machineHasFullInputs` |
 | 107 | `I_AM_INSIDE_TARGET_BUILDING` (`FUN_14059a4b0`, **Verified**): false outdoors; else the building the character stands in is the target's (an object target, a door or part by its building), with no object target its squad's home (`FUN_1407956a0` `+0x38`) |
@@ -543,7 +543,7 @@ shackles locked); 123 and 136 false; 16 `FUN_14059de10` (the target's immediate-
 | 142 | `isTargetRestrainedOrKO` |
 | 143 | `farm has food` |
 | 144 | `am hungry` |
-| 145 | `using any turret` |
+| 145 | `using any turret` (`FUN_140997d60`, **Verified** by disassembly): the character's turret hand `+0x258` names something (type `+0x260` not 0xb), written by the turret's operator slot 150 on every manning update. Meitou: `CharacterCold.Gunning` |
 | 146 | `target worshiped` |
 | 147 | `DITCHED_ALL_RESOURCES` |
 | 148 | `LOOTED_STORABLE_ITEMS` |

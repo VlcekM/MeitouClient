@@ -84,6 +84,7 @@ public sealed partial class World
             or TaskType.LootAnimalsJob => SystemOf<Carrying.CarrySystem>(),
         TaskType.FocusedMeleeAttack or TaskType.UnprovokedFocusedMeleeAttack or TaskType.MeleeAttack or TaskType.AttackEnemies
             => SystemOf<Combat.CombatSystem>(),
+        TaskType.ShootAtTarget => Combat.ShootAt.Instance,
         TaskType.FeedCorpseIntoMachine => SystemOf<Production.ProductionSystem>()?.CorpseOrders,
         TaskType.Build or TaskType.Repair or TaskType.Dismantle or TaskType.JobBuilder => SystemOf<Construction.ConstructionSystem>(),
         TaskType.OperateMachinery or TaskType.OperateAutomaticMachinery or TaskType.OperateStorage or TaskType.UseTrainingDummy

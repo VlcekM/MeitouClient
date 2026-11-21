@@ -525,9 +525,9 @@ sealed class ContextMenuWindow(PlayerInterface player)
 
         if (onTurret)
         {
-            // The lead mans a turret: the attacks give way to Shoot At (235), which sends every selected gunner's fire at the target.
-            var gunners = player.Selected().Where(c => c.Turret is not null).Select(c => c.Id).ToArray();
-            verbs.Add(("Shoot At", () => player.Say(new ShootAtOrder(gunners, id) { Tick = player.Session.World.Tick })));
+            // The lead mans a turret: the attacks give way to Shoot At (235), given to every selected character with its queue cleared
+            // (FUN_1407f9e20); one on no turret holds it blocked.
+            verbs.Add(("Shoot At", () => player.Say(new ShootAtOrder(player.SelectedIds(), id) { Tick = player.Session.World.Tick })));
             return;
         }
 

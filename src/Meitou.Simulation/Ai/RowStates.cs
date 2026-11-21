@@ -134,6 +134,10 @@ public static class RowStates
             StateType.IsAggressionTowards => Threatened(world, target.Character),
             StateType.IsAggressionTowardsMe => world.SystemOf<CombatSystem>() is { } combat && CharacterFacts.ImmediateThreat(combat, world, slot),
             StateType.MachineHasFreeOperatorSlot => BedSlotFree(world, slot, target.Site),
+
+            // 145 using any turret (FUN_140997d60, Verified by disassembly): the character's turret hand +0x258 names something (type +0x260 not 0xb),
+            // which the turret's operator slot 150 (FUN_140434d20) writes on every update of the manning.
+            StateType.UsingAnyTurret => cold.Gunning is not null,
             _ => null,
         };
     }

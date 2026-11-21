@@ -315,7 +315,9 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
   ([order givers](game/ai-tasks.md#order-givers)); `World.GiveOrder(queued: true)` appends one. DA_TRADE opens its window with no order (`OpenTradeNow`).
 - **Escape** (the caged character's menu verb, and Alt + the quick click on it in another faction's unlocked cage, `CageClickOrder`) is order 207 Escape cage (`GetOutOrder` → `Locks.CageEscape`) for every selected character, the queue cleared, as the
   original's giver: done for one in no cage (list A `!79`), held while the cage is locked (list B `!54`), else Task_GetOutOfCage's leave with the escape flag.
-- Not queued (it acts at once): Shoot At (sets the turret's target).
+- **Shoot At** is order 235 (`ShootAtOrder` → `Combat.ShootAt`) for every selected character, the menu clearing the queue and the quick click appending it (so behind
+  a running 146 order, which never finishes, it waits): it runs only on a manned turret (list B 145, `RowStates`), where it takes over the operate task as row 235,
+  the turret's target choice reading its target; it ends when the target is down (list A 7) or the gunner stops manning, and the operate task ends with it.
 - **Corpse Disposal** is order 136 (`DisposeCorpseOrder` → `ProductionSystem.CorpseOrders`) on the clicked machine for every selected character (menu and quick click,
   the queue cleared): done at once for one carrying nothing (list A 100), held for one carrying a living body (99 fails), else the walk to that machine is its task and
   the corpse errand feeds the body in there; a walk that ends short ends it.

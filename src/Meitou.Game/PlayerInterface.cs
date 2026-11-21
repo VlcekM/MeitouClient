@@ -1061,7 +1061,8 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
                 bool defence = c.FightsPlayer;
                 return ("attk", id, Do(() =>
                 {
-                    if (lead.Turret is not null) Say(new Simulation.Combat.ShootAtOrder(selection, id) { Tick = tick });
+                    // The quick click appends 235 to every selected character's queue, Shift or not (FUN_1407fb410 passes 1 to FUN_1407f9e20).
+                    if (lead.Turret is not null) Say(new Simulation.Combat.ShootAtOrder(selection, id) { Tick = tick, Queued = true });
                     else SquadWindows.OrderOrJob(Data.Gameplay.Ai.TaskType.MeleeAttack, id,
                         () => Say(new Simulation.Combat.AttackOrder(selection, id) { Tick = tick, Picked = true, Defensive = defence }));
                 }));

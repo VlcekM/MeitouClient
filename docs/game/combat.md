@@ -778,7 +778,13 @@ on screen with a body. Meitou: `CombatSystem.IsParry` decides (armed attacker, r
 
 **Shoot At** (context-menu order 235, offered when the lead mans a turret; [ui-input](ui-input.md#context-menu-verbs)). **Verified** givers: the original gives 235 through
 `FUN_1407f9e20` to every selected character, the menu's clearing the queue and the quick click on a character (`FUN_1407fb410`) appending it; row 235 is a `Task_UseTurret`
-row as 146 is (list B `using any turret`). Meitou's `ShootAtOrder` sets `CharacterCold.TurretTarget` on each selected gunner; the turret's target choice then returns that character while it lives and is free (not down: row 235's list A is state 7 `isTargetDown`, so a knocked-out, dead, carried, caged or crawling target ends the order, **Verified** row table), instead of scoring candidates, and the gunner does not regard it as friendly (`vfunc 0x3f0`, `FUN_140437f40`, **Verified**; otherwise the order is dropped and the gunner chooses normally), and waits while it is out of range or blocked. The order ends when the gunner stops manning. Engine reading.
+row as 146 is: with a target that is no building, `FUN_1403474f0` mans the turret of Character `+0x258`, which the turret's operator slot 150 (`FUN_140434d20`) writes on every
+update, and list B 145 `using any turret` (`FUN_140997d60`, **Verified** by disassembly) holds while that hand names something. Its end (slot 3 `FUN_140347800`) clears the controller
+(`FUN_140437470`) and the turret's in-use flag. Row 146 is never done (+0x15), so an appended 235 waits behind a running 146 order. Meitou: `ShootAtOrder` gives 235 through the queue
+(`Combat.ShootAt`); it runs only on a manned turret (blocked otherwise: 146 plans no turret on a character target, Meitou's reading), takes over the operate task as row 235,
+and the turret's target choice returns its target while it lives and is free (not down: row 235's list A is state 7 `isTargetDown`, so a knocked-out, dead, carried, caged or crawling target
+ends the order, **Verified** row table), instead of scoring candidates, and the gunner does not regard it as friendly (`vfunc 0x3f0`, `FUN_140437f40`, **Verified**; otherwise the gunner
+chooses normally that tick), and waits while it is out of range or blocked. The order ends when the target is down or the gunner stops manning, and the operate task with it.
 
 Controller phases reload → steady aim → fire; target motion/range, skill/injury, equipment and
 line of sight determine timing/spread. Bolts retain launch/direction/velocity/impact/friendly-hit

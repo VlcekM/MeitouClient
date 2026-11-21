@@ -200,12 +200,6 @@ public sealed class CharacterCold
         Running is { Task: CharacterTask.Attack, Row: not Data.Gameplay.Ai.TaskType.Bodyguard } run && Production.PermaJobs.Follows(run.Row);
 
     /// <summary>
-    /// The target a manned-turret gunner was told to shoot at (Shoot At, 235; <see cref="Combat.ShootAtOrder"/>); None: the gunner chooses. Not
-    /// saved; hashed only while set.
-    /// </summary>
-    public CharacterId TurretTarget { get; set; } = CharacterId.None;
-
-    /// <summary>
     /// The caged prisoner this character walks to free (Set Free, 110; <see cref="Locks.SetFreeOrder"/>); None: none. Not saved; hashed only while
     /// set.
     /// </summary>
@@ -2108,10 +2102,11 @@ public sealed class CharacterTable
         // a wake owed while carried; the rest is told from the medical state
         if ((k.BodyEvents & Combat.BodyEvents.Woke) != 0) hasher.Add(0x576F6B65);
 
-        if (!k.TurretTarget.IsNone)
+        // the target of a running Shoot At (its queue entry alone is hashed the legacy way)
+        if (Combat.ShootAt.TargetOf(k) is { IsNone: false } shootAt)
         {
             hasher.Add(0x54725467);
-            hasher.Add(k.TurretTarget);
+            hasher.Add(shootAt);
         }
 
         if (!k.Freeing.IsNone)

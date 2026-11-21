@@ -449,14 +449,19 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     }
 
     /// <summary>
-    /// The shoot-at order's input: the gunners that man a turret take the victim as their turret target.
+    /// The shoot-at order's input: each of the player's characters listed gets order 235 through its queue (<see cref="ShootAt"/>, the giver
+    /// <c>FUN_1407f9e20</c>), the queue cleared unless <see cref="OrderCommand.Queued"/>; one that mans no turret holds it blocked. An appended one
+    /// equal to one queued is refused (the push <c>FUN_140508380</c>, its zero point, <c>FUN_14050be30</c>).
     /// </summary>
-    void ShootAtInput(World world, CharacterTable table, ShootAtOrder shoot)
+    static void ShootAtInput(World world, CharacterTable table, ShootAtOrder shoot)
     {
         foreach (var id in shoot.Gunners.Count > 0 ? shoot.Gunners : world.Player.Selection.ToArray())
-            if (table.TryResolveNext(id, out int g) && table.Cold(g) is { IsPlayer: true, Gunning: not null } gunner
-                && table.TryResolveNext(shoot.Target, out int victim) && victim != g && table.Cold(victim) is { Medical.Dead: false })
-                gunner.TurretTarget = shoot.Target;
+        {
+            if (!table.TryResolveNext(id, out int g) || table.Cold(g) is not { IsPlayer: true } cold) continue;
+            if (shoot.Queued && cold.OrderQueue.Any(e => e.Row == TaskType.ShootAtTarget && e.Target == shoot.Target)) continue;
+
+            PlayerOrders.Give(world, g, ShootAt.Order(shoot.Target), shoot.Queued);
+        }
     }
 
     /// <summary>
