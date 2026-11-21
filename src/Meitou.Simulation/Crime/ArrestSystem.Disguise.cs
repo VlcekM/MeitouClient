@@ -84,10 +84,11 @@ public sealed partial class ArrestSystem
     }
 
     /// <summary>
-    /// Once a scan: the player's characters' disguise levels, the marks' countdown, and every NPC looker within <see cref="DisguiseRange"/> that sees
-    /// a working disguise filling its meter on it (<see cref="DisguiseSeconds"/>; the original's spot meter, <c>FUN_140856cb0</c>). A meter that was
-    /// full before this look sees through it: with a bounty of the looker's faction the looker fires event 44 BOUNTY_SPOTTED, else the disguise is
-    /// blown for 250 s (<see cref="CharacterCold.RecentlyWanted"/>, the same status field). Unseen meters empty by dt / 260.
+    /// Once a scan: the player's characters' disguise levels, the marks' countdown, and every NPC looker within <see cref="DisguiseRange"/>, not in
+    /// combat mode, that sees a working disguise filling its meter on it (<see cref="DisguiseSeconds"/>; the original's spot meter,
+    /// <c>FUN_140856cb0</c>). A meter that was full before this look sees through it: with a bounty of the looker's faction the looker fires event
+    /// 44 BOUNTY_SPOTTED, else the disguise is blown for 250 s (<see cref="CharacterCold.RecentlyWanted"/>, the same status field). Unseen meters
+    /// empty by dt / 260.
     /// </summary>
     void Disguise(World world, float seconds)
     {
@@ -113,6 +114,7 @@ public sealed partial class ArrestSystem
                     continue;
                 }
                 if (Vector3.DistanceSquared(next[w].Position, at) > DisguiseRange * DisguiseRange) continue;
+                if (InCombatMode(world, w, wc)) continue;   // FUN_140856f00 returns at once: no look, the meter empties as unseen
                 float v = SightRay.Sees(world, w, s, next[w].Position, at, DisguiseRange);
                 if (v <= 0 || Orders.Alertness(wc) <= 0) continue;   // no alertness: the meter empties (FUN_140856cb0)
                 var key = (table.IdOf(w), target);

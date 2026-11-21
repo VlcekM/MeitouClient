@@ -628,8 +628,9 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
                 bool escapee = !sight && EscapeShows(c) && Crimes.IsPoliceLike(world, wc) && InOwnTown(world, w);
                 bool hunts = bare && HuntsFor(wc, c);
 
-                // A looker that regards the target as friendly (slot 126, its love included) neither recognises nor fires (FUN_140856f00).
-                if ((spots || hunts) && Crimes.RegardsFriendly(world, w, s)) (spots, hunts) = (false, false);
+                // A looker in combat mode or that regards the target as friendly (slot 126, its love included) neither recognises nor fires
+                // (FUN_140856f00).
+                if ((spots || hunts) && (InCombatMode(world, w, wc) || Crimes.RegardsFriendly(world, w, s))) (spots, hunts) = (false, false);
                 if (!spots && !escapee && !hunts) continue;
                 if (!SeesSuspect(world, w, s, c, Settings.SpotRange)) continue;
 
@@ -659,6 +660,16 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             }
             if (recognised && hunter >= 0 && hunter != best) BeginHunt(world, hunter, s);
         }
+    }
+
+    /// <summary>
+    /// The looker is in combat mode, melee or ranged (<c>Character::isInCombatMode(1, 1)</c>, <c>FUN_140436610</c>): <c>FUN_140856f00</c> then
+    /// returns at entry (<b>Verified</b>, disassembly at <c>140856f3a</c>), so it fills no recognition or disguise meter and fires nothing.
+    /// </summary>
+    static bool InCombatMode(World world, int slot, CharacterCold cold)
+    {
+        var table = world.Characters;
+        return world.SystemOf<CombatSystem>() is { } combat && CharacterFacts.InCombatMode(combat, table, table.IdOf(slot), cold, true, true);
     }
 
     /// <summary>

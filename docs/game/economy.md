@@ -667,7 +667,8 @@ decompile's `DialogActionEnum` / `DialogConditionEnum` / `EventTriggerEnum`, com
 
 ### 11.8 Bounty spotting and bounty hunters
 
-- **Spotting** (`FUN_140856f00`, **Observed**): a non-player looker within 400 units (160000 squared) recognises a player-faction
+- **Spotting** (`FUN_140856f00`, **Observed**): it returns at entry for a looker that is an animal (vfunc `0x248`) or in combat mode, melee or ranged
+  (`FUN_140436610(looker, 1, 1)`, **Verified** disassembly at `140856f3a`), so such a looker fills no meter, a disguise's included, and fires nothing. A non-player looker within 400 units (160000 squared) recognises a player-faction
   character whose bounty with the looker's faction is at least a class threshold (`FUN_1408520c0`: LAW_ENFORCEMENT 1, MILITARY 4000
   or 2000, ADVENTURER 1000, SLAVE never, others 10000), immediately while `+0x110 > 0`, else through a recognition meter
   (`FUN_140856cb0`, the looker's per-target map, fires above 1.0): fill time T = lerp(v, 5a, a) x lerp(f, 4, 1) seconds, v the looker's view
@@ -688,7 +689,8 @@ decompile's `DialogActionEnum` / `DialogConditionEnum` / `EventTriggerEnum`, com
   blown one with any uniform piece takes neither branch and the function returns: no meter, no event 44, no blow, so any uniform piece hides a
   bounty from guards and hunters alike unless a working disguise is seen through (**Verified**, decompile: the bounty test is `+0x100 <= 0`,
   the disguise branch `FUN_1407c0520`). Meitou: `ArrestSystem.Spot` skips a target whose level is above 0. Repeats are the lines' own
-  `repetition limit`. Meitou: both gates are `CrimeSystem.RegardsFriendly` (the disguise read changes nothing where the bounty branch runs), in
+  `repetition limit`. The fire gate's combat test is again `(1, 1)` (disassembly at `140857424`). Meitou: `ArrestSystem.InCombatMode` skips such a looker in `Spot` and the disguise pass;
+  both friendly gates are `CrimeSystem.RegardsFriendly` (the disguise read changes nothing where the bounty branch runs), in
   `ArrestSystem.Spot` (no meter, no event 44) and `SeeThrough` (no event 44, no blow). The escaping-slave
   events (36 / 40) are the sight pass's ([sight](dialogue.md#ambient-conversations)). `EV_ESCAPED_PRISONER_SPOTTED` (45) is cut in by
   `FUN_140859680` (**Verified**) at a target with the escaped flag, while its disguise level (`+0x100`) is 0 or its blown cooldown (`+0x110`)
