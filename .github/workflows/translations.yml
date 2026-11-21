@@ -1,0 +1,66 @@
+# Translations: checks that every built-in catalog (src/Meitou.Core/Localisation/locale/<code>.po) translates each of Meitou's own texts
+# (.github/scripts/loc-strings.mjs). With an ANTHROPIC_API_KEY secret it first fills the gaps itself (loc-fill.mjs, Claude) and commits them
+# to the branch: on pushes, and on pull requests from a branch of this repository (GitHub gives no secrets to pull requests from forks, so
+# those are only checked; their gaps are filled once they land). A push with the default token starts no workflows, so the fill commit gets
+# no CI of its own unless a TRANSLATIONS_PUSH_TOKEN secret (a token that may push contents) is set. The LOC_MODEL variable picks the model.
+name: Translations
+
+on:
+  push:
+    branches: [master, fork]
+    paths: ["src/**", "launcher/**", ".github/scripts/loc-*.mjs", ".github/scripts/po.mjs"]
+  pull_request:
+    paths: ["src/**", "launcher/**", ".github/scripts/loc-*.mjs", ".github/scripts/po.mjs"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# A fill that is cut off spends its requests for nothing, so a newer run waits instead of cancelling it.
+concurrency:
+  group: translations-${{ github.head_ref || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  translations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SAME_REPO: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # A pull request from this repository checks out its branch, to commit to it; one from a fork keeps the default merge ref.
+          ref: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) && github.head_ref || '' }}
+          token: ${{ secrets.TRANSLATIONS_PUSH_TOKEN || github.token }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: npm ci
+        working-directory: .github/scripts
+
+      - name: Fill missing translations
+        if: env.SAME_REPO == 'true'
+        timeout-minutes: 30
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LOC_MODEL: ${{ vars.LOC_MODEL }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then echo "No ANTHROPIC_API_KEY secret; gaps are reported, not filled." >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          if git log -1 --format=%s | grep -q '^Translations: fill missing messages'; then echo "Last commit is a fill; not filling again."; exit 0; fi
+          node .github/scripts/loc-strings.mjs --write
+          node .github/scripts/loc-fill.mjs
+          if git diff --quiet -- src/Meitou.Core/Localisation/locale; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/Meitou.Core/Localisation/locale
+          git commit -m "Translations: fill missing messages (machine-translated)"
+          for attempt in 1 2 3; do
+            git push && exit 0
+            git pull --rebase
+          done
+          exit 1
+
+      - name: Check translations
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/loc-strings.mjs
