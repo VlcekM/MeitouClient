@@ -203,7 +203,8 @@ public sealed class OrderEntry(TaskType row, IOrderOwner owner)
     public bool RowRuns { get; internal set; }
     /// <summary>
     /// A second-list entry of a row with no TaskData row (Meitou's own orders, 54 Rest: no finished test to ask) whose task ended done, or any entry
-    /// whose start left nothing running (engine choice): it scores 0 until the list is cleared. Every other entry is tested again at each look, as the original's scorer
+    /// whose start left nothing running (engine choice), or a loaded entry whose target will come no more (<see cref="Awaits"/>): it scores 0 until
+    /// the list is cleared. Every other entry is tested again at each look, as the original's scorer
     /// does (<see cref="ListTests.OrderDone"/>), so one that turns unfinished again (a walk pushed off its spot) is picked again.
     /// </summary>
     public bool Spent { get; internal set; }
@@ -219,8 +220,8 @@ public sealed class OrderEntry(TaskType row, IOrderOwner owner)
     internal bool Forced { get; init; }
     /// <summary>
     /// A loaded order whose target character or fixture is still to come into the world (<see cref="Saving.OrderSave.Restore"/>): it holds its
-    /// place in the second list and is no candidate until the look that finds its target makes it from this; null: a made entry. Engine choice: one
-    /// whose target will come no more leaves the list, as it would never be a candidate.
+    /// place in the second list and is no candidate until the look that finds its target makes it from this; null: a made entry. One whose target will
+    /// come no more becomes a spent entry in its place (<see cref="Spent"/>).
     /// </summary>
     internal Saving.SavedOrder? Awaits { get; init; }
 

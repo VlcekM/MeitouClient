@@ -209,8 +209,9 @@ public static class OrderSave
     }
 
     /// <summary>
-    /// Makes the waiting entries whose target came into the world, in their place; drops those whose target will come no more (such an entry would
-    /// never be a candidate); true when one was made.
+    /// Makes the waiting entries whose target came into the world, in their place; one whose target will come no more stays there spent (no
+    /// candidate until the list is cleared, as the original's entry whose hand names nothing; in place, so a look's pick index holds); true when one
+    /// was made.
     /// </summary>
     static bool Settle(World world, int slot, CharacterCold cold)
     {
@@ -221,11 +222,10 @@ public static class OrderSave
             if (list[k].Awaits is not { } o) continue;
 
             var step = Make(world, slot, o, out var entry);
-            if (step == Restored.Dropped) list.RemoveAt(k);
-            if (step != Restored.Added) continue;
+            if (step == Restored.Waits) continue;
 
-            list[k] = entry!;
-            added = true;
+            list[k] = entry ?? Spent(list[k]);
+            added |= step == Restored.Added;
         }
 
         return added;
@@ -256,6 +256,11 @@ public static class OrderSave
         owner.Restored(world, entry);
         return Restored.Added;
     }
+
+    /// <summary>
+    /// A waiting entry whose target will come no more, spent (<see cref="OrderEntry.Spent"/>).
+    /// </summary>
+    static OrderEntry Spent(OrderEntry waiting) => new(waiting.Row, waiting.Owner) { Point = waiting.Point, Spent = true };
 
     /// <summary>
     /// The waiting entry of a loaded order whose target is still to come: its row, owner and point, no target, and the order kept to make it from.

@@ -1484,7 +1484,8 @@ public sealed class CharacterCold
     /// The receiver's second list (<c>+0x70</c>, count <c>+0x78</c>; docs/game/ai-tasks.md "Precedence" source 3): orders the chooser scores after
     /// its committed stop and before the urgent job pass (<see cref="Ladder"/>; the serial look scores each, the serial pass starts the pick). The
     /// queue loader <c>FUN_1405092d0</c> fills it from a saved order queue (<see cref="Saving.OrderSave.Restore"/>); entries are never popped by
-    /// completion (a done one is skipped) and leave only by the clears (<c>FUN_1405074a0</c>, <c>FUN_140507530</c>). Serial phases write it;
+    /// completion (a done one is skipped) nor for a hand that names nothing, and leave only by the clears (<c>FUN_1405074a0</c>,
+    /// <c>FUN_140507530</c>) and the remove by type (<c>FUN_140507090</c>). Serial phases write it;
     /// hashed while not empty; not saved (the original's writer saves the order queue only).
     /// </summary>
     public List<OrderEntry> SecondList { get; } = [];
