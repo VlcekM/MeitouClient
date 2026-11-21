@@ -1299,7 +1299,12 @@ which an order's hold refuses. The chain's rows and states are in [AI tasks](gam
   `repetition limit` decide what is said (each of the 14 base roots any dialogue package lists for event 44 has a limit: 1, 2 h, in 7; 2, 6 h, in 3;
   3 and 4 in one each; 6, 20 minutes, in "police bounty spotted" and "Shek law spots bounty"; **Verified**, the packages' `dialogs` lists in the
   gamedata dump; of the roots for events 45 and 36, which the same pass fires, "police escaping prisoner" and "slave spotting escapING" have limit 0). The target is left alone only while the guard still talks or walks up to talk (order 102 at
-  his queue's front; engine); paying ends it.
+  his queue's front; engine); paying ends it. Paying a fine (DA 49, `DialogueSystem.ClearBounties`) or a bounty expiring (`BountyBook.Expire`)
+  also forgives the target across each cleared booking faction and any faction sharing its `legal system` (engine choice,
+  `DialogueSystem.ForgiveBookingFaction`; DA 49 also runs `DialogueSystem.Forgive` for the speaker and nearby allies): those squads drop their
+  short-term TEMP_ENEMY, criminal and aggressor tags on the target, and the target's squad drops its TEMP_ENEMY tags on them, so a tag left by
+  an arrest attempt (short-term tags fade 6 game hours after their last write; a bounty 0.04 h per cat after its last raise) cannot outlive the
+  bounty and trigger an Assault cascade via `CrimeSystem.Hit`.
 - **Arrest orders** (DA 29, `ArrestSystem.OrderArrest`): in his own town (the town his resident squad belongs to, `Ai.AiSystem.TownAt` by its radius; engine stand-in without
   town data: within 2 x the squad's home radius of its centre) a non-animal target gets the guard 240 (his queue cleared), then 112 queued behind it; otherwise 4 Attacking
   (cleared; refused with "My arm is broken!" when no arm works), his squad tagging the target TEMP_ENEMY first, so his mates join through their own attack-on-sight

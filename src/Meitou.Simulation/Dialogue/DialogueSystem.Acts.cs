@@ -111,6 +111,43 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
+    /// Forgives <paramref name="target"/> across a booking faction (a paid fine in <see cref="ClearBounties"/> or an expired bounty in
+    /// <see cref="Crime.BountyBook.Expire"/>). Engine choice, no counterpart known in the original: every squad of <paramref name="bookingFaction"/>
+    /// or of a faction sharing its <c>legal system</c> drops its short-term TEMP_ENEMY, criminal and aggressor tags on <paramref name="target"/>, and
+    /// <paramref name="target"/>'s squad drops its TEMP_ENEMY tags on those factions (as <see cref="Captured"/> does for #599). Otherwise a guard tag
+    /// from an arrest attempt can outlive the bounty and start a fight whose police blows book Assault (<see cref="Crime.CrimeSystem.Hit"/>).
+    /// </summary>
+    internal void ForgiveBookingFaction(World world, int bookingFaction, CharacterId target)
+    {
+        if (bookingFaction < 0) return;
+
+        int targetSquad = world.Characters.TryResolveNext(target, out int slot) && world.Characters.Cold(slot) is { SquadId: >= 0 } tc
+            ? tc.SquadId : -1;
+        HashSet<int>? cleared = targetSquad >= 0 ? [] : null;
+
+        foreach (var squad in world.Squads.All)
+        {
+            if (!InLawSystem(squad.Faction, bookingFaction)) continue;
+
+            Memory.ClearShort(squad.Id, target, MemoryTag.TempEnemy);
+            Memory.ClearShort(squad.Id, target, MemoryTag.Criminal);
+            Memory.ClearShort(squad.Id, target, MemoryTag.Aggressor);
+            if (cleared is not null && cleared.Add(squad.Faction))
+                Memory.ClearShortOfFaction(world, targetSquad, squad.Faction, MemoryTag.TempEnemy);
+        }
+
+        if (cleared is not null && cleared.Add(bookingFaction))
+            Memory.ClearShortOfFaction(world, targetSquad, bookingFaction, MemoryTag.TempEnemy);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="faction"/> is <paramref name="bookingFaction"/> or books its bounties under it
+    /// (<see cref="Crime.CrimeFactions.BookingKey"/>).
+    /// </summary>
+    bool InLawSystem(int faction, int bookingFaction) =>
+        faction == bookingFaction || Crime.CrimeFactions.BookingKey(_data.Relations, faction) == bookingFaction;
+
+    /// <summary>
     /// Whether factions <paramref name="a"/> and <paramref name="b"/> are the same or allied (false for a missing one).
     /// </summary>
     bool AlliedFactions(int a, int b) =>
