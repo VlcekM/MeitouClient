@@ -9,6 +9,7 @@ using Meitou.Simulation.Construction;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Perception;
 using Meitou.Simulation.Player;
+using StorageUse = Meitou.Simulation.Items.StorageUse;
 
 namespace Meitou.Simulation.Production;
 
@@ -366,12 +367,14 @@ public sealed partial class ProductionSystem
             if (on == TaskType.DitchAllResources && cold.HaulTo is { } keep && !PlayerOrders.Holds(world, slot) && cold.Inventory is { } held
                 && Site(world, keep) is { Complete: true } keptSite && keptSite.Owner == world.Player.Faction
                 && Ensure(world, keptSite) is { } keptStore && keptStore.Data.IsStorage && keptStore.Storage is not null
-                && Ditchable(held).Any(item => Stores(keptStore, item)))
+                && Ditchable(held).Any(item => Stores(keptStore, item)) && world.StorageAllows(cold, keep, StorageUse.Put, DitchRecord(world, held)))
                 return (TaskType.DitchAllResources, keep);
 
-            if (!PlayerOrders.Holds(world, slot) && cold.Inventory is { } inv
-                && NearestSite(world, at, float.MaxValue, (s, m) => InFinderRange(s.Position, at) && TakesDitched(m, inv)) is { } store)
+            if (!PlayerOrders.Holds(world, slot) && cold.Inventory is not null && NearestSite(world, at, float.MaxValue, Ditches) is { } store)
                 return (TaskType.DitchAllResources, store);
+
+            bool Ditches(BuildSite s, Machine m) => InFinderRange(s.Position, at) && TakesDitched(m, cold.Inventory!)
+                && world.StorageAllows(cold, s.Id, StorageUse.Put, DitchRecord(world, cold.Inventory!));
         }
 
         // Sleep and Sit not while holding position (FUN_1402b2b90), carrying someone (+0x348) or selected by the player (FUN_1407f4d20, the
@@ -724,7 +727,7 @@ public sealed partial class ProductionSystem
         {
             if (input.Rate <= 0 || input.Level + input.Count > 0) continue;
             if (cold.Inventory is { } inv && Carried(inv, input.Item).Any()) continue;
-            if (Settings.AutoHaul && NearestSource(world, site, input.Item, cold) is not null) continue;
+            if (Settings.AutoHaul && NearestSource(world, site, input.Item, cold, operating: cold) is not null) continue;
             return false;
         }
 
@@ -744,12 +747,12 @@ public sealed partial class ProductionSystem
         {
             if (input.Rate <= 0) continue;
             if (input.Count < input.Recipe.Capacity && Carried(inv, input.Item).Any()) return true;
-            if (fetch && input.Count == 0 && NearestSource(world, site, input.Item, cold) is not null) return true;
+            if (fetch && input.Count == 0 && NearestSource(world, site, input.Item, cold, operating: cold) is not null) return true;
         }
 
         if (!fetch || m.Output is not { } output || _items.Create(output.Recipe.Item, 1) is not { } one) return false;
         if (!output.Full && !Carried(inv, one.Record).Any()) return false;
-        return NearestStorage(world, site, cold, s => s.Data.Accepts(one.Record, one.Type) && Fits(s.Storage!, one)) is not null;
+        return NearestStorage(world, site, cold, one.Record, s => s.Data.Accepts(one.Record, one.Type) && Fits(s.Storage!, one)) is not null;
     }
 
     /// <summary>
@@ -757,7 +760,7 @@ public sealed partial class ProductionSystem
     /// </summary>
     bool Room(World world, BuildSite site, Machine m, CharacterCold cold) =>
         m.Output is { } o && (!o.Full || Settings.AutoHaul && _items.Create(o.Recipe.Item, 1) is { } one
-            && NearestStorage(world, site, cold, s => s.Data.Accepts(one.Record, one.Type) && Fits(s.Storage!, one)) is not null);
+            && NearestStorage(world, site, cold, one.Record, s => s.Data.Accepts(one.Record, one.Type) && Fits(s.Storage!, one)) is not null);
 
     /// <summary>
     /// A carried item a "Hauling to" job takes to its storage: a loose stack of something a player machine makes or crafts (not the character's own
@@ -772,6 +775,12 @@ public sealed partial class ProductionSystem
     internal static bool Stores(Machine store, Items.ItemInstance item) =>
         item.Section is "main" or "backpack_content" && !item.LockedOn && item.Contents is null && store.Data.Accepts(item.Record, item.Type)
             && Fits(store.Storage!, item);
+
+    /// <summary>
+    /// The record the storage filters are asked about for a ditch trip: the one every ditchable item shares, else null; none without a filter.
+    /// </summary>
+    static string? DitchRecord(World world, Items.Inventory inv) =>
+        world.StorageFilters.Active ? Meitou.Simulation.Items.StorageFilters.OneRecord(Ditchable(inv)) : null;
 
     /// <summary>
     /// A storage machine that takes something 242 Ditch all resources carries off from <paramref name="inv"/>.

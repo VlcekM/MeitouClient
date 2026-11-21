@@ -52,11 +52,11 @@ static class PlayerShops
     }
 
     /// <summary>
-    /// The storages of the shop counters <paramref name="player"/> built inside <paramref name="building"/>, in the order of the player's buildings;
-    /// none for a building the player does not own. A building the player built stands in for itself by its site id
+    /// The shop counters <paramref name="player"/> built inside <paramref name="building"/>, each its site id and storage, in the order of the
+    /// player's buildings; none for a building the player does not own. A building the player built stands in for itself by its site id
     /// (<see cref="TownBuilding.RuntimeKey"/>).
     /// </summary>
-    public static IEnumerable<Inventory> Counters(World world, TownBuilding building, int player)
+    public static IEnumerable<(string Site, Inventory Storage)> Counters(World world, TownBuilding building, int player)
     {
         if (building.RuntimeKey is { } id && world.Buildings.Find(id) is { } built)
             return built.Owner == player ? InBuilt(world, id, player) : [];
@@ -65,24 +65,24 @@ static class PlayerShops
     }
 
     /// <summary>
-    /// The storages of the shop counters <paramref name="player"/> built inside the building it built with site id <paramref name="id"/>.
+    /// The shop counters <paramref name="player"/> built inside the building it built with site id <paramref name="id"/>: site id and storage.
     /// </summary>
-    static IEnumerable<Inventory> InBuilt(World world, string id, int player)
+    static IEnumerable<(string Site, Inventory Storage)> InBuilt(World world, string id, int player)
     {
         foreach (var site in world.Buildings.All)
-            if (site.Parent == id && CounterOf(world, site, player) is { } storage) yield return storage;
+            if (site.Parent == id && CounterOf(world, site, player) is { } storage) yield return (site.Id, storage);
     }
 
     /// <summary>
-    /// The storages of the shop counters <paramref name="player"/> built inside the town building <paramref name="building"/>.
+    /// The shop counters <paramref name="player"/> built inside the town building <paramref name="building"/>: site id and storage.
     /// </summary>
-    static IEnumerable<Inventory> InTownBuilding(World world, TownBuilding building, int player)
+    static IEnumerable<(string Site, Inventory Storage)> InTownBuilding(World world, TownBuilding building, int player)
     {
         string key = building.Key;
         foreach (var site in world.Buildings.All)
         {
             if (CounterOf(world, site, player) is not { } storage) continue;
-            if (site.Parent == key || site.Parent == building.InstanceId && site.Zone == building.Zone) yield return storage;
+            if (site.Parent == key || site.Parent == building.InstanceId && site.Zone == building.Zone) yield return (site.Id, storage);
         }
     }
 

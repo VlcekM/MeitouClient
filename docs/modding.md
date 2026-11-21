@@ -239,6 +239,35 @@ holds refuses the second mod.
   price the earlier ones left. A buy-back (undoing a trade of the open window) keeps its coins and is not asked. A filter must be a pure
   read, since the same price is asked again for the window and the payment; one that throws or answers a negative price is undone for that
   price and disabled for that world, and the fault enters the state hash. Without a filter nothing is built. Engine API, not in the original.
+- **Sales:** a registered system implementing `ITradeObserver` (`Meitou.Simulation.Trading`) receives `Traded(World, in TradeSale)` once for
+  every completed item deal, after the money and the goods moved: an NPC shopper's purchase of one unit from a building's stock or a shop counter
+  the player built (`TradeSaleKind.Shopping`), and the trade window's buys and sells (`WindowBuy`, `WindowSell`), a click or an item dragged
+  across. The sale names the tick, the kind, the item record, the units, the price paid, the buyer and the seller (`TradeParty`: the character,
+  none for a container's stock; its squad, -1 none; its faction, -1 none; a shop counter's seller is the player's faction), the site sold from
+  (the stock container's fixture id or the counter's site id; "" in the trade window, whose stock is the trader's shop), whether the goods
+  reached the buyer (a shopper's unit from an NPC's stock can be paid for and leave the stock without reaching it, [NPC
+  purchases](game/economy.md#npc-purchases)) and whether it is a buy-back (`Buyback`: it undoes an earlier deal of the open trade window at that
+  deal's own coins, so a mod that counts sales can take the earlier deal back instead of counting a second one). A refused deal (no money, no
+  room, caught fencing, smuggling) is not a sale. Slaves, animals, buildings, beds and bounties are not item deals and are not reported.
+  Observers are called serially in system order (mods in load order); a trade made in the paused interface is told between ticks on the host's
+  thread, with the coming tick's number. They may read the world and change their own hashed state, and gameplay changes go through commands. One
+  that throws is disabled for that world and the fault enters the state hash. Without an observer nothing is built. Engine API, not in the
+  original.
+- **Storage use:** a registered system implementing `IStorageFilter` (`Meitou.Simulation.Items`) is asked `Allows(World, CharacterId who, string
+  storage, StorageUse use, string? record)` for each storage the game's own searches would pick for a character: a hungry character's food store
+  and a looter's (`Take`), a stash or ditch store for carried loot and resources (`Put`), a machine operator's source for its input (`Take`) and
+  target for its output (`Put`), a townsperson's source for filling a town machine (`Take`), a builder's store of building materials (`Take`), a
+  squad's ditch trip and a forager's store (`Put`). The storage is a player machine's site id or a container's fixture id; the record is the
+  item's, or null when the search is not for one item (any food, whatever the character carries). A refused storage is passed over and the search
+  goes on to the next. What the player does by hand (dragging items, a trade, an order to use a container) is never asked, so a mod keeps
+  characters out of a store without locking the player out: "private chests", stores only one squad or faction uses, a quarantined store. The
+  filter answers for every character the searches run for, the player's own working a job among them; it tells them apart by `who` (its squad,
+  `Squad.Independent`, its faction). Filters run in system order (mods in load order); the first refusal wins. Some searches run on worker
+  threads in the AI's parallel steps, so a filter must be quick, thread-safe and a pure read of its arguments and of world state the tick has
+  settled (factions, squads, the storage's owner, its own system's serial step, the last finished tick). An order given while the game is paused
+  (a build order's materials) asks it between ticks on the host's thread, with the coming tick's number. One that throws is answered as allowing
+  for the rest of that tick and is not asked from the next tick on; the fault enters the state hash. Without a filter nothing is asked. Engine
+  API, not in the original.
 - **World ready:** a registered system implementing `IWorldReady` receives `Ready(World, bool fromSave)` once, between ticks before the
   first: after a save has loaded (`IModSaveData.Read` done and settings of mods no longer running dropped; an import counts as a save) or a
   new game has placed the player's characters (`fromSave` false). Systems are told in system order (mods in load order); one may change

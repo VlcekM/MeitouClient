@@ -118,6 +118,11 @@ public sealed class CharacterCold
     /// </summary>
     public LastingId LastingId { get; internal set; }
     /// <summary>
+    /// The character's id while it is in the table (set when it enters, none once it leaves): for code that holds the character's state but not its
+    /// slot.
+    /// </summary>
+    internal CharacterId Id { get; set; } = CharacterId.None;
+    /// <summary>
     /// The character's faction, a position in the world's faction list.
     /// </summary>
     public int Faction { get; set; }
@@ -1759,6 +1764,7 @@ public sealed class CharacterTable
         this._cold[slot] = cold;
         Spawns++;
         var id = new CharacterId(slot, generation);
+        cold.Id = id;
         if (!cold.LastingId.IsNone) IndexLasting(cold.LastingId, id);
         Watch?.Added(id, cold);
         return id;
@@ -1791,6 +1797,7 @@ public sealed class CharacterTable
         _next[slot].Alive = false;
         if (!_inTick) _previous[slot].Alive = false;
         if (_cold[slot] is { LastingId.IsNone: false } lasting) _lasting?.Remove(lasting.LastingId);
+        _cold[slot]!.Id = CharacterId.None;
         _cold[slot] = null;
         _free.Push(slot);
         return true;

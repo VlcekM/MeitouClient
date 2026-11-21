@@ -1736,11 +1736,11 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// <summary>
     /// The material finder (<b>Verified</b>, the 115 "Finding building mats" target finder <c>FUN_1405a2a60</c> -> <c>FUN_14059d000</c>;
     /// docs/game/buildings-production.md "Material delivery"): for each material still owed, in the site's order, the first that has a source wins: a
-    /// loose item of it (<see cref="LooseSource.Nearest"/>), else the nearest player storage holding it within <see cref="SourceRangeSquared"/>,
-    /// else the nearest player machine whose output holds it. The buildings are those of the builder's town
-    /// (<see cref="FixtureRegistry.TownCandidates"/>). Engine choices: no per-material memory of the last source (the original's is a cache emptied
-    /// at each AI update, so it changes no answer), the exact record (the original also lets any record of the same type stand in for a non-ITEM
-    /// material).
+    /// loose item of it (<see cref="LooseSource.Nearest"/>), else the nearest player storage holding it within <see cref="SourceRangeSquared"/> that
+    /// the storage filters let the builder take it from (<see cref="Items.IStorageFilter"/>), else the nearest player machine whose output holds it.
+    /// The buildings are those of the builder's town (<see cref="FixtureRegistry.TownCandidates"/>). Engine choices: no per-material memory of the
+    /// last source (the original's is a cache emptied at each AI update, so it changes no answer), the exact record (the original also lets any
+    /// record of the same type stand in for a non-ITEM material).
     /// </summary>
     MaterialSource? Source(World world, int slot, CharacterCold cold, BuildSite site)
     {
@@ -1764,7 +1764,8 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
                 if (d > SourceRangeSquared || inTown is not null && !inTown(building.Position)) continue;
                 if (m.Data.IsStorage)
                 {
-                    if (d < storeGap && m.Storage is { } inv && Stack(inv, want) is not null) (store, storeGap) = (m.Site, d);
+                    bool holds = d < storeGap && m.Storage is { } inv && Stack(inv, want) is not null;
+                    if (holds && world.StorageAllows(cold, m.Site, Items.StorageUse.Take, want)) (store, storeGap) = (m.Site, d);
                 }
                 else if (d < machineGap && m.Output is { Count: > 0 } output && output.Recipe.Item == want) (machine, machineGap) = (m.Site, d);
             }
