@@ -2228,9 +2228,15 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
-    /// Clears a character's slave state and owner (state 0) without DA 53's "Free!" (a slave bought free, <c>FUN_1406add20</c>).
+    /// Clears a character's slave state and owner (state 0) without DA 53's "Free!" (a slave bought free, <c>FUN_1406add20</c>, or bailed,
+    /// <c>FUN_1406ae170</c>). Both first give it the null owner hand (<c>FUN_14032e430</c>), whose tail turns a member of type 4 (slave) into type 0
+    /// (<b>Verified</b>): a bought slave alone in its squad, which the split leaves where it is, plans from the members' list, not the slaves'.
     /// </summary>
-    public static void ClearSlave(World world, CharacterCold c) => SetSlave(world, c, 0, -1);
+    public static void ClearSlave(World world, CharacterCold c)
+    {
+        if (c.Role == (int)Factions.SquadRole.Slave) c.Role = (int)Factions.SquadRole.Squad1;
+        SetSlave(world, c, 0, -1);
+    }
 
     /// <summary>
     /// <c>DA_TAG_ESCAPED_SLAVE</c> (25): the character becomes an escaped slave (state 2), keeping its owner (<c>FUN_140680560</c>).

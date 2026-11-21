@@ -204,10 +204,12 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
     }
 
     /// <summary>
-    /// The slaves DA 42 offers: every living character in slave state 1 that is the slaver's (engine reading of the original's per-owner slave set,
-    /// whose owner is a character): it obeys the slaver's squad, or is caged in a cage of that squad's home building (a slave shop's stock, whatever
-    /// faction owns it), or is owned by the slaver's faction within <see cref="SlaveSaleRange"/> of the slaver. A slave of the faction held elsewhere
-    /// (another town, a caravan) or an uncaged one out in the town is not offered (#425).
+    /// The slaves DA 42 offers: every living character in slave state 1 that is the slaver's. The original lists its platoon's ownership set
+    /// (<c>FUN_1407956a0</c>, Platoon vfunc 0x98 = <c>+0x148</c>, <b>Verified</b>), which the owner setter fills with the slaves owned by a member of
+    /// that platoon: those that obey the slaver's squad here. Engine stand-ins for the building owner hand a caging gives (<c>FUN_140330600</c>;
+    /// Meitou's building owner is a faction): caged in a cage of that squad's home building (a slave shop's stock, whatever faction owns it), or owned
+    /// by the slaver's faction within <see cref="SlaveSaleRange"/> of the slaver. A slave of the faction held elsewhere (another town, a caravan) or
+    /// an uncaged one out in the town is not offered (#425).
     /// </summary>
     static List<(CharacterId Id, CharacterCold Cold)> SlavesForSale(World world, int slaver, CharacterCold sc)
     {
@@ -363,7 +365,8 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
     }
 
     /// <summary>
-    /// One slave bought free (<c>FUN_1406add20</c>): no longer owned; out of a squad of others into a new squad of the old one's template
+    /// One slave bought free (<c>FUN_1406add20</c>): no longer owned (a member of type slave becomes a plain member,
+    /// <see cref="Locks.FixtureRegistry.ClearSlave"/>); out of a squad of others into a new squad of the old one's template
     /// (<c>FUN_1405ce4e0</c>, <see cref="DialogueSystem.Separate"/>; it does not join the player); its cage unlocked and left; slave state 0; its AI
     /// reset; its worn shackles unlocked (still worn); event 51 at it with the player character as the target; relations toward the player's faction:
     /// the slaver's +1, its own +4. Engine choice: event 51 fires after it is out of its cage (the original fires it first; Meitou's events need a

@@ -725,9 +725,11 @@ holding the slaver, the customer, the character list and val0.
   player-faction character, the owner set, AI order 187 obedient slave toward the owner, SHACKLES made and worn when it wears no locked armour); its faction and squad are
   kept (it stays in the player's squad, uncaged); its squad remembers the customer with long-term tag 5 MY_CAPTOR; relations toward the player's faction: the slaver's +4,
   its own -4. Then the total is **added** to the player faction's money; the slaver's money is not reduced.
-- **Buying** (42, title "Buying Slaves", confirm "Buy"): every character in the slaver's owned set that is a slave (state 1) and not dead; no radius, cage or count limit
-  (the set is per owner object, **Inferred**). Panels: Strength, Dexterity, Toughness, Melee Attack, Melee Defence | Labouring, Farming, Cooking, Engineering, Medic (stat
-  values). Confirm (`FUN_1406add20`), each ticked character not dead: its price added to the total; no longer owned; split from a squad of more than one into a new squad of
+- **Buying** (42, title "Buying Slaves", confirm "Buy"): every character in the slaver's ownership set that is a slave (state 1) and not dead (`+0x5bc`); no radius, cage or count
+  limit. The set (`FUN_1407956a0`, **Verified**) is the player's for a speaker of the player's faction, else the speaker's platoon's (Character `+0x658` -> `+0x78`, Platoon vfunc
+  0x98 = `+0x148`); the owner setter `FUN_14032e430` moves a slave's handle from the old owner's platoon's set to the new one's, so it holds the slaves owned by a member
+  of the slaver's platoon (a cage gives the caged slave its building's owner hand, `FUN_140330600`). Panels: Strength, Dexterity, Toughness, Melee Attack, Melee Defence | Labouring, Farming, Cooking, Engineering, Medic (stat
+  values). Confirm (`FUN_1406add20`), each ticked character not dead: its price added to the total; no longer owned (the null owner hand; the setter's tail turns member type 4, slave, into 0, **Verified**); split from a squad of more than one into a new squad of
   the old platoon's template (`FUN_1405ce4e0` -> `FUN_1407f4420` with the platoon's `+0x108`, **Verified** decompile; as DA 28) with a copy of its memory (it does not join the player); event 51 BOUGHT_ME_FROM_SLAVERY at it with the customer as target; its cage unlocked; slave state 0; it leaves its cage or
   restraint; AI reset; its locked shackles unlocked (still worn); its squad remembers the customer with tag 3 FREED_ME; task 133 GET_OUT_OF_CAGE_LEGIT (queue cleared; the
   hold is already cleared, so it does nothing: [locks](locks.md#cages-and-beds)); relations toward the
