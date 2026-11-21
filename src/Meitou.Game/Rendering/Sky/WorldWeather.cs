@@ -56,6 +56,29 @@ public sealed class WorldWeather
     readonly Dictionary<WeatherDef, IReadOnlyList<Meitou.Data.Particles.WeatherEffectEntry>> _effectLists = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>
+    /// Each weather's camera-centric effect list, made once from its records.
+    /// </summary>
+    readonly Dictionary<WeatherDef, IReadOnlyList<Meitou.Data.Particles.WeatherEffectEntry>> _cameraEffectLists =
+        new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>
+    /// Each weather's spatial (region-placed) effect list, made once from its records.
+    /// </summary>
+    readonly Dictionary<WeatherDef, IReadOnlyList<Meitou.Data.Particles.WeatherEffectEntry>> _spatialEffectLists =
+        new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>
+    /// Cached cell area per region colour, built lazily from <see cref="WeatherWorld.Areas"/>.
+    /// </summary>
+    readonly Dictionary<int, Meitou.Data.Particles.RegionArea> _regionAreas = [];
+
+    /// <summary>
+    /// Reused per-frame buffers for <see cref="NearbyRegionInputs"/>.
+    /// </summary>
+    readonly Dictionary<WeatherRegion, float> _nearbyDistances = new(ReferenceEqualityComparer.Instance);
+    readonly List<Meitou.Data.Particles.RegionWeatherInput> _nearbyInputs = [];
+
+    /// <summary>
     /// Hooks <paramref name="world"/>'s scheduler; <paramref name="database"/> supplies the effects' records.
     /// </summary>
     public WorldWeather(WeatherWorld world, Data.GameDatabase? database = null) => (World, this._database) = (world, database);
@@ -221,20 +244,113 @@ public sealed class WorldWeather
     {
         var s = State;
         if (_database is null) return Data.Particles.WeatherEffectInput.None;
-        if (!_effectLists.TryGetValue(s.Weather, out var list))
-        {
-            var entries = new List<Meitou.Data.Particles.WeatherEffectEntry>();
-            foreach (var e in s.Effects)
-                if (_database.Find(e.Effect.StringId) is { } record)
-                    entries.Add(new(Data.Particles.EffectRecord.From(record, _database), e.MaxCount, (int)e.RespawnMin, (int)e.RespawnMax));
-            _effectLists[s.Weather] = list = entries;
-        }
         // TODO(effects): the game gives each group the weather's effect strength (WeatherDef.EffectStrength); the groups take the strength s, as the
         // forced adapter did.
         return new Meitou.Data.Particles.WeatherEffectInput
         {
+            Effects = EffectsOf(s.Weather, s.Effects), Strength = s.Strength, Wind = s.WindDirection * s.WindSpeed, Region = s.RegionName,
+        };
+    }
+
+    /// <summary>
+    /// The camera-centric effect input (camera, rain, global, global-point, lightning) for the current state, or all effects when a weather is
+    /// forced.
+    /// </summary>
+    public Meitou.Data.Particles.WeatherEffectInput CameraEffectInput()
+    {
+        if (World.ForcedWeather is not null) return EffectInput();
+        var s = State;
+        if (_database is null) return Data.Particles.WeatherEffectInput.None;
+        if (!_cameraEffectLists.TryGetValue(s.Weather, out var list))
+            _cameraEffectLists[s.Weather] = list = [.. EffectsOf(s.Weather, s.Effects).Where(e => e.Effect.IsCameraCentric)];
+        return new Meitou.Data.Particles.WeatherEffectInput
+        {
             Effects = list, Strength = s.Strength, Wind = s.WindDirection * s.WindSpeed, Region = s.RegionName,
         };
+    }
+
+    /// <summary>
+    /// Spatial (point and wandering) weather inputs for every region with a cell within <paramref name="maxDistance"/> of
+    /// <paramref name="eye"/>. Empty when a weather is forced or without a database.
+    /// </summary>
+    public IReadOnlyList<Meitou.Data.Particles.RegionWeatherInput> NearbyRegionInputs(Vector3 eye, float maxDistance = 12000)
+    {
+        _nearbyInputs.Clear();
+        if (World.ForcedWeather is not null || _database is null) return _nearbyInputs;
+
+        _nearbyDistances.Clear();
+        if (World.CameraRegion is { } camRegion) _nearbyDistances[camRegion] = 0;
+
+        var areas = World.Areas;
+        var (camCx, camCz) = WeatherAreas.CellOf(eye.X, eye.Z);
+        int span = (int)MathF.Ceiling(maxDistance / WeatherAreas.CellSize) + 1;
+        float maxD2 = maxDistance * maxDistance;
+        for (int cz = camCz - span; cz <= camCz + span; cz++)
+        {
+            for (int cx = camCx - span; cx <= camCx + span; cx++)
+            {
+                if (!WeatherAreas.InMap(cx, cz)) continue;
+                float d2 = WeatherAreas.DistanceSquaredToCell(cx, cz, eye.X, eye.Z);
+                if (d2 > maxD2) continue;
+                var region = World.RegionOf(areas.RegionOf(World.Data, cx, cz));
+                if (!_nearbyDistances.TryGetValue(region, out float prev) || d2 < prev) _nearbyDistances[region] = d2;
+            }
+        }
+
+        foreach (var (region, d2) in _nearbyDistances)
+        {
+            var spatial = SpatialEffectsOf(region.Weather);
+            var area = AreaFor(region.Def.Index);
+            var input = new Meitou.Data.Particles.WeatherEffectInput
+            {
+                Effects = spatial,
+                Strength = region.Strength,
+                Wind = region.WindDirection * region.WindSpeed,
+                Region = region.Def.Name,
+            };
+            _nearbyInputs.Add(new Meitou.Data.Particles.RegionWeatherInput(region.Def.StringId, region.Index, area, input, d2));
+        }
+        return _nearbyInputs;
+    }
+
+    /// <summary>
+    /// Cached full effect list for <paramref name="weather"/>.
+    /// </summary>
+    IReadOnlyList<Meitou.Data.Particles.WeatherEffectEntry> EffectsOf(WeatherDef weather, IReadOnlyList<WeatherEffectEntry> raw)
+    {
+        if (!_effectLists.TryGetValue(weather, out var list))
+        {
+            var entries = new List<Meitou.Data.Particles.WeatherEffectEntry>();
+            foreach (var e in raw)
+                if (_database!.Find(e.Effect.StringId) is { } record)
+                    entries.Add(new(Data.Particles.EffectRecord.From(record, _database), e.MaxCount, (int)e.RespawnMin, (int)e.RespawnMax));
+            _effectLists[weather] = list = entries;
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// Cached spatial effect list for <paramref name="weather"/>.
+    /// </summary>
+    IReadOnlyList<Meitou.Data.Particles.WeatherEffectEntry> SpatialEffectsOf(WeatherDef weather)
+    {
+        if (!_spatialEffectLists.TryGetValue(weather, out var list))
+            _spatialEffectLists[weather] = list = [.. EffectsOf(weather, weather.Effects).Where(e => e.Effect.IsSpatial)];
+        return list;
+    }
+
+    /// <summary>
+    /// Cached cell area for a region's <paramref name="colour"/>.
+    /// </summary>
+    Meitou.Data.Particles.RegionArea AreaFor(int colour)
+    {
+        if (_regionAreas.TryGetValue(colour, out var area)) return area;
+        var areas = World.Areas;
+        var rects = new List<(float, float, float, float)>();
+        for (int j = 0; j < WeatherAreas.Cells; j++)
+            for (int i = 0; i < WeatherAreas.Cells; i++)
+                if (areas.ColourOf(i, j) == colour) rects.Add(WeatherAreas.CellRect(i, j));
+        return _regionAreas[colour] = new Meitou.Data.Particles.RegionArea(rects);
     }
 
     /// <summary>

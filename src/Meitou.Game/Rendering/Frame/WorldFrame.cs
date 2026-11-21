@@ -240,29 +240,49 @@ static partial class WorldFrame
     #region Particles and GPU build
 
     /// <summary>
-    /// Feeds the particle renderer the weather state's effect list, strength and wind (the renderer is made the first time a weather has effects; a
-    /// weather without any empties it again). The effect groups are rebuilt only when the weather's list changes.
+    /// Feeds the particle renderer the camera weather's camera-centric effects and every nearby region's spatial effects (the renderer is made the
+    /// first time a weather has effects; a weather without any retires its groups).
     /// </summary>
     static void UpdateParticles(WorldGpu gpu, WorldCamera camera)
     {
         if (gpu.Weather is not { } weather || gpu.MakeParticles is null) return;
 
         // In flight (KenshiCamera.FlightHeight, the platoons' gate) the weather's effects stop, as its fog does (SkyRenderer.WeatherFogScale).
-        var input = gpu.Sky.WeatherFogScale == 0 ? WeatherEffectInput.None : weather.EffectInput();
-        if (input.Effects.Count == 0 && gpu.Particles is null) return;
-        var particles = gpu.Particles ??= gpu.MakeParticles();
-
-        // The effects are placed in the camera's weather region: the area follows the cell the camera is in.
-        if (gpu.WeatherAreas is { } areas)
+        if (gpu.Sky.WeatherFogScale == 0)
         {
-            var (cx, cz) = WeatherAreas.CellOf(camera.Eye.X, camera.Eye.Z);
-            if (WeatherAreas.InMap(cx, cz) && areas.ColourOf(cx, cz) is var colour && colour != gpu.ParticleAreaColour)
+            if (gpu.Particles is { } p)
             {
-                gpu.ParticleAreaColour = colour;
-                particles.World.Area = RegionArea.At(areas, camera.Eye.X, camera.Eye.Z);
+                p.SetWeather(WeatherEffectInput.None);
+                p.SetRegionWeathers([]);
             }
+            return;
         }
-        particles.SetWeather(input);
+
+        if (weather.World.ForcedWeather is not null)
+        {
+            var forced = weather.EffectInput();
+            if (forced.Effects.Count == 0 && gpu.Particles is null) return;
+            var particles = gpu.Particles ??= gpu.MakeParticles();
+            if (gpu.WeatherAreas is { } areas)
+            {
+                var (cx, cz) = WeatherAreas.CellOf(camera.Eye.X, camera.Eye.Z);
+                if (WeatherAreas.InMap(cx, cz) && areas.ColourOf(cx, cz) is var colour && colour != gpu.ParticleAreaColour)
+                {
+                    gpu.ParticleAreaColour = colour;
+                    particles.World.Area = RegionArea.At(areas, camera.Eye.X, camera.Eye.Z);
+                }
+            }
+            particles.SetWeather(forced);
+            particles.SetRegionWeathers([]);
+            return;
+        }
+
+        var cameraInput = weather.CameraEffectInput();
+        var regionInputs = weather.NearbyRegionInputs(camera.Eye);
+        if (cameraInput.Effects.Count == 0 && regionInputs.Count == 0 && gpu.Particles is null) return;
+        var renderer = gpu.Particles ??= gpu.MakeParticles();
+        renderer.SetWeather(cameraInput);
+        renderer.SetRegionWeathers(regionInputs);
     }
 
     /// <summary>

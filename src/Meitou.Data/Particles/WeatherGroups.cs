@@ -38,6 +38,14 @@ public sealed class WeatherGroups : IDisposable
     /// </summary>
     readonly List<EffectGroup> _groups = [];
     /// <summary>
+    /// Groups from a previous weather or region that are fading out before being dropped.
+    /// </summary>
+    readonly List<RetiringGroup> _retiring = [];
+    /// <summary>
+    /// View over <see cref="_retiring"/>'s groups, kept in sync when retiring groups are added or removed.
+    /// </summary>
+    readonly List<EffectGroup> _retiringGroups = [];
+    /// <summary>
     /// The entries of the shown weather that have no group.
     /// </summary>
     readonly List<WeatherEffectEntry> _skipped = [];
@@ -45,6 +53,10 @@ public sealed class WeatherGroups : IDisposable
     /// Whether a weather's groups have been swapped in yet: the first change is made at once, without a dwell.
     /// </summary>
     bool _applied;
+    /// <summary>
+    /// Fade-in progress (0..1) for the current <see cref="_groups"/> after a non-initial swap.
+    /// </summary>
+    float _fadeIn = 1;
     /// <summary>
     /// The weather to change to (null: none) and the one whose warm-up last threw, not tried again until the weather changes.
     /// </summary>
@@ -68,14 +80,43 @@ public sealed class WeatherGroups : IDisposable
     public double SwapLatency { get; private set; }
 
     /// <summary>
-    /// The thread that warms background sets, made with the groups and not at the first change: starting one in a frame can stall that frame.
+    /// The thread that warms background sets, made with the groups (or shared from a parent) and not at the first change.
     /// </summary>
-    readonly EffectWarmer _warmer = new();
+    readonly EffectWarmer _warmer;
+    /// <summary>
+    /// Whether this instance owns <see cref="_warmer"/> and should dispose it.
+    /// </summary>
+    readonly bool _ownsWarmer;
 
     /// <summary>
     /// Shows no groups until the first weather is wanted and advanced.
     /// </summary>
-    public WeatherGroups(ParticleLibrary library, EffectWorld world) => (this._library, this._world) = (library, world);
+    public WeatherGroups(ParticleLibrary library, EffectWorld world, EffectWarmer? warmer = null)
+    {
+        this._library = library;
+        this._world = world;
+        _ownsWarmer = warmer is null;
+        _warmer = warmer ?? new EffectWarmer();
+    }
+
+    /// <summary>
+    /// A group fading out after a weather or region change.
+    /// </summary>
+    sealed class RetiringGroup(EffectGroup group, WeatherEffectInput input, float alpha)
+    {
+        /// <summary>
+        /// The retiring group.
+        /// </summary>
+        public EffectGroup Group { get; } = group;
+        /// <summary>
+        /// The weather input the group was running with.
+        /// </summary>
+        public WeatherEffectInput Input { get; } = input;
+        /// <summary>
+        /// Remaining opacity (1 down to 0).
+        /// </summary>
+        public float Alpha { get; set; } = alpha;
+    }
 
     /// <summary>
     /// The seed of the groups' random numbers (a group takes the seed plus its place in the list).
@@ -94,11 +135,28 @@ public sealed class WeatherGroups : IDisposable
     /// Whether a change is warmed on a worker while the old groups run on (the default). False: it is made and warmed at once on the calling thread.
     /// </summary>
     public bool Background { get; set; } = true;
+    /// <summary>
+    /// Whether the very first weather applied to these groups warms synchronously on the calling thread (true by default, so the first picture has
+    /// particles). Set false for regions added dynamically mid-flight so they warm on the worker without stalling a frame.
+    /// </summary>
+    public bool SyncFirst { get; set; } = true;
+    /// <summary>
+    /// Seconds over which old groups fade out and new groups fade in on a weather or region swap (0: instant swap).
+    /// </summary>
+    public float FadeSeconds { get; set; } = 2.5f;
 
     /// <summary>
     /// The groups shown (the same list object for ever: it is replaced in place by <see cref="Advance"/>).
     /// </summary>
     public IReadOnlyList<EffectGroup> Groups => _groups;
+    /// <summary>
+    /// Groups from a previous weather or region that are still fading out.
+    /// </summary>
+    public IReadOnlyList<EffectGroup> RetiringGroups => _retiringGroups;
+    /// <summary>
+    /// Whether these groups have any live or retiring units or a pending weather change.
+    /// </summary>
+    public bool HasActivity => _groups.Count > 0 || _retiring.Count > 0 || _wanted is not null || _building is not null;
     /// <summary>
     /// The entries of the shown weather that have no group.
     /// </summary>
@@ -174,9 +232,9 @@ public sealed class WeatherGroups : IDisposable
                 }
             }
         }
-        if (_building is null && _wanted is { } next && (!_applied || !Background || now - _wantedSince >= _wantedDwell))
+        if (_building is null && _wanted is { } next && ((!_applied && SyncFirst) || !Background || now - _wantedSince >= _wantedDwell))
         {
-            if (!_applied || !Background)
+            if ((!_applied && SyncFirst) || !Background)
             {
                 var made = EffectSet.Begin(next, _library, Seed, _world, PrewarmSeconds, camera);
                 made.SimulateNow();
@@ -196,12 +254,70 @@ public sealed class WeatherGroups : IDisposable
     }
 
     /// <summary>
+    /// Steps the active groups and any retiring groups, ramping fade-in and fade-out opacities.
+    /// </summary>
+    public void Step(float dt, in EffectCamera camera)
+    {
+        if (_fadeIn < 1)
+        {
+            _fadeIn = FadeSeconds > 0 ? Math.Min(1, _fadeIn + dt / FadeSeconds) : 1;
+            foreach (var g in _groups)
+                foreach (var u in g.Units)
+                    u.Alpha = _fadeIn;
+        }
+        foreach (var g in _groups) g.Update(dt, camera, Input);
+
+        for (int i = _retiring.Count - 1; i >= 0; i--)
+        {
+            var r = _retiring[i];
+            r.Alpha = FadeSeconds > 0 ? r.Alpha - dt / FadeSeconds : 0;
+            if (r.Alpha <= 0)
+            {
+                _retiring.RemoveAt(i);
+                _retiringGroups.RemoveAt(i);
+                continue;
+            }
+            r.Group.Update(dt, camera, r.Input);
+            if (r.Group.Units.Count == 0)
+            {
+                _retiring.RemoveAt(i);
+                _retiringGroups.RemoveAt(i);
+                continue;
+            }
+            foreach (var u in r.Group.Units) u.Alpha = r.Alpha;
+        }
+    }
+
+    /// <summary>
     /// Shows the groups of <paramref name="set"/> for <paramref name="weather"/> and notes the change's latency and cost.
     /// </summary>
     void Swap(EffectSet set, WeatherEffectInput weather)
     {
         long start = Stopwatch.GetTimestamp();
         SwapLatency = _lastNow - _wantedSince;
+        bool fade = _applied && FadeSeconds > 0;
+        if (fade)
+        {
+            foreach (var g in _groups)
+            {
+                if (g.Units.Count == 0) continue;
+                g.Retiring = true;
+                float alpha = _fadeIn;
+                foreach (var u in g.Units)
+                {
+                    u.Stopped = true;
+                    alpha = Math.Min(alpha, u.Alpha);
+                }
+                if (alpha <= 0) continue;
+                _retiring.Add(new RetiringGroup(g, Input, alpha));
+                _retiringGroups.Add(g);
+            }
+            _fadeIn = 0;
+            foreach (var g in set.Groups)
+                foreach (var u in g.Units)
+                    u.Alpha = 0;
+        }
+        else _fadeIn = 1;
         _groups.Clear();
         _groups.AddRange(set.Groups);
         _skipped.Clear();
@@ -222,12 +338,12 @@ public sealed class WeatherGroups : IDisposable
     public long LastSwapTicks { get; private set; }
 
     /// <summary>
-    /// Cancels a change being warmed and ends the warming thread.
+    /// Cancels a change being warmed and ends the warming thread if owned by this instance.
     /// </summary>
     public void Dispose()
     {
         _building?.Cancel();
         _building = null;
-        _warmer.Dispose();
+        if (_ownsWarmer) _warmer.Dispose();
     }
 }

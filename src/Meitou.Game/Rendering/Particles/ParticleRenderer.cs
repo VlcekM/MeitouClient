@@ -467,11 +467,11 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// <summary>
     /// The particles alive in the weather's groups and the placers (waits for the simulation).
     /// </summary>
-    public int ParticleCount { get { Sync(); return _groups.Weather.Groups.Concat(_groups.Placers).Sum(g => g.ParticleCount); } }
+    public int ParticleCount { get { Sync(); return _groups.WeatherGroups.Concat(_groups.Placers).Sum(g => g.ParticleCount); } }
     /// <summary>
-    /// The weather's groups (not the map placers').
+    /// The weather's groups (camera and nearby regions, not the map placers').
     /// </summary>
-    public IReadOnlyList<EffectGroup> Groups => _groups.Weather.Groups;
+    public IReadOnlyList<EffectGroup> Groups => _groups.WeatherGroups;
     /// <summary>
     /// The map placers' groups.
     /// </summary>
@@ -656,6 +656,11 @@ public sealed unsafe class ParticleRenderer : IDisposable
     public void SetWeather(WeatherEffectInput weather) => _groups.Weather.Want(weather, Now());
 
     /// <summary>
+    /// Sets the nearby regions' spatial weather inputs so neighbouring zones' dust clouds and storms spawn and remain visible across boundaries.
+    /// </summary>
+    public void SetRegionWeathers(IReadOnlyList<RegionWeatherInput> regions) => _groups.SetRegionWeathers(regions, Now());
+
+    /// <summary>
     /// The time in seconds on the high-resolution clock.
     /// </summary>
     static double Now() => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
@@ -746,7 +751,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
             {
                 var u = g.Units[ui];
                 if (u.Effect.FogVolumes.Count == 0) continue;
-                float fade = u.FogFade;
+                float fade = u.FogFade * u.Alpha;
                 if (fade <= 0) continue;
                 foreach (var f in u.Effect.FogVolumes)
                 {
@@ -799,14 +804,10 @@ public sealed unsafe class ParticleRenderer : IDisposable
 
         // A weather change: the groups made on the side are swapped in once warmed (with the frame's simulation finished, so nothing runs on the old
         // ones).
-        bool changed = _groups.Weather.Advance(view, Now());
-        if (changed || (_groups.Weather.Building && !ReferenceEquals(_groups.Weather.BuildingGroups, _preloaded)))
-        {
-            _preloaded = _groups.Weather.Building ? _groups.Weather.BuildingGroups : _groups.Weather.Groups;
-            PreloadTextures(_preloaded);   // decoded on a worker while the groups are warmed
-        }
+        _groups.Advance(view, Now(), _preloadTargets);
+        if (_preloadTargets.Count > 0) PreloadTextures(_preloadTargets);   // decoded on a worker while the groups are warmed
         DropStalePreloads();
-        if (_groups.Weather.Groups.Count == 0 && _groups.Placers.Count == 0)
+        if (_groups.WeatherGroups.Count == 0 && _groups.Placers.Count == 0)
         {
             _lastSeconds = seconds;
             return;
@@ -818,9 +819,9 @@ public sealed unsafe class ParticleRenderer : IDisposable
     }
 
     /// <summary>
-    /// The groups whose textures were last preloaded.
+    /// Reused list of groups whose textures should be preloaded on the current frame.
     /// </summary>
-    IReadOnlyList<EffectGroup>? _preloaded;
+    readonly List<EffectGroup> _preloadTargets = [];
 
     /// <summary>
     /// Starts the simulation of the active units on the thread pool.
@@ -870,7 +871,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
     {
         Sync();
         int n = 0;
-        foreach (var g in _groups.Weather.Groups.Concat(_groups.Placers))
+        foreach (var g in _groups.WeatherGroups.Concat(_groups.Placers))
             foreach (var u in g.Units)
             {
                 if (g is CameraEffectGroup) continue;
@@ -1020,7 +1021,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         _drawnParticles = 0;
         _drawnUnits = 0;
         _coveragePending = false;
-        if (!Enabled || (_groups.Weather.Groups.Count == 0 && _groups.Placers.Count == 0 && Tracers.Count == 0)) return;
+        if (!Enabled || (_groups.WeatherGroups.Count == 0 && _groups.Placers.Count == 0 && Tracers.Count == 0)) return;
         _draws.Clear();
         var frame = _gpu.Frame;
         var forward = -new Vector3(view.M13, view.M23, view.M33);   // the view's -Z axis in the world
@@ -1029,7 +1030,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         {
             var offset = u.Anchor - eye;
             if (u.Simulation is not { } sim || u.CatchingUp) continue;
-            float shown = RangeFade ? u.RangeFade : 1;
+            float shown = (RangeFade ? u.RangeFade : 1) * u.Alpha;
             if (shown <= 0) continue;
             _drawnUnits++;
             for (int t = 0; t < sim.Techniques.Count; t++)
@@ -1048,7 +1049,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 // A unit stepped at a lower rate (StartSimulation) is drawn ahead by the time it has queued since its last step, so it moves every
                 // frame.
                 int written = sim.Collect(t, _scratch.AsSpan(0, n), material.Blend == ParticleBlend.Add ? u.Tint * shown : u.Tint,
-                    u.Alpha * EffectOpacity(u.Effect.Name) * shown, offset, Math.Min(u.Pending, MaxDrawAhead));
+                    EffectOpacity(u.Effect.Name) * shown, offset, Math.Min(u.Pending, MaxDrawAhead));
                 if (written == 0) continue;
                 int close = PartitionByDepth(_scratch.AsSpan(0, written), forward, nearPlane);
 
@@ -1610,7 +1611,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
     public void Dispose()
     {
         Sync();
-        _groups.Weather.Dispose();
+        _groups.Dispose();
         _simulator.Dispose();
         foreach (var t in _textures.Values) t?.Dispose();
         _white.Dispose();

@@ -81,8 +81,7 @@ GLOBAL_POINT R defaults1000: ground rings within R and R..2R, bounded at3*count,
 Emitter wind factor=clamp((speed-min)/(max-min),0,1); invalid span leaves rate unchanged.
 Particle fade comes from affectors, fog volumes from effect fade/lifecycle.
 
-**Observed Meitou choices:** warm groups off-thread; region changes debounce2s, weather changes
-within a region immediate; static map-feature units immortal. Missing particle images/materials
+**Observed Meitou choices:** warm groups off-thread; camera-centric effects (`CAMERA*`, `GLOBAL`, `GLOBAL_POINT`, `POINT_LIGHTING`) follow the camera region with a 2 s region-change debounce and a 2.5 s alpha cross-fade on swaps, while spatial effects (`POINT`, `WANDERING*`) run per nearby region (entered within 9216 units, kept out to 12000) in each region's own cells; weather changes within a region immediate; static map-feature units immortal. Missing particle images/materials
 fall back to white. Fog-volume ground movement and effect lights are not fully implemented.
 **Verified** plugin constructor default quota500; ash techniques total1550. Denser original ash
 remains unexplained. Gameplay effects: [Effects on characters](#effects-on-characters); a rain collector's rain strength and a farm's rain water are the weather's `wetness`

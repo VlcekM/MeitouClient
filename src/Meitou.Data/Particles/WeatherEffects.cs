@@ -186,10 +186,25 @@ public sealed record EffectRecord(
     /// </summary>
     public bool IsCameraGroup => Type is EffectType.Camera or EffectType.CameraRain or EffectType.CameraAcidRain;
     /// <summary>
+    /// Whether the effect is centred on the camera rather than placed in a region's cells (camera, global, global-point and lightning).
+    /// </summary>
+    public bool IsCameraCentric => Type is EffectType.Camera or EffectType.CameraRain or EffectType.CameraAcidRain
+        or EffectType.Global or EffectType.GlobalPoint or EffectType.PointLighting;
+    /// <summary>
+    /// Whether the effect is placed at world positions inside its region's cells (point and wandering effects, excluding lightning).
+    /// </summary>
+    public bool IsSpatial => Type is EffectType.Point or EffectType.Wandering or EffectType.WanderingStorm or EffectType.WanderingGas;
+    /// <summary>
     /// Whether the effect has no life: <c>max time to live</c> 0 or less (Verified (decompiled), FUN_1401034f0: the handler never ends).
     /// </summary>
     public bool Immortal => MaxTimeToLive <= 0;
 }
+
+/// <summary>
+/// A nearby region's spatial weather input for <see cref="WeatherGroups"/>: its id, region index (for seeding), cell area, current weather input
+/// and squared ground distance from the camera to its nearest cell.
+/// </summary>
+public readonly record struct RegionWeatherInput(string RegionId, int RegionIndex, IEffectArea Area, WeatherEffectInput Input, float MinDistanceSq);
 
 /// <summary>
 /// One entry of a WEATHER's <c>effects</c> list: the effect, how many may be active at once (0 = no limit) and the respawn times in real seconds (0 /
