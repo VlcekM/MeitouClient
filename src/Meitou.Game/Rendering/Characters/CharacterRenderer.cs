@@ -1387,7 +1387,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
 
     /// <summary>
     /// How far the character is drawn below its position: the ground offset, but in a bed (<see cref="CharacterInstance.UnitMovement"/>) only
-    /// less the feet's lift, as the original lays the root bone at the node whatever the body shape (a long-legged paladin's 1.23 put its back
+    /// less the feet's lift, as the original lays the root bone at the node whatever the body shape (a short-legged paladin's 1.23 put its back
     /// through the mattress, docs/game/locks.md "Heights").
     /// </summary>
     static float Lowering(in CharacterInstance inst, CharacterAsset asset) => inst.UnitMovement ? -asset.FeetLift : asset.GroundOffset;
