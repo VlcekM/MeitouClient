@@ -160,7 +160,7 @@ public sealed partial class AiSystem
 
     /// <summary>
     /// The activation: a cannibal retreat (1) goes to the squad's home town, else the nearest town of its faction (<c>FUN_140288580</c>); the
-    /// nearest-nest kind (25) always to the nearest (<c>FUN_140289b50</c>). Slave shipping goes to <see cref="ShippingTown"/>.
+    /// nearest-nest kind (25) always to the nearest (<c>FUN_140289b50</c>). Slave shipping goes to <see cref="SlaveShipping.Town"/>.
     /// </summary>
     internal void CaptiveStarted(World world, Squad squad, Blackboard board, AiPackage package, PackageClass kind)
     {
@@ -173,82 +173,13 @@ public sealed partial class AiSystem
                 board.MissionTown = package.Signal == 1 && board.Town >= 0 ? board.Town : NearestTownOf(at, squad.Faction);
                 break;
             case PackageClass.SlaverShipping:
-                board.MissionTown = ShippingTown(at, squad.Faction, package.Signal);
+                board.MissionTown = SlaveShipping.Town(data, at, squad.Faction, package.Signal);
                 break;
         }
 
         // The travel goals (TRAVEL_TO_TARGET_TOWN_FAST) walk to the running package's destination.
         if (board.MissionTown >= 0) board.Destination = CampaignTown.OfSite(board.MissionTown);
     }
-
-    /// <summary>
-    /// The building designation of a slave pen (BD 10: the Slaver Shop and Cage Warden templates).
-    /// </summary>
-    const int PenDesignation = 10;
-
-    /// <summary>
-    /// The mission town of a slave shipping package (<b>Verified</b>): the nearest slave camp of a faction not hostile to the squad
-    /// (<c>FUN_1402873a0</c> over <c>FUN_140927f10</c>, type 5). The anywhere kind (28, <c>FUN_140289f90</c> over <c>FUN_140939090</c>) takes instead
-    /// the nearest TOWN (type 2) of such a faction within 0.7 x the camp's squared distance (anywhere with no camp) that houses slave pens
-    /// (<see cref="HousesPens"/>); none, the camp. -1: neither.
-    /// </summary>
-    int ShippingTown(Vector3 at, int faction, int signal)
-    {
-        int camp = NearestNotHostile(at, faction, TownType.SlaveCamp, float.MaxValue, null);
-        if (signal != 28) return camp;
-
-        float within = camp >= 0 ? Vector3.DistanceSquared(at, data.Sites[camp].Position) * 0.7f : float.MaxValue;
-        int town = NearestNotHostile(at, faction, TownType.Town, within, HousesPens);
-        return town >= 0 ? town : camp;
-    }
-
-    /// <summary>
-    /// The nearest town of <paramref name="type"/> (X/Z distance) whose faction is not hostile to <paramref name="faction"/>, within the squared
-    /// distance <paramref name="within"/> and passing <paramref name="test"/> (null: any); -1: none.
-    /// </summary>
-    int NearestNotHostile(Vector3 at, int faction, TownType type, float within, Func<TownSite, bool>? test)
-    {
-        int best = -1;
-        float bestD = float.MaxValue;
-        foreach (var site in data.Sites)
-        {
-            if (site.Town.Type != type || site.Index >= data.SiteFactions.Count || IsHostileTo(data.SiteFactions[site.Index], faction)) continue;
-
-            float d = Vector2.DistanceSquared(Flat(at), Flat(site.Position));
-            if (d > within || d >= bestD || test?.Invoke(site) == false) continue;
-
-            (best, bestD) = (site.Index, d);
-        }
-
-        return best;
-    }
-
-    /// <summary>
-    /// Whether the faction <paramref name="f"/> is hostile to <paramref name="faction"/> (false when either is none or has no relations).
-    /// </summary>
-    bool IsHostileTo(int f, int faction) =>
-        f >= 0 && faction >= 0 && data.Relations.Contains(f) && data.Relations.Contains(faction) && data.Relations.IsHostile(f, faction);
-
-    /// <summary>
-    /// Whether the town's building designation tags hold the slave pen's (bit 10 of the town's <c>TagsClass&lt;BuildingDesignation&gt;</c> at
-    /// <c>+0x498</c>, <b>Verified</b>: <c>FUN_140936e60</c> fills it once through <c>FUN_140935d10</c> with the <c>building designation</c> of every
-    /// template the faction's <c>residents</c> (unless <c>residents override</c>) and the town's list, whatever the entry's count; a town with no
-    /// faction has none).
-    /// </summary>
-    bool HousesPens(TownSite site)
-    {
-        int f = site.Index < data.SiteFactions.Count ? data.SiteFactions[site.Index] : -1;
-        if (f < 0) return false;
-
-        var residents = site.Town.ResidentsOverride ? site.Town.Residents : data.Factions[f].Residents.Concat(site.Town.Residents);
-        return residents.Any(IsPenTemplate);
-    }
-
-    /// <summary>
-    /// Whether the resident entry names a squad template of the slave pen's building designation.
-    /// </summary>
-    bool IsPenTemplate(RecordLink entry) =>
-        data.Db.Find(entry.Id) is { } record && SquadFactory.IsTemplate(record) && record.GetInt("building designation") == PenDesignation;
 
     /// <summary>
     /// <c>GoOutOnPatrol_Cannibal</c> slot 12 (<c>FUN_140289d80</c>): no patrol while every cage of the squad's faction in its town is taken
