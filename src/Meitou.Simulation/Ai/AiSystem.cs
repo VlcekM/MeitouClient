@@ -3869,9 +3869,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         melee ? d2 <= TurretNearMelee * TurretNearMelee ? 0.8f : 0.05f : d2 <= TurretNear * TurretNear ? 1 : 0.3f;
 
     /// <summary>
-    /// The desire of the turret goals (AI slot 35 <c>FUN_140598080</c>): 0 when carrying; 2.0 when enemies are sensed (it has a turret as target);
-    /// else 1.0. Not modelled: the 0 for a combat-flagged character outside melee mode, the cut at the squared distance clamp(<c>AI+0x28</c> x 1.2,
-    /// 10000, 1e6) and the 0.4 of a hurt character with none sensed; the player-faction branch (1.0 with a 146 in the order deque,
+    /// The desire of the turret goals (AI slot 35 <c>FUN_140598080</c>): 0 when carrying; 2.0 when enemies are sensed; else 1.0. The original gives
+    /// 2.0 only while the character mans a turret (Character <c>+0x260</c>, written by <c>TurretBuilding</c>'s <c>FUN_140434d20</c>). Not modelled:
+    /// the 0 for a Passive character outside melee combat mode, the cut at the squared distance clamp(<c>AI+0x28</c> x 1.2, 10000, 1e6) and the 0.4
+    /// of a hungry one (hunger level below 2.1, stomach buffer empty) with none sensed; the player-faction branch (1.0 with a 146 in the order deque,
     /// <c>FUN_140507c10</c>, else 0 without a 234 job, <c>FUN_140507200</c>, or Ranged, stat flag <c>+0x129</c>) is no NPC's.
     /// </summary>
     float TurretDesire(World world, int slot) =>
