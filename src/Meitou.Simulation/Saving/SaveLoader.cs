@@ -293,7 +293,7 @@ public static class SaveLoader
             }
         }
 
-        world.Fixtures.LayoutsFromSave(world, data);   // the layouts the original furnished the saved buildings with
+        world.Fixtures.LayoutsFromSave(world, data, save, context.Handles);   // the layouts the original furnished the saved buildings with
         world.Fixtures.RuinsFromSave(world, data);
 
         foreach (var site in data.Sites)

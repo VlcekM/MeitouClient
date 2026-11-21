@@ -41,6 +41,16 @@ public sealed class ItemSlots
     public const float ClaimReach = 2;
 
     /// <summary>
+    /// How near in 3D an unclaimed saved item must lie to an inactive layout's slot to count as a leftover of that layout and be dropped.
+    /// </summary>
+    const float OrphanReach = 0.1f;
+
+    /// <summary>
+    /// Horizontal reach round a building's origin for the orphan-slot check (larger than any building's interior).
+    /// </summary>
+    const float OrphanBuildingReach = 250;
+
+    /// <summary>
     /// Meitou's save key of an empty slot's due hour, then the slot's number in its building (<c>item3</c>): a float of the absolute game hour its
     /// next item is due, in the building's GAMESTATE_BUILDING (the original keeps the respawn time in the interior's own group record, which Meitou
     /// does not write).
@@ -147,12 +157,82 @@ public sealed class ItemSlots
     }
 
     /// <summary>
-    /// Registers the slots of a town's buildings once, binding the loaded items lying in them.
+    /// Registers the slots of a town's buildings once, binding the loaded items lying in them and dropping unclaimed saved items left at an inactive
+    /// layout's exact slot positions (e.g. a save whose building layouts changed).
     /// </summary>
     public void RegisterSite(World world, PopulationData data, int site)
     {
         if (site < 0 || site >= data.Sites.Count || !_sites.Add(site)) return;
-        foreach (var b in data.Sites[site].Buildings) AddBuilding(world, data, site, b);
+
+        var town = data.Sites[site];
+        foreach (var b in town.Buildings) AddBuilding(world, data, site, b);
+
+        DropOrphanedSlotItems(world, data, town);
+    }
+
+    /// <summary>
+    /// Removes unclaimed saved ground items lying at an exact slot position of another interior layout of a town building (or of a ruined building's
+    /// layouts): items left floating in mid-air after a building's layout changed or it was ruined before the town registered. Skips emptied
+    /// (player-bought) houses and items already claimed by an active slot.
+    /// </summary>
+    void DropOrphanedSlotItems(World world, PopulationData data, TownSite town)
+    {
+        if (world.Fixtures.Saved is null || data.Layouts is null || world.GroundItems.Count == 0) return;
+
+        var zones = town.Buildings.Select(b => b.Zone).ToHashSet();
+        var unclaimed = world.GroundItems.All
+            .Where(g => g.Slot is null && g.Item.Saved is not null && zones.Contains(WorldLayout.ZoneOf(g.Position.X, g.Position.Z)))
+            .ToList();
+        if (unclaimed.Count == 0) return;
+
+        var taken = new HashSet<int>();
+        foreach (var b in town.Buildings) DropOrphansOfBuilding(world, data, b, unclaimed, taken);
+    }
+
+    /// <summary>
+    /// Drops items from <paramref name="unclaimed"/> lying at an exact slot of an inactive interior layout of <paramref name="b"/>.
+    /// </summary>
+    void DropOrphansOfBuilding(World world, PopulationData data, TownBuilding b, List<GroundItem> unclaimed, HashSet<int> taken)
+    {
+        if (world.Fixtures.IsEmptied(b.Key) || b.Resolved is not { } resolved || b.InteriorLayouts.Count == 0
+            || data.Db.Find(b.BuildingId) is not { } record) return;
+
+        var origin = resolved.Position;
+        var near = unclaimed
+            .Where(g => !taken.Contains(g.Id)
+                && Vector2.DistanceSquared(new(g.Position.X, g.Position.Z), new(origin.X, origin.Z)) <= OrphanBuildingReach * OrphanBuildingReach)
+            .ToList();
+        if (near.Count == 0) return;
+
+        string active = world.Fixtures.IsDestroyed(b) ? "" : b.LayoutName(exterior: false);
+        foreach (string name in b.InteriorLayouts)
+        {
+            if (name == active || data.Layouts!.Find(record, name, exterior: false) is not { } layout) continue;
+
+            DropOrphansOfLayout(world, data, resolved, layout, near, taken);
+        }
+    }
+
+    /// <summary>
+    /// Drops items from <paramref name="near"/> matching an item-placement slot of <paramref name="layout"/> on <paramref name="resolved"/>.
+    /// </summary>
+    void DropOrphansOfLayout(World world, PopulationData data, ResolvedBuilding resolved, GameRecord layout, List<GroundItem> near,
+        HashSet<int> taken)
+    {
+        foreach (var groupItem in data.Layouts!.ItemGroups(layout))
+        {
+            if (Group(data.Db, groupItem.Building.StringId) is not { } group) continue;
+
+            var at = BuildingLayouts.Place(resolved.Position, resolved.Placement.Rotation, groupItem).Position;
+            foreach (var g in near)
+            {
+                if (taken.Contains(g.Id) || Vector3.DistanceSquared(g.Position, at) > OrphanReach * OrphanReach) continue;
+                if (!group.Items.Entries.Any(e => e.Id == g.Item.Record && Kept(e.Type))) continue;
+
+                world.GroundItems.Take(g.Id);
+                taken.Add(g.Id);
+            }
+        }
     }
 
     /// <summary>
