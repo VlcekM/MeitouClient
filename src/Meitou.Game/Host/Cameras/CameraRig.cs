@@ -38,15 +38,28 @@ public sealed class CameraRig
     public float GroundAt(float x, float z) => Floors?.Invoke(x, z) is { } floor ? MathF.Max(_ground(x, z), floor) : _ground(x, z);
 
     /// <summary>
-    /// The height the strategy camera's eye keeps above: <see cref="GroundAt"/>, building floors included.
+    /// <see cref="GroundAt(float, float)"/> raised by the map feature surfaces at or under <paramref name="top"/> (<see cref="Features"/>; the game's
+    /// group-14 ray, docs/formats/camera.md "Height").
     /// </summary>
-    public float EyeGroundAt(float x, float z) => GroundAt(x, z);
+    public float GroundAt(float x, float z, float top) =>
+        Features?.Invoke(x, z, top) is { } feature ? MathF.Max(GroundAt(x, z), feature) : GroundAt(x, z);
+
+    /// <summary>
+    /// The height the strategy camera's eye at (<paramref name="x"/>, <paramref name="eyeY"/>, <paramref name="z"/>) keeps above: building floors
+    /// and the map features under it included.
+    /// </summary>
+    public float EyeGroundAt(float x, float z, float eyeY) => GroundAt(x, z, eyeY + KenshiCamera.FeatureRayLift);
 
     /// <summary>
     /// The highest building floor at a point that the strategy camera's pivot rides on, or null (set by the host; the free camera keeps to the
     /// ground).
     /// </summary>
     public Func<float, float, float?>? Floors { get; set; }
+
+    /// <summary>
+    /// The highest map feature surface at (x, z) at or under a height (x, z, top), or null (set by the host; the free camera keeps to the ground).
+    /// </summary>
+    public Func<float, float, float, float?>? Features { get; set; }
 
     /// <summary>
     /// A rig on <paramref name="ground"/> (the ground or the sea, whichever is higher, at a point), starting in the strategy camera;
@@ -56,7 +69,7 @@ public sealed class CameraRig
     {
         this._ground = ground;
         Settings = settings ?? new CameraSettings();
-        Strategy = new StrategyCamera(GroundAt, Settings);
+        Strategy = new StrategyCamera((x, z, top) => GroundAt(x, z, top), Settings);
         Free = new FreeCamera(ground, Settings);
         _states = new Interpolated<CameraState>(Strategy.State, CameraState.Lerp);
     }
@@ -93,12 +106,13 @@ public sealed class CameraRig
     public CameraState At(float alpha) => _states.At(alpha);
 
     /// <summary>
-    /// Moves the strategy camera (leaving free flight if on) and cuts to it: no blend from the old position.
+    /// Moves the strategy camera (leaving free flight if on) and cuts to it: no blend from the old position. <paramref name="height"/> is where the
+    /// pivot's map feature ray is first cast from above (<see cref="StrategyCamera.Place"/>): a character's height when placing on one.
     /// </summary>
-    public void Place(Vector2 pivotXz, float yaw, float pitch, float distance)
+    public void Place(Vector2 pivotXz, float yaw, float pitch, float distance, float? height = null)
     {
         IsFree = false;
-        Strategy.Place(pivotXz, yaw, pitch, distance);
+        Strategy.Place(pivotXz, yaw, pitch, distance, height);
         _states.Snap(Strategy.State);
     }
 
@@ -118,12 +132,12 @@ public sealed class CameraRig
     /// <summary>
     /// What <see cref="Save"/> keeps of the rig: the strategy camera's placement, and the free camera's state when it was flying.
     /// </summary>
-    public readonly record struct Saved(Vector2 PivotXz, float Yaw, float Pitch, float Distance, bool WasFree, CameraState Free);
+    public readonly record struct Saved(Vector2 PivotXz, float PivotY, float Yaw, float Pitch, float Distance, bool WasFree, CameraState Free);
 
     /// <summary>
     /// The rig as it is now, for <see cref="Restore"/>.
     /// </summary>
-    public Saved Save() => new(Strategy.PivotXz, Strategy.Yaw, Strategy.Pitch, Strategy.Distance, IsFree, Free.State);
+    public Saved Save() => new(Strategy.PivotXz, Strategy.Pivot.Y, Strategy.Yaw, Strategy.Pitch, Strategy.Distance, IsFree, Free.State);
 
     /// <summary>
     /// Cuts back to the rig <paramref name="saved"/>: the strategy camera where it stood (whatever the free camera did since), or the free camera
@@ -133,11 +147,11 @@ public sealed class CameraRig
     {
         if (!saved.WasFree)
         {
-            Place(saved.PivotXz, saved.Yaw, saved.Pitch, saved.Distance);
+            Place(saved.PivotXz, saved.Yaw, saved.Pitch, saved.Distance, saved.PivotY);
             return;
         }
 
-        Strategy.Place(saved.PivotXz, saved.Yaw, saved.Pitch, saved.Distance);
+        Strategy.Place(saved.PivotXz, saved.Yaw, saved.Pitch, saved.Distance, saved.PivotY);
         TakeOver(saved.Free, false);
     }
 
@@ -145,7 +159,7 @@ public sealed class CameraRig
     /// Moves the strategy pivot without a cut: the view keeps its own yaw, pitch and boom, and the next tick blends from where it was (a camera that
     /// follows).
     /// </summary>
-    public void MovePivot(Vector2 pivotXz) => Strategy.Place(pivotXz, Strategy.Yaw, Strategy.Pitch, Strategy.Distance);
+    public void MovePivot(Vector2 pivotXz) => Strategy.Place(pivotXz, Strategy.Yaw, Strategy.Pitch, Strategy.Distance, Strategy.Pivot.Y);
 
     /// <summary>
     /// Keeps the active camera near the player's characters (set up and switched by the host).
@@ -189,7 +203,7 @@ public sealed class CameraRig
         var eye = Free.Position;
         Vector3 pivot = hit ?? new Vector3(eye.X, _ground(eye.X, eye.Z), eye.Z);
         float boom = hit is { } h ? Vector3.Distance(eye, h) : Strategy.Distance;
-        Strategy.Place(new Vector2(pivot.X, pivot.Z), Free.Yaw, Free.Pitch, boom);
+        Strategy.Place(new Vector2(pivot.X, pivot.Z), Free.Yaw, Free.Pitch, boom, pivot.Y);
         IsFree = false;
     }
 }

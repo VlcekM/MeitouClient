@@ -122,6 +122,7 @@ sealed class InteriorView(GameHost host)
         objects.KeepHeldGround = host.Config.FixRuinGround;
         objects.HiddenItems = host.GroundItemSync.HiddenGroundKeys;
         host.Session.Camera.Floors ??= CameraFloor;
+        host.Session.Camera.Features ??= CameraFeature;
         foreach (var c in characters)
         {
             var at = host.TrackedPosition(c);
@@ -238,6 +239,11 @@ sealed class InteriorView(GameHost host)
     /// panning lets go of it.
     /// </summary>
     float? CameraFloor(float x, float z) => host.ActiveObjects?.FloorHeightAt(x, z, _cameraFloorOf ??= key => InteriorFloors.GetValueOrDefault(key));
+
+    /// <summary>
+    /// The highest map feature surface at (x, z) at or under a height, or null: the camera's group-14 ray (docs/formats/camera.md "Height").
+    /// </summary>
+    float? CameraFeature(float x, float z, float top) => host.ActiveObjects?.FeatureHeightBelow(x, z, top);
 
     /// <summary>
     /// Where a click ray first comes down onto a walkable navmesh surface clear of the terrain (a wall top, a ramp, a deck) within <paramref

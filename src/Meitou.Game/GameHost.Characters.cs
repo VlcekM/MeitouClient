@@ -59,7 +59,7 @@ sealed partial class GameHost
         if (Duel.IsDuel) return;   // the duel's worlds keep the focus on its spot (DuelSetup), wherever the camera flies
         SendView();
         var current = Session.Camera.Current;
-        if (at is null && _sentFocus && current.IsFree && current.Eye.Y - Session.Camera.EyeGroundAt(current.Eye.X, current.Eye.Z) > FocusCeiling)
+        if (at is null && _sentFocus && current.IsFree && current.Eye.Y - Session.Camera.EyeGroundAt(current.Eye.X, current.Eye.Z, current.Eye.Y) > FocusCeiling)
             return;
         var target = at ?? current.Target;   // the cinema's camera while it holds the view
         if (_sentFocus && Vector3.DistanceSquared(target, _lastFocus) < 50 * 50) return;

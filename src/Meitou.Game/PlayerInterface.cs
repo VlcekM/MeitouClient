@@ -1320,7 +1320,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         if (Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { } c) return;
         var view = Session.Camera.Current;
         c = Carrier(c);
-        Session.Camera.Place(new Vector2(c.Position.X, c.Position.Z), view.Yaw, view.Pitch, view.Distance);
+        Session.Camera.Place(new Vector2(c.Position.X, c.Position.Z), view.Yaw, view.Pitch, view.Distance, c.Position.Y);
         Follow = follow ? id : null;
     }
 

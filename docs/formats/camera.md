@@ -77,8 +77,10 @@ not the game speed, so the camera works while the game is paused. Several inputs
   `FUN_1406aecc0`): collision groups 9..9+viewed floor, every loaded building's ordinary parts (wall tops, gate decks and roofs of
   floor-0 parts included), no stairs, doors, furniture or unwalkable roofs. When the hit object answers a virtual check (vtable
   +0x330, unknown) the ray is cast again with `0x200` only; the hit building is remembered and, when the ray misses, a radius-40 sweep
-  keeps the pivot on it; a second ray, 100 above, mask `0x4000` (group 14), also raises it (all **Observed**). The eye's ground is
-  the terrain and group 14 only: its building ray (`0x200`.., from 1000 above) can only lower it, gated by `FUN_1409b6d00`.
+  keeps the pivot on it (all **Observed**). With no building remembered, a ray from 100 above the pivot (`DAT_141683250` = 100,
+  **Verified** data value) straight down with mask `0x4000` (group 14: map features, walkable foliage) raises it. The eye's ground is
+  the terrain raised by a second `0x4000` ray from the same start, 100 above the pivot, not the eye (**Observed**, decompile reading);
+  its building ray (`0x200`.., from 1000 above the eye) can only lower it, gated by `FUN_1409b6d00`.
   The water surface (a node at the sea height) is the lowest ground of both. The pivot's
   goal is its height after coming down to the ground under the eye if that is lower (never below the ground at the pivot), then
   **raised by the shortfall until the eye is `min(0.2 · boom, 20) + 10` above the ground under it**: the pivot rises, the view
@@ -89,8 +91,15 @@ not the game speed, so the camera works while the game is paused. Several inputs
   Large Dock Wreck02, 1193 for Flats Lagoon's Lagoon Platform, 216 of 7819 floor buildings past 400, **Verified** by making every placement's floors;
   zones searched within 2100) are the pivot's ground, a ruin's on its `destroyed collision` as the game's ray meets it ([collision](collision.md);
   without them close zoom put the eye inside a ruin's raised base, issue #483), and a building in the interior view's parts up to the viewed
-  floor (others stay at floor 0, the +0x330 re-cast read as "not the viewed building"); the highest at the point, without the 3000 cap, the sweep, the group-14
-  ray or the eye's lowering ray. Engine: the eye keeps above those floors too (the game's eye sank into raised building bases). A building's collision is read on a worker, so the first frames near it keep to the terrain; a runtime placement
+  floor (others stay at floor 0, the +0x330 re-cast read as "not the viewed building"); the highest at the point, without the 3000 cap, the sweep
+  or the eye's lowering ray. Engine: the eye keeps above those floors too (the game's eye sank into raised building bases). The map features
+  (`features.dat` placements whose record has a `collision`, placed in the point's zone and its eight neighbours) are the group-14 ray: the highest
+  feature surface at or under 100 above the pivot raises the pivot's ground (engine: also over a building, and no walkable foliage). Engine:
+  the eye's group-14 ray starts 100 above the eye and at the eye's own (x, z), so the eye keeps out of a feature beside the pivot too. Placing the
+  camera starts that ray 100 above the height it is given (a character's, a save's pivot, the free camera's look point), else 100 above the
+  ground without features; panning and the leash start it from the pivot's height. Without the feature ray the pivot sank into a mod
+  cliff block's street (`Canyonland_Zone_Cliffblock_02` in 42.22, top 1562.9 over terrain 1508.7, **Verified** headless against
+  Newwworld.mod and `features.dat`). A building's or feature's collision is read on a worker, so the first frames near it keep to the terrain; a runtime placement
   added or removed (a building; not a ground item's drop or pick-up, which leaves the lists alone, issue #204, **Observed** by code, not measured) lists the zone's buildings again while the known floors keep answering
   (the pivot does not drop to the terrain meanwhile), and an unchanged building keeps its collision.
 - **Default keys** (`controls.cfg`): `camera_forward` W, Up; `camera_back` S, Down; `camera_left` A, Left; `camera_right` D, Right;

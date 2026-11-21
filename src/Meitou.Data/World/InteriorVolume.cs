@@ -543,6 +543,17 @@ public sealed partial class FloorSurfaces
     }
 
     /// <summary>
+    /// The surfaces of a map feature's collision (<c>features.dat</c>: a rock, a cliff block; collision group 14) placed with <paramref name="node"/>:
+    /// one floor-0 part, its convex shapes' flat undersides left out as a building part's are.
+    /// </summary>
+    public static FloorSurfaces ForFeature(CollisionMesh mesh, Matrix4x4 node)
+    {
+        var result = new FloorSurfaces();
+        result.AddMesh(mesh, node, 0, stairs: false, roof: false);
+        return result;
+    }
+
+    /// <summary>
     /// How far (units, unscaled) the collision of <paramref name="building"/>'s floor parts reaches from its origin: the farthest vertex of the
     /// parts <see cref="For"/> reads, in building space; 0 without any. A placement's floors lie within this times its scale of its position.
     /// </summary>
@@ -577,11 +588,17 @@ public sealed partial class FloorSurfaces
     /// <summary>
     /// Adds a part's collision, placed with <paramref name="node"/>: its floor (or unwalkable roof) triangles and its flat undersides.
     /// </summary>
-    void AddPart(GameRecord part, CollisionMesh mesh, Matrix4x4 node)
+    void AddPart(GameRecord part, CollisionMesh mesh, Matrix4x4 node) =>
+        AddMesh(mesh, node, Math.Clamp(part.GetInt("building floor"), 0, 3), part.GetBool("is stairs"), part.GetBool("is unwalkable roof"));
+
+    /// <summary>
+    /// Adds a collision mesh placed with <paramref name="node"/> as one part on <paramref name="floor"/>: its floor (or unwalkable roof) triangles
+    /// and its flat undersides.
+    /// </summary>
+    void AddMesh(CollisionMesh mesh, Matrix4x4 node, int floor, bool stairs, bool roof)
     {
         // A solid's flat underside (outward and facing down: a slab's or steps' bottom) is no floor; a wall hit dropped onto it put the goal
         // under the building.
-        bool roof = part.GetBool("is unwalkable roof");
         var kept = new List<Vector3>(mesh.Indices.Length);
         var under = new List<Vector3>();
         for (int t = 0; t + 2 < mesh.Indices.Length; t += 3)
@@ -597,8 +614,7 @@ public sealed partial class FloorSurfaces
             list.Add(c);
         }
 
-        int floor = Math.Clamp(part.GetInt("building floor"), 0, 3);
-        if (Of(floor, part.GetBool("is stairs"), kept) is { } surface) (roof ? _roofs : _surfaces).Add(surface);
+        if (Of(floor, stairs, kept) is { } surface) (roof ? _roofs : _surfaces).Add(surface);
         if (Of(floor, false, under) is { } bottom) _undersides.Add(bottom);
     }
 

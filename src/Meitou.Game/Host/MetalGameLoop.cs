@@ -2895,7 +2895,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             && (_tour.Active || !host.Session.Camera.IsFree && !_tourHolds))
         {
             var clearEye = host.Camera.Eye;
-            float shortfall = host.Session.Camera.EyeGroundAt(clearEye.X, clearEye.Z) +
+            float shortfall = host.Session.Camera.EyeGroundAt(clearEye.X, clearEye.Z, clearEye.Y) +
                 Meitou.Data.World.KenshiCamera.EyeClearance(host.Camera.Distance) - clearEye.Y;
             // Over a hair only.
             if (shortfall > 1e-3f) host.Camera.Target += new Vector3(0, shortfall, 0);

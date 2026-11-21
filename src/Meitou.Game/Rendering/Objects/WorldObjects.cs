@@ -311,6 +311,11 @@ sealed class WorldObjects : IDisposable
     BuildingFloors? _floors;
 
     /// <summary>
+    /// The map features' collision behind <see cref="FeatureFloors"/>, made on first use.
+    /// </summary>
+    FeatureFloors? _featureFloors;
+
+    /// <summary>
     /// How far each building record's floor collision reaches from its origin, unscaled, by record and whether it is the ruin
     /// (<see cref="FloorSurfaces.Reach"/>): found once per record, on the worker that first lists one.
     /// </summary>
@@ -326,6 +331,26 @@ sealed class WorldObjects : IDisposable
     /// thread.
     /// </summary>
     internal BuildingFloors Floors => _floors ??= new BuildingFloors(this);
+
+    /// <summary>
+    /// The map features' collision under the camera; used from the main thread.
+    /// </summary>
+    internal FeatureFloors FeatureFloors => _featureFloors ??= new FeatureFloors(this);
+
+    /// <summary>
+    /// The map features placed in a zone that have collision (<c>features.dat</c>, their record's <c>collision</c>), as the navmesh reads them.
+    /// The surfaces themselves are made later, per feature (<see cref="FeatureFloor.Make"/>). Safe from a worker thread.
+    /// </summary>
+    internal FeatureFloor[] FeatureFloorsOf(ZoneCoordinate zone)
+    {
+        int index = zone.Y * WorldLayout.ZoneCount + zone.X;
+        if (_interiorCollisions is not { } collisions || index >= Features.Zones.Count) return [];
+
+        var result = new List<FeatureFloor>();
+        foreach (var feature in Features.Zones[index])
+            if (FeatureFloorOf(feature, collisions) is { } floor) result.Add(floor);
+        return [.. result];
+    }
 
     /// <summary>
     /// The floors of the buildings placed in a zone that characters can stand on, ruins included (on their destroyed collision): not those whose path
@@ -356,6 +381,26 @@ sealed class WorldObjects : IDisposable
             });
         }
         return [.. result];
+    }
+
+    /// <summary>
+    /// One placed feature's collision for <see cref="FeatureFloors"/>, or null when its record has no readable <c>collision</c>.
+    /// </summary>
+    FeatureFloor? FeatureFloorOf(MapFeature feature, InteriorCollisions collisions)
+    {
+        if (Database.Find(feature.StringId) is not { Type: Data.Fcs.FcsRecordType.MapFeatures } record) return null;
+        if (collisions.Mesh(record.GetPath("collision")) is not { } mesh) return null;
+
+        float farthest = 0;
+        foreach (var v in mesh.Vertices) farthest = MathF.Max(farthest, v.LengthSquared());
+        float scale = MathF.Max(MathF.Abs(feature.Scale.X), MathF.Max(MathF.Abs(feature.Scale.Y), MathF.Abs(feature.Scale.Z)));
+        var node = WorldObjectLayout.InstanceTransform(feature.Position, feature.Rotation, feature.Scale);
+        return new FeatureFloor
+        {
+            Position = feature.Position,
+            Reach = MathF.Sqrt(farthest) * scale + BuildingFloors.ReachSlack,
+            Make = () => FloorSurfaces.ForFeature(mesh, node),
+        };
     }
 
     /// <summary>

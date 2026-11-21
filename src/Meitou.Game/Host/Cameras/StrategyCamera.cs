@@ -38,9 +38,9 @@ public sealed class StrategyCamera
     const float DegreesToRadians = MathF.PI / 180;
 
     /// <summary>
-    /// The ground under the eye, and the ground under the pivot (with buildings' floors).
+    /// The ground at (x, z) with the map feature surfaces at or under a height (x, z, top), for the pivot and the eye.
     /// </summary>
-    readonly Func<float, float, float> _ground, _pivotGround;
+    readonly Func<float, float, float, float> _ground;
     /// <summary>
     /// The settings the camera reads.
     /// </summary>
@@ -70,18 +70,24 @@ public sealed class StrategyCamera
     /// A camera at the start view (<see cref="KenshiCamera.InitialDistance"/>, <see cref="KenshiCamera.InitialPitchDegrees"/>), its pivot
     /// settled on the ground.
     /// </summary>
-    /// <param name="ground">The ground under the eye.</param>
-    /// <param name="pivotGround">The ground under the pivot (the game's pivot ray also hits buildings' floors, its eye ray does not raise the eye for
-    /// them); the eye's by default.</param>
-    public StrategyCamera(Func<float, float, float> ground, CameraSettings? settings = null, Func<float, float, float>? pivotGround = null)
+    /// <param name="ground">The ground at (x, z), with the map feature surfaces at or under the third argument (the game's group-14 ray cast down
+    /// from <see cref="KenshiCamera.FeatureRayLift"/> above the pivot).</param>
+    /// <param name="settings">The settings the camera reads.</param>
+    public StrategyCamera(Func<float, float, float, float> ground, CameraSettings? settings = null)
     {
         this._ground = ground;
-        this._pivotGround = pivotGround ?? ground;
         this._settings = settings ?? new CameraSettings();
         Pitch = KenshiCamera.InitialPitchDegrees * MathF.PI / 180;
         Distance = KenshiCamera.InitialDistance;
-        SettleHeight();
+        SettleHeight(null);
         State = Compute();
+    }
+
+    /// <summary>
+    /// A camera on <paramref name="ground"/> at (x, z), without map features.
+    /// </summary>
+    public StrategyCamera(Func<float, float, float> ground, CameraSettings? settings = null) : this((x, z, _) => ground(x, z), settings)
+    {
     }
 
     /// <summary>
@@ -123,15 +129,17 @@ public sealed class StrategyCamera
     public float DrawnFrameSeconds { get; set; }
 
     /// <summary>
-    /// Sets the pivot and view (yaw wrapped, pitch kept within the pitch limits, boom within the zoom limits); the pivot's height is found at once.
+    /// Sets the pivot and view (yaw wrapped, pitch kept within the pitch limits, boom within the zoom limits); the pivot's height is found at once,
+    /// its map feature ray cast from above <paramref name="height"/> (a followed character's, the pivot's own when it moves on), else from above the
+    /// ground without features.
     /// </summary>
-    public void Place(Vector2 pivotXz, float yaw, float pitch, float distance)
+    public void Place(Vector2 pivotXz, float yaw, float pitch, float distance, float? height = null)
     {
         PivotXz = pivotXz;
         Yaw = Interp.WrapAngle(yaw);
         Pitch = Math.Clamp(pitch, MinPitch, MaxPitch);
         Distance = Math.Clamp(distance, KenshiCamera.MinDistance, KenshiCamera.MaxDistance);
-        SettleHeight();
+        SettleHeight(height);
         State = Compute();
     }
 
@@ -300,8 +308,8 @@ public sealed class StrategyCamera
     float HeightGoal(float y)
     {
         var eye = CameraState.EyeFor(new Vector3(PivotXz.X, y, PivotXz.Y), Yaw, Pitch, Distance);
-        float groundAtPivot = _pivotGround(PivotXz.X, PivotXz.Y);
-        float groundAtEye = _ground(eye.X, eye.Z);
+        float groundAtPivot = _ground(PivotXz.X, PivotXz.Y, y + KenshiCamera.FeatureRayLift);
+        float groundAtEye = EyeGround(eye);
         float drop = MathF.Min(0, groundAtEye - y);   // a pivot above the ground under the eye comes down to it ...
         float required = groundAtEye + KenshiCamera.EyeClearance(Distance);
         float goal = y + drop;
@@ -310,11 +318,19 @@ public sealed class StrategyCamera
     }
 
     /// <summary>
-    /// Puts the pivot at its goal height at once (a placement, not a frame).
+    /// The ground under <paramref name="eye"/>, with the map feature surfaces under a ray from <see cref="KenshiCamera.FeatureRayLift"/> above it
+    /// (engine choice: the game's eye takes the feature under the pivot; this keeps the eye out of a feature beside the pivot too).
     /// </summary>
-    void SettleHeight()
+    float EyeGround(Vector3 eye) => _ground(eye.X, eye.Z, eye.Y + KenshiCamera.FeatureRayLift);
+
+    /// <summary>
+    /// Puts the pivot at its goal height at once (a placement, not a frame), its feature ray first cast from above <paramref name="height"/>, else
+    /// from above the ground without features.
+    /// </summary>
+    void SettleHeight(float? height)
     {
-        _pivotY = _pivotGround(PivotXz.X, PivotXz.Y);
+        float start = height ?? _ground(PivotXz.X, PivotXz.Y, float.NegativeInfinity);
+        _pivotY = _ground(PivotXz.X, PivotXz.Y, start + KenshiCamera.FeatureRayLift);
         for (int i = 0; i < 3; i++) _pivotY = HeightGoal(_pivotY);
         _heightGoal = _pivotY;
         _heightSpeed = 0;
@@ -350,7 +366,7 @@ public sealed class StrategyCamera
         }
         // Engine choice: the lag never shows the eye under the ground (the game's smoothing alone lets a fast climb dip into it for a few frames).
         var eye = CameraState.EyeFor(new Vector3(PivotXz.X, y, PivotXz.Y), Yaw, Pitch, Distance);
-        float shortfall = _ground(eye.X, eye.Z) + KenshiCamera.EyeClearance(Distance) - eye.Y;
+        float shortfall = EyeGround(eye) + KenshiCamera.EyeClearance(Distance) - eye.Y;
         _pivotY = shortfall > 0 ? y + shortfall : y;
     }
 

@@ -1588,7 +1588,7 @@ sealed class GameLoop(GameHost host)
     {
         if (host.SkyArrival is not null || host.TitleScreen.TitleVisible || !(_tour.Active || !host.Session.Camera.IsFree && !_cinemaHolds)) return;
         var eye = host.Camera.Eye;
-        float shortfall = host.Session.Camera.EyeGroundAt(eye.X, eye.Z) + Data.World.KenshiCamera.EyeClearance(host.Camera.Distance) - eye.Y;
+        float shortfall = host.Session.Camera.EyeGroundAt(eye.X, eye.Z, eye.Y) + Data.World.KenshiCamera.EyeClearance(host.Camera.Distance) - eye.Y;
         // Over a hair only: at the clearance's edge the ground read under the eye wavers by a few ten-thousandths frame to frame, and lifting by
         // that moved the eye by a float step now and then, a jump of a pixel or two for a character close to it.
         if (shortfall > 1e-3f) host.Camera.Target += new Vector3(0, shortfall, 0);

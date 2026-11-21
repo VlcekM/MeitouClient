@@ -1017,7 +1017,7 @@ sealed partial class GameHost(
         var yaw = (WorldOptions.Yaw ?? 30) * MathF.PI / 180;
         var pitch = (WorldOptions.Pitch ?? Data.World.KenshiCamera.InitialPitchDegrees) * MathF.PI / 180;
         var distance = WorldOptions.Distance ?? Data.World.KenshiCamera.InitialDistance;
-        Session.Camera.Place(new Vector2(target.X, target.Z), yaw, pitch, distance);
+        Session.Camera.Place(new Vector2(target.X, target.Z), yaw, pitch, distance, target.Y);
 
         SendFocus();
         ApplyCamera(Session.Camera.Current);

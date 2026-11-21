@@ -120,6 +120,12 @@ public static class KenshiCamera
     public const float HeightSnap = 0.1f;
 
     /// <summary>
+    /// How far above the pivot the camera's map feature ray (collision group 14, mask <c>0x4000</c>) starts: a feature surface higher than this over
+    /// the pivot is not its ground (<c>FUN_1406aecc0</c>, <c>DAT_141683250</c> = 100, <b>Verified</b> decompile and data value).
+    /// </summary>
+    public const float FeatureRayLift = 100;
+
+    /// <summary>
     /// Edge scrolling pans while the pointer is within this fraction of the screen's width or height of an edge.
     /// </summary>
     public const float EdgeMargin = 0.01f;

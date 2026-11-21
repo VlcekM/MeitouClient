@@ -30,10 +30,11 @@ public sealed class CameraLeash
         var point = rig.IsFree ? rig.Free.Position : rig.Strategy.Pivot;
         if (Pulled(point, anchors) is not { } pulled) return;
 
+        var strategy = rig.Strategy;
         if (rig.IsFree)
             rig.Free.Leash(pulled);
         else
-            rig.Strategy.Place(new Vector2(pulled.X, pulled.Z), rig.Strategy.Yaw, rig.Strategy.Pitch, rig.Strategy.Distance);
+            strategy.Place(new Vector2(pulled.X, pulled.Z), strategy.Yaw, strategy.Pitch, strategy.Distance, strategy.Pivot.Y);
     }
 
     /// <summary>

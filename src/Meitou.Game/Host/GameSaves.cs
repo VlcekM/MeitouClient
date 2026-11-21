@@ -542,9 +542,9 @@ sealed class GameSaves(GameHost host)
         if (saved.HasView)
         {
             var (yaw, pitch, distance) = KenshiCamera.FromSaved(saved.Rotation, saved.Zoom);
-            var pivot = KenshiCamera.SavedPivotInBounds(saved.Position) ? new Vector2(saved.Position.X, saved.Position.Z)
-                : KenshiCamera.SavedPivotFallback;
-            host.Session.Camera.Place(pivot, yaw, pitch, distance);
+            bool inBounds = KenshiCamera.SavedPivotInBounds(saved.Position);
+            var pivot = inBounds ? new Vector2(saved.Position.X, saved.Position.Z) : KenshiCamera.SavedPivotFallback;
+            host.Session.Camera.Place(pivot, yaw, pitch, distance, inBounds ? saved.Position.Y : null);
         }
         if (host.PlayerSquad is { } squad && !squad.Leader.IsNone)
         {
@@ -552,7 +552,7 @@ sealed class GameSaves(GameHost host)
             if (!saved.HasView)
             {
                 var view = host.Session.Camera.Current;
-                host.Session.Camera.Place(new Vector2(at.X, at.Z), view.Yaw, view.Pitch, view.Distance);
+                host.Session.Camera.Place(new Vector2(at.X, at.Z), view.Yaw, view.Pitch, view.Distance, at.Y);
             }
             navmesh = NavmeshAround(at);
         }
