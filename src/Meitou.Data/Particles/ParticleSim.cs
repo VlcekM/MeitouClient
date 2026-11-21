@@ -168,6 +168,10 @@ public sealed class ParticleSimulation
         /// A <c>force_emission</c> emitter has thrown its one burst.
         /// </summary>
         public bool Forced;
+        /// <summary>
+        /// Whether at least one particle was emitted in the current <c>duration</c> cycle.
+        /// </summary>
+        public bool CycleEmitted;
     }
 
     /// <summary>
@@ -387,8 +391,9 @@ public sealed class ParticleSimulation
             if (!def.Enabled || def.Type is PuEmitterType.Slave or PuEmitterType.Unknown) continue;
             st.Age += dt;
             if (!Working(def, st, dt)) continue;
-            float rate = def.Rate.Evaluate(st.Age, _random) * env.EmissionScale;
-            int n = Requested(def, st, Math.Max(rate, 0), dt);
+            float unscaled = Math.Max(def.Rate.Evaluate(st.Age, _random), 0);
+            float rate = unscaled * env.EmissionScale;
+            int n = Requested(def, st, rate, unscaled, dt);
             for (; n > 0 && t.Count < t.Capacity; n--) Spawn(t, e, def, env);
         }
     }
@@ -396,20 +401,31 @@ public sealed class ParticleSimulation
     /// <summary>
     /// The particles an emitter asks for this step (the plugin's <c>ParticleEmitter::_calculateRequestedParticles</c>, <b>Verified</b>, decompile):
     /// the rate times the step with the fraction carried over; a <c>force_emission</c> emitter throws the rate as a count once, at its first working
-    /// step, then nothing (docs/formats/particle-universe.md).
+    /// step, then nothing (docs/formats/particle-universe.md). When a positive <see cref="ParticleEnvironment.EmissionScale"/> (particle density)
+    /// would reduce a finite-duration or forced emitter below one particle even though the unscaled emitter would emit one, one particle is kept so
+    /// low-rate effects such as Venge's sky beams do not vanish at low particle density.
     /// </summary>
-    static int Requested(PuEmitterDef def, EmitterState st, float rate, float dt)
+    static int Requested(PuEmitterDef def, EmitterState st, float rate, float unscaled, float dt)
     {
         if (def.ForceEmission)
         {
             int burst = st.Forced ? 0 : (int)rate;
+            if (!st.Forced && burst == 0 && rate > 0 && unscaled >= 1) burst = 1;
             st.Forced = true;
             return burst;
+        }
+
+        if (!st.CycleEmitted && def.Duration is not null && rate > 0 && unscaled * st.Cycle >= 1 && rate * st.Cycle < 1.05f)
+        {
+            st.CycleEmitted = true;
+            st.Accumulator = 0;
+            return 1;
         }
 
         st.Accumulator += rate * dt;
         int n = (int)st.Accumulator;
         st.Accumulator -= n;
+        if (n > 0) st.CycleEmitted = true;
         return n;
     }
 
@@ -419,7 +435,11 @@ public sealed class ParticleSimulation
     bool Working(PuEmitterDef def, EmitterState st, float dt)
     {
         if (def.Duration is not { } duration) return true;
-        if (st.Cycle < 0) st.Cycle = Math.Max(duration.Evaluate(0, _random), 0);
+        if (st.Cycle < 0)
+        {
+            st.Cycle = Math.Max(duration.Evaluate(0, _random), 0);
+            st.CycleEmitted = false;
+        }
         st.Clock += dt;
         if (!st.Resting)
         {
@@ -439,6 +459,7 @@ public sealed class ParticleSimulation
         {
             st.Clock = 0;
             st.Cycle = Math.Max(duration.Evaluate(0, _random), 0);
+            st.CycleEmitted = false;
             st.Resting = false;
             return true;
         }
