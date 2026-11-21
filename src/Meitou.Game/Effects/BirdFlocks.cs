@@ -203,6 +203,14 @@ public sealed class BirdFlocks
     /// Every random draw of the step, seeded so a run repeats.
     /// </summary>
     readonly Random _random;
+    /// <summary>
+    /// The frame's attractors of the group being set, by key (scratch, filled again for each group).
+    /// </summary>
+    readonly Dictionary<object, BirdAttractor> _mine = [];
+    /// <summary>
+    /// The group's attractors kept from the last frame, by key (scratch, filled again for each group).
+    /// </summary>
+    readonly Dictionary<object, Attractor> _held = [];
 
     /// <param name="ground">The terrain's height at a world x, z.</param>
     /// <param name="groupOfCell">The BIOME_GROUP id of a weather cell (null: none).</param>
@@ -261,20 +269,46 @@ public sealed class BirdFlocks
     {
         foreach (var g in _groups)
         {
-            var mine = new Dictionary<object, BirdAttractor>();
-            foreach (var a in attractors)
-                if (a.Kind == g.Kind.Id && a.Max > 0) mine[a.Key] = a;
-            foreach (var gone in g.Attractors.Where(o => !mine.ContainsKey(o.Key)).ToList())
-            {
-                foreach (var b in g.Birds.Where(b => b.Attractor == gone)) ReleaseAttractor(b);
-                g.Attractors.Remove(gone);
-            }
-            var held = g.Attractors.ToDictionary(o => o.Key);
-            foreach (var a in mine.Values)
-            {
-                if (!held.TryGetValue(a.Key, out var current)) g.Attractors.Add(current = new Attractor(a.Key));
-                (current.Position, current.Strength, current.Max) = (a.Position, a.Range * (float)a.Range * 100, a.Max);
-            }
+            CollectMine(g, attractors);
+            DropGoneAttractors(g);
+            PlaceAttractors(g);
+        }
+    }
+
+    /// <summary>
+    /// Fills <see cref="_mine"/> with the attractors of <paramref name="g"/>'s kind that take birds (the last of a key wins).
+    /// </summary>
+    void CollectMine(Group g, IReadOnlyList<BirdAttractor> attractors)
+    {
+        _mine.Clear();
+        foreach (var a in attractors)
+            if (a.Kind == g.Kind.Id && a.Max > 0) _mine[a.Key] = a;
+    }
+
+    /// <summary>
+    /// Releases the birds on the group's attractors that <see cref="_mine"/> no longer has, and drops those attractors (the rest keep their order).
+    /// </summary>
+    void DropGoneAttractors(Group g)
+    {
+        foreach (var b in g.Birds)
+            if (b.Attractor is { } held && !_mine.ContainsKey(held.Key)) ReleaseAttractor(b);
+
+        for (int i = g.Attractors.Count - 1; i >= 0; i--)
+            if (!_mine.ContainsKey(g.Attractors[i].Key)) g.Attractors.RemoveAt(i);
+    }
+
+    /// <summary>
+    /// Gives each of <see cref="_mine"/> its place, pull and most birds, adding the ones the group lacks in their order.
+    /// </summary>
+    void PlaceAttractors(Group g)
+    {
+        _held.Clear();
+        foreach (var o in g.Attractors) _held.Add(o.Key, o);
+
+        foreach (var a in _mine.Values)
+        {
+            if (!_held.TryGetValue(a.Key, out var current)) g.Attractors.Add(current = new Attractor(a.Key));
+            (current.Position, current.Strength, current.Max) = (a.Position, a.Range * (float)a.Range * 100, a.Max);
         }
     }
 

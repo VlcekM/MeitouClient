@@ -1075,6 +1075,12 @@ sealed class BuildMode(PlayerInterface player)
     readonly Dictionary<string, (Vector3 Min, Vector3 Max)?> _ghostBoxes = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// How far (X/Z) each building record's footprint hull and collision triangles reach from its position, turned about Y in any way: the bound
+    /// of <see cref="PickSiteAt"/>'s coarse cull, by record; made once a record's footprint has loaded.
+    /// </summary>
+    readonly Dictionary<string, float> _siteReach = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// The nearest of the player's sites (and finished buildings) under a pixel, by a ray against each one's footprint prism (a sphere round its
     /// position without a footprint).
     /// </summary>
@@ -1097,24 +1103,15 @@ sealed class BuildMode(PlayerInterface player)
         var hits = new List<(BuildingSnapshot Site, float T)>();
         foreach (var site in player.Session.CurrentSnapshot.Buildings)
         {
+            // The coarse cull before the floor and ray tests (no effect on the pick): a hit on a footprint's prism or collision lies within their
+            // X/Z reach of the site. A site without a footprint (a plot, a sitting node, one still loading) takes the full tests.
+            var bounds = host.Placement.Footprint(site.Record);
+            if (bounds is { } outline && !WorldPicking.RayPassesXz(ray, site.Position, SiteReach(host, site.Record, outline))) continue;
+
             // Not drawn above the viewed floor of an opened house, so not picked there, as a bed or a container (FurnitureUse).
             if (player.Furniture.AboveViewedFloor?.Invoke(site.Position) == true) continue;
 
-            var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, PlacementCheck.YawOf(site.Rotation));
-
-            // No selectable geometry: an invisible sitting node must leave the click to ground movement.
-            var bounds = host.Placement.Footprint(site.Record);
-            bool invisible = bounds is null
-                && player.Production.Machine(site.Id)?.Function is TownBuildings.ChairFunction or TownBuildings.ThroneFunction;
-            if (invisible && host.Parts(site.Record).Count == 0) continue;
-
-            float? t = bounds is { } footprint
-                ? player.Picking.BuildingRayT(ray, footprint.Place(site.Position, yaw), footprint.YMin, footprint.YMax, site.Record, site.Position,
-                    site.Position.Y, yaw)
-                : host.Placement.Plot(site.Record) is { } plot
-                    ? WorldPicking.PlotT(ray, plot.Place(site.Position, yaw), terrain)
-                    : WorldPicking.RaySegment(ray.Origin, ray.Direction, site.Position, site.Position + new Vector3(0, 16, 0), 12);
-            if (t is not { } hit || hit >= ground) continue;
+            if (SiteRayT(host, ray, site, bounds, terrain) is not { } hit || hit >= ground) continue;
 
             hits.Add((site, hit));
             if (hit < bestT) (bestT, best) = (hit, site);
@@ -1126,6 +1123,45 @@ sealed class BuildMode(PlayerInterface player)
             && hits.Where(h => StandsIn(h.Site, best) && !player.Hidden(ray, h.T)).OrderBy(h => h.T).FirstOrDefault() is { Site: not null } inside)
             (best, bestT) = inside;
         return best is null ? null : (WallOf(best), bestT);
+    }
+
+    /// <summary>
+    /// Where the ray meets a site: by its footprint's prism and collision, else its plot (a farm), else a 12-unit segment over its position; null
+    /// for none, or an invisible sitting node without parts (no selectable geometry: the click is left to ground movement).
+    /// </summary>
+    float? SiteRayT(BuildServices host, (Vector3 Origin, Vector3 Direction) ray, BuildingSnapshot site,
+        Simulation.Navigation.BuildingFootprint? bounds, float? terrain)
+    {
+        var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, PlacementCheck.YawOf(site.Rotation));
+
+        // No selectable geometry: an invisible sitting node must leave the click to ground movement.
+        bool invisible = bounds is null
+            && player.Production.Machine(site.Id)?.Function is TownBuildings.ChairFunction or TownBuildings.ThroneFunction;
+        if (invisible && host.Parts(site.Record).Count == 0) return null;
+
+        return bounds is { } footprint
+            ? player.Picking.BuildingRayT(ray, footprint.Place(site.Position, yaw), footprint.YMin, footprint.YMax, site.Record, site.Position,
+                site.Position.Y, yaw)
+            : host.Placement.Plot(site.Record) is { } plot
+                ? WorldPicking.PlotT(ray, plot.Place(site.Position, yaw), terrain)
+                : WorldPicking.RaySegment(ray.Origin, ray.Direction, site.Position, site.Position + new Vector3(0, 16, 0), 12);
+    }
+
+    /// <summary>
+    /// <see cref="_siteReach"/> of <paramref name="record"/>, whose loaded footprint is <paramref name="footprint"/>.
+    /// </summary>
+    float SiteReach(BuildServices host, string record, Simulation.Navigation.BuildingFootprint footprint)
+    {
+        if (_siteReach.TryGetValue(record, out float known)) return known;
+
+        float reach = 0;
+        foreach (var p in footprint.Hull) reach = MathF.Max(reach, p.Length());
+        foreach (var (vertices, _) in host.Placement.CollisionMesh(record, false))
+        {
+            foreach (var v in vertices) reach = MathF.Max(reach, new Vector2(v.X, v.Z).Length());
+        }
+
+        return _siteReach[record] = reach;
     }
 
     /// <summary>

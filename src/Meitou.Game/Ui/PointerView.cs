@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Gameplay.Construction;
@@ -28,7 +29,8 @@ sealed class PointerView(PlayerInterface player)
 
     /// <summary>
     /// The pointer, the character it is over and the building (when no character), chosen again when the mouse, the camera or a modifier changed, and
-    /// every RepickTicks ticks while only the world moves (the picks walk every character, item and building near the ray: 0.5 ms).
+    /// every <see cref="RepickSeconds"/> of real time while only the world moves (the picks walk every character, item and building near the ray:
+    /// 0.5 ms).
     /// </summary>
     (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target,
         (BuildingSelection.SelectedBuilding Building, float T)? Building) _pointer = (-1, default, false, false, "arrow", null, null);
@@ -39,9 +41,14 @@ sealed class PointerView(PlayerInterface player)
     Matrix4x4 _pointerView;
 
     /// <summary>
-    /// The ticks a pointer pick holds while only the world moves.
+    /// When (<see cref="Stopwatch.GetTimestamp"/>) the pointer was last picked.
     /// </summary>
-    const long RepickTicks = 3;
+    long _pointerStamp;
+
+    /// <summary>
+    /// The real seconds a pointer pick holds while only the world moves (3 ticks at 1x): game ticks would run out every frame at 5x.
+    /// </summary>
+    const double RepickSeconds = 0.1;
 
     /// <summary>
     /// How far from the eye a hovered character or building is still outlined (engine choice; the pointer and the click reach farther).
@@ -144,15 +151,18 @@ sealed class PointerView(PlayerInterface player)
 
         player.Session.World.Player.Pointed = chosen.Target ?? CharacterId.None;
         _pointerView = player.ViewProjection;
+        _pointerStamp = Stopwatch.GetTimestamp();
         var hovered = chosen.Target is null ? player.BuildingSelection.PickBuildingAt(player.Mouse) : null;
         return _pointer = (snapshot.Tick, player.Mouse, player.CtrlHeld, player.AltHeld, chosen.Name, chosen.Target, hovered);
     }
 
     /// <summary>
-    /// Whether the last pointer pick still holds: recent enough, the mouse, modifiers and view unchanged.
+    /// Whether the last pointer pick still holds: of the same tick (paused) or a later one within <see cref="RepickSeconds"/>, the mouse,
+    /// modifiers and view unchanged.
     /// </summary>
     bool PointerStillValid(long tick) =>
-        _pointer.Tick >= 0 && (ulong)(tick - _pointer.Tick) < RepickTicks
+        _pointer.Tick >= 0 && tick >= _pointer.Tick
+        && (tick == _pointer.Tick || Stopwatch.GetElapsedTime(_pointerStamp).TotalSeconds < RepickSeconds)
         && _pointer.Mouse == player.Mouse && _pointer.Ctrl == player.CtrlHeld && _pointer.Alt == player.AltHeld
         && _pointerView == player.ViewProjection;
 

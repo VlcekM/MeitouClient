@@ -173,6 +173,10 @@ sealed class Birds(GameHost host)
     /// </summary>
     readonly List<BirdAttractor> _buildingAttractors = [], _levelAttractors = [];
     /// <summary>
+    /// The animals' attractors and all of the frame's, handed to the flocks (scratch, filled again each frame).
+    /// </summary>
+    readonly List<BirdAttractor> _animalAttractors = [], _allAttractors = [];
+    /// <summary>
     /// Whether the last frame had animal attractors, so their going away is handed on too.
     /// </summary>
     bool _hadAnimals;
@@ -189,16 +193,27 @@ sealed class Birds(GameHost host)
         changed |= TakeLevelAttractors();
         changed |= UpdateBuildingAttractors(db, snapshot);
 
-        var animals = new List<BirdAttractor>();
+        _animalAttractors.Clear();
         foreach (var c in snapshot.Characters)
         {
-            if (c.Animal && db.Find(c.RecordId) is { } animal) AddAttractors(animals, c.Id, animal, c.Position);
+            if (c.Animal && db.Find(c.RecordId) is { } animal) AddAttractors(_animalAttractors, c.Id, animal, c.Position);
         }
 
-        if (changed || animals.Count > 0 || _hadAnimals)
-            _flocks!.SetAttractors([.. _buildingAttractors, .. _levelAttractors, .. animals]);
+        if (changed || _animalAttractors.Count > 0 || _hadAnimals) HandAttractors();
 
-        _hadAnimals = animals.Count > 0;
+        _hadAnimals = _animalAttractors.Count > 0;
+    }
+
+    /// <summary>
+    /// Hands the buildings', the level's and the animals' attractors to the flocks, in that order.
+    /// </summary>
+    void HandAttractors()
+    {
+        _allAttractors.Clear();
+        _allAttractors.AddRange(_buildingAttractors);
+        _allAttractors.AddRange(_levelAttractors);
+        _allAttractors.AddRange(_animalAttractors);
+        _flocks!.SetAttractors(_allAttractors);
     }
 
     /// <summary>

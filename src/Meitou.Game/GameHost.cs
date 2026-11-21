@@ -1682,9 +1682,9 @@ sealed partial class GameHost(
     internal bool TickAhead;
 
     /// <summary>
-    /// Meitou's dynamic tick ahead (engine choice): on once a world tick takes <see cref="AheadOnMs"/> (smoothed), off again under
-    /// <see cref="AheadOffMs"/>, so a quiet world keeps the game's input delay and a big fight or crowd overlaps; a tick run ahead is slower (it
-    /// shares the cores with the draw), hence the gap.
+    /// Meitou's dynamic tick ahead (engine choice): on once a world tick takes <see cref="AheadOnMs"/> (smoothed, times the game speed when above
+    /// 1x: a frame at 5x runs that many more ticks), off again under <see cref="AheadOffMs"/>, so a quiet world keeps the game's input delay and a
+    /// big fight or crowd overlaps; a tick run ahead is slower (it shares the cores with the draw), hence the gap.
     /// </summary>
     const double AheadOnMs = 4, AheadOffMs = 2;
     /// <summary>
@@ -1698,9 +1698,15 @@ sealed partial class GameHost(
     internal bool TickAheadWanted() => Config.TickAhead switch
     {
         TickAheadMode.Always => true,
-        TickAheadMode.Dynamic => _worldBusy = Session.TickMs >= (_worldBusy ? AheadOffMs : AheadOnMs),
+        TickAheadMode.Dynamic => _worldBusy = SpeedTickMs() >= (_worldBusy ? AheadOffMs : AheadOnMs),
         _ => false,
     };
+
+    /// <summary>
+    /// The smoothed world tick's ms times the game speed (at least 1x), what the dynamic tick ahead weighs: the ticks a frame runs grow with the
+    /// speed.
+    /// </summary>
+    double SpeedTickMs() => Session.TickMs * Math.Max(1.0, Session.Simulation.Speed);
 
     #endregion
 }

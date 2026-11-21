@@ -299,6 +299,22 @@ sealed class WorldPicking(PlayerInterface player)
     }
 
     /// <summary>
+    /// Whether the ray (from its origin on) passes within <paramref name="reach"/> of <paramref name="position"/> in X/Z, a unit wider for rounding
+    /// far from the origin: a hit on anything within that X/Z reach lies on such a ray, whatever its height (the coarse cull of the picks).
+    /// </summary>
+    internal static bool RayPassesXz((Vector3 Origin, Vector3 Direction) ray, Vector3 position, float reach)
+    {
+        var to = new Vector2(position.X - ray.Origin.X, position.Z - ray.Origin.Z);
+        var along = new Vector2(ray.Direction.X, ray.Direction.Z);
+        float lengthSquared = along.LengthSquared();
+
+        // The half line's nearest point to the position (the origin for a ray straight up or down).
+        float s = lengthSquared < 1e-12f ? 0 : MathF.Max(Vector2.Dot(to, along) / lengthSquared, 0);
+        float widened = reach + 1;
+        return (to - along * s).LengthSquared() <= widened * widened;
+    }
+
+    /// <summary>
     /// The distance along the ray at which it passes closest to the segment a-b, when within <paramref name="radius"/>.
     /// </summary>
     internal static float? RaySegment(Vector3 origin, Vector3 direction, Vector3 a, Vector3 b, float radius)
