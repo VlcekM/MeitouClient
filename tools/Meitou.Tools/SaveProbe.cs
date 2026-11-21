@@ -736,7 +736,7 @@ static class SaveProbe
             .Select(m => $"{(CharacterTask)t.Next[m.Slot].Task}{Down(t.Cold(m.Slot)!)}:{t.Cold(m.Slot)!.Ai?.Goal?.Task.Type}"
                 + $"@{Vector3.Distance(t.Next[m.Slot].Position, at):F0}");
         return $"sq {squad.Id} '{squad.Name}' {probe.Faction(squad.Faction)} platoon={squad.PlatoonId} leader={(CharacterTask)t.Next[lead].Task} "
-            + $"engine={c.Ai?.Engine} behaviour={c.Ai?.Behaviour} goal={c.Ai?.Goal?.Task.Type} fight={c.Ai?.FightGoal} "
+            + $"behaviour={c.Ai?.Behaviour} goal={c.Ai?.Goal?.Task.Type} fight={c.Ai?.FightGoal} "
             + $"target={Target(probe, lead)} package={squad.Ai?.Current?.Name} town={TownLabel(squad.Ai?.InTown)} "
             + $"home={squad.HomeCentre:F0}/{squad.HomeRadius:F0} building={HomeName(probe, squad.Ai?.OwnHome ?? squad.HomeBuilding)} "
             + $"ai-home={HomeName(probe, squad.Ai?.Home)} table={squad.Ai?.BarTable} pinned={squad.Pinned} pos={at:F0} "
@@ -932,7 +932,7 @@ static class SaveProbe
                 if (probe.Characters.Cold(i) is not { } c) continue;
 
                 var n = probe.Characters.Next[i];
-                var place = c.Ai?.WorkBuilding ?? c.SlaveWork?.Place.Building;
+                var place = c.Ai?.WorkBuilding;
                 float range = place is null || ai is null ? 0 : ai.WorkRangeOf(place);
                 float gap = place is null || ai is null ? -1 : Flat(ai.WorkMarker(probe.World, place, n.Position), n.Position);
                 bool walks = n.Task == (byte)CharacterTask.GoTo;

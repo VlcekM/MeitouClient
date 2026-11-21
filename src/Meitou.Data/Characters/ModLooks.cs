@@ -466,6 +466,7 @@ public static class ModLooks
         catch (Exception e)
         {
             Drop(entry, "editor rows", $"threw {e.GetType().Name}: {e.Message}");
+            Content.CodeModFaults.Tell(entry.Owner, e);
             return null;
         }
     }
@@ -538,6 +539,8 @@ public static class ModLooks
             {
                 if (Interlocked.Exchange(ref entry.Dropped, 1) == 0)
                     Console.Error.WriteLine($"mod       {entry.Owner}: look roll threw (what it wrote is kept): {e.GetType().Name}: {e.Message}");
+
+                Content.CodeModFaults.Tell(entry.Owner, e);
             }
         }
     }
@@ -601,6 +604,7 @@ public static class ModLooks
         catch (Exception e)
         {
             problem = $"threw {e.GetType().Name}: {e.Message}";
+            Content.CodeModFaults.Tell(entry.Owner, e);
         }
 
         if (Interlocked.Exchange(ref entry.Dropped, 1) == 0)

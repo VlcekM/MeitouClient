@@ -133,8 +133,26 @@ public static class RowStates
             StateType.IsCrouchingOrLying => CharacterFacts.CrouchingOrLying(cold),
             StateType.IsAggressionTowards => Threatened(world, target.Character),
             StateType.IsAggressionTowardsMe => world.SystemOf<CombatSystem>() is { } combat && CharacterFacts.ImmediateThreat(combat, world, slot),
+            StateType.MachineHasFreeOperatorSlot => BedSlotFree(world, slot, target.Site),
+
+            // 145 using any turret (FUN_140997d60, Verified by disassembly): the character's turret hand +0x258 names something (type +0x260 not 0xb),
+            // which the turret's operator slot 150 (FUN_140434d20) writes on every update of the manning.
+            StateType.UsingAnyTurret => cold.Gunning is not null,
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// 73 machineHasFreeOperatorSlot (<c>FUN_140598de0</c> → <c>UseableStuff</c> slot 158 <c>FUN_1400f7bf0</c>, <b>Verified</b>) of a bed target:
+    /// true for a character among its users, else while its users are fewer than its places (one; Meitou reads the users as the bed's occupant).
+    /// The hand asked is read as the character's own (AI <c>+0x300</c> through <c>FUN_1405c6ae0</c>, <b>Observed</b>). Null for a target that is no
+    /// bed (a machine's or a cage's slots are their systems' own tests).
+    /// </summary>
+    static bool? BedSlotFree(World world, int slot, string? site)
+    {
+        if (site is null || world.Fixtures.Find(site) is not { Kind: FixtureKind.Bed } bed) return null;
+
+        return FixtureRegistry.IsFree(world.Characters, bed) || bed.Occupant == world.Characters.IdOf(slot);
     }
 
     /// <summary>

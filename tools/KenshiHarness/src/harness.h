@@ -82,6 +82,16 @@ int cmd_speed(Command* c);
 int cmd_wait(Command* c);
 int cmd_camera(Command* c);
 int cmd_select(Command* c);
+int cmd_standing(Command* c);
+int cmd_order(Command* c);
+
+// ---- track.c: characters' AI, recorded frame by frame -------------------------------------------------------------------
+
+int track_init(void);
+void track_frame(void);
+// Forgets the tracked characters (a load deletes them).
+void track_reset(void);
+int cmd_track(Command* c);
 
 // ---- dev.c: tools for working on the harness itself ---------------------------------------------------------------------
 

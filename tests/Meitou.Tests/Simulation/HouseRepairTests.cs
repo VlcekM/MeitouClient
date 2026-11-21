@@ -53,9 +53,15 @@ public class HouseRepairTests
             World.Fixtures.RegisterSite(World, Data, 0);
             var stats = new CharacterStats();
             stats[StatsEnumerated.Engineering] = 100;
+
+            // A character with no squad runs no chooser, so it would take no job or order (OrderStep.Runs).
+            var squad = new Meitou.Simulation.Factions.Squad { Id = World.Squads.NextId(), TemplateId = "t", Faction = Data.PlayerFaction };
+            World.Squads.Add(squad);
             Builder = World.Characters.Spawn(new CharacterHot { Position = House.Position, Health = 100 },
                 new CharacterCold { Name = "Builder", Race = Human, Medical = MedicalState.Create(Human, 50), Stats = stats,
-                    IsPlayer = true, Faction = Data.PlayerFaction, Inventory = new Inventory() }, 0);
+                    IsPlayer = true, Faction = Data.PlayerFaction, Inventory = new Inventory(), SquadId = squad.Id }, 0);
+            squad.Members.Add(Builder);
+            squad.Leader = Builder;
             World.Player.Selection.Add(Builder);
             World.RunTick();
         }

@@ -95,7 +95,8 @@ public sealed partial class CombatSystem
     /// A fighter's target choice (<c>CombatClassAI::chooseAttackTarget</c> <c>FUN_140666ee0</c>, <b>Verified</b>; docs/game/combat.md "Target
     /// selection"), scored by <see cref="TargetScore"/>: the best over its lists that scores above <see cref="PickFloor"/>. The lists: the attackers
     /// of its AI task's target, which the original holds only for the goals 45 Bodyguard, 17, 87, 152 and 124 (<c>FUN_14050ca70</c>; Meitou: a
-    /// bodyguard's protectee), the chooser's own attackers and its threats (<see cref="SenseBlock.Threats"/>); a candidate must be sensed by the
+    /// bodyguard's protectee), the chooser's own attackers (both engaged lists: those fighting it, then the melee alert's entries,
+    /// <see cref="AlertedAttackers"/>) and its threats (<see cref="SenseBlock.Threats"/>); a candidate must be sensed by the
     /// chooser or the protectee (<see cref="CharacterFacts.Knows"/>) and not crippled. When none qualifies, the sensed-enemy finder
     /// (<c>FUN_14059fa70</c>, gated on <c>numEnemies</c>; the aggro mode it also tests is 0 by construction): the entries tagged enemy, not down or
     /// imprisoned, seen or heard at the last look. The current target is scored as any other (its stubbornness keeps it). Reads the last tick's state
@@ -128,16 +129,8 @@ public sealed partial class CombatSystem
             return CharacterFacts.Knows(world, i, id) || protectee >= 0 && CharacterFacts.Knows(world, protectee, id);
         }
 
-        if (protectee >= 0)
-        {
-            int pg = prev[protectee].Generation;
-            foreach (var (_, _, _, a) in _index.AttackersOf(protectee))
-                if (_read[a].TargetGeneration == pg && !Crippled(table, a) && Known(a)) Consider(world, ref q, a, false);
-        }
-
-        int generation = prev[i].Generation;
-        foreach (var (_, _, _, a) in _index.AttackersOf(i))
-            if (_read[a].TargetGeneration == generation && !Crippled(table, a) && Known(a)) Consider(world, ref q, a, false);
+        if (protectee >= 0) ConsiderEngaged(world, ref q, protectee, Known);
+        ConsiderEngaged(world, ref q, i, Known);
 
         var senses = CharacterFacts.Senses(world, i);
         if (senses is not null)
@@ -154,6 +147,21 @@ public sealed partial class CombatSystem
                 Consider(world, ref q, e.Target, false);
 
         return q.Best;
+    }
+
+    /// <summary>
+    /// Scores the engaged list of <paramref name="owner"/> for the target choice: those fighting it, then the melee alert's entries
+    /// (<see cref="AlertedAttackers"/>), each not crippled and <paramref name="known"/>.
+    /// </summary>
+    void ConsiderEngaged(World world, ref Choice q, int owner, Func<int, bool> known)
+    {
+        var table = world.Characters;
+        int generation = table.Previous[owner].Generation;
+        foreach (var (_, _, _, a) in _index.AttackersOf(owner))
+            if (_read[a].TargetGeneration == generation && !Crippled(table, a) && known(a)) Consider(world, ref q, a, false);
+
+        for (int k = 0; k < _alerted.Count(owner); k++)
+            if (AlertedAt(world, owner, k) is >= 0 and var a && !Crippled(table, a) && known(a)) Consider(world, ref q, a, false);
     }
 
     /// <summary>
@@ -204,12 +212,13 @@ public sealed partial class CombatSystem
         && senses is not { ThreatToMe: > 0 };
 
     /// <summary>
-    /// <c>AI::findAttackerOf</c> (<c>FUN_14099c3b0</c>, <b>Verified</b>) for a character joining <paramref name="subject"/>'s fight: of those
-    /// fighting the subject, and the subject's own target while it fights, the best by <see cref="TargetScore"/> for <paramref name="looker"/>; for a
-    /// looker other than the subject only those within <see cref="RetaliationSystem.ProtectReach"/> of the subject, and never one the looker counts
-    /// as an ally (the subject's own target also only when either side is the other's enemy). -1 when none. The finder's sense tests and its fallback
-    /// to the subject's threats are left out (an attacker is put in the senses of whom it attacks). <paramref name="pending"/>: fights started this
-    /// tick by target, counted as attackers of theirs (the AI's serial step).
+    /// <c>AI::findAttackerOf</c> (<c>FUN_14099c3b0</c>, <b>Verified</b>) for a character joining <paramref name="subject"/>'s fight: the candidates
+    /// of the collector <c>FUN_1405cb150</c> in its order, the subject's engaged list (those fighting it, then the melee alert's entries,
+    /// <see cref="AlertedAttackers"/>), its threats list (<see cref="SenseBlock.Threats"/>) and its own target while it fights, the best by <see cref="TargetScore"/> for
+    /// <paramref name="looker"/>; for a looker other than the subject only those within <see cref="RetaliationSystem.ProtectReach"/> of the subject,
+    /// and never one the looker counts as an ally (the subject's own target also only when either side is the other's enemy). -1 when none. The
+    /// finder's sense tests are left out (an attacker is put in the senses of whom it attacks). <paramref name="pending"/>: fights started this tick by
+    /// target, counted as attackers of theirs (the AI's serial step).
     /// </summary>
     public int BestAttackerOf(World world, int subject, int looker, IReadOnlyDictionary<int, int>? pending = null)
     {
@@ -244,9 +253,23 @@ public sealed partial class CombatSystem
             return Relations is not { } r || !(r.Contains(tc.Faction) && r.Contains(cold.Faction) && r.IsAlly(cold.Faction, tc.Faction));
         }
 
+        // The subject's engaged list first (FUN_1405cb150): the fighters it lets close in, then those the melee alert put there.
         int generation = prev[subject].Generation;
         foreach (var (_, _, _, a) in _index.AttackersOf(subject))
             if (_read[a].TargetGeneration == generation && Joinable(a)) Consider(world, ref q, a, looker != subject);
+
+        for (int k = 0; k < _alerted.Count(subject); k++)
+            if (AlertedAt(world, subject, k) is >= 0 and var a && Joinable(a)) Consider(world, ref q, a, looker != subject);
+
+        // Then the subject's threats list (FUN_1405cb150's second list, AI +0x78) as its last look rebuilt it: those whose fight targets it, and the
+        // culprits it witnesses as their crime's victim (SenseBlock.Witnessed). Another FUN_1405cb0a0 push is not there: the sense pass clears it
+        // before any chooser reads the list (SenseBlock.Pushed).
+        if (CharacterFacts.Senses(world, subject) is { } senses)
+        {
+            foreach (var t in senses.Threats)
+                if ((uint)t.Slot < (uint)prev.Length && prev[t.Slot].Generation == t.Generation && Joinable(t.Slot))
+                    Consider(world, ref q, t.Slot, looker != subject);
+        }
 
         int own = _read[subject].TargetSlot;
         if (own >= 0 && own != looker && (uint)own < (uint)prev.Length && prev[own].Generation == _read[subject].TargetGeneration && Joinable(own)
@@ -363,6 +386,62 @@ public sealed partial class CombatSystem
             if (_read[a].TargetGeneration == generation && !_read[a].Down) n++;
 
         return n;
+    }
+
+    /// <summary>
+    /// The melee alert's push (<c>AI::underMeleeAttack</c> <c>FUN_140999f00</c> → <c>FUN_140666e20</c>, <b>Verified</b>): <paramref name="a"/> goes on
+    /// <paramref name="t"/>'s engaged list (<see cref="AlertedAttackers"/>) unless it is in as an asker already or the list, the askers that fight
+    /// <paramref name="t"/> counted, is full. Serial.
+    /// </summary>
+    internal void PushAlerted(World world, int t, int a)
+    {
+        var table = world.Characters;
+        if (a == t || (uint)t >= (uint)_read.Length || (uint)a >= (uint)table.HighWater) return;
+
+        var live = Live(world);
+        if ((uint)a >= (uint)live.Length) return;
+
+        int askers = 0;
+        foreach (var (_, _, _, f) in _index.AttackersOf(t))
+        {
+            if (f >= live.Length || live[f].TargetSlot != t || !Listed(in live[f], in live[t])) continue;
+            if (f == a) return;
+
+            askers++;
+        }
+
+        int generation = table.Next[t].Generation;
+        bool targeted = live[a].TargetSlot == t && live[a].TargetGeneration == generation;
+        _alerted.Push(t, generation, live[t].ListEpoch, table.IdOf(a), targeted, askers, e => !table.TryResolveNext(e.Item1, out _) || LeftList(live, t, generation, e));
+    }
+
+    /// <summary>
+    /// Whether the alert entry <paramref name="entry"/> on <paramref name="owner"/>'s engaged list (of generation <paramref name="generation"/>) has
+    /// left it, judged on <paramref name="slots"/> (its character known to be there): it is down (<c>FUN_140665e00</c>), or it fought the owner when
+    /// pushed and fights another now (<c>FUN_140665580</c>).
+    /// </summary>
+    static bool LeftList(CombatSlot[] slots, int owner, int generation, (CharacterId Attacker, bool Targeted) entry)
+    {
+        int a = entry.Attacker.Slot;
+        if (a >= slots.Length || slots[a].Down) return true;
+
+        return entry.Targeted && !(slots[a].TargetSlot == owner && slots[a].TargetGeneration == generation);
+    }
+
+    /// <summary>
+    /// Entry <paramref name="k"/> of the alert entries on <paramref name="owner"/>'s engaged list (<see cref="AlertedAttackers"/>) as of the last
+    /// tick: the attacker's slot, or -1 when the entry is no longer on the list or has left it (<see cref="LeftList"/>). Any thread after the schedule.
+    /// </summary>
+    int AlertedAt(World world, int owner, int k)
+    {
+        var prev = world.Characters.Previous;
+        int generation = prev[owner].Generation;
+        var entry = _alerted.At(owner, generation, _read[owner].ListEpoch, k);
+        var id = entry.Attacker;
+        if (id.IsNone || (uint)id.Slot >= (uint)prev.Length || !prev[id.Slot].Alive || prev[id.Slot].Generation != id.Generation) return -1;
+        if (LeftList(_read, owner, generation, entry)) return -1;
+
+        return id.Slot;
     }
 
     #endregion

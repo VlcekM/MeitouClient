@@ -180,6 +180,10 @@ msgid "A double click on a squad member far from the view (or a double tap of th
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
+msgid "A guard picks up a knocked-out prisoner only when a cage is free for them, and never takes one from a guard of his own faction. The game lets guards lift and grab prisoners anyway, so at a full prison they hand the same body round without end."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
 msgid "A key of the mod {1}: {2}."
 msgstr ""
 
@@ -189,6 +193,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "A mod"
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "A raid under way when you save goes on where it was when that save is loaded. The game starts its current stage over at every load, so its waits and time limits begin again."
 msgstr ""
 
 #: src/Meitou.Game/SettingsMenu.cs
@@ -1819,6 +1827,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "Guards spare their own"
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Guards stop passing bodies"
 msgstr ""
 
 #: src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/SettingsMenu.cs
@@ -3543,6 +3555,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "Raids as written"
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Raids keep their progress"
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/WorldFrame.cs
@@ -5343,6 +5359,10 @@ msgstr ""
 msgid "bounced light"
 msgstr ""
 
+#: src/Meitou.Game/Mods/ModHost.cs
+msgid "built for another version of the game"
+msgstr ""
+
 #: launcher/Meitou.Launcher/GraphicsPage.cs src/Meitou.Game/Settings/LookBar.cs src/Meitou.Game/Settings/LookPresets.cs
 msgid "built in"
 msgstr ""
@@ -5911,14 +5931,6 @@ msgstr ""
 msgid "{1} deleted; the look is Meitou."
 msgstr ""
 
-#: src/Meitou.Simulation/Crime/ArrestSystem.cs
-msgid "{1} found no free cage for {2}"
-msgstr ""
-
-#: src/Meitou.Simulation/Locks/LockSystem.cs
-msgid "{1} got out of the cage"
-msgstr ""
-
 #: src/Meitou.Simulation/Crime/CrimeSystem.cs
 msgid "{1} has been caught committing {2}!"
 msgstr ""
@@ -5929,10 +5941,6 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "{1} installed."
-msgstr ""
-
-#: src/Meitou.Simulation/Crime/ArrestSystem.Bounties.cs
-msgid "{1} is after the bounty on {2}!"
 msgstr ""
 
 #: src/Meitou.Simulation/Crime/ArrestSystem.cs

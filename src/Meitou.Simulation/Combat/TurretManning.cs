@@ -283,11 +283,7 @@ sealed class TurretManning
         if (cold is null) return;
 
         cold.Gunning = null;
-        if (!table.Next[i].Alive || Manning(world, i, cold) is not { } post)
-        {
-            cold.TurretTarget = CharacterId.None;
-            return;
-        }
+        if (!table.Next[i].Alive || Manning(world, i, cold) is not { } post) return;
 
         if (!_turrets.TryGetValue(post.Key, out var t))
         {

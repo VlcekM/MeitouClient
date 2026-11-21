@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Data.Gameplay;
+using Meitou.Data.Gameplay.Ai;
 using Meitou.Simulation;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
@@ -34,7 +35,11 @@ public class TownDutyRulesTests
         var duty = new TownDutySystem(data, population, carry);
         var walk = new OpenGroundWalkability((_, _) => 150);
         using var world = new SimWorld(new WorldSettings { Seed = 7, PublishSnapshots = false }, walk, [new PlayerSystem(), carry, duty]);
-        var board = new Blackboard([]);
+
+        // A wandering trader (16): its running package's mission town is the drawn town, Destination (SquadTown.MissionTown).
+        var trader = new AiPackage { Id = "trader", Name = "trader", Signal = 16, Roles = [[], [], [], [], []] };
+        var board = new Blackboard([new SlottedPackage(0, trader)]);
+        board.Resume(trader);
         var squad = new Squad { Id = world.Squads.NextId(), TemplateId = "t", Faction = data.FactionIndex("50-a"), Ai = board,
                 HomeCentre = new Vector2(Centre.X, Centre.Z), HomeRadius = 100 };
         world.Squads.Add(squad);

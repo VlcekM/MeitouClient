@@ -15,7 +15,7 @@ namespace Meitou.Simulation.Population;
 /// from sector to sector of its biome group: a neighbouring sector (the four diagonal or the four straight ones, a coin flip), a random point in it,
 /// or with <c>patrol approaches towns</c> sometimes a town of it, aimed 200 outside its gate or wall (<see cref="OutsideTown"/>); near the point it
 /// picks the next. Neighbours are weighted by how crowded they are (<see cref="SectorWeight"/>); the leader walks to the point
-/// (<see cref="Squad.HomeCentre"/>), its squad following, and the next is drawn once it is within <see cref="PointArrive"/>.</item>
+/// (<see cref="Squad.PatrolPoint"/>), its squad following, and the next is drawn once it is within <see cref="PointArrive"/>.</item>
 /// <item><b>Refill</b> (area tick <c>FUN_1408f9240</c>): while the loaded sectors hold fewer squads than the sum of P × <c>homeless spawn amount</c>,
 /// one sector below its own share and with no town in it makes one squad. Engine choice: the loaded sectors are one island.</item>
 /// <item><b>Sectors by place</b>: a squad belongs to the sector it stands in (<see cref="Refile"/>), so one that walks out of the loaded sectors
@@ -47,13 +47,14 @@ public sealed partial class PopulationSystem
     readonly Dictionary<int, (int X, int Z)?> _homelessHomes = [];
 
     /// <summary>
-    /// The home radius kept round a loaded patrol's point (a sector point or a town's, <see cref="OutsideTown"/>) and the distance from it at which
-    /// the next is drawn. The original sends the character to that exact point and draws the next once the move has ended
-    /// (<c>CharMovement::setPatrolInput</c> mode 3, <c>FUN_1405c6b30</c> mode 1: Verified); the leader walks there exactly (Ai.AiSystem's patrol
-    /// act-out), and the arrive distance with this step's 2 s cadence is the engine's reading of "the move has ended". The 500 of
-    /// <c>FUN_1407ee790</c> is the off-screen rule only (<see cref="Ai.PlatoonJobs.PatrolArrive"/>).
+    /// The distance from a loaded patrol's point (a sector point or a town's, <see cref="OutsideTown"/>) at which the next is drawn. The original
+    /// sends the character to that exact point and draws the next once the move has ended (<c>CharMovement::setPatrolInput</c> mode 3,
+    /// <c>FUN_1405c6b30</c> mode 1: Verified); the leader walks there exactly (Ai.AiSystem's patrol act-out), and this step draws the next within
+    /// this distance (with the step's 2 s cadence, the engine's reading of an arrival) or once the leader's move is over short of the point
+    /// (<see cref="AiSystem.PatrolMoveOver"/>). The 500 of <c>FUN_1407ee790</c> is the off-screen rule only
+    /// (<see cref="Ai.PlatoonJobs.PatrolArrive"/>).
     /// </summary>
-    const float PointRadius = 50, PointArrive = 100;
+    const float PointArrive = 100;
     /// <summary>
     /// The homeless step: the homeless squads patrol, then the sectors are refilled.
     /// </summary>
@@ -107,12 +108,24 @@ public sealed partial class PopulationSystem
 
         PatrolLoadedSquads(world);
         foreach (var (id, from, to) in _refiles) Refile(world, id, from, to);
-        if (_homelessPatrols.Count > _patrolSeen.Count)
-            foreach (int id in _homelessPatrols.Keys.Where(k => !_patrolSeen.Contains(k)).ToList()) _homelessPatrols.Remove(id);
+        if (_homelessPatrols.Count > _patrolSeen.Count) DropPatrols(world);
         if (_outsideSince.Count > 0)
             foreach (int id in _outsideSince.Keys.Where(k => !_sectorSeen.Contains(k)).ToList()) _outsideSince.Remove(id);
         if (_homelessHomes.Count > _sectorSeen.Count)
             foreach (int id in _homelessHomes.Keys.Where(k => world.Squads.Find(k) is null).ToList()) _homelessHomes.Remove(id);
+    }
+
+    /// <summary>
+    /// Forgets the patrols not seen in this pass (their leader no longer patrols, or the squad is gone): a later patrol draws afresh from where its
+    /// leader stands, as the original's <c>Task_Patrol</c> start does.
+    /// </summary>
+    void DropPatrols(World world)
+    {
+        foreach (int id in _homelessPatrols.Keys.Where(k => !_patrolSeen.Contains(k)).ToList())
+        {
+            _homelessPatrols.Remove(id);
+            if (world.Squads.Find(id) is { } squad) squad.PatrolPoint = null;
+        }
     }
 
     /// <summary>
@@ -212,11 +225,14 @@ public sealed partial class PopulationSystem
         _patrolSeen.Add(squad.Id);
         var at = new Vector2(table.Previous[slot].Position.X, table.Previous[slot].Position.Z);
         _homelessPatrols.TryGetValue(squad.Id, out var patrol);
-        if (patrol.Picks > 0 && Vector2.DistanceSquared(at, patrol.Point) > patrol.Arrive * patrol.Arrive) return;
+
+        // The next is drawn near the point, or once the leader's move to it is over, also short of it (Task_Patrol's update, FUN_1405c6b30 mode 1).
+        bool near = Vector2.DistanceSquared(at, patrol.Point) <= patrol.Arrive * patrol.Arrive;
+        if (patrol.Picks > 0 && !near && !AiSystem.PatrolMoveOver(table.Previous[slot], patrol.Point)) return;
+
         if (PatrolPoint(world, squad, group, zone, at, patrol.Picks) is not { } next) return;
         _homelessPatrols[squad.Id] = (next.Point, patrol.Picks + 1, PointArrive);
-        squad.HomeCentre = next.Point;
-        squad.HomeRadius = PointRadius;
+        squad.PatrolPoint = next.Point;
     }
 
     /// <summary>
@@ -317,8 +333,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// A town's patrol waypoint (<c>Town::getPositionOutsideTownGates(200)</c>): the first of its buildings, in list order, that is a gate with a
-    /// door (not a ruin) outside the town walls (gate code 0, or unknown) or a wall with <c>interior</c> references, moved
+    /// A town's patrol waypoint (<c>Town::getPositionOutsideTownGates(200)</c>): the first of its gate set (<c>is gateway</c>), in list order, that
+    /// is a gate with a door (not a ruin) outside the town walls (gate code 0, or unknown) or another wall with <c>interior</c> references, moved
     /// <see cref="TownExit.Offset"/> outward from the town's position; the town's position when there is none. The original moves the gate's door
     /// point and its direction is Observed; the building's origin and the outward direction are engine readings.
     /// </summary>

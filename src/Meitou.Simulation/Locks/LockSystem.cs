@@ -20,10 +20,17 @@ public sealed record PickLockOrder(IReadOnlyList<CharacterId> Characters, Charac
 }
 
 /// <summary>
-/// The characters (the selection when empty) leave their cage (Task_GetOutOfCage 207): refused while it is locked; whether it is an escape is the
-/// task's flag (<see cref="Locks.FixtureRegistry.GetOut"/>).
+/// The player's Escape: the characters (the selection when empty) get order 207 Escape cage (<see cref="CageEscape"/>, Task_GetOutOfCage), held while
+/// the cage is locked; whether it is an escape is the task's flag (<see cref="Locks.FixtureRegistry.GetOut"/>).
 /// </summary>
 public sealed record GetOutOrder(IReadOnlyList<CharacterId> Characters) : OrderCommand;
+
+/// <summary>
+/// A quick right click on <see cref="Occupant"/>, one of the player's characters in another faction's cage, that gives the occupant no order of its
+/// own (<c>FUN_1407fc6e0</c>, <b>Verified</b>): with <see cref="Alt"/> the characters (the selection when empty) get 76 Pick Lock on a locked cage
+/// (<see cref="PickLockOrder"/>) or 207 Escape on an unlocked one (<see cref="GetOutOrder"/>), the queue cleared; without it only the hint.
+/// </summary>
+public sealed record CageClickOrder(IReadOnlyList<CharacterId> Characters, CharacterId Occupant, bool Alt) : OrderCommand;
 
 /// <summary>
 /// The player's lock orders (docs/simulation.md "Arrest and jail"): picking a cage's lock (<see cref="Lockpicking.Step"/> once a tick while in reach,
@@ -69,6 +76,9 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
                     break;
                 case GetOutOrder getOut:
                     GetOutInput(world, getOut);
+                    break;
+                case CageClickOrder click:
+                    CageClickInput(world, click);
                     break;
                 case ShackleOrder shackles:
                     ShackleInput(world, shackles);
@@ -122,7 +132,7 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
         if (cage is null) return;
         foreach (var id in Who(world, pick.Characters))
         {
-            if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { IsPlayer: true, Medical.Incapacitated: false } c
+            if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { Medical.Incapacitated: false } c
                     || !c.CarriedBy.IsNone)
                 continue;
 
@@ -137,23 +147,40 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
     }
 
     /// <summary>
-    /// A get-out order: each prisoner listed leaves its cage when it is unlocked.
+    /// A get-out order: each character listed gets order 207 Escape cage through its queue (<see cref="CageEscape"/>), the queue cleared unless
+    /// <see cref="OrderCommand.Queued"/>.
     /// </summary>
     void GetOutInput(World world, GetOutOrder getOut)
     {
         var table = world.Characters;
         foreach (var id in Who(world, getOut.Characters))
-        {
-            if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { IsImprisoned: true, Medical.Incapacitated: false } c)
-                continue;
+            if (table.TryResolveNext(id, out int s) && table.Cold(s) is { IsPlayer: true })
+                PlayerOrders.Give(world, s, CageEscape.Order(world, s), getOut.Queued);
+    }
 
-            if (world.Fixtures.GetOut(world, id, Crimes))
-            {
-                c.PickingLock = null;
-                if (c.IsPlayer) world.Post(Loc.Tr("{1} got out of the cage", c.Name));
-            }
-            else if (c.IsPlayer) world.Post("It's locked.");
+    /// <summary>
+    /// The cage branch of the quick click on a caged character of the player's (<see cref="CageClickOrder"/>): nothing unless the occupant is the
+    /// player's and caged in a cage that is not; then the pick or the escape with Alt, else "Hold down the ALT key to pick the lock." on a locked
+    /// cage and "Hold down the ALT key to escape the cage." on an unlocked one.
+    /// </summary>
+    void CageClickInput(World world, CageClickOrder click)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(click.Occupant, out int o) || table.Cold(o) is not { IsPlayer: true, IsImprisoned: true, InWhat: { } where }
+            || world.Fixtures.Find(where) is not { Kind: FixtureKind.Cage } cage || cage.Owner == world.Player.Faction)
+        {
+            return;
         }
+
+        bool locked = cage.Lock is { EffectivelyLocked: true };
+        if (!click.Alt)
+        {
+            world.Post(locked ? "Hold down the ALT key to pick the lock." : "Hold down the ALT key to escape the cage.");
+            return;
+        }
+
+        if (locked) PickLockInput(world, new PickLockOrder(click.Characters, click.Occupant) { Tick = click.Tick, Clicked = click.Clicked });
+        else GetOutInput(world, new GetOutOrder(click.Characters) { Tick = click.Tick });
     }
 
     /// <summary>
@@ -162,8 +189,8 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
     internal static float PickPlayRate(float skill) => 0.55f + (2.0f - 0.55f) * (skill * 0.01f);
 
     /// <summary>
-    /// The lock step: caged characters held, the doors and rounds, then the shackle, bash, forcing, door-lock and cage work, the escapes and the
-    /// lock pickers.
+    /// The lock step: caged characters held, the doors and rounds, then the shackle, bash, forcing, door-lock and cage work, the escape goals'
+    /// act-outs and the lock pickers.
     /// </summary>
     public void SlowWorld(World world)
     {
@@ -175,8 +202,7 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
         ForcedLocks(world);
         DoorLockJobs(world);
         CageWorkers(world);
-        OpportunisticEscapes(world);
-        ShackleEscapes(world);
+        Escapes.Step(world);
         LockPickers(world);
     }
 

@@ -2,6 +2,7 @@ using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
+using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.World;
 using Meitou.Simulation;
@@ -189,6 +190,50 @@ public class ArrestTests
             hashes.Add(world.StateHash());
         }
         return (hashes, picked);
+    }
+
+    /// <summary>
+    /// Escape is order 207 Escape cage, given to every selected character with its queue cleared (the giver <c>FUN_1407f9e20</c>, commit
+    /// <c>2bf01bae6</c>): of two selected characters with a move queued, the one in a locked cage holds 207 (list B <c>!54</c>) until the cage is
+    /// unlocked and then gets out as an escape; the free one's 207 is done at once (list A <c>!79</c>) and leaves its queue empty. Catches the old
+    /// giver, which refused a locked cage and let the order go, a queue kept under the order, and a free character left holding it.
+    /// </summary>
+    [Fact]
+    public void Escape_holds_a_caged_character_until_its_cage_is_unlocked_and_leaves_a_free_one_at_once()
+    {
+        var data = Town();
+        var relations = data.Relations;
+        using var world = ScriptedWorld(data, relations, 1, out _);
+        int city = data.FactionIndex("50-a");
+        var playerSquad = new Squad { Id = 1000, TemplateId = "p", Faction = relations.PlayerFaction };
+        world.Squads.Add(playerSquad);
+        var caged = Hero(world, relations, city, playerSquad, new Vector2(-200, 0), "caged", 2500, new Combatant());
+        var free = Hero(world, relations, city, playerSquad, new Vector2(0, 100), "free", 0, new Combatant());
+        var cage = world.Fixtures.Find("0.0:cageB")!;
+
+        Assert.True(world.Fixtures.Imprison(world, caged, cage));
+
+        world.Commands.Enqueue(new MoveOrder([caged, free], Centre + new Vector3(0, 0, -400)) { Tick = world.Tick });
+        world.RunTick();
+        world.Commands.Enqueue(new GetOutOrder([caged, free]) { Tick = world.Tick });
+        world.RunTick();
+        var (cagedCold, freeCold) = (world.Characters.Cold(caged.Slot)!, world.Characters.Cold(free.Slot)!);
+
+        Assert.Equal([TaskType.GetOutOfCageEscape], cagedCold.OrderQueue.Select(e => e.Row));
+        Assert.Empty(freeCold.OrderQueue);
+
+        // Locked: the order waits and the prisoner stays in.
+        world.RunTicks(120);
+
+        Assert.True(cagedCold.IsImprisoned);
+        Assert.Equal([TaskType.GetOutOfCageEscape], cagedCold.OrderQueue.Select(e => e.Row));
+
+        world.Fixtures.SetLocked(cage, false);
+        for (int i = 0; i < 60 && cagedCold.IsImprisoned; i++) world.RunTick();
+
+        Assert.False(cagedCold.IsImprisoned);
+        Assert.True(cagedCold.Escaped);
+        Assert.Empty(cagedCold.OrderQueue);
     }
 
     [Fact]

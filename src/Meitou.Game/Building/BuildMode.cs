@@ -1250,8 +1250,8 @@ sealed class BuildMode(PlayerInterface player)
         }
         else if (machine.Function == MachineData.ItemFurnaceFunction) verbs.Add(("Inventory", () => OpenStorage(site)));
 
-        // A corpse machine (function 11) offers Corpse Disposal (136): with Shift the Corpse disposal job (137 and its finder 138), else the
-        // carried corpses go in.
+        // A corpse machine (function 11) offers Corpse Disposal (136): with Shift the Corpse disposal job (137 and its finder 138), else order 136
+        // for every selected character, its queue cleared (FUN_1407fa650 → FUN_1407f9e20).
         if (own && machine.Function == TownBuildings.CorpseDisposalFunction)
             verbs.Add(("Corpse Disposal", () => player.Say(player.SlowModifier
                 ? (SimCommand)new Simulation.Production.AddJob(selection, Data.Gameplay.Ai.TaskType.FeedCorpseIntoMachine, site.Id)
@@ -1329,10 +1329,11 @@ sealed class BuildMode(PlayerInterface player)
         if (player.SlowModifier && pending.Site.Complete && player.Production.Machine(pending.Site.Id) is { } job
             && (job.Operable || job.IsStorage
                 || job.Function is ObjectRanges.TurretFunction or MachineData.TrainingFunction
-                    or TownBuildings.ChairFunction or TownBuildings.ThroneFunction))
+                    or TownBuildings.ChairFunction or TownBuildings.ThroneFunction or TownBuildings.CorpseDisposalFunction))
         {
-            // A turret: 146 USE_TURRET, which becomes the job 234 Turret guard (PermaJobs).
+            // A turret: 146 USE_TURRET, which becomes the job 234 Turret guard (PermaJobs); a corpse machine: 136, the job 137 and its finder 138.
             var type = job.Function == ObjectRanges.TurretFunction ? Data.Gameplay.Ai.TaskType.UseTurret
+                : job.Function == TownBuildings.CorpseDisposalFunction ? Data.Gameplay.Ai.TaskType.FeedCorpseIntoMachine
                 : job.Function == MachineData.TrainingFunction ? Data.Gameplay.Ai.TaskType.UseTrainingDummy
                 : job.Function is TownBuildings.ChairFunction or TownBuildings.ThroneFunction ? Data.Gameplay.Ai.TaskType.OperateMachinery
                 : job.Operable ? (job.IsAutomatic ? Data.Gameplay.Ai.TaskType.OperateAutomaticMachinery : Data.Gameplay.Ai.TaskType.OperateMachinery)
@@ -1343,6 +1344,15 @@ sealed class BuildMode(PlayerInterface player)
 
         // With Shift the Build order becomes the Engineer job (125), which builds any unfinished site.
         if (QuickConstruction(pending.Site)) OrderConstruction(pending.Site, player.SelectedIds());
+        else if (player.Production.Machine(pending.Site.Id) is { Function: TownBuildings.CorpseDisposalFunction })
+        {
+            // the original's order 136 FEED_CORPSE_INTO_MACHINE for every selected character (FUN_1407fc6e0 → FUN_1407fa650 with 0)
+            var dispose = new Simulation.Production.DisposeCorpseOrder(player.SelectedIds(), pending.Site.Id)
+            {
+                Tick = player.Session.World.Tick, Clicked = true,
+            };
+            player.Say(dispose);
+        }
         else if (player.Production.Machine(pending.Site.Id) is { Operable: true }
             or { Function: MachineData.TrainingFunction or TownBuildings.ChairFunction or TownBuildings.ThroneFunction })
         {

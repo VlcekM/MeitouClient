@@ -337,6 +337,22 @@ sealed class CharacterAssembly(PopulationData data)
         cold.Fighter = FighterOf(record, cold.Inventory, cold.Medical, cold.Race?.StringId, weaponRoll);
         cold.WaterFactor = race.WaterAvoidance * (cold.Faction == data.PlayerFaction && data.PlayerFaction >= 0 ? 0.5f : 1);
         cold.RoadPreference = data.RoadPreferenceOf(cold.Faction);
+        GiveRoboticsJob(cold, record);
+    }
+
+    /// <summary>
+    /// <c>CharacterHuman</c>'s setup after the base one (<c>FUN_14062ef70</c>, its slot 111 alone, <b>Verified</b>): a person (a CHARACTER record, no
+    /// animal) of a robot race (<c>is robot</c>, race <c>+0x7c</c>) and not of the player's faction gets job 57 Robotics in its list (the permanent
+    /// add, keeping what is there; <see cref="Meitou.Simulation.Production.PermaJobs.Add"/> refuses a second one, so a load's saved list does not double it). A player
+    /// robot gets none: its 57 comes from the Medic button.
+    /// </summary>
+    void GiveRoboticsJob(CharacterCold cold, GameRecord? record)
+    {
+        if (record is not { Type: FcsRecordType.Character } || cold.Race is not { IsRobot: true }) return;
+        if (cold.IsPlayer || data.PlayerFaction >= 0 && cold.Faction == data.PlayerFaction) return;
+
+        const Meitou.Data.Gameplay.Ai.TaskType robotics = Meitou.Data.Gameplay.Ai.TaskType.JobRepairRobot;
+        Meitou.Simulation.Production.PermaJobs.Add(cold, robotics, Meitou.Simulation.Production.PermaJob.Untargeted(robotics));
     }
 
     /// <summary>
@@ -399,6 +415,7 @@ sealed class CharacterAssembly(PopulationData data)
         cold.WaterFactor = raceData.WaterAvoidance * (cold.Faction == data.PlayerFaction && data.PlayerFaction >= 0 ? 0.5f : 1);
         cold.RoadPreference = data.RoadPreferenceOf(cold.Faction);
         hot.MaxSpeed = Speed.Run(raceData, stats, medical, 1, statsFactor: cold.Fighter?.AthleticsFactor ?? 1);
+        GiveRoboticsJob(cold, record);
 
         // A start without a limb (CHARACTER `starting health`) shows its stump, one made with a prosthetic (`robot limbs`) its prosthetic.
         if (Enumerable.Range(0, 4).Any(k => medical.LimbPart(k) is { Limb: not LimbState.Original })) RefreshEquipment(cold);

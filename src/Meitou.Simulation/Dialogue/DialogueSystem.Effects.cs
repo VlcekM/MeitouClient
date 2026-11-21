@@ -89,7 +89,7 @@ public sealed partial class DialogueSystem
     /// </summary>
     bool RunActions(World world, Conversation c, DialogueNode line, CharacterId me, CharacterCold? mc, CharacterId target, CharacterCold? tc)
     {
-        bool takeOver = false, enslave = false;
+        bool takeOver = false;
         foreach (var effect in line.Effects)
         {
             switch (effect.Action)
@@ -113,7 +113,7 @@ public sealed partial class DialogueSystem
                     break;
                 case DialogueActions.AssignBounty or DialogueActions.CrimeAlarm or DialogueActions.PayBounty
                     or DialogueActions.ArrestTargetsCarriedPerson or DialogueActions.EnslaveTargetsCarriedPerson or DialogueActions.ClearBounty:
-                    LawEffect(world, effect, me, mc, target, tc, ref takeOver, ref enslave);
+                    LawEffect(world, effect, me, mc, target, tc, ref takeOver);
                     break;
                 case DialogueActions.ArrestTarget:
                     if (tc is not null) ArrestEffect(world, me, mc, target, tc);
@@ -136,7 +136,7 @@ public sealed partial class DialogueSystem
             }
         }
 
-        if (takeOver) Arrests?.TakeOver(world, me, target, enslave);
+        if (takeOver) Arrests?.TakeOver(world, me, target);
         return true;
     }
 
@@ -162,9 +162,9 @@ public sealed partial class DialogueSystem
         {
             case DialogueActions.Trade:
                 // The window opens whatever the speaker's squad stocks (FUN_1409524f0 tests no stock); a squad with none trades from an empty one
-                // (TradeSystem.StockFor).
+                // (TradeSystem.StockFor). It opens where the conversation stands, with no order (FUN_140791830 only queues the window).
                 c.Ended = true;
-                if (mc is { SquadId: >= 0 }) world.Defer(new Trading.OpenTrade(target, me) { Tick = world.Tick + 1 });
+                if (mc is { SquadId: >= 0 }) world.Defer(new Trading.OpenTradeNow(target, me) { Tick = world.Tick + 1 });
                 return true;
             case DialogueActions.CharacterEditor:
                 c.Ended = true;
@@ -278,10 +278,9 @@ public sealed partial class DialogueSystem
 
     /// <summary>
     /// The law effects: bounties assigned, paid and cleared, the crime alarm, arrests, and the carried person handed over (set in
-    /// <paramref name="takeOver"/> and <paramref name="enslave"/>, done after the line's other effects).
+    /// <paramref name="takeOver"/>, done after the line's other effects).
     /// </summary>
-    void LawEffect(World world, DialogueEffect effect, CharacterId me, CharacterCold? mc, CharacterId target, CharacterCold? tc, ref bool takeOver,
-        ref bool enslave)
+    void LawEffect(World world, DialogueEffect effect, CharacterId me, CharacterCold? mc, CharacterId target, CharacterCold? tc, ref bool takeOver)
     {
         switch (effect.Action)
         {
@@ -313,7 +312,8 @@ public sealed partial class DialogueSystem
                 takeOver = true;
                 break;
             case DialogueActions.EnslaveTargetsCarriedPerson when tc is { Carrying.IsNone: false }:
-                takeOver = enslave = true;
+                // the same 213 and 112 as DA 30, any town: the caged body is a captive for the town's slavers (183), not enslaved here
+                takeOver = true;
                 break;
             case DialogueActions.ClearBounty when tc?.Bounties is { } ledger && mc is not null
                 && world.Characters.TryResolveNext(target, out int wanted):
@@ -372,7 +372,7 @@ public sealed partial class DialogueSystem
         switch (effect.Action)
         {
             case DialogueActions.GiveTargetMySlaves when tc is not null && mc is not null:
-                GiveSlaves(world, me, mc, tc);
+                GiveSlaves(world, mc, tc);
                 break;
             case DialogueActions.SurrenderNonHumans when tc is not null && mc is not null:
                 SurrenderNonHumans(world, me, mc, tc);
@@ -520,15 +520,17 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// DA 6 / 55 / 57's order (<c>FUN_140680560</c>, <b>Verified</b>): the speaker alone gets order 101 Assault (55: 248 Attacking squad) on the
-    /// target (clear), but a speaker of the player's faction holding any order gets none (its squad's tag, written by the caller, stands either
-    /// way). Its mates follow through that tag. The original's stop before it (<c>FUN_1405c8330</c>) keeps the queue, whose front is then planned
-    /// again, so a refused speaker's order goes on.
+    /// DA 6 / 55 / 57's order (<c>FUN_140680560</c>, <b>Verified</b>): the speaker is stopped (<c>FUN_1405c8330</c>, <see cref="StopSpeaker"/>), then
+    /// gets alone order 101 Assault (55: 248 Attacking squad) on the target (clear), but a speaker of the player's faction holding any order gets
+    /// none (its squad's tag, written by the caller, stands either way). Its mates follow through that tag. The stop keeps the queue, whose front is
+    /// planned again, so a refused speaker's order goes on from its start.
     /// </summary>
     static void Attack(World world, CharacterId me, CharacterCold? mc, CharacterId target, bool nearHome)
     {
         var table = world.Characters;
         if (mc is null || !table.TryResolveNext(target, out _) || !table.TryResolveNext(me, out int s)) return;
+
+        StopSpeaker(world, me);
         if ((mc.IsPlayer || mc.Faction == world.Player.Faction) && PlayerOrders.Holds(world, s)) return;
 
         Order(world, me, nearHome ? TaskType.DefeatSquadLimitChaseRange : TaskType.DefeatSquad, target);

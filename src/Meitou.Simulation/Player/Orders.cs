@@ -361,6 +361,19 @@ public static class Orders
     }
 
     /// <summary>
+    /// Sneaking turned on (<c>Character::setSneaking</c> <c>FUN_1405ca9a0</c>, the standing order's case 3 in <c>FUN_1405caa50</c>, <b>Verified</b>):
+    /// only a change asks anything, and only with the AI's current goal 16 Attacking enemies the original's replan request (vfunc 3); turning it
+    /// off asks none. Serial phases.
+    /// </summary>
+    internal static void SneakOn(CharacterCold cold)
+    {
+        if ((cold.Orders & CharacterOrders.Sneak) != 0) return;
+
+        cold.Orders |= CharacterOrders.Sneak;
+        if (cold.Ai?.Goal?.Task.Type == TaskType.AttackEnemies) DecisionSystem.Replan(cold);
+    }
+
+    /// <summary>
     /// The point a holding character holds (<see cref="CharacterCold.HoldPoint"/>, else where it stands).
     /// </summary>
     public static Vector3 HoldPointOf(CharacterCold cold, Vector3 at) => cold.HoldPoint ?? at;
@@ -386,6 +399,7 @@ public static class Orders
                 {
                     if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { IsPlayer: true } cold) continue;
                     on ??= (cold.Orders & set.Order) == 0;
+                    if ((set.Order & CharacterOrders.Sneak) != 0 && on.Value) SneakOn(cold);
                     cold.Orders = on.Value ? cold.Orders | set.Order : cold.Orders & ~set.Order;
                     if ((set.Order & CharacterOrders.Jobs) != 0) DecisionSystem.Request(cold);   // the jobs switch: decided again
                     // Sneak off stands one staying low (setStandingOrder 4).

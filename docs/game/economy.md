@@ -98,7 +98,7 @@ stolen item." or 15 "Attempted smuggling!" (`FUN_140713d20`, `FUN_140715560`, `F
 unflagged, so 1000: the flag the trade window passes is the stealing test `FUN_140711740` (`FUN_140715560`, `FUN_140712490`). No trader is held for a trade: the Trade
 effect only queues the windows. Meitou: an open trade lasts while both characters are in the world and the customer is the player's with an inventory
 (`TradeSystem.Parties`); beyond 1000 of the trader its items stay put with "Out of trading range." (`TradeWith`, `HeldItems.PassTrade`); no trader is held, the
-customer's walk-up chasing a moving one; the close-all is `World.CloseInventories` (the open trade, container and loot at once, `PlayerState.InventoriesClosed` for the interface's windows).
+customer's Trade order (a 12 that opens the trade on arrival, [order queue](../simulation.md#order-queue)) chasing a moving one; the close-all is `World.CloseInventories` (the open trade, container and loot at once, `PlayerState.InventoriesClosed` for the interface's windows).
 
 Meitou (engine choices): window moves to and from a machine or storage need the character within `ProductionSettings.TransferReach` 40 of the building's footprint hull (for the
 bounds radius + 40) or within 60 of its position (so a small storage is never stricter than the original; a General Storage Chest's hull is about 14 x 9, **Observed** with the probe, #505), to and from a container within `ContainerAccess.TradingRange` 60; both post "Out of trading range.". The loot window closes beyond 1.5 x the carry reach, or over 20 units apart in height (Meitou: the reach is on the body's floor, and the looter walks to that floor, #292; the height is the body's root or the floor under it, as a big ragdoll's root rests well off the ground: a downed Cleanser Unit 67 over the terrain, **Observed** on a player save). A held item given to a
@@ -528,13 +528,13 @@ money, mark the entry claimed (it never pays twice) and show "Received c.{1} rew
   `Task_PutInSomething` (`PUT_IN_CAGE` 108) only when the captive has a bounty with the cage owner's faction. It stores the start
   (now, double game hours) at ledger `+0x98` and the length at ledger `+0xa0` (float): `trunc(bounty * 0.02 * prison time)` hours,
   999999 above 25000, 16 when the bounty lookup returns 0. Saved as character keys `sentence` (start, truncated int) and `psts` (length,
-  float) by `FUN_1406262b0` / `FUN_140625e60`. Its one caller is the cage mode (0x6b) of `FUN_140358670`, so every carry-a-body-into-a-cage flow uses the constant (**Verified**; Meitou: arrest, bounty hunters, kidnap `KidnapSystem` and the town duty `TownDutySystem` pass `prison time`; a slave's own entry and the delivery handover are not that task). The squad factory's spawn-time caging (`FUN_140583a10` calling `FUN_140330600` / `FUN_14032e2f0` directly) never reaches `FUN_140854950` (it is the only function that does, **Verified** by a search of the whole decompile), but it writes the length itself: 9999999.0 to Character `+0x190` for every `prisoners` member it cages (the ledger is Character `+0xf0`, so `+0x188` / `+0x190` are the start and length above; the start is not written). A spawned prisoner's sentence is thus never served and shows FOREVER (**Verified**); it is no kidnap victim, so getting out is Escaping Prison. Meitou `PopulationSystem.SpawnSentence`.
+  float) by `FUN_1406262b0` / `FUN_140625e60`. Its one caller is the cage mode (0x6b) of `FUN_140358670`, so every carry-a-body-into-a-cage flow uses the constant (**Verified**; Meitou: arrest, bounty hunters and the town goals' cage act-out `TownDutySystem` pass `prison time`; a slave's own entry and the delivery handover are not that task). The squad factory's spawn-time caging (`FUN_140583a10` calling `FUN_140330600` / `FUN_14032e2f0` directly) never reaches `FUN_140854950` (it is the only function that does, **Verified** by a search of the whole decompile), but it writes the length itself: 9999999.0 to Character `+0x190` for every `prisoners` member it cages (the ledger is Character `+0xf0`, so `+0x188` / `+0x190` are the start and length above; the start is not written). A spawned prisoner's sentence is thus never served and shows FOREVER (**Verified**); it is no kidnap victim, so getting out is Escaping Prison. Meitou `PopulationSystem.SpawnSentence`.
 - **Served** when `start + length <= now` (`FUN_1405c9f00`, also false for a character with a nonzero status type, e.g. a slave);
   nothing counts down. Meitou should treat it as served. The status panel (`FUN_1405d2da0`) shows "Imprisoned, sentence time remaining: ceil(length - elapsed) hrs",
   "FOREVER" for a length >= 2000, else "Waiting to be released" (**Observed**). Bounty expiry is paused meanwhile (11.3).
 - **Release** (`Task_ReleasePrisoner` 110, `FUN_1403570a0`; **Observed**): the jailer goal is AI_TASK "police free prisoners" (enum 211,
   only in AI_PACKAGE "addon- law enforcement"; the "- no freeing prisoners" variant lacks it; **Verified** by probe). Its finder
-  `FUN_1408cf3c0` picks an occupied `BF_CAGE` whose occupant is not down, served and not an enemy of the jailer (**Verified**: vfunc `0x3e8` = `isEnemy`, `FUN_14079c950`, called with the occupant and 1; Meitou `LockSystem.Served` reads its faction part, `CharacterFacts.RegardsEnemy`, and frees no enemy prisoner, not even by the booking-jail fallback; `FUN_14079c950` has no exemption for a caged target, and its leave-alone test `FUN_1408569a0` needs a faction that is not hostile, so a prisoner of a faction the jail's is hostile to is not released while that lasts, its sentence served, **Verified** by decompile; **Observed** on #1064's save: a Tech Hunter in a Shek cage, the Shek at -71 towards the Tech Hunters after NPC fights, [relation events](factions-squads-towns.md)), among the buildings of the jailer's own town (status `+0x88`) and faction in the 3 x 3 zone cells round the jailer (`FUN_1409fc450`, `FUN_1409fb880`, **Verified**; the faction argument is the jailer's AI object's vfunc 8, read as its faction, **Observed**), the first in list order: no radius, no nearest-jailer choice. For every releaser the
+  `FUN_1408cf3c0` picks an occupied `BF_CAGE` whose occupant is not down, served and not an enemy of the jailer (**Verified**: vfunc `0x3e8` = `isEnemy`, `FUN_14079c950`, called with the occupant and 1; Meitou `WardenGoals.Served` reads its faction part, `CharacterFacts.RegardsEnemy`, and frees no enemy prisoner; `FUN_14079c950` has no exemption for a caged target, and its leave-alone test `FUN_1408569a0` needs a faction that is not hostile, so a prisoner of a faction the jail's is hostile to is not released while that lasts, its sentence served, **Verified** by decompile; **Observed** on #1064's save: a Tech Hunter in a Shek cage, the Shek at -71 towards the Tech Hunters after NPC fights, [relation events](factions-squads-towns.md)), among the buildings of the jailer's own town (status `+0x88`) and faction in the 3 x 3 zone cells round the jailer (`FUN_1409fc450`, `FUN_1409fb880`, **Verified**; the faction argument is the jailer's AI object's vfunc 8, read as its faction, **Observed**), the first in list order that no squad mate already frees (`FUN_1402690e0`, **Verified**): no radius, no nearest-jailer choice. For every releaser the
   cage is unlocked and status `+0xea = 1`; then, if the releaser's faction has `+0x40`, the prisoner's entries for the releaser's booking faction and for the
   jail's booking faction are **erased** (`FUN_1408539f0`), the releaser says `EV_PRISONER_FREE_TO_GO`; if the releaser is a player
   (non-`+0x40` player faction), the prisoner says `EV_UNLOCK_MY_CAGE_OR_SHACKLES`. In those two cases the prisoner gets 133
@@ -544,11 +544,11 @@ money, mark the entry claimed (it never pays twice) and show "Received c.{1} rew
   is the living occupants of `BF_CAGE` furniture in the speaker's home town's buildings that are player-faction, or not hostile to
   the speaker under further tests (`FUN_1405995d0`, `FUN_140599590`, `FUN_14059a920 < 36`). Price `2 * bounty` with a zero faction,
   which through the cage rule of 11.2 is the jail's booking faction; at least 2000 when the prisoner is not of the player's faction.
-  Paying (`FUN_1406ae170`) unlocks the cage, erases the jail's entry (`FUN_1408539f0(ledger, 0)`), sets `+0xea = 1` (freed: [perception](perception.md#sense-tags-who-is-an-enemy), Meitou `Freed`), the prisoner says
-  `EV_BOUGHT_ME_FROM_SLAVERY` (event 51, `FUN_140684990` with the payer, the conversation's player character, as target; **Verified**) and gets 133 `GET_OUT_OF_CAGE_LEGIT` (**Verified**, `FUN_1405d20d0(prisoner, 0, 0x85, 0)` unconditionally; one whose event call returned 0, who could not speak, first gets 128 `RETREAT_HOMETOWN`);
+  Paying (`FUN_1406ae170`) leaves the cage locked (unlike the buy it writes no cage lock, and neither 133's leave `FUN_1403554b0` nor the hold clear `FUN_140330600` touches one; **Verified** by decompile), erases the jail's entry (`FUN_1408539f0(ledger, 0)`), sets `+0xea = 1` (freed: [perception](perception.md#sense-tags-who-is-an-enemy), Meitou `Freed`), splits it from a squad of more than one into a new squad of the old one's template, a player's character too (`FUN_1405ce4e0`, as the buy in [12](#12-slaves-prisoners-animals); **Verified**), the prisoner says
+  `EV_BOUGHT_ME_FROM_SLAVERY` (event 51, `FUN_140684990` with the payer, the conversation's player character, as target; **Verified**), its worn locked shackles are unlocked, still worn (`FUN_1405c8a10`, lock byte `+0x20` = 0, as the buy; **Verified**), and it gets 133 `GET_OUT_OF_CAGE_LEGIT` (**Verified**, `FUN_1405d20d0(prisoner, 0, 0x85, 0)` unconditionally; one whose event call returned 0, who could not speak, first gets 128 `RETREAT_HOMETOWN`);
   its squad's memory also takes the payer as FREED_ME (long tag 3, `FUN_140673930`; **Verified**), for every freed prisoner whose character resolved. Meitou: `ArrestSystem.Bail`
-  writes both. Both gives clear the order queue first (**Verified** by disassembly: `FUN_1405d20d0` with its clear argument 1), so 133 replaces 128; the bail only unlocks
-  the cage, and 133's leave takes the prisoner out at its exit spot, an escape only for a `not real` or bandit cage owner ([locks](locks.md#cages-and-beds)). Meitou
+  writes both. Both gives clear the order queue first (**Verified** by disassembly: `FUN_1405d20d0` with its clear argument 1), so 133 replaces 128; the bail does not
+  clear the hold, and 133's leave takes the prisoner out at its exit spot, an escape only for a `not real` or bandit cage owner ([locks](locks.md#cages-and-beds)). Meitou
   gives 133 (`Locks.FreedPrisoner`, its act-out `FixtureRegistry.GetOutLegit`) before event 51, as Meitou's events need a speaker out of its cage; so 128, which 133
   wipes unrun, is not given (**engine order**). Only two base dialogues carry DA 43 (**Verified** by probe, 2026-10-21): "Shek law
   bounty" (shek bounty desk, the reply "I'm here to bail out a friend.") and "Inquisitor heretic bounty" (Holy Nation Inquisitor); no United Cities law
@@ -580,13 +580,15 @@ money, mark the entry claimed (it never pays twice) and show "Received c.{1} rew
   resolves to a character with diplomatic status in its own biomes (`isDiplomaticStatus(victim, 1)`: NPC class 5 Diplomat standing in a BIOME_GROUP of its faction's `biomes`,
   [perception](perception.md#sense-tags-who-is-an-enemy)); the code 9 is set even over another pending crime, which holds off a plain Assault. Meitou `CrimeSystem.SetPending` (`DiplomatVictim`). Its witnesses say event 41,
   the generic assault line, with no tests of their own ([dialogue](dialogue.md#firing-an-event), **Verified** by the witness switch's jump table).
-- **Witness timing** (`FUN_1408580d0`, the perception's per-seen-character update, **Observed**): the witness function `FUN_140854d10` runs for a
-  seen character when the update says it is newly seen (either of two flag arguments), or while it has a pending crime whose timer
+- **Witness timing** (`FUN_1408580d0`, the perception's per-sensed-character update, **Verified**): the sense pass calls it for an entry seen or
+  heard at that pass (`FUN_1408593d0`, its two flag arguments), and the forced sense `FUN_140858f40` calls it as seen when the looker has no entry yet; the witness function `FUN_140854d10` runs when either flag is set, or while the character has a pending crime whose timer
   (`+0x180`) is above 5; every run that reacts sets that timer back to 20 (`FUN_140851f40`), so a watched crime stays fresh, except while the culprit is down: the refresh tests vfunc `0x30` first and then sets neither the timer nor the recently-wanted marker (250), so a knocked-out culprit's crime runs out in its witnesses' sight (**Verified**, decompile; Meitou `CrimeSystem.Witnesses`). The witness function returns at once when the seen character or the witness is imprisoned (`+0x2f8 == 2`, **Verified**, decompile), or the witness is in slave state 1 or 2 (both `FUN_1405c8aa0` calls take the witness, **Verified** by disassembly; a culprit in slave state 1 is not skipped), so a caged culprit's timer runs out and its status line gives way to the bounty. A witness
   that regards the culprit as friendly and sees it wrong the witness's own faction costs the culprit's faction 20 relation each time
   ([factions 3.5](factions-squads-towns.md#35-what-fires-relation-changes-observed-decompile)). A reacting witness that is the crime's
-  victim (for a trespass, the witness itself) goes for the culprit, which its whole squad then takes for an enemy
-  ([squad memory](dialogue.md#squad-memory)).
+  victim (for a trespass, the witness itself) takes the culprit as its threat (`Character::attackTarget`), which its whole squad then takes
+  for an enemy ([squad memory](dialogue.md#squad-memory)); being pushed from inside the victim's sense pass, the culprit is on the threats list its chooser reads
+  ([Self preservation](ai-tasks.md#combat-goals)); its own chooser answers it (Meitou `CrimeSystem.AttackTarget` with `AggroSystem.Witness`, no attack order;
+  a forced sense making a new entry reacts at once, `CrimeSystem.Sensed`).
 - `FUN_140673a20` in the trespass path is the squad-memory tag MY_INTRUDER, not a witness function (factions 3.5).
 
 ### Town alarms
@@ -604,8 +606,8 @@ money, mark the entry claimed (it never pays twice) and show "Received c.{1} rew
 - **Update** (`FUN_140354260`): no town or no alarm ends the task. Within 100 of it: faces it and counts down (15 s at the start, 10
   after any walk); at 0 the alarm is deleted and the task ends (the only remover found). Farther: runs (mode 2) to 30 short of it on its
   own side, the count set to 10, and every sensed character (neutral or enemy, not down: `SenseItr(6, 8)`) with a pending crime whose
-  victim faction is an ally of the investigator's (`FactionRelations::isAlly`: same, or 50+) is tagged TEMP ENEMY and attacked
-  (`Character::attackTarget`, which only stores the target). **Verified** (decompile; `FUN_140354260`): the whole sense list is walked with no early exit and no can-attack test (the goal system decides who is offered the task), on every update while it walks; each qualifying entry is tagged and the AI's attack hand is overwritten, so the last one scanned is the target (Meitou `CrimeSystem.Investigate`: all tagged, one order for the last; the sight scan stands in for the sense list).
+  victim faction is an ally of the investigator's (`FactionRelations::isAlly`: same, or 50+) is tagged TEMP ENEMY and taken as a threat
+  (`Character::attackTarget`). **Verified** (decompile; `FUN_140354260`): the whole sense list is walked with no early exit and no can-attack test (the goal system decides who is offered the task), on every update while it walks; each qualifying entry is tagged and added to the threats list (Meitou `CrimeSystem.LookForSuspects`: all of them, the sight scan standing in for the sense list; the investigator's chooser then fights through 32 or an attack-on-sight goal, [squad memory](dialogue.md#squad-memory)).
 
 Meitou (`CrimeSystem.TownAlarm` / `AlarmFor` / `Investigate`, `AiBehaviour.Investigate`): as above (reach by `TownAlarm.Place`, the culprit's `SightMap.LocationOf`, on top of a building too, and the more-than-one-floor skip by `Floor`); alarms are not saved; the closed-building
 halving and the `+0xc2` floor skip are not modelled; "sensed" is the witnesses' sight test.
@@ -646,12 +648,15 @@ decompile's `DialogActionEnum` / `DialogConditionEnum` / `EventTriggerEnum`, com
   `FUN_14099bfc0`: the first sensed character (mask 0x400e/0x221) not carried, not of a `not real` faction, not an animal (slot `0x248`), not
   imprisoned, that has a perceived bounty with the guard (`FUN_140853fd0`: the entry for the guard's booking faction, visible while
   `+0x110 > 0`, or when the target is down and an enemy), or that the guard's squad marks with flag 7, or regards as an enemy. Its effect
-  129 leads the planner to 203 Arresting (list B: target down, unarmed, carried) and then the cage goals. Meitou: `ArrestSystem.BountyTarget`
-  takes the nearest such character the guard sees (the witnesses' sight test: the ray where it applies, and for a sneaker a full spot meter),
-  standing for the sense list;
-  the mask's slave bit (0x20, slave state 1) leaves slaves out. A guard whose left arm cannot carry starts no arrest of a downed target it cannot
-  strip any further, and ends one once only the lift is left (its plan needs the carry, whose provider needs state 80, [ai-tasks](ai-tasks.md) "Arrest
-  chain"), so another guard takes it.
+  129 leads the planner to 203 Arresting (list B: target down, unarmed, carried) and then the cage goals. 203's desire (AI slot 32
+  `FUN_140598a40`) is 0 when the status town is unset and the ownership town is set, else 1; the fights' are 4's (AI slot 53, [combat](combat.md))
+  and 262's (slot 54 `FUN_140598260`: 0 unless ranged mode is on, an arm works, not crippled and a crossbow sits at back or hip; 0.1 while meleed;
+  0 at a caged target or without bolts; else 1, 0.5 while the squad is not intact), 181's 1 and 68's the lift desire (**Verified**, the registration's
+  stubs). 203 does not act, so the plan is over after each of the fight, the strip and the lift, and the chooser plans afresh; once the target is
+  carried 129 holds. Meitou (`ArrestGoals`, [arrest and jail](../simulation.md#arrest-and-jail)): the finder takes the nearest such character the guard
+  sees (the witnesses' sight test: the ray where it applies, and for a sneaker a full spot meter), standing for the sense list; flag 7 is the squad's
+  short-term memory tag 7 (`MemoryTag.Criminal`, `FUN_140678960`); the mask's slave bit (0x20, slave state 1) leaves slaves out. A guard whose left
+  arm cannot carry gets no lift (68 needs state 80, [ai-tasks](ai-tasks.md) "Arrest chain").
 - **Caging** (goals 112 / 281 "Find and put in cage", subtask 108 `PUT_IN_CAGE`): desire `FUN_1405a1140` (0 unless carrying;
   0.1 / 0.5 / 1.4 / 2.0 by status, death and bounty tests in `FUN_1405a0f10`); cage finder `FUN_1408d0770(ai, wantFree 1, function 8)`
   over the candidates `FUN_1408cbea0` gathers (interiors included): the town in the character's status (`+0x88`), else its faction's nearest town (`FUN_140927f10`, nest markers left out) when within squared `DAT_14172dd88` = 1.5625e7, the buildings within that town's radius x `DAT_1416b1640` = 1.1 of its position (`FUN_140a00690`, each passing the usable test with no character, only complete ones), plus those of the home building's town when it differs; with no town at all every zone is searched, i.e. every building (**Verified**): usable (`FUN_140621230`, `Ownerships::canIUseThisBuilding`, full rule in [locks](locks.md#beds); **Verified** by decompile), not reserved, free; weight
@@ -665,8 +670,23 @@ decompile's `DialogActionEnum` / `DialogConditionEnum` / `EventTriggerEnum`, com
 - **Spotting** (`FUN_140856f00`, **Observed**): a non-player looker within 400 units (160000 squared) recognises a player-faction
   character whose bounty with the looker's faction is at least a class threshold (`FUN_1408520c0`: LAW_ENFORCEMENT 1, MILITARY 4000
   or 2000, ADVENTURER 1000, SLAVE never, others 10000), immediately while `+0x110 > 0`, else through a recognition meter
-  (`FUN_140856cb0`, fires above 1.0; rate `5 + 40 * k`, `k` a 1..2 value from the target's stats scaled by status factors 0.5 / 0.6 /
-  0.75 and x2, not decoded); not while the target is carried or imprisoned. Recognition fires `EV_BOUNTY_SPOTTED` (44). The escaping-slave
+  (`FUN_140856cb0`, the looker's per-target map, fires above 1.0): fill time T = lerp(v, 5a, a) x lerp(f, 4, 1) seconds, v the looker's view
+  factor of the target (v <= 0 drops the entry), f 0.5 (a float of the looker's at `+0x648 -> +0x68 -> +0x70 -> +0x3c` when that is set; 0
+  while the looker is held, down or a slave), a = 5 + 40 k, k = (1 + clamp(`stealth` / 100, 0, 1)) x d x 0.5 when the target is in the
+  looker's give-up list (`FUN_1405995d0`) x 0.6 when its `+0x108` faction is the looker's x 0.5 when its slave owner (`+0xe0`) is x 0.75
+  inside the walls (vfunc 0x118) of a town whose vfunc 0x298 is false x 2 unless the looker stands in a town of a non-player faction not
+  hostile to it (town `+0xd8` set, faction `+0x1d0` clear); d is 1 (the disguise level `+0x100` with a disguise; for a slave of state 2 or
+  3 whose line condition 0x24 / 0x28 the looker holds, 1 - `+0xf4`, and 1 instead of 5 in a), 0 caged (`FUN_140856f00`; `FUN_140884850` reads stat `+0xa4` STAT_STEALTH;
+  literals 5, 40, 4, 0.6, 0.75 `data_values.txt`, **Verified**; the meter's own step, `FUN_140855e80`, **Observed** as for a sneaker,
+  [perception](perception.md)). So a stealth-0 target in full view of an awake guard in his town takes 45 x 2.5 = 112.5 s. Meitou
+  (`ArrestSettings.RecognitionSeconds` 45): one meter per suspect filling in 45 s while any looker sees it (engine); not while the target is
+  carried or imprisoned. Recognition fires `EV_BOUNTY_SPOTTED` (44) at every call, with no
+  timer, while the looker is not in combat mode (`FUN_140436610`), its squad does not love the target (`FUN_140599590`: long tags & 0xc) and it does not regard it as
+  friendly (vfunc `0x3f0` = `FUN_1407923d0` with 0: real factions, its own test includes the love); a bounty below 1 sets the target's `+0x110` to 250 instead, under the same gates (**Verified**, decompile). The
+  bounty branch itself (no uniform piece, `+0x100` <= 0) is taken only while the looker does not regard the target as friendly with the disguise read
+  (`0x3f0` with 1), so a friendly looker fills no meter on a bounty (**Verified**, decompile). Repeats are the lines' own
+  `repetition limit`. Meitou: both gates are `CrimeSystem.RegardsFriendly` (the disguise read changes nothing where the bounty branch runs), in
+  `ArrestSystem.Spot` (no meter, no event 44) and `SeeThrough` (no event 44, no blow). The escaping-slave
   events (36 / 40) are the sight pass's ([sight](dialogue.md#ambient-conversations)). `EV_ESCAPED_PRISONER_SPOTTED` (45) is cut in by
   `FUN_140859680` (**Verified**) at a target with the escaped flag, while its disguise level (`+0x100`) is 0 or its blown cooldown (`+0x110`)
   runs (any uniform piece hides an escapee, not only a working disguise) and it is not imprisoned, by a looker standing in its own ownership
@@ -705,9 +725,11 @@ holding the slaver, the customer, the character list and val0.
   player-faction character, the owner set, AI order 187 obedient slave toward the owner, SHACKLES made and worn when it wears no locked armour); its faction and squad are
   kept (it stays in the player's squad, uncaged); its squad remembers the customer with long-term tag 5 MY_CAPTOR; relations toward the player's faction: the slaver's +4,
   its own -4. Then the total is **added** to the player faction's money; the slaver's money is not reduced.
-- **Buying** (42, title "Buying Slaves", confirm "Buy"): every character in the slaver's owned set that is a slave (state 1) and not dead; no radius, cage or count limit
-  (the set is per owner object, **Inferred**). Panels: Strength, Dexterity, Toughness, Melee Attack, Melee Defence | Labouring, Farming, Cooking, Engineering, Medic (stat
-  values). Confirm (`FUN_1406add20`), each ticked character not dead: its price added to the total; no longer owned; split from a squad of more than one into a new squad of
+- **Buying** (42, title "Buying Slaves", confirm "Buy"): every character in the slaver's ownership set that is a slave (state 1) and not dead (`+0x5bc`); no radius, cage or count
+  limit. The set (`FUN_1407956a0`, **Verified**) is the player's for a speaker of the player's faction, else the speaker's platoon's (Character `+0x658` -> `+0x78`, Platoon vfunc
+  0x98 = `+0x148`); the owner setter `FUN_14032e430` moves a slave's handle from the old owner's platoon's set to the new one's, so it holds the slaves owned by a member
+  of the slaver's platoon (a cage gives the caged slave its building's owner hand, `FUN_140330600`). Panels: Strength, Dexterity, Toughness, Melee Attack, Melee Defence | Labouring, Farming, Cooking, Engineering, Medic (stat
+  values). Confirm (`FUN_1406add20`), each ticked character not dead: its price added to the total; no longer owned (the null owner hand; the setter's tail turns member type 4, slave, into 0, **Verified**); split from a squad of more than one into a new squad of
   the old platoon's template (`FUN_1405ce4e0` -> `FUN_1407f4420` with the platoon's `+0x108`, **Verified** decompile; as DA 28) with a copy of its memory (it does not join the player); event 51 BOUGHT_ME_FROM_SLAVERY at it with the customer as target; its cage unlocked; slave state 0; it leaves its cage or
   restraint; AI reset; its locked shackles unlocked (still worn); its squad remembers the customer with tag 3 FREED_ME; task 133 GET_OUT_OF_CAGE_LEGIT (queue cleared; the
   hold is already cleared, so it does nothing: [locks](locks.md#cages-and-beds)); relations toward the

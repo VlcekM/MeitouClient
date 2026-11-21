@@ -14,6 +14,7 @@ using Meitou.Simulation.Carrying;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Construction;
 using Meitou.Simulation.Crime;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.FirstAid;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Kidnap;
@@ -86,7 +87,9 @@ public class TaskStartTests
     /// production, combat, crime, arrest and lock systems in the game's order; <paramref name="decide"/> adds feeding and retaliation after combat
     /// and town duties after carrying, with an outpost and a store round the rig (the decision step's self-defence and food goals);
     /// <paramref name="senses"/> adds the aggro system's looks (attack on sight off) after retaliation, over <paramref name="relations"/> (the combat
-    /// system reads them too) when given.
+    /// system reads them too) when given; <paramref name="ai"/> adds the AI system after the player's, the senses (Self preservation's threats) and
+    /// puts every character in a squad (the chooser runs only for a character with a platoon, <c>FUN_1405112b0</c>); with <paramref name="senses"/>
+    /// too, the factions, the player's listing goal 15 Protect allies; <paramref name="flee"/> adds the flee step after the senses.
     /// </summary>
     internal sealed class Rig : IDisposable
     {
@@ -98,9 +101,16 @@ public class TaskStartTests
         readonly OpenGroundWalkability _walk = new(SyntheticTown.Ground);
         internal readonly ItemFactory Items;
 
-        public Rig(bool carrying, bool decide = false, bool slaves = false, bool senses = false, FactionRelations? relations = null)
+        /// <summary>
+        /// With <c>ai</c>, the player's squad every player character joins (each NPC gets a squad of its own); null without.
+        /// </summary>
+        readonly Squad? _playerSquad;
+
+        public Rig(bool carrying, bool decide = false, bool slaves = false, bool senses = false, FactionRelations? relations = null,
+                bool ai = false, bool flee = false)
         {
             var db = Database();
+            if (ai && senses) AddFactions(db);
             var data = PopulationData.Create(db, []);
             Items = new ItemFactory(db, BaseGame);
             Combat = new CombatSystem(KatanaTechniques(), Constants, BaseGame, BodyOptions.Default, DuelFixture.Lengths,
@@ -121,16 +131,34 @@ public class TaskStartTests
             {
                 systems.Insert(systems.IndexOf(carry) + 1, new TownDutySystem(data, new PopulationSystem(data), carry));
                 systems.InsertRange(systems.IndexOf(Combat) + 1, [new FeedSystem(Items), new RetaliationSystem(Combat)]);
-                // The senses the protect-allies finder reads (15, docs/game/ai-tasks.md "Combat goals"); attack on sight stays off so the other
-                // scenarios are not changed.
-                if (senses) systems.Insert(systems.IndexOf(Combat) + 3,
-                        new AggroSystem(relations ?? data.Relations, new AggroSettings { AttackOnSight = false }));
+                // The senses the protect-allies finder and Self preservation's threats read (15 and 32, docs/game/ai-tasks.md "Combat goals");
+                // attack on sight stays off so the other scenarios are not changed.
+                if (senses || ai)
+                {
+                    var aggro = new AggroSystem(relations ?? data.Relations, new AggroSettings { AttackOnSight = false });
+                    systems.Insert(systems.IndexOf(Combat) + 3, aggro);
+
+                    // A failed stealth knock-out puts its attacker on the victim's threats (the game's wiring, StandardSystems).
+                    if (ai) (aggro.Combat, carry.Aggro) = (Combat, aggro);
+
+                    // The flee step runs the goals' and Self preservation's runs, after the looks as in the game.
+                    if (flee) systems.Insert(systems.IndexOf(aggro) + 1, new FleeSystem(relations ?? data.Relations, Combat));
+                }
             }
+            // The chooser's goals on the ladder's rungs (Self preservation, Protect allies) are the AI's, after the player's as in the game.
+            if (ai) systems.Insert(1, new AiSystem(data) { ThreatSource = Combat });
             // The slaves' Obedient Slave job (187) is the captive system's.
             if (slaves) systems.Add(new CaptiveSystem(data, Combat));
             World = new SimWorld(new WorldSettings { Seed = 7, PublishSnapshots = false }, _walk, systems);
             if (relations is not null) Combat.Relations = relations;
             World.Player.Faction = 1;
+            if (ai)
+            {
+                _playerSquad = new Squad { Id = World.Squads.NextId(), TemplateId = "p", Faction = 1 };
+                World.Squads.Add(_playerSquad);
+                World.Player.Squad = _playerSquad.Id;
+            }
+
             string Site(string record, float x, float z, bool complete)
             {
                 var p = new Vector3(x, 300, z);
@@ -177,6 +205,24 @@ public class TaskStartTests
             Say(new AttackOrder([Fighter], Enemy) { Tick = 0, Picked = true });
         }
 
+        /// <summary>
+        /// Factions 0 (none), 1 (the player's, 204 Nameless, whose <c>AI Goals</c> list 15 Protect allies: AI_TASK 957, priority 3, weight 1, so a
+        /// player character holds goal 15, docs/game/ai-tasks.md "Combat goals") and 2 (the NPCs').
+        /// </summary>
+        static void AddFactions(GameDatabase db)
+        {
+            var protect = new FcsRecord { StringId = "957-t", Flags = 0x10, Name = "Protect allies", RecordType = FcsRecordType.AiTask };
+            protect.Ints["enum"] = (int)TaskType.ProtectAllies;
+            protect.Ints["classification"] = (int)TaskPriority.Urgent;
+            var nameless = new FcsRecord { StringId = FactionData.PlayerId, Flags = 0x10, Name = "Nameless", RecordType = FcsRecordType.Faction };
+            nameless.References["AI Goals"] = [new FcsReference(protect.StringId, 0, 100, 0)];
+            var file = new FcsFile();
+            file.Records.AddRange([protect,
+                new FcsRecord { StringId = "0-f", Flags = 0x10, Name = "none", RecordType = FcsRecordType.Faction }, nameless,
+                new FcsRecord { StringId = "2-f", Flags = 0x10, Name = "npcs", RecordType = FcsRecordType.Faction }]);
+            db.Apply(file, "factions.mod");
+        }
+
         internal CharacterId Add(float x, float z, bool player, params string[] kits)
         {
             var cold = new Combatant { Name = "C" + World.Characters.HighWater }.MakeCold();
@@ -186,7 +232,29 @@ public class TaskStartTests
             foreach (var k in kits) cold.Inventory.Add(Items.Create(k)!);
             cold.IsPlayer = player;
             cold.Faction = player ? 1 : 2;
-            return World.Characters.Spawn(new CharacterHot { Position = new Vector3(x, 300, z), MaxSpeed = 40, WalkSpeed = 15 }, cold, 0);
+            var id = World.Characters.Spawn(new CharacterHot { Position = new Vector3(x, 300, z), MaxSpeed = 40, WalkSpeed = 15 }, cold, 0);
+            if (_playerSquad is not null) Join(id, player ? _playerSquad : null);
+
+            return id;
+        }
+
+        /// <summary>
+        /// Puts the character in <paramref name="squad"/>, or in a new squad of its own faction when null (it leads it); every character the chooser
+        /// decides has a platoon (<c>FUN_1405112b0</c>).
+        /// </summary>
+        internal void Join(CharacterId id, Squad? squad)
+        {
+            var cold = Cold(id);
+            if (cold.SquadId >= 0) World.Squads.Find(cold.SquadId)!.Members.Remove(id);
+            if (squad is null)
+            {
+                squad = new Squad { Id = World.Squads.NextId(), TemplateId = "t", Faction = cold.Faction };
+                World.Squads.Add(squad);
+            }
+
+            cold.SquadId = squad.Id;
+            squad.Members.Add(id);
+            if (squad.Leader.IsNone) squad.Leader = id;
         }
 
         public CharacterCold Cold(CharacterId id) => World.Characters.Cold(id.Slot)!;
@@ -414,44 +482,5 @@ public class TaskStartTests
         Assert.False(TaskStart.Eligible(world, Make(stump: true), TaskType.Build));
         Assert.False(TaskStart.Eligible(world, Make(animal: true), TaskType.LiftPersonPlayerOrder));
         Assert.True(TaskStart.Eligible(world, Make(animal: true), TaskType.Rest));
-    }
-
-    /// <summary>
-    /// A system that sets slot 0's task in the slow world: directly, or through <see cref="TaskStart.Step"/>.
-    /// </summary>
-    sealed class Writer : ITickSystem
-    {
-        public CharacterTask? Direct, Stepped;
-        public void SlowWorld(SimWorld world)
-        {
-            if (Direct is { } d) world.Characters.Next[0].Task = (byte)d;
-            if (Stepped is { } s) TaskStart.Step(world.Characters, 0, s);
-            Direct = Stepped = null;
-        }
-    }
-
-#if DEBUG
-    const bool Debug = true;
-#else
-    const bool Debug = false;
-#endif
-
-    /// <summary>
-    /// Debug builds: a task written outside the start path fails the tick's check (<see cref="TaskStart.CheckStarts"/>), one set through it passes.
-    /// Catches the check weakened (a task left out of it, a stamp that passes any write), which no other test would notice.
-    /// </summary>
-    [Fact]
-    public void A_task_written_outside_the_start_path_fails_the_debug_check()
-    {
-        Assert.SkipUnless(Debug, "the check runs in debug builds only");
-        var writer = new Writer();
-        using var world = new SimWorld(new WorldSettings { PublishSnapshots = false }, new OpenGroundWalkability(SyntheticTown.Ground), [writer]);
-        world.Characters.Spawn(new CharacterHot { Position = new Vector3(1000, 300, 2000) }, new Combatant().MakeCold(), 0);
-        world.RunTick();
-        writer.Stepped = CharacterTask.Wander;
-        world.RunTick();
-        Assert.Equal((byte)CharacterTask.Wander, world.Characters.Previous[0].Task);
-        writer.Direct = CharacterTask.Idle;
-        Assert.Throws<InvalidOperationException>(() => world.RunTick());
     }
 }

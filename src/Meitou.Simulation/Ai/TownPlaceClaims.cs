@@ -389,8 +389,8 @@ sealed class TownPlaceClaims(PopulationData data)
 
     /// <summary>
     /// The sitting-around (275) counterpart of <see cref="ClaimSeats"/> (the finder <c>FUN_1408caf00</c>, docs/game/ai-tasks.md "Town goals"): a
-    /// member whose role list has 275 open at this hour takes a piece of furniture of the mask 0x1020080 that no one claimed in this cadence pass, in
-    /// the town it stands in (<see cref="TownPlaces.Seats"/>; the home need not be a part of it): a chair or throne, and a training dummy unless the
+    /// member whose role list has 275 open at this hour (or 255 Reigning, only the squad's leader: 255's desire, AI slot 67, is 0 for the others)
+    /// takes a piece of furniture of the mask 0x1020080 that no one claimed in this cadence pass, in the town it stands in (<see cref="TownPlaces.Seats"/>; the home need not be a part of it): a chair or throne, and a training dummy unless the
     /// character is on the player's side (the mask 0x1020000 of <c>FUN_140856bc0</c>: a recruit, or a member of an autonomous player squad). The
     /// town must be the squad's home town or owned by the squad's faction, a player-side character's a town of the player's faction
     /// (<see cref="MaySitIn"/>), and the piece's building owned by the character's faction or the squad's (<see cref="TownPlaces.SeatOwners"/>);
@@ -411,10 +411,11 @@ sealed class TownPlaceClaims(PopulationData data)
             if (!world.Characters.TryResolveNext(id, out int s) || world.Characters.Cold(s) is not { } cold || cold.Ai is null) continue;
             var roles = RolesOf(world, board, squad, id, cold);
             bool sits = false, around = false;
+            bool reigns = id == squad.Leader;   // 255's desire is 0 for any other member, so its finder is not asked (FUN_140597c20)
             for (int g = 0; g < roles.Count; g++)
             {
                 if (!roles[g].InWindow(hour)) continue;
-                sits |= roles[g].Task.Type is TaskType.SitAround or TaskType.SitOnThrone;
+                sits |= roles[g].Task.Type == TaskType.SitAround || roles[g].Task.Type == TaskType.SitOnThrone && reigns;
                 around |= roles[g].Task.Type == TaskType.SitAround;
             }
 

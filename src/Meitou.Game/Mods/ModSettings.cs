@@ -164,6 +164,8 @@ public sealed class ModSetting
             {
                 if (!_visibleFailed)
                     Console.Error.WriteLine($"mod       {Group.ModId}: setting '{Key}' VisibleWhen '{VisibleWhen}' failed: {e}");
+
+                Content.CodeModFaults.Tell(Group.ModId, e);
                 _visibleFailed = true;
                 return true;
             }

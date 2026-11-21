@@ -40,8 +40,9 @@ public enum BodyEvents : byte
 /// "Order queue"): getting up 65 and waking low 52 (<c>FUN_1405d00b0</c>, <c>FUN_1405c7e20</c>), stumbling 147 (<c>FUN_1404391f0</c> →
 /// <c>FUN_140507cd0</c>) and getting out of bed 116 (a failed kidnap, <c>FUN_14034ffa0</c>). Their act-out is standing in place (<see cref="CharacterTask.Idle"/>
 /// under the order's row) while the body's own hold lasts: the get-up's (<see cref="CharacterCold.GettingUpUntil"/>) and the stumble's
-/// (<see cref="CharacterCold.StaggeredUntil"/>), which the body step and the hit set. They release no duty (<see cref="OrderEntry.Interrupts"/>) and
-/// are not saved. Serial phases, but <see cref="Stumbles"/>.
+/// (<see cref="CharacterCold.StaggeredUntil"/>), which the body step and the hit set; the stumble's ends with its task, which the character's next
+/// AI update ends (<see cref="UpdateEnds"/>). They release no duty (<see cref="OrderEntry.Interrupts"/>).
+/// Saved as any queued order (the writer <c>FUN_1405090b0</c> has no row filter), their holds not. Serial phases, but <see cref="Stumbles"/>.
 /// </summary>
 public sealed class BodyOrders : IOrderOwner, ITaskHandler
 {
@@ -114,15 +115,24 @@ public sealed class BodyOrders : IOrderOwner, ITaskHandler
     /// <summary>
     /// The stagger outside a fight (<c>FUN_1404391f0</c> → <c>FUN_140507cd0</c>, <b>Verified</b>): 147 at the front of the queue, its stumble started
     /// with no plan; a second blow while one runs adds another front 147 and the running stumble goes on (<see cref="PlayerOrders.GiveFront"/>).
-    /// Serial phases, after the hit set the stumble's hold. A character with no squad, which no chooser ever runs for (and so none would pop it),
-    /// gets none unless the decision step decides it.
+    /// Serial phases, after the hit set the stumble's hold. A character with no squad gets it too: the insert sets the body task itself, and the
+    /// task-ended handling that pops it (<c>FUN_1405c7c30</c> → <c>FUN_14050d920</c>) runs without a chooser (<see cref="PlayerOrders.DropEnded"/>).
     /// </summary>
-    internal void Stumble(World world, int slot)
+    internal void Stumble(World world, int slot) =>
+        PlayerOrders.GiveFront(world, slot, new OrderEntry(TaskType.StumbleTaskForced, this) { Interrupts = true, Forced = true });
+
+    /// <summary>
+    /// The character's AI update after the stagger (the look, before the order step's pops): the front insert asked a replan, and an update with
+    /// one pending stops the running task before its chooser (<c>FUN_140511130</c> → CharBody slot 12 <c>FUN_1405c6770</c>, <b>Verified</b>), so
+    /// a running stumble ends there, its clip with it, and the order step starts the interrupted order again (<b>Observed</b>, docs/game/combat.md
+    /// "Stagger outside a fight"). A character no update runs for keeps the clip's hold. Serial phases.
+    /// </summary>
+    internal static void UpdateEnds(World world, int slot)
     {
         var cold = world.Characters.Cold(slot)!;
-        if (cold.SquadId < 0 && !DecisionSystem.Decides(cold)) return;
+        if (cold.OrderQueue.Front is not { Row: TaskType.StumbleTaskForced } front || !PlayerOrders.Runs(world, slot, front)) return;
 
-        PlayerOrders.GiveFront(world, slot, new OrderEntry(TaskType.StumbleTaskForced, this) { Interrupts = true, Forced = true });
+        TaskStart.End(world, slot, TaskEnd.Done);
     }
 
     /// <summary>
@@ -162,11 +172,6 @@ public sealed class BodyOrders : IOrderOwner, ITaskHandler
         TaskStart.Start(world, slot, request);
     }
 
-    /// <summary>
-    /// Not saved: each is a moment of the body, which a load does not keep either.
-    /// </summary>
-    int IOrderOwner.SaveKind(OrderEntry order) => -1;
-
     #endregion
 
     #region Act-out
@@ -181,10 +186,19 @@ public sealed class BodyOrders : IOrderOwner, ITaskHandler
     }
 
     /// <summary>
-    /// Holds nothing: the body's hold runs out by itself.
+    /// A get-up's or a bed leave's end holds nothing: the body's hold runs out by itself. A stumble's is the hold's end, however the task ends (its
+    /// clip done, an order that clears the queue, a task that replaces it, a wipe): <c>Task_Stumble</c>'s end unlocks the mover and clears the
+    /// stumble clip (<c>FUN_140335040</c>, <b>Verified</b>), which is what held the character (<c>FUN_1405cfd90</c> → <c>FUN_140435570</c>
+    /// locks the mover each frame only while that clip plays). A get-up's hold the stumble's shares stays.
     /// </summary>
     void ITaskHandler.End(World world, int slot, CharacterTask task, TaskEnd reason)
     {
+        var cold = world.Characters.Cold(slot)!;
+        if (cold.Running?.Row != TaskType.StumbleTaskForced) return;
+
+        long now = world.Tick;
+        if (cold.StaggeredUntil > now) cold.StaggeredUntil = Math.Min(cold.StaggeredUntil, Math.Max(now, cold.GettingUpUntil));
+        world.SystemOf<CombatSystem>()?.EndStumble(slot, (int)now);
     }
 
     /// <summary>

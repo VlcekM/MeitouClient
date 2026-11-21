@@ -30,9 +30,9 @@ public sealed record MoveOrder(IReadOnlyList<CharacterId> Characters, Vector3 Ta
 public sealed record FollowOrder(IReadOnlyList<CharacterId> Characters, CharacterId Target) : OrderCommand
 {
     /// <summary>
-    /// Bodyguard (order 45) rather than Follow (31): both fight an attacker of the target within 40 of it (state 16), a bodyguard also its own
-    /// attacker within 40 (state 39; <see cref="CharacterCold.Guarding"/>, <c>RetaliationSystem.Guards</c>, docs/game/ai-tasks.md "Precedence"); the
-    /// Bodyguard job's follow is the same row.
+    /// Bodyguard (order 45) rather than Follow (31): both plan a fight on an attacker of the target while it is threatened within 40 (state 16), a
+    /// bodyguard also while it is itself (state 39; <see cref="CharacterCold.Guarding"/>, <see cref="Ai.FollowDefence"/>, docs/game/ai-tasks.md
+    /// "Precedence"); the Bodyguard job's follow is the same row. The game's verb always gives the job, so only tools give this order.
     /// </summary>
     public bool Guard { get; init; }
 }

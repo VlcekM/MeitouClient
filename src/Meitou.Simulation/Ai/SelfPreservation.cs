@@ -8,8 +8,7 @@ namespace Meitou.Simulation.Ai;
 /// (<see cref="Combat.CombatSystem.ThreatLevel"/>) and it is achieved by the first provider of <c>!isAggressionTowardsMe</c> the planner reaches: 13
 /// "Attacking attackers of" (which leads to 4 Attacking; Meitou: the AI's serial step starts the fight on its own attacker, <see cref="AiSystem"/>)
 /// or 35 "Running away" (<see cref="FleeSystem"/> runs). This holds the two rows' desires and the planner's choice between them, which depends only
-/// on the character's body. The player's characters are the player's to drive (the original's veto for them, which wants no working arm, is not
-/// modelled).
+/// on the character's body and row 35's desire (a player-faction mind's has the vetoes of <c>FUN_1405a34e0</c>'s player branch, given by the AI).
 /// </summary>
 public static class SelfPreservation
 {
@@ -33,8 +32,8 @@ public static class SelfPreservation
     /// Row 35's desire (AI slot 55, <c>FUN_1405a34e0</c>, <b>Verified</b>): 1 for a crippled character (Character <c>isCrippled</c>, the medical
     /// tick's flag: a leg down, so it crawls), else 0.001. 0 for a character shut in behind a locked gate of town walls (<paramref name="walled"/>,
     /// <b>Verified</b>: <c>FUN_1402eb070</c> to code 0 is 3); the building half of the location test <c>FUN_1405a2710</c> (no open door) is not
-    /// modelled. A player's character has 0 here: its Self preservation is the player's; its player-faction branch serves the Obedient Slave job
-    /// (<see cref="AiSystem.ObedientRunDesire"/>), which adds its vetoes to <see cref="BodyRunDesire"/>.
+    /// modelled. A player's character has 0 here; a player-faction mind's 35 (a slave's goal, a node under 32) takes the player-faction branch
+    /// (<see cref="AiSystem"/>'s player-side run desire), which adds its vetoes to <see cref="BodyRunDesire"/>.
     /// </summary>
     public static float RunDesire(CharacterCold cold, bool walled = false) => cold.IsPlayer ? 0 : BodyRunDesire(cold, walled);
 
@@ -70,16 +69,27 @@ public static class SelfPreservation
     static bool CanRun(CharacterCold cold) => cold.Medical is { } medical && (medical.Crawling || !medical.Prone);
 
     /// <summary>
+    /// Whether a 35 node of desire <paramref name="run"/> is made and accepted (<c>FUN_14051bae0</c>: a node of desire 0 is never made; then it can
+    /// run, <see cref="CanRun"/>): the planner's plan under 32 when the chain through 13 dead-ends.
+    /// </summary>
+    public static bool CanRunAt(CharacterCold cold, float run) => run > 0 && CanRun(cold);
+
+    /// <summary>
     /// The planner's choice under goal 32 at threat level <paramref name="level"/> (docs/game/ai-tasks.md "Planner": best first by g + h, g the least
     /// desire on the way down from the goal's own, h the node's): true when 35 runs, false when the chain through 13 fights. A character that cannot
     /// fight (no arm, or crippled with nothing close) runs; a crippled one runs even when it can fight, for 35 is worth 1 against 4's 0.1; any other
     /// fights, 35 being worth 0.001. One in deep water runs too: the chain through 13 is a dead end there, its providers of state 7 (4 and 262)
     /// needing <c>!me swim</c>, which no row provides (<see cref="Combat.CombatSystem.SwimBarred"/>); an animal's 227 has no such test.
     /// </summary>
-    public static bool Runs(CharacterCold cold, float level, bool walled = false)
+    public static bool Runs(CharacterCold cold, float level, bool walled = false) => RunsAt(cold, level, RunDesire(cold, walled));
+
+    /// <summary>
+    /// <see cref="Runs"/> with row 35's desire <paramref name="run"/> given (a player-faction mind's, <c>FUN_1405a34e0</c>'s player branch).
+    /// </summary>
+    public static bool RunsAt(CharacterCold cold, float level, float run)
     {
-        float run = RunDesire(cold, walled);
-        if (run <= 0 || !CanRun(cold)) return false;
+        if (!CanRunAt(cold, run)) return false;
+
         bool swimming = cold is { WaterState: 3, InSomething: Locks.HeldState.None } && cold.Fighter?.IsAnimal != true;
         float fight = swimming ? 0 : AttackDesire(cold, level >= 1);
         return fight <= 0 || Value(level, run) > Value(level, fight);
@@ -89,11 +99,4 @@ public static class SelfPreservation
     /// The value of the goal at a threat <paramref name="level"/>: the smaller of the level and the desire, plus the desire.
     /// </summary>
     static float Value(float level, float desire) => MathF.Min(level, desire) + desire;
-
-    /// <summary>
-    /// Whether this character flees under Self preservation when threatened: an NPC with an AI whose body takes the choice to 35
-    /// (<see cref="Runs"/>).
-    /// </summary>
-    public static bool Flees(CharacterCold cold, float level, bool walled = false) =>
-        !cold.IsPlayer && cold.Ai is not null && Runs(cold, level, walled);
 }

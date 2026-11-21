@@ -62,13 +62,16 @@ public sealed partial class FixtureRegistry
     /// (squared 1.5625e7; nest markers, town type 8, left out), the cages within <see cref="TownReach"/> x that town's radius of its centre; plus
     /// those of the town of its squad's home when that differs. With no town at all every cage of the world qualifies. The towns' fixtures are
     /// registered (a town no one has loaded has its cages all the same). A nest building's cage of the carrier's faction always qualifies
-    /// (<see cref="Fixture.Nest"/>; the original's nest is a town of its own, which the town lookup here does not list: engine reading). Pass the
-    /// result to <see cref="FindCage"/> as part of its skip test; serial phases only.
+    /// (<see cref="Fixture.Nest"/>; the original's nest is a town of its own, which the town lookup here does not list: engine reading). A cage in
+    /// the carrier's ignore map (a lost walk's 20 s, <see cref="CharacterCold.IsIgnored"/>) does not qualify (<c>FUN_1408d0770</c> asks
+    /// <c>FUN_1405b0290</c> of each cage's hand, <b>Verified</b>). Pass the result to <see cref="FindCage"/> as part of its skip test; serial phases
+    /// only.
     /// </summary>
     public Func<Fixture, bool> CageCandidates(World world, PopulationData data, CharacterCold carrier, Vector3 at)
     {
         var inReach = TownCandidates(world, data, carrier, at);
-        return f => f.Nest && f.Owner == carrier.Faction || inReach(f.Position);
+        long tick = world.Tick;
+        return f => (f.Nest && f.Owner == carrier.Faction || inReach(f.Position)) && !carrier.IsIgnored(new IgnoreKey(f.Id, default), tick);
     }
 
     /// <summary>
@@ -80,16 +83,44 @@ public sealed partial class FixtureRegistry
     public Func<Vector3, bool> TownCandidates(World world, PopulationData data, CharacterCold carrier, Vector3 at)
     {
         _usableData ??= data;
-        var town = AiSystem.TownAt(data, world, at);
-        if (town.IsNone) town = NearestTownOf(world, data, carrier.Faction, at);
-        if (town.IsNone) return static _ => true;
-        int faction = carrier.Faction;
-        var home = world.Squads.Find(carrier.SquadId) is { Town: >= 0 } squad ? CampaignTown.OfSite(squad.Town) : CampaignTown.None;
-        if (home == town) home = CampaignTown.None;
-        var (centre, reach) = Reach(world, data, town);
-        var (homeCentre, homeReach) = home.IsNone ? default : Reach(world, data, home);
+        var (town, home) = CandidateTowns(world, data, carrier, at);
         if (town.Site >= 0) RegisterSite(world, data, town.Site);
         if (home.Site >= 0) RegisterSite(world, data, home.Site);
+        return InTowns(world, data, town, home);
+    }
+
+    /// <summary>
+    /// <see cref="TownCandidates"/> as a pure read, for the parallel think (row 94's finder): the towns' fixtures are those registered so far.
+    /// </summary>
+    public Func<Vector3, bool> RegisteredTownCandidates(World world, PopulationData data, CharacterCold carrier, Vector3 at)
+    {
+        var (town, home) = CandidateTowns(world, data, carrier, at);
+        return InTowns(world, data, town, home);
+    }
+
+    /// <summary>
+    /// The towns of <see cref="TownCandidates"/>: the one the character stands in, else its faction's nearest; and its squad's home town when that
+    /// differs (none: <see cref="CampaignTown.None"/>).
+    /// </summary>
+    static (CampaignTown Town, CampaignTown Home) CandidateTowns(World world, PopulationData data, CharacterCold carrier, Vector3 at)
+    {
+        var town = AiSystem.TownAt(data, world, at);
+        if (town.IsNone) town = NearestTownOf(world, data, carrier.Faction, at);
+        if (town.IsNone) return (town, CampaignTown.None);
+
+        var home = world.Squads.Find(carrier.SquadId) is { Town: >= 0 } squad ? CampaignTown.OfSite(squad.Town) : CampaignTown.None;
+        return (town, home == town ? CampaignTown.None : home);
+    }
+
+    /// <summary>
+    /// The position test of <see cref="TownCandidates"/>: within <see cref="TownReach"/> x the radius of either town; every position without one.
+    /// </summary>
+    static Func<Vector3, bool> InTowns(World world, PopulationData data, CampaignTown town, CampaignTown home)
+    {
+        if (town.IsNone) return static _ => true;
+
+        var (centre, reach) = Reach(world, data, town);
+        var (homeCentre, homeReach) = home.IsNone ? default : Reach(world, data, home);
         return position =>
         {
             var p = new Vector2(position.X, position.Z);

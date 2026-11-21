@@ -500,8 +500,9 @@ eat task, animation or player command (a right click on food does nothing, [ui-s
   Consume=Eat and `Character_Consume` within 200 units of the camera. The stomach then digests (hunger tick).
 - Food records do not stack (`stackable` 1 on all 15 base food items, **Verified** by probe). `vampiric`
   (spiders, land bats, skimmers) is read only by the loader here; it concerns eating downed bodies.
-- AI slot 25 (`FUN_140597d30`, the AI's eat desire) is 1 when hungry (hunger <= 2.4), AI +0xb0 and +0xb4 not
-  above 0 and no food in the inventory; 0.1 when +0xb4 > 0 and hunger < 1.2.
+- AI slot 25 (`FUN_140597d30`, the AI's eat desire): 0 unless hungry (`FUN_1405c7f70`, above) with hunger <= 2.4; then 0 while AI +0xb0
+  (threat to it) is above 0; else 0.1 when +0xb4 (threat to its allies) > 0 and hunger < 1.2, 0 above; else 1 with no food (types 15, 3) in the
+  inventory's own list (`FUN_1403344c0`, the bag not read), else 0. It reads no Feed Animals option.
 - **Mouth** (**Verified**, decompile of `FUN_14034f340`, `FUN_1405d0b50`, `FUN_1405c8240`, `FUN_1405d0d20`, `FUN_1405dc650`; the attach point is the string `mouth`,
   `FUN_141534950`). Only a **limb** (item function 17, item `+0x124`) picked up by an animal (vfunc 0x248 non-null) goes to the mouth; any other item, and a limb picked up
   by a person, goes into the inventory (the pickup task, below). Taking it: the limb held before is let go (`FUN_1405c8240`), the new one is flagged held (`+0xd8` = 1), attached to the
@@ -521,12 +522,16 @@ eat task, animation or player command (a right click on food does nothing, [ui-s
   (`FeedSystem.HasMouth`: its look's attachment points; none without a look) leaves the limb (`PlayerSystem.TakeInMouth`). Engine choices: a held limb is neither saved nor carried
   across a load; it goes with the animal if the animal dies or is removed.
 - **Food on the ground** (**Verified**, decompile): `Character::setupAI` gives every animal of a player squad goal 259 EAT_FOOD_ON_GROUND (priority 3, weight 0.5; it drops race goal 230)
-  and every player character 243. 259's desire: 0 unless the character wants to eat now (needs food, stomach empty, hunger < 2.5) and medical hunger <= 2.4; then 1.0 with no food in
-  its inventory and no enemies, 0.1 with enemies only below 1.2. Finder `FUN_14099a930`: the nearest food it may eat (function 3, 15 for an animal or a race that lists it) on
-  the ground within 100 in its own location, accessible, passing the stealing check; else a sensed corpse within 100 with such food. Meitou (`FeedSystem.GroundFood`): the ground pass only; a player character's 259 is a source of the [decision step](../simulation.md#decision-step).
-  The player's bonedog with no bag picks up Raw Meat dropped beside it and eats it (**Observed** in the original, 2026-11-14). Meitou: fetched food (`CharacterCold.FetchingFood`) may go into the animal's
-  [shut](animals.md#pack-animals) grid and is eaten from there (engine choice); the animal fetches only while Feed Animals is on, and checks the food
-  again on arrival (`FeedSystem.FreeFood`): after a load a shop slot claims its loose items only once its building is set up, so food that looked free
+  and every player character 243. 259's desire is AI slot 25 (above; the registration's stub jumps to it). Finder `FUN_14099a930`: pass 1 the nearest food it may eat (function 3, 15 for an animal or a race that lists it) on
+  the ground strictly within 100 (3D) in its own location (building or outdoors), not behind a closed gate (`FUN_140597160`), accessible (`FUN_140597030`) and passing `FUN_140997d80`:
+  an owned item must be of its faction, except for a looker whose status town (status `+0x88`) is a player faction's (its faction's `+0x250`), on an item outdoors or in a player-faction building. Pass 2, with none: the first sensed dead body (mask 0x10)
+  not carried, not in a bed or cage, within 100, worked by no squad mate (`FUN_1402690e0`), reachable (both tests) and holding such food (`FUN_1407465d0`: function 15 the looker eats, plus 3);
+  row 3 on that body is `Task_Loot_AI` ([NPC looting](carry-loot.md#33-npc-looting)). Meitou: 259 is a [captive goal](../simulation.md#captives) on the chooser's rung (`CaptiveGoals`:
+  desire `FeedSystem.EatDesire`, finder `FeedSystem.GroundFood` then `FoodBody` over the sense entries in slot order; act-out row 3's pick-up, or the NPC loot of the body,
+  `CaptiveJobKind.LootFood`, a goal's loot taking the NPC loot's path for a player-side looter too).
+  The player's bonedog with no bag picks up Raw Meat dropped beside it and eats it (**Observed** in the original, 2026-11-14). Meitou: fetched food (`CharacterCold.FetchingFood`), and the food 259's body loot takes (`CarrySystem.LootsToEat`), may go into the animal's
+  [shut](animals.md#pack-animals) grid and is eaten from there (engine choice); with Feed Animals off it still fetches (slot 25 reads no option) but does not eat, so
+  the carried food ends the want. It checks the food again on arrival (`FeedSystem.FreeFood`): after a load a shop slot claims its loose items only once its building is set up, so food that looked free
   can turn out to be the shop's.
 - **Food from storage** (**Verified**, decompile; registration of 243 in `FUN_140319a60`, desire `AI` slot 26 → 24 → 25): 243's desire is 0 for an animal while a global
   byte (`DAT_142134690+0x114`) is clear, the byte the eating rule `FUN_1405d29c0` tests for animals, so the squad option Feed Animals (**Observed**: writer not traced); 0 outside a town (status `+0x88`); 0 in a town of another faction unless town slot
@@ -535,12 +540,11 @@ eat task, animation or player command (a right click on food does nothing, [ui-s
   (`+0x128`, the size of the `occupiers` set) while the character senses an enemy (`SensoryData::numEnemies` > 0): 0.2 inside the walls (`amInsideTownWalls` > 0), whatever its
   hunger; else 0 when the town has gates (`Town::hasGates`, `+0x3b0` set; always false for TownBase); else 259's desire (slot 25, above). **Verified**, decompile of `AI::vfunc_24`
   `FUN_14059bbd0` and the Town slots. The finder and the take (244, one item): [ai-tasks](ai-tasks.md#arrest-and-prison-rows).
-  Meitou (`TownDutySystem.FoodWant`): for a player character a step-4 source of the [decision step](../simulation.md#decision-step) (after its orders, before its jobs; weight 0.5 against
-  Self preservation's 1 and Hold's attack on sight), for the other player-faction characters a pass over those idle or on a job's task; a store owned by their faction in their own town or
-  one where the player owns a house, its storages too (engine reading of the resident set, not tied to having stood in it; #762); the occupied branch as above, gates read as a gate building in the town. A fight
-  that replaces a player character's food run ends it. No run starts without room for the item the take picks ([state 82](ai-tasks.md#statetype-ids)):
-  the step's reason is "no room for the food" and the character keeps its job. Food in the worn bag counts as carried, so one meal takes one item
-  ([244](ai-tasks.md#perma-jobs)).
+  Meitou: a player-faction character's 243 is its own list's goal on the chooser's priority-3 rung ([decision step](../simulation.md#decision-step); weight 0.5 against
+  Self preservation's 1), acted out as an NPC's (`TownGoals`' food run); the store is one owned by its faction in its own town or one where the player owns a house, its storages too
+  (`TownDutySystem.FoodStore`; engine reading of the resident set, not tied to having stood in it; #762); the occupied branch as above (`TownExit.HasGates`: the gate set's rule,
+  [condition 49](dialogue.md)). Without room for the item the take picks ([state 82](ai-tasks.md#statetype-ids)) its plan ditches first (114, 93); a take that moves nothing at the
+  store fails and replans, with no ignore (`Task_grabOneFood` `FUN_140340850` sets the failed flag, whose handler `FUN_14050d080` clears the target, **Verified**). Food in the worn bag counts as carried, so one meal takes one item ([244](ai-tasks.md#perma-jobs)).
 - Meitou: `FeedSystem` (checks every 30 ticks, engine choice), squad options `SquadAi.Feed` / `Share` (CAMERA
   bools `feed`, `share`, **Verified** reader `FUN_1403ebf50`; default on).
 
@@ -601,7 +605,7 @@ A corpse is removed when no request holds its zone: the camera's block 4 s after
 **Corpses in saves**: an NPC platoon keeps its dead in its character list (the death handler `FUN_1407a6200` moves only the player's dead out, into `__DEAD_SQUAD__`). Unloading a platoon
 (`FUN_1407ef4b0`) serialises the whole list with `FUN_1404ff410` (`char count` = the list's size, dead included, **Verified**), then destroys the characters (`FUN_1404feed0`); a save writes the same
 (`FUN_140372ef0`), so a save holds the dead with the medical `dead` flag (census: 8 dead of 49 wild characters). The platoon decides its own relevance (`FUN_1404febd0`): it stays active while the zone of its
-position (`FUN_1404fed50`, **Verified**: its effective leader's ([squad leader](factions-squads-towns.md#squad-leader)) while that is not down, else the mean of its members that are not dead, a knocked-out one counting, else the last place; Meitou `PlatoonPosition`) is loaded or requested, and goes after 4-5 s without. A platoon whose members are all dead is declared dead (Meitou `Platoon.Dead`)
+position (`FUN_1404fed50`, **Verified**: its effective leader's ([squad leader](factions-squads-towns.md#squad-leader)) while that is not down, else the mean of its members that are not dead, a knocked-out one counting (divided by the number summed, not the member count), else the last place; Meitou `PlatoonPosition`) is loaded or requested, and goes after 4-5 s without. A platoon whose members are all dead is declared dead (Meitou `Platoon.Dead`)
 (`FUN_140797090`, `persistent` off, destroyed at its next unload). The character reader restores the `dead` flag; the death clock is not saved, so a restored corpse lies 12 hours from its first update
 (**Observed**: the make-from-record loop was not read; the writer and the first-update clock are **Verified**). A corpse that decays or is unloaded is destroyed and so leaves its platoon's list.
 **Loader (partly traced)**: `FUN_140795b30` (ActivePlatoon vtable `0x1416e2e08` slot 9) reads the platoon file (`platoon/<name>`) into the record, then calls slot 6 `FUN_14036d7e0` to make the characters from it and places them (`FUN_1405ca680`). `FUN_1404ffad0` (slot 4 step) makes characters from a template only when the platoon has none (`FUN_140583a10`, "createRandomSquad"). Platoon relevance: `FUN_1404febd0` keeps it while its zone is loaded or requested and inside the zone bounds trimmed by 170 on unloaded sides (`FUN_140a09770`); timer 4 s while relevant, 5 s with no zone record, counts down by game dt otherwise; an unloaded one activates once its dwell runs out inside a ready zone's trimmed box ([platoons](factions-squads-towns.md), `FUN_1407ebf30`). A member carrying a player-faction character holds it too (`PopulationSystem.SquadCarriesPlayer`). Meitou's squads use the same loaded zones as the corpses (below) and must stand in the zone's trimmed box (`ZoneActivation.InLoadedBox`, `PopulationSystem.Wanted`), then `UnloadGraceSeconds` (the original's 4 s / 5 s countdown is an engine choice); the activation box (trim 170) and the stand-in stop test's box (~178.5, `PopulationSystem.StandIn`) are built (`ZoneActivation.TrimmedBox`).

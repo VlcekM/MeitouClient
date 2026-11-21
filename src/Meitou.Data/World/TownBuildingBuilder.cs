@@ -153,6 +153,7 @@ public sealed class TownBuildingBuilder
             CanHouse = record.GetBool("is wall gate") || record.GetReferences("interior").Count > 0 && !record.GetBool("links together"),
             Furnished = c.Furnished,
             IsGate = record.GetBool("is wall gate"),
+            IsGateway = record.GetBool("is gateway"),
             IsWall = record.GetBool("links together"),
             HasInterior = record.GetReferences("interior").Count > 0,
             Destroyed = resolved.Destroyed,

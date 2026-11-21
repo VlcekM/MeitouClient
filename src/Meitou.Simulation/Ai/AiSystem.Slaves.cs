@@ -1,101 +1,57 @@
-using System.Numerics;
 using Meitou.Data.Gameplay.Ai;
-using Meitou.Data.World;
 using Meitou.Simulation.Factions;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Ai;
 
 /// <summary>
-/// The town data and finders a player character's Obedient Slave job (187, Kidnap/ObedientSlave.cs) works with: the worker goals' finder (189 / 190)
-/// over the town a point is in, and the combat goals 41 and 143 of its master's Slave list.
+/// What a player-faction slave's goals of its master's Slave list (job 187, <see cref="ObeyedRoles"/>) need beyond an NPC's: the town its worker goals
+/// (189 / 190) work in and their operator slots, and row 35's player-faction desire.
 /// </summary>
 public sealed partial class AiSystem
 {
-    #region Work
+    #region Work town
 
     /// <summary>
-    /// Whether the town at <paramref name="at"/> has a workplace goal <paramref name="type"/> may work at for the character (the finders of 189 / 190
-    /// return 0 without one: <see cref="PickWork"/>'s list, the player-flag gate and a free operator slot, the one it operates counting as free).
+    /// The town whose workplaces the worker goals 189 / 190 find for <paramref name="mind"/>: its stamped town (<see cref="AiMind.WorkTown"/>).
     /// </summary>
-    internal bool HasWorkplaces(World world, CharacterId self, Vector3 at, TaskType type)
-    {
-        if (TownAt(at) is not (>= 0 and var site)) return false;
-
-        var town = Population.CampaignTown.OfSite(site);
-        if (!WorkAllowed(world, self.Slot, town)) return false;
-
-        var held = HeldWork(world, self);
-        return WorkplacesFor(town, type).Any(b => HasFreeSlot(b, held));
-    }
+    static CampaignTown WorkTownOf(AiMind mind) => mind.WorkTown;
 
     /// <summary>
-    /// The building a worker on goal <paramref name="type"/> works at in the town at <paramref name="at"/> (<see cref="PickWork"/>: a random
-    /// workplace, the roll the character's and its <paramref name="epoch"/> of picks, 189 only one it can run), the clip it plays there, the
-    /// building's functionality, its <c>hunger rate</c> and the faction owning the town; null when the town has none.
+    /// The worker's own status town (<c>FUN_1408cac60</c> / <c>FUN_1408cadb0</c> ask the town of the character's status, AI <c>+0x18</c>
+    /// <c>+0x88</c>, the same field 135's desire and the 173 and 276 finders read, <b>Verified</b>; not its platoon's blackboard, whose town is
+    /// <c>+0x138</c>): <see cref="StatusTownAt"/> from where it stands and its last status town. None outside every town (the original then searches
+    /// every town's workplaces in the 3 x 3 zone cells round it: not modelled, Meitou finds none).
     /// </summary>
-    internal ObedientWorkplace? WorkAt(World world, CharacterId self, Vector3 at, int epoch, TaskType type)
-    {
-        if (TownAt(at) is not (>= 0 and var site)) return null;
-
-        var town = Population.CampaignTown.OfSite(site);
-        if (PickWork(world, self, town, epoch, type, HeldWork(world, self)) is not { } building) return null;
-
-        var functionality = _work.FunctionalityOf(building);
-        return new ObedientWorkplace(building, _work.ClipOf(building), functionality, _work.ToolOf(functionality), _work.HungerRateOf(building),
-            WorkRangeOf(building), town.Owner(world, data));
-    }
+    CampaignTown WorkTownAt(World world, int slot, CharacterCold cold) =>
+        StatusTownAt(data, world, world.Characters.Next[slot].Position, cold.StatusTown);
 
     /// <summary>
-    /// The workplaces of the town at <paramref name="at"/> (none outside a town): row 94's candidates
-    /// (<see cref="Production.ProductionSystem.InputSource"/>).
+    /// The worker goals' finder factor (<c>FUN_1408cac60</c> / <c>FUN_1408cadb0</c>): a workplace of <paramref name="town"/> the character may work at,
+    /// the one whose slot it holds or a pick with a free slot.
     /// </summary>
-    internal IReadOnlyList<TownBuilding> TownWorkplaces(Vector3 at) => TownAt(at) is >= 0 and var site ? Places(site).Workplaces : [];
+    bool WorkWanted(World world, CharacterId self, AiMind mind, CampaignTown town, TaskType type) =>
+        WorkAllowed(world, self.Slot, town) && (HoldsWork(mind, town, type) || PickWork(world, self, town, mind.WorkEpoch, type) is not null);
 
     /// <summary>
-    /// The workplace an obedient player slave operates now (<see cref="CharacterCold.SlaveWork"/>), null for none.
+    /// Stamps member <paramref name="k"/>'s work town (<see cref="WorkTownAt"/>) when it has a player-faction mind. Serial.
     /// </summary>
-    static TownBuilding? HeldWork(World world, CharacterId self) => world.Characters.Cold(self.Slot)?.SlaveWork?.Place.Building;
-
-    /// <summary>
-    /// The operator slots obedient player slaves hold: one standing at its workplace runs Task_OperateMachine (87 for 189, 221 for 190), whose
-    /// start adds it to the building's operators and whose end removes it (<c>FUN_14035b430</c>, <c>FUN_140347350</c>, <b>Verified</b>), so it
-    /// takes a slot of the functionality's <c>max operators</c> as an NPC worker does. Counted on the cadence pass with the members' kept slots.
-    /// </summary>
-    void ReserveObedientWork(World world)
+    void StampWorkTown(World world, Squad squad, int k)
     {
         var table = world.Characters;
-        for (int s = 0; s < table.HighWater; s++)
-        {
-            if (table.Next[s].Alive && table.Cold(s) is { Ai: null, SlaveWork.Place.Building: var b })
-                _workTaken[b] = _workTaken.GetValueOrDefault(b) + 1;
-        }
+        if (!table.TryResolveNext(squad.Members[k], out int s) || table.Cold(s) is not { Ai: { PlayerSide: true } mind } cold) return;
+
+        mind.WorkTown = WorkTownAt(world, s, cold);
     }
 
-    #endregion
-
-    #region Combat goals
-
     /// <summary>
-    /// Combat goal 41 or 143 of the master's Slave list for an obedient player slave (docs/game/ai-tasks.md "Combat goals"): the desire
-    /// (<see cref="FightDesire"/>: 41's constant 2, 143's 1; 0 when it cannot fight) times its finder's factor (41: 1 with a sensed enemy of the
-    /// master, <see cref="Aggro.AggroSystem.FoeFinder.MasterEnemies"/>; 143: the squad mate's or owned character's fight threat, capped, whose
-    /// attacker row 13 takes, <see cref="ProtectPick"/>), and the character it would fight. <paramref name="squad"/> is the slave's own squad (143's
-    /// mates). While its fight runs (<paramref name="running"/>) the goal is kept as the AI keeps it (<see cref="FightFactor"/>): 41 while it senses
-    /// an enemy or its finder still finds one, 143 while the finder values a mate above 0.
+    /// The operator slots of a player's squad without a board (<see cref="ClaimWork"/> over its members' work towns): a slave on 189 / 190 holds one
+    /// as an NPC worker does, the original's Task_OperateMachine adding it to the building's operators (<c>FUN_14035b430</c>, <b>Verified</b>).
+    /// Serial, on the package cadence.
     /// </summary>
-    internal (float Score, CharacterId Target) ObedientFight(World world, int slot, Squad squad, TaskType type, bool running)
+    void ClaimSlaveWork(World world, Squad squad)
     {
-        float desire = FightDesire(world, slot, type, squad);
-        if (!(desire > 0)) return (0, CharacterId.None);
-
-        if (running)
-        {
-            if (Protects(type)) return (desire * ProtectPick(world, slot, type, squad, attacker: false).Factor, CharacterId.None);
-            if (_aggro?.SensesOf(slot) is { Enemies: > 0 }) return (desire, CharacterId.None);
-        }
-
-        var (factor, target) = FightPick(world, slot, type, squad);
-        return (desire * factor, target);
+        if (IsPlayers(world, squad)) ClaimWork(world, squad);
     }
 
     #endregion
@@ -109,13 +65,13 @@ public sealed partial class AiSystem
     static readonly int[] RunningWeapons = [3, 6, 8];
 
     /// <summary>
-    /// Goal 35 Running away of the master's Slave list for an obedient player slave: done (0) while its list A holds (<c>!39</c> no immediate threat
-    /// and <c>6</c> no enemy sensed); else row 35's desire (AI slot 55 <c>FUN_1405a34e0</c>, <b>Verified</b>), whose player-faction branch gives 0
-    /// while either arm works (<c>FUN_140644150</c>), while it shoots at a target that is not down (<c>FUN_1404366b0</c>: the crossbow controller's
-    /// combat mode, <see cref="CharacterCold.RangedCombatMode"/>) or while a weapon in its <c>hip</c> section has another <c>skill category</c>
-    /// than <see cref="RunningWeapons"/>; then the body's desire (<see cref="SelfPreservation.BodyRunDesire"/>).
+    /// Goal 35 Running away of a player-faction mind (its master's Slave list): done (0) while its list A holds (<c>!39</c> no immediate threat and
+    /// <c>6</c> no enemy sensed); else row 35's desire (AI slot 55 <c>FUN_1405a34e0</c>, <b>Verified</b>), whose player-faction branch gives 0 while
+    /// either arm works (<c>FUN_140644150</c>), while it shoots at a target that is not down (<c>FUN_1404366b0</c>: the crossbow controller's combat
+    /// mode, <see cref="CharacterCold.RangedCombatMode"/>) or while a weapon in its <c>hip</c> section has another <c>skill category</c> than
+    /// <see cref="RunningWeapons"/>; then the body's desire (<see cref="SelfPreservation.BodyRunDesire"/>). Reads the last tick's state.
     /// </summary>
-    internal float ObedientRunDesire(World world, int slot)
+    float PlayerSideRunDesire(World world, int slot)
     {
         var table = world.Characters;
         if (table.Cold(slot) is not { Medical: { } medical } cold) return 0;
@@ -123,6 +79,16 @@ public sealed partial class AiSystem
         bool threatened = _combat is { } combat && Bodies.CharacterFacts.ImmediateThreat(combat, world, slot);
         if (!threatened && _aggro?.SensesOf(slot) is not { Enemies: > 0 }) return 0;
 
+        return PlayerSideRowRunDesire(world, slot, cold, medical);
+    }
+
+    /// <summary>
+    /// Row 35's desire for a player-faction character (<c>FUN_1405a34e0</c>'s player-faction branch, <b>Verified</b>): 0 while either arm works, while
+    /// it shoots (<see cref="Shoots"/>) or while a hip weapon is not one of <see cref="RunningWeapons"/>; else the body's desire
+    /// (<see cref="SelfPreservation.BodyRunDesire"/>). The value of a 35 node of any plan, Self preservation's among them.
+    /// </summary>
+    float PlayerSideRowRunDesire(World world, int slot, CharacterCold cold, Bodies.MedicalState medical)
+    {
         if (medical.ArmWorks(left: true) || medical.ArmWorks(left: false) || Shoots(world, slot, cold) || FightsFromHip(cold)) return 0;
 
         return SelfPreservation.BodyRunDesire(cold, SelfPreservation.Walled(world, slot));
@@ -137,8 +103,8 @@ public sealed partial class AiSystem
 
         var table = world.Characters;
         var (target, generation) = combat.TargetOf(slot, table.Previous[slot].Generation);
-        return target >= 0 && table.TryResolveNext(new CharacterId(target, generation), out int t) && table.Cold(t) is { } tc
-            && !Bodies.CharacterFacts.Down(tc);
+        var id = new CharacterId(target, generation);
+        return target >= 0 && table.IsAlive(id) && table.Cold(target) is { } tc && !Bodies.CharacterFacts.Down(tc);
     }
 
     /// <summary>
@@ -160,17 +126,3 @@ public sealed partial class AiSystem
 
     #endregion
 }
-
-/// <summary>
-/// A workplace an obedient player slave's 189 / 190 picked (<see cref="AiSystem.WorkAt"/>): the building, the clip it plays there, the building's
-/// functionality (null: none), the <c>special tool</c> held there (null: none), its functionality's <c>hunger rate</c>, how near the worker must come
-/// to it and the faction owning its town (-1: none).
-/// </summary>
-public sealed record ObedientWorkplace(TownBuilding Building, string Clip, string? Functionality, string? Tool, float HungerRate, float Range,
-    int Owner);
-
-/// <summary>
-/// An obedient player slave standing at its workplace (<see cref="CharacterCold.SlaveWork"/>): the workplace, and whether its goal is 189 (real work:
-/// row 87 operates the machine, row 92 empties a full output) rather than 190 (pretending, row 221).
-/// </summary>
-public sealed record ObedientWork(ObedientWorkplace Place, bool Operates);

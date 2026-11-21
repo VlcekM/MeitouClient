@@ -55,7 +55,7 @@ public sealed partial class LockSystem
         float bestDistance = float.MaxValue;
         foreach (var id in Who(world, order.Characters))
         {
-            if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { IsPlayer: true, Medical.Incapacitated: false } c
+            if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { Medical.Incapacitated: false } c
                     || c.IsImprisoned && !InCage(c, fixture) || !c.CarriedBy.IsNone || !TaskStart.Eligible(world, c, RowOf(order.Force)))
                 continue;
 

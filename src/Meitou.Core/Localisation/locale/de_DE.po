@@ -4570,3 +4570,18 @@ msgstr "das Spiel zeichnet den Staub und die Spritzer, die ein laufender Fuß au
 
 msgid "1 game data problem, see log.txt"
 msgstr "1 Spieldatenproblem, siehe log.txt"
+
+msgid "built for another version of the game"
+msgstr "für eine andere Version des Spiels gebaut"
+
+msgid "Raids keep their progress"
+msgstr "Überfälle behalten ihren Fortschritt"
+
+msgid "A raid under way when you save goes on where it was when that save is loaded. The game starts its current stage over at every load, so its waits and time limits begin again."
+msgstr "Ein Überfall, der beim Speichern läuft, geht beim Laden dieses Spielstands dort weiter, wo er war. Das Spiel beginnt die aktuelle Phase bei jedem Laden von vorn, sodass ihre Wartezeiten und Fristen neu beginnen."
+
+msgid "Guards stop passing bodies"
+msgstr "Wachen reichen keine Körper mehr weiter"
+
+msgid "A guard picks up a knocked-out prisoner only when a cage is free for them, and never takes one from a guard of his own faction. The game lets guards lift and grab prisoners anyway, so at a full prison they hand the same body round without end."
+msgstr "Eine Wache hebt einen bewusstlosen Gefangenen nur auf, wenn ein Käfig für ihn frei ist, und nimmt nie einen von einer Wache ihrer eigenen Fraktion. Das Spiel lässt Wachen Gefangene trotzdem aufheben und greifen, sodass sie in einem vollen Gefängnis denselben Körper endlos herumreichen."

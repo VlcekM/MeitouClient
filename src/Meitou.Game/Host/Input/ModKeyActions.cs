@@ -84,6 +84,7 @@ public sealed class ModKeyAction
         {
             Faulted = true;
             Console.Error.WriteLine($"mod       {Owner}: key action '{Name}' failed and gets no more presses: {e}");
+            Content.CodeModFaults.Tell(Owner, e);
         }
     }
 

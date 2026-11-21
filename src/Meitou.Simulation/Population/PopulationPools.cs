@@ -516,7 +516,6 @@ public sealed partial class PopulationSystem
         squad.SpawnSize = built.Plan.TotalMembers;
         MoveOutOfPlayerWalls(world, squad);
         TakeRemade(p, squad, built, null, pinned: false);
-        if (Goal(p) is not null && p.WaitLeft <= 0) OrderLeader(world, p, squad);
         Log($"{site.Town.Name}: {squad.Name} made afresh ({squad.Members.Count})");
         return squad;
     }
@@ -661,7 +660,7 @@ public sealed partial class PopulationSystem
         var squad = SpawnSquad(world, built, null, 0, platoonId: p.Id, wild: true);
         squad.HomeCentre = centre;
         squad.HomeRadius = homeRadius;
-        BindNest(squad, nest);
+        BindNest(squad, nest, sp.WildSite);
         squad.Money = p.Money;
 
         p.Stored = new StoredSquad { Name = squad.Name, Pinned = false };
@@ -766,7 +765,7 @@ public sealed partial class PopulationSystem
         squad.HomeCentre = centre;
         squad.HomeRadius = homeRadius;
         squad.Money = p.Money;
-        BindNest(squad, nest);
+        BindNest(squad, nest, sp.WildSite);
         TakeRemade(p, squad, built, null, pinned: false);
         Log($"{nest?.Name ?? sp.Name}: {squad.Name} made afresh ({squad.Members.Count})");
         return squad;

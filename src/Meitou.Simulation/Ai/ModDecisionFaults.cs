@@ -1,13 +1,13 @@
+using Meitou.Content;
 using Meitou.Data.Gameplay.Ai;
 
 namespace Meitou.Simulation.Ai;
 
 /// <summary>
-/// The decision sources and job contributors a code mod's system registered in one world (docs/modding.md "Decision sources"), with their calls
-/// caught. One whose call throws is dropped for that world: it answers that it cannot run and starts nothing from then on, what the throwing call
-/// did stands, the first fault is logged with the mod's id and the player gets a notice, and the faults enter the state hash. The decision step
-/// runs in the serial phases only, so the drop falls at the same call at any thread count. The standard sources are called as they are, never
-/// caught.
+/// The job contributors a code mod's system registered in one world (docs/modding.md "Chooser goals and jobs"), with their calls caught. One whose
+/// call throws is dropped for that world: it answers that it cannot run and starts nothing from then on, what the throwing call did stands, the
+/// first fault is logged with the mod's id and the player gets a notice, and the faults enter the state hash. The job passes run in the serial
+/// phases only, so the drop falls at the same call at any thread count. The engine's contributors are called as they are, never caught.
 /// </summary>
 sealed class ModDecisionFaults
 {
@@ -25,12 +25,6 @@ sealed class ModDecisionFaults
     /// How many guards have dropped their registration.
     /// </summary>
     int _faults;
-
-    /// <summary>
-    /// <paramref name="source"/>, registered by mod <paramref name="mod"/>, with its calls caught.
-    /// </summary>
-    public IDecisionSource Wrap(IDecisionSource source, string mod) =>
-        new GuardedSource(source, Add(mod, $"decision source '{source.Name}'"));
 
     /// <summary>
     /// <paramref name="source"/>, the contributor mod <paramref name="mod"/> registered for job type <paramref name="type"/>, with its calls caught.
@@ -84,105 +78,8 @@ sealed class ModDecisionFaults
             owner._faults++;
 
             Console.Error.WriteLine($"mod       {mod}: {what} dropped for this world, its {call} threw at tick {world.Tick}: {e}");
-            string text = $"Mod {mod}: its {what} stopped after an error ({e.GetType().Name}); the rest of the game goes on.";
-            if (e is MissingMemberException or TypeLoadException) text += " The mod was built for another version of the game and needs an update.";
-            world.ModFaults.Notify(text);
-        }
-    }
-
-    /// <summary>
-    /// A mod's decision source with its calls caught.
-    /// </summary>
-    sealed class GuardedSource(IDecisionSource inner, Guard guard) : IDecisionSource
-    {
-        /// <summary>
-        /// The mod's name for the trace.
-        /// </summary>
-        public string Name => inner.Name;
-
-        /// <summary>
-        /// The mod's step.
-        /// </summary>
-        public DecisionStep Step => inner.Step;
-
-        /// <summary>
-        /// The mod's order within the step.
-        /// </summary>
-        public int Key => inner.Key;
-
-        /// <summary>
-        /// The mod's weight.
-        /// </summary>
-        public float Weight => inner.Weight;
-
-        /// <summary>
-        /// The mod's answer; it cannot run once dropped or when the call throws.
-        /// </summary>
-        public DecisionCheck CanRun(World world, int slot)
-        {
-            if (guard.Dropped) return DroppedAnswer;
-
-            try
-            {
-                return inner.CanRun(world, slot);
-            }
-            catch (Exception e)
-            {
-                guard.Fault(world, "CanRun", e);
-                return DroppedAnswer;
-            }
-        }
-
-        /// <summary>
-        /// The mod's desire; 0 once dropped or when the call throws.
-        /// </summary>
-        public float Desire(World world, int slot)
-        {
-            if (guard.Dropped) return 0;
-
-            try
-            {
-                return inner.Desire(world, slot);
-            }
-            catch (Exception e)
-            {
-                guard.Fault(world, "Desire", e);
-                return 0;
-            }
-        }
-
-        /// <summary>
-        /// The mod's start; nothing once dropped.
-        /// </summary>
-        public void Start(World world, int slot)
-        {
-            if (guard.Dropped) return;
-
-            try
-            {
-                inner.Start(world, slot);
-            }
-            catch (Exception e)
-            {
-                guard.Fault(world, "Start", e);
-            }
-        }
-
-        /// <summary>
-        /// Tells the mod it could not run; nothing once dropped.
-        /// </summary>
-        public void Passed(World world, int slot, in DecisionCheck check)
-        {
-            if (guard.Dropped) return;
-
-            try
-            {
-                inner.Passed(world, slot, check);
-            }
-            catch (Exception e)
-            {
-                guard.Fault(world, "Passed", e);
-            }
+            if (!CodeModFaults.Tell(mod, e))
+                world.ModFaults.Notify($"Mod {mod}: its {what} stopped after an error ({e.GetType().Name}); the rest of the game goes on.");
         }
     }
 

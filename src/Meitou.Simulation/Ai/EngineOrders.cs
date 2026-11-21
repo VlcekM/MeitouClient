@@ -101,8 +101,8 @@ sealed class EngineOrders(AiSystem ai, PopulationData data) : IOrderOwner
     }
 
     /// <summary>
-    /// Where the order walks: 280 to its point, 67 to its target, 19 home, 22 to the squad's patrol point (<see cref="Squad.HomeCentre"/>, which
-    /// the population's patrol step draws); null when there is nowhere.
+    /// Where the order walks: 280 to its point, 67 to its target, 19 home, 22 to the squad's patrol point (<see cref="Squad.PatrolPoint"/>, which
+    /// the population's patrol step draws); null when there is nowhere (22 before its first point is drawn).
     /// </summary>
     Vector2? Goal(World world, int slot, OrderEntry order)
     {
@@ -118,7 +118,7 @@ sealed class EngineOrders(AiSystem ai, PopulationData data) : IOrderOwner
             case TaskType.GoHomebuilding:
                 return Home(squad);
             default:
-                return squad?.HomeCentre;
+                return squad?.PatrolPoint;
         }
     }
 

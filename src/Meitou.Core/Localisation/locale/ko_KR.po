@@ -4568,3 +4568,18 @@ msgstr "게임은 달리는 발이 일으키는 먼지와 물보라를 빛나는
 
 msgid "1 game data problem, see log.txt"
 msgstr "게임 데이터 문제 1개, log.txt 참조"
+
+msgid "built for another version of the game"
+msgstr "다른 버전의 게임용으로 만들어짐"
+
+msgid "Raids keep their progress"
+msgstr "습격이 진행 상황을 유지"
+
+msgid "A raid under way when you save goes on where it was when that save is loaded. The game starts its current stage over at every load, so its waits and time limits begin again."
+msgstr "저장할 때 진행 중이던 습격은 그 저장을 불러오면 있던 곳에서 이어집니다. 게임은 불러올 때마다 현재 단계를 처음부터 다시 시작하므로 대기 시간과 제한 시간이 다시 시작됩니다."
+
+msgid "Guards stop passing bodies"
+msgstr "경비병이 몸을 주고받지 않음"
+
+msgid "A guard picks up a knocked-out prisoner only when a cage is free for them, and never takes one from a guard of his own faction. The game lets guards lift and grab prisoners anyway, so at a full prison they hand the same body round without end."
+msgstr "경비병은 빈 우리가 있을 때만 기절한 죄수를 들어 올리며, 같은 세력의 경비병에게서 빼앗지 않습니다. 게임은 경비병이 그래도 죄수를 들어 올리고 붙잡게 해서, 꽉 찬 감옥에서는 같은 몸을 끝없이 주고받습니다."

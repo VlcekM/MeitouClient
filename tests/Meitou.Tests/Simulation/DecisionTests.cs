@@ -5,8 +5,10 @@ using Meitou.Data.Gameplay.Ai;
 using Meitou.Simulation;
 using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Ai;
+using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Carrying;
 using Meitou.Simulation.Combat;
+using Meitou.Simulation.Crime;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Locks;
 using Meitou.Simulation.FirstAid;
@@ -14,6 +16,7 @@ using Meitou.Simulation.Items;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
 using Meitou.Simulation.Production;
+using static Meitou.Tests.Bodies.BodyFixtures;
 
 namespace Meitou.Tests.Simulation;
 
@@ -28,7 +31,7 @@ public class DecisionTests
     /// </summary>
     static TaskStartTests.Rig Quiet(bool senses = false, FactionRelations? relations = null)
     {
-        var rig = new TaskStartTests.Rig(carrying: false, decide: true, senses: senses, relations: relations);
+        var rig = new TaskStartTests.Rig(carrying: false, decide: true, senses: senses, relations: relations, ai: true);
         rig.World.RunTicks(3);
         rig.Say(new StopCommand([rig.Fighter]) { Tick = rig.World.Tick });
         rig.World.RunTick();
@@ -100,7 +103,21 @@ public class DecisionTests
         Assert.Equal(foe.Slot, rig.Combat.StateOf(f).TargetSlot);
         Assert.Equal("32 Self preservation", rig.Cold(f).Decision!.Winner);
     }
-    static IDecisionSource ProtectAllies(TaskStartTests.Rig rig) => rig.World.Decisions.Sources.Single(s => s.Name == "15 Protect allies");
+
+    /// <summary>
+    /// The desire of goal 15 Protect allies on the character's chooser rung (the player faction's <c>AI Goals</c> entry): its first ally above 0
+    /// times its finder's best (<see cref="AiSystem.Desire"/>, as the tier scores it).
+    /// </summary>
+    static float ProtectDesire(TaskStartTests.Rig rig, CharacterId who)
+    {
+        const TaskType type = TaskType.ProtectAllies;
+        var cold = rig.Cold(who);
+        var squad = rig.World.Squads.Find(cold.SquadId)!;
+        var ai = rig.World.SystemOf<AiSystem>()!;
+
+        return ai.Desire(rig.World, TaskBehaviours.Of(type), type, TaskProfiles.Of(type), squad, AiSystem.PlayerSideBoard(squad), cold.Ai!, who,
+                TaskTargetType.Specific);
+    }
 
     /// <summary>
     /// A fight on the mate: an NPC of the enemy's faction beside it attacks it; the mate (a player's character) fights back.
@@ -124,23 +141,23 @@ public class DecisionTests
         using var rig = Quiet(senses: true);
         var (far, mate) = (rig.Fighter, rig.Mate);   // 40 units apart
         var at = rig.World.Characters.Next[mate.Slot].Position;
-        var near = rig.Add(at.X + 2, at.Z, player: true);   // in no squad
+        var near = rig.Add(at.X + 2, at.Z, player: true);
+        rig.Join(near, null);   // in a squad of its own, not the mate's
         // the rig's own enemy still attacks the fighter: the fighter would be an ally under attack too
         rig.Cold(rig.Enemy).Medical!.KnockOut(100000);
         AttackMate(rig);
-        var goal = ProtectAllies(rig);
         var senses = rig.World.SystemOf<AggroSystem>()!;
         float Threat() => rig.Combat.FightThreat(rig.World, mate.Slot, senses.SensesOf(mate.Slot));
 
         // Each one's desire as it starts, before the far one has run up: the mate's threat, x1 for the near one, x0.1 for the one 40 away.
         float? nearAt = null, farAt = null, nearThreat = null, farThreat = null;
-        for (int t = 0; t < 2 * RetaliationSystem.CheckEveryTicks + 2 && (nearAt is null || farAt is null); t++)
+        for (int t = 0; t < 32 && (nearAt is null || farAt is null); t++)
         {
             rig.World.RunTick();
             if (nearAt is null && rig.Task(near) == CharacterTask.Attack)
-                (nearAt, nearThreat) = (goal.Desire(rig.World, near.Slot), Threat());
+                (nearAt, nearThreat) = (ProtectDesire(rig, near), Threat());
             if (farAt is null && rig.Task(far) == CharacterTask.Attack)
-                (farAt, farThreat) = (goal.Desire(rig.World, far.Slot), Threat());
+                (farAt, farThreat) = (ProtectDesire(rig, far), Threat());
         }
 
         Assert.True(nearAt is not null && farAt is not null, "both join the mate's fight");
@@ -150,6 +167,23 @@ public class DecisionTests
         // desire (the first ally above 0: the mate, or the far fighter once it fights, at 0.1) x factor (the best, the mate at about 1)
         Assert.InRange(nearAt!.Value, 0.05f * nearThreat!.Value * nearThreat.Value, 1.01f * nearThreat.Value * nearThreat.Value);
         Assert.InRange(farAt!.Value, 0.005f * farThreat!.Value * farThreat.Value, 0.25f * farThreat.Value * farThreat.Value);
+    }
+
+    /// <summary>
+    /// A player character's own list starts with its faction's <c>AI Goals</c> (<c>setupAI</c> <c>FUN_140621b70</c>, <c>AiSystem.PlayerOwnGoals</c>):
+    /// the player's faction 204 Nameless lists 15 Protect allies (AI_TASK 957, weight 1; docs/game/ai-tasks.md "Combat goals"), so a player character's
+    /// mind holds goal 15 at weight 1, ahead of 243 Getting food. Catches the faction's list going missing from a player mind, which only the protect
+    /// fight above would show, and only as a fight not joined.
+    /// </summary>
+    [Fact]
+    public void A_player_character_holds_goal_15_from_its_factions_list()
+    {
+        using var rig = Quiet(senses: true);
+        var goals = rig.Cold(rig.Mate).Ai!.RaceGoals;
+
+        Assert.Equal(TaskType.ProtectAllies, goals[0].Task.Type);
+        Assert.Equal(1f, goals[0].Weight);
+        Assert.Single(goals, g => g.Task.Type == TaskType.ProtectAllies);
     }
 
     /// <summary>
@@ -315,14 +349,14 @@ public class DecisionTests
     }
 
     /// <summary>
-    /// The target of a failed stealth knock-out (<c>Character::attackTarget</c>: a replan, then the chooser) fights its attacker through the step,
-    /// and a standing order beats that as it beats Self preservation. Catches a player target that is pushed into a fight over its order, or one that
-    /// never answers.
+    /// The target of a failed stealth knock-out (<c>Character::attackTarget</c>: a replan, then the chooser) whose attacker then stands idle does not
+    /// fight it: the push puts the attacker on no list 32 Self preservation's scorer reads (<c>FUN_14050df10</c>), and a standing order keeps
+    /// running. Catches a player target pushed into a fight by the push alone, or over its order.
     /// </summary>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void The_target_of_a_failed_stealth_ko_defends_itself_unless_an_order_runs(bool resting)
+    public void The_target_of_a_failed_stealth_ko_does_not_fight_an_attacker_that_stands_idle_and_keeps_its_order(bool resting)
     {
         using var rig = Quiet();
         var target = Victim(rig, 1300, 2300);
@@ -353,18 +387,57 @@ public class DecisionTests
             return;
         }
 
+        // The attacker stands idle after the miss, so it is on no threats list the target's chooser reads (the look's refill, FUN_140854370, wants
+        // its fight aimed at the target): 32 is dropped before any plan (FUN_14050df10, list A !159 holding) and the push alone starts no fight.
+        Assert.NotEqual(CharacterTask.Attack, rig.Task(target));
+        Assert.False(rig.Cold(target).InCombat);
+        Assert.DoesNotContain("32 Self preservation", rig.Cold(target).Decision!.Winner ?? "");
+    }
+
+    /// <summary>
+    /// The NPC victim of a failed stealth knock-out whose attacker then stands idle in its view takes 32 Self preservation once it witnesses the
+    /// Assault, not at the miss: the witness function pushes the culprit from the victim's own perception update after its sense pass cleared the
+    /// list (<c>FUN_1408580d0</c> → <c>FUN_140854d10</c>), so a look that senses the culprit lists it. Catches a witnessed push that never reaches
+    /// the chooser, or one that fights at the miss while the sneaker is unseen.
+    /// </summary>
+    [Fact]
+    public void The_npc_victim_of_a_failed_stealth_ko_fights_its_idle_attacker_once_it_witnesses_the_assault()
+    {
+        using var rig = Quiet(senses: true);
+        var crime = rig.World.SystemOf<CrimeSystem>()!;
+        var carry = rig.World.SystemOf<CarrySystem>()!;
+        (carry.Crimes, rig.Combat.Crimes, rig.World.SystemOf<AiSystem>()!.Crimes) = (crime, crime, crime);
+        var target = rig.Add(1300, 2300, player: false);
+        var attacker = rig.Add(1330, 2300, player: true);
+        rig.Cold(attacker).Orders |= CharacterOrders.Sneak;
+        rig.Cold(attacker).Stats![StatsEnumerated.Assassination] = 0;
+        rig.World.RunTick();
+        rig.Say(new StealthKoOrder([attacker], target) { Tick = rig.World.Tick });
+        for (int t = 0; t < 600 && !carry.Knockouts.Any(k => !k.Success); t++) rig.World.RunTick();
+
+        Assert.Contains(carry.Knockouts, k => !k.Success);
+
+        // At the miss the sneaker behind it is not sensed again: no fight.
+        rig.World.RunTicks(30);
+        Assert.False(rig.Cold(target).InCombat);
+
+        // Idle in its view, the sneaker is spotted, the Assault witnessed and 32 taken.
+        var front = rig.World.Characters.Next[target.Slot].Position + new Vector3(0, 0, 12);
+        rig.World.Characters.Place(attacker.Slot, front, MathF.PI);
+        for (int t = 0; t < 300 && !rig.Cold(target).InCombat; t++) rig.World.RunTick();
+
+        Assert.Equal(TaskType.SelfPreservation, rig.Cold(target).Ai?.Goal?.Task.Type);
         Assert.Equal(CharacterTask.Attack, rig.Task(target));
         Assert.Equal(attacker.Slot, rig.Combat.StateOf(target).TargetSlot);
-        Assert.StartsWith("32 Self preservation", rig.Cold(target).Decision!.Winner);
     }
 
     /// <summary>
     /// The rig with the fighter enslaved to a master squad 300 units off whose Slave AI Goals list <paramref name="goal"/> (docs/game/ai-tasks.md
     /// "Obedient Slave"): the state setter gave it job 187, which the urgent pass runs.
     /// </summary>
-    static (TaskStartTests.Rig Rig, CharacterId Master) Enslaved(TaskType goal = TaskType.FollowSlavemaster)
+    static (TaskStartTests.Rig Rig, CharacterId Master) Enslaved(TaskType goal = TaskType.FollowSlavemaster, bool flee = false)
     {
-        var rig = new TaskStartTests.Rig(carrying: false, decide: true, slaves: true);
+        var rig = new TaskStartTests.Rig(carrying: false, decide: true, slaves: true, ai: flee, flee: flee);
         rig.World.RunTicks(3);
         rig.Say(new StopCommand([rig.Fighter]) { Tick = rig.World.Tick });
         rig.World.RunTick();
@@ -376,10 +449,60 @@ public class DecisionTests
         var squad = new Squad { Id = rig.World.Squads.NextId(), TemplateId = "m", Faction = 2, Ai = board };
         rig.World.Squads.Add(squad);
         var master = rig.Add(1300, 2000, player: false);
-        rig.Cold(master).SquadId = squad.Id;
-        squad.Members.Add(master);
-        squad.Leader = master;
+        rig.Join(master, squad);
         FixtureRegistry.Enslave(rig.World, rig.Cold(rig.Fighter), 2, squad.Id);
         return (rig, master);
+    }
+
+    /// <summary>
+    /// An obeying slave's goal 35 Running away from its master's Slave list (<c>Task_Runaway</c> tests no faction, <c>FUN_14034b440</c>,
+    /// <c>FUN_140336820</c>; the player-faction desire of slot 55 <c>FUN_1407916d0</c> is 0 while either arm works): a player slave with both arms
+    /// stumps, attacked beside it, runs as an NPC does, its run the goal's task. Catches a player-faction character whose goal 35 never starts the
+    /// flee step.
+    /// </summary>
+    [Fact]
+    public void An_armless_player_slave_told_to_run_away_runs_as_goal_35()
+    {
+        var (rig, _) = Enslaved(TaskType.RunAway, flee: true);
+        using var _ = rig;
+        var f = rig.Fighter;
+        var medical = rig.Cold(f).Medical!;
+        medical.Parts[LArm].Limb = medical.Parts[RArm].Limb = LimbState.Stump;
+        var at = rig.World.Characters.Next[f.Slot].Position;
+        var foe = rig.Add(at.X + 12, at.Z, player: false);
+        rig.Cold(foe).Faction = 0;
+        rig.Say(new AttackOrder([foe], f) { Tick = rig.World.Tick });
+        RunUntil(rig, () => rig.Cold(f).Fleeing, 300, "running away");
+
+        Assert.Equal((TaskType.RunAway, TaskSource.Goal), (rig.Cold(f).Running!.Row, rig.Cold(f).Running!.Source));
+        Assert.Equal(TaskType.RunAway, rig.Cold(f).Ai!.Goal!.Task.Type);
+    }
+
+    /// <summary>
+    /// A Bodyguard job's follow row plans its fight for its charge first (45 needs <c>!16 !39</c>, provided by 13 Attacking attackers of, whose chain
+    /// to 4 reads neither Passive nor sneaking, <c>FUN_1405a4260</c>; docs/game/ai-tasks.md "Precedence"): a Passive bodyguard fights its charge's
+    /// attacker under its job's row, and once that attacker is down follows its charge again. Catches Passive keeping a bodyguard out of its
+    /// charge's fight, or a bodyguard that does not take its follow up again.
+    /// </summary>
+    [Fact]
+    public void A_passive_bodyguard_joins_its_charges_fight_and_follows_again_after_it()
+    {
+        using var rig = Quiet(senses: true);
+        var (guard, charge) = (rig.Fighter, rig.Mate);
+        rig.Cold(guard).Orders |= CharacterOrders.Passive;
+        rig.Cold(rig.Enemy).Medical!.KnockOut(100000);   // the rig's own enemy would make the guard a target of its own
+        rig.Say(new AddOrderJob([guard], TaskType.Bodyguard, charge) { Tick = rig.World.Tick });
+        RunUntil(rig, () => rig.Task(guard) == CharacterTask.Follow, 2 * ProductionSystem.JobCheckTicks + 2, "guarding");
+        var foe = AttackMate(rig);
+        RunUntil(rig, () => rig.Task(guard) == CharacterTask.Attack, 300, "defending its charge");
+
+        Assert.Equal(foe.Slot, rig.Combat.StateOf(guard).TargetSlot);
+        Assert.Equal((TaskType.Bodyguard, TaskSource.Job), (rig.Cold(guard).Running!.Row, rig.Cold(guard).Running!.Source));
+
+        rig.Cold(foe).Medical!.KnockOut(100000);
+        RunUntil(rig, () => rig.Task(guard) == CharacterTask.Follow, 300, "following again");
+
+        Assert.Equal(charge, rig.Cold(guard).FollowOrder);
+        Assert.True(Orders.Has(rig.Cold(guard), CharacterOrders.Passive));
     }
 }
