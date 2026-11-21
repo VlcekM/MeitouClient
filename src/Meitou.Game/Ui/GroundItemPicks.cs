@@ -67,12 +67,15 @@ sealed class GroundItemPicks(PlayerInterface player)
         if (LabelAt(pixel) is { } labelled) return (labelled, 0);
         if (player.Ray(pixel) is not { } ray || GroundItemShape is not { } shapeOf) return null;
 
+        // Only what the ray meets before the ground counts, as for buildings (WorldPicking.PickReach): an item behind a hill is not picked
+        // through it, and the cull only walks the ray's part up to there.
+        var (limit, _) = player.Picking.PickReach(ray.Origin, ray.Direction, float.MaxValue);
         (int, float)? best = null;
-        float bestT = float.MaxValue;
+        float bestT = limit;
         foreach (var g in player.Session.CurrentSnapshot.GroundItems)
         {
             var reachKey = (g.Record, g.Fall is not null);
-            if (_shapeReach.TryGetValue(reachKey, out float reach) && !WorldPicking.RayPassesXz(ray, g.Position, reach)) continue;
+            if (_shapeReach.TryGetValue(reachKey, out float reach) && !WorldPicking.RayPassesXz(ray, g.Position, reach, limit)) continue;
             if (GroundItemHidden?.Invoke(g.Id) == true) continue;
             if (shapeOf(g) is not { } shape) continue;
 

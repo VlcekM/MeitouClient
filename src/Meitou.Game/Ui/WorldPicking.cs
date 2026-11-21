@@ -127,9 +127,8 @@ sealed class WorldPicking(PlayerInterface player)
     /// </summary>
     internal (float Reach, float? Terrain) PickReach(Vector3 origin, Vector3 direction, float open = 6000)
     {
-        if (GroundHit(origin, direction) is not { } hit) return (open, null);
-
-        return (FloorReach(origin, direction, hit), Vector3.Distance(origin, hit));
+        var (reach, terrain) = SharedReach(origin, direction);
+        return terrain is null ? (open, null) : (reach, terrain);
     }
 
     /// <summary>
@@ -299,17 +298,18 @@ sealed class WorldPicking(PlayerInterface player)
     }
 
     /// <summary>
-    /// Whether the ray (from its origin on) passes within <paramref name="reach"/> of <paramref name="position"/> in X/Z, a unit wider for rounding
-    /// far from the origin: a hit on anything within that X/Z reach lies on such a ray, whatever its height (the coarse cull of the picks).
+    /// Whether the ray from its origin up to <paramref name="limit"/> along it passes within <paramref name="reach"/> of <paramref name="position"/>
+    /// in X/Z, a unit wider for rounding far from the origin: a hit before the limit on anything within that X/Z reach lies on that part of the ray,
+    /// whatever its height (the coarse cull of the picks).
     /// </summary>
-    internal static bool RayPassesXz((Vector3 Origin, Vector3 Direction) ray, Vector3 position, float reach)
+    internal static bool RayPassesXz((Vector3 Origin, Vector3 Direction) ray, Vector3 position, float reach, float limit = float.MaxValue)
     {
         var to = new Vector2(position.X - ray.Origin.X, position.Z - ray.Origin.Z);
         var along = new Vector2(ray.Direction.X, ray.Direction.Z);
         float lengthSquared = along.LengthSquared();
 
-        // The half line's nearest point to the position (the origin for a ray straight up or down).
-        float s = lengthSquared < 1e-12f ? 0 : MathF.Max(Vector2.Dot(to, along) / lengthSquared, 0);
+        // The nearest point to the position of the ray's part up to limit (the origin for a ray straight up or down).
+        float s = lengthSquared < 1e-12f ? 0 : Math.Clamp(Vector2.Dot(to, along) / lengthSquared, 0, MathF.Max(limit, 0));
         float widened = reach + 1;
         return (to - along * s).LengthSquared() <= widened * widened;
     }
@@ -730,6 +730,50 @@ sealed class WorldPicking(PlayerInterface player)
         if (best is not { } met) return null;
 
         return (met, Vector3.Transform(normal.LengthSquared() < 1e-12f ? Vector3.UnitY : Vector3.Normalize(normal), q));
+    }
+
+    #endregion
+
+    #region Shared pick
+
+    /// <summary>
+    /// The shared pick open (<see cref="BeginShared"/>), else 0; a new number for each.
+    /// </summary>
+    public int SharedScope { get; private set; }
+
+    /// <summary>
+    /// The last scope's number, so each <see cref="BeginShared"/> gets a new one.
+    /// </summary>
+    int _lastScope;
+
+    /// <summary>
+    /// The ground reach of the shared pick: its scope, ray and <see cref="SharedReach"/>'s answer.
+    /// </summary>
+    (int Scope, Vector3 Origin, Vector3 Direction, float Reach, float? Terrain) _reach;
+
+    /// <summary>
+    /// Opens a shared pick (the pointer's): until <see cref="EndShared"/> nothing the picks read changes, so the ground reach and the site pick are
+    /// worked out once and reused by every pick in it.
+    /// </summary>
+    public void BeginShared() => SharedScope = ++_lastScope;
+
+    /// <summary>
+    /// Closes the shared pick: picks work everything out again.
+    /// </summary>
+    public void EndShared() => SharedScope = 0;
+
+    /// <summary>
+    /// The ray's floor reach and terrain distance (null: it meets no terrain, the reach then meaningless), kept for the shared pick's same ray.
+    /// </summary>
+    (float Reach, float? Terrain) SharedReach(Vector3 origin, Vector3 direction)
+    {
+        if (SharedScope != 0 && _reach.Scope == SharedScope && _reach.Origin == origin && _reach.Direction == direction)
+            return (_reach.Reach, _reach.Terrain);
+
+        var hit = GroundHit(origin, direction);
+        (float, float?) found = hit is { } h ? (FloorReach(origin, direction, h), Vector3.Distance(origin, h)) : (0, null);
+        if (SharedScope != 0) _reach = (SharedScope, origin, direction, found.Item1, found.Item2);
+        return found;
     }
 
     #endregion

@@ -28,9 +28,9 @@ sealed class PointerView(PlayerInterface player)
     internal bool PointerOverButton;
 
     /// <summary>
-    /// The pointer, the character it is over and the building (when no character), chosen again when the mouse, the camera or a modifier changed, and
-    /// every <see cref="RepickSeconds"/> of real time while only the world moves (the picks walk every character, item and building near the ray:
-    /// 0.5 ms).
+    /// The pointer, the character it is over and the building (when no character), chosen again when the mouse or a modifier changed, every
+    /// <see cref="CameraRepickSeconds"/> of real time while the camera moves, and every <see cref="RepickSeconds"/> while only the world moves (a
+    /// pick walks every character, item and building near the ray: up to 1.7 ms on a large base).
     /// </summary>
     (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target,
         (BuildingSelection.SelectedBuilding Building, float T)? Building) _pointer = (-1, default, false, false, "arrow", null, null);
@@ -49,6 +49,12 @@ sealed class PointerView(PlayerInterface player)
     /// The real seconds a pointer pick holds while only the world moves (3 ticks at 1x): game ticks would run out every frame at 5x.
     /// </summary>
     const double RepickSeconds = 0.1;
+
+    /// <summary>
+    /// The real seconds a pointer pick holds while the camera moves under a still mouse (engine choice): a camera following a walking squad moves
+    /// every frame, and picking each of them cost 1.3 ms a frame at 5x on a large base.
+    /// </summary>
+    const double CameraRepickSeconds = 0.05;
 
     /// <summary>
     /// How far from the eye a hovered character or building is still outlined (engine choice; the pointer and the click reach farther).
@@ -141,6 +147,23 @@ sealed class PointerView(PlayerInterface player)
         var snapshot = player.Session.CurrentSnapshot;
         if (PointerStillValid(snapshot.Tick)) return _pointer;
 
+        player.Picking.BeginShared();
+        try
+        {
+            return _pointer = Repick(snapshot);
+        }
+        finally
+        {
+            player.Picking.EndShared();
+        }
+    }
+
+    /// <summary>
+    /// A new pick of the pointer, its character and building, under one shared pick (<see cref="WorldPicking.BeginShared"/>).
+    /// </summary>
+    (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target,
+        (BuildingSelection.SelectedBuilding Building, float T)? Building) Repick(WorldSnapshot snapshot)
+    {
         (string Name, CharacterId? Target) chosen = ChoosePointer();
         chosen.Target ??= player.Picking.PickWhere(player.Mouse, _ => true);
 
@@ -153,18 +176,23 @@ sealed class PointerView(PlayerInterface player)
         _pointerView = player.ViewProjection;
         _pointerStamp = Stopwatch.GetTimestamp();
         var hovered = chosen.Target is null ? player.BuildingSelection.PickBuildingAt(player.Mouse) : null;
-        return _pointer = (snapshot.Tick, player.Mouse, player.CtrlHeld, player.AltHeld, chosen.Name, chosen.Target, hovered);
+        return (snapshot.Tick, player.Mouse, player.CtrlHeld, player.AltHeld, chosen.Name, chosen.Target, hovered);
     }
 
     /// <summary>
-    /// Whether the last pointer pick still holds: of the same tick (paused) or a later one within <see cref="RepickSeconds"/>, the mouse,
-    /// modifiers and view unchanged.
+    /// Whether the last pointer pick still holds, the mouse and modifiers unchanged: within <see cref="CameraRepickSeconds"/> when the view moved,
+    /// else of the same tick (paused) or a later one within <see cref="RepickSeconds"/>.
     /// </summary>
-    bool PointerStillValid(long tick) =>
-        _pointer.Tick >= 0 && tick >= _pointer.Tick
-        && (tick == _pointer.Tick || Stopwatch.GetElapsedTime(_pointerStamp).TotalSeconds < RepickSeconds)
-        && _pointer.Mouse == player.Mouse && _pointer.Ctrl == player.CtrlHeld && _pointer.Alt == player.AltHeld
-        && _pointerView == player.ViewProjection;
+    bool PointerStillValid(long tick)
+    {
+        if (_pointer.Tick < 0 || tick < _pointer.Tick) return false;
+        if (_pointer.Mouse != player.Mouse || _pointer.Ctrl != player.CtrlHeld || _pointer.Alt != player.AltHeld) return false;
+
+        double age = Stopwatch.GetElapsedTime(_pointerStamp).TotalSeconds;
+        if (_pointerView != player.ViewProjection) return age < CameraRepickSeconds;
+
+        return tick == _pointer.Tick || age < RepickSeconds;
+    }
 
     /// <summary>
     /// The pointer with characters selected (<see cref="PickWithSelection"/>), else the quick order's under the mouse, else the arrow.

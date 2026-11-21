@@ -1081,6 +1081,12 @@ sealed class BuildMode(PlayerInterface player)
     readonly Dictionary<string, float> _siteReach = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// The site pick of the shared pick open (<see cref="WorldPicking.BeginShared"/>): its scope, pixel and answer, reused by the pointer's second
+    /// look (the building hover after the right-click target).
+    /// </summary>
+    (int Scope, Vector2 Pixel, (BuildingSnapshot Site, float T)? Result) _sitePick;
+
+    /// <summary>
     /// The nearest of the player's sites (and finished buildings) under a pixel, by a ray against each one's footprint prism (a sphere round its
     /// position without a footprint).
     /// </summary>
@@ -1090,6 +1096,19 @@ sealed class BuildMode(PlayerInterface player)
     /// <see cref="PickSite"/> with the distance along the ray.
     /// </summary>
     internal (BuildingSnapshot Site, float T)? PickSiteAt(Vector2 pixel)
+    {
+        int scope = player.Picking.SharedScope;
+        if (scope != 0 && _sitePick.Scope == scope && _sitePick.Pixel == pixel) return _sitePick.Result;
+
+        var result = FindSiteAt(pixel);
+        if (scope != 0) _sitePick = (scope, pixel, result);
+        return result;
+    }
+
+    /// <summary>
+    /// <see cref="PickSiteAt"/> worked out.
+    /// </summary>
+    (BuildingSnapshot Site, float T)? FindSiteAt(Vector2 pixel)
     {
         if (Services is not { } host || player.Session.CurrentSnapshot.Buildings.Count == 0 || player.Ray(pixel) is not { } ray) return null;
 
@@ -1106,7 +1125,7 @@ sealed class BuildMode(PlayerInterface player)
             // The coarse cull before the floor and ray tests (no effect on the pick): a hit on a footprint's prism or collision lies within their
             // X/Z reach of the site. A site without a footprint (a plot, a sitting node, one still loading) takes the full tests.
             var bounds = host.Placement.Footprint(site.Record);
-            if (bounds is { } outline && !WorldPicking.RayPassesXz(ray, site.Position, SiteReach(host, site.Record, outline))) continue;
+            if (bounds is { } outline && !WorldPicking.RayPassesXz(ray, site.Position, SiteReach(host, site.Record, outline), ground)) continue;
 
             // Not drawn above the viewed floor of an opened house, so not picked there, as a bed or a container (FurnitureUse).
             if (player.Furniture.AboveViewedFloor?.Invoke(site.Position) == true) continue;
