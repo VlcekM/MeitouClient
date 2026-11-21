@@ -904,10 +904,12 @@ holds refuses the second mod.
   adds an unloaded platoon of a SQUAD_TEMPLATE at a walkable point in a ring round a point, with a purse, that loads like a roaming one, is
   kept off screen whatever the keep switches say (and stays loaded while a member lies knocked out in the loaded zones,
   [roaming](simulation.md#off-screen-tier)), is saved also before it first loads and loads back as the same roaming squad (-1 and nothing
-  added when no walkable point is found); `Platoon.ModTag` is a free string, saved when set, that finds a mod's platoon again after a load,
-  when platoon ids are given anew; for the player's own squads and outposts, whose ids and town numbers are also given anew at every load,
-  `Squad.ModTags[context.Id]` and `PlayerTown.ModTags[context.Id]` hold one tag per mod (keyed by the mod's id, so several mods tag the same
-  squad or town without replacing each other's), saved with the squad and on the outpost's town state; `PopulationSystem.SpawnIntoPlayerSquad` makes one
+  added when no walkable point is found); platoon ids are given anew at every load, so `Platoon.ModTags[context.Id]` holds one tag per mod
+  (keyed by the mod's id, so several mods tag the same platoon without replacing each other's), saved and hashed while set, and
+  `world.Platoons.FindByTag(context.Id, tag)` returns the first platoon in id order with that mod's tag (it looks through every platoon: call
+  it at a load or an event, not per platoon per tick); the older `Platoon.ModTag` is one string shared by every mod (`FindByTag(tag)`); for
+  the player's own squads and outposts, whose ids and town numbers are also given anew at every load, `Squad.ModTags[context.Id]` and
+  `PlayerTown.ModTags[context.Id]` hold one tag per mod the same way, saved with the squad and on the outpost's town state; `PopulationSystem.SpawnIntoPlayerSquad` makes one
   character of a CHARACTER or ANIMAL_CHARACTER record as a new game makes the player's (a look rolled for the player's faction, body,
   starting items, name; a unique claimed as any spawn claims it) and adds it, standing idle on the ground at a walkable point, to a living
   player squad, leading it when it has no leader. Only player squads: an NPC squad loaded from a save keeps only the save's members, so an
@@ -936,9 +938,19 @@ holds refuses the second mod.
   game, they are refused when they would come back instead). `OffscreenSwitches` counts changes made off
   screen.
 - **Driving NPCs** (engine API; serial phases): `PopulationSystem.HoldPlatoon` stops a roaming platoon's trips and its
-  stand-in's travel (not saved: find it by its tag and hold again after a load; it still unloads, and despawns as any platoon but a mod's
-  spawn). `PopulationSystem.SendPlatoon` sends a held platoon's stand-in off screen toward a point or a living character (by the roads, at the
-  stand-in travel speed, stopping within the roam arrival radius; null stops it; not saved, cleared when the hold ends). The hold is off screen
+  stand-in's travel (it still unloads, and despawns as any platoon but a mod's spawn). `HoldPlatoon(world, platoon, context.Id, held)` takes
+  the hold in the mod's name: only that mod sends or releases it, another mod's hold (named or not) refuses it, and it is saved with its goal
+  whenever the platoon is saved (PLATOON keys, [save](formats/save.md#npc-platoons-meitou-mapping): a mod's spawn, a campaign's, a squad once
+  made; a town's roaming stand-in never made is not saved, and its town makes a new one); a load without that mod running releases it, with a
+  log line. The
+  unnamed `HoldPlatoon(world, platoon, held)` is not saved (find the platoon by its tag and hold it again after a load) and refuses a platoon
+  a mod holds in its name. `PopulationSystem.SendPlatoon` sends a held platoon's stand-in off screen toward a point or a living character (by
+  the roads, at the stand-in travel speed, stopping within the roam arrival radius; null stops it; cleared when the hold ends), with the mod's
+  id for a named hold; a named hold follows its character again after a load when the character had a lasting id (Character ids, above) when
+  it was sent, and again whenever that character leaves the world and comes back. `population.DespawnPlatoon(world, platoon)` (on the
+  population system) takes a platoon out of the world for good as the game takes one it does not keep (its characters, made or not, vanish
+  where they stand; its uniques are free again; a save's platoon is left out of the next save), and refuses a town's own, the player's, one
+  being made, the parallel phase and the off-screen fights (a death observer told of a fight's dead). The hold is off screen
   only (**Observed**, by reading `AiSystem.MindAndCrowd` and `PopulationRoaming.StepTrip`): loaded, a held platoon's members run their package's full minds as any platoon's, and the mod steers them with orders (Ordering
   characters, below; a member whose package follows its leader follows an ordered leader), a chooser goal in the package, or a package change
   (`ChangeAi`, `StartContract`). The `EndContract(squadId)` command ends a running contract as its hours running out would (a `StartContract` of the
@@ -950,6 +962,37 @@ holds refuses the second mod.
   a witness answers), `CrimeSystem.Pickpocket`, `CarrySystem.BeginPickUp` / `BeginPutDown`, `ArrestSystem.TakeOver(enslave: true)` (a guard
   takes the carried body to a cage as its faction's slave), `AggroSystem.Spotted` / `Unseen`. `CharacterCold.FedTo` is a free hunger level
   that comes before the game's rule (not saved), for a captive the mod's squad carries.
+- **Platoon notices** (engine API, not in the original): a registered system implementing `IPlatoonObserver` (`Meitou.Simulation.Factions`)
+  receives `PlatoonChanged(World, in PlatoonNotice)` for each platoon `Added` (a town's pool, a campaign, a split or a mod made it, or a town
+  kept its squads on as stand-ins or loaded; not the platoons a save brings, though those whose characters are made at its first ticks are
+  told `Loaded`), `Removed` (with `Gone`: `Despawned` by the engine, `LostFight` with `By` the winner's id, `NoMembers`, `Dropped` for a
+  save's stand-in a town replaced, `ByMod`, `Other`; the platoon object is no longer in `World.Platoons`, and a loaded platoon removed gets no
+  `Unloaded` first), `Loaded`, `Unloaded`, and `Arrived` when a held platoon's stand-in reaches the goal its mod sent it to (for a followed
+  character, the route goal, which may trail the character by up to 200; off screen only; told once per sending, saved with a named hold). The
+  platoon is to read: change it through the population's API. They are
+  told once a tick on the tick thread after the slow world, in system order: the registry's changes in the order they happened, then the
+  loads and unloads since the last tick in id order. The observer may read the world, change its own state and call the population's serial
+  API (spawn, hold, send, despawn); what that changes is told the next tick. While one is registered, the world notes each change as it
+  happens and looks at every platoon's loaded state once a tick; with none it notes nothing. One that throws is disabled for that world (a log
+  line; the fault enters the state hash).
+- **Off-screen fight rules** (engine API, not in the original; [simulation](simulation.md#off-screen-tier) "Fights far away"): a registered
+  system implementing `IOffscreenFightRule` (`Meitou.Simulation.Population`) is asked `Judge(World, Platoon first, Platoon second)` before
+  the switch makes two hostile stand-ins fight, `first` the one looking for a fight and its enemies within reach asked about in id order until
+  one is not skipped: `Fight` (no say), `Skip` (they do not fight; the first looks for its next enemy within reach, and they may meet again at
+  a later check), `FirstWins` or `SecondWins` (the engine settles the
+  losses as for a win it drew). Every rule is asked: one `Skip` skips the fight; otherwise the winner the rules name wins when they agree, and
+  the engine draws it when they disagree, so the answer does not depend on load order. Asked only while the switch is on, every 2 s, for
+  enemies within 300 of each other. A rule reads the world and changes nothing in it; one that throws, answers no verdict, or adds or removes a
+  platoon is disabled for that world (a log line; the fault enters the state hash), and a fight whose platoon was removed does not happen.
+- **Roads** (engine API; any thread, read only): `PopulationSystem.Data.Roads` (`RoadNetwork`, `Meitou.Simulation.Towns`; null without a
+  level) is the road graph off-screen squads travel by, built once per world from the loaded level's ROAD records, those mods add or change
+  included, and never changed after. `JunctionCount` and `JunctionAt(j)` are its junctions, numbered from 0 in the order the roads first name
+  them (roads naming one ROAD `start` or `end` number meet at one junction, but that record number is not the junction's), `Count` its roads, `RoadAt(r)` a road's record id, junctions and `length` (the cost a trip pays),
+  `RoadsAt(j)` the roads ending at a junction, and `PointsOf(r)` its points (X/Z). `NearestRoad(at, within)` is the nearest road point within
+  a distance (its road, share of the way along, point and distance), and `RoadsNear(at, radius, list)` fills a list with the roads that pass
+  within a radius, in road order: the roads a town or base of that radius sits on. `Route(from, to, roadPreference)` is the trip the
+  engine's own stand-ins take. Both searches look at the grid cells their distance covers that hold roads, so a large one costs more, up to
+  the whole network.
 - **Goal types in data**: a data mod lists an AI_TASK whose `enum` is a number of the mod's own (1000 up) in its AI_PACKAGE records. Without
   the code mod such a goal loads (`AiTask.From` keeps any number) and is never chosen: it has no behaviour, so its desire is 0. The code mod's
   system, in a serial step, finds who has the goal now:

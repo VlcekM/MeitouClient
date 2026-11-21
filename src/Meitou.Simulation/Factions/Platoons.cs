@@ -234,19 +234,47 @@ public sealed class Platoon
     /// <summary>
     /// A code mod moves it off screen (<c>PopulationSystem.HoldPlatoon</c>, engine API): the population gives it no trips and moves no stand-in of
     /// it (the mod's <see cref="ModGoal"/> does); loaded, its members run their package's full minds as any platoon's. It still loads, unloads and
-    /// despawns as any platoon (a mod's spawn is kept, <see cref="ModSpawned"/>). Not saved: the mod finds it again by <see cref="ModTag"/> and
-    /// holds it again after a load.
+    /// despawns as any platoon (a mod's spawn is kept, <see cref="ModSpawned"/>). A hold a mod took in its own name (<see cref="HoldOwner"/>) is
+    /// saved with its goal; an unnamed one is not: the mod finds the platoon again by its tag and holds it again after a load.
     /// </summary>
     public bool Held { get; set; }
     /// <summary>
+    /// The code mod (its manifest id) whose hold this is (<c>PopulationSystem.HoldPlatoon</c> with a mod id); null for no hold or an unnamed one.
+    /// Only that mod sends or releases it. Saved with <see cref="ModGoal"/>, <see cref="ModFollowLasting"/> and <see cref="ModArrived"/>
+    /// (<see cref="Saving.ModPlatoonSave"/>); a load without that mod running releases it.
+    /// </summary>
+    public string? HoldOwner { get; set; }
+    /// <summary>
     /// Where a held platoon's stand-in travels off screen (<c>PopulationSystem.SendPlatoon</c>, engine API): a point, or the last position of
-    /// <see cref="ModFollow"/> while that character is alive. Null with no one to follow: it stands still. Cleared when the hold ends; not saved.
+    /// <see cref="ModFollow"/> while that character is alive. Null with no one to follow: it stands still. Cleared when the hold ends; saved only
+    /// with a named hold (<see cref="HoldOwner"/>).
     /// </summary>
     public Vector2? ModGoal { get; set; }
     /// <summary>
-    /// The character a held platoon's stand-in travels toward (<see cref="ModGoal"/>); none: the point. Not saved.
+    /// The character a held platoon's stand-in travels toward (<see cref="ModGoal"/>); none: the point. Not saved: a named hold saves the
+    /// character's lasting id instead (<see cref="ModFollowLasting"/>).
     /// </summary>
     public CharacterId ModFollow { get; set; } = CharacterId.None;
+    /// <summary>
+    /// The lasting id of the character a named hold follows (<see cref="ModFollow"/>), when that character has one: saved, and after a load the
+    /// platoon follows it again once the character is in the world (the population looks each roaming step). None otherwise.
+    /// </summary>
+    public LastingId ModFollowLasting { get; set; }
+    /// <summary>
+    /// The code mods' platoon observers were told that this held platoon reached its goal (<see cref="PlatoonEvent.Arrived"/>); cleared by a new
+    /// goal, so each sending is told once. Saved with a named hold.
+    /// </summary>
+    public bool ModArrived { get; set; }
+    /// <summary>
+    /// The code mods' tags on the platoon, by mod manifest id: a mod sets its own entry to find the platoon again after a load
+    /// (<see cref="PlatoonRegistry.FindByTag(string, string)"/>), when platoon ids are given anew; one mod's tag never replaces another's. Saved
+    /// (<see cref="Saving.ModTagSave"/>), hashed while any.
+    /// </summary>
+    public SortedDictionary<string, string> ModTags { get; } = new(StringComparer.Ordinal);
+    /// <summary>
+    /// Whether the platoon observers were last told it is loaded (<see cref="PlatoonObservers"/>); not saved.
+    /// </summary>
+    internal bool ToldLoaded { get; set; }
     /// <summary>
     /// Made by a code mod (<c>PopulationSystem.SpawnPlatoon</c>): kept off screen whatever the keep switches say, saved also before it first loads,
     /// and a roaming platoon again after a load (saved as <see cref="Saving.ModPlatoonSave.SpawnKey"/>).
@@ -254,7 +282,8 @@ public sealed class Platoon
     public bool ModSpawned { get; set; }
     /// <summary>
     /// A free string a code mod sets to find its platoon again after a load, when platoon ids are given anew (saved as
-    /// <see cref="Saving.ModPlatoonSave.TagKey"/> only when set).
+    /// <see cref="Saving.ModPlatoonSave.TagKey"/> only when set). Shared by every mod, so one mod's tag replaces another's; <see cref="ModTags"/>
+    /// keeps one per mod.
     /// </summary>
     public string ModTag { get; set; } = "";
 }
@@ -351,6 +380,10 @@ public sealed class PlatoonRegistry
     /// is rolled from it) as it would be without them, and come last in id order.
     /// </summary>
     int _nextReserved = int.MaxValue;
+    /// <summary>
+    /// The registry's changes the platoon observers have not heard yet, in the order they happened (<see cref="PlatoonObservers"/>).
+    /// </summary>
+    readonly List<PlatoonChange> _notices = [];
 
     /// <summary>
     /// The number of platoons.
@@ -377,13 +410,104 @@ public sealed class PlatoonRegistry
     /// </summary>
     public int NextReservedId() => _nextReserved--;
     /// <summary>
+    /// Whether changes are noted for the platoon observers: only while one is registered, so a world without one notes nothing.
+    /// </summary>
+    internal bool Noting { get; private set; }
+
+    /// <summary>
     /// Adds a platoon, replacing one of the same id.
     /// </summary>
-    public void Add(Platoon p) => _platoons[p.Id] = p;
+    public void Add(Platoon p)
+    {
+        _platoons[p.Id] = p;
+        if (Noting) Note(p, PlatoonEvent.Added);
+    }
+
     /// <summary>
-    /// Removes a platoon; false when it is not there.
+    /// Removes a platoon, for a reason the engine does not name (<see cref="PlatoonGone.Other"/>); false when it is not there.
     /// </summary>
-    public bool Remove(int id) => _platoons.Remove(id);
+    public bool Remove(int id) => Remove(id, PlatoonGone.Other);
+
+    /// <summary>
+    /// Removes a platoon for <paramref name="why"/>, beaten by platoon <paramref name="by"/> for <see cref="PlatoonGone.LostFight"/> (else -1);
+    /// false when it is not there.
+    /// </summary>
+    public bool Remove(int id, PlatoonGone why, int by = -1)
+    {
+        if (!_platoons.Remove(id, out var p)) return false;
+
+        if (Noting) Note(p, PlatoonEvent.Removed, why, by);
+        return true;
+    }
+
+    /// <summary>
+    /// The first platoon in id order on which mod <paramref name="mod"/> set the tag <paramref name="tag"/> (<see cref="Platoon.ModTags"/>); null
+    /// when none has. It looks through every platoon, so call it at a load or an event, not for each platoon every tick.
+    /// </summary>
+    public Platoon? FindByTag(string mod, string tag)
+    {
+        foreach (var p in _platoons.Values)
+        {
+            if (p.ModTags.TryGetValue(mod, out string? t) && string.Equals(t, tag, StringComparison.Ordinal)) return p;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The first platoon in id order whose shared tag is <paramref name="tag"/> (<see cref="Platoon.ModTag"/>); null when none has, or for an empty
+    /// tag. It looks through every platoon, as <see cref="FindByTag(string, string)"/> does.
+    /// </summary>
+    public Platoon? FindByTag(string tag)
+    {
+        if (tag.Length == 0) return null;
+
+        foreach (var p in _platoons.Values)
+        {
+            if (string.Equals(p.ModTag, tag, StringComparison.Ordinal)) return p;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Starts or stops noting changes for the platoon observers (<see cref="Noting"/>); starting marks every platoon as told whether it is loaded
+    /// now, so nothing from before is told.
+    /// </summary>
+    internal void SetNoting(bool on)
+    {
+        if (on && !Noting) ForgetNotices();
+        Noting = on;
+        if (!on) _notices.Clear();
+    }
+
+    /// <summary>
+    /// Notes a change for the platoon observers (only while <see cref="Noting"/>).
+    /// </summary>
+    internal void Note(Platoon p, PlatoonEvent kind, PlatoonGone gone = PlatoonGone.None, int by = -1)
+    {
+        if (Noting) _notices.Add(new PlatoonChange(kind, p, gone, by));
+    }
+
+    /// <summary>
+    /// Drops the changes not told yet and marks every platoon as told whether it is loaded now: a loaded save's platoons are the world's start,
+    /// not changes.
+    /// </summary>
+    internal void ForgetNotices()
+    {
+        _notices.Clear();
+        foreach (var p in _platoons.Values) p.ToldLoaded = p.State == PlatoonState.Loaded;
+    }
+
+    /// <summary>
+    /// Moves the changes not told yet into <paramref name="into"/> (cleared first), leaving none.
+    /// </summary>
+    internal void TakeNotices(List<PlatoonChange> into)
+    {
+        into.Clear();
+        into.AddRange(_notices);
+        _notices.Clear();
+    }
 
     /// <summary>
     /// Adds the id counters and the platoons to the world's state hash.
@@ -453,19 +577,46 @@ public sealed class PlatoonRegistry
     }
 
     /// <summary>
-    /// A code mod's marks on a platoon (<see cref="Platoon.ModSpawned"/>, <see cref="Platoon.ModTag"/>, <see cref="Platoon.ModGoal"/>), each only
-    /// when set, so worlds without code mods hash as before.
+    /// A code mod's marks on a platoon (<see cref="Platoon.ModSpawned"/>, <see cref="Platoon.ModTag"/>, its hold, <see cref="Platoon.ModTags"/>,
+    /// <see cref="Platoon.ModGoal"/>), each only when set, so worlds without code mods hash as before.
     /// </summary>
     static void HashMod(ref StateHasher h, Platoon p)
     {
         if (p.ModSpawned) h.Add(0x4D6F6453);
         if (p.ModTag.Length > 0) Items.Inventory.HashTag(ref h, p.ModTag);
+        HashModHold(ref h, p);
+        if (p.ModTags.Count > 0) HashModTags(ref h, p.ModTags);
 
         if (p.ModGoal is null && p.ModFollow.IsNone) return;
 
         h.Add(0x476F616C);
         h.Add(p.ModGoal ?? default);
         h.Add(p.ModFollow);
+    }
+
+    /// <summary>
+    /// The per-mod tags a save keeps (both mod id and tag not empty, as <see cref="Saving.ModTagSave.Write"/> writes them), so a save and load hash
+    /// alike.
+    /// </summary>
+    static void HashModTags(ref StateHasher h, SortedDictionary<string, string> tags)
+    {
+        foreach (var (mod, tag) in tags)
+        {
+            if (mod.Length == 0 || tag.Length == 0) continue;
+
+            h.Add(Rng.StableHash(mod));
+            h.Add(Rng.StableHash(tag));
+        }
+    }
+
+    /// <summary>
+    /// A named hold's owner, the lasting id it follows and its told arrival, each only when set, so worlds without them hash as before.
+    /// </summary>
+    static void HashModHold(ref StateHasher h, Platoon p)
+    {
+        if (p.HoldOwner is { } owner) h.Add(Rng.StableHash(owner));
+        if (!p.ModFollowLasting.IsNone) h.Add(p.ModFollowLasting.Value);
+        if (p.ModArrived) h.Add(0x41727276);
     }
 
     /// <summary>

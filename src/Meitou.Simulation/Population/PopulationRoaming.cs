@@ -156,6 +156,11 @@ public sealed partial class PopulationSystem
         });
         foreach (var p in _platoonBuffer)
         {
+            if (p.Held) StepModHold(world, p);
+        }
+
+        foreach (var p in _platoonBuffer)
+        {
             switch (p.State)
             {
                 case PlatoonState.Unloaded:
@@ -229,9 +234,10 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// Takes a platoon out of the world for good (serial phase), as the original does with one it does not keep: its characters (if made) and its
-    /// stand-in; a save's platoon is marked so a save leaves it out.
+    /// stand-in; a save's platoon is marked so a save leaves it out. The platoon observers hear <paramref name="why"/> (beaten by platoon
+    /// <paramref name="by"/> for a lost fight).
     /// </summary>
-    void Despawn(World world, Platoon p, bool killed = false, bool release = true)
+    void Despawn(World world, Platoon p, bool killed = false, bool release = true, PlatoonGone why = PlatoonGone.Despawned, int by = -1)
     {
         if (release) ReleaseUniques(world, p, killed);
         if (world.Squads.Find(p.SquadId) is { } squad)
@@ -247,7 +253,7 @@ public sealed partial class PopulationSystem
             saved.PlatoonId = -1;
         }
 
-        world.Platoons.Remove(p.Id);
+        world.Platoons.Remove(p.Id, why, by);
     }
 
     /// <summary>
@@ -616,7 +622,7 @@ public sealed partial class PopulationSystem
         }
 
         if (squad is not null) { world.Squads.Remove(squad.Id); ForgetSquad(squad.Id); }
-        world.Platoons.Remove(p.Id);
+        world.Platoons.Remove(p.Id, PlatoonGone.NoMembers);
     }
 
     /// <summary>
@@ -1000,7 +1006,7 @@ public sealed partial class PopulationSystem
             if (MakeUnmade(world, p) is null)
             {
                 if (p.Saved is { } none) none.PlatoonId = -1;
-                world.Platoons.Remove(p.Id);
+                world.Platoons.Remove(p.Id, PlatoonGone.NoMembers);
             }
 
             return;
@@ -1042,7 +1048,7 @@ public sealed partial class PopulationSystem
         // A player-owned platoon with nobody to bring is never filled from its template (FUN_1404ffad0, Verified): it is removed.
         if (p.Faction >= 0 && p.Faction == PlayerFactionOf(world))
         {
-            world.Platoons.Remove(p.Id);
+            world.Platoons.Remove(p.Id, PlatoonGone.NoMembers);
             return;
         }
 
@@ -1121,7 +1127,7 @@ public sealed partial class PopulationSystem
             // Nobody to spawn: the pool is free to make another (a saved platoon whose members are all dead lies as corpses with no squad; a save
             // keeps it by the declared-dead rule, SaveCapture.DropsDead).
             if (p.Saved is { } empty) empty.PlatoonId = -1;
-            world.Platoons.Remove(p.Id);
+            world.Platoons.Remove(p.Id, PlatoonGone.NoMembers);
             return;
         }
 
@@ -1476,49 +1482,171 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// A code mod takes over a platoon's off-screen movement, or gives it back (engine API, <see cref="Platoon.Held"/>): held, it gets no trip
     /// orders and its stand-in stays where it is until <see cref="SendPlatoon(World, int, Vector2?)"/> moves it. Loaded, its members run their
-    /// package's full minds as any platoon's: the mod steers them with orders (<c>World.GiveOrder</c>), a chooser goal or a package change. False
-    /// for an unknown platoon, a town's own or a campaign's. Serial phases only.
+    /// package's full minds as any platoon's: the mod steers them with orders (<c>World.GiveOrder</c>), a chooser goal or a package change. This
+    /// unnamed hold is not saved; <see cref="HoldPlatoon(World, int, string, bool)"/> takes one in the mod's name. False for an unknown platoon, a
+    /// town's own, a campaign's, or one a mod holds in its name. Serial phases only.
     /// </summary>
     public static bool HoldPlatoon(World world, int platoon, bool held)
     {
+        if (world.Platoons.Find(platoon) is not { Pinned: false, Campaign: null, HoldOwner: null } p) return false;
+
+        if (held) p.Held = true;
+        else Release(p);
+        return true;
+    }
+
+    /// <summary>
+    /// A code mod takes a hold in its own name, or releases it (engine API, <see cref="Platoon.HoldOwner"/>): as
+    /// <see cref="HoldPlatoon(World, int, bool)"/>, but only mod <paramref name="mod"/> (its manifest id) sends or releases the platoon, and the hold
+    /// is saved with its goal whenever the platoon is (a mod's spawn, a campaign's, a squad once made; a town's roaming stand-in never made is not
+    /// saved, and its town makes a new one); a load without that mod running releases it (<see cref="DropUnownedHolds"/>). False for an empty mod
+    /// id, an unknown platoon, a town's own or a campaign's, a hold another mod has (named or not), and a release of a hold that is not the mod's.
+    /// Serial phases only.
+    /// </summary>
+    public static bool HoldPlatoon(World world, int platoon, string mod, bool held)
+    {
+        if (string.IsNullOrEmpty(mod)) return false;
         if (world.Platoons.Find(platoon) is not { Pinned: false, Campaign: null } p) return false;
+        if (held ? p.Held && p.HoldOwner != mod : p.HoldOwner != mod) return false;
 
-        p.Held = held;
-        if (held) return true;
+        if (!held)
+        {
+            Release(p);
+            return true;
+        }
 
-        // Given back, the population's travel takes over again.
-        p.ModGoal = null;
-        p.ModFollow = CharacterId.None;
+        p.Held = true;
+        p.HoldOwner = mod;
         return true;
     }
 
     /// <summary>
     /// Sends a held platoon's stand-in toward a point off screen, or stops it (null) (engine API, <see cref="Platoon.ModGoal"/>): it travels as a
     /// roaming stand-in does (by the roads, at the engine's travel speed), stops within <see cref="PopulationSettings.RoamArrivalRadius"/> of the
-    /// point, and waits to be made at a loaded zone like any stand-in; once loaded, its members run their package. False for a platoon not held
-    /// (<see cref="HoldPlatoon"/>) or a point that is not finite. Serial phases only.
+    /// point, where the platoon observers hear it arrived (<see cref="PlatoonEvent.Arrived"/>), and waits to be made at a loaded zone like any
+    /// stand-in; once loaded, its members run their package. False for a platoon not held (<see cref="HoldPlatoon(World, int, bool)"/>), one a mod
+    /// holds in its name, or a point that is not finite. Serial phases only.
     /// </summary>
-    public static bool SendPlatoon(World world, int platoon, Vector2? point)
-    {
-        if (world.Platoons.Find(platoon) is not { Held: true } p) return false;
-        if (point is { } at && !(float.IsFinite(at.X) && float.IsFinite(at.Y))) return false;
+    public static bool SendPlatoon(World world, int platoon, Vector2? point) =>
+        world.Platoons.Find(platoon) is { Held: true, HoldOwner: null } p && Goal(p, point);
 
-        p.ModGoal = point;
-        p.ModFollow = CharacterId.None;
+    /// <summary>
+    /// Sends a platoon mod <paramref name="mod"/> holds in its name toward a point, or stops it (<see cref="SendPlatoon(World, int, Vector2?)"/>);
+    /// false for a platoon that mod does not hold. Serial phases only.
+    /// </summary>
+    public static bool SendPlatoon(World world, int platoon, string mod, Vector2? point) =>
+        !string.IsNullOrEmpty(mod) && world.Platoons.Find(platoon) is { Held: true } p && p.HoldOwner == mod && Goal(p, point);
+
+    /// <summary>
+    /// Sends a held platoon's stand-in toward a character off screen (<see cref="SendPlatoon(World, int, Vector2?)"/>): toward its last position
+    /// while it is alive, then it stops where it is. False for a platoon not held, one a mod holds in its name, or a character not alive. Serial
+    /// phases only.
+    /// </summary>
+    public static bool SendPlatoon(World world, int platoon, CharacterId follow) =>
+        world.Platoons.Find(platoon) is { Held: true, HoldOwner: null } p && Follow(world, p, follow);
+
+    /// <summary>
+    /// Sends a platoon mod <paramref name="mod"/> holds in its name toward a character (<see cref="SendPlatoon(World, int, CharacterId)"/>); a
+    /// character with a lasting id (<c>World.LastingIds</c>) is followed again after a load. False for a platoon that mod does not hold or a
+    /// character not alive. Serial phases only.
+    /// </summary>
+    public static bool SendPlatoon(World world, int platoon, string mod, CharacterId follow) =>
+        !string.IsNullOrEmpty(mod) && world.Platoons.Find(platoon) is { Held: true } p && p.HoldOwner == mod && Follow(world, p, follow);
+
+    /// <summary>
+    /// A code mod's despawn (engine API, not in the original): the platoon leaves the world for good as one the game does not keep leaves it (its
+    /// characters, made or not, and its stand-in; its unique characters free again; a save's platoon left out of the next save), and the platoon
+    /// observers hear <see cref="PlatoonGone.ByMod"/>. A loaded platoon's characters vanish where they stand. False, changing nothing, for an
+    /// unknown platoon, a town's own, the player's, one whose characters are being made, during the parallel phase, and while the off-screen fights
+    /// are settled (a death observer told of a fight's dead). Serial phases only.
+    /// </summary>
+    public bool DespawnPlatoon(World world, int platoon)
+    {
+        if (_fighting || world.Characters.Phase == TablePhase.Parallel) return false;
+        if (world.Platoons.Find(platoon) is not { Pinned: false, State: not PlatoonState.Activating } p) return false;
+        if (p.Faction >= 0 && p.Faction == PlayerFactionOf(world)) return false;
+
+        Despawn(world, p, why: PlatoonGone.ByMod);
         return true;
     }
 
     /// <summary>
-    /// Sends a held platoon's stand-in toward a character off screen (<see cref="SendPlatoon(World, int, Vector2?)"/>): toward its last position
-    /// while it is alive, then it stops where it is. False for a platoon not held or a character not alive. Serial phases only.
+    /// Releases the holds taken in the name of a mod that is not running (<paramref name="running"/> says which are), as a load without that mod
+    /// does (between ticks, before the first): the population moves those platoons again. Returns how many were released.
     /// </summary>
-    public static bool SendPlatoon(World world, int platoon, CharacterId follow)
+    public static int DropUnownedHolds(World world, Func<string, bool> running)
     {
-        if (world.Platoons.Find(platoon) is not { Held: true } p || !world.Characters.IsAlive(follow)) return false;
+        int dropped = 0;
+        foreach (var p in world.Platoons.All)
+        {
+            if (p.HoldOwner is not { } owner || running(owner)) continue;
+
+            Release(p);
+            dropped++;
+        }
+
+        return dropped;
+    }
+
+    /// <summary>
+    /// Ends a platoon's hold: the population's travel takes over again.
+    /// </summary>
+    static void Release(Platoon p)
+    {
+        p.Held = false;
+        p.HoldOwner = null;
+        p.ModGoal = null;
+        p.ModFollow = CharacterId.None;
+        p.ModFollowLasting = LastingId.None;
+        p.ModArrived = false;
+    }
+
+    /// <summary>
+    /// Sets a held platoon's goal point (null: it stops), a new sending; false for a point that is not finite.
+    /// </summary>
+    static bool Goal(Platoon p, Vector2? point)
+    {
+        if (point is { } at && !(float.IsFinite(at.X) && float.IsFinite(at.Y))) return false;
+
+        p.ModGoal = point;
+        p.ModFollow = CharacterId.None;
+        p.ModFollowLasting = LastingId.None;
+        p.ModArrived = false;
+        return true;
+    }
+
+    /// <summary>
+    /// Sets the character a held platoon follows, with its lasting id when it has one, a new sending; false for a character not alive.
+    /// </summary>
+    static bool Follow(World world, Platoon p, CharacterId follow)
+    {
+        if (!world.Characters.IsAlive(follow) || !world.Characters.TryResolveNext(follow, out int slot)) return false;
 
         p.ModGoal = null;
         p.ModFollow = follow;
+        p.ModFollowLasting = world.Characters.Cold(slot)?.LastingId ?? LastingId.None;
+        p.ModArrived = false;
         return true;
+    }
+
+    /// <summary>
+    /// A held platoon's serial look each roaming step: a named hold's followed character found again by its lasting id while the id it had is gone
+    /// (after a load, or once it left the world and came back), then its arrival at its goal told once (<see cref="PlatoonEvent.Arrived"/>; off
+    /// screen only).
+    /// </summary>
+    void StepModHold(World world, Platoon p)
+    {
+        if (!p.ModFollowLasting.IsNone && !world.Characters.IsAlive(p.ModFollow))
+        {
+            var found = world.LastingIds.Find(p.ModFollowLasting);
+            if (world.Characters.IsAlive(found)) p.ModFollow = found;
+        }
+
+        if (p.ModArrived || p.State != PlatoonState.Unloaded || ModGoalOf(world, p) is not { } goal) return;
+        if (Vector2.Distance(p.Position, goal) > _settings.RoamArrivalRadius) return;
+
+        p.ModArrived = true;
+        world.Platoons.Note(p, PlatoonEvent.Arrived);
     }
 
     /// <summary>

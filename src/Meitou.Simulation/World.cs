@@ -253,6 +253,8 @@ public sealed partial class World : IDisposable
             TownSwitchObservers.Register(this._systems[k], k);
             RelationObservers.Register(this._systems[k], k);
             DeathObservers.Register(this._systems[k], k);
+            PlatoonObservers.Register(this._systems[k], k);
+            OffscreenFightRules.Register(this._systems[k], k);
             ExperienceFilters.Register(this._systems[k], k);
             CrimeObservers.Register(this._systems[k], k);
         }
@@ -264,6 +266,7 @@ public sealed partial class World : IDisposable
 
         Characters = characters ?? new CharacterTable();
         WatchCharacters();
+        Platoons.SetNoting(PlatoonObservers.Active);
         Grid = new SpatialGrid(settings.GridCellSize);
         _pool = new WorkerPool(settings.Threads);
         _buffers = new EffectBuffer[Math.Max(1, settings.Threads * settings.PartitionsPerThread)];
@@ -529,6 +532,14 @@ public sealed partial class World : IDisposable
     /// </summary>
     internal Bodies.DeathObservers DeathObservers { get; } = new();
     /// <summary>
+    /// The systems told of the platoons' changes (<see cref="IPlatoonObserver"/>).
+    /// </summary>
+    internal PlatoonObservers PlatoonObservers { get; } = new();
+    /// <summary>
+    /// The systems asked whether two platoons fight off screen (<see cref="Population.IOffscreenFightRule"/>).
+    /// </summary>
+    internal Population.OffscreenFightRules OffscreenFightRules { get; } = new();
+    /// <summary>
     /// The systems filtering experience gains (<see cref="Bodies.IExperienceFilter"/>).
     /// </summary>
     internal Bodies.ExperienceFilters ExperienceFilters { get; } = new();
@@ -783,6 +794,8 @@ public sealed partial class World : IDisposable
         TownSwitchObservers.Register(system, _systems.Count - 1);
         RelationObservers.Register(system, _systems.Count - 1);
         DeathObservers.Register(system, _systems.Count - 1);
+        PlatoonObservers.Register(system, _systems.Count - 1);
+        OffscreenFightRules.Register(system, _systems.Count - 1);
         ExperienceFilters.Register(system, _systems.Count - 1);
         CrimeObservers.Register(system, _systems.Count - 1);
         RegisterTasks(system, _systems.Count - 1);
@@ -790,6 +803,7 @@ public sealed partial class World : IDisposable
         Ai.ChooserRegistry.Collect(this, system, _systems.Count - 1, Extensions(), [], goalsOpen: false);
         if (DecidesAfter(system)) _decideAfter = _systems.Count - 1;
         WatchCharacters();
+        Platoons.SetNoting(PlatoonObservers.Active);
     }
 
     /// <summary>
@@ -916,6 +930,7 @@ public sealed partial class World : IDisposable
         // lose a tick (nothing without registered effects).
         RunSlowWorld(prof);
         DeathObservers.Sweep(this);
+        PlatoonObservers.Tell(this);
         Bodies.StatusEffects.Step(this);
         AfterPhase?.Invoke(this, "slow world");
 
@@ -1452,6 +1467,8 @@ public sealed partial class World : IDisposable
         TownSwitchObservers.HashFaults(ref h);
         RelationObservers.HashFaults(ref h);
         DeathObservers.HashFaults(ref h);
+        PlatoonObservers.HashFaults(ref h);
+        OffscreenFightRules.HashFaults(ref h);
         ExperienceFilters.HashFaults(ref h);
         CrimeObservers.HashFaults(ref h);
         Decisions.HashFaults(ref h);

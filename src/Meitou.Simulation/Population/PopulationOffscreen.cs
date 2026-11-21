@@ -30,17 +30,46 @@ public sealed partial class PopulationSystem
     /// </summary>
     readonly Dictionary<(int X, int Z), List<Platoon>> _fightCells = [];
     /// <summary>
+    /// The enemies within reach of the stand-in looking for a fight, in id order (<see cref="FoeOf"/>).
+    /// </summary>
+    readonly List<Platoon> _foes = [];
+    /// <summary>
+    /// Whether the fights are being settled: a code mod's despawn waits (<see cref="DespawnPlatoon"/>).
+    /// </summary>
+    bool _fighting;
+    /// <summary>
+    /// Platoons by id.
+    /// </summary>
+    static readonly Comparison<Platoon> ById = (x, y) => x.Id.CompareTo(y.Id);
+    /// <summary>
     /// The race data cache of the off-screen healing.
     /// </summary>
     readonly Dictionary<string, RaceData?> _recoverRaces = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Settles the meetings of hostile stand-ins (serial phase): every unloaded platoon that is not a town's own nor the player's, met by an enemy
-    /// within <see cref="FightRadius"/>, fights the first one met in id order. The winner is drawn by the square of the strengths (A wins with S_A² /
-    /// (S_A² + S_B²)), the loser is wiped out (despawned; a save leaves it out), and the winner loses its weakest members in the share (S_loser /
+    /// within <see cref="FightRadius"/>, fights the first one met in id order that the code mods' rules do not skip
+    /// (<see cref="IOffscreenFightRule"/>). The winner is the one the rules name, else drawn by the square of the strengths (A wins with S_A² / (S_A²
+    /// + S_B²)); the loser is wiped out (despawned; a save leaves it out), and the winner loses its weakest members in the share (S_loser /
     /// S_winner)² / 2.
     /// </summary>
     void Fights(World world)
+    {
+        _fighting = true;
+        try
+        {
+            SettleFights(world);
+        }
+        finally
+        {
+            _fighting = false;
+        }
+    }
+
+    /// <summary>
+    /// The body of <see cref="Fights"/>.
+    /// </summary>
+    void SettleFights(World world)
     {
         _fighters.Clear();
         foreach (var list in _fightCells.Values) list.Clear();
@@ -60,50 +89,104 @@ public sealed partial class PopulationSystem
         var gone = new HashSet<int>();
         foreach (var a in _fighters)
         {
-            if (gone.Contains(a.Id)) continue;
+            if (gone.Contains(a.Id) || !Registered(world, a)) continue;
+            if (FoeOf(world, a, gone) is not { } met) continue;
 
-            int cx = (int)MathF.Floor(a.Position.X / FightRadius), cz = (int)MathF.Floor(a.Position.Y / FightRadius);
-            Platoon? foe = null;
-            for (int dx = -1; dx <= 1; dx++)
-            {
-                for (int dz = -1; dz <= 1; dz++)
-                {
-                    if (!_fightCells.TryGetValue((cx + dx, cz + dz), out var cell)) continue;
-
-                    foreach (var b in cell)
-                    {
-                        if (b.Id == a.Id || gone.Contains(b.Id) || foe is not null && b.Id >= foe.Id) continue;
-                        if (Vector2.DistanceSquared(a.Position, b.Position) > FightRadius * FightRadius) continue;
-                        if (!AggroSystem.IsEnemy(_data.Relations, a.Faction, b.Faction)
-                            && !AggroSystem.IsEnemy(_data.Relations, b.Faction, a.Faction))
-                            continue;
-
-                        foe = b;
-                    }
-                }
-            }
-
-            if (foe is null) continue;
-
+            var (foe, verdict) = met;
             var sa = Strengths(a);
             var sb = Strengths(foe);
             float ta = sa.Sum(s => s.Strength), tb = sb.Sum(s => s.Strength);
             if (ta <= 0 && tb <= 0) continue;
 
-            float u = Rng.Float(Rng.Hash(world.Seed, (ulong)a.Id << 32 | (uint)foe.Id, RngPurpose.Combat, (ulong)world.Tick));
-            bool aWins = u < ta * ta / (ta * ta + tb * tb);
+            bool aWins = verdict switch
+            {
+                OffscreenFightVerdict.FirstWins => true,
+                OffscreenFightVerdict.SecondWins => false,
+                _ => DrawsFirst(world, a, foe, ta, tb),
+            };
             var (winner, loser, ws, wt, lt) = aWins ? (a, foe, sa, ta, tb) : (foe, a, sb, tb, ta);
             int losses = (int)MathF.Round(ws.Count * MathF.Min(1, lt * lt / MathF.Max(wt * wt, 1e-3f)) * 0.5f);
             foreach (var (member, _) in ws.OrderBy(s => s.Strength).Take(losses)) Kill(world, winner, member, loser.Faction);
 
             gone.Add(loser.Id);
+            if (!Registered(world, loser)) continue;
+
             ReportWipedOut(world, loser, winner.Faction);
-            Despawn(world, loser, killed: true);
+            Despawn(world, loser, killed: true, why: PlatoonGone.LostFight, by: winner.Id);
             if (_townLog.Count >= 256) _townLog.RemoveAt(0);
             _townLog.Add($"Off screen at {winner.Position.X:0}, {winner.Position.Y:0}: {NameOf(winner)} ({wt:0}) beat {NameOf(loser)} ({lt:0}), "
                 + $"losing {losses}");
         }
     }
+
+    /// <summary>
+    /// Whether <paramref name="a"/> wins the draw against <paramref name="b"/>: with S_A² / (S_A² + S_B²), rolled from the pair and the tick.
+    /// </summary>
+    static bool DrawsFirst(World world, Platoon a, Platoon b, float ta, float tb)
+    {
+        float u = Rng.Float(Rng.Hash(world.Seed, (ulong)a.Id << 32 | (uint)b.Id, RngPurpose.Combat, (ulong)world.Tick));
+        return u < ta * ta / (ta * ta + tb * tb);
+    }
+
+    /// <summary>
+    /// The enemy <paramref name="a"/> fights: the first in id order within <see cref="FightRadius"/>, not gone, hostile either way and not skipped by
+    /// the code mods' rules (<see cref="IOffscreenFightRule"/>, asked in that order until one is not skipped), with the rules' verdict; null for
+    /// none, or once <paramref name="a"/> has left the world.
+    /// </summary>
+    (Platoon Foe, OffscreenFightVerdict Verdict)? FoeOf(World world, Platoon a, HashSet<int> gone)
+    {
+        Enemies(world, a, gone);
+        if (_foes.Count == 0) return null;
+        if (!world.OffscreenFightRules.Active) return (_foes[0], OffscreenFightVerdict.Fight);
+
+        foreach (var b in _foes)
+        {
+            if (!Registered(world, b)) continue;
+
+            var verdict = world.OffscreenFightRules.Judge(world, a, b);
+            if (!Registered(world, a)) return null;
+            if (verdict != OffscreenFightVerdict.Skip) return (b, verdict);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Fills <see cref="_foes"/> with the enemies within <see cref="FightRadius"/> of <paramref name="a"/>, not gone and hostile either way: in id
+    /// order when the code mods' rules ask about them, else only the first in id order.
+    /// </summary>
+    void Enemies(World world, Platoon a, HashSet<int> gone)
+    {
+        _foes.Clear();
+        bool all = world.OffscreenFightRules.Active;
+        int cx = (int)MathF.Floor(a.Position.X / FightRadius), cz = (int)MathF.Floor(a.Position.Y / FightRadius);
+        for (int dx = -1; dx <= 1; dx++)
+        {
+            for (int dz = -1; dz <= 1; dz++)
+            {
+                if (!_fightCells.TryGetValue((cx + dx, cz + dz), out var cell)) continue;
+
+                foreach (var b in cell)
+                {
+                    if (b.Id == a.Id || gone.Contains(b.Id) || !all && _foes.Count > 0 && b.Id >= _foes[0].Id) continue;
+                    if (Vector2.DistanceSquared(a.Position, b.Position) > FightRadius * FightRadius) continue;
+                    if (!AggroSystem.IsEnemy(_data.Relations, a.Faction, b.Faction) && !AggroSystem.IsEnemy(_data.Relations, b.Faction, a.Faction))
+                        continue;
+
+                    if (all) _foes.Add(b);
+                    else if (_foes.Count == 0) _foes.Add(b);
+                    else _foes[0] = b;
+                }
+            }
+        }
+
+        if (all) _foes.Sort(ById);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="p"/> is still in the world (a code mod's rule or death observer may have removed it during the fights).
+    /// </summary>
+    static bool Registered(World world, Platoon p) => world.Platoons.Find(p.Id) == p;
 
     /// <summary>
     /// A platoon's name for the town log: its stored or saved name, else its template's name, else the template id.
