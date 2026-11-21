@@ -126,7 +126,7 @@ precede host orders for their due tick. No concurrent host enqueue may alter tha
 Randomness: stateless `Rng.Hash(seed,entityKey,purpose,counter)`; changing purpose/salt changes rolls.
 Worker partitions are `threads*2`, minimum 16 slots (game 32: 128 left a 500-character battle 3 partitions). The caller runs partitions
 alongside `threads - 1` above-normal helpers that spin briefly between phases, then park; one thread means caller execution. Navmesh and foliage
-builds loop on their own below-normal threads (`NavBuildScheduler`), never the thread pool, so they cannot preempt a helper mid-phase.
+build loops run on their own below-normal threads (`NavBuildScheduler`) besides the calling thread, not the normal-priority thread pool.
 Async path and population results enter at tick boundaries and a navmesh zone goes live when its build ends, also in the middle of a tick; arrival
 timing is not repeatable in play. What play reads that no tick decides (**Observed**, code reading, #1056):
 - Services on their own threads: `PopulationSettings.Background` (town, wild and roamer builds), `PathService` without `SynchronousPaths`,

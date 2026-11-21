@@ -229,7 +229,7 @@ public sealed class WorkerPool : IDisposable
     /// </summary>
     Job? NextJob(Job last)
     {
-        SpinForJob(last);
+        if (SpinForJob(last) is { } spun) return spun;
 
         lock (_park)
         {
@@ -269,17 +269,22 @@ public sealed class WorkerPool : IDisposable
     }
 
     /// <summary>
-    /// Spins up to <see cref="HelperSpinTicks"/> for a job after <paramref name="last"/> or the pool's stop.
+    /// Spins up to <see cref="HelperSpinTicks"/> for a job after <paramref name="last"/>; the job, or null when the time ran out or the pool
+    /// stops (the helper then goes to park, or finds the stop there).
     /// </summary>
-    void SpinForJob(Job last)
+    Job? SpinForJob(Job last)
     {
         long end = Stopwatch.GetTimestamp() + HelperSpinTicks;
-        while (!_stopping && !Volatile.Read(ref _job).Offers(last))
+        while (!_stopping)
         {
-            if (Stopwatch.GetTimestamp() >= end) return;
+            var job = Volatile.Read(ref _job);
+            if (job.Offers(last)) return job;
+            if (Stopwatch.GetTimestamp() >= end) return null;
 
             Thread.SpinWait(SpinIterations);
         }
+
+        return null;
     }
 
     /// <summary>
