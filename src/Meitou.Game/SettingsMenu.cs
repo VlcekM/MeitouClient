@@ -1547,6 +1547,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.PauseOnLoad = true;
         Config.LoadingPause = false;
         Player.InventoryWindows.AutoOpenBags = Config.AutoOpenBags = true;
+        Player.InventoryWindows.SplitStacks = Config.SplitStacks = true;
         Config.AnimalsPickUp = false;
         AnimalsPickUpChanged?.Invoke(false);
         Config.CagesSpareOwn = false;
