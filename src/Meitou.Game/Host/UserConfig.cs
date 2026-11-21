@@ -446,6 +446,11 @@ sealed class UserConfig
     /// </summary>
     public bool AutoOpenBags { get; set; } = true;
     /// <summary>
+    /// Meitou's stack splitting (Advanced settings, a Faithful / Meitou switch; on by default, Meitou): a left press lifts the whole stack, Shift
+    /// half, Alt one unit, Shift + Alt asks how many. Off, as in the game: one unit, the whole stack with Shift or Ctrl.
+    /// </summary>
+    public bool SplitStacks { get; set; } = true;
+    /// <summary>
     /// The player's animals pick up loose items into their bags (Advanced settings, a Faithful / Meitou switch whose
     /// Faithful side is on, as the game lets animals pick up; off by default, Meitou;
     /// <c>PlayerSystem.AnimalsPickUp</c>).

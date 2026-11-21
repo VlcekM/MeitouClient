@@ -13,7 +13,8 @@ namespace Meitou.Game.Ui;
 sealed class InventoryWindows(PlayerInterface player)
 {
     // Holding an item with the mouse (docs/game/ui-screens.md section 6 "Holding an item"; the original's <c>MouseInventory</c>,
-    // <c>FUN_14070e640</c>): a left press on an item lifts it (LiftItem: one unit of a stack, the whole stack with Shift or Ctrl); the release places
+    // <c>FUN_14070e640</c>): a left press on an item lifts it (LiftItem: one unit of a stack, the whole stack with Shift or Ctrl; see LiftCount for
+    // Meitou's stack splitting); the release places
     // it where the pointer is when the pointer moved since the press, otherwise it stays on the mouse and the next press places it. The item lives in
     // the world (WorldSnapshot.Held); the interface draws what it expects until the world has applied its command.
     /// <summary>
@@ -43,9 +44,16 @@ sealed class InventoryWindows(PlayerInterface player)
     internal (ItemOwner Window, int Code)? Lifting;
 
     /// <summary>
-    /// Shift and Ctrl at the last press (a lift takes the whole stack with either).
+    /// Shift, Ctrl and Alt (the Highlight key, Alt by default) at the last press (<see cref="LiftCount"/>).
     /// </summary>
-    internal bool PressShift, PressCtrl;
+    internal bool PressShift, PressCtrl, PressAlt;
+
+    /// <summary>
+    /// Meitou's stack splitting (the Advanced page's Split stacks; docs/game/ui-screens.md "Holding an item"): a press lifts the whole stack, half of
+    /// it with Shift, one unit with Alt, and Shift + Alt asks how many (<see cref="LiftCount"/>). Not Ctrl: Left Ctrl is a default Orbit binding,
+    /// so Ctrl with a mouse move turns the camera.
+    /// </summary>
+    internal bool SplitStacks;
 
     /// <summary>
     /// Meitou's item rotation (the Advanced page's Item rotation; docs/game/ui-screens.md "Rotating an item"): <see cref="RotateAt"/> turns items.
@@ -478,7 +486,7 @@ sealed class InventoryWindows(PlayerInterface player)
 
     /// <summary>
     /// A press on an item cell lifts it (<c>FUN_1407139a0</c>): a character's item, the stock's, a machine's or container's. Nothing for the other
-    /// controls. The cell's footprint gives the grab offset.
+    /// controls. Shift + Alt with stack splitting on asks how many first (<see cref="StackSplitDialog"/>).
     /// </summary>
     bool LiftAt(string screen, UiControl control, Vector2 p)
     {
@@ -488,32 +496,60 @@ sealed class InventoryWindows(PlayerInterface player)
             : null;
         if (lift is not { } chosen) return false;
 
-        var (code, window, actor, token, whole, view) = chosen;
+        if (SplitStacks && PressShift && PressAlt && chosen.View.Quantity > 1)
+        {
+            player.StackSplitDialog.Ask(chosen.View, n => LiftUnits(chosen, n, control.Bounds, p, held: false));
+            return true;
+        }
 
-        SayHeld(new LiftItem(actor, window, token, whole) { Tick = player.Session.World.Tick });
-        Held = view;
-        Lifting = whole ? (window, code) : null;
-        var b = control.Bounds;
-        var cell = new Vector2(view.Width > 0 ? b.Width / view.Width : player.InventoryCell,
-            view.Height > 0 ? b.Height / view.Height : player.InventoryCellHeight);
-        _heldGrab = ClampGrab((p - new Vector2(b.X, b.Y)) / Vector2.Max(cell, Vector2.One), view);
-        LiftPress = p;
-        player.InterfaceSounds.Sound("Item_Lift", item: view.Record);
+        LiftUnits(chosen, LiftCount(chosen.View.Quantity), control.Bounds, p, held: true);
         return true;
     }
 
     /// <summary>
-    /// What a press lifts: the cell's code, the window it comes from, the character who takes it, the item, whether the whole stack goes, and the
-    /// item as the mouse holds it.
+    /// The units a press lifts out of a stack of <paramref name="quantity"/> without the dialog. The original's: one, or the whole stack with Shift
+    /// or Ctrl. Meitou's stack splitting (<see cref="SplitStacks"/>): the whole stack, half of it (rounded up) with Shift, one with Alt.
     /// </summary>
-    readonly record struct Lift(int Code, ItemOwner Window, CharacterId Actor, InventoryItemToken Token, bool Whole, HeldItemView View);
+    internal int LiftCount(int quantity)
+    {
+        if (!SplitStacks) return PressShift || PressCtrl ? quantity : 1;
+        if (PressShift) return (quantity + 1) / 2;
+        return PressAlt ? 1 : quantity;
+    }
 
     /// <summary>
-    /// The held view of a lifted item: one unit unless the whole stack goes.
+    /// Lifts <paramref name="count"/> units of <paramref name="lift"/> onto the mouse (<see cref="LiftItem"/>), the cell's footprint
+    /// <paramref name="cellBounds"/> giving the grab offset. <paramref name="held"/>: the button is still down, so its release may place the item.
+    /// </summary>
+    void LiftUnits(Lift lift, int count, UiRect cellBounds, Vector2 p, bool held)
+    {
+        var (code, window, actor, token, view) = lift;
+        if (Held is not null) return;
+
+        count = Math.Clamp(count, 1, view.Quantity);
+        bool whole = count >= view.Quantity;
+        SayHeld(new LiftItem(actor, window, token, count) { Tick = player.Session.World.Tick });
+        Held = view with { Quantity = count };
+        Lifting = whole ? (window, code) : null;
+        var cell = new Vector2(view.Width > 0 ? cellBounds.Width / view.Width : player.InventoryCell,
+            view.Height > 0 ? cellBounds.Height / view.Height : player.InventoryCellHeight);
+        _heldGrab = ClampGrab((p - new Vector2(cellBounds.X, cellBounds.Y)) / Vector2.Max(cell, Vector2.One), view);
+        LiftPress = held ? p : null;
+        player.InterfaceSounds.Sound("Item_Lift", item: view.Record);
+    }
+
+    /// <summary>
+    /// What a press may lift: the cell's code, the window it comes from, the character who takes it, the item, and the whole stack as the mouse
+    /// would hold it.
+    /// </summary>
+    readonly record struct Lift(int Code, ItemOwner Window, CharacterId Actor, InventoryItemToken Token, HeldItemView View);
+
+    /// <summary>
+    /// The held view of a whole lifted stack.
     /// </summary>
     static HeldItemView View(string record, string name, string material, int quantity, int width, int height, float? charge, ItemOwner from,
-        bool whole, bool rotated = false) =>
-        new(record, name, material, default, "", whole ? quantity : 1, width, height, charge, from, -1) { Rotated = rotated };
+        bool rotated = false) =>
+        new(record, name, material, default, "", quantity, width, height, charge, from, -1) { Rotated = rotated };
 
     /// <summary>
     /// A stock item of the open trade, taken by the customer.
@@ -525,10 +561,9 @@ sealed class InventoryWindows(PlayerInterface player)
         if (snapshot.Trade is not { } trade || trade.Stock.FirstOrDefault(i => i.Index == code) is not { } stock)
             return null;
 
-        var (window, actor, token, whole) = (ItemOwner.Stock, trade.Customer, stock.Token, PressShift || PressCtrl || stock.Quantity <= 1);
-        var view = View(stock.Record, stock.Name, stock.Material, stock.Quantity, stock.Width, stock.Height, stock.Charge, window, whole,
+        var view = View(stock.Record, stock.Name, stock.Material, stock.Quantity, stock.Width, stock.Height, stock.Charge, ItemOwner.Stock,
             stock.Rotated);
-        return new(code, window, actor, token, whole, view);
+        return new(code, ItemOwner.Stock, trade.Customer, stock.Token, view);
     }
 
     /// <summary>
@@ -547,30 +582,29 @@ sealed class InventoryWindows(PlayerInterface player)
 
         var (window, actor) = (ItemOwner.AtSite(m.Site), who.Id);
         int k = code - 10;
-        InventoryItemToken token;
-        bool whole;
-        HeldItemView view;
 
         if (code >= 1000 && m.Storage?.Items.FirstOrDefault(i => i.Index == code - 1000) is { } stored)
         {
-            (token, whole) = (new(stored.Index, stored.Record, "main", stored.X, stored.Y, stored.Quantity, stored.Quality), PressShift
-                || PressCtrl || stored.Quantity <= 1);
-            view = View(stored.Record, stored.Name, stored.Material, stored.Quantity, stored.Width, stored.Height, stored.Charge, window, whole,
+            var token = new InventoryItemToken(stored.Index, stored.Record, "main", stored.X, stored.Y, stored.Quantity, stored.Quality);
+            var view = View(stored.Record, stored.Name, stored.Material, stored.Quantity, stored.Width, stored.Height, stored.Charge, window,
                 stored.Rotated);
+            return new(code, window, actor, token, view);
         }
-        else if (code == 8 && m.Craft is { Done: [var made, ..] })
-        {
-            (token, whole) = (new(0, made.Record, "out", 0, 0, made.Quantity, made.Quality), PressShift || PressCtrl || made.Quantity <= 1);
-            view = View(made.Record, made.Name, made.Material, made.Quantity, made.Width, made.Height, made.Charge, window, whole);
-        }
-        else if ((code == 8 ? m.Output : k >= 0 && k < m.Inputs.Count ? m.Inputs[k] : null) is { Count: > 0 } slot)
-        {
-            (token, whole) = (new(0, slot.Item, code == 8 ? "out" : $"in{k + 1}", 0, 0, slot.Count, 0), PressShift || PressCtrl || slot.Count <= 1);
-            view = View(slot.Item, slot.Name, "", slot.Count, slot.Width, slot.Height, null, window, whole);
-        }
-        else return null;
 
-        return new(code, window, actor, token, whole, view);
+        if (code == 8 && m.Craft is { Done: [var made, ..] })
+        {
+            var token = new InventoryItemToken(0, made.Record, "out", 0, 0, made.Quantity, made.Quality);
+            return new(code, window, actor, token, View(made.Record, made.Name, made.Material, made.Quantity, made.Width, made.Height, made.Charge,
+                window));
+        }
+
+        if ((code == 8 ? m.Output : k >= 0 && k < m.Inputs.Count ? m.Inputs[k] : null) is { Count: > 0 } slot)
+        {
+            var token = new InventoryItemToken(0, slot.Item, code == 8 ? "out" : $"in{k + 1}", 0, 0, slot.Count, 0);
+            return new(code, window, actor, token, View(slot.Item, slot.Name, "", slot.Count, slot.Width, slot.Height, null, window));
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -589,10 +623,8 @@ sealed class InventoryWindows(PlayerInterface player)
         }
 
         var (window, actor) = (ItemOwner.Of(owner.Id), loot ? snapshot.LootOpener : owner.Id);
-        var (token, whole) = (InventoryItemToken.Of(item),
-            PressShift || PressCtrl || item.Quantity <= 1);
-        var view = View(item.Record, item.Name, item.Material, item.Quantity, item.Width, item.Height, item.Charge, window, whole, item.Rotated);
-        return new(code, window, actor, token, whole, view);
+        var view = View(item.Record, item.Name, item.Material, item.Quantity, item.Width, item.Height, item.Charge, window, item.Rotated);
+        return new(code, window, actor, InventoryItemToken.Of(item), view);
     }
 
     /// <summary>
