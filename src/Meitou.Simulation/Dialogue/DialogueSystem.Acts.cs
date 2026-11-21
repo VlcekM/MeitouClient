@@ -43,9 +43,10 @@ public sealed partial class DialogueSystem
     /// <summary>
     /// "A regards B as friendly" (Character slot 126, <c>FUN_1407923d0</c>): the same faction; never when A's squad holds TEMP_ENEMY on B (or, for a
     /// player-faction A, B's squad on A); always when B's squad holds TEMP_ALLY on a player-faction A, A's squad TEMP_ALLY on B, or A loves B (DC
-    /// 52); else A's faction is allied to B's. Engine: the uniform disguise the original can substitute for B's faction is not read.
+    /// 52); else A's faction is allied to B's, with <paramref name="disguise"/> the faction B's working disguise passes for (the third argument,
+    /// <c>FUN_1407c0520</c>, <see cref="Crime.ArrestSystem.SeenFaction"/>; <b>Verified</b>). The same-faction test reads the real factions.
     /// </summary>
-    bool RegardsFriendly(World world, CharacterId a, CharacterCold ac, CharacterId b, CharacterCold bc)
+    bool RegardsFriendly(World world, CharacterId a, CharacterCold ac, CharacterId b, CharacterCold bc, bool disguise = false)
     {
         if (ac.Faction == bc.Faction) return true;
         // One memory lookup each way (A's squad on B, B's on A) for all the tag tests.
@@ -58,7 +59,9 @@ public sealed partial class DialogueSystem
             if (Has(ba, MemoryTag.TempAlly)) return true;
         }
         if (Has(ab, MemoryTag.TempAlly) || (abEntry?.Long & MemoryTag.LoveMask) is > 0) return true;
-        return _data.Relations.Contains(ac.Faction) && _data.Relations.Contains(bc.Faction) && _data.Relations.IsAlly(ac.Faction, bc.Faction);
+
+        int seen = disguise ? Crime.ArrestSystem.SeenFaction(bc) : bc.Faction;
+        return _data.Relations.Contains(ac.Faction) && _data.Relations.Contains(seen) && _data.Relations.IsAlly(ac.Faction, seen);
     }
 
     /// <summary>
@@ -169,13 +172,13 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// The medic finders' slot 126 (<c>isAlly</c>, <see cref="RegardsFriendly(World, CharacterId, CharacterCold, CharacterId, CharacterCold)"/>) for
-    /// two characters by slot.
+    /// The medic finders' slot 126 (<c>isAlly</c>, <see cref="RegardsFriendly(World, CharacterId, CharacterCold, CharacterId, CharacterCold, bool)"/>)
+    /// for two characters by slot; <paramref name="disguise"/> reads B's working disguise (the sight pass's friend test).
     /// </summary>
-    public bool RegardsFriendly(World world, int a, int b)
+    public bool RegardsFriendly(World world, int a, int b, bool disguise = false)
     {
         var table = world.Characters;
-        return table.Cold(a) is { } ac && table.Cold(b) is { } bc && RegardsFriendly(world, table.IdOf(a), ac, table.IdOf(b), bc);
+        return table.Cold(a) is { } ac && table.Cold(b) is { } bc && RegardsFriendly(world, table.IdOf(a), ac, table.IdOf(b), bc, disguise);
     }
 
     /// <summary>

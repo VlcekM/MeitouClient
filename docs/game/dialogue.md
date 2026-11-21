@@ -363,12 +363,13 @@ nothing; an animal looker without event-3 lines, nothing; a target without a pla
 update flag: within the camera's range and frustum tests, always set for the player's faction) reacts only to a target in view or with the player
 (`FUN_140856bc0`: of the player's faction, or under an AI contract of a character of it); a down target (slot 6), nothing; an animal, event 27
 (I_SEE_ANIMAL_SQUAD) whether seen now or not. The rest needs Dialogue `+0x28` (below) and the entry seen or heard at the last look (`+0x38` /
-`+0x39`, `FUN_140855710`). **Friend** (slot 126 regards the target friendly): 67 only while the looker's platoon is in no campaign
+`+0x39`, `FUN_140855710`). **Friend** (slot 126 regards the target friendly, its disguise read: flag 1, so a working uniform of the looker's side lands here,
+**Verified**, `FUN_140859680` passes 1; Meitou `SightSystem`): 67 only while the looker's platoon is in no campaign
 (`FUN_1409c4540`: its faction's war manager holds it) and the target is no slave (state 1), of the player's faction and allied (`FUN_1406b2630`;
 the same faction counts). **Others**: only a looker in slave state 0, not an escaped prisoner (status `+0xe8`) and without a pending crime
 (`+0x148`); first the crime events, 45 for an escaped prisoner and, at a target not regarded as an enemy (slot 125), 36 / 40 for escaping slaves
 ([escaping slave spotted](ai-tasks.md#slave-work-shout-and-capture)), 17 and 9. Then, while neither side is in combat mode and the target has no
-pending crime, unless the looker's squad loves it (`FUN_140599590`) or regards it friendly with the disguise read (slot 126, 0): 34
+pending crime, unless the looker's squad loves it (`FUN_140599590`) or regards it friendly by its real faction (slot 126 with 0, disguise unread): 34
 I_SEE_UNIFORM_IMPOSTER when the target's disguise level (status `+0x100`, [disguise](perception.md#disguise)) is above 0.25 for a target wearing a
 uniform piece of the looker's faction outside the shirt and boots slots (Character vfunc `0x408`), else above 0.5 when its uniform's faction
 (`+0x108`) is allied to the looker's, else never (99), and the looker has a line for it and senses no enemy (before the line, `FUN_140852e10`
@@ -531,8 +532,8 @@ me, 5 captor, 6 friendly, 7 defeated my squad, 8 I beat his squad, 9 killed my f
   failed kidnap ([carry-loot](carry-loot.md#kidnapping)) and the alarm investigators ([economy](economy.md#town-alarms)).
 - **Readers**: DC 18 (`FUN_140673290`: hours since the time, **9999.99** when never noted), DC 20 (an entry exists), DC 23, DC 52
   (long & 0xc), DC 53 (long & 0x2b0), "regards as friendly" (`FUN_1407923d0`, Character slot 126: same faction; not with TEMP ENEMY;
-  yes with TEMP ALLY or love; else faction ally) and "regards as enemy" (`FUN_14079c950`, slot 125): TEMP ENEMY makes, and TEMP ALLY
-  unmakes, an enemy across faction relations; `FUN_140599390` (a grudge: long & 0x7b2 or short & 0xb6).
+  yes with TEMP ALLY or love; else faction ally, with its flag set the faction a working disguise gives, `FUN_1407c0520`) and "regards as
+  enemy" (`FUN_14079c950`, slot 125): TEMP ENEMY makes, and TEMP ALLY unmakes, an enemy across faction relations; `FUN_140599390` (a grudge: long & 0x7b2 or short & 0xb6).
 - **"Regards as enemy" in order** (`FUN_14079c950(A, B)`, **Observed**): the same faction: no. Otherwise: A's squad holds TEMP ENEMY on B, or A's
   faction is the player's and B's squad holds TEMP ENEMY on A: yes; A's squad holds TEMP ALLY on B: no; else the faction relation test (hostile
   A -> B plus extra gates for disguise, coexistence and a flag at faction `+0x1d0`).

@@ -8,6 +8,7 @@ using Meitou.Simulation.Combat;
 using Meitou.Simulation.Crime;
 using Meitou.Simulation.Dialogue;
 using Meitou.Simulation.Factions;
+using Meitou.Simulation.Items;
 using Meitou.Simulation.Locks;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Navigation;
@@ -87,7 +88,7 @@ static class SaveProbe
             case ("crime", >= 1): Crime(probe, a[0], a.Count > 1 ? int.Parse(a[1]) : 10, a.Count > 2 ? int.Parse(a[2]) : 10); return true;
             case ("meet", >= 2):
                 Meet(probe, a[0], a[1], a.Count > 2 ? float.Parse(a[2]) : 300, a.Count > 3 ? int.Parse(a[3]) : 20, a.Count > 4 ? int.Parse(a[4]) : 10,
-                    a.Count > 5 && a[5] == "forget");
+                    a.Skip(5).Contains("forget"), a.Skip(5).Contains("dress"));
                 return true;
             case ("bait", >= 1): Bait(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10); return true;
             case ("squads", >= 1): Squads(probe, float.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 10); return true;
@@ -383,9 +384,10 @@ static class SaveProbe
     /// Heals the characters named like <paramref name="name"/> (<see cref="DebugHeal"/>, limbs too) and puts them <paramref name="gap"/> from the
     /// first character named like <paramref name="near"/> (#807: a healed player character meeting the noble hunters), that one's squad first
     /// dropping its TEMP_ENEMY tag on them with <paramref name="forget"/>; then every <paramref name="interval"/> ticks, <paramref name="rounds"/>
-    /// times, the lines said and how each member of that squad senses the first of them, whom it fights and what the squad remembers of it.
+    /// times, the lines said and how each member of that squad senses the first of them, whom it fights and what the squad remembers of it. With
+    /// <paramref name="dress"/> they first wear the uniform pieces of their main inventory, and each round shows the first one's disguise.
     /// </summary>
-    static void Meet(ProbeWorld probe, string name, string near, float gap, int rounds, int interval, bool forget)
+    static void Meet(ProbeWorld probe, string name, string near, float gap, int rounds, int interval, bool forget, bool dress)
     {
         var world = probe.World;
         var t = probe.Characters;
@@ -405,16 +407,30 @@ static class SaveProbe
         world.ViewPosition = to;   // the camera on the meeting: the NPCs there are in view and get their update turns
         if (forget && world.Systems.OfType<DialogueSystem>().FirstOrDefault() is { } talk)
             foreach (var id in movers) talk.Memory.ClearShort(t.Cold(host)!.SquadId, id, MemoryTag.TempEnemy);
+        if (dress) foreach (var id in movers) WearUniforms(t.Cold(id.Slot)!);
         Console.WriteLine($"{movers.Count} healed and sent {gap:F0} from {probe.Who(host)}{(forget ? ", TEMP_ENEMY dropped" : "")}");
         for (int round = 0; round < rounds; round++)
         {
             probe.Tick(interval);
             foreach (var line in world.TakeSaid()) Console.WriteLine($"  SAID {line.Owner}: {line.Text}");
             foreach (string line in world.DialogueLines.Take()) Console.WriteLine($"  LOG {line}");
-            Console.WriteLine($"tick {world.Tick} {probe.Who(movers[0].Slot)}{Down(t.Cold(movers[0].Slot)!)} target={Target(probe, movers[0].Slot)}");
+            var first = t.Cold(movers[0].Slot)!;
+            string disguise = dress ? $" disguise={first.DisguiseLevel:F2}/{probe.Faction(first.DisguiseFaction)} blown={first.RecentlyWanted:F0}" : "";
+            Console.WriteLine($"tick {world.Tick} {probe.Who(movers[0].Slot)}{Down(first)} target={Target(probe, movers[0].Slot)}{disguise}");
             MetBy(probe, world.Squads.Find(t.Cold(host)!.SquadId), movers[0]);
             probe.PrintMessages();
         }
+    }
+
+    /// <summary>
+    /// The character wears every uniform piece of its main inventory that a free slot takes.
+    /// </summary>
+    static void WearUniforms(CharacterCold c)
+    {
+        if (c.Inventory is not { } inv) return;
+
+        foreach (var item in inv.Items.Where(i => i.Section == "main" && i.Uniform.Length > 0).ToList())
+            Console.WriteLine($"  wear {item.Record}: {InventoryCommands.TryEquip(inv, item, c)} -> {item.Section}");
     }
 
     /// <summary>
@@ -1050,7 +1066,7 @@ static class SaveProbe
             Console.WriteLine($"{probe.Who(i)} slave={c.SlaveState} owner={probe.Faction(c.SlaveOwner)} master={c.SlaveMaster} shaved={c.Shaved} "
                 + $"in={c.InSomething} bandage=[{string.Join(" ", c.Medical?.PartSpan.ToArray().Select(p => $"{p.Bandage:F0}/{p.Flesh:F0}") ?? [])}]");
             foreach (var item in c.Inventory?.All() ?? [])
-                Console.WriteLine($"  {item.Record} {item.Type} section={item.Section} locked={item.LockedOn} lock={item.Lock is not null}");
+                Console.WriteLine($"  {item.Record} {item.Type} section={item.Section} locked={item.LockedOn} lock={item.Lock is not null} uniform={item.Uniform}");
         }
     }
 
@@ -2217,7 +2233,7 @@ static class SaveProbe
               crowd <radius> [rounds] [interval]  characters near the leader every interval (40) ticks: down, water state, goal, load, fight target
               fight <slot> [rounds] [interval]  a character's combat state and body, and everyone targeting it: gap, blows thrown and landed
               crime <name> [rounds] [interval]  a character's saved squad memory, then its pending crime, bounties and who targets it with which tags
-              meet <name> <near> [gap] [rounds] [interval] [forget]  heals <name>, puts it gap from <near> (forget: its squad drops TEMP_ENEMY),
+              meet <name> <near> [gap] [rounds] [interval] [forget] [dress]  heals <name>, puts it gap from <near> (forget: its squad drops TEMP_ENEMY; dress: wears its uniforms),
                                        then the lines said and how that squad senses, fights and remembers it
               nests [radius]           the wild layout's nests whose first candidate spot the original would refuse; with a radius, the
                                        nests within it of the leader and where each stands as a town

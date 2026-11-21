@@ -226,7 +226,8 @@ public sealed class SightSystem(PopulationData data) : ITickSystem, IStateHashed
         }
         if (!e.Now || !talk.HasSightLines(world, slot)) return;
 
-        if (talk.RegardsFriendly(world, slot, t)) SeeFriend(world, talk, slot, lc, t, tc);
+        // The friend test reads the disguise (slot 126 with 1): a working uniform of the looker's side takes the friend branch, never the impostor line.
+        if (talk.RegardsFriendly(world, slot, t, disguise: true)) SeeFriend(world, talk, slot, lc, t, tc);
         else if (lc is { SlaveState: 0, Escaped: false, Pending: null }) SeeOther(world, talk, slot, lc, t, tc);
     }
 
