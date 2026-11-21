@@ -4757,3 +4757,7 @@ msgstr "AGRICOLTURA"
 #. machine-translated
 msgid "COOKING"
 msgstr "CUCINA"
+
+#. machine-translated
+msgid "{1} is built into Meitou now: {2}."
+msgstr "{1} è ora integrato in Meitou: {2}."

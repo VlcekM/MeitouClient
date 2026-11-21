@@ -4759,3 +4759,7 @@ msgstr "ЗЕМЛЕДЕЛИЕ"
 #. machine-translated
 msgid "COOKING"
 msgstr "ГОТОВКА"
+
+#. machine-translated
+msgid "{1} is built into Meitou now: {2}."
+msgstr "{1} теперь встроен в Meitou: {2}."

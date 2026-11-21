@@ -1,5 +1,6 @@
 using Meitou.Content;
 using Meitou.Game.Host;
+using Meitou.Localisation;
 
 namespace Meitou.Modding;
 
@@ -60,7 +61,7 @@ static class BuiltInMods
             if (CoveredOf(mod) is not { } covered || AdoptOnce(config, covered, mod, onDisk) is not { } taken) continue;
 
             Console.WriteLine($"mods      {mod.Name} is built into Meitou: {taken}");
-            notices.Add($"{mod.Name} is built into Meitou now: {taken}.");
+            notices.Add(Loc.Tr("{1} is built into Meitou now: {2}.", mod.Name, Loc.Tr(taken)));
         }
 
         if (notices.Count > 0) config.Save();

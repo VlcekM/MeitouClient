@@ -4755,3 +4755,7 @@ msgstr "농사"
 #. machine-translated
 msgid "COOKING"
 msgstr "요리"
+
+#. machine-translated
+msgid "{1} is built into Meitou now: {2}."
+msgstr "{1}은(는) 이제 Meitou에 내장되어 있습니다: {2}."

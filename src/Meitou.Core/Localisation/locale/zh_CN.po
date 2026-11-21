@@ -5603,3 +5603,7 @@ msgstr "务农"
 #. machine-translated
 msgid "COOKING"
 msgstr "烹饪"
+
+#. machine-translated
+msgid "{1} is built into Meitou now: {2}."
+msgstr "{1} 现已内置于 Meitou：{2}。"
