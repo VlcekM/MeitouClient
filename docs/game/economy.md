@@ -684,7 +684,10 @@ decompile's `DialogActionEnum` / `DialogConditionEnum` / `EventTriggerEnum`, com
   timer, while the looker is not in combat mode (`FUN_140436610`), its squad does not love the target (`FUN_140599590`: long tags & 0xc) and it does not regard it as
   friendly (vfunc `0x3f0` = `FUN_1407923d0` with 0: real factions, its own test includes the love); a bounty below 1 sets the target's `+0x110` to 250 instead, under the same gates (**Verified**, decompile). The
   bounty branch itself (no uniform piece, `+0x100` <= 0) is taken only while the looker does not regard the target as friendly with the disguise read
-  (`0x3f0` with 1), so a friendly looker fills no meter on a bounty (**Verified**, decompile). Repeats are the lines' own
+  (`0x3f0` with 1), so a friendly looker fills no meter on a bounty (**Verified**, decompile). A partial disguise (0 < level <= 0.6) or a
+  blown one with any uniform piece takes neither branch and the function returns: no meter, no event 44, no blow, so any uniform piece hides a
+  bounty from guards and hunters alike unless a working disguise is seen through (**Verified**, decompile: the bounty test is `+0x100 <= 0`,
+  the disguise branch `FUN_1407c0520`). Meitou: `ArrestSystem.Spot` skips a target whose level is above 0. Repeats are the lines' own
   `repetition limit`. Meitou: both gates are `CrimeSystem.RegardsFriendly` (the disguise read changes nothing where the bounty branch runs), in
   `ArrestSystem.Spot` (no meter, no event 44) and `SeeThrough` (no event 44, no blow). The escaping-slave
   events (36 / 40) are the sight pass's ([sight](dialogue.md#ambient-conversations)). `EV_ESCAPED_PRISONER_SPOTTED` (45) is cut in by

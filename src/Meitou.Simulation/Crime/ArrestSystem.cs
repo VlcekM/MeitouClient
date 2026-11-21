@@ -621,11 +621,12 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
                 float d2 = Vector3.DistanceSquared(next[w].Position, at);
                 if (d2 > range2) continue;
                 int bounty = c.Bounties?.BookedFor(Crimes.Factions.Relations, wc.Faction) is { Claimed: false } e ? e.Amount : 0;
-                // A working disguise hides the bounty: only a looker that sees through it recognises it (Disguise; disguiseMods' bounty branch needs
-                // no disguise level).
-                bool spots = bounty > 0 && bounty >= SpotThreshold(wc.NpcClass) && SeenFaction(c) == c.Faction;
+                // Any uniform piece hides the bounty, a partial or blown disguise too: FUN_140856f00's bounty branch needs the level at 0, and only
+                // a looker that sees through a working disguise recognises it (Disguise).
+                bool bare = c.DisguiseLevel <= 0;
+                bool spots = bare && bounty > 0 && bounty >= SpotThreshold(wc.NpcClass);
                 bool escapee = !sight && EscapeShows(c) && Crimes.IsPoliceLike(world, wc) && InOwnTown(world, w);
-                bool hunts = HuntsFor(wc, c);
+                bool hunts = bare && HuntsFor(wc, c);
 
                 // A looker that regards the target as friendly (slot 126, its love included) neither recognises nor fires (FUN_140856f00).
                 if ((spots || hunts) && Crimes.RegardsFriendly(world, w, s)) (spots, hunts) = (false, false);
