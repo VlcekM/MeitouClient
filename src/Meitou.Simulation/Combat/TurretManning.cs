@@ -162,12 +162,13 @@ sealed class TurretManning
     /// (task 146's <c>hasOneWorkingArm</c>). A player character operates a turret (<see cref="CharacterTask.Operate"/> at the site,
     /// <see cref="Production.ProductionSystem"/>): one of its own has the machine's power grant as efficiency (0 unpowered) and the research
     /// multiplier of the building on its damage; a town's has an NPC gunner's numbers (<see cref="TownPost"/>). An NPC stands at the turret of its town its squad gave it (the AI's turret goals,
-    /// <see cref="Ai.AiBehaviour.Turret"/>); <b>engine choice</b>: efficiency 1 (NPC towns have no power grid here).
+    /// <see cref="Ai.AiBehaviour.Turret"/>); <b>engine choice</b>: efficiency 1 (NPC towns have no power grid here). Either stands at the turret
+    /// Self preservation's 146 holds (<see cref="GuardPost"/>).
     /// </summary>
     Post? Manning(World world, int i, CharacterCold cold)
     {
         if (TurretGuns is not { } catalog || !CanMan(cold)) return null;
-        if (cold.IsPlayer) return PlayerPost(world, catalog, i, cold);
+        if (cold.IsPlayer) return PlayerPost(world, catalog, i, cold) ?? GuardPost(world, catalog, i, cold);
 
         return NpcPost(world, catalog, i, cold);
     }
@@ -186,6 +187,16 @@ sealed class TurretManning
     {
         if (world.Characters.Next[i].Task != (byte)CharacterTask.Operate || !cold.Operating || cold.OperateSite is not { } id) return null;
         if (Production.ProductionSystem.IsTownWork(id)) return TownTurretPost(world, catalog, id);
+
+        return OwnPost(world, catalog, id);
+    }
+
+    /// <summary>
+    /// The post of a placed turret building: the machine's power grant as efficiency (0 unpowered) and the research multiplier of the building
+    /// on its damage; null for one unfinished, gone, broken or without a gun.
+    /// </summary>
+    static Post? OwnPost(World world, TurretCatalog catalog, string id)
+    {
         if (world.Buildings.Find(id) is not { Complete: true } site || catalog.Get(site.Record) is not { } gun) return null;
 
         // broken: manning is impossible (Task_UseTurret ends)
@@ -199,33 +210,49 @@ sealed class TurretManning
     }
 
     /// <summary>
+    /// The post of a character standing at the turret Self preservation's 146 holds (<see cref="Ai.AiMind.Guard"/>; the original's
+    /// <c>Task_UseTurret</c> under the plan [146, 234, 32]), of any faction: a town's turret as an NPC gunner's (<see cref="TownPost"/>), a
+    /// placed one as its owner's (<see cref="OwnPost"/>).
+    /// </summary>
+    Post? GuardPost(World world, TurretCatalog catalog, int i, CharacterCold cold)
+    {
+        var n = world.Characters.Next[i];
+        if (cold.Ai is not { Guard: { } guard } mind || !Ai.AiSystem.GuardsTurret(mind)) return null;
+        if (n.Task != (byte)CharacterTask.Idle || !Ai.AiSystem.Holds(n, cold) || !InReach(n, guard.Post)) return null;
+
+        return guard.Building is { } building ? TownPost(world, catalog, guard.Site, building, guard.Post) : OwnPost(world, catalog, guard.Key);
+    }
+
+    /// <summary>
+    /// Whether a character stands within a turret's <c>use range</c> (and the walk's slack) of it, on the ground plane.
+    /// </summary>
+    static bool InReach(in CharacterHot n, in TurretPost post)
+    {
+        float reach = post.UseRange + Ai.AiSystem.TurretSlack;
+        return Vector2.DistanceSquared(new(n.Position.X, n.Position.Z), new(post.Position.X, post.Position.Z)) <= reach * reach;
+    }
+
+    /// <summary>
     /// The post of an NPC gunner standing at the turret its squad gave it (a turret goal, <see cref="Ai.AiBehaviour.Turret"/>), or at the turret
-    /// Self preservation's 146 holds (<see cref="Ai.AiMind.Guard"/>) (<see cref="Manning"/>).
+    /// Self preservation's 146 holds (<see cref="GuardPost"/>) (<see cref="Manning"/>).
     /// </summary>
     Post? NpcPost(World world, TurretCatalog catalog, int i, CharacterCold cold)
     {
         var n = world.Characters.Next[i];
-        if (cold.Ai is not { Squad.Ai: { } board } mind || n.Task != (byte)CharacterTask.Idle || !Ai.AiSystem.Holds(n, cold)) return null;
-        if (!NpcTurret(i, mind, board, out int site, out var building) || building.Turret is not { } post) return null;
-
-        float reach = post.UseRange + Ai.AiSystem.TurretSlack;
-        if (Vector2.DistanceSquared(new(n.Position.X, n.Position.Z), new(post.Position.X, post.Position.Z)) > reach * reach) return null;
+        if (cold.Ai is not { } mind) return null;
+        if (Ai.AiSystem.GuardsTurret(mind)) return GuardPost(world, catalog, i, cold);
+        if (mind.Squad.Ai is not { } board || n.Task != (byte)CharacterTask.Idle || !Ai.AiSystem.Holds(n, cold)) return null;
+        if (!NpcTurret(i, mind, board, out int site, out var building) || building.Turret is not { } post || !InReach(n, post)) return null;
 
         return TownPost(world, catalog, site, building, post);
     }
 
     /// <summary>
-    /// The town turret an NPC's goal mans: Self preservation's held turret while it plans 146, else its squad's turret claim under a turret goal.
+    /// The town turret an NPC's turret goal mans: its squad's turret claim.
     /// </summary>
     static bool NpcTurret(int i, Ai.AiMind mind, Ai.Blackboard board, out int site, [NotNullWhen(true)] out TownBuilding? building)
     {
         (site, building) = (-1, null);
-        if (Ai.AiSystem.GuardsTurret(mind) && mind.Guard is { } guard)
-        {
-            (site, building) = (guard.Site, guard.Building);
-            return true;
-        }
-
         if (mind.Behaviour != Ai.AiBehaviour.Turret || !board.TurretClaims.TryGetValue(i, out int claimed)) return false;
         if ((uint)claimed >= (uint)board.Turrets.Count) return false;
 

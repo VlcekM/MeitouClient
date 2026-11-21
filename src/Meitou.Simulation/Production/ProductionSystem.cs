@@ -540,15 +540,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// <summary>
     /// A player turret's post (its functionality's <c>use range</c> and <c>gun turret</c>), null for a building that is no turret.
     /// </summary>
-    Meitou.Data.World.TurretPost? TurretPostOf(BuildSite site)
-    {
-        if (_db.Find(site.Record) is not { } record
-            || (record.GetReferences("functionality") is [var link, ..] ? _db.Find(link.TargetStringId) : null) is not { } fn
-            || fn.GetInt("function") != Meitou.Data.World.ObjectRanges.TurretFunction) return null;
-        var forward = Vector3.Transform(Vector3.UnitZ, site.Rotation);
-        return new Meitou.Data.World.TurretPost(site.Position, MathF.Atan2(forward.X, forward.Z), fn.GetFloat("use range", 10),
-            record.GetReferences("gun turret").Select(r => r.TargetStringId).FirstOrDefault() ?? "", null);
-    }
+    Meitou.Data.World.TurretPost? TurretPostOf(BuildSite site) => PlacedTurrets.PostOf(_db, site);
 
     /// <summary>
     /// Where an operator walks to: a turret's gunner spot (<see cref="Ai.AiSystem.TurretSpot"/>), else the floor point at or next to the building's

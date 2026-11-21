@@ -2367,7 +2367,7 @@ Meitou only (the original's AI plans for no player squad; asked for as the RE_Ke
   `GameMods.DropUnownedAutonomy`); one with no owner stays as saved.
 - **Engine choices**: the sleeping desire and state 72 (fully rested) read an autonomous member as an NPC (with the player stand-in its sleep
   goals would never plan).
-- **Not built**: the outpost's turrets as goal targets (the player's turret job, `AddJob`, mans them with the player turret's power and
+- **Not built**: the outpost's turrets as targets of the turret goals 149 and 222 (the player's turret job, `AddJob`, mans them with the player turret's power and
   research; the AI's town turret post applies neither), its guard posts (157), bars and relaxing (a player-built building has no nodes, bar
   designation or tables); a work building; the contract's mission target over a save (as NPC platoons).
 
@@ -2505,7 +2505,7 @@ gun, facing its way (**Verified**: the move-task start `FUN_140332390` sets a no
 use task, vfunc `0x418`, is 146, which `TurretBuilding` returns, `FUN_140440550`; `AiSystem.ActTurret`, `SpeedMode.Free`); the home-building goal (222) takes only a turret mounted on its home (the
 state's `mounted` handle). Claim order and gunner spot are engine choices. The goals are done while
 no enemy is sensed (list A `isNoEnemiesInVicinity`, [combat.md](game/combat.md#turrets)): false while the character's senses count an
-enemy (`numEnemies`, `SenseBlock.Enemies`), so guards man the turrets only while enemies come. A guard at its turret fires it ([Ranged](#ranged)). Self preservation's turret (234 then 146 under 32, [ai-tasks](game/ai-tasks.md#combat-goals)) is held per character (`AiMind.Guard`), claimed in the AI's serial step after the fights, and manned as a guard's.
+enemy (`numEnemies`, `SenseBlock.Enemies`), so guards man the turrets only while enemies come. A guard at its turret fires it ([Ranged](#ranged)). Self preservation's turret (234 then 146 under 32, [ai-tasks](game/ai-tasks.md#combat-goals)) is held per character (`AiMind.Guard`), claimed in the AI's serial step after the fights, and manned by the character standing at its gun (`TurretManning.GuardPost`): a town's turret as a guard's, a placed one with its machine's power and its building's research.
 
 ### Engine goals
 

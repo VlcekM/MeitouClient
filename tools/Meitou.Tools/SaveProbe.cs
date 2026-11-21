@@ -199,7 +199,8 @@ static class SaveProbe
             if (site.Owner != faction) continue;
 
             bool accepts = construction?.Data(site.Record) is { } data && Meitou.Simulation.Player.PlayerHome.Accepts(data);
-            Console.WriteLine($"  site {site.Id} {site.Record} {site.Name} town={site.Town} accepts={accepts}");
+            bool turret = Meitou.Simulation.Combat.PlacedTurrets.PostOf(probe.Db, site) is not null;
+            Console.WriteLine($"  site {site.Id} {site.Record} {site.Name} town={site.Town} accepts={accepts} parent={site.Parent ?? "-"} turret={turret}");
         }
     }
 
@@ -2225,7 +2226,7 @@ static class SaveProbe
               watch <name> [rounds]    a character's task, AI, fight target, hunger, walk mode, speed, running plan, follow, race and decision trace every 40 ticks (default 10 rounds)
               medic <name> [rounds] [interval]  a medic's treatment and decision every interval (20) ticks; each downed character in sight: need, senses, sight test, ray (#843)
               treat <medic> [patient|-] [rounds] [interval]  order a treatment (- or none: itself); task, posture and each leg every interval (20) ticks (#898)
-              turrets <character> <count> <x> <z> [rounds] [interval]  spawn hostiles there; the turret squads near: goals, claims, enemies, gunners
+              turrets <character> <count> <x> <z> [rounds] [interval]  spawn hostiles there; the turret squads near: goals, claims, enemies, gunners; the player's characters that sense an enemy or hold a turret
               stage <x> <z> <faction:template> <faction:template> [rounds] [interval]  two squads spawned there; each: size, KO, slaves, carried, centre
               anim <radius> [ticks] [name]  the animation layers of the seated characters near the leader (or those named) each tick, then each clip's rate
               assault <name> [rounds] [interval]  the player's squad attacks a named character; who is near, indoors or out, and how each senses the leader
@@ -2238,7 +2239,7 @@ static class SaveProbe
               obey <name> <stand|sneak|walk> [rounds] [x z]  an enslaved player character stands, sneaks or walks to x z: state, owner, order, who sees it (#813)
               cages <name> [carrier]   fixtures within 300 of a character, with owners, occupants and building designation; a container's lock, grid
                                        and items; with a carrier, the cage that character would take a captive lifted there to
-              home                     the player's home building, then its faction's town houses and placed buildings with whether each can be it
+              home                     the player's home building, then its faction's town houses and placed buildings: whether each can be it, what it stands in, whether it is a turret
               owners                   town buildings whose saved owner is not the housing rule's (the residents' faction, else the town's), and the counts
               sleeper <name>           the bed a character lies in: record, yaw, use node yaws, lie spot and the sleeper's own yaw
               force <name> <tools|strength> [fixture id]  a character cuts or breaks a fixture's lock (a prisoner its own cage's); 120 ticks of it

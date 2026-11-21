@@ -418,7 +418,7 @@ public sealed partial class AiSystem
         /// A Self preservation step's target: 146's the gun spot of the turret asked for; the others none.
         /// </summary>
         PlanTarget StepTarget(TaskType step) =>
-            step == TaskType.UseTurret && _mind.GuardAsk is { Building.Turret: { } turret }
+            step == TaskType.UseTurret && _mind.GuardAsk is { Post: var turret }
                 ? new PlanTarget(Targets.Turret, TurretSpot(_world, turret))
                 : default;
 

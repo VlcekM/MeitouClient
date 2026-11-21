@@ -110,6 +110,11 @@ internal static class SeedSalts
     /// </summary>
     public const ulong AiDesire = 0x5043UL, AiCommit = 0x5044UL, AiTarget = 0x5045UL;
     /// <summary>
+    /// Counter base (under <see cref="RngPurpose.Think"/>, the tick mixed in) of the roll that draws a player-faction character's turret when no
+    /// sensed enemy gives one a score (<c>FUN_1408db140</c>).
+    /// </summary>
+    public const ulong TurretPick = 0x5447UL;
+    /// <summary>
     /// The AI's task commitment lengths (<see cref="Ai.AiMind.TaskCommitUntil"/>; the tick and row are mixed in), apart from the goal's.
     /// </summary>
     public const ulong AiTaskCommit = 0x5049UL;

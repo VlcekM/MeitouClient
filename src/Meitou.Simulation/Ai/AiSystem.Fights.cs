@@ -763,6 +763,12 @@ public sealed partial class AiSystem
     #region Turret guard
 
     /// <summary>
+    /// The pick's lowest winning score (<c>DAT_1416a1b78</c>), its nearest counted distance (<c>DAT_1416ad4b0</c>), the reach on Hold
+    /// (<c>DAT_141685344</c>), the gun range's factor (<c>DAT_1416b1640</c>) and the weight of an enemy behind the gun (<c>DAT_14167fad0</c>).
+    /// </summary>
+    const float TurretPickFloor = 1e-6f, TurretPickNear = 25, TurretHoldReach = 40, TurretReachFactor = 1.1f, TurretBehind = 0.1f;
+
+    /// <summary>
     /// Set by a think that asked for a turret (<see cref="AiMind.GuardAsk"/>), so the serial step claims them (<see cref="ClaimGuards"/>).
     /// </summary>
     int _guarding;
@@ -774,15 +780,18 @@ public sealed partial class AiSystem
     int _guards;
 
     /// <summary>
+    /// The placed buildings that are turrets, for the finder in a player town (built by the serial step, <see cref="ClaimGuardsIfAny"/>).
+    /// </summary>
+    readonly PlacedTurrets _placedTurrets = new();
+
+    /// <summary>
     /// The search's turret inputs (<see cref="SelfPreservation.Choose"/>): row 234's desire (slot 35 on the character itself, <see cref="TurretDesire"/>;
     /// a repertoire without 234 or 146 makes none), its list B 38, the turret its finder takes (<see cref="GuardTurretPick"/>), row 146's desire
-    /// on that turret and its list B <c>!158</c>. Not for the player's faction: its pick over the sensed enemies and its manning through the
-    /// operate task are not built, so its 234 is not made; its finder's home filter is kept (<see cref="OwnershipsHome"/>).
+    /// on that turret and its list B <c>!158</c>. The same for every faction; the desire and the finder's pick hold the player faction's own rules.
     /// </summary>
     SelfNodes GuardNodes(World world, int slot, AiMind mind, CharacterCold me, Bodies.MedicalState medical, SelfNodes nodes, out GuardTurret? turret)
     {
         turret = null;
-        if (me.Faction == PlayerFactionOf(world)) return nodes;
         if (!TaskStart.Eligible(world, me, TaskType.ManATurretPlayerJob) || !TaskStart.Eligible(world, me, TaskType.UseTurret)) return nodes;
 
         float guard = TurretDesire(world, slot);
@@ -790,61 +799,123 @@ public sealed partial class AiSystem
 
         bool arm = SelfPreservation.OneArm(medical);
         turret = arm ? GuardTurretPick(world, slot, me, mind) : null;
-        float gunner = turret is { } t ? TurretDesire(world, slot, t.Building.Position) : 0;
+        float gunner = turret is { } t ? TurretDesire(world, slot, t.Position) : 0;
         bool immediate = (ThreatSource ?? _combat)?.ImmediateThreat(world, slot) == true;
         return nodes with { Guard = guard, GuardArm = arm, TurretFound = turret is not null, Gunner = gunner, GunnerRuns = !immediate };
     }
 
     /// <summary>
-    /// Row 234's finder for a character outside the player's faction (<c>FUN_1408ccfa0</c> on the character itself, <b>Verified</b>;
-    /// docs/game/ai-tasks.md "Combat goals"): the nearest turret (<c>FUN_1409faf80</c>) of its status town (<see cref="CharacterCold.StatusTown"/>,
-    /// worked out from where it stands when it holds none) that <see cref="GuardCandidate"/> accepts; null with none. Reads only the last tick's
-    /// state and the serial claims.
+    /// Row 234's finder on the character itself (<c>FUN_1408ccfa0</c>, <b>Verified</b>; docs/game/ai-tasks.md "Combat goals"): of the turrets of
+    /// its status town that pass (<see cref="GuardCandidates"/>), the pick <c>FUN_1408db140</c> takes the nearest (<c>FUN_1409faf80</c>) for a
+    /// character outside the player's faction and <see cref="PlayerTurretPick"/> for one of it; null with none. Reads only the last tick's state
+    /// and the serial claims.
     /// </summary>
     GuardTurret? GuardTurretPick(World world, int slot, CharacterCold me, AiMind mind)
     {
         var here = world.Characters.Previous[slot].Position;
         var status = me.StatusTown.IsNone ? StatusTownAt(data, world, here, CampaignTown.None) : me.StatusTown;
-        if (status.Site < 0) return null;
+        var found = GuardCandidates(world, slot, me, mind, status);
+        if (found.Count == 0) return null;
+        if (me.Faction == PlayerFactionOf(world)) return PlayerTurretPick(world, slot, me, found);
 
-        GuardTurret? best = null;
-        float bestD = float.MaxValue;
-        int owner = status.Owner(world, data);
-        foreach (var b in data.Turrets(status.Site))
-        {
-            if (!GuardCandidate(world, slot, me, mind, status, owner, b)) continue;
-
-            float d = Vector3.DistanceSquared(here, b.Position);
-            if (d < bestD) (best, bestD) = (new GuardTurret(status.Site, b), d);
-        }
+        var best = found[0];
+        foreach (var t in found)
+            if (Vector3.DistanceSquared(here, t.Position) < Vector3.DistanceSquared(here, best.Position)) best = t;
 
         return best;
     }
 
     /// <summary>
+    /// The turrets 234's finder may take in the character's status town (<see cref="CharacterCold.StatusTown"/>, worked out from where it stands
+    /// when it holds none): a town's turret buildings (<see cref="GuardCandidate"/>) or a player town's placed ones
+    /// (<see cref="PlacedCandidate"/>), in their lists' order; a nest has none.
+    /// </summary>
+    List<GuardTurret> GuardCandidates(World world, int slot, CharacterCold me, AiMind mind, CampaignTown status)
+    {
+        var found = new List<GuardTurret>();
+        if (status.Site < 0 && status.PlayerTown <= 0) return found;
+
+        int owner = status.Owner(world, data);
+        if (status.Site >= 0)
+        {
+            foreach (var b in data.Turrets(status.Site))
+                if (GuardCandidate(world, slot, me, mind, status, owner, b)) found.Add(new GuardTurret(status.Site, b.Key, b.Turret!.Value, b));
+
+            return found;
+        }
+
+        foreach (var t in _placedTurrets.All)
+            if (PlacedCandidate(world, slot, me, mind, status, owner, t)) found.Add(new GuardTurret(-1, t.Site.Id, t.Post, null));
+
+        return found;
+    }
+
+    /// <summary>
     /// Whether 234's finder takes turret <paramref name="b"/> of the status town (<c>FUN_1408daf70</c>, <b>Verified</b>): in the zone cells within
     /// one of the character's (<c>FUN_1409fc450</c>); inside or mounted on its Ownerships' home building when that names one
-    /// (<see cref="OwnershipsHome"/>; Building slot 59 <c>FUN_140547530</c> against the <c>+0x38</c> hand, one that is gone included); manned by nobody else (<c>FUN_1400f7c90</c>); its path not impossible
-    /// (<c>FUN_1405b0290</c>); held by no squad mate (<c>FUN_1402690e0</c>, <see cref="HeldByMate"/>); usable (the town is of its faction, or
-    /// <c>canIUseThisBuilding</c>, <see cref="Locks.FixtureRegistry.CanUse(World, CharacterCold, int, Locks.FixtureRegistry.UsedBuilding?)"/>).
+    /// (<see cref="OwnershipsHome"/>; Building slot 59 <c>FUN_140547530</c> against the <c>+0x38</c> hand, one that is gone included); manned by
+    /// nobody else (<c>FUN_1400f7c90</c>); its path not impossible (<c>FUN_1405b0290</c>); held by no squad mate (<c>FUN_1402690e0</c>,
+    /// <see cref="HeldByMate"/>); usable (the town is of its faction, or <c>canIUseThisBuilding</c>,
+    /// <see cref="Locks.FixtureRegistry.CanUse(World, CharacterCold, int, Locks.FixtureRegistry.UsedBuilding?)"/>).
     /// </summary>
     bool GuardCandidate(World world, int slot, CharacterCold me, AiMind mind, CampaignTown status, int owner, TownBuilding b)
     {
         if (b.Turret is not { } post) return false;
-
-        var here = world.Characters.Previous[slot].Position;
-        var cell = WorldLayout.ZoneOf(here.X, here.Z);
-        var at = WorldLayout.ZoneOf(b.Position.X, b.Position.Z);
-        if (Math.Abs(at.X - cell.X) > 1 || Math.Abs(at.Y - cell.Y) > 1) return false;
+        if (!InFinderCells(world, slot, b.Position)) return false;
 
         if (OwnershipsHome(world, me, mind) is { } home && (b.InsideOf ?? post.MountedOn) != home) return false;
         if (_combat?.TurretTakenByOther(b.Key, slot) == true || me.IsUnreachable(b.Key, world.Tick)) return false;
-        if (HeldByMate(world, slot, mind, status.Site, b)) return false;
+        if (HeldByMate(world, slot, mind, status.Site, b.Key)) return false;
         if (owner == me.Faction) return true;
 
         var used = new Locks.FixtureRegistry.UsedBuilding(status, status.Site, b.Key, b.InsideOf is not null, false);
         return world.Fixtures.CanUse(world, me, BuildingOwner(world, b, owner), used);
     }
+
+    /// <summary>
+    /// <see cref="GuardCandidate"/>'s tests for a placed turret of the player town the character's status names: a finished building that
+    /// stands, of that town (<see cref="PlacedTurrets.Entry.Town"/>); its container the building it was placed in or on (<see cref="Construction.BuildSite.Parent"/>). A broken one
+    /// passes: the original's accept test reads no broken flag.
+    /// </summary>
+    bool PlacedCandidate(World world, int slot, CharacterCold me, AiMind mind, CampaignTown status, int owner, PlacedTurrets.Entry t)
+    {
+        var site = t.Site;
+        if (t.Town != status.PlayerTown || !Stands(world, site)) return false;
+        if (!InFinderCells(world, slot, site.Position)) return false;
+
+        if (OwnershipsHome(world, me, mind) is { } home && !PlacedIn(world, site, home)) return false;
+        if (_combat?.TurretTakenByOther(site.Id, slot) == true || me.IsUnreachable(site.Id, world.Tick)) return false;
+        if (HeldByMate(world, slot, mind, -1, site.Id)) return false;
+        if (owner == me.Faction) return true;
+
+        var used = new Locks.FixtureRegistry.UsedBuilding(status, -1, site.Parent ?? site.Id, site.Parent is not null, false);
+        return world.Fixtures.CanUse(world, me, site.Owner, used);
+    }
+
+    /// <summary>
+    /// Whether a place lies in the zone cells within one of the character's (<c>FUN_1409fc450</c>).
+    /// </summary>
+    static bool InFinderCells(World world, int slot, Vector3 at)
+    {
+        var here = world.Characters.Previous[slot].Position;
+        var cell = WorldLayout.ZoneOf(here.X, here.Z);
+        var other = WorldLayout.ZoneOf(at.X, at.Z);
+
+        return Math.Abs(other.X - cell.X) <= 1 && Math.Abs(other.Y - cell.Y) <= 1;
+    }
+
+    /// <summary>
+    /// Whether a placed building is finished and still in the registry.
+    /// </summary>
+    static bool Stands(World world, Construction.BuildSite site) =>
+        site is { Complete: true, Destroyed: false } && ReferenceEquals(world.Buildings.Find(site.Id), site);
+
+    /// <summary>
+    /// Whether a placed building was placed in or on building <paramref name="home"/> (a placed building's id, a level building's instance id
+    /// or a town building's key).
+    /// </summary>
+    static bool PlacedIn(World world, Construction.BuildSite site, string home) =>
+        site.Parent is { } parent && (parent == home || world.Buildings.Find(home)?.LevelPlacement?.InstanceId == parent);
 
     /// <summary>
     /// The key of the home building a character's Ownerships names (<c>Character::getOwnerships</c> <c>FUN_1407956a0</c>, its <c>+0x38</c> hand,
@@ -854,21 +925,97 @@ public sealed partial class AiSystem
         world.Player.Exists && me.Faction == world.Player.Faction ? world.Player.Home : mind.Squad.Ai?.Home?.Key;
 
     /// <summary>
-    /// Whether a squad mate holds turret <paramref name="b"/>: its town turret claim (<see cref="Blackboard.TurretClaims"/>) or its Self
-    /// preservation turret (<see cref="AiMind.Guard"/>, written by the serial claim only).
+    /// The pick for a character of the player's faction (<c>FUN_1408db140</c>, <b>Verified</b>, decompile and constants): over its sensed
+    /// entries tagged ENEMY and neither down nor dead (<c>FUN_140853960(4, 0x18)</c>) and every candidate, the highest
+    /// (<see cref="TurretWeight"/> x <see cref="TurretReach"/>)^2 above 1e-6; with none, a candidate drawn at random (<c>FUN_1409b3b40</c>).
     /// </summary>
-    static bool HeldByMate(World world, int slot, AiMind mind, int site, TownBuilding b)
+    GuardTurret PlayerTurretPick(World world, int slot, CharacterCold me, List<GuardTurret> found)
     {
-        if (mind.Squad.Ai is { } board && board.Town == site)
+        GuardTurret? best = null;
+        float bestScore = TurretPickFloor;
+        bool hold = (me.Orders & CharacterOrders.Hold) != 0;
+        var prev = world.Characters.Previous;
+        foreach (var e in _aggro?.SensesOf(slot)?.Entries ?? [])
+        {
+            if ((e.Tags & (SenseTag.Enemy | SenseTag.Ko)) != SenseTag.Enemy || (uint)e.Target >= (uint)prev.Length) continue;
+            if (!prev[e.Target].Alive || prev[e.Target].Generation != e.Generation) continue;
+
+            foreach (var t in found)
+            {
+                float score = TurretScore(world, t, e.Target, prev[e.Target].Position, hold);
+                if (score > bestScore) (best, bestScore) = (t, score);
+            }
+        }
+
+        if (best is not null || found.Count == 1) return best ?? found[0];
+
+        ulong roll = Rng.Hash(world.Seed, Rng.Key(world.Characters.IdOf(slot)), RngPurpose.Think, SeedSalts.TurretPick ^ (ulong)world.Tick << 16);
+        return found[Rng.Int(roll, found.Count)];
+    }
+
+    /// <summary>
+    /// A turret's score against one enemy: (weight x reach)^2, the reach measured to the gun's range x 1.1 (GunClass <c>+8</c>), or to 40 for a
+    /// character on Hold (the <c>+0x450</c> object's <c>+0x12b</c>).
+    /// </summary>
+    float TurretScore(World world, GuardTurret t, int foe, Vector3 foeAt, bool hold)
+    {
+        float weight = TurretWeight(world, t, foe, foeAt);
+        if (weight <= 0) return 0;
+
+        string? record = t.Building?.BuildingId ?? world.Buildings.Find(t.Key)?.Record;
+        float range = record is null ? 0 : _combat?.TurretGuns?.Get(record)?.Gun.Range ?? 0;
+        float both = weight * TurretReach(t.Position, foeAt, hold ? TurretHoldReach : range * TurretReachFactor);
+
+        return both * both;
+    }
+
+    /// <summary>
+    /// The turret's weight for an enemy (the gun's slot 6 <c>FUN_1404348e0</c>, <b>Verified</b> decompile; the subtraction's order
+    /// <b>Observed</b>): 1 for one before the gun (the building's facing, <c>+0x458</c>, against the way to it, <c>FUN_1409b1960</c>); behind it,
+    /// 0.1 for one outdoors or on a roof (location type 0xb or vfunc <c>0x1e0</c>), and for one indoors 0.1 when the turret stands in the same
+    /// building (slot 59) on the same floor, else 0.
+    /// </summary>
+    static float TurretWeight(World world, GuardTurret t, int foe, Vector3 foeAt)
+    {
+        var forward = new Vector3(MathF.Sin(t.Post.Yaw), 0, MathF.Cos(t.Post.Yaw));
+        if (Vector3.Dot(forward, foeAt - t.Position) > 0) return 1;
+        if (!world.Sight.Inside(foe)) return TurretBehind;
+
+        var site = t.Building is null ? world.Buildings.Find(t.Key) : null;
+        string? container = t.Building is { } b ? b.InsideOf ?? t.Post.MountedOn : site?.Parent;
+        if (container is null || world.Sight.BuildingOf(foe) != container) return 0;
+
+        int floor = site?.Floor ?? world.Sight.FloorAt(container, t.Position);
+        return world.Sight.FloorOf(foe, foeAt) == floor ? TurretBehind : 0;
+    }
+
+    /// <summary>
+    /// How well a turret reaches a place (<c>FUN_140435cf0</c>, <b>Verified</b>): 0 nearer than 25, else 1 - distance / range, never below 0.
+    /// </summary>
+    static float TurretReach(Vector3 turret, Vector3 foe, float range)
+    {
+        float d = Vector3.Distance(turret, foe);
+        if (d < TurretPickNear || range <= 0) return 0;
+
+        return MathF.Max(0, 1 - d / range);
+    }
+
+    /// <summary>
+    /// Whether a squad mate holds the turret of key <paramref name="key"/>: its town turret claim (<see cref="Blackboard.TurretClaims"/>) or its
+    /// Self preservation turret (<see cref="AiMind.Guard"/>, written by the serial claim only).
+    /// </summary>
+    static bool HeldByMate(World world, int slot, AiMind mind, int site, string key)
+    {
+        if (mind.Squad.Ai is { } board && site >= 0 && board.Town == site)
         {
             foreach (var (s, t) in board.TurretClaims)
-                if (s != slot && (uint)t < (uint)board.Turrets.Count && ReferenceEquals(board.Turrets[t], b)) return true;
+                if (s != slot && (uint)t < (uint)board.Turrets.Count && board.Turrets[t].Key == key) return true;
         }
 
         foreach (var m in mind.Squad.Members)
         {
             if (m.Slot == slot || world.Characters.Cold(m.Slot) is not { Ai: { } mate }) continue;
-            if (mate.Guard is { } held && ReferenceEquals(held.Building, b)) return true;
+            if (mate.Guard is { } held && held.Key == key) return true;
         }
 
         return false;
@@ -884,17 +1031,19 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// Runs the serial claim (<see cref="ClaimGuards"/>) when a think asked for a turret or a mind holds one.
+    /// Brings the placed turrets' list up to the building registry, then runs the serial claim (<see cref="ClaimGuards"/>) when a think asked
+    /// for a turret or a mind holds one.
     /// </summary>
     void ClaimGuardsIfAny(World world)
     {
+        _placedTurrets.Refresh(world, data.Db);
         if (Interlocked.Exchange(ref _guarding, 0) != 0 || _guards > 0) ClaimGuards(world);
     }
 
     /// <summary>
     /// The serial claim (slot order; the original's AI updates run one character after another, so a later squad mate's finder sees the earlier
     /// one's blackboard entry): a turret asked for and held by no squad mate is the mind's (<see cref="AiMind.Guard"/>), else none (its next think
-    /// picks again); a held turret whose mind no longer plans 146 under 32 is let go.
+    /// picks again); a held turret whose mind no longer plans 146 under 32, or whose placed building is gone, is let go.
     /// </summary>
     void ClaimGuards(World world)
     {
@@ -903,12 +1052,12 @@ public sealed partial class AiSystem
         for (int s = 0; s < table.HighWater; s++)
         {
             if (table.Cold(s) is not { Ai: { } mind }) continue;
-            if (mind.Guard is not null && !GuardsTurret(mind)) mind.Guard = null;
+            if (mind.Guard is { } kept && (!GuardsTurret(mind) || Gone(world, kept))) mind.Guard = null;
 
             if (mind.GuardAsk is { } ask)
             {
                 mind.GuardAsk = null;
-                mind.Guard = HeldByMate(world, s, mind, ask.Site, ask.Building) ? null : ask;
+                mind.Guard = HeldByMate(world, s, mind, ask.Site, ask.Key) ? null : ask;
             }
 
             if (mind.Guard is not null) held++;
@@ -918,18 +1067,24 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
+    /// Whether a held turret is a placed building that no longer stands (a town's turret buildings stay).
+    /// </summary>
+    static bool Gone(World world, GuardTurret turret) =>
+        turret.Building is null && world.Buildings.Find(turret.Key) is not { Complete: true, Destroyed: false };
+
+    /// <summary>
     /// Whether the mind's current plan is Self preservation's turret: [146, 234, 32].
     /// </summary>
     internal static bool GuardsTurret(AiMind mind) => mind is { Behaviour: AiBehaviour.SelfPreserve, Step: TaskType.UseTurret };
 
     /// <summary>
     /// Self preservation's 146: runs to the gun of the turret the claim gave it and stands there facing its way, where the turret step mans it
-    /// (an NPC's post in <see cref="Combat.CombatSystem"/>); without one yet it stands. The move to a turret building runs (mode 2; the move-task
+    /// (the goal's post in <see cref="Combat.CombatSystem"/>); without one yet it stands. The move to a turret building runs (mode 2; the move-task
     /// start <c>FUN_140332390</c>, as <see cref="ActTurret"/>).
     /// </summary>
     void ActGuardTurret(World world, int slot, AiMind mind)
     {
-        if (mind.Guard is not { Building.Turret: { } turret })
+        if (mind.Guard is not { Post: var turret })
         {
             Become(world, slot, CharacterTask.Idle);
             return;

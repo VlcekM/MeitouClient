@@ -1632,7 +1632,7 @@ public sealed class AiMind
         {
             hasher.Add(0x47726454);   // "GrdT": only while Self preservation holds a turret
             hasher.Add(guard.Site);
-            hasher.Add(Rng.StableHash(guard.Building.Key));
+            hasher.Add(Rng.StableHash(guard.Key));
         }
 
         if (!TravelDetour.IsNone)
@@ -1671,6 +1671,13 @@ public sealed class AiMind
 }
 
 /// <summary>
-/// A town turret Self preservation's 234 took (<see cref="AiMind.Guard"/>): the town site and the turret building.
+/// A turret Self preservation's 234 took (<see cref="AiMind.Guard"/>): a town's (its site and building) or a placed one (site -1, no town
+/// building), with its key (a town building's key, a placed building's id) and its post.
 /// </summary>
-public sealed record GuardTurret(int Site, TownBuilding Building);
+public sealed record GuardTurret(int Site, string Key, TurretPost Post, TownBuilding? Building)
+{
+    /// <summary>
+    /// Where the turret building stands.
+    /// </summary>
+    public Vector3 Position => Building?.Position ?? Post.Position;
+}
