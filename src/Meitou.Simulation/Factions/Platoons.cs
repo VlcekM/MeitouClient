@@ -106,6 +106,13 @@ public sealed class Platoon
     /// </summary>
     public Saving.SavedPlatoon? Saved { get; init; }
     /// <summary>
+    /// The town and arrival hour its save record held for its blackboard (<see cref="Saving.CurrentTownSave"/>), until the AI attaches a blackboard
+    /// to the first squad in it since the load and applies them (then null). The original's faction load (<c>FUN_1407f88c0</c> →
+    /// <c>FUN_1407f85f0</c>) builds every saved platoon, never activated or not, with its record, whose blackboard the constructor
+    /// <c>FUN_1407ee2d0</c> reads (<c>FUN_140272c20</c>); its squad being built from the template later (<c>FUN_1404ffad0</c>) keeps it.
+    /// </summary>
+    public Saving.CurrentTownSave? SavedTown { get; set; }
+    /// <summary>
     /// A squad the population made, kept as its characters while it is not in the world (null: none): a town's squad since its town unloaded, or (the
     /// Meitou <see cref="PopulationSystem.KeepRoamers"/> switch) a roaming one since it first left. Made of them again, never rolled anew. Set with
     /// <see cref="Saved"/> on a save's never-made platoon once made (<see cref="Unmade"/>): this holds its squad, the save's record is written with
@@ -436,6 +443,7 @@ public sealed class PlatoonRegistry
                 h.Add(saved.Pinned);
                 h.Add(saved.Touched);
             }
+            if (p.SavedTown is { } stay) HashSavedTown(ref h, stay);   // likewise, until the AI applies it
         }
     }
 
@@ -453,5 +461,17 @@ public sealed class PlatoonRegistry
         h.Add(0x476F616C);
         h.Add(p.ModGoal ?? default);
         h.Add(p.ModFollow);
+    }
+
+    /// <summary>
+    /// Hashes the town and arrival hour a save held, while the AI has not applied them yet.
+    /// </summary>
+    static void HashSavedTown(ref StateHasher h, Saving.CurrentTownSave saved)
+    {
+        h.Add(0x54776E53);   // "TwnS"
+        h.Add(saved.Town.Type);
+        h.Add(saved.Town.C);
+        h.Add(saved.Town.Cs);
+        h.Add(saved.Since);
     }
 }

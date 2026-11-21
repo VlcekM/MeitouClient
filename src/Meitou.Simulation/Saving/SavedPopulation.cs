@@ -847,8 +847,7 @@ internal static class SavedCharacters
         squad.SavedAi = sp.Ai;
         squad.SavedPackage = PackageSave.Read(sp.Source.Record);
 
-        // Its town and house flag as the save had them, the first time it is made (a squad that left the world since starts as a new one does).
-        if (!sp.Touched) squad.SavedTown = CurrentTownSave.Read(sp.Source.Record);
+        // Its house flag as the save had it, the first time it is made (its town and arrival hour wait on its platoon, Platoon.SavedTown).
         if (!sp.Touched) HomeLockSave.Read(sp.Source.Record, world, squad);
         world.Squads.Add(squad);
 

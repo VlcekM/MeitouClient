@@ -892,11 +892,15 @@ reads its own keys. Keys are looked up by name: **Observed**, METARU and i949 ho
   METARU given a pair or two on each of its 538 platoons, loaded headless and saved: every platoon written back keeps them).
 - **Current town**: the update `FUN_1402688d0` stamps `towntime` and says ENTER_TOWN only when `currenttown` was none, so a loaded squad still in its
   saved town keeps its saved hour. Meitou (`Saving/CurrentTownSave`, `Blackboard.InTown` / `InTownSince`) writes both for a squad in the world (a
-  nest, which has no town handle here, keeps the record's handle); a save's platoon made for the first time since the load takes them (`Squad.SavedTown`,
-  hashed, until its blackboard is made): the null handle as no town, so its next in-town step stamps the hour and says ENTER_TOWN as the original's
-  does; a handle naming no town of the world (a nest) leaves the town it starts in. Other squads start in the town they stand in at the current hour
-  (engine choice). **Observed** (METARU loaded headless, 1500 ticks, saved): 535 of 537 platoons written back with the same `currenttown` and
-  `towntime`; with every `currenttown` made null first, the 38 loaded squads in a town are written with that town and the hour of the load.
+  nest, which has no town handle here, keeps the record's handle). The faction's platoon load (`FUN_1407f88c0`) passes every saved PLATOON record,
+  never activated or not, through `FUN_1407f85f0` and `FUN_14057c6f0` to the platoon constructor `FUN_1407ee2d0`, which reads the blackboard from
+  it (`FUN_140272c20`; **Verified**, decompile), so a squad built from its template into the platoon (`FUN_1404ffad0`) has the saved town too. Meitou: every loaded platoon holds them (`Platoon.SavedTown`, hashed) until the first squad in it since the load gets its
+  blackboard, made from the save's characters or from its template (never made, regenerated, a characterless stand-in): the null handle as no town,
+  so its next in-town step stamps the hour and says ENTER_TOWN as the original's does; a handle naming no town of the world (a nest) leaves the town
+  it starts in. Other squads start in the town they stand in at the current hour (engine choice). **Observed** (METARU loaded headless, 300 ticks,
+  saved, `QuickSaveTests`): every platoon written back has the `currenttown`, `towntime` and `mission target` it was read with. **Observed**
+  (METARU loaded headless, 1500 ticks, saved): with every `currenttown` made null first, the 38 loaded squads in a town are written with that town
+  and the hour of the load.
 - **House locked**: Meitou keeps the flag on the squad's home (`LockSystem.IsHouseLocked`, the building's `meitou house locked`). `Saving/HomeLockSave`
   writes `homelok` as the flag of the home the platoon's `homebuilding` names (`Squad.HomeBuilding`; a save's platoon out of the world, from the same
   building), and a save's platoon made for the first time since the load with `homelok` set sets its home's flag; a platoon without a home keeps the

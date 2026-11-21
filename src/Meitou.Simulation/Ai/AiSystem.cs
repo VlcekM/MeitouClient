@@ -3976,10 +3976,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         // a saved squad then takes its saved town.
         if (TownPosition(world, squad) is { } at) (squad.Ai.InTown, squad.Ai.InTownSince) = (StartTown(world, at), world.GameHours);
 
-        // A saved squad's town and arrival hour as its save held them (FUN_140272c20 reads currenttown and towntime).
-        if (squad.SavedTown is { } stay && world.Saved is { } placed)
-            stay.Apply(squad.Ai, h => Saving.WarSave.Town(world, placed, h));
-        squad.SavedTown = null;
+        // The town and arrival hour its platoon's save record held, for the first squad in it since the load, made from the save's characters or
+        // from its template (FUN_140272c20 reads currenttown and towntime into the platoon's blackboard).
+        if (squad.PlatoonId >= 0 && world.Platoons.Find(squad.PlatoonId) is { SavedTown: { } stay } platoon)
+        {
+            if (world.Saved is { } placed) stay.Apply(squad.Ai, h => Saving.WarSave.Town(world, placed, h));
+            platoon.SavedTown = null;
+        }
         if (squad.SavedAi is { } saved)
         {
             _rules.Bind(this, world, squad);
