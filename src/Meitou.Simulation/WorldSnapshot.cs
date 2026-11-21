@@ -1137,6 +1137,11 @@ public sealed record WorldSnapshot(long Tick, IReadOnlyList<CharacterSnapshot> C
     /// </summary>
     public Production.LevelPowerView? InspectedLevelPower { get; init; }
     /// <summary>
+    /// The machine whose lines the HUD shows when the building is a town's generator, research bench or crafting bench (its <c>townwork:</c>
+    /// machine, or a view of one where none is made yet, <see cref="Production.ProductionSystem.TownMachineOf"/>); null for others.
+    /// </summary>
+    public Production.MachineSnapshot? InspectedTownMachine { get; init; }
+    /// <summary>
     /// The gun numbers of the building the HUD shows when it is a turret (its Stats 1 gun lines); null for others.
     /// </summary>
     public Combat.TurretPanelView? InspectedTurret { get; init; }

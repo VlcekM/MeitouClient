@@ -301,6 +301,7 @@ public sealed partial class World
             InspectedBuilding = beds?.DetailOf(this, Player.InspectedBuilding) ?? Fixtures.DetailOf(Player.InspectedBuilding, Player.Faction),
             InspectedRichness = _production?.RichnessOf(this, Player.InspectedBuilding),
             InspectedLevelPower = _production?.LevelPowerOf(this, Player.InspectedBuilding),
+            InspectedTownMachine = _production?.TownMachineOf(this, Player.InspectedBuilding),
             InspectedTurret = combat?.TurretPanelOf(this, Player.InspectedBuilding),
             Machines = OpenContainerView() is { } container
                 ? [.. _production is null ? [] : Machines.Published(_production.Items), container]
