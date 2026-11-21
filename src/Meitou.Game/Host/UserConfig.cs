@@ -511,6 +511,11 @@ sealed class UserConfig
     /// </summary>
     public bool FixBagSearch { get; set; } = true;
     /// <summary>
+    /// A shopkeeper at its counter is talked to from the counter's front (Gameplay settings, Meitou; off: the game's talk reach, so the customer
+    /// walks round behind the counter; <c>World.CounterTalk</c>).
+    /// </summary>
+    public bool CounterTalk { get; set; } = true;
+    /// <summary>
     /// Other buildings' parts (the Hub's wall in the Shinobi Thieves tower) are cut inside a building in the interior view (Fixes settings; off:
     /// drawn, as the game does; docs/render-interior-cut.md).
     /// </summary>

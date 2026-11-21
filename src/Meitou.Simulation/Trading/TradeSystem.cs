@@ -1345,12 +1345,6 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     }
 
     /// <summary>
-    /// Whether the customer is near enough to open the trade: the talk range (<see cref="Dialogue.DialogueSystem.InTalkRange"/>), as the original
-    /// opens a dialogue's trade where the conversation stands, with no distance test (<c>FUN_1407918a0</c>, docs/game/economy.md "Opening a trade").
-    /// </summary>
-    static bool InReach(World world, int c, int t) => Dialogue.DialogueSystem.InTalkRange(world.Characters, c, t);
-
-    /// <summary>
     /// Whether <paramref name="c"/> and <paramref name="t"/> are within <paramref name="range"/> of each other in X/Z.
     /// </summary>
     static bool InReach(World world, int c, int t, float range)

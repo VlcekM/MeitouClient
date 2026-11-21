@@ -788,6 +788,11 @@ sealed class GamePages(SettingsMenu menu)
             + "Meitou: only people pick items up, and an animal only a limb to carry in its mouth.",
             Toggle: new("Animals pick up items", () => !menu.Config.AnimalsPickUp,
                 v => { menu.Config.AnimalsPickUp = !v; menu.AnimalsPickUpChanged?.Invoke(!v); }, Remaster: true)));
+        result.Add(new("Talk across shop counters",
+            "Faithful, as in the game: to talk or trade with a shopkeeper behind a counter, your character often walks round the counter to stand "
+            + "behind them. Meitou: shopkeepers can be reached from the customer's side of the counter.",
+            Toggle: new("Talk across shop counters", () => menu.Config.CounterTalk,
+                v => { menu.Config.CounterTalk = v; menu.CounterTalkChanged?.Invoke(v); }, Remaster: true)));
         result.Add(new("Hover outline", "Outline and tint the character under the cursor, in the colour of what a right click would do.",
             Toggle: new("Hover outline", () => menu.Config.HoverOutline, v => menu.Config.HoverOutline = v, Remaster: true, OnOff: true)));
         result.Add(new("Building outline",

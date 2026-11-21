@@ -470,6 +470,12 @@ public sealed partial class World : IDisposable
     /// </summary>
     public bool BagSearchFix { get; set; } = true;
     /// <summary>
+    /// A shopkeeper at its counter is talked to and traded with from the counter's front (Gameplay settings, Meitou): its talk reach is
+    /// <see cref="Dialogue.DialogueSystem.CounterTalkReach"/>; off, the game's reach, so the customer walks round behind the counter
+    /// (docs/game/dialogue.md "Player conversation").
+    /// </summary>
+    public bool CounterTalk { get; set; } = true;
+    /// <summary>
     /// The player's pick-ups and right-click takes out of loot, containers and storage go into the character's backpack first, then its slots and
     /// grid (Controls settings, off by default as in the game, where only an open bag window does that).
     /// </summary>
