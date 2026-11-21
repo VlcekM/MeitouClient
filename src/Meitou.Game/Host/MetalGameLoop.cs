@@ -1124,6 +1124,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             SpeedUnit = host.Config.SpeedUnit,
             Floaters = host.Config.Floaters,
             FeedbackButtonInPlay = host.Config.FeedbackButton,
+            XpLabel = Settings.SkillXp.Label(host.Config),
         };
         host.Player = _hud;
         _hud.LoadUi(host.GameOptions.UiMode ?? host.Config.UiMode, host.Assets.Find);

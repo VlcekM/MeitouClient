@@ -18,13 +18,13 @@ A mod's ordinary data and assets load through the normal readers either way.
 entries are applied ([data entries](#data-entries)). Covered mods are one table,
 `CoveredMods` (Meitou.Core), read by the game and by the launcher's Mods page. Built-in mods (`BuiltInMods`,
 Meitou.Game): at start, each enabled mod the table names, by `.mod` name or code-mod id, that was not taken in before
-(`UserConfig.AdoptedMods`) has its settings copied once into Meitou's setting, with a notice. A covered code mod is not run (counted as
+(`UserConfig.AdoptedMods`) has its settings copied once into Meitou's setting, with a notice. An entry with a second takeover (the XP mods) copies what a later Meitou added once more for a mod taken in before it (their per-skill settings and label, without the main multiplier), marked `<name> (again)`. A covered code mod is not run (counted as
 disabled), so the feature never applies twice, and a save made while it ran does not report it gone.
 
 | Mod | Meitou setting | Matched against | Taken in |
 | --- | --- | --- | --- |
-| Player-Only XP x10 (xXDarkrusoXx, `Player XP Only x10 RE`, workshop 3679678086) | Squad XP | its 2026-11-07 update | `xp_multiplier` of its `plugin/player_xp_boost.ini`, else 10 (**Observed**: the key and path are strings in its `PlayerXpBoost.dll`; the original game writes the file on its first run). Per-skill `stat_<SKILL>` lines are not kept |
-| Its code-mod port (`player-only-xp`) | Squad XP | any version (by its id) | the plugin's file when the plugin is installed (the port shares it), else its saved `Multiplier`, else 10. Per-skill settings are not kept |
+| Player-Only XP x10 (xXDarkrusoXx, `Player XP Only x10 RE`, workshop 3679678086) | Squad XP, its skills and Show Squad XP | its 2026-11-07 update | `xp_multiplier` of its `plugin/player_xp_boost.ini`, else 10 (**Observed**: the key and path are strings in its `PlayerXpBoost.dll`; the original game writes the file on its first run); each `stat_<SKILL>` line (`stat_STRENGTH`, `stat_MELEE_ATTACK`...; **Observed**: the skill names and `stat_%s=%.3f` are strings in its DLL) of 0 or more as that skill's own rate, the others following Squad XP; Show Squad XP unless `show_hud=0`; a missing line keeps the default (10, follows, on) |
+| Its code-mod port (`player-only-xp`) | Squad XP, its skills and Show Squad XP | any version (by its id) | its saved settings (`Multiplier`, each skill's of 0 or more as its own rate, `ShowIndicator`), over them the plugin's file when the plugin is installed (the port read the shared file at start), else the defaults (10, follows, on) |
 | Swamp Turtle FIX (ikahurula, data mod, workshop 2237731365) | Swamp turtle attacks (Fixes) | its 2020-09-24 update | the fix is switched on. Its data still loads: it sets the Swamp Turtle's `weapon` to `_elephant type` (and its unread `attack type`), so its turtles use the elephant moves and that weapon's damage and reach ([animals](../game/animals.md) "Natural weapon") |
 | Character Highlight (BFrizFoShiz, RE_Kenshi plugin, `Character Highlight`, workshop 3688641949) | Hover outline (Advanced) | its 2026-06-23 update | the outline is switched on. Alt then outlines the characters near ([ui-input](../game/ui-input.md#hover-outline)), coloured by the right-click order on each, not by the plugin's relation colours |
 

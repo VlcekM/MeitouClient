@@ -48,6 +48,10 @@ sealed partial class PlayerInterface
     /// </summary>
     IDisposable? _uiRegistration;
     /// <summary>
+    /// The Squad XP label's registration (<see cref="SquadXpLabel"/>), removed in <see cref="DisposeUi"/>.
+    /// </summary>
+    IDisposable? _xpLabelRegistration;
+    /// <summary>
     /// Paints the arranged controls; null before <see cref="CreateUiPainter"/> or after <see cref="DisposeUi"/>.
     /// </summary>
     internal UiPainter? UiPainter;
@@ -204,6 +208,7 @@ sealed partial class PlayerInterface
         FaithfulScreens.Activated += ScreenRouter.FaithfulAction;
         _uiHost.Diagnostic += d => Console.Error.WriteLine($"ui        {d.Extension} {d.Operation}: {d.Error.Message}");
         _uiRegistration = _uiHost.Register(new PlayerUiExtension(ExecuteUiAction));
+        _xpLabelRegistration = _uiHost.Register(new SquadXpLabel(() => XpLabel));
     }
 
     /// <summary>
@@ -240,6 +245,8 @@ sealed partial class PlayerInterface
         UiPainter = null;
         _uiRegistration?.Dispose();
         _uiRegistration = null;
+        _xpLabelRegistration?.Dispose();
+        _xpLabelRegistration = null;
     }
 
     /// <summary>

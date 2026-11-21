@@ -419,6 +419,15 @@ sealed class UserConfig
     /// </summary>
     public float SquadXp { get; set; } = 1;
     /// <summary>
+    /// A skill's own multiplier in place of <see cref="SquadXp"/> (Advanced settings, under "Squad XP"), by its STATS field name
+    /// (<c>strength</c>, <c>attack</c>...; <see cref="SkillXp"/>); a skill not listed follows Squad XP.
+    /// </summary>
+    public Dictionary<string, float> SquadSkillXp { get; set; } = [];
+    /// <summary>
+    /// The Squad XP multiplier ("XP x10") at the top left of the screen during play (Advanced settings "Show Squad XP"; off).
+    /// </summary>
+    public bool ShowSquadXp { get; set; }
+    /// <summary>
     /// What every other character's XP gains are multiplied by (Advanced settings "Others' XP"; 1, as in the game).
     /// </summary>
     public float OthersXp { get; set; } = 1;
@@ -427,7 +436,8 @@ sealed class UserConfig
     /// </summary>
     public const float MinXpRate = 0, MaxXpRate = 1000;
     /// <summary>
-    /// The mods (by <c>mods.cfg</c> name) whose settings Meitou has taken into its own built-in feature, once each (<c>BuiltInMods</c>).
+    /// The mods (by <c>mods.cfg</c> name) whose settings Meitou has taken into its own built-in feature, once each (<c>BuiltInMods</c>); a name
+    /// followed by " (again)" marks a second takeover, of settings a later Meitou added to the feature.
     /// </summary>
     public List<string> AdoptedMods { get; set; } = [];
     /// <summary>
@@ -1045,6 +1055,7 @@ sealed class UserConfig
         AdoptedMods ??= [];
         SquadXp = float.IsFinite(SquadXp) ? Math.Clamp(SquadXp, MinXpRate, MaxXpRate) : 1;
         OthersXp = float.IsFinite(OthersXp) ? Math.Clamp(OthersXp, MinXpRate, MaxXpRate) : 1;
+        SquadSkillXp = SkillXp.Kept(SquadSkillXp);
         foreach (var (mod, saved) in ModSettings.ToList())
             if (saved is null) ModSettings.Remove(mod);
     }
