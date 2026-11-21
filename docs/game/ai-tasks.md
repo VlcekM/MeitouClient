@@ -922,20 +922,27 @@ there (`FUN_14060f570` answers false), so for 180 Man the gate the byte changes 
 | 45 Bodyguard | - | 0.9 |
 | 57, 58, 125, 237, 250 | - | 0.8 |
 
-How a commitment ends (**Verified**: the registrations in `FUN_140319a60`, `FUN_14050caf0`, `FUN_14050d130`, `FUN_14050f0b0`, `FUN_14050d080`,
-`FUN_140511130`, `FUN_14050df10`). There are two timers: the goal's (`+0x280`), rolled by the goal setter (AITaskSytem slot 5 `FUN_14050caf0`: from now
-when a committing goal that is not the current one is set, and min + r x range added on every set, so the same goal planned again extends it), and the
-task's (`+0x288`), rolled from now at each task start whose commit Tasker (`FUN_14050cff0`: the running task, or the plan's front when the running row does
-not commit and that one has a finder) commits. Rows with TaskData `+0x21` as well (37, 38, 43, 47, 118, 153, 157, 190, 221, 239, 240, 248, 255, 268, 275)
-end at the task's timer: the frame step ends the running task and asks a replan, so the next update clears the goal and scores it afresh. The others (35,
-280, 127, 52, 65) only leave committed mode when the goal's timer passes: the goal stays current and the scorer caps it at 0.05. While the goal's timer runs
-the scorer floors the current goal at 0.4 after its x1.25, whatever its desire; it is scored then only on an update whose plan step set the failed flag
-(`+0x26d`: the walk's target unreachable, `FUN_14050d970`), since committed mode skips its tier otherwise, and the failed flag's handler (`FUN_14050d080`)
-zeroes the goal's timer at the next character update. Meitou: one timer (`AiMind.CommitUntil`, rolled at take-up); the floor and cap in `AiSystem.Score`,
-the floor ahead of the desire gate (`AiSystem.HeldByCommitment`); the failed flag is not modelled, so the floor holds only a current committed goal that
-committed mode does not keep. Engine choice: every committing row ends as one without `+0x21` (capped while current): clearing a `+0x21` goal at its end
-makes the next choice without the engine goals' looks, which skip a committed character's lower goals and run on their own turn (a captive goal's look
-every 30 ticks), so the goal would win again and recommit before they are looked at.
+How a commitment ends (**Verified**: the registrations in `FUN_140319a60`, `FUN_14050caf0`, `FUN_14050d130`, `FUN_14050d540`, `FUN_14050cff0`,
+`FUN_14050f0b0`, `FUN_14050d7d0`, `FUN_14050d920`, `FUN_14050d080`, `FUN_140511130`, `FUN_140510650`, `FUN_14050df10`). There are two timers: the goal's
+(`+0x280`), rolled by the goal setter (AITaskSytem slot 5 `FUN_14050caf0`: from now when a committing goal that is not the current one is set, and min +
+r x range added on every set; the pick does not set a current goal again while a task runs, `FUN_140510650`), and the task's (`+0x288`), rolled from now
+at each task start (`FUN_14050d540`, for a row that acts) whose commit Tasker (`FUN_14050cff0`: the running task, or the plan's front when the running row
+does not commit and the front has an effect, `+0x128`) commits. Rows with TaskData `+0x21` as well (37, 38, 43, 47, 118, 153, 157, 190, 221, 239, 240,
+248, 255, 268, 275; the short `0x101` at `+0x20`) end at the task's timer: the frame step (`FUN_14050f0b0`) ends the running task (`FUN_14050d7d0`, which
+starts the plan's next step if one is queued) and asks a replan, so the next update clears the goal unless its own timer runs, and then the committed
+stop plans nothing and the update clears the goal with no task left. The others (35, 280, 127, 52, 65) only leave committed mode when the goal's timer
+passes: the goal stays current and the scorer caps it at 0.05. A goal row with an effect is queued behind its plan's steps ([planner](#planner)), so it is the commit
+Tasker of a step that does not commit: row 98's start under 153 rolls 153's 2 + r x 8 h (**Observed**, as the planner's queue is). While the goal's timer runs the scorer floors the current goal at 0.4
+after its x1.25, whatever its desire; it is scored then only on an update after the failed flag (`+0x26d`) was set, since committed mode skips its tier
+otherwise. The flag is set by the plan step when the mover is idle away from the running task's target (`FUN_14050d970`, which also marks the target
+unreachable) and by the task start when the front cannot start (`FUN_14050d540`); its handler (`FUN_14050d920` -> `FUN_14050d080`) zeroes the goal's
+timer and asks a replan. Meitou: the goal's timer `AiMind.CommitUntil` (rolled at take-up; a goal chosen again while current is kept, not set again),
+the task's `AiMind.TaskCommitUntil` (`AiSystem.StartTask` at each step start and take-up, `AiSystem.CommitStep`), `TaskProfile.EndsWithTask` for the
+`+0x21` rows and `TierRungs.Begin` for the frame step's end (a replan request), the same for players and NPCs; the floor and cap in `AiSystem.Score`,
+the floor ahead of the desire gate (`AiSystem.HeldByCommitment`). A front that cannot start ends the plan, which clears the goal. Engine choice: a walk the
+movement gave up zeroes the goal's timer (`AiSystem.WalkOver`) but asks no replan; the act-out walks again under the give-up rule
+(`AiSystem.MaxFailedWalks`), which stands in for the unreachable mark (a replan would take the goal up anew and reset the rule's count). The captive goals' look
+skipped a committed character's lower goals, so it looks again at one whose `+0x21` commitment ended (`AiMind.CommitEnded`) before its next choice.
 
 ### Finished tests
 

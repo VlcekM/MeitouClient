@@ -117,13 +117,15 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
     readonly bool[] _listed = new bool[Types.Length];
 
     /// <summary>
-    /// The finders' look (serial, the captive step), for each character on its slot's turn every <paramref name="every"/> ticks.
+    /// The finders' look (serial, the captive step), for each character on its slot's turn every <paramref name="every"/> ticks, and for one whose
+    /// <c>+0x21</c> commitment ended at this tick's think (<see cref="AiMind.CommitEnded"/>): the look skipped its goals while it was committed
+    /// (<see cref="MarkListed"/>), and the original's chooser asks their finders at its next choice.
     /// </summary>
     internal void Look(World world, int every)
     {
         var table = world.Characters;
         for (int s = 0; s < table.HighWater; s++)
-            if (world.Turn(s, every)) LookAt(world, s);
+            if (world.Turn(s, every) || table.Cold(s)?.Ai is { CommitEnded: true }) LookAt(world, s);
 
         foreach (var picks in _picks) Prune(table, picks);
     }

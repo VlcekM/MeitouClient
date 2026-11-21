@@ -2471,8 +2471,7 @@ origin, else the ground there (raised Swamp Houses and Cannibal Shacks: floor 25
 floor near it puts them on the nearest meshed storey below (`PopulationSystem.HomeFloor`, engine choices). **Observed** (headless probe of every
 town, 600 ticks): characters on the ground under a building floor went from 278 to 128 of 9060; ~80 of those are gate guards, the rest mostly
 homeless squads placed under unmeshed platforms. The Storm House's upper storey (+66) is on the navmesh except under its beds, whose
-spots therefore stand on the floor below (Observed, 2026-10-18 probe). Engine choices: a committed goal chosen again after its commitment ran out
-starts over with a new target; shops stand customers at a general
+spots therefore stand on the floor below (Observed, 2026-10-18 probe). Engine choices: shops stand customers at a general
 node, else a guard post, else any node; a home or seat given up
 after three failed walks is tried again when a new goal is taken up, and a member that gave its seat up
 leaves it to the next; a member keeps its seat while it still relaxes or sits (every squad's kept seats are reserved before any claims), so a

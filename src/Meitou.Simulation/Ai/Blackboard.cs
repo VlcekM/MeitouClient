@@ -1057,9 +1057,22 @@ public sealed class AiMind
     public Vector2 Post { get; set; }
 
     /// <summary>
-    /// The game hours (<see cref="World.GameHours"/>) until which it is committed to its goal (docs/game/ai.md "Packages and goals").
+    /// The game hours (<see cref="World.GameHours"/>) until which it is committed to its goal: the goal's timer (<c>AITaskSytem</c> <c>+0x280</c>,
+    /// docs/game/ai-tasks.md "Desire and commitment"). Not saved.
     /// </summary>
     public double CommitUntil { get; set; }
+
+    /// <summary>
+    /// The task's timer (<c>AITaskSytem</c> <c>+0x288</c>, <c>FUN_14050d130</c>, <b>Verified</b>): rolled from now at each start of a step whose
+    /// commit step commits (<see cref="AiSystem.CommitStep"/>); a row with TaskData <c>+0x21</c> ends when it passes. Not saved.
+    /// </summary>
+    public double TaskCommitUntil { get; set; }
+
+    /// <summary>
+    /// Its <c>+0x21</c> commitment ended at this think (<see cref="TierRungs.Begin"/>): the serial looks that skip a committed character look at it
+    /// again before its next choice (<see cref="Kidnap.CaptiveGoals"/>). Cleared by its next think; hashed while set.
+    /// </summary>
+    public bool CommitEnded { get; set; }
 
     /// <summary>
     /// The tick its current goal was taken up (<see cref="AiSystem"/>'s act-out): an engine task started before it does not displace that goal's plan.
@@ -1575,6 +1588,8 @@ public sealed class AiMind
         hasher.Add(HomeUnreachable);
         hasher.Add(SeatUnreachable);
         hasher.Add(CommitUntil);
+        if (TaskCommitUntil != 0) hasher.Add(TaskCommitUntil);
+        if (CommitEnded) hasher.Add(0x436D4564);   // "CmEd": only between the think that ended an +0x21 commitment and the next
         hasher.Add(Target ?? new Vector3(float.NaN));
         if (WorkActive || WorkEpoch != 0)
         {

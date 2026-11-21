@@ -121,15 +121,32 @@ internal sealed class TierRungs : ITierRungs
     /// (<see cref="AiSystem.EndStep"/>), then committed mode: while a goal it committed to is running, only a tier above that goal's priority may take
     /// over; if none plans, the goal and its plan stay (<c>FUN_140510ef0</c> in committed mode). Not past its hours: the plan step ends a goal's plan
     /// then, and the update clears a goal left with no plan however long its commitment runs (<c>FUN_14050d970</c>). With one: no plan step, and
-    /// the goal and its plan are cleared unless it commits and its commitment has not run out (<see cref="Replanned"/>).
+    /// the goal and its plan are cleared unless it commits and its commitment has not run out (<see cref="Replanned"/>). First the frame step's
+    /// commitment end (<see cref="EndCommittedTask"/>).
     /// </summary>
     public TaskPriority Begin()
     {
+        _mind.CommitEnded = false;
+        EndCommittedTask();
         if (_replan) return Replanned();
 
         _ai.EndStep(_world, _slot, _id, _mind, _squad, _board, _plans, _hour);
         _committed = CommittedTo(_world, _mind, _hour);
         return _committed?.Task.Priority ?? TaskPriority.JustAction;
+    }
+
+    /// <summary>
+    /// The frame step's end of a task whose commitment ran out (<c>FUN_14050f0b0</c>, <b>Verified</b>; <see cref="AiSystem.TaskCommitOver"/>): the
+    /// running task ends and a replan is asked, so this choice clears the goal unless the goal's own timer still runs (<see cref="Replanned"/>), and
+    /// then the stop of committed mode leaves it with no goal until its next think chooses freely. The serial looks look at it again first
+    /// (<see cref="AiMind.CommitEnded"/>). For players and NPCs alike.
+    /// </summary>
+    void EndCommittedTask()
+    {
+        if (!AiSystem.TaskCommitOver(_world, _mind)) return;
+
+        _replan = true;
+        _mind.CommitEnded = true;
     }
 
     /// <summary>
