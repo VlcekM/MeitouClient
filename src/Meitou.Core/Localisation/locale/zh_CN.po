@@ -5622,3 +5622,12 @@ msgstr "游戏的曝光只会随画面亮度降到白天的最小值，因此正
 
 msgid "Brighten the picture in deep shade by day, such as a canyon at noon; nights and sunny views stay as they are."
 msgstr "白天在深阴影中（如正午的峡谷）提亮画面；夜晚和晴天景色保持不变。"
+
+msgid "Adaptive exposure strength (max x)"
+msgstr "自适应曝光强度（最大 x）"
+
+msgid "Adaptive exposure strength"
+msgstr "自适应曝光强度"
+
+msgid "The most deep shade by day is brightened, as a multiple of the game's exposure."
+msgstr "白天深阴影最多提亮多少，以游戏曝光的倍数表示。"

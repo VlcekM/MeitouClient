@@ -345,9 +345,10 @@ without its gain rain's streaks fade; a distant torch a few pixels high flickers
 minimum 0.8 holds nearly every daytime view: the new game's open desert at 10:00 measures a mean of 0.567 (0.574 all Faithful), save
 `dark` (a cliff canyon at 12:02) 0.276 (0.311 with Indirect light off), so the game shows both at one fixed exposure and the canyon is
 near black (**Observed**, `ReadExposure` after offscreen shots). Meitou's adaptation target under the band's minimum is the mean times
-`Exposure.Min / ShadeExposureReference` (0.8 / 0.57: a scene darker than that desert is shown as bright as it), no lower than the geometric
-mean of the game's day and night minimums (0.47 with night darkness 0.35: at most 1.7x), the band's own at or above its minimum; the
-adaptation is smoothed towards the target, not clamped after it (`PostProcessShaders.Adapt` `uShade`, `MergedKernels` `ShadeScale`,
+`Exposure.Min / ShadeExposureReference` (0.8 / 0.57: a scene darker than that desert is shown as bright as it), no lower than the daytime
+minimum over the **Adaptive exposure strength** slider (1 to 3x, default 1.7: 0.47) nor the night's minimum, the band's own at or above its
+minimum. The adaptation is smoothed towards the target, not clamped after it, at `PostProcess.AdaptiveExposureRate` 2 / s (90 % of a change in
+1.2 s; the game's 0.5 / s took 4.6 s) (`PostProcessShaders.Adapt` `uShade`, `MergedKernels` `ShadeScale`,
 `PostComposite` on Metal). A held exposure and the unmerged pass with an interior in view keep the game's rule; the rooms' own exposure is
 unchanged. **Observed** (offscreen 1280x720, Meitou against `--faithful exposure`): new game at 10:00, 17:00 and 23:00 pixel-identical;
 at 18:30 (mean 0.457, band still 0.8 until sunY 0.2) 1.25x; `dark` and the shaded `quicksave` lifted 1.7x. The night minimum as the floor

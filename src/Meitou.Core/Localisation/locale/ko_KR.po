@@ -4774,3 +4774,12 @@ msgstr "게임의 노출은 화면 밝기를 낮 최솟값까지만 따라가므
 
 msgid "Brighten the picture in deep shade by day, such as a canyon at noon; nights and sunny views stay as they are."
 msgstr "낮의 깊은 그늘(정오의 협곡 등)에서 화면을 밝게 합니다. 밤과 맑은 풍경은 그대로입니다."
+
+msgid "Adaptive exposure strength (max x)"
+msgstr "적응형 노출 강도(최대 x)"
+
+msgid "Adaptive exposure strength"
+msgstr "적응형 노출 강도"
+
+msgid "The most deep shade by day is brightened, as a multiple of the game's exposure."
+msgstr "낮의 깊은 그늘을 최대 얼마나 밝게 할지(게임 노출의 배수)."

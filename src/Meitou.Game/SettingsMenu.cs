@@ -679,7 +679,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             return "Vegetation";
         if (S("Haze") || label == WorldFrame.HazeDistanceSlider || label == WorldFrame.CloudHeightSlider || WorldFrame.ParticleSliders.Contains(label))
             return "Sky & weather";
-        if (S("Tone map") || S("Hybrid") || S("Grading") || S("Night grading")) return "Colour";
+        if (S("Tone map") || S("Hybrid") || S("Grading") || S("Night grading") || S("Adaptive exposure")) return "Colour";
         if (S("Bloom") || S("Depth of field") || S("Heat haze") || S("Vignette") || S("Film grain")) return "Post FX";
         if (label == WorldFrame.CharacterDistanceSlider) return "Characters";
 
@@ -852,6 +852,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
                 or WorldFrame.MaterialMetalSwitch or WorldFrame.MaterialBeadsSwitch => SwitchOn("Advanced materials"),
             WorldFrame.MaterialPolishSwitch => SwitchOn("Advanced materials") && SwitchOn(WorldFrame.MaterialMetalSwitch),
             WorldFrame.NightGradeStrengthSlider => SwitchOn("Night grading"),
+            WorldFrame.AdaptiveExposureSlider => SwitchOn("Adaptive exposure"),
             WorldFrame.BloomStrengthSlider => SwitchOn(WorldFrame.BloomSwitch),
             WorldFrame.DofApertureSlider or WorldFrame.CameraEffectsSwitch => SwitchOn(WorldFrame.DepthOfFieldSwitch),
             WorldFrame.VignetteStrengthSlider => SwitchOn(WorldFrame.VignetteSwitch),

@@ -91,6 +91,7 @@ static class SettingHints
         "Hybrid tone map: ACES share" => "Blend more ACES into the hybrid tone mapping curve.",
         "Heat haze strength" => "Scale the distortion caused by hot air.",
         "Night grading strength" => "Adjust the blue shift of colours in low light.",
+        "Adaptive exposure strength" => "The most deep shade by day is brightened, as a multiple of the game's exposure.",
         "Bloom strength" => "How much of each pixel's light glows into its surroundings.",
         "Depth of field aperture" => "The lens's f-number: lower blurs more. A cinema key can set its own.",
         _ when label == WorldFrame.UpscalerSliders[0] => "How edges are smoothed.",

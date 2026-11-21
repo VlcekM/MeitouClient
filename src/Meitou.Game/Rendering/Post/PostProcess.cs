@@ -2931,6 +2931,10 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// </summary>
     const float AdaptationRate = 0.5f;
     /// <summary>
+    /// The adaptation rate with Adaptive exposure (1 / s): 90 % of a change in 1.2 s, against the game's 4.6 s.
+    /// </summary>
+    public const float AdaptiveExposureRate = 2;
+    /// <summary>
     /// Kenshi's exposure: the luminance measure (mipmapped) and the adapted value (1 × 1, ping-pong).
     /// </summary>
     Target2D? _luminance, _adaptA, _adaptB;
@@ -3002,6 +3006,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     float IndoorFloorShare(float bandMin) =>
         IndoorExposureMin > 0 ? MathF.Min(IndoorExposureFloor, IndoorExposureMin / MathF.Max(bandMin, 1e-4f)) : IndoorExposureFloor;
     /// <summary>
+    /// The adaptation rate (1 / s): <see cref="AdaptiveExposureRate"/> with Adaptive exposure, else the game's.
+    /// </summary>
+    internal static float Rate(PostOptions o) => o.AdaptiveExposure ? AdaptiveExposureRate : AdaptationRate;
+
+    /// <summary>
     /// Skip the smoothing: the exposure settles at once (screenshots, benchmarks).
     /// </summary>
     public bool InstantAdaptation { get; set; }
@@ -3046,7 +3055,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             _adaptClock.Restart();
 
             // Seed both ping-pong targets before smoothing; the next frame reads the other one.
-            float mblend = InstantAdaptation || !_adaptedValid || _adaptedFrames < 2 ? 1 : 1 - MathF.Exp(-mdt * AdaptationRate);
+            float mblend = InstantAdaptation || !_adaptedValid || _adaptedFrames < 2 ? 1 : 1 - MathF.Exp(-mdt * Rate(Options));
             (_adaptA, _adaptB) = (_adaptB, _adaptA);
             var mband = ExposureBand();
             var rooms = RoomMaskNow;
@@ -3067,7 +3076,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         _adaptClock.Restart();
 
         // Seed both ping-pong targets before smoothing; the next frame reads the other one.
-        float blend = InstantAdaptation || !_adaptedValid || _adaptedFrames < 2 ? 1 : 1 - MathF.Exp(-dt * AdaptationRate);
+        float blend = InstantAdaptation || !_adaptedValid || _adaptedFrames < 2 ? 1 : 1 - MathF.Exp(-dt * Rate(Options));
         var previous = _adaptB;   // the target written last frame; the swap below makes it adaptA
         (_adaptA, _adaptB) = (_adaptB, _adaptA);
         var ap = _adaptPass;

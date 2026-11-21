@@ -23,10 +23,6 @@ sealed class PostComposite : IDisposable
     /// The luminance measure's side in pixels, and its mip count (256 down to 1).
     /// </summary>
     const int LuminanceSize = 256, LuminanceLevels = 9;
-    /// <summary>
-    /// The game's adaptation rate (`AUTOEXP_ADAPTATION_RATE`, 1 / s), as <see cref="PostProcess"/>'s.
-    /// </summary>
-    const float AdaptationRate = 0.5f;
 
     /// <summary>
     /// The device the passes run on.
@@ -352,7 +348,7 @@ sealed class PostComposite : IDisposable
         EnsureDisplay(target.Desc.Width, target.Desc.Height);
         MakeTargets(o, temporal);
         RunLuminance(cmd, scene);
-        RunAdaptation(cmd, band, shade);
+        RunAdaptation(cmd, band, shade, PostProcess.Rate(o));
 
         // The composite: auto exposure (0.55 / adapted), the game's tone map, grade and dither.
         bool smaaOn = o.Smaa && !temporal && _ldr is not null;
@@ -398,7 +394,7 @@ sealed class PostComposite : IDisposable
     /// The adaptation: this frame's mean against the last output, blended at the game's rate (instant for a still)
     /// inside the band. adaptB is the target written last frame; the swap below makes it adaptA.
     /// </summary>
-    void RunAdaptation(IGpuCommandList cmd, (float Min, float Max) band, (float Scale, float Floor) shade)
+    void RunAdaptation(IGpuCommandList cmd, (float Min, float Max) band, (float Scale, float Floor) shade, float rate)
     {
         var previous = _adaptB;
         (_adaptA, _adaptB) = (_adaptB, _adaptA);
@@ -408,7 +404,7 @@ sealed class PostComposite : IDisposable
 
         // Both history targets must be seeded before the smoothing starts: the second ping-pong target is read on
         // the next frame, and an undefined texture there makes the exposure alternate dark/bright as it converges.
-        float blend = !_adaptedValid || _adaptedFrames < 2 ? 1 : 1 - MathF.Exp(-dt * AdaptationRate);
+        float blend = !_adaptedValid || _adaptedFrames < 2 ? 1 : 1 - MathF.Exp(-dt * rate);
         _adapt.Bind(_lumSlot, _luminanceSampler with { View = _luminanceTarget!.View() });
         _adapt.Bind(_lastSlot, previous is { } last ? _plainSampler with { View = last.View() } : _ctx.Dummy(_adapt.SamplerInfo(_lastSlot)));
         _adapt.Set(_adaptLevel, MathF.Log2(LuminanceSize));

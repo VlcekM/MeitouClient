@@ -5215,3 +5215,12 @@ msgstr "a exposição do jogo acompanha o brilho da imagem só até um mínimo d
 
 msgid "Brighten the picture in deep shade by day, such as a canyon at noon; nights and sunny views stay as they are."
 msgstr "Clareia a imagem de dia na sombra profunda, como um cânion ao meio-dia; noites e vistas ensolaradas continuam iguais."
+
+msgid "Adaptive exposure strength (max x)"
+msgstr "Intensidade da exposição adaptativa (máx. x)"
+
+msgid "Adaptive exposure strength"
+msgstr "Intensidade da exposição adaptativa"
+
+msgid "The most deep shade by day is brightened, as a multiple of the game's exposure."
+msgstr "Quanto a sombra profunda é clareada no máximo de dia, como múltiplo da exposição do jogo."

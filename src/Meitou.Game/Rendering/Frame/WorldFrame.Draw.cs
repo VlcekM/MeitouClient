@@ -462,7 +462,7 @@ static partial class WorldFrame
 
         // The game's exposure (0.55 over the mean luminance, clamped to its band) goes with the game's sky and light.
         post.AutoExposure = (gpu.Sky.MinLuminance, gpu.Sky.MaxLuminance);
-        post.ShadeExposure = post.Options.AdaptiveExposure ? ShadeExposure(gpu.Sky) : default;
+        post.ShadeExposure = post.Options.AdaptiveExposure ? ShadeExposure(gpu.Sky, post.Options.AdaptiveExposureStrength) : default;
 
         // A room lit by its probes (Indoor GI) is as dark as its lamps leave it: the exposure follows it under the game's minimum.
         if (post is PostProcess exposed)
@@ -494,13 +494,13 @@ static partial class WorldFrame
     /// <summary>
     /// Adaptive exposure (Meitou, docs/render-post.md "Adaptive exposure"): a scene darker than an open desert by day is exposed as that desert is
     /// (the scale is the game's daytime minimum over <see cref="PostProcess.ShadeExposureReference"/>, the same at every hour, so dusk still
-    /// darkens), down to the geometric mean of the game's day and night minimums, at most 1.7 times brighter; at night the band's minimum is the
-    /// floor and nothing changes.
+    /// darkens), down to the daytime minimum over <paramref name="strength"/> (at most that many times brighter) but never under the night's
+    /// minimum; at night the band's minimum is the floor and nothing changes.
     /// </summary>
-    static (float Scale, float Floor) ShadeExposure(SkyRenderer sky)
+    static (float Scale, float Floor) ShadeExposure(SkyRenderer sky, float strength)
     {
         float night = KenshiLighting.MinLuminance(-1, sky.Exposure.Min, sky.Exposure.NightDarkness);
-        float floor = MathF.Min(MathF.Sqrt(night * sky.Exposure.Min), sky.MinLuminance);
+        float floor = MathF.Min(MathF.Max(sky.Exposure.Min / Math.Max(strength, 1), night), sky.MinLuminance);
         return (sky.Exposure.Min / PostProcess.ShadeExposureReference, floor);
     }
 

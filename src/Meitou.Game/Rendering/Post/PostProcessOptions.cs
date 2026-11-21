@@ -95,6 +95,17 @@ public sealed class PostOptions
     public bool AdaptiveExposure = true;
 
     /// <summary>
+    /// The most <see cref="AdaptiveExposure"/> brightens a scene in deep shade by day (1 to 3; the Adaptive exposure strength slider).
+    /// </summary>
+    public float AdaptiveExposureStrength = MeitouAdaptiveExposureStrength;
+
+    /// <summary>
+    /// The default <see cref="AdaptiveExposureStrength"/>: the daytime minimum 0.8 goes down to 0.47, about the geometric mean of the game's day
+    /// and night minimums.
+    /// </summary>
+    public const float MeitouAdaptiveExposureStrength = 1.7f;
+
+    /// <summary>
     /// Meitou switch (<c>gihybrid</c>; docs/render-gi.md "Hybrid GI"), off by default: nothing it holds has been seen on a GPU.
     /// <c>--gi-hybrid</c> picks among its parts.
     /// </summary>
@@ -738,6 +749,7 @@ public sealed class PostOptions
         ParticleDivisor = other.ParticleDivisor;
         Exposure = other.Exposure;
         AdaptiveExposure = other.AdaptiveExposure;
+        AdaptiveExposureStrength = other.AdaptiveExposureStrength;
         ToneMap = other.ToneMap;
         ToneMix = other.ToneMix;
         Grade = other.Grade;

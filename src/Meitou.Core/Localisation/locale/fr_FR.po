@@ -4776,3 +4776,12 @@ msgstr "l'exposition du jeu ne suit la luminosité de l'image que jusqu'à un mi
 
 msgid "Brighten the picture in deep shade by day, such as a canyon at noon; nights and sunny views stay as they are."
 msgstr "Éclaircit l'image de jour dans l'ombre profonde, comme un canyon à midi ; les nuits et les vues ensoleillées ne changent pas."
+
+msgid "Adaptive exposure strength (max x)"
+msgstr "Force de l'exposition adaptative (max x)"
+
+msgid "Adaptive exposure strength"
+msgstr "Force de l'exposition adaptative"
+
+msgid "The most deep shade by day is brightened, as a multiple of the game's exposure."
+msgstr "De combien l'ombre profonde est éclaircie au plus de jour, en multiple de l'exposition du jeu."

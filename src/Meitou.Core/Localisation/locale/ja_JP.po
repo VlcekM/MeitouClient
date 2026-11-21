@@ -4774,3 +4774,12 @@ msgstr "ゲームの露出は画面の明るさに日中の最小値までしか
 
 msgid "Brighten the picture in deep shade by day, such as a canyon at noon; nights and sunny views stay as they are."
 msgstr "日中の深い日陰（正午の峡谷など）で画面を明るくします。夜と晴れた景色は変わりません。"
+
+msgid "Adaptive exposure strength (max x)"
+msgstr "適応露出の強さ（最大 x）"
+
+msgid "Adaptive exposure strength"
+msgstr "適応露出の強さ"
+
+msgid "The most deep shade by day is brightened, as a multiple of the game's exposure."
+msgstr "日中の深い日陰を最大でどれだけ明るくするか（ゲームの露出の倍率）。"

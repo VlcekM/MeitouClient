@@ -428,6 +428,7 @@ static partial class WorldFrame
         VignetteStrengthSlider = "Vignette strength",
         GrainStrengthSlider = "Film grain strength",
         NightGradeStrengthSlider = "Night grading strength (0 = game)",
+        AdaptiveExposureSlider = "Adaptive exposure strength (max x)",
         ShaftStrengthSlider = "Light shafts strength",
         ShaftAirSlider = "Light shafts air (0 = none)",
         ShaftAirDawnSlider = "Light shafts air at dawn and dusk (x)";
@@ -1051,6 +1052,8 @@ static partial class WorldFrame
             Logarithmic: true));
         sliders.Add(new Slider(NightGradeStrengthSlider, 0, 1, () => options.NightGradeStrength, v => options.NightGradeStrength = Round20(v),
             "0.00"));
+        sliders.Add(new Slider(AdaptiveExposureSlider, 1, 3, () => options.AdaptiveExposureStrength,
+            v => options.AdaptiveExposureStrength = Round20(v), "0.00"));
 
         sliders.Add(new Slider(ShaftStrengthSlider, 0, 1, () => options.ShaftStrength, v => options.ShaftStrength = Round20(v), "0.00"));
         sliders.Add(new Slider(ShaftAirSlider, 0, 4, () => options.ShaftAir, v => options.ShaftAir = Round20(v), "0.00"));

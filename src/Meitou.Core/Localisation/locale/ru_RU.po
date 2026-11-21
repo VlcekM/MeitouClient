@@ -4778,3 +4778,12 @@ msgstr "экспозиция игры следует за яркостью ка�
 
 msgid "Brighten the picture in deep shade by day, such as a canyon at noon; nights and sunny views stay as they are."
 msgstr "Осветляет картинку днём в глубокой тени, например в каньоне в полдень; ночи и солнечные виды не меняются."
+
+msgid "Adaptive exposure strength (max x)"
+msgstr "Сила адаптивной экспозиции (макс. x)"
+
+msgid "Adaptive exposure strength"
+msgstr "Сила адаптивной экспозиции"
+
+msgid "The most deep shade by day is brightened, as a multiple of the game's exposure."
+msgstr "Насколько сильнее всего осветляется глубокая тень днём, во сколько раз от экспозиции игры."

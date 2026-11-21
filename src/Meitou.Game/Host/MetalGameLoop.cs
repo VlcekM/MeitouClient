@@ -1691,6 +1691,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             v => _worldGpu.ParticleDensity = MathF.Round(v * 20) / 20, "0.00"));
         sliders.Add(new Slider("Night grading strength (0 = game)", 0, 1, () => host.WorldOptions.Post.NightGradeStrength,
             v => host.WorldOptions.Post.NightGradeStrength = MathF.Round(v * 20) / 20, "0.00"));
+        sliders.Add(new Slider(WorldFrame.AdaptiveExposureSlider, 1, 3, () => host.WorldOptions.Post.AdaptiveExposureStrength,
+            v => host.WorldOptions.Post.AdaptiveExposureStrength = MathF.Round(v * 20) / 20, "0.00"));
         sliders.Add(new Slider("Light shafts strength", 0, 1, () => host.WorldOptions.Post.ShaftStrength,
             v => host.WorldOptions.Post.ShaftStrength = MathF.Round(v * 20) / 20, "0.00"));
         sliders.Add(new Slider("Light shafts air (0 = none)", 0, 4, () => host.WorldOptions.Post.ShaftAir,

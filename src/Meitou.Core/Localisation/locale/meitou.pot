@@ -270,6 +270,14 @@ msgid "Adaptive exposure"
 msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
+msgid "Adaptive exposure strength"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs
+msgid "Adaptive exposure strength (max x)"
+msgstr ""
+
+#: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Add airglow to the night haze."
 msgstr ""
 
@@ -4803,6 +4811,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "The most blood marks on walls and objects and bloody footprints drawn in a frame, the ones that look largest first."
+msgstr ""
+
+#: src/Meitou.Game/Settings/SettingHints.cs
+msgid "The most deep shade by day is brightened, as a multiple of the game's exposure."
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs

@@ -269,7 +269,7 @@ sealed class LookPresets(SettingsMenu menu)
 
         if (S("Haze") || S("Heat haze")) return "Sky";
 
-        if (S("Tone map") || S("Hybrid") || S("Grading") || S("Night grading") || S("Bloom") || S("Depth of field") || S("Vignette")
+        if (S("Tone map") || S("Hybrid") || S("Grading") || S("Night grading") || S("Adaptive exposure") || S("Bloom") || S("Depth of field") || S("Vignette")
             || S("Film grain")) return "Colour";
 
         if (label.Contains("clarity", StringComparison.Ordinal) || label.Contains("see-through", StringComparison.Ordinal))

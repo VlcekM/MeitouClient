@@ -98,7 +98,7 @@ sealed class FeatureGrouping(SettingsMenu menu)
 
         // Colour
         new("Tone map and grade", "Tone map and grade", ["Tone map (0 = game)", "Hybrid tone map: ACES share", "Grading (0 = game)"]),
-        new("Adaptive exposure", "Adaptive exposure", []),
+        new("Adaptive exposure", "Adaptive exposure", [WorldFrame.AdaptiveExposureSlider]),
         new("Night grading", "Night grading", ["Night grading strength (0 = game)"]),
 
         // Post FX
