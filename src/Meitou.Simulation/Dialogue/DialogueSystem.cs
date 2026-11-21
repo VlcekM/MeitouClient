@@ -441,21 +441,36 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     /// </summary>
     public const float TalkReach = 21;
     /// <summary>
+    /// The reach that replaces <see cref="TalkReach"/> for a shopkeeper at its counter while <see cref="World.CounterTalk"/> is on (Meitou): the
+    /// customer talks from the counter's front instead of walking round behind it (docs/game/dialogue.md "Player conversation", counter reach).
+    /// </summary>
+    public const float CounterTalkReach = 31;
+    /// <summary>
     /// The largest height difference to talk across (the original's on the same floor; engine choice, the sim has no floors here).
     /// </summary>
     public const float TalkHeight = 35;
 
     /// <summary>
     /// Whether <paramref name="talker"/> is near enough <paramref name="target"/> to talk: X/Z within the target's scaled radius (footprint x body
-    /// scale) + <see cref="TalkReach"/>, twice the reach once the talker has stopped, and within <see cref="TalkHeight"/> in height.
+    /// scale) + <see cref="TalkReach"/> (<see cref="CounterTalkReach"/> for a shopkeeper at its counter, <see cref="CounterReach"/>), twice the
+    /// reach once the talker has stopped, and within <see cref="TalkHeight"/> in height.
     /// </summary>
-    internal static bool InTalkRange(CharacterTable table, int talker, int target)
+    internal static bool InTalkRange(World world, int talker, int target)
     {
+        var table = world.Characters;
         var (a, b) = (table.Next[talker].Position, table.Next[target].Position);
-        float reach =
-            Combat.CombatSteering.Radius(table.Cold(target)) + TalkReach * ((table.Next[talker].Flags & (ushort)MoveFlags.AnyPath) == 0 ? 2 : 1);
+        float stride = CounterReach(world, target) ? CounterTalkReach : TalkReach;
+        bool stopped = (table.Next[talker].Flags & (ushort)MoveFlags.AnyPath) == 0;
+        float reach = Combat.CombatSteering.Radius(table.Cold(target)) + stride * (stopped ? 2 : 1);
         return Vector2.Distance(new(a.X, a.Z), new(b.X, b.Z)) < reach && MathF.Abs(a.Y - b.Y) < TalkHeight;
     }
+
+    /// <summary>
+    /// Whether the character in <paramref name="target"/> is talked to across a shop counter: <see cref="World.CounterTalk"/> is on and its AI goal
+    /// is standing at a shopkeeper node (row 20, the node behind the counter).
+    /// </summary>
+    static bool CounterReach(World world, int target) =>
+        world.CounterTalk && world.Characters.Cold(target)?.Ai?.Goal?.Task.Type == Data.Gameplay.Ai.TaskType.StandAtShopkeeperNode;
 
     /// <summary>
     /// Whether the character is alive, not imprisoned and not incapacitated.
