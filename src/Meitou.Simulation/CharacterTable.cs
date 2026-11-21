@@ -1839,12 +1839,23 @@ public sealed class CharacterTable
     }
 
     /// <summary>
+    /// One slot's part of <see cref="Hash"/> hashed on its own, so two runs that differ can name the characters that do (<c>meitou-tools
+    /// mod-check</c>).
+    /// </summary>
+    internal ulong SlotHash(int slot)
+    {
+        var h = new StateHasher();
+        HashSlot(ref h, slot);
+        return h.Value;
+    }
+
+    /// <summary>
     /// One slot's part of <see cref="Hash"/>: its hot state, then, while alive, its cold state in groups (the order is fixed: the golden hashes
-    /// depend on it).
+    /// depend on it). The hot state is the last tick's, or during a tick the one being computed (<see cref="World.AfterPhase"/>).
     /// </summary>
     void HashSlot(ref StateHasher hasher, int i)
     {
-        ref readonly var c = ref _previous[i];
+        ref readonly var c = ref (_inTick ? _next : _previous)[i];
         hasher.Add(c.Alive);
         hasher.Add(c.Generation);
         if (!c.Alive) return;

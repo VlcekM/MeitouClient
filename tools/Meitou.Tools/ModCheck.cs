@@ -11,10 +11,11 @@ using Meitou.Simulation.Saving;
 
 /// <summary>
 /// <c>meitou-tools mod-check</c> (docs/modding.md "Determinism check"): loads a save headless with code mods (the enabled ones, or the folders given
-/// with <c>--mod</c>) and runs it three times, twice on one thread and once on several, comparing the state hash after every tick. A difference
-/// between the one-thread runs points at randomness or the clock, one between thread counts at a threading mistake. At the first differing tick it
-/// names the hashed systems that differ (a mod's with its id) and, on a difference, runs the game without mods to tell whether the game itself
-/// diverges there.
+/// with <c>--mod</c>) and runs it three times, twice on one thread and once on several, comparing the state hash right after the load and after
+/// every tick. A difference between the one-thread runs points at randomness or the clock, one between thread counts at a threading mistake, one
+/// right after the load at state a run leaves behind for the next. At the first difference it names the parts of the state and the hashed systems
+/// that differ (a mod's with its id), takes a close look at that tick (<see cref="ModCheckLook"/>) and runs the game without mods to tell whether
+/// the game itself diverges there.
 /// </summary>
 static class ModCheck
 {
@@ -25,9 +26,14 @@ static class ModCheck
     sealed record Options(string Save, int Ticks, int Threads, IReadOnlyList<string> ModFolders);
 
     /// <summary>
-    /// Per tick: the world's hash and each hashed system's, by label.
+    /// The world's hashes at one moment: the whole state's, each part's (<see cref="World.StatePartNames"/>) and each hashed system's, by label.
     /// </summary>
-    sealed record Trace(List<ulong> World, List<Dictionary<string, ulong>> Systems)
+    internal sealed record Hashes(ulong World, ulong[] Parts, Dictionary<string, ulong> Systems);
+
+    /// <summary>
+    /// A run's hashes: right after the load, before tick 1, and after every tick.
+    /// </summary>
+    sealed record Trace(Hashes Loaded, List<Hashes> Ticks)
     {
         /// <summary>
         /// The run's character count at the end (said with the report).
@@ -143,8 +149,8 @@ static class ModCheck
     }
 
     /// <summary>
-    /// Runs the save twice on one thread and once on <see cref="Options.Threads"/>, compares them and, on a difference, runs it without mods too.
-    /// Returns 0 when the runs agree, else 1.
+    /// Runs the save twice on one thread and once on <see cref="Options.Threads"/>, compares them and, on a difference, looks closer at it and runs
+    /// it without mods too. Returns 0 when the runs agree, else 1.
     /// </summary>
     static int Compare(Options options, Setup setup, ModHost mods)
     {
@@ -152,15 +158,32 @@ static class ModCheck
         var again = Play(options, setup, mods, threads: 1);
         var parallel = Play(options, setup, mods, options.Threads);
         ReportWorldSize(first.Characters);
-        bool repeats = Report("one thread, twice", first, again);
-        bool threads = Report($"1 against {options.Threads} threads", first, parallel);
-        if (repeats && threads)
+        int repeats = Report("one thread, twice", first, again);
+        int threads = Report($"1 against {options.Threads} threads", first, parallel);
+        if (repeats < 0 && threads < 0)
         {
             Console.WriteLine($"PASS      {options.Ticks} ticks agree run to run and across thread counts");
             return 0;
         }
-        CheckGameAlone(options, setup, !repeats);
+
+        LookAtFirstDifference(options, setup, mods, first, repeats, threads);
+        CheckGameAlone(options, setup, repeats >= 0);
         return 1;
+    }
+
+    /// <summary>
+    /// The close look (<see cref="ModCheckLook"/>) at the first differing tick of the one-thread pair, else of the thread counts; none when that pair
+    /// differs right after the load, which no tick made.
+    /// </summary>
+    static void LookAtFirstDifference(Options options, Setup setup, ModHost mods, Trace first, int repeats, int threads)
+    {
+        bool runToRun = repeats >= 0;
+        int tick = runToRun ? repeats : threads;
+        if (tick == 0) return;
+
+        var second = runToRun ? ("run 2", 1) : ($"{options.Threads} threads", options.Threads);
+        ModCheckLook.Run(t => Open(options, setup, mods, t), mods, tick, first.Ticks[tick - 1].World, ("run 1", 1), second);
+        s_current = null;
     }
 
     /// <summary>
@@ -184,30 +207,22 @@ static class ModCheck
         Console.WriteLine("baseline  the same runs without mods...");
         var first = Play(options, setup, null, threads: 1);
         var second = Play(options, setup, null, runToRun ? 1 : options.Threads);
-        int tick = FirstDifference(first.World, second.World);
-        string verdict = tick < 0 ? "the game alone agrees: the difference comes with the mods"
-            : $"the game alone differs too, from tick {tick + 1}: report it as a Meitou bug with this save";
+        int tick = FirstDifference(first, second);
+        string verdict = tick switch
+        {
+            < 0 => "the game alone agrees: the difference comes with the mods",
+            0 => "the game alone differs too, right after loading: a run leaves something behind that changes the next load",
+            _ => $"the game alone differs too, from tick {tick}: report it as a Meitou bug with this save",
+        };
         Console.WriteLine($"baseline  {verdict}");
     }
 
     /// <summary>
-    /// Loads the save into a new world (synchronous paths, no background population, seed 1, no snapshots), focuses it on the player squad and
-    /// records the ticks.
+    /// Runs the save in a new world (<see cref="Open"/>) and records its hashes.
     /// </summary>
     static Trace Play(Options options, Setup setup, ModHost? mods, int threads)
     {
-        var save = SaveGame.Load(SaveFolder.Open(options.Save));
-        var walk = setup.Walk;
-        var systems = StandardSystems.Build(setup.Data, walk, new StandardSystemOptions
-        {
-            SynchronousPaths = true, Extensions = mods?.Simulation, Population = new PopulationSettings { Background = false },
-        }).Systems;
-        var settings = new WorldSettings { Seed = 1, Threads = threads, MinPartitionSize = 32, PublishSnapshots = false };
-        using var world = new World(settings, walk, systems);
-        s_current = world;
-        SaveLoader.Load(world, save, setup.Data, new SaveLoadOptions { Appearances = setup.Data.Appearances });
-        mods?.RestoreSaveData(world, save.ModData);
-        Focus(world);
+        using var world = Open(options, setup, mods, threads);
         try
         {
             return Record(world, options.Ticks, mods);
@@ -216,6 +231,37 @@ static class ModCheck
         {
             s_current = null;
         }
+    }
+
+    /// <summary>
+    /// Loads the save into a new world (synchronous paths, no background population, seed 1, no snapshots) and focuses it on the player squad; it
+    /// is the world the mods see until the next one opens.
+    /// </summary>
+    static World Open(Options options, Setup setup, ModHost? mods, int threads)
+    {
+        var save = SaveGame.Load(SaveFolder.Open(options.Save));
+        var walk = setup.Walk;
+        var systems = StandardSystems.Build(setup.Data, walk, new StandardSystemOptions
+        {
+            SynchronousPaths = true, Extensions = mods?.Simulation, Population = new PopulationSettings { Background = false },
+        }).Systems;
+        var settings = new WorldSettings { Seed = 1, Threads = threads, MinPartitionSize = 32, PublishSnapshots = false };
+        var world = new World(settings, walk, systems);
+        s_current = world;
+        try
+        {
+            SaveLoader.Load(world, save, setup.Data, new SaveLoadOptions { Appearances = setup.Data.Appearances });
+            mods?.RestoreSaveData(world, save.ModData);
+        }
+        catch
+        {
+            s_current = null;
+            world.Dispose();
+            throw;
+        }
+
+        Focus(world);
+        return world;
     }
 
     /// <summary>
@@ -229,19 +275,33 @@ static class ModCheck
     }
 
     /// <summary>
-    /// Runs <paramref name="ticks"/> ticks and records the world's hash and each hashed system's after every one.
+    /// Records the world's hashes as loaded, then runs <paramref name="ticks"/> ticks and records them after every one.
     /// </summary>
     static Trace Record(World world, int ticks, ModHost? mods)
     {
-        var trace = new Trace([], []);
+        var trace = new Trace(Snapshot(world, mods), []);
         for (int i = 0; i < ticks; i++)
         {
             world.RunTick();
-            trace.World.Add(world.StateHash());
-            trace.Systems.Add(SystemHashes(world, mods));
+            trace.Ticks.Add(Snapshot(world, mods));
         }
         trace.Characters = world.Characters.Count;
         return trace;
+    }
+
+    /// <summary>
+    /// The world's hashes as they stand: the whole state's, each part's and each hashed system's.
+    /// </summary>
+    internal static Hashes Snapshot(World world, ModHost? mods) => new(world.StateHash(), PartHashes(world), SystemHashes(world, mods));
+
+    /// <summary>
+    /// Each part's hash, in the order of <see cref="World.StatePartNames"/>; during a tick, of the state as it stands.
+    /// </summary>
+    internal static ulong[] PartHashes(World world)
+    {
+        var hashes = new ulong[World.StatePartNames.Count];
+        for (int i = 0; i < hashes.Length; i++) hashes[i] = world.StatePartHash(i);
+        return hashes;
     }
 
     /// <summary>
@@ -267,32 +327,63 @@ static class ModCheck
         mods?.OwnerOf(system) is { } owner ? $"mod {owner.ModId} system '{owner.Name}'" : system.GetType().Name;
 
     /// <summary>
-    /// Prints the first differing tick and the hashed systems that differ there; true when the runs agree.
+    /// Prints the first difference and the parts and hashed systems that differ there. Returns its tick (0: right after the load), -1 when the
+    /// runs agree.
     /// </summary>
-    static bool Report(string what, Trace a, Trace b)
+    static int Report(string what, Trace a, Trace b)
     {
-        int tick = FirstDifference(a.World, b.World);
+        int tick = FirstDifference(a, b);
         if (tick < 0)
         {
             Console.WriteLine($"ok        {what}: every tick agrees");
-            return true;
+            return tick;
         }
-        Console.WriteLine($"DIFFERS   {what}: from tick {tick + 1}");
-        var systems = a.Systems[tick].Where(p => b.Systems[tick].GetValueOrDefault(p.Key) != p.Value)
-            .Select(p => p.Key[(p.Key.IndexOf(':') + 1)..]).ToList();
-        if (systems.Count == 0)
-            Console.WriteLine("          no hashed system differs: the world's own state does (characters, squads...); look at patches and writes");
-        foreach (var system in systems) Console.WriteLine($"          {system}");
-        return false;
+
+        var (x, y) = tick == 0 ? (a.Loaded, b.Loaded) : (a.Ticks[tick - 1], b.Ticks[tick - 1]);
+        Console.WriteLine(tick == 0 ? $"DIFFERS   {what}: right after loading, before tick 1" : $"DIFFERS   {what}: from tick {tick}");
+        ReportHashes(x, y, "          ");
+        if (tick == 0)
+        {
+            Console.WriteLine("          no tick made this: the run before left something the load does not reset (a static field, or game "
+                + "data the worlds share)");
+        }
+
+        return tick;
     }
 
     /// <summary>
-    /// The first index at which the two hash lists differ, -1 when they agree over the shorter.
+    /// Prints the parts of the state, then the hashed systems, that differ between <paramref name="a"/> and <paramref name="b"/> (a mod's system by
+    /// id and name), each line after <paramref name="indent"/>.
     /// </summary>
-    static int FirstDifference(List<ulong> a, List<ulong> b)
+    internal static void ReportHashes(Hashes a, Hashes b, string indent)
     {
-        for (int i = 0; i < Math.Min(a.Count, b.Count); i++)
-            if (a[i] != b[i]) return i;
+        var parts = DifferingParts(a.Parts, b.Parts).ToList();
+        if (parts.Count > 0) Console.WriteLine($"{indent}parts: {string.Join(", ", parts)}");
+
+        var systems = a.Systems
+            .Where(p => b.Systems.GetValueOrDefault(p.Key) != p.Value)
+            .Select(p => p.Key[(p.Key.IndexOf(':') + 1)..]);
+        foreach (var system in systems) Console.WriteLine($"{indent}system {system}");
+    }
+
+    /// <summary>
+    /// The names of the parts whose hashes differ (<see cref="World.StatePartNames"/>).
+    /// </summary>
+    internal static IEnumerable<string> DifferingParts(ulong[] a, ulong[] b) =>
+        Enumerable.Range(0, a.Length)
+            .Where(i => a[i] != b[i])
+            .Select(i => World.StatePartNames[i]);
+
+    /// <summary>
+    /// The first difference between the runs: 0 right after the load, else the tick after which they first differ (1 the first); -1 when they
+    /// agree over the shorter.
+    /// </summary>
+    static int FirstDifference(Trace a, Trace b)
+    {
+        if (a.Loaded.World != b.Loaded.World) return 0;
+
+        for (int i = 0; i < Math.Min(a.Ticks.Count, b.Ticks.Count); i++)
+            if (a.Ticks[i].World != b.Ticks[i].World) return i + 1;
         return -1;
     }
 }

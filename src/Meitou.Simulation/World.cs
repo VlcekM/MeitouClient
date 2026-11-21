@@ -851,6 +851,12 @@ public sealed partial class World : IDisposable
     }
 
     /// <summary>
+    /// Called after each serial step of a tick with its name (inputs, schedule, think move and act, commit, slow world), so
+    /// <c>meitou-tools mod-check</c> can hash the world part way through the tick that two runs first differ in; null in play.
+    /// </summary>
+    internal Action<World, string>? AfterPhase { get; set; }
+
+    /// <summary>
     /// Runs one simulation tick; <paramref name="publish"/> false skips its snapshot (a tick the host will not draw: not one of a frame's last two),
     /// <paramref name="views"/> false publishes only what the host interpolates from (a frame's second-to-last tick, docs/simulation.md
     /// "Snapshots").
@@ -866,21 +872,26 @@ public sealed partial class World : IDisposable
 
         // 1. Inputs (serial).
         RunInputs(table, prof);
+        AfterPhase?.Invoke(this, "inputs");
 
         // 2. Schedule (serial): the grid of the last tick's positions, then the systems.
         RunSchedule(table, prof);
+        AfterPhase?.Invoke(this, "schedule");
 
         // 3-5. Think, move, act (parallel; each system's phase is a barrier).
         RunThinkMoveAct(table, prof);
+        AfterPhase?.Invoke(this, "think, move and act");
 
         // 6. Commit (serial): the effects in an order the partitioning cannot change.
         Commit(table, prof);
+        AfterPhase?.Invoke(this, "commit");
 
         // 7. Slow world (serial), then the deaths of the commit and the slow world that no site reported, then the code mods' status effects
         // lose a tick (nothing without registered effects).
         RunSlowWorld(prof);
         DeathObservers.Sweep(this);
         Bodies.StatusEffects.Step(this);
+        AfterPhase?.Invoke(this, "slow world");
 
         // 8. Publish.
         Squads.Refresh(table, Player.Faction);
@@ -1300,6 +1311,58 @@ public sealed partial class World : IDisposable
     }
 
     /// <summary>
+    /// One part of <see cref="StateHash"/>: adds that part's state to the hasher.
+    /// </summary>
+    delegate void StatePart(World world, ref StateHasher hasher);
+
+    /// <summary>
+    /// The parts of <see cref="StateHash"/> in hashing order, each by name (<c>meitou-tools mod-check</c> names the parts two runs differ in). A part
+    /// that adds nothing until it holds something keeps worlds without it hashing as before.
+    /// </summary>
+    static readonly (string Name, StatePart Hash)[] StateParts =
+    [
+        ("characters", static (World w, ref StateHasher h) => w.Characters.Hash(ref h)),
+        ("squads", static (World w, ref StateHasher h) => w.Squads.Hash(ref h)),
+        ("platoons", static (World w, ref StateHasher h) => w.Platoons.Hash(ref h)),
+        ("player", static (World w, ref StateHasher h) => w.Player.Hash(ref h)),
+
+        // only once a unique is tracked
+        ("uniques", static (World w, ref StateHasher h) => { if (w.Uniques.Count > 0) w.Uniques.Hash(ref h); }),
+
+        // only once a town with buildings registered
+        ("fixtures", static (World w, ref StateHasher h) => { if (w.Fixtures.Count > 0) w.Fixtures.Hash(ref h); }),
+
+        // only once the player has a site
+        ("buildings", static (World w, ref StateHasher h) => w.HashBuildings(ref h)),
+
+        // only once something lies on the ground
+        ("ground items", static (World w, ref StateHasher h) => { if (w.GroundItems.Count > 0) w.GroundItems.Hash(ref h); }),
+
+        // only once a town with item slots registered
+        ("item slots", static (World w, ref StateHasher h) => { if (w.ItemSlots.Count > 0) w.ItemSlots.Hash(ref h); }),
+
+        // only once the player has a working building
+        ("machines", static (World w, ref StateHasher h) => { if (w.Machines.Count > 0) w.Machines.Hash(ref h); }),
+
+        // only once research changed in play
+        ("research", static (World w, ref StateHasher h) => { if (w.Research.Changed) w.Research.Hash(ref h); }),
+
+        // only once a mod asked for a character id or a save held some
+        ("lasting ids", static (World w, ref StateHasher h) => { if (w.LastingIds.Any) w.LastingIds.Hash(ref h); }),
+
+        // only while a code mod's world state has a value
+        ("mod states", static (World w, ref StateHasher h) => w.HashModStates(ref h)),
+
+        ("systems", static (World w, ref StateHasher h) => w.HashSystems(ref h)),
+        ("hook faults", static (World w, ref StateHasher h) => w.HashHookFaults(ref h)),
+    ];
+
+    /// <summary>
+    /// The names of the parts of <see cref="StateHash"/>, in hashing order (<see cref="StatePartHash"/>).
+    /// </summary>
+    internal static IReadOnlyList<string> StatePartNames { get; } = [.. StateParts.Select(p => p.Name)];
+
+    /// <summary>
     /// A hash of the canonical state after the last tick: the tick number, every character's state in slot order and the free list. Equal worlds give
     /// equal hashes at any thread count.
     /// </summary>
@@ -1308,29 +1371,51 @@ public sealed partial class World : IDisposable
         var h = new StateHasher();
         h.Add(Seed);
         h.Add(Tick);
-        Characters.Hash(ref h);
-        Squads.Hash(ref h);
-        Platoons.Hash(ref h);
-        Player.Hash(ref h);
-        if (Uniques.Count > 0)
-            Uniques.Hash(ref h);   // only once a unique is tracked, so worlds without one hash as before
+        foreach (var (_, part) in StateParts) part(this, ref h);
 
-        if (Fixtures.Count > 0)
-            Fixtures.Hash(ref h);   // only once a town with buildings registered, so worlds without them hash as before
+        return h.Value;
+    }
 
-        if (Buildings.Count > 0 || Buildings.Towns.Count > 0)
-            Buildings.Hash(ref h);   // only once the player has a site, so worlds without one hash as before
+    /// <summary>
+    /// One part of <see cref="StateHash"/> hashed on its own (part <paramref name="part"/> of <see cref="StatePartNames"/>), so two runs that differ
+    /// can name the parts that do. During a tick it hashes the state as it stands (<see cref="AfterPhase"/>).
+    /// </summary>
+    internal ulong StatePartHash(int part)
+    {
+        var h = new StateHasher();
+        StateParts[part].Hash(this, ref h);
+        return h.Value;
+    }
 
-        if (GroundItems.Count > 0)
-            GroundItems.Hash(ref h);   // only once something lies on the ground, so worlds without hash as before
+    /// <summary>
+    /// The player's sites and towns' part of <see cref="StateHash"/>.
+    /// </summary>
+    void HashBuildings(ref StateHasher h)
+    {
+        if (Buildings.Count > 0 || Buildings.Towns.Count > 0) Buildings.Hash(ref h);
+    }
 
-        if (ItemSlots.Count > 0) ItemSlots.Hash(ref h);   // only once a town with item slots registered
-        if (Machines.Count > 0) Machines.Hash(ref h);   // only once the player has a working building
-        if (Research.Changed) Research.Hash(ref h);   // only once research changed in play
-        if (LastingIds.Any) LastingIds.Hash(ref h);   // only once a mod asked for a character id or a save held some
-        if (ModStatesOrNull is { Count: > 0 } modStates) modStates.Hash(ref h);   // only while a code mod's world state has a value
+    /// <summary>
+    /// The code mods' world states' part of <see cref="StateHash"/>.
+    /// </summary>
+    void HashModStates(ref StateHasher h)
+    {
+        if (ModStatesOrNull is { Count: > 0 } modStates) modStates.Hash(ref h);
+    }
+
+    /// <summary>
+    /// The hashed systems' part of <see cref="StateHash"/> (<see cref="IStateHashed"/>), in system order.
+    /// </summary>
+    void HashSystems(ref StateHasher h)
+    {
         foreach (var s in _systems) if (s is IStateHashed hashed) hashed.Hash(ref h);
+    }
 
+    /// <summary>
+    /// The code mod hooks' faults' part of <see cref="StateHash"/>: each hook adds its disabled or faulted entries, nothing while none failed.
+    /// </summary>
+    void HashHookFaults(ref StateHasher h)
+    {
         HashCombatHitObserverFaults(ref h);
         CombatHitFilters.HashFaults(ref h);
         TradePriceFilters.HashFaults(ref h);
@@ -1343,7 +1428,6 @@ public sealed partial class World : IDisposable
         CrimeObservers.HashFaults(ref h);
         Decisions.HashFaults(ref h);
         ModFaults.HashFaults(ref h);
-        return h.Value;
     }
 
     /// <summary>
