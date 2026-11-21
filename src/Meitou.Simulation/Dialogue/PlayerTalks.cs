@@ -83,7 +83,7 @@ sealed class PlayerTalks(DialogueSystem dialogue)
 
         if (dialogue.InConversation) return;
 
-        if (DialogueSystem.InTalkRange(table, p, n))
+        if (DialogueSystem.InTalkRange(world, p, n))
         {
             Arrive(world, talk, p);
             return;
