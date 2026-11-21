@@ -1,0 +1,4585 @@
+# Meitou's own texts (launcher, title menu, settings menu, notices) in Korean.
+# Kenshi's own texts come from locale/ko_KR/LC_MESSAGES/main.mo; this file only adds what Meitou shows.
+# Machine-translated; a native speaker's corrections are welcome (locale/ko_KR/meitou.po overrides without a rebuild).
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: ko_KR\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid " (Vulkan loader missing)"
+msgstr " (Vulkan 로더 없음)"
+
+msgid " (as the game)"
+msgstr " (게임과 동일)"
+
+msgid " (no upscaler: plain scaling)"
+msgstr " (업스케일러 없음: 단순 확대)"
+
+msgid " (not enabled above it: {1})"
+msgstr " (위에서 활성화되지 않음: {1})"
+
+msgid " Continuing '{1}'."
+msgstr " '{1}' 계속하는 중."
+
+msgid " Not on disk: {1}."
+msgstr " 디스크에 없음: {1}."
+
+msgid " Start the game once to write it again; nothing is changed here until then."
+msgstr " 게임을 한 번 시작하면 다시 기록됩니다. 그때까지 여기서는 아무것도 바뀌지 않습니다."
+
+msgid " Steam would not download {1}."
+msgstr " Steam이 {1}을(를) 다운로드하지 않았습니다."
+
+msgid "(started with Play), and a change here creates it. Until then the game uses its defaults."
+msgstr "(플레이로 시작할 때 생성), 여기서 변경하면 생성됩니다. 그때까지 게임은 기본값을 사용합니다."
+
+msgid "-Avg. Price"
+msgstr "-평균 가격"
+
+msgid "-Combat skills bonus"
+msgstr "-전투 기술 보너스"
+
+msgid "-Dodge skill effect"
+msgstr "-회피 기술 효과"
+
+msgid "-Encumbrance reduction"
+msgstr "-무게 부담 감소"
+
+msgid "-Max HP"
+msgstr "-최대 HP"
+
+msgid "-Price mark-up"
+msgstr "-가격 인상"
+
+msgid "-Sell value"
+msgstr "-판매가"
+
+msgid "-Stealth skill effect"
+msgstr "-은신 기술 효과"
+
+msgid "-Unarmed damage bonus"
+msgstr "-맨손 피해 보너스"
+
+msgid "0 (off)"
+msgstr "0 (끔)"
+
+msgid "0 (true slant)"
+msgstr "0 (실제 기울기)"
+
+msgid "0 off"
+msgstr "0 끔"
+
+msgid "1 change from the game"
+msgstr "게임 대비 변경 1개"
+
+msgid "1 landscape"
+msgstr "1 지형"
+
+msgid "1 post"
+msgstr "게시물 1개"
+
+msgid "1 unsaved change"
+msgstr "저장되지 않은 변경 1개"
+
+msgid "2 characters"
+msgstr "2 캐릭터"
+
+msgid "3 buildings"
+msgstr "3 건물"
+
+msgid "32 rays"
+msgstr "광선 32개"
+
+msgid "4 everything"
+msgstr "4 전부"
+
+msgid "64 rays"
+msgstr "광선 64개"
+
+msgid "8 nearest"
+msgstr "가장 가까운 8개"
+
+msgid ": error px"
+msgstr ": 오차 px"
+
+msgid ": technique"
+msgstr ": 기법"
+
+msgid "; showing the last list"
+msgstr "; 마지막 목록 표시 중"
+
+msgid "; showing what was read before"
+msgstr "; 이전에 읽은 내용 표시 중"
+
+msgid "A biome whose sounds were not loaded yet starts its day or night ambience by the time of day. The game plays the opposite one (night sounds by day) until the next biome or day change."
+msgstr "소리가 아직 로드되지 않은 생물군계는 시간대에 맞춰 낮 또는 밤 환경음을 시작합니다. 게임에서는 다음 생물군계나 낮밤이 바뀔 때까지 반대 환경음(낮에 밤 소리)을 재생합니다."
+
+msgid "A blow that destroys a character's head cuts it off, by the same rule the Dismemberment setting cuts off limbs. In the game a destroyed head only kills."
+msgstr "캐릭터의 머리를 파괴하는 공격은 머리를 잘라냅니다. 신체 절단 설정이 팔다리를 자르는 것과 같은 규칙입니다. 게임에서는 파괴된 머리는 죽이기만 합니다."
+
+msgid "A character knocked down or killed by a blow falls with its own momentum and is pushed away from the hit, harder the heavier the blow and most at the part that was struck, its arms and legs flung by it, and a cut-off head flies the same way. Limp bodies have joints that ease to a stop and a slight muscle tone, so they settle into natural poses. In the game a body drops where it stood, its joints stopping hard."
+msgstr "공격에 쓰러지거나 죽은 캐릭터는 자신의 운동량으로 쓰러지며 타격 지점에서 밀려납니다. 공격이 무거울수록, 맞은 부위일수록 더 세게 밀리고 팔다리도 휘둘리며, 잘린 머리도 같은 방향으로 날아갑니다. 축 늘어진 몸은 관절이 부드럽게 멈추고 약간의 근육 긴장이 있어 자연스러운 자세로 놓입니다. 게임에서는 몸이 그 자리에 주저앉고 관절이 딱 멈춥니다."
+
+msgid "A character on a bench with the table behind it sits facing away from the table. The game mirrors the bench's look point through the middle of the world map, so the sitter faces an unrelated direction."
+msgstr "뒤에 탁자가 있는 벤치의 캐릭터는 탁자를 등지고 앉습니다. 게임은 벤치의 시선 지점을 월드 맵 중앙을 기준으로 뒤집어서, 앉은 사람이 엉뚱한 방향을 봅니다."
+
+msgid "A character that takes a fatal hit explodes, covers everything around in blood and sends bones flying everywhere. Its gear falls to the ground around the spot."
+msgstr "치명타를 맞은 캐릭터는 폭발하여 주변을 피로 뒤덮고 뼈를 사방으로 날립니다. 장비는 그 자리 주변 땅에 떨어집니다."
+
+msgid "A character that turned its head toward what it was talking to or watching looks ahead again once it stops looking. In the game the head stays turned until the next thing it looks at."
+msgstr "대화 상대나 보던 것 쪽으로 고개를 돌린 캐릭터는 보기를 멈추면 다시 앞을 봅니다. 게임에서는 다음에 무언가를 볼 때까지 고개가 돌아가 있습니다."
+
+msgid "A character's bag window opens with their inventory until you close it with OPEN BAG. In the game every bag stays shut after loading until OPEN BAG is pressed for it."
+msgstr "캐릭터의 가방 창은 인벤토리와 함께 열리고, 가방 열기로 닫을 때까지 열려 있습니다. 게임에서는 로드 후 각 가방이 가방 열기를 누를 때까지 닫혀 있습니다."
+
+msgid "A double click on a squad member far from the view (or a double tap of their number) flies the camera there in an arc instead of cutting."
+msgstr "시야에서 먼 분대원을 더블 클릭(또는 번호를 두 번 누르기)하면 카메라가 끊기지 않고 호를 그리며 그곳으로 날아갑니다."
+
+msgid "A key of the mod {1}: {2}."
+msgstr "모드 {1}의 키: {2}."
+
+msgid "A left click on the ground ends the selection of the selected building and closes its panels. In the game the building stays selected."
+msgstr "땅을 왼쪽 클릭하면 선택된 건물의 선택이 해제되고 패널이 닫힙니다. 게임에서는 건물이 계속 선택되어 있습니다."
+
+msgid "A mod"
+msgstr "모드"
+
+msgid "A robot race: no skin scattering unless turned on."
+msgstr "로봇 종족: 켜지 않으면 피부 산란 없음."
+
+msgid "A save starts paused once it has loaded, so nothing happens before you look around. In the game it runs at once."
+msgstr "저장 파일은 로드 후 일시 정지 상태로 시작하므로 주위를 둘러보기 전에는 아무 일도 일어나지 않습니다. 게임에서는 바로 진행됩니다."
+
+msgid "A small catchlight on the eyes instead of a mirror of the landscape."
+msgstr "풍경이 비치는 대신 눈에 작은 반사광."
+
+msgid "A soft GPU allocation budget, not a hard reservation. Higher values keep more textures and draw distance resident; Metal uses unified memory shared with macOS and other apps."
+msgstr "고정 예약이 아닌 유연한 GPU 할당 예산. 값이 높을수록 더 많은 텍스처와 시야 거리를 상주시킵니다. Metal은 macOS 및 다른 앱과 공유하는 통합 메모리를 사용합니다."
+
+msgid "A soft sheen on the edges of cloth, a little on leather."
+msgstr "천 가장자리에 부드러운 광택, 가죽에도 약간."
+
+msgid "A squad coming back into the area around your squads has healed for the time it was away. In the game it comes back as it left."
+msgstr "분대 주변 지역으로 돌아온 분대는 떠나 있던 시간만큼 회복되어 있습니다. 게임에서는 떠날 때 모습 그대로 돌아옵니다."
+
+msgid "A swamp turtle butts and bites when it fights. In the game it fights with a sword or club drawn for it, whose moves its body cannot play, so its blows land without any motion."
+msgstr "늪 거북은 싸울 때 들이받고 뭅니다. 게임에서는 그를 위해 꺼낸 검이나 곤봉으로 싸우는데, 몸이 그 동작을 재생할 수 없어 공격이 아무 움직임 없이 적중합니다."
+
+msgid "A town far from your squads is taken over or destroyed as soon as its story calls for it, so the map and the factions show it at once. In the game it changes only when you come near."
+msgstr "분대에서 멀리 떨어진 마을은 이야기가 요구하는 즉시 점령되거나 파괴되므로 지도와 세력에 바로 나타납니다. 게임에서는 가까이 가야만 바뀝니다."
+
+msgid "A traced cache adds fine indirect light near the camera."
+msgstr "추적 캐시가 카메라 근처에 세밀한 간접광을 더합니다."
+
+msgid "A trader or anyone else checking your squad for an item, a race or a carried body never turns the conversation to one of your animals. In the game a pack animal carrying the item takes over the talk, so trade and the other answers do nothing."
+msgstr "아이템, 종족 또는 운반 중인 몸을 찾으려 분대를 확인하는 상인 등은 대화를 당신의 동물에게 돌리지 않습니다. 게임에서는 그 아이템을 운반하는 짐승이 대화를 넘겨받아 거래와 다른 대답이 아무 효과가 없습니다."
+
+msgid "A turret's gunner turns with the gun, facing where it aims. In the game the gunner keeps facing the turret, so once the gun swings toward a target the gunner looks off to the side."
+msgstr "포탑 사수는 무기와 함께 돌아 조준하는 방향을 봅니다. 게임에서는 사수가 포탑 쪽을 계속 보기 때문에 무기가 목표로 돌면 옆을 보게 됩니다."
+
+msgid "A wounded prisoner on a pole or in a cage keeps the pole's or cage's pose. In the game it clutches its wounds there instead."
+msgstr "기둥에 묶이거나 우리에 갇힌 부상당한 포로는 기둥이나 우리의 자세를 유지합니다. 게임에서는 거기서 상처를 움켜쥡니다."
+
+msgid "ADD SQUAD"
+msgstr "분대 추가"
+
+msgid ""
+"Activates sneak mode so the character will try to go unnoticed.\n"
+"If the character is unconscious, when he wakes up he will stay down on the ground and crawl to avoid detection."
+msgstr ""
+"은신 모드를 켜 캐릭터가 들키지 않으려고 합니다.\n"
+"캐릭터가 의식을 잃은 상태라면 깨어난 뒤 땅에 엎드린 채 기어서 발각을 피합니다."
+
+msgid "Add airglow to the night haze."
+msgstr "밤 안개에 대기광을 더합니다."
+
+msgid "Add animated waves and shoreline surf."
+msgstr "움직이는 파도와 해안의 부서지는 파도를 더합니다."
+
+msgid "Add contact shading around nearby surfaces and creases."
+msgstr "가까운 표면과 주름 주위에 접촉 음영을 더합니다."
+
+msgid "Add to jobs"
+msgstr "작업에 추가"
+
+msgid "Adds a generated frame between rendered ones: nearly twice the frame rate, a little more input delay."
+msgstr "렌더링한 프레임 사이에 생성된 프레임을 넣습니다: 프레임 속도가 거의 두 배, 입력 지연이 약간 늘어납니다."
+
+msgid "Adds a generated frame between rendered ones: nearly twice the frame rate, a little more input delay. Now: {1}"
+msgstr "렌더링한 프레임 사이에 생성된 프레임을 넣습니다: 프레임 속도가 거의 두 배, 입력 지연이 약간 늘어납니다. 현재: {1}"
+
+msgid "Adjust the blue shift of colours in low light."
+msgstr "어두운 빛에서 색의 푸른 이동을 조절합니다."
+
+msgid "Adjust the brightness of light scattered through the air."
+msgstr "공기 중에 산란된 빛의 밝기를 조절합니다."
+
+msgid "Adjust underwater visibility at a distance."
+msgstr "먼 거리의 수중 가시성을 조절합니다."
+
+msgid "Adjust visibility beneath the water surface."
+msgstr "수면 아래 가시성을 조절합니다."
+
+msgid "Advanced materials"
+msgstr "고급 재질"
+
+msgid "Advanced ragdolls"
+msgstr "고급 래그돌"
+
+msgid "Air scattering density; zero removes air scattering."
+msgstr "대기 산란 밀도. 0이면 대기 산란이 없어집니다."
+
+msgid "All"
+msgstr "전체"
+
+msgid "All Faithful"
+msgstr "모두 원작"
+
+msgid "All Meitou"
+msgstr "모두 Meitou"
+
+msgid "All fixes"
+msgstr "모든 수정"
+
+msgid "All gameplay changes"
+msgstr "모든 게임플레이 변경"
+
+msgid "Also keeps the surroundings of your other squads' members loaded, not only the squad on the squad bar. Costs more video memory."
+msgstr "분대 바의 분대뿐 아니라 다른 분대원들의 주변도 로드된 상태로 유지합니다. 비디오 메모리를 더 사용합니다."
+
+msgid "Always on"
+msgstr "항상 켜짐"
+
+msgid "Ambience after loading"
+msgstr "로드 후 환경음"
+
+msgid "Ambient"
+msgstr "환경광"
+
+msgid "Ambient light"
+msgstr "환경광"
+
+msgid "Ambient light strength"
+msgstr "환경광 강도"
+
+msgid "Ambient light strength (1 = game)"
+msgstr "환경광 강도 (1 = 게임)"
+
+msgid "Ambient occlusion"
+msgstr "앰비언트 오클루전"
+
+msgid "Ambient occlusion quality"
+msgstr "앰비언트 오클루전 품질"
+
+msgid "Ambient occlusion quality (GTAO)"
+msgstr "앰비언트 오클루전 품질 (GTAO)"
+
+msgid "Ambient occlusion technique"
+msgstr "앰비언트 오클루전 기법"
+
+msgid "Ambient occlusion type"
+msgstr "앰비언트 오클루전 종류"
+
+msgid "An HDR10 picture for an HDR display (turn HDR on in Windows first). Not with frame generation."
+msgstr "HDR 디스플레이용 HDR10 화면(먼저 Windows에서 HDR을 켜세요). 프레임 생성과 함께 쓸 수 없습니다."
+
+msgid "An animal in a cage or on a pole breathes, looks around and lies down when knocked out. In the game it stands frozen there, since the cage's poses are for people only."
+msgstr "우리 안이나 기둥의 동물은 숨 쉬고 주위를 둘러보며 기절하면 눕습니다. 게임에서는 우리 자세가 사람 전용이라 거기서 굳은 채 서 있습니다."
+
+msgid "Animals pick up items"
+msgstr "동물이 아이템을 줍기"
+
+msgid "Animals stay out of talks"
+msgstr "동물은 대화에서 제외"
+
+msgid "Animals, bandits and other wild squads keep their characters, wounds and places when the area around them unloads, and are there again when you come back. In the game they are removed and new ones are made."
+msgstr "동물, 도적 및 기타 야생 분대는 주변 지역이 언로드되어도 캐릭터, 상처, 위치를 유지하고 돌아오면 다시 그곳에 있습니다. 게임에서는 제거되고 새로 만들어집니다."
+
+msgid "Anisotropic filtering"
+msgstr "비등방성 필터링"
+
+msgid "Anisotropic filtering (texture filtering)"
+msgstr "비등방성 필터링 (텍스처 필터링)"
+
+msgid "Anti-aliasing: 0 off 1 FXAA 2 SMAA 3 TAA 4 FSR 5 DLSS"
+msgstr "안티앨리어싱: 0 끔 1 FXAA 2 SMAA 3 TAA 4 FSR 5 DLSS"
+
+msgid "Aperture"
+msgstr "조리개"
+
+msgid "Apply"
+msgstr "적용"
+
+msgid "Apply the scene's colour and contrast adjustments."
+msgstr "장면의 색과 대비 조정을 적용합니다."
+
+msgid "Armour plates shine as bare metal wherever they have any gloss. Off: dull, painted or rusty plate stays dull. An armour a mod gives its own metalness keeps it."
+msgstr "갑옷 판은 광택이 조금이라도 있으면 맨 금속처럼 빛납니다. 끔: 칙칙하거나 칠해졌거나 녹슨 판은 칙칙하게 유지됩니다. 모드가 자체 금속도를 준 갑옷은 그것을 유지합니다."
+
+msgid "Arrange mods"
+msgstr "모드 정렬"
+
+msgid "As in the game, the camera (the free camera too) cannot go farther than 2250 units from the nearest of your characters. Off, it can fly anywhere in the world."
+msgstr "게임과 같이 카메라(자유 카메라 포함)는 가장 가까운 캐릭터에서 2250 단위 이상 멀어질 수 없습니다. 끄면 세계 어디로든 날아갈 수 있습니다."
+
+msgid "Ask the running Steam client to download or update your subscribed Kenshi workshop mods; subscribe in Steam"
+msgstr "실행 중인 Steam 클라이언트에 구독한 Kenshi 창작마당 모드를 다운로드하거나 업데이트하도록 요청합니다. 구독은 Steam에서 하세요"
+
+msgid "Asking Steam for your workshop mods..."
+msgstr "Steam에 창작마당 모드를 요청하는 중..."
+
+msgid "Asking Steam to subscribe..."
+msgstr "Steam에 구독을 요청하는 중..."
+
+msgid "Assign a control"
+msgstr "조작 지정"
+
+msgid "At startup, install a new launcher version and restart into it."
+msgstr "시작할 때 새 런처 버전을 설치하고 그것으로 다시 시작합니다."
+
+msgid "Attach a navmesh screenshot (only in a game)"
+msgstr "내비메시 스크린샷 첨부 (게임 중에만)"
+
+msgid "Attach a screenshot (none was taken)"
+msgstr "스크린샷 첨부 (찍힌 것 없음)"
+
+msgid "Attach a screenshot of the game"
+msgstr "게임 스크린샷 첨부"
+
+msgid "Attach a screenshot with the navmesh drawn over it"
+msgstr "내비메시를 겹친 스크린샷 첨부"
+
+msgid "Attach the action and dialogue logs (what characters did and said)"
+msgstr "행동 및 대화 기록 첨부 (캐릭터가 한 일과 말)"
+
+msgid "Attackers per target"
+msgstr "대상당 공격자 수"
+
+msgid "Auto"
+msgstr "자동"
+
+msgid "Auto (recommended)"
+msgstr "자동 (권장)"
+
+msgid "Auto uses Vulkan when MoltenVK is installed, otherwise Metal."
+msgstr "자동은 MoltenVK가 설치되어 있으면 Vulkan, 아니면 Metal을 사용합니다."
+
+msgid "Auto uses Vulkan when MoltenVK is installed, otherwise Metal. This overrides --renderer in Launch arguments."
+msgstr "자동은 MoltenVK가 설치되어 있으면 Vulkan, 아니면 Metal을 사용합니다. 실행 인수의 --renderer보다 우선합니다."
+
+msgid "Auto: about a third of this Mac's memory, from 5120 to 10240 MB, so a larger Mac keeps more resident."
+msgstr "자동: 이 Mac 메모리의 약 3분의 1, 5120~10240 MB. 큰 Mac일수록 더 많이 상주시킵니다."
+
+msgid "Auto: {1} (Vulkan loader found)."
+msgstr "자동: {1} (Vulkan 로더 있음)."
+
+msgid "Auto: {1} (no Vulkan loader)."
+msgstr "자동: {1} (Vulkan 로더 없음)."
+
+msgid "Auto: {1}."
+msgstr "자동: {1}."
+
+msgid "Automatic"
+msgstr "자동"
+
+msgid "Automatic ({1})"
+msgstr "자동 ({1})"
+
+msgid "Average minutes of silence between pieces of biome music."
+msgstr "생물군계 음악 곡 사이의 평균 무음 시간(분)."
+
+msgid "BACKPACK"
+msgstr "배낭"
+
+msgid "BUILDING"
+msgstr "건물"
+
+msgid "Back to the game's value."
+msgstr "게임 값으로 되돌립니다."
+
+msgid "Back to the look's value"
+msgstr "룩 값으로 되돌리기"
+
+msgid "Bags in the inventory"
+msgstr "인벤토리 속 가방"
+
+msgid "Balance change: a dodge or block that succeeds its roll but starts a moment late still works, instead of failing as in the game. Makes skilled fighters much harder to wear down when several enemies attack at once."
+msgstr "밸런스 변경: 판정에는 성공했지만 한순간 늦게 시작한 회피나 방어도 게임처럼 실패하지 않고 통합니다. 여러 적이 동시에 공격할 때 숙련된 전사를 훨씬 지치게 하기 어려워집니다."
+
+msgid "Balanced"
+msgstr "균형"
+
+msgid "Balanced — 6144 MB"
+msgstr "균형 — 6144 MB"
+
+msgid "Balanced: more resident detail than Safe, with some headroom for macOS and other apps."
+msgstr "균형: 안전보다 더 많은 세부를 상주시키고 macOS와 다른 앱을 위한 여유도 남깁니다."
+
+msgid "Being dismantled"
+msgstr "해체 중"
+
+msgid "Bench facing"
+msgstr "벤치 방향"
+
+msgid "Beyond it the terrain shows flat ground colour instead of textures. Shorter is cheaper."
+msgstr "이 거리 너머의 지형은 텍스처 대신 평평한 지면 색을 보여 줍니다. 짧을수록 가볍습니다."
+
+msgid "Billboard transition distance for large foliage."
+msgstr "큰 식생의 빌보드 전환 거리."
+
+msgid "Binding cleared."
+msgstr "지정이 해제되었습니다."
+
+msgid "Blades keep the blood of what they wound and dry dark; armour and clothing show the wounds under them."
+msgstr "칼날은 벤 것의 피가 남아 검게 마르고, 갑옷과 옷은 그 아래 상처를 보여 줍니다."
+
+msgid "Blend more ACES into the hybrid tone mapping curve."
+msgstr "하이브리드 톤 매핑 곡선에 ACES를 더 섞습니다."
+
+msgid "Blood --"
+msgstr "혈액 --"
+
+msgid "Blood cells"
+msgstr "혈흔 셀"
+
+msgid "Blood decals drawn"
+msgstr "그려지는 혈흔 데칼"
+
+msgid "Blood on surfaces"
+msgstr "표면의 피"
+
+msgid "Blood on weapons and gear"
+msgstr "무기와 장비의 피"
+
+msgid "Bloody footprints"
+msgstr "피 묻은 발자국"
+
+msgid "Bloom"
+msgstr "블룸"
+
+msgid "Bloom strength"
+msgstr "블룸 강도"
+
+msgid "Bloom strength (0 = game)"
+msgstr "블룸 강도 (0 = 게임)"
+
+msgid "Blur what is out of focus, as a lens does, in the free and cinematic cameras."
+msgstr "자유 카메라와 시네마틱 카메라에서 초점 밖을 렌즈처럼 흐리게 합니다."
+
+msgid "Body --"
+msgstr "신체 --"
+
+msgid "Bolt tracers"
+msgstr "볼트 예광"
+
+msgid "Borderless"
+msgstr "테두리 없음"
+
+msgid "Bounced light indoors too."
+msgstr "실내에서도 반사광을 사용합니다."
+
+msgid "Bounced light: the game's flat ambient, ray-traced probes, or probes with a fine cache near the camera. Needs ray tracing."
+msgstr "반사광: 게임의 평평한 환경광, 레이 트레이싱 프로브, 또는 카메라 근처에 세밀한 캐시를 둔 프로브. 레이 트레이싱이 필요합니다."
+
+msgid "Brighten or darken nights further, on top of Ambient light strength."
+msgstr "환경광 강도에 더해 밤을 더 밝게 하거나 어둡게 합니다."
+
+msgid "Brightness of white, in nits. Automatic matches the Windows desktop."
+msgstr "흰색 밝기(니트). 자동은 Windows 바탕 화면에 맞춥니다."
+
+msgid "Browse"
+msgstr "찾아보기"
+
+msgid "Build keys take a key, not a mouse button. Choose a key, or Esc to cancel."
+msgstr "건설 키에는 마우스 버튼이 아닌 키를 지정합니다. 키를 고르거나 Esc로 취소하세요."
+
+msgid "Building outline"
+msgstr "건물 윤곽선"
+
+msgid "Buildings, rocks and characters block the lamps' light. Needs ray tracing."
+msgstr "건물, 바위, 캐릭터가 램프 빛을 가립니다. 레이 트레이싱이 필요합니다."
+
+msgid "Built for Meitou {1} (checked when the game starts)"
+msgstr "Meitou {1}용 (게임 시작 시 확인)"
+
+msgid "Built in"
+msgstr "내장"
+
+msgid "Built into Meitou: {1}; this mod is not run"
+msgstr "Meitou에 내장됨: {1}. 이 모드는 실행되지 않습니다"
+
+msgid "CANCEL"
+msgstr "취소"
+
+msgid "CHARACTER STATS"
+msgstr "캐릭터 능력치"
+
+msgid "CONTAINER"
+msgstr "보관함"
+
+msgid "COPY LINK"
+msgstr "링크 복사"
+
+msgid "CREDITS"
+msgstr "제작진"
+
+msgid "Cage"
+msgstr "우리"
+
+msgid "Caged animals idle"
+msgstr "우리 속 동물 대기"
+
+msgid "Camera"
+msgstr "카메라"
+
+msgid "Camera effects in the strategy camera"
+msgstr "전략 카메라의 카메라 효과"
+
+msgid "Camera move speed"
+msgstr "카메라 이동 속도"
+
+msgid "Camera rotation speed"
+msgstr "카메라 회전 속도"
+
+msgid "Camera smoothing"
+msgstr "카메라 부드럽게"
+
+msgid "Camera stays near your squads"
+msgstr "카메라를 분대 근처에 유지"
+
+msgid "Camera zoom speed"
+msgstr "카메라 확대/축소 속도"
+
+msgid "Camera: you hear the world where the camera is. Character: you hear it where your first selected character stands (from the camera while nobody is selected)."
+msgstr "카메라: 카메라가 있는 곳에서 세상의 소리를 듣습니다. 캐릭터: 처음 선택한 캐릭터가 선 곳에서 듣습니다(아무도 선택하지 않았으면 카메라에서)."
+
+msgid "Cancel Construction"
+msgstr "건설 취소"
+
+msgid "Cancel the download of {1}"
+msgstr "{1} 다운로드 취소"
+
+msgid "Cascades past traced shadows"
+msgstr "추적 그림자 너머의 캐스케이드"
+
+msgid "Censorship"
+msgstr "검열"
+
+msgid "Centre the camera on the selected character."
+msgstr "선택한 캐릭터에 카메라를 맞춥니다."
+
+msgid "Change the Kenshi folder"
+msgstr "Kenshi 폴더 변경"
+
+msgid "Character"
+msgstr "캐릭터"
+
+msgid "Character draw distance"
+msgstr "캐릭터 그리기 거리"
+
+msgid "Character editor bar"
+msgstr "캐릭터 편집기 술집"
+
+msgid "Character flight time"
+msgstr "캐릭터로 이동하는 시간"
+
+msgid "Character flights"
+msgstr "캐릭터로 카메라 이동"
+
+msgid "Character levels"
+msgstr "캐릭터 세부 수준"
+
+msgid "Character {1} of {2} tried to spawn inside walls!"
+msgstr "{2}명 중 {1}번째 캐릭터가 벽 안에 생성되려 했습니다!"
+
+msgid "Characters with the medic job will also heal downed characters of factions that are not hostile"
+msgstr "의무병 작업을 가진 캐릭터는 적대적이지 않은 세력의 쓰러진 캐릭터도 치료합니다"
+
+msgid "Characters with the medic job will heal any downed character, enemies included"
+msgstr "의무병 작업을 가진 캐릭터는 적을 포함한 모든 쓰러진 캐릭터를 치료합니다"
+
+msgid "Charge:"
+msgstr "충전:"
+
+msgid "Chase"
+msgstr "추격"
+
+msgid "Check"
+msgstr "확인"
+
+msgid "Check again for a Vulkan loader"
+msgstr "Vulkan 로더 다시 확인"
+
+msgid "Check for releases"
+msgstr "릴리스 확인"
+
+msgid "Checking GitHub for releases..."
+msgstr "GitHub에서 릴리스를 확인하는 중..."
+
+msgid "Chinese"
+msgstr "중국어"
+
+msgid "Choose a character"
+msgstr "캐릭터 선택"
+
+msgid "Choose a character first: click one, or use the arrows"
+msgstr "먼저 캐릭터를 고르세요: 클릭하거나 화살표를 사용하세요"
+
+msgid "Choose a full path for the install folder."
+msgstr "설치 폴더의 전체 경로를 고르세요."
+
+msgid "Choose how bright scene colours fit the display range."
+msgstr "장면의 밝은 색을 디스플레이 범위에 어떻게 맞출지 고릅니다."
+
+msgid "Choose original Kenshi skins or Meitou materials."
+msgstr "Kenshi 원작 스킨 또는 Meitou 재질을 고릅니다."
+
+msgid "Choose the original Kenshi title screen or the Meitou main menu over a live world scene, whatever the UI style."
+msgstr "UI 스타일과 상관없이 Kenshi 원작 타이틀 화면 또는 살아 있는 세계 장면 위의 Meitou 메인 메뉴를 고릅니다."
+
+msgid "Choose the preset for this computer's graphics card, memory and processor."
+msgstr "이 컴퓨터의 그래픽 카드, 메모리, 프로세서에 맞는 프리셋을 고릅니다."
+
+msgid "Choose the version to play"
+msgstr "플레이할 버전 선택"
+
+msgid "Choose which parts of the scene appear in reflections."
+msgstr "반사에 나타날 장면 요소를 고릅니다."
+
+msgid "Clear cache"
+msgstr "캐시 지우기"
+
+msgid "Clear cached files?"
+msgstr "캐시된 파일을 지울까요?"
+
+msgid "Click a character to choose it    Drag the chosen one to move it    Ctrl + click sets the focus point    The arrows step through those in view    Drag an arrow to move, a ring to turn"
+msgstr "캐릭터를 클릭해 선택    선택한 캐릭터를 끌어 이동    Ctrl + 클릭으로 초점 지정    화살표로 화면 속 캐릭터 순회    화살표를 끌어 이동, 고리를 끌어 회전"
+
+msgid "Click a preset to use it    Right click to rename it    Wheel or the arrows to see the others"
+msgstr "프리셋을 클릭해 사용    오른쪽 클릭으로 이름 변경    휠이나 화살표로 다른 프리셋 보기"
+
+msgid "Click again"
+msgstr "다시 클릭"
+
+msgid "Click away deselects"
+msgstr "다른 곳 클릭 시 선택 해제"
+
+msgid "Click to install"
+msgstr "클릭하여 설치"
+
+msgid "Close Doors"
+msgstr "문 닫기"
+
+msgid "Cloth sheen"
+msgstr "천 광택"
+
+msgid "Cloud height"
+msgstr "구름 높이"
+
+msgid "Cloud height (Meitou)"
+msgstr "구름 높이 (Meitou)"
+
+msgid "Cloud shadows"
+msgstr "구름 그림자"
+
+msgid "Cloud shadows in fog"
+msgstr "안개 속 구름 그림자"
+
+msgid "Clouds"
+msgstr "구름"
+
+msgid "Clouds shade the bounced light and the light shafts."
+msgstr "구름이 반사광과 빛줄기를 가립니다."
+
+msgid "Code mod: runs C# code of its own"
+msgstr "코드 모드: 자체 C# 코드를 실행합니다"
+
+msgid "Collapse all"
+msgstr "모두 접기"
+
+msgid "Colour grading"
+msgstr "색 보정"
+
+msgid "Composition"
+msgstr "구도"
+
+msgid "Cone"
+msgstr "원뿔"
+
+msgid "Conscious"
+msgstr "의식 있음"
+
+msgid "Contact shadows"
+msgstr "접촉 그림자"
+
+msgid "Contrast"
+msgstr "대비"
+
+msgid "Cooldown {1,num} seconds"
+msgstr "재사용 대기 {1,num}초"
+
+msgid "Copied '{1}' and opened brew.sh; install Homebrew, run it in Terminal, then press Check."
+msgstr "'{1}'을(를) 복사하고 brew.sh를 열었습니다. Homebrew를 설치하고 터미널에서 실행한 뒤 확인을 누르세요."
+
+msgid "Copied to the clipboard."
+msgstr "클립보드에 복사했습니다."
+
+msgid "Copy"
+msgstr "복사"
+
+msgid "Copy all problems"
+msgstr "모든 문제 복사"
+
+msgid "Copy the Homebrew command for Vulkan, or open brew.sh"
+msgstr "Vulkan용 Homebrew 명령 복사 또는 brew.sh 열기"
+
+msgid "Could not delete the preset: {1}"
+msgstr "프리셋을 삭제할 수 없습니다: {1}"
+
+msgid "Could not detect the hardware: {1}"
+msgstr "하드웨어를 감지할 수 없습니다: {1}"
+
+msgid "Could not move the versions to {1}: {2}"
+msgstr "버전을 {1}(으)로 옮길 수 없습니다: {2}"
+
+msgid "Could not read the last save: {1}"
+msgstr "마지막 저장 파일을 읽을 수 없습니다: {1}"
+
+msgid "Could not read the mods: {1}"
+msgstr "모드를 읽을 수 없습니다: {1}"
+
+msgid "Could not read the save '{1}': {2}"
+msgstr "저장 파일 '{1}'을(를) 읽을 수 없습니다: {2}"
+
+msgid "Could not remove {1}: {2}"
+msgstr "{1}을(를) 제거할 수 없습니다: {2}"
+
+msgid "Could not save the mod list: {1}"
+msgstr "모드 목록을 저장할 수 없습니다: {1}"
+
+msgid "Could not start Meitou {1}: {2}"
+msgstr "Meitou {1}을(를) 시작할 수 없습니다: {2}"
+
+msgid "Could not update Kenshi's language setting: {1}"
+msgstr "Kenshi의 언어 설정을 업데이트할 수 없습니다: {1}"
+
+msgid "Could not use {1}: {2}"
+msgstr "{1}을(를) 사용할 수 없습니다: {2}"
+
+msgid "Could not write the preset: "
+msgstr "프리셋을 기록할 수 없습니다: "
+
+msgid "Could not write the preset: {1}"
+msgstr "프리셋을 기록할 수 없습니다: {1}"
+
+msgid "Could not write {1}: {2}"
+msgstr "{1}을(를) 기록할 수 없습니다: {2}"
+
+msgid "Custom"
+msgstr "사용자 지정"
+
+msgid "Custom value"
+msgstr "사용자 지정 값"
+
+msgid "Cycle GPU, CPU and hidden profiler views."
+msgstr "GPU, CPU, 숨김 프로파일러 보기를 전환합니다."
+
+msgid "DLSS preset"
+msgstr "DLSS 프리셋"
+
+msgid "Damage floaters"
+msgstr "피해 숫자 표시"
+
+msgid "Darken the picture towards its corners, as a camera lens does, in every camera."
+msgstr "모든 카메라에서 카메라 렌즈처럼 화면 모서리를 어둡게 합니다."
+
+msgid "Darkening in creases and under objects: screen-space (SSAO) or ground-truth (GTAO, more accurate)."
+msgstr "주름과 물체 아래의 어두움: 화면 공간(SSAO) 또는 실측 기반(GTAO, 더 정확)."
+
+msgid "Data folder"
+msgstr "데이터 폴더"
+
+msgid "Debug build"
+msgstr "디버그 빌드"
+
+msgid "Decapitation"
+msgstr "참수"
+
+msgid "Default"
+msgstr "기본값"
+
+msgid "Default settings restored."
+msgstr "기본 설정으로 복원했습니다."
+
+msgid "Delete billboard cache"
+msgstr "빌보드 캐시 삭제"
+
+msgid "Delete cached billboards; they are rebuilt when needed."
+msgstr "캐시된 빌보드를 삭제합니다. 필요할 때 다시 만들어집니다."
+
+msgid "Delete preset?"
+msgstr "프리셋을 삭제할까요?"
+
+msgid "Delivering materials"
+msgstr "자재 운반 중"
+
+msgid "Depth of field"
+msgstr "피사계 심도"
+
+msgid "Depth of field aperture"
+msgstr "피사계 심도 조리개"
+
+msgid "Depth of field aperture (f-number)"
+msgstr "피사계 심도 조리개 (F값)"
+
+msgid "Depth on the ground and smoother rocks and hills, from tessellation and parallax."
+msgstr "테셀레이션과 시차로 만든 지면의 깊이와 더 매끄러운 바위와 언덕."
+
+msgid "Detail"
+msgstr "세부"
+
+msgid "Detect"
+msgstr "감지"
+
+msgid "Detected: {1}"
+msgstr "감지됨: {1}"
+
+msgid "Detecting"
+msgstr "감지 중"
+
+msgid "Dismantling"
+msgstr "해체 중"
+
+msgid "Display"
+msgstr "디스플레이"
+
+msgid "Distance over which submerged scenery stays visible."
+msgstr "물에 잠긴 풍경이 보이는 거리."
+
+msgid "Distance where foliage changes to billboard images."
+msgstr "식생이 빌보드 이미지로 바뀌는 거리."
+
+msgid "Distances"
+msgstr "거리"
+
+msgid "Distances, shadows, detail and Meitou's effects together, by class of graphics card. Low is the same as --low-end."
+msgstr "거리, 그림자, 세부, Meitou 효과를 그래픽 카드 등급별로 한꺼번에 설정합니다. 낮음은 --low-end와 같습니다."
+
+msgid "Distant towns"
+msgstr "먼 마을"
+
+msgid "Distant towns (zones)"
+msgstr "먼 마을 (구역)"
+
+msgid "Dithering"
+msgstr "디더링"
+
+msgid "Do you want to subscribe now?"
+msgstr "지금 구독하시겠습니까?"
+
+msgid "Don't offer this version again; a newer one will be"
+msgstr "이 버전을 다시 제안하지 않기. 더 새로운 버전은 제안됩니다"
+
+msgid "Door"
+msgstr "문"
+
+msgid "Door break sound"
+msgstr "문 부서지는 소리"
+
+msgid "Doors and gates make their breaking sound when they are bashed or broken open. The game never picks which breaking sound to play, so it plays none."
+msgstr "문과 성문을 두드리거나 부수어 열면 부서지는 소리가 납니다. 게임은 어떤 소리를 낼지 고르지 않아 아무 소리도 내지 않습니다."
+
+msgid "Download and install {1}"
+msgstr "{1} 다운로드 및 설치"
+
+msgid "Download and install {1}; the arrow plays an installed version"
+msgstr "{1} 다운로드 및 설치. 화살표로 설치된 버전을 플레이"
+
+msgid "Download of {1} cancelled."
+msgstr "{1} 다운로드를 취소했습니다."
+
+msgid "Download the new launcher and restart into it"
+msgstr "새 런처를 다운로드하고 다시 시작"
+
+msgid "Downloading {1}"
+msgstr "{1} 다운로드 중"
+
+msgid "Downloading {1}..."
+msgstr "{1} 다운로드 중..."
+
+msgid "Drag to change the load order; Ctrl+click or Shift+click selects several mods to move together"
+msgstr "끌어서 로드 순서 변경. Ctrl+클릭 또는 Shift+클릭으로 여러 모드를 골라 함께 이동"
+
+msgid "Draw a faint streak behind a crossbow bolt in flight."
+msgstr "날아가는 석궁 볼트 뒤에 희미한 궤적을 그립니다."
+
+msgid "Draw blood on every terrain cell within decal range, not only the 8 nearest."
+msgstr "가장 가까운 8개뿐 아니라 데칼 범위 안의 모든 지형 셀에 피를 그립니다."
+
+msgid "Draw distances"
+msgstr "그리기 거리"
+
+msgid "Draw distant foliage using baked billboard images."
+msgstr "먼 식생을 미리 만든 빌보드 이미지로 그립니다."
+
+msgid "Draw individual stars instead of a starfield texture."
+msgstr "별 하늘 텍스처 대신 개별 별을 그립니다."
+
+msgid "Draw inventory item icons supersampled, without jagged edges."
+msgstr "인벤토리 아이템 아이콘을 슈퍼샘플링으로 그려 계단 현상을 없앱니다."
+
+msgid "Draw the game's yellow-green ceiling lamps, spotlights and searchlights amber, as bright as they were."
+msgstr "게임의 황록색 천장 램프, 스포트라이트, 탐조등을 같은 밝기의 호박색으로 그립니다."
+
+msgid "Draw the interface at the screen's size over a stretched picture (virtual Retina pixels, or a smaller render resolution), so it stays sharp. Off: it is drawn at the render size with the picture."
+msgstr "늘린 화면 위에 화면 크기로 인터페이스를 그려 선명하게 유지합니다(가상 Retina 픽셀 또는 더 작은 렌더링 해상도). 끔: 화면과 함께 렌더링 크기로 그립니다."
+
+msgid "Dropped items kept"
+msgstr "떨어뜨린 아이템 유지 수"
+
+msgid "Drops of water stand on wet skin, leather and metal, in the rain and after a swim."
+msgstr "비 속이나 수영 후 젖은 피부, 가죽, 금속에 물방울이 맺힙니다."
+
+msgid "ENTER"
+msgstr "입장"
+
+msgid "EXIT"
+msgstr "나가기"
+
+msgid "Each has a port for Meitou on the Steam workshop, kept up by its maintainer and endorsed by Meitou:"
+msgstr "각각 Steam 창작마당에 Meitou용 이식판이 있으며, 관리자가 유지하고 Meitou가 추천합니다:"
+
+msgid "Each light probe traces 64 rays instead of 32: less noise in bounced light, about twice the probe cost."
+msgstr "각 조명 프로브가 32개 대신 64개의 광선을 추적합니다: 반사광 노이즈가 줄고 프로브 비용은 약 두 배."
+
+msgid "Edit characters in a bar at night instead of on the platform."
+msgstr "플랫폼 대신 밤의 술집에서 캐릭터를 편집합니다."
+
+msgid "Empties file paths in {1} records of {2}: it likely belongs above them"
+msgstr "{2}의 레코드 {1}개에서 파일 경로를 비웁니다: 그것들보다 위에 두어야 할 것 같습니다"
+
+msgid "English"
+msgstr "영어"
+
+msgid "Enhanced hardware mouse"
+msgstr "향상된 하드웨어 마우스"
+
+msgid "Enter a valid number, or press Esc to cancel."
+msgstr "올바른 숫자를 입력하거나 Esc를 눌러 취소하세요."
+
+msgid "Every bug on this page as the game ships it, or every fix."
+msgstr "이 페이지의 모든 버그를 출시된 게임 그대로 두거나 모두 수정합니다."
+
+msgid "Every change on this page as the game plays, or every Meitou change."
+msgstr "이 페이지의 모든 변경을 게임 그대로 두거나 모두 Meitou 변경으로 합니다."
+
+msgid "Every graphics setting back to the game's defaults, also those only in the game's Tab panel."
+msgstr "모든 그래픽 설정을 게임 기본값으로 되돌립니다. 게임의 Tab 패널에만 있는 설정도 포함합니다."
+
+msgid "Every tutorial can show again, the ones already seen included."
+msgstr "이미 본 것을 포함해 모든 튜토리얼이 다시 표시될 수 있습니다."
+
+msgid "Example"
+msgstr "예시"
+
+msgid "Execution"
+msgstr "처형"
+
+msgid "Expand all"
+msgstr "모두 펼치기"
+
+msgid "Exposure"
+msgstr "노출"
+
+msgid "Extreme"
+msgstr "익스트림"
+
+msgid "Eye catchlights"
+msgstr "눈동자 반사광"
+
+msgid "FAITHFUL"
+msgstr "원작"
+
+msgid "FENCING CHANCE:"
+msgstr "장물 판매 확률:"
+
+msgid "FENCING ITEM"
+msgstr "장물 아이템"
+
+msgid "FSR 3"
+msgstr "FSR 3"
+
+msgid "FSR 3: any GPU, needs the FidelityFX library. DLSS: Windows with an RTX 40 or later, needs Streamline's frame generation DLLs."
+msgstr "FSR 3: 모든 GPU, FidelityFX 라이브러리 필요. DLSS: RTX 40 이상이 있는 Windows, Streamline의 프레임 생성 DLL 필요."
+
+msgid "Fade cloud shadows in fog, so foggy places stay lit."
+msgstr "안개 속에서는 구름 그림자를 약하게 하여 안개 낀 곳이 밝게 유지되게 합니다."
+
+msgid "Fade surface bumps where the sun only grazes, so the ground does not break into bright and black patches."
+msgstr "햇빛이 비스듬히 스치는 곳에서는 표면 요철을 약하게 하여 땅이 밝고 검은 얼룩으로 깨지지 않게 합니다."
+
+msgid "Faithful"
+msgstr "원작"
+
+msgid "Faithful (in series)"
+msgstr "원작 (순차)"
+
+msgid "Faithful (off)"
+msgstr "원작 (끔)"
+
+msgid "Faithful cascades"
+msgstr "원작 캐스케이드"
+
+msgid "Faithful shows the game's logos at startup (Faithful UI); a key or a click skips each one. Meitou shows the menu as soon as the game has loaded."
+msgstr "원작은 시작할 때 게임 로고를 표시합니다(원작 UI). 키나 클릭으로 하나씩 건너뜁니다. Meitou는 게임이 로드되자마자 메뉴를 표시합니다."
+
+msgid "Faithful, as in the game: when the camera comes to places that are not loaded yet (a jump to a squad far away), the game pauses and shows Loading... until they are. Meitou: the game runs on while they load."
+msgstr "원작, 게임과 동일: 카메라가 아직 로드되지 않은 곳에 오면(멀리 있는 분대로 이동 등) 게임이 일시 정지하고 로드될 때까지 로딩 중...을 표시합니다. Meitou: 로드하는 동안에도 게임이 계속 진행됩니다."
+
+msgid "Faithful, as in the game: your pack animals pick up an item you point them at, into the bag they wear (or wear a bag they pick up). Meitou: only people pick items up, and an animal only a limb to carry in its mouth."
+msgstr "원작, 게임과 동일: 짐승은 가리킨 아이템을 메고 있는 가방에 줍습니다(또는 주운 가방을 멥니다). Meitou: 아이템은 사람만 줍고, 동물은 입에 물고 갈 팔다리만 줍습니다."
+
+msgid "Faithful: every graphics feature as the game ships it."
+msgstr "원작: 모든 그래픽 기능을 출시된 게임 그대로."
+
+msgid "Far grass cover"
+msgstr "먼 풀 덮개"
+
+msgid "Far impostors"
+msgstr "먼 임포스터"
+
+msgid "Far water"
+msgstr "먼 물"
+
+msgid "Far water clarity"
+msgstr "먼 물의 투명도"
+
+msgid "Far water clarity (Meitou)"
+msgstr "먼 물의 투명도 (Meitou)"
+
+msgid "Farms, mines, wells and generators away from your squads keep working. In the game they stop while their area is unloaded, and only farms catch up when you come back."
+msgstr "분대에서 멀리 떨어진 농장, 광산, 우물, 발전기도 계속 작동합니다. 게임에서는 해당 지역이 언로드된 동안 멈추고, 돌아왔을 때 농장만 따라잡습니다."
+
+msgid "Fast speed"
+msgstr "빠른 속도"
+
+msgid "Faster with Meitou"
+msgstr "Meitou에서 더 빠름"
+
+msgid "Fastest speed"
+msgstr "가장 빠른 속도"
+
+msgid "Feedback"
+msgstr "피드백"
+
+msgid "Feedback button"
+msgstr "피드백 버튼"
+
+msgid "Field of view"
+msgstr "시야각"
+
+msgid "Fights far away"
+msgstr "먼 곳의 전투"
+
+msgid "Fill the monitor with a borderless game window."
+msgstr "테두리 없는 게임 창으로 모니터를 채웁니다."
+
+msgid "Film grain"
+msgstr "필름 그레인"
+
+msgid "Film grain strength"
+msgstr "필름 그레인 강도"
+
+msgid "Filter"
+msgstr "필터"
+
+msgid "Filter strength"
+msgstr "필터 강도"
+
+msgid "Find"
+msgstr "찾기"
+
+msgid "Finer shading of hair, cloth, skin, eyes and metal on characters. Each part has its own switch."
+msgstr "캐릭터의 머리카락, 천, 피부, 눈, 금속을 더 세밀하게 음영 처리합니다. 부분마다 스위치가 따로 있습니다."
+
+msgid "Fixes"
+msgstr "수정"
+
+msgid "Fly speed"
+msgstr "비행 속도"
+
+msgid "Foam clings to rocks, posts and legs; wading characters leave ripples and wakes."
+msgstr "거품이 바위, 기둥, 다리에 달라붙고 물을 건너는 캐릭터는 물결과 항적을 남깁니다."
+
+msgid "Focus"
+msgstr "초점"
+
+msgid "Focus distance"
+msgstr "초점 거리"
+
+msgid "Focus point set"
+msgstr "초점 지정됨"
+
+msgid "Fog"
+msgstr "안개"
+
+msgid "Foliage"
+msgstr "식생"
+
+msgid "Foliage LOD distance multiplier"
+msgstr "식생 LOD 거리 배수"
+
+msgid "Foliage LOD distance x (lod Meitou)"
+msgstr "식생 LOD 거리 x (lod Meitou)"
+
+msgid "Foliage draw distance multiplier"
+msgstr "식생 그리기 거리 배수"
+
+msgid "Foliage draw distance x"
+msgstr "식생 그리기 거리 x"
+
+msgid "Foliage levels"
+msgstr "식생 세부 수준"
+
+msgid "Foliage ranges"
+msgstr "식생 범위"
+
+msgid "Follow camera head lock"
+msgstr "추적 카메라 머리 고정"
+
+msgid "Follow camera height"
+msgstr "추적 카메라 높이"
+
+msgid "Follow camera offset"
+msgstr "추적 카메라 오프셋"
+
+msgid "Follow camera side"
+msgstr "추적 카메라 측면"
+
+msgid "Font size"
+msgstr "글꼴 크기"
+
+msgid "Footprints and drag marks in sand, mud and snow; wind and rain wear them away."
+msgstr "모래, 진흙, 눈 위의 발자국과 끌린 자국. 바람과 비에 지워집니다."
+
+msgid "For a window: on renders in its real pixels. Off renders in virtual Retina pixels, one per point (a quarter of the pixels on a 2x display) and stretches to the window. No effect on a display without Retina. Full screen has Render resolution."
+msgstr "창 모드: 켜면 실제 픽셀로 렌더링합니다. 끄면 가상 Retina 픽셀(포인트당 하나, 2x 디스플레이에서는 픽셀의 4분의 1)로 렌더링하고 창에 맞게 늘립니다. Retina가 아닌 디스플레이에서는 효과 없음. 전체 화면에는 렌더링 해상도가 있습니다."
+
+msgid "Forward"
+msgstr "앞뒤"
+
+msgid "Frame generation"
+msgstr "프레임 생성"
+
+msgid "Frame limit"
+msgstr "프레임 제한"
+
+msgid "Frames per second while vertical sync is off."
+msgstr "수직 동기화가 꺼져 있을 때의 초당 프레임 수."
+
+msgid "French"
+msgstr "프랑스어"
+
+msgid "From save"
+msgstr "저장 파일에서"
+
+msgid "Full Retina resolution"
+msgstr "전체 Retina 해상도"
+
+msgid "Full haze distance"
+msgstr "완전한 안개 거리"
+
+msgid "Full resolution"
+msgstr "전체 해상도"
+
+msgid "Full screen"
+msgstr "전체 화면"
+
+msgid "Full video"
+msgstr "전체 영상"
+
+msgid "GI 64 probe rays"
+msgstr "GI 프로브 광선 64개"
+
+msgid "GI cloud shadows"
+msgstr "GI 구름 그림자"
+
+msgid "GI probes out of walls"
+msgstr "GI 프로브를 벽 밖으로"
+
+msgid "GI radiance cache"
+msgstr "GI 복사 캐시"
+
+msgid "GI traced on characters"
+msgstr "캐릭터에 GI 추적"
+
+msgid "GRAPHICS"
+msgstr "그래픽"
+
+msgid "Gallery"
+msgstr "갤러리"
+
+msgid "Game language set to {1}. It applies when the game starts."
+msgstr "게임 언어를 {1}(으)로 설정했습니다. 게임을 시작할 때 적용됩니다."
+
+msgid "Game speed"
+msgstr "게임 속도"
+
+msgid "Game time"
+msgstr "게임 시간"
+
+msgid "Gear sway"
+msgstr "장비 흔들림"
+
+msgid "German"
+msgstr "독일어"
+
+msgid "Get launcher {1}"
+msgstr "런처 {1} 받기"
+
+msgid "Get the port"
+msgstr "이식판 받기"
+
+msgid "GitHub answered {1} {2}"
+msgstr "GitHub 응답: {1} {2}"
+
+msgid "GitHub not reachable ({1})"
+msgstr "GitHub에 연결할 수 없음 ({1})"
+
+msgid "Give orders and open menus (the game's right button)."
+msgstr "명령을 내리고 메뉴를 엽니다(게임의 오른쪽 버튼)."
+
+msgid "Give the ground texture depth."
+msgstr "지면 텍스처에 깊이를 줍니다."
+
+msgid "Giving first aid"
+msgstr "응급 처치 중"
+
+msgid "Glass bottles"
+msgstr "유리병"
+
+msgid "Global illumination"
+msgstr "전역 조명"
+
+msgid "Global population multiplier"
+msgstr "전체 인구 배수"
+
+msgid "Glossy and wet surfaces mirror their surroundings instead of one sky picture."
+msgstr "광택 있고 젖은 표면이 하늘 이미지 대신 주변을 비춥니다."
+
+msgid "Grading"
+msgstr "색 보정"
+
+msgid "Grading (0 = game)"
+msgstr "색 보정 (0 = 게임)"
+
+msgid "Grain strength"
+msgstr "그레인 강도"
+
+msgid "Graphics settings saved; the game reads them when it starts."
+msgstr "그래픽 설정을 저장했습니다. 게임은 시작할 때 읽습니다."
+
+msgid "Grass"
+msgstr "풀"
+
+msgid "Grass casts ray-traced shadows on the ground: the larger part of the traced shadows' cost in grassland."
+msgstr "풀이 지면에 레이 트레이싱 그림자를 드리웁니다: 초원에서 추적 그림자 비용의 대부분입니다."
+
+msgid "Grass density multiplier"
+msgstr "풀 밀도 배수"
+
+msgid "Grass density x"
+msgstr "풀 밀도 x"
+
+msgid "Grass draw"
+msgstr "풀 그리기"
+
+msgid "Grass draw distance multiplier"
+msgstr "풀 그리기 거리 배수"
+
+msgid "Grass draw distance x"
+msgstr "풀 그리기 거리 x"
+
+msgid "Grid"
+msgstr "격자"
+
+msgid "Ground"
+msgstr "지면"
+
+msgid "Ground displacement (tessellation)"
+msgstr "지면 변위 (테셀레이션)"
+
+msgid "Ground displacement distance (m)"
+msgstr "지면 변위 거리 (m)"
+
+msgid "Ground in buried ruins"
+msgstr "묻힌 유적의 지면"
+
+msgid "Ground parallax"
+msgstr "지면 시차"
+
+msgid "Ground parallax depth (% of relief depth)"
+msgstr "지면 시차 깊이 (부조 깊이의 %)"
+
+msgid "Ground parallax distance (m)"
+msgstr "지면 시차 거리 (m)"
+
+msgid "Ground relief depth (cm, typical ground)"
+msgstr "지면 부조 깊이 (cm, 일반 지면)"
+
+msgid "Ground relief quality"
+msgstr "지면 부조 품질"
+
+msgid "Ground trails"
+msgstr "지면 흔적"
+
+msgid "Ground-truth occlusion"
+msgstr "실측 기반 오클루전"
+
+msgid "Guards searching for smuggled or stolen goods and bandits after food or loot also look inside bags carried in the inventory, and guards confiscating stolen goods inside the worn backpack. The game misses those bags, so goods hidden in them are never found."
+msgstr "밀수품이나 장물을 찾는 경비병과 음식이나 전리품을 노리는 도적은 인벤토리에 든 가방 안도 살피고, 장물을 압수하는 경비병은 메고 있는 배낭 안도 살핍니다. 게임은 이런 가방을 놓쳐서 그 안에 숨긴 물건은 절대 발견되지 않습니다."
+
+msgid "Guards spare their own"
+msgstr "경비병은 자기 편을 봐준다"
+
+msgid "HDR output"
+msgstr "HDR 출력"
+
+msgid "HOME"
+msgstr "홈"
+
+msgid "Hair highlights"
+msgstr "머리카락 하이라이트"
+
+msgid "Half resolution"
+msgstr "절반 해상도"
+
+msgid "Hardware mouse"
+msgstr "하드웨어 마우스"
+
+msgid "Hauling"
+msgstr "운반 중"
+
+msgid "Haze"
+msgstr "안개"
+
+msgid "Haze strength"
+msgstr "안개 강도"
+
+msgid "Haze strength (1 = game)"
+msgstr "안개 강도 (1 = 게임)"
+
+msgid "Head turns back"
+msgstr "고개 되돌리기"
+
+msgid "Heal All"
+msgstr "모두 치료"
+
+msgid "Heal Neutrals"
+msgstr "중립 치료"
+
+msgid "Healing far away"
+msgstr "먼 곳에서의 회복"
+
+msgid "Hear from"
+msgstr "듣는 위치"
+
+msgid "Heat haze"
+msgstr "아지랑이"
+
+msgid "Heat haze strength"
+msgstr "아지랑이 강도"
+
+msgid "Heat haze strength (1 = game)"
+msgstr "아지랑이 강도 (1 = 게임)"
+
+msgid "Height"
+msgstr "높이"
+
+msgid "Help"
+msgstr "도움말"
+
+msgid "Hide hats"
+msgstr "모자 숨기기"
+
+msgid "Hide or show the whole interface."
+msgstr "인터페이스 전체를 숨기거나 표시합니다."
+
+msgid "Hide other factions' hats"
+msgstr "다른 세력의 모자 숨기기"
+
+msgid "High impact"
+msgstr "영향 큼"
+
+msgid "High — 8120 MB (16 GB Macs)"
+msgstr "높음 — 8120 MB (16 GB Mac)"
+
+msgid "High: keeps the most textures, terrain and objects resident. Best on a 16 GB-or-larger Mac with other memory-heavy apps closed."
+msgstr "높음: 텍스처, 지형, 오브젝트를 가장 많이 상주시킵니다. 메모리를 많이 쓰는 다른 앱을 닫은 16 GB 이상의 Mac에 가장 좋습니다."
+
+msgid "Higher resolution gives sharper shadow detail."
+msgstr "해상도가 높을수록 그림자 세부가 선명해집니다."
+
+msgid "Higher values make the camera ascend and descend faster."
+msgstr "값이 높을수록 카메라가 더 빨리 오르내립니다."
+
+msgid "Higher values retain detailed foliage farther away."
+msgstr "값이 높을수록 세밀한 식생을 더 멀리까지 유지합니다."
+
+msgid "Higher values retain detailed object meshes farther away."
+msgstr "값이 높을수록 세밀한 오브젝트 메시를 더 멀리까지 유지합니다."
+
+msgid "Higher values smooth shadow edges with more samples."
+msgstr "값이 높을수록 더 많은 샘플로 그림자 가장자리를 부드럽게 합니다."
+
+msgid "Hold and move the mouse to turn the camera."
+msgstr "누른 채 마우스를 움직여 카메라를 돌립니다."
+
+msgid "Hold to highlight building signs and outline the characters about."
+msgstr "누르고 있으면 건물 간판을 강조하고 주변 캐릭터에 윤곽선을 그립니다."
+
+msgid "Holding Shift with the camera move keys pans the camera faster (the game has no such boost)."
+msgstr "카메라 이동 키와 함께 Shift를 누르면 카메라가 더 빨리 이동합니다(게임에는 이런 가속이 없습니다)."
+
+msgid "Holes and needles in the ground"
+msgstr "지면의 구멍과 뾰족한 돌기"
+
+msgid "Hostile squads that meet far from your squads fight it out by strength; the loser is wiped out. In the game nothing happens far away."
+msgstr "분대에서 멀리 떨어진 곳에서 만난 적대 분대는 전력으로 승부를 내고 패자는 전멸합니다. 게임에서는 먼 곳에서 아무 일도 일어나지 않습니다."
+
+msgid "Hot and dry"
+msgstr "덥고 건조"
+
+msgid "Hover outline"
+msgstr "마우스 오버 윤곽선"
+
+msgid "How edges are smoothed."
+msgstr "가장자리를 부드럽게 하는 방식."
+
+msgid "How far above the game's point the camera looks: 0 is the game's height, about 17 a person's head."
+msgstr "게임의 기준점보다 카메라가 얼마나 위를 보는지: 0은 게임의 높이, 약 17은 사람의 머리 높이."
+
+msgid "How far away characters are drawn (the game's NPC View Range)."
+msgstr "캐릭터를 그리는 거리(게임의 NPC 시야 범위)."
+
+msgid "How far away sounds are heard: 1x is the original, 4x hears fights, footsteps and machines four times as far. Higher values mix more sounds at once."
+msgstr "소리가 들리는 거리: 1x는 원작, 4x는 전투, 발소리, 기계 소리를 네 배 멀리서 듣습니다. 값이 높을수록 한 번에 더 많은 소리를 섞습니다."
+
+msgid "How far shadows are drawn; zero disables them."
+msgstr "그림자를 그리는 거리. 0이면 그림자를 끕니다."
+
+msgid "How fast the arrow keys and the screen edge pan the camera (the game: 500; faster the higher the camera)."
+msgstr "방향키와 화면 가장자리로 카메라가 이동하는 속도(게임: 500. 카메라가 높을수록 빠름)."
+
+msgid "How fast the rotate and tilt keys and the mouse turn the camera (the game: 6)."
+msgstr "회전·기울기 키와 마우스로 카메라가 도는 속도(게임: 6)."
+
+msgid "How fast the wheel and the zoom keys move the camera in and out (the game: 125)."
+msgstr "휠과 확대/축소 키로 카메라가 다가가고 물러나는 속도(게임: 125)."
+
+msgid "How fast your characters and the rest of your faction learn: every skill and stat gain is multiplied by this (the game: 1x). 0 stops it. Click the number to type an exact value. A training dummy still stops at its level."
+msgstr "당신의 캐릭터와 세력의 나머지가 배우는 속도: 모든 기술과 능력치 상승에 이 값을 곱합니다(게임: 1x). 0이면 멈춥니다. 숫자를 클릭해 정확한 값을 입력하세요. 훈련용 인형은 여전히 그 수준에서 멈춥니다."
+
+msgid "How finely the ground's shape and its textures are drawn with distance."
+msgstr "거리에 따라 지면 모양과 텍스처를 얼마나 세밀하게 그릴지."
+
+msgid "How finely the terrain follows the ground."
+msgstr "지형이 지면을 얼마나 세밀하게 따르는지."
+
+msgid "How high the clouds' base sits above the ground."
+msgstr "구름 바닥이 지면에서 얼마나 높은지."
+
+msgid "How long a faction waits between attacks on your towns by squads passing by (the game: Normal). Never stops them."
+msgstr "지나가는 분대가 당신의 마을을 공격하는 사이에 세력이 기다리는 시간(게임: 보통). 공격을 막지는 않습니다."
+
+msgid "How many bolts and harpoons stay stuck in the ground and buildings, per kind of bolt; past it the one that flew longest disappears (the game: 60)."
+msgstr "땅과 건물에 박힌 채 남는 볼트와 작살의 수(볼트 종류별). 넘으면 가장 오래전에 날아간 것이 사라집니다(게임: 60)."
+
+msgid "How many enemies may swing at one character at once (the game: 1, plus its race's extra slots); the others wait at reach or circle."
+msgstr "한 캐릭터를 동시에 공격할 수 있는 적의 수(게임: 1, 종족의 추가 자리 포함). 나머지는 사거리에서 기다리거나 주위를 돕니다."
+
+msgid "How many fighters a raid on your towns gathers (the game: 1)."
+msgstr "당신의 마을 습격에 모이는 전투원 수(게임: 1)."
+
+msgid "How many items dropped during play (severed limbs, luckyren Mode's gear) stay on the ground; past it the oldest disappears. Items that were on the ground in the save always stay."
+msgstr "플레이 중 떨어진 아이템(잘린 팔다리, luckyren 모드의 장비)이 땅에 남는 수. 넘으면 가장 오래된 것이 사라집니다. 저장 파일에서 땅에 있던 아이템은 항상 남습니다."
+
+msgid "How many maps the shadows are split over, nearest to farthest: more keeps near and far shadows sharper, fewer is cheaper."
+msgstr "그림자를 가까운 곳부터 먼 곳까지 몇 장의 맵으로 나눌지: 많을수록 가깝고 먼 그림자가 선명하고, 적을수록 가볍습니다."
+
+msgid "How many squads roam and live in the wild (the game: 1). Affects performance."
+msgstr "황야를 떠돌며 사는 분대 수(게임: 1). 성능에 영향을 줍니다."
+
+msgid "How many surrounding zones can display distant towns."
+msgstr "주변 몇 개 구역까지 먼 마을을 표시할 수 있는지."
+
+msgid "How much of each pixel's light glows into its surroundings."
+msgstr "각 픽셀의 빛이 주변으로 얼마나 번지는지."
+
+msgid "How often factions start raids on your towns (the game: 1)."
+msgstr "세력이 당신의 마을을 습격하는 빈도(게임: 1)."
+
+msgid "How to get Kenshi on macOS"
+msgstr "macOS에서 Kenshi를 받는 방법"
+
+msgid "How to get Kenshi on this Mac"
+msgstr "이 Mac에서 Kenshi를 받는 방법"
+
+msgid "How?"
+msgstr "어떻게?"
+
+msgid "Hybrid"
+msgstr "하이브리드"
+
+msgid "Hybrid GI"
+msgstr "하이브리드 GI"
+
+msgid "Hybrid tone map: ACES share"
+msgstr "하이브리드 톤 맵: ACES 비율"
+
+msgid "IMPORT GAME"
+msgstr "게임 가져오기"
+
+msgid "INVENTORY"
+msgstr "인벤토리"
+
+msgid "Idle"
+msgstr "대기"
+
+msgid "Import this save into a new game? Unsaved progress will be lost."
+msgstr "이 저장 파일을 새 게임으로 가져올까요? 저장하지 않은 진행 상황은 사라집니다."
+
+msgid "Impostor"
+msgstr "임포스터"
+
+msgid "Impostor distance"
+msgstr "임포스터 거리"
+
+msgid "Impostor distance (F7 Meitou)"
+msgstr "임포스터 거리 (F7 Meitou)"
+
+msgid "Impostor memory budget"
+msgstr "임포스터 메모리 예산"
+
+msgid "Impostor memory budget (MB)"
+msgstr "임포스터 메모리 예산 (MB)"
+
+msgid "In-game scene transitions"
+msgstr "게임 내 장면 전환"
+
+msgid "In-game transition speed"
+msgstr "게임 내 전환 속도"
+
+msgid "Include my Discord name"
+msgstr "내 Discord 이름 포함"
+
+msgid "Incompatible with {1}"
+msgstr "{1}과(와) 호환되지 않음"
+
+msgid "Indirect light"
+msgstr "간접광"
+
+msgid "Indirect light technique"
+msgstr "간접광 기법"
+
+msgid "Indoor GI"
+msgstr "실내 GI"
+
+msgid "Indoors"
+msgstr "실내"
+
+msgid "Inputs"
+msgstr "투입물"
+
+msgid "Install"
+msgstr "설치"
+
+msgid "Install a version first (Versions)."
+msgstr "먼저 버전을 설치하세요(버전)."
+
+msgid "Install a version first (Versions): its settings are shown here."
+msgstr "먼저 버전을 설치하세요(버전): 그 설정이 여기에 표시됩니다."
+
+msgid "Install failed: {1}"
+msgstr "설치 실패: {1}"
+
+msgid "Install folder"
+msgstr "설치 폴더"
+
+msgid "Install latest"
+msgstr "최신 버전 설치"
+
+msgid "Install v{1} (skipped)"
+msgstr "v{1} 설치 (건너뜀)"
+
+msgid "Install {1}"
+msgstr "{1} 설치"
+
+msgid "Installed"
+msgstr "설치됨"
+
+msgid "Installed · Play"
+msgstr "설치됨 · 플레이"
+
+msgid "Installing"
+msgstr "설치 중"
+
+msgid "Interface"
+msgstr "인터페이스"
+
+msgid "Interface scale"
+msgstr "인터페이스 크기"
+
+msgid "Interior lamps"
+msgstr "실내 램프"
+
+msgid "Internal rendering resolution relative to the window."
+msgstr "창 대비 내부 렌더링 해상도."
+
+msgid "Italian"
+msgstr "이탈리아어"
+
+msgid "Item icons"
+msgstr "아이템 아이콘"
+
+msgid "Item rotation"
+msgstr "아이템 회전"
+
+msgid "Japanese"
+msgstr "일본어"
+
+msgid "Keep large wrecks, towers and landmarks visible farther away."
+msgstr "큰 잔해, 탑, 랜드마크를 더 멀리까지 보이게 합니다."
+
+msgid "Keep textures at all squads"
+msgstr "모든 분대에서 텍스처 유지"
+
+msgid "Keep textures at characters"
+msgstr "캐릭터 주변 텍스처 유지"
+
+msgid "Keep textures sharp when viewed at an angle."
+msgstr "비스듬히 볼 때도 텍스처를 선명하게 유지합니다."
+
+msgid "Keep the lamps of building interiors lit by day too. Stealth counts their light."
+msgstr "건물 실내 램프를 낮에도 켜 둡니다. 은신은 그 빛을 계산합니다."
+
+msgid "Keep them"
+msgstr "유지"
+
+msgid "Keeps a larger area loaded round each of your characters, so switching between distant ones skips most of the loading (the game: off; uses more memory)."
+msgstr "각 캐릭터 주변의 더 넓은 지역을 로드된 상태로 유지하여 멀리 떨어진 캐릭터 사이를 전환할 때 로딩을 대부분 건너뜁니다(게임: 끔. 메모리를 더 사용)."
+
+msgid "Keeps the meshes and textures around every squad member loaded, not only around the camera, so a flight or jump to them lands on finished detail. Costs video memory."
+msgstr "카메라 주변뿐 아니라 모든 분대원 주변의 메시와 텍스처도 로드된 상태로 유지하여, 그곳으로 날아가거나 이동하면 세부가 완성된 상태로 도착합니다. 비디오 메모리를 사용합니다."
+
+msgid "Kenshi folder"
+msgstr "Kenshi 폴더"
+
+msgid "Kenshi not found: set its folder in Settings"
+msgstr "Kenshi를 찾을 수 없음: 설정에서 폴더를 지정하세요"
+
+msgid "Kind"
+msgstr "종류"
+
+msgid "Korean"
+msgstr "한국어"
+
+msgid "LIMBS"
+msgstr "팔다리"
+
+msgid "LOAD GAME"
+msgstr "게임 불러오기"
+
+msgid "Lamp shadows"
+msgstr "램프 그림자"
+
+msgid "Lamp warmth"
+msgstr "램프 따뜻함"
+
+msgid "Landmark"
+msgstr "랜드마크"
+
+msgid "Landmark distance"
+msgstr "랜드마크 거리"
+
+msgid "Landmark distance (Meitou)"
+msgstr "랜드마크 거리 (Meitou)"
+
+msgid "Language"
+msgstr "언어"
+
+msgid "Large "
+msgstr "대형 "
+
+msgid "Large foliage"
+msgstr "대형 식생"
+
+msgid "Large foliage range"
+msgstr "대형 식생 범위"
+
+msgid "Large foliage range (F6 Meitou)"
+msgstr "대형 식생 범위 (F6 Meitou)"
+
+msgid "Large impostor"
+msgstr "대형 임포스터"
+
+msgid "Large impostor distance"
+msgstr "대형 임포스터 거리"
+
+msgid "Large impostor distance (F7 Meitou)"
+msgstr "대형 임포스터 거리 (F7 Meitou)"
+
+msgid "Late dodges and blocks"
+msgstr "늦은 회피와 방어"
+
+msgid "Latest"
+msgstr "최신"
+
+msgid "Latest (update to {1})"
+msgstr "최신 ({1}(으)로 업데이트)"
+
+msgid "Latest ({1})"
+msgstr "최신 ({1})"
+
+msgid "Launch arguments"
+msgstr "실행 인수"
+
+msgid "Launch arguments have {1}, which picks the start itself: remove it to continue a save."
+msgstr "실행 인수에 {1}이(가) 있어 그것이 시작 방식을 정합니다: 저장 파일을 이어 하려면 제거하세요."
+
+msgid "Launch as Kenshi on Steam"
+msgstr "Steam에서 Kenshi로 실행"
+
+msgid "Launcher"
+msgstr "런처"
+
+msgid "Launcher update failed: {1}"
+msgstr "런처 업데이트 실패: {1}"
+
+msgid "Launcher {1} is available."
+msgstr "런처 {1}을(를) 사용할 수 있습니다."
+
+msgid "Lay a fine film grain over the picture, in every camera."
+msgstr "모든 카메라에서 화면 위에 미세한 필름 그레인을 입힙니다."
+
+msgid "Layers and steps of the ground relief; lower is cheaper."
+msgstr "지면 부조의 레이어와 단계. 낮을수록 가볍습니다."
+
+msgid "Leave fading tracks on the ground after walking through fresh blood."
+msgstr "신선한 피를 밟고 걸은 뒤 땅에 점점 사라지는 자국을 남깁니다."
+
+msgid "Leaves the hats and helmets of your characters out of the picture, so their faces and hair show; they stay worn and protect as before. Portraits only: in the interface's portraits. On: in the world too. Off: hats are drawn everywhere, as in the game."
+msgstr "캐릭터의 모자와 투구를 화면에서 빼서 얼굴과 머리카락이 보이게 합니다. 여전히 착용 중이며 방어력도 그대로입니다. 초상화만: 인터페이스의 초상화에서. 켬: 세계에서도. 끔: 게임처럼 어디서나 모자를 그립니다."
+
+msgid "Let bright light glow softly into its surroundings, as in the eye."
+msgstr "눈처럼 밝은 빛이 주변으로 부드럽게 번지게 합니다."
+
+msgid "Let clouds cast shadows across land and water."
+msgstr "구름이 땅과 물 위에 그림자를 드리우게 합니다."
+
+msgid "Let shadows shape the light scattered through haze."
+msgstr "그림자가 안개 속에 산란된 빛을 빚게 합니다."
+
+msgid "Let sunlight soften and warm under bare skin instead of ending at a hard edge."
+msgstr "햇빛이 딱딱한 경계에서 끝나지 않고 맨살 아래에서 부드럽고 따뜻해지게 합니다."
+
+msgid "Level:"
+msgstr "레벨:"
+
+msgid "Light"
+msgstr "조명"
+
+msgid "Light portraits and the character editor with a fixed warm sun and its shadows."
+msgstr "초상화와 캐릭터 편집기를 고정된 따뜻한 태양과 그 그림자로 비춥니다."
+
+msgid "Light shafts"
+msgstr "빛줄기"
+
+msgid "Light shafts air"
+msgstr "빛줄기 대기"
+
+msgid "Light shafts air (0 = none)"
+msgstr "빛줄기 대기 (0 = 없음)"
+
+msgid "Light shafts air at dawn and dusk"
+msgstr "새벽과 황혼의 빛줄기 대기"
+
+msgid "Light shafts air at dawn and dusk (x)"
+msgstr "새벽과 황혼의 빛줄기 대기 (x)"
+
+msgid "Light shafts quality"
+msgstr "빛줄기 품질"
+
+msgid "Light shafts strength"
+msgstr "빛줄기 강도"
+
+msgid "Light the night scene from the planet and moon."
+msgstr "행성과 달로 밤 장면을 비춥니다."
+
+msgid "Lighting"
+msgstr "조명"
+
+msgid "List the mods folder and the Steam workshop items again"
+msgstr "모드 폴더와 Steam 창작마당 항목을 다시 나열"
+
+msgid "Load button"
+msgstr "불러오기 버튼"
+
+msgid "Load the game from the quicksave slot."
+msgstr "빠른 저장 슬롯에서 게임을 불러옵니다."
+
+msgid "Load the newest save, {1} ({2}); its mods must be the enabled ones"
+msgstr "최신 저장 파일 {1} ({2}) 불러오기. 그 모드들이 활성화되어 있어야 합니다"
+
+msgid "Load this save? Unsaved progress will be lost."
+msgstr "이 저장 파일을 불러올까요? 저장하지 않은 진행 상황은 사라집니다."
+
+msgid "Loaded; the save was made with mods not loaded now: {1}"
+msgstr "불러왔습니다. 이 저장 파일은 지금 로드되지 않은 모드로 만들어졌습니다: {1}"
+
+msgid "Loaded; the save was made with {1} mod(s) not loaded now (listed in the messages)"
+msgstr "불러왔습니다. 이 저장 파일은 지금 로드되지 않은 모드 {1}개로 만들어졌습니다(메시지에 나열됨)"
+
+msgid "Loads after {1}"
+msgstr "{1} 다음에 로드"
+
+msgid "Local mod"
+msgstr "로컬 모드"
+
+msgid "Lock Doors"
+msgstr "문 잠그기"
+
+msgid "Look"
+msgstr "룩"
+
+msgid "Look at camera"
+msgstr "카메라 보기"
+
+msgid "Loot into backpack"
+msgstr "전리품을 배낭에"
+
+msgid "Low holds off: {1}."
+msgstr "낮음에서 꺼진 채 유지: {1}."
+
+msgid "Low impact"
+msgstr "영향 적음"
+
+msgid "Low power"
+msgstr "전력 부족"
+
+msgid "Low quality applied: {1} off until you keep them on."
+msgstr "낮음 품질 적용: 켜 두기 전까지 {1} 꺼짐."
+
+msgid "Lower is cheaper and softer."
+msgstr "낮을수록 가볍고 부드럽습니다."
+
+msgid "Lower the camera in free camera mode."
+msgstr "자유 카메라 모드에서 카메라를 내립니다."
+
+msgid "MAIN MENU"
+msgstr "메인 메뉴"
+
+msgid "MEITOU"
+msgstr "MEITOU"
+
+msgid "MEITOU LAUNCHER"
+msgstr "MEITOU 런처"
+
+msgid "MODS"
+msgstr "모드"
+
+msgid "Main menu"
+msgstr "메인 메뉴"
+
+msgid "Main menu scene transitions"
+msgstr "메인 메뉴 장면 전환"
+
+msgid "Main menu style"
+msgstr "메인 메뉴 스타일"
+
+msgid "Main menu transition speed"
+msgstr "메인 메뉴 전환 속도"
+
+msgid "Maintained by"
+msgstr "관리자"
+
+msgid "Match the display refresh rate to prevent tearing."
+msgstr "디스플레이 주사율에 맞춰 화면 찢김을 막습니다."
+
+msgid "Maximise"
+msgstr "최대화"
+
+msgid "Maximum"
+msgstr "최대"
+
+msgid "Maximum distance at which objects remain visible."
+msgstr "오브젝트가 보이는 최대 거리."
+
+msgid "Maximum visibility range for medium-sized foliage."
+msgstr "중간 크기 식생의 최대 가시 범위."
+
+msgid "Maximum visibility range for small foliage."
+msgstr "작은 식생의 최대 가시 범위."
+
+msgid "Maximum visibility range for the largest foliage."
+msgstr "가장 큰 식생의 최대 가시 범위."
+
+msgid "Measure that shading from each pixel's horizon. Needs Ambient occlusion."
+msgstr "그 음영을 각 픽셀의 지평선에서 측정합니다. 앰비언트 오클루전이 필요합니다."
+
+msgid "Medium foliage"
+msgstr "중형 식생"
+
+msgid "Medium foliage range"
+msgstr "중형 식생 범위"
+
+msgid "Medium impact"
+msgstr "영향 중간"
+
+msgid "Meitou (on)"
+msgstr "Meitou (켬)"
+
+msgid "Meitou (when busy)"
+msgstr "Meitou (부하 시)"
+
+msgid "Meitou - Faithful UI"
+msgstr "Meitou - 원작 UI"
+
+msgid "Meitou Launcher"
+msgstr "Meitou 런처"
+
+msgid "Meitou cascades"
+msgstr "Meitou 캐스케이드"
+
+msgid "Meitou improvements (unticked: as the game)"
+msgstr "Meitou 개선 사항 (체크 해제: 게임과 동일)"
+
+msgid "Meitou is already running: close it before starting it again."
+msgstr "Meitou가 이미 실행 중입니다: 다시 시작하기 전에 닫으세요."
+
+msgid "Meitou needs Kenshi: it does not include Kenshi's data. You must own Kenshi and point Meitou at its folder."
+msgstr "Meitou에는 Kenshi가 필요합니다: Kenshi의 데이터가 포함되어 있지 않습니다. Kenshi를 소유하고 Meitou에 그 폴더를 지정해야 합니다."
+
+msgid "Meitou port"
+msgstr "Meitou 이식판"
+
+msgid "Meitou port on the Steam workshop, endorsed by Meitou: {1} by {2}"
+msgstr "Steam 창작마당의 Meitou 이식판(Meitou 추천): {2}의 {1}"
+
+msgid "Meitou port, endorsed by Meitou: {1} by {2} (installed)"
+msgstr "Meitou 이식판(Meitou 추천): {2}의 {1} (설치됨)"
+
+msgid "Meitou ports of your mods"
+msgstr "당신 모드의 Meitou 이식판"
+
+msgid "Meitou {1} is not installed any more."
+msgstr "Meitou {1}이(가) 더 이상 설치되어 있지 않습니다."
+
+msgid "Meitou {1} started with {2}{3}."
+msgstr "Meitou {1}을(를) {2}{3}(으)로 시작했습니다."
+
+msgid "Meitou {1} started."
+msgstr "Meitou {1}을(를) 시작했습니다."
+
+msgid "Meitou {1} stopped with an error (exit code {2}); its log is {3}"
+msgstr "Meitou {1}이(가) 오류로 종료되었습니다(종료 코드 {2}). 로그는 {3}입니다"
+
+msgid "Meitou: "
+msgstr "Meitou: "
+
+msgid "Meitou: on"
+msgstr "Meitou: 켬"
+
+msgid "Mesh welding"
+msgstr "메시 용접"
+
+msgid "Metal (native)"
+msgstr "Metal (네이티브)"
+
+msgid "Metal (native)."
+msgstr "Metal (네이티브)."
+
+msgid "Metal is not available on this Mac; Auto uses Vulkan."
+msgstr "이 Mac에서는 Metal을 쓸 수 없습니다. 자동은 Vulkan을 사용합니다."
+
+msgid "Metal memory budget"
+msgstr "Metal 메모리 예산"
+
+msgid "Metal memory budget: automatic."
+msgstr "Metal 메모리 예산: 자동."
+
+msgid "Metal memory budget: {1} MB."
+msgstr "Metal 메모리 예산: {1} MB."
+
+msgid "Metal needs an Apple-silicon Mac; choose Auto or Vulkan."
+msgstr "Metal에는 Apple 실리콘 Mac이 필요합니다. 자동 또는 Vulkan을 고르세요."
+
+msgid "Metal on buildings"
+msgstr "건물의 금속"
+
+msgid "Metal on characters"
+msgstr "캐릭터의 금속"
+
+msgid "Metal render scale"
+msgstr "Metal 렌더링 배율"
+
+msgid "Metal upscaling preset"
+msgstr "Metal 업스케일링 프리셋"
+
+msgid "MetalFX Balanced 0.59"
+msgstr "MetalFX 균형 0.59"
+
+msgid "MetalFX Performance 0.50"
+msgstr "MetalFX 성능 0.50"
+
+msgid "MetalFX Quality 0.67"
+msgstr "MetalFX 품질 0.67"
+
+msgid "MetalFX Spatial 0.40 (alternative)"
+msgstr "MetalFX 공간 0.40 (대안)"
+
+msgid "MetalFX Spatial 0.50 (alternative)"
+msgstr "MetalFX 공간 0.50 (대안)"
+
+msgid "MetalFX Super Quality 0.77"
+msgstr "MetalFX 최고 품질 0.77"
+
+msgid "MetalFX Temporal 0.40"
+msgstr "MetalFX 시간 0.40"
+
+msgid "MetalFX spatial"
+msgstr "MetalFX 공간"
+
+msgid "MetalFX temporal"
+msgstr "MetalFX 시간"
+
+msgid "MetalFX temporal is the default at every tier; spatial rows are explicit alternatives. The preset sets the render scale, and the render scale slider fine-tunes it (Custom)."
+msgstr "MetalFX 시간이 모든 등급의 기본값이며, 공간 행은 명시적인 대안입니다. 프리셋이 렌더링 배율을 정하고 렌더링 배율 슬라이더로 미세 조정합니다(사용자 지정)."
+
+msgid "Mine"
+msgstr "채굴"
+
+msgid "Mine · Meitou {1}"
+msgstr "내 것 · Meitou {1}"
+
+msgid "Minimise"
+msgstr "최소화"
+
+msgid "Minutes of unpaused play between autosaves (the game: 10)."
+msgstr "자동 저장 사이의 일시 정지하지 않은 플레이 시간(분)(게임: 10)."
+
+msgid "Mod Warning"
+msgstr "모드 경고"
+
+msgid "Mod list saved: {1} enabled."
+msgstr "모드 목록 저장됨: {1}개 활성화."
+
+msgid "Modifications to the GLOBAL_CONSTANTS will be lost, you'll have to set them again, sorry!"
+msgstr "GLOBAL_CONSTANTS에 대한 수정 사항은 사라집니다. 다시 설정해야 합니다, 죄송합니다!"
+
+msgid "Mods arranged by their dependencies."
+msgstr "의존성에 따라 모드를 정렬했습니다."
+
+msgid "Mods arranged by their dependencies; {1} still need attention."
+msgstr "의존성에 따라 모드를 정렬했습니다. {1}개는 아직 확인이 필요합니다."
+
+msgid "Mods from a save"
+msgstr "저장 파일의 모드"
+
+msgid "Mods of the save '{1}' applied."
+msgstr "저장 파일 '{1}'의 모드를 적용했습니다."
+
+msgid "Mods: {1} loaded"
+msgstr "모드: {1}개 로드됨"
+
+msgid "Mods: {1} of {2} loaded"
+msgstr "모드: {2}개 중 {1}개 로드됨"
+
+msgid "Move the camera backward."
+msgstr "카메라를 뒤로 이동합니다."
+
+msgid "Move the camera forward."
+msgstr "카메라를 앞으로 이동합니다."
+
+msgid "Move the camera left."
+msgstr "카메라를 왼쪽으로 이동합니다."
+
+msgid "Move the camera right."
+msgstr "카메라를 오른쪽으로 이동합니다."
+
+msgid "Move the installed versions from {1} to {2}? Kept, they stay where they are and the new folder lists only its own."
+msgstr "설치된 버전을 {1}에서 {2}(으)로 옮길까요? 유지하면 원래 자리에 남고 새 폴더에는 자기 버전만 표시됩니다."
+
+msgid "Move the light probes out of walls."
+msgstr "조명 프로브를 벽 밖으로 옮깁니다."
+
+msgid "Move the view closer."
+msgstr "시점을 가까이 합니다."
+
+msgid "Move the view farther away."
+msgstr "시점을 멀리 합니다."
+
+msgid "Move them"
+msgstr "옮기기"
+
+msgid "Moves the point the camera looks at sideways: above 0 the character stands left of the middle (a view over the right shoulder), below 0 right of it. It shows less the farther the camera is."
+msgstr "카메라가 보는 지점을 옆으로 옮깁니다: 0보다 크면 캐릭터가 중앙 왼쪽에 서고(오른쪽 어깨 너머 시점), 0보다 작으면 오른쪽에 섭니다. 카메라가 멀수록 덜 드러납니다."
+
+msgid "Moving installed versions…"
+msgstr "설치된 버전을 옮기는 중…"
+
+msgid "Music frequency"
+msgstr "음악 빈도"
+
+msgid "My look"
+msgstr "내 룩"
+
+msgid "NEW GAME"
+msgstr "새 게임"
+
+msgid "NONE"
+msgstr "없음"
+
+msgid "Near tree fade"
+msgstr "가까운 나무 흐리기"
+
+msgid "Needs first aid"
+msgstr "응급 처치 필요"
+
+msgid "Needs research"
+msgstr "연구 필요"
+
+msgid "Needs restart"
+msgstr "재시작 필요"
+
+msgid "Needs {1}"
+msgstr "{1} 필요"
+
+msgid "New version {1}"
+msgstr "새 버전 {1}"
+
+msgid "Newer version out"
+msgstr "더 새로운 버전 있음"
+
+msgid "News"
+msgstr "소식"
+
+msgid "News video sound"
+msgstr "소식 영상 소리"
+
+msgid "News: GitHub answered {1}"
+msgstr "소식: GitHub 응답 {1}"
+
+msgid "News: GitHub not reachable"
+msgstr "소식: GitHub에 연결할 수 없음"
+
+msgid "Night air"
+msgstr "밤 대기"
+
+msgid "Night ambient"
+msgstr "밤 환경광"
+
+msgid "Night ambient light strength"
+msgstr "밤 환경광 강도"
+
+msgid "Night ambient light strength (1 = 1.2x game)"
+msgstr "밤 환경광 강도 (1 = 게임의 1.2배)"
+
+msgid "Night grading"
+msgstr "밤 색 보정"
+
+msgid "Night grading strength"
+msgstr "밤 색 보정 강도"
+
+msgid "Night grading strength (0 = game)"
+msgstr "밤 색 보정 강도 (0 = 게임)"
+
+msgid "Night sky"
+msgstr "밤하늘"
+
+msgid "Nightly builds"
+msgstr "나이틀리 빌드"
+
+msgid ""
+"Nightly builds are made twice a day from the newest code and are not tested. They may be unstable, crash, and corrupt your save files: back up your saves before playing one.\n"
+"\n"
+"Continue with nightly builds?"
+msgstr ""
+"나이틀리 빌드는 최신 코드로 하루 두 번 만들어지며 테스트되지 않습니다. 불안정하거나 충돌하거나 저장 파일을 손상시킬 수 있습니다: 플레이하기 전에 저장 파일을 백업하세요.\n"
+"\n"
+"나이틀리 빌드로 계속할까요?"
+
+msgid "No character selected"
+msgstr "선택된 캐릭터 없음"
+
+msgid "No free bed to take anyone to."
+msgstr "누군가를 데려갈 빈 침대가 없습니다."
+
+msgid "No game data loaded."
+msgstr "로드된 게임 데이터가 없습니다."
+
+msgid "No impact"
+msgstr "영향 없음"
+
+msgid "No mods found in Kenshi's mods folder or among its Steam workshop items."
+msgstr "Kenshi의 모드 폴더나 Steam 창작마당 항목에서 모드를 찾지 못했습니다."
+
+msgid "No mods match the search."
+msgstr "검색과 일치하는 모드가 없습니다."
+
+msgid "No news yet."
+msgstr "아직 소식이 없습니다."
+
+msgid "No preset yet. Save preset keeps the settings of every tab."
+msgstr "아직 프리셋이 없습니다. 프리셋 저장은 모든 탭의 설정을 저장합니다."
+
+msgid "No release with a {1} build found yet"
+msgstr "아직 {1}용 빌드가 있는 릴리스를 찾지 못했습니다"
+
+msgid "No releases listed yet. Check for releases below."
+msgstr "아직 나열된 릴리스가 없습니다. 아래에서 릴리스를 확인하세요."
+
+msgid "No save to continue."
+msgstr "이어 할 저장 파일이 없습니다."
+
+msgid "No saves found."
+msgstr "저장 파일을 찾지 못했습니다."
+
+msgid "No setting matches the search."
+msgstr "검색과 일치하는 설정이 없습니다."
+
+msgid "No thanks"
+msgstr "괜찮습니다"
+
+msgid "No water"
+msgstr "물 없음"
+
+msgid "No {1} found"
+msgstr "{1}을(를) 찾지 못함"
+
+msgid "Nobody here to bail out."
+msgstr "여기에는 보석금을 내줄 사람이 없습니다."
+
+msgid "Not enough money: the bail is c.{1}."
+msgstr "돈이 부족합니다: 보석금은 c.{1}입니다."
+
+msgid "Numbers that float over a character when a blow lands, with the damage armour stopped in brackets. Simple shows the total, Full one number per damage type and the part hit."
+msgstr "공격이 적중하면 캐릭터 위에 떠오르는 숫자로, 갑옷이 막은 피해를 괄호 안에 표시합니다. 간단은 합계를, 전체는 피해 유형별 숫자와 맞은 부위를 표시합니다."
+
+msgid "OPTIONS"
+msgstr "옵션"
+
+msgid "OVERWRITE SAVE"
+msgstr "저장 파일 덮어쓰기"
+
+msgid "Object LOD"
+msgstr "오브젝트 LOD"
+
+msgid "Object LOD distance multiplier"
+msgstr "오브젝트 LOD 거리 배수"
+
+msgid "Object LOD distance x"
+msgstr "오브젝트 LOD 거리 x"
+
+msgid "Object draw distance"
+msgstr "오브젝트 그리기 거리"
+
+msgid "Objects"
+msgstr "오브젝트"
+
+msgid "Off (flat ambient)"
+msgstr "끔 (평평한 환경광)"
+
+msgid "Off at Low quality. Choose Meitou to keep it on at Low."
+msgstr "낮음 품질에서 꺼짐. 낮음에서도 켜 두려면 Meitou를 고르세요."
+
+msgid "Offline: saved posts"
+msgstr "오프라인: 저장된 게시물"
+
+msgid "On"
+msgstr "켬"
+
+msgid "On: render below the screen's size and upscale (MetalFX or TAA), with a render scale to choose. Off: render at the screen's size, or in full screen at a fraction of it with a resolution to choose."
+msgstr "켬: 화면보다 작은 크기로 렌더링하고 확대합니다(MetalFX 또는 TAA). 렌더링 배율을 고를 수 있습니다. 끔: 화면 크기로 렌더링하거나, 전체 화면에서는 그 일부 해상도로 렌더링합니다(해상도 선택 가능)."
+
+msgid "Only for:"
+msgstr "대상:"
+
+msgid "Only nightly builds so far: tick Nightly builds beside Play to list them."
+msgstr "아직 나이틀리 빌드만 있습니다: 플레이 옆의 나이틀리 빌드를 체크하면 목록에 표시됩니다."
+
+msgid "Open Doors"
+msgstr "문 열기"
+
+msgid "Open bags at once"
+msgstr "가방 바로 열기"
+
+msgid "Open folder"
+msgstr "폴더 열기"
+
+msgid "Open its Steam workshop page"
+msgstr "Steam 창작마당 페이지 열기"
+
+msgid "Open its page"
+msgstr "페이지 열기"
+
+msgid "Open or close the build menu."
+msgstr "건설 메뉴를 열거나 닫습니다."
+
+msgid "Open or close the debug menu: teleport, spawn, items, money, heal and damage."
+msgstr "디버그 메뉴를 열거나 닫습니다: 순간 이동, 생성, 아이템, 돈, 치료, 피해."
+
+msgid "Open or close the selected character's inventory."
+msgstr "선택한 캐릭터의 인벤토리를 열거나 닫습니다."
+
+msgid "Open or close the selected character's stats window."
+msgstr "선택한 캐릭터의 능력치 창을 열거나 닫습니다."
+
+msgid "Open or close this settings dialog."
+msgstr "이 설정 대화 상자를 열거나 닫습니다."
+
+msgid "Open the Tutorials window, or close it."
+msgstr "튜토리얼 창을 열거나 닫습니다."
+
+msgid "Open the crafting page, or close it."
+msgstr "제작 페이지를 열거나 닫습니다."
+
+msgid "Open the faction page, or close it."
+msgstr "세력 페이지를 열거나 닫습니다."
+
+msgid "Open the installed version's folder"
+msgstr "설치된 버전의 폴더 열기"
+
+msgid "Open the launcher's release page"
+msgstr "런처의 릴리스 페이지 열기"
+
+msgid "Open the public wishlist of RE_Kenshi mods for Meitou, where you can ask for this one"
+msgstr "Meitou용 RE_Kenshi 모드 공개 위시리스트를 열어 이 모드를 요청할 수 있습니다"
+
+msgid "Open the research page, or close it."
+msgstr "연구 페이지를 열거나 닫습니다."
+
+msgid "Open the world map, or close it."
+msgstr "세계 지도를 열거나 닫습니다."
+
+msgid "Open {1} pages"
+msgstr "페이지 {1}개 열기"
+
+msgid "Orbit the camera to the left round its target."
+msgstr "카메라를 대상 주위로 왼쪽으로 돌립니다."
+
+msgid "Orbit the camera to the right round its target."
+msgstr "카메라를 대상 주위로 오른쪽으로 돌립니다."
+
+msgid "Others"
+msgstr "기타"
+
+msgid "Others' XP"
+msgstr "다른 사람의 경험치"
+
+msgid "Outdoors"
+msgstr "실외"
+
+msgid "Outline and tint the character under the cursor, in the colour of what a right click would do."
+msgstr "커서 아래 캐릭터에 오른쪽 클릭으로 할 동작의 색으로 윤곽선과 색조를 입힙니다."
+
+msgid "Outline and tint the selected building, and the building under the cursor in the colour of what a right click would do, like a character under the cursor, except while its interior is shown."
+msgstr "선택된 건물과, 커서 아래 건물에 오른쪽 클릭으로 할 동작의 색으로 윤곽선과 색조를 입힙니다. 커서 아래 캐릭터와 같지만 내부를 표시하는 동안은 제외합니다."
+
+msgid "Output:"
+msgstr "생산:"
+
+msgid "Overlaymaps"
+msgstr "오버레이 맵"
+
+msgid "PROSPECTING RESULTS"
+msgstr "탐사 결과"
+
+msgid "Particle density multiplier"
+msgstr "파티클 밀도 배수"
+
+msgid "Particle density x"
+msgstr "파티클 밀도 x"
+
+msgid "Passed to the game, e.g. --faithful or --windowed."
+msgstr "게임에 전달됩니다. 예: --faithful 또는 --windowed."
+
+msgid "Paste"
+msgstr "붙여넣기"
+
+msgid "Pause after loading"
+msgstr "불러온 뒤 일시 정지"
+
+msgid "Pause or resume the simulation."
+msgstr "시뮬레이션을 일시 정지하거나 재개합니다."
+
+msgid "Pause while loading"
+msgstr "로딩 중 일시 정지"
+
+msgid "Paused"
+msgstr "일시 정지됨"
+
+msgid "Peak brightness"
+msgstr "최대 밝기"
+
+msgid "Performance"
+msgstr "성능"
+
+msgid "Photo mode"
+msgstr "사진 모드"
+
+msgid "Photo mode: the simulation pauses, the interface hides, and a free camera with a lens, roll, exposure, time of day and composition guides takes pictures."
+msgstr "사진 모드: 시뮬레이션이 일시 정지하고 인터페이스가 숨겨지며, 렌즈, 롤, 노출, 시간대, 구도 가이드가 있는 자유 카메라로 사진을 찍습니다."
+
+msgid "Picked-up and looted items go into the character's backpack first, then its slots and inventory (the game: only while the bag window is open)."
+msgstr "주운 아이템과 약탈품은 먼저 캐릭터의 배낭에, 그다음 슬롯과 인벤토리에 들어갑니다(게임: 가방 창이 열려 있을 때만)."
+
+msgid "Picking up"
+msgstr "줍는 중"
+
+msgid "Picture size"
+msgstr "사진 크기"
+
+msgid "Pictures"
+msgstr "사진"
+
+msgid "Place here"
+msgstr "여기에 배치"
+
+msgid "Planetshine"
+msgstr "행성광"
+
+msgid "Planetshine strength"
+msgstr "행성광 강도"
+
+msgid "Planetshine strength (x physical)"
+msgstr "행성광 강도 (물리값의 x배)"
+
+msgid "Plate, tanks and machinery read as metal; rust and paint stay matte."
+msgstr "철판, 탱크, 기계는 금속처럼 보이고 녹과 페인트는 무광으로 유지됩니다."
+
+msgid "Play latest"
+msgstr "최신 버전 플레이"
+
+msgid "Play starts Meitou {1}."
+msgstr "플레이를 누르면 Meitou {1}이(가) 시작됩니다."
+
+msgid "Play starts the latest installed version."
+msgstr "플레이를 누르면 설치된 최신 버전이 시작됩니다."
+
+msgid "Play this version"
+msgstr "이 버전 플레이"
+
+msgid "Play {1}"
+msgstr "{1} 플레이"
+
+msgid "Playback"
+msgstr "재생"
+
+msgid "Points added to every interface font's default height (the game: 3)."
+msgstr "모든 인터페이스 글꼴의 기본 높이에 더하는 포인트(게임: 3)."
+
+msgid "Polished armour"
+msgstr "광택 낸 갑옷"
+
+msgid "Portrait and editor sun"
+msgstr "초상화와 편집기 태양"
+
+msgid "Portraits only"
+msgstr "초상화만"
+
+msgid "Portuguese (Brazil)"
+msgstr "포르투갈어 (브라질)"
+
+msgid "Pose"
+msgstr "포즈"
+
+msgid "Pose moment"
+msgstr "포즈 순간"
+
+msgid "Pose speed"
+msgstr "포즈 속도"
+
+msgid "Post FX"
+msgstr "후처리"
+
+msgid "Preset '{1}' applied."
+msgstr "프리셋 '{1}'을(를) 적용했습니다."
+
+msgid "Preset '{1}' deleted."
+msgstr "프리셋 '{1}'을(를) 삭제했습니다."
+
+msgid "Preset '{1}' saved."
+msgstr "프리셋 '{1}'을(를) 저장했습니다."
+
+msgid "Preset name"
+msgstr "프리셋 이름"
+
+msgid "Presets"
+msgstr "프리셋"
+
+msgid "Prisoners hold still"
+msgstr "포로는 가만히 있는다"
+
+msgid "Probes"
+msgstr "프로브"
+
+msgid "Probes (ray tracing)"
+msgstr "프로브 (레이 트레이싱)"
+
+msgid "Probes + hybrid cache"
+msgstr "프로브 + 하이브리드 캐시"
+
+msgid "Probes and cache"
+msgstr "프로브와 캐시"
+
+msgid "Probes move out of walls, clouds shade bounced light, a traced cache adds fine detail."
+msgstr "프로브가 벽 밖으로 나오고, 구름이 반사광을 가리며, 추적 캐시가 세밀한 디테일을 더합니다."
+
+msgid "Problems in no mod's file:"
+msgstr "어떤 모드 파일에도 속하지 않는 문제:"
+
+msgid "Production far away"
+msgstr "먼 곳의 생산"
+
+msgid "Propose an order where each enabled mod loads after the mods it needs; nothing moves until you accept"
+msgstr "활성화된 각 모드가 필요한 모드 다음에 로드되는 순서를 제안합니다. 수락할 때까지 아무것도 옮기지 않습니다"
+
+msgid "Proposed moves:"
+msgstr "제안된 이동:"
+
+msgid "Prospect the ground with the selected character nearest the camera."
+msgstr "카메라에 가장 가까운 선택된 캐릭터로 땅을 탐사합니다."
+
+msgid "Proving Grounds"
+msgstr "시험장"
+
+msgid "Put on Shackles"
+msgstr "족쇄 채우기"
+
+msgid "QUIT"
+msgstr "게임 종료"
+
+msgid "Quality preset"
+msgstr "품질 프리셋"
+
+msgid "Quarter resolution"
+msgstr "4분의 1 해상도"
+
+msgid "RE_Kenshi file rebinds: applied to the map files"
+msgstr "RE_Kenshi 파일 재지정: 지도 파일에 적용됨"
+
+msgid "RE_Kenshi mod"
+msgstr "RE_Kenshi 모드"
+
+msgid "RE_Kenshi plugin: its DLLs are ignored in Meitou"
+msgstr "RE_Kenshi 플러그인: 그 DLL은 Meitou에서 무시됩니다"
+
+msgid "RE_Kenshi sound banks: loaded before the game's"
+msgstr "RE_Kenshi 사운드 뱅크: 게임의 것보다 먼저 로드됨"
+
+msgid "Raid and campaign data that builds on a base campaign counts the base's squads and follow-up campaigns once. The game counts them twice, so inherited squads come up more often and follow-up raids are about twice as likely."
+msgstr "기본 캠페인을 바탕으로 한 습격 및 캠페인 데이터는 기본의 분대와 후속 캠페인을 한 번만 셉니다. 게임은 두 번 세기 때문에 물려받은 분대가 더 자주 나오고 후속 습격이 약 두 배 더 일어나기 쉽습니다."
+
+msgid "Raids as written"
+msgstr "작성된 대로의 습격"
+
+msgid "Rain drops and puddles"
+msgstr "빗방울과 물웅덩이"
+
+msgid "Rain in open buildings"
+msgstr "열린 건물 안의 비"
+
+msgid "Rain shows on the world: water runs down walls, drops stand on metal and stone, puddles gather on the ground. Off: as the original."
+msgstr "비가 세계에 나타납니다: 물이 벽을 타고 흐르고, 금속과 돌에 물방울이 맺히며, 땅에 물웅덩이가 고입니다. 끔: 원작과 동일."
+
+msgid "Raise the camera in free camera mode."
+msgstr "자유 카메라 모드에서 카메라를 올립니다."
+
+msgid "Raise the nearby ground into real bumps and ridges that cast shadows."
+msgstr "가까운 지면을 그림자를 드리우는 실제 요철과 능선으로 솟아오르게 합니다."
+
+msgid "Ray traced"
+msgstr "레이 트레이싱"
+
+msgid "Ray traced + cascades"
+msgstr "레이 트레이싱 + 캐스케이드"
+
+msgid "Ray-traced probes, or the probes moved out of walls with a fine cache of traced rays near the camera."
+msgstr "레이 트레이싱 프로브, 또는 카메라 근처에 추적 광선의 세밀한 캐시를 둔, 벽 밖으로 옮긴 프로브."
+
+msgid "Ray-traced shadows near the camera only; four soft cascades take over further away, where distant trees and buildings keep their shadows."
+msgstr "레이 트레이싱 그림자는 카메라 근처에만. 더 먼 곳은 부드러운 캐스케이드 네 개가 맡아 먼 나무와 건물도 그림자를 유지합니다."
+
+msgid "Ray-traced sun shadows: sharp at contact, soft with distance. Needs ray tracing."
+msgstr "레이 트레이싱 태양 그림자: 접촉부에서는 선명하고 거리에 따라 부드러워집니다. 레이 트레이싱이 필요합니다."
+
+msgid "Rays gather the bounced light on each character instead of the probes'. Needs GTAO."
+msgstr "프로브 대신 광선이 각 캐릭터의 반사광을 모읍니다. GTAO가 필요합니다."
+
+msgid "Reach"
+msgstr "범위"
+
+msgid "Ready to harvest"
+msgstr "수확 가능"
+
+msgid "Reduce visible colour bands in smooth gradients."
+msgstr "부드러운 그라데이션에서 보이는 색 띠를 줄입니다."
+
+msgid "Reflection range"
+msgstr "반사 범위"
+
+msgid "Reflection range multiplier"
+msgstr "반사 범위 배수"
+
+msgid "Reflection range x (game 0.6)"
+msgstr "반사 범위 x (게임 0.6)"
+
+msgid "Reflection samples"
+msgstr "반사 샘플"
+
+msgid "Reflections"
+msgstr "반사"
+
+msgid "Refresh"
+msgstr "새로 고침"
+
+msgid "Release page"
+msgstr "릴리스 페이지"
+
+msgid "Render UI in screen resolution"
+msgstr "인터페이스를 화면 해상도로 렌더링"
+
+msgid "Render clouds with volume and depth."
+msgstr "구름을 부피와 깊이가 있게 렌더링합니다."
+
+msgid "Render resolution"
+msgstr "렌더링 해상도"
+
+msgid "Render scale"
+msgstr "렌더링 배율"
+
+msgid "Render scale (upscaler)"
+msgstr "렌더링 배율 (업스케일러)"
+
+msgid "Render weather at an adaptive lower resolution."
+msgstr "날씨를 적응형 낮은 해상도로 렌더링합니다."
+
+msgid "Renderer"
+msgstr "렌더러"
+
+msgid "Renderer: {1}; Play starts the game with it."
+msgstr "렌더러: {1}. 플레이를 누르면 이것으로 게임을 시작합니다."
+
+msgid "Rendering resolution as a share of the window's pixels, under the upscaler the preset chose (MetalFX at 0.40 at least). Only with Use Metal upscaling on."
+msgstr "창 픽셀 대비 렌더링 해상도 비율로, 프리셋이 고른 업스케일러 아래에서 쓰입니다(MetalFX는 최소 0.40). Metal 업스케일링 사용이 켜져 있을 때만."
+
+msgid "Rendering resolution for rain, dust and other weather particles."
+msgstr "비, 먼지 및 기타 날씨 파티클의 렌더링 해상도."
+
+msgid "Request it"
+msgstr "요청하기"
+
+msgid "Requires {1}"
+msgstr "{1} 필요"
+
+msgid "Reset "
+msgstr "초기화 "
+
+msgid "Reset character"
+msgstr "캐릭터 초기화"
+
+msgid "Reset graphics"
+msgstr "그래픽 초기화"
+
+msgid "Restart to apply"
+msgstr "재시작 후 적용"
+
+msgid "Resting"
+msgstr "휴식 중"
+
+msgid "Restore all preferences, controls and the look to their defaults?"
+msgstr "모든 환경 설정, 조작, 룩을 기본값으로 되돌릴까요?"
+
+msgid "Restore defaults"
+msgstr "기본값 복원"
+
+msgid "Restore defaults?"
+msgstr "기본값으로 복원할까요?"
+
+msgid "Return to the main menu or quit the game?"
+msgstr "메인 메뉴로 돌아갈까요, 게임을 종료할까요?"
+
+msgid "Return to the main menu or quit the game? Unsaved progress will be lost."
+msgstr "메인 메뉴로 돌아갈까요, 게임을 종료할까요? 저장하지 않은 진행 상황은 사라집니다."
+
+msgid "Reverses the camera's tilt, for the mouse and the keys (the game: on)."
+msgstr "마우스와 키에서 카메라 기울기를 반전합니다(게임: 켬)."
+
+msgid "Reverses the camera's turn, for the mouse and the keys (the game: off)."
+msgstr "마우스와 키에서 카메라 회전을 반전합니다(게임: 끔)."
+
+msgid "Roaming squads keep their characters when they leave the area around your squads, and travel on as themselves. In the game they are removed and new ones are made later."
+msgstr "떠도는 분대는 당신 분대 주변 지역을 떠나도 캐릭터를 유지하고 그대로 여행을 계속합니다. 게임에서는 제거되고 나중에 새로 만들어집니다."
+
+msgid "Rock smoothing (tessellation)"
+msgstr "바위 매끄럽게 (테셀레이션)"
+
+msgid "Round off the flat facets of rocks and cliffs up close."
+msgstr "가까이서 보는 바위와 절벽의 평평한 면을 둥글게 합니다."
+
+msgid "Run the simulation at double speed."
+msgstr "시뮬레이션을 2배속으로 진행합니다."
+
+msgid "Run the simulation at five times normal speed."
+msgstr "시뮬레이션을 보통의 5배속으로 진행합니다."
+
+msgid "Run the simulation at normal speed."
+msgstr "시뮬레이션을 보통 속도로 진행합니다."
+
+msgid "Runs the next world tick while the frame draws: higher frame rates in big fights and crowds, up to 33 ms more input delay."
+msgstr "프레임을 그리는 동안 다음 세계 틱을 실행합니다: 큰 전투와 군중에서 프레임 속도가 오르고 입력 지연이 최대 33 ms 늘어납니다."
+
+msgid "Russian"
+msgstr "러시아어"
+
+msgid "SETTINGS"
+msgstr "설정"
+
+msgid "SSAO is a cheap estimate; GTAO measures how much sky each pixel sees and keeps the colour of the light bounced in corners. Costs more."
+msgstr "SSAO는 저렴한 추정입니다. GTAO는 각 픽셀이 보는 하늘의 양을 측정하고 모서리에서 반사된 빛의 색을 유지합니다. 비용이 더 듭니다."
+
+msgid "STEALING CHANCE:"
+msgstr "절도 확률:"
+
+msgid "Safe — 5120 MB"
+msgstr "안전 — 5120 MB"
+
+msgid "Safe: a fixed 5120 MB; the guard shortens ranges and evicts caches sooner."
+msgstr "안전: 고정 5120 MB. 보호 장치가 범위를 줄이고 캐시를 더 일찍 비웁니다."
+
+msgid "Sake and rum bottles look like glass: they bend and tint what is behind them, catch reflections and show the drink inside."
+msgstr "사케와 럼 병이 유리처럼 보입니다: 뒤의 것을 굴절시키고 물들이며, 반사를 담고 안의 술을 보여 줍니다."
+
+msgid "Samples of the shading in creases: lower is cheaper and noisier."
+msgstr "주름 음영의 샘플 수: 낮을수록 가볍고 노이즈가 많습니다."
+
+msgid "Samples per pixel of the water's reflection: smoother edges, more video memory."
+msgstr "물 반사의 픽셀당 샘플 수: 가장자리가 매끄럽고 비디오 메모리가 늘어납니다."
+
+msgid "Save an image of the current view."
+msgstr "현재 화면의 이미지를 저장합니다."
+
+msgid "Save as"
+msgstr "다른 이름으로 저장"
+
+msgid "Save as a new preset"
+msgstr "새 프리셋으로 저장"
+
+msgid "Save as preset"
+msgstr "프리셋으로 저장"
+
+msgid "Save failed: {1}"
+msgstr "저장 실패: {1}"
+
+msgid "Save or load still in progress"
+msgstr "저장 또는 불러오기가 아직 진행 중입니다"
+
+msgid "Save preset"
+msgstr "프리셋 저장"
+
+msgid "Save the game now and attach the save"
+msgstr "지금 게임을 저장하고 저장 파일 첨부"
+
+msgid "Save the game to the quicksave slot."
+msgstr "빠른 저장 슬롯에 게임을 저장합니다."
+
+msgid "Saves the game on its own every few minutes of unpaused play, into three slots in turn (autosave0 to autosave2)."
+msgstr "일시 정지하지 않은 플레이 중 몇 분마다 스스로 게임을 저장하며, 세 슬롯을 차례로 씁니다(autosave0~autosave2)."
+
+msgid "Scale air scattering around sunrise and sunset."
+msgstr "일출과 일몰 무렵의 대기 산란을 조절합니다."
+
+msgid "Scale how far away reflected objects are drawn."
+msgstr "반사되는 오브젝트를 그리는 거리를 조절합니다."
+
+msgid "Scale how far trees and other foliage remain visible."
+msgstr "나무와 기타 식생이 보이는 거리를 조절합니다."
+
+msgid "Scale night lighting from the planet and moon."
+msgstr "행성과 달의 밤 조명을 조절합니다."
+
+msgid "Scale the amount of atmospheric haze."
+msgstr "대기 안개의 양을 조절합니다."
+
+msgid "Scale the distance at which grass disappears."
+msgstr "풀이 사라지는 거리를 조절합니다."
+
+msgid "Scale the distortion caused by hot air."
+msgstr "뜨거운 공기로 인한 왜곡을 조절합니다."
+
+msgid "Scale the number of grass instances drawn."
+msgstr "그려지는 풀의 수를 조절합니다."
+
+msgid "Scale the number of weather particles emitted."
+msgstr "방출되는 날씨 파티클 수를 조절합니다."
+
+msgid "Scale the sky's light in shade, at night and indoors."
+msgstr "그늘, 밤, 실내의 하늘빛을 조절합니다."
+
+msgid "Screen resolution"
+msgstr "화면 해상도"
+
+msgid "Search"
+msgstr "검색"
+
+msgid "Search results"
+msgstr "검색 결과"
+
+msgid "Search settings"
+msgstr "설정 검색"
+
+msgid "Seen into a building with its roof hidden, no rain, dust or ash falls over the open room. The game leaves out only what falls inside it, so with the camera pulled back the rain in front still streaks across the room."
+msgstr "지붕을 숨긴 건물 안을 볼 때 열린 방 위로 비, 먼지, 재가 내리지 않습니다. 게임은 안에 떨어지는 것만 빼기 때문에 카메라를 뒤로 빼면 앞쪽 비가 여전히 방을 가로지릅니다."
+
+msgid "Seen into a building your characters are in, parts of other buildings that run through it are left out, such as the Hub's town wall in the Shinobi Thieves tower. The game's world places them there and draws them inside the room."
+msgstr "캐릭터가 있는 건물 안을 볼 때 그 건물을 관통하는 다른 건물의 부분을 뺍니다. 예를 들어 Shinobi Thieves 탑 안의 Hub 성벽입니다. 게임의 세계는 그것을 그곳에 두고 방 안에 그립니다."
+
+msgid "Segments of the water mesh: fewer is cheaper, far waves lose shape."
+msgstr "물 메시의 분할 수: 적을수록 가볍고 먼 파도는 모양을 잃습니다."
+
+msgid "Select"
+msgstr "선택"
+
+msgid "Select a mod to see its author, description and problems."
+msgstr "모드를 선택하면 작성자, 설명, 문제가 표시됩니다."
+
+msgid "Select a release to read its notes."
+msgstr "릴리스를 선택하면 노트를 볼 수 있습니다."
+
+msgid "Select all"
+msgstr "모두 선택"
+
+msgid "Select characters and press the interface (the game's left button). Binding it elsewhere moves the other buttons along."
+msgstr "캐릭터를 선택하고 인터페이스를 누릅니다(게임의 왼쪽 버튼). 다른 곳에 지정하면 다른 버튼도 함께 옮겨집니다."
+
+msgid "Select none"
+msgstr "선택 해제"
+
+msgid "Select the next member of the character's squad."
+msgstr "캐릭터 분대의 다음 대원을 선택합니다."
+
+msgid "Select the previous member of the character's squad."
+msgstr "캐릭터 분대의 이전 대원을 선택합니다."
+
+msgid "Select the whole squad (Shift adds it to the selection)."
+msgstr "분대 전체를 선택합니다(Shift로 선택에 추가)."
+
+msgid "Select this member of the squad bar (Shift adds them to the selection; press twice to centre on them)."
+msgstr "분대 바의 이 대원을 선택합니다(Shift로 선택에 추가, 두 번 누르면 그 대원에게 카메라를 맞춤)."
+
+msgid "Selected"
+msgstr "선택됨"
+
+msgid "Send"
+msgstr "보내기"
+
+msgid "Send anyway"
+msgstr "그래도 보내기"
+
+msgid "Send feedback"
+msgstr "피드백 보내기"
+
+msgid "Sending"
+msgstr "보내는 중"
+
+msgid "Set foliage visibility by mesh size rather than layer."
+msgstr "식생 가시성을 레이어가 아닌 메시 크기로 정합니다."
+
+msgid "Set the Kenshi folder first (Settings)."
+msgstr "먼저 Kenshi 폴더를 지정하세요(설정)."
+
+msgid "Set the Kenshi folder in Settings to list its mods."
+msgstr "모드를 나열하려면 설정에서 Kenshi 폴더를 지정하세요."
+
+msgid "Set up Meitou"
+msgstr "Meitou 설정"
+
+msgid "Sets the upscaler and the render scale. MetalFX temporal by default; spatial is an alternative."
+msgstr "업스케일러와 렌더링 배율을 설정합니다. 기본은 MetalFX 시간, 공간은 대안입니다."
+
+msgid "Settings"
+msgstr "설정"
+
+msgid "Settings   (Tab hides this)"
+msgstr "설정   (Tab으로 숨김)"
+
+msgid "Setup"
+msgstr "설정"
+
+msgid "Sfx volume"
+msgstr "효과음 음량"
+
+msgid "Shadow"
+msgstr "그림자"
+
+msgid "Shadow cascades"
+msgstr "그림자 캐스케이드"
+
+msgid "Shadow cascades (Meitou)"
+msgstr "그림자 캐스케이드 (Meitou)"
+
+msgid "Shadow distance"
+msgstr "그림자 거리"
+
+msgid "Shadow distance (game 1k-9k, 0 off)"
+msgstr "그림자 거리 (게임 1k-9k, 0 끔)"
+
+msgid "Shadow filter"
+msgstr "그림자 필터"
+
+msgid "Shadow filter 0-2 (Meitou; 0 low-end)"
+msgstr "그림자 필터 0-2 (Meitou, 0 저사양)"
+
+msgid "Shadow map size"
+msgstr "그림자 맵 크기"
+
+msgid "Shadow map size (game quality 0-2)"
+msgstr "그림자 맵 크기 (게임 품질 0-2)"
+
+msgid "Share"
+msgstr "공유"
+
+msgid "Sharp zone"
+msgstr "선명 구역"
+
+msgid "Sharpen the image after resolution reconstruction."
+msgstr "해상도 재구성 후 이미지를 선명하게 합니다."
+
+msgid "Shift dark scenes toward the blue of night vision."
+msgstr "어두운 장면을 야간 시력의 푸른빛으로 옮깁니다."
+
+msgid "Shift pan boost"
+msgstr "Shift 이동 가속"
+
+msgid "Shift pan speed"
+msgstr "Shift 이동 속도"
+
+msgid "Short sharp sun shadows where small things touch a surface."
+msgstr "작은 물체가 표면에 닿는 곳의 짧고 선명한 태양 그림자."
+
+msgid "Shoulder"
+msgstr "어깨"
+
+msgid "Show names"
+msgstr "이름 표시"
+
+msgid "Show only the mods whose name or author holds this text"
+msgstr "이름이나 작성자에 이 텍스트가 있는 모드만 표시"
+
+msgid "Show or hide frame statistics."
+msgstr "프레임 통계를 표시하거나 숨깁니다."
+
+msgid "Show the next squad in the squad bar."
+msgstr "분대 바에서 다음 분대를 표시합니다."
+
+msgid "Shows the tutorial hints as you play (the game: on)."
+msgstr "플레이하는 동안 튜토리얼 힌트를 표시합니다(게임: 켬)."
+
+msgid "Sideways"
+msgstr "좌우"
+
+msgid "Simulation"
+msgstr "시뮬레이션"
+
+msgid "Size of the squads made from now on: townspeople, roaming squads and raids (the game: 1). Affects performance."
+msgstr "앞으로 만들어지는 분대의 규모: 마을 주민, 떠도는 분대, 습격(게임: 1). 성능에 영향을 줍니다."
+
+msgid "Size of the wave simulation: smaller is cheaper and coarser."
+msgstr "파도 시뮬레이션 크기: 작을수록 가볍고 거칩니다."
+
+msgid "Skin"
+msgstr "피부"
+
+msgid "Skin scatters light on this race (the default)."
+msgstr "이 종족은 피부가 빛을 산란합니다(기본값)."
+
+msgid "Skin sheen and glow"
+msgstr "피부 광택과 빛"
+
+msgid "Skin's oily sheen, a soft bright edge, and light through ears and fingers."
+msgstr "피부의 기름진 광택, 부드럽고 밝은 가장자리, 귀와 손가락을 통과하는 빛."
+
+msgid "Skip v{1}"
+msgstr "v{1} 건너뛰기"
+
+msgid "Skipped {1}: the arrow's menu can still install it."
+msgstr "{1} 건너뜀: 화살표 메뉴에서 여전히 설치할 수 있습니다."
+
+msgid "Sky"
+msgstr "하늘"
+
+msgid "Sky & weather"
+msgstr "하늘과 날씨"
+
+msgid "Slavers and other cage guards leave their own faction's people in their cages alone instead of making them slaves. In the game they enslave them too. Arrests that end in slavery are not affected."
+msgstr "노예상과 다른 우리 경비병은 우리 안의 자기 세력 사람을 노예로 만들지 않고 내버려 둡니다. 게임에서는 그들도 노예로 만듭니다. 노예로 끝나는 체포에는 영향이 없습니다."
+
+msgid "Small foliage"
+msgstr "소형 식생"
+
+msgid "Small foliage range"
+msgstr "소형 식생 범위"
+
+msgid "Small pits in the ground are filled and thin needles of ground standing above flat land are lowered, such as the pit near the Dead Workshop and some needles in the Crater. Off, the ground is exactly as the game's map file has it."
+msgstr "땅의 작은 구덩이를 메우고 평지 위로 솟은 가는 바늘 모양 지면을 낮춥니다. Dead Workshop 근처의 구덩이와 Crater의 바늘 일부 등입니다. 끄면 지면이 게임의 지도 파일 그대로입니다."
+
+msgid "Smooth the outline of hills and crests against the sky."
+msgstr "하늘을 배경으로 한 언덕과 능선의 윤곽을 매끄럽게 합니다."
+
+msgid "Smooths edges and upscales the render. Active: {1}"
+msgstr "가장자리를 부드럽게 하고 렌더링을 확대합니다. 활성: {1}"
+
+msgid "Sneak attack"
+msgstr "기습 공격"
+
+msgid "Soft cascaded maps to the horizon, or a ray to the sun from every pixel: as sharp as the caster is close, grass shadows too (needs ray tracing, turns on indirect light); or rays near the camera and soft cascades further away."
+msgstr "지평선까지 이어지는 부드러운 캐스케이드 맵, 또는 각 픽셀에서 태양으로 가는 광선: 드리우는 물체가 가까울수록 선명하고 풀 그림자도 생깁니다(레이 트레이싱 필요, 간접광 켬). 또는 카메라 근처는 광선, 먼 곳은 부드러운 캐스케이드."
+
+msgid "Soft cascades"
+msgstr "부드러운 캐스케이드"
+
+msgid "Soft grazing sun"
+msgstr "부드러운 비스듬한 햇빛"
+
+msgid "Soften dust and fog where they meet the ground, and light them by the sun and its shadows."
+msgstr "먼지와 안개가 땅에 닿는 곳을 부드럽게 하고 태양과 그 그림자로 비춥니다."
+
+msgid "Sound range"
+msgstr "소리 범위"
+
+msgid "Sound voices"
+msgstr "음성"
+
+msgid "Spanish"
+msgstr "스페인어"
+
+msgid "Speed units"
+msgstr "속도 단위"
+
+msgid "Splash blood on walls, buildings and rocks as well as the ground; pools stay on floors."
+msgstr "땅뿐 아니라 벽, 건물, 바위에도 피를 튀깁니다. 피 웅덩이는 바닥에 남습니다."
+
+msgid "Splash screens"
+msgstr "시작 화면"
+
+msgid "Squad XP"
+msgstr "분대 경험치"
+
+msgid "Squad XP in the Advanced settings"
+msgstr "고급 설정의 분대 경험치"
+
+msgid "Squads keep their people"
+msgstr "분대가 대원을 유지"
+
+msgid "Start Meitou {1}"
+msgstr "Meitou {1} 시작"
+
+msgid "Start Meitou {1} at the main menu"
+msgstr "Meitou {1}을(를) 메인 메뉴에서 시작"
+
+msgid "Start a new game? Unsaved progress will be lost."
+msgstr "새 게임을 시작할까요? 저장하지 않은 진행 상황은 사라집니다."
+
+msgid "Started {1}"
+msgstr "시작됨 {1}"
+
+msgid "Stays"
+msgstr "고정"
+
+msgid "Steam could not subscribe"
+msgstr "Steam이 구독하지 못했습니다"
+
+msgid "Steam did not answer in time."
+msgstr "Steam이 제때 응답하지 않았습니다."
+
+msgid "Steam did not subscribe to anything."
+msgstr "Steam이 아무것도 구독하지 않았습니다."
+
+msgid "Steam gave no answer."
+msgstr "Steam이 응답하지 않았습니다."
+
+msgid "Steam is downloading your workshop mods: {1} of {2} installed."
+msgstr "Steam이 창작마당 모드를 다운로드하는 중: {2}개 중 {1}개 설치됨."
+
+msgid "Steam is still downloading; press Refresh when it is done."
+msgstr "Steam이 아직 다운로드 중입니다. 끝나면 새로 고침을 누르세요."
+
+msgid "Steam sees the game as Kenshi: the overlay, play time and Steam's screenshot key. Needs the Steam copy of Kenshi."
+msgstr "Steam이 게임을 Kenshi로 인식합니다: 오버레이, 플레이 시간, Steam 스크린샷 키. Steam판 Kenshi가 필요합니다."
+
+msgid "Steam workshop"
+msgstr "Steam 창작마당"
+
+msgid "Step down to the previous simulation speed."
+msgstr "이전 시뮬레이션 속도로 내립니다."
+
+msgid "Step the selection's movement speed: walk, jog, run, group."
+msgstr "선택한 캐릭터의 이동 속도를 바꿉니다: 걷기, 조깅, 달리기, 집단."
+
+msgid "Step up to the next simulation speed."
+msgstr "다음 시뮬레이션 속도로 올립니다."
+
+msgid "Stop syncing"
+msgstr "동기화 중지"
+
+msgid "Stop the selected characters."
+msgstr "선택한 캐릭터를 멈춥니다."
+
+msgid "Store the game's models more compactly: about half the video memory, the same look."
+msgstr "게임의 모델을 더 작게 저장합니다: 비디오 메모리 약 절반, 모습은 같습니다."
+
+msgid "Subscribe"
+msgstr "구독"
+
+msgid "Subscribe to this mod's Meitou port on the Steam workshop, or open its page"
+msgstr "Steam 창작마당에서 이 모드의 Meitou 이식판을 구독하거나 페이지 열기"
+
+msgid "Subscribed on Steam: {1}."
+msgstr "Steam에서 구독함: {1}."
+
+msgid "Subscribing could not be started."
+msgstr "구독을 시작할 수 없습니다."
+
+msgid "Sun shadow technique"
+msgstr "태양 그림자 기법"
+
+msgid "Sun shadows"
+msgstr "태양 그림자"
+
+msgid "Super quality"
+msgstr "최고 품질"
+
+msgid "Support me on Ko-fi"
+msgstr "Ko-fi에서 후원하기"
+
+msgid "Swamp turtle attacks"
+msgstr "늪 거북 공격"
+
+msgid "Swamp turtle attacks on the Fixes page"
+msgstr "수정 페이지의 늪 거북 공격"
+
+msgid "Swamp turtle attacks on the Fixes page is on"
+msgstr "수정 페이지의 늪 거북 공격 켜짐"
+
+msgid "Swap the left and right mouse buttons (the game: off; the game view follows, as in the original)."
+msgstr "마우스 왼쪽과 오른쪽 버튼을 바꿉니다(게임: 끔. 게임 화면 조작도 원작처럼 따라 바뀝니다)."
+
+msgid "Swaps a few strong words in the dialogue for milder ones (the game's censorship option)."
+msgstr "대화의 몇몇 강한 단어를 순한 단어로 바꿉니다(게임의 검열 옵션)."
+
+msgid "Switch between orbit and free camera movement."
+msgstr "카메라 이동을 궤도와 자유 방식 사이에서 전환합니다."
+
+msgid "Sync stopped with {1} of {2} workshop mods installed; Steam keeps downloading in the background."
+msgstr "창작마당 모드 {2}개 중 {1}개가 설치된 상태에서 동기화가 멈췄습니다. Steam은 백그라운드에서 계속 다운로드합니다."
+
+msgid "Sync workshop"
+msgstr "창작마당 동기화"
+
+msgid "TAA (experimental)"
+msgstr "TAA(실험적)"
+
+msgid "TAA 0.50 (experimental)"
+msgstr "TAA 0.50(실험적)"
+
+msgid "THANK YOU"
+msgstr "감사합니다"
+
+msgid "TRADER"
+msgstr "상인"
+
+msgid "Take picture"
+msgstr "사진 찍기"
+
+msgid "Take the mod list and load order a save was made with"
+msgstr "저장 파일을 만들 때 쓰인 모드 목록과 로드 순서 가져오기"
+
+msgid "Take the mods and their load order from this save:"
+msgstr "이 저장 파일에서 모드와 로드 순서 가져오기:"
+
+msgid "Tech level:"
+msgstr "기술 수준:"
+
+msgid "Tell us what went wrong or what you think. It becomes a public issue on GitHub, with your Meitou version and load order."
+msgstr "무엇이 잘못되었는지, 또는 의견을 알려 주세요. Meitou 버전과 로드 순서가 포함된 GitHub 공개 이슈로 올라갑니다."
+
+msgid "Temperature"
+msgstr "기온"
+
+msgid "Terrain"
+msgstr "지형"
+
+msgid "Terrain detail"
+msgstr "지형 디테일"
+
+msgid "Terrain detail: error px (less = finer)"
+msgstr "지형 디테일: 오차 px(작을수록 세밀함)"
+
+msgid "Terrain material distance"
+msgstr "지형 재질 거리"
+
+msgid "Terrain outline refinement (tessellation)"
+msgstr "지형 윤곽 세분화(테셀레이션)"
+
+msgid "Terrain relief"
+msgstr "지형 기복"
+
+msgid "Texture filtering"
+msgstr "텍스처 필터링"
+
+msgid "Texture quality"
+msgstr "텍스처 품질"
+
+msgid "Texture quality 0-4 (game)"
+msgstr "텍스처 품질 0-4(게임)"
+
+msgid "Texture resolution; terrain changes need a restart."
+msgstr "텍스처 해상도. 지형 변경은 재시작이 필요합니다."
+
+msgid "That key is reserved. Choose another key, or Esc to cancel."
+msgstr "예약된 키입니다. 다른 키를 고르거나 Esc로 취소하세요."
+
+msgid "The DLSS model. Default picks by render scale; L and M ghost less than K and cost more."
+msgstr "DLSS 모델. 기본값은 렌더링 배율에 따라 고릅니다. L과 M은 K보다 잔상이 적지만 부하가 더 큽니다."
+
+msgid "The FEEDBACK button at the top right during play. Off, it still shows on the title screen and in the Esc menu."
+msgstr "플레이 중 오른쪽 위의 피드백 버튼. 꺼도 타이틀 화면과 Esc 메뉴에는 표시됩니다."
+
+msgid "The Rotate item control (the middle mouse button by default, Controls page) turns the inventory item on the mouse a quarter, or the item under the pointer in a character's grid, so long items fit across. Worn items are never turned. In the game items cannot be turned. From ErasmianFolly's GetRotatedIdiot."
+msgstr "아이템 회전 조작(기본값은 마우스 가운데 버튼, 조작 페이지)은 마우스에 든 인벤토리 아이템, 또는 캐릭터 격자에서 포인터 아래 있는 아이템을 90도 돌려 긴 아이템이 가로로 들어가게 합니다. 착용한 아이템은 돌아가지 않습니다. 게임에서는 아이템을 돌릴 수 없습니다. ErasmianFolly의 GetRotatedIdiot에서 가져왔습니다."
+
+msgid "The Vulkan loader is already installed. Select Vulkan to use it."
+msgstr "Vulkan 로더가 이미 설치되어 있습니다. 사용하려면 Vulkan을 선택하세요."
+
+msgid "The Vulkan loader is not installed: run 'brew install molten-vk vulkan-loader' in a terminal, then Play again."
+msgstr "Vulkan 로더가 설치되어 있지 않습니다. 터미널에서 'brew install molten-vk vulkan-loader'를 실행한 다음 다시 플레이를 누르세요."
+
+msgid "The Workshop sync could not be started."
+msgstr "창작마당 동기화를 시작할 수 없습니다."
+
+msgid "The ash filling a half-buried Ash Dome ruin stays drawn while your characters are in it, and they are ordered onto it. The game hides the ground inside the ruin, showing buried floors nobody can reach under characters that seem to walk on air."
+msgstr "반쯤 묻힌 재의 돔 유적을 채운 재가 캐릭터가 안에 있는 동안에도 그려지며, 캐릭터는 그 위로 이동합니다. 게임은 유적 안의 지면을 숨겨서, 아무도 닿을 수 없는 묻힌 바닥이 보이고 캐릭터가 허공을 걷는 것처럼 보입니다."
+
+msgid "The bounty will expire in {1,num} hrs"
+msgstr "현상금이 {1,num}시간 후 만료됩니다"
+
+msgid "The cage is locked."
+msgstr "우리가 잠겨 있습니다."
+
+msgid "The camera following a character looks higher than the game's point 10 units above its feet, and to one side if wanted, for a view from head height or over the shoulder. The free camera and the unlocked camera are not changed. From ErasmianFolly's Camera Tweaks."
+msgstr "캐릭터를 따라가는 카메라가 게임의 기준점(발에서 10유닛 위)보다 높은 곳을, 원하면 옆으로 비켜서 봅니다. 머리 높이나 어깨 너머 시점이 됩니다. 자유 카메라와 잠금 해제 카메라는 바뀌지 않습니다. ErasmianFolly의 Camera Tweaks에서 가져왔습니다."
+
+msgid "The camera moves when the pointer is at the edge of the screen."
+msgstr "포인터가 화면 가장자리에 있으면 카메라가 움직입니다."
+
+msgid "The camera's height follows the character's head as it crouches, sits or lies down. On, the height slider is not used."
+msgstr "캐릭터가 웅크리거나 앉거나 누울 때 카메라 높이가 머리를 따라갑니다. 켜면 높이 슬라이더는 쓰이지 않습니다."
+
+msgid "The camera's pan speed while Shift is held, of its normal speed."
+msgstr "Shift를 누르고 있는 동안의 카메라 이동 속도(보통 속도 대비)."
+
+msgid "The camera's turn and tilt ease in and out (the game: always on). Off: they follow the mouse and the keys at once."
+msgstr "카메라 회전과 기울기가 부드럽게 가속하고 감속합니다(게임: 항상 켬). 끔: 마우스와 키를 즉시 따라갑니다."
+
+msgid "The clipboard holds no preset code (MT1:...). Copy one with Share first."
+msgstr "클립보드에 프리셋 코드(MT1:...)가 없습니다. 먼저 공유로 복사하세요."
+
+msgid "The clipboard holds no preset code (MT1:…). Copy one with Share first."
+msgstr "클립보드에 프리셋 코드(MT1:…)가 없습니다. 먼저 공유로 복사하세요."
+
+msgid "The door will lock when it closes."
+msgstr "문이 닫히면 잠깁니다."
+
+msgid "The game as it ships, or Meitou with a look preset."
+msgstr "출시된 그대로의 게임, 또는 룩 프리셋을 적용한 Meitou."
+
+msgid "The game is running: close it before detecting the preset."
+msgstr "게임이 실행 중입니다. 프리셋을 감지하기 전에 게임을 닫으세요."
+
+msgid "The game is running: it saves its settings when it closes, over changes made here."
+msgstr "게임이 실행 중입니다. 게임은 종료할 때 설정을 저장해 여기서 바꾼 내용을 덮어씁니다."
+
+msgid "The game speed of the second speed button (two arrows) and its key (the game: 2x)."
+msgstr "두 번째 속도 버튼(화살표 두 개)과 그 키의 게임 속도(게임: 2x)."
+
+msgid "The game speed of the third speed button (three arrows) and its key (the game: 5x). High speeds need a fast processor; when it cannot keep up the game runs slower than chosen."
+msgstr "세 번째 속도 버튼(화살표 세 개)과 그 키의 게임 속도(게임: 5x). 빠른 속도에는 빠른 프로세서가 필요하며, 따라가지 못하면 게임이 고른 속도보다 느리게 진행됩니다."
+
+msgid "The game's cascades, Meitou's soft cascades to the horizon, ray-traced shadows, or ray-traced near and soft cascades further away (both need ray tracing and turn on global illumination)."
+msgstr "게임의 캐스케이드, 지평선까지 닿는 Meitou의 부드러운 캐스케이드, 레이 트레이싱 그림자, 또는 가까이는 레이 트레이싱이고 멀리는 부드러운 캐스케이드(둘 다 레이 트레이싱이 필요하며 전역 조명을 켭니다)."
+
+msgid "The green marker on the camera's pivot while you turn it (the game: on)."
+msgstr "카메라를 돌리는 동안 회전축에 표시되는 초록 마커(게임: 켬)."
+
+msgid "The green marker where a move order sends your characters (the game: on)."
+msgstr "이동 명령으로 캐릭터가 향하는 곳의 초록 마커(게임: 켬)."
+
+msgid "The hats of every other character are left out the same way, not only your own characters'."
+msgstr "내 캐릭터뿐 아니라 다른 모든 캐릭터의 모자도 같은 방식으로 뺍니다."
+
+msgid "The icon of what a right click would do beside the Windows cursor (none for a walk), and the hand over buttons and targets."
+msgstr "Windows 커서 옆에 오른쪽 클릭으로 할 동작의 아이콘을 표시하고(걷기는 없음), 버튼과 대상 위에서는 손 모양을 표시합니다."
+
+msgid "The launch arguments have --benchmark-baseline: the game ignores the graphics sliders while it is set."
+msgstr "실행 인수에 --benchmark-baseline이 있습니다. 설정되어 있는 동안 게임은 그래픽 슬라이더를 무시합니다."
+
+msgid "The launch arguments have --low-end: the game ignores the graphics sliders while it is set."
+msgstr "실행 인수에 --low-end가 있습니다. 설정되어 있는 동안 게임은 그래픽 슬라이더를 무시합니다."
+
+msgid "The launcher's and the game's settings: {1}"
+msgstr "런처와 게임 설정: {1}"
+
+msgid "The lens's f-number: lower blurs more. A cinema key can set its own."
+msgstr "렌즈의 F값. 낮을수록 더 흐려집니다. 시네마 키가 자체 값을 정할 수 있습니다."
+
+msgid "The load window's Load button works only once a save that can be read is selected. The game keeps it live: with nothing selected a click does nothing, and an unreadable save fails to load."
+msgstr "불러오기 창의 불러오기 버튼은 읽을 수 있는 저장 파일을 선택했을 때만 작동합니다. 게임에서는 늘 활성 상태여서, 아무것도 선택하지 않으면 클릭해도 아무 일도 없고 읽을 수 없는 저장 파일은 불러오기에 실패합니다."
+
+msgid "The mod list is still loading; try again in a moment."
+msgstr "모드 목록을 아직 불러오는 중입니다. 잠시 후 다시 시도하세요."
+
+msgid "The mod order already meets every dependency."
+msgstr "모드 순서가 이미 모든 의존성을 충족합니다."
+
+msgid "The most blood marks on walls and objects and bloody footprints drawn in a frame, the ones that look largest first."
+msgstr "한 프레임에 그리는 벽과 물체의 핏자국과 피 묻은 발자국의 최대 수. 크게 보이는 것부터 그립니다."
+
+msgid "The most sounds heard at once: the loudest play, quieter ones wait silently and come back when they are loud enough. Lower it if big fights stutter; All mixes every sound."
+msgstr "동시에 들리는 소리의 최대 수: 큰 소리가 재생되고, 작은 소리는 조용히 기다렸다가 충분히 커지면 돌아옵니다. 큰 전투에서 끊기면 낮추세요. 전체는 모든 소리를 섞습니다."
+
+msgid "The name over each of your characters (the game's Show names option). Off, only the stealth and light icons stay."
+msgstr "내 각 캐릭터 위의 이름(게임의 이름 표시 옵션). 끄면 은신과 조명 아이콘만 남습니다."
+
+msgid "The plugins of these RE_Kenshi mods do not run in Meitou."
+msgstr "이 RE_Kenshi 모드들의 플러그인은 Meitou에서 작동하지 않습니다."
+
+msgid "The same for everyone outside your faction: other factions, enemies and wild animals (the game: 1x)."
+msgstr "내 세력 밖의 모두에게도 동일: 다른 세력, 적, 야생 동물(게임: 1x)."
+
+msgid "The save '{1}' has no mod list."
+msgstr "저장 파일 '{1}'에 모드 목록이 없습니다."
+
+msgid "The save '{1}' was made with other mods ({2}); Mods > From save applies its list."
+msgstr "저장 파일 '{1}'은(는) 다른 모드({2})로 만들어졌습니다. 모드 > 저장 파일에서로 그 목록을 적용합니다."
+
+msgid "The selected carriers put their bodies down."
+msgstr "선택한 운반자가 메고 있는 몸을 내려놓습니다."
+
+msgid "The selection looks for someone to rescue (Shift: add the rescue job)."
+msgstr "선택한 캐릭터가 구조할 사람을 찾습니다(Shift: 구조 작업 추가)."
+
+msgid "The selection looks for someone to treat (Shift: add the medic job)."
+msgstr "선택한 캐릭터가 치료할 사람을 찾습니다(Shift: 의무 작업 추가)."
+
+msgid "The selection sits down to rest."
+msgstr "선택한 캐릭터가 앉아서 쉽니다."
+
+msgid "The size of the whole interface: text, buttons and windows (100%: as the window's height makes it)."
+msgstr "전체 인터페이스 크기: 글자, 버튼, 창(100%: 창 높이에 맞춘 크기)."
+
+msgid "The size the scene renders at in full screen, stretched to the screen with the nearest pixel. In a window it is the window's size."
+msgstr "전체 화면에서 장면을 렌더링하는 크기로, 최근접 픽셀로 화면에 늘립니다. 창 모드에서는 창 크기입니다."
+
+msgid "The sky's light in shade, at night and indoors."
+msgstr "그늘, 밤, 실내에서의 하늘빛."
+
+msgid "The sun's shadows: off, the game's cascades, or Meitou's, soft and to the horizon or ray traced. The lamps' shadows are inside."
+msgstr "태양 그림자: 끔, 게임의 캐스케이드, 또는 Meitou의 그림자(지평선까지 닿는 부드러운 그림자나 레이 트레이싱). 램프 그림자는 실내에 있습니다."
+
+msgid "The unit of the run speed in the character's information panel (the game: mph)."
+msgstr "캐릭터 정보 패널의 달리기 속도 단위(게임: mph)."
+
+msgid "The wind's sound ends when the wind dies down. The game asks for a stop sound that does not exist, so once the wind has blown it never goes quiet."
+msgstr "바람이 잦아들면 바람 소리도 끝납니다. 게임은 존재하지 않는 정지 소리를 요청하므로, 한 번 바람이 불면 결코 조용해지지 않습니다."
+
+msgid "There are no problems to copy."
+msgstr "복사할 문제가 없습니다."
+
+msgid "These can be changed later in Settings. You can install Meitou now and add Kenshi afterwards."
+msgstr "나중에 설정에서 바꿀 수 있습니다. Meitou를 지금 설치하고 Kenshi는 나중에 추가해도 됩니다."
+
+msgid "These dependencies contradict each other, so nothing was moved:"
+msgstr "이 의존성들이 서로 모순되어 아무것도 옮기지 않았습니다:"
+
+msgid "Thin grass stays visible far away instead of fading out. Off: as the original."
+msgstr "가는 풀이 사라지지 않고 멀리서도 보입니다. 끔: 원작대로."
+
+msgid "This Meitou version does not include Metal; choose Vulkan or install a newer version."
+msgstr "이 Meitou 버전에는 Metal이 포함되어 있지 않습니다. Vulkan을 고르거나 새 버전을 설치하세요."
+
+msgid "This Meitou version has no Metal renderer and no Vulkan loader; install a newer version or MoltenVK."
+msgstr "이 Meitou 버전에는 Metal 렌더러도 Vulkan 로더도 없습니다. 새 버전이나 MoltenVK를 설치하세요."
+
+msgid "This machine is switched Off"
+msgstr "이 기계는 꺼져 있습니다"
+
+msgid "This save file is currently in use and cannot be deleted"
+msgstr "이 저장 파일은 사용 중이라 삭제할 수 없습니다"
+
+msgid "Tick every mod the search shows"
+msgstr "검색에 표시된 모든 모드 선택"
+
+msgid "Tilt the view downward: the camera rises."
+msgstr "시점을 아래로 기울이기: 카메라가 올라갑니다."
+
+msgid "Tilt the view upward: the camera comes down."
+msgstr "시점을 위로 기울이기: 카메라가 내려옵니다."
+
+msgid "Time"
+msgstr "시간"
+
+msgid "Time of day"
+msgstr "시각"
+
+msgid "Time speed"
+msgstr "시간 속도"
+
+msgid "Time:"
+msgstr "시간:"
+
+msgid "Tint"
+msgstr "색조"
+
+msgid "Tone map"
+msgstr "톤 맵"
+
+msgid "Tone map (0 = game)"
+msgstr "톤 맵(0 = 게임)"
+
+msgid "Tone map and grade"
+msgstr "톤 맵과 그레이딩"
+
+msgid "Towns change far away"
+msgstr "멀리 있는 마을도 변함"
+
+msgid "Towns keep their schedule"
+msgstr "마을이 일과를 지킴"
+
+msgid "Townspeople you come back to after an hour or more are where their day puts them: in bed at night, at the counter, at their posts and seats. In the game they are where they stood when you left."
+msgstr "한 시간 이상 지나 돌아오면 마을 사람들은 하루 일과에 맞는 곳에 있습니다. 밤에는 침대에, 카운터에, 자기 자리와 좌석에. 게임에서는 떠날 때 서 있던 곳에 그대로 있습니다."
+
+msgid "Traced (ray tracing)"
+msgstr "트레이스(레이 트레이싱)"
+
+msgid "Traced grass shadows"
+msgstr "레이 트레이싱 풀 그림자"
+
+msgid "Traced near, cascades far"
+msgstr "가까이는 레이 트레이싱, 멀리는 캐스케이드"
+
+msgid "Traced sun shadows"
+msgstr "레이 트레이싱 태양 그림자"
+
+msgid "Trees close to the camera fade out round the middle of the view (not in the free camera). Off: as the original."
+msgstr "카메라 가까이의 나무가 화면 가운데쯤에서 흐려져 사라집니다(자유 카메라 제외). 끔: 원작대로."
+
+msgid "Turn"
+msgstr "회전"
+
+msgid "Turn sneaking of the selection on or off."
+msgstr "선택한 캐릭터의 은신을 켜거나 끕니다."
+
+msgid "Turn the Block order of the selection on or off."
+msgstr "선택한 캐릭터의 막기 명령을 켜거나 끕니다."
+
+msgid "Turn the Hold position order of the selection on or off."
+msgstr "선택한 캐릭터의 위치 고수 명령을 켜거나 끕니다."
+
+msgid "Turn the Jobs order of the selection on or off."
+msgstr "선택한 캐릭터의 작업 명령을 켜거나 끕니다."
+
+msgid "Turn the Passive order of the selection on or off."
+msgstr "선택한 캐릭터의 수동 명령을 켜거나 끕니다."
+
+msgid "Turn the Ranged order of the selection on or off."
+msgstr "선택한 캐릭터의 원거리 명령을 켜거나 끕니다."
+
+msgid "Turn the Taunt order of the selection on or off."
+msgstr "선택한 캐릭터의 도발 명령을 켜거나 끕니다."
+
+msgid "Turning"
+msgstr "회전"
+
+msgid "Turns the inventory item on the mouse, or the one under the pointer, a quarter (needs Item rotation on the Advanced page)."
+msgstr "마우스에 든 인벤토리 아이템, 또는 포인터 아래의 아이템을 90도 돌립니다(고급 페이지의 아이템 회전 필요)."
+
+msgid "Turret gunners turn"
+msgstr "포탑 사수 회전"
+
+msgid "Two highlights along the strands of hair and beards."
+msgstr "머리카락과 수염 가닥을 따라 생기는 두 개의 하이라이트."
+
+msgid "Type a name for the preset."
+msgstr "프리셋 이름을 입력하세요."
+
+msgid "Type a name, or press Esc to cancel."
+msgstr "이름을 입력하거나 Esc를 눌러 취소하세요."
+
+msgid "Type a value    Enter applies it    Esc cancels    Time of day as 13:30"
+msgstr "값 입력    Enter 적용    Esc 취소    시각은 13:30 형식"
+
+msgid "Type the preset's name, Enter keeps it, Esc cancels."
+msgstr "프리셋 이름 입력, Enter로 유지, Esc로 취소."
+
+msgid "UI style"
+msgstr "UI 스타일"
+
+msgid "Ultra"
+msgstr "울트라"
+
+msgid "Ultra performance"
+msgstr "울트라 성능"
+
+msgid "Ultra quality"
+msgstr "울트라 품질"
+
+msgid "Unable to read save:\n"
+msgstr "저장 파일을 읽을 수 없습니다:\n"
+
+msgid "Unavailable"
+msgstr "사용 불가"
+
+msgid "Unbound"
+msgstr "할당 안 됨"
+
+msgid "Uninstall"
+msgstr "제거"
+
+msgid "Unlimited"
+msgstr "무제한"
+
+msgid "Unlock Doors"
+msgstr "문 잠금 해제"
+
+msgid "Unpacking {1}..."
+msgstr "{1} 압축 푸는 중..."
+
+msgid "Unstable: daily builds of the newest code, untested. They may crash or corrupt save files; off, only full releases are offered."
+msgstr "불안정: 최신 코드의 일일 빌드로, 테스트되지 않았습니다. 충돌하거나 저장 파일을 손상시킬 수 있습니다. 끄면 정식 릴리스만 제공됩니다."
+
+msgid "Untick every mod the search shows"
+msgstr "검색에 표시된 모든 모드 선택 해제"
+
+msgid "Update launcher to {1}"
+msgstr "런처를 {1}(으)로 업데이트"
+
+msgid "Update the launcher automatically"
+msgstr "런처 자동 업데이트"
+
+msgid "Update to {1}"
+msgstr "{1}(으)로 업데이트"
+
+msgid "Updated on the workshop on {1}, after Meitou last checked it: some new features may be missing"
+msgstr "Meitou가 마지막으로 확인한 뒤인 {1}에 창작마당에서 업데이트됨: 일부 새 기능이 빠져 있을 수 있습니다"
+
+msgid "Updating the launcher: {1}%"
+msgstr "런처 업데이트 중: {1}%"
+
+msgid "Upscaler sharpness"
+msgstr "업스케일러 선명도"
+
+msgid "Upscaling"
+msgstr "업스케일링"
+
+msgid "Use Meitou's atmospheric haze tuning."
+msgstr "Meitou의 대기 연무 조정을 사용합니다."
+
+msgid "Use Meitou's reduced heat distortion strength."
+msgstr "Meitou의 약화된 열 왜곡 강도를 사용합니다."
+
+msgid "Use Metal upscaling"
+msgstr "Metal 업스케일링 사용"
+
+msgid "Use extended object and landmark visibility ranges."
+msgstr "확장된 물체 및 랜드마크 가시 거리를 사용합니다."
+
+msgid "Use generated simpler meshes for distant characters."
+msgstr "멀리 있는 캐릭터에 생성된 단순 메시를 사용합니다."
+
+msgid "Use generated simpler meshes for distant foliage."
+msgstr "멀리 있는 식물에 생성된 단순 메시를 사용합니다."
+
+msgid "Use hybrid tone mapping and scene colour grading."
+msgstr "하이브리드 톤 매핑과 장면 색 보정을 사용합니다."
+
+msgid "Use light probes for bounced and ambient lighting."
+msgstr "반사광과 주변광에 라이트 프로브를 사용합니다."
+
+msgid "Use soft shadows and include distant terrain."
+msgstr "부드러운 그림자를 사용하고 먼 지형도 포함합니다."
+
+msgid "Use temporal smoothing and upscaling instead of FXAA."
+msgstr "FXAA 대신 시간적 스무딩과 업스케일링을 사용합니다."
+
+msgid "Use the Windows cursor instead of the game's drawn pointer (no hover pointers unless Enhanced hardware mouse is on)."
+msgstr "게임이 그리는 포인터 대신 Windows 커서를 사용합니다(향상된 하드웨어 마우스가 켜져 있지 않으면 호버 포인터 없음)."
+
+msgid "Use the depth of field in the strategy camera too."
+msgstr "전략 카메라에서도 피사계 심도를 사용합니다."
+
+msgid "VERSIONS"
+msgstr "버전"
+
+msgid "Vanilla colours"
+msgstr "바닐라 색상"
+
+msgid "Vegetation"
+msgstr "식생"
+
+msgid "Version {1} for {2}. Not installed by its Setup, so updates open the release page."
+msgstr "{2}용 버전 {1}. 설치 프로그램으로 설치하지 않았으므로 업데이트는 릴리스 페이지를 엽니다."
+
+msgid "Version {1} for {2}. Updates itself from GitHub."
+msgstr "{2}용 버전 {1}. GitHub에서 스스로 업데이트합니다."
+
+msgid "Version {1}. The update check failed: {2}"
+msgstr "버전 {1}. 업데이트 확인 실패: {2}"
+
+msgid "Versions"
+msgstr "버전"
+
+msgid "Video memory for billboard images. Automatic follows the card's memory."
+msgstr "빌보드 이미지용 비디오 메모리. 자동은 그래픽 카드 메모리에 맞춥니다."
+
+msgid "View the next higher building floor."
+msgstr "건물의 한 층 위를 봅니다."
+
+msgid "View the next lower building floor."
+msgstr "건물의 한 층 아래를 봅니다."
+
+msgid "Vignette"
+msgstr "비네트"
+
+msgid "Vignette strength"
+msgstr "비네트 강도"
+
+msgid "Volume of combat, building and other sound effects."
+msgstr "전투, 건설 및 기타 효과음의 음량."
+
+msgid "Volume of footsteps."
+msgstr "발소리 음량."
+
+msgid "Volume of the biome music and the main theme."
+msgstr "생물 군계 음악과 메인 테마의 음량."
+
+msgid "Volume of the interface sounds."
+msgstr "인터페이스 소리의 음량."
+
+msgid "Volume of the voices."
+msgstr "목소리 음량."
+
+msgid "Volume of the weather and the world's ambience."
+msgstr "날씨와 세계 환경음의 음량."
+
+msgid "Vulkan (MoltenVK loader found)."
+msgstr "Vulkan(MoltenVK 로더 발견됨)."
+
+msgid "Vulkan (MoltenVK)"
+msgstr "Vulkan(MoltenVK)"
+
+msgid "Vulkan loader found. Select Vulkan to use it."
+msgstr "Vulkan 로더를 찾았습니다. 사용하려면 Vulkan을 선택하세요."
+
+msgid "Wait for the download to finish first."
+msgstr "먼저 다운로드가 끝날 때까지 기다리세요."
+
+msgid "Walls inside buildings"
+msgstr "건물 안의 벽"
+
+msgid "Want to look at them on Steam?"
+msgstr "Steam에서 살펴보시겠습니까?"
+
+msgid "Water & reflections"
+msgstr "물과 반사"
+
+msgid "Water beads"
+msgstr "물방울"
+
+msgid "Water clarity multiplier"
+msgstr "물 투명도 배율"
+
+msgid "Water clarity x (Meitou)"
+msgstr "물 투명도 x (Meitou)"
+
+msgid "Water contact foam, wakes and ripples"
+msgstr "물 접촉 거품, 항적, 물결"
+
+msgid "Water grid segments"
+msgstr "물 격자 분할 수"
+
+msgid "Water reflection 0-4 (game)"
+msgstr "물 반사 0-4 (게임)"
+
+msgid "Water see-through distance"
+msgstr "물속 가시 거리"
+
+msgid "Water see-through distance (Meitou, game 4000)"
+msgstr "물속 가시 거리 (Meitou, 게임 4000)"
+
+msgid "Water wave resolution"
+msgstr "파도 해상도"
+
+msgid "Water wave resolution (FFT size)"
+msgstr "파도 해상도 (FFT 크기)"
+
+msgid "Weak punch reach"
+msgstr "약한 주먹 사거리"
+
+msgid "Weapon"
+msgstr "무기"
+
+msgid "Weapons, armour plates, prosthetics and robots read as metal."
+msgstr "무기, 장갑판, 의수족, 로봇이 금속처럼 보입니다."
+
+msgid "Weather Protections"
+msgstr "날씨 보호"
+
+msgid "Weather particles"
+msgstr "날씨 파티클"
+
+msgid "Weather particles: 0 off 1 quarter 2 half 3 auto 4 full"
+msgstr "날씨 파티클: 0 끔 1 4분의 1 2 절반 3 자동 4 전체"
+
+msgid "What happened"
+msgstr "무슨 일이 있었는지"
+
+msgid "When a destroyed limb is cut off: Rare only by a single heavy blow, Frequent also when a wound worsens (the game: Rare)."
+msgstr "파괴된 팔다리가 잘려 나가는 때: 드묾은 한 번의 강한 공격으로만, 잦음은 상처가 악화될 때도(게임: 드묾)."
+
+msgid "Where game versions are downloaded and installed (in its versions folder)."
+msgstr "게임 버전을 다운로드하고 설치하는 곳(그 안의 versions 폴더)."
+
+msgid "Where the haze is complete: farther shows more land."
+msgstr "연무가 완전해지는 거리: 멀수록 땅이 더 많이 보입니다."
+
+msgid "Where versions are installed; changing it asks whether they move."
+msgstr "버전이 설치되는 곳. 바꾸면 옮길지 묻습니다."
+
+msgid "While building: drop the wall line being laid, else the last queued building."
+msgstr "건설 중: 긋고 있는 벽 줄을 취소하고, 없으면 마지막으로 예약한 건물을 취소합니다."
+
+msgid "While building: lower the held building (Shift: slowly)."
+msgstr "건설 중: 들고 있는 건물을 내립니다(Shift: 천천히)."
+
+msgid "While building: queue the held building where it stands, as a left click does."
+msgstr "건설 중: 들고 있는 건물을 지금 위치에 예약합니다. 왼쪽 클릭과 같습니다."
+
+msgid "While building: raise the held building (Shift: slowly)."
+msgstr "건설 중: 들고 있는 건물을 올립니다(Shift: 천천히)."
+
+msgid "While building: tilt the held building less, towards level."
+msgstr "건설 중: 들고 있는 건물을 덜 기울여 수평에 가깝게 합니다."
+
+msgid "While building: tilt the held building more to the slope of the ground."
+msgstr "건설 중: 들고 있는 건물을 지면 경사에 맞춰 더 기울입니다."
+
+msgid "While building: turn the held building left. Build keys may share keys with the others."
+msgstr "건설 중: 들고 있는 건물을 왼쪽으로 돌립니다. 건설 키는 다른 키와 겹쳐도 됩니다."
+
+msgid "While building: turn the held building right."
+msgstr "건설 중: 들고 있는 건물을 오른쪽으로 돌립니다."
+
+msgid "White brightness"
+msgstr "흰색 밝기"
+
+msgid "Wild squads stay"
+msgstr "떠돌이 분대 유지"
+
+msgid "Will not load: {1}"
+msgstr "불러오지 않음: {1}"
+
+msgid "Wind stops"
+msgstr "바람 멈춤"
+
+msgid "Window"
+msgstr "창"
+
+msgid "Workers"
+msgstr "일꾼"
+
+msgid "Workshop synchronised: {1} of {2} mods installed."
+msgstr "창작마당 동기화됨: 모드 {2}개 중 {1}개 설치됨."
+
+msgid "World tick alongside drawing"
+msgstr "그리기와 병행하는 월드 틱"
+
+msgid "You can only hire {1} more characters"
+msgstr "캐릭터를 {1}명만 더 고용할 수 있습니다"
+
+msgid "You can subscribe on the Steam workshop page instead."
+msgstr "대신 Steam 창작마당 페이지에서 구독할 수 있습니다."
+
+msgid "You have no subscribed Kenshi workshop mods."
+msgstr "구독한 Kenshi 창작마당 모드가 없습니다."
+
+msgid "You will die at {1}"
+msgstr "{1}에서 죽게 됩니다"
+
+msgid "Your display's brightest level, in nits."
+msgstr "디스플레이의 최대 밝기(니트)."
+
+msgid "[Crafted by {1}]"
+msgstr "[{1} 제작]"
+
+msgid "[Location already known]"
+msgstr "[이미 알려진 장소]"
+
+msgid ""
+"[Right-click to learn new map locations]\n"
+"Towns:\n"
+msgstr ""
+"[오른쪽 클릭으로 새 지도 장소 알아내기]\n"
+"마을:\n"
+
+msgid "a file field without a value"
+msgstr "값이 없는 파일 필드"
+
+msgid "a string field without a value"
+msgstr "값이 없는 문자열 필드"
+
+msgid "against banding in smooth gradients; the game has none"
+msgstr "부드러운 그라데이션의 밴딩 방지. 게임에는 없습니다"
+
+msgid "an image is named by a path relative to the mod's folder"
+msgstr "이미지는 모드 폴더 기준 상대 경로로 지정합니다"
+
+msgid "an instance without an id or target"
+msgstr "ID나 대상이 없는 인스턴스"
+
+msgid "assembly, so its EditData does not run (declare IModDataPhase on the entry type)"
+msgstr "어셈블리이므로 그 EditData가 실행되지 않습니다(진입 형식에 IModDataPhase를 선언하세요)"
+
+msgid "auto (centre)"
+msgstr "자동(중앙)"
+
+msgid "black & white"
+msgstr "흑백"
+
+msgid "black haze"
+msgstr "검은 연무"
+
+msgid "blades, armour, clothing"
+msgstr "칼날, 갑옷, 옷"
+
+msgid "bounced light"
+msgstr "반사광"
+
+msgid "built in"
+msgstr "내장"
+
+msgid "bumps fade"
+msgstr "요철이 흐려짐"
+
+msgid "by size"
+msgstr "크기별"
+
+msgid "clamp (as the game)"
+msgstr "클램프(게임과 같음)"
+
+msgid "click to cancel"
+msgstr "클릭하여 취소"
+
+msgid "darker corners"
+msgstr "어두운 모서리"
+
+msgid "day and night"
+msgstr "낮과 밤"
+
+msgid "fixed sun"
+msgstr "고정된 태양"
+
+msgid "flat ambient"
+msgstr "균일한 주변광"
+
+msgid "flat haze"
+msgstr "균일한 연무"
+
+msgid "flat night"
+msgstr "균일한 밤"
+
+msgid "foam, waves"
+msgstr "거품, 파도"
+
+msgid "full detail"
+msgstr "전체 디테일"
+
+msgid "full size"
+msgstr "전체 크기"
+
+msgid "game data"
+msgstr "게임 데이터"
+
+msgid "gameplay change"
+msgstr "게임플레이 변경"
+
+msgid "generated levels"
+msgstr "생성된 레벨"
+
+msgid "hair, cloth, skin, eyes, metal"
+msgstr "머리카락, 천, 피부, 눈, 금속"
+
+msgid "hard-edged, flat"
+msgstr "경계가 뚜렷하고 평평함"
+
+msgid "head turning"
+msgstr "머리 돌리기"
+
+msgid "hybrid (clamp + ACES)"
+msgstr "하이브리드(클램프 + ACES)"
+
+msgid "hybrid, graded"
+msgstr "하이브리드, 그레이딩"
+
+msgid "its game data changes failed to apply"
+msgstr "게임 데이터 변경을 적용하지 못했습니다"
+
+msgid "its multiplier is now Squad XP in the Advanced settings (per-skill multipliers are not kept)"
+msgstr "그 배율은 이제 고급 설정의 분대 경험치입니다(기술별 배율은 유지되지 않음)"
+
+msgid "key light"
+msgstr "키 라이트"
+
+msgid "latest nightly"
+msgstr "최신 나이틀리"
+
+msgid "lighter haze keeps far mountains visible"
+msgstr "옅은 연무로 먼 산이 계속 보입니다"
+
+msgid "low resolution"
+msgstr "저해상도"
+
+msgid "luckyren Mode"
+msgstr "luckyren 모드"
+
+msgid "metal textures"
+msgstr "금속 텍스처"
+
+msgid "near, cascades far"
+msgstr "가까이, 멀리는 캐스케이드"
+
+msgid "night only"
+msgstr "밤에만"
+
+msgid "nightly"
+msgstr "나이틀리"
+
+msgid "no name"
+msgstr "이름 없음"
+
+msgid "no string id"
+msgstr "문자열 ID 없음"
+
+msgid "no {1} build"
+msgstr "{1}용 빌드 없음"
+
+msgid "not enabled: {1}"
+msgstr "활성화되지 않음: {1}"
+
+msgid "not in the save: {1}"
+msgstr "저장 파일에 없음: {1}"
+
+msgid "off (as the game)"
+msgstr "끔(게임과 같음)"
+
+msgid "off (uncapped)"
+msgstr "끔(제한 없음)"
+
+msgid "off while the HDR output is on"
+msgstr "HDR 출력이 켜져 있는 동안 꺼짐"
+
+msgid "on the land"
+msgstr "육지에서"
+
+msgid "original ambient"
+msgstr "원래 주변광"
+
+msgid "own animation"
+msgstr "자체 애니메이션"
+
+msgid "per layer"
+msgstr "레이어별"
+
+msgid "per-face tangents"
+msgstr "면별 탄젠트"
+
+msgid "planet light"
+msgstr "행성광"
+
+msgid "ray-traced probes"
+msgstr "레이 트레이싱 프로브"
+
+msgid "relief march"
+msgstr "릴리프 마치"
+
+msgid "scotopic blue"
+msgstr "암소시 파랑"
+
+msgid "shadowed haze"
+msgstr "그늘진 연무"
+
+msgid "sky only"
+msgstr "하늘만"
+
+msgid "soft, far terrain"
+msgstr "부드러움, 먼 지형"
+
+msgid "soft, lit"
+msgstr "부드러움, 조명됨"
+
+msgid "starfield texture"
+msgstr "별밭 텍스처"
+
+msgid "strength 1"
+msgstr "강도 1"
+
+msgid "terrain only"
+msgstr "지형만"
+
+msgid "the Ambient occlusion switch's method (it needs that switch on): Meitou's SSAO is a cheap estimate; GTAO searches each pixel's horizon, measures how much sky it really sees, and keeps the colour of the light that bounces in a corner. Costs more; off by default"
+msgstr "앰비언트 오클루전 스위치의 방식(그 스위치가 켜져 있어야 함): Meitou의 SSAO는 저렴한 추정입니다. GTAO는 각 픽셀의 지평선을 탐색해 실제로 보이는 하늘의 양을 측정하고, 모서리에서 튕기는 빛의 색을 유지합니다. 부하가 더 큼. 기본값은 끔"
+
+msgid "the extension belongs to no mod folder"
+msgstr "이 확장자는 어떤 모드 폴더에도 속하지 않습니다"
+
+msgid "the file could not be opened: "
+msgstr "파일을 열 수 없습니다: "
+
+msgid "the file could not be read as an image"
+msgstr "파일을 이미지로 읽을 수 없습니다"
+
+msgid "the file does not exist"
+msgstr "파일이 없습니다"
+
+msgid "the file is not a PNG or DDS image"
+msgstr "파일이 PNG나 DDS 이미지가 아닙니다"
+
+msgid "the file is too short to be an image"
+msgstr "파일이 너무 짧아 이미지가 될 수 없습니다"
+
+msgid "the game draws every dust, ash and rain sprite at the full picture size, which is a fill-rate cost when big sprites pile up (a dust storm); Meitou draws the alpha and additive ones into a quarter-area (half per axis) target and blends it back, depth-aware, for a fraction of the cost"
+msgstr "게임은 먼지, 재, 비 스프라이트를 모두 화면 전체 크기로 그려서, 큰 스프라이트가 쌓이면(모래 폭풍) 필레이트 부하가 됩니다. Meitou는 알파와 가산 스프라이트를 4분의 1 면적(축마다 절반) 타깃에 그린 뒤 깊이를 고려해 다시 합성하여 부하를 크게 줄입니다"
+
+msgid "the game draws every foliage mesh at full detail, and TERRAIN-mode rocks and plants (some thousands of triangles each) have no LOD levels; Meitou makes coarser levels at load (quadric edge collapse, kept in a disk cache) and picks one per instance by how many pixels (shadow texels) its deviation would show"
+msgstr "게임은 식생 메시를 모두 전체 디테일로 그리며, TERRAIN 모드의 바위와 식물(각각 수천 개의 삼각형)에는 LOD 레벨이 없습니다. Meitou는 불러올 때 더 거친 레벨을 만들고(Quadric Edge Collapse, 디스크 캐시에 보관) 인스턴스마다 그 오차가 몇 픽셀(그림자 텍셀)로 보일지에 따라 하나를 고릅니다"
+
+msgid "the game draws every foliage mesh in full out to its range; Meitou draws large and medium meshes beyond the impostor distance (Tab slider) as baked billboards, crossfaded, which also stand in as shadow casters far out"
+msgstr "게임은 식생 메시를 모두 표시 거리까지 온전히 그립니다. Meitou는 임포스터 거리(Tab 슬라이더) 너머의 큰 메시와 중간 메시를 크로스페이드되는 미리 구운 빌보드로 그리며, 이것이 먼 곳에서 그림자를 드리우는 역할도 합니다"
+
+msgid "the game draws hard-edged cascades that end abruptly at the shadow range; Meitou fits them to the view, filters them softly with contact-hardening penumbrae, blends the cascades, and lets mountains shadow the land out to the horizon"
+msgstr "게임은 그림자 거리에서 갑자기 끝나는 경계가 뚜렷한 캐스케이드를 그립니다. Meitou는 캐스케이드를 시야에 맞추고, 접촉부에서 단단해지는 반영으로 부드럽게 필터링하며, 캐스케이드끼리 섞고, 산이 지평선까지 땅에 그림자를 드리우게 합니다"
+
+msgid "the game ends all of a layer's meshes at one range (1000 x foliage range for most: trees, ruins, junk and litter alike); Meitou draws large meshes (trees, ruins, wrecks, rock stacks) far, medium ones (junk, boulders, bushes) midway and small ones (litter, small plants) near, each class with its own Tab slider"
+msgstr "게임은 한 레이어의 메시를 모두 하나의 거리에서 끊습니다(대부분 식생 거리의 1000배: 나무, 유적, 고철, 쓰레기 모두 같음). Meitou는 큰 메시(나무, 유적, 잔해, 바위 더미)는 멀리, 중간 메시(고철, 바위, 덤불)는 중간까지, 작은 메시(쓰레기, 작은 식물)는 가까이 그리며, 각 등급마다 Tab 슬라이더가 있습니다"
+
+msgid "the game has no grading, so night is the day's saturated browns and oranges, darkened; Meitou shifts dim colour towards the rods' blue-grey as the scene's adapted luminance falls (the Purkinje shift), keeping lamps, fires and the moon in colour (the Tab slider sets the strength)"
+msgstr "게임에는 그레이딩이 없어서 밤은 낮의 채도 높은 갈색과 주황색을 어둡게 한 것일 뿐입니다. Meitou는 장면의 적응 휘도가 떨어질수록 어두운 색을 간상체의 청회색 쪽으로 옮기며(푸르키네 현상), 램프, 불, 달은 색을 유지합니다(Tab 슬라이더로 강도 설정)"
+
+msgid "the game has no tone curve (bright skies and sunlit sand clip flat at white) and no grading; Meitou blends the clip with ACES (the Tab slider sets the share, 0.75) so highlights roll off, then grades saturation 1.06 and contrast 1.05"
+msgstr "게임에는 톤 커브(밝은 하늘과 햇빛 받은 모래가 흰색으로 평평하게 잘림)도 그레이딩도 없습니다. Meitou는 클립과 ACES를 섞어(Tab 슬라이더로 비율 설정, 0.75) 하이라이트가 부드럽게 줄어들게 한 뒤, 채도 1.06과 대비 1.05로 그레이딩합니다"
+
+msgid "the game lights every bump of a normal map as if nothing stood between it and the sun, so ground and walls the sun only grazes break into bright and black patches, and bumps stay lit on a surface facing away; Meitou fades the normal map out of the sun's light as the sun nears the surface's own plane (from 24 degrees down to 6), where the bumps would shadow each other"
+msgstr "게임은 노멀 맵의 요철을 모두 태양 사이에 아무것도 없는 것처럼 비추므로, 태양이 스치기만 하는 지면과 벽이 밝은 얼룩과 검은 얼룩으로 갈라지고, 반대쪽을 향한 면에서도 요철이 밝게 남습니다. Meitou는 태양이 면 자체의 평면에 가까워질수록(24도에서 6도까지), 요철이 서로 그림자를 드리울 곳에서 노멀 맵을 햇빛에서 흐리게 합니다"
+
+msgid "the game ships SSAO but has it disabled"
+msgstr "게임은 SSAO를 포함하지만 비활성화해 두었습니다"
+
+msgid "the game stands the character being edited on a platform over bare ground; Meitou can stand it in a bar at night instead, drawn with your graphics settings"
+msgstr "게임은 편집 중인 캐릭터를 맨땅 위의 단상에 세웁니다. Meitou는 대신 밤의 술집에 세워 당신의 그래픽 설정으로 그릴 수 있습니다"
+
+msgid "the game uses FXAA; Meitou uses a temporal method (TAA, FSR or DLSS: the Tab panel chooses, FSR and DLSS need their libraries)"
+msgstr "게임은 FXAA를 사용합니다. Meitou는 시간적 방식을 사용합니다(TAA, FSR 또는 DLSS: Tab 패널에서 고르며, FSR과 DLSS는 각자의 라이브러리가 필요)"
+
+msgid "the game's"
+msgstr "게임의 것"
+
+msgid "the game's buildings are matte unless a material names a metalness map, and few do; Meitou treats the textures of plate, tank and machinery as metal where they have no colour of their own, so rust and paint stay matte"
+msgstr "게임의 건물은 재질이 메탈니스 맵을 지정하지 않으면 무광이며, 지정한 것은 드뭅니다. Meitou는 판금, 탱크, 기계의 텍스처에서 고유한 색이 없는 부분을 금속으로 취급하므로 녹과 페인트는 무광으로 남습니다"
+
+msgid "the game's colours"
+msgstr "게임의 색상"
+
+msgid "the game's glossy and rain-wet surfaces reflect one fixed sky picture, indoors and under a roof too; Meitou replaces it with what they really mirror (the screen, then a traced ray where the device has them, the sky past both), fading with roughness, and darkens the sky's reflection where the probes see no sky. Water keeps its own reflection. Off by default: not yet seen on a GPU"
+msgstr "게임의 광택면과 비에 젖은 면은 실내와 지붕 아래에서도 고정된 하늘 그림 하나를 반사합니다. Meitou는 이를 실제로 비치는 것(화면, 다음으로 장치가 지원하면 추적한 광선, 그 너머는 하늘)으로 바꾸고, 거칠기에 따라 흐려지게 하며, 프로브에 하늘이 보이지 않는 곳에서는 하늘 반사를 어둡게 합니다. 물은 자체 반사를 유지합니다. 기본값은 끔: 아직 GPU에서 확인되지 않았습니다"
+
+msgid "the game's ground is its height map's mesh; Meitou tessellates the ground near the eye and raises it by the same relief (needs tessellation shaders; visual only: characters walk on the undisplaced ground)"
+msgstr "게임의 지면은 높이 맵의 메시입니다. Meitou는 시점 가까이의 지면을 테셀레이션하고 같은 기복만큼 올립니다(테셀레이션 셰이더 필요. 시각 효과만: 캐릭터는 변위되지 않은 지면을 걷습니다)"
+
+msgid "the game's heat haze shifts distant objects by several pixels in hot weather, which reads as blur; Meitou halves it (the Tab slider sets any strength)"
+msgstr "게임의 아지랑이는 더운 날씨에 먼 물체를 몇 픽셀씩 움직여 흐릿하게 보이게 합니다. Meitou는 이를 절반으로 줄입니다(Tab 슬라이더로 원하는 강도 설정)"
+
+msgid "the game's shadows stop at the cascades' resolution, so small objects float; Meitou adds short sun shadows from the depth, at full resolution, with no noise, on characters too (armour plates, straps, feet on the ground). Off by default: what the screen does not show casts nothing; for the cascades, the Traced sun shadows hold theirs"
+msgstr "게임의 그림자는 캐스케이드 해상도에서 멈추므로 작은 물체가 떠 보입니다. Meitou는 깊이로부터 짧은 태양 그림자를 전체 해상도로, 노이즈 없이 더하며 캐릭터에도 적용합니다(장갑판, 끈, 땅에 닿은 발). 기본값은 끔: 화면에 보이지 않는 것은 그림자를 드리우지 않습니다. 캐스케이드의 경우, 레이 트레이싱 태양 그림자가 자체 그림자를 유지합니다"
+
+msgid "the game's sun shadows come from cascaded maps, soft or blocky by their texels; Meitou traces a ray to the sun from every lit pixel at every distance, softened by the sun's real size, the same every frame: a shadow is as sharp as it is close to its caster, characters shadow themselves exactly and grass shadows the ground (needs a GPU with ray tracing and Indirect light; off by default)"
+msgstr "게임의 태양 그림자는 캐스케이드 맵에서 나오며 텍셀에 따라 부드럽거나 각지게 됩니다. Meitou는 모든 거리에서 빛을 받는 각 픽셀로부터 태양을 향해 광선을 추적하고, 태양의 실제 크기로 부드럽게 하며, 매 프레임 같게 유지합니다. 그림자는 드리우는 물체에 가까울수록 선명하고, 캐릭터는 자기 자신에게 정확히 그림자를 드리우며, 풀은 지면에 그림자를 드리웁니다(레이 트레이싱 GPU와 간접광 필요. 기본값은 끔)"
+
+msgid "the game's water is a flat plane with scrolled normal maps; Meitou adds wind-driven waves, breakers that roll in along the depth, break into foam and run up the beach, and foam on the crests (visual only: the water stays at its height for the game)"
+msgstr "게임의 물은 노멀 맵을 스크롤하는 평평한 면입니다. Meitou는 바람에 밀리는 파도, 깊이를 따라 밀려와 거품으로 부서지며 해변을 타고 오르는 쇄파, 파도 마루의 거품을 더합니다(시각 효과만: 게임에서 물의 높이는 그대로입니다)"
+
+msgid "the meshes' own"
+msgstr "메시 자체의 것"
+
+msgid "thin lens"
+msgstr "얇은 렌즈"
+
+msgid "this interface shows no image markers"
+msgstr "이 인터페이스는 이미지 마커를 표시하지 않습니다"
+
+msgid "type to search"
+msgstr "입력하여 검색"
+
+msgid "unavailable (see the log), plain swapchain in use"
+msgstr "사용 불가(로그 참조), 일반 스왑체인 사용 중"
+
+msgid "walls, floors, objects"
+msgstr "벽, 바닥, 물체"
+
+msgid "waves and surf"
+msgstr "파도와 파랑"
+
+msgid "welded, averaged tangents"
+msgstr "용접·평균화된 탄젠트"
+
+msgid "where placed"
+msgstr "배치한 곳"
+
+msgid "whether it still happens before sending."
+msgstr "보내기 전에 여전히 발생하는지."
+
+msgid "with Indirect light enabled, use bounced light indoors; turn this off to keep the original ambient on room surfaces, furniture and indoor characters while outdoor GI stays enabled"
+msgstr "간접광이 켜져 있으면 실내에서 반사광을 사용합니다. 끄면 실외 GI는 켜진 채로 방 표면, 가구, 실내 캐릭터에는 원래 주변광을 유지합니다"
+
+msgid "with camera"
+msgstr "카메라와 함께"
+
+msgid "{1,num} hrs"
+msgstr "{1,num}시간"
+
+msgid "{1,num} secs"
+msgstr "{1,num}초"
+
+msgid "{1,num}h {2,num}m left"
+msgstr "{1,num}시간 {2,num}분 남음"
+
+msgid "{1,num}m left"
+msgstr "{1,num}분 남음"
+
+msgid "{1} after {2} ({3})"
+msgstr "{2} 다음에 {1} ({3})"
+
+msgid "{1} already wears something in that slot"
+msgstr "{1}은(는) 이미 그 슬롯에 무언가를 착용하고 있습니다"
+
+msgid "{1} and {2} more"
+msgstr "{1} 외 {2}개"
+
+msgid "{1} bought {2} for c.{3}"
+msgstr "{1}이(가) {2}을(를) {3} c.에 샀습니다"
+
+msgid "{1} cannot pay the fine of c.{2}"
+msgstr "{1}은(는) 벌금 {2} c.를 낼 수 없습니다"
+
+msgid "{1} changes from the game"
+msgstr "게임 대비 변경 {1}개"
+
+msgid "{1} could not put the captive in the cage"
+msgstr "{1}이(가) 포로를 우리에 넣지 못했습니다"
+
+msgid "{1} deleted; the look is Meitou."
+msgstr "{1} 삭제됨. 룩은 Meitou입니다."
+
+msgid "{1} found no free cage for {2}"
+msgstr "{1}이(가) {2}을(를) 넣을 빈 우리를 찾지 못했습니다"
+
+msgid "{1} got out of the cage"
+msgstr "{1}이(가) 우리에서 나왔습니다"
+
+msgid "{1} has been caught committing {2}!"
+msgstr "{1}이(가) {2} 현장에서 붙잡혔습니다!"
+
+msgid "{1} has been imprisoned by {2}"
+msgstr "{1}이(가) {2}에 의해 투옥되었습니다"
+
+msgid "{1} installed."
+msgstr "{1} 설치됨."
+
+msgid "{1} is after the bounty on {2}!"
+msgstr "{1}이(가) {2}의 현상금을 노리고 있습니다!"
+
+msgid "{1} is arresting {2}!"
+msgstr "{1}이(가) {2}을(를) 체포하고 있습니다!"
+
+msgid "{1} is no longer wanted by {2}"
+msgstr "{1}은(는) 더 이상 {2}의 수배 대상이 아닙니다"
+
+msgid "{1} is not installed."
+msgstr "{1}이(가) 설치되어 있지 않습니다."
+
+msgid "{1} is wanted by {2} for {3}: bounty c.{4}"
+msgstr "{1}은(는) {3} 혐의로 {2}에 수배 중입니다: 현상금 {4} c."
+
+msgid "{1} issue"
+msgid_plural "{1} issues"
+msgstr[0] "문제 {1}개"
+
+msgid "{1} issues"
+msgstr "문제 {1}개"
+
+msgid "{1} item stack(s) of a closed shop were left on the ground."
+msgstr "문 닫은 상점의 아이템 더미 {1}개가 땅에 남겨졌습니다."
+
+msgid "{1} paid a bail of c.{2} for {3}"
+msgstr "{1}이(가) {3}의 보석금 {2} c.를 냈습니다"
+
+msgid "{1} paid a fine of c.{2} to {3}; the bounty is cleared"
+msgstr "{1}이(가) {3}에 벌금 {2} c.를 냈습니다. 현상금이 해제되었습니다"
+
+msgid "{1} pasted and loaded (made on Meitou {2})."
+msgstr "{1} 붙여넣고 불러옴(Meitou {2}에서 만듦)."
+
+msgid "{1} posts"
+msgstr "게시물 {1}개"
+
+msgid "{1} put {2} on {3}"
+msgstr "{1}이(가) {3}에게 {2}을(를) 채웠습니다"
+
+msgid "{1} quality applied."
+msgstr "{1} 품질 적용됨."
+
+msgid "{1} releases · {2} installed"
+msgstr "릴리스 {1}개 · {2}개 설치됨"
+
+msgid "{1} saved."
+msgstr "{1} 저장됨."
+
+msgid "{1} second"
+msgstr "{1}초"
+
+msgid "{1} seconds"
+msgstr "{1}초"
+
+msgid "{1} sold {2} for c.{3}"
+msgstr "{1}이(가) {2}을(를) {3} c.에 팔았습니다"
+
+msgid "{1} uninstalled."
+msgstr "{1} 제거됨."
+
+msgid "{1} unsaved changes"
+msgstr "저장하지 않은 변경 {1}개"
+
+msgid "{1}'s code is on the clipboard: paste it on Discord, or with Paste."
+msgstr "{1}의 코드가 클립보드에 있습니다: Discord에 붙여넣거나 붙여넣기로 사용하세요."
+
+msgid "{1}-{2} seconds"
+msgstr "{1}-{2}초"
+
+msgid "{1}: no free cage nearby"
+msgstr "{1}: 근처에 빈 우리가 없습니다"
+
+msgid "{1}: {2} settings"
+msgstr "{1}: 설정 {2}개"
+
+msgid "Image"
+msgstr "이미지"
+
+msgid "Show or hide the selected mod's details beside the list"
+msgstr "선택한 모드의 세부 정보를 목록 옆에 표시하거나 숨기기"
+
+msgid "Details"
+msgstr "세부 정보"
+
+msgid "Save the mod list and load order as a preset of this name"
+msgstr "모드 목록과 로드 순서를 이 이름의 프리셋으로 저장"
+
+msgid "Take the chosen preset's mod list and load order"
+msgstr "고른 프리셋의 모드 목록과 로드 순서 가져오기"
+
+msgid "Delete the chosen preset"
+msgstr "고른 프리셋 삭제"
+
+msgid "{1} mods, {2} enabled"
+msgstr "모드 {1}개, {2}개 활성화"
+
+msgid "{1} of {2} mods shown, {3} enabled"
+msgstr "모드 {2}개 중 {1}개 표시, {3}개 활성화"
+
+msgid "Not enabled: the game does not load it"
+msgstr "비활성화됨: 게임이 불러오지 않습니다"
+
+msgid "Needs"
+msgstr "필요"
+
+msgid "not enabled above it"
+msgstr "위에서 활성화되지 않음"
+
+msgid "No description"
+msgstr "설명 없음"
+
+msgid "Hover outline in the Advanced settings"
+msgstr "고급 설정의 마우스 오버 윤곽선"
+
+msgid "Hover outline in the Advanced settings is on"
+msgstr "고급 설정의 마우스 오버 윤곽선 켜짐"
+
+msgid "Lit dust"
+msgstr "조명받는 먼지"
+
+msgid "Light the dust and spray kicked up by running feet like the ground around them, instead of glowing at night."
+msgstr "달리는 발이 일으키는 먼지와 물보라를 밤에 빛나게 하지 않고 주변 지면처럼 비춥니다."
+
+msgid "Save"
+msgstr "저장"
+
+msgid "Cancel"
+msgstr "취소"
+
+msgid "Reset"
+msgstr "초기화"
+
+msgid "Delete"
+msgstr "삭제"
+
+msgid "Close"
+msgstr "닫기"
+
+msgid "Continue"
+msgstr "계속"
+
+msgid "It supports me in the development of Meitou. ko-fi.com/martinvlcek"
+msgstr "Meitou 개발을 후원해 주세요. ko-fi.com/martinvlcek"
+
+msgid "Mods"
+msgstr "모드"
+
+msgid "New preset name"
+msgstr "새 프리셋 이름"
+
+msgid "Arrange"
+msgstr "정렬"
+
+msgid "Search mods"
+msgstr "모드 검색"
+
+msgid "Graphics"
+msgstr "그래픽"
+
+msgid "Of the game (written to Kenshi's settings.cfg) and of the launcher. Kenshi's own translations, plus Meitou's where they exist."
+msgstr "게임(Kenshi의 settings.cfg에 기록)과 런처의 언어. Kenshi 자체 번역에 더해, 있는 경우 Meitou의 번역."
+
+msgid "Open"
+msgstr "열기"
+
+msgid "Meitou's texts not yet translated"
+msgstr "아직 번역되지 않은 Meitou 텍스트"
+
+msgid "Loading"
+msgstr "불러오는 중"
+
+msgid "'{1}' is not a Kenshi folder (data/gamedata.base not found)."
+msgstr "'{1}'은(는) Kenshi 폴더가 아닙니다(data/gamedata.base 없음)."
+
+msgid "OK"
+msgstr "확인"
+
+msgid "and {1} more"
+msgstr "외 {1}개"
+
+msgid "Not found: browse to the folder with data/gamedata.base."
+msgstr "찾을 수 없음: data/gamedata.base가 있는 폴더를 선택하세요."
+
+msgid "The folder with data/gamedata.base."
+msgstr "data/gamedata.base가 있는 폴더."
+
+msgid "The folder with data/gamedata.base; Steam workshop mods found."
+msgstr "data/gamedata.base가 있는 폴더. Steam 창작마당 모드를 찾았습니다."
+
+msgid "Vulkan loader not found. Use Auto/Metal or install it with Setup."
+msgstr "Vulkan 로더를 찾을 수 없습니다. Auto/Metal을 사용하거나 설정에서 설치하세요."
+
+msgid "Vulkan loader not found. Install Homebrew and MoltenVK, or use Auto/Metal."
+msgstr "Vulkan 로더를 찾을 수 없습니다. Homebrew와 MoltenVK를 설치하거나 Auto/Metal을 사용하세요."
+
+msgid "The Vulkan loader is not installed: use Auto/Metal, or install MoltenVK from Settings > Setup."
+msgstr "Vulkan 로더가 설치되어 있지 않습니다: Auto/Metal을 사용하거나 설정 > 설정에서 MoltenVK를 설치하세요."
+
+msgid "Not found. Browse to your Kenshi folder (it contains data/gamedata.base)."
+msgstr "찾을 수 없음. Kenshi 폴더(data/gamedata.base가 있는 곳)를 선택하세요."
+
+msgid "Not a Kenshi folder: data/gamedata.base not found."
+msgstr "Kenshi 폴더가 아닙니다: data/gamedata.base 없음."
+
+msgid "Vulkan loader not found; choose Auto/Metal, or install it later in Settings."
+msgstr "Vulkan 로더를 찾을 수 없습니다. Auto/Metal을 선택하거나 나중에 설정에서 설치하세요."
+
+msgctxt "save notice"
+msgid "Loaded"
+msgstr "불러옴"
+
+msgid "WASD move    Q / E down, up    Right mouse look    Ctrl + left click focus    Wheel zoom    Alt + wheel fly speed    Shift fast    Ctrl slow    Z / X roll    V level    "
+msgstr "WASD 이동    Q / E 아래, 위    오른쪽 마우스 둘러보기    Ctrl + 왼쪽 클릭 초점    휠 줌    Alt + 휠 비행 속도    Shift 빠르게    Ctrl 느리게    Z / X 롤    V 수평    "
+
+msgid "Script mod not loaded"
+msgstr "스크립트 모드가 로드되지 않음"
+
+msgid "{1} problem"
+msgid_plural "{1} problems"
+msgstr[0] "문제 {1}개"
+
+msgid "Anti-aliasing"
+msgstr "안티에일리어싱"
+
+msgid "the game lights every surface's shadow side with one flat sky ambient per biome; Meitou traces rays from a grid of probes around the camera (needs a GPU with ray tracing; --no-gi leaves it out), so corners, interiors and the ground under overhangs darken and sunlit ground lights what faces it (docs/render-gi.md)"
+msgstr "게임은 모든 표면의 그늘진 면을 바이옴마다 하나의 평평한 하늘 환경광으로 비춥니다. Meitou는 카메라 주변의 프로브 격자에서 광선을 추적하여(레이 트레이싱 GPU 필요, --no-gi로 끔) 모서리, 실내, 돌출부 아래의 땅이 어두워지고 햇빛 받는 땅이 마주한 것을 비춥니다 (docs/render-gi.md)"
+
+msgid "the game lights its haze and weather fog the same everywhere, so shadows end at the ground; Meitou darkens the air the sun does not reach (a froxel grid of shadow samples along the view), so mountains, rock stacks and buildings cast shafts through the haze and the fog (docs/render-shafts.md)"
+msgstr "게임은 안개와 날씨 안개를 어디서나 똑같이 비춰서 그림자가 땅에서 끝납니다. Meitou는 해가 닿지 않는 공기를 어둡게 하여(시선을 따라 그림자 샘플을 담은 프록셀 격자) 산, 바위 기둥, 건물이 안개 속으로 빛줄기를 드리웁니다 (docs/render-shafts.md)"
+
+msgid "the game's haze takes the sky's sunlit colour, which is black at night, so everything a few thousand units away fades to black against a black sky and only the land round the camera stays lit; Meitou gives the air a faint glow of its own (airglow, and the planet's light scattered by the air, darker when the planet is a crescent): the far land fades into it, and the sky shows the same glow above the horizon, falling off with height, so ridges stand against it and the stars keep their contrast (docs/formats/sky.md, \"Night air\")"
+msgstr "게임의 연무는 하늘의 햇빛 색을 쓰는데 밤에는 검은색이라, 수천 유닛 떨어진 모든 것이 검은 하늘에 검게 사라지고 카메라 주변 땅만 밝게 남습니다. Meitou는 공기에 고유한 희미한 빛을 줍니다(대기광, 그리고 공기에 산란된 행성의 빛. 행성이 초승달 모양이면 더 어두움). 먼 땅은 그 빛에 녹아들고, 하늘은 지평선 위로 같은 빛을 보이며 높이에 따라 약해지므로 능선이 그 빛에 도드라지고 별은 대비를 유지합니다 (docs/formats/sky.md, \"Night air\")"
+
+msgid "the game lights the night land with a flat, directionless ambient; Meitou lets the big planet light it, as a sunlit sphere would (its phase, colour and size decide how much; the Tab slider scales it), from its fixed direction, with the shadows, the water's glint and the probes' light following (docs/formats/sky.md \"Planetshine\")"
+msgstr "게임은 밤의 땅을 평평하고 방향 없는 환경광으로 비춥니다. Meitou는 햇빛 받는 구체처럼 큰 행성이 땅을 비추게 합니다(위상, 색, 크기가 세기를 정하고 Tab 슬라이더로 조절). 빛은 고정된 방향에서 오며, 그림자, 물의 반짝임, 프로브의 빛도 이를 따릅니다 (docs/formats/sky.md \"Planetshine\")"
+
+msgid "the game lays one 4096 pixel starfield texture over the dome (blobby purple stars, a smeared brown nebula, blurred when it is magnified); Meitou draws point stars (a few thousand naked-eye ones and a faint background, colours from blackbody temperatures, one or two pixels wide at any resolution), turning about the sun's axis once a game day, dimming and reddening towards the horizon, the low ones twinkling (docs/formats/sky.md, \"Meitou night sky\")"
+msgstr "게임은 돔 위에 4096 픽셀 별밭 텍스처 하나를 덮습니다(번진 보라색 별, 얼룩진 갈색 성운, 확대하면 흐려짐). Meitou는 점 별을 그립니다(맨눈으로 보이는 수천 개와 희미한 배경, 흑체 온도에서 얻은 색, 어떤 해상도에서도 1~2 픽셀 폭). 별은 게임 하루에 한 번 태양의 축을 따라 돌고, 지평선 쪽으로 갈수록 어둡고 붉어지며, 낮은 별은 반짝입니다 (docs/formats/sky.md, \"Meitou night sky\")"
+
+msgid "the game uses a flat cloud texture; Meitou ray marches a procedural cloud volume with rounded shapes, light absorption, sunlit edges and shaded interiors, lit by the sun and by the planet at night; coverage and wind follow the existing weather, with separate temporal histories for the sky and water reflections (docs/render-clouds.md)"
+msgstr "게임은 평평한 구름 텍스처를 씁니다. Meitou는 둥근 형태, 빛 흡수, 햇빛 받는 가장자리, 그늘진 내부를 가진 절차적 구름 볼륨을 레이 마칭으로 그리며, 태양과 밤에는 행성이 비춥니다. 구름양과 바람은 기존 날씨를 따르고, 하늘과 물 반사에는 별도의 시간 기록을 둡니다 (docs/render-clouds.md)"
+
+msgid "the game's clouds cast no shadows; Meitou anchors the cloud layer to the world (1.2 km up, so the clouds also drift past as the camera moves) and dims the sun on the land and the water under it, the shadows sweeping over the ground with the wind (docs/formats/clouds.md, \"Meitou cloud shadows\")"
+msgstr "게임의 구름은 그림자를 드리우지 않습니다. Meitou는 구름층을 세계에 고정하고(1.2 km 높이, 카메라가 움직이면 구름도 지나감) 그 아래 땅과 물의 햇빛을 약하게 하며, 그림자가 바람을 따라 땅 위를 쓸고 지나갑니다 (docs/formats/clouds.md, \"Meitou cloud shadows\")"
+
+msgid "with Cloud shadows on, Meitou weakens them as the camera nears a placed fog volume and drops them inside one; otherwise the cloud shadows darken the already dim fog, and places like the swamp or the Deadlands get too dark (docs/render-clouds.md)"
+msgstr "구름 그림자가 켜져 있을 때, Meitou는 카메라가 배치된 안개 볼륨에 다가가면 그림자를 약하게 하고 그 안에서는 없앱니다. 그렇지 않으면 구름 그림자가 이미 흐린 안개를 더 어둡게 해서 늪이나 Deadlands 같은 곳이 너무 어두워집니다 (docs/render-clouds.md)"
+
+msgid "the game draws a character's meshes with their files' own LOD levels (one reduced level at 200 or 400 units for some, none for most: human_female, hair cuts, weapons) by the distance_sphere rule; Meitou makes four reductions of every mesh at load and picks one by how many pixels its deviation would show, with coarser levels in the shadow maps (docs/characters.md \"LOD of character meshes\")"
+msgstr "게임은 캐릭터의 메시를 파일 자체의 LOD 단계로 distance_sphere 규칙에 따라 그립니다(일부는 200 또는 400 유닛에서 축소 단계 하나, 대부분은 없음: human_female, 헤어스타일, 무기). Meitou는 로드할 때 모든 메시의 축소본 네 개를 만들고 그 편차가 몇 픽셀로 보일지에 따라 하나를 고르며, 그림자 맵에는 더 거친 단계를 씁니다 (docs/characters.md \"LOD of character meshes\")"
+
+msgid "the game lights skin as it lights stone, so the sun's terminator on a face or arm is a hard grey edge; Meitou lets the light spread under bare skin (pre-integrated scattering from a measured skin profile, by how tightly the surface curves), so the edge softens and warms to red, in the world and on the Meitou stage and portraits; clothing, hair, animals and robots stay as they were (docs/character-renderer.md \"Skin\")"
+msgstr "게임은 피부를 돌처럼 비추므로 얼굴이나 팔에 생기는 햇빛의 명암 경계가 딱딱한 회색 선이 됩니다. Meitou는 맨살 아래로 빛이 퍼지게 하여(측정된 피부 프로필에서, 표면의 굽은 정도에 따른 사전 적분 산란) 경계가 부드러워지고 붉게 따뜻해집니다. 세계에서도, Meitou 무대와 초상화에서도 마찬가지입니다. 옷, 머리카락, 동물, 로봇은 그대로입니다 (docs/character-renderer.md \"Skin\")"
+
+msgid "the game lights its ceiling lamps and other light buildings only at night, indoors too, so rooms are dim by day; Meitou keeps the lamps of buildings' interior layouts lit all day, outdoor lamps stay night-only (docs/render-lights.md)"
+msgstr "게임은 천장 등과 다른 조명 건물을 밤에만, 실내에서도 켜서 낮에는 방이 어둡습니다. Meitou는 건물 실내 배치의 등을 하루 종일 켜 두며, 실외 등은 밤에만 켜집니다 (docs/render-lights.md)"
+
+msgid "the game draws an inventory item's icon from its mesh with one sample a pixel (jagged edges, shimmering fine detail) and shows the pictures it saved before; Meitou draws each one supersampled 4 x 4, as the enhanced portraits, and keeps its own pictures (docs/game/ui-screens.md \"Item icons\")"
+msgstr "게임은 인벤토리 아이템의 아이콘을 메시에서 픽셀당 샘플 하나로 그리고(들쭉날쭉한 가장자리, 깜박이는 세부) 이전에 저장한 그림을 보여 줍니다. Meitou는 향상된 초상화처럼 4 x 4 슈퍼샘플링으로 각각을 그리고 자체 그림을 보관합니다 (docs/game/ui-screens.md \"Item icons\")"
+
+msgid "the game leaves blood only on the terrain, so a fight beside a wall or inside a building marks nothing there; Meitou also sprays splashes over walls, buildings, rocks and other static objects, and leaves pools and drips on floors, never up a wall (docs/game/blood-decals.md \"Blood on surfaces\")"
+msgstr "게임은 피를 지형에만 남겨서 벽 옆이나 건물 안에서 싸워도 그곳에는 아무 흔적이 없습니다. Meitou는 벽, 건물, 바위 및 기타 정적 오브젝트에도 피를 튀기고, 바닥에는 웅덩이와 방울을 남기지만 벽을 타고 오르지는 않습니다 (docs/game/blood-decals.md \"Blood on surfaces\")"
+
+msgid "the game leaves no tracks; Meitou lets a character who walks through a wet pool or splash carry its colour and leave a few fading prints on the terrain (docs/game/blood-decals.md \"Bloody footprints\")"
+msgstr "게임은 발자국을 남기지 않습니다. Meitou는 젖은 웅덩이나 튄 자국을 밟은 캐릭터가 그 색을 묻혀 지형에 희미해지는 발자국 몇 개를 남기게 합니다 (docs/game/blood-decals.md \"Bloody footprints\")"
+
+msgid "the game's ground is flat, its normal maps only shading it; Meitou marches the view ray through a height made from each layer's normal map near the eye, and toward the sun for a self-shadow (docs/render-terrain.md \"Ground relief\")"
+msgstr "게임의 땅은 평평하고 노멀 맵은 음영만 줍니다. Meitou는 눈 가까이에서 각 레이어의 노멀 맵으로 만든 높이를 따라 시선 광선을 진행시키고, 자체 그림자를 위해 태양 쪽으로도 진행시킵니다 (docs/render-terrain.md \"Ground relief\")"
+
+msgid "stores the game's 3D models more compactly, so they take about half the video memory and look practically the same; in detail, the game's meshes store most corners once for every triangle that uses them, each copy with its own triangle's tangent; Meitou merges the copies that differ only in that tangent into one vertex with their averaged tangent, so meshes keep about 60% fewer vertices (object meshes at The Hub take 50 MB of video memory instead of 98) and the bump lighting barely changes (tangents move 4° on average); applies to meshes loaded after the change (docs/render-objects.md)"
+msgstr "게임의 3D 모델을 더 압축해 저장하여 비디오 메모리를 절반 정도만 쓰면서 거의 똑같아 보입니다. 자세히 말하면, 게임의 메시는 대부분의 꼭짓점을 그것을 쓰는 삼각형마다 한 번씩 저장하고, 각 사본은 자기 삼각형의 탄젠트를 가집니다. Meitou는 그 탄젠트만 다른 사본들을 평균 탄젠트를 가진 꼭짓점 하나로 합쳐 메시의 꼭짓점이 약 60% 줄고(The Hub의 오브젝트 메시는 비디오 메모리 98 MB 대신 50 MB 사용) 범프 조명은 거의 변하지 않습니다(탄젠트가 평균 4° 이동). 변경 후 로드된 메시에 적용됩니다 (docs/render-objects.md)"
+
+msgid "the game draws a bolt in flight as its mesh alone, stretched a little with its speed, which is hard to follow at a distance; Meitou draws a faint streak behind it that grows out of the crossbow and shrinks into where the bolt stops; drawn with the particles, so none with --no-particles (docs/game/combat.md \"Bolt visuals\")"
+msgstr "게임은 날아가는 볼트를 속도에 따라 조금 늘린 메시만으로 그려서 멀리서는 따라가기 어렵습니다. Meitou는 그 뒤에 희미한 궤적을 그리는데, 궤적은 석궁에서 자라나 볼트가 멈춘 곳으로 줄어듭니다. 파티클과 함께 그려지므로 --no-particles에서는 없습니다 (docs/game/combat.md \"Bolt visuals\")"
+
+msgid "the game's dust and smoke sprites cut straight into the ground and walls they cross (all but its mist and steam, which fade; Faithful draws those hard-edged too); Meitou fades each sprite out over the last stretch before a surface (a quarter of its size, 0.2 to 30 m), so dust clouds meet the ground softly; the game's sprites are also flat and not fogged (one brightness in sun and shade, near and far, seen through fog banks), Meitou darkens dust and smoke where the sun is shadowed, brightens them towards the sun and puts the haze and the fog volumes in front of them over them; and it fades each effect out before the distance it stops being simulated at, where its whole cloud popped in and out (docs/render-post.md \"Fog\")"
+msgstr "게임의 먼지와 연기 스프라이트는 지나가는 땅과 벽에 그대로 잘려 들어갑니다(안개와 증기만 페이드됨. Faithful은 그것들도 딱딱한 가장자리로 그림). Meitou는 각 스프라이트를 표면 바로 앞의 마지막 구간(크기의 4분의 1, 0.2~30 m)에서 페이드하여 먼지 구름이 땅에 부드럽게 닿습니다. 게임의 스프라이트는 또한 평평하고 안개가 끼지 않습니다(양지와 음지, 가까이와 멀리, 안개 띠 너머에서도 같은 밝기). Meitou는 해가 가려진 곳에서 먼지와 연기를 어둡게 하고, 태양 쪽으로는 밝게 하며, 그 앞에 있는 연무와 안개 볼륨을 위에 덮습니다. 또 각 효과를 시뮬레이션이 멈추는 거리 전에 페이드하는데, 그곳에서는 구름 전체가 갑자기 나타났다 사라졌습니다 (docs/render-post.md \"Fog\")"
+
+msgid "the probes' grid leaves many probes inside walls, where they only go dark; Meitou moves them out of the geometry, lets the clouds shade the bounced light and the light shafts, and adds a world-space cache of short traced rays, small cells near the eye, for the fine indirect light the probes are too coarse for (corners, under tables) (--gi-hybrid picks the parts; docs/render-gi.md \"Hybrid GI\")"
+msgstr "프로브 격자는 많은 프로브를 벽 안에 남겨 두며, 그곳에서는 어두워지기만 합니다. Meitou는 프로브를 지오메트리 밖으로 옮기고, 구름이 반사광과 빛줄기를 가리게 하며, 눈 가까이에는 작은 셀을 둔 짧은 추적 광선의 월드 공간 캐시를 더해 프로브로는 너무 거친 섬세한 간접광(모서리, 탁자 밑)을 채웁니다(--gi-hybrid로 부분 선택. docs/render-gi.md \"Hybrid GI\")"
+
+msgid "the game lights hair and cloth as it lights stone; Meitou draws two highlights along the strands and a soft sheen on the edges of cloth and a little on leather, and skin glows past its shadows and through ears and fingers held against the light, eyes show a small catchlight instead of a mirror of the landscape, robots and held weapons read as metal, and everything wets in the rain, in the sun and under lamps (docs/character-renderer.md \"Hair, cloth, skin and eyes\")"
+msgstr "게임은 머리카락과 천을 돌처럼 비춥니다. Meitou는 머리 가닥을 따라 하이라이트 두 개를, 천의 가장자리와 가죽에 조금 부드러운 광택을 그립니다. 피부는 그림자 너머로, 빛에 비친 귀와 손가락을 통해 빛나고, 눈에는 풍경의 거울 대신 작은 캐치라이트가 보이며, 로봇과 손에 든 무기는 금속처럼 보이고, 비와 햇빛과 등불 아래에서 모든 것이 젖습니다 (docs/character-renderer.md \"Hair, cloth, skin and eyes\")"
+
+msgid "the game's characters leave nothing on the ground; Meitou presses footprints and drag marks into sand, mud, snow and, lightly, dirt near the camera, shaded as a normal and a height with the ground relief; wind and rain wear them away (visual only: not saved; docs/render-terrain.md \"Ground trails\")"
+msgstr "게임의 캐릭터는 땅에 아무것도 남기지 않습니다. Meitou는 카메라 근처의 모래, 진흙, 눈, 그리고 가볍게 흙에 발자국과 끌린 자국을 새기고, 지면 요철과 함께 노멀과 높이로 음영을 줍니다. 바람과 비가 그것을 지웁니다(시각 효과만: 저장되지 않음. docs/render-terrain.md \"Ground trails\")"
+
+msgid "the game's water meets what stands in it without a mark; Meitou clings foam to rocks, posts and legs at the waterline, from the scene's depth behind the surface, and the posed bodies of the characters and animals in the water near the camera push a simulated surface: legs raise bow waves and ripples that spread, slow in the shallows, stop at the shore and leave a wake with foam behind (Vulkan; needs the depth the refraction copies; docs/render-water.md \"Contact foam, wakes and ripples\")"
+msgstr "게임의 물은 그 안에 선 것과 아무 흔적 없이 만납니다. Meitou는 수면 뒤 장면의 깊이로 물가의 바위, 기둥, 다리에 거품을 붙이고, 카메라 근처 물속 캐릭터와 동물의 자세 잡힌 몸이 시뮬레이션된 수면을 밉니다. 다리가 뱃머리 물결과 잔물결을 일으키고, 물결은 퍼지며 얕은 곳에서 느려지고 기슭에서 멈추며 뒤에 거품 섞인 항적을 남깁니다(Vulkan. 굴절이 복사하는 깊이 필요. docs/render-water.md \"Contact foam, wakes and ripples\")"
+
+msgid "the game's blood stays on the skin: a blade that has just cut a man is clean, and a coat over a bleeding wound shows nothing; Meitou lets a weapon take the blood of what it wounds on its blade (wet and bright, then dried and dark, then flaking off; washed away in water and rain) and lets worn armour and clothing show the splatter of the body part under them, as the skin does (docs/game/blood-decals.md \"On weapons and gear\")"
+msgstr "게임의 피는 피부에만 남습니다. 방금 사람을 벤 칼날은 깨끗하고, 피 흘리는 상처 위의 코트에는 아무것도 보이지 않습니다. Meitou는 무기의 칼날에 그것이 상처 입힌 대상의 피가 묻게 하고(젖고 선명했다가, 마르고 검어졌다가, 벗겨짐. 물과 비에 씻김), 입은 갑옷과 옷에는 피부처럼 그 아래 신체 부위의 튄 자국이 보이게 합니다 (docs/game/blood-decals.md \"On weapons and gear\")"
+
+msgid "the game fixes a sheathed weapon, its scabbard and a crossbow on the back to their bone, and a backpack to the spine, so they move as one block with the hip or the back; Meitou lets them swing a little behind the body's motion (a damped spring on each hanging point, stepped in game time: at most 22 degrees for a weapon, 7 for a backpack, which never swings into the back and whose straps stay on the chest) for people near enough to see it (docs/character-renderer.md \"Gear sway\")"
+msgstr "게임은 칼집에 든 무기, 그 칼집, 등에 멘 석궁을 각자의 뼈에, 배낭을 척추에 고정하여 엉덩이나 등과 한 덩어리로 움직입니다. Meitou는 몸의 움직임보다 조금 늦게 흔들리게 합니다(매달린 지점마다 감쇠 스프링, 게임 시간으로 계산: 무기는 최대 22도, 배낭은 7도. 배낭은 등으로 파고들지 않고 끈은 가슴에 머무름). 볼 수 있을 만큼 가까운 사람에게 적용됩니다 (docs/character-renderer.md \"Gear sway\")"
+
+msgid "the game keeps everything in focus; Meitou blurs what is away from the focus as a real lens does, by the field of view, the f-number and the distance, for the free and cinematic cameras (the cinema's keys can set focus and aperture; docs/render-post.md \"Depth of field\")"
+msgstr "게임은 모든 것에 초점을 맞춥니다. Meitou는 실제 렌즈처럼 시야각, F값, 거리에 따라 초점에서 벗어난 것을 흐리게 하며, 자유 카메라와 시네마틱 카메라에 적용됩니다(시네마의 키로 초점과 조리개 설정 가능. docs/render-post.md \"Depth of field\")"
+
+msgid "the game's picture is as bright at its corners as at its centre; Meitou can darken it towards the corners as a camera lens does, by the Vignette strength, in every camera (photo mode's Look tab is this same switch; docs/render-post.md \"Vignette and film grain\")"
+msgstr "게임의 화면은 모서리도 가운데만큼 밝습니다. Meitou는 카메라 렌즈처럼 모서리 쪽으로 어둡게 할 수 있으며, 세기는 비네트 값에 따르고 모든 카메라에 적용됩니다(사진 모드의 룩 탭이 바로 이 스위치. docs/render-post.md \"Vignette and film grain\")"
+
+msgid "the game's picture is clean; Meitou can lay a fine film grain over it, new each frame and strongest in the mid-tones, by the Film grain strength, in every camera (photo mode's Look tab is this same switch; docs/render-post.md \"Vignette and film grain\")"
+msgstr "게임의 화면은 깨끗합니다. Meitou는 고운 필름 그레인을 덧씌울 수 있으며, 매 프레임 새로 생기고 중간 톤에서 가장 강하며, 세기는 필름 그레인 값에 따르고 모든 카메라에 적용됩니다(사진 모드의 룩 탭이 바로 이 스위치. docs/render-post.md \"Vignette and film grain\")"
+
+msgid "the game's lamps shine through walls and everything else that stands in their way; Meitou traces a ray from each surface to the lamps that light it most and takes the light of the blocked ones back off, so buildings, rocks, plants, grass and characters cast lamp shadows (needs a GPU with ray tracing and Indirect light on; characters cast them but do not receive them; docs/render-lights.md \"Traced lamp shadows\")"
+msgstr "게임의 등불은 벽과 앞을 가로막는 모든 것을 뚫고 비춥니다. Meitou는 각 표면에서 그것을 가장 많이 비추는 등불로 광선을 추적하고 가려진 등불의 빛을 다시 빼서, 건물, 바위, 식물, 풀, 캐릭터가 등불 그림자를 드리웁니다(레이 트레이싱 GPU와 간접광 켜기 필요. 캐릭터는 그림자를 드리우지만 받지는 않음. docs/render-lights.md \"Traced lamp shadows\")"
+
+msgid "the game lights its portraits and the character editor with a plain key light and nothing else; Meitou sets a fixed warm sun high on one side, a cool sky over warm sand, the sun's shadow on the character itself and the occlusion of its folds, the same whatever the hour (with Meitou's tone map, grade or anti-aliasing on; docs/character-renderer.md \"Meitou stage and portraits\")"
+msgstr "게임은 초상화와 캐릭터 편집기를 단순한 키 라이트 하나로만 비춥니다. Meitou는 한쪽 높이 고정된 따뜻한 태양, 따뜻한 모래 위의 서늘한 하늘, 캐릭터 자신에 드리운 햇빛 그림자와 옷 주름의 차폐를 두며, 시간과 상관없이 같습니다(Meitou의 톤 맵, 그레이딩 또는 안티에일리어싱이 켜져 있을 때. docs/character-renderer.md \"Meitou stage and portraits\")"
+
+msgid "the game's ceiling lamps, spotlights and searchlights are a pale yellow with more green than red, which reads as a sickly yellow-green on walls and skin; Meitou draws such lamps a warm yellow, halfway to the game's own torch colour and as bright as they were; torches, fires and the blue-green street lamps stay as they are (docs/render-lights.md)"
+msgstr "게임의 천장 등, 스포트라이트, 탐조등은 빨강보다 초록이 많은 옅은 노란색이라 벽과 피부에서 병든 듯한 황록색으로 보입니다. Meitou는 그런 등을 게임 자체의 횃불 색과의 중간인 따뜻한 노란색으로, 원래와 같은 밝기로 그립니다. 횃불, 불, 청록색 가로등은 그대로입니다 (docs/render-lights.md)"
+
+msgid "the game draws its sake and rum bottles solid; Meitou draws them as glass: the scene behind bent and tinted through the walls, reflections of the sun, sky and lamps brighter towards the edges, the drink inside up to its level, the neck or cork solid (docs/render-objects.md \"See-through items\")"
+msgstr "게임은 사케와 럼 병을 불투명하게 그립니다. Meitou는 유리로 그립니다: 뒤의 장면이 벽을 통해 굴절되고 물들며, 태양, 하늘, 등불의 반사는 가장자리로 갈수록 밝고, 안의 술은 그 높이까지 차 있으며, 병목이나 코르크는 불투명합니다 (docs/render-objects.md \"See-through items\")"
+
+msgid "Sky flight to/from the main menu (Meitou main menu)."
+msgstr "메인 메뉴로/에서 하늘 비행(Meitou 메인 메뉴)."
+
+msgid "Sky flight for save loads/new games during play (Meitou UI)."
+msgstr "플레이 중 저장 불러오기/새 게임 시 하늘 비행(Meitou UI)."
+
+msgid "Seconds a character flight takes, and each hop of the squad tour (numpad /)."
+msgstr "캐릭터로 날아가는 시간과 분대 순회의 각 이동 시간(초)(숫자패드 /)."
+
+msgid "Version"
+msgstr "버전"
+
+msgid "Author"
+msgstr "제작자"
+
+msgid "Custom list"
+msgstr "사용자 목록"
+
+msgid "off"
+msgstr "끔"
+
+msgid "unavailable"
+msgstr "사용 불가"
+
+msgid "Attach log.txt (it shows folder names; your user name is hidden)"
+msgstr "log.txt 첨부(폴더 이름이 보입니다. 사용자 이름은 가려집니다)"
+
+msgid "This machine needs electricity to function. You either need to build generators, or you are out of fuel / there is no wind."
+msgstr "이 기계가 작동하려면 전기가 필요합니다. 발전기를 지어야 하거나, 연료가 떨어졌거나 바람이 없습니다."
+
+msgid "the game draws the dust and the spray a running foot throws up as glowing sprites, as bright by night as by day and in shade as in the sun; Meitou lights them as the ground is lit: the sun through its shadows, the sky, the lamps, the same as the game's by day (docs/render-post.md \"Lit dust\")"
+msgstr "게임은 달리는 발이 일으키는 먼지와 물보라를 빛나는 스프라이트로 그려서, 밤에도 낮처럼, 그늘에서도 햇빛 아래처럼 밝습니다. Meitou는 땅이 비춰지는 것처럼 비춥니다: 그림자를 통한 태양, 하늘, 등불. 낮에는 게임과 같습니다 (docs/render-post.md \"Lit dust\")"
+
+msgid "1 game data problem, see log.txt"
+msgstr "게임 데이터 문제 1개, log.txt 참조"
+
+msgid "built for another version of the game"
+msgstr "다른 버전의 게임용으로 만들어짐"
+
+msgid "Raids keep their progress"
+msgstr "습격이 진행 상황을 유지"
+
+msgid "A raid under way when you save goes on where it was when that save is loaded. The game starts its current stage over at every load, so its waits and time limits begin again."
+msgstr "저장할 때 진행 중이던 습격은 그 저장을 불러오면 있던 곳에서 이어집니다. 게임은 불러올 때마다 현재 단계를 처음부터 다시 시작하므로 대기 시간과 제한 시간이 다시 시작됩니다."
+
+msgid "Guards stop passing bodies"
+msgstr "경비병이 몸을 주고받지 않음"
+
+msgid "A guard picks up a knocked-out prisoner only when a cage is free for them, and never takes one from a guard of his own faction. The game lets guards lift and grab prisoners anyway, so at a full prison they hand the same body round without end."
+msgstr "경비병은 빈 우리가 있을 때만 기절한 죄수를 들어 올리며, 같은 세력의 경비병에게서 빼앗지 않습니다. 게임은 경비병이 그래도 죄수를 들어 올리고 붙잡게 해서, 꽉 찬 감옥에서는 같은 몸을 끝없이 주고받습니다."
