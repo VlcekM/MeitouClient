@@ -219,7 +219,7 @@ internal static class ZoneNavMeshBuilder
     }
 
     /// <summary>
-    /// Builds every tile with triangles, in parallel, and records the tiles' times.
+    /// Builds every tile with triangles, in parallel on the build threads (<see cref="NavBuildScheduler"/>), and records the tiles' times.
     /// </summary>
     static (RcPolyMesh?[] Meshes, HeightGrid?[]?[] Details) BuildTiles(ZoneGeometry g, NavBuildSettings s, float[] verts, int[] indices,
         int[] areas, TileBuckets buckets, int tilesPerSide, float tileWorld, NavBuildTimes times)
@@ -229,7 +229,7 @@ internal static class ZoneNavMeshBuilder
         var details = new HeightGrid?[]?[meshes.Length];
         var workers = s.Threads > 0 ? s.Threads : Math.Max(1, Environment.ProcessorCount - 1);
         var watch = Stopwatch.StartNew();
-        Parallel.For(0, meshes.Length, new ParallelOptions { MaxDegreeOfParallelism = workers }, tile =>
+        Parallel.For(0, meshes.Length, NavBuildScheduler.Options(workers), tile =>
         {
             if (buckets.Triangles[tile].Count == 0) return;
 

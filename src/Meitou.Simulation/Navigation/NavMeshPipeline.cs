@@ -46,7 +46,7 @@ internal static class NavMeshPipeline
         // has few polygons to save.
         var geometries = GatherInteriors(gatherer, geometry, settings);
         var built = new ZoneNavMesh[geometries.Count];
-        Parallel.For(0, geometries.Count, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1) }, i =>
+        Parallel.For(0, geometries.Count, NavBuildScheduler.Options(Environment.ProcessorCount - 1), i =>
         {
             built[i] = ZoneNavMeshBuilder.Build(geometries[i], InteriorSettings(settings, geometries[i]), out _);
             built[i].Surfaces = new NavSurfaces(NavSurfaces.From(geometries[i], geometries[i].ZoneMin, geometries[i].ZoneMax));

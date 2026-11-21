@@ -1,90 +1,132 @@
+using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 
 namespace Meitou.Simulation;
 
 /// <summary>
 /// Dedicated worker threads for the tick's parallel phases (docs/simulation.md, "Threading"). <see cref="ForEach"/> hands out the
-/// numbers 0..count-1, each exactly once, to whichever worker is free and returns when all are done, so a phase is a barrier. Which
-/// worker takes which number is not fixed, so the body must write only what belongs to its number: then the thread count never
-/// changes a result. One thread means no threads at all: the caller runs everything.
+/// numbers 0..count-1, each exactly once, to whichever thread is free (the caller and the helpers) and returns when all are done, so a phase is a
+/// barrier. Which thread takes which number is not fixed, so the body must write only what belongs to its number: then the thread count never
+/// changes a result. One thread means no helpers at all: the caller runs everything.
 /// </summary>
 public sealed class WorkerPool : IDisposable
 {
     /// <summary>
-    /// The worker threads (none for one thread).
+    /// One <see cref="ForEach"/> call: its body, its numbers and how far they got. Each call has its own, so a helper still on an old one never
+    /// touches the next.
+    /// </summary>
+    sealed class Job(Action<int> body, int count)
+    {
+        /// <summary>
+        /// The body run for each number.
+        /// </summary>
+        public readonly Action<int> Body = body;
+        /// <summary>
+        /// How many numbers the job has.
+        /// </summary>
+        public readonly int Count = count;
+        /// <summary>
+        /// The next number to hand out.
+        /// </summary>
+        public int Next;
+        /// <summary>
+        /// How many numbers have finished (run, skipped after a failure, or failed).
+        /// </summary>
+        public int Done;
+        /// <summary>
+        /// 1 once the caller is about to park on <see cref="_callerWake"/>: the thread finishing the last number then sets it.
+        /// </summary>
+        public int CallerParked;
+        /// <summary>
+        /// The first failure; the numbers after it are skipped.
+        /// </summary>
+        public ExceptionDispatchInfo? Failure;
+
+        /// <summary>
+        /// Whether a helper that last ran <paramref name="last"/> has numbers to take here.
+        /// </summary>
+        public bool Offers(Job last) => this != last && Volatile.Read(ref Next) < Count;
+    }
+
+    /// <summary>
+    /// The job published between calls: it has no numbers.
+    /// </summary>
+    static readonly Job IdleJob = new(_ => { }, 0);
+
+    /// <summary>
+    /// How long an idle helper spins for the next job before it parks: tick phases follow each other within microseconds, and waking a parked
+    /// thread costs far more.
+    /// </summary>
+    static readonly long HelperSpinTicks = Stopwatch.Frequency / 20_000;
+
+    /// <summary>
+    /// How long the caller spins for the helpers' last numbers before it parks.
+    /// </summary>
+    static readonly long CallerSpinTicks = Stopwatch.Frequency / 10_000;
+
+    /// <summary>
+    /// The pause instructions between two looks while spinning. A spin only ever pauses: the runtime's own spin waits end in
+    /// <c>Thread.Sleep(1)</c>, a whole timer tick on Windows.
+    /// </summary>
+    const int SpinIterations = 8;
+
+    /// <summary>
+    /// The helper threads (one fewer than <see cref="ThreadCount"/>: the caller is the other).
     /// </summary>
     readonly Thread[] _threads;
     /// <summary>
-    /// Each worker's wake signal.
+    /// The lock the idle helpers park on (<see cref="Monitor.Wait(object)"/> needs a plain object).
     /// </summary>
-    readonly SemaphoreSlim[] _wake;
+    readonly object _park = new();
     /// <summary>
-    /// Counts the workers still busy with the job.
+    /// Wakes the caller parked for a job's last numbers. No spinning of its own: the caller spun already (see <see cref="SpinIterations"/>).
     /// </summary>
-    readonly CountdownEvent _done = new(0);
+    readonly ManualResetEventSlim _callerWake = new(false, 0);
+    /// <summary>
+    /// The job in flight, else <see cref="IdleJob"/>.
+    /// </summary>
+    Job _job = IdleJob;
+    /// <summary>
+    /// How many helpers are parked (or about to be) on <see cref="_park"/>.
+    /// </summary>
+    int _parked;
     /// <summary>
     /// Whether the pool is stopping.
     /// </summary>
     volatile bool _stopping;
 
     /// <summary>
-    /// The job in flight (written by the caller before the workers are woken, which orders it for them).
-    /// </summary>
-    Action<int>? _body;
-    /// <summary>
-    /// The numbers of the job (see <see cref="_body"/>).
-    /// </summary>
-    int _count;
-    /// <summary>
-    /// The next number to hand out (see <see cref="_body"/>).
-    /// </summary>
-    int _next;
-    /// <summary>
-    /// The first failure of the job (see <see cref="_body"/>).
-    /// </summary>
-    ExceptionDispatchInfo? _failure;
-
-    /// <summary>
-    /// A pool of <paramref name="threadCount"/> workers (1: none, the caller runs everything).
+    /// A pool of <paramref name="threadCount"/> threads: the caller and <paramref name="threadCount"/> - 1 helpers above normal priority, like the
+    /// render jobs, so another process or a navmesh build does not preempt one in the middle of a phase (1: no helpers).
     /// </summary>
     public WorkerPool(int threadCount)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(threadCount, 1);
         ThreadCount = threadCount;
+        _threads = new Thread[threadCount - 1];
 
-        if (threadCount == 1)
+        for (int i = 0; i < _threads.Length; i++)
         {
-            _threads = [];
-            _wake = [];
-            return;
-        }
-
-        _threads = new Thread[threadCount];
-        _wake = new SemaphoreSlim[threadCount];
-
-        for (int i = 0; i < threadCount; i++)
-        {
-            _wake[i] = new SemaphoreSlim(0);
-            int index = i;
-            _threads[i] = new Thread(() => Work(index)) { IsBackground = true, Name = $"Meitou.Sim {i}" };
+            _threads[i] = new Thread(Work) { IsBackground = true, Priority = ThreadPriority.AboveNormal, Name = $"Meitou.Sim {i}" };
             _threads[i].Start();
         }
     }
 
     /// <summary>
-    /// The number of threads.
+    /// The number of threads (the caller included).
     /// </summary>
     public int ThreadCount { get; }
 
     /// <summary>
-    /// Runs <paramref name="action"/> for 0..<paramref name="count"/>-1 on the workers and waits. Not reentrant; one caller at a time.
+    /// Runs <paramref name="action"/> for 0..<paramref name="count"/>-1 on the caller and the helpers and waits. Not reentrant; one caller at a
+    /// time. No body runs after it returns; the first failure is rethrown once every number is done.
     /// </summary>
     public void ForEach(int count, Action<int> action)
     {
         ArgumentNullException.ThrowIfNull(action);
         if (count <= 0) return;
 
-        if (ThreadCount == 1 || count == 1)
+        if (_threads.Length == 0 || count == 1)
         {
             for (int i = 0; i < count; i++) action(i);
 
@@ -92,63 +134,165 @@ public sealed class WorkerPool : IDisposable
         }
 
         ObjectDisposedException.ThrowIf(_stopping, this);
-        _body = action;
-        this._count = count;
-        _next = 0;
-        _failure = null;
-        int woken = Math.Min(ThreadCount, count);
-        _done.Reset(woken);
-        for (int i = 0; i < woken; i++) _wake[i].Release();
+        var job = new Job(action, count);
+        Publish(job);
 
-        _done.Wait();
-        _body = null;
-        _failure?.Throw();
+        // The caller takes numbers too: when it finishes them all before a parked helper wakes, there is nothing to wait for.
+        Run(job);
+        AwaitDone(job);
+
+        Volatile.Write(ref _job, IdleJob);
+        job.Failure?.Throw();
     }
 
     /// <summary>
-    /// A worker's loop: woken, it takes numbers until the job's are done, then signals.
+    /// Makes <paramref name="job"/> the one in flight and wakes the parked helpers. The exchange is a full fence before <see cref="_parked"/> is
+    /// read, and a helper counts itself parked before it looks at the job once more: so either the helper sees the job or the caller sees it parked.
     /// </summary>
-    void Work(int index)
+    void Publish(Job job)
+    {
+        Interlocked.Exchange(ref _job, job);
+        if (Volatile.Read(ref _parked) == 0) return;
+
+        lock (_park) Monitor.PulseAll(_park);
+    }
+
+    /// <summary>
+    /// Waits for the numbers the helpers still run: spins briefly, then parks until the last one sets <see cref="_callerWake"/>.
+    /// </summary>
+    void AwaitDone(Job job)
+    {
+        if (SpinForDone(job)) return;
+
+        // Reset before the flag, and again on each round: a set left over from an earlier job then only costs one more round. The flag's
+        // exchange and the finisher's increment are both full fences, so either the finisher sees the flag or the caller sees the count.
+        while (Volatile.Read(ref job.Done) < job.Count)
+        {
+            _callerWake.Reset();
+            Interlocked.Exchange(ref job.CallerParked, 1);
+            if (Volatile.Read(ref job.Done) >= job.Count) break;
+
+            _callerWake.Wait();
+        }
+    }
+
+    /// <summary>
+    /// Takes and runs <paramref name="job"/>'s numbers until none are left; the caller and the helpers all run it. A failure is kept and the numbers
+    /// after it are skipped (the rest of the job is moot), but each still counts as done.
+    /// </summary>
+    void Run(Job job)
     {
         while (true)
         {
-            _wake[index].Wait();
-            if (_stopping) return;
+            int i = Interlocked.Increment(ref job.Next) - 1;
+            if (i >= job.Count) return;
 
             try
             {
-                while (true)
-                {
-                    int i = Interlocked.Increment(ref _next) - 1;
-                    if (i >= _count) break;
-
-                    _body!(i);
-                }
+                if (Volatile.Read(ref job.Failure) is null) job.Body(i);
             }
             catch (Exception e)
             {
-                Interlocked.CompareExchange(ref _failure, ExceptionDispatchInfo.Capture(e), null);
-                Interlocked.Exchange(ref _next, int.MaxValue / 2);   // the rest of the job is moot
+                Interlocked.CompareExchange(ref job.Failure, ExceptionDispatchInfo.Capture(e), null);
             }
             finally
             {
-                _done.Signal();
+                Finish(job);
             }
         }
     }
 
     /// <summary>
-    /// Stops the workers and frees their signals.
+    /// Counts one of <paramref name="job"/>'s numbers done, and wakes the parked caller when it was the last.
+    /// </summary>
+    void Finish(Job job)
+    {
+        if (Interlocked.Increment(ref job.Done) < job.Count) return;
+        if (Volatile.Read(ref job.CallerParked) != 0) _callerWake.Set();
+    }
+
+    /// <summary>
+    /// A helper's loop: runs each new job it finds until the pool stops.
+    /// </summary>
+    void Work()
+    {
+        var last = IdleJob;
+        while (NextJob(last) is { } job)
+        {
+            last = job;
+            Run(job);
+        }
+    }
+
+    /// <summary>
+    /// The next job with numbers to take after <paramref name="last"/>, spinning briefly and then parked; null once the pool stops.
+    /// </summary>
+    Job? NextJob(Job last)
+    {
+        SpinForJob(last);
+
+        lock (_park)
+        {
+            while (true)
+            {
+                if (_stopping) return null;
+
+                // Counted parked before the last look at the job (see Publish).
+                Interlocked.Increment(ref _parked);
+                var job = Volatile.Read(ref _job);
+                if (job.Offers(last))
+                {
+                    Interlocked.Decrement(ref _parked);
+                    return job;
+                }
+
+                Monitor.Wait(_park);
+                Interlocked.Decrement(ref _parked);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Spins up to <see cref="CallerSpinTicks"/> for <paramref name="job"/>'s numbers to be done; whether they are.
+    /// </summary>
+    static bool SpinForDone(Job job)
+    {
+        long end = Stopwatch.GetTimestamp() + CallerSpinTicks;
+        while (Volatile.Read(ref job.Done) < job.Count)
+        {
+            if (Stopwatch.GetTimestamp() >= end) return false;
+
+            Thread.SpinWait(SpinIterations);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Spins up to <see cref="HelperSpinTicks"/> for a job after <paramref name="last"/> or the pool's stop.
+    /// </summary>
+    void SpinForJob(Job last)
+    {
+        long end = Stopwatch.GetTimestamp() + HelperSpinTicks;
+        while (!_stopping && !Volatile.Read(ref _job).Offers(last))
+        {
+            if (Stopwatch.GetTimestamp() >= end) return;
+
+            Thread.SpinWait(SpinIterations);
+        }
+    }
+
+    /// <summary>
+    /// Stops the helpers and frees the caller's signal.
     /// </summary>
     public void Dispose()
     {
         if (_stopping) return;
 
         _stopping = true;
-        foreach (var w in _wake) w.Release();
+        lock (_park) Monitor.PulseAll(_park);
         foreach (var t in _threads) t.Join();
-        foreach (var w in _wake) w.Dispose();
 
-        _done.Dispose();
+        _callerWake.Dispose();
     }
 }

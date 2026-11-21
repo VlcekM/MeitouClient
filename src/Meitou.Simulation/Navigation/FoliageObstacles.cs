@@ -128,7 +128,7 @@ internal sealed class FoliageObstacles : IDisposable
         LoadCatalog();
         if (_overlayTiles.Count > 6) _overlayTiles.Clear();
 
-        var options = new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Math.Min(missing.Count, Environment.ProcessorCount - 1)) };
+        var options = NavBuildScheduler.Options(Math.Min(missing.Count, Environment.ProcessorCount - 1));
         Parallel.ForEach(missing, options, i => lists[i] = PlaceFoliageZone(zones[i]));
         return lists;
     }

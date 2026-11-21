@@ -120,7 +120,9 @@ Effects sort by `(target,source,system,sequence)`; spatial-neighbour iteration o
 Commands apply by tick and queue order. Simplification: the original drains a character's command deque from its head each frame; the head is accepted or refused by `FUN_1405d0db0` and a refusal blocks everything behind it and is retried every frame (`FUN_1405d2c30`:15-41, **Verified**), while Meitou's `CommandQueue.TakeDue` removes every due command and a consumer that does not apply one drops it. In-tick orders use serial `World.Defer`; deferred orders
 precede host orders for their due tick. No concurrent host enqueue may alter that ordering.
 Randomness: stateless `Rng.Hash(seed,entityKey,purpose,counter)`; changing purpose/salt changes rolls.
-Worker partitions are `threads*2`, minimum 16 slots (game 32: 128 left a 500-character battle 3 partitions); one worker means caller execution.
+Worker partitions are `threads*2`, minimum 16 slots (game 32: 128 left a 500-character battle 3 partitions). The caller runs partitions
+alongside `threads - 1` above-normal helpers that spin briefly between phases, then park; one thread means caller execution. Navmesh and foliage
+builds loop on their own below-normal threads (`NavBuildScheduler`), never the thread pool, so they cannot preempt a helper mid-phase.
 Async path and population results enter at tick boundaries and a navmesh zone goes live when its build ends, also in the middle of a tick; arrival
 timing is not repeatable in play. What play reads that no tick decides (**Observed**, code reading, #1056):
 - Services on their own threads: `PopulationSettings.Background` (town, wild and roamer builds), `PathService` without `SynchronousPaths`,
