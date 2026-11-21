@@ -43,6 +43,7 @@ Not built, by design: the original's in-game level editor and fog editor (`Kensh
 - [render-shafts](render-shafts.md)
 - [render-sky](render-sky.md)
 - [render-terrain](render-terrain.md)
+- [render-title-dots](render-title-dots.md): unsolved light dots in the title scene, what was measured and ruled out
 - [render-water](render-water.md)
 - [renderer-native](renderer-native.md)
 - [resource-layer](resource-layer.md): the resources and the commands between the renderers and the API - the proposed neutral vocabulary
