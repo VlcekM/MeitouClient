@@ -67,7 +67,8 @@ public sealed class FactionRelations
     public int PlayerFaction { get; set; } = -1;
 
     /// <summary>
-    /// How many <see cref="Event"/>s changed a value so far (the state hash covers the table once this is above 0).
+    /// How many <see cref="Event"/>s changed a value since the table was built, <see cref="Reset"/> or a save was loaded into it
+    /// (<see cref="RestartChanges"/>); the state hash covers the table once this is above 0.
     /// </summary>
     public long Changes { get; private set; }
 
@@ -132,6 +133,12 @@ public sealed class FactionRelations
         Array.Clear(_trust);
         Changes = 0;
     }
+
+    /// <summary>
+    /// Starts <see cref="Changes"/> again from 0 and keeps the values (a save loaded into the table: the count is the loaded game's, not the
+    /// previous game's of the session, which shares this table through the data).
+    /// </summary>
+    public void RestartChanges() => Changes = 0;
 
     #region Relations
 

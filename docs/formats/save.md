@@ -333,7 +333,9 @@ the NPC platoons. A save older than 0.90.0 drops the reset, buildings, research 
 `SaveLoader` recognizes an original save's `imported` marker and excludes that zone from `World.SavedZones`, so NPC
 generators use fresh construction and switch defaults while player-owned generators retain their state. Meitou's own
 import filter does not yet write that marker (the NPC platoons are left out, so every town makes its residents anyway). The relation table is shared by the
-data, so an import without Relations first sets it back to the FACTION values (`FactionRelations.Reset`).
+data, so an import without Relations first sets it back to the FACTION values (`FactionRelations.Reset`), and every other load that applies the save's
+relations starts its change count again (`FactionRelations.RestartChanges`): the state hash reads that count, so it would otherwise depend on the
+games played before in the session.
 
 ### Object handles and slot lists
 
