@@ -252,15 +252,18 @@ public sealed partial class CarrySystem
 
     /// <summary>
     /// <c>FUN_140855830</c>: the target's sense entry for the attacker has its seen flag. Stand-in: its spot meter on the attacker is full
-    /// (<see cref="AggroSystem.Spotted"/>), or it fights the attacker (a fighter has the enemy in sight). Checked every tick, in every state, by the
-    /// original's update; a hit cancels the task silently.
+    /// (<see cref="AggroSystem.Spotted"/>), or the attacker fights the target (the sight test <c>FUN_140857b10</c> sees at once a character whose
+    /// fight is on and aimed at the looker, <b>Verified</b>). The target's own fight on the attacker is no sight: a sneaking attacker is still
+    /// spotted through the meter (<c>FUN_140856cb0</c>), so a target that fights back after a miss leaves the task to its swing's end or to a blow
+    /// that staggers the attacker, behind which the order starts again. Checked every tick, in every state, by the original's update; a hit
+    /// cancels the task silently.
     /// </summary>
     bool Senses(World world, CharacterTable table, int target, int attacker)
     {
-        var attackerId = table.IdOf(attacker);
-        return Aggro?.Spotted(target, attackerId) == true
-            || world.SystemOf<CombatSystem>()?.StateOf(table.IdOf(target)) is { } fight
-                && fight.TargetSlot == attacker && fight.TargetGeneration == attackerId.Generation;
+        var targetId = table.IdOf(target);
+        return Aggro?.Spotted(target, table.IdOf(attacker)) == true
+            || world.SystemOf<CombatSystem>()?.StateOf(table.IdOf(attacker)) is { } fight
+                && fight.TargetSlot == target && fight.TargetGeneration == targetId.Generation;
     }
 
     /// <summary>
