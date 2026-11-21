@@ -17,14 +17,20 @@ namespace Meitou.Game.Rendering.Overlays;
 public sealed unsafe class MarkerRenderer : IDisposable
 {
     /// <summary>
-    /// The movement marker's scale (<c>position.mesh</c> scaled 8) and the lighting's contrast (as <c>Basic_Lit_VP</c> lights it, 0.5).
+    /// The movement marker's scale (<c>position.mesh</c> scaled 8), the blue snap node sphere's scale (<c>unit_sphere.mesh</c> scaled 5,
+    /// <b>Verified</b> <c>0x14038ce92</c>) and the lighting's contrast (as <c>Basic_Lit_VP</c> lights it, 0.5).
     /// </summary>
-    const float MarkerScale = 8, Contrast = 0.5f;
+    const float MarkerScale = 8, BlueNodeScale = 5, Contrast = 0.5f;
 
     /// <summary>
     /// The colours of the material's two passes: the visible part (lit, alpha blended) and the part behind the scene.
     /// </summary>
     static readonly Vector4 Visible = new(0.612f, 0.694f, 0.529f, 1), Hidden = new(0.306f, 0.347f, 0.2645f, 0.6f);
+    /// <summary>
+    /// The blue snap node sphere's colour (<c>showBlueNodes</c> <c>0x14038ce74..0x14038ce8e</c>, <b>Verified</b>: R=0, G=0.8, B=1.0, A=0.5), and
+    /// its dimmer pass behind the scene.
+    /// </summary>
+    static readonly Vector4 BlueNodeVisible = new(0, 0.8f, 1, 0.5f), BlueNodeHidden = new(0, 0.4f, 0.5f, 0.25f);
     /// <summary>
     /// The alpha of an arrow's part behind the scene (the stealth call's second pass, <c>FUN_1409b7830</c>).
     /// </summary>
@@ -176,9 +182,9 @@ public sealed unsafe class MarkerRenderer : IDisposable
     long _idleSince;
 
     /// <summary>
-    /// The vertex ranges of the marker, arrow and rotation ring meshes in the buffer (count 0: the mesh is missing).
+    /// The vertex ranges of the marker, arrow, rotation ring and blue snap node sphere meshes in the buffer (count 0: the mesh is missing).
     /// </summary>
-    readonly (int First, int Count) _marker, _arrow, _ring;
+    readonly (int First, int Count) _marker, _arrow, _ring, _sphere;
 
     /// <summary>
     /// Premultiplied alpha blending: the colour over the picture by one minus its alpha.
@@ -204,6 +210,11 @@ public sealed unsafe class MarkerRenderer : IDisposable
     /// </summary>
     public Arrow[] Arrows { get; set; } = [];
     /// <summary>
+    /// This frame's blue snap node markers in build mode (<c>unit_sphere.mesh</c> scaled 5, docs/game/buildings-production.md "Snapping to a
+    /// building"; empty: none; ignored without <c>unit_sphere.mesh</c>).
+    /// </summary>
+    public Vector3[] BlueNodes { get; set; } = [];
+    /// <summary>
     /// Whether the rotation marker (<c>rotate.mesh</c>, docs/game/ui-input.md) shows while the camera turns: flat, 1 unit over the pivot of the
     /// camera the frame is drawn with, scaled max(3, 0.06 x its distance), so it keeps with the view (a followed character moves the pivot every
     /// frame, between the rig's ticks).
@@ -213,12 +224,13 @@ public sealed unsafe class MarkerRenderer : IDisposable
     /// <summary>
     /// Makes the programs and pipelines, uploads the meshes' vertices and picks the sample count.
     /// </summary>
-    MarkerRenderer(IGpuContext gpu, float[] data, (int, int) marker, (int, int) arrow, (int, int) ring)
+    MarkerRenderer(IGpuContext gpu, float[] data, (int, int) marker, (int, int) arrow, (int, int) ring, (int, int) sphere)
     {
         this._gpu = gpu;
         this._marker = marker;
         this._arrow = arrow;
         this._ring = ring;
+        this._sphere = sphere;
         _program = LegacyProgram.Create(gpu, Vertex, Fragment, "markers");
         _segment = new NativeSegment(gpu, _program, PrimitiveType.Triangles, "markers");
         _viewProjection = _program.Uniform("uViewProjection");
@@ -257,7 +269,8 @@ public sealed unsafe class MarkerRenderer : IDisposable
         var marker = Append(data, find, "position.mesh", MarkerScale);
         var arrow = Append(data, find, "arrow.mesh", 1);
         var ring = Append(data, find, "rotate.mesh", 1);
-        return data.Count == 0 ? null : new MarkerRenderer(gpu, [.. data], marker, arrow, ring);
+        var sphere = Append(data, find, "unit_sphere.mesh", BlueNodeScale);
+        return data.Count == 0 ? null : new MarkerRenderer(gpu, [.. data], marker, arrow, ring, sphere);
     }
 
     /// <summary>
@@ -305,7 +318,8 @@ public sealed unsafe class MarkerRenderer : IDisposable
     /// <summary>
     /// Whether anything is to be drawn this frame.
     /// </summary>
-    public bool Active => Strength > 0 && _marker.Count > 0 || Arrows.Length > 0 && _arrow.Count > 0 || Rotation && _ring.Count > 0;
+    public bool Active => Strength > 0 && _marker.Count > 0 || Arrows.Length > 0 && _arrow.Count > 0 || Rotation && _ring.Count > 0
+        || BlueNodes.Length > 0 && _sphere.Count > 0;
 
     /// <summary>
     /// Draws over the finished <paramref name="picture"/> (after the tone map, so the colours come out as the material gives them, whatever the
@@ -394,6 +408,13 @@ public sealed unsafe class MarkerRenderer : IDisposable
         {
             foreach (var a in arrows)
                 Draw(cmd, _arrow, a.At - eye, ArrowScale * PointAlong(a.Direction), new Vector4(a.Colour, hidden ? ArrowHiddenAlpha : 1));
+        }
+        var blueNodes = BlueNodes;
+        if (blueNodes.Length > 0 && _sphere.Count > 0)
+        {
+            var c = hidden ? BlueNodeHidden : BlueNodeVisible;
+            foreach (var p in blueNodes)
+                Draw(cmd, _sphere, p - eye, Matrix4x4.Identity, c);
         }
     }
 

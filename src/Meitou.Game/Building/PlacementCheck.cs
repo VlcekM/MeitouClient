@@ -11,7 +11,7 @@ namespace Meitou.Game.Building;
 /// A ghost waiting for Confirm: what it is and where it stands, with its footprint in the world.
 /// </summary>
 public sealed record QueuedGhost(
-    BuildingBuildData Building, Vector3 Position, Quaternion Rotation, int Floor, Vector2[]? Hull, string? Parent = null);
+    BuildingBuildData Building, Vector3 Position, Quaternion Rotation, int Floor, Vector2[]? Hull, string? Parent = null, bool Outside = false);
 
 /// <summary>
 /// A ghost standing on a building's floor: the building (its placement id, a player site's own id), its indoor hull in the world, and the floor
@@ -139,6 +139,27 @@ public sealed class PlacementServices
         get;
         init;
     } = (_, _, _) => [];
+
+    /// <summary>
+    /// Whether a BUILDING record has <c>is node</c> set (such as <c>Node Light Mount</c>).
+    /// </summary>
+    public Func<string, bool> IsNodeRecord { get; init; } = _ => false;
+
+    /// <summary>
+    /// The <c>is node</c> BUILDING instances of a building record in its own local space (cached per record).
+    /// </summary>
+    public Func<string, IReadOnlyList<PlacedSnapNode>> SnapNodesOf { get; init; } = _ => [];
+
+    /// <summary>
+    /// Level buildings within a radius of a point (X, Z) that carry at least one <c>is node</c> instance passing the filter, with their placement
+    /// transform and ownership metadata (<see cref="SnapHost"/>).
+    /// </summary>
+    public Func<Vector2, float, Func<string, bool>, IEnumerable<(string Key, string Record, Vector3 Position, Quaternion Rotation, SnapHost Host)>>
+        SnapHostsAround
+    {
+        get;
+        init;
+    } = (_, _, _) => [];
 }
 
 /// <summary>
@@ -177,6 +198,15 @@ public sealed record PlacementQuery(
     /// The ghost took its <c>snaps to</c> target's place and turn: like a wall piece, it is judged by its own pitch, not by the ground's margins.
     /// </summary>
     public bool Snapped { get; init; }
+    /// <summary>
+    /// The host building of the <c>is node</c> snap point this ghost snapped onto; null when not snapped to a building's node.
+    /// </summary>
+    public SnapHost? SnappedOn { get; init; }
+    /// <summary>
+    /// Whether this ghost requires a snap target (<c>PreviewBuilding_Snapping</c> slot 5, <c>0x1404d0ff0</c>): unsnapped placement fails with
+    /// <see cref="PlacementFailure.NeedsSnapNode"/>.
+    /// </summary>
+    public bool NeedsSnap { get; init; }
     /// <summary>
     /// The ghost's vertical offset from the ground under the cursor (the original's build-mode height offset); only the margins of interior furniture
     /// and nodes read it.
@@ -244,23 +274,30 @@ public static class PlacementCheck
     {
         var b = q.Building;
         var at = new Vector2(q.Position.X, q.Position.Z);
-        // A site floor counts as ours; a level building as PlacementRules.MayBuildIn has it.
+        // A site floor (or a player site's snap node) counts as ours; a level building as PlacementRules.MayBuildIn has it.
         bool mayBuildIn = q.On is { Level: null }
-            || q.On is { } level && PlacementRules.MayBuildIn(b, level.Owned, level.Destroyed, level.OwnerNotReal);
+            || q.On is { } level && PlacementRules.MayBuildIn(b, level.Owned, level.Destroyed, level.OwnerNotReal)
+            || q.SnappedOn is { IsLevel: false }
+            || q.SnappedOn is { IsLevel: true } sn && PlacementRules.MayBuildIn(b, sn.Owned, sn.Destroyed, sn.OwnerNotReal);
         var town = PlacementRules.TownBlock(b, at, q.Towns, q.PlayerFactionId, mayBuildIn);
         if (town != PlacementFailure.None) return town;
 
         var turned = Quaternion.CreateFromAxisAngle(Vector3.UnitY, q.Yaw);
         var hull = q.Services.Footprint(b.Id) is { } footprint ? footprint.Place(q.Position, turned) : null;
-        // On a floor: a level building we may build in, or a finished site.
-        string? parent = q.On?.Building;
+        // On a floor or a building's snap node: a level building we may build in, or a finished site.
+        string? parent = q.On?.Building ?? q.SnappedOn?.Id;
         if (q.On is { Level: not null } && !mayBuildIn) return PlacementFailure.NotOwnedBuilding;
         if (q.On is { Level: null } && q.Sites.FirstOrDefault(s => s.Id == parent) is null) return PlacementFailure.NotOwnedBuilding;
+        if (q.SnappedOn is { IsLevel: true } && !mayBuildIn) return PlacementFailure.NotOwnedBuilding;
+        if (q.SnappedOn is { IsLevel: false } && q.Sites.FirstOrDefault(s => s.Id == parent) is null) return PlacementFailure.NotOwnedBuilding;
         // The resource row comes after the first row's "don't own" text and before "incomplete".
         var resources = PlacementRules.ResourceBlock(q.Services.Readout(b.Id, q.Position));
         if (resources != PlacementFailure.None) return resources;
         // A site of ours, or an owned town house being repaired (a level building that is also a site).
-        if (q.On is not null && q.Sites.FirstOrDefault(s => s.Id == parent) is { Complete: false }) return PlacementFailure.InsideIncomplete;
+        if ((q.On is not null || q.SnappedOn is not null) && q.Sites.FirstOrDefault(s => s.Id == parent) is { Complete: false })
+            return PlacementFailure.InsideIncomplete;
+        // A snap-only building (such as an exterior wall light) that is not snapped to a node refuses placement (0x1404d0ff0).
+        if (q.NeedsSnap && !q.Snapped) return PlacementFailure.NeedsSnapNode;
         var centre = CentreBlock(q, at, parent);
         if (centre != PlacementFailure.None) return centre;
 
@@ -281,6 +318,7 @@ public static class PlacementCheck
     /// </summary>
     static PlacementFailure CentreBlock(PlacementQuery q, Vector2 at, string? parent)
     {
+        var ghostFootprint = q.Services.Footprint(q.Building.Id);
         // A building under the ghost's centre (the one it stands in aside): another town's or the level's (not ours), or an unfinished site of ours.
         foreach (var site in q.Sites)
         {
@@ -288,6 +326,7 @@ public static class PlacementCheck
                 && !OtherFloor(q, parent, site.Parent, site.Floor)
                 && !q.Passes(site.Record, site.Position, site.Rotation)
                 && q.Services.Footprint(site.Record) is { } siteFootprint
+                && (q.SnappedOn is null || OverlapsHeight(q.Position.Y, ghostFootprint, q.Building.BuildingHeight, site.Position.Y, siteFootprint))
                 && Contains(siteFootprint.Place(site.Position, site.Rotation), at))
                 return site.Complete ? PlacementFailure.TooCloseToBuilding : PlacementFailure.InsideIncomplete;
         }
@@ -313,6 +352,7 @@ public static class PlacementCheck
         // indoor hull.
         if (q.On is { } on && hull.Any(p => Distance(on.Footprint, p) > 0)) return PlacementFailure.TooCloseToBuilding;
         if (CutsStructure(q, hull)) return PlacementFailure.TooCloseToBuilding;
+        var ghostFootprint = q.Services.Footprint(q.Building.Id);
         float reach = hull.Max(p => Vector2.Distance(p, at)) + 150;
         foreach (var other in q.Services.StaticAround(at, reach))
             if (Blocks(q, other, parent) && Overlap(hull, other.Hull)) return PlacementFailure.TooCloseToBuilding;
@@ -322,6 +362,7 @@ public static class PlacementCheck
                 && !OtherFloor(q, parent, site.Parent, site.Floor)
                 && !q.Passes(site.Record, site.Position, site.Rotation)
                 && q.Services.Footprint(site.Record) is { } f
+                && (q.SnappedOn is null || OverlapsHeight(q.Position.Y, ghostFootprint, q.Building.BuildingHeight, site.Position.Y, f))
                 && Overlap(hull, f.Place(site.Position, site.Rotation)))
                 return PlacementFailure.TooCloseToBuilding;
         }
@@ -330,10 +371,25 @@ public static class PlacementCheck
             if (queued.Hull is not null
                 && !OtherFloor(q, parent, queued.Parent, queued.Floor)
                 && !q.Passes(queued.Building.Id, queued.Position, queued.Rotation)
+                && (q.SnappedOn is null || OverlapsHeight(q.Position.Y, ghostFootprint, q.Building.BuildingHeight, queued.Position.Y,
+                    q.Services.Footprint(queued.Building.Id), queued.Building.BuildingHeight))
                 && Overlap(hull, queued.Hull))
                 return PlacementFailure.TooCloseToBuilding;
         }
         return CharacterBlock(q, hull);
+    }
+
+    /// <summary>
+    /// Whether the ghost's vertical span overlaps another building's vertical span (used for elevated snap-node attachments such as exterior wall
+    /// lights so floor-level furniture inside the host building does not block a light mounted high on the wall, while two lights on the same node
+    /// still collide).
+    /// </summary>
+    static bool OverlapsHeight(float ghostY, BuildingFootprint? ghost, float ghostHeight, float otherY, BuildingFootprint? other,
+        float otherHeight = 100)
+    {
+        float gMin = ghostY + (ghost?.YMin ?? 0), gMax = ghostY + (ghost?.YMax ?? ghostHeight);
+        float oMin = otherY + (other?.YMin ?? 0), oMax = otherY + (other?.YMax ?? otherHeight);
+        return gMin <= oMax && oMin <= gMax;
     }
 
     /// <summary>
