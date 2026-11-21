@@ -235,6 +235,10 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// UI modes.
     /// </summary>
     internal TradeWindows TradeWindows => field ??= new(this);
+    /// <summary>
+    /// The split stack dialog of Meitou's stack splitting (Shift + Alt on a stack, <see cref="InventoryWindows.SplitStacks"/>).
+    /// </summary>
+    internal StackSplitDialog StackSplitDialog => field ??= new(this);
 
     #endregion
 
@@ -846,7 +850,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     {
         Mouse = p;
         UiInput++;
-        (InventoryWindows.PressShift, InventoryWindows.PressCtrl) = (shift, ctrl);
+        (InventoryWindows.PressShift, InventoryWindows.PressCtrl, InventoryWindows.PressAlt) = (shift, ctrl, alt);
         TooltipRuntime.HideTooltip();   // a press captures the mouse, which hides a tooltip (MyGUI)
         if (button == MouseButton.Left && FeedbackPanel.FeedbackButtonDown(p)) return true;
         if (CharacterEditor.EditorPointerDown(button, p)) return true;

@@ -111,17 +111,18 @@ sealed class HeldItems(PopulationData? data)
     #region Lift
 
     /// <summary>
-    /// What a lift takes out of <paramref name="holder"/> (<c>FUN_1407139a0</c>): the whole stack when <paramref name="whole"/> or a single unit,
-    /// else one unit.
+    /// What a lift takes out of <paramref name="holder"/> (<c>FUN_1407139a0</c>): the whole stack when <paramref name="count"/> reaches its
+    /// quantity, else <paramref name="count"/> units (at least one).
     /// </summary>
-    static ItemInstance Split(Inventory holder, ItemInstance item, bool whole)
+    static ItemInstance Split(Inventory holder, ItemInstance item, int count)
     {
-        if (whole || item.Quantity <= 1)
+        count = Math.Max(1, count);
+        if (count >= item.Quantity)
         {
             holder.Items.Remove(item);
             return item;
         }
-        return Part(item, 1);
+        return Part(item, count);
     }
 
     /// <summary>
@@ -194,7 +195,7 @@ sealed class HeldItems(PopulationData? data)
             cold.Medical.RemoveReplacement(limb);
         }
         var (section, x, y) = (item.Section, item.X, item.Y);
-        Hold(world, lift, Split(holder, item, lift.Whole), root, section, x, y);
+        Hold(world, lift, Split(holder, item, lift.Count), root, section, x, y);
         if (InventoryCommands.IsEquipmentSection(section) || InventoryCommands.IsLimbSection(section))
             _assembly?.RefreshEquipment(cold!);
     }
@@ -209,7 +210,7 @@ sealed class HeldItems(PopulationData? data)
             return;
         var item = stock.All().ElementAtOrDefault(t.Index);
         if (!Matches(item, t) || HolderOf(stock, item!) is not { } holder) return;
-        Hold(world, lift, Split(holder, item!, lift.Whole), stock, item!.Section, item.X, item.Y);
+        Hold(world, lift, Split(holder, item!, lift.Count), stock, item!.Section, item.X, item.Y);
     }
 
     /// <summary>
@@ -226,7 +227,7 @@ sealed class HeldItems(PopulationData? data)
             var grid = container.Contents!;
             var item = grid.Items.ElementAtOrDefault(t.Index);
             if (!Matches(item, t, section: false)) return;
-            Hold(world, lift, Split(grid, item!, lift.Whole), grid, "main", item!.X, item.Y);
+            Hold(world, lift, Split(grid, item!, lift.Count), grid, "main", item!.X, item.Y);
             world.Machines.Touch();
             return;
         }
@@ -246,13 +247,15 @@ sealed class HeldItems(PopulationData? data)
             if (m.Storage is not { } storage || m.Closed || storage.Items.ElementAtOrDefault(t.Index) is not { } item
                     || !Matches(item, t, section: false))
                 return;
-            Hold(world, lift, Split(storage, item, lift.Whole), storage, "main", item.X, item.Y);
+            Hold(world, lift, Split(storage, item, lift.Count), storage, "main", item.X, item.Y);
         }
         else if (t.Section == "out" && m.Craft is { } craft)
         {
             if (craft.Done.ElementAtOrDefault(t.Index) is not { } item || item.Record != t.Record) return;
-            if (lift.Whole || item.Quantity <= 1) craft.Done.Remove(item);
-            Hold(world, lift, lift.Whole || item.Quantity <= 1 ? item : Part(item, 1), null, "out", t.Index, 0);
+            int count = Math.Max(1, lift.Count);
+            bool whole = count >= item.Quantity;
+            if (whole) craft.Done.Remove(item);
+            Hold(world, lift, whole ? item : Part(item, count), null, "out", t.Index, 0);
         }
         else
         {
@@ -260,7 +263,7 @@ sealed class HeldItems(PopulationData? data)
             (string Item, int Count) slot = t.Section == "out" ? (m.Output?.Recipe.Item ?? "",
                     m.Output?.Count ?? 0) : k >= 0 && k < m.Inputs.Length ? (m.Inputs[k].Item, m.Inputs[k].Count) : ("", 0);
             if (slot.Count <= 0 || slot.Item != t.Record) return;
-            int n = lift.Whole ? slot.Count : 1;
+            int n = Math.Clamp(lift.Count, 1, slot.Count);
             if (data?.Items.Create(slot.Item, n) is not { } made) return;
             if (t.Section == "out") m.Output!.Count -= n;
             else

@@ -778,6 +778,11 @@ sealed class GamePages(SettingsMenu menu)
             + "until OPEN BAG is pressed for it.",
             Toggle: new("Open bags at once", () => menu.Config.AutoOpenBags,
                 v => menu.Player.InventoryWindows.AutoOpenBags = menu.Config.AutoOpenBags = v, Remaster: true, OnOff: true)));
+        result.Add(new("Split stacks",
+            "A click on a stack picks up all of it, Shift+click half, Alt+click one item, and Shift+Alt+click asks how many with a slider. "
+            + "In the game a click picks up one item and Shift or Ctrl the whole stack.",
+            Toggle: new("Split stacks", () => menu.Config.SplitStacks,
+                v => menu.Player.InventoryWindows.SplitStacks = menu.Config.SplitStacks = v, Remaster: true, OnOff: true)));
         result.Add(new("Animals pick up items",
             "Faithful, as in the game: your pack animals pick up an item you point them at, into the bag they wear (or wear a bag they pick up). "
             + "Meitou: only people pick items up, and an animal only a limb to carry in its mouth.",
