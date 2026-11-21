@@ -132,11 +132,30 @@ public static class TaskAggression
     };
 
     /// <summary>
-    /// The intended aggression of a character's current goal (status +0xac): in a fight its row (16 for a goal's or an NPC's attack, 13 for a
-    /// defence), else its AI goal, else its running row. Engine reading of "current goal" for Meitou's split of goals and engine starts.
+    /// The intended aggression of a character's current goal (status <c>+0xac</c>, <c>FUN_14050ed60</c>): the started order's row for an order-owned
+    /// task (such as 240 arrest, 5 attack or 61 unprovoked attack), the mind's goal for a goal duty (such as 204 arrest) or a fight its AI started
+    /// (16, 21, 144 rate 1; 34, 32 and the protect goals rate 0), else a fight's own row (a defence row 13 rates 0: the original plans it under 32
+    /// Self preservation or a protect goal, which rate 0), else the AI goal, else the running row.
     /// </summary>
-    public static float OfGoal(CharacterCold c) =>
-        c.InCombat && c.Running is { } fight ? Of(fight.Row) : c.Ai?.Goal is { } goal ? Of(goal.Task.Type) : c.Running is { } run ? Of(run.Row) : 0;
+    public static float OfGoal(CharacterCold c)
+    {
+        if (c.Running is { Source: TaskSource.Order } && c.OrderQueue.Front is { Started: true } order)
+            return Of(order.Row);
+
+        if (c.Running is { Source: TaskSource.Goal } && c.Ai is { Goal: { } dutyGoal })
+            return Of(dutyGoal.Task.Type);
+
+        if (c.Running is { Task: Movement.CharacterTask.Attack } fight)
+        {
+            if (c.Ai is { Goal: { } goal } mind && AiSystem.OwnsFight(c, mind))
+                return Of(goal.Task.Type);
+
+            return fight.Row == TaskType.AttackAttackersOf ? 0 : Of(fight.Row);
+        }
+
+        if (c.Ai is { Goal: { } current }) return Of(current.Task.Type);
+        return c.Running is { } run ? (run.Row == TaskType.AttackAttackersOf ? 0 : Of(run.Row)) : 0;
+    }
 
     /// <summary>
     /// The intended aggression of a character's running task (status +0xa0).

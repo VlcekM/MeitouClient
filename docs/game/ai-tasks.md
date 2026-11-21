@@ -1485,7 +1485,7 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   The best by `chooseBestAttackTarget` `FUN_14059e300`; factor 1. **Verified** (base data, the four official files): the
   `Shop` and `Shop-24hr` packages list 34 for the Squad and Squad2 roles (0-24 h, weight 1), next to 143, so every vanilla shop guard has it and the shopkeeper (Leader) has 143 only.
   Meitou (`AggroSystem.FindTroubleMaker`): both passes over the looker's sense entries (not KO, seen or heard or not) in its current town (`AiSystem.TownAt`); "intends aggression" is the TaskData
-  intended aggression (+0x24, below) of the candidate's current goal (in a fight its fight row, else its AI goal, else its running row; `TaskAggression.OfGoal`) and +0xa0 that of its running
+  intended aggression (+0x24, below) of the candidate's current goal (the started order's row for an order-owned task such as 240 arrest, the AI goal for a goal duty such as 204 or an AI-owned fight, else the fight's row with defence row 13 at 0, else the AI goal or running row; `TaskAggression.OfGoal`) and +0xa0 that of its running
   row; the class-2 resident-factions test stands on the town's owner faction; pass 2's victim is the attacker's fight target while the attacker fights
   (`AggroSystem.AttacksProtected`; the hold-position variant is not modelled), an ally by faction or `AggroSystem.Innocent` (the bounty of the looker's faction, `CharacterCold.Pending`
   for `+0x148`, "regards the looker an enemy" read as V's faction hostile to the looker's); the area test is not modelled.

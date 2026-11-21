@@ -14,7 +14,7 @@ accumulate `min(realDt, 0.05)*speed` (the original's cap before the speed multip
 `AchievedSpeed` reports it. Control ticks precede simulation ticks; a speed change applies
 to the entire frame. `WorldSession` rejects unequal world/clock tick lengths, owns snapshots,
 clocks, input and camera, and disposes systems/services. Of a frame's ticks only the last two publish
-a snapshot (`RunTick(publish, views)`), the pair the host interpolates between; the earlier of them only its motion ([snapshots](#snapshots)). Advanced → Pause after loading (`PauseOnLoad`, a Faithful / Meitou switch, Meitou and on by default; Faithful runs a loaded save at once as the game does, [game loop](game/game-loop.md)) pauses the speed after a menu load or import; `--load` runs. Advanced → Pause while loading (`LoadingPause`, a Faithful / Meitou switch, Meitou and off by default) holds the world without touching the speed while the zones round the camera load, as the game does ([loading pause](game/game-loop.md#loading-pause)).
+a snapshot (`RunTick(publish, views)`), the pair the host interpolates between; the earlier of them only its motion ([snapshots](#snapshots)). Advanced → Pause after loading (`PauseOnLoad`, on by default; in the game a loaded save runs at once, [game loop](game/game-loop.md)) pauses the speed after a menu load or import; `--load` runs. Advanced → Pause while loading (`LoadingPause`, a Faithful / Meitou switch, Meitou and off by default) holds the world without touching the speed while the zones round the camera load, as the game does ([loading pause](game/game-loop.md#loading-pause)).
 
 ### Engine choices against the original's frame loop
 
@@ -1006,7 +1006,7 @@ paths; preserve current ordering.
 Relation events (`FactionDeeds`, built with the aggro part; [factions 3.5](game/factions-squads-towns.md#35-what-fires-relation-changes-observed-decompile)):
 every landed melee blow and bolt, the cagings of the player, the police and kidnappers, and first aid on an unconscious or crawling member, for
 any two factions, weighted by the victim's `faction importance` and the town it stands in (`PopulationData.TownAt`, its squad's
-`Town`). The striker's rating is its goal's intended aggression (`FactionDeeds.Rating`: the mind's goal in a fight its AI started, else the fight's row, a defence 0). Engine choices: a death is credited only at the killing blow (a later
+`Town`). The striker's rating is its goal's intended aggression (`TaskAggression.OfGoal`: the started order's row for an order-owned task such as 240 arrest, the mind's goal for a goal duty such as 204 or a fight its AI started, else the fight's row, a defence 0). Engine choices: a death is credited only at the killing blow (a later
 bleed-out has no killer); first-aid gratitude on every bandaging update. The attack order and looting change no relation. A
 witness that regards the culprit as friendly (slot 126, squad tags included) and cares about the victim takes 20 off once: its squad drops TEMP_ALLY on the culprit and tags it TEMP_ENEMY, so it no longer regards it as friendly (`CrimeSystem.Betrayed`; **Verified**, the witness function `FUN_140854d10`'s ally branch, tags 3 and 4 before the relation call). Testing the faction relation alone, every witness took 20 off every sweep and a town's allies went to war with it within seconds (#948). Wars:
 `PlayerRelations.DeclareWar` / `EndWar` (one direction, the speaker's table; the war flag is not saved). Campaigns and diplomats in the aggro
