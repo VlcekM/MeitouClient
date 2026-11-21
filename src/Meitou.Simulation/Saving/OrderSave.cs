@@ -292,12 +292,15 @@ public static class OrderSave
     }
 
     /// <summary>
-    /// Whether a character the save holds with <paramref name="hand"/> is still to come into the world: a living member of one of its NPC platoons
-    /// (<see cref="SavedPopulation.Platoons"/>) that is not wiped out, not despawned and not made yet, or out of the world since.
+    /// Whether a character the save holds with <paramref name="hand"/> is still to come into the world: a member of one of its NPC platoons
+    /// (<see cref="SavedPopulation.Platoons"/>) that is not wiped out, not despawned and not made yet, or out of the world since, a dead one too,
+    /// whose body is made again with its platoon (<see cref="SavedCharacters.Prepare"/>), as the original's handle lookup finds a dead character
+    /// (<c>FUN_140284510</c>: the platoon's list, then the dead characters' map at <c>DAT_142134110 + 0x708</c>, which <c>FUN_140623920</c> fills
+    /// for a character with the dead byte <c>+0x5bc</c>); one whose body is gone (<see cref="SavedMember.Gone"/>) comes no more.
     /// </summary>
     static bool Awaited(World world, Hand hand) =>
         world.Saved is { } saved
-        && saved.Platoons.Exists(sp => sp.PlatoonId >= 0 && !sp.Despawned && sp.Members.Exists(m => !m.Gone && !m.Dead && m.Source.Handle == hand));
+        && saved.Platoons.Exists(sp => sp.PlatoonId >= 0 && !sp.Despawned && sp.Members.Exists(m => !m.Gone && m.Source.Handle == hand));
 
     /// <summary>
     /// Whether the fixture an order names (its site id, else the instance a building handle named) is one of a town's whose fixtures are registered

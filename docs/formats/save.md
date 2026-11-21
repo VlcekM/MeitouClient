@@ -819,7 +819,9 @@ A player character's order queue (the deque at `AITaskSytem` +0x40, [order queue
   test). The entry is never dropped for its hand: the second list loses entries only to the clears (`FUN_1405074a0`, `FUN_140507530`) and the remove-by-type `FUN_140507090`
   (**Verified**, every write of its count `+0x78` in `re/field_writes.txt` and the decrement in `FUN_140507090`), and its scorer weighs each entry alone ([second list](../game/ai-tasks.md#precedence)), so the entries
   around one whose hand names nothing are scored as usual; the hand is looked up in the handle registry each time it is read (`FUN_140284510`), so it names the character
-  once that is made (**Observed**). Meitou: an order on a character of one of the save's NPC platoons not made yet, or on a fixture of a town whose fixtures are not registered
+  once that is made (**Observed**), a dead one too (**Verified**: a character hand is looked up in its platoon's list, then in the dead characters' map at `DAT_142134110`
+  `+0x708`, which `FUN_140623920` fills for a character with the dead byte `+0x5bc`). Meitou: an order on a character of one of the save's NPC platoons not made yet (a
+  dead member too, whose body comes back with its platoon), or on a fixture of a town whose fixtures are not registered
   yet (both come in on later ticks), waits in its place in the second list as no candidate (`OrderEntry.Awaits`) and is made on the first look that finds its target; one whose
   target will come no more stays there spent (`OrderEntry.Spent`: no candidate until the list is cleared). An order is dropped when no system owns its row, its target
   character or site is neither in the world nor still to come, or its handle names nothing the save holds; an entry of a finder row
