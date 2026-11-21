@@ -596,10 +596,10 @@ finder's filter, [combat goals](ai-tasks.md#combat-goals); the medic's and the c
 characters, whatever their squad.
 
 That home is taken by `Ownerships::addOwned` (`FUN_1407ecb00`: a BUILDING hand, type 0, while the home hand is null, type 11, goes to `setHome`;
-then the hand joins the owned list unless there). `setHome` (`FUN_1407ec9e0`) does nothing when the home already is that hand, and for a building
+then the hand joins the owned list unless there). `setHome` (`FUN_1407ec9e0`) does nothing when the home already is that hand (**Observed**: the home hand's vfunc 8, the equality `addOwned` calls with the hand, shown without its argument), and for a building
 takes it only when it is a gateway (Building slot 123 non-null: the factory's GatewayBuilding, record `is wall gate`) or has an interior object
 (`+0x1f0`) and is no wall (slot 89: WallBuilding, `links together`). The player faction's Ownerships is given a building in two places: the building
-factory (`FUN_14057cc70`, placed or loaded) gives it every building whose faction is a player faction and that is no door (`+0x1a0`), unless the
+factory (`FUN_14057cc70`, placed or loaded) gives it every building whose faction is a player faction and that is no door (`+0x1a0`; a loaded one's faction is its state's `owner faction ID`, which the factory resolves before it makes the building), unless the
 player object's `+0x298` is set (**Observed**: an object with a road list that `FUN_1407f3720` makes and frees, taken as the in-game editor); and the purchase of a town house (`FUN_1407ad6c0`) takes the house out of its old faction's
 (`FUN_1407ec0f0`, which nulls a home that was it) and gives it to the player's. Nothing takes a dismantled or destroyed building out, so a home that
 is gone stays as a hand that resolves to nothing, and a filter on it passes no building, until the next load makes the factions and their
