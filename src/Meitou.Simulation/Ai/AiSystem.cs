@@ -3981,7 +3981,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         // from its template (FUN_140272c20 reads currenttown and towntime into the platoon's blackboard).
         if (squad.PlatoonId >= 0 && world.Platoons.Find(squad.PlatoonId) is { SavedTown: { } stay } platoon)
         {
-            if (world.Saved is { } placed) stay.Apply(squad.Ai, h => Saving.WarSave.Town(world, placed, h));
+            if (world.Saved is { } placed) stay.Apply(squad.Ai, h => Saving.CurrentTownSave.TownOf(world, placed, h));
             platoon.SavedTown = null;
         }
         if (squad.SavedAi is { } saved)

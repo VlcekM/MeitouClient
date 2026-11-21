@@ -294,7 +294,7 @@ public static partial class SaveCapture
 
                 writer.Write(site, squad.TemplateId, squad.Faction, squad.Money, squad.Ai?.Current?.Id,
                     [.. every.Select(id => (table.Cold(id.Slot)!, table.Previous[id.Slot].Position, table.Previous[id.Slot].Yaw, id, id == leader))],
-                    MemoryOf(world)?.Snapshot(squad.Id), dead: dead);
+                    MemoryOf(world)?.Snapshot(squad.Id), dead: dead, board: squad.Ai);
             }
 
             // Kept while the site is unloaded (the Meitou KeepWild switch): their characters as they were stored.
@@ -334,7 +334,7 @@ public static partial class SaveCapture
 
             writer.Write(null, squad.TemplateId, squad.Faction, squad.Money, squad.Ai?.Current?.Id,
                 [.. every.Select(id => (table.Cold(id.Slot)!, table.Previous[id.Slot].Position, table.Previous[id.Slot].Yaw, id, id == leader))],
-                MemoryOf(world)?.Snapshot(squad.Id), persistent: true, dead: dead);
+                MemoryOf(world)?.Snapshot(squad.Id), persistent: true, dead: dead, board: squad.Ai);
         }
     }
 
@@ -365,11 +365,12 @@ public static partial class SaveCapture
     {
         /// <summary>
         /// A platoon of the wild <paramref name="site"/> (none: homeless) with its <paramref name="members"/>; a <paramref name="dead"/> one is
-        /// declared dead (<c>dead</c>, not persistent, as <c>Platoon::declareDead</c> leaves it).
+        /// declared dead (<c>dead</c>, not persistent, as <c>Platoon::declareDead</c> leaves it); its squad's <paramref name="board"/> gives its
+        /// town and arrival hour (none: the new record's null handle and 0).
         /// </summary>
         public void Write(WildSite? site, string templateId, int factionIndex, long money, string? package,
             List<(CharacterCold Cold, Vector3 Position, float Yaw, CharacterId Id, bool Leader)> members, SquadMemoryData? memory = null,
-            bool persistent = false, bool dead = false)
+            bool persistent = false, bool dead = false, Ai.Blackboard? board = null)
         {
             var faction = data.Factions[factionIndex];
             factions.TryGetValue(faction.Id, out var state);
@@ -391,6 +392,7 @@ public static partial class SaveCapture
 
             WriteMapArea(record, data, at);
             if (package is not null) record.Strings["currentPackage"] = package;
+            WriteCurrentTown(record, board);
             NoteMemory(record, memory);
             foreach (var m in members)
             {
