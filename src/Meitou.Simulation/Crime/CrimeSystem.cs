@@ -630,7 +630,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// <summary>
     /// Slot 126 (<c>isAlly</c>): the dialogue's reading with the squad memory, else the same or allied factions.
     /// </summary>
-    bool RegardsFriendly(World world, int a, int b)
+    internal bool RegardsFriendly(World world, int a, int b)
     {
         if (world.SystemOf<Dialogue.DialogueSystem>() is { } talk) return talk.RegardsFriendly(world, a, b);
 

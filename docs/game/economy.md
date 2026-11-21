@@ -681,9 +681,12 @@ decompile's `DialogActionEnum` / `DialogConditionEnum` / `EventTriggerEnum`, com
   [perception](perception.md)). So a stealth-0 target in full view of an awake guard in his town takes 45 x 2.5 = 112.5 s. Meitou
   (`ArrestSettings.RecognitionSeconds` 45): one meter per suspect filling in 45 s while any looker sees it (engine); not while the target is
   carried or imprisoned. Recognition fires `EV_BOUNTY_SPOTTED` (44) at every call, with no
-  timer, while the looker is not in combat mode (`FUN_140436610`), its squad does not love the target (`FUN_140599590`) and it does not regard it as
-  friendly (vfunc `0x3f0`); a bounty below 1 sets the target's `+0x110` to 250 instead (**Verified**, decompile). Repeats are the lines' own
-  `repetition limit`. Meitou: the love and friendly gates are not modelled. The escaping-slave
+  timer, while the looker is not in combat mode (`FUN_140436610`), its squad does not love the target (`FUN_140599590`: long tags & 0xc) and it does not regard it as
+  friendly (vfunc `0x3f0` = `FUN_1407923d0` with 0: real factions, its own test includes the love); a bounty below 1 sets the target's `+0x110` to 250 instead, under the same gates (**Verified**, decompile). The
+  bounty branch itself (no uniform piece, `+0x100` <= 0) is taken only while the looker does not regard the target as friendly with the disguise read
+  (`0x3f0` with 1), so a friendly looker fills no meter on a bounty (**Verified**, decompile). Repeats are the lines' own
+  `repetition limit`. Meitou: both gates are `CrimeSystem.RegardsFriendly` (the disguise read changes nothing where the bounty branch runs), in
+  `ArrestSystem.Spot` (no meter, no event 44) and `SeeThrough` (no event 44, no blow). The escaping-slave
   events (36 / 40) are the sight pass's ([sight](dialogue.md#ambient-conversations)). `EV_ESCAPED_PRISONER_SPOTTED` (45) is cut in by
   `FUN_140859680` (**Verified**) at a target with the escaped flag, while its disguise level (`+0x100`) is 0 or its blown cooldown (`+0x110`)
   runs (any uniform piece hides an escapee, not only a working disguise) and it is not imprisoned, by a looker standing in its own ownership

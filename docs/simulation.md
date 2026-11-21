@@ -1273,7 +1273,8 @@ one starts with the order's provenance. The phases stay because Meitou's order s
 which an order's hold refuses. The chain's rows and states are in [AI tasks](game/ai-tasks.md#arrest-and-prison-rows). Goal 204 is an [engine goal](#engine-goals) (below); goals 203, 112 and 281 are not in `TaskBehaviours.Table`.
 - **Triggers**: a police-like witness that books a crime acts at once (`CrimeSystem.BookingsOf`, the witnessed-crime
   events); every 15 ticks an awake NPC within 400 that sees a player character (`Visibility`/`SneakVisibility`) whose
-  bounty with its faction reaches its class threshold spots it, at once while `RecentlyWanted` > 0 (250 game seconds after
+  bounty with its faction reaches its class threshold spots it, unless it regards the target as friendly
+  (`CrimeSystem.RegardsFriendly`, slot 126 by real factions, squad love included; such a looker neither fills the meter nor fires), at once while `RecentlyWanted` > 0 (250 game seconds after
   a booking or a witnessed crime; engine: the countdown), else after 45 s of being seen (engine: one meter per target,
   rate not decoded); only the nearest free police-like looker acts. MILITARY threshold: engine 2000 (original 4000 or 2000);
   the police-like NPCs of the five towns `CrimeInstallTests` loads are MILITARY (**Observed**).

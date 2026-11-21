@@ -625,6 +625,9 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
                 bool spots = bounty > 0 && bounty >= SpotThreshold(wc.NpcClass) && SeenFaction(c) == c.Faction;
                 bool escapee = !sight && EscapeShows(c) && Crimes.IsPoliceLike(world, wc) && InOwnTown(world, w);
                 bool hunts = HuntsFor(wc, c);
+
+                // A looker that regards the target as friendly (slot 126, its love included) neither recognises nor fires (FUN_140856f00).
+                if ((spots || hunts) && Crimes.RegardsFriendly(world, w, s)) (spots, hunts) = (false, false);
                 if (!spots && !escapee && !hunts) continue;
                 if (!SeesSuspect(world, w, s, c, Settings.SpotRange)) continue;
 
