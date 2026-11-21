@@ -453,6 +453,11 @@ internal sealed class CharacterAsset
     /// </summary>
     public float GroundOffset;
     /// <summary>
+    /// The worn boots' or leg replacements' lift (<see cref="CharacterShape.FeetLiftOf"/>): all a sleeper in a bed is raised by, as the original
+    /// lays the skeleton's root at the bed's node whatever the body shape (docs/game/locks.md "Heights").
+    /// </summary>
+    public float FeetLift;
+    /// <summary>
     /// The skeleton's <c>Bip01 Head</c> (-1: none), which the portrait camera looks at.
     /// </summary>
     public int HeadBone = -1;
@@ -1675,6 +1680,7 @@ internal sealed class CharacterContent : IDisposable
         var setup = Rigs.For(c);
         asset.Shape = setup?.Shape;
         asset.GroundOffset = setup?.GroundOffset ?? 0;
+        asset.FeetLift = CharacterShape.FeetLiftOf(c.Parts);
         asset.HeadBone = rig.Handle("Bip01 Head") ?? -1;
         AddMorph(asset, c, body, bodyPath);
         AddBody(asset, c, body, bodyPath);

@@ -317,7 +317,7 @@ boots have a `boot height`; two Scout legs lift 0.5, two Stealth legs -0.2. Mods
 2B Boots, `boot height` 1 on the female sandal mesh, a geta whose teeth sank into the ground before).
 Muscle normal blends, head poses and skinning follow their own data/shader rules, not bone scale.
 
-**Engine choice** GroundOffset compensates lowest foot/toe bind-pose height change per appearance;
+**Engine choice** GroundOffset compensates lowest foot/toe bind-pose height change per appearance (not in a bed: [locks](game/locks.md) "Heights");
 it does not re-ground crouches or prove the original controller's mechanism. It is measured with every limb (the sliders only): a lost leg's calf and foot scale to 0, so with
 both legs lost the lowest foot was the knee and the lowering sank a crawler into the ground and a carried body down its carrier's back (**Observed**, sandbox screenshots). Physically moving
 characters/root collision and leg-health/lying/care selection belong in [simulation](simulation.md#animation).

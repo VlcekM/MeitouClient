@@ -1379,20 +1379,26 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     static Matrix4x4 WorldOf(in CharacterInstance inst, CharacterAsset asset, float scale)
     {
         if (inst.World is { } world) return world;
-        if (inst.Rotation is { } rotation) return Turned(asset, inst.Position, rotation, scale);
+        if (inst.Rotation is { } rotation) return Turned(inst.Position, rotation, scale, Lowering(inst, asset));
 
-        var placed = Matrix4x4.CreateRotationY(inst.Yaw) * Matrix4x4.CreateTranslation(inst.Position - new Vector3(0, asset.GroundOffset, 0));
+        var placed = Matrix4x4.CreateRotationY(inst.Yaw) * Matrix4x4.CreateTranslation(inst.Position - new Vector3(0, Lowering(inst, asset), 0));
         return scale != 1 ? Matrix4x4.CreateScale(scale) * placed : placed;
     }
 
     /// <summary>
-    /// The world matrix of a node at <paramref name="position"/> turned by its whole <paramref name="rotation"/>: lowered by the ground offset in
-    /// its own frame, then turned and moved.
+    /// How far the character is drawn below its position: the ground offset, but in a bed (<see cref="CharacterInstance.UnitMovement"/>) only
+    /// less the feet's lift, as the original lays the root bone at the node whatever the body shape (a long-legged paladin's 1.23 put its back
+    /// through the mattress, docs/game/locks.md "Heights").
     /// </summary>
-    static Matrix4x4 Turned(CharacterAsset asset, Vector3 position, Quaternion rotation, float scale)
+    static float Lowering(in CharacterInstance inst, CharacterAsset asset) => inst.UnitMovement ? -asset.FeetLift : asset.GroundOffset;
+
+    /// <summary>
+    /// The world matrix of a node at <paramref name="position"/> turned by its whole <paramref name="rotation"/>: lowered by
+    /// <paramref name="lowering"/> in its own frame, then turned and moved.
+    /// </summary>
+    static Matrix4x4 Turned(Vector3 position, Quaternion rotation, float scale, float lowering)
     {
-        var placed = Matrix4x4.CreateTranslation(0, -asset.GroundOffset, 0) * Matrix4x4.CreateFromQuaternion(rotation)
-            * Matrix4x4.CreateTranslation(position);
+        var placed = Matrix4x4.CreateTranslation(0, -lowering, 0) * Matrix4x4.CreateFromQuaternion(rotation) * Matrix4x4.CreateTranslation(position);
         return scale != 1 ? Matrix4x4.CreateScale(scale) * placed : placed;
     }
 
@@ -1599,7 +1605,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     void MoveTo(ref Live l, Vector3 position, Quaternion rotation)
     {
         var state = l.State;
-        l.World = Turned(l.Asset, position, rotation, l.Scale);
+        l.World = Turned(position, rotation, l.Scale, l.Asset.GroundOffset);
         l.Centre = position + new Vector3(0, l.Asset.Height * 0.5f * l.Scale, 0);
 
         (state.World, state.Centre) = (l.World, l.Centre);
