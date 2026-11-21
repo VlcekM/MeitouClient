@@ -310,12 +310,12 @@ sealed class UserConfig
     public float InGameTransitionSpeed { get; set; } = 1.5f;
     /// <summary>
     /// A double click (or double tap) on a squad member farther than <see cref="FlightDistance"/> from the view flies the camera there in an arc
-    /// (Advanced settings; Meitou only, the game cuts).
+    /// (Advanced settings; off by default, the game cuts).
     /// </summary>
     public bool CharacterFlights { get; set; } = false;
     /// <summary>
     /// Keeps the object meshes and textures and the terrain textures around every squad bar character loaded, not only around the camera (Advanced
-    /// settings; Meitou only, costs video memory).
+    /// settings; on by default, costs video memory).
     /// </summary>
     public bool KeepTexturesAtCharacters { get; set; } = true;
     /// <summary>
@@ -441,7 +441,7 @@ sealed class UserConfig
     /// </summary>
     public List<string> AdoptedMods { get; set; } = [];
     /// <summary>
-    /// A loaded or imported save starts paused (Advanced settings, a Faithful / Meitou switch; on by default, Meitou: in the game it runs at once).
+    /// A loaded or imported save starts paused (Advanced settings; on by default; in the game it runs at once).
     /// <c>--load</c> is not paused.
     /// </summary>
     public bool PauseOnLoad { get; set; } = true;
