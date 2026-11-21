@@ -253,8 +253,9 @@ Every order command (`OrderCommand`) goes through `PlayerOrders.Give`: without `
 (Shift) the queue is cleared first, as the original's order giver `FUN_1405d20d0`; the order is queued; at the front it starts through its owner when `PlayerOrders.CanRun` says so (the row's repertoire, then
 the owner's pure `IOrderOwner.CanRun`: `Run`, `Blocked` with its failure text, or `Gone` when its target or site no longer fits the verb; then the plan's
 first step, `ListTests.OrderBlocked`: the first list B entry `RowStates` evaluates that fails (the walk left out) with no provider in the character's
-repertoire blocks it with that state's line, `StateFailureLines`, so a Follow on a downed character waits silently until it is up; one with a provider is a step
-the act-out carries out first, the row's list B tested once it held: `OrderEntry.RowRuns`).
+repertoire that leads to a step (`ListTests.ProviderSearch`, the planner's rules) blocks it with that state's line, `StateFailureLines`, so a Follow on a downed character
+waits silently until it is up; one with a provider is a step the act-out carries out first, the row's list B tested once the entry it provides holds:
+`OrderEntry.Planned`, `OrderEntry.RowRuns`).
 - A blocked front shows its text (a bark, or a posted message) and stays queued; the character's task is left alone, so its jobs, goals and reactions go on (S5). `Gone` pops it.
   An order given to a character out cold waits queued (the chooser does not run while it is carried, out cold or dead, `DecisionSystem.Down`, for the player's
   characters too) and is wiped when it wakes outside a bed or cage (the wake's get-up order has the clear flag, below).
@@ -287,10 +288,10 @@ the act-out carries out first, the row's list B tested once it held: `OrderEntry
 - After `Give` the decision step ([below](#decision-step)) asks the front again as its source 1: a blocked one falls through to goals and jobs there.
 - A done front leaves before it is asked (`PlayerOrders.PopDone`, `ListTests.OrderDone`: its row's list A, effect test and finished test, the original's
   order step, [finished tests](game/ai-tasks.md#finished-tests)), and so does one whose desire is 0 or less (`OrderDesire`: a first aid or splint order with no kit, a lift
-  order once the body is carried) and a running one whose list B fails while its own row runs (`ListTests.OrderNeedsFail`; `OrderEntry.RowRuns`: list B held at its start, or since, the plan step's end, [precedence](game/ai-tasks.md#precedence)).
+  order once the body is carried) and a running one whose list B fails while its own row runs (`ListTests.OrderNeedsFail`; `OrderEntry.RowRuns`: list B held at its start, or the entry its plan's first step provides has held since, the plan step's end, [precedence](game/ai-tasks.md#precedence)).
   A follow order (31) running its row ends so when the followed character is attacked (16) or goes down (7): the follower falls through to its goals (15 Protect allies
   joins the fight) and does not follow again (`PlayerOrders.FollowRowRuns`; the guards' fight and the fight-step provenance are only for a follow job, or a follow
-  order given while its target is already threatened, whose fight is the step before its row);
+  order given while its target is already threatened, whose fight is the step before its row; that order leaves once the fight is over if its target went down meanwhile);
   a running one ends its task (`TaskEnd.Done`) when its row is done or cannot run, while a desire of 0 leaves the act-out to its own end. The decision step tests this on every
   tick a character with a front steps (`PlayerOrders.PopsNow`) and decides it then. So a pick order on a lock already open leaves at once. A move leaves within 12 of its point
   and its walk goes on (`Task_Move`'s end stops the mover only once it is done), so the next order or job takes the walk over there.

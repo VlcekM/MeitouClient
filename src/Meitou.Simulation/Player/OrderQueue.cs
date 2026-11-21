@@ -197,10 +197,15 @@ public sealed class OrderEntry(TaskType row, IOrderOwner owner)
     /// </summary>
     public bool Tried { get; internal set; }
     /// <summary>
-    /// The order runs its own row (<see cref="ListTests.OrderNeedsFail"/>): its list B held at its start, or since, a step of its plan (a follow
-    /// row's fight, 13) being over; the original runs its row only then, so only then does a failing list B end it.
+    /// The order runs its own row (<see cref="ListTests.OrderNeedsFail"/>): its list B held at its start, or since, the steps of its plan (a follow
+    /// row's fight, 13) are over (<see cref="ListTests.StepsOver"/>); the original runs its row only then, so only then does a failing list B end it.
     /// </summary>
     public bool RowRuns { get; internal set; }
+    /// <summary>
+    /// The list B entry the first step of its plan provides, recorded at its start (<see cref="ListTests.PlannedNeed"/>; null: list B held, or none
+    /// recorded): once it holds the row runs, whatever else of list B fails then.
+    /// </summary>
+    public TaskCondition? Planned { get; internal set; }
     /// <summary>
     /// A second-list entry of a row with no TaskData row (Meitou's own orders, 54 Rest: no finished test to ask) whose task ended done, or any entry
     /// whose start left nothing running (engine choice), or a loaded entry whose target will come no more (<see cref="Awaits"/>): it scores 0 until
@@ -304,6 +309,7 @@ public sealed class OrderQueue : IReadOnlyList<OrderEntry>
             hasher.Add((int)e.Row);
             hasher.Add(e.Started);
             hasher.Add(e.Tried);
+            if (e.Planned is { } planned) hasher.Add(PlayerOrders.PlannedKey(planned));
             hasher.Add(e.Target);
             hasher.Add(e.Site is { } site ? Rng.StableHash(site) : 0UL);
             hasher.Add(e.Point);
@@ -417,6 +423,7 @@ public static class PlayerOrders
 
         front.Started = false;
         front.RowRuns = false;
+        front.Planned = null;
     }
 
     /// <summary>
@@ -562,7 +569,7 @@ public static class PlayerOrders
             Ai.OrderStep.TakeOver(world, slot, world.Characters.Cold(slot)!, front.Interrupts);
             LeaveSecond(world.Characters.Cold(slot)!);
             front.Started = true;
-            front.RowRuns = ListTests.OrderNeedsFailNow(world, slot, front) == false;   // else a step of its plan comes first
+            Plan(world, slot, front);
             front.Owner.Start(world, slot, front);
             if (q.Front != front || Runs(world, slot, front)) return check;
             q.PopFront();
@@ -582,6 +589,7 @@ public static class PlayerOrders
         if (q.Front is not { IsMove: true } next) return false;
         next.Started = next.Tried = true;
         next.RowRuns = false;
+        next.Planned = null;
         n.Goal = new Vector2(next.Point.X, next.Point.Z);
         n.Flags |= (ushort)MoveFlags.NeedPath;
         return true;
@@ -731,7 +739,7 @@ public static class PlayerOrders
     }
 
     /// <summary>
-    /// Whether the running front's row ends by its list B now (<see cref="ListTests.OrderNeedsFail"/>), after it held since the start
+    /// Whether the running front's row ends by its list B now (<see cref="ListTests.OrderNeedsFail"/>), once the steps of its plan are over
     /// (<see cref="OrderEntry.RowRuns"/>, recorded here). While a step of another row runs for an owner of several steps (<see cref="IOrderSteps"/>:
     /// a provider of the plan, the arrest's fight or strip), or none between two steps, the row's own list B is not asked.
     /// </summary>
@@ -740,10 +748,25 @@ public static class PlayerOrders
         var cold = world.Characters.Cold(slot)!;
         if (front.Owner is IOrderSteps && cold.Running?.Row != front.Row) return false;
         if (ListTests.OrderNeedsFail(world, slot, front) is not { } fails) return false;
-        if (!fails) front.RowRuns = true;
+        if (!front.RowRuns) front.RowRuns = ListTests.StepsOver(world, slot, front, fails);
 
         return fails && front.RowRuns;
     }
+
+    /// <summary>
+    /// Records an order's plan at its start: the entry its first step provides (<see cref="OrderEntry.Planned"/>), and whether its own row runs
+    /// at once (its list B holds; else a step of its plan comes first).
+    /// </summary>
+    static void Plan(World world, int slot, OrderEntry order)
+    {
+        order.Planned = ListTests.PlannedNeed(world, slot, order);
+        order.RowRuns = ListTests.OrderNeedsFailNow(world, slot, order) == false;
+    }
+
+    /// <summary>
+    /// The state hash's key of a recorded <see cref="OrderEntry.Planned"/> entry: its state and the value wanted, never 0.
+    /// </summary>
+    internal static int PlannedKey(TaskCondition planned) => ((int)planned.State << 1 | (planned.Holds ? 1 : 0)) + 1;
 
     /// <summary>
     /// Whether the character's follow order (31, 45, 289) runs its own row: its list B has held since its start, so a threat to the followed
@@ -782,7 +805,7 @@ public static class PlayerOrders
         Ai.OrderStep.TakeOver(world, slot, cold, entry.Interrupts);
         LeaveSecond(cold);
         entry.Started = entry.Tried = true;
-        entry.RowRuns = ListTests.OrderNeedsFailNow(world, slot, entry) == false;
+        Plan(world, slot, entry);
         entry.Owner.Start(world, slot, entry);
 
         // A start that left nothing running (a get-up in a bed) is over, as such a front leaves the queue. Engine choice: it is spent whatever its

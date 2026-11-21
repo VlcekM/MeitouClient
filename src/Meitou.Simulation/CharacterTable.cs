@@ -1895,8 +1895,8 @@ public sealed class CharacterTable
     }
 
     /// <summary>
-    /// The second list (<see cref="CharacterCold.SecondList"/>): its count, then each order's row, start, try, row run, spent mark, target, site,
-    /// point and wait for its target in list order.
+    /// The second list (<see cref="CharacterCold.SecondList"/>): its count, then each order's row, start, try, row run, planned entry (when one is
+    /// recorded), spent mark, target, site, point and wait for its target in list order.
     /// </summary>
     static void HashSecondList(ref StateHasher hasher, List<OrderEntry> list)
     {
@@ -1908,6 +1908,7 @@ public sealed class CharacterTable
             hasher.Add(e.Started);
             hasher.Add(e.Tried);
             hasher.Add(e.RowRuns);
+            if (e.Planned is { } planned) hasher.Add(PlayerOrders.PlannedKey(planned));
             hasher.Add(e.Spent);
             hasher.Add(e.Target);
             hasher.Add(e.Site is { } site ? Rng.StableHash(site) : 0UL);

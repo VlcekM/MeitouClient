@@ -1045,8 +1045,9 @@ order step runs on every AI update, and decides it then. 31 / 289 have Following
   (a root one fails the plan). A root without a finder that can run is the plan by itself. Otherwise, while open nodes remain, take the one with the
   **highest** g + h, then accept it when it equals a task already queued or repeats one of its ancestors (up to 50; rows 1 and 67 never count), or
   when it has no finder, acts and can run. Else expand it: children for the effect (target: the effect target its finder found) and for every B
-  entry that does not hold (target: its own), one child per provider; a restricted provider (`+0x41`) only when the search flag (`+0x20` of the task system) is set or the acting character's faction is not the player's (**Verified**, `FUN_14051bae0`: the AI's vtable slot 1 `FUN_140506cd0` gives the character's faction, vfunc `0x58` `FUN_140594640`, and its `+0x250` must be null; so every NPC plan may use 122, 270, 140, 76, 202, 185, 285, the player's characters only a flagged search). The flag is the plan call's last argument (`FUN_14050f800` stores it): `FUN_140510920`, the first step of `chooseGoal`, plans the goal from the order queue (`+0x40`) with it set (**Observed**: that step is the orders source); the other sources and `FUN_1405104d0` pass 0. A needs-target provider only when a target is known; a state without one gets a dead end
-  (row 104 "null"). The children followed are those of the first unmet B entry in list order, else the effect's. A child not yet seen gets
+  entry that does not hold (target: its own), one child per provider; a restricted provider (`+0x41`) only when the search flag (`+0x20` of the task system) is set or the acting character's faction is not the player's (**Verified**, `FUN_14051bae0`: the AI's vtable slot 1 `FUN_140506cd0` gives the character's faction, vfunc `0x58` `FUN_140594640`, and its `+0x250` must be null; so every NPC plan may use 122, 270, 140, 76, 202, 185, 285, the player's characters only a flagged search). The flag is the plan call's last argument (`FUN_14050f800` stores it): `FUN_140510920`, the first step of `chooseGoal`, plans the goal from the order queue (`+0x40`) with it set (**Observed**: that step is the orders source); the other sources and `FUN_1405104d0` pass 0. A needs-target provider only when a target is known (the node's hand not of type `0xb`, **Verified** `FUN_14051bae0`); a state without one gets a dead end
+  (row 104 "null"). The children followed are those of the first unmet B entry in list order, else the effect's (**Verified**, `FUN_14051b630`: the first of
+  the row's eleven B slots with a child group, else the effect's group). A child not yet seen gets
   g = min(its g, the node's g) and the node as parent; one already closed is accepted from there. A node repeated 4 times is reused, not made again.
 - **Result**: the accepted node's chain up to the root (stopping at a queued task) is the plan. Its value is the least desire on it (from 10); above 0,
   every node that acts or has an effect becomes a task (factory) in a new queue, leaf first. A failed plan clears the queue unless the root keeps it.
@@ -1116,9 +1117,15 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   (`FUN_14050d7d0`) first pops the order queue's front when it matches the running task (`FUN_140506b10`), so an order whose list B fails while its own row runs
   leaves the queue; while a provider step of its plan runs (a door closed before it is locked), the row's own list B is not asked. State 1 of an object target
   (`FUN_14059c6d0`) is true when it resolves to nothing, else by the distance to its position; so (**Observed**, from that reach test, the carried body being at its
-  carrier) a lift order's 1 holds once the body is on the shoulder, and its list B (80, 27, !26, 1) does not end it after the attach. Meitou:
-  `ListTests.OrderNeedsFail` on the running front order, once its list B has held since the start (`OrderEntry.RowRuns`, standing for the provider steps being
-  over, or list B held at the start): a list B entry `RowStates` evaluates fails (the walk's `isAtLocation` and a follow row's fight step left out); the task ends with `TaskEnd.Done`. The end (`FUN_14050d7d0`) then starts the next queued task (`FUN_14050d540`: a row that acts starts; one that does not is
+  carrier) a lift order's 1 holds once the body is on the shoulder, and its list B (80, 27, !26, 1) does not end it after the attach.
+  The order's own row starts when the last provider step of its plan ends, whatever its list B then (`FUN_14050d540` starts a row that acts without asking it, **Verified**),
+  so an entry other than the one the plan provided that fails then ends it at the next plan step: by (e), the order popped, or by (b) when the mover is idle away
+  from its target, the order planned again (the 20 s mark of (b), `FUN_140796ed0` → `+0x218`, is read only by the finders' target pick `FUN_14059e300`, **Verified**, so
+  an order's own target is planned again at once). Meitou: `ListTests.OrderNeedsFail` on the running front order once the steps of its plan are over
+  (`OrderEntry.RowRuns`: the entry its first step provides, `OrderEntry.Planned` recorded at the start, holds, `ListTests.StepsOver`; or list B held at the start): a list B entry
+  `RowStates` evaluates fails (the walk's `isAtLocation` and a follow row's fight step left out); the task ends with `TaskEnd.Done` and the order leaves, as by (e) (Meitou's act-out walks to the
+  target itself, so (b) has no counterpart). So a follow order whose target was threatened when it started, and goes down during that fight step, leaves once the fight is over (**Observed**, read from
+  the plan step, not run: the follower ends the fight near the target). The end (`FUN_14050d7d0`) then starts the next queued task (`FUN_14050d540`: a row that acts starts; one that does not is
   skipped while `FUN_14060f0c0` holds, all of list A and a list A or an effect, else a replan is asked), else asks a replan and clears the goal unless it commits and has not
   expired. The pick (`FUN_140510650`) keeps a candidate that is the current goal (`FUN_140506c00`: same type, both hands) while a task runs, without planning it again; any other
   it plans (`FUN_14050fe10`): a plan installs its queue (`FUN_14050d2e0`) and the goal, a failed one resets that candidate's finder hand and the next is tried, and with none
@@ -1160,8 +1167,11 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
      only faction test (`+0x250`) gates the failure text (vfunc 0x2d8), shown for a character of the player's faction that is not an animal (vfunc 0x248 null). The text is the
      line of the row's first list B entry that does not hold (`FUN_140610020`; each state's line is the fourth argument of its registration `FUN_140610170` in
      `FUN_140610250`, **Verified**: empty for 7 and 16, "It needs electricity." for 93, "My arm is messed up too badly to lift anything." for 80, Meitou
-     `StateFailureLines`). Meitou (`ListTests.OrderBlocked`): an order whose first failing evaluated entry has no provider waits so; one with a provider starts,
-     its act-out doing the step (a follow order whose target is threatened fights the attacker first, then follows).
+     `StateFailureLines`). Meitou (`ListTests.OrderBlocked`): an order whose first failing evaluated entry has no provider that leads to a step (the
+     [planner](#planner)'s rules on the states `RowStates` evaluates, `ListTests.ProviderSearch`) waits so; one with a provider starts, its act-out doing the step (a follow order
+     whose target is threatened fights the attacker first, then follows). States `RowStates` does not evaluate count as holding: their gates are the owners' checks
+     (`IOrderOwner.CanRun`). So a crippled character's lock order on an open, broken door waits (73 Closing needs `!56`, whose only provider 95 Repairing is not in the
+     crippled repertoire), where it started before.
   2. Committed mode (**Verified**: the update `FUN_140511130` works it out and passes it to the chooser: a current goal with the commit flag `+0x20`, `+0x26d` clear and its
      expiry `+0x280` not passed; the chooser turns it off without a current goal) with the running goal's priority (+0x20c) above 2: stop, the goal keeps its plan.
   3. The entries of a second list (+0x70, count +0x78, emptied with the queue by `FUN_1405074a0`) become candidates, scored by `FUN_14050df10`. It is not the one-shot order
