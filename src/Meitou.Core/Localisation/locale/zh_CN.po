@@ -5421,3 +5421,18 @@ msgstr "原版游戏把奔跑的脚扬起的尘土和水花画成发光的精灵
 
 msgid "1 game data problem, see log.txt"
 msgstr "1 个游戏数据问题，请查看 log.txt"
+
+msgid "built for another version of the game"
+msgstr "为另一个游戏版本构建"
+
+msgid "Raids keep their progress"
+msgstr "袭击保留进度"
+
+msgid "A raid under way when you save goes on where it was when that save is loaded. The game starts its current stage over at every load, so its waits and time limits begin again."
+msgstr "保存时正在进行的袭击，在载入该存档时会从原处继续。原版游戏每次载入都会重新开始当前阶段，因此其等待和时限会重新计时。"
+
+msgid "Guards stop passing bodies"
+msgstr "守卫不再互相传递人体"
+
+msgid "A guard picks up a knocked-out prisoner only when a cage is free for them, and never takes one from a guard of his own faction. The game lets guards lift and grab prisoners anyway, so at a full prison they hand the same body round without end."
+msgstr "守卫只有在有空笼子时才会捡起昏迷的囚犯，并且绝不会从本派系的守卫手中夺走。原版游戏仍允许守卫抬起和抓住囚犯，因此在满员的监狱里他们会无休止地互相传递同一个人。"

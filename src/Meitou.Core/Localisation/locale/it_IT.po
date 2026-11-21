@@ -4570,3 +4570,18 @@ msgstr "il gioco disegna la polvere e gli schizzi sollevati da un piede che corr
 
 msgid "1 game data problem, see log.txt"
 msgstr "1 problema nei dati di gioco, vedi log.txt"
+
+msgid "built for another version of the game"
+msgstr "creata per un'altra versione del gioco"
+
+msgid "Raids keep their progress"
+msgstr "Le incursioni mantengono i progressi"
+
+msgid "A raid under way when you save goes on where it was when that save is loaded. The game starts its current stage over at every load, so its waits and time limits begin again."
+msgstr "Un'incursione in corso al salvataggio riprende da dove era quando quel salvataggio viene caricato. Il gioco ricomincia la fase attuale a ogni caricamento, così le sue attese e i suoi limiti di tempo ripartono da capo."
+
+msgid "Guards stop passing bodies"
+msgstr "Le guardie smettono di passarsi i corpi"
+
+msgid "A guard picks up a knocked-out prisoner only when a cage is free for them, and never takes one from a guard of his own faction. The game lets guards lift and grab prisoners anyway, so at a full prison they hand the same body round without end."
+msgstr "Una guardia raccoglie un prigioniero svenuto solo quando c'è una gabbia libera per lui, e non lo prende mai a una guardia della propria fazione. Il gioco lascia comunque che le guardie sollevino e afferrino i prigionieri, così in una prigione piena si passano lo stesso corpo all'infinito."

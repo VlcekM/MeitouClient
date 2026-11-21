@@ -5014,3 +5014,18 @@ msgstr "o jogo desenha a poeira e os respingos que um pé correndo levanta como 
 
 msgid "1 game data problem, see log.txt"
 msgstr "1 problema nos dados do jogo, veja log.txt"
+
+msgid "built for another version of the game"
+msgstr "feito para outra versão do jogo"
+
+msgid "Raids keep their progress"
+msgstr "Ataques mantêm o progresso"
+
+msgid "A raid under way when you save goes on where it was when that save is loaded. The game starts its current stage over at every load, so its waits and time limits begin again."
+msgstr "Um ataque em andamento ao salvar continua de onde estava quando esse jogo salvo é carregado. O jogo recomeça a etapa atual a cada carregamento, então suas esperas e prazos começam de novo."
+
+msgid "Guards stop passing bodies"
+msgstr "Guardas param de passar corpos"
+
+msgid "A guard picks up a knocked-out prisoner only when a cage is free for them, and never takes one from a guard of his own faction. The game lets guards lift and grab prisoners anyway, so at a full prison they hand the same body round without end."
+msgstr "Um guarda só pega um prisioneiro desacordado quando há uma jaula livre para ele, e nunca tira um de um guarda da própria facção. O jogo deixa os guardas levantarem e agarrarem prisioneiros mesmo assim, então numa prisão cheia eles passam o mesmo corpo de mão em mão sem fim."

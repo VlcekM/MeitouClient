@@ -4568,3 +4568,18 @@ msgstr "ゲームは走る足が巻き上げる砂ぼこりと水しぶきを光
 
 msgid "1 game data problem, see log.txt"
 msgstr "ゲームデータの問題 1 件、log.txt を参照"
+
+msgid "built for another version of the game"
+msgstr "別のバージョンのゲーム向けに作られています"
+
+msgid "Raids keep their progress"
+msgstr "襲撃が進行状況を保つ"
+
+msgid "A raid under way when you save goes on where it was when that save is loaded. The game starts its current stage over at every load, so its waits and time limits begin again."
+msgstr "セーブ時に進行中の襲撃は、そのセーブを読み込むと元の場所から続きます。ゲームは読み込むたびに現在の段階をやり直すため、待ち時間と制限時間が最初から始まります。"
+
+msgid "Guards stop passing bodies"
+msgstr "看守が体を回し合わなくなる"
+
+msgid "A guard picks up a knocked-out prisoner only when a cage is free for them, and never takes one from a guard of his own faction. The game lets guards lift and grab prisoners anyway, so at a full prison they hand the same body round without end."
+msgstr "看守は気絶した囚人を、その囚人のための檻が空いているときだけ拾い上げ、同じ勢力の看守から奪うことはありません。ゲームは看守にそれでも囚人を持ち上げたりつかんだりさせるため、満員の牢獄では同じ体を延々と回し合います。"
