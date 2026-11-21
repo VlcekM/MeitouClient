@@ -329,7 +329,7 @@ no artifacts, as Meitou adds no state for a town a loaded save lacks. Tests: `Ar
 ## Crimes, bounties and prisoners
 
 Ledgers are per wanted faction; crimes pending at deed time and witness booking are distinct.
-The per-character crime tick `FUN_1405cbb80` (bounty expiry, skipped while imprisoned; then the pending timer at ledger `+0x90`: at or below 0.0 clears the code and victim, else it is reduced by the tick delta) is jumped over by the character tick `FUN_1405d00b0` for a dead character (`+0x5bc`): **Verified**. A dead body's bounties never expire and its pending crime stays frozen.
+The per-character crime tick `FUN_1405cbb80` (bounty expiry, skipped while imprisoned; then the pending timer at ledger `+0x90`: at or below 0.0 clears the code and victim, else it is reduced by the tick delta; the setter `FUN_140852c80` raises a timer below 3 to 3, `DAT_14168a254` = 3.0, **Verified**, so a crime set with no witness lapses after 3 s unless a witness refreshes it to 20) is jumped over by the character tick `FUN_1405d00b0` for a dead character (`+0x5bc`): **Verified**. A dead body's bounties never expire and its pending crime stays frozen.
 Nothing else clears it on death (decompile: no other writer of Character `+0x148`; the ragdoll path `FUN_1405d0db0` zeroes `+0x58` of
 slot 0x68's object `+0x650 + 0x28`, not the ledger), and neither the HUD's `BountyPanel` test nor the status entry checks for death: a corpse
 killed mid-crime keeps "Committing Crime!" with its frozen timer. **Verified** in the original 1.0.65 with the kh harness (an unprovoked
@@ -771,7 +771,6 @@ Meitou's reading: [simulation, slave trading](../simulation.md#arrest-and-jail).
   decides which neighbours have factors already.
 - **Whether `Zones_TownSetup` runs on a save load** and, if so, whether the saved `trade goods` factors (section 7.2, saved by `FUN_140376b80`,
   loaded by `FUN_1403715c0`) overwrite or are overwritten by a fresh roll. (That the factors are saved is settled.)
-- **How a pending crime's timer counts down** (`+0x90`; set by `FUN_140851f40` / `FUN_140852e10`, the decrement was not found), and so how long an unseen crime stays pending.
 - **Arrest and jail gaps** (11.5, 11.7, 11.8): what a guard carrying a captive does when no cage is free (`CAGES_ARE_ALL_FULL` 97 is
   registered but no TaskData row uses it); how `+0x110` decays;
   whether NPC bounty hunters ever cage or hand in a captive.
