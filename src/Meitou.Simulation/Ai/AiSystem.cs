@@ -2030,7 +2030,21 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return;
         }
 
-        if (!PlanStep(world, slot, mind, type, ref behaviour)) return;
+        // Leaving a resting/seated behaviour (Sit, Relax, Sleep), or waiting on a plan step (UnequipWeapon, EquipWeapon, LeaveBuilding, GetNearTo):
+        // stand up right away (unless lying in a bed) so an alarm look within AlarmLookRange or a step before ActOut never leaves the character in
+        // Rest with SitClip cleared and Holds false.
+        if (!PlanStep(world, slot, mind, type, ref behaviour))
+        {
+            if (table.Next[slot].Task == (byte)CharacterTask.Rest && self.InSomething != Locks.HeldState.Bed)
+                Become(world, slot, CharacterTask.Idle);
+            return;
+        }
+        if (behaviour is not (AiBehaviour.Sleep or AiBehaviour.Sit or AiBehaviour.Relax)
+            && table.Next[slot].Task == (byte)CharacterTask.Rest
+            && self.InSomething != Locks.HeldState.Bed)
+        {
+            Become(world, slot, CharacterTask.Idle);
+        }
         if (mind.Resume && Resume(world, slot, mind)) return;
 
         ActOut(world, slot, mind, goal, board, type, behaviour);
@@ -2885,7 +2899,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         if (gap.LengthSquared() <= Crime.CrimeSystem.AlarmLookRange * Crime.CrimeSystem.AlarmLookRange)
         {
-            if (mind.Walking) Become(world, slot, CharacterTask.Idle);
+            if (mind.Walking || n.Task == (byte)CharacterTask.Rest) Become(world, slot, CharacterTask.Idle);
 
             mind.Walking = false;
             if (gap.X * gap.X + gap.Z * gap.Z > 1e-4f) n.Yaw = MathF.Atan2(-gap.X, -gap.Z);
@@ -2938,7 +2952,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
         else claim = board.SeatClaims.TryGetValue(slot, out claimed);
 
-        if (!claim) return;
+        if (!claim)
+        {
+            if (n.Task == (byte)CharacterTask.Rest) Become(world, slot, CharacterTask.Idle);
+            return;
+        }
 
         bool chair = claimed.Kind is HomeSpotKind.Chair or HomeSpotKind.ThroneSeat;
 
@@ -2946,7 +2964,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         bool seated = chair && n.Task == (byte)CharacterTask.Rest && !mind.Walking
             && Vector2.DistanceSquared(Flat(n.Position), Flat(claimed.Position)) < 1
             && MathF.Abs(n.Position.Y - claimed.Position.Y) <= FloorSlack;
-        if (!seated && !GoToSpot(world, slot, mind, Flat(claimed.Position), GiveUp.Seat, SpeedMode.Walk, height: claimed.Position.Y)) return;
+        if (!seated && !GoToSpot(world, slot, mind, Flat(claimed.Position), GiveUp.Seat, SpeedMode.Walk, height: claimed.Position.Y))
+        {
+            if (n.Task == (byte)CharacterTask.Rest) Become(world, slot, CharacterTask.Idle);
+            return;
+        }
 
         if (chair)
         {
