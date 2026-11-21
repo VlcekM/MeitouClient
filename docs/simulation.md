@@ -46,6 +46,10 @@ other view the last snapshot's, as the host reads nothing else of `PreviousSnaps
 tick). **Observed** (play bench, `bench-bases-2026-10-27`, ~270-290 characters, two interleaved pairs, 2026-11-19; with the 64-slot chunks of
 [threading](#threading)): the publish 3.7-4.3 -> 1.9-2.1 ms a frame in speed-x5 and paths, 2.0-2.4 -> 1.2-1.4 ms a tick at 1x (its characters
 1.1-1.5 -> 0.45-0.6).
+Machine views (**engine choice**, `MachineViewCache`): each publish compares every value a machine's `MachineSnapshot` shows (numbers by bits,
+strings and data records by reference, each stored item's fields); an unchanged machine keeps its snapshot and item views, and `Machines` and
+`MachinesVersion` change only when some view or the set of machines did. `Machines.Worked` counts the ticks the machines work, which the smiths and
+research views (they also read characters) refresh on.
 
 ### Tick ahead
 

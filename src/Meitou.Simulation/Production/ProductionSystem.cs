@@ -942,7 +942,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
 
     /// <summary>
     /// The serial step: prospecting, the sync and the errands, the operator counts and the research bench, the town workers and obedient slaves; then
-    /// the farms, the machines' own work and every operator's step, the power, and the touches.
+    /// the farms, the machines' own work and every operator's step, the power, and the work count (<see cref="MachineRegistry.Worked"/>).
     /// </summary>
     public void SlowWorld(World world)
     {
@@ -972,7 +972,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         int contributions = OperatorsStep(world, dt);
         PowerTick(world, dt);
         if (research.Queue.Count > 0 && contributions > 0) research.Touch();
-        world.Machines.Touch();
+        world.Machines.Work();
     }
 
     /// <summary>
@@ -1657,9 +1657,14 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     ResearchSnapshot? _publishedResearch;
 
     /// <summary>
-    /// The research state's and the machines' versions <see cref="_publishedResearch"/> was built at.
+    /// The research state's version <see cref="_publishedResearch"/> was built at.
     /// </summary>
-    long _researchVersion = -1, _machinesVersion = -1;
+    long _researchVersion = -1;
+
+    /// <summary>
+    /// The machines' version and work count <see cref="_publishedResearch"/> was built at.
+    /// </summary>
+    (long Version, long Worked) _machinesVersion = (-1, -1);
 
     /// <summary>
     /// Where the camera looks (the last <see cref="FocusCommand"/>; null: not told, as in headless runs): research costs are counted round it.
@@ -1903,8 +1908,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     public ResearchSnapshot ResearchView(World world)
     {
         var zone = FocusZone();
-        if (_publishedResearch is not null && _researchVersion == world.Research.Version && _machinesVersion == world.Machines.Version
-            && _researchZone == zone)
+        var machines = (world.Machines.Version, world.Machines.Worked);
+        if (_publishedResearch is not null && _researchVersion == world.Research.Version && _machinesVersion == machines && _researchZone == zone)
             return _publishedResearch;
 
         // Progress, bench stock and the focus zone (each zone crossed in a flight) move often: those refresh at most once a second; finishing,
@@ -1917,7 +1922,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         _researchBuilt = world.Tick;
         _researchZone = zone;
         _researchVersion = world.Research.Version;
-        _machinesVersion = world.Machines.Version;
+        _machinesVersion = machines;
         _allResearch ??= ResearchData.LoadAll(_db);
         var state = world.Research;
         var queue = state.Queue.Select(q => (q.Id, Research(q.Id)?.Name ?? q.Id,

@@ -277,9 +277,9 @@ public sealed partial class ProductionSystem
     /// </summary>
     IReadOnlyDictionary<string, CraftSmithView>? _publishedSmiths;
     /// <summary>
-    /// The machine registry version <see cref="_publishedSmiths"/> was made at (-1: never).
+    /// The machine registry's version and work count <see cref="_publishedSmiths"/> was made at (-1: never).
     /// </summary>
-    long _smithsVersion = -1;
+    (long Version, long Worked) _smithsVersion = (-1, -1);
 
     /// <summary>
     /// The Craft tab's Current Smith per bench (<c>FUN_1402bcf60</c>): the bench's last operator (<see cref="Machine.Smith"/>) while it is alive with
@@ -288,8 +288,9 @@ public sealed partial class ProductionSystem
     /// </summary>
     public IReadOnlyDictionary<string, CraftSmithView> SmithsView(World world)
     {
-        if (_publishedSmiths is not null && _smithsVersion == world.Machines.Version) return _publishedSmiths;
-        _smithsVersion = world.Machines.Version;
+        var machines = (world.Machines.Version, world.Machines.Worked);
+        if (_publishedSmiths is not null && _smithsVersion == machines) return _publishedSmiths;
+        _smithsVersion = machines;
         var map = new Dictionary<string, CraftSmithView>(StringComparer.Ordinal);
         foreach (var m in world.Machines.All)
         {

@@ -100,7 +100,16 @@ sealed class FarmCrops(GameHost host)
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var machine in snapshot.Machines)
         {
-            if (machine.Farm is not { } view || PlaceOf(machine.Site) is not { } site) continue;
+            if (machine.Farm is not { } view) continue;
+
+            // A farm whose place or layout is not ready on the host yet (its shown building, the towns' lists) is tried again next frame: the
+            // machines' version stays put while nothing they show changes.
+            if (PlaceOf(machine.Site) is not { } site)
+            {
+                _farmsVersion = (-1, -1);
+                continue;
+            }
+
             if (!_farms.TryGetValue(site.Id, out var look) || look.Site != site)
             {
                 if (MakeFarm(db, objects, site) is not { } made) continue;

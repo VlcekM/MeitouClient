@@ -341,9 +341,6 @@ public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<M
     };
 
     /// <summary>
-    /// The host's view of a machine: its slots with their items, its storage, farm, crafting, power and efficiency.
-    /// </summary>
-    /// <summary>
     /// An input section's view: a bench whose sections start empty has them all <see cref="CraftBench.InputWidth"/> x
     /// <see cref="CraftBench.InputHeight"/>, any other section is its item's footprint.
     /// </summary>
@@ -374,6 +371,10 @@ public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<M
     static InventoryItemView? HeldView(string record, int count, ItemFactory items) =>
         count > 0 && items.Create(record, count) is { } item ? InventoryItemView.Of(0, item) : null;
 
+    /// <summary>
+    /// The host's view of a machine: its slots with their items, its storage, farm, crafting, power and efficiency. Every machine state read here (or in the helpers it calls) is also recorded by
+    /// <see cref="MachineViewCache"/>, which reuses the view while none changed; keep them in step.
+    /// </summary>
     internal static MachineSnapshot Of(Machine m, ItemFactory items)
     {
         string Name(string record) => items.Info(record)?.Name ?? record;

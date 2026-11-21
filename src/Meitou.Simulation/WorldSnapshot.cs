@@ -342,7 +342,7 @@ public sealed record InventoryItemView(int Index, string Record, string Name, st
 
     /// <summary>
     /// The view of <paramref name="item"/> as item <paramref name="index"/> of a window: everything the item itself says, none of what depends on
-    /// its holder (stolen marks, stealing chance).
+    /// its holder (stolen marks, stealing chance). A field read here is also recorded by <c>MachineViewCache.RecordItem</c>; keep them in step.
     /// </summary>
     public static InventoryItemView Of(int index, Items.ItemInstance item) =>
         new(index, item.Record, item.Name, item.Section, item.X, item.Y, item.Width, item.Height, item.Quantity, item.Weight, item.Quality)
