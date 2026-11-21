@@ -4,6 +4,7 @@ using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Carrying;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Locks;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Population;
@@ -341,8 +342,8 @@ internal sealed class KidnapGoals(KidnapSystem kidnap, CarrySystem carry, Popula
         return ask.Row switch
         {
             TaskType.LiftPerson => LiftDesire(world, ask, cold),
-            TaskType.FindAndKidnap => CarriesOrMatesDo(world, ask, cold) ? 0 : 1,
-            _ => CarriesOrMatesDo(world, ask, cold) ? 0 : PickOf(ask)?.TownFactor ?? 1,
+            TaskType.FindAndKidnap => CarriesOrMatesDo(world, ask.Squad, cold) ? 0 : 1,
+            _ => CarriesOrMatesDo(world, ask.Squad, cold) ? 0 : PickOf(ask)?.TownFactor ?? 1,
         };
     }
 
@@ -350,13 +351,13 @@ internal sealed class KidnapGoals(KidnapSystem kidnap, CarrySystem carry, Popula
     /// The test 254's and 132's desires share (<c>FUN_1405a1280</c>, <c>FUN_14059a600</c>, <b>Verified</b>): the member carries someone (Character
     /// <c>+0x348</c>), or two members of its squad already do.
     /// </summary>
-    static bool CarriesOrMatesDo(World world, in DutyAsk ask, CharacterCold cold)
+    internal static bool CarriesOrMatesDo(World world, Squad squad, CharacterCold cold)
     {
         if (!cold.Carrying.IsNone) return true;
 
         var table = world.Characters;
         int carriers = 0;
-        foreach (var member in ask.Squad.Members)
+        foreach (var member in squad.Members)
         {
             if (table.IsAlive(member) && table.Cold(member.Slot) is { Carrying.IsNone: false } && ++carriers > 1) return true;
         }

@@ -15,8 +15,10 @@ public readonly record struct TaskProfile(float Desire, float CommitMin = 0, flo
     bool EndsWithTask = false);
 
 /// <summary>
-/// The <see cref="TaskProfile"/> of every goal type the engine acts out (<see cref="TaskBehaviours"/>); other types get the default (special, no
-/// commitment, crowd 1).
+/// The <see cref="TaskProfile"/> of every goal type the engine acts out (<see cref="TaskBehaviours"/>); other types get the default (the registered
+/// desire, no commitment, crowd 1). Every desire is the row's registered one (<see cref="TaskDesires"/>: a constant, <see cref="Random"/> for AI
+/// slot 48, <see cref="Special"/> for a function of its own or a type with no TaskData row); the table's must agree with it (checked when the class
+/// loads).
 /// </summary>
 public static class TaskProfiles
 {
@@ -24,11 +26,6 @@ public static class TaskProfiles
     /// The desire stand-ins: a random desire (0.01 + 0.4 x a fresh roll) and a special one (a TaskData function of its own).
     /// </summary>
     public const float Random = -1, Special = -2;
-
-    /// <summary>
-    /// The profile of a type not in <see cref="Table"/>: special desire, no commitment, crowd 1.
-    /// </summary>
-    static readonly TaskProfile Default = new(Special);
 
     /// <summary>
     /// The profile of every goal type the engine acts out.
@@ -56,7 +53,7 @@ public static class TaskProfiles
         // machine, a step of plans (FUN_140319a60, Verified).
         [TaskType.AutoLabouringMines] = new(1),
         [TaskType.AutoLabouringMinesPretend] = new(1, 0.5f, 2, true, EndsWithTask: true),
-        [TaskType.PretendToOperateMachinery] = new(Special, 0.5f, 2, true, EndsWithTask: true),
+        [TaskType.PretendToOperateMachinery] = new(1, 0.5f, 2, true, EndsWithTask: true),
         [TaskType.FollowSlavemaster] = new(1),
         [TaskType.Bodyguard] = new(Special, Crowd: 0.9f),
         // Medic: the desire function's 1 times the finder's score (FUN_140998410); crowd factor 0.8 (FUN_140319a60, Observed).
@@ -79,20 +76,35 @@ public static class TaskProfiles
     static readonly TaskProfile[] Flat = BuildFlat();
 
     /// <summary>
-    /// Builds <see cref="Flat"/>: <see cref="Default"/> for every type, then the table's entries.
+    /// Builds <see cref="Flat"/>: the registered desire for every type, then the table's entries, each checked against it.
     /// </summary>
     static TaskProfile[] BuildFlat()
     {
         var a = new TaskProfile[TaskBehaviours.TypeCount];
-        Array.Fill(a, Default);
-        foreach (var (type, p) in Table) a[(int)type] = p;
+        for (int t = 0; t < a.Length; t++) a[t] = new(RegisteredDesire((TaskType)t));
+        foreach (var (type, p) in Table)
+        {
+            if (p.Desire != RegisteredDesire(type)) throw new InvalidOperationException($"{type}: desire {p.Desire} is not the registered one");
+            a[(int)type] = p;
+        }
+
         return a;
     }
 
     /// <summary>
-    /// The profile of a goal type (<see cref="Default"/> for one out of range).
+    /// A type's registered desire as a profile holds it (<see cref="TaskDesires"/>).
     /// </summary>
-    public static TaskProfile Of(TaskType type) => (uint)type < (uint)Flat.Length ? Flat[(int)type] : Default;
+    static float RegisteredDesire(TaskType type) => TaskDesires.Of(type) switch
+    {
+        { Kind: TaskDesireKind.Constant } d => d.Value,
+        { Kind: TaskDesireKind.Random } => Random,
+        _ => Special,
+    };
+
+    /// <summary>
+    /// The profile of a type (a type out of range: <see cref="Special"/>, no commitment, crowd 1).
+    /// </summary>
+    public static TaskProfile Of(TaskType type) => (uint)type < (uint)Flat.Length ? Flat[(int)type] : new(Special);
 }
 
 /// <summary>

@@ -156,9 +156,10 @@ internal sealed class ArrestGoals(ArrestSystem arrests)
     /// ownership town (a squad that belongs to a town), else 1. Without town data the status town is never set: <b>engine</b> stand-in, the guard's
     /// own town's extent (<see cref="ArrestSystem.InOwnTown"/>).
     /// </summary>
-    bool ArrestsHere(World world, int s, CharacterCold cold)
+    internal static bool ArrestsHere(World world, int s, CharacterCold cold)
     {
         if (world.Squads.Find(cold.SquadId) is not { TownOwn: true }) return true;
+        if (world.SystemOf<ArrestSystem>() is not { } arrests) return !cold.StatusTown.IsNone;
 
         return arrests.Towns is not null ? !cold.StatusTown.IsNone : arrests.InOwnTown(world, s);
     }

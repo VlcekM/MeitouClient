@@ -903,6 +903,29 @@ there (`FUN_14060f570` answers false), so for 180 Man the gate the byte changes 
   `+0x88` equal to the ownership town `+0x30`) the carried-body cage desire `FUN_1405a0f10` x the free-cage finder `FUN_1408d0d30`; elsewhere 1.0. With 254's empty target
   that cage desire is 0 while the running package's (`+0x48`) mission town hand `+0x8` is set and differs from the town it stands in (`FUN_1405944e0` compares the hands), else 1.0. 132's desire `FUN_14059a600` (exe bytes) has the same two zero tests,
   else 1.0. What the two make of 254's plan: [carry-loot 3.2](carry-loot.md#32-goals-and-their-target-finders).
+- **Rows on the way** (**Verified**: the functions named, decompiled; constants from the exe bytes). The planner makes a child node at its row's
+  desire member (`FUN_14051bae0`), so of the 104 function rows the 42 a plan can reach (a provider whose list A holds a state some row's list B or
+  effect wants) are weighed there; the other 62 are goals only. Besides those above: 28 Standing (`FUN_140317bd0`) 1.0 while `canGetUp` (45) holds,
+  else 0; 65 Getting up (`FUN_140598c80`) 0 at a posture other than 0 unless it is getting up (Character `+0x278`), else 1.0; 52 Waking up
+  (`FUN_140598cc0`) the same for a posture above 2; 59 Get ready (slot 34 `FUN_14059a260`) 0 unless it can get up, then 1.0 with state 38, else 0.05
+  (`DAT_141696c74`); 80 Unlocking door here (slot 27 `FUN_140599100`) 0 for the player's faction, else 1.0; 257 (slot 29 `FUN_140599160`) 0 out of a
+  bed, in one slot 28's danger plus 1.0 when medical `+0xb0` (the rested level, as state 72 reads it) is above 0.9; 4 and 227 (slot 53 `FUN_1405a4260`)
+  0 on a caged target or with no usable arm; crippled 0.1 with a threat within 40, else 0.0001 (`DAT_14169c3c4`) in Block (CharStats `+0x128` at posture
+  0) or Hold, else 0.1 for the player's faction or a unique character (the record's `unique`, `FUN_140506960`), else 0; holding (`+0x12b`, not
+  sneaking) only for a character target within 500 flat (`FUN_1405a3080`) that is itself (the hand compare is `!=`, vfunc `0x10` `FUN_1400cd0b0`) or
+  whose states 59 and 60 hold; then 1, x0.1 Ranged, x0.5 squad not intact. 123 and 272 (slot 37 `FUN_1405992f0`): slot 36's aggression with fewer
+  than 2 squad mates on the sub-target (`howManyGuysWorkingOnThisSubTarget` `FUN_1402690e0`), divided by their number from 2 to 8, 0 from 9; 290
+  Bashing gate has slot 19's 1.0. 156 Entering / 200 Leaving building (`FUN_140317c00` / `FUN_140317c40`): 0 / 1.0 inside the target building (state
+  107), else 1.0 / 0. 92 Collecting resource (slot 22 `FUN_1405a6860`): a loose item 1.0 while on the ground (`+0xd8`); a building with a storage its
+  first stored item, or with none and of another faction its first produced one, 0 without; 0 with no room for it (`FUN_1405cb520`); 1.0 out of a
+  town (Character vfunc `0x78`, status `+0x88`); in one the ditch finder `FUN_1405a59a0` over that building's output (1.0 found, else 0; 0.1 for
+  building function 6). 247 (slot 23 `FUN_14059a110`): 1.0 with room for the target item's (or the building's first stored) record. 112 / 281
+  (`FUN_1405a1140`) 0 unless carrying. 152 Operating automatic machine (slot 21 `FUN_14059df00`): 1.0 when the building takes the character as an
+  operator (vfunc `0x500` `FUN_1400f7c90`: one already, or under `max operators`), its output is full (slot 175) or one of its consumption items is
+  carried or found by row 94's finder (`FUN_14059d9b0` through the cache `FUN_14060f1d0`), else 0. The order step (`FUN_14060fd80`) asks the same
+  members. Meitou: `TaskDesires` (every row's member), `RowDesires` (the 42 and the three function rows an order owner takes, 52, 152 and 248; the
+  check at load refuses a missing one) for `PlanContext`, `DoorPlan`, `GatePlan` and `OrderDesire`; the sleep order, Meitou's 98 for the original's
+  258, weighs 258's 1.0; 248 as a goal its slot 32 (`AiSystem.AssaultDesire`), 28 its `canGetUp` (a starvation knock-out is the medical tick's).
 
 | Type | Commitment (h) | Crowd |
 |---|---|---|

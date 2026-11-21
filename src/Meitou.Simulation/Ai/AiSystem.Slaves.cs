@@ -71,7 +71,7 @@ public sealed partial class AiSystem
     /// mode, <see cref="CharacterCold.RangedCombatMode"/>) or while a weapon in its <c>hip</c> section has another <c>skill category</c> than
     /// <see cref="RunningWeapons"/>; then the body's desire (<see cref="SelfPreservation.BodyRunDesire"/>). Reads the last tick's state.
     /// </summary>
-    float PlayerSideRunDesire(World world, int slot)
+    internal float PlayerSideRunDesire(World world, int slot)
     {
         var table = world.Characters;
         if (table.Cold(slot) is not { Medical: { } medical } cold) return 0;

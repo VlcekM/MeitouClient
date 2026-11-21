@@ -141,7 +141,7 @@ public sealed partial class AiSystem
     /// done (its list A, a threat on its list at any distance, <c>FUN_140436720</c>; the plan step, <c>FUN_14050d970</c>): <b>engine</b>, a threat
     /// only beyond 181.7 keeps it at 0.7 at Meitou's re-think (the original does not weigh a running goal again).
     /// </summary>
-    float SelfPreservationDesire(World world, int slot, AiMind mind)
+    internal float SelfPreservationDesire(World world, int slot, AiMind mind)
     {
         if ((ThreatSource ?? _combat) is not { } source) return 0;
 

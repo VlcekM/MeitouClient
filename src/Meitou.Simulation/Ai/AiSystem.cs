@@ -130,6 +130,16 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     internal PopulationData Data => data;
 
     /// <summary>
+    /// <see cref="Rows"/>, made on first use (it holds no state, so two threads making one each is harmless).
+    /// </summary>
+    RowDesires? _rows;
+
+    /// <summary>
+    /// The desires of the rows on the way of a plan (<see cref="RowDesires"/>).
+    /// </summary>
+    internal RowDesires Rows => _rows ??= new RowDesires(this);
+
+    /// <summary>
     /// The gate codes of the lock system (<see cref="Locks.LockSystem.Regions"/>), for the towns' waypoints; null before the serial step found it.
     /// </summary>
     internal Locks.IGateRegions? GateRegions => _locks?.Regions;
@@ -1022,13 +1032,18 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         float desire = profile.Desire switch
         {
-            TaskProfiles.Random => 0.01f + 0.4f * Rng.Float(Rng.Hash(world.Seed, Rng.Key(self), RngPurpose.Think,
-                SeedSalts.AiDesire ^ (ulong)world.Tick << 9 ^ (ulong)type)),
+            TaskProfiles.Random => RandomDesire(world, self, type),
             TaskProfiles.Special => 1,
             var d => d,
         };
         return desire * FinderFactor(world, behaviour, type, squad, board, mind, self, targeting);
     }
+
+    /// <summary>
+    /// AI slot 48's desire (<c>FUN_1406415e0</c>, <b>Verified</b>): 0.01 + 0.4 x a fresh roll, drawn per character, tick and row.
+    /// </summary>
+    internal static float RandomDesire(World world, CharacterId self, TaskType type) =>
+        0.01f + 0.4f * Rng.Float(Rng.Hash(world.Seed, Rng.Key(self), RngPurpose.Think, SeedSalts.AiDesire ^ (ulong)world.Tick << 9 ^ (ulong)type));
 
     /// <summary>
     /// An engine-acted goal's desire (<see cref="DutyGoals.Desire"/>: the registering system's desire times its finder's factor, or a
@@ -1090,10 +1105,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 : board.Destination.IsNone || CurrentTown(world, world.Characters.Previous[self.Slot].Position) == board.Destination ? 0 : 1,
             // Only while an alarm of its town is in reach (the row's done state !ALARMS_IN_THE_VICINITY).
             AiBehaviour.Investigate => AlarmOf(world, self.Slot, type, board) is null ? 0 : 1,
-            // The assault's finder factor: 1 while a member of the mission target's squad passes its tests, else 0 (FUN_140793eb0).
-            // Crouching is wanted always (it holds the pose while it runs); standing up (its effects !24 !25 !26) only while crouched.
-            AiBehaviour.Crouch => type == TaskType.Crouch || world.Characters.Cold(self.Slot) is { Crouched: true } ? 1 : 0,
-            AiBehaviour.Assault => targeting == TaskTargetType.SquadMission && !AssaultTargetFor(world, self.Slot, board).IsNone ? 1 : 0,
+            // Crouching is wanted always (it holds the pose while it runs); standing up (its effects !24 !25 !26) only while crouched, times its
+            // desire FUN_140317bd0 (1 while it can get up, RowDesires.CanGetUp).
+            AiBehaviour.Crouch => type == TaskType.Crouch ? 1 : StandUpDesire(world.Characters.Cold(self.Slot)),
+            AiBehaviour.Assault => AssaultDesire(world, type, board, self, targeting),
             // Self preservation: the threat level (AI slot 17); Running away: row 35's own (AI slot 55), a goal of the packages that list it.
             AiBehaviour.SelfPreserve => SelfPreservationDesire(world, self.Slot, mind),
             AiBehaviour.Flee => mind.PlayerSide ? PlayerSideRunDesire(world, self.Slot)
@@ -1112,6 +1127,25 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
+    /// 28 Standing as a goal: wanted only while crouched, at its desire (<c>FUN_140317bd0</c>, <b>Verified</b>: 1.0 while it can get up,
+    /// <see cref="RowDesires.CanGetUp"/>).
+    /// </summary>
+    static float StandUpDesire(CharacterCold? cold) => cold is { Crouched: true } && RowDesires.CanGetUp(cold) ? 1 : 0;
+
+    /// <summary>
+    /// The assault goals 101 and 248: the finder's factor, 1 while a member of the mission target's squad passes its tests (<c>FUN_140793eb0</c>),
+    /// else 0; 248's times its desire, AI slot 32 (<c>FUN_140598a40</c>, <b>Verified</b>: 0 while it stands in no town and has an ownership town,
+    /// <see cref="Crime.ArrestGoals.ArrestsHere"/>), 101's being slot 19's 1.0.
+    /// </summary>
+    float AssaultDesire(World world, TaskType type, Blackboard board, CharacterId self, TaskTargetType targeting)
+    {
+        if (targeting != TaskTargetType.SquadMission || AssaultTargetFor(world, self.Slot, board).IsNone) return 0;
+        if (type != TaskType.DefeatSquadLimitChaseRange) return 1;
+
+        return world.Characters.Cold(self.Slot) is { } cold && Crime.ArrestGoals.ArrestsHere(world, self.Slot, cold) ? 1 : 0;
+    }
+
+    /// <summary>
     /// The Medic goal's desire (<c>FUN_140998410</c>, <b>Verified</b> by disassembly): 0.01 while the medic's senses hold a threat towards it (AI
     /// <c>+0xb0</c>), else 0.05 while they count an enemy (<c>+0xbc</c>, <c>numEnemies</c>), else 1. Its own senses, not its squad's fights.
     /// </summary>
@@ -1127,8 +1161,16 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// character's <c>followMe</c> (<see cref="FollowMe"/>, as stamped this tick), so a member follows a patrolling or travelling leader (1) at 0.5
     /// and one standing about or asleep (0.1) at 0.05. Other follow rows want 1.
     /// </summary>
-    float FollowDesire(TaskType type, CharacterId target) => type is TaskType.StayCloseToTarget or TaskType.GetNearTo or TaskType.FollowPlayerOrder
-        or TaskType.FollowSquadleader or TaskType.Unnamed289 ? FollowShare * _followMe.Of(target.Slot) : 1;
+    internal float FollowDesire(TaskType type, CharacterId target) =>
+        type is TaskType.StayCloseToTarget or TaskType.GetNearTo or TaskType.FollowPlayerOrder or TaskType.FollowSquadleader or TaskType.Unnamed289
+            ? FollowShare * _followMe.Of(target.Slot)
+            : 1;
+
+    /// <summary>
+    /// <see cref="FollowDesire"/> of a row on the way, whose target may not resolve: 1.0 then (<c>FUN_1405a33f0</c>, <b>Verified</b>).
+    /// </summary>
+    internal float FollowDesireOf(World world, TaskType type, CharacterId target) =>
+        world.Characters.IsAlive(target) ? FollowDesire(type, target) : 1;
 
     /// <summary>
     /// Following needs a living target other than self: the contract's mission target, else the slave owner or squad leader, as movement resolves
@@ -1192,7 +1234,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// Whether a character is within its squad's home town's radius (a site's or an outpost's, <see cref="HomePlace"/>); true when the squad has no
     /// town or the character is not alive.
     /// </summary>
-    bool AtHomeTown(World world, Squad squad, Blackboard board, CharacterId self)
+    internal bool AtHomeTown(World world, Squad squad, Blackboard board, CharacterId self)
     {
         if (HomePlace(world, board) is not { } town || !world.Characters.IsAlive(self)) return true;
 
@@ -3990,7 +4032,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// slot 150 <c>FUN_140434d20</c> writes from <c>Task_UseTurret</c>'s update; Meitou: <see cref="CharacterCold.Gunning"/>), 0.4 hungry (hunger
     /// below 2.1, stomach empty) with none sensed, else 1.
     /// </summary>
-    float TurretDesire(World world, int slot, Vector3? building = null)
+    internal float TurretDesire(World world, int slot, Vector3? building = null)
     {
         if (world.Characters.Cold(slot) is not { } cold || !cold.Carrying.IsNone) return 0;
         if (PassiveOffMelee(world, slot, cold)) return 0;

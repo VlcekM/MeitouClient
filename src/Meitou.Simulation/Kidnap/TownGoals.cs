@@ -1100,9 +1100,11 @@ internal sealed class TownGoals(TownDutySystem owner)
     sealed class Ransacking(TownGoals goals) : IDutyGoal
     {
         /// <summary>
-        /// 216's desire (slot 19) and row 156's (slot 57) 1.0.
+        /// 216's desire (slot 19) 1.0; row 156's (<c>FUN_140317c00</c>, <b>Verified</b>) 0 once inside the target building (state 107,
+        /// <c>FUN_14059a4b0</c>, as <see cref="State"/> reads it), else 1.0.
         /// </summary>
-        public float Desire(World world, in DutyAsk ask) => 1;
+        public float Desire(World world, in DutyAsk ask) =>
+            ask.Row == TaskType.EnterBuilding && State(world, ask, StateType.AmInsideTargetBuilding) == true ? 0 : 1;
 
         /// <summary>
         /// <c>AI::findRandomBuildingInTown</c>'s draw (<c>FUN_1408cb510</c>, <see cref="TownDutySystem.RansackTarget"/>), one per look.

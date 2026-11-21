@@ -337,7 +337,7 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
     float Desire(World world, in DutyAsk ask)
     {
         if (world.Characters.Cold(ask.Slot) is not { } cold) return 0;
-        if (ask.Row != ask.Type) return RowDesire(ask.Row, cold);
+        if (ask.Row != ask.Type) return RowDesire(world, ask, cold);
 
         return ask.Type switch
         {
@@ -366,15 +366,23 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
     static float RescueDesire(CharacterCold cold) => (cold.Orders & CharacterOrders.Hold) != 0 || !cold.Carrying.IsNone ? 0 : 1;
 
     /// <summary>
-    /// The desire of a row on the way: 3 (AI slot 72) 0 while down; 170 (AI slot 59, the lift's) 0 while carrying; the rest slot 19's 1.0
-    /// (<b>Verified</b>, the registration's stubs; 40's following desire is above 0 whenever the target lives, and the planner reads only that).
+    /// The desire of a row on the way (<b>Verified</b>, the registration's stubs): 3 (AI slot 72) 0 while down; 170 the lift's (AI slot 59,
+    /// <see cref="OrderDesire.LiftDesire"/>); 25 First aid the patient's need (<c>FUN_14099e0a0</c>,
+    /// <see cref="FirstAid.FirstAidSystem.TreatOrderDesire"/>); 40 Following's (AI slot 15, <see cref="AiSystem.FollowDesire"/>); the rest slot 19's
+    /// 1.0.
     /// </summary>
-    static float RowDesire(TaskType row, CharacterCold cold) => row switch
+    static float RowDesire(World world, in DutyAsk ask, CharacterCold cold)
     {
-        TaskType.Pickup => CharacterFacts.Down(cold) ? 0 : 1,
-        TaskType.LiftObjectButHealFirst => cold.Carrying.IsNone ? 1 : 0,
-        _ => 1,
-    };
+        var target = ask.Target.Character ?? CharacterId.None;
+        return ask.Row switch
+        {
+            TaskType.Pickup => CharacterFacts.Down(cold) ? 0 : 1,
+            TaskType.LiftObjectButHealFirst => OrderDesire.LiftDesire(world, ask.Slot, cold, target),
+            TaskType.FirstAidOrder => world.SystemOf<FirstAid.FirstAidSystem>()?.TreatOrderDesire(world, ask.Slot, target, robot: false) ?? 0,
+            TaskType.GetNearTo => world.SystemOf<AiSystem>()?.FollowDesireOf(world, TaskType.GetNearTo, target) ?? 1,
+            _ => 1,
+        };
+    }
 
     #endregion
 

@@ -177,17 +177,21 @@ sealed class DoorPlan : IPlanWorld
     }
 
     /// <summary>
-    /// The desire of a row on the way: the bash rows the character's aggression, else the row's task profile desire (1 for a random or own one).
+    /// The desire of a row on the way: 81 and 287 the character's aggression towards the building (AI slot 36), 123 that shared by the squad mates
+    /// on the door (slot 37, <see cref="RowDesires.GateBashDesire"/>), 290 the aggression too (engine choice: its registered 1.0 would bash whatever
+    /// the aggression), every other row its registered desire (<see cref="RowDesires"/>).
     /// </summary>
-    public float Desire(TaskDataRow row, in PlanTarget target)
+    public float Desire(TaskDataRow row, in PlanTarget target) => row.Type switch
     {
-        // The gate rows (scoreBashGate: the same score, shared by the crowd) never win on a house: 81 comes first.
-        if (row.Type is TaskType.BashDoor or TaskType.BashDoorHere or TaskType.BashGate or TaskType.Unnamed290)
-            return _aggressive;
+        TaskType.BashDoor or TaskType.BashDoorHere or TaskType.Unnamed290 => _aggressive,
+        TaskType.BashGate => RowDesires.GateBashDesire(_aggressive, MatesOnDoor()),
+        _ => RowDesires.OnTheWay(_world, this, _me, _cold, row.Type, target),
+    };
 
-        float d = TaskProfiles.Of(row.Type).Desire;
-        return d >= 0 ? d : 1;
-    }
+    /// <summary>
+    /// The squad mates of the character working on the door (<see cref="LockSystem.MatesBashing"/>).
+    /// </summary>
+    int MatesOnDoor() => _world.Squads.Find(_cold.SquadId) is { } squad ? LockSystem.MatesBashing(_world, squad, _door.Id, _me) : 0;
 
     /// <summary>
     /// A door state's value for a target (the door's open state, the character at the door or the foe, its weapon, the way not blocked by
