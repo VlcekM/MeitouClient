@@ -1954,25 +1954,27 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
 
     /// <summary>
     /// The turrets mounted on a building go with it when its dismantle completes, without a refund (<b>Verified</b>, <c>FUN_1402a2860</c>:
-    /// <c>BuildingFinderTurretsOnCertainBuilding</c> and the destroy routine <c>FUN_140799af0</c> with the reason "dismantled"). A gunner's Operate
-    /// task ends because its site is gone.
+    /// <c>BuildingFinderTurretsOnCertainBuilding</c> and the destroy routine <c>FUN_140799af0</c> with the reason "dismantled"): the turrets that
+    /// stand on it or, loaded from a save, name it as their mount (<see cref="BuildSite.Container"/>). A gunner's Operate task ends because its
+    /// site is gone.
     /// </summary>
     void DestroyMountedTurrets(World world, BuildSite site)
     {
-        foreach (var child in world.Buildings.All.Where(o => o.Parent == site.Id).ToList())
-            if (world.Machines.Find(child.Id) is { Data.Function: ObjectRanges.TurretFunction }) Remove(world, child);
+        foreach (var child in world.Buildings.All.Where(o => o.Container == site.Id).ToList())
+            if (Combat.PlacedTurrets.PostOf(_db, child) is not null) Remove(world, child);
     }
 
     /// <summary>
     /// The panel's Dismantle after its confirmation (<c>Building::confirmDismantle</c> <c>FUN_14054fea0</c>, <b>Observed</b>): refused with
-    /// <see cref="MountedRefusal"/> while a building other than furniture stands in it (the panel's own test, engine reading: Meitou's mounted
-    /// buildings are the non-furniture children); otherwise its furniture is destroyed (no refund) and the dismantle step runs with an endless amount
+    /// <see cref="MountedRefusal"/> while a building other than furniture stands in it or is mounted on it (the panel's own test, engine
+    /// reading: Meitou's mounted buildings are the non-furniture children and the loaded turrets that name it as their mount); otherwise its
+    /// furniture is destroyed (no refund) and the dismantle step runs with an endless amount
     /// (slot 73 with <c>FLT_MAX</c>), so the site goes at once with the usual refund.
     /// </summary>
     void DismantleAtOnce(World world, BuildSite site)
     {
         var reg = world.Buildings;
-        var children = reg.All.Where(o => o.Parent == site.Id).ToList();
+        var children = reg.All.Where(o => o.Container == site.Id).ToList();
         if (children.Any(o => Data(o.Record) is not ({ IsInteriorFurniture: true } or { IsNode: true })))
         {
             world.Post(MountedRefusal);
