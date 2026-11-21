@@ -15,6 +15,12 @@ static class GearBlood
     public static bool Enabled { get; set; }
 
     /// <summary>
+    /// Worn items keep their stains after the wound heals and wash clean (Advanced settings "Clothes keep blood stains", a Faithful / Meitou
+    /// switch, Meitou on by default; <c>UserConfig.KeptStains</c>); off, a worn item's blood follows the wound under it.
+    /// </summary>
+    public static bool KeptStains { get; set; } = true;
+
+    /// <summary>
     /// Game seconds a struck weapon takes to dry from wet blood to dried (darker, matte).
     /// </summary>
     public const float DrySeconds = 150;
@@ -264,7 +270,11 @@ internal sealed partial class CharacterRenderer
     void WornStainOf(ref Live l)
     {
         l.WornBlood = l.Blood;
-        if (!GearBlood.Enabled) return;
+        if (!GearBlood.Enabled || !GearBlood.KeptStains)
+        {
+            _wornStain.Remove(l.Key);
+            return;
+        }
 
         double now = SoakClock?.Invoke() ?? _poseSeconds;
         if (!_wornStain.TryGetValue(l.Key, out var stain))

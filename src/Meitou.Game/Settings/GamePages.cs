@@ -783,6 +783,11 @@ sealed class GamePages(SettingsMenu menu)
             + "Meitou: only people pick items up, and an animal only a limb to carry in its mouth.",
             Toggle: new("Animals pick up items", () => !menu.Config.AnimalsPickUp,
                 v => { menu.Config.AnimalsPickUp = !v; menu.AnimalsPickUpChanged?.Invoke(!v); }, Remaster: true)));
+        result.Add(new("Clothes keep blood stains",
+            "With Blood on weapons and gear on, blood soaks into worn clothes and armour slowly, stays when the wound heals, and washes out in "
+            + "water and rain or fades with time. Off, the clothes show only the blood of the wound under them.",
+            Toggle: new("Clothes keep blood stains", () => menu.Config.KeptStains,
+                v => Rendering.Characters.GearBlood.KeptStains = menu.Config.KeptStains = v, Remaster: true, OnOff: true)));
         result.Add(new("Hover outline", "Outline and tint the character under the cursor, in the colour of what a right click would do.",
             Toggle: new("Hover outline", () => menu.Config.HoverOutline, v => menu.Config.HoverOutline = v, Remaster: true, OnOff: true)));
         result.Add(new("Building outline",

@@ -851,6 +851,7 @@ sealed partial class GameHost(
         Player.BuildingSelection.DeselectBuildings = Config.DeselectBuildings;
         Player.InventoryWindows.RotateItems = Config.RotateItems;
         Player.InventoryWindows.AutoOpenBags = Config.AutoOpenBags;
+        Rendering.Characters.GearBlood.KeptStains = Config.KeptStains;
 
         // The region (BIOME_GROUP) under a point, for the biome banner.
         Player.BiomeBanner.RegionAt = (x, z) => Gpu.Weather?.World.RegionAt(x, z).Def is { } def ? (def.StringId, def.Name) : null;

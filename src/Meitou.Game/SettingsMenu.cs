@@ -1596,6 +1596,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.BuildingOutline = true;
         Player.BuildingSelection.DeselectBuildings = Config.DeselectBuildings = true;
         Config.LuckyrenMode = false;
+        Rendering.Characters.GearBlood.KeptStains = Config.KeptStains = true;
         Config.CameraLeash = true;
         GamePages.ResetOptional();
         Config.GroundItemLimit = Simulation.Items.GroundItems.DefaultLimit;
