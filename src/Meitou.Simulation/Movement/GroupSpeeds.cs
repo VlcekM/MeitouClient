@@ -9,9 +9,9 @@ namespace Meitou.Simulation.Movement;
 internal sealed class GroupSpeeds
 {
     /// <summary>
-    /// One speed group of this tick: its speed, its members' mean position, the sum of their velocities and how many they are.
+    /// One speed group of this tick: its speed, its members' mean position and the sum of their velocities.
     /// </summary>
-    readonly record struct SpeedGroupState(float Speed, Vector2 Centre, Vector2 Direction, int Count);
+    readonly record struct SpeedGroupState(float Speed, Vector2 Centre, Vector2 Direction);
 
     /// <summary>
     /// The player's speed groups of this tick, by key (serial Schedule; read by the parallel Move).
@@ -50,7 +50,7 @@ internal sealed class GroupSpeeds
                 a.Dir + new Vector2(prev[s].Velocity.X, prev[s].Velocity.Z));
         }
 
-        foreach (var (key, a) in acc) _speedGroups[key] = new SpeedGroupState(a.Speed, a.Sum / a.N, a.Dir, a.N);
+        foreach (var (key, a) in acc) _speedGroups[key] = new SpeedGroupState(a.Speed, a.Sum / a.N, a.Dir);
     }
 
     /// <summary>
