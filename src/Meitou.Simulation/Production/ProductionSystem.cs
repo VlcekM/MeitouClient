@@ -479,7 +479,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// The orders of machines (operate 87, training 97, turret gunner 146, a haul trip to a storage 124) and prospecting (150), anyone's (the order
     /// giver and the tasks test no faction: a worked bench counts for the player's research only when the player owns it, the storages are the
     /// worker's faction's, <see cref="StoresFor"/>, and a prospect's result goes to the Prospecting window, <c>Task_Prospecting</c>): on a complete
-    /// site that has its machine (or a turret's post), else the order leaves the queue; one already working that machine needs nothing more; the character must be able to work (<see cref="Able"/>; a gunner <see cref="AbleToMan"/>), the machine have a free operator place
+    /// site that has its machine (or a turret's post), else the order is gone (<see cref="OrderVerdict.Gone"/>); one already working that machine needs nothing more; the character must be able to work (<see cref="Able"/>; a gunner <see cref="AbleToMan"/>), the machine have a free operator place
     /// ("is already in use", posted) and, to operate or man it (rows 87 and 146), power (state 93, <see cref="Powered"/>; its text "It needs
     /// electricity." said); a prospector must not swim.
     /// </summary>

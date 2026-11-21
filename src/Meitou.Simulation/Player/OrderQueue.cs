@@ -41,7 +41,8 @@ public enum OrderVerdict : byte
     /// </summary>
     Blocked,
     /// <summary>
-    /// Its target or site is gone or no longer fits the verb (the original's desire x finder is 0): it leaves the queue.
+    /// Its target or site is gone or no longer fits the verb (the original's desire x finder is 0): it leaves the queue, unless its target resolves to
+    /// nothing and its plan fails on that (<see cref="Ai.ListTests.BlockedOnGone"/>: then <see cref="Blocked"/>).
     /// </summary>
     Gone,
 }
@@ -57,7 +58,7 @@ public readonly record struct OrderCheck(OrderVerdict Verdict, string? Why = nul
     /// </summary>
     public static OrderCheck Run => new(OrderVerdict.Run);
     /// <summary>
-    /// The order's target or site is gone: it leaves the queue.
+    /// The order's target or site is gone: it leaves the queue (<see cref="OrderVerdict.Gone"/>).
     /// </summary>
     public static OrderCheck Gone => new(OrderVerdict.Gone);
     /// <summary>
@@ -459,7 +460,8 @@ public static class PlayerOrders
     /// <summary>
     /// Whether the order can start for the character now (a pure read; the M6 <c>World.CanOrder</c> rests on it): the row is in the character's
     /// repertoire (<see cref="TaskStart.Eligible"/>), its owner's check, a row needing no melee threat (<see cref="NeedsNoThreat"/>) has none
-    /// (<see cref="Threatened"/>), and no failing list B entry leaves its plan without a step (<see cref="ListTests.OrderBlocked"/>).
+    /// (<see cref="Threatened"/>), and no failing list B entry leaves its plan without a step (<see cref="ListTests.OrderBlocked"/>). An order the
+    /// owner finds gone whose target resolves to nothing waits blocked instead where its plan fails on that (<see cref="ListTests.BlockedOnGone"/>).
     /// </summary>
     public static OrderCheck CanRun(World world, int slot, OrderEntry order)
     {
@@ -467,6 +469,8 @@ public static class PlayerOrders
         if (order.Forced) return order.Owner.CanRun(world, slot, order);
         if (!TaskStart.Eligible(world, cold, order.Row)) return OrderCheck.Blocked();
         var own = order.Owner.CanRun(world, slot, order);
+        if (own.Verdict == OrderVerdict.Gone && ListTests.BlockedOnGone(world, slot, order, out string? gone))
+            return OrderCheck.Blocked(gone is null ? null : Loc.Tr(gone));
         if (!own.CanRun) return own;
         if (Threatened(world, slot, order.Row)) return OrderCheck.Blocked();
 

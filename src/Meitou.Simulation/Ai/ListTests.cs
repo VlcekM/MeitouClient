@@ -84,6 +84,19 @@ public static class ListTests
     }
 
     /// <summary>
+    /// Whether the order names a character or site that resolves to nothing now (<see cref="RowStates.Gone"/>) and its plan fails on that
+    /// (<see cref="OrderBlocked"/>): the original's order keeps its hand, and the order step plans it again on every update with the hand looked up
+    /// anew (<c>FUN_140510920</c>, <c>FUN_140284510</c>), so it stays queued with that state's line where its list B fails on a state no provider
+    /// gives (a follow's <c>!7</c>, a bed's or machine's <c>73</c>, a lock's <c>70</c>). Its desire and list A were asked first (the order step's
+    /// pop).
+    /// </summary>
+    public static bool BlockedOnGone(World world, int slot, OrderEntry order, out string? line)
+    {
+        line = null;
+        return RowStates.Gone(world, Target(order)) && OrderBlocked(world, slot, order, out line);
+    }
+
+    /// <summary>
     /// The list B entry the first step of the order's plan provides (<see cref="RowStates.FirstUnmet"/> at its start, <c>FUN_14051b630</c>); null when
     /// its list B held, or where the plan step does not ask it (<see cref="OrderNeedsFailNow"/>).
     /// </summary>

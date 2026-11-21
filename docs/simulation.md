@@ -256,7 +256,9 @@ first step, `ListTests.OrderBlocked`: the first list B entry `RowStates` evaluat
 repertoire that leads to a step (`ListTests.ProviderSearch`, the planner's rules) blocks it with that state's line, `StateFailureLines`, so a Follow on a downed character
 waits silently until it is up; one with a provider is a step the act-out carries out first, the row's list B tested once the entry it provides holds:
 `OrderEntry.Planned`, `OrderEntry.RowRuns`).
-- A blocked front shows its text (a bark, or a posted message) and stays queued; the character's task is left alone, so its jobs, goals and reactions go on (S5). `Gone` pops it.
+- A blocked front shows its text (a bark, or a posted message) and stays queued; the character's task is left alone, so its jobs, goals and reactions go on (S5). `Gone` pops it,
+  except a front not started whose target character or site resolves to nothing now and whose plan fails on that (`ListTests.BlockedOnGone`): it stays blocked, as the
+  original's order keeps its hand ([vanished targets](game/ai-tasks.md#precedence)).
   An order given to a character out cold waits queued (the chooser does not run while it is carried, out cold or dead, `DecisionSystem.Down`, for the player's
   characters too) and is wiped when it wakes outside a bed or cage (the wake's get-up order has the clear flag, below).
 - **The body's orders** (`Combat.BodyOrders`, the original's engine order givers, [order givers](game/ai-tasks.md#order-givers); any character, the player's

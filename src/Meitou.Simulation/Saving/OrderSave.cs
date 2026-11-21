@@ -350,12 +350,7 @@ public static class OrderSave
     /// </summary>
     static string? SiteOf(World world, SavedOrder o)
     {
-        if (o.Site is { } id)
-        {
-            bool known = world.Buildings.Find(id) is not null || world.Fixtures.Find(id) is not null || ProductionSystem.IsNatural(id)
-                || Locks.FixtureRegistry.IsDummy(id) || ProductionSystem.IsTownWork(id);
-            return known ? id : null;
-        }
+        if (o.Site is { } id) return RowStates.SiteGone(world, id) ? null : id;
 
         var key = o.InstanceKey!;
         int colon = key.IndexOf(':');

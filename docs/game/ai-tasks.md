@@ -411,7 +411,8 @@ building target's slot 97 false (a door's broken byte `+0x3b6`) and its complete
 state 1 open, or 2 opening past 0.8, `DAT_141693ea8`); 54 `FUN_1405a00c0` (locked, not broken, level 1 or more); 56 `FUN_1405a3a10` (broken); 71
 `FUN_140598d60` → `FUN_1400f6b70` (built `+0x164` below the target `+0x188`); 78 `FUN_1405a1cc0` (the target's `+0x2f8` 2, caged); 79 `FUN_140599570` (own
 `+0x2f8` 2); 83 `FUN_140599540` (`+0x2f8` 1 with a bed); 99 `FUN_1405a14e0` (the carried character's dead byte `+0x5bc`); 114 `FUN_1405a1f00` (the worn
-shackles locked); 123 and 136 false; 16 `FUN_14059de10` (the target's immediate-threat flag `+0x2b0`), 39 the same of itself.
+shackles locked); 123 and 136 false; 16 `FUN_14059de10` (the target's immediate-threat flag `+0x2b0`), 39 the same of itself; 70 `FUN_1405a3c10` and 28 `FUN_1405a3080`
+only for a target that resolves to nothing (false), and 73 false for a site that does ([vanished targets](#precedence)).
 
 | id | name |
 |---|---|
@@ -1179,6 +1180,17 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
      whose target is threatened fights the attacker first, then follows). States `RowStates` does not evaluate count as holding: their gates are the owners' checks
      (`IOrderOwner.CanRun`). So a crippled character's lock order on an open, broken door waits (73 Closing needs `!56`, whose only provider 95 Repairing is not in the
      crippled repertoire), where it started before.
+     **A target that resolves to nothing** (**Verified**, the evaluators of `FUN_140610250`, each thunk followed in the exe): an order keeps its hand, which every reader
+     looks up anew (`FUN_140284510`: a character in its platoon's list, then the dead characters' map, then the handle remap; an `UnloadedPlatoon`'s character is none).
+     On such a hand 1 / 46 (`FUN_14059c6d0` with no object), 3, 42 and 57 hold; 2, 15, 16, 28 / 40 / 41 (`FUN_1405a3080`), 51, 52, 54, 56, 70, 71, 73, 78, 93, 113,
+     114, 128 and 140 do not; 7 holds unless the character's platoon is found, not declared dead (`+0x1f0`) and its byte `+0x100` set (`FUN_140792890`,
+     `FUN_1407ac7b0`; `FUN_1407a5be0` refreshes the byte while the platoon is active); the desires of 25, 60 and 249 are 0 (`FUN_14099e0a0`, `FUN_14099df10`,
+     `FUN_14099dc40`). So at the front, not running, 25, 60 and 249 pop by desire, and list A holds for 3, 73, 76, 78, 140, 285 (`!54`), 95 (`!56 !71`), 185, 186, 201
+     (`!114`), 99 / 108 once nothing is carried, and 5 / 61 when 7 holds (the pop also needs slot 4 and the effect test). **Observed** (the planner's rules on these
+     values): these fail to plan and stay queued: 31 / 289 when 7 holds (`!7`, none provides it), 164 (28, whose provider 40 needs `!7`), 87, 97, 258 and 99 / 108 while
+     carrying (73, none provides it), 77 (70, none). A running one ends and pops when its list B fails so (the plan step). Meitou (`ListTests.BlockedOnGone`,
+     `RowStates.Gone`): a front its owner finds gone (`IOrderOwner.CanRun`) whose target character or site is not in the world stays blocked where
+     `ListTests.OrderBlocked` fails on these states (7 holds for every character not in the world, its platoon not asked); the rest leave the queue.
   2. Committed mode (**Verified**: the update `FUN_140511130` works it out and passes it to the chooser: a current goal with the commit flag `+0x20`, `+0x26d` clear and its
      expiry `+0x280` not passed; the chooser turns it off without a current goal) with the running goal's priority (+0x20c) above 2: stop, the goal keeps its plan.
   3. The entries of a second list (+0x70, count +0x78, emptied with the queue by `FUN_1405074a0`) become candidates, scored by `FUN_14050df10`. It is not the one-shot order
