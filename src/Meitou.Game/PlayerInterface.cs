@@ -1300,7 +1300,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// <summary>
     /// The character the camera centres on for <paramref name="c"/>: a carried body is centred where its carrier stands, however deep the chain.
     /// </summary>
-    CharacterSnapshot Carrier(CharacterSnapshot c)
+    internal CharacterSnapshot Carrier(CharacterSnapshot c)
     {
         for (int depth = 0; depth < 8 && !c.CarriedBy.IsNone; depth++)
         {
