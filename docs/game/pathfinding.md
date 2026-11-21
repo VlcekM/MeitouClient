@@ -254,11 +254,11 @@ the centre); others the plain group speed. `assignSpeedGroup` (`1407f97c0`) also
 only when someone selected is in mode 3 (**Observed**). When the selected already share one group and the selection holds all its members,
 they keep it; otherwise each selected character leaves its group and the selection gets one new group, so a character set alone that was in
 a group gets a group of its own and, its group's slowest being itself, moves at its own max speed. With nobody selected in a group, fewer
-than two selected get no group (**Verified** against the original's `assignSpeedGroup` and `SpeedGroup::getSpeed`, Steam 1.0.65, names
-KenshiLib). Meitou gives a character set alone a group of one, which moves the same. Engine choice (#729): Meitou's group is runtime only
-and made by the speed order alone, so a player's character in mode 3 with no group (after a load) takes the lowest max speed of its squad
-mates ordered to mode 3, not down and not carried, whatever they are doing (followers steering straight at their slot have no path and must
-still count).
+than two selected get no group (**Verified** against the original's `assignSpeedGroup` and `SpeedGroup::getSpeed`, Steam 1.0.68 and 1.0.65
+alike, names KenshiLib). Meitou gives a character set alone a group of one, which moves the same. Engine choice (#729): Meitou's group is
+runtime only and made by the speed order alone, so a player's character in mode 3 with no group (after a load) takes the lowest max speed of
+its squad mates ordered to mode 3, not down and not carried, whatever they are doing (followers steering straight at their slot have no path
+and must still count).
 
 ## Own builder
 
