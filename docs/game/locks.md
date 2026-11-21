@@ -174,7 +174,7 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
     town; 123/290 give !54 and 56 at a gate (91, walked to by 121). So raiders breaking a locked gate is the planner's chain on gate codes
     (the chain itself is an inference from the table, as for 81; the user reports it in play). Codes and states: [gate codes](pathfinding.md#gate-codes).
     122 and 270 are restricted rows, offered to every NPC plan (**Verified**, `FUN_14051bae0`: the acting character's faction is not the player's, [planner](ai-tasks.md#planner)), so raiders plan the gate chain. Meitou: [simulation](../simulation.md#cages-beds-and-locks) ("Bashing gates").
-    270 (Assaulting town, effect state 163 `isBuildingDestroyed`, provided by 272 Smashing, which shares 123's desire function `LAB_14000dc29`; its finder `LAB_14001bcca` is an unresolved thunk, so the link to `FUN_1405a3f60` is **Observed** by shape only): with a nonzero place (Character vfunc `0x78`) it first returns the route gate as 122's finder `FUN_1405a28e0` does, so 270 -> 272 bashes the same gate door (`FUN_140348c10` resolves a hand to a building's door, else bashes the object itself); a target that is a building in the looker's gate region is kept; only when no gate is found does it scan the place's wall buildings (function mask `0x100000`, sorted by distance) for the first whose gate code is the looker's (`FUN_1405b0eb0`). The gate codes are flooded from gates only ([gate codes](pathfinding.md#gate-codes)), so for two different known codes a gate route normally exists and the wall scan is **Observed** to be a rare fallback. Meitou (`GatePlan`, `LockSystem.Smash`): 270's finder gives the gate first (as 122), else the nearest non-destroyed wall site of the attacker's own gate code (`LockSystem.NearestWall`); state 163 holds when the wall line is destroyed, 46 (`isWithinChoppingRange`: the wall's reach range 60 of its footprint, the height test of `SiteReach`) is provided only by 67 Running whose list B needs 90 again, so a repeat of 270: **the plan exists only for an attacker already within reach of the wall**. No gate leads to the target (`RouteState` gives no gate) -> the wall fallback (s01-f25). Smashing (272, s01-f26): `Task_BashDoor` on a hand that is no door damages the object itself; Meitou walks to the wall's reach, faces it and strikes every `BashSwingSeconds` with the attacker's packet (x0.25 for animals) through the wall formula shared with the fight's blows (`CombatSystem.StrikeWall`: clamp((2 blunt + 0.5 cut) / 2, 10, 60) x 0.003 of the wall line's progress, destroyed at 0). No crime is booked (only doors book Burglary). `CharacterCold.BashWall` marks that `Bashing` names a wall site.
+    270 (Assaulting town, effect state 163 `isBuildingDestroyed`, provided by 272 Smashing, which shares 123's desire function `LAB_14000dc29`; its finder `LAB_14001bcca` is a `jmp` to `FUN_1405a3f60`, **Verified** by the exe bytes): with a current town (Character vfunc `0x78`) it first returns the route gate as 122's finder `FUN_1405a28e0` does (the route to the hand's object, else to that town; factor 1, 0 without a gate), so 270 -> 272 bashes the same gate door (`FUN_140348c10` resolves a hand to a building's door, else bashes the object itself); a target that is a building in the looker's gate region is kept; only when no gate is found does it scan the place's wall buildings (function mask `0x100000`, sorted by distance) for the first whose gate code is the looker's (`FUN_1405b0eb0`). The gate codes are flooded from gates only ([gate codes](pathfinding.md#gate-codes)), so for two different known codes a gate route normally exists and the wall scan is **Observed** to be a rare fallback. Meitou (`GatePlan`, `LockSystem.Smash`): 270's finder gives the gate first (as 122), else the nearest non-destroyed wall site of the attacker's own gate code (`LockSystem.NearestWall`); state 163 holds when the wall line is destroyed, 46 (`isWithinChoppingRange`: the wall's reach range 60 of its footprint, the height test of `SiteReach`) is provided only by 67 Running whose list B needs 90 again, so a repeat of 270: **the plan exists only for an attacker already within reach of the wall**. No gate leads to the target (`RouteState` gives no gate) -> the wall fallback (s01-f25). Smashing (272, s01-f26): `Task_BashDoor` on a hand that is no door damages the object itself; Meitou walks to the wall's reach, faces it and strikes every `BashSwingSeconds` with the attacker's packet (x0.25 for animals) through the wall formula shared with the fight's blows (`CombatSystem.StrikeWall`: clamp((2 blunt + 0.5 cut) / 2, 10, 60) x 0.003 of the wall line's progress, destroyed at 0). No crime is booked (only doors book Burglary). `CharacterCold.BashWall` marks that `Bashing` names a wall site.
     123 / 290 also list `!158` (`iAmBeingMeleeAttacked immediate`, Character `+0x2b0`, **Verified**: thunk `140042866` returns that byte; [threats](combat.md#fight-lifecycle-and-orders)), so a basher with a melee threat in reach does not plan the gate bash: `GatePlan` reads `CombatSystem.ImmediateThreat`.
 - **Repair** (order 95, `Task_Build`; **Verified**: `FUN_1407fc6e0`, `FUN_1405595a0`, `FUN_14034a440`, `FUN_14029fb40`): a door is a Building of its own whose progress a builder raises. Slot 70 pushes the same work as for a site (`lerp(0.3, 2, engineering/100) x dt` x options, falloff), x3 for a door (`+0x1a0`, `DAT_14168a254`); `FUN_14029fb40` leaves the complete flag set on every door,
   so `FUN_14054a3f0` never stalls it and repair needs no materials. Progress above 0 calls slot 98 (`FUN_1402adca0`: only sets `+0x3ec`) with 0: the door is no longer broken (the lock is not touched; it stays open and unlocked from the bash). The task ends once progress / target (`FUN_140547200`, at most 1) reaches 1; the door never "completes" (no message). A right click on a complete, broken, own building (only doors report broken, slot 97) gives order 95 (Shift: job 125 Engineer, [table](ai-tasks.md)). Meitou: `ConstructionSystem` (`BuildOrder` on a door fixture id, own doors; `DoorStep`): the character walks to the door's work spot, adds `Rate x work / Target` of the door's record to `DoorProgress` (a fraction), clears `DoorBroken` above 0 and stops at 1; one falloff counter per door per tick.
@@ -218,8 +218,8 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   `6475-Newwworld-INGAME` Makeshift Gate) stands open once its guard plans. The five `Gate guard` packages give the leader Man the gate 0-24 and
   hold no lock goal (**Verified**, data), and the door's state `+0x380` is set only by the open (`FUN_140297040`), close (`FUN_140298c50`) and
   update functions, a snap shut (`FUN_1402991c0`) and `FUN_140299000`, which the initial door state (`FUN_140553210`) calls (**Observed**, the
-  field writers and callers): no relation to the player closes a gate. Meitou: `LockSystem.OpenGate`
-  ([simulation](../simulation.md#arrest-and-jail) "Rounds", "Gates"; #816).
+  field writers and callers): no relation to the player closes a gate. Meitou: `GateGoals` (goal 180's act-out)
+  ([simulation](../simulation.md#arrest-and-jail) "Gates"; #816).
 - **Door panel** (player's building, the HUD lines of a selected house: [ui-screens](ui-screens.md#selected-building)): open/close button `FUN_140546fb0`: an open door closes; otherwise an effectively locked
   one is unlocked first, then opened (**Verified**). Meitou: a door still moving counts by where it heads and turns back (an opening one closes, a
   closing one reopens); the original's open/close act only from closed / open, so a slow gate ignores the button for seconds.
@@ -253,7 +253,9 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   building's door on its side (the paths stop at the shut doors), unlocks its own (3.3 s), bashes another's (Burglary booked, the blows of the
   attackers' bash; never a gate, which its own rows bash, [gates](#doors)) or, on its way in where the restricted rows are offered (an NPC, a
   player's character on an order: `LockSystem.Restricted`), cuts (`Lockpicking.CutLock`) or picks it (`Lockpicking.Step`, the pick's clip and
-  floaters), and walks on once it is open; anyone else stops at the door ("It's locked." for the player). An NPC on 36
+  floaters), and walks on once it is open; anyone else stops at the door ("It's locked." for the player), except a lift's or a talk's own walk
+  that no order runs, which fails there as one blocked past the limit does (`MovementSystem.FailOwnWalk`): its goal takes it as a lost walk (the body ignored 20 s,
+  `FUN_14050d970` answers any failed mover so, **Verified**). An NPC on 36
   Patrolling town stops at a locked gate, its own faction's too: the patrol's move goes straight to the movement (`FUN_1405c6b30`,
   **Verified**), and row 36's list B has 60 but not 90, whose provider 122 Open gate (after 78) is what opens a gate on the way (**Verified**,
   row table); Meitou `LockSystem.PatrolsPast`. Row 36's list B has no 59 either (**Verified**, row table), so the patroller has no way in
@@ -270,8 +272,13 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   out of a shut building is refused the same way (the walk's 60, `LockSystem.CanLeave`, as the AI's own walks test it). The
   way through the door is a step of the NPC's plan (80 / 78 unlock, 287 / 81 bash, 76 pick, 285 cut, the providers of 59 / 60 the planner
   inserts; `AiSystem.TakeDoorStep`): ended by its list A on the door (52 open, 54 locked, 56 broken) or when the lock system's way ends, and
-  replaced as any running step, which drops the way (**Verified**, the providers in the row table). An NPC without a stepped plan (an engine
-  walk, an engine-run goal) is still left alone until the door opens (`Engaged`, engine).
+  replaced as any running step, which drops the way (**Verified**, the providers in the row table). Nothing but that plan holds the walker
+  (**Verified**): the door rows come only from the planner, the plan step (`FUN_14050d970`) ends a step whose list B fails (no `+0x16`), the
+  chooser keeps choosing, and the door opener (`FUN_140297040`) is called only by Task_OpenDoor (`FUN_140337000` / `FUN_1403370f0`), the
+  door's break, its panel button (`FUN_140546fb0`), a dialogue action (`FUN_140680560`) and a building's purchase (`FUN_1407ad6c0`), never
+  the mover. An order's walk (a player's 29, an NPC's) has the same rows, so the way is the order's step. Meitou (`LockSystem.StartDoorWay`, `DoorWayHolder`): the way is a step of the kept plan, else of the engine
+  goal's act-out (`AiMind.Duty`), else of the task running the walk (an order's, a player's source's, an engine system's, a mod's, a held
+  platoon's or a squadless character's), and ends with it (another task's start).
   **Observed** (headless, #807 save at 3 h): a Civilian solo UC woken in its locked Storm House and ordered
   out unlocked the door and walked out; with its way forced to the bash, it swung for 3.3 s, broke the door and walked out; with no way forced,
   its move order stayed queued and it did not move. #803's save at 8.00: the UC town racists' boss (United Heroes League, in the United Cities
@@ -284,7 +291,7 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   `Character_Lock` / `Character_Unlock_Success`. Locking closes the door first. No skill or level involved (**Verified**). Task_LockDoor update `FUN_140337670` (**Verified**): work += dt x 0.3; on reaching 1 it starts the door closing (`FUN_140298c50`,
   only from open), sets the lock's locked byte at once (`wants lock` is not touched), plays `Character_Lock` and sets the squad's house flag. The context menu's own-door verbs are these two orders: Lock 77 on an unlocked own door, Unlock 140 (0x8c) on a locked own door (`FUN_1407a6bc0` door branch, **Verified**); an own cage gets Lock 77 / Unlock 78 (cage branch, **Verified**; the update has no door to close there; Meitou runs the cage's unlock as row 140, same conditions); the panel's buttons are the instant toggle below.
   Row 77 (lock) lists `!DOOR_IS_BROKEN` in list B, so it is never planned on a smashed door (rows 79/162/198 have none; a lock on a broken door is not shown). The close acts only on an open, whole door (a closing, opening or smashed door is left as it is).
-  Meitou: `DoorLockOrder` (nearest selected character walks to the door's work spot, `LockSystem.DoorLockJobs`); the job (`CharacterCold.DoorJob`) is hashed while set and not saved. The lock-up round (`LockSystem.Rounds`) does the same: `FixtureRegistry.CloseDoor` then the lock at once, smashed doors left out of the round (engine choice for 198: the data does not exclude them).
+  Meitou: `DoorLockOrder` (nearest selected character walks to the door's work spot, `LockSystem.DoorLockJobs`); the job (`CharacterCold.DoorJob`) is hashed while set and not saved. The lock-up act-out ([wardens' goals](#wardens-goals)) does the same: `FixtureRegistry.CloseDoor` then the lock at once; rows 162 / 198 have no `!DOOR_IS_BROKEN`, so a smashed door is worked too: Meitou leaves it open and unlocked (engine choice) and still runs the house-flag test.
 - **Residents** (`allDoorsLocked` 87, `FUN_140596bd0`): true when the character is in bed, or its squad's "house locked" flag
   is set (squad AI object +0xe8, saved `homelok`; also read by dialogue condition 11 `BUILDING_IS_CLOSED_AND_SECURED`, **Verified** `FUN_140676950` case 0xb; set by Task_LockDoor at each door it locks whose lock is the worker's faction's, and Task_CloseDoor (a door with a working lock), when no door of the home is open or opening (`FUN_1407933a0`, **Verified**: one locked door is enough); cleared by unlocking, picking or a
   non-player opening a door (`Task_OpenDoor` update `FUN_1403370f0`, **Verified**: every update with the door unlocked, unless the opener's faction is the player's; Meitou `LockSystem.NoteDoorOpened`, from the walk-through opening)), else when the home building has no door that is open, broken or effectively unlocked
@@ -305,14 +312,17 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
 
 - **Lock up from outside** (197; **Verified** rows, `FUN_140596e90`): list B is `!strangers in house` and `!107` (107 I_AM_INSIDE_TARGET_BUILDING), and the lock row 198 needs state 126 AT_LOCATION_BUILDING_DOOR_OUTSIDE
   (**Verified**, `FUN_140596e90`: true when the character's X/Z distance to the door's outer point is below its reach range, 45 for a door; the outer point is the door record's point `+0x3bc` pushed out
-  by 1.1 times (`DAT_14169bb44`) its distance to the other point `+0x3c8`; the two points lie 15 either side of the leaf, so about 48 from the leaf), so a 197 worker inside first
-  leaves (row 200) and locks each door from its outer side. Meitou: a 197 round (`Round.FromOutside`) is given to a member already outside when there is one, else the worker first walks out to the first
-  door's outer point (the side away from the building's origin), then works each door within 45 of its outer point (`LockSystem.OuterPoint`); 155 rounds are unchanged.
+  by 1.1 times (`DAT_14169bb44`) its distance to the other point `+0x3c8`; the two points lie 15 either side of the leaf, so about 48 from the leaf).
+  107 without a target is "inside the squad's home" (`FUN_14059a4b0`, **Verified**: the current building against the target's building, else against the
+  home `FUN_1407956a0` `+0x38`). A member inside the home has no plan for 197 (**Verified**, `FUN_14051bae0`, `FUN_14050f800`, `FUN_14060fd80`): the
+  node expansion gives a list-B entry's providers the node's own target, for the root the goal's hand, empty for 197 (`targeting` 0, SPECIFIC; the
+  finder's door goes only to the effect's child), and skips a provider that needs a target (row 200) on an empty hand, so `!107` has no provider.
+  Meitou plans the same ([wardens' goals](#wardens-goals)).
 - **Opening up** (86 `OPEN_UP_SHOP_DOORS`, Task_Blank, finder `FUN_1408cb360`, **Verified** decompile): the building the character stands in when
   its owner matches the AI's (an owner test, **Observed**), else its home; the target is the first door that is closed and not opening (the plan unlocks, then opens it). With none left
   the finder clears the squad's "house locked" flag. A = !87, so it scores only while the home counts as locked. Only squads whose packages list
   86 open up (base data: Civilian, Shop, Shop-24hr, Slaver and Storage Guard leaders, among others); the rest stay locked.
-  Meitou (`LockSystem.LockUpSweep`): the opener's round starts while the home counts as locked by either branch of 87 (the round's flag, or `FixtureRegistry.AllDoorsLocked`). The worker approaches each door from its nearer side, unlocks it and starts the opening motion. **Observed** (headless, #293): the three `stolen slave clothing shop` Swamp Shacks of Slave Markets (Newwworld level data) start `locked0` true with `initial door state` 0 (CLOSED) on the template; the level state wins, so with only round-locked homes opened the shopkeeper outside could not get in, its path ended 29 units from its node behind the back wall (within the goal snap 30) and it stood there all day.
+  Meitou: [wardens' goals](#wardens-goals); the opener approaches the door from its nearer side, unlocks it and starts the opening motion. **Observed** (headless, #293): the three `stolen slave clothing shop` Swamp Shacks of Slave Markets (Newwworld level data) start `locked0` true with `initial door state` 0 (CLOSED) on the template; the level state wins, so with only round-locked homes opened the shopkeeper outside could not get in, its path ended 29 units from its node behind the back wall (within the goal snap 30) and it stood there all day.
 - **Initial door state** (`FUN_140553210`, when the home building is assigned to a squad; **Verified**): CLOSED -> unlocked, not
   broken, closed; OPEN -> unlocked, open; LOCKED -> locked, closed; BROKEN -> unlocked, lock broken, door broken, pose 0 (closed). Saved buildings keep
   their saved values.
@@ -325,6 +335,28 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   [save](../formats/save.md#object-handles-and-slot-lists)). Meitou: lock and door state from the level state, the save's on top;
   only doors with a `state` key count as restored, so `initial door state` still applies to the others (**engine choice**, the
   +0xa8 gate is Unknown).
+
+### Wardens' goals
+
+Goals 211, 155, 197, 86 and 195 (**Verified**, registration `FUN_140319a60`, its stubs read in the exe, and the state evaluators `FUN_140610250`):
+- **Desires**: 1.0 for 211 and the rows 110, 162, 198, 72, 73, 77, 78 (AI slot 19 `FUN_140641550`), 1.0 for 82, 163, 199 (slot 57 `FUN_1405983f0`),
+  1.0 for 86 and 195 (slot 19); 155 and 197 slot 31 `FUN_140795f80`: 1.0 while the squad's house flag is clear, else 1.0 only for a member standing outdoors
+  whose home's first door is open or broken (`FUN_1402ea2f0`), else 0.
+- **Finders** (each gives one target; factor 1.0, none 0): 211 the prisoner ([economy 11.5](economy.md#115-bail-and-sentence)). 155 and 197 share
+  `FUN_1408cb1c0`: the building the character stands in when its owner is the character's faction (building vfunc `0x58` against the character's), else the
+  platoon's home (`FUN_1407956a0` `+0x38`); its first door whose lock is not effectively locked (locked byte clear, broken `FUN_140297d60`, or level below 1), or
+  that is open or broken. 86 `FUN_1408cb360`: the same building, its first door neither broken nor open (state not 1); with none in the home, clears the
+  house flag. 195 `FUN_1408cc2a0` above.
+- **States**: 73 machineHasFreeOperatorSlot is false for a target that is no building, so 110's list B `!73` holds on a prisoner (`FUN_140598de0`); 54 of a
+  character is the lock of the cage it is held in (`FUN_1405a00c0`); 52 is false for a building without a door, a cage (`FUN_1405a3ad0`); 112 is the door
+  locked with the character inside a building, false outdoors (`FUN_1405a02d0`); 127 the same outdoors (`FUN_1405a0470`); 111 the inner point's mirror of 126
+  (`FUN_140596cf0`); 57 the chopping range of the door or the cage (`FUN_1405a25b0`).
+- **Plans**: 211 `[1, 110, 211]`; 155 `[163, 162, 155]` with 82 and 73 first while the door stands open; 197 `[199, 198, 197]`; 86 `[82, 78, 72, 86]` (78 only
+  while locked); 195 `[82, 77, 195]`.
+
+Meitou (`WardenGoals`, [simulation](../simulation.md#arrest-and-jail)): the finders run in a serial look every 15 ticks for each member weighing the goal,
+the act-out is a round on the one target, done once worked; 111's inner point is `DoorPoints.Inner`, the outer point mirrored through the leaf
+(**Observed**).
 
 ## Cages and beds
 
@@ -368,8 +400,7 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   (`FUN_1405d20d0` with its clear argument 1, **Verified** by disassembly), by `Task_ReleasePrisoner` (to a releaser that books bounties or is the player's), by the bail
   and by buying a slave free ([economy 11.5](economy.md#115-bail-and-sentence), [12](economy.md#12-slaves-prisoners-animals)); the release and the buy clear the hold
   themselves right after the give, so only a bailed prisoner leaves through it. Meitou: `FixtureRegistry.GetOut` (207, 256) and `GetOutLegit` (133, the act-out of
-  the order `Locks.FreedPrisoner` owns, given by the bail, the release and the buy), both through `LeaveCage`; `LockSystem.OpportunisticEscapes`: an AI prisoner whose role list holds 256, 207 or 202 in its hours walks out of
-  an unlocked cage. Lifting a prisoner out of another faction's cage (`FUN_14034fbe0`): the lifter gets code 7; the prisoner gets the escaped flag and a code 0xc call made while it is still
+  the order `Locks.FreedPrisoner` owns, given by the bail, the release and the buy), both through `LeaveCage`; the AI's are the escape goals' act-outs ([simulation](../simulation.md#engine-goals)). Lifting a prisoner out of another faction's cage (`FUN_14034fbe0`): the lifter gets code 7; the prisoner gets the escaped flag and a code 0xc call made while it is still
   held (`+0x2f8` = 2), which the setter refuses ([carry-loot](carry-loot.md)), so no pending crime (**Verified**).
 - **Escaped flag** (`StateBroadcastData::isEscapedPrisoner` `+0xe8`, KenshiLib 1ce4a16; **Verified** by decompile: every write through `+0x1a0`). Set only by `FUN_14034fbe0`
   (lifted out) and `Task_GetOutOfCage` flag 1 (above). Cleared only by: being caged again (`FUN_140330600`'s put-in branch); `Task_GetOutOfCage`
@@ -500,7 +531,8 @@ Meitou registers them as outdoor fixtures using their level placement and bed ma
   The finders' allies test (`FUN_1408ca5d0`, **Verified** by decompile) passes a building of the finder's faction or one `canIUseThisBuilding` accepts, which
   includes the town the squad occupies ([economy](economy.md)), so a homeless occupier sleeps in the occupied town's beds. Meitou: `AiSystem.OccupiedBed`, the
   member index's (round robin) complete BF_BED of the occupied town not held outside the squad (engine choice for the order).
-- **UI**: a quick right click on a bed (function 6 or 25) gives 258 (UseableStuff slot 131 `FUN_140299230`), sent to every selected character (`FUN_1407f9e20`, **Verified**: no gate for 258); the first to arrive takes the bed, the others are refused at it; the held menu (`FUN_1407a6bc0`) offers
+- **UI**: a quick right click on a bed (function 6 or 25) gives 258 (UseableStuff slot 131 `FUN_140299230`), sent to every selected character (`FUN_1407f9e20`, **Verified**: no gate for 258); the first to arrive takes the bed, the others are refused at it (258's list B state 73, the bed's "free for X", fails for them: their plan fails and the
+  order stays queued, [precedence](ai-tasks.md#precedence)); the held menu (`FUN_1407a6bc0`) offers
   99 "Put in Bed" when the last selected player character carries someone, else 258 "Sleep" (verb names `FUN_14079b2d0`).
 - Meitou: [simulation](../simulation.md#cages-beds-and-locks).
 

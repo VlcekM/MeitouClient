@@ -35,6 +35,7 @@ public class JailTests
 
     /// <summary>
     /// The town's cages are at +200 (A) and -200 (B) on X. <paramref name="locks"/>: the lock system's rounds run (they free a served prisoner).
+    /// <paramref name="liftFix"/>: the Fixes option "Guards stop passing bodies" (<see cref="ArrestSettings.LiftFix"/>).
     /// </summary>
     sealed class Jail : IDisposable
     {
@@ -48,12 +49,17 @@ public class JailTests
         readonly Squad _playerSquad;
         readonly FactionRelations _relations;
 
-        public Jail(bool locks = false)
+        /// <summary>
+        /// The bounty hunter's character record of a <c>talk</c> jail.
+        /// </summary>
+        public const string HunterRecord = "hunter-c";
+
+        public Jail(bool locks = false, bool ai = false, bool talk = false, bool liftFix = true)
         {
             var hunters = SyntheticTown.Rec("56-a", FcsRecordType.Faction, "hunters");
             hunters.Ints["fundamental type"] = (int)FundamentalType.Adventurer;
             hunters.References["legal system"] = [SyntheticTown.Ref("50-a")];
-            var data = ArrestTests.Town([hunters]);
+            var data = ArrestTests.Town([hunters, .. talk ? HunterLines() : []]);
             _relations = data.Relations;
             City = data.FactionIndex("50-a");
             Hunters = data.FactionIndex("56-a");
@@ -63,7 +69,7 @@ public class JailTests
             var crime = new CrimeSystem(_relations);
             combat.Crimes = crime;
             carry.Crimes = crime;
-            Arrest = new ArrestSystem(crime, BaseGame, new ArrestSettings { RecordLog = true }) { Carry = carry };
+            Arrest = new ArrestSystem(crime, BaseGame, new ArrestSettings { RecordLog = true, LiftFix = liftFix }) { Carry = carry };
             var walk = new OpenGroundWalkability((_, _) => 150);
             var systems = new List<ITickSystem>
             {
@@ -72,7 +78,15 @@ public class JailTests
                 new RetaliationSystem(combat), new AggroSystem(_relations), crime, Arrest,
             };
             if (locks) systems.Add(Locks = new LockSystem(BaseGame, BodyOptions.Default) { Crimes = crime });
-            World = new SimWorld(new WorldSettings { Seed = 31, PublishSnapshots = false, MinPartitionSize = 1 }, walk, systems);
+            if (ai) systems.Add(new AiSystem(data));
+            if (talk)
+            {
+                var dialogue = new Meitou.Simulation.Dialogue.DialogueSystem(data, new Meitou.Simulation.Dialogue.DialogueSettings { AmbientEvents = true });
+                systems.Add(dialogue);
+                Arrest.Talk = dialogue;
+            }
+
+            World =new SimWorld(new WorldSettings { Seed = 31, PublishSnapshots = false, MinPartitionSize = 1 }, walk, systems);
             World.Fixtures.RegisterSite(World, data, 0);
             _playerSquad = new Squad { Id = 1000, TemplateId = "p", Faction = _relations.PlayerFaction };
             World.Squads.Add(_playerSquad);
@@ -81,6 +95,29 @@ public class JailTests
         }
 
         public void Dispose() => World.Dispose();
+
+        /// <summary>
+        /// A bounty hunter's character record (<see cref="HunterRecord"/>) whose event 44 BOUNTY_SPOTTED line answers with DA 6
+        /// ATTACK_CHASE_FOREVER, as the base game's bounty hunters' lines do (economy.md 11.8).
+        /// </summary>
+        static FcsRecord[] HunterLines()
+        {
+            var hunter = SyntheticTown.Rec(HunterRecord, FcsRecordType.Character, "Bounty hunter");
+            hunter.References["dialogue package"] = [SyntheticTown.Ref("hunt-p")];
+            var package = SyntheticTown.Rec("hunt-p", FcsRecordType.DialoguePackage, "Hunts");
+            package.References["dialogs"] = [SyntheticTown.Ref("hunt-d", ArrestSystem.BountySpotted)];
+            var dialog = SyntheticTown.Rec("hunt-d", FcsRecordType.Dialogue, "Spotted");
+            dialog.Bools["monologue"] = true;
+            // The base "Bounty hunter" root's repetition limit 1: said at most every 2 game hours.
+            dialog.Ints["repetition limit"] = 1;
+            dialog.References["lines"] = [SyntheticTown.Ref("hunt-l")];
+            var line = SyntheticTown.Rec("hunt-l", FcsRecordType.DialogueLine, "Spotted line");
+            line.Strings["text0"] = "Your head is mine!";
+            line.References["effects"] = [SyntheticTown.Ref("hunt-a")];
+            var attack = SyntheticTown.Rec("hunt-a", FcsRecordType.DialogAction, "Attack");
+            attack.Ints["action name"] = Data.Gameplay.Dialogue.DialogueActions.AttackChaseForever;
+            return [hunter, package, dialog, line, attack];
+        }
 
         public CharacterCold Cold(CharacterId id) => World.Characters.Cold(id.Slot)!;
         public Vector3 Where(CharacterId id) => World.Characters.Previous[id.Slot].Position;
@@ -153,7 +190,7 @@ public class JailTests
     [Fact]
     public void A_served_prisoner_is_freed_by_a_policeman_who_walks_to_the_cage_and_unlocks_it_not_by_the_fallback()
     {
-        using var j = new Jail(locks: true);
+        using var j = new Jail(locks: true, ai: true);
         var police = j.Npc(new Vector2(-100, 0), j.City, FundamentalType.LawEnforcement, Strong, mind: true);
 
         // Only a holder of goal 211 frees prisoners (FUN_1408cf3c0): in every role list, always in its hours.
@@ -181,9 +218,9 @@ public class JailTests
             return !j.Cold(hero).IsImprisoned;
         }, 1500, "the release");
 
-        // A round of the policeman, after a walk of about 250 units (the system's fallback frees at the first sweep, tick 0, or only after 120 s).
+        // A round of the policeman, after a walk of about 250 units (no release at tick 0).
         Assert.True(round);
-        Assert.InRange(freed, 300, (long)(LockSystem.ReleaseTimeout / j.World.TickSeconds) - 1);
+        Assert.True(freed >= 300, $"freed at tick {freed}");
         Assert.True(Vector2.Distance(new Vector2(start.X, start.Z), new Vector2(at.X, at.Z)) > 150);
         Assert.True(Vector2.Distance(new Vector2(at.X, at.Z),
                 new Vector2(j.CageA.Position.X, j.CageA.Position.Z)) <= j.CageA.UseRange + LockSystem.Reach + 1);
@@ -230,6 +267,43 @@ public class JailTests
         Assert.True(j.CageA.Occupant.IsNone);
     }
 
+    /// <summary>
+    /// The arrest's lift with both cages full (docs/simulation.md "Arrest and jail"): with the Fixes option "Guards stop passing bodies" off, the
+    /// policeman lifts the wanted player character he downed though no cage is free, as the original's 240 does (its list B and desire ask for
+    /// none, bd6358b66); with it on (<see cref="ArrestSystem.LiftHeld"/>, 678b24b9e, #339) he does not. Catches the option not holding the lift
+    /// back, and the lift held back with the option off.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_guard_lifts_his_downed_arrest_target_with_both_cages_full_only_with_the_fix_off(bool liftFix)
+    {
+        using var j = new Jail(liftFix: liftFix);
+        var police = j.Npc(new Vector2(0, 60), j.City, FundamentalType.LawEnforcement, Strong, face: Vector2.Zero);
+        var hero = j.Hero(new Vector2(0, 0), "hero", Weak, bounty: 5000);
+        j.Cold(hero).RecentlyWanted = CrimeSystem.RecentlyWantedSeconds;   // just booked: recognised at once
+        foreach (var cage in new[] { j.CageA, j.CageB })
+        {
+            var prisoner = j.Npc(new Vector2(cage.Position.X - Centre.X, 0), j.City, FundamentalType.Civilian, new Combatant());
+
+            Assert.True(j.World.Fixtures.Imprison(j.World, prisoner, cage));
+        }
+
+        j.RunUntil(() => j.Cold(hero).Medical!.Incapacitated, 3000, "the target down");
+
+        // No cage takes him, so a lifted body does not stay on the shoulder: any tick it was carried counts.
+        bool lifted = false;
+        for (int t = 0; t < 600; t++)
+        {
+            j.World.RunTick();
+            lifted |= j.Cold(police).Carrying == hero;
+        }
+
+        Assert.Contains(j.Arrest.Log, e => e.Kind == ArrestEventKind.Arrest && e.Guard == police && e.Target == hero);
+        Assert.True(j.Cold(hero).Medical!.Incapacitated);
+        Assert.Equal(!liftFix, lifted);
+    }
+
     // ------------------------------------------------------------------ the claim and the bail
 
     [Fact]
@@ -266,7 +340,14 @@ public class JailTests
 
         Assert.Equal(2000, j.World.Player.Money);
         Assert.Null(j.Cold(captive).Bounties);
-        Assert.False(j.Cold(captive).IsImprisoned);
+
+        // The bail leaves the cage locked (FUN_1406ae170 writes no cage lock, unlike the buy) and gives 133 Get out of cage (economy.md 11.5): the
+        // captive, out cold, steps out once it comes round.
+        Assert.True(j.CageA.Lock!.Locked);
+
+        j.Cold(captive).Medical!.KoTimer = 0;
+        j.RunUntil(() => !j.Cold(captive).IsImprisoned, 60, "the way out");
+
         Assert.False(j.Cold(captive).Escaped);
         Assert.Null(j.Cold(captive).Pending);
         Assert.True(j.CageA.Occupant.IsNone);
@@ -278,27 +359,30 @@ public class JailTests
     [Fact]
     public void A_bounty_hunter_who_spots_a_character_with_a_big_bounty_attacks_until_it_is_down_then_leaves_it_alone_and_cages_nobody()
     {
-        using var j = new Jail();
+        using var j = new Jail(ai: true, talk: true);
         var hero = j.Hero(new Vector2(0, 0), "hero", Weak, bounty: 5000);
         j.Cold(hero).RecentlyWanted = CrimeSystem.RecentlyWantedSeconds;   // just booked: recognised at once
-        var hunter = j.Npc(new Vector2(0, 60), j.Hunters, FundamentalType.Adventurer, Strong, face: Vector2.Zero);
+        var hunter = j.Npc(new Vector2(0, 60), j.Hunters, FundamentalType.Adventurer, Strong, mind: true, face: Vector2.Zero);
+        j.Cold(hunter).RecordId = Jail.HunterRecord;
 
         j.RunUntil(() => j.Arrest.Log.Any(e => e.Kind == ArrestEventKind.Hunt), 120, "the hunt");
 
         Assert.Equal(5000, j.Arrest.Log.First(e => e.Kind == ArrestEventKind.Hunt).Amount);
 
-        j.RunUntil(() => j.Arrest.Log.Any(e => e.Kind == ArrestEventKind.HuntOver), 3000, "the end of the hunt");
+        // The line's DA 6 orders the attack (101), which ends once the target is down. No rest follows (FUN_140856f00 has no timer): the hunter
+        // fires event 44 again whenever it spots the target, and only the line's repetition limit keeps it from saying it twice.
+        j.RunUntil(() => j.Cold(hero).Medical!.Incapacitated, 3000, "the target down");
+        j.World.RunTicks(300);
 
         Assert.True(j.Cold(hero).Medical!.Incapacitated && !j.Cold(hero).Medical!.Dead);
+        Assert.NotEqual(CharacterTask.Attack, (CharacterTask)j.World.Characters.Next[hunter.Slot].Task);
         Assert.False(j.Cold(hero).IsImprisoned);
         Assert.DoesNotContain(j.Arrest.Log, e => e.Kind is ArrestEventKind.Arrest or ArrestEventKind.Lifted or ArrestEventKind.Jailed);
         Assert.Empty(j.Arrest.Arrests);
         Assert.Empty(j.Arrest.Cagings);
-        Assert.False(j.Cold(hunter).Engaged);
 
-        var hunt = Assert.Single(j.Arrest.Hunts);
+        var hunt = Assert.Single(j.Arrest.Log, e => e.Kind == ArrestEventKind.Hunt);
 
-        Assert.Equal((hunter, hero), (hunt.Hunter, hunt.Target));
-        Assert.InRange(hunt.Rest, 1, new ArrestSettings().HuntRestSeconds);
+        Assert.Equal((hunter, hero), (hunt.Guard, hunt.Target));
     }
 }

@@ -2,6 +2,7 @@ using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Data.World;
 using Meitou.Simulation;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Locks;
 using Meitou.Simulation.Movement;
@@ -79,6 +80,47 @@ public class HousedSquadTests(ITestOutputHelper output)
             Assert.True(f.Lock!.Locked);
         });
     }
+
+    /// <summary>
+    /// Going to bed (153, 239) weighs row 98's sleeping desire (AI slot 30, <c>FUN_140319a60</c> registers it for 98, 153, 175, 239 and 261) times
+    /// its bed finder's 1 (<c>FUN_1408cfe00</c>; docs/game/ai-tasks.md "Following"): a guard of Stack with a bed goal and a bed of its home, awake,
+    /// weighs it at 1 with its last bed 5 hours ago and at 0.3 having used a bed 10 minutes ago. Catches the goal weighed at a flat 1.
+    /// </summary>
+    [Fact]
+    public void A_town_guard_that_used_a_bed_within_20_minutes_weighs_going_to_bed_at_0_3()
+    {
+        var data = Load();
+        var site = data.Sites.First(s => s.Town.Name == "Stack");
+        using var world = Town(data, site, StandardParts.Ai);
+        world.RunTicks(60);
+        var ai = world.SystemOf<Meitou.Simulation.Ai.AiSystem>()!;
+        var sleepers = world.Squads.All
+            .Where(s => s.Ai?.Current is { } p && p.Roles.Any(r => r.Any(g => IsBedGoal(g.Task.Type))))
+            .SelectMany(s => s.Members.Select(m => (Squad: s, Id: m)))
+            .Where(x => world.Characters.Cold(x.Id.Slot) is { Ai: not null, InSomething: HeldState.None })
+            .ToList();
+        float Desire(Squad squad, CharacterId id, double usedHoursAgo)
+        {
+            var cold = world.Characters.Cold(id.Slot)!;
+            cold.BedUsedHours = world.GameHours - usedHoursAgo;
+            var goal = squad.Ai!.Current!.Roles.SelectMany(r => r).First(g => IsBedGoal(g.Task.Type));
+            var type = goal.Task.Type;
+            return ai.Desire(world, Meitou.Simulation.Ai.TaskBehaviours.Of(type), type, Meitou.Simulation.Ai.TaskProfiles.Of(type), squad,
+                    squad.Ai, cold.Ai!, id, goal.Task.Target);
+        }
+
+        bool Guard(Squad s) => s.Name.Contains("guard", StringComparison.OrdinalIgnoreCase);
+        var (squad, guard) = sleepers.First(x => Guard(x.Squad) && Desire(x.Squad, x.Id, 5) == 1);
+        output.WriteLine($"{squad.Name}: {world.Characters.Cold(guard.Slot)!.Name}");
+
+        Assert.Equal(0.3f, Desire(squad, guard, 10.0 / 60));
+    }
+
+    /// <summary>
+    /// Whether the goal is one of the going-to-bed rows (153, 239).
+    /// </summary>
+    static bool IsBedGoal(Data.Gameplay.Ai.TaskType type) =>
+        type is Data.Gameplay.Ai.TaskType.GoHomeAndGoToBed or Data.Gameplay.Ai.TaskType.GoHomeAndGoToBedSecure;
 
     [Fact]
     public void A_building_shops_trade_window_shows_its_containers_goods_in_one_grid_and_a_purchase_leaves_its_container()

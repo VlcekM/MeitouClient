@@ -174,10 +174,13 @@ public sealed partial class ArrestSystem
     static void Mark(CharacterCold c, int mark) => (c.DisguiseMarks ??= new float[3])[mark] = MarkSeconds;
 
     /// <summary>
-    /// A looker has seen through the disguise: event 44 when the character is wanted by the looker's faction, else blown for 250 s.
+    /// A looker has seen through the disguise: event 44 when the character is wanted by the looker's faction, else blown for 250 s; neither when the
+    /// looker regards the character as friendly by its real faction (slot 126 with the disguise unread, its love included; <c>FUN_140856f00</c>).
     /// </summary>
     void SeeThrough(World world, int w, int s, CharacterCold c, CharacterCold wc)
     {
+        if (Crimes.RegardsFriendly(world, w, s)) return;
+
         if (c.Bounties?.BookedFor(Crimes.Factions.Relations, wc.Faction) is { Claimed: false, Amount: > 0 })
         {
             if (!FreeGuard(world, w)) return;

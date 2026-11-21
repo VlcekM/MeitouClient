@@ -173,11 +173,15 @@ sealed class GameMods(GameHost host)
     }
 
     /// <summary>
-    /// Once a frame: a notice for each mod system the world stopped after a fault (docs/modding.md "Tick systems").
+    /// Once a frame: a notice for each mod system the world stopped after a fault (docs/modding.md "Tick systems") and one for each mod that
+    /// failed anywhere as built for another version of the game (<see cref="Content.CodeModFaults.Tell"/>).
     /// </summary>
     internal void UpdateModFaults()
     {
-        if (Mods is null || host.Session?.World is not { } world) return;
+        if (Mods is null) return;
+
+        while (Content.CodeModFaults.TryTakeNotice(out var outdated)) Notice(outdated);
+        if (host.Session?.World is not { } world) return;
 
         while (world.TryTakeModFaultNotice(out var notice)) Notice(notice);
     }
@@ -357,6 +361,7 @@ sealed class GameMods(GameHost host)
         catch (Exception e)
         {
             Console.Error.WriteLine($"mod       {command.Owner}: debug command '{command.Label}' failed: {e}");
+            Content.CodeModFaults.Tell(command.Owner, e);
             return $"{command.Owner}: {e.GetBaseException().Message}";
         }
     }

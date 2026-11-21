@@ -25,35 +25,15 @@ public sealed record TownDutySettings
     /// </summary>
     public int LookEveryTicks { get; init; } = 15;
     /// <summary>
-    /// A member looks for an intruder within its sight (the sensed list's size is <b>Unknown</b>).
+    /// A member looks for an intruder within its sight: the finders walk its sensed list, which holds what its vision range sees (1500 x the race's
+    /// <c>vision range mult</c>, <c>FUN_140851bc0</c>, <b>Verified</b>; <see cref="AggroSystem.RangeOf"/> with <see cref="CharacterFacts.Perceives"/>
+    /// standing in for the list).
     /// </summary>
     public float Sight { get; init; } = AggroSystem.OutdoorSight;
-    /// <summary>
-    /// A walk counts as arrived within this of its goal; a walk that ended within <see cref="CageSlack"/> of it does too (a cage's reach is
-    /// <see cref="FixtureRegistry.AtCage"/>).
-    /// </summary>
-    public float Arrive { get; init; } = 40;
-    /// <summary>
-    /// A walk that ended within this of its goal counts as arrived (see <see cref="Arrive"/>).
-    /// </summary>
-    public float CageSlack { get; init; } = 200;
-    /// <summary>
-    /// Walks that end short before the member gives up (an intruder is then put down where it is).
-    /// </summary>
-    public int Walks { get; init; } = 4;
-    /// <summary>
-    /// Game seconds a lift may spend walking to the body before the member gives it up for itself (<see cref="TownDutySystem.GiveUpLift"/>; no
-    /// timer of the original's is known; a body it cannot reach would hold it forever).
-    /// </summary>
-    public float LiftSeconds { get; init; } = 60;
-    /// <summary>
-    /// Game hours a body put down short of its goal is left alone.
-    /// </summary>
-    public double RefuseHours { get; init; } = 2;
 }
 
 /// <summary>
-/// What a town errand is: its rows, by <see cref="TownDutySystem.RowOf"/>.
+/// What a town errand is.
 /// </summary>
 public enum TownDutyKind : byte
 {
@@ -116,7 +96,11 @@ public enum TownDutyKind : byte
     /// <summary>
     /// 106 Find and put in bed: carrying a body to a bed and laying it in (the bed system's put-in walk, <see cref="BedSystem.PutIn"/>).
     /// </summary>
-    Bed
+    Bed,
+    /// <summary>
+    /// Fetching a machine's input from a loose item or a storage (the plan's step 92 on row 94's source).
+    /// </summary>
+    Fetch,
 }
 
 /// <summary>
@@ -153,27 +137,37 @@ public sealed class TownDuty
     /// </summary>
     public string? Target { get; set; }
     /// <summary>
-    /// Walks that ended short so far (<see cref="TownDutySettings.Walks"/> give up).
-    /// </summary>
-    public int Tries { get; set; }
-    /// <summary>
     /// A shoo's start (game hours) and its next event (game seconds of the errand); a confiscation's seconds at the cage; a lift's seconds walking to
     /// the body.
     /// </summary>
     public double Since { get; set; }
     /// <summary>
-    /// A shoo's next event (game seconds of the errand), a confiscation's seconds at the cage or a lift's seconds walking to the body
-    /// (see <see cref="Since"/>).
+    /// A confiscation's seconds at the cage (see <see cref="Since"/>).
     /// </summary>
     public float Next { get; set; }
-    /// <summary>
-    /// A food run of a character of the player's side (243 from <c>Character::setupAI</c>): a player order ends it without being undone.
-    /// </summary>
-    public bool PlayerSide { get; init; }
     /// <summary>
     /// A corpse disposal errand's machine (its id is <see cref="Target"/>).
     /// </summary>
     public CorpseMachine? Machine { get; set; }
+    /// <summary>
+    /// The record a fetch takes.
+    /// </summary>
+    public string? Record { get; init; }
+    /// <summary>
+    /// A fetch's loose item, its <see cref="Items.GroundItems"/> id (-1: the fetch is at the storage <see cref="Target"/>).
+    /// </summary>
+    public int Item { get; init; } = -1;
+
+    /// <summary>
+    /// The chooser's goal the errand acts out (<see cref="TownGoals"/>); <see cref="TaskType.None"/> for the errand no goal holds: a ditch the plan's
+    /// step 93 asked for, held by that step (<see cref="AiSystem.RunsDitchStep"/>).
+    /// </summary>
+    public TaskType Chosen { get; init; } = TaskType.None;
+
+    /// <summary>
+    /// The target the goal's plan carried at the start: its finder gives it again while the goal holds the member.
+    /// </summary>
+    internal PlanTarget Planned { get; init; }
 
     /// <summary>
     /// Adds the errand to the world's state hash.
@@ -187,51 +181,32 @@ public sealed class TownDuty
         h.Add(Town.PlayerTown);
         h.Add((int)Kind);
         h.Add(Goal);
-        h.Add(Tries);
         h.Add(Target is { } t ? Rng.StableHash(t) : 0UL);
-        if (Kind == TownDutyKind.Shoo)
+        if (Chosen != TaskType.None)
         {
-            h.Add(Since);
-            h.Add(Next);
+            h.Add((int)Chosen);
+            h.Add((int)Planned.Kind);
+            h.Add(Planned.Position);
+            h.Add(Planned.Character ?? CharacterId.None);
         }
+        if (Kind == TownDutyKind.Shoo) h.Add(Since);
 
-        if (PlayerSide) h.Add(0x50534964);
-        if (Kind is TownDutyKind.Confiscate or TownDutyKind.Lift or TownDutyKind.HomeLift or TownDutyKind.CorpseLift) h.Add(Next);
+        if (Kind == TownDutyKind.Confiscate) h.Add(Next);
+        if (Kind != TownDutyKind.Fetch) return;
+
+        h.Add(Rng.StableHash(Record ?? ""));
+        h.Add(Item);
     }
 }
 
 /// <summary>
-/// Goals of a squad's town the AI's act-outs do not cover (docs/game/carry-loot.md 3.2, ai-tasks.md "Finders of the jobs"), for the members of the
-/// squads the AI runs whose running package lists them for the member's role in the hour (<see cref="PopulationSystem.GoalDuty"/>). All serial, in
-/// <c>SlowWorld</c> after the carry system.
-/// <list type="bullet">
-/// <item><b>273 Remove Intruder</b> (finder <c>FUN_14099c250</c>, <b>Verified</b> by decompile): only while the member stands in a town that is its
-/// home town, the town its occupation holds, or a town of its faction (<c>Ownerships::isMyTown</c>, KenshiLib names); the intruder is knocked out, in
-/// that town, not carried or caged (Meitou: nor in a bed), and (an engine reading of the sensed-list classes) not of the member's faction or an ally. The original's last
-/// test, <c>amInsideTownWalls</c>, is read as the town's built-up area (<see cref="BuiltUp"/>). The member lifts it, then</item>
-/// <item><b>112 Find and put in cage</b> (a living body) or <b>281</b> (any body), while the package lists it: the best free cage in the town (the
-/// original's finder; an occupier may use the occupied town's, its use test passing for that town, <c>FUN_140621230</c>), where the intruder is
-/// locked up with the put-in's usual sentence (from a bounty with the cage owner's faction, docs/game/economy.md 11.5; none: served, so the jailer
-/// frees it); else</item>
-/// <item><b>274 Throwing out</b> (<c>Task_TakeIntruderOutsideTown</c>): carried to the town's point outside its gates (<see cref="TownExit"/>, the
-/// same for every carrier) and put down.</item>
-/// <item><b>223 Remove Home Intruder</b> (finder <c>FUN_14099c110</c>): a knocked-out character in the squad's home building
-/// (<see cref="HomeIntruder"/>) is lifted, then with <b>224</b> (<c>Task_TakeIntruderOutside</c>) carried past the home's first door
-/// (<see cref="AiSystem.LeavePoint"/>; a home with no door: the town's exit point) and put down; without 224 it goes on as 273's body does.</item>
-/// <item><b>138 Find corpses</b> and <b>137 Corpse disposal</b> (<see cref="LiftsCorpse"/>): a member listing 138, or 137 with a disposal found
-/// (<see cref="CorpseDisposal.Find"/>), lifts the corpse 138's finder gives; then 137, ranked with the cage and throw-out goals
-/// (<see cref="RankDisposals"/>), carries it to the disposal, which takes it in; without a disposal goal it keeps the body.</item>
-/// <item><b>106 Find and put in bed</b>, ranked with those goals for any carried body (<see cref="RankDisposals"/>): a body the carrier would lay
-/// in a bed (<see cref="BedSystem.PutInDesire"/>, <c>FUN_1405a0d50</c>) is walked to the bed the bed search finds and laid in
-/// (<see cref="BedSystem.PutIn"/>).</item>
-/// <item><b>243 Getting food</b> (finder <c>FUN_1408cb650</c>, <c>BuildingFinder_LootFoodAndStuff</c>; then 244 <c>Task_grabOneFood</c>): a member
-/// holding no food walks to the nearest store with food in the town and takes one item of it (the goal holds while it has food, list A
-/// <c>gotAFoodItem</c>). The finder searches the blackboard's target town (<c>Blackboard.Destination</c>), else the town the member stands in, else
-/// the 3 x 3 zone cells round it; it need not be the squad's own, and a player-side member takes only from its faction's stores.</item>
-/// </list>
+/// The town duties (docs/simulation.md "Town duties", docs/game/carry-loot.md 3.2, ai-tasks.md "Finders of the jobs"): the act-outs of the town goals
+/// the chooser weighs for NPCs with a mind of their own (<see cref="TownGoals"/>: the intruder and corpse lifts, the carried body's cage, throw-out,
+/// bed and disposal goals, the store runs, the confiscation, the shoos and the ransack), the finders those goals' picks come from and the ditch the
+/// plan's step 93 asks for. All serial, in <c>SlowWorld</c> after the carry system.
 /// </summary>
 public sealed class TownDutySystem(PopulationData data, PopulationSystem population, CarrySystem carry, TownDutySettings? settings = null)
-        : ITickSystem, IStateHashed, IDecisionOwner, IDutyRelease
+        : ITickSystem, IStateHashed, IDutyRelease, IDutyGoalOwner
 {
     #region State and wiring
 
@@ -241,35 +216,29 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     readonly List<TownDuty> _duties = [];
 
     /// <summary>
-    /// The downed characters that may be lifted, as of the look (<see cref="CountBodies"/>).
+    /// The town goals' picks and goals (the chooser's side).
+    /// </summary>
+    TownGoals? _goals;
+
+    /// <summary>
+    /// The engine goals of the world (the AI's), resolved at the first step.
+    /// </summary>
+    DutyGoals? _goalDuties;
+
+    /// <summary>
+    /// The downed characters that may be lifted, as of <see cref="_countedTick"/> (<see cref="CountBodies"/>).
     /// </summary>
     readonly List<int> _downed = [];
 
     /// <summary>
-    /// The slots carrying someone at the look.
-    /// </summary>
-    readonly List<int> _carriers = [];
-
-    /// <summary>
-    /// The bodies an errand, a refusal or a carrier holds, as of the look: no other errand takes them.
+    /// The bodies an errand, a refusal or a carrier holds, as of <see cref="_countedTick"/>: no lift finder offers them.
     /// </summary>
     readonly HashSet<CharacterId> _reserved = [];
 
     /// <summary>
-    /// Bodies put down short of their goal: left alone until this game hour, in the order they were put down.
+    /// The tick the bodies were last counted (-1: never).
     /// </summary>
-    readonly List<(CharacterId Body, double Until)> _refused = [];
-
-    /// <summary>
-    /// Lifts given up on the walk (<see cref="TownDutySettings.LiftSeconds"/>): the member leaves that body alone until this game hour, while the
-    /// others may still lift it.
-    /// </summary>
-    readonly List<(CharacterId Member, CharacterId Body, double Until)> _gaveUp = [];
-
-    /// <summary>
-    /// Player-side characters whose last food run found no room for the item: no new run until this game hour.
-    /// </summary>
-    readonly List<(CharacterId Member, double Until)> _foodWaits = [];
+    long _countedTick = -1;
 
     /// <summary>
     /// The lock system (resolved in the serial step), for the ransack's door bashing and the town walls.
@@ -303,23 +272,64 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     public IReadOnlyList<TownDuty> Duties => _duties;
 
     /// <summary>
-    /// The serial step: every errand steps on (an ended one is dropped), then the look on each member's turn, the player's food runs and the ditches
-    /// asked for.
+    /// The population data.
+    /// </summary>
+    internal PopulationData PopulationData => data;
+
+    /// <summary>
+    /// The carry system.
+    /// </summary>
+    internal CarrySystem Carry => carry;
+
+    /// <summary>
+    /// The population system the world was made with.
+    /// </summary>
+    internal PopulationSystem Population => population;
+
+    /// <summary>
+    /// The town goals, made on first use.
+    /// </summary>
+    TownGoals Goals => _goals ??= new TownGoals(this);
+
+    /// <summary>
+    /// Registers the town goals (<see cref="TownGoals.Register"/>).
+    /// </summary>
+    void IDutyGoalOwner.RegisterGoals(DutyGoals goals) => Goals.Register(goals);
+
+    /// <summary>
+    /// The serial step: every errand steps on (an ended one is dropped, a goal's done), then the town goals' look and the ditches asked for.
     /// </summary>
     public void SlowWorld(World world)
     {
+        _goalDuties ??= world.SystemOf<AiSystem>()?.Duties;
         for (int k = 0; k < _duties.Count;)
         {
-            if (Step(world, _duties[k])) k++;
-            else _duties.RemoveAt(k);
+            var d = _duties[k];
+            if (Step(world, d)) k++;
+            else
+            {
+                _duties.RemoveAt(k);
+                Finish(world, d);
+            }
         }
 
         // Each member looks once in LookEveryTicks, on its slot's turn (slot mod the period): the looks spread over the ticks (docs/simulation.md
         // "Spread sweeps").
         int every = world.Every(Settings.LookEveryTicks);
-        Look(world, every);
-        LookPlayerFood(world, every);
+        Goals.Look(world, every);
         StartRequestedDitches(world);
+        StartRequestedFetches(world);
+    }
+
+    /// <summary>
+    /// An errand is over: a goal's is done (<see cref="DutyGoals.Done"/>), and its member's picks are looked at again for its next choice.
+    /// </summary>
+    void Finish(World world, TownDuty d)
+    {
+        if (d.Chosen == TaskType.None || !world.Characters.TryResolveNext(d.Member, out int g)) return;
+
+        _goalDuties?.Done(world, g, d.Chosen);
+        Goals.LookAgain(world, g);
     }
 
     /// <summary>
@@ -328,56 +338,23 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     static Vector2 Flat(Vector3 p) => new(p.X, p.Z);
 
     /// <summary>
-    /// Hashes the errands, the refusals, the food waits and the lifts given up (only while there are any).
+    /// Hashes the errands, the refusals, the food waits, the lifts given up and the town goals' picks (only while there are any).
     /// </summary>
     public void Hash(ref StateHasher hasher)
     {
+        _goals?.Hash(ref hasher);
+
         // only while one runs, so worlds without them hash as before
-        if (_duties.Count == 0 && _refused.Count == 0 && _foodWaits.Count == 0 && _gaveUp.Count == 0) return;
+        if (_duties.Count == 0) return;
+
         hasher.Add(0x546F776E);
         hasher.Add(_duties.Count);
         foreach (var d in _duties) d.Hash(ref hasher);
-        hasher.Add(_refused.Count);
-        foreach (var (body, until) in _refused)
-        {
-            hasher.Add(body);
-            hasher.Add(until);
-        }
-
-        if (_foodWaits.Count > 0)
-        {
-            hasher.Add(_foodWaits.Count);
-            foreach (var (member, until) in _foodWaits)
-            {
-                hasher.Add(member);
-                hasher.Add(until);
-            }
-        }
-
-        if (_gaveUp.Count == 0) return;
-
-        hasher.Add(_gaveUp.Count);
-        foreach (var (member, body, until) in _gaveUp)
-        {
-            hasher.Add(member);
-            hasher.Add(body);
-            hasher.Add(until);
-        }
     }
 
     #endregion
 
-    #region The player's food runs
-
-    /// <summary>
-    /// Whether a squad runs an occupation, as found on <see cref="_occupationsTick"/>.
-    /// </summary>
-    bool _occupations;
-
-    /// <summary>
-    /// The tick <see cref="_occupations"/> was found on (-1: never).
-    /// </summary>
-    long _occupationsTick = -1;
+    #region Ditches
 
     /// <summary>
     /// Row 114's finder (<c>FUN_1405a70a0</c>, which is row 242's <c>FUN_1405a59a0</c>, <b>Verified</b>): the nearest storage in reach that takes one
@@ -393,8 +370,21 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
+    /// The storage the per-item storage finder (<c>FUN_14059acd0</c>, state 89's) finds for the carried stacks of <paramref name="record"/>, as
+    /// <see cref="DitchStore"/> searches; null when none takes them. A read-only look (the planner's).
+    /// </summary>
+    internal (string Id, Vector2 Spot)? OutputStore(World world, Squad squad, CharacterCold cold, Vector3 at, string record)
+    {
+        var town = AiSystem.TownAt(data, world, at);
+        if (town.IsNone || cold.Inventory is not { } inv) return null;
+
+        return StoreFor(world, squad, cold, at, town, [.. Production.ProductionSystem.Ditchable(inv).Where(i => i.Record == record)], register: false);
+    }
+
+    /// <summary>
     /// The plan's step 93 Filling machine at a storage (<see cref="AiMind.DitchRequest"/>, set by the think when the plan's first step walks to or
-    /// fills the ditch target): a <see cref="TownDutyKind.Ditch"/> errand walks there and puts the carried items in; the AI plans again when it ends.
+    /// fills the ditch target): a <see cref="TownDutyKind.Ditch"/> errand walks there and puts the carried items in while the AI holds the character on
+    /// that step (<see cref="AiSystem.RunsDitchStep"/>); the AI plans again when it ends.
     /// </summary>
     void StartRequestedDitches(World world)
     {
@@ -404,7 +394,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             if (!table.Next[s].Alive || table.Cold(s) is not { Ai: { DitchRequest: true } mind } c) continue;
             mind.DitchRequest = false;
             var id = table.IdOf(s);
-            if (c.Engaged || c.InCombat || c.Fleeing || Busy(id) || DecisionSystem.Ordered(c)) continue;
+            if (c.InCombat || !AiSystem.Holds(table.Next[s], c) || !AiSystem.RunsDitchStep(c) || mind.Duty is not null || Busy(id))
+                continue;
+
             var at = table.Next[s].Position;
             if (DitchStore(world, mind.Squad, c, at, register: true) is not var (storeId, spot))
             {
@@ -428,329 +420,88 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// </summary>
     void StartDitch(World world, int slot, CharacterCold cold, CampaignTown town, string storeId, Vector2 spot)
     {
-        cold.Engaged = true;
         _duties.Add(new TownDuty { Member = world.Characters.IdOf(slot), Faction = cold.Faction, Town = town, Kind = TownDutyKind.Ditch,
                 Target = storeId, Goal = spot });
-        TaskStart.Walk(world, slot, spot, ErrandMode(world, cold), RowOf(TownDutyKind.Ditch), TaskSource.Goal);
+        WalkToStore(world, slot, storeId, spot, ErrandMode(world, cold), DitchRow);
     }
 
     /// <summary>
-    /// 243 Getting food for the player's side (<c>Character::setupAI</c> gives it to every character of the player's faction; desire AI slots 26, 24,
-    /// 25, <b>Verified</b> by decompile): an animal only while the squad option Feed Animals is on; only in a town (slot 24), and in one of another
-    /// faction only while the player's faction is resident there (town slot 88: the town's owner or its <c>factionsResidentHere</c>, which takes the
-    /// player's faction when a player character stands in a building of the player's in that town; Meitou: the player owns a house there,
-    /// <see cref="FixtureRegistry.OwnsPropertyIn"/>). In a town with occupiers while it senses an enemy: inside the walls it wants food whatever its
-    /// hunger (desire 0.2), outside them in a town with gates not at all; else the 259 desire (slot 25): stomach empty, hunger at most 2.4, no food
-    /// it would bite on it, not fighting unless hunger is below 1.2. It walks to the nearest store of the town owned by its faction with food in it
-    /// and takes one item, which the eating rule then eats; without room for that item (state 82, <see cref="TakeFits"/>) it starts no run. A player
-    /// character's goal is the decision step's (<see cref="GettingFood"/>, priority 3, weight 0.5); this pass runs it for the other characters of
-    /// the player's faction while idle (they hold no jobs; engine choice).
+    /// The plan's step 92 Collecting resource from row 94's loose item or storage (<see cref="AiMind.FetchRequest"/>, set by the think when the plan's
+    /// first step walks to or takes from that source): a <see cref="TownDutyKind.Fetch"/> errand takes it while the AI holds the character on that
+    /// step (<see cref="AiSystem.RunsFetchStep"/>); the AI plans again when it ends, anew when it took nothing.
     /// </summary>
-    void LookPlayerFood(World world, int every)
+    void StartRequestedFetches(World world)
     {
-        int faction = world.Player.Faction;
-        if (faction < 0) return;
-        _foodWaits.RemoveAll(w => w.Until <= world.GameHours);
         var table = world.Characters;
         for (int s = 0; s < table.HighWater; s++)
         {
-            if (!table.Next[s].Alive || !world.Turn(s, every) || table.Cold(s) is not { IsPlayer: false } c || c.Faction != faction)
-                continue;
+            if (!table.Next[s].Alive || table.Cold(s) is not { Ai: { FetchRequest: true } mind } c) continue;
 
-            // An order beats the goal: one its order holds (an order in place runs on Idle) starts no run.
-            var task = (CharacterTask)table.Next[s].Task;
-            if (task != CharacterTask.Idle || DecisionSystem.Ordered(c)) continue;
-            if (FoodWant(world, s, c, out var store, out _) > 0) StartFood(world, s, c, store);
+            mind.FetchRequest = false;
+            if (c.InCombat || !AiSystem.Holds(table.Next[s], c) || mind.Duty is not null || Busy(table.IdOf(s))) continue;
+            if (AiSystem.FetchStepOf(c) is not { Record: { } record } source) continue;
+
+            bool started = source.Item >= 0 ? StartPickUp(world, s, c, source.Item, record) : StartTake(world, s, c, source, record);
+            if (!started) mind.AskReplan();
         }
     }
 
     /// <summary>
-    /// 243's desire for a player-side character, 0 with <paramref name="why"/> when it does not want food now, and the store it would walk to (a pure
-    /// read).
+    /// A fetch from a loose item: row 3's pick-up (<see cref="Items.PickUps"/>, <c>Task_Pickup</c>, the class row 92 builds for an item target),
+    /// a walk to it or the take where it stands within reach; false when the item is gone or another character fetches it.
     /// </summary>
-    float FoodWant(World world, int s, CharacterCold c, out (CampaignTown Town, string Id, Vector2 Spot) store, out string? why)
+    bool StartPickUp(World world, int slot, CharacterCold cold, int item, string record)
     {
-        store = default;
-        why = WhyNotFed(world, s, c, out bool animal, out bool hungry, out bool occupied);
-        if (why is not null) return 0;
-
         var table = world.Characters;
-        int faction = world.Player.Faction;
-        var race = c.Race!;
-        var at = table.Next[s].Position;
-        var town = AiSystem.TownAt(data, world, at);
-        if (town == CampaignTown.None)
-        {
-            why = "not in a town";
-            return 0;
-        }
+        if (world.GroundItems.Find(item) is not { } loose || CarrySystem.Claimed(table).Contains(item)) return false;
 
-        int owner = town.Owner(world, data);
-        if (owner != c.Faction && owner != faction && !world.Fixtures.OwnsPropertyIn(town.Site, faction))
-        {
-            why = "a town the player does not live in";
-            return 0;
-        }
+        var task = Items.PickUps.InReach(table.Next[slot].Position, loose.Position) ? CharacterTask.Idle : CharacterTask.GoTo;
+        var request = new TaskRequest(task, TaskType.Pickup, TaskSource.Goal) { Point = loose.Position, Detail = item };
+        if (TaskStart.Start(world, slot, request) != StartResult.Started) return false;
 
-        float desire = 1;
-        if (occupied && AiSystem.Occupied(world, town) && SensesEnemy(world, s, c))
-        {
-            if (InsideWalls(world, town, at)) (hungry, desire) = (true, 0.2f);
-            else if (HasGates(world, town))
-            {
-                why = "outside an occupied town's walls";
-                return 0;
-            }
-        }
-
-        if (!hungry)
-        {
-            why = "not hungry";
-            return 0;
-        }
-
-        if (Store(world, at, town, owner: c.Faction, animal: animal, race: race, asker: c) is not var (storeId, spot))
-        {
-            why = "no store with food";
-            return 0;
-        }
-
-        // 244 needs state 82, room for the food it takes: a full inventory starts no run, and the character keeps its job
-        if (!TakeFits(world, storeId, c))
-        {
-            why = "no room for the food";
-            return 0;
-        }
-
-        store = (town, storeId, spot);
-        return desire;
+        _duties.Add(new TownDuty { Member = table.IdOf(slot), Faction = cold.Faction, Town = TownOf(world, slot), Kind = TownDutyKind.Fetch,
+                Goal = Flat(loose.Position), Record = record, Item = item });
+        return true;
     }
 
     /// <summary>
-    /// The character's own gates of the food run (<see cref="FoodWant"/>): why it fetches no food (not the player's, Feed Animals off, neither
-    /// hungry nor in an occupied town, busy, already carrying food or waiting for room), null when it may; and whether it is an animal, hungry, and
-    /// an occupation is on.
+    /// A fetch from a storage (<c>Task_EmptyMachine</c>, the class row 92 builds for a building target): the walk to it, the take on arrival
+    /// (<see cref="StepFetch"/>); false when the storage is gone.
     /// </summary>
-    string? WhyNotFed(World world, int s, CharacterCold c, out bool animal, out bool hungry, out bool occupied)
+    bool StartTake(World world, int slot, CharacterCold cold, PlanTarget source, string record)
     {
-        animal = hungry = occupied = false;
-        var table = world.Characters;
-        int faction = world.Player.Faction;
-        if (faction < 0 || c is not { Medical: { Dead: false, Incapacitated: false } med, Race: { } race } || !(c.IsPlayer || c.Faction == faction))
-            return "not the player's";
+        if (source.Fixture is not { } storeId || StoreInventory(world, storeId) is null) return false;
 
-        animal = !med.HasStatsObject;
-        if (animal && (world.Player.SquadAi & SquadAi.Feed) == 0) return "Feed Animals is off";
-
-        hungry = med.Fed <= 0 && med.Hunger <= FeedSystem.FoodOnGroundBelow && !(c.InCombat && med.Hunger >= FeedSystem.FoodOnGroundInFight);
-        occupied = Occupations(world);
-        if (!hungry && !occupied) return "not hungry";
-
-        var id = table.IdOf(s);
-        if (c.Engaged || c.Fleeing || c.PickingUpItem is not null || !c.CarriedBy.IsNone || c.InSomething != HeldState.None || Busy(id)) return "busy";
-
-        if (FeedSystem.CarriesFood(c, race, animal) || _foodWaits.Exists(w => w.Member == id && w.Until > world.GameHours))
-            return "has food, or no room for it";
-
-        return null;
-    }
-
-    /// <summary>
-    /// Whether any squad occupies a town (the occupied branch of 243's desire), once a tick.
-    /// </summary>
-    bool Occupations(World world)
-    {
-        if (_occupationsTick != world.Tick)
-            (_occupations, _occupationsTick) = (world.Squads.All.Any(q => q.Ai is { CurrentClass: PackageClass.OccupyTown }), world.Tick);
-
-        return _occupations;
-    }
-
-    /// <summary>
-    /// Starts a food run of a player-side character to a store.
-    /// </summary>
-    void StartFood(World world, int s, CharacterCold c, (CampaignTown Town, string Id, Vector2 Spot) store)
-    {
-        c.Engaged = true;
-        _duties.Add(new TownDuty { Member = world.Characters.IdOf(s), Faction = c.Faction, Town = store.Town, Kind = TownDutyKind.Food,
-                Target = store.Id, Goal = store.Spot, PlayerSide = true });
-        TaskStart.Walk(world, s, store.Spot, ErrandMode(world, c), RowOf(TownDutyKind.Food), TaskSource.Goal);
-    }
-
-    /// <summary>
-    /// Registers 243 Getting food with the decision step.
-    /// </summary>
-    public void RegisterSources(DecisionSystem decisions) => decisions.Register(new GettingFood(this));
-
-    /// <summary>
-    /// 243 Getting food of a player character (priority 3, weight 0.5, <see cref="FoodWant"/>): it runs while its food run does.
-    /// </summary>
-    sealed class GettingFood(TownDutySystem owner) : IDecisionSource
-    {
-        /// <summary>
-        /// The source's name in the decision log.
-        /// </summary>
-        public string Name => "243 Getting food";
-        /// <summary>
-        /// A goal.
-        /// </summary>
-        public DecisionStep Step => DecisionStep.Goals;
-        /// <summary>
-        /// Its row.
-        /// </summary>
-        public int Key => 243;
-        /// <summary>
-        /// Its weight.
-        /// </summary>
-        public float Weight => 0.5f;
-
-        /// <summary>
-        /// Runs while its food run is under way; else may run when the character wants food (<see cref="FoodWant"/>).
-        /// </summary>
-        public DecisionCheck CanRun(World world, int slot)
-        {
-            var id = world.Characters.IdOf(slot);
-            if (owner.Busy(id))
-                return owner._duties.Exists(d => d.Member == id && d.Kind == TownDutyKind.Food) ? DecisionCheck.Runs : DecisionCheck.No("busy");
-
-            return owner.FoodWant(world, slot, world.Characters.Cold(slot)!, out _, out string? why) > 0 ? DecisionCheck.Run : DecisionCheck.No(why);
-        }
-
-        /// <summary>
-        /// 1 while its food run is under way, else the food run's desire (<see cref="FoodWant"/>).
-        /// </summary>
-        public float Desire(World world, int slot) =>
-            owner.Busy(world.Characters.IdOf(slot)) ? 1 : owner.FoodWant(world, slot, world.Characters.Cold(slot)!, out _, out _);
-
-        /// <summary>
-        /// Starts the food run to the store found.
-        /// </summary>
-        public void Start(World world, int slot)
-        {
-            var cold = world.Characters.Cold(slot)!;
-            if (owner.FoodWant(world, slot, cold, out var store, out _) > 0) owner.StartFood(world, slot, cold, store);
-        }
+        var spot = Flat(source.Position);
+        _duties.Add(new TownDuty { Member = world.Characters.IdOf(slot), Faction = cold.Faction, Town = TownOf(world, slot),
+                Kind = TownDutyKind.Fetch, Target = storeId, Goal = spot, Record = record });
+        WalkToStore(world, slot, storeId, spot, ErrandMode(world, cold), FetchRow);
+        return true;
     }
 
     #endregion
 
-    #region The look
+    #region Finders
 
     /// <summary>
-    /// The look of the town duties: the downed, the carriers and the bodies taken are counted, the carriers looked at, then every free member of
-    /// an AI squad on its turn takes the first duty its role has and finds work for (ransacking, shooing, looting, stashing, lifting intruders,
-    /// confiscating, fetching food).
+    /// The census of the lift finders, once a tick when one first needs it (<see cref="CountBodies"/>).
     /// </summary>
-    void Look(World world, int every)
+    void EnsureCounted(World world)
     {
+        if (_countedTick == world.Tick) return;
+
+        _countedTick = world.Tick;
         CountBodies(world);
-        LookCarriers(world, every);
-
-        var duties = new RoleDuties
-        {
-            Intruders = stackalloc int[5],
-            Food = stackalloc int[5],
-            Confiscate = stackalloc int[5],
-            Loot = stackalloc int[5],
-            Shoo = stackalloc int[5],
-            Ransack = stackalloc int[5],
-            Stash = stackalloc int[5],
-            Home = stackalloc int[5],
-            Corpse = stackalloc int[5],
-            FindCorpse = stackalloc int[5],
-        };
-
-        foreach (var squad in world.Squads.All)
-        {
-            if (squad.Ai is null || squad.Members.Count == 0) continue;
-
-            duties.Clear();
-            foreach (var member in squad.Members) LookMember(world, squad, member, every, ref duties);
-        }
     }
 
     /// <summary>
-    /// Which duties each role of the squad looked at has (by <see cref="AiRole"/>; -1: not asked yet, 0: no, 1: yes).
-    /// </summary>
-    ref struct RoleDuties
-    {
-        /// <summary>
-        /// 273 Throw out of town (lifting downed intruders out of its town).
-        /// </summary>
-        public Span<int> Intruders;
-
-        /// <summary>
-        /// 244 Fetching food from the home base's stores.
-        /// </summary>
-        public Span<int> Food;
-
-        /// <summary>
-        /// Confiscating stolen goods from the town's cages.
-        /// </summary>
-        public Span<int> Confiscate;
-
-        /// <summary>
-        /// 131 Looting food and stuff.
-        /// </summary>
-        public Span<int> Loot;
-
-        /// <summary>
-        /// Shooing strangers out of its building (or out of a private one).
-        /// </summary>
-        public Span<int> Shoo;
-
-        /// <summary>
-        /// Running round the town looking for people (the ransack).
-        /// </summary>
-        public Span<int> Ransack;
-
-        /// <summary>
-        /// 184 Putting loot in storage.
-        /// </summary>
-        public Span<int> Stash;
-
-        /// <summary>
-        /// Picking intruders up out of its home.
-        /// </summary>
-        public Span<int> Home;
-
-        /// <summary>
-        /// 137 Corpse disposal.
-        /// </summary>
-        public Span<int> Corpse;
-
-        /// <summary>
-        /// 138 Find corpses.
-        /// </summary>
-        public Span<int> FindCorpse;
-
-        /// <summary>
-        /// Forgets every answer (a new squad).
-        /// </summary>
-        public readonly void Clear()
-        {
-            Intruders.Fill(-1);
-            Food.Fill(-1);
-            Confiscate.Fill(-1);
-            Loot.Fill(-1);
-            Shoo.Fill(-1);
-            Ransack.Fill(-1);
-            Stash.Fill(-1);
-            Home.Fill(-1);
-            Corpse.Fill(-1);
-            FindCorpse.Fill(-1);
-        }
-    }
-
-    /// <summary>
-    /// The look's census: the bodies a duty or a refusal holds or a carrier carries or goes to pick up are taken (not an intruder its lifter still
-    /// walks to, <see cref="WalksToIntruder(CharacterTable, TownDuty)"/>), the carriers and the downed that may be lifted are listed.
+    /// The lift finders' census: the bodies an errand or a refusal holds or a carrier carries or goes to pick up are taken (not an intruder its
+    /// lifter still walks to, <see cref="WalksToIntruder(CharacterTable, TownDuty)"/>), and the downed that may be lifted are listed.
     /// </summary>
     void CountBodies(World world)
     {
         var table = world.Characters;
         _downed.Clear();
-        _carriers.Clear();
         _reserved.Clear();
 
         // An intruder a member still walks to is nobody's yet: the original's finders (223, 273) leave out only a carried body, so every member
@@ -758,476 +509,18 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         foreach (var d in _duties)
             if (!d.Body.IsNone && !WalksToIntruder(table, d)) _reserved.Add(d.Body);
 
-        _refused.RemoveAll(r => r.Until <= world.GameHours);
-        _gaveUp.RemoveAll(r => r.Until <= world.GameHours);
-        foreach (var r in _refused) _reserved.Add(r.Body);
-
         for (int s = 0; s < table.HighWater; s++)
         {
             if (!table.Next[s].Alive || table.Cold(s) is not { } c) continue;
 
             bool lifts = table.Next[s].Task == (byte)CharacterTask.PickUp && !c.CarryTarget.IsNone;
             if (lifts && !WalksToIntruder(table, s, c)) _reserved.Add(c.CarryTarget);
-
-            if (!c.Carrying.IsNone)
-            {
-                _reserved.Add(c.Carrying);
-                _carriers.Add(s);
-            }
+            if (!c.Carrying.IsNone) _reserved.Add(c.Carrying);
 
             if (c is { Medical: { Unconscious: true, Dead: false } } && c.InSomething != HeldState.Imprisoned && CarrySystem.CanBeLifted(c))
                 _downed.Add(s);
         }
     }
-
-    /// <summary>
-    /// One member on its turn, free and not busy: its role's duties are asked once per squad, then it ransacks or shoos when it can, else takes up
-    /// an errand (<see cref="LookErrands"/>).
-    /// </summary>
-    void LookMember(World world, Squad squad, CharacterId member, int every, ref RoleDuties duties)
-    {
-        var table = world.Characters;
-        if (!table.TryResolveNext(member, out int slot) || !world.Turn(slot, every) || !Free(world, slot) || Busy(member)) return;
-
-        var cold = table.Cold(slot)!;
-        int role = (int)AiSystem.RoleOf(squad, member, cold);
-        AskDuties(world, squad, role, ref duties);
-        var intruders = duties.Intruders;
-        var food = duties.Food;
-        var confiscate = duties.Confiscate;
-        var loot = duties.Loot;
-        var shoo = duties.Shoo;
-        var ransack = duties.Ransack;
-        var stash = duties.Stash;
-        var home = duties.Home;
-
-        if (ransack[role] == 1 && RansackTarget(world, squad, slot) is var (raid, door))
-        {
-            cold.Engaged = true;
-            if (door is not null) _locks?.BashForErrand(cold, door);
-            if (cold.Fighter is { } armed) cold.DrawnWeapon = Combat.CombatSystem.MeleeDrawn(armed);   // B: hasWeaponEquipped
-
-            var goal = Flat(raid.Position);
-            _duties.Add(new TownDuty
-            {
-                Member = member, Faction = cold.Faction, Town = AiSystem.TownAt(data, world, raid.Position), Kind = TownDutyKind.Ransack,
-                Target = raid.Key, Goal = goal,
-            });
-            TaskStart.Walk(world, slot, goal, SpeedMode.Run, RowOf(TownDutyKind.Ransack), TaskSource.Goal);
-            return;
-        }
-
-        if (intruders[role] == 0 && food[role] == 0 && confiscate[role] == 0 && loot[role] == 0 && shoo[role] == 0 && stash[role] == 0
-            && home[role] == 0 && duties.Corpse[role] == 0 && duties.FindCorpse[role] == 0)
-        {
-            return;
-        }
-
-        if (shoo[role] == 1 && Stranger(world, slot, cold, squad) is { IsNone: false } stranger)
-        {
-            cold.Engaged = true;
-            _duties.Add(new TownDuty
-            {
-                Member = member, Body = stranger, Faction = cold.Faction, Town = AiSystem.TownAt(data, world, table.Next[slot].Position),
-                Kind = TownDutyKind.Shoo, Since = world.GameHours,
-            });
-            return;
-        }
-
-        LookErrands(world, squad, member, slot, cold, role, in duties);
-    }
-
-    /// <summary>
-    /// The duties of the member's role (<paramref name="role"/>) not asked yet in this squad's look are asked of its goals.
-    /// </summary>
-    void AskDuties(World world, Squad squad, int role, ref RoleDuties duties)
-    {
-        var intruders = duties.Intruders;
-        var food = duties.Food;
-        var confiscate = duties.Confiscate;
-        var loot = duties.Loot;
-        var shoo = duties.Shoo;
-        var ransack = duties.Ransack;
-        var stash = duties.Stash;
-        var home = duties.Home;
-
-        if (intruders[role] < 0)
-            intruders[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.PickupIntrudersTown) ? 1 : 0;
-
-        if (food[role] < 0)
-            food[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.AquireFoodAtHomebase) ? 1 : 0;
-
-        if (confiscate[role] < 0)
-            confiscate[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.LootStolenGoods) ? 1 : 0;
-
-        if (loot[role] < 0)
-            loot[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.LootFoodAndStuff) ? 1 : 0;
-
-        if (shoo[role] < 0)
-        {
-            shoo[role] = squad.HomeBuilding is not null
-                && (population.GoalDuty(world, squad, (AiRole)role, TaskType.ShooStrangersOutOfMyBuilding)
-                    || squad.Ai is { HomePublic: false }
-                    && population.GoalDuty(world, squad, (AiRole)role, TaskType.ShooStrangersOutOfMyBuildingIfPrivate)) ? 1 : 0;
-        }
-
-        if (ransack[role] < 0)
-            ransack[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.RunAroundTownLookingForPeople) ? 1 : 0;
-
-        if (stash[role] < 0)
-            stash[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.PutLootInStorage) ? 1 : 0;
-
-        if (home[role] < 0)
-            home[role] = squad.HomeBuilding is not null && population.GoalDuty(world, squad, (AiRole)role, TaskType.PickupIntruders) ? 1 : 0;
-
-        if (duties.Corpse[role] < 0)
-            duties.Corpse[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.DeadGuysGoInThePot) ? 1 : 0;
-
-        if (duties.FindCorpse[role] < 0)
-            duties.FindCorpse[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.FindADeadGuy) ? 1 : 0;
-    }
-
-    /// <summary>
-    /// The errands a member takes up where it stands, the first it finds: looting food, ditching stolen goods, lifting a home or town intruder,
-    /// confiscating from a cage, fetching food (a ditch first when the food does not fit).
-    /// </summary>
-    void LookErrands(World world, Squad squad, CharacterId member, int slot, CharacterCold cold, int role, in RoleDuties duties)
-    {
-        var table = world.Characters;
-        var intruders = duties.Intruders;
-        var food = duties.Food;
-        var confiscate = duties.Confiscate;
-        var loot = duties.Loot;
-        var stash = duties.Stash;
-        var home = duties.Home;
-        var at = table.Next[slot].Position;
-        var town = AiSystem.TownAt(data, world, at);
-
-        // 131 Looting food and 243 below search the blackboard's target town (Blackboard.Destination), else the current one, else the 3 x 3
-        // zone cells round the member (FUN_1408cb650).
-        var foodTown = squad.Ai is { Destination.IsNone: false } target ? target.Destination : town;
-
-        if (loot[role] == 1 && !HoldsFood(cold) && Store(world, at, foodTown, cold.Faction, asker: cold) is var (lootId, lootSpot))
-        {
-            cold.Engaged = true;
-            _duties.Add(new TownDuty
-            {
-                Member = member, Faction = cold.Faction, Town = town, Kind = TownDutyKind.LootFood, Target = lootId, Goal = lootSpot,
-            });
-            TaskStart.Walk(world, slot, lootSpot, SpeedMode.Walk, RowOf(TownDutyKind.LootFood), TaskSource.Goal);
-            return;
-        }
-
-        // 184 Ditching loot: stolen goods it carries, in whatever town it is in (the finder reads the current town only).
-        if (stash[role] == 1 && !town.IsNone && StashStore(world, squad, cold, at, town) is var (stashId, stashSpot))
-        {
-            cold.Engaged = true;
-            _duties.Add(new TownDuty
-            {
-                Member = member, Faction = cold.Faction, Town = town, Kind = TownDutyKind.Stash, Target = stashId, Goal = stashSpot,
-            });
-            TaskStart.Walk(world, slot, stashSpot, SpeedMode.Walk, RowOf(TownDutyKind.Stash), TaskSource.Goal);
-            return;
-        }
-
-        if (home[role] == 1 && _downed.Count > 0 && HomeIntruder(world, slot, cold, squad.HomeBuilding!) is >= 0 and var guest
-            && StartLift(world, slot, cold, guest, town, TownDutyKind.HomeLift))
-        {
-            return;
-        }
-
-        bool mine = !town.IsNone && MyTown(world, squad, town);
-
-        if (mine && intruders[role] == 1 && _downed.Count > 0 && Intruder(world, slot, cold, town) is >= 0 and var body
-            && StartLift(world, slot, cold, body, town, TownDutyKind.Lift))
-        {
-            return;
-        }
-
-        if (LiftsCorpse(world, slot, cold, duties.Corpse[role] == 1, duties.FindCorpse[role] == 1, town)) return;
-
-        if (mine && confiscate[role] == 1 && Contraband(world, town) is var (cage, prisoner) && cage is not null)
-        {
-            cold.Engaged = true;
-            var goal = Flat(cage.Position);
-            _duties.Add(new TownDuty
-            {
-                Member = member, Body = prisoner, Faction = cold.Faction, Town = town, Kind = TownDutyKind.Confiscate, Target = cage.Id, Goal = goal,
-            });
-            TaskStart.Walk(world, slot, goal, SpeedMode.Walk, RowOf(TownDutyKind.Confiscate), TaskSource.Goal);
-            return;
-        }
-
-        if (food[role] == 1) FetchFood(world, squad, member, slot, cold, at, town, foodTown);
-    }
-
-    /// <summary>
-    /// 244 Fetching food: from a store of the target or current town (a player-side member only its own faction's), when no sensed ally fights; a
-    /// ditch first when the food does not fit.
-    /// </summary>
-    void FetchFood(World world, Squad squad, CharacterId member, int slot, CharacterCold cold, Vector3 at, CampaignTown town, CampaignTown foodTown)
-    {
-        // 243 needs no own town (FUN_1408cb650); a player-side member takes only from its own faction's stores (FUN_1408dac20). 244 starts
-        // only with room for the item (state 82,
-        // FUN_14059bd80: the inventory, else the worn bag) and with no sensed ally fighting (state !12, AiSystem.AlliesFighting).
-        if (HoldsFood(cold)
-            || Store(world, at, foodTown, owner: cold.Faction == world.Player.Faction ? cold.Faction : -1, asker: cold) is not var (id, spot)
-            || world.SystemOf<AiSystem>()?.AlliesFighting(world, slot) == true)
-        {
-            return;
-        }
-
-        if (!FoodFits(world, id, cold))
-        {
-            // 244's B list asks state 82 (room); its provider is row 114 Ditching to make space, whose plan is 93 into the nearest
-            // storage (a2-039): the food run waits for the next look.
-            if (!town.IsNone && DitchStore(world, squad, cold, at, register: true) is var (ditchId, ditchSpot))
-                StartDitch(world, slot, cold, town, ditchId, ditchSpot);
-
-            return;
-        }
-
-        cold.Engaged = true;
-        _duties.Add(new TownDuty { Member = member, Faction = cold.Faction, Town = town, Kind = TownDutyKind.Food, Target = id, Goal = spot });
-        TaskStart.Walk(world, slot, spot, ErrandMode(world, cold), RowOf(TownDutyKind.Food), TaskSource.Goal);
-    }
-
-    /// <summary>
-    /// The goals for a body already on the shoulder, whoever lifted it (a victim who died on the way, an arrest's target, a carry a save restored,
-    /// which no errand is saved with): a free member takes up the first of its disposal goals that starts (<see cref="DisposeCarried"/>, with 106
-    /// weighed too, as no goal's plan holds this body); with none it keeps the body, but a body that goal 148 lifted is put down there and left to
-    /// that rescuer for a while (<see cref="CarrySystem.RefuseRescue"/>; engine choice, as the town duties' short put-down), so a rescuer that
-    /// finds no bed after the lift does not stand holding it.
-    /// </summary>
-    void LookCarriers(World world, int every)
-    {
-        var table = world.Characters;
-        foreach (int slot in _carriers)
-        {
-            if (!world.Turn(slot, every)) continue;
-            var id = table.IdOf(slot);
-            if (!FreeCarrier(table, slot) || Busy(id)) continue;
-            var cold = table.Cold(slot)!;
-            if (!table.TryResolveNext(cold.Carrying, out int b) || table.Cold(b) is not { Medical: not null } body || body.CarriedBy != id)
-                continue;
-
-            var at = table.Next[slot].Position;
-            var duty = new TownDuty { Member = id, Body = cold.Carrying, Faction = cold.Faction, Town = AiSystem.TownAt(data, world, at),
-                    Kind = TownDutyKind.Cage };
-            if (!DisposeCarried(world, duty, slot, b, bed: true))
-            {
-                if (carry.RescuedBy148(world, slot) && carry.BeginPutDown(world, slot, TaskSource.Goal)) carry.RefuseRescue(world, id, cold.Carrying);
-                continue;
-            }
-
-            cold.Engaged = true;
-            _duties.Add(duty);
-        }
-    }
-
-    /// <summary>
-    /// The goal chooser over a carried body's disposal goals (<c>FUN_140510ef0</c> with the scorer <c>FUN_14050df10</c>, <b>Verified</b>): the
-    /// candidates ranked by <see cref="RankDisposals"/>, the first that starts wins (the cage goals need a free cage). Without
-    /// <paramref name="cageable"/> the cage goals are left out. 106 is weighed only with <paramref name="bed"/>: for a carrier whose body no goal's
-    /// plan holds (<see cref="LookCarriers"/>). After an errand's own lift (273, 223, 138 / 137) the goal that lifted goes on with its plan, as the
-    /// original runs a goal's plan task by task and chooses again only when it ends (docs/game/ai-tasks.md "The plan's lifecycle", Verified), so a
-    /// corpse lifted for the disposal is not taken to a bed. False when none starts.
-    /// </summary>
-    bool DisposeCarried(World world, TownDuty d, int g, int b, bool cageable = true, bool bed = false)
-    {
-        var gc = world.Characters.Cold(g)!;
-        if (world.Squads.Find(gc.SquadId) is not { } squad || population.GoalsOf(world, squad, AiSystem.RoleOf(squad, d.Member, gc)) is not { } goals)
-            return false;
-
-        foreach (var goal in RankDisposals(world, g, b, goals, cageable, bed))
-        {
-            bool started = goal.Task.Type switch
-            {
-                TaskType.TakeIntruderOutsideTown => ThrowOutCarried(world, g, d),
-                TaskType.DeadGuysGoInThePot => DisposeOfCarried(world, g, d),
-                TaskType.FindBedAndPutIn => BedCarried(world, g, d),
-                _ => CageCarried(world, g, d),
-            };
-            if (started) return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// The role's disposal goals for the body in slot <paramref name="b"/> in the chooser's order, each in its hours with a score above 0: 137 Corpse
-    /// disposal for a dead body (list B 99) at <see cref="DisposalDesire"/>, 112 FIND_CAGE_AND_PUT_IN (a living body, its list B <c>!99</c>) and 281
-    /// FIND_CAGE_AND_PUT_DEADGUY_IN (any body) at <see cref="CageDesire"/> times the cage finder's factor (<c>FUN_1408d0d30</c>: 1.0,
-    /// <c>DAT_14167c308</c>, with a free cage, else 0; tested when the goal starts), 274 at <see cref="ThrowOutDesire"/> (no effect, so no finder
-    /// factor, <c>FUN_14060fd80</c>), with <paramref name="bed"/> 106 FIND_BED_AND_PUT_IN at <see cref="BedSystem.PutInDesire"/>
-    /// (<c>FUN_1405a0d50</c>: no death or power test, and its friendly test passes a body of the carrier's faction at once) times the bed search's
-    /// factor (its finder, <c>FUN_1408cfe00</c>: tested when the goal starts), each times its package weight. A higher
-    /// tier first (an urgent cage before 274), then the higher score; of equal scores the goal listed later (<see cref="AiSystem"/>'s rank).
-    /// </summary>
-    List<AiGoal> RankDisposals(World world, int g, int b, IReadOnlyList<AiGoal> goals, bool cageable, bool bed)
-    {
-        bool dead = world.Characters.Cold(b)!.Medical!.Dead;
-        float cage = cageable ? CageDesire(world, g, b) : 0;
-        float throwOut = ThrowOutDesire(world, g, b);
-        float? disposal = null, putIn = null;
-        int hour = world.Hour;
-        var ranked = new List<(AiGoal Goal, float Score)>();
-        for (int k = 0; k < goals.Count; k++)
-        {
-            var goal = goals[k];
-            float desire = goal.Task.Type switch
-            {
-                TaskType.FindCageAndPutDeadguyIn => cage,
-                TaskType.FindCageAndPutIn when !dead => cage,
-                TaskType.TakeIntruderOutsideTown => throwOut,
-                TaskType.DeadGuysGoInThePot when dead => disposal ??= DisposalDesire(world, g),
-                TaskType.FindBedAndPutIn when bed => putIn ??= Beds(world)?.PutInDesire(world, g) ?? 0,
-                _ => 0,
-            };
-            float score = desire * goal.Weight;
-            if (score <= 0 || !goal.InWindow(hour)) continue;
-
-            int at = ranked.Count;
-            while (at > 0 && RanksBefore(goal, score, ranked[at - 1])) at--;
-            ranked.Insert(at, (goal, score));
-        }
-
-        return ranked.ConvertAll(r => r.Goal);
-    }
-
-    /// <summary>
-    /// Whether a goal listed later ranks before an earlier candidate: a higher tier, or the same tier and a score at least as high.
-    /// </summary>
-    static bool RanksBefore(AiGoal goal, float score, (AiGoal Goal, float Score) earlier) =>
-        goal.Task.Priority > earlier.Goal.Task.Priority || goal.Task.Priority == earlier.Goal.Task.Priority && score >= earlier.Score;
-
-    /// <summary>
-    /// 112 / 281 for the carried body of errand <paramref name="d"/>: the member walks it to the best free cage of its town; false with none free.
-    /// </summary>
-    bool CageCarried(World world, int g, TownDuty d)
-    {
-        if (Cage(world, world.Characters.Next[g].Position, d) is not { } cage) return false;
-
-        (d.Kind, d.Target, d.Goal, d.Tries) = (TownDutyKind.Cage, cage.Id, Flat(cage.Position), 0);
-        WalkToCage(world, g, cage);
-        return true;
-    }
-
-    /// <summary>
-    /// 106 for the carried body of errand <paramref name="d"/>: the member walks it to the bed the bed search finds, where the bed system lays it in
-    /// (<see cref="BedSystem.PutIn"/>); false with no bed found.
-    /// </summary>
-    bool BedCarried(World world, int g, TownDuty d)
-    {
-        if (Beds(world)?.PutIn(world, g) is not { } bed) return false;
-
-        (d.Kind, d.Target, d.Goal, d.Tries) = (TownDutyKind.Bed, bed.Id, Flat(bed.Position), 0);
-        return true;
-    }
-
-    /// <summary>
-    /// A corpse lift (138 / 137) whose disposal was busy at the lift's end tries it again only on the member's look turn (<see cref="Look"/>'s
-    /// cadence); true while it waits for that turn.
-    /// </summary>
-    bool WaitingTurn(World world, TownDuty d, int g) => d.Tries > 0 && !world.Turn(g, world.Every(Settings.LookEveryTicks));
-
-    /// <summary>
-    /// 137's corpse lift whose disposal is only busy (each one in reach has its operator places held by other errands): the member keeps the body
-    /// under this errand and tries again on its look turn until a place frees; the original's 137 plan
-    /// holds its machine from the choice on, so a second carrier is not handed to another goal. False, and the errand ends, when the role lists no
-    /// 137 in the hour, or no disposal it can get to is there at all.
-    /// </summary>
-    bool WaitsForDisposal(World world, TownDuty d, int g)
-    {
-        if (!ListsInHour(world, g, d.Member, TaskType.DeadGuysGoInThePot)) return false;
-        var cold = world.Characters.Cold(g)!;
-        var at = world.Characters.Next[g].Position;
-        if (CorpseDisposal.Find(world, data, Disposals(world), g, at, m => cold.IsUnreachable(m.Id, world.Tick)) is null) return false;
-
-        d.Tries = 1;
-        return true;
-    }
-
-    /// <summary>
-    /// Whether the member's role list holds goal <paramref name="type"/> in this hour.
-    /// </summary>
-    bool ListsInHour(World world, int g, CharacterId member, TaskType type)
-    {
-        var gc = world.Characters.Cold(g)!;
-        if (world.Squads.Find(gc.SquadId) is not { } squad || population.GoalsOf(world, squad, AiSystem.RoleOf(squad, member, gc)) is not { } goals)
-            return false;
-
-        foreach (var goal in goals)
-            if (goal.Task.Type == type && goal.InWindow(world.Hour)) return true;
-        return false;
-    }
-
-    /// <summary>
-    /// The bed system, resolved on first use (null in a world without one).
-    /// </summary>
-    BedSystem? Beds(World world) => _beds ??= world.SystemOf<BedSystem>();
-
-    /// <summary>
-    /// 274 Throwing out for the carried body of errand <paramref name="d"/> (list B 47 IS_CARRYING_SOMETHING): the member walks it to its town's
-    /// exit point (<see cref="Outside"/>) and puts it down there. False when the carrier stands in no town (Meitou: the exit point is a town's).
-    /// </summary>
-    bool ThrowOutCarried(World world, int g, TownDuty d)
-    {
-        if (d.Town.IsNone) return false;
-
-        (d.Kind, d.Goal, d.Tries) = (TownDutyKind.Out, Outside(world, d.Town), 0);
-        TaskStart.Walk(world, g, d.Goal, CarryOutMode, RowOf(d.Kind), TaskSource.Goal);
-        return true;
-    }
-
-    /// <summary>
-    /// The desire of 224 and 274 (both rows' desire stub jumps to <c>FUN_1405a13a0</c>, <b>Verified</b> by decompile and disassembly): 0 unless the
-    /// carrier carries a resolvable character, 0 when it regards that one as friendly (vfunc <c>0x3f0</c>, <see cref="CarrySystem.Friendly"/>),
-    /// else <see cref="AliveDesire"/> (<c>DAT_141682ad0</c>, 2). No town, animal or death test.
-    /// </summary>
-    public float ThrowOutDesire(World world, int carrier, int body)
-    {
-        var table = world.Characters;
-        if (table.Cold(carrier) is not { } c || table.Cold(body) is not { } b || c.Carrying != table.IdOf(body)) return 0;
-
-        return carry.Friendly(c, b) ? 0 : AliveDesire;
-    }
-
-    /// <summary>
-    /// A member that already carries someone and may start the cage errand: awake, not fighting, fleeing or held, doing nothing but its routine.
-    /// </summary>
-    static bool FreeCarrier(CharacterTable table, int slot)
-    {
-        if (!table.Next[slot].Alive
-                || table.Next[slot].Task is not ((byte)CharacterTask.Idle or (byte)CharacterTask.Wander or (byte)CharacterTask.Follow
-                        or (byte)CharacterTask.GoTo))
-            return false;
-
-        return table.Cold(slot) is { IsPlayer: false, Fleeing: false, Engaged: false, InCombat: false, Medical.Incapacitated: false,
-                CarriedBy.IsNone: true } c && c.Fighter is not { IsAnimal: true } && !DecisionSystem.Ordered(c);
-    }
-
-    /// <summary>
-    /// A member that may start an errand: awake, not fighting, fleeing or held, able to carry, doing nothing but its routine.
-    /// </summary>
-    static bool Free(World world, int slot)
-    {
-        var table = world.Characters;
-        if (!table.Next[slot].Alive
-                || table.Next[slot].Task is not ((byte)CharacterTask.Idle or (byte)CharacterTask.Wander or (byte)CharacterTask.Follow
-                        or (byte)CharacterTask.GoTo))
-            return false;
-
-        return table.Cold(slot) is { IsPlayer: false, Fleeing: false, Engaged: false, InCombat: false } c
-                && CarrySystem.CanCarry(world, c, TaskType.PickupIntruders) && !HoldsHigherGoal(c) && !DecisionSystem.Ordered(c);
-    }
-
-    /// <summary>
-    /// A duty is a priority-2 goal: the goal chooser (<c>FUN_140510ef0</c>) tries player orders, jobs, urgent perma-jobs and the priority-3 goals
-    /// first (Observed), so a member whose AI holds an urgent goal does not take one. Engine stand-in: jobs and perma-jobs show as a task other than
-    /// idle, wander, follow or go-to, which <see cref="Free"/> already turns away.
-    /// </summary>
-    static bool HoldsHigherGoal(CharacterCold c) => c.Ai?.Goal?.Task.Priority is TaskPriority.Urgent or TaskPriority.Obedience;
 
     /// <summary>
     /// Whether <paramref name="id"/> runs an errand.
@@ -1263,20 +556,10 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// Whether <paramref name="member"/> gave up walking to <paramref name="body"/> and still leaves it alone (<see cref="_gaveUp"/>).
-    /// </summary>
-    bool GaveUp(CharacterId member, CharacterId body)
-    {
-        foreach (var r in _gaveUp)
-            if (r.Member == member && r.Body == body) return true;
-        return false;
-    }
-
-    /// <summary>
     /// <c>Ownerships::isMyTown</c> (<c>FUN_1406211e0</c>, <b>Verified</b> by decompile): the squad's home town, the town its occupation holds
     /// (<c>Ownerships +0x80</c>, which the occupation's start declares), or a town of its faction.
     /// </summary>
-    bool MyTown(World world, Squad squad, CampaignTown town)
+    internal bool MyTown(World world, Squad squad, CampaignTown town)
     {
         if (town.Site >= 0)
             return town.Site == squad.Town || town.Site < data.SiteFactions.Count && data.SiteFactions[town.Site] == squad.Faction;
@@ -1286,30 +569,31 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// Lifts the body in slot <paramref name="body"/> for an intruder errand of <paramref name="kind"/> (<see cref="TownDutyKind.Lift"/> or
-    /// <see cref="TownDutyKind.HomeLift"/>); false when the lift does not start.
+    /// The town test of 273's desire (AI slot 60 <c>FUN_140597f20</c>, <b>Verified</b> by decompile): in a current town (status <c>+0x88</c>) the
+    /// desire is 0 when the town is no Town (vfunc <c>0x268</c>, null for a TownBase), has no gates (<c>Town::hasGates</c>, <see cref="HasGates"/>),
+    /// or has its walls locked up (Town slot 96, <see cref="LockSystem.TownLockedUp"/>) and the member is of the player's faction; outside a town the
+    /// lift desire stands. The town builder (<c>FUN_140581770</c>, <b>Verified</b>) makes a TownBase only for a TOWN record of type 0 (a nest);
+    /// every other type, and every player town, is a Town.
     /// </summary>
-    bool StartLift(World world, int slot, CharacterCold cold, int body, CampaignTown town, TownDutyKind kind)
+    internal bool TownLets(World world, CharacterCold cold, CampaignTown town)
     {
-        var table = world.Characters;
-        var id = table.IdOf(body);
-        if (!carry.BeginPickUp(world, slot, id, CharacterTask.Idle, source: TaskSource.Goal, row: RowOf(kind)))
-            return false;
+        if (town.IsNone) return true;
+        if (town.Site >= 0 && data.Sites[town.Site].Town.Type == Data.Gameplay.TownType.Nest) return false;
+        if (!HasGates(world, town)) return false;
 
-        cold.Engaged = true;
-        _reserved.Add(id);
-        _duties.Add(new TownDuty { Member = table.IdOf(slot), Body = id, Faction = cold.Faction, Town = town, Kind = kind });
-        return true;
+        bool locked = town.Site >= 0 && LockSystem.TownLockedUp(world, data.Sites[town.Site]);
+        return !(locked && cold.Faction == world.Player.Faction);
     }
 
     /// <summary>
     /// 223's finder (<c>FUN_14099c110</c>, docs/game/ai-tasks.md): the nearest knocked-out character the member senses
     /// (<see cref="CharacterFacts.Perceives"/>) within its sight inside the squad's home building, not carried, caged or in a bed (special state
-    /// 0), not one another errand lifts or carries or the member gave up on (<see cref="GaveUp"/>), and not one the member regards as friendly (the
+    /// 0), not one another errand lifts or carries, and not one the member regards as friendly (the
     /// sensed filter leaves out SENSE_ALLY; a dead one is tagged dead alone and fails it too). -1: none.
     /// </summary>
-    int HomeIntruder(World world, int slot, CharacterCold cold, Meitou.Data.World.TownBuilding home)
+    internal int HomeIntruder(World world, int slot, CharacterCold cold, Meitou.Data.World.TownBuilding home)
     {
+        EnsureCounted(world);
         var table = world.Characters;
         var at = Flat(table.Next[slot].Position);
         float range = AggroSystem.RangeOf(cold, Settings.Sight), best2 = range * range;
@@ -1319,7 +603,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             var body = table.Cold(v)!;
             if (v == slot || body.InSomething != HeldState.None || _reserved.Contains(table.IdOf(v))) continue;
             if (world.Sight.BuildingOf(v) != home.Key || carry.Friendly(cold, body)) continue;
-            if (!CharacterFacts.Perceives(world, slot, v) || GaveUp(table.IdOf(slot), table.IdOf(v))) continue;
+            if (!CharacterFacts.Perceives(world, slot, v)) continue;
 
             float d2 = Vector2.DistanceSquared(at, Flat(table.Next[v].Position));
             if (d2 <= best2) (best, best2) = (v, d2);
@@ -1329,12 +613,15 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// The nearest downed intruder the member senses (<see cref="CharacterFacts.Perceives"/>, 273's finder walks the sensed list) within its sight
-    /// in its town's built-up area, not one it gave up on (<see cref="GaveUp"/>); -1: none. Meitou: one in a bed is left alone (the original skips
-    /// only the caged, so guards threw patients out of rented beds, issue 751).
+    /// 273's finder (<c>FUN_14099c250</c>, <b>Verified</b> by decompile): the nearest downed intruder the member senses
+    /// (<see cref="CharacterFacts.Perceives"/>, the finder walks the sensed list) within its sight in its town inside the walls
+    /// (<see cref="InsideWalls"/>), not carried or caged, not of its faction or an ally (an engine reading of the sensed-list classes); -1: none.
+    /// Meitou: one in a bed is left alone (the original skips only the caged, so guards threw patients
+    /// out of rented beds, issue 751).
     /// </summary>
-    int Intruder(World world, int slot, CharacterCold cold, CampaignTown town)
+    internal int Intruder(World world, int slot, CharacterCold cold, CampaignTown town)
     {
+        EnsureCounted(world);
         var table = world.Characters;
         var next = table.Next;
         var at = Flat(next[slot].Position);
@@ -1345,7 +632,6 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             var body = table.Cold(v)!;
             if (v == slot || body.InSomething == HeldState.Bed || _reserved.Contains(table.IdOf(v))) continue;
             if (carry.Friendly(cold, body) || !CharacterFacts.Perceives(world, slot, v)) continue;
-            if (GaveUp(table.IdOf(slot), table.IdOf(v))) continue;
 
             var p = next[v].Position;
             float d2 = Vector2.DistanceSquared(at, Flat(p));
@@ -1354,6 +640,362 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         }
 
         return best;
+    }
+
+    /// <summary>
+    /// 138's finder (<see cref="CorpseDisposal.FindCorpse"/>): a corpse among the member's town candidates within its sight, not one an errand, a
+    /// refusal or a carrier holds; -1: none.
+    /// </summary>
+    internal int Corpse(World world, int slot, CharacterCold cold)
+    {
+        EnsureCounted(world);
+        var at = world.Characters.Next[slot].Position;
+        var inReach = world.Fixtures.TownCandidates(world, data, cold, at);
+        float sight = AggroSystem.RangeOf(cold, Settings.Sight);
+        var body = CorpseDisposal.FindCorpse(world, slot, f => inReach(f.Position), sight, _reserved.Contains);
+        return body.IsNone ? -1 : body.Slot;
+    }
+
+    /// <summary>
+    /// 243's pick: its desire (<see cref="NpcFoodDesire"/>), the nearest store with food of the target or current town (<see cref="FoodStore"/>),
+    /// room for the item the take moves (state 82, <see cref="FoodRoom"/>) and a sensed ally fighting (state 12, <see cref="AiSystem.AlliesFighting"/>);
+    /// null when it wants no food or finds no store.
+    /// </summary>
+    internal (string Id, Vector2 Spot, float Want, bool Room, bool Fighting)? FoodPick(World world, int slot, CharacterCold cold, Vector3 at,
+        CampaignTown foodTown)
+    {
+        float want = NpcFoodDesire(world, slot, cold, at);
+        if (want <= 0 || FoodStore(world, cold, at, foodTown) is not var (id, spot)) return null;
+
+        bool fighting = world.SystemOf<AiSystem>()?.AlliesFighting(world, slot) == true;
+        return (id, spot, want, FoodRoom(world, id, cold), fighting);
+    }
+
+    /// <summary>
+    /// 243's store (<see cref="Store"/>): for a player-faction character only its faction's stores, raw food counting for an animal (engine reading
+    /// of the finder's owner and animal tests, #762), else any store with food.
+    /// </summary>
+    (string Id, Vector2 Spot)? FoodStore(World world, CharacterCold cold, Vector3 at, CampaignTown town)
+    {
+        if (!PlayerFaction(world, cold)) return Store(world, at, town, asker: cold);
+
+        bool animal = cold.Medical is { HasStatsObject: false };
+        return Store(world, at, town, owner: cold.Faction, animal: animal, race: cold.Race, asker: cold);
+    }
+
+    /// <summary>
+    /// State 82 for 243's take: room for one unit of the item the take moves; a player-faction character's read on the take's own pick
+    /// (<see cref="TakeFits"/>), anyone else's on <see cref="FoodFits"/>.
+    /// </summary>
+    bool FoodRoom(World world, string storeId, CharacterCold cold) =>
+        PlayerFaction(world, cold) ? TakeFits(world, storeId, cold) : FoodFits(world, storeId, cold);
+
+    /// <summary>
+    /// Whether the character is of the player's faction (or a player character).
+    /// </summary>
+    static bool PlayerFaction(World world, CharacterCold cold) => cold.IsPlayer || world.Player.Faction >= 0 && cold.Faction == world.Player.Faction;
+
+    /// <summary>
+    /// 131's pick: the nearest store with food of the target or current town not of the looter's faction (<see cref="Store"/>), and room for a
+    /// unit of its first record (state 82, the take's pick, <see cref="LootFirstFood"/>); null with none.
+    /// </summary>
+    internal (string Id, Vector2 Spot, float Want, bool Room, bool Fighting)? LootPick(World world, CharacterCold cold, Vector3 at,
+        CampaignTown foodTown)
+    {
+        if (Store(world, at, foodTown, looter: cold.Faction, asker: cold) is not var (id, spot)) return null;
+
+        bool room = StoreInventory(world, id)?.Items.FirstOrDefault() is { } first && cold.Inventory?.HasRoomFor(first) == true;
+        return (id, spot, 1, room, false);
+    }
+
+    /// <summary>
+    /// 243's desire (AI slots 26, 24, 25, <b>Verified</b>, docs/game/character-stats.md "Food from storage"): 0 for an animal while Feed Animals is
+    /// off, outside a town, and in a town neither of its faction nor the player's faction's nor one where the player lives; in a town with occupiers
+    /// while it senses an enemy 0.2 inside the walls whatever its hunger, 0 outside them when the town has gates; else slot 25
+    /// (<see cref="FeedSystem.EatDesire"/>).
+    /// </summary>
+    float NpcFoodDesire(World world, int slot, CharacterCold c, Vector3 at)
+    {
+        if (c is not { Medical: { Dead: false } med }) return 0;
+        if (!med.HasStatsObject && (world.Player.SquadAi & SquadAi.Feed) == 0) return 0;
+
+        var town = AiSystem.TownAt(data, world, at);
+        if (town.IsNone) return 0;
+
+        int owner = town.Owner(world, data), player = world.Player.Faction;
+        if (owner != c.Faction && owner != player && !world.Fixtures.OwnsPropertyIn(town.Site, player)) return 0;
+
+        if (AiSystem.Occupied(world, town) && SensesEnemy(world, slot, c))
+        {
+            if (InsideWalls(world, town, at)) return 0.2f;
+            if (HasGates(world, town)) return 0;
+        }
+
+        return FeedSystem.EatDesire(world, slot, c);
+    }
+
+    #endregion
+
+    #region Goal act-outs
+
+    /// <summary>
+    /// The errand of <paramref name="member"/>'s goal <paramref name="goal"/>, or null (the think reads it: only serial steps change the errands).
+    /// </summary>
+    internal TownDuty? ActOf(CharacterId member, TaskType goal)
+    {
+        foreach (var d in _duties)
+            if (d.Member == member && d.Chosen == goal) return d;
+        return null;
+    }
+
+    /// <summary>
+    /// The first finder's target the plan carries (null: none).
+    /// </summary>
+    static PlanTarget? PlanTargetOf(IReadOnlyList<PlanStep> plan)
+    {
+        foreach (var step in plan)
+            if (step.Target.Kind == PlanTarget.Found) return step.Target;
+        return null;
+    }
+
+    /// <summary>
+    /// The town the member in <paramref name="slot"/> stands in.
+    /// </summary>
+    CampaignTown TownOf(World world, int slot) => AiSystem.TownAt(data, world, world.Characters.Next[slot].Position);
+
+    /// <summary>
+    /// 273, 223 and 138's act-out (and 137's while it carries no corpse): the lift of the plan's body as a goal's task on the goal's row; false when
+    /// the body is carried or caged already, another member's lift has reached it, or the lift does not start (<see cref="CarrySystem.BeginPickUp"/>).
+    /// </summary>
+    internal bool StartLift(World world, in DutyAsk ask, IReadOnlyList<PlanStep> plan, TownDutyKind kind)
+    {
+        var table = world.Characters;
+        if (PlanTargetOf(plan) is not { Character: { } body } target || !table.TryResolveNext(body, out int b)) return false;
+        if (table.Cold(b) is not { CarriedBy.IsNone: true, IsImprisoned: false } || LiftStarted(table, body)) return false;
+
+        var cold = table.Cold(ask.Slot)!;
+        if (!CarrySystem.CanCarry(world, cold, TaskType.PickupIntruders)) return false;
+        if (!carry.BeginPickUp(world, ask.Slot, body, CharacterTask.Idle, source: TaskSource.Goal, row: ask.Type)) return false;
+
+        _duties.Add(new TownDuty
+        {
+            Member = ask.Id, Body = body, Faction = cold.Faction, Town = TownOf(world, ask.Slot), Kind = kind, Chosen = ask.Type, Planned = target,
+        });
+        return true;
+    }
+
+    /// <summary>
+    /// Whether another member's lift of <paramref name="body"/> is past its walk (its clip started).
+    /// </summary>
+    bool LiftStarted(CharacterTable table, CharacterId body)
+    {
+        foreach (var d in _duties)
+            if (d.Body == body && d.Kind is TownDutyKind.Lift or TownDutyKind.HomeLift or TownDutyKind.CorpseLift && !WalksToIntruder(table, d))
+                return true;
+        return false;
+    }
+
+    /// <summary>
+    /// 137's act-out: a carrier of a corpse walks it onto the floor of the disposal at the plan's place (the one its finder found,
+    /// <paramref name="picked"/>); one carrying none lifts the plan's corpse (<see cref="StartLift"/>; the plan ends with the lift). False when the
+    /// disposal is no longer the plan's or its operator places are taken.
+    /// </summary>
+    internal bool StartDisposal(World world, in DutyAsk ask, IReadOnlyList<PlanStep> plan, CorpseMachine? picked)
+    {
+        var cold = world.Characters.Cold(ask.Slot)!;
+        if (cold.Carrying.IsNone) return StartLift(world, ask, plan, TownDutyKind.CorpseLift);
+        if (PlanTargetOf(plan) is not { } target || picked is not { } machine || Flat(machine.Position) != Flat(target.Position)) return false;
+        if (Operators(world, machine, null) >= MaxOperators(world, machine)) return false;
+
+        _duties.Add(new TownDuty
+        {
+            Member = ask.Id, Body = cold.Carrying, Faction = cold.Faction, Town = TownOf(world, ask.Slot), Kind = TownDutyKind.Corpse,
+            Target = machine.Id, Machine = machine, Goal = Flat(machine.Position), Chosen = ask.Type, Planned = target,
+        });
+        WalkToDisposal(world, ask.Slot, machine, ask.Type);
+        return true;
+    }
+
+    /// <summary>
+    /// 112 / 281's act-out: the carrier walks its body onto the floor of the plan's cage (<see cref="WalkToCage"/>); false when the cage is gone,
+    /// taken, or another errand's.
+    /// </summary>
+    internal bool StartCage(World world, in DutyAsk ask, IReadOnlyList<PlanStep> plan)
+    {
+        var table = world.Characters;
+        var cold = table.Cold(ask.Slot)!;
+        if (cold.Carrying.IsNone || PlanTargetOf(plan) is not { Fixture: { } id } target || world.Fixtures.Find(id) is not { } cage) return false;
+        if (!FixtureRegistry.IsFree(table, cage) || CageTaken(world, cage.Id, ask.Id, cold.SquadId)) return false;
+        if (Arrests?.CageReserved(world, cage.Id, cold.SquadId) == true) return false;
+
+        _duties.Add(new TownDuty
+        {
+            Member = ask.Id, Body = cold.Carrying, Faction = cold.Faction, Town = TownOf(world, ask.Slot), Kind = TownDutyKind.Cage, Target = cage.Id,
+            Goal = Flat(cage.Position), Chosen = ask.Type, Planned = target,
+        });
+        WalkToCage(world, ask.Slot, cage, ask.Type);
+        return true;
+    }
+
+    /// <summary>
+    /// Whether an errand of another member of <paramref name="squad"/> than <paramref name="member"/> takes a body to the cage <paramref name="cage"/>
+    /// (an arrest order's cage finder skips it too): the squad's work count <c>FUN_1402690e0</c>, which reads only the asker's own platoon
+    /// blackboard (<b>Verified</b>).
+    /// </summary>
+    internal bool CageTaken(World world, string cage, CharacterId member, int squad)
+    {
+        foreach (var d in _duties)
+            if (d.Member != member && d.Target == cage && Crime.ArrestSystem.InSquad(world, d.Member, squad)) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// 224 and 274's act-out (<c>Task_TakeIntruderOutside</c>, <b>Verified</b>, slots 2 / 5 / 7 <c>FUN_1403355e0</c> / <c>FUN_14033da80</c> /
+    /// <c>FUN_1403356e0</c>): 224 walks the body past its home's first door (<see cref="HomeDoor"/>), 274 to its town's point outside the gates
+    /// (<see cref="Outside"/>, the same for every carrier), at <see cref="CarryOutMode"/>; false with no such point (no home, no town).
+    /// </summary>
+    internal bool StartCarryOut(World world, in DutyAsk ask)
+    {
+        var cold = world.Characters.Cold(ask.Slot)!;
+        if (cold.Carrying.IsNone) return false;
+
+        var town = TownOf(world, ask.Slot);
+        bool home = ask.Type == TaskType.TakeIntruderOutside;
+        Vector2? goal = home ? HomeDoor(world, cold, town) : town.IsNone ? null : Outside(world, town);
+        if (goal is not { } spot) return false;
+
+        _duties.Add(new TownDuty
+        {
+            Member = ask.Id, Body = cold.Carrying, Faction = cold.Faction, Town = town, Kind = home ? TownDutyKind.HomeOut : TownDutyKind.Out,
+            Goal = spot, Chosen = ask.Type,
+        });
+        TaskStart.Walk(world, ask.Slot, spot, CarryOutMode, ask.Type, TaskSource.Goal);
+        return true;
+    }
+
+    /// <summary>
+    /// Where 224 takes the body: the point past the home's first door (<see cref="AiSystem.LeavePoint"/>, <c>FUN_140296a40</c>); a home with no door
+    /// has its town's exit point (<see cref="Outside"/>, <b>Verified</b> <c>FUN_140335480</c>). Null without a home, or with neither door nor town.
+    /// </summary>
+    Vector2? HomeDoor(World world, CharacterCold cold, CampaignTown town)
+    {
+        if (world.Squads.Find(cold.SquadId)?.HomeBuilding is not { } home) return null;
+        if (AiSystem.LeavePoint(world, home) is { } door) return door;
+
+        return town.IsNone ? null : Outside(world, town);
+    }
+
+    /// <summary>
+    /// 106's act-out: the bed system walks the carrier to the bed its search finds and lays the body in (<see cref="BedSystem.PutIn"/>, row 106, a
+    /// goal's task); false with no bed.
+    /// </summary>
+    internal bool StartBed(World world, in DutyAsk ask, IReadOnlyList<PlanStep> plan)
+    {
+        var cold = world.Characters.Cold(ask.Slot)!;
+        if (cold.Carrying.IsNone || Beds(world)?.PutIn(world, ask.Slot) is not { } bed) return false;
+
+        _duties.Add(new TownDuty
+        {
+            Member = ask.Id, Body = cold.Carrying, Faction = cold.Faction, Town = TownOf(world, ask.Slot), Kind = TownDutyKind.Bed, Target = bed.Id,
+            Goal = Flat(bed.Position), Chosen = ask.Type, Planned = PlanTarget.OfFixture(bed.Id, bed.Position),
+        });
+        return true;
+    }
+
+    /// <summary>
+    /// 243, 131 and 184's act-out: the walk to the plan's store (<paramref name="picked"/>, the one the finder found there), a food run at
+    /// <see cref="ErrandMode"/>, a loot or stash run at a walk; false when the store is no longer the plan's.
+    /// </summary>
+    internal bool StartStoreRun(World world, in DutyAsk ask, IReadOnlyList<PlanStep> plan, TownDutyKind kind, (string Id, Vector3 At)? picked)
+    {
+        if (PlanTargetOf(plan) is not { } target || picked is not var (store, at) || Flat(at) != Flat(target.Position)) return false;
+
+        var cold = world.Characters.Cold(ask.Slot)!;
+        var spot = Flat(at);
+        _duties.Add(new TownDuty
+        {
+            Member = ask.Id, Faction = cold.Faction, Town = TownOf(world, ask.Slot), Kind = kind, Target = store, Goal = spot, Chosen = ask.Type,
+            Planned = target,
+        });
+        byte mode = kind == TownDutyKind.Food ? ErrandMode(world, cold) : SpeedMode.Walk;
+        WalkToStore(world, ask.Slot, store, spot, mode, ask.Type);
+        return true;
+    }
+
+    /// <summary>
+    /// 212's act-out: the walk to the cage of the plan's prisoner; false when it is no longer caged there or another errand works it.
+    /// </summary>
+    internal bool StartConfiscate(World world, in DutyAsk ask, IReadOnlyList<PlanStep> plan)
+    {
+        var table = world.Characters;
+        if (PlanTargetOf(plan) is not { Character: { } prisoner } target || !table.TryResolveNext(prisoner, out int p) || HasDutyOn(prisoner))
+            return false;
+        if (table.Cold(p)?.InWhat is not { } cageId || world.Fixtures.Find(cageId) is not { Kind: FixtureKind.Cage } cage || cage.Occupant != prisoner)
+            return false;
+
+        var goal = Flat(cage.Position);
+        _duties.Add(new TownDuty
+        {
+            Member = ask.Id, Body = prisoner, Faction = table.Cold(ask.Slot)!.Faction, Town = TownOf(world, ask.Slot), Kind = TownDutyKind.Confiscate,
+            Target = cage.Id, Goal = goal, Chosen = ask.Type, Planned = target,
+        });
+        TaskStart.Walk(world, ask.Slot, cage.Position, SpeedMode.Walk, ask.Type, TaskSource.Goal);   // onto its floor, as WalkToCage
+        return true;
+    }
+
+    /// <summary>
+    /// 158 / 283's act-out: the shoo of the plan's stranger (<see cref="StepShoo"/> walks at it); false when it is gone or another errand shoos it.
+    /// </summary>
+    internal bool StartShoo(World world, in DutyAsk ask, IReadOnlyList<PlanStep> plan)
+    {
+        if (PlanTargetOf(plan) is not { Character: { } stranger } target || !world.Characters.IsAlive(stranger) || HasDutyOn(stranger)) return false;
+
+        _duties.Add(new TownDuty
+        {
+            Member = ask.Id, Body = stranger, Faction = world.Characters.Cold(ask.Slot)!.Faction, Town = TownOf(world, ask.Slot),
+            Kind = TownDutyKind.Shoo, Since = world.GameHours, Chosen = ask.Type, Planned = target,
+        });
+        return true;
+    }
+
+    /// <summary>
+    /// 216's act-out (156 into the drawn building): the run to the plan's building, its door bashed first when its way in needs it
+    /// (<see cref="LockSystem.BashForErrand"/>); false when the building is no longer the plan's.
+    /// </summary>
+    internal bool StartRansack(World world, in DutyAsk ask, IReadOnlyList<PlanStep> plan, (string Key, string? Door, Vector3 At)? picked)
+    {
+        if (PlanTargetOf(plan) is not { } target || picked is not var (key, door, at) || Flat(at) != Flat(target.Position)) return false;
+
+        var cold = world.Characters.Cold(ask.Slot)!;
+        _locks ??= world.Systems.OfType<LockSystem>().FirstOrDefault();
+        if (door is not null) _locks?.BashForErrand(cold, door);
+
+        var goal = Flat(at);
+        _duties.Add(new TownDuty
+        {
+            Member = ask.Id, Faction = cold.Faction, Town = AiSystem.TownAt(data, world, at), Kind = TownDutyKind.Ransack, Target = key, Goal = goal,
+            Chosen = ask.Type, Planned = target,
+        });
+        TaskStart.Walk(world, ask.Slot, goal, SpeedMode.Run, ask.Type, TaskSource.Goal);
+        return true;
+    }
+
+    /// <summary>
+    /// A town goal ended (serial, <see cref="IDutyGoal.End"/>): its errand goes. Every end, an order's too, leaves a carried body on the shoulder:
+    /// the carry link persists whatever happens to the task, and only a put-down task, an unlink or a knock-out release it (docs/game/carry-loot.md
+    /// "Lift and put-down timing", <b>Verified</b>). A ransacker's door bash stops.
+    /// </summary>
+    internal void EndGoal(World world, int slot, CharacterId id, DutyEnd why)
+    {
+        int k = _duties.FindIndex(d => d.Member == id && d.Chosen != TaskType.None);
+        if (k < 0) return;
+
+        var d = _duties[k];
+        _duties.RemoveAt(k);
+        if (why == DutyEnd.Gone || world.Characters.Cold(slot) is not { } cold) return;
+
+        if (d.Kind == TownDutyKind.Ransack && cold.BashErrand && !cold.BashOrdered && cold.DoorWay is null)
+            (cold.Bashing, cold.BashErrand, cold.BashTime) = (null, false, 0);
     }
 
     #endregion
@@ -1395,7 +1037,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// <summary>
     /// <c>Town::hasGates</c> (<see cref="TownExit.HasGates"/>).
     /// </summary>
-    bool HasGates(World world, CampaignTown town) => TownExit.HasGates(world, data, town, _gateFunctions);
+    bool HasGates(World world, CampaignTown town) => TownExit.HasGates(world, data, town);
 
     /// <summary>
     /// The intruder finder's stand-in for <c>amInsideTownWalls</c> where the gate codes are unknown (<b>engine reading</b>): a placed town's radius,
@@ -1443,17 +1085,18 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     readonly Dictionary<string, (bool Storage, Data.Fcs.FcsRecordType Type, string[] Limit)> _storageRecords = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// Whether the character carries something edible.
+    /// State 149 gotAFoodItem (<c>FUN_140597e20</c>): a limb in the mouth, or something edible among its items or in its worn bag.
     /// </summary>
-    static bool HoldsFood(CharacterCold cold) =>
-        cold.Inventory is { } inv && (inv.Items.Any(i => i.IsFood) || inv.Backpack?.Contents is { } bag && bag.Items.Any(i => i.IsFood));
+    internal static bool HoldsFood(CharacterCold cold) =>
+        cold.Mouth is not null
+        || cold.Inventory is { } inv && (inv.Items.Any(i => i.IsFood) || inv.Backpack?.Contents is { } bag && bag.Items.Any(i => i.IsFood));
 
     /// <summary>
     /// The nearest store of the town with food in it (<c>BuildingFinder_LootFoodAndStuff</c>, its filter only partly read: buildings with an
-    /// inventory holding food): a complete player storage of the town (for a player-side run also one in a placed town's bought house), or a
-    /// container that is not locked inside the town. Its id and where the
-    /// member walks. With <paramref name="owner"/> (a player-side run) only stores of that faction; for an <paramref name="animal"/> raw food counts
-    /// too and a store inside another building is skipped (the finder's animal tests).
+    /// inventory holding food): a complete player storage of the town (for a player-faction character's 243 also one in a placed town's bought
+    /// house), or a container that is not locked inside the town. Its id and where the member walks. With <paramref name="owner"/> (a player-faction
+    /// character's 243) only stores of that faction; for an <paramref name="animal"/> raw food counts too and a store inside another building is
+    /// skipped (the finder's animal tests).
     /// </summary>
     (string Id, Vector2 Spot)? Store(World world, Vector3 at, CampaignTown town, int looter = -1, int owner = -1, bool animal = false,
             RaceData? race = null, CharacterCold? asker = null)
@@ -1461,7 +1104,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         var here = Flat(at);
         (string, Vector2)? best = null;
         float bestD = float.MaxValue;
-        // A player-side run also takes the player's storages in a placed town, standing in a house the player owns there (#762).
+        // A player-faction character's 243 also takes the player's storages in a placed town, standing in a house the player owns there (#762).
         if (town.PlayerTown > 0 || town.IsNone || owner >= 0)
         {
             foreach (var m in world.Machines.All)
@@ -1588,7 +1231,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// free cell). Same test as <see cref="Production.ProductionSystem.Stores"/> for a machine; a building shop's stock containers hold its goods, so
     /// what goes into one is for sale.
     /// </summary>
-    bool Takes(Fixture f, ItemInstance item)
+    internal bool Takes(Fixture f, ItemInstance item)
     {
         if (!Accepts(f, item)) return false;
 
@@ -1612,7 +1255,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// town's (the nearest-allies finder's building test, <c>FUN_1408ca5d0</c> with <c>FUN_140621230</c>, <b>Observed</b>: a storage has an
     /// inventory, so only those two owners pass).
     /// </summary>
-    (string Id, Vector2 Spot)? StashStore(World world, Squad squad, CharacterCold cold, Vector3 at, CampaignTown town)
+    internal (string Id, Vector2 Spot)? StashStore(World world, Squad squad, CharacterCold cold, Vector3 at, CampaignTown town)
             => StoreFor(world, squad, cold, at, town, [.. LootOf(world, cold)], register: true);
 
     /// <summary>
@@ -1661,9 +1304,28 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     #region Errands
 
     /// <summary>
-    /// The cage walk's row is also the kidnapper's (KidnapSystem), whose walk is started again over a fight: left out.
+    /// The row the errand no goal holds walks on (<see cref="TaskStart.Walk(World, int, Vector2, byte, TaskType, TaskSource)"/>): 114's, for the ditch
+    /// of its plan's step. A fight may interrupt its walk; the errand waits for the fight's end and walks on (<see cref="Ai.AiSystem"/>'s pre-emption).
     /// </summary>
-    static readonly HashSet<TaskType> ErrandRows = [.. Enum.GetValues<TownDutyKind>().Where(k => k != TownDutyKind.Cage).Select(RowOf)];
+    const TaskType DitchRow = TaskType.GetRidOfResourcesInMyInventory;
+
+    /// <summary>
+    /// Whether the character walks its ditch errand now (its plan's ditch step, <see cref="StartRequestedDitches"/>): the AI waits for it.
+    /// </summary>
+    internal static bool Ditches(in CharacterHot n, CharacterCold cold) =>
+        n.Task == (byte)CharacterTask.GoTo && cold.Running is { Source: TaskSource.Goal } run && run.Row == DitchRow;
+
+    /// <summary>
+    /// The row a fetch's walk to its storage acts out: 92 Collecting resource, the plan's step.
+    /// </summary>
+    const TaskType FetchRow = TaskType.CollectOutputResource;
+
+    /// <summary>
+    /// Whether the character runs its fetch errand's task now (<see cref="StartRequestedFetches"/>): the walk to a storage, or a loose item's pick-up
+    /// (row 3, while <see cref="CharacterCold.PickingUpItem"/> is set). The AI waits for it.
+    /// </summary>
+    internal static bool Fetches(in CharacterHot n, CharacterCold cold) => cold.Running is { Source: TaskSource.Goal } run
+        && (run.Row == FetchRow && n.Task == (byte)CharacterTask.GoTo || run.Row == TaskType.Pickup && cold.PickingUpItem is not null);
 
     /// <summary>
     /// The mode 224 and 274 carry a body out in: their start sets the mover of a character of no player faction to walk (<c>FUN_1403355e0</c>,
@@ -1672,125 +1334,111 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     const byte CarryOutMode = SpeedMode.Walk;
 
     /// <summary>
-    /// Whether a walk's row is an errand's (<see cref="RowOf"/>, not the cage walk's, which the kidnapper's shares): a fight may interrupt it, the
-    /// errand waits for the fight's end and walks on (<see cref="Ai.AiSystem"/>'s pre-emption).
+    /// Whether a walk's row is the errand's that no goal holds (<see cref="DitchRow"/>): a fight may interrupt it.
     /// </summary>
-    internal static bool IsErrandRow(TaskType row) => ErrandRows.Contains(row);
+    internal static bool IsErrandRow(TaskType row) => row == DitchRow;
 
     /// <summary>
-    /// The row an errand's walks act out (<see cref="TaskStart.Walk(World, int, Vector2, byte, TaskType, TaskSource)"/>): the goal of the package it
-    /// stands in for.
+    /// The row an errand's walks act out: its goal's (the goal's row is its act-out's, <see cref="TaskSource.Goal"/>), else the ditch's.
     /// </summary>
-    static TaskType RowOf(TownDutyKind kind) => kind switch
-    {
-        TownDutyKind.Lift => TaskType.PickupIntrudersTown,
-        TownDutyKind.Out => TaskType.TakeIntruderOutsideTown,
-        TownDutyKind.Cage => TaskType.FindCageAndPutIn,
-        TownDutyKind.Food => TaskType.AquireFoodAtHomebase,
-        TownDutyKind.Confiscate => TaskType.LootStolenGoods,
-        TownDutyKind.LootFood => TaskType.LootFoodAndStuff,
-        TownDutyKind.Shoo => TaskType.ShooStrangersOutOfMyBuilding,
-        TownDutyKind.Ransack => TaskType.RunAroundTownLookingForPeople,
-        TownDutyKind.Ditch => TaskType.GetRidOfResourcesInMyInventory,
-        TownDutyKind.HomeLift => TaskType.PickupIntruders,
-        TownDutyKind.HomeOut => TaskType.TakeIntruderOutside,
-        TownDutyKind.CorpseLift => TaskType.FindADeadGuy,
-        TownDutyKind.Corpse => TaskType.DeadGuysGoInThePot,
-        TownDutyKind.Bed => TaskType.FindBedAndPutIn,
-        _ => TaskType.PutLootInStorage,
-    };
+    static TaskType RowFor(TownDuty d) => d.Chosen != TaskType.None ? d.Chosen : DitchRow;
 
     /// <summary>
-    /// One tick of an errand; false when it is over.
+    /// One tick of an errand; false when it is over. A goal's act-out goes on only while its goal holds the member (<see cref="DutyGoals.Runs"/>):
+    /// a fight, an order on its body, an order or another goal ends the goal, whose end drops the errand (<see cref="EndGoal"/>). A ditch goes on only
+    /// while its plan's step runs (<see cref="AiSystem.RunsDitchStep"/>): another goal the AI chose ends it.
     /// </summary>
     bool Step(World world, TownDuty d)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(d.Member, out int g) || table.Cold(g) is not { Medical.Incapacitated: false } gc)
             return End(world, d);
-        // A fight (a reaction, or what a shoo's dialogue turned into) beats the errand: its walks would end it (a new task drops the fight task), so
-        // it waits for the fight to be over. a player character's food run is a goal its fight replaced: the decision step chooses again
-        if (gc.InCombat) return d.PlayerSide && gc.IsPlayer ? End(world, d) : true;
 
-        // A stumble or a get-up (an order on the body, which lets no duty go) holds the member a moment: the errand waits for it, its walk not counted.
-        if (PlayerOrders.BodyHolds(gc)) return true;
-        ref var gn = ref table.Next[g];
+        if (d.Chosen != TaskType.None)
+        {
+            if (_goalDuties?.Runs(world, g, d.Chosen) != true) return true;
+        }
+        else if (d.Kind == TownDutyKind.Ditch && !AiSystem.RunsDitchStep(gc))
+            return End(world, d);
+        else if (d.Kind == TownDutyKind.Fetch && !AiSystem.RunsFetchStep(gc))
+            return End(world, d);
+        else if (ErrandWaits(gc) is { } waits)
+            return waits || End(world, d);
+
+        if (d.Kind == TownDutyKind.Fetch) return StepFetch(world, d, g, gc);
         if (d.Kind is TownDutyKind.Food or TownDutyKind.LootFood) return StepFood(world, d, g, gc);
         if (d.Kind is TownDutyKind.Stash or TownDutyKind.Ditch) return StepStash(world, d, g, gc);
         if (d.Kind == TownDutyKind.Confiscate) return StepConfiscate(world, d, g, gc);
         if (d.Kind == TownDutyKind.Shoo) return StepShoo(world, d, g, gc);
         if (d.Kind == TownDutyKind.Ransack) return StepRansack(world, d, g);
 
-        // A body that died on the way goes on into the cage only with 281 listed (112 needs !99 isCarriedDudeDead); a lifted one goes on to the
-        // disposal ranking; 224 and 274 carry out whatever they hold (their update, slot 7 FUN_1403356e0, has no death test).
-        if (!table.TryResolveNext(d.Body, out int b) || table.Cold(b) is not { Medical: { } bodyMedical } body || body.IsImprisoned
-            || bodyMedical.Dead && !KeepsDead(world, d, gc))
+        return StepBody(world, d, g, gc);
+    }
+
+    /// <summary>
+    /// An errand no goal holds over a fight or an order on its body: true while it waits for a fight to be over (a reaction; its walks would end
+    /// it, as a new task drops the fight task), false when it ends (a stumble or a get-up plans the AI anew); null when it steps on.
+    /// </summary>
+    static bool? ErrandWaits(CharacterCold gc)
+    {
+        if (gc.InCombat) return true;
+
+        return PlayerOrders.BodyHolds(gc) ? false : null;
+    }
+
+    /// <summary>
+    /// One tick of a body's errand: a lift (<see cref="StepLift"/>), else the carried body's walk (to a bed, a cage, a disposal, or out); over once
+    /// the body is gone or caged, or the member no longer carries it (fought off, pushed away).
+    /// </summary>
+    bool StepBody(World world, TownDuty d, int g, CharacterCold gc)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(d.Body, out int b) || table.Cold(b) is not { Medical: not null } body || body.IsImprisoned)
         {
             carry.LetGo(world, g);
             return End(world, d);
         }
 
-        if (d.Kind is TownDutyKind.Lift or TownDutyKind.HomeLift or TownDutyKind.CorpseLift)
-        {
-            if (gn.Task == (byte)CharacterTask.PickUp)
-            {
-                bool reaches = !carry.LiftWalkFails(world, g) && (d.Next += world.TickSeconds) <= Settings.LiftSeconds;
-                return gc.LiftTime >= 0 || reaches || GiveUpLift(world, d, g);
-            }
-
-            if (gc.Carrying != d.Body) return End(world, d);   // fought off or pushed away: the body lies there for the next look
-            return d.Kind switch
-            {
-                TownDutyKind.HomeLift => CarryOut(world, d, g, b),
-                // 138's lift needs no disposal: with no goal to take the body on, the carrier keeps it (docs/game/ai-tasks.md "Perma-jobs"); 137's waits
-                // for a busy disposal.
-                TownDutyKind.CorpseLift => WaitingTurn(world, d, g) || DisposeCarried(world, d, g, b) || WaitsForDisposal(world, d, g)
-                    || End(world, d),
-                _ => Dispose(world, d, g, b),
-            };
-        }
-
+        if (d.Kind is TownDutyKind.Lift or TownDutyKind.HomeLift or TownDutyKind.CorpseLift) return StepLift(world, d, g, gc);
         if (gc.Carrying != d.Body) return End(world, d);
-        if (d.Kind == TownDutyKind.Bed) return StepBed(world, d, g);
-        if (d.Kind == TownDutyKind.Cage) return StepCage(world, d, g, b);
-        if (d.Kind == TownDutyKind.Corpse) return StepCorpse(world, d, g);
 
-        bool walking = gn.Task == (byte)CharacterTask.GoTo;
-        if (Vector2.Distance(Flat(gn.Position), d.Goal) <= Settings.Arrive) return LetGo(world, d, g, refuse: false);
-        if (walking) return true;
-        if (++d.Tries > Settings.Walks) return LetGo(world, d, g, refuse: true);
-        TaskStart.Walk(world, g, d.Goal, CarryOutMode, RowOf(d.Kind), TaskSource.Goal);
-        return true;
+        return d.Kind switch
+        {
+            TownDutyKind.Bed => Beds(world)?.PuttingIn(d.Member) == true,
+            TownDutyKind.Cage => StepCage(world, d, g, b),
+            TownDutyKind.Corpse => StepCorpse(world, d, g),
+            _ => StepOut(world, d, g),
+        };
     }
 
     /// <summary>
-    /// Whether errand <paramref name="d"/> goes on with a body that has died: one carried out (224, 274) or to a bed (106: its desire and row 99's
-    /// list B have no death test), one lifted (the disposal goals are ranked again, <see cref="Dispose"/>), or one on its way to a cage with 281
-    /// listed.
+    /// One tick of a lift (273, 223, 138, 137's corpse): over once the pick-up is (the body on the shoulder, or fought off or pushed away: the
+    /// carried body's goals take it on); a lift whose body no path reaches (<see cref="CarrySystem.LiftWalkFails"/>) is a lost walk on the body
+    /// (<see cref="Lost"/>). The walk has no time limit: <c>Task_LiftSomething</c> times only its clip (<c>FUN_140354ff0</c>, <b>Verified</b>).
     /// </summary>
-    bool KeepsDead(World world, TownDuty d, CharacterCold gc)
+    bool StepLift(World world, TownDuty d, int g, CharacterCold gc)
     {
-        if (d.Kind is TownDutyKind.HomeLift or TownDutyKind.HomeOut or TownDutyKind.Out or TownDutyKind.CorpseLift or TownDutyKind.Corpse
-                or TownDutyKind.Bed)
-            return true;
+        if (world.Characters.Next[g].Task != (byte)CharacterTask.PickUp) return End(world, d);
+        if (gc.LiftTime >= 0) return true;
 
-        return gc.Carrying == d.Body && (d.Kind == TownDutyKind.Lift || d.Kind == TownDutyKind.Cage && ListsDeadCage(world, gc, d.Member));
+        return !carry.LiftWalkFails(world, g) || Lost(world, d, g, IgnoreKey.Of(d.Body));
     }
 
     /// <summary>
-    /// 106's errand while the body is on the shoulder: the bed system walks the member to the bed and lays the body in (which ends the errand: it
-    /// carries nothing then). A walk that is over without that (another task or a fight ended it, the bed was taken or could not be reached) starts
-    /// again with a fresh bed search, at most <see cref="TownDutySettings.Walks"/> times; then, or with no bed found, the errand ends and the member
-    /// keeps the body for the next look.
+    /// One tick of 224 or 274's walk. The task's update (<c>FUN_1403356e0</c>, <b>Verified</b>) does nothing while the carrier moves and lets the
+    /// body go (<see cref="LetGo"/>) once the movement says the walk is over (<c>CharMovement</c> slot 12 <c>FUN_14065edb0</c>: no path, or the path
+    /// followed to its end), wherever that is. A walk whose path failed is the plan step's lost walk (<c>FUN_14050d970</c>: a failed mover away
+    /// from the step's place, <c>isAtLocation</c> <c>FUN_1405a2450</c>: within 12 flat), with no target (the rows have none, <see cref="Lost"/>),
+    /// the body kept on the shoulder. Engine choice: one that failed within 12 of its point lets go at once (the update's 5 minutes standing are
+    /// not kept).
     /// </summary>
-    bool StepBed(World world, TownDuty d, int g)
+    bool StepOut(World world, TownDuty d, int g)
     {
-        if (Beds(world) is not { } beds) return End(world, d);
-        if (beds.PuttingIn(d.Member)) return true;
-        if (++d.Tries > Settings.Walks || beds.PutIn(world, g) is not { } bed) return End(world, d);
+        ref var gn = ref world.Characters.Next[g];
+        if (gn.Task == (byte)CharacterTask.GoTo) return true;
 
-        (d.Target, d.Goal) = (bed.Id, Flat(bed.Position));
-        return true;
+        bool failed = world.Characters.Cold(g)!.WalkEnd == WalkEnd.Failed;
+        return failed && !AtPoint(gn.Position, d.Goal) ? Lost(world, d, g, null) : LetGo(world, d, g);
     }
 
     /// <summary>
@@ -1807,49 +1455,83 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         var box = d.Target is { } fid && machine is null ? world.Fixtures.Find(fid) : null;
         var store = machine?.Storage ?? box?.Contents;
         if (store is null || gc.Inventory is not { } inv) return End(world, d);
-        bool walking = gn.Task == (byte)CharacterTask.GoTo;
-        float gap = Vector2.Distance(Flat(gn.Position), d.Goal);
-        if (gap <= Settings.Arrive || !walking && gap <= Settings.CageSlack)
+        if (AtStore(world, gn, d.Target!))
         {
             TaskStart.Stand(table, g);
             StashHere(world, d.Kind == TownDutyKind.Ditch, gc, inv, machine, box, store, gn.Position);
             return End(world, d);
         }
 
-        if (walking) return true;
-        if (++d.Tries > Settings.Walks)
-        {
-            // The walk failed for good: the store goes on the AI's give-up list (pathFailures, 20 s) the finders skip (FUN_1405b0290 in
-            // FUN_1408dac20).
-            if (d.Target is { } failed)
-                gc.NoteUnreachable(failed, world.Tick + (long)MathF.Ceiling(Construction.ConstructionSystem.UnreachableSeconds / world.TickSeconds));
+        // A walk that ends short puts the store on the ignore map (20 s) the finders skip (FUN_1405b0290 in FUN_1408dac20).
+        return gn.Task == (byte)CharacterTask.GoTo || Lost(world, d, g, TargetKey(d));
+    }
 
-            return End(world, d);
+    /// <summary>
+    /// One tick of a fetch: a loose item's while its pick-up runs (<see cref="Items.PickUps.PickUpWorkers"/> walks and takes it); a storage's walk,
+    /// and on arrival the take (<see cref="TakeAt"/>). Over with the item taken (the AI plans on), else failed (<see cref="FetchFailed"/>).
+    /// </summary>
+    bool StepFetch(World world, TownDuty d, int g, CharacterCold gc)
+    {
+        var table = world.Characters;
+        if (d.Item >= 0)
+        {
+            if (gc.PickingUpItem == d.Item) return true;
+
+            var left = world.GroundItems.Find(d.Item);
+            if (left is null && Production.ProductionSystem.Carries(gc, d.Record!)) return FetchTaken(world, d, gc);
+
+            bool lost = left is not null && !Items.PickUps.InReach(table.Next[g].Position, left.Position);
+            return FetchFailed(world, d, gc, lost);
         }
 
-        TaskStart.Walk(world, g, d.Goal, ErrandMode(world, gc), RowOf(d.Kind), TaskSource.Goal);
-        return true;
+        ref var gn = ref table.Next[g];
+        if (d.Target is not { } id || !AtStore(world, gn, id))
+            return gn.Task == (byte)CharacterTask.GoTo || FetchFailed(world, d, gc, lost: true);
+
+        TaskStart.Stand(table, g);
+        return TakeAt(world, d, gc, gn.Position) > 0 ? FetchTaken(world, d, gc) : FetchFailed(world, d, gc, lost: false);
     }
 
     /// <summary>
-    /// Row 93 at a storage for an obedient player slave's errand (<see cref="StashHere"/>, the ditch's collection): the carried items the storage
-    /// <paramref name="storeId"/> takes go in. Serial phases only.
+    /// A fetch that took its item: the task ends by itself, so the plan goes on to its next step (the walk to the machine), as the original's
+    /// queue moves on when a task ends (<see cref="AiSystem.FetchDone"/>). False, for the step.
     /// </summary>
-    internal void PutAway(World world, CharacterCold cold, string storeId, Vector3 at)
+    static bool FetchTaken(World world, TownDuty d, CharacterCold gc)
     {
-        var machine = world.Machines.Find(storeId);
-        var box = machine is null ? world.Fixtures.Find(storeId) : null;
-        if ((machine?.Storage ?? box?.Contents) is { } store && cold.Inventory is { } inv) StashHere(world, true, cold, inv, machine, box, store, at);
+        AiSystem.FetchDone(gc);
+        return End(world, d);
     }
 
     /// <summary>
-    /// The storage the ditch finder (<see cref="DitchStore"/>'s search, <see cref="StoreFor"/>) finds for <paramref name="items"/> in the town at
-    /// <paramref name="at"/>: the nearest that takes one of them; null outside a town or with none. A read-only look.
+    /// A fetch's take at its storage, the player's haul take (<see cref="Production.FillDemand.TakeStored"/>, <c>Task_EmptyMachine</c> with flag 0):
+    /// the first record the storage lists that the town wants, up to that count, whatever the machine the plan fills next needs; the units moved.
     /// </summary>
-    internal (string Id, Vector2 Spot)? StoreTaking(World world, Squad squad, CharacterCold cold, Vector3 at, IEnumerable<ItemInstance> items)
+    int TakeAt(World world, TownDuty d, CharacterCold gc, Vector3 at)
     {
-        var town = AiSystem.TownAt(data, world, at);
-        return town.IsNone ? null : StoreFor(world, squad, cold, at, town, [.. items], register: false);
+        if (d.Target is not { } id || StoreInventory(world, id) is not { } store || gc.Inventory is not { } inv) return 0;
+
+        var machine = world.Machines.Find(id);
+        string record = machine?.Data.Id ?? world.Fixtures.Find(id)?.RecordId ?? "";
+        int taken = Production.FillDemand.TakeStored(world, data, gc, at, store, id, record, inv);
+        if (taken > 0 && machine is not null) world.Machines.Touch();
+        return taken;
+    }
+
+    /// <summary>
+    /// A fetch that took nothing: the source emptied or taken by another, no room, or its walk ended short. As <c>Task_EmptyMachine</c>'s and
+    /// <c>Task_Pickup</c>'s failed flag (<c>AITaskSytem</c> <c>+0x26d</c>, <c>FUN_14001953d</c>, <b>Verified</b>) its handler <c>FUN_14050d080</c>
+    /// asks a replan (<see cref="AiMind.AskReplan"/>); a walk that ended short also puts the source in the ignore map for 20 s
+    /// (<c>FUN_14050d970</c>), which the finder reads for loose items only (<see cref="Items.LooseSource.Nearest"/>). False, for the step.
+    /// </summary>
+    bool FetchFailed(World world, TownDuty d, CharacterCold gc, bool lost)
+    {
+        IgnoreKey? key = d.Item >= 0 ? new IgnoreKey(Items.LooseSource.Key(d.Item), default) : TargetKey(d);
+        long until = world.Tick + (long)MathF.Ceiling(Construction.ConstructionSystem.UnreachableSeconds / world.TickSeconds);
+        if (lost && key is { } k) gc.Ignore(k, until);
+
+        End(world, d);
+        gc.Ai?.AskReplan();
+        return false;
     }
 
     /// <summary>
@@ -1873,31 +1555,20 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
 
     /// <summary>
     /// One tick of the cage errand (112 / 281, then 108): the carrier walks onto the cage's floor (<see cref="WalkToCage"/>) and locks the body up
-    /// there; walks that keep ending short mark the cage unreachable for its faction and the body is put down.
+    /// there. A cage gone or taken, or a walk that ends short (a lost walk: the cage is ignored for 20 s, <see cref="Lost"/>), ends it with the body
+    /// on the shoulder: the carrier's next choice takes it on. The goal's desire drop is the chooser's (another goal displaces it).
     /// </summary>
     bool StepCage(World world, TownDuty d, int g, int b)
     {
         var table = world.Characters;
         ref var gn = ref table.Next[g];
-
-        // The carried-body desire is read every update of the plan: at 0 the cage goal drops out and the body is thrown out or put down.
-        if ((world.Tick + g) % world.Every(Settings.LookEveryTicks) == 0 && CageDesire(world, g, b) <= 0)
-            return Dispose(world, d, g, b, cageable: false);
-
         var cage = d.Target is { } id ? world.Fixtures.Find(id) : null;
-        if (cage is null || !FixtureRegistry.IsFree(table, cage)) return PutDown(world, d, g);
+        if (cage is null || !FixtureRegistry.IsFree(table, cage)) return End(world, d);
 
         bool walking = gn.Task == (byte)CharacterTask.GoTo;
         if (FixtureRegistry.AtCage(cage, gn.Position, walking)) return LockUp(world, d, g, b, cage);
-        if (walking) return true;
-        if (++d.Tries > Settings.Walks)
-        {
-            world.Fixtures.MarkUnreachable(world, cage, d.Faction);
-            return PutDown(world, d, g);
-        }
 
-        WalkToCage(world, g, cage);
-        return true;
+        return walking || Lost(world, d, g, TargetKey(d));
     }
 
     /// <summary>
@@ -1922,82 +1593,43 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// The walk to a cage, onto its floor (<see cref="MovementSystem.GoToFloor"/>): a flat goal would end under a cage on an upper storey, out of
     /// <see cref="FixtureRegistry.AtCage"/>'s height.
     /// </summary>
-    static void WalkToCage(World world, int g, Fixture cage) =>
-        TaskStart.Walk(world, g, cage.Position, SpeedMode.Free, RowOf(TownDutyKind.Cage), TaskSource.Goal);
-
-    /// <summary>
-    /// What a member does with the body it has lifted: the first of its disposal goals that starts (<see cref="DisposeCarried"/>: a cage, 112 / 281,
-    /// or the town's exit point, 274), else it puts the body down.
-    /// </summary>
-    bool Dispose(World world, TownDuty d, int g, int b, bool cageable = true) => DisposeCarried(world, d, g, b, cageable) || PutDown(world, d, g);
-
-    /// <summary>
-    /// After a 223 lift: with 224 listed (<c>Task_TakeIntruderOutside</c>) the body goes to the point past the home's first door
-    /// (<see cref="AiSystem.LeavePoint"/>, <c>FUN_140296a40</c>) and is put down there; a home with no door has its town's exit point
-    /// (<see cref="Outside"/>, <b>Verified</b> <c>FUN_140335480</c>). Without 224, or with neither door nor town, it goes on as a 273 body does
-    /// (<see cref="Dispose"/>; engine choice: the original's carrier keeps it).
-    /// </summary>
-    bool CarryOut(World world, TownDuty d, int g, int b)
-    {
-        var gc = world.Characters.Cold(g)!;
-        var squad = world.Squads.Find(gc.SquadId);
-        if (squad?.HomeBuilding is not { } home
-            || !population.GoalDuty(world, squad, AiSystem.RoleOf(squad, d.Member, gc), TaskType.TakeIntruderOutside))
-            return Dispose(world, d, g, b);
-
-        // A home with no door: its town's exit point (FUN_140335480).
-        if (AiSystem.LeavePoint(world, home) is not { } door)
-        {
-            if (d.Town.IsNone) return Dispose(world, d, g, b);
-
-            door = Outside(world, d.Town);
-        }
-
-        (d.Kind, d.Goal, d.Tries) = (TownDutyKind.HomeOut, door, 0);
-        TaskStart.Walk(world, g, d.Goal, CarryOutMode, RowOf(d.Kind), TaskSource.Goal);
-        return true;
-    }
-
-    /// <summary>
-    /// The member puts the body down short of its goal; the body is left alone for <see cref="TownDutySettings.RefuseHours"/>.
-    /// </summary>
-    bool PutDown(World world, TownDuty d, int g)
-    {
-        TaskStart.Stand(world.Characters, g);
-        carry.BeginPutDown(world, g, TaskSource.Goal);
-        _refused.Add((d.Body, world.GameHours + Settings.RefuseHours));
-        return End(world, d);
-    }
+    static void WalkToCage(World world, int g, Fixture cage, TaskType row) =>
+        TaskStart.Walk(world, g, cage.Position, SpeedMode.Free, row, TaskSource.Goal);
 
     /// <summary>
     /// 224 and 274 at the end of their walk: the body is let go where the carrier stands, without the put-down task and its knock-out (their update
     /// <c>FUN_1403356e0</c> calls the unlink <c>FUN_1405ce1e0</c>, <b>Verified</b>; <b>Observed</b>, original 1.0.65, #1024: a body that came round
-    /// on the shoulder stayed conscious where it was dropped at the exit). <paramref name="refuse"/>: the walk ended short of its goal, and the body
-    /// is left alone for <see cref="TownDutySettings.RefuseHours"/>.
+    /// on the shoulder stayed conscious where it was dropped at the exit).
     /// </summary>
-    bool LetGo(World world, TownDuty d, int g, bool refuse)
+    bool LetGo(World world, TownDuty d, int g)
     {
         carry.LetGo(world, g);
-        if (refuse) _refused.Add((d.Body, world.GameHours + Settings.RefuseHours));
-
         return End(world, d);
     }
 
     /// <summary>
-    /// The member gives up a lift whose body it cannot reach (no path gets there, <see cref="CarrySystem.LiftWalkFails"/>) or never reached
-    /// (<see cref="TownDutySettings.LiftSeconds"/>): it leaves that body alone for <see cref="TownDutySettings.RefuseHours"/>, and the body stays
-    /// free for the others.
+    /// The errand's walk ended short of its place (or its lift found no path): as the original's plan step answers a running step whose mover is
+    /// idle away from its target (<c>FUN_14050d970</c>, <b>Verified</b>), the target goes into the member's ignore map for 20 s and the goal ends
+    /// for a replan (<see cref="DutyGoals.LostWalk"/>; no tries, no back-off). The errand no goal holds (a ditch) marks its
+    /// target the same way and ends. A carried body stays on the shoulder. False, for the step.
     /// </summary>
-    bool GiveUpLift(World world, TownDuty d, int g)
+    bool Lost(World world, TownDuty d, int g, IgnoreKey? key)
     {
-        TaskStart.Stand(world.Characters, g);
-        _gaveUp.Add((d.Member, d.Body, world.GameHours + Settings.RefuseHours));
+        if (d.Chosen != TaskType.None) _goalDuties?.LostWalk(world, g, d.Chosen, key);
+        else if (key is { } k && world.Characters.Cold(g) is { } cold)
+            cold.Ignore(k, world.Tick + (long)MathF.Ceiling(Construction.ConstructionSystem.UnreachableSeconds / world.TickSeconds));
+
         return End(world, d);
     }
 
     /// <summary>
-    /// An order takes the member (<see cref="IDutyRelease"/>): each errand it runs ends, a body it carries let go where it stands as at a walk's end
-    /// (<see cref="LetGo"/>).
+    /// The ignore-map key of the errand's fixture or store (<see cref="TownDuty.Target"/>); none without one.
+    /// </summary>
+    static IgnoreKey? TargetKey(TownDuty d) => d.Target is { } id ? new IgnoreKey(id, default) : null;
+
+    /// <summary>
+    /// An order takes the member (<see cref="IDutyRelease"/>): each errand no goal holds that it runs ends (a goal's errand ends with its goal,
+    /// <see cref="EndGoal"/>).
     /// </summary>
     void IDutyRelease.ReleaseForOrder(World world, int slot)
     {
@@ -2005,29 +1637,28 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         for (int k = _duties.Count - 1; k >= 0; k--)
         {
             var d = _duties[k];
-            if (d.Member != id) continue;
+            if (d.Member != id || d.Chosen != TaskType.None) continue;
 
-            if (!d.Body.IsNone && world.Characters.Cold(slot)?.Carrying == d.Body) carry.LetGo(world, slot);
             End(world, d);
             _duties.RemoveAt(k);
         }
     }
 
     /// <summary>
-    /// Ends an errand: the member goes back to its routine (the AI takes it again).
+    /// Ends an errand (false, for the step): a ditch's member plans again (its walk stands only while it is still the ditch's); a goal's is done by
+    /// <see cref="Finish"/>, which stops what is left of its act-out.
     /// </summary>
     static bool End(World world, TownDuty d)
     {
+        if (d.Chosen != TaskType.None) return false;
+
         var table = world.Characters;
-        if (table.TryResolveNext(d.Member, out int g) && table.Cold(g) is { } gc)
-        {
-            gc.Engaged = false;
-            if (table.Next[g].Task == (byte)CharacterTask.GoTo) TaskStart.Stand(table, g);
+        if (!table.TryResolveNext(d.Member, out int g) || table.Cold(g) is not { } gc) return false;
 
-            // the plan's step 93 is done: the planner asks again with the inventory as it is now
-            if (d.Kind == TownDutyKind.Ditch && gc.Ai is { } mind) mind.Replan = true;
-        }
-
+        // the plan's step 93 or 92 is done: the planner asks again with the inventory as it is now
+        bool walks = d.Kind == TownDutyKind.Fetch ? Fetches(table.Next[g], gc) : Ditches(table.Next[g], gc);
+        if (walks) TaskStart.Stand(table, g);
+        if (gc.Ai is { } mind) mind.Replan = true;
         return false;
     }
 
@@ -2041,43 +1672,11 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     CorpseMachineCache? _disposals;
 
     /// <summary>
-    /// The desire of 137 Corpse disposal (AI slot 43 <c>FUN_1406415a0</c>: 1.0, <c>DAT_14167c308</c>) times its finder's (<c>FUN_1408d1090</c>: 1.0
-    /// when <see cref="CorpseDisposal.Find"/> finds a disposal, else 0; <b>Verified</b>, the registration in <c>FUN_140319a60</c> disassembled).
+    /// 137's finder (<c>FUN_1408d1090</c>, <b>Verified</b>: 1.0 when <see cref="CorpseDisposal.Find"/> finds a disposal, else 0): the disposal the
+    /// member in slot <paramref name="g"/> takes a body to, leaving out one it cannot get to (its path-failure list, 20 s) and one whose operator
+    /// places other errands hold (the squad blackboard's claims, <c>FUN_1402690e0</c>).
     /// </summary>
-    float DisposalDesire(World world, int g) => DisposalFor(world, g) is null ? 0 : 1;
-
-    /// <summary>
-    /// 138 Find corpses as a goal or as 137's provider (its list A 99 <c>isCarriedDudeDead</c>): a member whose role lists 138 (desire
-    /// <c>FUN_140599480</c>: 1.0, 0 on Hold or while carrying, <b>Verified</b>), or 137 with a disposal found, lifts the corpse
-    /// <see cref="CorpseDisposal.FindCorpse"/> finds. False when it lifts none.
-    /// </summary>
-    bool LiftsCorpse(World world, int slot, CharacterCold cold, bool dispose, bool find, CampaignTown town)
-    {
-        if (!dispose && !find || (cold.Orders & CharacterOrders.Hold) != 0) return false;
-        if (!find && DisposalFor(world, slot) is null) return false;
-
-        var at = world.Characters.Next[slot].Position;
-        var inReach = world.Fixtures.TownCandidates(world, data, cold, at);
-        float sight = AggroSystem.RangeOf(cold, Settings.Sight);
-        var body = CorpseDisposal.FindCorpse(world, slot, f => inReach(f.Position), sight, id => _reserved.Contains(id) || Refused(id));
-        return !body.IsNone && StartLift(world, slot, cold, body.Slot, town, TownDutyKind.CorpseLift);
-    }
-
-    /// <summary>
-    /// Whether a body was put down short of its goal and is left alone for now.
-    /// </summary>
-    bool Refused(CharacterId body)
-    {
-        foreach (var r in _refused)
-            if (r.Body == body) return true;
-        return false;
-    }
-
-    /// <summary>
-    /// The disposal the carrier in slot <paramref name="g"/> takes a body to (<see cref="CorpseDisposal.Find"/>), leaving out one it cannot get to
-    /// (its path-failure list, 20 s) and one whose operator places other errands hold (the squad blackboard's claims, <c>FUN_1402690e0</c>).
-    /// </summary>
-    CorpseMachine? DisposalFor(World world, int g, TownDuty? self = null)
+    internal CorpseMachine? DisposalFor(World world, int g, TownDuty? self = null)
     {
         var cold = world.Characters.Cold(g)!;
         var at = world.Characters.Next[g].Position;
@@ -2108,27 +1707,15 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         world.SystemOf<Production.ProductionSystem>()?.Data(m.RecordId)?.MaxOperators ?? 1;
 
     /// <summary>
-    /// 137 for the carried corpse of errand <paramref name="d"/>: the member walks it onto the disposal's floor; false with none found.
+    /// The walk to a disposal, onto its floor (one in a lab's upper storey), on the goal's row.
     /// </summary>
-    bool DisposeOfCarried(World world, int g, TownDuty d)
-    {
-        if (DisposalFor(world, g, d) is not { } machine) return false;
-
-        (d.Kind, d.Target, d.Machine, d.Goal, d.Tries) = (TownDutyKind.Corpse, machine.Id, machine, Flat(machine.Position), 0);
-        WalkToDisposal(world, g, machine);
-        return true;
-    }
-
-    /// <summary>
-    /// The walk to a disposal, onto its floor (one in a lab's upper storey).
-    /// </summary>
-    static void WalkToDisposal(World world, int g, CorpseMachine machine) =>
-        TaskStart.Walk(world, g, machine.Position, SpeedMode.Free, RowOf(TownDutyKind.Corpse), TaskSource.Goal);
+    static void WalkToDisposal(World world, int g, CorpseMachine machine, TaskType row) =>
+        TaskStart.Walk(world, g, machine.Position, SpeedMode.Free, row, TaskSource.Goal);
 
     /// <summary>
     /// One tick of 137's walk (136 at the machine, its list B <c>isAtLocation</c>): at the disposal the body is fed in
-    /// (<see cref="CorpseDisposal.Feed"/>); walks that keep ending short put the machine on the carrier's path-failure list for 20 s (the original's
-    /// ignore map, <c>FUN_1405b0290</c>) and the carrier keeps the body for the next look.
+    /// (<see cref="CorpseDisposal.Feed"/>); a walk that ends short puts the machine on the carrier's ignore map for 20 s (<c>FUN_1405b0290</c>,
+    /// <see cref="Lost"/>) and the carrier keeps the body for its next choice.
     /// </summary>
     bool StepCorpse(World world, TownDuty d, int g)
     {
@@ -2136,8 +1723,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         ref var gn = ref table.Next[g];
         if (d.Machine is not { } machine) return End(world, d);
 
-        bool walking = gn.Task == (byte)CharacterTask.GoTo;
-        if (AtDisposal(gn.Position, machine.Position, walking))
+        if (AtDisposal(world, gn, machine))
         {
             TaskStart.Stand(table, g);
             string label = world.SystemOf<Production.ProductionSystem>()?.Data(machine.RecordId)?.Label ?? "";
@@ -2145,27 +1731,16 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             return End(world, d);
         }
 
-        if (walking) return true;
-        if (++d.Tries > Settings.Walks)
-        {
-            long until = world.Tick + (long)MathF.Ceiling(Construction.ConstructionSystem.UnreachableSeconds / world.TickSeconds);
-            table.Cold(g)!.NoteUnreachable(machine.Id, until);
-            return End(world, d);
-        }
-
-        WalkToDisposal(world, g, machine);
-        return true;
+        return gn.Task == (byte)CharacterTask.GoTo || Lost(world, d, g, new IgnoreKey(machine.Id, default));
     }
 
     /// <summary>
-    /// Whether a carrier at <paramref name="at"/> is at the disposal: within <see cref="TownDutySettings.Arrive"/> on the ground, or within
-    /// <see cref="TownDutySettings.CageSlack"/> once its walk has ended, on the machine's storey (<see cref="FixtureRegistry.WorkHeight"/>).
+    /// Whether the carrier at <paramref name="n"/> is at the disposal: the player's corpse job's test
+    /// (<see cref="Production.ProductionSystem.AtDisposal"/>, <c>AI::isWithinChoppingRange</c>: the BUILDING's use range, doubled once stopped, on
+    /// its storey).
     /// </summary>
-    bool AtDisposal(Vector3 at, Vector3 machine, bool walking)
-    {
-        float gap = Vector2.Distance(Flat(at), Flat(machine));
-        return (gap <= Settings.Arrive || !walking && gap <= Settings.CageSlack) && MathF.Abs(at.Y - machine.Y) < FixtureRegistry.WorkHeight;
-    }
+    internal static bool AtDisposal(World world, in CharacterHot n, CorpseMachine machine) =>
+        world.SystemOf<Production.ProductionSystem>()?.AtDisposal(world, n, machine) == true;
 
     #endregion
 
@@ -2186,9 +1761,8 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// The desire of goals 112 and 281 for the body the carrier in slot <paramref name="carrier"/> holds (<c>AI::scorePutCarriedDudeInCage</c>
     /// <c>FUN_1405a1140</c> with <c>FUN_1405a0f10</c>, <b>Verified</b>), tests in the original's order: the carrier stands in no town 0.1; an animal
     /// 0; a law enforcer (<see cref="Crime.CrimeSystem.IsPoliceLike"/>) carrying a slave or escapee it has no bounty on 1.4; a body the carrier
-    /// regards as friendly (<see cref="CarrySystem.Friendly"/>) 0; a dead one 0.5; else 2. Before the animal test, 0 while the squad's mission town
-    /// (the board's <see cref="Blackboard.Destination"/>, the hand of <b>Observed</b> <c>FUN_1405a0f10</c>) is set and is not the town the carrier
-    /// stands in.
+    /// regards as friendly (<see cref="CarrySystem.Friendly"/>) 0; a dead one 0.5; else 2. Before the animal test, 0 while the running package's
+    /// mission town (<see cref="SquadTown.MissionTown"/>) is set and is not the town the carrier stands in.
     /// </summary>
     public float CageDesire(World world, int carrier, int body)
     {
@@ -2196,10 +1770,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (table.Cold(carrier) is not { } c || table.Cold(body) is not { } b) return 0;
         var here = AiSystem.TownAt(data, world, table.Next[carrier].Position);
         if (here.IsNone) return OutsideTownDesire;
-
-        // The squad's mission town (the hand Task_TravelToTargetTown sets, FUN_1405a0f10) set and not the town it stands in: 0.
-        if (world.Squads.Find(c.SquadId)?.Ai is { Destination.IsNone: false } board && board.Destination != here)
-            return 0;
+        if (OtherMissionTown(world, c.SquadId, here)) return 0;
 
         if (b.Fighter is { IsAnimal: true }) return 0;
         if (b.SlaveState != 0 && (b.Bounties?.BookedAmount(data.Relations, c.Faction) ?? 0) < 1
@@ -2211,25 +1782,50 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// Whether the carrier's package lists 281 FIND_CAGE_AND_PUT_DEADGUY_IN for its role (any carried body, dead included).
+    /// Whether the running package of the squad <paramref name="squadId"/> has a mission town set that is not <paramref name="here"/>
+    /// (<c>FUN_1405a0f10</c> compares the hands with <c>FUN_1405944e0</c>, <b>Verified</b>; <see cref="SquadTown.MissionTown"/>).
     /// </summary>
-    bool ListsDeadCage(World world, CharacterCold carrier, CharacterId id) =>
-        world.Squads.Find(carrier.SquadId) is { } s
-                && population.GoalDuty(world, s, AiSystem.RoleOf(s, id, carrier), TaskType.FindCageAndPutDeadguyIn);
+    internal static bool OtherMissionTown(World world, int squadId, CampaignTown here)
+    {
+        if (world.Squads.Find(squadId) is not { Ai: { } board } squad) return false;
+
+        var mission = SquadTown.MissionTown(world, squad, board);
+        return !mission.IsNone && mission != here;
+    }
 
     /// <summary>
-    /// The best free cage among the carrier's town candidates (<see cref="FixtureRegistry.CageCandidates"/>) by
-    /// <see cref="FixtureRegistry.FindCage"/>'s weights (its squad's home x100), not another errand's.
+    /// The desire of 224 and 274 (both rows' desire stub jumps to <c>FUN_1405a13a0</c>, <b>Verified</b> by decompile and disassembly): 0 unless the
+    /// carrier carries a resolvable character, 0 when it regards that one as friendly (vfunc <c>0x3f0</c>, <see cref="CarrySystem.Friendly"/>),
+    /// else <see cref="AliveDesire"/> (<c>DAT_141682ad0</c>, 2). No town, animal or death test.
     /// </summary>
-    Fixture? Cage(World world, Vector3 at, TownDuty self)
+    public float ThrowOutDesire(World world, int carrier, int body)
     {
-        if (!world.Characters.TryResolveNext(self.Member, out int slot) || world.Characters.Cold(slot) is not { } carrier)
-            return null;
+        var table = world.Characters;
+        if (table.Cold(carrier) is not { } c || table.Cold(body) is not { } b || c.Carrying != table.IdOf(body)) return 0;
 
-        if (self.Town.Site >= 0) world.Fixtures.RegisterSite(world, data, self.Town.Site);
+        return carry.Friendly(c, b) ? 0 : AliveDesire;
+    }
+
+    /// <summary>
+    /// The bed system, resolved on first use (null in a world without one).
+    /// </summary>
+    internal BedSystem? Beds(World world) => _beds ??= world.SystemOf<BedSystem>();
+
+    /// <summary>
+    /// The cage finder of 112 and 281 (<c>FUN_1408d0d30</c>, 1.0 with a free cage, <b>Verified</b>): the best free cage among the carrier's town
+    /// candidates (<see cref="FixtureRegistry.CageCandidates"/>; an occupier may use the occupied town's, its use test passing for that town,
+    /// <c>FUN_140621230</c>) by <see cref="FixtureRegistry.FindCage"/>'s weights (its squad's home x100), not another squad member's errand's nor
+    /// arrest order's (<see cref="Crime.ArrestSystem.CageReserved"/>).
+    /// </summary>
+    internal Fixture? Cage(World world, int slot, CharacterCold carrier, Vector3 at)
+    {
+        var town = TownOf(world, slot);
+        if (town.Site >= 0) world.Fixtures.RegisterSite(world, data, town.Site);
+
+        var id = world.Characters.IdOf(slot);
         var candidate = world.Fixtures.CageCandidates(world, data, carrier, at);
-        return world.Fixtures.FindCage(world, carrier, at, FixtureRegistry.HomeOf(world, carrier), f => !candidate(f)
-                || _duties.Any(o => !ReferenceEquals(o, self) && o.Target == f.Id));
+        return world.Fixtures.FindCage(world, carrier, at, FixtureRegistry.HomeOf(world, carrier),
+            f => !candidate(f) || CageTaken(world, f.Id, id, carrier.SquadId) || Arrests?.CageReserved(world, f.Id, carrier.SquadId) == true);
     }
 
     #endregion
@@ -2280,7 +1876,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// State 82 for a player-side run (<see cref="FoodWant"/>): one unit of the item the take would move has room in the character's inventory or
+    /// State 82 of a player-faction character's 243 (<see cref="FoodRoom"/>): one unit of the item the take would move has room in the character's inventory or
     /// worn bag (<see cref="Inventory.HasRoomFor"/>). Read on the take's own pick, not <see cref="FoodFits"/>'s, so a player animal's raw food and a
     /// race's special food are tested as they would be taken.
     /// </summary>
@@ -2297,42 +1893,27 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (d.Target is not { } id || StoreInventory(world, id) is not { } store || gc.Inventory is not { } into)
             return End(world, d);
 
-        bool walking = gn.Task == (byte)CharacterTask.GoTo;
-
-        // A player order (a walk elsewhere, any other task) wins: the run ends and leaves it be.
-        if (d.PlayerSide && (walking ? gn.Goal != d.Goal : gn.Task != (byte)CharacterTask.Idle))
-        {
-            gc.Engaged = false;
-            return false;
-        }
-
-        if (Vector2.Distance(Flat(gn.Position), d.Goal) <= Settings.Arrive || !walking
-                && Vector2.Distance(Flat(gn.Position), d.Goal) <= Settings.CageSlack)
+        if (AtStore(world, gn, id))
         {
             TaskStart.Stand(table, g);
-            if (d.Kind == TownDutyKind.LootFood)
-                LootFirstFood(store, into);
-            else if (GrabFood(store, gc, into) == 0 && d.PlayerSide)
-            {
-                // No room on arrival although the start found some: room lost on the walk, or a room test that said yes where the move refuses
-                // (a food stack carrying a trade receipt, which a plain unit does not join). Not again for a while, so the run cannot loop.
-                _foodWaits.Add((d.Member, world.GameHours + Settings.RefuseHours));
-            }
+            bool grabbed = d.Kind == TownDutyKind.LootFood || GrabFood(store, gc, into) > 0;
+            if (d.Kind == TownDutyKind.LootFood) LootFirstFood(store, into);
             world.Machines.Touch();
-            return End(world, d);
+
+            // No food moved although the pick found room (room lost on the walk, or a stack the move refuses, as one carrying a trade receipt):
+            // the take fails, which only asks a replan (Task_grabOneFood FUN_140340850 sets the failed flag, FUN_14050d080 clears the target and
+            // replans: no ignore, Verified).
+            return grabbed ? End(world, d) : Lost(world, d, g, key: null);
         }
 
-        if (walking) return true;
-        if (++d.Tries > Settings.Walks) return End(world, d);
-        TaskStart.Walk(world, g, d.Goal, ErrandMode(world, gc), RowOf(d.Kind), TaskSource.Goal);
-        return true;
+        return gn.Task == (byte)CharacterTask.GoTo || Lost(world, d, g, TargetKey(d));
     }
 
     /// <summary>
     /// Whether an errand holds <paramref name="body"/>. Plain loops, not lambdas: Contraband looks at every cage each pass, and the captures made two
     /// closures per cage.
     /// </summary>
-    bool HasDutyOn(CharacterId body)
+    internal bool HasDutyOn(CharacterId body)
     {
         foreach (var d in _duties)
             if (d.Body == body) return true;
@@ -2342,7 +1923,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// <summary>
     /// Whether the inventory holds an item stolen from <paramref name="faction"/>.
     /// </summary>
-    bool CarriesStolen(Inventory inventory, int faction)
+    internal bool CarriesStolen(Inventory inventory, int faction)
     {
         foreach (var item in inventory.Items)
             if (item.IsStolenFor(faction, data)) return true;
@@ -2353,7 +1934,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     /// <c>AI::findPrisonerWithContraband</c> (<c>FUN_1408cf6a0</c>, goal 212): the first cage of the town, in list order (no distance weighting),
     /// whose occupant carries a stolen item and is not another errand's. Engine choice: the original's room test for the item is left to the take.
     /// </summary>
-    (Fixture? Cage, CharacterId Prisoner) Contraband(World world, CampaignTown town)
+    internal (Fixture? Cage, CharacterId Prisoner) Contraband(World world, CampaignTown town)
     {
         var table = world.Characters;
         if (town.Site >= 0) world.Fixtures.RegisterSite(world, data, town.Site);
@@ -2388,7 +1969,6 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             return End(world, d);
 
         bool walking = gn.Task == (byte)CharacterTask.GoTo;
-        float gap = Vector2.Distance(Flat(gn.Position), d.Goal);
         if (FixtureRegistry.AtCage(cage, gn.Position, walking))
         {
             TaskStart.Stand(table, g);
@@ -2397,10 +1977,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
             return End(world, d);
         }
 
-        if (walking) return true;
-        if (++d.Tries > Settings.Walks) return End(world, d);
-        TaskStart.Walk(world, g, d.Goal, SpeedMode.Walk, RowOf(d.Kind), TaskSource.Goal);
-        return true;
+        return walking || Lost(world, d, g, DutyGoals.KeyOf(d.Planned));
     }
 
     #endregion
@@ -2408,19 +1985,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     #region Shooing and ransacking
 
     /// <summary>
-    /// The senses (resolved on first use), for the shoo finder.
+    /// The finders of the shoo's stranger and the ransack's building.
     /// </summary>
-    AggroSystem? _aggro;
-
-    /// <summary>
-    /// Who is inside each building, by building key, as of <see cref="_insidersTick"/> (the shoo finder's pass).
-    /// </summary>
-    readonly Dictionary<string, List<int>> _insiders = new(StringComparer.Ordinal);
-
-    /// <summary>
-    /// The tick <see cref="_insiders"/> was taken (-1: never).
-    /// </summary>
-    long _insidersTick = -1;
+    readonly TownWatchFinders _watch = new(data);
 
     /// <summary>
     /// Event 9 EV_SHOO_FROM_MY_BUILDING, 17 EV_INTRUDER_FOUND (for an enemy), 60 EV_GIVE_UP_CHASE (docs/game/dialogue.md "Enums").
@@ -2428,62 +1995,14 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     const int ShooEvent = 9, IntruderFound = 17, GiveUpChase = 60;
 
     /// <summary>
-    /// Game seconds between shoo events (engine choice: the original re-sends on every update and its lines' own timers pace them).
+    /// The shoo's stranger in the squad's home building (goals 158 / 283, <see cref="TownWatchFinders.Stranger"/>); none: none.
     /// </summary>
-    const float ShooEverySeconds = 5;
-
-    /// <summary>
-    /// The door planner of the ransack's way in (<see cref="EntryTo"/>).
-    /// </summary>
-    readonly DoorPlan _doorPlan = new();
-
-    /// <summary>
-    /// The salt of the ransack's target roll.
-    /// </summary>
-    const ulong RansackSalt = 0x5261_6E73_6163_6B21;
-
-    /// <summary>
-    /// <c>AI::findStrangersInMyBuilding</c> (<c>FUN_1408ced70</c>, goals 158 / 283): in the squad's home building, the first character (slot order,
-    /// the original takes its sensed-list order) neither of an allied faction nor an enemy, not down, dead or caged, not a slave of the shooer's
-    /// faction and not law enforcement (AUTHORITY_FIGURE, engine reading); for an NPC squad also any of the player's characters there that is not
-    /// sneaking or that the shooer has spotted. Not one another errand shoos. None: none.
-    /// </summary>
-    CharacterId Stranger(World world, int slot, CharacterCold cold, Squad squad)
-    {
-        if (squad.HomeBuilding is not { } home) return CharacterId.None;
-        var table = world.Characters;
-        _aggro ??= world.Systems.OfType<AggroSystem>().FirstOrDefault();
-        if (_insidersTick != world.Tick)
-        {
-            _insidersTick = world.Tick;
-            _insiders.Clear();
-            for (int s = 0; s < table.HighWater; s++)
-            {
-                if (table.Next[s].Alive && world.Sight.BuildingOf(s) is { } key)
-                    (_insiders.TryGetValue(key, out var list) ? list : _insiders[key] = []).Add(s);
-            }
-        }
-
-        if (!_insiders.TryGetValue(home.Key, out var inside)) return CharacterId.None;
-        foreach (int s in inside)
-        {
-            if (s == slot || table.Cold(s) is not { Medical.Incapacitated: false } c || c.IsImprisoned) continue;
-            if (c.SlaveState == 1 && c.SlaveOwner == cold.Faction) continue;
-            var id = table.IdOf(s);
-            if (_duties.Any(o => o.Kind == TownDutyKind.Shoo && o.Body == id)) continue;
-            bool neutral = c.Faction != cold.Faction && !(data.Relations.Contains(cold.Faction) && data.Relations.Contains(c.Faction)
-                && (data.Relations.IsAlly(cold.Faction, c.Faction) || AggroSystem.IsEnemy(data.Relations, cold.Faction, c.Faction)));
-            if (neutral && c.NpcClass != Data.Gameplay.FundamentalType.LawEnforcement) return id;
-            if (!cold.IsPlayer && c.IsPlayer && ((c.Orders & CharacterOrders.Sneak) == 0 || _aggro?.Spotted(slot, id) == true))
-                return id;
-        }
-
-        return CharacterId.None;
-    }
+    internal CharacterId Stranger(World world, int slot, CharacterCold cold, Squad squad) => _watch.Stranger(world, slot, cold, squad, _duties);
 
     /// <summary>
     /// A shoo (161 <c>Task_TalktoPlayer</c> with the row event 9): the shooer walks at the stranger and sends it event 9 (17 when it is an enemy)
-    /// every <see cref="ShooEverySeconds"/>; the dialogue data does the rest (lines that follow, time out and turn violent). After 25 game minutes,
+    /// every tick, as the task's update fires it at every character update (<c>FUN_14034c7c0</c>, <b>Verified</b>): the dialogue refuses it while
+    /// the shooer still talks, and the lines' own chances and limits pace the rest (lines that follow, time out and turn violent). After 25 game minutes,
     /// once the stranger is getting away (fleeing or walking off), it gives up with event 60. Over when the stranger is no longer in the home
     /// building, is down or caged.
     /// </summary>
@@ -2500,16 +2019,11 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         var to = new Vector2(table.Next[t].Position.X, table.Next[t].Position.Z);
         if (Vector2.Distance(Flat(gn.Position), to) > Dialogue.DialogueSystem.TalkReach
                 && (gn.Task != (byte)CharacterTask.GoTo || Vector2.Distance(gn.Goal, to) > Dialogue.DialogueSystem.TalkReach))
-            TaskStart.Walk(world, g, to, SpeedMode.Walk, RowOf(d.Kind), TaskSource.Goal);
+            TaskStart.Walk(world, g, to, SpeedMode.Walk, RowFor(d), TaskSource.Goal);
 
-        d.Next -= world.TickSeconds;
-        if (d.Next <= 0)
-        {
-            d.Next = ShooEverySeconds;
-            bool enemy = data.Relations.Contains(gc.Faction) && data.Relations.Contains(tc.Faction)
-                    && AggroSystem.IsEnemy(data.Relations, gc.Faction, tc.Faction);
-            world.Defer(new Dialogue.DialogueEvent(d.Member, d.Body, enemy ? IntruderFound : ShooEvent) { Tick = world.Tick + 1 });
-        }
+        bool enemy = data.Relations.Contains(gc.Faction) && data.Relations.Contains(tc.Faction)
+                && AggroSystem.IsEnemy(data.Relations, gc.Faction, tc.Faction);
+        world.Defer(new Dialogue.DialogueEvent(d.Member, d.Body, enemy ? IntruderFound : ShooEvent) { Tick = world.Tick + 1 });
 
         bool away = tc.Fleeing || table.Next[t].Task == (byte)CharacterTask.GoTo
                 && Vector2.Distance(table.Next[t].Goal, Flat(gn.Position)) > Vector2.Distance(to, Flat(gn.Position));
@@ -2523,68 +2037,70 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     }
 
     /// <summary>
-    /// <c>AI::findRandomBuildingInTown</c> (<c>FUN_1408cb510</c>, goal 216): the squad's mission town (its blackboard's, else the campaign target it
-    /// marches on), else the town the member stands in; one of its standing buildings with an interior, drawn uniformly at random among those the
-    /// planner would reach: row 156 Entering building (the only provider of effect 107, which goal 216 wants) needs DESTINATION_IS_ACCESSIBLE (59:
-    /// <c>hasAnOpenDoor</c>) and DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS (90: no closed gate between), <b>Observed</b>. The door sub-steps are
-    /// planned (<see cref="EntryTo"/>: open the door, row 72, or bash it, row 81); a building with no way in is left out of the draw. A closed gate
-    /// on the route is planned as for an attacker (<see cref="Locks.LockSystem.GateEntry"/>: bash it, row 123 / 290, or pass an unlocked one, row
-    /// 122). Null: none.
+    /// The ransack's building (goal 216, <see cref="TownWatchFinders.RansackTarget"/>); null: none.
     /// </summary>
-    (Meitou.Data.World.TownBuilding Building, string? Door)? RansackTarget(World world, Squad squad, int slot)
+    internal (string Key, Vector3 At, string? Door)? RansackTarget(World world, Squad squad, int slot)
     {
-        int site = squad.Ai is { MissionTown: >= 0 } b ? b.MissionTown : squad.Ai is { Destination: { Site: >= 0 } dest } ? dest.Site
-                : AiSystem.TownAt(data, world, world.Characters.Next[slot].Position).Site;
-        if (site < 0) return null;
         _locks ??= world.Systems.OfType<LockSystem>().FirstOrDefault();
-        var from = world.Characters.Next[slot].Position;
-        var rooms = new List<(Meitou.Data.World.TownBuilding, string?)>();
-        foreach (var x in data.Sites[site].Buildings)
-        {
-            if (world.Fixtures.IsDestroyed(x) || x.InteriorLayout.Length == 0 && x.InteriorLayouts.Count == 0) continue;
-            var gate = _locks?.GateEntry(world, slot, from, x.Position) ?? (DoorPlan.Entry.Walk, null);
-            if (gate.Entry == DoorPlan.Entry.Blocked) continue;
-            if (gate.Door is not null) rooms.Add((x, gate.Door));   // the gate is bashed first (rows 123 / 290)
-            else if (EntryTo(world, slot, x) is { } door) rooms.Add((x, door.Length == 0 ? null : door));
-        }
-
-        if (rooms.Count == 0) return null;
-        return rooms[Rng.Int(Rng.Hash(world.Seed, (ulong)Rng.Key(world.Characters.IdOf(slot)) ^ (ulong)world.Tick, RngPurpose.Slow, RansackSalt),
-                rooms.Count)];
-    }
-
-    /// <summary>
-    /// How the member gets into a building, by the planner (row 156's state 59 <c>hasAnOpenDoor</c>, <see cref="Locks.DoorPlan.PlansEntry"/>): "" to
-    /// walk in (a door open, none, or a closed one the character opens as it passes, row 72), the id of the door it bashes first (row 81, a locked
-    /// door of a building it is aggressive towards), null when the planner finds no way in.
-    /// </summary>
-    string? EntryTo(World world, int slot, Meitou.Data.World.TownBuilding building)
-    {
-        if (world.Fixtures.HasOpenDoor(building.Key)) return "";
-        if (LockSystem.MainGateDoor(world, building.Key) is not { } main) return "";
-        var entry = _doorPlan.PlansEntry(world, world.SystemOf<Combat.CombatSystem>(), slot, building.Key, main.Door, main.Spot, _locks);
-        return entry switch { DoorPlan.Entry.Walk => "", DoorPlan.Entry.Bash => main.Door.Id, _ => null };
+        return _watch.RansackTarget(world, squad, slot, _locks);
     }
 
     /// <summary>
     /// 216 Ransacking town (156 into the drawn building, then <c>Task_PatrolTownViolent</c>, which only sets running): the member runs into the
-    /// building; once inside (or when the walk ends near it) the errand ends and the next look draws another, so the raiders run from building to
-    /// building.
+    /// building; once inside the errand ends and the next look draws another, so the raiders run from building to building. 156's update
+    /// (<c>Task_EnterBuilding</c> slot 2 <c>FUN_1403359a0</c>, <b>Verified</b>) walks at the building and ends only once the character's building is
+    /// it; a walk whose path failed is a lost walk (the building ignored 20 s, <see cref="Lost"/>). Engine choice: a walk followed to its end
+    /// outside ends the errand too (the original's update walks on).
     /// </summary>
     bool StepRansack(World world, TownDuty d, int g)
     {
         var table = world.Characters;
-        ref var gn = ref table.Next[g];
-        bool walking = gn.Task == (byte)CharacterTask.GoTo;
-        if (table.Cold(g)?.Bashing is not null) return true;   // bashing the door first (the lock system walks and swings)
-        if (world.Sight.BuildingOf(g) == d.Target || !walking && Vector2.Distance(Flat(gn.Position), d.Goal) <= Settings.CageSlack)
-            return End(world, d);
+        var cold = table.Cold(g)!;
+        if (cold.Bashing is not null) return true;   // bashing the door first (the lock system walks and swings)
+        if (world.Sight.BuildingOf(g) == d.Target) return End(world, d);
+        if (table.Next[g].Task == (byte)CharacterTask.GoTo) return true;
 
-        if (walking) return true;
-        if (++d.Tries > Settings.Walks) return End(world, d);
-        TaskStart.Walk(world, g, d.Goal, SpeedMode.Run, RowOf(d.Kind), TaskSource.Goal);
-        return true;
+        return cold.WalkEnd == WalkEnd.Finished ? End(world, d) : Lost(world, d, g, TargetKey(d));
     }
+
+    #endregion
+
+    #region Arrival
+
+    /// <summary>
+    /// <see cref="AtPoint"/>'s squared flat distance (<c>DAT_1416ad830</c>, <b>Verified</b>).
+    /// </summary>
+    const float PointReachSq = 144;
+
+    /// <summary>
+    /// Whether the character at <paramref name="n"/> is at the store <paramref name="id"/>: <c>isAtLocation</c> for a building
+    /// (<c>AI::isWithinChoppingRange</c> <c>FUN_14059c6d0</c>, <b>Verified</b>; docs/game/buildings-production.md "Work distance"): a player
+    /// machine's operator test (<see cref="Production.ProductionSystem.AtMachine"/>), a container's use test (<see cref="FixtureRegistry.AtFixture"/>):
+    /// its use range, doubled once the character stops, at its height. No slack: a walk that ends out of it is a lost walk.
+    /// </summary>
+    internal static bool AtStore(World world, in CharacterHot n, string id)
+    {
+        if (world.Machines.Find(id) is not null) return world.SystemOf<Production.ProductionSystem>()?.AtMachine(world, n, id) == true;
+
+        return world.Fixtures.Find(id) is { } box && FixtureRegistry.AtFixture(box, n.Position, n.Task == (byte)CharacterTask.GoTo);
+    }
+
+    /// <summary>
+    /// The walk to the store <paramref name="id"/> at <paramref name="spot"/>, onto its floor (<see cref="MovementSystem.GoToFloor"/>): a flat goal
+    /// would end under a store on an upper storey, out of <see cref="AtStore"/>'s height.
+    /// </summary>
+    static void WalkToStore(World world, int slot, string id, Vector2 spot, byte mode, TaskType row)
+    {
+        var at = world.Buildings.Find(id)?.Position ?? world.Fixtures.Find(id)?.Position;
+        if (at is { } floor) TaskStart.Walk(world, slot, floor, mode, row, TaskSource.Goal);
+        else TaskStart.Walk(world, slot, spot, mode, row, TaskSource.Goal);
+    }
+
+    /// <summary>
+    /// The place test of <c>isAtLocation</c> for a position (<c>FUN_1405a2450</c>, <b>Verified</b>): flat squared distance below 144; its height
+    /// test (|dy| below 20, <c>DAT_141683188</c>) is not made, the errand's point being flat.
+    /// </summary>
+    static bool AtPoint(Vector3 at, Vector2 point) => Vector2.DistanceSquared(Flat(at), point) < PointReachSq;
 
     #endregion
 }

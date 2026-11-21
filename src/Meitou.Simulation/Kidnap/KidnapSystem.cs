@@ -1,14 +1,9 @@
 using System.Numerics;
-using Meitou.Data.Gameplay;
-using Meitou.Data.Gameplay.Ai;
-using Meitou.Data.World;
 using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Carrying;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Locks;
-using Meitou.Simulation.Movement;
-using Meitou.Simulation.Player;
 using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Kidnap;
@@ -19,7 +14,7 @@ namespace Meitou.Simulation.Kidnap;
 public sealed record KidnapSettings
 {
     /// <summary>
-    /// Each kidnapper looks for victims and cages once in this many ticks, on its slot's turn.
+    /// Each kidnapper's finder looks once in this many ticks, on its slot's turn.
     /// </summary>
     public int LookEveryTicks { get; init; } = 15;
     /// <summary>
@@ -27,125 +22,13 @@ public sealed record KidnapSettings
     /// </summary>
     public float Sight { get; init; } = AggroSystem.OutdoorSight;
     /// <summary>
-    /// A carrier counts as in a town of its faction within this multiple of the town's radius (it then looks for the town's cages).
-    /// </summary>
-    public float TownSlack { get; init; } = 1.5f;
-    /// <summary>
-    /// Walks to cages before the carrier gives up and drops the captive; lifts that fail before it lets the victim be.
-    /// </summary>
-    public int CageWalks { get; init; } = 3;
-    /// <summary>
-    /// Lifts that fail before the kidnapper lets the victim be (see <see cref="CageWalks"/>).
-    /// </summary>
-    public int LiftTries { get; init; } = 3;
-    /// <summary>
-    /// Game hours a victim put down for want of a cage is left alone.
-    /// </summary>
-    public double RefuseHours { get; init; } = 2;
-    /// <summary>
-    /// Game seconds an AI squad's carrier waits for a free cage to appear before it drops the captive.
-    /// </summary>
-    public float PatienceSeconds { get; init; } = 60;
-    /// <summary>
     /// Keep a <see cref="KidnapSystem.Log"/> (tests).
     /// </summary>
     public bool RecordLog { get; init; }
 }
 
 /// <summary>
-/// Where an abduction is: lifting the victim, carrying it home, walking it to a cage.
-/// </summary>
-public enum KidnapPhase : byte
-{
-    /// <summary>
-    /// Lifting the victim.
-    /// </summary>
-    Lift,
-    /// <summary>
-    /// Carrying it home.
-    /// </summary>
-    Carry,
-    /// <summary>
-    /// Walking it to a cage.
-    /// </summary>
-    Walk
-}
-
-/// <summary>
-/// One kidnapper's hold on one victim (serial state of the <see cref="KidnapSystem"/>): lifting it, carrying it home, walking it to a cage.
-/// </summary>
-public sealed class Abduction
-{
-    /// <summary>
-    /// The kidnapper.
-    /// </summary>
-    public required CharacterId Carrier { get; init; }
-    /// <summary>
-    /// The victim.
-    /// </summary>
-    public required CharacterId Victim { get; init; }
-    /// <summary>
-    /// The kidnapper's faction.
-    /// </summary>
-    public required int Faction { get; init; }
-    /// <summary>
-    /// Where the abduction is.
-    /// </summary>
-    public KidnapPhase Phase { get; set; }
-    /// <summary>
-    /// Game seconds in the phase (the wait for a cage).
-    /// </summary>
-    public float Time { get; set; }
-    /// <summary>
-    /// The lifts or cage walks tried in the phase.
-    /// </summary>
-    public int Tries { get; set; }
-    /// <summary>
-    /// The cage chosen (reserved while the abduction lasts).
-    /// </summary>
-    public string? Cage { get; set; }
-    /// <summary>
-    /// The kidnapper was a campaign squad's when it lifted: it marches home with its squad and keeps the victim until a town of its faction (the
-    /// campaign ending on the way does not drop it).
-    /// </summary>
-    public bool Marching { get; init; }
-    /// <summary>
-    /// The town a marching carrier gives up in when no cage there is free (a site index; it cages in any town of its faction on the way): its
-    /// campaign's home, or the home town of an AI squad that retreats with its captive; -1: any town of its faction.
-    /// </summary>
-    public int HomeSite { get; init; } = -1;
-    /// <summary>
-    /// A slaver's carry of its downed slave (168): it goes on with its squad and cages the slave once a cage is found, never dropping it for want of
-    /// one (goal 112 finds no target).
-    /// </summary>
-    public bool Hauls { get; init; }
-    /// <summary>
-    /// The carrier is of an AI squad with a cannibal retreat package (signals 1, 25): it runs its captive to the package's mission town, the
-    /// retreat's 130 TRAVEL_TO_TARGET_TOWN_FAST, which the AI does not give a carrier (see <see cref="KidnapSystem"/>'s walk home).
-    /// </summary>
-    public bool Retreats { get; init; }
-
-    /// <summary>
-    /// Adds the abduction to the world's state hash.
-    /// </summary>
-    internal void Hash(ref StateHasher h)
-    {
-        h.Add(Carrier);
-        h.Add(Victim);
-        h.Add(Faction);
-        h.Add((int)Phase);
-        h.Add(Time);
-        h.Add(Tries);
-        h.Add(Marching);
-        h.Add(HomeSite);
-        h.Add(Cage is { } c ? Rng.StableHash(c) : 0UL);
-        if (Hauls) h.Add(0x48617573);   // only when set, so the other carries hash as before
-        if (Retreats) h.Add(0x52657472);
-    }
-}
-
-/// <summary>
-/// What happened in an abduction (<see cref="KidnapEvent"/>).
+/// What happened in a kidnapping (<see cref="KidnapEvent"/>).
 /// </summary>
 public enum KidnapEventKind
 {
@@ -162,86 +45,67 @@ public enum KidnapEventKind
     /// </summary>
     Dropped,
     /// <summary>
-    /// The abduction ended otherwise.
+    /// The carry ended otherwise.
     /// </summary>
     GaveUp
 }
 
 /// <summary>
-/// One abduction event of the log (<see cref="KidnapSystem.Log"/>): the tick, what happened, the carrier, the victim and the faction.
+/// One kidnapping event of the log (<see cref="KidnapSystem.Log"/>): the tick, what happened, the carrier, the victim and the faction.
 /// </summary>
 public readonly record struct KidnapEvent(long Tick, KidnapEventKind Kind, CharacterId Carrier, CharacterId Victim, int Faction);
 
 /// <summary>
-/// Raiders kidnapping the downed (docs/game/factions-squads-towns.md "Campaigns", carry-loot.md 3.2; the original's goal 254 "Find and kidnap (with
-/// cages) urgent": find a downed
-/// character, lift it, put it in a cage of the kidnapper's faction). Everything runs in <c>SlowWorld</c>, serially, after the carry system.
-/// <list type="bullet">
-/// <item><b>Duty</b>: the members of a squad whose package has goal 254 in the member's role list and hour window
-/// (<see cref="PopulationSystem.KidnapDuty"/>): a loaded campaign squad in the phase whose package lists it (the retreat package of the raids; the
-/// cannibal assault), or an AI squad whose running package does (cannibals on patrol and at home).</item>
-/// <item><b>Victim</b> (the finder of goal 132, <b>Verified</b>; <see cref="IsVictim"/>): the nearest character within sight that is alive, down, of
-/// a <c>carriable</c> race, not carried, not in a cage or a bed, not an animal, not already someone's pick; the sensed-list classes (<b>Unknown</b>
-/// bits) are read as "not of the kidnapper's faction or an ally". A free member (awake, not fighting, able to carry) lifts it
-/// (<see cref="CarrySystem.BeginPickUp"/>).</item>
-/// <item><b>Carry</b>: a campaign carrier goes on with its squad (following its leader, else wandering home, <see cref="ResumeOf"/>) and, within a
-/// town of its faction (<see cref="KidnapSettings.TownSlack"/> x its radius), looks for a free
-/// cage there (its faction's or an ally's, <see cref="CageFor"/>); an AI squad's member starts only when such a cage is in range. At the cage it lets
-/// go and imprisons the victim (<see cref="CharacterCold.Kidnapped"/> in a cage of its own faction: no sentence, no bail). No
-/// free cage in the home town, or three failed walks: it drops the victim (<b>engine choice</b>; the original's give-up rule is Unknown).</item>
-/// </list>
-/// A marching carrier (a campaign's, or a squad's that lists a cannibal retreat package, which then needs no cage in range to lift) cages in the
-/// first town of its faction with a free cage and gives up only in its home town (<see cref="Abduction.HomeSite"/>).
-/// What the captors then do with the captive is <see cref="CaptiveSystem"/>'s. Not built: the witnesses' kidnapping crime.
+/// Raiders kidnapping the downed (docs/game/factions-squads-towns.md "Campaigns", carry-loot.md 3.2; docs/simulation.md "Kidnapping"), in
+/// <c>SlowWorld</c>, serially, after the carry system: goal 254 "Find and kidnap (with cages) urgent" is a goal of the one chooser
+/// (<see cref="KidnapGoals"/>): a member whose lists hold it weighs it, and once chosen lifts the victim 132's finder found (<see cref="IsVictim"/>).
+/// The lift ends the goal; the carrier's own goals (112 / 281) cage the victim, which is then <see cref="CharacterCold.Kidnapped"/> in a cage of the
+/// kidnapper's faction. What the captors then do with the captive is <see cref="CaptiveSystem"/>'s. Not built: the witnesses' kidnapping crime.
 /// </summary>
-public sealed class KidnapSystem(PopulationData data, PopulationSystem population, CarrySystem carry, KidnapSettings? settings = null) : ITickSystem,
-        IStateHashed, IDutyRelease
+public sealed class KidnapSystem : ITickSystem, IStateHashed, IDutyGoalOwner
 {
     #region State
 
     /// <summary>
-    /// The abductions running, in the order they started.
+    /// The population's data (relations, factions, prison time).
     /// </summary>
-    readonly List<Abduction> _abductions = [];
+    readonly PopulationData _data;
+    /// <summary>
+    /// Goal 254: the finder's picks, the lifts it acts out and the victims lifted (<see cref="KidnapGoals"/>).
+    /// </summary>
+    readonly KidnapGoals _goals;
     /// <summary>
     /// The events since the world began, kept only with <see cref="KidnapSettings.RecordLog"/>.
     /// </summary>
     readonly List<KidnapEvent> _log = [];
-    /// <summary>
-    /// A scratch list of the victims a look finds.
-    /// </summary>
-    readonly List<int> _victims = [];
-    /// <summary>
-    /// The victims of the running abductions and the refused ones, which a look leaves alone.
-    /// </summary>
-    readonly HashSet<CharacterId> _reserved = [];
-
-    /// <summary>
-    /// Victims a carrier put down for want of a cage: left alone until this game hour (a body would otherwise be lifted and put down in turn). In the
-    /// order they were put down.
-    /// </summary>
-    readonly List<(CharacterId Victim, double Until)> _refused = [];
 
     /// <summary>
     /// The kidnapping settings.
     /// </summary>
-    public KidnapSettings Settings { get; } = settings ?? new KidnapSettings();
+    public KidnapSettings Settings { get; }
     /// <summary>
     /// The relation event of a caging (<see cref="FactionDeeds.Caged"/>); null: none.
     /// </summary>
     public FactionDeeds? Deeds { get; set; }
     /// <summary>
-    /// The abductions running.
-    /// </summary>
-    public IReadOnlyList<Abduction> Abductions => _abductions;
-    /// <summary>
     /// The events kept (<see cref="KidnapSettings.RecordLog"/>).
     /// </summary>
     public IReadOnlyList<KidnapEvent> Log => _log;
 
+    /// <summary>
+    /// Makes the system over the population's data, with the carry system that lifts and the settings (null: the defaults). The population system
+    /// is not read: the goals read the members' lists through the AI.
+    /// </summary>
+    public KidnapSystem(PopulationData data, PopulationSystem population, CarrySystem carry, KidnapSettings? settings = null)
+    {
+        _data = data;
+        Settings = settings ?? new KidnapSettings();
+        _goals = new KidnapGoals(this, carry, data);
+    }
+
     #endregion
 
-    #region The finder
+    #region The victim
 
     /// <summary>
     /// Whether the character in <paramref name="slot"/> may be kidnapped by one of <paramref name="faction"/> (the finder of goal 132, carry-loot.md
@@ -260,49 +124,20 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
                 || c.InSomething != HeldState.None)
             return false;
 
-        var relations = data.Relations;
+        var relations = _data.Relations;
         return c.Faction != faction && !(relations.Contains(faction) && relations.Contains(c.Faction) && relations.IsAlly(faction, c.Faction));
     }
 
     /// <summary>
-    /// A member that may start a kidnapping: awake, not fighting or fleeing or held, able to carry, doing nothing but walking with its squad.
+    /// Whether a free cage <paramref name="carrier"/> may use is among the candidates of its town at <paramref name="at"/>
+    /// (<see cref="FixtureRegistry.CageCandidates"/>: the town it stands in, else its faction's nearest, plus its home's;
+    /// <see cref="FixtureRegistry.FindCage"/>: the original's weights, its own faction's x100, any other faction's only when
+    /// <see cref="FixtureRegistry.CanUse"/> passes).
     /// </summary>
-    static bool FreeKidnapper(World world, int slot)
+    public bool HasCage(World world, Vector3 at, CharacterCold carrier)
     {
-        var table = world.Characters;
-        if (!table.Next[slot].Alive
-                || table.Next[slot].Task is not ((byte)CharacterTask.Idle or (byte)CharacterTask.Wander or (byte)CharacterTask.Follow
-                        or (byte)CharacterTask.GoTo))
-            return false;
-
-        return table.Cold(slot) is { IsPlayer: false, Fleeing: false, Engaged: false } c && CarrySystem.CanCarry(world, c, TaskType.KidnapOrder)
-            && !DecisionSystem.Ordered(c);
-    }
-
-    /// <summary>
-    /// Has the member in <paramref name="slot"/> lift <paramref name="victim"/> and carry it to a cage of its faction or an ally in range (the
-    /// carrying and caging of goals 167 and 168, which the <see cref="CaptiveSystem"/> starts once it has cuffed or found the captive; the original's
-    /// goal 112 puts the carried one in a cage). False when the member cannot carry, the victim is someone's pick already, or no free cage is in
-    /// range. With <paramref name="hauls"/> (a slave, goal 168) no cage is needed: see <see cref="Abduction.Hauls"/>.
-    /// </summary>
-    public bool Carry(World world, int slot, CharacterId victim, bool hauls = false)
-    {
-        var table = world.Characters;
-        if (!table.TryResolveNext(victim, out int v) || !FreeKidnapper(world, slot) || Busy(table.IdOf(slot)))
-            return false;
-
-        foreach (var a in _abductions)
-            if (a.Victim == victim) return false;
-        var cold = table.Cold(slot)!;
-        if (!hauls && CageFor(world, table.Next[v].Position, cold, null) is null) return false;
-        var task = (CharacterTask)table.Next[slot].Task;
-        var resume = hauls ? HaulResume(world, slot, cold) : TaskStart.Standing(cold, task);
-        if (!carry.BeginPickUp(world, slot, victim, resume, kidnap: true, source: TaskSource.Goal, row: TaskType.CarryWoundedSlaves))
-            return false;
-
-        cold.Engaged = true;
-        _abductions.Add(new Abduction { Carrier = table.IdOf(slot), Victim = victim, Faction = cold.Faction, Hauls = hauls });
-        return true;
+        var candidate = world.Fixtures.CageCandidates(world, _data, carrier, at);
+        return world.Fixtures.FindCage(world, carrier, at, FixtureRegistry.HomeOf(world, carrier), f => !candidate(f)) is not null;
     }
 
     #endregion
@@ -310,460 +145,39 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
     #region The tick
 
     /// <summary>
-    /// The kidnapping step: each running abduction moves on (an ended one is dropped), then the kidnappers on their turn look for victims.
+    /// Registers goal 254 (<see cref="KidnapGoals.Register"/>).
+    /// </summary>
+    void IDutyGoalOwner.RegisterGoals(DutyGoals goals) => _goals.Register(goals);
+
+    /// <summary>
+    /// The kidnapping step: 254's lifts move on (a lift that ended is done), then the kidnappers on their turn look for victims (each once in
+    /// <see cref="KidnapSettings.LookEveryTicks"/>, docs/simulation.md "Spread sweeps").
     /// </summary>
     public void SlowWorld(World world)
     {
-        for (int k = 0; k < _abductions.Count;)
-        {
-            if (Step(world, _abductions[k])) k++;
-            else _abductions.RemoveAt(k);
-        }
-
-        // Each kidnapper looks once in LookEveryTicks, on its slot's turn (slot mod the period): the looks spread over the ticks (docs/simulation.md
-        // "Spread sweeps").
-        int every = world.Every(Settings.LookEveryTicks);
-        Look(world, every);
-    }
-
-    /// <summary>
-    /// The kidnappers on their turn of <paramref name="every"/> ticks look for a downed victim within their sight, not reserved, and start
-    /// an abduction.
-    /// </summary>
-    void Look(World world, int every)
-    {
-        var table = world.Characters;
-        _victims.Clear();
-        _reserved.Clear();
-        foreach (var a in _abductions) _reserved.Add(a.Victim);
-        _refused.RemoveAll(r => r.Until <= world.GameHours);
-        foreach (var r in _refused) _reserved.Add(r.Victim);
-        for (int s = 0; s < table.HighWater; s++)
-        {
-            if (table.Next[s].Alive && table.Next[s].Task == (byte)CharacterTask.PickUp && table.Cold(s)!.CarryTarget is { IsNone: false } target)
-                _reserved.Add(target);
-
-            if (table.Next[s].Alive && table.Cold(s) is { Medical.Dead: false, Race.Carriable: true } c && !c.IsImprisoned && c.CarriedBy.IsNone
-                && (c.Medical.Incapacitated || c.InSomething == HeldState.Bed)) _victims.Add(s);
-        }
-
-        if (_victims.Count == 0) return;
-        Span<int> duty = stackalloc int[5];
-        foreach (var squad in world.Squads.All)
-        {
-            if (squad.Members.Count == 0) continue;
-            duty.Fill(-1);
-            foreach (var member in squad.Members)
-            {
-                if (!table.TryResolveNext(member, out int slot) || !world.Turn(slot, every) || !FreeKidnapper(world, slot))
-                    continue;
-
-                var cold = table.Cold(slot)!;
-                int role = (int)AiSystem.RoleOf(squad, member, cold);
-                if (duty[role] < 0) duty[role] = population.KidnapDuty(world, squad, (AiRole)role) ? 1 : 0;
-                if (duty[role] == 0 || Busy(member)) continue;
-                int victim = Nearest(world, slot, cold);
-                if (victim < 0) continue;
-                var victimId = table.IdOf(victim);
-
-                // An AI squad has no march home: it starts only with a free cage of its faction in range (the original's "all cages full" state stops
-                // the goal).
-                var inst = squad.PlatoonId >= 0 ? world.Platoons.Find(squad.PlatoonId)?.Campaign : null;
-                bool campaign = inst is not null;
-
-                // A squad with a cannibal retreat package (signals 1, 25) carries its captive home: the package starts once a member carries someone
-                // outside a town of its faction.
-                bool retreats = !campaign && squad.Ai is { } board
-                        && board.Packages.Any(p => PackageClasses.Of(p.Package.Signal) == PackageClass.CannibalRetreat);
-                if (!campaign && !retreats && CageFor(world, table.Next[victim].Position, cold, null) is null) continue;
-                int homeSite = campaign
-                        ? (inst!.Home.Site is >= 0 and var h && h < data.SiteFactions.Count && data.SiteFactions[h] == cold.Faction ? h : -1)
-                    : retreats ? squad.Ai!.Town : -1;
-                if (!carry.BeginPickUp(world, slot, victimId, ResumeOf(table.Next[slot].Task, campaign || retreats), kidnap: true,
-                        source: TaskSource.Goal, row: TaskType.FindAndKidnap))
-                    continue;
-
-                cold.Engaged = true;
-                _reserved.Add(victimId);
-                _abductions.Add(new Abduction { Carrier = member, Victim = victimId, Faction = cold.Faction, Marching = campaign || retreats,
-                        HomeSite = homeSite, Retreats = retreats });
-            }
-        }
-    }
-
-    /// <summary>
-    /// The nearest victim within sight of the kidnapper, among the downed of the look not picked by anyone (-1: none).
-    /// </summary>
-    int Nearest(World world, int slot, CharacterCold cold)
-    {
-        var next = world.Characters.Next;
-        float range = AggroSystem.RangeOf(cold, Settings.Sight), best2 = range * range;
-        int best = -1;
-        foreach (int v in _victims)
-        {
-            if (v == slot || _reserved.Contains(world.Characters.IdOf(v)) || !IsVictim(world, v, cold.Faction))
-                continue;
-
-            float d2 = Vector2.DistanceSquared(new Vector2(next[slot].Position.X, next[slot].Position.Z),
-                    new Vector2(next[v].Position.X, next[v].Position.Z));
-            if (d2 <= best2) (best, best2) = (v, d2);
-        }
-
-        return best;
-    }
-
-    /// <summary>
-    /// Whether <paramref name="id"/> carries out an abduction.
-    /// </summary>
-    bool Busy(CharacterId id)
-    {
-        foreach (var a in _abductions)
-            if (a.Carrier == id) return true;
-        return false;
+        _goals.Step(world);
+        _goals.Look(world, world.Every(Settings.LookEveryTicks));
     }
 
     #endregion
 
-    #region One abduction
+    #region Log and hash
 
     /// <summary>
-    /// One tick of an abduction; false when it is over.
+    /// Logs a kidnapping event (<see cref="KidnapSettings.RecordLog"/>) and writes it to the event log.
     /// </summary>
-    bool Step(World world, Abduction a)
+    internal void Note(World world, KidnapEventKind kind, CharacterId carrier, CharacterId victim, int faction)
     {
-        var table = world.Characters;
-        float dt = world.TickSeconds;
-        if (!table.TryResolveNext(a.Carrier, out int g) || table.Cold(g) is not { Medical.Incapacitated: false } gc)
-            return End(world, a, KidnapEventKind.GaveUp);
+        if (Settings.RecordLog) _log.Add(new KidnapEvent(world.Tick, kind, carrier, victim, faction));
 
-        if (!table.TryResolveNext(a.Victim, out int t) || table.Cold(t) is not { } tc || tc.Medical is { Dead: true })
-        {
-            // A victim that died on the way stays on the shoulder of a carrier whose package lists 281: the town duty cages the corpse
-            // (TownDutySystem.LookCarriers).
-            bool keeps = gc.Carrying == a.Victim && table.TryResolveNext(a.Victim, out _) && world.Squads.Find(gc.SquadId) is { } squad
-                && population.GoalDuty(world, squad, AiSystem.RoleOf(squad, a.Carrier, gc), TaskType.FindCageAndPutDeadguyIn);
-            if (!keeps) carry.LetGo(world, g);
-            return End(world, a, KidnapEventKind.GaveUp);
-        }
-
-        if (tc.IsImprisoned) return End(world, a, KidnapEventKind.GaveUp);
-
-        // A stumble or a get-up (an order on the body, which lets no duty go) holds the carrier a moment: the kidnap waits for it.
-        if (PlayerOrders.BodyHolds(gc)) return true;
-        a.Time += dt;
-        ref var gn = ref table.Next[g];
-        switch (a.Phase)
-        {
-            case KidnapPhase.Lift:
-                return StepLift(world, a, g, t, gc, tc, ref gn);
-            case KidnapPhase.Carry:
-                return StepCarry(world, a, g, gc, ref gn);
-            case KidnapPhase.Walk:
-                return StepWalk(world, a, g, gc, tc, ref gn);
-        }
-
-        return true;
+        string by = EventLog.Who(world, carrier), whom = EventLog.Who(world, victim);
+        world.Events.Line(world, "kidnap", $"{kind}: {whom} by {by} ({EventLog.FactionName(world, faction)})");
     }
 
     /// <summary>
-    /// The lift: once the carrier has the body it carries it; a lift that ended without it is tried again a few times.
+    /// Adds 254's records to the world's state hash, while there are any.
     /// </summary>
-    bool StepLift(World world, Abduction a, int g, int t, CharacterCold gc, CharacterCold tc, ref CharacterHot gn)
-    {
-        if (gc.Carrying == a.Victim)
-        {
-            Note(world, KidnapEventKind.Lifted, a);
-            if (tc.IsPlayer) world.Post($"{gc.Name} is carrying {tc.Name} away");
-            a.Phase = KidnapPhase.Carry;
-            a.Time = 0;
-            a.Tries = 0;
-            return true;
-        }
-
-        if (gn.Task == (byte)CharacterTask.PickUp) return true;
-
-        // The lift ended without the body (fought off, pushed away): again while it is down and free, a few times.
-        if (++a.Tries > Settings.LiftTries || !tc.CarriedBy.IsNone || !IsVictim(world, t, a.Faction)
-                || !carry.BeginPickUp(world, g, a.Victim, ResumeOf(gn.Task, a.Marching), kidnap: true, source: TaskSource.Goal,
-                        row: TaskType.FindAndKidnap))
-            return End(world, a, KidnapEventKind.GaveUp);
-
-        return true;
-    }
-
-    /// <summary>
-    /// The carry: every look the best free cage, else the march home or a wait; a dropped body ends it.
-    /// </summary>
-    bool StepCarry(World world, Abduction a, int g, CharacterCold gc, ref CharacterHot gn)
-    {
-        // dropped (hit, the arm lost): the body lies there for the next one
-        if (gc.Carrying != a.Victim) return End(world, a, KidnapEventKind.GaveUp);
-
-        // Every look the best free cage of its faction in range. A marching carrier looks only within a town of its faction (any on the
-        // way: the original's cage finder weighs the home x100 but does not require it) and drops the captive when its home town (any,
-        // without a HomeSite) has no free cage; any other carrier waits a while for one (engine choices; the original's give-up rule is
-        // Unknown).
-        if ((world.Tick + g) % world.Every(Settings.LookEveryTicks) != 0) return true;
-        if (a.Hauls) return CageFor(world, gn.Position, gc, a) is { } cageFound ? ToCage(world, a, g, cageFound) : true;
-        int town = TownOf(world, gn.Position, gc.Faction);
-        if ((!a.Marching || town >= 0) && CageFor(world, gn.Position, gc, a) is { } found)
-            return ToCage(world, a, g, found);
-        if (!a.Marching) return a.Time > Settings.PatienceSeconds ? Drop(world, a, g) : true;
-
-        int home = a.Retreats ? RetreatHome(world, gc) : a.HomeSite;
-        if (town >= 0 && (home < 0 || town == home)) return Drop(world, a, g);
-        return a.Retreats ? WalkHome(world, a, g, home) : true;
-    }
-
-    /// <summary>
-    /// The town a retreating carrier runs to: its squad's retreat mission town (<see cref="AiSystem.CaptiveStarted"/>), else its home town; -1:
-    /// none.
-    /// </summary>
-    static int RetreatHome(World world, CharacterCold carrier) =>
-        world.Squads.Find(carrier.SquadId)?.Ai is not { } board ? -1
-        : board.MissionTown >= 0 ? board.MissionTown
-        : board.Town;
-
-    /// <summary>
-    /// A retreating carrier out of its home town: standing or milling, it runs there (130 TRAVEL_TO_TARGET_TOWN_FAST, the retreat's own goal, which
-    /// the original's carrier keeps since its cage goals score 0 outside the mission town, docs/game/ai-tasks.md goals 112 / 281); a follower
-    /// follows its leader there. Without a home it waits as an AI squad's carrier does, then drops the captive.
-    /// </summary>
-    bool WalkHome(World world, Abduction a, int g, int home)
-    {
-        if (home < 0) return a.Time > Settings.PatienceSeconds ? Drop(world, a, g) : true;
-        if (world.Characters.Next[g].Task is not ((byte)CharacterTask.Idle or (byte)CharacterTask.Wander)) return true;
-
-        var centre = data.Sites[home].Position;
-        TaskStart.Walk(world, g, new Vector2(centre.X, centre.Z), SpeedMode.Run, TaskType.TravelToTargetTownFast, TaskSource.Goal);
-        return true;
-    }
-
-    /// <summary>
-    /// The walk to the cage: at it the victim is caged; a cage gone, taken or out of reach is a retry.
-    /// </summary>
-    bool StepWalk(World world, Abduction a, int g, CharacterCold gc, CharacterCold tc, ref CharacterHot gn)
-    {
-        var table = world.Characters;
-        if (gc.Carrying != a.Victim) return End(world, a, KidnapEventKind.GaveUp);
-        var cage = a.Cage is { } id ? world.Fixtures.Find(id) : null;
-        if (cage is null || !FixtureRegistry.IsFree(table, cage)) return Retry(world, a, g);
-        float d = Vector2.Distance(new Vector2(gn.Position.X, gn.Position.Z), new Vector2(cage.Position.X, cage.Position.Z));
-        bool walking = gn.Task == (byte)CharacterTask.GoTo;
-        if (FixtureRegistry.AtCage(cage, gn.Position, walking))
-        {
-            TaskStart.Stand(table, g);
-            carry.LetGo(world, g);
-            if (!world.Fixtures.Imprison(world, a.Victim, cage, data.Bodies.Constants.PrisonTime, a.Carrier))
-                return Retry(world, a, g);
-
-            if (table.TryResolveNext(a.Victim, out int caged)) Deeds?.Caged(world, g, caged);
-
-            // The hold is the kidnappers' own: in another faction's cage (a public barracks' the carrier may use) the victim is that faction's
-            // prisoner, whose jailers free it once served, as the original's goal 211 does for any served occupant (#628).
-            tc.Kidnapped = cage.Owner == a.Faction;
-            if (tc.IsPlayer) world.Post($"{tc.Name} has been kidnapped by {data.Factions[a.Faction].Name}");
-            return End(world, a, KidnapEventKind.Caged);
-        }
-
-        if (!walking)
-        {
-            if (++a.Tries > Settings.CageWalks)
-            {
-                world.Fixtures.MarkUnreachable(world, cage, a.Faction);
-                return Retry(world, a, g);
-            }
-
-            TaskStart.Walk(world, g, cage.Position, SpeedMode.Free, TaskType.FindCageAndPutIn, TaskSource.Goal);
-        }
-
-        return true;
-    }
-
-    /// <summary>
-    /// The task a carrier goes back to once it has the body: its wandering or following, else idle; a marching carrier wanders, also from a fight's
-    /// idle, as it walks home by milling round its own town (<see cref="PopulationSystem"/>'s retreating column leaves carriers alone; idle it would
-    /// stand there with the captive).
-    /// </summary>
-    static CharacterTask ResumeOf(byte task, bool marching) =>
-        task is (byte)CharacterTask.Wander or (byte)CharacterTask.Follow ? (CharacterTask)task : marching ? CharacterTask.Wander : CharacterTask.Idle;
-
-    /// <summary>
-    /// Whether a free cage <paramref name="carrier"/> may use is in range of <paramref name="at"/> (see <see cref="CageFor"/>).
-    /// </summary>
-    public bool HasCage(World world, Vector3 at, CharacterCold carrier) => CageFor(world, at, carrier, null) is not null;
-
-    /// <summary>
-    /// A free cage <paramref name="carrier"/> may use among the candidates of its town (<see cref="FixtureRegistry.CageCandidates"/>: the town it
-    /// stands in, else its faction's nearest, plus its home's), not another abduction's (<see cref="FixtureRegistry.FindCage"/>: the original's
-    /// weights, its own faction's x100, any other faction's only when <see cref="FixtureRegistry.CanUse"/> passes).
-    /// </summary>
-    Fixture? CageFor(World world, Vector3 at, CharacterCold carrier, Abduction? self)
-    {
-        var candidate = world.Fixtures.CageCandidates(world, data, carrier, at);
-        return world.Fixtures.FindCage(world, carrier, at, FixtureRegistry.HomeOf(world, carrier), f => !candidate(f) || Reserved(f, self));
-    }
-
-    /// <summary>
-    /// Whether another abduction chose cage <paramref name="f"/>.
-    /// </summary>
-    bool Reserved(Fixture f, Abduction? self)
-    {
-        foreach (var a in _abductions)
-            if (!ReferenceEquals(a, self) && a.Cage == f.Id) return true;
-        return false;
-    }
-
-    /// <summary>
-    /// The town of <paramref name="faction"/> a point is in (within <see cref="KidnapSettings.TownSlack"/> x its radius; the nearest centre), else
-    /// -1.
-    /// </summary>
-    int TownOf(World world, Vector3 at, int faction)
-    {
-        int best = -1;
-        float bestD2 = float.MaxValue;
-        foreach (var site in data.Sites)
-        {
-            if (site.Index >= data.SiteFactions.Count || data.SiteFactions[site.Index] != faction || site.Town.Type is TownType.NestMarker
-                    or TownType.Null)
-                continue;
-
-            float r = site.Town.SizeRadius * site.Town.TownRadiusMult * Settings.TownSlack;
-            float d2 = Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(site.Position.X, site.Position.Z));
-            if (r > 0 && d2 <= r * r && d2 < bestD2) (best, bestD2) = (site.Index, d2);
-        }
-
-        return best;
-    }
-
-    /// <summary>
-    /// Sends the carrier to <paramref name="cage"/>, which the abduction reserves.
-    /// </summary>
-    bool ToCage(World world, Abduction a, int g, Fixture cage)
-    {
-        a.Phase = KidnapPhase.Walk;
-        a.Tries = 0;
-        a.Time = 0;
-        a.Cage = cage.Id;
-        TaskStart.Walk(world, g, cage.Position, SpeedMode.Free, TaskType.FindCageAndPutIn, TaskSource.Goal);
-        return true;
-    }
-
-    /// <summary>
-    /// The cage was taken or cannot be reached: another one (the walks are counted), else the captive is dropped.
-    /// </summary>
-    bool Retry(World world, Abduction a, int g)
-    {
-        var table = world.Characters;
-        a.Cage = null;
-        if (++a.Tries > Settings.CageWalks || CageFor(world, table.Next[g].Position, table.Cold(g)!, a) is not { } cage)
-            return a.Hauls ? CarryOn(world, a, g) : Drop(world, a, g);
-
-        return ToCage(world, a, g, cage);
-    }
-
-    /// <summary>
-    /// What a hauling carrier does once it has the slave: a squad member follows its leader (goal 141, the next of its list), the leader stands.
-    /// </summary>
-    static CharacterTask HaulResume(World world, int slot, CharacterCold cold) =>
-        world.Squads.Find(cold.SquadId) is { } squad && squad.Leader != world.Characters.IdOf(slot) ? CharacterTask.Follow : CharacterTask.Idle;
-
-    /// <summary>
-    /// A hauling carrier with no cage to go to keeps its slave and goes back to its squad (<see cref="Abduction.Hauls"/>).
-    /// </summary>
-    bool CarryOn(World world, Abduction a, int g)
-    {
-        a.Phase = KidnapPhase.Carry;
-        a.Tries = 0;
-        a.Time = 0;
-        var table = world.Characters;
-        if (table.Next[g].Task != (byte)CharacterTask.GoTo) return true;
-        if (world.Squads.Find(table.Cold(g)!.SquadId) is { } squad && squad.Leader != a.Carrier)
-            TaskStart.Become(world, g, CharacterTask.Follow, TaskType.FollowSquadleader, TaskSource.Goal);
-        else TaskStart.Stand(table, g);
-        return true;
-    }
-
-    /// <summary>
-    /// The carrier puts the victim down for want of a cage; the victim is left alone for <see cref="KidnapSettings.RefuseHours"/>.
-    /// </summary>
-    bool Drop(World world, Abduction a, int g)
-    {
-        TaskStart.Stand(world.Characters, g);
-        carry.LetGo(world, g);
-        _refused.Add((a.Victim, world.GameHours + Settings.RefuseHours));
-        return End(world, a, KidnapEventKind.Dropped);
-    }
-
-    /// <summary>
-    /// An order takes the carrier (<see cref="IDutyRelease"/>): its abduction ends, the victim let go where it stands (<see cref="Drop"/>'s
-    /// unlink) and its walk stood rather than turned into a follow, which the order's own start replaces.
-    /// </summary>
-    void IDutyRelease.ReleaseForOrder(World world, int slot)
-    {
-        var table = world.Characters;
-        var id = table.IdOf(slot);
-        for (int k = _abductions.Count - 1; k >= 0; k--)
-        {
-            var a = _abductions[k];
-            if (a.Carrier != id) continue;
-
-            bool carries = table.Cold(slot)?.Carrying == a.Victim;
-            if (carries) carry.LetGo(world, slot);
-            if (table.Next[slot].Task == (byte)CharacterTask.GoTo) TaskStart.Stand(table, slot);
-            End(world, a, carries ? KidnapEventKind.Dropped : KidnapEventKind.GaveUp);
-            _abductions.RemoveAt(k);
-        }
-    }
-
-    /// <summary>
-    /// Ends an abduction: the carrier goes back to its squad (following its leader) or its routine (the AI takes it again).
-    /// </summary>
-    bool End(World world, Abduction a, KidnapEventKind kind)
-    {
-        var table = world.Characters;
-        if (table.TryResolveNext(a.Carrier, out int g) && table.Cold(g) is { } gc)
-        {
-            gc.Engaged = false;
-            if (table.Next[g].Task == (byte)CharacterTask.GoTo)
-            {
-                // A campaign squad's follower walks on after its leader again.
-                if (world.Squads.Find(gc.SquadId) is { } squad && squad.Leader != a.Carrier)
-                    TaskStart.Become(world, g, CharacterTask.Follow, TaskType.FollowSquadleader, TaskSource.Goal);
-                else TaskStart.Stand(table, g);
-            }
-        }
-
-        Note(world, kind, a);
-        return false;
-    }
-
-    /// <summary>
-    /// Logs an event of the abduction (<see cref="KidnapSettings.RecordLog"/>).
-    /// </summary>
-    void Note(World world, KidnapEventKind kind, Abduction a)
-    {
-        if (Settings.RecordLog) _log.Add(new KidnapEvent(world.Tick, kind, a.Carrier, a.Victim, a.Faction));
-        string by = EventLog.Who(world, a.Carrier), whom = EventLog.Who(world, a.Victim);
-        world.Events.Line(world, "kidnap", $"{kind}: {whom} by {by} ({EventLog.FactionName(world, a.Faction)})");
-    }
-
-    /// <summary>
-    /// Adds the running abductions and the refused victims to the world's state hash, while there are any.
-    /// </summary>
-    public void Hash(ref StateHasher hasher)
-    {
-        if (_abductions.Count == 0 && _refused.Count == 0) return;   // only while one runs, so worlds without kidnappings hash as before
-        hasher.Add(0x4B64704E);
-        hasher.Add(_abductions.Count);
-        foreach (var a in _abductions) a.Hash(ref hasher);
-        hasher.Add(_refused.Count);
-        foreach (var (victim, until) in _refused)
-        {
-            hasher.Add(victim);
-            hasher.Add(until);
-        }
-    }
+    public void Hash(ref StateHasher hasher) => _goals.Hash(ref hasher);
 
     #endregion
 }

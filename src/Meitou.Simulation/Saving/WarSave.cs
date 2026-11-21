@@ -10,7 +10,8 @@ namespace Meitou.Simulation.Saving;
 /// with the original's keys. Keys Meitou does not know are kept (the capture writes into the loaded save's records). The original saves no phase
 /// timer (its phases start again at load); Meitou writes its own floats <c>meitou phase start c&lt;i&gt;</c>, <c>meitou fight start c&lt;i&gt;</c>,
 /// <c>meitou arrived c&lt;i&gt;</c>, <c>meitou announced c&lt;i&gt;</c> and <c>meitou carry start p&lt;i&gt;</c> (on the campaign platoon
-/// <c>p&lt;i&gt;</c>; absolute game hours, as <c>updatetime</c>; absent: not started) and reads them back, so a loaded campaign goes on where it was.
+/// <c>p&lt;i&gt;</c>; absolute game hours, as <c>updatetime</c>; absent: not started) and, under the Fixes option
+/// <see cref="PopulationSettings.KeepCampaignClocks"/>, reads them back, so a loaded campaign goes on where it was.
 /// Older saves' <c>meitou carry start c&lt;i&gt;</c> (one stamp per campaign) is read onto each of its platoons and dropped on the next write.
 /// </summary>
 internal static class WarSave
@@ -103,6 +104,7 @@ internal static class WarSave
         Dictionary<CampaignInstance, int> leaders, Dictionary<CampaignInstance, double> legacyCarry)
     {
         var data = population.Data;
+        bool kept = population.Settings.KeepCampaignClocks;
         for (int i = 0, n = war.Ints.GetValueOrDefault("num actives"); i < n; i++)
         {
             string id = war.Strings.GetValueOrDefault($"dat c{i}", "");
@@ -120,13 +122,13 @@ internal static class WarSave
                 Phase = Math.Clamp(war.Ints.GetValueOrDefault($"phase c{i}"), 0, 2),
                 Reached = war.Bools.GetValueOrDefault($"rd c{i}"),
                 Trig = war.Bools.GetValueOrDefault($"trig c{i}"),
-                PhaseStart = Hour(war, PhaseStartKey + i) ?? now,
+                PhaseStart = Clock(war, PhaseStartKey + i, kept) ?? now,
                 Required = (int)(c.NumForces * population.Settings.RaidSizeMult),
-                FightStart = Hour(war, FightStartKey + i) ?? -1,
-                ArrivedAt = Hour(war, ArrivedKey + i) ?? -1,
-                AnnouncedAt = Hour(war, AnnouncedKey + i) ?? -1,
+                FightStart = Clock(war, FightStartKey + i, kept) ?? -1,
+                ArrivedAt = Clock(war, ArrivedKey + i, kept) ?? -1,
+                AnnouncedAt = Clock(war, AnnouncedKey + i, kept) ?? -1,
             };
-            if (Hour(war, CarryStartKey + i) is double carry) legacyCarry[inst] = carry;
+            if (Clock(war, CarryStartKey + i, kept) is double carry) legacyCarry[inst] = carry;
             if (inst.Phase == 1 && !c.HasPt2) inst.Phase = 2;
             if (Platoon(saved, Hand.Read(war, $"leader c{i}")) is int leader) leaders[inst] = leader;
 
@@ -181,11 +183,17 @@ internal static class WarSave
             p.Campaign = inst;
             inst.Platoons.Add(p.Id);
             inst.Men += population.LivingOf(world, p);
-            double? carry = Hour(war, CarryPlatoonKey + i);
+            double? carry = Clock(war, CarryPlatoonKey + i, population.Settings.KeepCampaignClocks);
             if (carry is null && legacyCarry.TryGetValue(inst, out double legacy)) carry = legacy;
             if (carry is { } stamp) inst.CarryStarts[p.Id] = stamp;
         }
     }
+
+    /// <summary>
+    /// A Meitou clock key's game hour (<see cref="Hour(FcsRecord, string)"/>); null, as when it is missing, while <paramref name="kept"/>
+    /// (<see cref="PopulationSettings.KeepCampaignClocks"/>) is off.
+    /// </summary>
+    static double? Clock(FcsRecord war, string key, bool kept) => kept ? Hour(war, key) : null;
 
     /// <summary>
     /// The game hour under <paramref name="key"/>; null when it is missing or not finite.

@@ -6,6 +6,7 @@ using Meitou.Simulation.Factions;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Perception;
 using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Dialogue;
 
@@ -87,6 +88,50 @@ public sealed partial class DialogueSystem
         world.Characters.TryResolveNext(npc, out int slot) && world.Characters.Cold(slot) is { } c && !SquadRegistry.IsAnimal(c)
         && _dialogue.Node(dialogueId) is { IsRoot: true } root
             && StartBubbles(world, npc, CharacterId.None, root, DialogueEvents.Announcement, now: false);
+
+    /// <summary>
+    /// <c>isMessageDelivered</c> (state 76, <c>FUN_140792190</c> -> <c>FUN_140673830(dialogue, 2)</c>, <b>Verified</b>): an ANNOUNCEMENT conversation of
+    /// <paramref name="npc"/> has ended (<see cref="_delivered"/>) in its current status town (any town while it is in none), and it is saying nothing
+    /// now (its conversation ended, no chained speaker: here no line on show, no bubble chain of its own and not in the open conversation). Read by
+    /// the AI's parallel think and the war manager; only serial steps write what it reads.
+    /// </summary>
+    internal bool MessageDelivered(World world, CharacterId npc)
+    {
+        if (!_delivered.TryGetValue(npc, out var town) || !SaysNothing(npc)) return false;
+
+        var now = world.Characters.TryResolveNext(npc, out int s) ? world.Characters.Cold(s)?.StatusTown ?? CampaignTown.None : CampaignTown.None;
+        return now.IsNone || now == town;
+    }
+
+    /// <summary>
+    /// <c>Dialogue::conversationHasEnded</c> as the announcement reads it: <paramref name="npc"/> has no line on show, no bubble chain of its own or
+    /// to speak in, and is not the open conversation's NPC. Any phase.
+    /// </summary>
+    internal bool SaysNothing(CharacterId npc) => !BubbleOf(npc) && _open?.Npc != npc;
+
+    /// <summary>
+    /// Whether <paramref name="npc"/> is saying an ANNOUNCEMENT bubble conversation of its own.
+    /// </summary>
+    bool Announcing(CharacterId npc)
+    {
+        foreach (var b in _bubbles)
+            if (b.C.Npc == npc && b.C.Event == DialogueEvents.Announcement) return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// Records an ANNOUNCEMENT of <paramref name="npc"/> as delivered in its current status town (<see cref="_delivered"/>); records of characters no
+    /// longer in the world go (their Dialogue object went with them).
+    /// </summary>
+    void Deliver(World world, CharacterId npc)
+    {
+        var table = world.Characters;
+        foreach (var gone in _delivered.Keys.Where(k => !table.TryResolveNext(k, out _)).ToArray()) _delivered.Remove(gone);
+        if (!table.TryResolveNext(npc, out int s) || table.Cold(s) is not { } c) return;
+
+        _delivered[npc] = c.StatusTown;
+    }
 
     /// <summary>
     /// Starts <paramref name="root"/> as a bubble conversation of <paramref name="npc"/> with <paramref name="whom"/> (<c>FUN_140683f90</c>): the
@@ -526,6 +571,7 @@ public sealed partial class DialogueSystem
     void EndBubbles(World world, Conversation c)
     {
         _starters.Ended(c.Npc);
+        if (c.Event == DialogueEvents.Announcement) Deliver(world, c.Npc);
         var key = (c.Npc, c.Event);
         var (count, _) = _counters.GetValueOrDefault(key);
         _counters[key] = (count + 1, world.GameHours);

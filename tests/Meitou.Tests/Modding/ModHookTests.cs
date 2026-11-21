@@ -100,8 +100,9 @@ public class ModHookTests
         Assert.Equal(2, travellers.Count);
         Assert.False(PopulationSystem.HoldPlatoon(w, -1, true));
 
-        // The camera leaves, so both roamers unload and walk on as stand-ins.
+        // The camera leaves and the roamers walk out of its block, so both unload and walk on as stand-ins.
         w.Commands.Enqueue(new FocusCommand(new Vector3(-2000, 0, 2000)) { Tick = w.Tick });
+        RoamingTests.WalkOut(w, travellers);
         for (int i = 0; i < 40 && travellers.Any(p => p.State != PlatoonState.Unloaded); i++) w.RunTicks(150);
 
         Assert.True(PopulationSystem.HoldPlatoon(w, travellers[0].Id, true));

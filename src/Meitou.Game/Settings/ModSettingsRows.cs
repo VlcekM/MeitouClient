@@ -209,6 +209,7 @@ sealed class ModSettingsRows(SettingsMenu menu)
         catch (Exception e)
         {
             Console.Error.WriteLine($"mod       {setting.Group.ModId}: setting '{setting.Key}' failed: {e}");
+            Content.CodeModFaults.Tell(setting.Group.ModId, e);
             menu.Notice = $"{setting.Group.Name}: {e.GetBaseException().Message}";
         }
 

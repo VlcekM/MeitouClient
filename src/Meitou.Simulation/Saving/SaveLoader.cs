@@ -522,6 +522,7 @@ public static class SaveLoader
         ModSquadSave.Read(platoon.Record, squad);
         squad.Shop = ShopSave.ReadPlayer(world, squad, platoon.Record, data);
         ModTagSave.Read(platoon.Record, squad.ModTags);
+        squad.SavedTown = CurrentTownSave.Read(platoon.Record);
 
         foreach (var sc in platoon.Characters)
         {
@@ -580,7 +581,7 @@ public static class SaveLoader
         // a string: the AI_PACKAGE id (docs/formats/save.md)
         string? saved = platoon.Record.Strings.TryGetValue("currentPackage", out var current) && current.Length > 0 ? current : null;
         var (package, job) = data.Db.Find(platoon.SquadTemplate) is { } templateRecord && SquadFactory.IsTemplate(templateRecord)
-            ? Ai.PlatoonJobs.For(data.Ai, SquadTemplate.From(templateRecord), saved) : (null, Ai.PlatoonJob.None);
+            ? Ai.PlatoonJobs.For(data.Ai, SquadTemplate.From(templateRecord), platoon.FactionId, true, saved) : (null, Ai.PlatoonJob.None);
 
         // Town-bound platoons are the town's own: its residents, bar squads, slaves and farm animals. They stay home, and the town makes none of its
         // own.
@@ -839,7 +840,7 @@ public static class SaveLoader
         foreach (var sc in platoon.Characters) sp.Members.Add(new SavedMember { Source = sc });
 
         string? saved = platoon.Record.Strings.TryGetValue("currentPackage", out var current) && current.Length > 0 ? current : null;
-        var (package, job) = Ai.PlatoonJobs.For(data.Ai, SquadTemplate.From(templateRecord), saved);
+        var (package, job) = Ai.PlatoonJobs.For(data.Ai, SquadTemplate.From(templateRecord), platoon.FactionId, true, saved);
         int faction = data.FactionIndex(platoon.FactionId);
         var p = new Platoon
         {
@@ -870,8 +871,8 @@ public static class SaveLoader
     }
 
     /// <summary>
-    /// The state every loaded platoon reads off its saved record, NPC or wild: its imprisoned, dead and intact flags and a code mod's marks (its
-    /// spawn flag and tag, <see cref="ModPlatoonSave"/>).
+    /// The state every loaded platoon reads off its saved record, NPC or wild: its imprisoned, dead and intact flags, a code mod's marks (its
+    /// spawn flag and tag, <see cref="ModPlatoonSave"/>) and its blackboard's town and arrival hour (<see cref="Platoon.SavedTown"/>).
     /// </summary>
     static void ReadSavedState(Platoon p, SavePlatoon platoon)
     {
@@ -881,6 +882,7 @@ public static class SaveLoader
         p.IntactFlag = record.Bools.GetValueOrDefault("intact", true);
         p.ModSpawned = ModPlatoonSave.Spawned(record);
         p.ModTag = ModPlatoonSave.Tag(record);
+        p.SavedTown = CurrentTownSave.Read(record);
     }
 
     /// <summary>

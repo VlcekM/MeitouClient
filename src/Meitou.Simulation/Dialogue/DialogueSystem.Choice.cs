@@ -125,7 +125,7 @@ public sealed partial class DialogueSystem
         {
             if (m == c.Npc || c.Interjectors.Contains(m) || !table.TryResolveNext(m, out int s) || !Awake(table, s) || table.Cold(s) is not { } mc)
                 continue;
-            if (mc.Engaged || mc.Fighter?.IsAnimal == true) continue;
+            if (Talking(m) || mc.Fighter?.IsAnimal == true) continue;
             if (!ListsSpeaker(node, mc.RecordId)) continue;
             float d2 = Vector3.DistanceSquared(table.Next[s].Position, at);
             float w = Math.Clamp((d2 - 202800f) / (900f - 202800f), 0, 1);

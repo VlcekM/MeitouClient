@@ -174,8 +174,8 @@ public sealed class ActionLog
     }
 
     /// <summary>
-    /// A line when goal 148's note of an NPC whose lists hold it changed since the last one written (<see cref="AiMind.BedRescueNote"/>): whether it
-    /// is eligible, wanted but not chosen (with the goal chosen instead), chosen but not started, or lifting. True when it wrote.
+    /// A line when goal 148's note of a character whose lists weigh it changed since the last one written (<see cref="AiMind.BedRescueNote"/>): whether it
+    /// is eligible, wanted but not chosen (with the goal chosen instead), or lifting. True when it wrote.
     /// </summary>
     bool WriteRescue(TextWriter writer, World world, int slot, CharacterCold cold)
     {
@@ -188,8 +188,6 @@ public sealed class ActionLog
         var line = _line.Clear();
         line.Append(EventLog.Stamp(world)).Append(EventLog.Who(world, slot)).Append(": rescue 148, ").Append(RescueText(note));
         if (note == BedRescueNote.NotChosen && cold.Ai?.Goal is { } goal) line.Append(": its goal is ").Append(RowText(goal.Task.Type));
-        if (note == BedRescueNote.NotFree)
-            line.Append(": task ").Append((CharacterTask)world.Characters.Previous[slot].Task).Append(cold.Engaged ? ", engaged" : "");
         writer.WriteLine(line.ToString());
         return true;
     }
@@ -205,8 +203,6 @@ public sealed class ActionLog
         BedRescueNote.NoBed => "not eligible: no bed for it",
         BedRescueNote.NoPutIn => "not eligible: the ally found is one it would not lay in a bed",
         BedRescueNote.NotChosen => "wanted, not chosen",
-        BedRescueNote.NotFree => "chosen, not free to lift",
-        BedRescueNote.Refused => "chosen, the lift would not start",
         BedRescueNote.Lifting => "chosen, lifting",
         _ => note.ToString(),
     };

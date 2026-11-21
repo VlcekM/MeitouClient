@@ -75,7 +75,7 @@ public sealed partial class LockSystem
         float bestDistance = float.MaxValue;
         foreach (var id in Who(world, who))
         {
-            if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { IsPlayer: true, Medical.Incapacitated: false, IsImprisoned: false } c
+            if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { Medical.Incapacitated: false, IsImprisoned: false } c
                     || !c.CarriedBy.IsNone
                 || !TaskStart.Eligible(world, c, row)) continue;
             float d = Vector2.Distance(Flat(table.Next[s].Position), Flat(where.Position));
@@ -106,57 +106,12 @@ public sealed partial class LockSystem
     }
 
     /// <summary>
-    /// Whether the character's role list in its squad's running package holds one of the goals in its hours.
-    /// </summary>
-    static bool Lists(Blackboard board, Squad squad, CharacterId id, CharacterCold c, int hour, TaskType a, TaskType b,
-            TaskType other = TaskType.None)
-    {
-        var roles = board.Roles[(int)AiSystem.RoleOf(squad, id, c)];
-        for (int g = 0; g < roles.Count; g++)
-            if (roles[g].Task.Type is var t && (t == a || t == b || t == other) && roles[g].InWindow(hour)) return true;
-        return false;
-    }
-
-    /// <summary>
-    /// 202 Escaping (docs/game/ai-tasks.md "Finders of the jobs"; <c>Task_TakeOffCuffs</c> 219 provides its !134 through 201 / 185 / 186), every
-    /// <see cref="EscapeEveryTicks"/> ticks: an awake AI character wearing locked shackles whose role list holds 202 sets to work on them, cutting
-    /// with a tool, else picking (engine choice: the planner's pick among the three is <b>Unknown</b>). Caged, it first needs the cage open
-    /// (<see cref="OpportunisticEscapes"/>). One that wears shackles no longer locked takes them off (<see cref="TakeOffCuffs"/>).
-    /// </summary>
-    void ShackleEscapes(World world)
-    {
-        if (world.Tick % EscapeEveryTicks != 0) return;
-        var table = world.Characters;
-        int hour = world.Hour;
-        for (int s = 0; s < table.HighWater; s++)
-        {
-            if (!table.Next[s].Alive
-                    || table.Cold(s) is not { IsImprisoned: false, IsPlayer: false, Shackles: null, Medical.Incapacitated: false,
-                            CarriedBy.IsNone: true, Ai: { Squad: { Ai: { } board } squad } } c
-                || !Lists(board, squad, table.IdOf(s), c, hour, TaskType.TotalEscape, TaskType.TotalEscape)) continue;
-            if (WornShackles(c) is null)
-            {
-                TakeOffCuffs(world, c, table.Next[s].Position);
-                continue;
-            }
-
-            c.PickingLock = null;
-            c.Shackles = new ShackleJob(table.IdOf(s), Lockpicking.BestTool(c) is null ? ShackleWork.Pick : ShackleWork.Cut);
-        }
-    }
-
-    /// <summary>
-    /// How often the AI's shackled characters are looked at for an escape (see <see cref="ShackleEscapes"/>).
-    /// </summary>
-    const int EscapeEveryTicks = 30;
-
-    /// <summary>
     /// 219 Removing Shackles (<c>Task_TakeOffCuffs</c>, <b>Verified</b>: its update queues <c>Character::setChainedMode(self, false)</c>,
     /// <c>FUN_14032e590</c>): the worn locked-armour item, in the boots section else the body one, leaves the equipment whatever its lock state.
     /// <b>Engine choice</b>: it goes to the character's inventory, else the ground (where the original sends it is <b>Unknown</b>); the planner's
     /// chained flag (<c>+0x320</c>) is read as wearing such an item.
     /// </summary>
-    void TakeOffCuffs(World world, CharacterCold c, Vector3 at)
+    internal void TakeOffCuffs(World world, CharacterCold c, Vector3 at)
     {
         if (c.Inventory is not { } inv) return;
         var cuffs = inv.Items.FirstOrDefault(i => i.IsLocked && i.Section == "boots")
@@ -166,31 +121,6 @@ public sealed partial class LockSystem
         cuffs.Section = "main";
         if (!inv.Add(cuffs)) world.GroundItems.Drop(cuffs, at, 0);
         Assembly?.RefreshEquipment(c);
-    }
-
-    /// <summary>
-    /// 256 Get out of cage and 207 Escape cage (opportunistic; <c>Task_GetOutOfCage</c> with the escape flag, docs/game/ai-tasks.md "Arrest and
-    /// prison rows"): an AI prisoner, awake, whose role list holds the goal in its hours, walks out as soon as its cage is not effectively locked
-    /// (<see cref="FixtureRegistry.GetOut"/> refuses a locked one; whether it is an escape is the task's flag,
-    /// <see cref="FixtureRegistry.LeaveCage"/>).
-    /// </summary>
-    void OpportunisticEscapes(World world)
-    {
-        var table = world.Characters;
-        int hour = world.Hour;
-        foreach (var f in world.Fixtures.All)
-        {
-            if (f.Kind != FixtureKind.Cage || FixtureRegistry.IsFree(table, f) || f.Lock is { Locked: true }
-                    || !table.TryResolveNext(f.Occupant, out int s))
-                continue;
-
-            if (table.Cold(s) is not { IsImprisoned: true, IsPlayer: false, Medical.Incapacitated: false, Ai: { Squad: { Ai: { } board } squad } } c)
-                continue;
-            // 256, 207 (Escape cage: A !79, B !54, the same task with the escape flag) or 202 TOTAL_ESCAPE, whose !79 the cage rows (133 / 207 / 256)
-            // provide once the cage is unlocked.
-            if (Lists(board, squad, f.Occupant, c, hour, TaskType.GetOutOfCageOpportunistic, TaskType.TotalEscape, TaskType.GetOutOfCageEscape))
-                world.Fixtures.GetOut(world, f.Occupant, Crimes);
-        }
     }
 
     /// <summary>

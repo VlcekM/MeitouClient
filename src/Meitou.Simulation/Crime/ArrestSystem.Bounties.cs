@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Data.Gameplay.Ai;
+using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Locks;
@@ -43,41 +44,6 @@ public sealed class Caging
 }
 
 /// <summary>
-/// A bounty hunter after a player character (economy.md 11.8): chasing until the target is down, then resting from it (<see cref="Rest"/> game
-/// seconds left).
-/// </summary>
-public sealed class Hunt
-{
-    /// <summary>
-    /// The bounty hunter.
-    /// </summary>
-    public required CharacterId Hunter { get; init; }
-    /// <summary>
-    /// The player character hunted.
-    /// </summary>
-    public required CharacterId Target { get; init; }
-    /// <summary>
-    /// Game seconds since the last attack order.
-    /// </summary>
-    public float Time { get; set; }
-    /// <summary>
-    /// Above 0: the hunt is over and the hunter leaves this target alone for that many more game seconds.
-    /// </summary>
-    public float Rest { get; set; }
-
-    /// <summary>
-    /// Adds the hunter, target, time and rest to the world hash.
-    /// </summary>
-    internal void Hash(ref StateHasher h)
-    {
-        h.Add(Hunter);
-        h.Add(Target);
-        h.Add(Time);
-        h.Add(Rest);
-    }
-}
-
-/// <summary>
 /// The arrest system's bail, the player's put-in-cage order with its bounty claim, and the bounty hunters.
 /// </summary>
 public sealed partial class ArrestSystem : IOrderOwner
@@ -96,19 +62,11 @@ public sealed partial class ArrestSystem : IOrderOwner
     /// The running put-in-cage walks, one per carrier.
     /// </summary>
     readonly List<Caging> _cagings = [];
-    /// <summary>
-    /// The hunts, the resting ones kept until their rest runs out.
-    /// </summary>
-    readonly List<Hunt> _hunts = [];
 
     /// <summary>
     /// The running put-in-cage walks.
     /// </summary>
     public IReadOnlyList<Caging> Cagings => _cagings;
-    /// <summary>
-    /// The hunts, running and resting.
-    /// </summary>
-    public IReadOnlyList<Hunt> Hunts => _hunts;
 
     /// <summary>
     /// Takes the player's bail and put-in-cage orders (the selection's carriers when the order names none).
@@ -247,8 +205,15 @@ public sealed partial class ArrestSystem : IOrderOwner
     }
 
     /// <summary>
-    /// Paying (<c>FUN_1406ae170</c>, economy.md 11.5): the money, the jail's entry erased, the cage unlocked and the prisoner out through task 133
-    /// (<see cref="SendOut"/>).
+    /// Paying (<c>FUN_1406ae170</c>, economy.md 11.5): the money, the jail's entry erased, the prisoner split from a squad of others
+    /// into one of its own (<see cref="Dialogue.DialogueSystem.Separate"/>), its worn shackles unlocked and out through order 133.
+    /// The end of each freed prisoner's block (<b>Verified</b> by disassembly): one that could not speak (event 51 returned 0) is given 128 Retreat
+    /// to hometown, then every one 133 Get out of cage (legit); both gives clear the order queue first (<c>FUN_1405d20d0</c> with its clear argument
+    /// 1: <c>FUN_1405074a0</c> and <c>FUN_140507530</c>), so 133 replaces 128 and the prisoner only steps out of its cage
+    /// (<see cref="FixtureRegistry.GetOutLegit"/>); its own AI goes on from there. <b>Engine order</b>: 133 is given (and started) before event 51,
+    /// since Meitou's events need a speaker out of its cage, so whether the event would fail is not known before it and 128, which 133 wipes unrun,
+    /// is not given. A prisoner whose chooser does not run (no squad, out cold) keeps the order queued in its cage until it does. The cage stays locked: unlike the buy, the bail
+    /// writes no cage lock (<b>Verified</b>).
     /// </summary>
     void Bail(World world, int p, CharacterCold pc, Fixture cage, int price, int payer)
     {
@@ -258,30 +223,24 @@ public sealed partial class ArrestSystem : IOrderOwner
         if (pc.Bounties is { } ledger && ledger.BookedFor(Crimes.Factions.Relations, cage.Owner) is { } entry)
             CrimeSystem.ClearBounty(world, p, pc, ledger, entry);
         world.Post(Loc.Tr("{1} paid a bail of c.{2} for {3}", table.Cold(payer)!.Name, price, pc.Name));
-        world.Fixtures.SetLocked(cage, false);
         FixtureRegistry.ClearSlave(world, pc);   // bail frees a slave (FUN_1406ae170)
         pc.Freed = true;
         pc.Recognition = 0;
+
+        // Out of a squad of others into a squad of its own, as a slave bought free (FUN_1406ae170 calls FUN_1405ce4e0 before event 51, for a
+        // player's character too; Verified), so the payer below is tagged in the new squad's memory.
+        Talk?.Separate(world, prisoner);
+
+        // Its worn shackles are unlocked, still worn (FUN_1406ae170: FUN_1405c8a10's locked armour, lock byte +0x20 = 0; Verified, as the buy).
+        if (LockSystem.WornShackles(pc)?.Lock is { } shackles) shackles.Locked = false;
+
         // Its squad remembers the payer as the one who freed it, and it says event 51 at the payer (FUN_1406ae170: FUN_140673930 tag 3, FUN_140684990
         // event 0x33; Verified).
         var payerId = table.IdOf(payer);
         Talk?.Memory.Remember(world, pc.SquadId, payerId, Dialogue.MemoryTag.FreedMe);
-        SendOut(world, prisoner);
+        FreedPrisoner.Give(world, p);
         Talk?.FireEvent(world, prisoner, payerId, Dialogue.DialogueSystem.BoughtMeFromSlavery);
         Note(world, ArrestEventKind.Bailed, table.IdOf(payer), prisoner, cage.Owner, price);
-    }
-
-    /// <summary>
-    /// The end of each freed prisoner's block in <c>FUN_1406ae170</c> (<b>Verified</b> by disassembly): one that could not speak (event 51 returned
-    /// 0) is given 128 Retreat to hometown, then every one 133 Get out of cage (legit); both gives clear the order queue first (<c>FUN_1405d20d0</c>
-    /// with its clear argument 1: <c>FUN_1405074a0</c> and <c>FUN_140507530</c>), so 133 replaces 128 and the prisoner only steps out of its
-    /// unlocked cage (<see cref="FixtureRegistry.GetOutLegit"/>); its own AI goes on from there. <b>Engine order</b>: 133 is given before event 51,
-    /// since Meitou's events need a speaker out of its cage, so whether the event would fail is not known before it and 128, which 133 wipes
-    /// unrun, is not given. A prisoner whose chooser does not run (no squad, out cold) keeps the order queued in its unlocked cage until it does.
-    /// </summary>
-    void SendOut(World world, CharacterId prisoner)
-    {
-        if (world.Characters.TryResolveNext(prisoner, out int p)) FreedPrisoner.Give(world, p);
     }
 
     #endregion
@@ -317,7 +276,7 @@ public sealed partial class ArrestSystem : IOrderOwner
     Fixture? ChosenCage(World world, string chosen, CharacterId carrier)
     {
         if (world.Fixtures.Find(chosen) is not { Kind: FixtureKind.Cage } picked || !FixtureRegistry.IsFree(world.Characters, picked)) return null;
-        if (Reserved(picked, null) || _cagings.Exists(k => k.Carrier != carrier && k.Cage == picked.Id)) return null;
+        if (Reserved(world, picked, null) || _cagings.Exists(k => k.Carrier != carrier && k.Cage == picked.Id)) return null;
         return picked;
     }
 
@@ -399,7 +358,7 @@ public sealed partial class ArrestSystem : IOrderOwner
     {
         var at = world.Characters.Next[s].Position;
         var cage = world.Fixtures.FindCage(world, c, at, FixtureRegistry.HomeOf(world, c),
-            f => Reserved(f, null) || _cagings.Exists(k => !ReferenceEquals(k, self) && k.Cage == f.Id));
+            f => Reserved(world, f, null) || _cagings.Exists(k => !ReferenceEquals(k, self) && k.Cage == f.Id));
         float r = Settings.CageSearchRange;
         return cage is not null && Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(cage.Position.X, cage.Position.Z)) <= r * r
             ? cage : null;
@@ -532,12 +491,12 @@ public sealed partial class ArrestSystem : IOrderOwner
     }
 
     /// <summary>
-    /// The hand-over of DA 30 <c>DA_ARREST_TARGETS_CARRIED_PERSON</c>, 40 <c>DA_ENSLAVE_TARGETS_CARRIED_PERSON</c> (<paramref name="enslave"/>) and
-    /// 10 <c>DA_PAY_BOUNTY</c> (<c>FUN_140680560</c>, <b>Verified</b>): <paramref name="carrier"/> drops the body it carries and
-    /// <paramref name="guard"/> is ordered 213 Lifting/Snatching on it, his queue cleared, then 112 Find and put in cage queued behind it, so he
-    /// carries it to a free cage. The order check <c>FUN_1405d1940</c> refuses 213 to a guard whose left arm cannot carry ("I can't carry anyone with
-    /// this arm."), and 112 is given all the same. DA 40's caging makes the body the guard faction's slave (engine: the original's slaver processing,
-    /// task 182, is not built). False: no body.
+    /// The hand-over of DA 30 <c>DA_ARREST_TARGETS_CARRIED_PERSON</c>, 40 <c>DA_ENSLAVE_TARGETS_CARRIED_PERSON</c> and 10 <c>DA_PAY_BOUNTY</c>
+    /// (<c>FUN_140680560</c>, <b>Verified</b>): <paramref name="carrier"/> drops the body it carries and <paramref name="guard"/> is ordered 213
+    /// Lifting/Snatching on it, his queue cleared, then 112 Find and put in cage queued behind it, so he carries it to a free cage. The order check
+    /// <c>FUN_1405d1940</c> refuses 213 to a guard whose left arm cannot carry ("I can't carry anyone with this arm."), and 112 is given all the same.
+    /// DA 40 gives the same orders: the caged body is enslaved only by the town's slavers' processing (183). <paramref name="enslave"/> (code mods'
+    /// call, docs/modding.md; no dialogue action sets it) makes the caging enslave the body to the guard's faction. False: no body.
     /// </summary>
     public bool TakeOver(World world, CharacterId guard, CharacterId carrier, bool enslave = false)
     {
@@ -577,10 +536,9 @@ public sealed partial class ArrestSystem : IOrderOwner
         Crimes.Factions.Hunts(looker.Faction) && HuntBounty(target, looker.Faction) > HuntLimit;
 
     /// <summary>
-    /// A hunter free to start a hunt on <paramref name="target"/>: awake, not fighting or carrying, in no arrest or hunt, and not resting from this
-    /// target.
+    /// A hunter free to act on a sighting: awake, not fighting or carrying, in no arrest, with no order.
     /// </summary>
-    bool FreeHunter(World world, int slot, CharacterId target)
+    bool FreeHunter(World world, int slot)
     {
         var table = world.Characters;
         if (!table.Next[slot].Alive || table.Next[slot].Task is (byte)CharacterTask.Attack or (byte)CharacterTask.Treat) return false;
@@ -589,107 +547,59 @@ public sealed partial class ArrestSystem : IOrderOwner
         {
             return false;
         }
-        var id = table.IdOf(slot);
-        if (Busy(id)) return false;
-        foreach (var h in _hunts) if (h.Hunter == id && (h.Rest <= 0 || h.Target == target)) return false;
-        return true;
+
+        return !Busy(table.IdOf(slot));
     }
 
     /// <summary>
-    /// The hunter and his squad attack the target and chase it (the dialogue's <c>DA_ATTACK_CHASE_FOREVER</c>, economy.md 11.8).
+    /// The hunter recognised the target's bounty: it fires event 44 BOUNTY_SPOTTED at it (<c>FUN_140856f00</c>), whose bounty hunters' lines answer a
+    /// bounty above 4000 with <c>DA_ATTACK_CHASE_FOREVER</c> (6, order 101; economy.md 11.8). With no line said nothing follows (the event is all the
+    /// original's spotting does, <c>FUN_140685660</c>, <b>Verified</b>). There is no rest after a hunt: the hunter fires again at every spotting pass
+    /// it is not fighting, and its lines' <c>repetition limit</c> (2 or 6 game hours in the base data, global per line) keeps it from repeating.
     /// </summary>
     void BeginHunt(World world, int hunter, int target)
     {
         var table = world.Characters;
         var hc = table.Cold(hunter)!;
-        hc.Engaged = true;
-        _hunts.Add(new Hunt { Hunter = table.IdOf(hunter), Target = table.IdOf(target) });
-        Attack(world, null, hunter, target);
-        world.Post(Loc.Tr("{1} is after the bounty on {2}!", hc.Name, table.Cold(target)!.Name));
-        Note(world, ArrestEventKind.Hunt, table.IdOf(hunter), table.IdOf(target), hc.Faction, HuntBounty(table.Cold(target)!, hc.Faction));
+        var hunterId = table.IdOf(hunter);
+        var targetId = table.IdOf(target);
+        if (!Talks || !Talk!.FireEvent(world, hunterId, targetId, BountySpotted)) return;
+
+        Note(world, ArrestEventKind.Spotted, hunterId, targetId, hc.Faction, BountySpotted);
+        Note(world, ArrestEventKind.Hunt, hunterId, targetId, hc.Faction, HuntBounty(table.Cold(target)!, hc.Faction));
     }
 
     /// <summary>
-    /// One tick of a hunt; false when it is gone. The chase ends when the target is down (the hunter leaves it: nothing in the data cages it),
-    /// carried, caged or beyond the leash.
+    /// A bounty the target carries that the guard sees (goal 204's finder, <c>FUN_140853fd0</c>, <b>Verified</b>): the entry of the guard's booking
+    /// faction is above 0, and either the target is recently wanted (the status marker above 0) or it is down and the guard regards it as an enemy.
     /// </summary>
-    bool StepHunt(World world, Hunt h)
+    internal bool PerceivedBounty(CharacterCold guard, CharacterCold target)
     {
-        var table = world.Characters;
-        float dt = world.TickSeconds;
-        if (h.Rest > 0) return (h.Rest -= dt) > 0;
-        if (!table.TryResolveNext(h.Hunter, out int g) || table.Cold(g) is not { } gc) return false;
+        if ((target.Bounties?.BookedAmount(Crimes.Relations, guard.Faction) ?? 0) <= 0) return false;
+        if (target.RecentlyWanted > 0) return true;
 
-        // A hunter knocked out drops the hunt: the AI takes him again once he is up, as after an arrest (End).
-        if (gc.Medical is not { Incapacitated: false })
-        {
-            gc.Engaged = false;
-            return false;
-        }
-
-        bool over = !table.TryResolveNext(h.Target, out int t)
-            || table.Cold(t) is not { Medical.Incapacitated: false, IsImprisoned: false, CarriedBy.IsNone: true };
-        if (!over)
-        {
-            h.Time += dt;
-            ref var gn = ref table.Next[g];
-            if (gn.Task != (byte)CharacterTask.Attack && !gc.InCombat && h.Time >= 1)
-            {
-                float gap = Vector3.Distance(gn.Position, table.Next[t].Position);
-                if (gap > Settings.HuntLeash || HuntBounty(table.Cold(t)!, gc.Faction) <= HuntLimit) over = true;
-                else
-                {
-                    h.Time = 0;
-                    Attack(world, null, g, t);
-                }
-            }
-        }
-        if (!over) return true;
-        EndHunt(world, h, gc);
-        return true;
+        return target.Medical is { Incapacitated: true } && Enemy(guard, target);
     }
 
     /// <summary>
-    /// A hunt is over: the hunter goes back to the AI and the hunt rests for <see cref="ArrestSettings.HuntRestSeconds"/>.
+    /// Whether the guard's faction regards the target's as an enemy.
     /// </summary>
-    void EndHunt(World world, Hunt h, CharacterCold gc)
+    internal bool Enemy(CharacterCold guard, CharacterCold target)
     {
-        gc.Engaged = false;
-        h.Rest = Settings.HuntRestSeconds;
-        Note(world, ArrestEventKind.HuntOver, h.Hunter, h.Target, gc.Faction, 0);
+        var relations = Crimes.Relations;
+        return relations.Contains(guard.Faction) && relations.Contains(target.Faction) && AggroSystem.IsEnemy(relations, guard.Faction, target.Faction);
     }
 
     /// <summary>
-    /// An order takes the hunter in <paramref name="slot"/>: each hunt of his under way is over (<see cref="EndHunt"/>).
-    /// </summary>
-    void ReleaseHunts(World world, int slot)
-    {
-        if (_hunts.Count == 0 || world.Characters.Cold(slot) is not { } gc) return;
-
-        var id = world.Characters.IdOf(slot);
-        foreach (var h in _hunts)
-        {
-            if (h.Hunter == id && h.Rest <= 0) EndHunt(world, h, gc);
-        }
-    }
-
-    /// <summary>
-    /// Adds the cagings and hunts to the world hash, each only while there are any.
+    /// Adds the cagings to the world hash, only while there are any.
     /// </summary>
     void HashBounties(ref StateHasher hasher)
     {
-        if (_cagings.Count > 0)
-        {
-            hasher.Add(0x43616765);
-            hasher.Add(_cagings.Count);
-            foreach (var k in _cagings) k.Hash(ref hasher);
-        }
-        if (_hunts.Count > 0)
-        {
-            hasher.Add(0x48756E74);
-            hasher.Add(_hunts.Count);
-            foreach (var h in _hunts) h.Hash(ref hasher);
-        }
+        if (_cagings.Count == 0) return;
+
+        hasher.Add(0x43616765);
+        hasher.Add(_cagings.Count);
+        foreach (var k in _cagings) k.Hash(ref hasher);
     }
 
     #endregion

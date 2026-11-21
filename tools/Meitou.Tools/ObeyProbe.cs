@@ -84,12 +84,13 @@ static class ObeyProbe
     /// </summary>
     static string WorkText(World world, CharacterCold c)
     {
-        if (c.SlaveWork is not { Place.Building: var b } work) return "";
+        if (c.Ai is not { Behaviour: Meitou.Simulation.Ai.AiBehaviour.Work, WorkBuilding: { } b } mind) return "";
 
         var stat = (StatsEnumerated)(world.SystemOf<ProductionSystem>()?.Data(b.BuildingId)?.Stat ?? 0);
         string level = stat > 0 && c.Stats is { } stats ? $" {stat}={stats[stat]:F4}" : "";
+        bool real = mind.Goal?.Task.Type == Meitou.Data.Gameplay.Ai.TaskType.AutoLabouringMines;
 
-        return $" work={b.Name}/{(work.Operates ? "real" : "pretend")}{level}";
+        return $" work={b.Name}/{(real ? "real" : "pretend")}{level}";
     }
 
     /// <summary>

@@ -5,7 +5,7 @@ namespace Meitou.Simulation.Locks;
 /// <summary>
 /// A door's two points (<c>FUN_14029cc90</c>, <b>Verified</b>): 15 either side of the leaf along its way through; the outer one is the side away from
 /// the building's origin (which of the two the original calls outer is <b>Unknown</b>). Shared by state 126 (<c>FUN_140596e90</c>) and the town's
-/// guard nodes (<c>FUN_14038b650</c>), which both extend it by 1.1 times the distance between the points.
+/// guard nodes (<c>FUN_14038b650</c>), which both extend it by 1.1 times the distance between the points; state 111 pushes the other point alike.
 /// </summary>
 public static class DoorPoints
 {
@@ -33,6 +33,13 @@ public static class DoorPoints
     /// </summary>
     public static Vector2 Outer(DoorSpot spot, Vector3 origin) =>
         new Vector2(spot.Centre.X, spot.Centre.Z) + Away(spot, origin) * (Offset + 2 * Offset * OuterFactor);
+
+    /// <summary>
+    /// The inner point pushed in the same way, the mirror of <see cref="Outer"/> through the leaf (state 111, <c>FUN_140596cf0</c>, <b>Observed</b>: it
+    /// pushes the door's other point by the same factor).
+    /// </summary>
+    public static Vector2 Inner(DoorSpot spot, Vector3 origin) =>
+        new Vector2(spot.Centre.X, spot.Centre.Z) - Away(spot, origin) * (Offset + 2 * Offset * OuterFactor);
 
     /// <summary>
     /// The point past a building's first door (<c>Building::getDoor</c> <c>FUN_1400f7080</c>, <see cref="LockSystem.FirstDoor"/>) where the

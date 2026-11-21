@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Data.Gameplay.Ai;
+using Meitou.Data.World;
 using Meitou.Simulation;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Factions;
@@ -64,7 +65,7 @@ public class SlaveListTests
         var data = ArrestTests.Town();
         var captive = new CaptiveSystem(data, null, new CaptiveSettings { RecordLog = true });
         var world = new SimWorld(new WorldSettings { PublishSnapshots = false, StartHours = 24 + 12 }, new OpenGroundWalkability((_, _) => 150),
-                [captive, .. more]);
+                [new AiSystem(data), captive, .. more]);
         world.Fixtures.RegisterSite(world, data, 0);
         return (world, captive, data.FactionIndex("50-a"), world.Fixtures.Find("0.0:cageA")!);
     }
@@ -89,8 +90,8 @@ public class SlaveListTests
     }
 
     /// <summary>
-    /// At its first slow world, starts a walk of row 43 Staying home (a goal's provenance) for <paramref name="who"/> to <paramref name="to"/> and
-    /// lets the captive sweep have it.
+    /// At its first slow world, starts a walk of row 43 Staying home (a goal's provenance) for <paramref name="who"/> to <paramref name="to"/> as
+    /// 43's act-out does: under the AI's behaviour Post, so the AI holds the walk and its chooser may take it over.
     /// </summary>
     sealed class HomeWalker(Func<CharacterId> who, Vector2 to) : ITickSystem
     {
@@ -101,7 +102,7 @@ public class SlaveListTests
             if (_done || !world.Characters.TryResolveNext(who(), out int slot)) return;
             _done = true;
             TaskStart.Walk(world, slot, to, SpeedMode.Walk, TaskType.StayInHome, TaskSource.Goal);
-            world.Characters.Cold(slot)!.Engaged = false;
+            world.Characters.Cold(slot)!.Ai!.Behaviour = AiBehaviour.Post;
         }
     }
 
@@ -123,8 +124,8 @@ public class SlaveListTests
 
         var master = NewSquad(world, city, Board([], [], [Goal(TaskType.GatherSlavesFromCages)], [], []));
 
-        // Held off the sweep until it walks home (HomeWalker), a walk the AI holds (43's act-out).
-        worker = Member(world, master, cage.Position + new Vector3(150, 0, 0), c => (c.Ai!.Behaviour, c.Engaged) = (AiBehaviour.Post, true));
+        // It walks home at tick 2 (HomeWalker), before the look's first pick of 173.
+        worker = Member(world, master, cage.Position + new Vector3(150, 0, 0));
         var prisoner = Member(world, NewSquad(world, city, Board([], [], [], [], [])), cage.Position);
 
         Assert.True(world.Fixtures.Imprison(world, prisoner, cage));
@@ -137,7 +138,7 @@ public class SlaveListTests
 
     /// <summary>
     /// With its line on (a dialogue package with an event-38 line, ambient events on), the worker's Shout job ends once it says the line, and the
-    /// next sweep starts another on its slaves. Catches a job that never ended, or ended without a line.
+    /// chooser starts another on its slaves. Catches a job that never ended, or ended without a line.
     /// </summary>
     [Fact]
     public void A_worker_ends_its_shout_job_on_its_line_and_starts_another()
@@ -155,7 +156,7 @@ public class SlaveListTests
         var captive = new CaptiveSystem(data, null, new CaptiveSettings { RecordLog = true });
         var talk = new Meitou.Simulation.Dialogue.DialogueSystem(data, new Meitou.Simulation.Dialogue.DialogueSettings { AmbientEvents = true });
         using var world = new SimWorld(new WorldSettings { PublishSnapshots = false, StartHours = 24 + 12 }, new OpenGroundWalkability((_, _) => 150),
-                [captive, talk]);
+                [new AiSystem(data), captive, talk]);
         world.Fixtures.RegisterSite(world, data, 0);
         int city = data.FactionIndex("50-a");
         var cage = world.Fixtures.Find("0.0:cageA")!;
@@ -226,7 +227,8 @@ public class SlaveListTests
     /// <summary>
     /// Processing a slave shaves its head (docs/game/ai-tasks.md "Processing a slave shaves its head", FUN_14035aa20): a watcher processes an
     /// unshaven slave of its own side, which hears event 35 and ends shaven; one shaven already but without shackles hears 37. Catches the constant
-    /// event 35 and a processing that leaves the head as it was, so the slave it made stayed a target.
+    /// event 35 and a processing that leaves the head as it was, so the slave it made stayed a target. The slave is caged in the watcher's town: a
+    /// loose one standing unshackled plans nothing (182 needs 134, whose provider 166 needs 7 isTargetDown; docs/simulation.md "Process").
     /// </summary>
     [Fact]
     public void Processing_a_slave_shaves_its_head_and_says_37_to_one_shaven_already()
@@ -234,11 +236,16 @@ public class SlaveListTests
         foreach (bool shaven in new[] { false, true })
         {
             var log = new EventLog();
-            var (world, captive, city, cage) = Town(log);
+            var walkability = new OpenGroundWalkability((_, _) => 150);
+            var (world, captive, city, cage) = Town(log, new MovementSystem(new PathService(walkability, true)));
             using var _ = world;
-            var watcher = Member(world, NewSquad(world, city, Board([], [], [Goal(TaskType.SlaveWatching)], [], [])),
-                    cage.Position + new Vector3(60, 0, 0));
-            var slave = LooseSlave(world, city, cage.Position + new Vector3(70, 0, 0), shaven, shackled: false);
+            var board = Board([], [], [Goal(TaskType.SlaveWatching)], [], []);
+            board.Town = 0;
+            var watcher = Member(world, NewSquad(world, city, board), cage.Position + new Vector3(60, 0, 0));
+            var slave = LooseSlave(world, city, cage.Position, shaven, shackled: false);
+
+            Assert.True(world.Fixtures.Imprison(world, slave, cage));
+
             bool Enslaved() => captive.Log.Any(e => e is { Kind: CaptiveEventKind.Enslaved } && e.Worker == watcher && e.Captive == slave);
             for (int t = 0; t < 1200 && !Enslaved(); t++) world.RunTicks(1);
 
@@ -254,54 +261,33 @@ public class SlaveListTests
     }
 
     /// <summary>
-    /// At its first slow world, seats <paramref name="who"/> as 43 Staying home does on a chair (task Rest, a goal's provenance; its AI behaviour Sit
-    /// is the test's) and lets the captive sweep see it; once <see cref="Up"/> is set, stands it up (inside the tick, where a task holds).
-    /// </summary>
-    sealed class HomeSitter(Func<CharacterId> who) : ITickSystem
-    {
-        bool _seated, _stood;
-
-        public bool Up { get; set; }
-
-        public void SlowWorld(SimWorld world)
-        {
-            if (!world.Characters.TryResolveNext(who(), out int slot)) return;
-            if (!_seated)
-            {
-                _seated = true;
-                TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Rest, TaskType.StayInHome, TaskSource.Goal));
-                world.Characters.Cold(slot)!.Engaged = false;
-            }
-            else if (Up && !_stood)
-            {
-                _stood = true;
-                TaskStart.Stand(world.Characters, slot);
-            }
-        }
-    }
-
-    /// <summary>
-    /// A seated member's sweep turn only finds out which captive goals would start (docs/simulation.md "Captives", weighed by the AI): an eater on
-    /// its chair with a captive in the cage keeps 139 as an offer for its think, and remembers no cage, sheathes nothing, has no "marked for death"
-    /// line said and starts no job. Once it stands, the sweep starts the job, which does all of these. Catches a probe with the job start's side
-    /// effects, which would pick and announce a victim for every seated eater, every sweep.
+    /// A member seated and committed under 43 Staying home weighs no captive goal of 43's tier (docs/simulation.md "Captives", the look; committed
+    /// mode, FUN_140510ef0): an eater its chooser seated on its home's chair, a captive put in the cage, remembers no cage, has no "marked for
+    /// death" line said and starts no job. Once its commitment runs out, its chooser takes 139 up and the job starts, which does both. Catches a
+    /// look whose finder picks and announces a victim for every seated eater.
     /// </summary>
     [Fact]
     public void A_seated_eater_is_offered_its_goal_and_nothing_is_drawn_said_or_remembered_until_it_stands()
     {
-        var eater = CharacterId.None;
-        var sitter = new HomeSitter(() => eater);
-        var (world, captive, city, cage) = Town(sitter);
+        var walkability = new OpenGroundWalkability((_, _) => 150);
+        var (world, captive, city, cage) = Town(new MovementSystem(new PathService(walkability, true)));
         using var _ = world;
-        var squad = NewSquad(world, city, Board([], [], [Goal(TaskType.EatARandomCageOccupant)], [], []));
+        var seat = cage.Position + new Vector3(60, 0, 0);
+        var board = Board([], [], [Goal(TaskType.StayInHome), Goal(TaskType.EatARandomCageOccupant)], [], []);
+        board.OwnHome = board.Home = new TownBuilding("home", "b-home", "Home", seat, 0, false, false, [new HomeSpot(HomeSpotKind.Chair, seat, 0)]);
+        var squad = NewSquad(world, city, board);
         var prisoner = Member(world, NewSquad(world, city, Board([], [], [], [], [])), cage.Position);
+        var eater = Member(world, squad, seat);
+        var cold = world.Characters.Cold(eater.Slot)!;
+        var mind = cold.Ai!;
+        for (int t = 0; t < 600 && world.Characters.Next[eater.Slot].Task != (byte)CharacterTask.Rest; t++) world.RunTicks(1);
 
+        Assert.Equal((CharacterTask.Rest, TaskType.StayInHome), ((CharacterTask)world.Characters.Next[eater.Slot].Task, mind.Goal?.Task.Type));
+
+        // Seated by its chooser under 43, committed an hour more, with a captive in the cage.
         Assert.True(world.Fixtures.Imprison(world, prisoner, cage));
 
-        // Held off the sweep until it sits (HomeSitter).
-        eater = Member(world, squad, cage.Position + new Vector3(60, 0, 0),
-            c => (c.Ai!.Behaviour, c.DrawnWeapon, c.Engaged) = (AiBehaviour.Sit, Data.Gameplay.WeaponKinds.Katana, true));
-        var cold = world.Characters.Cold(eater.Slot)!;
+        mind.CommitUntil = world.GameHours + 1;
         for (int t = 0; t < 61; t++)
         {
             world.RunTicks(1);
@@ -310,18 +296,148 @@ public class SlaveListTests
         }
 
         Assert.Equal(CharacterTask.Rest, (CharacterTask)world.Characters.Next[eater.Slot].Task);
-        Assert.Equal([(TaskType.EatARandomCageOccupant, 1f)], cold.Ai!.CaptiveOffers);
-        Assert.Equal((null, Data.Gameplay.WeaponKinds.Katana), (cold.Ai.FateCage, cold.DrawnWeapon));
+        Assert.Null(mind.FateCage);
         Assert.DoesNotContain(captive.Log, e => e.Worker == eater);
 
-        sitter.Up = true;
+        mind.CommitUntil = world.GameHours;
         world.RunTicks(31);
 
         Assert.Contains(captive.Log,
 
             e => e is { Kind: CaptiveEventKind.Started, Job: CaptiveJobKind.Eat } && e.Worker == eater && e.Captive == prisoner);
 
-        Assert.Equal((cage.Id, Data.Gameplay.WeaponKinds.None), (cold.Ai.FateCage, cold.DrawnWeapon));
-        Assert.Empty(cold.Ai.CaptiveOffers);
+        Assert.Equal((cage.Id, Data.Gameplay.WeaponKinds.None), (mind.FateCage, cold.DrawnWeapon));
+    }
+
+    /// <summary>
+    /// The jail town with a second faction, <c>60-a</c> (neither allied to the city nor its enemy), and the dialogue system
+    /// <paramref name="makeTalk"/> makes: the captive system, the AI and the town's two cages, A listed first.
+    /// </summary>
+    static (SimWorld World, CaptiveSystem Captive, int City, int Others, Fixture CageA, Fixture CageB) TwoFactionTown(
+            IEnumerable<Data.Fcs.FcsRecord>? extra = null,
+            Func<Meitou.Simulation.Population.PopulationData, Meitou.Simulation.Dialogue.DialogueSystem>? makeTalk = null)
+    {
+        var data = ArrestTests.Town([SyntheticTown.Rec("60-a", Data.Fcs.FcsRecordType.Faction, "others"), .. extra ?? []]);
+        var captive = new CaptiveSystem(data, null, new CaptiveSettings { RecordLog = true });
+        var systems = new List<ITickSystem> { new AiSystem(data), captive };
+        if (makeTalk?.Invoke(data) is { } dialogue) systems.Add(dialogue);
+        var world = new SimWorld(new WorldSettings { PublishSnapshots = false, StartHours = 24 + 12 }, new OpenGroundWalkability((_, _) => 150),
+                systems);
+        world.Fixtures.RegisterSite(world, data, 0);
+        var cages = world.Fixtures.All.Where(f => f.Kind == FixtureKind.Cage).ToList();
+
+        Assert.Equal(["0.0:cageA", "0.0:cageB"], cages.Select(f => f.Id));
+
+        return (world, captive, data.FactionIndex("50-a"), data.FactionIndex("60-a"), cages[0], cages[1]);
+    }
+
+    /// <summary>
+    /// A city NPC of a squad of its own, imprisoned in <paramref name="cage"/>.
+    /// </summary>
+    static CharacterId Caged(SimWorld world, int city, Fixture cage)
+    {
+        var prisoner = Member(world, NewSquad(world, city, Board([], [], [], [], [])), cage.Position);
+
+        Assert.True(world.Fixtures.Imprison(world, prisoner, cage));
+
+        return prisoner;
+    }
+
+    /// <summary>
+    /// 276's finder takes the first listed qualifying cage, with no distance test (docs/game/ai-tasks.md goal 276, <c>FUN_1408cf140</c> over
+    /// <c>FUN_1409fc450</c>, 7eea7e88e): a liberator standing by cage B, both cages of the city holding a city prisoner, is given cage A, the first
+    /// in the registry. Catches the nearest-cage pick the finder had before.
+    /// </summary>
+    [Fact]
+    public void A_liberator_takes_the_first_listed_cage_not_the_nearest()
+    {
+        var (world, captive, city, others, cageA, cageB) = TwoFactionTown();
+        using var _ = world;
+        Caged(world, city, cageA);
+        Caged(world, city, cageB);
+        var liberator = Member(world, NewSquad(world, others, Board([], [], [], [], [])), cageB.Position + new Vector3(20, 0, 0));
+        var cold = world.Characters.Cold(liberator.Slot)!;
+
+        Assert.Equal(cageA.Id, captive.LiberateTarget(world, liberator.Slot, cold)?.Id);
+    }
+
+    /// <summary>
+    /// 276's slot-0 test (<c>FUN_1408db880</c>, f2bb0011a): a cage of no faction fails the allied test, so its captive is freed, while a captive the
+    /// liberator's squad hates (long-term tag CAPTOR, <c>FUN_1405995d0</c> &amp; 0x2b0) is passed over though its cage is listed first. The liberator
+    /// runs 276 from its leader list and starts its job on cage B's captive. Catches the finder that skipped ownerless cages and the one with no
+    /// hate test.
+    /// </summary>
+    [Fact]
+    public void A_liberator_frees_a_captive_from_a_cage_of_no_faction_and_skips_one_its_squad_hates()
+    {
+        var (world, captive, city, others, cageA, cageB) = TwoFactionTown(makeTalk: data => new Meitou.Simulation.Dialogue.DialogueSystem(data));
+        using var _ = world;
+        var hated = Caged(world, city, cageA);
+        var freed = Caged(world, city, cageB);
+        cageB.Owner = -1;
+        var squad = NewSquad(world, others, Board([], [], [Goal(TaskType.LiberateAllThePrisoners)], [], []));
+        var liberator = Member(world, squad, cageA.Position + new Vector3(60, 0, 0));
+        world.SystemOf<Meitou.Simulation.Dialogue.DialogueSystem>()!.Memory.Remember(world, squad.Id, hated, Meitou.Simulation.Dialogue.MemoryTag.Captor);
+        bool Started(CharacterId who) => captive.Log.Any(e => e is { Kind: CaptiveEventKind.Started, Job: CaptiveJobKind.Liberate }
+                && e.Worker == liberator && e.Captive == who);
+        for (int t = 0; t < 600 && !Started(freed); t++) world.RunTicks(1);
+
+        Assert.True(Started(freed));
+        Assert.False(Started(hated));
+    }
+
+    /// <summary>
+    /// A dialogue package whose event-39 SLAVE_DELIVERY monologue says a line with DA 24 GIVE_TARGET_MY_SLAVES, as the base data's
+    /// <c>slave delivery</c> lines do (docs/simulation.md "Sell"), on the character record <c>slaver-c</c>.
+    /// </summary>
+    static Data.Fcs.FcsRecord[] DeliveryLines()
+    {
+        var slaver = SyntheticTown.Rec("slaver-c", Data.Fcs.FcsRecordType.Character, "Slaver");
+        slaver.References["dialogue package"] = [SyntheticTown.Ref("deliver-p")];
+        var package = SyntheticTown.Rec("deliver-p", Data.Fcs.FcsRecordType.DialoguePackage, "Delivers");
+        package.References["dialogs"] = [SyntheticTown.Ref("deliver-d", CaptiveSystem.SlaveDelivery)];
+        var dialog = SyntheticTown.Rec("deliver-d", Data.Fcs.FcsRecordType.Dialogue, "Delivery");
+        dialog.Bools["monologue"] = true;
+        dialog.References["lines"] = [SyntheticTown.Ref("deliver-l")];
+        var line = SyntheticTown.Rec("deliver-l", Data.Fcs.FcsRecordType.DialogueLine, "Delivery line");
+        line.Strings["text0"] = "Fresh stock for the pens.";
+        line.References["effects"] = [SyntheticTown.Ref("deliver-a")];
+        var give = SyntheticTown.Rec("deliver-a", Data.Fcs.FcsRecordType.DialogAction, "Give slaves");
+        give.Ints["action name"] = Data.Gameplay.Dialogue.DialogueActions.GiveTargetMySlaves;
+        return [slaver, package, dialog, line, give];
+    }
+
+    /// <summary>
+    /// Event 39 to a pen keeper (f8f592ba0; DA 24 <c>FUN_140680560</c>, docs/simulation.md "Sell"): the slaver's line hands both slaves on its
+    /// squad's list to the keeper: their owner is the keeper's faction and their master its squad, each keeps its own squad, and the slaver's list is
+    /// empty. Catches the engine handover that moved the slaves into squads of their own and cages.
+    /// </summary>
+    [Fact]
+    public void Event_39_to_a_pen_keeper_gives_it_the_slavers_slaves_and_leaves_their_squads()
+    {
+        var (world, _, city, others, cageA, _) = TwoFactionTown(DeliveryLines(),
+                makeTalk: data => new Meitou.Simulation.Dialogue.DialogueSystem(data,
+                        new Meitou.Simulation.Dialogue.DialogueSettings { AmbientEvents = true }));
+        using var __ = world;
+        var slavers = NewSquad(world, others, Board([], [], [], [], []));
+        var slaver = Member(world, slavers, cageA.Position + new Vector3(60, 0, 0), c => c.RecordId = "slaver-c");
+        var keepers = NewSquad(world, city, Board([], [], [], [], []));
+        var keeper = Member(world, keepers, cageA.Position + new Vector3(80, 0, 0));
+        var slaves = new[]
+        {
+            ObeyingSlave(world, others, slavers, cageA.Position + new Vector3(70, 0, 10)),
+            ObeyingSlave(world, others, slavers, cageA.Position + new Vector3(70, 0, -10)),
+        };
+        var squads = slaves.Select(s => world.Characters.Cold(s.Slot)!.SquadId).ToList();
+
+        Assert.Equal(2, CaptiveSystem.SlavesOf(world, slavers).Count());
+
+        world.Commands.Enqueue(new Meitou.Simulation.Dialogue.DialogueEvent(slaver, keeper, CaptiveSystem.SlaveDelivery) { Tick = world.Tick });
+        world.RunTicks(30);
+
+        Assert.All(slaves, s => Assert.Equal((city, keepers.Id),
+                (world.Characters.Cold(s.Slot)!.SlaveOwner, world.Characters.Cold(s.Slot)!.SlaveMaster)));
+        Assert.Equal(squads, slaves.Select(s => world.Characters.Cold(s.Slot)!.SquadId));
+        Assert.Empty(CaptiveSystem.SlavesOf(world, slavers));
     }
 }

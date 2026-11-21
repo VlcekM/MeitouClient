@@ -7,8 +7,10 @@ using Meitou.Data.Gameplay.Ai;
 using Meitou.Simulation;
 using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Ai;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Construction;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.FirstAid;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Movement;
@@ -66,7 +68,7 @@ public class OrderQueueTests
     [Fact]
     public void An_order_with_no_desire_leaves_the_queue_and_the_job_runs()
     {
-        using var rig = new TaskStartTests.Rig(carrying: false);
+        using var rig = new TaskStartTests.Rig(carrying: false, ai: true);
         rig.World.RunTicks(3);
         var f = rig.Fighter;
         var inventory = rig.Cold(f).Inventory!;
@@ -124,8 +126,8 @@ public class OrderQueueTests
     static TaskType[] Rows(SimWorld world, CharacterId id) => [.. world.Characters.Cold(id.Slot)!.OrderQueue.Select(e => e.Row)];
 
     /// <summary>
-    /// A player's turret (function 12) with a gunner of the player's next to it and an enemy fighter 120 away; movement, pursuit, body, production,
-    /// combat and retaliation; with <paramref name="aggro"/> also the attack-on-sight look, the two factions hostile (the urgent turret job's sensed
+    /// A player's turret (function 12) with a gunner of the player's next to it and an enemy fighter 120 away, each in a squad of its own; the AI,
+    /// movement, pursuit, body, production, combat and retaliation; with <paramref name="aggro"/> also the attack-on-sight look, the two factions hostile (the urgent turret job's sensed
     /// enemies). With <paramref name="town"/> the turret is a town's building instead (its <c>townwork:</c> site).
     /// </summary>
     internal sealed class TurretRig : IDisposable
@@ -155,7 +157,8 @@ public class OrderQueueTests
                     new CombatOptions { SelfApproach = false, TickMedical = false });
             World = new SimWorld(new WorldSettings { Seed = 7, PublishSnapshots = false }, _walk,
             [
-                new PlayerSystem(), new PursuitSystem(combat), new MovementSystem(new PathService(_walk, true)),
+                new PlayerSystem(), new AiSystem(data) { ThreatSource = combat }, new PursuitSystem(combat),
+                        new MovementSystem(new PathService(_walk, true)),
                         new BodySystem(BaseGame, BodyOptions.Default),
                 town ? new ProductionSystem(data) : new ProductionSystem(db, BaseGame, BodyOptions.Default, items, null), combat,
                         new RetaliationSystem(combat),
@@ -196,7 +199,17 @@ public class OrderQueueTests
                     Carriable = true };
             cold.IsPlayer = player;
             cold.Faction = player ? 1 : 2;
-            return World.Characters.Spawn(new CharacterHot { Position = new Vector3(x, 300, z), MaxSpeed = 40, WalkSpeed = 15 }, cold, 0);
+
+            // A squad of its own: the chooser runs only for a character with a platoon (FUN_1405112b0).
+            var squad = new Squad { Id = World.Squads.NextId(), TemplateId = "t", Faction = cold.Faction };
+            World.Squads.Add(squad);
+            if (player) World.Player.Squad = squad.Id;
+            cold.SquadId = squad.Id;
+            var id = World.Characters.Spawn(new CharacterHot { Position = new Vector3(x, 300, z), MaxSpeed = 40, WalkSpeed = 15 }, cold, 0);
+            squad.Members.Add(id);
+            squad.Leader = id;
+
+            return id;
         }
 
         public CharacterCold Cold(CharacterId id) => World.Characters.Cold(id.Slot)!;

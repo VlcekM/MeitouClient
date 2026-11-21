@@ -83,7 +83,7 @@ public enum StandardParts
     /// </summary>
     Crime = 8192,
     /// <summary>
-    /// Shops, prices and trading (<see cref="Meitou.Simulation.Trading.TradeSystem"/>).
+    /// Shops, prices and trading (<see cref="Meitou.Simulation.Trading.TradeSystem"/>), with the dialogue system, whose talk order the Trade order is.
     /// </summary>
     Trade = 16384,
     /// <summary>
@@ -698,7 +698,7 @@ public static class StandardSystems
         {
             if (Has(StandardParts.Feed)) _systems.Add(StandardParts.Feed, new FeedSystem(_data.Items, _o.Feed));
             if (Has(StandardParts.Retaliation))
-                _systems.Add(StandardParts.Retaliation, new RetaliationSystem(_combat!) { Towns = _data });
+                _systems.Add(StandardParts.Retaliation, new RetaliationSystem(_combat!));
 
             if (Has(StandardParts.Aggro))
             {
@@ -772,18 +772,17 @@ public static class StandardSystems
                 _trade.Crimes = _crime;
             }
 
-            if (Has(StandardParts.Dialogue))
-            {
+            // The Trade order is a talk order 12 (Dialogue.DialogueOrders.Trade), acted out by the dialogue system: trade brings it along.
+            if (Has(StandardParts.Dialogue | StandardParts.Trade))
                 _systems.Add(StandardParts.Dialogue, _talk = new Dialogue.DialogueSystem(_data, _o.Dialogue, _population));
-                _systems.Add(StandardParts.Dialogue, new Perception.SightSystem(_data));
-            }
+            if (Has(StandardParts.Dialogue)) _systems.Add(StandardParts.Dialogue, new Perception.SightSystem(_data));
 
             // a captive's squad remembers its captor (MY_CAPTOR), blows their tags
             if (_deeds is not null && _talk is not null)
                 (_deeds.CagedHook, _deeds.Memory) = (_talk.Captured, _talk.Memory);
 
             if (_talk is not null && _population is not null)
-                (_population.Announcer, _population.PendingTalk) = (_talk.Announce, _talk.HasInterrupt);
+                _population.Announcer = _talk.Announce;
 
             if (_talk is not null) (_talk.Arrests, _talk.Extensions) = (_arrest, _o.Extensions);
             if (_weather is not null) _weather.Talk = _talk;

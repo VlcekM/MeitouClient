@@ -22,10 +22,11 @@ public class AnimalTests(ITestOutputHelper output)
 {
     const string Bonedog = "3979-gamedata.base", BeakThing = "2859-gamedata.base", Megaraptor = "50983-rebirth.mod";
 
-    // With the animation system: animals play their own clip sets (no clip lengths here, so the 1 s default).
+    // With the animation system: animals play their own clip sets (no clip lengths here, so the 1 s default). With the AI: a character's own defence
+    // is its chooser's goal.
     const StandardParts Fighting = StandardParts.Movement | StandardParts.Pursuit | StandardParts.Body | StandardParts.Combat
         | StandardParts.Retaliation | StandardParts.Aggro
-        | StandardParts.Animation;
+        | StandardParts.Animation | StandardParts.Ai;
 
     static GameDatabase Db()
     {
@@ -121,7 +122,7 @@ public class AnimalTests(ITestOutputHelper output)
 
     /// <summary>
     /// A bonedog's fight with a person goes through the hit pipeline (bites with pierce, the person's hits on its body, no block or dodge). The
-    /// attack is ordered: its attack on sight is a goal of its squad's AI package (16), and this world runs no AI.
+    /// attack is ordered; the person's answer is its chooser's 32 Self preservation, so the world runs the AI.
     /// </summary>
     [Fact]
     public void A_hostile_bonedogs_attack_on_a_person_goes_through_the_hit_pipeline()

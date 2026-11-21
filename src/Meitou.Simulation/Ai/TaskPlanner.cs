@@ -4,10 +4,33 @@ using Meitou.Data.Gameplay.Ai;
 namespace Meitou.Simulation.Ai;
 
 /// <summary>
-/// What a plan step acts on: a kind (<see cref="None"/>: no target) and the place. Two targets are the same when both agree.
+/// What a plan step acts on: a kind (<see cref="None"/>: no target), the place and, for the finders of the engine-acted goals
+/// (<see cref="IDutyGoal.Find"/>), the character or the fixture found there (null: none); for row 94's sources the record fetched and the loose
+/// item's <see cref="Items.GroundItems"/> id (-1: none). Two targets are the same when all agree.
 /// </summary>
-public readonly record struct PlanTarget(byte Kind, Vector3 Position)
+public readonly record struct PlanTarget(byte Kind, Vector3 Position, CharacterId? Character = null, string? Fixture = null, string? Record = null,
+    int Item = -1)
 {
+    /// <summary>
+    /// The kind of an engine-acted goal's finder result (<see cref="IDutyGoal.Find"/>): a place, with the character or fixture it found.
+    /// </summary>
+    public const byte Found = 11;
+
+    /// <summary>
+    /// A finder's character target, at its place.
+    /// </summary>
+    public static PlanTarget OfCharacter(CharacterId character, Vector3 at) => new(Found, at, character);
+
+    /// <summary>
+    /// A finder's fixture target (its id), at its place.
+    /// </summary>
+    public static PlanTarget OfFixture(string fixture, Vector3 at) => new(Found, at, null, fixture);
+
+    /// <summary>
+    /// A finder's place target.
+    /// </summary>
+    public static PlanTarget OfPlace(Vector3 at) => new(Found, at);
+
     /// <summary>
     /// The kind of no target.
     /// </summary>

@@ -37,6 +37,7 @@ public class RoamingTests
         // The camera moves a zone west of the first town (its block still holds the town): the roamers walk out of the block, then only their
         // stand-ins go on.
         w.Commands.Enqueue(new FocusCommand(new Vector3(-2000, 0, 2000)) { Tick = w.Tick });
+        WalkOut(w, travellers);
         for (int i = 0; i < 40 && travellers.Any(p => p.State != PlatoonState.Unloaded); i++) w.RunTicks(150);
 
         Assert.All(travellers, p => Assert.Equal(PlatoonState.Unloaded, p.State));
@@ -75,6 +76,7 @@ public class RoamingTests
         w.Characters.Cold(prisoner.Slot)!.InSomething = Meitou.Simulation.Locks.HeldState.Imprisoned;
         int platoons = w.Platoons.Count;
         w.Commands.Enqueue(new FocusCommand(new Vector3(-2000, 0, 2000)) { Tick = w.Tick });
+        WalkOut(w, [platoon]);
         for (int i = 0; i < 40 && platoon.State != PlatoonState.Unloaded; i++) w.RunTicks(150);
 
         Assert.Equal(PlatoonState.Unloaded, platoon.State);
@@ -86,6 +88,16 @@ public class RoamingTests
         Assert.Equal([prisoner], own.Members);
         Assert.Equal(own.Id, w.Characters.Cold(prisoner.Slot)!.SquadId);
         Assert.DoesNotContain(prisoner, squad.Members);
+    }
+
+    /// <summary>
+    /// Orders the platoons' members toward the far town: a squad template without AI packages travels nowhere by itself (docs/game/
+    /// factions-squads-towns.md "Squads without packages"), so the walk out of the active zones is ordered.
+    /// </summary>
+    internal static void WalkOut(SimWorld w, IEnumerable<Platoon> platoons)
+    {
+        foreach (var p in platoons)
+            w.Commands.Enqueue(new MoveOrder([.. w.Squads.Find(p.SquadId)!.Members], SyntheticTown.Far) { Tick = w.Tick });
     }
 
     internal static List<ulong> Scripted(int threads)

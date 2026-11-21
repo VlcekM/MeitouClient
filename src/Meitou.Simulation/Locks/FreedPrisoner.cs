@@ -9,7 +9,7 @@ namespace Meitou.Simulation.Locks;
 /// The owner of order 133 Get out of cage (legit), the order a freed prisoner gets with its queue cleared (docs/game/ai-tasks.md "Order givers",
 /// <b>Verified</b>): a bailed prisoner (<c>FUN_1406ae170</c>), a slave bought free (<c>FUN_1406add20</c>) and a prisoner a jailer of a faction that
 /// books bounties or of the player's faction releases (<c>FUN_1403570a0</c>). Its act-out is <c>Task_GetOutOfCage</c>'s leave
-/// (<see cref="FixtureRegistry.GetOutLegit"/>), which ends at once: out of a cage the bail only unlocked, nothing for one whose hold the release or the
+/// (<see cref="FixtureRegistry.GetOutLegit"/>), which ends at once: out of the cage of a bailed prisoner (its lock left as it was), nothing for one whose hold the release or the
 /// purchase already cleared. Stateless: one instance serves every world.
 /// </summary>
 internal sealed class FreedPrisoner : IOrderOwner

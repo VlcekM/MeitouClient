@@ -26,10 +26,9 @@ public sealed record SetSquadHome(int SquadId, string? Building) : SimCommand;
 
 /// <summary>
 /// The player's squads the AI runs (docs/simulation.md "Autonomous player squads"): the switch and home commands, the home's building, and the
-/// rules that keep the AI below the player's orders and jobs. A member of such a squad gets a mind of its package's goals
-/// (<see cref="AiMind.Player"/>); the AI holds it only while no order, job or reaction runs its task (<see cref="Free"/>), an urgent package goal
-/// takes it off a job through the decision step (<see cref="PackageGoals"/>), and a job takes it back from any other goal
-/// (<see cref="Yields"/>), as the original's chooser orders them (docs/game/ai-tasks.md "Precedence").
+/// player's places the AI keeps to. A member of such a squad keeps its player-faction mind (<see cref="AiMind.PlayerSide"/>) and runs the one
+/// chooser on the ordinary route; only its role list is its squad's package's (<see cref="AiSystem.PlayerSideRoles"/>), so orders, jobs and every
+/// goal reach it at their rungs as the original's chooser orders them (docs/game/ai-tasks.md "Precedence").
 /// </summary>
 public sealed class SquadAutonomy(PopulationData data)
 {
@@ -68,7 +67,8 @@ public sealed class SquadAutonomy(PopulationData data)
     /// <summary>
     /// Turns the squad's autonomy on or off, and its independence with it (never for the last squad the player leads; the selection's upkeep drops
     /// an independent squad's members and shows another squad); on notes the mod that names itself (one that names none, or an empty id, keeps the
-    /// noted one), off forgets it and drops the squad's board, its saved AI and its members' minds (<see cref="Release"/>).
+    /// noted one), off forgets it and drops the squad's board and its saved AI. Either way the members' minds go (<see cref="Release"/>): the next
+    /// schedule step gives them fresh ones, with or without the package's roles.
     /// </summary>
     static void Switch(World world, Squad squad, bool on, bool independent, string? owner)
     {
@@ -78,9 +78,11 @@ public sealed class SquadAutonomy(PopulationData data)
         if (squad.Autonomous == on) return;
 
         squad.Autonomous = on;
+        DropMinds(world, squad);
         if (on) return;
 
-        DropMinds(world, squad);
+        // The town it is in and its hour stay with the squad (the original's platoon keeps its one blackboard).
+        if (squad.Ai is { } board) (squad.StayTown, squad.StaySince) = (board.InTown, board.InTownSince);
         squad.Ai = null;
         squad.SavedAi = null;
     }
@@ -119,23 +121,22 @@ public sealed class SquadAutonomy(PopulationData data)
     #region Minds
 
     /// <summary>
-    /// The minds of a player's squad the AI does not run, and those its members brought from another squad, go (<see cref="Release"/>).
+    /// The player-faction minds of the squad's members go (<see cref="Release"/>): its autonomy was switched.
     /// </summary>
-    internal static void DropMinds(World world, Squad squad)
+    static void DropMinds(World world, Squad squad)
     {
         var table = world.Characters;
         foreach (var id in squad.Members)
         {
-            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { IsPlayer: true, Ai.Player: true } cold) continue;
-            if (squad is { Autonomous: true, Ai: not null } && ReferenceEquals(cold.Ai.Squad, squad)) continue;
+            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { Ai.PlayerSide: true } cold) continue;
 
             Release(world, slot, cold);
         }
     }
 
     /// <summary>
-    /// Takes a character's mind away; a task the AI started for it ends (it stands, and the decision step decides it again), but one lying in a
-    /// bed lies on.
+    /// Takes a character's mind away; a task the AI started for it ends (it stands, and its next mind's chooser decides it again), but one lying in
+    /// a bed lies on.
     /// </summary>
     static void Release(World world, int slot, CharacterCold cold)
     {
@@ -145,39 +146,6 @@ public sealed class SquadAutonomy(PopulationData data)
         cold.Ai = null;
         if (own && cold.InSomething != Locks.HeldState.Bed) TaskStart.End(world, slot, TaskEnd.Stopped);
     }
-
-    /// <summary>
-    /// Whether the mind is its character's own squad's and that squad is autonomous (a character moved to another squad keeps its mind until the
-    /// next package step).
-    /// </summary>
-    static bool Active(CharacterCold cold, AiMind mind) => mind.Player && mind.Squad.Autonomous && cold.SquadId == mind.Squad.Id;
-
-    /// <summary>
-    /// Whether the AI may hold a player character (<see cref="AiSystem.Holds"/> goes on to its own tests): its squad is autonomous and no plan
-    /// runs its task, or the plan is 14 Idleness's or one the think started (<see cref="AiMind.Owns"/>, its own fight). An order's, a job's, a
-    /// reaction's or another goal's task is not the AI's.
-    /// </summary>
-    internal static bool Free(in CharacterHot n, CharacterCold cold, AiMind mind)
-    {
-        if (!Active(cold, mind)) return false;
-        if (cold.Running is not { } run || !run.Runs((CharacterTask)n.Task)) return true;
-
-        return run.Source == TaskSource.Goal && (run.Row == TaskType.Idle || mind.Owns(run) || AiSystem.OwnsFight(cold, mind));
-    }
-
-    /// <summary>
-    /// Whether a player character of an autonomous squad is on a job's task and able: the think then weighs its urgent package goals only
-    /// (<see cref="AiSystem.Restrict.Urgent"/>).
-    /// </summary>
-    internal static bool OnJob(in CharacterHot n, CharacterCold cold, AiMind mind) =>
-        Active(cold, mind) && cold is { InCombat: false, Fleeing: false, IsImprisoned: false } && cold.CarriedBy.IsNone && cold.Carrying.IsNone
-        && cold.Medical is not { Incapacitated: true } && cold.Running is { Source: TaskSource.Job } run && run.Runs((CharacterTask)n.Task);
-
-    /// <summary>
-    /// Whether the jobs come before the task <paramref name="run"/> runs for a player character (<see cref="DecisionSystem.GoalsComeFirst"/>): the
-    /// AI's own task for a package goal that is not urgent (the chooser's step 5 comes before its priority-2 and priority-1 goals).
-    /// </summary>
-    internal static bool Yields(CharacterCold cold, RunningTask run) => cold.Ai is { Player: true, Urgent: false } mind && mind.Owns(run);
 
     /// <summary>
     /// Whether another start has taken a player character's task since the think started its walk (an order, a job): what ended since is then not
@@ -346,56 +314,6 @@ public sealed class SquadAutonomy(PopulationData data)
         }
 
         return null;
-    }
-
-    #endregion
-
-    #region Decision step
-
-    /// <summary>
-    /// The decision step's source for an autonomous squad's urgent package goals (priority 3, step 4): it can run while the character's think
-    /// wants one (<see cref="AiMind.Urgent"/>), and counts as running once the character is off its job, so the jobs (step 5) do not take it back.
-    /// Its start only frees the character (it stands as 14 Idleness); the next think chooses and acts the goal out. <b>Engine choice</b>: one
-    /// source of weight 0.5 and desire 1 for whichever goal the think picks, so Self preservation (1 or 0.7) still wins.
-    /// </summary>
-    internal sealed class PackageGoals : IDecisionSource
-    {
-        /// <summary>
-        /// The trace name.
-        /// </summary>
-        public string Name => "Package goals";
-        /// <summary>
-        /// Step 4, the priority-3 goals.
-        /// </summary>
-        public DecisionStep Step => DecisionStep.Goals;
-        /// <summary>
-        /// Listed after the numbered goals.
-        /// </summary>
-        public int Key => 1000;
-        /// <summary>
-        /// Its weight (engine choice).
-        /// </summary>
-        public float Weight => 0.5f;
-
-        /// <summary>
-        /// Whether the character's think wants an urgent package goal: it starts for one on a job, and runs for any other.
-        /// </summary>
-        public DecisionCheck CanRun(World world, int slot)
-        {
-            var cold = world.Characters.Cold(slot)!;
-            if (cold.Ai is not { Urgent: true } mind || !Active(cold, mind)) return DecisionCheck.No("no urgent package goal");
-
-            return OnJob(world.Characters.Next[slot], cold, mind) ? DecisionCheck.Run : DecisionCheck.Runs;
-        }
-
-        /// <summary>
-        /// Takes the character off its job: it stands idle and thinks at the next tick.
-        /// </summary>
-        public void Start(World world, int slot)
-        {
-            TaskStart.Become(world, slot, CharacterTask.Idle, TaskType.Idle, TaskSource.Goal);
-            if (world.Characters.Cold(slot)?.Ai is { } mind) mind.Replan = true;
-        }
     }
 
     #endregion

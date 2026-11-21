@@ -405,7 +405,7 @@ camps it has explored (**engine choice**).
 | `animals` / `animals2` (ANIMAL_CHARACTER, v0, v1, v2 = age 0..100) | animal members, 5.1 |
 | `slaves`, `prisoners` (SQUAD_TEMPLATE) | whole squads created recursively, 5.2 |
 | `housemates` (SQUAD_TEMPLATE, min, max) | further squads spawned with this one (`FUN_14057f820`) |
-| `faction` | owner faction; if absent the spawn code asks the owning town's faction, else with no town takes the first faction in load order whose `squads` or `squad default` lists the template (`FUN_1402e7d10`); when that gives nothing, or a named faction does not resolve, the faction `Wildlife` (`3943-gamedata.base`) (**Verified**, `SpawnInfoList::vfunc_0` = `FUN_1408fe6b0`; Meitou `PopulationData.SpawnFactionOf`) |
+| `faction` | owner faction; if absent the spawn code asks the owning town's faction, else with no town takes the first faction in load order whose `squads` or `squad default` lists the template (`FUN_1402e7d10`); when that gives nothing, or a named faction does not resolve, the faction `Wildlife` (`3943-gamedata.base`) (**Verified**, `SpawnInfoList::vfunc_0` = `FUN_1408fe6b0`; Meitou `PopulationData.SpawnFactionOf`). FACTION `squads` spawns nothing: besides that lookup only the level editor's list box (`FUN_140775340`) and the squad generator (`FUN_1402e3430`) read it, so `Medic squad`, listed only by the Medics Guild's `squads`, never appears in base data (**Verified**, the readers of the string and `gamedata_base.txt`) |
 | `world state` | AND gate for the spawn: tested by the spawn-list picker `FUN_1408f7e80` and the choosefrom picker `FUN_14057fd40`, never by the squad creator `FUN_140583a10` itself (**Verified**: no `world state` read in it, so a `slaves` template's own gate is not tested; Meitou tests it at every top-level plan, not for slave squads) |
 | `roaming military` | forces squad mode 2 ("roaming") even with a home town (**Verified**, `FUN_140583a10` before `FUN_1409c44b0`). The mode (1 residents, 2 roaming) only picks the town pool set the platoon is registered in (`FUN_1407ec8d0`); it still gets its home and stands in the town (67 base templates; 15 of them are in `residents`, `default resident` or `bar squads` lists, e.g. Holy Guards, Holy Army Patrol). Meitou: the town wipe reads it (no resident there, counted with the roaming living) and a save writes `sqt` 2 for such a housing squad (`SaveCapture`; nothing reads `sqt` back); the pool budgets and the regeneration pass are unchanged  |
 | `dont multiply` | exempts the template from the *Squad size multiplier* setting |
@@ -574,7 +574,41 @@ Meitou: [ground items](../simulation.md#items-and-eating).
      **Leader** (**Observed**): the platoon's leader is its first member made, whatever these role writes say: `ActivePlatoon::addActiveObject` (`FUN_140797240`) calls the leader setter `FUN_1407917a0` when the member count becomes 1, and the save's `is leader` is that leader slot (`Character::serialise` `FUN_1406280a0`, platoon `+0xa0`). Vanilla saves (METARU, autosaves 1 and 2, redev), templates with no `leader` or `choosefrom list` but `squad2` or `animals`: a `squad` member leads in all 43 platoons that still have one (`farm shop UC`: the Shop Guard, not its Garru; the 44th has only its Bonedog left), an animal in the 61 animal-only ones. Meitou `SquadFactory.Plan`: the first animal leads only as the first member; otherwise a squad with no leader-role member takes its first non-animal (`SquadRegistry.Successor`).
   5. `slaves`: each a platoon of its own (the slave template's `faction`, else the owner's), its squad made recursively, every member role 4, owned by the squad; `prisoners`: only with a home, into free cages.
   6. Tail: a non-player owner with vendor lists or specials and a home but no member made stocks the home like section 1; with members (or no home) `FUN_1404ff5e0(squad, 1)` fills the squad's own or home stock ([shops](economy.md#building-shops-observed-decompile)).
-  Meitou: `SquadFactory.Plan` (3, 4), `PopulationSystem.MakePrisoners` / `MakeSlaves` (5), `TradeSystem` (1, 6). Three early returns of `FUN_14095b210` (**Observed**, constructors `FUN_14055ca90`, `FUN_14029fb40`, factory `FUN_14057cc70`): the building's location hand `+0x88` must be null (type 0xb; the base constructor copies it from a parent object or a door's parent building), its parent `+0x238` null (a turret mounted on a building has one) and its byte `+0x1a0` clear (set only by `DoorStuff`); so only a child object is refused, never a level-data home. Meitou: `TradeSystem.StockHome` refuses a turret post, for the squad path and `StockEmptyHome` alike. `FUN_14057f4c0` stamps its template's designation on the building even when the template makes no squad (`NoteMade` for every home).
+  Meitou: `SquadFactory.Plan` (3, 4), `PopulationSystem.MakePrisoners` / `MakeSlaves` (5), `TradeSystem` (1, 6).
+- **Squad factory callers** (the template is its seventh argument; **Verified** unless marked): `FUN_1409c5040` (a campaign's unique leader: a typed
+  SQUAD_TEMPLATE lookup, `FUN_1406c0120`, for a template whose `leader` lists it); `FUN_1409fcd20` (town spawns: the Town +0x318 table, filled only by
+  `FUN_140935d10` from `bar squads` through the typed lookup `FUN_1406bfe60(…, 0x34)`); `FUN_140586510` (a weighted pick from a record's `spawns`,
+  `FUN_14057fd40`, resolved untyped by `FUN_1406bee10`; in the base data 7 BUILDINGs and 3 ROADs list them, all 17 targets SQUAD_TEMPLATEs);
+  `FUN_140872e00` (the new game: NEW_GAME_STARTOFF `squad`, read with type 0x34 by `FUN_1400b6330`, which filters only uncached references, a cached
+  one passing unchecked; four base start entries are CHARACTERs, none with `AI Goals`; an empty list falls back to `45550-gamedata.base`'s
+  "startoff- Wanderer squad"); `FUN_1404ffad0` (the platoon's own template +0x108, from its constructor's argument or, at load, a typed 0x34
+  `squad template` lookup in `FUN_1407ed0f0`). Three early returns of `FUN_14095b210` (**Observed**, constructors `FUN_14055ca90`, `FUN_14029fb40`, factory `FUN_14057cc70`): the building's location hand `+0x88` must be null (type 0xb; the base constructor copies it from a parent object or a door's parent building), its parent `+0x238` null (a turret mounted on a building has one) and its byte `+0x1a0` clear (set only by `DoorStuff`); so only a child object is refused, never a level-data home. Meitou: `TradeSystem.StockHome` refuses a turret post, for the squad path and `StockEmptyHome` alike. `FUN_14057f4c0` stamps its template's designation on the building even when the template makes no squad (`NoteMade` for every home).
+
+### Squads without packages
+
+**Verified** (decompile) unless marked.
+
+- **Where a platoon's packages come from**: the Platoon constructor `FUN_1407ee2d0` adds its FACTION's `AI fallback` packages at slot 0 (`FUN_140271fd0`, its
+  only caller); the template reader `FUN_140271620` (run by the factory on the creation template, Platoon +0x108, or the blackboard's unique mission +0x100)
+  has no record-type test: a record with `Leader AI Goals` or `AI Goals` is itself added as a slot-0 package, then each `AI packages` entry at its slot. The
+  adder `FUN_14026c160` appends to the slot's list and skips a record the slot already holds. Nothing else fills the role lists (package activation,
+  `FUN_1402721a0`), so a template that lists no package (and no own goals) leaves them empty.
+- **A CHARACTER's `AI Goals` reach no character**: `setupAI` reads only the FACTION and RACE lists (campaign-goals confirmation: the string's five references
+  are in `setupAI`, the template reader and the goal loader). The template reader takes a CHARACTER only as a creation template, which the untyped `spawns`
+  lists (`FUN_140586510`) and the factory's `prisoners` recursion can give (each entry, looked up with no type, becomes a platoon of its own with that
+  record by `FUN_1407f4420`, then the factory runs on it as the template); but the factory draws members only from the template's `leader`, `squad`,
+  `animals`, `slaves` and `prisoners` lists, which no CHARACTER has, so such a platoon is made empty. A new game's CHARACTER entries are made as single
+  characters (`FUN_140583400`, the record-type-1 test in `FUN_140872e00`). Base data: every `spawns` and `prisoners` target is a SQUAD_TEMPLATE.
+- **Loaded**: every member runs the chooser (it needs only a platoon, `FUN_1405112b0`) over 14, 32, its race's and its faction's lists ([goals of a
+  character](ai-tasks.md#precedence)) and the blackboard's requests, which only `Task_FirstAid` / `Task_FirstAidRig` post (62 for their patient). The
+  generic goal adder `FUN_1405c9020` has no caller (no call, jump, pointer or RIP-relative reference to it or its thunk in the exe); the combat-event
+  adder gives 16 only. No base RACE or FACTION list holds a travel or follow goal (data: 32, 269, 143, 15, the eating and dog-limb goals), so such a squad
+  neither travels nor follows: each member stands (14: the weapon sheathe, else the mover reset), fights back (32) and acts out its race's goals.
+- **Off screen** (`FUN_1407ee790`): with no package the job is 0, which becomes 2 for a non-persistent platoon (a goto with no speed: the step resets
+  the mover's speed to 0 first) and 4 or the idle hook for a persistent one, so it does not move.
+- Meitou: `AiSystem.Runs` gives every non-player squad a blackboard, so these members get full minds (`AiDatabase.OwnGoals`) and stand; the population
+  orders no loaded leader (`PopulationRoaming.StepTrip`). Off screen a persistent one stands; a non-persistent one, which the original destroys at
+  unload, lives on only where Meitou keeps roamers (`KeepRoamers`) and then takes the engine's travel ([off-screen world](#off-screen-world)).
 
 ### Off-screen world
 
@@ -606,9 +640,11 @@ Meitou: [ground items](../simulation.md#items-and-eating).
     loaded zones after about 480 s and rejoined the player.
   - TRAVEL_TARGET / _FAST: to the mission target: the blackboard's override package's, else the campaign's target, else the current
     package's saved `mission target`, else a fallback (`FUN_140269cd0`); no move when it is the town the squad is in (**Observed**); a campaign's `travel speed unloaded` WALK / JOG / RUN gives 25 / 55 / 90;
-    otherwise (GROUPED, NO_SPEED_CHANGE, no campaign) FAST 60 (90 beyond 25000), TRAVEL_TARGET 25. The mover caps speed at 70 (**Observed**: no other writer of the cap). `FUN_140269cd0` (**Verified**): `+0x210` the override target; else the war manager's campaign target when it is a town (hand type 0xd) or nest (0x55); else the blackboard's saved mission target `+0x48`; else (caller flag) the platoon's Ownerships home town `+0x30`; Meitou `PopulationSystem.MissionGoal` for every TRAVEL job outside a campaign: `Platoon.Target` (set to the package's mission town where the squad unloads, saved as `meitou mission town`), a shipping squad with slaves and none chosen the nearest camp, else the origin; it stays once inside that town's radius.
+    otherwise (GROUPED, NO_SPEED_CHANGE, no campaign) FAST 60 (90 beyond 25000), TRAVEL_TARGET 25. The mover caps speed at 70 (**Observed**: no other writer of the cap). `FUN_140269cd0` (**Verified**): `+0x210` the override target; else the war manager's campaign target when it is a town (hand type 0xd) or nest (0x55); else the running package's (`+0x48`) mission town, set or not; only with no running package (caller flag) the platoon's Ownerships home town `+0x30`; Meitou `PopulationSystem.MissionGoal` for every TRAVEL job outside a campaign: `Platoon.Target` (set to the package's mission town where the squad unloads, saved as `meitou mission town`), a shipping squad with slaves and none chosen the nearest camp, else the origin; it stays once inside that town's radius.
   - PATROL_SHORTRANGE: picks a point in a neighbouring 4608 sector of the same biome group (sometimes a town, `patrol approaches towns`)
-    but sets no speed, so it does not move (**Observed**). PATROL_TOWN, PATROL_LONGRANGE: no branch, no movement.
+    with the loaded patrol's picker and range (**Verified**, `FUN_1407ee790`: the range (1, 2), or (0, 1) with a home town, `FUN_1407ee130`, then
+    `FUN_1408fe0d0` on the platoon's `PatrolInfo` +0x1e8, as [Task_Patrol](#off-screen-world)'s start), but sets no speed: the update zeroes the
+    mover's speed (+0xbc) at its top and only the travel branches (5, 6) and the home branch's object case set one, so it does not move (**Observed**). PATROL_TOWN, PATROL_LONGRANGE: no branch, no movement.
   - Movement is a straight line, no navmesh. Roads (`0x14065f940`, **Verified** unless marked): for a destination over 10000 away with
     w = max(0, 1 - `road preference`) < 1, the entry and exit are the nearest projected points on any road within 20000 (X/Z; roads with
     the +8 flag skipped), scored by distance minus a pull towards the travel direction (reversed for the exit) of clamp(w, 0.2, 0.9). The road is
@@ -773,7 +809,8 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   2. Weight (`FUN_1408f5ad0`): 1 for a sector whose zone is not active. Active: n = its counted platoons + 0.5 × the others (the area
      tick's sets: non-persistent platoons not homed to a nest are counted); 10 when n = 0, a flat 5 when n < 2, 1 at n = 2, 1 / n above
      (**Verified**: constants and branches of the `FUN_1408f5ad0` disassembly). Plus the zone's smell × the smell factor, but that factor
-     is `blood smell mult` read from the template's bool fields, so it is always 0 (**Observed**). With a home town, × 5 when the
+     is `blood smell mult` read from the template's bool fields, where the data never has it (it is a number), so it is always 0
+     (**Verified**, [blood smell](perception.md#blood-smell)). With a home town, × 5 when the
      sector's Chebyshev distance d from the home's sector equals near or far, × 10 between, × 0 outside: a homed patrol stays within one
      sector of its home's sector, and homeless squads have one (above).
   3. With `patrol approaches towns` and the drawn sector's town flag +0x30 (above), the towns in it (`TownList::getTownsInArea`): each
@@ -781,15 +818,19 @@ Meitou: [ground items](../simulation.md#items-and-eating).
      `getPositionForWaypoint` (`TownBase`, `FUN_140927120`, vtable +0x38) is the target. Else a placed spot in that sector
      (`FUN_1408f50d0`); with no neighbour, `FUN_1408fc1a0` takes the first active sector of the group (no town flag, fewer than 2
      excluded platoons) where a spot is placed, else a random sector of the group; it ignores the tether.
-  **The town waypoint is outside the town** (**Verified**, decompile): `getPositionForWaypoint` caches its point (`TownPositionCacher`,
-  Town +0xc0) and, for a town with a building list (vtable +0x2f0: Town +0x3b0 set), takes `Town::getPositionOutsideTownGates(200)`
-  (`FUN_140929560`): one pass over the building list, returning at the first entry that is either a gateway (`isGate`) with
+  **The town waypoint is outside the town gates** (**Verified**, decompile): `getPositionForWaypoint` (Town vtable +0x38, `FUN_140927120`) caches its point
+  (`TownPositionCacher`, Town +0xc0) and, for a town with gates (vtable +0x2f0 `hasGates`: its gate set Town +0x390 is not empty), takes
+  `Town::getPositionOutsideTownGates(200)` (vtable +0x290, `FUN_140929560`): one pass over the gate set (the `is gateway` buildings only,
+  [dialogue](dialogue.md#conditions) DC 49), returning at the first entry that is either a gateway (`isGate`, Building slot 123) with
   `amInsideTownWalls` 0 and a door (`getDoor`), whose door point +0x3bc is moved 200 along a normalised direction (its origin is dropped
-  by the decompile; outward from the town is **Observed** from the name), or a wall (`isAWall`) whose BUILDING record has `interior` references (`myInterior` +0x1f0, created only then by `Building::setup` `FUN_140551b20`; **Verified**, decompile), whose position
-  is moved the same way; neither: the town position. Meitou: `TownExit` serves the patrols and the intruder errand 274 (`TownDutySystem.Outside`; placed towns by their level buildings, a player town by its complete sites). A town without buildings: a door point of the object under the town position
-  (`FUN_1409b2ab0`, a ray from 1000 above), else the position. So bandits never aim inside a walled town, the Hub included (its two
-  `Defensive Gate IV` are ruins in the level data; a ruin has no door ([locks](locks.md#doors)), so the wall branch applies, skipping the first wall, a `Defensive Wall IV Connector` without `interior`; **Observed**).
-  The point still lies within the town radius (2500), so the squad counts as in the town and its loot goals walk it in through the ruined gates (**Observed**, headless, Rebirth save: Dust Bandit roamers at the Hub's west gate run LOOT_THE_DEAD inside the walls).
+  by the decompile; outward from the town is **Observed** from the name), or another building that is a wall (`isAWall`) whose BUILDING record has `interior` references (`myInterior` +0x1f0, created only then by `Building::setup` `FUN_140551b20`), whose position
+  is moved the same way; a gateway inside the walls or without a door (a ruin, [locks](locks.md#doors)) is passed over, never taken as a wall; neither: the town position. A town without gates: a door point of the object under the town position
+  (`FUN_1409b2ab0`, a ray from 1000 above), else the position. So the Hub, whose gate set holds only its two `Defensive Gate IV`, gets a point beyond one of
+  them while it has a door, else its town position, and Skinhouse HQ, which has no gateway building (its first wall with an interior, a `Defensive Wall IV` 3700 from its centre, is none), takes the gateless branch
+  (**Verified**, the data).
+  Meitou: `TownExit` (Town +0x38 and +0x290 alike: the patrols, the intruder errand 274, the travel rows 53 / 130, the war point and the homeward walks; placed towns by
+  their level buildings in list order, a player town by its complete sites; engine readings: list order for the set's, and the town position for the door point of a
+  town without gates).
   The move: `CharMovement::setPatrolInput` (`FUN_14065eaa0`, vtable +0xa0) in mode 3 (a `PatrolInfo` with a biome group) draws the point
   above and sends the character to it exactly; it redraws (up to 10 times) only a point whose ground is present and below 95 when the
   byte at +0x79 of the object at Character +0x2e0 is set (a race flag, water below 95: **Observed**), else accepts it (**Verified**). The
@@ -816,7 +857,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   idle, reached or failed), so the squad walks up to 200 outside the gate, stops, and turns to the next sector or town. Off screen a new
   point is picked within 500 of the last (`FUN_1407ee790`).
   Meitou (`PopulationHomeless.PatrolPoint`): the weights above with n the homeless squads standing in the zone and 10 for an empty active
-  one (engine choice), the tether (to the squad's own town when it has one, else to the homeless home town above: `HomeCell`), the leader walking to the exact point and the next drawn within 100 of it for a loaded squad (100 and the 2 s step: engine reading of the move's end; 500 only off screen); with no neighbour, a point of the home's sector, else of its own (engine choice); a squad with a town of its own that no neighbour ties to draws among the neighbours with no tether, and with none takes a point of its own sector, so one that came into the world far from home patrols where it is (engine choice too: the fallback above, `FUN_1408fc1a0`, is not implemented; both keep such a squad round the loaded sectors). That the tether's home town is the town the platoon was made out of is Meitou's reading of the home town field.
+  one (engine choice), the tether (to the squad's own town when it has one, else to the homeless home town above: `HomeCell`), the leader walking to the exact point and the next drawn within 100 of it for a loaded squad (100 and the 2 s step: engine reading of an arrival; 500 only off screen), or once the leader's walk to it is over short of it, arrived, given up or stopped (`AiSystem.PatrolMoveOver`; meanwhile it stands), so a leader whose point has no way to it turns to the next (**Observed**, headless: with a water band between sectors, leaders that draw a point across it draw again and patrol on); with no neighbour, a point of the home's sector, else of its own (engine choice); a squad with a town of its own that no neighbour ties to draws among the neighbours with no tether, and with none takes a point of its own sector, so one that came into the world far from home patrols where it is (engine choice too: the fallback above, `FUN_1408fc1a0`, is not implemented; both keep such a squad round the loaded sectors). That the tether's home town is the town the platoon was made out of is Meitou's reading of the home town field.
   A drawn town's point is the outside point above (`OutsideTown`: the first non-ruined `is wall gate` building with gate code 0 or unknown (unknown = outside, engine choice) or `links together` building with `interior` references, its origin
   moved 200 outward from the town position); the leader walks to it and the next is drawn within 100 (origin, outward and the radius: engine choices).
   `patrol approaches towns` is set on 933 of 961 squad templates of the merged load order, the Starving Bandit and Dust Bandit roamers
@@ -879,10 +920,10 @@ to now + 6 h and, only if the faction has no active campaign and no pending requ
 
 **Start** (`FUN_1409c9830`): home missing or disabled → the nearest own town to the target. Required men = int(`num forces` ×
 `raidSizeMult`) (**Verified** by disassembly). Gathering stops once men > required (each platoon adds its living members):
-1. the `special leader`'s platoon, taken as leader without any eligibility test (**Verified**, `FUN_1409c5040` / join `FUN_1409c4720`: it only returns when the platoon is already in this campaign; the free-platoon passes below do test); if not spawned, the squad template naming it `leader`, made 700 outward through the first gate or wall with an interior (Town vfunc 0x290 with 700, `TownExit`'s rule) of the first of the faction's 4 own towns nearest the campaign's start (`FUN_140943880`), or by the sector spawn helper `FUN_1408f50d0` when the faction has no town (**Verified**);
+1. the `special leader`'s platoon, taken as leader without any eligibility test (**Verified**, `FUN_1409c5040` / join `FUN_1409c4720`: it only returns when the platoon is already in this campaign; the free-platoon passes below do test); if not spawned, the squad template naming it `leader`, made 700 outward through the first gate or wall with an interior of its gate set (Town vfunc 0x290 with 700, `TownExit`'s rule) of the first of the faction's 4 own towns nearest the campaign's start (`FUN_140943880`), or by the sector spawn helper `FUN_1408f50d0` when the faction has no town (**Verified**);
 2. the faction's free, idle, intact homeless platoons (of a `squads to use` template when the list is set);
 3. for each of the 4 own towns nearest the target: such platoons homed there, then new squads drawn from `squads to use` by val0, made 700
-   outward through the town's first gate or wall with an interior (the town's position without one), or at the leader platoon's position once the campaign has a
+   outward through the first gate or wall with an interior of the town's gate set (the town's position without one), or at the leader platoon's position once the campaign has a
    leader, the spot without a leader snapped by the sector spawn helper `FUN_1408f50d0` (`FUN_1409c4150`, **Verified**); up to 100 tries per town; none when the
    list is empty. No rally point or phase: the travel packages start at once and the followers converge on the leader (`GatherAndMove`'s update `FUN_1409d66d0`).
    Meitou (`DraftNewSquad`, `NewSquad`): a walkable point within 700 of the town's centre, or of the leader platoon (engine stand-in).
@@ -906,7 +947,7 @@ campaign is not hostile, or that is not active (slot 70); a redirected request d
 
 **Phases** (`CampaignInstance::vfunc_10`, every war-manager run, loaded or not; times are game hours since the phase began):
 - Any phase but ended: the leader platoon loaded with every member down → defeat.
-- 0 travel: arrived strictly within 0.8 × town radius (XZ; `Town::getRadius` `FUN_140926eb0`, **Verified**: a placed town's `town radius mult` × its type base ([towns](buildings-production.md#placement), not `size radius`, which only the nest debris scatter `FUN_140938440` reads), a player town's [reassessed radius](buildings-production.md#placement), at least 1250; a nest marker is never inside, `FUN_140926d50`) or 400 of a non-town target; then the `dialog announcement` waits, "{1} has arrived at
+- 0 travel: arrived strictly within 0.8 × town radius (XZ; `Town::getRadius` `FUN_140926eb0`, **Verified**: a placed town's `town radius mult` × its type base ([towns](buildings-production.md#placement), not `size radius`, which only the nest debris scatter `FUN_140938440` reads), a player town's [reassessed radius](buildings-production.md#placement), at least 1250; a nest marker is never inside, `FUN_140926d50`) or 400 of a non-town target; then the `dialog announcement` waits ([below](#campaigns)), "{1} has arrived at
   {2}", and phase 1, or straight to ended without victory or defeat when there is no `pt2 AI leader`. A loaded, non-hostile, non-DEFEND
   campaign within 1.8 × radius of a town with hostile occupiers (+0x128) is defeated at once (a trader or ally does not walk into an occupied town).
 - 1 at target: victory when the leader is back in its home town (two null towns compare equal); else by `key`: ASSAULT_TOWN wins after
@@ -942,11 +983,17 @@ campaign is not hostile, or that is not active (slot 70); a redirected request d
   parents counted; the 13 ally defences also set `retreat AI others`; the `pt2` "Loot food then run away (non violent)" is signal 0, so a 24 h
   `Contract_Timed`; **Verified** by record dump, base files merged with inheritance). Goals (**Observed**, data): pt1 leader 215 TRAVEL_TO_TARGET_PACKAGE, 143, 129 MAKE_ANNOUNCEMENT_FAST; pt1
   others 215, 15; pt2 16 (attack enemies), 15, 216, 270, 276 or 131; cannibal 216, 254, 270.
+  - Phase 1 has no approach of its own: the members stand where the package change finds them (the leader within 0.8 × radius) and only their goals
+    take them in: 216 to a house of the target town, an outpost's too ([216](ai-tasks.md#town-goals)), 270 to a gate or wall, 276 to a cage, 131 to a
+    store, 254 to a downed one, 16 and 15 at what they sense (1500 × the race's `vision range mult`, [perception](perception.md)). With none of them a
+    member has only 14 and 32, and an NPC's default task is empty, so it stands (**Observed**, from the rows and [precedence](ai-tasks.md#precedence)).
+    A reassessed outpost's radius is max(1250, farthest building + 200), so its stop line is at least 1000 from the centre.
   - Kidnapping (**Verified**, data query of the install's AI_PACKAGE records for task enum 254 "Find and kidnap (with cages) urgent"; 132 and 246 are in no
     base package): the leader goal list of `Cannibal Raid Retreat` (the `retreat AI leader` of "BASE Basic Invasion", "slave raider silent", its
     "non slave trade" copy and "BASE- standard cannibal raid"), `Cannibal raid assault town` (the pt2 leader of the cannibal raid), `Cannibals at home`, the squad
-    goals of `Cannibal patrol map (short range)` and `Assault and kidnap` (a DIALOGUE_LINE's `delivery AI package`). So raiders (bandit invasions, slave
-    raiders, cannibals) kidnap when their leader retreats from a raid, cannibals also during their assault, on patrol and at home. The task (254, final state 153 got a
+    goals of `Cannibal patrol map (short range)` and `Assault and kidnap` (a DIALOGUE_LINE's `delivery AI package`, a field the exe never reads, so that
+    package never runs: [carry-loot](carry-loot.md#32-goals-and-their-target-finders)). So raiders (bandit invasions, slave raiders,
+    cannibals) kidnap when their leader retreats from a raid, cannibals also during their assault, on patrol and at home. The task (254, final state 153 got a
     victim, then 154 put the carried one in a cage) needs a free squad member to lift a downed one and a cage of its faction. The target is the nearest
     down, uncarried, uncaged, non-animal character of the sensed classes (and, unlike rescue, a sleeper in a bed). Not every raid kidnaps: the Dust Bandit "Invasion with demands" and the Hive, Ninja and Crab
     raids retreat with other packages (**Verified**, same query). The retreat package's mission town is the platoon's home town, else the nearest town of its
@@ -978,19 +1025,35 @@ campaign is not hostile, or that is not active (slot 70); a redirected request d
   walks; its task is done when its movement arrives, and it is finished at once for the campaign leader (`FUN_140349de0`), so the scorer drops it once
   131 holds; a follower's never finishes on its own. Speed modes: WALK default, JOG 55, RUN and GROUPED 999 (no cap), NO_SPEED_CHANGE unchanged.
   The campaign leader's package target is the campaign's town, so it walks to the town's waypoint point (Town vfunc 0x38, `FUN_140927120`, cached
-  on a timer): for a town with gates 200 outward through its first gate or wall with an interior (vfunc 0x290 with 200, `TownExit`), else 3 × (A − B)
-  beyond the first door of the building `FUN_1409b2ab0` finds at the town's position, else the town's position. A follower platoon's mission target is
+  on a timer, [the town waypoint](#off-screen-world)): for a town with gates 200 outward through the first entry of its gate set that is a gate outside the walls or a
+  wall with an interior (vfunc 0x290 with 200, `TownExit`), else 3 × (A − B) beyond the first door of the building `FUN_1409b2ab0` finds at the town's position,
+  else the town's position. A follower platoon's mission target is
   the leader platoon's own hand with a zero point (`FUN_1409d5020`), which the war class's mission-target slot pairs with its trail point
   (`FUN_14028fb10`); the hand resolver (`FUN_140284510`) finds a kind-0x22 hand through the platoon list and refuses a platoon for kind 1
-  (**Verified**). Meitou (`PopulationCampaigns.StepCampaignLoaded`, engine stand-in until 215 is
-  acted out by the AI): the leader walks to the town's centre, followers to their trail points, both off screen and loaded (`MoveCampaigns`; its trail point is measured from the trail's newest point and stops at
-  its oldest); a
-  follower's squad leader takes the campaign leader's speed mode inside 100, capped by `CharacterCold.PaceCap` = the campaign leader's velocity now,
-  × 0.9 under 70, cleared at 100 or more, on leaving the campaign and while fighting (reading the speed value as the velocity is an engine reading).
-- Announcement (task 129 in the pt1 leader package, **Verified**): "{1} has arrived at {2}" once; task 129 needs the leader not down (!101)
-  and at the package target (131 `atPackageTarget`, [TaskData](ai-tasks.md); Meitou uses the 0.8 × radius arrival); with the leader within 2500 of the camera
-  and a target-faction member within 2500 of it, `dialog announcement` fires as event 2 ANNOUNCEMENT with no target; phase 0 then waits on
-  the leader's event-2 state. When that state ends, the update of `FUN_140355770` clears the waiting flag (+0x78) and falls through to the camera and faction-object test (`FUN_140354990`, 2500) and the event (`FUN_140685750`) again, so the announcement repeats while the leader stays at the target and the conditions hold; only the 'has arrived' message is gated once (+0x7a) (**Verified**, decompile; Meitou `PopulationCampaigns.TryAnnounce`, bounded by its patience of one game hour). Talking to a campaign member (event 1) is refused without a pending `interrupt`.
+  (**Verified**). The war start copies that hand once, and the platoon is not saved with it: a load runs the start again (`FUN_140272c20` installs the
+  saved `contractjob` through `FUN_140272240`). A follower's 131 (`FUN_140506d30`) always holds: the target's character flag (+0x2c, set by
+  `FUN_14028fb10` only for kind 1) is clear, so the hand is looked up as a town (`FUN_140792980`, the towns' list) and none is found; with its finished
+  test false its 215 is never dropped. Where a hand no longer resolves, campaign slot 21 (`FUN_1409d5990`) gives the point: without a current lead
+  the asker's own position, for the lead the campaign target's point (`FUN_1409b65d0`), else its trail point (its own position on an empty trail)
+  (**Verified**). Meitou (`AiSystem.ActFormation`, `MissionFormation`): the lead platoon's members walk to the target town's own point (a nest's centre),
+  the others to the lead platoon's position (`Platoon.Position`, one look old), the fallback as above (`PopulationSystem.TrailAim`); a member's pace
+  inside 100 is capped by `CharacterCold.PaceCap` = the campaign leader's last velocity, × 0.9 under 70, only while 215 runs (reading the speed value as
+  the velocity is an engine reading). Off screen the leader travels to the target and the followers to their trail points (`MoveCampaigns`; the
+  trail point is measured from the trail's newest point and stops at its oldest).
+- Announcement (task 129 `Task_MakeAnnouncement` in the pt1 leader package, update `FUN_140355770`, **Verified**): 129 needs the leader not down (!101)
+  and at the package target (131 `atPackageTarget`, [TaskData](ai-tasks.md)); list A is 76 `isMessageDelivered` ([StateType ids](ai-tasks.md#statetype-ids)).
+  Each run's first update posts "{1} has arrived at {2}" for a town target (its +0x7a; a new run is a new task, so a repeat posts it again). With the
+  leader within 2500 of the camera and a target-faction member within 2500 of it (`FUN_140354990`), `dialog announcement` fires as event 2
+  ANNOUNCEMENT with no target (`FUN_140685750`) and sets +0x78. While +0x78 is set the update waits for the conversation's end (+0x79,
+  `FUN_140671c60`); then with `FUN_140673830(dialogue, 2)` true the run is finished (slot 4 `FUN_140333f60`) and the plan step ends it, else +0x78
+  is cleared and it announces again. A fresh 129 never passes the scorer's done test (slot 4 false), so it is planned again and repeats while the
+  leader stands at the target and the conditions hold.
+- **The phase-0 wait** (`FUN_1409c70f0`, **Verified**): with a `dialog announcement` (`FUN_1409c6fc0`) the campaign stays in phase 0 until the lead
+  platoon's effective leader (`FUN_14079aea0`) exists and `FUN_140673830(its dialogue, 2)` is true, with no time limit and no "has arrived" line of its
+  own; an unloaded leader platoon resolves no leader character (**Observed**), so it waits. So a talk with the leader holds phase 0 until it ends.
+  Without an announcement the war manager posts the line itself and moves on, unless `FUN_140672a30(the leader's dialogue, 2)` (its +0x1a0 entry
+  for event 2) is set. Meitou: `AiSystem.ActAnnounce` / `SendAnnouncements` -> `PopulationSystem.Announce`, `TaskFinished.AnnouncementOver`,
+  `PopulationSystem.LeaderDelivered`; the no-announcement branch's +0x1a0 test is not built. Talking to a campaign member (event 1) is refused without a pending `interrupt`.
   "Invasion with demands" (data): the announcement sets the negotiation as `interrupt`; paying 2000 (DA 8 + DA 38) retreats and requests it
   again in 42-56 h; refusing is DA 37 (attack); stabbing the speaker is DA 21 + DA 38 and the "EXTRA ANGRY" campaign in 20-50 h.
 
@@ -1019,7 +1082,7 @@ every message {1} is the campaign's name and {2} the target town's (the cancel m
 - Nest respawn delay after "wiped out", the default of `DAT_142133588` (the Number of nests multiplier option; **Unknown**, the exe image holds zeros there), the rule that makes `TownPopulationManager::vfunc_4`
   declare a town wiped out (**Observed** gates: roaming pool cap <= 3 and <= 25 roaming members).
 - Campaigns: TownBase slots 92 / 96, the disabled-town flag, what besides the two calls recomputes the town level,
-  the "fought a player squad" test, the announcement wait's event-2 state, the A* road cost, `Platoon::vfunc_25` (sends phase 0 to 2), whether spawned campaign squads are `persistent`.
+  the "fought a player squad" test, the A* road cost, `Platoon::vfunc_25` (sends phase 0 to 2), whether spawned campaign squads are `persistent`.
 - Unique characters: the `Character +0x279 & 7` gate and the 0.1 roll against a town list at platoon unload, platoon +0xac, the unit of
   `replacement time` (constant 2618.18 from `FUN_14066cd50`), UNIQUE_SQUAD_TEMPLATE `persistent` use,
   the polarity of the import handle test; other readers of `unique` (`FUN_14067b070` dialogue conditions, `FUN_1407609e0` / `FUN_140761550`) not opened.

@@ -103,11 +103,35 @@ public sealed class SenseBlock
     /// The threats sensed at the last look.
     /// </summary>
     internal readonly List<CharacterId> ThreatList = [];
+    /// <summary>
+    /// The characters <c>FUN_1405cb0a0</c> put on the threats list (<see cref="Aggro.AggroSystem.Threaten"/>), apart from it: the original's logic
+    /// tick takes the immediate-threat flag from the list (<c>FUN_1404378f0</c>, Character <c>+0x2b0</c>) before its AI update's sense pass clears
+    /// it and the chooser runs (<c>FUN_1405d00b0</c>, <b>Verified</b>), so a push raises that flag for the next think and is in no list a chooser
+    /// reads (<see cref="Pushes"/>).
+    /// </summary>
+    internal readonly List<CharacterId> Pushed = [];
+    /// <summary>
+    /// The tick of the last push into <see cref="Pushed"/>.
+    /// </summary>
+    internal long PushedTick = -1;
+    /// <summary>
+    /// The culprits this character, the victim of their crime, witnesses (<see cref="Aggro.AggroSystem.Witness"/>) and the tick until which each
+    /// witnessing holds: the original's witness function pushes the culprit from the victim's own perception update inside the sense pass, after
+    /// the clear (<c>FUN_14085a070</c> → <c>FUN_1408593d0</c> → <c>FUN_1408580d0</c> → <c>FUN_140854d10</c>, <b>Verified</b>), so the look puts it
+    /// back on <see cref="ThreatList"/> while the crime sweep renews it. Serial writes; hashed while set; not saved (the list is the look's).
+    /// </summary>
+    internal readonly List<(CharacterId Id, long Until)> Witnessed = [];
 
     /// <summary>
     /// The entries, by target slot.
     /// </summary>
     public IReadOnlyList<SenseEntry> Entries => EntryList;
+
+    /// <summary>
+    /// The pushed threats (<see cref="Pushed"/>) that still raise the immediate-threat flag at <paramref name="tick"/>: until the tick after the
+    /// push, whose think stands for the immediate AI update the push asks for.
+    /// </summary>
+    internal IReadOnlyList<CharacterId> Pushes(long tick) => tick <= PushedTick + 1 ? Pushed : [];
 
     /// <summary>
     /// The threats list (+0x50): the characters of another faction sensed at the last look whose fight targets this one.
@@ -150,6 +174,12 @@ public sealed class SenseBlock
     /// The threat towards characters of its faction (+0x8c), one per fighting threat.
     /// </summary>
     public float ThreatToAllies { get; internal set; }
+
+    /// <summary>
+    /// The summed intended aggression (+0x90, the AI's +0xb8) of the sensed characters of other factions not ragdolled or carried: each one's
+    /// goal's (<see cref="Ai.TaskAggression.OfGoal"/>, <c>FUN_140854370</c>, <b>Verified</b>).
+    /// </summary>
+    public float Aggression { get; internal set; }
 
     /// <summary>
     /// The last look was a fade (<c>SensoryData::fade</c>: carried or knocked out), so the counts are zero, not sensed.
@@ -244,11 +274,28 @@ public sealed class SenseBlock
             h.Add(t.Generation);
         }
 
+        if (Pushed.Count > 0)
+        {
+            h.Add(PushedTick);
+            foreach (var t in Pushed) h.Add(t);
+        }
+
+        if (Witnessed.Count > 0)
+        {
+            h.Add(Witnessed.Count);
+            foreach (var (id, until) in Witnessed)
+            {
+                h.Add(id);
+                h.Add(until);
+            }
+        }
+
         h.Add(Enemies);
         h.Add(Neutrals);
         h.Add(Allies);
         h.Add(AlliesDown);
         h.Add(ThreatToMe);
         h.Add(ThreatToAllies);
+        if (Aggression != 0) h.Add(Aggression);
     }
 }

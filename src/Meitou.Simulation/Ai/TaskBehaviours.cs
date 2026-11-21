@@ -36,8 +36,8 @@ public enum AiBehaviour : byte
     /// </summary>
     Sit = 6,
     /// <summary>
-    /// While a patrol package runs, the leader walks the patrol's route and the others follow it; otherwise wanders about the town
-    /// (<see cref="CharacterTask.Wander"/>).
+    /// PATROL (22, <c>Task_Patrol</c>): the leader walks to the squad's patrol point, which the population's patrol step draws sector by sector
+    /// (<see cref="Factions.Squad.PatrolPoint"/>), and the others follow it.
     /// </summary>
     Patrol = 7,
     /// <summary>
@@ -66,9 +66,9 @@ public enum AiBehaviour : byte
     /// </summary>
     ToTown = 13,
     /// <summary>
-    /// The leader walks (runs for the fast one) to the running package's mission town (<see cref="Blackboard.Destination"/>); wanted only while it
-    /// has one and is not in it (WANDERING_TRADER and the travelling rows, whose plan is <c>Task_TravelToTargetTown</c> to <c>atDestinationTown</c>,
-    /// docs/game/ai-tasks.md).
+    /// WANDERING_TRADER 39 and the travelling rows 53 and 130 (desire 1): their plan's <c>Task_TravelToTargetTown</c> step walks to the squad's town
+    /// (<see cref="TownTravel"/>) until <c>atDestinationTown</c> holds; 39 then stands. 215 Mission formation: the refugee's walk to its mission, a
+    /// war package's formation (docs/game/ai-tasks.md "Town goals").
     /// </summary>
     Travel = 14,
     /// <summary>
@@ -115,38 +115,17 @@ public enum AiBehaviour : byte
     /// </summary>
     Medic = 21,
     /// <summary>
-    /// PATROL_TOWN (36, <c>Task_PatrolTown</c>, docs/game/ai-tasks.md "Town goals"): walks to a random point round its town's centre, and draws the
-    /// next one each time a walk is over, so it keeps strolling about the town (its squad's mission town, else its home; an occupier: the player town
-    /// it holds).
+    /// PATROL_TOWN (36, <c>Task_PatrolTown</c>, docs/game/ai-tasks.md "Town goals"): away from the squad's town (<see cref="SquadTown"/>) its plan's
+    /// 130 walks there (<see cref="TownTravel"/>); in it, it walks to a random point round the town's centre and draws the next one each time a walk
+    /// is over, so it keeps strolling about the town.
     /// </summary>
     PatrolTown = 22,
-    /// <summary>
-    /// Find and rescue leader (142, finder <c>FUN_140598540</c>, list B 101 <c>isLeaderDown</c>): wanted while the squad's leader (not the character,
-    /// not dead) is down and can be lifted (<see cref="Carrying.CarrySystem.LeaderToRescue"/>); the serial carry sweep lifts it (row 213, the snatch
-    /// lift) once the goal is chosen.
-    /// </summary>
-    RescueLeader = 23,
     /// <summary>
     /// Crouches (CROUCH 27, <c>Task_Crouch</c>) or stands up from a crouch (STAND_UP 28, <c>Task_UnCrouch</c>) where it stands: the <c>squat T</c>
     /// clip plays forwards or backwards and the animation stance's crouched byte is set once it passes 0.9 or cleared under 0.1
     /// (<see cref="AnimationSystem"/>). The base data lists neither goal; modded packages may.
     /// </summary>
     Crouch = 24,
-    /// <summary>
-    /// A captive goal (slave work, gathering, processing, the prisoner's fate and the rest that <see cref="Kidnap.CaptiveSystem"/> runs as jobs;
-    /// docs/simulation.md "Captives"): its sweep starts the job for a member the AI holds that stands free. Any other member awake weighs the goal at
-    /// the desire its last sweep turn or job's end kept (<see cref="AiMind.CaptiveOffers"/>), as the original's chooser weighs it against its other
-    /// goals; the think asks for the job (<see cref="AiMind.CaptiveAsk"/>) and the serial step starts it.
-    /// </summary>
-    Captive = 25,
-    /// <summary>
-    /// Find and rescue if there's beds (148, finder <c>FUN_1408cd550</c>, desire <c>FUN_1405994c0</c>, effect 48 <c>IS_CARRYING_TARGET</c>): wanted
-    /// while the character is not on Hold, carries nothing, is able to lift, the bed search finds a bed for it and the rescue finder finds a downed
-    /// ally (<see cref="Carrying.CarrySystem"/>'s serial sweep keeps that in <see cref="AiMind.BedRescueWant"/>); once the goal is chosen the sweep
-    /// lifts the body (row 148, as the player's rescue job does), and the carried body's goals then take it on (106 lays it in a bed,
-    /// <see cref="Kidnap.TownDutySystem"/>).
-    /// </summary>
-    RescueToBed = 26,
     /// <summary>
     /// HEAL_MY_LEGS (269 Fixing Legs, a race goal; <c>Task_FirstAid</c> on the character itself, docs/game/ai-tasks.md "Medic jobs"): wanted while its
     /// legs are messed up (<see cref="AiSystem.HealLegsDesire"/>); planned by the planner from its list B (an arm, a first aid kit, not swimming, no
@@ -155,10 +134,16 @@ public enum AiBehaviour : byte
     /// </summary>
     HealLegs = 27,
     /// <summary>
-    /// A code mod's goal (a type from 1000 up that a mod registered, <see cref="NpcGoals"/>; never in <see cref="TaskBehaviours"/>' table): it stands
-    /// while the serial step asks the mod to start it (<see cref="AiMind.ModGoalAsk"/>, <see cref="INpcGoal.Start"/>).
+    /// A goal an engine system or a code mod acts out (a type no entry of this table acts out, registered by that system or mod,
+    /// <see cref="DutyGoals"/>): it stands on the goal's row (a code mod's type on row 14 Idleness) while the serial step asks for the act-out's start
+    /// (<see cref="AiMind.DutyAsk"/>, <see cref="IDutyGoal.Start"/>), and the goal then holds the character (<see cref="AiMind.Duty"/>).
     /// </summary>
-    Mod = 28,
+    Duty = 29,
+    /// <summary>
+    /// 129 Approaching fast (<c>Task_MakeAnnouncement</c>, a campaign leader's goal at its package target): it stands while the serial step has
+    /// the campaign's announcement said (<see cref="AiMind.AnnounceAsk"/>, <see cref="Population.PopulationSystem.Announce"/>).
+    /// </summary>
+    Announce = 30,
 }
 
 /// <summary>
@@ -173,6 +158,8 @@ public static class TaskBehaviours
     static readonly Dictionary<TaskType, (AiBehaviour Behaviour, string Text)> Table = new()
     {
         [TaskType.Idle] = (AiBehaviour.Mill, "Idleness"),
+        // 62 Standing still (Task_StandStill): a request first aid files on the patient's blackboard (BoardRequests); it stands where it is.
+        [TaskType.StandStill] = (AiBehaviour.Mill, "Standing still"),
         [TaskType.Wanderer] = (AiBehaviour.ToTown, "Wandering"),
         [TaskType.WanderTown] = (AiBehaviour.TownNode, "Wandering town"),
         [TaskType.PatrolTown] = (AiBehaviour.PatrolTown, "Patrolling town"),
@@ -186,7 +173,6 @@ public static class TaskBehaviours
         [TaskType.StandAtGeneralNode] = (AiBehaviour.Post, "general node"),
         [TaskType.HoldPosition] = (AiBehaviour.Post, "Holding position"),
         [TaskType.StayInHome] = (AiBehaviour.Post, "Staying home"),
-        [TaskType.ManTheGate] = (AiBehaviour.Post, "Gate guard"),
         [TaskType.ManATurret] = (AiBehaviour.Turret, "Turret guard"),
         [TaskType.ManATurretOnBuilding] = (AiBehaviour.Turret, "Turret home guard"),
         [TaskType.ManATurretPlayerJob] = (AiBehaviour.Turret, "Turret guard"),
@@ -194,7 +180,10 @@ public static class TaskBehaviours
         [TaskType.SitOnThrone] = (AiBehaviour.Sit, "Reigning"),
         [TaskType.FollowSquadleader] = (AiBehaviour.Follow, "Following leader"),
         [TaskType.FollowSlavemaster] = (AiBehaviour.Follow, "Following master"),
-        // 45 Bodyguard has no behaviour of its own (FUN_14032ebd0 builds Task_Blank for it): the following of a bodyguard contract is goal 44's.
+        // 45 Bodyguard is Task_Blank (FUN_14032ebd0): with nobody threatening its target or itself it neither acts nor has an effect and is dropped,
+        // else it plans row 13 Attacking attackers of its target, as the protect goals' fight (AiSystem.Fights.cs). The following of a bodyguard
+        // contract is goal 44's.
+        [TaskType.Bodyguard] = (AiBehaviour.Fight, "Bodyguard"),
         [TaskType.FollowPlayerOrder] = (AiBehaviour.Follow, "Following"),
         // 253 Following (urgent escape): a Task_Follow like 31 / 44 / 289 (FUN_14032ebd0 case 253, list B !7 60 90 59); one package lists it as a
         // Leader goal.
@@ -209,22 +198,17 @@ public static class TaskBehaviours
         [TaskType.RunAwayHometown] = (AiBehaviour.GoHome, "Retreating fast"),
         [TaskType.WanderingTrader] = (AiBehaviour.Travel, "Wandering trader"),
         [TaskType.TravelToTargetTown] = (AiBehaviour.Travel, "Travelling"),
-        // To the running package's destination (Blackboard.Destination): the trader's next town; under the retreat packages that list it (signals 1
-        // and 25) the squad's home town (AiSystem.Captives.cs, engine reading).
         [TaskType.TravelToTargetTownFast] = (AiBehaviour.Travel, "Travelling quickly"),
-        // Row 215 of the refugee package (and of the campaigns' first phase, whose squads the campaign drives): to its mission, the town or the squad
-        // it is to join.
-        [TaskType.TravelToTargetPackage] = (AiBehaviour.Travel, "Travelling"),
-        // Its Task_PatrolTownViolent is not decoded (engine choice): it roams the town it assaults, as patrolling does without a patrol package.
-        [TaskType.RunAroundTownLookingForPeople] = (AiBehaviour.Patrol, "Ransacking town"),
+        // Row 215: the refugee package's walk to its mission, the town or the squad it is to join; under a campaign's war package the formation's
+        // walk to the package target (MissionFormation).
+        [TaskType.TravelToTargetPackage] = (AiBehaviour.Travel, "Mission formation"),
+        [TaskType.MakeAnnouncementFast] = (AiBehaviour.Announce, "Approaching fast"),
         [TaskType.InvestigateAlarms] = (AiBehaviour.Investigate, "Investigating"),
         [TaskType.InvestigateAlarmsAlliesOnly] = (AiBehaviour.Investigate, "Investigating"),
         [TaskType.DefeatSquad] = (AiBehaviour.Assault, "Assault"),
         // 248 Attacking Squad: the same finder as 101 (FUN_140793eb0, stub LAB_140006d25), the same flags and effect; no base package lists it, a mod
         // can.
         [TaskType.DefeatSquadLimitChaseRange] = (AiBehaviour.Assault, "Attacking squad"),
-        [TaskType.FindAndRescueLeader] = (AiBehaviour.RescueLeader, "Rescuing leader"),
-        [TaskType.FindAndRescueIfTheresBeds] = (AiBehaviour.RescueToBed, "Find and rescue"),
         [TaskType.Crouch] = (AiBehaviour.Crouch, "Crouching"),
         [TaskType.StandUp] = (AiBehaviour.Crouch, "Standing"),
         [TaskType.SelfPreservation] = (AiBehaviour.SelfPreserve, "Self preservation"),
@@ -252,15 +236,12 @@ public static class TaskBehaviours
     static readonly AiBehaviour[] Behaviours = BuildBehaviours();
 
     /// <summary>
-    /// Builds <see cref="Behaviours"/> from <see cref="Table"/> and the captive goals.
+    /// Builds <see cref="Behaviours"/> from <see cref="Table"/>.
     /// </summary>
     static AiBehaviour[] BuildBehaviours()
     {
         var a = new AiBehaviour[TypeCount];
         foreach (var (type, e) in Table) a[(int)type] = e.Behaviour;
-
-        // The captive goals: acted out by their jobs; their display texts are CaptiveTexts.
-        foreach (var type in Kidnap.CaptiveSystem.GoalTypes) a[(int)type] = AiBehaviour.Captive;
         return a;
     }
 
@@ -270,42 +251,15 @@ public static class TaskBehaviours
     public static AiBehaviour Of(TaskType type) => (uint)type < TypeCount ? Behaviours[(int)type] : AiBehaviour.None;
 
     /// <summary>
-    /// The game's display text (TaskData) of the captive goals, which their jobs act out (<see cref="Kidnap.CaptiveSystem.GoalTypes"/>).
-    /// </summary>
-    static readonly Dictionary<TaskType, string> CaptiveTexts = new()
-    {
-        [TaskType.KillARandomCageOccupant] = "Kill random prisoner",
-        [TaskType.EatARandomCageOccupant] = "Eat random prisoner",
-        [TaskType.EatARandomCageOccupantMeasuredRate] = "Dinner time",
-        [TaskType.EatARandomDeadBody] = "Eat corpse",
-        [TaskType.EatARandomKoBody] = "Eat body",
-        [TaskType.FindCropsToEat] = "Find crops",
-        [TaskType.FogmanWorshipVictim] = "Worshiping",
-        [TaskType.AnimalFetchALimb] = "Fetch",
-        [TaskType.PlayBecauseIHaveALimbInMouth] = "Playing 'Limbs'",
-        [TaskType.ChaseAllyDogsWithMouthLimbs] = "Limb Jealousy",
-        [TaskType.NewSlaveProcessing] = "Watching for new slaves",
-        [TaskType.SlaveWatching] = "Watching slaves",
-        [TaskType.LiberateAllThePrisoners] = "Liberating prisoners",
-        [TaskType.CaptureNewSlaves] = "Capturing slave",
-        [TaskType.CarryWoundedSlaves] = "Carrying slaves",
-        [TaskType.WorkTheSlaves] = "Working the slaves",
-        [TaskType.GatherSlavesFromCages] = "Gathering slaves",
-        [TaskType.GatherSlavesFromCagesIfFemaleOrBeast] = "Gathering unholy slaves",
-        [TaskType.GatherSlavesFromCagesIfItsAnExportTown] = "Gathering slaves for shipping",
-        [TaskType.GoToSomewhereForDeliveringSlaves] = "Delivering slaves",
-        [TaskType.SlaveGetInMyMastersCage] = "Getting in my cage",
-    };
-
-    /// <summary>
-    /// The game's display text of a type the engine acts out or a captive goal; the enum name for the rest.
+    /// The game's display text of a type the engine acts out; for the rest its TaskData row's (an engine-acted goal's,
+    /// <see cref="DutyGoals"/>), else the enum name.
     /// </summary>
     public static string Text(TaskType type)
     {
         if (Table.TryGetValue(type, out var e)) return e.Text;
-        if (CaptiveTexts.TryGetValue(type, out string? captive)) return captive;
+        if (type == TaskType.StumbleTaskForced) return "Stumbling";
 
-        return type == TaskType.StumbleTaskForced ? "Stumbling" : type.ToString();
+        return TaskDataTable.Of(type)?.Text ?? type.ToString();
     }
 
     /// <summary>

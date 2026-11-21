@@ -113,9 +113,17 @@ public static class TaskFinished
 
             // Set only by the update that also ends the task (or asks a replan), which the same character update carries out.
             TaskFinish.OwnEnd => true,
+            TaskFinish.Announcement => !AnnouncementOver(world, slot),
             _ => !Fresh(world, slot, row, target),
         };
     }
+
+    /// <summary>
+    /// A running <c>Task_MakeAnnouncement</c>'s test (<c>FUN_140333f60</c>, <b>Verified</b>): its line was said (<see cref="AiMind.Announced"/>), its
+    /// conversation is over and the message counts as delivered (<c>FUN_140673830</c>, <see cref="AiSystem.MessageDelivered"/>).
+    /// </summary>
+    static bool AnnouncementOver(World world, int slot) =>
+        world.Characters.Cold(slot)?.Ai is { Announced: true } && world.SystemOf<AiSystem>()?.MessageDelivered(world, slot) == true;
 
     /// <summary>
     /// The original's running task for Meitou's act-out, with its character target: a fight is <c>Task_MeleeAttack</c> (4, 227 for an animal) or a

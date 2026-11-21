@@ -140,6 +140,7 @@ public static class SaveImport
         foreach (var (coordinate, zone) in game.Zones) imported.Zones[coordinate] = zone;
         imported.Reindex();
         imported.UpdateDerived();
+        imported.Problems.AddRange(game.Problems);
         return imported;
     }
 

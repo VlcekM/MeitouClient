@@ -516,7 +516,8 @@ to Jobs; the saved `chase mode` flag is that switch (**Verified**, [perma-jobs](
   **Verified** in `Kenshi_MainPanel.layout`; its frame is invisible and disabled and the exe never names `BehaviorSlider`: dead layout, **Verified** by byte search) and a jobs list ([ai.md](ai.md#packages-and-goals)) with the hint "To add jobs, hold shift key when
   giving an order". Jobs list (`JobsPanel`, an ItemBox of class `OrdersItemBox`): "assigned player jobs and
   orders for the selected character"; each row has an X that removes the job, top rows take priority and rows can be dragged to reorder (tutorial strings,
-  **Verified** in the exe). Empty, `JobsPanelInfo` shows "[No jobs assigned]" and the hint. Rows (**Verified**, `FUN_14072b540`, `FUN_1407263b0`,
+  **Verified** in the exe). Its rows are the job list alone (`+0x88`, count `+0x90`, through `FUN_1405c8f30` / `FUN_1405c8f10`, **Verified** `FUN_1407263b0`): neither the order
+  queue nor the second list is shown. Empty, `JobsPanelInfo` shows "[No jobs assigned]" and the hint. Rows (**Verified**, `FUN_14072b540`, `FUN_1407263b0`,
   `FUN_140724cb0`, `FUN_140729d50`, `FUN_140723ee0`): an `OrderCellView` of `Kenshi_OrdersPanelOrder.layout` (300 × 20: a `Kenshi_ConnectBarSkin` bar,
   `OrderText` `Kenshi_TextboxStandardText` 10 px in and 35 px short of the right, `RemoveButton` `Kenshi_Button1` 30 px wide at the right, red "X"), int(24 ×
   height / 1080) tall and the box's width less 4 × width / 1920, less the bar's when the rows overflow; text `#afa68b` + (index + 1) + ": " + the
@@ -1227,6 +1228,9 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
   character"), else "Dismiss character '{1}'?". Yes (`FUN_14048fa30`): deselected, faction `1233-gamedata.base` (Tech Hunters; else `nofac`), a new
   persistent platoon of `5006-squad.mod` ("Wandering Squad") whose AI packages it runs (the factory `FUN_1407f4420`'s third argument 1 is the persistent flag, **Observed**),
   so `saveGame` writes it with every platoon. Meitou saves it as a homeless persistent platoon ([save](../formats/save.md#wild-and-nest-platoons-meitou-mapping)).
+  The faction change (Character slot 20 `FUN_1405cbac0` → `FUN_14050a9d0`) empties the goal lists; the job list goes (`FUN_140507280`) and the plan is
+  emptied (`FUN_14050d1b0` on `+0x300`); nothing empties the order deque, so its orders stay, the front planned again (**Verified**, `FUN_14048fa30`).
+  Recruiting (DA 3 / 18, `FUN_1407ff8b0`) changes the faction through the same vfunc `0xa0` and drops the jobs (`FUN_140507280`): its goals go, its orders stay (**Verified**, `FUN_1407ff8b0`).
 - Meitou: a portrait clicked without dragging selects the character (engine choice); a box is dragged by its frame.
 - **Observed** (installed `Kenshi_OverviewWindow.layout`, `kenshi_templates.xml`): `DismissCharPanel` expands to a transparent `PanelEmpty` ItemBox;
   its caption has `NeedMouse=false`. Meitou checks the arranged panel's bounds and clip for portrait drops, with the overview as the top hit screen.

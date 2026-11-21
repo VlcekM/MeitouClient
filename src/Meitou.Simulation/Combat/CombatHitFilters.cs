@@ -87,6 +87,7 @@ sealed class CombatHitFilters
         catch (Exception e)
         {
             fault = $"{e.GetType().Name}: {e.Message}";
+            SimulationExtensions.TellOutdated(entry.Filter, e);
         }
 
         if (fault is null) return before with { Packet = hit.Packet, Cancelled = hit.Cancelled };

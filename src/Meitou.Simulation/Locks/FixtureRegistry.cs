@@ -485,6 +485,22 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
+    /// Whether <paramref name="id"/> names a building of a town not registered yet (<see cref="RegisterSite"/>), or a fixture of one (its ids start
+    /// with the building's key): it is there once the town comes into the world.
+    /// </summary>
+    internal bool Unregistered(PopulationData data, string id)
+    {
+        for (int s = 0; s < data.Sites.Count; s++)
+        {
+            if (_sites.Contains(s)) continue;
+            foreach (var b in data.Sites[s].Buildings)
+                if (b.Key.Length > 0 && id.StartsWith(b.Key, StringComparison.Ordinal) || b.Fixtures.Any(f => f.Id == id)) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Registers a town building and adds it to the sight's occluders. A gate the last labelling listed gets its first code back on its first door.
     /// </summary>
     void RegisterWithSight(World world, PopulationData data, int site, TownBuilding b, int townFaction)
@@ -1563,11 +1579,17 @@ public sealed partial class FixtureRegistry
     /// functionality's <c>use range</c>, doubled while it is not moving, and it is less than 15 above or below it (the original's same-floor test has
     /// no counterpart here: Meitou's cage has no floor of its own).
     /// </summary>
-    public static bool AtCage(Fixture cage, Vector3 character, bool moving)
+    public static bool AtCage(Fixture cage, Vector3 character, bool moving) => AtFixture(cage, character, moving);
+
+    /// <summary>
+    /// Whether a character is at a piece of furniture to use it (a cage, a bed, a storage container; <c>isAtLocation</c> for a building,
+    /// <c>AI::isWithinChoppingRange</c> <c>FUN_14059c6d0</c>, <b>Verified</b>): as <see cref="AtCage"/>.
+    /// </summary>
+    public static bool AtFixture(Fixture f, Vector3 character, bool moving)
     {
-        float reach = cage.UseRange * (moving ? 1 : StillReachFactor);
-        return Vector2.Distance(new(character.X, character.Z), new(cage.Position.X, cage.Position.Z)) < reach
-                && MathF.Abs(character.Y - cage.Position.Y) < WorkHeight;
+        float reach = f.UseRange * (moving ? 1 : StillReachFactor);
+        return Vector2.Distance(new(character.X, character.Z), new(f.Position.X, f.Position.Z)) < reach
+                && MathF.Abs(character.Y - f.Position.Y) < WorkHeight;
     }
 
     /// <summary>
@@ -2041,8 +2063,8 @@ public sealed partial class FixtureRegistry
     /// Task 133 Get out of cage (legit, flag 0; <see cref="LeaveCage"/>), given with the queue cleared to a prisoner bailed out
     /// (<c>FUN_1406ae170</c>), bought free (<c>FUN_1406add20</c>) or released by a jailer (<c>FUN_1403570a0</c>). The bought and the released are out
     /// of their cage before the task runs (both clear the hold themselves, <c>FUN_140330600</c>, right after the give), so its leave finds no cage and
-    /// does nothing (<b>Verified</b>: the leave tests the held building's handle, which the clear set to none); only a bailed prisoner, whose cage
-    /// the bail merely unlocks, leaves through it. False when the character is in no cage (nothing to do).
+    /// does nothing (<b>Verified</b>: the leave tests the held building's handle, which the clear set to none); only a bailed prisoner, whose hold
+    /// the bail leaves (its cage stays locked), leaves through it. False when the character is in no cage (nothing to do).
     /// </summary>
     public bool GetOutLegit(World world, CharacterId prisoner, CrimeSystem? crimes = null)
     {
@@ -2206,9 +2228,15 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
-    /// Clears a character's slave state and owner (state 0) without DA 53's "Free!" (a slave bought free, <c>FUN_1406add20</c>).
+    /// Clears a character's slave state and owner (state 0) without DA 53's "Free!" (a slave bought free, <c>FUN_1406add20</c>, or bailed,
+    /// <c>FUN_1406ae170</c>). Both first give it the null owner hand (<c>FUN_14032e430</c>), whose tail turns a member of type 4 (slave) into type 0
+    /// (<b>Verified</b>): a bought slave alone in its squad, which the split leaves where it is, plans from the members' list, not the slaves'.
     /// </summary>
-    public static void ClearSlave(World world, CharacterCold c) => SetSlave(world, c, 0, -1);
+    public static void ClearSlave(World world, CharacterCold c)
+    {
+        if (c.Role == (int)Factions.SquadRole.Slave) c.Role = (int)Factions.SquadRole.Squad1;
+        SetSlave(world, c, 0, -1);
+    }
 
     /// <summary>
     /// <c>DA_TAG_ESCAPED_SLAVE</c> (25): the character becomes an escaped slave (state 2), keeping its owner (<c>FUN_140680560</c>).
@@ -2216,17 +2244,24 @@ public sealed partial class FixtureRegistry
     public static void TagEscaped(World world, CharacterCold c) => SetSlave(world, c, 2, c.SlaveOwner);
 
     /// <summary>
-    /// <c>DA_REMOVE_SLAVE_STATUS</c> (53, <c>FUN_140680560</c>): a character in shackles or slave state is freed with "Free!" (the original floats it
-    /// in green over the head) and <c>Character_Unlock_Success</c>; its slave state is cleared and its worn shackles unlocked.
+    /// <c>DA_REMOVE_SLAVE_STATUS</c> (53, <c>FUN_140680560</c> case 0x35, <b>Verified</b>): a character in shackles or slave state is told "Free!"
+    /// (the original floats it in green over the head) with <c>Character_Unlock_Success</c>; then, whoever it is, its slave state is set to 0
+    /// (the setter: job 187 removed), its perma-jobs are destroyed (<c>FUN_140507280</c>) and its worn shackles' lock is broken (<c>FUN_140297db0</c>
+    /// sets the lock's broken flag <c>+0x21</c>, as a cut does). The setter leaves the owner handle; Meitou clears it with the state (engine choice,
+    /// <see cref="LayLow"/>).
     /// </summary>
     public static void FreeSlave(World world, int slot, CharacterCold c)
     {
         var shackles = LockSystem.WornShackles(c);
-        if (shackles is null && c.SlaveState == 0) return;
-        world.Bark(world.Characters.IdOf(slot), Loc.Tr("Free!"));
-        world.EmitSound(SoundKind.Unlocked, slot, world.Characters.Next[slot].Position);
+        if (shackles is not null || c.SlaveState != 0)
+        {
+            world.Bark(world.Characters.IdOf(slot), Loc.Tr("Free!"));
+            world.EmitSound(SoundKind.Unlocked, slot, world.Characters.Next[slot].Position);
+        }
+
         SetSlave(world, c, 0, -1);
-        if (shackles?.Lock is { } l) l.Locked = false;
+        Kidnap.ObedientSlave.DropJobs(world, c);
+        if (shackles?.Lock is { } l) l.Broken = true;
     }
 
     /// <summary>

@@ -60,7 +60,8 @@ public sealed class SaveWriter(SaveGame game)
     }
 
     /// <summary>
-    /// Every file of the save into the working folder: the record files, the portraits, the mod data and the level edits.
+    /// Every file of the save into the working folder: the record files, the rejected files carried on as read, the portraits, the mod data and
+    /// the level edits.
     /// </summary>
     void WriteFiles(string work)
     {
@@ -68,6 +69,8 @@ public sealed class SaveWriter(SaveGame game)
         Directory.CreateDirectory(Path.Combine(work, SaveFolder.ZoneDirectory));
         foreach (var (name, file) in _game.AllFiles())
             file.WriteFile(Path.Combine(work, name.Replace('/', Path.DirectorySeparatorChar)));
+        foreach (var (name, bytes) in _game.CarriedRejects())
+            File.WriteAllBytes(Path.Combine(work, name.Replace('/', Path.DirectorySeparatorChar)), bytes);
         if (_game.Portraits is not null) File.WriteAllBytes(Path.Combine(work, SaveFolder.PortraitName), _game.Portraits);
         WriteModData(work);
         WriteLevelEdits(work);

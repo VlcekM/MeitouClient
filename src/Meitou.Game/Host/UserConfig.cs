@@ -374,6 +374,16 @@ sealed class UserConfig
     /// </summary>
     public bool CampaignAncestorsOnce { get; set; } = true;
     /// <summary>
+    /// A loaded raid goes on where it was: its phase, fight, arrival, announcement and carry clocks are read from the save (Fixes settings; off: they
+    /// start again at load, as the game does; read at load; <c>PopulationSettings.KeepCampaignClocks</c>, docs/formats/save.md "WAR_SAVESTATE").
+    /// </summary>
+    public bool FixRaidClocks { get; set; } = true;
+    /// <summary>
+    /// An arrest's guard lifts a downed target only with a cage free for it and never from another carrier of his faction (Fixes settings; off: he
+    /// lifts either way, as the game does, and guards at a full station pass the same body round; read at load; <c>ArrestSettings.LiftFix</c>).
+    /// </summary>
+    public bool FixArrestLifts { get; set; } = true;
+    /// <summary>
     /// Wild animals and homeless squads keep their characters while their area is unloaded (Advanced settings; Faithful off: removed and made anew,
     /// as the game does).
     /// </summary>

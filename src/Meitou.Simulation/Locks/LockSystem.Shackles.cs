@@ -91,7 +91,7 @@ public sealed partial class LockSystem
         if (!table.TryResolveNext(order.Wearer, out int w) || WornShackles(table.Cold(w)) is null) return;
         foreach (var id in Who(world, order.Characters))
         {
-            if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { IsPlayer: true, Medical.Incapacitated: false } c
+            if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { Medical.Incapacitated: false } c
                     || !c.CarriedBy.IsNone)
                 continue;
 
@@ -146,7 +146,7 @@ public sealed partial class LockSystem
         foreach (var id in Who(world, order.Characters))
         {
             if (id == order.Wearer || !table.TryResolveNext(id, out int s)
-                    || table.Cold(s) is not { IsPlayer: true, Medical.Incapacitated: false, IsImprisoned: false } c || !c.CarriedBy.IsNone)
+                    || table.Cold(s) is not { Medical.Incapacitated: false, IsImprisoned: false } c || !c.CarriedBy.IsNone)
                 continue;
 
             if (CarriedShackles(c) is null) continue;

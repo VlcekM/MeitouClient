@@ -268,6 +268,20 @@ public sealed class Machine : IPowerDraw
     public byte Status { get; set; }
 
     /// <summary>
+    /// The inputs row 94's finder walks, in list order (<c>FUN_14059d9b0</c>, <b>Verified</b>): those that rate and hold none of their item (slot
+    /// <c>0x560</c>, <c>FUN_140299d00</c>), else, with none such, those with room (slot <c>0x568</c>, <c>FUN_140299b60</c>). An idle bench section
+    /// has no item (<see cref="InputSlot.Idle"/>) and is left out.
+    /// </summary>
+    public IEnumerable<InputSlot> FillOrder
+    {
+        get
+        {
+            var empty = Inputs.Where(i => !i.Idle && i.Rate > 0 && i.Count == 0).ToList();
+            return empty.Count > 0 ? empty : Inputs.Where(i => !i.Idle && i.Count < i.Recipe.Capacity);
+        }
+    }
+
+    /// <summary>
     /// <c>machineHasEmptyInputs</c> (slot 149 <c>FUN_140298b70</c>, <b>Verified</b>): some rated input holds no item and its level is spent (0.001
     /// or less).
     /// </summary>

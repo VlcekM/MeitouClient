@@ -43,6 +43,7 @@ public sealed partial class World
             or Construction.PlaceBuildings or Construction.CancelSite or Construction.ConfirmDismantle or Construction.PauseSite
             or Editing.EditCharacter or Editing.FinishCreation or Editing.InPlayEditorOpened
             or Locks.ToggleDoorsOrder or Locks.ToggleDoorLocksOrder or DebugGiveItem or DebugPlaceItem or DebugAnimalAge);
+        due = Simulation.Player.OrderGiver.SkipGettingUp(this, due);
         if (due.Count == 0)
         {
             // The pointer moved onto another character: publish again, as what its menu offers with a chance (stealth KO, kidnap) is published only
