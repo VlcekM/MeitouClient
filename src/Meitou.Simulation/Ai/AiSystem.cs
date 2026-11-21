@@ -3953,14 +3953,63 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         melee ? d2 <= TurretNearMelee * TurretNearMelee ? 0.8f : 0.05f : d2 <= TurretNear * TurretNear ? 1 : 0.3f;
 
     /// <summary>
-    /// The desire of the turret goals (AI slot 35 <c>FUN_140598080</c>): 0 when carrying; 2.0 when enemies are sensed; else 1.0. The original gives
-    /// 2.0 only while the character mans a turret (Character <c>+0x260</c>, written by <c>TurretBuilding</c>'s <c>FUN_140434d20</c>). Not modelled:
-    /// the 0 for a Passive character outside melee combat mode, the cut at the squared distance clamp(<c>AI+0x28</c> x 1.2, 10000, 1e6) and the 0.4
-    /// of a hungry one (hunger level below 2.1, stomach buffer empty) with none sensed; the player-faction branch (1.0 with a 146 in the order deque,
-    /// <c>FUN_140507c10</c>, else 0 without a 234 job, <c>FUN_140507200</c>, or Ranged, stat flag <c>+0x129</c>) is no NPC's.
+    /// The hunger level below which a turret goal's desire drops to <see cref="TurretHungry"/> with an empty stomach and no enemy sensed
+    /// (<c>DAT_1416efdd4</c>).
     /// </summary>
-    float TurretDesire(World world, int slot) =>
-        world.Characters.Cold(slot) is not { } cold || !cold.Carrying.IsNone ? 0 : _aggro?.SensesOf(slot) is { Enemies: > 0 } ? 2 : 1;
+    const float TurretHungerBelow = 2.1f;
+
+    /// <summary>
+    /// A turret goal's desire for a hungry character (<c>DAT_141696c90</c>).
+    /// </summary>
+    const float TurretHungry = 0.4f;
+
+    /// <summary>
+    /// The desire of the turret goals 149 and 222 (AI slot 35 <c>FUN_140598080</c>, <b>Verified</b>, decompile and constants): 0 when carrying, or
+    /// Passive outside melee combat mode; for a character of the player's faction 1 with a 146 in its order queue, else 0 with neither a 234 job
+    /// nor Ranged; then 2 with an enemy sensed while it mans a turret (Character <c>+0x260</c>, the turret hand <c>TurretBuilding</c> slot 150
+    /// <c>FUN_140434d20</c> writes from <c>Task_UseTurret</c>'s update; Meitou: <see cref="CharacterCold.Gunning"/>), 0.4 hungry (hunger below 2.1,
+    /// stomach empty) with none sensed, else 1. The distance cut applies only to a building target (<c>FUN_140792910</c> resolves building hands
+    /// only), and these goals have none (<c>targeting</c> 0).
+    /// </summary>
+    float TurretDesire(World world, int slot)
+    {
+        if (world.Characters.Cold(slot) is not { } cold || !cold.Carrying.IsNone) return 0;
+        if (PassiveOffMelee(world, slot, cold)) return 0;
+        if (cold.Faction == PlayerFactionOf(world))
+        {
+            if (!PlayerSideTurretWanted(cold, out bool queued)) return 0;
+            if (queued) return 1;
+        }
+
+        int enemies = _aggro?.SensesOf(slot) is { } senses ? senses.Enemies : 0;
+        if (enemies > 0 && cold.Gunning is not null) return 2;
+
+        bool hungry = cold.Medical is { Hunger: < TurretHungerBelow, Fed: <= 0 };
+        return hungry && enemies == 0 ? TurretHungry : 1;
+    }
+
+    /// <summary>
+    /// Passive (standing order 13, the <c>+0x450</c> object's <c>+0x12c</c>) and not in melee combat mode (<c>FUN_140436610</c>).
+    /// </summary>
+    static bool PassiveOffMelee(World world, int slot, CharacterCold cold)
+    {
+        if ((cold.Orders & CharacterOrders.Passive) == 0) return false;
+
+        var table = world.Characters;
+        return world.SystemOf<Combat.CombatSystem>() is not { } combat || !combat.IsInCombatMode(table, table.IdOf(slot), cold, melee: true, ranged: false);
+    }
+
+    /// <summary>
+    /// Slot 35's player-faction gate: a 146 in the order queue (<c>FUN_140507c10</c>, <paramref name="queued"/>: the desire is 1 at once), else a
+    /// 234 job (<c>FUN_140507200</c>) or Ranged (<see cref="Orders.RangedMode"/>); without any of them the desire is 0.
+    /// </summary>
+    static bool PlayerSideTurretWanted(CharacterCold cold, out bool queued)
+    {
+        queued = cold.OrderQueue.Any(o => o.Row == TaskType.UseTurret);
+        if (queued) return true;
+
+        return cold.Jobs.Exists(j => j.Type == TaskType.ManATurretPlayerJob) || Orders.RangedMode(cold);
+    }
 
     /// <summary>
     /// Where a turret is manned: behind its gun (the gunner stands between the gun and the walkway behind it), inside the turret's <c>use range</c>:
