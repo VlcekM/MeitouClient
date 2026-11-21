@@ -197,8 +197,8 @@ public class OrderSaveTests
 
     /// <summary>
     /// A Talk order (12, commit <c>9991b0e0f</c>) given over a queued move replaces it, is saved as <c>tjob0</c> on the NPC's handle, and after a load
-    /// waits until that NPC's platoon is in the world, then goes into the second list on it: the loader's add makes the entry whatever its hand names
-    /// (<c>FUN_1405086d0</c>). Catches a Talk that does not clear the queue, and a loaded order dropped because its target's platoon is made after
+    /// waits in the second list until that NPC's platoon is in the world, then is made on it: the loader's add makes the entry whatever its hand
+    /// names (<c>FUN_1405086d0</c>). Catches a Talk that does not clear the queue, and a loaded order dropped because its target's platoon is made after
     /// the first look.
     /// </summary>
     [Fact]
@@ -230,11 +230,11 @@ public class OrderSaveTests
         var cold = b.World.Characters.Cold(heroB.Slot)!;
         b.World.RunTicks(2);
 
-        // The NPC's platoon is not made yet: the order waits loaded.
-        Assert.Empty(cold.SecondList);
-        Assert.Single(cold.SavedOrders!);
+        // The NPC's platoon is not made yet: the order waits in the second list as no candidate (FUN_14050df10 scores each entry alone).
+        Assert.NotNull(Assert.Single(cold.SecondList).Awaits);
+        Assert.Null(cold.SavedOrders);
 
-        for (int i = 0; i < 600 && cold.SecondList.Count == 0; i++) b.World.RunTick();
+        for (int i = 0; i < 600 && cold.SecondList[0].Awaits is not null; i++) b.World.RunTick();
         var entry = Assert.Single(cold.SecondList);
         var target = b.World.Characters.Cold(entry.Target.Slot);
 

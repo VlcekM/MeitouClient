@@ -816,8 +816,12 @@ A player character's order queue (the deque at `AITaskSytem` +0x40, [order queue
   the look puts them in the second list once every character and building exists (the job-form remap: 2 and 95 as 125, 4, 5 and 61 as 16, 25 as 58, 60 as 57, 249 as
   250, 26 as 238; 146 and 136 are not remapped; 258 has none and stays a rest order on its bed, [second list](../game/ai-tasks.md#precedence)); a save writes the queue alone.
   The add makes the entry whatever its hand names (**Verified**: the maker `FUN_14032ebd0` copies the hand into the entry and tests only its type, after the repertoire
-  test). Meitou: an order on a character of one of the save's NPC platoons not made yet, or on a fixture of a town whose fixtures are not registered yet (both come in on later
-  ticks), stays loaded, with every order after it, and is put in the second list on the first look that finds it. An order is dropped when no system owns its row, its target
+  test). The entry is never dropped for its hand: the second list loses entries only to the clears (`FUN_1405074a0`, `FUN_140507530`) and the remove-by-type `FUN_140507090`
+  (**Verified**, every write of its count in the receiver's functions), and its scorer weighs each entry alone ([second list](../game/ai-tasks.md#precedence)), so the entries
+  around one whose hand names nothing are scored as usual; the hand is looked up in the handle registry each time it is read (`FUN_140284510`), so it names the character
+  once that is made (**Observed**). Meitou: an order on a character of one of the save's NPC platoons not made yet, or on a fixture of a town whose fixtures are not registered
+  yet (both come in on later ticks), waits in its place in the second list as no candidate (`OrderEntry.Awaits`) and is made on the first look that finds its target; one whose
+  target will come no more leaves the list (engine choice: it would never be a candidate). An order is dropped when no system owns its row, its target
   character or site is neither in the world nor still to come, or its handle names nothing the save holds; an entry of a finder row
   (125, 16, 58, 57, 250, 238) is kept whatever its hand names, as its finder picks the target. A building handle is the building's instance (a build site, or a fixture whose id is the building's own, a bed too); a CHARACTER handle finds the character by its saved handle.
 - **Meitou keys**: string `meitou tjob<i>` (the order's site id: a build site, fixture or rock, which wins on load over a building handle, as `meitou pjob<i>`), int `meitou tjobK<i>` (the owner's

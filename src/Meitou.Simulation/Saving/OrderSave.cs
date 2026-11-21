@@ -24,7 +24,7 @@ public sealed record SavedOrder(TaskType Row, Vector3 Point, Hand Hand, string? 
 /// running. Meitou's own keys carry what the keys above cannot: the string <c>meitou tjob&lt;i&gt;</c> (the <see cref="OrderEntry.Site"/> id, which
 /// wins on load) and the int <c>meitou tjobK&lt;i&gt;</c> (the owner's detail code, <see cref="IOrderOwner.SaveKind"/>; absent: 0). A load reads the
 /// orders into <see cref="CharacterCold.SavedOrders"/>; the decision step puts them in the second list (<see cref="Restore"/>, as the loader adds
-/// each through <c>FUN_1405086d0</c> without the permanent flag) once the world they name exists, where the chooser scores them. Only the queue is
+/// each through <c>FUN_1405086d0</c> without the permanent flag), where the chooser scores them once the world they name exists. Only the queue is
 /// written, so a save after the load writes the loaded orders no more.
 /// </summary>
 public static class OrderSave
@@ -138,16 +138,16 @@ public static class OrderSave
     }
 
     /// <summary>
-    /// What <see cref="Restore"/> did with one loaded order.
+    /// What became of one loaded order (<see cref="Make"/>).
     /// </summary>
     enum Restored
     {
         /// <summary>
-        /// Put in the second list.
+        /// Made into a second-list entry.
         /// </summary>
         Added,
         /// <summary>
-        /// Kept loaded: its target character or fixture is still to come into the world.
+        /// Its target character or fixture is still to come into the world: it waits in the second list (<see cref="OrderEntry.Awaits"/>).
         /// </summary>
         Waits,
         /// <summary>
@@ -157,40 +157,87 @@ public static class OrderSave
     }
 
     /// <summary>
-    /// Puts the orders a load read in the character's second list (serial phases, from the decision step or a queued order,
-    /// <see cref="PlayerOrders.Give"/>): nothing is started, its owner readies it (<see cref="IOrderOwner.Restored"/>), and the chooser scores it
-    /// from its next look. The loader's add makes an entry whatever its hand names (<c>FUN_1405086d0</c> → <c>FUN_14032ebd0</c> copies the hand
-    /// and tests only its type), so an order whose target character is in one of the save's NPC platoons not made yet, or whose fixture is a town's
-    /// not registered yet, stays loaded with every order after it (the second list keeps the saved order) and is put in once it is there (a later
-    /// look). An order whose row no system owns, whose target character or site is neither in the world nor still to come, or whose handle named
-    /// nothing is left out.
+    /// Whether the character has loaded orders still to settle: read and not put in the second list yet, or waiting there for their target.
     /// </summary>
-    internal static void Restore(World world, int slot, CharacterCold cold)
+    internal static bool Pending(CharacterCold cold)
     {
-        var saved = cold.SavedOrders;
-        cold.SavedOrders = null;
-        if (saved is null) return;
+        if (cold.SavedOrders is not null) return true;
 
-        bool added = false;
-        for (int i = 0; i < saved.Count; i++)
-        {
-            var step = RestoreOne(world, slot, cold, saved[i]);
-            added |= step == Restored.Added;
-            if (step != Restored.Waits) continue;
+        foreach (var e in cold.SecondList)
+            if (e.Awaits is not null) return true;
 
-            // It and those after it wait, so the second list keeps the saved order.
-            cold.SavedOrders = saved.Skip(i).ToList();
-            break;
-        }
-
-        if (added) DecisionSystem.Replan(cold);   // each second-list add replans (FUN_1405086d0)
+        return false;
     }
 
     /// <summary>
-    /// Puts one loaded order in the second list when its row has an owner and what it names is there; says what became of it.
+    /// Puts the orders a load read in the character's second list, in the saved order (serial phases, from the decision step or a queued order,
+    /// <see cref="PlayerOrders.Give"/>): nothing is started, its owner readies it (<see cref="IOrderOwner.Restored"/>), and the chooser scores it
+    /// from its next look. The loader's add makes an entry whatever its hand names (<c>FUN_1405086d0</c> → <c>FUN_14032ebd0</c> copies the hand
+    /// and tests only its type), and the scorer weighs each entry alone (<c>FUN_14050df10</c>), so an order whose target character is in one of the
+    /// save's NPC platoons not made yet, or whose fixture is a town's not registered yet, waits in its place in the list as no candidate while the
+    /// orders around it are scored, and is made on the first look that finds its target (<see cref="Settle"/>). An order whose row no system owns,
+    /// whose target character or site is neither in the world nor still to come, or whose handle named nothing is left out.
     /// </summary>
-    static Restored RestoreOne(World world, int slot, CharacterCold cold, SavedOrder o)
+    internal static void Restore(World world, int slot, CharacterCold cold)
     {
+        bool settled = Settle(world, slot, cold);
+        bool loaded = Load(world, slot, cold);
+        if (settled || loaded) DecisionSystem.Replan(cold);   // each second-list add replans (FUN_1405086d0)
+    }
+
+    /// <summary>
+    /// Adds the orders a load read to the second list, those whose target is still to come as waiting entries; true when one was made.
+    /// </summary>
+    static bool Load(World world, int slot, CharacterCold cold)
+    {
+        var saved = cold.SavedOrders;
+        cold.SavedOrders = null;
+        if (saved is null) return false;
+
+        bool added = false;
+        foreach (var o in saved)
+        {
+            var step = Make(world, slot, o, out var entry);
+            if (step == Restored.Waits) entry = Waiting(world, o);
+            if (entry is null) continue;
+
+            cold.SecondList.Add(entry);
+            added |= step == Restored.Added;
+        }
+
+        return added;
+    }
+
+    /// <summary>
+    /// Makes the waiting entries whose target came into the world, in their place; drops those whose target will come no more (such an entry would
+    /// never be a candidate); true when one was made.
+    /// </summary>
+    static bool Settle(World world, int slot, CharacterCold cold)
+    {
+        var list = cold.SecondList;
+        bool added = false;
+        for (int k = list.Count - 1; k >= 0; k--)
+        {
+            if (list[k].Awaits is not { } o) continue;
+
+            var step = Make(world, slot, o, out var entry);
+            if (step == Restored.Dropped) list.RemoveAt(k);
+            if (step != Restored.Added) continue;
+
+            list[k] = entry!;
+            added = true;
+        }
+
+        return added;
+    }
+
+    /// <summary>
+    /// The second-list entry of one loaded order when its row has an owner and what it names is there (its owner readied it); says what became of
+    /// it.
+    /// </summary>
+    static Restored Make(World world, int slot, SavedOrder o, out OrderEntry? entry)
+    {
+        entry = null;
         bool onSite = (o.Site ?? o.InstanceKey) is not null;
         var row = LoadedRow(o, onSite);
         if (row == TaskType.None || world.OrderOwnerOf(row, onSite) is not { } owner) return Restored.Dropped;
@@ -205,10 +252,19 @@ public static class OrderSave
         string? site = null;
         if (onSite && (site = SiteOf(world, o)) is null && !finder) return SiteAwaited(world, o) ? Restored.Waits : Restored.Dropped;
 
-        var entry = Entry(world, slot, o, row, owner, target, site);
+        entry = Entry(world, slot, o, row, owner, target, site);
         owner.Restored(world, entry);
-        cold.SecondList.Add(entry);
         return Restored.Added;
+    }
+
+    /// <summary>
+    /// The waiting entry of a loaded order whose target is still to come: its row, owner and point, no target, and the order kept to make it from.
+    /// </summary>
+    static OrderEntry Waiting(World world, SavedOrder o)
+    {
+        bool onSite = (o.Site ?? o.InstanceKey) is not null;
+        var row = LoadedRow(o, onSite);
+        return new OrderEntry(row, world.OrderOwnerOf(row, onSite)!) { Point = o.Point, Awaits = o };
     }
 
     /// <summary>

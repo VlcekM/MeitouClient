@@ -398,7 +398,7 @@ public sealed class DecisionSystem
         for (int i = 0; i < table.HighWater; i++)
         {
             if (!table.Previous[i].Alive || table.Previous[i].Dormant || !world.Steps(i) || table.Cold(i) is not { } cold) continue;
-            if (Decides(cold) && cold.SavedOrders is not null) Saving.OrderSave.Restore(world, i, cold);
+            if (Decides(cold) && Saving.OrderSave.Pending(cold)) Saving.OrderSave.Restore(world, i, cold);
             if (!Concerns(cold) || !Due(world, i, cold, every)) continue;
 
             var row = _rows[i] ??= new ChooserRow();
@@ -472,7 +472,8 @@ public sealed class DecisionSystem
     /// Scores the second list's entries for the think's rung 3 (<c>FUN_14050df10</c> over <c>+0x70</c>): an entry that runs the character's task, or
     /// can start and is not done (its row's list A, effect and finished test, <see cref="ListTests.OrderDone"/>), scores its desire
     /// (<see cref="OrderDesire"/>) x weight 1 (the loader's), as a goal source does; one whose task ended is no longer started. The plan step
-    /// ends a running entry's task as a front's (<see cref="PlayerOrders.EndSecond"/>).
+    /// ends a running entry's task as a front's (<see cref="PlayerOrders.EndSecond"/>). A loaded entry waiting for its target
+    /// (<see cref="OrderEntry.Awaits"/>) scores 0.
     /// </summary>
     void LookSecond(World world, int slot, CharacterCold cold, ChooserRow row)
     {
@@ -482,6 +483,13 @@ public sealed class DecisionSystem
         for (int k = 0; k < list.Count; k++)
         {
             var entry = list[k];
+            if (entry.Awaits is not null)
+            {
+                row.SecondScores[k] = 0;
+                if (Tracing) _lines.Add($"3 second list [{k}] {(int)entry.Row}: waits for its target");
+                continue;
+            }
+
             var check = PlayerOrders.SecondCheck(world, slot, entry);
             if (entry.Started && !check.Running) entry.Started = false;
             if (check.Running && PlayerOrders.EndSecond(world, slot, entry)) check = PlayerOrders.SecondCheck(world, slot, entry);
@@ -807,7 +815,7 @@ public sealed class DecisionSystem
     /// </summary>
     void PausedPlayer(World world, int slot, CharacterCold cold)
     {
-        if (cold.SavedOrders is not null) Saving.OrderSave.Restore(world, slot, cold);
+        if (Saving.OrderSave.Pending(cold)) Saving.OrderSave.Restore(world, slot, cold);
         if (Down(cold) || !PausedDue(world, slot, cold)) return;
 
         PausedOrders(world, slot, cold);

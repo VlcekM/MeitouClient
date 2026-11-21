@@ -1490,9 +1490,8 @@ public sealed class CharacterCold
     public List<OrderEntry> SecondList { get; } = [];
 
     /// <summary>
-    /// The queued orders a load read (<see cref="Saving.OrderSave"/>), until the decision step puts them in the <see cref="SecondList"/> once the
-    /// world they name is there (those from the first whose target is still to come wait, <see cref="Saving.OrderSave.Restore"/>); null: none.
-    /// Hashed by count while set.
+    /// The queued orders a load read (<see cref="Saving.OrderSave"/>), until the decision step puts them in the <see cref="SecondList"/>
+    /// (<see cref="Saving.OrderSave.Restore"/>); null: none. Hashed by count while set.
     /// </summary>
     public IReadOnlyList<Saving.SavedOrder>? SavedOrders { get; set; }
 
@@ -1901,8 +1900,8 @@ public sealed class CharacterTable
     }
 
     /// <summary>
-    /// The second list (<see cref="CharacterCold.SecondList"/>): its count, then each order's row, start, try, row run, spent mark, target, site and
-    /// point in list order.
+    /// The second list (<see cref="CharacterCold.SecondList"/>): its count, then each order's row, start, try, row run, spent mark, target, site,
+    /// point and wait for its target in list order.
     /// </summary>
     static void HashSecondList(ref StateHasher hasher, List<OrderEntry> list)
     {
@@ -1918,6 +1917,7 @@ public sealed class CharacterTable
             hasher.Add(e.Target);
             hasher.Add(e.Site is { } site ? Rng.StableHash(site) : 0UL);
             hasher.Add(e.Point);
+            if (e.Awaits is not null) hasher.Add(0x41776169);   // "Awai": a loaded order waiting for its target
         }
     }
 

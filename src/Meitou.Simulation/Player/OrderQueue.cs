@@ -217,6 +217,12 @@ public sealed class OrderEntry(TaskType row, IOrderOwner owner)
     /// body task directly): the queue tests only its owner's check, not the repertoire, the threat rule or list B.
     /// </summary>
     internal bool Forced { get; init; }
+    /// <summary>
+    /// A loaded order whose target character or fixture is still to come into the world (<see cref="Saving.OrderSave.Restore"/>): it holds its
+    /// place in the second list and is no candidate until the look that finds its target makes it from this; null: a made entry. Engine choice: one
+    /// whose target will come no more leaves the list, as it would never be a candidate.
+    /// </summary>
+    internal Saving.SavedOrder? Awaits { get; init; }
 
     /// <summary>
     /// Whether the order is a move (row <c>MoveCusOrdered</c>).
@@ -324,7 +330,7 @@ public static class PlayerOrders
         var cold = world.Characters.Cold(slot)!;
         var q = cold.OrderQueue;
         // A queue loaded and not restored yet (OrderSave.Restore) is the second list's: a queued order keeps it, any other empties it with the queue.
-        if (queued && cold.SavedOrders is not null) Saving.OrderSave.Restore(world, slot, cold);
+        if (queued && Saving.OrderSave.Pending(cold)) Saving.OrderSave.Restore(world, slot, cold);
         if (!queued)
         {
             q.Clear();
@@ -758,6 +764,7 @@ public static class PlayerOrders
     /// </summary>
     internal static DecisionCheck SecondCheck(World world, int slot, OrderEntry entry)
     {
+        if (entry.Awaits is not null) return DecisionCheck.No("its target is not in the world yet");
         if (entry.Started && Runs(world, slot, entry)) return DecisionCheck.Runs;
 
         var check = CanRun(world, slot, entry);
