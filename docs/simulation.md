@@ -1357,7 +1357,7 @@ which an order's hold refuses. The chain's rows and states are in [AI tasks](gam
   closes and the window reopens as the bail list (engine stand-in for the trading window): "Pay Bounty", one choice "Name (c.N)" per prisoner of
   `ArrestSystem.BailOffers` (cages within the speaker's town extent, as `InOwnTown`; player-faction or not hostile to the speaker; `BailFor` not
   null: the cage's owner neither the player's faction nor lawless), `[Leave]`. A click pays (`PayBail(prisoner, payer)`, `ArrestSystem.Bail`): erases the jail's
-  entry, splits the prisoner from a squad of others (`DialogueSystem.Separate`, a new player squad for a player's character) and gives 133 (no escape). NPC prisoners are only freed, not recruited. `PayBailOrder` (no UI) is the same bail paid by a player character within 500 of the cage.
+  entry, splits the prisoner from a squad of others (`DialogueSystem.Separate`, a new player squad for a player's character), unlocks its worn shackles and gives 133 (no escape). NPC prisoners are only freed, not recruited. `PayBailOrder` (no UI) is the same bail paid by a player character within 500 of the cage.
 - **Put in Cage / claim** (`PutInCageOrder`, a cage's Put in while a selected character carries someone): the carrier walks to
   that cage, or with none named the best free cage within 1500 (`FindCage`; others' cages reserved), `LetGo` + `Imprison` as an arrest does, then `Claim`
   (11.4 caging tests; the slaver exception never applies): the cage owner's unclaimed entry, halved for a dead captive, is
