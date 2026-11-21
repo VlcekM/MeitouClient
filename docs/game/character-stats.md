@@ -279,6 +279,9 @@ skill x 0.8 when treating oneself and q = min(skill, kit quality):
 - **Bandaging.** The first part in part order of the kit's kind with h + b < M takes rate x dt (rate below); only if that fills it
   (clamped to M) does the next part also take the full rate x dt. The kit drains once per part bandaged. So a patient with n injured
   parts takes about n times as long, and n times the charges, as one with a single part of the same damage.
+  Meitou (engine choice, `FirstAidSystem.RoomLeft`): a part counts as bandaged up within 1e-4 of its M. A growing animal's parts gain HP every
+  tick (its size, [animals](animals.md)), about 2.5e-6 of M for a Skin Spider, so a fully bandaged animal otherwise always had a new sliver
+  to bandage and its medic treated it for ever, a kit drained each update.
 - **Drain** = lerp(`medkit drain 99`, `medkit drain 1`, (100 - skill) / 100) x dt (skill, not q), x `robot medic speed mult` for a
   robot kit (function 12).
 - **Reach.** **Observed** (one run, an original save with a prisoner caged upstairs in the Rebirth
