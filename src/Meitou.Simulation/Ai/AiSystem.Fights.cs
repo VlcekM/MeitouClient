@@ -776,8 +776,8 @@ public sealed partial class AiSystem
     /// <summary>
     /// The search's turret inputs (<see cref="SelfPreservation.Choose"/>): row 234's desire (slot 35 on the character itself, <see cref="TurretDesire"/>;
     /// a repertoire without 234 or 146 makes none), its list B 38, the turret its finder takes (<see cref="GuardTurretPick"/>), row 146's desire
-    /// on that turret and its list B <c>!158</c>. Not for the player's faction: its finder filters by the player's Ownerships home
-    /// (<c>FUN_1407ec9e0</c> fills it), which Meitou does not keep, so its 234 is not made.
+    /// on that turret and its list B <c>!158</c>. Not for the player's faction: its pick over the sensed enemies and its manning through the
+    /// operate task are not built, so its 234 is not made; its finder's home filter is kept (<see cref="OwnershipsHome"/>).
     /// </summary>
     SelfNodes GuardNodes(World world, int slot, AiMind mind, CharacterCold me, Bodies.MedicalState medical, SelfNodes nodes, out GuardTurret? turret)
     {
@@ -823,8 +823,8 @@ public sealed partial class AiSystem
 
     /// <summary>
     /// Whether 234's finder takes turret <paramref name="b"/> of the status town (<c>FUN_1408daf70</c>, <b>Verified</b>): in the zone cells within
-    /// one of the character's (<c>FUN_1409fc450</c>); inside or mounted on the squad's home building when it has one (Building slot 59
-    /// <c>FUN_140547530</c> against the Ownerships <c>+0x38</c> hand); manned by nobody else (<c>FUN_1400f7c90</c>); its path not impossible
+    /// one of the character's (<c>FUN_1409fc450</c>); inside or mounted on its Ownerships' home building when that names one
+    /// (<see cref="OwnershipsHome"/>; Building slot 59 <c>FUN_140547530</c> against the <c>+0x38</c> hand, one that is gone included); manned by nobody else (<c>FUN_1400f7c90</c>); its path not impossible
     /// (<c>FUN_1405b0290</c>); held by no squad mate (<c>FUN_1402690e0</c>, <see cref="HeldByMate"/>); usable (the town is of its faction, or
     /// <c>canIUseThisBuilding</c>, <see cref="Locks.FixtureRegistry.CanUse(World, CharacterCold, int, Locks.FixtureRegistry.UsedBuilding?)"/>).
     /// </summary>
@@ -837,7 +837,7 @@ public sealed partial class AiSystem
         var at = WorldLayout.ZoneOf(b.Position.X, b.Position.Z);
         if (Math.Abs(at.X - cell.X) > 1 || Math.Abs(at.Y - cell.Y) > 1) return false;
 
-        if (mind.Squad.Ai?.Home?.Key is { } home && (b.InsideOf ?? post.MountedOn) != home) return false;
+        if (OwnershipsHome(world, me, mind) is { } home && (b.InsideOf ?? post.MountedOn) != home) return false;
         if (_combat?.TurretTakenByOther(b.Key, slot) == true || me.IsUnreachable(b.Key, world.Tick)) return false;
         if (HeldByMate(world, slot, mind, status.Site, b)) return false;
         if (owner == me.Faction) return true;
@@ -845,6 +845,13 @@ public sealed partial class AiSystem
         var used = new Locks.FixtureRegistry.UsedBuilding(status, status.Site, b.Key, b.InsideOf is not null, false);
         return world.Fixtures.CanUse(world, me, BuildingOwner(world, b, owner), used);
     }
+
+    /// <summary>
+    /// The key of the home building a character's Ownerships names (<c>Character::getOwnerships</c> <c>FUN_1407956a0</c>, its <c>+0x38</c> hand,
+    /// <b>Verified</b>): the player faction's for one of its characters (<see cref="Player.PlayerState.Home"/>), else its squad's; null with none.
+    /// </summary>
+    static string? OwnershipsHome(World world, CharacterCold me, AiMind mind) =>
+        world.Player.Exists && me.Faction == world.Player.Faction ? world.Player.Home : mind.Squad.Ai?.Home?.Key;
 
     /// <summary>
     /// Whether a squad mate holds turret <paramref name="b"/>: its town turret claim (<see cref="Blackboard.TurretClaims"/>) or its Self

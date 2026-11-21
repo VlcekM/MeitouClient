@@ -154,6 +154,10 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// Some character may still hold a site that is gone (the sweep in Schedule ends its task).
     /// </summary>
     bool _sweep;
+    /// <summary>
+    /// The search for the player's home building, run at each serial step's start (<see cref="PlayerHome.Find"/>).
+    /// </summary>
+    readonly PlayerHome _home = new();
 
     /// <summary>
     /// BuildingFunction 19 SHELL_WITH_INTERIOR (a house): its functionality's <c>function</c>.
@@ -1369,6 +1373,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     public void SlowWorld(World world)
     {
         var reg = world.Buildings;
+        _home.Find(world, this);
         if (reg.Count == 0 && !_sweep) return;
 
         _doorBuilders.Clear();

@@ -124,6 +124,7 @@ static class SaveProbe
                 return true;
             case ("ko", >= 1): Knockout(probe, int.Parse(a[0]), a.Count > 1 ? int.Parse(a[1]) : 15); return true;
             case ("cages", >= 1): Cages(probe, a[0], a.Count > 1 ? a[1] : null); return true;
+            case ("home", _): Home(probe); return true;
             case ("owners", _): OwnerProbe.Run(probe); return true;
             case ("interiors", _): InteriorProbe.Run(probe, a.Count > 0 ? a[0] : null); return true;
             case ("sleeper", >= 1): Sleeper(probe, a[0]); return true;
@@ -179,6 +180,27 @@ static class SaveProbe
     static void Near(ProbeWorld probe, float radius)
     {
         foreach (int i in probe.Near(probe.LeaderPosition, radius)) Console.WriteLine(probe.Who(i));
+    }
+
+    /// <summary>
+    /// The player's home building after the settle (<see cref="Meitou.Simulation.Player.PlayerState.Home"/>), then every town house and placed
+    /// building of the player's faction in the order the search takes them, with whether it can be the home.
+    /// </summary>
+    static void Home(ProbeWorld probe)
+    {
+        var world = probe.World;
+        int faction = world.Player.Faction;
+        Console.WriteLine($"home {world.Player.Home ?? "none"}");
+        foreach (string key in world.Fixtures.OwnedProperties(faction).Order(StringComparer.Ordinal)) Console.WriteLine($"  house {key}");
+
+        var construction = world.SystemOf<Meitou.Simulation.Construction.ConstructionSystem>();
+        foreach (var site in world.Buildings.All)
+        {
+            if (site.Owner != faction) continue;
+
+            bool accepts = construction?.Data(site.Record) is { } data && Meitou.Simulation.Player.PlayerHome.Accepts(data);
+            Console.WriteLine($"  site {site.Id} {site.Record} {site.Name} town={site.Town} accepts={accepts}");
+        }
     }
 
     /// <summary>
@@ -2216,6 +2238,7 @@ static class SaveProbe
               obey <name> <stand|sneak|walk> [rounds] [x z]  an enslaved player character stands, sneaks or walks to x z: state, owner, order, who sees it (#813)
               cages <name> [carrier]   fixtures within 300 of a character, with owners, occupants and building designation; a container's lock, grid
                                        and items; with a carrier, the cage that character would take a captive lifted there to
+              home                     the player's home building, then its faction's town houses and placed buildings with whether each can be it
               owners                   town buildings whose saved owner is not the housing rule's (the residents' faction, else the town's), and the counts
               sleeper <name>           the bed a character lies in: record, yaw, use node yaws, lie spot and the sleeper's own yaw
               force <name> <tools|strength> [fixture id]  a character cuts or breaks a fixture's lock (a prisoner its own cage's); 120 ticks of it
