@@ -17,17 +17,6 @@ internal static class NavSolidCarving
     internal const float SolidTopInset = 1;
 
     /// <summary>
-    /// How far (cells) from where a map feature's surface runs inside a building's solid that surface is removed (engine choice: two cells, so the
-    /// building's walkway and the feature's surface are not neighbours; docs/game/pathfinding.md, "Map features").
-    /// </summary>
-    const int FeatureSeamCells = 2;
-
-    /// <summary>
-    /// How far (units) a span's floor may be over a feature triangle's height at the cell's middle and still stand on it (engine choice).
-    /// </summary>
-    const float FeatureSurfaceReach = 2;
-
-    /// <summary>
     /// The height over a span's floor its enclosure rays run at (engine choice: just over the ground, under a gravel pile's skirt).
     /// </summary>
     const float EncloseRayHeight = 1;
@@ -84,7 +73,7 @@ internal static class NavSolidCarving
     /// span's floor, at the middle of the cell and more than <see cref="SolidTopInset"/> over it, faces up, and the mesh walls the span in
     /// (<see cref="Enclosed"/>; docs/game/pathfinding.md, "Map features").
     /// </summary>
-    internal static void RemoveInside(NavMeshSolid solid, RcCompactHeightfield chf, List<NavSolid> allSolids, List<int> tileSolids)
+    internal static void RemoveInside(NavMeshSolid solid, RcCompactHeightfield chf)
     {
         float cs = chf.cs;
         int x0 = Math.Max(0, (int)MathF.Floor((solid.Min.X - chf.bmin.X) / cs));
@@ -94,8 +83,7 @@ internal static class NavSolidCarving
         if (x0 > x1 || z0 > z1) return;
 
         var hits = Crossings(solid, chf, x0, x1, z0, z1);
-        var buried = Buried(chf, hits, allSolids, tileSolids, x0, x1, z0, z1);
-        RemoveCovered(solid, chf, hits, buried, x0, x1, z0, z1);
+        RemoveCovered(solid, chf, hits, x0, x1, z0, z1);
     }
 
     /// <summary>
@@ -136,92 +124,9 @@ internal static class NavSolidCarving
     }
 
     /// <summary>
-    /// Where the feature's upward surface runs inside a building's solid (Mourn's tube through the defensive wall), it does not join the
-    /// building's walkway: its own surface within FeatureSeamCells of there is removed. The cells of the box where it does; null when none does.
+    /// Removes the walkable spans of the box whose nearest crossing above faces up and walls them in.
     /// </summary>
-    static bool[]? Buried(RcCompactHeightfield chf, List<(float Y, bool Up)>?[] hits, List<NavSolid> allSolids, List<int> tileSolids, int x0, int x1,
-        int z0, int z1)
-    {
-        float cs = chf.cs;
-        int w = x1 - x0 + 1;
-        var buried = new bool[hits.Length];
-        bool anyBuried = false;
-        for (int z = z0; z <= z1; z++)
-        {
-            for (int x = x0; x <= x1; x++)
-            {
-                if (hits[(z - z0) * w + x - x0] is not { } list) continue;
-
-                float px = chf.bmin.X + (x + 0.5f) * cs, pz = chf.bmin.Z + (z + 0.5f) * cs;
-                foreach (int c in tileSolids)
-                {
-                    var b = allSolids[c];
-                    if (b.Feature || px < b.Min.X || px > b.Max.X || pz < b.Min.Y || pz > b.Max.Y) continue;
-
-                    if (FaceInside(b, list, px, pz))
-                    {
-                        buried[(z - z0) * w + x - x0] = anyBuried = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        return anyBuried ? buried : null;
-    }
-
-    /// <summary>
-    /// Whether one of the upward crossings in <paramref name="list"/> lies inside the solid <paramref name="b"/> at (<paramref name="px"/>,
-    /// <paramref name="pz"/>).
-    /// </summary>
-    static bool FaceInside(NavSolid b, List<(float Y, bool Up)> list, float px, float pz)
-    {
-        foreach (var (y, faceUp) in list)
-        {
-            if (!faceUp) continue;
-
-            bool inside = true;
-            foreach (var plane in b.Planes)
-            {
-                if (plane.X * px + plane.Y * (y - SolidTopInset) + plane.Z * pz + plane.W >= 0)
-                {
-                    inside = false;
-                    break;
-                }
-            }
-
-            if (inside) return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Whether a buried cell lies within <see cref="FeatureSeamCells"/> of cell (<paramref name="x"/>, <paramref name="z"/>).
-    /// </summary>
-    static bool NearBuried(bool[]? buried, int x, int z, int x0, int x1, int z0, int z1)
-    {
-        if (buried is null) return false;
-
-        int w = x1 - x0 + 1;
-        for (int dz = -FeatureSeamCells; dz <= FeatureSeamCells; dz++)
-        {
-            for (int dx = -FeatureSeamCells; dx <= FeatureSeamCells; dx++)
-            {
-                int bx = x + dx - x0, bz = z + dz - z0;
-                if (bx >= 0 && bx < w && bz >= 0 && bz <= z1 - z0 && buried[bz * w + bx]) return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Removes the walkable spans of the box whose nearest crossing above faces up and walls them in, and those on the feature's surface by a
-    /// buried cell.
-    /// </summary>
-    static void RemoveCovered(NavMeshSolid solid, RcCompactHeightfield chf, List<(float Y, bool Up)>?[] hits, bool[]? buried, int x0, int x1,
-        int z0, int z1)
+    static void RemoveCovered(NavMeshSolid solid, RcCompactHeightfield chf, List<(float Y, bool Up)>?[] hits, int x0, int x1, int z0, int z1)
     {
         float cs = chf.cs, ch = chf.ch;
         int w = x1 - x0 + 1;
@@ -231,14 +136,13 @@ internal static class NavSolidCarving
             {
                 if (hits[(z - z0) * w + x - x0] is not { } list) continue;
 
-                bool seam = NearBuried(buried, x, z, x0, x1, z0, z1);
                 var cell = chf.cells[x + z * chf.width];
                 for (int i = cell.index, end = cell.index + cell.count; i < end; i++)
                 {
                     if (chf.areas[i] == NavArea.Null) continue;
 
                     float floor = chf.bmin.Y + chf.spans[i].y * ch, nearest = float.MaxValue;
-                    bool up = false, onSurface = false;
+                    bool up = false;
                     foreach (var (y, faceUp) in list)
                     {
                         if (y > floor + SolidTopInset && y < nearest)
@@ -246,8 +150,6 @@ internal static class NavSolidCarving
                             nearest = y;
                             up = faceUp;
                         }
-
-                        if (faceUp && floor >= y - SolidTopInset && floor - y <= FeatureSurfaceReach) onSurface = true;
                     }
 
                     // Under a single-sided top (a trestle bridge's deck) the ground stays walkable unless the mesh walls it in.
@@ -255,7 +157,7 @@ internal static class NavSolidCarving
                             chf.bmin.X + (x + 0.5f) * cs, floor + EncloseRayHeight, chf.bmin.Z + (z + 0.5f) * cs)))
                         up = false;
 
-                    if (up || seam && onSurface) chf.areas[i] = NavArea.Null;
+                    if (up) chf.areas[i] = NavArea.Null;
                 }
             }
         }

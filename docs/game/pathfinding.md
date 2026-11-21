@@ -466,9 +466,13 @@ original-only 20.32 1.6 → 0.6 %, 18.35 1.1 → 0.3 %, 21.19 1.4 → 0.3 %; 19.
 (`--feature-tops`: samples every 8 units where a feature's top face is walkable and 12+ over the terrain, with a polygon within 8): the original walks
 feature tops reached from the ground (statue 3,281 of 4,026; Gravel-Pile02 2,144 of 2,551 and 1,912 of 2,132), but on Mourn's `Vast_Land Tube 01` (34.46)
 its 1,278 of 42,908 all lie where the defensive walls' walkway (y ~1,049, kept in its tile) coincides with the tube; Meitou kept 5,958, the flat band at
-z 66,200..66,500 reached where the tube's 24° top rises out of the wall walkway (`Defensive Wall IV 34.46:20-`). Engine choice: where a feature's upward surface runs inside a building's
-solid, its surface within 2 cells (`FeatureSeamCells`) is removed, so the walkway and the feature are not neighbours; the tube then keeps 1,328 samples,
-34.46's floors under floors 5,183 → 544 (510 before features), other zones within 0.1 %. Features are obstacles of the long routes too (below) and ragdolls land
+z 66,200..66,500 reached where the tube's 24° top rises out of the wall walkway (`Defensive Wall IV 34.46:20-`); now Meitou keeps 1,349 there with no
+rule of its own. A feature's surface joins a building's walkable top where the two meet, as in the original. **Observed** (`--probe`, zone 42.22,
+2694-Newwworld.mod): the Watchtower `42.22:151-Newwworld-INGAME`'s porch ramp (`Storm_House_09_Exterior[Steps]`) runs into the top of
+`Canyonland_Zone_Cliffblock_02`, the street, at x ~47376; the original's tile has polygons across it at 1569, 1565, 1563. A rule that cut the feature's
+surface within 2 cells of where it runs inside a building's solid left a 4-unit gap there, so no path led from the street up the ramp; without it,
+original-only area falls in 42.22 (738 → 592 samples), 34.46, 21.19, 22.19, 23.22 and 18.35, 34.46's floors under floors go 404 → 405, and the
+other zones' original-only area is unchanged. Features are obstacles of the long routes too (below) and ragdolls land
 on them ([simulation](../simulation.md)).
 **Observed** (issue #214, Black Desert 33.30 at 6791,-5404; `--feature-tops` over the neighbours' features, `--probe`): the original walks the tops of the
 pipeline `Tarsand_Pipeline01` (a 1,436-unit triangle mesh placed in 33.31; 380 of 1,085 top samples, ours 384) and of the fallen

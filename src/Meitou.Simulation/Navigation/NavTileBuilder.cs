@@ -125,7 +125,7 @@ internal static class NavTileBuilder
             NavSolidCarving.RemoveInside(g.Solids[c], chf);
 
         foreach (int c in meshSolids)
-            NavSolidCarving.RemoveInside(g.MeshSolids[c], chf, g.Solids, solids);
+            NavSolidCarving.RemoveInside(g.MeshSolids[c], chf);
 
         if (g.Ground is { } ground) NavSolidCarving.RemoveUnderground(ground, s.AgentHeight, chf);
 
