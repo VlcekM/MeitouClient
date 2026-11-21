@@ -945,6 +945,10 @@ msgstr ""
 msgid "Cloth sheen"
 msgstr ""
 
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Clothes keep blood stains"
+msgstr ""
+
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Cloud height"
 msgstr ""
@@ -5423,6 +5427,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/LauncherSchema.cs
 msgid "Window"
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "With Blood on weapons and gear on, blood soaks into worn clothes and armour slowly, stays when the wound heals, and washes out in water and rain or fades with time. Off, the clothes show only the blood of the wound under them."
 msgstr ""
 
 #: src/Meitou.Game/Tutorials/TutorialPanel.cs

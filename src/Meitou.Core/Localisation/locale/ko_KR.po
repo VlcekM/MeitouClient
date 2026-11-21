@@ -4755,3 +4755,11 @@ msgstr "농사"
 #. machine-translated
 msgid "COOKING"
 msgstr "요리"
+
+#. machine-translated
+msgid "Clothes keep blood stains"
+msgstr "옷에 핏자국이 남음"
+
+#. machine-translated
+msgid "With Blood on weapons and gear on, blood soaks into worn clothes and armour slowly, stays when the wound heals, and washes out in water and rain or fades with time. Off, the clothes show only the blood of the wound under them."
+msgstr "\"무기와 장비의 피\"가 켜져 있으면 피가 입은 옷과 갑옷에 천천히 스며들고, 상처가 나아도 남으며, 물과 비에 씻기거나 시간이 지나며 옅어집니다. 끄면 옷에는 그 아래 상처의 피만 보입니다."

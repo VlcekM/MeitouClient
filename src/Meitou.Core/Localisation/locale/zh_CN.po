@@ -5603,3 +5603,11 @@ msgstr "务农"
 #. machine-translated
 msgid "COOKING"
 msgstr "烹饪"
+
+#. machine-translated
+msgid "Clothes keep blood stains"
+msgstr "衣物保留血渍"
+
+#. machine-translated
+msgid "With Blood on weapons and gear on, blood soaks into worn clothes and armour slowly, stays when the wound heals, and washes out in water and rain or fades with time. Off, the clothes show only the blood of the wound under them."
+msgstr "开启“武器和装备上的血迹”时，血会慢慢渗入穿着的衣物和护甲，伤口愈合后仍会留下，并会被水和雨洗掉或随时间褪去。关闭时，衣物只显示其下伤口的血。"

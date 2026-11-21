@@ -4757,3 +4757,11 @@ msgstr "LANDWIRTSCHAFT"
 #. machine-translated
 msgid "COOKING"
 msgstr "KOCHEN"
+
+#. machine-translated
+msgid "Clothes keep blood stains"
+msgstr "Kleidung behält Blutflecken"
+
+#. machine-translated
+msgid "With Blood on weapons and gear on, blood soaks into worn clothes and armour slowly, stays when the wound heals, and washes out in water and rain or fades with time. Off, the clothes show only the blood of the wound under them."
+msgstr "Mit „Blut an Waffen und Ausrüstung“ zieht Blut langsam in getragene Kleidung und Rüstung ein, bleibt, wenn die Wunde heilt, und wäscht sich in Wasser und Regen aus oder verblasst mit der Zeit. Aus zeigt die Kleidung nur das Blut der Wunde darunter."
