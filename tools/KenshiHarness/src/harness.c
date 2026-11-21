@@ -25,7 +25,8 @@ static const Entry COMMANDS[] = {
     {"shot", cmd_shot}, {"window", cmd_window}, {"ui", cmd_ui}, {"state", cmd_state}, {"load", cmd_load}, {"speed", cmd_speed}, {"wait", cmd_wait},
     {"camera", cmd_camera}, {"select", cmd_select}, {"mouse", cmd_mouse}, {"click", cmd_click}, {"drag", cmd_drag},
     {"scroll", cmd_scroll}, {"key", cmd_key}, {"type", cmd_type}, {"peek", cmd_peek}, {"sym", cmd_sym},
-    {"fault", cmd_fault}, {"sound", cmd_sound}, {"containers", cmd_containers},
+    {"fault", cmd_fault}, {"sound", cmd_sound}, {"containers", cmd_containers}, {"track", cmd_track},
+    {"standing", cmd_standing}, {"order", cmd_order},
 };
 
 int fail(Command* c, const char* format, ...)
@@ -114,6 +115,7 @@ static void tick(void)
 {
     InterlockedIncrement(&frames);
     lastFrameAt = GetTickCount64();
+    track_frame();
 
     if (!running)
     {
@@ -351,7 +353,8 @@ void startPlugin(void)
     InitializeCriticalSection(&waitingLock);
 
     // A part whose exports are missing is logged and its commands fail; the rest still work.
-    log_line("screen %d, ui %d, input %d, game %d, control %d", screen_init(), ui_init(), input_init(), game_init(), control_init());
+    log_line("screen %d, ui %d, input %d, game %d, control %d, track %d", screen_init(), ui_init(), input_init(), game_init(), control_init(),
+             track_init());
 
     int muted;
     const char* why;

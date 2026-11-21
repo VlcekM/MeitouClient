@@ -479,9 +479,11 @@ sealed class FurnitureUse(PlayerInterface player)
             return true;
         }
 
+        // The door's quick order is appended to the queue, Shift or not (FUN_1407fc6e0 gives it through FUN_1407f9e20 with the keep flag set,
+        // Verified by disassembly); the broken door's Repair clears it.
         void Quick() => player.Say(DoorBroken(pick.Door)
             ? new Simulation.Construction.BuildOrder([], pick.Door.Id) { Tick = player.Session.World.Tick }
-            : new DoorOrder([], pick.Door.Id, alt) { Tick = player.Session.World.Tick, Clicked = true });
+            : new DoorOrder([], pick.Door.Id, alt) { Tick = player.Session.World.Tick, Clicked = true, Queued = true });
 
         ContextMenuWindow.ContextMenu? DoorMenu(Vector2 at) =>
             player.ContextMenuWindow.Menu(Loc.Tr("Door"), at, player.ContextMenuWindow.DoorVerbs(pick));

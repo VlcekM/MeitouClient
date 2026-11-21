@@ -540,6 +540,16 @@ sealed class GamePages(SettingsMenu menu)
             + "The game counts them twice, so inherited squads come up more often and follow-up raids are about twice as likely.",
             Toggle: new("Raids as written", () => menu.Config.CampaignAncestorsOnce,
                 v => { menu.Config.CampaignAncestorsOnce = v; menu.OffscreenChanged?.Invoke(); }, Remaster: true, OnOff: true)));
+        result.Add(new("Raids keep their progress",
+            "A raid under way when you save goes on where it was when that save is loaded. "
+            + "The game starts its current stage over at every load, so its waits and time limits begin again.",
+            Toggle: new("Raids keep their progress", () => menu.Config.FixRaidClocks, v => menu.Config.FixRaidClocks = v, Remaster: true,
+                OnOff: true)));
+        result.Add(new("Guards stop passing bodies",
+            "A guard picks up a knocked-out prisoner only when a cage is free for them, and never takes one from a guard of his own faction. "
+            + "The game lets guards lift and grab prisoners anyway, so at a full prison they hand the same body round without end.",
+            Toggle: new("Guards stop passing bodies", () => menu.Config.FixArrestLifts, v => menu.Config.FixArrestLifts = v, Remaster: true,
+                OnOff: true)));
         result.Add(new("Door break sound",
             "Doors and gates make their breaking sound when they are bashed or broken open. "
             + "The game never picks which breaking sound to play, so it plays none.",

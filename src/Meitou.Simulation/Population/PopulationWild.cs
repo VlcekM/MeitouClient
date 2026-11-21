@@ -110,6 +110,11 @@ public sealed partial class PopulationSystem
     readonly Dictionary<int, TownData> _nestSquads = [];
 
     /// <summary>
+    /// The wild site of the nest each nest squad was made for, by squad id (see <see cref="NestSiteOf"/>).
+    /// </summary>
+    readonly Dictionary<int, int> _nestSites = [];
+
+    /// <summary>
     /// The wild squads made since the last take of the log.
     /// </summary>
     readonly List<WildSpawn> _wildLog = [];
@@ -156,6 +161,12 @@ public sealed partial class PopulationSystem
     /// nest's.
     /// </summary>
     public TownData? NestOf(int squad) => _nestSquads.GetValueOrDefault(squad);
+
+    /// <summary>
+    /// The wild site of the nest a squad was made for (its Ownerships home town in the original, docs/game/ai-tasks.md "36 Patrolling town"); -1:
+    /// not a nest's. Derived like <see cref="NestOf"/>; the parallel steps read it.
+    /// </summary>
+    internal int NestSiteOf(int squad) => _nestSites.GetValueOrDefault(squad, -1);
 
     /// <summary>
     /// Where the squads of wild site <paramref name="site"/> are in their life.
@@ -308,6 +319,17 @@ public sealed partial class PopulationSystem
     /// Remembers the save instance and handle of nest site <paramref name="site"/>.
     /// </summary>
     internal void RememberNest(int site, string instance, Data.Save.Hand handle) => _nestSaveIds[site] = (instance, handle);
+
+    /// <summary>
+    /// The nest site whose remembered handle is <paramref name="handle"/> (by its container and serial, as handles are matched); -1 for none.
+    /// </summary>
+    internal int NestSiteOf(Data.Save.Hand handle)
+    {
+        foreach (var (site, id) in _nestSaveIds)
+            if (id.Handle.C == handle.C && id.Handle.Cs == handle.Cs) return site;
+
+        return -1;
+    }
 
     /// <summary>
     /// What a wild site holds already when it loads: the save's platoons bound to it that still have someone (squads, members, squads per template).
@@ -823,7 +845,7 @@ public sealed partial class PopulationSystem
 
             squad.Money = k.Money;
             state.Squads.Add(squad.Id);
-            if (_wildSites![site].Kind == WildKind.Nest) _nestSquads[squad.Id] = _wildSites[site].Nest!;
+            if (_wildSites![site].Kind == WildKind.Nest) BindNest(squad, _wildSites[site].Nest, site);
         }
     }
 
@@ -987,7 +1009,7 @@ public sealed partial class PopulationSystem
         {
             squad.HomeCentre = b.Centre;
             squad.HomeRadius = NestRadius(site.Nest!);
-            _nestSquads[squad.Id] = site.Nest!;
+            BindNest(squad, site.Nest, b.Site);
         }
         else squad.HomeRadius = _settings.HomelessHomeRadius;
         state.Squads.Add(squad.Id);

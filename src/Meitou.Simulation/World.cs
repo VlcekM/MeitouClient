@@ -254,14 +254,10 @@ public sealed partial class World : IDisposable
             ExperienceFilters.Register(this._systems[k], k);
             CrimeObservers.Register(this._systems[k], k);
         }
-        foreach (var owner in this._systems.OfType<ITaskOwner>())
-        {
-            if (SimulationExtensions.FactoryOf((ITickSystem)owner) is { } made) Tasks.RegisterMod(owner, made.Owner, ClaimedTasks());
-            else owner.RegisterTasks(Tasks);
-        }
-        foreach (var owner in this._systems.OfType<IDecisionOwner>())
-            Decisions.RegisterFrom(owner, SimulationExtensions.FactoryOf((ITickSystem)owner)?.Owner);
-        for (int k = 0; k < this._systems.Count; k++) if (this._systems[k] is Ai.AiSystem ai) ai.BindModGoals(this._systems);
+        for (int k = 0; k < this._systems.Count; k++) RegisterTasks(this._systems[k], k);
+        foreach (var owner in this._systems.OfType<IDecisionOwner>()) Decisions.RegisterFrom(owner);
+        BindChooser();
+        for (int k = 0; k < this._systems.Count; k++) if (this._systems[k] is Ai.AiSystem ai) Decisions.Bind(ai.Settings.ThinkEveryTicks);
         for (int k = 0; k < this._systems.Count; k++) if (DecidesAfter(this._systems[k])) _decideAfter = k;
 
         Characters = characters ?? new CharacterTable();
@@ -273,15 +269,43 @@ public sealed partial class World : IDisposable
     }
 
     /// <summary>
-    /// The task numbers the code mods claimed (job and NPC goal types) and the mod of each, from the extensions the AI or player system was given;
-    /// null without them.
+    /// System <paramref name="system"/>'s task handlers (<see cref="ITaskOwner"/>): a mod's checked and guarded (<see cref="TaskHandlers.RegisterMod"/>).
     /// </summary>
-    IReadOnlyDictionary<Data.Gameplay.Ai.TaskType, string>? ClaimedTasks()
+    void RegisterTasks(ITickSystem system, int index)
+    {
+        if (system is not ITaskOwner owner) return;
+
+        if (SimulationExtensions.FactoryOf(system) is not { } made)
+        {
+            Tasks.RegisterEngine(owner);
+            return;
+        }
+
+        Tasks.RegisterMod(owner, made.Owner, Extensions()?.TaskOwners, ModFaults, index);
+    }
+
+    /// <summary>
+    /// The code mods' chooser goals and jobs (<see cref="Ai.IChooserOwner"/>), then the AI's goals: the engine systems' and the mods'
+    /// (<see cref="Ai.AiSystem.BindGoals"/>), fixed from here on.
+    /// </summary>
+    void BindChooser()
+    {
+        var goals = new List<Ai.ModGoalClaim>();
+        var extensions = Extensions();
+        for (int k = 0; k < this._systems.Count; k++) Ai.ChooserRegistry.Collect(this, this._systems[k], k, extensions, goals, goalsOpen: true);
+
+        for (int k = 0; k < this._systems.Count; k++) if (this._systems[k] is Ai.AiSystem ai) ai.BindGoals(this._systems, goals);
+    }
+
+    /// <summary>
+    /// What the code mods add (their claimed task numbers among it), from the extensions the AI or player system was given; null without them.
+    /// </summary>
+    SimulationExtensions? Extensions()
     {
         foreach (var system in _systems)
         {
-            if (system is Ai.AiSystem { Extensions: { } fromAi }) return fromAi.TaskOwners;
-            if (system is Player.PlayerSystem { Extensions: { } fromPlayer }) return fromPlayer.TaskOwners;
+            if (system is Ai.AiSystem { Extensions: { } fromAi }) return fromAi;
+            if (system is Player.PlayerSystem { Extensions: { } fromPlayer }) return fromPlayer;
         }
 
         return null;
@@ -303,9 +327,10 @@ public sealed partial class World : IDisposable
     public TaskHandlers Tasks { get; } = new();
 
     /// <summary>
-    /// The decision step for the player's characters (docs/simulation.md "Decision step"): run in the slow world right after the last of retaliation,
-    /// aggro and flight (after every system when the world has none of them), and for orders between ticks. Its sources are registered by the systems
-    /// that own them (<see cref="IDecisionOwner"/>; open to later additions).
+    /// The chooser's sources (docs/simulation.md "Decision step"): their look runs at the end of the schedule step, the starts of the think's picks in
+    /// the slow world right after the last of retaliation, aggro and flight (after every system when the world has none of them), and orders alone
+    /// between ticks. Its sources are the engine systems' own (<see cref="IDecisionOwner"/>), and the code mods add job sources
+    /// (<see cref="Ai.ChooserRegistry.Jobs"/>).
     /// </summary>
     public DecisionSystem Decisions { get; } = new();
     /// <summary>
@@ -346,13 +371,14 @@ public sealed partial class World : IDisposable
 
     /// <summary>
     /// Tells every <see cref="IWorldReady"/> system, in system order, that the world is ready to run (<paramref name="fromSave"/>: loaded from a
-    /// save, else a new game); one that throws is logged and the rest are still told. Between ticks, before the first.
+    /// save, else a new game); one that throws is logged and the rest are still told, and a mod's is stopped with the player's notice
+    /// (<see cref="ModSystemFaults.Fault"/>). Between ticks, before the first.
     /// </summary>
     public void TellReady(bool fromSave)
     {
-        foreach (var system in _systems)
+        for (int k = 0; k < _systems.Count; k++)
         {
-            if (system is not IWorldReady ready) continue;
+            if (_systems[k] is not IWorldReady ready) continue;
 
             try
             {
@@ -360,13 +386,26 @@ public sealed partial class World : IDisposable
             }
             catch (Exception e)
             {
-                string fault = $"{e.GetType().Name}: {e.Message}";
-                if (SimulationExtensions.FactoryOf(ready) is { } factory)
-                    Console.Error.WriteLine($"mod       {factory.Owner}: world ready of '{factory.Name}' failed: {fault}");
-                else
-                    Console.Error.WriteLine($"world ready of '{ready.GetType().FullName}' failed: {fault}");
+                ReadyFailed(k, ready, e);
             }
         }
+    }
+
+    /// <summary>
+    /// System <paramref name="index"/>'s <see cref="IWorldReady.Ready"/> threw <paramref name="e"/>: a log line; a mod's system is stopped as for a
+    /// throw of one of its phases.
+    /// </summary>
+    void ReadyFailed(int index, IWorldReady ready, Exception e)
+    {
+        string fault = $"{e.GetType().Name}: {e.Message}";
+        if (SimulationExtensions.FactoryOf(ready) is not { } factory)
+        {
+            Console.Error.WriteLine($"world ready of '{ready.GetType().FullName}' failed: {fault}");
+            return;
+        }
+
+        Console.Error.WriteLine($"mod       {factory.Owner}: world ready of '{factory.Name}' failed: {fault}");
+        ModFaults.Fault(index, "world ready", e);
     }
 
     /// <summary>
@@ -694,7 +733,8 @@ public sealed partial class World : IDisposable
     public WorldSnapshot PreviousSnapshot { get; private set; } = WorldSnapshot.Empty;
 
     /// <summary>
-    /// Adds a system after the existing ones; before the first tick.
+    /// Adds a system after the existing ones, its hooks and task handlers registered as the made world's are (chooser goals excepted); before the
+    /// first tick.
     /// </summary>
     public void AddSystem(ITickSystem system)
     {
@@ -719,7 +759,9 @@ public sealed partial class World : IDisposable
         DeathObservers.Register(system, _systems.Count - 1);
         ExperienceFilters.Register(system, _systems.Count - 1);
         CrimeObservers.Register(system, _systems.Count - 1);
-        if (system is IDecisionOwner owner) Decisions.RegisterFrom(owner, SimulationExtensions.FactoryOf(system)?.Owner);
+        RegisterTasks(system, _systems.Count - 1);
+        if (system is IDecisionOwner owner) Decisions.RegisterFrom(owner);
+        Ai.ChooserRegistry.Collect(this, system, _systems.Count - 1, Extensions(), [], goalsOpen: false);
         if (DecidesAfter(system)) _decideAfter = _systems.Count - 1;
         WatchCharacters();
     }
@@ -768,6 +810,10 @@ public sealed partial class World : IDisposable
     /// Each partition's Stopwatch ticks (see <see cref="_timedBody"/>).
     /// </summary>
     long[] _jobTicks = [];
+    /// <summary>
+    /// The body of <see cref="ThinkWithoutMind"/> over one partition, made once.
+    /// </summary>
+    Action<int>? _thinkWithoutMind;
 
     /// <summary>
     /// One system's parallel phase over the partitions; profiled, it also sums its jobs' time and notes the slowest (<see cref="TickProfile.Jobs"/>).
@@ -895,6 +941,11 @@ public sealed partial class World : IDisposable
 
             prof?.Lap(TickProfile.Schedule, k);
         }
+
+        // The chooser's serial look, after the systems' (the minds they give), before the think reads it.
+        Decisions.Look(this);
+        prof?.Part("decision look");
+        prof?.Lap(TickProfile.Schedule);
     }
 
     /// <summary>
@@ -907,6 +958,7 @@ public sealed partial class World : IDisposable
 
         // A system that leaves a phase at its empty default is skipped there: a barrier costs more than the nothing it would wait for.
         foreach (var p in _phases) if (p.Think is { } think) RunParallel(think, prof, TickProfile.Think, p.Index);
+        ThinkWithoutMind(prof);
         foreach (var p in _phases) if (p.Move is { } move) RunParallel(move, prof, TickProfile.Move, p.Index);
         foreach (var b in _buffers) b.Reset();
 
@@ -922,6 +974,19 @@ public sealed partial class World : IDisposable
 
             RunParallel(act, prof, TickProfile.Act, p.Index);
         }
+    }
+
+    /// <summary>
+    /// The chooser's ladder for the characters the look made a row for that no think ran (no mind, or no AI; parallel, after the systems' thinks,
+    /// <see cref="DecisionSystem.ThinkWithoutMind"/>); skipped when the look made no row.
+    /// </summary>
+    void ThinkWithoutMind(TickProfile? prof)
+    {
+        if (!Decisions.AnyRow) return;
+
+        _thinkWithoutMind ??= i => Decisions.ThinkWithoutMind(this, _partitions[i]);
+        _pool.ForEach(_partitions.Length, _thinkWithoutMind);
+        prof?.Part("decision ladder without a mind");
     }
 
     /// <summary>
@@ -1045,11 +1110,11 @@ public sealed partial class World : IDisposable
     public int DeferredCount => _deferred.Count;
 
     /// <summary>
-    /// The commands due this tick: the deferred ones due, then the host's.
+    /// The commands due this tick: the deferred ones due, then the host's, the order giver's skip applied to those (<see cref="Simulation.Player.OrderGiver"/>).
     /// </summary>
     IReadOnlyList<SimCommand> TakeDue()
     {
-        var external = Commands.TakeDue(Tick);
+        var external = Simulation.Player.OrderGiver.SkipGettingUp(this, Commands.TakeDue(Tick));
         if (_deferred.Count == 0) return external;
 
         var due = new List<SimCommand>(_deferred.Count + external.Count);

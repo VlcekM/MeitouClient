@@ -577,7 +577,8 @@ internal static class SavedCharacters
         if (cold.InSomething == Locks.HeldState.Bed)
             hot.Task = (byte)CharacterTask.Sleep;   // it lies there until an order (Locks.BedSystem)
 
-        if (cold.IsPlayer && sc.Ai is { } ai)
+        // Every character's job list, an NPC's too (the loader FUN_140508e10 has no faction test: an NPC robot's 57, an NPC slave's 187).
+        if (sc.Ai is { } ai)
         {
             PermaJobSave.Read(ai, sc.GameState, cold, world.Buildings, context.Handles, context.InstanceOf, context.InstanceIds,
                 world.SystemOf<Player.PlayerSystem>()?.Extensions?.JobTypes);
@@ -844,6 +845,10 @@ internal static class SavedCharacters
         // Its shop as it was when it left the world, else the save's (a fresh fill when the save has none).
         squad.Shop = sp.Shop ?? ShopSave.Read(world, squad, sp.Source.Record, data);
         squad.SavedAi = sp.Ai;
+        squad.SavedPackage = PackageSave.Read(sp.Source.Record);
+
+        // Its house flag as the save had it, the first time it is made (its town and arrival hour wait on its platoon, Platoon.SavedTown).
+        if (!sp.Touched) HomeLockSave.Read(sp.Source.Record, world, squad);
         world.Squads.Add(squad);
 
         // What the squad remembered: the save's, else what it kept when it last left the world.

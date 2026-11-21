@@ -139,7 +139,8 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
     /// </summary>
     public static void Write(FcsRecord platoon, AiSave? ai, Func<CampaignTown, Hand>? townHand = null)
     {
-        WriteMissionTown(platoon, ai, townHand);
+        bool held = platoon.Strings.GetValueOrDefault(ContractKey) is { Length: > 0 };
+        WriteMissionTown(platoon, ai, townHand, held);
         platoon.Strings[ContractKey] = ai?.Contract ?? "";
         platoon.Strings[ReplacementKey] = ai?.Replacement ?? "";
         if (ai?.Contract is not null) platoon.Floats[EndKey] = (float)ai.ContractEnd;
@@ -148,13 +149,7 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
         if (ai is { Contract: not null, Phase: true }) platoon.Bools[PhaseKey] = true;
         else platoon.Bools.Remove(PhaseKey);
 
-        // A record without a contract keeps a null handle as it was read (its other parts are stale values).
-        var target = ai?.Contract is null
-            ? Hand.Null
-            : ai.TargetIsTown
-                ? TownHand(ai.MissionTown, ai.MissionTownHand, townHand)
-                : ai.TargetHand;
-        WriteHand(platoon, TargetKey, target);
+        WriteMissionTarget(platoon, ai, townHand, held);
         if (ai?.Contract is null) return;
 
         // The employer only once known; the target town while the contract runs (the null handle for a bodyguard's).
@@ -163,16 +158,31 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
     }
 
     /// <summary>
-    /// The contract's mission town handle: written while a contract runs, cleared once one the record held has ended, else left as the record has it
-    /// (another package's own, which Meitou does not read).
+    /// The contract's mission town handle: written while a contract runs, cleared once one the record held (<paramref name="held"/>) has ended, else
+    /// left as the record has it (another package's own, which Meitou does not read).
     /// </summary>
-    static void WriteMissionTown(FcsRecord platoon, AiSave? ai, Func<CampaignTown, Hand>? townHand)
+    static void WriteMissionTown(FcsRecord platoon, AiSave? ai, Func<CampaignTown, Hand>? townHand, bool held)
     {
-        bool held = platoon.Strings.GetValueOrDefault(ContractKey) is { Length: > 0 };
         if (ai?.Contract is null && !held) return;
 
         var town = ai?.Contract is null ? Hand.Null : TownHand(ai.MissionTown, ai.MissionTownHand, townHand);
         WriteHand(platoon, MissionTownKey, town);
+    }
+
+    /// <summary>
+    /// The contract's mission target handle (a base defence's mission town): written while a contract runs, cleared once one the record held
+    /// (<paramref name="held"/>) has ended, else left as the record has it (another package's own, which Meitou does not read).
+    /// </summary>
+    static void WriteMissionTarget(FcsRecord platoon, AiSave? ai, Func<CampaignTown, Hand>? townHand, bool held)
+    {
+        if (ai?.Contract is null && !held) return;
+
+        var target = ai?.Contract is null
+            ? Hand.Null
+            : ai.TargetIsTown
+                ? TownHand(ai.MissionTown, ai.MissionTownHand, townHand)
+                : ai.TargetHand;
+        WriteHand(platoon, TargetKey, target);
     }
 
     /// <summary>

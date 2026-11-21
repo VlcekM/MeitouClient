@@ -77,8 +77,30 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             else if (command is MoveOrder order) GiveMove(world, order);
         }
 
+        var owned = OwnedSlaves(world);
         foreach (var squad in world.Squads.All)
-            RefreshFormation(world, squad);
+            RefreshFormation(world, squad, owned?.GetValueOrDefault(squad.Id));
+    }
+
+    /// <summary>
+    /// The slaves of other squads by the master squad they obey (<see cref="CharacterCold.SlaveMaster"/>), in slot order: the original's formation
+    /// gives each member's record the slaves whose owner it is, wherever their platoon (<c>FUN_14026db30</c>; Meitou's owner is the master squad's
+    /// leader, <see cref="Kidnap.ObedientSlave.OwnerOf"/>); null when there are none.
+    /// </summary>
+    static Dictionary<int, List<CharacterId>>? OwnedSlaves(World world)
+    {
+        var table = world.Characters;
+        Dictionary<int, List<CharacterId>>? owned = null;
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (!table.Next[s].Alive || table.Cold(s) is not { SlaveState: 1, SlaveMaster: >= 0 } c || c.SquadId == c.SlaveMaster) continue;
+
+            owned ??= [];
+            if (!owned.TryGetValue(c.SlaveMaster, out var list)) owned[c.SlaveMaster] = list = [];
+            list.Add(table.IdOf(s));
+        }
+
+        return owned;
     }
 
     /// <summary>
@@ -114,11 +136,16 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         if (!table.TryResolveNext(order.Target, out int led) || led == slot) return OrderCheck.Gone;
 
         bool free = table.Cold(slot) is { IsImprisoned: false, Medical.Incapacitated: false, CarriedBy.IsNone: true };
-        return free ? OrderCheck.Run : OrderCheck.Blocked();
+        if (!free) return OrderCheck.Blocked();
+
+        // A follow row whose plan starts with 13 and finds no attacker to fight fails its plan: the order waits (FollowDefence).
+        bool fails = FollowDefence.Wanted(world, slot, order.Row, order.Target) && FollowDefence.Foe(world, slot, order.Row, order.Target).IsNone;
+        return fails ? OrderCheck.Blocked() : OrderCheck.Run;
     }
 
     /// <summary>
-    /// A sleeper gets up first; then the move's walk or the follow starts (<see cref="ITaskHandler.Start"/>).
+    /// A sleeper gets up first; then the move's walk or the follow starts (<see cref="ITaskHandler.Start"/>), and a follow whose plan starts with
+    /// 13 fights the attacker from the next tick (<see cref="FollowDefence.Start"/>).
     /// </summary>
     void IOrderOwner.Start(World world, int slot, OrderEntry order)
     {
@@ -128,7 +155,19 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         TaskStart.Start(world, slot, order.IsMove
             ? new TaskRequest(CharacterTask.GoTo, TaskType.MoveCusOrdered, TaskSource.Order) { Point = order.Point }
             : new TaskRequest(CharacterTask.Follow, order.Row, TaskSource.Order) { Target = order.Target });
+        if (order.IsMove) return;
+
+        var foe = FollowDefence.Foe(world, slot, order.Row, order.Target);
+        if (!foe.IsNone) FollowDefence.Start(world, slot, foe, order.Row, TaskSource.Order);
     }
+
+    /// <summary>
+    /// A started follow order not yet running its own row (<see cref="PlayerOrders.FollowRowRuns"/>: given while its character was threatened) is
+    /// planned again once its follow runs and its list B fails on 16 or 39 (<see cref="FollowDefence.Due"/>): its task ends and it starts again,
+    /// with 13 first.
+    /// </summary>
+    bool IOrderOwner.StillHolds(World world, int slot, OrderEntry order) =>
+        order.IsMove || !FollowDefence.Due(world, slot, world.Characters.Cold(slot)!);
 
     /// <summary>
     /// A move order's walk (row 29: <see cref="CharacterCold.OrderMove"/>, the Hold point follows it) to <see cref="TaskRequest.Point"/>'s floor, or
@@ -342,7 +381,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         for (int s = 0; s < table.Next.Length; s++)
         {
             ref var c = ref table.Next[s];
-            if (!c.Alive || c.Task != (byte)CharacterTask.GoTo || (c.Flags & (ushort)(MoveFlags.Pending | MoveFlags.HasPath)) == 0)
+            if (!c.Alive || !Walks(c.Task) || (c.Flags & (ushort)(MoveFlags.Pending | MoveFlags.HasPath)) == 0)
                 continue;
 
             // A walker whose way on does not lead through a changed zone keeps its path (a long walk loads zones ahead all the way, and each
@@ -416,33 +455,47 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         foreach (var id in who)
         {
             if (!table.TryResolveNext(id, out int found)) continue;
-
-            if (!TaskStart.Eligible(world, table.Cold(found)!, TaskType.MoveCusOrdered))
-            {
-                // A prisoner stays in its cage (row 29 is not registered for the imprisoned or chained): the order waits in its queue.
-                PlayerOrders.Give(world, found, new OrderEntry(TaskType.MoveCusOrdered, this) { Point = order.Target, TaskPoint = order.Target },
-                        order.Queued);
-                continue;
-            }
-
-            if (table.Cold(found)!.InSomething == Locks.HeldState.Bed)
-                world.Fixtures.LeaveBed(world, id);   // an order gets a sleeper up
-
-            slots.Add(found);
+            if (WaitsInCage(world, found, order.Target, order.Queued) is null) slots.Add(found);
         }
 
         var points = MovePoints(world, slots, order.Target);
 
-        for (int k = 0; k < slots.Count; k++)
-        {
-            int slot = slots[k];
-            table.Cold(slot)!.FollowOrder = CharacterId.None;
-
-            // Shift + right click: after the order in hand.
-            var entry = new OrderEntry(TaskType.MoveCusOrdered, this) { Point = points[k], TaskPoint = points[k] };
-            PlayerOrders.Give(world, slot, entry, order.Queued);
-        }
+        for (int k = 0; k < slots.Count; k++) GiveMoveTo(world, slots[k], points[k], order.Queued);
     }
+
+    /// <summary>
+    /// One character's move order to <paramref name="target"/> as <see cref="MoveOrder"/> gives it (<see cref="World.GiveOrder"/>): queued in its
+    /// cage, or out of its bed and on to its point; the check <see cref="PlayerOrders.Give"/> answers.
+    /// </summary>
+    internal OrderCheck GiveMove(World world, int slot, Vector3 target, bool queued) =>
+        WaitsInCage(world, slot, target, queued) ?? GiveMoveTo(world, slot, MovePoints(world, [slot], target)[0], queued);
+
+    /// <summary>
+    /// A prisoner stays in its cage (row 29 is not registered for the imprisoned or chained): the order waits in its queue, and its check is
+    /// returned. Null for any other character, which gets out of its bed first (an order gets a sleeper up).
+    /// </summary>
+    OrderCheck? WaitsInCage(World world, int slot, Vector3 target, bool queued)
+    {
+        var cold = world.Characters.Cold(slot)!;
+        if (!TaskStart.Eligible(world, cold, TaskType.MoveCusOrdered)) return PlayerOrders.Give(world, slot, MoveEntry(target), queued);
+
+        if (cold.InSomething == Locks.HeldState.Bed) world.Fixtures.LeaveBed(world, world.Characters.IdOf(slot));
+        return null;
+    }
+
+    /// <summary>
+    /// The move to <paramref name="point"/> (shift + right click: after the order in hand); the character follows no one from then.
+    /// </summary>
+    OrderCheck GiveMoveTo(World world, int slot, Vector3 point, bool queued)
+    {
+        world.Characters.Cold(slot)!.FollowOrder = CharacterId.None;
+        return PlayerOrders.Give(world, slot, MoveEntry(point), queued);
+    }
+
+    /// <summary>
+    /// A move order's entry: the point is both its goal and its task point.
+    /// </summary>
+    OrderEntry MoveEntry(Vector3 point) => new(TaskType.MoveCusOrdered, this) { Point = point, TaskPoint = point };
 
     /// <summary>
     /// The characters' points of a move order (order 0x1d in <c>FUN_1407f9e20</c>, <b>Verified</b>): an animal that the building the order is on
@@ -481,10 +534,10 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
     /// <summary>
     /// Rebuilds a squad's <see cref="Squad.FormationSlots"/> when its formation, head, members or their roles changed (serial). The head is the
-    /// leader, or the squad mate the leader follows (the original's task-31 head). The draws are keyed by the squad and the key, so a rebuild of the
-    /// same squad gives the same slots.
+    /// leader, or the squad mate the leader follows (the original's task-31 head). The slaves are its slave members and <paramref name="owned"/>, the
+    /// slaves of other squads that obey it. The draws are keyed by the squad and the key, so a rebuild of the same squad gives the same slots.
     /// </summary>
-    static void RefreshFormation(World world, Squad squad)
+    static void RefreshFormation(World world, Squad squad, List<CharacterId>? owned)
     {
         var table = world.Characters;
         squad.ForceSpeed = world.ForcedSpeeds is { } forced && forced.TryGetValue(squad.TemplateId, out byte force) ? force : Squad.NoForceSpeed;
@@ -494,6 +547,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             : (int)SquadFormation.Random;
         ulong key = Rng.Mix((ulong)type ^ Rng.Key(head) << 2);
         foreach (var m in squad.Members) key = Rng.Mix(key ^ Rng.Key(m) ^ (ulong)(table.IsAlive(m) ? table.Cold(m.Slot)!.Role : 7) << 56);
+        if (owned is not null) foreach (var o in owned) key = Rng.Mix(key ^ Rng.Key(o) ^ 8UL << 56);
         if (key == squad.FormationKey) return;
 
         squad.FormationKey = key;
@@ -521,6 +575,8 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             var member = Of(m);
             (member.Role == (int)SquadRole.Slave ? slaves : others).Add(member);
         }
+
+        if (owned is not null) foreach (var o in owned) slaves.Add(Of(o) with { Role = (int)SquadRole.Slave });
 
         ulong draws = 0, seed = Rng.Hash(world.Seed, (ulong)squad.Id, RngPurpose.Formation, key);
         squad.FormationSlots = Formation.Layout((SquadFormation)type, Of(head), others, slaves,
@@ -746,12 +802,17 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     static void TakeOlderAnswer(IWalkability walk, ref CharacterHot n, CharacterCold cold, PathAnswer answer)
     {
         bool waiting = (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0;
-        if (!answer.Path.Found || !waiting || n.Task != (byte)CharacterTask.GoTo || answer.Id <= cold.PathApplied || answer.Id == cold.LastSplice)
+        if (!answer.Path.Found || !waiting || !Walks(n.Task) || answer.Id <= cold.PathApplied || answer.Id == cold.LastSplice)
             return;
 
         TakePath(walk, ref n, cold, answer.Path);
         cold.PathApplied = answer.Id;
     }
+
+    /// <summary>
+    /// Whether the task walks a path to a goal of its own: a walk, or a talk act-out walking up to its target (<see cref="Aim"/>).
+    /// </summary>
+    static bool Walks(byte task) => task is (byte)CharacterTask.GoTo or (byte)CharacterTask.Talk;
 
     /// <summary>
     /// The latest request found no path: a player's short order walks straight at its goal, any other walk is dropped and waits.
@@ -934,6 +995,8 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     {
         if (n.Task == (byte)CharacterTask.Follow) cold.FollowPathTime = FollowPathSeconds;
 
+        if (FailOwnWalk(ref n, cold)) return;
+
         n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.HasPath);
         n.TaskTime = FailedPathWait;
         if (n.Task != (byte)CharacterTask.GoTo) return;
@@ -946,6 +1009,22 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         EndWalk(cold, WalkEnd.Failed);
         PlayerOrders.WalkFailed(cold);
         TaskStart.Step(world.Characters, slot, CharacterTask.Idle);
+    }
+
+    /// <summary>
+    /// A talk act-out's or a lift's own walk given up (blocked past the limit, stopped at a locked door) fails as a walk does: the path is dropped,
+    /// the walker waits before asking again, and its owner reads the failure (<see cref="Dialogue.DialogueOrders"/>,
+    /// <see cref="Carrying.CarrySystem.LiftWalkFails"/>; the original's plan step takes any failed mover as a lost walk, <c>FUN_14050d970</c>,
+    /// <b>Verified</b>). False for any other task.
+    /// </summary>
+    internal static bool FailOwnWalk(ref CharacterHot n, CharacterCold cold)
+    {
+        if (n.Task is not ((byte)CharacterTask.Talk or (byte)CharacterTask.PickUp)) return false;
+
+        n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.HasPath);
+        n.TaskTime = FailedPathWait;
+        cold.PathFailed = true;
+        return true;
     }
 
     /// <summary>
@@ -967,7 +1046,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     static void EndWalk(CharacterCold cold, WalkEnd how)
     {
         cold.WalkEnd = how;
-        if (cold.Ai is { Engine: false } mind) mind.Replan = true;
+        if (cold.Ai is { } mind) mind.Replan = true;
     }
 
     /// <summary>
@@ -1107,7 +1186,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         Vector2? door = null;
         float aimHeight = lead.Position.Y;
 
-        if (squad is not null && squad.FormationSlots.TryGetValue(self, out var slot) && squad.Members.Contains(leader))
+        if (FormationOf(world, squad, cold, leader) is { } formation && formation.FormationSlots.TryGetValue(self, out var slot))
         {
             (slotPos, door, aimHeight) = FormationAim(world, i, dt, n.Position, cold, slot, leader.Slot, lead.Position, leadAt, leadDir, leadSpeed,
                 moving);
@@ -1215,9 +1294,10 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
     /// <summary>
     /// Task_Follow sets the follower's sneaking each update (FUN_14033b350, Verified): on while the leader sneaks out of a fight and the follower
-    /// regards it as friendly (vfunc 0x3f0; here: the same faction or an allied one, as Carry.Friendly reads it), off otherwise; dropping it also
-    /// stands it up. A leader that follows someone itself may change its own flag in this same parallel pass, so its followers are left as they are
-    /// (engine choice, keeps the step deterministic).
+    /// regards it as friendly (vfunc 0x3f0; here: the same faction or an allied one, as Carry.Friendly reads it), off otherwise. Dropping it leaves
+    /// the posture alone (its setter <c>FUN_1405ca9a0</c> resets the mover, not the posture, Verified), so one staying low follows on low. A leader
+    /// that follows someone itself may change its own flag in this same parallel pass, so its followers are left as they are (engine choice, keeps
+    /// the step deterministic).
     /// </summary>
     void CopySneak(CharacterTable table, in CharacterHot lead, int leader, CharacterCold cold)
     {
@@ -1229,12 +1309,11 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
         if (sneak)
         {
-            cold.Orders |= CharacterOrders.Sneak;
+            Orders.SneakOn(cold);   // its own slot: the replan request writes only its own mind
         }
-        else if ((cold.Orders & CharacterOrders.Sneak) != 0)
+        else
         {
             cold.Orders &= ~CharacterOrders.Sneak;
-            if (cold.Medical is { } med) med.StayingLow = false;
         }
     }
 
@@ -1301,6 +1380,18 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     static CharacterId Followed(World world, Squad? squad, CharacterCold cold) =>
         !cold.FollowOrder.IsNone ? cold.FollowOrder : cold.Ai is { FollowTarget.IsNone: false } follows ? follows.FollowTarget
         : Kidnap.ObedientSlave.OwnerOf(world, cold) is { } owner ? owner : squad?.Leader ?? CharacterId.None;
+
+    /// <summary>
+    /// The squad whose formation a follower takes its slot in (<c>Task_Follow</c>'s formation test <c>FUN_14033b160</c> and its spot
+    /// <c>FUN_14033b220</c>, <b>Verified</b>): its owner's platoon when it follows its owner (a slave's master squad,
+    /// <see cref="Kidnap.ObedientSlave.OwnerOf"/>), else its own when the followed one is in it; null for none.
+    /// </summary>
+    static Squad? FormationOf(World world, Squad? squad, CharacterCold cold, CharacterId followed)
+    {
+        if (Kidnap.ObedientSlave.OwnerOf(world, cold) == followed && world.Squads.Find(cold.SlaveMaster) is { } master) return master;
+
+        return squad is not null && squad.Members.Contains(followed) ? squad : null;
+    }
 
     /// <summary>
     /// A velocity's horizontal unit direction (zero stays zero, as Ogre's normalise leaves it).
@@ -1773,15 +1864,6 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             return true;
         }
 
-        if (AskedToStandStill(n, cold, world.Tick))
-        {
-            // A medic treating it asked it to stand still (FirstAidSystem): it stops where it is; its own walk is kept and goes on when the ask
-            // lapses.
-            n.Velocity = Vector3.Zero;
-            cold.AgentSpeed = 0;
-            return true;
-        }
-
         return false;
     }
 
@@ -1927,8 +2009,10 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         if (mode == SpeedMode.Group && cold.SpeedOverride <= 0 && n.Task != (byte)CharacterTask.Follow)
             desired = MathF.Min(desired, _groupSpeeds.Of(world, i, cold, p.Position));
 
-        if (cold.PaceCap is { } pace && n.Task == (byte)CharacterTask.GoTo && !cold.InCombat)
-            desired = MathF.Min(desired, pace);   // a campaign follower near its trail point
+        // A campaign member near its formation's destination keeps to the campaign leader's pace (215, Ai.MissionFormation); a travel step to the
+        // functor's speed (Ai.TownTravel).
+        bool formation = cold.Running is { Row: TaskType.TravelToTargetPackage } || Ai.TownTravel.Runs(cold);
+        if (cold.PaceCap is { } pace && formation && n.Task == (byte)CharacterTask.GoTo && !cold.InCombat) desired = MathF.Min(desired, pace);
 
         return desired;
     }
@@ -1936,10 +2020,11 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     /// <summary>
     /// Whether the character's task is a carry-out (224 <c>Task_TakeIntruderOutside</c>, 274 <c>...OutsideTown</c>): its start sets the mover's
     /// mode itself and goes through neither reader that raises a carrier's walk to a jog, so it walks (<c>FUN_1403355e0</c>, <b>Verified</b>;
-    /// <b>Observed</b>, original 1.0.65, #1024 save: mode 0 at the race's walk speed from the lift to the drop).
+    /// <b>Observed</b>, original 1.0.65, #1024 save: mode 0 at the race's walk speed from the lift to the drop); or a travel to town, whose speed
+    /// functor raises only a mode 0 and which the AI gives its mode in full (<see cref="Ai.TownTravel.Runs"/>).
     /// </summary>
     internal static bool CarriesOutAtWalk(CharacterCold cold) =>
-        cold.Running is { Row: TaskType.TakeIntruderOutside or TaskType.TakeIntruderOutsideTown };
+        cold.Running is { Row: TaskType.TakeIntruderOutside or TaskType.TakeIntruderOutsideTown } || Ai.TownTravel.Runs(cold);
 
     /// <summary>
     /// A follower near its aim (Think set it as the goal) steers straight at it at its desired speed, capped by its top speed, never past it.
@@ -2334,17 +2419,6 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     /// The way from the walker to the point past the corner it heads for, the point <see cref="CornerBrake"/> tests.
     /// </summary>
     static Vector2 PastCorner(in CharacterHot p, Vector3 past) => new(past.X - p.Position.X, past.Z - p.Position.Z);
-
-    /// <summary>
-    /// Whether a medic's ask to stand still holds the character (<see cref="CharacterCold.StandStillUntil"/>): the original's patient takes 62
-    /// Standing still as an urgent goal (a tier 3 request, docs/game/ai-tasks.md "Stand still"), which the front of its order queue outranks (the
-    /// chooser's source 1) and which beats its jobs and routine (sources 5 and 6); its row needs no attack on it (<c>!isAggressionTowardsMe</c>).
-    /// So a player's character with no order in hand, or an NPC its order does not hold (<see cref="DecisionSystem.Ordered"/>), is held; not one
-    /// fighting or fleeing.
-    /// </summary>
-    static bool AskedToStandStill(in CharacterHot n, CharacterCold cold, long tick) =>
-        cold.StandStillUntil > tick && (cold.IsPlayer ? cold.OrderQueue.Count == 0 : !DecisionSystem.Ordered(cold)) && !cold.InCombat && !cold.Fleeing
-        && cold.CarriedBy.IsNone && n.Task != (byte)CharacterTask.Attack;
 
     /// <summary>
     /// The factor on a character's step time: <see cref="OffViewTime"/> out of view.

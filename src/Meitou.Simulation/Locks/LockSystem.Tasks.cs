@@ -10,7 +10,8 @@ namespace Meitou.Simulation.Locks;
 /// The lock system's task starts (docs/simulation.md "Task starts"): each order (and a warden's round) starts through <see cref="TaskStart.Start"/>
 /// with its row, which the lock system handles whatever the walk that acts it out: pick lock 76, unlock / cut / break shackles 201 / 185 / 186
 /// (putting shackles on, an engine stand-in for the original's inventory drag, has no row: <see cref="TaskType.None"/>), set free 110, get in 107,
-/// open / close door 72 / 73, lock / unlock door 77 / 140, cut / break lock 285 / 286, smash 226; a round runs release 110, lock 77 or unlock 78.
+/// open / close door 72 / 73, lock / unlock door 77 / 140, cut / break lock 285 / 286, smash 226; a round (a warden goal's act-out, a gate guard's
+/// door work) runs release 110, lock 77 or unlock 78.
 /// </summary>
 public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
 {
@@ -38,12 +39,6 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
     /// Whether the row is a lock order's (<see cref="World.CanOrder(TaskType, CharacterId, CharacterId, string?, System.Numerics.Vector3)"/>).
     /// </summary>
     internal static bool OwnsRow(TaskType row) => row != TaskType.None && Array.IndexOf(Rows, row) >= 0;
-
-    /// <summary>
-    /// The detail a lock order carries when a walk to its work starts it
-    /// (<see cref="World.CanOrder(TaskType, CharacterId, CharacterId, string?, System.Numerics.Vector3)"/>).
-    /// </summary>
-    internal object WorkDetail() => new LockWork(CharacterTask.GoTo, null);
 
     /// <summary>
     /// The row of a shackle job.
@@ -74,14 +69,26 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
     bool StartWork(World world, int slot, CharacterTask task, TaskType row, string? site, CharacterId? target = null, object? detail = null,
             bool queued = false, Vector3 point = default)
     {
-        var order = new OrderEntry(row, this)
-        {
-            Site = site, Target = target ?? CharacterId.None, Detail = new LockWork(task, detail), TaskPoint = point,
-        };
+        var order = WorkOrder(task, row, site, target, detail, point);
         if (!PlayerOrders.CanRun(world, slot, order).CanRun) return false;
         PlayerOrders.Give(world, slot, order, queued);
         return true;
     }
+
+    /// <summary>
+    /// Gives the character a lock order's work whether or not it can run yet (<see cref="PlayerOrders.Give"/>: it waits queued until it can), as the
+    /// original's giver does.
+    /// </summary>
+    void GiveWork(World world, int slot, CharacterTask task, TaskType row, string? site, bool queued, Vector3 point) =>
+        PlayerOrders.Give(world, slot, WorkOrder(task, row, site, null, null, point), queued);
+
+    /// <summary>
+    /// A lock order's entry: its row, fixture or character, act-out and the work's parameter, and its <see cref="OrderEntry.TaskPoint"/>.
+    /// </summary>
+    OrderEntry WorkOrder(CharacterTask task, TaskType row, string? site, CharacterId? target, object? detail, Vector3 point) => new(row, this)
+    {
+        Site = site, Target = target ?? CharacterId.None, Detail = new LockWork(task, detail), TaskPoint = point,
+    };
 
     /// <summary>
     /// Lock work done where the character stands (<see cref="CharacterTask.Idle"/>: a prisoner on its own cage or shackles, a worker at its lock) is
@@ -93,9 +100,8 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
         if (table.Next[slot].Task != (byte)task) return true;
         if (task != CharacterTask.Idle) return false;
         var c = table.Cold(slot)!;
-        return c is { PickingLock: null, Shackles: null, ForcingLock: null, DoorJob: null, Freeing.IsNone: true, EnteringCage: null,
-                BashOrdered: false }
-            && !(world.Player.DoorTarget is not null && world.Player.DoorWalker == table.IdOf(slot));
+        return c is { PickingLock: null, Shackles: null, ForcingLock: null, DoorJob: null, DoorWalk: null, Freeing.IsNone: true, EnteringCage: null,
+                BashOrdered: false };
     }
 
     /// <summary>
@@ -142,8 +148,8 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
     /// <summary>
     /// A lock order (the pickers choose who gets it from the conditions of the moment): a character's that is awake, not carried and free, or caged
     /// and working on its own cage or shackles where it stands; its fixture or character still there (else it leaves the queue). What else the work
-    /// needs is tested where it is done (the worker gives up there). The walk to a door (<see cref="StartDoor"/>) is a player character's only (else
-    /// it leaves the queue): it takes the interface's one door target (<see cref="PlayerState.DoorTarget"/>).
+    /// needs is tested where it is done (the worker gives up there). The walk to a door (<see cref="StartDoor"/>) is anyone's, as the original's door
+    /// tasks are (the walker's own <see cref="CharacterCold.DoorWalk"/>).
     /// </summary>
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
@@ -151,18 +157,9 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
         var c = table.Cold(slot)!;
         if (order.Site is { } site && world.Fixtures.Find(site) is null || !order.Target.IsNone && !table.TryResolveNext(order.Target, out _))
             return OrderCheck.Gone;
-        if (!c.IsPlayer && WalksToDoor(world, order)) return OrderCheck.Gone;
-
         bool inPlace = ((LockWork)order.Detail!).Task == CharacterTask.Idle;
         return c.Medical is not { Incapacitated: true } && c.CarriedBy.IsNone && (inPlace || !c.IsImprisoned) ? OrderCheck.Run : OrderCheck.Blocked();
     }
-
-    /// <summary>
-    /// Whether the order's work is a walk to a door to open, close or pick it (<see cref="StartDoor"/>).
-    /// </summary>
-    static bool WalksToDoor(World world, OrderEntry order) =>
-        order.Row is TaskType.PickLock or TaskType.OpenDoor or TaskType.CloseDoor && order.Site is { } site
-        && world.Fixtures.Find(site) is { Kind: FixtureKind.Door };
 
     /// <summary>
     /// Starts the order's lock work.
@@ -234,8 +231,8 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
     }
 
     /// <summary>
-    /// Lock work another task replaces or the Stop order ends lets go of its lock, shackles, door, prisoner or cage (a warden's round ends by itself
-    /// once its worker is on another task).
+    /// Lock work another task replaces or the Stop order ends lets go of its lock, shackles, door, prisoner or cage (a gate guard's round ends by
+    /// itself once its worker is on another task, a warden goal's with its goal).
     /// </summary>
     void ITaskHandler.End(World world, int slot, CharacterTask task, TaskEnd reason)
     {
@@ -244,7 +241,7 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
         if (c.Running is { Source: TaskSource.Npc }) return;
         ClearWork(c);
         if (c.BashOrdered) (c.Bashing, c.BashOrdered) = (null, false);
-        if (world.Player.DoorWalker == table.IdOf(slot)) world.Player.DoorTarget = null;
+        c.DoorWalk = null;
     }
 
     /// <summary>
@@ -255,17 +252,16 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
     {
         var table = world.Characters;
         var walker = table.Cold(slot)!;
-        var player = world.Player;
         var (at, _) = WorkSpot(world, door, Flat(table.Next[slot].Position));
         walker.Shackles = null;
         walker.PickingLock = null;
         walker.DoorJob = null;
-        player.DoorTarget = null;
+        walker.DoorWalk = null;
         if (door.Lock is { EffectivelyLocked: true } && door.Motion == DoorMotion.Closed && door.Owner != world.Player.Faction)
         {
             if (pick) walker.PickingLock = door.Id;
         }
-        else (player.DoorTarget, player.DoorWalker) = (door.Id, table.IdOf(slot));
+        else walker.DoorWalk = door.Id;
         MovementSystem.GoToFloor(world, slot, new Vector3(at.X, door.Position.Y, at.Y), walker.RunSpeed);
     }
 
@@ -281,7 +277,7 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
         DropDoorWay(walker);
         walker.Bashing = null;
         walker.BashOrdered = false;
-        if (world.Player.DoorWalker == table.IdOf(slot)) world.Player.DoorTarget = null;
+        walker.DoorWalk = null;
         walker.DoorJob = new DoorLockJob(door.Id, locking);
         MovementSystem.GoToFloor(world, slot, new Vector3(at.X, door.Position.Y, at.Y), walker.RunSpeed);
     }
@@ -302,7 +298,7 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
         DropDoorWay(walker);
         walker.Bashing = null;
         walker.BashOrdered = false;
-        if (world.Player.DoorWalker == table.IdOf(slot)) world.Player.DoorTarget = null;
+        walker.DoorWalk = null;
         if (force == LockForce.Smash) (walker.Bashing, walker.BashOrdered, walker.BashTime) = (fixture.Id, true, 0);
         else (walker.ForcingLock, walker.Force) = (fixture.Id, force);
 

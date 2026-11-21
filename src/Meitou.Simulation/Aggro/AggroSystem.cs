@@ -56,9 +56,9 @@ public readonly record struct AggroEntry(long Tick, CharacterId Attacker, Charac
 /// (<see cref="Pick"/>).</item>
 /// <item><b>Decide</b> (<c>Apply</c>, serial commit order): an NPC with a mind, and its squad mates within twice their own range R of the target (the
 /// original's squad-shared sightings, <c>GroupSense</c>), are asked to think at the next tick (<see cref="Ai.AiMind.Replan"/>): their combat goals
-/// decide in the chooser (<see cref="FindFoe"/>). An NPC without a mind starts no fight on sight. The player's characters look only with the
-/// attacking-enemies job (<see cref="HuntsEnemies"/>) or on Hold, and are offered the sighting: the decision step starts their fight
-/// (<see cref="HoldAttack"/>, <see cref="AttackJob"/>); they have no leash, and after a job's fight go back to following or stand idle.</item>
+/// decide in the chooser (<see cref="FindFoe"/>). An NPC without a mind starts no fight on sight. The player's characters look the same way,
+/// with the attacking-enemies job (<see cref="HuntsEnemies"/>) or on Hold each look that finds an enemy asks again: Hold's goal 16 and the job
+/// (<see cref="AttackJob"/>) take it; they have no leash, and after a job's fight go back to following or stand idle.</item>
 /// <item><b>Chase give-up and stand down</b> (<c>SlowWorld</c>, serial, every tick): an NPC running after its target
 /// (<see cref="CharacterCold.CombatRunning"/>) senses that target on its look cadence (<c>Act</c>) and gives it up by the original's <c>ChaseMode</c>
 /// rule (<see cref="GiveUpGateSeconds"/>, <see cref="GiveUpSenseSeconds"/>, <see cref="GiveUpReach"/>). When its fight is over (target down, or
@@ -1084,8 +1084,9 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     {
         var b = s.Block;
         b.ThreatList.Clear();
+        if (b.PushedTick + 1 < s.World.Tick) b.Pushed.Clear();
         b.Enemies = b.CagedEnemies = b.Neutrals = b.Allies = b.AlliesDown = 0;
-        b.ThreatToMe = b.ThreatToAllies = 0;
+        b.ThreatToMe = b.ThreatToAllies = b.Aggression = 0;
         b.Faded = false;
         var table = s.Table;
         var prev = table.Previous;
@@ -1108,6 +1109,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         }
 
         list.RemoveRange(w, list.Count - w);
+        if (b.Witnessed.Count > 0) Rewitness(b, s.World);
         VisitKin(ref s);
         VisitFighters(ref s);
         s.Gathered = 0;
@@ -1128,7 +1130,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         var b = s.Block;
         b.ThreatList.Clear();
         b.Enemies = b.CagedEnemies = b.Neutrals = b.Allies = b.AlliesDown = 0;
-        b.ThreatToMe = b.ThreatToAllies = 0;
+        b.ThreatToMe = b.ThreatToAllies = b.Aggression = 0;
         b.Faded = true;
         var table = s.Table;
         var prev = table.Previous;
@@ -1153,7 +1155,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// (<c>AI::underMeleeAttack</c>, a massive alarm): a new entry is made as seen (tags, threats and counts as at a look), an existing one is marked
     /// seen. An existing entry's threat is also taken at once when the target's fight targets the looker (<b>engine</b>: the original's AI update
     /// runs its sense pass right before the chooser, <c>FUN_1405112b0</c>, so the replan an attack asks for reads a current threats list; Meitou's
-    /// look runs once in <see cref="AggroSettings.ScanEveryTicks"/>). Serial phases only.
+    /// look runs once in <see cref="AggroSettings.ScanEveryTicks"/>). A new entry's perception update runs the witness function
+    /// (<see cref="Crime.CrimeSystem.Sensed"/>). Serial phases only.
     /// </summary>
     public void Force(World world, int looker, int target)
     {
@@ -1195,6 +1198,72 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         Refresh(ref scan, ref entry, target, tc, true, false);
         Count(ref scan, entry, tc);
         Insert(b, b.LowerBound(target), entry, world.Tick);
+
+        // The new entry's perception update runs the witness function (FUN_140858f40 → FUN_1408580d0 → FUN_140854d10).
+        world.SystemOf<Crime.CrimeSystem>()?.Sensed(world, looker, target);
+    }
+
+    /// <summary>
+    /// <c>FUN_1405cb0a0</c>'s threat (<b>Verified</b>: it appends the target to the AI's <c>+0x78</c> list, SensoryData <c>+0x50</c>, the threats
+    /// list, and forces the sense): <paramref name="target"/> is sensed by <paramref name="looker"/> (<see cref="Force"/>) and pushed
+    /// (<see cref="SenseBlock.Pushed"/>): the original's next logic tick takes its immediate-threat flag from the list (<c>FUN_1404378f0</c>) and
+    /// its AI update's sense pass then clears it before the chooser, so the push raises that flag at the looker's next think and no chooser finds
+    /// the target on the list. Adds nothing to <see cref="SenseBlock.ThreatToMe"/> (the push adds no aggression). Serial phases only.
+    /// </summary>
+    internal void Threaten(World world, int looker, int target)
+    {
+        Force(world, looker, target);
+        if ((uint)looker >= (uint)_slots.Length || _slots[looker].Senses is not { } b) return;
+
+        if (b.PushedTick + 1 < world.Tick) b.Pushed.Clear();
+        b.PushedTick = world.Tick;
+
+        var id = world.Characters.IdOf(target);
+        if (!b.Pushed.Contains(id)) b.Pushed.Add(id);
+    }
+
+    /// <summary>
+    /// The crime victim <paramref name="looker"/> witnesses <paramref name="target"/>'s crime (<c>FUN_140854d10</c>'s <c>FUN_1405cb0a0</c> call,
+    /// <b>Verified</b>): pushed as <see cref="Threaten"/> does, and since the original's push comes from the victim's own perception update after its
+    /// sense pass cleared the list, every look until <paramref name="until"/> that senses the target puts it back on the threats list its chooser
+    /// reads (<see cref="SenseBlock.Witnessed"/>); a look that does not sense it leaves it off. Adds nothing to <see cref="SenseBlock.ThreatToMe"/>.
+    /// Serial phases only.
+    /// </summary>
+    internal void Witness(World world, int looker, int target, long until)
+    {
+        Threaten(world, looker, target);
+        if ((uint)looker >= (uint)_slots.Length || _slots[looker].Senses is not { } b) return;
+
+        var id = world.Characters.IdOf(target);
+        int k = b.Witnessed.FindIndex(w => w.Id == id);
+
+        if (k >= 0) b.Witnessed[k] = (id, until);
+        else
+            b.Witnessed.Add((id, until));
+    }
+
+    /// <summary>
+    /// The witnessed culprits still held (<see cref="SenseBlock.Witnessed"/>) that this look senses and whose crime is still pending go back on the
+    /// threats list after the look refilled it; a lapsed or dead one, or one whose crime ended, is dropped.
+    /// </summary>
+    static void Rewitness(SenseBlock b, World world)
+    {
+        var prev = world.Characters.Previous;
+        int kept = 0;
+        for (int k = 0; k < b.Witnessed.Count; k++)
+        {
+            var (id, until) = b.Witnessed[k];
+            bool stands = until >= world.Tick && (uint)id.Slot < (uint)prev.Length && prev[id.Slot].Alive && prev[id.Slot].Generation == id.Generation;
+            if (!stands || world.Characters.Cold(id.Slot) is not { Pending: not null }) continue;
+
+            // The witness function runs only for an entry this pass senses (FUN_1408593d0 calls FUN_1408580d0 when seen or heard).
+            if (!b.TryGet(id, out var entry) || !entry.Now) continue;
+
+            b.Witnessed[kept++] = (id, until);
+            if (!b.ThreatList.Contains(id)) b.ThreatList.Add(id);
+        }
+
+        b.Witnessed.RemoveRange(kept, b.Witnessed.Count - kept);
     }
 
     /// <summary>
@@ -1444,7 +1513,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// An entry sensed now (<c>FUN_1408580d0</c>): its place and time, seen and heard, its tags (<see cref="TagOf"/>); the threats
     /// (<c>addToThreatsAndFlockingList</c> <c>FUN_140854370</c>: a standing character of another faction whose fight targets the looker joins the
     /// threats list and adds 1 to <see cref="SenseBlock.ThreatToMe"/>, one fighting another of the looker's faction adds 1 to
-    /// <see cref="SenseBlock.ThreatToAllies"/>; the original adds its aggression, Meitou has none); an ally counts as standing or not; and the
+    /// <see cref="SenseBlock.ThreatToAllies"/>; the original adds its aggression, Meitou has none; and its goal's aggression to
+    /// <see cref="SenseBlock.Aggression"/>); an ally counts as standing or not; and the
     /// sensing hooks of the looker's squad package (war assault TEMP_ENEMY, hired ally TEMP_ALLY) tag it in the squad's memory.
     /// </summary>
     static void Refresh(ref Scan s, ref SenseEntry e, int slot, CharacterCold c, bool seen, bool heard)
@@ -1470,16 +1540,20 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     }
 
     /// <summary>
-    /// The threats of a sensed entry (<c>addToThreatsAndFlockingList</c> <c>FUN_140854370</c>): a standing character of another faction whose
-    /// fight targets the looker joins the threats list and adds 1 to <see cref="SenseBlock.ThreatToMe"/>; one fighting another of the looker's
-    /// faction adds 1 to <see cref="SenseBlock.ThreatToAllies"/>.
+    /// The threats of a sensed entry (<c>addToThreatsAndFlockingList</c> <c>FUN_140854370</c>): a character of another faction not ragdolled or
+    /// carried (<c>FUN_1407d1440</c>) adds the intended aggression of its goal (status <c>+0xac</c>) to <see cref="SenseBlock.Aggression"/>
+    /// (<b>Verified</b>); a standing one whose fight targets the looker joins the threats list and adds 1 to <see cref="SenseBlock.ThreatToMe"/>; one
+    /// fighting another of the looker's faction adds 1 to <see cref="SenseBlock.ThreatToAllies"/>.
     /// </summary>
     static void Threats(ref Scan s, int slot, CharacterCold c)
     {
         var prev = s.Table.Previous;
         ref readonly var other = ref prev[slot];
         var b = s.Block;
-        if (c.Faction == s.Faction || !c.InCombat || c.Medical is not { Incapacitated: false } || s.Fights is not { } combat) return;
+        if (c.Faction == s.Faction || Ragdolls.RagdollSystem.IsRagdoll(c)) return;
+
+        b.Aggression += TaskAggression.OfGoal(c);
+        if (!c.InCombat || c.Medical is not { Incapacitated: false } || s.Fights is not { } combat) return;
 
         var (ft, fg) = combat.TargetOf(slot, other.Generation);
 
@@ -2318,30 +2392,22 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     #region The player's attack on sight
 
     /// <summary>
-    /// This tick's targets of the player characters whose look (or a squad mate's) found an enemy, for row 16 Attacking enemies: Hold's goal
-    /// (<see cref="HoldAttack"/>) and the job (<see cref="AttackJob"/>).
+    /// Registers the job 16 with the decision step (Hold's goal 16 is the chooser's own list entry, <see cref="Ai.AiSystem.HoldGoalOf"/>).
     /// </summary>
-    readonly SightOffers _offers = new();
+    void IDecisionOwner.RegisterSources(DecisionSystem decisions) => decisions.RegisterJob(Data.Gameplay.Ai.TaskType.AttackEnemies, new AttackJob(this));
 
     /// <summary>
-    /// Registers Hold's goal and the job 16 with the decision step.
-    /// </summary>
-    public void RegisterSources(DecisionSystem decisions)
-    {
-        decisions.Register(new HoldAttack(this));
-        decisions.RegisterJob(Data.Gameplay.Ai.TaskType.AttackEnemies, new AttackJob(this));
-    }
-
-    /// <summary>
-    /// The job 16 Attacking enemies (Shift with an attack; it runs with the jobs switch off, docs/game/ai-tasks.md "Perma-jobs") as the decision
-    /// step's contributor (step 5): its finder is the original's attack on sight (<c>FUN_14059f3a0</c>, "Combat goals"), which this system's look
-    /// stands in for: the enemy the look (or a squad mate's) offered this tick is attacked (row 16, the job's provenance), with the row's desire (0
-    /// while Passive, sneaking outside a fight or not standing, <see cref="WantsToAttack"/>). The fight's end asks a decision.
+    /// The job 16 Attacking enemies of a character's list (Shift with an attack; it runs with the jobs switch off, docs/game/ai-tasks.md
+    /// "Perma-jobs") as the decision step's contributor: its finder is goal 16's, <c>FUN_14059f3a0</c> (<see cref="FindFoe"/> with
+    /// <see cref="FoeFinder.Enemies"/>: the character's last look and its squad's shared sightings, a holder's post test), asked at the look and again
+    /// right before the start; the row's desire is 0 while Passive, sneaking outside a fight or not standing (<see cref="WantsToAttack"/>). The enemy
+    /// is attacked on row 16 as the job. The fight's end asks a decision.
     /// </summary>
     sealed class AttackJob(AggroSystem owner) : IJobSource
     {
         /// <summary>
-        /// Runs while its fight is the job's; else may run with the row's desire and an enemy offered.
+        /// Runs while its fight is the job's; else may run with the row's desire, free of another fight, a flight, a cage and a turret, and an enemy
+        /// the finder takes.
         /// </summary>
         public DecisionCheck CanRun(World world, int slot, int k)
         {
@@ -2355,20 +2421,20 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             }
 
             if (!WantsToAttack(cold)) return DecisionCheck.No("desire 0 (Passive, sneaking or not standing)");
+            if (cold is not { InCombat: false, Fleeing: false, IsImprisoned: false, Gunning: null }) return DecisionCheck.No("busy");
 
-            return owner._offers.Offered(world, slot) >= 0 ? DecisionCheck.Run : DecisionCheck.No("no enemy sighted");
+            return owner.FindFoe(world, slot, FoeFinder.Enemies).IsNone ? DecisionCheck.No("no enemy sighted") : DecisionCheck.Run;
         }
 
         /// <summary>
-        /// Attacks the enemy offered this tick, as the job, with the fighter's alert voice.
+        /// Attacks the enemy the finder takes now, as the job, with the fighter's alert voice.
         /// </summary>
         public void Start(World world, int slot, int k)
         {
             var table = world.Characters;
-            int t = owner._offers.Offered(world, slot);
-            if (t < 0) return;
+            var targetId = owner.FindFoe(world, slot, FoeFinder.Enemies);
+            if (!table.TryResolveNext(targetId, out int t)) return;
 
-            var targetId = table.IdOf(t);
             world.Defer(new AttackOrder([table.IdOf(slot)], targetId)
             {
                 Tick = world.Tick + 1, Source = TaskSource.Job, Job = k, Cause = "an attack job of its list",
@@ -2379,70 +2445,33 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     }
 
     /// <summary>
-    /// Goal 16 Attacking enemies as Hold adds it to a player character (priority 3; its weight is <b>Unknown</b>, 1 here; desire 1, 0 as
-    /// <see cref="HoldsGround"/> says): the enemy this tick's look found (<see cref="Apply"/>) is attacked. It runs while an attack on sight (row 16)
-    /// of a goal is its fight.
+    /// A loaded 16 entry's score in the second list (<c>FUN_14060fd80</c>, <b>Verified</b>): row 16's desire (<see cref="WantsToAttack"/>: 1, else
+    /// 0) times its finder's value (<c>FUN_14059f3a0</c>: 1 with an enemy taken, else 0; <see cref="AttackEntryPick"/>).
     /// </summary>
-    sealed class HoldAttack(AggroSystem owner) : IDecisionSource
+    internal float AttackEntryScore(World world, int slot) =>
+        WantsToAttack(world.Characters.Cold(slot)!) && !AttackEntryPick(world, slot).IsNone ? 1 : 0;
+
+    /// <summary>
+    /// Whether a loaded 16 entry can start, as the job 16 can (<see cref="AttackJob"/>): free of another fight, a flight, a cage and a turret, with
+    /// an enemy the finder takes (row 16's plan fights the finder's pick, not the saved hand).
+    /// </summary>
+    internal OrderCheck AttackEntryCheck(World world, int slot)
     {
-        /// <summary>
-        /// The source's name in the decision log.
-        /// </summary>
-        public string Name => "16 Attack on sight (Hold)";
-        /// <summary>
-        /// A goal (priority 3).
-        /// </summary>
-        public DecisionStep Step => DecisionStep.Goals;
-        /// <summary>
-        /// After the goals <c>setupAI</c> lists: Hold adds it when it is turned on.
-        /// </summary>
-        public int Key => 1000;
+        var cold = world.Characters.Cold(slot)!;
+        if (cold is not { InCombat: false, Fleeing: false, IsImprisoned: false, Gunning: null }) return OrderCheck.Blocked();
 
-        /// <summary>
-        /// Runs while its fight is the goal's; else may run on Hold with the desire and an enemy offered.
-        /// </summary>
-        public DecisionCheck CanRun(World world, int slot)
-        {
-            var table = world.Characters;
-            var cold = table.Cold(slot)!;
-            var task = (CharacterTask)table.Next[slot].Task;
-
-            if (task == CharacterTask.Attack && cold.Running is { Row: Data.Gameplay.Ai.TaskType.AttackEnemies, Source: TaskSource.Goal } run
-                && run.Runs(task))
-            {
-                return DecisionCheck.Runs;
-            }
-
-            if (!Orders.Holding(cold)) return DecisionCheck.No("not on Hold");
-            if (!HoldsGround(cold)) return DecisionCheck.No("desire 0 (Passive, sneaking or not standing)");
-
-            return owner._offers.Offered(world, slot) >= 0 ? DecisionCheck.Run : DecisionCheck.No("no enemy sighted");
-        }
-
-        /// <summary>
-        /// Attacks the enemy offered this tick, with the fighter's alert voice.
-        /// </summary>
-        public void Start(World world, int slot)
-        {
-            var table = world.Characters;
-            int t = owner._offers.Offered(world, slot);
-            if (t < 0) return;
-
-            var targetId = table.IdOf(t);
-            world.Defer(new AttackOrder([table.IdOf(slot)], targetId)
-            {
-                Tick = world.Tick + 1, Cause = "holding its ground: an enemy came in range",
-            });
-            owner.Started++;
-            world.Sounds?.Enqueue(new SoundEvent(SoundKind.Alert, table.IdOf(slot), targetId, table.Next[t].Position));   // its alert voice
-        }
+        return AttackEntryPick(world, slot).IsNone ? OrderCheck.Blocked() : OrderCheck.Run;
     }
 
     /// <summary>
-    /// Whether one of the player's characters has Hold's attack on sight: Hold adds goal 16 (standing order 12), whose desire
-    /// (<c>AI::scoreAttackEnemies</c>) is 0 while sneaking outside a fight, Passive or not standing. It is a priority-3 goal: the decision step
-    /// weighs it after the character's orders and before its jobs (<see cref="HoldAttack"/>, docs/game/ai-tasks.md "Precedence"). Its targets pass
-    /// the Hold post test (<see cref="Orders.HoldPost"/>).
+    /// Row 16's finder for a loaded entry: goal 16's (<see cref="FindFoe"/> with <see cref="FoeFinder.Enemies"/>).
+    /// </summary>
+    internal CharacterId AttackEntryPick(World world, int slot) => FindFoe(world, slot, FoeFinder.Enemies);
+
+    /// <summary>
+    /// Whether one of the player's characters has Hold's attack on sight: Hold adds goal 16 (standing order 12, <see cref="Ai.AiSystem.HoldGoalOf"/>),
+    /// whose desire (<c>AI::scoreAttackEnemies</c>) is 0 while sneaking outside a fight, Passive or not standing. Its targets pass the Hold post test
+    /// (<see cref="Orders.HoldPost"/>).
     /// </summary>
     static bool HoldsGround(CharacterCold? cold) => cold is not null && Orders.Holding(cold) && WantsToAttack(cold);
 
@@ -2455,8 +2484,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
 
     /// <summary>
     /// Whether one of the player's characters looks for enemies like an NPC: it has the job 16 "Attacking enemies" and the row's desire
-    /// (<see cref="WantsToAttack"/>). Whether its sighting is attacked is the decision step's (<see cref="AttackJob"/>: its orders, goals and higher
-    /// jobs first).
+    /// (<see cref="WantsToAttack"/>). Whether its sighting is attacked is the chooser's (<see cref="AttackJob"/>: its orders, goals and higher jobs
+    /// first).
     /// </summary>
     static bool HuntsEnemies(CharacterCold cold) =>
         WantsToAttack(cold) && Production.PermaJobs.IndexOf(cold, Data.Gameplay.Ai.TaskType.AttackEnemies) >= 0;
@@ -2515,16 +2544,6 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// How long a watcher stays on a sneaker's list after its last look (<c>FUN_1408586d0</c>: entries older than 4 s are dropped, Verified literal).
     /// </summary>
     public const float WatcherSeconds = 4;
-
-    /// <summary>
-    /// The player characters given a fight by this tick's sightings (<see cref="Free"/>).
-    /// </summary>
-    readonly HashSet<int> _taken = [];
-
-    /// <summary>
-    /// The tick <see cref="_taken"/> was last cleared on (-1: never).
-    /// </summary>
-    long _takenTick = -1;
 
     /// <summary>
     /// The fights started since the last <see cref="TakeLog"/> (<see cref="AggroSettings.RecordLog"/>).
@@ -2630,40 +2649,22 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     }
 
     /// <summary>
-    /// A <see cref="SightEffect"/>: an NPC with a mind, and its squad mates, are asked to think; a free player character and its free mates that
-    /// would take the target are offered it for the decision step.
+    /// A <see cref="SightEffect"/>: a character with a mind, NPC or player-faction, and its squad mates are asked to think (a replan trigger, engine
+    /// stand-in for the original's chooser on every AI update); nothing for one without a mind.
     /// </summary>
     void TakeSighting(World world, in Effect e)
     {
-        if (_takenTick != world.Tick)
-        {
-            _taken.Clear();
-            _takenTick = world.Tick;
-        }
-
         var table = world.Characters;
-        var next = table.Next;
         int i = e.Source, t = e.Target;
-        if (!next[t].Alive || table.Cold(t) is not { Medical.Incapacitated: false } target) return;
+        if (!table.Next[t].Alive || table.Cold(t) is not { Medical.Incapacitated: false }) return;
 
-        // An NPC the AI runs decides by its own goals in the chooser (docs/game/ai-tasks.md "Combat goals"): the sighting only asks it, and the squad
-        // mates that share it, to think at the next tick (AiMind.Replan), where its attack goals' finders (FindFoe) and the rest of its goals are
-        // weighed.
-        if (table.Cold(i)?.Ai is { } minded)
-        {
-            minded.Replan = true;
-            JoinMates(world, table, i, t, target, null);
-            return;
-        }
+        // The chooser decides by its goals and jobs (docs/game/ai-tasks.md "Combat goals"): the sighting only asks it, and the squad mates that share
+        // it, to think at the next tick (AiMind.Replan), where the attack goals' finders (FindFoe; a player character's Hold goal 16 and job 16) and
+        // the rest of its goals are weighed.
+        if (table.Cold(i)?.Ai is not { } minded) return;
 
-        // A player character takes this fight through row 16 only, Hold's goal (priority 3) or its job: it and its free mates whose own look would
-        // take the target are offered it, and the decision step weighs it against their orders, goals and jobs.
-        if (table.Cold(i) is not { IsPlayer: true } || !Free(table, i, _taken)) return;
-
-        var fighters = new List<CharacterId> { table.IdOf(i) };
-        _taken.Add(i);
-        JoinMates(world, table, i, t, target, fighters);
-        _offers.Offer(world, fighters, table.IdOf(t));
+        minded.Replan = true;
+        AskMates(world, table, i, t);
     }
 
     /// <summary>
@@ -2716,12 +2717,10 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// <summary>
     /// The looker's squad mates share its sighting, not its attack: the original shares a squad's sightings (<c>GroupSense</c>: a member counts a
     /// character a mate saw or heard as seen within 2 R, with no view cone or light test, <c>FUN_140857b10</c>, Observed), and each member attacks
-    /// only by its own goals. A mate within twice its own range R of the target that has a mind is asked to think at the next tick (its attack goals
-    /// read the mates' sightings, <see cref="FindFoe"/>); a player character that is free is offered the target with the looker
-    /// (<paramref name="fighters"/>) when its own attack on sight takes it (<see cref="Takes"/>), in the squad's member order. Null
-    /// <paramref name="fighters"/>: only the asking.
+    /// only by its own goals. A mate within twice its own range R of the target that has a mind and is not fighting is asked to think at the next
+    /// tick (its attack goals read the mates' sightings, <see cref="FindFoe"/>).
     /// </summary>
-    void JoinMates(World world, CharacterTable table, int slot, int target, CharacterCold targetCold, List<CharacterId>? fighters)
+    void AskMates(World world, CharacterTable table, int slot, int target)
     {
         var squad = table.Cold(slot)!.SquadId >= 0 ? world.Squads.Find(table.Cold(slot)!.SquadId) : null;
         if (squad is null) return;
@@ -2736,18 +2735,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             float r = 2 * RangeOf(cold, Settings.SightRange);
             if (Vector3.DistanceSquared(table.Next[s].Position, at) > r * r) continue;
 
-            if (cold.Ai is { } mate)
-            {
-                if (!cold.InCombat) mate.Replan = true;
-
-                continue;
-            }
-
-            if (fighters is null || !cold.IsPlayer || !Free(table, s, _taken) || !Takes(world, s, cold, target, targetCold))
-                continue;
-
-            fighters.Add(m);
-            _taken.Add(s);
+            if (cold.Ai is { } mate && !cold.InCombat) mate.Replan = true;
         }
     }
 
@@ -2784,23 +2772,6 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         var scan = NewScan(world, slot, cold, war, MathF.Max(0, RangeOf(cold, Settings.SightRange)), null, keepSenses: false);
         Candidate(ref scan, target, targetCold);
         return scan.Best == target;
-    }
-
-    /// <summary>
-    /// Whether the character may take a sighting's fight: not taken this tick, not busy, able, not held by a turret or a gun.
-    /// </summary>
-    static bool Free(CharacterTable table, int slot, HashSet<int> taken)
-    {
-        if (taken.Contains(slot) || !table.Next[slot].Alive) return false;
-
-        byte task = table.Next[slot].Task;
-        if (Busy(table.Cold(slot), task)) return false;
-
-        return table.Cold(slot) is { InCombat: false, Fleeing: false, IsImprisoned: false, Fighter.CanAttack: true, Medical.Incapacitated: false,
-            Gunning: null, Ai: null or { Behaviour: not AiBehaviour.Turret } } cold
-            // a carrier fights like anyone (docs/game/carry-loot.md "A carrier in a fight"); a turret guard keeps to its turret (task 146: only a
-            // melee attacker takes it off)
-            && (!cold.IsPlayer || HuntsEnemies(cold) || HoldsGround(cold));
     }
 
     /// <summary>

@@ -8,7 +8,7 @@ public static class CodeModApi
     /// <summary>
     /// The newest code-mod API this build implements; a manifest asking for a later one is refused.
     /// </summary>
-    public const int Newest = 2;
+    public const int Newest = 3;
     /// <summary>
     /// The oldest code-mod API this build still loads.
     /// </summary>

@@ -126,6 +126,7 @@ sealed class DeathObservers
             catch (Exception e)
             {
                 fault = $"{e.GetType().Name}: {e.Message}";
+                SimulationExtensions.TellOutdated(entry.Observer, e);
             }
 
             if (fault is null || !observers[i].Enabled) continue;

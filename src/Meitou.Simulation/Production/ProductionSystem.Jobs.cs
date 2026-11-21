@@ -23,8 +23,8 @@ namespace Meitou.Simulation.Production;
 public sealed partial class ProductionSystem
 {
     /// <summary>
-    /// How often (ticks) the decision step asks again for a player character idle or on a job's task, staggered by slot
-    /// (<see cref="DecisionSystem.ReAsked"/>; engine choice: the original re-plans when its task ends or its commitment runs out).
+    /// A job's look-again period (ticks) that callers wait out; the chooser itself runs on the think's turn (<see cref="DecisionSystem.Look"/>,
+    /// <c>AiSettings.ThinkEveryTicks</c>) or when asked.
     /// </summary>
     public const int JobCheckTicks = 10;
 
@@ -37,7 +37,7 @@ public sealed partial class ProductionSystem
         var table = world.Characters;
         foreach (var id in Who(world, add.Characters))
         {
-            if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { IsPlayer: true } cold)
+            if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { } cold)
                 PermaJobs.Give(cold, add.Type, new PermaJob(add.Type, add.Site));
         }
     }
@@ -59,7 +59,7 @@ public sealed partial class ProductionSystem
         bool onCharacter = ordered is TaskType.Bodyguard or TaskType.StayCloseToTarget;
         foreach (var id in Who(world, add.Characters))
         {
-            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { IsPlayer: true } cold) continue;
+            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { } cold) continue;
             if (!onCharacter) PermaJobs.Give(cold, ordered, PermaJob.Untargeted(ordered));
             else if (id != add.Target && table.IsAlive(add.Target))
             {
@@ -125,7 +125,7 @@ public sealed partial class ProductionSystem
     /// jobs 138, 137, 223, 273 (<see cref="ErrandJobs"/>). A job runs while <see cref="Runnable"/> holds; one that no longer does and that nothing
     /// replaces ends (<see cref="End"/>).
     /// </summary>
-    public void RegisterSources(DecisionSystem decisions)
+    void IDecisionOwner.RegisterSources(DecisionSystem decisions)
     {
         var jobs = new ListJobs(this);
         foreach (var type in (ReadOnlySpan<TaskType>)[TaskType.OperateMachinery, TaskType.OperateAutomaticMachinery, TaskType.OperateStorage,
@@ -177,11 +177,29 @@ public sealed partial class ProductionSystem
                 return DecisionCheck.No("a melee threat within 40 (146 needs !158)");
 
             if (!owner.Runnable(world, slot, cold, k)) return DecisionCheck.No("blocked");
+            if (PermaJobs.Follows(type) && Defends(world, slot, cold, k) is { } foe)
+                return foe.IsNone ? DecisionCheck.No("its plan's 13 has no attacker it can fight") : DecisionCheck.Run;
+
             return runs ? DecisionCheck.Runs : DecisionCheck.Run;
         }
 
         /// <summary>
-        /// Starts list job <paramref name="k"/> for the character (a follow job whose fight is over follows again).
+        /// A follow job whose row's plan starts with 13 (<see cref="FollowDefence"/>: its character threatened within 40, for 45 also itself): the
+        /// attacker it fights, <see cref="CharacterId.None"/> when the plan fails; null when the row plans no fight.
+        /// </summary>
+        static CharacterId? Defends(World world, int slot, CharacterCold cold, int k)
+        {
+            if (FollowedBy(world, slot, cold, k) is not { } charge) return null;
+
+            var type = cold.Jobs[k].Type;
+            if (!FollowDefence.Wanted(world, slot, type, charge)) return null;
+
+            return FollowDefence.Foe(world, slot, type, charge);
+        }
+
+        /// <summary>
+        /// Starts list job <paramref name="k"/> for the character: a follow job whose fight is over follows again, one whose plan starts with 13
+        /// follows (unless it does already) and fights the attacker from the next tick (<see cref="FollowDefence.Start"/>).
         /// </summary>
         public void Start(World world, int slot, int k)
         {
@@ -191,7 +209,16 @@ public sealed partial class ProductionSystem
                 && MovementSystem.FollowAgain(world, slot, cold))
                 return;
 
-            owner.StartJob(world, slot, k);
+            var type = cold.Jobs[k].Type;
+            if (!PermaJobs.Follows(type) || Defends(world, slot, cold, k) is not { IsNone: false } foe)
+            {
+                owner.StartJob(world, slot, k);
+                return;
+            }
+
+            bool follows = cold.Running is { Source: TaskSource.Job, Task: CharacterTask.Follow } on && on.Job == k;
+            if (!follows) owner.StartJob(world, slot, k);
+            FollowDefence.Start(world, slot, foe, type, TaskSource.Job, k);
         }
 
         /// <summary>
@@ -315,7 +342,7 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// The implicit job of a character whose list has none to run (docs/game/ai-tasks.md "Perma-jobs": the original's lowest keys, in this order),
-    /// with the jobs switch on, not sneaking and not a slave; Sleep and Sit not while it holds position. <see cref="SquadAi.Ditch"/>: carried items a
+    /// with the jobs switch on and not sneaking (the tail has no slave test); Sleep and Sit not while it holds position, carries someone or is selected. <see cref="SquadAi.Ditch"/>: carried items a
     /// storage takes go there (242; only with no queued orders). <see cref="SquadAi.Sleep"/>: an injured character lies in the bed the bed search
     /// finds (153, whose target finder it is, <b>Verified</b>; <see cref="Locks.FixtureRegistry.FindBed"/>) until healed (then 257 gets it up).
     /// <see cref="SquadAi.Sit"/>: a free chair (275). The one it is on is kept while it holds (a bed within
@@ -328,9 +355,7 @@ public sealed partial class ProductionSystem
         var options = world.Player.SquadAi;
 
         // None while sneaking (FUN_1405c9750; a fighting character is not Able anyway).
-        if ((cold.Orders & CharacterOrders.Jobs) == 0 || (cold.Orders & CharacterOrders.Sneak) != 0 || cold.SlaveState != 0
-            || options == SquadAi.None)
-            return null;
+        if ((cold.Orders & CharacterOrders.Jobs) == 0 || (cold.Orders & CharacterOrders.Sneak) != 0 || options == SquadAi.None) return null;
 
         var at = table.Next[slot].Position;
         var on = PermaJobs.ListJob(cold, (CharacterTask)table.Next[slot].Task) is { Implicit: true } running ? running.Row : TaskType.None;
@@ -349,9 +374,10 @@ public sealed partial class ProductionSystem
                 return (TaskType.DitchAllResources, store);
         }
 
-        // Sleep and Sit not while holding position (FUN_1402b2b90) or carrying someone (+0x348; FUN_14050e5b0).
-        if (Orders.Holding(cold) || !cold.Carrying.IsNone) return null;
-        if ((options & SquadAi.Sleep) != 0 && WantsBed(world, slot, cold) && Beds is not null)
+        // Sleep and Sit not while holding position (FUN_1402b2b90), carrying someone (+0x348) or selected by the player (FUN_1407f4d20, the
+        // interface's selection set; FUN_14050e5b0, Verified).
+        if (Orders.Holding(cold) || !cold.Carrying.IsNone || world.Player.Selection.Contains(table.IdOf(slot))) return null;
+        if ((options & SquadAi.Sleep) != 0 && WantsBed(world, _towns, slot, cold) && Beds is not null)
         {
             if (on == TaskType.GoHomeAndGoToBed && cold.OperateSite is { } bed && world.Fixtures.Find(bed) is { } kept
                 && Gap(kept.Position, at) <= Locks.FixtureRegistry.BedSearchRange)
@@ -420,10 +446,10 @@ public sealed partial class ProductionSystem
     /// <summary>
     /// The player branch of row 98 Sleeping's desire (<c>FUN_1405a0880</c>, <b>Verified</b>; 153 plans into 98, and a node whose desire is 0 is
     /// dropped): it stands in a player place (<see cref="InPlayerPlace"/>), its organic first aid need is 0 (everything bandaged) and it is
-    /// <see cref="Unrested"/>.
+    /// <see cref="Unrested"/>. <paramref name="towns"/>: the world's town data (null: none built).
     /// </summary>
-    bool WantsBed(World world, int slot, CharacterCold cold) =>
-        Unrested(cold) && FirstAid.FirstAidSystem.OrganicAidNeed(world, cold) <= 0 && InPlayerPlace(world, slot, cold);
+    internal static bool WantsBed(World world, Population.PopulationData? towns, int slot, CharacterCold cold) =>
+        Unrested(cold) && FirstAid.FirstAidSystem.OrganicAidNeed(world, cold) <= 0 && InPlayerPlace(world, towns, slot, cold);
 
     /// <summary>
     /// The player branch's place test (<c>FUN_1405a0880</c>, <b>Verified</b> decompile): the character's status town (status <c>+0x88</c>) is set,
@@ -431,9 +457,9 @@ public sealed partial class ProductionSystem
     /// So a character out in the wild, or outdoors in another faction's town, is not sent to bed. A world built without town data has no towns to
     /// test, so there it is not asked.
     /// </summary>
-    bool InPlayerPlace(World world, int slot, CharacterCold cold)
+    static bool InPlayerPlace(World world, Population.PopulationData? data, int slot, CharacterCold cold)
     {
-        if (_towns is not { } towns) return true;
+        if (data is not { } towns) return true;
 
         int player = world.Player.Faction;
         var town = Ai.AiSystem.StatusTownAt(towns, world, world.Characters.Next[slot].Position, cold.StatusTown);
@@ -461,13 +487,13 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// The original's 257 "Getting out of bed once healed", above 153 in the implicit list (docs/game/ai-tasks.md "Perma-jobs"): a player character
-    /// asleep in a bed with no order, under the <see cref="SquadAi.Sleep"/> option and the jobs switch, not sneaking, not a slave, not holding
-    /// position, and rested. Engine reading: it applies to any such sleeper, not only one the 153 job put there.
+    /// of the player's faction asleep in a bed with no order, under the <see cref="SquadAi.Sleep"/> option and the jobs switch, not sneaking, not
+    /// holding position, and rested (the tail has no slave test). Engine reading: it applies to any such sleeper, not only one the 153 job put there.
     /// </summary>
     bool GetsUpHealed(World world, int slot, CharacterCold cold) =>
-        cold.IsPlayer && cold.InSomething == Locks.HeldState.Bed && world.Characters.Next[slot].Task == (byte)CharacterTask.Sleep
+        DecisionSystem.Decides(cold) && cold.InSomething == Locks.HeldState.Bed && world.Characters.Next[slot].Task == (byte)CharacterTask.Sleep
         && (world.Player.SquadAi & SquadAi.Sleep) != 0 && (cold.Orders & CharacterOrders.Jobs) != 0 && (cold.Orders & CharacterOrders.Sneak) == 0
-        && cold.SlaveState == 0 && !Orders.Holding(cold) && !PlayerOrders.Holds(world, slot) && !Unrested(cold);
+        && !Orders.Holding(cold) && !PlayerOrders.Holds(world, slot) && !Unrested(cold);
 
     /// <summary>
     /// Whether the character is on the implicit 153 job (walking to its bed or lying in it) and committed to it: its commitment
@@ -667,7 +693,7 @@ public sealed partial class ProductionSystem
         if (m.Farm is { } f)
         {
             if (f.Death >= m.Data.Farm!.DeathThreshold) return true;
-            if (f.Growth >= 1) return f.Harvested < f.Plants.Length && Room(world, site, m);
+            if (f.Growth >= 1) return f.Harvested < f.Plants.Length && Room(world, site, m, cold);
 
             // A growing crop is no work while it holds water: the original's operate row needs a free operator place, false while the farm's
             // status is 3 (growing), so a farmer goes on to his next job (#913). Its status is 0 once an input runs empty (state 62), and he
@@ -675,11 +701,11 @@ public sealed partial class ProductionSystem
             return m.HasEmptyInputs && Supplied(world, site, m, cold);
         }
 
-        if (m.Craft is not { } craft) return Supplied(world, site, m, cold) && Room(world, site, m);
+        if (m.Craft is not { } craft) return Supplied(world, site, m, cold) && Room(world, site, m, cold);
         if (craft.Queue.Count == 0 || !Supplied(world, site, m, cold)) return false;
 
         // A bench held by its first craft's store works again once its finished items can go to a storage (#762).
-        return !CraftFull(craft) || Settings.AutoHaul && craft.Done.Any(i => StorageFor(world, site, i) is not null);
+        return !CraftFull(craft) || Settings.AutoHaul && craft.Done.Any(i => StorageFor(world, site, i, cold) is not null);
     }
 
     /// <summary>
@@ -716,15 +742,15 @@ public sealed partial class ProductionSystem
 
         if (!fetch || m.Output is not { } output || _items.Create(output.Recipe.Item, 1) is not { } one) return false;
         if (!output.Full && !Carried(inv, one.Record).Any()) return false;
-        return NearestStorage(world, site, s => s.Data.Accepts(one.Record, one.Type) && Fits(s.Storage!, one)) is not null;
+        return NearestStorage(world, site, cold, s => s.Data.Accepts(one.Record, one.Type) && Fits(s.Storage!, one)) is not null;
     }
 
     /// <summary>
-    /// The output has room, or with AutoHaul a storage takes it.
+    /// The output has room, or with AutoHaul a storage <paramref name="cold"/> uses takes it.
     /// </summary>
-    bool Room(World world, BuildSite site, Machine m) =>
+    bool Room(World world, BuildSite site, Machine m, CharacterCold cold) =>
         m.Output is { } o && (!o.Full || Settings.AutoHaul && _items.Create(o.Recipe.Item, 1) is { } one
-            && NearestStorage(world, site, s => s.Data.Accepts(one.Record, one.Type) && Fits(s.Storage!, one)) is not null);
+            && NearestStorage(world, site, cold, s => s.Data.Accepts(one.Record, one.Type) && Fits(s.Storage!, one)) is not null);
 
     /// <summary>
     /// A carried item a "Hauling to" job takes to its storage: a loose stack of something a player machine makes or crafts (not the character's own
@@ -817,7 +843,8 @@ public sealed partial class ProductionSystem
             if (FollowedBy(world, slot, cold, k) is not { } target) return;
             End(world, slot);
 
-            // The Bodyguard job guards (row 45, RetaliationSystem.Guards); the verb always gives the job. The circle was broken when the job was added.
+            // The Bodyguard job's follow runs row 45, whose fights the contributor plans (FollowDefence); the verb always gives the job. The circle was
+            // broken when the job was added.
             MovementSystem.Follow(world, new FollowOrder([table.IdOf(slot)], target) { Tick = world.Tick }, TaskSource.Job, k, job.Type);
             return;
         }

@@ -53,7 +53,9 @@ public interface IModSaveData
 public static class ModApi
 {
     /// <summary>
-    /// The newest <c>apiVersion</c> this game runs. 2 added <c>version</c>, <c>dependencies</c> and <see cref="ModContext.Dependency{T}"/>.
+    /// The newest <c>apiVersion</c> this game runs. 2 added <c>version</c>, <c>dependencies</c> and <see cref="ModContext.Dependency{T}"/>; 3 the
+    /// chooser surface (<c>IChooserOwner</c>, <c>IModGoal</c>, <c>World.GiveOrder</c>) with the old NPC hooks gone (<c>CharacterCold.Engaged</c>,
+    /// <c>AiMind.Engine</c>, <c>HoldPlatoon</c>'s in-world hold).
     /// </summary>
     public const int Version = Content.CodeModApi.Newest;
 

@@ -94,13 +94,17 @@ case 247, `FUN_14033cd10`): the planner chain is 2 Building (needs 51) <- 71 Add
 building mats" (effect 150, a target finder) <- 247 "Collecting resource". The 115 finder takes the site's materials with
 `required - delivered > 0` (`FUN_14054a450`) in list order and returns the first one's source (factor 1; 0 when none):
 1. a source remembered for that item (a per-item map in the AI, kept in the AI's per-update cache, which is emptied at the start and end of each update, so it changes no answer; Meitou keeps none);
-2. a loose item within 1200 of the character with the same record, not blacklisted and not lying in another faction's
-   building (`FUN_140997d80`, **Observed**); the first the world grid query meets;
+2. a loose item within 1200 of the character with the same record, not blacklisted and passing the ownership test `FUN_140997d80`
+   (**Verified**: an owned item must be of the character's faction, except while the character's status town is a player faction's and the
+   item lies outdoors or in a player-faction building; Meitou `ItemOwnership.MayTake`); the first the world grid query meets;
 3. a complete building of the character's town (its current town, else the nearest town within 3953, plus its home
-   town; `FUN_1408cbea0`, query mask 0x4002436 = functions 1, 2, 4, 5, 10, 13, 26 read as bits, **Observed**) whose
-   owner it may use, that is not the excluded one, holds the item and has items: storages (`StorageBuilding`, slot
-   0x3b0 null) first, then production buildings (their output); nearest within the AI's range. An item matches when
-   it is the same record, or, when neither is an ITEM (type 4), any record of the same type.
+   town; `FUN_1408cbea0`, query mask 0x4002436 = functions 1, 2, 4, 5, 10, 13, 26, one bit per function, **Verified** by the bed
+   search's 0x40 = function 6 and the cage finders' 0x100 = function 8) whose
+   owner it may use, that is not of the excluded building's record (vfunc `0x18`, the RootObject's record `+0x40`), holds the item (vfunc `0x548`:
+   a storage's distinct records, a production building's output) and has items (vfunc `0x558`): storages (vfunc `0x3b0` null: `StorageBuilding`
+   returns 0, `ProductionBuilding` itself) first, then production buildings; the nearest of each within the AI's range, the bound inclusive
+   (**Verified**, `FUN_14059d000`). An item matches when it is the same record, or, when either is an ITEM (type 4), only the same record; else
+   any record of the same type.
 The town candidates are the buildings found by a spatial query round the town (`FUN_140a00690`: within the town's radius x 1.1 of its position, filtered by the Ownerships' `canIUseThisBuilding`), not the buildings registered to the town, so a player outpost's storages count by where they stand (**Verified**; Meitou `FixtureRegistry.TownCandidates`, shared with the cage finders). The range is the AI's mode `AI+0x2bc` (**Verified**, constructor `FUN_1406236d0` sets 2): mode 2 squared distance <= 4.246733e7 (about 6517)
 from the character; mode 0 `(18 + 40 + 5)`, mode 1 `(18 + 200 + 5)` (AI+8 = 18, AI+0xc = 5), others 1000.
 Task 247 is `Task_EmptyMachine_BuildMats` (+0x78 clear) for a building target, `Task_Pickup` for an item. At the building
@@ -130,15 +134,22 @@ score and the 0.75 falloff spread them). Work distance: [below](#work-distance).
 
 ### Work distance
 
-**Observed** (decompile of kenshi_x64.exe 1.0.68, names from KenshiLib 1ce4a16): the AI's arrival condition `isAtLocation`
-(AI slot 11, `FUN_1405a2450`) at a Vector3 is 12 units X/Z and |dy| < 20, or the path has ended; at an object it is
+The AI's arrival condition `isAtLocation` (AI slot 11, `FUN_1405a2450`; names from KenshiLib 1ce4a16) at a Vector3 (handle type 0xb) is the
+movement's "walk over" (`CharMovement` slot 12 `FUN_14065edb0`: no path object, or the path in state 1 with the mover stopped), or X/Z squared distance
+below 144 (`DAT_1416ad830`) and |dy| below 20 (`DAT_141683188`) (**Verified**, decompile and `data_values.txt`). A failed path is slot 10
+(`FUN_14065e830`: path state 3, after 16 retries when retrying); the plan step's lost walk (`FUN_14050d970`) is a failed, stopped mover not at the
+location (**Verified**). At an object it is
 `AI::isWithinChoppingRange(target, isMoving)` (`FUN_14059c6d0`). For a building (type 0) that is arrived when:
 - the building `is foliage` (+0xc0, a rock) and the character is inside its bounds box scaled 1.2 (`getAABB`, slot 0x420), under a
   movement flag (+0x640 +8); or the character's movement reports touching the building's handle (+0x300 slot 1); or
 - the X/Z distance to `getPositionMarker(charPos)` (slot 0x470: the nearest valid usage node, else the construction position
   +0x26c when fewer than 2) is below `getReachRange()` (slot 0x350), **doubled when not moving**, and the character is on the
   same floor (slot 0x60) or |dy| below a limit: 130 when the door byte (+0x1a0) is set or the building has a door child (slot 0x3e0), else 45 when its containing-building handle (slot 0x1d8) is null (outside any building) or slot 0x428 is true, else 15 (**Verified**, `AI::isWithinChoppingRange` `FUN_14059c6d0`, constants 130 / 45 / 15 in `data_values.txt`; what slot 0x428 is stays **Observed**: ceiling-mounted class).
-- Meitou: one shared `FixtureRegistry.AtCage` for the cage goals (arrest, kidnap, town duty): flat distance to the cage's position below its `use range` (doubled when not moving) and |dy| below 15; the former `CageReach` / `CageSlack` slack of cages is gone (a cage's position marker, the floor number and the outdoor 45 are not modelled).
+- Meitou: one shared `FixtureRegistry.AtCage` / `AtFixture` for the cage goals (arrest, kidnap, town duty) and the town errands' containers and beds: flat distance to the fixture's position below its `use range` (doubled when not moving) and |dy| below 15; no slack (a fixture's position marker, the floor number and the outdoor 45 are not modelled). The town errands' player machines use the operators' test (`ProductionSystem.AtMachine`), their disposals the corpse job's (`ProductionSystem.AtDisposal`).
+- For a character (type 1): X/Z distance below 7 x 2 (x 3 when `FUN_1407d1440` is false), doubled when not moving, plus a value of the
+  target's (`FUN_1405c83b0`, not read), with |dy| < 10 or the same floor and |dy| < 35; else below 7 x 1.6 = 11.2 on the same floor or with
+  |dy| < 35 (**Verified** `FUN_14059c6d0`; 7 is `DAT_141e3c5d0`, a writable global, its initial value). Meitou's lift reach
+  `CarrySettings.Reach` 14 is the moving case.
 - Otherwise not; once the path has ended at the target it logs "Task impossible: X can't get to Y". There is no settle slack.
 - That notice (**Verified**, `FUN_14059c6d0`, also the failure handlers `FUN_14033da80` / `FUN_140332150`) calls `FUN_140796ed0`: the target's handle goes into the AI's ignore map (AI +0x20 -> +0x218) with the timer 20.0, and the squad blackboard is told. Readers skip the handle: the loose-item source finder `FUN_14059d000` (before the ownership test), the engineer finder `FUN_1409a6900` (first condition), the turret finder `FUN_1405b0da0`, the corpse-machine finder ([ai-tasks](ai-tasks.md)). Meitou `ConstructionSystem.NoteUnreachable` (`CharacterCold.Ignored`, not saved): a builder whose path ended short ignores that site or loose item for 20 s; a fetcher of a loose item goes back to its site and picks another source.
 
@@ -309,7 +320,7 @@ shows the first failing message in this order (**Verified** unless marked):
   and the constants agree; the Ghidra text is wrong at the division, so build nothing from it; via `TownList::reassessTownPositions` `FUN_14054d080`; called on placement commit `FUN_1404d72a0`, dismantle `FUN_1402a2860` /
   `FUN_14054fea0` and town merge `FUN_140931840`). Only for a town of the player faction. The buildings of a town are those whose root object's town handle resolves to it, else the NEAREST non-nest town by
   horizontal distance (`FUN_1400f6c20`; so a building left with a dangling handle by a load that removed an overlapping outpost belongs to the nearest town and is counted at the next refit). The building
-  function keys come from the constructors (house with an interior 19, wall gate 21, wall piece 20, others their functionality's `function`, plain 18). The centre (+0x48) is
+  function keys are the constructors' ([function key](#classes-and-functions): house with an interior 19, wall gate 21, wall piece 20, others their functionality's `function`, plain 18). The centre (+0x48) is
   `(4 x sum of the marker positions of the houses (19) and gates (21) + 1 x sum of the top-level REFINERY (4) buildings that are not foliage) / (4 nA + nB)`, X and Z (the move, slot 32 `FUN_140933b90`, sets the town's Y to the terrain height; **Observed**, round-4 parity); with no such building
   nothing changes (no centre, no radius; the town is removed only when it has no building at all). It is then put on the closest navmesh point within a 500 box (doors and water excluded) and
   **keeps its old position when none is found**. The radius (+0x51c) is the farthest building's X/Z distance from the new position + 200 over every building that is not a wall piece (gates, doors, storage, turrets
@@ -538,6 +549,15 @@ generators, `RainCollectorBuilding`; `ResearchBuilding` beside them. `BuildingFu
 27 MINE_NATURAL, 28 STEERING, 29 ENGINE, 30 LIQUID_TANK. `MiningResource` (**Verified**): 0 NONE, 1 IRON, 2 STONE,
 3 COPPER, 4 CARBON, 5 WATER, 6 GROUND. A farm is function 1 with `world resource mining` 6 and a BUILDING `farm data`
 reference (FARM_DATA); a well is function 1 with resource 5 (**Verified**, probe: `farming wheat`, `well`).
+
+**Function key and the zone map's building lists** (**Verified**, decompile): a building's key is `+0x158`, read by slot 94 (`FUN_1400f6b30`, which gives 27
+MINE_NATURAL for a factionless 1). The factory tests in order `is wall gate` (GatewayBuilding, 21), `links together` (WallBuilding, 20), `farm data`, then the
+functionality's `function`: 0 or 18 or none make a plain Building, any other a machine class keyed by that function (`FUN_1402a0900`); given a parent object
+(its ninth argument) it makes a DoorStuff instead (`FUN_14029fb40`, 22). The Building constructor (`FUN_14055ca90`) sets 18, then `FUN_140551b20` makes the interior object and sets 19 when the record has an
+`interior` reference; the derived constructors run after it and set their own key, and later calls of `FUN_140551b20` find the interior made and leave the key,
+so 19 means a plain building with an interior. `RootObjectFactory::createBuilding` (`FUN_14057cc70`) registers each new building in its zone's
+`ZoneMapContent` `+0x70`, a `map<BuildingFunction, set<Building*>>` (its allocator type names it), under that key; the finders' masks (`FUN_1400db970`) select
+keys by bit. A mine is moved to key 1 when it gains a faction (`FUN_140557950`).
 
 **Corpse machine label** (**Verified**, `Task_FeedCorpseIntoMachine` slot 3 `FUN_1403567a0`, disassembly; floats read from the exe): each time a body is fed in
 ([job 136](ai-tasks.md)) and the task's target hand is a BUILDING (type 0) that resolves, the building's functionality (`UseableStuff` +0x400, KenshiLib 1ce4a16) `string`
@@ -1191,16 +1211,20 @@ it with them. Meitou: `MachineData.Accepts` (AI) and `TakesByHand` (player).
   the nearest storage taking a carried item). "Can run" (`FUN_14060f940`) tests B first, then the effect on its target (false and the effect reported unmet when it does not hold); it only gates the accepting of a finder-less acting node. Row 93 then needs 67 (carries something the target
   takes), 2, `!169` and isAtLocation, and acts (`FUN_140344510`): a ditch into a storage is plan `[93, 114, ...]`, not blocked by 62. A workplace the plan cannot make runnable (inputs to fetch: 94 then 66 from another machine's output, 113) fails goal 189, and goal 190
   (pretend, row 221, which asks nothing of the machine) is what the NPC does.
-- **Task_EmptyMachine** (`FUN_14033cd10`, **Verified**): at the building, takes its output item types in order and moves units into the character's inventory while there is room
-  (backpack included); a production building at status 1 goes to 2 after a take; ends when nothing is left.
-- **State evaluators** (**Observed**, read from the decompile, meanings of the virtual calls inferred): 66 `FUN_140597530` the character carries the machine's output item; 67 `FUN_1405a45f0` it carries an item the machine (an input) or storage accepts;
+- **Task_EmptyMachine** (`FUN_14033cd10`, **Verified**): at the building, takes one record of what it lists (flag 0, row 92: the first the
+  town wants, up to that count, the take below; flag 1, row 284: the first listed, up to 10) a unit at a time while the character has room
+  (backpack included); a production building at status 1 goes to 2 after a take; the task then ends, failed when nothing moved.
+- **State evaluators** (**Observed**, read from the decompile, meanings of the virtual calls inferred): 66 `FUN_140597530` the character carries the machine's output item (a building with no `StorageBuilding` cast: false; 68 has the same evaluator, **Verified** `FUN_140610250`); 67 `FUN_1405a45f0` it carries an item the machine (an input) or storage accepts;
   82 `FUN_14059bd80` inventory or worn backpack has room for the target's item (a machine: its output item); 105 `FUN_1405a2c40` machine output empty; 169 `FUN_1405975d0` input invalid
   (production type 6 flag). 89 `haveSomeResourcesFromThisMachineButWantThemGoneIfPossible` (`FUN_1405a2c90`, registered in `FUN_140610250`): for a target with a StorageBuilding cast
   whose type (`+0x440`) is 4 (ITEM), the character's vfunc `0x300` asked with the machine (it carries resources from it) and then its output item (vfunc `0x550`) passing the per-item storage
   finder `FUN_14059acd0` (the nearest building of the query mask `0x4002436` with a StorageBuilding cast, complete, of the character's faction or, for a character `FUN_140856bc0` holds for, a
   player-flagged one, whose slot `0x4a0` takes the item, within the range mode's bound; **Verified**); so it holds while the character carries the machine's output and a storage takes it, and
-  row 87's `!89` is met by 113 (A `!89`, effect `!62` at the ditch finder's storage), then 93 into that storage: an operator puts the output away before operating again. Meitou: the obedient
-  player slaves' 189 (`ObedientJobs.ErrandFor`, the storage from the ditch finder's search); the NPC planner holds 89 false.
+  row 87's `!89` is met by 113 (A `!89`, effect `!62` at the ditch finder's storage), then 93 into that storage: an operator puts the output away before operating again. Meitou: the planner
+  evaluates 89 on the machine target (`ProductionSystem.CarriesOutputOf` and a storage of `TownDutySystem.OutputStore`, the ditch's search for the output's stacks), so a worker of 189,
+  NPC or player-faction, plans 113 and the ditch step 93 (`AiSystem.RunsDitchStep`, the Ditch errand) before operating again. A player's operate job is not planned: its
+  operator hauls through `ProductionSystem.StartHaul` (with Auto haul), which takes carried output to a storage only after it took a full output or while the output stays
+  full (engine choice, #388), so the two are kept apart.
 - **Made with the zone** (**Verified**, decompile: the building factory `FUN_14057cc70` switches on the functionality's `function`, 1 and 4 constructing through the ProductionBuilding
   constructor `FUN_1402a3750`, a farm through `FUN_1400e8420`): every building of a loaded zone is made as the class of its functionality, so every NPC mine, well, refinery and farm has its
   sections and progress from the start, loaded from its saved GAMESTATE_BUILDING and INVENTORY_STATE ([production](#production) save keys; **Observed** in two saves: NPC quarry mines with
@@ -1211,8 +1235,33 @@ it with them. Meitou: `MachineData.Accepts` (AI) and `TakesByHand` (player).
   a research bench counts for the player's research alone, a crafting bench has no queue, a town's generators are the power frame's ([NPC generator state](#npc-generator-state)) and its storages are container fixtures.
   Its state is the original's: the production keys of the building's GAMESTATE_BUILDING and its items in the INVENTORY_STATE the building lists ([town machines](../formats/save.md)), read when the machine is made, so an
   original save's NPC mines keep their progress and output. A worker whose plan starts with
-  87 operates it every tick (skill factor, operating XP: the player's operator lines), with 92 empties it into its inventory. A worker of 190 (221) operates it alike, whatever it holds. At a bench the work step makes
-  nothing: a research bench's counts only for a player-owned one (`FUN_14029b8d0`) and a crafting bench's only for a queued craft (`FUN_1402b5a40`); the operator still trains its `stat used`. Ditching: rows 113 / 114 / 93 (`TownDutySystem.DitchStore` and the Ditch errand, [ai-tasks](ai-tasks.md#ditching)). Row 94 (`WANT_TO_FILL_MACHINE`, effect 66) and its finder `FUN_14059d9b0` (**Verified**: for each input item of the target machine in list order, `FUN_14059d000` looks for a cached earlier pick, then loose ground items, then the nearest building whose production component's output lists the item (identity for ITEM records, same record type otherwise) with some in it, the buildings split by the owner test of vfunc `0x3b0`, within the sight range of the AI's range mode) give the chain 92 at the source, 94, 93 at the machine, 87: Meitou plans it (`PlanContext.Find` row 94, states 66 / 67 on machine targets), the worker walks to the source (`AiSystem.StepBuilding`), `TownWorkers` empties it (92), fills the inputs (93, `FillInputs`) and operates. Not modelled: the cached pick, ground items, the `0x3b0` split and the building mask `0x4002436` (the town's workplaces stand in). Power share: a town machine that draws power works at a share of 1 (its draw is the frame's pseudo consumer, `NpcDraws`); only a layout's battery bank is a member of the frame. A resident staying home at a workstation of its house (221) operates that layout object's machine as a worker of 190 does (`HomePretenders`, [town goals](ai-tasks.md#town-goals)).
+  87 operates it every tick (skill factor, operating XP: the player's operator lines), with 92 takes from its output into its inventory (the take below). A worker of 190 (221) operates it alike, whatever it holds. At a bench the work step makes
+  nothing: a research bench's counts only for a player-owned one (`FUN_14029b8d0`) and a crafting bench's only for a queued craft (`FUN_1402b5a40`); the operator still trains its `stat used`. Ditching: rows 113 / 114 / 93 (`TownDutySystem.DitchStore` and the Ditch errand, [ai-tasks](ai-tasks.md#ditching)). Row 94 (`WANT_TO_FILL_MACHINE`, effect 66) and its finder `FUN_14059d9b0` (**Verified**: for each input of the target machine in list order, its empty ones (slot `0x560`, `FUN_140299d00`: a rate and none of the item) or, with none empty, those with room (slot `0x568`, `FUN_140299b60`), the first input with a source deciding, `FUN_14059d000` looks for a cached earlier pick, then loose ground items, then the nearest building whose production component's output lists the item (identity for ITEM records, same record type otherwise) with some in it, the buildings split by the owner test of vfunc `0x3b0`, within the sight range of the AI's range mode) give the chain 92 at the source, 94, 93 at the machine, 87: Meitou plans it (`PlanContext.Find` row 94, states 66 / 67 on machine targets), the worker walks to the source (`AiSystem.StepBuilding`), `TownWorkers` empties it (92), fills the inputs (93, `FillInputs`) and operates. Meitou's finder is `FillSources.Find` (the source order above: a loose item through `LooseSource.Nearest`, the construction's ground search,
+then the nearest storage of the mask, a container fixture or player storage the character may use, then the nearest workplace producer of the mask
+and another record). The cached pick (AI `+0x288`) is cleared by `FUN_1405112b0` before and after every chooser run, so it only spares repeat searches
+within one run; Meitou plans one 94 target per think and keeps none. Before its loop over the inputs (vfunc `0x560`, else `0x568`) the finder tests
+the item in the AI task system's hand (AI `+0x20`, its `+0x10` / `+0x18`); `FUN_14050ca70` copies the current goal's hand there only for goals 45,
+17, 87, 152 and 124, so for a worker of 189 it is empty and the pre-pass never fires (**Verified**, decompile). The row 92 factory (`FUN_14032ebd0`)
+makes `Task_EmptyMachine` (flag 0) for a building source and `Task_Pickup` for an item: Meitou's plan step 92 at a loose item or storage sets
+`AiMind.FetchRequest` and `TownDutySystem` runs a `Fetch` errand (the pick-up row 3, or a walk and the take below, `FillDemand.TakeStored`).
+**Take** (**Verified**, `Task_EmptyMachine` flag 0, `FUN_14033cd10`; its slot 5 `FUN_140356db0`): the source lists its records (a storage its
+distinct records in item order, `FUN_140299990`; a producer its output); the first whose count is above 0 is taken, a unit at a time up to the
+count while the character has room (Character slot `0x170`), and the task ends; none wanted fails it. The machine the plan fills is not asked, so
+a mixed storage can hand over another record than the one the finder looked for, and the trip repeats: row 92's done state 66 at a
+storage is "carries its item" (`FUN_140597530`; `StorageBuilding` slot `0x550`, `FUN_14029ba60`: the record at `+0x448`, none for an ITEM
+storage), so 93 at the machine still lacks 67 and the next plan runs 92 at the same source again; the player's haul repeats it alike
+(**Observed**, headless: a farmer at a tank holding fuel before water takes the fuel a generator wants, trip by trip, before any water). The count is computed at the take, nothing is kept: over the
+buildings of mask `0x4002436` round the character's town (`FUN_1408cbea0`, a player outpost alike) that are complete (slot `0x228`, `+0x160`),
+not the source and not of its record, each that takes the item (slot `0x4a0`) adds the room of its input of it (`max` - count; 1 for `max`
+-1 with room) when that is its first input; a storage (its entry 0 is empty) or a machine whose input of it comes later makes the count 5 at
+once (the inventory-room test `FUN_14074afa0` on the entry before). One more when the item is food (`item function` 3) and the character carries
+none (slot `0x2f0`, `FUN_1405972d0`: functions 3 and 15). A crafting bench source (class 6) with nothing wanted gives 1 of the last record the
+character has room for (no Meitou finder yields a bench). Meitou `FillDemand.Count` (no distance bound; town data absent: every machine) serves
+the NPC fetch at a storage, the player's haul fetch (`ProductionSystem.FetchAt`, a storage or a producer's output) and a worker's 92 at a
+producer (its own or a fetch source: `TakeOutput`, once per task, `AiSystem.CollectDone`) alike, so an NPC mine's worker takes 5 of a full output
+when a storage of the town takes ore, and none when nothing in the town wants it (the output stays full). A fetch that takes nothing asks a
+replan (the failed flag `+0x26d`, handler `FUN_14050d080`); a walk that ended short also ignores the source for 20 s. The player's hauling fetch (`NearestSource`) walks the empty
+inputs in list order as the finder does, takes storages before producers and skips the machine's own record. Power share: a town machine that draws power works at a share of 1 (its draw is the frame's pseudo consumer, `NpcDraws`); only a layout's battery bank is a member of the frame. A resident staying home at a workstation of its house (221) operates that layout object's machine as a worker of 190 does (`HomePretenders`, [town goals](ai-tasks.md#town-goals)).
   A town machine is no player machine for the hauling jobs (`ProductionSystem.Takes`).
   Town farms (#625) and unattended producers (#763: `Well II` / `Well III`, raw `max operators` 0, which `UnattendedStep` runs with no operator) start as a farm with no saved keys
   does ([farming](#farming)), so they grow and work whether a worker came; a worker of 87 at a farm harvests and tends it as a player's operator does (`HarvestStep`), its crop goes to the output, which row 92

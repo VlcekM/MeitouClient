@@ -187,6 +187,11 @@ public sealed record TownBuilding(string InstanceId, string BuildingId, string N
     /// </summary>
     public bool IsGate { get; init; }
     /// <summary>
+    /// <c>is gateway</c>: it joins its town's gate set (Town <c>+0x390</c>, Building slot 138 <c>FUN_140551b20</c>), the only buildings
+    /// <c>getPositionOutsideTownGates</c> looks at (docs/game/factions-squads-towns.md "The town waypoint is outside the town gates").
+    /// </summary>
+    public bool IsGateway { get; init; }
+    /// <summary>
     /// <c>links together</c>: a wall.
     /// </summary>
     public bool IsWall { get; init; }

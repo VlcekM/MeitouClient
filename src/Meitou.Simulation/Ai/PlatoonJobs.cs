@@ -39,7 +39,9 @@ public enum PlatoonJob : byte
 public static class PlatoonJobs
 {
     /// <summary>
-    /// The engine's range for a short-range patrol point round the home town, in units (the original's is <b>Unknown</b>).
+    /// The engine's range for a short-range patrol point round the home town, in units (engine choice, part of the walking stand-in: the original's
+    /// PATROL_SHORTRANGE draws a point in a neighbouring 4608 sector with the loaded patrol's picker, <c>FUN_1407ee790</c>, <b>Verified</b>, but its
+    /// mover gets no speed, so it stands still, <b>Observed</b>; docs/game/factions-squads-towns.md "Off-screen world").
     /// </summary>
     public const float PatrolRange = 3000;
 
@@ -49,12 +51,14 @@ public static class PlatoonJobs
     public const float PatrolArrive = 500;
 
     /// <summary>
-    /// The AI package and unloaded-squad job of a new or loaded platoon: the template's package named <paramref name="savedPackage"/>, else the one a
-    /// fresh blackboard of the template's packages starts with.
+    /// The AI package and unloaded-squad job of a new or loaded platoon of faction <paramref name="factionId"/>: its package named
+    /// <paramref name="savedPackage"/>, else the one a fresh blackboard of its packages (the template's and the faction's <c>AI fallback</c>,
+    /// <see cref="AiDatabase.Packages(SquadTemplate, string, bool)"/>; <paramref name="restored"/>: rebuilt from a saved record) starts with.
     /// </summary>
-    public static (AiPackage? Package, PlatoonJob Job) For(AiDatabase ai, SquadTemplate template, string? savedPackage = null)
+    public static (AiPackage? Package, PlatoonJob Job) For(AiDatabase ai, SquadTemplate template, string? factionId, bool restored = false,
+        string? savedPackage = null)
     {
-        var packages = ai.Packages(template);
+        var packages = ai.Packages(template, factionId, restored);
         AiPackage? package = null;
         foreach (var p in packages)
         {
@@ -86,4 +90,15 @@ public static class PlatoonJobs
         6 => PlatoonJob.TravelTargetFast,
         _ => PlatoonJob.None,
     };
+
+    /// <summary>
+    /// The unloaded job a war package's start writes over its <c>unloaded func</c> (package <c>+0x78</c>, campaign slot 12 <c>FUN_1409d4cc0</c>,
+    /// <b>Verified</b>): 5 TRAVEL_TARGET for the campaign's lead platoon, 6 TRAVEL_TARGET_FAST for any other; null for another package or a platoon
+    /// with no campaign.
+    /// </summary>
+    internal static PlatoonJob? WarJob(Factions.Platoon platoon, AiPackage running) =>
+        platoon.Campaign is { } campaign && PackageClasses.Of(running.Signal) is PackageClass.WarBase or PackageClass.WarAssault
+            or PackageClass.WarAssaultCannibal
+            ? campaign.Leader == platoon.Id ? PlatoonJob.TravelTarget : PlatoonJob.TravelTargetFast
+            : null;
 }

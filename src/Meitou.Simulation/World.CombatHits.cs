@@ -99,6 +99,7 @@ public sealed partial class World
     static void LogObserverFault(ICombatHitObserver observer, Exception e)
     {
         string fault = $"{e.GetType().Name}: {e.Message}";
+        SimulationExtensions.TellOutdated(observer, e);
         if (SimulationExtensions.FactoryOf(observer) is { } factory)
             Console.Error.WriteLine($"mod       {factory.Owner}: combat observer '{factory.Name}' disabled for this world: {fault}");
         else

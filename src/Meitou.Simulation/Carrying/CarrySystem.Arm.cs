@@ -23,58 +23,9 @@ public sealed partial class CarrySystem
     public const float FindWeaponRange = 100;
 
     /// <summary>
-    /// Every <see cref="CarrySettings.AutoEveryTicks"/> ticks (serial, slot order): each NPC member whose running package lists goal 42 for its role,
-    /// that has no weapon and a working arm and that the AI runs now, goes for the weapon <see cref="FindWeapon"/> picks: a ground item it picks up,
-    /// else a body it loots (<see cref="NpcLoot"/>, which takes weapons first while it has none equipped; engine choice: the original's row 3
-    /// "Collecting item" takes the weapon alone).
-    /// </summary>
-    void Arm(World world, CharacterTable table)
-    {
-        if (world.SystemOf<PopulationSystem>() is not { } population) return;
-        HashSet<int>? taken = null;
-        HashSet<int>? claimed = null;
-        Span<int> duty = stackalloc int[5];
-        foreach (var squad in world.Squads.All)
-        {
-            if (squad.Members.Count == 0) continue;
-            duty.Fill(-1);
-            foreach (var member in squad.Members)
-            {
-                if (!table.TryResolveNext(member, out int slot)
-                    || table.Cold(slot) is not { IsPlayer: false, Inventory: not null, PickingUpItem: null } cold
-                    || !AiSystem.Holds(table.Next[slot], cold) || HasWeapon(cold)
-                    || cold.Medical is { } m && !m.ArmWorks(left: true) && !m.ArmWorks(left: false))
-                    continue;
-                int role = (int)AiSystem.RoleOf(squad, member, cold);
-                if (duty[role] < 0) duty[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.NotBeUnarmed) ? 1 : 0;
-                if (duty[role] == 0) continue;
-                taken ??= Looting(table);
-                claimed ??= Claimed(table);
-                var (item, body) = FindWeapon(world, population.Data, table, slot, cold, taken, claimed);
-                if (item >= 0)
-                {
-                    claimed.Add(item);
-                    cold.PickingUpItem = item;
-                    var at = world.GroundItems.Find(item)!.Position;
-                    if (Vector2.Distance(new Vector2(table.Next[slot].Position.X, table.Next[slot].Position.Z), new Vector2(at.X, at.Z))
-                        > Items.PickUps.PickUpReach)
-                        TaskStart.Walk(world, slot, at, SpeedMode.Run, TaskType.NotBeUnarmed, TaskSource.Npc);
-                }
-                else if (body >= 0)
-                {
-                    var task = (CharacterTask)table.Next[slot].Task;
-                    if (Start(world, slot, CharacterTask.Loot, TaskType.NotBeUnarmed, TaskSource.Npc, table.IdOf(body),
-                        task is CharacterTask.Wander or CharacterTask.Follow ? task : CharacterTask.Idle))
-                        taken.Add(body);
-                }
-            }
-        }
-    }
-
-    /// <summary>
     /// The ground items characters are walking to pick up.
     /// </summary>
-    static HashSet<int> Claimed(CharacterTable table)
+    internal static HashSet<int> Claimed(CharacterTable table)
     {
         var claimed = new HashSet<int>();
         for (int i = 0; i < table.HighWater; i++)
@@ -89,7 +40,7 @@ public sealed partial class CarrySystem
     /// Engine choices: the nearest of the body passes (the original takes its sensed-list order); the accessibility tests are left to the walk. (-1,
     /// -1): none.
     /// </summary>
-    (int Item, int Body) FindWeapon(World world, PopulationData data, CharacterTable table, int slot, CharacterCold cold,
+    internal (int Item, int Body) FindWeapon(World world, PopulationData data, CharacterTable table, int slot, CharacterCold cold,
         HashSet<int> taken, HashSet<int> claimed)
     {
         var next = table.Next;

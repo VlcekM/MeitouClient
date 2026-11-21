@@ -531,6 +531,7 @@ sealed class GameSaves(GameHost host)
         }
         host.PlayerSquad = world.Squads.Find(world.Player.Squad);
         foreach (var note in loaded.Notes) Console.WriteLine($"load      {note}");
+        foreach (var problem in read.Result.Problems) Console.WriteLine($"load      save: {problem}");
 
         // The saved camera (FUN_1407ade60, docs/formats/camera.md "Saved camera"): pivot, orientation and boom, a pivot out of bounds moved to the
         // loader's fallback. A save without a view (an older Meitou one) puts the camera on the leader, keeping the view's heading, pitch and boom.
@@ -729,6 +730,7 @@ sealed class GameSaves(GameHost host)
                 OffscreenFights = host.Config.OffscreenFights,
                 OffscreenHealing = host.Config.OffscreenHealing,
                 CampaignAncestorsOnce = host.Config.CampaignAncestorsOnce,
+                KeepCampaignClocks = host.Config.FixRaidClocks,
                 KeepWild = host.Config.KeepWild,
                 ResidentSchedule = host.Config.ResidentSchedule,
                 OffscreenOverrides = host.Config.OffscreenOverrides,
@@ -741,6 +743,7 @@ sealed class GameSaves(GameHost host)
             },
             Ai = new Simulation.Ai.AiSettings { TownAttacks = Gameplay.TownAttacks },
             Captives = new Simulation.Kidnap.CaptiveSettings { SpareOwnFaction = host.Config.CagesSpareOwn },
+            Arrest = new Simulation.Crime.ArrestSettings { LiftFix = host.Config.FixArrestLifts },
             Construction = new Simulation.Construction.ConstructionSettings { BuildingSpeed = (settings ?? Difficulty)[5], EdgeGap = SiteEdgeGap },
             Production = new Simulation.Production.ProductionSettings { ProductionOption = (settings ?? Difficulty)[3],
                 ResearchOption = (settings ?? Difficulty)[4], EdgeGap = SiteEdgeGap, UnloadedProduction = host.Config.UnloadedProduction },

@@ -142,6 +142,11 @@ public sealed partial class DialogueSystem
         var me = table.IdOf(slot);
         var mc = table.Cold(slot)!;
         world.Events.Line(world, "recruit", $"{EventLog.Who(world, slot)} joins the player's squad");
+
+        // The faction change empties its own goal lists (Character slot 20 FUN_1405cbac0 -> FUN_14050a9d0), so the engine duties those goals stand
+        // for let it go; its order queue stays (nothing there empties it), the front planned again from its start.
+        world.ReleaseDuties(slot);
+        Player.PlayerOrders.Interrupt(mc);
         Leave(world, me, mc);
         mc.Faction = world.Player.Faction;
         mc.RoadPreference = data.RoadPreferenceOf(mc.Faction);
@@ -151,7 +156,6 @@ public sealed partial class DialogueSystem
         mc.NpcClass = FundamentalType.Adventurer;   // every player-faction character's class
         mc.Orders = Orders.PlayerDefaults;
         mc.Ai = null;
-        mc.Engaged = false;
         mc.Fleeing = false;
         Crime.CrimeSystem.DropPending(world, slot, mc);
         mc.Jobs.Clear();   // an NPC's list, if any, does not carry over
@@ -179,31 +183,10 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// <c>DA_GIVE_TARGET_MY_SLAVES</c> (24, <c>FUN_140680560</c>): the slaves on the speaker's platoon's list are let out of their cages and join the
-    /// target's squad. Engine reading of the list: the members of the speaker's squad in slave state (Meitou makes no slave squads yet, so it is
-    /// often empty). They join the player as recruits do, keeping their slave state, now owned by the target's faction; a non-player target's squad
-    /// takes them into its own.
+    /// <c>DA_GIVE_TARGET_MY_SLAVES</c> (24): the speaker squad's slaves get the target as their owner (<see cref="Kidnap.CaptiveSystem.GiveSlaves"/>).
     /// </summary>
-    void GiveSlaves(World world, CharacterId me, CharacterCold mc, CharacterCold tc)
+    static void GiveSlaves(World world, CharacterCold mc, CharacterCold tc)
     {
-        var table = world.Characters;
-        if (mc.SquadId < 0 || world.Squads.Find(mc.SquadId) is not { } squad) return;
-        foreach (var id in squad.Members.ToArray())
-        {
-            if (id == me || !table.TryResolveNext(id, out int s) || table.Cold(s) is not { SlaveState: 1 or 2, Medical.Dead: false } slave) continue;
-            byte state = slave.SlaveState;
-            if (slave.IsImprisoned) world.Fixtures.Release(world, id);
-            if (tc.IsPlayer || tc.Faction == world.Player.Faction)
-            {
-                if (SquadManagement.CappedHeads(world) >= _data.Bodies.Constants.MaxFactionSize || !JoinPlayer(world, s, tc)) break;
-            }
-            else if (world.Squads.Find(tc.SquadId) is { } theirs)
-            {
-                Leave(world, id, slave);
-                slave.SquadId = theirs.Id;
-                theirs.Members.Add(id);
-            }
-            (slave.SlaveState, slave.SlaveOwner) = (state, tc.Faction);
-        }
+        if (world.Squads.Find(mc.SquadId) is { } squad) Kidnap.CaptiveSystem.GiveSlaves(world, squad, tc);
     }
 }

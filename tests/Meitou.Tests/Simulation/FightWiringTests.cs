@@ -1,10 +1,13 @@
-using System.Numerics;
+﻿using System.Numerics;
+using Meitou.Data;
 using Meitou.Data.Gameplay;
 using Meitou.Simulation;
+using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Movement;
+using Meitou.Simulation.Population;
 using Meitou.Tests.Combat;
 using static Meitou.Tests.Bodies.BodyFixtures;
 using static Meitou.Tests.Combat.CombatFixtures;
@@ -17,6 +20,10 @@ namespace Meitou.Tests.Simulation;
 /// </summary>
 public class FightWiringTests
 {
+    /// <summary>
+    /// A player character (faction 1, no squad) ordered onto a bandit whose mate stands 40 behind it (faction 0, one squad): the AI gives the
+    /// bandits their minds (every character defends itself by its 32 Self preservation) and the senses tell each who threatens it.
+    /// </summary>
     static (SimWorld World, CombatSystem Combat, CharacterId A, CharacterId B, CharacterId C) Fight(ulong seed, int threads, float distance = 120,
         Func<float, float, float>? ground = null)
     {
@@ -24,14 +31,16 @@ public class FightWiringTests
                 new CombatOptions { SelfApproach = false, TickMedical = false, RecordLog = true });
         var walk = new OpenGroundWalkability(ground ?? ((_, _) => 150));
         var world = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = 1 }, walk,
-            [new PursuitSystem(combat), new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), combat,
-                    new RetaliationSystem(combat)]);
+            [new AiSystem(new PopulationData { Db = new GameDatabase(), Sites = [], Factions = [], Relations = FactionRelations.Build([]) }),
+                    new PursuitSystem(combat), new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), combat,
+                    new RetaliationSystem(combat), Senses(combat)]);
         var squad = new Squad { Id = world.Squads.NextId(), TemplateId = "t" };
         world.Squads.Add(squad);
         CharacterId Make(string name, Vector3 at, bool player)
         {
             var cold = new Combatant { Name = name }.MakeCold();
             cold.IsPlayer = player;
+            cold.Faction = player ? 1 : 0;
             cold.SquadId = player ? -1 : squad.Id;
             return world.Characters.Spawn(new CharacterHot { Position = at, Health = 100, MaxSpeed = 60, WalkSpeed = 15, Mode = SpeedMode.Free },
                     cold, 0);
@@ -45,8 +54,9 @@ public class FightWiringTests
     }
 
     /// <summary>
-    /// The attacked bandit fights back (Self preservation's stand-in, <see cref="RetaliationSystem"/>); its mate, with no goal that protects anyone
-    /// (no AI here), keeps out: squad mates join only by their own protect goals (docs/game/ai-tasks.md "Combat goals").
+    /// The attacked bandit fights back (its 32 Self preservation, which the alert of <see cref="RetaliationSystem"/> asks to think); its mate, with
+    /// no goal that protects anyone (no AI package), keeps out: squad mates join only by their own protect goals (docs/game/ai-tasks.md "Combat
+    /// goals").
     /// </summary>
     [Fact]
     public void An_attacker_walks_to_its_target_fights_and_the_attacked_retaliates_alone()

@@ -226,8 +226,11 @@ literally reads `CARAVAN. MILITARY`). Random draws are uniform (`rand()`).
   move to x = front-most x + 25 + r as a rear guard.
 
 **Following** (`Task_Follow` update `14033b350`, shared by 141 Task_FollowLeader, 31 and the other follow tasks). Task 141 follows
-the slave owner if the character has one (Meitou: the leader of its master squad, `ObedientSlave.OwnerOf`), else its squad leader. Formation mode applies when the target is the follower's slave
-owner or in its platoon (`14033b160`); otherwise the aim is target + normalise(me − target) × D, D = 20..40 drawn when the task is made
+(slot 6 `14034bac0`, **Verified**) the slave owner (handle `+0x330`): a character handle resolving in any of the character registries gives that character; a squad handle (0x5b) gives what
+`140791600` returns, a fixed object (`+0xc0` of a global holder) whatever the handle (**Verified**, disassembly); a handle that resolves to nothing, or none, gives the own platoon's leader
+(`140792b90`). Meitou: the leader of its master squad (`ObedientSlave.OwnerOf`), else its squad leader. Formation mode applies when the target is the follower's slave
+owner or in its platoon (`14033b160`); the slot (slot 5 `14033b220`, **Verified**) is the owner's platoon's blackboard's when the owner handle resolves to one, else the own platoon's, and the owner's
+formation holds its members' slaves whatever their platoon (Meitou: `MovementSystem.FormationOf`, the master squad's formation laying out the slaves of other squads that obey it, `OwnedSlaves`); otherwise the aim is target + normalise(me − target) × D, D = 20..40 drawn when the task is made
 (`14032ebd0`). Formation aim (`1403335c0`): heading H (task +0xa0) eases toward the leader's XZ direction (−X if zero) while the leader
 moves, H += (dir − H) × 0.5 × dt (`GameLoop_DtScaled`), aim = leader position + H × leader speed + slot rotated from −X onto H, so
 followers aim one second ahead of the leader. When the leader is inside a building the follower cannot enter, aim = A + (A − B) × 1.1 +

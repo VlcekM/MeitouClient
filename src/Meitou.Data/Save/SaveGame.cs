@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Fcs;
@@ -133,6 +134,13 @@ public sealed class SaveGame
     public List<string> Problems { get; } = [];
 
     /// <summary>
+    /// The platoon and zone files the original's loader refuses (<see cref="RejectedType"/>), by name, as read: loaded as no file, as the original
+    /// does, and written back unchanged while nothing replaces them (<see cref="CarriedRejects"/>), as the original's save copies a file it did not
+    /// rewrite (docs/formats/save.md "Rejected files").
+    /// </summary>
+    public SortedDictionary<string, byte[]> RejectedFiles { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// A save of <paramref name="quick"/> alone, its views indexed (<see cref="Reindex"/>); throws <see cref="FcsFormatException"/> without a CAMERA.
     /// </summary>
     public SaveGame(SaveFile quick)
@@ -154,27 +162,99 @@ public sealed class SaveGame
         if (!folder.HasQuickSave) throw new FileNotFoundException($"'{folder.TopLayer}' has no {SaveFolder.QuickSaveName}.");
         var game = new SaveGame(folder.ReadQuickSave());
         cameraRead?.Invoke(game.Camera);
-        foreach (var platoon in game.Platoons)
+        game.ReadPlatoonFiles(folder);
+        game.ReadZoneFiles(folder);
+        game.ReadSidecars(folder);
+        game.Reindex();
+        game.CheckZoneFiles();
+        return game;
+    }
+
+    /// <summary>
+    /// The file of every platoon that names one; a missing or rejected one is a problem and leaves the platoon without a file.
+    /// </summary>
+    void ReadPlatoonFiles(SaveFolder folder)
+    {
+        foreach (var platoon in Platoons)
         {
             if (platoon.FileName is not { } name) continue;
             if (!folder.Exists(name))
             {
-                game.Problems.Add($"Platoon file missing: {name}");
+                Problems.Add($"Platoon file missing: {name}");
                 continue;
             }
-            platoon.File = folder.ReadFile(name);
+            platoon.File = ReadOrReject(folder, name);
         }
+    }
+
+    /// <summary>
+    /// The zone files of <c>zone/</c>; a rejected one is a problem and the zone is left without a file.
+    /// </summary>
+    void ReadZoneFiles(SaveFolder folder)
+    {
         foreach (var zone in folder.ZoneFiles)
-            game.Zones[zone] = new SaveZone(zone, folder.ReadFile(SaveFolder.ZoneName(zone)));
-        if (folder.Exists(SaveFolder.PortraitName)) game.Portraits = folder.ReadAllBytes(SaveFolder.PortraitName);
-        foreach (var (id, name) in folder.ModDataFiles) game.ModData[id] = folder.ReadAllBytes(name);
-        if (folder.Exists(SaveFolder.ModEnvironmentName)) game.ModEnvironment = folder.ReadAllBytes(SaveFolder.ModEnvironmentName);
-        foreach (var (zone, name) in folder.LevelEditFiles) game.LevelEdits[zone] = folder.ReadAllBytes(name);
-        if (folder.Exists(SaveFolder.WeaponBloodName)) game.WeaponBlood = folder.ReadAllBytes(SaveFolder.WeaponBloodName);
-        if (folder.Exists(SaveFolder.LastingIdsName)) game.LastingIds = folder.ReadAllBytes(SaveFolder.LastingIdsName);
-        game.Reindex();
-        game.CheckZoneFiles();
-        return game;
+            if (ReadOrReject(folder, SaveFolder.ZoneName(zone)) is { } file)
+                Zones[zone] = new SaveZone(zone, file);
+    }
+
+    /// <summary>
+    /// The files beside the record files: the portraits and Meitou's own (mod data, mod environment, level edits, weapon blood, lasting ids).
+    /// </summary>
+    void ReadSidecars(SaveFolder folder)
+    {
+        if (folder.Exists(SaveFolder.PortraitName)) Portraits = folder.ReadAllBytes(SaveFolder.PortraitName);
+        foreach (var (id, name) in folder.ModDataFiles) ModData[id] = folder.ReadAllBytes(name);
+        if (folder.Exists(SaveFolder.ModEnvironmentName)) ModEnvironment = folder.ReadAllBytes(SaveFolder.ModEnvironmentName);
+        foreach (var (zone, name) in folder.LevelEditFiles) LevelEdits[zone] = folder.ReadAllBytes(name);
+        if (folder.Exists(SaveFolder.WeaponBloodName)) WeaponBlood = folder.ReadAllBytes(SaveFolder.WeaponBloodName);
+        if (folder.Exists(SaveFolder.LastingIdsName)) LastingIds = folder.ReadAllBytes(SaveFolder.LastingIdsName);
+    }
+
+    /// <summary>
+    /// Reads the platoon or zone file <paramref name="name"/>. One the original's loader refuses (<see cref="RejectedType"/>) is kept in
+    /// <see cref="RejectedFiles"/> with a problem, and null is returned; one of an accepted type that does not parse throws an
+    /// <see cref="FcsFormatException"/> that names the file.
+    /// </summary>
+    SaveFile? ReadOrReject(SaveFolder folder, string name)
+    {
+        var bytes = folder.ReadAllBytes(name);
+        if (RejectedType(bytes) is { } reason)
+        {
+            RejectedFiles[name] = bytes;
+            Problems.Add($"File rejected, loaded as none ({reason}): {name}");
+            return null;
+        }
+
+        try
+        {
+            return SaveFile.Read(bytes);
+        }
+        catch (FcsFormatException e)
+        {
+            throw Named(e, name);
+        }
+    }
+
+    /// <summary>
+    /// Why the original's game-data loader refuses a file of these bytes: shorter than its type, or a type outside 8..17 (docs/formats/fcs-mod.md
+    /// "Files that fail to load"); null when it takes it.
+    /// </summary>
+    static string? RejectedType(byte[] bytes)
+    {
+        if (bytes.Length < 4) return $"{bytes.Length} bytes";
+
+        int type = BinaryPrimitives.ReadInt32LittleEndian(bytes);
+        return type is >= 8 and <= 17 ? null : $"file type {type}";
+    }
+
+    /// <summary>
+    /// <paramref name="e"/> again with the file name in front of its message.
+    /// </summary>
+    static FcsFormatException Named(FcsFormatException e, string name)
+    {
+        string suffix = $" (at byte {e.Offset})";
+        string message = e.Message.EndsWith(suffix, StringComparison.Ordinal) ? e.Message[..^suffix.Length] : e.Message;
+        return new FcsFormatException($"{name}: {message}", e.Offset, e) { Partial = e.Partial };
     }
 
     /// <summary>
@@ -274,13 +354,25 @@ public sealed class SaveGame
 
     /// <summary>
     /// The zone-file check the game runs at load and at save (docs/formats/save.md, <c>FUN_140a0bef0</c>): the CAMERA <c>zones</c> list against the
-    /// files. Adds "Zone file missing" and "Extra zone file" problems.
+    /// files. Adds "Zone file missing" and "Extra zone file" problems; a rejected zone file has its own problem.
     /// </summary>
     public void CheckZoneFiles()
     {
         var listed = Camera.Zones.ToHashSet();
-        foreach (var z in listed.Where(z => !Zones.ContainsKey(z))) Problems.Add($"Zone file missing: zone.{z.X}.{z.Y}.zone");
+        var rejected = RejectedZones().ToHashSet();
+        foreach (var z in listed.Where(z => !Zones.ContainsKey(z) && !rejected.Contains(z)))
+            Problems.Add($"Zone file missing: zone.{z.X}.{z.Y}.zone");
         foreach (var z in Zones.Keys.Where(z => !listed.Contains(z))) Problems.Add($"Extra zone file: zone.{z.X}.{z.Y}.zone");
+    }
+
+    /// <summary>
+    /// The zones of the rejected files in <see cref="RejectedFiles"/>.
+    /// </summary>
+    IEnumerable<ZoneCoordinate> RejectedZones()
+    {
+        foreach (var name in RejectedFiles.Keys)
+            if (SaveFolder.TryParseZoneName(name, out var zone))
+                yield return zone;
     }
 
     /// <summary>
@@ -301,6 +393,7 @@ public sealed class SaveGame
         foreach (var (zone, bytes) in LevelEdits) copy.LevelEdits[zone] = bytes.ToArray();
         copy.WeaponBlood = WeaponBlood?.ToArray();
         copy.LastingIds = LastingIds?.ToArray();
+        foreach (var (name, bytes) in RejectedFiles) copy.RejectedFiles[name] = bytes.ToArray();
         copy.Reindex();
         copy.Problems.AddRange(Problems);
         return copy;
@@ -320,18 +413,29 @@ public sealed class SaveGame
     #region Derived data
 
     /// <summary>
-    /// Brings the parts that follow from the rest up to date: the CAMERA <c>zones</c> list from the zone files, the character count of every platoon
+    /// Brings the parts that follow from the rest up to date: the CAMERA <c>zones</c> list from the zone files (and the carried rejected ones it
+    /// listed, <see cref="ListedCarriedZones"/>), the character count of every platoon
     /// with a file and the file name, slot lists 0 (platoon containers) and 1 (town containers) of <c>quick.save</c> (lists 2 and 3 are kept, or
     /// start as 1..4096: their meaning is Unknown), a zone file's slot list when it has none, each file's <c>nextId</c> (raised to its highest record
     /// id, never lowered) and the <c>byteSize</c> of the records that carry a child count.
     /// </summary>
     public void UpdateDerived()
     {
-        Camera.SetZones(Zones.Keys);
+        Camera.SetZones(Zones.Keys.Concat(ListedCarriedZones()));
         UpdatePlatoonCounts();
         UpdateSlotLists();
         FillZoneSlotLists();
         UpdateFileCounters();
+    }
+
+    /// <summary>
+    /// The zones of the rejected files a write carries on (<see cref="CarriedRejects"/>) that the CAMERA <c>zones</c> list names: they stay in it,
+    /// as the original keeps a zone's has-file flag until it loads the zone again.
+    /// </summary>
+    IEnumerable<ZoneCoordinate> ListedCarriedZones()
+    {
+        var listed = Camera.Zones.ToHashSet();
+        return RejectedZones().Where(z => !Zones.ContainsKey(z) && listed.Contains(z)).ToList();
     }
 
     /// <summary>
@@ -446,6 +550,21 @@ public sealed class SaveGame
                 yield return (name, p.File);
         foreach (var z in Zones.Values)
             yield return (SaveFolder.ZoneName(z.Coordinate), z.File);
+    }
+
+    /// <summary>
+    /// The rejected files (<see cref="RejectedFiles"/>) a write carries on byte for byte: a zone's while the zone has no file now, a platoon's while
+    /// a PLATOON record without a file still names it. The original never rewrites a file it did not load (an unloaded platoon's is written only
+    /// with its loaded flag set, <c>FUN_14036bad0</c>), and its save copies the loaded save's files under the ones it wrote (<c>FUN_140472ac0</c>).
+    /// </summary>
+    public IEnumerable<(string Name, byte[] Bytes)> CarriedRejects()
+    {
+        var named = Platoons.Where(p => p.File is null).Select(p => p.FileName).OfType<string>().ToHashSet(StringComparer.Ordinal);
+        foreach (var (name, bytes) in RejectedFiles)
+        {
+            bool carried = SaveFolder.TryParseZoneName(name, out var zone) ? !Zones.ContainsKey(zone) : named.Contains(name);
+            if (carried) yield return (name, bytes);
+        }
     }
 
     /// <summary>

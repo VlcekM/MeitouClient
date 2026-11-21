@@ -59,7 +59,10 @@ sealed class ModCombatMoves(IReadOnlyList<ModCombatMove> sources)
             if (was == seen)
             {
                 if (seen == long.MaxValue)
+                {
                     Console.Error.WriteLine($"mod       {sources[i].Owner}: combat move failed at tick {tick}, dropped from the next tick: {e}");
+                    Content.CodeModFaults.Tell(sources[i].Owner, e);
+                }
 
                 return;
             }

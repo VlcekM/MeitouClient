@@ -36,13 +36,16 @@ public class KidnapTests
             Anatomy = Human.Anatomy, Carriable = true };
 
     /// <summary>
-    /// A package whose every role list holds goal 254 (find, kidnap and put in a cage), always in its hours.
+    /// A package whose every role list holds goal 254 (find and kidnap) and 112 (find and put in a cage: the carrier's own goal cages the body once
+    /// 254 is done at the lift), always in their hours.
     /// </summary>
     static AiPackage Kidnapping()
     {
-        var goal = new AiGoal(new AiTask("t", "kidnap", TaskType.FinalKidnapperCageJob, TaskPriority.Urgent, TaskTargetType.Specific,
+        var kidnap = new AiGoal(new AiTask("t", "kidnap", TaskType.FinalKidnapperCageJob, TaskPriority.Urgent, TaskTargetType.Specific,
                 TaskEndEvent.Nothing), 0, 100, 1);
-        return new AiPackage { Id = "kidnap", Name = "kidnap", Roles = [[goal], [goal], [goal], [], []] };
+        var cage = new AiGoal(new AiTask("c", "cage", TaskType.FindCageAndPutIn, TaskPriority.Urgent, TaskTargetType.Specific,
+                TaskEndEvent.Nothing), 0, 100, 1);
+        return new AiPackage { Id = "kidnap", Name = "kidnap", Roles = [[kidnap, cage], [kidnap, cage], [kidnap, cage], [], []] };
     }
 
     static CharacterId Add(SimWorld world, CharacterCold cold, Vector2 at, Squad squad)
@@ -68,7 +71,8 @@ public class KidnapTests
         var kidnap = new KidnapSystem(data, population, carry, new KidnapSettings { RecordLog = true });
         var walk = new OpenGroundWalkability((_, _) => 150);
         using var world = new SimWorld(new WorldSettings { Seed = 31, Threads = threads, PublishSnapshots = false, MinPartitionSize = 1 }, walk,
-            [new PlayerSystem(), new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), carry, kidnap]);
+            [new PlayerSystem(), new AiSystem(data), new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), carry, kidnap,
+                    new TownDutySystem(data, population, carry)]);
         world.Fixtures.RegisterSite(world, data, 0);
         int city = data.FactionIndex("50-a");
 
@@ -115,7 +119,7 @@ public class KidnapTests
         var walk = new OpenGroundWalkability((_, _) => 150);
         using var world = new SimWorld(new WorldSettings { Seed = 7, PublishSnapshots = false }, walk,
             [new PlayerSystem(), new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), carry, population,
-                    new Meitou.Simulation.Dialogue.DialogueSystem(data)]);
+                    new Meitou.Simulation.Dialogue.DialogueSystem(data), new AiSystem(data)]);
         int city = data.FactionIndex("50-a");
 
         // Goal 177 in every role list, always in its hours.
@@ -372,6 +376,73 @@ public class KidnapTests
 
         Assert.Equal((0, -1), (loaded.SlaveState, loaded.SlaveOwner));
     }
+
+    /// <summary>
+    /// The house's first door has its leaf at the house's position, facing +Z; the second has none.
+    /// </summary>
+    sealed class HouseDoor : IDoorGate
+    {
+        public void SetDoorsBlocked(string buildingInstance, bool blocked) { }
+        public void ResetDoors() { }
+        public DoorSpot? DoorSpotOf(string buildingRecordId, int doorIndex) => doorIndex == 0 ? new(Vector3.Zero, Vector3.UnitZ, 15) : null;
+    }
+
+    /// <summary>
+    /// A lift walk stopped at a locked door fails as a walk does (a361e0a03; docs/game/locks.md "Doors": <c>MovementSystem.FailOwnWalk</c>, the plan
+    /// step taking any failed mover as a lost walk, <c>FUN_14050d970</c>): a raider of another faction than the house's, with no way through its
+    /// locked door (not its own, no bash in its own squad's town, no tools, a lock far above its skill), walks to lift a downed player character
+    /// beyond it; its 254 takes the walk as lost, so the victim is on its ignore map and nobody carries it. Catches the walker that only stood at the
+    /// door, its goal holding the lift.
+    /// </summary>
+    [Fact]
+    public void A_lift_walk_stopped_at_a_locked_door_is_a_lost_walk_for_its_goal()
+    {
+        var data = ArrestTests.Town([SyntheticTown.Rec("60-a", FcsRecordType.Faction, "raiders")]);
+        var carry = new CarrySystem(BaseGame, BodyOptions.Default, 1) { Relations = data.Relations };
+        using var population = new PopulationSystem(data);
+        var kidnap = new KidnapSystem(data, population, carry, new KidnapSettings { RecordLog = true });
+        var walk = new OpenGroundWalkability((_, _) => 150);
+        using var world = new SimWorld(new WorldSettings { Seed = 31, PublishSnapshots = false, MinPartitionSize = 1 }, walk,
+            [new PlayerSystem(), new AiSystem(data), new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), carry, kidnap,
+                    new TownDutySystem(data, population, carry), new LockSystem(BaseGame, BodyOptions.Default)]);
+        world.Fixtures.RegisterSite(world, data, 0);
+        world.Fixtures.Doors = new HouseDoor();
+        var door = world.Fixtures.Find("0.0:house#0")!;
+        door.Lock!.Level = 80;
+        world.Fixtures.SetLocked(door, true);
+        var leaf = world.Fixtures.DoorSpotOf(door)!.Value;
+        var house = new Vector2(leaf.Centre.X - Centre.X, leaf.Centre.Z - Centre.Z);
+
+        var board = new Blackboard([new(0, Kidnapping())]);
+        board.Update();
+        board.Town = 0;
+        var raiders = new Squad { Id = world.Squads.NextId(), TemplateId = "t", Faction = data.FactionIndex("60-a"), Town = 0, Ai = board,
+                HomeCentre = new Vector2(Centre.X, Centre.Z), HomeRadius = 500 };
+        world.Squads.Add(raiders);
+        var raider = new Combatant { Name = "raider" }.MakeCold();
+        raider.Faction = raiders.Faction;
+        var lifter = Add(world, raider, house - new Vector2(0, 60), raiders);
+
+        var players = new Squad { Id = world.Squads.NextId(), TemplateId = "p", Faction = data.Relations.PlayerFaction };
+        world.Squads.Add(players);
+        var hero = new Combatant { Name = "hero" }.MakeCold();
+        hero.Faction = data.Relations.PlayerFaction;
+        hero.IsPlayer = true;
+        var victim = Add(world, hero, house + new Vector2(0, 60), players);
+        hero.Medical!.KnockOut(100000);
+
+        bool walked = false;
+        for (int t = 0; t < 900 && !raider.IsIgnored(IgnoreKey.Of(victim), world.Tick); t++)
+        {
+            world.RunTick();
+            walked |= world.Characters.Next[lifter.Slot].Task == (byte)CharacterTask.PickUp;
+        }
+
+        Assert.True(walked);
+        Assert.True(raider.IsIgnored(IgnoreKey.Of(victim), world.Tick));
+        Assert.True(door.Lock.Locked);
+        Assert.True(hero.CarriedBy.IsNone);
+    }
 }
 
 /// <summary>
@@ -386,6 +457,42 @@ public class KidnapInstallTests(ITestOutputHelper output)
     const float CageFloorRadius = 40;
 
     /// <summary>
+    /// How far east of the raiders' town the outpost stands: the raid is drafted within 700 of its town, so it starts outside the outpost's arrival
+    /// circle (0.8 of a player town's radius 2500) and marches there under its travel package.
+    /// </summary>
+    const float OutpostDistance = 4200;
+
+    /// <summary>
+    /// How far short of the outpost's centre, towards the raiders' town, the heroes stand: just inside the arrival circle, where the raid stops and
+    /// its assault package starts. An outpost with no building gives that package nothing else to go to (216 no building to ransack, 270 no gate or
+    /// wall), so the raiders reach only characters they see from there.
+    /// </summary>
+    const float HeroesInset = 1850;
+
+    /// <summary>
+    /// How far east of the raiders' town the house test's outpost stands: inside its arrival circle (2000) for a raid drafted within 700 of its
+    /// town, so phase 1 starts where the raid is drafted.
+    /// </summary>
+    const float NearOutpostDistance = 1500;
+
+    /// <summary>
+    /// How far east of the house the first hero stands (the others 30 apart from there, 150 to 240 from the house), so a raider at the house is not one
+    /// fighting a hero.
+    /// </summary>
+    const float HeroesBesideHouse = 150;
+
+    /// <summary>
+    /// How near the house's origin a raider counts as at its way in: the Small Shack's door fixture stands at the origin, and the raiders come
+    /// within 3 to 8 of it.
+    /// </summary>
+    const float HouseReach = 20;
+
+    /// <summary>
+    /// The ticks the house test gives the raid: a raider reaches the house at about 2300 and a hero is down at about 2500.
+    /// </summary>
+    const int RaidTicks = 4500;
+
+    /// <summary>
     /// The Skin Bandits' small raid on an outpost of four player characters: the raiders lift the downed and cage them in their town, and a save
     /// and a load keep them caged and kidnapped.
     /// </summary>
@@ -394,25 +501,11 @@ public class KidnapInstallTests(ITestOutputHelper output)
     {
         Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
 
-        var install = InstallData.Install!;
         var db = InstallData.FullLoadOrder!;
-        var levels = WorldLevelData.LoadBaseGame(install, includeInteriors: true);
-        using var map = TerrainHeightmap.Open(install);
-        var buildings = TownBuildings.Build(db, levels, new BuildingLayouts(db, levels.Interiors), (x, z) => map.HeightAt((float)x, (float)z));
-        var data = PopulationData.Create(db, levels.Towns(), new GeneratedAppearances(db, install.Root), buildings: buildings);
-
-        // The terrain, with the floor the navmesh would give round each cage of the raiders' town: Skinhouse HQ's cages stand on upper floors, 87
-        // to 95 above the ground, and a cage is reached only within 15 of its height (FixtureRegistry.AtCage). The heightmap's file reader is not
-        // thread-safe.
+        using var map = TerrainHeightmap.Open(InstallData.Install!);
+        var data = InstallPopulation(map, out var levels);
         var cageFloors = new List<Fixture>();
-        var heightGate = new object();
-        float Ground(float x, float z)
-        {
-            foreach (var c in cageFloors)
-                if (Vector2.Distance(new(x, z), new(c.Position.X, c.Position.Z)) < CageFloorRadius) return c.Position.Y;
-            lock (heightGate) return map.HeightAt(x, z);
-        }
-        var walk = new OpenGroundWalkability(Ground);
+        var walk = CageFloorGround(map, cageFloors);
 
         using var world = NewWorld(data, walk, new PopulationSettings { RaidFrequencyMult = 1000 }, out var set);
         var population = set.Population!;
@@ -421,22 +514,22 @@ public class KidnapInstallTests(ITestOutputHelper output)
 
         Assert.Contains(data.Factions[faction].Campaigns, l => population.CampaignOf(l.Id)?.Name == "skin bandit standard raid small");
 
-        // A town of theirs with cages, and an outpost 1500 east of it with four player characters.
+        // A town of theirs with cages, and an outpost east of it with four player characters at its edge.
         var home = TownWithCages(world, data, faction);
 
         Assert.NotNull(home);
 
         cageFloors.AddRange(world.Fixtures.All.Where(x => x.Kind == FixtureKind.Cage && x.Site == home.Index));
-        var outpost = world.Buildings.AddTown(home.Position + new Vector3(1500, 0, 0), data.PlayerFaction);
+        var outpost = world.Buildings.AddTown(home.Position + new Vector3(OutpostDistance, 0, 0), data.PlayerFaction);
         world.RunTicks(15);
         var war = population.Wars[faction];
         foreach (var m in population.Wars) m.UpdateTime = m == war ? 0 : 1e9;
-        var heroes = SpawnHeroes(world, population, db, data, outpost);
+        var heroes = SpawnHeroes(world, population, db, data, new Vector2(outpost.Position.X - HeroesInset, outpost.Position.Z));
         var table = world.Characters;
         foreach (var h in heroes) table.Cold(h.Slot)!.IsPlayer = true;
 
-        // The assault is won once nobody fights 0.2 h in, which the lifts themselves can bring about, so not every hero need be downed; the
-        // leader's captive goes to the campaign's home, which has no free cage. The carriers of the rest walk home and cage them.
+        // The assault is won once nobody fights 0.2 h in, which the lifts themselves can bring about, so not every hero need be downed. The
+        // carriers walk their captives to their platoon's home town under the retreat package and cage them there.
         for (int i = 0; i < 60 && Caged(world, heroes) < 2; i++) world.RunTicks(150);
         output.WriteLine($"tick {world.Tick}: caged {Caged(world, heroes)}, lifted {set.Kidnap!.Log.Count(e => e.Kind == KidnapEventKind.Lifted)}");
 
@@ -448,16 +541,138 @@ public class KidnapInstallTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// The Skin Bandits' small raid on an outpost 1500 from their town, so drafted inside its arrival circle: phase 1 starts with nobody in sight,
+    /// and only 216's draw of the outpost's house (<c>FUN_1408cb510</c> takes the squad's town, a player outpost too) takes the raiders in. They
+    /// reach the house's door and down one of the heroes standing 150 out, at about 2300 and 2500 ticks (the same with the heroes 40 to 250 out).
+    /// Catches 216 losing player towns again: the raiders then stand where phase 1 finds them, no closer than 682, and nobody is hurt.
+    /// </summary>
+    [Fact]
+    public void A_raid_drafted_near_a_player_outpost_enters_its_house_and_downs_a_hero()
+    {
+        Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
+
+        using var map = TerrainHeightmap.Open(InstallData.Install!);
+        var data = InstallPopulation(map, out _);
+        var cageFloors = new List<Fixture>();
+        using var world = NewWorld(data, CageFloorGround(map, cageFloors), new PopulationSettings { RaidFrequencyMult = 1000 }, out var set,
+                StandardParts.All);
+        world.Player.Faction = data.PlayerFaction;
+        int faction = Enumerable.Range(0, data.Factions.Count).First(f => data.Factions[f].Name == "Skin Bandits");
+        var home = TownWithCages(world, data, faction);
+
+        Assert.NotNull(home);
+
+        cageFloors.AddRange(world.Fixtures.All.Where(x => x.Kind == FixtureKind.Cage && x.Site == home.Index));
+        var outpost = world.Buildings.AddTown(home.Position + new Vector3(NearOutpostDistance, 0, 0), data.PlayerFaction);
+        var house = PlaceShack(world, data, map, outpost);
+        world.Commands.Enqueue(new FocusCommand(house) { Tick = world.Tick + 1 });
+        world.RunTicks(15);
+        var population = set.Population!;
+        foreach (var m in population.Wars) m.UpdateTime = m == population.Wars[faction] ? 0 : 1e9;
+        var heroes = SpawnHeroes(world, population, data.Db, data, new Vector2(house.X + HeroesBesideHouse, house.Z));
+        foreach (var h in heroes) world.Characters.Cold(h.Slot)!.IsPlayer = true;
+        var (reached, downed) = RunRaid(world, faction, house, heroes);
+        output.WriteLine($"a raider within {HouseReach} of the house at tick {reached}, a hero down at tick {downed}");
+
+        Assert.True(reached >= 0, $"no raider came within {HouseReach} of the house in {RaidTicks} ticks");
+        Assert.True(downed >= 0, $"no hero was downed in {RaidTicks} ticks");
+    }
+
+    /// <summary>
+    /// The install's base-game population with its towns' buildings on the terrain of <paramref name="map"/>, and the level data it was made of.
+    /// </summary>
+    static PopulationData InstallPopulation(TerrainHeightmap map, out WorldLevelData levels)
+    {
+        var install = InstallData.Install!;
+        var db = InstallData.FullLoadOrder!;
+        levels = WorldLevelData.LoadBaseGame(install, includeInteriors: true);
+        var buildings = TownBuildings.Build(db, levels, new BuildingLayouts(db, levels.Interiors), (x, z) => map.HeightAt((float)x, (float)z));
+        return PopulationData.Create(db, levels.Towns(), new GeneratedAppearances(db, install.Root), buildings: buildings);
+    }
+
+    /// <summary>
+    /// The terrain, with the floor the navmesh would give round each cage in <paramref name="cageFloors"/> (filled in later): Skinhouse HQ's cages
+    /// stand on upper floors, 87 to 95 above the ground, and a cage is reached only within 15 of its height (FixtureRegistry.AtCage). The
+    /// heightmap's file reader is not thread-safe.
+    /// </summary>
+    static OpenGroundWalkability CageFloorGround(TerrainHeightmap map, List<Fixture> cageFloors)
+    {
+        var heightGate = new object();
+        float Ground(float x, float z)
+        {
+            foreach (var c in cageFloors)
+                if (Vector2.Distance(new(x, z), new(c.Position.X, c.Position.Z)) < CageFloorRadius) return c.Position.Y;
+            lock (heightGate) return map.HeightAt(x, z);
+        }
+
+        return new OpenGroundWalkability(Ground);
+    }
+
+    /// <summary>
+    /// A finished player "Small Shack" (one unlocked door; function key 19, a house) at the centre of <paramref name="outpost"/>, in that town and
+    /// on the ground, with its doors registered; returns where it stands.
+    /// </summary>
+    static Vector3 PlaceShack(SimWorld world, PopulationData data, TerrainHeightmap map, Meitou.Simulation.Construction.PlayerTown outpost)
+    {
+        var at = new Vector3(outpost.Position.X, map.HeightAt(outpost.Position.X, outpost.Position.Z), outpost.Position.Z);
+        string shack = data.Db.OfType(FcsRecordType.Building).First(r => r.Name == "Small Shack").StringId;
+        var site = new Meitou.Simulation.Construction.BuildSite
+        {
+            Id = world.Buildings.NewId(WorldLayout.ZoneOf(at.X, at.Z)), Record = shack, Position = at, Owner = data.PlayerFaction, Materials = [],
+            Complete = true, Town = outpost.Number,
+        };
+        world.Buildings.Add(site);
+        world.Fixtures.RegisterPlayerBuilding(world, data, site);
+        return at;
+    }
+
+    /// <summary>
+    /// Runs the raid up to <see cref="RaidTicks"/> ticks, until a character of <paramref name="faction"/> has come within <see cref="HouseReach"/>
+    /// of <paramref name="house"/> and one of the heroes is down; the ticks (from the start of the run) of the first of each, -1 for none.
+    /// </summary>
+    static (long Reached, long Downed) RunRaid(SimWorld world, int faction, Vector3 house, List<CharacterId> heroes)
+    {
+        var table = world.Characters;
+        long start = world.Tick;
+        long reached = -1, downed = -1;
+        while (world.Tick - start < RaidTicks && (reached < 0 || downed < 0))
+        {
+            world.RunTicks(1);
+            if (reached < 0 && RaiderAt(table, faction, house)) reached = world.Tick - start;
+            if (downed < 0 && heroes.Any(h => table.Cold(h.Slot)!.Medical!.Incapacitated)) downed = world.Tick - start;
+        }
+
+        return (reached, downed);
+    }
+
+    /// <summary>
+    /// Whether a live character of <paramref name="faction"/> stands within <see cref="HouseReach"/> of <paramref name="house"/> (on the ground).
+    /// </summary>
+    static bool RaiderAt(CharacterTable table, int faction, Vector3 house)
+    {
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (!table.Next[s].Alive || table.Cold(s)?.Faction != faction) continue;
+
+            var p = table.Next[s].Position;
+            if (Vector2.Distance(new(p.X, p.Z), new(house.X, house.Z)) <= HouseReach) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// A world of the install's data with population, the player, fighting, first aid, aggro, flight, carrying, crime and AI, paths found at once
     /// and the kidnap log recorded.
     /// </summary>
-    static SimWorld NewWorld(PopulationData data, OpenGroundWalkability walk, PopulationSettings settings, out StandardSystemSet set)
+    static SimWorld NewWorld(PopulationData data, OpenGroundWalkability walk, PopulationSettings settings, out StandardSystemSet set,
+            StandardParts parts = StandardParts.Population | StandardParts.Player | StandardParts.Pursuit | StandardParts.Movement | StandardParts.Body
+                | StandardParts.Combat | StandardParts.Retaliation
+                | StandardParts.FirstAid | StandardParts.Aggro | StandardParts.Flee | StandardParts.Carry | StandardParts.Crime | StandardParts.Ai)
     {
         set = StandardSystems.Build(data, walk, new StandardSystemOptions
         {
-            Parts = StandardParts.Population | StandardParts.Player | StandardParts.Pursuit | StandardParts.Movement | StandardParts.Body
-                | StandardParts.Combat | StandardParts.Retaliation
-                | StandardParts.FirstAid | StandardParts.Aggro | StandardParts.Flee | StandardParts.Carry | StandardParts.Crime | StandardParts.Ai,
+            Parts = parts,
             SynchronousPaths = true,
             Population = settings,
             Kidnap = new KidnapSettings { RecordLog = true },
@@ -484,14 +699,12 @@ public class KidnapInstallTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Four Greenlander player characters at the outpost, side by side.
+    /// Four Greenlander player characters of the outpost at <paramref name="at"/>, side by side.
     /// </summary>
-    static List<CharacterId> SpawnHeroes(SimWorld world, PopulationSystem population, GameDatabase db, PopulationData data,
-            Meitou.Simulation.Construction.PlayerTown outpost)
+    static List<CharacterId> SpawnHeroes(SimWorld world, PopulationSystem population, GameDatabase db, PopulationData data, Vector2 at)
     {
         string human = db.OfType(FcsRecordType.Character).First(r => r.GetReferences("race").Any(x => x.Values.Value0 > 0
                 && db.Find(x.TargetStringId)?.Name == "Greenlander") && r.GetReferences("stats").Count > 0).StringId;
-        var at = new Vector2(outpost.Position.X, outpost.Position.Z);
         var heroes = new List<CharacterId> { population.SpawnSandbox(world, human, at, player: true) };
         for (int k = 1; k < 4; k++)
         {

@@ -87,7 +87,7 @@ public class TradeUiTests
         Assert.SkipWhen(install is null, "No Kenshi install configured");
         var data = TradeTests.Data(TradeTests.Shops);
         using var session = new WorldSession(Vector3.Zero, (-100, -100, 100, 100), (_, _) => 150,
-                systems: [new PlayerSystem(), new TradeSystem(data)]);
+                systems: [new PlayerSystem(), new TradeSystem(data), new Meitou.Simulation.Dialogue.DialogueSystem(data)]);
         var world = session.World;
         CharacterId Spawn(string name, float x, int faction, bool player, string template)
         {

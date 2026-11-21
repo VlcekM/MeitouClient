@@ -105,6 +105,7 @@ sealed class ProbeWorld : IDisposable
         ResidentRuins.Apply(db, levels, layouts);   // the homes' ruins and layouts before anything reads the levels, as the game's boot
         var data = PopulationData(install, db, levels, layouts, height);
         var save = SaveGame.Load(SaveFolder.Open(saveFolder));
+        ReportProblems(save);
         if (!HasPlayerCharacter(save))
         {
             WarnNoPlayerCharacter(save);
@@ -305,6 +306,17 @@ sealed class ProbeWorld : IDisposable
         Console.Error.WriteLine($"probe     the save has no character of the player's faction ({save.Characters.Count()} characters in "
             + $"{save.Platoons.Count} platoons read)");
         Console.Error.WriteLine("  A zip unpacked without its UTF-8 names loses the platoons' characters: unpack it with .NET's ZipFile or Explorer.");
+    }
+
+    /// <summary>
+    /// Says how many problems the save read with (<see cref="SaveGame.Problems"/>), with the first few.
+    /// </summary>
+    static void ReportProblems(SaveGame save)
+    {
+        if (save.Problems.Count == 0) return;
+
+        Console.Error.WriteLine($"probe     the save read with {save.Problems.Count} problem(s), {save.RejectedFiles.Count} file(s) rejected");
+        foreach (var problem in save.Problems.Take(5)) Console.Error.WriteLine("  " + problem);
     }
 
     /// <summary>

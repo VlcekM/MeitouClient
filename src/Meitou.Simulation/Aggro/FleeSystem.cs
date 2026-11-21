@@ -22,10 +22,12 @@ namespace Meitou.Simulation.Aggro;
 /// a random direction.</item>
 /// <item><b>Until</b> (the task's end conditions, <c>isNoEnemiesInVicinity</c> and not <c>isAggressionTowardsMe</c>): no enemy standing within its
 /// sight range and nobody attacking it. It then goes back to wandering. A fleeing character neither looks for fights (<see cref="AggroSystem"/>) nor
-/// answers attacks (<see cref="RetaliationSystem"/>). The player's characters never flee by themselves.</item>
+/// answers attacks (<see cref="RetaliationSystem"/>). No squad with a player's character breaks.</item>
 /// <item><b>On the AI's request</b> (<see cref="Ai.AiMind.FleeRequest"/>, the same run): an NPC whose Self preservation goes to Running away (a
-/// crippled one, or one with no working arm, under attack: <see cref="Ai.SelfPreservation"/>) runs from the centre of its threats and stops when none
-/// attacks it within reach (<see cref="CharacterCold.FleesAlone"/>); a goal 35 of its lists starts the squads' run for one character.</item>
+/// crippled one, or one with no working arm, under attack: <see cref="Ai.SelfPreservation"/>) runs from the centre of its threats; a goal 35 of its
+/// lists from the enemies it senses (a player's character too: an obeying slave's of its master's Slave list). The run is the task of that goal (<see cref="CharacterCold.FleesAlone"/>, row 35, a goal's provenance): the
+/// runner's chooser runs on, and the flight ends when the goal does (another winner's task replaces the run, or no goal of the run is
+/// current).</item>
 /// </list>
 /// </summary>
 public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, float sightRange = AggroSystem.OutdoorSight)
@@ -150,7 +152,9 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
             if (!table.Next[i].Alive || table.Cold(i) is not { Ai.FleeRequest: not FleeAsk.None } asker) continue;
             var ask = asker.Ai!.FleeRequest;
             asker.Ai.FleeRequest = FleeAsk.None;
-            if (!asker.Fleeing && !asker.IsPlayer && asker.Medical is not { Incapacitated: true } && !DecisionSystem.Ordered(asker))
+            // The player's characters included: Task_Runaway's start and update test no faction (FUN_14034b440, FUN_140336820), so an obeying
+            // slave's goal 35 runs; what keeps them from running is the desire (32's run, AiSystem's player-side 35) and that no squad of theirs breaks.
+            if (!asker.Fleeing && asker.Medical is not { Incapacitated: true } && !DecisionSystem.Ordered(asker))
                 Begin(world, table, i, ask);
         }
     }
@@ -165,29 +169,94 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
             ref var n = ref table.Next[i];
             if (!n.Alive || table.Cold(i) is not { Fleeing: true } cold) continue;
 
-            // A stumble or a get-up (an order on the body) holds the runner a moment; the flight goes on after it.
-            if (Player.PlayerOrders.BodyHolds(cold) && cold.Medical is not { Incapacitated: true }) continue;
-
-            // An order beats the flight (Self preservation's run included): it stops, as for a player character.
-            if (cold.Medical is { Incapacitated: true } || cold.IsPlayer || DecisionSystem.Ordered(cold))
+            // An order beats the flight (Self preservation's run included): it stops (a player-faction character's order ends its goal at the order
+            // step, and with it the goal's run, FlightGoes). So does an order on the body: the stumble's front insert sets its body task at once,
+            // replacing Task_Runaway (FUN_140507cd0 -> FUN_1405c6ec0); a get-up 65 / 52 is an ordinary push with the clear flag (FUN_140508380: queue
+            // and goal wiped, a replan), whose order step plans it over the run. The replan after either chooses again, a new run starting from its
+            // first leg (FUN_14034b440).
+            if (cold.Medical is { Incapacitated: true } || DecisionSystem.Ordered(cold) || PlayerOrders.BodyHolds(cold))
             {
                 cold.Fleeing = cold.FleesAlone = false;
                 continue;
             }
 
+            if (cold.FleesAlone && GoalFlight(cold))
+            {
+                ContinueGoalFlight(world, table, i, cold);
+                continue;
+            }
+
             if (check && (cold.FleesAlone ? Unthreatened(world, i, cold) : Safe(world, table, i)))
             {
-                cold.Fleeing = cold.FleesAlone = false;
-                TaskStart.Become(world, i, CharacterTask.Wander, Data.Gameplay.Ai.TaskType.Wanderer, TaskSource.Npc);
-                n.TaskTime = 0;
+                EndSafe(world, i, cold);
                 continue;
             }
 
             bool running = n.Task == (byte)CharacterTask.GoTo;
             if (running && Vector2.DistanceSquared(new Vector2(n.Position.X, n.Position.Z), n.Goal) > Arrived * Arrived) continue;
             if (n.Task == (byte)CharacterTask.Attack) world.Defer(new StopCommand([new CharacterId(i, n.Generation)]) { Tick = world.Tick + 1 });
-            Run(world, table, i, RandomDirection(world, i, 1), Hop);
+            Run(world, table, i, RandomDirection(world, i, 1), Hop, TaskSource.Npc);
         }
+    }
+
+    /// <summary>
+    /// A run that is no goal's ends once safe: an NPC goes back to wandering; a character the sources decide (<see cref="DecisionSystem.Decides"/>, a
+    /// player-faction one whose mind was dropped during its goal's run) stands, its chooser deciding what it does next.
+    /// </summary>
+    static void EndSafe(World world, int i, CharacterCold cold)
+    {
+        cold.Fleeing = cold.FleesAlone = false;
+        if (DecisionSystem.Decides(cold))
+        {
+            TaskStart.Become(world, i, CharacterTask.Idle, Data.Gameplay.Ai.TaskType.Idle, TaskSource.Goal);
+            return;
+        }
+
+        TaskStart.Become(world, i, CharacterTask.Wander, Data.Gameplay.Ai.TaskType.Wanderer, TaskSource.Npc);
+        world.Characters.Next[i].TaskTime = 0;
+    }
+
+    /// <summary>
+    /// A goal's run (<see cref="GoalFlight"/>): the next hop while its goal goes on (<see cref="FlightGoes"/>), else the end of the flight; a run the
+    /// goal left behind (its starter gone, the walk still on) stops, and the character chooses again.
+    /// </summary>
+    void ContinueGoalFlight(World world, CharacterTable table, int i, CharacterCold cold)
+    {
+        ref var n = ref table.Next[i];
+        if (!FlightGoes(n, cold))
+        {
+            cold.Fleeing = cold.FleesAlone = false;
+            if (cold.Running is not { Row: Data.Gameplay.Ai.TaskType.RunAway } run || !run.Runs((CharacterTask)n.Task)) return;
+
+            TaskStart.Become(world, i, CharacterTask.Idle, Data.Gameplay.Ai.TaskType.Idle, TaskSource.Goal);
+            cold.Ai!.Replan = true;
+            return;
+        }
+
+        bool running = n.Task == (byte)CharacterTask.GoTo;
+        if (running && Vector2.DistanceSquared(new Vector2(n.Position.X, n.Position.Z), n.Goal) > Arrived * Arrived) return;
+
+        Run(world, table, i, RandomDirection(world, i, 1), Hop, TaskSource.Goal);
+    }
+
+    /// <summary>
+    /// Whether an AI-asked flight is still its goal's task (<see cref="CharacterCold.FleesAlone"/>): the runner keeps its mind, whose chooser runs on
+    /// (a squad or faction change drops the mind, and such a run ends once no threat attacks it, <see cref="Unthreatened"/>).
+    /// </summary>
+    static bool GoalFlight(CharacterCold cold) => cold.Ai is not null;
+
+    /// <summary>
+    /// Whether a goal's run goes on: its goal is current (32 on its step 35, or a goal of the Flee behaviour, 35) and no other start replaced the
+    /// run (<c>Task_Runaway</c> holds until the chooser installs another goal, or the goal's list A holds and the planner ends it).
+    /// </summary>
+    static bool FlightGoes(in CharacterHot n, CharacterCold cold)
+    {
+        // The plan step clears a goal whose plan is over (35's list A !39 6 held) and leaves the behaviour: the goal tells.
+        if (cold.Ai is not { Goal: not null } mind) return false;
+        if (mind is not ({ Behaviour: AiBehaviour.Flee } or { Behaviour: AiBehaviour.SelfPreserve, Step: Data.Gameplay.Ai.TaskType.RunAway }))
+            return false;
+
+        return cold.Running is not { } run || !run.Runs((CharacterTask)n.Task) || run.Row == Data.Gameplay.Ai.TaskType.RunAway;
     }
 
     /// <summary>
@@ -241,7 +310,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
             if (table.Cold(s)!.Fleeing || DecisionSystem.Ordered(table.Cold(s)!)) continue;
             var (centre, k) = Centre(world, table, s);
             table.Cold(s)!.FleesAlone = false;
-            Begin(world, table, s, centre, k);
+            Begin(world, table, s, centre, k, TaskSource.Npc);
         }
     }
 
@@ -251,9 +320,9 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
 
     /// <summary>
     /// A flight the AI asked for (<see cref="Ai.AiMind.FleeRequest"/>). From the threats (<see cref="Ai.FleeAsk.Threat"/>, Self preservation's
-    /// provider 35, <see cref="Ai.SelfPreservation"/>): if a threat still attacks it and its body still takes the choice to running; it runs from
-    /// their centre and stops when none is left. From the enemies it senses (<see cref="Ai.FleeAsk.Enemies"/>, a goal 35): as a broken squad's
-    /// member does.
+    /// provider 35, <see cref="Ai.AiSystem.SelfPreservationPlans"/>, whose plan already made the choice, a player-faction mind's included): if a
+    /// threat still attacks it; it runs from their centre. From the enemies it senses (<see cref="Ai.FleeAsk.Enemies"/>, a goal 35), as a broken squad's member does. The run is its goal's
+    /// task (<see cref="GoalFlight"/>).
     /// </summary>
     void Begin(World world, CharacterTable table, int s, FleeAsk ask)
     {
@@ -261,20 +330,21 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
         if (ask == FleeAsk.Threat)
         {
             float level = combat.ThreatLevel(world, s, out var threats);
-            if (level <= 0 || !SelfPreservation.Runs(cold, level, SelfPreservation.Walled(world, s))) return;
+            if (level <= 0) return;
+
             cold.FleesAlone = true;
-            Begin(world, table, s, threats, 1);
+            Begin(world, table, s, threats, 1, TaskSource.Goal);
             return;
         }
 
         var (centre, k) = EnemyCentre(world, table, s);
-        cold.FleesAlone = false;
-        Begin(world, table, s, centre, k);
+        cold.FleesAlone = true;
+        Begin(world, table, s, centre, k, TaskSource.Goal);
     }
 
     /// <summary>
-    /// Where <c>Task_Runaway</c> sends a character from the enemies it senses (<see cref="Centre"/>, <see cref="FirstLeg"/>), for a run that is not
-    /// this system's: an obedient player slave's goal 35 (Kidnap/ObedientSlave.cs). Serial phases only.
+    /// Where <c>Task_Runaway</c> sends a character from the enemies it senses (<see cref="Centre"/>, <see cref="FirstLeg"/>), for the start of an
+    /// order 35 (<see cref="GiveRun"/>). Serial phases only.
     /// </summary>
     internal Vector2 EnemyRunPoint(World world, int s)
     {
@@ -301,16 +371,27 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     /// <summary>
     /// <c>Task_Runaway</c>'s start (<c>FUN_14034b440</c>): the character stops fighting and runs at full speed along <see cref="FirstLeg"/>.
     /// </summary>
-    void Begin(World world, CharacterTable table, int s, Vector3 centre, int count)
+    void Begin(World world, CharacterTable table, int s, Vector3 centre, int count, TaskSource source)
     {
         var (away, from) = FirstLeg(world, table, s, centre, count);
-        ref var n = ref table.Next[s];
+        StopFighting(world, table, s);
         table.Cold(s)!.Fleeing = true;
-        if (n.Task == (byte)CharacterTask.Attack || table.Cold(s)!.InCombat)
-            world.Defer(new StopCommand([new CharacterId(s, n.Generation)]) { Tick = world.Tick + 1 });
-
-        Run(world, table, s, away, FirstRun, from);
+        Run(world, table, s, away, FirstRun, source, from);
         Fled++;
+    }
+
+    /// <summary>
+    /// A runner that fights stops: an NPC by a Stop command at the next tick; a player's character at once, out of its fight alone, for the Stop
+    /// command is the player's (<see cref="PlayerSystem"/>: it would also clear its orders and end the run).
+    /// </summary>
+    void StopFighting(World world, CharacterTable table, int s)
+    {
+        ref var n = ref table.Next[s];
+        var cold = table.Cold(s)!;
+        if (n.Task != (byte)CharacterTask.Attack && !cold.InCombat) return;
+
+        if (cold.IsPlayer) combat.Disengage(table, new CharacterId(s, n.Generation));
+        else world.Defer(new StopCommand([new CharacterId(s, n.Generation)]) { Tick = world.Tick + 1 });
     }
 
     /// <summary>
@@ -559,11 +640,10 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
 
     /// <summary>
     /// Sends the character at <paramref name="s"/> running from <paramref name="from"/> (else where it stands) <paramref name="distance"/> plus up to
-    /// <see cref="RunSpread"/> at random along <paramref name="direction"/>.
+    /// <see cref="RunSpread"/> at random along <paramref name="direction"/>, as row 35 of <paramref name="source"/> (a goal's run, or the engine's).
     /// </summary>
-    void Run(World world, CharacterTable table, int s, Vector2 direction, float distance, Vector2? from = null) =>
-        TaskStart.Walk(world, s, RunPoint(world, table, s, direction, distance, from), SpeedMode.Free, Data.Gameplay.Ai.TaskType.RunAway,
-            TaskSource.Npc);
+    void Run(World world, CharacterTable table, int s, Vector2 direction, float distance, TaskSource source, Vector2? from = null) =>
+        TaskStart.Walk(world, s, RunPoint(world, table, s, direction, distance, from), SpeedMode.Free, Data.Gameplay.Ai.TaskType.RunAway, source);
 
     /// <summary>
     /// The end of a hop of <see cref="Run"/>: <paramref name="distance"/> plus up to <see cref="RunSpread"/> at random along
@@ -581,11 +661,6 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     #endregion
 
     #region Run-away orders
-
-    /// <summary>
-    /// The characters running under order 35 (<see cref="IOrderOwner.Start"/>), in the order they started: their hops go on here.
-    /// </summary>
-    readonly List<CharacterId> _ordered = [];
 
     /// <summary>
     /// Gives the character in <paramref name="slot"/> order 35 Running away on <paramref name="target"/>, clearing its queue (serial phases; the
@@ -612,36 +687,28 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     /// <c>Task_Runaway</c>'s start: the first run from the enemies it senses (<see cref="EnemyRunPoint"/>; the order's target is not used), at full
     /// speed.
     /// </summary>
-    void IOrderOwner.Start(World world, int slot, OrderEntry order)
-    {
+    void IOrderOwner.Start(World world, int slot, OrderEntry order) =>
         TaskStart.Walk(world, slot, EnemyRunPoint(world, slot), SpeedMode.Free, Data.Gameplay.Ai.TaskType.RunAway, TaskSource.Order);
 
-        var id = world.Characters.IdOf(slot);
-        if (!_ordered.Contains(id)) _ordered.Add(id);
-    }
-
     /// <summary>
-    /// The run has no end of its own: between two hops (the last one arrived, the next not yet started on this system's step) the order still runs.
+    /// The run has no end of its own: between two hops (the last one arrived, the next not yet started on this system's step) the started order still
+    /// runs while it is the front (asked only of a started one, <see cref="PlayerOrders.Runs"/>).
     /// </summary>
-    bool IOrderSteps.Between(World world, int slot, OrderEntry order) => _ordered.Contains(world.Characters.IdOf(slot));
+    bool IOrderSteps.Between(World world, int slot, OrderEntry order) => ReferenceEquals(world.Characters.Cold(slot)!.OrderQueue.Front, order);
 
     /// <summary>
-    /// The hops of the ordered runs (<c>Task_Runaway</c>'s update, as <see cref="ContinueFlights"/>): a run that stopped or is within
-    /// <see cref="Arrived"/> of its end goes on <see cref="Hop"/> in a random direction. A runner whose front is no longer a started 35 of this
-    /// system leaves the list.
+    /// The hops of the ordered runs (<c>Task_Runaway</c>'s update, as <see cref="ContinueFlights"/>), told from the queues (a front that is a started
+    /// 35 of this system), in slot order: a run that stopped or is within <see cref="Arrived"/> of its end goes on <see cref="Hop"/> in a random
+    /// direction.
     /// </summary>
     void ContinueOrderedRuns(World world, CharacterTable table)
     {
-        for (int k = _ordered.Count - 1; k >= 0; k--)
+        for (int s = 0; s < table.HighWater; s++)
         {
-            if (!table.TryResolveNext(_ordered[k], out int s) || !RunsOrder(table.Cold(s)!))
-            {
-                _ordered.RemoveAt(k);
-                continue;
-            }
+            if (!table.Next[s].Alive || table.Cold(s) is not { } cold || !RunsOrder(cold)) continue;
 
             ref var n = ref table.Next[s];
-            bool running = n.Task == (byte)CharacterTask.GoTo && table.Cold(s)!.Running is { Row: Data.Gameplay.Ai.TaskType.RunAway };
+            bool running = n.Task == (byte)CharacterTask.GoTo && cold.Running is { Row: Data.Gameplay.Ai.TaskType.RunAway };
             if (running && Vector2.DistanceSquared(new Vector2(n.Position.X, n.Position.Z), n.Goal) > Arrived * Arrived) continue;
 
             var hop = RunPoint(world, table, s, RandomDirection(world, s, 1), Hop);

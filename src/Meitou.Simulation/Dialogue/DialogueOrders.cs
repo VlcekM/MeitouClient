@@ -7,29 +7,56 @@ using Meitou.Simulation.Player;
 namespace Meitou.Simulation.Dialogue;
 
 /// <summary>
-/// The dialogue's talk orders (docs/game/dialogue.md "Effects"), one-shot orders of the character's queue: 102 Making announcement
+/// The talk orders, one-shot orders of the character's queue: the player's 12 Talking (<c>Task_PlayerTalkto</c> with the walk before it, the Talk
+/// order, and Meitou's Trade order on it, <see cref="PlayerTalks"/>) and the dialogue's (docs/game/dialogue.md "Effects") 102 Making announcement
 /// (<c>Task_TalktoPlayer</c> with the walk before it, DA 2, <see cref="ApproachQueue"/>), 164 Following and talking (DA 16, the movement's follow,
 /// <see cref="TalkFollowers"/>) and 165 Stalking (DA 17, <see cref="TownStalkers"/>). It checks and starts them and acts out
 /// <see cref="CharacterTask.Talk"/>; its records are the act-outs' state, each dropped once its character no longer runs the order. Serial phases.
 /// </summary>
-sealed class DialogueOrders(ApproachQueue approaches, TalkFollowers followers, TownStalkers stalkers) : IOrderOwner, ITaskHandler
+sealed class DialogueOrders(PlayerTalks talks, ApproachQueue approaches, TalkFollowers followers, TownStalkers stalkers) : IOrderOwner, ITaskHandler
 {
     #region Orders
 
     /// <summary>
-    /// A talk order needs a target that is there and is not the character itself (else it leaves the queue); the repertoire test is the queue's.
+    /// The <see cref="OrderEntry.Detail"/> of a 12 that opens a trade on arrival instead of the conversation (Meitou's Trade order; saved as kind 1).
     /// </summary>
-    OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order) =>
-        world.Characters.TryResolveNext(order.Target, out int t) && t != slot ? OrderCheck.Run : OrderCheck.Gone;
+    internal static readonly object Trade = new();
 
     /// <summary>
-    /// Starts the order's task: 164 the follow of its target (the shared follow task, <c>Task_FollowAndTalk</c>), 102 and 165 the talk act-out.
+    /// A talk order needs a target that is there and is not the character itself, and 12 one that can be talked to (alive, not out cold): else it
+    /// leaves the queue. A 12 whose talker cannot walk (a prisoner: row 29 is not in its repertoire, so the plan has no walk to the target) waits
+    /// blocked until the target is in talk range. The repertoire test is the queue's.
+    /// </summary>
+    OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(order.Target, out int t) || t == slot) return OrderCheck.Gone;
+        if (order.Row != TaskType.PlayerTalkTo) return OrderCheck.Run;
+        if (!DialogueSystem.Talkable(table, t)) return OrderCheck.Gone;
+
+        bool walks = TaskStart.Eligible(world, table.Cold(slot)!, TaskType.MoveCusOrdered);
+        return walks || DialogueSystem.InTalkRange(table, slot, t) ? OrderCheck.Run : OrderCheck.Blocked();
+    }
+
+    /// <summary>
+    /// A running 12 whose talker cannot walk ends and waits blocked once its target is out of talk range (its plan fails again).
+    /// </summary>
+    bool IOrderOwner.StillHolds(World world, int slot, OrderEntry order) =>
+        order.Row != TaskType.PlayerTalkTo || ((IOrderOwner)this).CanRun(world, slot, order).CanRun;
+
+    /// <summary>
+    /// Starts the order's task: 164 the follow of its target (the shared follow task, <c>Task_FollowAndTalk</c>), 12, 102 and 165 the talk act-out.
+    /// A sleeper given a 12 gets up first, as for a move.
     /// </summary>
     void IOrderOwner.Start(World world, int slot, OrderEntry order)
     {
+        var cold = world.Characters.Cold(slot)!;
+        if (order.Row == TaskType.PlayerTalkTo && cold.InSomething == Locks.HeldState.Bed) world.Fixtures.LeaveBed(world, world.Characters.IdOf(slot));
+
         if (order.Row != TaskType.FollowWhileTalking)
         {
-            TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Talk, order.Row, TaskSource.Order) { Target = order.Target });
+            var talk = new TaskRequest(CharacterTask.Talk, order.Row, TaskSource.Order) { Target = order.Target, Detail = order.Detail };
+            TaskStart.Start(world, slot, talk);
             return;
         }
 
@@ -38,24 +65,48 @@ sealed class DialogueOrders(ApproachQueue approaches, TalkFollowers followers, T
     }
 
     /// <summary>
-    /// The act-outs' steps (the dialogue's slow-world step): the walk-ups, the follows while talking and the stalkers.
+    /// A Trade order is saved as kind 1, a Talk with none.
+    /// </summary>
+    int IOrderOwner.SaveKind(OrderEntry order) => order.Detail is null ? 0 : order.Detail == Trade ? 1 : -1;
+
+    /// <summary>
+    /// Kind 1 of a 12 is the Trade order.
+    /// </summary>
+    object? IOrderOwner.LoadDetail(World world, CharacterId self, TaskType row, int kind, CharacterId target) =>
+        row == TaskType.PlayerTalkTo && kind == 1 ? Trade : null;
+
+    /// <summary>
+    /// The act-outs' steps (the dialogue's slow-world step): the player's talks, the walk-ups, the follows while talking and the stalkers.
     /// </summary>
     internal void Step(World world)
     {
+        talks.Step(world);
         approaches.Step(world);
         followers.Step(world);
         stalkers.Step(world);
     }
 
     /// <summary>
-    /// Whether the character at <paramref name="slot"/> still runs the talk order <paramref name="row"/> on <paramref name="target"/>: its queue's
-    /// front is that order, started, and its task the order's (<see cref="RunningTask.Runs"/>). A record for one that does not is dropped.
+    /// Whether the character at <paramref name="slot"/> still runs the talk order <paramref name="row"/> on <paramref name="target"/>: that order is
+    /// started at its queue's front or in its second list (a loaded queue the chooser picked), and its task is the order's
+    /// (<see cref="RunningTask.Runs"/>). A record for one that does not is dropped.
     /// </summary>
     internal static bool Runs(CharacterTable table, int slot, TaskType row, CharacterId target)
     {
         var cold = table.Cold(slot)!;
         bool front = cold.OrderQueue.Front is { Started: true } f && f.Row == row && f.Target == target;
-        return front && cold.Running is { Source: TaskSource.Order } run && run.Row == row && run.Runs((CharacterTask)table.Next[slot].Task);
+        bool second = cold.SecondList.Exists(e => e.Started && e.Row == row && e.Target == target);
+        bool task = cold.Running is { Source: TaskSource.Order } run && run.Row == row && run.Runs((CharacterTask)table.Next[slot].Task);
+        return (front || second) && task;
+    }
+
+    /// <summary>
+    /// A record dropped while its character still stands on the talk act-out (its order cleared by one that cannot start yet): the act-out stops,
+    /// as the original's replan deletes the running task, so the character stands idle for its AI rather than on a task nothing steers.
+    /// </summary>
+    internal static void LetGo(CharacterTable table, int slot)
+    {
+        if (table.Next[slot].Task == (byte)CharacterTask.Talk) TaskStart.Stand(table, slot);
     }
 
     #endregion
@@ -63,8 +114,8 @@ sealed class DialogueOrders(ApproachQueue approaches, TalkFollowers followers, T
     #region Talk act-out
 
     /// <summary>
-    /// Starts the talk act-out of 102 or 165: the character stops (the task's start stops its own mover, <c>FUN_14034c5a0</c>) and its record is
-    /// made; its step walks it from there.
+    /// Starts the talk act-out of 12, 102 or 165: the character stops (the tasks' starts stop their own mover, <c>FUN_14034be70</c>,
+    /// <c>FUN_14034c5a0</c>) and its record is made; its step walks it from there.
     /// </summary>
     void ITaskHandler.Start(World world, int slot, in TaskRequest request)
     {
@@ -76,6 +127,7 @@ sealed class DialogueOrders(ApproachQueue approaches, TalkFollowers followers, T
 
         var id = table.IdOf(slot);
         if (request.Row == TaskType.TownStalker) stalkers.Add(id, request.Target);
+        else if (request.Row == TaskType.PlayerTalkTo) talks.Add(id, request.Target, request.Detail == Trade);
         else
             approaches.Add(id, request.Target);
     }
@@ -86,6 +138,7 @@ sealed class DialogueOrders(ApproachQueue approaches, TalkFollowers followers, T
     void ITaskHandler.End(World world, int slot, CharacterTask task, TaskEnd reason)
     {
         var id = world.Characters.IdOf(slot);
+        talks.Drop(id);
         approaches.Drop(id);
         stalkers.Drop(id);
     }

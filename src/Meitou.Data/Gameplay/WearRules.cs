@@ -81,6 +81,8 @@ public static class WearRules
         {
             if (Interlocked.Exchange(ref entry.Logged, 1) == 0)
                 Console.Error.WriteLine($"mod       {entry.Owner}: wear rule threw (counted as yes): {e.GetType().Name}: {e.Message}");
+
+            Content.CodeModFaults.Tell(entry.Owner, e);
             return true;
         }
     }

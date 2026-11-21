@@ -90,9 +90,11 @@ sealed class TownStalkers(DialogueSystem system, PopulationData data)
     void Step(World world, CharacterId who, Stalk stalk)
     {
         var table = world.Characters;
-        if (!table.TryResolveNext(who, out int s) || !DialogueOrders.Runs(table, s, TaskType.TownStalker, stalk.Target))
+        bool there = table.TryResolveNext(who, out int s);
+        if (!there || !DialogueOrders.Runs(table, s, TaskType.TownStalker, stalk.Target))
         {
             _stalkers.Remove(who);
+            if (there) DialogueOrders.LetGo(table, s);
             return;
         }
 

@@ -235,16 +235,6 @@ public sealed class PlayerState
     /// </summary>
     public CharacterId LootWalker { get; set; } = CharacterId.None;
 
-    /// <summary>
-    /// The door (<see cref="Locks.Fixture.Id"/>) a character is walking to open or close (<see cref="Locks.DoorOrder"/>), and who. Not hashed and not
-    /// saved, as the container walk.
-    /// </summary>
-    public string? DoorTarget { get; set; }
-
-    /// <summary>
-    /// The character walking to <see cref="DoorTarget"/>.
-    /// </summary>
-    public CharacterId DoorWalker { get; set; } = CharacterId.None;
 
     /// <summary>
     /// The item on the mouse (<see cref="Items.HeldItem"/>, <see cref="HeldItems"/>), or null. Hashed; not saved: a save puts it back where it came

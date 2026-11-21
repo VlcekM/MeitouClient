@@ -943,7 +943,8 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         var kind = Picking.PickAt(p).Kind;
         if (kind == WorldPicking.Picked.Character)
         {
-            var quick = QuickOrder(p)?.Do;
+            // A click that gives the character nothing goes on to its cage when it is one of the player's caged by another faction (FUN_1407fc6e0).
+            var quick = QuickOrder(p) is { } order ? order.Do : CageClick(p, alt);
             if (!ContextMenuWindow.ContextPress(p, quick)) quick?.Invoke();
             return;
         }
@@ -981,7 +982,21 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     }
 
     /// <summary>
-    /// The talk pointer: <c>s_talk</c> while the character holds a line for the player (Dialogue <c>playerInterruptionDialog</c> +0xc8,
+    /// The quick click's cage order on the character under the cursor with a selection (<see cref="Simulation.Locks.CageClickOrder"/>: Alt picks a
+    /// locked cage or escapes an unlocked one, else the hint) for a caged character of the player's; the simulation tests whose cage it is. Null with
+    /// nobody selected or on any other character.
+    /// </summary>
+    Action? CageClick(Vector2 p, bool alt)
+    {
+        if (SelectedIds().Count == 0 || Picking.PickWhereAt(p, _ => true) is not { } hit) return null;
+        if (Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == hit.Id) is not { IsPlayer: true, Prison: not null }) return null;
+
+        var occupant = hit.Id;
+        return () => Say(new Simulation.Locks.CageClickOrder([], occupant, alt) { Tick = Session.World.Tick, Clicked = true });
+    }
+
+    /// <summary>
+    /// The talk pointer:<c>s_talk</c> while the character holds a line for the player (Dialogue <c>playerInterruptionDialog</c> +0xc8,
     /// <c>FUN_1407fb410</c>), else <c>talk</c>.
     /// </summary>
     string TalkPointer(CharacterSnapshot c) => Session.World.WantsToTalk(c.Id) ? "s_talk" : "talk";
@@ -1046,7 +1061,8 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
                 bool defence = c.FightsPlayer;
                 return ("attk", id, Do(() =>
                 {
-                    if (lead.Turret is not null) Say(new Simulation.Combat.ShootAtOrder(selection, id) { Tick = tick });
+                    // The quick click appends 235 to every selected character's queue, Shift or not (FUN_1407fb410 passes 1 to FUN_1407f9e20).
+                    if (lead.Turret is not null) Say(new Simulation.Combat.ShootAtOrder(selection, id) { Tick = tick, Queued = true });
                     else SquadWindows.OrderOrJob(Data.Gameplay.Ai.TaskType.MeleeAttack, id,
                         () => Say(new Simulation.Combat.AttackOrder(selection, id) { Tick = tick, Picked = true, Defensive = defence }));
                 }));

@@ -78,6 +78,7 @@ sealed class TradePriceFilters
         catch (Exception e)
         {
             fault = $"{e.GetType().Name}: {e.Message}";
+            SimulationExtensions.TellOutdated(entry.Filter, e);
         }
 
         _filters[i] = (entry.Filter, entry.SystemIndex, false);
