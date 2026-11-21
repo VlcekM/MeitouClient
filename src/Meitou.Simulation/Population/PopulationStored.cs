@@ -55,6 +55,7 @@ public sealed partial class PopulationSystem
             RemoveMember(world, id);
         }
 
+        stored.SquadId = squad.Id;
         stored.Anchor = at;
         stored.StoredTick = world.Tick;
         stored.StoredHours = world.GameHours;
@@ -236,10 +237,39 @@ public sealed partial class PopulationSystem
         world.Squads.Add(squad);
         Memory?.Restore(squad.Id, stored.Memory);
         stored.Memory = null;
+        RepointSlaves(world, stored.SquadId, squad.Id);
 
         // A resident in its bed takes it again.
         world.Fixtures.Bind(world);
         return squad;
+    }
+
+    /// <summary>
+    /// The slaves that obeyed squad <paramref name="from"/>, in the world or stored with another platoon or wild site, obey <paramref name="to"/>, the
+    /// squad the same characters came back as (<see cref="StoredSquad.SquadId"/>).
+    /// </summary>
+    void RepointSlaves(World world, int from, int to)
+    {
+        if (from < 0) return;
+
+        var table = world.Characters;
+        for (int s = 0; s < table.HighWater; s++)
+            if (table.Cold(s) is { } c && c.SlaveMaster == from) c.SlaveMaster = to;
+
+        foreach (var p in world.Platoons.All)
+            if (p.Stored is { } stored) RepointStored(stored, from, to);
+
+        foreach (var site in _keptWild.Values)
+            foreach (var k in site) RepointStored(k.Stored, from, to);
+    }
+
+    /// <summary>
+    /// <see cref="RepointSlaves"/> for the members of one stored squad.
+    /// </summary>
+    static void RepointStored(StoredSquad stored, int from, int to)
+    {
+        foreach (var m in stored.Members)
+            if (m.Cold.SlaveMaster == from) m.Cold.SlaveMaster = to;
     }
 
     /// <summary>

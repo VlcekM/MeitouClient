@@ -41,33 +41,35 @@ static class SlaveEscape
     }
 
     /// <summary>
-    /// The owner (Meitou's stand-in: the master squad's leader, <see cref="ObedientSlave.OwnerOf"/>) out of the world starts the stamp
-    /// (<see cref="MasterGone"/>). Otherwise the stamp stops; every member of the squad beaten (<see cref="AllBeaten"/>) frees the slave with its
-    /// savior; else a downed owner with no member standing to take its place (<see cref="Stands"/>) frees it alone.
+    /// The master squad out of the world starts the stamp (<see cref="MasterGone"/>). Otherwise the stamp stops; every member of the squad beaten
+    /// (<see cref="AllBeaten"/>) frees the slave with its savior; else the owner (Meitou's stand-in: the squad's leader,
+    /// <see cref="ObedientSlave.OwnerOf"/>) down or gone with no member standing to take its place (<see cref="Stands"/>) frees it alone. A leader
+    /// gone from a squad still here is read as down: the original's owner was handed to a standing member when it went down.
     /// </summary>
     static void Check(World world, int s, CharacterCold c)
     {
         var table = world.Characters;
-        if (world.Squads.Find(c.SlaveMaster) is not { } master || !table.TryResolveNext(master.Leader, out int o))
+        if (world.Squads.Find(c.SlaveMaster) is not { } master)
         {
             MasterGone(world, s, c);
             return;
         }
 
         c.MasterLostTick = -1;
+        bool owner = table.TryResolveNext(master.Leader, out int o);
         if (AllBeaten(table, master))
         {
-            Escape(world, s, c, Savior(world, s, o));
+            Escape(world, s, c, owner ? Savior(world, s, o) : CharacterId.None);
             return;
         }
 
-        if (!CharacterFacts.Down(table.Cold(o)!) || Stands(world, master)) return;
+        if ((owner && !CharacterFacts.Down(table.Cold(o)!)) || Stands(world, master)) return;
 
         Escape(world, s, c, CharacterId.None);
     }
 
     /// <summary>
-    /// The owner is not in the world: the first pass stamps the time, a later one more than <see cref="MasterLostSeconds"/> on frees the slave alone.
+    /// The master squad is not in the world: the first pass stamps the time, a later one more than <see cref="MasterLostSeconds"/> on frees the slave alone.
     /// The stamp is not cleared by the escape, as the original's (AI <c>+0x2f0</c>) is not.
     /// </summary>
     static void MasterGone(World world, int s, CharacterCold c)
@@ -95,12 +97,15 @@ static class SlaveEscape
 
     /// <summary>
     /// Whether the squad's effective leader (<c>FUN_140792b90</c>) is not down. The original then hands the slave's owner handle to that member
-    /// (<c>FUN_14032e430</c>); Meitou's owner stays the master squad, so nothing changes.
+    /// (<c>FUN_14032e430</c>); Meitou's owner stays the master squad, so nothing changes. A world without a population (no active zones) takes the
+    /// first member not down.
     /// </summary>
     static bool Stands(World world, Squad master)
     {
-        var lead = world.SystemOf<PopulationSystem>()?.EffectiveLeader(world, master) ?? master.Leader;
-        return !SquadIntact.Down(world.Characters, lead);
+        var table = world.Characters;
+        if (world.SystemOf<PopulationSystem>() is { } population) return !SquadIntact.Down(table, population.EffectiveLeader(world, master));
+
+        return master.Members.Exists(m => !SquadIntact.Down(table, m));
     }
 
     /// <summary>

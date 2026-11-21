@@ -1434,8 +1434,8 @@ which an order's hold refuses. The chain's rows and states are in [AI tasks](gam
 - **Escape from beaten masters** (`Kidnap.SlaveEscape`, on the same cadence after the far rule; facts: [carry-loot](game/carry-loot.md#a-slave-whose-masters-are-beaten-escapes)):
   a slave (state 1), player or NPC, not caged, not down, with a master squad, escapes (state 2) when every member of that squad is down or not upright,
   saying event 54 at the owner's defeater (`CharacterCold.DefeatedBy`, set by a melee blow that leaves its victim down) when the slave knows it, else 55; or
-  when the owner (the squad's leader) is down and no effective leader stands, saying 55; or 45 simulation seconds after its master squad or the squad's leader
-  left the world (`CharacterCold.MasterLostTick`), saying 55. The lines' `change AI` gives it an escaping package (`Escaping slave- run away solo`, goal 202).
+  when the owner (the squad's leader) is down or gone and no effective leader stands, saying 55; or 45 simulation seconds after its master squad left the
+  world (`CharacterCold.MasterLostTick`), saying 55; a stored squad that comes back under a new id takes its slaves with it (`PopulationSystem.RepointSlaves`). The lines' `change AI` gives it an escaping package (`Escaping slave- run away solo`, goal 202).
   Engine choices: the owner is the squad's leader, so the original's hand-over to the effective leader changes nothing and the savior is always the
   leader's defeater; the 45 s are simulation seconds, where the original counts wall-clock seconds (unscaled by game speed).
 - **Slave trading** (DA 41 / 42, `CharacterTrading`; facts: [economy 12](game/economy.md#12-slaves-prisoners-animals)): the line ends the conversation and the window

@@ -271,6 +271,11 @@ public sealed class StoredSquad
     /// </summary>
     public required string Name { get; init; }
     /// <summary>
+    /// The squad the members were stored from (-1: none yet). The squad they come back as has a new id; the slaves that obey the old one
+    /// (<see cref="CharacterCold.SlaveMaster"/>) are pointed to it then, as the original's owner handle names the same character across the unload.
+    /// </summary>
+    public int SquadId { get; set; } = -1;
+    /// <summary>
     /// A town's own squad (else a roaming one, which travels).
     /// </summary>
     public bool Pinned { get; init; } = true;

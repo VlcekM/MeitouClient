@@ -438,7 +438,7 @@ Since the setter removes job 187 Obedient Slave, the slave then plans with its o
 
 ### A slave whose masters are beaten escapes
 
-AI vfunc `0x30` (1.0.68 `FUN_1405a4ae0`, **Verified** by decompile) runs in each AI update, for player and NPC characters alike. It acts on a slave (state 1)
+AI vfunc `0x30` (1.0.68 `FUN_1405a4ae0`, **Verified** by decompile; it takes the frame time and also counts down status `+0x110`) acts on a slave (state 1)
 that is not held in a cage (Character `+0x2f8` not 2) and not down (vfunc `0x30`). Its owner platoon is the platoon (`+0x1d8`) of the character the owner handle
 (`+0x330`) names (`FUN_1407928c0`: handle types 1 and 0x22 only; a cage's building handle gives none, but a caged slave is skipped first).
 - **No owner platoon**: the first update stamps AI `+0x2f0` with the clock; a later one more than 45 s (`DAT_1416a1b84`) after the stamp makes it escaped
@@ -457,11 +457,13 @@ cut-in sender `FUN_140685660` ([dialogue](dialogue.md)). The base lines (**Verif
 `Escape opp alone civ` (55), listed by the civilian, tough, military, ninja, noble, priest, Reaver, Valamon and Tengu's Vault Guard dialogue packages,
 and Rebirth's `slave escape opportunity` / `... alone` (package `base slave`); lines of them ("I'm free!", "Run for it!") carry `AI contract` or `change AI`
 `Escaping slave- run away solo` (signal 23,
-inheriting `Escaping slave- base`: Escape 202, get out of cage, don't be unarmed, protect squad, loot), so the freed slave frees itself of its shackles and runs.
+inheriting `Escaping slave- base`, whose leader goals are Don't be unarmed, Protect squad, Looting corpses and food, Escape 202 and get out of cage - escape).
 
 Meitou: `Kidnap.SlaveEscape`, serially on the arrest system's spotting cadence. The owner is the master squad's leader ([above](#a-slave-far-from-its-owner-escapes)),
 so the hand-over changes nothing and the savior is the leader's defeater (`CharacterCold.DefeatedBy`, set in `CombatSystem.BlowConsequences`); a master squad
-not found, or its leader gone, runs the 45 s stamp in simulation seconds (`CharacterCold.MasterLostTick`). A slave without a master squad is left to the far rule.
+not found runs the 45 s stamp in simulation seconds (`CharacterCold.MasterLostTick`), and a leader gone from a squad still here counts as a downed owner
+(the original had handed the slave on when it went down). A slave without a master squad is left to the far rule. A stored squad that comes back gets a
+new id, and the slaves obeying the old one are pointed to it (`PopulationSystem.RepointSlaves`), as the original's owner handle survives the unload.
 
 ### The status town
 
