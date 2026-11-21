@@ -250,6 +250,11 @@ checking call keeps the target it was given (`FUN_140678f30` param 3) and `FUN_1
 shows from the next speaker resolution, walk or click (`FUN_140683c00` re-reads the handle). Callers: the `target carrying character`, `target has item (type)` and
 `target race` tests above, and two conditions in `FUN_140676950` (IS_FEMALE's branch and HAS_ILLEGAL_ITEM's). Meitou: `SetTarget` writes `Conversation.Player` when the
 check's `me` is the conversation's NPC (an interjector candidate's own state is not the conversation's); `Pick` tests the target it started with.
+With the dialogue window up, the same function repaints the window's player side to the new target: portrait, name and the window's player character
+(`FUN_140722ef0(window, member, 1)`, **Verified**; not the money label). A [player conversation](#player-conversation)'s start undoes a search made
+during it; a search in a line reached by a reply click keeps its move (`FUN_140683c00` writes nothing back), and from there the window, the replies
+and Trade go to the member found (**Observed**, 1.0.68: a pack
+animal carrying the searched item took the window and the trade one reply deep, whether the searching line passed or failed).
 
 ### Speakers
 
@@ -276,7 +281,15 @@ NPC answers an event's lines like any other; the rule is also in [Arrival banter
 
 `FUN_140684320`:
 - Dropped unless the player character is within 9216 units of the camera node (inferred as the camera).
-- Plays Wwise `Initiate_Conversation`. Chooses the root and its best child, says it.
+- Plays Wwise `Initiate_Conversation` and says the opening line. For a Talk the line is picked before it is called (`FUN_140684990` walks the
+  event's roots with `FUN_14067a0c0`, which descends into a passing root's children, and hands it the line); a pending interrupt root is handed
+  whole and its children are picked inside (**Verified**).
+- **The target during the start** (**Verified**, `FUN_140684320`): it sets the talker as the target, picks a pending interrupt's line, says the
+  line (tokens, effects, then the replies, `FUN_1406839a0`), checks the replies (`FUN_140679b00`), asks for the window, and **writes the talker
+  back as the target at its end**. So a [retargeting](#retargeting) search during a Talk's pick changes nothing; one while the opening line's
+  replies are checked, or in an interrupt's pick, lasts until the write-back. **Observed** (1.0.68): the window, the replies and Trade stay with
+  the talker when the opening line's search finds a pack animal or another person carrying the item. Meitou: `Start` sets
+  `Conversation.Player` to the talker after the pick (without a pending interrupt) and again after `Say` / `Offer` unless the conversation ended.
 - Opens the DialogueWindow when the said line has passing children; **the window pauses the game** (clock speed 0, the previous speed
   restored on close, `FUN_140787fb0`).
 - **What holds the two** (**Verified**, `FUN_140684320`, `FUN_1406746a0`, `FUN_140788100`, `FUN_140674830`): the pause alone; the window's open calls the pause

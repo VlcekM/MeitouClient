@@ -531,8 +531,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         }
 
         var c = new Conversation { Npc = npc, Player = player, Event = ev };
-        IReadOnlyList<DialogueNode> roots = _interrupts.Remove(npc, out var pending) && _dialogue.Node(pending) is { IsRoot: true } interrupt
-            ? [interrupt] : SetOf(world, n).For(ev);
+        var interrupt = _interrupts.Remove(npc, out var pending) && _dialogue.Node(pending) is { IsRoot: true } root ? root : null;
+        IReadOnlyList<DialogueNode> roots = interrupt is not null ? [interrupt] : SetOf(world, n).For(ev);
         string from = pending is null ? $"{roots.Count} root(s) of the event" : $"pending interrupt {pending}";
         var picked = Pick(world, c, roots);
         if (picked is not { } p)
@@ -549,9 +549,18 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         _open = c;
         FaceOnce(world, n, player);
         c.Root = p.Root;
+
+        // A Talk's opening line is picked before the start, which sets the talker as the target before saying it (FUN_140684990, FUN_140684320,
+        // Verified): a squad search during the pick moves nothing. A pending interrupt's line is picked inside the start, after that reset.
+        if (interrupt is null) c.Player = player;
+
         if (IsNpcSide(p.Line.Speaker)) Say(world, c, p.Line, p.Speaker);
         else Offer(world, c, p.Root ?? p.Line);
+
+        // The start ends by writing the talker back (FUN_140684320, Verified): a search while the line's replies were checked moved the target for
+        // those checks only; the window, the replies and Trade stay with the talker. A search in a line reached by a reply keeps its move.
         if (c.Ended) End(world);
+        else c.Player = player;
     }
 
     /// <summary>
