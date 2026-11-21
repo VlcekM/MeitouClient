@@ -341,12 +341,12 @@ public sealed partial class CarrySystem
                 .Continuous(stats, race, StatsEnumerated.Assassination, 1, f * (success ? 100 : 300), ExperienceSource.Assassination);
         }
 
+        // The swing books an Assault on the target's faction at the roll, hit or miss, before its outcome (the pending-crime setter FUN_140852c80
+        // with code 5, called unconditionally first, Verified), so a missed target that notices the attacker witnesses it.
+        Crimes?.SetPending(world, i, Crime.CrimeCode.Assault, target.Faction, targetId, Crime.CrimeSystem.MinTimer);
+
         if (success) KnockOutTarget(table, t, cold, target);
         else if (!target.Medical!.Incapacitated) Missed(world, i, t, attackerId, targetId);
-
-        // The swing books an Assault on the target's faction at the roll, hit or miss (the pending-crime setter FUN_140852c80 with code 5, called
-        // unconditionally, Verified).
-        Crimes?.SetPending(world, i, Crime.CrimeCode.Assault, target.Faction, targetId, Crime.CrimeSystem.MinTimer);
 
         // The floater over the attacker, shown to anyone (Verified): "*Thunk*" or "Failed!" + " (No XP)".
         world.Floaters?.Enqueue(Floater.Strike(attackerId, table.Next[i].Position,

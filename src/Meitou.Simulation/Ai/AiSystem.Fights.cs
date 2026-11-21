@@ -134,7 +134,8 @@ public sealed partial class AiSystem
     /// (<see cref="Combat.CombatSystem.ThreatLevel"/>: 1 with a threat within 40, 0.7 with one within 181.7, else 0). Not the current goal, it is no
     /// candidate while no threat is on the senses' list (<see cref="Combat.CombatSystem.Threatened"/>): the scorer drops it before any plan, its list
     /// A <c>!159</c> holding, its finished test the base one and its effect test passing unasked (<c>FUN_14050df10</c>, <b>Verified</b>), so an
-    /// <c>attackTarget</c> push alone (a crime's victim, an alarm's investigator) weighs nothing. In its own fight the goal is kept while it is not
+    /// <c>attackTarget</c> push alone (an alarm's investigator, a failed knock-out's target) weighs nothing; a crime's victim that witnesses the crime
+    /// has the culprit on the list (<see cref="Perception.SenseBlock.Witnessed"/>). In its own fight the goal is kept while it is not
     /// done (its list A, a threat on its list at any distance, <c>FUN_140436720</c>; the plan step, <c>FUN_14050d970</c>): <b>engine</b>, a threat
     /// only beyond 181.7 keeps it at 0.7 at Meitou's re-think (the original does not weigh a running goal again).
     /// </summary>

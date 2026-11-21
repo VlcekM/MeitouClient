@@ -8,6 +8,7 @@ using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Carrying;
 using Meitou.Simulation.Combat;
+using Meitou.Simulation.Crime;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Locks;
 using Meitou.Simulation.FirstAid;
@@ -391,6 +392,43 @@ public class DecisionTests
         Assert.NotEqual(CharacterTask.Attack, rig.Task(target));
         Assert.False(rig.Cold(target).InCombat);
         Assert.DoesNotContain("32 Self preservation", rig.Cold(target).Decision!.Winner ?? "");
+    }
+
+    /// <summary>
+    /// The NPC victim of a failed stealth knock-out whose attacker then stands idle in its view takes 32 Self preservation once it witnesses the
+    /// Assault, not at the miss: the witness function pushes the culprit from the victim's own perception update after its sense pass cleared the
+    /// list (<c>FUN_1408580d0</c> → <c>FUN_140854d10</c>), so a look that senses the culprit lists it. Catches a witnessed push that never reaches
+    /// the chooser, or one that fights at the miss while the sneaker is unseen.
+    /// </summary>
+    [Fact]
+    public void The_npc_victim_of_a_failed_stealth_ko_fights_its_idle_attacker_once_it_witnesses_the_assault()
+    {
+        using var rig = Quiet(senses: true);
+        var crime = rig.World.SystemOf<CrimeSystem>()!;
+        var carry = rig.World.SystemOf<CarrySystem>()!;
+        (carry.Crimes, rig.Combat.Crimes, rig.World.SystemOf<AiSystem>()!.Crimes) = (crime, crime, crime);
+        var target = rig.Add(1300, 2300, player: false);
+        var attacker = rig.Add(1330, 2300, player: true);
+        rig.Cold(attacker).Orders |= CharacterOrders.Sneak;
+        rig.Cold(attacker).Stats![StatsEnumerated.Assassination] = 0;
+        rig.World.RunTick();
+        rig.Say(new StealthKoOrder([attacker], target) { Tick = rig.World.Tick });
+        for (int t = 0; t < 600 && !carry.Knockouts.Any(k => !k.Success); t++) rig.World.RunTick();
+
+        Assert.Contains(carry.Knockouts, k => !k.Success);
+
+        // At the miss the sneaker behind it is not sensed again: no fight.
+        rig.World.RunTicks(30);
+        Assert.False(rig.Cold(target).InCombat);
+
+        // Idle in its view, the sneaker is spotted, the Assault witnessed and 32 taken.
+        var front = rig.World.Characters.Next[target.Slot].Position + new Vector3(0, 0, 12);
+        rig.World.Characters.Place(attacker.Slot, front, MathF.PI);
+        for (int t = 0; t < 300 && !rig.Cold(target).InCombat; t++) rig.World.RunTick();
+
+        Assert.Equal(TaskType.SelfPreservation, rig.Cold(target).Ai?.Goal?.Task.Type);
+        Assert.Equal(CharacterTask.Attack, rig.Task(target));
+        Assert.Equal(attacker.Slot, rig.Combat.StateOf(target).TargetSlot);
     }
 
     /// <summary>

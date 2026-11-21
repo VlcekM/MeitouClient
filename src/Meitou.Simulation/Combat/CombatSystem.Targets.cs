@@ -261,8 +261,9 @@ public sealed partial class CombatSystem
         for (int k = 0; k < _alerted.Count(subject); k++)
             if (AlertedAt(world, subject, k) is >= 0 and var a && Joinable(a)) Consider(world, ref q, a, looker != subject);
 
-        // Then the subject's threats list (FUN_1405cb150's second list, AI +0x78) as its last look rebuilt it: those whose fight targets it. A
-        // FUN_1405cb0a0 push is not there: the sense pass clears it before any chooser reads the list (SenseBlock.Pushed).
+        // Then the subject's threats list (FUN_1405cb150's second list, AI +0x78) as its last look rebuilt it: those whose fight targets it, and the
+        // culprits it witnesses as their crime's victim (SenseBlock.Witnessed). Another FUN_1405cb0a0 push is not there: the sense pass clears it
+        // before any chooser reads the list (SenseBlock.Pushed).
         if (CharacterFacts.Senses(world, subject) is { } senses)
         {
             foreach (var t in senses.Threats)

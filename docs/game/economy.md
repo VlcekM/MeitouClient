@@ -580,13 +580,15 @@ money, mark the entry claimed (it never pays twice) and show "Received c.{1} rew
   resolves to a character with diplomatic status in its own biomes (`isDiplomaticStatus(victim, 1)`: NPC class 5 Diplomat standing in a BIOME_GROUP of its faction's `biomes`,
   [perception](perception.md#sense-tags-who-is-an-enemy)); the code 9 is set even over another pending crime, which holds off a plain Assault. Meitou `CrimeSystem.SetPending` (`DiplomatVictim`). Its witnesses say event 41,
   the generic assault line, with no tests of their own ([dialogue](dialogue.md#firing-an-event), **Verified** by the witness switch's jump table).
-- **Witness timing** (`FUN_1408580d0`, the perception's per-seen-character update, **Observed**): the witness function `FUN_140854d10` runs for a
-  seen character when the update says it is newly seen (either of two flag arguments), or while it has a pending crime whose timer
+- **Witness timing** (`FUN_1408580d0`, the perception's per-sensed-character update, **Verified**): the sense pass calls it for an entry seen or
+  heard at that pass (`FUN_1408593d0`, its two flag arguments), and the forced sense `FUN_140858f40` calls it as seen when the looker has no entry yet; the witness function `FUN_140854d10` runs when either flag is set, or while the character has a pending crime whose timer
   (`+0x180`) is above 5; every run that reacts sets that timer back to 20 (`FUN_140851f40`), so a watched crime stays fresh, except while the culprit is down: the refresh tests vfunc `0x30` first and then sets neither the timer nor the recently-wanted marker (250), so a knocked-out culprit's crime runs out in its witnesses' sight (**Verified**, decompile; Meitou `CrimeSystem.Witnesses`). The witness function returns at once when the seen character or the witness is imprisoned (`+0x2f8 == 2`, **Verified**, decompile), or the witness is in slave state 1 or 2 (both `FUN_1405c8aa0` calls take the witness, **Verified** by disassembly; a culprit in slave state 1 is not skipped), so a caged culprit's timer runs out and its status line gives way to the bounty. A witness
   that regards the culprit as friendly and sees it wrong the witness's own faction costs the culprit's faction 20 relation each time
   ([factions 3.5](factions-squads-towns.md#35-what-fires-relation-changes-observed-decompile)). A reacting witness that is the crime's
   victim (for a trespass, the witness itself) takes the culprit as its threat (`Character::attackTarget`), which its whole squad then takes
-  for an enemy ([squad memory](dialogue.md#squad-memory)); its own chooser answers it (Meitou `CrimeSystem.AttackTarget`, no attack order).
+  for an enemy ([squad memory](dialogue.md#squad-memory)); being pushed from inside the victim's sense pass, the culprit is on the threats list its chooser reads
+  ([Self preservation](ai-tasks.md#combat-goals)); its own chooser answers it (Meitou `CrimeSystem.AttackTarget` with `AggroSystem.Witness`, no attack order;
+  a forced sense making a new entry reacts at once, `CrimeSystem.Sensed`).
 - `FUN_140673a20` in the trespass path is the squad-memory tag MY_INTRUDER, not a witness function (factions 3.5).
 
 ### Town alarms
