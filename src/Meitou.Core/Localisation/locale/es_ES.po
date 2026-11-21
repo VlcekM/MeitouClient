@@ -4613,3 +4613,147 @@ msgstr "Hablar a través del mostrador"
 #. machine-translated
 msgid "Faithful, as in the game: to talk or trade with a shopkeeper behind a counter, your character often walks round the counter to stand behind them. Meitou: shopkeepers can be reached from the customer's side of the counter."
 msgstr "Original, como en el juego: para hablar o comerciar con un tendero que está tras un mostrador, tu personaje suele rodear el mostrador para ponerse detrás de él. Meitou: se puede llegar a los tenderos desde el lado del cliente del mostrador."
+
+#. machine-translated
+msgid "its multipliers are now Squad XP in the Advanced settings (open it for each skill's own) and Show Squad XP"
+msgstr "sus multiplicadores ahora son XP del escuadrón en los ajustes avanzados (ábrelo para ver el de cada habilidad) y Mostrar XP del escuadrón"
+
+#. machine-translated
+msgid "its per-skill multipliers are now under Squad XP in the Advanced settings, and its XP label is Show Squad XP"
+msgstr "sus multiplicadores por habilidad ahora están en XP del escuadrón en los ajustes avanzados, y su etiqueta de XP es Mostrar XP del escuadrón"
+
+#. machine-translated
+msgid "How fast your characters and the rest of your faction learn: every skill and stat gain is multiplied by this (the game: 1x). 0 stops it. Click the number to type an exact value. A training dummy still stops at its level. Open it to give single skills their own multiplier."
+msgstr "Lo rápido que aprenden tus personajes y el resto de tu facción: cada ganancia de habilidad y atributo se multiplica por este valor (el juego: 1x). 0 lo detiene. Haz clic en el número para escribir un valor exacto. Un muñeco de entrenamiento sigue deteniéndose en su nivel. Ábrelo para dar a cada habilidad su propio multiplicador."
+
+#. machine-translated
+msgid "This skill's own multiplier for your faction, in place of Squad XP. At the far left (Squad XP) it follows Squad XP."
+msgstr "El multiplicador propio de esta habilidad para tu facción, en lugar de XP del escuadrón. Totalmente a la izquierda (XP del escuadrón) sigue a XP del escuadrón."
+
+#. machine-translated
+msgid "Show Squad XP"
+msgstr "Mostrar XP del escuadrón"
+
+#. machine-translated
+msgid "Shows the Squad XP multiplier (\"XP x10\") at the top left of the screen during play."
+msgstr "Muestra el multiplicador de XP del escuadrón (\"XP x10\") en la parte superior izquierda de la pantalla durante la partida."
+
+#. machine-translated
+msgid "STRENGTH"
+msgstr "FUERZA"
+
+#. machine-translated
+msgid "DEXTERITY"
+msgstr "DESTREZA"
+
+#. machine-translated
+msgid "TOUGHNESS"
+msgstr "DUREZA"
+
+#. machine-translated
+msgid "PERCEPTION"
+msgstr "PERCEPCIÓN"
+
+#. machine-translated
+msgid "Dodge"
+msgstr "Esquivar"
+
+#. machine-translated
+msgid "DODGE"
+msgstr "ESQUIVAR"
+
+#. machine-translated
+msgid "MARTIALARTS"
+msgstr "ARTES MARCIALES"
+
+#. machine-translated
+msgid "KATANAS"
+msgstr "KATANAS"
+
+#. machine-translated
+msgid "SABRES"
+msgstr "SABLES"
+
+#. machine-translated
+msgid "HACKERS"
+msgstr "MACHETES"
+
+#. machine-translated
+msgid "HEAVYWEAPONS"
+msgstr "ARMAS PESADAS"
+
+#. machine-translated
+msgid "BLUNT"
+msgstr "CONTUNDENTES"
+
+#. machine-translated
+msgid "Polearms"
+msgstr "Armas de asta"
+
+#. machine-translated
+msgid "POLEARMS"
+msgstr "ARMAS DE ASTA"
+
+#. machine-translated
+msgid "CROSSBOWS"
+msgstr "BALLESTAS"
+
+#. machine-translated
+msgid "TURRETS"
+msgstr "TORRETAS"
+
+#. machine-translated
+msgid "STEALTH"
+msgstr "SIGILO"
+
+#. machine-translated
+msgid "LOCKPICKING"
+msgstr "GANZÚAS"
+
+#. machine-translated
+msgid "THIEVING"
+msgstr "ROBO"
+
+#. machine-translated
+msgid "ASSASSINATION"
+msgstr "ASESINATO"
+
+#. machine-translated
+msgid "ATHLETICS"
+msgstr "ATLETISMO"
+
+#. machine-translated
+msgid "SWIMMING"
+msgstr "NATACIÓN"
+
+#. machine-translated
+msgid "MEDIC"
+msgstr "MEDICINA"
+
+#. machine-translated
+msgid "ROBOTICS"
+msgstr "ROBÓTICA"
+
+#. machine-translated
+msgid "ENGINEERING"
+msgstr "INGENIERÍA"
+
+#. machine-translated
+msgid "SCIENCE"
+msgstr "CIENCIA"
+
+#. machine-translated
+msgid "Bow smith"
+msgstr "Fabricación de ballestas"
+
+#. machine-translated
+msgid "LABOURING"
+msgstr "TRABAJO"
+
+#. machine-translated
+msgid "FARMING"
+msgstr "AGRICULTURA"
+
+#. machine-translated
+msgid "COOKING"
+msgstr "COCINA"

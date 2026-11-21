@@ -4611,3 +4611,147 @@ msgstr "店のカウンター越しに話す"
 #. machine-translated
 msgid "Faithful, as in the game: to talk or trade with a shopkeeper behind a counter, your character often walks round the counter to stand behind them. Meitou: shopkeepers can be reached from the customer's side of the counter."
 msgstr "オリジナル（ゲームと同じ）：カウンターの向こうにいる店主と話したり取引したりするとき、キャラクターはよくカウンターを回り込んで店主の後ろに立ちます。Meitou：客側からカウンター越しに店主に話しかけられます。"
+
+#. machine-translated
+msgid "its multipliers are now Squad XP in the Advanced settings (open it for each skill's own) and Show Squad XP"
+msgstr "その倍率は現在、詳細設定の「部隊 XP」（開くと各スキル個別の倍率）と「部隊 XP を表示」になっています"
+
+#. machine-translated
+msgid "its per-skill multipliers are now under Squad XP in the Advanced settings, and its XP label is Show Squad XP"
+msgstr "そのスキルごとの倍率は現在、詳細設定の「部隊 XP」の下にあり、XP 表示は「部隊 XP を表示」です"
+
+#. machine-translated
+msgid "How fast your characters and the rest of your faction learn: every skill and stat gain is multiplied by this (the game: 1x). 0 stops it. Click the number to type an exact value. A training dummy still stops at its level. Open it to give single skills their own multiplier."
+msgstr "あなたのキャラクターと勢力の他のメンバーが学ぶ速さ：すべてのスキルと能力値の上昇にこの値を掛けます（ゲーム：1x）。0 で停止します。数値をクリックすると正確な値を入力できます。訓練用ダミーは引き続きそのレベルで止まります。開くと個々のスキルに独自の倍率を設定できます。"
+
+#. machine-translated
+msgid "This skill's own multiplier for your faction, in place of Squad XP. At the far left (Squad XP) it follows Squad XP."
+msgstr "部隊 XP の代わりに使う、あなたの勢力でのこのスキル独自の倍率。左端（部隊 XP）では部隊 XP に従います。"
+
+#. machine-translated
+msgid "Show Squad XP"
+msgstr "部隊 XP を表示"
+
+#. machine-translated
+msgid "Shows the Squad XP multiplier (\"XP x10\") at the top left of the screen during play."
+msgstr "プレイ中、画面左上に部隊 XP の倍率（「XP x10」）を表示します。"
+
+#. machine-translated
+msgid "STRENGTH"
+msgstr "筋力"
+
+#. machine-translated
+msgid "DEXTERITY"
+msgstr "器用さ"
+
+#. machine-translated
+msgid "TOUGHNESS"
+msgstr "タフネス"
+
+#. machine-translated
+msgid "PERCEPTION"
+msgstr "知覚"
+
+#. machine-translated
+msgid "Dodge"
+msgstr "回避"
+
+#. machine-translated
+msgid "DODGE"
+msgstr "回避"
+
+#. machine-translated
+msgid "MARTIALARTS"
+msgstr "格闘術"
+
+#. machine-translated
+msgid "KATANAS"
+msgstr "刀"
+
+#. machine-translated
+msgid "SABRES"
+msgstr "サーベル"
+
+#. machine-translated
+msgid "HACKERS"
+msgstr "ハッカー"
+
+#. machine-translated
+msgid "HEAVYWEAPONS"
+msgstr "重量武器"
+
+#. machine-translated
+msgid "BLUNT"
+msgstr "鈍器"
+
+#. machine-translated
+msgid "Polearms"
+msgstr "長柄武器"
+
+#. machine-translated
+msgid "POLEARMS"
+msgstr "長柄武器"
+
+#. machine-translated
+msgid "CROSSBOWS"
+msgstr "クロスボウ"
+
+#. machine-translated
+msgid "TURRETS"
+msgstr "タレット"
+
+#. machine-translated
+msgid "STEALTH"
+msgstr "隠密"
+
+#. machine-translated
+msgid "LOCKPICKING"
+msgstr "開錠"
+
+#. machine-translated
+msgid "THIEVING"
+msgstr "窃盗"
+
+#. machine-translated
+msgid "ASSASSINATION"
+msgstr "暗殺"
+
+#. machine-translated
+msgid "ATHLETICS"
+msgstr "運動"
+
+#. machine-translated
+msgid "SWIMMING"
+msgstr "水泳"
+
+#. machine-translated
+msgid "MEDIC"
+msgstr "医療"
+
+#. machine-translated
+msgid "ROBOTICS"
+msgstr "ロボット工学"
+
+#. machine-translated
+msgid "ENGINEERING"
+msgstr "工学"
+
+#. machine-translated
+msgid "SCIENCE"
+msgstr "科学"
+
+#. machine-translated
+msgid "Bow smith"
+msgstr "弓職人"
+
+#. machine-translated
+msgid "LABOURING"
+msgstr "労働"
+
+#. machine-translated
+msgid "FARMING"
+msgstr "農業"
+
+#. machine-translated
+msgid "COOKING"
+msgstr "料理"

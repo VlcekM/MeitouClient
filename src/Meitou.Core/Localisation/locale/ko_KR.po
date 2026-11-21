@@ -4611,3 +4611,147 @@ msgstr "상점 카운터 너머로 대화"
 #. machine-translated
 msgid "Faithful, as in the game: to talk or trade with a shopkeeper behind a counter, your character often walks round the counter to stand behind them. Meitou: shopkeepers can be reached from the customer's side of the counter."
 msgstr "원작(게임과 동일): 카운터 뒤의 상인과 대화하거나 거래하려면 캐릭터가 종종 카운터를 돌아 상인 뒤에 섭니다. Meitou: 카운터의 손님 쪽에서도 상인에게 닿을 수 있습니다."
+
+#. machine-translated
+msgid "its multipliers are now Squad XP in the Advanced settings (open it for each skill's own) and Show Squad XP"
+msgstr "해당 배수는 이제 고급 설정의 분대 XP(각 기술별 배수는 펼쳐서 확인)와 분대 XP 표시로 옮겨졌습니다"
+
+#. machine-translated
+msgid "its per-skill multipliers are now under Squad XP in the Advanced settings, and its XP label is Show Squad XP"
+msgstr "기술별 배수는 이제 고급 설정의 분대 XP 아래에 있으며, XP 표시는 분대 XP 표시입니다"
+
+#. machine-translated
+msgid "How fast your characters and the rest of your faction learn: every skill and stat gain is multiplied by this (the game: 1x). 0 stops it. Click the number to type an exact value. A training dummy still stops at its level. Open it to give single skills their own multiplier."
+msgstr "당신의 캐릭터와 나머지 세력원이 배우는 속도: 모든 기술과 능력치 상승에 이 값을 곱합니다(게임: 1x). 0이면 성장이 멈춥니다. 숫자를 클릭하면 정확한 값을 입력할 수 있습니다. 훈련용 허수아비는 여전히 자체 한계 수준에서 멈춥니다. 펼치면 개별 기술에 따로 배수를 지정할 수 있습니다."
+
+#. machine-translated
+msgid "This skill's own multiplier for your faction, in place of Squad XP. At the far left (Squad XP) it follows Squad XP."
+msgstr "분대 XP 대신 당신의 세력에 적용되는 이 기술만의 배수. 맨 왼쪽(분대 XP)에서는 분대 XP를 따릅니다."
+
+#. machine-translated
+msgid "Show Squad XP"
+msgstr "분대 XP 표시"
+
+#. machine-translated
+msgid "Shows the Squad XP multiplier (\"XP x10\") at the top left of the screen during play."
+msgstr "플레이 중 화면 왼쪽 위에 분대 XP 배수(\"XP x10\")를 표시합니다."
+
+#. machine-translated
+msgid "STRENGTH"
+msgstr "근력"
+
+#. machine-translated
+msgid "DEXTERITY"
+msgstr "민첩"
+
+#. machine-translated
+msgid "TOUGHNESS"
+msgstr "강인함"
+
+#. machine-translated
+msgid "PERCEPTION"
+msgstr "지각"
+
+#. machine-translated
+msgid "Dodge"
+msgstr "회피"
+
+#. machine-translated
+msgid "DODGE"
+msgstr "회피"
+
+#. machine-translated
+msgid "MARTIALARTS"
+msgstr "무술"
+
+#. machine-translated
+msgid "KATANAS"
+msgstr "카타나"
+
+#. machine-translated
+msgid "SABRES"
+msgstr "사브르"
+
+#. machine-translated
+msgid "HACKERS"
+msgstr "해커"
+
+#. machine-translated
+msgid "HEAVYWEAPONS"
+msgstr "중병기"
+
+#. machine-translated
+msgid "BLUNT"
+msgstr "둔기"
+
+#. machine-translated
+msgid "Polearms"
+msgstr "장병기"
+
+#. machine-translated
+msgid "POLEARMS"
+msgstr "장병기"
+
+#. machine-translated
+msgid "CROSSBOWS"
+msgstr "석궁"
+
+#. machine-translated
+msgid "TURRETS"
+msgstr "포탑"
+
+#. machine-translated
+msgid "STEALTH"
+msgstr "은신"
+
+#. machine-translated
+msgid "LOCKPICKING"
+msgstr "자물쇠 따기"
+
+#. machine-translated
+msgid "THIEVING"
+msgstr "절도"
+
+#. machine-translated
+msgid "ASSASSINATION"
+msgstr "암살"
+
+#. machine-translated
+msgid "ATHLETICS"
+msgstr "운동"
+
+#. machine-translated
+msgid "SWIMMING"
+msgstr "수영"
+
+#. machine-translated
+msgid "MEDIC"
+msgstr "의술"
+
+#. machine-translated
+msgid "ROBOTICS"
+msgstr "로봇공학"
+
+#. machine-translated
+msgid "ENGINEERING"
+msgstr "공학"
+
+#. machine-translated
+msgid "SCIENCE"
+msgstr "과학"
+
+#. machine-translated
+msgid "Bow smith"
+msgstr "활 제작"
+
+#. machine-translated
+msgid "LABOURING"
+msgstr "노동"
+
+#. machine-translated
+msgid "FARMING"
+msgstr "농사"
+
+#. machine-translated
+msgid "COOKING"
+msgstr "요리"

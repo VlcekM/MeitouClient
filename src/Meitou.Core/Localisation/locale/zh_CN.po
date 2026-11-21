@@ -5459,3 +5459,147 @@ msgstr "隔着柜台交谈"
 #. machine-translated
 msgid "Faithful, as in the game: to talk or trade with a shopkeeper behind a counter, your character often walks round the counter to stand behind them. Meitou: shopkeepers can be reached from the customer's side of the counter."
 msgstr "忠实，与原版游戏一致：要与柜台后的店主交谈或交易时，你的角色常常会绕过柜台走到店主身后。Meitou：可以从柜台的顾客一侧与店主交谈。"
+
+#. machine-translated
+msgid "its multipliers are now Squad XP in the Advanced settings (open it for each skill's own) and Show Squad XP"
+msgstr "其倍率现已移至高级设置中的 Squad XP（展开可为每项技能单独设置）以及“显示 Squad XP”"
+
+#. machine-translated
+msgid "its per-skill multipliers are now under Squad XP in the Advanced settings, and its XP label is Show Squad XP"
+msgstr "其各技能倍率现位于高级设置中的 Squad XP 下，其 XP 标签则为“显示 Squad XP”"
+
+#. machine-translated
+msgid "How fast your characters and the rest of your faction learn: every skill and stat gain is multiplied by this (the game: 1x). 0 stops it. Click the number to type an exact value. A training dummy still stops at its level. Open it to give single skills their own multiplier."
+msgstr "你的角色及派系其他成员的学习速度：每项技能和属性的成长都会乘以此值（游戏默认：1x）。设为 0 则停止成长。点击数字可输入精确数值。训练假人仍会在其等级处停止。展开可为单项技能设置独立倍率。"
+
+#. machine-translated
+msgid "This skill's own multiplier for your faction, in place of Squad XP. At the far left (Squad XP) it follows Squad XP."
+msgstr "此技能对你的派系单独生效的倍率，取代 Squad XP。拖到最左侧（Squad XP）时跟随 Squad XP。"
+
+#. machine-translated
+msgid "Show Squad XP"
+msgstr "显示 Squad XP"
+
+#. machine-translated
+msgid "Shows the Squad XP multiplier (\"XP x10\") at the top left of the screen during play."
+msgstr "游戏中在屏幕左上角显示 Squad XP 倍率（“XP x10”）。"
+
+#. machine-translated
+msgid "STRENGTH"
+msgstr "力量"
+
+#. machine-translated
+msgid "DEXTERITY"
+msgstr "敏捷"
+
+#. machine-translated
+msgid "TOUGHNESS"
+msgstr "坚韧"
+
+#. machine-translated
+msgid "PERCEPTION"
+msgstr "感知"
+
+#. machine-translated
+msgid "Dodge"
+msgstr "闪避"
+
+#. machine-translated
+msgid "DODGE"
+msgstr "闪避"
+
+#. machine-translated
+msgid "MARTIALARTS"
+msgstr "武术"
+
+#. machine-translated
+msgid "KATANAS"
+msgstr "武士刀"
+
+#. machine-translated
+msgid "SABRES"
+msgstr "军刀"
+
+#. machine-translated
+msgid "HACKERS"
+msgstr "砍刀"
+
+#. machine-translated
+msgid "HEAVYWEAPONS"
+msgstr "重武器"
+
+#. machine-translated
+msgid "BLUNT"
+msgstr "钝器"
+
+#. machine-translated
+msgid "Polearms"
+msgstr "长柄武器"
+
+#. machine-translated
+msgid "POLEARMS"
+msgstr "长柄武器"
+
+#. machine-translated
+msgid "CROSSBOWS"
+msgstr "弩"
+
+#. machine-translated
+msgid "TURRETS"
+msgstr "炮塔"
+
+#. machine-translated
+msgid "STEALTH"
+msgstr "潜行"
+
+#. machine-translated
+msgid "LOCKPICKING"
+msgstr "开锁"
+
+#. machine-translated
+msgid "THIEVING"
+msgstr "偷窃"
+
+#. machine-translated
+msgid "ASSASSINATION"
+msgstr "刺杀"
+
+#. machine-translated
+msgid "ATHLETICS"
+msgstr "运动"
+
+#. machine-translated
+msgid "SWIMMING"
+msgstr "游泳"
+
+#. machine-translated
+msgid "MEDIC"
+msgstr "医疗"
+
+#. machine-translated
+msgid "ROBOTICS"
+msgstr "机械"
+
+#. machine-translated
+msgid "ENGINEERING"
+msgstr "工程"
+
+#. machine-translated
+msgid "SCIENCE"
+msgstr "科学"
+
+#. machine-translated
+msgid "Bow smith"
+msgstr "弩匠"
+
+#. machine-translated
+msgid "LABOURING"
+msgstr "劳作"
+
+#. machine-translated
+msgid "FARMING"
+msgstr "务农"
+
+#. machine-translated
+msgid "COOKING"
+msgstr "烹饪"

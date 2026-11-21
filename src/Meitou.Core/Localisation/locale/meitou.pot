@@ -251,6 +251,14 @@ msgstr ""
 msgid "ADD SQUAD"
 msgstr ""
 
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "ASSASSINATION"
+msgstr ""
+
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "ATHLETICS"
+msgstr ""
+
 #: src/Meitou.Game/Ui/TooltipRuntime.cs
 msgid ""
 "Activates sneak mode so the character will try to go unnoticed.\n"
@@ -537,6 +545,10 @@ msgstr ""
 msgid "BACKPACK"
 msgstr ""
 
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "BLUNT"
+msgstr ""
+
 #: src/Meitou.Game/Ui/ProductionWindows.cs
 msgid "BUILDING"
 msgstr ""
@@ -657,6 +669,10 @@ msgstr ""
 msgid "Bounced light: the game's flat ambient, ray-traced probes, or probes with a fine cache near the camera. Needs ray tracing."
 msgstr ""
 
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "Bow smith"
+msgstr ""
+
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Brighten or darken nights further, on top of Ambient light strength."
 msgstr ""
@@ -705,12 +721,20 @@ msgstr ""
 msgid "CONTAINER"
 msgstr ""
 
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "COOKING"
+msgstr ""
+
 #: src/Meitou.Game/Ui/FeedbackPanel.cs
 msgid "COPY LINK"
 msgstr ""
 
 #: src/Meitou.Game/Title/TitleMenu.cs
 msgid "CREDITS"
+msgstr ""
+
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "CROSSBOWS"
 msgstr ""
 
 #: src/Meitou.Game/Ui/ContextMenuWindow.cs src/Meitou.Game/Ui/FurnitureUse.cs
@@ -1077,8 +1101,16 @@ msgstr ""
 msgid "Cycle GPU, CPU and hidden profiler views."
 msgstr ""
 
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "DEXTERITY"
+msgstr ""
+
 #: src/Meitou.Game/Rendering/Frame/WorldFrame.cs src/Meitou.Game/Settings/SettingHints.cs
 msgid "DLSS preset"
+msgstr ""
+
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "DODGE"
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
@@ -1209,6 +1241,10 @@ msgstr ""
 msgid "Do you want to subscribe now?"
 msgstr ""
 
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "Dodge"
+msgstr ""
+
 #: launcher/Meitou.Launcher/MainWindow.axaml
 msgid "Don't offer this version again; a newer one will be"
 msgstr ""
@@ -1293,6 +1329,10 @@ msgstr ""
 msgid "Drops of water stand on wet skin, leather and metal, in the rain and after a swim."
 msgstr ""
 
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "ENGINEERING"
+msgstr ""
+
 #: src/Meitou.Game/Title/TitleMenu.cs
 msgid "ENTER"
 msgstr ""
@@ -1371,6 +1411,10 @@ msgstr ""
 
 #: src/Meitou.Game/SettingsMenu.cs
 msgid "FAITHFUL"
+msgstr ""
+
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "FARMING"
 msgstr ""
 
 #: src/Meitou.Game/Ui/TooltipRuntime.cs
@@ -1841,8 +1885,16 @@ msgstr ""
 msgid "Guards stop passing bodies"
 msgstr ""
 
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "HACKERS"
+msgstr ""
+
 #: src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/SettingsMenu.cs
 msgid "HDR output"
+msgstr ""
+
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "HEAVYWEAPONS"
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml
@@ -2030,7 +2082,7 @@ msgid "How fast the wheel and the zoom keys move the camera in and out (the game
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
-msgid "How fast your characters and the rest of your faction learn: every skill and stat gain is multiplied by this (the game: 1x). 0 stops it. Click the number to type an exact value. A training dummy still stops at its level."
+msgid "How fast your characters and the rest of your faction learn: every skill and stat gain is multiplied by this (the game: 1x). 0 stops it. Click the number to type an exact value. A training dummy still stops at its level. Open it to give single skills their own multiplier."
 msgstr ""
 
 #: src/Meitou.Game/Settings/FeatureGrouping.cs
@@ -2261,6 +2313,10 @@ msgstr ""
 msgid "Japanese"
 msgstr ""
 
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "KATANAS"
+msgstr ""
+
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Keep large wrecks, towers and landmarks visible farther away."
 msgstr ""
@@ -2309,12 +2365,20 @@ msgstr ""
 msgid "Korean"
 msgstr ""
 
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "LABOURING"
+msgstr ""
+
 #: src/Meitou.Game/Ui/ScreenRouter.cs
 msgid "LIMBS"
 msgstr ""
 
 #: src/Meitou.Game/Title/FrontendScreens.cs src/Meitou.Game/Title/TitleMenu.cs
 msgid "LOAD GAME"
+msgstr ""
+
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "LOCKPICKING"
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/Settings/QualityTiers.cs src/Meitou.Game/Settings/SettingHints.cs src/Meitou.Game/SettingsMenu.cs
@@ -2584,6 +2648,14 @@ msgstr ""
 
 #: src/Meitou.Game/Title/FrontendScreens.cs
 msgid "MAIN MENU"
+msgstr ""
+
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "MARTIALARTS"
+msgstr ""
+
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "MEDIC"
 msgstr ""
 
 #: src/Meitou.Game/SettingsMenu.cs
@@ -3309,6 +3381,14 @@ msgstr ""
 msgid "Overlaymaps"
 msgstr ""
 
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "PERCEPTION"
+msgstr ""
+
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "POLEARMS"
+msgstr ""
+
 #: src/Meitou.Game/Ui/ProspectingPanel.cs
 msgid "PROSPECTING RESULTS"
 msgstr ""
@@ -3423,6 +3503,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "Points added to every interface font's default height (the game: 3)."
+msgstr ""
+
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "Polearms"
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/WorldFrame.cs
@@ -3555,6 +3639,10 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/Rows.cs
 msgid "RE_Kenshi sound banks: loaded before the game's"
+msgstr ""
+
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "ROBOTICS"
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
@@ -3785,6 +3873,14 @@ msgstr ""
 msgid "Russian"
 msgstr ""
 
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "SABRES"
+msgstr ""
+
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "SCIENCE"
+msgstr ""
+
 #: launcher/Meitou.Launcher/MainWindow.axaml
 msgid "SETTINGS"
 msgstr ""
@@ -3795,6 +3891,18 @@ msgstr ""
 
 #: src/Meitou.Game/Ui/TooltipRuntime.cs
 msgid "STEALING CHANCE:"
+msgstr ""
+
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "STEALTH"
+msgstr ""
+
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "STRENGTH"
+msgstr ""
+
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "SWIMMING"
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml
@@ -4110,6 +4218,10 @@ msgid "Shoulder"
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
+msgid "Show Squad XP"
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
 msgid "Show names"
 msgstr ""
 
@@ -4127,6 +4239,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Show the next squad in the squad bar."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Shows the Squad XP multiplier (\"XP x10\") at the top left of the screen during play."
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
@@ -4265,7 +4381,7 @@ msgstr ""
 msgid "Split stacks"
 msgstr ""
 
-#: src/Meitou.Game/Settings/GamePages.cs
+#: src/Meitou.Game/Settings/FeatureGrouping.cs src/Meitou.Game/Settings/GamePages.cs
 msgid "Squad XP"
 msgstr ""
 
@@ -4429,8 +4545,20 @@ msgstr ""
 msgid "THANK YOU"
 msgstr ""
 
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "THIEVING"
+msgstr ""
+
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "TOUGHNESS"
+msgstr ""
+
 #: src/Meitou.Game/Ui/TradeWindows.cs
 msgid "TRADER"
+msgstr ""
+
+#: src/Meitou.Game/Settings/SkillXp.cs
+msgid "TURRETS"
 msgstr ""
 
 #: src/Meitou.Game/Ui/StackSplitDialog.cs
@@ -4767,6 +4895,10 @@ msgstr ""
 
 #: src/Meitou.Game/Title/FrontendScreens.cs
 msgid "This save file is currently in use and cannot be deleted"
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "This skill's own multiplier for your faction, in place of Squad XP. At the far left (Squad XP) it follows Squad XP."
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
@@ -5484,7 +5616,11 @@ msgid "its game data changes failed to apply"
 msgstr ""
 
 #: src/Meitou.Game/Mods/BuiltInMods.cs
-msgid "its multiplier is now Squad XP in the Advanced settings (per-skill multipliers are not kept)"
+msgid "its multipliers are now Squad XP in the Advanced settings (open it for each skill's own) and Show Squad XP"
+msgstr ""
+
+#: src/Meitou.Game/Mods/BuiltInMods.cs
+msgid "its per-skill multipliers are now under Squad XP in the Advanced settings, and its XP label is Show Squad XP"
 msgstr ""
 
 #: src/Meitou.Game/Rendering/Frame/Enhancements.cs

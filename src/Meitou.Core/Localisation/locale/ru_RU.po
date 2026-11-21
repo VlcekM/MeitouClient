@@ -4615,3 +4615,147 @@ msgstr "Разговор через прилавок"
 #. machine-translated
 msgid "Faithful, as in the game: to talk or trade with a shopkeeper behind a counter, your character often walks round the counter to stand behind them. Meitou: shopkeepers can be reached from the customer's side of the counter."
 msgstr "Оригинал, как в игре: чтобы поговорить или поторговать с торговцем за прилавком, ваш персонаж часто обходит прилавок и встаёт позади него. Meitou: к торговцам можно обратиться со стороны покупателя."
+
+#. machine-translated
+msgid "its multipliers are now Squad XP in the Advanced settings (open it for each skill's own) and Show Squad XP"
+msgstr "его множители теперь — «Опыт отряда» в расширенных настройках (откройте его, чтобы задать свой для каждого навыка) и «Показывать опыт отряда»"
+
+#. machine-translated
+msgid "its per-skill multipliers are now under Squad XP in the Advanced settings, and its XP label is Show Squad XP"
+msgstr "его множители для отдельных навыков теперь находятся в разделе «Опыт отряда» расширенных настроек, а его метка опыта — «Показывать опыт отряда»"
+
+#. machine-translated
+msgid "How fast your characters and the rest of your faction learn: every skill and stat gain is multiplied by this (the game: 1x). 0 stops it. Click the number to type an exact value. A training dummy still stops at its level. Open it to give single skills their own multiplier."
+msgstr "Как быстро учатся ваши персонажи и остальная ваша фракция: каждый прирост навыков и характеристик умножается на это значение (в игре: 1x). 0 останавливает рост. Щёлкните по числу, чтобы ввести точное значение. Тренировочный манекен всё равно ограничен своим уровнем. Откройте, чтобы задать отдельным навыкам собственный множитель."
+
+#. machine-translated
+msgid "This skill's own multiplier for your faction, in place of Squad XP. At the far left (Squad XP) it follows Squad XP."
+msgstr "Собственный множитель этого навыка для вашей фракции вместо опыта отряда. В крайнем левом положении (Опыт отряда) он следует опыту отряда."
+
+#. machine-translated
+msgid "Show Squad XP"
+msgstr "Показывать опыт отряда"
+
+#. machine-translated
+msgid "Shows the Squad XP multiplier (\"XP x10\") at the top left of the screen during play."
+msgstr "Показывает множитель опыта отряда («XP x10») в левом верхнем углу экрана во время игры."
+
+#. machine-translated
+msgid "STRENGTH"
+msgstr "СИЛА"
+
+#. machine-translated
+msgid "DEXTERITY"
+msgstr "ЛОВКОСТЬ"
+
+#. machine-translated
+msgid "TOUGHNESS"
+msgstr "СТОЙКОСТЬ"
+
+#. machine-translated
+msgid "PERCEPTION"
+msgstr "ВОСПРИЯТИЕ"
+
+#. machine-translated
+msgid "Dodge"
+msgstr "Уклонение"
+
+#. machine-translated
+msgid "DODGE"
+msgstr "УКЛОНЕНИЕ"
+
+#. machine-translated
+msgid "MARTIALARTS"
+msgstr "БОЕВЫЕ ИСКУССТВА"
+
+#. machine-translated
+msgid "KATANAS"
+msgstr "КАТАНЫ"
+
+#. machine-translated
+msgid "SABRES"
+msgstr "САБЛИ"
+
+#. machine-translated
+msgid "HACKERS"
+msgstr "ТЕСАКИ"
+
+#. machine-translated
+msgid "HEAVYWEAPONS"
+msgstr "ТЯЖЁЛОЕ ОРУЖИЕ"
+
+#. machine-translated
+msgid "BLUNT"
+msgstr "ДРОБЯЩЕЕ"
+
+#. machine-translated
+msgid "Polearms"
+msgstr "Древковое"
+
+#. machine-translated
+msgid "POLEARMS"
+msgstr "ДРЕВКОВОЕ"
+
+#. machine-translated
+msgid "CROSSBOWS"
+msgstr "АРБАЛЕТЫ"
+
+#. machine-translated
+msgid "TURRETS"
+msgstr "ТУРЕЛИ"
+
+#. machine-translated
+msgid "STEALTH"
+msgstr "СКРЫТНОСТЬ"
+
+#. machine-translated
+msgid "LOCKPICKING"
+msgstr "ВЗЛОМ ЗАМКОВ"
+
+#. machine-translated
+msgid "THIEVING"
+msgstr "ВОРОВСТВО"
+
+#. machine-translated
+msgid "ASSASSINATION"
+msgstr "УБИЙСТВО"
+
+#. machine-translated
+msgid "ATHLETICS"
+msgstr "АТЛЕТИКА"
+
+#. machine-translated
+msgid "SWIMMING"
+msgstr "ПЛАВАНИЕ"
+
+#. machine-translated
+msgid "MEDIC"
+msgstr "МЕДИЦИНА"
+
+#. machine-translated
+msgid "ROBOTICS"
+msgstr "РОБОТОТЕХНИКА"
+
+#. machine-translated
+msgid "ENGINEERING"
+msgstr "ИНЖЕНЕРИЯ"
+
+#. machine-translated
+msgid "SCIENCE"
+msgstr "НАУКА"
+
+#. machine-translated
+msgid "Bow smith"
+msgstr "Изготовление арбалетов"
+
+#. machine-translated
+msgid "LABOURING"
+msgstr "ТРУД"
+
+#. machine-translated
+msgid "FARMING"
+msgstr "ЗЕМЛЕДЕЛИЕ"
+
+#. machine-translated
+msgid "COOKING"
+msgstr "ГОТОВКА"

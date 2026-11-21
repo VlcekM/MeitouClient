@@ -163,7 +163,6 @@ world grid {coarseSize}² every {CoarseStep * WorldLayout.SampleSpacing} units;
 {look.Name} pasted and loaded (made on Meitou {look.Made}).
 {look.Name} saved.
 {look.Name}'s code is on the clipboard: paste it on Discord, or in Paste.
-{mod.Name} is built into Meitou now: {covered.Taken}.
 {name} exists already
 {name} is a built-in preset: choose another name.
 {pause} pause    

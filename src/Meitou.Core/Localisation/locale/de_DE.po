@@ -4613,3 +4613,147 @@ msgstr "Über Ladentheken hinweg sprechen"
 #. machine-translated
 msgid "Faithful, as in the game: to talk or trade with a shopkeeper behind a counter, your character often walks round the counter to stand behind them. Meitou: shopkeepers can be reached from the customer's side of the counter."
 msgstr "Original, wie im Spiel: Um mit einem Händler hinter einer Ladentheke zu sprechen oder zu handeln, geht deine Figur oft um die Theke herum und stellt sich hinter ihn. Meitou: Händler können von der Kundenseite der Theke aus erreicht werden."
+
+#. machine-translated
+msgid "its multipliers are now Squad XP in the Advanced settings (open it for each skill's own) and Show Squad XP"
+msgstr "ihre Multiplikatoren sind jetzt Trupp-EP in den erweiterten Einstellungen (aufklappen für den eigenen jeder Fertigkeit) und Trupp-EP anzeigen"
+
+#. machine-translated
+msgid "its per-skill multipliers are now under Squad XP in the Advanced settings, and its XP label is Show Squad XP"
+msgstr "ihre Multiplikatoren pro Fertigkeit liegen jetzt unter Trupp-EP in den erweiterten Einstellungen, und ihre EP-Anzeige heißt Trupp-EP anzeigen"
+
+#. machine-translated
+msgid "How fast your characters and the rest of your faction learn: every skill and stat gain is multiplied by this (the game: 1x). 0 stops it. Click the number to type an exact value. A training dummy still stops at its level. Open it to give single skills their own multiplier."
+msgstr "Wie schnell deine Figuren und der Rest deiner Fraktion lernen: jeder Zuwachs an Fertigkeiten und Werten wird damit multipliziert (im Spiel: 1x). 0 stoppt ihn. Klicke auf die Zahl, um einen genauen Wert einzugeben. Eine Trainingspuppe stoppt weiterhin bei ihrer Stufe. Aufklappen, um einzelnen Fertigkeiten einen eigenen Multiplikator zu geben."
+
+#. machine-translated
+msgid "This skill's own multiplier for your faction, in place of Squad XP. At the far left (Squad XP) it follows Squad XP."
+msgstr "Der eigene Multiplikator dieser Fertigkeit für deine Fraktion, anstelle von Trupp-EP. Ganz links (Trupp-EP) folgt er Trupp-EP."
+
+#. machine-translated
+msgid "Show Squad XP"
+msgstr "Trupp-EP anzeigen"
+
+#. machine-translated
+msgid "Shows the Squad XP multiplier (\"XP x10\") at the top left of the screen during play."
+msgstr "Zeigt den Trupp-EP-Multiplikator (\"EP x10\") während des Spiels oben links auf dem Bildschirm an."
+
+#. machine-translated
+msgid "STRENGTH"
+msgstr "STÄRKE"
+
+#. machine-translated
+msgid "DEXTERITY"
+msgstr "GESCHICKLICHKEIT"
+
+#. machine-translated
+msgid "TOUGHNESS"
+msgstr "ZÄHIGKEIT"
+
+#. machine-translated
+msgid "PERCEPTION"
+msgstr "WAHRNEHMUNG"
+
+#. machine-translated
+msgid "Dodge"
+msgstr "Ausweichen"
+
+#. machine-translated
+msgid "DODGE"
+msgstr "AUSWEICHEN"
+
+#. machine-translated
+msgid "MARTIALARTS"
+msgstr "KAMPFKUNST"
+
+#. machine-translated
+msgid "KATANAS"
+msgstr "KATANAS"
+
+#. machine-translated
+msgid "SABRES"
+msgstr "SÄBEL"
+
+#. machine-translated
+msgid "HACKERS"
+msgstr "HACKWAFFEN"
+
+#. machine-translated
+msgid "HEAVYWEAPONS"
+msgstr "SCHWERE WAFFEN"
+
+#. machine-translated
+msgid "BLUNT"
+msgstr "STUMPFE WAFFEN"
+
+#. machine-translated
+msgid "Polearms"
+msgstr "Stangenwaffen"
+
+#. machine-translated
+msgid "POLEARMS"
+msgstr "STANGENWAFFEN"
+
+#. machine-translated
+msgid "CROSSBOWS"
+msgstr "ARMBRÜSTE"
+
+#. machine-translated
+msgid "TURRETS"
+msgstr "GESCHÜTZE"
+
+#. machine-translated
+msgid "STEALTH"
+msgstr "SCHLEICHEN"
+
+#. machine-translated
+msgid "LOCKPICKING"
+msgstr "SCHLOSSKNACKEN"
+
+#. machine-translated
+msgid "THIEVING"
+msgstr "STEHLEN"
+
+#. machine-translated
+msgid "ASSASSINATION"
+msgstr "MEUCHELN"
+
+#. machine-translated
+msgid "ATHLETICS"
+msgstr "ATHLETIK"
+
+#. machine-translated
+msgid "SWIMMING"
+msgstr "SCHWIMMEN"
+
+#. machine-translated
+msgid "MEDIC"
+msgstr "SANITÄTER"
+
+#. machine-translated
+msgid "ROBOTICS"
+msgstr "ROBOTIK"
+
+#. machine-translated
+msgid "ENGINEERING"
+msgstr "INGENIEURWESEN"
+
+#. machine-translated
+msgid "SCIENCE"
+msgstr "WISSENSCHAFT"
+
+#. machine-translated
+msgid "Bow smith"
+msgstr "Bogenschmied"
+
+#. machine-translated
+msgid "LABOURING"
+msgstr "ARBEIT"
+
+#. machine-translated
+msgid "FARMING"
+msgstr "LANDWIRTSCHAFT"
+
+#. machine-translated
+msgid "COOKING"
+msgstr "KOCHEN"

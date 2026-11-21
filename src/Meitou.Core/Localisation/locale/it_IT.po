@@ -4613,3 +4613,147 @@ msgstr "Parla da dietro i banconi dei negozi"
 #. machine-translated
 msgid "Faithful, as in the game: to talk or trade with a shopkeeper behind a counter, your character often walks round the counter to stand behind them. Meitou: shopkeepers can be reached from the customer's side of the counter."
 msgstr "Originale, come nel gioco: per parlare o commerciare con un negoziante dietro un bancone, il tuo personaggio spesso fa il giro del bancone per mettersi dietro di lui. Meitou: i negozianti si possono raggiungere dal lato cliente del bancone."
+
+#. machine-translated
+msgid "its multipliers are now Squad XP in the Advanced settings (open it for each skill's own) and Show Squad XP"
+msgstr "i suoi moltiplicatori ora sono XP squadra nelle impostazioni avanzate (aprila per quello di ogni abilità) e Mostra XP squadra"
+
+#. machine-translated
+msgid "its per-skill multipliers are now under Squad XP in the Advanced settings, and its XP label is Show Squad XP"
+msgstr "i suoi moltiplicatori per abilità ora sono sotto XP squadra nelle impostazioni avanzate, e la sua etichetta XP è Mostra XP squadra"
+
+#. machine-translated
+msgid "How fast your characters and the rest of your faction learn: every skill and stat gain is multiplied by this (the game: 1x). 0 stops it. Click the number to type an exact value. A training dummy still stops at its level. Open it to give single skills their own multiplier."
+msgstr "Quanto velocemente imparano i tuoi personaggi e il resto della tua fazione: ogni guadagno di abilità e statistica viene moltiplicato per questo valore (il gioco: 1x). 0 lo ferma. Fai clic sul numero per digitare un valore esatto. Un manichino da allenamento si ferma comunque al suo livello. Aprila per dare alle singole abilità un moltiplicatore proprio."
+
+#. machine-translated
+msgid "This skill's own multiplier for your faction, in place of Squad XP. At the far left (Squad XP) it follows Squad XP."
+msgstr "Il moltiplicatore proprio di questa abilità per la tua fazione, al posto di XP squadra. All'estrema sinistra (XP squadra) segue XP squadra."
+
+#. machine-translated
+msgid "Show Squad XP"
+msgstr "Mostra XP squadra"
+
+#. machine-translated
+msgid "Shows the Squad XP multiplier (\"XP x10\") at the top left of the screen during play."
+msgstr "Mostra il moltiplicatore XP squadra (\"XP x10\") in alto a sinistra dello schermo durante il gioco."
+
+#. machine-translated
+msgid "STRENGTH"
+msgstr "FORZA"
+
+#. machine-translated
+msgid "DEXTERITY"
+msgstr "DESTREZZA"
+
+#. machine-translated
+msgid "TOUGHNESS"
+msgstr "ROBUSTEZZA"
+
+#. machine-translated
+msgid "PERCEPTION"
+msgstr "PERCEZIONE"
+
+#. machine-translated
+msgid "Dodge"
+msgstr "Schivata"
+
+#. machine-translated
+msgid "DODGE"
+msgstr "SCHIVATA"
+
+#. machine-translated
+msgid "MARTIALARTS"
+msgstr "ARTI MARZIALI"
+
+#. machine-translated
+msgid "KATANAS"
+msgstr "KATANA"
+
+#. machine-translated
+msgid "SABRES"
+msgstr "SCIABOLE"
+
+#. machine-translated
+msgid "HACKERS"
+msgstr "MANNAIE"
+
+#. machine-translated
+msgid "HEAVYWEAPONS"
+msgstr "ARMI PESANTI"
+
+#. machine-translated
+msgid "BLUNT"
+msgstr "CONTUNDENTI"
+
+#. machine-translated
+msgid "Polearms"
+msgstr "Armi in asta"
+
+#. machine-translated
+msgid "POLEARMS"
+msgstr "ARMI IN ASTA"
+
+#. machine-translated
+msgid "CROSSBOWS"
+msgstr "BALESTRE"
+
+#. machine-translated
+msgid "TURRETS"
+msgstr "TORRETTE"
+
+#. machine-translated
+msgid "STEALTH"
+msgstr "FURTIVITÀ"
+
+#. machine-translated
+msgid "LOCKPICKING"
+msgstr "SCASSO"
+
+#. machine-translated
+msgid "THIEVING"
+msgstr "FURTO"
+
+#. machine-translated
+msgid "ASSASSINATION"
+msgstr "ASSASSINIO"
+
+#. machine-translated
+msgid "ATHLETICS"
+msgstr "ATLETICA"
+
+#. machine-translated
+msgid "SWIMMING"
+msgstr "NUOTO"
+
+#. machine-translated
+msgid "MEDIC"
+msgstr "MEDICINA"
+
+#. machine-translated
+msgid "ROBOTICS"
+msgstr "ROBOTICA"
+
+#. machine-translated
+msgid "ENGINEERING"
+msgstr "INGEGNERIA"
+
+#. machine-translated
+msgid "SCIENCE"
+msgstr "SCIENZA"
+
+#. machine-translated
+msgid "Bow smith"
+msgstr "Fabbro di balestre"
+
+#. machine-translated
+msgid "LABOURING"
+msgstr "LAVORO MANUALE"
+
+#. machine-translated
+msgid "FARMING"
+msgstr "AGRICOLTURA"
+
+#. machine-translated
+msgid "COOKING"
+msgstr "CUCINA"
