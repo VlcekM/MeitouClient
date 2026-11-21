@@ -213,6 +213,11 @@ public static class PlacementCheck
     /// </summary>
     public const float CharacterRadius = 2.5f;
     /// <summary>
+    /// A person's height for the characters-in-the-way test (engine choice): one whose feet to this far over them miss the ghost's height, on
+    /// the floor below or above it, is not in the way.
+    /// </summary>
+    const float CharacterHeight = 19;
+    /// <summary>
     /// How far above the floor and below its top the ghost's footprint is tested against the building's structure (engine choice): the floor it stands
     /// on and a ceiling it hangs from touch it there.
     /// </summary>
@@ -328,11 +333,26 @@ public static class PlacementCheck
                 && Overlap(hull, queued.Hull))
                 return PlacementFailure.TooCloseToBuilding;
         }
+        return CharacterBlock(q, hull);
+    }
+
+    /// <summary>
+    /// <see cref="PlacementFailure.CharactersInTheWay"/> when a living, uncarried character stands in the footprint <paramref name="hull"/> at
+    /// the ghost's height (from its floor to its top: the footprint's, else the record's <c>building height</c>); None otherwise.
+    /// </summary>
+    static PlacementFailure CharacterBlock(PlacementQuery q, Vector2[] hull)
+    {
+        var footprint = q.Services.Footprint(q.Building.Id);
+        float bottom = q.Position.Y + MathF.Max(footprint?.YMin ?? 0, 0);
+        float top = q.Position.Y + (footprint?.YMax ?? q.Building.BuildingHeight);
+
         foreach (var c in q.Characters)
         {
             if (c.Body is { Dead: true } || !c.CarriedBy.IsNone) continue;
+            if (c.Position.Y > top || c.Position.Y + CharacterHeight < bottom) continue;
             if (Distance(hull, new Vector2(c.Position.X, c.Position.Z)) < CharacterRadius) return PlacementFailure.CharactersInTheWay;
         }
+
         return PlacementFailure.None;
     }
 
