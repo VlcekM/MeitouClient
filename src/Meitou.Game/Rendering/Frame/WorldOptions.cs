@@ -608,19 +608,20 @@ sealed class WorldOptions
 
     /// <summary>
     /// <c>--low-end</c>: the potato-PC settings, applied where it stands among the options (so any option after it overrides one of them).
-    /// Short draw distances, no reflections, shadows, ground relief or light shafts, the game's FXAA turned off too, 0.83 render scale, quarter-size
-    /// particles.
+    /// Short draw distances, no GI (flat ambient; the device is made without ray queries), reflections, shadows, ground relief or light shafts,
+    /// the game's FXAA turned off too, 0.83 render scale, quarter-size particles.
     /// </summary>
     internal void ApplyLowEnd()
     {
         VSync = false;
+        Gi = false;
         (ObjectDistance, ObjectLod) = (LowEndObjectDistance, LowEndObjectLod);
         (LargeRange, ImpostorDistance, LargeImpostorDistance) = (LowEndLargeRange, LowEndImpostorDistance,
             LowEndLargeImpostorDistance);   // the medium and small ranges follow the large one
         GrassDensity = LowEndGrassDensity;
         WaterReflection = 0;
         (ShadowsOff, ShadowFilter) = (true, 0);   // --shadow-range 0
-        Enhancements.Apply(Switches(this), "ao,aa,shadows,water,parallax,displace", meitou: false);
+        Enhancements.Apply(Switches(this), "gi,interiorgi,gihybrid,ao,aa,shadows,water,parallax,displace", meitou: false);
         Enhancements.Apply(Switches(this), "particles", meitou: true);
         GroundRelief.Quality = 0;
         GroundRelief.RefinePixels = 0;
