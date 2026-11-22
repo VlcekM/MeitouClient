@@ -1478,6 +1478,16 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     public InteriorVolume? InteriorAt(Vector3 p, float margin = 0) => InteriorAt(p, margin, null);
 
     /// <summary>
+    /// Every loaded building's indoor volume.
+    /// </summary>
+    public IEnumerable<InteriorVolume> LoadedInteriors()
+    {
+        foreach (var zone in _streamer.AllZones)
+            foreach (var room in zone.Interiors)
+                yield return room;
+    }
+
+    /// <summary>
     /// <see cref="InteriorAt(Vector3, float)"/> without a margin, asked again only once <paramref name="p"/> has moved farther than the nearest
     /// interior's box was (at most 50 units, over every zone the moved point could ask) or the interiors changed. Standing still inside asks nothing
     /// either: there the distance kept is 0.
