@@ -273,6 +273,12 @@ sealed partial class PlayerInterface
         _uiHost.BuildingActions(new UiBuildingContext(building, snapshot, () => Session.World.Tick, Say));
 
     /// <summary>
+    /// The lines the interface extensions add to an item's tooltip (<see cref="UiHost.ItemTooltipLines"/>); none without an extension that adds any.
+    /// </summary>
+    internal IReadOnlyList<UiItemTooltipLine> ModItemTooltipLines(UiItemTooltipContext item) =>
+        _uiHost.ItemTips.Any ? _uiHost.ItemTooltipLines(item) : [];
+
+    /// <summary>
     /// Whether any UI extension adds lines to the town panel.
     /// </summary>
     internal bool HasModTownLines => _uiHost.HasTownLines;

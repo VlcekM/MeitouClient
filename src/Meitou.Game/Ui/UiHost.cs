@@ -331,6 +331,11 @@ public sealed class UiHost
     public const int MaxTownLineTooltip = 1000;
 
     /// <summary>
+    /// The extensions' item tooltip line sources (<see cref="UiRegistration.AddItemTooltipLines"/>).
+    /// </summary>
+    internal ItemTooltipLines ItemTips { get; } = new();
+
+    /// <summary>
     /// The town panel line sources, with their owners, in registration order.
     /// </summary>
     readonly List<(string Owner, Func<UiTownContext, IEnumerable<UiTownLine>> Lines)> _townLines = [];
@@ -506,6 +511,7 @@ public sealed class UiHost
         _squadAiOptions.RemoveAll(o => o.Owner == owner);
         _buildingActions.RemoveAll(a => a.Owner == owner);
         _townLines.RemoveAll(l => l.Owner == owner);
+        ItemTips.Remove(owner);
         foreach (string id in _styles.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) _styles.Remove(id);
         foreach (string id in _controls.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) _controls.Remove(id);
         foreach (string id in _actions.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) _actions.Remove(id);
@@ -741,6 +747,12 @@ public sealed class UiHost
 
         return actions;
     }
+
+    /// <summary>
+    /// The lines the extensions add to an item's tooltip (<see cref="ItemTooltipLines.For"/>); a failing source is reported as a
+    /// <see cref="Diagnostic"/> and dropped.
+    /// </summary>
+    public IReadOnlyList<UiItemTooltipLine> ItemTooltipLines(UiItemTooltipContext item) => ItemTips.For(item, Diagnostic);
 
     /// <summary>
     /// Whether any extension adds town panel lines (<see cref="TownLines"/>).
@@ -1128,6 +1140,18 @@ public sealed class UiRegistration : IDisposable
         Check();
         ArgumentNullException.ThrowIfNull(lines);
         _host.AddTownLines(Id, lines);
+    }
+
+    /// <summary>
+    /// Adds lines to item tooltips, after the game's own rows and before the description (docs/modding.md "Item tooltip lines"):
+    /// <paramref name="lines"/> runs on the host's thread whenever a tooltip is built, so it must be cheap, and while a tick may be in flight, so it
+    /// reads only its context (the item's record, name, code-mod tag, quantity, level and quality).
+    /// </summary>
+    public void AddItemTooltipLines(Func<UiItemTooltipContext, IEnumerable<UiItemTooltipLine>> lines)
+    {
+        Check();
+        ArgumentNullException.ThrowIfNull(lines);
+        _host.ItemTips.Add(Id, lines);
     }
 
     /// <summary>
