@@ -40,8 +40,8 @@ enum FrameGenerationVendor
 }
 
 /// <summary>
-/// When the next world tick runs during the world draw (<see cref="UserConfig.TickAhead"/>): never (Faithful), while ticks are expensive (Meitou),
-/// always.
+/// When the next world tick runs during the world draw (<see cref="UserConfig.TickAhead"/>): never (Faithful), while ticks are expensive, or
+/// always (the default).
 /// </summary>
 enum TickAheadMode
 {
@@ -50,11 +50,11 @@ enum TickAheadMode
     /// </summary>
     Faithful,
     /// <summary>
-    /// While a tick is expensive (Meitou, the default).
+    /// While a tick is expensive.
     /// </summary>
     Dynamic,
     /// <summary>
-    /// Every frame.
+    /// Every frame (Meitou's default).
     /// </summary>
     Always
 }
@@ -102,7 +102,7 @@ sealed class UserConfig
     /// retyped or read with a new meaning, and convert older files in <see cref="Migrate"/>. A Tab panel slider whose numbering changes
     /// takes a new label instead (<c>WorldFrame.UpscalerSliders</c>), so its old value is not misread.
     /// </summary>
-    public const int CurrentVersion = 4;
+    public const int CurrentVersion = 5;
     /// <summary>
     /// The default of <see cref="CharacterFlightSeconds"/>, and the distance from the view a squad member must be past for a double click to
     /// fly there.
@@ -336,9 +336,9 @@ sealed class UserConfig
     public int TickRate { get; set; } = 30;
     /// <summary>
     /// The next world tick run during the world draw (Display settings, docs/simulation.md "Tick ahead"): Faithful never (the world, then the draw,
-    /// as the game), Meitou (the default) while a tick is expensive, or always. Running ahead adds up to a tick (33 ms) of input delay.
+    /// as the game), while a tick is expensive, or always (the default). Running ahead adds up to a tick (33 ms) of input delay.
     /// </summary>
-    public TickAheadMode TickAhead { get; set; } = TickAheadMode.Dynamic;
+    public TickAheadMode TickAhead { get; set; } = TickAheadMode.Always;
     /// <summary>
     /// How many enemies may swing at one target at once (Advanced settings, 1-5; plus the race's extra slots): Faithful 1 (the game's CONSTANTS, the
     /// default), Meitou 3.
@@ -940,6 +940,17 @@ sealed class UserConfig
         }
         if (from < 3) MigrateMetalUpscaling(json);
         if (from < 4) MigrateShadowCascades(json);
+        if (from < 5) MigrateTickAhead(json);
+    }
+
+    /// <summary>
+    /// Layout 5 makes Always the default tick ahead: a file's "while busy" (<see cref="TickAheadMode.Dynamic"/>, the earlier default, which every
+    /// file wrote) becomes Always; Faithful stays.
+    /// </summary>
+    static void MigrateTickAhead(JsonObject json)
+    {
+        if (json["tickAhead"] is JsonValue value && value.TryGetValue(out int mode) && mode == (int)TickAheadMode.Dynamic)
+            json["tickAhead"] = (int)TickAheadMode.Always;
     }
 
     /// <summary>

@@ -1621,7 +1621,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Player.InterfaceScale = Config.InterfaceScale = 1;
         Player.ShowNames = Config.ShowNames = true;
         Player.FeedbackButtonInPlay = Config.FeedbackButton = true;
-        Config.TickAhead = TickAheadMode.Dynamic;
+        Config.TickAhead = TickAheadMode.Always;
         Bindings.ResetToDefaults();
         Config.LookPreset = null;
         Config.FaithfulLook = false;
