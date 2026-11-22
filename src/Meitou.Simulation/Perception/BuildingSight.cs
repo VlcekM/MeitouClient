@@ -51,6 +51,9 @@ sealed class BuildingSight(GameInstall install, GameDatabase db, WorldLevelData 
         ? BuildingShape.BoundsRadius(db, r.Record, building.Key, r.Position, r.Placement.Rotation, destroyed, _collisions)
         : 0;
 
+    /// <inheritdoc/>
+    public bool HangsFromCeiling(string record) => db.Find(record)?.GetBool("ceiling placement") == true;
+
     /// <summary>
     /// A completed player building's lamps, placed as the renderer lights them (<c>GameHost.UpdateLamps</c>: its own lights, no interior layouts).
     /// </summary>

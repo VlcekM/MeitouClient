@@ -460,7 +460,60 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
         var points = MovePoints(world, slots, order.Target);
 
+        AssignSpeedGroup(world, slots);
         for (int k = 0; k < slots.Count; k++) GiveMoveTo(world, slots[k], points[k], order.Queued);
+    }
+
+    /// <summary>
+    /// <c>PlayerInterface::assignSpeedGroup</c>, run by each formation move order (docs/game/pathfinding.md "Speed groups"): when one of the
+    /// player's ordered characters is in Group speed, the ordered keep their group if they already share one and hold all its members, else they
+    /// leave their groups for one new group of their own, so a character moved alone goes at its own pace, not its old group's slowest.
+    /// </summary>
+    static void AssignSpeedGroup(World world, List<int> slots)
+    {
+        var table = world.Characters;
+        int shared = int.MinValue;
+        bool grouping = false;
+        foreach (int s in slots)
+        {
+            if (table.Cold(s) is not { IsPlayer: true } c) continue;
+
+            grouping |= c.RunSpeed == SpeedMode.Group;
+            shared = shared == int.MinValue || shared == c.SpeedGroup ? c.SpeedGroup : -1;
+        }
+
+        if (!grouping) return;
+
+        // They keep a group they all share only when nobody else is in it.
+        if (shared >= 0 && SpeedGroupMembers(table, shared) == OrderedPlayers(table, slots)) return;
+
+        int key = world.Player.NextSpeedGroup++;
+        foreach (int s in slots)
+            if (table.Cold(s) is { IsPlayer: true } c) c.SpeedGroup = key;
+    }
+
+    /// <summary>
+    /// How many live characters are in speed group <paramref name="group"/>.
+    /// </summary>
+    static int SpeedGroupMembers(CharacterTable table, int group)
+    {
+        int members = 0;
+        for (int s = 0; s < table.HighWater; s++)
+            if (table.Previous[s].Alive && table.Cold(s) is { SpeedGroup: var g } && g == group) members++;
+
+        return members;
+    }
+
+    /// <summary>
+    /// How many of <paramref name="slots"/> are the player's characters.
+    /// </summary>
+    static int OrderedPlayers(CharacterTable table, List<int> slots)
+    {
+        int ordered = 0;
+        foreach (int s in slots)
+            if (table.Cold(s) is { IsPlayer: true }) ordered++;
+
+        return ordered;
     }
 
     /// <summary>

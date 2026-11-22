@@ -701,11 +701,12 @@ holds refuses the second mod.
   it takes no text, in the character editor, and for the mouse's extra buttons in photo mode, as the game's own actions do; a numpad key bound
   to one is not the cinema camera's. On the Metal host F7, F8, F11, F12 and Print Screen are the view's own keys and never reach an action.
   A binding is one key or button with no modifier, as the game's own bindings are in Meitou: the action fires whatever Shift, Ctrl or Alt is
-  held, and the press does not say which (the host's own combinations, Alt+Enter, Ctrl+F9 and on the Vulkan host Shift with F1, F2, F11 or
-  F12, never reach the bindings).
-  Once per press, also while paused, `pressed(ModKeyContext)` (the `Snapshot` on screen, `Selected`, `Tick`, `Enqueue`) runs on the host
-  thread at the control tick, so it must not touch the world, must not block, and queues commands for gameplay; `action.Held` is its state at
-  the last control tick, for host-thread readers. A throw is logged with the mod id and the name and that action gets no more presses.
+  held, and the press tells which in its context (the host's own combinations, Alt+Enter, Ctrl+F9 and on the Vulkan host Shift with F1,
+  F2, F11 or F12, never reach the bindings).
+  Once per press, also while paused, `pressed(ModKeyContext)` (the `Snapshot` on screen, `Selected`, `Tick`, `Enqueue`, and `Ctrl`, `Shift`,
+  `Alt`: either key of each held as it was pressed, so a mod can give Ctrl+key its own meaning) runs on the host thread at the control tick,
+  so it must not touch the world, must not block, and queues commands for gameplay; `action.Held` is its state at the last control tick, for
+  host-thread readers. A throw is logged with the mod id and the name and that action gets no more presses.
   `name` (1 to 48 letters, digits, `_ . -`, unique within the mod) keys the saved keys; a bad name, or a label that is empty or blank, over 48
   characters or on more than one line, refuses the mod. The actions are numbered `InputAction` from `InputBindings.FirstModAction` (1000) in
   load order, for this session only. Without key actions the bindings, the page and `meitou.user.json` are the game's. Engine API, not in the
@@ -735,6 +736,13 @@ holds refuses the second mod.
   and still qualifies before acting. A source that throws, or returns a
   button without a caption or press, is logged once and dropped for the session; a press that throws is logged. Without a source the panel
   is as before. Engine API, not in the original.
+- **Item tooltip lines:** in `Register`, `registration.AddItemTooltipLines(context => lines)` adds `UiItemTooltipLine`s (a label and an
+  optional value) to an item's tooltip, after the game's own rows and before the record's description. The source gets `UiItemTooltipContext`:
+  the item's record string id, name, code-mod tag (`ItemInstance.ModTag`, so a mod shows what it keeps on the item: a condition, rolled
+  affixes; a trader's stock item has none), quantity, level and quality. It runs on the host thread each time a tooltip is built, so it must be
+  cheap and must not touch the world. At most 8 lines from all sources together; a label or value is put on one line and cut to 80
+  characters, a blank value is none. A source that throws or gives a line without a label is reported once and dropped for the session.
+  **Verified** by `ItemTooltipLinesTests` (order, the context, disposal, the cap and cut, a throwing and an unlabelled source dropped).
 - **Town panel lines:** in `Register`, `registration.AddTownPanelLines(context => lines)` adds lines to the HUD's town panel (the outpost the
   camera is in: name, Open to public, Research, Power, Battery charge; [town panel](game/ui-screens.md#town-panel)) under the game's own, in
   registration order (mods in load order), so several mods share it. A `UiTownLine` has a `Label` (in the labels' column, drawn as the game's

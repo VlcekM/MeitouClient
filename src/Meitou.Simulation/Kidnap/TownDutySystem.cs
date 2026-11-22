@@ -1080,9 +1080,11 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
 
     /// <summary>
     /// The storage facts of a container's record, by record id: function 2 or 13 (BF_RESOURCE_STORAGE, BF_GENERAL_STORAGE), its itemtype limit and
-    /// its limit inventory list. Derived from the data.
+    /// its limit inventory list. Derived from the data. Filled on first ask from the planner's workers too (its storage finders' read-only look), so
+    /// concurrent.
     /// </summary>
-    readonly Dictionary<string, (bool Storage, Data.Fcs.FcsRecordType Type, string[] Limit)> _storageRecords = new(StringComparer.Ordinal);
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, (bool Storage, Data.Fcs.FcsRecordType Type, string[] Limit)> _storageRecords =
+        new(StringComparer.Ordinal);
 
     /// <summary>
     /// State 149 gotAFoodItem (<c>FUN_140597e20</c>): a limb in the mouth, or something edible among its items or in its worn bag.
@@ -1201,23 +1203,28 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     public static bool CarriesLoot(World world, CharacterCold c) => LootOf(world, c).Any();
 
     /// <summary>
-    /// Whether a fixture is a store, with the item type and the items it is limited to (cached by record).
+    /// Whether a fixture is a store, with the item type and the items it is limited to (cached by record; any thread).
     /// </summary>
-    (bool Storage, Data.Fcs.FcsRecordType Type, string[] Limit) StorageOf(Fixture f)
-    {
-        if (_storageRecords.TryGetValue(f.RecordId, out var known)) return known;
+    (bool Storage, Data.Fcs.FcsRecordType Type, string[] Limit) StorageOf(Fixture f) =>
+        _storageRecords.GetOrAdd(f.RecordId, static (id, self) => self.StorageFacts(id), this);
 
-        var record = data.Db.Find(f.RecordId);
-        (bool, Data.Fcs.FcsRecordType, string[]) made = (false, Data.Fcs.FcsRecordType.Item, []);
-        if (record is not null
-                && Data.World.TownBuildings.FunctionOf(data.Db, record, _gateFunctions)?.GetInt("function")
-                    is Data.World.TownBuildings.ResourceStorageFunction or Data.World.TownBuildings.GeneralStorageFunction)
+    /// <summary>
+    /// The storage facts of record <paramref name="id"/> (<see cref="_storageRecords"/>). Its functionality is looked up without the shared gate
+    /// cache, which only the serial phases fill.
+    /// </summary>
+    (bool Storage, Data.Fcs.FcsRecordType Type, string[] Limit) StorageFacts(string id)
+    {
+        var record = data.Db.Find(id);
+        var functions = new Dictionary<string, Data.GameRecord?>(StringComparer.Ordinal);
+
+        if (record is null || Data.World.TownBuildings.FunctionOf(data.Db, record, functions)?.GetInt("function")
+                is not (Data.World.TownBuildings.ResourceStorageFunction or Data.World.TownBuildings.GeneralStorageFunction))
         {
-            made = (true, (Data.Fcs.FcsRecordType)record.GetInt("itemtype limit", (int)Data.Fcs.FcsRecordType.Item),
-                    [.. Data.Gameplay.Construction.MachineData.Limits(data.Db, record).Select(r => r.TargetStringId)]);
+            return (false, Data.Fcs.FcsRecordType.Item, []);
         }
 
-        return _storageRecords[f.RecordId] = made;
+        return (true, (Data.Fcs.FcsRecordType)record.GetInt("itemtype limit", (int)Data.Fcs.FcsRecordType.Item),
+                [.. Data.Gameplay.Construction.MachineData.Limits(data.Db, record).Select(r => r.TargetStringId)]);
     }
 
     /// <summary>

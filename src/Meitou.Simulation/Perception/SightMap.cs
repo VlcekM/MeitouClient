@@ -25,6 +25,10 @@ public interface ISightSource
     /// </summary>
     IReadOnlyList<WorldLight> SiteLights(Construction.BuildSite site) => [];
     /// <summary>
+    /// BUILDING <c>ceiling placement</c>: the building hangs from a ceiling (false by default).
+    /// </summary>
+    bool HangsFromCeiling(string record) => false;
+    /// <summary>
     /// BUILDING <c>enforce ceiling</c> (7 true): nobody on an upper floor of it is on top (<c>Character::threadedUpdatePeriodic</c>,
     /// <b>Verified</b>).
     /// </summary>
@@ -95,9 +99,10 @@ public sealed class SightMap
     /// </summary>
     readonly record struct Room(string Key, InteriorVolume Volume, bool EnforcesCeiling);
     /// <summary>
-    /// A lamp, the room it lights (-1: outdoors or not an interior lamp) and its floor there.
+    /// A lamp, the room it lights (-1: outdoors or not an interior lamp), its floor there, and whether the <c>interiorlamps</c> switch lights it at
+    /// any daylight (a town building's interior lamp, as the renderer draws those; a player lamp keeps its own rule, as drawn).
     /// </summary>
-    readonly record struct Lamp(WorldLight Light, int Room, int Floor);
+    readonly record struct Lamp(WorldLight Light, int Room, int Floor, bool AllDay);
 
     /// <summary>
     /// The keys of the buildings added.
@@ -132,9 +137,14 @@ public sealed class SightMap
     /// </summary>
     readonly Dictionary<(int, int), List<int>> _lampCells = [];
     /// <summary>
-    /// The completed player buildings' lamps, rebuilt when the building registry changes (outdoor lights, no room).
+    /// The completed player buildings' lamps, rebuilt when the building registry or the rooms change (outdoor lights, but those in a town building
+    /// with the building over them light its room).
     /// </summary>
     readonly List<Lamp> _siteLamps = [];
+    /// <summary>
+    /// Each completed player building with its lights, read when the building registry changed; a change of rooms alone reuses them.
+    /// </summary>
+    readonly List<(Construction.BuildSite Site, IReadOnlyList<WorldLight> Lights)> _siteSources = [];
     /// <summary>
     /// The completed player buildings' lamps whose radius overlaps each cell.
     /// </summary>
@@ -144,7 +154,15 @@ public sealed class SightMap
     /// </summary>
     long _sitesRevision = -1;
     /// <summary>
-    /// The sight source of the first building added (for the player buildings' lamps).
+    /// Counts the rooms coming and going (a lamp in a town building takes its room).
+    /// </summary>
+    int _roomsRevision;
+    /// <summary>
+    /// The <see cref="_roomsRevision"/> that <see cref="_siteLamps"/> were built for.
+    /// </summary>
+    int _sitesRooms = -1;
+    /// <summary>
+    /// The sight source of the first building added, else the population's (for the player buildings' lamps).
     /// </summary>
     ISightSource? _source;
 
@@ -190,13 +208,14 @@ public sealed class SightMap
             _rooms.Add(new Room(building.Key, volume, source.EnforcesCeiling(building)));
             _roomOf[building.Key] = room;
             RoomCells(room, add: true);
+            _roomsRevision++;
         }
         var own = new List<int>();
         foreach (var l in source.Lights(building))
         {
             if (!(l.Intensity > 0) || !(l.Radius > 0)) continue;
             own.Add(_lamps.Count);
-            _lamps.Add(new Lamp(l, l.Interior ? room : -1, LampFloor(l, l.Interior ? room : -1)));
+            _lamps.Add(new Lamp(l, l.Interior ? room : -1, LampFloor(l, l.Interior ? room : -1), l.Interior));
             LampCells(_lamps.Count - 1, add: true);
         }
         _entries[building.Key] = (room, own);
@@ -213,6 +232,7 @@ public sealed class SightMap
         {
             RoomCells(e.Room, add: false);
             _roomOf.Remove(building);
+            _roomsRevision++;
         }
         foreach (int k in e.Lamps) LampCells(k, add: false);
     }
@@ -252,6 +272,7 @@ public sealed class SightMap
         {
             RoomCells(e.Room, add: true);
             _roomOf[building.Key] = e.Room;
+            _roomsRevision++;
         }
         foreach (int k in e.Lamps) LampCells(k, add: true);
     }
@@ -578,8 +599,8 @@ public sealed class SightMap
     /// </summary>
     float Gain(Lamp lamp, int slot, Vector3 at, bool inside, int floor)
     {
-        var (l, room, lampFloor) = lamp;
-        if (!WorldLights.IsLit(l, l.Interior && InteriorLampsAllDay ? 0 : Daylight) || l.Interior != inside) return 0;
+        var (l, room, lampFloor, allDay) = lamp;
+        if (!WorldLights.IsLit(l, allDay && InteriorLampsAllDay ? 0 : Daylight) || l.Interior != inside) return 0;
         // The original also matches the light's floor when both are inside; a lamp of another building's interior is taken as on another floor.
         if (inside && (room != _place[slot] || lampFloor != floor)) return 0;
         float d2 = Vector3.DistanceSquared(l.Position, at), r2 = l.Radius * l.Radius;
@@ -598,27 +619,56 @@ public sealed class SightMap
 
     /// <summary>
     /// Rebuilds the completed player buildings' lamps when the building registry changed (a level-placed building bought is a town building, already
-    /// counted).
+    /// counted), and when a town building's room comes or goes. The source is the population's own until a town building brings one, so a base with
+    /// no town loaded near it has its lamps too. Per registry or room change, serial.
     /// </summary>
     void RefreshSites(World world)
     {
-        if (_source is null || world.Buildings.Revision == _sitesRevision) return;
-        _sitesRevision = world.Buildings.Revision;
+        _source ??= world.SystemOf<PopulationSystem>()?.Data.Sight;
+        bool sites = world.Buildings.Revision != _sitesRevision;
+        if (_source is null || !sites && _roomsRevision == _sitesRooms) return;
+
+        if (sites)
+        {
+            _sitesRevision = world.Buildings.Revision;
+            _siteSources.Clear();
+            foreach (var site in world.Buildings.All)
+                if (site.Complete && !site.Destroyed && site.LevelPlacement is null) _siteSources.Add((site, _source.SiteLights(site)));
+        }
+
+        _sitesRooms = _roomsRevision;
         _siteLamps.Clear();
         _siteCells.Clear();
-        foreach (var site in world.Buildings.All)
+        foreach (var (site, lights) in _siteSources)
         {
-            if (!site.Complete || site.Destroyed || site.LevelPlacement is not null) continue;
-            foreach (var l in _source.SiteLights(site))
+            int room = RoomOfLamp(site);
+            foreach (var placed in lights)
             {
-                if (!(l.Intensity > 0) || !(l.Radius > 0)) continue;
+                if (!(placed.Intensity > 0) || !(placed.Radius > 0)) continue;
+                var l = room >= 0 ? placed with { Interior = true, Floor = site.Floor } : placed;
                 int lamp = _siteLamps.Count;
-                _siteLamps.Add(new Lamp(l, -1, l.Floor));
+                _siteLamps.Add(new Lamp(l, room, l.Floor, false));
                 for (int x = CellOf(l.Position.X - l.Radius); x <= CellOf(l.Position.X + l.Radius); x++)
                     for (int z = CellOf(l.Position.Z - l.Radius); z <= CellOf(l.Position.Z + l.Radius); z++)
                         Into(_siteCells, (x, z), lamp);
             }
         }
+    }
+
+    /// <summary>
+    /// The room a player building's lamps light, -1 for outdoor ones. A lamp standing in a town building lights that building's room, on the floor it
+    /// was placed on: the original counts a building's lights as indoor while the building's location is a building and its outside flag is clear
+    /// (FUN_140a0af10: the location's type not 0xb outdoors, RootObject +0x240 clear, docs/render-objects.md "Closed interiors"). Placing a ghost
+    /// with a parent sets that flag when a ray straight up from it hits nothing (FUN_1404d72a0), so a lamp on the building's roof stays outdoor and
+    /// one hung from a ceiling is under it. The parent is the building's instance id when placed in Meitou, its full key when read from the
+    /// original's save.
+    /// </summary>
+    int RoomOfLamp(Construction.BuildSite site)
+    {
+        if (site.Parent is not { } parent) return -1;
+        string key = parent.Contains(':') ? parent : BuildingKey.Of(site.Zone, parent);
+        if (!_roomOf.TryGetValue(key, out int room)) return -1;
+        return _source!.HangsFromCeiling(site.Record) || _rooms[room].Volume.Covered(site.Position) ? room : -1;
     }
 
     /// <summary>
