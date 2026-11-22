@@ -498,13 +498,16 @@ sealed class GameSaves(GameHost host)
                     world.Player.Selection.Clear();
                     world.Player.Selection.Add(squad.Members[0]);
                 }
-            }).TellReady(fromSave: true);   // after the swap: a mod's Ready that queues a command or reads the tick reaches this world
+            });
         }
         catch (Exception e) when (e is not GameHost.SceneLoadFailed)
         {
             Console.Error.WriteLine($"load      failed: {e}");
             throw new GameHost.SceneLoadFailed($"Load failed: {e.Message}");
         }
+
+        // After the swap, so a mod's Ready that queues a command or reads the tick reaches this world, not the one it replaced.
+        host.Session.World.TellReady(fromSave: true);
         host.PopData = nextData;
         Difficulty = nextDifficulty;
         // The New game window then shows the loaded save's options (the original loads them into its globals).
