@@ -159,8 +159,7 @@ public sealed partial class AiSystem
     };
 
     /// <summary>
-    /// The activation: a cannibal retreat (1) goes to the squad's home town, else the nearest town of its faction (<c>FUN_140288580</c>); the
-    /// nearest-nest kind (25) always to the nearest (<c>FUN_140289b50</c>). Slave shipping goes to <see cref="SlaveShipping.Town"/>.
+    /// The activation: a cannibal retreat goes to <see cref="RetreatTown"/>. Slave shipping goes to <see cref="SlaveShipping.Town"/>.
     /// </summary>
     internal void CaptiveStarted(World world, Squad squad, Blackboard board, AiPackage package, PackageClass kind)
     {
@@ -170,8 +169,9 @@ public sealed partial class AiSystem
         switch (kind)
         {
             case PackageClass.CannibalRetreat:
-                board.MissionTown = package.Signal == 1 && board.Town >= 0 ? board.Town : NearestTownOf(at, squad.Faction);
-                break;
+                board.Destination = RetreatTown(world, squad, board, package, at);
+                board.MissionTown = board.Destination.Site;
+                return;
             case PackageClass.SlaverShipping:
                 board.MissionTown = SlaveShipping.Town(data, at, squad.Faction, package.Signal);
                 break;
@@ -179,6 +179,19 @@ public sealed partial class AiSystem
 
         // The travel goals (TRAVEL_TO_TARGET_TOWN_FAST) walk to the running package's destination.
         if (board.MissionTown >= 0) board.Destination = CampaignTown.OfSite(board.MissionTown);
+    }
+
+    /// <summary>
+    /// A cannibal retreat's town (<c>FUN_140288580</c>, <b>Verified</b>): for signal 1 the base start's (<c>FUN_1402856c0</c>) platoon Ownerships home
+    /// town (<see cref="SquadTown.Home"/>: its site, outpost, or a nest squad's nest, #1107), else the nearest town of its faction; the
+    /// nearest-nest kind (25) always the nearest (<c>FUN_140289b50</c>).
+    /// </summary>
+    CampaignTown RetreatTown(World world, Squad squad, Blackboard board, AiPackage package, Vector3 at)
+    {
+        if (package.Signal == 1 && SquadTown.Home(world, squad, board) is { IsNone: false } home) return home;
+
+        int nearest = NearestTownOf(at, squad.Faction);
+        return nearest >= 0 ? CampaignTown.OfSite(nearest) : CampaignTown.None;
     }
 
     /// <summary>
