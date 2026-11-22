@@ -740,8 +740,8 @@ field prefixes by MiningResource: `iron`, `stone`, `copper`, `carbon`, `water`, 
 
 Function 10, `CraftingBuilding` (**Observed** unless noted).
 - **Lists.** The functionality's `item crafts` (v0 = finished items the output holds), `armour crafts`, `weapon crafts`
-  (MATERIAL_SPECS_WEAPON models), `crossbow crafts`, `backpack crafts`, `robotics crafts`. A weapon bench crafts every
-  WEAPON in the `PLAYER_WEAPONS` manufacturer's `weapon types` in each listed model; the model's level is that
+  (MATERIAL_SPECS_WEAPON models), `crossbow crafts`, `backpack crafts`, `robotics crafts`. Meitou's weapon bench offers every
+  WEAPON in the `PLAYER_WEAPONS` manufacturer's `weapon types` in each listed model (the original's list is narrower, below); the model's level is that
   manufacturer's `weapon models` v0 (Rusted Junk 5 ... Edge Type 3 80). `tech level` does not cap what comes out: the
   finish (`FUN_1402bcac0`) hands the factory only the record, the quality and the model (**Verified**, disassembly; #1069).
 - **Output section** (**Verified**, `FUN_1402b9aa0` code read): `out` is max `inventory footprint width` x max `inventory
@@ -786,6 +786,14 @@ Function 10, `CraftingBuilding` (**Observed** unless noted).
 - **Research** `enable item`, `enable armour`, `enable weapon type`, `enable weapon model`, `enable crossbow`,
   `enable backpack`, `enable robotics` unlock crafts, v0 = the repetition that does it; `repeats` and `repeat mult`
   ([Research](#research) repetitions).
+- **A weapon bench's list** (`FUN_1402bbd20`, **Verified** decompile): the research-unlocked MATERIAL_SPECS_WEAPON records (type 50, `FUN_14082f1b0`
+  over the research's unlocked map) the bench's `weapon crafts` holds, each with the research-unlocked WEAPON types (type 2). A weapon type or model
+  no research enables is never listed, so in the base data Edge Type 2 and 3 (enabled by no research; Edge Type 1 by rebirth.mod's) and the Iron
+  Stick (a PLAYER_WEAPONS type no research enables) are never made to order. Of the models it then keeps only the highest-scored one
+  (`FUN_1402b82a0`; what the score is, probably the level, is Unknown) and those whose `craft list fixed` is set (Refitted Blade, Catun No.3,
+  Mk III and Edge Type 3 in the base data) (**Observed**, decompile). Meitou: `ProductionSystem.CanCraft` needs the type and model both enabled
+  by a finished research, and `CraftOptions` leaves out a weapon option no research could enable (#1227); it lists every unlocked model, not the
+  original's narrower set (not modelled). Other kinds keep the engine reading that a record no research lists is craftable from the start.
 - **Save** (GAMESTATE_BUILDING, `vfunc_17`/`18` `FUN_1402b8440` / `FUN_1402b8ab0`): float `num crafts`, bool `repeat`,
   per queued k strings `current<k>` (item) and `currentExtraData<k>` (weapon model), float `current prog<k>`, int
   `crit<k>`; partly drawn items as strings `craft partial item sid <k>` (item id), floats `craft partial item val <k>` and int `craft partial item size`
