@@ -77,6 +77,16 @@ public sealed partial class World
     readonly SnapshotBuffer[] _snapshotRing = [new(), new(), new(), new()];
 
     /// <summary>
+    /// The jobs arrays the snapshots hand out, kept per slot while unchanged (<see cref="FillOrders"/>).
+    /// </summary>
+    readonly SlotArrays<Production.PermaJob> _publishedJobs = new();
+
+    /// <summary>
+    /// The stuck-bolt arrays the snapshots hand out, kept per slot while unchanged (<see cref="FillIdentity"/>).
+    /// </summary>
+    readonly SlotArrays<StuckBolt> _publishedBolts = new();
+
+    /// <summary>
     /// The buffers <see cref="Snapshot"/>, <see cref="PreviousSnapshot"/> and the snapshot before that were filled from (null:
     /// <see cref="WorldSnapshot.Empty"/>).
     /// </summary>
@@ -170,6 +180,8 @@ public sealed partial class World
         }
 
         var slots = buffer.Slots;
+        _publishedJobs.Reserve(state.Length);
+        _publishedBolts.Reserve(state.Length);
         var facts = new PublishFacts(koSlot, leadSlot, pointed, aggro, talk, combat, bodyConstants, population, extraBloodLoss);
         Movement.LookTargets.Gather(this, _looks);
 
@@ -448,7 +460,7 @@ public sealed partial class World
         s.Faction = cold?.Faction ?? -1;
         s.WeaponDrawn = cold is not null && cold.DrawnWeapon != WeaponKinds.None;
         s.CrossbowShots = cold?.CrossbowShots ?? 0;
-        s.StuckBolts = cold?.StuckBolts is { Count: > 0 } bolts ? bolts.ToArray() : [];
+        s.StuckBolts = _publishedBolts.Of(i, state[i].Generation, cold?.StuckBolts);
         s.RangedDrawn = cold is not null && cold.DrawnWeapon != WeaponKinds.None
             && cold.DrawnWeapon == HandHold.OfCategory((int)Data.Gameplay.Combat.WeaponCategory.Bow).Weapon;
         s.BackDrawn = cold?.Fighter?.WeaponIsBack ?? false;
@@ -588,7 +600,7 @@ public sealed partial class World
         s.CarriesShackles = selected && Locks.LockSystem.CarriedShackles(cold) is not null;
         s.Orders = cold?.Orders ?? CharacterOrders.None;
         s.RunSpeed = cold?.RunSpeed ?? SpeedMode.Free;
-        s.Jobs = cold is { Jobs.Count: > 0 } ? cold.Jobs.ToArray() : [];
+        s.Jobs = _publishedJobs.Of(i, state[i].Generation, cold?.Jobs);
         s.Scale = cold?.Animal is { } animal ? animal.Scale(cold.ShownAge) : 1;   // the size last refreshed (BodySystem.Age)
         s.TagHeight = cold is null ? CharacterSnapshot.PersonTagHeight : Combat.CombatSystem.NameTagHeight(cold);
         s.DrawDistanceScale = cold?.Race is { Gigantic: true } ? RaceData.GiganticDrawScale : 1;
