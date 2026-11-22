@@ -1,3 +1,4 @@
+using System.Numerics;
 using Meitou.Data.World;
 using Meitou.Simulation;
 
@@ -32,6 +33,17 @@ sealed class InteriorView(GameHost host)
     /// The buildings left within the keep-open time, shown with every floor this frame (<see cref="HoldLeftOpen"/>).
     /// </summary>
     readonly List<InteriorVolume> _held = [];
+
+    /// <summary>
+    /// The buildings build mode opens this frame for an interior-furniture ghost (<see cref="OpenForFurniture"/>), shown at the viewed floor with no
+    /// keep-open after.
+    /// </summary>
+    readonly List<InteriorVolume> _furnished = [];
+
+    /// <summary>
+    /// The ids of the buildings <see cref="OpenForFurniture"/> opens this frame (reused).
+    /// </summary>
+    readonly HashSet<string> _furnishIds = new(StringComparer.Ordinal);
     /// <summary>
     /// The keep-open entries that closed this frame, removed after the loop.
     /// </summary>
@@ -106,6 +118,7 @@ sealed class InteriorView(GameHost host)
         if (host.ActiveObjects is not { } objects) return;
         InteriorFloors.Clear();
         _viewed.Clear();
+        _furnished.Clear();
         HiddenIndoors.Clear();
         var characters = host.Session.CurrentSnapshot.Characters;
         FollowFloor(objects);
@@ -113,6 +126,7 @@ sealed class InteriorView(GameHost host)
             if (c.IsPlayer && objects.InteriorAt(host.DrawnPosition(c), InsideMargin) is { } building
                     && InteriorFloors.TryAdd(building.PlacementId, ViewedFloorValue))
                 _viewed.Add(building);
+        OpenForFurniture(objects);
         host.ApplyForcedInteriorView(objects);
         HoldLeftOpen(objects);
         PublishShown();
@@ -137,6 +151,50 @@ sealed class InteriorView(GameHost host)
                 HiddenIndoors.Add(c.Id);
         }
         host.GroundItemSync.UpdateGroundVisibility();
+    }
+
+    /// <summary>
+    /// While a ghost of interior furniture (or a node) is out in build mode, the buildings the player owns in the town nearest it are in the view at
+    /// the viewed floor, so the piece can be placed inside one with nobody there, as the original's opener does (<c>FUN_1407f7230</c>: with the
+    /// build-mode ghost's <c>is interior furniture</c> set, the nearest town to the cursor's ground point within its radius, <c>FUN_140928890</c>,
+    /// and each of its buildings the player's faction owns; docs/render-objects.md "Closed interiors"). The towns are the level's (their radius, <see
+    /// cref="Meitou.Data.Gameplay.TownData.Radius"/>) and the player's outposts; the player's buildings are its complete sites within the town's
+    /// radius and the town houses it owns. They take no keep-open: the original's branch writes no timer. Per frame, only while such a ghost is out.
+    /// </summary>
+    void OpenForFurniture(Rendering.Objects.WorldObjectRenderer objects)
+    {
+        if (host.Player?.Build is not { Active: true, Ghost: { } ghost } || !(ghost.Building.IsInteriorFurniture || ghost.Building.IsNode)) return;
+
+        var snapshot = host.Session.CurrentSnapshot;
+        var at = ghost.Position;
+        Vector3? centre = null;
+        float radius = 0, nearest = float.MaxValue;
+        void Consider(Vector3 position, float r)
+        {
+            float d = Flat(position - at);
+            if (r > 0 && d <= r * r && d < nearest) (centre, radius, nearest) = (position, r, d);
+        }
+
+        foreach (var o in snapshot.Outposts) Consider(o.Position, o.Radius);
+        if (host.PopData is { } data)
+            foreach (var site in data.Sites) Consider(site.Position, site.Town.Radius);
+        if (centre is not { } middle) return;
+
+        int faction = host.Session.World.Player.Faction;
+        _furnishIds.Clear();
+        foreach (var b in snapshot.Buildings)
+            if (b.Owner == faction && b.Complete && !b.Destroyed && b.Parent is null && Flat(b.Position - middle) <= radius * radius)
+                _furnishIds.Add(b.Id);
+        _furnishIds.UnionWith(snapshot.OwnedTownBuildings);
+        if (_furnishIds.Count == 0) return;
+
+        foreach (var room in objects.LoadedInteriors())
+            if (_furnishIds.Contains(room.PlacementId) && room.Footprint is [var corner, ..]
+                    && Flat(new Vector3(corner.X, 0, corner.Y) - middle) <= radius * radius
+                    && InteriorFloors.TryAdd(room.PlacementId, ViewedFloorValue))
+                _furnished.Add(room);
+
+        static float Flat(Vector3 v) => v.X * v.X + v.Z * v.Z;
     }
 
     /// <summary>
@@ -168,6 +226,7 @@ sealed class InteriorView(GameHost host)
     internal InteriorVolume? ViewedAt(System.Numerics.Vector3 at)
     {
         foreach (var b in _viewed) if (b.Contains(at, InsideMargin)) return b;
+        foreach (var b in _furnished) if (b.Contains(at, InsideMargin)) return b;
         foreach (var b in _held) if (b.Contains(at, InsideMargin)) return b;
         return null;
     }
