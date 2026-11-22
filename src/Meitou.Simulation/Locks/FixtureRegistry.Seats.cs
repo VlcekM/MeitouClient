@@ -29,6 +29,18 @@ public sealed record SeatSpot(string Id, string Building, string Record, Vector3
 public sealed partial class FixtureRegistry
 {
     /// <summary>
+    /// The suffix that marks a town seat id (<c>&lt;building&gt;@seat&lt;index&gt;</c>).
+    /// </summary>
+    const string SeatMark = "@seat";
+
+    /// <summary>
+    /// Whether an id names a town seat (<c>&lt;building&gt;@seat&lt;index&gt;</c>), registered or not yet.
+    /// </summary>
+    public static bool IsSeat(string id) => id.LastIndexOf(SeatMark, StringComparison.Ordinal) is var at and > 0
+        && at + SeatMark.Length < id.Length
+        && id.AsSpan(at + SeatMark.Length).IndexOfAnyExceptInRange('0', '9') < 0;
+
+    /// <summary>
     /// The town seats by id.
     /// </summary>
     readonly Dictionary<string, SeatSpot> _seatSpots = new(StringComparer.Ordinal);

@@ -252,7 +252,7 @@ public static class TownReport
                 w.WriteString("building", s.Record);
                 w.WriteString("name", s.Name);
                 w.WriteBoolean("complete", s.Complete);
-                w.WriteBoolean("indoors", world.Machines.Find(s.Id)?.Indoors ?? s.Parent is not null);
+                w.WriteBoolean("indoors", world.Machines.Find(s.Id)?.Indoors ?? (s.Parent is not null && !s.Outside));
                 WritePosition(w, s.Position);
                 w.WriteEndObject();
             }

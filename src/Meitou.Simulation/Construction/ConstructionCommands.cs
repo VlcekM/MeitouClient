@@ -4,10 +4,11 @@ using Meitou.Simulation.Player;
 namespace Meitou.Simulation.Construction;
 
 /// <summary>
-/// One confirmed ghost: the BUILDING record, its absolute position, its rotation (tilt included), floor and parent building instance (null outdoors).
+/// One confirmed ghost: the BUILDING record, its absolute position, its rotation (tilt included), floor, parent building instance (null outdoors),
+/// bounds size, and whether a parented attachment sits outside its parent (such as an exterior wall light snapped to a building's light node).
 /// </summary>
 public sealed record PlannedBuilding(string Record, Vector3 Position, Quaternion Rotation, int Floor = 0, string? Parent = null,
-    Vector3 BoundsSize = default);
+    Vector3 BoundsSize = default, bool Outside = false);
 
 /// <summary>
 /// Build mode's Confirm: creates a site per plan, in order, for the player faction (docs/simulation.md "Buildings"). A plan failing the data rules is

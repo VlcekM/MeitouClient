@@ -422,11 +422,23 @@ shows the first failing message in this order (**Verified** unless marked):
   187..222 against Wall IV (x -59..27, z 0..305; both scale 0.85). At its wall's position and turn a ramp stands against the wall's -X side.
 - **Turrets** have no `snaps to`, and none refers to the `Node Turret` instances (node type 3, as `Node Defensive Position`) that wall parts
   such as `Wall Level 02` carry: they stand on a wall's walkway like on any surface (**Observed**, data only).
-- **Meitou** (engine choice, `GhostSnap`, `BuildMode.SnapToTarget`): a `snaps to` ghost takes the position and turn of the nearest building
-  of a target record (queued ghost, site or level building) that puts its footprint centre within 150 of the cursor; it is judged by its own
-  pitch like a wall piece, and neither its target nor, on a wall, any other wall blocks it. With no target in reach it places as usual (the
-  "blue nodes" refusal is not decided). Nodes inside other buildings (light mounts) and resources are not searched. A ghost over a raised
-  walkable surface outside the rooms (a wall top, `InteriorView.SurfaceMoveHit`) stands on it level, with that height as its ground, and
+- **Snap nodes and blue node markers** (**Verified**, `PreviewBuilding_Snapping` vtable `0x1416e1cb8`, `0x1404dd410`, `0x1404ddb43`, `0x1404d0ff0`,
+  `0x1404fe160`, `0x14038cdf0`, `0x140388e10`):
+  - A building's `is node` child instances (such as `Node Light Mount`, `node type` 5, or `Node Turret`, `node type` 3) are placed at
+    `parent.pos + parent.rot * instance.pos` (unscaled by `scale`) and `parent.rot * instance.rot` (`0x140388e10`).
+  - `PreviewBuilding_Snapping` searches both buildings and building nodes matching `snaps to` within squared 3D distance `32400` (`180` units,
+    `0x1404ddb43`). Slot 5 (`0x1404d0ff0`) refuses unsnapped placement with `NeedsSnapNode` ("Can only be placed on certain locations (marked by
+    blue nodes).") unless slot `+0x108` (`0x1404fe160`) finds a `gun turret` reference.
+  - `showBlueNodes` (`0x14038cdf0`) draws `unit_sphere.mesh` scaled `5.0` in cyan-blue `(0, 0.8, 1.0, 0.5)` at every matching node of player-owned
+    buildings (or all buildings in the level editor).
+- **Meitou** (`GhostSnap`, `BuildMode.SnapToTarget`, `MarkerRenderer.BlueNodes`): a `snaps to` ghost takes the position and turn of the nearest
+  building of a target record (within 150 X/Z) or the nearest matching `is node` instance of an owned building or player site (direct pointer ray
+  hover preferred, else nearest within 180 3D); it is judged by its own pitch like a wall piece, its host building does not block it, and an
+  exterior snap attachment records its parent while staying outside (`Outside` / `flags` bit 0) so it remains visible and lit outdoors when the
+  house's interior is closed. While a ghost that snaps to `is node` records is held, matching nodes on player sites and owned buildings (all
+  non-destroyed buildings in the level editor) show blue node spheres (`unit_sphere.mesh` scaled 5), and unsnapped placement fails with
+  `NeedsSnapNode` unless the building has a `gun turret`. Resources (`is foliage`, e.g. Ore Drill -> Iron Resource) are not searched. A ghost over
+  a raised walkable surface outside the rooms (a wall top, `InteriorView.SurfaceMoveHit`) stands on it level, with that height as its ground, and
   walls do not block it.
 
 ### Upgrades

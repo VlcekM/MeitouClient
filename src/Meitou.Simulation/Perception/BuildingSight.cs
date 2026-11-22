@@ -60,7 +60,7 @@ sealed class BuildingSight(GameInstall install, GameDatabase db, WorldLevelData 
 
         var placed = new List<PlacedLight>();
         WorldObjectLayout.Building(db, record, site.Id, site.Position, site.Rotation, new BuildingState { Identity = site.Id }, placed);
-        bool indoors = WorldLights.IsIndoors(record, site.Parent is not null);
+        bool indoors = WorldLights.IsIndoors(record, site.Parent is not null && !site.Outside);
         return [.. placed.Select(p => WorldLights.FromPlaced(p, interior: false, indoors: indoors))];
     }
 }
