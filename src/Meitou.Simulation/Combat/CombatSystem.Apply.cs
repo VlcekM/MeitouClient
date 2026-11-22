@@ -117,6 +117,7 @@ public sealed partial class CombatSystem
                 return;
             case BlowOutcome.Blocked:
                 ApplyBlocked(world, a, d, blow, ac, dc, tech, live, now);
+                ReportDefence(world, a, d, seq, blow, CombatDefenceKind.Blocked, Parried(ac, dc, tech, blow, d));
                 return;
             case BlowOutcome.Dodged:
                 aSlot.Evaded++;
@@ -128,6 +129,7 @@ public sealed partial class CombatSystem
                     ExperienceSource.Combat);
                 Punch(world, a, ac, dc, tech, blow, 0);
                 Record(now, a, d, blow, outcome, -1, default, false, false);
+                ReportDefence(world, a, d, seq, blow, CombatDefenceKind.Dodged, false);
                 return;
         }
 
@@ -145,6 +147,27 @@ public sealed partial class CombatSystem
         bool intended = d == aSlot.TargetSlot && table.Previous[d].Generation == aSlot.TargetGeneration;
         return world.CombatHitFilters.Pass(world, CombatHitSource.Melee, table.IdOf(a), table.IdOf(d), seq, blow, intended, ref packet);
     }
+
+    /// <summary>
+    /// Tells the code mods' defence observers of a blocked or dodged blow (<see cref="ICombatDefenceObserver"/>); nothing without one. Serial
+    /// (Commit), after the block's or dodge's own consequences.
+    /// </summary>
+    void ReportDefence(World world, int a, int d, int seq, int blow, CombatDefenceKind kind, bool parry)
+    {
+        if (!world.CombatDefenceObservers.Active) return;
+
+        var table = world.Characters;
+        ref readonly var aSlot = ref _write[a];
+        bool intended = d == aSlot.TargetSlot && table.Previous[d].Generation == aSlot.TargetGeneration;
+        var defence = new CombatDefence(world.Tick, table.IdOf(a), table.IdOf(d), seq, blow, kind, parry, intended);
+        world.CombatDefenceObservers.Observe(world, defence);
+    }
+
+    /// <summary>
+    /// Whether a block was a weapon's parry (<see cref="IsParry"/>) and not a dodge technique counted as a block.
+    /// </summary>
+    bool Parried(CharacterCold ac, CharacterCold dc, CombatTechnique tech, int blow, int d) =>
+        !_techniques[_write[d].ReactTech].IsDodge && IsParry(ac, dc, tech, blow);
 
     /// <summary>
     /// A blocked blow: the parry and block counts and XP, the block's sound and sparks (a dodge that counts as a block is silent), the swing stopped
