@@ -32,6 +32,10 @@ sealed partial class PlayerInterface
     /// </summary>
     internal bool InfoExpanded;
     /// <summary>
+    /// Told the panel's new state at each press of its ^ button, to keep it for the next start (<see cref="UserConfig.KeepInfoPanel"/>).
+    /// </summary>
+    internal Action<bool>? InfoExpandedChanged;
+    /// <summary>
     /// The original's HUD, <c>Kenshi_MainPanel.layout</c> expanded.
     /// </summary>
     internal MyGuiLayout FaithfulHud = null!;
@@ -522,6 +526,15 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>
+    /// The information panel's ^ button: extends or collapses it and reports the new state.
+    /// </summary>
+    void ToggleInfoPanel()
+    {
+        InfoExpanded = !InfoExpanded;
+        InfoExpandedChanged?.Invoke(InfoExpanded);
+    }
+
+    /// <summary>
     /// The information panel's <c>ExtendingPanel</c> collapsed: its bottom on the panel's bottom; null before the HUD is read.
     /// </summary>
     UiRect? CollapsedExtendingPanel()
@@ -956,7 +969,7 @@ sealed partial class PlayerInterface
             }
         }
         else if (action == "help") ToggleHelpWindow();
-        else if (action == "extendedstats") InfoExpanded = !InfoExpanded;
+        else if (action == "extendedstats") ToggleInfoPanel();
         else if (action is "floor-up" or "floor-down") Floor?.Step(action == "floor-up" ? 1 : -1);
         else if (action == "build") Build.ToggleBuildMode();
         else if (action == "context") ContextMenuWindow.ContextAction(argument);

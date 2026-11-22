@@ -5650,3 +5650,11 @@ msgstr "昏迷者留下"
 
 msgid "A knocked-out character left lying near your squads, such as a guard you carried off and put down, stays when his squad or town unloads far away. In the game he vanishes with them once you look away."
 msgstr "躺在你小队附近的昏迷角色（例如你扛走后放下的守卫）在其小队或城镇于远处卸载时会留下。在原版游戏中，一旦你移开视线，他就会随他们一起消失。"
+
+#. machine-translated
+msgid "Information panel stays open"
+msgstr "信息面板保持展开"
+
+#. machine-translated
+msgid "The character information panel at the bottom left stays extended or collapsed as you last left it, also after restarting the game. The game starts it collapsed every time."
+msgstr "左下角的角色信息面板会保持你上次留下的展开或折叠状态，重启游戏后也一样。原版游戏每次启动时都是折叠的。"

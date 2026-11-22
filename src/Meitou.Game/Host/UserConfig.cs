@@ -561,6 +561,15 @@ sealed class UserConfig
     /// </summary>
     public bool FixGround { get; set; } = true;
     /// <summary>
+    /// The information panel opens extended or collapsed as it was last left (<see cref="InfoPanelExtended"/>), also after a restart (Fixes
+    /// settings; off: collapsed at every start, as the game does; docs/game/ui-screens.md "Information panel").
+    /// </summary>
+    public bool KeepInfoPanel { get; set; } = true;
+    /// <summary>
+    /// The information panel was last left extended (its ^ button), written at every press; read at start while <see cref="KeepInfoPanel"/> is on.
+    /// </summary>
+    public bool InfoPanelExtended { get; set; }
+    /// <summary>
     /// The strategy camera's turn and tilt rate in degrees per second per unit of input (Controls settings): the original's <c>mouse speed pan</c> /
     /// <c>mouse speed tilt</c> (slider 2 … 50, default 6), one value for both here.
     /// </summary>

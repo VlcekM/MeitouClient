@@ -1068,6 +1068,7 @@ sealed partial class GameHost(
     {
         Modding.ConnectModUi(ui);
         ConnectSaves(ui);
+        ConnectInfoPanel(ui);
         ui.InventoryWindows.SplitStacks = Config.SplitStacks;
 
         // The region (BIOME_GROUP) under a point, for the biome banner.
@@ -1093,6 +1094,24 @@ sealed partial class GameHost(
         ui.Frontend.HideKenshiSavesChanged = KeepHideKenshiSaves;
         ui.Frontend.SaveInUse = SaveInUse;
         ui.Frontend.DeleteSave = DeleteSave;
+    }
+
+    /// <summary>
+    /// The information panel opens as it was last left while the fix keeps it (<see cref="UserConfig.KeepInfoPanel"/>); each press is kept.
+    /// </summary>
+    void ConnectInfoPanel(PlayerInterface ui)
+    {
+        ui.InfoExpanded = Config.KeepInfoPanel && Config.InfoPanelExtended;
+        ui.InfoExpandedChanged = KeepInfoPanelState;
+    }
+
+    /// <summary>
+    /// Writes the information panel's state to the config at once, so a quit or crash keeps it.
+    /// </summary>
+    void KeepInfoPanelState(bool extended)
+    {
+        Config.InfoPanelExtended = extended;
+        Config.Save();
     }
 
     /// <summary>

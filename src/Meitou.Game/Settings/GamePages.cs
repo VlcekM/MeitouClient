@@ -683,6 +683,11 @@ sealed class GamePages(SettingsMenu menu)
             "A character that turned its head toward what it was talking to or watching looks ahead again once it stops looking. "
             + "In the game the head stays turned until the next thing it looks at.",
             Toggle: new("Head turns back", () => menu.Config.FixHeadTurnBack, v => menu.Config.FixHeadTurnBack = v, Remaster: true, OnOff: true)));
+        result.Add(new("Information panel stays open",
+            "The character information panel at the bottom left stays extended or collapsed as you last left it, also after restarting the game. "
+            + "The game starts it collapsed every time.",
+            Toggle: new("Information panel stays open", () => menu.Config.KeepInfoPanel, v => menu.Config.KeepInfoPanel = v, Remaster: true,
+                OnOff: true)));
         result.Add(GroundRow());
         result.Insert(0, menu.PageSidesEntry(result, "All fixes", "Every bug on this page as the game ships it, or every fix.", "fix"));
     }

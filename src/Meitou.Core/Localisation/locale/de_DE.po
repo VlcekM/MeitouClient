@@ -4804,3 +4804,11 @@ msgstr "Bewusstlose bleiben"
 
 msgid "A knocked-out character left lying near your squads, such as a guard you carried off and put down, stays when his squad or town unloads far away. In the game he vanishes with them once you look away."
 msgstr "Eine bewusstlose Figur, die nahe deinen Trupps liegt, etwa eine weggetragene und abgelegte Wache, bleibt, wenn ihr Trupp oder ihre Stadt weit weg entladen wird. Im Spiel verschwindet sie mit ihnen, sobald du wegschaust."
+
+#. machine-translated
+msgid "Information panel stays open"
+msgstr "Infofeld bleibt offen"
+
+#. machine-translated
+msgid "The character information panel at the bottom left stays extended or collapsed as you last left it, also after restarting the game. The game starts it collapsed every time."
+msgstr "Das Charakter-Infofeld unten links bleibt ausgeklappt oder eingeklappt, wie du es zuletzt verlassen hast, auch nach einem Neustart des Spiels. Im Spiel ist es bei jedem Start eingeklappt."

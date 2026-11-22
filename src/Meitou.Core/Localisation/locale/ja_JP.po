@@ -4802,3 +4802,11 @@ msgstr "気絶した者が残る"
 
 msgid "A knocked-out character left lying near your squads, such as a guard you carried off and put down, stays when his squad or town unloads far away. In the game he vanishes with them once you look away."
 msgstr "部隊の近くに倒れたままの気絶したキャラクター（運び出して下ろした衛兵など）は、遠くでその部隊や町がアンロードされても残ります。ゲームでは目を離すとそれらと一緒に消えます。"
+
+#. machine-translated
+msgid "Information panel stays open"
+msgstr "情報パネルを開いたままにする"
+
+#. machine-translated
+msgid "The character information panel at the bottom left stays extended or collapsed as you last left it, also after restarting the game. The game starts it collapsed every time."
+msgstr "左下のキャラクター情報パネルが、最後に残した展開・折りたたみの状態のままになります。ゲームを再起動した後も同じです。ゲームでは毎回折りたたまれた状態で始まります。"

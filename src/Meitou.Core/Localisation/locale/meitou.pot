@@ -2257,6 +2257,10 @@ msgstr ""
 msgid "Indoors"
 msgstr ""
 
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Information panel stays open"
+msgstr ""
+
 #: launcher/Meitou.Launcher/MainWindow.axaml launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "Install"
 msgstr ""
@@ -4735,6 +4739,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "The camera's turn and tilt ease in and out (the game: always on). Off: they follow the mouse and the keys at once."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "The character information panel at the bottom left stays extended or collapsed as you last left it, also after restarting the game. The game starts it collapsed every time."
 msgstr ""
 
 #: launcher/Meitou.Launcher/GraphicsPage.cs

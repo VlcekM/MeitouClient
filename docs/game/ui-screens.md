@@ -463,7 +463,8 @@ to Jobs; the saved `chase mode` flag is that switch (**Verified**, [perma-jobs](
   and is unreachable. The row is skipped for robot races (race +0x7c, KenshiLib 1ce4a16, Observed). The parts come in the
   medical part array's order ([part order](character-stats.md#part-order), **Verified**): head, torso, arms, legs, left before right.
 - Information panel: `ExtendingPanel` starts collapsed, its bottom moved onto the panel's bottom (behind the Overlapped `StatsPanel`), and slides over
-  0.5 s to its layout place when `ExtendedStatsButton` is pressed (**Verified**). `BountyPanel` shows only for one selected character
+  0.5 s to its layout place when `ExtendedStatsButton` is pressed (**Verified**). Meitou fix (Fixes page `Information panel stays open`, on by default;
+  `UserConfig.KeepInfoPanel`): it starts as last left, the state kept in the config at each press. `BountyPanel` shows only for one selected character
   (`MainBarGUI` `FUN_1407211b0`, **Verified**) that is Diplomatic Status, has a bounty (`FUN_140853740` 1 or more), a slave state, leads a war campaign, has a pending crime
   (`+0x148`), the escaped flag or the bare kidnap victim flag (`+0xe9`, carried or not). Meitou: `TooltipRuntime.ShowsBountyPanel`.
 - Status rows (`FUN_1405d4260`, **Observed**; Meitou puts the slave rows ahead of the bounty rows): a character in slave state 1 / 2 / 3
