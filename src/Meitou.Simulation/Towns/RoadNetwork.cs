@@ -24,9 +24,9 @@ public sealed class RoadNetwork
     const float Cell = 2000;
 
     /// <summary>
-    /// A road: its points (X/Z), each point's share of the way along it (0..1), its <c>length</c> and its two junctions.
+    /// A road: its ROAD record's id, its points (X/Z), each point's share of the way along it (0..1), its <c>length</c> and its two junctions.
     /// </summary>
-    sealed record Road(Vector2[] Points, float[] Along, float Length, int From, int To);
+    sealed record Road(string Id, Vector2[] Points, float[] Along, float Length, int From, int To);
 
     /// <summary>
     /// The roads.
@@ -44,6 +44,10 @@ public sealed class RoadNetwork
     /// The road segments crossing each grid cell.
     /// </summary>
     readonly Dictionary<(int, int), List<(int Road, int Segment)>> _grid = [];
+    /// <summary>
+    /// The grid cells any road crosses lie within these (none when the low one passes the high one).
+    /// </summary>
+    int _lowX = int.MaxValue, _lowZ = int.MaxValue, _highX = int.MinValue, _highZ = int.MinValue;
 
     /// <summary>
     /// The number of roads.
@@ -80,7 +84,7 @@ public sealed class RoadNetwork
 
             int from = Junction(path.Start, points[0]), to = Junction(path.End, points[^1]);
             int index = _roads.Count;
-            _roads.Add(new Road(points, along, path.Length, from, to));
+            _roads.Add(new Road(path.StringId, points, along, path.Length, from, to));
             _edges[from].Add(index);
             if (to != from) _edges[to].Add(index);
 
@@ -95,6 +99,8 @@ public sealed class RoadNetwork
                         if (!_grid.TryGetValue((cx, cz), out var list)) _grid[(cx, cz)] = list = [];
 
                         list.Add((index, s));
+                        (_lowX, _highX) = (Math.Min(_lowX, cx), Math.Max(_highX, cx));
+                        (_lowZ, _highZ) = (Math.Min(_lowZ, cz), Math.Max(_highZ, cz));
                     }
                 }
             }
@@ -134,12 +140,7 @@ public sealed class RoadNetwork
                     if (!seen.Add((index, s))) continue;
 
                     var road = _roads[index];
-                    var (a, b) = (road.Points[s], road.Points[s + 1]);
-                    var ab = b - a;
-                    float len2 = ab.LengthSquared();
-                    float u = len2 > 0 ? Math.Clamp(Vector2.Dot(at - a, ab) / len2, 0, 1) : 0;
-                    var q = a + ab * u;
-                    float d = Vector2.Distance(at, q);
+                    var (q, u, d) = Closest(road, s, at);
                     if (d > JoinRange) continue;
 
                     float score = d - pull * Vector2.Dot(q - at, direction);
@@ -315,4 +316,133 @@ public sealed class RoadNetwork
 
         return road.Points[^1];
     }
+
+    /// <summary>
+    /// The number of junctions: the road ends, numbered from 0 in the order the roads first name them (roads naming one ROAD <c>start</c> or
+    /// <c>end</c> number meet at one junction; the junction's own number is not that record number).
+    /// </summary>
+    public int JunctionCount => _junctions.Count;
+
+    /// <summary>
+    /// Where junction <paramref name="junction"/> lies (X/Z): the end of the first road that named it.
+    /// </summary>
+    public Vector2 JunctionAt(int junction) => _junctions[junction];
+
+    /// <summary>
+    /// The roads (indices below <see cref="Count"/>) that end at junction <paramref name="junction"/>, in road order; a road from a junction to
+    /// itself is listed once.
+    /// </summary>
+    public ReadOnlySpan<int> RoadsAt(int junction) => System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_edges[junction]);
+
+    /// <summary>
+    /// Road <paramref name="road"/>: its ROAD record's id, its two junctions and its <c>length</c>, the cost a trip pays for it.
+    /// </summary>
+    public RoadInfo RoadAt(int road)
+    {
+        var r = _roads[road];
+        return new RoadInfo(r.Id, r.From, r.To, r.Length);
+    }
+
+    /// <summary>
+    /// Road <paramref name="road"/>'s points (X/Z), from its first junction to its second.
+    /// </summary>
+    public ReadOnlySpan<Vector2> PointsOf(int road) => _roads[road].Points;
+
+    /// <summary>
+    /// The point of any road nearest to <paramref name="at"/> within <paramref name="within"/> (X/Z), with its road, its share of the way along it
+    /// from its first junction (0..1) and its distance; null when no road comes that close, or for a point or distance that is not finite or a
+    /// distance below 0. It looks at the grid cells the distance covers that hold roads, so a large one costs more, up to the whole network.
+    /// </summary>
+    public RoadPoint? NearestRoad(Vector2 at, float within)
+    {
+        if (!float.IsFinite(at.X) || !float.IsFinite(at.Y) || !float.IsFinite(within) || within < 0) return null;
+
+        RoadPoint? best = null;
+        var (x0, x1) = Cells(at.X, within, _lowX, _highX);
+        var (z0, z1) = Cells(at.Y, within, _lowZ, _highZ);
+        for (int cx = x0; cx <= x1; cx++)
+        {
+            for (int cz = z0; cz <= z1; cz++)
+            {
+                if (!_grid.TryGetValue((cx, cz), out var list)) continue;
+
+                foreach (var (index, s) in list)
+                {
+                    var (point, u, d) = Closest(_roads[index], s, at);
+                    if (d > within || best is { } b && (d > b.Distance || d == b.Distance && index >= b.Road)) continue;
+
+                    var road = _roads[index];
+                    best = new RoadPoint(index, road.Along[s] + (road.Along[s + 1] - road.Along[s]) * u, point, d);
+                }
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// Fills <paramref name="into"/> (cleared first) with the roads that pass within <paramref name="radius"/> of <paramref name="at"/> (X/Z), each
+    /// once, in road order: the roads a place of that radius sits on. Nothing for a point or radius that is not finite or a radius below 0. It looks
+    /// at the grid cells the radius covers that hold roads, as <see cref="NearestRoad"/>.
+    /// </summary>
+    public void RoadsNear(Vector2 at, float radius, List<int> into)
+    {
+        into.Clear();
+        if (!float.IsFinite(at.X) || !float.IsFinite(at.Y) || !float.IsFinite(radius) || radius < 0) return;
+
+        var (x0, x1) = Cells(at.X, radius, _lowX, _highX);
+        var (z0, z1) = Cells(at.Y, radius, _lowZ, _highZ);
+        for (int cx = x0; cx <= x1; cx++)
+        {
+            for (int cz = z0; cz <= z1; cz++)
+            {
+                if (!_grid.TryGetValue((cx, cz), out var list)) continue;
+
+                foreach (var (index, s) in list)
+                {
+                    if (!into.Contains(index) && Closest(_roads[index], s, at).Distance <= radius) into.Add(index);
+                }
+            }
+        }
+
+        into.Sort();
+    }
+
+    /// <summary>
+    /// The grid cells from <paramref name="at"/> - <paramref name="reach"/> to <paramref name="at"/> + <paramref name="reach"/> on one axis, kept
+    /// within the cells roads cross (<paramref name="low"/> to <paramref name="high"/>); an empty range (low above high) when they miss.
+    /// </summary>
+    static (int Low, int High) Cells(float at, float reach, int low, int high)
+    {
+        float from = MathF.Floor((at - reach) / Cell), to = MathF.Floor((at + reach) / Cell);
+        if (low > high || to < low || from > high) return (1, 0);
+
+        return ((int)MathF.Max(from, low), (int)MathF.Min(to, high));
+    }
+
+    /// <summary>
+    /// The point of segment <paramref name="segment"/> of <paramref name="road"/> nearest to <paramref name="at"/>, its share of the segment and its
+    /// distance.
+    /// </summary>
+    static (Vector2 Point, float Share, float Distance) Closest(Road road, int segment, Vector2 at)
+    {
+        var (a, b) = (road.Points[segment], road.Points[segment + 1]);
+        var ab = b - a;
+        float len2 = ab.LengthSquared();
+        float u = len2 > 0 ? Math.Clamp(Vector2.Dot(at - a, ab) / len2, 0, 1) : 0;
+        var q = a + ab * u;
+        return (q, u, Vector2.Distance(at, q));
+    }
 }
+
+/// <summary>
+/// A road of the <see cref="RoadNetwork"/> (docs/modding.md "Roads"): its ROAD record's id, the junctions it joins
+/// (<see cref="RoadNetwork.JunctionAt"/>) and its <c>length</c>, the cost a trip pays for it.
+/// </summary>
+public readonly record struct RoadInfo(string Id, int From, int To, float Length);
+
+/// <summary>
+/// A point on a road of the <see cref="RoadNetwork"/> (<see cref="RoadNetwork.NearestRoad"/>): the road, its share of the way along it from its first
+/// junction (0..1), the point (X/Z) and its distance from the point asked about.
+/// </summary>
+public readonly record struct RoadPoint(int Road, float Along, Vector2 Point, float Distance);

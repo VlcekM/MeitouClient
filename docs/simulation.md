@@ -605,7 +605,8 @@ Seven Faithful/Meitou switches (the fifth, campaign inheritance, under Campaigns
   within 600 of the departed leader ([off-screen world](game/factions-squads-towns.md#off-screen-world)). **Observed** (headless, a reporter's
   save): with the leader sent 20000 away, his two knocked-out squad mates beside the player stay; before, both vanished.
 - **Fights far away** (`OffscreenFights`). Meitou: every 2 s, an unloaded travelling or wild stand-in (not a town's own, not the player's) met
-  by an enemy (`AggroSystem.IsEnemy` either way) within 300 fights the first such in id order; strength per member able to fight is 10 + the
+  by an enemy (`AggroSystem.IsEnemy` either way) within 300 fights the first such in id order that no code mod's rule skips
+  ([modding](modding.md) "Off-screen fight rules"; a rule may also name the winner); strength per member able to fight is 10 + the
   mean of melee attack, melee defence and toughness (25 for a squad never made); A wins with S_A² / (S_A² + S_B²); the loser is despawned and the
   winner loses its weakest members in the share min(1, (S_loser / S_winner)²) / 2. Faithful: none.
 - **Healing far away** (`OffscreenHealing`). Meitou: when a kept squad comes back, `MedicalState.Recover` steps the hours it was away in one go:

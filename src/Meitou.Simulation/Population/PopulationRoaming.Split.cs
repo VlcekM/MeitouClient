@@ -151,7 +151,7 @@ public sealed partial class PopulationSystem
                 Rejoin(world, squad, parent, id, cold);
             }
 
-            if (squad.Members.Count == 0) Despawn(world, p, release: false);
+            if (squad.Members.Count == 0) Despawn(world, p, release: false, why: PlatoonGone.NoMembers);
         }
     }
 
