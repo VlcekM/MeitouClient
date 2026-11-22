@@ -85,7 +85,7 @@ Addresses are `kenshi_x64.exe` (1.0.68).
   lists prose that is not Meitou's to translate in two sections: texts Kenshi's own catalog translates (a Meitou entry cannot override a game
   msgid), which still need an entry when the launcher shows them, since it reads no game catalog; and widget, skin, icon, font, brand and
   record names. `loc-fill.mjs` translates the gaps with Claude (a failed batch is split and retried, an unusable entry replaced) and marks each
-  entry `#. machine-translated`; the Translations workflow runs it when an `ANTHROPIC_API_KEY` secret exists, then the check.
+  entry `#. machine-translated`; run it locally (`npm ci` in `.github/scripts`, `ANTHROPIC_API_KEY` set) when MEI0002 fails the build.
 - **Fonts, tips, names**: through the overlay folder (`OgreScriptResources.ForInstall`) and `Loc.FindTextFile`.
 - **New-game option help**: `NewGameHelpCatalog` reads the installed English `main.pot` source references and passes the exact msgid through `Loc.Tr`; no paraphrases or translated paragraphs are embedded. Missing translations fall back to the original English; a missing template leaves help empty. Font resources use the active locale overlay.
 - All text files are read and written as UTF-8, except `settings.cfg`: without a byte order mark it is edited as Latin-1, so its bytes are kept.
