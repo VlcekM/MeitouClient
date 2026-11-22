@@ -218,6 +218,18 @@ holds refuses the second mod.
   (`World.CombatHitFeed`, like `BloodMarks`) that the simulation never reads, so it cannot change a run; a new world (load, new game) gets a
   new queue, dropping the old world's hits. A tick may be in flight, so `view` must not touch the world; the list is reused, so copy what you
   keep. A throw is logged with the mod id and that feed gets no more hits for the session.
+- **Visual effects:** `PlayEffect(effect, point, seconds = 1, tint = null)` and `PlayEffect(effect, characterId, bone = null, seconds = 1,
+  tint = null)` on `ModContext` play a display-only particle burst, e.g. from a hit feed. `effect` is an EFFECT record's string id (its
+  `particle system`) or a Particle Universe system name; `seconds` is how long it emits, in (0, 30]; `tint` replaces the particles' hue
+  (rgb, 1 the full channel, up to 4), as a race's blood colour does. An attached effect starts at the character's `bone` as last drawn
+  (null: `Bip01 Spine2`) and follows it while it emits; a character not drawn, or a bone its rig lacks, plays nothing. Requests queue and
+  start at the next frame, after the hit feed, through the renderer's own bursts (`ParticleRenderer.Burst`, as the blood and dust do): at
+  most 16 a frame, 64 playing and 128 waiting. A bad request (unknown id, non-finite point, lifetime out of range, bad tint, no character,
+  full queue, or a call off the host's thread) returns false and is dropped, logged once per mod and reason. Call it only on the host's
+  thread (host-side callbacks: hit feed, UI, key actions, debug rows), never from a tick system. The simulation never reads the queue, so
+  the state hash is untouched; without code mods the frame skips it; a new world drops all queued and playing effects, and a mod that fails
+  its `Initialize` loses those it queued. **Verified** by `ModVisualEffectsTests` (order, tint, lifetime, caps, rejection logging, a
+  dropped mod's effects) against a recording sink; drawing in a running game is **Unknown** (not checked).
 - **Hits before they land:** a registered system implementing `ICombatHitFilter` receives `HitLanding(World, ref PendingHit)` for each melee
   blow about to hit (after the defender's block and dodge are decided), bolt about to strike a body and execution blow on a captive, before
   armour and toughness: the tick, the `CombatHitSource`, attacker and victim, the sequence and blow as in `CombatHit`, whether the victim
