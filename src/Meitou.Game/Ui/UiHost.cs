@@ -341,6 +341,12 @@ public sealed class UiHost
     readonly HashSet<string> _townLinesCut = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// The extensions' character panel line and job panel button sources (<see cref="UiRegistration.AddCharacterPanelLines"/>,
+    /// <see cref="UiRegistration.AddJobPanelButtons"/>).
+    /// </summary>
+    internal CharacterPanelHooks CharacterPanel { get; } = new();
+
+    /// <summary>
     /// The contributions: owner, slot, mode (null: every mode), order and factory.
     /// </summary>
     readonly List<(string Owner, string Slot, UiMode? Mode, int Order, Func<UiFrameContext, UiNode> Factory)> _contributions = [];
@@ -372,8 +378,8 @@ public sealed class UiHost
 
     /// <summary>
     /// An extension failed (a contribution's build, an action, a map marker source, a right-click menu row source or a row's action, a squad
-    /// AI option source or press, a building panel button source or press, or a town panel line source or press, or lines past the town panel's
-    /// limit).
+    /// AI option source or press, a building panel button source or press, a town panel line, character panel line or job panel button source or
+    /// press, or lines or buttons past a panel's limit).
     /// </summary>
     public event Action<UiDiagnostic>? Diagnostic;
 
@@ -506,6 +512,7 @@ public sealed class UiHost
         _squadAiOptions.RemoveAll(o => o.Owner == owner);
         _buildingActions.RemoveAll(a => a.Owner == owner);
         _townLines.RemoveAll(l => l.Owner == owner);
+        CharacterPanel.Remove(owner);
         foreach (string id in _styles.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) _styles.Remove(id);
         foreach (string id in _controls.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) _controls.Remove(id);
         foreach (string id in _actions.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) _actions.Remove(id);
@@ -743,6 +750,29 @@ public sealed class UiHost
     }
 
     /// <summary>
+    /// Whether any extension adds character panel lines (<see cref="CharacterPanelLines"/>).
+    /// </summary>
+    public bool HasCharacterPanelLines => CharacterPanel.AnyLines;
+
+    /// <summary>
+    /// The lines the extensions add to the character panel (<see cref="CharacterPanelHooks.Lines"/>), with the town panel lines' rules: at most
+    /// <see cref="CharacterPanelHooks.MaxLines"/>, texts cut, a failing source reported as a <see cref="Diagnostic"/> once and dropped.
+    /// </summary>
+    public IReadOnlyList<UiCharacterLine> CharacterPanelLines(UiCharacterContext context) =>
+        CharacterPanel.Lines(context, GuardedPress, Diagnostic);
+
+    /// <summary>
+    /// Whether any extension adds job panel buttons (<see cref="JobPanelButtons"/>).
+    /// </summary>
+    public bool HasJobPanelButtons => CharacterPanel.AnyButtons;
+
+    /// <summary>
+    /// The buttons the extensions add beside the jobs list (<see cref="CharacterPanelHooks.Buttons"/>), with the town panel lines' rules: at most
+    /// <see cref="CharacterPanelHooks.MaxButtons"/>, captions cut, a failing source reported as a <see cref="Diagnostic"/> once and dropped.
+    /// </summary>
+    public IReadOnlyList<UiJobButton> JobPanelButtons(UiCharacterContext context) => CharacterPanel.Buttons(context, GuardedPress, Diagnostic);
+
+    /// <summary>
     /// Whether any extension adds town panel lines (<see cref="TownLines"/>).
     /// </summary>
     public bool HasTownLines => _townLines.Count > 0;
@@ -800,7 +830,7 @@ public sealed class UiHost
     /// <paramref name="text"/> cut to <see cref="MaxTownLineText"/> characters first (so a long text costs no more than a short one), then with its
     /// line breaks, a backslash followed by <c>n</c> (which the painter draws as a break) and other control characters as spaces.
     /// </summary>
-    static string OneLine(string text)
+    internal static string OneLine(string text)
     {
         string line = Cut(text, MaxTownLineText)
             .ReplaceLineEndings(" ")
@@ -818,7 +848,7 @@ public sealed class UiHost
     /// <paramref name="text"/> cut to at most <paramref name="max"/> characters, never between the two halves of a character outside the basic plane
     /// (an emoji).
     /// </summary>
-    static string Cut(string text, int max)
+    internal static string Cut(string text, int max)
     {
         if (text.Length <= max) return text;
 
@@ -1128,6 +1158,31 @@ public sealed class UiRegistration : IDisposable
         Check();
         ArgumentNullException.ThrowIfNull(lines);
         _host.AddTownLines(Id, lines);
+    }
+
+    /// <summary>
+    /// Adds lines to the HUD's character panel, under its stats lines (docs/modding.md "Character panel lines and job panel buttons"):
+    /// <paramref name="lines"/> runs on the host's thread whenever the panel is arranged, which can be every frame, so it must be cheap, and while a
+    /// tick may be in flight, so it must not touch the world; it reads the context, and a pressed line changes the world through commands
+    /// (<see cref="UiCharacterContext.Enqueue"/>).
+    /// </summary>
+    public void AddCharacterPanelLines(Func<UiCharacterContext, IEnumerable<UiCharacterLine>> lines)
+    {
+        Check();
+        ArgumentNullException.ThrowIfNull(lines);
+        _host.CharacterPanel.AddLines(Id, lines);
+    }
+
+    /// <summary>
+    /// Adds buttons beside the HUD's jobs list (docs/modding.md "Character panel lines and job panel buttons"): <paramref name="buttons"/> runs on
+    /// the host's thread whenever the HUD is bound, which can be every frame, so it must be cheap and must not touch the world; a press runs for
+    /// the character the buttons were shown for and changes the world through commands (<see cref="UiCharacterContext.Enqueue"/>).
+    /// </summary>
+    public void AddJobPanelButtons(Func<UiCharacterContext, IEnumerable<UiJobButton>> buttons)
+    {
+        Check();
+        ArgumentNullException.ThrowIfNull(buttons);
+        _host.CharacterPanel.AddButtons(Id, buttons);
     }
 
     /// <summary>

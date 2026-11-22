@@ -20,6 +20,11 @@ namespace Meitou.Game.Ui;
 sealed class HudPanels(PlayerInterface player)
 {
     /// <summary>
+    /// The code mods' lines under the stats lines (docs/modding.md "Character panel lines and job panel buttons").
+    /// </summary>
+    internal CharacterModLines ModLines { get; } = new(player);
+
+    /// <summary>
     /// The goal line for a character the AI is not running (the player's orders, a fight, a job): what its movement task is, else Aimless.
     /// </summary>
     static string TaskText(CharacterTask task) => task switch
@@ -639,6 +644,7 @@ sealed class HudPanels(PlayerInterface player)
         if (player.BuildingSelection.BuildingFocus() is { } focus)
         {
             var (name, state, stats, _, _, extended) = player.BuildingSelection.BuildingLines(focus);
+            ModLines.Clear();
             player.AddLines(controls, "NameText", [name], row, sidePixels);
             player.AddLines(controls, "StateText", state, row, sidePixels);
 
@@ -653,7 +659,11 @@ sealed class HudPanels(PlayerInterface player)
             return;
         }
 
-        if (player.Lead() is not { } lead) return;
+        if (player.Lead() is not { } lead)
+        {
+            ModLines.Clear();
+            return;
+        }
 
         string faction = player.FactionName?.Invoke(lead.Faction) ?? "";
         player.AddLines(controls, "NameText", [new(lead.Name, faction, PlayerInterface.TitleColour, PlayerInterface.TitleColour)], row, sidePixels);
@@ -663,8 +673,10 @@ sealed class HudPanels(PlayerInterface player)
 
         // The base game draws the stats labels in the painted face (Observed: glyph shapes and widths match Sentencia at its resized 22 pt); the
         // values take the standard face, like the medical column's numbers.
-        player.AddLines(controls, "StatsText", StatsLines(lead), row, font: "Kenshi_PaintedTextFont_Medium", valueFont: "Kenshi_StandardFont_Medium",
+        var statsLines = StatsLines(lead);
+        player.AddLines(controls, "StatsText", statsLines, row, font: "Kenshi_PaintedTextFont_Medium", valueFont: "Kenshi_StandardFont_Medium",
             valuePixels: sidePixels);
+        ModLines.AddContent(controls, lead, statsLines.Length, row, sidePixels);
 
         if (player.InfoExpanded)
         {

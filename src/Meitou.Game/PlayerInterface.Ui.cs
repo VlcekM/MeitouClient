@@ -285,6 +285,33 @@ sealed partial class PlayerInterface
         _uiHost.TownLines(new UiTownContext(town, owned, snapshot, () => Session.World.Tick, Say));
 
     /// <summary>
+    /// Whether any UI extension adds lines to the character panel.
+    /// </summary>
+    internal bool HasModCharacterLines => _uiHost.HasCharacterPanelLines;
+
+    /// <summary>
+    /// The lines the interface extensions add to the character panel for <paramref name="character"/> (<see cref="UiHost.CharacterPanelLines"/>).
+    /// </summary>
+    internal IReadOnlyList<UiCharacterLine> ModCharacterLines(CharacterSnapshot character) =>
+        _uiHost.CharacterPanelLines(CharacterContext(character));
+
+    /// <summary>
+    /// Whether any UI extension adds buttons beside the jobs list.
+    /// </summary>
+    internal bool HasModJobButtons => _uiHost.HasJobPanelButtons;
+
+    /// <summary>
+    /// The buttons the interface extensions add beside the jobs list for <paramref name="character"/> (<see cref="UiHost.JobPanelButtons"/>).
+    /// </summary>
+    internal IReadOnlyList<UiJobButton> ModJobButtons(CharacterSnapshot character) => _uiHost.JobPanelButtons(CharacterContext(character));
+
+    /// <summary>
+    /// What a character panel's mod source gets for <paramref name="character"/>: the snapshot on screen, the tick and the command queue.
+    /// </summary>
+    UiCharacterContext CharacterContext(CharacterSnapshot character) =>
+        new(character, Session.CurrentSnapshot, () => Session.World.Tick, Say);
+
+    /// <summary>
     /// Future code-mod loader entry point; disposal removes the extension's owned registrations.
     /// </summary>
     public IDisposable RegisterUiExtension(IUiExtension extension) => _uiHost.Register(extension);
@@ -629,6 +656,7 @@ sealed partial class PlayerInterface
         HudPanels.AddHudText(controls);
         if (hud) OrdersPanel.AddJobScrollBar(controls);
         OrdersPanel.AddJobRowParts(controls);
+        if (hud) OrdersPanel.ModButtons.AddContent(controls);
         if (hud) TutorialWindow.AddTutorialPanel(controls);
         AddScreens(controls);
         return controls;
@@ -876,6 +904,8 @@ sealed partial class PlayerInterface
         else if (action == "rescue") Say(new Simulation.Carrying.RescueJobCommand(SelectedIds(), SlowModifier) { Tick = Session.World.Tick });
         else if (action == "prospect") Prospecting.ProspectAction();
         else if (action == BuildingModButtons.Action) BuildingSelection.ModButtons.Press(argument);
+        else if (action == CharacterModLines.Action) HudPanels.ModLines.Press(argument);
+        else if (action == JobModButtons.Action) OrdersPanel.ModButtons.Press(argument);
         else if (action.StartsWith("building-", StringComparison.Ordinal) || action.StartsWith("machine-", StringComparison.Ordinal))
             BuildingSelection.BuildingAction(action);
         else if (action == "tutorial") TutorialWindow.TutorialAction(argument);
