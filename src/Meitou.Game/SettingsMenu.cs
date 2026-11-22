@@ -435,6 +435,11 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     public Action<bool>? AnimalMovesChanged { get; init; }
 
     /// <summary>
+    /// Applies the turret assault fix (<see cref="UserConfig.FixTurretAssault"/>) to the running combat system.
+    /// </summary>
+    public Action<bool>? TurretAssaultChanged { get; init; }
+
+    /// <summary>
     /// Applies the bench facing fix (<see cref="UserConfig.FixBenchFacing"/>).
     /// </summary>
     public Action<bool>? BenchFacingChanged { get; init; }
@@ -1571,6 +1576,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         PunchReachChanged?.Invoke(true);
         Config.FixAnimalMoves = true;
         AnimalMovesChanged?.Invoke(true);
+        Config.FixTurretAssault = true;
+        TurretAssaultChanged?.Invoke(true);
         Config.FixBenchFacing = true;
         BenchFacingChanged?.Invoke(true);
         Config.FixPrisonPose = true;

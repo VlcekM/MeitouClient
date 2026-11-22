@@ -634,6 +634,11 @@ sealed class GamePages(SettingsMenu menu)
             + "In the game it fights with a sword or club drawn for it, whose moves its body cannot play, so its blows land without any motion.",
             Toggle: new("Swamp turtle attacks", () => menu.Config.FixAnimalMoves,
                 v => { menu.Config.FixAnimalMoves = v; menu.AnimalMovesChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
+        result.Add(new("Turret fire is a crime",
+            "Shooting a turret at someone who is not an enemy and not fighting is an assault, as attacking them in person is, and guards who see it "
+            + "put a bounty on you. In the game turret fire is never a crime: the victim's faction only likes you less.",
+            Toggle: new("Turret fire is a crime", () => menu.Config.FixTurretAssault,
+                v => { menu.Config.FixTurretAssault = v; menu.TurretAssaultChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
         result.Add(new("Bench facing",
             "A character on a bench with the table behind it sits facing away from the table. "
             + "The game mirrors the bench's look point through the middle of the world map, so the sitter faces an unrelated direction.",

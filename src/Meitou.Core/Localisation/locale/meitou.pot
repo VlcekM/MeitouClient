@@ -4229,6 +4229,10 @@ msgstr ""
 msgid "Shift pan speed"
 msgstr ""
 
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Shooting a turret at someone who is not an enemy and not fighting is an assault, as attacking them in person is, and guards who see it put a bounty on you. In the game turret fire is never a crime: the victim's faction only likes you less."
+msgstr ""
+
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Short sharp sun shadows where small things touch a surface."
 msgstr ""
@@ -5039,6 +5043,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Turns the inventory item on the mouse, or the one under the pointer, a quarter (needs Item rotation on the Advanced page)."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Turret fire is a crime"
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs

@@ -4234,6 +4234,12 @@ msgstr "沼泽龟攻击"
 msgid "A swamp turtle butts and bites when it fights. In the game it fights with a sword or club drawn for it, whose moves its body cannot play, so its blows land without any motion."
 msgstr "沼泽龟战斗时会撞击和撕咬。在游戏中它拿着为它准备的刀或棍战斗，而它的身体无法播放这些动作，所以它的攻击毫无动作地命中。"
 
+msgid "Turret fire is a crime"
+msgstr "炮塔射击算犯罪"
+
+msgid "Shooting a turret at someone who is not an enemy and not fighting is an assault, as attacking them in person is, and guards who see it put a bounty on you. In the game turret fire is never a crime: the victim's faction only likes you less."
+msgstr "用炮塔射击非敌人且未在战斗的人算作袭击，与亲自攻击相同，目睹的守卫会悬赏你。原版游戏中炮塔射击从不算犯罪：受害者的派系只会降低对你的好感。"
+
 msgid "Prisoners hold still"
 msgstr "囚犯保持静止"
 

@@ -3470,6 +3470,12 @@ msgstr "Ataques da tartaruga do pântano"
 msgid "A swamp turtle butts and bites when it fights. In the game it fights with a sword or club drawn for it, whose moves its body cannot play, so its blows land without any motion."
 msgstr "A tartaruga do pântano dá cabeçadas e mordidas quando luta. No jogo ela luta com uma espada ou porrete desenhado para ela, cujos movimentos seu corpo não consegue fazer, então seus golpes acertam sem nenhum movimento."
 
+msgid "Turret fire is a crime"
+msgstr "Disparar torretas é crime"
+
+msgid "Shooting a turret at someone who is not an enemy and not fighting is an assault, as attacking them in person is, and guards who see it put a bounty on you. In the game turret fire is never a crime: the victim's faction only likes you less."
+msgstr "Atirar com uma torreta em alguém que não é inimigo e não está lutando é agressão, como atacá-lo pessoalmente, e os guardas que virem colocam uma recompensa pela sua cabeça. No jogo, disparar torretas nunca é crime: a facção da vítima apenas gosta menos de você."
+
 msgid "Bench facing"
 msgstr "Direção no banco"
 

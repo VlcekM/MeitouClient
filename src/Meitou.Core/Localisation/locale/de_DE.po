@@ -166,6 +166,12 @@ msgstr "Ein Trupp, der in die Umgebung deiner Trupps zurückkehrt, ist für die 
 msgid "A swamp turtle butts and bites when it fights. In the game it fights with a sword or club drawn for it, whose moves its body cannot play, so its blows land without any motion."
 msgstr "Eine Sumpfschildkröte rammt und beißt im Kampf. Im Spiel kämpft sie mit einem für sie gezogenen Schwert oder Knüppel, dessen Bewegungen ihr Körper nicht abspielen kann, sodass ihre Schläge ohne jede Bewegung treffen."
 
+msgid "Turret fire is a crime"
+msgstr "Geschützfeuer ist ein Verbrechen"
+
+msgid "Shooting a turret at someone who is not an enemy and not fighting is an assault, as attacking them in person is, and guards who see it put a bounty on you. In the game turret fire is never a crime: the victim's faction only likes you less."
+msgstr "Mit einem Geschütz auf jemanden zu schießen, der kein Feind ist und nicht kämpft, ist ein Angriff wie ein Angriff von Hand, und Wachen, die es sehen, setzen ein Kopfgeld auf dich aus. Im Spiel ist Geschützfeuer nie ein Verbrechen: Die Fraktion des Opfers mag dich nur weniger."
+
 msgid "A town far from your squads is taken over or destroyed as soon as its story calls for it, so the map and the factions show it at once. In the game it changes only when you come near."
 msgstr "Eine Stadt fern deiner Trupps wird übernommen oder zerstört, sobald ihre Geschichte es verlangt, sodass Karte und Fraktionen es sofort zeigen. Im Spiel ändert sie sich erst, wenn du in die Nähe kommst."
 

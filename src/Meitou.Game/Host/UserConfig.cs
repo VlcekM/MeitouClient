@@ -502,6 +502,11 @@ sealed class UserConfig
     /// </summary>
     public bool FixAnimalMoves { get; set; } = true;
     /// <summary>
+    /// A player gunner's turret harpoon that hits its target is an Assault, as an unprovoked attack is (Fixes settings; off: no crime, as the game
+    /// does; docs/game/economy.md "Turret fire").
+    /// </summary>
+    public bool FixTurretAssault { get; set; } = true;
+    /// <summary>
     /// A bench with its table behind is sat facing away from it (Fixes settings; off: towards the world origin, as the game does;
     /// docs/game/ai-tasks.md "Town goals").
     /// </summary>

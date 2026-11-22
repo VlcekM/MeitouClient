@@ -166,6 +166,12 @@ msgstr "Una squadra che torna nell'area delle tue squadre si è curata per il te
 msgid "A swamp turtle butts and bites when it fights. In the game it fights with a sword or club drawn for it, whose moves its body cannot play, so its blows land without any motion."
 msgstr "Una tartaruga di palude dà testate e morde quando combatte. Nel gioco combatte con una spada o una mazza estratta per lei, i cui movimenti il suo corpo non può eseguire, così i suoi colpi arrivano senza alcun movimento."
 
+msgid "Turret fire is a crime"
+msgstr "Sparare con le torrette è reato"
+
+msgid "Shooting a turret at someone who is not an enemy and not fighting is an assault, as attacking them in person is, and guards who see it put a bounty on you. In the game turret fire is never a crime: the victim's faction only likes you less."
+msgstr "Sparare con una torretta a qualcuno che non è un nemico e non sta combattendo è un'aggressione, come attaccarlo di persona, e le guardie che lo vedono mettono una taglia su di te. Nel gioco sparare con le torrette non è mai un reato: la fazione della vittima ti apprezza solo di meno."
+
 msgid "A town far from your squads is taken over or destroyed as soon as its story calls for it, so the map and the factions show it at once. In the game it changes only when you come near."
 msgstr "Una città lontana dalle tue squadre viene conquistata o distrutta appena la sua storia lo richiede, così la mappa e le fazioni lo mostrano subito. Nel gioco cambia solo quando ti avvicini."
 

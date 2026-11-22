@@ -922,6 +922,10 @@ public sealed partial class CombatSystem : IProjectileSource
         if (shooterAlive && intended && world.Characters.Cold(p.Shooter) is { IsPlayer: false })
             Crimes?.Assault(world, p.Shooter, v);
 
+        // Meitou (TurretAssault): a player gunner's turret harpoon is an assault, as Attack Unprovoked is; the original books none.
+        if (shooterAlive && intended && p.Turret && p.ShooterIsPlayer && TurretAssault)
+            Crimes?.Assault(world, p.Shooter, v, VictimFighting(world.Characters, world.Characters.IdOf(v)));
+
         if (shooterAlive && !medical.Incapacitated)
         {
             // the victim senses the shooter, with the alarm flag (FUN_140999d50)

@@ -166,6 +166,12 @@ msgstr "Une escouade qui revient près de vos escouades a guéri pendant son abs
 msgid "A swamp turtle butts and bites when it fights. In the game it fights with a sword or club drawn for it, whose moves its body cannot play, so its blows land without any motion."
 msgstr "Une tortue des marais donne des coups de tête et mord quand elle se bat. Dans le jeu, elle se bat avec une épée ou une massue dégainée pour elle, dont son corps ne peut jouer les mouvements, si bien que ses coups portent sans aucun geste."
 
+msgid "Turret fire is a crime"
+msgstr "Le tir de tourelle est un crime"
+
+msgid "Shooting a turret at someone who is not an enemy and not fighting is an assault, as attacking them in person is, and guards who see it put a bounty on you. In the game turret fire is never a crime: the victim's faction only likes you less."
+msgstr "Tirer à la tourelle sur quelqu'un qui n'est pas un ennemi et ne se bat pas est une agression, comme l'attaquer en personne, et les gardes qui le voient mettent ta tête à prix. Dans le jeu, le tir de tourelle n'est jamais un crime : la faction de la victime t'apprécie seulement moins."
+
 msgid "A town far from your squads is taken over or destroyed as soon as its story calls for it, so the map and the factions show it at once. In the game it changes only when you come near."
 msgstr "Une ville loin de vos escouades est prise ou détruite dès que son histoire l'exige, si bien que la carte et les factions le montrent aussitôt. Dans le jeu, elle ne change que lorsque vous approchez."
 
