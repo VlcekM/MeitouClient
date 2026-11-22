@@ -66,6 +66,7 @@ static class PlaceProbe
     static void PrintFoliage(GameInstall install, GameDatabase db, WorldLevelData world, Vector2 at, float radius)
     {
         using var foliage = new FoliageWorld(install, db, world);
+        var assets = new AssetLocator(install);
         var centre = WorldLayout.ZoneOf(at.X, at.Y);
         var zones = from dx in Enumerable.Range(-1, 3)
                     from dy in Enumerable.Range(-1, 3)
@@ -74,7 +75,7 @@ static class PlaceProbe
         foreach (var i in zones.SelectMany(z => foliage.Zone(z).Instances))
         {
             float distance = Vector2.Distance(new(i.Position.X, i.Position.Z), at);
-            float reach = MeshBounds(install, i.Mesh.MeshPath, bounds) is { } b ? BoxDistance(WorldBox(b, i.Transform), at) : distance;
+            float reach = MeshBounds(assets, i.Mesh.MeshPath, bounds) is { } b ? BoxDistance(WorldBox(b, i.Transform), at) : distance;
             if (Math.Min(distance, reach) >= radius) continue;
 
             string building = i.Mesh.BuildingType is { } type ? $" building={type.StringId}" : "";
@@ -99,16 +100,18 @@ static class PlaceProbe
     }
 
     /// <summary>
-    /// A foliage mesh's bounds box, read once per mesh; null when the file cannot be read.
+    /// A foliage mesh's bounds box, read once per mesh from the file the foliage renderer loads for it; null when the file is missing or cannot be
+    /// read.
     /// </summary>
-    static OgreBounds? MeshBounds(GameInstall install, string meshPath, Dictionary<string, OgreBounds?> cache)
+    static OgreBounds? MeshBounds(AssetLocator assets, string meshPath, Dictionary<string, OgreBounds?> cache)
     {
         if (cache.TryGetValue(meshPath, out var known)) return known;
 
-        var path = Path.Combine(install.Root, meshPath);
+        var path = assets.Find(meshPath) ?? assets.Find(Path.GetFileName(meshPath.Replace('\\', '/')));
         OgreBounds? bounds = null;
         try
         {
+            if (path is null) throw new FileNotFoundException("not found in the install or its resource folders");
             bounds = OgreMeshReader.TryReadBounds(path, out var quick) ? quick : OgreMeshReader.ReadFile(path).Bounds;
         }
         catch (Exception e) when (e is IOException or OgreFormatException)

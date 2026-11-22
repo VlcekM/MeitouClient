@@ -260,7 +260,8 @@ sealed class TitleComposition
             Vector3[] points;
             try
             {
-                var mesh = Data.Ogre.OgreMeshReader.ReadFile(Path.Combine(install.Root, meshPath.TrimStart('.', '\\', '/')));
+                string file = Data.Physics.CollisionPaths.Resolve(install, meshPath) ?? throw new FileNotFoundException(meshPath);
+                var mesh = Data.Ogre.OgreMeshReader.ReadFile(file);
                 points = [.. (mesh.SharedVertexData?.ReadPositions() ?? []), .. mesh.SubMeshes.SelectMany(s => s.VertexData?.ReadPositions() ?? [])];
             }
             catch (IOException)
