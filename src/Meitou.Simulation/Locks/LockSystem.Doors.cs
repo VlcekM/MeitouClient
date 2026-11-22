@@ -152,9 +152,9 @@ public sealed partial class LockSystem
 
     /// <summary>
     /// Where a character works a fixture from, and how near counts: a door's side nearer <paramref name="from"/>, out from the leaf; anything else
-    /// its own place.
+    /// its own place. Public for code mods that send characters to work a lock (docs/modding.md "Chooser goals and jobs").
     /// </summary>
-    internal static (Vector2 At, float Reach) WorkSpot(World world, Fixture f, Vector2 from)
+    public static (Vector2 At, float Reach) WorkSpot(World world, Fixture f, Vector2 from)
     {
         if (f.Kind != FixtureKind.Door || world.Fixtures.DoorSpotOf(f) is not { } spot)
             return (Flat(f.Position), f.UseRange + Reach);
