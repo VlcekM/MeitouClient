@@ -1342,6 +1342,27 @@ sealed class AgentPlay(GameHost host)
 
         add("root-log", "root-log on|off|dump", "log every root-motion step that was shortened (wall slide, body, end-point refusal) by character, "
             + "then dump and clear the log", ControlRootLog);
+
+        add("anim-layers", "anim-layers [--id c:slot.gen]", "debug: the animation layers (name, clip time, weight) of the selected characters (or the one "
+            + "given) as the last tick published them, as JSON; read-only", ControlAnimLayers);
+    }
+
+    /// <summary>
+    /// The <c>anim-layers</c> command (usage and help at its registration in <see cref="RegisterControlCombatCommands"/>).
+    /// </summary>
+    void ControlAnimLayers(IReadOnlyList<string> args, DevConsole con)
+    {
+        if (!Loaded(con)) return;
+        if (!ControlTargets(args, con, "anim-layers", out var who, out var rest) || rest.Count != 0) return;
+
+        var snapshot = host.Session.CurrentSnapshot;
+        var listed = who.Select(id => snapshot.Characters.FirstOrDefault(c => c.Id == id)).Where(c => c is not null).Select(c => new
+        {
+            id = $"c:{c!.Id.Slot}.{c.Id.Generation}",
+            tick = snapshot.Tick,
+            layers = c.Animations.Select(l => new { name = l.Name, time = MathF.Round(l.Time, 3), weight = MathF.Round(l.Weight, 3) }).ToArray(),
+        }).ToArray();
+        host.AgentChannel.PrintData(con, JsonSerializer.Serialize(new { characters = listed }));
     }
 
     /// <summary>
