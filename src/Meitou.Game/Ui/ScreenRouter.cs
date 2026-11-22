@@ -15,6 +15,8 @@ sealed class ScreenRouter(PlayerInterface player)
     /// </summary>
     internal void FaithfulAction(MyGuiEvent e)
     {
+        if (player.OverlayText(e)) return;
+
         player.InterfaceSounds.SoundForScreen(e);
 
         if (e.Action.StartsWith("inventory-scroll:", StringComparison.Ordinal))

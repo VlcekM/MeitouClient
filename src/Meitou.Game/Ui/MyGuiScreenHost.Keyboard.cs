@@ -6,7 +6,8 @@ namespace Meitou.Game.Ui;
 
 /// <summary>
 /// Keyboard side of the host: the edit boxes' clipboard (MyGUI 3.2.2 <c>EditBox</c>, docs/game/ui-input.md "Edit boxes") and Tab / Shift+Tab / Enter
-/// / Space over the top window's edit boxes and buttons. MyGUI has no key traversal and no key-focus look for buttons (<b>Verified</b>:
+/// / Space over the top window's edit boxes and buttons, and the mod overlays' text boxes (<see cref="UiNodeKind.TextBox"/>), which take the keys
+/// through the same edit focus. MyGUI has no key traversal and no key-focus look for buttons (<b>Verified</b>:
 /// <c>InputManager</c> and <c>Button</c> of 3.2.2), so the buttons' part is Meitou's.
 /// </summary>
 public sealed partial class MyGuiScreenHost
@@ -167,11 +168,17 @@ public sealed partial class MyGuiScreenHost
     /// <summary>
     /// Enter in the focused box (MyGUI): a multi-line box takes a line break (Ctrl+Enter accepts), any other accepts, which here is the default
     /// action; a read-only box does nothing. A box whose layout names a <c>SubmitAction</c> raises that action with its text and lets go of the keys
-    /// instead (the Edit characters window's values). True when the box took it.
+    /// instead (the Edit characters window's values), and a mod overlay's text box lets go of the keys. True when the box took it.
     /// </summary>
     public bool EditEnter(bool ctrl)
     {
         if (_edit is null || _edit.ReadOnly) return false;
+
+        if (_focus?.Screen == OverlayScreen)
+        {
+            Blur();
+            return true;
+        }
 
         if (_edit.MultiLine && !ctrl)
         {
@@ -302,6 +309,89 @@ public sealed partial class MyGuiScreenHost
         Bar("bottom", b.X - 4, b.Y + b.Height + 2, b.Width + 8, 2);
         Bar("left", b.X - 4, b.Y - 2, 2, b.Height + 4);
         Bar("right", b.X + b.Width + 2, b.Y - 2, 2, b.Height + 4);
+    }
+
+    #endregion
+
+    #region Overlay text boxes
+
+    /// <summary>
+    /// The screen id the overlay text boxes' focus and text events carry.
+    /// </summary>
+    public const string OverlayScreen = "ui-overlay";
+
+    /// <summary>
+    /// The property that marks an overlay control as a text box.
+    /// </summary>
+    public const string OverlayEditProperty = "OverlayEdit";
+
+    /// <summary>
+    /// Whether <paramref name="c"/> is an overlay text box.
+    /// </summary>
+    static bool IsOverlayEdit(UiControl c) => c.Type == "EditBox" && c.Properties.ContainsKey(OverlayEditProperty);
+
+    /// <summary>
+    /// A press at <paramref name="p"/> on an overlay control: an enabled text box takes the keys and places the caret as a screen's box does (a
+    /// disabled one only takes the click). False for any other control.
+    /// </summary>
+    public bool PressOverlayEdit(UiControl c, Vector2 p)
+    {
+        if (!IsOverlayEdit(c)) return false;
+        if (!c.Enabled) return true;
+
+        SyncOverlayText(c);
+        PressEdit(OverlayScreen, c, p);
+        return true;
+    }
+
+    /// <summary>
+    /// After the overlay is arranged: each text box's text is the node's (the focused box's buffer takes it when it differs), and the focused one
+    /// shows its caret and selection. The focus lets go of a box that is gone or disabled.
+    /// </summary>
+    public void ArrangeOverlayEdits(List<UiControl> controls)
+    {
+        bool shown = false;
+
+        for (int i = 0; i < controls.Count; i++)
+        {
+            var c = controls[i];
+            if (!IsOverlayEdit(c)) continue;
+
+            SyncOverlayText(c);
+            if (_focus != (OverlayScreen, c.Name) || _edit is null || !c.Enabled) continue;
+
+            controls[i] = WithCaret(c, _edit);
+            shown = true;
+        }
+
+        if (!shown && _focus?.Screen == OverlayScreen) Blur();
+    }
+
+    /// <summary>
+    /// Keeps a text box's text as its node gives it.
+    /// </summary>
+    void SyncOverlayText(UiControl c)
+    {
+        _screens.TryAdd(OverlayScreen, new(new MyGuiLayout("3.2.0", []), false, false, panel: true));
+        _screens[OverlayScreen].Text[c.Name] = c.Caption;
+
+        if (_focus == (OverlayScreen, c.Name) && _edit is not null && _edit.Text != c.Caption) _edit.Set(c.Caption);
+    }
+
+    /// <summary>
+    /// <paramref name="c"/> drawn focused, with <paramref name="edit"/>'s caret and selection.
+    /// </summary>
+    static UiControl WithCaret(UiControl c, UiTextBuffer edit)
+    {
+        var properties = new Dictionary<string, string>(c.Properties, StringComparer.Ordinal)
+        {
+            ["Focused"] = "true",
+            ["CaretIndex"] = edit.Caret.ToString(CultureInfo.InvariantCulture),
+            ["SelectionStart"] = edit.SelectionStart.ToString(CultureInfo.InvariantCulture),
+            ["SelectionLength"] = edit.SelectionLength.ToString(CultureInfo.InvariantCulture),
+        };
+
+        return c with { Properties = properties };
     }
 
     #endregion
