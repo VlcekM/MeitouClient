@@ -1199,7 +1199,10 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         var entry = new SenseEntry { Target = target, Generation = gen };
         Refresh(ref scan, ref entry, target, tc, true, false);
         Count(ref scan, entry, tc);
-        Insert(b, b.LowerBound(target), entry, world.Tick);
+
+        // A full block may refuse it (SenseBlock.Cap, an engine choice): then there is no new entry to update. The witness function's
+        // reaction forces this sense again (React → AttackTarget → Witness → Threaten), which without the entry recursed until the stack overflowed.
+        if (!Insert(b, b.LowerBound(target), entry, world.Tick)) return;
 
         // The new entry's perception update runs the witness function (FUN_140858f40 → FUN_1408580d0 → FUN_140854d10).
         world.SystemOf<Crime.CrimeSystem>()?.Sensed(world, looker, target);
