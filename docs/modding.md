@@ -947,9 +947,11 @@ holds refuses the second mod.
   saved with the contract). **Verified** by `ModHookTests` (synthetic world): a held stand-in, travel to a point, the contract's end and restart,
   and an any-range target taken past the reach. A chooser goal's act-out (below) drives its character with what the engine's own duties use:
   `TaskStart.Walk`, `CharacterOrders.Sneak` on `Orders` (speed, sight and spot meters follow it for any faction), `LockSystem.Picking.Step` (books the Burglary
-  a witness answers), `CrimeSystem.Pickpocket`, `CarrySystem.BeginPickUp` / `BeginPutDown`, `ArrestSystem.TakeOver(enslave: true)` (a guard
-  takes the carried body to a cage as its faction's slave), `AggroSystem.Spotted` / `Unseen`. `CharacterCold.FedTo` is a free hunger level
-  that comes before the game's rule (not saved), for a captive the mod's squad carries.
+  a witness answers), `LockSystem.WorkSpot(world, fixture, from)` (where to stand to work a fixture's lock and how near counts: a door's
+  side nearer `from`, out from the leaf, within `DoorWorkReach`; any other fixture its own place within its `UseRange` plus `Reach`),
+  `CrimeSystem.Pickpocket`, `CarrySystem.BeginPickUp` / `BeginPutDown`, `ArrestSystem.TakeOver(enslave: true)` (a guard takes the carried
+  body to a cage as its faction's slave), `AggroSystem.Spotted` / `Unseen`. `CharacterCold.FedTo` is a free hunger level that comes before the
+  game's rule (not saved), for a captive the mod's squad carries.
 - **Goal types in data**: a data mod lists an AI_TASK whose `enum` is a number of the mod's own (1000 up) in its AI_PACKAGE records. Without
   the code mod such a goal loads (`AiTask.From` keeps any number) and is never chosen: it has no behaviour, so its desire is 0. The code mod's
   system, in a serial step, finds who has the goal now:
