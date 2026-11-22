@@ -1800,7 +1800,10 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   (MINE, RESEARCH, REFINERY, CRAFTING pieces of the interior layout; `TownBuilding.Furniture`), then the nest's pieces (`NestBuildings.FurnitureOf`), of `Blackboard.OwnHome`
   are the candidates; `TownPlaceClaims.HasStayingFurniture` is the desire (0 without any), members draw a free
   piece at random (`FreeFurniture`; distinct pieces per member is the engine's claim, **Observed**), sit on a chair, stand at a dummy, or stand at a workstation facing it at the machine's work clip and
-  hunger rate (`PretendOperate`: 221's look). 221 runs `Task_OperateMachine`'s update there (**Verified**, `FUN_14035bc90`: `tryOperate`, then
+  hunger rate (`PretendOperate`: 221's look). At a dummy or workstation it stands as 87's town workers do ([work
+  distance](buildings-production.md#work-distance), `AiSystem.AtPiece`): within the piece's `use range` of its nearest use node, else its origin, not on
+  the origin (#1151: a camp's residents cooked standing in the campfire); one back from its town's time unloaded is put that far from it.
+  **Observed** (headless, #1151 save, Rebel Base): a Holy Nation Outlaws resident at the camp's Campfire (`use range` 15, no use node) stands 14.8 from it, 1.7 before. 221 runs `Task_OperateMachine`'s update there (**Verified**, `FUN_14035bc90`: `tryOperate`, then
   the operating XP `FUN_1408c7250` for any function but 7, then the building's work step, slot `0x4b0`), so the resident gains the piece's operating
   XP and at a dummy its training; at a workstation Meitou runs `TownOperate` on the layout object's own machine (`ProductionSystem.HomePretenders`,
   [layout objects](buildings-production.md#npc-town-machines)), so a refinery's step draws its inputs into its output and a

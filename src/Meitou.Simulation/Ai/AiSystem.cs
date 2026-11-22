@@ -1922,12 +1922,19 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// At a piece it pretend-operates (221, <see cref="PretendOperate"/>): staying home at a workstation or training dummy of the home, or sitting
     /// around at a training dummy (275 leads to 221 too).
     /// </summary>
-    static bool PretendsAtHome(Blackboard board, int slot, AiBehaviour behaviour, TaskType type)
-    {
-        if (behaviour != AiBehaviour.Sit) return false;
-        if (type == TaskType.StayInHome) return board.SeatClaims.TryGetValue(slot, out var claim) && Pretended(claim.Kind);
+    static bool PretendsAtHome(Blackboard board, int slot, AiBehaviour behaviour, TaskType type) =>
+        behaviour == AiBehaviour.Sit && PretendedClaim(board, slot, type) is not null;
 
-        return type == TaskType.SitAround && board.SitClaims.TryGetValue(slot, out var sitting) && sitting.Spot.Kind == HomeSpotKind.Training;
+    /// <summary>
+    /// The piece a goal of <paramref name="type"/> pretend-operates (<see cref="PretendsAtHome"/>): staying home's claimed workstation or training
+    /// dummy, sitting around's claimed dummy; null for any other claim or goal.
+    /// </summary>
+    static HomeSpot? PretendedClaim(Blackboard board, int slot, TaskType type)
+    {
+        if (type == TaskType.StayInHome) return board.SeatClaims.TryGetValue(slot, out var claim) && Pretended(claim.Kind) ? claim : null;
+
+        bool dummy = type == TaskType.SitAround && board.SitClaims.TryGetValue(slot, out var sitting) && sitting.Spot.Kind == HomeSpotKind.Training;
+        return dummy ? board.SitClaims[slot].Spot : null;
     }
 
     /// <summary>
@@ -2045,7 +2052,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         {
             Become(world, slot, CharacterTask.Idle);
         }
-        if (mind.Resume && Resume(world, slot, mind)) return;
+        if (mind.Resume && Resume(world, slot, mind, board, type)) return;
 
         ActOut(world, slot, mind, goal, board, type, behaviour);
     }
@@ -2395,7 +2402,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// Back from its town's time unloaded (<see cref="AiMind.Resume"/>, cleared here): it is already where the plan's walk ends, put there by the
     /// serial step when that is walkable. True when it is to be placed (the act-out waits).
     /// </summary>
-    bool Resume(World world, int slot, AiMind mind)
+    bool Resume(World world, int slot, AiMind mind, Blackboard board, TaskType type)
     {
         // Back from its town's time unloaded: it is already where the plan's walk ends (docs/simulation.md "Off-screen tier", residents'
         // schedule).
@@ -2403,11 +2410,16 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (!(mind.Step is TaskType.MoveOnFreeWill or TaskType.MoveOnFreeWillFast && !mind.Plan[0].Target.IsNone)) return false;
 
         var end = mind.Plan[0].Target.Position;
+        float ring = ResumeRing;
+
+        // At a piece it pretend-operates the walk ends within the piece's reach of its marker (AtPiece), not on the piece.
+        if (mind.Plan[0].Target.Kind == Targets.Seat && PretendedClaim(board, slot, type) is { } piece)
+            (end, ring) = (_work.PieceMarkerOf(piece, world.Characters.Next[slot].Position, world.Walkability), _work.PieceRangeOf(piece));
 
         // On a ring round the spot by member (engine choice): members sharing a bed or node are not put on one point, where separation would
         // throw them off it.
         float angle = mind.MemberIndex * 2.39996f;
-        end += new Vector3(MathF.Sin(angle), 0, MathF.Cos(angle)) * ResumeRing;
+        end += new Vector3(MathF.Sin(angle), 0, MathF.Cos(angle)) * ring;
         var walk = world.Walkability;
         var at = !float.IsNaN(end.Y) && walk.FloorNear(end.X, end.Z, end.Y, FloorSlack) is { } floor ? floor
             : new Vector3(end.X, float.IsNaN(end.Y) ? walk.GroundHeight(end.X, end.Z) : end.Y, end.Z);
@@ -2960,12 +2972,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
 
         bool chair = claimed.Kind is HomeSpotKind.Chair or HomeSpotKind.ThroneSeat;
-
-        // Already on its chair (moved onto it below, off the floor point the walk ended at).
-        bool seated = chair && n.Task == (byte)CharacterTask.Rest && !mind.Walking
-            && Vector2.DistanceSquared(Flat(n.Position), Flat(claimed.Position)) < 1
-            && MathF.Abs(n.Position.Y - claimed.Position.Y) <= FloorSlack;
-        if (!seated && !GoToSpot(world, slot, mind, Flat(claimed.Position), GiveUp.Seat, SpeedMode.Walk, height: claimed.Position.Y))
+        bool pretended = Pretended(claimed.Kind);
+        bool there = pretended ? AtPiece(world, slot, mind, claimed) : AtSeat(world, slot, mind, claimed, chair);
+        if (!there)
         {
             if (n.Task == (byte)CharacterTask.Rest) Become(world, slot, CharacterTask.Idle);
             return;
@@ -2979,10 +2988,46 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             mind.SitClip = claimed.SitClip;
             mind.SitHungerRate = claimed.HungerRate;
         }
-        else if (claimed.Kind is HomeSpotKind.Training or HomeSpotKind.Workstation) n.Yaw = claimed.Yaw;
 
-        if (Pretended(claimed.Kind)) PretendOperate(world, slot, mind, claimed);
-        Become(world, slot, claimed.Kind is HomeSpotKind.Training or HomeSpotKind.Workstation ? CharacterTask.Idle : CharacterTask.Rest);
+        if (pretended) PretendOperate(world, slot, mind, claimed);
+        Become(world, slot, pretended ? CharacterTask.Idle : CharacterTask.Rest);
+    }
+
+    /// <summary>
+    /// Walks to a claimed seat or node; true once there: on its chair already (moved onto it by <see cref="ActSeated"/>, off the floor point the
+    /// walk ended at), else at the spot.
+    /// </summary>
+    bool AtSeat(World world, int slot, AiMind mind, HomeSpot seat, bool chair)
+    {
+        ref var n = ref world.Characters.Next[slot];
+        bool seated = chair && n.Task == (byte)CharacterTask.Rest && !mind.Walking
+            && Vector2.DistanceSquared(Flat(n.Position), Flat(seat.Position)) < 1
+            && MathF.Abs(n.Position.Y - seat.Position.Y) <= FloorSlack;
+        return seated || GoToSpot(world, slot, mind, Flat(seat.Position), GiveUp.Seat, SpeedMode.Walk, height: seat.Position.Y);
+    }
+
+    /// <summary>
+    /// Walks to a workstation or training dummy it pretend-operates; true once there, then facing it. Row 221 runs <c>Task_OperateMachine</c> as 87
+    /// does, so it stands as a town worker at a workplace (docs/game/buildings-production.md "Work distance"): it walks to the piece's use node
+    /// nearest it (the piece's origin without one) and is there within the functionality's <c>use range</c> of it, twice that once stopped, at the
+    /// piece's height; not on the origin, where it stood in a campfire (#1151).
+    /// </summary>
+    bool AtPiece(World world, int slot, AiMind mind, HomeSpot piece)
+    {
+        ref var n = ref world.Characters.Next[slot];
+        var marker = _work.PieceMarkerOf(piece, n.Position, world.Walkability);
+        float reach = _work.PieceRangeOf(piece);
+        bool level = MathF.Abs(n.Position.Y - marker.Y) < Construction.SiteReach.HeightLimit(false, piece.Piece is not null);
+
+        bool there = level && AtWork(in n, marker, reach)
+            || GoToSpot(world, slot, mind, Flat(marker), GiveUp.Seat, SpeedMode.Walk, reach, marker.Y, reach);
+        if (!there) return false;
+
+        mind.Walking = false;
+        mind.FailedWalks = 0;
+        var face = piece.Position - n.Position;
+        if (face.X * face.X + face.Z * face.Z > 1e-4f) n.Yaw = MathF.Atan2(face.X, face.Z);
+        return true;
     }
 
     /// <summary>
@@ -3241,9 +3286,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <see cref="MaxFailedWalks"/> in a row it gives the spot up as <paramref name="giveUp"/> says. <paramref name="slack"/> overrides
     /// <see cref="AiSettings.PostSlack"/> where the spot must be exact (a turret's gun); <paramref name="height"/> is the floor the spot is on, so
     /// the path reaches a floor or walkway above the ground; a spot over a hole furniture cuts in that floor is walked to beside it, on the floor
-    /// (<see cref="IWalkability.FloorNear"/>).
+    /// (<see cref="IWalkability.FloorNear"/>); <paramref name="arrive"/> (with a height) ends that walk within it of the spot rather than on it.
     /// </summary>
-    bool GoToSpot(World world, int slot, AiMind mind, Vector2 target, GiveUp giveUp, byte mode, float slack = 0, float? height = null)
+    bool GoToSpot(World world, int slot, AiMind mind, Vector2 target, GiveUp giveUp, byte mode, float slack = 0, float? height = null,
+        float arrive = 0)
     {
         var walk = world.Walkability;
         var table = world.Characters;
@@ -3296,9 +3342,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             mind.ArrivedAt = null;
             if (height is { } floor && n.Task == (byte)CharacterTask.GoTo)
             {
-                // A spot on a floor (a node, seat or gun) is walked onto, not to a stride off it.
+                // A spot on a floor (a node, seat or gun) is walked onto, not to a stride off it; one with a reach of its own ends within it.
                 var cold = table.Cold(slot)!;
-                (cold.GoalHeight, cold.GoalHeightAt, cold.ArriveWithin) = (floor, target, MovementSystem.SpotArrive);
+                (cold.GoalHeight, cold.GoalHeightAt) = (floor, target);
+                cold.ArriveWithin = arrive > 0 ? arrive : MovementSystem.SpotArrive;
             }
 
             mind.Walking = true;
