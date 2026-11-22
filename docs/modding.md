@@ -923,6 +923,10 @@ holds refuses the second mod.
   pays the player once it lies in the bed, and a visitor in a player town picks the nearest bed it can afford before the NPC bed search (null
   keeps the original: NPCs never pay). Non-finite delays, hours, points and radii are refused. **Verified** by `ModHookTests` (synthetic
   world): the spawn ring, purse and refusals, a never-loaded spawn kept and reloaded with its tag, and the campaign queue.
+- **Animals born into a squad** (engine API, not in the original; serial phases): `PopulationSystem.SpawnAnimal(world, record, squad, at, age)`
+  adds one ANIMAL_CHARACTER to an existing squad at a walkable point (else the squad's first member's spot), aged 0 to 1.1, idle, with its
+  species' look and its record's kit; a player squad's animal is a player character, and none is made at the faction's head cap. Returns its id,
+  `CharacterId.None` when refused. For a mod's newborn or a trader's stock.
 - **Town overrides** (engine API, not in the original; serial phases; [simulation](simulation.md) "Town overrides"): `PopulationSystem.CheckOverrides(world,
   site)` runs a town's `override town` list now, as its zone's load would; `ApplyTownVersion(world, site, townId)` puts a TOWN of the mod's choice
   in its place (null or the town's own id: back to its own record, residents made afresh; also for a held town or one of the player's faction); both
