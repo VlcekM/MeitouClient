@@ -292,20 +292,31 @@ TownBase, Town, Nest and TownNull), which seeds `rand()` from the town's positio
     beside it stay. **Observed** (1.0.65 through KenshiHarness, the same save, 2026-11-17, bought paused with Re_Dev's money): the Stationhouse's
     campfire, stools and camp bed and the debris round it vanish at the purchase, its squatters stay. The building's bounding box there is the
     merge of its part entities' world boxes (`FUN_140549480`); a part placed for its collision only (`FUN_14055f6e0` mode 2) makes no entity.
-- Persistence: the items are saved with the nest as their `persist` handle ([save](save.md)); the buildings are not saved.
+- Persistence: the items are saved with the nest as their `persist` handle ([save](save.md)); a wild nest's buildings are not saved. A home's pieces that stand on it
+  are objects of its interior and saved with it (`internalbuildings-<k>`, `serialised interior` 1; **Observed**, METARU: zone 17.31's Hive lists its 14 camp beds among its
+  27 internal buildings; none of the save's 89 generated entries standing on their own is of a `debris building` record of `nest housecamp`); its pieces on the
+  ground and its meshes are not, and a ruin keeps no object ([ruined by residents](../game/buildings-production.md#ruined-by-residents)).
+- When a home's nest is laid (**Verified**, disassembly 1.0.68): only the squad setup `FUN_14057f1f0` hands the town a nest with a home (`Town::addNest`
+  `FUN_140929340`; its other caller, `Town::setup`, is the `spawn in town centre` camp with no home), and only `populateBuilding` (`FUN_14057f820`, housing's) makes a squad
+  with a home (the other `createRandomUnloadedSquad` callers pass none). Housing (`Town::chooseResidents`) takes only the buildings `ZoneMapContent::populateAllTheBuildings`
+  collected, which it does only for a zone whose `newGameFirstTimeLoaded` (+0xa8) is set; so a home's camp is laid only when its zone loads fresh, never again from a save.
+  **Observed** (1.0.65 under Proton, issue #1090's save, its Old Storm House `34.13:82-Newwworld-INGAME` saved with `residents template` `Trashed building w/squatters`
+  and a zone file, no squatter platoon): no squatters, camp pieces or trash in or round it in 11 game hours.
 - A resident template's `nest` (a TOWN link on SQUAD_TEMPLATE) has its `loot spawn` laid at the town that lists the template in `residents` (**Observed**, METARU: The Old
   Prison holds 16 loose items with the town's own `persist` handle, all from the lists of `nest armoury ruin`, the `nest` of its resident `ruin- tech loot`; the Infested Lab's 17
   match `nest spiders`, the `nest` of `Ancient Lab n.5 empty spiders`; neither TOWN has lists of its own). Its `debris building` and `debris` meshes stand round each home too (**Observed**, 1.0.65 through KenshiHarness, a Wanderer save at The
-  Hub, 2026-11-15: the four `hub squatters` ruins, Bughouse, Old Storm House, Stationhouse and Snailhouse, hold `nest housecamp`'s campfire, stools, camp beds and trash
-  after a load, and their squatters stand at the campfire or stools for three game hours in three runs). Base data (gamedata.base, Newwworld, Dialogue, rebirth): 47 templates name a `nest`, e.g.
+  Hub, 2026-11-15: the four `hub squatters` ruins, Bughouse, Old Storm House, Stationhouse and Snailhouse, hold `nest housecamp`'s campfire, stools, camp beds and trash,
+  and their squatters stand at the campfire or stools for three game hours in three runs). Base data (gamedata.base, Newwworld, Dialogue, rebirth): 47 templates name a `nest`, e.g.
   the Old Empire Watchtowers' `ruin- tech loot` (issue #347).
   - Place (**Observed**, three original saves, 12 towns, 403 items): each lies within the nest's `size radius` of a building housing the template, on its floor or the ground
     beside it; none round the town's centre unless a home stands there. One roll per home is Meitou's reading (the totals fit: 7 Hub homes x 0..7). The Hub: 19 to 22 items in the homes of `hub squatters` (`nest housecamp`, radius 60), 320 to
     1630 from the centre; The Old Prison's 16 within 349 of the Broken Watchtower (`nest armoury ruin`, 350). Measured against Meitou's boot housing; 5 items of 403 lie further.
 Meitou (`PopulationSystem.StandCamp`, **Engine choices**: its own random stream, loot reach): the first load of a nest the save does not name lays the eggs and the loot as ground
 items kept apart from the ground item limit; a nest loaded again, and one a save names, lay nothing more. A town stands its residents' nests round each home whose template
-names one, as its own camp's (`PopulationSystem.ResidentNests`): the buildings and meshes every time it is made, the items once and only round a home whose zone the save has
-no file of. A building of the player's gets none (housing passes it over, [town residents](../game/factions-squads-towns.md#town-residents), so nothing hands its nest to the town). The pieces that are chairs, dummies or workstations are that home's furniture for staying home (`NestBuildings.FurnitureOf`). A resident template no building of
+names one, as its own camp's (`PopulationSystem.ResidentNests`): round a home whose zone the loaded save has no file of (or the town's own zone after an override, which the
+original trims and loads fresh), its buildings, meshes and items; round any other the pieces the save holds inside the home (`SavedPieces.Camp`: its generated entries of the
+nest's `debris building` records inside it, none a layout object's) and nothing else. A save writes a standing home's pieces laid in this world as objects of its
+interior (`InteriorSave`, the whole interior written as for an occupied cage), none into a ruin. A building of the player's gets none (housing passes it over, [town residents](../game/factions-squads-towns.md#town-residents), so nothing hands its nest to the town). The pieces that are chairs, dummies or workstations are that home's furniture for staying home (`NestBuildings.FurnitureOf`). A resident template no building of
 the town houses (5 base sites: 4 one-building Lost Library placements, Police Barracks) lays its nest's items round the centre. A home's piece stands where the
 placement ray meets first (`PopulationSystem.FirstHit`): the highest group-9 surface over the spot (`GroundShapes`) of the home (as a ruin or standing), another town building,
 a finished player building (or one built past its visual threshold) or a camp piece laid before, else the terrain when that is higher; at that height, tilted to that
