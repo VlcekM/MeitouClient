@@ -940,6 +940,7 @@ Generator
 Good
 Greyed
 Group
+HCenter Top
 HCenter VCenter
 Hover
 Hurt
@@ -1014,6 +1015,8 @@ Yellow
 [MeitouClient] Execution
 [Meitou] Proving Grounds
 brew install molten-vk vulkan-loader
+character panel line 
+character panel lines
 d MMMM yyyy
 enable armour
 enable buildings
@@ -1023,6 +1026,8 @@ enable weapon type
 exterior layout name
 fonts:Kenshi#Exo 2, $Default
 interior layout name
+job panel button 
+job panel buttons
 meitou world states
 npc range
 town panel line 
