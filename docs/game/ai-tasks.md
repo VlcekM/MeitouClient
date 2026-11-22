@@ -933,7 +933,7 @@ there (`FUN_14060f570` answers false), so for 180 Man the gate the byte changes 
 | 43 Staying home, 255 Reigning, 275 Sitting around | 0.2 + r x 0.8 | 1 |
 | 38, 268 Static guard | 0.1 + r x 0.5 | 1 |
 
-38 and 268 Static guard's finder (`FUN_14099edd0`, **Verified**; the registration stubs `FUN_14099f650` / `FUN_14099f670` call it with the indoors flag 0 / 1, which only reaches the node search; 157 has its own, `FUN_14099f1a0`) returns the factor 0.5 (`DAT_14167e8d8`) on its normal exit (nodes via `FUN_14099e920`) and 1.0 only on its visitor branch: a building of type 1, 3 or 8 whose faction is real and whose vfunc 0x290 holds, with a sensed (filter 2, 0x2a9) uncarried stranger whose home is not this building, then a node beside the stranger. The desire 0.5 is multiplied by it (row 38 has an effect), so a guard scores 0.25; **Resolved** (RE): the building's `+0xc4` is its `building designation` (set from the first resident squad's template, `FUN_14057f1f0`; 1 shop, 3 bar, 8 headquarters by the base templates), vfunc `0x290` the `public day` flag, faction `+0x1d0` the `not real` flag; the stranger filter takes NEUTRAL and leaves out ally, KO, 0x20, 0x80 and imprisoned, then non-sneaking characters standing inside a building other than the home; one is drawn uniformly and `FUN_14038ab50` (kind 2) gives the guard post nearest it. Meitou: `AiSystem.GuardFactor` (1.0 with `AiMind.GuardVisitorAt` read by `SpotFor`, else 0.5).
+38 and 268 Static guard's finder (`FUN_14099edd0`, **Verified**; the registration stubs `FUN_14099f650` / `FUN_14099f670` call it with the indoors flag 0 / 1, which only reaches the node search; 157 has its own, `FUN_14099f1a0`) returns the factor 0.5 (`DAT_14167e8d8`) on its normal exit (nodes via `FUN_14099e920`) and 1.0 only on its visitor branch: a building of type 1, 3 or 8 whose faction is real and whose vfunc 0x290 holds, with a sensed (filter 2, 0x2a9) uncarried stranger standing in this building, then the guard post nearest the stranger. The desire 0.5 is multiplied by it (row 38 has an effect), so a guard scores 0.25; **Resolved** (RE): the building's `+0xc4` is its `building designation` (set from the first resident squad's template, `FUN_14057f1f0`; 1 shop, 3 bar, 8 headquarters by the base templates), vfunc `0x290` the `public day` flag, faction `+0x1d0` the `not real` flag; the stranger filter takes NEUTRAL and leaves out ally, KO, 0x20, 0x80 and imprisoned, then non-sneaking characters standing inside the home (the stranger's building hand, Character vfunc 0x1d8, is set and hand vfunc 0x10, `!=` (`FUN_1400cd0b0`), is false against the home; **Verified**, decompile); one is drawn uniformly and `FUN_14038ab50` (kind 2) gives the guard post nearest it. Meitou: `AiSystem.GuardFactor` (1.0 with `AiMind.GuardVisitorAt` read by `SpotFor`, else 0.5).
 | 157 Static town guard | 0.1 + r x 1 | 1 |
 | 47 general node | 0.03 + r x 0.1 | 1 |
 | 153, 239 Going to bed | 2 + r x 8 | 1 |
@@ -1688,8 +1688,8 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   indoorsOnly)` (`FUN_14099edd0`); 157 is `findGuardNodeForTown` (`FUN_14099f1a0`).
   - **nearestPlayer**: when the home building (`StateBroadcastData` +0x48) has designation (`Building` +0xc4) BD_SHOP, BD_BAR or
     BD_HQ, is public (vfunc 0x290 `isPublic`) and the character's faction is real (`notARealFaction` +0x1d0 clear), it draws one
-    of the characters it senses that are indoors (`isIndoors`, vfunc 0x1d8,
-    compared with the home: **Observed**) and takes the home's guard post nearest them (`FUN_14038ab50`): factor 1, 0 with none.
+    of the characters it senses that stand inside the home (vfunc 0x1d8, the building hand, equal to the home's: **Verified**, see
+    above) and takes the home's guard post nearest them (`FUN_14038ab50`): factor 1, 0 with none.
     Otherwise, or with nobody drawn: `AI::findNode(NODE_GUARD_POST, home only, indoorsOnly)`, factor 0.5 whatever it finds.
   - **findGuardNodeForTown**: keeps a current target that is still a node, else `findNode(NODE_GUARD_POST, false, false)`; factor
     1 whatever it finds.
@@ -1712,7 +1712,7 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
     start depends on the original's loading, not on a rule.
     The 157 holders walk to posts across the town, up to about 1400 away.
   - Meitou: 157 holds a guard post of its town ([simulation](../simulation.md#ai)); 38 and 268 take the home's posts, a gate
-    member a flank spot, a member with no home building none (`AiSystem.NodeGoalFindsNothing`, also for 20 and 47); branch nearestPlayer and the factors are not modelled.
+    member a flank spot, a member with no home building none (`AiSystem.NodeGoalFindsNothing`, also for 20 and 47); nearestPlayer and its factors are `AiSystem.GuardFactor`.
 - **118 Shopping** (`FUN_1409997f0`, **Verified**): a shop of the town selling an item on the character's shopping list (`FUN_1409fc070`), else, only when the faction of the
   shopper's town has no player flag (`+0x250` clear; the list loop runs first and a hit skips this test), a random building (`FUN_1409fc1b0`): a town of the player's faction gets
   no random shopping, only list hits; none found: 0. Factor 1 for a BF_SHOP building, 0.4 otherwise. Then 119 (`Task_Shopping`) at it. The town is the AI status town (`+0x88`), and with none the finder returns 0 (**Verified**, disassembly: the null test at `0x140999868` jumps to the zero return), so a shopper shops only in the town it stands in: one standing in an outpost shops there, and one away from every town does not want to shop. Both finders scan every loaded zone's
