@@ -219,7 +219,11 @@ public static class UiTooltips
     /// </summary>
     public static Dictionary<string, string> RowProperties(IReadOnlyList<(string Key, string Value)> lines, string? tooltipClass = null)
     {
-        var properties = new Dictionary<string, string> { [Type] = "1", [Size] = lines.Count.ToString(CultureInfo.InvariantCulture) };
+        var properties = new Dictionary<string, string>(2 * lines.Count + 3)
+        {
+            [Type] = "1",
+            [Size] = lines.Count.ToString(CultureInfo.InvariantCulture),
+        };
         for (int i = 0; i < lines.Count; i++)
         {
             properties[KeyPrefix + i.ToString(CultureInfo.InvariantCulture)] = lines[i].Key;

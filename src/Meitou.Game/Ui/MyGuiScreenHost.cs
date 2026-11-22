@@ -194,6 +194,11 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
     public IReadOnlyList<string> OpenScreens => _open.ToArray();
 
     /// <summary>
+    /// Whether the open screens are <paramref name="ids"/>, bottom first (as <see cref="OpenScreens"/> would list them, without copying them).
+    /// </summary>
+    public bool OpenScreensAre(ReadOnlySpan<string> ids) => System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_open).SequenceEqual(ids);
+
+    /// <summary>
     /// Registers screen <paramref name="id"/> with <paramref name="layout"/> (its templates expanded).
     /// </summary>
     public void Register(string id, MyGuiLayout layout, bool modal = false, bool centreRoot = false) =>

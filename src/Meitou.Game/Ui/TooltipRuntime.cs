@@ -503,6 +503,17 @@ sealed class TooltipRuntime(PlayerInterface player)
     ];
 
     /// <summary>
+    /// <see cref="HudTips"/>' user strings, made once: bound as they are to a widget without properties of its own (the bindings only read them).
+    /// </summary>
+    static readonly (string Widget, Dictionary<string, string> Tip)[] HudTipProperties =
+        [.. HudTips.Select(t => (t.Widget, UiTooltips.TextProperties(t.Text, "fixed")))];
+
+    /// <summary>
+    /// The widgets the bounty rows' tooltip goes on.
+    /// </summary>
+    static readonly string[] BountyWidgets = ["BountyPanel", "BountyText"];
+
+    /// <summary>
     /// A selected building's status word (the medical header) and the tooltip the building classes give it (<b>Observed</b>: the strings of the
     /// <c>vfunc_114</c> status functions, a title followed by its text; the machine classes' words, Meitou applies them to every building).
     /// </summary>
@@ -729,13 +740,11 @@ sealed class TooltipRuntime(PlayerInterface player)
     {
         void Add(string name, string text)
         {
-            var properties = b.Properties.TryGetValue(name, out var existing) ? new Dictionary<string, string>(existing) : [];
-            foreach (var pair in UiTooltips.TextProperties(text, "fixed")) properties[pair.Key] = pair.Value;
-
-            b.Properties[name] = properties;
+            var tip = UiTooltips.TextProperties(text, "fixed");
+            b.Properties[name] = b.Properties.TryGetValue(name, out var existing) ? Merged(existing, tip) : tip;
         }
 
-        foreach (var (widget, text) in HudTips) Add(widget, text);
+        BindHudTips(b);
 
         if (player.Lead() is { } wanted && ShowsBountyPanel(wanted))
         {
@@ -745,13 +754,8 @@ sealed class TooltipRuntime(PlayerInterface player)
             if (wanted.Bounties.Count > 0 && !bare)
                 rows.AddRange(BountyRows(wanted.Bounties, wanted.Prison, player.UiMode == UiMode.Meitou));
 
-            foreach (string name in new[] { "BountyPanel", "BountyText" })
-            {
-                var properties = b.Properties.TryGetValue(name, out var existing) ? new Dictionary<string, string>(existing) : [];
-                foreach (var pair in UiTooltips.RowProperties(rows, "fixed")) properties[pair.Key] = pair.Value;
-
-                b.Properties[name] = properties;
-            }
+            var tip = UiTooltips.RowProperties(rows, "fixed");
+            foreach (string name in BountyWidgets) b.Properties[name] = b.Properties.TryGetValue(name, out var existing) ? Merged(existing, tip) : tip;
         }
 
         if (player.BuildingSelection.BuildingFocus() is { } focus)
@@ -760,6 +764,27 @@ sealed class TooltipRuntime(PlayerInterface player)
             if (BuildingStatusTip(status, player.BuildingSelection.PanelMachine(focus)) is { } tip) Add("HealthText", tip);
         }
         else if (player.Lead() is { Body: not null } lead) Add("HealthText", HudPanels.HealthWord(lead).Tip);
+    }
+
+    /// <summary>
+    /// The HUD widgets' fixed tooltips (<see cref="HudTips"/>) over what the widgets already bind.
+    /// </summary>
+    static void BindHudTips(UiBindings b)
+    {
+        foreach (var (widget, tip) in HudTipProperties)
+            b.Properties[widget] = b.Properties.TryGetValue(widget, out var existing) ? Merged(existing, tip) : tip;
+    }
+
+    /// <summary>
+    /// A copy of <paramref name="existing"/> with <paramref name="tip"/>'s user strings set over it, sized for both.
+    /// </summary>
+    static Dictionary<string, string> Merged(IReadOnlyDictionary<string, string> existing, Dictionary<string, string> tip)
+    {
+        var properties = new Dictionary<string, string>(existing.Count + tip.Count);
+        foreach (var (key, value) in existing) properties[key] = value;
+        foreach (var (key, value) in tip) properties[key] = value;
+
+        return properties;
     }
 
     #endregion

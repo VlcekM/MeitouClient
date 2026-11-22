@@ -125,6 +125,11 @@ sealed partial class PlayerInterface
     #region Loading and binding
 
     /// <summary>
+    /// The roster's name texts' keys (<c>squad.0.name</c> to <c>squad.7.name</c>), made once.
+    /// </summary>
+    static readonly string[] RosterNameKeys = [.. Enumerable.Range(0, 8).Select(i => $"squad.{i}.name")];
+
+    /// <summary>
     /// The original layouts the faithful mode opens as screens: id, layout file, modal.
     /// </summary>
     internal static readonly (string Id, string File, bool Modal)[] FaithfulScreenFiles =
@@ -375,6 +380,7 @@ sealed partial class PlayerInterface
         // The original sizes the HUD's template parts by height / 1080 (Observed: the squad tabs' 37 px HeaderPlace at 1440 lines,
         // docs/game/ui-screens.md).
         var b = new UiBindings { TemplateScale = UiScale };
+        PresizeBindings(b);
         var lead = Lead();
         BindStatusTexts(b, lead);
         BindShortcutButtons(b);
@@ -416,14 +422,45 @@ sealed partial class PlayerInterface
             : "No character selected";
         b.Text["blood"] = lead?.Body is { } blood ? $"Blood   {blood.Blood * 100:0}%" : "Blood --";
         b.Text["body"] = lead?.Body is { } worst ? $"Worst body part   {worst.WorstPart * 100:0}%" : "Body --";
-        var roster = Session.CurrentSnapshot.Characters.Where(c => c.IsPlayer).ToArray();
-        b.Text["squad.count"] = roster.Length.ToString(CultureInfo.InvariantCulture);
-        for (int i = 0; i < Math.Min(8, roster.Length); i++) b.Text[$"squad.{i}.name"] = roster[i].Name;
+        BindRoster(b);
         b.Text["members"] = $"{PlayerCharacters().Count} members | {Selected().Count} selected";
         b.Text["ExtendedStatsText"] = "";
 
         // The exe sets the money label without the layout's colon (docs/game/ui-screens.md section 4).
         b.Text["MoneyLabelText"] = "Money";
+    }
+
+    /// <summary>
+    /// Sizes the HUD bindings' main maps and sets as the last bindings filled them, so that binding does not grow them from empty.
+    /// </summary>
+    void PresizeBindings(UiBindings b)
+    {
+        if (_hudBindings is not { } last) return;
+
+        b.Text.EnsureCapacity(last.Text.Count);
+        b.Actions.EnsureCapacity(last.Actions.Count);
+        b.Properties.EnsureCapacity(last.Properties.Count);
+        b.Hidden.EnsureCapacity(last.Hidden.Count);
+        b.Disabled.EnsureCapacity(last.Disabled.Count);
+        b.Positions.EnsureCapacity(last.Positions.Count);
+        b.Progress.EnsureCapacity(last.Progress.Count);
+    }
+
+    /// <summary>
+    /// The squad roster's texts: the count of the player's characters and the first eight names.
+    /// </summary>
+    void BindRoster(UiBindings b)
+    {
+        int count = 0;
+        foreach (var c in Session.CurrentSnapshot.Characters)
+        {
+            if (!c.IsPlayer) continue;
+
+            if (count < 8) b.Text[RosterNameKeys[count]] = c.Name;
+            count++;
+        }
+
+        b.Text["squad.count"] = count.ToString(CultureInfo.InvariantCulture);
     }
 
     /// <summary>
@@ -592,6 +629,14 @@ sealed partial class PlayerInterface
     /// When <see cref="_uiBase"/> was arranged (a <see cref="System.Diagnostics.Stopwatch"/> timestamp).
     /// </summary>
     long _uiBaseAt;
+    /// <summary>
+    /// The frame's name tags, ground item labels and task bars while they are gathered (<see cref="AddUnderLayers"/>); empty between frames.
+    /// </summary>
+    readonly List<UiControl> _nameTagLayer = [];
+    /// <summary>
+    /// The frame's floaters and speech bubbles while they are gathered (<see cref="AddUnderLayers"/>); empty between frames.
+    /// </summary>
+    readonly List<UiControl> _dialogLayer = [];
 
     /// <summary>
     /// What a base was arranged from: when it changes, the base is arranged again.
@@ -648,7 +693,7 @@ sealed partial class PlayerInterface
     {
         var b = BindUi();
         var controls = hud ? ArrangeHud(b) : [];
-        UiRect FaithfulSlot(string name) => controls.FirstOrDefault(c => c.Name == name)?.Bounds ?? default;
+        UiRect FaithfulSlot(string name) => FindControl(controls, name)?.Bounds ?? default;
         var slots = new Dictionary<string, UiRect>
         {
             [UiSlots.Overlay] = new(0, 0, Width, Height),
@@ -660,7 +705,7 @@ sealed partial class PlayerInterface
         FaithfulScreens.ArrangeOverlayEdits(overlay);
         controls.AddRange(RecordPortraits.Resolve(overlay));
         PortraitBar.SquadBarRow = 0;
-        if (controls.FirstOrDefault(c => c.Name == "SquadPanel") is { } squadPanel)
+        if (FindControl(controls, "SquadPanel") is { } squadPanel)
             PortraitBar.AddSquadPortraits(controls, squadPanel.Bounds);
         HudPanels.AddHudText(controls);
         if (hud) OrdersPanel.AddJobScrollBar(controls);
@@ -716,19 +761,32 @@ sealed partial class PlayerInterface
         InventoryWindows.AddInventoryDrag(controls);
         ItemsWindow.AddDrag(controls);
 
-        var nameTags = new List<UiControl>();
-        GroundItemPicks.AddItemLabels(nameTags);
-        StealthView.AddNameTags(nameTags);
-        StealthView.AddTaskBars(nameTags);
-        var dialogLayer = new List<UiControl>();
-        DamageFloaters.AddFloaters(dialogLayer);
-        SpeechBubbles.AddSpeech(dialogLayer);
-        controls.InsertRange(0, [.. nameTags, .. dialogLayer]);
+        AddUnderLayers(controls);
 
         Build.AddBuildReadout(controls);
         PointerPanel.AddPointerChance(controls);
         ContextMenuWindow.AddContextMenu(controls);
         FeedbackPanel.AddFeedbackButton(controls);
+    }
+
+    /// <summary>
+    /// Puts the name tags, ground item labels and task bars, then the floaters and speech bubbles, under <paramref name="controls"/> (gathered in
+    /// lists kept across frames, inserted with one move).
+    /// </summary>
+    void AddUnderLayers(List<UiControl> controls)
+    {
+        _nameTagLayer.Clear();
+        GroundItemPicks.AddItemLabels(_nameTagLayer);
+        StealthView.AddNameTags(_nameTagLayer);
+        StealthView.AddTaskBars(_nameTagLayer);
+        _dialogLayer.Clear();
+        DamageFloaters.AddFloaters(_dialogLayer);
+        SpeechBubbles.AddSpeech(_dialogLayer);
+
+        _nameTagLayer.AddRange(_dialogLayer);
+        controls.InsertRange(0, _nameTagLayer);
+        _nameTagLayer.Clear();
+        _dialogLayer.Clear();
     }
 
     /// <summary>
@@ -752,9 +810,8 @@ sealed partial class PlayerInterface
     List<UiControl> ArrangedBase(bool hud)
     {
         var key = BaseKey(hud);
-        var screens = FaithfulScreens.OpenScreens.ToArray();
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
-        bool fresh = _uiBaseKey is { } kept && kept == key && screens.AsSpan().SequenceEqual(_uiBaseScreens) && !UiAnimating
+        bool fresh = _uiBaseKey is { } kept && kept == key && FaithfulScreens.OpenScreensAre(_uiBaseScreens) && !UiAnimating
             && System.Diagnostics.Stopwatch.GetElapsedTime(_uiBaseAt, now).TotalSeconds < UiReuseSeconds;
         if (!fresh)
         {

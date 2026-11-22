@@ -618,66 +618,103 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     internal void AddLines(List<UiControl> controls, string panel, IReadOnlyList<HudLine> lines, float rowHeight, float? fontPixels = null,
         string font = "Kenshi_StandardFont_Medium", string? valueFont = null, float? valuePixels = null, float top = 0)
     {
-        if (controls.FirstOrDefault(c => c.Name == panel) is not { } host) return;
+        if (FindControl(controls, panel) is not { } host) return;
+
         var area = host.Bounds;
         var labelProperties = Face(font, fontPixels);
         var valueProperties = valueFont is null ? labelProperties : Face(valueFont, valuePixels);
         for (int i = 0; i < lines.Count; i++)
         {
-            var tipProperties = lines[i].TipProperties;
+            var line = lines[i];
+            var tipProperties = line.TipProperties;
             var row = new UiRect(area.X + area.Width * 0.03f, area.Y + top + i * rowHeight, area.Width * 0.93f, rowHeight);
-            if (lines[i].Fill is { } fill)
+            if (line.Fill is { } fill)
             {
-                AddProgressLine(controls, $"{panel}-progress-{i}", row, lines[i], fill, valueProperties, host.Clip);
+                AddProgressLine(controls, $"{panel}-progress-{i}", row, line, fill, valueProperties, host.Clip);
                 continue;
             }
 
-            if (lines[i].Action is { } action)
+            if (line.Action is { } action)
             {
-                // The button holds the value; the row's label (if any) stays text on its left.
-                float width = Math.Clamp(lines[i].ButtonWidth, 0.1f, 1);
-                var button = lines[i].Label.Length == 0 ? row : row with { X = row.X + row.Width * (1 - width), Width = row.Width * width };
-                var buttonProperties = new Dictionary<string, string>(valueProperties) { ["TextAlign"] = "Center",
-                    ["TextColour"] = lines[i].ValueColour ?? MyGuiColours.InkText };
-                if (lines[i].TipProperties is { } buttonTip) foreach (var pair in buttonTip) buttonProperties[pair.Key] = pair.Value;
-
-                // Kenshi_Button2 is a template (kenshi_templates.xml) whose root widget has the Kenshi_Button1Skin skin.
-                controls.Add(new($"{panel}-button-{i}", "Button", button with { Y = button.Y + 1, Height = button.Height - 2 },
-                    Loc.Tr(lines[i].Value), action, "Kenshi_Button1Skin", true, buttonProperties, Vector4.Zero, Argument: lines[i].Argument ?? "",
-                    Clip: host.Clip));
-                if (lines[i].Label.Length == 0) continue;
+                AddLineButton(controls, $"{panel}-button-{i}", row, line, action, valueProperties, tipProperties, host.Clip);
+                if (line.Label.Length == 0) continue;
             }
-            var columns = new[]
-            {
-                ("label", lines[i].Label, lines[i].LabelColour, "Left Top", labelProperties),
-                ("value", lines[i].Action is null ? lines[i].Value : "", lines[i].ValueColour, "Right Top", valueProperties),
-            };
-            var (labelBox, valueBox) = LineColumns(row, lines[i], labelProperties["FontName"], valueProperties["FontName"]);
-            foreach (var (part, text, colour, align, properties) in columns)
-                if (text.Length > 0)
-                {
-                    var textProperties = new Dictionary<string, string>(properties) { ["TextAlign"] = align,
-                        ["TextColour"] = colour ?? MyGuiColours.TemplateInk(UiResources, "Kenshi_TextboxStandardText") };
 
-                    // A line with a tooltip is a mouse target (the HUD's own tooltip, anchored on its panel).
-                    if (tipProperties is not null) foreach (var pair in tipProperties) textProperties[pair.Key] = pair.Value;
+            var (labelBox, valueBox) = LineColumns(row, line, labelProperties["FontName"], valueProperties["FontName"]);
 
-                    // A label beside a button keeps to its left: added after the button, a full-row label with a tooltip would take its clicks.
-                    var box = part == "value" ? valueBox
-                        : lines[i].Action is not null ? row with { Width = row.Width * (1 - Math.Clamp(lines[i].ButtonWidth, 0.1f, 1)) }
-                        : labelBox;
-                    controls.Add(new($"{panel}-{part}-{i}", "TextBox", box, Loc.Tr(text), "", "Kenshi_TextboxStandardText", true,
-                        textProperties, Vector4.Zero, Pickable: tipProperties is not null, Clip: host.Clip));
-                }
+            // A label beside a button keeps to its left: added after the button, a full-row label with a tooltip would take its clicks.
+            var labelArea = line.Action is not null ? row with { Width = row.Width * (1 - Math.Clamp(line.ButtonWidth, 0.1f, 1)) } : labelBox;
+            AddLineText(controls, $"{panel}-label-{i}", labelArea, line.Label, line.LabelColour, "Left Top", labelProperties, tipProperties,
+                host.Clip);
+            AddLineText(controls, $"{panel}-value-{i}", valueBox, line.Action is null ? line.Value : "", line.ValueColour, "Right Top",
+                valueProperties, tipProperties, host.Clip);
         }
 
         static Dictionary<string, string> Face(string name, float? pixels)
         {
-            var properties = new Dictionary<string, string> { ["FontName"] = name };
+            var properties = new Dictionary<string, string>(2) { ["FontName"] = name };
             if (pixels is { } p)
                 properties["FontPixels"] = Math.Max(8, (int)MathF.Round(p)).ToString(CultureInfo.InvariantCulture);
             return properties;
         }
+    }
+
+    /// <summary>
+    /// The first control named <paramref name="name"/>, or null.
+    /// </summary>
+    static UiControl? FindControl(List<UiControl> controls, string name)
+    {
+        foreach (var c in controls)
+        {
+            if (c.Name == name) return c;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// A button line's button: it holds the value; the row's label (if any) stays text on its left.
+    /// </summary>
+    void AddLineButton(List<UiControl> controls, string name, UiRect row, HudLine line, string action, Dictionary<string, string> face,
+        Dictionary<string, string>? tipProperties, UiRect? clip)
+    {
+        float width = Math.Clamp(line.ButtonWidth, 0.1f, 1);
+        var button = line.Label.Length == 0 ? row : row with { X = row.X + row.Width * (1 - width), Width = row.Width * width };
+        var buttonProperties = LineProperties(face, "Center", line.ValueColour ?? MyGuiColours.InkText, tipProperties);
+
+        // Kenshi_Button2 is a template (kenshi_templates.xml) whose root widget has the Kenshi_Button1Skin skin.
+        controls.Add(new(name, "Button", button with { Y = button.Y + 1, Height = button.Height - 2 }, Loc.Tr(line.Value), action,
+            "Kenshi_Button1Skin", true, buttonProperties, Vector4.Zero, Argument: line.Argument ?? "", Clip: clip));
+    }
+
+    /// <summary>
+    /// One text column of a line (nothing for an empty text); a line with a tooltip is a mouse target (the HUD's own tooltip, anchored on its
+    /// panel).
+    /// </summary>
+    void AddLineText(List<UiControl> controls, string name, UiRect box, string text, string? colour, string align, Dictionary<string, string> face,
+        Dictionary<string, string>? tipProperties, UiRect? clip)
+    {
+        if (text.Length == 0) return;
+
+        var ink = colour ?? MyGuiColours.TemplateInk(UiResources, "Kenshi_TextboxStandardText");
+        var textProperties = LineProperties(face, align, ink, tipProperties);
+        controls.Add(new(name, "TextBox", box, Loc.Tr(text), "", "Kenshi_TextboxStandardText", true, textProperties, Vector4.Zero,
+            Pickable: tipProperties is not null, Clip: clip));
+    }
+
+    /// <summary>
+    /// A line part's properties: <paramref name="face"/>, its alignment and colour, then the line's tooltip, in one map sized for them all.
+    /// </summary>
+    static Dictionary<string, string> LineProperties(Dictionary<string, string> face, string align, string colour,
+        Dictionary<string, string>? tipProperties)
+    {
+        var properties = new Dictionary<string, string>(face.Count + 2 + (tipProperties?.Count ?? 0));
+        foreach (var (key, value) in face) properties[key] = value;
+        properties["TextAlign"] = align;
+        properties["TextColour"] = colour;
+        if (tipProperties is not null) foreach (var (key, value) in tipProperties) properties[key] = value;
+
+        return properties;
     }
 
     /// <summary>

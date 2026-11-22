@@ -832,9 +832,19 @@ public sealed unsafe class DebugOverlay : IDisposable
     public sealed class OverlayPass(IGpuContext gpu, int width, int height) : IDisposable
     {
         /// <summary>
-        /// The queued vertices of every run.
+        /// The floats of the live adds (a replayed recording's stay in its array, <see cref="_chunks"/>).
         /// </summary>
         readonly List<float> _vertices = [];
+
+        /// <summary>
+        /// The pass's vertex floats in order: stretches of <see cref="_vertices"/> and of replayed recordings, copied once into the upload.
+        /// </summary>
+        readonly List<Chunk> _chunks = [];
+
+        /// <summary>
+        /// The floats queued so far, over every chunk.
+        /// </summary>
+        int _floatCount;
 
         /// <summary>
         /// The draws: runs of vertices with the same texture and scissor.
@@ -857,10 +867,17 @@ public sealed unsafe class DebugOverlay : IDisposable
         readonly record struct Run(SampledTexture Texture, bool Image, PixelRect Scissor, int First, int Count);
 
         /// <summary>
-        /// One <see cref="Add"/> as recorded: its arguments, the data at <paramref name="First"/> in the recording's floats.
+        /// A stretch of the pass's floats: <paramref name="Source"/>'s from <paramref name="Start"/> (null: <see cref="_vertices"/>'s).
+        /// </summary>
+        readonly record struct Chunk(float[]? Source, int Start, int Count);
+
+        /// <summary>
+        /// One <see cref="Add"/> as recorded: its arguments, the data at <paramref name="First"/> in the recording's floats, and what the add found of
+        /// it in a <paramref name="PassWidth"/> x <paramref name="PassHeight"/> pass: whether it lies wholly inside the clip and whether it is only
+        /// solid shapes (a replay into a pass of that size reuses both).
         /// </summary>
         public readonly record struct Recorded(DebugOverlay Owner, SampledTexture? Image, PixelRect Clip, SampledTexture? Atlas, int First,
-            int Count);
+            int Count, bool Contained, bool Solid, int PassWidth, int PassHeight);
 
         /// <summary>
         /// The adds recorded since <see cref="BeginRecording"/>; null when not recording.
@@ -883,11 +900,31 @@ public sealed unsafe class DebugOverlay : IDisposable
         public void EndRecording() => (_recording, _recordedFloats) = (null, null);
 
         /// <summary>
-        /// Adds again what was recorded.
+        /// Adds again what was recorded, as <see cref="Add"/> would add each: the floats as one stretch, read from <paramref name="floats"/> when the
+        /// pass draws (a recording's arrays are never changed once made), and the clip test's results kept from the recording when the pass is the
+        /// size it was.
         /// </summary>
         public void Replay(float[] floats, Recorded[] adds)
         {
-            foreach (var r in adds) Add(r.Owner, floats.AsSpan(r.First, r.Count), r.Image, r.Clip, r.Atlas);
+            if (_recording is not null)
+            {
+                foreach (var r in adds) Add(r.Owner, floats.AsSpan(r.First, r.Count), r.Image, r.Clip, r.Atlas);
+                return;
+            }
+
+            int start = _floatCount;
+            foreach (var r in adds)
+            {
+                Claim(r.Owner);
+                bool known = r.PassWidth == width && r.PassHeight == height;
+                var (contained, solid) = known ? (r.Contained, r.Solid) : Inspect(floats.AsSpan(r.First, r.Count), r.Clip);
+                AddRun(r.Owner, r.Image, r.Atlas, contained ? FullClip : r.Clip, solid, (start + r.First) / Stride, r.Count / Stride);
+            }
+
+            if (floats.Length == 0) return;
+
+            _chunks.Add(new(floats, 0, floats.Length));
+            _floatCount += floats.Length;
         }
 
         /// <summary>
@@ -897,10 +934,7 @@ public sealed unsafe class DebugOverlay : IDisposable
         {
             width = newWidth;
             height = newHeight;
-            _vertices.Clear();
-            _runs.Clear();
-            _renderer = null;
-            _target = null;
+            ClearQueued();
             return this;
         }
 
@@ -912,16 +946,40 @@ public sealed unsafe class DebugOverlay : IDisposable
         /// the owner's baked one.</param>
         public void Add(DebugOverlay owner, ReadOnlySpan<float> data, SampledTexture? image, PixelRect clip, SampledTexture? atlas = null)
         {
+            Claim(owner);
+            var (contained, solid) = Inspect(data, clip);
+            if (_recording is not null && _recordedFloats is not null)
+            {
+                _recording.Add(new(owner, image, clip, atlas, _recordedFloats.Count, data.Length, contained, solid, width, height));
+                _recordedFloats.AddRange(data);
+            }
+
+            int first = _floatCount / Stride;
+            QueueLive(data);
+            AddRun(owner, image, atlas, contained ? FullClip : clip, solid, first, data.Length / Stride);
+        }
+
+        /// <summary>
+        /// The whole target as a scissor.
+        /// </summary>
+        PixelRect FullClip => new(0, 0, (uint)width, (uint)height);
+
+        /// <summary>
+        /// Checks that <paramref name="owner"/> shares the pass's GPU and target, and makes it the pass's renderer when it is the first.
+        /// </summary>
+        void Claim(DebugOverlay owner)
+        {
             if (owner.Gpu != gpu || _target is not null && _target != owner.Target)
                 throw new InvalidOperationException("An overlay pass must share its GPU and target.");
             _renderer ??= owner;
             _target = owner.Target;
-            if (_recording is not null && _recordedFloats is not null)
-            {
-                _recording.Add(new(owner, image, clip, atlas, _recordedFloats.Count, data.Length));
-                _recordedFloats.AddRange(data);
-            }
+        }
 
+        /// <summary>
+        /// Whether every vertex of <paramref name="data"/> lies inside <paramref name="clip"/>, and whether all are solid shapes.
+        /// </summary>
+        (bool Contained, bool Solid) Inspect(ReadOnlySpan<float> data, PixelRect clip)
+        {
             // If no geometry reaches outside this scissor, the full viewport clips it identically.
             // Different widget clips can then share a draw without changing their pixels.
             bool contained = true, solid = true;
@@ -932,11 +990,34 @@ public sealed unsafe class DebugOverlay : IDisposable
                 contained &= data[i] >= left && data[i] <= right && data[i + 1] >= top && data[i + 1] <= bottom;
                 solid &= data[i + 2] < 0;
             }
-            if (contained) clip = new PixelRect(0, 0, (uint)width, (uint)height);
+
+            return (contained, solid);
+        }
+
+        /// <summary>
+        /// Appends a live add's floats to <see cref="_vertices"/>, extending the last chunk when it ends where they start.
+        /// </summary>
+        void QueueLive(ReadOnlySpan<float> data)
+        {
+            if (data.Length == 0) return;
+
+            int start = _vertices.Count;
+            if (_chunks.Count > 0 && _chunks[^1] is { Source: null } last && last.Start + last.Count == start)
+                _chunks[^1] = last with { Count = last.Count + data.Length };
+            else
+                _chunks.Add(new(null, start, data.Length));
+            _vertices.AddRange(data);
+            _floatCount += data.Length;
+        }
+
+        /// <summary>
+        /// Draws <paramref name="count"/> vertices from <paramref name="first"/> with the add's texture inside <paramref name="clip"/>: joined to the
+        /// last run when they share its clip and texture (solid shapes join any texture).
+        /// </summary>
+        void AddRun(DebugOverlay owner, SampledTexture? image, SampledTexture? atlas, PixelRect clip, bool solid, int first, int count)
+        {
             var texture = image ?? atlas ?? owner._atlasSampled;
             bool isImage = image.HasValue;
-            int first = _vertices.Count / Stride, count = data.Length / Stride;
-            _vertices.AddRange(data);
             if (_runs.Count > 0)
             {
                 var last = _runs[^1];
@@ -947,6 +1028,34 @@ public sealed unsafe class DebugOverlay : IDisposable
                 }
             }
             _runs.Add(new(texture, isImage, clip, first, count));
+        }
+
+        /// <summary>
+        /// Forgets every queued float, chunk and run, and the renderer and target.
+        /// </summary>
+        void ClearQueued()
+        {
+            _vertices.Clear();
+            _chunks.Clear();
+            _floatCount = 0;
+            _runs.Clear();
+            _renderer = null;
+            _target = null;
+        }
+
+        /// <summary>
+        /// Copies every chunk, in order, into <paramref name="upload"/>.
+        /// </summary>
+        void CopyChunks(Span<float> upload)
+        {
+            var own = CollectionsMarshal.AsSpan(_vertices);
+            int at = 0;
+            foreach (var chunk in _chunks)
+            {
+                var from = chunk.Source is { } source ? source.AsSpan(chunk.Start, chunk.Count) : own.Slice(chunk.Start, chunk.Count);
+                from.CopyTo(upload[at..]);
+                at += chunk.Count;
+            }
         }
 
         /// <summary>
@@ -970,9 +1079,8 @@ public sealed unsafe class DebugOverlay : IDisposable
                     blend: new BlendState(true, BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha, AlphaSrc: BlendingFactor.One,
                     AlphaDst: BlendingFactor.OneMinusSrcAlpha));
                 state.Record(cmd, targets);
-                var data = CollectionsMarshal.AsSpan(_vertices);
-                var upload = gpu.Frame.AllocateConstants((ulong)(data.Length * 4), 16);
-                MemoryMarshal.AsBytes(data).CopyTo(new Span<byte>(upload.Pointer, data.Length * 4));
+                var upload = gpu.Frame.AllocateConstants((ulong)(_floatCount * 4), 16);
+                CopyChunks(new Span<float>(upload.Pointer, _floatCount));
                 Span<LegacyProgram.Attribute?> attributes =
                 [
                     new(new GpuBufferBinding(upload.Handle, upload.Offset), InternalFormat.Rg32F, Stride * 4, false),
@@ -1005,10 +1113,7 @@ public sealed unsafe class DebugOverlay : IDisposable
             {
                 cmd.EndRendering();
                 gpu.EndNative(cmd);
-                _vertices.Clear();
-                _runs.Clear();
-                _renderer = null;
-                _target = null;
+                ClearQueued();
             }
         }
     }

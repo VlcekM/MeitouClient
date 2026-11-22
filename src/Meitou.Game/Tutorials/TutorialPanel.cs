@@ -126,6 +126,24 @@ sealed class TutorialPanel(PlayerInterface player)
     long _highlightClock;
 
     /// <summary>
+    /// The list's arranged lines by what they are made from (<see cref="TutorialLine"/> depends on nothing else), kept from one arrangement to the
+    /// next; lines no longer shown are dropped when the list is next arranged.
+    /// </summary>
+    Dictionary<TutorialLineKey, List<UiControl>> _tutorialLines = [];
+
+    /// <summary>
+    /// The lines the arrangement under way uses; they become <see cref="_tutorialLines"/> once it is done.
+    /// </summary>
+    Dictionary<TutorialLineKey, List<UiControl>> _tutorialLinesNext = [];
+
+    /// <summary>
+    /// What a list line is made from: the tutorial and its title, the line's width, height and top, the template scale, the line layout and the
+    /// layers it is arranged with, and the language its captions are translated into.
+    /// </summary>
+    readonly record struct TutorialLineKey(int Id, string Title, float Width, float Height, float Y, float Scale, MyGuiLayout Layout,
+        IReadOnlyList<string> Layers, GameLanguage Language);
+
+    /// <summary>
     /// The host's tutorial manager (null: no tutorials).
     /// </summary>
     public void ConfigureTutorials(TutorialManager? manager) => _tutorials = manager;
@@ -312,44 +330,7 @@ sealed class TutorialPanel(PlayerInterface player)
             || !player.Session.World.Player.Exists || player.CharacterEditor.EditorOpen)
             return;
 
-        float scale = player.UiScale, lineHeight = MathF.Round(TutorialLineHeight * scale);
-        float width = MathF.Round(player.Width * TutorialListWidth);
-        float y = player.Height * TutorialListHeight;
-        var active = manager.Active;
-        for (int k = active.Count - 1; k >= 0; k--)
-        {
-            int id = active[k];
-            y -= lineHeight;
-            var b = new UiBindings { TemplateScale = scale };
-            // The layout's root is 250 x 25 in pixels; the list sizes it to the panel's width and the scaled line height (arrangeList).
-            // Its children keep their pixel margins: NameButton stretches, CloseButton (Right VStretch) stays 27 px at the right end.
-            if (TutorialLineLayout.Roots.FirstOrDefault() is { } root) b.Positions[root.Name] = new(0, 0, width, lineHeight);
-            b.Positions["NameButton"] = new(0, 0, width - 25, lineHeight);
-            b.Positions["CloseButton"] = new(width - 27, 0, 27, lineHeight);
-            b.Text["NameButton"] = TutorialTexts.Title(id);
-            string prefix = $"tutorial-{id}-";
-            foreach (var c in MyGuiPresentation.Arrange(TutorialLineLayout, (int)width, (int)lineHeight, b, player.UiResources.Layers))
-            {
-                // Arranged at the top of the screen: the clip moves down with the bounds, else it hides the whole line.
-                var control = c with
-                {
-                    Name = c.Name.Length > 0 ? prefix + c.Name : c.Name,
-                    Bounds = c.Bounds with { Y = c.Bounds.Y + y },
-                    Clip = c.Clip is { } clip ? clip with { Y = clip.Y + y } : null,
-                };
-                if (c.Name == "NameButton") control = control with { Action = "meitou:tutorial", Argument = $"open:{id}" };
-                else if (c.Name == "CloseButton") control = control with { Action = "meitou:tutorial", Argument = $"close:{id}" };
-                controls.Add(control);
-            }
-
-            if (TutorialFlashes.TryGetValue(id, out float alpha))
-            {
-                var flashBounds = new UiRect(0, y, width, lineHeight);
-                controls.Add(new(prefix + "flash", "Widget", flashBounds, "", "", "", true, new Dictionary<string, string>(),
-                    new Vector4(1, 1, 1, alpha), Pickable: false));
-            }
-        }
-
+        AddTutorialLines(controls, manager.Active);
         if (TutorialShown is not { } shown) return;
         var (title, pages) = TutorialCatalog.Items[shown];
         int page = Math.Clamp(manager.Pages[shown], 0, pages.Length - 1);
@@ -379,6 +360,68 @@ sealed class TutorialPanel(PlayerInterface player)
             else if (c.Name == "Root") control = control with { Pickable = false };
             controls.Add(control);
         }
+    }
+
+    /// <summary>
+    /// The list's lines, the newest at the bottom, each with its flash while it flashes; lines made from the same things as last time are reused.
+    /// </summary>
+    void AddTutorialLines(List<UiControl> controls, IReadOnlyList<int> active)
+    {
+        float scale = player.UiScale, lineHeight = MathF.Round(TutorialLineHeight * scale);
+        float width = MathF.Round(player.Width * TutorialListWidth);
+        float y = player.Height * TutorialListHeight;
+        for (int k = active.Count - 1; k >= 0; k--)
+        {
+            int id = active[k];
+            y -= lineHeight;
+            var key = new TutorialLineKey(id, TutorialTexts.Title(id), width, lineHeight, y, scale, TutorialLineLayout!, player.UiResources.Layers,
+                Loc.Language);
+            if (!_tutorialLines.TryGetValue(key, out var line)) line = TutorialLine(key);
+
+            _tutorialLinesNext[key] = line;
+            controls.AddRange(line);
+            if (TutorialFlashes.TryGetValue(id, out float alpha))
+            {
+                var flashBounds = new UiRect(0, y, width, lineHeight);
+                controls.Add(new($"tutorial-{id}-flash", "Widget", flashBounds, "", "", "", true, new Dictionary<string, string>(),
+                    new Vector4(1, 1, 1, alpha), Pickable: false));
+            }
+        }
+
+        (_tutorialLines, _tutorialLinesNext) = (_tutorialLinesNext, _tutorialLines);
+        _tutorialLinesNext.Clear();
+    }
+
+    /// <summary>
+    /// One list line's controls, arranged from <paramref name="key"/>.
+    /// </summary>
+    List<UiControl> TutorialLine(TutorialLineKey key)
+    {
+        var (id, width, lineHeight, y) = (key.Id, key.Width, key.Height, key.Y);
+        var b = new UiBindings { TemplateScale = key.Scale };
+        // The layout's root is 250 x 25 in pixels; the list sizes it to the panel's width and the scaled line height (arrangeList).
+        // Its children keep their pixel margins: NameButton stretches, CloseButton (Right VStretch) stays 27 px at the right end.
+        if (key.Layout.Roots.FirstOrDefault() is { } root) b.Positions[root.Name] = new(0, 0, width, lineHeight);
+        b.Positions["NameButton"] = new(0, 0, width - 25, lineHeight);
+        b.Positions["CloseButton"] = new(width - 27, 0, 27, lineHeight);
+        b.Text["NameButton"] = key.Title;
+        string prefix = $"tutorial-{id}-";
+        var line = new List<UiControl>();
+        foreach (var c in MyGuiPresentation.Arrange(key.Layout, (int)width, (int)lineHeight, b, key.Layers))
+        {
+            // Arranged at the top of the screen: the clip moves down with the bounds, else it hides the whole line.
+            var control = c with
+            {
+                Name = c.Name.Length > 0 ? prefix + c.Name : c.Name,
+                Bounds = c.Bounds with { Y = c.Bounds.Y + y },
+                Clip = c.Clip is { } clip ? clip with { Y = clip.Y + y } : null,
+            };
+            if (c.Name == "NameButton") control = control with { Action = "meitou:tutorial", Argument = $"open:{id}" };
+            else if (c.Name == "CloseButton") control = control with { Action = "meitou:tutorial", Argument = $"close:{id}" };
+            line.Add(control);
+        }
+
+        return line;
     }
 
     /// <summary>

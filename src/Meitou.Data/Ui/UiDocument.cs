@@ -185,10 +185,16 @@ public static partial class MyGuiPresentation
         }
 
         var screen = new UiRect(0, 0, width, height);
-        foreach (var root in layout.Roots.OrderBy(w => LayerOrder(layers, w))) Visit(root, screen, screen);
+        foreach (var root in RootsInOrder(layout, layers)) Visit(root, screen, screen);
         for (int i = 0; i < deferred.Count; i++) deferred[i]();
         return result;
     }
+
+    /// <summary>
+    /// The layout's roots in paint order (by <see cref="LayerOrder"/>, stable); a single root needs no sorting.
+    /// </summary>
+    static IEnumerable<MyGuiWidget> RootsInOrder(MyGuiLayout layout, IReadOnlyList<string> layers) =>
+        layout.Roots.Count <= 1 ? layout.Roots : layout.Roots.OrderBy(w => LayerOrder(layers, w));
 
     /// <summary>
     /// A root's place in the paint order: its layer's index, 0 for an unknown layer.
