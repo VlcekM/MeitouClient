@@ -1,7 +1,7 @@
-using System.Diagnostics;
 using System.Numerics;
 using Meitou.Data.Fcs;
 using Meitou.Data.Particles;
+using Meitou.Game.Rendering.Particles;
 using Meitou.Modding;
 using Meitou.Simulation;
 
@@ -18,25 +18,10 @@ sealed class ModEffectPlayer(GameHost host) : IModEffectSink
     /// </summary>
     const string DefaultBone = "Bip01 Spine2";
     /// <summary>
-    /// The longest frame step the effects' clock takes (a stall does not end every effect at once).
+    /// Once a frame: ages, moves and starts the mods' effects by the particles' frame clock (<see cref="ParticleRenderer.LastStep"/>), so pause
+    /// and game speed match the bursts. This runs before the frame's particle update, so the step is the previous frame's.
     /// </summary>
-    const float MaxStep = 0.25f;
-
-    /// <summary>
-    /// The timestamp of the last <see cref="Advance"/>; 0 before the first.
-    /// </summary>
-    long _last;
-
-    /// <summary>
-    /// Once a frame: ages, moves and starts the mods' effects by the frame clock.
-    /// </summary>
-    public void Advance(ModEffects effects)
-    {
-        long now = Stopwatch.GetTimestamp();
-        float step = _last == 0 ? 0 : MathF.Min(MaxStep, (float)Stopwatch.GetElapsedTime(_last, now).TotalSeconds);
-        _last = now;
-        effects.Advance(step, this);
-    }
+    public void Advance(ModEffects effects) => effects.Advance(host.Gpu?.Particles?.LastStep ?? 0, this);
 
     /// <summary>
     /// An effect id to its particle system: an EFFECT record's <c>particle system</c>, else the id as a system name; null when the particles (once

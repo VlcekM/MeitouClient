@@ -220,8 +220,8 @@ holds refuses the second mod.
   keep. A throw is logged with the mod id and that feed gets no more hits for the session.
 - **Visual effects:** `PlayEffect(effect, point, seconds = 1, tint = null)` and `PlayEffect(effect, characterId, bone = null, seconds = 1,
   tint = null)` on `ModContext` play a display-only particle burst, e.g. from a hit feed. `effect` is an EFFECT record's string id (its
-  `particle system`) or a Particle Universe system name; `seconds` is how long it emits, in (0, 30]; `tint` replaces the particles' hue
-  (rgb, 1 the full channel, up to 4), as a race's blood colour does. An attached effect starts at the character's `bone` as last drawn
+  `particle system`) or a Particle Universe system name; `seconds` is how long it emits, in (0, 30], on the particles' frame clock (still
+  while paused, faster at higher speeds); `tint` replaces the particles' hue (rgb, 1 the full channel, up to 4), as a race's blood colour does. An attached effect starts at the character's `bone` as last drawn
   (null: `Bip01 Spine2`) and follows it while it emits; a character not drawn, or a bone its rig lacks, plays nothing. Requests queue and
   start at the next frame, after the hit feed, through the renderer's own bursts (`ParticleRenderer.Burst`, as the blood and dust do): at
   most 16 a frame, 64 playing and 128 waiting. A bad request (unknown id, non-finite point, lifetime out of range, bad tint, no character,
