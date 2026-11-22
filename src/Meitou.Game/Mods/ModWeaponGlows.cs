@@ -11,9 +11,9 @@ internal readonly record struct WeaponGlow(Vector3 Colour, float Strength);
 
 /// <summary>
 /// The code mods' display-only weapon glows (docs/modding.md "Weapon glow"): at most one a character, the newest request replacing the one before,
-/// fading in and out over <see cref="FadeSeconds"/>, with an optional particle system played once on the held blade (at its base, +Y along it,
-/// scaled to it) through the mods' effect sink, counted against <see cref="ModEffects.MaxAlive"/>. Set and aged on the host's thread; the renderer reads
-/// <see cref="Current"/> each frame, the simulation never. A rejected request is logged once per mod and problem, and dropped.
+/// fading in and out over <see cref="FadeSeconds"/>, with an optional particle system played once on the held weapon (at its hilt end, +Y along
+/// the blade, scaled to it) through the mods' effect sink, counted against <see cref="ModEffects.MaxAlive"/>. Set and aged on the host's thread;
+/// the renderer reads <see cref="Current"/> each frame, the simulation never. A rejected request is logged once per mod and problem, and dropped.
 /// </summary>
 internal sealed class ModWeaponGlows(ModEffects effects)
 {

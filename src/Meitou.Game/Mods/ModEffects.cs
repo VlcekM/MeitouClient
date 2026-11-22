@@ -7,7 +7,7 @@ namespace Meitou.Modding;
 /// One effect a mod queued (<see cref="ModContext.PlayEffect(string, Vector3, float, Vector3?)"/>): the id it named and the particle system that
 /// resolved to, at a world point or on a character (<see cref="On"/> not <see cref="CharacterId.None"/>; then <see cref="Bone"/>, null for the
 /// chest), the particles' recolour (null: as their texture) and the seconds it emits and follows the character. A weapon glow's effect
-/// (<see cref="ModWeaponGlows"/>, <see cref="OnBlade"/>) follows the character's held blade instead: at its base, +Y along it, scaled to it.
+/// (<see cref="ModWeaponGlows"/>, <see cref="OnBlade"/>) follows the character's held blade instead: at its hilt end, +Y along it, scaled to it.
 /// </summary>
 internal readonly record struct ModEffectRequest(string Owner, string Effect, string System, Vector3 At, CharacterId On, string? Bone,
     Vector3? Tint, float Seconds, bool OnBlade = false)

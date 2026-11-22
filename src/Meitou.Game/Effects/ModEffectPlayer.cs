@@ -78,8 +78,8 @@ sealed class ModEffectPlayer(GameHost host) : IModEffectSink
     }
 
     /// <summary>
-    /// Where and how a request plays now: at its point, or its character's bone as last drawn, unturned; or at its character's held blade's base,
-    /// +Y along the blade and scaled to its length (<see cref="BladeFrame"/>). Null: not drawn, no blade drawn, or no such bone.
+    /// Where and how a request plays now: at its point, or its character's bone as last drawn, unturned; or at its character's held weapon's
+    /// hilt end, +Y along the blade and scaled to its length (<see cref="BladeFrame"/>). Null: not drawn, no blade drawn, or no such bone.
     /// </summary>
     (Vector3 At, Quaternion Turn, float Stretch)? Pose(in ModEffectRequest request)
     {

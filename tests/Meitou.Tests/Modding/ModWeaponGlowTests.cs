@@ -126,7 +126,7 @@ public class ModWeaponGlowTests
     /// A glow's effect resolves as PlayEffect's (HasEffect asks without a logged rejection) and plays once on the blade, recoloured to the glow's
     /// colour but for white, once the blade is drawn; a call again with the same effect and colour renews it (no restart); it stops while the blade
     /// is not drawn and when the glow ends, and counts against the effects' cap. Strength 0 shows the particles with no tint on the blade. The
-    /// blade's frame: the base where the glowing span starts, a turn taking +Y to the tip and X across the blade's width, the length to the tip.
+    /// weapon's frame: the base at the hilt end, a turn taking +Y to the tip and X across the blade's width, the length to the tip.
     /// </summary>
     [Fact]
     public void Glow_particles_play_on_the_blade_aligned_and_are_kept_when_renewed()
@@ -202,11 +202,11 @@ public class ModWeaponGlowTests
         AssertNear(new Vector3(0.02f, 0, -1.1f), BladeSpan.Point(boxes, axis, -0.1f, 1 / 1.2f, 1));
 
         var frame = BladeSpan.Frame(boxes, axis, -0.1f, 1 / 1.2f, Matrix4x4.Identity);
-        AssertNear(new Vector3(0.02f, 0, 0.1f - BladeSpan.Start * 1.2f), frame.Base);
+        AssertNear(new Vector3(0.02f, 0, 0.1f), frame.Base);
         AssertNear(axis, Vector3.Transform(Vector3.UnitY, frame.Turn));
         AssertNear(Vector3.UnitX, Vector3.Transform(Vector3.UnitX, frame.Turn));
-        Assert.Equal(1.2f * (1 - BladeSpan.Start), frame.Length, 1e-4f);
-        Assert.Equal(frame.Length / 7, frame.Stretch, 1e-6f);
+        Assert.Equal(1.2f, frame.Length, 1e-4f);
+        Assert.Equal(1.2f / 8.5f, frame.Stretch, 1e-6f);
 
         var world = Matrix4x4.CreateScale(2) * Matrix4x4.CreateRotationY(MathF.PI / 2) * Matrix4x4.CreateTranslation(10, 0, 0);
         var placed = BladeSpan.Frame(boxes, axis, -0.1f, 1 / 1.2f, world);

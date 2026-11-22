@@ -76,34 +76,29 @@ internal sealed partial class CharacterRenderer
 }
 
 /// <summary>
-/// A held blade in the world: its base (the hilt end of the glowing span), the turn that takes a system's local +Y along it (towards the tip, its
-/// X across the blade's width) and its length in world units.
+/// A held weapon in the world: its base (the mesh's hilt end), the turn that takes a system's local +Y along its blade (towards the tip, its X
+/// across the blade's width) and its length from the hilt end to the tip in world units.
 /// </summary>
 internal readonly record struct BladeFrame(Vector3 Base, Quaternion Turn, float Length)
 {
     /// <summary>
-    /// The length a blade particle system is authored to span along its +Y (docs/modding.md "Weapon glow").
+    /// The length along its +Y that a blade particle system authored with its origin at the weapon's base reaches to the tip (its box from about
+    /// 1.5 to 8.5; docs/modding.md "Blade effect").
     /// </summary>
-    public const float AuthoredLength = 7;
+    public const float AuthoredLength = 8.5f;
 
     /// <summary>
-    /// The scale that makes <see cref="AuthoredLength"/> span the blade.
+    /// The scale that makes <see cref="AuthoredLength"/> span the weapon.
     /// </summary>
     public float Stretch => Length / AuthoredLength;
 }
 
 /// <summary>
 /// A weapon mesh's blade in its own space, as the gear blood maps it (<see cref="PartMaterial.BladeAxis"/>): a line through the middle of its pick
-/// boxes along the long axis, from the mesh's hilt end (value <c>low</c> on the axis) over <c>1 / scale</c> to the tip; the glowing blade is the
-/// part from <see cref="Start"/> of it.
+/// boxes along the long axis, from the mesh's hilt end (value <c>low</c> on the axis) over <c>1 / scale</c> to the tip.
 /// </summary>
 static class BladeSpan
 {
-    /// <summary>
-    /// Where along the mesh the blade starts (the glow comes up from 0.25 to 0.4, CharacterShaders): the hilt and guard are below.
-    /// </summary>
-    public const float Start = 0.3f;
-
     /// <summary>
     /// The point at <paramref name="along"/> of the line (0 the hilt end, 1 the tip).
     /// </summary>
@@ -115,12 +110,12 @@ static class BladeSpan
     }
 
     /// <summary>
-    /// The blade placed by <paramref name="world"/> (the mesh's own space to the world): the base at <see cref="Start"/>, +Y towards the tip and
-    /// X along the boxes' wider cross axis (the blade's width), and the length from the base to the tip.
+    /// The weapon placed by <paramref name="world"/> (the mesh's own space to the world): the base at the hilt end, +Y towards the tip and X along
+    /// the boxes' wider cross axis (the blade's width), and the length from the base to the tip.
     /// </summary>
     public static BladeFrame Frame(ReadOnlySpan<PickBox> boxes, Vector3 axis, float low, float scale, Matrix4x4 world)
     {
-        var at = Vector3.Transform(Point(boxes, axis, low, scale, Start), world);
+        var at = Vector3.Transform(Point(boxes, axis, low, scale, 0), world);
         var tip = Vector3.Transform(Point(boxes, axis, low, scale, 1), world);
         var up = Vector3.Normalize(tip - at);
         var across = Vector3.TransformNormal(Across(boxes, axis), world);

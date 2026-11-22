@@ -510,9 +510,10 @@ public sealed class ModContext
     /// <see cref="ModWeaponGlows.MaxSeconds"/>), at <paramref name="strength"/> (0 to <see cref="ModWeaponGlows.MaxStrength"/>; 0: no tint on the
     /// blade, the particles only). It fades in and out and replaces the character's glow before. <paramref name="effect"/> (an EFFECT record's
     /// string id or a particle system name, as <see cref="PlayEffect(string, CharacterId, string?, float, System.Numerics.Vector3?)"/>'s; null:
-    /// none) is played once at the blade's base with its local +Y along the blade, scaled so 7 units span it, while the blade is drawn, its
-    /// particles recoloured to <paramref name="colour"/> unless that is white (1, 1, 1). Call it again before it ends to keep it going: the same effect and colour keep their particles. On the
-    /// host's thread, as <c>PlayEffect</c>. False when rejected (logged once per mod and problem).
+    /// none) is played once at the weapon's hilt end with its local +Y along the blade, scaled so 8.5 units span the weapon, while the blade is
+    /// drawn, its particles recoloured to <paramref name="colour"/> unless that is white (1, 1, 1). Call it again before it ends to keep it going:
+    /// the same effect and colour keep their particles. On the host's thread, as <c>PlayEffect</c>. False when rejected (logged once per mod and
+    /// problem).
     /// </summary>
     public bool GlowWeapon(CharacterId on, System.Numerics.Vector3 colour, float seconds, float strength = 1, string? effect = null) =>
         _registry.WeaponGlows.Start(Id, on, colour, seconds, strength, effect);
