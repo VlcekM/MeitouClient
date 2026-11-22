@@ -210,7 +210,7 @@ faction) when no member is a character that is not dead: with the template's `re
 (and may run again); else it logs "Platoon::declareDead: <name>" to death.log, takes the platoon out of its town's pool set (lowering the pool by its living count, 0 here), sets the saved
 `dead` flag (+0x1f0) and clears `persistent` (destroyed at its next unload, its PLATOON record deleted by `FUN_1407ec5e0`; a campaign's platoon stays with its campaign, `FUN_1407ec570`); a save before then leaves it out unless the player is near ([save.md](../formats/save.md#npc-platoons-meitou-mapping)).
 Meitou: `Platoon.Dead` (saved as `dead`, read at load), set in `StepLoaded`; the platoon leaves the pool counts at once, is not kept and is despawned when it unloads (its dead lie where they fell).
-Meitou (g-008): a town unloads with its coverage zones only; a town squad with a living member in the loaded box of an active zone, or one carrying a player character (the carry test of `FUN_1404febd0`), then stays in the world as a loaded pinned platoon (`PopulationSystem.KeepLoaded`) that unloads by its own place after `TownUnloadGraceSeconds` (0), as each original platoon checks itself (the old "town stays loaded while a member is active" engine choice is gone; wild sites keep it).
+Meitou (g-008): a town unloads with its coverage zones only; a town squad with a living member in the loaded box of an active zone, or one carrying a player character (the carry test of `FUN_1404febd0`), or one with a member on screen (`+0x1a9` below; #1085: a guard carried off and put down in view vanished with Blister Hill), then stays in the world as a loaded pinned platoon (`PopulationSystem.KeepLoaded`) that unloads by its own place after `TownUnloadGraceSeconds` (0), as each original platoon checks itself (the old "town stays loaded while a member is active" engine choice is gone; wild sites keep it).
 A pinned platoon is otherwise wanted and made with its town's zone (engine choice), except one under a contract (hired bodyguards, a base defence;
 `PopulationSystem.TownBound`): that one is wanted, gated and activated by its own place like any original platoon, at game load too, and
 unloads after the original's 4 s outside the loaded zones (#858).
@@ -224,7 +224,8 @@ member with `+0x1a9` never is). An out-of-zone member is destroyed (`FUN_140799a
 in a loaded or requested zone) is out of zone, so is every in-zone member not in view within 600 of it (squared 360000, `DAT_141714bd4`; 3D distance; reason "leader wandered out of zone").
 The platoon stays active while any member is left, and the test repeats every frame; with none left it is destroyed as above. Before that, a platoon with 2 or more members whose members include one carried (`+0x3d4`), imprisoned
 (`+0x2f8` = 2) or flagged `+0x320` runs the split pass `FUN_14079c1c0` (see below). Meitou (`PopulationSystem.ThinOutOfZone`, Faithful
-unload of a non-kept roaming squad, after its grace): the same per-member rule on living members, with the effective leader as anchor, except the in-view exemption (render state) and the split;
+unload of a non-kept roaming squad, after its grace): the same per-member rule on living members, with the effective leader as anchor and the in-view exemption (`MedicalClock.OnScreen` against the host's camera, none headless), except the split;
+a kept or pinned platoon whose timer ran out stays active while any member, dead or alive, is on screen (`PopulationSystem.StaysActive`, `MemberInView`);
 when no living member would stay the squad is despawned whole as before.
 
 **Split at unload** (**Verified** `FUN_14079c1c0`, run for any platoon with 2+ members and no pointer at +0xe8): each member is skipped when its chain-owner handle (+0x330, a character or platoon) resolves to an

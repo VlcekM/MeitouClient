@@ -651,9 +651,7 @@ public sealed partial class PopulationSystem
             p.UnloadAtTick = world.Tick + (long)Math.Ceiling(grace / world.TickSeconds);
         }
 
-        // Faithful: a platoon the original does not keep is not unloaded whole: each member out of the zone is destroyed, and the platoon stays while
-        // any is left.
-        else if (world.Tick >= p.UnloadAtTick && !(!Kept(p) && !p.Pinned && ThinOutOfZone(world, p, squad)))
+        else if (world.Tick >= p.UnloadAtTick && !StaysActive(world, p, squad))
         {
             Unload(world, p, squad);
             return;
@@ -661,6 +659,37 @@ public sealed partial class PopulationSystem
 
         StepTrip(world, p, squad);
     }
+
+    /// <summary>
+    /// Whether a platoon whose unload timer ran out stays active (<c>FUN_14079c600</c>, <b>Verified</b>): a kept one (or a pinned one) while a member
+    /// is on screen (<see cref="MemberInView"/>), whatever its zone; one the original does not keep is not unloaded whole (Faithful): each member out
+    /// of the zone is destroyed, and the platoon stays while any is left (<see cref="ThinOutOfZone"/>).
+    /// </summary>
+    bool StaysActive(World world, Platoon p, Squad squad) =>
+        Kept(p) || p.Pinned ? MemberInView(world, squad) : ThinOutOfZone(world, p, squad);
+
+    /// <summary>
+    /// Whether a member of the squad, dead or alive, is on screen (the original's <c>Character+0x1a9</c>, <see cref="Bodies.MedicalClock.OnScreen"/>):
+    /// a kept platoon stays active while one is (<c>FUN_14079c600</c>, <b>Verified</b>; tested again each frame), so a knocked-out guard put down
+    /// in view does not vanish with its squad. A world never told a camera has none on screen.
+    /// </summary>
+    static bool MemberInView(World world, Squad squad)
+    {
+        if (world.View is null) return false;
+
+        var table = world.Characters;
+        foreach (var m in squad.Members)
+        {
+            if (table.TryResolveNext(m, out int slot) && InView(world, table.Next[slot].Position)) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether a point's body is on screen (<see cref="Bodies.MedicalClock.OnScreen"/>); never in a world never told a camera.
+    /// </summary>
+    static bool InView(World world, Vector3 at) => world.View is { } view && Bodies.MedicalClock.OnScreen(view, at);
 
     /// <summary>
     /// The platoon leaves the world: its prisoners split off, its package and target kept, its characters kept or despawned (Faithful: a
@@ -865,10 +894,10 @@ public sealed partial class PopulationSystem
     /// The unload of a platoon the original does not keep (<c>FUN_14079c600</c>, serial phase): not the whole squad at once but each living member by
     /// its own place. One out of the zone is destroyed ("wandered out of zone"); while the anchor (the effective leader,
     /// <see cref="EffectiveLeader"/>) is out of it, so is every member within 600 of it ("leader wandered out of zone"). A member in the zone and not
-    /// near an absent leader stays, and the platoon with it. True when some stay (the others are gone, the squad goes on); false when none would,
-    /// which leaves the whole squad to the caller's despawn (and its pool payment) unchanged. <b>Not built</b>: the exemption of a member in the
-    /// camera's view (<c>Character+0x1a9</c>, render state), the split of imprisoned members into squads of their own first (<c>FUN_14079c1c0</c>),
-    /// and that dead members count as staying in the zone (here a corpse is no part of it).
+    /// near an absent leader stays, and the platoon with it; a member on screen (<see cref="InView"/>, <c>Character+0x1a9</c>) is never out of the
+    /// zone nor taken with its leader. True when some stay (the others are gone, the squad goes on); false when none would, which leaves the whole
+    /// squad to the caller's despawn (and its pool payment) unchanged. <b>Not built</b>: the split of imprisoned members into squads of their own
+    /// first (<c>FUN_14079c1c0</c>), and that dead members count as staying in the zone (here a corpse is no part of it).
     /// </summary>
     bool ThinOutOfZone(World world, Platoon p, Squad squad)
     {
@@ -881,14 +910,15 @@ public sealed partial class PopulationSystem
         if (table.TryResolveNext(anchor, out int anchorSlot))
         {
             anchorAt = table.Next[anchorSlot].Position;
-            leaderOut = OutOfZone(anchorAt);
+            leaderOut = !InView(world, anchorAt) && OutOfZone(anchorAt);
         }
 
         foreach (var m in squad.Members)
         {
             if (!Living(world, m) || !table.TryResolveNext(m, out int slot)) continue;   // a corpse is no part of the platoon's staying
             var at = table.Next[slot].Position;
-            if (OutOfZone(at) || leaderOut && Vector3.DistanceSquared(at, anchorAt) < LeaderOutOfZoneRadiusSq) _thinGo.Add(m);
+            bool near = leaderOut && Vector3.DistanceSquared(at, anchorAt) < LeaderOutOfZoneRadiusSq;
+            if (!InView(world, at) && (OutOfZone(at) || near)) _thinGo.Add(m);
             else _thinStay.Add(m);
         }
 
