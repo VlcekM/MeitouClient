@@ -564,14 +564,14 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     }
 
     /// <summary>
-    /// Sends an operator towards <paramref name="goal"/> (<see cref="GoalOf"/>) on the site's own floor (not a turret's, whose spot may stand above
-    /// it).
+    /// Sends an operator towards <paramref name="goal"/> (<see cref="GoalOf"/>) on the site's own floor (or a turret's gunner spot floor).
     /// </summary>
     void WalkToSite(ref CharacterHot n, CharacterCold cold, BuildSite site, Vector2 goal)
     {
         n.Goal = goal;
         n.Flags |= (ushort)MoveFlags.NeedPath;
-        (cold.GoalHeight, cold.GoalHeightAt) = _turretSpots.ContainsKey(site.Id) ? (float.NaN, default) : (site.Position.Y, n.Goal);
+        float y = _turretSpots.TryGetValue(site.Id, out var turret) ? turret.Spot.Y : site.Position.Y;
+        (cold.GoalHeight, cold.GoalHeightAt) = (y, n.Goal);
     }
 
     /// <summary>

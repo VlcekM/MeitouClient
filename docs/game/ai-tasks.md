@@ -644,8 +644,8 @@ Meitou: [simulation, captives](../simulation.md#captives).
   (`FUN_1405c8aa0`, the status's first int, which `FUN_1405a4940` writes); 116 `TARGET_IS_MY_SLAVE` `FUN_1405a2170` chained and the asker on its owner list; 118
   `FUN_1405a2290` unarmed; 120 `FUN_1405a6f60` looks like a slave (`FUN_1405a6bb0`); 115 `IS_CARRYING_TARGET_HEALTHY` `FUN_14059ab30` carrying the target (48) and
   not `needsFirstAid`; 143 `farm has food` `FUN_1408ca350` a farm (function 13) grown past and died below the thresholds; 155 `iHaveSomeSlaves` `FUN_14059a0e0` the
-  platoon's slave list not empty; 149 `gotAFoodItem` `FUN_140597e20` a mouthful, or food (item types 0xf, 3) in the inventory or backpack; 144 always true; 135
-  and 146 always false.
+  platoon's slave list not empty; 149 `gotAFoodItem` `FUN_140597e20` a mouthful, or food (item types 0xf, 3, excluding a living character's death items; Meitou
+  `FeedSystem.HoldsFood` also checks race edibility) in the inventory or backpack; 144 always true; 135 and 146 always false.
 - **Kill** (`Task_KillPrisoner`, 134 and 196): faces the target (a character, or a cage's occupant) and plays `chop down static`; each time the clip passes 0.55 the
   character's weapon attack (`FUN_1408868b0`, the race multipliers included) lands through the target's take-hit virtual and the target says event 11 SCREAMING_TORTURE. When the
   target is dead the character's town gets a new kill time, now + uniform[1, 15) h. 134 needs a drawn weapon.

@@ -542,9 +542,9 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
     }
 
     /// <summary>
-    /// The asker's own states the rows list: 149 gotAFoodItem (<c>FUN_140597e20</c>: a mouthful, or food among its items or in its worn bag), 79
-    /// I_AM_IMPRISONED (held in a cage), 155 iHaveSomeSlaves (<c>FUN_14059a0e0</c>: the platoon's slave list is not empty; asked only by 194 / 218, whose look's desire is 0.25 x
-    /// that list),
+    /// The asker's own states the rows list: 149 gotAFoodItem (<c>FUN_140597e20</c>: a mouthful, or live edible food among its items or in its
+    /// worn bag; <see cref="Items.FeedSystem.HoldsFood"/>), 79 I_AM_IMPRISONED (held in a cage), 155 iHaveSomeSlaves (<c>FUN_14059a0e0</c>: the
+    /// platoon's slave list is not empty; asked only by 194 / 218, whose look's desire is 0.25 x that list),
     /// 144 "am hungry" always true and 135, 146 always false (<b>Verified</b>, docs/game/ai-tasks.md).
     /// </summary>
     bool? OwnState(World world, in DutyAsk ask, StateType state)
@@ -552,7 +552,7 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
         var cold = world.Characters.Cold(ask.Slot);
         return state switch
         {
-            StateType.GotAFoodItem => cold is not null && GotFood(cold),
+            StateType.GotAFoodItem => cold is not null && Items.FeedSystem.HoldsFood(cold),
             StateType.AmImprisoned => cold is { InSomething: HeldState.Imprisoned },
             StateType.IHaveSomeSlaves => PickOf(ask) is { Desire: > 0 },
             StateType.AmHungry => true,
@@ -560,13 +560,6 @@ internal sealed class CaptiveGoals(CaptiveSystem captives, PopulationData data)
             _ => null,
         };
     }
-
-    /// <summary>
-    /// State 149's reading: a limb in the mouth, or a food item among the character's items or in its worn bag.
-    /// </summary>
-    static bool GotFood(CharacterCold cold) =>
-        cold.Mouth is not null || cold.Inventory is { } inv && (inv.Items.Exists(Items.FeedSystem.IsFood)
-            || inv.Backpack?.Contents is { } bag && bag.Items.Exists(Items.FeedSystem.IsFood));
 
     /// <summary>
     /// The states of a character target (<b>Verified</b> evaluators, each id's registry thunk followed in the 1.0.68 exe): 1 / 46 at it (its cage's

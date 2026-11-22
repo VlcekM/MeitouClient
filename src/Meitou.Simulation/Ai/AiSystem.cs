@@ -4109,25 +4109,64 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// Where a turret is manned: behind its gun (the gunner stands between the gun and the walkway behind it), inside the turret's <c>use range</c>:
-    /// the first of a few distances behind it whose ground is walkable at the turret's height, else beside or before it, else the turret's own place.
-    /// The Y is the walkable surface there, so the path goes up to the tower's floor rather than to the ground below it. Engine choice: the game's
-    /// gunner spot is not in the data.
+    /// the first of a few distances behind it whose ground is walkable at the turret's height, else beside or before it, else the nearest roof or
+    /// walkway floor within reach, else the turret's own position (keeping its height so a roof turret never falls back to the ground below it).
+    /// Engine choice: the game's gunner spot is not in the data.
     /// </summary>
-    internal static Vector3 TurretSpot(World world, in TurretPost turret)
+    internal static Vector3 TurretSpot(World world, in TurretPost turret) =>
+        TurretStand(world.Walkability, turret) ?? TurretFloor(world.Walkability, turret) ?? turret.Position;
+
+    /// <summary>
+    /// The first walkable spot at the turret's height: a few distances behind it within reach, then farther behind within its <c>use range</c> (up to
+    /// 16), then beside, before, and on it; null when none is walkable.
+    /// </summary>
+    static Vector3? TurretStand(IWalkability walk, in TurretPost turret)
     {
         var at = Flat(turret.Position);
         var forward = new Vector2(MathF.Sin(turret.Yaw), MathF.Cos(turret.Yaw));
         var side = new Vector2(forward.Y, -forward.X);
         float nearY = turret.Position.Y;
-        bool Walkable(Vector2 p) => world.Walkability.IsWalkable(p.X, p.Y, nearY);
-        Vector3 On(Vector2 p) => new(p.X, world.Walkability.GroundHeight(p.X, p.Y, nearY), p.Y);
-        float reach = MathF.Max(MathF.Min(turret.UseRange, 10), 2);
+        float reach = TurretReach(turret);
+
         for (float d = reach * 0.6f; d >= 2; d -= 2)
-            if (Walkable(at - forward * d)) return On(at - forward * d);
+            if (Stand(walk, at - forward * d, nearY) is { } behind) return behind;
+        for (float d = reach * 0.6f + 2; d <= MathF.Min(turret.UseRange, 16); d += 2)
+            if (Stand(walk, at - forward * d, nearY) is { } farther) return farther;
         for (int k = 0; k < 2; k++)
-            if (Walkable(at + side * (k == 0 ? 4 : -4))) return On(at + side * (k == 0 ? 4 : -4));
-        return Walkable(at + forward * 4) ? On(at + forward * 4) : On(at);
+            if (Stand(walk, at + side * (k == 0 ? 4 : -4), nearY) is { } beside) return beside;
+
+        return Stand(walk, at + forward * 4, nearY) ?? Stand(walk, at, nearY);
     }
+
+    /// <summary>
+    /// The nearest roof or walkway floor (within <see cref="MovementSystem.FloorSlack"/> of the turret's height) behind the turret, else at it, when
+    /// it lies inside the turret's <c>use range</c>; null otherwise.
+    /// </summary>
+    static Vector3? TurretFloor(IWalkability walk, in TurretPost turret)
+    {
+        var at = Flat(turret.Position);
+        var forward = new Vector2(MathF.Sin(turret.Yaw), MathF.Cos(turret.Yaw));
+        var back = at - forward * (TurretReach(turret) * 0.6f);
+        float nearY = turret.Position.Y;
+        float useRangeSq = turret.UseRange * turret.UseRange;
+
+        var backFloor = walk.FloorNear(back.X, back.Y, nearY, MovementSystem.FloorSlack);
+        if (backFloor is { } b && Vector2.DistanceSquared(Flat(b), at) <= useRangeSq) return b;
+
+        var nearFloor = walk.FloorNear(at.X, at.Y, nearY, MovementSystem.FloorSlack);
+        return nearFloor is { } n && Vector2.DistanceSquared(Flat(n), at) <= useRangeSq ? n : null;
+    }
+
+    /// <summary>
+    /// The distance behind a turret its gunner spot is sought within: its <c>use range</c> clamped to 2..10.
+    /// </summary>
+    static float TurretReach(in TurretPost turret) => MathF.Max(MathF.Min(turret.UseRange, 10), 2);
+
+    /// <summary>
+    /// The walkable surface at <paramref name="p"/> near height <paramref name="nearY"/>, or null when it is not walkable there.
+    /// </summary>
+    static Vector3? Stand(IWalkability walk, Vector2 p, float nearY) =>
+        walk.TryStand(p.X, p.Y, nearY, out float y) ? new Vector3(p.X, y, p.Y) : null;
 
     #endregion
 
