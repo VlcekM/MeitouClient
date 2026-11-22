@@ -152,9 +152,12 @@ sealed class FurnitureUse(PlayerInterface player)
                 : ("Sleep", () => SleepIn(bed)),
         };
 
-        // A bed the player built: its site's verbs too (dismantle...), which its quick click no longer reaches.
+        // A bed the player built: its site's verbs too (dismantle...), which its quick click no longer reaches, and the code mods' job offers.
         if (player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => bed.Id == s.Id + "@bed0") is { } site)
+        {
             verbs.AddRange(player.Build.SiteVerbs(site));
+            verbs.AddRange(player.Build.OfferedJobs(site));
+        }
 
         player.ContextMenuWindow.OpenMenu = new(player.Build.Services?.ItemName(bed.Record) ?? bed.Record, pending.At, verbs);
     }

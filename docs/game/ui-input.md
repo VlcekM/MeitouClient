@@ -569,7 +569,8 @@ and a walk there). The right button's target, for the pointer and the click alik
 **Observed** (kenshi_x64 1.0.68 decompile: list builder `FUN_1407a6bc0`, `ContextMenuGUI::show` `FUN_1407a7fe0`, labels `FUN_14079b2d0`, row click
 `FUN_1407a7f10`). Order numbers are [ai-tasks](ai-tasks.md) taskTypes; "the lead" is the last selected character of the player's faction.
 
-Meitou only: the rows code mods add come after the game's ([modding](../modding.md#registration-surface), right-click menu rows).
+Meitou only: the rows code mods add come after the game's ([modding](../modding.md#registration-surface), right-click menu rows). A building's
+menu also ends with the rows of the mods' job offers (modding, Mod jobs): an offer names who it is for, so an animals-only selection keeps its row.
 
 - **Rows**: the verbs are a set of order numbers, so each shows once, **in ascending order number**; an empty label drops it. An animals-only selection
   (PlayerInterface+0x268) keeps only 5, 31, 45, 61, 123, 226, 227 (`FUN_1407f23b0`). **Verified** (`data/gui/layout/Kenshi_ContextMenu.layout`): title

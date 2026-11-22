@@ -45,11 +45,29 @@ public sealed partial class ProductionSystem
     bool Unlocked(World world, CraftKind kind, string id) => world.Research.UnlockedCrafts.Contains((kind, id)) || !EverEnabled().Contains((kind, id));
 
     /// <summary>
-    /// Whether the player can queue an option now: its record (and a weapon's model) unlocked, and its level within the bench's tech level.
+    /// Whether the player can queue an option now: its record (and a weapon's model) unlocked, and its level within the bench's tech level. A
+    /// weapon's type and model must each have been enabled by a finished research: the original's bench lists only the research-unlocked WEAPON
+    /// and MATERIAL_SPECS_WEAPON records its <c>weapon crafts</c> hold (<c>FUN_1402bbd20</c> over <c>FUN_14082f1b0</c>, <b>Verified</b>), so a
+    /// model no research enables (Edge Type 2 and 3) is never made to order (#1227).
     /// </summary>
     public bool CanCraft(World world, CraftBench bench, CraftOption option) =>
-        Unlocked(world, option.Kind, option.Item) && (option.Model is null || Unlocked(world, CraftKind.Weapon, option.Model))
+        (option.Kind == CraftKind.Weapon ? Researched(world, option.Item) : Unlocked(world, option.Kind, option.Item))
+            && (option.Model is null || Researched(world, option.Model))
             && option.Level <= bench.TechLevel;
+
+    /// <summary>
+    /// Whether a finished research has enabled the weapon type or model <paramref name="id"/>.
+    /// </summary>
+    static bool Researched(World world, string id) => world.Research.UnlockedCrafts.Contains((CraftKind.Weapon, id));
+
+    /// <summary>
+    /// Whether some research could enable the weapon option: its type and model are each in a research's enable lists. The original's bench never
+    /// lists one that cannot be (<see cref="CanCraft"/>), so the Craft tab leaves it out.
+    /// </summary>
+    bool EverOffered(CraftOption option) =>
+        option.Kind != CraftKind.Weapon
+            || (EverEnabled().Contains((CraftKind.Weapon, option.Item))
+                && (option.Model is null || EverEnabled().Contains((CraftKind.Weapon, option.Model))));
 
     /// <summary>
     /// The recipe of a bench option on the machine.
@@ -302,7 +320,7 @@ public sealed partial class ProductionSystem
     /// Every option of a crafting machine's bench with its recipe and whether it can be queued now (<see cref="CraftOptionsCache"/> keeps them).
     /// </summary>
     IReadOnlyList<CraftOptionView> BuildCraftOptions(World world, Machine m) =>
-        m.Data.Craft is { } bench ? [.. bench.Options.Select(o => OptionView(world, m, bench, o))] : [];
+        m.Data.Craft is { } bench ? [.. bench.Options.Where(EverOffered).Select(o => OptionView(world, m, bench, o))] : [];
 
     /// <summary>
     /// One option of a bench as its Craft tab shows it.

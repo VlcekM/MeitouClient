@@ -1,3 +1,4 @@
+using System.Numerics;
 using Meitou.Data.World;
 using Meitou.Simulation;
 
@@ -32,6 +33,17 @@ sealed class InteriorView(GameHost host)
     /// The buildings left within the keep-open time, shown with every floor this frame (<see cref="HoldLeftOpen"/>).
     /// </summary>
     readonly List<InteriorVolume> _held = [];
+
+    /// <summary>
+    /// The buildings build mode opens this frame for an interior-furniture ghost (<see cref="OpenForFurniture"/>), shown at the viewed floor with no
+    /// keep-open after.
+    /// </summary>
+    readonly List<InteriorVolume> _furnished = [];
+
+    /// <summary>
+    /// The ids of the buildings <see cref="OpenForFurniture"/> opens this frame (reused).
+    /// </summary>
+    readonly HashSet<string> _furnishIds = new(StringComparer.Ordinal);
     /// <summary>
     /// The keep-open entries that closed this frame, removed after the loop.
     /// </summary>
@@ -106,6 +118,7 @@ sealed class InteriorView(GameHost host)
         if (host.ActiveObjects is not { } objects) return;
         InteriorFloors.Clear();
         _viewed.Clear();
+        _furnished.Clear();
         HiddenIndoors.Clear();
         var characters = host.Session.CurrentSnapshot.Characters;
         FollowFloor(objects);
@@ -113,6 +126,7 @@ sealed class InteriorView(GameHost host)
             if (c.IsPlayer && objects.InteriorAt(host.DrawnPosition(c), InsideMargin) is { } building
                     && InteriorFloors.TryAdd(building.PlacementId, ViewedFloorValue))
                 _viewed.Add(building);
+        OpenForFurniture(objects);
         host.ApplyForcedInteriorView(objects);
         HoldLeftOpen(objects);
         PublishShown();
@@ -138,6 +152,88 @@ sealed class InteriorView(GameHost host)
         }
         host.GroundItemSync.UpdateGroundVisibility();
     }
+
+    /// <summary>
+    /// While a ghost of interior furniture (or a node) is out in build mode, the buildings the player owns in the town nearest it are in the view at
+    /// the viewed floor, so the piece can be placed inside one with nobody there, as the original's opener does (<c>FUN_1407f7230</c>: with the
+    /// build-mode ghost's <c>is interior furniture</c> set, the nearest town to the cursor's ground point within its radius, <c>FUN_140928890</c>,
+    /// and each of its buildings the player's faction owns; docs/render-objects.md "Closed interiors"). The towns are the level's (their radius, <see
+    /// cref="Meitou.Data.Gameplay.TownData.Radius"/>) and the player's outposts; the player's buildings are its complete sites within the town's
+    /// radius and the town houses it owns. They take no keep-open: the original's branch writes no timer. Per frame, only while such a ghost is out.
+    /// </summary>
+    void OpenForFurniture(Rendering.Objects.WorldObjectRenderer objects)
+    {
+        if (host.Player?.Build is not { Active: true, Ghost: { } ghost } || !(ghost.Building.IsInteriorFurniture || ghost.Building.IsNode)) return;
+
+        var snapshot = host.Session.CurrentSnapshot;
+        if (NearestTown(snapshot, ghost.Position) is not var (centre, radius)) return;
+
+        CollectOwnedIds(snapshot, centre, radius);
+        if (_furnishIds.Count == 0) return;
+
+        AddFurnishedInteriors(objects, centre, radius);
+    }
+
+    /// <summary>
+    /// The centre and radius of the town or player outpost nearest <paramref name="at"/> on the ground plane that has it within its radius, or null.
+    /// </summary>
+    (Vector3 Centre, float Radius)? NearestTown(WorldSnapshot snapshot, Vector3 at)
+    {
+        (Vector3, float)? best = null;
+        float nearest = float.MaxValue;
+        foreach (var o in snapshot.Outposts) ConsiderTown(o.Position, o.Radius, at, ref best, ref nearest);
+        if (host.PopData is not { } data) return best;
+
+        foreach (var site in data.Sites) ConsiderTown(site.Position, site.Town.Radius, at, ref best, ref nearest);
+        return best;
+    }
+
+    /// <summary>
+    /// Takes the town at <paramref name="position"/> as <paramref name="best"/> when <paramref name="at"/> is within its radius and nearer than any
+    /// so far.
+    /// </summary>
+    static void ConsiderTown(Vector3 position, float radius, Vector3 at, ref (Vector3, float)? best, ref float nearest)
+    {
+        float d = FlatLengthSquared(position - at);
+        if (radius <= 0 || d > radius * radius || d >= nearest) return;
+
+        best = (position, radius);
+        nearest = d;
+    }
+
+    /// <summary>
+    /// Fills <see cref="_furnishIds"/> with the player's complete top-level sites within the town and the town houses it owns.
+    /// </summary>
+    void CollectOwnedIds(WorldSnapshot snapshot, Vector3 centre, float radius)
+    {
+        int faction = host.Session.World.Player.Faction;
+        _furnishIds.Clear();
+        foreach (var b in snapshot.Buildings)
+        {
+            bool own = b.Owner == faction && b.Complete && !b.Destroyed && b.Parent is null;
+            if (own && FlatLengthSquared(b.Position - centre) <= radius * radius) _furnishIds.Add(b.Id);
+        }
+
+        _furnishIds.UnionWith(snapshot.OwnedTownBuildings);
+    }
+
+    /// <summary>
+    /// Opens at the viewed floor each loaded interior in <see cref="_furnishIds"/> whose first footprint corner lies within the town.
+    /// </summary>
+    void AddFurnishedInteriors(Rendering.Objects.WorldObjectRenderer objects, Vector3 centre, float radius)
+    {
+        foreach (var room in objects.LoadedInteriors())
+        {
+            if (!_furnishIds.Contains(room.PlacementId) || room.Footprint is not [var corner, ..]) continue;
+            if (FlatLengthSquared(new Vector3(corner.X, 0, corner.Y) - centre) > radius * radius) continue;
+            if (InteriorFloors.TryAdd(room.PlacementId, ViewedFloorValue)) _furnished.Add(room);
+        }
+    }
+
+    /// <summary>
+    /// The squared length of <paramref name="v"/> on the ground plane (x, z).
+    /// </summary>
+    static float FlatLengthSquared(Vector3 v) => v.X * v.X + v.Z * v.Z;
 
     /// <summary>
     /// A character slot's interior memo, the array grown to fit it.
@@ -168,6 +264,7 @@ sealed class InteriorView(GameHost host)
     internal InteriorVolume? ViewedAt(System.Numerics.Vector3 at)
     {
         foreach (var b in _viewed) if (b.Contains(at, InsideMargin)) return b;
+        foreach (var b in _furnished) if (b.Contains(at, InsideMargin)) return b;
         foreach (var b in _held) if (b.Contains(at, InsideMargin)) return b;
         return null;
     }
