@@ -67,11 +67,16 @@ public sealed partial class PopulationSystem
         ZoneActivation.InLoadedBox(p.Position.X, p.Position.Y, _active) || TownBound(world, p) && _active.Contains(_data.Sites[p.Origin].Zone);
 
     /// <summary>
-    /// Whether a wanted platoon may be made now: the host's <see cref="ZoneGate"/> holds it back until the navmesh is ready, of its town's zone for a
-    /// town's own (<see cref="TownBound"/>: as the town's load is gated; its members may stand in a neighbouring zone), else of its own zone.
+    /// Whether a wanted platoon may be made now: the host's <see cref="ZoneGate"/> holds it back until the navmesh is ready, in its town's zones for
+    /// a town's own (<see cref="TownBound"/>: as the town's load is gated, <see cref="TownZonesReady"/>; its members may stand in a neighbouring
+    /// zone), else in its own zone.
     /// </summary>
-    bool Ready(World world, Platoon p) =>
-        ZoneGate is not { } gate || gate(TownBound(world, p) ? _data.Sites[p.Origin].Zone : WorldLayout.ZoneOf(p.Position.X, p.Position.Y));
+    bool Ready(World world, Platoon p)
+    {
+        if (TownBound(world, p)) return TownZonesReady(_data.Sites[p.Origin]);
+
+        return ZoneGate is not { } gate || gate(WorldLayout.ZoneOf(p.Position.X, p.Position.Y));
+    }
 
     /// <summary>
     /// A town's own platoon that comes and goes with its town (engine choice): pinned, of a placed town and under no contract. A hired squad

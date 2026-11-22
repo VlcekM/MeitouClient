@@ -830,11 +830,16 @@ public sealed partial class PopulationSystem : ITickSystem, Bodies.ICharacterDea
 
     /// <summary>
     /// Starts loading a town: its replacement or held squads settled, its residents built (on the build thread when there is one, else made at once);
-    /// a zone gate that says no leaves it for the next look.
+    /// a zone gate that says no for one of its zones (<see cref="TownZonesReady"/>) leaves it for the next look, those zones asked for meanwhile.
     /// </summary>
     void Load(World world, TownSite site, SiteState state)
     {
-        if (ZoneGate is { } gate && !gate(site.Zone)) return;   // retried at the next look
+        if (!TownZonesReady(site))
+        {
+            AskCoverage(site);
+            return;   // retried at the next look
+        }
+
         state.Status = SiteStatus.Loading;
         state.LoadId++;
         long loadId = state.LoadId;
@@ -861,6 +866,33 @@ public sealed partial class PopulationSystem : ITickSystem, Bodies.ICharacterDea
         {
             _work.Add(() => _built.Enqueue(BuildTown(site, loadId, seed, walk, held, owned)));
         }
+    }
+
+    /// <summary>
+    /// Whether the host's <see cref="ZoneGate"/> lets the town be made: the navmesh is ready in its own zone and in each of its
+    /// <see cref="TownSite.Coverage"/> zones (engine choice: its residents stand in buildings of those zones too, and one made where the mesh is not
+    /// loaded yet would stand on the terrain under its floor; #1125: World's End's library in the zone beside its own).
+    /// </summary>
+    bool TownZonesReady(TownSite site)
+    {
+        if (ZoneGate is not { } gate) return true;
+        if (!gate(site.Zone)) return false;
+
+        foreach (var zone in site.Coverage)
+            if (!gate(zone)) return false;
+
+        return true;
+    }
+
+    /// <summary>
+    /// A town waiting for its zones (<see cref="TownZonesReady"/>) asks for its coverage zones for as long as its own zone is asked for, so their
+    /// navmesh is loaded (<see cref="AskTownZones"/> asks only for a town loaded or loading).
+    /// </summary>
+    void AskCoverage(TownSite site)
+    {
+        if (!_loadedUntil.TryGetValue(site.Zone, out long until)) return;
+
+        foreach (var zone in site.Coverage) Ask(zone, until);
     }
 
     /// <summary>
