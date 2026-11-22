@@ -2079,8 +2079,12 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         var at = table.Next[slot].Position;
         BuildSite? best = null;
         float bestScore = 0;
-        foreach (var site in reg.All)
+
+        // By index: Source registers the builder's town on first use (FixtureRegistry.TownCandidates), which adds its properties' construction
+        // sites to the registry mid-loop (a first tick after a load); they are appended and get looked at too.
+        for (int i = 0; i < reg.All.Count; i++)
         {
+            var site = reg.All[i];
             if (IsUnreachable(world, cold, site.Id)) continue;   // the first condition of FUN_1409a6900
             if (!site.NeedsWork || site.Paused || site.Destroyed && IsShell(site.Record) || site.Dismantling || site.WallParent is not null
                 || site.Owner != cold.Faction)
