@@ -441,6 +441,27 @@ shows the first failing message in this order (**Verified** unless marked):
   a raised walkable surface outside the rooms (a wall top, `InteriorView.SurfaceMoveHit`) stands on it level, with that height as its ground, and
   walls do not block it.
 
+### Usage node markers
+
+**Verified** by decompile (Steam 1.0.68: the preview's setup `FUN_1404dde30`, `PreviewBuilding::resetUseageNodes` `FUN_1404d3bf0`,
+`PreviewBuilding::validateUsageNodes` `FUN_1404d40c0`, the node box `FUN_1404d99b0` and its test `FUN_1404d45a0`, the queue's add, re-add, undo
+and pick-up `FUN_1404d4240`, `FUN_1404d5130`, `FUN_1404e1f70`, `FUN_1404e27e0`); data from the base game:
+
+- **Which nodes.** The preview walks the building and every record its `parts` lists name (recursively, whatever their chance); each instance
+  whose target has `node type` 4 (`n-use node`, `1183-gamedata.base`) gets a marker. The instance itself is not tested for `is node`.
+- **Look.** An entity of the `phs or mesh` of the node record's first `parts` entry (base: BUILDING_PART `nodemarker`, `1132-gamedata.base`,
+  `nodemarker.mesh`), attached under the ghost's scene node at the instance's position and rotation (unscaled; a part's offset is not applied),
+  render queue 0x53, no shadows, material `greenbuilding` (the valid ghost's).
+- **Held ghost.** Shows every marker, green, whether it can stand or not (picking a queued ghost up resets its markers so).
+- **Queued ghosts.** Each time the queue changes (a ghost queued, re-queued, undone or picked up), every queued ghost's nodes are judged; a node
+  that fails is hidden. A node's box spans X and Z -2.5 to 2.5 and Y 0 to 10 round the node; it fails when it meets the physics shapes (the
+  footprint test), when the ghost stands outdoors and the terrain under the node is more than 40 above or below it, or when it meets a footprint box
+  of another queued ghost that does not pass through this one (`isNoCollideWithThisBuilding`).
+- Meitou (`UseNodeMarkerLayout`, `UseNodeMarkers`): the markers are ghosts drawn in the valid green; a node's box is tested in X/Z against the
+  collision shapes of the player's sites (the one the ghost stands in aside) and, outdoors, of the level's buildings, and against the other queued
+  ghosts' footprints, each within its height span (engine stand-in for the physics shapes; indoors the level building the ghost stands in is not
+  told apart, so level buildings are not tested there). A node whose record has no part with a mesh has no marker.
+
 ### Upgrades
 
 A building is upgraded or downgraded in place: same object, its record swapped (**Verified** unless marked: Building slots

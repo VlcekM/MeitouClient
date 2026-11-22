@@ -226,7 +226,8 @@ normal blend. Sites always use the fading (discard-capable) batch.
 **Ghost.** `WorldObjectRenderer.SetGhosts(GhostDraw[])` draws a building's parts (laid out once at the origin, exterior
 only) at a transform, from the `ObjectStreamer.Loose` pseudo-zone (never streamed out, scanned each frame like the
 landmarks), with 65 % dither coverage and a tint through the push `FlatColour` (`uTint` only reaches grey-channel
-materials): green valid, red invalid, blue queued. Not drawn in shadow or landmarks-only passes.
+materials): green valid, red invalid, blue queued. Not drawn in shadow or landmarks-only passes. A ghost's usage node markers are ghosts of their own in the valid green
+([usage node markers](game/buildings-production.md#usage-node-markers)).
 
 **Farm plants.** The host lays out each farm machine of the snapshot once (`FarmLayout.Plant`, seeded by the building id) and
 recomputes its plants' transforms (`FarmLayout.Transform`) when the farm's growth, death or harvest count changes
