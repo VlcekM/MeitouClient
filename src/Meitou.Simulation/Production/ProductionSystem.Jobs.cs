@@ -6,6 +6,7 @@ using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Construction;
+using Meitou.Simulation.Items;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Perception;
 using Meitou.Simulation.Player;
@@ -648,7 +649,7 @@ public sealed partial class ProductionSystem
         }
 
         if (job.Site is { } id && Site(world, id) is { } site && Vector3.DistanceSquared(at, site.Position) >= JobRangeSq) return false;
-        return !Blocked(world, cold, job);
+        return !Blocked(world, cold, job, at);
     }
 
     /// <summary>
@@ -675,10 +676,11 @@ public sealed partial class ProductionSystem
     /// <summary>
     /// Whether a job cannot run (the original skips such a job: an unmet start condition the planner cannot meet, or the target finder found nothing;
     /// docs/game/ai-tasks.md "Perma-jobs"). Operating: the building is gone or not an operable machine, its operator places are taken by others, or
-    /// it has no work (<see cref="HasWork"/>). Hauling to: the storage is gone, and the character carries nothing it takes and no machine within
-    /// <see cref="InFinderRange"/> has an output it takes. Automatic machines (152, and 124 on one): <see cref="AutoWork"/>.
+    /// it has no work (<see cref="HasWork"/>). Hauling to: the storage is gone, and the character at <paramref name="at"/> carries nothing it takes,
+    /// no loose item it wants lies near (<see cref="LooseFor"/>) and no machine within <see cref="InFinderRange"/> has an output it takes. Automatic
+    /// machines (152, and 124 on one): <see cref="AutoWork"/>.
     /// </summary>
-    bool Blocked(World world, CharacterCold cold, PermaJob job)
+    bool Blocked(World world, CharacterCold cold, PermaJob job, Vector3 at)
     {
         if (job.Site is not { } id || Site(world, id) is not { Complete: true } site || Ensure(world, site) is not { } m) return true;
         switch (job.Type)
@@ -706,7 +708,7 @@ public sealed partial class ProductionSystem
                 if (m.Data.IsAutomatic && m.Data.IsProducer) return !AutoWork(world, site, m, cold, fetch: false);
                 if (!m.Data.IsStorage || m.Storage is null) return true;
                 if (cold.Inventory is { } inv && inv.All().Any(i => Takes(world, m, i))) return false;
-                return HaulSource(world, site, m) is null;
+                return LooseFor(world, cold, at, m) is null && HaulSource(world, site, m) is null;
             default:
                 return true;
         }
@@ -792,11 +794,34 @@ public sealed partial class ProductionSystem
             && NearestStorage(world, site, cold, one.Record, s => s.Data.Accepts(one.Record, one.Type) && Fits(s.Storage!, one)) is not null);
 
     /// <summary>
-    /// A carried item a "Hauling to" job takes to its storage: a loose stack of something a player machine makes or crafts (not the character's own
-    /// kit), that the storage takes and has room for.
+    /// A carried item a "Hauling to" job takes to its storage: a loose stack (not the character's own kit), that the storage takes and has room for,
+    /// of a record its <c>limit inventory</c> lists (what <see cref="LooseFor"/> picks up) or that a player machine makes or crafts.
     /// </summary>
     static bool Takes(World world, Machine store, Items.ItemInstance item) =>
-        Stores(store, item) && world.Machines.All.Any(s => !s.Data.IsStorage && !IsTownWork(s.Site) && Makes(s, item.Record));
+        Stores(store, item) && (store.Data.StorageLimit.Contains(item.Record)
+            || world.Machines.All.Any(s => !s.Data.IsStorage && !IsTownWork(s.Site) && Makes(s, item.Record)));
+
+    /// <summary>
+    /// The loose item a "Hauling to" trip picks up for <paramref name="store"/> (<b>Verified</b>, decompile: job 124 needs state 67 at its storage,
+    /// which row 94 Try filling machine achieves; 94's finder <c>FUN_14059d9b0</c> asks the storage for the records it wants, <c>StorageBuilding</c>
+    /// slot <c>0x560</c> <c>FUN_140299c30</c>: its item list while it has room, and passes them to <c>FUN_14059d000</c>, whose first pass is the
+    /// loose one; docs/game/buildings-production.md "Hauling"): for each record of the storage's <c>limit inventory</c> it has room for, the
+    /// nearest loose item of it (<see cref="LooseSource.Nearest"/> from <paramref name="at"/>), while a unit fits the hauler's main grid (row 92
+    /// Collecting resource needs state 82, room for it). Engine choices: an item another faction owns is never picked up, so a hauler steals
+    /// nothing (the ownership test alone lets one in a player town take such an item, which marks it stolen); a storage with no
+    /// <c>limit inventory</c> wants nothing from the ground.
+    /// </summary>
+    GroundItem? LooseFor(World world, CharacterCold cold, Vector3 at, Machine store)
+    {
+        if (store.Storage is not { } grid || cold.Inventory is not { } inv) return null;
+        foreach (string record in store.Data.StorageLimit)
+        {
+            if (_items.Create(record, 1) is not { } one || !store.Data.Accepts(record, one.Type) || !Fits(grid, one) || !Fits(inv, one)) continue;
+            if (LooseSource.Nearest(world, _towns, cold, at, record, ownOnly: true) is { } loose) return loose;
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// A loose stack (not the character's own kit) the storage takes and has room for.
@@ -918,8 +943,8 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// A <see cref="CharacterTask.Haul"/> trip to a storage: what the character already carries for it goes there first; else it fetches a machine's
-    /// output.
+    /// A <see cref="CharacterTask.Haul"/> trip to a storage: what the character already carries for it goes there first; else a "Hauling to" job
+    /// picks up a loose item (<see cref="LooseFor"/>, the finder's first pass); else it fetches a machine's output.
     /// </summary>
     void StartHaulTrip(World world, int slot, BuildSite storage, Machine store, bool ditch = false)
     {
@@ -934,8 +959,17 @@ public sealed partial class ProductionSystem
         n.Mode = SpeedMode.Free;
         n.TaskTime = 0;
         bool carries = cold.Inventory is { } inv && Delivered(world, inv, store, ditch).Any();
-        cold.HaulSite = carries ? storage.Id : HaulSource(world, storage, store);
         cold.HaulTo = storage.Id;
+        cold.HaulItem = null;
+        if (!carries && !ditch && LooseFor(world, cold, n.Position, store) is { } loose)
+        {
+            cold.HaulItem = loose.Id;
+            cold.HaulSite = storage.Id;
+            _sweep = true;
+            return;
+        }
+
+        cold.HaulSite = carries ? storage.Id : HaulSource(world, storage, store);
         _sweep = true;
     }
 
@@ -959,6 +993,12 @@ public sealed partial class ProductionSystem
             || cold.Inventory is not { } inv)
         {
             End(world, slot);
+            return;
+        }
+
+        if (cold.HaulItem is { } loose)
+        {
+            PickUpLoose(world, slot, cold, inv, store, loose);
             return;
         }
 
@@ -991,5 +1031,73 @@ public sealed partial class ProductionSystem
 
         world.Machines.Touch();
         End(world, slot);
+    }
+
+    /// <summary>
+    /// A hauler at the loose item it fetches (<c>Task_Pickup</c>, docs/game/buildings-production.md "Hauling"): the stack goes into the inventory
+    /// (what does not fit stays on the ground), then it makes for the storage with what the storage takes; with nothing it can take the trip ends.
+    /// Not there yet: nothing happens (the walk is <see cref="ApproachLoose"/>'s).
+    /// </summary>
+    void PickUpLoose(World world, int slot, CharacterCold cold, Items.Inventory inv, Machine store, int item)
+    {
+        ref var n = ref world.Characters.Next[slot];
+        if (world.GroundItems.Find(item) is not { } loose)
+        {
+            End(world, slot);
+            return;
+        }
+
+        if (!PickUps.InReach(n.Position, loose.Position)) return;
+
+        int before = loose.Item.Quantity;
+        bool whole = inv.Add(loose.Item);
+        if (whole) world.GroundItems.Take(item);
+        if (whole || loose.Item.Quantity < before) world.EmitSound(SoundKind.PickedUp, slot, n.Position);
+
+        cold.HaulItem = null;
+        if (Delivered(world, inv, store, ditch: false).Any()) cold.HaulSite = store.Site;
+        else End(world, slot);
+    }
+
+    /// <summary>
+    /// The walk of a hauler to the loose item it fetches: it stands once in reach (<see cref="PickUps.InReach"/>); a path that ended short leaves the
+    /// item out for <see cref="ConstructionSystem.UnreachableSeconds"/> (<see cref="LooseSource.Key"/>) and ends the trip, so the next pick is
+    /// another source.
+    /// </summary>
+    void ApproachLoose(World world, int slot, ref CharacterHot n, CharacterCold cold, int item, float dt)
+    {
+        const ushort path = (ushort)MoveFlags.AnyPath;
+        if (world.GroundItems.Find(item) is not { } loose || !Able(cold))
+        {
+            End(world, slot);
+            return;
+        }
+
+        if (PickUps.InReach(n.Position, loose.Position))
+        {
+            if ((n.Flags & path) != 0)
+            {
+                n.Flags = (ushort)(n.Flags & ~path);
+                n.PathCursor = 0;
+                cold.PathRequest = 0;
+            }
+
+            n.TaskTime = 0;
+            return;
+        }
+
+        if ((n.Flags & path) != 0) return;
+        if (n.TaskTime > 0)
+        {
+            cold.NoteUnreachable(LooseSource.Key(item), world.Tick + (long)MathF.Ceiling(ConstructionSystem.UnreachableSeconds / world.TickSeconds));
+            End(world, slot);
+            return;
+        }
+
+        n.Goal = new Vector2(loose.Position.X, loose.Position.Z);
+        (cold.GoalHeight, cold.GoalHeightAt) = (loose.Position.Y, n.Goal);
+        n.Mode = SpeedMode.Free;
+        n.Flags |= (ushort)MoveFlags.NeedPath;
+        n.TaskTime = PursuitSystem.RepathSeconds;
     }
 }

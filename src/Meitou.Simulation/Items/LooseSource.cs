@@ -19,9 +19,11 @@ internal static class LooseSource
     /// no contents, not in the character's ignore map (<see cref="Key"/>, asked before the ownership test) and passing the ownership test
     /// (<see cref="ItemOwnership.MayTake"/>, <c>FUN_140997d80</c>); null when none. Engine choice: the nearest, where the original takes the first
     /// its grid query meets. The tests are pure, so their order changes no answer: the record set (<see cref="GroundItems.Holds"/>), the item's own
-    /// fields and the distance come first, so the ignore-map key is made only for a nearer item of the record.
+    /// fields and the distance come first, so the ignore-map key is made only for a nearer item of the record. With <paramref name="ownOnly"/> an
+    /// item another faction owns is skipped even where the ownership test would let the character take it (a player hauler's pick, so it steals
+    /// nothing: <see cref="Production.ProductionSystem"/> "Hauling to").
     /// </summary>
-    public static GroundItem? Nearest(World world, PopulationData? data, CharacterCold cold, Vector3 at, string record)
+    public static GroundItem? Nearest(World world, PopulationData? data, CharacterCold cold, Vector3 at, string record, bool ownOnly = false)
     {
         var ground = world.GroundItems;
         if (!ground.Holds(record)) return null;
@@ -33,6 +35,7 @@ internal static class LooseSource
         {
             var g = all[k];
             if (g.Item.Record != record || g.Item.Quantity <= 0 || g.Item.Contents is not null) continue;
+            if (ownOnly && g.OwnedBy >= 0 && g.OwnedBy != cold.Faction) continue;
 
             float d = Vector3.DistanceSquared(g.Position, at);
             if (!(d <= best && (loose is null || d < best))) continue;

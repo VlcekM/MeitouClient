@@ -779,6 +779,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         cold.HaulFetch = null;
         cold.Operating = false;
         cold.HaulTo = null;
+        cold.HaulItem = null;
     }
 
     /// <summary>
@@ -806,6 +807,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         cold.HaulFetch = null;
         cold.Operating = false;
         cold.HaulTo = null;
+        cold.HaulItem = null;
         var goal = GoalOf(world, site, m);
         if (!AtSite(world, n, site, m)) WalkToSite(ref n, cold, site, goal);
         _sweep = true;
@@ -829,6 +831,23 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         cold.HaulFetch = null;
         cold.Operating = false;
         cold.HaulTo = null;
+        cold.HaulItem = null;
+    }
+
+    /// <summary>
+    /// A hauler's walk: to the loose item it fetches, else to its leg's machine; the trip ends when that is gone or the hauler cannot work.
+    /// </summary>
+    void HaulWalk(World world, int slot, ref CharacterHot n, CharacterCold cold, float dt)
+    {
+        if (cold.HaulItem is { } item)
+        {
+            ApproachLoose(world, slot, ref n, cold, item, dt);
+            return;
+        }
+
+        if (cold.HaulSite is { } to && Site(world, to) is { Complete: true } leg && world.Machines.Find(to) is { } legMachine && Able(cold))
+            Approach(world, ref n, cold, leg, legMachine, dt);
+        else End(world, slot);
     }
 
     /// <summary>
@@ -850,9 +869,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             var cold = table.Cold(i)!;
             if (n.Task == (byte)CharacterTask.Haul)
             {
-                if (cold.HaulSite is { } to && Site(world, to) is { Complete: true } leg && world.Machines.Find(to) is { } legMachine && Able(cold))
-                    Approach(world, ref n, cold, leg, legMachine, dt);
-                else End(world, i);
+                HaulWalk(world, i, ref n, cold, dt);
                 continue;
             }
 

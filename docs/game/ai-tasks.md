@@ -2010,7 +2010,8 @@ A character's job list (the Orders menu's "Perma-Jobs"; class `OrdersReceiver`, 
   disabled then the character won't do any of the jobs listed."; tutorial: jobs are reordered by dragging and removed with X.
   Row text: [Jobs list](ui-screens.md#4-hud-mainbargui).
 - **Unknown:** what list A/B mean per job type in detail (operating 87: A `IS_WORKING`; B free slot, power, inputs not
-  empty, output not full, at the machine); how 124 "Hauling to" gets the items it needs (B 67 `haveSomeResourcesFor`; no row's effect is 67).
+  empty, output not full, at the machine). 124 "Hauling to" needs 67 `haveSomeResourcesFor`, which row 94's list A achieves
+  ([sources of 124](buildings-production.md#hauling)).
 
 ### Medic jobs
 

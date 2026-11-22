@@ -1419,6 +1419,12 @@ public sealed class CharacterCold
     public string? HaulTo { get; set; }
 
     /// <summary>
+    /// The ground item (<see cref="Items.GroundItems"/> id) a "Hauling to" trip picks up before it makes for <see cref="HaulTo"/> (null: none).
+    /// Hashed with <see cref="HaulTo"/>.
+    /// </summary>
+    public int? HaulItem { get; set; }
+
+    /// <summary>
     /// The clip the operator plays while it works (the functionality's <c>animation</c>).
     /// </summary>
     public string? OperateClip { get; set; }
@@ -2354,6 +2360,7 @@ public sealed class CharacterTable
         }
 
         if (k.HaulTo is { } haulTo) hasher.Add(Rng.StableHash(haulTo));
+        if (k.HaulItem is { } haulItem) hasher.Add(haulItem);
     }
 
     /// <summary>

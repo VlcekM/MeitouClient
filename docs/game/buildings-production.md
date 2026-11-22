@@ -1304,8 +1304,13 @@ inputs in list order as the finder does, takes storages before producers and ski
 - **Storage pick** (**Verified**, `FUN_14059acd0`, also called by the 242 ditch finder `FUN_1405a59a0`): the candidates are the current town's
   buildings (the nearest-allies query, mask `0x4002436`) with a StorageBuilding cast, complete, of the character's faction, whose slot `0x4a0`
   takes the item; the nearest to the character by squared 3D distance wins, within the AI's range-mode bound (ROAM_FAR 4.246733e7).
-- **Unknown:** when an operator leaves a machine to haul, where a 124 job takes its items from, and whether 152 / 124 on an automatic machine ever empty its output
-  (152's goal is only "no empty inputs", !62).
+- **Sources of 124** (**Verified**, decompile): 124 needs state 67 at its storage, which row 94 Try filling machine achieves (its list A), so the
+  planner runs 94's finder `FUN_14059d9b0` on the storage, then 92 at the source found and 124 at the storage. The finder asks the target's
+  `StorageBuilding` slot `0x560` (`FUN_140299c30`) for the records it wants: its item entry (`+0x448`) while that has room, the entry's item list
+  when it has one; with none, slot `0x568` (`FUN_14029bab0`). Per record it calls `FUN_14059d000`, whose first pass is the loose items within
+  1200 of the character ([NPC town machines](#npc-town-machines)), then the buildings. Row 92 at a loose item is `Task_Pickup`. Meitou
+  (`ProductionSystem.LooseFor`): the records of the storage's `limit inventory` it and the hauler's main grid have room for; never an item another
+  faction owns (engine choice); then the player machines' outputs ([job lists](../simulation.md#job-lists)).
 
 ## House sales
 
