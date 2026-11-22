@@ -153,9 +153,11 @@ sealed class TurretManning
     int _townTurretsRevision = -1;
 
     /// <summary>
-    /// A gunner's turret this tick: its key, BUILDING, place, facing, mount bonus, efficiency and research damage multiplier.
+    /// A gunner's turret this tick: its key, BUILDING, place, facing, efficiency and research damage multiplier, and for a town turret its site and
+    /// the wall it is mounted on (<see cref="MountOf"/>, read only when the turret's state is made).
     /// </summary>
-    readonly record struct Post(string Key, string BuildingId, Vector3 Position, float Yaw, float Mount, float Efficiency, float DamageMult);
+    readonly record struct Post(string Key, string BuildingId, Vector3 Position, float Yaw, float Efficiency, float DamageMult, int Site = -1,
+        string? MountedOn = null);
 
     /// <summary>
     /// The turret a character mans now, or null. Any gunner must be awake, free (not fighting, carrying, carried or caged) and have a working arm
@@ -167,10 +169,22 @@ sealed class TurretManning
     /// </summary>
     Post? Manning(World world, int i, CharacterCold cold)
     {
-        if (TurretGuns is not { } catalog || !CanMan(cold)) return null;
+        if (TurretGuns is not { } catalog || !MayHavePost(world, i, cold) || !CanMan(cold)) return null;
         if (cold.IsPlayer) return PlayerPost(world, catalog, i, cold) ?? GuardPost(world, catalog, i, cold);
 
         return NpcPost(world, catalog, i, cold);
+    }
+
+    /// <summary>
+    /// Whether the character's task or AI goal could give it a post at all, which <see cref="PlayerPost"/>, <see cref="GuardPost"/> and
+    /// <see cref="NpcPost"/> each need: a player character operating, or a mind guarding a turret (146), or an NPC's turret goal. A cheap test
+    /// first, so the rest of the world skips <see cref="CanMan"/>'s limb walk every tick; the posts found are the same.
+    /// </summary>
+    static bool MayHavePost(World world, int i, CharacterCold cold)
+    {
+        if (cold.Ai is { } mind && (Ai.AiSystem.GuardsTurret(mind) || !cold.IsPlayer && mind.Behaviour == Ai.AiBehaviour.Turret)) return true;
+
+        return cold.IsPlayer && cold.Operating && world.Characters.Next[i].Task == (byte)CharacterTask.Operate;
     }
 
     /// <summary>
@@ -186,7 +200,7 @@ sealed class TurretManning
     Post? PlayerPost(World world, TurretCatalog catalog, int i, CharacterCold cold)
     {
         if (world.Characters.Next[i].Task != (byte)CharacterTask.Operate || !cold.Operating || cold.OperateSite is not { } id) return null;
-        if (Production.ProductionSystem.IsTownWork(id)) return TownTurretPost(world, catalog, id);
+        if (Production.ProductionSystem.IsTownWork(id)) return TownTurretPost(world, id);
 
         return OwnPost(world, catalog, id);
     }
@@ -205,8 +219,8 @@ sealed class TurretManning
         float e = 1;
         if (gun.IsConsumer) e = world.Machines.Find(id) is { } m ? m.HasPower ? m.Power : 0 : 0;
 
-        return new Post(site.Id, site.Record, site.Position, TownBuildings.YawOf(site.Rotation), 1, e,
-            world.Research.Upgrade(site.Record).ProductionMult);
+        float research = world.Research.Upgrade(site.Record).ProductionMult;
+        return new Post(site.Id, site.Record, site.Position, TownBuildings.YawOf(site.Rotation), e, research);
     }
 
     /// <summary>
@@ -220,7 +234,7 @@ sealed class TurretManning
         if (cold.Ai is not { Guard: { } guard } mind || !Ai.AiSystem.GuardsTurret(mind)) return null;
         if (n.Task != (byte)CharacterTask.Idle || !Ai.AiSystem.Holds(n, cold) || !InReach(n, guard.Post)) return null;
 
-        return guard.Building is { } building ? TownPost(world, catalog, guard.Site, building, guard.Post) : OwnPost(world, catalog, guard.Key);
+        return guard.Building is { } building ? TownPost(world, guard.Site, building, guard.Post) : OwnPost(world, catalog, guard.Key);
     }
 
     /// <summary>
@@ -244,7 +258,7 @@ sealed class TurretManning
         if (mind.Squad.Ai is not { } board || n.Task != (byte)CharacterTask.Idle || !Ai.AiSystem.Holds(n, cold)) return null;
         if (!NpcTurret(i, mind, board, out int site, out var building) || building.Turret is not { } post || !InReach(n, post)) return null;
 
-        return TownPost(world, catalog, site, building, post);
+        return TownPost(world, site, building, post);
     }
 
     /// <summary>
@@ -264,7 +278,7 @@ sealed class TurretManning
     /// The post of a player character operating a town's turret (its <see cref="Production.ProductionSystem.TownWorkId"/> site): the turret
     /// building of that key, null when no town has it.
     /// </summary>
-    Post? TownTurretPost(World world, TurretCatalog catalog, string id)
+    Post? TownTurretPost(World world, string id)
     {
         if (Towns is not { } towns) return null;
         if (_townTurrets is null || _townTurretsRevision != towns.BuildingsRevision)
@@ -278,30 +292,36 @@ sealed class TurretManning
         string key = id[Production.ProductionSystem.TownWorkPrefix.Length..];
         if (!_townTurrets.TryGetValue(key, out var found) || found.Building.Turret is not { } post) return null;
 
-        return TownPost(world, catalog, found.Site, found.Building, post);
+        return TownPost(world, found.Site, found.Building, post);
     }
 
     /// <summary>
-    /// A town turret's post, keyed by its building (an NPC and a player gunner share its gun): the mount bonus of the wall it stands on, efficiency
-    /// 1 and no research multiplier; null when its building is broken.
+    /// A town turret's post, keyed by its building (an NPC and a player gunner share its gun): the wall it stands on (<see cref="MountOf"/>),
+    /// efficiency 1 and no research multiplier; null when its building is broken.
     /// </summary>
-    Post? TownPost(World world, TurretCatalog catalog, int site, TownBuilding building, TurretPost post)
+    static Post? TownPost(World world, int site, TownBuilding building, TurretPost post)
     {
         // A town turret is a TurretBuilding like the player's: its saved `broken` (FUN_1402a1750) stops manning as well. Nothing at run time breaks a
         // town's own turret (only a player owner may dismantle, slot 79; hits never damage machines, slot 62), so the zone state is its only source
         // (docs/game/buildings-production.md "Broken machines").
-        if (world.Fixtures.Saved?.GetValueOrDefault(building.Key)?.Bools.GetValueOrDefault("broken") == true) return null;
+        string key = building.Key;
+        if (world.Fixtures.Saved?.GetValueOrDefault(key)?.Bools.GetValueOrDefault("broken") == true) return null;
 
-        float mount = 1;
-        if (post.MountedOn is { } on && Towns is { } towns && (uint)site < (uint)towns.Sites.Count)
-            foreach (var b in towns.Sites[site].Buildings)
-                if (b.Key == on)
-                {
-                    mount = TurretFormulas.MountFactor(catalog.OutputOf(b.BuildingId));
-                    break;
-                }
+        return new Post(key, building.BuildingId, post.Position, post.Yaw, 1, 1, site, post.MountedOn);
+    }
 
-        return new Post(building.Key, building.BuildingId, post.Position, post.Yaw, mount, 1, 1);
+    /// <summary>
+    /// The mount bonus of the wall a town turret's post stands on (<see cref="TurretFormulas.MountFactor"/> of the wall's output); 1 for a placed
+    /// turret, one on no wall or a wall its town no longer has. Read once, when the turret's state is made (<see cref="TurretState.Mount"/>).
+    /// </summary>
+    float MountOf(TurretCatalog catalog, Post post)
+    {
+        if (post.MountedOn is not { } on || Towns is not { } towns || (uint)post.Site >= (uint)towns.Sites.Count) return 1;
+
+        foreach (var b in towns.Sites[post.Site].Buildings)
+            if (b.Key == on) return TurretFormulas.MountFactor(catalog.OutputOf(b.BuildingId));
+
+        return 1;
     }
 
     /// <summary>
@@ -331,9 +351,10 @@ sealed class TurretManning
 
         if (!_turrets.TryGetValue(post.Key, out var t))
         {
-            if (TurretGuns!.Get(post.BuildingId) is not { } gun) return;
+            var catalog = TurretGuns!;
+            if (catalog.Get(post.BuildingId) is not { } gun) return;
 
-            _turrets[post.Key] = t = new TurretState(post.Key, gun, post.Position, post.Yaw, post.Mount);
+            _turrets[post.Key] = t = new TurretState(post.Key, gun, post.Position, post.Yaw, MountOf(catalog, post));
             t.Loaded = SavedShots(world, post.Key, gun);
         }
 

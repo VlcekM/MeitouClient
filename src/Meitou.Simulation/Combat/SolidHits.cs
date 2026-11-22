@@ -19,12 +19,6 @@ static class SolidHits
     const float Chunk = 32;
 
     /// <summary>
-    /// This thread's list for the buildings' triangles near a segment.
-    /// </summary>
-    [ThreadStatic]
-    static List<Vector3>? s_triangles;
-
-    /// <summary>
     /// The fraction of <paramref name="seg"/> from <paramref name="from"/> where it first meets the terrain or a building, -1 when it meets neither.
     /// </summary>
     public static float Hit(IWalkability walk, IRagdollEnvironment? buildings, Vector3 from, Vector3 seg, float terrainStep,
@@ -74,26 +68,42 @@ static class SolidHits
     /// </summary>
     static float Buildings(IRagdollEnvironment env, Vector3 from, Vector3 seg, float limit, bool roofs, ref bool ready)
     {
-        var list = s_triangles ??= [];
         int pieces = Math.Max(1, (int)MathF.Ceiling(seg.Length() * limit / Chunk));
         for (int k = 0; k < pieces; k++)
         {
             float t0 = limit * k / pieces;
             float t1 = limit * (k + 1) / pieces;
             Vector3 a = from + seg * t0, b = from + seg * t1;
-            list.Clear();
             var lo = Vector3.Min(a, b) - Vector3.One;
             var hi = Vector3.Max(a, b) + Vector3.One;
-            ready &= roofs ? env.Roofs(lo, hi, list) : env.Buildings(lo, hi, list);
+            var scan = new PieceScan(from, seg, t0, t1);
+            ready &= env.VisitBuildings(lo, hi, roofs, ref scan);
 
-            float best = float.PositiveInfinity;
-            for (int i = 0; i + 2 < list.Count; i += 3)
-                if (Crosses(from, seg, list[i], list[i + 1], list[i + 2], out float t) && t >= t0 && t <= t1 && t < best) best = t;
-
-            if (best <= t1) return best;
+            if (scan.Best <= t1) return scan.Best;
         }
 
         return -1;
+    }
+
+    /// <summary>
+    /// One piece's test (<see cref="Buildings"/>): the nearest crossing of the whole segment within the piece's span of it, over the runs of
+    /// triangles the environment hands it in order (read where they are kept, not copied).
+    /// </summary>
+    struct PieceScan(Vector3 from, Vector3 seg, float t0, float t1) : ITriangleVisitor
+    {
+        /// <summary>
+        /// The nearest crossing found within the piece (a fraction of the segment); infinity for none yet.
+        /// </summary>
+        public float Best = float.PositiveInfinity;
+
+        /// <summary>
+        /// Tests a run's triangles against the segment, keeping the nearest crossing within the piece.
+        /// </summary>
+        public void Visit(ReadOnlySpan<Vector3> run)
+        {
+            for (int i = 0; i + 2 < run.Length; i += 3)
+                if (Crosses(from, seg, run[i], run[i + 1], run[i + 2], out float t) && t >= t0 && t <= t1 && t < Best) Best = t;
+        }
     }
 
     /// <summary>

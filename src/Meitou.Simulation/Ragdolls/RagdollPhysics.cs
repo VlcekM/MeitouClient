@@ -662,6 +662,12 @@ internal sealed class RagdollPhysics : IDisposable
 public interface IRagdollEnvironment
 {
     /// <summary>
+    /// This thread's list behind the default <see cref="VisitBuildings"/>.
+    /// </summary>
+    [ThreadStatic]
+    private static List<Vector3>? s_visitScratch;
+
+    /// <summary>
     /// The ground height at (<paramref name="x"/>, <paramref name="z"/>): the terrain, or a floor near <paramref name="nearY"/>.
     /// </summary>
     float GroundHeight(float x, float z, float nearY);
@@ -682,6 +688,20 @@ public interface IRagdollEnvironment
     /// </summary>
     bool Roofs(Vector3 min, Vector3 max, List<Vector3> triangles) => Buildings(min, max, triangles);
     /// <summary>
+    /// Hands <paramref name="visitor"/> the triangles <see cref="Buildings"/> (<see cref="Roofs"/> for <paramref name="roofs"/>) would add, in the
+    /// same order, a run at a time; the same meaning of the result. An environment that keeps them hands its own runs without copying them (the line
+    /// tests' path, <see cref="Combat.SolidHits"/>); this default copies them into a list of the thread's. The visitor must not ask again.
+    /// </summary>
+    bool VisitBuildings<TVisitor>(Vector3 min, Vector3 max, bool roofs, ref TVisitor visitor) where TVisitor : struct, ITriangleVisitor
+    {
+        var list = s_visitScratch ??= [];
+        list.Clear();
+        bool ready = roofs ? Roofs(min, max, list) : Buildings(min, max, list);
+        visitor.Visit(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(list));
+
+        return ready;
+    }
+    /// <summary>
     /// Whether the collision of the buildings placed in <paramref name="zone"/> has been read (a failed reading counts as read, with none), starting
     /// the reading when it was not asked for yet. A zone loads only once this holds. Environments that always know theirs answer true.
     /// </summary>
@@ -692,6 +712,17 @@ public interface IRagdollEnvironment
     void HoldZones(IReadOnlyCollection<ZoneCoordinate> zones)
     {
     }
+}
+
+/// <summary>
+/// Takes building collision triangles a run at a time (<see cref="IRagdollEnvironment.VisitBuildings"/>).
+/// </summary>
+public interface ITriangleVisitor
+{
+    /// <summary>
+    /// Takes a run of triangles (three points each, world space, any winding); the span is valid only during the call.
+    /// </summary>
+    void Visit(ReadOnlySpan<Vector3> triangles);
 }
 
 /// <summary>
