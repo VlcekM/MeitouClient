@@ -41,6 +41,8 @@ in-region weather changes warm without that wait. Publish prepared groups betwee
 old particles can remain while new content loads. Missing textures fall back to white, not proof
 of original appearance. Reduced-resolution particles use depth-aware composition and spare detailed textures; density
 changes emission/population. [Post](../render-post.md), [weather](weather.md).
+The draws are recorded far to near in their order (blending needs it); a draw records only the state, uniforms and textures that differ from
+the previous one's, and reaches its instance rows by first instance from one vertex-buffer binding of the frame's constants.
 
 ### Grammar (Verified)
 

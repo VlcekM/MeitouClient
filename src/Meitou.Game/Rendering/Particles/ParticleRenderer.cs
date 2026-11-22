@@ -1309,20 +1309,24 @@ public sealed unsafe class ParticleRenderer : IDisposable
 
     /// <summary>
     /// Records the prepared draws of <paramref name="divisor"/> for <paramref name="kind"/>: per draw the far particles depth tested, then the ones
-    /// nearer than the near plane without the test.
+    /// nearer than the near plane without the test. The draws keep their order (the blending needs it); each pass records only the state and
+    /// uniforms that differ from the previous one's (<see cref="Recorded"/>).
     /// </summary>
     void RecordDraws(IGpuCommandList cmd, in DrawState baseState, in PassTargets targets, bool hasDepth, bool hasColour,
         ColorMask rgb, Kind kind, SoftDepth? softDepth, int divisor = 1)
     {
         int coverage = kind == Kind.Coverage ? 1 : 0;
-        var (vp, closeVp, right, up, ambient) = (_frameVp, _frameCloseVp, _frameRight, _frameUp, _frameAmbient);
+        var (vp, closeVp) = kind == Kind.Low ? (_frameLowVp, _frameLowCloseVp) : (_frameVp, _frameCloseVp);
         _program.ApplyGlobals();   // the atmosphere's and the shadows' uniforms (the Meitou lit sprites)
-        if (kind == Kind.Low) (vp, closeVp) = (_frameLowVp, _frameLowCloseVp);
+        _program.Set(_cameraRight, _frameRight);
+        _program.Set(_cameraUp, _frameUp);
+        _program.Set(_particleEye, _frameEye);
+        var recorded = new Recorded();
         foreach (var d in _draws)
         {
             if (d.Divisor != divisor) continue;
             var m = d.Material;
-            var r = d.Technique.Renderer;
+            SetDrawUniforms(d, rgb, kind, coverage, softDepth, targets, divisor);
 
             // The far particles first (tested against the scene's depth), then the ones nearer than the near plane (no depth test).
             for (int pass = 0; pass < 2; pass++)
@@ -1338,23 +1342,29 @@ public sealed unsafe class ParticleRenderer : IDisposable
                     ColourMask = rgb,
                     Blend = BlendOf(m, rgb, kind, coverage, hasColour),
                 };
-                SetCoverage(d, m, rgb, kind, coverage);
-                var matrix = close ? closeVp : vp;
-                _program.Set(this._viewProjection, in matrix);
-                _program.Set(_cameraRight, right);
-                _program.Set(_cameraUp, up);
-                _program.Set(_mode, ModeOf(r.BillboardType));
-                _program.Set(_anchor, AnchorOf(r.Origin));
-                _program.Set(_commonDirection, r.CommonDirection);
-                _program.Set(_commonUp, r.CommonUp);
-                float lit = m.Ambient ? ambient : 1;
-                _program.Set(_colourScale, m.ColourScale.X * lit, m.ColourScale.Y * lit, m.ColourScale.Z * lit, m.ColourScale.W);
-                _program.Bind(_textureSlot, d.Texture.Sampled());
-                SetSoftAndLight(m, coverage, softDepth, d.Scatter);
-                SetInteriorCut(d, m, targets, divisor);
-                RecordPass(cmd, state, targets, d, first, count);
+                _program.Set(_viewProjection, close ? closeVp : vp);
+                RecordPass(cmd, state, targets, d, first, count, ref recorded);
             }
         }
+    }
+
+    /// <summary>
+    /// The uniforms and textures of a draw (the same for both its passes): its billboard, colour, coverage, soft fade, lighting and interior cut.
+    /// </summary>
+    void SetDrawUniforms(in DrawItem d, ColorMask rgb, Kind kind, int coverage, SoftDepth? softDepth, in PassTargets targets, int divisor)
+    {
+        var m = d.Material;
+        var r = d.Technique.Renderer;
+        SetCoverage(d, m, rgb, kind, coverage);
+        _program.Set(_mode, ModeOf(r.BillboardType));
+        _program.Set(_anchor, AnchorOf(r.Origin));
+        _program.Set(_commonDirection, r.CommonDirection);
+        _program.Set(_commonUp, r.CommonUp);
+        float lit = m.Ambient ? _frameAmbient : 1;
+        _program.Set(_colourScale, m.ColourScale.X * lit, m.ColourScale.Y * lit, m.ColourScale.Z * lit, m.ColourScale.W);
+        _program.Bind(_textureSlot, d.Texture.Sampled());
+        SetSoftAndLight(m, coverage, softDepth, d.Scatter);
+        SetInteriorCut(d, m, targets, divisor);
     }
 
     /// <summary>
@@ -1407,7 +1417,6 @@ public sealed unsafe class ParticleRenderer : IDisposable
         _program.Set(_litVertex, litOn ? 1 : 0, 0, SunGlow, 0);
         _program.Set(_litFragment, litOn ? 1 : 0, Math.Clamp(SunShade, 0, 1),
             m.Blend == ParticleBlend.Alpha ? 0 : m.Blend == ParticleBlend.Add ? 1 : 2, 0);
-        _program.Set(_particleEye, _frameEye);
         // Every pass of a lit scatterer, the reactive mask's too: what it adds is what it shows.
         _program.Set(_dustLight, LitDust && scatter ? 1 : 0, DustNoon.X, DustNoon.Y, 0);
         _program.Bind(_softDepthSlot, softDepth is { } bound ? bound.Texture : _white.Sampled());
@@ -1436,19 +1445,76 @@ public sealed unsafe class ParticleRenderer : IDisposable
     }
 
     /// <summary>
-    /// Records one pass of a draw: its raster and depth state, the pipeline, the quad and instance buffers, and the instanced draw.
+    /// What a <see cref="RecordDraws"/> call has recorded so far, so a pass records only what differs from the previous one's: the raster and depth
+    /// bias (the same for every pass of a call), the depth test, the pipeline (by the blend, the one key field that varies within a call) and the
+    /// instance buffer, bound once at a base its later draws reach by their first instance (the frame's constants hand out consecutive slices of
+    /// one buffer).
     /// </summary>
-    void RecordPass(IGpuCommandList cmd, in DrawState state, in PassTargets targets, in DrawItem d, int first, int count)
+    struct Recorded
     {
-        cmd.SetRaster(state.Cull, state.Front);
-        cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
-        cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
-        cmd.BindPipeline(_segment.Get(state, targets.Formats, _vertexSource));
-        _bindings[0] = new GpuBufferBinding(_quad.Handle, 0);
-        for (int a = 0; a < 4; a++) _bindings[1 + a] = new GpuBufferBinding(d.Instances.Handle, d.Instances.Offset + (ulong)(16 * a));
-        cmd.BindVertexBuffers(0, _bindings);
+        /// <summary>
+        /// Whether a pass has been recorded: until then nothing is known to be set.
+        /// </summary>
+        public bool Started;
+        /// <summary>
+        /// The depth test last set.
+        /// </summary>
+        public bool DepthTest;
+        /// <summary>
+        /// The blend the bound pipeline was made for.
+        /// </summary>
+        public BlendState Blend;
+        /// <summary>
+        /// The pipeline bound.
+        /// </summary>
+        public GpuPipeline Pipeline;
+        /// <summary>
+        /// The buffer the instance rows are bound from.
+        /// </summary>
+        public GpuBuffer Instances;
+        /// <summary>
+        /// The offset in <see cref="Instances"/> the instance rows are bound at (instance 0).
+        /// </summary>
+        public ulong InstanceBase;
+    }
+
+    /// <summary>
+    /// Records one pass of a draw: what changed of its raster and depth state, pipeline and instance buffer since the last pass, then the instanced
+    /// draw.
+    /// </summary>
+    void RecordPass(IGpuCommandList cmd, in DrawState state, in PassTargets targets, in DrawItem d, int first, int count, ref Recorded recorded)
+    {
+        if (!recorded.Started)
+        {
+            cmd.SetRaster(state.Cull, state.Front);
+            cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
+        }
+
+        if (!recorded.Started || recorded.DepthTest != state.DepthTest) cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
+        if (!recorded.Started || recorded.Blend != state.Blend) recorded.Pipeline = _segment.Get(state, targets.Formats, _vertexSource);
+        cmd.BindPipeline(recorded.Pipeline);
+        uint firstInstance = InstanceIndex(cmd, d.Instances, ref recorded) + (uint)first;
+        (recorded.Started, recorded.DepthTest, recorded.Blend) = (true, state.DepthTest, state.Blend);
         _program.Flush(cmd);
-        cmd.Draw(4, (uint)count, 0, (uint)first);
+        cmd.Draw(4, (uint)count, 0, firstInstance);
+    }
+
+    /// <summary>
+    /// The instance index of <paramref name="instances"/>' first row from the bound base. Binds the quad and the rows anew, at the rows' own offset,
+    /// when they are not in the bound buffer a whole number of rows past its base.
+    /// </summary>
+    uint InstanceIndex(IGpuCommandList cmd, in Transient instances, ref Recorded recorded)
+    {
+        ulong offset = instances.Offset;
+        bool reachable = recorded.Started && instances.Handle == recorded.Instances && offset >= recorded.InstanceBase
+            && (offset - recorded.InstanceBase) % InstanceBytes == 0;
+        if (reachable) return (uint)((offset - recorded.InstanceBase) / InstanceBytes);
+
+        _bindings[0] = new GpuBufferBinding(_quad.Handle, 0);
+        for (int a = 0; a < 4; a++) _bindings[1 + a] = new GpuBufferBinding(instances.Handle, offset + (ulong)(16 * a));
+        cmd.BindVertexBuffers(0, _bindings);
+        (recorded.Instances, recorded.InstanceBase) = (instances.Handle, offset);
+        return 0;
     }
 
     /// <summary>

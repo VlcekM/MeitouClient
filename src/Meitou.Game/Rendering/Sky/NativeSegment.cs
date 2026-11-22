@@ -31,6 +31,12 @@ internal sealed class NativeSegment(IGpuContext gpu, LegacyProgram program, Prim
     VertexArrayBindings? _source0, _source1;
 
     /// <summary>
+    /// Every state's pipeline and the vertex export it was made for, behind the last two: a renderer whose draws cycle through more than two
+    /// states (the particles' blends) finds it here instead of building a pipeline description.
+    /// </summary>
+    readonly Dictionary<Key, (VertexArrayBindings? Source, GpuPipeline Pipeline)> _made = [];
+
+    /// <summary>
     /// The pipeline for <paramref name="state"/> into <paramref name="formats"/>, with the vertex inputs of <paramref name="vertices"/> (null: none).
     /// </summary>
     public GpuPipeline Get(DrawState state, AttachmentFormats formats, VertexArrayBindings? vertices)
@@ -38,10 +44,20 @@ internal sealed class NativeSegment(IGpuContext gpu, LegacyProgram program, Prim
         var key = new Key(formats, state.Blend, state.ColourMask, state.Polygon, state.AlphaToCoverage, state.DepthClamp);
         if (_pipeline0 is not null && key == _key0 && ReferenceEquals(vertices, _source0)) return _pipeline0!.Value;
         if (_pipeline1 is not null && key == _key1 && ReferenceEquals(vertices, _source1)) return _pipeline1!.Value;
-        var layout = program.VertexLayout(vertices is null ? default : vertices.Attributes);
-        var made = gpu.Pipelines.Get(state.Pipeline(program.Program, layout, topology, formats, label));
+        bool madeBefore = _made.TryGetValue(key, out var known) && ReferenceEquals(known.Source, vertices);
+        var made = madeBefore ? known.Pipeline : Make(state, formats, vertices);
+        _made[key] = (vertices, made);
         (_key1, _pipeline1, _source1) = (_key0, _pipeline0, _source0);
         (_key0, _pipeline0, _source0) = (key, made, vertices);
         return made;
+    }
+
+    /// <summary>
+    /// Builds the pipeline description of <paramref name="state"/> and takes its pipeline from the context's cache (made there when new).
+    /// </summary>
+    GpuPipeline Make(DrawState state, AttachmentFormats formats, VertexArrayBindings? vertices)
+    {
+        var layout = program.VertexLayout(vertices is null ? default : vertices.Attributes);
+        return gpu.Pipelines.Get(state.Pipeline(program.Program, layout, topology, formats, label));
     }
 }

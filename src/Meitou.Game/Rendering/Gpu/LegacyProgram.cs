@@ -321,23 +321,17 @@ public sealed unsafe class LegacyProgram : IDisposable
     }
 
     /// <summary>
-    /// Scatters GL values into the default block of each stage that has the uniform and marks that block changed; an invalid handle does nothing.
+    /// Scatters GL values into the default block of each stage that has the uniform and marks that block changed when a value differs (the block's
+    /// slice of this frame still holds an unchanged one); an invalid handle does nothing.
     /// </summary>
     void Write(UniformHandle u, byte* src, int rows, int columns, int count, bool isInt)
     {
         if (!u.IsValid) return;
         var (_, v, f) = _uniforms[u.Index];
-        if (v is { } vl)
-        {
-            GlUniforms.Scatter(VertexDefault, vl, src, rows, columns, count, isInt);
+        if (v is { } vl && GlUniforms.Scatter(VertexDefault, vl, src, rows, columns, count, isInt))
             _vertexDirty = true;
-        }
-
-        if (f is { } fl)
-        {
-            GlUniforms.Scatter(FragmentDefault, fl, src, rows, columns, count, isInt);
+        if (f is { } fl && GlUniforms.Scatter(FragmentDefault, fl, src, rows, columns, count, isInt))
             _fragmentDirty = true;
-        }
     }
 
     /// <summary>

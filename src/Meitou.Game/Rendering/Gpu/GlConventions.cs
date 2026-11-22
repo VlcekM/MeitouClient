@@ -353,9 +353,9 @@ public static unsafe class GlUniforms
     /// <summary>
     /// Copies tightly packed GL values (<paramref name="count"/> elements of <paramref name="columns"/> × <paramref name="rows"/>
     /// 4-byte components) into a default block at the reflected offset and strides. A float written to an int or bool member and an int
-    /// written to a float member convert as GL does; bools are stored as 0/1.
+    /// written to a float member convert as GL does; bools are stored as 0/1. Returns whether any stored word changed.
     /// </summary>
-    public static void Scatter(byte[] block, UniformLookup at, byte* src, int rows, int columns, int count, bool isInt)
+    public static bool Scatter(byte[] block, UniformLookup at, byte* src, int rows, int columns, int count, bool isInt)
     {
         var m = at.Member;
         int elements = m.ArrayLength > 0 ? Math.Min(count, m.ArrayLength - at.Element) : Math.Min(count, 1);
@@ -363,6 +363,7 @@ public static unsafe class GlUniforms
         int elemStride = m.ArrayLength > 0 ? m.ArrayStride : 0;
         rows = Math.Min(rows, m.Rows);
         columns = Math.Min(columns, m.Columns);
+        bool changed = false;
         fixed (byte* dst = block)
         {
             for (int e = 0; e < elements; e++)
@@ -383,11 +384,15 @@ public static unsafe class GlUniforms
                         else if (m.Kind != ScalarKind.Float && !isInt) bits = (uint)(int)*(float*)&bits;
                         if (m.Kind == ScalarKind.Bool || (m.Kind == ScalarKind.UInt && !isInt))
                             bits = bits != 0 ? 1u : 0u;
-                        *(uint*)(dst + at.Offset + e * elemStride + c * colStride + r * 4) = bits;
+                        uint* word = (uint*)(dst + at.Offset + e * elemStride + c * colStride + r * 4);
+                        changed |= *word != bits;
+                        *word = bits;
                     }
                 }
             }
         }
+
+        return changed;
     }
 }
 
