@@ -303,9 +303,7 @@ sealed class FurnitureUse(PlayerInterface player)
     {
         if (player.SelectedIds().Count == 0 || PickCageAt(p)?.Cage is not { } cage) return false;
 
-        var verbs = CageVerbs(cage);
-
-        if (!player.InventoryWindows.PressShift && player.ContextMenuWindow.Menu(Loc.Tr("Cage"), p, verbs) is { } now)
+        if (!player.InventoryWindows.PressShift && CageMenu(cage, p) is { } now)
         {
             player.ContextMenuWindow.OpenMenu = now;
             return true;
@@ -314,7 +312,21 @@ sealed class FurnitureUse(PlayerInterface player)
         // The quick order is the cage's use (108 / 107 / 76), never the own cage's Lock or Unlock.
         var clickedVerbs = CageVerbs(cage, clicked: true);
         Action? quick = cage.Occupant.IsNone ? clickedVerbs.FirstOrDefault(v => v.Caption is not ("Lock" or "Unlock")).Give : null;
-        return player.ContextMenuWindow.ContextPressOn(p, at => player.ContextMenuWindow.Menu(Loc.Tr("Cage"), at, CageVerbs(cage)), quick);
+        return player.ContextMenuWindow.ContextPressOn(p, at => CageMenu(cage, at), quick);
+    }
+
+    /// <summary>
+    /// The cage's menu: its verbs, and for one the player built its site's (Repair 95, Dismantle 96, sorted in by order number as the original's
+    /// building rows, so the own cage reads Unlock, Dismantle, Put in; #1089) and the code mods' job offers.
+    /// </summary>
+    internal ContextMenuWindow.ContextMenu? CageMenu(CageSpot cage, Vector2 at)
+    {
+        var verbs = CageVerbs(cage);
+        if (player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == cage.Id) is not { } site)
+            return player.ContextMenuWindow.Menu(Loc.Tr("Cage"), at, verbs);
+
+        verbs.AddRange(player.Build.SiteVerbs(site));
+        return player.ContextMenuWindow.Menu(Loc.Tr("Cage"), at, verbs, player.Build.OfferedJobs(site));
     }
 
     #endregion
