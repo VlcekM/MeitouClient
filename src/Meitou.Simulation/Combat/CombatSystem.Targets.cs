@@ -138,6 +138,8 @@ public sealed partial class CombatSystem
                 if ((uint)t.Slot < (uint)prev.Length && prev[t.Slot].Generation == t.Generation && !Crippled(table, t.Slot))
                     Consider(world, ref q, t.Slot, false);
 
+        if (TroubleMaker(world, i, in s, cold) is >= 0 and var maker) Consider(world, ref q, maker, false);
+
         if (q.Best >= 0 || senses is not { Enemies: > 0 }) return q.Best;
 
         q.BestScore = float.NegativeInfinity;
@@ -162,6 +164,24 @@ public sealed partial class CombatSystem
 
         for (int k = 0; k < _alerted.Count(owner); k++)
             if (AlertedAt(world, owner, k) is >= 0 and var a && !Crippled(table, a) && known(a)) Consider(world, ref q, a, false);
+    }
+
+    /// <summary>
+    /// Engine choice (#1122, the original's rule not worked out): the character a 34 Attacking trouble makers fight was started on, a candidate of
+    /// the fight's target choice while the fighter's AI still holds that goal as its own fight's; -1 otherwise. The goal holds only while its finder
+    /// picks a trouble maker, so the fight lets go once the target stops. Without it a neutral shooting someone else is on none of the guard's
+    /// lists, and the guard stood in its stance without a target until the victim fell.
+    /// </summary>
+    static int TroubleMaker(World world, int i, in CombatSlot s, CharacterCold cold)
+    {
+        if (cold.Ai is not { Goal.Task.Type: Data.Gameplay.Ai.TaskType.AttackTroubleMakers } mind || !Ai.AiSystem.OwnsFight(cold, mind))
+            return -1;
+
+        var table = world.Characters;
+        int t = s.TaskSlot;
+        if ((uint)t >= (uint)table.Previous.Length || table.Previous[t].Generation != s.TaskGeneration || Crippled(table, t)) return -1;
+
+        return CharacterFacts.Knows(world, i, new CharacterId(t, s.TaskGeneration)) ? t : -1;
     }
 
     /// <summary>

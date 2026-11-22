@@ -352,6 +352,8 @@ as the fighters whose target it is stand for it), stamped with the owner's `List
   member (an attacker, a threat) or, through the finder, while it is seen or heard and tagged an enemy: one that runs out of sight on open ground is lost at the next pick (a path
   chase does not pick, below). Meitou (`CombatSystem.ChooseTarget` over `CharacterFacts.Senses`, [perception](perception.md#senses)): the lists and the finder as above (the area test left
   out; the leave-alone test is the target score's, below), the aggro mode taken as 0; a pick after the timer runs out is made while the fighter runs on a path too (engine choice).
+  Engine choice (#1122): a fight that 34 Attacking trouble makers started also scores its start target while the AI holds 34 (`CombatSystem.TroubleMaker`); else a neutral
+  shooting a third party is on none of the lists and the guard stood targetless until the victim fell.
 - **Target score** (`AI::chooseBestAttackTarget` `FUN_14059e300`). Skips ragdolls (`Character::isRagdoll`), candidates the leave-alone test
   `FUN_1408569a0` passes, allies by faction (`FUN_1406b2630`, unless the candidate is a slave), impossible-path candidates and an obedient slave of the
   chooser's faction (slave state 1, chained with that faction its owner, `FUN_14032e2a0`, and holding job 187; **Verified**, the test gates the
