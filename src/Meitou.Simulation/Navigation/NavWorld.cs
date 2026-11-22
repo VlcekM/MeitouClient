@@ -345,9 +345,10 @@ public sealed class NavWorld
 
     /// <summary>
     /// The polygon under or nearest to the point (nearest within <paramref name="maxDistance"/> on the XZ plane, height as the tie-break), not one
-    /// <paramref name="skip"/> rules out.
+    /// <paramref name="skip"/> rules out nor one more than <paramref name="heightSlack"/> above or below the point.
     /// </summary>
-    public bool TryFindPolygon(Vector3 p, float maxDistance, out NavRef polygon, out Vector3 snapped, Func<NavRef, bool>? skip = null)
+    public bool TryFindPolygon(Vector3 p, float maxDistance, out NavRef polygon, out Vector3 snapped, Func<NavRef, bool>? skip = null,
+        float heightSlack = float.PositiveInfinity)
     {
         polygon = default;
         snapped = p;
@@ -363,7 +364,7 @@ public sealed class NavWorld
                 if (!_slots.TryGetValue(new ZoneCoordinate(zone.X + dx, zone.Y + dz), out int slot)) continue;
 
                 var m = _meshes[slot];
-                int poly = m.Nearest(p.X, p.Y, p.Z, maxDistance, out float d, skip is null ? null : q => skip(new NavRef(slot, q)));
+                int poly = m.Nearest(p.X, p.Y, p.Z, maxDistance, out float d, skip is null ? null : q => skip(new NavRef(slot, q)), heightSlack);
                 if (poly < 0) continue;
 
                 float y = m.HeightAt(poly, Math.Clamp(p.X, m.BoundsMin.X, m.BoundsMax.X), Math.Clamp(p.Z, m.BoundsMin.Y, m.BoundsMax.Y));
@@ -378,6 +379,26 @@ public sealed class NavWorld
         }
 
         return found;
+    }
+
+    /// <summary>
+    /// The polygon a path to <paramref name="goal"/> ends on: the one <see cref="TryFindPolygon"/> finds within <see cref="NavQuery.GoalSnap"/>,
+    /// unless that one is on another floor (more than <see cref="NavQuery.GoalFloorSlack"/> above or below the goal) and a polygon on the goal's own
+    /// floor lies nearer the goal in 3D, within <see cref="NavQuery.GoalFloorReach"/> on the XZ plane. The original takes the goal face as the
+    /// closest point in 3D (docs/game/pathfinding.md, "Geometry and queries"), so a floor straight overhead loses to the goal's own floor beside it, as
+    /// at a row of prisoner cages that cuts the ground floor's mesh under them (#1108).
+    /// </summary>
+    public bool TryFindGoalPolygon(Vector3 goal, out NavRef polygon, out Vector3 snapped)
+    {
+        if (!TryFindPolygon(goal, NavQuery.GoalSnap, out polygon, out snapped)) return false;
+        if (MathF.Abs(snapped.Y - goal.Y) <= NavQuery.GoalFloorSlack) return true;
+
+        // On another floor: a polygon on the goal's own floor wins while it is nearer the goal than the other floor's point.
+        float other = Vector3.Distance(snapped, goal);
+        if (TryFindPolygon(goal, MathF.Min(other, NavQuery.GoalFloorReach), out var own, out var ownPoint, heightSlack: NavQuery.GoalFloorSlack)
+                && Vector3.Distance(ownPoint, goal) < other)
+            (polygon, snapped) = (own, ownPoint);
+        return true;
     }
 
     /// <summary>

@@ -799,6 +799,10 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
     by the probe of the merged data). Turret `FUN_14030c2a0`: section 6 the gun's slot 14 lines then 154, section 7 (`ExtendedStatsText`) 155 then 154; Furnace
     `FUN_14030b750` draws its own section 0xf (`Total Metals:`, the `Active:` toggle) and hands every other section to `FUN_1402ffeb0`, so 155, 154, 153 as a
     production building.
+    Meitou: a town's generator, research bench or crafting bench (a level building or a layout object) has a machine only once a worker or the player's
+    order comes, so its lines come from a machine made for the inspected building alone that never joins the world, with its save's inputs and state and its
+    town frame's output, load and grant (`ProductionSystem.TownMachineOf`, published as `WorldSnapshot.InspectedTownMachine`); once its own machine is made,
+    that one's workers and inputs with the same power and wind figures.
   - Farms (FarmBuilding slot 40 `FUN_1400e21a0` runs `FUN_1402ffeb0` first, so section 6 is its own 186, 155, 154, 153): Workers (`FUN_1400e0020`) is `-` with
     "No workers required until the crop is ready to harvest." while grown (+0x518) is below 1, else the common line. Efficiency (`FUN_1400e2d50`) only on a farm
     with +0x558 set, which the constructor `FUN_1400e8420` sets when the FARM_DATA's `fertility effect` is 0 (hydroponic and indoor farms): one line, no Max
