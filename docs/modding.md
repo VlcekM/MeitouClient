@@ -231,6 +231,14 @@ holds refuses the second mod.
   combat, and must answer from the world and the hit alone. The one-punch debug cheat ignores the packet but keeps a cancel. Hits on doors
   and walls are not filtered. A filter that throws or breaks the packet's rule is undone for that hit, logged and disabled for that world;
   faulted registrations enter the state hash. Without a filter no payload is made.
+- **Defences:** a registered system implementing `ICombatDefenceObserver` (`Meitou.Simulation.Combat`) receives `Defended(World, in
+  CombatDefence)` once per melee blow the defender blocked or dodged, after its counts, XP, sound and combat log entry: the tick, the attacker,
+  the defender, the attack's sequence and blow (as `CombatHit`'s), `Kind` (`Blocked`, also for a dodge technique that counts as a block, or
+  `Dodged`), `Parry` (a weapon's parry, the one that throws sparks) and whether the defender was the attacker's chosen target. Only melee blows
+  are reported. Observers are called serially in Commit, in system order; they may read the world and change their own state,
+  and must not change characters or other world state in the call. One that throws is logged and disabled for that world, and the fault enters
+  the state hash. Without an observer no payload is made. Engine API, not in the original. **Verified** by `CombatDefenceObserverTests`
+  (a duel: one report per logged block or dodge, the same on 1 and 4 threads, the run unchanged; a throwing observer called once, its fault hashed).
 - **Trade prices:** a registered system implementing `ITradePriceFilter` (`Meitou.Simulation.Trading`) is asked
   `Price(World, in TradeDeal, long price)` for every price the game asks: the trade window's stack and unit prices and the coins it takes,
   and an NPC shopper's purchase from a building's stock. The deal names the tick, the item record, the units, whether the customer sells,
@@ -683,11 +691,12 @@ holds refuses the second mod.
   it takes no text, in the character editor, and for the mouse's extra buttons in photo mode, as the game's own actions do; a numpad key bound
   to one is not the cinema camera's. On the Metal host F7, F8, F11, F12 and Print Screen are the view's own keys and never reach an action.
   A binding is one key or button with no modifier, as the game's own bindings are in Meitou: the action fires whatever Shift, Ctrl or Alt is
-  held, and the press does not say which (the host's own combinations, Alt+Enter, Ctrl+F9 and on the Vulkan host Shift with F1, F2, F11 or
-  F12, never reach the bindings).
-  Once per press, also while paused, `pressed(ModKeyContext)` (the `Snapshot` on screen, `Selected`, `Tick`, `Enqueue`) runs on the host
-  thread at the control tick, so it must not touch the world, must not block, and queues commands for gameplay; `action.Held` is its state at
-  the last control tick, for host-thread readers. A throw is logged with the mod id and the name and that action gets no more presses.
+  held, and the press tells which in its context (the host's own combinations, Alt+Enter, Ctrl+F9 and on the Vulkan host Shift with F1,
+  F2, F11 or F12, never reach the bindings).
+  Once per press, also while paused, `pressed(ModKeyContext)` (the `Snapshot` on screen, `Selected`, `Tick`, `Enqueue`, and `Ctrl`, `Shift`,
+  `Alt`: either key of each held as it was pressed, so a mod can give Ctrl+key its own meaning) runs on the host thread at the control tick,
+  so it must not touch the world, must not block, and queues commands for gameplay; `action.Held` is its state at the last control tick, for
+  host-thread readers. A throw is logged with the mod id and the name and that action gets no more presses.
   `name` (1 to 48 letters, digits, `_ . -`, unique within the mod) keys the saved keys; a bad name, or a label that is empty or blank, over 48
   characters or on more than one line, refuses the mod. The actions are numbered `InputAction` from `InputBindings.FirstModAction` (1000) in
   load order, for this session only. Without key actions the bindings, the page and `meitou.user.json` are the game's. Engine API, not in the
@@ -913,8 +922,10 @@ holds refuses the second mod.
   character of a CHARACTER or ANIMAL_CHARACTER record as a new game makes the player's (a look rolled for the player's faction, body,
   starting items, name; a unique claimed as any spawn claims it) and adds it, standing idle on the ground at a walkable point, to a living
   player squad, leading it when it has no leader. Only player squads: an NPC squad loaded from a save keeps only the save's members, so an
-  added NPC would be lost at the next save or unload (`SpawnPlatoon` adds NPCs). It returns the character's id, or none and adds nothing
-  for another squad, another record type, a point that is not finite or not walkable, a unique already claimed, or the recruit's caps
+  added NPC would be lost at the next save or unload (`SpawnPlatoon` adds NPCs). `SpawnIntoPlayerSquad(world, squadId, recordId, at, age)`
+  makes an ANIMAL_CHARACTER at that age, its stats multiplier and size ([animals](game/animals.md#ageing)), where the four-argument call
+  makes the adult of age 1; a CHARACTER ignores the age. It returns the character's id, or none and adds nothing for another squad, another
+  record type, a point that is not finite or not walkable, an age that is not finite or below 0, a unique already claimed, or the recruit's caps
   (`max squad size`, `max faction size`); `PopulationSystem.JoinPlayerSquad(world, character, squadId)` moves a living character that is not
   the player's (a traveller who settles) into a living player squad as a recruit joins (the player's faction, orders and class; no AI, jobs or
   uniform marks; written as a new member at the next save), leading it when it has no leader, and returns false, changing nothing, for

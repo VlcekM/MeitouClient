@@ -206,7 +206,7 @@ A carried or knocked-out character runs `FUN_140859220` instead of the sense upd
 Meitou (`SenseBlock`, `CharacterFacts.Senses`): written by `AggroSystem`'s look in `Act` for every living character not carried or knocked out (`AwakeLying` aside) on its turn (one in `ScanEveryTicks` = 15, by slot), the looker's
 own slot only, and by `AggroSystem.Force` (serial: the alert, a landed blow, a bolt, an alarm; it also takes an existing entry's threat at once, standing for the pass the original runs before
 its chooser). Engine choices: at most 40 entries (`SenseBlock.Cap`; a new one replaces the one sensed
-longest ago; when all were sensed at this look a kin or enemy entry replaces a neutral's and an enemy one an ally's, `AggroSystem.Insert`, so a squad
+longest ago; when all were sensed at this look a kin or enemy entry replaces a neutral's and an enemy one an ally's, `AggroSystem.Insert`; a forced sense the full block refuses makes no entry and runs no witness function, so a squad
 of more than 40 does not fill its blocks with its own mates and miss the enemy it fights, **Measured** on the #412 save: 75 of 88 Holy Nation
 attackers had no target before, none after; a block can fill with enemies and lose allies in a large battle), the gather takes up to 60 new characters within 250 then up to 40 in all within reach (every character it visits counts, sensed or not, in the grid's order; **Measured** in the
 sandbox with 250 idle neutrals round a player squad: the player's characters kept 0 entries, so a squad mate never sensed its attacked mate and none joined, 15 Protect allies reading
