@@ -221,7 +221,8 @@ public sealed partial class CombatSystem
         bool intended = observe && d == aSlot.TargetSlot && prev[d].Generation == aSlot.TargetGeneration;
         var (part, damage, absorbed) = world.Player.OnePunch && ac.IsPlayer
             ? HitResolver.LandLethal(medical, ctx, DebugCheats.OnePunchDamage, tech.LowStrike, direction == 6, events)
-            : HitResolver.LandDetailed(medical, ctx, packet, target.Armour, cover, toughness, tech.LowStrike, direction == 6, _combat, events);
+            : HitResolver.LandDetailed(medical, ctx, packet, world.ArmourFilters.Pieces(world, CombatHitSource.Melee, table.IdOf(d), target), cover,
+                toughness, tech.LowStrike, direction == 6, _combat, events);
         FloatHit(world, d, dc, ac.IsPlayer, part, damage, absorbed);
         aSlot.Landed++;
         dSlot.Taken++;

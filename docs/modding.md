@@ -241,6 +241,16 @@ holds refuses the second mod.
   nothing is asked. Engine API, not in the original. **Verified** by `CombatSpeedFilterTests` (a duel: attack and block rates asked, an unchanged
   answer leaves log and hash as they were on 1 and 4 threads, a doubled attack rate halves the swing; a NaN answer is asked in one tick only and
   hashed).
+- **Armour:** a registered system implementing `IArmourFilter` (`Meitou.Simulation.Combat`) is asked `Piece(World, in ArmourAsk)` for each
+  armour piece a character wears, every time a hit (melee, bolt, execution) is about to go through its stack: the tick, the hit's source, the
+  wearer, the worn `ItemInstance` the piece was built from (`Fighter.ArmourItems`, same order as `Fighter.Armour`; null for a piece made
+  without one), its index and the `ArmourPiece` with its defences. It answers the piece to use, so a mod lowers a worn item's protection or
+  raises an enchanted one's; coverage stays the record's. Filters run serially where the hit lands, in system order, each seeing the piece as
+  the earlier ones left it, and must answer from the world and the ask alone. A throw or a defence not finite or outside the game's range (cut
+  0 to 0.9, blunt 0 to 0.8, pierce from 0, cut-into-stun 0 to 1) keeps the piece as it came and disables the filter for that world; the
+  fault enters the state hash. Without a filter the fighter's own pieces are used and nothing is built. Engine API, not in the original.
+  **Verified** by `ArmourFilterTests` (a duel: every worn piece asked per hit, zeroed defences stop nothing, an unchanged answer changes neither
+  hits nor hash on 1 or 4 threads; an out-of-range answer is asked once, keeps the piece and is hashed).
 - **Defences:** a registered system implementing `ICombatDefenceObserver` (`Meitou.Simulation.Combat`) receives `Defended(World, in
   CombatDefence)` once per melee blow the defender blocked or dodged, after its counts, XP, sound and combat log entry: the tick, the attacker,
   the defender, the attack's sequence and blow (as `CombatHit`'s), `Kind` (`Blocked`, also for a dodge technique that counts as a block, or
