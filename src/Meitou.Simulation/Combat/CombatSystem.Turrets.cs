@@ -529,7 +529,7 @@ public sealed partial class CombatSystem
             Mesh = gun.LiveAmmoMesh,
         });
         ShotAt(world, target, cold.Faction);
-        Sound(world, SoundKind.TurretShot, g, -1, muzzle);
+        Sound(world, SoundKind.TurretShot, g, -1, muzzle, shootSound: gun.ShootSound);
     }
 
     /// <summary>

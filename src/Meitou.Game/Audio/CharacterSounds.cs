@@ -733,6 +733,12 @@ public sealed class CharacterSounds
     #region Combat
 
     /// <summary>
+    /// The <c>Weapons</c> values of a turret gun by GUN_DATA <c>shoot sound</c> (<c>GunSounds</c>, <c>TurretBuilding::setup</c> <c>0x14043b9f0</c>,
+    /// table <c>0x141d91598</c>, <b>Verified</b>).
+    /// </summary>
+    static readonly string[] GunSounds = ["Crossbow", "Harpoon", "Crossbow_Turret", "Harpoon_Turret"];
+
+    /// <summary>
     /// Whether the character has an object now (it is near enough to be heard).
     /// </summary>
     public bool Tracked(ulong key) => _entries.ContainsKey(key);
@@ -822,15 +828,16 @@ public sealed class CharacterSounds
     }
 
     /// <summary>
-    /// A turret fired, its muzzle at <paramref name="at"/> (<c>FUN_14043a730</c>): <c>Attack</c> with <c>Weapons</c> = <c>Turret</c>. The exe posts
-    /// it on the building's object; here on a pooled object at the muzzle (<b>engine choice</b>).
+    /// A turret fired, its muzzle at <paramref name="at"/> (<c>FUN_14043a730</c>): <c>Attack</c> with <c>Weapons</c> from the gun's <c>shoot sound</c>
+    /// (<see cref="GunSounds"/>; set on the building's object in <c>TurretBuilding::setup</c>). The exe posts it on the building's object; here on
+    /// a pooled object at the muzzle (<b>engine choice</b>).
     /// </summary>
-    public void TurretShot(Vector3 at)
+    public void TurretShot(Vector3 at, int shootSound = 3)
     {
         if (_player.HeardDistanceSquared(at, _camera) >= EventLimit) return;
         ulong id = NextPooled();
         _player.SetPosition(id, at);
-        _player.SetSwitch("Weapons", "Turret", id);
+        _player.SetSwitch("Weapons", (uint)shootSound < GunSounds.Length ? GunSounds[shootSound] : "", id);
         _player.Post("Attack", id);
         Swings++;
     }

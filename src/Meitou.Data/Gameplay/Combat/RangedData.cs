@@ -76,6 +76,11 @@ public sealed record GunData
     public string LiveAmmoMesh { get; init; } = "";
 
     /// <summary>
+    /// <c>shoot sound</c> (<c>GunSounds</c>: 0 Crossbow, 1 Harpoon, 2 Crossbow_Turret, 3 Harpoon_Turret; fcs.def default 3).
+    /// </summary>
+    public int ShootSound { get; init; } = 3;
+
+    /// <summary>
     /// Reads a GUN_DATA record with the fcs.def defaults named on each property.
     /// </summary>
     public static GunData From(GameRecord r)
@@ -96,6 +101,7 @@ public sealed record GunData
             BarrelY = RecordReading.Float(r, "barrel pos Y", 0),
             BarrelZ = RecordReading.Float(r, "barrel pos Z", 5),
             LiveAmmoMesh = r.GetPath("live ammo"),
+            ShootSound = RecordReading.Int(r, "shoot sound", 3),
         };
     }
 }

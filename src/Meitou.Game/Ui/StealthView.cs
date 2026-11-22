@@ -140,18 +140,22 @@ sealed class StealthView(PlayerInterface player)
         int n = 0;
         foreach (var c in player.Session.CurrentSnapshot.Characters)
         {
-            if (!c.IsPlayer || c.Name.Length == 0 || player.CharacterEditor.EditorOpen || c.CarriedBy != CharacterId.None) continue;
+            if (!c.IsPlayer || c.Name.Length == 0 || player.CharacterEditor.EditorOpen) continue;
             if (c.Body is { Dead: true }) continue;
             if (!c.Selected && HiddenInWorld?.Invoke(c.Id) == true) continue;
 
-            var feet = player.Where(c);
+            // FUN_1406e8100: a carried character's position is its carrier's feet (FUN_1405ce680) and its tag is lifted by one text-box height
+            // (0x1406e84fa) so it stacks above the carrier's tag (anchored at the carrier's height so incapacitated/animal loads do not drop to waist height).
+            bool carried = !c.CarriedBy.IsNone;
+            var anchor = carried ? player.Carrier(c) : c;
+            var feet = player.Where(anchor);
             if (Vector3.DistanceSquared(player.Eye, feet) >= NameTagRangeSquared) continue;
-            if (player.Project(TagAnchor(c, feet)) is not { } head) continue;
+            if (player.Project(TagAnchor(anchor, feet)) is not { } head) continue;
 
             string caption = c.Selected ? $"[{c.Name}]" : c.Name;
             float width = player.ShowNames ? PanelWidth(caption, layoutWidth, icons) : layoutWidth;
             float x = head.X - width / 2;
-            float y = head.Y - 4 * scale - height;
+            float y = head.Y - 4 * scale - height - (carried ? height : 0);
             if (player.ShowNames)
                 AddNameText(controls, c, caption, n, new UiRect(x + layoutWidth * StealthIconShare, y, width - icons, height));
 

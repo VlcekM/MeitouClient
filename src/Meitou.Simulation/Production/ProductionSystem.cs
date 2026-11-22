@@ -671,7 +671,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// Building slot 59 (<c>isIndoors</c>, <b>Verified</b>): a machine whose record is interior furniture and which stands in a building. One rule
     /// for the power tick, a light's work and a farm's crop match and rain.
     /// </summary>
-    static bool IsIndoors(MachineData data, BuildSite? site) => data.InteriorFurniture && site?.Parent is not null;
+    static bool IsIndoors(MachineData data, BuildSite? site) => data.InteriorFurniture && site is { Parent: not null, Outside: false };
 
     /// <summary>
     /// Whether the operator is at the machine: a turret's gunner at its spot or within the turret's use range, a rock's within
@@ -685,7 +685,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (_turretSpots.TryGetValue(site.Id, out var turret))
         {
             bool near = Gap(n.Position, turret.Spot) <= AiSystem.TurretSlack || SiteReach.Within(n, Gap(n.Position, site.Position), turret.Range);
-            return near && MathF.Abs(n.Position.Y - turret.Spot.Y) < SiteReach.HeightLimit(door: false, site.Parent is not null);
+            return near && MathF.Abs(n.Position.Y - turret.Spot.Y) < SiteReach.HeightLimit(door: false, site.Parent is not null && !site.Outside);
         }
 
         // A rock: at its footprint (engine choice, #587: the original's use range of the position marker, doubled when stopped, has a copper

@@ -20,11 +20,13 @@ public sealed partial class CombatSystem
         bool unarmed = false,
         bool robot = false,
         bool armoured = false,
-        bool fatal = false)
+        bool fatal = false,
+        int shootSound = 3)
     {
         if (world.Sounds is not { } queue) return;
 
-        queue.Enqueue(new SoundEvent(kind, Id(world, subject), Id(world, other), at, heavy, unarmed, robot, armoured, fatal));
+        queue.Enqueue(new SoundEvent(kind, Id(world, subject), Id(world, other), at, heavy, unarmed, robot, armoured, fatal,
+            ShootSound: shootSound));
     }
 
     /// <summary>
