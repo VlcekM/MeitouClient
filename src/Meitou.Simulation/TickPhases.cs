@@ -3,8 +3,8 @@ namespace Meitou.Simulation;
 /// <summary>
 /// The phases of the slow world's whole-system periodic jobs (<see cref="World.Beat"/>), engine choice: each fires on its own tick of its period, so
 /// the 15, 20, 30 and 60-tick jobs never all land on the same tick (they did on every 60th, a heavy tick every few frames at 5x). The 15-tick group
-/// takes distinct phases mod 15; the 30-tick group phases that none of them share mod 15; the 60-tick job one that neither group shares. The 20-tick
-/// jobs cannot miss every 15-tick phase (gcd 5), so each meets one 15-tick job once in 60 ticks.
+/// takes distinct phases mod 15; the 30-tick group phases that none of them share mod 15. The 20-tick jobs cannot miss every 15-tick phase (gcd 5),
+/// so each meets one 15-tick job once in 60 ticks.
 /// </summary>
 static class TickPhases
 {
@@ -74,7 +74,8 @@ static class TickPhases
     public const int BashCheck = 7;
 
     /// <summary>
-    /// The population's roaming check (every 60).
+    /// The population's roaming check (every 60). It runs inside the population check's step, so it takes the check's phase (any other never fires);
+    /// no 30 or 20-tick job shares it.
     /// </summary>
-    public const int RoamCheck = 11;
+    public const int RoamCheck = PopulationCheck;
 }

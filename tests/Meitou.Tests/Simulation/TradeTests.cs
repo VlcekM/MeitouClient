@@ -145,6 +145,9 @@ public class TradeTests
             World = new SimWorld(new WorldSettings { Seed = 3 }, ground, systems);
             World.Player.Faction = Data.PlayerFaction;
             World.Player.Money = 1000;
+
+            // The trade check runs on its own phase (TickPhases): the tests' first tick is a check tick.
+            World.RunTicks(TickPhases.TradeCheck);
         }
 
         public void Dispose() => World.Dispose();
@@ -185,7 +188,7 @@ public class TradeTests
         Assert.InRange(units, 8, 12);                                                         // round(U(0.8, 1.2) x 10)
         Assert.Equal(500, shop.Stock.All().Where(i => i.Record == "cats-t").Sum(i => i.Quantity));   // the money roll, as money items
         Assert.Equal(3000, b.SquadOf(shopkeeper).Money);   // a small stock, its money items included, is worth less than 12000: the floor
-        Assert.Equal(1 + (long)(24 / BodySystem.HoursPerTick) - 1, shop.NextRestockTick);
+        Assert.Equal(TickPhases.TradeCheck + (long)(24 / BodySystem.HoursPerTick), shop.NextRestockTick);
 
         b.Say(new OpenTrade(hero, shopkeeper) { Tick = 0 });
         b.World.RunTicks(2);

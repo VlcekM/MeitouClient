@@ -620,9 +620,10 @@ public class AiTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// A town guard keeps its post while its goal stays 157 and lets it go when the goal ends: the posts drawn stay the same over 20 more package
-    /// cadences, and at 23:00, outside the goal's hours, no member holds one. Catches a draw on every cadence (the guards walking from post to post)
-    /// and a post still held after the goal.
+    /// A town guard keeps its post while its goal stays 157 and lets it go when the goal ends: the post of each guard whose goal stayed 157 stays the
+    /// same over 20 more package cadences (157's desire is a fresh roll, so a re-roll may lose to Idle and let the post go), and at 23:00, outside
+    /// the goal's hours, no member holds one. Catches a draw on every cadence (the guards walking from post to post) and a post still held after
+    /// the goal.
     /// </summary>
     [Fact]
     public void A_town_guard_keeps_its_post_until_its_goal_ends()
@@ -634,9 +635,15 @@ public class AiTests(ITestOutputHelper output)
         Assert.True(held.Count >= 3, $"{held.Count} members on 157");
         Assert.All(held.Values, p => Assert.NotNull(p));
 
-        world.RunTicks(600);
+        var stayed = held.Keys.ToHashSet();
+        for (int t = 0; t < 600; t++)
+        {
+            world.RunTicks(1);
+            stayed.RemoveWhere(id => world.Characters.Cold(id.Slot)!.Ai!.Goal?.Task.Type != TaskType.StandAtGuardNodeHometownOutside);
+        }
 
-        Assert.All(held, h => Assert.Equal(h.Value, world.Characters.Cold(h.Key.Slot)!.Ai!.TownPost));
+        Assert.NotEmpty(stayed);
+        Assert.All(stayed, id => Assert.Equal(held[id], world.Characters.Cold(id.Slot)!.Ai!.TownPost));
 
         world.GameHours = 24 + 23;
         world.RunTicks(300);
