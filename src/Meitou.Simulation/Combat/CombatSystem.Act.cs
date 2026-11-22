@@ -207,7 +207,22 @@ public sealed partial class CombatSystem
         float skill = attack ? AttackRating(world, slot, cold, fighter) : DefenceRating(world, slot, cold, fighter);
         float t = 0.01f * (0.6f * dex + 0.4f * skill);
         float swim = cold.WaterState == 3 ? 0.8f : 1;
-        return swim * (attack ? MathF.Min(1.2f, WeaponStats.Lerp(t, 0.8f, 1.2f) * g) : MathF.Min(4f, WeaponStats.Lerp(t, 0.6f, 4f) * g));
+        float capped = attack
+            ? MathF.Min(1.2f, WeaponStats.Lerp(t, 0.8f, 1.2f) * g)
+            : MathF.Min(4f, WeaponStats.Lerp(t, 0.6f, 4f) * g);
+        float rate = swim * capped;
+        return Filtered(world, slot, attack, rate);
+    }
+
+    /// <summary>
+    /// The rate after the code mods' combat speed filters (<see cref="ICombatSpeedFilter"/>); as it is without one. Any thread.
+    /// </summary>
+    static float Filtered(World world, int slot, bool attack, float rate)
+    {
+        if (!world.CombatSpeedFilters.Active) return rate;
+
+        var kind = attack ? CombatSpeedKind.Attack : CombatSpeedKind.Block;
+        return world.CombatSpeedFilters.Pass(world, world.Characters.IdOf(slot), kind, rate);
     }
 
     #endregion

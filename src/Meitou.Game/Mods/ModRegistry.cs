@@ -236,6 +236,11 @@ sealed class ModRegistry
     /// </summary>
     public List<ModFactionList> FactionLists { get; } = [];
     /// <summary>
+    /// The mods' queued and playing display-only effects (<see cref="ModContext.PlayEffect(string, System.Numerics.Vector3, float,
+    /// System.Numerics.Vector3?)"/>).
+    /// </summary>
+    public ModEffects Effects { get; } = new();
+    /// <summary>
     /// The record types' names by type number.
     /// </summary>
     public Dictionary<int, string> RecordTypes { get; } = [];

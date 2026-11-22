@@ -218,6 +218,18 @@ holds refuses the second mod.
   (`World.CombatHitFeed`, like `BloodMarks`) that the simulation never reads, so it cannot change a run; a new world (load, new game) gets a
   new queue, dropping the old world's hits. A tick may be in flight, so `view` must not touch the world; the list is reused, so copy what you
   keep. A throw is logged with the mod id and that feed gets no more hits for the session.
+- **Visual effects:** `PlayEffect(effect, point, seconds = 1, tint = null)` and `PlayEffect(effect, characterId, bone = null, seconds = 1,
+  tint = null)` on `ModContext` play a display-only particle burst, e.g. from a hit feed. `effect` is an EFFECT record's string id (its
+  `particle system`) or a Particle Universe system name; `seconds` is how long it emits, in (0, 30], on the particles' frame clock (still
+  while paused, faster at higher speeds); `tint` replaces the particles' hue (rgb, 1 the full channel, up to 4), as a race's blood colour
+  does. An attached effect starts at the character's `bone` as last drawn (null: `Bip01 Spine2`) and follows it while it emits; a character
+  not drawn, or a bone its rig lacks, plays nothing. Requests queue and start at the next frame, after the hit feed, through the renderer's
+  own bursts (`ParticleRenderer.Burst`, as the blood and dust do): at most 16 a frame, 64 playing and 128 waiting. A bad request (unknown
+  id, non-finite point, lifetime out of range, bad tint, no character, full queue, or a call off the host's thread) returns false and is
+  dropped, logged once per mod and reason. Call it only on the host's thread (host-side callbacks: hit feed, UI, key actions, debug rows),
+  never from a tick system. The simulation never reads the queue, so the state hash is untouched; without code mods the frame skips it; a
+  new world drops all queued and playing effects, and a mod that fails its `Initialize` loses those it queued. **Verified** by
+  `ModVisualEffectsTests` (order, tint, lifetime, caps, rejection logging, a dropped mod's effects) against a recording sink.
 - **Hits before they land:** a registered system implementing `ICombatHitFilter` receives `HitLanding(World, ref PendingHit)` for each melee
   blow about to hit (after the defender's block and dodge are decided), bolt about to strike a body and execution blow on a captive, before
   armour and toughness: the tick, the `CombatHitSource`, attacker and victim, the sequence and blow as in `CombatHit`, whether the victim
@@ -231,6 +243,16 @@ holds refuses the second mod.
   combat, and must answer from the world and the hit alone. The one-punch debug cheat ignores the packet but keeps a cancel. Hits on doors
   and walls are not filtered. A filter that throws or breaks the packet's rule is undone for that hit, logged and disabled for that world;
   faulted registrations enter the state hash. Without a filter no payload is made.
+- **Combat speed:** a registered system implementing `ICombatSpeedFilter` (`Meitou.Simulation.Combat`) is asked `Rate(World, in
+  CombatSpeedAsk)` for every attack and block play rate the game computes (`CombatSystem` rate: a swing's or a block's start, the chase
+  lead, the HUD's figures): the tick, the character, `Kind` (`Attack` or `Block`; dodges play at 1 and are not asked) and the rate after the
+  game's caps (1.2 attack, 4 block). It answers the rate to use, which may pass the caps. Filters run in system order, each seeing the rate the
+  earlier ones left, on any thread and concurrently (the combat act phase is parallel), so a filter must be quick, thread-safe and a pure read
+  of the ask and of world state the tick has settled. A throw or an answer that is not a finite number above 0 leaves the rate as it came; the
+  filter is still asked for the rest of that tick and not from the next, and the fault (its first tick) enters the state hash. Without a filter
+  nothing is asked. Engine API, not in the original. **Verified** by `CombatSpeedFilterTests` (a duel: attack and block rates asked, an unchanged
+  answer leaves log and hash as they were on 1 and 4 threads, a doubled attack rate halves the swing; a NaN answer is asked in one tick only and
+  hashed).
 - **Armour:** a registered system implementing `IArmourFilter` (`Meitou.Simulation.Combat`) is asked `Piece(World, in ArmourAsk)` for each
   armour piece a character wears, every time a hit (melee, bolt, execution) is about to go through its stack: the tick, the hit's source, the
   wearer, the worn `ItemInstance` the piece was built from (`Fighter.ArmourItems`, same order as `Fighter.Armour`; null for a piece made
