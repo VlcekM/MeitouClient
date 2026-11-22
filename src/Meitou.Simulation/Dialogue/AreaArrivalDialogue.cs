@@ -86,7 +86,8 @@ sealed class AreaArrivalDialogue(DialogueSystem system, PopulationData data, Dia
                 foreach (var partner in candidates)
                 {
                     if (partner == speaker) continue;
-                    if (MaySpeak(world, root!, speaker) && system.StartBubbles(world, speaker, partner, root!, 0)) return true;
+                    if (MaySpeak(world, root!, speaker) && system.StartBubbles(world, speaker, partner, root!, 0, checkRoot: true))
+                        return true;
                 }
             }
         }

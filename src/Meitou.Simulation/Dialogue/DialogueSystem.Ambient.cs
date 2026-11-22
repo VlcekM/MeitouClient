@@ -154,9 +154,11 @@ public sealed partial class DialogueSystem
     /// best of its lines (speakers resolved as in any choice) is said, the chain after it. <paramref name="now"/>: said this tick, else on the next
     /// bubble step. Returns whether a line was found. <paramref name="force"/> (a crowd trigger): the start is not refused for a character busy
     /// talking or caged; what it was saying is dropped without the end step (no counter), as the original overwrites the state (a character in the
-    /// open player conversation is still refused: engine choice).
+    /// open player conversation is still refused: engine choice). <paramref name="checkRoot"/>: the root itself must first pass the line check, its
+    /// <c>repetition limit</c> included, as the arrival banter's <c>scoreCustomDialog</c> (<c>FUN_14067e060</c>) runs it on the DIALOGUE.
     /// </summary>
-    internal bool StartBubbles(World world, CharacterId npc, CharacterId whom, DialogueNode root, int ev, bool now = true, bool force = false)
+    internal bool StartBubbles(
+        World world, CharacterId npc, CharacterId whom, DialogueNode root, int ev, bool now = true, bool force = false, bool checkRoot = false)
     {
         if (!world.Characters.TryResolveNext(npc, out int n)) return false;
         if (force)
@@ -166,7 +168,8 @@ public sealed partial class DialogueSystem
         }
         else if (!Awake(world.Characters, n) || BubbleOf(npc)) return false;
         var c = new Conversation { Npc = npc, Player = whom, Event = ev, Root = root };
-        if (Pick(world, c, root.Children) is not { } first || !force && Busy(first.Speaker, c)) return false;
+        IReadOnlyList<DialogueNode> from = checkRoot ? [root] : root.Children;
+        if (Pick(world, c, from) is not { } first || !force && Busy(first.Speaker, c)) return false;
         _starters.Started(npc, whom);
         FaceOnce(world, n, whom);
         _bubbles.Add(new Bubble(c, first.Line, world.Tick, first.Speaker));
