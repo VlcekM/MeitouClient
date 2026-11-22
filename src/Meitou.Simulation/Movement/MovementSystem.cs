@@ -288,6 +288,30 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     }
 
     /// <summary>
+    /// <see cref="Aim"/> at a point with its height (serial phases only): the walk keeps the point's floor (<see cref="CharacterCold.GoalHeight"/>),
+    /// as the original hands its path search the goal at its own height (docs/game/pathfinding.md "Geometry and queries"). Without it a goal under
+    /// a stacked floor resolves to the walker's own storey. Returns the X/Z goal.
+    /// </summary>
+    public static Vector2 AimAt(CharacterTable table, int slot, Vector3 at, byte mode)
+    {
+        var flat = new Vector2(at.X, at.Z);
+        Aim(table, slot, flat, mode);
+        var cold = table.Cold(slot)!;
+        (cold.GoalHeight, cold.GoalHeightAt) = (at.Y, flat);
+        return flat;
+    }
+
+    /// <summary>
+    /// <see cref="GoTo"/> a point with its height (serial phases only; <see cref="AimAt"/>). Returns the X/Z goal.
+    /// </summary>
+    public static Vector2 GoToAt(CharacterTable table, int slot, Vector3 at, byte mode)
+    {
+        var flat = AimAt(table, slot, at, mode);
+        table.Next[slot].Task = (byte)CharacterTask.GoTo;
+        return flat;
+    }
+
+    /// <summary>
     /// <see cref="FollowOrder"/>: each awake, free character (not the target) drops what it does and follows the target
     /// (<see cref="CharacterCold.FollowOrder"/>); a sleeper gets up first. The order is row 45 Bodyguard or 31 Staying close; a job's follow
     /// (<paramref name="source"/> <see cref="TaskSource.Job"/>) runs the job's <paramref name="row"/>.

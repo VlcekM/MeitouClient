@@ -208,7 +208,7 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
                 c.PickingLock = null;
                 c.Shackles = new ShackleJob(request.Target, (ShackleWork)request.Detail!);
                 if (request.Target != table.IdOf(slot) && table.TryResolveNext(request.Target, out int w))
-                    MovementSystem.GoTo(table, slot, Flat(table.Next[w].Position), c.RunSpeed);
+                    MovementSystem.GoToAt(table, slot, table.Next[w].Position, c.RunSpeed);
 
                 break;
             case TaskType.ReleasePrisoner:

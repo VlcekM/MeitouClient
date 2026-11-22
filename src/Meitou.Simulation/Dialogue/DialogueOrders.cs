@@ -148,7 +148,18 @@ sealed class DialogueOrders(PlayerTalks talks, ApproachQueue approaches, TalkFol
     /// there or the goal has moved more than <see cref="DialogueSystem.TalkReach"/> from the one it walks to. False when the last way there was not
     /// found: the walk fails.
     /// </summary>
-    internal static bool WalkTo(CharacterTable table, int slot, Vector2 goal, byte mode)
+    internal static bool WalkTo(CharacterTable table, int slot, Vector2 goal, byte mode) => WalkTo(table, slot, goal, float.NaN, mode);
+
+    /// <summary>
+    /// <see cref="WalkTo(CharacterTable, int, Vector2, byte)"/> toward a character at <paramref name="at"/>: the walk keeps its floor
+    /// (<see cref="MovementSystem.AimAt"/>), so one upstairs, or in a cage cutting its floor's mesh, is walked to on its own storey.
+    /// </summary>
+    internal static bool WalkTo(CharacterTable table, int slot, Vector3 at, byte mode) => WalkTo(table, slot, new Vector2(at.X, at.Z), at.Y, mode);
+
+    /// <summary>
+    /// The walk of <see cref="WalkTo(CharacterTable, int, Vector2, byte)"/>, at <paramref name="height"/> when it is a number.
+    /// </summary>
+    static bool WalkTo(CharacterTable table, int slot, Vector2 goal, float height, byte mode)
     {
         ref var n = ref table.Next[slot];
         var cold = table.Cold(slot)!;
@@ -157,7 +168,8 @@ sealed class DialogueOrders(PlayerTalks talks, ApproachQueue approaches, TalkFol
         bool walking = (n.Flags & (ushort)MoveFlags.AnyPath) != 0;
         if (walking && Vector2.Distance(n.Goal, goal) <= DialogueSystem.TalkReach) return true;
 
-        MovementSystem.Aim(table, slot, goal, mode);
+        if (float.IsNaN(height)) MovementSystem.Aim(table, slot, goal, mode);
+        else MovementSystem.AimAt(table, slot, new Vector3(goal.X, height, goal.Y), mode);
         return true;
     }
 
