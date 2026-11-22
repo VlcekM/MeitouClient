@@ -3,10 +3,12 @@ using System.Text.Json;
 namespace Meitou.Data.Save;
 
 /// <summary>
-/// The blood on characters' weapons (Meitou-only, docs/game/blood-decals.md "On weapons and gear"), kept in <see cref="SaveFolder.WeaponBloodName"/>
-/// beside the original's files, which are not touched: UTF-8 JSON <c>{ "format": 1, "weapons": [ { "hand": [type, C, CS, I, S], "amount", "wet",
-/// "colour": [r, g, b], "back" } ] }</c>, each entry keyed by the character's save handle (what survives a load). A file that is missing, unreadable or
-/// from a newer format reads as no weapon blood (clean weapons), and an entry naming no character is dropped by the host.
+/// The blood on characters' weapons and the stains their worn items keep (Meitou-only, docs/game/blood-decals.md "On weapons and gear"), kept in
+/// <see cref="SaveFolder.WeaponBloodName"/> beside the original's files, which are not touched: UTF-8 JSON <c>{ "format": 1, "weapons": [ { "hand":
+/// [type, C, CS, I, S], "amount", "wet", "colour": [r, g, b], "back", "worn": [8 levels] } ] }</c>, each entry keyed by the character's save handle
+/// (what survives a load). <c>worn</c> is optional (older files have none, and older builds skip it); an entry with only worn stains has an amount of
+/// 0. A file that is missing, unreadable or from a newer format reads as no blood (clean weapons and clothes), and an entry naming no character is
+/// dropped by the host.
 /// </summary>
 public static class SaveWeaponBlood
 {
@@ -17,9 +19,9 @@ public static class SaveWeaponBlood
 
     /// <summary>
     /// One character's weapon: the blood on it (0..1), how wet it still is (1 just struck), the colour of the victim's blood (0..1 RGB, not yet dried)
-    /// and whether the weapon on the back is the one.
+    /// and whether the weapon on the back is the one; and the stain its worn items keep on each of the body's first 8 parts (0..1), null for none.
     /// </summary>
-    public readonly record struct Entry(Hand Hand, float Amount, float Wet, float R, float G, float B, bool Back);
+    public readonly record struct Entry(Hand Hand, float Amount, float Wet, float R, float G, float B, bool Back, float[]? Worn = null);
 
     /// <summary>
     /// The file for <paramref name="entries"/>.
@@ -57,6 +59,13 @@ public static class SaveWeaponBlood
         w.WriteNumberValue(e.B);
         w.WriteEndArray();
         w.WriteBoolean("back", e.Back);
+        if (e.Worn is { Length: > 0 } worn)
+        {
+            w.WriteStartArray("worn");
+            foreach (float v in worn) w.WriteNumberValue(v);
+            w.WriteEndArray();
+        }
+
         w.WriteEndObject();
     }
 
@@ -90,18 +99,22 @@ public static class SaveWeaponBlood
     }
 
     /// <summary>
-    /// One entry of the file, its values clamped to their ranges; null for one without a five-number hand, a three-number colour or any blood.
+    /// One entry of the file, its values clamped to their ranges; null for one without a five-number hand, a three-number colour or any blood on the
+    /// weapon or the worn items.
     /// </summary>
     static Entry? ReadEntry(JsonElement item)
     {
         var h = item.GetProperty("hand").EnumerateArray().Select(v => v.GetInt32()).ToArray();
         var c = item.GetProperty("colour").EnumerateArray().Select(v => v.GetSingle()).ToArray();
         float amount = item.GetProperty("amount").GetSingle();
-        if (h.Length != 5 || c.Length != 3 || !(amount > 0)) return null;
+        float[]? worn = item.TryGetProperty("worn", out var stains) && stains.ValueKind == JsonValueKind.Array
+            ? [.. stains.EnumerateArray().Take(8).Select(v => Math.Clamp(v.GetSingle(), 0, 1))] : null;
+        if (worn is not null && !worn.Any(v => v > 0)) worn = null;
+        if (h.Length != 5 || c.Length != 3 || !(amount > 0) && worn is null) return null;
 
         var hand = new Hand(h[0], h[1], h[2], h[3], h[4]);
         float wet = Math.Clamp(item.GetProperty("wet").GetSingle(), 0, 1);
         bool onBack = item.TryGetProperty("back", out var back) && back.ValueKind == JsonValueKind.True;
-        return new Entry(hand, Math.Min(amount, 1), wet, Math.Clamp(c[0], 0, 1), Math.Clamp(c[1], 0, 1), Math.Clamp(c[2], 0, 1), onBack);
+        return new Entry(hand, Math.Clamp(amount, 0, 1), wet, Math.Clamp(c[0], 0, 1), Math.Clamp(c[1], 0, 1), Math.Clamp(c[2], 0, 1), onBack, worn);
     }
 }

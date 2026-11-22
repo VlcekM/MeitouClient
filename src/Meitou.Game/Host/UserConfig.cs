@@ -655,6 +655,11 @@ sealed class UserConfig
     /// </summary>
     public bool LuckyrenMode { get; set; }
     /// <summary>
+    /// With "Blood on weapons and gear" on, worn items keep their blood stains after the wound heals and wash clean (Advanced settings, a Faithful /
+    /// Meitou switch; on by default, Meitou; <c>GearBlood.KeptStains</c>, docs/game/blood-decals.md "On weapons and gear").
+    /// </summary>
+    public bool KeptStains { get; set; } = true;
+    /// <summary>
     /// The camera following a character looks at a point moved up and sideways from the game's (Advanced settings; optional, off by default;
     /// <see cref="Cameras.FollowFocus"/>, after ErasmianFolly's Camera Tweaks mod).
     /// </summary>

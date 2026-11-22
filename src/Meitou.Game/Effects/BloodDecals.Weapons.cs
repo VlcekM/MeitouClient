@@ -6,7 +6,8 @@ using Meitou.Simulation;
 namespace Meitou.Game.Effects;
 
 /// <summary>
-/// The blood on weapons across a save (docs/game/blood-decals.md "On weapons and gear"): written beside the save as <see cref="SaveWeaponBlood"/>,
+/// The blood on weapons and the stains worn items keep, across a save (docs/game/blood-decals.md "On weapons and gear"): written beside the save as
+/// <see cref="SaveWeaponBlood"/>,
 /// keyed by the characters' save handles (the renderer's draw keys are new for every world), and put back on the characters of the loaded world, those
 /// not met yet (their zone not loaded) as they appear.
 /// </summary>
@@ -46,20 +47,26 @@ sealed partial class BloodDecals
         }
 
         long epoch = (long)host.Saves.WorldEpoch << 56;
-        var entries = new List<SaveWeaponBlood.Entry>();
+        var byHand = new Dictionary<Hand, SaveWeaponBlood.Entry>();
         foreach (var (key, amount, wet, colour, back) in crowd.WeaponBloodNow())
+            if (HandOf(key) is { } hand) byHand[hand] = new SaveWeaponBlood.Entry(hand, amount, wet, colour.X, colour.Y, colour.Z, back);
+        foreach (var (key, levels) in crowd.WornStainNow())
+            if (HandOf(key) is { } hand)
+                byHand[hand] = byHand.TryGetValue(hand, out var weapon) ? weapon with { Worn = levels } : new SaveWeaponBlood.Entry(hand, 0, 0, 0, 0, 0, false, levels);
+
+        var entries = new List<SaveWeaponBlood.Entry>(byHand.Values);
+        entries.AddRange(_pendingWeapons);
+        game.WeaponBlood = entries.Count > 0 ? SaveWeaponBlood.Write(entries) : null;
+
+        // The save handle of the character a draw key names, written by the capture; null for an earlier world's key or a character without one.
+        Hand? HandOf(long key)
         {
-            // An earlier world's.
-            if ((key & ~((1L << 56) - 1)) != epoch) continue;
+            if ((key & ~((1L << 56) - 1)) != epoch) return null;
 
             long v = (key & ((1L << 56) - 1)) - 1;
             var id = new CharacterId((int)(v >> 32), (int)(uint)v);
-            if (_writtenHandles.TryGetValue(id, out var hand) && !hand.IsNull)
-                entries.Add(new SaveWeaponBlood.Entry(hand, amount, wet, colour.X, colour.Y, colour.Z, back));
+            return _writtenHandles.TryGetValue(id, out var hand) && !hand.IsNull ? hand : null;
         }
-
-        entries.AddRange(_pendingWeapons);
-        game.WeaponBlood = entries.Count > 0 ? SaveWeaponBlood.Write(entries) : null;
     }
 
     /// <summary>
@@ -97,7 +104,9 @@ sealed partial class BloodDecals
             if (!table.Next[slot].Alive || table.Cold(slot)?.Save?.Source.Handle is not { IsNull: false } hand || !wanted.Remove(hand, out var e))
                 continue;
 
-            crowd.RestoreWeaponBlood(host.DrawKey(table.IdOf(slot)), e.Amount, e.Wet, new Vector3(e.R, e.G, e.B), e.Back);
+            long key = host.DrawKey(table.IdOf(slot));
+            if (e.Amount > 0) crowd.RestoreWeaponBlood(key, e.Amount, e.Wet, new Vector3(e.R, e.G, e.B), e.Back);
+            if (e.Worn is { } worn) crowd.RestoreWornStain(key, worn);
         }
 
         _pendingWeapons = [.. wanted.Values];

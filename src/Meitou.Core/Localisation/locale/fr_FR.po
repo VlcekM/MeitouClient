@@ -4759,6 +4759,13 @@ msgid "COOKING"
 msgstr "CUISINE"
 
 #. machine-translated
+msgid "Clothes keep blood stains"
+msgstr "Les vêtements gardent les taches de sang"
+
+#. machine-translated
+msgid "With Blood on weapons and gear on, blood soaks into worn clothes and armour slowly, stays when the wound heals, and washes out in water and rain or fades with time. Off, the clothes show only the blood of the wound under them."
+msgstr "Avec « Sang sur les armes et l'équipement » activé, le sang imprègne lentement les vêtements et l'armure portés, reste quand la blessure guérit, et part dans l'eau et sous la pluie ou s'estompe avec le temps. Désactivé, les vêtements ne montrent que le sang de la blessure en dessous."
+
 msgid "{1} is built into Meitou now: {2}."
 msgstr "{1} est désormais intégré à Meitou : {2}."
 
