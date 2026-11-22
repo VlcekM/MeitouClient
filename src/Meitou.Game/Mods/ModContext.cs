@@ -408,6 +408,39 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// An offer of one of the mod's job types on the player's buildings (docs/modding.md "Mod jobs"): the right-click menu of a finished building
+    /// of the player's faction whose record the offer names shows its caption to a selection holding a character it is for, and choosing it gives
+    /// each such character the job on that building, in the place of the one of that type it held. After the type's <see cref="AddJobType"/>; one
+    /// offer per type. Refused: what <see cref="Simulation.Production.ModJobOffer.Refusal"/> names, a caption that is the label of one of the
+    /// game's own verbs, and a building that is no BUILDING of the loaded data.
+    /// </summary>
+    public void AddJobOffer(Simulation.Production.ModJobOffer offer)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(offer);
+        if (!Pending.JobTypes.ContainsKey(offer.Type))
+            throw new InvalidOperationException($"Job type {offer.Type} is not one mod '{Id}' has claimed (AddJobType comes first).");
+        if (Pending.JobOffers.Any(o => o.Type == offer.Type))
+            throw new InvalidOperationException($"Job type {offer.Type} is offered twice by mod '{Id}'.");
+        if (JobOfferRefusal(offer) is { } refusal) throw new ArgumentException(refusal, nameof(offer));
+
+        Pending.JobOffers.Add(offer with { Buildings = [.. offer.Buildings.Distinct(StringComparer.Ordinal)] });
+    }
+
+    /// <summary>
+    /// Why the mod's job offer cannot be registered, or null: its own refusal, a caption the game's verbs have, or a building the data lacks.
+    /// </summary>
+    string? JobOfferRefusal(Simulation.Production.ModJobOffer offer)
+    {
+        if (offer.Refusal() is { } refusal) return refusal;
+        if (ContextMenuWindow.IsGameVerb(offer.Caption))
+            return $"'{offer.Caption}' is the label of one of the game's own verbs.";
+
+        string? missing = offer.Buildings.FirstOrDefault(b => Data.Find(b) is not { Type: global::Meitou.Data.Fcs.FcsRecordType.Building });
+        return missing is null ? null : $"'{missing}' is not a BUILDING of the loaded data.";
+    }
+
+    /// <summary>
     /// A goal type of the mod's own (docs/modding.md "Chooser goals and jobs"): a task type number (<see cref="SimulationExtensions.FirstModCode"/>
     /// and up, so never a game task) that AI_TASK records of a data mod name in AI packages and goal lists; characters whose lists hold it weigh it in
     /// the AI's chooser by the desire of the goal one of the mod's systems registers (<see cref="Meitou.Simulation.Ai.IChooserOwner"/>), and the

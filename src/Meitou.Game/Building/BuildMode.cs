@@ -1491,6 +1491,46 @@ sealed class BuildMode(PlayerInterface player)
     }
 
     /// <summary>
+    /// The rows of the code mods' job offers for a site (docs/modding.md "Mod jobs"), shown after its verbs (<see cref="ContextMenuWindow.Menu"/>):
+    /// on a finished building of the player's faction, each offer that names the building's record and is for one of the selected characters;
+    /// choosing it gives the selection that job there, Shift or not. The simulation tests the building and each character again as it applies
+    /// the command (<see cref="Simulation.Production.AddJob"/>).
+    /// </summary>
+    internal List<(string Caption, Action Give)> OfferedJobs(BuildingSnapshot site)
+    {
+        var rows = new List<(string, Action)>();
+        if (!site.Complete || site.Owner != player.Session.World.Player.Faction) return rows;
+
+        var selected = player.Selected();
+        var selection = player.SelectedIds();
+        foreach (var offer in JobOffers())
+        {
+            if (!offer.On(site.Record) || !selected.Any(c => offer.Takes(c.Animal))) continue;
+
+            rows.Add((offer.Caption, () => GiveOffered(selection, offer, site)));
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// Sends the command that gives the selection an offered job on a site (<see cref="OfferedJobs"/>).
+    /// </summary>
+    void GiveOffered(IReadOnlyList<CharacterId> selection, Simulation.Production.ModJobOffer offer, BuildingSnapshot site) =>
+        player.Say(new Simulation.Production.AddJob(selection, offer.Type, site.Id) { Tick = player.Session.World.Tick });
+
+    /// <summary>
+    /// The code mods' job offers in registration order (docs/modding.md "Mod jobs"); none without mods.
+    /// </summary>
+    IReadOnlyList<Simulation.Production.ModJobOffer> JobOffers()
+    {
+        IReadOnlyList<Simulation.Production.ModJobOffer>? offers = player.Session.World.Systems
+            .OfType<Simulation.Player.PlayerSystem>()
+            .FirstOrDefault()?.Extensions?.JobOffers;
+        return offers ?? [];
+    }
+
+    /// <summary>
     /// A finished building's doors: the door panel's open/close and lock buttons, for all its doors at once (docs/simulation.md "Cages, beds and
     /// locks").
     /// </summary>
@@ -1538,7 +1578,7 @@ sealed class BuildMode(PlayerInterface player)
         if (!SiteIsObject(site) && SomethingInsideAt(p)) return false;
         // With Shift a storage takes a job even without verbs.
         bool shiftStorage = player.SlowModifier && site.Complete && player.Production.Machine(site.Id) is { IsStorage: true };
-        if (SiteVerbs(site).Count == 0 && !shiftStorage) return false;
+        if (SiteVerbs(site).Count == 0 && OfferedJobs(site).Count == 0 && !shiftStorage) return false;
         _sitePending = (site, p, System.Diagnostics.Stopwatch.GetTimestamp());
         return true;
     }
@@ -1680,7 +1720,7 @@ sealed class BuildMode(PlayerInterface player)
 
         _sitePending = null;
         if (player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == pending.Site.Id) is not { } site) return;
-        player.ContextMenuWindow.OpenMenu = player.ContextMenuWindow.Menu(SiteName(site), pending.At, SiteVerbs(site));
+        player.ContextMenuWindow.OpenMenu = player.ContextMenuWindow.Menu(SiteName(site), pending.At, SiteVerbs(site), OfferedJobs(site));
     }
 
     /// <summary>
