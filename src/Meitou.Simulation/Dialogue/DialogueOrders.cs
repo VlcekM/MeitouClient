@@ -165,8 +165,12 @@ sealed class DialogueOrders(PlayerTalks talks, ApproachQueue approaches, TalkFol
         var cold = table.Cold(slot)!;
         if (cold.PathFailed) return false;
 
+        // A walk on its way is kept while its goal stays within talk reach, and, given a height, on the same floor (a target gone up the stairs
+        // to a spot over its old one is walked to anew).
         bool walking = (n.Flags & (ushort)MoveFlags.AnyPath) != 0;
-        if (walking && Vector2.Distance(n.Goal, goal) <= DialogueSystem.TalkReach) return true;
+        bool sameFloor = float.IsNaN(height)
+            || cold.GoalHeightAt == n.Goal && MathF.Abs(cold.GoalHeight - height) <= MovementSystem.FloorSlack;
+        if (walking && sameFloor && Vector2.Distance(n.Goal, goal) <= DialogueSystem.TalkReach) return true;
 
         if (float.IsNaN(height)) MovementSystem.Aim(table, slot, goal, mode);
         else MovementSystem.AimAt(table, slot, new Vector3(goal.X, height, goal.Y), mode);

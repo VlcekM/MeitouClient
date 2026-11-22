@@ -595,7 +595,7 @@ public static class PlayerOrders
         next.RowRuns = false;
         next.Planned = null;
         n.Goal = new Vector2(next.Point.X, next.Point.Z);
-        (cold.GoalHeight, cold.GoalHeightAt) = (next.Point.Y, n.Goal);   // its clicked floor, as the first move's (MovementSystem.GoToFloor)
+        (cold.GoalHeight, cold.GoalHeightAt) = (next.Point.Y, n.Goal);   // its clicked height picks the floor (the first move also snaps its point to the floor, MovementSystem.GoToFloor)
         n.Flags |= (ushort)MoveFlags.NeedPath;
         return true;
     }
