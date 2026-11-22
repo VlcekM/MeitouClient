@@ -41,7 +41,7 @@ public sealed partial class CombatSystem
         var ctx = MakeContext(world, d, dc);
         var events = _hitEvents;
         events.Clear();
-        ReadOnlySpan<ArmourPiece> armour = dc.Fighter is { } df ? df.Armour : default;
+        var armour = world.ArmourFilters.Pieces(world, CombatHitSource.Execution, table.IdOf(d), dc.Fighter);
         var cover = new CoverRoll(world.Seed, Rng.Key(table.IdOf(d)), a, blow, 0);
         bool wasIncapacitated = medical.Incapacitated;
         var (part, damage, absorbed) = world.Player.OnePunch && ac.IsPlayer

@@ -175,6 +175,12 @@ public sealed class Fighter
     public ReadOnlySpan<ArmourPiece> Armour => _armour;
 
     /// <summary>
+    /// The worn items <see cref="Armour"/>'s pieces were built from, in the same order (empty for a fighter made without items); the code mods'
+    /// armour filters get them (<see cref="IArmourFilter"/>).
+    /// </summary>
+    public IReadOnlyList<Items.ItemInstance> ArmourItems { get; init; } = [];
+
+    /// <summary>
     /// Sum of the pieces' <c>combat def bonus</c> (the "float equipment bonus" of the block chance).
     /// </summary>
     public float DefenceBonus { get; }
