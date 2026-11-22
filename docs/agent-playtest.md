@@ -122,6 +122,7 @@ c help                                # one usage line per command; `c help <nam
 | `place-item` | `place-item "<item>" <x> <z> [yawDegrees] [y] [qty] [--maker <id or name>] [--model <id or name>] [--level <n>]` (same grade flags as `give`) |
 | `root-probe` | `root-probe [--id c:slot.gen] [--at x z] [length] [directions]` (read-only: root-motion step from a spot in N headings, wall slide and end-point refusal) |
 | `root-log` | `root-log on\|off\|dump` (log of every shortened root-motion step) |
+| `anim-layers` | `anim-layers [--id <c:slot.gen>]` (read-only, debug: the selected characters' or the given one's animation layers as the last tick published them, JSON: layer name, clip time, weight; with `pause` and `step 1` a per-tick trace) |
 | `root-scan` | `root-scan <x> <z> <radius> [spacing] [length]` (counts free/slid/cut/refused root steps over a grid) |
 | `prospect` | `prospect` |
 | `putdown` | `putdown` |

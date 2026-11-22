@@ -36,8 +36,8 @@
     "areas": "Benchmark results, Animal hunger"
   },
   "dxseba": {
-    "commits": 17,
-    "areas": "Blood prints, Ragdolls, Crossbow bolts"
+    "commits": 22,
+    "areas": "Blood stains, footprints, ragdolls"
   },
   "dfdffish": {
     "commits": 17,
@@ -48,8 +48,8 @@
     "areas": "Mod settings"
   },
   "teppum": {
-    "commits": 252,
-    "areas": "Code mod hooks, NPC goals"
+    "commits": 265,
+    "areas": "Code mods, AI, Navmesh, UI"
   },
   "robgreen490": {
     "commits": 4,
@@ -74,5 +74,9 @@
   "protocol-nyx": {
     "commits": 1,
     "areas": "Monitor start option"
+  },
+  "theivorydisaster": {
+    "commits": 1,
+    "areas": "LockSystem"
   }
 }
