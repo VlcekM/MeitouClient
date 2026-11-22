@@ -1345,7 +1345,7 @@ public sealed partial class PopulationSystem : ITickSystem, Bodies.ICharacterDea
             if (p is { Unmade: true, Guest: false, State: PlatoonState.Unloaded } && p.Origin == site)
             {
                 if (p.Saved is { } sp) sp.PlatoonId = -1;
-                world.Platoons.Remove(p.Id);
+                world.Platoons.Remove(p.Id, PlatoonGone.Dropped);
             }
         }
     }

@@ -12,13 +12,15 @@ using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
 using Meitou.Simulation.Population;
 using Meitou.Simulation.Saving;
+using Meitou.Simulation.Towns;
 using Meitou.Tests.Simulation;
 using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Modding;
 
 /// <summary>
-/// The engine hooks for code mods (docs/modding.md "World hooks", "Driving NPCs", "Item use") on synthetic worlds.
+/// The engine hooks for code mods (docs/modding.md "World hooks", "Driving NPCs", "Platoon notices", "Off-screen fight rules", "Roads",
+/// "Item use") on synthetic worlds.
 /// </summary>
 public class ModHookTests
 {
@@ -30,9 +32,11 @@ public class ModHookTests
     const string Faction = "20-t";
 
     /// <summary>
-    /// A world of the roaming synthetic towns with population and movement, the camera on the first town.
+    /// A world of the roaming synthetic towns with population and movement (and <paramref name="more"/> systems after them), the camera on the
+    /// first town.
     /// </summary>
-    static (SimWorld World, PopulationSystem Population) Start(IReadOnlyList<FcsRecord>? extra = null, bool keepRoamers = true)
+    static (SimWorld World, PopulationSystem Population) Start(IReadOnlyList<FcsRecord>? extra = null, bool keepRoamers = true,
+        IReadOnlyList<ITickSystem>? more = null)
     {
         var db = SyntheticTown.Database(roaming: true, extra: extra);
         var walk = new OpenGroundWalkability(SyntheticTown.Ground);
@@ -42,7 +46,7 @@ public class ModHookTests
         };
         var population = new PopulationSystem(SyntheticTown.Data(db), settings);
         var world = new SimWorld(new WorldSettings { Seed = 3, Threads = 1, PublishSnapshots = false }, walk,
-            [population, new MovementSystem(new PathService(walk, true))]);
+            [population, new MovementSystem(new PathService(walk, true)), .. more ?? []]);
         world.Commands.Enqueue(new FocusCommand(SyntheticTown.Centre) { Tick = 0 });
         return (world, population);
     }
@@ -300,6 +304,286 @@ public class ModHookTests
 
         Assert.True(squads[0].Ai!.MissionAnyRange);
         Assert.Equal(target, ai.AssaultTargetFor(world, me.Slot, squads[0].Ai));
+    }
+
+    #endregion
+
+    #region Platoons and roads
+
+    /// <summary>
+    /// The raiders' faction of <see cref="Hostile"/>, at war with Testfolk.
+    /// </summary>
+    const string Raiders = "95-t";
+
+    /// <summary>
+    /// A faction at war with Testfolk (the lower default relation of two factions is theirs).
+    /// </summary>
+    static FcsRecord[] Hostile()
+    {
+        var raiders = SyntheticTown.Rec(Raiders, FcsRecordType.Faction, "Raiders");
+        raiders.Ints["default relation"] = -100;
+        return [raiders];
+    }
+
+    /// <summary>
+    /// A hold a mod takes in its name is its own: another mod, or the unnamed calls, can neither take, send nor release it. Saved and loaded again,
+    /// the platoon is held in that name with its goal and both mods' tags, found by each mod's tag; a load without the mod running releases it.
+    /// Catches one mod undoing another's hold, a named hold or goal lost on a save, a per-mod tag that replaces another mod's, and a hold that
+    /// outlives an uninstalled mod and freezes its platoon.
+    /// </summary>
+    [Fact]
+    public void A_named_hold_is_its_mods_own_and_reloads_with_its_goal_and_every_mods_tag()
+    {
+        var (w, population) = Start();
+        using var world = w;
+        int faction = population.Data.FactionIndex(Faction);
+        int id = population.SpawnPlatoon(w, faction, "12-t", 0, new Vector2(20000, 20000), 100, 200);
+        var p = w.Platoons.Find(id)!;
+        var goal = p.Position + new Vector2(3000, 0);
+        p.ModTags["mod.a"] = "caravan|1";
+        p.ModTags["mod.b"] = "target|2";
+
+        Assert.True(PopulationSystem.HoldPlatoon(w, id, "mod.a", true));
+        Assert.False(PopulationSystem.HoldPlatoon(w, id, "mod.b", true));
+        Assert.False(PopulationSystem.HoldPlatoon(w, id, true));
+        Assert.False(PopulationSystem.HoldPlatoon(w, id, false));
+        Assert.False(PopulationSystem.HoldPlatoon(w, id, "mod.b", false));
+        Assert.False(PopulationSystem.SendPlatoon(w, id, goal));
+        Assert.False(PopulationSystem.SendPlatoon(w, id, "mod.b", goal));
+        Assert.True(PopulationSystem.SendPlatoon(w, id, "mod.a", goal));
+        Assert.Equal(("mod.a", goal), (p.HoldOwner, p.ModGoal));
+        Assert.Same(p, w.Platoons.FindByTag("mod.a", "caravan|1"));
+        Assert.Null(w.Platoons.FindByTag("mod.b", "caravan|1"));
+
+        var game = SaveCapture.Capture(w, population.Data, new SaveClock(1, 13, 0));
+        var (w2, population2) = Start();
+        using var back = w2;
+        SaveLoader.Load(w2, game, population2.Data, new SaveLoadOptions { ApplyRelations = false });
+        var again = w2.Platoons.FindByTag("mod.a", "caravan|1")!;
+
+        Assert.Same(again, w2.Platoons.FindByTag("mod.b", "target|2"));
+        Assert.Equal((true, "mod.a"), (again.Held, again.HoldOwner));
+        Assert.InRange(Vector2.Distance(goal, again.ModGoal!.Value), 0, 0.01f);
+        Assert.Equal(1, PopulationSystem.DropUnownedHolds(w2, mod => mod == "mod.b"));
+        Assert.Equal((false, (string?)null, (Vector2?)null), (again.Held, again.HoldOwner, again.ModGoal));
+    }
+
+    /// <summary>
+    /// A platoon observer hears a mod's spawn as added, a held platoon's arrival once when it reaches its goal, and a mod's despawn as removed by
+    /// the mod, with the platoon gone from the registry; an observer that throws is disabled without stopping the others. Catches a change no
+    /// observer hears, an arrival told every step, a despawn told with the wrong reason, or one failing observer silencing the rest.
+    /// </summary>
+    [Fact]
+    public void Platoon_observers_hear_a_spawn_an_arrival_once_and_a_mods_despawn()
+    {
+        var log = new PlatoonLog();
+        var (w, population) = Start(more: [new ThrowingPlatoonObserver(), log]);
+        using var world = w;
+        int faction = population.Data.FactionIndex(Faction);
+        int id = population.SpawnPlatoon(w, faction, "12-t", 0, new Vector2(20000, 20000), 100, 200);
+        var p = w.Platoons.Find(id)!;
+        w.RunTicks(1);
+
+        Assert.Contains(log.Heard, n => n.Kind == PlatoonEvent.Added && n.Platoon == p);
+
+        Assert.True(PopulationSystem.HoldPlatoon(w, id, "mod.a", true));
+        Assert.True(PopulationSystem.SendPlatoon(w, id, "mod.a", p.Position + new Vector2(1500, 0)));
+        for (int i = 0; i < 40 && !p.ModArrived; i++) w.RunTicks(300);
+        w.RunTicks(600);
+
+        Assert.Single(log.Heard, n => n.Kind == PlatoonEvent.Arrived && n.Platoon == p);
+
+        Assert.True(population.DespawnPlatoon(w, id));
+        Assert.False(population.DespawnPlatoon(w, id));
+        w.RunTicks(1);
+        var gone = Assert.Single(log.Heard, n => n.Kind == PlatoonEvent.Removed && n.Platoon == p);
+
+        Assert.Equal(PlatoonGone.ByMod, gone.Gone);
+        Assert.Null(w.Platoons.Find(id));
+    }
+
+    /// <summary>
+    /// Two hostile stand-ins met off screen: a rule's skip keeps both, a rule naming the winner decides the fight either way round whatever the draw,
+    /// and the loser's removal names the winner. Catches a rule the fights never ask, a skip that still fights, a named winner overridden by the
+    /// draw, or a lost fight told without who won.
+    /// </summary>
+    [Fact]
+    public void An_offscreen_fight_rule_skips_a_fight_or_names_its_winner()
+    {
+        var at = new Vector2(20000, 20000);
+        var (w, population) = Start(Hostile(), more: [new FightJudge((_, _) => OffscreenFightVerdict.Skip)]);
+        using var world = w;
+        int folk = population.Data.FactionIndex(Faction), raiders = population.Data.FactionIndex(Raiders);
+        int a = Camp(w, population, folk, at);
+        int b = Camp(w, population, raiders, at);
+        w.RunTicks(600);
+
+        Assert.NotNull(w.Platoons.Find(a));
+        Assert.NotNull(w.Platoons.Find(b));
+
+        foreach (int victor in new[] { raiders, folk })
+        {
+            var log = new PlatoonLog();
+            var named = new FightJudge((first, _) => first.Faction == victor ? OffscreenFightVerdict.FirstWins : OffscreenFightVerdict.SecondWins);
+            var (w2, population2) = Start(Hostile(), more: [named, log]);
+            using var fought = w2;
+            int folkCamp = Camp(w2, population2, folk, at);
+            int raiderCamp = Camp(w2, population2, raiders, at);
+            var (winner, loser) = victor == raiders ? (raiderCamp, folkCamp) : (folkCamp, raiderCamp);
+            w2.RunTicks(600);
+            var lost = Assert.Single(log.Heard, n => n.Kind == PlatoonEvent.Removed && n.Platoon.Id == loser);
+
+            Assert.True(named.Asked > 0);
+            Assert.NotNull(w2.Platoons.Find(winner));
+            Assert.Equal((PlatoonGone.LostFight, winner), (lost.Gone, lost.By));
+        }
+    }
+
+    /// <summary>
+    /// The road map lists the level's junctions and roads with their ids, lengths and points, finds the nearest road point and the roads near a
+    /// place, even with a huge distance, and refuses input that is not finite; a road of one point is left out. Catches a junction or road a mod
+    /// cannot reach, a share or distance measured from the wrong end, a search that throws on bad input, or one that walks every grid cell a huge
+    /// distance covers.
+    /// </summary>
+    [Fact]
+    public void The_road_map_lists_junctions_and_roads_and_finds_the_roads_near_a_place()
+    {
+        var roads = new RoadNetwork(
+        [
+            new RoadPath("r1", 10, 1, 2, 1000, [new(0, 0, 0), new(1000, 0, 0)]),
+            new RoadPath("r2", 10, 2, 3, 1200, [new(1000, 0, 0), new(1000, 0, 500), new(1000, 0, 1000)]),
+            new RoadPath("stub", 10, 3, 4, 10, [new(1000, 0, 1000)]),
+        ]);
+        var near = new List<int> { 99 };
+
+        Assert.Equal((2, 3), (roads.Count, roads.JunctionCount));
+        Assert.Equal(new RoadInfo("r2", 1, 2, 1200), roads.RoadAt(1));
+        Assert.Equal([0, 1], roads.RoadsAt(1).ToArray());
+        Assert.Equal(new Vector2(1000, 1000), roads.JunctionAt(2));
+        Assert.Equal(3, roads.PointsOf(1).Length);
+
+        var point = roads.NearestRoad(new Vector2(250, 30), 100)!.Value;
+
+        Assert.Equal((0, 0.25f, new Vector2(250, 0), 30f), (point.Road, point.Along, point.Point, point.Distance));
+        Assert.Null(roads.NearestRoad(new Vector2(250, 300), 100));
+        Assert.Null(roads.NearestRoad(new Vector2(float.NaN, 0), 100));
+        Assert.Equal(0, roads.NearestRoad(new Vector2(250, 30), 4e12f)!.Value.Road);
+        Assert.NotNull(roads.NearestRoad(new Vector2(1e15f, 600), float.MaxValue));
+
+        roads.RoadsNear(new Vector2(990, 10), 50, near);
+
+        Assert.Equal([0, 1], near);
+
+        roads.RoadsNear(new Vector2(-5e9f, 0), 1e30f, near);
+
+        Assert.Equal([0, 1], near);
+
+        roads.RoadsNear(new Vector2(0, 0), -1, near);
+
+        Assert.Empty(near);
+    }
+
+    /// <summary>
+    /// A rule that removes a platoon it is asked about is disabled and that fight does not happen; a mod's despawn waits while the fights are
+    /// settled. Catches a fight settled on a platoon no longer in the world (its members reported dead, its characters released twice), or a
+    /// misbehaving rule asked again.
+    /// </summary>
+    [Fact]
+    public void An_offscreen_fight_rule_that_removes_a_platoon_is_disabled_and_its_fight_skipped()
+    {
+        var at = new Vector2(20000, 20000);
+        var log = new PlatoonLog();
+        SimWorld? world = null;
+        PopulationSystem? population = null;
+        bool refused = false;
+        int removed = -1;
+        var remover = new FightJudge((_, second) =>
+        {
+            refused = !population!.DespawnPlatoon(world!, second.Id);
+            removed = second.Id;
+            world!.Platoons.Remove(second.Id);
+            return OffscreenFightVerdict.FirstWins;
+        });
+        var deaths = new DeathCount();
+        (world, population) = Start(Hostile(), more: [remover, log, deaths]);
+        using var w = world;
+        int folk = population.Data.FactionIndex(Faction), raiders = population.Data.FactionIndex(Raiders);
+        int a = Camp(world, population, folk, at);
+        int b = Camp(world, population, raiders, at);
+        world.RunTicks(600);
+        int kept = removed == a ? b : a;
+        var gone = Assert.Single(log.Heard, n => n.Kind == PlatoonEvent.Removed);
+
+        Assert.True(refused);
+        Assert.Equal(1, remover.Asked);
+        Assert.Equal((removed, PlatoonGone.Other), (gone.Platoon.Id, gone.Gone));
+        Assert.Equal(0, deaths.Count);
+        Assert.NotNull(world.Platoons.Find(kept));
+    }
+
+    /// <summary>
+    /// A mod's platoon of <paramref name="faction"/> spawned within 50 of <paramref name="at"/> and held there (a held stand-in still fights).
+    /// </summary>
+    static int Camp(SimWorld world, PopulationSystem population, int faction, Vector2 at)
+    {
+        int id = population.SpawnPlatoon(world, faction, "12-t", 0, at, 0, 50);
+        Assert.True(PopulationSystem.HoldPlatoon(world, id, true));
+        return id;
+    }
+
+    /// <summary>
+    /// Records every platoon notice.
+    /// </summary>
+    sealed class PlatoonLog : IPlatoonObserver
+    {
+        /// <summary>
+        /// The notices heard, in order.
+        /// </summary>
+        public List<PlatoonNotice> Heard { get; } = [];
+
+        /// <inheritdoc/>
+        public void PlatoonChanged(SimWorld world, in PlatoonNotice notice) => Heard.Add(notice);
+    }
+
+    /// <summary>
+    /// Counts the deaths reported to death observers.
+    /// </summary>
+    sealed class DeathCount : ICharacterDeathObserver
+    {
+        /// <summary>
+        /// How many deaths were reported.
+        /// </summary>
+        public int Count { get; private set; }
+
+        /// <inheritdoc/>
+        public void Died(SimWorld world, in CharacterDeath death) => Count++;
+    }
+
+    /// <summary>
+    /// A platoon observer that throws on its first notice.
+    /// </summary>
+    sealed class ThrowingPlatoonObserver : IPlatoonObserver
+    {
+        /// <inheritdoc/>
+        public void PlatoonChanged(SimWorld world, in PlatoonNotice notice) => throw new InvalidOperationException("observer failed");
+    }
+
+    /// <summary>
+    /// An off-screen fight rule answering with <paramref name="judge"/>, counting how often it is asked.
+    /// </summary>
+    sealed class FightJudge(Func<Platoon, Platoon, OffscreenFightVerdict> judge) : IOffscreenFightRule
+    {
+        /// <summary>
+        /// How often it was asked.
+        /// </summary>
+        public int Asked { get; private set; }
+
+        /// <inheritdoc/>
+        public OffscreenFightVerdict Judge(SimWorld world, Platoon first, Platoon second)
+        {
+            Asked++;
+            return judge(first, second);
+        }
     }
 
     #endregion
