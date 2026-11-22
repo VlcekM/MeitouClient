@@ -777,6 +777,7 @@ public sealed partial class FixtureRegistry
                 AdmitsAnimals = admitsAnimals,
                 Cavernous = cavernous,
                 Leaf = door is null ? new DoorLeaf(0, 30, 1, 0) : DoorLeaf.Of(door),
+                DoorTarget = DoorTargetOf(door),
                 Lock = new LockState { Level = RollLevel(world.Seed, id, faction, IntOf(door, "lock level bonus"), door: true),
                         Hardness = FloatOf(record, "hardness") },
             });
@@ -1158,6 +1159,18 @@ public sealed partial class FixtureRegistry
         int level = (faction?.DoorsLockLevel ?? 40) + delta + bonus;
         level = door ? (level < 2 ? 1 : level) : Math.Max(level, 0);
         return Math.Min(level, 100);
+    }
+
+    /// <summary>
+    /// A door record's target in material units (<see cref="Data.Gameplay.Construction.BuildingBuildData.Target"/>), the whole of its progress;
+    /// 1 when it has none.
+    /// </summary>
+    static float DoorTargetOf(GameRecord? door)
+    {
+        if (door is not { Type: FcsRecordType.Building }) return 1;
+
+        float target = Data.Gameplay.Construction.BuildingBuildData.From(door).Target;
+        return target > 0 ? target : 1;
     }
 
     /// <summary>

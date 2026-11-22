@@ -352,10 +352,15 @@ public sealed class Fixture
     /// </summary>
     public bool WantsLock { get; set; }
     /// <summary>
-    /// Doors: the door's own construction progress (Building +0x164, 1 when whole; docs/game/locks.md "Bash door"): blows take it down, at 0 the door
-    /// breaks. Not among the zone save's door keys, so not saved; hashed only while under 1.
+    /// Doors: the door's own construction progress (Building +0x164, as a fraction of <see cref="DoorTarget"/>, 1 when whole; docs/game/locks.md
+    /// "Bash door"): blows take it down, at 0 the door breaks. Not among the zone save's door keys, so not saved; hashed only while under 1.
     /// </summary>
     public float DoorProgress { get; set; } = 1;
+    /// <summary>
+    /// Doors: the door record's target in material units (<see cref="Meitou.Data.Gameplay.Construction.BuildingBuildData.Target"/>), the whole
+    /// <see cref="DoorProgress"/>; 1 when the record has none.
+    /// </summary>
+    public float DoorTarget { get; init; } = 1;
     /// <summary>
     /// Doors: how the leaf moves (its record's <c>door move speed</c> etc.), and the parent BUILDING record (the door's position is looked up by it
     /// and <see cref="DoorIndex"/>; a player building's bed has it too, so an upgrade is noticed).
