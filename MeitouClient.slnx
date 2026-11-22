@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/analyzers/">
+    <Project Path="analyzers/Meitou.Analyzers/Meitou.Analyzers.csproj" />
+  </Folder>
   <Folder Name="/launcher/">
     <Project Path="launcher/Meitou.Launcher/Meitou.Launcher.csproj" />
   </Folder>

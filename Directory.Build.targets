@@ -1,5 +1,18 @@
 <Project>
 
+  <!-- Meitou's analyzers (analyzers/Meitou.Analyzers) check the projects whose texts .github/scripts/loc-strings.mjs reads: MEI0001 fails the
+       build on a player-facing $"..." text that locale/meitou.built does not list. Built for the host, whatever the project's runtime. -->
+  <PropertyGroup>
+    <MeitouTextChecked>false</MeitouTextChecked>
+    <MeitouTextChecked Condition="$([System.String]::Copy(';Meitou.Core;Meitou.Data;Meitou.Simulation;Meitou.Game;Meitou.Launcher;').Contains(';$(MSBuildProjectName);'))">true</MeitouTextChecked>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(MeitouTextChecked)' == 'true'">
+    <ProjectReference Include="$(MSBuildThisFileDirectory)analyzers/Meitou.Analyzers/Meitou.Analyzers.csproj" OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false"
+                      GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained;PublishAot;PublishTrimmed;MeitouLegacyMac;MeitouTargetFramework" />
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)src/Meitou.Core/Localisation/locale/meitou.built" />
+  </ItemGroup>
+
   <!-- The packaged macOS OpenAL and GLFW binaries require Sonoma. CI builds the same versions for Ventura. -->
   <PropertyGroup>
     <MeitouMacNativeDirectory>$(MSBuildThisFileDirectory)macos-runtime/$(RuntimeIdentifier)</MeitouMacNativeDirectory>

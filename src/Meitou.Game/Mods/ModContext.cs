@@ -422,22 +422,22 @@ public sealed class ModContext
             throw new InvalidOperationException($"Job type {offer.Type} is not one mod '{Id}' has claimed (AddJobType comes first).");
         if (Pending.JobOffers.Any(o => o.Type == offer.Type))
             throw new InvalidOperationException($"Job type {offer.Type} is offered twice by mod '{Id}'.");
-        if (JobOfferRefusal(offer) is { } refusal) throw new ArgumentException(refusal, nameof(offer));
+        ThrowIfRefused(offer);
 
         Pending.JobOffers.Add(offer with { Buildings = [.. offer.Buildings.Distinct(StringComparer.Ordinal)] });
     }
 
     /// <summary>
-    /// Why the mod's job offer cannot be registered, or null: its own refusal, a caption the game's verbs have, or a building the data lacks.
+    /// Throws when the mod's job offer cannot be registered: its own refusal, a caption the game's verbs have, or a building the data lacks.
     /// </summary>
-    string? JobOfferRefusal(Simulation.Production.ModJobOffer offer)
+    void ThrowIfRefused(Simulation.Production.ModJobOffer offer)
     {
-        if (offer.Refusal() is { } refusal) return refusal;
+        if (offer.Refusal() is { } refusal) throw new ArgumentException(refusal, nameof(offer));
         if (ContextMenuWindow.IsGameVerb(offer.Caption))
-            return $"'{offer.Caption}' is the label of one of the game's own verbs.";
+            throw new ArgumentException($"'{offer.Caption}' is the label of one of the game's own verbs.", nameof(offer));
 
         string? missing = offer.Buildings.FirstOrDefault(b => Data.Find(b) is not { Type: global::Meitou.Data.Fcs.FcsRecordType.Building });
-        return missing is null ? null : $"'{missing}' is not a BUILDING of the loaded data.";
+        if (missing is not null) throw new ArgumentException($"'{missing}' is not a BUILDING of the loaded data.", nameof(offer));
     }
 
     /// <summary>
