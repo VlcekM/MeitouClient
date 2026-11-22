@@ -183,6 +183,10 @@ public sealed class SimulationExtensions
     /// </summary>
     public Dictionary<Data.Gameplay.Ai.TaskType, string> JobTypes { get; } = [];
     /// <summary>
+    /// The mods' offers of their job types on the player's buildings, in registration order, one per job type (docs/modding.md "Mod jobs").
+    /// </summary>
+    public List<Production.ModJobOffer> JobOffers { get; } = [];
+    /// <summary>
     /// The mods' own goal types, each with the mod that claimed it and its name (docs/modding.md "Chooser goals and jobs";
     /// <see cref="Ai.ChooserRegistry"/>).
     /// </summary>

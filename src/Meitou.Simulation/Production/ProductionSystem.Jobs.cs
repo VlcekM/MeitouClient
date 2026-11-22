@@ -30,16 +30,41 @@ public sealed partial class ProductionSystem
     public const int JobCheckTicks = 10;
 
     /// <summary>
-    /// Gives each player character named a job of the order's type on its site (when the site exists).
+    /// Gives each player character named a job of the order's type on its site (when the site exists); a type a code mod offers on buildings goes
+    /// by its offer (<see cref="GiveOffered"/>).
     /// </summary>
     void AddJobs(World world, AddJob add)
     {
+        if (world.SystemOf<PlayerSystem>()?.Extensions?.JobOffers.Find(o => o.Type == add.Type) is { } offer)
+        {
+            GiveOffered(world, add, offer);
+            return;
+        }
+
         if ((Site(world, add.Site) ?? TownMachineSite(world, add.Site)) is null) return;
         var table = world.Characters;
         foreach (var id in Who(world, add.Characters))
         {
             if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { } cold)
                 PermaJobs.Give(cold, add.Type, new PermaJob(add.Type, add.Site));
+        }
+    }
+
+    /// <summary>
+    /// A code mod's offered job (docs/modding.md "Mod jobs"): when the site is a finished building of the player's faction and of one of the offer's
+    /// records, each living player character named that the offer is for takes the job there (<see cref="PermaJobs.GiveOffered"/>).
+    /// </summary>
+    void GiveOffered(World world, AddJob add, ModJobOffer offer)
+    {
+        if (world.Buildings.Find(add.Site) is not { Complete: true } site) return;
+        if (site.Owner != world.Player.Faction || !offer.On(site.Record)) return;
+
+        var table = world.Characters;
+        foreach (var id in Who(world, add.Characters))
+        {
+            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { } cold) continue;
+            if (cold is { IsPlayer: true, DiedTick: < 0 } && offer.Takes(CharacterFacts.Animal(cold)))
+                PermaJobs.GiveOffered(cold, offer.Type, site.Id);
         }
     }
 

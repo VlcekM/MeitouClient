@@ -20,6 +20,11 @@ sealed class ScrollBars(PlayerInterface player)
     internal readonly Dictionary<string, (UiRect View, float Maximum)> InventoryViews = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// A view's own step for its arrows and the wheel, pixels (a list of rows: one row), by id; three inventory cells for any other.
+    /// </summary>
+    internal readonly Dictionary<string, float> ViewSteps = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// Per scrolled window, where its scrollbar's thumb runs and how tall it is (for dragging it).
     /// </summary>
     internal readonly Dictionary<string, (UiRect Track, float Thumb)> InventoryTracks = new(StringComparer.Ordinal);
@@ -97,12 +102,15 @@ sealed class ScrollBars(PlayerInterface player)
     }
 
     /// <summary>
-    /// Scrolls view <paramref name="id"/> by three cells a wheel step, within its range.
+    /// Scrolls view <paramref name="id"/> by its step (<see cref="ViewSteps"/>, else three cells) a wheel step, within its range.
     /// </summary>
     internal void ScrollInventory(string id, float steps)
     {
         if (InventoryViews.TryGetValue(id, out var view))
-            InventoryScroll[id] = Math.Clamp(InventoryScroll.GetValueOrDefault(id) - steps * player.InventoryCellHeight * 3, 0, view.Maximum);
+        {
+            float step = ViewSteps.TryGetValue(id, out float own) ? own : player.InventoryCellHeight * 3;
+            InventoryScroll[id] = Math.Clamp(InventoryScroll.GetValueOrDefault(id) - steps * step, 0, view.Maximum);
+        }
     }
 
     /// <summary>
