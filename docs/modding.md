@@ -231,6 +231,14 @@ holds refuses the second mod.
   combat, and must answer from the world and the hit alone. The one-punch debug cheat ignores the packet but keeps a cancel. Hits on doors
   and walls are not filtered. A filter that throws or breaks the packet's rule is undone for that hit, logged and disabled for that world;
   faulted registrations enter the state hash. Without a filter no payload is made.
+- **Defences:** a registered system implementing `ICombatDefenceObserver` (`Meitou.Simulation.Combat`) receives `Defended(World, in
+  CombatDefence)` once per melee blow the defender blocked or dodged, after its counts, XP, sound and combat log entry: the tick, the attacker,
+  the defender, the attack's sequence and blow (as `CombatHit`'s), `Kind` (`Blocked`, also for a dodge technique that counts as a block, or
+  `Dodged`), `Parry` (a weapon's parry, the one that throws sparks) and whether the defender was the attacker's chosen target. Only melee blows
+  are reported. Observers are called serially in Commit, in system order; they may read the world and change their own state,
+  and must not change characters or other world state in the call. One that throws is logged and disabled for that world, and the fault enters
+  the state hash. Without an observer no payload is made. Engine API, not in the original. **Verified** by `CombatDefenceObserverTests`
+  (a duel: one report per logged block or dodge, the same on 1 and 4 threads, the run unchanged; a throwing observer called once, its fault hashed).
 - **Trade prices:** a registered system implementing `ITradePriceFilter` (`Meitou.Simulation.Trading`) is asked
   `Price(World, in TradeDeal, long price)` for every price the game asks: the trade window's stack and unit prices and the coins it takes,
   and an NPC shopper's purchase from a building's stock. The deal names the tick, the item record, the units, whether the customer sells,
