@@ -1087,11 +1087,9 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         new(StringComparer.Ordinal);
 
     /// <summary>
-    /// State 149 gotAFoodItem (<c>FUN_140597e20</c>): a limb in the mouth, or something edible among its items or in its worn bag.
+    /// State 149 gotAFoodItem (<c>FUN_140597e20</c>): a limb in the mouth, or live edible food among its items or in its worn bag.
     /// </summary>
-    internal static bool HoldsFood(CharacterCold cold) =>
-        cold.Mouth is not null
-        || cold.Inventory is { } inv && (inv.Items.Any(i => i.IsFood) || inv.Backpack?.Contents is { } bag && bag.Items.Any(i => i.IsFood));
+    internal static bool HoldsFood(CharacterCold cold) => FeedSystem.HoldsFood(cold);
 
     /// <summary>
     /// The nearest store of the town with food in it (<c>BuildingFinder_LootFoodAndStuff</c>, its filter only partly read: buildings with an

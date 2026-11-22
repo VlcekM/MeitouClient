@@ -320,10 +320,37 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
             && (Best(own.Items, race, animal) is not null || own.Backpack?.Contents is { } bag && Best(bag.Items, race, animal) is not null);
 
     /// <summary>
+    /// State 149 <c>gotAFoodItem</c> (<c>FUN_140597e20</c>): a limb in the mouth, or live edible food in the character's items or worn bag.
+    /// Excludes death items of a living character (an animal's own carcass raw meat does not count as carried food).
+    /// </summary>
+    internal static bool HoldsFood(CharacterCold cold)
+    {
+        if (cold.Mouth is not null) return true;
+        if (cold.Inventory is not { } own) return false;
+        bool animal = cold.Medical is { HasStatsObject: false };
+        if (cold.Race is { } race) return CarriesFood(cold, race, animal);
+
+        return HasLiveFood(own.Items, animal) || own.Backpack?.Contents is { } bag && HasLiveFood(bag.Items, animal);
+    }
+
+    /// <summary>
+    /// Fallback for <see cref="HoldsFood"/> when a character has no race record loaded: live food, or raw food for an animal.
+    /// </summary>
+    static bool HasLiveFood(List<ItemInstance> items, bool animal)
+    {
+        foreach (var item in items)
+        {
+            if (item.Death || item.Quantity <= 0) continue;
+            if (item.ItemFunction == FoodFunction || animal && item.ItemFunction == RawFoodFunction) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// The bite of <c>FUN_140748d70</c>: raw food the race eats first, then food.
     /// </summary>
     static ItemInstance? Best(List<ItemInstance> items, RaceData race, bool animal, bool ownerDead = false) =>
-        Best(items, RawFoodFunction, r => animal || race.SpecialFood.Contains(r), ownerDead) ?? Best(items, FoodFunction, null, ownerDead);
+        Best(items, RawFoodFunction, animal ? null : race, ownerDead) ?? Best(items, FoodFunction, specialFor: null, ownerDead);
 
     /// <summary>
     /// The item of <paramref name="function"/> with the highest score: an opened item (charges below its full) scores (2 - charges / full) x 1000, a
@@ -338,6 +365,28 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
         {
             if (item.ItemFunction != function || item.Quantity <= 0 || item.Death && !ownerDead || eats is not null && !eats(item.Record))
                 continue;
+            float full = item.MaxCharges;
+            float score = item.Charges == full ? full * 0.01f : full > 0 ? (1 - item.Charges / full + 1) * 1000 : 0;
+            if (score > 0 && score > top) (best, top) = (item, score);
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// Allocation-free overload of <see cref="Best(List{ItemInstance}, int, Func{string, bool}?, bool)"/> filtering raw food by
+    /// <paramref name="specialFor"/>'s <c>special food</c> list when non-null.
+    /// </summary>
+    static ItemInstance? Best(List<ItemInstance> items, int function, RaceData? specialFor, bool ownerDead)
+    {
+        ItemInstance? best = null;
+        float top = -1;
+        foreach (var item in items)
+        {
+            if (item.ItemFunction != function || item.Quantity <= 0 || item.Death && !ownerDead
+                || specialFor is not null && !specialFor.SpecialFood.Contains(item.Record))
+            {
+                continue;
+            }
             float full = item.MaxCharges;
             float score = item.Charges == full ? full * 0.01f : full > 0 ? (1 - item.Charges / full + 1) * 1000 : 0;
             if (score > 0 && score > top) (best, top) = (item, score);
