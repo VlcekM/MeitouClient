@@ -66,16 +66,16 @@ public static class BuildingShape
     }
 
     /// <summary>
-    /// The highest of <paramref name="corners"/>' triangles straight over <paramref name="at"/> (X, Z), what a ray cast straight down meets of them
-    /// first, with its normal turned up; null when none lies over it.
+    /// The highest of <paramref name="corners"/>' triangles straight over <paramref name="at"/> (X, Z), what a ray cast straight down from height
+    /// <paramref name="from"/> meets of them first (one above it is not met), with its normal turned up; null when none lies under it.
     /// </summary>
-    public static GroundHit? TopOf(Vector3[] corners, Vector2 at)
+    public static GroundHit? TopOf(Vector3[] corners, Vector2 at, float from = float.PositiveInfinity)
     {
         GroundHit? top = null;
         for (int t = 0; t + 2 < corners.Length; t += 3)
         {
             var (a, b, c) = (corners[t], corners[t + 1], corners[t + 2]);
-            if (HeightOver(a, b, c, at) is not { } y || top is { } best && y <= best.Y) continue;
+            if (HeightOver(a, b, c, at) is not { } y || y > from || top is { } best && y <= best.Y) continue;
 
             var normal = Vector3.Cross(b - a, c - a);
             if (normal.Y < 0) normal = -normal;

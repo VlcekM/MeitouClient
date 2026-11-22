@@ -20,15 +20,16 @@ public sealed class GroundShapes(GameDatabase db, InteriorCollisions collisions)
     sealed record Shape(Vector3[] Corners, Vector2 Min, Vector2 Max);
 
     /// <summary>
-    /// Where a ground ray cast straight down over <paramref name="at"/> (X, Z) meets the placed building's group-9 surfaces first; null when none
-    /// lies over it. The building is read the first time it is asked for at that place in that state.
+    /// Where a ground ray cast straight down over <paramref name="at"/> (X, Z) from height <paramref name="from"/> meets the placed building's group-9
+    /// surfaces first; null when none lies under it. The building is read the first time it is asked for at that place in that state.
     /// </summary>
-    public GroundHit? Hit(GameRecord building, string id, Vector3 position, Quaternion rotation, bool destroyed, Vector2 at)
+    public GroundHit? Hit(GameRecord building, string id, Vector3 position, Quaternion rotation, bool destroyed, Vector2 at,
+        float from = float.PositiveInfinity)
     {
         var shape = _shapes.GetOrAdd((id, position, rotation, destroyed), _ => Read(building, id, position, rotation, destroyed));
         if (at.X < shape.Min.X || at.Y < shape.Min.Y || at.X > shape.Max.X || at.Y > shape.Max.Y) return null;
 
-        return BuildingShape.TopOf(shape.Corners, at);
+        return BuildingShape.TopOf(shape.Corners, at, from);
     }
 
     /// <summary>

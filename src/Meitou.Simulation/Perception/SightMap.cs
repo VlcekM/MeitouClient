@@ -34,16 +34,16 @@ public interface ISightSource
     /// </summary>
     bool EnforcesCeiling(TownBuilding building) => false;
     /// <summary>
-    /// Where a ground ray cast straight down over <paramref name="at"/> (X, Z) meets the building's group-9 surfaces first, as it stands or as a ruin
-    /// (<see cref="BuildingShape.GroundTriangles"/>); null when none lies over it (and by default).
+    /// Where a ground ray cast straight down over <paramref name="at"/> (X, Z) from height <paramref name="from"/> meets the building's group-9
+    /// surfaces first, as it stands or as a ruin (<see cref="BuildingShape.GroundTriangles"/>); null when none lies under it (and by default).
     /// </summary>
-    GroundHit? TopAt(TownBuilding building, bool destroyed, System.Numerics.Vector2 at) => null;
+    GroundHit? TopAt(TownBuilding building, bool destroyed, System.Numerics.Vector2 at, float from = float.PositiveInfinity) => null;
     /// <summary>
-    /// As <see cref="TopAt(TownBuilding, bool, System.Numerics.Vector2)"/> for any placed BUILDING <paramref name="record"/> (a player's site, a
-    /// camp piece), cached by <paramref name="id"/>; null by default.
+    /// As <see cref="TopAt(TownBuilding, bool, System.Numerics.Vector2, float)"/> for any placed BUILDING <paramref name="record"/> (a player's site,
+    /// a camp piece), cached by <paramref name="id"/>; null by default.
     /// </summary>
     GroundHit? TopAt(string record, string id, System.Numerics.Vector3 position, System.Numerics.Quaternion rotation, bool destroyed,
-        System.Numerics.Vector2 at) => null;
+        System.Numerics.Vector2 at, float from = float.PositiveInfinity) => null;
     /// <summary>
     /// The radius of the building's bounding box, as it stands or as a ruin (<see cref="BuildingShape.BoundsRadius"/>); 0 by default.
     /// </summary>

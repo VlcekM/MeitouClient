@@ -38,13 +38,14 @@ sealed class BuildingSight(GameInstall install, GameDatabase db, WorldLevelData 
     public bool EnforcesCeiling(TownBuilding building) => db.Find(building.BuildingId)?.GetBool("enforce ceiling") == true;
 
     /// <inheritdoc/>
-    public GroundHit? TopAt(TownBuilding building, bool destroyed, Vector2 at) => building.Resolved is { } r
-        ? Ground.Hit(r.Record, building.Key, r.Position, r.Placement.Rotation, destroyed, at)
+    public GroundHit? TopAt(TownBuilding building, bool destroyed, Vector2 at, float from = float.PositiveInfinity) => building.Resolved is { } r
+        ? Ground.Hit(r.Record, building.Key, r.Position, r.Placement.Rotation, destroyed, at, from)
         : null;
 
     /// <inheritdoc/>
-    public GroundHit? TopAt(string record, string id, Vector3 position, Quaternion rotation, bool destroyed, Vector2 at) =>
-        db.Find(record) is { } building ? Ground.Hit(building, id, position, rotation, destroyed, at) : null;
+    public GroundHit? TopAt(string record, string id, Vector3 position, Quaternion rotation, bool destroyed, Vector2 at,
+        float from = float.PositiveInfinity) =>
+        db.Find(record) is { } building ? Ground.Hit(building, id, position, rotation, destroyed, at, from) : null;
 
     /// <inheritdoc/>
     public float BoundsRadius(TownBuilding building, bool destroyed) => building.Resolved is { } r

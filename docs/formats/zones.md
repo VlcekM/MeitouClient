@@ -270,7 +270,8 @@ TownBase, Town, Nest and TownNull), which seeds `rand()` from the town's positio
   Egg, Crab Egg, Gurgler Egg, each `trade item`, values 7000 / 400 / 400): for each of the count, `cluster min`..`cluster max` copies, each at the centre plus a random direction
   times 0..`cluster range`, on the ground; only when the flag byte +0xa8 of the object the zone's slot 25 returns allows it (Meitou: always). Any other (13 records:
   bones, dung, trash, carpets, awnings; `trade item` mostly set, value 0..25) is a mesh node from `ground mesh` (else `mesh`; with `number of meshes` above 1 a numbered
-  variant) at a random yaw within `size radius` of the centre, plus cluster copies; the item's own `cluster` links then repeat this with their v0..v1 and v2. Meitou does not draw these.
+  variant) at a random yaw within `size radius` of the centre, plus cluster copies; the item's own `cluster` links then repeat this with their v0..v1 and v2. Heights:
+  [nest furniture](../game/factions-squads-towns.md) (a home's ray from 1000 over the point before, else the terrain). Meitou draws these (`NestDebris.cs`).
 - `loot spawn` (63 links in the base game, all VENDOR_LIST): v0..v1 times a point of the nest where the height is at least 1, an item rolled from the list as an interior layout's slot rolls
   ([loose items](../game/factions-squads-towns.md#loose-items-in-buildings), `FUN_1409540d0`), put there as a real item, only with the same flag. Meitou uses `size radius`.
 - `debris building` (BUILDING link: Prisoner Pole, Camp Bed, Torch Post, Campfire, Sitting spot, Trophy ...): for each of `num centrepoints` a point round the centre

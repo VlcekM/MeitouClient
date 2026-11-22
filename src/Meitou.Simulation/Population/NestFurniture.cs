@@ -29,11 +29,11 @@ public sealed record NestPiece(string Id, string Record, Vector3 Position, Quate
 public readonly record struct PlacementHit(GroundHit Hit, bool OnHome);
 
 /// <summary>
-/// What the original's placement ray (<c>FUN_140930120</c>: straight down from 10000 over a piece's spot, mask <c>0x204</c>) meets first over
-/// <paramref name="spot"/> (X, Z) round a resident nest's home, given the pieces laid before it: a building's surface (the home's or another's),
-/// else null for the terrain.
+/// What the original's placement ray (<c>FUN_140930120</c>: straight down from 10000 over a piece's spot, mask <c>0x204</c>; a debris mesh's from
+/// <paramref name="from"/>) meets first over <paramref name="spot"/> (X, Z) round a resident nest's home, given the pieces laid before it: a
+/// building's surface (the home's or another's), else null for the terrain.
 /// </summary>
-public delegate PlacementHit? PlacementRay(Vector2 spot, IReadOnlyList<NestPiece> earlier);
+public delegate PlacementHit? PlacementRay(Vector2 spot, IReadOnlyList<NestPiece> earlier, float from = float.PositiveInfinity);
 
 /// <summary>
 /// What a nest scatters at its place: its buildings, its <c>debris</c> meshes (drawn only) and the items it lays down in a fresh zone (<c>debris</c>
@@ -94,15 +94,16 @@ public static partial class NestFurniture
     /// <summary>
     /// What <paramref name="nest"/> scatters at <paramref name="at"/>, in the original's order: <c>debris</c>, the buildings (ids are
     /// <paramref name="idPrefix"/> and a number), <c>loot spawn</c>. <paramref name="ray"/>: a resident nest's placement ray, whose first hit a
-    /// piece stands on (null: a nest of no home, whose pieces stand on the navmesh).
+    /// piece stands on (null: a nest of no home, whose buildings stand on the navmesh and debris on the terrain); <paramref name="atY"/>: the
+    /// height of its spot, the home's position, over which its debris rays start.
     /// </summary>
     public static NestLayout Scatter(GameDatabase db, TownData nest, Vector2 at, IWalkability walk, ulong seed, string idPrefix,
-        PlacementRay? ray = null)
+        PlacementRay? ray = null, float atY = 0)
     {
         ulong key = Rng.Mix(SeedSalts.NestFurniture ^ (ulong)(uint)(int)at.X ^ (ulong)(uint)(int)at.Y << 32);
         var rolls = new RandomStream(seed, key, RngPurpose.Spawn);
         var layout = new NestLayout([], [], []);
-        Debris(db, nest, at, walk, ref rolls, layout);
+        Debris(db, nest, new Vector3(at.X, atY, at.Y), new DebrisGround(walk, ray), ref rolls, layout);
         Buildings(db, nest, at, walk, ref rolls, idPrefix, layout.Pieces, ray);
         Loot(nest, at, walk, ref rolls, layout.Drops);
         return layout;

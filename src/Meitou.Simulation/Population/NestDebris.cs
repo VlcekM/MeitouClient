@@ -27,8 +27,9 @@ public sealed record NestDrop(string Record, bool List, Vector3 Position, float 
 /// scale v2 / 100 (0: 1), each at a random point within <c>size radius</c>. A NEST_ITEM without a <c>physics file</c> is <c>cluster min</c> to
 /// <c>cluster max</c> meshes, each within <c>cluster range</c> x scale of the one before (a walk), its <c>ground mesh</c> (else <c>mesh</c>) or, with
 /// <c>number of meshes</c> above 1, a numbered one of them, scaled by the scale ± 0.1; one with a physics file is that many items within <c>cluster
-/// range</c> of the cluster's point. Its own <c>cluster</c> list follows from the last one placed (v0 to v1 clusters within v2). <c>loot spawn</c>:
-/// v0 to v1 rolls of the list, each at a point within <c>size radius</c> on the navmesh, none below height 1.
+/// range</c> of the cluster's point. Its own <c>cluster</c> list follows from the last one placed (v0 to v1 clusters within v2). Every piece lies
+/// where <see cref="DebrisGround"/> puts it. <c>loot spawn</c>: v0 to v1 rolls of the list, each at a point within <c>size radius</c> on the navmesh,
+/// none below height 1.
 /// </summary>
 public static partial class NestFurniture
 {
@@ -40,19 +41,44 @@ public static partial class NestFurniture
     /// How deep a NEST_ITEM's own <c>cluster</c> list may nest.
     /// </summary>
     const int MaxDebrisDepth = 4;
+    /// <summary>
+    /// How far over the point before a home nest's debris ray starts (<c>FUN_140937510</c>: the point plus 1000 up, cast along -Y).
+    /// </summary>
+    const float DebrisRayRise = 1000;
 
     /// <summary>
-    /// Lays out the nest's <c>debris</c> entries: v0 to v1 clusters of each NEST_ITEM, at the entry's scale, round the nest's place.
+    /// Where the pieces of a nest's <c>debris</c> lie (<c>spawnDebris</c> <c>FUN_140937510</c>, <b>Verified</b> by disassembly): a home's nest
+    /// (<paramref name="Ray"/> set) casts the placement ray (mask <c>0x204</c>: the terrain and the buildings' group-9 parts) straight down from
+    /// <see cref="DebrisRayRise"/> over the point before and lies where it meets first; a nest of no home, or a ray that meets nothing, lies on
+    /// the terrain (<c>getTerrainHeightFast</c>), never on the navmesh.
     /// </summary>
-    static void Debris(GameDatabase db, TownData nest, Vector2 at, IWalkability walk, ref RandomStream rolls, NestLayout layout)
+    readonly record struct DebrisGround(IWalkability Walk, PlacementRay? Ray)
+    {
+        /// <summary>
+        /// The point <paramref name="offset"/> from <paramref name="from"/> where a piece lies.
+        /// </summary>
+        public Vector3 At(Vector3 from, Vector2 offset)
+        {
+            float x = from.X + offset.X;
+            float z = from.Z + offset.Y;
+            if (Ray?.Invoke(new Vector2(x, z), [], from.Y + DebrisRayRise) is { } first) return new Vector3(x, first.Hit.Y, z);
+
+            return new Vector3(x, Walk.TerrainHeight(x, z), z);
+        }
+    }
+
+    /// <summary>
+    /// Lays out the nest's <c>debris</c> entries: v0 to v1 clusters of each NEST_ITEM, at the entry's scale, round the nest's spot
+    /// <paramref name="at"/> (a home's nest: the home's position).
+    /// </summary>
+    static void Debris(GameDatabase db, TownData nest, Vector3 at, DebrisGround ground, ref RandomStream rolls, NestLayout layout)
     {
         foreach (var entry in nest.Debris)
         {
             if (db.Find(entry.Id) is not { } item) continue;
 
             float scale = entry.V2 == 0 ? 1 : entry.V2 * 0.01f;
-            var centre = new Vector3(at.X, walk.GroundHeight(at.X, at.Y), at.Y);
-            Clusters(db, item, centre, nest.SizeRadius, IntIn(ref rolls, entry.V0, entry.V1), scale, walk, ref rolls, layout, 0);
+            Clusters(db, item, at, nest.SizeRadius, IntIn(ref rolls, entry.V0, entry.V1), scale, ground, ref rolls, layout, 0);
         }
     }
 
@@ -66,7 +92,7 @@ public static partial class NestFurniture
         float radius,
         int count,
         float scale,
-        IWalkability walk,
+        DebrisGround ground,
         ref RandomStream rolls,
         NestLayout layout,
         int depth)
@@ -82,21 +108,14 @@ public static partial class NestFurniture
             {
                 for (int n = IntIn(ref rolls, min, max); n > 0; n--)
                 {
-                    last = Ground(walk, at, Direction(ref rolls) * Between(ref rolls, 0, range));
+                    last = ground.At(at, Direction(ref rolls) * Between(ref rolls, 0, range));
                     layout.Drops.Add(new NestDrop(item.StringId, false, last, rolls.NextFloat() * MathF.Tau));
                 }
             }
             else
             {
-                last = Ground(walk, at, Direction(ref rolls) * Between(ref rolls, 0, radius));
-                for (int n = IntIn(ref rolls, min, max); n > 0; n--)
-                {
-                    float yaw = rolls.NextFloat() * MathF.Tau;
-                    string mesh = MeshOf(item, ref rolls);
-                    float size = scale + Between(ref rolls, -MeshScaleSpread, MeshScaleSpread);
-                    last = Ground(walk, last, Direction(ref rolls) * Between(ref rolls, 0, range * scale));
-                    if (mesh.Length > 0) layout.Meshes.Add(new NestMesh(item.StringId, mesh, last, yaw, size));
-                }
+                var point = ground.At(at, Direction(ref rolls) * Between(ref rolls, 0, radius));
+                last = Meshes(item, point, IntIn(ref rolls, min, max), range * scale, scale, ground, ref rolls, layout);
             }
 
             if (depth >= MaxDebrisDepth) continue;
@@ -106,10 +125,30 @@ public static partial class NestFurniture
                 if (db.Find(sub.TargetStringId) is { } subItem)
                 {
                     int subCount = IntIn(ref rolls, sub.Values.Value0, sub.Values.Value1);
-                    Clusters(db, subItem, last, sub.Values.Value2, subCount, scale, walk, ref rolls, layout, depth + 1);
+                    Clusters(db, subItem, last, sub.Values.Value2, subCount, scale, ground, ref rolls, layout, depth + 1);
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// <paramref name="count"/> meshes of a NEST_ITEM without a physics file, the first at <paramref name="point"/> and each after it within
+    /// <paramref name="step"/> of the one before (the original places a mesh, then steps). Returns the point after the last.
+    /// </summary>
+    static Vector3 Meshes(GameRecord item, Vector3 point, int count, float step, float scale, DebrisGround ground, ref RandomStream rolls,
+        NestLayout layout)
+    {
+        for (int n = count; n > 0; n--)
+        {
+            float yaw = rolls.NextFloat() * MathF.Tau;
+            string mesh = MeshOf(item, ref rolls);
+            float size = scale + Between(ref rolls, -MeshScaleSpread, MeshScaleSpread);
+            if (mesh.Length > 0) layout.Meshes.Add(new NestMesh(item.StringId, mesh, point, yaw, size));
+
+            point = ground.At(point, Direction(ref rolls) * Between(ref rolls, 0, step));
+        }
+
+        return point;
     }
 
     /// <summary>
@@ -143,16 +182,6 @@ public static partial class NestFurniture
                 drops.Add(new NestDrop(entry.Id, true, new Vector3(p.X, y, p.Y), 0));
             }
         }
-    }
-
-    /// <summary>
-    /// A point <paramref name="offset"/> from <paramref name="from"/> on the ground under it.
-    /// </summary>
-    static Vector3 Ground(IWalkability walk, Vector3 from, Vector2 offset)
-    {
-        float x = from.X + offset.X;
-        float z = from.Z + offset.Y;
-        return new Vector3(x, walk.GroundHeight(x, z, from.Y), z);
     }
 
     /// <summary>
