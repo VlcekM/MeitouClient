@@ -5658,3 +5658,24 @@ msgstr "信息面板保持展开"
 #. machine-translated
 msgid "The character information panel at the bottom left stays extended or collapsed as you last left it, also after restarting the game. The game starts it collapsed every time."
 msgstr "左下角的角色信息面板会保持你上次留下的展开或折叠状态，重启游戏后也一样。原版游戏每次启动时都是折叠的。"
+
+msgid "Date added"
+msgstr "添加日期"
+
+msgid "Hide incompatible RE_Kenshi plugins"
+msgstr "隐藏不兼容的 RE_Kenshi 插件"
+
+msgid "Last modified"
+msgstr "最后修改时间"
+
+msgid "Load order"
+msgstr "加载顺序"
+
+msgid "No mods match the filters."
+msgstr "没有符合筛选条件的模组。"
+
+msgid "Save current preset"
+msgstr "保存当前预设"
+
+msgid "Sort by"
+msgstr "排序方式"

@@ -4810,3 +4810,27 @@ msgstr "정보 패널 열림 유지"
 #. machine-translated
 msgid "The character information panel at the bottom left stays extended or collapsed as you last left it, also after restarting the game. The game starts it collapsed every time."
 msgstr "왼쪽 아래의 캐릭터 정보 패널이 마지막으로 둔 대로 펼쳐지거나 접힌 상태를 유지합니다. 게임을 다시 시작한 뒤에도 마찬가지입니다. 게임에서는 매번 접힌 상태로 시작합니다."
+
+msgid "Date added"
+msgstr "추가 날짜"
+
+msgid "Hide incompatible RE_Kenshi plugins"
+msgstr "호환되지 않는 RE_Kenshi 플러그인 숨기기"
+
+msgid "Last modified"
+msgstr "마지막 수정 날짜"
+
+msgid "Load order"
+msgstr "로드 순서"
+
+msgid "Name"
+msgstr "이름"
+
+msgid "No mods match the filters."
+msgstr "필터에 맞는 모드가 없습니다."
+
+msgid "Save current preset"
+msgstr "현재 프리셋 저장"
+
+msgid "Sort by"
+msgstr "정렬 기준"

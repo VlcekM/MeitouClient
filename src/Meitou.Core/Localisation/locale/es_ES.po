@@ -4812,3 +4812,27 @@ msgstr "El panel de información sigue abierto"
 #. machine-translated
 msgid "The character information panel at the bottom left stays extended or collapsed as you last left it, also after restarting the game. The game starts it collapsed every time."
 msgstr "El panel de información del personaje, abajo a la izquierda, sigue desplegado o plegado como lo dejaste, también tras reiniciar el juego. En el juego empieza plegado cada vez."
+
+msgid "Date added"
+msgstr "Fecha de incorporación"
+
+msgid "Hide incompatible RE_Kenshi plugins"
+msgstr "Ocultar plugins de RE_Kenshi incompatibles"
+
+msgid "Last modified"
+msgstr "Última modificación"
+
+msgid "Load order"
+msgstr "Orden de carga"
+
+msgid "Name"
+msgstr "Nombre"
+
+msgid "No mods match the filters."
+msgstr "Ningún mod coincide con los filtros."
+
+msgid "Save current preset"
+msgstr "Guardar preajuste actual"
+
+msgid "Sort by"
+msgstr "Ordenar por"

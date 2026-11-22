@@ -4812,3 +4812,27 @@ msgstr "Infofeld bleibt offen"
 #. machine-translated
 msgid "The character information panel at the bottom left stays extended or collapsed as you last left it, also after restarting the game. The game starts it collapsed every time."
 msgstr "Das Charakter-Infofeld unten links bleibt ausgeklappt oder eingeklappt, wie du es zuletzt verlassen hast, auch nach einem Neustart des Spiels. Im Spiel ist es bei jedem Start eingeklappt."
+
+msgid "Date added"
+msgstr "Hinzugefügt am"
+
+msgid "Hide incompatible RE_Kenshi plugins"
+msgstr "Inkompatible RE_Kenshi-Plugins ausblenden"
+
+msgid "Last modified"
+msgstr "Zuletzt geändert"
+
+msgid "Load order"
+msgstr "Ladereihenfolge"
+
+msgid "Name"
+msgstr "Name"
+
+msgid "No mods match the filters."
+msgstr "Keine Mods entsprechen den Filtern."
+
+msgid "Save current preset"
+msgstr "Aktuelle Voreinstellung speichern"
+
+msgid "Sort by"
+msgstr "Sortieren nach"

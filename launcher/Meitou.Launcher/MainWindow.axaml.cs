@@ -955,26 +955,18 @@ public sealed partial class MainWindow : Window
     {
         int load = ++_modsLoad;
         _modsReady = false;
+        UpdateSaveCurrentPreset();
         _blanking.Reset();
         _mods.Clear();
+        ShowModSort();
         ModsEmpty.IsVisible = false;
         SyncWorkshopButton.IsVisible = MacSteam.CanSync;
         var gameInstall = _install;
-        List<(ModEntry Entry, CodeModEntry Code)> entries;
+        List<ModRow> rows;
         try
         {
-            entries = gameInstall is null ? [] : await Task.Run(() =>
-            {
-                var order = ModList.LauncherOrder(gameInstall, ModList.Discover(gameInstall));
-
-                // The rows show each mod's author, RE_Kenshi notes and code-mod dependencies: read them here too, not on the UI thread.
-                foreach (var entry in order)
-                {
-                    _ = entry.Mod.Header;
-                    _ = entry.Mod.ReKenshi;
-                }
-                return order.Select(e => (e, CodeModDependencies.ReadEntry(e.Mod, e.Enabled))).ToList();
-            });
+            rows = gameInstall is null ? [] : await Task.Run(() =>
+                ModList.LauncherOrder(gameInstall, ModList.Discover(gameInstall)).Select(ReadModRow).ToList());
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -983,32 +975,104 @@ public sealed partial class MainWindow : Window
             ModsEmpty.Text = Tr("Could not read the mods: {1}", e.Message);
             return;
         }
+
         if (load != _modsLoad) return;
-        foreach (var (entry, code) in entries) _mods.Add(new ModRow(entry.Mod, entry.Enabled, code));
+
+        foreach (var row in rows) _mods.Add(row);
 
         // Only a toggle changes the checks; the checks' own Notes changes must not start them again.
         foreach (var row in _mods)
             row.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ModRow.Enabled)) ModListChanged(); };
         _modsReady = true;
+        UpdateSaveCurrentPreset();
         ShowDependencyProblems();
         QueueBlankingCheck();
         MarkPorts();
-        ApplyModSearch();
+        ApplyModFilters();
+        ShowModSort();
         OfferPorts();
     }
 
     /// <summary>
-    /// The search text changed: the rows that do not match it are hidden.
+    /// Reads the header, RE_Kenshi metadata and code manifest for the row, and snapshots the file dates for sorting.
     /// </summary>
-    void ModSearch_TextChanged(object? sender, TextChangedEventArgs e) => ApplyModSearch();
+    static ModRow ReadModRow(ModEntry entry)
+    {
+        var mod = entry.Mod;
+        _ = mod.Header;
+        _ = mod.ReKenshi;
+        var code = CodeModDependencies.ReadEntry(mod, entry.Enabled);
+
+        return new ModRow(mod, entry.Enabled, code) { Dates = ReadModDates(mod.Path) };
+    }
 
     /// <summary>
-    /// Shows only the rows matching the search box (<see cref="ModRow.Matches"/>), and says why the list is empty when it is.
+    /// Reads both timestamps from the installed file. An inaccessible or missing file sorts last by date.
     /// </summary>
-    void ApplyModSearch()
+    static (DateTime Added, DateTime Modified) ReadModDates(string path)
+    {
+        try
+        {
+            var file = new FileInfo(path);
+            return file.Exists ? (file.CreationTimeUtc, file.LastWriteTimeUtc) : default;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return default;
+        }
+    }
+
+    /// <summary>
+    /// Updates the display order when the sort choice changes.
+    /// </summary>
+    void ModSortBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_languageReady) ShowModSort();
+    }
+
+    /// <summary>
+    /// Shows the chosen ordering. Only the load order view uses the live collection so manual moves remain edits to that order.
+    /// </summary>
+    void ShowModSort()
+    {
+        int sort = ModSortBox.SelectedIndex;
+        bool loadOrder = sort <= 0;
+
+        foreach (var row in _mods) row.CanReorder = loadOrder;
+
+        var byName = StringComparer.CurrentCultureIgnoreCase;
+        ModListBox.ItemsSource = sort switch
+        {
+            1 => _mods.OrderBy(m => m.Name, byName).ToList(),
+            2 => _mods.OrderByDescending(m => m.Dates.Added).ThenBy(m => m.Name, byName).ToList(),
+            3 => _mods.OrderByDescending(m => m.Dates.Modified).ThenBy(m => m.Name, byName).ToList(),
+            _ => _mods,
+        };
+    }
+
+    /// <summary>
+    /// Updates visibility when the search text changes.
+    /// </summary>
+    void ModSearch_TextChanged(object? sender, TextChangedEventArgs e) => ApplyModFilters();
+
+    /// <summary>
+    /// Updates visibility when the compatibility filter changes.
+    /// </summary>
+    void ModFilter_Click(object? sender, RoutedEventArgs e) => ApplyModFilters();
+
+    /// <summary>
+    /// Shows only rows passing the search and compatibility filters, with an empty message when no rows pass.
+    /// </summary>
+    void ApplyModFilters()
     {
         string search = ModSearch.Text?.Trim() ?? "";
-        foreach (var row in _mods) row.IsShown = row.Matches(search);
+        bool hidePlugins = HideIncompatiblePlugins?.IsChecked == true;
+
+        foreach (var row in _mods) row.IsShown = (!hidePlugins || !row.HasIncompatiblePlugin) && row.Matches(search);
+
+        if (ModListBox?.SelectedItems is { } selected)
+            foreach (var row in selected.OfType<ModRow>().Where(m => !m.IsShown).ToList()) selected.Remove(row);
+
         ShowModsSummary();
 
         // Until a load ends the empty line is the load's own (its error, or nothing).
@@ -1016,9 +1080,10 @@ public sealed partial class MainWindow : Window
 
         bool none = _mods.Count == 0;
         ModsEmpty.IsVisible = !_mods.Any(m => m.IsShown);
-        ModsEmpty.Text = Tr(!none ? "No mods match the search."
-            : _install is null ? "Set the Kenshi folder in Settings to list its mods."
-            : "No mods found in Kenshi's mods folder or among its Steam workshop items.");
+        ModsEmpty.Text = !none
+            ? Tr(hidePlugins ? "No mods match the filters." : "No mods match the search.")
+            : Tr(_install is null ? "Set the Kenshi folder in Settings to list its mods."
+                : "No mods found in Kenshi's mods folder or among its Steam workshop items.");
     }
 
     /// <summary>
@@ -1444,7 +1509,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     void ModListBox_KeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.KeyModifiers != KeyModifiers.Alt || e.Key is not (Key.Up or Key.Down)) return;
+        if (ModSortBox.SelectedIndex > 0 || e.KeyModifiers != KeyModifiers.Alt || e.Key is not (Key.Up or Key.Down)) return;
 
         _modDrag.MoveSelection(e.Key == Key.Up ? -1 : 1);
         e.Handled = true;
@@ -1453,7 +1518,10 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// A press on a row's drag handle starts dragging the row (<see cref="ModListDrag"/>).
     /// </summary>
-    void DragHandle_PointerPressed(object? sender, PointerPressedEventArgs e) => _modDrag.Press(sender, e);
+    void DragHandle_PointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (ModSortBox.SelectedIndex <= 0) _modDrag.Press(sender, e);
+    }
 
     /// <summary>
     /// A click on a workshop mod's link icon opens its Steam workshop page; a local mod's row has no icon.
@@ -1577,11 +1645,43 @@ public sealed partial class MainWindow : Window
         }
         if (!ModsReady()) return;
         _config.Presets.RemoveAll(p => p.Name == name);
-        _config.Presets.Add(new ModPreset { Name = name, Mods = [.. _mods.Select(m => new PresetMod { Name = m.Name, Enabled = m.Enabled })] });
-        _config.Save();
+        var preset = new ModPreset { Name = name };
+        _config.Presets.Add(preset);
+        SavePreset(preset);
         PresetName.Text = "";
         RefreshPresets(name);
-        Status(Tr("Preset '{1}' saved.", name));
+    }
+
+    /// <summary>
+    /// Enables updating a preset when one is selected and the mod list is available.
+    /// </summary>
+    void PresetBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_languageReady) UpdateSaveCurrentPreset();
+    }
+
+    /// <summary>
+    /// Keeps the save button in sync with preset selection and list loading.
+    /// </summary>
+    void UpdateSaveCurrentPreset() =>
+        SaveCurrentPresetButton.IsEnabled = _install is not null && _modsReady && PresetBox.SelectedItem is ModPreset;
+
+    /// <summary>
+    /// Updates the selected preset with the current mod list and load order.
+    /// </summary>
+    void SaveCurrentPreset_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_install is not null && PresetBox.SelectedItem is ModPreset preset && ModsReady()) SavePreset(preset);
+    }
+
+    /// <summary>
+    /// Stores the full load order and enabled flags in the preset.
+    /// </summary>
+    void SavePreset(ModPreset preset)
+    {
+        preset.Mods = [.. _mods.Select(m => new PresetMod { Name = m.Name, Enabled = m.Enabled })];
+        _config.Save();
+        Status(Tr("Preset '{1}' saved.", preset.Name));
     }
 
     /// <summary>
@@ -1629,6 +1729,7 @@ public sealed partial class MainWindow : Window
         {
             _checksSuspended = false;
         }
+        ShowModSort();
         ShowDependencyProblems();
         SaveMods();
         return missing;
