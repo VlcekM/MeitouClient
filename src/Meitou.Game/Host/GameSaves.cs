@@ -737,6 +737,7 @@ sealed class GameSaves(GameHost host)
                 KeepCampaignClocks = host.Config.FixRaidClocks,
                 KeepWild = host.Config.KeepWild,
                 ResidentSchedule = host.Config.ResidentSchedule,
+                KeepDowned = host.Config.KeepDowned,
                 OffscreenOverrides = host.Config.OffscreenOverrides,
                 NestsMultiplier = (settings ?? Difficulty)[6],
                 SquadSizeMultiplier = Gameplay.SquadSize,

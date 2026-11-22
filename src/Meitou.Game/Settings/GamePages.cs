@@ -766,6 +766,11 @@ sealed class GamePages(SettingsMenu menu)
             + "and are there again when you come back. In the game they are removed and new ones are made.",
             Toggle: new("Wild squads stay", () => menu.Config.KeepWild,
                 v => { menu.Config.KeepWild = v; menu.OffscreenChanged?.Invoke(); }, Remaster: true, OnOff: true)));
+        result.Add(new("Knocked out stay",
+            "A knocked-out character left lying near your squads, such as a guard you carried off and put down, stays when his squad or town "
+            + "unloads far away. In the game he vanishes with them once you look away.",
+            Toggle: new("Knocked out stay", () => menu.Config.KeepDowned,
+                v => { menu.Config.KeepDowned = v; menu.OffscreenChanged?.Invoke(); }, Remaster: true, OnOff: true)));
         result.Add(new("Towns keep their schedule",
             "Townspeople you come back to after an hour or more are where their day puts them: in bed at night, at the counter, at their posts and "
             + "seats. "

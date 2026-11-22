@@ -35,7 +35,7 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// The split at unload (<c>FUN_14079c1c0</c>, <b>Verified</b>; a squad with 2 or more members): each imprisoned member, and each one carried
-    /// away (<see cref="CarriedAway"/>), goes into a squad and platoon of its own, same faction and template, at its place, loaded (it then keeps or
+    /// away (<see cref="CarriedAway"/>) or, under <see cref="KeepDowned"/>, left knocked out in the loaded zones (<see cref="LeftDown"/>), goes into a squad and platoon of its own, same faction and template, at its place, loaded (it then keeps or
     /// loses its zone by its own test), with the captured NPC package (the slave-only one for a slave); persistent when the old platoon is or the
     /// member is unique. A persistent platoon left with just that member keeps it (reused). The original's skip of a chained slave whose owner exists
     /// is not modelled. Serial.
@@ -46,12 +46,21 @@ public sealed partial class PopulationSystem
         foreach (var id in squad.Members.ToArray())
         {
             if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { } cold) continue;
-            if (!cold.IsImprisoned && !CarriedAway(world, cold)) continue;
+            var at = table.Previous[slot].Position;
+            if (!cold.IsImprisoned && !CarriedAway(world, cold) && !LeftDown(cold, at)) continue;
             if (squad.Members.Count == 1 && from.Persistent) break;
 
-            SplitOff(world, squad, from, id, cold, table.Previous[slot].Position);
+            SplitOff(world, squad, from, id, cold, at);
         }
     }
+
+    /// <summary>
+    /// The Meitou <see cref="KeepDowned"/> clause of the split: a living member lying knocked out inside the loaded zones (<see cref="OutOfZone"/>),
+    /// such as a guard carried off and put down, is split off as a carried one is instead of leaving with his squad (#1085; the original keeps
+    /// him only while he is on screen, <see cref="MemberInView"/>).
+    /// </summary>
+    bool LeftDown(CharacterCold cold, Vector3 at) =>
+        KeepDowned && cold.DiedTick < 0 && cold.Medical is { Incapacitated: true, Dead: false } && !OutOfZone(at);
 
     /// <summary>
     /// The carried clause of the split (<c>FUN_14079c1c0</c>, <b>Verified</b>): a member carried by a character it does not regard as friendly (vfunc

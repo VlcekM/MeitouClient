@@ -4792,3 +4792,9 @@ msgstr "Intensità dell'esposizione adattiva"
 
 msgid "The most deep shade by day is brightened, as a multiple of the game's exposure."
 msgstr "Quanto viene schiarita al massimo l'ombra profonda di giorno, come multiplo dell'esposizione del gioco."
+
+msgid "Knocked out stay"
+msgstr "Gli svenuti restano"
+
+msgid "A knocked-out character left lying near your squads, such as a guard you carried off and put down, stays when his squad or town unloads far away. In the game he vanishes with them once you look away."
+msgstr "Un personaggio svenuto lasciato a terra vicino alle tue squadre, come una guardia che hai portato via e posato, resta quando la sua squadra o la sua città viene scaricata lontano. Nel gioco sparisce con loro appena distogli lo sguardo."

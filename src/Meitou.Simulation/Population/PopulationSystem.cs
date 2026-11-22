@@ -177,6 +177,7 @@ public sealed partial class PopulationSystem : ITickSystem, Bodies.ICharacterDea
         CampaignAncestorsOnce = this._settings.CampaignAncestorsOnce;
         KeepWild = this._settings.KeepWild;
         ResidentSchedule = this._settings.ResidentSchedule;
+        KeepDowned = this._settings.KeepDowned;
         OffscreenOverrides = this._settings.OffscreenOverrides;
         _overrides = new TownOverrides(_data.Db);
         _live = new WorldStates(data.Db, data.Relations);
@@ -211,6 +212,10 @@ public sealed partial class PopulationSystem : ITickSystem, Bodies.ICharacterDea
     /// The residents' schedule switch (<see cref="PopulationSettings.ResidentSchedule"/>), changed live by the host.
     /// </summary>
     public bool ResidentSchedule { get; set; }
+    /// <summary>
+    /// The knocked-out members' switch (<see cref="PopulationSettings.KeepDowned"/>), changed live by the host.
+    /// </summary>
+    public bool KeepDowned { get; set; }
     /// <summary>
     /// The off-screen town override switch (<see cref="PopulationSettings.OffscreenOverrides"/>), changed live by the host.
     /// </summary>

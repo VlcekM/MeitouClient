@@ -599,7 +599,7 @@ its `Platoon.BaseTown` (a world squad's its platoon's), so one of an older versi
 Tests (the load rule only, with `OffscreenOverrides` off): `PopulationTests.A_town_takes_its_heaviest_qualifying_override_at_each_load_and_makes_its_residents`, `..._whose_residents_were_never_made_...`,
 `TownOverrideSaveTests`.
 
-Seven Faithful/Meitou switches (the fifth, campaign inheritance, under Campaigns below; `PopulationSettings`, live on `PopulationSystem`; Advanced settings (the fifth on the Fixes page), Meitou on by default; `PopulationOffscreen.cs`):
+Eight Faithful/Meitou switches (the fifth, campaign inheritance, under Campaigns below; `PopulationSettings`, live on `PopulationSystem`; Advanced settings (the fifth on the Fixes page), Meitou on by default; `PopulationOffscreen.cs`):
 - **Squads keep their people** (`KeepRoamers`). Meitou: a roaming squad the population made keeps its characters as a `StoredSquad` from the
   first time it leaves, travels on as them and comes back as them (moved along with its stand-in); saves write it as a new platoon (`sqt` 2,
   `persistent` false). Faithful (the original): a platoon that is not a town's own is despawned as it leaves, and a stand-in out of range for
@@ -609,6 +609,10 @@ Seven Faithful/Meitou switches (the fifth, campaign inheritance, under Campaigns
   (not one the unload splits off as a captive), where the original's member-by-member thinning keeps such a member unless he lies out of view
   within 600 of the departed leader ([off-screen world](game/factions-squads-towns.md#off-screen-world)). **Observed** (headless, a reporter's
   save): with the leader sent 20000 away, his two knocked-out squad mates beside the player stay; before, both vanished.
+- **Knocked out stay** (`KeepDowned`). Meitou: a squad that unloads (a town's with its town, or a platoon by its own place) splits off each
+  living member lying knocked out inside the loaded zones into a squad of its own, as the original splits a carried one
+  (`PopulationSystem.LeftDown` in the [split at unload](game/factions-squads-towns.md#1-object-model)), so a guard carried off and put down
+  stays (#1085) and rejoins his squad once up and near it. Faithful (the original): he goes with his squad once no member is on screen.
 - **Fights far away** (`OffscreenFights`). Meitou: every 2 s, an unloaded travelling or wild stand-in (not a town's own, not the player's) met
   by an enemy (`AggroSystem.IsEnemy` either way) within 300 fights the first such in id order that no code mod's rule skips
   ([modding](modding.md) "Off-screen fight rules"; a rule may also name the winner); strength per member able to fight is 10 + the

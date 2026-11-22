@@ -545,6 +545,7 @@ sealed class GameLoop(GameHost host)
             (population.CampaignAncestorsOnce, population.KeepWild, population.ResidentSchedule) =
                 (host.Config.CampaignAncestorsOnce, host.Config.KeepWild, host.Config.ResidentSchedule);
             population.OffscreenOverrides = host.Config.OffscreenOverrides;
+            population.KeepDowned = host.Config.KeepDowned;
         }
 
         foreach (var production in host.Session.World.Systems.OfType<Simulation.Production.ProductionSystem>())

@@ -1551,7 +1551,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Config.LateDefences = false;
         LateDefencesChanged?.Invoke(false);
         Config.KeepRoamers = Config.OffscreenFights = Config.OffscreenHealing = Config.CampaignAncestorsOnce = Config.KeepWild
-            = Config.ResidentSchedule = Config.OffscreenOverrides = Config.UnloadedProduction = true;
+            = Config.ResidentSchedule = Config.OffscreenOverrides = Config.UnloadedProduction = Config.KeepDowned = true;
         Config.Decapitation = true;
         Config.AdvancedRagdolls = true;
         Config.PauseOnLoad = true;

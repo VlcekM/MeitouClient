@@ -4790,3 +4790,9 @@ msgstr "適応露出の強さ"
 
 msgid "The most deep shade by day is brightened, as a multiple of the game's exposure."
 msgstr "日中の深い日陰を最大でどれだけ明るくするか（ゲームの露出の倍率）。"
+
+msgid "Knocked out stay"
+msgstr "気絶した者が残る"
+
+msgid "A knocked-out character left lying near your squads, such as a guard you carried off and put down, stays when his squad or town unloads far away. In the game he vanishes with them once you look away."
+msgstr "部隊の近くに倒れたままの気絶したキャラクター（運び出して下ろした衛兵など）は、遠くでその部隊や町がアンロードされても残ります。ゲームでは目を離すとそれらと一緒に消えます。"

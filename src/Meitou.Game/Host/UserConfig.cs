@@ -394,6 +394,11 @@ sealed class UserConfig
     /// </summary>
     public bool ResidentSchedule { get; set; } = true;
     /// <summary>
+    /// A knocked-out character left lying near the player's squads stays when his squad or town unloads, split off as a carried one is (Advanced
+    /// settings; Faithful off: he goes with them once out of view, as the game does; #1085).
+    /// </summary>
+    public bool KeepDowned { get; set; } = true;
+    /// <summary>
     /// A town away from the player's squads takes its override version (taken over, destroyed) as soon as the story allows (Advanced settings;
     /// Faithful off: only when the player comes near, as the game does).
     /// </summary>

@@ -1063,6 +1063,12 @@ public sealed class PopulationSettings
     public bool ResidentSchedule { get; init; } = true;
 
     /// <summary>
+    /// Meitou: a squad that unloads splits off each member lying knocked out inside the loaded zones, as it does a carried one, so a guard carried
+    /// off and put down stays (#1085). Faithful: he goes with his squad once out of view, as the original.
+    /// </summary>
+    public bool KeepDowned { get; init; } = true;
+
+    /// <summary>
     /// Meitou: a town that is not loaded takes its <c>override town</c> at the next look once one qualifies (<see cref="TownOverrides"/>).
     /// Faithful: only when its zone loads, as the original.
     /// </summary>
