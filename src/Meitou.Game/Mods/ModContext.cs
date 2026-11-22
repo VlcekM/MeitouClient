@@ -487,6 +487,24 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// Plays a display-only effect at a world point (docs/modding.md "Visual effects"): <paramref name="effect"/> is an EFFECT record's string id
+    /// or a particle system name, <paramref name="seconds"/> how long it emits (0 to <see cref="ModEffects.MaxSeconds"/>), <paramref name="tint"/>
+    /// the particles' colour (rgb, 1 the full channel, up to <see cref="ModEffects.MaxTint"/>; null: their texture's). On the host's thread, from a
+    /// host-side callback such as a combat hit feed, never a tick system; queued and started at the next frame. False when rejected (logged once
+    /// per mod and problem).
+    /// </summary>
+    public bool PlayEffect(string effect, System.Numerics.Vector3 at, float seconds = 1, System.Numerics.Vector3? tint = null) =>
+        _registry.Effects.Play(Id, effect, at, false, CharacterId.None, null, tint, seconds);
+
+    /// <summary>
+    /// Plays a display-only effect on a character, following its <paramref name="bone"/> (null: the chest, <c>Bip01 Spine2</c>) while it emits;
+    /// nothing while the character is not drawn. Otherwise as <see cref="PlayEffect(string, System.Numerics.Vector3, float,
+    /// System.Numerics.Vector3?)"/>.
+    /// </summary>
+    public bool PlayEffect(string effect, CharacterId on, string? bone = null, float seconds = 1, System.Numerics.Vector3? tint = null) =>
+        _registry.Effects.Play(Id, effect, default, true, on, bone, tint, seconds);
+
+    /// <summary>
     /// Arranges the faction tab's relations list (docs/modding.md "Faction list"): <paramref name="arrange"/> gets the rows the tab would show,
     /// sorted by name, and returns the rows to show in order: reordered, renamed, left out, or with headings (<see cref="FactionListRow.Faction"/>
     /// -1). Called on the host's thread whenever the tab is drawn, so it must not touch the world; mods chain in load order. A throw or a null is

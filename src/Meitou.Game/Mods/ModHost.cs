@@ -177,6 +177,11 @@ public sealed class ModHost
     }
 
     /// <summary>
+    /// The mods' display-only effects (docs/modding.md "Visual effects"), played by the host once a frame.
+    /// </summary>
+    internal ModEffects Effects => _registry.Effects;
+
+    /// <summary>
     /// Whether a mod arranges the faction tab's list.
     /// </summary>
     public bool ArrangesFactionList => _registry.FactionLists.Count > 0;
@@ -650,6 +655,7 @@ public sealed class ModHost
         catch
         {
             if (context.HasHarmony) context.Harmony.UnpatchAll(context.Id);
+            _registry.Effects.Drop(context.Id);
             TellDependenciesItFailed(mod);
             throw;
         }
