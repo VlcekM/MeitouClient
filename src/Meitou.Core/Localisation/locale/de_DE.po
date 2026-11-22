@@ -4812,3 +4812,15 @@ msgstr "Infofeld bleibt offen"
 #. machine-translated
 msgid "The character information panel at the bottom left stays extended or collapsed as you last left it, also after restarting the game. The game starts it collapsed every time."
 msgstr "Das Charakter-Infofeld unten links bleibt ausgeklappt oder eingeklappt, wie du es zuletzt verlassen hast, auch nach einem Neustart des Spiels. Im Spiel ist es bei jedem Start eingeklappt."
+
+#. machine-translated
+msgid "Set hunger (1-300)"
+msgstr "Hunger setzen (1-300)"
+
+#. machine-translated
+msgid "Enter a hunger value from 1 to 300."
+msgstr "Gib einen Hungerwert von 1 bis 300 ein."
+
+#. machine-translated
+msgid "Hunger set to {1}."
+msgstr "Hunger auf {1} gesetzt."

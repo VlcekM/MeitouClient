@@ -1389,6 +1389,10 @@ msgstr ""
 msgid "Enhanced hardware mouse"
 msgstr ""
 
+#: src/Meitou.Game/DevTools/DebugMenu.cs
+msgid "Enter a hunger value from 1 to 300."
+msgstr ""
+
 #: src/Meitou.Game/SettingsMenu.cs
 msgid "Enter a valid number, or press Esc to cancel."
 msgstr ""
@@ -2171,6 +2175,10 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/SetupOverlay.axaml
 msgid "How?"
+msgstr ""
+
+#: src/Meitou.Game/DevTools/DebugMenu.cs
+msgid "Hunger set to {1}."
 msgstr ""
 
 #: src/Meitou.Game/Settings/LauncherSchema.cs src/Meitou.Game/Settings/LookPresets.cs src/Meitou.Game/SettingsMenu.cs
@@ -3137,7 +3145,7 @@ msgid ""
 "Continue with nightly builds?"
 msgstr ""
 
-#: src/Meitou.Game/PlayerInterface.Ui.cs
+#: src/Meitou.Game/DevTools/DebugMenu.cs src/Meitou.Game/PlayerInterface.Ui.cs
 msgid "No character selected"
 msgstr ""
 
@@ -4147,6 +4155,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Set foliage visibility by mesh size rather than layer."
+msgstr ""
+
+#: src/Meitou.Game/DevTools/DebugMenu.cs
+msgid "Set hunger (1-300)"
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs launcher/Meitou.Launcher/ModsFromSave.cs

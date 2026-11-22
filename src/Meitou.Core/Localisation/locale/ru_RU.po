@@ -4814,3 +4814,15 @@ msgstr "Панель сведений остаётся открытой"
 #. machine-translated
 msgid "The character information panel at the bottom left stays extended or collapsed as you last left it, also after restarting the game. The game starts it collapsed every time."
 msgstr "Панель сведений о персонаже в левом нижнем углу остаётся развёрнутой или свёрнутой, как вы её оставили, даже после перезапуска игры. В игре она каждый раз начинается свёрнутой."
+
+#. machine-translated
+msgid "Set hunger (1-300)"
+msgstr "Задать сытость (1-300)"
+
+#. machine-translated
+msgid "Enter a hunger value from 1 to 300."
+msgstr "Введите значение сытости от 1 до 300."
+
+#. machine-translated
+msgid "Hunger set to {1}."
+msgstr "Сытость установлена на {1}."

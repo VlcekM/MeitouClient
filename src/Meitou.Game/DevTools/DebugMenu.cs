@@ -8,6 +8,7 @@ using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Overlays;
 using Meitou.Game.Rendering.Profiling;
 using Meitou.Game.Ui;
+using Meitou.Localisation;
 using Meitou.Modding;
 using Meitou.Simulation;
 using Meitou.Simulation.Dialogue;
@@ -28,7 +29,7 @@ namespace Meitou.Game.DevTools;
 /// from the selection; Items opens the Items window (<see cref="DebugItemsWindow"/>). Recruit takes the inspected character (a click on another
 /// faction's character shows it in the HUD and keeps the squad's selection), else the first selected: it adds it to the player's faction and
 /// active squad when it has a dialogue line that makes it join and the squad has room, then opens the character editor on it. The Cheats category
-/// holds the one-time actions (Heal, Heal fully, Clear bounties, Give item) and the five debug switches (Gigachad mode, Auto heal, Move instantly,
+/// holds the one-time actions (Heal, Heal fully, Set hunger, Clear bounties, Give item) and the five debug switches (Gigachad mode, Auto heal, Move instantly,
 /// One-punch man mode, No stumbling; they apply to player characters, the hits they land or take, or player-issued moves) and Guard
 /// (<see cref="DebugGuard"/>: kills hostiles within 30 m of the lead and heals the player's characters; it switches itself off when a game loads).
 /// "Teleport on map" is a switch too: while on, a click on the open map sends the selected characters there. Clear bounties clears the selected
@@ -150,6 +151,11 @@ sealed class DebugMenu(GameHost host)
         /// Opens the faction relations sub-view.
         /// </summary>
         FactionRelations,
+
+        /// <summary>
+        /// Sets the targets' hunger to the typed HUD value.
+        /// </summary>
+        SetHunger,
     }
 
     /// <summary>
@@ -160,7 +166,7 @@ sealed class DebugMenu(GameHost host)
         "Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "Heal fully (restore limbs)",
         "Damage (cut)", "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Gigachad mode (stats 1000)", "Auto heal",
             "Move instantly", "One-punch man mode", "No stumbling", "Guard (kill + heal in radius)", "Explosion level", "Explode at target",
-            "Explode on click", "Recruit", "Faction relations",
+            "Explode on click", "Recruit", "Faction relations", "Set hunger (1-300)",
     ];
 
     /// <summary>
@@ -201,7 +207,7 @@ sealed class DebugMenu(GameHost host)
             new("Combat", [(int)DebugRow.Damage, (int)DebugRow.ForceHits, (int)DebugRow.DamageMultiplier, (int)DebugRow.ExplodeLevel,
                 (int)DebugRow.Explode, (int)DebugRow.ExplodeClick]),
             new("Cheats", [(int)DebugRow.StatsTo1000, (int)DebugRow.OnePunch, (int)DebugRow.AutoHeal, (int)DebugRow.Heal,
-                (int)DebugRow.HealFully, (int)DebugRow.Guard, (int)DebugRow.InstantMove, (int)DebugRow.NoStumble,
+                (int)DebugRow.HealFully, (int)DebugRow.SetHunger, (int)DebugRow.Guard, (int)DebugRow.InstantMove, (int)DebugRow.NoStumble,
                 (int)DebugRow.GiveItem, (int)DebugRow.ClearBounties]),
         };
         if (host.Modding.DebugRowCount > DebugLabels.Length)
@@ -948,7 +954,7 @@ sealed class DebugMenu(GameHost host)
     }
 
     /// <summary>
-    /// Heal and damage: the selected characters, else the inspected one.
+    /// Heal, hunger and damage: the selected characters, else the inspected one.
     /// </summary>
     internal static CharacterId[] DebugTargets(GameHost host)
     {
@@ -1149,6 +1155,8 @@ sealed class DebugMenu(GameHost host)
                 bool limbs = row == DebugRow.HealFully;
                 world.Commands.Enqueue(new DebugHeal(targets, limbs) { Tick = tick });
                 return $"healed {targets.Length}{(limbs ? ", limbs restored" : "")}";
+            case DebugRow.SetHunger:
+                return DebugHungerApply(world, tick, targets, field);
             case DebugRow.Damage:
                 if (targets.Length == 0) return DebugFail("select or inspect a character first");
                 if (!float.TryParse(field, NumberStyles.Float, CultureInfo.InvariantCulture, out float cut) || !(cut > 0))
@@ -1182,6 +1190,29 @@ sealed class DebugMenu(GameHost host)
             default:
                 return DebugSwitchApply(world, row, field, tick);
         }
+    }
+
+    /// <summary>
+    /// Queues a hunger change in HUD units for the selected or inspected characters.
+    /// </summary>
+    string DebugHungerApply(World world, long tick, CharacterId[] targets, string field)
+    {
+        if (targets.Length == 0) return DebugFail(Tr("No character selected"));
+
+        if (!int.TryParse(field, NumberStyles.None, CultureInfo.InvariantCulture, out int hunger) || hunger is < 1 or > 300)
+            return DebugFail(Tr("Enter a hunger value from 1 to 300."));
+
+        world.Commands.Enqueue(new DebugSetHunger(targets, hunger) { Tick = tick });
+        return Tr("Hunger set to {1}.", hunger);
+    }
+
+    /// <summary>
+    /// Translates debug text when the baked overlay font can display it, falling back to English otherwise.
+    /// </summary>
+    static string Tr(string english, params object?[] args)
+    {
+        string translated = Loc.Tr(english);
+        return Loc.Format(DebugOverlay.SupportsBakedText(translated) ? translated : english, args);
     }
 
     /// <summary>
@@ -1630,7 +1661,8 @@ sealed class DebugMenu(GameHost host)
                         ? $" x{host.PopData?.BodyOptions.GlobalDamageMultiplier ?? 1:0.##}"
                         : ""));
             }
-            string text = mark + DebugColumns(host.Modding.DebugLabel(i), "", value);
+            string label = i == (int)DebugRow.SetHunger ? Tr("Set hunger (1-300)") : host.Modding.DebugLabel(i);
+            string text = mark + DebugColumns(label, "", value);
             lines.Add(new(text, current && DebugParts is null, rowOn, i, -1));
             if (DebugPicksPart(i) && current && DebugParts is { } parts)
             {
