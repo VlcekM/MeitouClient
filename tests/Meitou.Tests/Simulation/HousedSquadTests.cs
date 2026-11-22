@@ -128,7 +128,7 @@ public class HousedSquadTests(ITestOutputHelper output)
         var data = Load();
         var squin = data.Sites.First(s => s.Town.Name == "Squin");
         using var world = Town(data, squin, StandardParts.Trade);
-        world.RunTicks(3);
+        world.RunTicks(TickPhases.TradeCheck + 1);
         var squad = world.Squads.All.First(s => s.Shop?.Building is not null);
         var shop = squad.Shop!;
         var grids = shop.Containers.Select(id => world.Fixtures.Find(id)!.Contents!).ToList();
@@ -174,7 +174,7 @@ public class HousedSquadTests(ITestOutputHelper output)
         var data = Load();
         var squin = data.Sites.First(s => s.Town.Name == "Squin");
         using var world = Town(data, squin, StandardParts.Trade);
-        world.RunTicks(3);
+        world.RunTicks(TickPhases.TradeCheck + 1);
         var shops = world.Squads.All.Where(s => s.Shop?.Building is not null).ToList();
         foreach (var s in shops)
         {
