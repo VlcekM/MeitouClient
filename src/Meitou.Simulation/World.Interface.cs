@@ -19,6 +19,11 @@ public sealed partial class World
     CharacterId _publishedPointed;
 
     /// <summary>
+    /// <see cref="PlayerState.AllSelectedGrids"/> when the last snapshot was published.
+    /// </summary>
+    bool _publishedAllGrids;
+
+    /// <summary>
     /// Applies the interface's commands between ticks while paused, without advancing time or running simulation phases:
     /// selection, order toggles, job lists, crafting and research queues, squads, inventory, open-shop transactions, building settings,
     /// the Stop order and every order (<see cref="OrderCommand"/>: each goes into its characters' queues through the one order path,
@@ -47,8 +52,8 @@ public sealed partial class World
         if (due.Count == 0)
         {
             // The pointer moved onto another character: publish again, as what its menu offers with a chance (stealth KO, kidnap) is published only
-            // for the character pointed at, selected or inspected (#878).
-            if (Player.Pointed != _publishedPointed) PublishPaused();
+            // for the character pointed at, selected or inspected (#878); the selection's grids are wanted or no longer.
+            if (Player.Pointed != _publishedPointed || Player.AllSelectedGrids != _publishedAllGrids) PublishPaused();
             return;
         }
 

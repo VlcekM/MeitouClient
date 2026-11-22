@@ -146,8 +146,11 @@ public sealed partial class World
     /// <param name="BodyConstants">The body system's constants.</param>
     /// <param name="Population">The population data.</param>
     /// <param name="ExtraBloodLoss">The body parts' extra blood loss factor (1 without a body system).</param>
+    /// <param name="OwnerSlot">The inventory window's default character (<see cref="InventoryOwnerSlot"/>; -1: none).</param>
+    /// <param name="AllSelectedGrids">Every selected character gets its grid (<see cref="PlayerState.AllSelectedGrids"/>).</param>
     readonly record struct PublishFacts(int KoSlot, int LeadSlot, CharacterId Pointed, AggroSystem? Aggro, Dialogue.DialogueSystem? Talk,
-        Combat.CombatSystem? Combat, GameConstants? BodyConstants, PopulationData? Population, float ExtraBloodLoss);
+        Combat.CombatSystem? Combat, GameConstants? BodyConstants, PopulationData? Population, float ExtraBloodLoss, int OwnerSlot,
+        bool AllSelectedGrids);
 
     /// <summary>
     /// Builds the <see cref="WorldSnapshot"/> of the tick that just ended from the state it left in <see cref="CharacterTable.Previous"/>.
@@ -163,6 +166,7 @@ public sealed partial class World
         var (koSlot, leadSlot) = SelectionSlots();
 
         var pointed = _publishedPointed = Player.Pointed;
+        bool allGrids = _publishedAllGrids = Player.AllSelectedGrids;
         var aggro = koSlot >= 0 ? _systems.OfType<AggroSystem>().FirstOrDefault() : null;
         var talk = _systems.OfType<Dialogue.DialogueSystem>().FirstOrDefault();
         var combat = _systems.OfType<Combat.CombatSystem>().FirstOrDefault();
@@ -182,7 +186,8 @@ public sealed partial class World
         var slots = buffer.Slots;
         _publishedJobs.Reserve(state.Length);
         _publishedBolts.Reserve(state.Length);
-        var facts = new PublishFacts(koSlot, leadSlot, pointed, aggro, talk, combat, bodyConstants, population, extraBloodLoss);
+        var facts = new PublishFacts(koSlot, leadSlot, pointed, aggro, talk, combat, bodyConstants, population, extraBloodLoss,
+            InventoryOwnerSlot(), allGrids);
         Movement.LookTargets.Gather(this, _looks);
 
         // A character the far cadence skipped this tick has not changed: the last publish's object stands for it again (docs/simulation.md "Far
@@ -259,6 +264,26 @@ public sealed partial class World
         }
 
         return (koSlot, leadSlot);
+    }
+
+    /// <summary>
+    /// The selected character with the lowest slot (as <see cref="Viewed"/> counts one selected), -1 for none: the snapshot lists the characters
+    /// by slot, and the host's inventory window shows the first selected one it finds unless a selected looter opened a window.
+    /// </summary>
+    int InventoryOwnerSlot()
+    {
+        var table = Characters;
+        var state = table.Previous;
+        int owner = -1;
+
+        foreach (var s in Player.Selection)
+        {
+            int k = s.Slot;
+            bool listed = (uint)k < (uint)state.Length && state[k].Alive && state[k].Generation == s.Generation;
+            if (listed && (owner < 0 || k < owner) && table.Cold(k) is { IsPlayer: true }) owner = k;
+        }
+
+        return owner;
     }
 
     /// <summary>
@@ -511,8 +536,8 @@ public sealed partial class World
         s.BloodAmounts = cold?.Medical?.ShownBlood ?? 0UL;
         s.Knockdown = cold?.Knockdown ?? default;
 
-        // A character an inventory window shows (selected, the open loot, a pinned own one) gets its grid and closed sections.
-        bool windowed = selected || id == Player.OpenLoot || cold is { IsPlayer: true } && Player.InventoryShown.Contains(id);
+        // A character an inventory window shows (the inventory's own, the open loot, a pinned own one) gets its grid and closed sections.
+        bool windowed = GridShown(i, in v, in f);
         s.ClosedSlots = cold is null || !(detailed || windowed) ? [] : ClosedSlotsOf(cold);
         s.HealthParts = detailed && cold!.Medical is { } health && cold.Race is { } anatomy ? HealthPartsOf(health, anatomy) : [];
         s.ItemGrid = windowed
@@ -535,6 +560,22 @@ public sealed partial class World
             && (guilt.NpcClass is FundamentalType.Bandit or FundamentalType.Slave || population is { Factions: { } fl }
                 && (uint)guilt.Faction < (uint)fl.Count && fl[guilt.Faction].NotReal);
         s.Body = cold?.Medical is { } med && cold.Race is { } race ? BodyOf(cold, med, race, state[i].Task, extraBloodLoss) : null;
+    }
+
+    /// <summary>
+    /// Whether a window can show the character's inventory, so the publish builds its grid (<see cref="CharacterSnapshot.ItemGrid"/>): the open
+    /// loot's body, a pinned window's own character, and of the selection the inventory window's character: its first by slot, the selected
+    /// opener of the open loot or container window, and the lead (the agent's orders); every selected one with
+    /// <see cref="PublishFacts.AllSelectedGrids"/>.
+    /// </summary>
+    bool GridShown(int i, in PublishedCharacter v, in PublishFacts f)
+    {
+        var id = v.Id;
+        if (id == Player.OpenLoot || v.Cold is { IsPlayer: true } && Player.InventoryShown.Contains(id)) return true;
+        if (!v.Selected) return false;
+
+        bool opener = !Player.OpenLoot.IsNone && id == Player.LootOpener || Player.OpenContainer is not null && id == Player.ContainerOpener;
+        return f.AllSelectedGrids || i == f.OwnerSlot || i == f.LeadSlot || opener;
     }
 
     /// <summary>

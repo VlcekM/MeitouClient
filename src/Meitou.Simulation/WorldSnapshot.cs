@@ -605,8 +605,9 @@ public sealed class CharacterSnapshot
     /// </summary>
     public IReadOnlyList<Bodies.StatusEffectView> Effects { get; internal set; } = [];
     /// <summary>
-    /// The inventory of a selected character, of the one whose loot window is open, or of a player character whose inventory is shown (null for
-    /// the others).
+    /// The inventory of a character a window can show (null for the others): of the selection, the first by slot, the lead and the selected
+    /// opener of the open loot or container window (every selected one with <see cref="Player.PlayerState.AllSelectedGrids"/>); the open loot's
+    /// body; a player character whose pinned inventory is shown.
     /// </summary>
     public InventoryView? ItemGrid { get; internal set; }
     /// <summary>

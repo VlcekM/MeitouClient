@@ -54,6 +54,12 @@ Smith and craft views (**engine choice**): `SmithViewCache` keeps a bench's `Cra
 penalty and queued options are unchanged, and the map while every bench's is. `CraftOptionsCache` keeps one option list per bench record (shared by
 its benches) until research replaces `UnlockedCrafts`, and the site map until the crafting machines (compared by reference, in order) change.
 
+Item grids (**engine choice**, `World.GridShown`): `CharacterSnapshot.ItemGrid` is built only for a character a window can show: of the selection the
+first by slot (the inventory window's default), the lead and the selected opener of the open loot or container; the open loot's body; the pinned
+windows' characters (`ShowInventoryCommand`). All are derived from world state, so a newly shown one has its grid in the same publish, paused too.
+`PlayerState.AllSelectedGrids` (set each frame by the host while the control directory, `--exec` or the console is active) publishes every selected
+one's, as the agent's orders read the whole selection.
+
 ### Tick ahead
 
 The game can run the next ticks on their own thread (`WorldSession.BeginTickAhead`, thread `Meitou.Tick`) during the world draw (`WorldFrame.Draw`, after

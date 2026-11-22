@@ -141,11 +141,23 @@ sealed class AgentChannel(GameHost host)
     }
 
     /// <summary>
+    /// Once per frame: while the agent's orders can run (the control directory, <c>--exec</c>, the open console) every selected character's grid
+    /// is published, as they read the whole selection's inventories (<see cref="Meitou.Simulation.Player.PlayerState.AllSelectedGrids"/>).
+    /// </summary>
+    void WantSelectionGrids()
+    {
+        if (host.Session?.World is not { } world) return;
+
+        world.Player.AllSelectedGrids = ControlDir is not null || host.GameOptions.Exec is not null || host.DevConsoleHost.ConsoleOpen;
+    }
+
+    /// <summary>
     /// Once per frame: the one-shot <c>--exec</c> after the load, then the command file at most every 0.25 s.
     /// </summary>
     internal void PollControl()
     {
         if (!host.DevConsoleHost.ConsoleRegistered) host.DevConsoleHost.RegisterConsoleCommands();
+        WantSelectionGrids();
         if (ExecPending is { } exec && SetupSettled())
         {
             ExecPending = null;

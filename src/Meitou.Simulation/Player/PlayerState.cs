@@ -166,6 +166,12 @@ public sealed class PlayerState
     public List<CharacterId> InventoryShown { get; } = [];
 
     /// <summary>
+    /// Every selected character's inventory grid is published, not only the inventory window's (the dev console and the agent channel read the
+    /// whole selection's). Set by the host each frame (any thread). Display only: not hashed and not saved.
+    /// </summary>
+    public bool AllSelectedGrids { get; set; }
+
+    /// <summary>
     /// Drops characters that are gone, and from the selection those of a squad the player does not lead (<see cref="Squad.Independent"/>; serial
     /// phases, after the commit).
     /// </summary>
