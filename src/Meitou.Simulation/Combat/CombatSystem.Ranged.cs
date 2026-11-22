@@ -835,7 +835,7 @@ public sealed partial class CombatSystem : IProjectileSource
         var events = _hitEvents;
         events.Clear();
         float toughness = dc.Stats is { } ds ? ds[StatsEnumerated.Toughness] * dc.Medical.StatMultiplier(StatsEnumerated.Toughness) : 0;
-        ReadOnlySpan<ArmourPiece> armour = dc.Fighter is { } df ? df.Armour : default;
+        var armour = world.ArmourFilters.Pieces(world, CombatHitSource.Projectile, table.IdOf(v), dc.Fighter);
         var cover = new BoltCover(world.Seed, Rng.Key(table.IdOf(v)), p.Id);
         bool observe = world.WantsCombatHits;
         bool wasAlive = observe && !dc.Medical.Dead, wasIncapacitated = observe && dc.Medical.Incapacitated;
