@@ -923,6 +923,12 @@ holds refuses the second mod.
   pays the player once it lies in the bed, and a visitor in a player town picks the nearest bed it can afford before the NPC bed search (null
   keeps the original: NPCs never pay). Non-finite delays, hours, points and radii are refused. **Verified** by `ModHookTests` (synthetic
   world): the spawn ring, purse and refusals, a never-loaded spawn kept and reloaded with its tag, and the campaign queue.
+- **Mod jobs** (engine API, not in the original): `AddJob(new ModJobKind(id, building, caption, text, takers))`. The context menu of a finished
+  player building whose record is `building` offers `caption` to a selection holding a character `takers` allows (people, animals or both);
+  each such player character then holds the job on that building (`CharacterCold.ModJobs`, one per kind, a new building replacing the old) and
+  its jobs list shows `text: building name` after its vanilla jobs, with an X that takes it off (`RemoveModJob`; no drag). The engine only
+  offers and lists the job: the mod's system reads the list in the tick and does the work, saves it (the engine neither saves nor hashes
+  `ModJobs`), puts it back after a load (`cold.ModJobs.Add`) and takes it off when the building goes. An id another mod took refuses the mod.
 - **Town overrides** (engine API, not in the original; serial phases; [simulation](simulation.md) "Town overrides"): `PopulationSystem.CheckOverrides(world,
   site)` runs a town's `override town` list now, as its zone's load would; `ApplyTownVersion(world, site, townId)` puts a TOWN of the mod's choice
   in its place (null or the town's own id: back to its own record, residents made afresh; also for a held town or one of the player's faction); both

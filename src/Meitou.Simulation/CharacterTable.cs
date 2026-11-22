@@ -1405,6 +1405,12 @@ public sealed class CharacterCold
     public List<Production.PermaJob> Jobs { get; } = [];
 
     /// <summary>
+    /// The code mods' jobs the character holds (<see cref="Production.ModJobs"/>), at most one of a kind. Serial phases only. Neither saved nor hashed
+    /// by the engine: the mod saves and hashes its own.
+    /// </summary>
+    public List<Production.ModJob> ModJobs { get; } = [];
+
+    /// <summary>
     /// The provenance of the task (<see cref="TaskStart.Start"/>; null: none recorded): which job of <see cref="Jobs"/> or implicit job it runs
     /// (<see cref="Production.PermaJobs.ListJob"/>) and the task it goes back to. Serial phases only; not saved. Hashed while the task is a job's,
     /// with the resume task of a treatment, a carry, a site's work or a job list.

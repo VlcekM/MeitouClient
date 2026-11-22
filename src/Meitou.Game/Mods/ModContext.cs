@@ -259,6 +259,21 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// A job (docs/modding.md "Mod jobs"): the context menu of a finished player building of record
+    /// <see cref="Meitou.Simulation.Production.ModJobKind.Building"/> offers its caption to a selection with a character it takes, who then lists it
+    /// in the jobs list. The engine only offers and lists it: the mod's system reads <see cref="Meitou.Simulation.CharacterCold.ModJobs"/> in the
+    /// tick, does the work and saves the jobs. An id another mod took refuses it.
+    /// </summary>
+    public void AddJob(Meitou.Simulation.Production.ModJobKind job)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(job);
+        if (Meitou.Simulation.Production.ModJobs.Refusal(job) is { } refusal) throw new ArgumentException(refusal, nameof(job));
+        if (Pending.Jobs.Any(j => j.Id == job.Id)) throw new ArgumentException($"The mod already has a job '{job.Id}'.", nameof(job));
+        Pending.Jobs.Add(job);
+    }
+
+    /// <summary>
     /// A rule asked whether a wearer may wear an item (docs/modding.md "Wear rules"): <paramref name="rule"/> gets the item's record id, the
     /// wearer's RACE id and whether it is an animal, after the item's own race lists pass, and false refuses the item everywhere a race limit
     /// applies. It may run on any thread, so it must be quick, read no world state and answer the same for the same arguments. A throw counts as
