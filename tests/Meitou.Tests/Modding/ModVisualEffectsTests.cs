@@ -317,6 +317,54 @@ public class ModVisualEffectsTests
     }
 
     /// <summary>
+    /// A burst's stretch is a uniform system scale: the emitter's place, its particles' size and their speed all grow by it; stretch 1 reads
+    /// exactly as an unstretched burst.
+    /// </summary>
+    [Fact]
+    public void Stretch_scales_places_sizes_and_speeds()
+    {
+        var system = PuSystemDef.From(PuScriptReader.Parse("""
+            system blade
+            {
+                technique
+                {
+                    visual_particle_quota 50
+                    default_particle_width 0.5
+                    default_particle_height 2
+                    default_particle_depth 1
+                    emitter Point
+                    {
+                        position 0 1 0
+                        emission_rate 10
+                        time_to_live 100
+                        velocity 3
+                        direction 0 1 0
+                        angle 0
+                    }
+                }
+            }
+            """).Single(n => n.Kind == "system"));
+        var plain = Read(new ParticleSimulation(system, 1));
+        var one = Read(new ParticleSimulation(system, 1) { Stretch = 1 });
+        var twice = Read(new ParticleSimulation(system, 1) { Stretch = 2 });
+
+        Assert.Equal(plain, one);
+        Assert.Equal(plain.Length, twice.Length);
+        for (int i = 0; i < plain.Length; i++)
+        {
+            AssertNear(plain[i].Position * 2, twice[i].Position);   // the emitter's place and the distance flown since
+            Assert.Equal((plain[i].Width * 2, plain[i].Height * 2, plain[i].Depth * 2), (twice[i].Width, twice[i].Height, twice[i].Depth));
+        }
+
+        static ParticleInstance[] Read(ParticleSimulation sim)
+        {
+            sim.Advance(1, ParticleEnvironment.None);
+            var buffer = new ParticleInstance[sim.TechniqueParticleCount(0)];
+            return buffer[..sim.Collect(0, buffer, Vector3.One, 1)];
+        }
+    }
+
+    /// <summary>
     /// Every particle <paramref name="sim"/> reads out is at <paramref name="at"/>.
     /// </summary>
     static void AssertAll(ParticleSimulation sim, Vector3 at)

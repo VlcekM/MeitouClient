@@ -113,10 +113,21 @@ public sealed class ParticleSimulation
     /// </summary>
     public float LifeScale { get; set; } = 1;
     /// <summary>
-    /// The system node's scale: multiplies the technique's and emitters' positions and the emitters' spawn shapes before <see cref="Orientation"/>
-    /// (1 for every effect but a code mod's anchored one, docs/modding.md "Visual effects").
+    /// The system node's uniform scale, as Particle Universe's system scale: it multiplies the system's <c>scale</c> and <c>scale_velocity</c>, so
+    /// every place, shape, particle size and speed, and the technique's position (1 for every effect but a code mod's anchored one,
+    /// docs/modding.md "Visual effects").
     /// </summary>
     public float Stretch { get; set; } = 1;
+
+    /// <summary>
+    /// The system's <c>scale</c> with the node's (<see cref="Stretch"/>).
+    /// </summary>
+    Vector3 Scale => Definition.Scale * Stretch;
+
+    /// <summary>
+    /// The system's <c>scale_velocity</c> with the node's (<see cref="Stretch"/>).
+    /// </summary>
+    float ScaleVelocity => Definition.ScaleVelocity * Stretch;
     /// <summary>
     /// The whole system keeps its particles in its node's frame, its place and its turn (as every technique's <c>keep_local</c>, and turned
     /// too): they move and turn with the node and are placed in the world when read (<see cref="Collect"/>). Off for every effect but a code
@@ -487,7 +498,7 @@ public sealed class ParticleSimulation
     /// </summary>
     void Spawn(TechniqueState t, int emitterIndex, PuEmitterDef e, in ParticleEnvironment env)
     {
-        var scale = Definition.Scale;
+        var scale = Scale;
         Vector3 offset = SpawnOffset(e, scale);
         var direction = e.AutoDirection && offset.LengthSquared() > 1e-12f ? Vector3.Normalize(offset)
             : Cone(e.Direction.LengthSquared() > 1e-12f ? Vector3.Normalize(e.Direction) : Vector3.UnitY, e.Angle.Evaluate(0, _random));
@@ -501,14 +512,14 @@ public sealed class ParticleSimulation
         }
 
         // The emitter's attributes are read at the system's age (Verified, the plugin's _initParticleVelocity / TimeToLive / Dimensions).
-        float speed = e.Velocity.Evaluate(Time, _random) * Definition.ScaleVelocity;
+        float speed = e.Velocity.Evaluate(Time, _random) * ScaleVelocity;
         float life = Math.Max(e.Life.Evaluate(Time, _random) * LifeScale, 1e-3f);
         var (width, height, depth) = SpawnDimensions(t, e);
         var colour = SpawnColour(e);
 
         t.Grow();
         int i = t.Count++;
-        var local = Placed(t.Def.Position + e.Position * scale + offset);
+        var local = Placed(t.Def.Position * Stretch + e.Position * scale + offset);
         var p = Local(t) ? local : Origin + local;
         t.X[i] = p.X;
         t.Y[i] = p.Y;
@@ -535,15 +546,10 @@ public sealed class ParticleSimulation
     }
 
     /// <summary>
-    /// A new particle's place in the system node's frame (the technique's and emitter's positions plus the shape's offset) scaled by
-    /// <see cref="Stretch"/> and turned by <see cref="Orientation"/>, unless the whole system keeps its particles in the node's frame
-    /// (<see cref="KeepLocal"/>: turned when read).
+    /// A new particle's place in the system node's frame (the technique's and emitter's positions plus the shape's offset, all scaled) turned
+    /// by <see cref="Orientation"/>, unless the whole system keeps its particles in the node's frame (<see cref="KeepLocal"/>: turned when read).
     /// </summary>
-    Vector3 Placed(Vector3 local)
-    {
-        local *= Stretch;
-        return Orientation.IsIdentity || KeepLocal ? local : Vector3.Transform(local, Orientation);
-    }
+    Vector3 Placed(Vector3 local) => Orientation.IsIdentity || KeepLocal ? local : Vector3.Transform(local, Orientation);
 
     /// <summary>
     /// The offset of a new particle from the emitter's centre, by the emitter's shape (one random draw or more, in the shape's order).
@@ -771,7 +777,7 @@ public sealed class ParticleSimulation
                 // given, else x / y / z; read at the life fraction or the system's age. A size that would not stay above 0 is
                 // left as it was (Verified, the plugin's ScaleAffector::_affect and setOwnDimensions).
                 float f = a.SinceStartSystem ? Time : t.Age[i] / t.Life[i];
-                var s = Definition.Scale * (dt * Size);
+                var s = Scale * (dt * Size);
                 float rx, ry, rz;
                 if (a.ScaleXyz is not null) rx = ry = rz = a.ScaleXyz.Evaluate(f);
                 else
@@ -831,8 +837,8 @@ public sealed class ParticleSimulation
     void AffectVortex(TechniqueState t, PuAffectorDef a, bool[]? excluded, int n, float dt)
     {
         var axis = a.Axis.LengthSquared() > 1e-12f ? Vector3.Normalize(a.Axis) : Vector3.UnitY;
-        var centre = Origin + a.Position * Definition.Scale;
-        if (Local(t)) centre = a.Position * Definition.Scale;
+        var centre = Origin + a.Position * Scale;
+        if (Local(t)) centre = a.Position * Scale;
         // The plugin's VortexAffector::_preProcessParticles (Verified): once per update the angle is the rotation speed (radians a
         // second) read at the SYSTEM's age (a dyn_random draws anew each update), times the step. _affect then turns every
         // particle's place about the affector's position, and its velocity, by it.
@@ -863,9 +869,9 @@ public sealed class ParticleSimulation
         // mass * the affector's mass / |d|^2) * dt, d the vector to the affector's place (nothing at d = 0). The motion step then
         // multiplies the direction by the scale velocity again, and the velocities here are those moved distances, so the pull is
         // scale velocity squared in all.
-        var centre = (Local(t) ? Vector3.Zero : Origin) + a.Position * Definition.Scale;
+        var centre = (Local(t) ? Vector3.Zero : Origin) + a.Position * Scale;
         float g = a.Strength?.Evaluate(0) ?? 0;
-        float pull = Definition.ScaleVelocity * Definition.ScaleVelocity * g * a.MassAffector * dt;
+        float pull = ScaleVelocity * ScaleVelocity * g * a.MassAffector * dt;
         ForRange(n, (lo, hi) =>
         {
             for (int i = lo; i < hi; i++)
@@ -954,8 +960,8 @@ public sealed class ParticleSimulation
 
         uint step = t.Step * 2654435761u + (uint)k * 40503u;
         bool kick = a.RandomDirection;
-        var dev = a.MaxDeviation * (kick ? Definition.ScaleVelocity * rate : rate);
-        var place = kick ? Vector3.One : Definition.Scale;
+        var dev = a.MaxDeviation * (kick ? ScaleVelocity * rate : rate);
+        var place = kick ? Vector3.One : Scale;
         ForRange(n, (lo, hi) =>
         {
             for (int i = lo; i < hi; i++)

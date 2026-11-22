@@ -232,8 +232,9 @@ holds refuses the second mod.
     `NestBuildings`, by `BuildingSnapshot.Id`), its origin and turn. Town buildings of the level data and furniture are not covered (no
     host-side lookup by id); worn items are skinned to the skeleton and have no frame of their own: use a `Bone` (e.g. `Bip01 Spine2`).
   - `.Scaled(stretch)` on any anchor overrides its stretch, in (0, 100].
-  The system's origin is at the anchor, its axes turned to the anchor's frame; the stretch multiplies its technique and emitter positions and
-  emitter shapes (`ParticleSimulation.Stretch`), not the particles' size. A blade system authored along its +Y with its origin at the
+  The system's origin is at the anchor, its axes turned to the anchor's frame; the stretch is a uniform system scale, as Particle Universe's
+  (`ParticleSimulation.Stretch`: it multiplies the system's `scale` and `scale_velocity`, so every place, shape, particle size, speed and
+  affector reach, and the technique's position; 1 changes nothing). A blade system authored along its +Y with its origin at the
   weapon's base (the original Elemental Enchantment mod's convention, **Observed** from its shipped `.pu` files: a box from y 1.5 to 8.5)
   thus covers about 18% of the weapon to the tip; a base-game system authored at its origin plays at the hilt end. The effect follows its
   anchor each frame (`ParticleRenderer.MoveBurst`); on a `Bone` or `Weapon` its particles stay in the anchor's frame, moving and turning
@@ -250,8 +251,8 @@ holds refuses the second mod.
   Call it only on the host's thread (host-side callbacks: hit feed, UI, key actions, debug rows), never from a tick system. The simulation
   never reads it, so the state hash is untouched; without code mods the frame skips it; a new world drops all effects, and a mod that fails
   its `Initialize` loses its own. **Verified** by `ModVisualEffectsTests` (order, tint, lifetime, caps, rejection logging, a dropped mod's
-  effects; each anchor kind's frame; pause and resume; keep, renew and stop; the old overloads; kept-local particles following the burst)
-  against a recording sink and frame source.
+  effects; each anchor kind's frame; pause and resume; keep, renew and stop; the old overloads; kept-local particles following the burst; the
+  stretch scaling places, sizes and speeds) against a recording sink and frame source.
 - **Glow:** `Glow(GlowTarget target, colour, seconds, strength = 1)` on `ModContext` makes a target give off light of its own (display
   only). Targets (`GlowTarget`): `Character(characterId)`, the whole drawn character (body, worn items, what it holds); `Weapon(characterId)`,
   the blade of the melee weapon it holds drawn (from 0.3 of the weapon mesh to the tip, the gear blood's mapping, docs/game/blood-decals.md
@@ -271,9 +272,9 @@ holds refuses the second mod.
 - Drawing **Observed** in `--duel` through forced glows and effects, not a mod's call: `Character` lit one duellist whole in cyan (body and
   armour; at strength 1 it washes out the texture) while `Weapon` lit only the other's drawn katana blade, its hilt and back scabbard not;
   `kenshi_fire1_small` kept on `Bone(..., "Bip01 Head")` and on `Weapon` burned over the heads and at the hands, following both duellists.
-  The original Elemental Enchantment's `SB_Prototype_Fire` kept on both duellists' `Weapon` burned at the hands and low on the blades and
-  stayed with them mid-swing. Not seen: a `Worn` target, a `Building` anchor (no player or nest building in the duel), the stretch on a
-  system authored along +Y with its own textures.
+  The original Elemental Enchantment's `SB_Prototype_Fire` kept on both duellists' `Weapon` (a katana: weapon length 21.15 world units,
+  stretch 2.49) burned along each blade from near the hilt to the tip and stayed on it mid-swing; its `SB_Prototype_IceBlade` showed a
+  faint cyan mist along a blade. Not seen: a `Worn` target, a `Building` anchor (no player or nest building in the duel).
 - **Hits before they land:** a registered system implementing `ICombatHitFilter` receives `HitLanding(World, ref PendingHit)` for each melee
   blow about to hit (after the defender's block and dodge are decided), bolt about to strike a body and execution blow on a captive, before
   armour and toughness: the tick, the `CombatHitSource`, attacker and victim, the sequence and blow as in `CombatHit`, whether the victim
