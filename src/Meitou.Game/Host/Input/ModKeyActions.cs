@@ -107,10 +107,26 @@ public sealed class ModKeyAction
 }
 
 /// <summary>
-/// What a key action's press gets, on the host's thread while a tick may be in flight: the snapshot on screen, the selected characters, the tick, and
-/// the command queue for anything that changes the world.
+/// What a key action's press gets, on the host's thread while a tick may be in flight: the snapshot on screen, the selected characters, the tick, the
+/// command queue for anything that changes the world, and the modifier keys held as it was pressed.
 /// </summary>
-public sealed record ModKeyContext(WorldSnapshot Snapshot, IReadOnlyList<CharacterId> Selected, long Tick, Action<SimCommand> Enqueue);
+public sealed record ModKeyContext(WorldSnapshot Snapshot, IReadOnlyList<CharacterId> Selected, long Tick, Action<SimCommand> Enqueue)
+{
+    /// <summary>
+    /// Either Ctrl key was held as the key was pressed.
+    /// </summary>
+    public bool Ctrl { get; init; }
+
+    /// <summary>
+    /// Either Shift key was held as the key was pressed.
+    /// </summary>
+    public bool Shift { get; init; }
+
+    /// <summary>
+    /// Either Alt key was held as the key was pressed.
+    /// </summary>
+    public bool Alt { get; init; }
+}
 
 /// <summary>
 /// The code mods' key actions in one set of bindings (<see cref="InputBindings"/>): their numbers, the keys each started with, and their saved form.
