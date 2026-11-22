@@ -537,7 +537,7 @@ public sealed class DecisionSystem
             row.Asked[k] = true;
             row.Checks[k] = check;
             if (source.Step == DecisionStep.Goals && check.Can) row.Scores[k] = Score(world, slot, source, check);
-            Note(source, Verdict(source, check, row.Scores[k]));
+            if (Tracing) Note(source, Verdict(source, check, row.Scores[k]));
         }
     }
 

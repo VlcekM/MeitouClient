@@ -83,6 +83,10 @@ public sealed class GroundItems
     /// The id the next item gets.
     /// </summary>
     int _nextId = 1;
+    /// <summary>
+    /// The last record set (<see cref="Holds"/>); null until first asked.
+    /// </summary>
+    RecordSet? _records;
 
     /// <summary>
     /// How many items lie on the ground.
@@ -180,6 +184,34 @@ public sealed class GroundItems
                                     i.Item.Quality, i.OwnedBy, i.Fall, i.Item.MaterialId))], Revision);
         return _published;
     }
+    /// <summary>
+    /// Whether an item of <paramref name="record"/> lies on the ground: a quick test before a finder's scan. The record set is made again only when
+    /// <see cref="Revision"/> changed (an item's record never changes); a set once made is only read, so the parallel think may ask too.
+    /// </summary>
+    public bool Holds(string record)
+    {
+        var set = _records;
+        if (set is null || set.Revision != Revision) _records = set = new RecordSet(Revision, RecordsLying());
+
+        return set.Records.Contains(record);
+    }
+
+    /// <summary>
+    /// The records of the items on the ground.
+    /// </summary>
+    HashSet<string> RecordsLying()
+    {
+        var records = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var i in _items) records.Add(i.Item.Record);
+
+        return records;
+    }
+
+    /// <summary>
+    /// The records lying on the ground (<see cref="Holds"/>) as of <paramref name="Revision"/>.
+    /// </summary>
+    sealed record RecordSet(long Revision, HashSet<string> Records);
+
     /// <summary>
     /// The last published list.
     /// </summary>

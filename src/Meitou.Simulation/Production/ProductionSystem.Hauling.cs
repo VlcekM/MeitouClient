@@ -285,7 +285,7 @@ public sealed partial class ProductionSystem
             && world.StorageAllows(fetcher, s.Id, StorageUse.Take, record);
         bool Made(BuildSite s, Machine m) => !m.Data.IsStorage && Fetchable(s, m) && OutputHolds(m, s, record, operating);
 
-        return NearestSite(world, from.Position, float.MaxValue, Stored) ?? NearestSite(world, from.Position, float.MaxValue, Made);
+        return NearestSite(world, from.Position, float.MaxValue, IsStore, Stored) ?? NearestSite(world, from.Position, float.MaxValue, IsMaker, Made);
     }
 
     /// <summary>

@@ -370,7 +370,8 @@ public sealed partial class ProductionSystem
                 && Ditchable(held).Any(item => Stores(keptStore, item)) && world.StorageAllows(cold, keep, StorageUse.Put, DitchRecord(world, held)))
                 return (TaskType.DitchAllResources, keep);
 
-            if (!PlayerOrders.Holds(world, slot) && cold.Inventory is not null && NearestSite(world, at, float.MaxValue, Ditches) is { } store)
+            bool ditching = !PlayerOrders.Holds(world, slot) && cold.Inventory is { } carried && Ditchable(carried).Any();
+            if (ditching && NearestSite(world, at, float.MaxValue, IsStore, Ditches) is { } store)
                 return (TaskType.DitchAllResources, store);
 
             bool Ditches(BuildSite s, Machine m) => InFinderRange(s.Position, at) && TakesDitched(m, cold.Inventory!)
@@ -394,7 +395,7 @@ public sealed partial class ProductionSystem
             if (on == TaskType.SitAround && cold.OperateSite is { } seat && Site(world, seat) is { } kept && Gap(kept.Position, at) <= SeatRange)
                 return (TaskType.SitAround, seat);
 
-            if (NearestSite(world, at, SeatRange, (s, m) => IsSeat(m) && Free(world, cold, s, m)) is { } free) return (TaskType.SitAround, free);
+            if (NearestSite(world, at, SeatRange, IsSeat, (s, m) => Free(world, cold, s, m)) is { } free) return (TaskType.SitAround, free);
         }
 
         return null;
@@ -536,15 +537,18 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// The player's complete building nearest <paramref name="at"/> within <paramref name="range"/> whose machine passes <paramref name="ok"/> (ties:
-    /// the lower site id).
+    /// the lower site id). <paramref name="kind"/> is a test of the machine alone that <paramref name="ok"/> implies, asked first so the other
+    /// machines' sites are not looked up.
     /// </summary>
-    string? NearestSite(World world, Vector3 at, float range, Func<BuildSite, Machine, bool> ok)
+    string? NearestSite(World world, Vector3 at, float range, Func<Machine, bool> kind, Func<BuildSite, Machine, bool> ok)
     {
         string? best = null;
         float bestGap = float.MaxValue;
-        foreach (var m in world.Machines.All)
+        var all = world.Machines.All;
+        for (int k = 0; k < all.Count; k++)
         {
-            if (Site(world, m.Site) is not { Complete: true } site || site.Owner != world.Player.Faction) continue;
+            var m = all[k];
+            if (!kind(m) || Site(world, m.Site) is not { Complete: true } site || site.Owner != world.Player.Faction) continue;
             float gap = Gap(site.Position, at);
             if (gap > range || gap > bestGap || (gap == bestGap && string.CompareOrdinal(m.Site, best) > 0) || !ok(site, m)) continue;
             best = m.Site;
@@ -781,6 +785,16 @@ public sealed partial class ProductionSystem
     /// </summary>
     static string? DitchRecord(World world, Items.Inventory inv) =>
         world.StorageFilters.Active ? Meitou.Simulation.Items.StorageFilters.OneRecord(Ditchable(inv)) : null;
+
+    /// <summary>
+    /// A storage machine with its grid (what <see cref="TakesDitched"/> asks first).
+    /// </summary>
+    static bool IsStore(Machine m) => m.Data.IsStorage && m.Storage is not null;
+
+    /// <summary>
+    /// A machine that is not a storage.
+    /// </summary>
+    static bool IsMaker(Machine m) => !m.Data.IsStorage;
 
     /// <summary>
     /// A storage machine that takes something 242 Ditch all resources carries off from <paramref name="inv"/>.

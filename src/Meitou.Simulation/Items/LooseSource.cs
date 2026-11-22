@@ -18,20 +18,27 @@ internal static class LooseSource
     /// The nearest loose item of <paramref name="record"/> within <see cref="Radius"/> (3D, inclusive) of <paramref name="at"/>: with some in it and
     /// no contents, not in the character's ignore map (<see cref="Key"/>, asked before the ownership test) and passing the ownership test
     /// (<see cref="ItemOwnership.MayTake"/>, <c>FUN_140997d80</c>); null when none. Engine choice: the nearest, where the original takes the first
-    /// its grid query meets.
+    /// its grid query meets. The tests are pure, so their order changes no answer: the record set (<see cref="GroundItems.Holds"/>), the item's own
+    /// fields and the distance come first, so the ignore-map key is made only for a nearer item of the record.
     /// </summary>
     public static GroundItem? Nearest(World world, PopulationData? data, CharacterCold cold, Vector3 at, string record)
     {
+        var ground = world.GroundItems;
+        if (!ground.Holds(record)) return null;
+
+        var all = ground.All;
         GroundItem? loose = null;
         float best = Radius * Radius;
-        foreach (var g in world.GroundItems.All)
+        for (int k = 0; k < all.Count; k++)
         {
-            if (cold.IsUnreachable(Key(g.Id), world.Tick)) continue;
-            if (g.Item.Record != record || g.Item.Quantity <= 0 || g.Item.Contents is not null || !ItemOwnership.MayTake(world, data, cold, at, g))
-                continue;
+            var g = all[k];
+            if (g.Item.Record != record || g.Item.Quantity <= 0 || g.Item.Contents is not null) continue;
 
             float d = Vector3.DistanceSquared(g.Position, at);
-            if (d <= best && (loose is null || d < best)) (loose, best) = (g, d);
+            if (!(d <= best && (loose is null || d < best))) continue;
+            if (cold.IsUnreachable(Key(g.Id), world.Tick) || !ItemOwnership.MayTake(world, data, cold, at, g)) continue;
+
+            (loose, best) = (g, d);
         }
 
         return loose;
