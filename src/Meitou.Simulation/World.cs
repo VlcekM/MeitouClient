@@ -247,6 +247,7 @@ public sealed partial class World : IDisposable
             CombatHitFilters.Register(this._systems[k], k);
             TradePriceFilters.Register(this._systems[k], k);
             TradeObservers.Register(this._systems[k], k);
+            ArmourFilters.Register(this._systems[k], k);
             StorageFilters.Register(this._systems[k], k);
             ItemUseObservers.Register(this._systems[k], k);
             GoodsTakenObservers.Register(this._systems[k], k);
@@ -519,6 +520,10 @@ public sealed partial class World : IDisposable
     /// The systems hearing of completed deals (<see cref="Trading.ITradeObserver"/>).
     /// </summary>
     internal Trading.TradeObservers TradeObservers { get; } = new();
+    /// <summary>
+    /// The systems asked about worn armour pieces as a hit is about to go through them (<see cref="Combat.IArmourFilter"/>).
+    /// </summary>
+    internal Combat.ArmourFilters ArmourFilters { get; } = new();
     /// <summary>
     /// The systems asked about a storage the game picks for a character (<see cref="Items.IStorageFilter"/>).
     /// </summary>
@@ -799,6 +804,7 @@ public sealed partial class World : IDisposable
         CombatHitFilters.Register(system, _systems.Count - 1);
         TradePriceFilters.Register(system, _systems.Count - 1);
         TradeObservers.Register(system, _systems.Count - 1);
+        ArmourFilters.Register(system, _systems.Count - 1);
         StorageFilters.Register(system, _systems.Count - 1);
         ItemUseObservers.Register(system, _systems.Count - 1);
         GoodsTakenObservers.Register(system, _systems.Count - 1);
@@ -1472,6 +1478,7 @@ public sealed partial class World : IDisposable
         CombatHitFilters.HashFaults(ref h);
         TradePriceFilters.HashFaults(ref h);
         TradeObservers.HashFaults(ref h);
+        ArmourFilters.HashFaults(ref h);
         StorageFilters.HashFaults(ref h);
         ItemUseObservers.HashFaults(ref h);
         GoodsTakenObservers.HashFaults(ref h);

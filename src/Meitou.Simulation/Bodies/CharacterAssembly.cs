@@ -86,10 +86,13 @@ sealed class CharacterAssembly(PopulationData data)
                         combat.WeaponMaterial(item.MaterialId), combat.Constants);
             return null;
         }
-        var armour = inventory.Items
+        var worn = inventory.Items
             .Where(i => i.Type == FcsRecordType.Armour && InventoryCommands.IsEquipmentSection(i.Section) && combat.Armour(i.Record) is not null)
-            // Its stats follow the level (the grade's quality), not `quality`, which is 100 on saved armour; level 0 is full strength without the
-            // slot rules (docs/game/combat.md "Armour and medical hit").
+            .ToList();
+
+        // Its stats follow the level (the grade's quality), not `quality`, which is 100 on saved armour; level 0 is full strength without the
+        // slot rules (docs/game/combat.md "Armour and medical hit").
+        var armour = worn
             .Select(i => (Data: combat.Armour(i.Record)!, i.Level))
             .Select(x => ArmourPiece.Create(x.Data, ArmourPiece.QualityOf(x.Data, x.Level), ArmourPiece.Graded(x.Data, x.Level)));
 
@@ -110,6 +113,7 @@ sealed class CharacterAssembly(PopulationData data)
             : null;
         var fighter = new Fighter(First("hip"), armour, pack.Stealth, pack.Athletics, pack.Skill, pack.Speed)
         {
+            ArmourItems = worn,
             BackWeapon = First("back"),
             Crossbow = crossbow,
             Fists = fists,
