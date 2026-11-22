@@ -50,6 +50,9 @@ Machine views (**engine choice**, `MachineViewCache`): each publish compares eve
 strings and data records by reference, each stored item's fields); an unchanged machine keeps its snapshot and item views, and `Machines` and
 `MachinesVersion` change only when some view or the set of machines did. `Machines.Worked` counts the ticks the machines work, which the smiths and
 research views (they also read characters) refresh on.
+Smith and craft views (**engine choice**): `SmithViewCache` keeps a bench's `CraftSmithView` while its machine, smith, name, effective level (by bits),
+penalty and queued options are unchanged, and the map while every bench's is. `CraftOptionsCache` keeps one option list per bench record (shared by
+its benches) until research replaces `UnlockedCrafts`, and the site map until the crafting machines (compared by reference, in order) change.
 
 ### Tick ahead
 

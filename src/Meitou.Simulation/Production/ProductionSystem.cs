@@ -126,6 +126,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         _xp = new XpService(constants, options);
         _resources = new ResourceField(db, biomes, nodes);
         this._nodes = nodes;
+        _craftOptions = new CraftOptionsCache(BuildCraftOptions);
+        _smiths = new SmithViewCache(db);
         UnloadedProduction = Settings.UnloadedProduction;
     }
 

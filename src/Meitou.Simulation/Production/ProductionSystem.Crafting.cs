@@ -1,4 +1,3 @@
-using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Gameplay.Construction;
 using Meitou.Simulation.Items;
 
@@ -19,6 +18,16 @@ public sealed partial class ProductionSystem
     /// The cache of <see cref="EverEnabled"/>.
     /// </summary>
     HashSet<(CraftKind, string)>? _everEnabled;
+
+    /// <summary>
+    /// The benches' published craft options (<see cref="CraftsView"/>).
+    /// </summary>
+    readonly CraftOptionsCache _craftOptions;
+
+    /// <summary>
+    /// The benches' published smiths (<see cref="SmithsView"/>).
+    /// </summary>
+    readonly SmithViewCache _smiths;
 
     /// <summary>
     /// Crafts some research unlocks; anything no research lists is craftable from the start (engine reading).
@@ -264,7 +273,7 @@ public sealed partial class ProductionSystem
     /// The model a weapon craft comes out as: the queued one, or below the crafter's skill with no critical the best model of the bench at or below
     /// the skill (else its lowest).
     /// </summary>
-    static CraftOption WeaponModel(CraftBench bench, CraftOption option, float skill, bool critical) =>
+    internal static CraftOption WeaponModel(CraftBench bench, CraftOption option, float skill, bool critical) =>
         skill >= option.Level || critical
             ? option
             : bench.Options.Where(o => o.Kind == CraftKind.Weapon && o.Item == option.Item && o.Level <= skill)
@@ -273,107 +282,36 @@ public sealed partial class ProductionSystem
                 ?? bench.Options.Where(o => o.Kind == CraftKind.Weapon && o.Item == option.Item).OrderBy(o => o.Level).First();
 
     /// <summary>
-    /// The cache of the smiths' craft predictions (null: made again).
+    /// The Craft tab's Current Smith per bench: his name, effective level of the bench's stat and its multiplier's penalty, and for each queued craft
+    /// what he would make (<see cref="CraftPrediction"/>). A bench's view is made again when its smith, his level or penalty, or its queue changed
+    /// (<see cref="SmithViewCache"/>).
     /// </summary>
-    IReadOnlyDictionary<string, CraftSmithView>? _publishedSmiths;
-    /// <summary>
-    /// The machine registry's version and work count <see cref="_publishedSmiths"/> was made at (-1: never).
-    /// </summary>
-    (long Version, long Worked) _smithsVersion = (-1, -1);
+    public IReadOnlyDictionary<string, CraftSmithView> SmithsView(World world) => _smiths.Of(world);
 
     /// <summary>
-    /// The Craft tab's Current Smith per bench (<c>FUN_1402bcf60</c>): the bench's last operator (<see cref="Machine.Smith"/>) while it is alive with
-    /// stats, his effective level of the bench's stat and the penalty of its multiplier, and for each queued craft what that smith would make
-    /// (<see cref="CraftPrediction"/>). Rebuilt when the machines changed.
+    /// Every crafting bench's options by site: one list per bench record, made again when research unlocks change (<see cref="CraftOptionsCache"/>).
     /// </summary>
-    public IReadOnlyDictionary<string, CraftSmithView> SmithsView(World world)
-    {
-        var machines = (world.Machines.Version, world.Machines.Worked);
-        if (_publishedSmiths is not null && _smithsVersion == machines) return _publishedSmiths;
-        _smithsVersion = machines;
-        var map = new Dictionary<string, CraftSmithView>(StringComparer.Ordinal);
-        foreach (var m in world.Machines.All)
-        {
-            if (m.Craft is not { } state || m.Data.Craft is not { } bench || m.Data.Stat <= 0 || !world.Characters.IsAlive(m.Smith)
-                || world.Characters.Cold(m.Smith.Slot) is not { Stats: { } stats, Medical: { } medical } cold) continue;
-            var (level, penalty) = World.EffectiveSkill(cold, medical, stats, (StatsEnumerated)m.Data.Stat);
-
-            // FUN_1402b5900 reads the first queued craft whichever one is hovered.
-            int critical = state.Queue.Count == 0
-                ? 0
-                : Math.Clamp((int)(CraftBench.CriticalChance(level, m.Data.Stat, state.Queue[0].Option.Level) * 100), 0, 100);
-            var entries = new List<CraftPrediction>(state.Queue.Count);
-            foreach (var job in state.Queue)
-            {
-                var option = job.Option;
-                var none = new CraftPrediction(-1, null, false, 0, -1);
-                switch (option.Kind)
-                {
-                    case CraftKind.Armour or CraftKind.Crossbow:
-                        entries.Add(none with { Quality = CraftBench.ArmourQuality(level, false), Critical = critical });
-                        break;
-                    case CraftKind.Weapon:
-                        var model = WeaponModel(bench, option, level, false);
-                        entries.Add(none with
-                        {
-                            Model = model.Model is { } id ? _db.Find(id)?.Name ?? id : "",
-                            ModelChanged = model.Model != option.Model,
-                            MaterialCost = _db.Find(option.Item)?.GetInt("material cost", 4) ?? 4,
-                            Critical = critical,
-                        });
-                        break;
-                    default:
-                        entries.Add(none);
-                        break;
-                }
-            }
-
-            map[m.Site] = new CraftSmithView(cold.Name, (int)level, penalty, entries);
-        }
-
-        return _publishedSmiths = map;
-    }
-
-    /// <summary>
-    /// The cache of the benches' craft options (null: made again).
-    /// </summary>
-    IReadOnlyDictionary<string, IReadOnlyList<CraftOptionView>>? _publishedCrafts;
-    /// <summary>
-    /// The research count <see cref="_publishedCrafts"/> was made at (-1: never).
-    /// </summary>
-    long _craftsResearch = -1;
-    /// <summary>
-    /// The bench count <see cref="_publishedCrafts"/> was made at (-1: never).
-    /// </summary>
-    int _craftsBenches = -1;
-
-    /// <summary>
-    /// Every crafting bench's options (rebuilt when research or the set of benches changed).
-    /// </summary>
-    public IReadOnlyDictionary<string, IReadOnlyList<CraftOptionView>> CraftsView(World world)
-    {
-        int benches = 0;
-        foreach (var m in world.Machines.All) if (m.Craft is not null) benches++;
-        if (_publishedCrafts is not null && _craftsResearch == world.Research.Version && _craftsBenches == benches) return _publishedCrafts;
-        _craftsResearch = world.Research.Version;
-        _craftsBenches = benches;
-        var map = new Dictionary<string, IReadOnlyList<CraftOptionView>>(StringComparer.Ordinal);
-        foreach (var m in world.Machines.All) if (m.Craft is not null) map[m.Site] = CraftOptions(world, m.Site);
-        return _publishedCrafts = map;
-    }
+    public IReadOnlyDictionary<string, IReadOnlyList<CraftOptionView>> CraftsView(World world) => _craftOptions.Of(world);
 
     /// <summary>
     /// What a bench can craft, for its Craft tab: every option with its recipe and whether it can be queued now.
     /// </summary>
-    public IReadOnlyList<CraftOptionView> CraftOptions(World world, string site)
+    public IReadOnlyList<CraftOptionView> CraftOptions(World world, string site) => _craftOptions.Of(world, site);
+
+    /// <summary>
+    /// Every option of a crafting machine's bench with its recipe and whether it can be queued now (<see cref="CraftOptionsCache"/> keeps them).
+    /// </summary>
+    IReadOnlyList<CraftOptionView> BuildCraftOptions(World world, Machine m) =>
+        m.Data.Craft is { } bench ? [.. bench.Options.Select(o => OptionView(world, m, bench, o))] : [];
+
+    /// <summary>
+    /// One option of a bench as its Craft tab shows it.
+    /// </summary>
+    CraftOptionView OptionView(World world, Machine m, CraftBench bench, CraftOption option)
     {
-        if (world.Machines.Find(site) is not { Data.Craft: { } bench } m) return [];
-        return [.. bench.Options.Select(o =>
-        {
-            var recipe = RecipeOf(m, o);
-            return new CraftOptionView(o.Key, recipe.Name, o.Kind, o.Level, recipe.Hours,
-                [.. recipe.Inputs.Select(i => (_items.Info(i.Item)?.Name ?? i.Item, i.PerItem))], CanCraft(world, bench, o));
-        })];
+        var recipe = RecipeOf(m, option);
+        var inputs = recipe.Inputs.Select(i => (_items.Info(i.Item)?.Name ?? i.Item, i.PerItem)).ToArray();
+        return new CraftOptionView(option.Key, recipe.Name, option.Kind, option.Level, recipe.Hours, inputs, CanCraft(world, bench, option));
     }
 
     /// <summary>
