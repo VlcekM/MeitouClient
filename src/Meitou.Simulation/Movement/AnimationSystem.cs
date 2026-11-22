@@ -1064,7 +1064,7 @@ public sealed class AnimationSystem(
             wanted.Add((technique, 1));
         }
 
-        if (!down && !carried) AddArmOverlay(a, cold, stance, crawling, inCage, speed, wanted);
+        if (!carried && (!down || inBed || inCage)) AddArmOverlay(a, cold, stance, crawling, inCage, speed, wanted);
 
         var (lift, liftTime) = PickLift(a, cold, task, down, carried, wanted, ref legs);
 
@@ -1300,15 +1300,17 @@ public sealed class AnimationSystem(
 
     /// <summary>
     /// A carrier (FUN_140520000, the arm overlay update every frame): the carrying arm's overlay clip whatever else plays, a technique included
-    /// (docs/animation.md "A carrier"). A character that carries nothing and stands holds its hurt parts (FUN_140520000 -> FUN_14051fe60,
-    /// docs/animation.md "Injury holds"); a prisoner does too, unless <see cref="World.PrisonPoseFix"/>.
+    /// (docs/animation.md "A carrier"). A character that carries nothing holds its hurt parts (FUN_140520000 -> FUN_14051fe60, docs/animation.md
+    /// "Injury holds"): in any state whose pick leaves the animation category at 0, that is the combat stance too (FUN_140520500 returns before it sets
+    /// 4 or 5); a sleeper in a bed does too, as in the game, and a prisoner (<paramref name="inCage"/>) unless <see cref="World.PrisonPoseFix"/>.
     /// </summary>
     void AddArmOverlay(CharacterAnimation a, CharacterCold cold, in AnimationStance stance, bool crawling, bool inCage, float speed,
         List<(int Index, float Weight)> wanted)
     {
         bool swims = cold is { WaterState: 3, Race.Swims: true };
         bool armsFree = !stance.CarryingLeft && !stance.CarryingRight;
-        bool holds = armsFree && !crawling && speed <= PainHoldMaxSpeed && !swims && !(inCage && _prisonPoseFix);
+        bool category0 = stance.Combat || !crawling && !swims;
+        bool holds = armsFree && category0 && speed <= PainHoldMaxSpeed && !(inCage && _prisonPoseFix);
         if (stance.CarryingLeft && CarryArmClip >= 0)
         {
             wanted.Add((CarryArmClip, 1));
@@ -1871,7 +1873,7 @@ public sealed class AnimationSystem(
     /// <b>Verified</b>, docs/animation.md "Injury holds"): the parts whose health fraction is under their <c>pain anim</c> threshold per cent, the
     /// lowest fraction first; the first whose record the free arms allow wins: a record that uses the left arm plays as is when the left arm is free
     /// and works, else as its <c>-R</c> mirror when the right arm is; a record that uses the right arm needs it free. An arm is busy while a hand
-    /// holds a weapon or an upper / whole-body layer uses it. -1: none.
+    /// holds a weapon or a layer of the upper / whole-body manager, a fading one too, uses it: a technique's layer uses both. -1: none.
     /// </summary>
     int PainHold(CharacterAnimation a, CharacterCold cold, in AnimationStance stance, List<(int Index, float Weight)> wanted)
     {
@@ -1881,8 +1883,10 @@ public sealed class AnimationSystem(
         {
             var d = Library.Definitions[index];
             if (weight <= 0 || d.Area is not (AnimationArea.Upper or AnimationArea.All)) return;
-            leftBusy |= d.UsesLeftArm;
-            rightBusy |= d.UsesRightArm;
+
+            // A technique's layer (FUN_1405b7800) marks both arms busy whatever a record says; an ANIMATION's layer has its own two flags.
+            leftBusy |= d.UsesLeftArm || d.Technique;
+            rightBusy |= d.UsesRightArm || d.Technique;
         }
         foreach (var (index, weight) in wanted) Scan(index, weight);
         for (int k = 0; k < a.Count; k++) Scan(a.Layers[k].Definition, a.Layers[k].Weight);
