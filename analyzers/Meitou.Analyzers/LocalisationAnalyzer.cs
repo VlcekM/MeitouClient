@@ -6,22 +6,17 @@ using Microsoft.CodeAnalysis.Text;
 namespace Meitou.Analyzers;
 
 /// <summary>
-/// MEI0001: a text a player reads built with $"...", which no catalog can match (docs/formats/localisation.md "Keeping Meitou's catalogs
-/// complete"). The same rule as the Translations workflow's check (.github/scripts/loc-strings.mjs), so it fails the build before a push does;
-/// the texts listed in src/Meitou.Core/Localisation/locale/meitou.built (an additional file) are the baseline still to convert.
+/// The rules of Meitou's own texts (docs/formats/localisation.md "Keeping Meitou's catalogs complete"), as .github/scripts/loc-strings.mjs
+/// checks them, so the build fails before a push does. MEI0001: a text a player reads built with $"...", which no catalog can match, unless
+/// meitou.built lists it. MEI0002: a message some built-in catalog has no usable translation of, unless meitou.ignore lists it.
 /// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
-public sealed class BuiltTextAnalyzer : DiagnosticAnalyzer
+public sealed class LocalisationAnalyzer : DiagnosticAnalyzer
 {
     /// <summary>
-    /// The baseline's path from the repository root.
+    /// MEI0001: built text.
     /// </summary>
-    const string BaselinePath = "src/Meitou.Core/Localisation/locale/meitou.built";
-
-    /// <summary>
-    /// The rule reported.
-    /// </summary>
-    static readonly DiagnosticDescriptor Rule = new(
+    static readonly DiagnosticDescriptor BuiltRule = new(
         "MEI0001",
         "Player-facing text built with $\"...\"",
         "\"{0}\" is built with $\"...\" where a player reads it, so no catalog can match it; give it to Loc.Tr with {{1}}, {{2}} placeholders",
@@ -30,9 +25,20 @@ public sealed class BuiltTextAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true);
 
     /// <summary>
-    /// The rules this analyzer reports: MEI0001.
+    /// MEI0002: missing translation.
     /// </summary>
-    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => [Rule];
+    static readonly DiagnosticDescriptor MissingRule = new(
+        "MEI0002",
+        "Text without a translation",
+        "\"{0}\" has no usable translation in {1}; translate it (node .github/scripts/loc-fill.mjs) or list it in meitou.ignore",
+        "Localisation",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    /// <summary>
+    /// The rules this analyzer reports: MEI0001 and MEI0002.
+    /// </summary>
+    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => [BuiltRule, MissingRule];
 
     /// <summary>
     /// Checks each compilation's files, generated code skipped.
@@ -45,71 +51,79 @@ public sealed class BuiltTextAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>
-    /// Reads the baseline and checks each file of the compilation under src/ or launcher/; nothing without the baseline.
+    /// Reads the locale files and checks each C# file under src/ or launcher/ and each launcher .axaml file; nothing without the locale files.
     /// </summary>
     static void Start(CompilationStartAnalysisContext context)
     {
-        AdditionalText? baseline = context.Options.AdditionalFiles.FirstOrDefault(f => Normalise(f.Path).EndsWith("/" + BaselinePath));
-        if (baseline is null) return;
+        LocaleFiles? locale = LocaleFiles.Find(context.Options.AdditionalFiles, context.CancellationToken);
+        if (locale is null) return;
 
-        string normalised = Normalise(baseline.Path);
-        string root = normalised.Substring(0, normalised.Length - BaselinePath.Length);
-        HashSet<string> listed = ReadList(baseline.GetText(context.CancellationToken));
-        context.RegisterSyntaxTreeAction(tree => Check(tree, root, listed));
+        context.RegisterSyntaxTreeAction(tree => CheckCSharp(tree, locale));
+        context.RegisterAdditionalFileAction(file => CheckAxaml(file, locale));
     }
 
     /// <summary>
-    /// Reports the built texts of one file that the baseline does not list.
+    /// Reports one C# file's built texts that meitou.built does not list and its messages a catalog lacks.
     /// </summary>
-    static void Check(SyntaxTreeAnalysisContext context, string root, HashSet<string> listed)
+    static void CheckCSharp(SyntaxTreeAnalysisContext context, LocaleFiles locale)
     {
-        string? path = RelativePath(context.Tree.FilePath, root);
-        if (path is null) return;
+        string? path = locale.RelativePath(context.Tree.FilePath);
+        if (path is null || !path.EndsWith(".cs", StringComparison.Ordinal)) return;
 
         string src = context.Tree.GetText(context.CancellationToken).ToString();
-        foreach (CSharpLiteral literal in BuiltTexts.Find(src, path).Where(l => !listed.Contains(l.Value)))
+        (List<CSharpLiteral> built, List<LocMessage> messages) = LocTexts.FindInCSharp(src, path);
+        foreach (CSharpLiteral literal in built.Where(l => !locale.Built.Contains(l.Value)))
         {
-            int end = Math.Min(literal.End, src.Length);
-            var location = Location.Create(context.Tree, TextSpan.FromBounds(literal.Start, end));
-            context.ReportDiagnostic(Diagnostic.Create(Rule, location, literal.Value));
+            Location at = Location.Create(context.Tree, Span(literal.Start, literal.End, src.Length));
+            context.ReportDiagnostic(Diagnostic.Create(BuiltRule, at, literal.Value));
+        }
+
+        foreach ((LocMessage message, string lacking) in Missing(messages, locale))
+        {
+            Location at = Location.Create(context.Tree, Span(message.Start, message.End, src.Length));
+            context.ReportDiagnostic(Diagnostic.Create(MissingRule, at, message.Id, lacking));
         }
     }
 
     /// <summary>
-    /// The path of a source file from the repository root when the script reads it (a .cs file under src/ or launcher/, not in bin or obj),
-    /// else null.
+    /// Reports the captions of a launcher .axaml file that a catalog lacks.
     /// </summary>
-    static string? RelativePath(string filePath, string root)
+    static void CheckAxaml(AdditionalFileAnalysisContext context, LocaleFiles locale)
     {
-        string path = Normalise(filePath);
-        if (!path.StartsWith(root, StringComparison.Ordinal) || !path.EndsWith(".cs", StringComparison.Ordinal)) return null;
+        string? path = locale.RelativePath(context.AdditionalFile.Path);
+        if (path is null || !path.StartsWith("launcher/", StringComparison.Ordinal) || !path.EndsWith(".axaml", StringComparison.Ordinal)) return;
+        if (context.AdditionalFile.GetText(context.CancellationToken) is not { } text) return;
 
-        string relative = path.Substring(root.Length);
-        if (!relative.StartsWith("src/", StringComparison.Ordinal) && !relative.StartsWith("launcher/", StringComparison.Ordinal)) return null;
-        if (relative.Split('/').Any(part => part is "bin" or "obj")) return null;
-
-        return relative;
+        foreach ((LocMessage message, string lacking) in Missing(LocTexts.FindInAxaml(text.ToString()), locale))
+        {
+            TextSpan span = Span(message.Start, message.End, text.Length);
+            Location at = Location.Create(context.AdditionalFile.Path, span, text.Lines.GetLinePositionSpan(span));
+            context.ReportDiagnostic(Diagnostic.Create(MissingRule, at, message.Id, lacking));
+        }
     }
 
     /// <summary>
-    /// A list file's texts: one per line ('\n' for a line break), '#' lines and blank lines skipped.
+    /// The messages not on the ignore list that a catalog cannot translate, each with the catalogs and their reasons ("de_DE, fr_FR: no entry").
     /// </summary>
-    static HashSet<string> ReadList(SourceText? text)
+    static IEnumerable<(LocMessage Message, string Lacking)> Missing(IEnumerable<LocMessage> messages, LocaleFiles locale)
     {
-        if (text is null) return [];
-
-        IEnumerable<string> entries = text.ToString()
-            .Split('\n')
-            .Where(l => l.Length > 0 && l[0] != '#')
-            .Select(l => l.Replace("\\n", "\n"));
-        return new HashSet<string>(entries, StringComparer.Ordinal);
+        foreach (LocMessage message in messages.Where(m => !locale.Ignored.Ignores(m)))
+        {
+            IEnumerable<string> byReason = locale.Catalogs
+                .Select(c => (c.Code, Problem: c.Problem(message)))
+                .Where(c => c.Problem is not null)
+                .GroupBy(c => c.Problem)
+                .Select(g => string.Join(", ", g.Select(c => c.Code)) + ": " + g.Key);
+            string lacking = string.Join("; ", byReason);
+            if (lacking.Length > 0) yield return (message, lacking);
+        }
     }
 
     /// <summary>
-    /// A path with '/' separators.
+    /// The span [start, end), clamped to a text of <paramref name="length"/> characters.
     /// </summary>
-    static string Normalise(string path)
+    static TextSpan Span(int start, int end, int length)
     {
-        return path.Replace('\\', '/');
+        return TextSpan.FromBounds(Math.Min(start, length), Math.Min(end, length));
     }
 }

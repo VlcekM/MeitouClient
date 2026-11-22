@@ -51,12 +51,12 @@ sealed class TranslatingCalls
     }
 
     /// <summary>
-    /// The offsets of the literals the calls take, and those the calls translate (their messages; interpolated ones are built text).
+    /// The offsets of the literals the calls take, and those the calls translate with their context and plural (interpolated ones are built text).
     /// </summary>
-    public (HashSet<int> Used, List<CSharpLiteral> Messages) Find()
+    public (HashSet<int> Used, List<CallText> Translated) Find()
     {
         var used = new HashSet<int>();
-        var messages = new List<CSharpLiteral>();
+        var messages = new List<CallText>();
         foreach (Match call in Calls.Matches(_masked))
             AddCall(call, used, messages);
 
@@ -66,7 +66,7 @@ sealed class TranslatingCalls
     /// <summary>
     /// Adds the literals of one call: TrIn's second argument's (its first is their context), Plural's first paired with its second's.
     /// </summary>
-    void AddCall(Match call, HashSet<int> used, List<CSharpLiteral> messages)
+    void AddCall(Match call, HashSet<int> used, List<CallText> messages)
     {
         string name = call.Groups[1].Success ? call.Groups[1].Value : call.Groups[2].Success ? call.Groups[2].Value : call.Groups[3].Value;
         List<(int From, int To)> args = ArgumentSpans(call.Index + call.Length);
@@ -74,25 +74,26 @@ sealed class TranslatingCalls
         used.UnionWith(first.Select(l => l.Start));
         if (name is not ("TrIn" or "Plural"))
         {
-            messages.AddRange(first);
+            messages.AddRange(first.Select(l => new CallText(l, null, null)));
             return;
         }
 
         List<CSharpLiteral> second = InArgument(args, 1);
         used.UnionWith(second.Select(l => l.Start));
-        if (name == "TrIn") messages.AddRange(second);
-        else messages.AddRange(PluralSingulars(first, second));
+        string? context = first.FirstOrDefault()?.Value;
+        if (name == "TrIn") messages.AddRange(second.Select(l => new CallText(l, context, null)));
+        else messages.AddRange(PluralPairs(first, second));
     }
 
     /// <summary>
-    /// The singular of each of Plural's plural forms: the first argument's literal at the same index, or its first one.
+    /// Each of Plural's plural forms with its singular: the first argument's literal at the same index, or its first one.
     /// </summary>
-    static IEnumerable<CSharpLiteral> PluralSingulars(List<CSharpLiteral> first, List<CSharpLiteral> second)
+    static IEnumerable<CallText> PluralPairs(List<CSharpLiteral> first, List<CSharpLiteral> second)
     {
         for (int k = 0; k < second.Count; k++)
         {
             CSharpLiteral? singular = k < first.Count ? first[k] : first.FirstOrDefault();
-            if (singular is not null) yield return singular;
+            if (singular is not null) yield return new CallText(singular, null, second[k].Value);
         }
     }
 
@@ -171,4 +172,25 @@ sealed class TranslatingCalls
         int end = Math.Max(start, Math.Min(to, _masked.Length));
         return _masked.Substring(start, end - start);
     }
+}
+
+/// <summary>
+/// A literal a translating call translates, with the msgctxt it is asked under and the plural it is paired with (or null).
+/// </summary>
+readonly struct CallText(CSharpLiteral literal, string? context, string? plural)
+{
+    /// <summary>
+    /// The literal: the msgid (or built text when interpolated).
+    /// </summary>
+    public CSharpLiteral Literal { get; } = literal;
+
+    /// <summary>
+    /// TrIn's context, or null.
+    /// </summary>
+    public string? Context { get; } = context;
+
+    /// <summary>
+    /// Plural's plural form, or null.
+    /// </summary>
+    public string? Plural { get; } = plural;
 }
