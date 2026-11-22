@@ -777,6 +777,8 @@ public sealed partial class FixtureRegistry
                 AdmitsAnimals = admitsAnimals,
                 Cavernous = cavernous,
                 Leaf = door is null ? new DoorLeaf(0, 30, 1, 0) : DoorLeaf.Of(door),
+                DoorTarget = door is { Type: FcsRecordType.Building }
+                        && Data.Gameplay.Construction.BuildingBuildData.From(door).Target is > 0 and var target ? target : 1,
                 Lock = new LockState { Level = RollLevel(world.Seed, id, faction, IntOf(door, "lock level bonus"), door: true),
                         Hardness = FloatOf(record, "hardness") },
             });

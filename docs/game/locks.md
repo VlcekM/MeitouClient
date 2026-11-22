@@ -142,7 +142,7 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   (door vfunc 62, `FUN_14029d690`): the attacker's damage packet, x0.25 for an animal (vfunc 0x248), then
   `f = clamp(2 x blunt + 0.5 x cut, 20, 60)`; 0.015 x f comes off the door's own construction progress (`getBuildState`, slot 69, returns
   the door's Building +0x160; `constructionProgress` +4 = the Building's progress `+0x164` in material units, see Repair); the lock's hardness is not touched
-  (Meitou: `Fixture.DoorProgress`, `LockSystem.Damage`, a fraction of 1 that a blow takes 0.015 f off as if the door's target were 1, so a whole door takes 2 to 4 blows: an engine reading, see Repair; not among the door save keys, so not saved; a template's BROKEN door starts at 0, engine reading). At <= 0 the door is broken, its lock
+  (Meitou: `Fixture.DoorProgress`, `LockSystem.Damage`, a fraction of the door record's target (`Fixture.DoorTarget`, its materials) that a blow takes 0.015 f / target off, as Repair adds; not among the door save keys, so not saved; a template's BROKEN door starts at 0, engine reading). At <= 0 the door is broken, its lock
   unlocked and the door opened, sound `Break`. The task ends once the door is broken, open or opening; no timer (**Verified**, `FUN_140348c10`: the door's vfunc `0x3e0`
   `FUN_1402adcc0` returns the door itself, so the "lock owner" tests are the door's own broken flag `+0x3ec` and state `+0x380` 1 or 2; the lock object's locked and broken flags are never read,
   so a closed unlocked door, or one whose lock was cut, is struck on). The Burglary booking comes on every update that passes the in-the-way test, before the blow test.
