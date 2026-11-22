@@ -594,6 +594,7 @@ sealed partial class PlayerInterface
         InventoryWindows.SyncClosedInventories();
         TradeWindows.SyncTradeScreens();
         Production.SyncMachineScreens();
+        Production.ShareShownMachines();
         TradeWindows.SyncLootScreen();
         InventoryWindows.SyncPinnedInventories();
         TradeWindows.SyncInventoryLayouts();

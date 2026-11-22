@@ -117,6 +117,11 @@ public sealed class PlayerState
     long _pointed = (long)CharacterId.None.Generation << 32 | (uint)CharacterId.None.Slot;
 
     /// <summary>
+    /// <see cref="ShownMachines"/>, replaced whole, read and written atomically.
+    /// </summary>
+    IReadOnlyList<string> _shownMachines = [];
+
+    /// <summary>
     /// The selected characters, in the order they were selected.
     /// </summary>
     public List<CharacterId> Selection { get; } = [];
@@ -153,6 +158,17 @@ public sealed class PlayerState
             return new((int)v, (int)(v >> 32));
         }
         set => Volatile.Write(ref _pointed, (long)value.Generation << 32 | (uint)value.Slot);
+    }
+
+    /// <summary>
+    /// The sites of the machines whose windows the host shows: only their snapshots carry <see cref="Production.MachineSnapshot.Storage"/>'s items
+    /// (docs/simulation.md "Snapshots"). Set by the host, a new list on each change, not by a command (any thread); a change while paused publishes
+    /// again. Display only: not hashed and not saved.
+    /// </summary>
+    public IReadOnlyList<string> ShownMachines
+    {
+        get => Volatile.Read(ref _shownMachines);
+        set => Volatile.Write(ref _shownMachines, value);
     }
 
     /// <summary>

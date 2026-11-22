@@ -619,15 +619,17 @@ public sealed class MachineRegistry
 
     /// <summary>
     /// The machines as the host shows them: each machine's view is made again only when a value it shows changed
-    /// (<see cref="MachineViewCache"/>), and the list and <see cref="Version"/> only when a view or the set of machines changed.
+    /// (<see cref="MachineViewCache"/>), and the list and <see cref="Version"/> only when a view or the set of machines changed. Only the machines
+    /// of <paramref name="shown"/> (sites) get their storage's items.
     /// </summary>
-    internal IReadOnlyList<MachineSnapshot> Published(ItemFactory items)
+    internal IReadOnlyList<MachineSnapshot> Published(ItemFactory items, IReadOnlyList<string> shown)
     {
         MachineSnapshot[]? fresh = null;
 
         for (int i = 0; i < _all.Count; i++)
         {
-            var view = _all[i].View.ViewOf(_all[i], items);
+            var m = _all[i];
+            var view = m.View.ViewOf(m, items, shown.Contains(m.Site));
             if (fresh is null && i < _published.Count && ReferenceEquals(view, _published[i])) continue;
             fresh ??= Started(i);
             fresh[i] = view;

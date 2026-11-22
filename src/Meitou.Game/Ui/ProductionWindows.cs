@@ -89,7 +89,7 @@ sealed class ProductionWindows(PlayerInterface player)
     /// window.
     /// </summary>
     internal static string MachineScreen(MachineSnapshot m) =>
-        m.Storage is null || m.Inputs.Count > 0 || m.Output is not null ? "building"
+        !m.HasStorage || m.Inputs.Count > 0 || m.Output is not null ? "building"
         : m.TechLevel == 0 ? "storage"
         : "bench";
 
@@ -121,10 +121,27 @@ sealed class ProductionWindows(PlayerInterface player)
 
         // A rock's natural site is no registry building: its machine, once mined, is enough.
         var selected = SiteMachine(focus?.SiteId);
-        if (selected is { Inputs.Count: 0, Output: null, Storage: null, Craft: null }) selected = null;
+        if (selected is { Inputs.Count: 0, Output: null, HasStorage: false, Craft: null }) selected = null;
 
         SyncShownMachine(selected);
         SyncOwnMachine(selected);
+    }
+
+    /// <summary>
+    /// Tells the world which machines' windows are shown (<see cref="Simulation.Player.PlayerState.ShownMachines"/>): only their storages are
+    /// published with their items. A new list only when they changed, so the paused world publishes again only then.
+    /// </summary>
+    internal void ShareShownMachines()
+    {
+        var state = player.Session.World.Player;
+        var shown = state.ShownMachines;
+        bool same = shown.Count == Count(ShownMachine) + Count(OwnMachine) && Listed(shown, ShownMachine) && Listed(shown, OwnMachine);
+        if (same) return;
+
+        state.ShownMachines = new[] { ShownMachine, OwnMachine }.OfType<string>().ToArray();
+
+        static int Count(string? site) => site is null ? 0 : 1;
+        static bool Listed(IReadOnlyList<string> list, string? site) => site is null || list.Contains(site);
     }
 
     /// <summary>
@@ -428,9 +445,9 @@ sealed class ProductionWindows(PlayerInterface player)
             b.Hidden.Add("TypeText");
         }
 
-        if (m?.Storage is { } sg)
+        if (m?.StorageSize is { } size)
         {
-            player.InventoryLayout.BindContainerGeometry(id, b, sg.Width, sg.Height);
+            player.InventoryLayout.BindContainerGeometry(id, b, size.Width, size.Height);
         }
 
         b.TemplateScale = player.UiScale;
@@ -448,11 +465,11 @@ sealed class ProductionWindows(PlayerInterface player)
 
         b.Disabled.Remove("ArrangeButton");
         b.Actions["ArrangeButton"] = "ArrangeButton";
-        if (m?.Storage is null) b.Hidden.Add("ArrangeButton");
+        if (m is not { HasStorage: true }) b.Hidden.Add("ArrangeButton");
 
-        if (m?.Storage is { } grid)
+        if (m?.StorageSize is { } size)
         {
-            player.InventoryLayout.BindContainerGeometry(id, b, grid.Width, grid.Height);
+            player.InventoryLayout.BindContainerGeometry(id, b, size.Width, size.Height);
         }
 
         b.TemplateScale = player.UiScale;
@@ -482,7 +499,7 @@ sealed class ProductionWindows(PlayerInterface player)
         {
             string n = (k + 1).ToString(CultureInfo.InvariantCulture);
 
-            if (k == 0 && FurnaceGrid(m) is not null)
+            if (k == 0 && FurnaceSize(m) is not null)
             {
                 BindFurnaceInput(b);
                 continue;
@@ -571,12 +588,12 @@ sealed class ProductionWindows(PlayerInterface player)
     /// </summary>
     void BindColumnTitles(MachineSnapshot m, UiBindings b)
     {
-        int inputCount = FurnaceGrid(m) is not null ? 1 : m.Inputs.Count;
+        int inputCount = FurnaceSize(m) is not null ? 1 : m.Inputs.Count;
         if (inputCount > 0) b.Text["InputTitleText"] = Loc.Plural("Input", "Inputs", inputCount);
 
         b.Text["OutputTitleText"] = Loc.Tr("Output");
-        if (m.Inputs.Count == 0 && FurnaceGrid(m) is null) b.Hidden.Add("InputTitleText");
-        if (m.Inputs.Count == 0 && FurnaceGrid(m) is null) b.Hidden.Add("InputColumn");
+        if (m.Inputs.Count == 0 && FurnaceSize(m) is null) b.Hidden.Add("InputTitleText");
+        if (m.Inputs.Count == 0 && FurnaceSize(m) is null) b.Hidden.Add("InputColumn");
     }
 
     /// <summary>
@@ -587,7 +604,7 @@ sealed class ProductionWindows(PlayerInterface player)
         var geometry = new InventoryGeometry(player.FaithfulScreens.Layout(id), player.Width, player.Height,
             player.InterfaceScale, player.UiScale);
         var cell = player.InventoryCellSize;
-        var furnace = FurnaceGrid(machine);
+        var furnace = FurnaceSize(machine);
         Vector2[] inputs = furnace is { } grid
             ? [new Vector2(grid.Width, grid.Height) * cell]
             : machine.Inputs.Take(2).Select(s => new Vector2(s.Width, s.Height) * cell).ToArray();
@@ -598,9 +615,15 @@ sealed class ProductionWindows(PlayerInterface player)
     }
 
     /// <summary>
-    /// A furnace's item grid (its <c>in1</c> section, kept as the machine's storage); null for any other machine.
+    /// A furnace's item grid with its items (its <c>in1</c> section, kept as the machine's storage); null for any other machine, and for a
+    /// furnace until its window is shown (<see cref="ShareShownMachines"/>).
     /// </summary>
     internal static InventoryView? FurnaceGrid(MachineSnapshot? m) => m is { Furnace: not null, Inputs.Count: 0, Storage: { } grid } ? grid : null;
+
+    /// <summary>
+    /// A furnace's item grid's size, published whether or not its window is shown; null for any other machine.
+    /// </summary>
+    internal static (int Width, int Height)? FurnaceSize(MachineSnapshot? m) => m is { Furnace: not null, Inputs.Count: 0 } ? m.StorageSize : null;
 
     /// <summary>
     /// A bench's current craft: the queue's front while its progress is below 1 (docs/game/ui-screens.md "Selected building", crafting window); null:
@@ -648,20 +671,21 @@ sealed class ProductionWindows(PlayerInterface player)
 
         for (int k = 0; k < Math.Min(2, m.Inputs.Count); k++) AddSlot(controls, m, $"in{k + 1}", m.Inputs[k], 10 + k);
 
-        if (FurnaceGrid(m) is { } fg && m.Furnace is { } burn) AddFurnaceGrid(controls, m, fg, burn);
+        if (FurnaceSize(m) is { } size && m.Furnace is { } burn) AddFurnaceGrid(controls, m, size, burn);
 
         AddOutputSlot(controls, m);
     }
 
     /// <summary>
-    /// A bench's or storage's grid and its items, placed in the window's <c>backpack_content</c>.
+    /// A bench's or storage's grid and its items, placed in the window's <c>backpack_content</c>; the items once the snapshot carries them (the
+    /// publish after the window was shown).
     /// </summary>
     void AddStorageGrid(string id, List<UiControl> controls, MachineSnapshot m)
     {
-        if (m.Storage is not { } grid) return;
+        if (!m.HasStorage) return;
 
         player.InventoryLayout.ArrangeContainerGrid(id, controls);
-        if (controls.FirstOrDefault(c => c.Name == "backpack_content") is not { } slot) return;
+        if (m.Storage is not { } grid || controls.FirstOrDefault(c => c.Name == "backpack_content") is not { } slot) return;
 
         var area = slot.Bounds;
 
@@ -736,17 +760,18 @@ sealed class ProductionWindows(PlayerInterface player)
     }
 
     /// <summary>
-    /// A furnace's input grid and its items.
+    /// A furnace's input grid of <paramref name="size"/> and its items (none until the snapshot carries them, the publish after the window was
+    /// shown).
     /// </summary>
-    void AddFurnaceGrid(List<UiControl> controls, MachineSnapshot m, InventoryView fg, FurnaceView burn)
+    void AddFurnaceGrid(List<UiControl> controls, MachineSnapshot m, (int Width, int Height) size, FurnaceView burn)
     {
         // The furnace's grid in in1, its items the storage's (picked up as storage items); disabled while it burns
         // (InventorySection::setEnabled(!active)).
-        AddSlot(controls, m, "in1", new MachineSlotView("", "", 0, 0, 0, fg.Width, fg.Height), -1);
+        AddSlot(controls, m, "in1", new MachineSlotView("", "", 0, 0, 0, size.Width, size.Height), -1);
         if (burn.Burning) DisableSection(controls, "in1");
         int gi = controls.FindIndex(c => c.Name == "in1");
 
-        if (gi >= 0)
+        if (gi >= 0 && FurnaceGrid(m) is { } fg)
         {
             var g = controls[gi];
 

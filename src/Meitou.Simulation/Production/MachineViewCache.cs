@@ -6,7 +6,8 @@ namespace Meitou.Simulation.Production;
 /// <summary>
 /// A machine's last published view and every value it was made from (docs/simulation.md "Snapshots"): each publish records the values again and
 /// makes a new <see cref="MachineSnapshot"/> only when one differs, so an idle machine (a storage box) keeps its view and its item views. Exact:
-/// numbers are compared by their bits and strings and data records by reference (all immutable), so no change goes unseen.
+/// numbers are compared by their bits and strings and data records by reference (all immutable), so no change goes unseen. A storage's items
+/// are walked only for a machine the host shows (<see cref="Player.PlayerState.ShownMachines"/>).
 /// </summary>
 sealed class MachineViewCache
 {
@@ -32,18 +33,19 @@ sealed class MachineViewCache
     MachineSnapshot? _view;
 
     /// <summary>
-    /// The view of <paramref name="m"/> now: the last one while nothing it shows changed, else a new one.
+    /// The view of <paramref name="m"/> now: the last one while nothing it shows changed, else a new one. Its storage's items are recorded and
+    /// published only while <paramref name="shown"/>; an unshown storage is reused whatever its items, by its size and emptiness alone.
     /// </summary>
-    internal MachineSnapshot ViewOf(Machine m, ItemFactory items)
+    internal MachineSnapshot ViewOf(Machine m, ItemFactory items, bool shown)
     {
         _nextValues.Clear();
         _nextRefs.Clear();
-        Record(m);
+        Record(m, shown);
         if (_view is not null && Unchanged()) return _view;
 
         (_values, _nextValues) = (_nextValues, _values);
         (_refs, _nextRefs) = (_nextRefs, _refs);
-        return _view = MachineSnapshot.Of(m, items);
+        return _view = MachineSnapshot.Of(m, items, shown);
     }
 
     /// <summary>
@@ -63,14 +65,29 @@ sealed class MachineViewCache
     /// <summary>
     /// Records everything <see cref="MachineSnapshot.Of"/> reads of the machine that can change (its data is immutable); keep the two in step.
     /// </summary>
-    void Record(Machine m)
+    void Record(Machine m, bool shown)
     {
         RecordState(m);
         RecordPower(m);
         RecordSlots(m);
-        if (m.Storage is { } grid) RecordGrid(grid);
+        RecordStorage(m.Storage, shown);
         if (m.Farm is { } farm) RecordFarm(farm);
         if (m.Craft is { } craft) RecordCraft(craft);
+    }
+
+    /// <summary>
+    /// Whether the storage's items are published, its presence, size and emptiness, and its items only while <paramref name="shown"/>.
+    /// </summary>
+    void RecordStorage(Inventory? grid, bool shown)
+    {
+        Flag(shown);
+        Flag(grid is not null);
+        if (grid is null) return;
+
+        Number(grid.Width);
+        Number(grid.Height);
+        Flag(grid.Items.Count == 0);
+        if (shown) RecordGrid(grid);
     }
 
     /// <summary>
@@ -136,12 +153,10 @@ sealed class MachineViewCache
     }
 
     /// <summary>
-    /// The storage grid's size and items.
+    /// A shown storage grid's items.
     /// </summary>
     void RecordGrid(Inventory grid)
     {
-        Number(grid.Width);
-        Number(grid.Height);
         Number(grid.Items.Count);
         foreach (var item in grid.Items) RecordItem(item);
     }

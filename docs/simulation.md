@@ -48,7 +48,10 @@ tick). **Observed** (play bench, `bench-bases-2026-10-27`, ~270-290 characters, 
 1.1-1.5 -> 0.45-0.6).
 Machine views (**engine choice**, `MachineViewCache`): each publish compares every value a machine's `MachineSnapshot` shows (numbers by bits,
 strings and data records by reference, each stored item's fields); an unchanged machine keeps its snapshot and item views, and `Machines` and
-`MachinesVersion` change only when some view or the set of machines did. `Machines.Worked` counts the ticks the machines work, which the smiths and
+`MachinesVersion` change only when some view or the set of machines did. Only the machines whose windows the host shows
+(`PlayerState.ShownMachines`, set by `ProductionWindows`; a change while paused publishes again) get `Storage` with its items, compared item by
+item; every other machine's `Storage` is null and its storage is compared and shown by `StorageSize` and `StorageEmpty` alone, so its items are
+never walked. `Machines.Worked` counts the ticks the machines work, which the smiths and
 research views (they also read characters) refresh on.
 Smith and craft views (**engine choice**): `SmithViewCache` keeps a bench's `CraftSmithView` while its machine, smith, name, effective level (by bits),
 penalty and queued options are unchanged, and the map while every bench's is. `CraftOptionsCache` keeps one option list per bench record (shared by

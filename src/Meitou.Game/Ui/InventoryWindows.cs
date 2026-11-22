@@ -711,7 +711,7 @@ sealed class InventoryWindows(PlayerInterface player)
                 {
                     // A furnace's in1 grid is its storage, the sim's "main".
                     bool furnaceGrid = name == "in1" && window.Holder == ItemHolder.Site
-                        && ProductionWindows.FurnaceGrid(player.Production.Machine(window.Site)) is not null;
+                        && ProductionWindows.FurnaceSize(player.Production.Machine(window.Site)) is not null;
                     return Spot(window, furnaceGrid ? "main" : section, slot, topLeft, h);
                 }
             }
@@ -765,7 +765,7 @@ sealed class InventoryWindows(PlayerInterface player)
             case ItemHolder.Stock:
                 return snapshot.Trade is { } trade ? (trade.StockWidth, trade.StockHeight) : (0, 0);
             case ItemHolder.Site:
-                return section == "main" && player.Production.Machine(window.Site)?.Storage is { } storage ? (storage.Width, storage.Height) : (0, 0);
+                return section == "main" && player.Production.Machine(window.Site)?.StorageSize is { } storage ? storage : (0, 0);
             default:
                 if (InventoryCommands.IsSingleSlot(section)) return (0, 0);
                 if (section is "back" or "hip") return InventoryCommands.SectionSize(section);

@@ -50,7 +50,7 @@ sealed class UseableLines(PlayerInterface player)
     {
         if (DataOf(record) is not { } data || !Useable(data)) return;
 
-        bool emptyMachine = (player.Production.Machine(focus.SiteId) ?? MachineOf(focus))?.Storage is { Items.Count: 0 };
+        bool emptyMachine = (player.Production.Machine(focus.SiteId) ?? MachineOf(focus))?.StorageEmpty == true;
         if (!emptyMachine && detail is not { Empty: true }) return;
 
         string caption = $"[{Loc.Tr("Empty").ToUpper(System.Globalization.CultureInfo.CurrentCulture)}]";

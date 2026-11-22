@@ -340,8 +340,8 @@ public sealed partial class World
             InspectedLevelPower = _production?.LevelPowerOf(this, Player.InspectedBuilding),
             InspectedTurret = combat?.TurretPanelOf(this, Player.InspectedBuilding),
             Machines = OpenContainerView() is { } container
-                ? [.. _production is null ? [] : Machines.Published(_production.Items), container]
-                : _production is null ? [] : Machines.Published(_production.Items),
+                ? [.. MachineViews(), container]
+                : MachineViews(),
             MachinesVersion = Machines.Version,
             Research = _production?.ResearchView(this) ?? Production.ResearchSnapshot.Empty,
             Outposts = _production?.OutpostView(this) ?? [],

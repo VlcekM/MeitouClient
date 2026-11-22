@@ -888,7 +888,7 @@ sealed class WorldMap(PlayerInterface player)
 
         if (machine is null) return false;
 
-        bool inputs = machine.Inputs.Count > 0 || machine.Storage is null;
+        bool inputs = machine.Inputs.Count > 0 || !machine.HasStorage;
         int slot = inputs ? machine.Inputs.ToList().FindIndex(i => i.Item == item.Record) : -1;
         if (inputs && slot < 0) return true;   // no input takes it
 

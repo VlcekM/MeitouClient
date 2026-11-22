@@ -236,10 +236,24 @@ public readonly record struct FurnaceView(bool Burning, float Metal);
 
 /// <summary>
 /// A machine of a complete player building after a tick (docs/simulation.md "Production"); <see cref="Site"/> is the building's instance id.
+/// <see cref="Storage"/>'s items are published only for a machine the host shows (<see cref="PlayerState.ShownMachines"/>, docs/simulation.md
+/// "Snapshots"); every other machine's is null and <see cref="StorageSize"/> and <see cref="StorageEmpty"/> stand in.
 /// </summary>
 public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<MachineSlotView> Inputs, MachineSlotView? Output,
     InventoryView? Storage, FarmView? Farm, byte Status, int Operators, int MaxOperators)
 {
+    /// <summary>
+    /// Its storage grid's width and height in cells, published for every machine (null: no storage); <see cref="Storage"/>'s when that is set.
+    /// </summary>
+    public (int Width, int Height)? StorageSize { get => Storage is { } s ? (s.Width, s.Height) : field; init; }
+    /// <summary>
+    /// It has a storage grid (<see cref="StorageSize"/> set), shown or not.
+    /// </summary>
+    public bool HasStorage => StorageSize is not null;
+    /// <summary>
+    /// It has a storage grid holding no item, published for every machine; <see cref="Storage"/>'s when that is set.
+    /// </summary>
+    public bool StorageEmpty { get => Storage is { } s ? s.Items.Count == 0 : field; init; }
     /// <summary>
     /// A container of a building's interior, open (<see cref="PlayerState.OpenContainer"/>): <see cref="Site"/> is its fixture id; no research,
     /// recipe or power.
@@ -372,16 +386,25 @@ public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<M
         count > 0 && items.Create(record, count) is { } item ? InventoryItemView.Of(0, item) : null;
 
     /// <summary>
-    /// The host's view of a machine: its slots with their items, its storage, farm, crafting, power and efficiency. Every machine state read here (or in the helpers it calls) is also recorded by
-    /// <see cref="MachineViewCache"/>, which reuses the view while none changed; keep them in step.
+    /// A storage grid's view with its items, each in section "main".
     /// </summary>
-    internal static MachineSnapshot Of(Machine m, ItemFactory items)
+    static InventoryView StorageView(Inventory grid) => new(grid.Width, grid.Height, 0, 0,
+        Array.AsReadOnly(grid.Items.Select((item, index) => InventoryItemView.Of(index, item) with { Section = "main" }).ToArray()));
+
+    /// <summary>
+    /// The host's view of a machine: its slots with their items, its storage, farm, crafting, power and efficiency. Every machine state read here
+    /// (or in the helpers it calls) is also recorded by <see cref="MachineViewCache"/>, which reuses the view while none changed; keep them in step.
+    /// </summary>
+    /// <param name="m">The machine.</param>
+    /// <param name="items">The item data its slots and grid are named from.</param>
+    /// <param name="storageItems">Whether <see cref="Storage"/> is made with its items (a machine the host shows); else only
+    /// <see cref="StorageSize"/> and <see cref="StorageEmpty"/> are.</param>
+    internal static MachineSnapshot Of(Machine m, ItemFactory items, bool storageItems = true)
     {
         string Name(string record) => items.Info(record)?.Name ?? record;
         var inputs = m.Inputs.Select(i => InputView(m, i, items)).ToArray();
         MachineSlotView? output = m.Output is { } o ? OutputView(o, items) : null;
-        InventoryView? storage = m.Storage is { } s ? new InventoryView(s.Width, s.Height, 0, 0,
-            Array.AsReadOnly(s.Items.Select((item, index) => InventoryItemView.Of(index, item) with { Section = "main" }).ToArray())) : null;
+        InventoryView? storage = storageItems && m.Storage is { } s ? StorageView(s) : null;
         FarmView? farm = m.Farm is { } f && m.Data.Farm is { } fd
             ? new FarmView(f.Growth, f.Death, f.Harvested, f.Plants.Length, f.Status, m.Yield, m.CropMatch,
                 Math.Clamp(f.HarvestProgress, 0, 1))
@@ -410,6 +433,8 @@ public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<M
             Function = m.Data.Function,
             StorageLimitName = m.Data.StorageLimit is [var only] ? Name(only) : null,
             StorageCapacity = m.Data.StorageLimit is [_] ? (int)m.Data.StackBonusMult : 0,
+            StorageSize = m.Storage is { } grid ? (grid.Width, grid.Height) : null,
+            StorageEmpty = m.Storage is { Items.Count: 0 },
             Craft = Crafting(m, items),
             Power = PowerOf(m),
             Panel = PanelOf(m.Data),

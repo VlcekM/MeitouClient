@@ -24,6 +24,11 @@ public sealed partial class World
     bool _publishedAllGrids;
 
     /// <summary>
+    /// The shown machines the last machine views were made for (<see cref="PlayerState.ShownMachines"/>; null: none made yet).
+    /// </summary>
+    IReadOnlyList<string>? _publishedShownMachines;
+
+    /// <summary>
     /// Applies the interface's commands between ticks while paused, without advancing time or running simulation phases:
     /// selection, order toggles, job lists, crafting and research queues, squads, inventory, open-shop transactions, building settings,
     /// the Stop order and every order (<see cref="OrderCommand"/>: each goes into its characters' queues through the one order path,
@@ -51,9 +56,12 @@ public sealed partial class World
         due = Simulation.Player.OrderGiver.SkipGettingUp(this, due);
         if (due.Count == 0)
         {
-            // The pointer moved onto another character: publish again, as what its menu offers with a chance (stealth KO, kidnap) is published only
-            // for the character pointed at, selected or inspected (#878); the selection's grids are wanted or no longer.
-            if (Player.Pointed != _publishedPointed || Player.AllSelectedGrids != _publishedAllGrids) PublishPaused();
+            // The pointer moved onto another character, the selection's grids are wanted or no longer, or a machine window opened or closed:
+            // publish again, as what its menu offers with a chance (stealth KO, kidnap) is published only for the character pointed at, selected or
+            // inspected (#878), and a storage's items only for a shown machine.
+            bool shownChanged = !ReferenceEquals(Player.ShownMachines, _publishedShownMachines);
+            bool gridsChanged = Player.AllSelectedGrids != _publishedAllGrids;
+            if (Player.Pointed != _publishedPointed || gridsChanged || shownChanged) PublishPaused();
             return;
         }
 
@@ -87,6 +95,16 @@ public sealed partial class World
         foreach (var trade in _systems.OfType<Trading.TradeSystem>()) trade.RefreshView(this);
         foreach (var talk in _systems.OfType<Dialogue.DialogueSystem>()) talk.RefreshView(this);
         PublishPaused();
+    }
+
+    /// <summary>
+    /// The machines' views for a publish, the shown machines' storages with their items (<see cref="PlayerState.ShownMachines"/>, remembered for
+    /// the paused publish).
+    /// </summary>
+    IReadOnlyList<Production.MachineSnapshot> MachineViews()
+    {
+        var shown = _publishedShownMachines = Player.ShownMachines;
+        return _production is null ? [] : Machines.Published(_production.Items, shown);
     }
 
     /// <summary>
