@@ -765,6 +765,26 @@ holds refuses the second mod.
   exists (`world.Buildings.FindTown`) and, for a change only its owner may make, that its `Owner` is still the player's faction. A source that
   throws, or returns a line without a label, is logged once and dropped for the session; a press that throws is logged. The hook keeps no state:
   nothing of it enters the state hash or a save. Without a source the panel is as before. Engine API, not in the original.
+- **Character panel lines and job panel buttons:** in `Register`, `registration.AddCharacterPanelLines(context => lines)` adds lines to the
+  HUD's character panel under its stats lines (`StatsText`), and `registration.AddJobPanelButtons(context => buttons)` adds buttons beside the
+  jobs list (`JobsPanel`), in registration order. Both sources get `UiCharacterContext`: the `Character` the panel shows (the `CharacterSnapshot`:
+  skills, XP multipliers, jobs, orders, faction; for the character panel an inspected other faction's character too, for the jobs list the
+  selected one), its `Id` and `Name`, the `Snapshot` on screen, `Tick` and `Enqueue` (from a press only). A `UiCharacterLine` has a `Label` (the
+  stats labels' column and look), an optional `Value` (the value column; blank is none), an optional `Bar` (0 to 1, clamped; the game's progress
+  bar in the value column with the value centred on it; not finite: the source is faulty), `Tooltip` and `Press` (as a town panel line's: a
+  button for the value, or one button across the line without a value; a line with a press draws no bar). Lines take the rows after the stats
+  lines at their pitch; those that do not fit in `StatsText` are not shown (at 1080 lines it holds about six rows, the game's stats take some),
+  and a layout without `StatsText` (a UI mod's) shows none. A `UiJobButton` is a caption, a tooltip or null, and a press. The orders panel has
+  no free room, so when a source gives buttons the jobs list and its empty-list hint start one job row (int(24 × height / 1080)) lower in
+  their frame and the buttons share that row above the list, side by side across its width; a layout where the list or one of its parents is
+  not placed in fractions of its parent (a UI mod's) gets none, and without buttons the panel is as before. Limits, cuts and faults as the town
+  panel lines: at most four lines and four buttons of all mods together (the rest left out, logged once per extension), texts cut to 64
+  characters on one line, tooltips to 1,000, translated; a source that throws or gives a line without a label (a button without a caption or
+  press) is logged once and dropped for the session; a press that throws is logged. A press plays the click and runs only while the panel
+  still shows the character it was shown for. Sources run on the host thread whenever the HUD is arranged (each tick, each mouse move), so they
+  must be cheap and must not touch the world. **Verified** by `CharacterPanelLinesTests` (order, context, disposal, caps and cuts, faulty
+  sources dropped; with the installed HUD layout: placement under `StatsText`, the list lowered and restored, presses for the shown
+  character). Not yet seen in a running game. Engine API, not in the original.
 - **Settings:** `AddSettings(object)`, once per mod: the object's public get/set properties marked
   `[Setting(label, Hint, Min, Max, Step, Options, SubGroup, VisibleWhen)]` (`ModSettings.cs`) become one group, in declaration order (a
   sub-group's settings together at its first one's place), under the mod's row on the Settings screen's Mods page

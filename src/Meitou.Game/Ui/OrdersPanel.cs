@@ -50,6 +50,11 @@ sealed class OrdersPanel(PlayerInterface player)
     /// </summary>
     internal int? JobDrag;
 
+    /// <summary>
+    /// The code mods' buttons beside the jobs list (docs/modding.md "Character panel lines and job panel buttons").
+    /// </summary>
+    internal JobModButtons ModButtons { get; } = new(player);
+
     #endregion
 
     #region Order toggles
@@ -118,6 +123,7 @@ sealed class OrdersPanel(PlayerInterface player)
             ["LineHeight"] = ((int)(24 * player.UiScale)).ToString(CultureInfo.InvariantCulture),
         };
         b.ScrollOffsets["JobsPanel"] = player.ScrollBars.InventoryScroll.GetValueOrDefault("JobsPanel");
+        ModButtons.Bind(b, lead);
 
         // The brackets are the panel's, not the catalog's (its keys have none: "No jobs assigned", "To add jobs, hold shift key when giving an
         // order").
