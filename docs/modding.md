@@ -683,10 +683,10 @@ holds refuses the second mod.
   it takes no text, in the character editor, and for the mouse's extra buttons in photo mode, as the game's own actions do; a numpad key bound
   to one is not the cinema camera's. On the Metal host F7, F8, F11, F12 and Print Screen are the view's own keys and never reach an action.
   A binding is one key or button with no modifier, as the game's own bindings are in Meitou: the action fires whatever Shift, Ctrl or Alt is
-  held, and the press does not say which (the host's own combinations, Alt+Enter, Ctrl+F9 and on the Vulkan host Shift with F1, F2, F11 or
+  held, and the press tells which in its context (the host's own combinations, Alt+Enter, Ctrl+F9 and on the Vulkan host Shift with F1, F2, F11 or
   F12, never reach the bindings).
-  Once per press, also while paused, `pressed(ModKeyContext)` (the `Snapshot` on screen, `Selected`, `Tick`, `Enqueue`) runs on the host
-  thread at the control tick, so it must not touch the world, must not block, and queues commands for gameplay; `action.Held` is its state at
+  Once per press, also while paused, `pressed(ModKeyContext)` (the `Snapshot` on screen, `Selected`, `Tick`, `Enqueue`, and `Ctrl`, `Shift`,
+  `Alt`: either key of each held as it was pressed, so a mod can give Ctrl+key its own meaning) runs on the host thread at the control tick, so it must not touch the world, must not block, and queues commands for gameplay; `action.Held` is its state at
   the last control tick, for host-thread readers. A throw is logged with the mod id and the name and that action gets no more presses.
   `name` (1 to 48 letters, digits, `_ . -`, unique within the mod) keys the saved keys; a bad name, or a label that is empty or blank, over 48
   characters or on more than one line, refuses the mod. The actions are numbered `InputAction` from `InputBindings.FirstModAction` (1000) in
