@@ -800,6 +800,11 @@ sealed class TooltipRuntime(PlayerInterface player)
         public int BagItems { get; init; } = -1;
 
         /// <summary>
+        /// The item's code-mod tag (<see cref="InventoryItemView.ModTag"/>; "" none), for the mods' tooltip lines.
+        /// </summary>
+        public string ModTag { get; init; } = "";
+
+        /// <summary>
         /// The chance a take of the item goes unseen, for another faction's item its window's opener would steal
         /// (<see cref="InventoryItemView.StealChance"/>); null otherwise.
         /// </summary>
@@ -830,6 +835,7 @@ sealed class TooltipRuntime(PlayerInterface player)
                 BagItems = v.BagItems,
                 StealChance = v.StealChance,
                 StolenOwner = v.StolenOwner,
+                ModTag = v.ModTag,
             };
 
         /// <summary>
@@ -1055,6 +1061,7 @@ sealed class TooltipRuntime(PlayerInterface player)
         if (armour is not null) AddArmourTail(lines, t, record, armour);
         AddChargeRows(lines, t, type, function);
         AddMapNoteRows(lines, t);
+        AddModRows(lines, t);
 
         // The record's description closes every other item's tooltip, with no blank row before it (the second tooltip function, FUN_14079f4d0 and its
         // overrides).
@@ -1063,6 +1070,15 @@ sealed class TooltipRuntime(PlayerInterface player)
         if (type == Data.Fcs.FcsRecordType.Weapon) lines.AddRange(WeaponTail(t, model));
 
         return lines;
+    }
+
+    /// <summary>
+    /// The code mods' lines for the item (<see cref="UiRegistration.AddItemTooltipLines"/>), each a label and an optional value.
+    /// </summary>
+    void AddModRows(List<TooltipLine> lines, ItemTip t)
+    {
+        var item = new UiItemTooltipContext(t.Record, t.Name, t.ModTag, t.Quantity, t.Level, t.Quality);
+        foreach (var line in player.ModItemTooltipLines(item)) lines.Add(new(line.Label, line.Value ?? ""));
     }
 
     /// <summary>

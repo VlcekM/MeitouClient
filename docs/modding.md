@@ -736,6 +736,13 @@ holds refuses the second mod.
   and still qualifies before acting. A source that throws, or returns a
   button without a caption or press, is logged once and dropped for the session; a press that throws is logged. Without a source the panel
   is as before. Engine API, not in the original.
+- **Item tooltip lines:** in `Register`, `registration.AddItemTooltipLines(context => lines)` adds `UiItemTooltipLine`s (a label and an
+  optional value) to an item's tooltip, after the game's own rows and before the record's description. The source gets `UiItemTooltipContext`:
+  the item's record string id, name, code-mod tag (`ItemInstance.ModTag`, so a mod shows what it keeps on the item: a condition, rolled
+  affixes; a trader's stock item has none), quantity, level and quality. It runs on the host thread each time a tooltip is built, so it must be
+  cheap and must not touch the world. At most 8 lines from all sources together; a label or value is put on one line and cut to 80
+  characters, a blank value is none. A source that throws or gives a line without a label is reported once and dropped for the session.
+  **Verified** by `ItemTooltipLinesTests` (order, the context, disposal, the cap and cut, a throwing and an unlabelled source dropped).
 - **Town panel lines:** in `Register`, `registration.AddTownPanelLines(context => lines)` adds lines to the HUD's town panel (the outpost the
   camera is in: name, Open to public, Research, Power, Battery charge; [town panel](game/ui-screens.md#town-panel)) under the game's own, in
   registration order (mods in load order), so several mods share it. A `UiTownLine` has a `Label` (in the labels' column, drawn as the game's
