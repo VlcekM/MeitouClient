@@ -61,6 +61,7 @@ Not built, by design: the original's in-game level editor and fog editor (`Kensh
 - [fcs-mod](formats/fcs-mod.md)
 - [fogfeatures](formats/fogfeatures.md)
 - [gettext](formats/gettext.md)
+- [kenshilib-1068](formats/kenshilib-1068.md): KenshiLib's names at Steam 1.0.68 addresses (7,134 functions), and where a mod hears the original's events
 - [localisation](formats/localisation.md): language selection, locale overlay, translations
 - [havok-tagfile](formats/havok-tagfile.md): `.hkt` encoding, navmesh tiles
 - [foliage](formats/foliage.md)
