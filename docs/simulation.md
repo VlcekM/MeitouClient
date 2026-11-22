@@ -133,6 +133,11 @@ only in serial phases after consumers finish; generation IDs prevent stale slot 
 Combat has separate double buffers swapped at the end of its SlowWorld, not at global publish. Its checks round a target (who swings at
 it, who yields, attack slots, joining, fighters at it) walk `AttackerIndex`, the per-target attacker lists rebuilt in Pursuit's and Combat's
 Schedule, filtered to the grid cells a search would cover, in the grid's order. Ragdoll physics steps on `Threads` workers (Bepu deterministic mode).
+SlowWorld systems run serially in system order; inside one, a pass over independent items may fan out on the workers (`World.ParallelFor`) when
+each item only reads shared state and writes its own entry, and everything order-dependent (budgets, registries, events, RNG keys, physics
+bodies) stays in a serial pass in the original order. So far: the roaming stand-ins ([population](#population)) and the ragdoll
+look (`RagdollSystem.PrepareAll`, 32 slots a job: each slot's wanted parts, a carried body's hang from its carrier's animation, and the pins'
+animated pose of a ragdoll keeping its mask), whose builds, budgets, pins and tiles then run serially in slot order.
 
 Effects sort by `(target,source,system,sequence)`; spatial-neighbour iteration order is fixed.
 Commands apply by tick and queue order. Simplification: the original drains a character's command deque from its head each frame; the head is accepted or refused by `FUN_1405d0db0` and a refusal blocks everything behind it and is retried every frame (`FUN_1405d2c30`:15-41, **Verified**), while Meitou's `CommandQueue.TakeDue` removes every due command and a consumer that does not apply one drops it. In-tick orders use serial `World.Defer`; deferred orders
