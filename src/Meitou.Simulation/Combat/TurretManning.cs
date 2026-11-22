@@ -238,12 +238,13 @@ sealed class TurretManning
     }
 
     /// <summary>
-    /// Whether a character stands within a turret's <c>use range</c> (and the walk's slack) of it, on the ground plane.
+    /// Whether a character stands within a turret's <c>use range</c> (and the walk's slack) of it, on the same floor.
     /// </summary>
     static bool InReach(in CharacterHot n, in TurretPost post)
     {
         float reach = post.UseRange + Ai.AiSystem.TurretSlack;
-        return Vector2.DistanceSquared(new(n.Position.X, n.Position.Z), new(post.Position.X, post.Position.Z)) <= reach * reach;
+        return Vector2.DistanceSquared(new(n.Position.X, n.Position.Z), new(post.Position.X, post.Position.Z)) <= reach * reach
+            && MathF.Abs(n.Position.Y - post.Position.Y) <= Movement.MovementSystem.FloorSlack;
     }
 
     /// <summary>

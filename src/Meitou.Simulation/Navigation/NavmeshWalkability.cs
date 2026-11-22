@@ -449,9 +449,12 @@ public sealed partial class NavmeshWalkability : IWalkability
 
     /// <summary>
     /// Whether a path ending at <paramref name="end"/> has arrived at <paramref name="goal"/>: within <see cref="NavQuery.GoalSnap"/> of it on the
-    /// X/Z plane.
+    /// X/Z plane and on the same floor (<see cref="NavQuery.GoalFloorSlack"/>). A point on the stairs or ground below an upper-floor or roof goal
+    /// behind a locked door has not arrived.
     /// </summary>
-    static bool Arrives(Vector3 end, Vector3 goal) => Vector2.Distance(new(end.X, end.Z), new(goal.X, goal.Z)) <= NavQuery.GoalSnap;
+    static bool Arrives(Vector3 end, Vector3 goal) =>
+        Vector2.Distance(new(end.X, end.Z), new(goal.X, goal.Z)) <= NavQuery.GoalSnap
+        && MathF.Abs(end.Y - goal.Y) <= NavQuery.GoalFloorSlack;
 
     /// <summary>
     /// The route to a goal just found unreachable (shut in, or a way in too narrow for the radius; <see cref="_unreachable"/>), for a walker whose
