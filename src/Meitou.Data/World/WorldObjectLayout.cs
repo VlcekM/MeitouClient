@@ -165,6 +165,12 @@ public sealed record PlacedEffect(
     Quaternion Orientation);
 
 /// <summary>
+/// An <c>is node</c> BUILDING instance of a placed building (such as <c>Node Light Mount</c> or <c>Node Turret</c>), in world or building-local
+/// space: its node record id, position (unscaled by the building's <c>scale</c>, <b>Verified</b> <c>0x140388e10</c>) and orientation.
+/// </summary>
+public readonly record struct PlacedSnapNode(string Record, Vector3 Position, Quaternion Rotation);
+
+/// <summary>
 /// State of a placed building that changes what is drawn (from its GAMESTATE_BUILDING and its town).
 /// </summary>
 /// <param name="Destroyed">The state's <c>destroyed</c> flag: parts switch to their <c>destroyed mesh</c>, upper floors and stairs without
@@ -372,7 +378,8 @@ public static class WorldObjectLayout
         BuildingState state,
         List<PlacedMesh> result,
         List<PlacedLight>? lights,
-        List<PlacedEffect>? effects)
+        List<PlacedEffect>? effects,
+        List<PlacedSnapNode>? snapNodes = null)
     {
         /// <summary>
         /// The database the parts are found in.
@@ -407,6 +414,10 @@ public static class WorldObjectLayout
         /// The effects laid out; null when not wanted.
         /// </summary>
         public readonly List<PlacedEffect>? Effects = effects;
+        /// <summary>
+        /// The <c>is node</c> building instances laid out; null when not wanted.
+        /// </summary>
+        public readonly List<PlacedSnapNode>? SnapNodes = snapNodes;
         /// <summary>
         /// The building's scale (its parent's for a door), never 0 or less.
         /// </summary>
@@ -450,6 +461,17 @@ public static class WorldObjectLayout
         AddBuilding(db, building, building.StringId, worldPosition, rotation, new BuildingState(), [], null, null)?.Marker;
 
     /// <summary>
+    /// The <c>is node</c> BUILDING instances of <paramref name="building"/> and its parts in the building's own space (position and orientation at
+    /// the origin, unrotated).
+    /// </summary>
+    public static IReadOnlyList<PlacedSnapNode> SnapNodes(GameDatabase db, GameRecord building)
+    {
+        var nodes = new List<PlacedSnapNode>();
+        AddBuilding(db, building, building.StringId, Vector3.Zero, Quaternion.Identity, new BuildingState { WithInterior = true }, [], null, null, snapNodes: nodes);
+        return nodes;
+    }
+
+    /// <summary>
     /// Lays out <paramref name="building"/> at <paramref name="position"/>, its interior too when <paramref name="state"/> asks; null for an <c>is
     /// node</c> building.
     /// </summary>
@@ -464,12 +486,13 @@ public static class WorldObjectLayout
         List<PlacedLight>? lights,
         List<PlacedEffect>? effects,
         int doorIndex = -1,
-        float? parentScale = null)
+        float? parentScale = null,
+        List<PlacedSnapNode>? snapNodes = null)
     {
         if (building.GetBool("is node")) return null;
 
         float scale = parentScale ?? building.GetFloat("scale", 1);
-        var a = new Assembly(db, building, placementId, state, result, lights, effects)
+        var a = new Assembly(db, building, placementId, state, result, lights, effects, snapNodes)
         {
             Scale = scale > 0 ? scale : 1,
 
@@ -758,6 +781,15 @@ public static class WorldObjectLayout
             else if (target.Type == FcsRecordType.Building && target.GetBool("is node"))
             {
                 a.Random.Next();
+                if (a.SnapNodes is { } snapNodes)
+                {
+                    // A node building's offset is rotated by its holder's turn and added to its origin without scaling (Verified, 0x140388e10).
+                    Matrix4x4.Decompose(holderNode, out _, out var turn, out var origin);
+                    var normalized = Normalized(turn);
+                    var position = origin + Vector3.Transform(instance.Position, normalized);
+                    var orientation = Normalized(normalized * Normalized(instance.Rotation));
+                    snapNodes.Add(new PlacedSnapNode(target.StringId, position, orientation));
+                }
             }
         }
     }

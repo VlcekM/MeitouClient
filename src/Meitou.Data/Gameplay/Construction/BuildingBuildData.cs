@@ -159,6 +159,12 @@ public sealed record BuildingBuildData
     public IReadOnlyList<string> SnapsTo { get; init; } = [];
 
     /// <summary>
+    /// Whether the building lists a <c>gun turret</c> GUN_DATA (<c>PreviewBuilding_Snapping</c> slot <c>+0x108</c>, <c>0x1404fe160</c>: a snapping
+    /// building with a gun turret may still be placed without snapping).
+    /// </summary>
+    public bool HasGunTurret { get; init; }
+
+    /// <summary>
     /// The site's target: the sum of the required amounts (0 completes at once).
     /// </summary>
     public float Target
@@ -228,6 +234,7 @@ public sealed record BuildingBuildData
             HasInterior = r.GetReferences("interior").Count > 0,
             WallSubsections = [.. r.GetReferences("wall subsections").Select(s => s.TargetStringId)],
             SnapsTo = [.. r.GetReferences("snaps to").Select(s => s.TargetStringId)],
+            HasGunTurret = r.GetReferences("gun turret").Count > 0,
         };
     }
 

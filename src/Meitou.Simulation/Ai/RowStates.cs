@@ -194,13 +194,17 @@ public static class RowStates
     /// <summary>
     /// 2 isBuildingComplete (<c>FUN_140596b20</c>, <b>Verified</b>): an object target that is not destroyed (slot 97: 0 for a building, a door's
     /// broken byte +0x3b6) and whose complete byte (slot 69, +0x160) is set: a player building's <see cref="Construction.BuildSite.Complete"/>, a town
-    /// building's machine site (complete, <see cref="Production.ProductionSystem.TownWorkSite"/>), a door not broken.
+    /// building's machine site (complete, <see cref="Production.ProductionSystem.TownWorkSite"/>), a registered town seat or training dummy, a
+    /// natural rock, or a door not broken.
     /// </summary>
     static bool BuildingComplete(World world, string? site)
     {
         if (site is null) return false;
         if (world.Buildings.Find(site) is { } building) return building.Complete;
         if (world.SystemOf<Production.ProductionSystem>()?.TownWorkSite(site) is { } town) return town.Complete;
+        if (world.Fixtures.FindSeat(site) is not null || world.Fixtures.Find(site) is { Kind: FixtureKind.Training }
+            || Production.ProductionSystem.IsNatural(site))
+            return true;
 
         return Door(world, site) is { DoorBroken: false };
     }
@@ -259,12 +263,13 @@ public static class RowStates
         !target.Character.IsNone && !world.Characters.TryResolveNext(target.Character, out _) || SiteGone(world, target.Site);
 
     /// <summary>
-    /// Whether <paramref name="site"/> names a site the world does not have (a build site, a fixture, a rock, a town dummy or turret); false for
-    /// none.
+    /// Whether <paramref name="site"/> names a site the world does not have (a build site, a fixture, a town seat, a rock, a town dummy or turret);
+    /// false for none.
     /// </summary>
     public static bool SiteGone(World world, string? site) =>
-        site is not null && world.Buildings.Find(site) is null && world.Fixtures.Find(site) is null && !Production.ProductionSystem.IsNatural(site)
-        && !FixtureRegistry.IsDummy(site) && !Production.ProductionSystem.IsTownWork(site);
+        site is not null && world.Buildings.Find(site) is null && world.Fixtures.Find(site) is null
+        && !Production.ProductionSystem.IsNatural(site) && !FixtureRegistry.IsDummy(site) && !FixtureRegistry.IsSeat(site)
+        && !Production.ProductionSystem.IsTownWork(site);
 
     /// <summary>
     /// The door fixture of id <paramref name="site"/>; null for none or another fixture.

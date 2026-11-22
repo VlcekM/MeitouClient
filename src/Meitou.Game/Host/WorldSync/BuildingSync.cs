@@ -269,7 +269,7 @@ sealed class BuildingSync(GameHost host)
         }
         var placed = new List<PlacedLight>();
         WorldObjectLayout.Building(db, record, site.Id, site.Position, site.Rotation, new BuildingState { Identity = site.Id }, placed);
-        bool indoors = WorldLights.IsIndoors(record, site.Parent is not null);
+        bool indoors = WorldLights.IsIndoors(record, site.Parent is not null && !site.Outside);
         lamps.SetRuntime(site.Id, placed.Select(p => WorldLights.FromPlaced(p, interior: false, indoors: indoors)));
     }
 
@@ -304,8 +304,8 @@ sealed class BuildingSync(GameHost host)
         return new(WorldLayout.ZoneOf(site.Position.X, site.Position.Z), site.Id, site.Record, site.Position, site.Rotation, null, site.Position.Y)
         {
             Key = site.Id,
-            Contained = site.Parent is not null,
-            OutsideWhenUncovered = site.Parent is not null,
+            Contained = site.Parent is not null && !site.Outside,
+            OutsideWhenUncovered = site.Parent is not null && !site.Outside,
             ContainerId = site.Parent,
             PlayerOwned = mine,
         };
@@ -428,6 +428,57 @@ sealed class BuildingSync(GameHost host)
             lastReadout = (record, at, readout);
             return readout;
         }
+        var isNode = new Dictionary<string, bool>(StringComparer.Ordinal);
+        bool IsNodeRecord(string record) => isNode.TryGetValue(record, out bool known) ? known
+            : isNode[record] = db.Find(record) is { Type: Data.Fcs.FcsRecordType.Building } r && r.GetBool("is node");
+        var snapNodes = new Dictionary<string, IReadOnlyList<PlacedSnapNode>>(StringComparer.Ordinal);
+        IReadOnlyList<PlacedSnapNode> SnapNodesOf(string record) => snapNodes.TryGetValue(record, out var known) ? known
+            : snapNodes[record] = db.Find(record) is { Type: Data.Fcs.FcsRecordType.Building } r ? WorldObjectLayout.SnapNodes(db, r) : [];
+        (PopulationData Data, HashSet<string> Real)? realFactions = null;
+        HashSet<string>? RealFactions()
+        {
+            if (host.PopData is not { } d) return null;
+            if (realFactions is { } cached && ReferenceEquals(cached.Data, d)) return cached.Real;
+            var set = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var f in d.Factions) if (!f.NotReal) set.Add(f.Id);
+            realFactions = (d, set);
+            return set;
+        }
+        var snapHostsScratch = new List<(string Key, string Record, Vector3 Position, Quaternion Rotation, Building.SnapHost Host)>();
+        IReadOnlyList<(string Key, string Record, Vector3 Position, Quaternion Rotation, Building.SnapHost Host)> SnapHostsAround(
+            Vector2 centre, float radius, Func<string, bool> needsNode)
+        {
+            snapHostsScratch.Clear();
+            var owners = LevelOwners();
+            string player = host.PopData is { } p && p.PlayerFaction is >= 0 and var mine && mine < p.Factions.Count ? p.Factions[mine].Id : "";
+            var ownedTown = host.Session.CurrentSnapshot.OwnedTownBuildings;
+            var real = RealFactions();
+            bool RecordMatches(string record)
+            {
+                var nodes = SnapNodesOf(record);
+                for (int i = 0; i < nodes.Count; i++)
+                    if (needsNode(nodes[i].Record)) return true;
+                return false;
+            }
+            foreach (var b in footprints.PlacedAround(centre, radius, RecordMatches, (x, z) => host.ActiveGround((float)x, (float)z)))
+            {
+                if (owners?.TryGetValue(b.Key, out var level) == true)
+                {
+                    bool owned = ownedTown.Contains(b.Key) || player.Length > 0 && level.Owner == player;
+                    bool destroyed = host.TownChanges.ShownRuins.TryGetValue(b.Key, out var ruin) ? ruin.Destroyed
+                        : host.Session.World.Fixtures.SavedDestroyed(level.Building);
+                    bool ownerNotReal = level.Owner is not { } owner || real is null || !real.Contains(owner);
+                    snapHostsScratch.Add((b.Key, b.Record, b.Position, b.Rotation,
+                        new Building.SnapHost(b.Key, level.Instance, true, owned, destroyed, ownerNotReal)));
+                }
+                else
+                {
+                    snapHostsScratch.Add((b.Key, b.Record, b.Position, b.Rotation,
+                        new Building.SnapHost(b.Key, b.Key, true, false, false, true)));
+                }
+            }
+            return snapHostsScratch;
+        }
         return new Building.PlacementServices
         {
             Ground = host.ActiveGround,
@@ -441,6 +492,9 @@ sealed class BuildingSync(GameHost host)
             LinkedAround = (centre, radius) => footprints.LinkedAround(centre, radius, (x, z) => host.ActiveGround((float)x, (float)z)),
             PlacedAround = (centre, radius, record) =>
                 footprints.PlacedAround(centre, radius, record, (x, z) => host.ActiveGround((float)x, (float)z)),
+            IsNodeRecord = IsNodeRecord,
+            SnapNodesOf = SnapNodesOf,
+            SnapHostsAround = SnapHostsAround,
             StaticAround = footprints.StaticAround,
             StaticPlacementsAround = (centre, radius) => footprints.PlacementsAround(centre, radius).Where(b => Pickable(b.BuildingId)),
             StaticAlong = (origin, direction, length) => footprints.Along(origin, direction, length).Where(b => Pickable(b.Placement.BuildingId)),
