@@ -223,6 +223,11 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
         _floors?.Value.LowestAbove(p.X, p.Z, p.Y + CoverClearance, maxFloor) is not null;
 
     /// <summary>
+    /// Whether <see cref="Covered"/> can tell: the building's floor collision is known.
+    /// </summary>
+    public bool KnowsCover => _floors is not null;
+
+    /// <summary>
     /// The height of the ceiling over <paramref name="p"/> (from <see cref="CoverClearance"/> up), or null when nothing is over it
     /// (<see cref="FloorSurfaces.CeilingAbove"/>).
     /// </summary>

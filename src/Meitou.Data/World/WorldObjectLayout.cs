@@ -81,6 +81,13 @@ public sealed record PlacedMesh(
     public bool Contained { get; init; }
 
     /// <summary>
+    /// For a <see cref="Contained"/> player building: outside, and so never hidden with the building it is in, when nothing of that building stands
+    /// straight over it. The original decides a placed building's outside flag so (<b>Verified</b>, decompile, docs/render-objects.md "Closed
+    /// interiors"): furniture on a roof stays drawn from outside. A zone's own pieces keep the flag their state has.
+    /// </summary>
+    public bool OutsideWhenUncovered { get; init; }
+
+    /// <summary>
     /// For a <see cref="Contained"/> player building: the building it was placed in (its parent, a site's id or a level building's instance id); null
     /// when unknown.
     /// </summary>

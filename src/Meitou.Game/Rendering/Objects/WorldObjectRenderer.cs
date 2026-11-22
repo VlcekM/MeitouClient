@@ -1715,7 +1715,9 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         // Engine choice: the 2-unit margin the host gives characters, so an object standing on the hull's top floor counts as on it. A building
         // placed inside another takes that one's hull where it reaches it (a neighbour's within the margin is not its holder).
         var holder = InteriorAt(at, 2, inst.Placed.ContainerId);
-        return inst.Interior = new(_streamer.InteriorVersion, at, inside, holder?.PlacementId, holder?.FloorAt(at) ?? 0);
+        // Where the holder's floor collision is not known, what it holds stays inside, as before.
+        bool covered = inst.Placed.OutsideWhenUncovered && holder is not null && (!holder.KnowsCover || holder.Covered(at));
+        return inst.Interior = new(_streamer.InteriorVersion, at, inside, holder?.PlacementId, holder?.FloorAt(at) ?? 0, covered);
     }
 
     /// <summary>
@@ -1735,13 +1737,16 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
     /// <summary>
     /// Whether a building placed inside another (<see cref="PlacedMesh.Contained"/>) is hidden: the building whose hull holds it shows its outside
-    /// (not in the interior view; a construction site is open). Game: closing an interior hides its contained objects, in every view
-    /// (docs/render-objects.md "Closed interiors").
+    /// (not in the interior view; a construction site is open). Game: closing an interior hides its contained objects, in every view, except those
+    /// flagged outside, which a player's placed building is when nothing of the building stands over it (<see cref="PlacedMesh.OutsideWhenUncovered"/>,
+    /// docs/render-objects.md "Closed interiors"): a bench on a roof stays drawn (#1136).
     /// </summary>
     bool ClosedAround(ObjectStreamer.Instance inst)
     {
         if (!inst.Placed.Contained) return false;
-        return InteriorOf(inst).Building is { } holder && holder != inst.Placed.PlacementId && !InteriorView.ContainsKey(holder)
+        var answer = InteriorOf(inst);
+        if (inst.Placed.OutsideWhenUncovered && !answer.Covered) return false;
+        return answer.Building is { } holder && holder != inst.Placed.PlacementId && !InteriorView.ContainsKey(holder)
             && _construction?.ContainsKey(holder) != true;
     }
 
