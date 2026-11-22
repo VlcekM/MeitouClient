@@ -107,8 +107,7 @@ sealed class NewGameLaunch(GameHost host)
                         world.RestoreSeed(seed);
                         world.Player.BanditsLoot = nextDifficulty.BanditsLoot;
                         spawned = built.Population!.StartPlayer(world, chosen);
-                        world.TellReady(fromSave: false);
-                    });
+                    }).TellReady(fromSave: false);   // after the swap, as a load's (GameSaves.SwapInSave)
                 }
                 catch (Exception e)
                 {
