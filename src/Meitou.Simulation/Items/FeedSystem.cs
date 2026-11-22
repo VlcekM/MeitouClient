@@ -84,7 +84,7 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
     /// </summary>
     public void SlowWorld(World world)
     {
-        if (world.Tick % Math.Max(Settings.CheckEveryTicks, 1) != 0) return;
+        if (!world.Beat(Settings.CheckEveryTicks, TickPhases.Feed)) return;
         var table = world.Characters;
         var state = table.Next;
         var options = world.Player.SquadAi;

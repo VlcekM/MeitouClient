@@ -179,7 +179,7 @@ public sealed partial class PopulationSystem
             }
         }
 
-        if (world.Tick % _settings.RoamCheckTicks == 0)
+        if (world.Beat(_settings.RoamCheckTicks, TickPhases.RoamCheck))
         {
             EnsurePools(world);
             GrowPools(world);

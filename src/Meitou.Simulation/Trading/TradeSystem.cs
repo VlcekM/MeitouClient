@@ -383,7 +383,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     {
         MarkShownHomes(world);
 
-        if (world.Tick % Settings.CheckEveryTicks == 0)
+        if (world.Beat(Settings.CheckEveryTicks, TickPhases.TradeCheck))
         {
             // The wages first: a new squad's members are paid as they are made (Character::giveBirth), before its shop's first fill sets the
             // purse (FUN_14095b210), so a trader with a waged guard starts with the fill's purse, not the guard's wages (#659).

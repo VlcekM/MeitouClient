@@ -360,7 +360,7 @@ public sealed partial class PopulationSystem : ITickSystem, Bodies.ICharacterDea
         // changed), not at the look.
         RefreshStates(world);
         TickDiscover(world);
-        if (world.Tick % _settings.CheckEveryTicks != 0) { if (_wars is not null) StepWarManager(world); return; }
+        if (!world.Beat(_settings.CheckEveryTicks, TickPhases.PopulationCheck)) { if (_wars is not null) StepWarManager(world); return; }
         world.Uniques.SeedPrisoners(_data.Db);
         RefreshUniques(world);
         RefreshStates(world);

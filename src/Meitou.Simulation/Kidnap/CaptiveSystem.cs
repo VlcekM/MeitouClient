@@ -428,7 +428,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// </summary>
     public void SlowWorld(World world)
     {
-        if (world.Tick % RestoreEveryTicks == 0) RestoreSlavers(world);
+        if (world.Beat(RestoreEveryTicks, TickPhases.SlaverRestore)) RestoreSlavers(world);
         StepRacks(world);
         StepJobs(world);
         OrderRunsFromRisers(world);

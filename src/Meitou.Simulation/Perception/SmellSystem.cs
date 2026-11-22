@@ -72,7 +72,7 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
     /// </summary>
     public void SlowWorld(World world)
     {
-        if (world.Tick % EveryTicks != 0) return;
+        if (!world.Beat(EveryTicks, TickPhases.Smell)) return;
 
         // The sources step once per 10 game seconds with the whole time since the last step as dt (FUN_1408f85f0: its timer runs to DAT_14167fad4 =
         // 10 and the step takes the frozen value).

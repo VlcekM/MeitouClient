@@ -101,7 +101,7 @@ public sealed partial class LockSystem
     {
         var table = world.Characters;
         var next = table.Next;
-        if (Combat is not null && world.Tick % BashCheckTicks == 0)
+        if (Combat is not null && world.Beat(BashCheckTicks, TickPhases.BashCheck))
         {
             _gateGraph = null;
             FindBashers(world);

@@ -126,7 +126,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     public void SlowWorld(World world)
     {
         var table = world.Characters;
-        bool check = world.Tick % CheckEveryTicks == 0;
+        bool check = world.Beat(CheckEveryTicks, TickPhases.FleeCheck);
         if (check)
         {
             Attacked(table);

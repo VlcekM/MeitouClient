@@ -3578,7 +3578,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     public void SlowWorld(World world)
     {
         SendRequests(world);
-        bool cadence = world.Tick % world.Every(Settings.PackageEveryTicks) == 0;
+        bool cadence = world.Beat(world.Every(Settings.PackageEveryTicks), TickPhases.AiPackages);
 
         // Each town's turrets are claimed once per cadence, by the squads in squad order (derived, not hashed).
         if (cadence) ReserveClaims(world);

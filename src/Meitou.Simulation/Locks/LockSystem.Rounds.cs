@@ -274,7 +274,7 @@ public sealed partial class LockSystem : IStateHashed, Player.IDutyRelease, IDut
         Gates.Step(world);
         Wardens.Look(world);
         Wardens.Step(world);
-        if (world.Tick % RoundEveryTicks != 0) return;
+        if (!world.Beat(RoundEveryTicks, TickPhases.LockRounds)) return;
 
         LeaveSweep(world);
     }

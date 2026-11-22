@@ -910,7 +910,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                     break;
             }
         }
-        if (world.Tick % RestoreEveryTicks == 0) RestoreLinks(world);
+        if (world.Beat(RestoreEveryTicks, TickPhases.CarryRestore)) RestoreLinks(world);
         LootWindow(world);
         KeepLinks(world);
         _lootGoals.Step(world, this);
@@ -918,7 +918,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         if (Settings.AutoEveryTicks > 0)
         {
             int every = world.Every(Settings.AutoEveryTicks);
-            if (world.Tick % every == 0) _rescueGoals.Look(world, this);
+            if (world.Beat(every, TickPhases.RescueLook)) _rescueGoals.Look(world, this);
             _lootGoals.Look(world, this, every);   // each character on its slot's turn
         }
     }

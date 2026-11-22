@@ -395,7 +395,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             if (StepSpotting(world, _spottings[k])) k++;
             else _spottings.RemoveAt(k);
         }
-        if (world.Tick % Math.Max(1, Settings.SpotEveryTicks) == 0)
+        if (world.Beat(Settings.SpotEveryTicks, TickPhases.ArrestSpot))
         {
             Disguise(world, Math.Max(1, Settings.SpotEveryTicks) * world.TickSeconds);
             Spot(world, Math.Max(1, Settings.SpotEveryTicks) * world.TickSeconds);

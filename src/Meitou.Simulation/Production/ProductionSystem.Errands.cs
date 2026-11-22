@@ -144,7 +144,7 @@ public sealed partial class ProductionSystem
     /// </summary>
     void Errands(World world)
     {
-        if (Carry is null || world.Tick % ErrandEveryTicks != 0 || _errands.Count == 0) return;
+        if (Carry is null || !world.Beat(ErrandEveryTicks, TickPhases.Errands) || _errands.Count == 0) return;
         var table = world.Characters;
         foreach (var gone in _errands.Keys.Where(k => !table.IsAlive(k)).ToList()) _errands.Remove(gone);
         for (int i = 0; i < table.HighWater; i++)

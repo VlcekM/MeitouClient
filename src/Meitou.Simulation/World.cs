@@ -740,6 +740,17 @@ public sealed partial class World : IDisposable
     }
 
     /// <summary>
+    /// Whether a whole-system job that runs once in <paramref name="every"/> ticks runs this tick: on the ticks where Tick is
+    /// <paramref name="phase"/> mod every (<see cref="TickPhases"/>, so jobs of different systems do not all land on the same tick).
+    /// </summary>
+    public bool Beat(int every, int phase)
+    {
+        if (every <= 1) return true;
+
+        return Tick % every == phase % every;
+    }
+
+    /// <summary>
     /// The integer hour of day, 0 to 23 (the game's sky controller hour that the AI compares windows with).
     /// </summary>
     public int Hour => Math.Clamp((int)(((GameHours % 24) + 24) % 24), 0, 23);
