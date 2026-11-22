@@ -286,6 +286,7 @@ Motion vectors (temporal upscalers): an instance with a door, turret joint or ro
   - Loaded from a state's `flags` bit 0, or the older `is outside` (`FUN_140552b70`).
   - Exterior-layout objects get it from their layout (`+0xa0`, `FUN_1405765c0`).
   - Interior-layout objects spawn without it (`FUN_140583400`).
+  - A player's building placed in or on another (a ghost with a parent) gets it when the ghost is made real (`FUN_1404d72a0`): set when a ray cast straight up from the ghost's position, without end, hits nothing in the collision groups `0x8079e00` (`FUN_1409b7430`, `FUN_1409b6a90`), or when the parent building is destroyed (Building slot `0x330`, `+0x1a1`); the object factory (`FUN_14057cc70`) takes it as its last argument. So furniture on a roof, with open sky over it, is outside and stays drawn while the building is closed.
 - `is interior furniture` / `is exterior furniture` only pick collision groups and the build label (`FUN_14055f6e0`, `FUN_1404df450`).
 - Ground items and characters have no closed-interior rule, only the floor sweep `FUN_1409fb540` (**Observed**).
 - **Unknown:** what makes the doorway black. There is no occluder object; the mask is destroyed on close.
@@ -296,6 +297,7 @@ Motion vectors (temporal upscalers): an instance with a door, turret joint or ro
   - In the install's interior layouts, 10 170 objects without the flag are `is exterior furniture` (barrels, cages, camp beds, Stack's rooftop awnings); these are now hidden while closed.
   - 1 820 objects with the flag (yard tents, torches) stay.
 - A building inside another (`PlacedMesh.Contained`) is hidden while the building whose hull holds it is closed (`ClosedAround`); a player site takes its parent's hull over a neighbour's within the 2-unit margin (`PlacedMesh.ContainerId`). These are player sites with a parent (saved with `flags` 0), and zone states with `is inside building` and no outside flag.
+  - A player site is outside, and not hidden, when nothing of its holder's floor, stairs or roof collision stands straight over it (`PlacedMesh.OutsideWhenUncovered`, `InteriorVolume.Covered`), decided while drawing rather than stored. Engine choice: only the holder's collision is tested, where the original's ray meets any building. **Not done:** the parent being destroyed at placement, and the outside bit in the save (`flags` is still 0 for every site with a parent).
 - Shadow passes keep what the floor view hides above the viewed floor (parts, objects standing above it; `WorldObjectRenderer.DrawReal`), so a lower
   floor stays shaded under its ceiling (a watchtower's floor 0 was sunlit). The traced scene keeps them too (`WorldObjectRenderer.LeftOutOfRays`): the rays stand for the sun and the sky, so a roof the view hides still shades the room and blocks the sky. Faithful shadows leave them out (`HiddenFloorsCast`), as the game does: **Verified** (decompile) `Building::setFloorVisibility` (`FUN_1405482e0`) calls the scene node's `setVisible(vis, cascade)` for each physical entity of the floor, and an invisible object is in no camera's queue, the shadow cameras' included.
 - **Not done:** interior lamps still light a closed interior.

@@ -3,10 +3,10 @@ using Meitou.Data.Fcs;
 namespace Meitou.Simulation.Saving;
 
 /// <summary>
-/// The code mods' tags on a player squad's PLATOON record or a player town's GAMESTATE_TOWN (docs/formats/save.md; Meitou only): one string key
-/// per mod, <c>meitou mod tag &lt;mod id&gt;</c>, holding that mod's tag (<see cref="Factions.Squad.ModTags"/>,
-/// <see cref="Construction.PlayerTown.ModTags"/>). The NPC platoons' single <c>meitou mod tag</c> (<see cref="ModPlatoonSave"/>) has no mod id and
-/// is not one of these.
+/// The code mods' tags on a PLATOON record or a player town's GAMESTATE_TOWN (docs/formats/save.md; Meitou only): one string key per mod,
+/// <c>meitou mod tag &lt;mod id&gt;</c>, holding that mod's tag (<see cref="Factions.Squad.ModTags"/> for a player squad,
+/// <see cref="Factions.Platoon.ModTags"/> for an NPC one, <see cref="Construction.PlayerTown.ModTags"/>). The NPC platoons' shared
+/// <c>meitou mod tag</c> (<see cref="ModPlatoonSave"/>) has no mod id and is not one of these.
 /// </summary>
 public static class ModTagSave
 {

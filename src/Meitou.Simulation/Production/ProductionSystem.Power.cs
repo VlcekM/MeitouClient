@@ -52,6 +52,11 @@ public sealed partial class ProductionSystem
     /// </summary>
     readonly OutpostViews _outposts = new();
     /// <summary>
+    /// The machine the panel of the selected town building with no machine reads, by the building's key (<see cref="LevelMachine"/>); never in the
+    /// world. Not saved.
+    /// </summary>
+    (string Key, Machine Machine)? _levelMachine;
+    /// <summary>
     /// The generation of each town of the level data (negative grid keys) that holds a player machine this tick: what its placed generators give
     /// (<see cref="NpcGeneration"/>). A scratch map.
     /// </summary>
@@ -474,6 +479,123 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
+    /// The machine the panel shows for the level building or layout object <paramref name="key"/> when it is a town's generator, research bench or
+    /// crafting bench: the original makes every town building and layout object as its class at load and draws their Workers, Efficiency and power
+    /// lines with no owner test (docs/game/ui-screens.md "Who shows it"), but here such a building gets its machine only when a worker or the
+    /// player's order comes (<see cref="IsTownMachine"/>). <see cref="LevelMachine"/>, a machine that never joins the world; once its own machine is
+    /// made, that one's operators, inputs and state with the level machine's power and wind, since the power step leaves a town's own machine out
+    /// of the frames and the town's output counts its generators (<see cref="NpcOutput"/>). Null for any other key. Read only; runs once per publish
+    /// while such a building is selected.
+    /// </summary>
+    public MachineSnapshot? TownMachineOf(World world, string? key)
+    {
+        if (key is null || LevelPiece(world, key) is not { } found || PanelData(found.Record) is not { } data) return null;
+        if (world.SystemOf<PopulationSystem>()?.Data.Sites is not { } sites || SiteOf(sites, found.Town) is not { } town) return null;
+
+        var level = MachineSnapshot.Of(LevelMachine(world, key, town, found, data), Items);
+        if (world.Machines.Find(TownWorkPrefix + key) is not { } own) return level;
+
+        var mine = MachineSnapshot.Of(own, Items);
+        return mine with
+        {
+            Power = level.Power is { } power && mine.Power is { } fuel ? power with { Fueled = fuel.Fueled } : level.Power,
+            Wind = level.Wind,
+            Efficiency = mine.Efficiency is { } e && level.Efficiency is { } l ? e with { Health = l.Health, Power = l.Power } : mine.Efficiency,
+        };
+    }
+
+    /// <summary>
+    /// The machine data of <paramref name="record"/> when its class draws the production panel's lines and a town's has no machine until a worker
+    /// comes: a generator, research bench or crafting bench; null for any other.
+    /// </summary>
+    MachineData? PanelData(string record) => Data(record) is { } data && (data.IsGenerator || data.IsResearch || data.IsCrafting) ? data : null;
+
+    /// <summary>
+    /// The standing level building of a town or object of its layout named by <paramref name="key"/> (as <see cref="LevelObject"/> reads it), with
+    /// its town's index and record; null for any other.
+    /// </summary>
+    (int Town, TownBuilding Building, TownLayoutBuilding? Piece, string Record)? LevelPiece(World world, string key)
+    {
+        int end = key.IndexOf('/');
+        if (LevelBuilding(world, end > 0 ? key[..end] : key) is not { Building.Destroyed: false } found) return null;
+        if (end <= 0) return (found.Town, found.Building, null, found.Building.BuildingId);
+
+        // A ruin holds no layout objects (FUN_140557280).
+        if (world.Fixtures.IsDestroyed(found.Building)) return null;
+
+        foreach (var piece in found.Building.LayoutBuildings)
+            if (piece.Id == key) return (found.Town, found.Building, piece, piece.RecordId);
+        return null;
+    }
+
+    /// <summary>
+    /// The town site of index <paramref name="index"/>, or null.
+    /// </summary>
+    static TownSite? SiteOf(IReadOnlyList<TownSite> sites, int index)
+    {
+        foreach (var site in sites)
+            if (site.Index == index) return site;
+        return null;
+    }
+
+    /// <summary>
+    /// The machine of <paramref name="key"/>'s building as its panel reads it, made once and kept while the same building stays selected: no
+    /// operators, complete, its inputs and production state from the save as a town machine takes them (<see cref="RestoreTownMachine"/>); a
+    /// generator switched and built as its save or level state has it with the output, wind and load the town's frame counts
+    /// (<see cref="NpcOutput"/>, which ignores an empty tank), a consumer granted what the frame gives it (<see cref="LevelPowerOf"/>). It never
+    /// joins the world, so nothing simulated, hashed or saved changes.
+    /// </summary>
+    Machine LevelMachine(World world, string key, TownSite town, (int Town, TownBuilding Building, TownLayoutBuilding? Piece, string Record) found,
+        MachineData data)
+    {
+        var at = found.Piece?.Position ?? found.Building.Position;
+        if (_levelMachine is not { } kept || kept.Key != key || kept.Machine.Data != data || kept.Machine.Position != at)
+        {
+            var site = new BuildSite { Id = TownWorkPrefix + key, Record = found.Record, Position = at, Materials = [], Complete = true };
+            var made = Create(world, site)!;
+            if (found.Piece is not { } piece) RestoreTownMachine?.Invoke(found.Building, made);
+            else if (!_piecesDestroyed.Contains(piece.Id)) RestorePieceMachine?.Invoke(piece, made);
+            _levelMachine = kept = (key, made);
+        }
+
+        var m = kept.Machine;
+        if (data.IsGenerator)
+        {
+            LevelGenerator(world, m, town, found.Building, found.Piece);
+        }
+        else
+        {
+            var power = LevelPowerOf(world, key);
+            (m.Demand, m.Granted, m.Power) = power is { Demand: > 0 } p ? (p.Demand, p.Granted, p.Granted / p.Demand) : (0, 0, 1);
+        }
+
+        return m;
+    }
+
+    /// <summary>
+    /// A level generator's machine as <see cref="LevelMachine"/> shows it: its switch and construction fraction, its wind, its output
+    /// (<see cref="Generated"/>, as <see cref="NpcOutput"/> adds it) and its load (<see cref="Machine.Usage"/>, the formula of the frame's
+    /// <c>GeneratorBuilding::vfunc_167</c>) from the town's last frame when one ran, else from the town's generators and draws now.
+    /// </summary>
+    void LevelGenerator(World world, Machine m, TownSite town, TownBuilding b, TownLayoutBuilding? piece)
+    {
+        (m.PowerOn, m.Health) = piece is null ? NpcGeneratorState(world, town, b) : PieceGeneratorState(world, piece);
+        if (m.Data.IsWind)
+        {
+            m.WindSpeed = world.Weather?.At(m.Position.X, m.Position.Z) is { } here ? here.WindSpeed : 0;
+            (m.Wind, m.WindRated) = (piece is null ? NpcWind(world, b) : PieceWind(world, piece), m.Data.PowerOutput);
+        }
+
+        m.Demand = Generated(m.Data, m.PowerOn ? m.Health : 0, m.Wind);
+        int grid = -(town.Index + 1);
+        var (generated, load) = _townPower.TryGetValue(grid, out var frame)
+            ? (frame.Generated, frame.Charging + frame.Demand)
+            : (NpcOutput(world, town.Index), NpcDraws(world, town.Index).Sum(d => d.Demand));
+        float rated = m.Data.PowerOutput;
+        m.Usage = generated > 0 && rated > 0 ? MathF.Min(1, m.Demand / rated * load / generated) : 0;
+    }
+
+    /// <summary>
     /// What the last tick's frame of <paramref name="grid"/> granted the pseudo consumer <paramref name="key"/>, batteries included (<see cref="Share"/>),
     /// else one of its draw on that frame; null when the grid holds no player machine (no frame ran).
     /// </summary>
@@ -625,12 +747,17 @@ public sealed partial class ProductionSystem
     /// A level generator's switched construction fraction. Fresh/reset zones complete and switch on NPC buildings; player ownership bypasses
     /// that reset guard. Otherwise the save's whole state replaces the level state (FUN_1402a1750, FUN_140552b70; "NPC generator state").
     /// </summary>
-    float NpcGeneratorHealth(World world, TownSite town, TownBuilding b)
+    float NpcGeneratorHealth(World world, TownSite town, TownBuilding b) => Switched(NpcGeneratorState(world, town, b));
+
+    /// <summary>
+    /// A level generator's switch and construction fraction, as <see cref="NpcGeneratorHealth"/> reads them.
+    /// </summary>
+    (bool On, float Fraction) NpcGeneratorState(World world, TownSite town, TownBuilding b)
     {
         var saved = world.Fixtures.Saved?.GetValueOrDefault(b.Key);
-        if (!world.SavedZones.Contains(b.Zone) && !PlayerGeneratorOwner(world, town, b, saved)) return 1;
+        if (!world.SavedZones.Contains(b.Zone) && !PlayerGeneratorOwner(world, town, b, saved)) return (true, 1);
 
-        return SwitchedHealth(b.BuildingId, saved, b.LevelState);
+        return SwitchedState(b.BuildingId, saved, b.LevelState);
     }
 
     /// <summary>
@@ -638,18 +765,27 @@ public sealed partial class ProductionSystem
     /// (<see cref="SavedPieceState"/>; an entry is only in a zone file that loads, so the guard holds); with no entry (a fresh zone, or an interior
     /// made again from its layout) complete and switched on (<c>FUN_140562340</c>).
     /// </summary>
-    float PieceGeneratorHealth(World world, TownLayoutBuilding piece) =>
-        SavedPieceState(world, piece) is { } saved ? SwitchedHealth(piece.RecordId, saved, null) : 1;
+    float PieceGeneratorHealth(World world, TownLayoutBuilding piece) => Switched(PieceGeneratorState(world, piece));
 
     /// <summary>
-    /// The construction fraction of a building of <paramref name="record"/> by its state (the save's, else the level's), 0 when switched off: a
+    /// A layout generator's switch and construction fraction, as <see cref="PieceGeneratorHealth"/> reads them.
+    /// </summary>
+    (bool On, float Fraction) PieceGeneratorState(World world, TownLayoutBuilding piece) =>
+        SavedPieceState(world, piece) is { } saved ? SwitchedState(piece.RecordId, saved, null) : (true, 1);
+
+    /// <summary>
+    /// A switch and construction fraction as one fraction: 0 when switched off.
+    /// </summary>
+    static float Switched((bool On, float Fraction) state) => state.On ? state.Fraction : 0;
+
+    /// <summary>
+    /// Whether a building of <paramref name="record"/> is switched on and its construction fraction, by its state (the save's, else the level's): a
     /// missing <c>power on</c> is off and missing progress 0 once a state is read; no state at all is complete and on.
     /// </summary>
-    float SwitchedHealth(string record, Meitou.Data.Fcs.FcsRecord? saved, Meitou.Data.GameRecord? level)
+    (bool On, float Fraction) SwitchedState(string record, Meitou.Data.Fcs.FcsRecord? saved, Meitou.Data.GameRecord? level)
     {
         bool on = saved is not null ? saved.Bools.GetValueOrDefault("power on") : level?.GetBool("power on") ?? true;
-        if (!on) return 0;
-        if (saved is null && level is null) return 1;
+        if (saved is null && level is null) return (on, 1);
 
         if (!_npcTargets.TryGetValue(record, out var known) || known.Version != _db.Version)
         {
@@ -658,10 +794,10 @@ public sealed partial class ProductionSystem
         }
 
         float target = known.Target;
-        if (target <= 0) return 1;
+        if (target <= 0) return (on, 1);
 
         float progress = saved is not null ? saved.Floats.GetValueOrDefault("construction progress") : level!.GetFloat("construction progress");
-        return Math.Clamp(progress / target, 0, 1);
+        return (on, Math.Clamp(progress / target, 0, 1));
     }
 
     /// <summary>

@@ -141,7 +141,7 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     /// <paramref name="Building"/> is the building whose hull holds it (with a small margin) and <paramref name="Floor"/> the floor of that hull it
     /// stands on (<c>WorldObjectRenderer.StandsAbove</c>).
     /// </summary>
-    public sealed record InteriorAnswer(int Version, Vector3 At, bool Inside, string? Building, int Floor);
+    public sealed record InteriorAnswer(int Version, Vector3 At, bool Inside, string? Building, int Floor, bool Covered = false);
 
     #endregion
 

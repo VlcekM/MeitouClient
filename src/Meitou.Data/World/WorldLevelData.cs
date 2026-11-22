@@ -588,6 +588,12 @@ public sealed record BuildingPlacement(
     public bool Contained { get; init; }
 
     /// <summary>
+    /// For a <see cref="Contained"/> player building: outside when nothing of the building it is in stands straight over it
+    /// (<see cref="PlacedMesh.OutsideWhenUncovered"/>).
+    /// </summary>
+    public bool OutsideWhenUncovered { get; init; }
+
+    /// <summary>
     /// The building it was placed in (<see cref="PlacedMesh.ContainerId"/>), when known.
     /// </summary>
     public string? ContainerId { get; init; }

@@ -570,7 +570,7 @@ sealed class WorldObjects : IDisposable
 
         // Inside another building and not outside: hidden while that one is closed (a player's own building says so; a zone's by its state).
         if (b.Contained || state is not null && state.GetBool("is inside building") && !BuildingLayouts.IsOutside(state))
-            for (int k = 0; k < parts.Count; k++) parts[k] = parts[k] with { Contained = true, ContainerId = b.ContainerId };
+            for (int k = 0; k < parts.Count; k++) parts[k] = parts[k] with { Contained = true, ContainerId = b.ContainerId, OutsideWhenUncovered = b.OutsideWhenUncovered };
         result.Items.AddRange(parts);
         Interlocked.Increment(ref _buildings);
         LayLayouts(result, b, record, layAt, state, townMaterial, isDestroyed);

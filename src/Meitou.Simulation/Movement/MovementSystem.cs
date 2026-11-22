@@ -726,9 +726,10 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
             // The goal's floor: the height the order was given at (a follower's leader on another storey), else the character's own (a wander or
             // follow goal on its level).
-            float nearY = cold.GoalHeightAt == next[i].Goal && !float.IsNaN(cold.GoalHeight) ? cold.GoalHeight : next[i].Position.Y;
+            bool onFloor = cold.GoalHeightAt == next[i].Goal && !float.IsNaN(cold.GoalHeight);
+            float nearY = onFloor ? cold.GoalHeight : next[i].Position.Y;
             var splice = SpliceTarget(next[i], cold);
-            var to = splice ?? new Vector3(next[i].Goal.X, world.Walkability.GroundHeight(next[i].Goal.X, next[i].Goal.Y, nearY), next[i].Goal.Y);
+            var to = splice ?? new Vector3(next[i].Goal.X, GoalHeight(world.Walkability, next[i].Goal, nearY, onFloor), next[i].Goal.Y);
             cold.PathRequest = Paths.Submit(new CharacterId(i, next[i].Generation), next[i].Position, to, CombatSteering.Radius(cold),
                 WaterCost.Of(cold.WaterFactor), cold.RoadPreference);
             if (splice is null) cold.SplicePath = null;
@@ -739,6 +740,18 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
         // The synchronous service has the answers already.
         if (Paths.IsSynchronous) ApplyAnswers(world);
+    }
+
+    /// <summary>
+    /// The height a path is asked to: the surface at the goal on the floor <paramref name="nearY"/> is on. For a goal given with its floor
+    /// (<paramref name="onFloor"/>: an order's height, a building site's) with no surface there within reach of that floor, the floor's own height,
+    /// not another floor's: where the goal's floor is cut away under a floor above (a row of prisoner cages), the floor above was taken and the walk
+    /// ended on it (#1108).
+    /// </summary>
+    static float GoalHeight(IWalkability walk, Vector2 goal, float nearY, bool onFloor)
+    {
+        if (!onFloor) return walk.GroundHeight(goal.X, goal.Y, nearY);
+        return walk.TryStand(goal.X, goal.Y, nearY, out float y) ? y : nearY;
     }
 
     /// <summary>

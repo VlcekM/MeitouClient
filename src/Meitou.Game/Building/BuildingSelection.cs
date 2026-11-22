@@ -766,15 +766,20 @@ sealed class BuildingSelection(PlayerInterface player)
         player.Production.Machine(focus.SiteId) ?? TownMachine(focus);
 
     /// <summary>
-    /// The machine of a town building or layout object selected without a site, when it is a farm or has an output (a well, a mine, a refinery);
-    /// null for any other, whose lines stay the UseableStuff ones (<see cref="UseableLines.AddStatsLines"/>).
+    /// The machine of a town building or layout object selected without a site: its own when it is a farm or has an output (a well, a mine, a
+    /// refinery), else for a generator, research bench or crafting bench the one the simulation publishes for the selection (its own or a view
+    /// of one, <c>WorldSnapshot.InspectedTownMachine</c>); null for any other, whose lines stay the UseableStuff ones
+    /// (<see cref="UseableLines.AddStatsLines"/>).
     /// </summary>
     Simulation.Production.MachineSnapshot? TownMachine(SelectedBuilding focus)
     {
         if (focus.SiteId is not null) return null;
 
-        var machine = player.Production.Machine(Simulation.Production.ProductionSystem.TownWorkPrefix + focus.Instance);
-        return machine is { Farm: not null } or { Output: not null } ? machine : null;
+        string id = Simulation.Production.ProductionSystem.TownWorkPrefix + focus.Instance;
+        var machine = player.Production.Machine(id);
+        if (machine is { Farm: not null } or { Output: not null }) return machine;
+
+        return player.Session.CurrentSnapshot.InspectedTownMachine is { } inspected && inspected.Site == id ? inspected : null;
     }
 
     /// <summary>
