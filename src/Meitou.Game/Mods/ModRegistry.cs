@@ -246,13 +246,9 @@ sealed class ModRegistry
     /// </summary>
     public ModEffects Effects { get; } = new();
     /// <summary>
-    /// The mods' display-only weapon glows (<see cref="ModContext.GlowWeapon"/>).
+    /// The mods' display-only glows (<see cref="ModContext.Glow"/>).
     /// </summary>
-    public ModWeaponGlows WeaponGlows => _weaponGlows ??= new(Effects);
-    /// <summary>
-    /// Backs <see cref="WeaponGlows"/>, made on first use beside <see cref="Effects"/>.
-    /// </summary>
-    ModWeaponGlows? _weaponGlows;
+    public ModGlows Glows { get; } = new();
     /// <summary>
     /// The record types' names by type number.
     /// </summary>

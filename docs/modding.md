@@ -249,22 +249,27 @@ holds refuses the second mod.
   never reads it, so the state hash is untouched; without code mods the frame skips it; a new world drops all effects, and a mod that fails
   its `Initialize` loses its own. **Verified** by `ModVisualEffectsTests` (order, tint, lifetime, caps, rejection logging, a dropped mod's
   effects; each anchor kind's frame; pause and resume; keep, renew and stop; the old overloads) against a recording sink and frame source.
-- **Weapon glow:** `GlowWeapon(characterId, colour, seconds, strength = 1, effect = null)` makes the blade of the melee weapon the
-  character holds drawn give off light of its own (display only). `colour` is rgb (1 the full channel, up to 4), `seconds` in (0, 30] on the
-  game clock, `strength` in [0, 4] (0: no tint, the particles only). One glow a character: a newer request replaces it, fading from where the
-  old one stood; each fades in and out over 0.25 s; `StopWeaponGlow(characterId)` fades out early the one this mod set (false: none). The
-  tint covers the blade from 0.3 of the weapon mesh to the tip, brighter at the silhouette; sheathed weapons, worn items, scabbards and
-  ranged weapons never glow. The renderer carries it per instance (the w of the matrix's last two rows, instance flag bit 31) and adds it to
-  the lit colour before fog, so bloom picks it up. `effect` is kept (`KeepEffect`) on `EffectAnchor.Weapon` for the glow's lifetime, its
-  particles in `colour` unless that is white (1, 1, 1), which keeps the system's own; the same effect and colour on a renewed glow keep their
-  particles. Requests are validated and logged once per mod and reason (bad character, colour, lifetime, strength or effect id, more than 256
-  characters, off the host's thread); host thread only; never read by the simulation; a new world clears all glows, a mod that fails its
-  `Initialize` loses its own. **Verified** by `ModWeaponGlowTests` (fade, replace, stop, expiry, rejection logging, drop, clear; the kept
-  effect's anchor, tint, renewal, pause and end; the weapon's frame) against a recording sink.
-- Drawing **Observed** in `--duel` through a forced glow and effects, not a mod's call: both drawn katanas lit, hilts and the back
-  scabbard not; `kenshi_fire1_small` kept on `Bone(..., "Bip01 Head")` and on `Weapon` burned over the heads and at the hands, following
-  both duellists. Not seen: a `Building` anchor (no player or nest building in the duel), the stretch on a system authored along +Y with its
-  own textures.
+- **Glow:** `Glow(GlowTarget target, colour, seconds, strength = 1)` on `ModContext` makes a target give off light of its own (display
+  only). Targets (`GlowTarget`): `Character(characterId)`, the whole drawn character (body, worn items, what it holds); `Weapon(characterId)`,
+  the blade of the melee weapon it holds drawn (from 0.3 of the weapon mesh to the tip, the gear blood's mapping, docs/game/blood-decals.md
+  "On weapons and gear"; never sheathed, worn, scabbard or ranged parts); `Worn(characterId, slot)`, its parts in one `AttachSlot` (the
+  game's `ATTACH_*`: `Hat`, `Body`, `Legs`, `Boots`, ...). On a part several of a character's targets cover, the weapon's or the slot's wins
+  over the whole character's. Buildings are not a target: the building renderer's instances carry their own data in the w of their rows and
+  have no room set aside for a tint. `colour` is rgb (1 the full channel, up to 4), `seconds` in (0, 30] on the game clock, `strength` in
+  [0, 4] (the level drawn is the brightest channel times it, in eighths, at most 15.9; 0 shows nothing). One glow a target: a newer request
+  replaces it, fading from where the old one stood, so re-calling it before it ends keeps it up with no restart; each fades in and out over
+  0.25 s; `StopGlow(target)` fades out early the one this mod set (false: none). The renderer adds it to the lit colour before fog, brighter
+  at the silhouette, so bloom picks it up; it rides in bits 16-23 of the w of the instance matrix's four rows (the blood keeps the low 16
+  bits; instance flag bit 31), the blade mask in the level byte's bit 7. Particles are separate: a burning blade is `Glow(GlowTarget.Weapon(id),
+  ...)` and `KeepEffect(effect, EffectAnchor.Weapon(id), ...)`. Requests are validated and logged once per mod and reason (no character or
+  an unknown kind, colour, lifetime or strength out of range, more than 256 targets, off the host's thread); host thread only; never read by
+  the simulation; a new world clears all glows, a mod that fails its `Initialize` loses its own. **Verified** by `ModGlowsTests` (fade,
+  replace, stop, expiry, rejection logging, drop, clear; which parts each target lights; the packing).
+- Drawing **Observed** in `--duel` through forced glows and effects, not a mod's call: `Character` lit one duellist whole in cyan (body and
+  armour; at strength 1 it washes out the texture) while `Weapon` lit only the other's drawn katana blade, its hilt and back scabbard not;
+  `kenshi_fire1_small` kept on `Bone(..., "Bip01 Head")` and on `Weapon` burned over the heads and at the hands, following both duellists.
+  Not seen: a `Worn` target, a `Building` anchor (no player or nest building in the duel), the stretch on a system authored along +Y with
+  its own textures.
 - **Hits before they land:** a registered system implementing `ICombatHitFilter` receives `HitLanding(World, ref PendingHit)` for each melee
   blow about to hit (after the defender's block and dodge are decided), bolt about to strike a body and execution blow on a captive, before
   armour and toughness: the tick, the `CombatHitSource`, attacker and victim, the sequence and blow as in `CombatHit`, whether the victim

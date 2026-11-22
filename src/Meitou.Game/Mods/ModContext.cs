@@ -530,23 +530,20 @@ public sealed class ModContext
     public bool StopEffect(string effect, EffectAnchor anchor) => _registry.Effects.Stop(Id, effect, anchor);
 
     /// <summary>
-    /// Makes the blade of the melee weapon <paramref name="on"/> holds glow (docs/modding.md "Weapon glow"), display only: <paramref name="colour"/>
-    /// rgb (1 the full channel, up to <see cref="ModWeaponGlows.MaxColour"/>), for <paramref name="seconds"/> (0 to
-    /// <see cref="ModWeaponGlows.MaxSeconds"/>), at <paramref name="strength"/> (0 to <see cref="ModWeaponGlows.MaxStrength"/>; 0: no tint on the
-    /// blade, the particles only). It fades in and out and replaces the character's glow before. <paramref name="effect"/> (an EFFECT record's
-    /// string id or a particle system name, as <see cref="PlayEffect(string, CharacterId, string?, float, System.Numerics.Vector3?)"/>'s; null:
-    /// none) is kept on <see cref="EffectAnchor.Weapon"/> (<see cref="KeepEffect"/>) for the glow's lifetime, its particles recoloured to
-    /// <paramref name="colour"/> unless that is white (1, 1, 1). Call it again before it ends to keep it going: the same effect and colour keep
-    /// their particles. On the host's thread, as <c>PlayEffect</c>. False when rejected (logged once per mod and
-    /// problem).
+    /// Makes <paramref name="target"/> give off light of its own (docs/modding.md "Glow"), display only: a whole character, the blade it holds
+    /// drawn, or its parts in one slot. <paramref name="colour"/> is rgb (1 the full channel, up to <see cref="ModGlows.MaxColour"/>),
+    /// <paramref name="seconds"/> its lifetime (0 to <see cref="ModGlows.MaxSeconds"/>, on the game clock), <paramref name="strength"/> 0 to
+    /// <see cref="ModGlows.MaxStrength"/>. One glow a target: it replaces the one before, fading from where that stood, so calling it again
+    /// before it ends keeps it up with no restart. Particles are separate (<see cref="KeepEffect"/>). On the host's thread, as
+    /// <see cref="PlayEffect(string, EffectAnchor, float, System.Numerics.Vector3?)"/>. False when rejected (logged once per mod and problem).
     /// </summary>
-    public bool GlowWeapon(CharacterId on, System.Numerics.Vector3 colour, float seconds, float strength = 1, string? effect = null) =>
-        _registry.WeaponGlows.Start(Id, on, colour, seconds, strength, effect);
+    public bool Glow(GlowTarget target, System.Numerics.Vector3 colour, float seconds, float strength = 1) =>
+        _registry.Glows.Start(Id, target, colour, seconds, strength);
 
     /// <summary>
-    /// Fades out early the weapon glow this mod set on <paramref name="on"/>; false when it set none there.
+    /// Fades out early the glow this mod set on <paramref name="target"/>; false when it set none there.
     /// </summary>
-    public bool StopWeaponGlow(CharacterId on) => _registry.WeaponGlows.Stop(Id, on);
+    public bool StopGlow(GlowTarget target) => _registry.Glows.Stop(Id, target);
 
     /// <summary>
     /// Whether <paramref name="effect"/> (an EFFECT record's string id or a particle system name) names a particle system the game has now, so a

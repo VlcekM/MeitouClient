@@ -182,9 +182,9 @@ public sealed class ModHost
     internal ModEffects Effects => _registry.Effects;
 
     /// <summary>
-    /// The mods' display-only weapon glows (docs/modding.md "Weapon glow"), handed to the renderer by the host once a frame.
+    /// The mods' display-only glows (docs/modding.md "Glow"), handed to the renderer by the host once a frame.
     /// </summary>
-    internal ModWeaponGlows WeaponGlows => _registry.WeaponGlows;
+    internal ModGlows Glows => _registry.Glows;
 
     /// <summary>
     /// Whether a mod arranges the faction tab's list.
@@ -661,7 +661,7 @@ public sealed class ModHost
         {
             if (context.HasHarmony) context.Harmony.UnpatchAll(context.Id);
             _registry.Effects.Drop(context.Id);
-            _registry.WeaponGlows.Drop(context.Id);
+            _registry.Glows.Drop(context.Id);
             TellDependenciesItFailed(mod);
             throw;
         }

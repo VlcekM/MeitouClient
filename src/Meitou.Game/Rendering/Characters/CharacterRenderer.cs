@@ -532,10 +532,9 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         /// </summary>
         public bool GearBack;
         /// <summary>
-        /// A mod's glow on its held blade this frame (<see cref="WeaponGlows"/>): the colour over its brightest channel as 24 bits, and that
-        /// channel times the strength (0: none).
+        /// The mods' glows on it this frame (<see cref="Glows"/>; null: none).
         /// </summary>
-        public float GlowColour, GlowLevel;
+        public CharacterGlow? Glow;
         /// <summary>
         /// Posed this frame whatever the thinning (the player's, a ragdoll, a new asset or a first pose).
         /// </summary>
@@ -1430,13 +1429,13 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         {
             l.Soak = 0;
             (l.GearColour, l.GearAmounts) = (0, 0);
-            (l.GlowColour, l.GlowLevel) = (0, 0);
+            l.Glow = null;
         }
         else
         {
             Soaked(ref l, state);
             WeaponBloodOf(ref l);
-            WeaponGlowOf(ref l);
+            GlowOf(ref l);
             WornStainOf(ref l);
         }
 

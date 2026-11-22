@@ -81,15 +81,16 @@ static class CharacterShaders
     public const uint HeadOnly = 1u << 29;
 
     /// <summary>
-    /// A weapon that carries blood (GearBlood): the w of the instance matrix's first two rows hold its colour and amounts instead of the body's
-    /// blood amounts.
+    /// A weapon that carries blood (GearBlood): the low 16 bits of the w of the instance matrix's first three rows hold its colour (rows 0 and
+    /// 2) and amounts (row 1) instead of the body's blood amounts.
     /// </summary>
     public const uint WeaponBlood = 1u << 30;
 
     /// <summary>
-    /// A held blade a code mod makes glow (CharacterRenderer.GlowModel): the w of the instance matrix's last two rows hold its colour and level.
+    /// A part a code mod makes glow (CharacterGlow, docs/modding.md "Glow"): bits 16-23 of the w of the instance matrix's four rows hold its
+    /// colour (r, g, b) and its level in eighths, bit 7 of that byte the blade mask.
     /// </summary>
-    public const uint WeaponGlow = 1u << 31;
+    public const uint Glow = 1u << 31;
 
     /// <summary>
     /// The shading modes (<see cref="CharacterMaterialRecord.Shading"/>): an item, a body, a hair card.
@@ -231,7 +232,7 @@ static class CharacterShaders
         out vec3 vLocal;        // the vertex in the mesh's own space (a weapon's blade position)
         flat out vec4 vGear;    // a weapon's blood (WeaponBlood): rgb its colour, a its amount
         flat out float vGearFresh;  // how wet it still is (1 just struck, 0 dry)
-        flat out vec4 vGlow;        // a mod's glow on the blade (WeaponGlow): rgb its colour, a its level
+        flat out vec4 vGlow;        // a mod's glow (Glow): rgb its colour, a its level, negative for the blade mask
         //ROW_OUT
 
         void main()
@@ -279,22 +280,23 @@ static class CharacterShaders
                 float pair = k < 2u ? aInstance0.w : k < 4u ? aInstance1.w : k < 6u ? aInstance2.w : aInstance3.w;
                 vBloodAmount = float((uint(pair + 0.5) >> (8u * (k & 1u))) & 255u) / 255.0;
             }
-            // A weapon's blood: colour 8 bits a channel in the w of row 0, amount and wetness a byte each in row 1's (CharacterRenderer.GearBlood).
+            // A weapon's blood: colour 8 bits a channel in the low 16 bits of the w of row 0 (g, b) and row 2 (r), amount and wetness a byte each in row 1's
+            // (CharacterRenderer.GearBlood).
             vLocal = aPosition;
             vGear = vec4(0.0);
             vGearFresh = 0.0;
             if ((aInstanceData.z & {{WeaponBlood}}u) != 0u)
             {
-                uint rgb = uint(aInstance0.w + 0.5), amounts = uint(aInstance1.w + 0.5);
+                uint rgb = (uint(aInstance0.w + 0.5) & 65535u) | ((uint(aInstance2.w + 0.5) & 255u) << 16), amounts = uint(aInstance1.w + 0.5);
                 vGear = vec4(float((rgb >> 16) & 255u), float((rgb >> 8) & 255u), float(rgb & 255u), float(amounts & 255u)) / 255.0;
                 vGearFresh = float((amounts >> 8) & 255u) / 255.0;
             }
-            // A mod's glow on a held blade: the colour over its brightest channel 8 bits a channel in the w of row 2, the level in row 3's (CharacterRenderer.PackGlow).
+            // A mod's glow: bits 16-23 of the rows' w, the colour over its brightest channel and the level in eighths, its bit 7 the blade mask (CharacterGlow.Pack).
             vGlow = vec4(0.0);
-            if ((aInstanceData.z & {{WeaponGlow}}u) != 0u)
+            if ((aInstanceData.z & {{Glow}}u) != 0u)
             {
-                uint glowRgb = uint(aInstance2.w + 0.5);
-                vGlow = vec4(float((glowRgb >> 16) & 255u), float((glowRgb >> 8) & 255u), float(glowRgb & 255u), 255.0 * aInstance3.w) / 255.0;
+                uvec4 high = (uvec4(uint(aInstance0.w + 0.5), uint(aInstance1.w + 0.5), uint(aInstance2.w + 0.5), uint(aInstance3.w + 0.5)) >> 16u) & 255u;
+                vGlow = vec4(vec3(high.xyz) / 255.0, float(high.w & 127u) / 8.0 * ((high.w & 128u) != 0u ? -1.0 : 1.0));
             }
             // The water's mark (skin.hlsl waterLine): wet below its height on the mesh as it is modelled (not as it is posed), by its strength.
             uint soak = (aInstanceData.z >> 1) & 2047u;
@@ -875,13 +877,13 @@ static class CharacterShaders
                 colour = albedo * (ambient + diffSkin * sunLight) + spec * diff * sunLight;
                 if (surfaceOn) colour += surfaceSpecular(l) * sunLight;
             }
-            // A mod's glow on a held blade (docs/modding.md "Weapon glow"): light of its own over the blood's blade (the far 70% of the mesh's long axis), brighter at the
-            // silhouette so the edge burns.
-            if (vGlow.a > 0.0)
+            // A mod's glow (docs/modding.md "Glow"): light of its own, brighter at the silhouette so the edge burns; with the blade mask only over the blood's blade
+            // (the far 70% of a held weapon mesh's long axis).
+            if (vGlow.a != 0.0)
             {
-                float glowAlong = (dot(vLocal, m.hairAlpha.xyz) - m.hairMult.x) * m.hairMult.y;
+                float glowMask = vGlow.a < 0.0 ? smoothstep(0.25, 0.4, (dot(vLocal, m.hairAlpha.xyz) - m.hairMult.x) * m.hairMult.y) : 1.0;
                 float glowRim = 1.0 - max(dot(n, v), 0.0);
-                colour += vGlow.rgb * vGlow.a * smoothstep(0.25, 0.4, glowAlong) * (0.7 + 0.6 * glowRim * glowRim);
+                colour += vGlow.rgb * abs(vGlow.a) * glowMask * (0.7 + 0.6 * glowRim * glowRim);
             }
             // A presentation fill (CharacterRenderer.Fill, 0 in play): ambient light, stronger towards the silhouette as a back light rims it.
             if (view.fogDistance > 0.0) colour += albedo * pc.fill.rgb * (1.0 + 2.0 * pow(1.0 - max(dot(n, v), 0.0), 3.0));

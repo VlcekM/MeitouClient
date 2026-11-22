@@ -1,51 +1,118 @@
 using System.Numerics;
 using Meitou.Data.Characters;
+using Meitou.Modding;
 
 namespace Meitou.Game.Rendering.Characters;
+
+/// <summary>
+/// The code mods' glows on one drawn character (docs/modding.md "Glow"), each packed for the instances (<see cref="Pack"/>; 0: none): the whole
+/// character's, its held blade's and its slots'.
+/// </summary>
+internal sealed class CharacterGlow
+{
+    /// <summary>
+    /// The whole character's glow.
+    /// </summary>
+    public uint Whole;
+    /// <summary>
+    /// The held blade's glow (blade-masked).
+    /// </summary>
+    public uint Weapon;
+    /// <summary>
+    /// The glows of its slots' parts.
+    /// </summary>
+    public Dictionary<AttachSlot, uint>? Slots;
+
+    /// <summary>
+    /// Sets <paramref name="target"/>'s glow.
+    /// </summary>
+    public void Set(in GlowTarget target, Vector3 colour, float strength)
+    {
+        switch (target.Kind)
+        {
+            case GlowTargetKind.Weapon:
+                Weapon = Pack(colour, strength, bladeMasked: true);
+                break;
+            case GlowTargetKind.Worn:
+                (Slots ??= [])[target.Slot] = Pack(colour, strength, bladeMasked: false);
+                break;
+            default:
+                Whole = Pack(colour, strength, bladeMasked: false);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// The glow a part takes: a held blade the weapon's, a part in a glowing slot (<paramref name="slot"/>, null for the body) its slot's, else
+    /// the whole character's.
+    /// </summary>
+    public uint For(bool heldBlade, AttachSlot? slot)
+    {
+        if (heldBlade && Weapon != 0) return Weapon;
+        if (slot is { } s && Slots is not null && Slots.TryGetValue(s, out uint glow)) return glow;
+        return Whole;
+    }
+
+    /// <summary>
+    /// A glow as four bytes from the top: the colour over its brightest channel (r, g, b), then its level (that channel times
+    /// <paramref name="strength"/>, in eighths, at most 127) with bit 7 set for the blade mask; 0 for none.
+    /// </summary>
+    public static uint Pack(Vector3 colour, float strength, bool bladeMasked)
+    {
+        float top = MathF.Max(colour.X, MathF.Max(colour.Y, colour.Z));
+        uint level = (uint)Math.Clamp(MathF.Round(top * strength * 8), 0, 127);
+        if (level == 0) return 0;
+
+        static uint Byte(float c) => (uint)Math.Clamp(MathF.Round(c * 255), 0, 255);
+        var unit = colour / top;
+        return Byte(unit.X) << 24 | Byte(unit.Y) << 16 | Byte(unit.Z) << 8 | level | (bladeMasked ? 128u : 0);
+    }
+}
 
 internal sealed partial class CharacterRenderer
 {
     /// <summary>
-    /// The code mods' weapon glows by draw key (docs/modding.md "Weapon glow"): the colour and its level as <see cref="PackGlow"/> makes them, set
-    /// by the host each frame before the draw. Empty without a mod.
+    /// The code mods' glows by draw key, set by the host each frame before the draw (<see cref="SetGlow"/>). Empty without a mod.
     /// </summary>
-    public Dictionary<long, (float Colour, float Level)> WeaponGlows { get; } = [];
+    public Dictionary<long, CharacterGlow> Glows { get; } = [];
 
     /// <summary>
-    /// A glow for the instances (<see cref="Live.GlowColour"/>, <see cref="Live.GlowLevel"/>): the colour over its brightest channel, 8 bits a
-    /// channel as an exact integer, and that channel times <paramref name="strength"/>.
+    /// Sets <paramref name="target"/>'s glow on the character <paramref name="key"/> for this frame.
     /// </summary>
-    public static (float Colour, float Level) PackGlow(Vector3 colour, float strength)
+    public void SetGlow(long key, in GlowTarget target, Vector3 colour, float strength)
     {
-        float top = MathF.Max(colour.X, MathF.Max(colour.Y, colour.Z));
-        if (top <= 0 || strength <= 0) return (0, 0);
-
-        static uint Byte(float c) => (uint)Math.Clamp(MathF.Round(c * 255), 0, 255);
-        var unit = colour / top;
-        return ((Byte(unit.X) << 16) | (Byte(unit.Y) << 8) | Byte(unit.Z), top * strength);
+        if (!Glows.TryGetValue(key, out var glow)) Glows[key] = glow = new CharacterGlow();
+        glow.Set(target, colour, strength);
     }
 
     /// <summary>
-    /// The character's weapon glow for its instances this frame.
+    /// The character's glows for its instances this frame.
     /// </summary>
-    void WeaponGlowOf(ref Live l)
-    {
-        (l.GlowColour, l.GlowLevel) = WeaponGlows.Count > 0 && WeaponGlows.TryGetValue(l.Key, out var glow) ? glow : (0, 0);
-    }
+    void GlowOf(ref Live l) => l.Glow = Glows.Count > 0 ? Glows.GetValueOrDefault(l.Key) : null;
 
     /// <summary>
-    /// A held melee weapon's blade (the gear blood's mapping, <see cref="PartMaterial.BladeAxis"/>) takes the character's glow in the w of the
-    /// matrix's last two rows (<see cref="CharacterShaders.WeaponGlow"/>); a sheathed, worn or ranged part does not.
+    /// A part's glow (<see cref="CharacterGlow.For"/>) in the high byte (bits 16-23) of the w of the matrix's four rows, whose low 16 bits keep the
+    /// blood (<see cref="CharacterShaders.Glow"/>).
     /// </summary>
     static Matrix4x4 GlowModel(AssetPart part, in Live l, Matrix4x4 model, ref uint flags)
     {
-        if (l.GlowLevel <= 0 || !HeldBlade(part)) return model;
+        if (l.Glow is not { } glow) return model;
 
-        flags |= CharacterShaders.WeaponGlow;
-        model.M34 = l.GlowColour;
-        model.M44 = l.GlowLevel;
+        uint packed = glow.For(HeldBlade(part), part.IsBody ? null : part.Slot);
+        if (packed == 0) return model;
+
+        flags |= CharacterShaders.Glow;
+        model.M14 = WithHigh(model.M14, packed >> 24);
+        model.M24 = WithHigh(model.M24, (packed >> 16) & 255);
+        model.M34 = WithHigh(model.M34, (packed >> 8) & 255);
+        model.M44 = WithHigh(model.M44, packed & 255);
         return model;
     }
+
+    /// <summary>
+    /// <paramref name="w"/>'s low 16 bits (an exact integer) with <paramref name="high"/> in bits 16-23.
+    /// </summary>
+    static float WithHigh(float w, uint high) => ((uint)MathF.Round(w) & 0xFFFF) | high << 16;
 
     /// <summary>
     /// A melee weapon's blade as held (the gear blood's mapping): not worn, sheathed or ranged.
@@ -56,7 +123,7 @@ internal sealed partial class CharacterRenderer
     /// <summary>
     /// Where the held blade of the character <paramref name="key"/> was last drawn (<see cref="BladeSpan.Frame"/>): its base, the turn that takes
     /// +Y along it and its length; null when the character was not drawn in the world in the last update or holds no blade drawn. Render thread,
-    /// after <see cref="Update"/> (a mod's weapon glow particles, ModEffectPlayer).
+    /// after <see cref="Update"/> (a mod's effect on EffectAnchor.Weapon, ModEffectPlayer).
     /// </summary>
     public BladeFrame? HeldBladeFrame(long key)
     {

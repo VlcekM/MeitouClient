@@ -72,6 +72,10 @@ internal sealed class AssetPart
     /// </summary>
     public bool IsWeapon;
     /// <summary>
+    /// The part's attach slot, if it has one (a code mod's glow on a slot, <see cref="CharacterGlow"/>).
+    /// </summary>
+    public AttachSlot? Slot;
+    /// <summary>
     /// When it shows by the bolts loaded in its crossbow (<see cref="CharacterPart.ShownShots"/>).
     /// </summary>
     public int ShownShots;
@@ -1809,6 +1813,7 @@ internal sealed class CharacterContent : IDisposable
                 BoundsRadius = loaded.Radius,
                 Shown = part.Shown,
                 IsWeapon = part.Slot == AttachSlot.Weapon,
+                Slot = part.Slot,
                 ShownShots = part.ShownShots,
                 Muzzle = part is { Field: "live ammo", ShownShots: 1, Shown: WeaponShown.RangedDrawn },
                 HideSide = part.HideSide,

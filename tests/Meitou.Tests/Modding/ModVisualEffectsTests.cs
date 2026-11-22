@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Content;
+using Meitou.Game.Rendering.Characters;
 using Meitou.Modding;
 using Meitou.Simulation;
 
@@ -152,7 +153,8 @@ public class ModVisualEffectsTests
 
     /// <summary>
     /// Each anchor kind resolves to its frame: a point as given (its turn normalized), a bone and a building moved and turned in their own frame,
-    /// a weapon with its blade's stretch unless the anchor scales it; one not there is null. The chest is the bone overload's default.
+    /// a weapon with its blade's stretch unless the anchor scales it; one not there is null. The chest is the bone overload's default. The weapon's
+    /// frame from its mesh: the base at the hilt end, +Y to the tip, X across the blade's width, stretch = length / 8.5.
     /// </summary>
     [Fact]
     public void Anchors_resolve_to_their_frames()
@@ -184,12 +186,42 @@ public class ModVisualEffectsTests
         Assert.True(Context(registry, "gore").PlayEffect("spark", hero));
         registry.Effects.Advance(0, sink);
         Assert.Equal(EffectAnchor.Bone(hero, "Bip01 Spine2"), Assert.Single(sink.Started).Anchor);
+
+        AssertBladeFrame();
     }
+
+    /// <summary>
+    /// A blade along -Z from its hilt end at z = 0.1 over 1.2 units, its pick boxes centred on x = 0.02, y = 0 and wider in x: its line, and its
+    /// frame as held (unplaced, then scaled by 2, turned and moved).
+    /// </summary>
+    static void AssertBladeFrame()
+    {
+        PickBox[] boxes = [new(-1, new Vector3(0, -0.01f, -1.1f), new Vector3(0.04f, 0.01f, -0.5f)), new(-1, new Vector3(0, -0.01f, -0.5f),
+            new Vector3(0.04f, 0.01f, 0.1f))];
+        var axis = -Vector3.UnitZ;
+        AssertNear(new Vector3(0.02f, 0, 0.1f), BladeSpan.Point(boxes, axis, -0.1f, 1 / 1.2f, 0));
+        AssertNear(new Vector3(0.02f, 0, -1.1f), BladeSpan.Point(boxes, axis, -0.1f, 1 / 1.2f, 1));
+
+        var frame = BladeSpan.Frame(boxes, axis, -0.1f, 1 / 1.2f, Matrix4x4.Identity);
+        AssertNear(new Vector3(0.02f, 0, 0.1f), frame.Base);
+        AssertNear(axis, Vector3.Transform(Vector3.UnitY, frame.Turn));
+        AssertNear(Vector3.UnitX, Vector3.Transform(Vector3.UnitX, frame.Turn));
+        Assert.Equal(1.2f, frame.Length, 1e-4f);
+        Assert.Equal(1.2f / 8.5f, frame.Stretch, 1e-6f);
+
+        var world = Matrix4x4.CreateScale(2) * Matrix4x4.CreateRotationY(MathF.PI / 2) * Matrix4x4.CreateTranslation(10, 0, 0);
+        var placed = BladeSpan.Frame(boxes, axis, -0.1f, 1 / 1.2f, world);
+        AssertNear(Vector3.Transform(frame.Base, world), placed.Base);
+        AssertNear(Vector3.Normalize(Vector3.TransformNormal(axis, world)), Vector3.Transform(Vector3.UnitY, placed.Turn));
+        Assert.Equal(2 * frame.Length, placed.Length, 1e-4f);
+    }
+
 
     /// <summary>
     /// An effect whose anchor is not there waits, paused, and starts once it is; one that loses its anchor stops emitting and starts again where
     /// the anchor is, for the seconds it has left. A kept effect is renewed, not restarted, by the same mod, effect and anchor (another tint
-    /// restarts it), and stopped by its key; a played one is never renewed. Bad anchors are rejected and logged.
+    /// restarts it), and stopped by its key; a played one is never renewed. Bad anchors are rejected and logged. HasEffect answers without a
+    /// logged rejection, false before the particles load.
     /// </summary>
     [Fact]
     public void Effects_pause_while_unlocated_and_kept_ones_renew_until_stopped()
@@ -199,6 +231,11 @@ public class ModVisualEffectsTests
         var mod = Context(registry, "aura");
         var sink = new Recorder { Located = false };
         var head = EffectAnchor.Bone(new CharacterId(3, 1), "Bip01 Head");
+
+        Assert.False(mod.HasEffect("spark"));   // before the particles load
+        registry.Effects.Exists = id => registry.Effects.System(id) is not null;
+        Assert.True(mod.HasEffect("spark"));
+        Assert.False(mod.HasEffect("nope"));
 
         Assert.True(mod.KeepEffect("spark", head, 10));
         registry.Effects.Advance(1, sink);
