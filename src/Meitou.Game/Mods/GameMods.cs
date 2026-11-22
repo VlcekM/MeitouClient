@@ -201,6 +201,7 @@ sealed class GameMods(GameHost host)
         var effects = Mods.Effects;
         _effectPlayer ??= new ModEffectPlayer(host);
         effects.Resolve ??= _effectPlayer.Resolve;
+        effects.Exists ??= _effectPlayer.Exists;
         var world = host.Session?.World;
         if (!ReferenceEquals(_effectsFor, world))
         {

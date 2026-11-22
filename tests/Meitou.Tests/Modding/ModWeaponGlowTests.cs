@@ -107,7 +107,7 @@ public class ModWeaponGlowTests
         Assert.False(fire.GlowWeapon(hero, new Vector3(-1, 0, 0), 1));
         Assert.False(fire.GlowWeapon(hero, orange, 0));
         Assert.False(fire.GlowWeapon(hero, orange, ModWeaponGlows.MaxSeconds + 1));
-        Assert.False(fire.GlowWeapon(hero, orange, 1, 0));
+        Assert.False(fire.GlowWeapon(hero, orange, 1, -1));
         Assert.False(ice.GlowWeapon(hero, orange, 0));
         Assert.Equal(0, registry.WeaponGlows.Count);
         Assert.Equal(5, log.Count);
@@ -123,66 +123,96 @@ public class ModWeaponGlowTests
     }
 
     /// <summary>
-    /// A glow's effect resolves as PlayEffect's and plays at each blade point, in the glow's colour, once the blade is drawn; a call again with the
-    /// same effect and colour renews those emitters (no restart); they stop while the blade is not drawn and when the glow ends, and count against
-    /// the effects' cap. The blade points lie on the mesh's long axis from the hilt end to the tip, through the middle of its pick boxes.
+    /// A glow's effect resolves as PlayEffect's (HasEffect asks without a logged rejection) and plays once on the blade, recoloured to the glow's
+    /// colour but for white, once the blade is drawn; a call again with the same effect and colour renews it (no restart); it stops while the blade
+    /// is not drawn and when the glow ends, and counts against the effects' cap. Strength 0 shows the particles with no tint on the blade. The
+    /// blade's frame: the base where the glowing span starts, a turn taking +Y to the tip and X across the blade's width, the length to the tip.
     /// </summary>
     [Fact]
-    public void Glow_particles_play_along_the_blade_and_are_kept_when_renewed()
+    public void Glow_particles_play_on_the_blade_aligned_and_are_kept_when_renewed()
     {
         var log = new List<string>();
         var registry = new ModRegistry();
-        registry.Effects.Resolve = id => id == "frost" ? "kenshi_smoke3_small" : null;
+        registry.Effects.Resolve = id => id == "frost" ? "SB_Ice" : null;
         registry.WeaponGlows.Log = log.Add;
         var ice = Context(registry, "ice");
         var hero = new CharacterId(3, 1);
         var cyan = new Vector3(0.3f, 0.9f, 1);
         var sink = new Recorder { Drawn = false };
-        int points = ModWeaponGlows.BladePoints.Length;
 
+        Assert.False(ice.HasEffect("frost"));   // before the particles load
+        registry.Effects.Exists = id => registry.Effects.System(id) is not null;
+        Assert.True(ice.HasEffect("frost"));
+        Assert.False(ice.HasEffect("no such effect"));
+        Assert.Empty(log);
         Assert.False(ice.GlowWeapon(hero, cyan, 5, 1, "no such effect"));
         Assert.Single(log, l => l.Contains("effect id"));
+
         Assert.True(ice.GlowWeapon(hero, cyan, 5, 1, "frost"));
         registry.WeaponGlows.Advance(0.1f, sink);
         Assert.Empty(sink.Started);   // sheathed: nothing yet
-
         sink.Drawn = true;
         registry.WeaponGlows.Advance(0.1f, sink);
-        Assert.Equal(points, sink.Started.Count);
-        Assert.All(sink.Started, r => Assert.Equal(("ice", "frost", "kenshi_smoke3_small", hero, cyan), (r.Owner, r.Effect, r.System, r.On, r.Tint)));
-        Assert.Equal(ModWeaponGlows.BladePoints, sink.Started.Select(r => r.Along));
-        Assert.All(sink.Started, r => Assert.True(r.OnBlade && r.Seconds > 4.8f));
-        Assert.Equal(points, registry.Effects.Reserved);
-        Assert.False(registry.Effects.Fits(ModEffects.MaxAlive - points + 1));
+        var started = Assert.Single(sink.Started);
+        Assert.Equal(("ice", "frost", "SB_Ice", hero, cyan, true), (started.Owner, started.Effect, started.System, started.On, started.Tint,
+            started.OnBlade));
+        Assert.True(started.Seconds > 4.8f);
+        Assert.Equal(1, registry.Effects.Reserved);
+        Assert.False(registry.Effects.Fits(ModEffects.MaxAlive));
 
-        // Kept alive: the same effect and colour renew the playing emitters to the new lifetime rather than starting others.
+        // Kept alive: the same effect and colour renew the playing one to the new lifetime rather than starting another.
         registry.WeaponGlows.Advance(1, sink);
         Assert.True(ice.GlowWeapon(hero, cyan, 20, 1, "frost"));
         registry.WeaponGlows.Advance(0.1f, sink);
-        Assert.Equal(points, sink.Started.Count);
-        Assert.Equal(points, sink.Renewed.Count);
-        Assert.All(sink.Renewed, r => Assert.True(r.Seconds > 19.8f));
+        Assert.Single(sink.Started);
+        Assert.True(Assert.Single(sink.Renewed).Seconds > 19.8f);
 
-        // Sheathed: they stop (renewed to 0); drawn again: new ones start; the glow's end stops them.
+        // Sheathed: it stops (renewed to 0); drawn again: a new one starts; the glow's end stops it.
         sink.Drawn = false;
         registry.WeaponGlows.Advance(0.1f, sink);
         registry.WeaponGlows.Advance(0.1f, sink);
-        Assert.Equal(points, sink.Renewed.Count(r => r.Seconds == 0));
-        Assert.Equal(0, registry.Effects.Reserved);
+        Assert.Equal((1, 0), (sink.Renewed.Count(r => r.Seconds == 0), registry.Effects.Reserved));
         sink.Drawn = true;
         registry.WeaponGlows.Advance(0.1f, sink);
-        Assert.Equal(2 * points, sink.Started.Count);
+        Assert.Equal(2, sink.Started.Count);
         registry.WeaponGlows.Advance(25, sink);
         registry.WeaponGlows.Advance(0, sink);
-        Assert.Equal(2 * points, sink.Renewed.Count(r => r.Seconds == 0));
+        Assert.Equal(2, sink.Renewed.Count(r => r.Seconds == 0));
         Assert.Equal((0, 0), (registry.WeaponGlows.Count, registry.Effects.Reserved));
 
-        // A blade along -Z from its hilt end at z = 0.1 over 1.2 units, its pick boxes centred on x = 0.02, y = 0.
+        // Strength 0 and white: the particles in their own colours, no tint on the blade.
+        Assert.True(ice.GlowWeapon(hero, Vector3.One, 5, 0, "frost"));
+        registry.WeaponGlows.Advance(0.5f, sink);
+        Assert.Null(sink.Started[^1].Tint);
+        Assert.Empty(Now(registry));
+
+        AssertBladeFrame();
+    }
+
+    /// <summary>
+    /// A blade along -Z from its hilt end at z = 0.1 over 1.2 units, its pick boxes centred on x = 0.02, y = 0 and wider in x: its line, and its
+    /// frame as held (unplaced, then scaled by 2, turned and moved).
+    /// </summary>
+    static void AssertBladeFrame()
+    {
         PickBox[] boxes = [new(-1, new Vector3(0, -0.01f, -1.1f), new Vector3(0.04f, 0.01f, -0.5f)), new(-1, new Vector3(0, -0.01f, -0.5f),
             new Vector3(0.04f, 0.01f, 0.1f))];
-        AssertNear(new Vector3(0.02f, 0, 0.1f), BladeSpan.Point(boxes, -Vector3.UnitZ, -0.1f, 1 / 1.2f, 0));
-        AssertNear(new Vector3(0.02f, 0, -1.1f), BladeSpan.Point(boxes, -Vector3.UnitZ, -0.1f, 1 / 1.2f, 1));
-        AssertNear(new Vector3(0.02f, 0, -0.5f), BladeSpan.Point(boxes, -Vector3.UnitZ, -0.1f, 1 / 1.2f, 0.5f));
+        var axis = -Vector3.UnitZ;
+        AssertNear(new Vector3(0.02f, 0, 0.1f), BladeSpan.Point(boxes, axis, -0.1f, 1 / 1.2f, 0));
+        AssertNear(new Vector3(0.02f, 0, -1.1f), BladeSpan.Point(boxes, axis, -0.1f, 1 / 1.2f, 1));
+
+        var frame = BladeSpan.Frame(boxes, axis, -0.1f, 1 / 1.2f, Matrix4x4.Identity);
+        AssertNear(new Vector3(0.02f, 0, 0.1f - BladeSpan.Start * 1.2f), frame.Base);
+        AssertNear(axis, Vector3.Transform(Vector3.UnitY, frame.Turn));
+        AssertNear(Vector3.UnitX, Vector3.Transform(Vector3.UnitX, frame.Turn));
+        Assert.Equal(1.2f * (1 - BladeSpan.Start), frame.Length, 1e-4f);
+        Assert.Equal(frame.Length / 7, frame.Stretch, 1e-6f);
+
+        var world = Matrix4x4.CreateScale(2) * Matrix4x4.CreateRotationY(MathF.PI / 2) * Matrix4x4.CreateTranslation(10, 0, 0);
+        var placed = BladeSpan.Frame(boxes, axis, -0.1f, 1 / 1.2f, world);
+        AssertNear(Vector3.Transform(frame.Base, world), placed.Base);
+        AssertNear(Vector3.Normalize(Vector3.TransformNormal(axis, world)), Vector3.Transform(Vector3.UnitY, placed.Turn));
+        Assert.Equal(2 * frame.Length, placed.Length, 1e-4f);
     }
 
     /// <summary>

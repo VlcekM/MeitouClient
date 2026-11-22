@@ -11,8 +11,8 @@ internal readonly record struct WeaponGlow(Vector3 Colour, float Strength);
 
 /// <summary>
 /// The code mods' display-only weapon glows (docs/modding.md "Weapon glow"): at most one a character, the newest request replacing the one before,
-/// fading in and out over <see cref="FadeSeconds"/>, with an optional particle system emitted at <see cref="BladePoints"/> along the held blade
-/// through the mods' effect sink (counted against <see cref="ModEffects.MaxAlive"/>). Set and aged on the host's thread; the renderer reads
+/// fading in and out over <see cref="FadeSeconds"/>, with an optional particle system played once on the held blade (at its base, +Y along it,
+/// scaled to it) through the mods' effect sink, counted against <see cref="ModEffects.MaxAlive"/>. Set and aged on the host's thread; the renderer reads
 /// <see cref="Current"/> each frame, the simulation never. A rejected request is logged once per mod and problem, and dropped.
 /// </summary>
 internal sealed class ModWeaponGlows(ModEffects effects)
@@ -46,12 +46,6 @@ internal sealed class ModWeaponGlows(ModEffects effects)
     /// The seconds an emitter is started or renewed for past its glow's end, so a clock's drift never stops it first; the glow stops it.
     /// </summary>
     const float EmitMargin = 1;
-
-    /// <summary>
-    /// Where a glow's particle emitters sit along the weapon mesh's long axis, 0 the hilt end and 1 the tip (the glowing blade starts near 0.3):
-    /// denser towards the tip.
-    /// </summary>
-    public static readonly float[] BladePoints = [0.35f, 0.55f, 0.7f, 0.85f, 0.97f];
 
     /// <summary>
     /// One character's glow: who set it, its colour, strength and particle system, the seconds it has shown and those it has left, and its
@@ -88,7 +82,7 @@ internal sealed class ModWeaponGlows(ModEffects effects)
         /// </summary>
         public float Left { get; set; } = left;
         /// <summary>
-        /// Its playing emitters, one a blade point, with their requests; empty while the blade is not drawn.
+        /// Its playing effect (one at most) with its request; empty while the blade is not drawn.
         /// </summary>
         public List<(object Handle, ModEffectRequest Request)> Emitters { get; set; } = [];
         /// <summary>
@@ -195,7 +189,7 @@ internal sealed class ModWeaponGlows(ModEffects effects)
         if (on.Slot < 0) return Problem.BadCharacter;
         if (!InRange(colour.X) || !InRange(colour.Y) || !InRange(colour.Z)) return Problem.BadColour;
         if (!float.IsFinite(seconds) || seconds <= 0 || seconds > MaxSeconds) return Problem.BadSeconds;
-        if (!float.IsFinite(strength) || strength <= 0 || strength > MaxStrength) return Problem.BadStrength;
+        if (!float.IsFinite(strength) || strength < 0 || strength > MaxStrength) return Problem.BadStrength;
         return null;
     }
 
@@ -281,7 +275,7 @@ internal sealed class ModWeaponGlows(ModEffects effects)
             case Problem.BadCharacter: return "no character";
             case Problem.BadColour: return $"its colour is not finite in [0, {MaxColour}]";
             case Problem.BadSeconds: return $"its lifetime is not in (0, {MaxSeconds}] seconds";
-            case Problem.BadStrength: return $"its strength is not in (0, {MaxStrength}]";
+            case Problem.BadStrength: return $"its strength is not in [0, {MaxStrength}]";
             case Problem.UnknownEffect: return "no EFFECT record or particle system has its effect id";
             case Problem.Full: return $"{MaxGlowing} characters already glow";
             case Problem.OffThread: return "set off the host's thread (from a tick system?)";
@@ -358,22 +352,16 @@ internal sealed class ModWeaponGlows(ModEffects effects)
     }
 
     /// <summary>
-    /// Starts an emitter at each blade point when they fit under the effects' cap; none when the blade is not drawn (one fails to start).
+    /// Starts the glow's effect on the blade when it fits under the effects' cap; nothing while the blade is not drawn (it fails to start).
+    /// The particles take the glow's colour, but for white (their own).
     /// </summary>
     void StartEmitters(CharacterId on, Glow glow, IModEffectSink sink)
     {
-        if (!effects.Fits(BladePoints.Length)) return;
+        if (!effects.Fits(1)) return;
 
-        foreach (float along in BladePoints)
-        {
-            var request = new ModEffectRequest(glow.Owner, glow.Effect!, glow.System!, default, on, null, glow.Colour, glow.Left + EmitMargin, along);
-            if (sink.Start(request) is not { } handle)
-            {
-                Retire(glow);
-                return;
-            }
-            glow.Emitters.Add((handle, request));
-        }
+        Vector3? tint = glow.Colour == Vector3.One ? null : glow.Colour;
+        var request = new ModEffectRequest(glow.Owner, glow.Effect!, glow.System!, default, on, null, tint, glow.Left + EmitMargin, OnBlade: true);
+        if (sink.Start(request) is { } handle) glow.Emitters.Add((handle, request));
     }
 
     /// <summary>

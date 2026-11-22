@@ -667,12 +667,14 @@ public sealed class BurstEffectGroup(PuSystemDef system, int seed, EffectWorld w
 {
     /// <summary>
     /// A unit at <paramref name="position"/>, turned by <paramref name="orientation"/>, emitting for <paramref name="seconds"/>, its particles
-    /// <paramref name="size"/> times as big and <paramref name="lifeScale"/> times as long-lived.
+    /// <paramref name="size"/> times as big and <paramref name="lifeScale"/> times as long-lived, its emitters placed <paramref name="stretch"/>
+    /// times as far out (<see cref="ParticleSimulation.Stretch"/>).
     /// </summary>
     /// <param name="recolour">A colour the particles take in place of their texture's hue: kept as a negative tint, which the renderer's fragment
     /// program reads as that.</param>
     /// <returns>The unit, which its owner may move while it emits (its particles stay in the world where they were thrown).</returns>
-    public EffectUnit Spawn(Vector3 position, Quaternion orientation, float seconds, float size, float lifeScale, Vector3? recolour = null)
+    public EffectUnit Spawn(Vector3 position, Quaternion orientation, float seconds, float size, float lifeScale, Vector3? recolour = null,
+        float stretch = 1)
     {
         var u = NewUnit(position);
         if (recolour is { } colour) u.Tint = -Vector3.Max(colour, new Vector3(1e-4f));
@@ -680,7 +682,8 @@ public sealed class BurstEffectGroup(PuSystemDef system, int seed, EffectWorld w
         u.Life = seconds;
         u.Size = size;
         u.LifeScale = lifeScale;
-        u.Radius *= size * lifeScale;
+        u.Stretch = stretch;
+        u.Radius *= size * lifeScale * Math.Max(stretch, 1);
         return u;
     }
 

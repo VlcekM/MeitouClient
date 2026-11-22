@@ -113,6 +113,11 @@ public sealed class ParticleSimulation
     /// </summary>
     public float LifeScale { get; set; } = 1;
     /// <summary>
+    /// The system node's scale: multiplies the technique's and emitters' positions and the emitters' spawn shapes before <see cref="Orientation"/>
+    /// (1 for every effect but a code mod's blade burst, docs/modding.md "Weapon glow").
+    /// </summary>
+    public float Stretch { get; set; } = 1;
+    /// <summary>
     /// The system was stopped (an effect whose life is over): the emitters make nothing more and the particles live out.
     /// </summary>
     public bool EmissionStopped { get; set; }
@@ -475,11 +480,7 @@ public sealed class ParticleSimulation
         Vector3 offset = SpawnOffset(e, scale);
         var direction = e.AutoDirection && offset.LengthSquared() > 1e-12f ? Vector3.Normalize(offset)
             : Cone(e.Direction.LengthSquared() > 1e-12f ? Vector3.Normalize(e.Direction) : Vector3.UnitY, e.Angle.Evaluate(0, _random));
-        if (!Orientation.IsIdentity)
-        {
-            offset = Vector3.Transform(offset, Orientation);
-            direction = Vector3.Transform(direction, Orientation);
-        }
+        if (!Orientation.IsIdentity) direction = Vector3.Transform(direction, Orientation);
 
         if (env.WindDirectionEmission && env.Wind.LengthSquared() > 1e-6f)
         {
@@ -496,7 +497,7 @@ public sealed class ParticleSimulation
 
         t.Grow();
         int i = t.Count++;
-        var local = t.Def.Position + e.Position * scale + offset;
+        var local = Placed(t.Def.Position + e.Position * scale + offset);
         var p = t.Def.KeepLocal ? local : Origin + local;
         t.X[i] = p.X;
         t.Y[i] = p.Y;
@@ -520,6 +521,16 @@ public sealed class ParticleSimulation
         t.Rotation[i] = 0;
         t.RotationSpeed[i] = 0;
         InitTextureRotation(t, i, e);
+    }
+
+    /// <summary>
+    /// A new particle's place in the system node's frame (the technique's and emitter's positions plus the shape's offset) scaled by
+    /// <see cref="Stretch"/> and turned by <see cref="Orientation"/>.
+    /// </summary>
+    Vector3 Placed(Vector3 local)
+    {
+        local *= Stretch;
+        return Orientation.IsIdentity ? local : Vector3.Transform(local, Orientation);
     }
 
     /// <summary>

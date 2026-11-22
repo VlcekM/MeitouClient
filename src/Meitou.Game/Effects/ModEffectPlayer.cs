@@ -1,6 +1,7 @@
 using System.Numerics;
 using Meitou.Data.Fcs;
 using Meitou.Data.Particles;
+using Meitou.Game.Rendering.Characters;
 using Meitou.Game.Rendering.Particles;
 using Meitou.Modding;
 using Meitou.Simulation;
@@ -36,13 +37,18 @@ sealed class ModEffectPlayer(GameHost host) : IModEffectSink
     }
 
     /// <summary>
+    /// Whether <paramref name="id"/> names a particle system the particles have now (false before they load or while they are off).
+    /// </summary>
+    public bool Exists(string id) => host.Gpu?.Particles is { Enabled: true } && Resolve(id) is not null;
+
+    /// <summary>
     /// Fires the request's system as a burst at its point or its character's bone; null when the character is not drawn or there are no
     /// particles.
     /// </summary>
     public object? Start(in ModEffectRequest request)
     {
-        if (host.Gpu?.Particles is not { } particles || Where(request) is not { } at) return null;
-        return particles.Burst(request.System, at, Quaternion.Identity, request.Seconds, recolour: request.Tint);
+        if (host.Gpu?.Particles is not { } particles || Pose(request) is not { } pose) return null;
+        return particles.Burst(request.System, pose.At, pose.Turn, request.Seconds, recolour: request.Tint, stretch: pose.Stretch);
     }
 
     /// <summary>
@@ -55,10 +61,11 @@ sealed class ModEffectPlayer(GameHost host) : IModEffectSink
     /// </summary>
     public bool Track(object playing, in ModEffectRequest request)
     {
-        if (host.Gpu?.Particles is not { } particles || playing is not EffectUnit { Stopped: false } unit || Where(request) is not { } at)
+        if (host.Gpu?.Particles is not { } particles || playing is not EffectUnit { Stopped: false } unit || Pose(request) is not { } pose)
             return false;
 
-        particles.MoveBurst(unit, at, Quaternion.Identity);
+        particles.MoveBurst(unit, pose.At, pose.Turn);
+        unit.Stretch = pose.Stretch;
         return true;
     }
 
@@ -71,13 +78,16 @@ sealed class ModEffectPlayer(GameHost host) : IModEffectSink
     }
 
     /// <summary>
-    /// Where a request plays now: its point, its character's held blade or bone as last drawn (null: not drawn, no blade drawn, or no such bone).
+    /// Where and how a request plays now: at its point, or its character's bone as last drawn, unturned; or at its character's held blade's base,
+    /// +Y along the blade and scaled to its length (<see cref="BladeFrame"/>). Null: not drawn, no blade drawn, or no such bone.
     /// </summary>
-    Vector3? Where(in ModEffectRequest request)
+    (Vector3 At, Quaternion Turn, float Stretch)? Pose(in ModEffectRequest request)
     {
-        if (!request.Attached) return request.At;
+        if (!request.Attached) return (request.At, Quaternion.Identity, 1);
         if (host.Gpu?.Characters is not { } crowd) return null;
-        if (request.OnBlade) return crowd.BladePoint(host.DrawKey(request.On), request.Along);
-        return crowd.BonePosition(host.DrawKey(request.On), request.Bone ?? DefaultBone);
+        if (request.OnBlade)
+            return crowd.HeldBladeFrame(host.DrawKey(request.On)) is { } blade ? (blade.Base, blade.Turn, blade.Stretch) : null;
+
+        return crowd.BonePosition(host.DrawKey(request.On), request.Bone ?? DefaultBone) is { } at ? (at, Quaternion.Identity, 1) : null;
     }
 }

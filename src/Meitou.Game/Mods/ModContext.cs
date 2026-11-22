@@ -507,10 +507,11 @@ public sealed class ModContext
     /// <summary>
     /// Makes the blade of the melee weapon <paramref name="on"/> holds glow (docs/modding.md "Weapon glow"), display only: <paramref name="colour"/>
     /// rgb (1 the full channel, up to <see cref="ModWeaponGlows.MaxColour"/>), for <paramref name="seconds"/> (0 to
-    /// <see cref="ModWeaponGlows.MaxSeconds"/>), at <paramref name="strength"/> (0 to <see cref="ModWeaponGlows.MaxStrength"/>). It fades in and
-    /// out and replaces the character's glow before. <paramref name="effect"/> (an EFFECT record's string id or a particle system name, as
-    /// <see cref="PlayEffect(string, CharacterId, string?, float, System.Numerics.Vector3?)"/>'s; null: none) is emitted along the blade in the
-    /// glow's colour while it is drawn. Call it again before it ends to keep it going: the same effect and colour keep their particles. On the
+    /// <see cref="ModWeaponGlows.MaxSeconds"/>), at <paramref name="strength"/> (0 to <see cref="ModWeaponGlows.MaxStrength"/>; 0: no tint on the
+    /// blade, the particles only). It fades in and out and replaces the character's glow before. <paramref name="effect"/> (an EFFECT record's
+    /// string id or a particle system name, as <see cref="PlayEffect(string, CharacterId, string?, float, System.Numerics.Vector3?)"/>'s; null:
+    /// none) is played once at the blade's base with its local +Y along the blade, scaled so 7 units span it, while the blade is drawn, its
+    /// particles recoloured to <paramref name="colour"/> unless that is white (1, 1, 1). Call it again before it ends to keep it going: the same effect and colour keep their particles. On the
     /// host's thread, as <c>PlayEffect</c>. False when rejected (logged once per mod and problem).
     /// </summary>
     public bool GlowWeapon(CharacterId on, System.Numerics.Vector3 colour, float seconds, float strength = 1, string? effect = null) =>
@@ -520,6 +521,12 @@ public sealed class ModContext
     /// Fades out early the weapon glow this mod set on <paramref name="on"/>; false when it set none there.
     /// </summary>
     public bool StopWeaponGlow(CharacterId on) => _registry.WeaponGlows.Stop(Id, on);
+
+    /// <summary>
+    /// Whether <paramref name="effect"/> (an EFFECT record's string id or a particle system name) names a particle system the game has now, so a
+    /// mod can choose another before asking for it. False before the particles load, while they are off, or off the host's thread.
+    /// </summary>
+    public bool HasEffect(string effect) => _registry.Effects.Has(effect);
 
     /// <summary>
     /// Arranges the faction tab's relations list (docs/modding.md "Faction list"): <paramref name="arrange"/> gets the rows the tab would show,

@@ -54,11 +54,11 @@ internal sealed partial class CharacterRenderer
         !part.Shared && part.Material.GearBlood && part.Shown is not (WeaponShown.Sheathed or WeaponShown.BackSheathed or WeaponShown.RangedSheathed);
 
     /// <summary>
-    /// Where the held blade of the character <paramref name="key"/> was last drawn at <paramref name="along"/> of its length (0 the hilt end of the
-    /// mesh, 1 the tip; <see cref="BladeSpan"/>); null when it was not drawn in the world in the last update or holds no blade drawn. Render
-    /// thread, after <see cref="Update"/> (a mod's weapon glow particles, ModEffectPlayer).
+    /// Where the held blade of the character <paramref name="key"/> was last drawn (<see cref="BladeSpan.Frame"/>): its base, the turn that takes
+    /// +Y along it and its length; null when the character was not drawn in the world in the last update or holds no blade drawn. Render thread,
+    /// after <see cref="Update"/> (a mod's weapon glow particles, ModEffectPlayer).
     /// </summary>
-    public Vector3? BladePoint(long key, float along)
+    public BladeFrame? HeldBladeFrame(long key)
     {
         if (!_states.TryGetValue(key, out var s) || s.Seen != _updateStamp || !s.InWorld || s.Asset is not { IsIcon: false } asset || s.Posed < 0)
             return null;
@@ -68,23 +68,84 @@ internal sealed partial class CharacterRenderer
             if (!HeldBlade(part) || part.PickBoxes.Length == 0 || part.AttachIndex < 0 || part.AttachIndex >= s.Attach.Length) continue;
             if (!part.ShowsWith(s.WeaponDrawn, s.RangedDrawn, back: s.BackDrawn, weaponsHidden: s.WeaponsHidden)) continue;
 
-            var local = BladeSpan.Point(part.PickBoxes, part.Material.BladeAxis, part.Material.BladeLow, part.Material.BladeScale, along);
-            return Vector3.Transform(local, s.Attach[part.AttachIndex] * s.World);
+            var m = part.Material;
+            return BladeSpan.Frame(part.PickBoxes, m.BladeAxis, m.BladeLow, m.BladeScale, s.Attach[part.AttachIndex] * s.World);
         }
         return null;
     }
 }
 
 /// <summary>
-/// A weapon mesh's blade line in its own space, as the gear blood maps it (<see cref="PartMaterial.BladeAxis"/>): through the middle of its pick
-/// boxes, along the long axis from the hilt end (value <c>low</c> on the axis) over <c>1 / scale</c>.
+/// A held blade in the world: its base (the hilt end of the glowing span), the turn that takes a system's local +Y along it (towards the tip, its
+/// X across the blade's width) and its length in world units.
+/// </summary>
+internal readonly record struct BladeFrame(Vector3 Base, Quaternion Turn, float Length)
+{
+    /// <summary>
+    /// The length a blade particle system is authored to span along its +Y (docs/modding.md "Weapon glow").
+    /// </summary>
+    public const float AuthoredLength = 7;
+
+    /// <summary>
+    /// The scale that makes <see cref="AuthoredLength"/> span the blade.
+    /// </summary>
+    public float Stretch => Length / AuthoredLength;
+}
+
+/// <summary>
+/// A weapon mesh's blade in its own space, as the gear blood maps it (<see cref="PartMaterial.BladeAxis"/>): a line through the middle of its pick
+/// boxes along the long axis, from the mesh's hilt end (value <c>low</c> on the axis) over <c>1 / scale</c> to the tip; the glowing blade is the
+/// part from <see cref="Start"/> of it.
 /// </summary>
 static class BladeSpan
 {
     /// <summary>
-    /// The point at <paramref name="along"/> of the blade line (0 the hilt end, 1 the tip).
+    /// Where along the mesh the blade starts (the glow comes up from 0.25 to 0.4, CharacterShaders): the hilt and guard are below.
+    /// </summary>
+    public const float Start = 0.3f;
+
+    /// <summary>
+    /// The point at <paramref name="along"/> of the line (0 the hilt end, 1 the tip).
     /// </summary>
     public static Vector3 Point(ReadOnlySpan<PickBox> boxes, Vector3 axis, float low, float scale, float along)
+    {
+        var (min, max) = Bounds(boxes);
+        var middle = (min + max) / 2;
+        return middle + axis * (low + along / scale - Vector3.Dot(middle, axis));
+    }
+
+    /// <summary>
+    /// The blade placed by <paramref name="world"/> (the mesh's own space to the world): the base at <see cref="Start"/>, +Y towards the tip and
+    /// X along the boxes' wider cross axis (the blade's width), and the length from the base to the tip.
+    /// </summary>
+    public static BladeFrame Frame(ReadOnlySpan<PickBox> boxes, Vector3 axis, float low, float scale, Matrix4x4 world)
+    {
+        var at = Vector3.Transform(Point(boxes, axis, low, scale, Start), world);
+        var tip = Vector3.Transform(Point(boxes, axis, low, scale, 1), world);
+        var up = Vector3.Normalize(tip - at);
+        var across = Vector3.TransformNormal(Across(boxes, axis), world);
+        across = Vector3.Normalize(across - up * Vector3.Dot(across, up));
+        var forward = Vector3.Cross(across, up);
+        var turn = new Matrix4x4(across.X, across.Y, across.Z, 0, up.X, up.Y, up.Z, 0, forward.X, forward.Y, forward.Z, 0, 0, 0, 0, 1);
+        return new BladeFrame(at, Quaternion.Normalize(Quaternion.CreateFromRotationMatrix(turn)), Vector3.Distance(at, tip));
+    }
+
+    /// <summary>
+    /// The cross axis (of the mesh's two other than <paramref name="axis"/>) along which the boxes are wider.
+    /// </summary>
+    static Vector3 Across(ReadOnlySpan<PickBox> boxes, Vector3 axis)
+    {
+        var (min, max) = Bounds(boxes);
+        var size = max - min;
+        var a = MathF.Abs(axis.X) > 0.5f ? Vector3.UnitY : Vector3.UnitX;
+        var b = MathF.Abs(axis.Z) > 0.5f ? Vector3.UnitY : Vector3.UnitZ;
+        return Vector3.Dot(size, a) >= Vector3.Dot(size, b) ? a : b;
+    }
+
+    /// <summary>
+    /// The union of the boxes.
+    /// </summary>
+    static (Vector3 Min, Vector3 Max) Bounds(ReadOnlySpan<PickBox> boxes)
     {
         var min = new Vector3(float.MaxValue);
         var max = new Vector3(float.MinValue);
@@ -93,8 +154,6 @@ static class BladeSpan
             min = Vector3.Min(min, box.Min);
             max = Vector3.Max(max, box.Max);
         }
-
-        var middle = (min + max) / 2;
-        return middle + axis * (low + along / scale - Vector3.Dot(middle, axis));
+        return (min, max);
     }
 }

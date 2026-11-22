@@ -6,21 +6,16 @@ namespace Meitou.Modding;
 /// <summary>
 /// One effect a mod queued (<see cref="ModContext.PlayEffect(string, Vector3, float, Vector3?)"/>): the id it named and the particle system that
 /// resolved to, at a world point or on a character (<see cref="On"/> not <see cref="CharacterId.None"/>; then <see cref="Bone"/>, null for the
-/// chest), the particles' recolour (null: as their texture) and the seconds it emits and follows the character. A weapon glow's emitter
-/// (<see cref="ModWeaponGlows"/>) follows the character's held blade instead, at <see cref="Along"/> of its length from the hilt end.
+/// chest), the particles' recolour (null: as their texture) and the seconds it emits and follows the character. A weapon glow's effect
+/// (<see cref="ModWeaponGlows"/>, <see cref="OnBlade"/>) follows the character's held blade instead: at its base, +Y along it, scaled to it.
 /// </summary>
 internal readonly record struct ModEffectRequest(string Owner, string Effect, string System, Vector3 At, CharacterId On, string? Bone,
-    Vector3? Tint, float Seconds, float Along = float.NaN)
+    Vector3? Tint, float Seconds, bool OnBlade = false)
 {
     /// <summary>
     /// The effect follows a character rather than staying at <see cref="At"/>.
     /// </summary>
     public bool Attached => On != CharacterId.None;
-
-    /// <summary>
-    /// The effect follows the character's held blade (<see cref="Along"/>) rather than a bone.
-    /// </summary>
-    public bool OnBlade => !float.IsNaN(Along);
 }
 
 /// <summary>
@@ -133,6 +128,17 @@ internal sealed class ModEffects
     /// An effect id to its particle system, null for an unknown one; without it every id is taken as a system name.
     /// </summary>
     public Func<string, string?>? Resolve { get; set; }
+
+    /// <summary>
+    /// Whether an effect id names a particle system the loaded particles have; null until the host sets it (then none does).
+    /// </summary>
+    public Func<string, bool>? Exists { get; set; }
+
+    /// <summary>
+    /// Whether <paramref name="effect"/> plays now (<see cref="ModContext.HasEffect"/>): false off the host's thread or before the particles load.
+    /// </summary>
+    public bool Has(string? effect) =>
+        !string.IsNullOrEmpty(effect) && !(_hostThread != 0 && Environment.CurrentManagedThreadId != _hostThread) && Exists?.Invoke(effect) == true;
 
     /// <summary>
     /// Where a rejection's line goes (the game's log).

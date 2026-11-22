@@ -710,15 +710,16 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// <paramref name="seconds"/> of the frame clock, the particles <paramref name="size"/> times as big and <paramref name="lifeScale"/> times as
     /// long-lived (luckyren Mode's blood). With <paramref name="recolour"/> the particles take that colour (rgb, 0 to about 2) in place of their
     /// texture's hue (a race's <c>blood colour</c>). <paramref name="scatters"/>: the particles are dust or spray lit by the scene
-    /// (<see cref="EffectUnit.Scatters"/>). Drawn with the map's placers; an unknown system does nothing. Returns the burst's unit (null: none), for
+    /// (<see cref="EffectUnit.Scatters"/>). <paramref name="stretch"/> scales the system node (its emitters' places and shapes,
+    /// <see cref="ParticleSimulation.Stretch"/>). Drawn with the map's placers; an unknown system does nothing. Returns the burst's unit (null: none), for
     /// <see cref="MoveBurst"/>.
     /// </summary>
     public EffectUnit? Burst(string system, Vector3 position, Quaternion orientation, float seconds, float size = 1, float lifeScale = 1,
-        Vector3? recolour = null, bool scatters = false)
+        Vector3? recolour = null, bool scatters = false, float stretch = 1)
     {
         if (!Enabled) return null;
         Sync();
-        var unit = _groups.BurstGroup(system)?.Spawn(position, orientation, seconds, size, lifeScale, recolour);
+        var unit = _groups.BurstGroup(system)?.Spawn(position, orientation, seconds, size, lifeScale, recolour, stretch);
         if (unit is not null) unit.Scatters = scatters;
         return unit;
     }
