@@ -308,12 +308,13 @@ holds refuses the second mod.
   (a build order's materials) asks it between ticks on the host's thread, with the coming tick's number. One that throws is answered as allowing
   for the rest of that tick and is not asked from the next tick on; the fault enters the state hash. Without a filter nothing is asked. Engine
   API, not in the original.
-- **World ready:** a registered system implementing `IWorldReady` receives `Ready(World, bool fromSave)` once, between ticks before the
-  first: after a save has loaded (`IModSaveData.Read` done and settings of mods no longer running dropped; an import counts as a save) or a
-  new game has placed the player's characters (`fromSave` false). Systems are told in system order (mods in load order); one may change
-  the world as a serial phase does, so a mod sets its unsaved runtime settings (a held platoon, a sleeping town) back on here, also for a
-  save made without its own saved state. One that throws is logged and the others are still told; a mod's system is also stopped, with a
-  notice, as for a throw of one of its phases (Tick systems above). Engine API, not in the original.
+- **World ready:** a registered system implementing `IWorldReady` receives `Ready(World, bool fromSave)` once, between ticks before the first:
+  after a save has loaded (`IModSaveData.Read` done and settings of mods no longer running dropped; an import counts as a save) or a new game has
+  placed the player's characters (`fromSave` false), once that world is the running one, so the context's `Enqueue`, `Tick` and `PostSound` reach
+  it. Systems are told in system order (mods in load order); one may change the world as a serial phase does, so a mod sets its unsaved runtime
+  settings (a held platoon, a sleeping town) back on here, also for a save made without its own saved state. One that throws is logged and the
+  others are still told; a mod's system is also stopped, with a notice, as for a throw of one of its phases (Tick systems above). Engine API, not
+  in the original.
 - **Goods taken:** a registered system implementing `IGoodsTakenObserver` (`Meitou.Simulation.Crime`) receives
   `GoodsTaken(World, in GoodsTaken)` when one of the player's characters takes goods that are not its own by hand: a held item dragged or
   given out of an owned container or another character, a click take out of an owned container or a town machine, a right-click loot take off

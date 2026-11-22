@@ -107,7 +107,6 @@ sealed class NewGameLaunch(GameHost host)
                         world.RestoreSeed(seed);
                         world.Player.BanditsLoot = nextDifficulty.BanditsLoot;
                         spawned = built.Population!.StartPlayer(world, chosen);
-                        world.TellReady(fromSave: false);
                     });
                 }
                 catch (Exception e)
@@ -115,6 +114,8 @@ sealed class NewGameLaunch(GameHost host)
                     Console.Error.WriteLine($"new game  {e}");
                     throw new GameHost.SceneLoadFailed($"New game failed: {e.Message}");
                 }
+
+                host.Session.World.TellReady(fromSave: false);   // after the swap, as a load's (GameSaves.SwapInSave)
 
                 host.PopData = nextData;
                 host.Saves.Difficulty = nextDifficulty;

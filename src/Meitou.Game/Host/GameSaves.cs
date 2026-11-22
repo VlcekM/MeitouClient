@@ -493,7 +493,6 @@ sealed class GameSaves(GameHost host)
                 loaded = SaveLoader.Load(world, read.Result, data, loadOptions ?? new SaveLoadOptions { Appearances = data.Appearances });
                 host.Modding.RestoreModData(world, read.Result);
                 host.Modding.DropUnownedAutonomy(world);
-                world.TellReady(fromSave: true);
                 if (world.Squads.Find(world.Player.Squad) is { Members.Count: > 0 } squad)
                 {
                     world.Player.Selection.Clear();
@@ -506,6 +505,10 @@ sealed class GameSaves(GameHost host)
             Console.Error.WriteLine($"load      failed: {e}");
             throw new GameHost.SceneLoadFailed($"Load failed: {e.Message}");
         }
+
+        // After the swap, so a mod's Ready that queues a command or reads the tick reaches this world, not the one it replaced.
+        host.Session.World.TellReady(fromSave: true);
+
         host.PopData = nextData;
         Difficulty = nextDifficulty;
         // The New game window then shows the loaded save's options (the original loads them into its globals).
