@@ -320,10 +320,26 @@ sealed class GameMods(GameHost host)
             action.Held = playing && actions.Held(action.Action);
             if (!playing || !actions.Pressed(action.Action)) continue;
 
-            context ??= new Game.Host.Input.ModKeyContext(host.Session.CurrentSnapshot, host.Player.SelectedIds(), host.Session.World.Tick,
-                host.Session.World.Commands.Enqueue);
+            context ??= KeyContext();
             action.Press(context);
         }
+    }
+
+    /// <summary>
+    /// A key action press's context: the snapshot on screen, the selection, the tick, the command queue and the modifiers held now.
+    /// </summary>
+    Game.Host.Input.ModKeyContext KeyContext()
+    {
+        var input = host.Session.Input;
+        bool Held(Game.Host.Input.Key left, Game.Host.Input.Key right) => input.IsHeld(left) || input.IsHeld(right);
+
+        return new Game.Host.Input.ModKeyContext(host.Session.CurrentSnapshot, host.Player.SelectedIds(), host.Session.World.Tick,
+            host.Session.World.Commands.Enqueue)
+        {
+            Ctrl = Held(Game.Host.Input.Key.LeftControl, Game.Host.Input.Key.RightControl),
+            Shift = Held(Game.Host.Input.Key.LeftShift, Game.Host.Input.Key.RightShift),
+            Alt = Held(Game.Host.Input.Key.LeftAlt, Game.Host.Input.Key.RightAlt),
+        };
     }
 
     /// <summary>
