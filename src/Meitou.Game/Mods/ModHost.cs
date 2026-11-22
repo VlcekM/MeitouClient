@@ -182,6 +182,11 @@ public sealed class ModHost
     internal ModEffects Effects => _registry.Effects;
 
     /// <summary>
+    /// The mods' display-only glows (docs/modding.md "Glow"), handed to the renderer by the host once a frame.
+    /// </summary>
+    internal ModGlows Glows => _registry.Glows;
+
+    /// <summary>
     /// Whether a mod arranges the faction tab's list.
     /// </summary>
     public bool ArrangesFactionList => _registry.FactionLists.Count > 0;
@@ -656,6 +661,7 @@ public sealed class ModHost
         {
             if (context.HasHarmony) context.Harmony.UnpatchAll(context.Id);
             _registry.Effects.Drop(context.Id);
+            _registry.Glows.Drop(context.Id);
             TellDependenciesItFailed(mod);
             throw;
         }

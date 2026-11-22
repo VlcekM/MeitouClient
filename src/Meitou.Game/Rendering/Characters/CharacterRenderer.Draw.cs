@@ -688,7 +688,8 @@ internal sealed unsafe partial class CharacterRenderer
             uint gearFlags = 0;
             var instance = new CharInstance
             {
-                Model = part.IsBody ? WithBlood(model, l.Blood) : GearModel(part, in l, model, ref gearFlags),
+                Model = GlowModel(part, in l, part.IsBody ? WithBlood(model, l.Blood) : GearModel(part, in l, model, ref gearFlags),
+                    ref gearFlags),
                 BoneBase = (uint)l.BoneBase,
                 Material = (uint)part.Material.Slot,
                 Flags = (interior ? 1u : 0u) | l.Soak | HiddenFlags(part, l.Asset) | gearFlags,
@@ -971,7 +972,8 @@ internal sealed unsafe partial class CharacterRenderer
         uint gearFlags = 0;
         var instance = new CharInstance
         {
-            Model = part.IsBody ? WithBlood(f.Model, l.Blood) : GearModel(part, in l, f.Model, ref gearFlags),
+            Model = GlowModel(part, in l, part.IsBody ? WithBlood(f.Model, l.Blood) : GearModel(part, in l, f.Model, ref gearFlags),
+                ref gearFlags),
             BoneBase = (uint)l.BoneBase,
             Material = (uint)part.Material.Slot,
             Flags = (l.Interior ? 1u : 0u) | l.Soak | HiddenFlags(part, l.Asset) | gearFlags,

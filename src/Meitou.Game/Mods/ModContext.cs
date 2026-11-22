@@ -487,22 +487,68 @@ public sealed class ModContext
     }
 
     /// <summary>
-    /// Plays a display-only effect at a world point (docs/modding.md "Visual effects"): <paramref name="effect"/> is an EFFECT record's string id
-    /// or a particle system name, <paramref name="seconds"/> how long it emits (0 to <see cref="ModEffects.MaxSeconds"/>), <paramref name="tint"/>
-    /// the particles' colour (rgb, 1 the full channel, up to <see cref="ModEffects.MaxTint"/>; null: their texture's). On the host's thread, from a
-    /// host-side callback such as a combat hit feed, never a tick system; queued and started at the next frame. False when rejected (logged once
-    /// per mod and problem).
+    /// Plays a display-only effect on <paramref name="anchor"/> (docs/modding.md "Visual effects"): a world point, a character's bone or held
+    /// weapon, or a building, the system's origin at the anchor, its axes turned to the anchor's frame and its emitters scaled by its stretch,
+    /// following it while it emits; while the anchor cannot be located (not drawn, weapon sheathed, building gone) it pauses, until its lifetime
+    /// ends. <paramref name="effect"/> is an EFFECT record's string id or a particle system name, <paramref name="seconds"/> how long it emits (0
+    /// to <see cref="ModEffects.MaxSeconds"/>), <paramref name="tint"/> the particles' colour (rgb, 1 the full channel, up to
+    /// <see cref="ModEffects.MaxTint"/>; null: their texture's). Each call plays a new one (<see cref="KeepEffect"/> renews one). On the host's
+    /// thread, from a host-side callback such as a combat hit feed, never a tick system; started at the next frame. False when rejected (logged
+    /// once per mod and problem).
     /// </summary>
-    public bool PlayEffect(string effect, System.Numerics.Vector3 at, float seconds = 1, System.Numerics.Vector3? tint = null) =>
-        _registry.Effects.Play(Id, effect, at, false, CharacterId.None, null, tint, seconds);
+    public bool PlayEffect(string effect, EffectAnchor anchor, float seconds = 1, System.Numerics.Vector3? tint = null) =>
+        _registry.Effects.Play(Id, effect, anchor, tint, seconds);
 
     /// <summary>
-    /// Plays a display-only effect on a character, following its <paramref name="bone"/> (null: the chest, <c>Bip01 Spine2</c>) while it emits;
-    /// nothing while the character is not drawn. Otherwise as <see cref="PlayEffect(string, System.Numerics.Vector3, float,
-    /// System.Numerics.Vector3?)"/>.
+    /// Plays a display-only effect at a world point: <see cref="PlayEffect(string, EffectAnchor, float, System.Numerics.Vector3?)"/> on
+    /// <see cref="EffectAnchor.At"/>.
+    /// </summary>
+    public bool PlayEffect(string effect, System.Numerics.Vector3 at, float seconds = 1, System.Numerics.Vector3? tint = null) =>
+        PlayEffect(effect, EffectAnchor.At(at), seconds, tint);
+
+    /// <summary>
+    /// Plays a display-only effect on a character's <paramref name="bone"/> (null: the chest, <c>Bip01 Spine2</c>):
+    /// <see cref="PlayEffect(string, EffectAnchor, float, System.Numerics.Vector3?)"/> on <see cref="EffectAnchor.Bone"/>.
     /// </summary>
     public bool PlayEffect(string effect, CharacterId on, string? bone = null, float seconds = 1, System.Numerics.Vector3? tint = null) =>
-        _registry.Effects.Play(Id, effect, default, true, on, bone, tint, seconds);
+        PlayEffect(effect, EffectAnchor.Bone(on, bone ?? EffectAnchor.ChestBone), seconds, tint);
+
+    /// <summary>
+    /// Plays <paramref name="effect"/> on <paramref name="anchor"/> as <see cref="PlayEffect(string, EffectAnchor, float,
+    /// System.Numerics.Vector3?)"/>, but as this mod's one for that effect and anchor: called again before it ends it is renewed to
+    /// <paramref name="seconds"/> from then rather than restarted (another tint restarts it), so a mod keeps an aura up by calling it within
+    /// <see cref="ModEffects.MaxSeconds"/>.
+    /// </summary>
+    public bool KeepEffect(string effect, EffectAnchor anchor, float seconds, System.Numerics.Vector3? tint = null) =>
+        _registry.Effects.Keep(Id, effect, anchor, tint, seconds);
+
+    /// <summary>
+    /// Ends this mod's kept <paramref name="effect"/> on <paramref name="anchor"/> (<see cref="KeepEffect"/>); its particles live out. False when
+    /// it keeps none there.
+    /// </summary>
+    public bool StopEffect(string effect, EffectAnchor anchor) => _registry.Effects.Stop(Id, effect, anchor);
+
+    /// <summary>
+    /// Makes <paramref name="target"/> give off light of its own (docs/modding.md "Glow"), display only: a whole character, the blade it holds
+    /// drawn, or its parts in one slot. <paramref name="colour"/> is rgb (1 the full channel, up to <see cref="ModGlows.MaxColour"/>),
+    /// <paramref name="seconds"/> its lifetime (0 to <see cref="ModGlows.MaxSeconds"/>, on the game clock), <paramref name="strength"/> 0 to
+    /// <see cref="ModGlows.MaxStrength"/>. One glow a target: it replaces the one before, fading from where that stood, so calling it again
+    /// before it ends keeps it up with no restart. Particles are separate (<see cref="KeepEffect"/>). On the host's thread, as
+    /// <see cref="PlayEffect(string, EffectAnchor, float, System.Numerics.Vector3?)"/>. False when rejected (logged once per mod and problem).
+    /// </summary>
+    public bool Glow(GlowTarget target, System.Numerics.Vector3 colour, float seconds, float strength = 1) =>
+        _registry.Glows.Start(Id, target, colour, seconds, strength);
+
+    /// <summary>
+    /// Fades out early the glow this mod set on <paramref name="target"/>; false when it set none there.
+    /// </summary>
+    public bool StopGlow(GlowTarget target) => _registry.Glows.Stop(Id, target);
+
+    /// <summary>
+    /// Whether <paramref name="effect"/> (an EFFECT record's string id or a particle system name) names a particle system the game has now, so a
+    /// mod can choose another before asking for it. False before the particles load, while they are off, or off the host's thread.
+    /// </summary>
+    public bool HasEffect(string effect) => _registry.Effects.Has(effect);
 
     /// <summary>
     /// Arranges the faction tab's relations list (docs/modding.md "Faction list"): <paramref name="arrange"/> gets the rows the tab would show,

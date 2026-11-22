@@ -246,6 +246,10 @@ sealed class ModRegistry
     /// </summary>
     public ModEffects Effects { get; } = new();
     /// <summary>
+    /// The mods' display-only glows (<see cref="ModContext.Glow"/>).
+    /// </summary>
+    public ModGlows Glows { get; } = new();
+    /// <summary>
     /// The record types' names by type number.
     /// </summary>
     public Dictionary<int, string> RecordTypes { get; } = [];

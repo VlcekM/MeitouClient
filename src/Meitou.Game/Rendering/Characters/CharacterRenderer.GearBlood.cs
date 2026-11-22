@@ -385,7 +385,8 @@ internal sealed partial class CharacterRenderer
 
     /// <summary>
     /// The matrix an instance of <paramref name="part"/> is drawn with and its extra flags: a worn item that takes blood gets the body's amounts in
-    /// the matrix's w (as the body does), a weapon's blade its colour and amounts.
+    /// the matrix's w (as the body does), a weapon's blade its colour and amounts (in the low 16 bits of the w of rows 0 to 2: a glow takes
+    /// the high byte).
     /// </summary>
     static Matrix4x4 GearModel(AssetPart part, in Live l, Matrix4x4 model, ref uint flags)
     {
@@ -396,8 +397,10 @@ internal sealed partial class CharacterRenderer
         if (l.GearAmounts == 0 || part.Shown != WeaponShown.Always && back != l.GearBack) return model;
 
         flags |= CharacterShaders.WeaponBlood;
-        model.M14 = l.GearColour;
+        uint colour = (uint)l.GearColour;
+        model.M14 = colour & 0xFFFF;
         model.M24 = l.GearAmounts;
+        model.M34 = colour >> 16;
         return model;
     }
 }

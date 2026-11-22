@@ -97,6 +97,14 @@ public sealed class EffectUnit
     /// </summary>
     public float LifeScale { get; set; } = 1;
     /// <summary>
+    /// The node's scale (<see cref="ParticleSimulation.Stretch"/>).
+    /// </summary>
+    public float Stretch { get; set; } = 1;
+    /// <summary>
+    /// The node keeps its particles in its frame (<see cref="ParticleSimulation.KeepLocal"/>).
+    /// </summary>
+    public bool KeepLocal { get; set; }
+    /// <summary>
     /// The node's bounding sphere for culling (<see cref="float.PositiveInfinity"/>: always drawn).
     /// </summary>
     public float Radius { get; set; }
@@ -215,6 +223,8 @@ public sealed class EffectUnit
             Orientation = Orientation,
             Size = Size,
             LifeScale = LifeScale,
+            Stretch = Stretch,
+            KeepLocal = KeepLocal,
         };
         Anchor = Position;
     }
@@ -249,6 +259,7 @@ public sealed class EffectUnit
         sim.WorldOffset = Anchor;
         sim.Origin = local;
         sim.Orientation = Orientation;   // a steered burst turns with what it follows (ParticleRenderer.MoveBurst)
+        sim.Stretch = Stretch;
         sim.EmissionStopped = Stopped;
         float left = Pending;
         Pending = 0;

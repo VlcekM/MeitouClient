@@ -80,6 +80,18 @@ internal sealed partial class CharacterRenderer
     }
 
     /// <summary>
+    /// The frame of the character <paramref name="key"/>'s <paramref name="bone"/> as last drawn in the world, moved by <paramref name="offset"/> and
+    /// turned by <paramref name="turn"/> in the bone's frame (<see cref="BoneAnchor"/>; a code mod's effect, docs/modding.md "Visual effects"); null
+    /// when it was not drawn in the world in the last update or has no such bone. Render thread, after <see cref="Update"/>.
+    /// </summary>
+    public (Vector3 At, Quaternion Turn)? BoneFrame(long key, string bone, Vector3 offset, Quaternion turn)
+    {
+        if (!_states.TryGetValue(key, out var s) || s.Seen != _updateStamp || !s.InWorld || s.Asset is not { IsIcon: false } asset || s.Posed < 0)
+            return null;
+        return BoneAnchor.Node(asset.Rig, s.Bones, s.World, bone, offset, turn);
+    }
+
+    /// <summary>
     /// How the character <paramref name="key"/> was last drawn in the world: its placement, the look and where its <paramref name="bone"/> was; null
     /// when it was not drawn in the world in the last update. Render thread, between updates (a cut-off head starts from it,
     /// <see cref="CharacterInstance.FreezeFrom"/>).
