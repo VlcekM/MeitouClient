@@ -231,6 +231,16 @@ holds refuses the second mod.
   combat, and must answer from the world and the hit alone. The one-punch debug cheat ignores the packet but keeps a cancel. Hits on doors
   and walls are not filtered. A filter that throws or breaks the packet's rule is undone for that hit, logged and disabled for that world;
   faulted registrations enter the state hash. Without a filter no payload is made.
+- **Combat speed:** a registered system implementing `ICombatSpeedFilter` (`Meitou.Simulation.Combat`) is asked `Rate(World, in
+  CombatSpeedAsk)` for every attack and block play rate the game computes (`CombatSystem` rate: a swing's or a block's start, the chase
+  lead, the HUD's figures): the tick, the character, `Kind` (`Attack` or `Block`; dodges play at 1 and are not asked) and the rate after the
+  game's caps (1.2 attack, 4 block). It answers the rate to use, which may pass the caps. Filters run in system order, each seeing the rate the
+  earlier ones left, on any thread and concurrently (the combat act phase is parallel), so a filter must be quick, thread-safe and a pure read
+  of the ask and of world state the tick has settled. A throw or an answer that is not a finite number above 0 leaves the rate as it came; the
+  filter is still asked for the rest of that tick and not from the next, and the fault (its first tick) enters the state hash. Without a filter
+  nothing is asked. Engine API, not in the original. **Verified** by `CombatSpeedFilterTests` (a duel: attack and block rates asked, an unchanged
+  answer leaves log and hash as they were on 1 and 4 threads, a doubled attack rate halves the swing; a NaN answer is asked in one tick only and
+  hashed).
 - **Trade prices:** a registered system implementing `ITradePriceFilter` (`Meitou.Simulation.Trading`) is asked
   `Price(World, in TradeDeal, long price)` for every price the game asks: the trade window's stack and unit prices and the coins it takes,
   and an NPC shopper's purchase from a building's stock. The deal names the tick, the item record, the units, whether the customer sells,
