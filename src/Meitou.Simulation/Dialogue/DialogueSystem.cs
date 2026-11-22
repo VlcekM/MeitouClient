@@ -630,7 +630,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     /// </summary>
     public bool Trades(World world, int slot) =>
         world.Characters.Cold(slot) is { IsPlayer: false, IsImprisoned: false, SquadId: >= 0 } cold && world.Squads.Find(cold.SquadId) is { } squad
-        && (squad.Shop is not null || squad.HomeBuilding is null && _data.Db.Find(squad.TemplateId)?.GetReferences("vendors").Count > 0)
+        && (squad.Shop is not null || squad.HomeBuilding is null && _data.Db.Find(squad.TemplateId)?.ReferenceCount("vendors") > 0)
         && (_data.Db.Find(cold.RecordId)?.GetBool("is trader") == true || SetOf(world, slot).Trades);
 
     /// <inheritdoc/>

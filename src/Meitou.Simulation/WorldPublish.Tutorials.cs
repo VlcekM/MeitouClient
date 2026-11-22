@@ -25,42 +25,81 @@ public sealed partial class World
     const int BlueprintFunction = 11;
 
     /// <summary>
-    /// What the tutorial triggers read this tick (<see cref="TutorialFacts"/>).
+    /// What the tutorial triggers read this tick (<see cref="TutorialFacts"/>). A fact already found is not looked for again, and the walk ends once
+    /// every one is found.
     /// </summary>
     TutorialFacts PublishTutorialFacts(PopulationData? population)
     {
-        bool town = false, stolen = false, uniform = false, blueprint = false, prison = false, cannibal = false;
+        var facts = new TutorialFacts();
         var table = Characters;
 
-        for (int i = 0; i < table.HighWater; i++)
+        for (int i = 0; i < table.HighWater && !AllFound(facts); i++)
         {
             if (!table.Next[i].Alive || table.Cold(i) is not { IsPlayer: true } c) continue;
-            if (!town && population is not null && TownSiteAt(population, table.Next[i].Position) is { Town.Type: TownType.Outpost or TownType.Town })
-                town = true;
+            if (!facts.InTown && population is not null && InTown(population, table.Next[i].Position))
+                facts = facts with { InTown = true };
 
-            if (c.Inventory is { } inv)
-            {
-                if (inv.Backpack is not null) blueprint = true;
-
-                foreach (var item in inv.All())
-                {
-                    stolen |= item.IsStolenFor(c.Faction, population);
-                    uniform |= item.Uniform.Length > 0;
-                    blueprint |= item.ItemFunction == BlueprintFunction;
-                }
-            }
-
+            if (c.Inventory is { } inv) facts = ItemFacts(facts, c, inv, population);
             if (c.InSomething == Locks.HeldState.Imprisoned && c.InWhat is { } held)
-            {
-                int owner = Fixtures.Find(held)?.Owner ?? -1;
-                if (population is not null && (uint)owner < (uint)population.Factions.Count && population.Factions[owner].Id == CannibalFaction)
-                    cannibal = true;
-                else prison = true;
-            }
+                facts = PrisonFacts(facts, held, population);
         }
 
-        return new(town, stolen, uniform, blueprint, prison, cannibal);
+        return facts;
     }
+
+    /// <summary>
+    /// Whether every one of the <paramref name="facts"/> is found.
+    /// </summary>
+    static bool AllFound(TutorialFacts facts) =>
+        facts is { InTown: true, Stolen: true, Uniform: true, Blueprint: true, InPrison: true, InCannibalCage: true };
+
+    /// <summary>
+    /// <paramref name="facts"/> with what player character <paramref name="c"/>'s <paramref name="inv"/> adds: stolen goods, a uniform, a blueprint
+    /// (or any backpack).
+    /// </summary>
+    static TutorialFacts ItemFacts(TutorialFacts facts, CharacterCold c, Items.Inventory inv, PopulationData? population)
+    {
+        if (inv.Backpack is not null) facts = facts with { Blueprint = true };
+        if (facts is { Stolen: true, Uniform: true, Blueprint: true }) return facts;
+
+        var (stolen, uniform, blueprint) = (facts.Stolen, facts.Uniform, facts.Blueprint);
+        ScanItems(inv, c.Faction, population, ref stolen, ref uniform, ref blueprint);
+        return facts with { Stolen = stolen, Uniform = uniform, Blueprint = blueprint };
+    }
+
+    /// <summary>
+    /// Sets the item facts the items of <paramref name="inv"/> and of the bags among them show (<see cref="Items.Inventory.All"/>'s items, walked
+    /// without an iterator); stops once all three are set.
+    /// </summary>
+    static void ScanItems(Items.Inventory inv, int faction, PopulationData? population, ref bool stolen, ref bool uniform, ref bool blueprint)
+    {
+        foreach (var item in inv.Items)
+        {
+            if (stolen && uniform && blueprint) return;
+
+            stolen = stolen || item.IsStolenFor(faction, population);
+            uniform = uniform || item.Uniform.Length > 0;
+            blueprint = blueprint || item.ItemFunction == BlueprintFunction;
+            if (item.Contents is { } bag) ScanItems(bag, faction, population, ref stolen, ref uniform, ref blueprint);
+        }
+    }
+
+    /// <summary>
+    /// <paramref name="facts"/> with an imprisoned player character held by fixture <paramref name="held"/>: in the Cannibals' cage, else in
+    /// another faction's prison.
+    /// </summary>
+    TutorialFacts PrisonFacts(TutorialFacts facts, string held, PopulationData? population)
+    {
+        int owner = Fixtures.Find(held)?.Owner ?? -1;
+        bool cannibal = population is not null && (uint)owner < (uint)population.Factions.Count && population.Factions[owner].Id == CannibalFaction;
+        return cannibal ? facts with { InCannibalCage = true } : facts with { InPrison = true };
+    }
+
+    /// <summary>
+    /// Whether <paramref name="p"/> lies in an outpost or a town (<see cref="TownSiteAt"/>).
+    /// </summary>
+    static bool InTown(PopulationData population, System.Numerics.Vector3 p) =>
+        TownSiteAt(population, p) is { Town.Type: TownType.Outpost or TownType.Town };
 
     /// <summary>
     /// The town whose radius holds <paramref name="p"/>, the nearest such (the character's current town).

@@ -48,6 +48,10 @@ public sealed partial class ProductionSystem
     /// </summary>
     readonly Dictionary<int, TownPower> _townPower = [];
     /// <summary>
+    /// The outposts the town panel was last given, handed out again while unchanged (<see cref="OutpostView"/>).
+    /// </summary>
+    readonly OutpostViews _outposts = new();
+    /// <summary>
     /// The generation of each town of the level data (negative grid keys) that holds a player machine this tick: what its placed generators give
     /// (<see cref="NpcGeneration"/>). A scratch map.
     /// </summary>
@@ -123,11 +127,9 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The player outposts with their grids' totals, for the town panel (docs/game/ui-screens.md "Town panel").
+    /// The player outposts with their grids' totals, for the town panel (docs/game/ui-screens.md "Town panel"); the same list while unchanged.
     /// </summary>
-    public IReadOnlyList<OutpostSnapshot> OutpostView(World world) => world.Buildings.Towns.Count == 0 ? []
-        : [.. world.Buildings.Towns.Select(t => new OutpostSnapshot(t.Number, t.Name, t.Position, t.Radius, t.Owner, t.Public,
-            _townPower.GetValueOrDefault(t.Number)))];
+    public IReadOnlyList<OutpostSnapshot> OutpostView(World world) => _outposts.Of(world.Buildings.Towns, _townPower);
 
     /// <summary>
     /// The towns' round-robin cursor of the power frame (the static <c>DAT_14213543c</c>, advanced before each use); not saved.

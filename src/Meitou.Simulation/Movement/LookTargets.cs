@@ -50,10 +50,12 @@ public static class LookTargets
 
     /// <summary>
     /// <c>Task_InvestigateAlarms</c> (<c>FUN_140354260</c>, <b>Verified</b>): an investigator within <see cref="Crime.CrimeSystem.AlarmLookRange"/>
-    /// of its alarm looks at it (the same alarm <see cref="Crime.CrimeSystem"/>'s serial step answers).
+    /// of its alarm looks at it (the same alarm <see cref="Crime.CrimeSystem"/>'s serial step answers). No alarm: nobody has one to look at.
     /// </summary>
     static void Investigators(World world, Crime.CrimeSystem crime, Dictionary<int, Vector3> into)
     {
+        if (crime.Alarms.Count == 0) return;
+
         var table = world.Characters;
         var state = table.Previous;
         for (int i = 0; i < state.Length; i++)

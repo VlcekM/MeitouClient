@@ -158,6 +158,11 @@ public sealed class GameRecord
         _references.TryGetValue(list, out var refs) ? refs.Select(kv => new GameReference(kv.Key, kv.Value)).ToList() : [];
 
     /// <summary>
+    /// The number of entries of reference list <paramref name="list"/> (<see cref="GetReferences"/>' count, without building the list).
+    /// </summary>
+    public int ReferenceCount(string list) => _references.TryGetValue(list, out var refs) ? refs.Count : 0;
+
+    /// <summary>
     /// The placed instances by id, in the order first set; a cleared one has an empty target.
     /// </summary>
     public IReadOnlyDictionary<string, GameInstance> Instances => _instances;

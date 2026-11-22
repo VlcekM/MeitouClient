@@ -110,24 +110,52 @@ sealed class BuildingSync(GameHost host)
     /// The outposts the foliage placer was last given.
     /// </summary>
     IReadOnlyList<Simulation.Production.OutpostSnapshot>? _foliageOutposts;
+    /// <summary>
+    /// The navmesh, database (and its version, which the outposts' range is read from) and player faction <see cref="_foliageOutposts"/> were given
+    /// with: a change of any gives the towns again.
+    /// </summary>
+    (Simulation.Navigation.NavSystem? Nav, Meitou.Data.GameDatabase? Db, int DbVersion, int Faction) _foliageKey;
 
     /// <summary>
     /// Gives the navmesh the player's outposts (centre, the template's <c>no-foliage range</c>, owned by the player's faction or not) as towns that
     /// keep <c>avoid towns</c> foliage away, and the foliage renderer the same list. Before the sites are diffed, so a building added in the same
-    /// snapshot is built with them.
+    /// snapshot is built with them. A new list whose towns are the same (only a grid's power moved) is not given again.
     /// </summary>
     void UpdateFoliageTowns(WorldSnapshot snapshot)
     {
         if (host.Nav is null || host.Scene.Database is not { } db) return;
 
         host.ActiveFoliage?.SetPlayerTowns(host.Nav.Runtime.FoliageTowns);
-        if (ReferenceEquals(snapshot.Outposts, _foliageOutposts)) return;
-
-        _foliageOutposts = snapshot.Outposts;
-        float range = FoliageWorld.OutpostRange(db);
         int player = host.Session.World.Player.Faction;
+        var key = (host.Nav, db, db.Version, player);
+        bool sameKey = key == _foliageKey;
+        if (sameKey && ReferenceEquals(snapshot.Outposts, _foliageOutposts)) return;
+
+        bool sameTowns = sameKey && _foliageOutposts is { } before && SameFoliageTowns(before, snapshot.Outposts, player);
+        (_foliageOutposts, _foliageKey) = (snapshot.Outposts, key);
+        if (sameTowns) return;
+
+        float range = FoliageWorld.OutpostRange(db);
         host.Nav.SetPlayerTowns([.. snapshot.Outposts.Select(o => new FoliageTown(new Vector2(o.Position.X, o.Position.Z), range, o.Owner == player))]);
         host.ActiveFoliage?.SetPlayerTowns(host.Nav.Runtime.FoliageTowns);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="before"/> and <paramref name="now"/> give the same foliage towns: the same centres on the ground and the same
+    /// ownership by <paramref name="player"/>, in order.
+    /// </summary>
+    static bool SameFoliageTowns(IReadOnlyList<Simulation.Production.OutpostSnapshot> before,
+        IReadOnlyList<Simulation.Production.OutpostSnapshot> now, int player)
+    {
+        if (before.Count != now.Count) return false;
+
+        for (int k = 0; k < now.Count; k++)
+        {
+            var (a, b) = (before[k], now[k]);
+            if (a.Position.X != b.Position.X || a.Position.Z != b.Position.Z || (a.Owner == player) != (b.Owner == player)) return false;
+        }
+
+        return true;
     }
 
     /// <summary>

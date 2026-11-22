@@ -167,13 +167,14 @@ public sealed partial class World
 
         var pointed = _publishedPointed = Player.Pointed;
         bool allGrids = _publishedAllGrids = Player.AllSelectedGrids;
-        var aggro = koSlot >= 0 ? _systems.OfType<AggroSystem>().FirstOrDefault() : null;
-        var talk = _systems.OfType<Dialogue.DialogueSystem>().FirstOrDefault();
-        var combat = _systems.OfType<Combat.CombatSystem>().FirstOrDefault();
-        var beds = _systems.OfType<Locks.BedSystem>().FirstOrDefault();
-        var bodyConstants = _systems.OfType<BodySystem>().FirstOrDefault()?.Constants;
-        var population = _systems.OfType<PopulationSystem>().FirstOrDefault()?.Data;
-        float extraBloodLoss = _systems.OfType<BodySystem>().FirstOrDefault()?.Constants.ExtraBloodLossFromBodyparts ?? 1;
+        var aggro = koSlot >= 0 ? SystemOf<AggroSystem>() : null;
+        var talk = SystemOf<Dialogue.DialogueSystem>();
+        var combat = SystemOf<Combat.CombatSystem>();
+        var beds = SystemOf<Locks.BedSystem>();
+        var bodies = SystemOf<BodySystem>();
+        var bodyConstants = bodies?.Constants;
+        var population = SystemOf<PopulationSystem>()?.Data;
+        float extraBloodLoss = bodies?.Constants.ExtraBloodLossFromBodyparts ?? 1;
         var buffer = Array.Find(_snapshotRing, b => b != _shownBuffer && b != _previousBuffer && b != _olderBuffer)!;
 
         if (buffer.Slots.Length < state.Length)
@@ -521,9 +522,8 @@ public sealed partial class World
             ? new SkillSummary(sk[StatsEnumerated.MeleeAttack], sk[StatsEnumerated.MeleeDefence], sk[StatsEnumerated.Dodge], sk.Toughness,
                 sk.Strength, sk.Athletics)
             : null;
-        s.Inventory = selected && cold!.Inventory is { } carried ? Items.InventoryText.Lines(carried) : [];
         s.AllSkills = detailed && cold!.Stats is { } allStats ? Array.AsReadOnly(allStats.ToEffectiveArray()) : [];
-        s.SkillXpMultipliers = detailed && cold!.Race is { } skillRace ? Array.AsReadOnly((float[])skillRace.StatMultipliers.Clone()) : [];
+        s.SkillXpMultipliers = detailed && cold!.Race is { } skillRace ? skillRace.StatMultiplierList : [];
         s.Hud = detailed && cold!.Medical is { } hudMed && cold.Race is { } hudRace && cold.Stats is { } hudStats
             ? HudOf(id, cold, hudMed, hudRace, hudStats, state[i], combat, bodyConstants, !Sight.Outdoors(i), Sight.Inside(i), population?.Db)
             : null;
@@ -549,7 +549,7 @@ public sealed partial class World
         s.Slave = cold is { SlaveState: >= 1 and <= 3 }
             ? new SlaveView(cold.SlaveState,
                 population is { Factions: { } factions } && (uint)cold.SlaveOwner < (uint)factions.Count ? factions[cold.SlaveOwner].Name : "",
-                _systems.OfType<Kidnap.CaptiveSystem>().FirstOrDefault()?.LooksLikeSlaveLevel(cold) ?? 0)
+                SystemOf<Kidnap.CaptiveSystem>()?.LooksLikeSlaveLevel(cold) ?? 0)
             : null;
         s.Disguise = detailed && cold!.Faction == Player.Faction && (cold.DisguiseLevel > 0 || cold.RecentlyWanted > 0)
             ? DisguiseOf(cold, state[i].Position, population)
@@ -689,9 +689,9 @@ public sealed partial class World
         s.InPlayerBuilding = cold is { IsPlayer: false } && cold.Faction != Player.Faction
             && (cold.Medical is { Unconscious: true } || Carrying.CarrySystem.Asleep(table, i))
             && _production?.InPlayerBuilding(this, state[i].Position) == true;
-        s.BedRecoveryRate = detailed && cold is { InSomething: Locks.HeldState.Bed } ? _systems
-            .OfType<BodySystem>()
-            .FirstOrDefault()?.BedRecoveryRate(this, cold, in state[i]) : null;
+        s.BedRecoveryRate = detailed && cold is { InSomething: Locks.HeldState.Bed }
+            ? SystemOf<BodySystem>()?.BedRecoveryRate(this, cold, in state[i])
+            : null;
         s.Stealth = sneaking ? watchers.Length == 0 ? StealthExposure.Unobserved : watchers.Max(w => w.Level) : null;
         s.Light = sneaking ? Sight.PeekLight(i) : 1;
         s.Watchers = watchers;
@@ -789,7 +789,7 @@ public sealed partial class World
         bool Marked(int k) => marks is not null && marks[k] > 0;
 
         string name = data is { Factions: { } factions } && (uint)c.DisguiseFaction < (uint)factions.Count ? factions[c.DisguiseFaction].Name : "";
-        bool secure = _systems.OfType<Crime.ArrestSystem>().FirstOrDefault()?.SecureLocation(this, at) ?? false;
+        bool secure = SystemOf<Crime.ArrestSystem>()?.SecureLocation(this, at) ?? false;
         return new DisguiseView(c.DisguiseLevel, name, c.RecentlyWanted, Crime.ArrestSystem.SeenFaction(c) != c.Faction, secure,
             Marked(Crime.ArrestSystem.SameFactionMark), Marked(Crime.ArrestSystem.SlaveOwnerMark), Marked(Crime.ArrestSystem.KnowsMeMark));
     }
@@ -805,7 +805,7 @@ public sealed partial class World
         if (c.SquadId >= 0 && Squads.Find(c.SquadId) is { PlatoonId: >= 0 } squad && squad.Leader == id
             && Platoons.Find(squad.PlatoonId) is { Campaign: { } inst } platoon && inst.Leader == platoon.Id)
         {
-            return new(_systems.OfType<PopulationSystem>().FirstOrDefault()?.CampaignOf(inst.CampaignId)?.IsHostile == true
+            return new(SystemOf<PopulationSystem>()?.CampaignOf(inst.CampaignId)?.IsHostile == true
                 ? StatusKind.WarLeader
                 : StatusKind.Leader);
         }
@@ -1057,7 +1057,7 @@ public sealed partial class World
         var hc = combat?.HudNumbers(this, id.Slot, cold);
         var lines = HudTips.Lines(cold, med, stats, hc, constants, inBuilding, inside, mode);
         bool combatMode = combat is not null && CharacterFacts.InCombatMode(combat, Characters, id, cold, true, true);
-        var extended = cold.Extended is { } x0 && _systems.OfType<BodySystem>().FirstOrDefault() is { } bodies
+        var extended = cold.Extended is { } x0 && SystemOf<BodySystem>() is { } bodies
             ? bodies.WithCombatMode(x0, cold, combatMode)
             : cold.Extended;
         bool stealthMode = (cold.Orders & CharacterOrders.Sneak) != 0 && !combatMode;

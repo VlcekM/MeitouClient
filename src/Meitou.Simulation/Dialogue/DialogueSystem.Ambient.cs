@@ -39,6 +39,15 @@ public sealed partial class DialogueSystem
     readonly SortedDictionary<CharacterId, (string Text, long Until, bool Large, bool Interrupting, int Event)> _shown =
         new(Comparer<CharacterId>.Create(CompareIds));
     /// <summary>
+    /// The speech bubbles <see cref="PublishSpeech"/> last handed out, given again while <see cref="_shown"/> is unchanged; never changed once
+    /// published (the host reads them on its own thread).
+    /// </summary>
+    IReadOnlyList<SpeechBubble> _publishedSpeech = [];
+    /// <summary>
+    /// Whether <see cref="_shown"/> changed since <see cref="_publishedSpeech"/> was made.
+    /// </summary>
+    bool _speechChanged;
+    /// <summary>
     /// The per-event cooldowns (the original's Dialogue <c>+0xd0</c>): the tick until which a character's event is refused, kept only while it runs.
     /// Hashed.
     /// </summary>
@@ -73,10 +82,17 @@ public sealed partial class DialogueSystem
     static bool IsInterrupting(int ev) => IsLarge(ev) || ev is 6 or 13 or 30 or 46 or 48 or 51 or 54;
 
     /// <summary>
-    /// The lines on show, for the renderer's speech bubbles.
+    /// The lines on show, for the renderer's speech bubbles: the last list while they have not changed.
     /// </summary>
-    public IReadOnlyList<SpeechBubble> PublishSpeech() =>
-        [.. _shown.Select(s => new SpeechBubble(s.Key, s.Value.Text, s.Value.Large, s.Value.Interrupting))];
+    public IReadOnlyList<SpeechBubble> PublishSpeech()
+    {
+        if (!_speechChanged) return _publishedSpeech;
+
+        _speechChanged = false;
+        return _publishedSpeech = _shown.Count == 0
+            ? []
+            : [.. _shown.Select(s => new SpeechBubble(s.Key, s.Value.Text, s.Value.Large, s.Value.Interrupting))];
+    }
 
     /// <summary>
     /// A campaign's <c>dialog announcement</c> (docs/game/factions-squads-towns.md "Campaigns", announcement): <paramref name="dialogueId"/> fired as
@@ -165,7 +181,7 @@ public sealed partial class DialogueSystem
     void DropBubbles(CharacterId npc)
     {
         _bubbles.RemoveAll(b => b.C.Npc == npc || b.Speaker == npc);
-        _shown.Remove(npc);
+        _speechChanged |= _shown.Remove(npc);
     }
 
     /// <summary>
@@ -270,7 +286,7 @@ public sealed partial class DialogueSystem
             EndBubbles(world, c);
             _bubbles.RemoveAll(b => b.C == c);
         }
-        _shown.Remove(who);
+        _speechChanged |= _shown.Remove(who);
     }
 
     /// <summary>
@@ -497,6 +513,7 @@ public sealed partial class DialogueSystem
         {
             long until = world.Tick + (long)MathF.Ceiling(seconds / world.TickSeconds);
             _shown[speaker] = (text, until, IsLarge(c.Event), IsInterrupting(c.Event), c.Event);
+            _speechChanged = true;
             world.Said(NameOf(world, speaker), text, world.Characters.Cold(n) is { IsPlayer: true });
         }
         LogBubble(world, c, line, speaker, text);
@@ -593,7 +610,7 @@ public sealed partial class DialogueSystem
         foreach (var who in _shown.Where(s => world.Tick >= s.Value.Until || !world.Characters.TryResolveNext(s.Key, out _)).Select(s => s.Key)
             .ToArray())
         {
-            _shown.Remove(who);
+            _speechChanged |= _shown.Remove(who);
         }
     }
 }

@@ -41,6 +41,8 @@ publish) into a set none of `Snapshot`, `PreviousSnapshot` and the one before th
 paused publish and loading keep `PreviousSnapshot`'s set out of the ring with it. Contract: a published snapshot's characters stay as they are until
 two more snapshots are published; hold them across frames, not across ticks (the host's per-id index and the HUD's selection are rebuilt when the
 snapshot object changes). `WorldSnapshot` itself is new on each publish.
+Its outposts, speech bubbles and projectiles are the last publish's list (never changed once published) while unchanged (**engine choice**), so the
+host's reference checks hold (the foliage towns are given again only when an outpost moves or changes hands).
 A frame's second-to-last tick publishes a motion snapshot (**engine choice**, `World.MotionOf`): its characters and projectiles are the tick's, every
 other view the last snapshot's, as the host reads nothing else of `PreviousSnapshot` (its per-id index, the turrets' angles, the bolts, the splashes'
 tick). **Observed** (play bench, `bench-bases-2026-10-27`, ~270-290 characters, two interleaved pairs, 2026-11-19; with the 64-slot chunks of

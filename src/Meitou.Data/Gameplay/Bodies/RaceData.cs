@@ -22,6 +22,11 @@ public readonly record struct SlotReference(int Slot, string TargetStringId);
 public sealed class RaceData
 {
     /// <summary>
+    /// The wrapper <see cref="StatMultiplierList"/> hands out (a race made by two publish workers at once keeps either one).
+    /// </summary>
+    IReadOnlyList<float>? _statMultiplierList;
+
+    /// <summary>
     /// The order the original's race stat map iterates (a boost map of every <see cref="StatsEnumerated"/> 0-38 inserted in order,
     /// <c>FUN_14042efa0</c>, docs/formats/boost-unordered.md): the RACE STATS panel lists the bonuses, then the penalties, in it.
     /// </summary>
@@ -231,6 +236,11 @@ public sealed class RaceData
     /// <c>stats bad</c>, then RACE <c>strength</c> and <c>dexterity</c> for stats 1 and 18. They scale the starting stats and every XP gain.
     /// </summary>
     public float[] StatMultipliers { get; init; } = NewStatMap();
+
+    /// <summary>
+    /// <see cref="StatMultipliers"/> as a read-only list, one wrapper for every reader (the snapshots' skill XP multipliers); made on first use.
+    /// </summary>
+    public IReadOnlyList<float> StatMultiplierList => _statMultiplierList ??= Array.AsReadOnly(StatMultipliers);
 
     /// <summary>
     /// The parts, in the order of the race's <c>combat anatomy</c> list (which differs from the saves' usual order).

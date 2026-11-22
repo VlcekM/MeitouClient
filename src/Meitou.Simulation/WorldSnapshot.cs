@@ -527,10 +527,6 @@ public sealed class CharacterSnapshot
     /// </summary>
     public BodyBuild? Build { get; internal set; }
     /// <summary>
-    /// What a selected character carries, one line per item (empty for the others).
-    /// </summary>
-    public IReadOnlyList<string> Inventory { get; internal set; } = [];
-    /// <summary>
     /// A selected character's bounties, one line per faction that wants it (empty for the others and for one nobody wants).
     /// </summary>
     public IReadOnlyList<Crime.BountyLine> Bounties { get; internal set; } = [];
