@@ -488,22 +488,46 @@ public sealed class ModContext
     }
 
     /// <summary>
-    /// Plays a display-only effect at a world point (docs/modding.md "Visual effects"): <paramref name="effect"/> is an EFFECT record's string id
-    /// or a particle system name, <paramref name="seconds"/> how long it emits (0 to <see cref="ModEffects.MaxSeconds"/>), <paramref name="tint"/>
-    /// the particles' colour (rgb, 1 the full channel, up to <see cref="ModEffects.MaxTint"/>; null: their texture's). On the host's thread, from a
-    /// host-side callback such as a combat hit feed, never a tick system; queued and started at the next frame. False when rejected (logged once
-    /// per mod and problem).
+    /// Plays a display-only effect on <paramref name="anchor"/> (docs/modding.md "Visual effects"): a world point, a character's bone or held
+    /// weapon, or a building, the system's origin at the anchor, its axes turned to the anchor's frame and its emitters scaled by its stretch,
+    /// following it while it emits; while the anchor cannot be located (not drawn, weapon sheathed, building gone) it pauses, until its lifetime
+    /// ends. <paramref name="effect"/> is an EFFECT record's string id or a particle system name, <paramref name="seconds"/> how long it emits (0
+    /// to <see cref="ModEffects.MaxSeconds"/>), <paramref name="tint"/> the particles' colour (rgb, 1 the full channel, up to
+    /// <see cref="ModEffects.MaxTint"/>; null: their texture's). Each call plays a new one (<see cref="KeepEffect"/> renews one). On the host's
+    /// thread, from a host-side callback such as a combat hit feed, never a tick system; started at the next frame. False when rejected (logged
+    /// once per mod and problem).
     /// </summary>
-    public bool PlayEffect(string effect, System.Numerics.Vector3 at, float seconds = 1, System.Numerics.Vector3? tint = null) =>
-        _registry.Effects.Play(Id, effect, at, false, CharacterId.None, null, tint, seconds);
+    public bool PlayEffect(string effect, EffectAnchor anchor, float seconds = 1, System.Numerics.Vector3? tint = null) =>
+        _registry.Effects.Play(Id, effect, anchor, tint, seconds);
 
     /// <summary>
-    /// Plays a display-only effect on a character, following its <paramref name="bone"/> (null: the chest, <c>Bip01 Spine2</c>) while it emits;
-    /// nothing while the character is not drawn. Otherwise as <see cref="PlayEffect(string, System.Numerics.Vector3, float,
-    /// System.Numerics.Vector3?)"/>.
+    /// Plays a display-only effect at a world point: <see cref="PlayEffect(string, EffectAnchor, float, System.Numerics.Vector3?)"/> on
+    /// <see cref="EffectAnchor.At"/>.
+    /// </summary>
+    public bool PlayEffect(string effect, System.Numerics.Vector3 at, float seconds = 1, System.Numerics.Vector3? tint = null) =>
+        PlayEffect(effect, EffectAnchor.At(at), seconds, tint);
+
+    /// <summary>
+    /// Plays a display-only effect on a character's <paramref name="bone"/> (null: the chest, <c>Bip01 Spine2</c>):
+    /// <see cref="PlayEffect(string, EffectAnchor, float, System.Numerics.Vector3?)"/> on <see cref="EffectAnchor.Bone"/>.
     /// </summary>
     public bool PlayEffect(string effect, CharacterId on, string? bone = null, float seconds = 1, System.Numerics.Vector3? tint = null) =>
-        _registry.Effects.Play(Id, effect, default, true, on, bone, tint, seconds);
+        PlayEffect(effect, EffectAnchor.Bone(on, bone ?? EffectAnchor.ChestBone), seconds, tint);
+
+    /// <summary>
+    /// Plays <paramref name="effect"/> on <paramref name="anchor"/> as <see cref="PlayEffect(string, EffectAnchor, float,
+    /// System.Numerics.Vector3?)"/>, but as this mod's one for that effect and anchor: called again before it ends it is renewed to
+    /// <paramref name="seconds"/> from then rather than restarted (another tint restarts it), so a mod keeps an aura up by calling it within
+    /// <see cref="ModEffects.MaxSeconds"/>.
+    /// </summary>
+    public bool KeepEffect(string effect, EffectAnchor anchor, float seconds, System.Numerics.Vector3? tint = null) =>
+        _registry.Effects.Keep(Id, effect, anchor, tint, seconds);
+
+    /// <summary>
+    /// Ends this mod's kept <paramref name="effect"/> on <paramref name="anchor"/> (<see cref="KeepEffect"/>); its particles live out. False when
+    /// it keeps none there.
+    /// </summary>
+    public bool StopEffect(string effect, EffectAnchor anchor) => _registry.Effects.Stop(Id, effect, anchor);
 
     /// <summary>
     /// Makes the blade of the melee weapon <paramref name="on"/> holds glow (docs/modding.md "Weapon glow"), display only: <paramref name="colour"/>
@@ -511,9 +535,9 @@ public sealed class ModContext
     /// <see cref="ModWeaponGlows.MaxSeconds"/>), at <paramref name="strength"/> (0 to <see cref="ModWeaponGlows.MaxStrength"/>; 0: no tint on the
     /// blade, the particles only). It fades in and out and replaces the character's glow before. <paramref name="effect"/> (an EFFECT record's
     /// string id or a particle system name, as <see cref="PlayEffect(string, CharacterId, string?, float, System.Numerics.Vector3?)"/>'s; null:
-    /// none) is played once at the weapon's hilt end with its local +Y along the blade, scaled so 8.5 units span the weapon, while the blade is
-    /// drawn, its particles recoloured to <paramref name="colour"/> unless that is white (1, 1, 1). Call it again before it ends to keep it going:
-    /// the same effect and colour keep their particles. On the host's thread, as <c>PlayEffect</c>. False when rejected (logged once per mod and
+    /// none) is kept on <see cref="EffectAnchor.Weapon"/> (<see cref="KeepEffect"/>) for the glow's lifetime, its particles recoloured to
+    /// <paramref name="colour"/> unless that is white (1, 1, 1). Call it again before it ends to keep it going: the same effect and colour keep
+    /// their particles. On the host's thread, as <c>PlayEffect</c>. False when rejected (logged once per mod and
     /// problem).
     /// </summary>
     public bool GlowWeapon(CharacterId on, System.Numerics.Vector3 colour, float seconds, float strength = 1, string? effect = null) =>

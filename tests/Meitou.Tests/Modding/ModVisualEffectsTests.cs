@@ -6,26 +6,52 @@ using Meitou.Simulation;
 namespace Meitou.Tests.Modding;
 
 /// <summary>
-/// The code mods' display-only effects (docs/modding.md "Visual effects"): the queue between <see cref="ModContext.PlayEffect(string, Vector3,
-/// float, Vector3?)"/> and the renderer, played here through a recording sink in place of the particles.
+/// The code mods' display-only effects (docs/modding.md "Visual effects"): the queue between <see cref="ModContext.PlayEffect(string, EffectAnchor,
+/// float, Vector3?)"/> and the renderer, played here through a recording sink in place of the particles, and the anchors' frames.
 /// </summary>
 public class ModVisualEffectsTests
 {
     /// <summary>
-    /// Records what it is asked to start and follow, in order.
+    /// Records what it is asked to start, follow and renew, in order; the anchors are there while <see cref="Located"/>.
     /// </summary>
     sealed class Recorder : IModEffectSink
     {
+        public bool Located = true;
         public readonly List<ModEffectRequest> Started = [];
         public readonly List<ModEffectRequest> Followed = [];
+        public readonly List<float> Renewed = [];
 
         public object? Start(in ModEffectRequest request)
         {
+            if (!Located) return null;
+
             Started.Add(request);
             return new object();
         }
 
-        public void Follow(object playing, in ModEffectRequest request) => Followed.Add(request);
+        public bool Follow(object playing, in ModEffectRequest request)
+        {
+            Followed.Add(request);
+            return Located;
+        }
+
+        public void Renew(object playing, float seconds) => Renewed.Add(seconds);
+    }
+
+    /// <summary>
+    /// Frames for the anchors that follow something: a bone at (1, 2, 3) turned a quarter about Y, a weapon at (0, 1, 0) with stretch 0.2, the
+    /// building <c>hut</c> at (10, 0, 0) turned a quarter about Y; nothing else.
+    /// </summary>
+    sealed class Frames : IEffectFrameSource
+    {
+        public static readonly Quaternion Quarter = Quaternion.CreateFromAxisAngle(Vector3.UnitY, MathF.PI / 2);
+
+        public EffectFrame? Bone(CharacterId on, string bone, Vector3 offset, Quaternion turn) =>
+            bone == "Bip01 Head" ? new EffectFrame(new Vector3(1, 2, 3) + Vector3.Transform(offset, Quarter), Quarter * turn, 1) : null;
+
+        public EffectFrame? Weapon(CharacterId on) => on.Slot == 3 ? new EffectFrame(Vector3.UnitY, Quaternion.Identity, 0.2f) : null;
+
+        public EffectFrame? Building(string id) => id == "hut" ? new EffectFrame(new Vector3(10, 0, 0), Quarter, 1) : null;
     }
 
     /// <summary>
@@ -64,15 +90,17 @@ public class ModVisualEffectsTests
         registry.Effects.Advance(0, sink);
 
         Assert.Equal(ModEffects.MaxPerFrame, sink.Started.Count);
-        Assert.Equal(new ModEffectRequest("gore", "spark", "sparks", default, new CharacterId(3, 1), "Bip01 Head", red, 0.5f), sink.Started[0]);
-        Assert.Equal([.. Enumerable.Range(0, ModEffects.MaxPerFrame - 1).Select(i => (float)i)], sink.Started.Skip(1).Select(r => r.At.X));
+        var head = EffectAnchor.Bone(new CharacterId(3, 1), "Bip01 Head");
+        Assert.Equal(new ModEffectRequest("gore", "spark", "sparks", head, red, 0.5f), sink.Started[0]);
+        Assert.Equal([.. Enumerable.Range(0, ModEffects.MaxPerFrame - 1).Select(i => (float)i)], sink.Started.Skip(1).Select(r => r.Anchor.Offset.X));
+        Assert.All(sink.Started.Skip(1), r => Assert.Equal(EffectAnchorKind.Point, r.Anchor.Kind));
         Assert.Empty(sink.Followed);
 
         for (int frame = 0; frame < 10; frame++) registry.Effects.Advance(0, sink);
         Assert.Equal(ModEffects.MaxAlive, registry.Effects.Alive);
         Assert.Equal(11, registry.Effects.Queued);
         Assert.Equal(10, sink.Followed.Count);
-        Assert.All(sink.Followed, r => Assert.Equal(new CharacterId(3, 1), r.On));
+        Assert.All(sink.Followed, r => Assert.Equal(head, r.Anchor));
 
         // The attached effect's half second runs out first: one queued effect takes its place, and it is no longer followed.
         registry.Effects.Advance(1, sink);
@@ -121,4 +149,97 @@ public class ModVisualEffectsTests
         registry.Effects.Advance(0, sink);
         Assert.All(sink.Started.Skip(ModEffects.MaxPerFrame), r => Assert.Equal("other", r.Owner));
     }
+
+    /// <summary>
+    /// Each anchor kind resolves to its frame: a point as given (its turn normalized), a bone and a building moved and turned in their own frame,
+    /// a weapon with its blade's stretch unless the anchor scales it; one not there is null. The chest is the bone overload's default.
+    /// </summary>
+    [Fact]
+    public void Anchors_resolve_to_their_frames()
+    {
+        var frames = new Frames();
+        var hero = new CharacterId(3, 1);
+        var half = Quaternion.CreateFromAxisAngle(Vector3.UnitX, MathF.PI / 2);
+
+        var point = EffectFrames.Locate(EffectAnchor.At(new Vector3(4, 5, 6), half * 3), frames)!.Value;
+        Assert.Equal((new Vector3(4, 5, 6), 1f), (point.At, point.Stretch));
+        AssertNear(Vector3.Transform(Vector3.UnitY, half), Vector3.Transform(Vector3.UnitY, point.Turn));
+        var bone = EffectFrames.Locate(EffectAnchor.Bone(hero, "Bip01 Head", Vector3.UnitX, half), frames)!.Value;
+        AssertNear(new Vector3(1, 2, 2), bone.At);
+        AssertNear(Vector3.Transform(Vector3.UnitY, Frames.Quarter * half), Vector3.Transform(Vector3.UnitY, bone.Turn));
+        Assert.Null(EffectFrames.Locate(EffectAnchor.Bone(hero, "Bip01 Tail"), frames));
+
+        Assert.Equal(new EffectFrame(Vector3.UnitY, Quaternion.Identity, 0.2f), EffectFrames.Locate(EffectAnchor.Weapon(hero), frames));
+        Assert.Equal(2, EffectFrames.Locate(EffectAnchor.Weapon(hero).Scaled(2), frames)!.Value.Stretch);
+        Assert.Null(EffectFrames.Locate(EffectAnchor.Weapon(new CharacterId(4, 1)), frames));
+
+        var hut = EffectFrames.Locate(EffectAnchor.Building("hut", Vector3.UnitX), frames)!.Value;
+        AssertNear(new Vector3(10, 0, -1), hut.At);
+        Assert.Equal(1f, hut.Stretch);
+        AssertNear(Vector3.Transform(Vector3.UnitX, Frames.Quarter), Vector3.Transform(Vector3.UnitX, hut.Turn));
+        Assert.Null(EffectFrames.Locate(EffectAnchor.Building("tower"), frames));
+
+        var registry = Registry([]);
+        var sink = new Recorder();
+        Assert.True(Context(registry, "gore").PlayEffect("spark", hero));
+        registry.Effects.Advance(0, sink);
+        Assert.Equal(EffectAnchor.Bone(hero, "Bip01 Spine2"), Assert.Single(sink.Started).Anchor);
+    }
+
+    /// <summary>
+    /// An effect whose anchor is not there waits, paused, and starts once it is; one that loses its anchor stops emitting and starts again where
+    /// the anchor is, for the seconds it has left. A kept effect is renewed, not restarted, by the same mod, effect and anchor (another tint
+    /// restarts it), and stopped by its key; a played one is never renewed. Bad anchors are rejected and logged.
+    /// </summary>
+    [Fact]
+    public void Effects_pause_while_unlocated_and_kept_ones_renew_until_stopped()
+    {
+        var log = new List<string>();
+        var registry = Registry(log);
+        var mod = Context(registry, "aura");
+        var sink = new Recorder { Located = false };
+        var head = EffectAnchor.Bone(new CharacterId(3, 1), "Bip01 Head");
+
+        Assert.True(mod.KeepEffect("spark", head, 10));
+        registry.Effects.Advance(1, sink);
+        Assert.Equal((1, 0, 0), (registry.Effects.Alive, registry.Effects.Playing, sink.Started.Count));
+        sink.Located = true;
+        registry.Effects.Advance(1, sink);
+        Assert.Equal(9, Assert.Single(sink.Started).Seconds);   // its seconds count from its first frame alive
+
+        Assert.True(mod.KeepEffect("spark", head, 20));
+        registry.Effects.Advance(1, sink);
+        Assert.Single(sink.Started);
+        Assert.Equal([19f], sink.Renewed);
+
+        sink.Located = false;
+        registry.Effects.Advance(1, sink);
+        Assert.Equal([19f, 0f], sink.Renewed);
+        Assert.Equal((1, 0), (registry.Effects.Alive, registry.Effects.Playing));
+        sink.Located = true;
+        registry.Effects.Advance(1, sink);
+        Assert.Equal(17, sink.Started[^1].Seconds);
+
+        Assert.True(mod.KeepEffect("spark", head, 20, new Vector3(0, 1, 0)));   // another tint: restarted with it
+        registry.Effects.Advance(0, sink);
+        Assert.Equal((3, new Vector3(0, 1, 0)), (sink.Started.Count, sink.Started[^1].Tint));
+        Assert.True(mod.PlayEffect("spark", head, 5));
+        registry.Effects.Advance(0, sink);
+        Assert.Equal((2, 4), (registry.Effects.Alive, sink.Started.Count));
+
+        Assert.True(mod.StopEffect("spark", head));
+        Assert.False(mod.StopEffect("spark", head));
+        registry.Effects.Advance(0, sink);
+        Assert.Equal(1, registry.Effects.Alive);   // the played one goes on
+
+        Assert.False(mod.PlayEffect("spark", EffectAnchor.Building("")));
+        Assert.False(mod.PlayEffect("spark", head.Scaled(0)));
+        Assert.False(mod.PlayEffect("spark", EffectAnchor.At(Vector3.Zero, default(Quaternion))));
+        Assert.Equal(3, log.Count);
+    }
+
+    /// <summary>
+    /// <paramref name="actual"/> within a thousandth of <paramref name="expected"/>.
+    /// </summary>
+    static void AssertNear(Vector3 expected, Vector3 actual) => Assert.True(Vector3.Distance(expected, actual) < 1e-3f, $"{actual} not {expected}");
 }

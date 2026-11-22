@@ -38,9 +38,7 @@ public class ModWeaponGlowTests
             return new object();
         }
 
-        public void Follow(object playing, in ModEffectRequest request) => Tracked++;
-
-        public bool Track(object playing, in ModEffectRequest request)
+        public bool Follow(object playing, in ModEffectRequest request)
         {
             Tracked++;
             return Drawn;
@@ -123,20 +121,21 @@ public class ModWeaponGlowTests
     }
 
     /// <summary>
-    /// A glow's effect resolves as PlayEffect's (HasEffect asks without a logged rejection) and plays once on the blade, recoloured to the glow's
-    /// colour but for white, once the blade is drawn; a call again with the same effect and colour renews it (no restart); it stops while the blade
-    /// is not drawn and when the glow ends, and counts against the effects' cap. Strength 0 shows the particles with no tint on the blade. The
-    /// weapon's frame: the base at the hilt end, a turn taking +Y to the tip and X across the blade's width, the length to the tip.
+    /// A glow's effect resolves as PlayEffect's (HasEffect asks without a logged rejection) and is kept on the weapon anchor, recoloured to the
+    /// glow's colour but for white, starting once the blade is drawn; a call again with the same effect and colour renews it (no restart); it
+    /// pauses while the blade is not drawn and ends with the glow or its stop. Strength 0 shows the particles with no tint on the blade.
     /// </summary>
     [Fact]
-    public void Glow_particles_play_on_the_blade_aligned_and_are_kept_when_renewed()
+    public void Glow_particles_are_kept_on_the_weapon_and_renewed()
     {
         var log = new List<string>();
         var registry = new ModRegistry();
         registry.Effects.Resolve = id => id == "frost" ? "SB_Ice" : null;
         registry.WeaponGlows.Log = log.Add;
+        registry.Effects.Log = log.Add;
         var ice = Context(registry, "ice");
         var hero = new CharacterId(3, 1);
+        var blade = EffectAnchor.Weapon(hero);
         var cyan = new Vector3(0.3f, 0.9f, 1);
         var sink = new Recorder { Drawn = false };
 
@@ -149,42 +148,39 @@ public class ModWeaponGlowTests
         Assert.Single(log, l => l.Contains("effect id"));
 
         Assert.True(ice.GlowWeapon(hero, cyan, 5, 1, "frost"));
-        registry.WeaponGlows.Advance(0.1f, sink);
-        Assert.Empty(sink.Started);   // sheathed: nothing yet
+        registry.Effects.Advance(0.1f, sink);
+        Assert.Empty(sink.Started);   // sheathed: it waits
         sink.Drawn = true;
-        registry.WeaponGlows.Advance(0.1f, sink);
+        registry.Effects.Advance(0.1f, sink);
         var started = Assert.Single(sink.Started);
-        Assert.Equal(("ice", "frost", "SB_Ice", hero, cyan, true), (started.Owner, started.Effect, started.System, started.On, started.Tint,
-            started.OnBlade));
-        Assert.True(started.Seconds > 4.8f);
-        Assert.Equal(1, registry.Effects.Reserved);
-        Assert.False(registry.Effects.Fits(ModEffects.MaxAlive));
+        Assert.Equal(("ice", "frost", "SB_Ice", blade, cyan), (started.Owner, started.Effect, started.System, started.Anchor, started.Tint));
 
-        // Kept alive: the same effect and colour renew the playing one to the new lifetime rather than starting another.
-        registry.WeaponGlows.Advance(1, sink);
+        // Kept alive: the same effect and colour renew the playing one rather than starting another.
         Assert.True(ice.GlowWeapon(hero, cyan, 20, 1, "frost"));
-        registry.WeaponGlows.Advance(0.1f, sink);
+        registry.Effects.Advance(0.1f, sink);
         Assert.Single(sink.Started);
         Assert.True(Assert.Single(sink.Renewed).Seconds > 19.8f);
 
-        // Sheathed: it stops (renewed to 0); drawn again: a new one starts; the glow's end stops it.
+        // Sheathed: it stops (renewed to 0); drawn again: it starts again; the glow's end ends it.
         sink.Drawn = false;
-        registry.WeaponGlows.Advance(0.1f, sink);
-        registry.WeaponGlows.Advance(0.1f, sink);
-        Assert.Equal((1, 0), (sink.Renewed.Count(r => r.Seconds == 0), registry.Effects.Reserved));
+        registry.Effects.Advance(0.1f, sink);
+        Assert.Equal((1, 0), (sink.Renewed.Count(r => r.Seconds == 0), registry.Effects.Playing));
         sink.Drawn = true;
-        registry.WeaponGlows.Advance(0.1f, sink);
+        registry.Effects.Advance(0.1f, sink);
         Assert.Equal(2, sink.Started.Count);
-        registry.WeaponGlows.Advance(25, sink);
-        registry.WeaponGlows.Advance(0, sink);
+        registry.WeaponGlows.Advance(25);
+        registry.Effects.Advance(0, sink);
         Assert.Equal(2, sink.Renewed.Count(r => r.Seconds == 0));
-        Assert.Equal((0, 0), (registry.WeaponGlows.Count, registry.Effects.Reserved));
+        Assert.Equal((0, 0), (registry.WeaponGlows.Count, registry.Effects.Alive));
 
-        // Strength 0 and white: the particles in their own colours, no tint on the blade.
+        // Strength 0 and white: the particles in their own colours, no tint on the blade; a stop ends them.
         Assert.True(ice.GlowWeapon(hero, Vector3.One, 5, 0, "frost"));
-        registry.WeaponGlows.Advance(0.5f, sink);
+        registry.WeaponGlows.Advance(0.5f);
+        registry.Effects.Advance(0.5f, sink);
         Assert.Null(sink.Started[^1].Tint);
         Assert.Empty(Now(registry));
+        Assert.True(ice.StopWeaponGlow(hero));
+        Assert.Equal(0, registry.Effects.Alive);
 
         AssertBladeFrame();
     }

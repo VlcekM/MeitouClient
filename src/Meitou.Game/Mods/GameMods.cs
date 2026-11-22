@@ -212,8 +212,9 @@ sealed class GameMods(GameHost host)
     }
 
     /// <summary>
-    /// Once a frame: ages the mods' weapon glows by the game clock (pause and game speed hold and hasten them), plays their particles along the
-    /// blades through the effects' player and hands the glows to the character renderer by draw key (docs/modding.md "Weapon glow"). Nothing without code mods; a new world drops the old world's glows.
+    /// Once a frame: ages the mods' weapon glows by the game clock (pause and game speed hold and hasten them) and hands them to the character
+    /// renderer by draw key (docs/modding.md "Weapon glow"); their particles are the mods' effects (<see cref="UpdateModEffects"/>). Nothing
+    /// without code mods; a new world drops the old world's glows.
     /// </summary>
     internal void UpdateModWeaponGlows()
     {
@@ -227,8 +228,7 @@ sealed class GameMods(GameHost host)
             _glowsFor = (world, now);
             glows.Clear();
         }
-        _effectPlayer ??= new ModEffectPlayer(host);
-        glows.Advance((float)Math.Clamp(now - _glowsFor.Seconds, 0, 1), _effectPlayer);
+        glows.Advance((float)Math.Clamp(now - _glowsFor.Seconds, 0, 1));
         _glowsFor.Seconds = now;
         ShowWeaponGlows(glows);
     }

@@ -218,41 +218,53 @@ holds refuses the second mod.
   (`World.CombatHitFeed`, like `BloodMarks`) that the simulation never reads, so it cannot change a run; a new world (load, new game) gets a
   new queue, dropping the old world's hits. A tick may be in flight, so `view` must not touch the world; the list is reused, so copy what you
   keep. A throw is logged with the mod id and that feed gets no more hits for the session.
-- **Visual effects:** `PlayEffect(effect, point, seconds = 1, tint = null)` and `PlayEffect(effect, characterId, bone = null, seconds = 1,
-  tint = null)` on `ModContext` play a display-only particle burst, e.g. from a hit feed. `effect` is an EFFECT record's string id (its
-  `particle system`) or a Particle Universe system name; `seconds` is how long it emits, in (0, 30], on the particles' frame clock (still
-  while paused, faster at higher speeds); `tint` replaces the particles' hue (rgb, 1 the full channel, up to 4), as a race's blood colour
-  does. An attached effect starts at the character's `bone` as last drawn (null: `Bip01 Spine2`) and follows it while it emits; a character
-  not drawn, or a bone its rig lacks, plays nothing. Requests queue and start at the next frame, after the hit feed, through the renderer's
-  own bursts (`ParticleRenderer.Burst`, as the blood and dust do): at most 16 a frame, 64 playing and 128 waiting. A bad request (unknown
-  id, non-finite point, lifetime out of range, bad tint, no character, full queue, or a call off the host's thread) returns false and is
-  dropped, logged once per mod and reason. Call it only on the host's thread (host-side callbacks: hit feed, UI, key actions, debug rows),
-  never from a tick system. The simulation never reads the queue, so the state hash is untouched; without code mods the frame skips it; a
-  new world drops all queued and playing effects, and a mod that fails its `Initialize` loses those it queued. **Verified** by
-  `ModVisualEffectsTests` (order, tint, lifetime, caps, rejection logging, a dropped mod's effects) against a recording sink.
-- **Weapon glow:** `GlowWeapon(characterId, colour, seconds, strength = 1, effect = null)` on `ModContext` makes the blade of the melee
-  weapon the character holds drawn give off light of its own (display only), e.g. an enchanted blade. `colour` is rgb (1 the full channel,
-  up to 4), `seconds` in (0, 30] on the game clock (held while paused, faster at higher speeds), `strength` in [0, 4] (0: no tint on the
-  blade, the particles only). One glow a character: a newer request replaces it, fading from where the old one stood; each fades in and out
-  over 0.25 s; `StopWeaponGlow(characterId)` fades out early the one this mod set (false: none). The blade is the gear blood's
-  (docs/game/blood-decals.md "On weapons and gear": the mesh's long axis through the middle of its pick boxes, from 0.3 of it to the tip),
-  brighter at the silhouette; sheathed weapons, worn items, scabbards and ranged weapons never glow. The renderer carries the tint per
-  instance (the w of the matrix's last two rows, instance flag bit 31) and adds it to the lit colour before fog, so bloom picks it up.
-- **Blade effect:** `effect` (resolved as `PlayEffect`'s) is played once at the weapon's hilt end with its local +Y along the blade (X
-  across its width), scaled so 8.5 units span the weapon (an emitter box from y 1.5 to 8.5 then covers about 18% of it to the tip), and moved and turned with it each frame; the scale multiplies the system's technique and
-  emitter positions and emitter shapes (`ParticleSimulation.Stretch`), not the particles' size. This is the convention the original
-  Elemental Enchantment mod's blade systems use (**Observed** from its shipped `.pu` files); a base-game system authored at its origin plays
-  at the hilt end. Its particles take `colour` unless it is white (1, 1, 1), which keeps the system's own. It is one of the 64 playing
-  effects; it starts once the blade is drawn, stops while it is not and when the glow fades out; calling again with the same effect and
-  colour renews it (no restart), so a mod keeps an aura up by re-calling within 30 s. `HasEffect(effect)` says whether an id names a loaded
-  particle system now (false before the particles load, while they are off, or off the host's thread), without a logged rejection.
-- Glow requests are validated and logged as `PlayEffect`'s (bad character, colour, lifetime, strength or effect id, more than 256
-  characters, off the host's thread); host thread only; the simulation never reads them; a new world clears all glows, a mod that fails its
-  `Initialize` loses its own. **Verified** by `ModWeaponGlowTests` (fade, replace, stop, expiry, rejection logging, drop, clear; the effect's
-  resolving, `HasEffect`, tint and white, renewal, stop when sheathed, cap; the weapon's hilt end, turn and scale) against a recording sink.
-  Drawing **Observed** in `--duel` through a forced glow, not a mod's call: the blades lit, hilts and the back scabbard not;
-  `kenshi_fire1_small` burning low on the blade and following it (anchored then at 0.3 of the mesh, not the hilt end). The original's ice blade system (its scripts added to the library
-  without its textures) threw particles about the blades, but their alignment along the blade was not made out.
+- **Visual effects:** `PlayEffect(effect, EffectAnchor anchor, seconds = 1, tint = null)` on `ModContext` plays a display-only particle
+  burst, e.g. from a hit feed. `effect` is an EFFECT record's string id (its `particle system`) or a Particle Universe system name;
+  `HasEffect(effect)` says whether one is loaded now (false before the particles load, while they are off, or off the host's thread), without
+  a logged rejection. `seconds` is how long it emits, in (0, 30], on the particles' frame clock (still while paused, faster at higher
+  speeds); `tint` replaces the particles' hue (rgb, 1 the full channel, up to 4), as a race's blood colour does. Anchors (`EffectAnchor`):
+  - `At(point, turn = null)`: a fixed world point.
+  - `Bone(characterId, bone, offset = default, turn = null)`: a bone as last drawn, its position and turn; `offset` and `turn` are in the
+    bone's frame, the offset scaled with the character.
+  - `Weapon(characterId)`: the melee weapon the character holds drawn (the gear blood's blade, docs/game/blood-decals.md "On weapons and
+    gear"): origin at the weapon mesh's hilt end, +Y along the blade, X across its width, stretch = weapon length / 8.5.
+  - `Building(id, offset = default, turn = null)`: a player-built or nest building of the snapshot (`WorldSnapshot.Buildings`,
+    `NestBuildings`, by `BuildingSnapshot.Id`), its origin and turn. Town buildings of the level data and furniture are not covered (no
+    host-side lookup by id); worn items are skinned to the skeleton and have no frame of their own: use a `Bone` (e.g. `Bip01 Spine2`).
+  - `.Scaled(stretch)` on any anchor overrides its stretch, in (0, 100].
+  The system's origin is at the anchor, its axes turned to the anchor's frame; the stretch multiplies its technique and emitter positions and
+  emitter shapes (`ParticleSimulation.Stretch`), not the particles' size. A blade system authored along its +Y with its origin at the
+  weapon's base (the original Elemental Enchantment mod's convention, **Observed** from its shipped `.pu` files: a box from y 1.5 to 8.5)
+  thus covers about 18% of the weapon to the tip; a base-game system authored at its origin plays at the hilt end. The effect follows its
+  anchor each frame (`ParticleRenderer.MoveBurst`); while the anchor cannot be located (character not drawn, weapon sheathed, building
+  gone, unknown bone) it pauses (its emission stops) and starts again where the anchor is, for the seconds left. `PlayEffect(effect, point,
+  ...)` and `PlayEffect(effect, characterId, bone = null, ...)` are `At` and `Bone` (null: `Bip01 Spine2`). Each `PlayEffect` is a new
+  burst; `KeepEffect(effect, anchor, seconds, tint = null)` is the mod's one for that effect and anchor: called again before it ends it is
+  renewed to `seconds` from then, not restarted (another tint restarts it), so a mod keeps an aura up by re-calling within 30 s;
+  `StopEffect(effect, anchor)` ends it (its particles live out). Requests queue and start at the next frame, after the hit feed, through the
+  renderer's own bursts (`ParticleRenderer.Burst`, as the blood and dust do): at most 16 started a frame, 64 alive (playing or paused) and
+  128 waiting. A bad request (unknown id; anchor kind, point, offset or turn not usable; no character or bone; no building id; stretch,
+  lifetime or tint out of range; full queue; a call off the host's thread) returns false and is dropped, logged once per mod and reason.
+  Call it only on the host's thread (host-side callbacks: hit feed, UI, key actions, debug rows), never from a tick system. The simulation
+  never reads it, so the state hash is untouched; without code mods the frame skips it; a new world drops all effects, and a mod that fails
+  its `Initialize` loses its own. **Verified** by `ModVisualEffectsTests` (order, tint, lifetime, caps, rejection logging, a dropped mod's
+  effects; each anchor kind's frame; pause and resume; keep, renew and stop; the old overloads) against a recording sink and frame source.
+- **Weapon glow:** `GlowWeapon(characterId, colour, seconds, strength = 1, effect = null)` makes the blade of the melee weapon the
+  character holds drawn give off light of its own (display only). `colour` is rgb (1 the full channel, up to 4), `seconds` in (0, 30] on the
+  game clock, `strength` in [0, 4] (0: no tint, the particles only). One glow a character: a newer request replaces it, fading from where the
+  old one stood; each fades in and out over 0.25 s; `StopWeaponGlow(characterId)` fades out early the one this mod set (false: none). The
+  tint covers the blade from 0.3 of the weapon mesh to the tip, brighter at the silhouette; sheathed weapons, worn items, scabbards and
+  ranged weapons never glow. The renderer carries it per instance (the w of the matrix's last two rows, instance flag bit 31) and adds it to
+  the lit colour before fog, so bloom picks it up. `effect` is kept (`KeepEffect`) on `EffectAnchor.Weapon` for the glow's lifetime, its
+  particles in `colour` unless that is white (1, 1, 1), which keeps the system's own; the same effect and colour on a renewed glow keep their
+  particles. Requests are validated and logged once per mod and reason (bad character, colour, lifetime, strength or effect id, more than 256
+  characters, off the host's thread); host thread only; never read by the simulation; a new world clears all glows, a mod that fails its
+  `Initialize` loses its own. **Verified** by `ModWeaponGlowTests` (fade, replace, stop, expiry, rejection logging, drop, clear; the kept
+  effect's anchor, tint, renewal, pause and end; the weapon's frame) against a recording sink.
+- Drawing **Observed** in `--duel` through a forced glow and effects, not a mod's call: both drawn katanas lit, hilts and the back
+  scabbard not; `kenshi_fire1_small` kept on `Bone(..., "Bip01 Head")` and on `Weapon` burned over the heads and at the hands, following
+  both duellists. Not seen: a `Building` anchor (no player or nest building in the duel), the stretch on a system authored along +Y with its
+  own textures.
 - **Hits before they land:** a registered system implementing `ICombatHitFilter` receives `HitLanding(World, ref PendingHit)` for each melee
   blow about to hit (after the defender's block and dodge are decided), bolt about to strike a body and execution blow on a captive, before
   armour and toughness: the tick, the `CombatHitSource`, attacker and victim, the sequence and blow as in `CombatHit`, whether the victim

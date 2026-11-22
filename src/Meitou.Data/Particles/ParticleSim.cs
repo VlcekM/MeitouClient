@@ -114,7 +114,7 @@ public sealed class ParticleSimulation
     public float LifeScale { get; set; } = 1;
     /// <summary>
     /// The system node's scale: multiplies the technique's and emitters' positions and the emitters' spawn shapes before <see cref="Orientation"/>
-    /// (1 for every effect but a code mod's blade burst, docs/modding.md "Weapon glow").
+    /// (1 for every effect but a code mod's anchored one, docs/modding.md "Visual effects").
     /// </summary>
     public float Stretch { get; set; } = 1;
     /// <summary>

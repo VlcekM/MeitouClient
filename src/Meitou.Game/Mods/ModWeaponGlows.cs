@@ -11,8 +11,8 @@ internal readonly record struct WeaponGlow(Vector3 Colour, float Strength);
 
 /// <summary>
 /// The code mods' display-only weapon glows (docs/modding.md "Weapon glow"): at most one a character, the newest request replacing the one before,
-/// fading in and out over <see cref="FadeSeconds"/>, with an optional particle system played once on the held weapon (at its hilt end, +Y along
-/// the blade, scaled to it) through the mods' effect sink, counted against <see cref="ModEffects.MaxAlive"/>. Set and aged on the host's thread;
+/// fading in and out over <see cref="FadeSeconds"/>, with an optional effect kept on the held weapon (<see cref="EffectAnchor.Weapon"/>, through
+/// <see cref="ModEffects.Keep"/>) for the glow's lifetime. Set and aged on the host's thread;
 /// the renderer reads <see cref="Current"/> each frame, the simulation never. A rejected request is logged once per mod and problem, and dropped.
 /// </summary>
 internal sealed class ModWeaponGlows(ModEffects effects)
@@ -42,16 +42,11 @@ internal sealed class ModWeaponGlows(ModEffects effects)
     /// The seconds a glow takes to come up and to die down.
     /// </summary>
     public const float FadeSeconds = 0.25f;
-    /// <summary>
-    /// The seconds an emitter is started or renewed for past its glow's end, so a clock's drift never stops it first; the glow stops it.
-    /// </summary>
-    const float EmitMargin = 1;
 
     /// <summary>
-    /// One character's glow: who set it, its colour, strength and particle system, the seconds it has shown and those it has left, and its
-    /// emitters while they play.
+    /// One character's glow: who set it, its colour, strength and effect, and the seconds it has shown and those it has left.
     /// </summary>
-    sealed class Glow(string owner, Vector3 colour, float strength, string? effect, string? system, float shown, float left)
+    sealed class Glow(string owner, Vector3 colour, float strength, string? effect, float shown, float left)
     {
         /// <summary>
         /// The mod that set it.
@@ -70,10 +65,6 @@ internal sealed class ModWeaponGlows(ModEffects effects)
         /// </summary>
         public string? Effect { get; } = effect;
         /// <summary>
-        /// The particle system it resolved to.
-        /// </summary>
-        public string? System { get; } = system;
-        /// <summary>
         /// The seconds it has shown (a replacement starts where the glow before stood).
         /// </summary>
         public float Shown { get; set; } = shown;
@@ -82,23 +73,14 @@ internal sealed class ModWeaponGlows(ModEffects effects)
         /// </summary>
         public float Left { get; set; } = left;
         /// <summary>
-        /// Its playing effect (one at most) with its request; empty while the blade is not drawn.
-        /// </summary>
-        public List<(object Handle, ModEffectRequest Request)> Emitters { get; set; } = [];
-        /// <summary>
-        /// A newer request took these emitters over: they are renewed to its lifetime at the next frame.
-        /// </summary>
-        public bool Renew { get; set; }
-
-        /// <summary>
         /// The fade: 0 to 1 over the first and last <see cref="FadeSeconds"/>.
         /// </summary>
         public float Envelope => Math.Clamp(MathF.Min(Shown, Left) / FadeSeconds, 0, 1);
 
         /// <summary>
-        /// The same particles as <paramref name="other"/>'s, so its emitters can go on.
+        /// Its effect's anchor on <paramref name="on"/>'s weapon.
         /// </summary>
-        public bool SameParticles(Glow other) => System is not null && System == other.System && Colour == other.Colour;
+        public static EffectAnchor Anchor(CharacterId on) => EffectAnchor.Weapon(on);
     }
 
     /// <summary>
@@ -109,10 +91,6 @@ internal sealed class ModWeaponGlows(ModEffects effects)
     /// The glows by character.
     /// </summary>
     readonly Dictionary<CharacterId, Glow> _glows = [];
-    /// <summary>
-    /// Emitters of glows that ended or were replaced, stopped at the next frame.
-    /// </summary>
-    readonly List<object> _stopping = [];
     /// <summary>
     /// The mod and problem pairs logged already.
     /// </summary>
@@ -133,20 +111,15 @@ internal sealed class ModWeaponGlows(ModEffects effects)
     public int Count { get { lock (_lock) return _glows.Count; } }
 
     /// <summary>
-    /// The particle emitters playing for the glows.
-    /// </summary>
-    public int Emitting { get { lock (_lock) return _glows.Values.Sum(g => g.Emitters.Count); } }
-
-    /// <summary>
-    /// Makes the weapon of <paramref name="on"/> glow, with <paramref name="effect"/> along its blade (null: none), replacing its glow; false when
-    /// rejected (logged once per mod and problem). A replacement with the same particles and colour keeps its emitters going.
+    /// Makes the weapon of <paramref name="on"/> glow, with <paramref name="effect"/> kept on it (<see cref="ModEffects.Keep"/>; null: none),
+    /// replacing its glow; false when rejected (logged once per mod and problem). A replacement with the same effect and colour renews its
+    /// particles rather than restarting them.
     /// </summary>
     public bool Start(string owner, CharacterId on, Vector3 colour, float seconds, float strength, string? effect = null)
     {
-        string? system = null;
         var problem = Check(on, colour, seconds, strength)
-            ?? Resolved(effect, out system)
-            ?? Set(on, new Glow(owner, colour, strength, effect, system, 0, seconds));
+            ?? Resolved(effect)
+            ?? Set(on, new Glow(owner, colour, strength, effect, 0, seconds));
         if (problem is null) return true;
 
         Tell(owner, problem.Value);
@@ -170,7 +143,7 @@ internal sealed class ModWeaponGlows(ModEffects effects)
             if (!_glows.TryGetValue(on, out var glow) || glow.Owner != owner) return false;
 
             glow.Left = MathF.Min(glow.Left, FadeSeconds * glow.Envelope);
-            Retire(glow);
+            Retire(on, glow);
             return true;
         }
     }
@@ -199,18 +172,14 @@ internal sealed class ModWeaponGlows(ModEffects effects)
     static bool InRange(float channel) => channel is >= 0 and <= MaxColour;
 
     /// <summary>
-    /// The particle system of <paramref name="effect"/> as <see cref="ModContext.PlayEffect(string, Vector3, float, Vector3?)"/> resolves it;
-    /// <see cref="Problem.UnknownEffect"/> when one is named and resolves to none.
+    /// <see cref="Problem.UnknownEffect"/> when <paramref name="effect"/> is named and resolves to no particle system (as
+    /// <see cref="ModContext.PlayEffect(string, Vector3, float, Vector3?)"/> resolves it).
     /// </summary>
-    Problem? Resolved(string? effect, out string? system)
-    {
-        system = effect is null ? null : effects.System(effect);
-        return effect is not null && system is null ? Problem.UnknownEffect : null;
-    }
+    Problem? Resolved(string? effect) => effect is not null && effects.System(effect) is null ? Problem.UnknownEffect : null;
 
     /// <summary>
-    /// Sets <paramref name="glow"/>, coming up from where the one it replaces stood and taking over its emitters when the particles are the same;
-    /// <see cref="Problem.Full"/> for a new character past <see cref="MaxGlowing"/>.
+    /// Sets <paramref name="glow"/>, coming up from where the one it replaces stood, and keeps its effect (the one replaced ends unless it is the
+    /// same); <see cref="Problem.Full"/> for a new character past <see cref="MaxGlowing"/>.
     /// </summary>
     Problem? Set(CharacterId on, Glow glow)
     {
@@ -222,35 +191,31 @@ internal sealed class ModWeaponGlows(ModEffects effects)
             if (replaces)
             {
                 glow.Shown = FadeSeconds * before!.Envelope;
-                TakeOver(glow, before);
+                if (before.Effect != glow.Effect || before.Owner != glow.Owner) Retire(on, before);
             }
             _glows[on] = glow;
+            Keep(on, glow);
             return null;
         }
     }
 
     /// <summary>
-    /// The new glow keeps the old one's emitters (renewed at the next frame) when its particles are the same; else they stop.
+    /// Keeps the glow's effect on the weapon for its lifetime, in its colour (white: the system's own).
     /// </summary>
-    void TakeOver(Glow glow, Glow before)
+    void Keep(CharacterId on, Glow glow)
     {
-        if (!glow.SameParticles(before) || before.Emitters.Count == 0)
-        {
-            Retire(before);
-            return;
-        }
+        if (glow.Effect is null) return;
 
-        glow.Emitters = [.. before.Emitters.Select(e => (e.Handle, e.Request with { Owner = glow.Owner, Effect = glow.Effect! }))];
-        glow.Renew = true;
+        Vector3? tint = glow.Colour == Vector3.One ? null : glow.Colour;
+        effects.Keep(glow.Owner, glow.Effect, Glow.Anchor(on), tint, glow.Left);
     }
 
     /// <summary>
-    /// Hands the glow's emitters to be stopped at the next frame.
+    /// Ends the glow's effect.
     /// </summary>
-    void Retire(Glow glow)
+    void Retire(CharacterId on, Glow glow)
     {
-        foreach (var (handle, _) in glow.Emitters) _stopping.Add(handle);
-        glow.Emitters = [];
+        if (glow.Effect is not null) effects.Stop(glow.Owner, glow.Effect, Glow.Anchor(on));
     }
 
     /// <summary>
@@ -284,84 +249,23 @@ internal sealed class ModWeaponGlows(ModEffects effects)
     }
 
     /// <summary>
-    /// Once a frame on the host's thread: ages every glow by <paramref name="seconds"/> and drops those done, then, with a
-    /// <paramref name="sink"/>, plays their particles: stops the retired emitters, starts a glow's along its blade once the blade is drawn, renews
-    /// those a newer request took over and moves the others with the blade (all of a glow's stop while its blade is not drawn).
+    /// Once a frame on the host's thread: ages every glow by <paramref name="seconds"/>, ending those done with their effects.
     /// </summary>
-    public void Advance(float seconds, IModEffectSink? sink = null)
+    public void Advance(float seconds)
     {
         _hostThread = Environment.CurrentManagedThreadId;
         lock (_lock)
         {
-            Age(seconds);
-            if (sink is null) return;
-
-            foreach (var handle in _stopping) sink.Renew(handle, 0);
-            _stopping.Clear();
-            foreach (var (on, glow) in _glows) Emit(on, glow, sink);
-            effects.Reserved = _glows.Values.Sum(g => g.Emitters.Count);
-        }
-    }
-
-    /// <summary>
-    /// Takes <paramref name="seconds"/> off every glow, retiring and dropping those done.
-    /// </summary>
-    void Age(float seconds)
-    {
-        foreach (var (on, glow) in _glows)
-        {
-            glow.Shown += seconds;
-            glow.Left -= seconds;
-            if (glow.Left > 0) continue;
-
-            Retire(glow);
-            _glows.Remove(on);
-        }
-    }
-
-    /// <summary>
-    /// Plays one glow's particles for this frame (<see cref="Advance"/>).
-    /// </summary>
-    void Emit(CharacterId on, Glow glow, IModEffectSink sink)
-    {
-        if (glow.System is null) return;
-        if (glow.Left <= FadeSeconds)
-        {
-            Retire(glow);   // fading out: its particles die down with it
-            return;
-        }
-
-        if (glow.Emitters.Count == 0)
-        {
-            StartEmitters(on, glow, sink);
-            return;
-        }
-        if (glow.Renew)
-        {
-            foreach (var (handle, _) in glow.Emitters) sink.Renew(handle, glow.Left + EmitMargin);
-            glow.Renew = false;
-        }
-        foreach (var (handle, request) in glow.Emitters)
-        {
-            if (!sink.Track(handle, request))
+            foreach (var (on, glow) in _glows)
             {
-                Retire(glow);
-                return;
+                glow.Shown += seconds;
+                glow.Left -= seconds;
+                if (glow.Left > 0) continue;
+
+                Retire(on, glow);
+                _glows.Remove(on);
             }
         }
-    }
-
-    /// <summary>
-    /// Starts the glow's effect on the blade when it fits under the effects' cap; nothing while the blade is not drawn (it fails to start).
-    /// The particles take the glow's colour, but for white (their own).
-    /// </summary>
-    void StartEmitters(CharacterId on, Glow glow, IModEffectSink sink)
-    {
-        if (!effects.Fits(1)) return;
-
-        Vector3? tint = glow.Colour == Vector3.One ? null : glow.Colour;
-        var request = new ModEffectRequest(glow.Owner, glow.Effect!, glow.System!, default, on, null, tint, glow.Left + EmitMargin, OnBlade: true);
-        if (sink.Start(request) is { } handle) glow.Emitters.Add((handle, request));
     }
 
     /// <summary>
@@ -389,24 +293,16 @@ internal sealed class ModWeaponGlows(ModEffects effects)
         {
             foreach (var (on, glow) in _glows)
             {
-                if (glow.Owner != owner) continue;
-
-                Retire(glow);
-                _glows.Remove(on);
+                if (glow.Owner == owner) _glows.Remove(on);   // the host drops the mod's effects too
             }
         }
     }
 
     /// <summary>
-    /// Drops every glow and forgets their emitters (a new world: its characters and particles are not the old world's).
+    /// Drops every glow (a new world: its characters are not the old world's; the host clears the effects too).
     /// </summary>
     public void Clear()
     {
-        lock (_lock)
-        {
-            _glows.Clear();
-            _stopping.Clear();
-            effects.Reserved = 0;
-        }
+        lock (_lock) _glows.Clear();
     }
 }

@@ -902,13 +902,14 @@ when finished
 {1} to {2} has failed
 {1} was defeated on their way to {2}
 
-# Not shown as Meitou's text: widget, skin and icon names, alignments, formats, fonts, record names (translated by .translation files), Workshop mod titles, editor fields.
+# Not shown as Meitou's text: widget, skin and icon names, alignments, formats, fonts, skeleton bone names, record names (translated by .translation files), Workshop mod titles, editor fields.
  d MMM
 ACES
 Alert
 Ancient
 Background
 Bad
+Bip01 Spine2
 Bottom
 Brass
 Button
