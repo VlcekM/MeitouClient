@@ -378,6 +378,12 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// The frame clock at the last <see cref="Update"/> (NaN before the first).
     /// </summary>
     double _lastSeconds = double.NaN;
+
+    /// <summary>
+    /// The frame clock's step at the last <see cref="Update"/>, clamped to 0.25 s as the groups step (0 at the first): still while paused, longer
+    /// at higher speeds. The code mods' effects age by it.
+    /// </summary>
+    internal float LastStep { get; private set; }
     /// <summary>
     /// Particles and units drawn in the last frame, and the units active.
     /// </summary>
@@ -782,6 +788,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
     public void Update(double seconds, WorldCamera camera)
     {
         long start = Stopwatch.GetTimestamp();
+        LastStep = double.IsNaN(_lastSeconds) ? 0 : (float)Math.Clamp(seconds - _lastSeconds, 0, 0.25);
         UpdateInner(seconds, camera);
         _updateTotal += Stopwatch.GetTimestamp() - start;
         _updateFrames++;

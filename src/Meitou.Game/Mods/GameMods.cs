@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Numerics;
 using Meitou.Game;
 using Meitou.Game.DevTools;
+using Meitou.Game.Effects;
 using Meitou.Game.Host;
 using Meitou.Simulation;
 using Meitou.Simulation.Combat;
@@ -41,6 +42,14 @@ sealed class GameMods(GameHost host)
     /// This frame's hits handed to the mods' feeds, kept to avoid allocating.
     /// </summary>
     readonly List<CombatHit> _frameHits = [];
+    /// <summary>
+    /// The world the mods' effects were queued for; a new world drops them.
+    /// </summary>
+    World? _effectsFor;
+    /// <summary>
+    /// Plays the mods' effects; made with the first one.
+    /// </summary>
+    ModEffectPlayer? _effectPlayer;
 
     /// <summary>
     /// Starts the JIT warm-up now, or (with code mods enabled) once they are initialized.
@@ -171,6 +180,26 @@ sealed class GameMods(GameHost host)
         _frameHits.Clear();
         while (_hitFeed.TryDequeue(out var hit)) _frameHits.Add(hit);
         Mods.DeliverCombatHits(_frameHits);
+    }
+
+    /// <summary>
+    /// Once a frame, after the hits: the mods' queued effects start and the playing ones follow their characters (docs/modding.md "Visual
+    /// effects"). Nothing without code mods; a new world drops the old world's effects.
+    /// </summary>
+    internal void UpdateModEffects()
+    {
+        if (Mods is null) return;
+
+        var effects = Mods.Effects;
+        _effectPlayer ??= new ModEffectPlayer(host);
+        effects.Resolve ??= _effectPlayer.Resolve;
+        var world = host.Session?.World;
+        if (!ReferenceEquals(_effectsFor, world))
+        {
+            _effectsFor = world;
+            effects.Clear();
+        }
+        if (!effects.Idle) _effectPlayer.Advance(effects);
     }
 
     /// <summary>

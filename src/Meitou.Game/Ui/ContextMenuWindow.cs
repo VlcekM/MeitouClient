@@ -192,10 +192,18 @@ sealed class ContextMenuWindow(PlayerInterface player)
     static int? OrderOf(string caption) => VerbOrders.TryGetValue(SplitChance(caption).Caption, out int order) ? order : null;
 
     /// <summary>
-    /// The menu for <paramref name="verbs"/>, as the original fills it: an animals-only selection keeps only its orders, the rest sorted by order
-    /// number; null when none is left.
+    /// Whether <paramref name="caption"/> is the label of one of the original's verbs. A code mod's job offer may not take one: its row would read
+    /// as the game's.
     /// </summary>
-    internal ContextMenu? Menu(string title, Vector2 at, List<(string Caption, Action Give)> verbs)
+    internal static bool IsGameVerb(string caption) => OrderOf(caption) is not null;
+
+    /// <summary>
+    /// The menu for <paramref name="verbs"/>, as the original fills it: an animals-only selection keeps only its orders, the rest sorted by order
+    /// number. Then <paramref name="offered"/>, the rows of the code mods' job offers (<see cref="Building.BuildMode.OfferedJobs"/>): an offer
+    /// names who it is for, so its row stays for an animals-only selection too. Null when no row is left.
+    /// </summary>
+    internal ContextMenu? Menu(string title, Vector2 at, List<(string Caption, Action Give)> verbs,
+        IReadOnlyList<(string Caption, Action Give)>? offered = null)
     {
         var selected = player.Selected();
         IEnumerable<(string Caption, Action Give)> kept = verbs;
@@ -203,6 +211,8 @@ sealed class ContextMenuWindow(PlayerInterface player)
             kept = kept.Where(v => OrderOf(v.Caption) is { } o && AnimalVerbOrders.Contains(o));
 
         var list = kept.Select((v, i) => (v, i)).OrderBy(x => OrderOf(x.v.Caption) ?? int.MaxValue).ThenBy(x => x.i).Select(x => x.v).ToList();
+        if (offered is not null) list.AddRange(offered);
+
         return list.Count == 0 ? null : new ContextMenu(title, at, list);
     }
 

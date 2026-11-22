@@ -271,7 +271,7 @@ public sealed partial class LockSystem
         && (door.IsGate || DoorPlan.AggressiveTowards(world, Combat, c, door.Building, door.Position) <= 1);
 
     /// <summary>
-    /// The door construction progress (1 when whole) one point of <see cref="BlowDamage"/> takes off (<c>DoorStuff::vfunc_62</c>).
+    /// The door construction progress (material units) one point of <see cref="BlowDamage"/> takes off (<c>DoorStuff::vfunc_62</c>).
     /// </summary>
     public const float ProgressPerDamage = 0.015f;
 
@@ -312,8 +312,9 @@ public sealed partial class LockSystem
     }
 
     /// <summary>
-    /// Takes <paramref name="damage"/> (the clamped f) x <see cref="ProgressPerDamage"/> off a door's <see cref="Fixture.DoorProgress"/>; at 0 it
-    /// breaks: unlocked and opened. True when it broke.
+    /// Takes <paramref name="damage"/> (the clamped f) x <see cref="ProgressPerDamage"/> material units off a door's
+    /// <see cref="Fixture.DoorProgress"/> (a fraction of its <see cref="Fixture.DoorTarget"/>, as the repair adds); at 0 it breaks: unlocked and
+    /// opened. True when it broke.
     /// </summary>
     static bool Damage(World world, Fixture door, float damage)
     {
@@ -321,7 +322,7 @@ public sealed partial class LockSystem
 
         // the damage number at the door (FUN_14029d2b0); queued only while the host shows floaters
         world.Floaters?.Enqueue(Floater.BuildingHit(door.Position, (int)damage));
-        door.DoorProgress -= damage * ProgressPerDamage;
+        door.DoorProgress -= damage * ProgressPerDamage / door.DoorTarget;
         if (door.DoorProgress > 0) return false;
         door.DoorProgress = 0;
         if (door.Lock is { } l) l.Locked = false;
