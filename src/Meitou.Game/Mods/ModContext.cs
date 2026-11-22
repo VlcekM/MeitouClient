@@ -408,6 +408,39 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// An offer of one of the mod's job types on the player's buildings (docs/modding.md "Mod jobs"): the right-click menu of a finished building
+    /// of the player's faction whose record the offer names shows its caption to a selection holding a character it is for, and choosing it gives
+    /// each such character the job on that building, in the place of the one of that type it held. After the type's <see cref="AddJobType"/>; one
+    /// offer per type. Refused: what <see cref="Simulation.Production.ModJobOffer.Refusal"/> names, a caption that is the label of one of the
+    /// game's own verbs, and a building that is no BUILDING of the loaded data.
+    /// </summary>
+    public void AddJobOffer(Simulation.Production.ModJobOffer offer)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(offer);
+        if (!Pending.JobTypes.ContainsKey(offer.Type))
+            throw new InvalidOperationException($"Job type {offer.Type} is not one mod '{Id}' has claimed (AddJobType comes first).");
+        if (Pending.JobOffers.Any(o => o.Type == offer.Type))
+            throw new InvalidOperationException($"Job type {offer.Type} is offered twice by mod '{Id}'.");
+        if (JobOfferRefusal(offer) is { } refusal) throw new ArgumentException(refusal, nameof(offer));
+
+        Pending.JobOffers.Add(offer with { Buildings = [.. offer.Buildings.Distinct(StringComparer.Ordinal)] });
+    }
+
+    /// <summary>
+    /// Why the mod's job offer cannot be registered, or null: its own refusal, a caption the game's verbs have, or a building the data lacks.
+    /// </summary>
+    string? JobOfferRefusal(Simulation.Production.ModJobOffer offer)
+    {
+        if (offer.Refusal() is { } refusal) return refusal;
+        if (ContextMenuWindow.IsGameVerb(offer.Caption))
+            return $"'{offer.Caption}' is the label of one of the game's own verbs.";
+
+        string? missing = offer.Buildings.FirstOrDefault(b => Data.Find(b) is not { Type: global::Meitou.Data.Fcs.FcsRecordType.Building });
+        return missing is null ? null : $"'{missing}' is not a BUILDING of the loaded data.";
+    }
+
+    /// <summary>
     /// A goal type of the mod's own (docs/modding.md "Chooser goals and jobs"): a task type number (<see cref="SimulationExtensions.FirstModCode"/>
     /// and up, so never a game task) that AI_TASK records of a data mod name in AI packages and goal lists; characters whose lists hold it weigh it in
     /// the AI's chooser by the desire of the goal one of the mod's systems registers (<see cref="Meitou.Simulation.Ai.IChooserOwner"/>), and the
@@ -452,6 +485,24 @@ public sealed class ModContext
         ArgumentNullException.ThrowIfNull(view);
         Pending.HitFeeds.Add(new ModHitFeed(Id, view));
     }
+
+    /// <summary>
+    /// Plays a display-only effect at a world point (docs/modding.md "Visual effects"): <paramref name="effect"/> is an EFFECT record's string id
+    /// or a particle system name, <paramref name="seconds"/> how long it emits (0 to <see cref="ModEffects.MaxSeconds"/>), <paramref name="tint"/>
+    /// the particles' colour (rgb, 1 the full channel, up to <see cref="ModEffects.MaxTint"/>; null: their texture's). On the host's thread, from a
+    /// host-side callback such as a combat hit feed, never a tick system; queued and started at the next frame. False when rejected (logged once
+    /// per mod and problem).
+    /// </summary>
+    public bool PlayEffect(string effect, System.Numerics.Vector3 at, float seconds = 1, System.Numerics.Vector3? tint = null) =>
+        _registry.Effects.Play(Id, effect, at, false, CharacterId.None, null, tint, seconds);
+
+    /// <summary>
+    /// Plays a display-only effect on a character, following its <paramref name="bone"/> (null: the chest, <c>Bip01 Spine2</c>) while it emits;
+    /// nothing while the character is not drawn. Otherwise as <see cref="PlayEffect(string, System.Numerics.Vector3, float,
+    /// System.Numerics.Vector3?)"/>.
+    /// </summary>
+    public bool PlayEffect(string effect, CharacterId on, string? bone = null, float seconds = 1, System.Numerics.Vector3? tint = null) =>
+        _registry.Effects.Play(Id, effect, default, true, on, bone, tint, seconds);
 
     /// <summary>
     /// Arranges the faction tab's relations list (docs/modding.md "Faction list"): <paramref name="arrange"/> gets the rows the tab would show,

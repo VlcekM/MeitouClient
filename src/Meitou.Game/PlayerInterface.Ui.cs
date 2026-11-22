@@ -629,7 +629,9 @@ sealed partial class PlayerInterface
             [UiSlots.Selection] = FaithfulSlot("InformationPanel"),
             [UiSlots.Squad] = FaithfulSlot("SquadPanel"),
         };
-        controls.AddRange(RecordPortraits.Resolve(hud ? _uiHost.Arrange(UiMode, Width, Height, b, slots) : []));
+        var overlay = hud ? _uiHost.Arrange(UiMode, Width, Height, b, slots).ToList() : [];
+        FaithfulScreens.ArrangeOverlayEdits(overlay);
+        controls.AddRange(RecordPortraits.Resolve(overlay));
         PortraitBar.SquadBarRow = 0;
         if (controls.FirstOrDefault(c => c.Name == "SquadPanel") is { } squadPanel)
             PortraitBar.AddSquadPortraits(controls, squadPanel.Bounds);
@@ -813,9 +815,15 @@ sealed partial class PlayerInterface
             else ScrollBars.HudScrollAction(key, c.Action);
             return true;
         }
+        if (FaithfulScreens.PressOverlayEdit(c, p)) return true;
         _uiHost.Dispatch(c);
         return true;
     }
+
+    /// <summary>
+    /// A mod overlay text box's event (<see cref="UiHost.DispatchText"/>); false for a screen's.
+    /// </summary>
+    internal bool OverlayText(MyGuiEvent e) => _uiHost.DispatchText(e);
 
     /// <summary>
     /// The F1 key and the HLP button share one handler: toggle the Tutorials window (FUN_1406e1f20; ui-screens.md).

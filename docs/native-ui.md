@@ -172,7 +172,7 @@ insert into builtin layout. Override factory or choose explicit child placement.
 
 ## Layout, input and lifetime
 
-Panels/labels/buttons/images/compound children: pixel/percentage/offset/right-bottom placement,
+Panels/labels/buttons/images/text boxes ([modding](modding.md#registration-surface))/compound children: pixel/percentage/offset/right-bottom placement,
 absolute/row/column flow, padding/gaps. Parent disabled propagates; clip drawing/hits to parent/
 slot. Labels and images pass input through; panels block world in region. An image node
 (`UiNodeKind.Image`) shows the file at `UiNode.Image` (full path; PNG, TGA, JPEG, BMP, DDS) stretched
