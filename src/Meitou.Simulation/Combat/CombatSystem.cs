@@ -126,6 +126,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         GunnerFacesBarrel = Settings.GunnerFacesBarrel;
         PunchReachFix = Settings.PunchReachFix;
         AnimalMovesFix = Settings.AnimalMovesFix;
+        TurretAssault = Settings.TurretAssault;
         StuckLimit = Math.Clamp(Settings.StuckLimit, RangedTuning.MinStuckLimit, RangedTuning.MaxStuckLimit);
         _xp = new XpService(constants, options);
     }
@@ -173,6 +174,13 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     /// cref="CombatOptions.AnimalMovesFix"/>, Meitou fix; docs/game/animals.md "Natural weapon"); off: its weapon's own, as the game does.
     /// </summary>
     public bool AnimalMovesFix { get; set; }
+
+    /// <summary>
+    /// A harpoon from a player gunner's turret that hits its intended victim books an Assault as Attack Unprovoked does, under the same gates
+    /// (<see cref="Crime.CrimeSystem.Assault"/>: not on a victim already fighting, a bandit, a hostile faction) (<see
+    /// cref="CombatOptions.TurretAssault"/>, Meitou fix; docs/game/economy.md "Turret fire"); off: no crime, as the game does.
+    /// </summary>
+    public bool TurretAssault { get; set; }
 
     /// <summary>
     /// A fist attack whose <c>attack distance</c> is negative but above -100 (base data: "ma badpunch", -4, the only punch up to martial arts 20)

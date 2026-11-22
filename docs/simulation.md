@@ -704,7 +704,7 @@ Implemented (`PopulationRoaming.cs`):
     (N 20, pool 14) refills an 8-duck squad after its two squads die; drained to 1 with all dead it is wiped out and saved with `ded`, `tod`,
     `pop2` 1.008, `popd2` 20.
   - **Homeless squads** (`PopulationHomeless.cs`; [original rules](game/factions-squads-towns.md#off-screen-world)): every 2 s a squad whose
-    leader patrols (a PATROL goal, in any package: the Border Zone's starving bandits, a town's patrol squads) walks to its patrol point: the leader to the point exactly (`AiSystem.ActPatrol`; the point is `Squad.PatrolPoint`, apart from the squad's home, hashed, not saved), the
+    leader patrols (a PATROL goal, in any package and whatever its mission town: the Border Zone's starving bandits, a town's patrol squads, a fogman nest's Fog Prince squads under their cannibal retreat, #1107) walks to its patrol point: the leader to the point exactly (`AiSystem.ActPatrol`; the point is `Squad.PatrolPoint`, apart from the squad's home, hashed, not saved), the
     others following it; within 100 of it, or once the leader's walk to it is over (also short of it: no way there), the next is drawn (the original's "move ended"); a town drawn with `patrol
     approaches towns` is aimed 200 outside its first gate that is not a ruin with gate code 0 or unknown (unknown = outside, engine choice) or wall
     with `interior` references, so bandits stop outside the Hub ([patrol task](game/factions-squads-towns.md#off-screen-world)).

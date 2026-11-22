@@ -213,15 +213,15 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// One squad's patrol (<c>Task_Patrol</c>): when its leader acts a PATROL goal or order (<see cref="Patrols"/>) that is not under a mission town (a trader on its way, an
-    /// assault or occupation roaming the town it took), it draws the next point once it has reached the last
-    /// (<see cref="PatrolPoint"/>) and walks to it. Every squad does, homeless or not: the picker's only caller is the patrol task
+    /// One squad's patrol (<c>Task_Patrol</c>): when its leader acts a PATROL goal or order (<see cref="Patrols"/>), it draws the next point once it
+    /// has reached the last (<see cref="PatrolPoint"/>) and walks to it. Every squad does, homeless or not, whatever its package's mission town (a
+    /// cannibal retreat's nest squad too, #1107): the picker's only caller is the patrol task, which reads only the platoon's <c>PatrolInfo</c>
     /// (<c>FUN_1408fd6c0</c>, <c>FUN_1408fe0d0</c>, <b>Verified</b>).
     /// </summary>
     void PatrolStep(World world, Squad squad, int slot, int group, ZoneCoordinate zone)
     {
         var table = world.Characters;
-        if (!Patrols(table.Cold(slot)) || squad.Ai is { Destination.IsNone: false }) return;
+        if (!Patrols(table.Cold(slot))) return;
         _patrolSeen.Add(squad.Id);
         var at = new Vector2(table.Previous[slot].Position.X, table.Previous[slot].Position.Z);
         _homelessPatrols.TryGetValue(squad.Id, out var patrol);

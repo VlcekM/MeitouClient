@@ -758,7 +758,7 @@ sealed class GameSaves(GameHost host)
             Combat = new Simulation.Combat.CombatOptions { SelfApproach = false, TickMedical = false, RecordLog = host.Duel.IsDuel,
                 AttackSlots = host.Config.AttackSlotsOption, StuckLimit = Gameplay.HarpoonLimit, LateDefences = host.Config.LateDefences,
                 GunnerFacesBarrel = host.Config.FixGunnerFacing, PunchReachFix = host.Config.FixPunchReach,
-                AnimalMovesFix = host.Config.FixAnimalMoves },
+                AnimalMovesFix = host.Config.FixAnimalMoves, TurretAssault = host.Config.FixTurretAssault },
             AnimalsPickUp = host.Config.AnimalsPickUp,
             AnimationLengths = host.AnimationLengths,
             AnimationLibrary = host.AnimationLibrary,

@@ -21,9 +21,10 @@ public sealed partial class AiSystem
     /// <summary>
     /// The static guard's finder factor (goals 38 and 268, <c>FUN_14099edd0</c>, <b>Verified</b>): in a public home of designation shop, bar or
     /// headquarters of a real faction, a sensed neutral stranger (the sense iterator takes NEUTRAL and leaves out allies, KO and imprisoned, and the
-    /// tags 0x20 and 0x80) that does not sneak and stands inside a building other than the home is drawn uniformly; the guard then stands at the
-    /// guard post nearest it (<see cref="AiMind.GuardVisitorAt"/>, read by <see cref="SpotFor"/>) with factor 1.0, else the plain post with 0.5. The
-    /// home's designation is its first squad's template's (<see cref="Note"/>'s simplification).
+    /// tags 0x20 and 0x80) that does not sneak and stands inside the home (its building hand equals the home's: hand vfunc 0x10 is <c>!=</c>,
+    /// <c>FUN_1400cd0b0</c>, and the stranger is taken when it is false) is drawn uniformly; the guard then stands at the guard post nearest it
+    /// (<see cref="AiMind.GuardVisitorAt"/>, read by <see cref="SpotFor"/>) with factor 1.0, else the plain post with 0.5. The home's designation is
+    /// its first squad's template's (<see cref="Note"/>'s simplification).
     /// </summary>
     float GuardFactor(World world, CharacterId self, Blackboard board, AiMind mind)
     {
@@ -48,7 +49,7 @@ public sealed partial class AiSystem
             if (table.Cold(e.Target) is not { } other || (other.Orders & CharacterOrders.Sneak) != 0 || !other.CarriedBy.IsNone)
                 continue;
 
-            if (world.Sight.BuildingOf(e.Target) is { } inside && inside != home.Key)
+            if (world.Sight.BuildingOf(e.Target) is { } inside && inside == home.Key)
                 strangers.Add(table.Previous[e.Target].Position);
         }
 

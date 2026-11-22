@@ -166,6 +166,12 @@ msgstr "분대 주변 지역으로 돌아온 분대는 떠나 있던 시간만�
 msgid "A swamp turtle butts and bites when it fights. In the game it fights with a sword or club drawn for it, whose moves its body cannot play, so its blows land without any motion."
 msgstr "늪 거북은 싸울 때 들이받고 뭅니다. 게임에서는 그를 위해 꺼낸 검이나 곤봉으로 싸우는데, 몸이 그 동작을 재생할 수 없어 공격이 아무 움직임 없이 적중합니다."
 
+msgid "Turret fire is a crime"
+msgstr "포탑 사격은 범죄"
+
+msgid "Shooting a turret at someone who is not an enemy and not fighting is an assault, as attacking them in person is, and guards who see it put a bounty on you. In the game turret fire is never a crime: the victim's faction only likes you less."
+msgstr "적이 아니고 싸우고 있지도 않은 사람을 포탑으로 쏘면 직접 공격한 것과 같은 폭행이 되며, 이를 본 경비병이 현상금을 겁니다. 원래 게임에서는 포탑 사격이 결코 범죄가 아니며, 피해자의 세력 호감도만 떨어집니다."
+
 msgid "A town far from your squads is taken over or destroyed as soon as its story calls for it, so the map and the factions show it at once. In the game it changes only when you come near."
 msgstr "분대에서 멀리 떨어진 마을은 이야기가 요구하는 즉시 점령되거나 파괴되므로 지도와 세력에 바로 나타납니다. 게임에서는 가까이 가야만 바뀝니다."
 

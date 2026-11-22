@@ -166,6 +166,12 @@ msgstr "Отряд, возвращающийся в область вокруг 
 msgid "A swamp turtle butts and bites when it fights. In the game it fights with a sword or club drawn for it, whose moves its body cannot play, so its blows land without any motion."
 msgstr "Болотная черепаха в бою бодается и кусается. В оригинальной игре она дерётся выданным ей мечом или дубиной, движения которых её тело не может исполнить, поэтому удары наносятся без всякой анимации."
 
+msgid "Turret fire is a crime"
+msgstr "Стрельба из турели — преступление"
+
+msgid "Shooting a turret at someone who is not an enemy and not fighting is an assault, as attacking them in person is, and guards who see it put a bounty on you. In the game turret fire is never a crime: the victim's faction only likes you less."
+msgstr "Стрельба из турели по тому, кто не враг и не сражается, — это нападение, как и атака лично, и стражники, увидевшие это, назначат награду за вашу голову. В игре стрельба из турели никогда не преступление: фракция жертвы лишь хуже к вам относится."
+
 msgid "A town far from your squads is taken over or destroyed as soon as its story calls for it, so the map and the factions show it at once. In the game it changes only when you come near."
 msgstr "Город далеко от ваших отрядов захватывается или уничтожается, как только этого требует его история, и карта и фракции сразу это показывают. В оригинальной игре он меняется только когда вы подходите близко."
 

@@ -23,6 +23,11 @@ struct Projectile
     public bool ShooterIsPlayer;
 
     /// <summary>
+    /// A turret's harpoon (<see cref="CombatSystem.TurretAssault"/>).
+    /// </summary>
+    public bool Turret;
+
+    /// <summary>
     /// The shooter's effective Crossbows (or Turrets) level when it fired: the victim's "hit taken" XP weighs it.
     /// </summary>
     public float ShooterSkill;

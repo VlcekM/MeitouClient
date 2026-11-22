@@ -1071,8 +1071,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             AiBehaviour.Sleep => SleepingDesire(world, board, self.Slot),
             AiBehaviour.GoHome => AtHomeTown(world, squad, board, self) ? 0 : GoHomeDesire(world, self),
             // Static guard's finder (FUN_14099edd0, Verified; 38 and 268 both register it, 268 with the indoors flag; 157 has its own, FUN_14099f1a0)
-            // returns 0.5 on its normal exit; only its visitor branch (a node beside a neutral stranger, not modelled) returns 1. Staying home needs
-            // a piece of the home's furniture to operate (the finder of 43 returns 0 without one).
+            // returns 0.5 on its normal exit; only its visitor branch (the guard post nearest a neutral stranger in the home) returns 1. Staying
+            // home needs a piece of the home's furniture to operate (the finder of 43 returns 0 without one).
             AiBehaviour.Post when type == TaskType.StayInHome => TownPlaceClaims.HasStayingFurniture(world, board.OwnHome) ? 1 : 0,
             AiBehaviour.Post when type is TaskType.StandAtGuardNodeHomebuilding or TaskType.StandAtGuardNodeHomebuildingIndoorsOnly =>
                 GuardFactor(world, self, board, mind),
@@ -2135,6 +2135,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         // a renewed goal draws its node anew
         mind.NodeRoll = Rng.Hash(world.Seed, Rng.Key(table.IdOf(slot)), RngPurpose.Think, SeedSalts.NodePick ^ (ulong)++mind.NodeEpoch);
+        mind.GuardVisitorHeld = mind.GuardVisitorAt;
 
         // A spot given up is tried again from wherever the character is now (engine choice: the walk may have failed from the old place only).
         mind.HomeUnreachable = false;
@@ -3046,7 +3047,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             _ => HomeSpotKind.General,
         };
         ulong roll = kind == HomeSpotKind.Bed ? 0 : mind.NodeRoll;   // beds stay round robin (the bed search is not the node finders')
-        if (kind == HomeSpotKind.Guard && mind.GuardVisitorAt is { } visitor && Nearest(home, kind, visitor) is { } beside)
+        if (kind == HomeSpotKind.Guard && mind.GuardVisitorHeld is { } visitor && Nearest(home, kind, visitor) is { } beside)
             return (Flat(beside.Position), true, beside.Position.Y, beside.Yaw, true);
 
         if (Pick(home, kind, mind.MemberIndex, roll) is { } spot)

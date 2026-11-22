@@ -1442,10 +1442,16 @@ public sealed class AiMind
     public TravelAsk TravelAsk { get; internal set; }
 
     /// <summary>
-    /// Where the stranger a static guard stands beside is (<see cref="AiSystem"/>'s <c>GuardFactor</c>, FUN_14099edd0); null: the plain guard post.
-    /// Derived by the think; hashed while set.
+    /// Where the stranger the static guard's finder drew on its latest run is (<see cref="AiSystem"/>'s <c>GuardFactor</c>, FUN_14099edd0); null:
+    /// the plain guard post. Derived by the think; hashed while set.
     /// </summary>
     public Vector3? GuardVisitorAt { get; set; }
+
+    /// <summary>
+    /// The stranger a static guard stands beside: <see cref="GuardVisitorAt"/> as it was when the goal was taken up, kept while the goal stays
+    /// current (the pick keeps a current goal without setting its target again, FUN_140510650); null: the plain guard post. Hashed while set.
+    /// </summary>
+    public Vector3? GuardVisitorHeld { get; set; }
 
     /// <summary>
     /// What the think asks of the <see cref="FleeSystem"/> this tick: to run the character from its threats (Self preservation's provider 35) or from
@@ -1625,6 +1631,12 @@ public sealed class AiMind
         {
             hasher.Add(0x47756172);
             hasher.Add(visitor);
+        }
+
+        if (GuardVisitorHeld is { } held)
+        {
+            hasher.Add(0x47486c64);
+            hasher.Add(held);
         }
 
         if (FightFrom != 0) hasher.Add(FightFrom);

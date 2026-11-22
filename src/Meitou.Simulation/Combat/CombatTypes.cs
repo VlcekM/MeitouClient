@@ -138,6 +138,11 @@ public sealed record CombatOptions
     public bool PunchReachFix { get; init; }
 
     /// <summary>
+    /// A player gunner's turret harpoon that hits its intended victim books an Assault (Meitou fix); false: no crime, as the game does.
+    /// </summary>
+    public bool TurretAssault { get; init; }
+
+    /// <summary>
     /// An animal fighting with a weapon drawn from its manufacturer (the Swamp Turtle) picks the elephant creature techniques (Meitou fix); false:
     /// its weapon's own, whose clips its skeleton lacks, as the game does.
     /// </summary>

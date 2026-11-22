@@ -492,7 +492,7 @@ public sealed partial class CombatSystem
     /// A turret's shot (<c>FUN_14043a730</c> with a <c>GunClassTurret</c>): from the muzzle along the barrel tilted by u x D degrees (D =
     /// <see cref="RangedFormulas.Deviation"/> of the gun's <c>accuracy deviation at 0 skill</c> with Turrets and perception), a harpoon of
     /// <see cref="TurretFormulas.Harpoon"/> with the height factor from the muzzle, the gunner's friendly-fire avoidance. The harpoon is the gunner's
-    /// bolt: its hits, XP and crimes are the gunner's.
+    /// bolt: its hits, XP and crimes are the gunner's (a player gunner's Assault: <see cref="TurretAssault"/>).
     /// </summary>
     void FireTurret(World world, TurretState t, int g, CharacterCold cold, int target, Vector3 muzzle, Vector3 forward)
     {
@@ -518,6 +518,7 @@ public sealed partial class CombatSystem
             TargetGeneration = prev[target].Generation,
             ShooterFaction = cold.Faction,
             ShooterIsPlayer = cold.IsPlayer,
+            Turret = true,
             ShooterSkill = Eff(cold, StatsEnumerated.Turrets),
             Position = muzzle,
             Direction = dir,
