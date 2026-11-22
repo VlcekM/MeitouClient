@@ -192,18 +192,22 @@ internal sealed class ModEffects
     }
 
     /// <summary>
-    /// A problem in words.
+    /// A problem in words, for the log (one <c>case</c> per line, so the translations check reads them as not shown).
     /// </summary>
-    static string Reason(Problem problem) => problem switch
+    static string Reason(Problem problem)
     {
-        Problem.UnknownEffect => "no EFFECT record or particle system has that id",
-        Problem.BadPoint => "its point is not finite",
-        Problem.BadCharacter => "no character, or an empty bone name",
-        Problem.BadSeconds => $"its lifetime is not in (0, {MaxSeconds}] seconds",
-        Problem.BadTint => $"its tint is not finite in [0, {MaxTint}]",
-        Problem.Full => $"{MaxQueued} effects are already queued",
-        _ => "queued off the host's thread (from a tick system?)",
-    };
+        switch (problem)
+        {
+            case Problem.UnknownEffect: return "no EFFECT record or particle system has that id";
+            case Problem.BadPoint: return "its point is not finite";
+            case Problem.BadCharacter: return "no character, or an empty bone name";
+            case Problem.BadSeconds: return $"its lifetime is not in (0, {MaxSeconds}] seconds";
+            case Problem.BadTint: return $"its tint is not finite in [0, {MaxTint}]";
+            case Problem.Full: return $"{MaxQueued} effects are already queued";
+            case Problem.OffThread: return "queued off the host's thread (from a tick system?)";
+            default: throw new ArgumentOutOfRangeException(nameof(problem));
+        }
+    }
 
     /// <summary>
     /// Once a frame on the host's thread: ages the playing effects by <paramref name="seconds"/>, moves the attached ones to their characters, then
