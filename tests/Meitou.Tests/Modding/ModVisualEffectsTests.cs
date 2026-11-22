@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Content;
+using Meitou.Data.Particles;
 using Meitou.Game.Rendering.Characters;
 using Meitou.Modding;
 using Meitou.Simulation;
@@ -273,6 +274,57 @@ public class ModVisualEffectsTests
         Assert.False(mod.PlayEffect("spark", head.Scaled(0)));
         Assert.False(mod.PlayEffect("spark", EffectAnchor.At(Vector3.Zero, default(Quaternion))));
         Assert.Equal(3, log.Count);
+    }
+
+    /// <summary>
+    /// A burst kept in its frame (an effect on a bone or weapon) holds its particles there: they move and turn with its origin and turn. A
+    /// world-space burst's particles stay where they were thrown. Both throw them at the same place.
+    /// </summary>
+    [Fact]
+    public void Kept_local_particles_follow_the_burst_and_world_ones_stay()
+    {
+        var system = PuSystemDef.From(PuScriptReader.Parse("""
+            system held
+            {
+                technique
+                {
+                    visual_particle_quota 50
+                    emitter Point
+                    {
+                        position 0 1 0
+                        emission_rate 10
+                        time_to_live 100
+                        velocity 0
+                    }
+                }
+            }
+            """).Single(n => n.Kind == "system"));
+        var quarter = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathF.PI / 2);   // +Y to -X
+        var world = new ParticleSimulation(system, 1) { Origin = new Vector3(5, 0, 0), Orientation = quarter };
+        var local = new ParticleSimulation(system, 1) { Origin = new Vector3(5, 0, 0), Orientation = quarter, KeepLocal = true };
+        world.Advance(1, ParticleEnvironment.None);
+        local.Advance(1, ParticleEnvironment.None);
+        AssertAll(world, new Vector3(4, 0, 0));
+        AssertAll(local, new Vector3(4, 0, 0));
+
+        foreach (var sim in new[] { world, local })
+        {
+            sim.Origin = new Vector3(10, 0, 0);
+            sim.Orientation = Quaternion.Identity;
+        }
+        AssertAll(world, new Vector3(4, 0, 0));
+        AssertAll(local, new Vector3(10, 1, 0));
+    }
+
+    /// <summary>
+    /// Every particle <paramref name="sim"/> reads out is at <paramref name="at"/>.
+    /// </summary>
+    static void AssertAll(ParticleSimulation sim, Vector3 at)
+    {
+        var buffer = new ParticleInstance[sim.TechniqueParticleCount(0)];
+        int n = sim.Collect(0, buffer, Vector3.One, 1);
+        Assert.True(n > 0);
+        foreach (var p in buffer.AsSpan(0, n)) AssertNear(at, p.Position);
     }
 
     /// <summary>

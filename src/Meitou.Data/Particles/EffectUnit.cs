@@ -101,6 +101,10 @@ public sealed class EffectUnit
     /// </summary>
     public float Stretch { get; set; } = 1;
     /// <summary>
+    /// The node keeps its particles in its frame (<see cref="ParticleSimulation.KeepLocal"/>).
+    /// </summary>
+    public bool KeepLocal { get; set; }
+    /// <summary>
     /// The node's bounding sphere for culling (<see cref="float.PositiveInfinity"/>: always drawn).
     /// </summary>
     public float Radius { get; set; }
@@ -220,6 +224,7 @@ public sealed class EffectUnit
             Size = Size,
             LifeScale = LifeScale,
             Stretch = Stretch,
+            KeepLocal = KeepLocal,
         };
         Anchor = Position;
     }

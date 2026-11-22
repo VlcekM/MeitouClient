@@ -48,12 +48,15 @@ sealed class ModEffectPlayer(GameHost host) : IModEffectSink, IEffectFrameSource
     public bool Exists(string id) => host.Gpu?.Particles is { Enabled: true } && Resolve(id) is not null;
 
     /// <summary>
-    /// Fires the request's system as a burst at its anchor's frame; null when the anchor is not there or there are no particles.
+    /// Fires the request's system as a burst at its anchor's frame, its particles kept in that frame on a bone or weapon (they move and turn with
+    /// it); null when the anchor is not there or there are no particles.
     /// </summary>
     public object? Start(in ModEffectRequest request)
     {
         if (host.Gpu?.Particles is not { } particles || EffectFrames.Locate(request.Anchor, this) is not { } frame) return null;
-        return particles.Burst(request.System, frame.At, frame.Turn, request.Seconds, recolour: request.Tint, stretch: frame.Stretch);
+        bool keepLocal = request.Anchor.Kind is EffectAnchorKind.Bone or EffectAnchorKind.Weapon;
+        return particles.Burst(request.System, frame.At, frame.Turn, request.Seconds, recolour: request.Tint, stretch: frame.Stretch,
+            keepLocal: keepLocal);
     }
 
     /// <summary>

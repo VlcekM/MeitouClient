@@ -118,6 +118,17 @@ public sealed class ParticleSimulation
     /// </summary>
     public float Stretch { get; set; } = 1;
     /// <summary>
+    /// The whole system keeps its particles in its node's frame, its place and its turn (as every technique's <c>keep_local</c>, and turned
+    /// too): they move and turn with the node and are placed in the world when read (<see cref="Collect"/>). Off for every effect but a code
+    /// mod's on a bone or weapon (docs/modding.md "Visual effects").
+    /// </summary>
+    public bool KeepLocal { get; set; }
+
+    /// <summary>
+    /// The technique's particles are in the node's frame (its own <c>keep_local</c>, or <see cref="KeepLocal"/>).
+    /// </summary>
+    bool Local(TechniqueState t) => KeepLocal || t.Def.KeepLocal;
+    /// <summary>
     /// The system was stopped (an effect whose life is over): the emitters make nothing more and the particles live out.
     /// </summary>
     public bool EmissionStopped { get; set; }
@@ -480,7 +491,7 @@ public sealed class ParticleSimulation
         Vector3 offset = SpawnOffset(e, scale);
         var direction = e.AutoDirection && offset.LengthSquared() > 1e-12f ? Vector3.Normalize(offset)
             : Cone(e.Direction.LengthSquared() > 1e-12f ? Vector3.Normalize(e.Direction) : Vector3.UnitY, e.Angle.Evaluate(0, _random));
-        if (!Orientation.IsIdentity) direction = Vector3.Transform(direction, Orientation);
+        if (!Orientation.IsIdentity && !KeepLocal) direction = Vector3.Transform(direction, Orientation);
 
         if (env.WindDirectionEmission && env.Wind.LengthSquared() > 1e-6f)
         {
@@ -498,7 +509,7 @@ public sealed class ParticleSimulation
         t.Grow();
         int i = t.Count++;
         var local = Placed(t.Def.Position + e.Position * scale + offset);
-        var p = t.Def.KeepLocal ? local : Origin + local;
+        var p = Local(t) ? local : Origin + local;
         t.X[i] = p.X;
         t.Y[i] = p.Y;
         t.Z[i] = p.Z;
@@ -525,12 +536,13 @@ public sealed class ParticleSimulation
 
     /// <summary>
     /// A new particle's place in the system node's frame (the technique's and emitter's positions plus the shape's offset) scaled by
-    /// <see cref="Stretch"/> and turned by <see cref="Orientation"/>.
+    /// <see cref="Stretch"/> and turned by <see cref="Orientation"/>, unless the whole system keeps its particles in the node's frame
+    /// (<see cref="KeepLocal"/>: turned when read).
     /// </summary>
     Vector3 Placed(Vector3 local)
     {
         local *= Stretch;
-        return Orientation.IsIdentity ? local : Vector3.Transform(local, Orientation);
+        return Orientation.IsIdentity || KeepLocal ? local : Vector3.Transform(local, Orientation);
     }
 
     /// <summary>
@@ -820,7 +832,7 @@ public sealed class ParticleSimulation
     {
         var axis = a.Axis.LengthSquared() > 1e-12f ? Vector3.Normalize(a.Axis) : Vector3.UnitY;
         var centre = Origin + a.Position * Definition.Scale;
-        if (t.Def.KeepLocal) centre = a.Position * Definition.Scale;
+        if (Local(t)) centre = a.Position * Definition.Scale;
         // The plugin's VortexAffector::_preProcessParticles (Verified): once per update the angle is the rotation speed (radians a
         // second) read at the SYSTEM's age (a dyn_random draws anew each update), times the step. _affect then turns every
         // particle's place about the affector's position, and its velocity, by it.
@@ -851,7 +863,7 @@ public sealed class ParticleSimulation
         // mass * the affector's mass / |d|^2) * dt, d the vector to the affector's place (nothing at d = 0). The motion step then
         // multiplies the direction by the scale velocity again, and the velocities here are those moved distances, so the pull is
         // scale velocity squared in all.
-        var centre = (t.Def.KeepLocal ? Vector3.Zero : Origin) + a.Position * Definition.Scale;
+        var centre = (Local(t) ? Vector3.Zero : Origin) + a.Position * Definition.Scale;
         float g = a.Strength?.Evaluate(0) ?? 0;
         float pull = Definition.ScaleVelocity * Definition.ScaleVelocity * g * a.MassAffector * dt;
         ForRange(n, (lo, hi) =>
@@ -1020,7 +1032,7 @@ public sealed class ParticleSimulation
             {
                 // The particle's own position: world space unless the technique keeps its particles local (Observed: the plugin compares the position
                 // attribute).
-                float shift = t.Def.KeepLocal ? 0 : o.Axis switch { 0 => WorldOffset.X, 1 => WorldOffset.Y, _ => WorldOffset.Z };
+                float shift = Local(t) ? 0 : o.Axis switch { 0 => WorldOffset.X, 1 => WorldOffset.Y, _ => WorldOffset.Z };
                 var axis = o.Axis switch { 0 => t.X, 1 => t.Y, _ => t.Z };
                 for (int i = t.Count - 1; i >= 0; i--)
                 {
@@ -1059,7 +1071,7 @@ public sealed class ParticleSimulation
     {
         foreach (var t in _techniques)
         {
-            if (t.Def.KeepLocal) continue;
+            if (Local(t)) continue;
             for (int i = 0; i < t.Count; i++)
             {
                 t.X[i] += delta.X;
@@ -1078,7 +1090,7 @@ public sealed class ParticleSimulation
         float edge = halfExtent * 2;
         foreach (var t in _techniques)
         {
-            if (t.Def.KeepLocal) continue;
+            if (Local(t)) continue;
             for (int i = 0; i < t.Count; i++)
             {
                 t.X[i] = WrapAxis(t.X[i] - centre.X, halfExtent, edge) + centre.X;
@@ -1101,7 +1113,7 @@ public sealed class ParticleSimulation
         var shift = ahead * (radius * 1.5f);
         foreach (var t in _techniques)
         {
-            if (t.Def.KeepLocal) continue;
+            if (Local(t)) continue;
             for (int i = 0; i < t.Count; i++)
             {
                 float dx = t.X[i] - centre.X, dy = t.Y[i] - centre.Y, dz = t.Z[i] - centre.Z;
@@ -1142,6 +1154,11 @@ public sealed class ParticleSimulation
     #region Reading
 
     /// <summary>
+    /// <paramref name="v"/> turned by <paramref name="turn"/> (untouched by the identity, so a world-space system reads as it did).
+    /// </summary>
+    static Vector3 Turned(Vector3 v, Quaternion turn) => turn.IsIdentity ? v : Vector3.Transform(v, turn);
+
+    /// <summary>
     /// Technique <paramref name="index"/>'s particles into <paramref name="destination"/> (at least its <see cref="TechniqueParticleCount"/>
     /// long); returns how many were written. The colour is multiplied by <paramref name="tint"/> (rgb) and <paramref name="alpha"/>;
     /// <paramref name="worldOffset"/> is added to every position (the sim keeps small numbers near its own origin; the caller adds where that origin
@@ -1153,14 +1170,15 @@ public sealed class ParticleSimulation
     {
         var t = _techniques[index];
         int n = Math.Min(t.Count, destination.Length);
-        var offset = (t.Def.KeepLocal ? Origin : Vector3.Zero) + worldOffset;
+        var offset = (Local(t) ? Origin : Vector3.Zero) + worldOffset;
+        var turn = KeepLocal ? Orientation : Quaternion.Identity;
         for (int i = 0; i < n; i++)
         {
-            var v = new Vector3(t.Vx[i], t.Vy[i], t.Vz[i]);
+            var v = Turned(new Vector3(t.Vx[i], t.Vy[i], t.Vz[i]), turn);
             float len = v.Length();
             destination[i] = new ParticleInstance
             {
-                Position = new Vector3(t.X[i], t.Y[i], t.Z[i]) + offset + v * ahead,
+                Position = Turned(new Vector3(t.X[i], t.Y[i], t.Z[i]), turn) + offset + v * ahead,
                 Rotation = t.Rotation[i],
                 Direction = len > 1e-4f ? v / len : Vector3.Zero,
                 Width = t.Width[i],
