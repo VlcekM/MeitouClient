@@ -1270,7 +1270,6 @@ sealed class BuildMode(PlayerInterface player)
         else if (!site.Complete && !site.Destroyed) verbs.Add(("Build", () => OrderConstruction(site, selection)));
         player.Production.AddMachineVerb(verbs, site, selection);
         if (site.Complete && player.Production.Machine(site.Id) is { } machine) AddMachineVerbs(verbs, site, selection, machine, own);
-        if (own && site.Complete) AddModJobVerbs(verbs, site, selection);
 
         if (own && site.LevelPlacement is null)
             verbs.Add(("Dismantle", () => player.Say(new DismantleOrder(selection, site.Id) { Tick = player.Session.World.Tick })));
@@ -1324,30 +1323,38 @@ sealed class BuildMode(PlayerInterface player)
     }
 
     /// <summary>
-    /// The code mods' jobs on a finished building of the player's (docs/modding.md "Mod jobs"): each kind of the building's record whose takers
-    /// the selection holds gives the selection that job.
+    /// The rows of the code mods' job offers for a site (docs/modding.md "Mod jobs"), shown after its verbs (<see cref="ContextMenuWindow.Menu"/>):
+    /// on a finished building of the player's faction, each offer that names the building's record and is for one of the selected characters;
+    /// choosing it gives the selection that job there, Shift or not. The simulation tests the building and each character again as it applies
+    /// the command (<see cref="Simulation.Production.AddJob"/>).
     /// </summary>
-    void AddModJobVerbs(List<(string, Action)> verbs, BuildingSnapshot site, IReadOnlyList<CharacterId> selection)
+    internal List<(string Caption, Action Give)> OfferedJobs(BuildingSnapshot site)
     {
-        foreach (var kind in Simulation.Production.ModJobs.On(site.Record))
-        {
-            if (!selection.Any(id => TakesModJob(kind, id))) continue;
+        var rows = new List<(string, Action)>();
+        if (!site.Complete || site.Owner != player.Session.World.Player.Faction) return rows;
 
-            verbs.Add((kind.Caption, () => player.Say(new Simulation.Production.AddModJob(selection, kind.Id, site.Id)
+        var selected = player.Selected();
+        var selection = player.SelectedIds();
+        foreach (var offer in JobOffers())
+        {
+            if (!offer.On(site.Record) || !selected.Any(c => offer.Takes(c.Animal))) continue;
+
+            rows.Add((offer.Caption, () => player.Say(new Simulation.Production.AddJob(selection, offer.Type, site.Id)
                 { Tick = player.Session.World.Tick })));
         }
+
+        return rows;
     }
 
     /// <summary>
-    /// Whether the drawn character <paramref name="id"/> is one the mod job takes (the simulation tests again:
-    /// <see cref="Simulation.Production.ModJobs.Takes"/>).
+    /// The code mods' job offers in registration order (docs/modding.md "Mod jobs"); none without mods.
     /// </summary>
-    bool TakesModJob(Simulation.Production.ModJobKind kind, CharacterId id)
+    IReadOnlyList<Simulation.Production.ModJobOffer> JobOffers()
     {
-        if (player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { } c) return false;
-
-        var side = c.Animal ? Simulation.Production.ModJobTakers.Animals : Simulation.Production.ModJobTakers.People;
-        return (kind.Takers & side) != 0;
+        IReadOnlyList<Simulation.Production.ModJobOffer>? offers = player.Session.World.Systems
+            .OfType<Simulation.Player.PlayerSystem>()
+            .FirstOrDefault()?.Extensions?.JobOffers;
+        return offers ?? [];
     }
 
     /// <summary>
@@ -1398,7 +1405,7 @@ sealed class BuildMode(PlayerInterface player)
         if (!SiteIsObject(site) && SomethingInsideAt(p)) return false;
         // With Shift a storage takes a job even without verbs.
         bool shiftStorage = player.SlowModifier && site.Complete && player.Production.Machine(site.Id) is { IsStorage: true };
-        if (SiteVerbs(site).Count == 0 && !shiftStorage) return false;
+        if (SiteVerbs(site).Count == 0 && OfferedJobs(site).Count == 0 && !shiftStorage) return false;
         _sitePending = (site, p, System.Diagnostics.Stopwatch.GetTimestamp());
         return true;
     }
@@ -1540,7 +1547,7 @@ sealed class BuildMode(PlayerInterface player)
 
         _sitePending = null;
         if (player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == pending.Site.Id) is not { } site) return;
-        player.ContextMenuWindow.OpenMenu = player.ContextMenuWindow.Menu(SiteName(site), pending.At, SiteVerbs(site));
+        player.ContextMenuWindow.OpenMenu = player.ContextMenuWindow.Menu(SiteName(site), pending.At, SiteVerbs(site), OfferedJobs(site));
     }
 
     /// <summary>

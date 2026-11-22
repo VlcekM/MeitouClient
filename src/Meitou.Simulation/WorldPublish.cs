@@ -601,7 +601,6 @@ public sealed partial class World
         s.Orders = cold?.Orders ?? CharacterOrders.None;
         s.RunSpeed = cold?.RunSpeed ?? SpeedMode.Free;
         s.Jobs = _publishedJobs.Of(i, state[i].Generation, cold?.Jobs);
-        s.ModJobs = cold is { ModJobs.Count: > 0 } ? cold.ModJobs.ToArray() : [];
         s.Scale = cold?.Animal is { } animal ? animal.Scale(cold.ShownAge) : 1;   // the size last refreshed (BodySystem.Age)
         s.TagHeight = cold is null ? CharacterSnapshot.PersonTagHeight : Combat.CombatSystem.NameTagHeight(cold);
         s.DrawDistanceScale = cold?.Race is { Gigantic: true } ? RaceData.GiganticDrawScale : 1;

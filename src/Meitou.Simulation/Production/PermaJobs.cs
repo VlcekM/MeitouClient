@@ -176,6 +176,26 @@ public static class PermaJobs
             && Add(cold, ordered, target);
 
     /// <summary>
+    /// A job of a code mod's type the player takes up from a building's menu (<see cref="ModJobOffer"/>, docs/modding.md "Mod jobs"; engine rule,
+    /// not in the original): a character holds one per type, so its first job of <paramref name="type"/> gives way to one on <paramref name="site"/>
+    /// in its place in the list, or the job is added at the end; then the jobs switch turns on and the character plans again, as <see cref="Add"/>.
+    /// False when it holds that job on the site already.
+    /// </summary>
+    public static bool GiveOffered(CharacterCold cold, TaskType type, string site)
+    {
+        int at = IndexOf(cold, type);
+        if (at >= 0 && cold.Jobs[at].Site == site) return false;
+
+        var job = new PermaJob(type, site);
+        if (at >= 0) cold.Jobs[at] = job;
+        else cold.Jobs.Add(job);
+
+        cold.Orders |= CharacterOrders.Jobs;
+        DecisionSystem.Replan(cold);
+        return true;
+    }
+
+    /// <summary>
     /// Whether two jobs have the same target: the same character when either follows one, else the same site, else the same saved handle.
     /// </summary>
     static bool SameTarget(PermaJob a, PermaJob b) =>

@@ -33,7 +33,6 @@ public sealed partial class World
             or StandUpCommand or ManoeuvreCommand or SquadCommand or SquadAiCommand
             or SquadFormationCommand or RenameFactionCommand or SeenDiscoveriesCommand
             or Production.AddJob or Production.AddOrderJob or Production.RemoveJob or Production.MoveJob
-            or Production.AddModJob or Production.RemoveModJob
             or Production.QueueCraft or Production.CancelCraft or Production.RepeatCrafts or Production.QueueResearch or Production.CancelResearch
             or Items.CloseContainer or Locks.BuyBuilding or Construction.UpgradeSite or Construction.DowngradeSite or Construction.SetBuildingPublic
             or InspectCommand or InspectBuildingCommand or ShowInventoryCommand or Items.HeldCommand or Items.QuickMoveItem or Items.ReadMapItem

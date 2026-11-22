@@ -5,6 +5,7 @@ using Meitou.Simulation;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Items;
+using Meitou.Simulation.Production;
 
 namespace Meitou.Modding;
 
@@ -61,6 +62,10 @@ sealed class ModRegistrations
     /// </summary>
     public Dictionary<Data.Gameplay.Ai.TaskType, string> JobTypes { get; } = [];
     /// <summary>
+    /// The mod's offers of its job types on the player's buildings, in registration order.
+    /// </summary>
+    public List<ModJobOffer> JobOffers { get; } = [];
+    /// <summary>
     /// The mod's own NPC goal types and their names.
     /// </summary>
     public Dictionary<Data.Gameplay.Ai.TaskType, string> GoalTypes { get; } = [];
@@ -68,10 +73,6 @@ sealed class ModRegistrations
     /// The equipment slots, in registration order.
     /// </summary>
     public List<ModSlot> Slots { get; } = [];
-    /// <summary>
-    /// The mod jobs, in registration order.
-    /// </summary>
-    public List<Meitou.Simulation.Production.ModJobKind> Jobs { get; } = [];
     /// <summary>
     /// The wear rules, in registration order.
     /// </summary>
@@ -291,6 +292,7 @@ sealed class ModRegistry
             Simulation.JobTypes[type] = name;
             Simulation.TaskOwners[type] = mod;
         }
+        Simulation.JobOffers.AddRange(r.JobOffers);
         foreach (var (type, name) in r.GoalTypes)
         {
             _goalTypeOwners[type] = mod;
@@ -298,7 +300,6 @@ sealed class ModRegistry
             Simulation.TaskOwners[type] = mod;
         }
         foreach (var slot in r.Slots) ModSlots.Add(slot);
-        foreach (var job in r.Jobs) Meitou.Simulation.Production.ModJobs.Add(job);
         foreach (var rule in r.WearRules) Data.Gameplay.WearRules.Add(mod, rule);
         foreach (var source in r.LookRows) Data.Characters.ModLooks.AddRows(mod, source);
         foreach (var roll in r.LookRolls) Data.Characters.ModLooks.AddRoll(mod, roll);

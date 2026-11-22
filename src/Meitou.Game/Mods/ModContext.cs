@@ -259,21 +259,6 @@ public sealed class ModContext
     }
 
     /// <summary>
-    /// A job (docs/modding.md "Mod jobs"): the context menu of a finished player building of record
-    /// <see cref="Meitou.Simulation.Production.ModJobKind.Building"/> offers its caption to a selection with a character it takes, who then lists it
-    /// in the jobs list. The engine only offers and lists it: the mod's system reads <see cref="Meitou.Simulation.CharacterCold.ModJobs"/> in the
-    /// tick, does the work and saves the jobs. An id another mod took refuses it.
-    /// </summary>
-    public void AddJob(Meitou.Simulation.Production.ModJobKind job)
-    {
-        CheckOpen();
-        ArgumentNullException.ThrowIfNull(job);
-        if (Meitou.Simulation.Production.ModJobs.Refusal(job) is { } refusal) throw new ArgumentException(refusal, nameof(job));
-        if (Pending.Jobs.Any(j => j.Id == job.Id)) throw new ArgumentException($"The mod already has a job '{job.Id}'.", nameof(job));
-        Pending.Jobs.Add(job);
-    }
-
-    /// <summary>
     /// A rule asked whether a wearer may wear an item (docs/modding.md "Wear rules"): <paramref name="rule"/> gets the item's record id, the
     /// wearer's RACE id and whether it is an animal, after the item's own race lists pass, and false refuses the item everywhere a race limit
     /// applies. It may run on any thread, so it must be quick, read no world state and answer the same for the same arguments. A throw counts as
@@ -420,6 +405,39 @@ public sealed class ModContext
 
         _registry.CheckJobTypeFree(type, Pending, Id);
         Pending.JobTypes[type] = name;
+    }
+
+    /// <summary>
+    /// An offer of one of the mod's job types on the player's buildings (docs/modding.md "Mod jobs"): the right-click menu of a finished building
+    /// of the player's faction whose record the offer names shows its caption to a selection holding a character it is for, and choosing it gives
+    /// each such character the job on that building, in the place of the one of that type it held. After the type's <see cref="AddJobType"/>; one
+    /// offer per type. Refused: what <see cref="Simulation.Production.ModJobOffer.Refusal"/> names, a caption that is the label of one of the
+    /// game's own verbs, and a building that is no BUILDING of the loaded data.
+    /// </summary>
+    public void AddJobOffer(Simulation.Production.ModJobOffer offer)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(offer);
+        if (!Pending.JobTypes.ContainsKey(offer.Type))
+            throw new InvalidOperationException($"Job type {offer.Type} is not one mod '{Id}' has claimed (AddJobType comes first).");
+        if (Pending.JobOffers.Any(o => o.Type == offer.Type))
+            throw new InvalidOperationException($"Job type {offer.Type} is offered twice by mod '{Id}'.");
+        if (JobOfferRefusal(offer) is { } refusal) throw new ArgumentException(refusal, nameof(offer));
+
+        Pending.JobOffers.Add(offer with { Buildings = [.. offer.Buildings.Distinct(StringComparer.Ordinal)] });
+    }
+
+    /// <summary>
+    /// Why the mod's job offer cannot be registered, or null: its own refusal, a caption the game's verbs have, or a building the data lacks.
+    /// </summary>
+    string? JobOfferRefusal(Simulation.Production.ModJobOffer offer)
+    {
+        if (offer.Refusal() is { } refusal) return refusal;
+        if (ContextMenuWindow.IsGameVerb(offer.Caption))
+            return $"'{offer.Caption}' is the label of one of the game's own verbs.";
+
+        string? missing = offer.Buildings.FirstOrDefault(b => Data.Find(b) is not { Type: global::Meitou.Data.Fcs.FcsRecordType.Building });
+        return missing is null ? null : $"'{missing}' is not a BUILDING of the loaded data.";
     }
 
     /// <summary>
