@@ -1515,7 +1515,7 @@ sealed class AgentWorld(GameHost host)
             return result;
         }
 
-        if (!world.TryFindPolygon(to, NavQuery.GoalSnap, out var goal, out var goalPoint))
+        if (!world.TryFindGoalPolygon(to, out var goal, out var goalPoint))
         {
             why = "the target is not on the navmesh";
             return result;

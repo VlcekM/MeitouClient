@@ -569,11 +569,11 @@ public sealed partial class NavmeshWalkability : IWalkability
     }
 
     /// <summary>
-    /// The key of the goal polygon of <paramref name="to"/> for <paramref name="agent"/>; null when no polygon is within
-    /// <see cref="NavQuery.GoalSnap"/> of it.
+    /// The key of the goal polygon of <paramref name="to"/> (<see cref="NavWorld.TryFindGoalPolygon"/>, as the search takes it) for
+    /// <paramref name="agent"/>; null when no polygon is within <see cref="NavQuery.GoalSnap"/> of it.
     /// </summary>
     static (NavRef, float, bool)? UnreachableKey(NavWorld w, Vector3 to, NavAgent agent) =>
-        w.TryFindPolygon(to, NavQuery.GoalSnap, out var goal, out _) ? (goal, agent.Radius, agent.DoorsClosed) : null;
+        w.TryFindGoalPolygon(to, out var goal, out _) ? (goal, agent.Radius, agent.DoorsClosed) : null;
 
     /// <summary>
     /// How far (units) along the provisional part of a route the zones are asked for (<see cref="RouteZones"/>) at 1x, so the walker finds rocks,

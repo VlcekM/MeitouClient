@@ -71,6 +71,16 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
     /// </summary>
     public const float StartSnap = 60, GoalSnap = 30;
     /// <summary>
+    /// How far (units) above or below the goal a polygon is still on the goal's floor (<see cref="NavWorld.TryFindGoalPolygon"/>; engine choice:
+    /// about half a storey of about 78, over the up to 31 a polygon sags under a hillside or a stair's mesh lies off its steps).
+    /// </summary>
+    public const float GoalFloorSlack = 40;
+    /// <summary>
+    /// How far (units, X/Z) from the goal a polygon on the goal's floor is looked for when the one found is on another floor
+    /// (<see cref="NavWorld.TryFindGoalPolygon"/>): the original's goal face search box, half size 30 Havok units (<b>Verified</b>, decompile).
+    /// </summary>
+    public const float GoalFloorReach = 300;
+    /// <summary>
     /// How near (units) a walker shut out of its goal must stand to its start polygon's point nearest the goal to have no way toward it (engine
     /// choice).
     /// </summary>
@@ -248,7 +258,7 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
             return PathResult.NotFound;
         }
         if (s_searchScratch is { } last) last.Exhaustive = false;
-        if (!World.TryFindPolygon(to, GoalSnap, out var goal, out var goalPoint)) return PathResult.NotFound;
+        if (!World.TryFindGoalPolygon(to, out var goal, out var goalPoint)) return PathResult.NotFound;
         var corridor = FindCorridor(start, startPoint, goal, goalPoint, agent);
         if (corridor is null) return PathResult.NotFound;
         return new PathResult(Pull(corridor, agent));
@@ -293,7 +303,7 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
     public Vector3? ClosedDoorOnTheWay(Vector3 from, Vector3 to, Vector3 near, NavAgent agent)
     {
         if (!World.TryFindPolygon(from, StartSnap, out var start, out var startPoint)) return null;
-        if (!World.TryFindPolygon(to, GoalSnap, out var goal, out var goalPoint)) return null;
+        if (!World.TryFindGoalPolygon(to, out var goal, out var goalPoint)) return null;
         if (new NavQuery(World).FindCorridor(start, startPoint, goal, goalPoint, agent) is not { } open) return null;
 
         Vector3? best = null;
@@ -317,7 +327,7 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
     {
         agent ??= NavAgent.Human;
         if (!World.TryFindPolygon(from, StartSnap, out var start, out var startPoint)) return PathResult.NotFound;
-        if (!World.TryFindPolygon(to, GoalSnap, out var goal, out var goalPoint))
+        if (!World.TryFindGoalPolygon(to, out var goal, out var goalPoint))
             (goal, goalPoint) = (new NavRef(-1, -1), to);
         var corridor = FindCorridor(start, startPoint, goal, goalPoint, agent, partial: true);
         return corridor is null ? PathResult.NotFound : new PathResult(Pull(corridor, agent));
