@@ -290,7 +290,9 @@ HUD text size: `Kenshi_StandardFont_Medium` (the MyGUI default font, `core_setti
 em (**Verified**, `kenshi_fonts.xml`). The base game draws HUD text at that size at 1080 p (**Observed**: user screenshots; Meitou's
 former 16 px floor came out 10-15 % wider). Meitou uses it as the in-game minimum and for the HUD panel and body-part lines.
 HUD text colours (**Observed**, ink sampled from a base-game screenshot): StatsText labels (MARTIAL ARTS ...) are grey ~#69625e,
-taken as the skins' `0.4 0.380392 0.356863` (#66615b, also the orders buttons' text); the jobs hint is ~#483b30, which is
+the `TextColour` `0.4 0.380392 0.356863` (#66615b, also the orders buttons' text) of `Kenshi_TextboxPaintedText`, the template whose font
+(`Kenshi_PaintedTextFont_Medium`) they use (**Verified**, `kenshi_templates.xml`); Meitou takes these labels, and the Stats window's attribute
+rows, from that template so a UI mod that recolours it applies; the jobs hint is ~#483b30, which is
 Secondary at the `JobsPanelInfo` EditBox's `Alpha` 0.5 (**Verified** property, `Kenshi_MainPanel.layout`): MyGUI multiplies a
 widget's alpha into its children (`InheritsAlpha`, default true), and the text is drawn by the EditBox template's client.
 **Verified** (`Kenshi_MainPanel.layout`): `OrdersChaseButton` is captioned JOBS; Meitou binds it

@@ -466,9 +466,10 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// </summary>
     RgbaImage? _uiAtlas;
     /// <summary>
-    /// The stats panel's labels (MARTIAL ARTS, STRENGTH, ...): the grey of the orders buttons' text, not Main (docs/game/ui-screens.md).
+    /// The stats panel's labels (MARTIAL ARTS, STRENGTH, ...): the ink of the painted-text template, grey in the base game and a UI mod's colour
+    /// when it recolours that template (docs/game/ui-screens.md).
     /// </summary>
-    internal static readonly string StatLabelColour = "0.4 0.380392 0.356863";
+    internal string StatLabelColour => MyGuiColours.TemplateInk(UiResources, "Kenshi_TextboxPaintedText");
 
     /// <summary>
     /// The game's Kenshi_UI.png, decoded once and shared by the title menu, tooltips and settings; null when missing or unreadable.

@@ -127,13 +127,16 @@ sealed class StatsWindow(PlayerInterface player)
     {
         var lead = player.Selected().FirstOrDefault();
 
-        // The skill columns sit in Kenshi_GenericTextBoxSkin frames (the attributes column's frame has no text colour and keeps its grey).
+        // The skill columns sit in Kenshi_GenericTextBoxSkin frames; the attributes column's frame has no text colour, so its painted labels
+        // keep the painted-text template's.
         string statInk = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_GenericTextBoxSkin");
+        string attributeInk = player.StatLabelColour;
         for (int column = 0; column < StatPanels.Length; column++)
         {
             string name = column == 0 ? "AttributesPanel" : $"Skills{column}Panel";
             if (controls.FirstOrDefault(c => c.Name == name) is not { } panel) continue;
-            new StatColumn(controls, panel, name, player.UiScale, RowHeight(column, panel)).Add(column, lead, statInk);
+            var rows = new StatColumn(controls, panel, name, player.UiScale, RowHeight(column, panel), attributeInk);
+            rows.Add(column, lead, statInk);
         }
 
         AddStatDescription(controls);
@@ -161,9 +164,9 @@ sealed class StatsWindow(PlayerInterface player)
 
     /// <summary>
     /// One column's rows as they are laid down from the panel's top: the game's stats under their headings, then the code mods' skills of the
-    /// column.
+    /// column. <paramref name="attributeInk"/> colours the attributes column's game stats.
     /// </summary>
-    sealed class StatColumn(List<UiControl> controls, UiControl panel, string name, float scale, float rowHeight)
+    sealed class StatColumn(List<UiControl> controls, UiControl panel, string name, float scale, float rowHeight, string attributeInk)
     {
         /// <summary>
         /// The clip of every row: the panel within its own clip.
@@ -209,7 +212,7 @@ sealed class StatsWindow(PlayerInterface player)
             string id = ((int)stat).ToString(CultureInfo.InvariantCulture), action = "stat:" + id;
             string label = column == 0 ? StatLabel(stat).ToUpperInvariant() : StatLabel(stat);
             string font = column == 0 ? "Kenshi_PaintedTextFont_Medium" : "Kenshi_StandardFont_Medium";
-            string colour = column == 0 ? "0.4 0.380392 0.356863" : statInk;
+            string colour = column == 0 ? attributeInk : statInk;
             bool wrapLabel = WrapsLabel(stat);
             Text($"{name}-label-{i}", label, font, colour, "Left VCenter", action, wrap: wrapLabel);
 

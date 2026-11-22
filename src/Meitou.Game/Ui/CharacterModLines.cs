@@ -77,7 +77,7 @@ sealed class CharacterModLines(PlayerInterface player)
 
         var labelFace = new Dictionary<string, string> { ["FontName"] = "Kenshi_PaintedTextFont_Medium" };
         controls.Add(Text(name + "-label", line.Label, line.Tooltip, row with { Width = column.X - row.X }, labelFace, "Left Top",
-            PlayerInterface.StatLabelColour, clip));
+            player.StatLabelColour, clip));
         if (line.Value is not { } value) return;
 
         if (line.Press is not null)
