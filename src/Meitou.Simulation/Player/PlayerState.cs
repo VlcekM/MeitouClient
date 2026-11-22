@@ -127,8 +127,8 @@ public sealed class PlayerState
     public List<CharacterId> Selection { get; } = [];
 
     /// <summary>
-    /// The key the next Group speed order gives its characters' new speed group (<see cref="CharacterCold.SpeedGroup"/>). Runtime only, like the
-    /// groups: not saved and not hashed.
+    /// The key the next Group speed order, or move order that regroups, gives its characters' new speed group
+    /// (<see cref="CharacterCold.SpeedGroup"/>). Runtime only, like the groups: not saved and not hashed.
     /// </summary>
     public int NextSpeedGroup { get; set; }
 

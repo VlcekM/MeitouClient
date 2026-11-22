@@ -1228,8 +1228,9 @@ public sealed class CharacterCold
     public bool OrderedUp { get; set; }
 
     /// <summary>
-    /// The player's speed group (<c>SpeedGroup</c>, made for the characters given Group speed together: a key from
-    /// <see cref="Meitou.Simulation.Player.PlayerState.NextSpeedGroup"/>; -1 none). Runtime only.
+    /// The player's speed group (<c>SpeedGroup</c>, made for the characters given Group speed together, and again for those given a move order
+    /// together unless they already make up their whole group: a key from <see cref="Meitou.Simulation.Player.PlayerState.NextSpeedGroup"/>; -1
+    /// none). Runtime only.
     /// </summary>
     public int SpeedGroup { get; set; } = -1;
 
