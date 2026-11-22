@@ -1400,16 +1400,27 @@ public sealed partial class PopulationSystem
     /// squad at <c>max squad size</c> or player faction at <c>max faction size</c> (the recruit's caps), and during the parallel phase, before a unique
     /// is claimed. Serial phases only.
     /// </summary>
-    public CharacterId SpawnIntoPlayerSquad(World world, int squadId, string recordId, Vector2 at)
+    public CharacterId SpawnIntoPlayerSquad(World world, int squadId, string recordId, Vector2 at) =>
+        SpawnIntoPlayerSquad(world, squadId, recordId, at, age: 1);
+
+    /// <summary>
+    /// <see cref="SpawnIntoPlayerSquad(World, int, string, Vector2)"/> at an age (engine API, not in the original): an ANIMAL_CHARACTER is made
+    /// at <paramref name="age"/> (<see cref="CharacterCold.Age"/>: its stats multiplier, and its size by the record's <c>scale min</c> and
+    /// <c>scale max</c>), as a squad template's animal is made at its rolled age (docs/game/animals.md "Ageing": below 0.4 a pup, 1 the adult
+    /// that call makes, above 1.1 an elder, which grows no more). A CHARACTER ignores the age. None, adding nothing, also for an age that is not
+    /// finite or below 0 (as <see cref="Bodies.BodySystem.SetAnimalAge"/> refuses one). Serial phases only.
+    /// </summary>
+    public CharacterId SpawnIntoPlayerSquad(World world, int squadId, string recordId, Vector2 at, float age)
     {
         if (world.Characters.Phase == TablePhase.Parallel) return CharacterId.None;
         if (world.Squads.Find(squadId) is not { } squad || !SquadManagement.PlayerSquads(world).Contains(squad)) return CharacterId.None;
         if (!float.IsFinite(at.X) || !float.IsFinite(at.Y) || !world.Walkability.IsWalkable(at.X, at.Y)) return CharacterId.None;
+        if (!float.IsFinite(age) || age < 0) return CharacterId.None;
         if (_data.Db.Find(recordId) is not { Type: FcsRecordType.Character or FcsRecordType.AnimalCharacter } record) return CharacterId.None;
         if (PlayerSquadFull(world, squad)) return CharacterId.None;
         if (UniqueCharacters.IsUnique(record) && !world.Uniques.TryClaim(recordId)) return CharacterId.None;
 
-        var built = ModMember(world, squad, record, at);
+        var built = ModMember(world, squad, record, at, age);
         var id = SpawnMember(world, built, squad, built.Members[0], !squad.Leader.IsNone, player: true, idle: false, yaw: 0, site: null);
         squad.Members.Add(id);
         if (squad.Leader.IsNone) squad.Leader = id;
@@ -1421,9 +1432,8 @@ public sealed partial class PopulationSystem
     /// squad and joins the player squad <paramref name="squadId"/> as a player character, as a recruit joins (<c>DialogueSystem.Join</c>: the
     /// player's faction, orders and class, no AI, jobs or uniform marks, written as a new member at the next save), leading it when it has no
     /// leader. False, changing nothing, for a squad that is not a living player squad, a character that is not alive, is the player's already or
-    /// is held in a cage or on a pole,
-    /// a squad at <c>max squad size</c> or a faction at <c>max faction size</c> (as <see cref="SpawnIntoPlayerSquad"/>), and during the parallel
-    /// phase. Serial phases only.
+    /// is held in a cage or on a pole, a squad at <c>max squad size</c> or a faction at <c>max faction size</c> (as
+    /// <see cref="SpawnIntoPlayerSquad(World, int, string, Vector2)"/>), and during the parallel phase. Serial phases only.
     /// </summary>
     public bool JoinPlayerSquad(World world, CharacterId character, int squadId)
     {
@@ -1453,16 +1463,16 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// The built one-member squad <see cref="SpawnIntoPlayerSquad"/> makes its character from: the squad's own template (a stand-in of its id
-    /// and name when the data has none), a look rolled for its faction, and the new character's slot as its member index, so its name roll is
-    /// its own.
+    /// The built one-member squad <see cref="SpawnIntoPlayerSquad(World, int, string, Vector2, float)"/> makes its character from: the squad's
+    /// own template (a stand-in of its id and name when the data has none), a look rolled for its faction, the new character's slot as its
+    /// member index, so its name roll is its own, and <paramref name="age"/> as an animal's age.
     /// </summary>
-    BuiltSquad ModMember(World world, Squad squad, Meitou.Data.GameRecord record, Vector2 at)
+    BuiltSquad ModMember(World world, Squad squad, Meitou.Data.GameRecord record, Vector2 at, float age)
     {
         var next = world.Characters.PeekNextId();
         bool animal = record.Type == FcsRecordType.AnimalCharacter;
         var role = squad.Leader.IsNone ? SquadRole.Leader : SquadRole.Squad1;
-        var member = new MemberPlan(record.StringId, role, next.Slot, default, animal, 1);
+        var member = new MemberPlan(record.StringId, role, next.Slot, default, animal, animal ? age : 1);
         ulong key = Rng.Mix(SeedSalts.ModMember ^ Rng.Key(next));
         var look = _data.Appearances?.Create(record.StringId, _data.Factions[squad.Faction].Id,
             (int)(Rng.Hash(world.Seed, key, RngPurpose.Spawn, SeedSalts.PlayerLook) & 0x7FFFFFFF));

@@ -911,8 +911,10 @@ holds refuses the second mod.
   character of a CHARACTER or ANIMAL_CHARACTER record as a new game makes the player's (a look rolled for the player's faction, body,
   starting items, name; a unique claimed as any spawn claims it) and adds it, standing idle on the ground at a walkable point, to a living
   player squad, leading it when it has no leader. Only player squads: an NPC squad loaded from a save keeps only the save's members, so an
-  added NPC would be lost at the next save or unload (`SpawnPlatoon` adds NPCs). It returns the character's id, or none and adds nothing
-  for another squad, another record type, a point that is not finite or not walkable, a unique already claimed, or the recruit's caps
+  added NPC would be lost at the next save or unload (`SpawnPlatoon` adds NPCs). `SpawnIntoPlayerSquad(world, squadId, recordId, at, age)`
+  makes an ANIMAL_CHARACTER at that age, its stats multiplier and size ([animals](game/animals.md#ageing)), where the four-argument call
+  makes the adult of age 1; a CHARACTER ignores the age. It returns the character's id, or none and adds nothing for another squad, another
+  record type, a point that is not finite or not walkable, an age that is not finite or below 0, a unique already claimed, or the recruit's caps
   (`max squad size`, `max faction size`); `PopulationSystem.JoinPlayerSquad(world, character, squadId)` moves a living character that is not
   the player's (a traveller who settles) into a living player squad as a recruit joins (the player's faction, orders and class; no AI, jobs or
   uniform marks; written as a new member at the next save), leading it when it has no leader, and returns false, changing nothing, for
@@ -923,10 +925,6 @@ holds refuses the second mod.
   pays the player once it lies in the bed, and a visitor in a player town picks the nearest bed it can afford before the NPC bed search (null
   keeps the original: NPCs never pay). Non-finite delays, hours, points and radii are refused. **Verified** by `ModHookTests` (synthetic
   world): the spawn ring, purse and refusals, a never-loaded spawn kept and reloaded with its tag, and the campaign queue.
-- **Animals born into a squad** (engine API, not in the original; serial phases): `PopulationSystem.SpawnAnimal(world, record, squad, at, age)`
-  adds one ANIMAL_CHARACTER to an existing squad at a walkable point (else the squad's first member's spot), aged 0 to 1.1, idle, with its
-  species' look and its record's kit; a player squad's animal is a player character, and none is made at the faction's head cap. Returns its id,
-  `CharacterId.None` when refused. For a mod's newborn or a trader's stock.
 - **Town overrides** (engine API, not in the original; serial phases; [simulation](simulation.md) "Town overrides"): `PopulationSystem.CheckOverrides(world,
   site)` runs a town's `override town` list now, as its zone's load would; `ApplyTownVersion(world, site, townId)` puts a TOWN of the mod's choice
   in its place (null or the town's own id: back to its own record, residents made afresh; also for a held town or one of the player's faction); both

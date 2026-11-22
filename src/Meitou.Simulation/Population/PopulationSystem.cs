@@ -1585,45 +1585,6 @@ public sealed partial class PopulationSystem : ITickSystem, Bodies.ICharacterDea
     }
 
     /// <summary>
-    /// A code mod's animal joining a squad (engine API, not in the original; docs/modding.md "World hooks"): one character made from the
-    /// ANIMAL_CHARACTER <paramref name="recordId"/> at <paramref name="at"/> (its walkable spot, else the squad's first member's), aged
-    /// <paramref name="age"/> (0 to 1.1, the stats multiplier and size of <see cref="CharacterCold.Age"/>), standing idle in the existing squad
-    /// <paramref name="squadId"/> and its faction: a player squad's animal is a player character. Its look is its species' shared one, its kit
-    /// the record's (death items, bag). Returns <see cref="CharacterId.None"/>, adding nothing, for an unknown squad or a record that is not an
-    /// animal, an age or point that is not finite, or a squad of the player's faction at the faction's head cap (CONSTANTS <c>max faction size</c>).
-    /// Serial phases only.
-    /// </summary>
-    public CharacterId SpawnAnimal(World world, string recordId, int squadId, Vector2 at, float age)
-    {
-        if (!float.IsFinite(age) || !float.IsFinite(at.X) || !float.IsFinite(at.Y)) return CharacterId.None;
-        if (world.Squads.Find(squadId) is not { } squad || _data.Db.Find(recordId) is not { Type: FcsRecordType.AnimalCharacter } record)
-            return CharacterId.None;
-
-        bool player = squad.Faction == world.Player.Faction && world.Player.Faction >= 0;
-        if (player && Factions.SquadManagement.CappedHeads(world) >= _data.Bodies.Constants.MaxFactionSize) return CharacterId.None;
-
-        var built = AnimalBuilt(world, record, squad, at, Math.Clamp(age, 0, 1.1f));
-        var id = SpawnMember(world, built, squad, built.Members[0], hasLeader: true, player, idle: true, yaw: 0, site: null);
-        squad.Members.Add(id);
-        if (squad.Leader.IsNone) squad.Leader = id;
-        return id;
-    }
-
-    /// <summary>
-    /// <see cref="SpawnAnimal"/>'s one-member plan: a squad member at <paramref name="at"/> with the species' look, under a template named after
-    /// the squad.
-    /// </summary>
-    BuiltSquad AnimalBuilt(World world, GameRecord record, Squad squad, Vector2 at, float age)
-    {
-        var member = new MemberPlan(record.StringId, SquadRole.Squad1, squad.Members.Count, default, true, age);
-        var template = new SquadTemplate { Id = squad.TemplateId, Name = squad.Name };
-        ulong key = Rng.Mix(SeedSalts.ModAnimal ^ (ulong)squad.Id << 8 ^ (ulong)world.Tick << 24);
-        var look = _data.Appearances?.Create(record.StringId, _data.Factions[squad.Faction].Id,
-            (int)(Rng.Hash(world.Seed, key, RngPurpose.Spawn, SeedSalts.MemberLook) & 0x7FFFFFFF), null);
-        return new BuiltSquad(new SquadPlan(template, [member], [], []), at, squad.Faction, [new BuiltMember(member, look)]);
-    }
-
-    /// <summary>
     /// Appends a made squad to <paramref name="trace"/> (<see cref="SpawnTrace"/>), with its distance to the nearest player character (-1: none).
     /// </summary>
     void TraceSpawn(World world, List<SpawnTraceEntry> trace, Squad squad, BuiltSquad built, TownSite? site, List<BuiltMember> builtMembers,
