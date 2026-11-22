@@ -633,6 +633,12 @@ holds refuses the second mod.
   with each new interface (`ConfigurePlayerInterface`, Vulkan and Metal). A picture from the mod's folder is an image node:
   `new UiNode(id, UiNodeKind.Image) { Image = Path.Combine(context.Folder, "face.png") }`; a CHARACTER record's portrait is
   `{ Portrait = "<string id>" }` on the same kind of node ([native UI](native-ui.md#layout-input-and-lifetime)).
+  A text box is `new UiNode(id, UiNodeKind.TextBox) { Text = text, Action = action, MaxLength = 32 }`: a one-line MyGUI `EditBox`
+  (skin `Kenshi_EditBox` unless the style names one; `MaxLength` 0 is MyGUI's 2048). A click gives it the keys through the screens' edit focus
+  (caret, selection, undo, clipboard: [edit boxes](game/ui-input.md#edit-boxes-and-keyboard-focus)) until a click elsewhere, Enter, or the box
+  disappears or is disabled; meanwhile the interface's keys go to it, as for a window's box. Each change of its text runs `Action` with
+  the new text in `UiActionContext.Text` (empty for clicks on other nodes). `Text` is the box's text: whenever the node's differs the box
+  takes it, so a mod stores the text its action gets and echoes it, or sets another (empty to clear). Engine API, not in the original.
 - **Map markers:** `UiRegistration.AddMapMarkers(markers)` puts markers on the world map (Overview's Map tab). `markers` gets `UiMapContext`
   (the snapshot the map is drawn from and its zoom level, 0 for the whole map to 2) on the host's thread each frame the map shows, so it
   must not touch the world, and returns `UiMapMarker`s: a world point (X, Z), an image group of the game's map marker set

@@ -167,11 +167,17 @@ public sealed partial class MyGuiScreenHost
     /// <summary>
     /// Enter in the focused box (MyGUI): a multi-line box takes a line break (Ctrl+Enter accepts), any other accepts, which here is the default
     /// action; a read-only box does nothing. A box whose layout names a <c>SubmitAction</c> raises that action with its text and lets go of the keys
-    /// instead (the Edit characters window's values). True when the box took it.
+    /// instead (the Edit characters window's values), and a mod overlay's text box lets go of the keys. True when the box took it.
     /// </summary>
     public bool EditEnter(bool ctrl)
     {
         if (_edit is null || _edit.ReadOnly) return false;
+
+        if (_focus?.Screen == OverlayScreen)
+        {
+            Blur();
+            return true;
+        }
 
         if (_edit.MultiLine && !ctrl)
         {

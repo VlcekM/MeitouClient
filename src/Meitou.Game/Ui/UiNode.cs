@@ -96,6 +96,12 @@ public enum UiNodeKind
     /// A picture, <see cref="UiNode.Image"/>, stretched over the node (not pickable by default).
     /// </summary>
     Image,
+
+    /// <summary>
+    /// A one-line edit box (MyGUI <c>EditBox</c>, skin <c>Kenshi_EditBox</c> unless the style names one): a click gives it the keys, and each change
+    /// of its text runs <see cref="UiNode.Action"/> with the text in <see cref="UiActionContext.Text"/>. Its text is <see cref="UiNode.Text"/>.
+    /// </summary>
+    TextBox,
 }
 
 /// <summary>
@@ -180,9 +186,15 @@ public sealed class UiNode(string id, UiNodeKind kind = UiNodeKind.Panel)
     public string Style { get; init; } = "";
 
     /// <summary>
-    /// The node's text.
+    /// The node's text; a text box's text, which the box takes again whenever it differs (so the node echoes the text its action gets, or sets
+    /// another, such as empty to clear it).
     /// </summary>
     public string Text { get; init; } = "";
+
+    /// <summary>
+    /// A text box's most characters; 0 for MyGUI's default (2048).
+    /// </summary>
+    public int MaxLength { get; init; }
 
     /// <summary>
     /// An image node's picture: the full path of a PNG, TGA, JPEG, BMP or DDS file (a mod's own: under <c>ModContext.Folder</c>). It is read off

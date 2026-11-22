@@ -159,7 +159,13 @@ public sealed class UiTownContext(Simulation.Production.OutpostSnapshot town, bo
 /// <summary>
 /// What an action handler gets: the frame's data and the control's argument.
 /// </summary>
-public sealed record UiActionContext(UiFrameContext Frame, string Argument);
+public sealed record UiActionContext(UiFrameContext Frame, string Argument)
+{
+    /// <summary>
+    /// A text box's text after the change that ran the action (<see cref="UiNodeKind.TextBox"/>); empty for a click.
+    /// </summary>
+    public string Text { get; init; } = "";
+}
 
 /// <summary>
 /// What an extension's right-click menu rows get (<see cref="UiRegistration.AddCharacterMenuVerbs"/>): the character the menu is for, the selected
@@ -294,6 +300,11 @@ public sealed class UiHost
     /// The action handlers by id, with their owners.
     /// </summary>
     readonly Dictionary<string, (string Owner, Action<UiActionContext> Handler)> _actions = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The text boxes the last <see cref="Arrange"/> laid out, by name (<see cref="DispatchText"/>).
+    /// </summary>
+    readonly Dictionary<string, UiControl> _textBoxes = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The style overrides in registration order (the last wins).
@@ -865,6 +876,7 @@ public sealed class UiHost
     public IReadOnlyList<UiControl> Arrange(UiMode mode, int width, int height, UiBindings bindings, IReadOnlyDictionary<string, UiRect> slots)
     {
         _frame = new(this, mode, width, height, bindings);
+        _textBoxes.Clear();
         var result = new List<UiControl>();
         if (width <= 0 || height <= 0) return result;
 
@@ -905,7 +917,9 @@ public sealed class UiHost
         if (visible.Width <= 0 || visible.Height <= 0) return;
 
         bool enabled = parentEnabled && node.Enabled;
-        result.Add(Control(node, b, visible, enabled));
+        var control = Control(node, b, visible, enabled);
+        result.Add(control);
+        if (node.Kind == UiNodeKind.TextBox) _textBoxes[node.Id] = control;
 
         var content = new UiRect(
             b.X + node.Padding, b.Y + node.Padding, Math.Max(0, b.Width - node.Padding * 2), Math.Max(0, b.Height - node.Padding * 2));
@@ -947,9 +961,28 @@ public sealed class UiHost
         if (image && node.Portrait.Length > 0) properties[RecordPortraits.Property] = node.Portrait;
         else if (image && node.Image.Length > 0) properties["ImageTexture"] = Rendering.Ui.UiPainter.IconTexture(node.Image);
 
-        return new(node.Id, ControlType(node.Kind), image ? bounds : visible, node.Text, node.Action, style.Skin, enabled, properties,
+        bool textBox = node.Kind == UiNodeKind.TextBox;
+        if (textBox) AddTextBoxProperties(node, properties);
+
+        string skin = textBox && style.Skin.Length == 0 ? TextBoxSkin : style.Skin;
+        return new(node.Id, ControlType(node.Kind), image ? bounds : visible, node.Text, node.Action, skin, enabled, properties,
             style.Background, style.Text, style.Hover, style.Active, style.Disabled, node.Pickable, node.Argument, style.TextScale,
             image ? visible : null);
+    }
+
+    /// <summary>
+    /// A text box's skin when its style names none (the faithful screens' one-line boxes).
+    /// </summary>
+    const string TextBoxSkin = "Kenshi_EditBox";
+
+    /// <summary>
+    /// A text box's edit properties: the mark that routes it through the screens' edit focus (<see cref="MyGuiScreenHost.OverlayEditProperty"/>)
+    /// and its <c>MaxTextLength</c>.
+    /// </summary>
+    static void AddTextBoxProperties(UiNode node, Dictionary<string, string> properties)
+    {
+        properties[MyGuiScreenHost.OverlayEditProperty] = "true";
+        if (node.MaxLength > 0) properties["MaxTextLength"] = node.MaxLength.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
     /// <summary>
@@ -960,6 +993,7 @@ public sealed class UiHost
         UiNodeKind.Button => "Button",
         UiNodeKind.Label => "TextBox",
         UiNodeKind.Image => "ImageBox",
+        UiNodeKind.TextBox => "EditBox",
         _ => "Widget",
     };
 
@@ -970,14 +1004,31 @@ public sealed class UiHost
     /// <summary>
     /// Returns false for an unregistered action; disabled controls consume clicks without invoking handlers.
     /// </summary>
-    public bool Dispatch(UiControl control)
+    public bool Dispatch(UiControl control) => Dispatch(control, "");
+
+    /// <summary>
+    /// A text event of the screens' edit focus: a text box's text changed, so its action runs with the text (disabled or actionless: nothing). False
+    /// for an event of a screen, not of a text box.
+    /// </summary>
+    public bool DispatchText(MyGuiEvent e)
+    {
+        if (e.Screen != MyGuiScreenHost.OverlayScreen) return false;
+
+        if (e.Action == "text" && _textBoxes.TryGetValue(e.Widget, out var box)) Dispatch(box, e.Text);
+        return true;
+    }
+
+    /// <summary>
+    /// Runs <paramref name="control"/>'s action with <paramref name="text"/> (<see cref="UiActionContext.Text"/>).
+    /// </summary>
+    bool Dispatch(UiControl control, string text)
     {
         if (!control.Enabled) return true;
         if (_frame is null || !_actions.TryGetValue(control.Action, out var action)) return false;
 
         try
         {
-            action.Handler(new(_frame, control.Argument));
+            action.Handler(new(_frame, control.Argument) { Text = text });
         }
         catch (Exception e)
         {
