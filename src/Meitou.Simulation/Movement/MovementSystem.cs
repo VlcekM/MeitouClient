@@ -1764,6 +1764,11 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         public Vector2 Goal;
 
         /// <summary>
+        /// The goal's height.
+        /// </summary>
+        public float GoalY;
+
+        /// <summary>
         /// A body covers the goal.
         /// </summary>
         public bool Found;
@@ -2304,6 +2309,9 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         float len = d.Length();
         if (len >= SeparationRadius) return;
 
+        // One on another floor is out of the avoidance list, which holds only bodies within 20 in height (FUN_14085a070).
+        if (MathF.Abs(all[s.Self].Position.Y - all[other].Position.Y) >= CombatSteering.FlockHeight) return;
+
         // A carried body is on its carrier's shoulder and a downed or dead one lies out of the flocking list: neither is in anyone's way
         // (docs/game/pathfinding.md "Bodies in the way").
         if (s.Table.Cold(other) is { } them && (!them.CarriedBy.IsNone || them.Medical is { Incapacitated: true }))
@@ -2581,7 +2589,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     /// </summary>
     static bool GoalOccupied(World world, int self, Vector3 goal)
     {
-        var state = new OccupiedState { Table = world.Characters, Self = self, Goal = new Vector2(goal.X, goal.Z) };
+        var state = new OccupiedState { Table = world.Characters, Self = self, Goal = new Vector2(goal.X, goal.Z), GoalY = goal.Y };
         world.Grid.Query(goal.X, goal.Z, 30, ref state, CoversGoal);
         return state.Found;
     }
@@ -2598,6 +2606,8 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         }
 
         var at = s.Table.Previous[other].Position;
+        if (MathF.Abs(at.Y - s.GoalY) >= CombatSteering.FlockHeight) return;
+
         float r = CombatTuning.Footprint(c);
         if (Vector2.DistanceSquared(new Vector2(at.X, at.Z), s.Goal) < r * r) s.Found = true;
     }

@@ -105,6 +105,8 @@ characters round its owner and tests each as a circle (its footprint radius plus
 | Sitting (resting on a seat) | no | no for the fight steering; engine choice: a walker steers past a sitter (separation) but is not blocked |
 | Beyond the LOD range (`+0x1a9` clear) | no | not modelled (depends on the camera) |
 
+Height: the list holds only bodies within 20 in height (`FUN_14085a070`, [combat](combat.md)); Meitou's separation, contact and covered goal test the same (`MovementSystem.AddSeparation`, `CoversGoal`), so a body on another floor does not push a walker.
+
 Not modelled: a conscious ragdolled character (a stagger that ragdolls a limb or the whole body) is left out in the original; Meitou keeps it solid unless it is incapacitated.
 
 ### Made on the mesh
