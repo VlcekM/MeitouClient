@@ -6,15 +6,21 @@ namespace Meitou.Modding;
 /// <summary>
 /// One effect a mod queued (<see cref="ModContext.PlayEffect(string, Vector3, float, Vector3?)"/>): the id it named and the particle system that
 /// resolved to, at a world point or on a character (<see cref="On"/> not <see cref="CharacterId.None"/>; then <see cref="Bone"/>, null for the
-/// chest), the particles' recolour (null: as their texture) and the seconds it emits and follows the character.
+/// chest), the particles' recolour (null: as their texture) and the seconds it emits and follows the character. A weapon glow's emitter
+/// (<see cref="ModWeaponGlows"/>) follows the character's held blade instead, at <see cref="Along"/> of its length from the hilt end.
 /// </summary>
 internal readonly record struct ModEffectRequest(string Owner, string Effect, string System, Vector3 At, CharacterId On, string? Bone,
-    Vector3? Tint, float Seconds)
+    Vector3? Tint, float Seconds, float Along = float.NaN)
 {
     /// <summary>
     /// The effect follows a character rather than staying at <see cref="At"/>.
     /// </summary>
     public bool Attached => On != CharacterId.None;
+
+    /// <summary>
+    /// The effect follows the character's held blade (<see cref="Along"/>) rather than a bone.
+    /// </summary>
+    public bool OnBlade => !float.IsNaN(Along);
 }
 
 /// <summary>
@@ -32,6 +38,22 @@ internal interface IModEffectSink
     /// Moves an attached effect's emitter to where its character is now.
     /// </summary>
     void Follow(object playing, in ModEffectRequest request);
+
+    /// <summary>
+    /// Moves an attached effect as <see cref="Follow"/> does; false when it could not (its character or blade is not drawn, or it stopped).
+    /// </summary>
+    bool Track(object playing, in ModEffectRequest request)
+    {
+        Follow(playing, request);
+        return true;
+    }
+
+    /// <summary>
+    /// Makes a started effect emit for <paramref name="seconds"/> from now (0: it stops, its particles live out).
+    /// </summary>
+    void Renew(object playing, float seconds)
+    {
+    }
 }
 
 /// <summary>
@@ -133,6 +155,19 @@ internal sealed class ModEffects
     public bool Idle { get { lock (_lock) return _queued.Count == 0 && _alive.Count == 0; } }
 
     /// <summary>
+    /// The emitters the weapon glows play through the same sink (<see cref="ModWeaponGlows"/>), counted against <see cref="MaxAlive"/>.
+    /// </summary>
+    public int Reserved { get; set; }
+
+    /// <summary>
+    /// Whether <paramref name="count"/> more emitters fit under <see cref="MaxAlive"/> beside those playing and reserved.
+    /// </summary>
+    public bool Fits(int count)
+    {
+        lock (_lock) return _alive.Count + Reserved + count <= MaxAlive;
+    }
+
+    /// <summary>
     /// Queues an effect at <paramref name="at"/>, or with <paramref name="attached"/> on the character <paramref name="on"/>; false when it was
     /// rejected (logged once per mod and problem).
     /// </summary>
@@ -187,8 +222,19 @@ internal sealed class ModEffects
     /// </summary>
     Problem? Resolved(string effect, out string? system)
     {
-        system = Resolve is { } resolve ? resolve(effect) : effect;
-        return system is { Length: > 0 } ? null : Problem.UnknownEffect;
+        system = System(effect);
+        return system is not null ? null : Problem.UnknownEffect;
+    }
+
+    /// <summary>
+    /// The particle system of <paramref name="effect"/> (<see cref="Resolve"/>), or null when it names none.
+    /// </summary>
+    public string? System(string? effect)
+    {
+        if (string.IsNullOrEmpty(effect)) return null;
+
+        string? system = Resolve is { } resolve ? resolve(effect) : effect;
+        return system is { Length: > 0 } ? system : null;
     }
 
     /// <summary>
@@ -262,7 +308,7 @@ internal sealed class ModEffects
     void StartQueued(IModEffectSink sink)
     {
         int started = 0;
-        while (_queued.Count > 0 && started < MaxPerFrame && _alive.Count < MaxAlive)
+        while (_queued.Count > 0 && started < MaxPerFrame && _alive.Count + Reserved < MaxAlive)
         {
             var request = _queued[0];
             _queued.RemoveAt(0);

@@ -385,9 +385,15 @@ internal sealed partial class CharacterRenderer
 
     /// <summary>
     /// The matrix an instance of <paramref name="part"/> is drawn with and its extra flags: a worn item that takes blood gets the body's amounts in
-    /// the matrix's w (as the body does), a weapon's blade its colour and amounts.
+    /// the matrix's w (as the body does), a weapon's blade its colour and amounts, and a mod's glow (<see cref="GlowModel"/>).
     /// </summary>
-    static Matrix4x4 GearModel(AssetPart part, in Live l, Matrix4x4 model, ref uint flags)
+    static Matrix4x4 GearModel(AssetPart part, in Live l, Matrix4x4 model, ref uint flags) =>
+        GlowModel(part, in l, BloodModel(part, in l, model, ref flags), ref flags);
+
+    /// <summary>
+    /// <see cref="GearModel"/>'s blood: a worn item's amounts or a weapon's colour and amounts, in the w of the first two rows.
+    /// </summary>
+    static Matrix4x4 BloodModel(AssetPart part, in Live l, Matrix4x4 model, ref uint flags)
     {
         if (!GearBlood.Enabled || !part.Material.GearBlood) return model;
         if (part.Shared) return WithBlood(model, l.WornBlood);

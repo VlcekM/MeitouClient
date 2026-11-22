@@ -50,6 +50,14 @@ sealed class GameMods(GameHost host)
     /// Plays the mods' effects; made with the first one.
     /// </summary>
     ModEffectPlayer? _effectPlayer;
+    /// <summary>
+    /// The world the mods' weapon glows were set for and its game second at the last frame; a new world drops them.
+    /// </summary>
+    (World? World, double Seconds) _glowsFor;
+    /// <summary>
+    /// This frame's glows, kept to avoid allocating.
+    /// </summary>
+    readonly List<(CharacterId On, WeaponGlow Glow)> _frameGlows = [];
 
     /// <summary>
     /// Starts the JIT warm-up now, or (with code mods enabled) once they are initialized.
@@ -200,6 +208,43 @@ sealed class GameMods(GameHost host)
             effects.Clear();
         }
         if (!effects.Idle) _effectPlayer.Advance(effects);
+    }
+
+    /// <summary>
+    /// Once a frame: ages the mods' weapon glows by the game clock (pause and game speed hold and hasten them), plays their particles along the
+    /// blades through the effects' player and hands the glows to the character renderer by draw key (docs/modding.md "Weapon glow"). Nothing without code mods; a new world drops the old world's glows.
+    /// </summary>
+    internal void UpdateModWeaponGlows()
+    {
+        if (Mods is null) return;
+
+        var glows = Mods.WeaponGlows;
+        var world = host.Session?.World;
+        double now = host.Session?.Clock.GameSeconds ?? 0;
+        if (!ReferenceEquals(_glowsFor.World, world))
+        {
+            _glowsFor = (world, now);
+            glows.Clear();
+        }
+        _effectPlayer ??= new ModEffectPlayer(host);
+        glows.Advance((float)Math.Clamp(now - _glowsFor.Seconds, 0, 1), _effectPlayer);
+        _glowsFor.Seconds = now;
+        ShowWeaponGlows(glows);
+    }
+
+    /// <summary>
+    /// Puts this frame's glows into the character renderer's table (left empty when none glow).
+    /// </summary>
+    void ShowWeaponGlows(ModWeaponGlows glows)
+    {
+        if (host.Gpu?.Characters is not { } crowd) return;
+
+        crowd.WeaponGlows.Clear();
+        if (glows.Count == 0) return;
+
+        glows.Current(_frameGlows);
+        foreach (var (on, glow) in _frameGlows)
+            crowd.WeaponGlows[host.DrawKey(on)] = Meitou.Game.Rendering.Characters.CharacterRenderer.PackGlow(glow.Colour, glow.Strength);
     }
 
     /// <summary>

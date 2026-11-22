@@ -48,18 +48,36 @@ sealed class ModEffectPlayer(GameHost host) : IModEffectSink
     /// <summary>
     /// Moves an attached burst's emitter to its character's bone, where it was drawn this frame (left in place while it is not).
     /// </summary>
-    public void Follow(object playing, in ModEffectRequest request)
+    public void Follow(object playing, in ModEffectRequest request) => Track(playing, request);
+
+    /// <summary>
+    /// Moves the burst as <see cref="Follow"/> does; false when its character or blade is not drawn this frame or it stopped emitting.
+    /// </summary>
+    public bool Track(object playing, in ModEffectRequest request)
     {
-        if (host.Gpu?.Particles is not { } particles || playing is not EffectUnit unit || Where(request) is not { } at) return;
+        if (host.Gpu?.Particles is not { } particles || playing is not EffectUnit { Stopped: false } unit || Where(request) is not { } at)
+            return false;
+
         particles.MoveBurst(unit, at, Quaternion.Identity);
+        return true;
     }
 
     /// <summary>
-    /// Where a request plays now: its point, or its character's bone as last drawn (null: not drawn, or no such bone).
+    /// Makes the burst emit for <paramref name="seconds"/> from now (0: it stops at the next particle update, its particles live out).
+    /// </summary>
+    public void Renew(object playing, float seconds)
+    {
+        if (playing is EffectUnit unit) unit.Life = seconds;
+    }
+
+    /// <summary>
+    /// Where a request plays now: its point, its character's held blade or bone as last drawn (null: not drawn, no blade drawn, or no such bone).
     /// </summary>
     Vector3? Where(in ModEffectRequest request)
     {
         if (!request.Attached) return request.At;
-        return host.Gpu?.Characters?.BonePosition(host.DrawKey(request.On), request.Bone ?? DefaultBone);
+        if (host.Gpu?.Characters is not { } crowd) return null;
+        if (request.OnBlade) return crowd.BladePoint(host.DrawKey(request.On), request.Along);
+        return crowd.BonePosition(host.DrawKey(request.On), request.Bone ?? DefaultBone);
     }
 }

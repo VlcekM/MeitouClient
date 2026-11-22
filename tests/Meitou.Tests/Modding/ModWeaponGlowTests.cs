@@ -1,0 +1,192 @@
+using System.Numerics;
+using Meitou.Content;
+using Meitou.Game.Rendering.Characters;
+using Meitou.Modding;
+using Meitou.Simulation;
+
+namespace Meitou.Tests.Modding;
+
+/// <summary>
+/// The code mods' weapon glows (docs/modding.md "Weapon glow"): the state between <see cref="ModContext.GlowWeapon"/> and the character renderer,
+/// read here as the renderer reads it each frame.
+/// </summary>
+public class ModWeaponGlowTests
+{
+    /// <summary>
+    /// A context for the mod <paramref name="id"/> on <paramref name="registry"/>, without data or a world.
+    /// </summary>
+    static ModContext Context(ModRegistry registry, string id) =>
+        new(new LoadedMod(new ModInfo(id, $"mods/{id}/{id}.mod", ModSource.Local),
+                new CodeModManifest(id, ModApi.Version, [$"{id}.dll"], $"{id}.Mod")),
+            registry, null!, null!, () => null);
+
+    /// <summary>
+    /// Plays the glows' particles: starts and tracks them while <see cref="Drawn"/> (the blade is drawn), recording what it is asked.
+    /// </summary>
+    sealed class Recorder : IModEffectSink
+    {
+        public bool Drawn = true;
+        public readonly List<ModEffectRequest> Started = [];
+        public readonly List<(object Handle, float Seconds)> Renewed = [];
+        public int Tracked;
+
+        public object? Start(in ModEffectRequest request)
+        {
+            if (!Drawn) return null;
+
+            Started.Add(request);
+            return new object();
+        }
+
+        public void Follow(object playing, in ModEffectRequest request) => Tracked++;
+
+        public bool Track(object playing, in ModEffectRequest request)
+        {
+            Tracked++;
+            return Drawn;
+        }
+
+        public void Renew(object playing, float seconds) => Renewed.Add((playing, seconds));
+    }
+
+    /// <summary>
+    /// The glows as the renderer would draw them now.
+    /// </summary>
+    static Dictionary<CharacterId, WeaponGlow> Now(ModRegistry registry)
+    {
+        var list = new List<(CharacterId On, WeaponGlow Glow)>();
+        registry.WeaponGlows.Current(list);
+        return list.ToDictionary(g => g.On, g => g.Glow);
+    }
+
+    /// <summary>
+    /// A glow comes up over the fade, holds its colour and strength, is replaced by a newer request, fades out early on a stop and ends with its
+    /// lifetime; invalid requests are rejected and each problem logged once per mod; a mod's drop and a new world's clear remove glows.
+    /// </summary>
+    [Fact]
+    public void Glows_reach_the_renderer_fade_replace_expire_and_reject_bad_requests()
+    {
+        var log = new List<string>();
+        var registry = new ModRegistry();
+        registry.WeaponGlows.Log = log.Add;
+        var fire = Context(registry, "fire");
+        var ice = Context(registry, "ice");
+        var hero = new CharacterId(3, 1);
+        var foe = new CharacterId(4, 2);
+        var orange = new Vector3(1, 0.45f, 0.1f);
+        var cyan = new Vector3(0.3f, 0.9f, 1);
+        float fade = ModWeaponGlows.FadeSeconds;
+
+        Assert.True(fire.GlowWeapon(hero, orange, 2, 1.5f));
+        registry.WeaponGlows.Advance(0);
+        Assert.Empty(Now(registry));   // not up yet
+
+        registry.WeaponGlows.Advance(fade / 2);
+        Assert.Equal(new WeaponGlow(orange, 0.75f), Now(registry)[hero]);
+        registry.WeaponGlows.Advance(fade);
+        Assert.Equal(new WeaponGlow(orange, 1.5f), Now(registry)[hero]);
+
+        // A newer request replaces the colour and comes up from where the glow stood; another character's is apart.
+        Assert.True(ice.GlowWeapon(hero, cyan, 5));
+        Assert.True(fire.GlowWeapon(foe, orange, 1));
+        registry.WeaponGlows.Advance(0);
+        Assert.Equal(new WeaponGlow(cyan, 1), Now(registry)[hero]);
+        Assert.Equal(2, registry.WeaponGlows.Count);
+
+        // Only the mod that set a glow stops it, fading out; the foe's lifetime runs out.
+        Assert.False(fire.StopWeaponGlow(hero));
+        Assert.True(ice.StopWeaponGlow(hero));
+        registry.WeaponGlows.Advance(fade / 2);
+        Assert.Equal(new WeaponGlow(cyan, 0.5f), Now(registry)[hero]);
+        registry.WeaponGlows.Advance(1);
+        Assert.Equal(0, registry.WeaponGlows.Count);
+
+        // Invalid requests: each problem once per mod in the log.
+        Assert.False(fire.GlowWeapon(new CharacterId(-1, 0), orange, 1));
+        Assert.False(fire.GlowWeapon(hero, new Vector3(float.NaN, 0, 0), 1));
+        Assert.False(fire.GlowWeapon(hero, new Vector3(-1, 0, 0), 1));
+        Assert.False(fire.GlowWeapon(hero, orange, 0));
+        Assert.False(fire.GlowWeapon(hero, orange, ModWeaponGlows.MaxSeconds + 1));
+        Assert.False(fire.GlowWeapon(hero, orange, 1, 0));
+        Assert.False(ice.GlowWeapon(hero, orange, 0));
+        Assert.Equal(0, registry.WeaponGlows.Count);
+        Assert.Equal(5, log.Count);
+        Assert.Single(log, l => l.Contains("ice") && l.Contains("lifetime"));
+
+        // A mod that leaves loses its own glows only; a new world clears the rest.
+        Assert.True(fire.GlowWeapon(hero, orange, 10));
+        Assert.True(ice.GlowWeapon(foe, cyan, 10));
+        registry.WeaponGlows.Drop("fire");
+        Assert.Equal(1, registry.WeaponGlows.Count);
+        registry.WeaponGlows.Clear();
+        Assert.Equal(0, registry.WeaponGlows.Count);
+    }
+
+    /// <summary>
+    /// A glow's effect resolves as PlayEffect's and plays at each blade point, in the glow's colour, once the blade is drawn; a call again with the
+    /// same effect and colour renews those emitters (no restart); they stop while the blade is not drawn and when the glow ends, and count against
+    /// the effects' cap. The blade points lie on the mesh's long axis from the hilt end to the tip, through the middle of its pick boxes.
+    /// </summary>
+    [Fact]
+    public void Glow_particles_play_along_the_blade_and_are_kept_when_renewed()
+    {
+        var log = new List<string>();
+        var registry = new ModRegistry();
+        registry.Effects.Resolve = id => id == "frost" ? "kenshi_smoke3_small" : null;
+        registry.WeaponGlows.Log = log.Add;
+        var ice = Context(registry, "ice");
+        var hero = new CharacterId(3, 1);
+        var cyan = new Vector3(0.3f, 0.9f, 1);
+        var sink = new Recorder { Drawn = false };
+        int points = ModWeaponGlows.BladePoints.Length;
+
+        Assert.False(ice.GlowWeapon(hero, cyan, 5, 1, "no such effect"));
+        Assert.Single(log, l => l.Contains("effect id"));
+        Assert.True(ice.GlowWeapon(hero, cyan, 5, 1, "frost"));
+        registry.WeaponGlows.Advance(0.1f, sink);
+        Assert.Empty(sink.Started);   // sheathed: nothing yet
+
+        sink.Drawn = true;
+        registry.WeaponGlows.Advance(0.1f, sink);
+        Assert.Equal(points, sink.Started.Count);
+        Assert.All(sink.Started, r => Assert.Equal(("ice", "frost", "kenshi_smoke3_small", hero, cyan), (r.Owner, r.Effect, r.System, r.On, r.Tint)));
+        Assert.Equal(ModWeaponGlows.BladePoints, sink.Started.Select(r => r.Along));
+        Assert.All(sink.Started, r => Assert.True(r.OnBlade && r.Seconds > 4.8f));
+        Assert.Equal(points, registry.Effects.Reserved);
+        Assert.False(registry.Effects.Fits(ModEffects.MaxAlive - points + 1));
+
+        // Kept alive: the same effect and colour renew the playing emitters to the new lifetime rather than starting others.
+        registry.WeaponGlows.Advance(1, sink);
+        Assert.True(ice.GlowWeapon(hero, cyan, 20, 1, "frost"));
+        registry.WeaponGlows.Advance(0.1f, sink);
+        Assert.Equal(points, sink.Started.Count);
+        Assert.Equal(points, sink.Renewed.Count);
+        Assert.All(sink.Renewed, r => Assert.True(r.Seconds > 19.8f));
+
+        // Sheathed: they stop (renewed to 0); drawn again: new ones start; the glow's end stops them.
+        sink.Drawn = false;
+        registry.WeaponGlows.Advance(0.1f, sink);
+        registry.WeaponGlows.Advance(0.1f, sink);
+        Assert.Equal(points, sink.Renewed.Count(r => r.Seconds == 0));
+        Assert.Equal(0, registry.Effects.Reserved);
+        sink.Drawn = true;
+        registry.WeaponGlows.Advance(0.1f, sink);
+        Assert.Equal(2 * points, sink.Started.Count);
+        registry.WeaponGlows.Advance(25, sink);
+        registry.WeaponGlows.Advance(0, sink);
+        Assert.Equal(2 * points, sink.Renewed.Count(r => r.Seconds == 0));
+        Assert.Equal((0, 0), (registry.WeaponGlows.Count, registry.Effects.Reserved));
+
+        // A blade along -Z from its hilt end at z = 0.1 over 1.2 units, its pick boxes centred on x = 0.02, y = 0.
+        PickBox[] boxes = [new(-1, new Vector3(0, -0.01f, -1.1f), new Vector3(0.04f, 0.01f, -0.5f)), new(-1, new Vector3(0, -0.01f, -0.5f),
+            new Vector3(0.04f, 0.01f, 0.1f))];
+        AssertNear(new Vector3(0.02f, 0, 0.1f), BladeSpan.Point(boxes, -Vector3.UnitZ, -0.1f, 1 / 1.2f, 0));
+        AssertNear(new Vector3(0.02f, 0, -1.1f), BladeSpan.Point(boxes, -Vector3.UnitZ, -0.1f, 1 / 1.2f, 1));
+        AssertNear(new Vector3(0.02f, 0, -0.5f), BladeSpan.Point(boxes, -Vector3.UnitZ, -0.1f, 1 / 1.2f, 0.5f));
+    }
+
+    /// <summary>
+    /// <paramref name="actual"/> within a millimetre of <paramref name="expected"/>.
+    /// </summary>
+    static void AssertNear(Vector3 expected, Vector3 actual) => Assert.True(Vector3.Distance(expected, actual) < 1e-3f, $"{actual} not {expected}");
+}
