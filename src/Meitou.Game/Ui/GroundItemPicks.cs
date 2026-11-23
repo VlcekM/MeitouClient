@@ -178,6 +178,15 @@ sealed class GroundItemPicks(PlayerInterface player)
     readonly List<(int Id, UiRect Rect)> _itemLabels = [];
 
     /// <summary>
+    /// Each item name's text width in the label's font at a window height and minimum text size, measured once (the names are the records' and the
+    /// translations', so the set stays small).
+    /// </summary>
+    readonly Dictionary<(string Name, int Height, float Minimum), float> _labelWidths = [];
+
+    const string ItemLabelFont = "Kenshi_StandardFont_Medium";
+    const float ItemLabelTextScale = 1;
+
+    /// <summary>
     /// The ground item whose label took the left press, until the release.
     /// </summary>
     internal int? LabelPress;
@@ -229,7 +238,13 @@ sealed class GroundItemPicks(PlayerInterface player)
         var placed = new List<(int Id, UiRect Rect)>();
         foreach (var (g, _, at) in near)
         {
-            float width = painter.MeasureStandard(g.Name, em) + em;
+            // Measured as the name is drawn (its font at TextScale 1): the locale can map the font to a face other than the standard one
+            // (Chinese names in a face with full-width characters were cut to a few characters and "...", #1288).
+            var key = (g.Name, player.Height, player.StandardPixels);
+            if (!_labelWidths.TryGetValue(key, out float text))
+                _labelWidths[key] = text = painter.MeasureText(ItemLabelFont, g.Name, player.Height, 0, player.StandardPixels,
+                    ItemLabelTextScale).Width;
+            float width = MathF.Ceiling(text) + em;
             var rect = new UiRect(at.X - width / 2, at.Y - 6 * scale - height, width, height);
             for (bool moved = true; moved;)
             {
@@ -292,12 +307,12 @@ sealed class GroundItemPicks(PlayerInterface player)
                 new Dictionary<string, string> { ["Colour"] = back }, Vector4.Zero, Pickable: false));
             var font = new Dictionary<string, string>
             {
-                ["FontName"] = "Kenshi_StandardFont_Medium",
+                ["FontName"] = ItemLabelFont,
                 ["TextAlign"] = "Center",
                 ["TextColour"] = text,
             };
             controls.Add(new($"itemlabel-text-{i}", "TextBox", rect, near[i].Item.Name, "", "", true, font, Vector4.Zero, Pickable: false,
-                TextScale: 1));
+                TextScale: ItemLabelTextScale));
         }
     }
 

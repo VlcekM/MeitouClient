@@ -86,12 +86,13 @@ public sealed partial class UiPainter
     /// <summary>
     /// The size <see cref="Draw"/> gives <paramref name="text"/> in font resource <paramref name="fontName"/> on a viewport
     /// <paramref name="viewportHeight"/> high: wrapped to <paramref name="wrapWidth"/> when that is above zero (a control with <c>WordWrap</c> true),
-    /// else one line per line break. <paramref name="minimumTextPixels"/> is the value passed to <see cref="Draw"/>.
+    /// else one line per line break. <paramref name="minimumTextPixels"/> is the value passed to <see cref="Draw"/>; <paramref name="textScale"/> the
+    /// control's <c>TextScale</c>, when it has one.
     /// </summary>
-    public TextSize MeasureText(string fontName, string text, int viewportHeight, float wrapWidth, float minimumTextPixels)
+    public TextSize MeasureText(string fontName, string text, int viewportHeight, float wrapWidth, float minimumTextPixels, float? textScale = null)
     {
-        var font = ResourceFont(fontName, Scale(viewportHeight), minimumTextPixels) ?? _standardFont ?? _overlay;
-        float scale = font == _standardFont || font == _overlay ? ClampedScale(viewportHeight) : 1;
+        var font = ResourceFont(fontName, textScale ?? Scale(viewportHeight), minimumTextPixels) ?? _standardFont ?? _overlay;
+        float scale = font == _standardFont || font == _overlay ? textScale ?? ClampedScale(viewportHeight) : 1;
         return Measure(font, text, wrapWidth, scale);
     }
 
