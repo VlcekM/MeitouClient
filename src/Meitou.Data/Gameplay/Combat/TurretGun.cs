@@ -95,6 +95,12 @@ public sealed record TurretGun
 public static class TurretRig
 {
     /// <summary>
+    /// How far along the barrel a line of fire starts again past the building the turret is mounted on (<c>DAT_141683170</c>, units;
+    /// <see cref="RecastFrom"/>).
+    /// </summary>
+    public const float RecastReach = 50;
+
+    /// <summary>
     /// Collects the parts that turn to the target (<c>rotation function</c> 5), depth first like the exe's part list: each hangs from the nearest
     /// such ancestor, with the offsets of the parts between carried along. A part whose <c>rotation axis</c> is Y yaws; any other pitches.
     /// </summary>
@@ -164,12 +170,32 @@ public static class TurretRig
     /// </summary>
     public static (Vector3 Muzzle, Vector3 Forward) Barrel(TurretGun turret, float[] angles, Vector3 position, float yaw)
     {
-        var (at, orientation) = turret.Parts.Count > 0
-            ? Derived(turret.Parts, angles, position, yaw, turret.Scale, turret.Parts.Count - 1)
-            : (position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw));
+        var (at, orientation) = Node(turret, angles, position, yaw);
         var muzzle = at + Vector3.Transform(new Vector3(0, turret.Gun.BarrelY, turret.Gun.BarrelZ) * turret.Scale, orientation);
         return (muzzle, Vector3.Normalize(Vector3.Transform(Vector3.UnitZ, orientation)));
     }
+
+    /// <summary>
+    /// Where a line of fire that met the building the turret is mounted on starts again (gun slot 10, <c>FUN_140435040</c>, with
+    /// <see cref="RecastReach"/>): the barrel node's place + its orientation x the unit (0, <c>barrel pos Y</c>, <c>barrel pos Z</c>) x
+    /// <see cref="RecastReach"/>, unscaled (the node itself when both are 0).
+    /// </summary>
+    public static Vector3 RecastFrom(TurretGun turret, float[] angles, Vector3 position, float yaw)
+    {
+        var (at, orientation) = Node(turret, angles, position, yaw);
+        var barrel = new Vector3(0, turret.Gun.BarrelY, turret.Gun.BarrelZ);
+        if (barrel.LengthSquared() < 1e-12f) return at;
+
+        return at + Vector3.Transform(Vector3.Normalize(barrel) * RecastReach, orientation);
+    }
+
+    /// <summary>
+    /// The barrel node's world place and orientation: the last turning part's (<see cref="Derived"/>), without parts the building's own.
+    /// </summary>
+    static (Vector3 Position, Quaternion Orientation) Node(TurretGun turret, float[] angles, Vector3 position, float yaw) =>
+        turret.Parts.Count > 0
+            ? Derived(turret.Parts, angles, position, yaw, turret.Scale, turret.Parts.Count - 1)
+            : (position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw));
 }
 
 /// <summary>

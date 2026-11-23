@@ -288,15 +288,27 @@ public sealed partial class CombatSystem : IProjectileSource
     /// <summary>
     /// The fire decision's line of fire (<c>FUN_140437ad0</c>, docs/game/combat.md "Line of fire and the hit shape"): a ray from
     /// <paramref name="from"/> through <paramref name="to"/> (the original's is unbounded; here <paramref name="reach"/> long at least) and the first
-    /// thing it meets of the click hulls, the terrain and the buildings. A hull of one the shooter does not count an enemy holds the shot (2), any
-    /// enemy's lets it go (1), the target's included; the terrain lets it go (it names no object); a building closes in (0) when it is nearer the
-    /// shooter than the target is (feet to feet), else lets it go; nothing met fires. Buildings on the way still being read hold it (engine choice).
+    /// thing it meets (<see cref="FirstMet"/>), as <see cref="FireDecision"/> takes it.
     /// </summary>
-    int LineOfFire(World world, int self, int target, Vector3 from, Vector3 to, int faction, float reach)
+    int LineOfFire(World world, int self, int target, Vector3 from, Vector3 to, int faction, float reach) =>
+        FireDecision(world, self, target, faction, FirstMet(world, self, from, to, reach));
+
+    /// <summary>
+    /// What a line of fire meets first: the click hull of <see cref="Hull"/> (-1: none first), or a building where the segment
+    /// <see cref="From"/> + <see cref="Seg"/> x <see cref="At"/> meets it (<see cref="Building"/>), or the terrain or nothing; <see cref="Ready"/>
+    /// false while buildings on the way are still being read.
+    /// </summary>
+    readonly record struct LineMet(int Hull, bool Building, bool Ready, Vector3 From, Vector3 Seg, float At);
+
+    /// <summary>
+    /// The first thing a ray from <paramref name="from"/> through <paramref name="to"/>, <paramref name="reach"/> long at least, meets of the click
+    /// hulls, the terrain and the buildings.
+    /// </summary>
+    LineMet FirstMet(World world, int self, Vector3 from, Vector3 to, float reach)
     {
         var seg = to - from;
         float length = seg.Length();
-        if (length < 1e-3f) return 1;
+        if (length < 1e-3f) return new(-1, false, true, from, seg, -1);
 
         seg *= MathF.Max(length, reach) / length;
         length = MathF.Max(length, reach);
@@ -305,15 +317,27 @@ public sealed partial class CombatSystem : IProjectileSource
         // The terrain and the buildings only up to the first hull: whichever comes first decides.
         var solidSeg = hit >= 0 ? seg * atHull : seg;
         float solid = SolidHits.Hit(world.Walkability, Buildings, from, solidSeg, RangedTuning.TerrainStep, out bool building, out bool ready);
+
+        return solid < 0 ? new(hit, false, ready, from, solidSeg, -1) : new(-1, building, ready, from, solidSeg, solid);
+    }
+
+    /// <summary>
+    /// The decision on what a line of fire met first (<c>FUN_140437ad0</c>): a hull of one the shooter does not count an enemy holds the shot (2),
+    /// any enemy's lets it go (1), the target's included; the terrain lets it go (it names no object); a building closes in (0) when it is nearer
+    /// the shooter than the target is (feet to feet), else lets it go; nothing met fires. Buildings on the way still being read hold it (engine
+    /// choice).
+    /// </summary>
+    int FireDecision(World world, int self, int target, int faction, LineMet met)
+    {
         var prev = world.Characters.Previous;
 
         // The buildings on the way still being read: hold fire until they are known rather than shoot through a wall.
-        if (!ready) return 2;
+        if (!met.Ready) return 2;
 
-        if (solid < 0 && hit >= 0) return Hostile(world, self, prev[self].Generation, faction, target, hit) ? 1 : 2;
-        if (solid < 0 || !building) return 1;
+        if (met.Hull >= 0) return Hostile(world, self, prev[self].Generation, faction, target, met.Hull) ? 1 : 2;
+        if (!met.Building) return 1;
 
-        var at = from + solidSeg * solid;
+        var at = met.From + met.Seg * met.At;
         return Vector3.DistanceSquared(prev[self].Position, prev[target].Position) < Vector3.DistanceSquared(at, prev[self].Position) ? 1 : 0;
     }
 

@@ -135,6 +135,11 @@ public sealed partial class CombatSystem
     #region Turret fire
 
     /// <summary>
+    /// How near (units) the mount's own crossing must be to where the line met a building for that building to be the mount.
+    /// </summary>
+    const float MountTolerance = 0.01f;
+
+    /// <summary>
     /// The serial turret step (after the bolts fly): finds the gunners, then runs every manned turret in key order.
     /// </summary>
     void TickTurrets(World world)
@@ -216,12 +221,49 @@ public sealed partial class CombatSystem
 
         var (from, forward) = TurretRig.Barrel(t.Gun, t.Angles, t.Position, t.Yaw);
         float reach = Vector3.Distance(from, t.Aim ?? prev[target].Position);
-        if (LineOfFire(world, g, target, from, from + forward * reach, cold.Faction, gun.Range) != 1) return;
+        if (TurretLineOfFire(world, t, g, target, from, forward * reach, cold.Faction) != 1) return;
 
         FireTurret(world, t, g, cold, target, from, forward);
         t.Loaded--;
         t.Shots++;
         t.Steady = RangedFormulas.SteadyAim;
+    }
+
+    /// <summary>
+    /// A turret's line of fire (<see cref="LineOfFire"/>) from <paramref name="from"/> along <paramref name="seg"/>: when the first thing it meets is
+    /// the building the turret is mounted on (gun slot 11 <c>GunClassTurret::didThisTraceHitOurMountedBuilding</c>, <c>FUN_140438050</c>, in the
+    /// ray request <c>FUN_140435b40</c>), the ray starts again from <see cref="TurretRig.RecastFrom"/> along the same direction
+    /// (<c>FUN_140434750</c>) and what that one meets decides.
+    /// </summary>
+    int TurretLineOfFire(World world, TurretState t, int g, int target, Vector3 from, Vector3 seg, int faction)
+    {
+        float range = t.Gun.Gun.Range;
+        var met = FirstMet(world, g, from, from + seg, range);
+        if (met.Ready && met.Building && OnMount(t, met))
+        {
+            var again = TurretRig.RecastFrom(t.Gun, t.Angles, t.Position, t.Yaw);
+            met = FirstMet(world, g, again, again + seg, range);
+        }
+
+        return FireDecision(world, g, target, faction, met);
+    }
+
+    /// <summary>
+    /// Whether the building <paramref name="met"/> names is the one turret <paramref name="t"/> is mounted on: its own triangles
+    /// (<see cref="TurretState.MountTriangles"/>, read on the first need) are crossed where the line met a building.
+    /// </summary>
+    bool OnMount(TurretState t, LineMet met)
+    {
+        if (t.MountedOn is not { } mount || Buildings is null) return false;
+
+        if (t.MountTriangles is null)
+        {
+            t.MountTriangles = [];
+            Buildings.BuildingTriangles(mount, t.Position, t.MountTriangles);
+        }
+
+        float at = SolidHits.FirstCrossing(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(t.MountTriangles), met.From, met.Seg);
+        return at >= 0 && MathF.Abs(at - met.At) * met.Seg.Length() < MountTolerance;
     }
 
     /// <summary>

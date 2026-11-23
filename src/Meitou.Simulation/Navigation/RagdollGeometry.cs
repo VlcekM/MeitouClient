@@ -150,6 +150,15 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
     public float GroundHeight(float x, float z, float nearY) => _ground.HeightAt(x, z);
 
     /// <inheritdoc/>
+    public bool BuildingTriangles(string id, Vector3 near, List<Vector3> triangles)
+    {
+        lock (_gatherLock)
+        {
+            return !_disposed && _gatherer.OwnRagdollTriangles(id, near, triangles);
+        }
+    }
+
+    /// <inheritdoc/>
     public bool Buildings(Vector3 min, Vector3 max, List<Vector3> triangles)
     {
         var add = new Appender(triangles);
