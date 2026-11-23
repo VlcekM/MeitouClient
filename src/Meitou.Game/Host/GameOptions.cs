@@ -294,7 +294,7 @@ sealed class GameOptions
                                      works with --renderer metal too (GPU time per frame, no GPU stages)
           --metal-gpu-budget <MB>    Metal: the memory guard's GPU allocation ceiling for this run (over MEITOU_METAL_GPU_BUDGET_MB, the launcher's setting;
                                      default a third of the Mac's memory, 5120 to 10240)
-          --benchmark-baseline       the settings benchmarks for the site use (bench/kit): a 1920x1080 window, the Medium tier, no GI, ground parallax or tessellation, no upscaler, SMAA;
+          --benchmark-baseline       the benchmarks' fixed graphics: a 1920x1080 window, the Medium tier, no GI, ground parallax or tessellation, no upscaler, SMAA;
                                      like --low-end, the saved graphics are neither applied nor overwritten
           --control-dir <dir>        agent channel (debug): polls <dir>/cmd (lines "<id> <console command>"), appends results to <dir>/out; also MEITOU_CONTROL_DIR
           --exec "<cmd; cmd>"        console commands run once, in order, after the world has loaded and settled (state.screen world, a selected character, the simulation has ticked; same as wait-ready --world); also --setup.

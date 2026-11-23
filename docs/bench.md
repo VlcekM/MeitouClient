@@ -133,7 +133,7 @@ Loading the same autosave and resaving after 300 headless ticks gave matching SH
 - The render-thread stages (`cpu_*`) come from the shared `WorldFrame` laps; `cpu_sim` stays 0 (`update_ms` has the ticks).
 - The summary's run line names the device, scene and window sizes, the upscaler, the pacing, the GPU budget
   (`--metal-gpu-budget`) and the memory guard's state at the end. The saved graphics apply; `--benchmark-baseline` is
-  not applied on Metal, so its numbers do not compare with the benchmarks page.
+  not applied on Metal, so its numbers do not compare with Vulkan benchmark runs.
 - The Metal loop saves vsync, frame limit, full screen, upscaler and graphics at exit whatever the run's options were:
   point a bench run at a copy of `meitou.user.json` (the file is read from the working directory first).
 
