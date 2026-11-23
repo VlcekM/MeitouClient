@@ -313,7 +313,7 @@ sealed class ProjectileFlight
             if (v >= 0)
             {
                 bool intended = v == p.Target && prev[v].Generation == p.TargetGeneration;
-                bool enemy = intended || combat.Hostile(table, p.Shooter, p.ShooterGeneration, p.ShooterFaction, p.Target, v);
+                bool enemy = intended || combat.Hostile(world, p.Shooter, p.ShooterGeneration, p.ShooterFaction, p.Target, v);
                 if (!enemy && FriendPasses(world, combat, p, v))
                 {
                     p.Passed = v;

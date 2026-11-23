@@ -66,6 +66,18 @@ public sealed partial class CombatSystem
         /// </summary>
         public FactionRelations? Relations;
         /// <summary>
+        /// The world.
+        /// </summary>
+        public World World;
+        /// <summary>
+        /// The squads' memory; null: the factions alone decide the enemy test.
+        /// </summary>
+        public Dialogue.SquadMemory? Memory;
+        /// <summary>
+        /// The attacker.
+        /// </summary>
+        public CharacterCold Cold;
+        /// <summary>
         /// The attacker's slot, its target's, faction and squad, and how many characters are found.
         /// </summary>
         public int Self, Target, Faction, Squad, Count;
@@ -150,6 +162,9 @@ public sealed partial class CombatSystem
             Table = world.Characters,
             Read = _read,
             Relations = Relations,
+            World = world,
+            Memory = Memory,
+            Cold = cold,
             Self = i,
             Target = s.TargetSlot,
             Faction = cold.Faction,
@@ -175,9 +190,11 @@ public sealed partial class CombatSystem
             {
                 if (tc.Faction == z.Faction || z.Squad >= 0 && tc.SquadId == z.Squad) return;
 
-                // A slave (slave state 1) that is not its ally is in it for an attacker neither of the player's faction nor anti-slavery.
-                if (z.Relations is { } relations && !AggroSystem.IsEnemy(relations, z.Faction, tc.Faction)
-                    && !(z.HitsSlaves && tc.SlaveState == 1 && !relations.IsAlly(z.Faction, tc.Faction))) return;
+                // An enemy by the character's test (its squad's temporary enemies too, so a fight with a faction that is not hostile sweeps
+                // everyone in it); a slave (slave state 1) that is not its ally is in it for an attacker neither of the player's faction nor
+                // anti-slavery.
+                if (!Bodies.CharacterFacts.RegardsEnemy(z.World, z.Memory, z.Relations, z.Self, z.Cold, c, tc)
+                    && !(z.Relations is { } relations && z.HitsSlaves && tc.SlaveState == 1 && !relations.IsAlly(z.Faction, tc.Faction))) return;
             }
 
             var q = state[c].Position;

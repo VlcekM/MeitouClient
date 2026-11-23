@@ -535,15 +535,17 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// Whether <paramref name="c"/> counts as an enemy of <paramref name="me"/> for the steering's repulsion (its <c>isEnemy</c>, engine reading): of
-    /// a hostile faction (another faction when there is no relation table), or fighting <paramref name="me"/>, or fought by it. Last tick's state;
-    /// any thread after Schedule.
+    /// Whether <paramref name="c"/> counts as an enemy of <paramref name="me"/> for the steering's repulsion (its <c>isEnemy</c>, engine reading): by
+    /// its enemy test (<c>CharacterFacts.RegardsEnemy</c>: the squads' temporary enemies, else a hostile faction, another faction when there is no
+    /// relation table), or fighting <paramref name="me"/>, or fought by it. Last tick's state; any thread after Schedule.
     /// </summary>
     public bool IsEnemyOf(World world, int c, CharacterCold oc, int me, int myFaction)
     {
         var prev = world.Characters.Previous;
         if (_read[c].TargetSlot == me && _read[c].TargetGeneration == prev[me].Generation) return true;
         if (_read[me].TargetSlot == c && _read[me].TargetGeneration == prev[c].Generation) return true;
+
+        if (world.Characters.Cold(me) is { } mc) return CharacterFacts.RegardsEnemy(world, Memory, Relations, c, oc, me, mc);
 
         return CharacterFacts.RegardsEnemy(Relations, oc.Faction, myFaction);
     }
