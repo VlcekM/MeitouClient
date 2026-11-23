@@ -1945,6 +1945,10 @@ msgstr ""
 msgid "Grass draw distance x"
 msgstr ""
 
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Greyed: a menu row your selection can't do now, such as First Aid without a medkit, is greyed; Shift-click it to set up the job anyway. Faithful: every row as in the game."
+msgstr ""
+
 #: src/Meitou.Game/Host/Photo/PhotoMode.cs
 msgid "Grid"
 msgstr ""
@@ -5471,6 +5475,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/SettingsCanvas.cs
 msgid "Unavailable"
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Unavailable menu rows"
 msgstr ""
 
 #: src/Meitou.Game/Settings/SettingsCanvas.cs

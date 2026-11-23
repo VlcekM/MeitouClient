@@ -5238,3 +5238,8 @@ msgstr "벤치마크가 중단되었습니다."
 #. machine-translated
 msgid "{1} squad(s) given their own squad AI options by a mod that is not loaded follow yours again."
 msgstr "로드되지 않은 모드가 자체 분대 AI 옵션을 준 분대 {1}개가 다시 당신의 옵션을 따릅니다."
+msgid "Unavailable menu rows"
+msgstr "사용할 수 없는 메뉴 항목"
+
+msgid "Greyed: a menu row your selection can't do now, such as First Aid without a medkit, is greyed; Shift-click it to set up the job anyway. Faithful: every row as in the game."
+msgstr "회색 표시: 선택한 캐릭터가 지금 할 수 없는 메뉴 항목(구급 키트 없는 응급 처치 등)은 회색으로 표시됩니다. Shift+클릭하면 작업을 그대로 지정할 수 있습니다. 원작대로: 모든 항목을 게임과 같이 표시합니다."

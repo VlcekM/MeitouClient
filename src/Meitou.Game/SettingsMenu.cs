@@ -1666,6 +1666,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Player.MeitouMainMenu = Config.MeitouMainMenu = true;
         Player.SpeedUnit = Config.SpeedUnit = SpeedUnit.Mph;
         Player.Floaters = Config.Floaters = FloaterMode.Simple;
+        Player.GreyUnavailableVerbs = Config.GreyUnavailableVerbs = true;
         Player.InterfaceScale = Config.InterfaceScale = 1;
         Player.ShowNames = Config.ShowNames = true;
         Player.FeedbackButtonInPlay = Config.FeedbackButton = true;

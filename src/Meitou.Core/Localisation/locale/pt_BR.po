@@ -5667,3 +5667,8 @@ msgstr "O benchmark parou."
 #. machine-translated
 msgid "{1} squad(s) given their own squad AI options by a mod that is not loaded follow yours again."
 msgstr "{1} esquadrão(ões) que receberam opções de IA de esquadrão próprias de um mod não carregado voltam a seguir as suas."
+msgid "Unavailable menu rows"
+msgstr "Linhas de menu indisponíveis"
+
+msgid "Greyed: a menu row your selection can't do now, such as First Aid without a medkit, is greyed; Shift-click it to set up the job anyway. Faithful: every row as in the game."
+msgstr "Esmaecidas: uma linha do menu que sua seleção não pode fazer agora, como Primeiros socorros sem kit médico, fica esmaecida; use Shift+clique para definir o trabalho mesmo assim. Fiel: cada linha como no jogo."

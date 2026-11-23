@@ -5240,3 +5240,8 @@ msgstr "Il benchmark si è fermato."
 #. machine-translated
 msgid "{1} squad(s) given their own squad AI options by a mod that is not loaded follow yours again."
 msgstr "{1} squadra/e a cui una mod non caricata aveva dato opzioni IA di squadra proprie seguono di nuovo le tue."
+msgid "Unavailable menu rows"
+msgstr "Righe di menu non disponibili"
+
+msgid "Greyed: a menu row your selection can't do now, such as First Aid without a medkit, is greyed; Shift-click it to set up the job anyway. Faithful: every row as in the game."
+msgstr "Disattivate: una riga del menu che la selezione non può eseguire ora, come Primo soccorso senza kit medico, è in grigio; fai Maiusc+clic per impostare comunque il lavoro. Fedele: ogni riga come nel gioco."

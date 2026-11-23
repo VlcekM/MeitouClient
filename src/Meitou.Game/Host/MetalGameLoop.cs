@@ -1139,6 +1139,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         {
             SpeedUnit = host.Config.SpeedUnit,
             Floaters = host.Config.Floaters,
+            GreyUnavailableVerbs = host.Config.GreyUnavailableVerbs,
             FeedbackButtonInPlay = host.Config.FeedbackButton,
             XpLabel = Settings.SkillXp.Label(host.Config),
         };

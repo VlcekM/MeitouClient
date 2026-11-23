@@ -934,6 +934,18 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     }
 
     /// <summary>
+    /// Whether First Aid (25) or Repairs (60) would find a kit for the character now: a first aid or robot kit by <see cref="FindKit"/>, as
+    /// <see cref="IOrderOwner.CanRun"/> asks before the medic moves. For the context menu's unavailable rows.
+    /// </summary>
+    internal bool MedkitAtHand(World world, int slot, CharacterCold cold) =>
+        FindKit(world, slot, cold, ItemInfo.FirstAidKitFunction) is not null || FindKit(world, slot, cold, ItemInfo.RobotKitFunction) is not null;
+
+    /// <summary>
+    /// Whether Splint Injuries (249) would find the character's own splint kit now (<see cref="OwnKit"/>). For the context menu's unavailable rows.
+    /// </summary>
+    internal static bool SplintKitAtHand(CharacterCold cold) => OwnKit(cold, ItemInfo.SplintKitFunction) is not null;
+
+    /// <summary>
     /// The medic's own kit of an <c>item function</c> by the original's search (<see cref="OwnKit"/>: main grid, then the worn backpack; fewest
     /// charges above zero), else a squad mate's within <see cref="FirstAidSettings.KitReach"/> by the same rule (an engine choice: the original
     /// searches only the medic's own).

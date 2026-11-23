@@ -5240,3 +5240,8 @@ msgstr "El benchmark se detuvo."
 #. machine-translated
 msgid "{1} squad(s) given their own squad AI options by a mod that is not loaded follow yours again."
 msgstr "{1} escuadrón(es) a los que un mod no cargado dio sus propias opciones de IA de escuadrón vuelven a seguir las tuyas."
+msgid "Unavailable menu rows"
+msgstr "Filas de menú no disponibles"
+
+msgid "Greyed: a menu row your selection can't do now, such as First Aid without a medkit, is greyed; Shift-click it to set up the job anyway. Faithful: every row as in the game."
+msgstr "Atenuadas: una fila del menú que tu selección no puede hacer ahora, como Primeros auxilios sin botiquín, aparece atenuada; haz Mayús+clic para asignar la tarea igualmente. Fiel: cada fila como en el juego."

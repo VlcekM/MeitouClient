@@ -256,7 +256,15 @@ public sealed class UiMenuContext(Simulation.CharacterSnapshot target, IReadOnly
 /// <summary>
 /// A row an extension adds to a character's right-click menu: its caption and what choosing it does (on the host's thread).
 /// </summary>
-public sealed record UiMenuVerb(string Caption, Action Choose);
+public sealed record UiMenuVerb(string Caption, Action Choose)
+{
+    /// <summary>
+    /// The selection cannot carry it out now (for example it lacks the item it needs). With the Interface setting "Unavailable menu rows" on
+    /// Greyed (the default) the row is drawn greyed, a plain click does nothing and a Shift click still chooses it (a mod row reads Shift itself,
+    /// so it can set up a job for later); on Faithful the row is drawn and chosen as any other.
+    /// </summary>
+    public bool Unavailable { get; init; }
+}
 
 /// <summary>
 /// Read-only presentation data. UI extensions cannot mutate UiBindings or receive the simulation world.

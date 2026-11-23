@@ -453,7 +453,7 @@ sealed partial class PlayerInterface
 
         var context = new UiMenuContext(target, SelectedIds(), Mouse, () => SlowModifier, () => Session.World.Tick, Say);
         return _uiHost.CharacterMenuVerbs(context)
-            .Select(v => (v.Caption, v.Choose))
+            .Select(v => ContextMenuWindow.Available(v.Caption, v.Choose, !v.Unavailable))
             .Concat(targetRows);
     }
 

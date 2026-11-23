@@ -36,6 +36,11 @@ sealed class ContextMenuWindow(PlayerInterface player)
     internal static readonly Vector4 VerbHover = new(0.86f, 0.62f, 0.2f, 1);
 
     /// <summary>
+    /// The colour of an unavailable row's caption.
+    /// </summary>
+    internal static readonly Vector4 UnavailableInk = new(0.5f, 0.48f, 0.43f, 1);
+
+    /// <summary>
     /// A context menu: its title, where it opens and its verbs (caption and what it gives).
     /// </summary>
     internal sealed record ContextMenu(string Title, Vector2 At, IReadOnlyList<(string Caption, Action Give)> Verbs);
@@ -292,11 +297,50 @@ sealed class ContextMenuWindow(PlayerInterface player)
             }));
         }
 
-        // Shift turns an order into a job (SquadPanel).
-        List<(string, Action)> rows = [.. verbs.Select(v => (v.Item1, player.SquadWindows.JobOrOrder(v.Item1, id, v.Item2)))];
+        // Shift turns an order into a job (SquadPanel); a medic verb no selected character has the kit for is unavailable.
+        List<(string, Action)> rows = [.. verbs.Select(v => KitVerb(v.Item1, player.SquadWindows.JobOrOrder(v.Item1, id, v.Item2)))];
         rows.AddRange(player.ModMenuVerbs(target));
         return rows;
     }
+
+    /// <summary>
+    /// A medic verb (First Aid, Repairs, Splint Injuries) made unavailable (<see cref="Available"/>) when no selected character has its kit at hand
+    /// (<see cref="CharacterSnapshot.HasMedkit"/>, <see cref="CharacterSnapshot.HasSplintKit"/>: what the order's start would refuse with "I don't
+    /// have a medkit." or "I don't have a splint kit."); other verbs as they are.
+    /// </summary>
+    (string, Action) KitVerb(string caption, Action give) => caption switch
+    {
+        "First Aid" or "Repairs" => Available(caption, give, player.Selected().Any(c => c.HasMedkit)),
+        "Splint Injuries" => Available(caption, give, player.Selected().Any(c => c.HasSplintKit)),
+        _ => (caption, give),
+    };
+
+    /// <summary>
+    /// A row the selection cannot carry out now, with the setting on (<see cref="PlayerInterface.GreyUnavailableVerbs"/>): drawn greyed; a plain
+    /// click does nothing, a Shift click gives the row's own action (which turns an order into its job). Meitou only: the original draws and gives
+    /// every row alike.
+    /// </summary>
+    sealed class UnavailableVerb(PlayerInterface player, Action give)
+    {
+        /// <summary>
+        /// The row chosen: its action with Shift held, else nothing.
+        /// </summary>
+        public void Choose()
+        {
+            if (player.SlowModifier) give();
+        }
+    }
+
+    /// <summary>
+    /// A row as it is when <paramref name="available"/> or the setting is off, else its unavailable form (<see cref="UnavailableVerb"/>).
+    /// </summary>
+    internal (string Caption, Action Give) Available(string caption, Action give, bool available) =>
+        available || !player.GreyUnavailableVerbs ? (caption, give) : (caption, new UnavailableVerb(player, give).Choose);
+
+    /// <summary>
+    /// Whether a row's action is an unavailable row's (<see cref="Available"/>).
+    /// </summary>
+    static bool IsUnavailable(Action give) => give.Target is UnavailableVerb;
 
     /// <summary>
     /// A caged character: Talk To (12) and Loot (26). Meitou points at an occupied cage with occupant selection as its occupant and shows one menu,
@@ -870,10 +914,11 @@ sealed class ContextMenuWindow(PlayerInterface player)
         {
             var (caption, chance) = SplitChance(menu.Verbs[i].Caption);
             float rowY = y + titleH + i * optionH + optionH * 0.0512821f, rowH = optionH * 0.897436f;
+            var rowInk = IsUnavailable(menu.Verbs[i].Give) ? UnavailableInk : ink;
             controls.Add(new($"context-verb-{i}", "Button", new(x + w * 0.0208333f, rowY, buttonW, rowH), Loc.Tr(caption),
                 "meitou:context", "Kenshi_Button1Skin", true,
                 new Dictionary<string, string> { ["FontName"] = "Kenshi_PaintedTextFont_Medium", ["TextAlign"] = "Center" },
-                default, ink, HoverColour: VerbHover, Pickable: true, Argument: i.ToString(CultureInfo.InvariantCulture)));
+                default, rowInk, HoverColour: VerbHover, Pickable: true, Argument: i.ToString(CultureInfo.InvariantCulture)));
             if (chance is not { } c) continue;
 
             float p = Math.Clamp(c * 0.01f, 0, 1);
