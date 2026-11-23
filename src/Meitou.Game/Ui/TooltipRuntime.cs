@@ -349,10 +349,10 @@ sealed class TooltipRuntime(PlayerInterface player)
             var line = lines[i];
             var area = layout.Rows[i].Area;
 
-            AddTipText(controls, prefix, "key", i, area, line.Key, "Left Top", line.KeyTone, meitou);
+            AddTipText(controls, prefix, "key", i, area, line.Key, "Left Top", line.KeyTone, meitou, line.KeyColour);
             float suffixWidth = line.Suffix.Length > 0 ? painter.MeasureText(TooltipFont, line.Suffix, player.Height, 0, minimum).Width : 0;
             AddTipText(controls, prefix, "value", i, area with { Width = Math.Max(0, area.Width - suffixWidth) }, line.Value, "Right Top",
-                line.ValueTone, meitou, valueColours is not null && i < valueColours.Count ? valueColours[i] : null);
+                line.ValueTone, meitou, valueColours is not null && i < valueColours.Count ? valueColours[i] ?? line.ValueColour : line.ValueColour);
             AddTipText(controls, prefix, "suffix", i, area, line.Suffix, "Right Top", line.SuffixTone, meitou);
         }
     }
@@ -830,6 +830,17 @@ sealed class TooltipRuntime(PlayerInterface player)
         public string ModTag { get; init; } = "";
 
         /// <summary>
+        /// Who holds the item and its index there (<see cref="InventoryItemView.Index"/>; -1 with no holder), for the mods' tooltip lines
+        /// (<see cref="UiItemTooltipContext.Owner"/>); null for an item no command can name (a trader's stock, a debug window's).
+        /// </summary>
+        public Simulation.Items.ItemOwner? Owner { get; init; }
+
+        /// <summary>
+        /// The item's index in <see cref="Owner"/>'s items; -1 without an owner.
+        /// </summary>
+        public int Index { get; init; } = -1;
+
+        /// <summary>
         /// The chance a take of the item goes unseen, for another faction's item its window's opener would steal
         /// (<see cref="InventoryItemView.StealChance"/>); null otherwise.
         /// </summary>
@@ -1102,9 +1113,23 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// </summary>
     void AddModRows(List<TooltipLine> lines, ItemTip t)
     {
-        var item = new UiItemTooltipContext(t.Record, t.Name, t.ModTag, t.Quantity, t.Level, t.Quality);
-        foreach (var line in player.ModItemTooltipLines(item)) lines.Add(new(line.Label, line.Value ?? ""));
+        bool first = !Equals(t, _modRowsShownFor);
+        _modRowsShownFor = t;
+        foreach (var line in player.ModItemTooltipLines(t, first))
+        {
+            lines.Add(new TooltipLine(line.Label, line.Value ?? "")
+            {
+                KeyColour = UiLineStyle.Ink(line.Style?.Label),
+                ValueColour = UiLineStyle.Ink(line.Style?.Value),
+            });
+        }
     }
+
+    /// <summary>
+    /// The item tooltip the mods' lines were last asked for: a tooltip built again for an equal tip (each frame it shows) is not a first showing
+    /// (<see cref="UiItemTooltipContext.First"/>); another item's tooltip, or the item changed, is.
+    /// </summary>
+    ItemTip? _modRowsShownFor;
 
     /// <summary>
     /// A blueprint's research title and rows, then the grade line right under the name (a weapon's model, a crossbow's grade).

@@ -72,7 +72,7 @@ public class CharacterPanelLinesTests
         using var many = host.Register(new Extension("many", r =>
         {
             r.AddCharacterPanelLines(_ => Enumerable.Range(0, 9).Select(i => new UiCharacterLine(new string('x', 200) + i, "line\nbreak")));
-            r.AddJobPanelButtons(_ => Enumerable.Range(0, 9).Select(i => new UiJobButton("Tab" + i, new string('t', 2000), () => { })));
+            r.AddJobPanelButtons(_ => Enumerable.Range(0, 12).Select(i => new UiJobButton("Tab" + i, new string('t', 2000), () => { })));
         }));
         var context = Context("Beep");
 

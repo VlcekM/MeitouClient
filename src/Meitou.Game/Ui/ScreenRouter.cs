@@ -18,6 +18,7 @@ sealed class ScreenRouter(PlayerInterface player)
         if (player.OverlayText(e)) return;
 
         player.InterfaceSounds.SoundForScreen(e);
+        if (player.ModScreenAction(e)) return;
 
         if (e.Action.StartsWith("inventory-scroll:", StringComparison.Ordinal))
         {
@@ -238,10 +239,19 @@ sealed class ScreenRouter(PlayerInterface player)
     }
 
     /// <summary>
+    /// Adds a faithful screen's own controls (<see cref="AddOwnContent"/>), then the UI extensions' over them.
+    /// </summary>
+    internal void AddFaithfulContent(string id, List<UiControl> controls)
+    {
+        AddOwnContent(id, controls);
+        player.AddModScreenControls(id, controls);
+    }
+
+    /// <summary>
     /// Adds a faithful screen's own controls: the owning feature's content, the map, the overview's tabs, the trader's stock and the character
     /// windows' item cells.
     /// </summary>
-    internal void AddFaithfulContent(string id, List<UiControl> controls)
+    void AddOwnContent(string id, List<UiControl> controls)
     {
         if (id == DebugCharactersLayout.Screen)
         {
@@ -421,7 +431,8 @@ sealed class ScreenRouter(PlayerInterface player)
 
             // The name carries the character: the loot window's cells would otherwise take over the same names' tooltips in the player's window.
             string name = $"inventory-item-{lead.Id}-{item.Index}";
-            var tip = TooltipRuntime.ItemTip.Of(item, player.TradeWindows.SellTip(lead.Id, item.Index), player.WorldMap.MapItemCaption(item.Record));
+            var tip = TooltipRuntime.ItemTip.Of(item, player.TradeWindows.SellTip(lead.Id, item.Index), player.WorldMap.MapItemCaption(item.Record))
+                with { Owner = Simulation.Items.ItemOwner.Of(lead.Id), Index = item.Index };
             var clip = slot.Bounds.Intersect(slot.Clip ?? slot.Bounds);
             player.ItemCells.AddItemCell(controls, name, area, item.Record, item.Material, item.Name, item.Quantity, tip, "InventoryItem",
                 item.Index, clip, charge: item.Charge, colour: item.Colour, rotated: item.Rotated);

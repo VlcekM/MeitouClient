@@ -60,8 +60,8 @@ sealed class CharacterModLines(PlayerInterface player)
     }
 
     /// <summary>
-    /// Line <paramref name="k"/>'s controls in <paramref name="row"/>: one button across it, or its label and then its value as a button, over a bar
-    /// or as text in the value column.
+    /// Line <paramref name="k"/>'s controls in <paramref name="row"/>: its icon, then one button across it, or its label and then its value as a
+    /// button, over a bar or as text in the value column; the line style's colours over the panel's.
     /// </summary>
     void AddLine(List<UiControl> controls, int k, UiRect row, float valuePixels, UiRect? clip)
     {
@@ -69,26 +69,36 @@ sealed class CharacterModLines(PlayerInterface player)
         string name = "StatsText-mod-" + k.ToString(CultureInfo.InvariantCulture);
         var column = row with { X = row.X + row.Width * 0.35f, Width = row.Width * 0.65f };
         var valueFace = Face("Kenshi_StandardFont_Medium", valuePixels);
+        var label = UiLineStyle.PlaceIcon(controls, name, line.Style, row, clip);
+        string? labelInk = UiLineStyle.Ink(line.Style?.Label);
         if (line.Press is not null && line.Value is null)
         {
-            controls.Add(Button(name + "-button", line.Label, line.Tooltip, k, row, valueFace, clip));
+            controls.Add(Button(name + "-button", line.Label, line.Tooltip, k, label, valueFace, clip, labelInk));
             return;
         }
 
         var labelFace = new Dictionary<string, string> { ["FontName"] = "Kenshi_PaintedTextFont_Medium" };
-        controls.Add(Text(name + "-label", line.Label, line.Tooltip, row with { Width = column.X - row.X }, labelFace, "Left Top",
-            player.StatLabelColour, clip));
-        if (line.Value is not { } value) return;
+        controls.Add(Text(name + "-label", line.Label, line.Tooltip, label with { Width = Math.Max(0, column.X - label.X) }, labelFace, "Left Top",
+            labelInk ?? player.StatLabelColour, clip));
+        if (line.Value is { } value) AddValue(controls, name, k, line, value, column, valueFace, clip);
+    }
 
+    /// <summary>
+    /// Line <paramref name="k"/>'s value in <paramref name="column"/>: a button for a line with a press, else text over its bar or alone.
+    /// </summary>
+    void AddValue(List<UiControl> controls, string name, int k, UiCharacterLine line, string value, UiRect column,
+        Dictionary<string, string> valueFace, UiRect? clip)
+    {
+        string? valueInk = UiLineStyle.Ink(line.Style?.Value);
         if (line.Press is not null)
         {
-            controls.Add(Button(name + "-button", value, line.Tooltip, k, column, valueFace, clip));
+            controls.Add(Button(name + "-button", value, line.Tooltip, k, column, valueFace, clip, valueInk));
             return;
         }
 
         if (line.Bar is { } fill) ProgressLine.Add(controls, player.UiResources, player.Width, player.Height, column, fill, name + "-bar-", clip);
         string align = line.Bar is null ? "Right Top" : "HCenter Top";
-        controls.Add(Text(name + "-value", value, line.Tooltip, column, valueFace, align, Ink(), clip));
+        controls.Add(Text(name + "-value", value, line.Tooltip, column, valueFace, align, valueInk ?? Ink(), clip));
     }
 
     /// <summary>
@@ -119,11 +129,12 @@ sealed class CharacterModLines(PlayerInterface player)
 
     /// <summary>
     /// A button in <paramref name="bounds"/> (inset a pixel above and below, as the HUD's button lines) running line <paramref name="k"/>: the
-    /// game's neutral button with its caption in the panel's main colour.
+    /// game's neutral button with its caption in the panel's main colour (or <paramref name="ink"/>).
     /// </summary>
-    static UiControl Button(string name, string caption, string? tooltip, int k, UiRect bounds, Dictionary<string, string> face, UiRect? clip)
+    static UiControl Button(string name, string caption, string? tooltip, int k, UiRect bounds, Dictionary<string, string> face, UiRect? clip,
+        string? ink)
     {
-        var properties = new Dictionary<string, string>(face) { ["TextAlign"] = "Center", ["TextColour"] = PlayerInterface.MainColour };
+        var properties = new Dictionary<string, string>(face) { ["TextAlign"] = "Center", ["TextColour"] = ink ?? PlayerInterface.MainColour };
         AddTooltip(properties, tooltip);
         var inset = bounds with { Y = bounds.Y + 1, Height = bounds.Height - 2 };
         return new(name, "Button", inset, Loc.Tr(caption), LineAction, "Kenshi_Button1Skin", true, properties, Vector4.Zero, Pickable: true,

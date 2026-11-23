@@ -737,6 +737,22 @@ holds refuses the second mod.
   disappears or is disabled; meanwhile the interface's keys go to it, as for a window's box. Each change of its text runs `Action` with
   the new text in `UiActionContext.Text` (empty for clicks on other nodes). `Text` is the box's text: whenever the node's differs the box
   takes it, so a mod stores the text its action gets and echoes it, or sets another (empty to clear). Engine API, not in the original.
+- **Screen controls:** in `Register`, `registration.AddScreenControls(screen, anchorWidget, placement, context => node)` adds a `UiNode` tree
+  to a faithful screen (its id as the interface registers it, e.g. `stats`, `inventory`, `dialogue`, `bench`, or its kind: a pinned inventory
+  is `inventory`) or the HUD (`UiScreens.Hud`; the time controls are `TimeMoneyPanel`), laid out against the arranged widget named
+  `anchorWidget` by `UiAnchorPlacement`: `Inside` its rectangle (clipped to it), or in a rectangle of its size just `Above`, `Below`, `Left` or
+  `Right` of it (clipped to the screen only, so it may lie outside the window). The node's `Placement`, flow and styles work as in the overlay; it
+  is drawn over the screen after its own controls, and a node's `Action` names an action of `RegisterAction`, run on a click (the screen's
+  click sound first). `UiScreens.ItemCells` as the anchor builds once per item cell of a character window (inventory, bag, limbs, loot), at
+  most 128 cells per source and frame, with `Item` set. `UiScreenContext` gives `Screen`, `Kind`, `AnchorWidget`, `Anchor` (the arranged
+  rectangle), `Character` (a character window's own, the stats window's selected, the NPC talked to, the HUD's selected or lead; null for
+  none), `Building` (a machine or storage window's site id), `Item` (`UiScreenItem`: the holder, an `ItemOwner`, and the `InventoryItemView`),
+  `Snapshot`, `Tick`, `Enqueue` (from an action) and `Frame` (registered controls). Return null to add nothing. Nothing shows while the
+  screen is closed or its layout lacks the widget (a UI mod's), and without a source the screens are as before. Text boxes are refused. The
+  source runs on the host thread each time the screen is arranged (each frame it is open), so it must be cheap and must not touch the world.
+  At most 256 controls of all sources per screen (the rest left out, logged once per screen); a source that throws, builds a text box or lays
+  out a node not finite is logged once and dropped; an action that throws is logged. Engine API, not in the original. **Observed** with the
+  installed HUD and stats layouts headless (placement, clicks, disposal); no test yet, not seen in a running game.
 - **Map markers:** `UiRegistration.AddMapMarkers(markers)` puts markers on the world map (Overview's Map tab). `markers` gets `UiMapContext`
   (the snapshot the map is drawn from and its zoom level, 0 for the whole map to 2) on the host's thread each frame the map shows, so it
   must not touch the world, and returns `UiMapMarker`s: a world point (X, Z), an image group of the game's map marker set
@@ -826,7 +842,13 @@ holds refuses the second mod.
   optional value) to an item's tooltip, after the game's own rows and before the record's description. The source gets `UiItemTooltipContext`:
   the item's record string id, name, code-mod tag (`ItemInstance.ModTag`, so a mod shows what it keeps on the item: a condition, rolled
   affixes; a trader's stock item has none), quantity, level and quality. It runs on the host thread each time a tooltip is built, so it must be
-  cheap and must not touch the world. At most 8 lines from all sources together; a label or value is put on one line and cut to 80
+  cheap and must not touch the world; it acts on the world only through `Enqueue`. The context also names the item: `Owner` (an `ItemOwner`:
+  a character's inventory, a machine's or storage's site; null for a trader's stock, a crafted product's preview) and its `Index` there (-1
+  without an owner; it names the item only until the inventory changes, so the mod's command checks the record and tag it expects), and
+  `First`, true for the first build of the tooltip for the item as it is (another item shown before, or the item changed, its tag included),
+  false while the same tooltip is built again each frame. So a mod rolls state on the first tooltip by queueing its own command when `First`
+  is true and the item has no tag of its; its system tags the item (`ItemInstance.ModTag`) in a serial step. `Style` colours a line (see
+  "Line style"). At most 8 lines from all sources together; a label or value is put on one line and cut to 80
   characters, a blank value is none. A source that throws or gives a line without a label is reported once and dropped for the session.
   **Verified** by `ItemTooltipLinesTests` (order, the context, disposal, the cap and cut, a throwing and an unlabelled source dropped).
 - **Town panel lines:** in `Register`, `registration.AddTownPanelLines(context => lines)` adds lines to the HUD's town panel (the outpost the
@@ -864,13 +886,31 @@ holds refuses the second mod.
   no free room, so when a source gives buttons the jobs list and its empty-list hint start one job row (int(24 × height / 1080)) lower in
   their frame and the buttons share that row above the list, side by side across its width; a layout where the list or one of its parents is
   not placed in fractions of its parent (a UI mod's) gets none, and without buttons the panel is as before. Limits, cuts and faults as the town
-  panel lines: at most four lines and four buttons of all mods together (the rest left out, logged once per extension), texts cut to 64
+  panel lines: at most four lines and nine buttons of all mods together (the rest left out, logged once per extension), texts cut to 64
   characters on one line, tooltips to 1,000, translated; a source that throws or gives a line without a label (a button without a caption or
   press) is logged once and dropped for the session; a press that throws is logged. A press plays the click and runs only while the panel
   still shows the character it was shown for. Sources run on the host thread whenever the HUD is arranged (each tick, each mouse move), so they
-  must be cheap and must not touch the world. **Verified** by `CharacterPanelLinesTests` (order, context, disposal, caps and cuts, faulty
+  must be cheap and must not touch the world. A `UiJobButton` with `Lit` shows in its skin's selected state (the tab a character is on).
+  `AddJobPanelButtons(source, UiJobButtonLayout)` also places the buttons: `Rows` (the default, as above, wrapping into more rows above the
+  list after `PerLine` buttons) or `Columns` (left of the list, which starts that many columns further right, `PerLine` buttons a column, each
+  a job row high and `ColumnWidth` job rows wide; 0.5 to 6); the first registered source that gives a layout sets it for all, and a list
+  that would keep less room than it gives up shows no buttons. **Verified** by `CharacterPanelLinesTests` (order, context, disposal, caps and cuts, faulty
   sources dropped; with the installed HUD layout: placement under `StatsText`, the list lowered and restored, presses for the shown
   character). Not yet seen in a running game. Engine API, not in the original.
+- **Line style:** item tooltip lines, character panel lines and town panel lines take `Style = new UiLineStyle(Label, Value, Icon)` (an init
+  property): `Label` and `Value` are text colours (RGB 0 to 1, alpha not used; not finite: none; clamped) over the panel's own (a button's
+  caption takes the colour of the text it shows), and `Icon` an image file path (as a `UiNode`'s `Image`, e.g.
+  `Path.Combine(context.Folder, "rank.png")`) drawn in a square of the row's height before the label, which moves right. Tooltips draw no
+  icon. Engine API, not in the original.
+- **Dialogue replies:** in `Register`, `registration.AddDialogueReplies(context => replies)` adds player replies to the open conversation,
+  after the game's own choices, numbered on with them (the number keys pick them too). `UiDialogueContext` gives the `Conversation`
+  (`ConversationView`: NPC, player and speaker ids, the line, the game's choices, the log), the `Npc`, `Player` and `Speaker` snapshots (record
+  id, faction, name; null when not in the snapshot), the `Snapshot`, `Tick`, `Enqueue` and `Leave()` (queues `EndConversation`). Answer the
+  `UiDialogueReply`s (text, press) to offer for that line, or none; the source is asked again only when the NPC, the line or the choices
+  change, so it must not decide by time. A chosen reply runs its press on the host thread (it may open the mod's own window, queue commands
+  or `Leave()`); the conversation goes on unless the press ends it. At most four replies of all mods together; a text is put on one line and
+  cut to 200 characters. A source that throws or gives a reply without a text or press is logged once and dropped; a press that throws is
+  logged. Without a source the conversation window is as before. Engine API, not in the original.
 - **Settings:** `AddSettings(object)`, once per mod: the object's public get/set properties marked
   `[Setting(label, Hint, Min, Max, Step, Options, SubGroup, VisibleWhen)]` (`ModSettings.cs`) become one group, in declaration order (a
   sub-group's settings together at its first one's place), under the mod's row on the Settings screen's Mods page

@@ -97,6 +97,16 @@ public readonly record struct TooltipLine(string Key, string Value = "", Tooltip
     /// The value and the suffix (the price mark-up after a price) as one text.
     /// </summary>
     public string Whole => Value + Suffix;
+
+    /// <summary>
+    /// The key's text colour as MyGUI's "r g b" in place of <see cref="KeyTone"/>'s; null keeps the tone's (a code mod's line style).
+    /// </summary>
+    public string? KeyColour { get; init; }
+
+    /// <summary>
+    /// The value's text colour as MyGUI's "r g b" in place of <see cref="ValueTone"/>'s; null keeps the tone's (a code mod's line style).
+    /// </summary>
+    public string? ValueColour { get; init; }
 }
 
 /// <summary>
