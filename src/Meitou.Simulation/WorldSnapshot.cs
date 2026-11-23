@@ -679,6 +679,11 @@ public sealed class CharacterSnapshot
     /// </summary>
     public bool WorkingShackles { get; internal set; }
     /// <summary>
+    /// Building, repairing or dismantling at its site this tick (its job used Engineering): not on the walk there or a fetch, as the original's row 2
+    /// needs <c>isAtLocation</c>. The <c>Character_Build_Loop</c> plays only then.
+    /// </summary>
+    public bool Engineering { get; internal set; }
+    /// <summary>
     /// Lying in a bed (<see cref="Locks.HeldState.Bed"/>).
     /// </summary>
     public bool InBed { get; internal set; }

@@ -609,6 +609,7 @@ public sealed partial class World
         s.LookAt = _looks.TryGetValue(i, out var lookAt) ? lookAt : null;
         s.PickingLock = cold?.PickingLock is not null;
         s.WorkingShackles = cold?.Shackles is { Work: Locks.ShackleWork.Pick or Locks.ShackleWork.Cut };
+        s.Engineering = cold is { SkillInUse: StatsEnumerated.Engineering } && cold.SkillInUseTick >= Tick - 1;
         s.InBed = cold is { InSomething: Locks.HeldState.Bed };
         s.Imprisoned = cold is { InSomething: Locks.HeldState.Imprisoned };
         s.CageOpen = cold is { InSomething: Locks.HeldState.Imprisoned, InWhat: { } heldIn }

@@ -308,11 +308,11 @@ sealed class CharacterAudio(GameHost host)
     static ulong SoundKey(CharacterId id) => (ulong)(uint)id.Slot << 32 | (uint)id.Generation;
 
     /// <summary>
-    /// The loop a character's task (and its unlocking or shackling) plays; none for the rest.
+    /// The loop a character's task (and its unlocking or shackling) plays; none for the rest. Building plays only at the site.
     /// </summary>
     static CharacterLoop LoopOf(CharacterSnapshot c)
     {
-        if (c.Task == CharacterTask.Build) return CharacterLoop.Build;
+        if (c.Task == CharacterTask.Build && c.Engineering) return CharacterLoop.Build;
         if (c.Task == CharacterTask.Treat) return CharacterLoop.Medic;
         if ((c.PickingLock || c.WorkingShackles) && c.Task != CharacterTask.GoTo) return CharacterLoop.Unlock;
 
