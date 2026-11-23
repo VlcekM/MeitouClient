@@ -737,6 +737,24 @@ holds refuses the second mod.
   disappears or is disabled; meanwhile the interface's keys go to it, as for a window's box. Each change of its text runs `Action` with
   the new text in `UiActionContext.Text` (empty for clicks on other nodes). `Text` is the box's text: whenever the node's differs the box
   takes it, so a mod stores the text its action gets and echoes it, or sets another (empty to clear). Engine API, not in the original.
+  A node's own looks override its style without registering one: `TextScale` (above 0, at most `UiHost.MaxTextScale`, 8), `TextColour`,
+  `Opacity` (0 to 1, multiplied into its fill, picture, skin and text and into its children's; a transparent node still takes the pointer) and,
+  on an image, `ImageCrop` (`UiImageCrop.Pixels(x, y, w, h)` or `UiImageCrop.Uv(u0, v0, u1, v1)`, not for a portrait). Inline `#RRGGBB` tags
+  colour a node's text after them (`##` is a #), as in the game's texts. A non-finite or out-of-range look leaves the contribution out and is
+  reported, as a non-finite placement is. `Animated` lays the overlay out every frame while the node shows (fades), instead of at least 20 times
+  a second. A contribution to `UiSlots.Overlay` whose root sets `ShowWithHudHidden` is also drawn while the interface is hidden (F7, not the
+  cinema's clean picture or recorded frames), laid out every frame with no bindings, without input or portraits. Pointer events:
+  `Pointer` (`UiPointerEvents` flags `Release`, `Drag`, `Wheel`, `Hover`) makes the node's `Action` get them besides the left press, all through
+  `UiActionContext`: `Kind` (`UiEventKind`: `Press`, `Text`, `Release`, `Drag`, `Wheel`, `Enter`, `Leave`), `Node` (the asking node's id),
+  `Position`, `Start` (the press), `Delta` (since the last drag event), `Wheel` (steps, above 0 up) and `Over` (for a drag or release, the
+  topmost overlay node's id under the pointer, a drop target). A left press on a node or a child is held by the nearest one asking for
+  `Release` or `Drag` (while held the world does not see the pointer), which gets each move and the release wherever it happens; the wheel and
+  hover go to the nearest asking. A window is made draggable by adding `Delta` to its placement. `UiNodeKind.ScrollView` lays out its
+  children by its flow shifted by its offset and clipped to it; while they overflow it shows a `Kenshi_ScrollBarV`-skinned bar (14 pixels, at
+  its right, unless `ScrollBar` is false); the wheel over it or a child that does not take the wheel, the arrows (`ScrollStep`, 24 pixels),
+  the track (a page) and the thumb scroll it. Its offset is kept by the extension and node id across frames and clamped to its content, and
+  is forgotten when the extension is disposed. Events run on the host's thread like any action; a throw is reported each time and leaves
+  the press held until the release. With no overlay node nothing changes. Engine API, not in the original.
 - **Map markers:** `UiRegistration.AddMapMarkers(markers)` puts markers on the world map (Overview's Map tab). `markers` gets `UiMapContext`
   (the snapshot the map is drawn from and its zoom level, 0 for the whole map to 2) on the host's thread each frame the map shows, so it
   must not touch the world, and returns `UiMapMarker`s: a world point (X, Z), an image group of the game's map marker set

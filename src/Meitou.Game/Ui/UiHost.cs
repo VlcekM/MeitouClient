@@ -165,6 +165,42 @@ public sealed record UiActionContext(UiFrameContext Frame, string Argument)
     /// A text box's text after the change that ran the action (<see cref="UiNodeKind.TextBox"/>); empty for a click.
     /// </summary>
     public string Text { get; init; } = "";
+
+    /// <summary>
+    /// What ran the action: the press (as every action has always been run), a text change, or one of the pointer events the node asks for
+    /// (<see cref="UiNode.Pointer"/>).
+    /// </summary>
+    public UiEventKind Kind { get; init; }
+
+    /// <summary>
+    /// The id of the node the event is for (the one that asked for it); empty for a control the host made.
+    /// </summary>
+    public string Node { get; init; } = "";
+
+    /// <summary>
+    /// The pointer, screen pixels, for a pointer event.
+    /// </summary>
+    public System.Numerics.Vector2 Position { get; init; }
+
+    /// <summary>
+    /// Where the left button was pressed, for a press, a drag and a release.
+    /// </summary>
+    public System.Numerics.Vector2 Start { get; init; }
+
+    /// <summary>
+    /// How far the pointer moved since the last drag event (the press for the first), for a drag.
+    /// </summary>
+    public System.Numerics.Vector2 Delta { get; init; }
+
+    /// <summary>
+    /// The wheel's steps, for a wheel event: above 0 away from the player (up), below 0 towards.
+    /// </summary>
+    public float Wheel { get; init; }
+
+    /// <summary>
+    /// For a drag or a release: the id of the topmost overlay node under the pointer (empty: none), the drop target of a drag and drop.
+    /// </summary>
+    public string Over { get; init; } = "";
 }
 
 /// <summary>
@@ -277,7 +313,7 @@ public sealed class UiFrameContext
 /// <summary>
 /// Platform-independent native UI extension host. Access on the UI thread only; no DLL discovery/loading.
 /// </summary>
-public sealed class UiHost
+public sealed partial class UiHost
 {
     #region State
 
@@ -300,11 +336,6 @@ public sealed class UiHost
     /// The action handlers by id, with their owners.
     /// </summary>
     readonly Dictionary<string, (string Owner, Action<UiActionContext> Handler)> _actions = new(StringComparer.Ordinal);
-
-    /// <summary>
-    /// The text boxes the last <see cref="Arrange"/> laid out, by name (<see cref="DispatchText"/>).
-    /// </summary>
-    readonly Dictionary<string, UiControl> _textBoxes = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The style overrides in registration order (the last wins).
@@ -539,6 +570,7 @@ public sealed class UiHost
         _mapMarkers.RemoveAll(m => m.Owner == owner);
         _markerImages.Remove(owner);
         _menuVerbs.RemoveAll(v => v.Owner == owner);
+        RemovePointerState(owner);
         _extensions.Remove(owner);
     }
 
@@ -923,34 +955,71 @@ public sealed class UiHost
     public IReadOnlyList<UiControl> Arrange(UiMode mode, int width, int height, UiBindings bindings, IReadOnlyDictionary<string, UiRect> slots)
     {
         _frame = new(this, mode, width, height, bindings);
-        _textBoxes.Clear();
+        _last = new UiArrangement();
         var result = new List<UiControl>();
         if (width <= 0 || height <= 0) return result;
 
+        ArrangeContributions(mode, slots, _frame, _last, result, hudHidden: false);
+        return result;
+    }
+
+    /// <summary>
+    /// The overlay drawn while the interface is hidden (F7): the overlay contributions whose root asks for it (<see cref="UiNode.ShowWithHudHidden"/>),
+    /// laid out over the whole screen with no bindings. They take no input: the last <see cref="Arrange"/> keeps its controls for that.
+    /// </summary>
+    public IReadOnlyList<UiControl> ArrangeHudHidden(UiMode mode, int width, int height)
+    {
+        var result = new List<UiControl>();
+        if (width <= 0 || height <= 0 || !_contributions.Any(c => c.Slot == UiSlots.Overlay)) return result;
+
+        var frame = new UiFrameContext(this, mode, width, height, new UiBindings());
+        var slots = new Dictionary<string, UiRect> { [UiSlots.Overlay] = new(0, 0, width, height) };
+        ArrangeContributions(mode, slots, frame, new UiArrangement(), result, hudHidden: true);
+        return result;
+    }
+
+    /// <summary>
+    /// Lays out each contribution of <paramref name="mode"/> whose slot is in <paramref name="slots"/> (with <paramref name="hudHidden"/>, only
+    /// those asking to be shown with the interface hidden) into <paramref name="result"/>, recorded in <paramref name="into"/>; one that fails is
+    /// left out whole and reported.
+    /// </summary>
+    void ArrangeContributions(UiMode mode, IReadOnlyDictionary<string, UiRect> slots, UiFrameContext frame, UiArrangement into,
+        List<UiControl> result, bool hudHidden)
+    {
         foreach (var contribution in _contributions.OrderBy(c => c.Order).ToArray())
         {
             if (contribution.Mode is { } only && only != mode || !slots.TryGetValue(contribution.Slot, out var parent)) continue;
 
+            int kept = into.Nodes.Count;
             try
             {
+                var root = contribution.Factory(frame);
+                if (hudHidden && root?.ShowWithHudHidden != true) continue;
+
+                into.Owner = contribution.Owner;
                 var local = new List<UiControl>();
-                ArrangeNode(contribution.Factory(_frame), parent, parent, true, local);
+                ArrangeNode(root!, parent, new NodeScope(parent, true, 1, -1), into, local);
                 result.AddRange(local);
             }
             catch (Exception e)
             {
+                into.Truncate(kept);
                 Diagnostic?.Invoke(new(contribution.Owner, $"build {contribution.Slot}", e));
             }
         }
-
-        return result;
     }
+
+    /// <summary>
+    /// What a node is laid out within: the clip its parent leaves, whether its parent takes clicks, the opacity it inherits and its parent's index
+    /// in the arrangement (-1: a root).
+    /// </summary>
+    readonly record struct NodeScope(UiRect Clip, bool Enabled, float Opacity, int Parent);
 
     /// <summary>
     /// Lays out <paramref name="node"/> in <paramref name="parent"/> (or at <paramref name="placed"/>), clipped, and its children by its flow;
     /// nothing for a hidden or clipped-out node.
     /// </summary>
-    void ArrangeNode(UiNode node, UiRect parent, UiRect clip, bool parentEnabled, List<UiControl> result, UiRect? placed = null)
+    void ArrangeNode(UiNode node, UiRect parent, NodeScope scope, UiArrangement into, List<UiControl> result, UiRect? placed = null)
     {
         if (!node.Visible) return;
 
@@ -958,18 +1027,40 @@ public sealed class UiHost
         if (!float.IsFinite(b.X) || !float.IsFinite(b.Y) || !float.IsFinite(b.Width) || !float.IsFinite(b.Height))
             throw new InvalidOperationException($"Non-finite UI layout: {node.Id}");
 
+        var clip = scope.Clip;
         float x = Math.Max(b.X, clip.X), y = Math.Max(b.Y, clip.Y);
         var visible = new UiRect(x, y, Math.Max(0, Math.Min(b.X + b.Width, clip.X + clip.Width) - x),
             Math.Max(0, Math.Min(b.Y + b.Height, clip.Y + clip.Height) - y));
         if (visible.Width <= 0 || visible.Height <= 0) return;
 
-        bool enabled = parentEnabled && node.Enabled;
-        var control = Control(node, b, visible, enabled);
+        ValidateLooks(node);
+        bool enabled = scope.Enabled && node.Enabled;
+        float opacity = scope.Opacity * Math.Clamp(node.Opacity, 0, 1);
+        var control = Control(node, b, visible, enabled, opacity);
         result.Add(control);
-        if (node.Kind == UiNodeKind.TextBox) _textBoxes[node.Id] = control;
+        int index = into.Add(node, control, scope.Parent);
 
         var content = new UiRect(
             b.X + node.Padding, b.Y + node.Padding, Math.Max(0, b.Width - node.Padding * 2), Math.Max(0, b.Height - node.Padding * 2));
+        var inner = new NodeScope(visible, enabled, opacity, index);
+        if (node.Kind == UiNodeKind.ScrollView) ArrangeScrollView(node, content, inner, into, result);
+        else ArrangeChildren(node, content, inner, into, result);
+    }
+
+    /// <summary>
+    /// Lays out <paramref name="node"/>'s children in <paramref name="content"/> by its flow.
+    /// </summary>
+    void ArrangeChildren(UiNode node, UiRect content, NodeScope scope, UiArrangement into, List<UiControl> result)
+    {
+        foreach (var (child, rect) in ChildRects(node, content)) ArrangeNode(child, content, scope, into, result, rect);
+    }
+
+    /// <summary>
+    /// <paramref name="node"/>'s shown children, each with its rectangle in <paramref name="content"/> when the node's flow places it (null: its
+    /// own placement).
+    /// </summary>
+    static IEnumerable<(UiNode Child, UiRect? Rect)> ChildRects(UiNode node, UiRect content)
+    {
         float cursor = 0;
         foreach (var child in node.Children)
         {
@@ -987,15 +1078,15 @@ public sealed class UiHost
                 cursor += (node.Flow == UiFlow.Row ? size.Width : size.Height) + node.Gap;
             }
 
-            ArrangeNode(child, content, visible, enabled, result, childRect);
+            yield return (child, childRect);
         }
     }
 
     /// <summary>
     /// <paramref name="node"/>'s control: its <paramref name="visible"/> part, or for an image the whole of <paramref name="bounds"/> clipped to
-    /// it (a picture is cut off, not squeezed).
+    /// it (a picture is cut off, not squeezed); the node's own looks (<see cref="AddLooks"/>) over the style's.
     /// </summary>
-    UiControl Control(UiNode node, UiRect bounds, UiRect visible, bool enabled)
+    UiControl Control(UiNode node, UiRect bounds, UiRect visible, bool enabled, float opacity)
     {
         var style = Style(node.Style);
         bool image = node.Kind == UiNodeKind.Image;
@@ -1010,11 +1101,12 @@ public sealed class UiHost
 
         bool textBox = node.Kind == UiNodeKind.TextBox;
         if (textBox) AddTextBoxProperties(node, properties);
+        AddLooks(node, opacity, properties);
 
         string skin = textBox && style.Skin.Length == 0 ? TextBoxSkin : style.Skin;
         return new(node.Id, ControlType(node.Kind), image ? bounds : visible, node.Text, node.Action, skin, enabled, properties,
-            style.Background, style.Text, style.Hover, style.Active, style.Disabled, node.Pickable, node.Argument, style.TextScale,
-            image ? visible : null);
+            style.Background, node.TextColour ?? style.Text, style.Hover, style.Active, style.Disabled, node.Pickable, node.Argument,
+            node.TextScale ?? style.TextScale, image ? visible : null);
     }
 
     /// <summary>
@@ -1046,7 +1138,7 @@ public sealed class UiHost
     /// <summary>
     /// Returns false for an unregistered action; disabled controls consume clicks without invoking handlers.
     /// </summary>
-    public bool Dispatch(UiControl control) => Dispatch(control, "");
+    public bool Dispatch(UiControl control) => Dispatch(control, "", UiEventKind.Press);
 
     /// <summary>
     /// A text event of the screens' edit focus: a text box's text changed, so its action runs with the text (disabled or actionless: nothing). False
@@ -1056,25 +1148,32 @@ public sealed class UiHost
     {
         if (e.Screen != MyGuiScreenHost.OverlayScreen) return false;
 
-        if (e.Action == "text" && _textBoxes.TryGetValue(e.Widget, out var box)) Dispatch(box, e.Text);
+        if (e.Action == "text" && _last.TextBoxes.TryGetValue(e.Widget, out var box)) Dispatch(box, e.Text, UiEventKind.Text);
         return true;
     }
 
     /// <summary>
-    /// Runs <paramref name="control"/>'s action with <paramref name="text"/> (<see cref="UiActionContext.Text"/>).
+    /// Runs <paramref name="control"/>'s action with <paramref name="text"/> (<see cref="UiActionContext.Text"/>) as <paramref name="kind"/>.
     /// </summary>
-    bool Dispatch(UiControl control, string text)
+    bool Dispatch(UiControl control, string text, UiEventKind kind) =>
+        Run(control.Enabled, control.Action, frame => new(frame, control.Argument) { Text = text, Kind = kind });
+
+    /// <summary>
+    /// Runs action <paramref name="id"/> with the context <paramref name="context"/> makes from the last frame; a throw is reported as a
+    /// <see cref="Diagnostic"/>. Not <paramref name="enabled"/>: consumed without running; false for an unregistered action or before a frame.
+    /// </summary>
+    bool Run(bool enabled, string id, Func<UiFrameContext, UiActionContext> context)
     {
-        if (!control.Enabled) return true;
-        if (_frame is null || !_actions.TryGetValue(control.Action, out var action)) return false;
+        if (!enabled) return true;
+        if (_frame is null || !_actions.TryGetValue(id, out var action)) return false;
 
         try
         {
-            action.Handler(new(_frame, control.Argument) { Text = text });
+            action.Handler(context(_frame));
         }
         catch (Exception e)
         {
-            Diagnostic?.Invoke(new(action.Owner, $"action {control.Action}", e));
+            Diagnostic?.Invoke(new(action.Owner, $"action {id}", e));
         }
 
         return true;

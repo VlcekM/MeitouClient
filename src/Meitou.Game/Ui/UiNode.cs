@@ -102,6 +102,103 @@ public enum UiNodeKind
     /// of its text runs <see cref="UiNode.Action"/> with the text in <see cref="UiActionContext.Text"/>. Its text is <see cref="UiNode.Text"/>.
     /// </summary>
     TextBox,
+
+    /// <summary>
+    /// A scroll view: a panel whose children are laid out by its flow, shifted by its scroll offset and cut off at its edges. The wheel over it (or
+    /// a child) and the <c>Kenshi_ScrollBarV</c>-skinned bar at its right (shown while the children overflow, <see cref="UiNode.ScrollBar"/>)
+    /// scroll it; the host keeps the offset across frames by the extension and node id.
+    /// </summary>
+    ScrollView,
+}
+
+/// <summary>
+/// The pointer events a node's <see cref="UiNode.Action"/> gets besides the left press it always gets (flags; room to grow).
+/// </summary>
+[Flags]
+public enum UiPointerEvents
+{
+    /// <summary>
+    /// The press only.
+    /// </summary>
+    None = 0,
+
+    /// <summary>
+    /// The left button's release after a press on the node or a child (wherever the pointer is then).
+    /// </summary>
+    Release = 1,
+
+    /// <summary>
+    /// Each pointer move while the left button pressed on the node or a child is held.
+    /// </summary>
+    Drag = 2,
+
+    /// <summary>
+    /// The wheel over the node or a child that does not take it itself.
+    /// </summary>
+    Wheel = 4,
+
+    /// <summary>
+    /// The pointer coming onto the node or a child, and leaving it.
+    /// </summary>
+    Hover = 8,
+}
+
+/// <summary>
+/// What ran an action (<see cref="UiActionContext.Kind"/>).
+/// </summary>
+public enum UiEventKind
+{
+    /// <summary>
+    /// The left button pressed on the node: the click every action gets.
+    /// </summary>
+    Press,
+
+    /// <summary>
+    /// A text box's text changed (<see cref="UiActionContext.Text"/>).
+    /// </summary>
+    Text,
+
+    /// <summary>
+    /// The left button released (<see cref="UiPointerEvents.Release"/>).
+    /// </summary>
+    Release,
+
+    /// <summary>
+    /// The pointer moved with the button held (<see cref="UiPointerEvents.Drag"/>).
+    /// </summary>
+    Drag,
+
+    /// <summary>
+    /// A wheel step (<see cref="UiPointerEvents.Wheel"/>).
+    /// </summary>
+    Wheel,
+
+    /// <summary>
+    /// The pointer came onto the node (<see cref="UiPointerEvents.Hover"/>).
+    /// </summary>
+    Enter,
+
+    /// <summary>
+    /// The pointer left the node (<see cref="UiPointerEvents.Hover"/>).
+    /// </summary>
+    Leave,
+}
+
+/// <summary>
+/// The part of an image node's picture it shows: <paramref name="Rect"/> in the picture's pixels, or with <paramref name="Normalized"/> in
+/// fractions of its size (UV, 0 to 1).
+/// </summary>
+public readonly record struct UiImageCrop(UiRect Rect, bool Normalized = false)
+{
+    /// <summary>
+    /// The picture's pixels from <paramref name="x"/>, <paramref name="y"/>, <paramref name="width"/> by <paramref name="height"/> (an atlas cell).
+    /// </summary>
+    public static UiImageCrop Pixels(float x, float y, float width, float height) => new(new(x, y, width, height));
+
+    /// <summary>
+    /// The picture from UV <paramref name="u0"/>, <paramref name="v0"/> to <paramref name="u1"/>, <paramref name="v1"/>.
+    /// </summary>
+    public static UiImageCrop Uv(float u0, float v0, float u1, float v1) => new(new(u0, v0, u1 - u0, v1 - v0), true);
 }
 
 /// <summary>
@@ -248,6 +345,56 @@ public sealed class UiNode(string id, UiNodeKind kind = UiNodeKind.Panel)
     /// The space between flowed children, pixels.
     /// </summary>
     public float Gap { get; init; }
+
+    /// <summary>
+    /// The pointer events <see cref="Action"/> gets besides the press (<see cref="UiActionContext.Kind"/> tells them apart); none by default. A press
+    /// on a child goes to the nearest node, the child or one of its parents, asking for Release or Drag; the wheel and hover to the nearest asking
+    /// for them.
+    /// </summary>
+    public UiPointerEvents Pointer { get; init; }
+
+    /// <summary>
+    /// The text's scale instead of the style's; null: the style's. Finite, above 0 and at most <see cref="UiHost.MaxTextScale"/>.
+    /// </summary>
+    public float? TextScale { get; init; }
+
+    /// <summary>
+    /// The text colour (RGBA, 0 to 1) instead of the style's; null: the style's. Inline <c>#RRGGBB</c> tags in <see cref="Text"/> colour the text
+    /// after them (<c>##</c> is a #), as in the game's own texts.
+    /// </summary>
+    public Vector4? TextColour { get; init; }
+
+    /// <summary>
+    /// The node's opacity, 0 to 1, multiplied into its fill, picture, skin and text and into its children's; 1 by default. A transparent node still
+    /// takes the pointer as it would opaque.
+    /// </summary>
+    public float Opacity { get; init; } = 1;
+
+    /// <summary>
+    /// The part of an image node's <see cref="Image"/> it shows (an atlas cell); null: the whole picture. Not for a portrait.
+    /// </summary>
+    public UiImageCrop? ImageCrop { get; init; }
+
+    /// <summary>
+    /// On a contribution's root in <see cref="UiSlots.Overlay"/>: it is drawn also while the interface is hidden (F7), without input and
+    /// portraits, laid out with no bindings (<see cref="UiFrameContext.Text"/> gives its fallback).
+    /// </summary>
+    public bool ShowWithHudHidden { get; init; }
+
+    /// <summary>
+    /// The node changes on real time (a fade): while one is shown the overlay is laid out every frame instead of at least 20 times a second.
+    /// </summary>
+    public bool Animated { get; init; }
+
+    /// <summary>
+    /// A scroll view shows its bar while its children overflow; true by default.
+    /// </summary>
+    public bool ScrollBar { get; init; } = true;
+
+    /// <summary>
+    /// A scroll view's step for a wheel step and an arrow of its bar, pixels (a page is its height); finite and above 0.
+    /// </summary>
+    public float ScrollStep { get; init; } = 24;
 
     /// <summary>
     /// The child nodes.

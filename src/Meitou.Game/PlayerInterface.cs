@@ -1158,6 +1158,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         Mouse = p;
         if (CharacterEditor.EditorPointerMove(p)) return;
         if (ScrollBars.ScrollThumbMove(p)) return;
+        if (UiVisible && _uiHost.PointerMove(p)) return;
         if (WorldMap.MapPointerMove(p)) return;
         if (UiVisible && FaithfulScreens.PointerMove(p)) return;
         if (_dragFrom is { } from && !Dragging && Vector2.Distance(from, p) >= DragThreshold) Dragging = true;
@@ -1185,6 +1186,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             ItemsWindow.PointerUp(p, shift);
             InventoryWindows.InventoryPointerUp(p);
             OrdersPanel.JobDragEnd(p);
+            _uiHost.PointerUp(p);
             SquadWindows.SquadPointerUp(p, shift);
             CharactersWindow.PointerUp();
             FaithfulScreens.PointerUp();

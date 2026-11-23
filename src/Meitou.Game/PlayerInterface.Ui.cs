@@ -672,6 +672,7 @@ sealed partial class PlayerInterface
         var top = MyGuiPresentation.HitTest(controls, Mouse.X, Mouse.Y);
         PointerPanel.PointerOverUi = FaithfulScreens.Contains(Mouse) || top is not null;
         PointerPanel.PointerOverButton = top is { Enabled: true } && (top.Type == "Button" || top.Action.Length > 0);
+        _uiHost.Hover(top, Mouse);
         TooltipRuntime.AddHoverLabel(controls);
         Inspector.AddInspectorPanel(controls);
         return controls;
@@ -846,7 +847,7 @@ sealed partial class PlayerInterface
     /// </summary>
     bool UiAnimating => TitleOpen || CharacterEditor.EditorOpen || Frontend.ShowCredits || BiomeBanner.BiomeShown || WorldMap.MapShown
         || CharactersWindow.Shown || ItemsWindow.Shown || PortraitBar.PortraitFlashes.Count > 0 || TutorialWindow.TutorialFlashes.Count > 0
-        || FaithfulScreens.CapturesPointer;
+        || FaithfulScreens.CapturesPointer || _uiHost.Animating;
 
     #endregion
 
@@ -914,7 +915,7 @@ sealed partial class PlayerInterface
             return true;
         }
         if (FaithfulScreens.PressOverlayEdit(c, p)) return true;
-        _uiHost.Dispatch(c);
+        _uiHost.Press(c, p);
         return true;
     }
 
@@ -1008,7 +1009,7 @@ sealed partial class PlayerInterface
     /// Whether the interface takes the pointer: a screen that captures it, the map's or a scroll bar's drag, or an item lifted.
     /// </summary>
     public bool UiCapturesPointer => UiVisible && (FaithfulScreens.CapturesPointer || WorldMap.MapDrag is not null
-        || InventoryWindows.LiftPress is not null || ScrollBars.ScrollDrag is not null);
+        || InventoryWindows.LiftPress is not null || ScrollBars.ScrollDrag is not null || _uiHost.CapturesPointer);
 
     /// <summary>
     /// A modal screen (the Esc menu, a message box) is up: the pointer is the interface's, even in the free camera.
@@ -1098,7 +1099,8 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>
-    /// With the interface hidden (F7, <c>hud hide</c>) only the speech bubbles are drawn, so a filmed clean picture keeps the <c>say</c> commentary.
+    /// With the interface hidden (F7, <c>hud hide</c>) only the speech bubbles are drawn, so a filmed clean picture keeps the <c>say</c> commentary,
+    /// and the mod overlay nodes that ask to be (<see cref="UiNode.ShowWithHudHidden"/>).
     /// </summary>
     public void DrawSpeechOnly(DebugOverlay overlay, int width, int height, DebugOverlay.OverlayPass? pass = null)
     {
@@ -1106,6 +1108,7 @@ sealed partial class PlayerInterface
         Height = height;
         var controls = new List<UiControl>();
         SpeechBubbles.AddSpeech(controls);
+        controls.AddRange(_uiHost.ArrangeHudHidden(UiMode, width, height));
         if (controls.Count == 0) return;
         UiPainter?.Draw(controls, width, height, Mouse, SpeedButtonAction, minimumTextPixels: StandardPixels, pass: pass);
         overlay.Flush(width, height, null, pass);
@@ -1452,7 +1455,8 @@ sealed partial class PlayerInterface
     {
         UiInput++;
         if (!UiVisible) return false;
-        ArrangeUi();
+        var controls = ArrangeUi();
+        if (_uiHost.HasOverlayNodes && _uiHost.Wheel(MyGuiPresentation.HitTest(controls, p.X, p.Y), p, steps)) return true;
         if (ScrollBars.InventoryWheel(p, steps)) return true;
         if (WorldMap.MapWheel(p, steps)) return true;
         if (!FaithfulScreens.Contains(p) && PortraitBar.SquadBarWheel(p, steps)) return true;
