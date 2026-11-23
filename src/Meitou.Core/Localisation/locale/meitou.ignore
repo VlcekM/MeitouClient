@@ -914,6 +914,7 @@ Bottom
 Brass
 Button
 Camp
+Cannibalism
 Cascadia Mono, Consolas, DejaVu Sans Mono, Menlo, monospace
 Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace
 Center
@@ -929,10 +930,12 @@ Disarm
 Disguises
 Drifter's Boots
 Drifter's Leather Pants
+Durability
 Dust Bandit
 Dust Bandits
 Dustcoat
 Eaten
+Elemental Enchantment
 Enter
 Field
 Frame
@@ -957,9 +960,13 @@ Left
 Left Bottom
 Left Top
 Left VCenter
+Limit Talent
 Main
+Map-markers
 Meitou
 Meitou Level Editor
+Mentors
+Metabolic Traversal
 Metal
 Mg
 Movement
@@ -982,9 +989,11 @@ Ruin
 Run
 SMAA
 SSAO
+Search bar
 Secondary
 Slider
 Small Backpack
+Sparring
 Speed Menu
 Stretch
 Swamp Turtle FIX
@@ -1004,15 +1013,44 @@ Walk
 Watchtower
 White
 Widget
+Work for Cats - Get Hired at NPC Workbenches
 Workcamp
 Yellow
+[Meitou Client] Area Guard Port
+[Meitou Client] Better Looting Port
+[Meitou Client] Building Search Bar Port
+[Meitou Client] Cannibalism Port
 [Meitou Client] Disarm Port
+[Meitou Client] Elemental Enchantment Port
+[Meitou Client] Equipment Durability Port
+[Meitou Client] Fix Shopping Wages Port
 [Meitou Client] It. Tickles. Me. Port
+[Meitou Client] Job Management Port
+[Meitou Client] Job Tabs Port
+[Meitou Client] Kenshi Affixes Port
+[Meitou Client] Kenshi Compact Port
 [Meitou Client] Kill Counter Port
 [Meitou Client] Level Up Notify Port
+[Meitou Client] Limb Toughness Port
+[Meitou Client] Limited Stats Port
+[Meitou Client] Map Markers Port
+[Meitou Client] Mentors Port
+[Meitou Client] Metabolic Traversal Port
+[Meitou Client] Persistent Prisoners Port
+[Meitou Client] Posh Damage Numbers Port
+[Meitou Client] Queen Birthing Port
+[Meitou Client] Sleep Fix Port
+[Meitou Client] Sparring Port
 [Meitou Client] Speed Menu Port
+[Meitou Client] Squad Autonomy Port
 [Meitou Client] Stack Sort Port
 [Meitou Client] Taunt Expansion Port
+[Meitou Client] Vital Read Port
+[Meitou Client] Vital Sense Port
+[Meitou Client] Wanted Map Port
+[Meitou Client] Weapon Dodge & Guard Port
+[Meitou Client] Work for Cats Port
+[Meitou Client] XP Info Port
 [MeitouClient] Execution
 [Meitou] Proving Grounds
 brew install molten-vk vulkan-loader

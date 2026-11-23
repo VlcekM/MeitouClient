@@ -111,11 +111,205 @@ public static class CoveredMods
         "TauntExpansion", [new(3771499164, 1784997418)], "[Meitou Client] Taunt Expansion Port", "TauntExpansion", 3841647315, "dxseba");
 
     /// <summary>
+    /// tata's "Area Guard" (workshop 3769985477, matched against its 2026-07-23 update), with dxseba's "[Meitou Client] Area Guard Port".
+    /// </summary>
+    static readonly EndorsedPort AreaGuard = new(
+        "AreaGuard", [new(3769985477, 1784775327)], "[Meitou Client] Area Guard Port", "AreaGuard", 3844430966, "dxseba");
+
+    /// <summary>
+    /// LEOPARD's "Better Looting (MCM fork) (QoL)" (workshop 3816121198, matched against its 2026-11-21 update), with dxseba's "[Meitou Client]
+    /// Better Looting Port".
+    /// </summary>
+    static readonly EndorsedPort BetterLooting = new(
+        "BetterLooting", [new(3816121198, 1795304224)], "[Meitou Client] Better Looting Port", "BetterLooting", 3844430978, "dxseba");
+
+    /// <summary>
+    /// Asur's "Building Search Bar (RE_Kenshi)" (workshop 3786979230, matched against its 2026-08-21 update), with dxseba's "[Meitou Client] Building
+    /// Search Bar Port".
+    /// </summary>
+    static readonly EndorsedPort BuildingSearchBar = new(
+        "Search bar", [new(3786979230, 1787345024)], "[Meitou Client] Building Search Bar Port", "BuildingSearchBar", 3844430983, "dxseba");
+
+    /// <summary>
+    /// luckyren's "Cannibalism" (workshop 3797113265, matched against its 2026-09-08 update), with dxseba's "[Meitou Client] Cannibalism Port".
+    /// </summary>
+    static readonly EndorsedPort Cannibalism = new(
+        "CannibalismTask", [new(3797113265, 1788868831)], "[Meitou Client] Cannibalism Port", "Cannibalism", 3844430991, "dxseba");
+
+    /// <summary>
+    /// nestore1961's "Elemental Enchantment" (workshop 3832978749, matched against its 2026-11-19 update), with dxseba's "[Meitou Client] Elemental
+    /// Enchantment Port".
+    /// </summary>
+    static readonly EndorsedPort ElementalEnchantment = new(
+        "Elemental Enchantment", [new(3832978749, 1795061091)],
+        "[Meitou Client] Elemental Enchantment Port", "ElementalEnchantment", 3844431001, "dxseba");
+
+    /// <summary>
+    /// Manboy's "Equipment Durability" (workshop 3834344700, matched against its 2026-11-18 update), with dxseba's "[Meitou Client] Equipment
+    /// Durability Port".
+    /// </summary>
+    static readonly EndorsedPort EquipmentDurability = new(
+        "Durability", [new(3834344700, 1794969418)], "[Meitou Client] Equipment Durability Port", "EquipmentDurability", 3844431009, "dxseba");
+
+    /// <summary>
+    /// Nixxen's "Fix Shopping Wages (RE_Kenshi)" (workshop 3775703318, matched against its 2026-08-01 update), with dxseba's "[Meitou Client] Fix
+    /// Shopping Wages Port".
+    /// </summary>
+    static readonly EndorsedPort FixShoppingWages = new(
+        "FixShoppingWages", [new(3775703318, 1785598382)], "[Meitou Client] Fix Shopping Wages Port", "FixShoppingWages", 3844431026, "dxseba");
+
+    /// <summary>
+    /// LEOPARD's "Kenshi Job Management (MCM fork) (QoL)" (workshop 3818460323, matched against its 2026-11-01 update), with dxseba's "[Meitou
+    /// Client] Job Management Port".
+    /// </summary>
+    static readonly EndorsedPort JobManagement = new(
+        "KenshiJobManagement", [new(3818460323, 1793577496)], "[Meitou Client] Job Management Port", "JobManagement", 3844431040, "dxseba");
+
+    /// <summary>
+    /// Jakematt2004's "Job Tabs" (workshop 3813790518, matched against its 2026-10-05 update), with dxseba's "[Meitou Client] Job Tabs Port".
+    /// </summary>
+    static readonly EndorsedPort JobTabs = new(
+        "JobTabs", [new(3813790518, 1791164245)], "[Meitou Client] Job Tabs Port", "JobTabs", 3844431048, "dxseba");
+
+    /// <summary>
+    /// SaturnVI_OuO's "Kenshi Affixes | 装备随机词条 [RE_Kenshi]" (workshop 3821983877, matched against its 2026-10-26 update), with dxseba's "[Meitou
+    /// Client] Kenshi Affixes Port".
+    /// </summary>
+    static readonly EndorsedPort KenshiAffixes = new(
+        "KenshiAffixes", [new(3821983877, 1793047348)], "[Meitou Client] Kenshi Affixes Port", "KenshiAffixes", 3844431053, "dxseba");
+
+    /// <summary>
+    /// Ekiuts's "Kenshi Compact" (workshop 3763089712, matched against its 2026-08-19 update), with dxseba's "[Meitou Client] Kenshi Compact Port".
+    /// </summary>
+    static readonly EndorsedPort KenshiCompact = new(
+        "KenshiCompact", [new(3763089712, 1787167045)], "[Meitou Client] Kenshi Compact Port", "KenshiCompact", 3844431060, "dxseba");
+
+    /// <summary>
+    /// redderth's "LimbToughness - Max HP to Limb [RE_Kenshi]" (workshop 3787222853, matched against its 2026-08-29 update), with dxseba's "[Meitou
+    /// Client] Limb Toughness Port".
+    /// </summary>
+    static readonly EndorsedPort LimbToughness = new(
+        "LimbToughness", [new(3787222853, 1788042766)], "[Meitou Client] Limb Toughness Port", "LimbToughness", 3844431063, "dxseba");
+
+    /// <summary>
+    /// Edenflora's "属性上限 Limited Stats (RE_Kenshi)" (workshop 3807762285, matched against its 2026-10-19 update), with dxseba's "[Meitou Client]
+    /// Limited Stats Port".
+    /// </summary>
+    static readonly EndorsedPort LimitedStats = new(
+        "Limit Talent", [new(3807762285, 1792411807)], "[Meitou Client] Limited Stats Port", "LimitedStats", 3841647179, "dxseba");
+
+    /// <summary>
+    /// LEOPARD's "Map markers (MCM fork) (QoL)" (workshop 3813852161, matched against its 2026-11-04 update), with dxseba's "[Meitou Client] Map
+    /// Markers Port".
+    /// </summary>
+    static readonly EndorsedPort MapMarkers = new(
+        "Map-markers", [new(3813852161, 1793810767)], "[Meitou Client] Map Markers Port", "MapMarkers", 3844431073, "dxseba");
+
+    /// <summary>
+    /// MENTAL's "KENSHI: MENTORS" (workshop 3834394158, matched against its 2026-11-05 update), with dxseba's "[Meitou Client] Mentors Port".
+    /// </summary>
+    static readonly EndorsedPort Mentors = new(
+        "Mentors", [new(3834394158, 1793917850)], "[Meitou Client] Mentors Port", "Mentors", 3844431079, "dxseba");
+
+    /// <summary>
+    /// john warosa's "Metabolic Traversal" (workshop 3709852838, matched against its 2026-04-19 update), with dxseba's "[Meitou Client] Metabolic
+    /// Traversal Port".
+    /// </summary>
+    static readonly EndorsedPort MetabolicTraversal = new(
+        "Metabolic Traversal", [new(3709852838, 1776588013)], "[Meitou Client] Metabolic Traversal Port", "MetabolicTraversal", 3844431090, "dxseba");
+
+    /// <summary>
+    /// Thenewcomer91's "PersistentPrisoners (RE_Kenshi)" (workshop 3798215878, matched against its 2026-09-13 update), with dxseba's "[Meitou Client]
+    /// Persistent Prisoners Port".
+    /// </summary>
+    static readonly EndorsedPort PersistentPrisoners = new(
+        "PersistentPrisoners", [new(3798215878, 1789307536)],
+        "[Meitou Client] Persistent Prisoners Port", "PersistentPrisoners", 3844431102, "dxseba");
+
+    /// <summary>
+    /// гопсосмыком's "Posh Damage Numbers" (workshop 3821781631, matched against its 2026-10-31 update), with dxseba's "[Meitou Client] Posh Damage
+    /// Numbers Port".
+    /// </summary>
+    static readonly EndorsedPort PoshDamageNumbers = new(
+        "DamageNumbers", [new(3821781631, 1793486736)], "[Meitou Client] Posh Damage Numbers Port", "PoshDamageNumbers", 3844431107, "dxseba");
+
+    /// <summary>
+    /// luckyren's "Queen Start with Birthing" (workshop 3777203526, matched against its 2026-08-29 update), with dxseba's "[Meitou Client] Queen
+    /// Birthing Port".
+    /// </summary>
+    static readonly EndorsedPort QueenBirthing = new(
+        "QueenBirth", [new(3777203526, 1788026960)], "[Meitou Client] Queen Birthing Port", "QueenBirthing", 3844431111, "dxseba");
+
+    /// <summary>
+    /// Basusu's "SleepFix" (workshop 3787375792, matched against its 2026-09-06 update), with dxseba's "[Meitou Client] Sleep Fix Port".
+    /// </summary>
+    static readonly EndorsedPort SleepFix = new(
+        "SleepFix", [new(3787375792, 1788679213)], "[Meitou Client] Sleep Fix Port", "SleepFix", 3844431114, "dxseba");
+
+    /// <summary>
+    /// Lingyang crow's "Sparring 切磋 - 队友互练 (RE_Kenshi)" (workshop 3776308916, matched against its 2026-08-29 update), with dxseba's "[Meitou Client]
+    /// Sparring Port".
+    /// </summary>
+    static readonly EndorsedPort Sparring = new(
+        "Sparring", [new(3776308916, 1788023150)], "[Meitou Client] Sparring Port", "Sparring", 3844431123, "dxseba");
+
+    /// <summary>
+    /// Au's "Squad Autonomy" (workshop 3800729618, matched against its 2026-10-16 update), with dxseba's "[Meitou Client] Squad Autonomy Port".
+    /// </summary>
+    static readonly EndorsedPort SquadAutonomy = new(
+        "SquadAutonomy", [new(3800729618, 1792129131)], "[Meitou Client] Squad Autonomy Port", "SquadAutonomy", 3844431127, "dxseba");
+
+    /// <summary>
+    /// LEOPARD's "Vital Read (MCM fork) (QoL)" (workshop 3813852230, matched against its 2026-11-01 update), with dxseba's "[Meitou Client] Vital
+    /// Read Port".
+    /// </summary>
+    static readonly EndorsedPort VitalRead = new(
+        "Vital-Read", [new(3813852230, 1793577431)], "[Meitou Client] Vital Read Port", "VitalRead", 3844431130, "dxseba");
+
+    /// <summary>
+    /// LEOPARD's "Vital Sense (MCM fork) (QoL)" (workshop 3813852288, matched against its 2026-11-13 update), with dxseba's "[Meitou Client] Vital
+    /// Sense Port".
+    /// </summary>
+    static readonly EndorsedPort VitalSense = new(
+        "Vital-Sense", [new(3813852288, 1794544314)], "[Meitou Client] Vital Sense Port", "VitalSense", 3844431141, "dxseba");
+
+    /// <summary>
+    /// LEOPARD's "Wanted Map (QoL)" (workshop 3813761812, matched against its 2026-11-21 update), with dxseba's "[Meitou Client] Wanted Map Port".
+    /// </summary>
+    static readonly EndorsedPort WantedMap = new(
+        "WantedMap", [new(3813761812, 1795297616)], "[Meitou Client] Wanted Map Port", "WantedMap", 3844431147, "dxseba");
+
+    /// <summary>
+    /// tata's "Weapon Dodge & Guard" (workshop 3767056805, matched against its 2026-08-22 update), with dxseba's "[Meitou Client] Weapon Dodge &
+    /// Guard Port".
+    /// </summary>
+    static readonly EndorsedPort WeaponDodgeGuard = new(
+        "WeaponDodgeGuard", [new(3767056805, 1787386406)], "[Meitou Client] Weapon Dodge & Guard Port", "WeaponDodgeGuard", 3844431155, "dxseba");
+
+    /// <summary>
+    /// klimsat's "Work for Cats - Get Hired at NPC Workbenches" (workshop 3802290991, matched against its 2026-09-15 update), with dxseba's "[Meitou
+    /// Client] Work for Cats Port".
+    /// </summary>
+    static readonly EndorsedPort WorkForCats = new(
+        "Work for Cats - Get Hired at NPC Workbenches", [new(3802290991, 1789500209)],
+        "[Meitou Client] Work for Cats Port", "WorkForCats", 3844431159, "dxseba");
+
+    /// <summary>
+    /// Alexander's "XP Info - experience gain notifications" (workshop 3795213616, matched against its 2026-09-03 update), with dxseba's "[Meitou
+    /// Client] XP Info Port".
+    /// </summary>
+    static readonly EndorsedPort XpInfo = new(
+        "xp_info", [new(3795213616, 1788472284)], "[Meitou Client] XP Info Port", "XpInfo", 3844431170, "dxseba");
+
+    /// <summary>
     /// The RE_Kenshi mods with an endorsed port on the Steam workshop.
     /// </summary>
     public static IReadOnlyList<EndorsedPort> Endorsed { get; } =
     [
-        Execution, ProvingGrounds, Disarm, ItTicklesMe, KillCounter, LevelUpNotify, SpeedMenu, StackSort, TauntExpansion,
+        Execution, ProvingGrounds, Disarm, ItTicklesMe, KillCounter, LevelUpNotify, SpeedMenu, StackSort, TauntExpansion, AreaGuard, BetterLooting,
+        BuildingSearchBar, Cannibalism, ElementalEnchantment, EquipmentDurability, FixShoppingWages, JobManagement, JobTabs, KenshiAffixes,
+        KenshiCompact, LimbToughness, LimitedStats, MapMarkers, Mentors, MetabolicTraversal, PersistentPrisoners, PoshDamageNumbers, QueenBirthing,
+        SleepFix, Sparring, SquadAutonomy, VitalRead, VitalSense, WantedMap, WeaponDodgeGuard, WorkForCats, XpInfo,
     ];
 
     /// <summary>
