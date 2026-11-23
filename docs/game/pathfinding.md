@@ -254,14 +254,16 @@ House roof storey, stood "Following leader" on the floors below).
 `SpeedGroup`; nothing else creates one (**Observed**: no other callers), so NPC squads never use it. `SpeedGroup::getSpeed` (`1407f5740`),
 once per frame: speed = the lowest max speed of members not down and not carried, centre = their mean position, direction = the sum
 of their velocities. A member ahead of the centre (positive dot with the direction) gets speed × max(0.8, 1 − 0.001 × XZ distance to
-the centre); others the plain group speed. `assignSpeedGroup` (`1407f97c0`) also runs on each formation move order (`1407f9e20`); it groups
-only when someone selected is in mode 3 (**Observed**). When the selected already share one group and the selection holds all its members,
-they keep it; otherwise each selected character leaves its group and the selection gets one new group, so a character set alone that was in
-a group gets a group of its own and, its group's slowest being itself, moves at its own max speed. With nobody selected in a group, fewer
-than two selected get no group (**Verified** against the original's `assignSpeedGroup` and `SpeedGroup::getSpeed`, Steam 1.0.68 and 1.0.65
-alike, names KenshiLib). Meitou gives a character set alone a group of one, which moves the same. Meitou regroups the ordered characters
-on each move order as `assignSpeedGroup` does (`MovementSystem.AssignSpeedGroup`), so a character moved alone out of a group goes at its own
-pace. Engine choice (#729): Meitou's group is runtime only, so a player's character in mode 3 with no group (after a load, before its first
+the centre); others the plain group speed. `assignSpeedGroup` (`1407f97c0`) also runs, with 0, at the start of the order giver `1407f9e20`
+(**Verified**, disassembly: `xor edx, edx` before the call), so on every order it gives: moves, and Follow (31) without Shift, which the dispatcher
+`1407fa650` hands it; Bodyguard (45) and Shift jobs go through the job giver `1407f5a90` and regroup nobody. When the selected already share one
+group and the selection holds all its members, they keep it; otherwise, when someone selected is in mode 3 or in a group, each selected character
+leaves its group and the selection gets one new group, so a character ordered alone that was in a group gets a group of its own and, its group's
+slowest being itself, moves at its own max speed. With nobody selected in a group, nobody in mode 3 or fewer than two selected get no group
+(**Verified** against the original's `assignSpeedGroup` and `SpeedGroup::getSpeed`, Steam 1.0.68 and 1.0.65 alike, names KenshiLib). So a
+follower is never in the group of the leader it was ordered to follow, and a leader in Group speed moved alone outruns a slower follower (#1236).
+Meitou gives a character set alone a group of one, which moves the same. Meitou regroups the ordered characters on each move and Follow order as
+`assignSpeedGroup` does (`MovementSystem.AssignSpeedGroup`). Engine choice (#729): Meitou's group is runtime only, so a player's character in mode 3 with no group (after a load, before its first
 move order) takes the lowest max speed of its squad mates ordered to mode 3, not down and not carried, whatever they are doing (followers steering straight at their slot have no path
 and must still count).
 
