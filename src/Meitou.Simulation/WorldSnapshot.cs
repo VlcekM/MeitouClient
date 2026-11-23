@@ -1139,6 +1139,11 @@ public sealed record WorldSnapshot(long Tick, IReadOnlyList<CharacterSnapshot> C
     /// </summary>
     public Production.MachineSnapshot? InspectedTownMachine { get; init; }
     /// <summary>
+    /// The <c>townwork:</c> machine site of the building the HUD shows when it is a standing town building or layout object of the player's faction
+    /// (<see cref="Production.ProductionSystem.OwnTownMachineOf"/>): its window opens on selection; null for others.
+    /// </summary>
+    public string? InspectedOwnMachine { get; init; }
+    /// <summary>
     /// The gun numbers of the building the HUD shows when it is a turret (its Stats 1 gun lines); null for others.
     /// </summary>
     public Combat.TurretPanelView? InspectedTurret { get; init; }

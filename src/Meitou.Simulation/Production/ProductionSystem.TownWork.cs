@@ -139,6 +139,46 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
+    /// The player inspecting a standing town building or layout object of the player's makes its machine, so that its window opens on selection as the
+    /// original's does for a complete building of the player's faction (docs/game/ui-input.md "Building picking and selection"); another faction's
+    /// is made by its first worker or order. Serial phases only.
+    /// </summary>
+    void InspectTownWork(World world, string? key)
+    {
+        if (key is null || !OwnedByPlayer(world, key)) return;
+        if (TownBuildingOf(key) is { } found && world.Fixtures.IsDestroyed(found.Building)) return;
+
+        TownWork(world, key);
+    }
+
+    /// <summary>
+    /// The machine site of the standing town building or layout object <paramref name="key"/> when it is made and the player's faction owns it (the
+    /// window its selection opens, <see cref="WorldSnapshot.InspectedOwnMachine"/>); null for any other. Read only.
+    /// </summary>
+    public string? OwnTownMachineOf(World world, string? key)
+    {
+        if (key is null || TownWorkSite(TownWorkPrefix + key) is not { } site || site.Owner != world.Player.Faction || world.Player.Faction < 0)
+            return null;
+        if (TownBuildingOf(key) is { } found && world.Fixtures.IsDestroyed(found.Building)) return null;
+
+        return world.Machines.Find(site.Id) is null ? null : site.Id;
+    }
+
+    /// <summary>
+    /// Whether the player's faction owns the machine of town building or layout object <paramref name="key"/>: its site's owner once made, else the
+    /// owner <see cref="TownWork"/> or <see cref="PieceWork"/> would give it.
+    /// </summary>
+    bool OwnedByPlayer(World world, string key)
+    {
+        int player = world.Player.Faction;
+        if (player < 0) return false;
+        if (TownWorkSite(TownWorkPrefix + key) is { } made) return made.Owner == player;
+        if (TownBuildingOf(key) is { } found) return (_towns?.LevelOwnerOf(found.Building, found.Owner) ?? found.Owner) == player;
+
+        return TownPieceOf(key) is { } piece && (_towns?.LevelOwnerOf(piece.House, piece.Owner) ?? piece.Owner) == player;
+    }
+
+    /// <summary>
     /// The town building of a run-time key and the faction owning its town; null for none.
     /// </summary>
     (TownBuilding Building, int Owner, int Site)? TownBuildingOf(string key) =>

@@ -19,14 +19,15 @@ sealed class TerrainPrograms : IDisposable
     readonly GpuSetLayout[] _sets;
 
     /// <summary>
-    /// The colour sets made so far, by march (3 apart) and relief quality.
+    /// The colour sets made so far, by march (3 apart), relief quality, trails (6 apart) and the simple material (12 apart).
     /// </summary>
-    readonly ColourSet?[] _colourSets = new ColourSet?[12];
+    readonly ColourSet?[] _colourSets = new ColourSet?[24];
 
     /// <summary>
-    /// The resolved colour's programs (TerrainRenderer.Resolve) by parallax march, relief quality, trails and normal maps.
+    /// The resolved colour's programs (TerrainRenderer.Resolve) by parallax march, relief quality, trails, the simple material and normal maps.
     /// </summary>
-    readonly Dictionary<(bool March, int Quality, bool Trails, bool Normal, TerrainShaders.ResolvePart Part), TerrainProgram> _resolvePrograms = [];
+    readonly Dictionary<(bool March, int Quality, bool Trails, bool Simple, bool Normal, TerrainShaders.ResolvePart Part), TerrainProgram>
+        _resolvePrograms = [];
 
     /// <summary>
     /// Makes the depth and prepass programs, the colour set for the current relief, and the tessellated variants where the device has tessellation.
@@ -35,7 +36,7 @@ sealed class TerrainPrograms : IDisposable
     {
         _gpu = gpu;
         _sets = sets;
-        UseColour(GroundRelief.ParallaxActive, GroundRelief.Quality);
+        UseColour(GroundRelief.ParallaxActive, GroundRelief.Quality, simple: TerrainSimpleShading.Enabled);
         PatchDepth = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(), TerrainShaders.DepthFragmentNative(), "terrain depth");
         PatchPrepass = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(), TerrainShaders.PrepassFragmentNative(), "terrain prepass");
         PatchPrepassCut = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(),
@@ -109,9 +110,9 @@ sealed class TerrainPrograms : IDisposable
     public TerrainProgram? PatchPrepassResolveCutTess { get; }
 
     /// <summary>
-    /// The parallax march, relief quality and trails of the colour set in use (<see cref="UseColour"/>).
+    /// The parallax march, relief quality, trails and simple material of the colour set in use (<see cref="UseColour"/>).
     /// </summary>
-    public (bool March, int Quality, bool Trails) ColourKey { get; private set; }
+    public (bool March, int Quality, bool Trails, bool Simple) ColourKey { get; private set; }
 
     /// <summary>
     /// The shadow casters' TERRAIN-mode meshes.
@@ -223,18 +224,18 @@ sealed class TerrainPrograms : IDisposable
     }
 
     /// <summary>
-    /// Draws with the colour set of <paramref name="march"/> and the relief <paramref name="quality"/> (compiled in), made the first time it is asked
-    /// for (at load the settings'; a change in play makes the other once, and keeps it: switching back costs nothing).
+    /// Draws with the colour set of <paramref name="march"/>, the relief <paramref name="quality"/> and <paramref name="simple"/> (compiled in), made
+    /// the first time it is asked for (at load the settings'; a change in play makes the other once, and keeps it: switching back costs nothing).
     /// </summary>
     [System.Diagnostics.CodeAnalysis.MemberNotNull(nameof(PatchColour), nameof(PatchColourNoNormal), nameof(PatchColourCut),
         nameof(PatchColourCutNoNormal), nameof(MeshColour), nameof(MeshColourNoNormal), nameof(MeshSolid), nameof(MeshSolidNoNormal))]
-    public void UseColour(bool march, int quality, bool trails = false)
+    public void UseColour(bool march, int quality, bool trails = false, bool simple = false)
     {
         quality = Math.Clamp(quality, 0, 2);
-        ColourKey = (march, quality, trails);
+        ColourKey = (march, quality, trails, simple);
         var set = trails
-            ? _colourSets[6 + (march ? 3 : 0) + quality] ??= MakeTrailed(march, quality)
-            : Plain(march, quality);
+            ? _colourSets[SetIndex(march, quality, simple) + 6] ??= MakeTrailed(march, quality, simple)
+            : Plain(march, quality, simple);
         (PatchColour, PatchColourNoNormal, PatchColourCut,
             PatchColourCutNoNormal) = (set.Patch, set.PatchNoNormal, set.PatchCut, set.PatchCutNoNormal);
         (MeshColour, MeshColourNoNormal, MeshSolid, MeshSolidNoNormal) = (set.Mesh, set.MeshNoNormal, set.MeshSolid, set.MeshSolidNoNormal);
@@ -242,9 +243,10 @@ sealed class TerrainPrograms : IDisposable
     }
 
     /// <summary>
-    /// The colour set of <paramref name="march"/> and <paramref name="quality"/>, compiled now.
+    /// The colour set of <paramref name="march"/>, <paramref name="quality"/> and <paramref name="simple"/>, compiled now. The simple material
+    /// changes only the blended patches; the map features' meshes shade their one biome in full either way.
     /// </summary>
-    ColourSet MakeColour(bool march, int quality)
+    ColourSet MakeColour(bool march, int quality, bool simple)
     {
         bool tess = _gpu.HasTessellation;
         TerrainProgram Patch(string fragment, string name) => new(_gpu, _sets, TerrainShaders.PatchVertexNative(), fragment, name);
@@ -258,17 +260,18 @@ sealed class TerrainPrograms : IDisposable
                 TerrainShaders.MeshEvaluationNative())
             : null;
         return new ColourSet(march,
-            Patch(TerrainShaders.FragmentNative(march: march, reliefQuality: quality), "terrain"),
-            Patch(TerrainShaders.FragmentNative(march: march, normalMaps: false, reliefQuality: quality), "terrain no normal"),
-            Patch(TerrainShaders.FragmentNative(interiorCut: true, march: march, reliefQuality: quality), "terrain interior cut"),
-            Patch(TerrainShaders.FragmentNative(interiorCut: true, march: march, normalMaps: false, reliefQuality: quality),
+            Patch(TerrainShaders.FragmentNative(march: march, reliefQuality: quality, simple: simple), "terrain"),
+            Patch(TerrainShaders.FragmentNative(march: march, normalMaps: false, reliefQuality: quality, simple: simple), "terrain no normal"),
+            Patch(TerrainShaders.FragmentNative(interiorCut: true, march: march, reliefQuality: quality, simple: simple), "terrain interior cut"),
+            Patch(TerrainShaders.FragmentNative(interiorCut: true, march: march, normalMaps: false, reliefQuality: quality, simple: simple),
                     "terrain interior cut no normal"),
             Mesh(TerrainShaders.MeshFragmentNative(march, reliefQuality: quality), "terrain meshes"),
             Mesh(TerrainShaders.MeshFragmentNative(march, normalMaps: false, reliefQuality: quality), "terrain meshes no normal"),
             Mesh(TerrainShaders.MeshFragmentSolidNative(march, reliefQuality: quality), "terrain meshes solid"),
             Mesh(TerrainShaders.MeshFragmentSolidNative(march, normalMaps: false, reliefQuality: quality), "terrain meshes solid no normal"),
-            PatchTess(TerrainShaders.FragmentNative(march: march, reliefQuality: quality), "terrain relief"),
-            PatchTess(TerrainShaders.FragmentNative(interiorCut: true, march: march, reliefQuality: quality), "terrain relief interior cut"),
+            PatchTess(TerrainShaders.FragmentNative(march: march, reliefQuality: quality, simple: simple), "terrain relief"),
+            PatchTess(TerrainShaders.FragmentNative(interiorCut: true, march: march, reliefQuality: quality, simple: simple),
+                "terrain relief interior cut"),
             MeshTess(TerrainShaders.MeshFragmentNative(march, reliefQuality: quality), "terrain meshes smoothed"),
             MeshTess(TerrainShaders.MeshFragmentSolidNative(march, reliefQuality: quality), "terrain meshes solid smoothed"));
     }
@@ -278,10 +281,10 @@ sealed class TerrainPrograms : IDisposable
     /// </summary>
     public TerrainProgram ResolveProgram(bool normalMaps, TerrainShaders.ResolvePart part = TerrainShaders.ResolvePart.Whole)
     {
-        var key = (ColourKey.March, ColourKey.Quality, ColourKey.Trails, normalMaps, part);
+        var key = (ColourKey.March, ColourKey.Quality, ColourKey.Trails, ColourKey.Simple, normalMaps, part);
         if (_resolvePrograms.TryGetValue(key, out var p)) return p;
 
-        var fragment = TerrainShaders.ResolveFragmentNative(key.March, normalMaps ? null : false, key.Quality, key.Trails, part);
+        var fragment = TerrainShaders.ResolveFragmentNative(key.March, normalMaps ? null : false, key.Quality, key.Trails, part, key.Simple);
         string name = part switch
         {
             TerrainShaders.ResolvePart.Near => "terrain resolve near",
@@ -292,21 +295,26 @@ sealed class TerrainPrograms : IDisposable
     }
 
     /// <summary>
-    /// The plain colour set of <paramref name="march"/> and <paramref name="quality"/>, made the first time.
+    /// The plain colour set of <paramref name="march"/>, <paramref name="quality"/> and <paramref name="simple"/>, made the first time.
     /// </summary>
-    ColourSet Plain(bool march, int quality) => _colourSets[(march ? 3 : 0) + quality] ??= MakeColour(march, quality);
+    ColourSet Plain(bool march, int quality, bool simple) => _colourSets[SetIndex(march, quality, simple)] ??= MakeColour(march, quality, simple);
+
+    /// <summary>
+    /// The plain set's index in <see cref="_colourSets"/> (a trails set is 6 further).
+    /// </summary>
+    static int SetIndex(bool march, int quality, bool simple) => (simple ? 12 : 0) + (march ? 3 : 0) + quality;
 
     /// <summary>
     /// The plain set with its patch programs built with the ground trails; the map features' meshes take no trails.
     /// </summary>
-    ColourSet MakeTrailed(bool march, int quality) => Plain(march, quality) with
+    ColourSet MakeTrailed(bool march, int quality, bool simple) => Plain(march, quality, simple) with
     {
-        Patch = TrailedPatch(TerrainShaders.FragmentTrails(false, march, true, quality), "terrain trails"),
-        PatchNoNormal = TrailedPatch(TerrainShaders.FragmentTrails(false, march, false, quality), "terrain trails no normal"),
-        PatchCut = TrailedPatch(TerrainShaders.FragmentTrails(true, march, true, quality), "terrain trails interior cut"),
-        PatchCutNoNormal = TrailedPatch(TerrainShaders.FragmentTrails(true, march, false, quality), "terrain trails interior cut no normal"),
-        PatchTess = TrailedPatchTess(TerrainShaders.FragmentTrails(false, march, true, quality), "terrain trails relief"),
-        PatchCutTess = TrailedPatchTess(TerrainShaders.FragmentTrails(true, march, true, quality), "terrain trails relief interior cut"),
+        Patch = TrailedPatch(TerrainShaders.FragmentTrails(false, march, true, quality, simple), "terrain trails"),
+        PatchNoNormal = TrailedPatch(TerrainShaders.FragmentTrails(false, march, false, quality, simple), "terrain trails no normal"),
+        PatchCut = TrailedPatch(TerrainShaders.FragmentTrails(true, march, true, quality, simple), "terrain trails interior cut"),
+        PatchCutNoNormal = TrailedPatch(TerrainShaders.FragmentTrails(true, march, false, quality, simple), "terrain trails interior cut no normal"),
+        PatchTess = TrailedPatchTess(TerrainShaders.FragmentTrails(false, march, true, quality, simple), "terrain trails relief"),
+        PatchCutTess = TrailedPatchTess(TerrainShaders.FragmentTrails(true, march, true, quality, simple), "terrain trails relief interior cut"),
         SharesMeshes = true,
     };
 

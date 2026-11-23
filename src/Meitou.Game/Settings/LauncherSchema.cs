@@ -270,6 +270,7 @@ static class LauncherSchema
         // An optional effect, in neither look: plain Off / On (Toggle.Optional).
         yield return Switch(WorldFrame.BloomSwitch, "Off", "On", false);
         yield return Switch(WorldFrame.CameraEffectsSwitch, "Off", "On", false);
+        yield return Switch(WorldFrame.SimpleTerrainSwitch, "Off", "On", false);
         // Faithful / Meitou switches whose game side is off; both start off (Ultra turns them on).
         yield return Switch(WorldFrame.RockSmoothingSwitch, "Off", "Meitou: on", false);
         yield return Switch(WorldFrame.OutlineRefineSwitch, "Off", "Meitou: on", false);

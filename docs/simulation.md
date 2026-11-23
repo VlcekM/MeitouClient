@@ -1847,7 +1847,9 @@ optional), `EdgeGap` (site, point -> gap to its footprint hull; the host's).
   materials back."; `PauseSite` sets `Paused` (only the auto-job skips it). `PlaceBuildings`, `CancelSite`, `ConfirmDismantle` and `PauseSite`
   also apply while paused (`ApplyPausedInterfaceCommands`).
 - `Schedule`: a worker walks to the site like a medic to a patient (goal = site XZ, free speed, asked again after a wait
-  when the path failed). It has arrived within the [work distance](game/buildings-production.md#work-distance) (`SiteReach`:
+  when the path failed). A builder starting on a stalled site it carries nothing for starts as *FetchMaterials* when `Source`
+  finds one (`FetchFirst`), as the original's row 2 plan starts with 247 at the 115 finder's source
+  ([material delivery](game/buildings-production.md#material-delivery)). It has arrived within the [work distance](game/buildings-production.md#work-distance) (`SiteReach`:
   40, walls 60, twice that once stopped, from the footprint hull). A fetcher walks to its source instead (a storage within its
   `use range`; a ground item within `PickUps.PickUpReach`, twice that once stopped; a source that is gone sends it back
   to building). Work ends when the site is gone,

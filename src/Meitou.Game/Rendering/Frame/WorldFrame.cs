@@ -466,7 +466,10 @@ static partial class WorldFrame
         GroundParallaxSwitch = "Ground parallax",
         GroundDisplaceSwitch = "Ground displacement (tessellation)",
         RockSmoothingSwitch = "Rock smoothing (tessellation)",
-        OutlineRefineSwitch = "Terrain outline refinement (tessellation)";
+        OutlineRefineSwitch = "Terrain outline refinement (tessellation)",
+
+        // The simple terrain material for weak GPUs (TerrainSimpleShading), on at Low.
+        SimpleTerrainSwitch = "Simple terrain shading";
 
     /// <summary>
     /// The mutually exclusive techniques as one choice each (docs/native-ui.md "Settings"), over the switches they stand for (which stay the saved
@@ -1129,6 +1132,8 @@ static partial class WorldFrame
         }
 
         if (g.Characters is not null && g.Options is { } materials) AddMaterialToggles(toggles, g, materials);
+        toggles.Add(new Toggle(SimpleTerrainSwitch, () => TerrainSimpleShading.Enabled, v => TerrainSimpleShading.Enabled = v, Remaster: true,
+            OnOff: true, Optional: true));
         if (tessellation)
         {
             toggles.Add(new Toggle(RockSmoothingSwitch, () => RockSmoothing.TessellateActive, v => RockSmoothing.TessellateActive = v, Remaster: true,

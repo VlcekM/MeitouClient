@@ -4848,3 +4848,11 @@ msgstr "Guardar preajuste actual"
 
 msgid "Sort by"
 msgstr "Ordenar por"
+
+#. machine-translated
+msgid "Simple terrain shading"
+msgstr "Sombreado de terreno simple"
+
+#. machine-translated
+msgid "Faster ground for weak graphics: one biome and two texture layers a pixel, no bump detail. Blends between biomes show harder edges."
+msgstr "Suelo más rápido para gráficos modestos: un bioma y dos capas de textura por píxel, sin detalle de relieve. Las transiciones entre biomas muestran bordes más marcados."

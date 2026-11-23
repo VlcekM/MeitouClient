@@ -1121,7 +1121,31 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         SiteReach.Within(n, goal.Site is { } site
             ? SiteReach.Gap(Settings.EdgeGap, site, n.Position)
             : Vector2.Distance(new(n.Position.X, n.Position.Z), new(goal.At.X, goal.At.Z)), goal.Reach)
-        && (goal.Site is not { } high || SiteReach.AtHeight(n, high, FloorHeight(world, high), world.Fixtures.DoorsByBuilding[high.Id].Any()));
+        && (goal.Site is not { } high || SiteReach.AtHeight(n, high, FloorHeight(world, high), HasDoor(world, high)));
+
+    /// <summary>
+    /// Whether the site is a building with a door, for <see cref="SiteReach.HeightLimit"/>.
+    /// </summary>
+    static bool HasDoor(World world, BuildSite site) => world.Fixtures.DoorsByBuilding[site.Id].Any();
+
+    /// <summary>
+    /// Sends the worker toward its goal: for a site, to the spot on the site's floor within its reach nearest the worker
+    /// (<see cref="SiteReach.WorkSpot"/>), which <see cref="Arrived"/> then passes; for a ground item, to the item. The spot's height is the walk's
+    /// floor: a site upstairs is walked to, not stood under (#353).
+    /// </summary>
+    void WalkTo(World world, ref CharacterHot n, CharacterCold cold, (Vector3 At, BuildSite? Site, float Reach) goal)
+    {
+        var spot = goal.At;
+        if (goal.Site is { } site)
+        {
+            float limit = SiteReach.HeightLimit(HasDoor(world, site), SiteReach.InBuilding(site));
+            spot = SiteReach.WorkSpot(world.Walkability, Settings.EdgeGap, site, FloorHeight(world, site), limit, goal.Reach, n.Position);
+        }
+
+        n.Goal = new Vector2(spot.X, spot.Z);
+        (cold.GoalHeight, cold.GoalHeightAt) = (spot.Y, n.Goal);
+        n.Flags |= (ushort)MoveFlags.NeedPath;
+    }
 
     /// <summary>
     /// The height of the floor a site belongs to: a <c>ceiling placement</c> site's is the floor under it (it hangs from the ceiling, and the
@@ -1147,7 +1171,8 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     }
 
     /// <summary>
-    /// Gives the character a site to work (serial phases): it stands, then walks there unless it is there already.
+    /// Gives the character a site to work (serial phases): it stands, then walks there unless it is there already. A builder of a stalled site it
+    /// carries nothing for goes for a material first (<see cref="FetchFirst"/>).
     /// </summary>
     void Begin(World world, int slot, BuildSite site, CharacterTask task)
     {
@@ -1161,14 +1186,28 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         cold.BuildSite = site.Id;
         cold.BuildBar = 0;
         ClearFetch(cold);
-        if (!Arrived(world, n, (site.Position, site, ReachOf(site))))
-        {
-            n.Goal = new Vector2(site.Position.X, site.Position.Z);
-            (cold.GoalHeight, cold.GoalHeightAt) = (site.Position.Y, n.Goal);   // the site's floor: one upstairs is walked to, not stood under (#353)
-            n.Flags |= (ushort)MoveFlags.NeedPath;
-        }
-
         _sweep = true;
+        if (task == CharacterTask.Build && FetchFirst(world, slot, cold, site)) return;
+
+        var goal = (site.Position, (BuildSite?)site, ReachOf(site));
+        if (!Arrived(world, n, goal)) WalkTo(world, ref n, cold, goal);
+    }
+
+    /// <summary>
+    /// Sends a builder starting on a stalled site it carries nothing for straight to a material's source, as the original's plan for row 2
+    /// starts: 2 Building needs 51 (the site has its materials), whose provider 71 Adding materials needs 50 (the builder carries them), whose
+    /// provider chain 115 -> 247 Collecting resource walks to the 115 finder's source first (<b>Verified</b>, the TaskData rows of
+    /// <c>FUN_140319a60</c>; docs/game/buildings-production.md "Material delivery"). Walking to the site first could carry the builder out of the
+    /// finder's reach of a loose item (1200), so the engineer job's finder dropped the site and the job flipped on and off at that edge. False
+    /// when it builds at the site: the site is not stalled, the builder carries a material for it, or no source is found.
+    /// </summary>
+    bool FetchFirst(World world, int slot, CharacterCold cold, BuildSite site)
+    {
+        if (Root(world.Buildings, site) is not { Stalled: true } root || Carries(cold, root) || Source(world, slot, cold, root) is not { } source)
+            return false;
+
+        Fetch(world, slot, cold, source);
+        return true;
     }
 
     /// <summary>
@@ -1326,10 +1365,8 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         n.TaskTime -= dt;
         if (n.TaskTime > 0) return;
 
-        n.Goal = new Vector2(goal.At.X, goal.At.Z);
-        (cold.GoalHeight, cold.GoalHeightAt) = (goal.At.Y, n.Goal);
         n.Mode = SpeedMode.Free;
-        n.Flags |= (ushort)MoveFlags.NeedPath;
+        WalkTo(world, ref n, cold, goal);
         n.TaskTime = PursuitSystem.RepathSeconds;
     }
 
@@ -1346,7 +1383,9 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// <summary>
     /// The path of a worker ended short of its target (<c>FUN_14059c6d0</c>, "Task impossible: X can't get to Y"): the site, or the loose item it
     /// fetches, is ignored for <see cref="UnreachableSeconds"/> (readers: <see cref="EngineerWork"/>, <see cref="Source"/>). A fetcher of a loose
-    /// item goes back to its site, which picks another source. True when the worker left its goal.
+    /// item goes back to its site, which picks another source; a worker of the site itself ends the work, as the plan step ends a task whose target
+    /// the movement cannot reach (<c>FUN_14050d970</c>, <b>Verified</b>, docs/game/combat.md), so the engineer job picks another site. True when the
+    /// worker left its goal.
     /// </summary>
     bool NoteUnreachable(World world, int slot, CharacterCold cold, BuildSite site)
     {
@@ -1354,8 +1393,9 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         string? key = !fetch ? site.Id : cold.FetchItem is { } item ? LooseSource.Key(item) : null;
         if (key is null) return false;
         cold.NoteUnreachable(key, world.Tick + (long)MathF.Ceiling(UnreachableSeconds / world.TickSeconds));
-        if (!fetch) return false;
-        BackToSite(world.Characters, slot, cold);
+
+        if (fetch) BackToSite(world.Characters, slot, cold);
+        else End(world, slot);
         return true;
     }
 

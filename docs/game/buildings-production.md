@@ -154,7 +154,7 @@ location (**Verified**). At an object it is
   |dy| < 35 (**Verified** `FUN_14059c6d0`; 7 is `DAT_141e3c5d0`, a writable global, its initial value). Meitou's lift reach
   `CarrySettings.Reach` 14 is the moving case.
 - Otherwise not; once the path has ended at the target it logs "Task impossible: X can't get to Y". There is no settle slack.
-- That notice (**Verified**, `FUN_14059c6d0`, also the failure handlers `FUN_14033da80` / `FUN_140332150`) calls `FUN_140796ed0`: the target's handle goes into the AI's ignore map (AI +0x20 -> +0x218) with the timer 20.0, and the squad blackboard is told. Readers skip the handle: the loose-item source finder `FUN_14059d000` (before the ownership test), the engineer finder `FUN_1409a6900` (first condition), the turret finder `FUN_1405b0da0`, the corpse-machine finder ([ai-tasks](ai-tasks.md)). Meitou `ConstructionSystem.NoteUnreachable` (`CharacterCold.Ignored`, not saved): a builder whose path ended short ignores that site or loose item for 20 s; a fetcher of a loose item goes back to its site and picks another source.
+- That notice (**Verified**, `FUN_14059c6d0`, also the failure handlers `FUN_14033da80` / `FUN_140332150`) calls `FUN_140796ed0`: the target's handle goes into the AI's ignore map (AI +0x20 -> +0x218) with the timer 20.0, and the squad blackboard is told. Readers skip the handle: the loose-item source finder `FUN_14059d000` (before the ownership test), the engineer finder `FUN_1409a6900` (first condition), the turret finder `FUN_1405b0da0`, the corpse-machine finder ([ai-tasks](ai-tasks.md)). Meitou `ConstructionSystem.NoteUnreachable` (`CharacterCold.Ignored`, not saved): a builder whose path ended short ignores that site or loose item for 20 s; a fetcher of a loose item goes back to its site and picks another source; a builder of the site itself ends the work (the plan step ends a task whose target the movement cannot reach, [combat](combat.md#combat-stance)), so the engineer job picks another site.
 
 `getReachRange`: `Building` 40 (construction), `WallBuilding` 60, `UseableStuff` (machines, storages, farms, mines, rocks) its
 `maxUseRange` +0x420, read from the functionality's `use range` (`FUN_1402a0900`), `DoorStuff` 45 (kind 7) or 25. Vanilla `use range`
@@ -187,7 +187,7 @@ its vertices seen from above) as the instance places it (its bounds circle witho
 faces it (a rock's origin can lie off its pile). Engine choice, nearer than the original: its rule above has a copper rock (`use range`
 100) mined from 100 to 200 off its position marker (#587), and the bounds box let miners work a scattered or long rock from 20 m off
 (#332). **Observed** (navmesh walks at the two copper rocks by 52474,-95934, zone 43.11): a walker reaches the footprint itself. Taking its ore
-measures 40 to the footprint's edge. Height: Meitou has no floor id, so `SiteReach.AtHeight` requires |dy| below the limit above (130 door, 15 inside a building, else 45; slot 0x428 not read) for every site goal; a builder measures a `ceiling placement` site from the floor under it (`ConstructionSystem.FloorHeight`), as the same-floor test passes it (#592: lamps hang 26 to 48 over a swamp house floor).
+measures 40 to the footprint's edge. Height: Meitou has no floor id, so `SiteReach.AtHeight` requires |dy| below the limit above (130 door, 15 inside a building, else 45; slot 0x428 not read) for every site goal; a builder measures a `ceiling placement` site from the floor under it (`ConstructionSystem.FloorHeight`), as the same-floor test passes it (#592: lamps hang 26 to 48 over a swamp house floor). Walk: a builder, a storage fetcher, a player machine's operator or hauler and a corpse carrier to a player machine walk to the site's position on its floor when they can stand there within that limit, else to the point nearest them, on rings round the site out to the reach plus 40, that stands on the floor within the limit and within the reach (builders 40, machines the `use range`) of the hull (`SiteReach.WorkSpot`, engine choice standing in for the position marker; a turret's gunner and a rock's miner keep their own spots): furniture cuts holes in a floor's mesh, and a path to the position itself may end on any surface within its goal floor slack (`NavQuery.GoalFloorSlack` 40), such as a stair beside the site, where the height test above never passes.
 
 Repair (**Verified**, Building slot 0x328 `FUN_1400f6b70`, `Task_Build` `FUN_14034a440`): a building needs repair when
 `progress < target`; building health is construction progress. Orders 2 and 95 are both `Task_Build`, which pushes the
@@ -423,22 +423,29 @@ shows the first failing message in this order (**Verified** unless marked):
 - **A ramp's mesh sits in its wall's own space** (**Verified**, mesh bounds): `basic_wall_ramp2.mesh` spans x -102..-20, z 0..24, just
   outside Concrete Wall's `wall_basic02.mesh` (x -19.5..3.9, z -2.7..118.7); Defensive Wall Ramp IV's staircase spans x -268..-49, z
   187..222 against Wall IV (x -59..27, z 0..305; both scale 0.85). At its wall's position and turn a ramp stands against the wall's -X side.
-- **Turrets** have no `snaps to`, and none refers to the `Node Turret` instances (node type 3, as `Node Defensive Position`) that wall parts
-  such as `Wall Level 02` carry: they stand on a wall's walkway like on any surface (**Observed**, data only).
+- **Turrets snap to `Node Turret`** (**Verified**, decompile of `PreviewBuilding_Snapping`, Steam 1.0.68): a building with `snaps to` or a
+  `gun turret` gets the `_Snapping` ghost (factory `0x1404e1a97`-`0x1404e1e48`), so turrets have one although none lists `snaps to`. Its snap
+  node type (`0x1404dd250`) is 3 for a `gun turret`, else the `node type` of the first `snaps to` record when that is an `is node` record, else
+  none (it snaps to `snaps to` buildings). With a node type the update (`0x1404dd7a0`) takes the nearest node of that **node type** (any record,
+  `0x14038aca0`) within 300 units 3D, 60 for a `gun turret`, and its position and turn; a turret then turns 180 degrees about its own up
+  (`0x1404dda21` -> `0x1404d4f80`). The `Node Turret` instances sit on wall parts' walkways (`Wall Level 02`: three at x -1.2, y 43.4, turned
+  180 degrees about Y; data).
 - **Snap nodes and blue node markers** (**Verified**, `PreviewBuilding_Snapping` vtable `0x1416e1cb8`, `0x1404dd410`, `0x1404ddb43`, `0x1404d0ff0`,
   `0x1404fe160`, `0x14038cdf0`, `0x140388e10`):
   - A building's `is node` child instances (such as `Node Light Mount`, `node type` 5, or `Node Turret`, `node type` 3) are placed at
     `parent.pos + parent.rot * instance.pos` (unscaled by `scale`) and `parent.rot * instance.rot` (`0x140388e10`).
-  - `PreviewBuilding_Snapping` searches both buildings and building nodes matching `snaps to` within squared 3D distance `32400` (`180` units,
-    `0x1404ddb43`). Slot 5 (`0x1404d0ff0`) refuses unsnapped placement with `NeedsSnapNode` ("Can only be placed on certain locations (marked by
-    blue nodes).") unless slot `+0x108` (`0x1404fe160`) finds a `gun turret` reference.
-  - `showBlueNodes` (`0x14038cdf0`) draws `unit_sphere.mesh` scaled `5.0` in cyan-blue `(0, 0.8, 1.0, 0.5)` at every matching node of player-owned
-    buildings (or all buildings in the level editor).
-- **Meitou** (`GhostSnap`, `BuildMode.SnapToTarget`, `MarkerRenderer.BlueNodes`): a `snaps to` ghost takes the position and turn of the nearest
-  building of a target record (within 150 X/Z) or the nearest matching `is node` instance of an owned building or player site (direct pointer ray
-  hover preferred, else nearest within 180 3D); it is judged by its own pitch like a wall piece, its host building does not block it, and an
+  - Without a snap node type the ghost searches its `snaps to` buildings with squared distance `32400` (`180` units, `0x1404ddb43`). Slot 5
+    (`0x1404d0ff0`) refuses unsnapped placement with `NeedsSnapNode` ("Can only be placed on certain locations (marked by blue nodes).") unless
+    slot `+0x108` (`0x1404fe160`) finds a `gun turret` reference.
+  - Slot 7 (`0x1404deb80`) calls `showBlueNodes` (`0x14038cdf0`) with the snap node type: `unit_sphere.mesh` scaled `5.0` in cyan-blue
+    `(0, 0.8, 1.0, 0.5)` at every node of that type on player-owned buildings (or all buildings in the level editor), a turret's `Node Turret`
+    ones too.
+- **Meitou** (`GhostSnap`, `BuildMode.SnapToTarget`, `MarkerRenderer.BlueNodes`): a snapping ghost with a snap node type takes the position and
+  turn of the nearest node of that type on an owned building or player site (direct pointer ray hover preferred, else nearest within 300 3D, 60
+  for a turret, which turns 180 degrees and is not blocked by walls), one without takes the nearest building of a `snaps to` record (within 150
+  X/Z of its footprint centre, engine choice); it is judged by its own pitch like a wall piece, its host building does not block it, and an
   exterior snap attachment records its parent while staying outside (`Outside` / `flags` bit 0) so it remains visible and lit outdoors when the
-  house's interior is closed. While a ghost that snaps to `is node` records is held, matching nodes on player sites and owned buildings (all
+  house's interior is closed. While a ghost with a snap node type is held, the nodes of that type on player sites and owned buildings (all
   non-destroyed buildings in the level editor) show blue node spheres (`unit_sphere.mesh` scaled 5), and unsnapped placement fails with
   `NeedsSnapNode` unless the building has a `gun turret`. Resources (`is foliage`, e.g. Ore Drill -> Iron Resource) are not searched. A ghost over
   a raised walkable surface outside the rooms (a wall top, `InteriorView.SurfaceMoveHit`) stands on it level, with that height as its ground, and
@@ -1254,7 +1261,7 @@ it with them. Meitou: `MachineData.Accepts` (AI) and `TakesByHand` (player).
   `production amount` > 0, [resources](#resources)).
 - **Meitou** (`ProductionSystem.TownWork` / `TownMachines`, `AiSystem.WorkAtMachine`): a town building's machine is a virtual complete site `townwork:<building key>` of the town's
   faction (like a rock or a training dummy: no registry site, not drawn or built). Every standing farm and producer (`MachineData.IsProducer`: mine, well, refinery, rain collector) of a town
-  gets it when the town registers (a ruin once it stands); any other building when the first worker arrives or the player's first order names it (a turret's, [ui-input](ui-input.md#building-picking-and-selection)):
+  gets it when the town registers (a ruin once it stands); any other building when the first worker arrives, the player selects it while the player's faction owns it (its window opens, [ui-input](ui-input.md#building-picking-and-selection)) or the player's first order names it (a turret's, [ui-input](ui-input.md#building-picking-and-selection)):
   a research bench counts for the player's research alone, a crafting bench has no queue, a town's generators are the power frame's ([NPC generator state](#npc-generator-state)) and its storages are container fixtures.
   Its state is the original's: the production keys of the building's GAMESTATE_BUILDING and its items in the INVENTORY_STATE the building lists ([town machines](../formats/save.md)), read when the machine is made, so an
   original save's NPC mines keep their progress and output. A worker whose plan starts with

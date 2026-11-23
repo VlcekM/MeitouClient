@@ -340,6 +340,7 @@ public sealed partial class World
             InspectedRichness = _production?.RichnessOf(this, Player.InspectedBuilding),
             InspectedLevelPower = _production?.LevelPowerOf(this, Player.InspectedBuilding),
             InspectedTownMachine = _production?.TownMachineOf(this, Player.InspectedBuilding),
+            InspectedOwnMachine = _production?.OwnTownMachineOf(this, Player.InspectedBuilding),
             InspectedTurret = combat?.TurretPanelOf(this, Player.InspectedBuilding),
             Machines = OpenContainerView() is { } container
                 ? [.. MachineViews(), container]

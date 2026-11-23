@@ -82,7 +82,7 @@ sealed class GroundItemPicks(PlayerInterface player)
             _shapeReach.TryAdd(reachKey, ShapeReach(shape.Mesh));
             if (!RayNears(ray, shape.Mesh, shape.At, shape.Rotation)) continue;
             if (WorldPicking.RayMesh(ray, shape.Mesh, shape.At, shape.Rotation) is not { } t) continue;
-            if (!(t < bestT) || player.Hidden(ray, t)) continue;
+            if (!(t < bestT) || player.Obscured(ray, t)) continue;
 
             (best, bestT) = ((g.Id, t), t);
         }

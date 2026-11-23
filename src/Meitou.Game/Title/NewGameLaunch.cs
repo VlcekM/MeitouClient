@@ -37,6 +37,15 @@ sealed class NewGameLaunch(GameHost host)
             return;
         }
 
+        LeaveForMainMenu();
+    }
+
+    /// <summary>
+    /// The main menu's load: the new world of <see cref="HandleMainMenu"/>, the title or game menu shown. Also where a load whose world was already
+    /// swapped in fails (GameHost.StepSceneLoad, #1198): that world is left half-ticked and must not run.
+    /// </summary>
+    internal void LeaveForMainMenu()
+    {
         host.StartSceneLoad(mainMenuTransition: true, host.TitleScreen.TitleHour, GameHost.Stage("build", () =>
         {
             var built = host.Saves.BuildSystems(interactive: true);
@@ -58,6 +67,7 @@ sealed class NewGameLaunch(GameHost host)
             host.Sound.AudioMainMenu();
             return null;
         }));
+        host.ActiveSceneLoad!.ToMainMenu = true;
     }
 
     /// <summary>

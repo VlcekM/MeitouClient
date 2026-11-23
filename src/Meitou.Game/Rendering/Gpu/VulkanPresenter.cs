@@ -357,6 +357,16 @@ public sealed unsafe class VulkanPresenter : IDisposable
         var old = _swapchain;
         bool layer = FrameGeneration is not null || StreamlineHooks is not null;
         var info = SwapchainInfo(caps, chosen, mode, count, layer, old);
+
+        // Never exclusive: with the default the driver may take the monitor for a window that covers it (borderless full screen), and the
+        // desktop compositor's copy of the window, which screen captures such as Win+Shift+S read, then keeps an old frame.
+        var exclusive = new SurfaceFullScreenExclusiveInfoEXT
+        {
+            SType = StructureType.SurfaceFullScreenExclusiveInfoExt,
+            FullScreenExclusive = FullScreenExclusiveEXT.DisallowedExt,
+        };
+        if (_device.HasFullScreenExclusive) info.PNext = &exclusive;
+
         if (FrameGeneration is { } fg)
         {
             bool ok;

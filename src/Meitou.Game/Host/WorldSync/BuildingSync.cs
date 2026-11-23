@@ -428,9 +428,14 @@ sealed class BuildingSync(GameHost host)
             lastReadout = (record, at, readout);
             return readout;
         }
-        var isNode = new Dictionary<string, bool>(StringComparer.Ordinal);
-        bool IsNodeRecord(string record) => isNode.TryGetValue(record, out bool known) ? known
-            : isNode[record] = db.Find(record) is { Type: Data.Fcs.FcsRecordType.Building } r && r.GetBool("is node");
+        var nodeTypes = new Dictionary<string, int?>(StringComparer.Ordinal);
+        int? NodeTypeOf(string record)
+        {
+            if (nodeTypes.TryGetValue(record, out int? known)) return known;
+
+            var r = db.Find(record);
+            return nodeTypes[record] = r is { Type: Data.Fcs.FcsRecordType.Building } && r.GetBool("is node") ? r.GetInt("node type") : null;
+        }
         var snapNodes = new Dictionary<string, IReadOnlyList<PlacedSnapNode>>(StringComparer.Ordinal);
         IReadOnlyList<PlacedSnapNode> SnapNodesOf(string record) => snapNodes.TryGetValue(record, out var known) ? known
             : snapNodes[record] = db.Find(record) is { Type: Data.Fcs.FcsRecordType.Building } r ? WorldObjectLayout.SnapNodes(db, r) : [];
@@ -492,7 +497,7 @@ sealed class BuildingSync(GameHost host)
             LinkedAround = (centre, radius) => footprints.LinkedAround(centre, radius, (x, z) => host.ActiveGround((float)x, (float)z)),
             PlacedAround = (centre, radius, record) =>
                 footprints.PlacedAround(centre, radius, record, (x, z) => host.ActiveGround((float)x, (float)z)),
-            IsNodeRecord = IsNodeRecord,
+            NodeTypeOf = NodeTypeOf,
             SnapNodesOf = SnapNodesOf,
             SnapHostsAround = SnapHostsAround,
             StaticAround = footprints.StaticAround,
