@@ -316,10 +316,8 @@ public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITa
         var player = world.Player;
         foreach (var id in stop.Characters.Count > 0 ? stop.Characters : player.Selection.ToArray())
         {
-            if (!table.TryResolveNext(id, out int slot) || !table.Cold(slot)!.IsPlayer) continue;
-            PlayerOrders.Wipe(table.Cold(slot)!);
-            TaskStart.End(world, slot, TaskEnd.Stopped);
-            table.Cold(slot)!.FollowOrder = CharacterId.None;
+            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { IsPlayer: true } cold) continue;
+            PlayerOrders.Stop(world, slot, cold);
         }
     }
 

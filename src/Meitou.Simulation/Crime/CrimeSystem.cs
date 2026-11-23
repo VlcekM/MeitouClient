@@ -300,7 +300,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         if (table.Phase == TablePhase.Parallel || amount <= 0) return -1;
         if (!table.TryResolveNext(character, out int slot) || table.Cold(slot) is not { } c) return -1;
 
-        return AddBounty(world, slot, c, faction, amount, CrimeCode.None, CharacterId.None)?.Amount ?? -1;
+        return AddBounty(world, slot, c, faction, amount)?.Amount ?? -1;
     }
 
     /// <summary>
@@ -320,20 +320,30 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     }
 
     /// <summary>
-    /// Adds <paramref name="amount"/> to the entry of <paramref name="faction"/>'s booking faction on the character in <paramref name="slot"/>
-    /// (<c>FUN_140853e20</c>: added and the time stamped unconditionally, no crime bit) and reports the booking with <paramref name="code"/> and
-    /// <paramref name="witness"/>. Null, changing nothing, when the faction has no booking faction (the original's entry has a null key nothing
-    /// reads).
+    /// A mod's bounty on the character in <paramref name="slot"/>: <see cref="Raise"/> on <paramref name="faction"/>'s booking faction, reported as
+    /// a booking with no crime, no witness and no victim (the character's pending crime, if any, is not this booking's). Null, changing nothing,
+    /// when the faction has no booking faction (the original's entry has a null key nothing reads).
     /// </summary>
-    internal BountyEntry? AddBounty(World world, int slot, CharacterCold c, int faction, int amount, CrimeCode code, CharacterId witness)
+    BountyEntry? AddBounty(World world, int slot, CharacterCold c, int faction, int amount)
     {
         int key = Factions.BookingOf(faction);
         if (key < 0) return null;
 
-        var entry = (c.Bounties ??= new BountyLedger()).Get(key, Factions.NameOf(key));
-        entry.Amount += amount;
+        var entry = Raise(world, c, key, Factions.NameOf(key), amount);
+        Note(world, CrimeEventKind.Booked, slot, CrimeCode.None, key, entry.Amount, CharacterId.None, withPending: false);
+        return entry;
+    }
+
+    /// <summary>
+    /// Raises the character's ledger entry of booking faction <paramref name="key"/> (named <paramref name="name"/>) by <paramref name="amount"/>,
+    /// no higher than <see cref="int.MaxValue"/>, and stamps the time of its last raise (<c>FUN_140853e20</c>: added and stamped unconditionally, no
+    /// crime bit), as dialogue's assigned bounty and a mod's do. Returns the entry.
+    /// </summary>
+    internal static BountyEntry Raise(World world, CharacterCold c, int key, string name, int amount)
+    {
+        var entry = (c.Bounties ??= new BountyLedger()).Get(key, name);
+        entry.Amount = (int)Math.Min(int.MaxValue, (long)entry.Amount + amount);
         entry.RaisedTick = world.Tick;
-        Note(world, CrimeEventKind.Booked, slot, code, key, entry.Amount, witness);
         return entry;
     }
 
@@ -1027,12 +1037,13 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         BountyBook.Lines(c, tick, tickSeconds, local);
 
     /// <summary>
-    /// Records a pending, witnessed, booked or expired crime: <see cref="Report"/> (with the culprit's pending crime, none for an expiry), then the
-    /// world event log's line.
+    /// Records a pending, witnessed, booked or expired crime: <see cref="Report"/> (with the culprit's pending crime, none for an expiry or without
+    /// <paramref name="withPending"/>), then the world event log's line.
     /// </summary>
-    internal void Note(World world, CrimeEventKind kind, int culprit, CrimeCode code, int faction, int amount, CharacterId witness)
+    internal void Note(World world, CrimeEventKind kind, int culprit, CrimeCode code, int faction, int amount, CharacterId witness,
+        bool withPending = true)
     {
-        var pending = kind == CrimeEventKind.Expired ? null : world.Characters.Cold(culprit)?.Pending;
+        var pending = kind == CrimeEventKind.Expired || !withPending ? null : world.Characters.Cold(culprit)?.Pending;
         Report(world, kind, culprit, code, faction, amount, witness, pending);
         world.Events.Line(world, "crime", CrimeLine(world, kind, culprit, code, faction, amount, witness));
     }

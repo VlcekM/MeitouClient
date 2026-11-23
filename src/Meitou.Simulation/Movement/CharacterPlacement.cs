@@ -30,7 +30,7 @@ public static class CharacterPlacement
     /// terrain). Each one stands still facing as it did, its fight, task, path and orders dropped (its move, follow and job queue, as the Stop
     /// order drops them), so it waits there for whoever leads it next; the characters it carries come along. Outside a tick both of the table's
     /// state buffers are written, so the host's camera, which a new game puts on the first squad's leader after <see cref="IWorldReady"/>, sees
-    /// the new place. A character that is not alive, is carried or is held in a bed, cage or on a pole is left where it is (release it first); the
+    /// the new place. A character that is dead, is carried or is held in a bed, cage or on a pole is left where it is (release it first); the
     /// rest keep their order in the list. Returns how many were put, 0 for a point that is not finite, with no walkable spot near it, or during
     /// the parallel phase. Each call costs a walkability test per character; call it at an event, not per tick.
     /// </summary>
@@ -41,15 +41,14 @@ public static class CharacterPlacement
         if (!float.IsFinite(at.X) || !float.IsFinite(at.Y) || !float.IsFinite(at.Z)) return 0;
 
         var centre = new Vector2(at.X, at.Z);
-        if (WalkableNear(world, centre, Rng.Mix(BitConverter.SingleToUInt32Bits(at.X) | (ulong)BitConverter.SingleToUInt32Bits(at.Z) << 32))
-            is not { } first)
-            return 0;
+        ulong key = Rng.Mix(BitConverter.SingleToUInt32Bits(at.X) | (ulong)BitConverter.SingleToUInt32Bits(at.Z) << 32);
+        if (WalkableNear(world, centre, key) is not { } first) return 0;
 
         var spots = Formation.Scatter(characters.Count, first);
         int placed = 0;
         foreach (var id in characters)
         {
-            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { } cold) continue;
+            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { Medical.Dead: false } cold) continue;
             if (!cold.CarriedBy.IsNone || cold.InSomething != HeldState.None) continue;
 
             var spot = spots[placed++];
@@ -57,6 +56,7 @@ public static class CharacterPlacement
             Halt(world, slot, cold);
             var ground = new Vector3(spot.X, world.Walkability.GroundHeight(spot.X, spot.Y, at.Y), spot.Y);
             table.Place(slot, ground, table.Next[slot].Yaw);
+            PlaceCarried(table, cold, ground);
         }
 
         return placed;
@@ -80,18 +80,24 @@ public static class CharacterPlacement
     }
 
     /// <summary>
-    /// Drops what the character in <paramref name="slot"/> was doing, as the Stop order does for the player's characters (orders, follow, task)
-    /// and its fight for anyone.
+    /// Drops what the character in <paramref name="slot"/> was doing: its fight, and for the player's characters what the Stop order drops
+    /// (<see cref="PlayerOrders.Stop"/>), for anyone else its task.
     /// </summary>
     static void Halt(World world, int slot, CharacterCold cold)
     {
         world.SystemOf<CombatSystem>()?.Disengage(world.Characters, cold.Id);
-        if (cold.IsPlayer)
-        {
-            PlayerOrders.Wipe(cold);
-            cold.FollowOrder = CharacterId.None;
-        }
+        if (cold.IsPlayer) PlayerOrders.Stop(world, slot, cold);
+        else TaskStart.End(world, slot, TaskEnd.Stopped);
+    }
 
-        TaskStart.End(world, slot, TaskEnd.Stopped);
+    /// <summary>
+    /// Puts the body <paramref name="carrier"/> carries at its new place too, so outside a tick both buffers already show it there; the carry system
+    /// sets it on the carrier's shoulder at the next step.
+    /// </summary>
+    static void PlaceCarried(CharacterTable table, CharacterCold carrier, Vector3 at)
+    {
+        if (carrier.Carrying.IsNone || !table.TryResolveNext(carrier.Carrying, out int body)) return;
+
+        table.Place(body, at, table.Next[body].Yaw);
     }
 }

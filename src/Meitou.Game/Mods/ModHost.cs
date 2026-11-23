@@ -230,7 +230,14 @@ public sealed class ModHost
         {
             if (rule.Faulted || rule.Rule.Waive is not { } waive) continue;
 
-            if (AskRule(rule, () => waive(ask, failure))) return true;
+            try
+            {
+                if (waive(ask, failure)) return true;
+            }
+            catch (Exception e)
+            {
+                Fault(rule, e);
+            }
         }
         return false;
     }
@@ -240,33 +247,30 @@ public sealed class ModHost
     /// </summary>
     public string? RefusePlacement(PlacementAsk ask)
     {
-        string? text = null;
         foreach (var rule in _registry.PlacementRules)
         {
             if (rule.Faulted || rule.Rule.Refuse is not { } refuse) continue;
 
-            AskRule(rule, () => (text = refuse(ask)) is not null);
-            if (text is not null) return text;
+            try
+            {
+                if (refuse(ask) is { } text) return text;
+            }
+            catch (Exception e)
+            {
+                Fault(rule, e);
+            }
         }
         return null;
     }
 
     /// <summary>
-    /// Runs a placement rule's answer, turning the rule off with a log line if it throws (false then).
+    /// Turns off a placement rule that threw, with a log line.
     /// </summary>
-    static bool AskRule(ModPlacementRule rule, Func<bool> ask)
+    static void Fault(ModPlacementRule rule, Exception e)
     {
-        try
-        {
-            return ask();
-        }
-        catch (Exception e)
-        {
-            rule.Faulted = true;
-            Console.Error.WriteLine($"mod       {rule.Owner}: placement rule disabled: {e.GetType().Name}: {e.Message}");
-            CodeModFaults.Tell(rule.Owner, e);
-            return false;
-        }
+        rule.Faulted = true;
+        Console.Error.WriteLine($"mod       {rule.Owner}: placement rule disabled: {e.GetType().Name}: {e.Message}");
+        CodeModFaults.Tell(rule.Owner, e);
     }
 
     /// <summary>

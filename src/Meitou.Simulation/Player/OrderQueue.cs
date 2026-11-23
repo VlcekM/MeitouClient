@@ -458,6 +458,17 @@ public static class PlayerOrders
     }
 
     /// <summary>
+    /// What the original's stop key does to a player character (<c>FUN_1407f6470</c>, which gives no order): its order queue, second list and
+    /// goal go (<see cref="Wipe"/>), its task ends, and it no longer follows anyone (serial phases).
+    /// </summary>
+    internal static void Stop(World world, int slot, CharacterCold cold)
+    {
+        Wipe(cold);
+        TaskStart.End(world, slot, TaskEnd.Stopped);
+        cold.FollowOrder = CharacterId.None;
+    }
+
+    /// <summary>
     /// Whether the order can start for the character now (a pure read; the M6 <c>World.CanOrder</c> rests on it): the row is in the character's
     /// repertoire (<see cref="TaskStart.Eligible"/>), its owner's check, a row needing no melee threat (<see cref="NeedsNoThreat"/>) has none
     /// (<see cref="Threatened"/>), and no failing list B entry leaves its plan without a step (<see cref="ListTests.OrderBlocked"/>). An order the

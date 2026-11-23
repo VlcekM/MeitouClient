@@ -922,10 +922,10 @@ sealed class AgentOrders(PlayerInterface player)
 
         var query = ControlBuildQuery(host, data, x, z, yawDegrees, out var position, out var rotation);
 
-        var failure = PlacementCheck.Evaluate(query);
+        var failure = PlacementCheck.Evaluate(query, out var refusal);
         if (failure != PlacementFailure.None)
         {
-            message = $"refused: {PlacementCheck.Message(failure)} ({failure}) at {x:0.#} {z:0.#}";
+            message = $"refused: {PlacementCheck.Message(failure, refusal)} ({failure}) at {x:0.#} {z:0.#}";
             return false;
         }
         var who = ControlOrderers();

@@ -84,7 +84,8 @@ sealed class BuildMode(PlayerInterface player)
     /// <summary>
     /// The ghost now: where the cursor meets the ground or a building's floor (On), its rotation (tilt included), the first failure.
     /// </summary>
-    internal (Vector3 Position, Quaternion Rotation, PlacementFailure Failure, BuildingBuildData Building, Vector2[]? Hull, GhostFloor? On)? Ghost;
+    internal (Vector3 Position, Quaternion Rotation, PlacementFailure Failure, BuildingBuildData Building, Vector2[]? Hull, GhostFloor? On,
+        string? Refusal)? Ghost;
     /// <summary>
     /// The build map's keys held down (the ghost's controls run while held).
     /// </summary>
@@ -113,7 +114,7 @@ sealed class BuildMode(PlayerInterface player)
     /// <summary>
     /// The wall line's pieces this frame, each with its own placement check and footprint.
     /// </summary>
-    internal readonly List<(WallPiece Piece, PlacementFailure Failure, Vector2[]? Hull)> WallPieces = [];
+    internal readonly List<(WallPiece Piece, PlacementFailure Failure, Vector2[]? Hull, string? Refusal)> WallPieces = [];
     /// <summary>
     /// The snap at the wall line's end, and the snap of the ghost before the first click.
     /// </summary>
@@ -416,9 +417,9 @@ sealed class BuildMode(PlayerInterface player)
             PlaceGhost(host, building, ray, terrainHit);
         }
 
-        _buildMessage = Ghost is { Failure: not PlacementFailure.None } g ? PlacementCheck.Message(g.Failure)
+        _buildMessage = Ghost is { Failure: not PlacementFailure.None } g ? PlacementCheck.Message(g.Failure, g.Refusal)
             : WallPieces.FirstOrDefault(p => p.Failure != PlacementFailure.None) is { Piece.Data: not null } bad
-                ? PlacementCheck.Message(bad.Failure) : null;
+                ? PlacementCheck.Message(bad.Failure, bad.Refusal) : null;
         ShowGhosts();
     }
 
@@ -447,11 +448,12 @@ sealed class BuildMode(PlayerInterface player)
         query = SnapToWall(query) ?? SnapToTarget(host, query, footprint, ray) ?? Settled(query);
         _ghostSnappedOn = query.SnappedOn;
 
+        string? refusal = null;
         var failure = player.LevelEditorPanel.LevelBuild ? PlacementFailure.None
             : !Unlocked().Contains(building.Id) ? PlacementFailure.NotAvailable
-            : PlacementCheck.Evaluate(query);
+            : PlacementCheck.Evaluate(query, out refusal);
         var hull = footprint?.Place(query.Position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, query.Yaw));
-        Ghost = (query.Position, query.Rotation, failure, building, hull, query.On);
+        Ghost = (query.Position, query.Rotation, failure, building, hull, query.On, refusal);
     }
 
     /// <summary>
@@ -787,13 +789,14 @@ sealed class BuildMode(PlayerInterface player)
         foreach (var piece in pieces)
         {
             float yaw = PlacementCheck.YawOf(piece.Rotation);
+            string? refusal = null;
             var failure = player.LevelEditorPanel.LevelBuild ? PlacementFailure.None
                 : !available ? PlacementFailure.NotAvailable
                 : PlacementCheck.Evaluate(new PlacementQuery(piece.Data, piece.Position, piece.Rotation, yaw, 0, host.Parts(piece.Data.Id),
                     BuildQueue, snapshot.Characters, snapshot.Buildings, towns, faction, host.Placement)
-                { WallPiece = true, Ignore = WallIgnore(piece, joints) });
+                { WallPiece = true, Ignore = WallIgnore(piece, joints) }, out refusal);
             var hull = host.Placement.Footprint(piece.Data.Id)?.Place(piece.Position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw));
-            WallPieces.Add((piece, failure, hull));
+            WallPieces.Add((piece, failure, hull, refusal));
         }
     }
 
@@ -809,10 +812,10 @@ sealed class BuildMode(PlayerInterface player)
             if (WallPieces.Count == 0) return true;
             if (WallPieces.FirstOrDefault(p => p.Failure != PlacementFailure.None) is { Piece.Data: not null } bad)
             {
-                player.Notice(PlacementCheck.Message(bad.Failure), error: true);
+                player.Notice(PlacementCheck.Message(bad.Failure, bad.Refusal), error: true);
                 return true;
             }
-            foreach (var (piece, _, hull) in WallPieces) BuildQueue.Add(new QueuedGhost(piece.Data, piece.Position, piece.Rotation, 0, hull));
+            foreach (var (piece, _, hull, _) in WallPieces) BuildQueue.Add(new QueuedGhost(piece.Data, piece.Position, piece.Rotation, 0, hull));
             WallLine = null;
             if (_wallEndSnap is null && line.Master.LinkType != 3)
             {
@@ -925,7 +928,7 @@ sealed class BuildMode(PlayerInterface player)
                     g.Failure == PlacementFailure.None ? WorldObjectRenderer.GhostState.Valid : WorldObjectRenderer.GhostState.Invalid));
             }
 
-            foreach (var (piece, failure, _) in WallPieces)
+            foreach (var (piece, failure, _, _) in WallPieces)
             {
                 var pieceWorld = Matrix4x4.CreateFromQuaternion(piece.Rotation) * Matrix4x4.CreateTranslation(piece.Position);
                 draws.Add(new(host.Parts(piece.Data.Id), pieceWorld,
@@ -950,7 +953,7 @@ sealed class BuildMode(PlayerInterface player)
         if (Ghost is { Failure: not PlacementFailure.None } failed)
         {
             player.InterfaceSounds.Sound("Building_Cant_Build_There");
-            player.Notice(PlacementCheck.Message(failed.Failure), error: true);
+            player.Notice(PlacementCheck.Message(failed.Failure, failed.Refusal), error: true);
         }
         else
         {

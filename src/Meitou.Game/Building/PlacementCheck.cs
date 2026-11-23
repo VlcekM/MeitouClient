@@ -281,23 +281,22 @@ public static class PlacementCheck
     /// <summary>
     /// The first reason the ghost cannot stand (<see cref="GameVerdict"/>); None when it can. The code mods' placement rules (docs/modding.md
     /// "Placement rules", engine API) may lift any of the game's reasons but the town block, which the simulation applies again on Confirm, and may
-    /// refuse a ghost the game allows (<see cref="PlacementFailure.RefusedByMod"/>, its text in <see cref="ModRefusal"/>).
+    /// refuse a ghost the game allows (<see cref="PlacementFailure.RefusedByMod"/>, the mod's text in <paramref name="refusal"/>, else null).
     /// </summary>
-    public static PlacementFailure Evaluate(PlacementQuery q)
+    public static PlacementFailure Evaluate(PlacementQuery q, out string? refusal)
     {
+        refusal = null;
         var failure = GameVerdict(q);
         if (failure != PlacementFailure.None || q.Services.Refuse is not { } refuse) return failure;
-        if (refuse(q) is not { } text) return PlacementFailure.None;
 
-        ModRefusal = text;
-        return PlacementFailure.RefusedByMod;
+        refusal = refuse(q);
+        return refusal is null ? PlacementFailure.None : PlacementFailure.RefusedByMod;
     }
 
     /// <summary>
-    /// The text of the last refusal by a mod's placement rule, which <see cref="Message"/> shows for <see cref="PlacementFailure.RefusedByMod"/>
-    /// (host thread only).
+    /// <see cref="Evaluate(PlacementQuery, out string?)"/> without the text of a mod's refusal.
     /// </summary>
-    public static string ModRefusal { get; private set; } = "";
+    public static PlacementFailure Evaluate(PlacementQuery q) => Evaluate(q, out _);
 
     /// <summary>
     /// Whether <paramref name="failure"/> keeps the ghost from standing: any reason but None, unless a mod's rule lifts it (never the town block).
@@ -606,10 +605,10 @@ public static class PlacementCheck
     }
 
     /// <summary>
-    /// The text of a failure (<see cref="PlacementRules.Message"/>); a mod's refusal shows its own (<see cref="ModRefusal"/>).
+    /// The text of a failure (<see cref="PlacementRules.Message"/>); a mod's refusal shows its own <paramref name="refusal"/>.
     /// </summary>
-    public static string Message(PlacementFailure failure) =>
-        failure == PlacementFailure.RefusedByMod ? ModRefusal : PlacementRules.Message(failure);
+    public static string Message(PlacementFailure failure, string? refusal = null) =>
+        failure == PlacementFailure.RefusedByMod ? refusal ?? "" : PlacementRules.Message(failure);
 
     #endregion
 
