@@ -239,6 +239,14 @@ public sealed class Market
     }
 
     /// <summary>
+    /// The unit price with no trade open (slot 81, <c>vfunc 0x288</c>, with <c>sell</c> false): the value the building filler orders and scores a
+    /// fill's items by (<c>FUN_1409565e0</c>, <c>FUN_140952df0</c>, <b>Verified</b>, decompile). The trader factor and the town's market factor come
+    /// from the open trade window (<c>FUN_14070e2d0</c>, <c>FUN_14070d170</c>), none while the world fills shops, so T is 1 and a blueprint is worth
+    /// its research's <c>money</c>.
+    /// </summary>
+    public int UnitValue(ItemInstance item) => UnitPrice(item, false, Trader.None, -1);
+
+    /// <summary>
     /// The price of the whole stack (slot 82, <c>FUN_1407915b0</c>, <b>Verified</b>): the unit price for a single unit, else every unit at the full
     /// unit price with the last scaled by its charge fraction: p x n - trunc(p - p x charges / max charges).
     /// </summary>

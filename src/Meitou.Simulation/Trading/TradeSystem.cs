@@ -1042,8 +1042,9 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     /// <summary>
     /// Places a building fill as the building filler does (<c>FUN_14095b210</c>, <b>Verified</b>, decompile): the usable containers, and only
     /// those, cleared but their unique items (<c>FUN_14074a5b0</c>); each special item into the first that takes it of a fresh shuffle of them
-    /// (<c>FUN_14096ac50</c>); then the units spread over them (<see cref="HomeStock.Spread"/>). What fits nowhere is lost. Returns the placed units'
-    /// value at full price (the original sums the placed items' stack price, <c>vfunc 0x290</c>), or null when the fill made no unit.
+    /// (<c>FUN_14096ac50</c>); then the units spread over them by unit value (<see cref="HomeStock.Spread"/>, <see cref="Market.UnitValue"/>). What
+    /// fits nowhere is lost. Returns the placed units' value at full price (the original sums the placed items' stack price, <c>vfunc 0x290</c>), or
+    /// null when the fill made no unit.
     /// </summary>
     long? PlaceFill(World world, List<StockBox> usable, ShopFill fill, Trader terms, ulong key, int fills)
     {
@@ -1054,7 +1055,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         if (fill.Units.Count == 0) return null;
 
         var market = Market(world);
-        var placed = HomeStock.Spread(usable, fill.Units, market.BaseValue, ref rng);
+        var placed = HomeStock.Spread(usable, fill.Units, market.UnitValue, ref rng);
         return placed.Sum(i => market.StackPrice(i, false, terms, terms.Faction));
     }
 

@@ -190,8 +190,9 @@ Goal 118/119 shoppers: the sale is `FUN_14074a630`, called by [`FUN_1409a14b0`](
   has a type (the `StorageBuilding` field `+0x440`, read as a function 2 building's `itemtype limit`; ITEM for any other building, **Observed**), its section's `limit inventory`
   list (function 2 only, [storage](buildings-production.md)) and its lock's level (0 without a lock).
 - **Spread** (**Verified** by decompile, `FUN_14095b210`, `FUN_14095a5b0`, `FUN_1409565e0`, score `FUN_140952df0`; **Observed** in the original, #685's video of the Flotsam Safehouse:
-  bread, dried meat, kits and clothes over every barrel and basket; read, not traced: the item's `+0x13c` as its record type and its vfunc `0x288` as its unit value, Meitou
-  `Market.BaseValue`). The filler unlocks every container, then drops those that cannot hold what the template's vendor lists make: one of
+  bread, dried meat, kits and clothes over every barrel and basket; read, not traced: the item's `+0x13c` as its record type). The unit value below is the item's vfunc `0x288` (slot 81, the unit price, with
+  `sell` false; **Verified**, decompile): its trader and town factors come from the open trade window (`FUN_14070e2d0`, `FUN_14070d170`), none while
+  shops fill, so T is 1 (`DAT_14167c308`) and a blueprint is worth its research `money`, not the `BLUEPRINT_ITEM` record's 600 (Meitou `Market.UnitValue`). The filler unlocks every container, then drops those that cannot hold what the template's vendor lists make: one of
   another type than ITEM with no entry of that record type, one with a list holding none of the entries. With none left nothing is made. The rest are ordered by lock level,
   highest first, optionally cleared (unique items stay), and each special item goes into the first container that takes it of a `random_shuffle` of them. The vendor items, each a
   stack as the draw made it (the money stacks too), are ordered by unit value, highest first (`FUN_140969ff0` over reversed bounds; equal values keep no defined order, Meitou breaks the
