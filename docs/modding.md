@@ -998,6 +998,14 @@ holds refuses the second mod.
   screen's count use `SquadManagement.CappedHeads`), for townspeople, staff or followers a mod adds beside the player's own characters; the
   dismiss rule still counts everyone (`FactionHeads`). Several mods can each mark their own squads. Saved with the squad; a load without the
   owner mod running counts the squad again, with a notice. Engine API, not in the original.
+- **Squad AI options per squad** (`Meitou.Simulation.Factions`): `SetSquadOptions(squadId, options, Owner: context.Id)` gives a squad of the
+  player's faction its own squad AI options (`Squad.OwnOptions`, the `SquadAi` flags: sit when idle, sleep when injured, ditch items, share
+  food, feed animals, heal, help and rescue allies, shoot first, heal neutrals, heal all), which its members follow in place of the player's
+  faction-wide ones; `null` gives it the player's again. Guards that should not sit, sleep in other people's beds or haul goods away, for
+  example: `SquadAi.Feed | SquadAi.Share`. Every system that reads the options asks `SquadAiRules.For(world, cold)` (the character's squad's,
+  else the player's), so a squad with none set behaves as in the original. A command naming another mod than the one that set them is
+  ignored. Saved with the squad; a load without the owner mod running gives the squad the player's options again, with a notice. Cost: one
+  squad lookup where an option is read (at decisions, and per character at the feed check). Engine API, not in the original.
 - **Squad purses** (`Meitou.Simulation.Factions`): `SetSquadPurse(squadId, own, Owner: context.Id)` gives a squad of the player's faction its own
   purse (`Squad.OwnPurse`, its `Squad.Money`): its members pay an NPC-style purchase (a shopper buying from a building's stock) from it
   instead of the player's money, and a shop the squad owns keeps its takings in it, so a shopkeeper keeps its own earnings. The trade window

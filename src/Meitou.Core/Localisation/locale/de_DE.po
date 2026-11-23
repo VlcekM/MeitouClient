@@ -5236,3 +5236,7 @@ msgstr "Ein Benchmark läuft: Brich ihn zuerst auf der Benchmark-Seite ab."
 #. machine-translated
 msgid "The benchmark stopped."
 msgstr "Der Benchmark wurde beendet."
+
+#. machine-translated
+msgid "{1} squad(s) given their own squad AI options by a mod that is not loaded follow yours again."
+msgstr "{1} Trupp(s), denen eine nicht geladene Mod eigene Trupp-KI-Optionen gegeben hat, folgen wieder deinen."

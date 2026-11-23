@@ -5236,3 +5236,7 @@ msgstr "È in corso un benchmark: annullalo prima nella pagina Benchmark."
 #. machine-translated
 msgid "The benchmark stopped."
 msgstr "Il benchmark si è fermato."
+
+#. machine-translated
+msgid "{1} squad(s) given their own squad AI options by a mod that is not loaded follow yours again."
+msgstr "{1} squadra/e a cui una mod non caricata aveva dato opzioni IA di squadra proprie seguono di nuovo le tue."

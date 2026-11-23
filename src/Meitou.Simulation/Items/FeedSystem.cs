@@ -87,7 +87,6 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
         if (!world.Beat(Settings.CheckEveryTicks, TickPhases.Feed)) return;
         var table = world.Characters;
         var state = table.Next;
-        var options = world.Player.SquadAi;
         for (int i = 0; i < table.HighWater; i++)
         {
             if (!state[i].Alive || table.Cold(i) is not { Medical: { Dead: false } med, Race: { } race, Inventory: { } own } cold)
@@ -103,6 +102,7 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
                 continue;
             }
 
+            var options = SquadAiRules.For(world, cold);
             if (animal && (options & SquadAi.Feed) == 0) continue;
             if (!WantsFood(world, cold, med) || med.Fed > 0 || !(med.Hunger < HungryBelow)) continue;
             Inventory? from = own;

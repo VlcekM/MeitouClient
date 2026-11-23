@@ -389,9 +389,10 @@ public sealed partial class FirstAidSystem
         bool organic = HoldsKit(cold, ItemInfo.FirstAidKitFunction), robotic = HoldsKit(cold, ItemInfo.RobotKitFunction);
         if (cold.Medical!.PlayingDead) return Itself(world, i, cold, robotics, organic, robotic);
 
-        bool healAllies = (world.Player.SquadAi & SquadAi.Heal) != 0;
-        bool healAll = cold.IsPlayer && (world.Player.SquadAi & SquadAi.HealAll) != 0, healNeutrals = healAll || cold.IsPlayer
-                && (world.Player.SquadAi & SquadAi.HealNeutrals) != 0;
+        var options = SquadAiRules.For(world, cold);
+        bool healAllies = (options & SquadAi.Heal) != 0;
+        bool healAll = cold.IsPlayer && (options & SquadAi.HealAll) != 0, healNeutrals = healAll || cold.IsPlayer
+                && (options & SquadAi.HealNeutrals) != 0;
         bool heals = Relations is { } rel && rel.Contains(cold.Faction) && rel.Factions[cold.Faction].HealsStrangers;
         float range = AggroSystem.RangeOf(cold, AggroSystem.OutdoorSight), range2 = range * range;
 

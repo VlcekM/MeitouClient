@@ -506,7 +506,7 @@ public sealed partial class AiSystem
         float v = threat * Math.Clamp((distanceSquared - 1000f) / (10f - 1000f), 0.1f, 1f);
         if (ally.Faction == me.Faction) return v;
 
-        return (world.Player.SquadAi & SquadAi.Help) != 0 ? v * v : 0;
+        return (SquadAiRules.For(world, me) & SquadAi.Help) != 0 ? v * v : 0;
     }
 
     /// <summary>

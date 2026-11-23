@@ -161,6 +161,27 @@ public static class SquadAiRules
     public const float ShareReach = 200;
 
     /// <summary>
+    /// The squad AI options <paramref name="cold"/> follows: its squad's own (<see cref="Factions.Squad.OwnOptions"/>, which a code mod sets with
+    /// <see cref="Factions.SetSquadOptions"/>), else the player's faction-wide ones, as the original reads for everyone. One squad lookup.
+    /// </summary>
+    public static SquadAi For(World world, CharacterCold cold) =>
+        world.Squads.Find(cold.SquadId)?.OwnOptions ?? world.Player.SquadAi;
+
+    /// <summary>
+    /// Whether anyone follows <paramref name="option"/>: the player's options hold it or a squad's own do. A pass over the squads.
+    /// </summary>
+    public static bool AnyFollow(World world, SquadAi option)
+    {
+        if ((world.Player.SquadAi & option) != 0) return true;
+        foreach (var squad in world.Squads.All)
+        {
+            if (squad.OwnOptions is { } own && (own & option) != 0) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Whether a player turret gunner with <see cref="SquadAi.ShootFirst"/> may take a sensed non-enemy of a faction whose fundamental type is
     /// <paramref name="fundamentalType"/> and whose own default relation is <paramref name="defaultRelation"/> (<c>FUN_1404374d0</c>, asked only when
     /// no enemy is in its sights): type 0 or 8, or a default below -30. Such a target is scored at range factor

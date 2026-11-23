@@ -349,6 +349,9 @@ sealed class GameMods(GameHost host)
         int woken = Simulation.Factions.SquadManagement.DropUnownedDormant(world, running.Contains);
         if (woken > 0) Notice($"{woken} squad(s) a mod that is not loaded put to sleep are awake again.");
 
+        int options = Simulation.Factions.SquadManagement.DropUnownedOptions(world, running.Contains);
+        if (options > 0) Notice(Meitou.Localisation.Loc.Tr("{1} squad(s) given their own squad AI options by a mod that is not loaded follow yours again.", options));
+
         // NPC platoons a missing mod held go back to the population; the player sees no change, so the log only.
         int released = Simulation.Population.PopulationSystem.DropUnownedHolds(world, running.Contains);
         if (released > 0)

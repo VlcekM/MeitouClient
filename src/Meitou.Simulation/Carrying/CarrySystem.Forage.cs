@@ -180,7 +180,7 @@ public sealed partial class CarrySystem
     /// count for it without the option.
     /// </summary>
     bool Rescues(World world, CharacterCold rescuer, CharacterCold body) =>
-        body.Faction == rescuer.Faction || (!rescuer.IsPlayer || (world.Player.SquadAi & SquadAi.Rescue) != 0) && Friendly(rescuer, body);
+        body.Faction == rescuer.Faction || (!rescuer.IsPlayer || (SquadAiRules.For(world, rescuer) & SquadAi.Rescue) != 0) && Friendly(rescuer, body);
 
     #endregion
 }
