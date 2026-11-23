@@ -647,7 +647,13 @@ static class AtmosphereShaders
             vec3 l = uAtmoLight.xyz;
             vec3 sunBase = uAtmoSunLight * am.a * 2.0 * atmoCloudShadow(world);
             vec3 shadowPoint = world + vec3(0.0, atmoShadowLift, 0.0);
+            // LIGHTING_LEAN (LeanLighting): no sun shadows, probes or traced sun this frame, so the term is 0 and the lookups below are dead code
+            // the compiler drops; their registers were the program's whether they ran or not.
+            #ifdef LIGHTING_LEAN
+            float tracedShare = 0.0;
+            #else
             float tracedShare = atmoTracedShare(world);
+            #endif
             vec3 ns = atmoSunNormal(n);
             float nl = clamp(dot(ns, l), 0.0, 1.0);
             // The sun's term multiplies the diffuse N.L (diffuseNl) and the glint (nl) alone: where both are 0 (a surface turned from the sun with no
@@ -661,7 +667,11 @@ static class AtmosphereShaders
             bool sunReaches = sunFaced && max(sunBase.x, max(sunBase.y, sunBase.z)) > 0.0 && atmoSelfShadow > 0.0;
             // The sun shadow term (deferred.hlsl: lightColor * shadow); what the traced sun takes over leaves the colour, shadowed by the characters' layers alone.
             msCascadesOnly = tracedShare > 0.0;   // the rays' handoff band: its other share is the cascades'
+            #ifdef LIGHTING_LEAN
+            vec3 sun = sunReaches ? sunBase * atmoSelfShadow : vec3(0.0);   // the shadow pass is off: its receivers' term is 1
+            #else
             vec3 sun = tracedShare < 1.0 && sunReaches ? sunBase * kenshiShadow(shadowPoint, n) * atmoSelfShadow * (1.0 - tracedShare) : vec3(0.0);
+            #endif
             msCascadesOnly = false;
             vec3 tracedSun = vec3(0.0);
             if (tracedShare > 0.0)
@@ -693,7 +703,11 @@ static class AtmosphereShaders
             // Meitou probe GI: the probes' irradiance (sky seen past the geometry, light bounced off it) in place of the sky's, and the sky's
             // reflection dimmed as much as the probes dim the sky (an occluded corner reflects no sky).
             float specularOcclusion = 1.0;
+            #ifdef LIGHTING_LEAN
+            const bool useGi = false;
+            #else
             bool useGi = uGiParams.x > 0.5 && (!giInterior || uGiParams.w > 0.5);
+            #endif
             #ifdef GI_IN_SHADER
             // The traced lamp shadows' receivers among the fragments that read the probes themselves: while the lamps are traced (uGiParams.z bit 16) a character writes
             // its normal and albedo with bit 19, which the lamp pass alone reads (docs/render-lights.md "Traced lamp shadows").
