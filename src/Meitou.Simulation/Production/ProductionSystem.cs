@@ -917,14 +917,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (m.Data.Function == Meitou.Data.World.ObjectRanges.TurretFunction && !_turretSpots.ContainsKey(site.Id)) GoalOf(world, site, m);
         if (AtSite(world, n, site, m))
         {
-            if ((n.Flags & path) != 0)
-            {
-                n.Flags = (ushort)(n.Flags & ~path);
-                n.PathCursor = 0;
-                cold.PathRequest = 0;
-            }
-
-            n.TaskTime = 0;
+            StopWalk(ref n, cold);
             return;
         }
 
@@ -934,6 +927,22 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         WalkToSite(ref n, cold, site, GoalOf(world, site, m));
         n.Mode = SpeedMode.Free;
         n.TaskTime = PursuitSystem.RepathSeconds;
+    }
+
+    /// <summary>
+    /// Stops a worker's walk where it stands (its path and any pending request dropped) and clears its wait, so its next leg starts at once.
+    /// </summary>
+    static void StopWalk(ref CharacterHot n, CharacterCold cold)
+    {
+        const ushort path = (ushort)MoveFlags.AnyPath;
+        if ((n.Flags & path) != 0)
+        {
+            n.Flags = (ushort)(n.Flags & ~path);
+            n.PathCursor = 0;
+            cold.PathRequest = 0;
+        }
+
+        n.TaskTime = 0;
     }
 
     #endregion

@@ -1016,6 +1016,8 @@ public sealed partial class ProductionSystem
             if (there.Craft is { } craft && TakeDone(craft, inv, i => store.Data.Accepts(i.Record, i.Type)))
                 world.Machines.Touch();
 
+            // The walk stops here, as at a loose item (PickUpLoose), so the leg to the storage starts at once.
+            StopWalk(ref n, cold);
             if (Delivered(world, inv, store, Ditching(cold)).Any()) cold.HaulSite = storeId;
             else End(world, slot);
             return;
@@ -1036,7 +1038,8 @@ public sealed partial class ProductionSystem
     /// <summary>
     /// A hauler at the loose item it fetches (<c>Task_Pickup</c>, docs/game/buildings-production.md "Hauling"): the stack goes into the inventory
     /// (what does not fit stays on the ground), then it makes for the storage with what the storage takes; with nothing it can take the trip ends.
-    /// Not there yet: nothing happens (the walk is <see cref="ApproachLoose"/>'s).
+    /// The walk to the item stops at the pick-up, so the leg to the storage starts at once: a walk left to end by itself set the idle wait of a
+    /// finished path, and the hauler stood up to 10 s with its load. Not there yet: nothing happens (the walk is <see cref="ApproachLoose"/>'s).
     /// </summary>
     void PickUpLoose(World world, int slot, CharacterCold cold, Items.Inventory inv, Machine store, int item)
     {
@@ -1055,6 +1058,7 @@ public sealed partial class ProductionSystem
         if (whole || loose.Item.Quantity < before) world.EmitSound(SoundKind.PickedUp, slot, n.Position);
 
         cold.HaulItem = null;
+        StopWalk(ref n, cold);
         if (Delivered(world, inv, store, ditch: false).Any()) cold.HaulSite = store.Site;
         else End(world, slot);
     }
@@ -1075,14 +1079,7 @@ public sealed partial class ProductionSystem
 
         if (PickUps.InReach(n.Position, loose.Position))
         {
-            if ((n.Flags & path) != 0)
-            {
-                n.Flags = (ushort)(n.Flags & ~path);
-                n.PathCursor = 0;
-                cold.PathRequest = 0;
-            }
-
-            n.TaskTime = 0;
+            StopWalk(ref n, cold);
             return;
         }
 

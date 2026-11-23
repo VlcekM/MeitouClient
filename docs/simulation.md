@@ -2110,7 +2110,8 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
     go first; else the nearest loose item of a listed record within 1200 of the hauler is picked up and carried there (`ProductionSystem.LooseFor`, the
     original's source order, [hauling](game/buildings-production.md#hauling)), never one another faction owns (engine choice: the ownership test alone
     lets a hauler in a player town take such an item, which marks it stolen); else the nearest player machine within that 4.246733e7 bound (3D) of the storage whose output
-    (a bench's: its finished items) the storage takes is emptied into the hauler's pack and carried there. Blocked with none.
+    (a bench's: its finished items) the storage takes is emptied into the hauler's pack and carried there. Blocked with none. The walk stops at
+    the pick-up, so the leg to the storage starts the same tick (a path left to finish by itself sets a wanderer's 5-10 s wait).
   - 152 Operating automatic machine (Shift + Auto-Haul on an automatic machine; its companion 124 lands on the same machine): the operator above at the machine, hauling only. Its done list is `!62` (machineHasEmptyInputs false, **Verified**, TaskData row 152): the job is finished, and the list moves on to the 124 companion, as soon as no input of the machine is empty (`ProductionSystem.Blocked`).
     Blocked unless it is mid-trip for it, carries an item an input has room for, an empty input's item is in a storage, or a full or carried output has a storage that takes it
     (engine reading of the row's goal "no empty inputs", `AutoWork`). 124 on an automatic machine runs the same way, blocked unless it carries an item an input has room for.
