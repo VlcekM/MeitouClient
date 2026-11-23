@@ -73,7 +73,7 @@ sealed class TurretManning
 
         var g = gun.Gun;
         if (!_turrets.TryGetValue(instance, out var t))
-            return new(instance, g.Range, g.AimSpeed, g.AccuracyDeviationAtZeroSkill, 1, 1, 0, null)
+            return new(instance, g.Range, g.AimSpeed, g.AccuracyDeviationAtZeroSkill, PlacedMount(world, catalog, site.Container), 1, 0, null)
             {
                 Shots = g.NumShots,
                 ReloadMin = g.ReloadTimeMin,
@@ -153,8 +153,9 @@ sealed class TurretManning
     int _townTurretsRevision = -1;
 
     /// <summary>
-    /// A gunner's turret this tick: its key, BUILDING, place, facing, efficiency and research damage multiplier, and for a town turret its site and
-    /// the wall it is mounted on (<see cref="MountOf"/>, read only when the turret's state is made).
+    /// A gunner's turret this tick: its key, BUILDING, place, facing, efficiency and research damage multiplier, for a town turret its site, and the
+    /// building it is mounted on (a town turret's wall, a placed turret's <see cref="Construction.BuildSite.Container"/>; read only when the
+    /// turret's state is made).
     /// </summary>
     readonly record struct Post(string Key, string BuildingId, Vector3 Position, float Yaw, float Efficiency, float DamageMult, int Site = -1,
         string? MountedOn = null);
@@ -220,7 +221,7 @@ sealed class TurretManning
         if (gun.IsConsumer) e = world.Machines.Find(id) is { } m ? m.HasPower ? m.Power : 0 : 0;
 
         float research = world.Research.Upgrade(site.Record).ProductionMult;
-        return new Post(site.Id, site.Record, site.Position, TownBuildings.YawOf(site.Rotation), e, research);
+        return new Post(site.Id, site.Record, site.Position, TownBuildings.YawOf(site.Rotation), e, research, MountedOn: site.Container);
     }
 
     /// <summary>
@@ -312,17 +313,33 @@ sealed class TurretManning
     }
 
     /// <summary>
-    /// The mount bonus of the wall a town turret's post stands on (<see cref="TurretFormulas.MountFactor"/> of the wall's output); 1 for a placed
-    /// turret, one on no wall or a wall its town no longer has. Read once, when the turret's state is made (<see cref="TurretState.Mount"/>).
+    /// The mount bonus of the building a turret's post is mounted on (<see cref="TurretFormulas.MountFactor"/> of its output; gun slot 18
+    /// <c>FUN_1404353b0</c> reads any mounted building's): a town turret's wall, a placed turret's container (a player site, named by its id or its
+    /// level instance id); 1 for one mounted on nothing or on a building no longer there. Read once, when the turret's state is made
+    /// (<see cref="TurretState.Mount"/>).
     /// </summary>
-    float MountOf(TurretCatalog catalog, Post post)
+    float MountOf(World world, TurretCatalog catalog, Post post)
     {
-        if (post.MountedOn is not { } on || Towns is not { } towns || (uint)post.Site >= (uint)towns.Sites.Count) return 1;
+        if (post.MountedOn is not { } on) return 1;
+        if (post.Site < 0) return PlacedMount(world, catalog, on);
+        if (Towns is not { } towns || post.Site >= towns.Sites.Count) return 1;
 
         foreach (var b in towns.Sites[post.Site].Buildings)
             if (b.Key == on) return TurretFormulas.MountFactor(catalog.OutputOf(b.BuildingId));
 
         return 1;
+    }
+
+    /// <summary>
+    /// The mount bonus of a placed turret mounted on <paramref name="container"/> (its <see cref="Construction.BuildSite.Container"/>, a player
+    /// site's id or level instance id; null: none).
+    /// </summary>
+    static float PlacedMount(World world, TurretCatalog catalog, string? container)
+    {
+        if (container is null) return 1;
+
+        var site = world.Buildings.Find(container) ?? world.Buildings.All.FirstOrDefault(s => s.LevelPlacement?.InstanceId == container);
+        return site is null ? 1 : TurretFormulas.MountFactor(catalog.OutputOf(site.Record));
     }
 
     /// <summary>
@@ -355,7 +372,7 @@ sealed class TurretManning
             var catalog = TurretGuns!;
             if (catalog.Get(post.BuildingId) is not { } gun) return;
 
-            _turrets[post.Key] = t = new TurretState(post.Key, gun, post.Position, post.Yaw, MountOf(catalog, post));
+            _turrets[post.Key] = t = new TurretState(post.Key, gun, post.Position, post.Yaw, MountOf(world, catalog, post), post.MountedOn);
             t.Loaded = SavedShots(world, post.Key, gun);
         }
 
@@ -388,7 +405,7 @@ sealed class TurretManning
 /// One turret building's gun state (the original's <c>GunClassTurret</c> and <c>TurretBuilding</c> fields, and its gunner's controller fields while
 /// one mans it).
 /// </summary>
-internal sealed class TurretState(string key, TurretGun gun, Vector3 position, float yaw, float mount)
+internal sealed class TurretState(string key, TurretGun gun, Vector3 position, float yaw, float mount, string? mountedOn)
 {
     /// <summary>
     /// The turret's key: its building instance id (a town turret's building key).
@@ -414,6 +431,17 @@ internal sealed class TurretState(string key, TurretGun gun, Vector3 position, f
     /// The <see cref="TurretFormulas.MountFactor"/> of the wall it stands on.
     /// </summary>
     public readonly float Mount = mount;
+
+    /// <summary>
+    /// The building it is mounted on (TurretBuilding <c>+0x478</c>, <c>getMountedBuilding</c>): a town turret's wall, a placed turret's container
+    /// (the building whose turret node it snapped to); null for none.
+    /// </summary>
+    public readonly string? MountedOn = mountedOn;
+
+    /// <summary>
+    /// The collision triangles of <see cref="MountedOn"/>, read the first time a line of fire meets a building; null until then.
+    /// </summary>
+    public List<Vector3>? MountTriangles;
 
     /// <summary>
     /// The turret's roll entity, from its key.

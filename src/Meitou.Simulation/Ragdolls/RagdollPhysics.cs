@@ -707,6 +707,12 @@ public interface IRagdollEnvironment
     /// </summary>
     bool ZoneRead(ZoneCoordinate zone) => true;
     /// <summary>
+    /// Adds the triangles of one building's own collision, those <see cref="Buildings"/> holds for it: the placement nearest
+    /// <paramref name="near"/> whose key or instance id is <paramref name="id"/>. False when none is found; environments without placements find
+    /// none.
+    /// </summary>
+    bool BuildingTriangles(string id, Vector3 near, List<Vector3> triangles) => false;
+    /// <summary>
     /// The loaded zones, whose building collision must stay read while they are loaded (never dropped to make room).
     /// </summary>
     void HoldZones(IReadOnlyCollection<ZoneCoordinate> zones)

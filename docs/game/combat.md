@@ -835,7 +835,7 @@ values; trajectory, aim timing and obstruction uncertainties remain labelled.
   owner test `FUN_140546dd0`)). Base data: harpoon turrets 75, auto/multi 50 (`output rate`, **Verified** probe); walls 10–30.
 - **Gun slots of `GunClassTurret`** (vtable `1416d5258`): 6 target weight `FUN_1404348e0`: 1 when dot(turret facing `+0x458`, target − turret) > 0, else 0.1 for a target outdoors,
   for one inside a building 0.1 only in the turret's own building on its floor, else 0 (**Observed**); 12 aim direction = the barrel node's +Z (`FUN_140434f40`); 13 aim error = building `+0x448`;
-  18 mount factor M = 1 + 0.01 × the output value of the building in `+0x478` (the `mounted` handle: a wall's turret bonus) (`FUN_1404353b0`); 19 power factor P = 0.8 e + 0.2 (`FUN_140435380`),
+  18 mount factor M = 1 + 0.01 × the output value of the building in `+0x478` (the `mounted` handle: a wall's turret bonus; any mounted building, a placed turret's too, **Verified** by decompile; Meitou `TurretManning.MountOf`) (`FUN_1404353b0`); 19 power factor P = 0.8 e + 0.2 (`FUN_140435380`),
   e = building slot 109 `FUN_140296e00` = 0 when not operational, else hp ratio × power grant; 22/23 pierce ends trunc(0.75 D), trunc(1.25 D).
 - **Manning** (`Task_UseTurret`, update `FUN_1403474f0`): the building of the order's target or the character's `+0x258`; it must be a turret (slot 107 = 8) with a free
   operator place (slot 159); the gunner faces it and holds clip `combatstance`; unless broken (`+0x3b6`) the controller gets the building and stat 11 Turrets
@@ -1062,6 +1062,12 @@ still running answers "pending". **Line of fire** (`FUN_140437ad0`): from the mu
 the shape's handle: a character that is not the shooter and not an enemy (`Character::isEnemy` slot 0x3e8, disguises counted) holds (2); any enemy, the target or another, fires (1);
 another object (a building) blocks (0) unless the shooter is nearer the target than the hit point (feet to feet, `FUN_1404346d0`); a shape without an object and no hit at all
 fire. The terrain is such a shape (`FUN_1407eaf90`: heightfield, group 2, no user data and no handle set), so a hill in the way fires into the hill. So packed ranks hold: a rear rank's line runs into the front rank's hulls (5 wide, 6 apart in Meitou's battle) unless they stand aside.
+**Turret's mount** (**Verified** by decompile; names from KenshiLib's exports): the ray request (`FUN_140435b40`) asks the gun whether the first shape met is a building
+(object kind 0) whose handle equals its turret's mounted building (gun slot 11 `GunClassTurret::didThisTraceHitOurMountedBuilding` `FUN_140438050`; the turret is gun `+0x128`,
+`TurretBuilding::getMountedBuilding` returns `+0x478`, the saved `mounted` handle). Then a second ray (`FUN_140434750`, same mask and direction) starts from gun slot 10
+(`FUN_140435040`): barrel node + orientation × unit(gun `+0x90` = (0, `barrel pos Y`, `barrel pos Z`), `FUN_14043baa0`) × 50 (`DAT_141683170`), and what it meets decides
+as above. So a turret on a wall or roof shoots over its own parapet. Meitou: `CombatSystem.TurretLineOfFire`, `TurretRig.RecastFrom`; the mount's collision
+(`IRagdollEnvironment.BuildingTriangles`) tells it apart from other buildings at the hit point.
 **Closing ray** (`FUN_140438c70`, state 1): from the muzzle along (target feet + 5 up) − (own feet + 5 up) (read through the decompiler's garbled Ogre operators: the feet-to-feet
 line), mask `0x87f9e04` (no characters); it passes when it meets something
 farther from the shooter than the target is. Meeting nothing does not pass, so on open ground a walker goes on until its path fails or the planner turns it to melee.

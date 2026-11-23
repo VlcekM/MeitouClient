@@ -497,6 +497,28 @@ internal sealed partial class ZoneGeometryGatherer
     }
 
     /// <summary>
+    /// The <see cref="RagdollTriangles"/> of one building (its layout objects, buildings of their own, left out): of the placements within reach of
+    /// <paramref name="near"/> whose key or instance id is <paramref name="id"/>, the nearest. False for none.
+    /// </summary>
+    public bool OwnRagdollTriangles(string id, Vector3 near, List<Vector3> output)
+    {
+        var zone = WorldLayout.ZoneOf(near.X, near.Z);
+        var (ox, oz) = WorldLayout.ZoneOrigin(zone);
+        var min = new Vector2((float)ox, (float)oz);
+        ResolvedBuilding? best = null;
+        foreach (var found in NearBuildings(zone, min, min + new Vector2(WorldLayout.ZoneSize), 0))
+        {
+            if (found.Placement.Key != id && found.Placement.InstanceId != id) continue;
+            if (best is null || Vector3.DistanceSquared(found.Position, near) < Vector3.DistanceSquared(best.Value.Position, near)) best = found;
+        }
+
+        if (best is not { } own) return false;
+
+        AddRagdollBuilding(own.Record, own.Placement.Key, own.Position, own.Placement.Rotation, own.Destroyed, output, roofs: false);
+        return true;
+    }
+
+    /// <summary>
     /// Adds one building's collision triangles: its passable parts and all of a building paths ignore with <paramref name="roofs"/>, the other parts
     /// without; never doors.
     /// </summary>

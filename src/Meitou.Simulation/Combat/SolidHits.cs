@@ -107,6 +107,19 @@ static class SolidHits
     }
 
     /// <summary>
+    /// The fraction of <paramref name="seg"/> from <paramref name="from"/> where it first crosses one of <paramref name="triangles"/> (three points
+    /// each, world space), -1 when it crosses none.
+    /// </summary>
+    public static float FirstCrossing(ReadOnlySpan<Vector3> triangles, Vector3 from, Vector3 seg)
+    {
+        float best = -1;
+        for (int i = 0; i + 2 < triangles.Length; i += 3)
+            if (Crosses(from, seg, triangles[i], triangles[i + 1], triangles[i + 2], out float t) && (best < 0 || t < best)) best = t;
+
+        return best;
+    }
+
+    /// <summary>
     /// Whether the segment crosses the triangle (either side), at fraction <paramref name="t"/> of it (Möller–Trumbore).
     /// </summary>
     static bool Crosses(Vector3 from, Vector3 seg, Vector3 a, Vector3 b, Vector3 c, out float t)

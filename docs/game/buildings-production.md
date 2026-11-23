@@ -440,7 +440,9 @@ shows the first failing message in this order (**Verified** unless marked):
   none (it snaps to `snaps to` buildings). With a node type the update (`0x1404dd7a0`) takes the nearest node of that **node type** (any record,
   `0x14038aca0`) within 300 units 3D, 60 for a `gun turret`, and its position and turn; a turret then turns 180 degrees about its own up
   (`0x1404dda21` -> `0x1404d4f80`). The `Node Turret` instances sit on wall parts' walkways (`Wall Level 02`: three at x -1.2, y 43.4, turned
-  180 degrees about Y; data).
+  180 degrees about Y; data). The placed building is then mounted on the building it snapped to (`FUN_1404ec160`, **Verified** by decompile):
+  class 8 (BCTYPE_TURRET) through `TurretBuilding::setMountedBuilding` (`FUN_140298220`, the `mounted` handle `+0x478`); Meitou records it as
+  the site's parent ([turret line of fire](combat.md#line-of-fire-and-the-hit-shape)).
 - **Snap nodes and blue node markers** (**Verified**, `PreviewBuilding_Snapping` vtable `0x1416e1cb8`, `0x1404dd410`, `0x1404ddb43`, `0x1404d0ff0`,
   `0x1404fe160`, `0x14038cdf0`, `0x140388e10`):
   - A building's `is node` child instances (such as `Node Light Mount`, `node type` 5, or `Node Turret`, `node type` 3) are placed at
