@@ -76,7 +76,8 @@ found through a resource group (`GameResources.Find`); to every file `AssetLocat
 in the install, a name anywhere under `data/`): meshes, skeletons, textures and icons, and the interface's files (MyGUI layouts and the
 resource, font and colour files they list, the locale template, `tips.txt`, `credits.txt`); and to a collision XML the game opens by name
 because no cooked `.bin` of its name exists ([collision](collision.md#file-lookup)). A hidden file reads as missing, so hiding one the game
-needs (an interface layout) stops what needs it from loading; a hidden `tips.txt` or locale template falls back to the base game's own file.
+needs (an interface layout) stops what needs it from loading; a hidden `tips.txt` or locale template falls back to the base game's own file, and a
+hidden `features.dat` places no map features ([zones](zones.md#datanewlandlandfeaturesdat-mapfeaturefile--layoutexample)).
 The log names each hiding rebind and its mod when the rebinds are read. Not applied: the data and level files, sound banks (`SoundBanks`
 adds them), material and particle scripts (parsed from every resource folder's listing), the blood decal textures (listed from the resource
 index), and a cooked collision file, since Meitou reads the XML beside it. The navigation
