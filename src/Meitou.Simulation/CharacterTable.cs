@@ -423,6 +423,11 @@ public sealed class CharacterCold
     /// The character's medical state (null: none).
     /// </summary>
     public MedicalState? Medical { get; set; }
+    /// <summary>
+    /// The health values the code mods' health change observers last saw of the character (<see cref="Bodies.HealthObservers"/>); null until one
+    /// is registered and the character's health is first looked at, and again once it leaves the world. Never saved or hashed.
+    /// </summary>
+    internal Bodies.HealthWatch? HealthWatch { get; set; }
 
     /// <summary>
     /// Sandbox only (the animation sandbox of the game host): replaces the movement mode of every order, and the speed the character walks at (0: the

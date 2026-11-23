@@ -116,6 +116,16 @@ public readonly struct MedicalContext(GameConstants constants, BodyOptions optio
     public float HungerFloor { get; init; } = NoHungerFloor;
 
     /// <summary>
+    /// The world whose need rate filters the character's rates go through (<see cref="INeedRateFilter"/>); null while none is registered.
+    /// </summary>
+    internal World? Needs { get; init; }
+
+    /// <summary>
+    /// The character <see cref="Needs"/> asks about.
+    /// </summary>
+    internal CharacterId NeedsOf { get; init; }
+
+    /// <summary>
     /// The <see cref="HungerFloor"/> of a character nobody feeds (the player's faction, and prisoners of the player): -10.
     /// </summary>
     public const float NoHungerFloor = -10;

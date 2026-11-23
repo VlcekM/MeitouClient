@@ -498,7 +498,8 @@ public sealed partial class MedicalState
     /// <summary>
     /// Hunger by the game clock: <paramref name="hours"/> game hours (<c>FUN_14064da70</c> reads the clock's elapsed time, not the character time).
     /// First the free food: below the <see cref="MedicalContext.HungerFloor"/> with an empty stomach, the stomach gets min(floor - hunger, 0.04).
-    /// Then with an empty stomach hunger falls by hours / T x race <c>hunger rate</c> x the situation factor; with food it rises by what the stomach
+    /// Then with an empty stomach hunger falls by hours / T x race <c>hunger rate</c> x the situation factor (after the code mods' need rate
+    /// filters, <see cref="INeedRateFilter"/>); with food it rises by what the stomach
     /// gives, at most hours / T x <c>fed recovery rate mult</c> x race rate x the slot-0x390 factor.
     /// </summary>
     void TickHunger(float hours, in MedicalContext ctx)
@@ -511,7 +512,7 @@ public sealed partial class MedicalState
         if (Fed <= 0)
         {
             float situation = HungerSituationFactor(c, ctx.Resting || Unconscious, ctx.Still, ctx.Idle, ctx.EncumbranceFactor, ctx.UseHungerRate);
-            Hunger -= hours / t * ctx.Race.HungerRate * situation;
+            Hunger -= hours / t * NeedRateFilters.Hunger(ctx, ctx.Race.HungerRate * situation);
         }
         else
         {

@@ -5,7 +5,14 @@ namespace Meitou.Simulation.Trading;
 /// sells to the shop (else buys from it), the customer (the player's character in the trade window, or an NPC shopper buying from a building's
 /// stock) and the shop's squad (the trader's, or the squad living in the shop building; -1 none).
 /// </summary>
-public readonly record struct TradeDeal(long Tick, string Record, int Units, bool Sell, CharacterId Customer, int ShopSquad);
+public readonly record struct TradeDeal(long Tick, string Record, int Units, bool Sell, CharacterId Customer, int ShopSquad)
+{
+    /// <summary>
+    /// The item priced (its <see cref="Items.ItemInstance.ModTag"/>, quality, level and maker among it): the stack in the window or the shop's
+    /// unit; null for a deal built without one. A filter reads it and must not change it.
+    /// </summary>
+    public Items.ItemInstance? Item { get; init; }
+}
 
 /// <summary>
 /// A system that adjusts trade prices (docs/modding.md "Trade prices"): asked for every price the game asks (the trade window's stack and unit

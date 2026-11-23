@@ -267,7 +267,8 @@ public sealed class CharacterStats
         if (s == StatsEnumerated.None) return Bodies.ModSkills.Of(stat)?.Gain(this, amount, cap) ?? 0;
         float value = _values[(int)s];
         if (float.IsNaN(value)) return value;
-        return _values[(int)s] = CoreGain(value, Filtered(stat, value, Rated(s, value, amount, cap), cap, source), cap);
+        var (filtered, top) = Filtered(stat, value, Rated(s, value, amount, cap), cap, source);
+        return _values[(int)s] = CoreGain(value, filtered, top);
     }
 
     /// <summary>
@@ -293,41 +294,44 @@ public sealed class CharacterStats
     }
 
     /// <summary>
-    /// A core gain's amount after the code mods' experience filters (<see cref="IExperienceFilter"/>), held as <see cref="Rated"/> holds the
-    /// rate: to the core's limit, and with no raise for a stat at or past the gain's cap. Only an amount in the core's range (above 0, at most its
-    /// limit) is asked: the core adds nothing for any other, and a filter cannot bring one back. The amount itself without a filter.
+    /// A core gain's amount and curve top after the code mods' experience filters (<see cref="IExperienceFilter"/>), the amount held as
+    /// <see cref="Rated"/> holds the rate: to the core's limit, and with no raise for a stat at or past the top the filters left. Only an amount in
+    /// the core's range (above 0, at most its limit) is asked: the core adds nothing for any other, and a filter cannot bring one back. The amount
+    /// and cap themselves without a filter.
     /// </summary>
-    float Filtered(StatsEnumerated stat, float value, float amount, float cap, ExperienceSource source)
+    (float Amount, float Cap) Filtered(StatsEnumerated stat, float value, float amount, float cap, ExperienceSource source)
     {
-        if (_xpWorld is null || !(amount > 0 && amount <= MaxCoreGain)) return amount;
+        if (_xpWorld is null || !(amount > 0 && amount <= MaxCoreGain)) return (amount, cap);
 
-        float filtered = Ask(stat, amount, source);
-        return value >= cap ? MathF.Min(filtered, amount) : MathF.Min(filtered, MaxCoreGain);
+        var gain = Ask(stat, amount, source, value, cap);
+        float held = value >= gain.Cap ? MathF.Min(gain.Amount, amount) : MathF.Min(gain.Amount, MaxCoreGain);
+        return (held, gain.Cap);
     }
 
     /// <summary>
     /// An amount the game adds to a stat straight, past the core curve (first aid, mass combat), after the code mods' experience filters, held as
     /// the game holds the XP rate setting there: no raise once the stat is at or past <paramref name="raiseBelow"/> (first aid's 100; mass combat
-    /// has no such limit). The amount itself without a filter or for one not above 0.
+    /// has no such limit), which the filters see and may move as the gain's cap. The amount itself without a filter or for one not above 0.
     /// </summary>
     internal float FilterStraight(StatsEnumerated stat, float amount, ExperienceSource source, float raiseBelow)
     {
         if (_xpWorld is null || !(amount > 0)) return amount;
 
-        float filtered = Ask(stat, amount, source);
-        return Stored(stat) >= raiseBelow ? MathF.Min(filtered, amount) : filtered;
+        var gain = Ask(stat, amount, source, Stored(stat), raiseBelow);
+        return Stored(stat) >= gain.Cap ? MathF.Min(gain.Amount, amount) : gain.Amount;
     }
 
     /// <summary>
-    /// The filters' amount for a gain of these bound stats; the amount itself for stats no longer the bound character's (a safety: a stats object
-    /// a mod moved by hand is never charged to whoever now holds the slot).
+    /// The filters' gain (amount and cap) for a gain of these bound stats at <paramref name="level"/> with <paramref name="cap"/>; the gain itself
+    /// for stats no longer the bound character's (a safety: a stats object a mod moved by hand is never charged to whoever now holds the slot).
     /// </summary>
-    float Ask(StatsEnumerated stat, float amount, ExperienceSource source)
+    ExperienceGain Ask(StatsEnumerated stat, float amount, ExperienceSource source, float level, float cap)
     {
         var world = _xpWorld!;
-        if (world.Characters.Cold(_xpOwner.Slot)?.Stats != this) return amount;
+        var gain = new ExperienceGain(world.Tick, _xpOwner, stat, amount, source) { Level = level, Cap = cap };
+        if (world.Characters.Cold(_xpOwner.Slot)?.Stats != this) return gain;
 
-        return world.ExperienceFilters.Pass(world, _xpOwner, stat, amount, source);
+        return world.ExperienceFilters.Pass(world, gain);
     }
 
     /// <summary>

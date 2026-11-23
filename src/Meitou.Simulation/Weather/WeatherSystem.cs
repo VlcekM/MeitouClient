@@ -98,7 +98,12 @@ public sealed class WeatherSystem(GameConstants constants) : ITickSystem
         // Each character every EveryTicks ticks on its slot's turn, with that many ticks of time.
         float dt = world.TickSeconds * EveryTicks;
         var zones = source.Zones;
-        for (int i = (int)(world.Tick % EveryTicks); i < table.HighWater; i += EveryTicks) Update(world, source, zones, i, dt);
+        for (int i = (int)(world.Tick % EveryTicks); i < table.HighWater; i += EveryTicks)
+        {
+            Bodies.HealthObservers.Before(world, i);
+            Update(world, source, zones, i, dt);
+            Bodies.HealthObservers.After(world, i, Bodies.HealthChangeKind.Environment);
+        }
     }
 
     /// <summary>

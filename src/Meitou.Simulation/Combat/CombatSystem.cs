@@ -941,6 +941,8 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
             EncumbranceFactor = cold.Fighter?.EncumbranceFactor ?? 1,
             Seed = world.Seed,
             CharacterKey = Rng.Key(world.Characters.IdOf(slot)),
+            Needs = world.NeedRateFilters.Active ? world : null,
+            NeedsOf = world.Characters.IdOf(slot),
         };
 
     /// <summary>

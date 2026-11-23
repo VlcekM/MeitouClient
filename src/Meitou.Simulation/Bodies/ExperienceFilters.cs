@@ -75,34 +75,35 @@ sealed class ExperienceFilters
     }
 
     /// <summary>
-    /// <paramref name="amount"/> after every filter not faulted before this tick, in system order, until one answers 0. Any thread.
+    /// <paramref name="gain"/> after every filter not faulted before this tick, in system order, until one answers an amount of 0. Any thread.
     /// </summary>
-    internal float Pass(World world, CharacterId character, StatsEnumerated skill, float amount, ExperienceSource source)
+    internal ExperienceGain Pass(World world, ExperienceGain gain)
     {
         var filters = _filters!;
-        long tick = world.Tick;
-        for (int i = 0; i < filters.Count && amount > 0; i++)
+        for (int i = 0; i < filters.Count && gain.Amount > 0; i++)
         {
-            if (Volatile.Read(ref _faults[i]) < tick) continue;
+            if (Volatile.Read(ref _faults[i]) < gain.Tick) continue;
 
-            amount = Ask(world, i, new ExperienceGain(tick, character, skill, amount, source));
+            gain = Ask(world, i, gain);
         }
 
-        return amount;
+        return gain;
     }
 
     /// <summary>
-    /// One filter's amount; the amount as it came when the filter throws or answers one that is negative or not finite, which faults it.
+    /// One filter's gain; the gain as it came when the filter throws or answers an amount that is negative or not finite, or a cap that is not above
+    /// 0, which faults it.
     /// </summary>
-    float Ask(World world, int i, in ExperienceGain gain)
+    ExperienceGain Ask(World world, int i, in ExperienceGain gain)
     {
         string fault;
         try
         {
-            float amount = _filters![i].Filter.Gain(world, gain);
-            if (float.IsFinite(amount) && amount >= 0) return amount;
+            var answer = _filters![i].Filter.Adjust(world, gain);
+            bool valid = float.IsFinite(answer.Amount) && answer.Amount >= 0 && answer.Cap > 0;
+            if (valid) return gain with { Amount = answer.Amount, Cap = answer.Cap };
 
-            fault = $"amount {amount} is negative or not a finite number";
+            fault = $"amount {answer.Amount} or cap {answer.Cap} is out of range";
         }
         catch (Exception e)
         {
@@ -111,7 +112,7 @@ sealed class ExperienceFilters
         }
 
         Fault(i, gain.Tick, fault);
-        return gain.Amount;
+        return gain;
     }
 
     /// <summary>

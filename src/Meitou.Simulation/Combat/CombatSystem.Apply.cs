@@ -219,10 +219,12 @@ public sealed partial class CombatSystem
         bool observe = world.WantsCombatHits;
         bool wasAlive = observe && !medical.Dead, wasIncapacitated = observe && medical.Incapacitated;
         bool intended = observe && d == aSlot.TargetSlot && prev[d].Generation == aSlot.TargetGeneration;
+        Bodies.HealthObservers.Before(world, d);
         var (part, damage, absorbed) = world.Player.OnePunch && ac.IsPlayer
             ? HitResolver.LandLethal(medical, ctx, DebugCheats.OnePunchDamage, tech.LowStrike, direction == 6, events)
             : HitResolver.LandDetailed(medical, ctx, packet, world.ArmourFilters.Pieces(world, CombatHitSource.Melee, table.IdOf(d), target), cover,
                 toughness, tech.LowStrike, direction == 6, _combat, events);
+        Bodies.HealthObservers.After(world, d, Bodies.HealthChangeKind.Hit);
         FloatHit(world, d, dc, ac.IsPlayer, part, damage, absorbed);
         aSlot.Landed++;
         dSlot.Taken++;
@@ -397,7 +399,10 @@ public sealed partial class CombatSystem
         var (cut, blunt) = material switch { 1 => (2f, 2f), 5 => (5f, 1f), 6 => (1f, 1f), _ => (0f, 1f) };
         var stats = ac.Stats!;
         float k = (1 - 0.5f * (UnarmedRating(world, a, ac, f) + stats.ScaledToughness) * 0.01f) * _options.GlobalDamageMultiplier * f.FistInjury;
-        if (ac.Medical!.PunchDamage(limb, cut * k, blunt * k, _constants)) _xp.ToughnessFromDamage(stats, ac.Race, material);
+        Bodies.HealthObservers.Before(world, a);
+        bool hurt = ac.Medical!.PunchDamage(limb, cut * k, blunt * k, _constants);
+        Bodies.HealthObservers.After(world, a, Bodies.HealthChangeKind.Hit);
+        if (hurt) _xp.ToughnessFromDamage(stats, ac.Race, material);
     }
 
     /// <summary>

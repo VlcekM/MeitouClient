@@ -297,7 +297,10 @@ holds refuses the second mod.
   filter is still asked for the rest of that tick and not from the next, and the fault (its first tick) enters the state hash. Without a filter
   nothing is asked. Engine API, not in the original. **Verified** by `CombatSpeedFilterTests` (a duel: attack and block rates asked, an unchanged
   answer leaves log and hash as they were on 1 and 4 threads, a doubled attack rate halves the swing; a NaN answer is asked in one tick only and
-  hashed).
+  hashed). Two more kinds, same rules: `Reload`, asked as 1 when a crossbow reload starts (the reload takes the game's time divided by the
+  answer), and `Projectile`, a bolt's flight speed in units a second, asked as the shot is fired and for the aim's lead (turrets are not asked).
+  **Observed** by a scratch run (not in the repo): both asked, an unchanged answer keeps hash and timing on 1 and 4 threads, a doubled reload
+  rate and a halved bolt speed move the first hit earlier and later.
 - **Armour:** a registered system implementing `IArmourFilter` (`Meitou.Simulation.Combat`) is asked `Piece(World, in ArmourAsk)` for each
   armour piece a character wears, every time a hit (melee, bolt, execution) is about to go through its stack: the tick, the hit's source, the
   wearer, the worn `ItemInstance` the piece was built from (`Fighter.ArmourItems`, same order as `Fighter.Armour`; null for a piece made
@@ -324,6 +327,7 @@ holds refuses the second mod.
   price the earlier ones left. A buy-back (undoing a trade of the open window) keeps its coins and is not asked. A filter must be a pure
   read, since the same price is asked again for the window and the payment; one that throws or answers a negative price is undone for that
   price and disabled for that world, and the fault enters the state hash. Without a filter nothing is built. Engine API, not in the original.
+  `TradeDeal.Item` is the priced item itself (the window's stack, the shopper's unit; its `ModTag`, quality, level and maker), read only.
 - **Sales:** a registered system implementing `ITradeObserver` (`Meitou.Simulation.Trading`) receives `Traded(World, in TradeSale)` once for
   every completed item deal, after the money and the goods moved: an NPC shopper's purchase of one unit from a building's stock or a shop counter
   the player built (`TradeSaleKind.Shopping`), and the trade window's buys and sells (`WindowBuy`, `WindowSell`), a click or an item dragged
@@ -439,7 +443,9 @@ holds refuses the second mod.
   crime, already cleared); a body loaded dead is never reported. Callbacks may read the world and change their own hashed state, and must not
   change characters or other world state (gameplay changes go through commands). One that throws, or that removes the dead character itself,
   is logged and disabled for that world (the removal it made stands, and is not made twice); faulted registrations enter the state hash.
-  Without an observer no payload is made and no death watch is kept. Engine API, not in the original.
+  Without an observer no payload is made and no death watch is kept. Engine API, not in the original. A mod that kills a character itself
+  reports the death with its killer and site at once with `Deaths.Report(world, victim, killer, site)` (serial phases; nothing for a character
+  not dead or already reported; else the sweep reports it with no killer).
 - **Experience:** a registered system implementing `IExperienceFilter` (`Meitou.Simulation.Bodies`) is asked `Gain(World, in ExperienceGain)` for
   every experience gain the game makes to one of a character's own stats in the world (every `XpService` entry: combat, injuries, ranged and
   turrets, moving, sneaking, assassination, thievery, lockpicking, building, machine work, training dummies, first aid, mass combat) and for a
@@ -460,7 +466,42 @@ holds refuses the second mod.
   naming that skill trains into it (`meitou skill`, Weapon types below) passes the filters; only the game's own stats do. A filter that throws,
   or answers an amount that is negative or not finite, leaves that gain as it came and is logged once; it is still asked for the rest of that
   tick and not from the next, and the fault (with its tick) enters the state hash. Without a filter nothing is bound or built. Engine API, not in
-  the original.
+  the original. The gain also carries `Level` (the stored level before it) and `Cap`: the core curve's top (101, or a training dummy's level;
+  the curve adds amount x ((cap - level) / cap)^2), or for an amount added straight the level from which no raise is taken (first aid's 100,
+  mass combat's infinity). A filter that overrides the default method `Adjust(World, in ExperienceGain)` returns the gain to make: its amount
+  and cap are taken (a cap above 0, else a fault as above), and the hold rules then use that cap, so a level cap above 101 trains on its own
+  curve. The default `Adjust` is `Gain`'s amount with the cap unchanged.
+- **Need rates:** a registered system implementing `INeedRateFilter` (`Meitou.Simulation.Bodies`) is asked `Rate(World, in NeedRateAsk)` for
+  each body update's rate of a need of every character in the world: the tick, the character, `NeedKind` (`Hunger`: the race's hunger rate
+  times the situation factor, the multiplier on hours / (starvation time x hunger time option) the hunger meter loses; more kinds may come)
+  and the rate. It answers the rate to use; the HUD's hunger figure is asked too. Runs in the parallel body step: quick, thread-safe, a pure
+  read of the ask, the character's own state and world state the tick has settled. A throw or an answer that is negative or not finite keeps
+  the rate; the filter is still asked for the rest of that tick and not from the next, and the fault enters the state hash. Without a filter
+  nothing is asked. Engine API, not in the original.
+- **Health changes:** a registered system implementing `IHealthChangeObserver` (`Meitou.Simulation.Bodies`) receives `HealthChanged(World, in
+  HealthChange)` for every change of a body part's flesh, stun, bandage or splint (`HealthValue`, the part's index in `MedicalState.Parts`) or
+  of the blood (part -1) of a character in the world, whatever made it, with before and after and a `HealthChangeKind`: `Hit` (melee, bolt,
+  execution, a martial artist's punch on itself), `Body` (bleeding, blood regained, healing, stun recovering, a wound worsening), `FirstAid`
+  (bandage, wound closing, splint), `Environment` (acid water and ground, acid rain, burning, gas, dust), `Eaten`, `Rack`, or `Other` (any
+  change no step names: debug commands, dialogue, a mod's own change, off-screen recovery). One step's changes to one value are told as one.
+  Calls run serially once per tick after the slow world and the deaths' sweep, in slot order, each character's changes in the order its steps
+  made them, or as the character leaves the world (a character coming back is taken in afresh, its off-screen changes not told); a character's
+  first look tells nothing. Callbacks may read the world and change their own hashed state, not characters or other world state. A throw
+  disables the observer for that world, and the fault enters the state hash. Without an observer nothing is looked at. Engine API, not in the
+  original. **Observed** by a scratch run (not in the repo): a duel's changes are the same list on 1 and 4 threads, and its hash and log are
+  unchanged by the observer.
+- **Removals:** a registered system implementing `IRemovalVeto` (`Meitou.Simulation.Bodies`) is asked `Keep(World, in RemovalAsk)` before the
+  engine takes a character or body out of the world for a `RemovalKind`: `CorpseDecayed` (12 game hours) or `CorpseUnloaded` (in a zone not
+  loaded); more kinds may come. True keeps it this time; it is asked again when the rule would take it next (every tick for a corpse). Vetoes
+  run serially in system order until one keeps it. A throw disables the veto (the removal goes ahead) and enters the state hash. A squad stored
+  off screen takes its dead with it, unasked. Engine API, not in the original.
+- **Items created:** a registered system implementing `IItemCreatedObserver` (`Meitou.Simulation.Items`) receives `Created(World, in
+  ItemCreated)` for each item the world makes of an `ItemCreatedKind`: `Loot` (a camp's ground items, a town's artifacts for its buildings'
+  containers), `Crafted` (a bench's finished item, `Character` the crafter), `ShopStock` (each unit and special item of a shop's fill, before
+  it is stacked; `Squad` the shop's squad, -1 for a home stocked without one) and `SpawnEquipment` (a new character's kit and what it holds,
+  once it is in the world); more kinds may come. The observer may set the item's `ModTag` (units tagged apart do not stack) and its own hashed
+  state, and nothing else. Calls run serially in system order in the step that made the item. A throw disables the observer and enters the
+  state hash. Without an observer nothing is walked. Engine API, not in the original.
 - **Faction list:** `ArrangeFactionList(arrange)` arranges the Overview's Faction tab: `arrange` gets the rows the tab would show
   (`FactionListRow`: faction, name, the player's relation), sorted by name, and returns the rows to show, in order. It can reorder, rename
   (names go through the translation catalog like the tab's own), leave out, or add headings (faction -1: the name alone, no number or bar),
@@ -1182,6 +1223,17 @@ holds refuses the second mod.
   - **Jobs:** the chooser's job passes ask the contributor of a job type for each listed job of that type, for any character with a job list (Mod
     jobs above). A contributor whose call throws is dropped for that world: the first fault is logged with the mod id, the player gets a notice,
     and the fault enters the state hash.
+  - **Desire filters:** in `Register`, `chooser.DesireFilter(IGoalDesireFilter)` filters the chooser's desires of every task type, the
+    engine's and the mods', for every character (a system added later may register one too). `Desire(World, in GoalDesireAsk)` gets the tick,
+    the character, the type, a `GoalDesireKind` and the desire, and answers the desire to use: `Goal` (a list goal as the goal scorer weighs
+    it, before the list's weight, crowding and continuity; a bed goal whose bed search found no bed is not asked), `PlanStep` (a row on the
+    way of a plan, 0 or below a dead end, such as getting out of bed once healed), `Order` (the order queue's front, which leaves at 0 or below,
+    and the second list), `Job` (a job of the list that could run, `Job` its index, asked as 1: 0 or below passes over it). Filters run in
+    registration order, each seeing the desire the earlier ones left, on any thread (the think is parallel): quick, thread-safe, a pure read. A
+    throw or a desire that is not finite keeps the desire; the filter is still asked for the rest of that tick and not from the next, and the
+    fault enters the state hash. Raising a goal's desire from 0 can pick a goal that then finds nothing to act on. Engine API, not in the
+    original. **Observed** by a scratch run (not in the repo): an unchanged answer keeps the town's hash on 1 and 4 threads; 0 for the bed
+    goals leaves every bed empty at night.
 - **Ordering characters** (`Meitou.Simulation`, [order queue](simulation.md#order-queue); **Observed**, by reading `World.GiveOrder` and
   `PlayerOrders.Give`): `world.GiveOrder(actor, row, target, site, point, queued)` gives a player character or an NPC an order through the one
   queue the player's orders use, with the parts the menu's verbs give. The row is one a system owns as an order (the rows `World.CanOrder`

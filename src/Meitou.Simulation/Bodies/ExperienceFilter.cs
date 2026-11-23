@@ -69,9 +69,22 @@ public enum ExperienceSource
 /// <summary>
 /// An experience gain about to be added (<see cref="IExperienceFilter"/>): the world's tick, the character, the stat it trains, the amount (after
 /// the Squad XP and Others' XP setting, before the core curve; for <see cref="ExperienceSource.FirstAid"/> and mass combat the amount added
-/// straight) and its source.
+/// straight) and its source; with the stat's stored level and the gain's cap.
 /// </summary>
-public readonly record struct ExperienceGain(long Tick, CharacterId Character, StatsEnumerated Skill, float Amount, ExperienceSource Source);
+public readonly record struct ExperienceGain(long Tick, CharacterId Character, StatsEnumerated Skill, float Amount, ExperienceSource Source)
+{
+    /// <summary>
+    /// The stat's stored level before the gain (no modifiers).
+    /// </summary>
+    public float Level { get; init; }
+
+    /// <summary>
+    /// The gain's cap. For a gain through the core curve, the curve's top: <see cref="CharacterStats.XpCap"/> (101), or a training dummy's level;
+    /// the curve adds amount x ((cap - level) / cap)^2. For an amount added straight, the level from which no raise is taken (first aid's 100,
+    /// mass combat's infinity).
+    /// </summary>
+    public float Cap { get; init; } = CharacterStats.XpCap;
+}
 
 /// <summary>
 /// A system that scales or cancels experience gains (docs/modding.md "Experience"): asked for every gain the game makes to one of a character's own
@@ -88,4 +101,11 @@ public interface IExperienceFilter : ITickSystem
     /// The amount to add for <paramref name="gain"/> (0 cancels it).
     /// </summary>
     float Gain(World world, in ExperienceGain gain);
+
+    /// <summary>
+    /// The gain to make of <paramref name="gain"/>: its <see cref="ExperienceGain.Amount"/> and <see cref="ExperienceGain.Cap"/> are taken (a cap
+    /// above 0, infinity allowed; nothing else of the answer is read). By default <see cref="Gain"/>'s amount with the cap as it came; a filter that
+    /// moves the curve's top (a level cap above 101, a dummy trained past its level) overrides it.
+    /// </summary>
+    ExperienceGain Adjust(World world, in ExperienceGain gain) => gain with { Amount = Gain(world, gain) };
 }
