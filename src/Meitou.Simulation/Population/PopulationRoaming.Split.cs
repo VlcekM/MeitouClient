@@ -14,7 +14,7 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// The AI package an imprisoned member's own squad runs (<c>FUN_14079c1c0</c>, <b>Verified</b>): "captured NPC".
     /// </summary>
-    const string CapturedPackage = "CAPTURED_NPC";
+    internal const string CapturedPackage = "CAPTURED_NPC";
 
     /// <summary>
     /// The AI package that squad runs when the member is a slave (slave state 1): "Slave only squad".

@@ -647,16 +647,18 @@ public static class SaveLoader
     }
 
     /// <summary>
-    /// The site of a platoon's base town (or the override that took its place), else of its campaign's home town; -1 when neither is placed.
+    /// The site of a platoon's base town (or the override that took its place), else of its campaign's home town; -1 when neither is placed. An
+    /// unset base town is its <c>hometown</c> town's own, as the activation reads it (<c>FUN_1404ffad0</c>).
     /// </summary>
     static int OriginOf(SavePlatoon platoon, PopulationData data, SavedPopulation context, string baseTown, Hand? campaignHome)
     {
         int origin = -1;
 
-        // Several placed towns can be one TOWN (the four Waystations of 44854-rebirth.mod): the platoon's `hometown` handle names its own.
+        // Several placed towns can be one TOWN (the four Waystations of 44854-rebirth.mod): the platoon's `hometown` handle names its own. A captive
+        // the original split off a town's squad has that town's `hometown` and no `basetown` (#1271).
         var named = Hand.Read(platoon.Record, "hometown");
         int namedSite = named.Type == (int)FcsRecordType.Town && context.TownSites.TryGetValue((named.C, named.Cs), out int s) ? s : -1;
-        if (namedSite >= 0 && IsBaseTown(data.Sites[namedSite], baseTown)) return namedSite;
+        if (namedSite >= 0 && (baseTown.Length == 0 || IsBaseTown(data.Sites[namedSite], baseTown))) return namedSite;
 
         for (int i = 0; i < data.Sites.Count && baseTown.Length > 0; i++)
         {
@@ -763,7 +765,8 @@ public static class SaveLoader
     /// are marked <c>is resident</c> and counted in the town's <c>sqt</c> 1 pool, and the bar squads, slaves and farm animals of a town have a
     /// package whose unloaded func keeps them home, 4, or 0): not a resident, and an off-screen job that moves it (unloaded func 2, 5 or 6) and not a
     /// bar squad of the town or its faction (which the population makes with the town), or a template of its base town's <c>roaming squads</c>.
-    /// A platoon Meitou saved as a roaming one carries its own mark and roams whatever its package (<see cref="SaveCapture.RoamsKey"/>).
+    /// A platoon Meitou saved as a roaming one carries its own mark and roams whatever its package (<see cref="SaveCapture.RoamsKey"/>), and a
+    /// split-off captive is never its town's own.
     /// </summary>
     internal static bool Travels(SavePlatoon platoon, Ai.PlatoonJob job, TownData baseTown, FactionData? townFaction)
     {
@@ -771,6 +774,9 @@ public static class SaveLoader
 
         // One Meitou saved as roaming roams (SaveCapture.RoamsKey): the package it ran when saved may be the bar's of a town it had stopped in.
         if (platoon.Record.Bools.GetValueOrDefault(SaveCapture.RoamsKey)) return true;
+
+        // A captive split off its squad (the "captured NPC" package, FUN_14079c1c0) is made at its own place, its cage's, not with its town (#1271).
+        if (platoon.Record.Strings.GetValueOrDefault("currentPackage") == PopulationSystem.CapturedPackage) return true;
         if (platoon.Record.Bools.GetValueOrDefault("is resident")) return false;
 
         // `sqt` 1 is the town's resident pool (residents and bar squads, docs/formats/save.md "PLATOON keys"): the platoon belongs to its town,

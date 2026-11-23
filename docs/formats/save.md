@@ -486,7 +486,11 @@ saved look.
 Every saved NPC platoon with a `basetown` naming a placed town is restored (a characterless town-bound one is skipped). Its town is the one its `hometown` handle
 names when that town is the `basetown` (or was replaced by it), else the first placed town of that TOWN: several placements share one TOWN (the four Waystations of
 `44854-rebirth.mod`; issue #630, where the first-match rule homed another Waystation's residents 36 km away and they walked off). A `basetown` that is a TOWN
-no placed town is now (an older version of a town that changed since) leaves the platoon its `hometown` town's, whose activation then refuses it. Town-bound ones (an `sqt` 1 platoon, or a template that does not travel) are pinned to their town, and a town holding any
+no placed town is now (an older version of a town that changed since) leaves the platoon its `hometown` town's, whose activation then refuses it. An empty
+`basetown` is the `hometown` town's own, as the activation reads it ([Keep test](../game/factions-squads-towns.md)). **Observed** (#1271, a reporter's
+modded save): captives the original split off town squads have their town's `hometown` and no `basetown`. A platoon running `CAPTURED_NPC`, which the split
+gives the split-off or reused platoon of a non-slave captive (**Verified**, `FUN_14079c1c0`), is made at its own place, its cage's, never pinned to its town
+(**engine rule**; the original activates every platoon by its own zone). Town-bound ones (an `sqt` 1 platoon, or a template that does not travel) are pinned to their town, and a town holding any
 is made of them alone: it makes no residents, default residents, housemates or bar squads (**engine rule**, after the original's: a zone with a save file makes no town
 population, [Zone files](#zone-files) Load; Meitou keys it on the saved platoons). A town Meitou made and unloaded before saving keeps its squads as stored
 platoons, which the save writes like the town's squads in the world, so a Meitou save holds the residents of every town it made a zone file for
@@ -790,7 +794,8 @@ beds keep rolled state. `in what` resolves to a placed building, or, for a priso
 Shop prisoner's cage (`1783-gamedata.base`, an `<n>-zoneX.Y-INGAME` entry of the shop's serialised interior) stands at distance 0 from Meitou's fixture made from
 the shop's `interior layout name`, the next cage 27.8 away. A sleeper's generated interior bed is matched the same way
 (**Observed**: the 24 saved sleepers of the Rebirth garrison, record `3460-otto.mod`, at distance 0 from Meitou's beds, the next bed
-of the record 33 away). Meitou-only keys `meitou in something` (int) /
+of the record 33 away). A building of the player's is known by its zone and instance in the zones' states but by its instance alone in Meitou, so an
+`in what` naming one resolves to the cage or bed of that instance (`FixtureRegistry.PlayerBuildingFixture`, #1271). Meitou-only keys `meitou in something` (int) /
 `meitou in what` (fixture id) carry the rest and win on load. A prisoner in a layout cage is written with `in what` naming the cage's
 entry when the save holds it (the house's saved interior, else the one `InteriorSave` writes, [Zone files](#zone-files)), the entry's
 `locked` and `lock lvl` as the cage's lock is now; a prisoner of a platoon the save leaves as read gets it too. The held characters are bound (`FixtureRegistry.Bind`) when a town registers

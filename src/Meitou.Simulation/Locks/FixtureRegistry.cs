@@ -1222,15 +1222,14 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
-    /// The fixture a held character's <see cref="CharacterCold.InWhat"/> names: a fixture id, a bed the player built, or a generated interior cage or
-    /// bed of the original's save.
+    /// The fixture a held character's <see cref="CharacterCold.InWhat"/> names: a fixture id, a standalone bed, a building of the player's the
+    /// original's save names, or a generated interior cage or bed of the original's save.
     /// </summary>
     Fixture? HeldFixture(CharacterCold c, string what)
     {
         if (_byId.TryGetValue(what, out var f)) return f;
-
-        // A standalone bed is saved as a building, including when it belongs to a town.
-        if (c.InSomething == HeldState.Bed && _byId.TryGetValue(what + "@bed0", out f) && !f.Indoors) return f;
+        if (StandaloneBed(c, what) is { } bed) return bed;
+        if (PlayerBuildingFixture(c, what) is { } own) return own;
         if (SavedSpots?.GetValueOrDefault(what) is not { } spot) return null;
         return c.InSomething switch
         {
@@ -1238,6 +1237,27 @@ public sealed partial class FixtureRegistry
             HeldState.Bed => InteriorBedAt(spot),
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// A standalone bed's fixture: such a bed is saved as a building, including when it belongs to a town.
+    /// </summary>
+    Fixture? StandaloneBed(CharacterCold c, string building) =>
+        c.InSomething == HeldState.Bed && _byId.TryGetValue(building + "@bed0", out var f) && !f.Indoors ? f : null;
+
+    /// <summary>
+    /// The cage or bed of a building of the player's that the original's <c>in what</c> names: the save's state is known by its zone and instance
+    /// (<see cref="BuildingKey"/>), the player's building by its instance alone (<c>BuildingSave</c>), so a prisoner in a cage the player built
+    /// sat in none (#1271).
+    /// </summary>
+    Fixture? PlayerBuildingFixture(CharacterCold c, string what)
+    {
+        int colon = what.IndexOf(':');
+        if (colon < 0) return null;
+
+        string instance = what[(colon + 1)..];
+        if (_byId.TryGetValue(instance, out var f) && f.Id == f.Building) return f;
+        return StandaloneBed(c, instance);
     }
 
     /// <summary>
