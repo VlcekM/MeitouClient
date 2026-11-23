@@ -80,7 +80,7 @@ function Write-PublicizedSet([string] $bin, [string] $dir) {
     if ($LASTEXITCODE -ne 0) { throw "meitou-reference-pack failed for $dir" }
 }
 
-# Every Meitou assembly in a set must carry the release's version, or a mod built against it would not bind to the release.
+# Every Meitou assembly in a set must carry the release's version, as the game's do.
 function Test-Versions([string] $dir) {
     foreach ($assembly in $assemblies) {
         $identity = [Reflection.AssemblyName]::GetAssemblyName((Join-Path $dir "$assembly.dll"))

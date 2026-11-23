@@ -92,7 +92,7 @@ dependent.
 
 `ModLoadContext.Load(name)` checks, in order:
 
-1. Game assemblies (trusted platform list).
+1. Game assemblies (trusted platform list), by simple name whatever the requested version.
 2. The dependencies' exports: each loaded dependency's manifest `assemblies` and, transitively, what its dependencies export, returned as
    the already-loaded `Assembly`.
 3. The mod's own folder.

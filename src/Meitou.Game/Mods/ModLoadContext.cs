@@ -5,10 +5,10 @@ namespace Meitou.Modding;
 
 /// <summary>
 /// One mod's assemblies (docs/modding.md "Loading"): non-collectible, loaded once. An assembly the game ships (<c>Meitou.*</c>, the framework, Bepu,
-/// <c>0Harmony</c>: everything on the trusted platform list) always comes from the game, even when the mod folder has a copy, so a mod never holds a
-/// private copy of engine types or a second Harmony; next, an assembly a dependency exports (docs/modding-dependencies.md "Assembly resolution")
-/// comes from that dependency's context, so a framework's types and statics exist once; anything else comes from the mod folder, so two mods may ship
-/// different versions of a library.
+/// <c>0Harmony</c>: everything on the trusted platform list) always comes from the game, whatever version the mod was compiled against and even
+/// when the mod folder has a copy, so a mod never holds a private copy of engine types or a second Harmony; next, an assembly a dependency exports
+/// (docs/modding-dependencies.md "Assembly resolution") comes from that dependency's context, so a framework's types and statics exist once;
+/// anything else comes from the mod folder, so two mods may ship different versions of a library.
 /// </summary>
 sealed class ModLoadContext(string folder, string name, IReadOnlyDictionary<string, Assembly>? imports = null)
     : AssemblyLoadContext($"mod {name}", isCollectible: false)
@@ -35,10 +35,28 @@ sealed class ModLoadContext(string folder, string name, IReadOnlyDictionary<stri
 
     protected override Assembly? Load(AssemblyName assemblyName)
     {
-        if (assemblyName.Name is not { } simple || IsShipped(simple)) return null;
+        if (assemblyName.Name is not { } simple) return null;
+        if (IsShipped(simple)) return FromGame(simple);
         if (Imports.TryGetValue(simple, out var imported)) return imported;
         var path = Path.Combine(Folder, simple + ".dll");
         return File.Exists(path) ? LoadFromAssemblyPath(path) : null;
+    }
+
+    /// <summary>
+    /// The game's own copy of a shipped assembly, bound by simple name alone: the default context refuses a request for a higher version than the
+    /// game's (a mod built against an unstamped 1.0.0.0 build on a 0.x release), with a missing-file error. Null when the game cannot load it, so
+    /// the default context's own binding reports why.
+    /// </summary>
+    static Assembly? FromGame(string simple)
+    {
+        try
+        {
+            return Default.LoadFromAssemblyName(new AssemblyName(simple));
+        }
+        catch (Exception e) when (e is FileNotFoundException or FileLoadException or BadImageFormatException)
+        {
+            return null;
+        }
     }
 
     protected override nint LoadUnmanagedDll(string unmanagedDllName)

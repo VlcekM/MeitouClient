@@ -58,8 +58,8 @@ push none). A mod's project references it and needs nothing else:
 For `net11.0` (standard builds) and `net10.0` (legacy macOS builds), its `assemblies/<framework>/ref/` folder holds the compiler's reference
 assemblies of the four Meitou assemblies (their public API; the internals two of them keep for the game's tools and tests stay out of a
 mod's reach) beside the game's own builds of its other managed libraries (`0Harmony`, Bepu, DotRecast, Silk.NET and the rest), which the
-compiler needs for any member typed in one of them. The Meitou assemblies carry the release's version like the game's: .NET binds a mod
-only to an assembly of at least the version it was compiled against, so a mod does not load on a release older than the package it was built against.
+compiler needs for any member typed in one of them. The Meitou assemblies carry the release's version like the game's; the game binds a mod
+to its own assemblies whatever version the mod was compiled against ([Loading](#loading)), so `gameVersion` is what ties a mod to releases.
 The game never loads these copies: the Meitou ones are reference assemblies .NET refuses to run, and the libraries are always taken from
 the game ([Loading](#loading)). The Metal backend's types (macOS builds only) are not in the package.
 
@@ -103,7 +103,10 @@ is the consent, as in RimWorld: the game loads every enabled code mod's code, wi
 
 - One non-collectible `AssemblyLoadContext` per mod (`ModLoadContext`), loaded once at startup; no unload or hot reload.
 - Resolution by simple name: an assembly on the game's trusted platform list (`Meitou.*`, the framework, Bepu, `0Harmony`) comes from
-  the game even when the mod folder has a copy; anything else comes from the mod folder, so
+  the game whatever version the mod asks for and even when the mod folder has a copy. .NET's default binding refuses a request above the
+  game's version with `Could not load file or assembly ... cannot find the file specified`: a mod built against an unstamped local build
+  (`MeitouClient` 1.0.0.0) on a 0.x release (**Observed**: issue #1294, StackSort on v0.22.2; a mod built against 1.0.0.0 then loads on a
+  0.22.2 build). A member the game lacks then fails where it is bound ([Versioning](#versioning)). Anything else comes from the mod folder, so
   two mods may ship different versions of a library. Listing a game assembly in `assemblies` refuses the mod. Native libraries resolve from the mod folder first.
 - Between the two: an assembly a declared dependency exports comes from that dependency's context, so a framework loads once
   ([dependencies](modding-dependencies.md#assembly-resolution)).
