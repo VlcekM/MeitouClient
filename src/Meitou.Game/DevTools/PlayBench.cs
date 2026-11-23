@@ -228,6 +228,21 @@ sealed class PlayBench(GameHost host)
     internal Func<string>? RunDescription { get; set; }
 
     /// <summary>
+    /// The launcher benchmark's hash of the settings its tier put in effect (GameLoop sets it); null outside one.
+    /// </summary>
+    internal string? Applied { get; set; }
+
+    /// <summary>
+    /// The script ran to its end (not stopped by a closed window or a missing segment).
+    /// </summary>
+    internal bool Completed { get; private set; }
+
+    /// <summary>
+    /// When the script started (UTC).
+    /// </summary>
+    DateTime _startedAt;
+
+    /// <summary>
     /// The camera pivot when the script started, and the direction from it towards the world's centre.
     /// </summary>
     Vector2 _benchOrigin, _benchDirection;
@@ -257,9 +272,12 @@ sealed class PlayBench(GameHost host)
             _benchLeader = (host.PlayerSquad is { Leader.IsNone: false } squad ? squad.Leader : players[0].Id);
             _benchOrigin = host.Session.Camera.Strategy.PivotXz;
             _benchDirection = _benchOrigin.LengthSquared() > 1 ? Vector2.Normalize(-_benchOrigin) : Vector2.UnitX;
-            _benchScript = new PlayBenchScript(host, _benchLeader, _benchOrigin, _benchDirection).Segments();
-            // MEITOU_BENCH_ONLY=settle,zoom: only those segments (iterating on one hitch).
-            if (Environment.GetEnvironmentVariable("MEITOU_BENCH_ONLY") is { Length: > 0 } only)
+            _benchScript = host.GameOptions.Benchmark is not null && host.GameOptions.BenchmarkScenario == Benchmark.SharkFlyby.Id
+                ? new Benchmark.SharkFlyby(host).Segments()
+                : new PlayBenchScript(host, _benchLeader, _benchOrigin, _benchDirection).Segments();
+
+            // MEITOU_BENCH_ONLY=settle,zoom: only those segments (iterating on one hitch); the launcher benchmark runs them all.
+            if (Environment.GetEnvironmentVariable("MEITOU_BENCH_ONLY") is { Length: > 0 } only && host.GameOptions.Benchmark is null)
             {
                 var keep = only.Split(',');
                 _benchScript = [.. _benchScript.Where(s => keep.Contains(s.Name))];
@@ -278,12 +296,18 @@ sealed class PlayBench(GameHost host)
             };
             Console.WriteLine($"bench     the script starts: {_benchScript.Length} segments, {_benchScript.Sum(s => s.Seconds):0} s, "
                 + $"leader {_benchLeader}, from {_benchOrigin.X:0}, {_benchOrigin.Y:0}");
+            _startedAt = DateTime.UtcNow;
             StartBenchSegment(0);
         }
         _benchClock += dt;
-        if (_benchClock - _benchSegmentStart >= _benchScript[_benchSegment].Seconds)
+        if (_benchScript[_benchSegment].Over(_benchClock - _benchSegmentStart))
         {
-            if (_benchSegment + 1 >= _benchScript.Length) return false;
+            if (_benchSegment + 1 >= _benchScript.Length)
+            {
+                Completed = true;
+                return false;
+            }
+
             StartBenchSegment(_benchSegment + 1);
         }
         double t = _benchClock - _benchSegmentStart;
@@ -430,6 +454,23 @@ sealed class PlayBench(GameHost host)
         File.WriteAllText(Path.Combine(dir, "summary.md"), BenchSummary(size) + GcSummary());
         _benchGc?.Dispose();
         Console.WriteLine($"bench     {_benchFrames.Count} frames: {Path.GetFullPath(Path.Combine(dir, "summary.md"))}");
+        WriteBenchmarkResult(dir, size);
+    }
+
+    /// <summary>
+    /// The launcher benchmark's result.json beside frames.csv, once its script has run to the end (Benchmark.BenchmarkResult).
+    /// </summary>
+    void WriteBenchmarkResult(string dir, Silk.NET.Maths.Vector2D<int> size)
+    {
+        if (host.GameOptions.Benchmark is not { } tier || !Completed
+            || Benchmark.BenchmarkSpec.Find(host.GameOptions.BenchmarkScenario) is not { } scenario)
+        {
+            return;
+        }
+
+        var device = host.Gpu.Sky.Gpu is Rendering.Gpu.GpuContext vk ? vk.Device : null;
+        var hardware = Benchmark.HardwareRecord.Of(device);
+        Benchmark.BenchmarkResult.Write(dir, new(scenario, tier, Applied ?? "", hardware, size.X, size.Y, _startedAt));
     }
 
     /// <summary>

@@ -130,7 +130,7 @@ sealed class QualityTiers(SettingsMenu menu)
     /// <summary>
     /// The tier switches that need the indirect light's traced scene: off, whatever the tier, while it is off (no ray tracing on the device).
     /// </summary>
-    static readonly string[] TracedSwitches =
+    internal static readonly string[] TracedSwitches =
         ["Hybrid GI", "Traced sun shadows", WorldFrame.TracedFarCascadesSwitch, "Lamp shadows", WorldFrame.GiCharactersSwitch];
 
     /// <summary>
@@ -143,7 +143,7 @@ sealed class QualityTiers(SettingsMenu menu)
     /// <summary>
     /// The on/off effects Low turns off too (the tessellation's outline refinement and rocks; they are not Faithful / Meitou switches).
     /// </summary>
-    static readonly string[] LowOffToggles = [WorldFrame.OutlineRefineSwitch, WorldFrame.RockSmoothingSwitch];
+    internal static readonly string[] LowOffToggles = [WorldFrame.OutlineRefineSwitch, WorldFrame.RockSmoothingSwitch];
 
 
     /// <summary>
@@ -334,6 +334,66 @@ sealed class QualityTiers(SettingsMenu menu)
 
         menu.Notice = "";
         LastTier = CurrentPreset();
+    }
+
+    /// <summary>
+    /// The launcher benchmark's tier (<c>--benchmark</c>, docs/bench.md "Launcher benchmark"), at start instead of the saved settings: the Meitou
+    /// look, the tier, its traced switches, then the anti-aliasing: an upscaler (FSR, DLSS) becomes TAA and every tier but Low draws at render
+    /// scale 1 (Low keeps its own anti-aliasing and scale). A tier without traced switches has no indirect light either (no ray queries on the
+    /// device). Nothing is saved.
+    /// </summary>
+    internal void ApplyBenchmarkTier(int tier)
+    {
+        menu.LookPresets.ApplyLook(LookPresets.MeitouLook);
+        ApplyPreset(tier);
+        ApplyTracedSwitches(tier);
+        if (!NeedsRayQueries(tier))
+        {
+            foreach (var toggle in menu.Values.Toggles.Where(t => t.Label is "Indirect light" or "Indoor GI" && t.Get())) toggle.Set(false);
+        }
+
+        if (tier != LowPreset) SetBenchmarkAntiAliasing();
+        menu.Notice = "";
+        LastTier = CurrentPreset();
+    }
+
+    /// <summary>
+    /// Whether tier <paramref name="tier"/> turns on a switch that needs ray queries (<see cref="TracedSwitches"/>), from the tables alone.
+    /// </summary>
+    internal static bool NeedsRayQueries(int tier) =>
+        PresetToggles.Any(p => TracedSwitches.Contains(p.Label) && TableSwitch(p, tier) == true);
+
+    /// <summary>
+    /// The table's value of <paramref name="p"/> at <paramref name="tier"/> (High's own, else the tier's factor or fixed value); null where the
+    /// tier keeps the start default. How it applies (fixed, a multiple, the mode's base) is <see cref="PresetTarget"/>'s.
+    /// </summary>
+    internal static float? TableValue(PresetSlider p, int tier)
+    {
+        float factor = tier switch
+        {
+            LowPreset => p.Low,
+            MediumPreset => p.Medium,
+            UltraPreset => p.Ultra,
+            ExtremePreset => p.Extreme ?? p.Ultra,
+            _ => float.NaN,
+        };
+        return float.IsNaN(factor) ? p.High : factor;
+    }
+
+    /// <summary>
+    /// The table's state of switch <paramref name="p"/> at <paramref name="tier"/>; null where the tier keeps the start default (High).
+    /// </summary>
+    internal static bool? TableSwitch(PresetToggle p, int tier) => tier == HighPreset && p.High is null ? null : SwitchTarget(p, false, tier);
+
+    /// <summary>
+    /// The benchmark's anti-aliasing past Low: an upscaler (FSR, DLSS) becomes TAA, at render scale 1.
+    /// </summary>
+    void SetBenchmarkAntiAliasing()
+    {
+        if (menu.Values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[0]) is { } antiAliasing && antiAliasing.Get() > 3)
+            antiAliasing.Set(3);   // TAA
+
+        if (menu.Values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[1]) is { } scale) scale.Set(1);
     }
 
     /// <summary>

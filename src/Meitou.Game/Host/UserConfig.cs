@@ -864,6 +864,29 @@ sealed class UserConfig
     public string Path { get; private set; } = FileName;
 
     /// <summary>
+    /// A config that is never written (<see cref="Save"/> does nothing): the launcher benchmark's (<c>--benchmark</c>).
+    /// </summary>
+    [JsonIgnore]
+    public bool ReadOnly { get; private set; }
+
+    /// <summary>
+    /// The launcher benchmark's config (docs/bench.md "Launcher benchmark"): the defaults with the tutorials off (else the install's settings.cfg
+    /// decides, and their state file in the working directory carries from run to run), the file neither read nor written.
+    /// </summary>
+    public static UserConfig ForBenchmark() => new()
+    {
+        Path = System.IO.Path.Combine(Directory.GetCurrentDirectory(), FileName),
+        ReadOnly = true,
+        Tutorials = false,
+    };
+
+    /// <summary>
+    /// <see cref="ForBenchmark"/>'s config as compact JSON (the benchmark's fingerprint, BenchmarkSpec).
+    /// </summary>
+    internal static string BenchmarkText() =>
+        JsonSerializer.Serialize(ForBenchmark(), new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+
+    /// <summary>
     /// Reads the config from the working directory, else from next to the executable; without either file, the defaults, for the working directory.
     /// </summary>
     public static UserConfig Load()
@@ -1110,6 +1133,8 @@ sealed class UserConfig
     /// </summary>
     public void Save()
     {
+        if (ReadOnly) return;
+
         try
         {
             AtomicFile.WriteAllText(Path, JsonSerializer.Serialize(this, Json));

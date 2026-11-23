@@ -209,6 +209,18 @@ sealed class GameOptions
     /// </summary>
     public string? PlayBench;
     /// <summary>
+    /// <c>--benchmark &lt;tier&gt;</c>: the launcher benchmark at this QualityTiers preset (docs/bench.md "Launcher benchmark"); null: not one.
+    /// </summary>
+    public int? Benchmark;
+    /// <summary>
+    /// <c>--benchmark-out &lt;dir&gt;</c>: where the launcher benchmark writes frames.csv, summary.md and result.json.
+    /// </summary>
+    public string? BenchmarkOut;
+    /// <summary>
+    /// <c>--benchmark-scenario &lt;id&gt;</c>: the launcher benchmark's scenario (BenchmarkSpec.Scenarios; Program exits 7 for an unknown one).
+    /// </summary>
+    public string BenchmarkScenario = DevTools.Benchmark.BenchmarkSpec.DefaultScenario;
+    /// <summary>
     /// <c>--no-precompile</c>: the methods are compiled on their first call only, not ahead on a background thread (JitWarmup).
     /// </summary>
     public bool NoPrecompile;
@@ -233,7 +245,11 @@ sealed class GameOptions
     /// <summary>
     /// The CHARACTER record (name or id) the fight and turret scenes spawn as enemies (<c>--scene-npc</c>).
     /// </summary>
-    public string SceneNpc = "Bandit";
+    public string SceneNpc = DefaultSceneNpc;
+    /// <summary>
+    /// <see cref="SceneNpc"/>'s default (the launcher benchmark keeps it).
+    /// </summary>
+    public const string DefaultSceneNpc = "Bandit";
     /// <summary>
     /// The town (name, part of it) the turret scene moves the squad to first (<c>--scene-town</c>; null: the nearest turret to where the save is).
     /// </summary>
@@ -294,6 +310,14 @@ sealed class GameOptions
                                      works with --renderer metal too (GPU time per frame, no GPU stages)
           --metal-gpu-budget <MB>    Metal: the memory guard's GPU allocation ceiling for this run (over MEITOU_METAL_GPU_BUDGET_MB, the launcher's setting;
                                      default a third of the Mac's memory, 5120 to 10240)
+          --benchmark <tier> --benchmark-out <dir> [--benchmark-scenario <id>] [--load <save>]
+                                     the launcher benchmark (tier low, medium, high, ultra, extreme; scenario bases, the default, on its save with --load, or
+                                     shark-flyby, a new game): its script at that tier from the
+                                     default settings (meitou.user.json neither read nor written, no autosave), a 1920x1080 window, the Meitou look, frame limit
+                                     and vsync off, Vulkan only; writes frames.csv, summary.md and result.json there. Exit 7: unknown scenario; 6: the save is
+                                     not the scenario's; 5: the tier needs ray queries the GPU lacks
+          --benchmark-list <file>    the only arguments: writes the benchmark's version and scenarios as JSON and exits
+          --benchmark-probe <file>   the only arguments: writes the benchmark's hardware record (CPU, memory, GPU, driver, ray queries, OS) as JSON and exits
           --benchmark-baseline       the benchmarks' fixed graphics: a 1920x1080 window, the Medium tier, no GI, ground parallax or tessellation, no upscaler, SMAA;
                                      like --low-end, the saved graphics are neither applied nor overwritten
           --control-dir <dir>        agent channel (debug): polls <dir>/cmd (lines "<id> <console command>"), appends results to <dir>/out; also MEITOU_CONTROL_DIR
@@ -350,7 +374,36 @@ sealed class GameOptions
             g.UiMode = Data.Ui.UiMode.Faithful;
             g.MeitouMainMenu = false;
         }
+        CheckBenchmark(g);
         return (g, rest.ToArray());
+    }
+
+    /// <summary>
+    /// <c>--benchmark</c>'s needs (an output folder, its scenario's save or none, Vulkan, no other bench), then what it fixes for the run whatever
+    /// came after it: the play bench into its folder, frame limit, vsync and HDR off, the default fight NPC; a scenario without a save is a new
+    /// game at the default start and seed. An unknown scenario is left to Program (exit 7).
+    /// </summary>
+    static void CheckBenchmark(GameOptions g)
+    {
+        if (g.Benchmark is null)
+        {
+            if (g.BenchmarkOut is not null) throw new ArgumentException("--benchmark-out needs --benchmark <tier>");
+            return;
+        }
+
+        if (DevTools.Benchmark.BenchmarkSpec.Find(g.BenchmarkScenario) is not { } scenario) return;
+        if (g.BenchmarkOut is null) throw new ArgumentException("--benchmark needs --benchmark-out <dir>");
+        if (scenario.Save is not null && g.Load is null)
+            throw new ArgumentException($"--benchmark-scenario {scenario.Id} needs --load <save folder> ({scenario.Save})");
+        if (scenario.Save is null && (g.Load is not null || g.Continue || g.NewGame))
+            throw new ArgumentException($"--benchmark-scenario {scenario.Id} makes its own new game: drop --load, --continue and --new-game");
+        if (g.Renderer != "vulkan") throw new ArgumentException("--benchmark runs on Vulkan only: drop --renderer metal");
+        if (g.PlayBench is not null || g.BenchmarkBaseline)
+            throw new ArgumentException("--benchmark runs its own play bench: drop --play-bench and --benchmark-baseline");
+
+        (g.PlayBench, g.FpsLimit, g.VSync, g.Hdr) = (g.BenchmarkOut, 0, false, false);
+        g.SceneNpc = DefaultSceneNpc;
+        if (scenario.Save is null) (g.NewGame, g.NewGameName, g.Seed, g.SeedGiven) = (true, null, 0, true);
     }
 
     /// <summary>
@@ -489,6 +542,22 @@ sealed class GameOptions
             case "--play-bench":
                 (g.PlayBench, g.FpsLimit, g.VSync) = (Next(), 0, false);
                 break;
+            case "--benchmark":
+                {
+                    string tier = Next();
+                    g.Benchmark = DevTools.Benchmark.BenchmarkSpec.TierOf(tier)
+                        ?? throw new ArgumentException($"--benchmark {tier}: the tier must be low, medium, high, ultra or extreme");
+                    break;
+                }
+            case "--benchmark-out":
+                g.BenchmarkOut = Next();
+                break;
+            case "--benchmark-scenario":
+                g.BenchmarkScenario = Next();
+                break;
+            case DevTools.Benchmark.BenchmarkSpec.ListFlag:
+            case DevTools.Benchmark.HardwareRecord.ProbeFlag:
+                throw new ArgumentException($"{a} <file> must be the only arguments");
             case "--metal-gpu-budget":
                 g.MetalGpuBudgetMb = ulong.Parse(Next(), CultureInfo.InvariantCulture);
                 if (g.MetalGpuBudgetMb == 0) throw new ArgumentException("--metal-gpu-budget must be a size in MB above 0");

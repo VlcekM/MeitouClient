@@ -97,6 +97,8 @@ sealed class GameSaves(GameHost host)
     /// </summary>
     void Autosave(double realDt)
     {
+        if (host.GameOptions.Benchmark is not null) return;   // the launcher benchmark: none during the run
+
         if (_autosaveDue)
         {
             _autosaveDue = false;

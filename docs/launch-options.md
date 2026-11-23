@@ -27,6 +27,11 @@ Authority: `src/Meitou.Game/Host/GameOptions.cs` (`Split`, `Usage`), `src/Meitou
 | `--quit-after <s>` | seconds | none | Close after s seconds and print the frame rate (smoke test). |
 | `--no-precompile` | | off | Compile methods on first call, not ahead on a background thread. |
 | `--play-bench <dir>` | folder | none | Scripted run, every frame measured; writes `frames.csv` and `summary.md`, then quits. Forces fps limit 0 and vsync off (a later `--vsync` turns vsync on). Works with `--load` or `--new-game`, on Vulkan and Metal ([bench](bench.md#play-benchmark)). |
+| `--benchmark <tier>` | low, medium, high, ultra, extreme | none | The launcher benchmark at that tier: needs `--benchmark-out`; the scenario's script from the default settings, `meitou.user.json` neither read nor written; exit 0, 5 (tier needs ray queries the GPU lacks), 6 (save is not the scenario's), 7 (unknown scenario) ([bench](bench.md#launcher-benchmark)). |
+| `--benchmark-scenario <id>` | `bases`, `shark-flyby` | `bases` | The benchmark's scenario: `bases` needs `--load` of its save, `shark-flyby` refuses `--load`. |
+| `--benchmark-out <dir>` | folder | none | Where `--benchmark` writes `frames.csv`, `summary.md` and `result.json`. |
+| `--benchmark-list <file>` | path | | Writes the benchmark version and scenarios as JSON and exits. Must be the only arguments. |
+| `--benchmark-probe <file>` | path | | Writes the benchmark's hardware record as JSON (headless Vulkan device) and exits. Must be the only arguments. |
 | `--settings-schema <file>` | path | | Writes the launcher's settings description and exits. Must be the first two arguments; no log or window. |
 | `--recommend-preset <file>` | path | | Writes the quality preset for this computer (`HardwareProbe`, [launcher](launcher.md#graphics)) as JSON and exits. Must be the first two arguments; no log or window. |
 | `--wiki-export <dir>` | folder | | Writes the agent wiki's generated JSON (zones, towns, factions, squads, NPCs, items, buildings, shops, characters, research, animals, spawns...) from the game data, mods included, and exits ([agent playtest](agent-playtest.md)). |

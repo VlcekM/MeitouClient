@@ -656,6 +656,28 @@ sealed class WorldOptions
     }
 
     /// <summary>
+    /// <c>--benchmark &lt;tier&gt;</c>: the parts of the launcher benchmark's tier that must be set before the device and the post chain exist, after
+    /// the whole command line (docs/bench.md "Launcher benchmark"): a 1920x1080 window, the tier's <paramref name="textureQuality"/>, no GI (the
+    /// device is made without ray queries) unless the tier traces (<paramref name="rays"/>), and the anti-aliasing: Low's none at its render scale,
+    /// else TAA at scale 1. The game sets the rest of the tier through the settings (QualityTiers.ApplyBenchmarkTier).
+    /// </summary>
+    internal void ApplyBenchmarkTier(bool low, bool rays, int textureQuality)
+    {
+        (Width, Height) = BenchmarkBaselineSize;
+        SizeGiven = Windowed = true;
+        VSync = false;
+        TextureQuality = textureQuality;
+        if (!rays)
+        {
+            Gi = false;
+            Enhancements.Apply(Switches(this), "gi,interiorgi,gihybrid", meitou: false);
+        }
+
+        var upscale = low ? (UpscalerKind.Off, LowEndRenderScale) : (UpscalerKind.Taa, 1f);
+        (Post.Upscale.Kind, Post.Upscale.Scale, Post.Upscale.Explicit) = (upscale.Item1, upscale.Item2, true);
+    }
+
+    /// <summary>
     /// <c>--low-end</c>'s values, which the Low graphics preset sets too (<c>SettingsMenu.Presets</c>).
     /// </summary>
     public const float LowEndObjectDistance = 5000, LowEndObjectLod = 0.25f, LowEndLargeRange = 5050,

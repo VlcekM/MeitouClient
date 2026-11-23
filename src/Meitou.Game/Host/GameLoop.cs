@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
 using Meitou.Game.DevTools;
+using Meitou.Game.DevTools.Benchmark;
 using Meitou.Game.Host.Cameras;
 using Meitou.Game.Host.Input;
 using Meitou.Game.Host.Photo;
@@ -302,6 +303,7 @@ sealed class GameLoop(GameHost host)
     internal int Run()
     {
         using var owned = OpenDisplay();
+        if (BenchmarkLacksRayQueries()) return BenchmarkSpec.NoRayQueriesExit;
         ShowWindow();
         if (LoadWorld() is { } exit) return exit;
         CreateDebugTools();
@@ -327,7 +329,23 @@ sealed class GameLoop(GameHost host)
         }
 
         ShutDown(spikeGc);
+
+        // A benchmark whose script did not finish (the window closed) wrote no result.json.
+        if (host.GameOptions.Benchmark is not null && !host.PlayBench.Completed) return 1;
         return host.AgentChannel.ControlExitCode;
+    }
+
+    /// <summary>
+    /// <c>--benchmark</c> at a tier that needs ray queries on a device without them: says so on stderr (the run does not start).
+    /// </summary>
+    bool BenchmarkLacksRayQueries()
+    {
+        var device = _display.Context.Device;
+        if (host.GameOptions.Benchmark is not { } tier || !QualityTiers.NeedsRayQueries(tier) || device.HasRayQuery)
+            return false;
+
+        Console.Error.WriteLine($"--benchmark {BenchmarkSpec.TierName(tier)} needs ray queries, which {device.DeviceName} lacks");
+        return true;
     }
 
     // ---- start-up ----
@@ -471,7 +489,8 @@ sealed class GameLoop(GameHost host)
     {
         _switches = WorldFrame.LiveSwitches(host.WorldOptions, () => host.Gpu, () => host.Camera, () => host.Render);
         _meitou = new MeitouToggle(_switches);
-        _lowEnd = Environment.GetCommandLineArgs().Contains("--low-end") || host.GameOptions.BenchmarkBaseline;
+        _lowEnd = Environment.GetCommandLineArgs().Contains("--low-end") || host.GameOptions.BenchmarkBaseline
+            || host.GameOptions.Benchmark is not null;
         _runOnly = GameHost.RunOnlyKeys();
         if (_overlay is null) return;
         var values = WorldFrame.CreateSettingsPanel(_overlay, host.Gpu, host.Render,
@@ -523,6 +542,7 @@ sealed class GameLoop(GameHost host)
             TimeSpeedsChanged = () => host.Session.Simulation.SetFastSpeeds(host.Config.FastSpeed, host.Config.FastestSpeed),
             AnimalsPickUpChanged = on => EachSystem<Simulation.Player.PlayerSystem>(players => players.AnimalsPickUp = on),
             OffscreenChanged = ApplyOffscreenSettings,
+            NoDiskWrites = host.GameOptions.Benchmark is not null,   // nor the look presets beside meitou.user.json
         };
     }
 
@@ -614,6 +634,26 @@ sealed class GameLoop(GameHost host)
             _panel.Tiers.ApplySavedPreset();
         }
         if (host.GameOptions.BenchmarkBaseline) _panel?.Tiers.ApplyBenchmarkBaseline();
+        if (host.GameOptions.Benchmark is { } tier) ApplyBenchmarkTier(tier);
+    }
+
+    /// <summary>
+    /// <c>--benchmark</c>'s tier over the default settings, and the hash of what it set for result.json; without the settings panel the run
+    /// cannot set it and quits.
+    /// </summary>
+    void ApplyBenchmarkTier(int tier)
+    {
+        if (_panel is null)
+        {
+            Console.Error.WriteLine("--benchmark: no settings panel to set the tier with; the run stops");
+            _quit = true;
+            return;
+        }
+
+        _panel.Tiers.ApplyBenchmarkTier(tier);
+        var settings = _panel.Sliders.Select(s => (s.Label, s.Get().ToString("R", CultureInfo.InvariantCulture)))
+            .Concat(_panel.Toggles.Select(t => (SwitchKey(t.Label), t.Get() ? "on" : "off")));
+        host.PlayBench.Applied = BenchmarkSpec.AppliedHash(settings);
     }
 
     #endregion

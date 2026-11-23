@@ -123,9 +123,20 @@ public static class ModList
     }
 
     /// <summary>
+    /// No mod is enabled, whatever <c>mods.cfg</c> or <see cref="ModsCfgOverride"/> lists (the launcher benchmark, <see cref="UseNoMods"/>): the
+    /// base files and the core mods alone.
+    /// </summary>
+    public static bool NoMods { get; private set; }
+
+    /// <summary>
+    /// From now on no mod is enabled (<see cref="NoMods"/>).
+    /// </summary>
+    public static void UseNoMods() => NoMods = true;
+
+    /// <summary>
     /// Back to the install's own <c>data/mods.cfg</c> (tests).
     /// </summary>
-    public static void ClearModsCfg() => ModsCfgOverride = null;
+    public static void ClearModsCfg() => (ModsCfgOverride, NoMods) = (null, false);
 
     /// <summary>
     /// The file the enabled mods are read from: <see cref="ModsCfgOverride"/>, else <c>data/mods.cfg</c>.
@@ -133,10 +144,13 @@ public static class ModList
     public static string ModsCfgPath(GameInstall install) => ModsCfgOverride ?? Path.Combine(install.DataDirectory, "mods.cfg");
 
     /// <summary>
-    /// The enabled mods named in <c>data/mods.cfg</c> (or the <c>--mods-cfg</c> file), in order, without duplicates; empty when the file is missing.
+    /// The enabled mods named in <c>data/mods.cfg</c> (or the <c>--mods-cfg</c> file), in order, without duplicates; empty when the file is missing
+    /// or under <see cref="NoMods"/>.
     /// </summary>
     public static List<string> ReadEnabled(GameInstall install)
     {
+        if (NoMods) return [];
+
         var path = ModsCfgPath(install);
         return File.Exists(path) ? [.. ParseModsCfg(ReadLines(path)).Distinct(StringComparer.Ordinal)] : [];
     }

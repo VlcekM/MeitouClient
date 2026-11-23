@@ -2,6 +2,7 @@ using System.Numerics;
 using Meitou.Content;
 using Meitou.Data.Ogre;
 using Meitou.Game.DevTools;
+using Meitou.Game.DevTools.Benchmark;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Terrain;
 using Meitou.Game.Scenarios;
@@ -44,6 +45,8 @@ static class Program
         // The launcher's settings description (package-release.ps1): no log, window or game files.
         if (args is ["--settings-schema", var schema]) return LauncherSchema.Write(schema);
         if (args is [HardwareProbeFlag, var report]) return HardwareProbe.Write(report);
+        if (args is [HardwareRecord.ProbeFlag, var record]) return HardwareRecord.WriteProbe(record);
+        if (args is [BenchmarkSpec.ListFlag, var list]) return BenchmarkSpec.WriteList(list);
         GameConsole.StartLog();
         RenderJobs.RaiseRenderThread();
         GameOptions game;
@@ -65,6 +68,7 @@ static class Program
             return 2;
         }
         if (CheckScreenshotOptions(game, world) is { } screenshotExit) return screenshotExit;
+        if (StartBenchmark(game, world) is { } benchmarkExit) return benchmarkExit;
         PlaceDefaultView(game, world);
         var install = LocateInstall();
         if (install is null) return 1;
@@ -79,11 +83,31 @@ static class Program
         // A native splash at once, until the game window draws (docs/engine.md "Loading"); not for pictures, a listing or a hidden window.
         bool showSplash = world.Screenshot is null && !game.ListStarts && !world.HiddenWindow && !world.Headless;
         using var splash = showSplash ? SplashWindow.Show(install.DataDirectory) : null;
-        var config = UserConfig.Load();
+        var config = game.Benchmark is null ? UserConfig.Load() : UserConfig.ForBenchmark();
         Data.World.HeightmapRepair.Configure(install, config.FixGround);
         Loc.Use(install);   // the language of settings.cfg: texts from locale/<code>/LC_MESSAGES/main.mo (docs/formats/localisation.md)
         RestoreTextureQuality(args, game, world, config);
         return RunGame(install, game, rest, world, config, splash);
+    }
+
+    /// <summary>
+    /// <c>--benchmark</c> (docs/bench.md "Launcher benchmark"): the tier's settings that must precede the device, over the whole command line, then
+    /// the save's hash; the exit code for an unknown scenario or a save that is not the scenario's, else null.
+    /// </summary>
+    static int? StartBenchmark(GameOptions game, WorldOptions world)
+    {
+        if (game.Benchmark is not { } tier) return null;
+
+        if (BenchmarkSpec.Find(game.BenchmarkScenario) is not { } scenario)
+        {
+            string known = string.Join(", ", BenchmarkSpec.Scenarios.Select(s => s.Id));
+            Console.Error.WriteLine($"--benchmark-scenario {game.BenchmarkScenario}: no such scenario (known: {known})");
+            return BenchmarkSpec.UnknownScenarioExit;
+        }
+
+        bool low = tier == QualityTiers.LowPreset;
+        world.ApplyBenchmarkTier(low, QualityTiers.NeedsRayQueries(tier), BenchmarkSpec.TextureQuality(tier));
+        return scenario.Save is null ? null : SaveDigest.Check(game.Load!, scenario);
     }
 
     /// <summary>
@@ -131,10 +155,18 @@ static class Program
     }
 
     /// <summary>
-    /// <c>--mods-cfg</c> (or <c>MEITOU_MODS_CFG</c>): reads the enabled mods from that file; an exit code when it is missing.
+    /// <c>--mods-cfg</c> (or <c>MEITOU_MODS_CFG</c>): reads the enabled mods from that file; an exit code when it is missing. <c>--benchmark</c>:
+    /// no mods at all.
     /// </summary>
     static int? UseModsCfg(GameOptions game)
     {
+        // The launcher benchmark runs on the base data alone: no data or code mods, whatever mods.cfg, --mods-cfg or MEITOU_MODS_CFG say.
+        if (game.Benchmark is not null)
+        {
+            ModList.UseNoMods();
+            return null;
+        }
+
         try
         {
             var modsCfg = game.ModsCfg ?? Environment.GetEnvironmentVariable("MEITOU_MODS_CFG");
@@ -174,7 +206,7 @@ static class Program
     {
         // The saved texture quality before the world loads: the terrain's layer arrays are sized from it once (the Tab panel's restore after
         // the boot reaches only the other textures). --texture-quality, --low-end and --benchmark-baseline choose it for this run instead.
-        if (!args.Contains("--texture-quality") && !args.Contains("--low-end") && !game.BenchmarkBaseline
+        if (!args.Contains("--texture-quality") && !args.Contains("--low-end") && !game.BenchmarkBaseline && game.Benchmark is null
             && config.Graphics.TryGetValue(WorldFrame.TextureQualitySlider, out float savedQuality))
             world.TextureQuality = Math.Clamp((int)MathF.Round(savedQuality), 0, Data.Textures.TextureQuality.Maximum);
 

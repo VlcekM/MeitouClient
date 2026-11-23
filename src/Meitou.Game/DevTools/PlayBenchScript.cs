@@ -7,10 +7,22 @@ using Meitou.Simulation;
 namespace Meitou.Game.DevTools;
 
 /// <summary>
-/// One segment of the play benchmark's script: its name, its length in seconds, what it does each frame (t: seconds into it, dt: the frame's) and
-/// once when it starts.
+/// One segment of the play benchmark's script: its name, its length in seconds, what it does each frame (t: seconds into it, dt: the frame's),
+/// once when it starts, and what holds it past its length while true (at most <see cref="MaxHoldSeconds"/> more; an uncounted settle waiting
+/// for the world).
 /// </summary>
-sealed record BenchSegment(string Name, double Seconds, Action<double, double>? Frame = null, Action? Begin = null);
+sealed record BenchSegment(string Name, double Seconds, Action<double, double>? Frame = null, Action? Begin = null, Func<bool>? Hold = null)
+{
+    /// <summary>
+    /// The longest a <see cref="Hold"/> keeps a segment past its length.
+    /// </summary>
+    public const double MaxHoldSeconds = 120;
+
+    /// <summary>
+    /// Whether the segment is over <paramref name="into"/> seconds into it: its length is past and nothing holds it.
+    /// </summary>
+    public bool Over(double into) => into >= Seconds && (Hold?.Invoke() != true || into >= Seconds + MaxHoldSeconds);
+}
 
 /// <summary>
 /// Builds <see cref="PlayBench"/>'s script (docs/bench.md, "Play benchmark"): each segment's length and what it does each frame. Its fields are the
@@ -112,43 +124,73 @@ sealed class PlayBenchScript
     }
 
     /// <summary>
-    /// The script: each segment's length and what it does each frame (t: seconds into it, dt: the frame's).
+    /// The script's segments in order with their lengths in seconds, the one table of them (the launcher benchmark's fingerprint reads it,
+    /// BenchmarkSpec). Flights' length is the launcher benchmark's (<see cref="BenchmarkFlightMembers"/>); a plain play bench sets it from the squad
+    /// (<see cref="FlightSeconds"/>).
     /// </summary>
-    public BenchSegment[] Segments() =>
+    internal static readonly (string Name, double Seconds)[] Timeline =
     [
-        new("settle", 8),
-        new("idle", 10, Begin: IdleBegin),
-        new("orbit", 12, (t, dt) => _strategy.Rotate((float)(dt * 2 * Math.PI / 12))),
-        new("zoom", 10, ZoomFrame),
-        new("pan", 12, PanFrame, Begin: () => _pan = Vector2.Zero),
-        new("travel", 30, TravelFrame),
-        new("return", 10, Begin: () => Look(_origin, _yaw0, _pitch0, _distance0)),
-        new("speed-x2", 10, FollowLeader, Begin: () => _host.Session.Simulation.SetSpeed(2)),
-        new("speed-x5", 15, FollowLeader, Begin: () => _host.Session.Simulation.SetSpeed(5)),
-        new("talk", 10, Retry(() => _host.Session.CurrentSnapshot.Conversation is not null, TalkAgain), Begin: TalkBegin),
-        new("trade", 12, Retry(() => _host.Session.CurrentSnapshot.Trade is not null, TradeAgain), Begin: TradeBegin),
-        new("container", 10, FollowLeader, Begin: ContainerBegin),
-        new("doors", 8, FollowLeader, Begin: DoorsBegin),
-        new("pick-up", 8, FollowLeader, Begin: PickUpBegin),
+        ("settle", 8), ("idle", 10), ("orbit", 12), ("zoom", 10), ("pan", 12), ("travel", 30), ("return", 10), ("speed-x2", 10),
+        ("speed-x5", 15), ("talk", 10), ("trade", 12), ("container", 10), ("doors", 8), ("pick-up", 8), ("paths", 20), ("walk", 15),
+        ("fight", 25), ("fight-on", 0.1), ("loot", 8), ("panels", 12), ("panels-warm", 15), ("horizon", 12), ("overview", 8),
+        ("flights", 6 * 2 * BenchmarkFlightMembers),
+    ];
+
+    /// <summary>
+    /// The player characters the launcher benchmark's flights visit (the first ones, twice each): all 62 of bench-bases took 744 s.
+    /// </summary>
+    internal const int BenchmarkFlightMembers = 6;
+
+    /// <summary>
+    /// The script: each segment of <see cref="Timeline"/> with what it does each frame (t: seconds into it, dt: the frame's).
+    /// </summary>
+    public BenchSegment[] Segments() => [.. Timeline.Select(s => Segment(s.Name, s.Seconds))];
+
+    /// <summary>
+    /// Segment <paramref name="name"/> of <paramref name="seconds"/>: its frame and begin steps.
+    /// </summary>
+    BenchSegment Segment(string name, double seconds) => name switch
+    {
+        "settle" => new(name, seconds),
+        "idle" => new(name, seconds, Begin: IdleBegin),
+        "orbit" => new(name, seconds, (t, dt) => _strategy.Rotate((float)(dt * 2 * Math.PI / 12))),
+        "zoom" => new(name, seconds, ZoomFrame),
+        "pan" => new(name, seconds, PanFrame, Begin: () => _pan = Vector2.Zero),
+        "travel" => new(name, seconds, TravelFrame),
+        "return" => new(name, seconds, Begin: () => Look(_origin, _yaw0, _pitch0, _distance0)),
+        "speed-x2" => new(name, seconds, FollowLeader, Begin: () => _host.Session.Simulation.SetSpeed(2)),
+        "speed-x5" => new(name, seconds, FollowLeader, Begin: () => _host.Session.Simulation.SetSpeed(5)),
+        "talk" => new(name, seconds, Retry(() => _host.Session.CurrentSnapshot.Conversation is not null, TalkAgain), Begin: TalkBegin),
+        "trade" => new(name, seconds, Retry(() => _host.Session.CurrentSnapshot.Trade is not null, TradeAgain), Begin: TradeBegin),
+        "container" => new(name, seconds, FollowLeader, Begin: ContainerBegin),
+        "doors" => new(name, seconds, FollowLeader, Begin: DoorsBegin),
+        "pick-up" => new(name, seconds, FollowLeader, Begin: PickUpBegin),
+
         // Path requests: every half second the squad, or each member apart, is sent 20 to 200 m away in a random direction (some places it cannot
         // reach).
-        new("paths", 20, PathsFrame),
-        new("walk", 15, FollowLeader, Begin: WalkBegin),
-        new("fight", 25, FollowLeader, Begin: FightBegin),
-        new("fight-on", 0.1, Begin: FightOnBegin),
-        new("loot", 8, Retry(() => !_host.Session.CurrentSnapshot.OpenLoot.IsNone, LootAgain), Begin: LootBegin),
-        new("panels", 12, PanelsFrame, Begin: () => _panel = "-"),
+        "paths" => new(name, seconds, PathsFrame),
+        "walk" => new(name, seconds, FollowLeader, Begin: WalkBegin),
+        "fight" => new(name, seconds, FollowLeader, Begin: FightBegin),
+        "fight-on" => new(name, seconds, Begin: FightOnBegin),
+        "loot" => new(name, seconds, Retry(() => !_host.Session.CurrentSnapshot.OpenLoot.IsNone, LootAgain), Begin: LootBegin),
+        "panels" => new(name, seconds, PanelsFrame, Begin: () => _panel = "-"),
+
         // The same panels again (what the first opening built is warm), with the limbs and the build menu.
-        new("panels-warm", 15, PanelsWarmFrame, Begin: () => _panel = "-"),
+        "panels-warm" => new(name, seconds, PanelsWarmFrame, Begin: () => _panel = "-"),
+
         // The far grazing view: the most terrain, foliage and objects in sight.
-        new("horizon", 12, (t, dt) => Look(_origin, _yaw0 + (float)(t * 2 * Math.PI / 12), 0.12f, 900),
+        "horizon" => new(name, seconds, (t, dt) => Look(_origin, _yaw0 + (float)(t * 2 * Math.PI / 12), 0.12f, 900),
             Begin: () => _host.Player.ShowUiPanel(null)),
-        new("overview", 8, Begin: OverviewBegin),
-        // Every player character in turn, twice, 6 s each, as a double click on its portrait does (a character flight with "Character flights"
-        // on, else a cut).
-        new("flights", 6 * 2 * Math.Max(1, _host.Session.CurrentSnapshot.PlayerSquads.Sum(s => s.Members.Count)), FlightsFrame,
-            Begin: FlightsBegin),
-    ];
+        "overview" => new(name, seconds, Begin: OverviewBegin),
+        "flights" => new(name, _host.GameOptions.Benchmark is null ? FlightSeconds() : seconds, FlightsFrame, Begin: FlightsBegin),
+        _ => throw new ArgumentOutOfRangeException(nameof(name), name, "not a segment of the play benchmark"),
+    };
+
+    /// <summary>
+    /// The flights' length: every player character in turn, twice, 6 s each, as a double click on its portrait does (a character flight with
+    /// "Character flights" on, else a cut).
+    /// </summary>
+    double FlightSeconds() => 6 * 2 * Math.Max(1, _host.Session.CurrentSnapshot.PlayerSquads.Sum(s => s.Members.Count));
 
     /// <summary>
     /// Idle: stops following and puts the camera back where it started.
@@ -411,6 +453,9 @@ sealed class PlayBenchScript
     void FlightsFrame(double t, double dt)
     {
         var members = _host.Session.CurrentSnapshot.PlayerSquads.SelectMany(s => s.Members).ToList();
+        if (_host.GameOptions.Benchmark is not null && members.Count > BenchmarkFlightMembers)
+            members.RemoveRange(BenchmarkFlightMembers, members.Count - BenchmarkFlightMembers);
+
         int hop = (int)(t / 6);
         if (members.Count == 0 || hop == _flightHop) return;
         _flightHop = hop;

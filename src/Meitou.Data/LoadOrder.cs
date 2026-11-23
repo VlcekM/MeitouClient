@@ -67,7 +67,7 @@ public sealed class LoadOrder
         }
 
         var modsCfg = ModList.ModsCfgPath(install);
-        if (!File.Exists(modsCfg))
+        if (ModList.NoMods || !File.Exists(modsCfg))
             return order;
 
         var available = FindMods(install);
