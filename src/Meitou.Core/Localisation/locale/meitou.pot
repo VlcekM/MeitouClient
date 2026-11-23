@@ -195,12 +195,28 @@ msgstr ""
 msgid "A knocked-out character left lying near your squads, such as a guard you carried off and put down, stays when his squad or town unloads far away. In the game he vanishes with them once you look away."
 msgstr ""
 
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "A large storage tank for fuel."
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "A larger wind generator with twice the power of the first when the wind is up. Keep batteries as a backup."
+msgstr ""
+
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "A left click on the ground ends the selection of the selected building and closes its panels. In the game the building stays selected."
 msgstr ""
 
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "A low, crude wall that won't keep enemies out for long."
+msgstr ""
+
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "A mod"
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "A proper defensive wall, taller than a makeshift one."
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
@@ -213,6 +229,14 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "A save starts paused once it has loaded, so nothing happens before you look around. In the game it runs at once."
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "A simple round table."
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "A simple stool to sit on."
 msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
@@ -231,8 +255,40 @@ msgstr ""
 msgid "A squad coming back into the area around your squads has healed for the time it was away. In the game it comes back as it left."
 msgstr ""
 
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "A stack of boxes you can store anything in."
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "A storage barrel for cactus."
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "A storage barrel for greenfruit."
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "A storage barrel for riceweed."
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "A sturdy metal table."
+msgstr ""
+
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "A swamp turtle butts and bites when it fights. In the game it fights with a sword or club drawn for it, whose moves its body cannot play, so its blows land without any motion."
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "A tall two-story building shell with stairs inside."
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "A taller, heavier defensive wall."
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "A towering fortified wall."
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
@@ -245,6 +301,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "A turret's gunner turns with the gun, facing where it aims. In the game the gunner keeps facing the turret, so once the gun swings toward a target the gunner looks off to the side."
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "A wooden shelf, for decoration."
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
@@ -999,6 +1059,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/SettingsCanvas.cs
 msgid "Collapse all"
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "Collects water when it rains."
 msgstr ""
 
 #: src/Meitou.Game/Settings/LauncherSchema.cs
@@ -1905,6 +1969,18 @@ msgstr ""
 msgid "Ground-truth occlusion"
 msgstr ""
 
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "Grows greenfruit indoors, safe from the weather. Needs power and water."
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "Grows hemp indoors, safe from the weather. Needs power and water."
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "Grows riceweed indoors, safe from the weather. Needs power and water."
+msgstr ""
+
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "Guards searching for smuggled or stolen goods and bandits after food or loot also look inside bags carried in the inventory, and guards confiscating stolen goods inside the worn backpack. The game misses those bags, so goods hidden in them are never found."
 msgstr ""
@@ -2744,6 +2820,14 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "Maintained by"
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "Makes basic first aid kits and sleeping bags from fabrics. Needs power."
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "Makes first aid kits and splint kits from fabrics and hemp. Needs power."
 msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
@@ -4549,6 +4633,10 @@ msgstr ""
 msgid "Store the game's models more compactly: about half the video memory, the same look."
 msgstr ""
 
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "Stores power for when your generators fall short."
+msgstr ""
+
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "Subscribe"
 msgstr ""
@@ -4831,6 +4919,18 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "The game's cascades, Meitou's soft cascades to the horizon, ray-traced shadows, or ray-traced near and soft cascades further away (both need ray tracing and turn on global illumination)."
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "The gate for Defensive Wall II."
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "The gate for Defensive Wall III."
+msgstr ""
+
+#: src/Meitou.Game/Building/BuildingDescriptions.cs
+msgid "The gate for Defensive Wall IV."
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
