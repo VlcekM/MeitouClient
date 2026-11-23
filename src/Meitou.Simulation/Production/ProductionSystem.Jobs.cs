@@ -987,6 +987,12 @@ public sealed partial class ProductionSystem
         var table = world.Characters;
         var cold = table.Cold(slot)!;
         ref var n = ref table.Next[slot];
+        if (Lingers(cold))
+        {
+            Linger(world, slot, ref n);
+            return;
+        }
+
         if (cold.HaulTo is not { } storeId || cold.HaulSite is not { } at
             || Site(world, storeId) is not { Complete: true } || world.Machines.Find(storeId) is not { Storage: not null } store
             || Site(world, at) is not { Complete: true } atSite || world.Machines.Find(at) is not { } there || !Able(cold)
@@ -1016,7 +1022,7 @@ public sealed partial class ProductionSystem
             if (there.Craft is { } craft && TakeDone(craft, inv, i => store.Data.Accepts(i.Record, i.Type)))
                 world.Machines.Touch();
 
-            // The walk stops here, as at a loose item (PickUpLoose), so the leg to the storage starts at once.
+            // The walk stops here, as at a loose item (PickUpLoose), so the leg to the storage starts after the beat.
             StopWalk(ref n, cold);
             if (Delivered(world, inv, store, Ditching(cold)).Any()) cold.HaulSite = storeId;
             else End(world, slot);
@@ -1031,15 +1037,32 @@ public sealed partial class ProductionSystem
             break;
         }
 
+        // The hauler stands the beat at the storage (Linger) before the trip ends.
         world.Machines.Touch();
-        End(world, slot);
+        StopWalk(ref n, cold);
+        cold.HaulSite = null;
+    }
+
+    /// <summary>
+    /// A hauler standing at its storage after the drop-off (<see cref="HaulStep"/>): the trip has a storage but no leg or loose item left.
+    /// </summary>
+    static bool Lingers(CharacterCold cold) => cold.HaulTo is not null && cold.HaulSite is null && cold.HaulItem is null;
+
+    /// <summary>
+    /// The beat after a drop-off (<see cref="StepPauseSeconds"/>, set by <see cref="StopWalk"/>): the trip ends once it has passed, so the next job's
+    /// walk starts after it.
+    /// </summary>
+    static void Linger(World world, int slot, ref CharacterHot n)
+    {
+        n.TaskTime -= world.TickSeconds;
+        if (n.TaskTime <= 0) End(world, slot);
     }
 
     /// <summary>
     /// A hauler at the loose item it fetches (<c>Task_Pickup</c>, docs/game/buildings-production.md "Hauling"): the stack goes into the inventory
     /// (what does not fit stays on the ground), then it makes for the storage with what the storage takes; with nothing it can take the trip ends.
-    /// The walk to the item stops at the pick-up, so the leg to the storage starts at once: a walk left to end by itself set the idle wait of a
-    /// finished path, and the hauler stood up to 10 s with its load. Not there yet: nothing happens (the walk is <see cref="ApproachLoose"/>'s).
+    /// The walk to the item stops at the pick-up, so the leg to the storage starts after <see cref="StepPauseSeconds"/>: a walk left to end by
+    /// itself set the idle wait of a finished path, and the hauler stood up to 10 s with its load. Not there yet: nothing happens (the walk is <see cref="ApproachLoose"/>'s).
     /// </summary>
     void PickUpLoose(World world, int slot, CharacterCold cold, Items.Inventory inv, Machine store, int item)
     {

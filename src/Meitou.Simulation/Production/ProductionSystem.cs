@@ -845,6 +845,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             return;
         }
 
+        if (Lingers(cold)) return;
         if (cold.HaulSite is { } to && Site(world, to) is { Complete: true } leg && world.Machines.Find(to) is { } legMachine && Able(cold))
             Approach(world, ref n, cold, leg, legMachine, dt);
         else End(world, slot);
@@ -930,7 +931,14 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     }
 
     /// <summary>
-    /// Stops a worker's walk where it stands (its path and any pending request dropped) and clears its wait, so its next leg starts at once.
+    /// The beat a worker stands at the end of a leg (a pick-up, a fill, a drop-off) before it sets off on the next: a walk left to end by itself
+    /// set the idle wait of a finished path (5 to 10 s), and none at all looked mechanical.
+    /// </summary>
+    internal const float StepPauseSeconds = 0.5f;
+
+    /// <summary>
+    /// Stops a worker's walk where it stands (its path and any pending request dropped) and sets its wait to <see cref="StepPauseSeconds"/>, so its
+    /// next leg starts after that beat.
     /// </summary>
     static void StopWalk(ref CharacterHot n, CharacterCold cold)
     {
@@ -942,7 +950,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             cold.PathRequest = 0;
         }
 
-        n.TaskTime = 0;
+        n.TaskTime = StepPauseSeconds;
     }
 
     #endregion
@@ -1129,7 +1137,11 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (Hauling(world, cold) is { } haul)
         {
             cold.OperateToolHeld = false;
-            if (AtSite(world, n, haul.Site, haul.Machine)) HaulAt(world, cold, n.Position, m, haul.Machine);
+            if (!AtSite(world, n, haul.Site, haul.Machine)) return;
+
+            // The walk stops at the storage, as a hauler's does (StopWalk), so the walk back starts after the beat.
+            HaulAt(world, cold, n.Position, m, haul.Machine);
+            StopWalk(ref n, cold);
             return;
         }
 
