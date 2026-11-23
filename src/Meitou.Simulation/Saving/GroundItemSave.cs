@@ -76,10 +76,12 @@ public static class GroundItemSave
     /// <summary>
     /// Writes each zone's list from the items lying in it (by position). A zone whose list would name the same records it does, each where it
     /// lies, and gains no item is left as it is (so an unchanged save keeps its zone files); a zone with items and no file gets one; a file left
-    /// with no record goes (as the original deletes it). Returns the new items a camp laid (<see cref="GroundItem.Camp"/>), for
-    /// <see cref="WritePersist"/> once the nests have their handles.
+    /// with no record goes (as the original deletes it). An item dropped in play is written where <paramref name="poses"/> says the host draws it
+    /// (<see cref="PoseOf"/>). Returns the new items a camp laid (<see cref="GroundItem.Camp"/>), for <see cref="WritePersist"/> once the nests have
+    /// their handles.
     /// </summary>
-    public static List<(SaveItem Item, int Camp)> Write(SaveGame game, World world, ItemFactory factory)
+    public static List<(SaveItem Item, int Camp)> Write(SaveGame game, World world, ItemFactory factory,
+        Func<int, (Vector3 Position, Quaternion Rotation)?>? poses = null)
     {
         var camps = new List<(SaveItem Item, int Camp)>();
         var byZone = GroupByZone(world);
@@ -93,11 +95,11 @@ public static class GroundItemSave
             foreach (var o in old) placed.TryAdd(o.Record.StringId, o.Instance);
 
             var held = old.Where(o => o.Item.Contents is { Count: > 0 }).Select(o => o.Record.StringId).ToHashSet(StringComparer.Ordinal);
-            bool unchanged = zone is not null && items.All(i => AsSaved(i, placed, held)) && items.Count + kept.Count == old.Count;
+            bool unchanged = zone is not null && items.All(i => AsSaved(i, PoseOf(i, poses), placed, held)) && items.Count + kept.Count == old.Count;
             if (unchanged) continue;
 
             if (zone is null) game.Zones[z] = zone = new SaveZone(z, new SaveFile());
-            var saved = items.Select(i => (i.Position, i.Rotation, Item: SavedKit.FromItem(i.Item))).ToList();
+            var saved = items.Select(i => SavedEntry(i, poses)).ToList();
             for (int k = 0; k < items.Count; k++)
                 if (items[k].Camp is { } camp && items[k].Item.Saved is null) camps.Add((saved[k].Item, camp));
 
@@ -109,15 +111,32 @@ public static class GroundItemSave
     }
 
     /// <summary>
-    /// Whether a ground item is still as the zone's list holds it: read from one of its records (<paramref name="placed"/>, each with its list
-    /// entry), lying where that entry puts it (an item picked up and dropped again keeps its record, not its place) and with that record's mod
-    /// tag, so a code mod's retag in place rewrites the zone; a container that holds items, or was read holding some (<paramref name="held"/>),
-    /// always counts as changed.
+    /// A ground item's list entry: where it lies (<see cref="PoseOf"/>) and its item.
     /// </summary>
-    static bool AsSaved(GroundItem item, Dictionary<string, FcsInstance> placed, HashSet<string> held)
+    static (Vector3 Position, Quaternion Rotation, SaveItem Item) SavedEntry(GroundItem item, Func<int, (Vector3, Quaternion)?>? poses)
+    {
+        var (position, rotation) = PoseOf(item, poses);
+        return (position, rotation, SavedKit.FromItem(item.Item));
+    }
+
+    /// <summary>
+    /// Where a ground item is written: one dropped in play where the host draws it, as the original saves the pose its placement gave the item
+    /// (<c>FUN_1407626e0</c> sets the item's position <c>+0x48</c> and orientation <c>+0xb0</c>, docs/game/carry-loot.md "Dropped item placement",
+    /// <b>Verified</b>), else (any other, or one not drawn) its simulation pose.
+    /// </summary>
+    static (Vector3 Position, Quaternion Rotation) PoseOf(GroundItem item, Func<int, (Vector3, Quaternion)?>? poses) =>
+        item.Dropped && poses?.Invoke(item.Id) is { } drawn ? drawn : (item.Position, item.Rotation);
+
+    /// <summary>
+    /// Whether a ground item is still as the zone's list holds it: read from one of its records (<paramref name="placed"/>, each with its list
+    /// entry), written where that entry puts it (<paramref name="pose"/>; an item picked up and dropped again keeps its record, not its place) and
+    /// with that record's mod tag, so a code mod's retag in place rewrites the zone; a container that holds items, or was read holding some
+    /// (<paramref name="held"/>), always counts as changed.
+    /// </summary>
+    static bool AsSaved(GroundItem item, (Vector3 Position, Quaternion Rotation) pose, Dictionary<string, FcsInstance> placed, HashSet<string> held)
     {
         if (item.Item.Saved is not { } saved || !placed.TryGetValue(saved.StringId, out var entry)) return false;
-        if (item.Position != entry.Position || item.Rotation != entry.Rotation) return false;
+        if (pose.Position != entry.Position || pose.Rotation != entry.Rotation) return false;
         if (item.Item.Contents is { Items.Count: > 0 } || held.Contains(saved.StringId)) return false;
 
         return saved.Strings.GetValueOrDefault(SaveItem.ModTagKey, "") == item.Item.ModTag;

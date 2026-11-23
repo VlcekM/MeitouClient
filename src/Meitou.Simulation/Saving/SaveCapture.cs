@@ -59,6 +59,12 @@ public sealed class SaveCaptureOptions
     /// beside the save, such as the weapon blood: docs/game/blood-decals.md "On weapons and gear").
     /// </summary>
     public Action<IReadOnlyDictionary<CharacterId, Hand>>? HandlesWritten { get; init; }
+
+    /// <summary>
+    /// Where the host draws a ground item dropped in play (<see cref="Items.GroundItem.Dropped"/>), by its id: the original saves a dropped item's
+    /// placed pose (docs/game/carry-loot.md "Dropped item placement"). Null, or a null answer (an item not drawn): its simulation pose is written.
+    /// </summary>
+    public Func<int, (Vector3 Position, Quaternion Rotation)?>? GroundPoses { get; init; }
 }
 
 /// <summary>
@@ -239,7 +245,7 @@ public static partial class SaveCapture
         if (world.Systems.OfType<Production.ProductionSystem>().FirstOrDefault() is { } production)
             RockMachineSave.Write(game.Camera.Record, world, production);
         world.Systems.OfType<Combat.CombatSystem>().FirstOrDefault()?.WriteTurretShots(world, buildings);
-        var campItems = GroundItemSave.Write(game, world, data.Items);
+        var campItems = GroundItemSave.Write(game, world, data.Items, options.GroundPoses);
         return (outposts, buildings, campItems);
     }
 

@@ -75,6 +75,13 @@ sealed class GroundItemSync(GameHost host)
     }
 
     /// <summary>
+    /// Where a ground item is drawn (a falling limb: where it comes to rest), for the save (<c>SaveCaptureOptions.GroundPoses</c>); null when it is
+    /// not shown.
+    /// </summary>
+    internal (Vector3 Position, Quaternion Rotation)? DrawnPose(int id) =>
+        _groundPoses.TryGetValue(id, out var pose) ? (pose.At, pose.Rotation) : null;
+
+    /// <summary>
     /// The placement of a ground item: its record's mesh at its place, turned by <paramref name="rotation"/> and set at height <paramref name="y"/>.
     /// </summary>
     internal void ShowGround(GroundItemSnapshot g, Quaternion rotation, float y) =>

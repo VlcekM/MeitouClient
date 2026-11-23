@@ -182,6 +182,7 @@ sealed class GameSaves(GameHost host)
             Seed = host.Session.World.Seed ^ (ulong)++_captures << 20,
             View = new SavedView(view.Pivot, view.Yaw, view.Pitch, view.Distance),
             HandlesWritten = host.BloodDecals.NoteHandles,
+            GroundPoses = host.GroundItemSync.DrawnPose,
         };
     }
 

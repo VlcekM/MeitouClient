@@ -114,7 +114,12 @@ order, or while it delivers on an errand (engine choice).
 | any other | `Q` | 0 |
 
 `U(a, b)` is `FUN_1409b1c80`, a uniform random float. Their body is static (the 4th argument of the body builder is `+0x1da == 0`), a weapon's from its `physics file` `.xml` when it names one, else a box of the mesh bounds; the weapon's ray mask leaves out groups 28 to 31 (`0x7f9e04`), the others' includes them (`0xf07f9e04`). Severed limbs set `+0x1d9` and `+0x1da` and keep the bone's pose with a dynamic body ([collision](../formats/collision.md#item-physics)). Why a weapon sticks in the ground (**Verified**, probe over the base game's records and their meshes): weapon meshes run along +Y with the grip near the origin (e.g. Mercenary Club Y -2.5 to 8.6, Polearm -5.9 to 14.8), so the turned mesh's blade end lies about 0.7 to 0.8 of its length below the origin, which the raise of 0.5 to 0.7 leaves 0 to 0.3 of the length below the ground; 283 of 309 ITEM meshes are thinnest in Y with the origin on their base, 120 of 142 ARMOUR and 14 of 16 CONTAINER meshes thinnest in Z.
-Meitou: `GameHost.PlacedPose` (a limb keeps `GameHost.LaidFlat`, engine choice); the random draws come from the item's id.
+The placement writes the item's own position `+0x48` and orientation `+0xb0`, which the save writes. A loaded item keeps them: the zone load
+`FUN_14036f950` puts each `1-itemlist` item in the world through vfunc `+0x228` with the pose-kept flag 1 (`FUN_14075d9b0` -> `FUN_14075d660`
+sets `+0x1d9`), so it is not placed again (**Verified**, decompile).
+Meitou: `GroundItemSync.PlacedPose` (a limb keeps `GroundItemSync.LaidFlat`, engine choice); the random draws come from the item's id. A save
+writes a drop where it is drawn (`GroundItemSave.PoseOf`). A loaded WEAPON, ARMOUR or CONTAINER turned about Y only, a pose the placement never
+leaves, is placed again as a drop (`GroundItems.Load`).
 
 ## Theft and witnesses
 

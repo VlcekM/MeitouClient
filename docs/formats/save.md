@@ -742,8 +742,9 @@ files. Once time passes a live farm's `save time` is the clock then, as the orig
 the player moved to zone 21.25: after 300 ticks all 13 `save time` values of 21.25 and 22.26 are 197.7247, the capture's clock; a reload saved with no tick keeps every
 zone file byte for byte). Base saves 1, 3,
 wade and 2 (moved to Admag) keep every zone file byte for byte except door keys added to buildings whose saved state has none (3 files in save 2, 1 in save 1).
-Loose items (`Saving/GroundItemSave`, `Data/Save/SaveGroundItems`): a load puts every `1-itemlist` item the data can make on the ground at its saved position and rotation;
-a container's contents load into its bag; a save writes each zone's list from the items lying in it, a read item with its own record (unmodelled keys kept), a new one with the key set above minus `uniform`
+Loose items (`Saving/GroundItemSave`, `Data/Save/SaveGroundItems`): a load puts every `1-itemlist` item the data can make on the ground at its saved position and rotation
+(a WEAPON, ARMOUR or CONTAINER turned about Y only is laid as a drop: [placement](../game/carry-loot.md#dropped-item-placement));
+an item dropped in play is written where the host draws it (`SaveCaptureOptions.GroundPoses`), as the original saves the placed pose; a container's contents load into its bag; a save writes each zone's list from the items lying in it, a read item with its own record (unmodelled keys kept), a new one with the key set above minus `uniform`
 and the limb keys (`persist` only on a camp's, above), id `<n>-zone<X>.<Y>-INGAME` above every such number of the file and of the read items written back (a reused id loads as the other item); entries whose item the data lacks are written back as read; a zone whose
 list is unchanged (same records, each lying where its entry puts it, none retagged by a code mod, no container holding or read holding items) is left as it is, an empty list is not written, a file left empty goes. **Observed** (headless, METARU with the install's load order): 285 of 285 items
 loaded; a capture with nothing changed keeps all 142 zone files byte for byte; an item dropped, saved and reloaded lies where it was, and a second save writes the

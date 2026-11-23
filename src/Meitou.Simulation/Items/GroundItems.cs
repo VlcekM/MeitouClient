@@ -22,12 +22,13 @@ public readonly record struct GroundItemSnapshot(int Id, string Record, string N
     Data.Fcs.FcsRecordType Type = default, int Level = 0, float Quality = 0, int OwnedBy = -1, FallSource? Fall = null, string Material = "");
 
 /// <summary>
-/// One loose item: where it lies and how it is turned (a saved item's whole rotation, written back as read; a dropped one turned about Y).
+/// One loose item: where it lies and how it is turned (a saved item's whole rotation, written back as read; a dropped one turned about Y, saved
+/// where the host draws it).
 /// </summary>
 public sealed record GroundItem(int Id, ItemInstance Item, Vector3 Position, Quaternion Rotation)
 {
     /// <summary>
-    /// Dropped in play (turned about Y only), not put back from the save.
+    /// Laid by the host as a drop (turned about Y only here): dropped in play, or loaded never placed (<see cref="GroundItems.Load"/>).
     /// </summary>
     public bool Dropped { get; init; }
     /// <summary>
@@ -140,19 +141,32 @@ public sealed class GroundItems
         int k = _items.FindIndex(i => i.Id == id);
         if (k < 0) return;
         var g = _items[k];
-        bool yawOnly = MathF.Abs(g.Rotation.X) < 1e-4f && MathF.Abs(g.Rotation.Z) < 1e-4f;
-        _items[k] = g with { Slot = slot, OwnedBy = owner, Dropped = g.Dropped || yawOnly };
+        _items[k] = g with { Slot = slot, OwnedBy = owner, Dropped = g.Dropped || YawOnly(g.Rotation) };
         Revision++;
     }
 
     /// <summary>
-    /// Puts a saved item back where the save had it (no limit), owned by <paramref name="ownedBy"/> (<see cref="GroundItem.OwnedBy"/>).
+    /// Puts a saved item back where the save had it (no limit), owned by <paramref name="ownedBy"/> (<see cref="GroundItem.OwnedBy"/>). The original
+    /// keeps a loaded item's saved pose (docs/game/carry-loot.md "Dropped item placement"); a WEAPON, ARMOUR or CONTAINER saved turned about Y only
+    /// was never placed (a save of an older Meitou wrote its drops so), so it is laid as a dropped one (<see cref="NeverPlaced"/>).
     /// </summary>
     public void Load(ItemInstance item, Vector3 position, Quaternion rotation, int ownedBy = -1)
     {
-        _items.Add(new GroundItem(_nextId++, item, position, rotation) { OwnedBy = ownedBy });
+        _items.Add(new GroundItem(_nextId++, item, position, rotation) { OwnedBy = ownedBy, Dropped = NeverPlaced(item.Type, rotation) });
         Revision++;
     }
+
+    /// <summary>
+    /// Whether a saved item of <paramref name="type"/> turned by <paramref name="rotation"/> cannot be one the original placed: its placement turns
+    /// a WEAPON about its Z axis and lays ARMOUR and CONTAINER on their side, never only about Y (<c>FUN_1407626e0</c>, <b>Verified</b>).
+    /// </summary>
+    static bool NeverPlaced(Data.Fcs.FcsRecordType type, Quaternion rotation) =>
+        type is Data.Fcs.FcsRecordType.Weapon or Data.Fcs.FcsRecordType.Armour or Data.Fcs.FcsRecordType.Container && YawOnly(rotation);
+
+    /// <summary>
+    /// Whether a rotation turns only about Y.
+    /// </summary>
+    static bool YawOnly(Quaternion rotation) => MathF.Abs(rotation.X) < 1e-4f && MathF.Abs(rotation.Z) < 1e-4f;
 
     /// <summary>
     /// The item of <paramref name="id"/>; null when it is gone.
