@@ -495,8 +495,9 @@ public sealed partial class AiSystem
     /// <summary>
     /// A player-faction looker's weighing of an ally in 15 / 288's finder (<c>FUN_14099ca10</c>, its branch for a looker whose faction is the
     /// player's, <c>+0x250</c>; <b>Verified</b>): the threat x <c>clamp((1000 - d^2) / 990, 0.1, 1)</c> by the squared distance d^2 between the two
-    /// (<c>FUN_1409b2380</c> with 10, 1000 and 0.1: 1 within 3.2 units, 0.1 from 30); an ally of another faction counts only with the player's Help
-    /// Allies setting (<see cref="SquadAi.Help"/>, <c>DAT_142134690 + 0x111</c>), and then squared. An NPC looker skips the branch: no distance factor,
+    /// (<c>FUN_1409b2380</c> with 10, 1000 and 0.1: 1 within 3.2 units, 0.1 from 30); an ally of another faction counts only with the Help Allies
+    /// option the looker follows (<see cref="SquadAi.Help"/>, <c>DAT_142134690 + 0x111</c>; <see cref="SquadAiRules.For"/>), and then
+    /// squared. An NPC looker skips the branch: no distance factor,
     /// and an ally of any faction counts at its threat.
     /// </summary>
     static float PlayerFactionWeigh(World world, int slot, int other, CharacterCold me, CharacterCold ally, float threat)
@@ -506,7 +507,7 @@ public sealed partial class AiSystem
         float v = threat * Math.Clamp((distanceSquared - 1000f) / (10f - 1000f), 0.1f, 1f);
         if (ally.Faction == me.Faction) return v;
 
-        return (world.Player.SquadAi & SquadAi.Help) != 0 ? v * v : 0;
+        return (SquadAiRules.For(world, me) & SquadAi.Help) != 0 ? v * v : 0;
     }
 
     /// <summary>

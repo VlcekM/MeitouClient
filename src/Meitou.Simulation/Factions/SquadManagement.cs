@@ -58,6 +58,14 @@ public sealed record DismissCommand(CharacterId Character) : SquadCommand;
 public sealed record SetSquadUncounted(int Squad, bool On, string? Owner = null) : SquadCommand;
 
 /// <summary>
+/// A code mod gives a squad of the player's faction its own squad AI options (<paramref name="Options"/>: the flags its members follow in place of
+/// the player's faction-wide ones, sit, sleep, ditch, heal, help, rescue, feed and shoot first among them), or null to follow the player's again
+/// (<see cref="Squad.OwnOptions"/>). <paramref name="Owner"/>: the mod's manifest id, so a load without the mod gives the squad the player's options
+/// again (one that names none keeps the noted one). Meitou only.
+/// </summary>
+public sealed record SetSquadOptions(int Squad, Player.SquadAi? Options, string? Owner = null) : SquadCommand;
+
+/// <summary>
 /// A code mod gives a squad of the player's faction its own purse (<paramref name="Own"/>, <see cref="Squad.OwnPurse"/>) or ends it, pouring what
 /// is left into the player's money. <paramref name="Owner"/>: the mod's manifest id, so a load without the mod ends it the same way (one that
 /// names none keeps the noted one). Meitou only.
@@ -253,6 +261,9 @@ public static class SquadManagement
             case SetSquadUncounted uncounted:
                 SetUncounted(world, uncounted);
                 break;
+            case SetSquadOptions options:
+                SetOptions(world, options);
+                break;
             case SetSquadPurse purse:
                 SetPurse(world, purse);
                 break;
@@ -279,6 +290,20 @@ public static class SquadManagement
         squad.Uncounted = command.On;
         if (!command.On) squad.UncountedOwner = null;
         else if (command.Owner is { Length: > 0 } owner) squad.UncountedOwner = owner;
+    }
+
+    /// <summary>
+    /// Gives a squad of the player's faction its own squad AI options or gives it the player's again, noting the mod that set them.
+    /// </summary>
+    static void SetOptions(World world, SetSquadOptions command)
+    {
+        if (world.Squads.Find(command.Squad) is not { } squad || squad.Faction != world.Player.Faction) return;
+        if (!MayChange(squad.OptionsOwner, command.Owner)) return;
+
+        squad.OwnOptions = command.Options;
+        if (command.Options is not null) world.Squads.OwnOptionsSeen = true;
+        if (command.Options is null) squad.OptionsOwner = null;
+        else if (command.Owner is { Length: > 0 } owner) squad.OptionsOwner = owner;
     }
 
     /// <summary>
@@ -377,6 +402,25 @@ public static class SquadManagement
 
             squad.Uncounted = false;
             squad.UncountedOwner = null;
+            dropped++;
+        }
+
+        return dropped;
+    }
+
+    /// <summary>
+    /// Gives the player's squad AI options back to every squad whose own a code mod set when that mod is not running now (<paramref name="running"/>:
+    /// whether a mod id runs). Between ticks after a load, before the first. Returns how many.
+    /// </summary>
+    public static int DropUnownedOptions(World world, Func<string, bool> running)
+    {
+        int dropped = 0;
+        foreach (var squad in world.Squads.All)
+        {
+            if (squad.OptionsOwner is not { } owner || running(owner)) continue;
+
+            squad.OwnOptions = null;
+            squad.OptionsOwner = null;
             dropped++;
         }
 

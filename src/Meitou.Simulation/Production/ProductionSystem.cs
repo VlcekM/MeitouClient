@@ -928,7 +928,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     {
         // The jobs are the decision step's (RegisterSources); with no machine a sleeper of the "Sleep when injured" option still lets go of its bed
         // here once up.
-        if (world.Machines.Count == 0 && !_sweep && !(Beds is not null && (world.Player.SquadAi & SquadAi.Sleep) != 0 && world.Fixtures.Count > 0))
+        if (world.Machines.Count == 0 && !_sweep && !(Beds is not null && world.Fixtures.Count > 0 && SquadAiRules.AnyFollow(world, SquadAi.Sleep)))
             return;
 
         var table = world.Characters;

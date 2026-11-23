@@ -717,7 +717,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
     float NpcFoodDesire(World world, int slot, CharacterCold c, Vector3 at)
     {
         if (c is not { Medical: { Dead: false } med }) return 0;
-        if (!med.HasStatsObject && (world.Player.SquadAi & SquadAi.Feed) == 0) return 0;
+        if (!med.HasStatsObject && (SquadAiRules.For(world, c) & SquadAi.Feed) == 0) return 0;
 
         var town = AiSystem.TownAt(data, world, at);
         if (town.IsNone) return 0;

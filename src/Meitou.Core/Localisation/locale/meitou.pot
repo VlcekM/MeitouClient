@@ -6679,6 +6679,10 @@ msgstr ""
 msgid "{1} sold {2} for c.{3}"
 msgstr ""
 
+#: src/Meitou.Game/Mods/GameMods.cs
+msgid "{1} squad(s) given their own squad AI options by a mod that is not loaded follow yours again."
+msgstr ""
+
 #: launcher/Meitou.Launcher/Benchmarks/BenchmarkPage.cs
 msgid "{1} target builds"
 msgstr ""

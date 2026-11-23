@@ -444,7 +444,8 @@ public sealed partial class CombatSystem
         /// </summary>
         public int ShootFirst(FactionRelations relations, int current, int best, float bestScore)
         {
-            if ((world.Player.SquadAi & SquadAi.ShootFirst) == 0) return best;
+            var options = SquadAiRules.For(world, gc);
+            if ((options & SquadAi.ShootFirst) == 0) return best;
 
             var table = world.Characters;
             var prev = table.Previous;
@@ -453,7 +454,7 @@ public sealed partial class CombatSystem
                 if (o == g || !prev[o].Alive || table.Cold(o) is not { } oc || !relations.Contains(oc.Faction)) continue;
 
                 var faction = relations.Factions[oc.Faction];
-                if (!SquadAiRules.ShootsFirstAt(world.Player.SquadAi, (int)faction.FundamentalType, faction.DefaultRelation)) continue;
+                if (!SquadAiRules.ShootsFirstAt(options, (int)faction.FundamentalType, faction.DefaultRelation)) continue;
 
                 float s = Score(o, TurretFormulas.ShootFirstRange, current);
                 if (s > bestScore) (best, bestScore) = (o, s);

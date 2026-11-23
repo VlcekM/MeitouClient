@@ -176,11 +176,12 @@ public sealed partial class CarrySystem
     /// <summary>
     /// Whom a rescuer's rescue job takes in (the character finder <c>FUN_1408cd2d0</c>, <b>Verified</b>): the sensed entries tagged ALLY (the looker
     /// does not regard them as enemies and <see cref="Friendly"/> holds: its own or an allied faction), and for a player character also, unless
-    /// <see cref="SquadAi.Rescue"/> (the global +0x112) is on, its own faction only. An NPC rescuer has no faction test, so allied factions' bodies
+    /// <see cref="SquadAi.Rescue"/> (the global +0x112; the rescuer's squad's own options when a mod set them,
+    /// <see cref="SquadAiRules.For"/>) is on, its own faction only. An NPC rescuer has no faction test, so allied factions' bodies
     /// count for it without the option.
     /// </summary>
     bool Rescues(World world, CharacterCold rescuer, CharacterCold body) =>
-        body.Faction == rescuer.Faction || (!rescuer.IsPlayer || (world.Player.SquadAi & SquadAi.Rescue) != 0) && Friendly(rescuer, body);
+        body.Faction == rescuer.Faction || (!rescuer.IsPlayer || (SquadAiRules.For(world, rescuer) & SquadAi.Rescue) != 0) && Friendly(rescuer, body);
 
     #endregion
 }

@@ -5238,3 +5238,7 @@ msgstr "Идёт бенчмарк: сначала отмените его на �
 #. machine-translated
 msgid "The benchmark stopped."
 msgstr "Бенчмарк остановлен."
+
+#. machine-translated
+msgid "{1} squad(s) given their own squad AI options by a mod that is not loaded follow yours again."
+msgstr "Отряды, которым незагруженный мод задал собственные настройки ИИ отряда, снова следуют вашим: {1}."

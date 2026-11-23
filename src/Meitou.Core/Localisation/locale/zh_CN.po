@@ -6067,3 +6067,7 @@ msgstr "基准测试正在运行：请先在基准测试页面取消它。"
 #. machine-translated
 msgid "The benchmark stopped."
 msgstr "基准测试已停止。"
+
+#. machine-translated
+msgid "{1} squad(s) given their own squad AI options by a mod that is not loaded follow yours again."
+msgstr "{1} 个由未加载的模组设置了独立小队 AI 选项的小队重新遵循你的选项。"

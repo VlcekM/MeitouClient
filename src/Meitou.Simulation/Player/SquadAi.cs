@@ -45,7 +45,7 @@ public enum SquadAi : ushort
     /// </summary>
     Share = 64,
     /// <summary>
-    /// Feed Animals (+0x114): off, the player's animals do not eat (<see cref="Items.FeedSystem"/>).
+    /// Feed Animals (+0x114): off, animals following these options do not eat (<see cref="Items.FeedSystem"/>).
     /// </summary>
     Feed = 128,
     /// <summary>
@@ -159,6 +159,20 @@ public static class SquadAiRules
     /// <c>FUN_1405d29c0</c>).
     /// </summary>
     public const float ShareReach = 200;
+
+    /// <summary>
+    /// The squad AI options <paramref name="cold"/> follows: its squad's own (<see cref="Factions.Squad.OwnOptions"/>, which a code mod sets with
+    /// <see cref="Factions.SetSquadOptions"/>), else the player's faction-wide ones, as the original reads for everyone. One squad lookup.
+    /// </summary>
+    public static SquadAi For(World world, CharacterCold cold) =>
+        world.Squads.Find(cold.SquadId)?.OwnOptions ?? world.Player.SquadAi;
+
+    /// <summary>
+    /// Whether anyone follows <paramref name="option"/>: the player's options hold it or a squad's own do
+    /// (<see cref="Factions.Squads.AnyOwnOptions"/>: a bit test in a game where no mod set any).
+    /// </summary>
+    public static bool AnyFollow(World world, SquadAi option) =>
+        (world.Player.SquadAi & option) != 0 || world.Squads.AnyOwnOptions(option);
 
     /// <summary>
     /// Whether a player turret gunner with <see cref="SquadAi.ShootFirst"/> may take a sensed non-enemy of a faction whose fundamental type is

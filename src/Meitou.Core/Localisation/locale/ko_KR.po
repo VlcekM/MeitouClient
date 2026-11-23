@@ -5234,3 +5234,7 @@ msgstr "벤치마크가 실행 중입니다. 먼저 벤치마크 페이지에서
 #. machine-translated
 msgid "The benchmark stopped."
 msgstr "벤치마크가 중단되었습니다."
+
+#. machine-translated
+msgid "{1} squad(s) given their own squad AI options by a mod that is not loaded follow yours again."
+msgstr "로드되지 않은 모드가 자체 분대 AI 옵션을 준 분대 {1}개가 다시 당신의 옵션을 따릅니다."

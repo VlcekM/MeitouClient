@@ -229,6 +229,17 @@ public sealed class Squad
     /// </summary>
     public string? UncountedOwner { get; set; }
     /// <summary>
+    /// The squad AI options its members follow in place of the player's faction-wide ones (<see cref="SetSquadOptions"/>, read through
+    /// <see cref="Player.SquadAiRules.For"/>); null, the default: the player's, as in the original. Only a squad of the player's faction has
+    /// them. Meitou only; saved, hashed while set.
+    /// </summary>
+    public Player.SquadAi? OwnOptions { get; set; }
+    /// <summary>
+    /// The code mod that set <see cref="OwnOptions"/> (its manifest id); null: none named. A load without that mod running gives the squad the
+    /// player's options again (<see cref="SquadManagement.DropUnownedOptions"/>). Saved, hashed while set.
+    /// </summary>
+    public string? OptionsOwner { get; set; }
+    /// <summary>
     /// The code mods' tags on the squad, by mod manifest id: a mod sets its own entry to find the squad again after a load, when squad ids are
     /// given anew; one mod's tag never replaces another's. Saved for the player's squads (<see cref="Saving.ModTagSave"/>), hashed while any.
     /// </summary>
@@ -339,9 +350,29 @@ public sealed class SquadRegistry
     int _nextId;
 
     /// <summary>
+    /// Whether any squad has had its own squad AI options this session (<see cref="Squad.OwnOptions"/>; set by <see cref="SquadManagement"/> and
+    /// the save reader, never cleared): until then <see cref="AnyOwnOptions"/> answers without a pass. Derived, not saved or hashed.
+    /// </summary>
+    public bool OwnOptionsSeen { get; set; }
+
+    /// <summary>
     /// The number of squads.
     /// </summary>
     public int Count => _squads.Count;
+
+    /// <summary>
+    /// Whether a squad's own squad AI options hold <paramref name="option"/>; a pass over the squads once any had their own.
+    /// </summary>
+    public bool AnyOwnOptions(Player.SquadAi option)
+    {
+        if (!OwnOptionsSeen) return false;
+        foreach (var squad in _squads.Values)
+        {
+            if (squad.OwnOptions is { } own && (own & option) != 0) return true;
+        }
+
+        return false;
+    }
     /// <summary>
     /// The squads in id order.
     /// </summary>
@@ -468,6 +499,8 @@ public sealed class SquadRegistry
             }
             if (s.Uncounted) hasher.Add(0x556E636E);
             if (s.UncountedOwner is { } uncountedOwner) hasher.Add(Rng.StableHash(uncountedOwner));
+            if (s.OwnOptions is { } ownOptions) hasher.Add(0x4F707400 ^ (int)ownOptions);   // "Opt": nothing while unset, so the pinned hashes stay
+            if (s.OptionsOwner is { } optionsOwner) hasher.Add(Rng.StableHash(optionsOwner));
             foreach (var (mod, tag) in s.ModTags)
             {
                 hasher.Add(Rng.StableHash(mod));
