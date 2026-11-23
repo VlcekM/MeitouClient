@@ -118,7 +118,13 @@ public sealed record UiSelectedBuilding(string Instance, string? Record, string?
 /// when the line has a <paramref name="Press"/>; a line with a press and no value is one button across the line, captioned with the label.
 /// <paramref name="Tooltip"/> (null: none) shows over the line. A press runs on the host's thread and changes the world only by queueing commands.
 /// </summary>
-public sealed record UiTownLine(string Label, string? Value = null, string? Tooltip = null, Action? Press = null);
+public sealed record UiTownLine(string Label, string? Value = null, string? Tooltip = null, Action? Press = null)
+{
+    /// <summary>
+    /// The line's colours and icon (<see cref="UiLineStyle"/>); null: the panel's own look.
+    /// </summary>
+    public UiLineStyle? Style { get; init; }
+}
 
 /// <summary>
 /// What an extension's town panel lines get: the outpost the panel shows, whether the player's faction owns it, the snapshot the panel is laid out
@@ -394,6 +400,26 @@ public sealed partial class UiHost
     internal CharacterPanelHooks CharacterPanel { get; } = new();
 
     /// <summary>
+    /// The extensions' controls in the faithful screens and the HUD (<see cref="UiRegistration.AddScreenControls"/>).
+    /// </summary>
+    internal ScreenControls Screens { get; } = new();
+
+    /// <summary>
+    /// The extensions' player replies in conversations (<see cref="UiRegistration.AddDialogueReplies"/>).
+    /// </summary>
+    internal DialogueReplies Replies { get; } = new();
+
+    /// <summary>
+    /// The extensions' right-click menu rows for any target (<see cref="UiRegistration.AddMenuVerbs"/>).
+    /// </summary>
+    internal MenuTargetVerbs TargetVerbs { get; } = new();
+
+    /// <summary>
+    /// The extensions' world map input handlers (<see cref="UiRegistration.AddMapInput"/>).
+    /// </summary>
+    internal MapInputs Map { get; } = new();
+
+    /// <summary>
     /// The contributions: owner, slot, mode (null: every mode), order and factory.
     /// </summary>
     readonly List<(string Owner, string Slot, UiMode? Mode, int Order, Func<UiFrameContext, UiNode> Factory)> _contributions = [];
@@ -561,6 +587,10 @@ public sealed partial class UiHost
         _townLines.RemoveAll(l => l.Owner == owner);
         ItemTips.Remove(owner);
         CharacterPanel.Remove(owner);
+        Screens.Remove(owner);
+        Replies.Remove(owner);
+        TargetVerbs.Remove(owner);
+        Map.Remove(owner);
         foreach (string id in _styles.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) _styles.Remove(id);
         foreach (string id in _controls.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) _controls.Remove(id);
         foreach (string id in _actions.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) _actions.Remove(id);
@@ -610,6 +640,27 @@ public sealed partial class UiHost
 
         return rows;
     }
+
+    /// <summary>
+    /// Whether any extension adds rows to the right-click menus of any target (<see cref="MenuVerbs"/>).
+    /// </summary>
+    public bool HasTargetMenuVerbs => TargetVerbs.Any;
+
+    /// <summary>
+    /// The rows the extensions add to the right-click menu of <paramref name="context"/>'s target (<see cref="MenuTargetVerbs.For"/>), with the
+    /// character rows' rules: a failing source reported once and dropped, a row's action that throws reported each time.
+    /// </summary>
+    public IReadOnlyList<UiMenuVerb> MenuVerbs(UiMenuTargetContext context) => TargetVerbs.For(context, Guarded, Diagnostic);
+
+    /// <summary>
+    /// Whether any extension handles world map input (<see cref="MapInput"/>).
+    /// </summary>
+    public bool HasMapInput => Map.Any;
+
+    /// <summary>
+    /// Hands a world map input to the extensions (<see cref="MapInputs.Handle"/>); true when one took it.
+    /// </summary>
+    public bool MapInput(UiMapInput input) => Map.Handle(input, Diagnostic);
 
     /// <summary>
     /// A menu row's action that reports a throw as a <see cref="Diagnostic"/> instead of passing it on to the input, and does nothing once its
@@ -828,6 +879,39 @@ public sealed partial class UiHost
     public IReadOnlyList<UiJobButton> JobPanelButtons(UiCharacterContext context) => CharacterPanel.Buttons(context, GuardedPress, Diagnostic);
 
     /// <summary>
+    /// Whether any extension adds controls to a screen (<see cref="ArrangeScreenControls"/>).
+    /// </summary>
+    public bool HasScreenControls => Screens.Any;
+
+    /// <summary>
+    /// Adds the extensions' controls for <paramref name="view"/>'s screen to its arranged <paramref name="controls"/>
+    /// (<see cref="ScreenControls.Arrange"/>); a failing source is reported as a <see cref="Diagnostic"/> and dropped.
+    /// </summary>
+    internal void ArrangeScreenControls(ScreenView view, List<UiControl> controls, UiMode mode, int width, int height)
+    {
+        var frame = new UiFrameContext(this, mode, width, height, new UiBindings());
+        _frame ??= frame;
+        Screens.Arrange(this, view, controls, frame, Diagnostic);
+    }
+
+    /// <summary>
+    /// A press on a screen's extension control: runs its action (<see cref="Dispatch(UiControl)"/>); false for any other control.
+    /// </summary>
+    public bool DispatchScreen(string screen, string widget) => Screens.Shown(screen, widget) is { } control && Dispatch(control);
+
+    /// <summary>
+    /// Whether any extension adds dialogue replies (<see cref="DialogueReplies"/>).
+    /// </summary>
+    public bool HasDialogueReplies => Replies.Any;
+
+    /// <summary>
+    /// The replies the extensions add to a conversation's choices (<see cref="Ui.DialogueReplies.For"/>): at most
+    /// <see cref="Ui.DialogueReplies.MaxReplies"/>, texts cut, a failing source reported as a <see cref="Diagnostic"/> once and dropped, a press
+    /// that throws reported each time.
+    /// </summary>
+    public IReadOnlyList<UiDialogueReply> DialogueReplies(UiDialogueContext context) => Replies.For(context, GuardedPress, Diagnostic);
+
+    /// <summary>
     /// Whether any extension adds town panel lines (<see cref="TownLines"/>).
     /// </summary>
     public bool HasTownLines => _townLines.Count > 0;
@@ -878,7 +962,7 @@ public sealed partial class UiHost
         string? value = string.IsNullOrWhiteSpace(line.Value) ? null : OneLine(line.Value);
         string? tooltip = line.Tooltip is null ? null : Cut(line.Tooltip, MaxTownLineTooltip);
         var press = line.Press is null ? null : GuardedPress(owner, "town panel line " + label, line.Press);
-        return new UiTownLine(label, value, tooltip, press);
+        return new UiTownLine(label, value, tooltip, press) { Style = UiLineStyle.Shown(line.Style) };
     }
 
     /// <summary>
@@ -1015,6 +1099,12 @@ public sealed partial class UiHost
     /// </summary>
     readonly record struct NodeScope(UiRect Clip, bool Enabled, float Opacity, int Parent);
 
+    /// Lays out <paramref name="node"/> in <paramref name="parent"/>, clipped to <paramref name="clip"/>, into <paramref name="result"/> (a screen
+    /// control's tree, by the overlay's rules).
+    /// </summary>
+    internal void ArrangeInto(UiNode node, UiRect parent, UiRect clip, List<UiControl> result) =>
+        ArrangeNode(node, parent, new NodeScope(clip, true, 1, -1), new UiArrangement(), result);
+
     /// <summary>
     /// Lays out <paramref name="node"/> in <paramref name="parent"/> (or at <paramref name="placed"/>), clipped, and its children by its flow;
     /// nothing for a hidden or clipped-out node.
@@ -1148,7 +1238,9 @@ public sealed partial class UiHost
     {
         if (e.Screen != MyGuiScreenHost.OverlayScreen) return false;
 
-        if (e.Action == "text" && _last.TextBoxes.TryGetValue(e.Widget, out var box)) Dispatch(box, e.Text, UiEventKind.Text);
+        if (e.Action != "text") return true;
+
+        if ((_last.TextBoxes.GetValueOrDefault(e.Widget) ?? Screens.TextBox(e.Widget)) is { } box) Dispatch(box, e.Text, UiEventKind.Text);
         return true;
     }
 
@@ -1357,6 +1449,71 @@ public sealed class UiRegistration : IDisposable
         Check();
         ArgumentNullException.ThrowIfNull(buttons);
         _host.CharacterPanel.AddButtons(Id, buttons);
+    }
+
+    /// <summary>
+    /// Adds buttons beside the HUD's jobs list as <see cref="AddJobPanelButtons(Func{UiCharacterContext, IEnumerable{UiJobButton}})"/> does, placed
+    /// by <paramref name="layout"/> (rows above the list or columns beside it): the first registered source with a layout sets it for all.
+    /// </summary>
+    public void AddJobPanelButtons(Func<UiCharacterContext, IEnumerable<UiJobButton>> buttons, UiJobButtonLayout layout)
+    {
+        Check();
+        ArgumentNullException.ThrowIfNull(buttons);
+        ArgumentNullException.ThrowIfNull(layout);
+        _host.CharacterPanel.AddButtons(Id, buttons, layout);
+    }
+
+    /// <summary>
+    /// Adds controls to a faithful screen or the HUD (docs/modding.md "Screen controls"): <paramref name="build"/> makes a node tree (null: nothing)
+    /// laid out against the widget <paramref name="anchorWidget"/> of <paramref name="screen"/> (a screen id or kind, or <see cref="UiScreens.Hud"/>;
+    /// <see cref="UiScreens.ItemCells"/> builds once per item cell) by <paramref name="placement"/>, drawn over the screen; a node's
+    /// <see cref="UiNode.Action"/> names an action registered with <see cref="RegisterAction"/>. Nothing shows while the screen is closed or its
+    /// layout lacks the widget (a UI mod's). It runs on the host's thread each time the screen is arranged, which can be every frame, so it must be
+    /// cheap, and while a tick may be in flight, so it must not touch the world; an action changes the world through commands
+    /// (<see cref="UiScreenContext.Enqueue"/>).
+    /// </summary>
+    public void AddScreenControls(string screen, string anchorWidget, UiAnchorPlacement placement, Func<UiScreenContext, UiNode?> build)
+    {
+        Check();
+        ArgumentNullException.ThrowIfNull(build);
+        _host.Screens.Add(Id, screen, anchorWidget, placement, build);
+    }
+
+    /// <summary>
+    /// Adds rows to the right-click menu of any target (docs/modding.md "Right-click menu rows"): <paramref name="verbs"/> gets the target
+    /// (<see cref="UiMenuTarget"/>: a character, ground item, container, door, building or the ground) whenever the game builds a menu for one with a
+    /// selection, which can be each frame the target is under the cursor, so it must be cheap and must not touch the world; a chosen row queues
+    /// commands (<see cref="UiMenuTargetContext.Enqueue"/>).
+    /// </summary>
+    public void AddMenuVerbs(Func<UiMenuTargetContext, IEnumerable<UiMenuVerb>> verbs)
+    {
+        Check();
+        ArgumentNullException.ThrowIfNull(verbs);
+        _host.TargetVerbs.Add(Id, verbs);
+    }
+
+    /// <summary>
+    /// Handles input on the world map (docs/modding.md "World map input"): <paramref name="input"/> gets presses over the map, keys while it shows
+    /// and its closing, with the map as drawn (<see cref="UiWorldMapView"/>), on the host's thread; true takes the press or key from the game (no
+    /// pan, no move order). It must not touch the world; it queues commands.
+    /// </summary>
+    public void AddMapInput(Func<UiMapInput, bool> input)
+    {
+        Check();
+        ArgumentNullException.ThrowIfNull(input);
+        _host.Map.Add(Id, input);
+    }
+
+    /// <summary>
+    /// Adds player replies to conversations, after the game's own choices (docs/modding.md "Dialogue replies"): <paramref name="replies"/> gets the
+    /// conversation (the NPC's and the player's snapshots: record, faction) whenever its line or choices change and answers the replies to offer
+    /// (none: the conversation is as the game's); a chosen reply runs on the host's thread and changes the world only by queueing commands.
+    /// </summary>
+    public void AddDialogueReplies(Func<UiDialogueContext, IEnumerable<UiDialogueReply>> replies)
+    {
+        Check();
+        ArgumentNullException.ThrowIfNull(replies);
+        _host.Replies.Add(Id, replies);
     }
 
     /// <summary>

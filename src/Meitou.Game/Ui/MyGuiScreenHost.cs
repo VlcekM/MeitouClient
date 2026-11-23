@@ -527,6 +527,7 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
             return true;
         }
 
+        if (PressOverlayEdit(c, p)) return true;   // a code mod's text box placed in the screen (UiHost screen controls)
         if (c.Type == "EditBox" && c.Properties.GetValueOrDefault("Static") != "true")
         {
             PressEdit(id, c, p);

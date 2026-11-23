@@ -104,36 +104,39 @@ sealed class TownModLines(PlayerInterface player)
         r.X >= panel.X && r.Y >= panel.Y && r.X + r.Width <= panel.X + panel.Width && r.Y + r.Height <= panel.Y + panel.Height;
 
     /// <summary>
-    /// Line <paramref name="k"/>'s controls: its label in <paramref name="row"/> and its value or button in <paramref name="column"/>, or one button
-    /// across both.
+    /// Line <paramref name="k"/>'s controls: its icon, its label in <paramref name="row"/> and its value or button in <paramref name="column"/>, or
+    /// one button across both; the line style's colours over the panel's.
     /// </summary>
     void AddLine(List<UiControl> controls, int k, UiControl label, UiRect row, UiRect column)
     {
         var line = _shown[k];
         string name = "TownModLine" + k.ToString(CultureInfo.InvariantCulture);
+        row = UiLineStyle.PlaceIcon(controls, name, line.Style, row, label.Clip);
+        string? labelInk = UiLineStyle.Ink(line.Style?.Label), valueInk = UiLineStyle.Ink(line.Style?.Value);
         if (line.Press is not null && line.Value is null)
         {
             var across = row with { Width = column.X + column.Width - row.X };
-            controls.Add(Button(name + "Button", line.Label, line.Tooltip, k, label, across));
+            controls.Add(Button(name + "Button", line.Label, line.Tooltip, k, label, across, labelInk));
             return;
         }
 
-        controls.Add(Text(name + "Label", line.Label, line.Tooltip, label, row, null));
+        controls.Add(Text(name + "Label", line.Label, line.Tooltip, label, row, null, labelInk));
         if (line.Value is not { } value) return;
 
         controls.Add(line.Press is null
-            ? Text(name + "Value", value, line.Tooltip, label, column, "Center")
-            : Button(name + "Button", value, line.Tooltip, k, label, column));
+            ? Text(name + "Value", value, line.Tooltip, label, column, "Center", valueInk)
+            : Button(name + "Button", value, line.Tooltip, k, label, column, valueInk));
     }
 
     /// <summary>
     /// A text in <paramref name="bounds"/> as the panel's labels draw theirs (a copy of <paramref name="label"/>, its alignment
     /// <paramref name="align"/> when given), a mouse target only with a tooltip.
     /// </summary>
-    static UiControl Text(string name, string text, string? tooltip, UiControl label, UiRect bounds, string? align)
+    static UiControl Text(string name, string text, string? tooltip, UiControl label, UiRect bounds, string? align, string? ink)
     {
         var properties = new Dictionary<string, string>(label.Properties, StringComparer.Ordinal) { ["Caption"] = text };
         if (align is not null) properties["TextAlign"] = align;
+        if (ink is not null) properties["TextColour"] = ink;
         AddTooltip(properties, tooltip);
         return label with
         {
@@ -145,13 +148,13 @@ sealed class TownModLines(PlayerInterface player)
     /// A button in <paramref name="bounds"/> (inset a pixel above and below, as the HUD's button lines) running line <paramref name="k"/>: the
     /// game's neutral button with its caption in the label font and the panel's main colour, as the building panel's own action lines.
     /// </summary>
-    static UiControl Button(string name, string caption, string? tooltip, int k, UiControl label, UiRect bounds)
+    static UiControl Button(string name, string caption, string? tooltip, int k, UiControl label, UiRect bounds, string? ink)
     {
         var properties = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["FontName"] = label.Properties.GetValueOrDefault("FontName") ?? "Kenshi_StandardFont_Medium",
             ["TextAlign"] = "Center",
-            ["TextColour"] = PlayerInterface.MainColour,
+            ["TextColour"] = ink ?? PlayerInterface.MainColour,
         };
         AddTooltip(properties, tooltip);
         string action = LineAction + k.ToString(CultureInfo.InvariantCulture);

@@ -99,6 +99,12 @@ sealed class ProductionWindows(PlayerInterface player)
     internal static bool IsMachineScreen(string screen) => MachineScreens.Contains(screen);
 
     /// <summary>
+    /// The tooltip of a machine's item at <paramref name="site"/>, naming it by its site and index for the mods' tooltip lines.
+    /// </summary>
+    static TooltipRuntime.ItemTip MachineTip(InventoryItemView item, string site) =>
+        TooltipRuntime.ItemTip.Of(item) with { Owner = ItemOwner.AtSite(site), Index = item.Index };
+
+    /// <summary>
     /// The kind of a machine screen (building, bench or storage), the selected building's own window's as the shown one's; any other screen as is.
     /// </summary>
     internal static string MachineKind(string screen) =>
@@ -696,7 +702,7 @@ sealed class ProductionWindows(PlayerInterface player)
             player.ItemCells.AddItemCell(controls, $"machine-item-{item.Index}",
                 new(area.X + item.X * area.Width / grid.Width, area.Y + item.Y * area.Height / grid.Height, item.Width * area.Width / grid.Width,
                     item.Height * area.Height / grid.Height),
-                item.Record, item.Material, item.Name, item.Quantity, TooltipRuntime.ItemTip.Of(item), "MachineItem", 1000 + item.Index,
+                item.Record, item.Material, item.Name, item.Quantity, MachineTip(item, m.Site), "MachineItem", 1000 + item.Index,
                 slot.Bounds.Intersect(slot.Clip ?? slot.Bounds), charge: item.Charge, colour: item.Colour, rotated: item.Rotated);
         }
     }
@@ -782,7 +788,7 @@ sealed class ProductionWindows(PlayerInterface player)
                 player.ItemCells.AddItemCell(controls, $"machine-item-{item.Index}",
                     new(g.Bounds.X + item.X * player.InventoryCell, g.Bounds.Y + item.Y * player.InventoryCellHeight, item.Width * player.InventoryCell,
                         item.Height * player.InventoryCellHeight),
-                    item.Record, item.Material, item.Name, item.Quantity, TooltipRuntime.ItemTip.Of(item), "MachineItem", 1000 + item.Index,
+                    item.Record, item.Material, item.Name, item.Quantity, MachineTip(item, m.Site), "MachineItem", 1000 + item.Index,
                     g.Clip, charge: item.Charge, colour: item.Colour, rotated: item.Rotated);
             }
         }

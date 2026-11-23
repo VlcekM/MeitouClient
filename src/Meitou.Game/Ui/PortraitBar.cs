@@ -69,6 +69,24 @@ sealed class PortraitBar(PlayerInterface player)
     internal float SquadBarScroll;
 
     /// <summary>
+    /// The members the squad bar's cells last showed, in cell order (<see cref="MemberOfCell"/>).
+    /// </summary>
+    IReadOnlyList<CharacterSnapshot> _cellMembers = [];
+
+    /// <summary>
+    /// The member whose portrait picture <paramref name="c"/> is (<c>portrait-N</c>, the code mods' <see cref="UiScreens.Portraits"/> anchor); null
+    /// for any other control.
+    /// </summary>
+    internal CharacterSnapshot? MemberOfCell(UiControl c)
+    {
+        const string prefix = "portrait-";
+        if (!c.Name.StartsWith(prefix, StringComparison.Ordinal)) return null;
+        if (!int.TryParse(c.Name.AsSpan(prefix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out int i)) return null;
+
+        return (uint)i < (uint)_cellMembers.Count ? _cellMembers[i] : null;
+    }
+
+    /// <summary>
     /// When each member's flash started (<see cref="Stopwatch"/> ticks); a member leaves when its flash stops.
     /// </summary>
     internal readonly Dictionary<CharacterId, long> PortraitFlashes = [];
@@ -202,6 +220,7 @@ sealed class PortraitBar(PlayerInterface player)
     /// </summary>
     internal void AddSquadPortraits(List<UiControl> controls, UiRect panel)
     {
+        _cellMembers = [];
         var members = SquadBarMembers();
         if (members.Count == 0) return;
 
@@ -257,6 +276,7 @@ sealed class PortraitBar(PlayerInterface player)
     /// </summary>
     void AddSquadCells(List<UiControl> controls, IReadOnlyList<CharacterSnapshot> members, UiRect page, float size, int columns)
     {
+        _cellMembers = members;
         float k = size / PortraitLayoutSize;
         var camera = player.Session.Camera.Current;
         for (int i = 0; i < members.Count; i++)

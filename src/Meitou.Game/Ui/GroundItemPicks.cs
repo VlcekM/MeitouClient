@@ -150,8 +150,26 @@ sealed class GroundItemPicks(PlayerInterface player)
     {
         if (player.SelectedIds().Count == 0 || PickGroundItem(p) is not { } item) return false;
 
-        player.Say(new Simulation.Items.PickUpItemOrder([], item) { Tick = player.Session.World.Tick, Alt = player.AltHeld });
+        bool alt = player.AltHeld;
+        void PickUp() => player.Say(new Simulation.Items.PickUpItemOrder([], item) { Tick = player.Session.World.Tick, Alt = alt });
+        if (!ModMenuPress(p, item, PickUp)) PickUp();
         return true;
+    }
+
+    /// <summary>
+    /// A right press on ground item <paramref name="item"/> the code mods give rows for (<see cref="UiMenuTargetKind.GroundItem"/>): held, the
+    /// menu of Pick Up and their rows opens; released quickly, <paramref name="pickUp"/> runs as without them. False without such rows.
+    /// </summary>
+    bool ModMenuPress(Vector2 p, int item, Action pickUp)
+    {
+        var found = player.Session.CurrentSnapshot.GroundItems.Where(g => g.Id == item).Select(g => (Simulation.Items.GroundItemSnapshot?)g).FirstOrDefault();
+        if (found is not { } g) return false;
+
+        var target = new UiMenuTarget(UiMenuTargetKind.GroundItem, g.Name, g.Position) { GroundItem = g, Record = g.Record };
+        if (player.ModTargetVerbs(target) is not { Count: > 0 }) return false;
+
+        var window = player.ContextMenuWindow;
+        return window.ContextPressOn(p, at => window.Menu(g.Name, at, [("Pick Up", pickUp), .. player.ModTargetVerbs(target)]), pickUp);
     }
 
     /// <summary>

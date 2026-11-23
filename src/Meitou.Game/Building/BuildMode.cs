@@ -1489,6 +1489,8 @@ sealed class BuildMode(PlayerInterface player)
         if (site.LevelPlacement is null && !site.Complete && site.Progress <= 0 && site.Materials.All(m => m.Delivered <= 0))
             verbs.Add(("Cancel Construction", () => player.Say(new CancelSite(site.Id) { Tick = player.Session.World.Tick })));
         AddDoorVerbs(verbs, site);
+        var target = new UiMenuTarget(UiMenuTargetKind.Building, SiteName(site), site.Position) { Id = site.Id, Record = site.Record };
+        verbs.AddRange(player.ModTargetVerbs(target));
         return verbs;
     }
 
