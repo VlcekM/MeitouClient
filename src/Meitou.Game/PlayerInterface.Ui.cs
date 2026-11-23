@@ -360,6 +360,18 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>
+    /// Whether any UI extension adds bars to the building panel.
+    /// </summary>
+    internal bool HasModBuildingRows => _uiHost.HasBuildingRows;
+
+    /// <summary>
+    /// The bars the interface extensions add under the Condition of <paramref name="building"/> (<see cref="UiHost.BuildingRows"/>), given the
+    /// snapshot the panel is laid out from.
+    /// </summary>
+    internal IReadOnlyList<UiBuildingRow> ModBuildingRows(UiSelectedBuilding building, WorldSnapshot snapshot) =>
+        _uiHost.BuildingRows(new UiBuildingContext(building, snapshot, () => Session.World.Tick, Say));
+
+    /// <summary>
     /// The lines the interface extensions add to an item's tooltip (<see cref="UiHost.ItemTooltipLines"/>); none without an extension that adds any.
     /// </summary>
     internal IReadOnlyList<UiItemTooltipLine> ModItemTooltipLines(TooltipRuntime.ItemTip t, bool first)

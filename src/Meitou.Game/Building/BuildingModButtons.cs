@@ -4,9 +4,9 @@ using Meitou.Game.Ui;
 namespace Meitou.Game.Building;
 
 /// <summary>
-/// The code mods' buttons on the selected building's panel (docs/modding.md "Building panel buttons",
-/// <see cref="UiRegistration.AddBuildingActions"/>): one button line each, after the game's own stats lines, laid out with the panel; a press runs
-/// the button shown for the building it was shown for.
+/// The code mods' buttons and bars on the selected building's panel (docs/modding.md "Building panel buttons" and "Building panel bars",
+/// <see cref="UiRegistration.AddBuildingActions"/>, <see cref="UiRegistration.AddBuildingRows"/>): one button line each, after the game's own stats
+/// lines, laid out with the panel; a press runs the button shown for the building it was shown for. The bars go under Condition.
 /// </summary>
 sealed class BuildingModButtons(PlayerInterface player)
 {
@@ -42,8 +42,7 @@ sealed class BuildingModButtons(PlayerInterface player)
             return [];
         }
 
-        var building = new UiSelectedBuilding(focus.Instance, focus.Record, focus.SiteId, focus.Name, Owned(focus));
-        _shown = player.ModBuildingActions(building, player.Session.CurrentSnapshot);
+        _shown = player.ModBuildingActions(Selected(focus), player.Session.CurrentSnapshot);
         _shownFor = focus.Instance;
 
         var lines = new PlayerInterface.HudLine[_shown.Count];
@@ -72,6 +71,24 @@ sealed class BuildingModButtons(PlayerInterface player)
         player.InterfaceSounds.Sound("General_Click");
         _shown[k].Press();
     }
+
+    /// <summary>
+    /// The mods' bars for <paramref name="focus"/> (none without a mod that adds any), as medical panel rows: the bar in the healed (yellow) layer, as
+    /// the game's own Condition bar.
+    /// </summary>
+    internal IEnumerable<PlayerInterface.MedicalRow> Rows(BuildingSelection.SelectedBuilding focus)
+    {
+        if (!player.HasModBuildingRows) return [];
+
+        return player.ModBuildingRows(Selected(focus), player.Session.CurrentSnapshot)
+            .Select(r => new PlayerInterface.MedicalRow(r.Name, 0, r.Fraction, 0, r.Value, "", false, r.Tooltip));
+    }
+
+    /// <summary>
+    /// <paramref name="focus"/> as the mods' sources see it.
+    /// </summary>
+    UiSelectedBuilding Selected(BuildingSelection.SelectedBuilding focus) =>
+        new(focus.Instance, focus.Record, focus.SiteId, focus.Name, Owned(focus));
 
     /// <summary>
     /// Whether the player's faction owns <paramref name="focus"/>: a building of its own (not a rock's or a town machine's site), or a town building

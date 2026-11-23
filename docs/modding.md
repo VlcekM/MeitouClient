@@ -1295,6 +1295,13 @@ holds refuses the second mod.
   keep it quick and never wait on the game): read only the context and the mod's own state, safely across threads. Texts other than names are cut to 4,000 characters. A source that throws is reported once
   and dropped. With no source, text shows as before at the cost of one check per lookup; with one, a shown text costs one dictionary lookup
   after its first time. Engine API, not in the original.
+- **Building panel bars:** in `Register`, `registration.AddBuildingRows(context => bars)` adds bars to the medical-bars column of a selected
+  complete building, placed piece or piece of furniture, right under its Condition (and a farm's crop bars), drawn as the Condition bar is.
+  Each `UiBuildingRow` has a name on the bar, a fraction (0 to 1, clamped) for how full it is, a number-column value ("" none) and a tooltip
+  or null; texts are shown as given, put on one line and cut to 80 characters. At most 6 bars from all sources together, in registration
+  order. The source gets the same `UiBuildingContext` as the buttons and the same rules (host thread, possibly every frame, cheap, never
+  touches the world); bars show state and have no press. A source that throws, or returns a bar without a name, is logged once and dropped
+  for the session. Engine API, not in the original.
 - **Item tooltip lines:** in `Register`, `registration.AddItemTooltipLines(context => lines)` adds `UiItemTooltipLine`s (a label and an
   optional value) to an item's tooltip, after the game's own rows and before the record's description. The source gets `UiItemTooltipContext`:
   the item's record string id, name, code-mod tag (`ItemInstance.ModTag`, so a mod shows what it keeps on the item: a condition, rolled

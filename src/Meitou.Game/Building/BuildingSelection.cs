@@ -908,7 +908,7 @@ sealed class BuildingSelection(PlayerInterface player)
     /// Condition</c> (<see cref="DoorConditionRow"/>), then <c>Building Condition</c> (<c>Condition</c> without doors), the construction progress as
     /// the number and its fraction of the target as the bar, then while unfinished a row per material, delivered over required. Meitou models no
     /// building damage, so a finished building's progress is its target (the original's damaged state lowers it). A complete farm adds its crop bars
-    /// after Condition.
+    /// after Condition, then a complete building the mods' bars (<see cref="BuildingModButtons.Rows"/>).
     /// </summary>
     internal List<PlayerInterface.MedicalRow> BuildingRows(SelectedBuilding focus)
     {
@@ -929,6 +929,7 @@ sealed class BuildingSelection(PlayerInterface player)
         rows.Add(Bar(Loc.Tr(door is null ? "Condition" : "Building Condition"), fraction, progressValue, tip));
 
         if (complete && PanelMachine(focus)?.Farm is { } farm) FarmPanel.AddRows(farm, rows);
+        if (complete) rows.AddRange(ModButtons.Rows(focus));
 
         // A wind generator's rows (WindGeneratorBuilding::getGUIPower section 4): Wind, its share as a whole percent and the bar; Power Output,
         // the output as an int over the rated.
