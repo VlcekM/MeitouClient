@@ -106,6 +106,9 @@ sealed class QualityTiers(SettingsMenu menu)
     [
         new(WorldFrame.RockSmoothingSwitch, false, false, true),
         new(WorldFrame.OutlineRefineSwitch, false, false, true),
+
+        // The simple terrain material: Low only (docs/render-terrain.md "Simple material": 1.3-2.7 ms of terrain on an Iris Xe at --low-end).
+        new(WorldFrame.SimpleTerrainSwitch, true, false, false, High: false),
         new("Advanced materials", false, true, true, High: true),
         new("Ground trails", false, true, true, High: true),
         new("Water contact foam, wakes and ripples", false, true, true, High: true),

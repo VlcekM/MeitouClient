@@ -150,6 +150,8 @@ static class SettingHints
         "Ground trails" => "Footprints and drag marks in sand, mud and snow; wind and rain wear them away.",
         "Ground displacement (tessellation)" => "Raise the nearby ground into real bumps and ridges that cast shadows.",
         "Rock smoothing (tessellation)" => "Round off the flat facets of rocks and cliffs up close.",
+        WorldFrame.SimpleTerrainSwitch => "Faster ground for weak graphics: one biome and two texture layers a pixel, no bump detail. "
+            + "Blends between biomes show harder edges.",
         "Terrain outline refinement (tessellation)" => "Smooth the outline of hills and crests against the sky.",
         "Character levels" => "Use generated simpler meshes for distant characters.",
         "Item icons" => "Draw inventory item icons supersampled, without jagged edges.",

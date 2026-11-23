@@ -1537,6 +1537,10 @@ msgstr ""
 msgid "Fast speed"
 msgstr ""
 
+#: src/Meitou.Game/Settings/SettingHints.cs
+msgid "Faster ground for weak graphics: one biome and two texture layers a pixel, no bump detail. Blends between biomes show harder edges."
+msgstr ""
+
 #: src/Meitou.Game/Settings/LookPresets.cs
 msgid "Faster with Meitou"
 msgstr ""
@@ -4327,6 +4331,10 @@ msgstr ""
 
 #: src/Meitou.Game/Host/Photo/PhotoMode.cs
 msgid "Sideways"
+msgstr ""
+
+#: src/Meitou.Game/Rendering/Frame/WorldFrame.cs
+msgid "Simple terrain shading"
 msgstr ""
 
 #: src/Meitou.Game/Host/Photo/PhotoMode.cs

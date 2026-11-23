@@ -4850,3 +4850,11 @@ msgstr "Сохранить текущий набор"
 
 msgid "Sort by"
 msgstr "Сортировать по"
+
+#. machine-translated
+msgid "Simple terrain shading"
+msgstr "Упрощённое затенение земли"
+
+#. machine-translated
+msgid "Faster ground for weak graphics: one biome and two texture layers a pixel, no bump detail. Blends between biomes show harder edges."
+msgstr "Более быстрая земля для слабой графики: один биом и два слоя текстур на пиксель, без рельефных деталей. Переходы между биомами выглядят резче."

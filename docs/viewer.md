@@ -35,7 +35,7 @@ terrain material distance30000, error16 rendered pixels (Faithful10), haze250000
 Water reflection0..4 determines included classes. Texture quality0..4 skips mips; default0.
 --low-end: objects/landmarks5000, quarter LOD distance, short foliage/10%grass/particles,
 quarter particles, no reflection/shadows/AO/AA, flat water, scale0.83, anisotropy1, textureLow3,
-material distance15000, VSync off. It is a tunable preset, not an automatic hardware guarantee.
+material distance15000, simple terrain shading, VSync off. It is a tunable preset, not an automatic hardware guarantee.
 --benchmark-baseline: a 1920x1080 window, no GI, ground parallax or tessellation, no upscaler, SMAA at scale 1, texture quality 1; the game adds the Medium tier
 (QualityTiers.ApplyBenchmarkBaseline). In the game a --low-end or --benchmark-baseline run neither applies nor overwrites the sliders and switches saved in `meitou.user.json`.
 
