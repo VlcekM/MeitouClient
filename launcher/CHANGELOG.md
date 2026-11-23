@@ -2,6 +2,14 @@
 
 Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.yml`; each release needs its `## v<version>` section.
 
+## v1.18.0
+
+- Mods page: sort the list by load order, name, date added or last modified
+- Hide incompatible RE_Kenshi plugins hides DLL plugins that Meitou cannot run
+- Save current preset updates the selected preset with the full load order
+- Ignored plugins and code mods have distinct subtitle colours
+- Picking a language no longer crashes the launcher
+
 ## v1.17.0
 
 - Mods page: presets sit above the list, with compact icon buttons and one Select all / none toggle
