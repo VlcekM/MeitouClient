@@ -36,8 +36,8 @@
     "areas": "Benchmark results, Animal hunger"
   },
   "dxseba": {
-    "commits": 22,
-    "areas": "Blood stains, footprints, ragdolls"
+    "commits": 42,
+    "areas": "Effects, Blood, Code mods"
   },
   "dfdffish": {
     "commits": 17,
@@ -48,8 +48,8 @@
     "areas": "Mod settings"
   },
   "teppum": {
-    "commits": 265,
-    "areas": "Code mods, AI, Navmesh, UI"
+    "commits": 281,
+    "areas": "Code mods, AI, Navmesh"
   },
   "robgreen490": {
     "commits": 4,
@@ -64,11 +64,11 @@
     "areas": "Benchmarks, Homepage"
   },
   "pza-mods-bot": {
-    "commits": 5,
-    "areas": "Group speed, mod settings"
+    "commits": 6,
+    "areas": "KenshiLib, Speed groups"
   },
   "dk853": {
-    "commits": 2,
+    "commits": 3,
     "areas": ""
   },
   "protocol-nyx": {
