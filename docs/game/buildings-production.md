@@ -1279,15 +1279,15 @@ distinct records in item order, `FUN_140299990`; a producer its output); the fir
 count while the character has room (Character slot `0x170`), and the task ends; none wanted fails it. The machine the plan fills is not asked, so
 a mixed storage can hand over another record than the one the finder looked for, and the trip repeats: row 92's done state 66 at a
 storage is "carries its item" (`FUN_140597530`; `StorageBuilding` slot `0x550`, `FUN_14029ba60`: the record at `+0x448`, none for an ITEM
-storage), so 93 at the machine still lacks 67 and the next plan runs 92 at the same source again; the player's haul repeats it alike
-(**Observed**, headless: a farmer at a tank holding fuel before water takes the fuel a generator wants, trip by trip, before any water). The count is computed at the take, nothing is kept: over the
+storage), so 93 at the machine still lacks 67 and the next plan runs 92 at the same source again; an automatic machine's hauler (152) repeats it alike
+in Meitou (**Observed**, headless: a farmer at a tank holding fuel before water takes the fuel a generator wants, trip by trip, before any water). The count is computed at the take, nothing is kept: over the
 buildings of mask `0x4002436` round the character's town (`FUN_1408cbea0`, a player outpost alike) that are complete (slot `0x228`, `+0x160`),
 not the source and not of its record, each that takes the item (slot `0x4a0`) adds the room of its input of it (`max` - count; 1 for `max`
 -1 with room) when that is its first input; a storage (its entry 0 is empty) or a machine whose input of it comes later makes the count 5 at
 once (the inventory-room test `FUN_14074afa0` on the entry before). One more when the item is food (`item function` 3) and the character carries
 none (slot `0x2f0`, `FUN_1405972d0`: functions 3 and 15). A crafting bench source (class 6) with nothing wanted gives 1 of the last record the
 character has room for (no Meitou finder yields a bench). Meitou `FillDemand.Count` (no distance bound; town data absent: every machine) serves
-the NPC fetch at a storage, the player's haul fetch (`ProductionSystem.FetchAt`, a storage or a producer's output) and a worker's 92 at a
+the NPC fetch at a storage, an automatic machine's hauler's fetch (`ProductionSystem.FetchTownWants`, a storage or a producer's output) and a worker's 92 at a
 producer (its own or a fetch source: `TakeOutput`, once per task, `AiSystem.CollectDone`) alike, so an NPC mine's worker takes 5 of a full output
 when a storage of the town takes ore, and none when nothing in the town wants it (the output stays full). A fetch that takes nothing asks a
 replan (the failed flag `+0x26d`, handler `FUN_14050d080`); a walk that ended short also ignores the source for 20 s. The player's hauling fetch (`NearestSource`) walks the empty
@@ -1314,8 +1314,14 @@ inputs in list order as the finder does, takes storages before producers and ski
 - **Storage pick** (**Verified**, `FUN_14059acd0`, also called by the 242 ditch finder `FUN_1405a59a0`): the candidates are the current town's
   buildings (the nearest-allies query, mask `0x4002436`) with a StorageBuilding cast, complete, of the character's faction, whose slot `0x4a0`
   takes the item; the nearest to the character by squared 3D distance wins, within the AI's range-mode bound (ROAM_FAR 4.246733e7).
-- **Unknown:** when an operator leaves a machine to haul, where a 124 job takes its items from, and whether 152 / 124 on an automatic machine ever empty its output
-  (152's goal is only "no empty inputs", !62).
+- **Observed** (the original 1.0.68, no mods, 2026-11-23): an operator's job 87 at an empty machine fetches nothing. A Copper Alloy Bench with
+  its Copper input emptied by hand and a General Storage Chest in the same room holding Iron Plates (listed first) and 11 Copper: the operator,
+  with jobs on and nothing else to do, stayed Aimless beside the bench for two game hours and never went to the chest.
+- **Unknown:** where a 124 job takes its items from, whether 152 / 124 on an automatic machine ever empty its output
+  (152's goal is only "no empty inputs", !62), and what a 152 hauler takes at a mixed storage.
+- **Meitou** (`ProductionSystem.FetchAt`, engine choice): an operator's Auto haul fetch, which the original has no counterpart for, takes the
+  record it went for, up to the room the machine's inputs of it have (an input with a negative capacity counts 1), from a storage's main grid or a
+  producer's output. An automatic machine's hauler keeps the NPC fetch's take ([NPC town machines](#npc-town-machines)).
 
 ## House sales
 
