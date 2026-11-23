@@ -41,7 +41,9 @@ public sealed partial class ProductionSystem
             return;
         }
 
-        if ((Site(world, add.Site) ?? TownMachineSite(world, add.Site)) is null) return;
+        // A door's repair with Shift gives the engineer job on the door (FUN_1407fc6e0's 95, whose job is 125).
+        bool door = world.Fixtures.Find(add.Site) is { Kind: Locks.FixtureKind.Door };
+        if (!door && (Site(world, add.Site) ?? TownMachineSite(world, add.Site)) is null) return;
         var table = world.Characters;
         foreach (var id in Who(world, add.Characters))
         {
@@ -639,8 +641,8 @@ public sealed partial class ProductionSystem
         if (CharacterFacts.GettingUp(cold, world.Tick)) return false;
         var at = world.Characters.Next[slot].Position;
 
-        // The engineer job ignores its target: its finder picks any site or door (the original's row 125 finder, docs/game/buildings-production.md "Builders
-        // and dismantle"); a pick out of range fails the job, and so does a character with no working arm (row 2's state 38).
+        // The engineer job ignores its target: its finder picks any site or door (the original's row 125 finder, docs/game/buildings-production.md
+        // "Builders and dismantle"); a pick out of range fails the job, and so does a character with no working arm (row 2's state 38).
         if (job.Type == TaskType.JobBuilder)
         {
             return ConstructionSystem.HasWorkingArm(cold) && Construction?.EngineerWork(world, slot) is { } pick

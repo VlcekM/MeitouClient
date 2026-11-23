@@ -1880,7 +1880,7 @@ optional), `EdgeGap` (site, point -> gap to its footprint hull; the host's).
   not in the sim). A destroyed flag (a save's, or a wall line hit to 0) turns a player-built building into a ruin on the next tick; a town house waits for Repair
   (**Verified** rule: progress 0.4 x target, delivered floor(delivered x U[0.3, 0.5) + 0.5)).
 - Engineer job (125, run by the [job lists](#production)): `EngineerWork` scores the faction's sites that `NeedsWork`,
-  not paused, destroyed, attached or being dismantled, and the doors needing repair of its complete ones (at the leaf),
+  not paused, destroyed, attached or being dismantled, and the doors needing repair of its complete ones and of the town houses it owns (at the leaf),
   `max(2 (1 - d^2/9000^2), 0.0001) / (n + 1)` (d 3D, n others working it), skipping a stalled site the character carries
   nothing for and `Source` cannot feed; `StartBuilding` sends it there (a door: the door repair). Without the job nobody builds unordered (the original has no other auto-build).
 - `BuildingsRevision` bumps on add, complete, a complete building becoming a site (dismantling started), destroyed and

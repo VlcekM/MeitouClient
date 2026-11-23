@@ -2029,8 +2029,8 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// <summary>
     /// What the engineer job (125) works next (<b>Verified</b>, <c>BuildingFinderForEngineers</c> <c>FUN_1409a6900</c> / <c>FUN_1409a6c10</c>):
     /// of the character's faction's unpaused, not dismantled sites, not a destroyed house (function 19; any other destroyed building is ruined by
-    /// the engineer's first touch), one that needs work is itself a candidate, a complete one that needs none puts in its doors that need work
-    /// (its door list, Building <c>+0x1c0</c>; slot 101, progress below target: a damaged or broken door); score
+    /// the engineer's first touch), and the town houses it owns, one that needs work is itself a candidate, a complete one that needs none puts in
+    /// its doors that need work (its door list, Building <c>+0x1c0</c>; slot 101, progress below target: a damaged or broken door); score
     /// <c>max(2 (1 - d^2/9000^2), 0.0001) / (n + 1)</c>, d the 3D distance, n the others working it; the highest wins (the first on a tie). A
     /// stalled site the character carries nothing for counts only when <see cref="Source"/> finds a material; a door never stalls. Null: none.
     /// </summary>
@@ -2086,7 +2086,13 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             if (!EngineerCandidate(world, cold, site)) continue;
 
             if (site.NeedsWork) WeighSite(world, slot, cold, site, ref best, ref bestScore);
-            else WeighDoors(world, slot, site, ref best, ref bestScore);
+            else WeighDoors(world, slot, site.Id, ref best, ref bestScore);
+        }
+
+        // The town houses the faction owns are its buildings too; one that is a site was weighed above.
+        foreach (var house in world.Fixtures.OwnedPropertyKeys(cold.Faction))
+        {
+            if (reg.Find(house) is null && !IsUnreachable(world, cold, house)) WeighDoors(world, slot, house, ref best, ref bestScore);
         }
 
         return (best, bestScore);
@@ -2111,11 +2117,11 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     }
 
     /// <summary>
-    /// Weighs the doors of a complete site that need work (<see cref="DoorNeedsWork"/>), each at its leaf (its own node in the original).
+    /// Weighs the doors of a complete building that need work (<see cref="DoorNeedsWork"/>), each at its leaf (its own node in the original).
     /// </summary>
-    static void WeighDoors(World world, int slot, BuildSite site, ref EngineerTarget? best, ref float bestScore)
+    static void WeighDoors(World world, int slot, string building, ref EngineerTarget? best, ref float bestScore)
     {
-        foreach (var door in world.Fixtures.OfBuilding(site.Id))
+        foreach (var door in world.Fixtures.OfBuilding(building))
         {
             if (door.Kind != Locks.FixtureKind.Door || !DoorNeedsWork(door)) continue;
 

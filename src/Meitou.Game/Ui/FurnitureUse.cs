@@ -471,6 +471,19 @@ sealed class FurnitureUse(PlayerInterface player)
     internal bool DoorBroken(DoorPick door) => player.Session.CurrentSnapshot.Doors.GetValueOrDefault((door.Building, door.Door)).Broken;
 
     /// <summary>
+    /// The broken door's Repair (95): the selection repairs it; with Shift it also takes the Engineer job (125, the job of 95), as a site's Repair.
+    /// </summary>
+    internal void RepairDoor(DoorPick door)
+    {
+        long tick = player.Session.World.Tick;
+        player.Say(new Simulation.Construction.BuildOrder([], door.Id) { Tick = tick });
+        if (!player.SlowModifier) return;
+
+        var job = new Simulation.Production.AddJob(player.SelectedIds(), Data.Gameplay.Ai.TaskType.Repair, door.Id) { Tick = tick };
+        player.Say(job);
+    }
+
+    /// <summary>
     /// The pointer over a door: <c>spanner</c> for a broken one (<c>FUN_1407fc6e0</c>), <c>lock</c> for the player's own locked one, <c>lockpick</c>
     /// for another faction's, else <c>door</c>.
     /// </summary>
@@ -496,9 +509,11 @@ sealed class FurnitureUse(PlayerInterface player)
 
         // The door's quick order is appended to the queue, Shift or not (FUN_1407fc6e0 gives it through FUN_1407f9e20 with the keep flag set,
         // Verified by disassembly); the broken door's Repair clears it.
-        void Quick() => player.Say(DoorBroken(pick.Door)
-            ? new Simulation.Construction.BuildOrder([], pick.Door.Id) { Tick = player.Session.World.Tick }
-            : new DoorOrder([], pick.Door.Id, alt) { Tick = player.Session.World.Tick, Clicked = true, Queued = true });
+        void Quick()
+        {
+            if (DoorBroken(pick.Door)) RepairDoor(pick.Door);
+            else player.Say(new DoorOrder([], pick.Door.Id, alt) { Tick = player.Session.World.Tick, Clicked = true, Queued = true });
+        }
 
         ContextMenuWindow.ContextMenu? DoorMenu(Vector2 at) =>
             player.ContextMenuWindow.Menu(Loc.Tr("Door"), at, player.ContextMenuWindow.DoorVerbs(pick));
