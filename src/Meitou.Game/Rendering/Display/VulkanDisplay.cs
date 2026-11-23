@@ -201,8 +201,8 @@ public sealed unsafe class VulkanDisplay : IDisposable
     IWindow OpenWindow(WindowOptions options, VulkanDeviceOptions deviceOptions, bool hdr)
     {
         var window = Silk.NET.Windowing.Window.Create(options with { API = GraphicsAPI.DefaultVulkan, VSync = false });
-        window.Initialize();
-        SetWindowIcon(window);
+        WaylandDesktop.Initialize(window);
+        if (window.Native?.Wayland is null) SetWindowIcon(window);
         var surface = window.VkSurface ?? throw new InvalidOperationException("the window has no Vulkan surface support");
         var names = surface.GetRequiredExtensions(out uint count);
         var extensions = new string[count];
