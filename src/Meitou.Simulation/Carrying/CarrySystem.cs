@@ -234,17 +234,17 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             : Settings.Reach;
 
     /// <summary>
-    /// How near a looter must come to the character it loots or opens: <see cref="ReachOf"/> for a down or carried one; for a standing one (the
-    /// player's own, a pickpocket target) at least the original's arrival test on a character, row 26's <c>isAtLocation</c> (<c>FUN_1405a2450</c>
+    /// How near a looter must come to the character it loots or opens: <see cref="ReachOf"/> for a down or carried one or a pickpocket target; for
+    /// one of the player's own standing, at least the original's arrival test on a character, row 26's <c>isAtLocation</c> (<c>FUN_1405a2450</c>
     /// over <c>FUN_14059c6d0</c>, <b>Observed</b>): the target's radius + <see cref="Dialogue.DialogueSystem.TalkReach"/>, doubled once the
-    /// looter stops. A follower of the looter keeps backing off and body contact holds the looter off a big animal, so the flat reach was
-    /// never reached (#1247).
+    /// looter stops. With the flat reach, a follower backing off from its approaching leader and body contact with a big animal kept the looter
+    /// walking after its bag for seconds (#1247).
     /// </summary>
     float LootReach(World world, int looter, int target)
     {
         var body = world.Characters.Cold(target)!;
         float reach = ReachOf(world, body);
-        if (CanBeLooted(body)) return reach;
+        if (!body.IsPlayer || CanBeLooted(body)) return reach;
 
         bool stopped = (world.Characters.Next[looter].Flags & (ushort)MoveFlags.AnyPath) == 0;
         float stride = stopped ? Dialogue.DialogueSystem.TalkReach * 2 : Dialogue.DialogueSystem.TalkReach;
