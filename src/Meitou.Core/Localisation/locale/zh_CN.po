@@ -20,6 +20,9 @@ msgstr "最大化"
 msgid "Close"
 msgstr "关闭"
 
+msgid "Pick-up thefts from the owner"
+msgstr "拾取盗窃算物主的"
+
 msgid "Play"
 msgstr "开始游戏"
 
@@ -40,6 +43,9 @@ msgstr "每日构建"
 
 msgid "HOME"
 msgstr "主页"
+
+msgid "Taking someone else's item from the floor of a building is a theft from the item's owner. The game counts it as stolen from whoever owns the building you stand in, even when the item belongs to someone else."
+msgstr "在建筑内从地上拾取别人的物品，算作偷窃物品的主人。原版游戏则算作偷窃你所在建筑的主人，即使物品属于别人。"
 
 msgid "VERSIONS"
 msgstr "版本"

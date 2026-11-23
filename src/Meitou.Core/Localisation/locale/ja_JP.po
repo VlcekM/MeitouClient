@@ -166,6 +166,12 @@ msgstr "部隊の周辺に戻ってきた部隊は、離れていた間の分だ
 msgid "A swamp turtle butts and bites when it fights. In the game it fights with a sword or club drawn for it, whose moves its body cannot play, so its blows land without any motion."
 msgstr "沼ガメは戦うとき頭突きと噛みつきをします。ゲームでは用意された剣や棍棒で戦いますが、その動きを体で再生できないため、攻撃が何の動作もなく当たります。"
 
+msgid "Pick-up thefts from the owner"
+msgstr "拾った盗品は持ち主から"
+
+msgid "Taking someone else's item from the floor of a building is a theft from the item's owner. The game counts it as stolen from whoever owns the building you stand in, even when the item belongs to someone else."
+msgstr "建物の床から他人のアイテムを拾うと、そのアイテムの持ち主からの窃盗になります。ゲームでは、アイテムが別人のものでも、立っている建物の所有者からの窃盗として扱われます。"
+
 msgid "Turret fire is a crime"
 msgstr "タレット射撃は犯罪"
 

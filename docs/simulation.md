@@ -1195,7 +1195,11 @@ Loot on another faction's sleeper or prisoner opens its inventory (`CarrySystem.
 character sets the call site's code (`CrimeSystem.TakeCode`: right click, drag, give) and rolls with the owner watching (a playing-dead owner
 too); the take-all (`LootOrder`) keeps the Looting of `CrimeSystem.Loot`. Floors are `SightMap.FloorOf` / `FloorAt`. Engine choices: every squad
 living in the building watches (Meitou may house more than one), the window closes when the sleeper wakes. A stolen ground pick-up inside
-a building is a pending Theft with thievery XP 20, no roll.
+a building is a pending Theft with thievery XP 20, no roll; against the building's faction with its resident leader as the victim, or with the Fixes option "Pick-up thefts from the owner" (on by default)
+against the item's owner (`StolePickUp`, [economy](game/economy.md#fencing-stealing-and-smuggling)).
+Every witness says its witness line at a player's culprit once per pending crime (`PendingCrime.Told`; the original on every reacting run), so the
+victim's guards who see the crime after the first witness still say theirs, the Hub bar's Ninja Guards "Thief!" with DA 6 (#1251, **Observed** with the
+probe on the report's save).
 
 ## Cages, beds and locks
 

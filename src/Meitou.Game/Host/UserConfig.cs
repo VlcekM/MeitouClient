@@ -542,6 +542,11 @@ sealed class UserConfig
     /// </summary>
     public bool FixBagSearch { get; set; } = true;
     /// <summary>
+    /// A stolen ground pick-up is a Theft from the item's owner (Fixes settings; off: from the building the thief stands in, as the game does;
+    /// docs/game/economy.md "Fencing, stealing and smuggling").
+    /// </summary>
+    public bool FixPickUpTheft { get; set; } = true;
+    /// <summary>
     /// A shopkeeper at its counter is talked to from the counter's front (Gameplay settings, Meitou; off: the game's talk reach, so the customer
     /// walks round behind the counter; <c>World.CounterTalk</c>).
     /// </summary>

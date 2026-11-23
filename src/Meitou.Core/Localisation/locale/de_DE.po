@@ -166,6 +166,12 @@ msgstr "Ein Trupp, der in die Umgebung deiner Trupps zurückkehrt, ist für die 
 msgid "A swamp turtle butts and bites when it fights. In the game it fights with a sword or club drawn for it, whose moves its body cannot play, so its blows land without any motion."
 msgstr "Eine Sumpfschildkröte rammt und beißt im Kampf. Im Spiel kämpft sie mit einem für sie gezogenen Schwert oder Knüppel, dessen Bewegungen ihr Körper nicht abspielen kann, sodass ihre Schläge ohne jede Bewegung treffen."
 
+msgid "Pick-up thefts from the owner"
+msgstr "Aufgehobenes Diebesgut gehört dem Besitzer"
+
+msgid "Taking someone else's item from the floor of a building is a theft from the item's owner. The game counts it as stolen from whoever owns the building you stand in, even when the item belongs to someone else."
+msgstr "Wer in einem Gebäude den Gegenstand eines anderen vom Boden nimmt, bestiehlt dessen Besitzer. Das Spiel wertet es als Diebstahl beim Besitzer des Gebäudes, in dem du stehst, auch wenn der Gegenstand jemand anderem gehört."
+
 msgid "Turret fire is a crime"
 msgstr "Geschützfeuer ist ein Verbrechen"
 

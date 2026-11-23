@@ -3766,6 +3766,10 @@ msgid "Photo mode: the simulation pauses, the interface hides, and a free camera
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
+msgid "Pick-up thefts from the owner"
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
 msgid "Picked-up and looted items go into the character's backpack first, then its slots and inventory (the game: only while the bag window is open)."
 msgstr ""
 
@@ -5007,6 +5011,10 @@ msgstr ""
 
 #: src/Meitou.Game/Ui/StackSplitDialog.cs
 msgid "Take {1} of {2}"
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Taking someone else's item from the floor of a building is a theft from the item's owner. The game counts it as stolen from whoever owns the building you stand in, even when the item belongs to someone else."
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
