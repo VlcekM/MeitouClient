@@ -525,6 +525,7 @@ public static class SaveLoader
         };
         AutonomySave.Read(platoon.Record, squad);
         ModSquadSave.Read(platoon.Record, squad);
+        if (squad.OwnOptions is not null) world.Squads.OwnOptionsSeen = true;
         squad.Shop = ShopSave.ReadPlayer(world, squad, platoon.Record, data);
         ModTagSave.Read(platoon.Record, squad.ModTags);
         squad.SavedTown = CurrentTownSave.Read(platoon.Record);

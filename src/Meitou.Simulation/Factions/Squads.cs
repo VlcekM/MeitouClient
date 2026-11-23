@@ -350,9 +350,29 @@ public sealed class SquadRegistry
     int _nextId;
 
     /// <summary>
+    /// Whether any squad has had its own squad AI options this session (<see cref="Squad.OwnOptions"/>; set by <see cref="SquadManagement"/> and
+    /// the save reader, never cleared): until then <see cref="AnyOwnOptions"/> answers without a pass. Derived, not saved or hashed.
+    /// </summary>
+    public bool OwnOptionsSeen { get; set; }
+
+    /// <summary>
     /// The number of squads.
     /// </summary>
     public int Count => _squads.Count;
+
+    /// <summary>
+    /// Whether a squad's own squad AI options hold <paramref name="option"/>; a pass over the squads once any had their own.
+    /// </summary>
+    public bool AnyOwnOptions(Player.SquadAi option)
+    {
+        if (!OwnOptionsSeen) return false;
+        foreach (var squad in _squads.Values)
+        {
+            if (squad.OwnOptions is { } own && (own & option) != 0) return true;
+        }
+
+        return false;
+    }
     /// <summary>
     /// The squads in id order.
     /// </summary>

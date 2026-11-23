@@ -530,8 +530,8 @@ public sealed partial class ProductionSystem
     /// </summary>
     bool GetsUpHealed(World world, int slot, CharacterCold cold) =>
         DecisionSystem.Decides(cold) && cold.InSomething == Locks.HeldState.Bed && world.Characters.Next[slot].Task == (byte)CharacterTask.Sleep
-        && (SquadAiRules.For(world, cold) & SquadAi.Sleep) != 0 && (cold.Orders & CharacterOrders.Jobs) != 0 && (cold.Orders & CharacterOrders.Sneak) == 0
-        && !Orders.Holding(cold) && !PlayerOrders.Holds(world, slot) && !Unrested(cold);
+        && (SquadAiRules.For(world, cold) & SquadAi.Sleep) != 0 && (cold.Orders & CharacterOrders.Jobs) != 0
+        && (cold.Orders & CharacterOrders.Sneak) == 0 && !Orders.Holding(cold) && !PlayerOrders.Holds(world, slot) && !Unrested(cold);
 
     /// <summary>
     /// Whether the character is on the implicit 153 job (walking to its bed or lying in it) and committed to it: its commitment

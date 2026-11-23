@@ -325,8 +325,9 @@ sealed class GameMods(GameHost host)
     /// <summary>
     /// The squads of the world just loaded that a code mod made autonomous or kept out of the faction size count, when that mod is not running now
     /// (not installed, refused or failed to start), go back to the player (<see cref="Simulation.Ai.SquadAutonomy.DropUnowned"/>) and count again
-    /// (<see cref="Simulation.Factions.SquadManagement.DropUnownedUncounted"/>), and lose the shops, purses and sleep it gave them, each with a
-    /// notice; the NPC platoons it held in its name move on their own again (<see cref="Simulation.Population.PopulationSystem.DropUnownedHolds"/>,
+    /// (<see cref="Simulation.Factions.SquadManagement.DropUnownedUncounted"/>), and lose the shops, purses, sleep and squad AI options it
+    /// gave them, each with a notice; the NPC platoons it held in its name move on their own again
+    /// (<see cref="Simulation.Population.PopulationSystem.DropUnownedHolds"/>,
     /// a log line only); between ticks, before the first.
     /// </summary>
     internal void DropUnownedAutonomy(World world)
@@ -350,7 +351,11 @@ sealed class GameMods(GameHost host)
         if (woken > 0) Notice($"{woken} squad(s) a mod that is not loaded put to sleep are awake again.");
 
         int options = Simulation.Factions.SquadManagement.DropUnownedOptions(world, running.Contains);
-        if (options > 0) Notice(Meitou.Localisation.Loc.Tr("{1} squad(s) given their own squad AI options by a mod that is not loaded follow yours again.", options));
+        if (options > 0)
+        {
+            Notice(Meitou.Localisation.Loc.Tr(
+                "{1} squad(s) given their own squad AI options by a mod that is not loaded follow yours again.", options));
+        }
 
         // NPC platoons a missing mod held go back to the population; the player sees no change, so the log only.
         int released = Simulation.Population.PopulationSystem.DropUnownedHolds(world, running.Contains);

@@ -14,7 +14,7 @@ namespace Meitou.Simulation.Saving;
 public static class ModSquadSave
 {
     /// <summary>
-    /// The PLATOON keys: the count flag, the purse's money and the sleep flag, each with the mod that set it.
+    /// The PLATOON keys: the count flag, the purse's money, the sleep flag and the squad AI options, each with the mod that set it.
     /// </summary>
     public const string UncountedKey = "meitou uncounted", OwnerKey = "meitou uncounted owner", PurseKey = "meitou purse",
         PurseOwnerKey = "meitou purse owner", DormantKey = "meitou dormant", DormantOwnerKey = "meitou dormant owner",

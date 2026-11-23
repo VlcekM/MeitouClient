@@ -301,6 +301,7 @@ public static class SquadManagement
         if (!MayChange(squad.OptionsOwner, command.Owner)) return;
 
         squad.OwnOptions = command.Options;
+        if (command.Options is not null) world.Squads.OwnOptionsSeen = true;
         if (command.Options is null) squad.OptionsOwner = null;
         else if (command.Owner is { Length: > 0 } owner) squad.OptionsOwner = owner;
     }
