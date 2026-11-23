@@ -217,8 +217,15 @@ Meitou: `CombatSystem.MostAdvanced` (the followed swing; an exact tie keeps the 
 is clamped at 1, so it keeps blocking. A blow decided again draws afresh (`ChooseDefence` salts the blow's roll counter with the tick). The zone list: `AttackZoneLists.Contains`, double-buffered,
 so a defender sees the list an attacker built last tick (the original reads it in its own update order).
 
-**Observed** (decompiled, not measured in game), with several attackers: a target answering a request is asked by
-anyone, not only its own target, and the winner of the roll turns to attack the asker (`FUN_140666a30`). Deciding
+**Verified** (decompile of `FUN_140666a30`, `FUN_140665650`): a target answering a request is asked by anyone, not only its own target. It
+turns to attack the asker (`FUN_140665650` sets its opponent +0x290/+0x298 to the asker) only on the path taken without a current opponent, in
+the wait after its swing (+0x144), or in a state other than attacking (0) or defending (1); while it swings at or defends against its opponent
+the asker gets the plain answer (defending: the asker may swing; attacking: the initiative roll, a lost one refuses the asker) and the target
+keeps its opponent. So a fighter in a crowd finishes its combo on the one it started it on. Meitou: `CombatSystem.TurnOnYielder` (before, a
+fighter mobbed by a squad switched target between the blows of a combo, 46 times in 30 s on the save of #1248, and the later blows went to
+the new target's place with the heading still on the old one: 4 of 16 blows found nobody; after, every blow at a standing target landed).
+
+**Observed** (decompiled, not measured in game), with several attackers: Deciding
 (`FUN_14060c8b0`) tries attacking first and defends only when that fails; a waiting fighter that is attacked goes
 to deciding, except in the wait after its own swing (above). During its own swing a fighter aborts to defend only while under 50% of it with an incoming blow past
 50% (`FUN_14060a970` → `FUN_1406083d0(0.5, 0.5)`); while anyone attacks it the swing ends at the current blow's stop
