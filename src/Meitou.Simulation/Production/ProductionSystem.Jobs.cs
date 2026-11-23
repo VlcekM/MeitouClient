@@ -677,7 +677,8 @@ public sealed partial class ProductionSystem
     /// Whether a job cannot run (the original skips such a job: an unmet start condition the planner cannot meet, or the target finder found nothing;
     /// docs/game/ai-tasks.md "Perma-jobs"). Operating: the building is gone or not an operable machine, its operator places are taken by others, or
     /// it has no work (<see cref="HasWork"/>). Hauling to: the storage is gone, and the character at <paramref name="at"/> carries nothing it takes,
-    /// no loose item it wants lies near (<see cref="LooseFor"/>) and no machine within <see cref="InFinderRange"/> has an output it takes. Automatic
+    /// fetches no loose item for it (<see cref="FetchesLoose"/>), no loose item it wants lies near (<see cref="LooseFor"/>) and no machine within
+    /// <see cref="InFinderRange"/> has an output it takes. Automatic
     /// machines (152, and 124 on one): <see cref="AutoWork"/>.
     /// </summary>
     bool Blocked(World world, CharacterCold cold, PermaJob job, Vector3 at)
@@ -708,11 +709,20 @@ public sealed partial class ProductionSystem
                 if (m.Data.IsAutomatic && m.Data.IsProducer) return !AutoWork(world, site, m, cold, fetch: false);
                 if (!m.Data.IsStorage || m.Storage is null) return true;
                 if (cold.Inventory is { } inv && inv.All().Any(i => Takes(world, m, i))) return false;
+                if (FetchesLoose(world, cold, id)) return false;
                 return LooseFor(world, cold, at, m) is null && HaulSource(world, site, m) is null;
             default:
                 return true;
         }
     }
+
+    /// <summary>
+    /// The character is on its way to the loose item it took for this storage (<see cref="CharacterCold.HaulItem"/>) and the item still lies there:
+    /// its trip goes on whatever else lies within <see cref="LooseSource.Radius"/> of where it now stands (engine: a detour taking it out of that
+    /// reach of every wanted item blocked the job and ended the trip halfway).
+    /// </summary>
+    static bool FetchesLoose(World world, CharacterCold cold, string storage) =>
+        cold.HaulTo == storage && cold.HaulItem is { } item && world.GroundItems.Find(item) is not null;
 
     /// <summary>
     /// State 38 <c>hasOneWorkingArm</c>, which rows 87, 97, 146 and 234 need and no row provides, so the job cannot run without it.

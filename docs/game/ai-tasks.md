@@ -1296,7 +1296,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   jobs, and a follow order given while its target is already threatened, fight by their rows' plans (`FollowDefence`): the job's contributor or the order's owner starts 13 on the
   followed character's attacker when the row's first unmet list-B entry is 16 (for 45 also 39), as a step of the row, and they follow again when the fight ends; a running follow
   whose list B fails makes the step due at once (`FollowDefence.Due`). The step runs on the replan triggers above plus an engine re-ask at the think turn (`ThinkEveryTicks`) of a character
-  idle, on a job's task or on a running order (no periodic replan was found), so a higher job takes over a running one within that period, where the original waits for its next replan. Goal 15 is
+  idle, on a job's task or on a running order (no periodic replan was found), so a higher job takes over a running one within that period, where the original waits for its next replan; not a job's fetch walk (a corpse's lift, a haul's walk to its loose item; `JobSource.OnTrip`), which only a replan, a higher step or its own end stops (engine: a haul that came within reach on the way took over a corpse fetch, over and over, **Observed** on a player save). Goal 15 is
   the faction list's own goal on tier 3 (below).
 - **15 Protect allies for a player character** (**Verified**: desire `FUN_140599b90`, finder `FUN_14099ca10`, falloff `FUN_1409b2380`, constants from the exe): desire 0 when Passive or
   sneaking outside a fight; else the finder's best sensed ally (seen or heard, tagged ally) by its fight threat (`FUN_14099a190`, [combat goals](#combat-goals)) x clamp((1000 - d^2) / 990, 0.1, 1)

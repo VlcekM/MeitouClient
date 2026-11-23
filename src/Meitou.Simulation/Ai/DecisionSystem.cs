@@ -354,6 +354,10 @@ public sealed class DecisionSystem
     /// The trace lines of the character being looked at (kept only while <see cref="Tracing"/> is on).
     /// </summary>
     readonly List<string> _lines = [];
+    /// <summary>
+    /// Whether the character being looked at was asked for outside its think's turn (<see cref="Asked"/>).
+    /// </summary>
+    bool _asked;
 
     /// <summary>
     /// Takes the AI's think period (<paramref name="thinkEvery"/>), once when the world is made.
@@ -469,6 +473,7 @@ public sealed class DecisionSystem
     void LookAt(World world, int slot, CharacterCold cold, ChooserRow row, bool asked)
     {
         _lines.Clear();
+        _asked = asked;
         Combat.BodyOrders.UpdateEnds(world, slot);
         PlayerOrders.Prepare(world, slot);
         Ask(world, slot, cold, row);
@@ -898,7 +903,8 @@ public sealed class DecisionSystem
     /// Steps 3 and 5: the character's job list in order (<c>FUN_14050e5b0</c>, docs/game/ai-tasks.md "Perma-jobs"): the jobs switch gates every job
     /// but 16, 31, 45, 57, 58 and 250 (<c>FUN_14050c1c0</c>) in both passes; a job whose type has no contributor or whose row the repertoire does not
     /// register is skipped, and so is one the general list tests pass over (<see cref="ListTests.JobSkipped"/>: done, or nothing to do); the first
-    /// job that can run wins (one that runs the character's task already ends the step), so a higher job takes over a lower one at the next decision.
+    /// job that can run wins (one that runs the character's task already ends the step), so a higher job takes over a lower one at the next decision,
+    /// but not on a turn look during a fetch walk (<see cref="JobSource.OnTrip"/>).
     /// Step 3 asks only the jobs that are urgent now. The implicit jobs are step 5's next source
     /// (<see cref="Production.ProductionSystem"/>).
     /// </summary>
@@ -929,6 +935,8 @@ public sealed class DecisionSystem
         {
             _picked = -1;
             var cold = world.Characters.Cold(slot)!;
+            if (!urgent && !owner._asked && OnTrip(world, slot, cold) is { } trip) return trip;
+
             bool on = (cold.Orders & CharacterOrders.Jobs) != 0;
             for (int k = 0; k < cold.Jobs.Count; k++)
             {
@@ -951,6 +959,28 @@ public sealed class DecisionSystem
             }
 
             return DecisionCheck.No(urgent ? "no urgent job" : "no job can run");
+        }
+
+        /// <summary>
+        /// On a turn look (not asked), a list job on a fetch walk keeps the character while it can go on, so no higher job takes over halfway
+        /// (engine: the original chooses again only at a replan; the turn look let a haul that came within reach on the way take over a corpse
+        /// fetch, over and over). A fetch walk gives itself up when it cannot get there: a corpse's lift (<see cref="CharacterTask.PickUp"/>,
+        /// <see cref="Carrying.CarrySystem"/>) or a haul to its loose item (<see cref="CharacterCold.HaulItem"/>); a haul's leg to a machine or its
+        /// storage does not, so it is not kept. Null: the list is walked as usual.
+        /// </summary>
+        DecisionCheck? OnTrip(World world, int slot, CharacterCold cold)
+        {
+            var task = (CharacterTask)world.Characters.Next[slot].Task;
+            if (task != CharacterTask.PickUp && (task != CharacterTask.Haul || cold.HaulItem is null)) return null;
+            if (Production.PermaJobs.ListJob(cold, task) is not { Implicit: false } run || run.Job >= cold.Jobs.Count) return null;
+            if (owner._jobs.GetValueOrDefault(cold.Jobs[run.Job].Type) is not { } source) return null;
+
+            var check = source.CanRun(world, slot, run.Job);
+            if (!check.Running) return null;
+
+            if (owner.Tracing) owner._lines.Add($"{(int)Step} {Name} [{run.Job}] {(int)cold.Jobs[run.Job].Type}: runs (its trip)");
+            _picked = run.Job;
+            return check;
         }
 
         /// <summary>

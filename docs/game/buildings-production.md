@@ -1317,7 +1317,8 @@ inputs in list order as the finder does, takes storages before producers and ski
   when it has one; with none, slot `0x568` (`FUN_14029bab0`). Per record it calls `FUN_14059d000`, whose first pass is the loose items within
   1200 of the character ([NPC town machines](#npc-town-machines)), then the buildings. Row 92 at a loose item is `Task_Pickup`. Meitou
   (`ProductionSystem.LooseFor`): the records of the storage's `limit inventory` it and the hauler's main grid have room for; never an item another
-  faction owns (engine choice); then the player machines' outputs ([job lists](../simulation.md#job-lists)).
+  faction owns (engine choice); then the player machines' outputs ([job lists](../simulation.md#job-lists)). The item taken is kept for the trip
+  (`CharacterCold.HaulItem`): while it still lies there the job is not blocked, wherever the walk to it leads (`FetchesLoose`, engine choice).
 
 ## House sales
 
