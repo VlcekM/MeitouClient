@@ -631,8 +631,10 @@ public sealed partial class CombatSystem
         var prev = world.Characters.Previous;
 
         // One that lost the initiative roll to it: it turns on that one (FUN_140666a30 sets the winner to attack the asker), unless it fights the
-        // player's pick.
-        if (yielder >= 0 && yielder != s.TargetSlot && !s.Ranged && !(fighting && s.Picked))
+        // player's pick, or swings at or defends against the one it fights: then the asker is only refused (Verified, FUN_140666a30 reaches
+        // the turn FUN_140665650 only without a current opponent, in the wait after a swing, or in a state other than attacking or defending).
+        bool busy = fighting && (s.AttackTech >= 0 || s.ReactTech >= 0);
+        if (yielder >= 0 && yielder != s.TargetSlot && !s.Ranged && !(fighting && s.Picked) && !busy)
         {
             s.TargetSlot = yielder;
             s.TargetGeneration = prev[yielder].Generation;
