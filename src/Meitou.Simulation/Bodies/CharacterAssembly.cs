@@ -277,7 +277,7 @@ sealed class CharacterAssembly(PopulationData data)
     /// Builds the character's look again from its body, worn kit, limbs and shave (an animal's: from the bag it wears); one without an inventory
     /// stays as it is.
     /// </summary>
-    void RefreshLook(CharacterCold cold)
+    internal void RefreshLook(CharacterCold cold)
     {
         if (cold.Inventory is not { } inventory || cold.Appearance is not { } look) return;
         if (look.Animal is not null)

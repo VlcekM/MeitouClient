@@ -71,6 +71,38 @@ public sealed record EndContract(int SquadId) : SimCommand;
 public sealed record ChangeAi(int SquadId, string PackageId) : SimCommand;
 
 /// <summary>
+/// Replaces a squad's packages with <paramref name="Packages"/>, each in its slot (engine API for code mods, not in the original; the original
+/// adds packages by priority with <c>Blackboard::_addPackage</c>): the board tries the highest slot first, a slot's packages in the order given
+/// (docs/game/ai.md "Blackboard update"), and chooses at once. <see cref="ChangeAi"/> is the one-package case (slot 0). Taken by an NPC squad and
+/// by a player's squad while it is autonomous, as <see cref="ChangeAi"/>; an empty list or a package id the data lacks refuses the whole command
+/// (a log line). Saved with the squad (docs/formats/save.md "NPC platoons", <c>meitou packages</c>). A running contract keeps running.
+/// </summary>
+public sealed record SetSquadPackages(int SquadId, IReadOnlyList<SquadPackage> Packages) : SimCommand;
+
+/// <summary>
+/// One package of <see cref="SetSquadPackages"/>: its AI_PACKAGE string id and the board slot it goes in (higher is tried first; 0 to 1000).
+/// </summary>
+public readonly record struct SquadPackage(int Slot, string PackageId)
+{
+    /// <summary>
+    /// The highest slot a package may take.
+    /// </summary>
+    public const int MaxSlot = 1000;
+}
+
+/// <summary>
+/// A workplace's operator slots (<see cref="AiSystem.WorkSlots"/>): how many hold one and how many its functionality's <c>max operators</c> allows
+/// (<see cref="int.MaxValue"/> for a building without a functionality).
+/// </summary>
+public readonly record struct WorkplaceSlots(int Held, int Max)
+{
+    /// <summary>
+    /// Whether one more operator fits.
+    /// </summary>
+    public bool Free => Held < Max;
+}
+
+/// <summary>
 /// Sends a wandering trader squad to the player town <see cref="PlayerTown"/> for a stay of <see cref="Hours"/> game hours (engine API for code
 /// mods, not in the original): its next town and stay as the trader's start would pick them; the stay counts from its first step in that town
 /// after the command, also when it is there already. Ignored unless the squad runs a wandering trader package, or for hours that are not finite;
@@ -1719,6 +1751,20 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// The operator slots of each workplace held in the current cadence pass (derived, not hashed).
     /// </summary>
     readonly Dictionary<TownBuilding, int> _workTaken = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>
+    /// The operator slots of workplace <paramref name="building"/> (docs/modding.md "Workplace slots"): its <see cref="TownBuilding.Key"/> (a town
+    /// building's <c>x.y:instance</c>, a player-built one's site id). <see cref="WorkplaceSlots.Held"/> counts the AI workers holding it and the
+    /// player's operators on a job at an outpost machine, as of the last package cadence pass; null for a building that is no workplace of a town
+    /// or outpost the AI looked at then. Read only, in the serial phases (the pass changes it in the serial step).
+    /// </summary>
+    public WorkplaceSlots? WorkSlots(string building)
+    {
+        ArgumentNullException.ThrowIfNull(building);
+        if (_townPlaces.FindWorkplace(building) is not { } b) return null;
+
+        return new WorkplaceSlots(_workTaken.GetValueOrDefault(b), _work.MaxOperatorsOf(b));
+    }
 
     /// <summary>
     /// The work data of the buildings and home pieces (reach, clip, functionality, hunger rate, operator slots), cached by string id.
@@ -3626,6 +3672,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// </summary>
     void TakePackage(World world, SimCommand command)
     {
+        if (command is SetSquadPackages set)
+        {
+            TakePackages(world, set);
+            return;
+        }
+
         var (squadId, packageId) = command switch
         {
             StartContract s => (s.SquadId, s.PackageId),
@@ -3633,15 +3685,61 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             _ => (-1, ""),
         };
         if (world.Squads.Find(squadId) is not { } squad || data.Ai.Package(packageId) is not { } package) return;
-        if (squad.Ai is null)
-        {
-            if (IsPlayers(world, squad) && !squad.Autonomous) return;
-            Attach(world, squad);
-        }
+        if (!Attached(world, squad)) return;
 
         _rules.Bind(this, world, squad);
         if (command is StartContract c) squad.Ai!.StartContract(package, world.GameHours, c.Hours, _rules, c.Target, c.AnyRange);
         else squad.Ai!.Replace(package, _rules);
+    }
+
+    /// <summary>
+    /// Whether the squad has a board to take a package, attaching one first when the AI does not run it yet; false for a player's squad that is
+    /// not autonomous.
+    /// </summary>
+    bool Attached(World world, Squad squad)
+    {
+        if (squad.Ai is not null) return true;
+        if (IsPlayers(world, squad) && !squad.Autonomous) return false;
+
+        Attach(world, squad);
+        return true;
+    }
+
+    /// <summary>
+    /// A <see cref="SetSquadPackages"/>: the squad's slots become the packages given and the board chooses at once; refused whole (a log line)
+    /// for an empty list, a slot out of range or a package the data lacks.
+    /// </summary>
+    void TakePackages(World world, SetSquadPackages set)
+    {
+        if (world.Squads.Find(set.SquadId) is not { } squad) return;
+        if (SquadPackagesOf(set) is not { } packages)
+        {
+            string why = $"no packages, a slot outside 0..{SquadPackage.MaxSlot} or an unknown package";
+            Console.Error.WriteLine($"ai        SetSquadPackages for squad {set.SquadId} refused: {why}");
+            return;
+        }
+        if (!Attached(world, squad)) return;
+
+        _rules.Bind(this, world, squad);
+        squad.Ai!.ReplaceAll(packages, _rules);
+    }
+
+    /// <summary>
+    /// The packages of a <see cref="SetSquadPackages"/> as the data has them; null when the list is empty or holds a slot out of range or an
+    /// unknown id.
+    /// </summary>
+    List<SlottedPackage>? SquadPackagesOf(SetSquadPackages set)
+    {
+        if (set.Packages is not { Count: > 0 } list) return null;
+
+        var packages = new List<SlottedPackage>(list.Count);
+        foreach (var (slot, id) in list)
+        {
+            if (slot is < 0 or > SquadPackage.MaxSlot || id is null || data.Ai.Package(id) is not { } package) return null;
+            packages.Add(new SlottedPackage(slot, package));
+        }
+
+        return packages;
     }
 
     /// <summary>

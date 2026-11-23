@@ -160,6 +160,7 @@ sealed class ModSettingsRows(SettingsMenu menu)
         {
             ModSettingKind.Switch => entry with { Toggle = new Toggle(raw, () => setting.Get() is true, v => SetModSetting(setting, v)) },
             ModSettingKind.Slider => entry with { Slider = ModSlider(setting, raw) },
+            ModSettingKind.Text => entry with { Text = new(raw, () => setting.Text, v => SetModSetting(setting, v), setting.MaxLength) },
             _ => entry with { Choice = new(() => setting.Options, () => setting.Choice, i => SetModSetting(setting, setting.Options[i])) },
         };
     }

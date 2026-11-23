@@ -282,6 +282,7 @@ sealed class GameSaves(GameHost host)
 
             host.Config.ContinueSave = folder;
             host.Config.Save();
+            host.Modding.TellSaveWritten(folder);
         }
     }
 
@@ -423,7 +424,8 @@ sealed class GameSaves(GameHost host)
                 if ((options & ImportOptions.ResetPositions) != 0 && host.Nav is not null && read!.IsCompletedSuccessfully)
                     SaveImport.PlaceOnGround(read.Result, host.Nav.Walkability.GroundHeight);
                 return SwapInSave(read!, interactive: true, out summary,
-                    new SaveLoadOptions { Appearances = data.Appearances, ResetRelations = (options & ImportOptions.Relations) == 0 }, prepared);
+                    new SaveLoadOptions { Appearances = data.Appearances, ResetRelations = (options & ImportOptions.Relations) == 0 }, prepared,
+                    WorldStartKind.Import);
             }),
             GameHost.Stage("finishing", () =>
             {
@@ -474,12 +476,17 @@ sealed class GameSaves(GameHost host)
     }
 
     /// <summary>
+    /// The full path of the folder a load reads (<see cref="ReadingFolder"/>) for <see cref="World.Start"/>; null when none is known.
+    /// </summary>
+    static string? SaveFolderPath(string? folder) => string.IsNullOrEmpty(folder) ? null : Path.GetFullPath(folder);
+
+    /// <summary>
     /// Swaps in a world made from the save (at a tick boundary, the frame loop's) and hooks the host to it: the game clock, the camera on the
     /// player's squad. Returns the navmesh of the zones round the player to wait for before the first tick (<see cref="GameHost.SettleNewWorld"/>);
     /// throws <see cref="GameHost.SceneLoadFailed"/> when the save does not load (the old world stays).
     /// </summary>
     internal Task SwapInSave(Task<SaveGame> read, bool interactive, out string summary, SaveLoadOptions? loadOptions = null,
-        PreparedSystems? prepared = null)
+        PreparedSystems? prepared = null, WorldStartKind start = WorldStartKind.Load)
     {
         var watch = Stopwatch.StartNew();
         LoadedSave? loaded = null;
@@ -507,7 +514,7 @@ sealed class GameSaves(GameHost host)
         }
 
         // After the swap, so a mod's Ready that queues a command or reads the tick reaches this world, not the one it replaced.
-        host.Session.World.TellReady(fromSave: true);
+        host.Session.World.TellReady(new WorldStart(start, SaveFolderPath(ReadingFolder)));
 
         host.PopData = nextData;
         Difficulty = nextDifficulty;

@@ -780,6 +780,12 @@ public sealed class Blackboard
     public AiPackage? Replacement { get; private set; }
 
     /// <summary>
+    /// The packages a code mod's <see cref="SetSquadPackages"/> put in place of the template's, by slot as given (saved as <c>meitou packages</c>,
+    /// with <see cref="Replacement"/> the first of the highest slot); null: none (the template's, or <see cref="Replacement"/> alone).
+    /// </summary>
+    public IReadOnlyList<SlottedPackage>? Replacements { get; private set; }
+
+    /// <summary>
     /// The squad's mission target: whom its running contract is aimed at (none without one).
     /// </summary>
     public CharacterId MissionTarget { get; private set; } = CharacterId.None;
@@ -844,10 +850,32 @@ public sealed class Blackboard
     public void Replace(AiPackage package, IPackageRules? rules = null)
     {
         Replacement = package;
+        Replacements = null;
         _slots.Clear();
         _slots[0] = [package];
         if (Contract is null) Start(package, 0, rules);
         else Version++;
+    }
+
+    /// <summary>
+    /// A code mod's <see cref="SetSquadPackages"/>: the squad's packages become <paramref name="packages"/>, each in its slot (a slot's in the order
+    /// given, a repeat left out), and every member chooses again; without a running contract the board chooses at once (<see cref="Update"/>), so a
+    /// package that cannot start leaves the one running until a slot's package can.
+    /// </summary>
+    public void ReplaceAll(IReadOnlyList<SlottedPackage> packages, IPackageRules? rules = null)
+    {
+        ArgumentOutOfRangeException.ThrowIfZero(packages.Count);
+        _slots.Clear();
+        foreach (var (slot, package) in packages)
+        {
+            if (!_slots.TryGetValue(slot, out var list)) _slots[slot] = list = [];
+            if (!list.Contains(package)) list.Add(package);
+        }
+
+        Replacements = [.. Packages];
+        Replacement = Replacements[0].Package;
+        Version++;
+        if (Contract is null) Update(rules);
     }
 
     /// <summary>
@@ -876,6 +904,7 @@ public sealed class Blackboard
         if (MissionAnyRange) hasher.Add(0x416E7952);   // only when a code mod set it, so worlds without one hash as before
         if (PhaseContract) HashPhase(ref hasher);
         if (Replacement is not null) hasher.Add(Rng.StableHash(Replacement.Id));
+        if (Replacements is { } slots) HashReplacements(ref hasher, slots);
         hasher.Add(Intact);
         hasher.Add(PatrolStart);
         hasher.Add(Home?.Position ?? default);
@@ -923,6 +952,19 @@ public sealed class Blackboard
         {
             hasher.Add(RefugeeBroken);
             hasher.Add(RefugeeTarget);
+        }
+    }
+
+    /// <summary>
+    /// A code mod's packages by slot (<see cref="Replacements"/>); only a mod sets them, so worlds without one hash as before.
+    /// </summary>
+    static void HashReplacements(ref StateHasher hasher, IReadOnlyList<SlottedPackage> slots)
+    {
+        hasher.Add(0x506B6773 + slots.Count);
+        foreach (var (slot, package) in slots)
+        {
+            hasher.Add(slot);
+            hasher.Add(Rng.StableHash(package.Id));
         }
     }
 

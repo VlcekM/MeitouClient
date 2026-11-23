@@ -130,6 +130,14 @@ sealed class ModRegistrations
     /// </summary>
     public List<ModFactionList> FactionLists { get; } = [];
     /// <summary>
+    /// The save-written listeners.
+    /// </summary>
+    public List<ModSaveWritten> SavesWritten { get; } = [];
+    /// <summary>
+    /// The per-frame callbacks.
+    /// </summary>
+    public List<ModFrameView> Frames { get; } = [];
+    /// <summary>
     /// The mod's settings group; null when it registered none.
     /// </summary>
     public ModSettingsGroup? Settings { get; set; }
@@ -150,6 +158,44 @@ sealed class ModHitFeed(string owner, Action<IReadOnlyList<CombatHit>> run)
     public Action<IReadOnlyList<CombatHit>> Run => run;
     /// <summary>
     /// Set once the feed threw; a faulted feed is not called again.
+    /// </summary>
+    public bool Faulted { get; set; }
+}
+
+/// <summary>
+/// A mod's listener for saves written (<see cref="ModContext.AddSaveWritten"/>); faulted once it threw.
+/// </summary>
+sealed class ModSaveWritten(string owner, Action<string> run)
+{
+    /// <summary>
+    /// The id of the mod that registered it.
+    /// </summary>
+    public string Owner => owner;
+    /// <summary>
+    /// Tells it the full path of the save folder written.
+    /// </summary>
+    public Action<string> Run => run;
+    /// <summary>
+    /// Set once it threw; a faulted listener is not called again.
+    /// </summary>
+    public bool Faulted { get; set; }
+}
+
+/// <summary>
+/// A mod's per-frame callback (<see cref="ModContext.AddFrame"/>); faulted once it threw.
+/// </summary>
+sealed class ModFrameView(string owner, Action<ModFrame> run)
+{
+    /// <summary>
+    /// The id of the mod that registered it.
+    /// </summary>
+    public string Owner => owner;
+    /// <summary>
+    /// Hands it the frame.
+    /// </summary>
+    public Action<ModFrame> Run => run;
+    /// <summary>
+    /// Set once it threw; a faulted callback is not called again.
     /// </summary>
     public bool Faulted { get; set; }
 }
@@ -240,6 +286,18 @@ sealed class ModRegistry
     /// Every mod's faction tab list arrangers, in load order.
     /// </summary>
     public List<ModFactionList> FactionLists { get; } = [];
+    /// <summary>
+    /// Every mod's save-written listeners, in load order.
+    /// </summary>
+    public List<ModSaveWritten> SavesWritten { get; } = [];
+    /// <summary>
+    /// Every mod's per-frame callbacks, in load order.
+    /// </summary>
+    public List<ModFrameView> Frames { get; } = [];
+    /// <summary>
+    /// The player interface the mods' <see cref="ModInterface"/>s act on (docs/modding.md "Interface actions").
+    /// </summary>
+    public ModInterfaceHub Interface { get; } = new();
     /// <summary>
     /// The mods' queued and playing display-only effects (<see cref="ModContext.PlayEffect(string, System.Numerics.Vector3, float,
     /// System.Numerics.Vector3?)"/>).
@@ -332,6 +390,8 @@ sealed class ModRegistry
         }
         HitFeeds.AddRange(r.HitFeeds);
         FactionLists.AddRange(r.FactionLists);
+        SavesWritten.AddRange(r.SavesWritten);
+        Frames.AddRange(r.Frames);
         if (r.Settings is not null) Settings.Add(r.Settings);
     }
 

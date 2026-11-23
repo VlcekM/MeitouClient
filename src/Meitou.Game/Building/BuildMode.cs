@@ -294,6 +294,51 @@ sealed class BuildMode(PlayerInterface player)
         CurrentGroup() is { } group ? BuildMember is { } member && group.Members.Contains(member) ? member : group.Default : null;
 
     /// <summary>
+    /// The window's buildings for the mods (<see cref="Modding.ModInterface.BuildEntries"/>): each listed category, its groups, each group's members;
+    /// none while build mode is off.
+    /// </summary>
+    internal IReadOnlyList<Modding.UiBuildEntry> ModEntries()
+    {
+        if (!Active || Services is not { } services) return [];
+
+        var unlocked = Unlocked();
+        var list = new List<Modding.UiBuildEntry>();
+        foreach (var category in BuildCategories())
+        {
+            var groups = services.Menu.Groups(category, unlocked);
+            for (int g = 0; g < groups.Count; g++)
+            {
+                foreach (var member in groups[g].Members) list.Add(new(member.Id, member.Name, category, groups[g].Name, g));
+            }
+        }
+
+        return list;
+    }
+
+    /// <summary>
+    /// The chosen building's id for the mods; null without one or while build mode is off.
+    /// </summary>
+    internal string? ModChoice => Active ? CurrentBuilding()?.Id : null;
+
+    /// <summary>
+    /// Chooses a listed building for a mod as clicks on its category, its group and its variant do; false while build mode is off or when the window
+    /// does not list it.
+    /// </summary>
+    internal bool ModChoose(string building)
+    {
+        if (ModEntries().FirstOrDefault(e => e.Building == building) is not { } entry) return false;
+        if (Services!.Menu.Groups(entry.Category, Unlocked())[entry.GroupIndex].Members.FirstOrDefault(m => m.Id == building) is not { } member)
+            return false;
+
+        _buildCategory = entry.Category;
+        BuildDiscarded = false;
+        _buildGroup = entry.GroupIndex;
+        BuildMember = member;
+        FollowChoiceInLists(category: true);
+        return true;
+    }
+
+    /// <summary>
     /// Steps the chosen group's member by <paramref name="step"/> (wrapping round), resetting the lift.
     /// </summary>
     void StepVariant(int step)

@@ -487,6 +487,37 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// The game's screens for this mod (docs/modding.md "Interface actions"): open the character editor, the overview or the build window, see
+    /// what shows, read and choose the build window's buildings. Host thread only.
+    /// </summary>
+    public ModInterface Interface => field ??= new ModInterface(_registry.Interface, Id);
+
+    /// <summary>
+    /// Tells <paramref name="written"/> the full path of each save folder the game finishes writing (docs/modding.md "Persistence"), on the host's
+    /// thread once the files are on disk, so a mod writes a file of its own beside the save. A tick may be in flight: it must not touch the world.
+    /// A throw is logged and the listener is not called again.
+    /// </summary>
+    public void AddSaveWritten(Action<string> written)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(written);
+        Pending.SavesWritten.Add(new ModSaveWritten(Id, written));
+    }
+
+    /// <summary>
+    /// Calls <paramref name="frame"/> once a frame on the host's thread, after the frame's snapshot and before the frame is drawn (docs/modding.md
+    /// "Frame"), with what the host shows: the snapshot, selection, pointer, modifiers, speed, screen, camera, projection, open screens and
+    /// bindings, and the notice line. A tick may be in flight: it must not touch the world (queue commands with <see cref="Enqueue"/>), must be
+    /// cheap, and must not keep the frame. A throw is logged and the callback is not called again.
+    /// </summary>
+    public void AddFrame(Action<ModFrame> frame)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(frame);
+        Pending.Frames.Add(new ModFrameView(Id, frame));
+    }
+
+    /// <summary>
     /// Plays a display-only effect on <paramref name="anchor"/> (docs/modding.md "Visual effects"): a world point, a character's bone or held
     /// weapon, or a building, the system's origin at the anchor, its axes turned to the anchor's frame and its emitters scaled by its stretch,
     /// following it while it emits; while the anchor cannot be located (not drawn, weapon sheathed, building gone) it pauses, until its lifetime

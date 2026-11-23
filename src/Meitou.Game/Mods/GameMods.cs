@@ -166,6 +166,7 @@ sealed class GameMods(GameHost host)
         foreach (var notice in _builtInNotices) ui.Notice(notice);
         if (Mods is null) return;
         Mods.RegisterUi((extension, folder) => ui.RegisterUiExtension(extension, folder));
+        Mods.AttachInterface(new Game.Ui.PlayerModInterface(ui));
         if (Mods.ArrangesFactionList) ui.FactionWindow.ArrangeList = Mods.ArrangeFactionList;
         foreach (var notice in Mods.Notices) ui.Notice(notice, true);
     }
@@ -318,6 +319,27 @@ sealed class GameMods(GameHost host)
     }
 
     /// <summary>
+    /// Once a frame, after the hits: the mods' per-frame callbacks get what the host shows (docs/modding.md "Frame"). Nothing without one, or over
+    /// the title (no world shown).
+    /// </summary>
+    internal void UpdateModFrames()
+    {
+        if (Mods is not { WantsFrames: true } mods || host.Player is null || host.Player.TitleOpen) return;
+
+        mods.DeliverFrame(_frame ??= new ModFrame(host));
+    }
+
+    /// <summary>
+    /// The frame the mods read, made with the first callback (its reads are live).
+    /// </summary>
+    ModFrame? _frame;
+
+    /// <summary>
+    /// A save folder was written: its full path to the mods' save-written listeners (docs/modding.md "Persistence"); on the host's thread.
+    /// </summary>
+    internal void TellSaveWritten(string folder) => Mods?.TellSaveWritten(Path.GetFullPath(folder));
+
+    /// <summary>
     /// The save's mod data into the systems of the world just loaded from it; between ticks, before the first.
     /// </summary>
     internal void RestoreModData(World world, Data.Save.SaveGame save) => Mods?.RestoreSaveData(world, save.ModData);
@@ -409,6 +431,7 @@ sealed class GameMods(GameHost host)
         return new Game.Host.Input.ModKeyContext(host.Session.CurrentSnapshot, host.Player.SelectedIds(), host.Session.World.Tick,
             host.Session.World.Commands.Enqueue)
         {
+            Frame = _frame ??= new ModFrame(host),
             Ctrl = Held(Game.Host.Input.Key.LeftControl, Game.Host.Input.Key.RightControl),
             Shift = Held(Game.Host.Input.Key.LeftShift, Game.Host.Input.Key.RightShift),
             Alt = Held(Game.Host.Input.Key.LeftAlt, Game.Host.Input.Key.RightAlt),

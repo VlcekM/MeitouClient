@@ -349,6 +349,7 @@ public sealed partial class CombatSystem
         var candidate = new TargetCandidate
         {
             Current = c == q.Current,
+            ChooserHasTarget = q.Current >= 0,
             Staggered = o.StumbleClip >= 0 && world.Tick < o.StunUntil,
             Attackers = attackers,
             ChooserAttacks = c == q.Current,
