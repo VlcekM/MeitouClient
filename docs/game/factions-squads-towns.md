@@ -784,16 +784,14 @@ turret finder uses it so far (the others read the squad's home, which a player s
   - `loot spawn` (VENDOR_LIST): the list for the nest's faction (`FUN_1409592a0`), v0 to v1 items rolled as an item slot's (`FUN_1409540d0`), each at
     a point within `size radius` snapped to the navmesh, none below height 1; persisted to the nest.
   - The real items (physics debris, loot) are made only when the zone's `ZoneMapContent::newGameFirstTimeLoaded` (+0xa8, read through
-    `getZoneMapLocation`) is set: a zone with no save file. A wild nest's and a town centre's meshes and buildings come every load; a home's nest is laid only
-    when its zone loads fresh ([zones](../formats/zones.md#nest-debris-and-loot)).
+    `getZoneMapLocation`) is set: a zone with no save file. The meshes and buildings come every load.
   - Meitou (`NestFurniture`, `PopulationCamps.cs`): all of it when a nest's zone activates, removed when it unloads (NPCs in its cages let out); a
     `spawn in town centre` town's when it is made, kept (again when its TOWN record changed), with its residents' nests round their homes
     ([zones](../formats/zones.md#nest-debris-and-loot)). Its own rolls keyed by the camp's place; a centre snaps to the closest walkable point within 60
     (unsnapped, a centre in a ruin's rubble lost every piece near it); the navmesh query
     is the walkability at the centre's height within 60. The items are loose ground items, laid once per camp in this world and only in a zone the
     loaded save has no file of. Its pieces are fixtures: cages, locked containers and beds (a bandit camp's Camp Beds, #362). A nest's cage of a kidnapper's faction is always a candidate, and a standing nest is a town for the fogman worship finder
-    (nest markers skipped). A home's camp is laid only in a fresh zone and its pieces on the home saved and read back with the home's interior
-    ([zones](../formats/zones.md#nest-debris-and-loot)).
+    (nest markers skipped). Not modelled: the dedupe of a town's saved pieces (Meitou makes them again, not saving them).
 - **Homeless squads** (area tick `FUN_1408f9240`, every 2 s, per island): the island's load (sum over its loaded sectors of intact +
   0.5 × not-intact squads, [counts](#off-screen-world) above; clamped to [0, 2] for a sector with its own town or the town flag `FUN_1408f62e0` / +0x30) is compared with `FUN_1408f5ca0`, the sum of P × `homeless spawn
   amount` over the loaded zones of the island; while below, one sector is picked by weight max(0, P × amount + 1 − load), halved when its own town stands in it (`FUN_1408f62e0`; only a

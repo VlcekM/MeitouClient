@@ -17,9 +17,7 @@ namespace Meitou.Simulation.Saving;
 /// handle, each loose-item group an entry with an ITEM_PLACEMENT_GROUP, and the house's state has <c>serialised interior</c> 1 and names the
 /// furniture by <c>internalbuildings-&lt;k&gt;</c>. A zone file Meitou made has none of it (the original makes the interior again from the layout
 /// names), so nothing there can name a cage: a house with a prisoner in one of its cages is written whole, and the prisoner's <c>in what</c> names
-/// the cage's entry (<see cref="HeldSave"/>). The pieces a house's camp stood on it are objects of its interior too, which the original saves and
-/// never lays again (docs/formats/zones.md "Nest debris and loot"): a house holding pieces laid in this world is written with them. The machine and
-/// furniture-inventory writers after it fill the new entries as they do the original's.
+/// the cage's entry (<see cref="HeldSave"/>). The machine and furniture-inventory writers after it fill the new entries as they do the original's.
 /// </summary>
 public sealed class InteriorSave
 {
@@ -47,79 +45,24 @@ public sealed class InteriorSave
     readonly Dictionary<string, string> _entryIds = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// Writes the interior of each house that holds a prisoner in one of its layout's cages or camp pieces laid in this world and has none saved
-    /// (<see cref="WriteHouse"/>), then adds each such cage's entry state to <paramref name="buildings"/> under the cage's fixture id, its lock as it
-    /// is now, and names it on the prisoners whose records the capture leaves as read. After the buildings' own states, before the machines' and the
-    /// furniture inventories'.
+    /// Writes the interior of each house that holds a prisoner in one of its layout's cages and has none saved, then adds each such cage's entry
+    /// state to <paramref name="buildings"/> under the cage's fixture id, its lock as it is now, and names it on the prisoners whose records the
+    /// capture leaves as read. After the buildings' own states, before the machines' and the furniture inventories'.
     /// </summary>
     public void Write(SaveGame game, World world, PopulationData data, Dictionary<string, FcsRecord> buildings, ulong seed)
     {
         var waiting = PassedThrough(game, world);
         var cages = Cages(data, OccupiedCages(world, waiting));
-        var camps = LaidCamps(world, data);
-        if (cages.Count == 0 && camps.Count == 0) return;
+        if (cages.Count == 0) return;
 
         string? player = data.PlayerFaction >= 0 ? data.Factions[data.PlayerFaction].Id : null;
-        var houses = cages.Select(c => c.House).Concat(camps.Keys).Distinct();
-        foreach (var b in houses)
-        {
-            if (buildings.TryGetValue(b.Key, out var house))
-                WriteHouse(game, world, data.Db, b, house, camps.GetValueOrDefault(b) ?? [], player, seed);
-        }
-
-        if (cages.Count == 0) return;
+        foreach (var b in cages.Select(c => c.House).Distinct())
+            if (buildings.TryGetValue(b.Key, out var house) && CanFurnish(world, b, house, player)) Furnish(game, world, data.Db, b, house, seed);
 
         var saved = new SavedPieces(game);
         foreach (var (house, cage) in cages) NameCage(world, house, cage, saved, buildings);
         foreach (var prisoner in waiting) NamePrisoner(prisoner, buildings);
     }
-
-    /// <summary>
-    /// The camp pieces laid in this world that stand on a town house (<see cref="NestPiece.OnHome"/>, no <see cref="NestPiece.Entry"/>), by house.
-    /// </summary>
-    static Dictionary<TownBuilding, List<NestPiece>> LaidCamps(World world, PopulationData data)
-    {
-        var camps = new Dictionary<TownBuilding, List<NestPiece>>();
-        foreach (var site in data.Sites)
-        {
-            var laid = world.NestBuildings.Of(NestBuildings.TownCamp(site.Index)).Where(p => p is { OnHome: true, Entry: null, Home: not null });
-            foreach (var group in laid.GroupBy(p => p.Home!, StringComparer.Ordinal))
-            {
-                if (site.Buildings.FirstOrDefault(b => b.Key == group.Key) is { } house) camps[house] = [.. group];
-            }
-        }
-
-        return camps;
-    }
-
-    /// <summary>
-    /// Writes a house's interior with the <paramref name="camp"/> pieces laid on it: a house whose saved interior the save keeps gets the pieces
-    /// added to it, a standing house it may furnish (<see cref="CanFurnish"/>) its whole interior with them; a ruin nothing, as the original saves
-    /// no object inside a ruin (<see cref="RuinSave"/>), its camp's pieces neither.
-    /// </summary>
-    void WriteHouse(SaveGame game, World world, GameDatabase db, TownBuilding b, FcsRecord house, List<NestPiece> camp, string? player, ulong seed)
-    {
-        if (house.Bools.GetValueOrDefault("destroyed")) return;
-
-        if (!FurnitureInventorySave.Keeps(house.Ints))
-        {
-            if (CanFurnish(world, b, house, player)) Furnish(game, world, db, b, house, seed, camp, layout: true);
-
-            return;
-        }
-
-        if (camp.Count > 0 && CanHold(world, b, house, player)) Furnish(game, world, db, b, house, seed, camp, layout: false);
-    }
-
-    /// <summary>
-    /// Whether camp pieces can be written into a house: it was neither bought (its camp went with its interior) nor furnished anew by an override,
-    /// its state has a handle to name, and it is not the player's.
-    /// </summary>
-    static bool CanHold(World world, TownBuilding b, FcsRecord house, string? playerFactionId) =>
-        !world.Fixtures.IsEmptied(b.Key)
-        && !world.Fixtures.IsRebuilt(b.Key)
-        && Hand.IsComplete(house, "handle")
-        && house.Strings.GetValueOrDefault("owner faction ID") != playerFactionId;
 
     /// <summary>
     /// The states of the prisoners in the platoons the capture leaves as the loaded save has them (not made since, <see cref="SavedPlatoon.Touched"/>)
@@ -201,11 +144,10 @@ public sealed class InteriorSave
     sealed record Site(World World, SaveZone Zone, FcsRecord List, FcsRecord House, InteriorHouse Inside, HashSet<string> Taken);
 
     /// <summary>
-    /// Writes a house's furniture and item groups (<paramref name="layout"/>) and its <paramref name="camp"/> pieces as entries of its zone's building
-    /// list and marks its state as holding them: each furniture entry takes the next slot after the zone's last and is named by the house's next
-    /// <c>internalbuildings-&lt;k&gt;</c>.
+    /// Writes a house's furniture and item groups as entries of its zone's building list and marks its state as holding them: each furniture
+    /// entry takes the next slot after the zone's last and is named by the house's next <c>internalbuildings-&lt;k&gt;</c>.
     /// </summary>
-    void Furnish(SaveGame game, World world, GameDatabase db, TownBuilding b, FcsRecord house, ulong seed, List<NestPiece> camp, bool layout)
+    void Furnish(SaveGame game, World world, GameDatabase db, TownBuilding b, FcsRecord house, ulong seed)
     {
         if (!game.Zones.TryGetValue(b.Zone, out var zone) || zone.BuildingList is not { } list) return;
 
@@ -214,8 +156,7 @@ public sealed class InteriorSave
         int first = LastSlot(zone) + 1;
         int slot = first - 1;
         int k = InternalCount(house);
-        var camped = camp.Select(p => new TownLayoutBuilding(p.Id, p.Record, false, p.Position, p.Rotation));
-        foreach (var piece in (layout ? b.LayoutBuildings : []).Concat(camped))
+        foreach (var piece in b.LayoutBuildings)
         {
             if (db.Find(piece.RecordId) is not { Type: FcsRecordType.Building } record || record.GetBool("is node")) continue;
 
@@ -223,10 +164,7 @@ public sealed class InteriorSave
             hand.Write(house, InternalPrefix + (k++).ToString(CultureInfo.InvariantCulture));
         }
 
-        if (layout)
-        {
-            foreach (var itemSlot in b.ItemSlots) AddGroup(site, itemSlot);
-        }
+        foreach (var itemSlot in b.ItemSlots) AddGroup(site, itemSlot);
 
         ListSlots(zone, first, slot);
         house.Ints[FurnitureInventorySave.SerialisedInterior] = 1;

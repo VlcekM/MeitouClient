@@ -21,12 +21,6 @@ public sealed record NestPiece(string Id, string Record, Vector3 Position, Quate
     /// home's interior objects (<c>FUN_140930120</c>, <c>FUN_14054f3d0</c>); buying the home destroys it.
     /// </summary>
     public bool OnHome { get; init; }
-
-    /// <summary>
-    /// The id of the building-list entry the piece was read from (a house's camp in a zone the loaded save has a file of); null for a piece laid in
-    /// this world, which a save writes as an entry of its own.
-    /// </summary>
-    public string? Entry { get; init; }
 }
 
 /// <summary>

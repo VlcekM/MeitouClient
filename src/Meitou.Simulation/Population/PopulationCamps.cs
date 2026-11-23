@@ -39,16 +39,15 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// A town's camp, stood up when the town is made and again only when its TOWN record changed since (an override): a town with <c>spawn in town
-    /// centre</c> scatters at its own position (<c>Town::setup</c> queues it), and every town stands its residents' nests round their homes
+    /// A town's camp, stood up when the town is made and again only when its TOWN record changed since: a town with <c>spawn in town centre</c>
+    /// scatters at its own position (<c>Town::setup</c> queues it), and every town stands its residents' nests round their homes
     /// (<see cref="ResidentNests"/>). The items go down once, in fresh zones only.
     /// </summary>
     void StandTownCamp(World world, TownSite site)
     {
         var town = site.Town;
         int camp = NestBuildings.TownCamp(site.Index);
-        string? before = world.NestBuildings.RecordOf(camp);
-        if (before == town.Id) return;
+        if (world.NestBuildings.RecordOf(camp) == town.Id) return;
 
         var at = new Vector2(site.Position.X, site.Position.Z);
         int owner = site.Index < _data.SiteFactions.Count ? _data.SiteFactions[site.Index] : -1;
@@ -57,19 +56,20 @@ public sealed partial class PopulationSystem
             : new NestLayout([], [], []);
         if (world.SavedZones.Contains(WorldLayout.ZoneOf(at.X, at.Y))) layout.Drops.Clear();
 
-        var furniture = ResidentNests(world, site, layout, overridden: before is not null);
+        var furniture = ResidentNests(world, site, layout);
         if (!layout.IsEmpty) StandCamp(world, camp, layout, owner, at, town.Id, site.Index, fresh: true, furniture);
     }
 
     /// <summary>
-    /// The TOWN each home's resident template names as its <c>nest</c>, round that home, building by building, into the town's camp
-    /// <paramref name="layout"/> (docs/formats/zones.md "Nest debris and loot"). The original lays a home's nest only when housing makes the home's
-    /// squad (<c>FUN_14057f1f0</c> hands the town the nest with the home), which it does only for the homes of a zone loaded fresh
-    /// (<see cref="FreshHome"/>), and passes over the player's buildings: there it is scattered, its buildings, meshes and items. In a zone the loaded
-    /// save has a file of, the home's camp is the pieces the save holds (<see cref="SavedCamp"/>; the meshes are never saved). Returns the furniture
-    /// the pieces give each home (staying home takes it).
+    /// The TOWN each home's resident template names as its <c>nest</c>, scattered round that home, building by building, into the town's camp
+    /// <paramref name="layout"/> (docs/formats/zones.md "Nest debris and loot"): its buildings and meshes every time (<b>Observed</b>: the Hub
+    /// squatters' ruins hold a campfire, stools and a camp bed in the original after a load), its items (<c>loot spawn</c>, <c>debris</c> with
+    /// physics) only round a home in a zone the save has no file of (<b>Observed</b> in original saves: within the nest's <c>size radius</c> of a
+    /// home of the template, not round the town's centre). A building of the player's lays none: the original lays a home's nest when housing sets
+    /// the home up (<c>FUN_14057f1f0</c> hands the town the nest with the home), and housing passes over the player's buildings. Returns the
+    /// furniture the pieces give each home (staying home takes it).
     /// </summary>
-    Dictionary<string, List<HomeSpot>> ResidentNests(World world, TownSite site, NestLayout layout, bool overridden)
+    Dictionary<string, List<HomeSpot>> ResidentNests(World world, TownSite site, NestLayout layout)
     {
         var furniture = new Dictionary<string, List<HomeSpot>>(StringComparer.Ordinal);
         var housed = new HashSet<string>(StringComparer.Ordinal);
@@ -82,60 +82,17 @@ public sealed partial class PopulationSystem
             housed.Add(home.ResidentsTemplate);
             if (players.Contains(home.Key) || _data.Db.Find(templateId) is not { } template) continue;
 
-            bool fresh = FreshHome(world, site, home, overridden);
-            var ray = fresh ? PlacementRayOf(world, site, home, layout) : null;
+            bool fresh = !world.SavedZones.Contains(home.Zone);
+            var ray = PlacementRayOf(world, site, home, layout);
             foreach (var link in template.GetReferences("nest"))
             {
-                string prefix = $"town{site.Index}:{home.Key}:{link.TargetStringId}:";
-                var nest = fresh
-                    ? NestAt(world, home.Position, link.TargetStringId, prefix, ray)
-                    : SavedCamp(world, home, link.TargetStringId, prefix);
+                var nest = NestAt(world, home.Position, link.TargetStringId, $"town{site.Index}:{home.Key}:{link.TargetStringId}:", ray);
                 if (nest is not null) Merge(layout, nest, fresh, home, HomeFurniture(furniture, home.Key));
             }
         }
 
         layout.Drops.AddRange(HomelessNestDrops(world, site, housed));
         return furniture;
-    }
-
-    /// <summary>
-    /// Whether the original houses <paramref name="home"/> now, making its squad and laying its nest: its zone loads fresh (the resident chooser
-    /// <c>Town::chooseResidents</c> takes only the buildings <c>ZoneMapContent::populateAllTheBuildings</c> collects, which it does only for a zone
-    /// whose <c>newGameFirstTimeLoaded</c> is set; <b>Verified</b>, disassembly 1.0.68), or the town's own zone after an override, which the
-    /// original trims and loads fresh again (<paramref name="overridden"/>).
-    /// </summary>
-    static bool FreshHome(World world, TownSite site, TownBuilding home, bool overridden) =>
-        !world.SavedZones.Contains(home.Zone) || overridden && home.Zone == site.Zone;
-
-    /// <summary>
-    /// The camp of <paramref name="home"/>'s nest <paramref name="nestId"/> as the loaded save holds it: its <c>debris building</c> pieces that stood
-    /// on the home, saved as objects of its interior (<see cref="Saving.SavedPieces.Camp"/>), each where it was saved; no pieces that stood on their
-    /// own, meshes or items (the original saves none of them). Null when it is no TOWN.
-    /// </summary>
-    NestLayout? SavedCamp(World world, TownBuilding home, string nestId, string idPrefix)
-    {
-        if (_data.Db.Find(nestId) is not { Type: Meitou.Data.Fcs.FcsRecordType.Town } record) return null;
-
-        var layout = new NestLayout([], [], []);
-        if (world.Fixtures.SavedPieces is not { } saved || world.Fixtures.Saved?.GetValueOrDefault(home.Key) is not { } state) return layout;
-
-        var nest = TownData.From(record);
-        var records = nest.DebrisBuilding.Select(e => e.Id).ToHashSet(StringComparer.Ordinal);
-        var house = Meitou.Data.Save.Hand.Read(state, "handle");
-        foreach (var entry in saved.Camp(house, records, home.LayoutBuildings))
-            layout.Pieces.Add(SavedPiece(entry, idPrefix));
-
-        return layout;
-    }
-
-    /// <summary>
-    /// A camp piece read from its building-list entry, standing on the home where the entry stands (<c>world Y pos</c> the height).
-    /// </summary>
-    static NestPiece SavedPiece(Saving.SavedPiece entry, string idPrefix)
-    {
-        var i = entry.Instance;
-        var position = i.Position with { Y = entry.State!.Floats.GetValueOrDefault("world Y pos", i.Position.Y) };
-        return new NestPiece($"{idPrefix}{i.Id}", i.Target, position, i.Rotation) { Entry = i.Id, OnHome = true };
     }
 
     /// <summary>

@@ -9,8 +9,7 @@ namespace Meitou.Simulation.Saving;
 /// The loaded save's building-list entries of the towns' layout objects. The original saves a house's generated furniture as entries of their own
 /// (ids <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c>, state <c>is inside building</c>, the house's <c>serialised interior</c> 1; docs/formats/save.md
 /// "Zone files"); their ids are not Meitou's, so a layout object is matched to the entry of its record standing within <see cref="Reach"/> of it, as
-/// an interior cage is (<see cref="Locks.FixtureRegistry.SavedSpots"/>); a house's camp pieces are the rest of its entries of the camp's records
-/// (<see cref="Camp"/>). Serial phases only.
+/// an interior cage is (<see cref="Locks.FixtureRegistry.SavedSpots"/>). Serial phases only.
 /// </summary>
 public sealed class SavedPieces
 {
@@ -80,52 +79,6 @@ public sealed class SavedPieces
         _matched[id] = found;
         if (found is not null) _taken.Add(found);
         return found;
-    }
-
-    /// <summary>
-    /// The saved pieces of a house's camp (docs/formats/zones.md "Nest debris and loot"): the generated entries (ids <c>-zone&lt;X&gt;.&lt;Y&gt;-</c>)
-    /// of <paramref name="records"/> inside the house (their <c>isInsideBuilding</c> is <paramref name="house"/>) that no other object took, none
-    /// standing within <see cref="Reach"/> of a layout object of its record (<paramref name="layout"/>), whose entry that is. Each is taken. The
-    /// original saves the pieces that stand on the house, as objects of its interior, and none of those standing on their own.
-    /// </summary>
-    public List<SavedPiece> Camp(Hand house, IReadOnlySet<string> records, IReadOnlyList<TownLayoutBuilding> layout)
-    {
-        var found = new List<SavedPiece>();
-        foreach (string record in records)
-        {
-            foreach (var entry in _byRecord.GetValueOrDefault(record) ?? [])
-            {
-                if (_taken.Contains(entry) || !IsInside(entry, house) || IsLayoutObject(entry, layout)) continue;
-
-                _taken.Add(entry);
-                found.Add(entry);
-            }
-        }
-
-        return found;
-    }
-
-    /// <summary>
-    /// Whether <paramref name="entry"/> is a generated building inside <paramref name="house"/>.
-    /// </summary>
-    static bool IsInside(SavedPiece entry, Hand house) =>
-        entry.Instance.Id.Contains("-zone", StringComparison.Ordinal)
-        && entry.State is { } state
-        && state.Bools.GetValueOrDefault("is inside building")
-        && Hand.Read(state, "isInsideBuilding") == house;
-
-    /// <summary>
-    /// Whether <paramref name="entry"/> stands within <see cref="Reach"/> of a layout object of its record.
-    /// </summary>
-    static bool IsLayoutObject(SavedPiece entry, IReadOnlyList<TownLayoutBuilding> layout)
-    {
-        foreach (var piece in layout)
-        {
-            if (piece.RecordId == entry.Instance.Target && Vector3.DistanceSquared(piece.Position, entry.Instance.Position) <= Reach * Reach)
-                return true;
-        }
-
-        return false;
     }
 
     /// <summary>
