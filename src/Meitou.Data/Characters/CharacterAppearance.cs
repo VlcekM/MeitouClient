@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Data.Fcs;
+using Meitou.Data.Gameplay;
 
 namespace Meitou.Data.Characters;
 
@@ -126,7 +127,7 @@ public sealed record CharacterPart
     public Vector3 PointOffset { get; init; }
 
     /// <summary>
-    /// The part's own placement in the item it belongs to, before the attachment point's (a loaded bolt in its crossbow); null: none.
+    /// The part's own placement in the item it belongs to, before the attachment point's (a loaded bolt in its crossbow, a weapon's scale); null: none.
     /// </summary>
     public Matrix4x4? Local { get; init; }
 
@@ -1098,14 +1099,15 @@ public sealed class CharacterAppearance
         if (slot == "back" && backCount > 0) slot = "back2";
         string Field(string f) => f == "mesh" && female && weapon.GetPath("mesh female").Length > 0 ? "mesh female" : f;
         bool bare = weapon.GetPath("bare sword").Length > 0;
+        var local = WeaponLocal(weapon, model);
         if ((drawn || both) && bare)
         {
             var shown = !both ? WeaponShown.Always : back ? WeaponShown.BackDrawn : WeaponShown.Drawn;
             Parts.Add(new CharacterPart { Record = weapon, Mesh = weapon.GetPath("bare sword"), Field = "bare sword", Mode = AttachMode.Bone,
-                    Slot = AttachSlot.Weapon, Point = "hands", Material = model, Shown = shown });
+                    Slot = AttachSlot.Weapon, Point = "hands", Material = model, Shown = shown, Local = local });
             if (weapon.GetPath("sheath") is { Length: > 0 } sheath)
                 Parts.Add(new CharacterPart { Record = weapon, Mesh = sheath, Field = "sheath", Mode = AttachMode.Bone, Slot = AttachSlot.Weapon,
-                        Point = slot, Material = model, Shown = shown });
+                        Point = slot, Material = model, Shown = shown, Local = local });
             if (!both) return;
         }
         // Mode-0 items fall back from "mesh female" to "mesh" (ogre-skeleton.md).
@@ -1124,9 +1126,17 @@ public sealed class CharacterAppearance
             Slot = AttachSlot.Weapon,
             Point = slot,
             Material = model,
-            Shown = !(both && bare) ? WeaponShown.Always : back ? WeaponShown.BackSheathed : WeaponShown.Sheathed
+            Shown = !(both && bare) ? WeaponShown.Always : back ? WeaponShown.BackSheathed : WeaponShown.Sheathed,
+            Local = local
         });
     }
+
+    /// <summary>
+    /// A weapon's meshes are scaled by the item's and its model's scale fields (<see cref="ItemIconStyle.WeaponScale"/>; <c>setupItemMaterial</c>
+    /// sets it on every WEAPON attachment's node): the wakizashi is the katana's meshes at 0.95 overall and 0.9 in length. Null when unscaled.
+    /// </summary>
+    static Matrix4x4? WeaponLocal(GameRecord weapon, GameRecord? model) =>
+        ItemIconStyle.WeaponScale(weapon, model) is var scale && scale != Vector3.One ? Matrix4x4.CreateScale(scale) : null;
 
     /// <summary>
     /// A crossbow (docs/characters.md "Crossbows", <b>Observed</b>): its <c>mesh</c>, <c>extra mesh loaded</c> / <c>extra mesh unloaded</c> and a

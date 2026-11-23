@@ -160,18 +160,20 @@ public sealed record ItemIconStyle(
         float zoom = item.GetFloat("icon zoom", weapon || crossbow ? 1 : 2.7f);
         float v = item.GetFloat("icon offset V", weapon || crossbow ? 0 : -8);
         float h = item.GetFloat("icon offset H", weapon ? -4 : 0);
-        var scale = Vector3.One;
-        if (weapon)
-        {
-            scale = ScaleOf(item);
-            if (material is not null) scale *= ScaleOf(material);
-        }
+        var scale = weapon ? WeaponScale(item, material) : Vector3.One;
         var (pitch, yaw, roll) = weapon
             ? (-90f, -90f, 90f)
             : (item.GetFloat("icon offset pitch"), item.GetFloat("icon offset yaw", 90), item.GetFloat("icon offset roll"));
         int width = Math.Max(item.GetInt("inventory footprint width", 1), 1), height = Math.Max(item.GetInt("inventory footprint height", 1), 1);
         return new(MeshOf(item), zoom, h, v, pitch, yaw, roll, scale, width * PixelsPerCell, height * PixelsPerCell);
     }
+
+    /// <summary>
+    /// The node scale of a WEAPON's meshes, its icon's and those it is drawn with on a character (<c>FUN_140840380</c>, called by
+    /// <c>setupItemMaterial</c> and the icon renderer): the item's <see cref="ScaleOf"/> times its model's (<paramref name="model"/>, a
+    /// MATERIAL_SPECS_WEAPON) when known.
+    /// </summary>
+    public static Vector3 WeaponScale(GameRecord weapon, GameRecord? model) => model is null ? ScaleOf(weapon) : ScaleOf(weapon) * ScaleOf(model);
 
     /// <summary>
     /// (thickness, length, width) times the overall scale, x y z of the node's scale.

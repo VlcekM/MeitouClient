@@ -56,7 +56,7 @@ sealed class FurnitureUse(PlayerInterface player)
                 var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, b.Yaw);
                 var placed = footprint.Place(b.Position, yaw);
                 if (player.Picking.BuildingRayT(ray, placed, footprint.YMin, footprint.YMax, b.Record, b.Position, b.Position.Y, yaw) is { } t
-                    && t < bestT && AboveViewedFloor?.Invoke(b.Position) != true && !player.Hidden(ray, t))
+                    && t < bestT && AboveViewedFloor?.Invoke(b.Position) != true && !player.Obscured(ray, t))
                 {
                     (hit, bestT) = ((b, t), t);
                 }
@@ -189,7 +189,7 @@ sealed class FurnitureUse(PlayerInterface player)
             var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, c.Yaw);
             var placed = footprint.Place(c.Position, yaw);
             if (player.Picking.BuildingRayT(ray, placed, footprint.YMin, footprint.YMax, c.Record, c.Position, c.Position.Y, yaw) is { } t
-                && t < bestT && AboveViewedFloor?.Invoke(c.Position) != true && !player.Hidden(ray, t))
+                && t < bestT && AboveViewedFloor?.Invoke(c.Position) != true && !player.Obscured(ray, t))
             {
                 (hit, bestT) = ((c, t), t);
             }
@@ -371,7 +371,7 @@ sealed class FurnitureUse(PlayerInterface player)
             var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, c.Yaw);
             var placed = footprint.Place(c.Position, yaw);
             if (player.Picking.BuildingRayT(ray, placed, footprint.YMin, footprint.YMax, c.Record, c.Position, c.Position.Y, yaw) is { } t
-                && t < bestT && AboveViewedFloor?.Invoke(c.Position) != true && !player.Hidden(ray, t))
+                && t < bestT && AboveViewedFloor?.Invoke(c.Position) != true && !player.Obscured(ray, t))
             {
                 (hit, bestT) = ((c, t), t);
             }
@@ -455,7 +455,7 @@ sealed class FurnitureUse(PlayerInterface player)
             var turn = door.Rotation ?? Quaternion.CreateFromAxisAngle(Vector3.UnitY, door.Yaw);
 
             if (player.GroundItemPicks.RayNears(ray, mesh, at, turn) && WorldPicking.RayMesh(ray, mesh, at, turn) is { } t && t < bestT
-                && !player.Hidden(ray, t - DoorPickSlack))
+                && !player.Obscured(ray, t - DoorPickSlack))
             {
                 (best, bestT) = (((door, state.Locked), t), t);
             }
@@ -539,7 +539,7 @@ sealed class FurnitureUse(PlayerInterface player)
                 var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, d.Yaw);
                 var placed = footprint.Place(d.Position, yaw);
                 if (player.Picking.BuildingRayT(ray, placed, footprint.YMin, footprint.YMax, d.Record, d.Position, d.Position.Y, yaw) is { } t
-                    && t < bestT && AboveViewedFloor?.Invoke(d.Position) != true && !player.Hidden(ray, t))
+                    && t < bestT && AboveViewedFloor?.Invoke(d.Position) != true && !player.Obscured(ray, t))
                 {
                     (hit, bestT) = ((d, t), t);
                 }
@@ -631,7 +631,7 @@ sealed class FurnitureUse(PlayerInterface player)
             var hull = candidate.Footprint.Place(b.Position, b.Rotation);
             var hit = player.Picking.BuildingRayT(ray, hull, candidate.Footprint.YMin, candidate.Footprint.YMax, b.BuildingId, b.Position, y,
                 b.Rotation);
-            if (hit is not { } t || t >= bestT || player.Hidden(ray, t) || host.WorldInfo(b) is not { Turret: true, Destroyed: false }) continue;
+            if (hit is not { } t || t >= bestT || player.Obscured(ray, t) || host.WorldInfo(b) is not { Turret: true, Destroyed: false }) continue;
 
             (best, bestT) = ((b.Key, b.BuildingId, t), t);
         }
@@ -701,7 +701,7 @@ sealed class FurnitureUse(PlayerInterface player)
                 var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, b.PlacementYaw);
                 var placed = footprint.Place(b.Position, yaw);
                 if (player.Picking.BuildingRayT(ray, placed, footprint.YMin, footprint.YMax, b.Record, b.Position, b.Position.Y, yaw) is { } t
-                    && t < bestT && AboveViewedFloor?.Invoke(b.Position) != true && !player.Hidden(ray, t))
+                    && t < bestT && AboveViewedFloor?.Invoke(b.Position) != true && !player.Obscured(ray, t))
                 {
                     (hit, bestT) = ((b, t), t);
                 }
