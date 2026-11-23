@@ -13,18 +13,28 @@ public sealed class ReleaseInstaller(HttpClient http)
     /// <c>versions/&lt;version&gt;</c>, taking the zip's single top folder as the version's folder. <paramref name="progress"/> gets the bytes
     /// downloaded and the total (0 when unknown), at most every 100 ms and once at the end.
     /// </summary>
-    public async Task InstallAsync(Release release, IProgress<(long Done, long Total)> progress, CancellationToken ct = default)
+    public Task InstallAsync(Release release, IProgress<(long Done, long Total)> progress, CancellationToken ct = default)
     {
         var asset = release.Asset ?? throw new InvalidOperationException($"{release.Title} has no download for {Releases.Rid}.");
         var downloads = Path.Combine(LauncherConfig.InstallDirectory, "downloads");
+        return InstallAsync(asset, downloads, Releases.VersionDirectory(release.Version), Releases.GameExecutables, progress, ct);
+    }
+
+    /// <summary>
+    /// <see cref="InstallAsync(Release, IProgress{ValueTuple{long, long}}, CancellationToken)"/> of any <paramref name="asset"/>: downloaded
+    /// into <paramref name="downloads"/>, unpacked into <paramref name="target"/>, which must then hold one of <paramref name="executables"/>
+    /// (another platform's names for a build that is not this platform's, such as the Windows build run with Proton).
+    /// </summary>
+    public async Task InstallAsync(ReleaseAsset asset, string downloads, string target, IReadOnlyList<string> executables,
+        IProgress<(long Done, long Total)> progress, CancellationToken ct = default)
+    {
         Directory.CreateDirectory(downloads);
         var zip = Path.Combine(downloads, asset.Name);
-        var target = Releases.VersionDirectory(release.Version);
         var staging = target + ".partial";
         try
         {
             await DownloadAsync(asset, zip, progress, ct);
-            await UnpackAsync(asset, zip, staging, target, ct);
+            await UnpackAsync(asset, zip, staging, target, executables, ct);
         }
         finally
         {
@@ -72,17 +82,24 @@ public sealed class ReleaseInstaller(HttpClient http)
     /// Unpacks the download into <paramref name="staging"/>, checks the game's executable is there and moves the version's folder to
     /// <paramref name="target"/>.
     /// </summary>
-    static async Task UnpackAsync(ReleaseAsset asset, string zip, string staging, string target, CancellationToken ct)
+    static async Task UnpackAsync(ReleaseAsset asset, string zip, string staging, string target, IReadOnlyList<string> executables,
+        CancellationToken ct)
     {
         if (Directory.Exists(staging)) Directory.Delete(staging, true);
         await ZipFile.ExtractToDirectoryAsync(zip, staging, ct);
         var root = staging;
-        if (Releases.FindGame(root) is null && Directory.GetFiles(root).Length == 0 && Directory.GetDirectories(root) is [var only])
+        if (FindGame(root, executables) is null && Directory.GetFiles(root).Length == 0 && Directory.GetDirectories(root) is [var only])
             root = only;
-        var exe = Releases.FindGame(root) ?? throw new InvalidDataException($"{asset.Name} has no {Releases.GameExecutables[0]}.");
+        var exe = FindGame(root, executables) ?? throw new InvalidDataException($"{asset.Name} has no {executables[0]}.");
         if (!OperatingSystem.IsWindows())
             File.SetUnixFileMode(exe, File.GetUnixFileMode(exe) | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
         if (Directory.Exists(target)) Directory.Delete(target, true);
         Directory.Move(root, target);
     }
+
+    /// <summary>
+    /// The first of <paramref name="executables"/> in <paramref name="directory"/>, or null.
+    /// </summary>
+    static string? FindGame(string directory, IReadOnlyList<string> executables) =>
+        executables.Select(name => Path.Combine(directory, name)).FirstOrDefault(File.Exists);
 }

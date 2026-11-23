@@ -5699,3 +5699,371 @@ msgstr "简易地形着色"
 #. machine-translated
 msgid "Faster ground for weak graphics: one biome and two texture layers a pixel, no bump detail. Blends between biomes show harder edges."
 msgstr "为性能较弱的显卡加快地面渲染：每个像素只用一个生物群系和两层纹理，没有凹凸细节。生物群系之间的过渡边缘会更硬。"
+
+#. machine-translated
+msgid "Loading the target builds..."
+msgstr "正在加载目标版本..."
+
+#. machine-translated
+msgid "{1} target builds"
+msgstr "{1} 个目标版本"
+
+#. machine-translated
+msgid "Benchmark"
+msgstr "基准测试"
+
+#. machine-translated
+msgid "Target builds unknown: {1}"
+msgstr "目标版本未知：{1}"
+
+#. machine-translated
+msgid "Download the build into the benchmark's own folder and list its benchmarks"
+msgstr "将该版本下载到基准测试专用文件夹并列出其基准测试"
+
+#. machine-translated
+msgid "Target builds (full releases and the daily nightlies) count for comparisons; others can be run but not submitted."
+msgstr "目标版本（正式版和每日 nightly）用于比较；其他版本可以运行，但不能提交。"
+
+#. machine-translated
+msgid "Build"
+msgstr "版本"
+
+#. machine-translated
+msgid "target"
+msgstr "目标"
+
+#. machine-translated
+msgid "not a target"
+msgstr "非目标"
+
+#. machine-translated
+msgid "installed"
+msgstr "已安装"
+
+#. machine-translated
+msgid "Proton runs the Windows build, with its own prefix in the launcher's folder."
+msgstr "Proton 以启动器文件夹中的独立前缀运行 Windows 版本。"
+
+#. machine-translated
+msgid "Platform"
+msgstr "平台"
+
+#. machine-translated
+msgid "Install the build to see all the benchmarks it has."
+msgstr "安装该版本即可查看其全部基准测试。"
+
+#. machine-translated
+msgid "Each ticked benchmark is run at each ticked tier."
+msgstr "每个勾选的基准测试都会在每个勾选的档位下运行。"
+
+#. machine-translated
+msgid "Benchmarks"
+msgstr "基准测试"
+
+#. machine-translated
+msgid "Needs ray tracing"
+msgstr "需要光线追踪"
+
+#. machine-translated
+msgid "Medium and {1}, recommended for this computer, are ticked first."
+msgstr "已预先勾选“中”和为本机推荐的 {1}。"
+
+#. machine-translated
+msgid "The game's quality presets."
+msgstr "游戏的画质预设。"
+
+#. machine-translated
+msgid "Tiers"
+msgstr "档位"
+
+#. machine-translated
+msgid "Start"
+msgstr "开始"
+
+#. machine-translated
+msgid "Do not use the computer while it runs."
+msgstr "运行期间请勿使用电脑。"
+
+#. machine-translated
+msgid "Sessions: {1}, two runs each, about {2} minutes."
+msgstr "会话：{1} 个，每个运行两次，约 {2} 分钟。"
+
+#. machine-translated
+msgid "{1} ({2} elapsed)"
+msgstr "{1}（已用 {2}）"
+
+#. machine-translated
+msgid "Benchmark finished."
+msgstr "基准测试已完成。"
+
+#. machine-translated
+msgid "The build is installed."
+msgstr "该版本已安装。"
+
+#. machine-translated
+msgid "A benchmark is already running."
+msgstr "已有基准测试正在运行。"
+
+#. machine-translated
+msgid "Meitou is running: close it before benchmarking."
+msgstr "Meitou 正在运行：请先关闭它再进行基准测试。"
+
+#. machine-translated
+msgid "Choose a build first."
+msgstr "请先选择一个版本。"
+
+#. machine-translated
+msgid "Tick at least one benchmark and one tier."
+msgstr "请至少勾选一个基准测试和一个档位。"
+
+#. machine-translated
+msgid "Cancelled."
+msgstr "已取消。"
+
+#. machine-translated
+msgid "The benchmark stopped: {1}"
+msgstr "基准测试已停止：{1}"
+
+#. machine-translated
+msgid "Benchmarking: the game window opens and closes by itself."
+msgstr "基准测试中：游戏窗口会自动打开和关闭。"
+
+#. machine-translated
+msgid "{1} at {2}: run {3} of {4}, launch {5} of {6}"
+msgstr "{1}（{2}）：第 {3}/{4} 次运行，第 {5}/{6} 次启动"
+
+#. machine-translated
+msgid "Proton: {1}"
+msgstr "Proton：{1}"
+
+#. machine-translated
+msgid "Native Linux build"
+msgstr "原生 Linux 版本"
+
+#. machine-translated
+msgid "This computer's build"
+msgstr "适用于本机的版本"
+
+#. machine-translated
+msgid "Results"
+msgstr "结果"
+
+#. machine-translated
+msgid "No results for this build and platform yet."
+msgstr "此版本和平台尚无结果。"
+
+#. machine-translated
+msgid "Machine id (letters, digits, dashes)"
+msgstr "机器 ID（字母、数字、连字符）"
+
+#. machine-translated
+msgid "Machine name"
+msgstr "机器名称"
+
+#. machine-translated
+msgid "Notes (cooling, power plan, ...)"
+msgstr "备注（散热、电源计划……）"
+
+#. machine-translated
+msgid "Kept as it was first submitted, so the site keeps your results together."
+msgstr "保持首次提交时的内容，以便网站将你的结果归在一起。"
+
+#. machine-translated
+msgid "Can be edited until the first session is submitted; then it is kept, so the site keeps your results together."
+msgstr "在提交第一个会话前可以编辑；之后将保持不变，以便网站将你的结果归在一起。"
+
+#. machine-translated
+msgid "Machine"
+msgstr "机器"
+
+#. machine-translated
+msgid "Your name on the benchmarks site (optional)"
+msgstr "你在基准测试网站上的名字（可选）"
+
+#. machine-translated
+msgid "Submitted by"
+msgstr "提交者"
+
+#. machine-translated
+msgid "Shown beside your results."
+msgstr "显示在你的结果旁边。"
+
+#. machine-translated
+msgid "The hardware is probed when a benchmark starts."
+msgstr "开始基准测试时会检测硬件。"
+
+#. machine-translated
+msgid "{1}, {2}, {3} GB, {4}"
+msgstr "{1}，{2}，{3} GB，{4}"
+
+#. machine-translated
+msgid "{1} at {2}"
+msgstr "{1}（{2}）"
+
+#. machine-translated
+msgid "Run {1}: FPS"
+msgstr "第 {1} 次：FPS"
+
+#. machine-translated
+msgid "Run {1}: 99% ms"
+msgstr "第 {1} 次：99% ms"
+
+#. machine-translated
+msgid "Run {1}: over 33 ms"
+msgstr "第 {1} 次：超过 33 ms"
+
+#. machine-translated
+msgid "Submitted (#{1})."
+msgstr "已提交（#{1}）。"
+
+#. machine-translated
+msgid "Submitting..."
+msgstr "正在提交..."
+
+#. machine-translated
+msgid "Submit"
+msgstr "提交"
+
+#. machine-translated
+msgid "Submit again"
+msgstr "再次提交"
+
+#. machine-translated
+msgid "Incomplete: both runs are needed to submit."
+msgstr "不完整：提交需要两次运行都完成。"
+
+#. machine-translated
+msgid "Not a target build: its results can be seen here but not submitted."
+msgstr "非目标版本：结果可在此查看，但不能提交。"
+
+#. machine-translated
+msgid "The runs were made by {1}, not {2}: they cannot be submitted."
+msgstr "这些运行由 {1} 而非 {2} 完成：无法提交。"
+
+#. machine-translated
+msgid "Fill in the machine's id and name to submit."
+msgstr "请填写机器 ID 和名称后再提交。"
+
+#. machine-translated
+msgid "The service refused it: {1}"
+msgstr "服务拒绝了：{1}"
+
+#. machine-translated
+msgid "Could not reach the reports service: {1}"
+msgstr "无法连接报告服务：{1}"
+
+#. machine-translated
+msgid "{1} skipped: it needs ray tracing, which this graphics card does not have."
+msgstr "已跳过 {1}：需要光线追踪，而此显卡不支持。"
+
+#. machine-translated
+msgid "{1} has no download for {2}."
+msgstr "{1} 没有适用于 {2} 的下载。"
+
+#. machine-translated
+msgid "{1} has no game in its download."
+msgstr "{1} 的下载中没有游戏。"
+
+#. machine-translated
+msgid "Asking the build for its benchmarks..."
+msgstr "正在向该版本查询基准测试..."
+
+#. machine-translated
+msgid "This build did not list its benchmarks (exit code {1}): it may be older than launcher benchmarks."
+msgstr "该版本未列出其基准测试（退出代码 {1}）：它可能早于启动器基准测试。"
+
+#. machine-translated
+msgid "{1} skipped: this build has no such benchmark."
+msgstr "已跳过 {1}：该版本没有此基准测试。"
+
+#. machine-translated
+msgid "{1} skipped: it needs the save {2}, which this launcher cannot download."
+msgstr "已跳过 {1}：需要存档 {2}，而此启动器无法下载它。"
+
+#. machine-translated
+msgid "Checking the benchmark save..."
+msgstr "正在检查基准测试存档..."
+
+#. machine-translated
+msgid "The benchmark save is damaged: its download does not match the expected hash."
+msgstr "基准测试存档已损坏：下载内容与预期哈希不符。"
+
+#. machine-translated
+msgid "Probing the hardware..."
+msgstr "正在检测硬件..."
+
+#. machine-translated
+msgid "This build did not report the hardware (exit code {1}): it may be older than launcher benchmarks."
+msgstr "该版本未报告硬件信息（退出代码 {1}）：它可能早于启动器基准测试。"
+
+#. machine-translated
+msgid "Copying the save..."
+msgstr "正在复制存档..."
+
+#. machine-translated
+msgid "{1} skipped: the game says it needs ray tracing, which this graphics card does not have."
+msgstr "已跳过 {1}：游戏表示需要光线追踪，而此显卡不支持。"
+
+#. machine-translated
+msgid "{1} skipped: the game does not know this benchmark (exit code 7)."
+msgstr "已跳过 {1}：游戏不认识此基准测试（退出代码 7）。"
+
+#. machine-translated
+msgid "The game refused the save: its hash is not the benchmark's (exit code 6)."
+msgstr "游戏拒绝了存档：其哈希与基准测试的不符（退出代码 6）。"
+
+#. machine-translated
+msgid "The game stopped with exit code {1} in {2}, run {3}; its log is {4}"
+msgstr "游戏在 {2} 第 {3} 次运行时以退出代码 {1} 停止；日志为 {4}"
+
+#. machine-translated
+msgid "The game wrote no result.json into {1}; its log is {2}"
+msgstr "游戏未向 {1} 写入 result.json；日志为 {2}"
+
+#. machine-translated
+msgid "The Vulkan loader is not installed: run 'brew install molten-vk vulkan-loader' in a terminal, then try again."
+msgstr "未安装 Vulkan 加载器：请在终端运行 'brew install molten-vk vulkan-loader'，然后重试。"
+
+#. machine-translated
+msgid "The game did not start."
+msgstr "游戏未能启动。"
+
+#. machine-translated
+msgid "The game ran over {1} minutes and was stopped."
+msgstr "游戏运行超过 {1} 分钟，已被停止。"
+
+#. machine-translated
+msgid "Bases: the play bench on a save"
+msgstr "据点：基于存档的游玩测试"
+
+#. machine-translated
+msgid "Shark fly-by: a new game, flying round Shark"
+msgstr "Shark 飞越：新游戏，绕 Shark 飞行"
+
+#. machine-translated
+msgid "Whole run"
+msgstr "完整运行"
+
+#. machine-translated
+msgid "Streaming"
+msgstr "流式加载"
+
+#. machine-translated
+msgid "Views"
+msgstr "视野"
+
+#. machine-translated
+msgid "Flight"
+msgstr "飞行"
+
+#. machine-translated
+msgid "BENCHMARK"
+msgstr "基准测试"
+
+#. machine-translated
+msgid "A benchmark is running: cancel it on the Benchmark page first."
+msgstr "基准测试正在运行：请先在基准测试页面取消它。"
+
+#. machine-translated
+msgid "The benchmark stopped."
+msgstr "基准测试已停止。"

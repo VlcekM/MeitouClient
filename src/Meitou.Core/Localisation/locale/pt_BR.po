@@ -5295,3 +5295,371 @@ msgstr "Sombreamento de terreno simples"
 #. machine-translated
 msgid "Faster ground for weak graphics: one biome and two texture layers a pixel, no bump detail. Blends between biomes show harder edges."
 msgstr "Chão mais rápido para gráficos fracos: um bioma e duas camadas de textura por pixel, sem detalhe de relevo. As transições entre biomas mostram bordas mais marcadas."
+
+#. machine-translated
+msgid "Loading the target builds..."
+msgstr "Carregando as versões-alvo..."
+
+#. machine-translated
+msgid "{1} target builds"
+msgstr "{1} versões-alvo"
+
+#. machine-translated
+msgid "Benchmark"
+msgstr "Benchmark"
+
+#. machine-translated
+msgid "Target builds unknown: {1}"
+msgstr "Versões-alvo desconhecidas: {1}"
+
+#. machine-translated
+msgid "Download the build into the benchmark's own folder and list its benchmarks"
+msgstr "Baixar a versão na pasta própria do benchmark e listar seus benchmarks"
+
+#. machine-translated
+msgid "Target builds (full releases and the daily nightlies) count for comparisons; others can be run but not submitted."
+msgstr "As versões-alvo (versões completas e as nightlies diárias) contam para comparações; as outras podem ser executadas, mas não enviadas."
+
+#. machine-translated
+msgid "Build"
+msgstr "Versão"
+
+#. machine-translated
+msgid "target"
+msgstr "alvo"
+
+#. machine-translated
+msgid "not a target"
+msgstr "não é alvo"
+
+#. machine-translated
+msgid "installed"
+msgstr "instalada"
+
+#. machine-translated
+msgid "Proton runs the Windows build, with its own prefix in the launcher's folder."
+msgstr "O Proton executa a versão para Windows, com prefixo próprio na pasta do launcher."
+
+#. machine-translated
+msgid "Platform"
+msgstr "Plataforma"
+
+#. machine-translated
+msgid "Install the build to see all the benchmarks it has."
+msgstr "Instale a versão para ver todos os seus benchmarks."
+
+#. machine-translated
+msgid "Each ticked benchmark is run at each ticked tier."
+msgstr "Cada benchmark marcado é executado em cada nível marcado."
+
+#. machine-translated
+msgid "Benchmarks"
+msgstr "Benchmarks"
+
+#. machine-translated
+msgid "Needs ray tracing"
+msgstr "Requer ray tracing"
+
+#. machine-translated
+msgid "Medium and {1}, recommended for this computer, are ticked first."
+msgstr "Médio e {1}, recomendado para este computador, vêm marcados."
+
+#. machine-translated
+msgid "The game's quality presets."
+msgstr "As predefinições de qualidade do jogo."
+
+#. machine-translated
+msgid "Tiers"
+msgstr "Níveis"
+
+#. machine-translated
+msgid "Start"
+msgstr "Iniciar"
+
+#. machine-translated
+msgid "Do not use the computer while it runs."
+msgstr "Não use o computador enquanto ele roda."
+
+#. machine-translated
+msgid "Sessions: {1}, two runs each, about {2} minutes."
+msgstr "Sessões: {1}, duas execuções cada, cerca de {2} minutos."
+
+#. machine-translated
+msgid "{1} ({2} elapsed)"
+msgstr "{1} ({2} decorrido)"
+
+#. machine-translated
+msgid "Benchmark finished."
+msgstr "Benchmark concluído."
+
+#. machine-translated
+msgid "The build is installed."
+msgstr "A versão está instalada."
+
+#. machine-translated
+msgid "A benchmark is already running."
+msgstr "Um benchmark já está em execução."
+
+#. machine-translated
+msgid "Meitou is running: close it before benchmarking."
+msgstr "O Meitou está em execução: feche-o antes do benchmark."
+
+#. machine-translated
+msgid "Choose a build first."
+msgstr "Escolha uma versão primeiro."
+
+#. machine-translated
+msgid "Tick at least one benchmark and one tier."
+msgstr "Marque pelo menos um benchmark e um nível."
+
+#. machine-translated
+msgid "Cancelled."
+msgstr "Cancelado."
+
+#. machine-translated
+msgid "The benchmark stopped: {1}"
+msgstr "O benchmark parou: {1}"
+
+#. machine-translated
+msgid "Benchmarking: the game window opens and closes by itself."
+msgstr "Executando o benchmark: a janela do jogo abre e fecha sozinha."
+
+#. machine-translated
+msgid "{1} at {2}: run {3} of {4}, launch {5} of {6}"
+msgstr "{1} em {2}: execução {3} de {4}, início {5} de {6}"
+
+#. machine-translated
+msgid "Proton: {1}"
+msgstr "Proton: {1}"
+
+#. machine-translated
+msgid "Native Linux build"
+msgstr "Versão nativa para Linux"
+
+#. machine-translated
+msgid "This computer's build"
+msgstr "Versão deste computador"
+
+#. machine-translated
+msgid "Results"
+msgstr "Resultados"
+
+#. machine-translated
+msgid "No results for this build and platform yet."
+msgstr "Ainda não há resultados para esta versão e plataforma."
+
+#. machine-translated
+msgid "Machine id (letters, digits, dashes)"
+msgstr "ID da máquina (letras, dígitos, hífens)"
+
+#. machine-translated
+msgid "Machine name"
+msgstr "Nome da máquina"
+
+#. machine-translated
+msgid "Notes (cooling, power plan, ...)"
+msgstr "Notas (refrigeração, plano de energia, ...)"
+
+#. machine-translated
+msgid "Kept as it was first submitted, so the site keeps your results together."
+msgstr "Mantida como foi enviada pela primeira vez, para que o site agrupe seus resultados."
+
+#. machine-translated
+msgid "Can be edited until the first session is submitted; then it is kept, so the site keeps your results together."
+msgstr "Pode ser editada até a primeira sessão ser enviada; depois é mantida, para que o site agrupe seus resultados."
+
+#. machine-translated
+msgid "Machine"
+msgstr "Máquina"
+
+#. machine-translated
+msgid "Your name on the benchmarks site (optional)"
+msgstr "Seu nome no site de benchmarks (opcional)"
+
+#. machine-translated
+msgid "Submitted by"
+msgstr "Enviado por"
+
+#. machine-translated
+msgid "Shown beside your results."
+msgstr "Exibido ao lado dos seus resultados."
+
+#. machine-translated
+msgid "The hardware is probed when a benchmark starts."
+msgstr "O hardware é verificado quando um benchmark começa."
+
+#. machine-translated
+msgid "{1}, {2}, {3} GB, {4}"
+msgstr "{1}, {2}, {3} GB, {4}"
+
+#. machine-translated
+msgid "{1} at {2}"
+msgstr "{1} em {2}"
+
+#. machine-translated
+msgid "Run {1}: FPS"
+msgstr "Execução {1}: FPS"
+
+#. machine-translated
+msgid "Run {1}: 99% ms"
+msgstr "Execução {1}: 99% ms"
+
+#. machine-translated
+msgid "Run {1}: over 33 ms"
+msgstr "Execução {1}: acima de 33 ms"
+
+#. machine-translated
+msgid "Submitted (#{1})."
+msgstr "Enviado (#{1})."
+
+#. machine-translated
+msgid "Submitting..."
+msgstr "Enviando..."
+
+#. machine-translated
+msgid "Submit"
+msgstr "Enviar"
+
+#. machine-translated
+msgid "Submit again"
+msgstr "Enviar novamente"
+
+#. machine-translated
+msgid "Incomplete: both runs are needed to submit."
+msgstr "Incompleto: as duas execuções são necessárias para enviar."
+
+#. machine-translated
+msgid "Not a target build: its results can be seen here but not submitted."
+msgstr "Não é uma versão-alvo: os resultados aparecem aqui, mas não podem ser enviados."
+
+#. machine-translated
+msgid "The runs were made by {1}, not {2}: they cannot be submitted."
+msgstr "As execuções foram feitas por {1}, não por {2}: não podem ser enviadas."
+
+#. machine-translated
+msgid "Fill in the machine's id and name to submit."
+msgstr "Preencha o ID e o nome da máquina para enviar."
+
+#. machine-translated
+msgid "The service refused it: {1}"
+msgstr "O serviço recusou: {1}"
+
+#. machine-translated
+msgid "Could not reach the reports service: {1}"
+msgstr "Não foi possível acessar o serviço de relatórios: {1}"
+
+#. machine-translated
+msgid "{1} skipped: it needs ray tracing, which this graphics card does not have."
+msgstr "{1} pulado: requer ray tracing, que esta placa de vídeo não tem."
+
+#. machine-translated
+msgid "{1} has no download for {2}."
+msgstr "{1} não tem download para {2}."
+
+#. machine-translated
+msgid "{1} has no game in its download."
+msgstr "O download de {1} não contém o jogo."
+
+#. machine-translated
+msgid "Asking the build for its benchmarks..."
+msgstr "Consultando os benchmarks da versão..."
+
+#. machine-translated
+msgid "This build did not list its benchmarks (exit code {1}): it may be older than launcher benchmarks."
+msgstr "Esta versão não listou seus benchmarks (código de saída {1}): pode ser anterior aos benchmarks do launcher."
+
+#. machine-translated
+msgid "{1} skipped: this build has no such benchmark."
+msgstr "{1} pulado: esta versão não tem esse benchmark."
+
+#. machine-translated
+msgid "{1} skipped: it needs the save {2}, which this launcher cannot download."
+msgstr "{1} pulado: precisa do save {2}, que este launcher não consegue baixar."
+
+#. machine-translated
+msgid "Checking the benchmark save..."
+msgstr "Verificando o save do benchmark..."
+
+#. machine-translated
+msgid "The benchmark save is damaged: its download does not match the expected hash."
+msgstr "O save do benchmark está danificado: o download não corresponde ao hash esperado."
+
+#. machine-translated
+msgid "Probing the hardware..."
+msgstr "Verificando o hardware..."
+
+#. machine-translated
+msgid "This build did not report the hardware (exit code {1}): it may be older than launcher benchmarks."
+msgstr "Esta versão não informou o hardware (código de saída {1}): pode ser anterior aos benchmarks do launcher."
+
+#. machine-translated
+msgid "Copying the save..."
+msgstr "Copiando o save..."
+
+#. machine-translated
+msgid "{1} skipped: the game says it needs ray tracing, which this graphics card does not have."
+msgstr "{1} pulado: o jogo diz que precisa de ray tracing, que esta placa de vídeo não tem."
+
+#. machine-translated
+msgid "{1} skipped: the game does not know this benchmark (exit code 7)."
+msgstr "{1} pulado: o jogo não conhece este benchmark (código de saída 7)."
+
+#. machine-translated
+msgid "The game refused the save: its hash is not the benchmark's (exit code 6)."
+msgstr "O jogo recusou o save: o hash não é o do benchmark (código de saída 6)."
+
+#. machine-translated
+msgid "The game stopped with exit code {1} in {2}, run {3}; its log is {4}"
+msgstr "O jogo parou com código de saída {1} em {2}, execução {3}; o log é {4}"
+
+#. machine-translated
+msgid "The game wrote no result.json into {1}; its log is {2}"
+msgstr "O jogo não gravou result.json em {1}; o log é {2}"
+
+#. machine-translated
+msgid "The Vulkan loader is not installed: run 'brew install molten-vk vulkan-loader' in a terminal, then try again."
+msgstr "O carregador do Vulkan não está instalado: execute 'brew install molten-vk vulkan-loader' em um terminal e tente de novo."
+
+#. machine-translated
+msgid "The game did not start."
+msgstr "O jogo não iniciou."
+
+#. machine-translated
+msgid "The game ran over {1} minutes and was stopped."
+msgstr "O jogo passou de {1} minutos e foi interrompido."
+
+#. machine-translated
+msgid "Bases: the play bench on a save"
+msgstr "Bases: o teste de jogo em um save"
+
+#. machine-translated
+msgid "Shark fly-by: a new game, flying round Shark"
+msgstr "Sobrevoo de Shark: um jogo novo, voando ao redor de Shark"
+
+#. machine-translated
+msgid "Whole run"
+msgstr "Execução inteira"
+
+#. machine-translated
+msgid "Streaming"
+msgstr "Streaming"
+
+#. machine-translated
+msgid "Views"
+msgstr "Vistas"
+
+#. machine-translated
+msgid "Flight"
+msgstr "Voo"
+
+#. machine-translated
+msgid "BENCHMARK"
+msgstr "BENCHMARK"
+
+#. machine-translated
+msgid "A benchmark is running: cancel it on the Benchmark page first."
+msgstr "Um benchmark está em execução: cancele-o primeiro na página Benchmark."
+
+#. machine-translated
+msgid "The benchmark stopped."
+msgstr "O benchmark parou."

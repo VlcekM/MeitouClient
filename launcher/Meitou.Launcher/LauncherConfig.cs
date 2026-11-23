@@ -164,6 +164,11 @@ public sealed class LauncherConfig
     public List<string> OfferedPorts { get; set; } = [];
 
     /// <summary>
+    /// The Benchmark page's install id, handle and machine record.
+    /// </summary>
+    public Benchmarks.BenchmarkSettings Benchmark { get; set; } = new();
+
+    /// <summary>
     /// Reads <c>launcher.json</c>; defaults when it is missing or cannot be read.
     /// </summary>
     public static LauncherConfig Load()

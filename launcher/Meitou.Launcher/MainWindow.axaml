@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:l="using:Meitou.Launcher"
+        xmlns:bench="using:Meitou.Launcher.Benchmarks"
         x:Class="Meitou.Launcher.MainWindow"
         Title="Meitou Launcher" Icon="avares://meitou-launcher/Assets/meitou.ico"
         WindowDecorations="None" TransparencyLevelHint="Transparent"
@@ -140,6 +141,13 @@
               <!-- A monitor on its stand -->
               <Path Data="F1 M0,1 H16 V11 H0 Z M2,3 V9 H14 V3 Z M7,11 H9 V13 H7 Z M4,13.5 H12 V15.5 H4 Z" />
               <TextBlock Text="GRAPHICS" />
+            </StackPanel>
+          </ToggleButton>
+          <ToggleButton x:Name="NavBenchmark" Classes="nav" Click="Nav_Click">
+            <StackPanel Orientation="Horizontal">
+              <!-- A gauge: its dial and needle -->
+              <Path Data="F1 M8,2 A8,8 0 0 1 16,10 H13.5 A5.5,5.5 0 0 0 2.5,10 H0 A8,8 0 0 1 8,2 Z M7,10.5 L12,5 L13,6 L9,11.5 Z M6,12 H10 V14 H6 Z" />
+              <TextBlock Text="BENCHMARK" />
             </StackPanel>
           </ToggleButton>
           <ToggleButton x:Name="NavSettings" Classes="nav" Click="Nav_Click">
@@ -413,6 +421,9 @@
             </StackPanel>
           </ScrollViewer>
         </DockPanel>
+
+        <!-- Benchmark: builds, benchmarks and tiers to run, and the sessions to submit (Benchmarks/BenchmarkPage.cs), built in code -->
+        <bench:BenchmarkPage x:Name="BenchmarkPage" IsVisible="False" />
 
         <!-- Settings: one row per option, name and description left, control right -->
         <ScrollViewer x:Name="SettingsPage" Classes="page" IsVisible="False">

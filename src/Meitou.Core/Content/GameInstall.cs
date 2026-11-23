@@ -277,7 +277,7 @@ public sealed class GameInstall
     /// The Steam libraries on this machine: Steam's own folder (<c>SteamPath</c> in the user's registry on Windows; <c>~/.local/share/Steam</c>,
     /// <c>~/.steam/steam</c> or the Flatpak one on Linux) and every <c>"path"</c> in its <c>steamapps/libraryfolders.vdf</c>. Empty without Steam.
     /// </summary>
-    static IEnumerable<string> SteamLibraries()
+    public static IEnumerable<string> SteamLibraries()
     {
         foreach (var steam in SteamFolders())
         {
@@ -296,7 +296,7 @@ public sealed class GameInstall
     /// <summary>
     /// Steam's own folders that exist on this machine, by platform (see <see cref="SteamLibraries"/>).
     /// </summary>
-    static IEnumerable<string> SteamFolders()
+    public static IEnumerable<string> SteamFolders()
     {
         if (OperatingSystem.IsWindows())
         {

@@ -72,10 +72,12 @@ static class LauncherText
     public static string Translate(string text, params object?[] args) => Loc.Format(Translate(text), args);
 
     /// <summary>
-    /// A control whose text or items are data (a list, the release notes, the news, the newest save's name), not a label.
+    /// A control whose text or items are data (a list, the release notes, the news, the newest save's name), not a label, or that is built
+    /// in the current language whenever it is built (the Benchmark page).
     /// </summary>
     static bool HoldsData(Control control) => control is ComboBox or ListBox
-        or ContentControl { Name: "ReleaseNotes" } or StackPanel { Name: "NewsPanel" } or TextBlock { Name: "ContinueSaveText" };
+        or ContentControl { Name: "ReleaseNotes" } or StackPanel { Name: "NewsPanel" } or TextBlock { Name: "ContinueSaveText" }
+        or Benchmarks.BenchmarkPage;
 
     /// <summary>
     /// Translates the label items of <paramref name="combo"/>. The closed box shows the content its selected item had when chosen, so a new
