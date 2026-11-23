@@ -226,7 +226,7 @@ public sealed partial class LockSystem
                     }
 
                     if (Vector2.Distance(next[s].Goal, Flat(next[w].Position)) > ShackleReach)
-                        TaskStart.StepTo(table, s, Flat(next[w].Position), c.RunSpeed);
+                        TaskStart.StepTo(table, s, next[w].Position, c.RunSpeed);
 
                     continue;
                 }

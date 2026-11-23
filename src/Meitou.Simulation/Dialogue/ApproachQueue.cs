@@ -113,8 +113,7 @@ sealed class ApproachQueue(DialogueSystem dialogue)
             return;
         }
 
-        var to = new Vector2(table.Next[t].Position.X, table.Next[t].Position.Z);
-        if (!DialogueOrders.WalkTo(table, n, to, SpeedMode.Free)) Finish(world, a, n, "gives up (no way to the target)");
+        if (!DialogueOrders.WalkTo(table, n, table.Next[t].Position, SpeedMode.Free)) Finish(world, a, n, "gives up (no way to the target)");
     }
 
     /// <summary>

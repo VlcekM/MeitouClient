@@ -227,7 +227,8 @@ sealed class TownStalkers(DialogueSystem system, PopulationData data)
         var table = world.Characters;
         var at = new Vector2(table.Next[s].Position.X, table.Next[s].Position.Z);
         var victim = new Vector2(table.Next[t].Position.X, table.Next[t].Position.Z);
-        if (world.Tick % 15 == 0 && Vector2.Distance(at, victim) > DialogueSystem.TalkReach) DialogueOrders.WalkTo(table, s, victim, SpeedMode.Walk);
+        if (world.Tick % 15 == 0 && Vector2.Distance(at, victim) > DialogueSystem.TalkReach)
+            DialogueOrders.WalkTo(table, s, table.Next[t].Position, SpeedMode.Walk);
     }
 
     /// <summary>

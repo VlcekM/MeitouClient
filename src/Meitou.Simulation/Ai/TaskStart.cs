@@ -628,6 +628,16 @@ public static class TaskStart
     }
 
     /// <summary>
+    /// <see cref="StepTo(CharacterTable, int, System.Numerics.Vector2, byte)"/> to a point with its height, whose floor the walk keeps
+    /// (<see cref="MovementSystem.GoToAt"/>): a walk to another character.
+    /// </summary>
+    public static void StepTo(CharacterTable table, int slot, System.Numerics.Vector3 at, byte mode)
+    {
+        MovementSystem.GoToAt(table, slot, at, mode);
+        Stamp(table, slot);
+    }
+
+    /// <summary>
     /// Debug builds: the task the start path has just set (<see cref="CheckStarts"/>).
     /// </summary>
     [System.Diagnostics.Conditional("DEBUG")]

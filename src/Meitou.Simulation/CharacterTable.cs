@@ -314,8 +314,9 @@ public sealed class CharacterCold
     public OrderQueue OrderQueue { get; } = new();
 
     /// <summary>
-    /// The height a move order was given at (the clicked ground), for the goal <see cref="GoalHeightAt"/>: it picks the floor where floors are
-    /// stacked. Other goals use the character's own height. Derived from orders and not hashed.
+    /// The height a walk's goal was given at (a move order's clicked ground, a site's or fixture's floor, the character walked to), for the goal
+    /// <see cref="GoalHeightAt"/>: it picks the floor where floors are stacked. Other goals use the character's own height. Derived from orders and
+    /// not hashed.
     /// </summary>
     public float GoalHeight { get; set; } = float.NaN;
     /// <summary>
