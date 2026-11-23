@@ -508,8 +508,16 @@ sealed class BuildingSync(GameHost host)
             StaticAlong = (origin, direction, length) => footprints.Along(origin, direction, length).Where(b => Pickable(b.Placement.BuildingId)),
             FloorAlong = GhostFloorAlong,
             Readout = Readout,
+            Waive = host.Modding.Mods is { HasPlacementRules: true } waivers ? (q, failure) => waivers.WaivePlacement(Ask(q), failure) : null,
+            Refuse = host.Modding.Mods is { HasPlacementRules: true } refusers ? q => refusers.RefusePlacement(Ask(q)) : null,
         };
     }
+
+    /// <summary>
+    /// What the mods' placement rules are asked about a ghost (docs/modding.md "Placement rules").
+    /// </summary>
+    static Modding.PlacementAsk Ask(Building.PlacementQuery q) =>
+        new(q.Building, q.Position, q.Yaw, q.On?.Building ?? q.SnappedOn?.Id, q.Floor, q.WallPiece);
 
     /// <summary>
     /// The movement pick's floors up to the viewed one: the build window's floor arrows choose the floor the ghost stands on.

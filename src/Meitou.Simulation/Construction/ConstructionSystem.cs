@@ -423,15 +423,57 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         foreach (var plan in place.Plans)
             if (Place(world, plan) is { } site) placed.Add(site);
 
-        TownForWalls(world, placed);
-        AssignFinalTowns(world, placed);
-        AttachWalls(world.Buildings, Data, placed);
-        // Once, with the last placed building's town (FUN_1404d72a0), not once per town the batch touched.
-        if (placed.Count > 0 && !placed[^1].InNoTown)
-            TownRefit.Reassess(world, TownLookup.PlayerTownOf(world, placed[^1]), this);
+        Settle(world, placed);
 
         // Confirm ends by sending the selection to build the last building created (FUN_1404d72a0: order 2 through FUN_1407f9e20, Shift ignored).
         if (placed.Count > 0) OrderBuild(world, world.Player.Selection.ToArray(), Root(reg, placed[^1]), queued: false);
+    }
+
+    /// <summary>
+    /// A code mod's buildings for the player's faction (engine API, not in the original): a site for each plan, in order, as build mode's Confirm
+    /// makes them (<see cref="PlaceBuildings"/>: the same town block, the same player town or new outpost, walls joined, the town reassessed once),
+    /// without research's gate, without a message and without sending anyone to build. <paramref name="complete"/> makes every site standing
+    /// already: built to its target with all its materials delivered (as a saved complete building is, so dismantling it refunds them), with no
+    /// "construction complete" message; else each waits for builders as a placed ghost does. The game gives a standing site its doors, beds,
+    /// seats and machine on its next step. Furniture goes inside a building by a plan whose <see cref="PlannedBuilding.Parent"/> is that
+    /// building's site id, so place the building first and its furniture in a second call; the position is absolute, and nothing checks that it
+    /// lies inside. A plan's <see cref="PlannedBuilding.BoundsSize"/> moves a new outpost's centre as a ghost's does (zero: the building's
+    /// position). Returns the sites in plan order (<see cref="BuildSite.Id"/> for <c>SetSquadHome</c> or a parent, <see cref="BuildSite.Town"/>
+    /// for <see cref="BuildingRegistry.FindTown"/>), null for a plan refused: a record that is not a BUILDING, a position that is not finite, too
+    /// close to a town (<see cref="PlacementRules.TownBlock"/>), and every plan when the world has no player faction or during the parallel
+    /// phase. Serial phases and <see cref="IWorldReady"/>; costs as much as build mode's Confirm.
+    /// </summary>
+    public BuildSite?[] PlaceSites(World world, IReadOnlyList<PlannedBuilding> plans, bool complete)
+    {
+        var sites = new BuildSite?[plans.Count];
+        if (world.Characters.Phase == TablePhase.Parallel || world.Player.Faction < 0) return sites;
+
+        var placed = new List<BuildSite>(plans.Count);
+        for (int i = 0; i < plans.Count; i++)
+        {
+            var plan = plans[i];
+            if (!float.IsFinite(plan.Position.X) || !float.IsFinite(plan.Position.Y) || !float.IsFinite(plan.Position.Z)) continue;
+            if (Data(plan.Record) is not { } data || Blocked(data, plan) != PlacementFailure.None) continue;
+
+            sites[i] = NewSite(world, plan, data, complete);
+            placed.Add(sites[i]!);
+        }
+
+        Settle(world, placed);
+        return sites;
+    }
+
+    /// <summary>
+    /// Settles a batch of new sites into towns: queued walls take their town, every site its final town, walls are joined, and the last site's town
+    /// is reassessed once (FUN_1404d72a0), not once per town the batch touched.
+    /// </summary>
+    void Settle(World world, List<BuildSite> placed)
+    {
+        TownForWalls(world, placed);
+        AssignFinalTowns(world, placed);
+        AttachWalls(world.Buildings, Data, placed);
+        if (placed.Count > 0 && !placed[^1].InNoTown)
+            TownRefit.Reassess(world, TownLookup.PlayerTownOf(world, placed[^1]), this);
     }
 
     /// <summary>
@@ -632,17 +674,37 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             return null;
         }
 
-        // A plan with a parent stands in a building the host found ours.
-        var fail = PlacementRules.TownBlock(data, new Vector2(plan.Position.X, plan.Position.Z), _towns, _playerFactionId, plan.Parent is not null);
+        var fail = Blocked(data, plan);
         if (fail != PlacementFailure.None)
         {
             world.Post(PlacementRules.Message(fail));
             return null;
         }
 
+        return NewSite(world, plan, data, complete: false);
+    }
+
+    /// <summary>
+    /// Whether a town keeps the plan off its ground (<see cref="PlacementRules.TownBlock"/>); a plan with a parent stands in a building the host
+    /// found ours.
+    /// </summary>
+    PlacementFailure Blocked(BuildingBuildData data, PlannedBuilding plan) =>
+        PlacementRules.TownBlock(data, new Vector2(plan.Position.X, plan.Position.Z), _towns, _playerFactionId, plan.Parent is not null);
+
+    /// <summary>
+    /// Adds the plan's site for the player's faction, in its town (<see cref="TownFor"/>): a ghost, or <paramref name="complete"/> built to its
+    /// target with every material delivered. A record whose target is 0 is complete at once.
+    /// </summary>
+    BuildSite NewSite(World world, PlannedBuilding plan, BuildingBuildData data, bool complete)
+    {
         var reg = world.Buildings;
         var materials = new MaterialSlot[data.Materials.Count];
-        for (int i = 0; i < materials.Length; i++) materials[i] = new MaterialSlot(data.Materials[i].Item, data.Materials[i].Required);
+        for (int i = 0; i < materials.Length; i++)
+        {
+            float required = data.Materials[i].Required;
+            materials[i] = new MaterialSlot(data.Materials[i].Item, required) { Delivered = complete ? required : 0 };
+        }
+
         var site = new BuildSite
         {
             Id = reg.NewId(WorldLayout.ZoneOf(plan.Position.X, plan.Position.Z), _levelIds),
@@ -658,7 +720,8 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             Target = data.Target,
             Rate = data.Rate,
         };
-        site.Complete = site.Target <= 0;   // a total of 0 completes at once (Verified)
+        site.Complete = complete || site.Target <= 0;   // a total of 0 completes at once (Verified)
+        if (complete) site.Progress = site.Target;
         site.Town = TownFor(world, site, data, plan.BoundsSize);
         reg.Add(site);
         return site;

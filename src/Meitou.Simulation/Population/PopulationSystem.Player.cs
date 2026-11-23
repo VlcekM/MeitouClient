@@ -109,25 +109,8 @@ public sealed partial class PopulationSystem
     /// The place a new game's squad stands at: the place itself when walkable, else a walkable spot near it (the original stands the squad at the
     /// place itself).
     /// </summary>
-    Vector2 StandingPlace(World world, Vector2 centre, ulong key)
-    {
-        // The original stands the squad at the place itself; here on a walkable spot near it.
-        const float spread = 50;
-        var at = centre;
-        if (world.Walkability.IsWalkable(centre.X, centre.Y)) return at;
-
-        for (int attempt = 0; attempt < 20; attempt++)
-        {
-            var p = Rng.PointInDisc(Rng.Hash(world.Seed, key, RngPurpose.Spawn, (ulong)attempt), centre, spread * (1 + attempt));
-            if (world.Walkability.IsWalkable(p.X, p.Y))
-            {
-                at = p;
-                break;
-            }
-        }
-
-        return at;
-    }
+    static Vector2 StandingPlace(World world, Vector2 centre, ulong key) =>
+        Movement.CharacterPlacement.WalkableNear(world, centre, key) ?? centre;   // the original stands the squad at the place itself
 
     /// <summary>
     /// The towns of the biome group the start place is in are known to the player.

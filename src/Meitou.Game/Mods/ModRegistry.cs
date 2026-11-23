@@ -141,6 +141,9 @@ sealed class ModRegistrations
     /// The per-frame callbacks.
     /// </summary>
     public List<ModFrameView> Frames { get; } = [];
+    /// The placement rules.
+    /// </summary>
+    public List<ModPlacementRule> PlacementRules { get; } = [];
     /// <summary>
     /// The mod's settings group; null when it registered none.
     /// </summary>
@@ -306,6 +309,9 @@ sealed class ModRegistry
     /// The player interface the mods' <see cref="ModInterface"/>s act on (docs/modding.md "Interface actions").
     /// </summary>
     public ModInterfaceHub Interface { get; } = new();
+    /// Every mod's placement rules, in load order.
+    /// </summary>
+    public List<ModPlacementRule> PlacementRules { get; } = [];
     /// <summary>
     /// The mods' queued and playing display-only effects (<see cref="ModContext.PlayEffect(string, System.Numerics.Vector3, float,
     /// System.Numerics.Vector3?)"/>).
@@ -405,6 +411,7 @@ sealed class ModRegistry
         FactionLists.AddRange(r.FactionLists);
         SavesWritten.AddRange(r.SavesWritten);
         Frames.AddRange(r.Frames);
+        PlacementRules.AddRange(r.PlacementRules);
         if (r.Settings is not null) Settings.Add(r.Settings);
     }
 

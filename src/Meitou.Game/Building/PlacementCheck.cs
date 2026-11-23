@@ -161,6 +161,17 @@ public sealed class PlacementServices
         get;
         init;
     } = (_, _, _) => [];
+
+    /// <summary>
+    /// The code mods' placement rules (docs/modding.md "Placement rules"; engine API, not in the original): whether a mod lifts this refusal of the
+    /// ghost. Null when no mod has a rule.
+    /// </summary>
+    public Func<PlacementQuery, PlacementFailure, bool>? Waive { get; init; }
+
+    /// <summary>
+    /// The code mods' placement rules: the text of a mod's refusal of a ghost the game itself allows, else null. Null when no mod has a rule.
+    /// </summary>
+    public Func<PlacementQuery, string?>? Refuse { get; init; }
 }
 
 /// <summary>
@@ -268,13 +279,40 @@ public static class PlacementCheck
     const float SteepestNormalY = 0.2f;
 
     /// <summary>
-    /// The first reason the ghost cannot stand, in the original's order (town, ownership, resources, incomplete site, the centre, inside only,
-    /// overlap, ground, slope); None when it can.
+    /// The first reason the ghost cannot stand (<see cref="GameVerdict"/>); None when it can. The code mods' placement rules (docs/modding.md
+    /// "Placement rules", engine API) may lift any of the game's reasons but the town block, which the simulation applies again on Confirm, and may
+    /// refuse a ghost the game allows (<see cref="PlacementFailure.RefusedByMod"/>, the mod's text in <paramref name="refusal"/>, else null).
     /// </summary>
-    public static PlacementFailure Evaluate(PlacementQuery q)
+    public static PlacementFailure Evaluate(PlacementQuery q, out string? refusal)
+    {
+        refusal = null;
+        var failure = GameVerdict(q);
+        if (failure != PlacementFailure.None || q.Services.Refuse is not { } refuse) return failure;
+
+        refusal = refuse(q);
+        return refusal is null ? PlacementFailure.None : PlacementFailure.RefusedByMod;
+    }
+
+    /// <summary>
+    /// <see cref="Evaluate(PlacementQuery, out string?)"/> without the text of a mod's refusal.
+    /// </summary>
+    public static PlacementFailure Evaluate(PlacementQuery q) => Evaluate(q, out _);
+
+    /// <summary>
+    /// Whether <paramref name="failure"/> keeps the ghost from standing: any reason but None, unless a mod's rule lifts it (never the town block).
+    /// </summary>
+    static bool Refused(PlacementQuery q, PlacementFailure failure) =>
+        failure != PlacementFailure.None
+        && (failure == PlacementFailure.TooCloseToTown || q.Services.Waive is not { } waive || !waive(q, failure));
+
+    /// <summary>
+    /// The game's own first reason the ghost cannot stand, in the original's order (town, ownership, resources, incomplete site, the centre, inside
+    /// only, overlap, ground, slope), each passed over when a mod's rule lifts it; None when it can.
+    /// </summary>
+    static PlacementFailure GameVerdict(PlacementQuery q)
     {
         // PreviewBuilding_Snapping overrides the placement test and rejects unsnapped snap-only buildings first (0x1404d0ff0).
-        if (q.NeedsSnap && !q.Snapped) return PlacementFailure.NeedsSnapNode;
+        if (q.NeedsSnap && !q.Snapped && Refused(q, PlacementFailure.NeedsSnapNode)) return PlacementFailure.NeedsSnapNode;
 
         var b = q.Building;
         var at = new Vector2(q.Position.X, q.Position.Z);
@@ -284,36 +322,47 @@ public static class PlacementCheck
             || q.SnappedOn is { IsLevel: false }
             || q.SnappedOn is { IsLevel: true } sn && PlacementRules.MayBuildIn(b, sn.Owned, sn.Destroyed, sn.OwnerNotReal);
         var town = PlacementRules.TownBlock(b, at, q.Towns, q.PlayerFactionId, mayBuildIn);
-        if (town != PlacementFailure.None) return town;
+        if (Refused(q, town)) return town;
 
         var turned = Quaternion.CreateFromAxisAngle(Vector3.UnitY, q.Yaw);
         var hull = q.Services.Footprint(b.Id) is { } footprint ? footprint.Place(q.Position, turned) : null;
         // On a floor or a building's snap node: a level building we may build in, or a finished site.
         string? parent = q.On?.Building ?? q.SnappedOn?.Id;
-        if (q.On is { Level: not null } && !mayBuildIn) return PlacementFailure.NotOwnedBuilding;
-        if (q.On is { Level: null } && q.Sites.FirstOrDefault(s => s.Id == parent) is null) return PlacementFailure.NotOwnedBuilding;
-        if (q.SnappedOn is { IsLevel: true } && !mayBuildIn) return PlacementFailure.NotOwnedBuilding;
-        if (q.SnappedOn is { IsLevel: false } && q.Sites.FirstOrDefault(s => s.Id == parent) is null) return PlacementFailure.NotOwnedBuilding;
+        if (NotOwned(q, parent, mayBuildIn) && Refused(q, PlacementFailure.NotOwnedBuilding)) return PlacementFailure.NotOwnedBuilding;
         // The resource row comes after the first row's "don't own" text and before "incomplete".
         var resources = PlacementRules.ResourceBlock(q.Services.Readout(b.Id, q.Position));
-        if (resources != PlacementFailure.None) return resources;
+        if (Refused(q, resources)) return resources;
         // A site of ours, or an owned town house being repaired (a level building that is also a site).
-        if ((q.On is not null || q.SnappedOn is not null) && q.Sites.FirstOrDefault(s => s.Id == parent) is { Complete: false })
+        if ((q.On is not null || q.SnappedOn is not null) && q.Sites.FirstOrDefault(s => s.Id == parent) is { Complete: false }
+            && Refused(q, PlacementFailure.InsideIncomplete))
+        {
             return PlacementFailure.InsideIncomplete;
+        }
         var centre = CentreBlock(q, at, parent);
-        if (centre != PlacementFailure.None) return centre;
+        if (Refused(q, centre)) return centre;
 
         // Interior-only furniture must stand on a building's floor; what may also stand outside (exterior furniture or a node) goes either way.
-        if (parent is null && b.IsInteriorFurniture && !b.IsExteriorFurniture && !b.IsNode) return PlacementFailure.MustBeInside;
+        if (parent is null && b.IsInteriorFurniture && !b.IsExteriorFurniture && !b.IsNode && Refused(q, PlacementFailure.MustBeInside))
+            return PlacementFailure.MustBeInside;
 
         var overlap = hull is null ? PlacementFailure.None : HullBlock(q, hull, at, parent);
-        if (overlap != PlacementFailure.None) return overlap;
+        if (Refused(q, overlap)) return overlap;
 
         var ground = GroundBlock(q, b);
-        if (ground != PlacementFailure.None) return ground;
+        if (Refused(q, ground)) return ground;
 
-        return SlopeBlock(q, b, at, parent);
+        var slope = SlopeBlock(q, b, at, parent);
+        return Refused(q, slope) ? slope : PlacementFailure.None;
     }
+
+    /// <summary>
+    /// Whether the ghost stands on a floor or snap node of a building it may not build in: a level building it does not own, or no site of ours.
+    /// </summary>
+    static bool NotOwned(PlacementQuery q, string? parent, bool mayBuildIn) =>
+        q.On is { Level: not null } && !mayBuildIn
+        || q.On is { Level: null } && q.Sites.FirstOrDefault(s => s.Id == parent) is null
+        || q.SnappedOn is { IsLevel: true } && !mayBuildIn
+        || q.SnappedOn is { IsLevel: false } && q.Sites.FirstOrDefault(s => s.Id == parent) is null;
 
     /// <summary>
     /// A building under the ghost's centre <paramref name="at"/> that blocks it; None when there is none.
@@ -556,9 +605,10 @@ public static class PlacementCheck
     }
 
     /// <summary>
-    /// The text of a failure (<see cref="PlacementRules.Message"/>).
+    /// The text of a failure (<see cref="PlacementRules.Message"/>); a mod's refusal shows its own <paramref name="refusal"/>.
     /// </summary>
-    public static string Message(PlacementFailure failure) => PlacementRules.Message(failure);
+    public static string Message(PlacementFailure failure, string? refusal = null) =>
+        failure == PlacementFailure.RefusedByMod ? refusal ?? "" : PlacementRules.Message(failure);
 
     #endregion
 
