@@ -376,7 +376,7 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
     /// <paramref name="s"/> trimmed, without control characters (line breaks kept when <paramref name="lines"/>) and cut to <paramref name="max"/>;
     /// null when empty.
     /// </summary>
-    static string? Clean(string? s, int max, bool lines)
+    public static string? Clean(string? s, int max, bool lines)
     {
         if (string.IsNullOrWhiteSpace(s)) return null;
         s = new string(s.Trim().ReplaceLineEndings("\n").Where(c => !char.IsControl(c) || lines && c == '\n').ToArray());

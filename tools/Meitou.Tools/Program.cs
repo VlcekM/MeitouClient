@@ -34,6 +34,7 @@ return args switch
     ["icons", .. var iconArgs] => WithInstall(i => IconExport.Run(i, iconArgs)),
     ["world-map", var png] => WithInstall(i => WorldSurvey.RenderMap(i, png)),
     ["world-map", var png, var step] => WithInstall(i => WorldSurvey.RenderMap(i, png, int.Parse(step))),
+    ["bench-import", .. var benchArgs] => BenchImport.Run(benchArgs),
     _ => Usage(),
 };
 
@@ -75,6 +76,9 @@ static int Usage()
                            (<item>.<material>[.<colour>].png), the others <item>.png, and icons.json listing them; --enhanced draws them supersampled,
                            --mods uses the install's load order instead of the base game
         meitou-tools world-map <png> [step]  render a top-down world map (every step-th height sample, default 16)
+        meitou-tools bench-import [--commit c] (--url <reports service> --token <admin token> | --dry)
+                           read the old kit's benchmark results from git history (default 1e317e343~1, run in the repo) and replace the reports
+                           service's legacy benchmark sessions with them; --dry prints the sessions instead
         """);
     return 2;
 }
