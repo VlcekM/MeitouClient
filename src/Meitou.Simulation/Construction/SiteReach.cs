@@ -132,7 +132,7 @@ public static class SiteReach
     /// Whether a worker can stand at X/Z on the surface itself (not grazing the edge of a hole beside it) within <paramref name="heightLimit"/> of
     /// the floor at <paramref name="floorY"/>; <paramref name="y"/> is that surface's height.
     /// </summary>
-    static bool OnFloor(IWalkability walk, float x, float z, float floorY, float heightLimit, out float y)
+    internal static bool OnFloor(IWalkability walk, float x, float z, float floorY, float heightLimit, out float y)
     {
         y = walk.GroundHeight(x, z, floorY);
         return walk.IsOnSurface(x, z, floorY) && MathF.Abs(y - floorY) < heightLimit;
