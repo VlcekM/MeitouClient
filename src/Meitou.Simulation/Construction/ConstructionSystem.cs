@@ -1171,7 +1171,8 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     }
 
     /// <summary>
-    /// Gives the character a site to work (serial phases): it stands, then walks there unless it is there already.
+    /// Gives the character a site to work (serial phases): it stands, then walks there unless it is there already. A builder of a stalled site it
+    /// carries nothing for goes for a material first (<see cref="FetchFirst"/>).
     /// </summary>
     void Begin(World world, int slot, BuildSite site, CharacterTask task)
     {
@@ -1185,10 +1186,28 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         cold.BuildSite = site.Id;
         cold.BuildBar = 0;
         ClearFetch(cold);
+        _sweep = true;
+        if (task == CharacterTask.Build && FetchFirst(world, slot, cold, site)) return;
+
         var goal = (site.Position, (BuildSite?)site, ReachOf(site));
         if (!Arrived(world, n, goal)) WalkTo(world, ref n, cold, goal);
+    }
 
-        _sweep = true;
+    /// <summary>
+    /// Sends a builder starting on a stalled site it carries nothing for straight to a material's source, as the original's plan for row 2
+    /// starts: 2 Building needs 51 (the site has its materials), whose provider 71 Adding materials needs 50 (the builder carries them), whose
+    /// provider chain 115 -> 247 Collecting resource walks to the 115 finder's source first (<b>Verified</b>, the TaskData rows of
+    /// <c>FUN_140319a60</c>; docs/game/buildings-production.md "Material delivery"). Walking to the site first could carry the builder out of the
+    /// finder's reach of a loose item (1200), so the engineer job's finder dropped the site and the job flipped on and off at that edge. False
+    /// when it builds at the site: the site is not stalled, the builder carries a material for it, or no source is found.
+    /// </summary>
+    bool FetchFirst(World world, int slot, CharacterCold cold, BuildSite site)
+    {
+        if (Root(world.Buildings, site) is not { Stalled: true } root || Carries(cold, root) || Source(world, slot, cold, root) is not { } source)
+            return false;
+
+        Fetch(world, slot, cold, source);
+        return true;
     }
 
     /// <summary>
