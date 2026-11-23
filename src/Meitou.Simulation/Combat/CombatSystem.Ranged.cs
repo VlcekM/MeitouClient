@@ -258,18 +258,22 @@ public sealed partial class CombatSystem : IProjectileSource
     /// Whether <paramref name="shooter"/> (of <paramref name="faction"/>) counts <paramref name="other"/> as an enemy for the line of fire and
     /// friendly fire.
     /// </summary>
-    internal bool Hostile(CharacterTable table, int shooter, int shooterGeneration, int faction, int target, int other)
+    internal bool Hostile(World world, int shooter, int shooterGeneration, int faction, int target, int other)
     {
         if (other == target) return true;
 
         ref readonly var o = ref _read[other];
         if (o.TargetSlot == shooter && o.TargetGeneration == shooterGeneration) return true;
 
+        var table = world.Characters;
         var oc = table.Cold(other);
         if (oc is null) return false;
 
-        // The original asks the character's enemy test (Character slot 125); the engine uses the faction relations, and without a table (hand-built
-        // worlds) another faction.
+        // The character's enemy test (Character slot 125) while the shooter lives: the squads' temporary enemies, else the faction relations; a
+        // shooter gone, its faction's relations, and without a table (hand-built worlds) another faction.
+        bool shooterHere = table.Previous[shooter].Generation == shooterGeneration && table.Cold(shooter) is not null;
+        if (shooterHere) return CharacterFacts.RegardsEnemy(world, Memory, Relations, shooter, table.Cold(shooter)!, other, oc);
+
         return CharacterFacts.RegardsEnemy(Relations, faction, oc.Faction);
     }
 
@@ -306,7 +310,7 @@ public sealed partial class CombatSystem : IProjectileSource
         // The buildings on the way still being read: hold fire until they are known rather than shoot through a wall.
         if (!ready) return 2;
 
-        if (solid < 0 && hit >= 0) return Hostile(world.Characters, self, prev[self].Generation, faction, target, hit) ? 1 : 2;
+        if (solid < 0 && hit >= 0) return Hostile(world, self, prev[self].Generation, faction, target, hit) ? 1 : 2;
         if (solid < 0 || !building) return 1;
 
         var at = from + solidSeg * solid;

@@ -251,6 +251,18 @@ HitMaterialType: `HIT_MISSED` dodged 0.2 s, `HIT_SWORD` blocked 0.3 s, flesh or 
 - Per target the attacker frees that one's attack slot (`AttackSlotManager::freeSlotH`), and after a hit or block takes it off its own engaged
   list (`removeAttackerH`, [attack slots](#attack-slots-and-circling)).
 
+### Enemy test
+
+**Verified** (decompile of `FUN_14079c950`, Character vtable slot 125 (+0x3e8) of `Character`, `CharacterHuman` and `CharacterAnimal`; `FUN_140678960`,
+`FUN_140678830`). `isEnemy(A, B)`: never when B is of A's faction. When their squads differ, A's squad memory decides first: B tagged TEMP_ENEMY
+(bit 4 of the entry's short-term tags) in A's squad's memory, or, when A is the player's faction (+0x250), A tagged TEMP_ENEMY in B's squad's
+memory, makes an enemy; B tagged TEMP_ALLY (bit 3) in A's squad's memory makes none. Only then the disguise, slave-owner and faction relation
+tests run. So a squad that remembers the player as a temporary enemy is the enemy of every member of the
+player's faction whatever the faction relation, and a sweep takes all of its members in the attack zone. Meitou:
+`CharacterFacts.RegardsEnemy(World, SquadMemory, ...)` (the squad memory part `SquadMemoryEnemy`, then the faction relations), used by the attack
+zone, the line of fire and the steering's repulsion. Checked on the save of #1239 (a maxed fighter against a squad of Hungry Bandits, 30 s windows):
+before, 23 blows thrown and 18 landed, never two victims to a blow; after, 11 thrown and 18 landed.
+
 **Verified** (disassembly of `FUN_1406087a0`): "attack start" is `CombatClass` +0x15c, written at each attack's start by `FUN_1402b4570` (the fight start's write is only the initial
 value), so `moved` is the 3D distance from where this swing began, in any direction: the attacker's own drift, backing or circling counts, not just a lunge. The clamp is max(−1, attack distance − moved)
 (the constant at `0x141684fcc` is −1.0, not 0). The list is built at the attack start and again at each blow frame (`FUN_14060a590`); the one-shot flag +0x1d4 is cleared every fight tick (`FUN_14060ce30`),

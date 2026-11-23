@@ -155,11 +155,43 @@ public static class CharacterFacts
 
     /// <summary>
     /// Slot 125, "A regards B as an enemy" (<c>FUN_14079c950</c>), faction part: hostile and not coexisting in either direction
-    /// (<see cref="AggroSystem.IsEnemy"/>), another faction when the world has no relation table. Engine reading: the original's squad memory tests
-    /// are not read.
+    /// (<see cref="AggroSystem.IsEnemy"/>), another faction when the world has no relation table.
     /// </summary>
     public static bool RegardsEnemy(FactionRelations? relations, int mine, int theirs) =>
         relations is not null ? AggroSystem.IsEnemy(relations, mine, theirs) : mine != theirs;
+
+    /// <summary>
+    /// Slot 125, "A regards B as an enemy" (<c>FUN_14079c950</c>, <b>Verified</b>, docs/game/combat.md "Enemy test"): never one of its own faction;
+    /// the squad memory part (<see cref="SquadMemoryEnemy"/>) when it decides, else the faction part.
+    /// </summary>
+    public static bool RegardsEnemy(World world, SquadMemory? memory, FactionRelations? relations, int a, CharacterCold ac, int b, CharacterCold bc)
+    {
+        if (ac.Faction == bc.Faction) return false;
+
+        return SquadMemoryEnemy(world, memory, a, ac, b, bc) ?? RegardsEnemy(relations, ac.Faction, bc.Faction);
+    }
+
+    /// <summary>
+    /// The squad memory part of slot 125 (<c>FUN_14079c950</c> through <c>FUN_140678960</c> and <c>FUN_140678830</c>, <b>Verified</b>), for
+    /// characters of different squads: an enemy when A's squad remembers B as a temporary enemy, or A is the player's and B's squad remembers A as one
+    /// (the bandits that picked the fight, the people the player attacked); not one when A's squad remembers B as a temporary ally; null when the
+    /// memory says neither and the factions decide.
+    /// </summary>
+    public static bool? SquadMemoryEnemy(World world, SquadMemory? memory, int a, CharacterCold ac, int b, CharacterCold bc)
+    {
+        if (memory is null || ac.SquadId == bc.SquadId) return null;
+
+        var table = world.Characters;
+        var aId = table.IdOf(a);
+        var bId = table.IdOf(b);
+        if (memory.AnyTempEnemy(ac.SquadId) && memory.HasShort(world, ac.SquadId, bId, MemoryTag.TempEnemy)) return true;
+        if (ac.Faction == world.Player.Faction && memory.AnyTempEnemy(bc.SquadId) && memory.HasShort(world, bc.SquadId, aId, MemoryTag.TempEnemy))
+            return true;
+
+        if (ac.SquadId >= 0 && memory.HasShort(world, ac.SquadId, bId, MemoryTag.TempAlly)) return false;
+
+        return null;
+    }
 
     /// <summary>
     /// A fight is on in the squad: a member in combat or with an attack order (engine reading of the squad's "in combat" test).
