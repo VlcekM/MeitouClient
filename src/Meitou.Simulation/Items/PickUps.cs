@@ -251,8 +251,8 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
                 world.GroundItems.Take(id);
 
                 // Task_Pickup: another faction's item taken inside a building is a Theft.
-                if (item.OwnedBy >= 0 && item.OwnedBy != c.Faction && world.Sight.BuildingOf(s) is not null)
-                    world.SystemOf<Crime.CrimeSystem>()?.StolePickUp(world, s, item.OwnedBy);
+                if (item.OwnedBy >= 0 && item.OwnedBy != c.Faction && world.Sight.BuildingOf(s) is { } inside)
+                    world.SystemOf<Crime.CrimeSystem>()?.StolePickUp(world, s, item.OwnedBy, inside);
                 if (wear) assembly?.RefreshEquipment(c);
                 world.EmitSound(SoundKind.PickedUp, s, next[s].Position);
             }

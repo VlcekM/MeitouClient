@@ -355,9 +355,14 @@ public sealed class PendingCrime
     /// Somebody has seen it (the HUD's "caught" message is posted once).
     /// </summary>
     public bool Witnessed { get; set; }
+    /// <summary>
+    /// The witnesses that have fired their witness event at a player's culprit for this crime, in the order they did (each fires it once:
+    /// <see cref="CrimeSystem"/>'s witness reaction).
+    /// </summary>
+    internal List<CharacterId> Told { get; } = [];
 
     /// <summary>
-    /// Adds the pending crime (code, victim faction, victim, timer, booked, witnessed) to the world hash.
+    /// Adds the pending crime (code, victim faction, victim, timer, booked, witnessed, the witnesses told) to the world hash.
     /// </summary>
     internal void Hash(ref StateHasher h)
     {
@@ -368,6 +373,8 @@ public sealed class PendingCrime
         h.Add(Timer);
         h.Add(Booked);
         h.Add(Witnessed);
+        h.Add(Told.Count);
+        foreach (var told in Told) h.Add(told);
     }
 }
 

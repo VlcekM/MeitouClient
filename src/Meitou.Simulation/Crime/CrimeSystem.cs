@@ -558,16 +558,31 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
                 world.Post(Loc.Tr("{1} has been caught committing {2}!", c.Name, CrimeTable.Name(p.Code)));
             }
         }
-        // The original fires the event on every reacting run (docs/game/dialogue.md "Witnesses"). Meitou fires it once at the player's
-        // characters; at an NPC culprit again on every sweep from a police-like witness not yet fighting, as the guards' lines want a culprit
-        // within talking range that does not run (engine choice: lines' repetition limits are not kept). Not a Trespassing: its event-17 line
-        // ("intruder law", DA 6 chase forever) needs no range, and repeating it only restarts the chase (#519).
-        if (first || !c.IsPlayer && p.Code != CrimeCode.Trespassing && !wc.InCombat && IsPoliceLike(world, wc))
+        // The original fires the event on every reacting run (docs/game/dialogue.md "Witnesses"). Meitou fires it once per witness at the
+        // player's characters, so the victim's guards that see the crime after the first witness still say their attack lines (#1251); at an NPC
+        // culprit again on every sweep from a police-like witness not yet fighting, as the guards' lines want a culprit within talking range that
+        // does not run (engine choice: lines' repetition limits are not kept). Not a Trespassing: its event-17 line ("intruder law", DA 6 chase
+        // forever) needs no range, and repeating it only restarts the chase (#519).
+        if (FiresWitnessEvent(world, wc, witness, c, p))
             world.Defer(new Dialogue.DialogueEvent(witness, table.IdOf(culprit), WitnessEvent(world, wc, p)) { Tick = world.Tick + 1 });
 
         // No stop once booked: the original runs the witness function per looker, so every witness reacts. A booking police far off
         // (in sight range, too far for its lines) would otherwise keep the guards beside the crime from ever reacting.
         if (!p.Booked && IsPoliceLike(world, wc) && Factions.Books(wf)) Book(world, culprit, wf, witness);
+    }
+
+    /// <summary>
+    /// Whether the reacting witness fires its witness event at the culprit now: at a player's character once per witness and crime
+    /// (<see cref="PendingCrime.Told"/>, which it joins); at an NPC culprit when the witness is police-like and not fighting, and the crime is no
+    /// Trespassing.
+    /// </summary>
+    bool FiresWitnessEvent(World world, CharacterCold wc, CharacterId witness, CharacterCold c, PendingCrime p)
+    {
+        if (!c.IsPlayer) return p.Code != CrimeCode.Trespassing && !wc.InCombat && IsPoliceLike(world, wc);
+        if (p.Told.Contains(witness)) return false;
+
+        p.Told.Add(witness);
+        return true;
     }
 
     /// <summary>

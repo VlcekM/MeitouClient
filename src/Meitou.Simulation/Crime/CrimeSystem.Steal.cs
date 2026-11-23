@@ -190,6 +190,15 @@ public sealed partial class CrimeSystem
             return -1;
         }
 
+        return ResidentLeader(world, building);
+    }
+
+    /// <summary>
+    /// The effective leader of <paramref name="building"/>'s resident squad (<see cref="ResidentSquad"/>,
+    /// <see cref="Population.PopulationSystem.EffectiveLeader"/>, <c>FUN_140547ba0</c> -> <c>FUN_140792b90</c>); -1 when nobody lives there.
+    /// </summary>
+    static int ResidentLeader(World world, string building)
+    {
         if (ResidentSquad(world, building) is not { } squad) return -1;
 
         var lead = world.SystemOf<Population.PopulationSystem>()?.EffectiveLeader(world, squad) ?? squad.Leader;
@@ -443,13 +452,17 @@ public sealed partial class CrimeSystem
     }
 
     /// <summary>
-    /// A ground item of another faction picked up inside a building (<c>Task_Pickup</c>, <b>Observed</b>): a pending Theft against the owner and
-    /// thievery XP 20; no steal roll.
+    /// A ground item of another faction picked up inside <paramref name="building"/> (<c>Task_Pickup</c> <c>FUN_14034f340</c>, <b>Verified</b>
+    /// decompile): a pending Theft against the owner with the building's resident leader as its victim (<see cref="ResidentLeader"/>, none when
+    /// nobody lives there), so that leader and its squad mates witness it as stolen from them; thievery XP 20; no steal roll.
     /// </summary>
-    public void StolePickUp(World world, int thief, int owner)
+    public void StolePickUp(World world, int thief, int owner, string building)
     {
         if (world.Characters.Cold(thief) is not { } c || owner < 0 || owner == c.Faction) return;
-        SetPending(world, thief, CrimeCode.Theft, owner, CharacterId.None, MinTimer);
+
+        int leader = ResidentLeader(world, building);
+        var victim = leader >= 0 ? world.Characters.IdOf(leader) : CharacterId.None;
+        SetPending(world, thief, CrimeCode.Theft, owner, victim, MinTimer);
         if (c.Stats is { } stats && c.Race is { } race)
             Xp?.Continuous(stats, race, StatsEnumerated.Thieving, 1, PickUpXp, ExperienceSource.Thievery);
     }
