@@ -508,7 +508,7 @@ move the strategy camera; edge scrolling, left click/box select, right-click mov
 Ctrl+/ writes one frame's Metal capture (`.gputrace`), Alt+Enter toggles full screen. The view keys are the Controls page's bindings, as on Vulkan:
 `ToggleInterface` (F7) hides the interface, `Screenshot` (F8, Print Screen) saves the picture as `_screens/screenshot_<n>.png`
 ([ui-input](game/ui-input.md) "Screenshots"), `ToggleStats` (F11) lists the frame, `CycleProfiler` (F12) shows the frame-rate lines (the profiler
-chart waits for Metal timestamps), `ToggleFps` (unbound; Ctrl+F9) the fps counter. Insert or Ctrl+` opens the dev console ([ui-input](game/ui-input.md)
+chart waits for Metal timestamps), `ToggleFps` (unbound; Shift+F9) the fps counter. Insert or Ctrl+` opens the dev console ([ui-input](game/ui-input.md)
 "Dev console"), and the F10 menu's Tools rows open the pick & collision inspector's menu (its hulls drawn by the shared frame) and the interior
 editor. The agent control channel (`--control-dir`, `--exec`, `--screenshot-after`, `screenshot`, `state`, `hud`) is polled each frame; its `mouse`
 and `click` need the window's pointer path and are not done. Full screen on macOS is native (`NSWindow toggleFullScreen:`, the window
