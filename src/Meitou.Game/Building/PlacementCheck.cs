@@ -141,9 +141,10 @@ public sealed class PlacementServices
     } = (_, _, _) => [];
 
     /// <summary>
-    /// Whether a BUILDING record has <c>is node</c> set (such as <c>Node Light Mount</c>).
+    /// The <c>node type</c> of a BUILDING record with <c>is node</c> set (such as <c>Node Light Mount</c>, 5, or <c>Node Turret</c>, 3); null for
+    /// any other record.
     /// </summary>
-    public Func<string, bool> IsNodeRecord { get; init; } = _ => false;
+    public Func<string, int?> NodeTypeOf { get; init; } = _ => null;
 
     /// <summary>
     /// The <c>is node</c> BUILDING instances of a building record in its own local space (cached per record).
