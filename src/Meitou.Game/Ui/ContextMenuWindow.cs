@@ -139,13 +139,19 @@ sealed class ContextMenuWindow(PlayerInterface player)
     /// chance shows 0 (<c>DAT_142133f28</c>, taken to be CONSTANTS <c>minimum lockpick chance</c>, <b>Observed</b>: the allowed test
     /// <c>FUN_1408ca120</c> compares with it).
     /// </summary>
-    internal string PickLockCaption(Vector3 at, int level, bool building)
-    {
-        if (LockChance(at, level) is not { } chance) return "Pick Lock";
-        if (building && chance < (player.SquadWindows.SquadLimits?.Invoke()?.MinimumLockpickChance ?? 0.05f))
-            chance = 0;
+    internal string PickLockCaption(Vector3 at, int level, bool building) =>
+        ShownLockChance(at, level, building) is { } chance ? WithChance("Pick Lock", chance * 100) : "Pick Lock";
 
-        return WithChance("Pick Lock", chance * 100);
+    /// <summary>
+    /// The pick chance (0..1) the Pick Lock row shows: <see cref="LockChance"/>, 0 for a <paramref name="building"/>'s lock below the minimum pick
+    /// chance; null with nobody selected.
+    /// </summary>
+    internal float? ShownLockChance(Vector3 at, int level, bool building)
+    {
+        if (LockChance(at, level) is not { } chance) return null;
+        if (building && chance < (player.SquadWindows.SquadLimits?.Invoke()?.MinimumLockpickChance ?? 0.05f)) return 0;
+
+        return chance;
     }
 
     /// <summary>

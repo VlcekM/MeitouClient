@@ -368,6 +368,12 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     public bool GreyUnavailableVerbs { get; set; } = true;
 
     /// <summary>
+    /// The lockpick pointer's chance label shows 0 below the minimum pick chance, as the Pick Lock row does (<see cref="UserConfig.FixLockpickLabel"/>);
+    /// off, it shows the bare chance as in the original.
+    /// </summary>
+    public bool FixLockpickLabel { get; set; } = true;
+
+    /// <summary>
     /// The button during play (<see cref="UserConfig.FeedbackButton"/>); off, it still shows on the title and with the game menu open.
     /// </summary>
     public bool FeedbackButtonInPlay { get; set; } = true;

@@ -5359,3 +5359,11 @@ msgstr "Nicht verfügbare Menüzeilen"
 
 msgid "Greyed: a menu row your selection can't do now, such as First Aid without a medkit, is greyed; Shift-click it to set up the job anyway. Faithful: every row as in the game."
 msgstr "Ausgegraut: Eine Menüzeile, die deine Auswahl gerade nicht ausführen kann, etwa Erste Hilfe ohne Medikit, wird ausgegraut; mit Umschalt-Klick richtest du die Aufgabe trotzdem ein. Originalgetreu: jede Zeile wie im Spiel."
+
+#. machine-translated
+msgid "Lockpick chance on the pointer"
+msgstr "Dietrich-Chance am Mauszeiger"
+
+#. machine-translated
+msgid "Pointing at a lock too hard to pick shows 0%, as its Pick Lock menu entry does, since the character cannot pick it. The game shows the chance before that limit there, such as 3% for a lock the menu gives 0%."
+msgstr "Zeigst du auf ein Schloss, das zu schwer zu knacken ist, steht dort 0 %, wie bei seinem Menüeintrag Schloss knacken, da die Figur es nicht knacken kann. Das Spiel zeigt dort die Chance vor dieser Grenze, etwa 3 % für ein Schloss, dem das Menü 0 % gibt."

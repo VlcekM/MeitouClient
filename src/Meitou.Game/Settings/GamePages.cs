@@ -698,6 +698,11 @@ sealed class GamePages(SettingsMenu menu)
             + "The game starts it collapsed every time.",
             Toggle: new("Information panel stays open", () => menu.Config.KeepInfoPanel, v => menu.Config.KeepInfoPanel = v, Remaster: true,
                 OnOff: true)));
+        result.Add(new("Lockpick chance on the pointer",
+            "Pointing at a lock too hard to pick shows 0%, as its Pick Lock menu entry does, since the character cannot pick it. "
+            + "The game shows the chance before that limit there, such as 3% for a lock the menu gives 0%.",
+            Toggle: new("Lockpick chance on the pointer", () => menu.Config.FixLockpickLabel,
+                v => menu.Player.FixLockpickLabel = menu.Config.FixLockpickLabel = v, Remaster: true, OnOff: true)));
         result.Add(GroundRow());
         result.Insert(0, menu.PageSidesEntry(result, "All fixes", "Every bug on this page as the game ships it, or every fix.", "fix"));
     }

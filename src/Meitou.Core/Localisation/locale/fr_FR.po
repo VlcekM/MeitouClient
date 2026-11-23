@@ -5359,3 +5359,11 @@ msgstr "Lignes de menu indisponibles"
 
 msgid "Greyed: a menu row your selection can't do now, such as First Aid without a medkit, is greyed; Shift-click it to set up the job anyway. Faithful: every row as in the game."
 msgstr "Grisées : une ligne du menu que votre sélection ne peut pas faire maintenant, comme Premiers soins sans trousse, est grisée ; Maj+clic pour créer la tâche quand même. Fidèle : chaque ligne comme dans le jeu."
+
+#. machine-translated
+msgid "Lockpick chance on the pointer"
+msgstr "Chance de crochetage sur le pointeur"
+
+#. machine-translated
+msgid "Pointing at a lock too hard to pick shows 0%, as its Pick Lock menu entry does, since the character cannot pick it. The game shows the chance before that limit there, such as 3% for a lock the menu gives 0%."
+msgstr "Pointer une serrure trop difficile à crocheter affiche 0 %, comme son entrée Crocheter du menu, puisque le personnage ne peut pas la crocheter. Le jeu y affiche la chance avant cette limite, par exemple 3 % pour une serrure à laquelle le menu donne 0 %."

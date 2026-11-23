@@ -1634,6 +1634,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         BagSearchChanged?.Invoke(true);
         Config.FixHeadTurnBack = false;
         Config.KeepInfoPanel = true;
+        Player.FixLockpickLabel = Config.FixLockpickLabel = true;
         Config.FixRaidClocks = true;
         Config.FixArrestLifts = true;
         Config.FixGround = true;

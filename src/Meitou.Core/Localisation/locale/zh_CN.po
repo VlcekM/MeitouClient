@@ -6190,3 +6190,11 @@ msgstr "不可用的菜单项"
 
 msgid "Greyed: a menu row your selection can't do now, such as First Aid without a medkit, is greyed; Shift-click it to set up the job anyway. Faithful: every row as in the game."
 msgstr "灰显：所选角色当前无法执行的菜单项（例如没有急救包时的急救）会灰显；按住 Shift 点击仍可设为工作。原版：所有菜单项与游戏一致。"
+
+#. machine-translated
+msgid "Lockpick chance on the pointer"
+msgstr "指针上的撬锁几率"
+
+#. machine-translated
+msgid "Pointing at a lock too hard to pick shows 0%, as its Pick Lock menu entry does, since the character cannot pick it. The game shows the chance before that limit there, such as 3% for a lock the menu gives 0%."
+msgstr "指向难度过高、无法撬开的锁时显示 0%，与其菜单中的“撬锁”一项一致，因为角色撬不开它。游戏在那里显示的是应用该下限之前的几率，例如菜单给出 0% 的锁会显示 3%。"

@@ -315,7 +315,7 @@ DatapanelGUI on the `Popup` layer with one row, empty key and value `{1,num}%` =
 
 Meitou (`PlayerInterface.AddPointerChance`): the `knockout` label, from the pointed character's published `StealthKoChance` (the selection's first sneaking
 member, not the nearest); the `lockpick` label, from `Lockpicking.Chance` of the selected character nearest the lock (a caged character's cage, else the
-container, else the door under the mouse). A floating tooltip 32 px at 1080 above the mouse, recomputed every frame (engine choices); drawn with the Hardware mouse too.
+container, else the door under the mouse); Meitou fix (Fixes page `Lockpick chance on the pointer`, on by default; `UserConfig.FixLockpickLabel`): a door's or container's chance below the minimum shows 0, as the Pick Lock row (#1190). A floating tooltip 32 px at 1080 above the mouse, recomputed every frame (engine choices); drawn with the Hardware mouse too.
 
 ### Character picking
 

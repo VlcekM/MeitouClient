@@ -5786,3 +5786,11 @@ msgstr "Linhas de menu indisponíveis"
 
 msgid "Greyed: a menu row your selection can't do now, such as First Aid without a medkit, is greyed; Shift-click it to set up the job anyway. Faithful: every row as in the game."
 msgstr "Esmaecidas: uma linha do menu que sua seleção não pode fazer agora, como Primeiros socorros sem kit médico, fica esmaecida; use Shift+clique para definir o trabalho mesmo assim. Fiel: cada linha como no jogo."
+
+#. machine-translated
+msgid "Lockpick chance on the pointer"
+msgstr "Chance de arrombamento no ponteiro"
+
+#. machine-translated
+msgid "Pointing at a lock too hard to pick shows 0%, as its Pick Lock menu entry does, since the character cannot pick it. The game shows the chance before that limit there, such as 3% for a lock the menu gives 0%."
+msgstr "Apontar para uma fechadura difícil demais de arrombar mostra 0%, como a opção Arrombar fechadura do menu, já que o personagem não consegue arrombá-la. O jogo mostra ali a chance antes desse limite, como 3% para uma fechadura à qual o menu dá 0%."

@@ -577,6 +577,11 @@ sealed class UserConfig
     /// </summary>
     public bool KeepInfoPanel { get; set; } = true;
     /// <summary>
+    /// The lockpick pointer's chance label shows 0 for a building's lock below the minimum pick chance, as the Pick Lock row does (Fixes settings;
+    /// off: the bare chance, as the game does; docs/game/ui-input.md "Pointer chance label").
+    /// </summary>
+    public bool FixLockpickLabel { get; set; } = true;
+    /// <summary>
     /// The information panel was last left extended (its ^ button), written at every press; read at start while <see cref="KeepInfoPanel"/> is on.
     /// </summary>
     public bool InfoPanelExtended { get; set; }

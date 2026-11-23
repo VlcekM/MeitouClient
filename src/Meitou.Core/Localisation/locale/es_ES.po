@@ -5359,3 +5359,11 @@ msgstr "Filas de menú no disponibles"
 
 msgid "Greyed: a menu row your selection can't do now, such as First Aid without a medkit, is greyed; Shift-click it to set up the job anyway. Faithful: every row as in the game."
 msgstr "Atenuadas: una fila del menú que tu selección no puede hacer ahora, como Primeros auxilios sin botiquín, aparece atenuada; haz Mayús+clic para asignar la tarea igualmente. Fiel: cada fila como en el juego."
+
+#. machine-translated
+msgid "Lockpick chance on the pointer"
+msgstr "Probabilidad de forzar en el puntero"
+
+#. machine-translated
+msgid "Pointing at a lock too hard to pick shows 0%, as its Pick Lock menu entry does, since the character cannot pick it. The game shows the chance before that limit there, such as 3% for a lock the menu gives 0%."
+msgstr "Al señalar una cerradura demasiado difícil de forzar se muestra 0 %, como en su opción Forzar cerradura del menú, ya que el personaje no puede forzarla. El juego muestra ahí la probabilidad antes de ese límite, como un 3 % para una cerradura a la que el menú da 0 %."
