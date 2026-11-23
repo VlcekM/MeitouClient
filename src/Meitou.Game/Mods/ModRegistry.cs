@@ -130,6 +130,10 @@ sealed class ModRegistrations
     /// </summary>
     public List<ModFactionList> FactionLists { get; } = [];
     /// <summary>
+    /// The placement rules.
+    /// </summary>
+    public List<ModPlacementRule> PlacementRules { get; } = [];
+    /// <summary>
     /// The mod's settings group; null when it registered none.
     /// </summary>
     public ModSettingsGroup? Settings { get; set; }
@@ -241,6 +245,10 @@ sealed class ModRegistry
     /// </summary>
     public List<ModFactionList> FactionLists { get; } = [];
     /// <summary>
+    /// Every mod's placement rules, in load order.
+    /// </summary>
+    public List<ModPlacementRule> PlacementRules { get; } = [];
+    /// <summary>
     /// The mods' queued and playing display-only effects (<see cref="ModContext.PlayEffect(string, System.Numerics.Vector3, float,
     /// System.Numerics.Vector3?)"/>).
     /// </summary>
@@ -332,6 +340,7 @@ sealed class ModRegistry
         }
         HitFeeds.AddRange(r.HitFeeds);
         FactionLists.AddRange(r.FactionLists);
+        PlacementRules.AddRange(r.PlacementRules);
         if (r.Settings is not null) Settings.Add(r.Settings);
     }
 

@@ -472,6 +472,16 @@ holds refuses the second mod.
   (names go through the translation catalog like the tab's own), leave out, or add headings (faction -1: the name alone, no number or bar),
   for example to group factions under another. It runs on the host's thread whenever the tab is drawn, so it must not touch the world; mods chain in
   load order. A throw or a null is logged and that arranger is not called again.
+- **Placement rules:** `AddPlacementRule(rule)` changes where build mode lets the player place a building. `rule.Waive(ask, failure)` may
+  lift one of the game's own reasons for refusing a ghost (`PlacementFailure`: inside only, too close to a building, uneven ground, a building
+  not owned, and the rest), and the check goes on to its next step; the town block (`TooCloseToTown`) is never asked about, since
+  the simulation applies it again on Confirm, nor is research. `rule.Refuse(ask)` may refuse a ghost the game allows, with the mod's own text as
+  build mode's message (`PlacementFailure.RefusedByMod`). `PlacementAsk` gives the building's build data, the ghost's position and turn, the
+  building it stands in or on (null outdoors), the floor and whether it is a wall piece. A reason any mod lifts is lifted; a refusal by any mod
+  stands. Asked on the host's thread for every ghost build mode shows (each frame it moves, each piece of a wall line, and the test channel's
+  `build`), so it must be cheap and must not touch the world; with no rule registered the check is unchanged. A rule that throws is logged and
+  not asked again. What a lifted reason allows is the mod's to answer for: furniture placed outdoors stands with no parent building, and
+  whatever reads indoors (rain on farms and rain collectors, lights, beds) treats it as outdoors. Engine API, not in the original.
 - **Combat moves:** `AddCombatMove(source)`: `source(world, id, tick)` answers a `CombatMove` (a `CombatTechnique` and its progress, 0 to
   1) or null, and the animation plays the first answer, in load order, as the character's technique (`CombatSystem.ModMove`). It is asked
   only when the game plays nothing of its own: not while the character attacks, blocks or dodges, is stunned or stumbling, holds a crossbow

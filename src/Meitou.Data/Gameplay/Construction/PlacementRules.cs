@@ -75,6 +75,10 @@ public enum PlacementFailure : byte
     /// Engine: the record is not a BUILDING or not research-unlocked.
     /// </summary>
     NotAvailable,
+    /// <summary>
+    /// Engine: a code mod's placement rule refused it (docs/modding.md "Placement rules"); the text shown is the mod's.
+    /// </summary>
+    RefusedByMod,
 }
 
 /// <summary>

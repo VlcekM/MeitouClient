@@ -216,6 +216,60 @@ public sealed class ModHost
     }
 
     /// <summary>
+    /// Whether a mod registered a placement rule.
+    /// </summary>
+    public bool HasPlacementRules => _registry.PlacementRules.Count > 0;
+
+    /// <summary>
+    /// Whether any mod's placement rule lifts <paramref name="failure"/> for <paramref name="ask"/>, on the host's thread; one that throws is logged,
+    /// skipped and asked no more.
+    /// </summary>
+    public bool WaivePlacement(PlacementAsk ask, Data.Gameplay.Construction.PlacementFailure failure)
+    {
+        foreach (var rule in _registry.PlacementRules)
+        {
+            if (rule.Faulted || rule.Rule.Waive is not { } waive) continue;
+
+            if (AskRule(rule, () => waive(ask, failure))) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// The first mod's refusal text for <paramref name="ask"/>, in load order; null when none refuses.
+    /// </summary>
+    public string? RefusePlacement(PlacementAsk ask)
+    {
+        string? text = null;
+        foreach (var rule in _registry.PlacementRules)
+        {
+            if (rule.Faulted || rule.Rule.Refuse is not { } refuse) continue;
+
+            AskRule(rule, () => (text = refuse(ask)) is not null);
+            if (text is not null) return text;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Runs a placement rule's answer, turning the rule off with a log line if it throws (false then).
+    /// </summary>
+    static bool AskRule(ModPlacementRule rule, Func<bool> ask)
+    {
+        try
+        {
+            return ask();
+        }
+        catch (Exception e)
+        {
+            rule.Faulted = true;
+            Console.Error.WriteLine($"mod       {rule.Owner}: placement rule disabled: {e.GetType().Name}: {e.Message}");
+            CodeModFaults.Tell(rule.Owner, e);
+            return false;
+        }
+    }
+
+    /// <summary>
     /// The settings the mods registered, in load order (docs/modding.md "Settings").
     /// </summary>
     public IReadOnlyList<ModSettingsGroup> Settings => _registry.Settings;

@@ -564,6 +564,20 @@ public sealed class ModContext
     }
 
     /// <summary>
+    /// A placement rule for build mode (docs/modding.md "Placement rules"): <see cref="PlacementRule.Waive"/> may lift the game's own reasons for
+    /// refusing a ghost (inside only, too close to a building, uneven ground and the rest; never the town block, which the simulation applies again),
+    /// and <see cref="PlacementRule.Refuse"/> may refuse one the game allows, with the mod's text. Asked on the host's thread for every ghost build
+    /// mode shows (each frame it moves, and each piece of a wall line), so it must be cheap and must not touch the world; a refusal by any mod
+    /// stands, a reason any mod lifts is lifted. A rule that throws is logged and not asked again.
+    /// </summary>
+    public void AddPlacementRule(PlacementRule rule)
+    {
+        CheckOpen();
+        ArgumentNullException.ThrowIfNull(rule);
+        Pending.PlacementRules.Add(new ModPlacementRule(Id, rule));
+    }
+
+    /// <summary>
     /// A row of the debug menu (F10), after the vanilla rows. <paramref name="run"/> runs on the host's thread while a tick may be in flight: it must
     /// not touch the world, only read the context and queue commands; its return is the status line.
     /// </summary>
