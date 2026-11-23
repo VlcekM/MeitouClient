@@ -46,6 +46,11 @@ public sealed record DebugTeleport(IReadOnlyList<CharacterId> Characters, Vector
 public sealed record DebugHeal(IReadOnlyList<CharacterId> Characters, bool Limbs = false) : DebugCommand;
 
 /// <summary>
+/// Sets the characters' hunger to <see cref="Value"/> in HUD units and empties their stomachs.
+/// </summary>
+public sealed record DebugSetHunger(IReadOnlyList<CharacterId> Characters, int Value) : DebugCommand;
+
+/// <summary>
 /// Sets every stat of the characters to 100.
 /// </summary>
 public sealed record DebugMaxSkills(IReadOnlyList<CharacterId> Characters) : DebugCommand;
@@ -733,6 +738,9 @@ static class DebugCheats
             case DebugHeal heal when data is not null:
                 Heal(world, data, assembly, heal);
                 break;
+            case DebugSetHunger hunger:
+                SetHunger(world, hunger);
+                break;
             case DebugMaxSkills max:
                 MaxSkills(world, max);
                 break;
@@ -980,6 +988,23 @@ static class DebugCheats
 
             foreach (var (stat, value) in set.Stats) stats[stat] = value;
             foreach (var skill in skills) skill.Set(stats, set.ModSkills[skill.Id]);
+        }
+    }
+
+    /// <summary>
+    /// Sets hunger and clears undigested food so the next feeding check can act on the new value.
+    /// </summary>
+    static void SetHunger(World world, DebugSetHunger command)
+    {
+        if (command.Value is < 1 or > 300) return;
+
+        var table = world.Characters;
+        foreach (var id in command.Characters)
+        {
+            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot)?.Medical is not { Dead: false } medical) continue;
+
+            medical.Hunger = command.Value / 100f;
+            medical.Fed = 0;
         }
     }
 

@@ -268,6 +268,11 @@ public sealed unsafe class DebugOverlay : IDisposable
     #region Measuring text
 
     /// <summary>
+    /// Whether the overlay's baked font covers the characters in the text.
+    /// </summary>
+    internal static bool SupportsBakedText(string text) => text.All(c => c is >= (char)FirstChar and < (char)(FirstChar + CharCount));
+
+    /// <summary>
     /// The advance of one code point (kerned against <paramref name="previous"/>, -1: none), which becomes the new previous. The stb faces have the
     /// baked range only: '?' for the rest.
     /// </summary>

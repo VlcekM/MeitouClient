@@ -4812,3 +4812,15 @@ msgstr "El panel de información sigue abierto"
 #. machine-translated
 msgid "The character information panel at the bottom left stays extended or collapsed as you last left it, also after restarting the game. The game starts it collapsed every time."
 msgstr "El panel de información del personaje, abajo a la izquierda, sigue desplegado o plegado como lo dejaste, también tras reiniciar el juego. En el juego empieza plegado cada vez."
+
+#. machine-translated
+msgid "Set hunger (1-300)"
+msgstr "Ajustar hambre (1-300)"
+
+#. machine-translated
+msgid "Enter a hunger value from 1 to 300."
+msgstr "Introduce un valor de hambre entre 1 y 300."
+
+#. machine-translated
+msgid "Hunger set to {1}."
+msgstr "Hambre ajustada a {1}."
