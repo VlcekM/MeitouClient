@@ -1493,8 +1493,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         {
             seen = s.Sight.Sees(s.Self, slot, s.Eye, other.Position, s.Outdoor, stealth) > 0;
 
-            // can-see ends with the sight ray for a pair with one side the player's (FUN_140857b10)
-            if (seen && s.Cold is { } me && SightRay.Applies(me, c))
+            // can-see ends with the sight ray for a pair with one side the player's, a sneaking target or one on screen (FUN_140857b10)
+            if (seen && s.Cold is { } me && SightRay.Applies(s.World, me, c, other.Position))
                 seen = SightRay.Clear(s.World.Walkability, s.Fights?.Buildings, s.Eye, other.Position);
         }
 

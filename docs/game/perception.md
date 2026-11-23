@@ -31,6 +31,9 @@ relations: [factions](factions-squads-towns.md). Simulation senses/leash remain 
   town (`+0x138`) and the target's has one; else the ray decides when the target is the player's, the looker is with the player
   (`FUN_140856bc0`), or the target is in a state (`FUN_1405c8aa0` != 0), sneaking (`FUN_1406643d0`), on screen (`+0x1a9`) or has `+0x320`, its
   `+0x1a0` object's `+0x100` > 0 or `+0xe8` set; otherwise seen without it. It has no floor test: floors and walls block only through the ray.
+  Meitou (`SightRay.Applies`) casts it for the player's side, a sneaker and a target on screen (`MedicalClock.OnScreen`), not for the other
+  states: without the on-screen case a guard on a roof (on top) saw an escaped prisoner shut in a house on screen and came for it (#1262's
+  save, headless probe with the report's camera: the ray from the roof meets building collision).
 - **Light level** (`+0xd8`, `FUN_140a0af10`, `FUN_140a08da0`, **Verified** literals): set each update to the daylight factor;
   when requested by a sight test (`+0xdc`) and the character is the player's or daylight < 0.75, it is resampled: 1 above
   daylight 0.5, else 2 x daylight + per light within 500 of the zone search: 1.5 x power scale x (1 - d^2 / r^2) (x the spot
