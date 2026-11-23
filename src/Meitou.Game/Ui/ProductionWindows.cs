@@ -873,8 +873,8 @@ sealed class ProductionWindows(PlayerInterface player)
     internal void AddMachineVerb(List<(string Caption, Action Give)> verbs, Simulation.Construction.BuildingSnapshot site,
         IReadOnlyList<CharacterId> selection)
     {
-        // An automatic machine: Auto-Haul (152) in place of Use; with Shift the 152 job (its companion 124 follows), else a one-shot haul round (the
-        // operator only hauls there).
+        // An automatic machine: Auto-Haul (152) in place of Use; with Shift the 152 job (its companion 124 follows), else the 152 order, which leaves
+        // once the output holds nothing a storage takes.
         if (site.Complete && Machine(site.Id) is { Operable: true, IsAutomatic: true })
         {
             verbs.Add(("Auto-Haul", () => player.Say(player.SlowModifier

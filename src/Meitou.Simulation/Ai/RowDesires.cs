@@ -483,18 +483,25 @@ internal sealed class RowDesires(AiSystem ai)
     /// <summary>
     /// Row 152 Operating automatic machine (AI slot 21 <c>FUN_14059df00</c>, <b>Verified</b>): of a machine, 1.0 when it takes the character as an
     /// operator (vfunc <c>0x500</c> <c>FUN_1400f7c90</c>: already one, or fewer than its <c>max operators</c>), its output is full (slot 175, state
-    /// 63), the character carries one of its inputs (vfunc <c>0x178</c>) or row 94's finder finds one (<c>FUN_14059d9b0</c> through the AI's cache
+    /// 63), the character carries the item of one of its inputs with room (slot <c>0x568</c> <c>FUN_140299b60</c>, Character vfunc <c>0x178</c>
+    /// <c>FUN_1405cb5b0</c>) or row 94's finder finds one (<c>FUN_14059d9b0</c> through the AI's cache
     /// <c>FUN_14060f1d0</c>, <see cref="Production.FillSources.Find"/>); else 0. 0 for any other target.
     /// </summary>
     float AutomaticDesire(World world, in RowAsk ask)
     {
         if (ask.Target.Fixture is not { } site || world.Machines.Find(site) is not { } machine) return 0;
         if (Production.ProductionSystem.TakesOperator(world, ask.Cold, machine) || machine.OutputBlocked) return 1;
-        if (Production.ProductionSystem.CarriesInputOf(ask.Cold, machine)) return 1;
+        if (CarriesInputWithRoom(ask.Cold, machine)) return 1;
 
         var at = world.Characters.Previous[ask.Slot].Position;
         return Production.FillSources.Find(world, _ai.Data, machine, ask.Cold, at, []) is not null ? 1 : 0;
     }
+
+    /// <summary>
+    /// Whether the character carries the item of one of the machine's inputs that has room.
+    /// </summary>
+    static bool CarriesInputWithRoom(CharacterCold cold, Production.Machine machine) =>
+        machine.Inputs.Any(input => input.FillRoom > 0 && Production.ProductionSystem.Carries(cold, input.Item));
 
     /// <summary>
     /// Row 247 Collecting resource (AI slot 23 <c>FUN_14059a110</c>, <b>Verified</b>): 1.0 when the character has room (<c>FUN_1405cb520</c>) for a

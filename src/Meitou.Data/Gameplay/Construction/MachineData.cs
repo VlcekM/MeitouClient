@@ -290,8 +290,8 @@ public sealed record MachineData
     public bool IsCrafting => Craft is not null;
 
     /// <summary>
-    /// An automatic fuelled generator (function 5 with <c>consumes</c>, raw <c>max operators</c> 0): its menu order is 152 Auto-Haul, whose hauler
-    /// fills its fuel (the GeneratorBuilding class's slot 131, docs/game/ui-input.md "Building picking and selection"). <b>Verified</b> (probe of the merged
+    /// An automatic fuelled generator (function 5 with <c>consumes</c>, raw <c>max operators</c> 0): its menu order is 152 Auto-Haul, whose job's
+    /// hauler fills its fuel (the GeneratorBuilding class's slot 131, docs/game/ui-input.md "Building picking and selection"). <b>Verified</b> (probe of the merged
     /// base data): Small Generator and Generator II have BUILDING <c>max operators</c> -1 and functionality 0, Fuel 10 at rate 100.
     /// </summary>
     public bool IsFuelGenerator => Function == GeneratorFunction && Inputs.Count > 0 && IsAutomatic;

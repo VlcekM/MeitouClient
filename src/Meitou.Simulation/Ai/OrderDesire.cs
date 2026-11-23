@@ -70,6 +70,7 @@ public static class OrderDesire
             TaskType.LiftPersonPlayerOrder or TaskType.KidnapOrder or TaskType.LiftPersonSnatchingAllowed
                 or TaskType.LiftPersonSnatchingAllowedInTownOnly => LiftDesire(world, slot, cold, order.Target),
             TaskType.UseTurret => TurretDesire(world, slot, cold),
+            TaskType.OperateAutomaticMachinery => AutoHaulDesire(world, slot, cold, order),
             TaskType.FirstAidOrder => world.SystemOf<FirstAidSystem>()?.TreatOrderDesire(world, slot, order.Target, robot: false),
             TaskType.FirstAidRobot => world.SystemOf<FirstAidSystem>()?.TreatOrderDesire(world, slot, order.Target, robot: true),
             TaskType.SplintOrder => world.SystemOf<FirstAidSystem>()?.SplintOrderDesire(world, slot, order.Target),
@@ -93,6 +94,18 @@ public static class OrderDesire
         if (world.SystemOf<AiSystem>() is { } ai) return ai.Rows.ForOrder(world, slot, order);
 
         return TaskDesires.Of(order.Row) is { Kind: TaskDesireKind.Constant } d ? d.Value : 1;
+    }
+
+    /// <summary>
+    /// 152 Auto-Haul (AI slot 21, <see cref="RowDesires"/>), which has an effect (!62): above 0, times its finder
+    /// (<see cref="Production.ProductionSystem.AutoHaulFinder"/>); so the order leaves once the machine's output holds nothing a storage takes.
+    /// </summary>
+    static float AutoHaulDesire(World world, int slot, CharacterCold cold, OrderEntry order)
+    {
+        float desire = Registered(world, slot, order);
+        if (desire <= 0 || order.Site is not { } site || world.SystemOf<Production.ProductionSystem>() is not { } production) return desire;
+
+        return desire * production.AutoHaulFinder(world, cold, site);
     }
 
     /// <summary>

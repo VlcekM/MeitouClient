@@ -921,8 +921,9 @@ there (`FUN_14060f570` answers false), so for 180 Man the gate the byte changes 
   town (Character vfunc `0x78`, status `+0x88`); in one the ditch finder `FUN_1405a59a0` over that building's output (1.0 found, else 0; 0.1 for
   building function 6). 247 (slot 23 `FUN_14059a110`): 1.0 with room for the target item's (or the building's first stored) record. 112 / 281
   (`FUN_1405a1140`) 0 unless carrying. 152 Operating automatic machine (slot 21 `FUN_14059df00`): 1.0 when the building takes the character as an
-  operator (vfunc `0x500` `FUN_1400f7c90`: one already, or under `max operators`), its output is full (slot 175) or one of its consumption items is
-  carried or found by row 94's finder (`FUN_14059d9b0` through the cache `FUN_14060f1d0`), else 0. The order step (`FUN_14060fd80`) asks the same
+  operator (vfunc `0x500` `FUN_1400f7c90`: one already, or under `max operators`; never at an automatic machine, whose raw `max operators` 0 lets
+  `tryOperate` take nobody), its output is full (slot 175), or the item of one of its inputs with room (slot `0x568` `FUN_140299b60`) is carried
+  (Character vfunc `0x178` `FUN_1405cb5b0`, inventory or backpack) or found by row 94's finder (`FUN_14059d9b0` through the cache `FUN_14060f1d0`), else 0. The order step (`FUN_14060fd80`) asks the same
   members. Meitou: `TaskDesires` (every row's member), `RowDesires` (the 42 and the three function rows an order owner takes, 52, 152 and 248; the
   check at load refuses a missing one) for `PlanContext`, `DoorPlan`, `GatePlan` and `OrderDesire`; the sleep order, Meitou's 98 for the original's
   258, weighs 258's 1.0; 248 as a goal its slot 32 (`AiSystem.AssaultDesire`), 28 its `canGetUp` (a starvation knock-out is the medical tick's).
@@ -1036,7 +1037,7 @@ point, so state 1 never holds and it leaves by its task's end (Meitou: `Containe
 list A empty, desire 1), so it never pops by list A; Meitou's 98 order (the saved 258) takes it.
 
 The desire half (**Verified**, `FUN_14060fd80`; each row's function from its registration in `FUN_140319a60`, its stub followed to the AI vtable slot): TaskData `+0x108`
-of the order's target and point, times the finder's score only for a row with an effect and a desire above 0 (`DAT_141681b38`); no order row has an effect. Slots 19 and 43
+of the order's target and point, times the finder's score only for a row with an effect and a desire above 0 (`DAT_141681b38`); of the order rows only 152 has an effect, see below. Slots 19 and 43
 answer 1 (`FUN_140641550`, `FUN_1406415a0`); slot 39 0.1 (`FUN_140641560`: 76, 186, 201, 286). The rest: 3 slot 72 `FUN_140792650`, 0 while the character is down
 (`FUN_1405c9e10`); 45 slot 44 `FUN_1405991c0`, 1 for itself as target or one sensed now, else 0; 225 / 246 slot 59 `FUN_14059e1a0`, 0 while carrying (`+0x348`, set at the attach
 by `FUN_1405cff90`, which the lift update `FUN_140354ff0` calls past 0.4 of the clip, `_DAT_1416c16a0`, so a lift order leaves the queue there) or with the target
@@ -1048,8 +1049,18 @@ none: 0), 0.1 when a part qualifies, x the relation / 100 (at least 0.05) for an
 (`FUN_14050d970`) ends the running task on its slot 4 and list A, or on its list B, never on the desire. Meitou: `OrderDesire`; a desire pop leaves the act-out
 to its own end (a lift to its clip's 0.95). The decision step asks every stepping character with a front order on every tick whether it leaves (`PlayerOrders.PopsNow`), as the original's
 order step runs on every AI update, and decides it then. 31 / 289 have Following's desire (slot 15 `FUN_1405a33f0`, [shared desires](#desire-and-commitment)):
-0.5 x the followed character's `followMe` (at least 0.05), or 1 for a target that does not resolve, so a follow order never pops by it. 152 is no order in Meitou
-(its operate orders are 87, 97, 124 and 146), so its desire (slot 21 `FUN_14059df00`) is not asked.
+0.5 x the followed character's `followMe` (at least 0.05), or 1 for a target that does not resolve, so a follow order never pops by it. 152 Auto-Haul (**Verified**, decompile of `FUN_140319a60`, `FUN_14060fd80`, `FUN_14060f460`, `FUN_1405a59a0`): list A empty, list B 2 and
+!hasWeaponEquipped, effect !62 with TaskData `+0x120` set (so the effect test always holds), finder the ditch finder `FUN_1405a59a0` through the stub
+`FUN_1405a70a0` (the 114 / 242 one, [ditching](#ditching)), called with the collect flag 0. Its desire half: slot 21's desire, when above 0, times 1.0 when
+the finder finds a target, else 0. At a machine (functionality, vfunc `0x3b0`, is itself) the finder's items are its output record
+(slot `0x550` `FUN_14029ba60`) when its output section is not empty (slot `0x548` `FUN_140299b00`, slot `0x580` `FUN_140296ff0`) and the machine holds
+some, or the character carries some (Character vfunc `0x300` `FUN_1405a4510`, only with an output object `+0x448`); found: the nearest storage of the
+town that takes one ([storage pick](buildings-production.md#hauling)). So the order leaves once the output holds nothing a storage takes, or nothing
+keeps the desire up; a machine with no output (a fuel generator: no `produces`, so no output object, and type `+0x440` ITEM, **Observed** in [economy](economy.md), so slot
+`0x550` gives no record) never has a finder target, so there the order leaves at its first order step. Its plan, as 114's, is 93 Filling machine at the finder's
+storage. Meitou: `OperateOrder` gives 152 on an automatic machine; `OrderDesire` weighs it by `ProductionSystem.AutoHaulFinder`; the act-out (engine
+reading) carries the output, held or carried, to the storage when there is any, fills the inputs on the way, and ends after the trip it is on once the
+order has left the queue.
 
 ## Planner
 

@@ -471,10 +471,15 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// Whether machine <paramref name="m"/> takes the character as an operator (<c>FUN_1400f7c90</c>, <b>Verified</b>): it operates it already, or
-    /// fewer than its <c>max operators</c> do.
+    /// fewer than its <c>max operators</c> do. Never an automatic machine: its raw <c>max operators</c> is 0, so <c>tryOperate</c> takes nobody on
+    /// and its hauler is no operator (Meitou's <see cref="MachineData.MaxOperators"/> is at least 1).
     /// </summary>
-    internal static bool TakesOperator(World world, CharacterCold cold, Machine m) =>
-        cold.OperateSite == m.Site || OperatorsOf(world, m.Site) < m.Data.MaxOperators;
+    internal static bool TakesOperator(World world, CharacterCold cold, Machine m)
+    {
+        if (m.Data.IsAutomatic) return false;
+
+        return cold.OperateSite == m.Site || OperatorsOf(world, m.Site) < m.Data.MaxOperators;
+    }
 
     /// <summary>
     /// Nobody else lies or sits on it.
