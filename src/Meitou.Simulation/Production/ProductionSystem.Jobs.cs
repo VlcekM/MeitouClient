@@ -705,10 +705,10 @@ public sealed partial class ProductionSystem
             case TaskType.OperateAutomaticMachinery:
                 // Done as soon as no input of the machine is empty (the row's done list !62, machineHasEmptyInputs false): the 124 companion goes on
                 // from there.
-                return !m.Data.IsAutomatic || !m.Data.IsProducer || !m.HasEmptyInputs || !AutoWork(world, site, m, cold, fetch: true);
+                return !m.Data.IsHauledAutomatic || !m.HasEmptyInputs || !AutoWork(world, site, m, cold, fetch: true);
             case TaskType.OperateStorage:
                 // On an automatic machine (152's companion, the original's Task_FillMachine into it): what the character carries for its inputs.
-                if (m.Data.IsAutomatic && m.Data.IsProducer) return !AutoWork(world, site, m, cold, fetch: false);
+                if (m.Data.IsHauledAutomatic) return !AutoWork(world, site, m, cold, fetch: false);
                 if (!m.Data.IsStorage || m.Storage is null) return true;
                 if (cold.Inventory is { } inv && inv.All().Any(i => Takes(world, m, i))) return false;
                 if (FetchesLoose(world, cold, id)) return false;

@@ -290,9 +290,22 @@ public sealed record MachineData
     public bool IsCrafting => Craft is not null;
 
     /// <summary>
-    /// A building characters can operate.
+    /// An automatic fuelled generator (function 5 with <c>consumes</c>, raw <c>max operators</c> 0): its menu order is 152 Auto-Haul, whose hauler
+    /// fills its fuel (the GeneratorBuilding class's slot 131, docs/game/ui-input.md "Building picking and selection"). <b>Verified</b> (probe of the merged
+    /// base data): Small Generator and Generator II have BUILDING <c>max operators</c> -1 and functionality 0, Fuel 10 at rate 100.
     /// </summary>
-    public bool Operable => IsResearch || Farm is not null || IsProducer || IsCrafting;
+    public bool IsFuelGenerator => Function == GeneratorFunction && Inputs.Count > 0 && IsAutomatic;
+
+    /// <summary>
+    /// A building characters can operate (or, automatic, haul for).
+    /// </summary>
+    public bool Operable => IsResearch || Farm is not null || IsProducer || IsCrafting || IsFuelGenerator;
+
+    /// <summary>
+    /// An automatic machine whose hauler fills its inputs and carries its output away (the 152 job and its 124 companion): a producer or a fuelled
+    /// generator.
+    /// </summary>
+    public bool IsHauledAutomatic => IsAutomatic && (IsProducer || IsFuelGenerator);
 
     /// <summary>
     /// Whether the exe's class updates its sound emitter every frame (<c>ProductionBuilding::vfunc_28</c>: mines, wells, refineries, generators,

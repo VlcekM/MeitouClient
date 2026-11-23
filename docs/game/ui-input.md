@@ -493,7 +493,7 @@ that activation menu-only; once the ruin becomes an unfinished construction site
 | Class | Pointer (slot 130) | Order (slot 131) |
 |---|---|---|
 | Building, GatewayBuilding, WallBuilding | `arrow` | 29 MOVE_CUS_ORDERED |
-| Crafting, Farm, Production, Generator, WindGenerator, RainCollector, Torture | `mine` for function 1 / 27, else `use` | 87 OPERATE_MACHINERY, 152 OPERATE_AUTOMATIC_MACHINERY when +0x3ac is 0 |
+| Crafting, Farm, Production, Generator, WindGenerator, RainCollector, Torture | `mine` for function 1 / 27, else `use` | 87 OPERATE_MACHINERY, 152 OPERATE_AUTOMATIC_MACHINERY when +0x3ac is 0. Meitou: of the generator classes only automatic fuelled generators ([fuel generators](buildings-production.md#hauling)) |
 | FurnaceBuilding | as Farm | 26 LOOT_TARGET |
 | ResearchBuilding | as Storage | 87 |
 | TurretBuilding | as Storage | 146 USE_TURRET |
