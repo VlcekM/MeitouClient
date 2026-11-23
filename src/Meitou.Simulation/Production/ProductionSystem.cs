@@ -128,6 +128,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         this._nodes = nodes;
         _craftOptions = new CraftOptionsCache(BuildCraftOptions);
         _smiths = new SmithViewCache(db);
+        _useSpots = new UseSpots(db);
         UnloadedProduction = Settings.UnloadedProduction;
     }
 
@@ -356,6 +357,11 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     readonly Dictionary<string, (Vector3 Spot, float Range)> _turretSpots = [];
 
     /// <summary>
+    /// The machines' use nodes and position markers, where operators walk to and are measured from.
+    /// </summary>
+    readonly UseSpots _useSpots;
+
+    /// <summary>
     /// The clip a turret's gunner holds.
     /// </summary>
     public const string TurretClip = "combatstance";
@@ -562,7 +568,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (_naturalBounds.TryGetValue(site.Id, out var rock)) return RockGoal(world, site, rock.Centre);
 
         float limit = SiteReach.HeightLimit(world.Fixtures.DoorsByBuilding[site.Id].Any(), SiteReach.InBuilding(site));
-        return SiteReach.WorkSpot(world.Walkability, Settings.EdgeGap, site, site.Position.Y, limit, m.Data.UseRange, from);
+        return _useSpots.WalkGoal(world.Walkability, site, site.Position.Y, limit, from)
+            ?? SiteReach.WorkSpot(world.Walkability, Settings.EdgeGap, site, site.Position.Y, limit, m.Data.UseRange, from);
     }
 
     /// <summary>
@@ -703,8 +710,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         // rock mined from 100 to 200 off its middle).
         if (_naturalBounds.TryGetValue(site.Id, out var rock)) return SiteReach.Within(n, rock.Gap(n.Position), RockReach);
 
-        // The machine's use range (UseableStuff::getReachRange).
-        if (!SiteReach.Within(n, GapTo(site, n.Position), m.Data.UseRange)) return false;
+        // The machine's use range (UseableStuff::getReachRange) of its marker nearest the operator, else of its footprint.
+        if (!SiteReach.Within(n, ReachGap(site, n.Position), m.Data.UseRange)) return false;
         return SiteReach.AtHeight(n, site, world.Fixtures.DoorsByBuilding[site.Id].Any()) || OffFloor(world, n, site);
     }
 
@@ -721,6 +728,13 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     static bool OffFloor(World world, in CharacterHot n, BuildSite site) =>
         (n.Flags & (ushort)MoveFlags.AnyPath) == 0
         && world.Walkability.FloorNear(site.Position.X, site.Position.Z, site.Position.Y, MovementSystem.FloorSlack) is null;
+
+    /// <summary>
+    /// The X/Z gap an operator's reach is measured over: to the machine's marker nearest it (<see cref="UseSpots"/>) when its walk goes there, else
+    /// to the site (<see cref="GapTo"/>).
+    /// </summary>
+    float ReachGap(BuildSite site, Vector3 from) =>
+        _useSpots.ArrivesAtMarker(site) && _useSpots.MarkerOf(site, from) is { } marker ? Gap(from, marker) : GapTo(site, from);
 
     /// <summary>
     /// The X/Z gap from <paramref name="from"/> to a site (<see cref="SiteReach.Gap"/>). A rock's BUILDING footprint is not scaled like the rock, so
