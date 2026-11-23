@@ -13,6 +13,7 @@ app.UseRateLimiter();
 
 MapPublic(app);
 MapFeedback(app);
+MapBench(app);
 MapAdmin(app, config);
 app.Run();
 
@@ -26,20 +27,28 @@ static void AddServices(WebApplicationBuilder builder, Config config)
     builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.TypeInfoResolverChain.Insert(0, ReportsJson.Default));
     builder.Services.AddSingleton<Store>();
     builder.Services.AddHttpClient();
-    builder.Services.AddSingleton(sp =>
-    {
-        return new Releases(sp.GetRequiredService<IHttpClientFactory>().CreateClient(), config, sp.GetRequiredService<ILogger<Releases>>());
-    });
+    builder.Services.AddSingleton(NewReleases);
     builder.Services.AddSingleton<Reporters>();
     builder.Services.AddSingleton<GithubAuth>();
     builder.Services.AddSingleton<Feedback>();
+    builder.Services.AddSingleton<Bench>();
     builder.Services.AddRateLimiter(o =>
     {
         o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
         // A feedback report is up to five requests (start, three files, send); the 20 a day per person is counted on the forms.
         o.AddPolicy("feedback", ctx => RateLimitPartition.GetFixedWindowLimiter(ClientIp(ctx), _ => TenMinuteWindow(60)));
+
+        // A benchmark session is one request; the launcher submits one per tier, five at most.
+        o.AddPolicy("bench", ctx => RateLimitPartition.GetFixedWindowLimiter(ClientIp(ctx), _ => TenMinuteWindow(20)));
     });
+}
+
+// The releases reader with an HTTP client of its own.
+static Releases NewReleases(IServiceProvider sp)
+{
+    var http = sp.GetRequiredService<IHttpClientFactory>().CreateClient();
+    return new Releases(http, sp.GetRequiredService<Config>(), sp.GetRequiredService<GithubAuth>(), sp.GetRequiredService<ILogger<Releases>>());
 }
 
 // A rate limit of permits per client in each 10 minutes.
@@ -100,7 +109,43 @@ static void MapFeedback(WebApplication app)
     });
 }
 
-// Admin (Authorization: Bearer REPORTS_ADMIN_TOKEN): removing a feedback form and its files.
+// The launcher's benchmarks: submitting a session; the sessions and the targets, which the site reads from its own origin.
+static void MapBench(WebApplication app)
+{
+    app.MapPost("/bench", async (HttpRequest request, Bench bench) =>
+    {
+        var (id, error) = await bench.Submit(request);
+        return id is { } created
+            ? Results.Json(new BenchCreated(created), ReportsJson.Default.BenchCreated, statusCode: StatusCodes.Status201Created)
+            : Results.BadRequest(new Refused(error!));
+    }).RequireRateLimiting("bench");
+    app.MapGet("/bench/data", async (HttpContext ctx, Bench bench) =>
+    {
+        AllowSite(ctx);
+        ctx.Response.Headers.CacheControl = "public, max-age=60";
+        return Results.Content(await bench.Data(), "application/json; charset=utf-8");
+    });
+    app.MapGet("/bench/targets", async (HttpContext ctx, Releases releases) =>
+    {
+        AllowSite(ctx);
+        if (await releases.Targets() is not { } targets)
+            return Results.Json(new Refused("the game's releases can't be read now"), ReportsJson.Default.Refused, statusCode: 503);
+
+        ctx.Response.Headers.CacheControl = "public, max-age=300";
+        return Results.Ok(new BenchTargets(targets));
+    });
+}
+
+// CORS for the site's pages (a plain GET, so no preflight): the allowed origin is echoed; Vary keeps caches from mixing origins.
+static void AllowSite(HttpContext ctx)
+{
+    string[] siteOrigins = ["https://meitou.kenshi.wiki", "http://localhost:4321"];
+    string origin = ctx.Request.Headers.Origin.ToString();
+    if (siteOrigins.Contains(origin)) ctx.Response.Headers.AccessControlAllowOrigin = origin;
+    ctx.Response.Headers.Vary = "Origin";
+}
+
+// Admin (Authorization: Bearer REPORTS_ADMIN_TOKEN): removing a feedback form and its files; replacing the legacy benchmark sessions.
 static void MapAdmin(WebApplication app, Config config)
 {
     var admin = app.MapGroup("").AddEndpointFilter(async (ctx, next) =>
@@ -113,6 +158,11 @@ static void MapAdmin(WebApplication app, Config config)
     {
         feedback.DeleteFiles(token);
         return await store.DeleteFeedback(token) ? Results.NoContent() : Results.NotFound();
+    });
+    admin.MapPost("/admin/bench/legacy", async (HttpRequest request, Bench bench) =>
+    {
+        var (count, error) = await bench.ImportLegacy(request);
+        return count is { } imported ? Results.Ok(new LegacyImported(imported)) : Results.BadRequest(new Refused(error!));
     });
 }
 
@@ -140,4 +190,12 @@ sealed record Refused(string Error);
 [JsonSerializable(typeof(FeedbackBody))]
 [JsonSerializable(typeof(FeedbackCreated))]
 [JsonSerializable(typeof(FeedbackIssue))]
+[JsonSerializable(typeof(System.Text.Json.JsonElement))]
+[JsonSerializable(typeof(BenchBody))]
+[JsonSerializable(typeof(BenchMachine))]
+[JsonSerializable(typeof(BenchCreated))]
+[JsonSerializable(typeof(BenchData))]
+[JsonSerializable(typeof(BenchTargets))]
+[JsonSerializable(typeof(LegacyBody))]
+[JsonSerializable(typeof(LegacyImported))]
 sealed partial class ReportsJson : JsonSerializerContext;

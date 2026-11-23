@@ -1386,6 +1386,72 @@ static partial class TerrainShaders
             return s;
         }
 
+        #ifdef TERRAIN_SIMPLE
+        // The simple material (TerrainSimpleShading): biome b's surface for weak GPUs: the base layer and the strongest of grass, slope and dirt,
+        // the road, the cliff's stronger projection; no normal maps.
+        Surface biomeSimple(int b, vec3 n, float slope, vec4 map, vec4 colour, float distance, ReliefOut relief)
+        {
+            vec4 layersA = P(b, 0), layersB = P(b, 1), nearA = P(b, 13), nearB = P(b, 14);
+            vec4 sA = P(b, 2), sB = P(b, 3), sC = P(b, 4);
+            vec4 omult = P(b, 8), fade = P(b, 9);
+            vec4 w = layerWeights(b, slope, map);
+            vec4 white = vec4(1.0);
+            float far = clamp(distance * fade.a - 0.3, 0.0, 1.0);
+
+            Surface s;
+            GradCoord base = groundCoord(sB.xy);
+            base.p += relief.ground * sB.xy;
+            s.albedo = layerDiffuse(base, nearA.x, layersA.x) * colour;
+
+            // The strongest of the three overlay-or-slope layers, at its own weight.
+            float wg = map.r, ws = w.x, wd = map.b;
+            if (far < 1.0 && max(wg, max(ws, wd)) > 0.0)
+            {
+                if (wg >= ws && wg >= wd)
+                {
+                    GradCoord c = groundCoord(sB.zw); c.p += relief.ground * sB.zw;
+                    s.albedo = mix(s.albedo, layerDiffuse(c, nearA.w, layersA.w) * mix(white, colour, omult.y), wg);
+                }
+                else if (ws >= wd)
+                {
+                    GradCoord c = groundCoord(sA.xy); c.p += relief.ground * sA.xy;
+                    s.albedo = mix(s.albedo, layerDiffuse(c, nearA.y, layersA.y) * colour, ws);
+                }
+                else
+                {
+                    GradCoord c = groundCoord(sC.xy); c.p += relief.ground * sC.xy;
+                    s.albedo = mix(s.albedo, layerDiffuse(c, nearB.x, layersB.x) * mix(white, colour, omult.z), wd);
+                }
+            }
+            s.albedo.rgb = mix(s.albedo.rgb, fade.rgb * colour.rgb, far);
+            if (map.a != 0.0)
+            {
+                GradCoord road = groundCoord(sC.zw); road.p += relief.ground * sC.zw;
+                s.albedo.rgb = mix(s.albedo.rgb, (layerDiffuse(road, nearB.y, layersB.y) * mix(white, colour, omult.w)).rgb, map.a);
+            }
+            if (w.y != 0.0)
+            {
+                vec2 vd;
+                float vert = cliffVert(b, vd);
+                vec2 cb = cliffBlend(n);
+                GradCoord cliff = cb.x >= cb.y ? cliffCoordX(vert, vd, sA.zw) : cliffCoordZ(vert, vd, sA.zw);
+                vec4 cliffAlbedo = layerDiffuse(cliff, nearA.z, layersA.z) * mix(vec4(1.0), colour, omult.x);
+                s.albedo = mix(s.albedo, cliffAlbedo, w.y);
+            }
+            s.albedo.rgb *= layersB.z;
+            s.shade = relief.shade;
+            s.normal = vec4(0.5, 0.5, 1.0, 1.0);
+
+            vec4 ab0 = P(b, 11), ab1 = P(b, 12);
+            float absorb = mix(ab0.x, ab0.w, map.r);
+            absorb = mix(absorb, ab0.y, w.x);
+            absorb = mix(absorb, ab1.x, map.b);
+            absorb = mix(absorb, ab1.y, map.a);
+            s.absorb = w.y != 0.0 ? mix(absorb, ab0.z, w.y) : absorb;
+            return s;
+        }
+        #endif
+
         // Untextured: height tint (sand, olive, grey).
         vec3 heightTint(float y)
         {
@@ -1625,6 +1691,33 @@ static partial class TerrainShaders
                         Surface s = biome(single, n, slope, map, colour, distance, relief);
                         sumA = s.albedo; sumN = s.normal; sumAbsorb = s.absorb; sumShade = s.shade; total = 1.0;
                     }
+                    #ifdef TERRAIN_SIMPLE
+                    else
+                    {
+                        // The simple material (TerrainSimpleShading): only the pixel's dominant biome is shaded.
+                        // It stands for every resident biome's share, so the loading ones' share (pending) is weighed as in the full blend.
+                        uint best = 255u;
+                        float bestW = 0.0, resident = 0.0;
+                        for (int k = 0; k < 5; k++)
+                        {
+                            uint b; float wk;
+                            blendSlot(k, slots, slot4, weights, rest, b, wk);
+                            if (b == 254u && wk > 0.0) pending += wk;
+                            if (b >= 254u || wk <= 0.0) continue;
+                            resident += wk;
+                            if (wk > bestW) { best = b; bestW = wk; }
+                        }
+                        if (best < 254u)
+                        {
+                            Surface s = biomeSimple(int(best), n, slope, map, colour, distance, relief);
+                            sumA = s.albedo * resident;
+                            sumN = s.normal * resident;
+                            sumAbsorb = s.absorb * resident;
+                            sumShade = s.shade * resident;
+                            total = resident;
+                        }
+                    }
+                    #else
                     else
                     {
                         for (int k = 0; k < 5; k++)
@@ -1641,6 +1734,7 @@ static partial class TerrainShaders
                             total += wk;
                         }
                     }
+                    #endif
                     uint fallback = slot4 < 254u ? slot4 : slots.x;
                     if (total <= 0.0 && pending <= 0.0 && fallback < 254u)
                     {
@@ -2125,17 +2219,18 @@ static partial class TerrainShaders
     /// the uniforms); <paramref name="trails"/> adds the ground trails (<see cref="FragmentTrails"/>).
     /// </summary>
     public static string FragmentNative(bool interiorCut = false, bool march = true, bool? normalMaps = null, int? reliefQuality = null,
-        bool trails = false)
+        bool trails = false, bool simple = false, bool lean = false)
     {
-        string marched = interiorCut ? InteriorMaskRenderer.WithCut(Marched(Fragment, march)) : Marched(Fragment, march);
+        string shaded = Leaned(Simplified(Marched(Fragment, march), simple), lean);
+        string marched = interiorCut ? InteriorMaskRenderer.WithCut(shaded) : shaded;
         return Gi.GiResolveShaders.WithAlbedo(Variant(Native(Trailed(Baked(marched), trails)), normalMaps, reliefQuality));
     }
 
     /// <summary>
     /// The patches' colour program with the ground trails (<see cref="TerrainTrails"/>); without the switch none of their code is in the program.
     /// </summary>
-    public static string FragmentTrails(bool interiorCut, bool march, bool normalMaps, int reliefQuality) =>
-        FragmentNative(interiorCut, march, normalMaps, reliefQuality, trails: true);
+    public static string FragmentTrails(bool interiorCut, bool march, bool normalMaps, int reliefQuality, bool simple = false, bool lean = false) =>
+        FragmentNative(interiorCut, march, normalMaps, reliefQuality, trails: true, simple, lean);
 
     /// <summary>
     /// <paramref name="fragment"/> with <c>TERRAIN_BAKED</c> defined (the material cache's reads).
@@ -2224,9 +2319,9 @@ static partial class TerrainShaders
     /// points, and every lookup names its level or its gradients.
     /// </summary>
     public static string ResolveFragmentNative(bool march = true, bool? normalMaps = null, int? reliefQuality = null, bool trails = false,
-        ResolvePart part = ResolvePart.Whole)
+        ResolvePart part = ResolvePart.Whole, bool simple = false, bool lean = false)
     {
-        string f = ResolvedPointPatches(Fragment);
+        string f = ResolvedPointPatches(Leaned(Simplified(Fragment, simple), lean));
         f = ResolvedLookupPatches(f);
         bool far = part == ResolvePart.Far;
         if (part != ResolvePart.Whole) f = ResolvePatch(f, "// RESOLVE_PART", ResolvePartTest(far));
@@ -2433,6 +2528,20 @@ static partial class TerrainShaders
     static string Marched(string fragment, bool march) => march ? fragment : fragment.Insert(fragment.IndexOf('\n') + 1, "#define NO_MARCH\n");
 
     /// <summary>
+    /// <paramref name="fragment"/> with <c>LIGHTING_LEAN</c> defined when <paramref name="lean"/> (<see cref="Frame.LeanLighting"/>): lit without
+    /// the sun shadows and probe GI.
+    /// </summary>
+    static string Leaned(string fragment, bool lean) => lean ? Frame.LeanLighting.Define(fragment) : fragment;
+
+    /// <summary>
+    /// <paramref name="fragment"/> with <c>TERRAIN_SIMPLE</c> defined when <paramref name="simple"/> (<see cref="TerrainSimpleShading"/>): the
+    /// blended patches shade only their dominant biome, two of its ground layers and no normal maps. A program of its own, so the full blend pays
+    /// nothing for it.
+    /// </summary>
+    static string Simplified(string fragment, bool simple) =>
+        simple ? fragment.Insert(fragment.IndexOf('\n') + 1, "#define TERRAIN_SIMPLE\n") : fragment;
+
+    /// <summary>
     /// The terrain colour pass's depth-only twin: the same vertex stage (so the depths are the same), a fragment stage that writes nothing (<see
     /// cref="TerrainLateColour"/>).
     /// </summary>
@@ -2451,14 +2560,17 @@ static partial class TerrainShaders
     /// The TERRAIN-mode meshes' colour program, with the interior cut (on per draw: <see cref="TerrainConstants.InteriorCut"/>; the cross-fade
     /// already discards).
     /// </summary>
-    public static string MeshFragmentNative(bool march = true, bool? normalMaps = null, int? reliefQuality = null) =>
-        Gi.GiResolveShaders.WithAlbedo(Variant(Native(InteriorMaskRenderer.WithCut(Marched(MeshFragment, march))), normalMaps, reliefQuality));
+    public static string MeshFragmentNative(bool march = true, bool? normalMaps = null, int? reliefQuality = null, bool lean = false)
+    {
+        string cut = InteriorMaskRenderer.WithCut(Leaned(Marched(MeshFragment, march), lean));
+        return Gi.GiResolveShaders.WithAlbedo(Variant(Native(cut), normalMaps, reliefQuality));
+    }
 
     /// <summary>
     /// <see cref="MeshFragmentSolid"/>, native: the placements not mid-fade (no <c>discard</c>, no interior cut).
     /// </summary>
-    public static string MeshFragmentSolidNative(bool march = true, bool? normalMaps = null, int? reliefQuality = null) =>
-        Gi.GiResolveShaders.WithAlbedo(Variant(Native(Marched(MeshFragmentSolid, march)), normalMaps, reliefQuality));
+    public static string MeshFragmentSolidNative(bool march = true, bool? normalMaps = null, int? reliefQuality = null, bool lean = false) =>
+        Gi.GiResolveShaders.WithAlbedo(Variant(Native(Leaned(Marched(MeshFragmentSolid, march), lean)), normalMaps, reliefQuality));
 
     /// <summary>
     /// The TERRAIN-mode meshes' instanced caster vertex stage, native.

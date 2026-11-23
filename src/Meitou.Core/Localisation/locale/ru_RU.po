@@ -4850,3 +4850,391 @@ msgstr "Сохранить текущий набор"
 
 msgid "Sort by"
 msgstr "Сортировать по"
+
+#. machine-translated
+msgid "Simple terrain shading"
+msgstr "Упрощённое затенение земли"
+
+#. machine-translated
+msgid "Faster ground for weak graphics: one biome and two texture layers a pixel, no bump detail. Blends between biomes show harder edges."
+msgstr "Более быстрая земля для слабой графики: один биом и два слоя текстур на пиксель, без рельефных деталей. Переходы между биомами выглядят резче."
+
+#. machine-translated
+msgid "Loading the target builds..."
+msgstr "Загрузка целевых сборок..."
+
+#. machine-translated
+msgid "{1} target builds"
+msgstr "Целевых сборок: {1}"
+
+#. machine-translated
+msgid "Benchmark"
+msgstr "Бенчмарк"
+
+#. machine-translated
+msgid "Target builds unknown: {1}"
+msgstr "Целевые сборки неизвестны: {1}"
+
+#. machine-translated
+msgid "Download the build into the benchmark's own folder and list its benchmarks"
+msgstr "Скачать сборку в собственную папку бенчмарка и получить список её бенчмарков"
+
+#. machine-translated
+msgid "Target builds (full releases and the daily nightlies) count for comparisons; others can be run but not submitted."
+msgstr "Для сравнения учитываются целевые сборки (полные выпуски и ежедневные ночные); остальные можно запускать, но не отправлять."
+
+#. machine-translated
+msgid "Build"
+msgstr "Сборка"
+
+#. machine-translated
+msgid "target"
+msgstr "целевая"
+
+#. machine-translated
+msgid "not a target"
+msgstr "не целевая"
+
+#. machine-translated
+msgid "installed"
+msgstr "установлена"
+
+#. machine-translated
+msgid "Proton runs the Windows build, with its own prefix in the launcher's folder."
+msgstr "Proton запускает сборку для Windows со своим префиксом в папке лаунчера."
+
+#. machine-translated
+msgid "Platform"
+msgstr "Платформа"
+
+#. machine-translated
+msgid "Install the build to see all the benchmarks it has."
+msgstr "Установите сборку, чтобы увидеть все её бенчмарки."
+
+#. machine-translated
+msgid "Each ticked benchmark is run at each ticked tier."
+msgstr "Каждый отмеченный бенчмарк запускается на каждом отмеченном уровне."
+
+#. machine-translated
+msgid "Benchmarks"
+msgstr "Бенчмарки"
+
+#. machine-translated
+msgid "Needs ray tracing"
+msgstr "Нужна трассировка лучей"
+
+#. machine-translated
+msgid "Medium and {1}, recommended for this computer, are ticked first."
+msgstr "Средний и рекомендованный для этого компьютера {1} отмечены заранее."
+
+#. machine-translated
+msgid "The game's quality presets."
+msgstr "Пресеты качества игры."
+
+#. machine-translated
+msgid "Tiers"
+msgstr "Уровни"
+
+#. machine-translated
+msgid "Start"
+msgstr "Запустить"
+
+#. machine-translated
+msgid "Do not use the computer while it runs."
+msgstr "Не пользуйтесь компьютером во время работы."
+
+#. machine-translated
+msgid "Sessions: {1}, two runs each, about {2} minutes."
+msgstr "Сессий: {1}, по два прогона, около {2} мин."
+
+#. machine-translated
+msgid "{1} ({2} elapsed)"
+msgstr "{1} (прошло {2})"
+
+#. machine-translated
+msgid "Benchmark finished."
+msgstr "Бенчмарк завершён."
+
+#. machine-translated
+msgid "The build is installed."
+msgstr "Сборка установлена."
+
+#. machine-translated
+msgid "A benchmark is already running."
+msgstr "Бенчмарк уже запущен."
+
+#. machine-translated
+msgid "Meitou is running: close it before benchmarking."
+msgstr "Meitou запущен: закройте его перед бенчмарком."
+
+#. machine-translated
+msgid "Choose a build first."
+msgstr "Сначала выберите сборку."
+
+#. machine-translated
+msgid "Tick at least one benchmark and one tier."
+msgstr "Отметьте хотя бы один бенчмарк и один уровень."
+
+#. machine-translated
+msgid "Cancelled."
+msgstr "Отменено."
+
+#. machine-translated
+msgid "The benchmark stopped: {1}"
+msgstr "Бенчмарк остановлен: {1}"
+
+#. machine-translated
+msgid "Benchmarking: the game window opens and closes by itself."
+msgstr "Идёт бенчмарк: окно игры откроется и закроется само."
+
+#. machine-translated
+msgid "{1} at {2}: run {3} of {4}, launch {5} of {6}"
+msgstr "{1}, {2}: прогон {3} из {4}, запуск {5} из {6}"
+
+#. machine-translated
+msgid "Proton: {1}"
+msgstr "Proton: {1}"
+
+#. machine-translated
+msgid "Native Linux build"
+msgstr "Нативная сборка для Linux"
+
+#. machine-translated
+msgid "This computer's build"
+msgstr "Сборка для этого компьютера"
+
+#. machine-translated
+msgid "Results"
+msgstr "Результаты"
+
+#. machine-translated
+msgid "No results for this build and platform yet."
+msgstr "Для этой сборки и платформы результатов пока нет."
+
+#. machine-translated
+msgid "Machine id (letters, digits, dashes)"
+msgstr "ID компьютера (буквы, цифры, дефисы)"
+
+#. machine-translated
+msgid "Machine name"
+msgstr "Имя компьютера"
+
+#. machine-translated
+msgid "Notes (cooling, power plan, ...)"
+msgstr "Заметки (охлаждение, схема питания, ...)"
+
+#. machine-translated
+msgid "Kept as it was first submitted, so the site keeps your results together."
+msgstr "Сохраняется таким, каким было отправлено впервые, чтобы сайт держал ваши результаты вместе."
+
+#. machine-translated
+msgid "Can be edited until the first session is submitted; then it is kept, so the site keeps your results together."
+msgstr "Можно изменить до отправки первой сессии; затем сохраняется, чтобы сайт держал ваши результаты вместе."
+
+#. machine-translated
+msgid "Machine"
+msgstr "Компьютер"
+
+#. machine-translated
+msgid "Your name on the benchmarks site (optional)"
+msgstr "Ваше имя на сайте бенчмарков (необязательно)"
+
+#. machine-translated
+msgid "Submitted by"
+msgstr "Отправитель"
+
+#. machine-translated
+msgid "Shown beside your results."
+msgstr "Показывается рядом с вашими результатами."
+
+#. machine-translated
+msgid "The hardware is probed when a benchmark starts."
+msgstr "Оборудование определяется при запуске бенчмарка."
+
+#. machine-translated
+msgid "{1}, {2}, {3} GB, {4}"
+msgstr "{1}, {2}, {3} ГБ, {4}"
+
+#. machine-translated
+msgid "{1} at {2}"
+msgstr "{1}, {2}"
+
+#. machine-translated
+msgid "Run {1}: FPS"
+msgstr "Прогон {1}: FPS"
+
+#. machine-translated
+msgid "Run {1}: 99% ms"
+msgstr "Прогон {1}: 99% мс"
+
+#. machine-translated
+msgid "Run {1}: over 33 ms"
+msgstr "Прогон {1}: дольше 33 мс"
+
+#. machine-translated
+msgid "Submitted (#{1})."
+msgstr "Отправлено (№{1})."
+
+#. machine-translated
+msgid "Submitting..."
+msgstr "Отправка..."
+
+#. machine-translated
+msgid "Submit"
+msgstr "Отправить"
+
+#. machine-translated
+msgid "Submit again"
+msgstr "Отправить снова"
+
+#. machine-translated
+msgid "Incomplete: both runs are needed to submit."
+msgstr "Не завершено: для отправки нужны оба прогона."
+
+#. machine-translated
+msgid "Not a target build: its results can be seen here but not submitted."
+msgstr "Не целевая сборка: результаты видны здесь, но отправить их нельзя."
+
+#. machine-translated
+msgid "The runs were made by {1}, not {2}: they cannot be submitted."
+msgstr "Прогоны сделаны сборкой {1}, а не {2}: их нельзя отправить."
+
+#. machine-translated
+msgid "Fill in the machine's id and name to submit."
+msgstr "Для отправки укажите ID и имя компьютера."
+
+#. machine-translated
+msgid "The service refused it: {1}"
+msgstr "Сервис отказал: {1}"
+
+#. machine-translated
+msgid "Could not reach the reports service: {1}"
+msgstr "Не удалось связаться с сервисом отчётов: {1}"
+
+#. machine-translated
+msgid "{1} skipped: it needs ray tracing, which this graphics card does not have."
+msgstr "{1} пропущен: нужна трассировка лучей, которой нет у этой видеокарты."
+
+#. machine-translated
+msgid "{1} has no download for {2}."
+msgstr "У {1} нет загрузки для {2}."
+
+#. machine-translated
+msgid "{1} has no game in its download."
+msgstr "В загрузке {1} нет игры."
+
+#. machine-translated
+msgid "Asking the build for its benchmarks..."
+msgstr "Запрос списка бенчмарков у сборки..."
+
+#. machine-translated
+msgid "This build did not list its benchmarks (exit code {1}): it may be older than launcher benchmarks."
+msgstr "Сборка не выдала список бенчмарков (код выхода {1}): возможно, она старше бенчмарков лаунчера."
+
+#. machine-translated
+msgid "{1} skipped: this build has no such benchmark."
+msgstr "{1} пропущен: в этой сборке нет такого бенчмарка."
+
+#. machine-translated
+msgid "{1} skipped: it needs the save {2}, which this launcher cannot download."
+msgstr "{1} пропущен: нужно сохранение {2}, которое этот лаунчер скачать не может."
+
+#. machine-translated
+msgid "Checking the benchmark save..."
+msgstr "Проверка сохранения для бенчмарка..."
+
+#. machine-translated
+msgid "The benchmark save is damaged: its download does not match the expected hash."
+msgstr "Сохранение для бенчмарка повреждено: загрузка не совпадает с ожидаемым хешем."
+
+#. machine-translated
+msgid "Probing the hardware..."
+msgstr "Определение оборудования..."
+
+#. machine-translated
+msgid "This build did not report the hardware (exit code {1}): it may be older than launcher benchmarks."
+msgstr "Сборка не сообщила об оборудовании (код выхода {1}): возможно, она старше бенчмарков лаунчера."
+
+#. machine-translated
+msgid "Copying the save..."
+msgstr "Копирование сохранения..."
+
+#. machine-translated
+msgid "{1} skipped: the game says it needs ray tracing, which this graphics card does not have."
+msgstr "{1} пропущен: игра сообщает, что нужна трассировка лучей, которой нет у этой видеокарты."
+
+#. machine-translated
+msgid "{1} skipped: the game does not know this benchmark (exit code 7)."
+msgstr "{1} пропущен: игра не знает этот бенчмарк (код выхода 7)."
+
+#. machine-translated
+msgid "The game refused the save: its hash is not the benchmark's (exit code 6)."
+msgstr "Игра отклонила сохранение: его хеш не совпадает с хешем бенчмарка (код выхода 6)."
+
+#. machine-translated
+msgid "The game stopped with exit code {1} in {2}, run {3}; its log is {4}"
+msgstr "Игра остановилась с кодом выхода {1} на уровне {2}, прогон {3}; журнал: {4}"
+
+#. machine-translated
+msgid "The game wrote no result.json into {1}; its log is {2}"
+msgstr "Игра не записала result.json в {1}; журнал: {2}"
+
+#. machine-translated
+msgid "The Vulkan loader is not installed: run 'brew install molten-vk vulkan-loader' in a terminal, then try again."
+msgstr "Загрузчик Vulkan не установлен: выполните 'brew install molten-vk vulkan-loader' в терминале и попробуйте снова."
+
+#. machine-translated
+msgid "The game did not start."
+msgstr "Игра не запустилась."
+
+#. machine-translated
+msgid "The game ran over {1} minutes and was stopped."
+msgstr "Игра работала дольше {1} мин и была остановлена."
+
+#. machine-translated
+msgid "Bases: the play bench on a save"
+msgstr "Базы: игровой тест на сохранении"
+
+#. machine-translated
+msgid "Shark fly-by: a new game, flying round Shark"
+msgstr "Облёт Шарка: новая игра, полёт вокруг Шарка"
+
+#. machine-translated
+msgid "Low"
+msgstr "Низкий"
+
+#. machine-translated
+msgid "Medium"
+msgstr "Средний"
+
+#. machine-translated
+msgid "High"
+msgstr "Высокий"
+
+#. machine-translated
+msgid "Whole run"
+msgstr "Весь прогон"
+
+#. machine-translated
+msgid "Streaming"
+msgstr "Подгрузка"
+
+#. machine-translated
+msgid "Views"
+msgstr "Виды"
+
+#. machine-translated
+msgid "Flight"
+msgstr "Полёт"
+
+#. machine-translated
+msgid "BENCHMARK"
+msgstr "БЕНЧМАРК"
+
+#. machine-translated
+msgid "A benchmark is running: cancel it on the Benchmark page first."
+msgstr "Идёт бенчмарк: сначала отмените его на странице «Бенчмарк»."
+
+#. machine-translated
+msgid "The benchmark stopped."
+msgstr "Бенчмарк остановлен."

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -12,7 +13,14 @@ sealed record FeedbackRow(
     int? Issue, string? IssueUrl, string? Discord, long? NavmeshSize, string? Location, string[]? Workshop);
 
 /// <summary>
-/// The feedback table in PostgreSQL. Reporters are only ever stored as salted hashes.
+/// A benchmark session to store: <paramref name="Machine"/> and <paramref name="Data"/> are JSON text, <paramref name="At"/> null for now.
+/// </summary>
+sealed record BenchRow(
+    DateTimeOffset? At, string Sender, string Handle, string Machine, string Platform, string Scenario, string Target, string Tier, int Version,
+    string Fingerprint, bool Legacy, string Data, string? Summary);
+
+/// <summary>
+/// The feedback and benchmark tables in PostgreSQL. Reporters and benchmark senders are only ever stored as salted hashes.
 /// </summary>
 sealed class Store(NpgsqlDataSource db)
 {
@@ -47,6 +55,23 @@ sealed class Store(NpgsqlDataSource db)
             alter table feedback add column if not exists navmesh_size bigint;
             alter table feedback add column if not exists location text;
             alter table feedback add column if not exists workshop text[];
+            create table if not exists bench_session (
+                id bigserial primary key,
+                at timestamptz not null default now(),
+                sender text not null,
+                handle text not null,
+                machine jsonb not null,
+                platform text not null,
+                scenario text not null,
+                target text not null,
+                tier text not null,
+                version integer not null,
+                fingerprint text not null,
+                legacy boolean not null default false,
+                data jsonb not null,
+                summary text
+            );
+            create index if not exists bench_session_key on bench_session (sender, target, scenario, tier, version, platform);
             """);
         await cmd.ExecuteNonQueryAsync();
     }
@@ -159,6 +184,132 @@ sealed class Store(NpgsqlDataSource db)
         cmd.Parameters.Add(new() { Value = token });
         return await cmd.ExecuteNonQueryAsync() > 0;
     }
+
+    #endregion
+
+    #region Benchmarks
+
+    /// <summary>
+    /// How many sessions one sender keeps per target, scenario, tier, benchmark version and platform; a new one beyond it replaces the oldest.
+    /// </summary>
+    const int SessionsPerKey = 2;
+
+    /// <summary>
+    /// Stores a submitted session, first deleting the sender's oldest ones of the same target, scenario, tier, version and platform so that at most
+    /// <see cref="SessionsPerKey"/> remain; returns its id.
+    /// </summary>
+    public async Task<long> AddBenchSession(BenchRow row)
+    {
+        await using var connection = await db.OpenConnectionAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+        await TrimBenchSessions(connection, row);
+        long id = await InsertBenchSession(connection, row);
+        await transaction.CommitAsync();
+        return id;
+    }
+
+    /// <summary>
+    /// Replaces every legacy session with <paramref name="rows"/> in one transaction, so a failed import keeps the old ones.
+    /// </summary>
+    public async Task ReplaceLegacyBenchSessions(IReadOnlyList<BenchRow> rows)
+    {
+        await using var connection = await db.OpenConnectionAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+        await using (var delete = new NpgsqlCommand("delete from bench_session where legacy", connection))
+        {
+            await delete.ExecuteNonQueryAsync();
+        }
+
+        foreach (var row in rows) await InsertBenchSession(connection, row);
+        await transaction.CommitAsync();
+    }
+
+    /// <summary>
+    /// Every benchmark session without its sender and summary, newest first.
+    /// </summary>
+    public async Task<List<BenchSession>> BenchSessions()
+    {
+        await using var cmd = db.CreateCommand("""
+            select id, at, handle, machine::text, platform, scenario, target, tier, version, fingerprint, legacy, data::text
+            from bench_session order by at desc, id desc
+            """);
+        await using var r = await cmd.ExecuteReaderAsync();
+        var sessions = new List<BenchSession>();
+        while (await r.ReadAsync()) sessions.Add(ReadBenchSession(r));
+        return sessions;
+    }
+
+    /// <summary>
+    /// Deletes the non-legacy sessions of <paramref name="row"/>'s sender and key past the newest <see cref="SessionsPerKey"/> − 1.
+    /// </summary>
+    static async Task TrimBenchSessions(NpgsqlConnection connection, BenchRow row)
+    {
+        await using var cmd = new NpgsqlCommand("""
+            delete from bench_session where id in (
+                select id from bench_session
+                where not legacy and sender = $1 and target = $2 and tier = $3 and version = $4 and platform = $5 and scenario = $6
+                order by at desc, id desc offset $7)
+            """, connection);
+        cmd.Parameters.Add(new() { Value = row.Sender });
+        cmd.Parameters.Add(new() { Value = row.Target });
+        cmd.Parameters.Add(new() { Value = row.Tier });
+        cmd.Parameters.Add(new() { Value = row.Version });
+        cmd.Parameters.Add(new() { Value = row.Platform });
+        cmd.Parameters.Add(new() { Value = row.Scenario });
+        cmd.Parameters.Add(new() { Value = (long)(SessionsPerKey - 1) });
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>
+    /// Inserts one session (the JSON columns bound as text and cast: no JSON plugin under AOT); returns its id.
+    /// </summary>
+    static async Task<long> InsertBenchSession(NpgsqlConnection connection, BenchRow row)
+    {
+        await using var cmd = new NpgsqlCommand("""
+            insert into bench_session (at, sender, handle, machine, platform, scenario, target, tier, version, fingerprint, legacy, data, summary)
+            values (coalesce($1, now()), $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13)
+            returning id
+            """, connection);
+        cmd.Parameters.Add(new() { Value = (object?)row.At ?? DBNull.Value, NpgsqlDbType = NpgsqlDbType.TimestampTz });
+        cmd.Parameters.Add(new() { Value = row.Sender });
+        cmd.Parameters.Add(new() { Value = row.Handle });
+        cmd.Parameters.Add(new() { Value = row.Machine, NpgsqlDbType = NpgsqlDbType.Text });
+        cmd.Parameters.Add(new() { Value = row.Platform });
+        cmd.Parameters.Add(new() { Value = row.Scenario });
+        cmd.Parameters.Add(new() { Value = row.Target });
+        cmd.Parameters.Add(new() { Value = row.Tier });
+        cmd.Parameters.Add(new() { Value = row.Version });
+        cmd.Parameters.Add(new() { Value = row.Fingerprint });
+        cmd.Parameters.Add(new() { Value = row.Legacy });
+        cmd.Parameters.Add(new() { Value = row.Data, NpgsqlDbType = NpgsqlDbType.Text });
+        cmd.Parameters.Add(new() { Value = (object?)row.Summary ?? DBNull.Value, NpgsqlDbType = NpgsqlDbType.Text });
+        return (long)(await cmd.ExecuteScalarAsync())!;
+    }
+
+    /// <summary>
+    /// The session at the reader's row, its JSON columns parsed.
+    /// </summary>
+    static BenchSession ReadBenchSession(NpgsqlDataReader r)
+    {
+        return new BenchSession(
+            r.GetInt64(0),
+            r.GetFieldValue<DateTimeOffset>(1),
+            r.GetString(2),
+            ParseJson(r.GetString(3)),
+            r.GetString(4),
+            r.GetString(5),
+            r.GetString(6),
+            r.GetString(7),
+            r.GetInt32(8),
+            r.GetString(9),
+            r.GetBoolean(10),
+            ParseJson(r.GetString(11)));
+    }
+
+    /// <summary>
+    /// JSON text read from a <c>jsonb</c> column as an element that outlives its document.
+    /// </summary>
+    static JsonElement ParseJson(string text) => JsonSerializer.Deserialize(text, ReportsJson.Default.JsonElement);
 
     #endregion
 }

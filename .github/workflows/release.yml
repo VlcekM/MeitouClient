@@ -250,12 +250,3 @@ jobs:
           $package = Get-ChildItem out -Filter 'Meitou.References.*.nupkg' | Select-Object -First 1
           dotnet nuget push $package.FullName --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json
 
-  # Every release becomes a benchmark target (bench/README.md).
-  bench-target:
-    needs: [version, release]
-    permissions:
-      contents: write
-      actions: write
-    uses: ./.github/workflows/bench-target.yml
-    with:
-      tag: v${{ needs.version.outputs.version }}

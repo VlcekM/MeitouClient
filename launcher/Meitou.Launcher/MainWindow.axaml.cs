@@ -18,7 +18,7 @@ using Meitou.Steam;
 namespace Meitou.Launcher;
 
 /// <summary>
-/// The launcher's window: the Home (news), Mods, Versions, Graphics and Settings pages, the footer with Play, and the custom title bar.
+/// The launcher's window: the Home (news), Mods, Versions, Graphics, Benchmark and Settings pages, the footer with Play, and the custom title bar.
 /// </summary>
 public sealed partial class MainWindow : Window
 {
@@ -169,6 +169,7 @@ public sealed partial class MainWindow : Window
         LauncherVersionText.Text = $"v{LauncherVersion} · {Releases.Channel}";
         RefreshPresets();
         RefreshInstalled();
+        AttachBenchmark();
         UseKenshi(found);
         if (!config.FoldersConfirmed) ShowSetup();
         WireWindowEvents();
@@ -232,6 +233,7 @@ public sealed partial class MainWindow : Window
         {
             SaveWindowSize();
             _workshopSync.Stop();
+            BenchmarkPage.Stop();
             if (_graphicsSave?.IsEnabled == true) SaveGame();
         };
 
@@ -424,6 +426,7 @@ public sealed partial class MainWindow : Window
         ShowModDetails();
         ShowModsSummary();
         ShowReleases();
+        BenchmarkPage.LanguageChanged();
 
         // Refilling the box inside its own SelectionChanged throws (Avalonia's selection is still committing), so it waits for the next turn.
         Dispatcher.UIThread.Post(() => PopulateLanguageOptions(_install));
@@ -516,7 +519,8 @@ public sealed partial class MainWindow : Window
     {
         var pages = new (ToggleButton, Control)[]
         {
-            (NavHome, HomePage), (NavMods, ModsPage), (NavVersions, VersionsPage), (NavGraphics, GraphicsPage), (NavSettings, SettingsPage),
+            (NavHome, HomePage), (NavMods, ModsPage), (NavVersions, VersionsPage), (NavGraphics, GraphicsPage), (NavBenchmark, BenchmarkPage),
+            (NavSettings, SettingsPage),
         };
         foreach (var (nav, page) in pages)
         {
@@ -524,6 +528,7 @@ public sealed partial class MainWindow : Window
             page.IsVisible = nav == sender;
         }
         if (sender == NavGraphics) ShowGraphics();
+        if (sender == NavBenchmark) BenchmarkPage.Shown();
         Control? selectedPage = sender == NavHome ? HomePage
             : sender == NavMods ? ModsPage
             : sender == NavVersions ? VersionsPage
@@ -539,6 +544,25 @@ public sealed partial class MainWindow : Window
             };
             selectedPage.LayoutUpdated += applyAfterLayout;
         }
+    }
+
+    /// <summary>
+    /// Gives the Benchmark page the window's HTTP client, installer, settings, release list, Kenshi folder, the game Play starts (for its tier
+    /// recommendation) and whether that game runs.
+    /// </summary>
+    void AttachBenchmark()
+    {
+        BenchmarkPage.Attach(new Benchmarks.BenchmarkHost(Http, _installer, _config, () => _allReleases, () => _install, BenchmarkDetectGame,
+            () => _running is { HasExited: false }));
+    }
+
+    /// <summary>
+    /// The game Play starts and its preset detection flag, null when that version cannot detect.
+    /// </summary>
+    (string Exe, string Flag)? BenchmarkDetectGame()
+    {
+        if (PlaySchema().Schema?.Presets?.Detect is not { Length: > 0 } flag || PlayVersion is not { } version) return null;
+        return Releases.FindGame(Releases.VersionDirectory(version)) is { } exe ? (exe, flag) : null;
     }
 
     #endregion
@@ -2008,6 +2032,7 @@ public sealed partial class MainWindow : Window
         var (list, problem) = await _releases.FetchAsync();
         _allReleases = list;
         ShowReleases();
+        if (BenchmarkPage.IsVisible) BenchmarkPage.Shown();
         Status(problem ?? "");
         await ShowLauncherUpdateAsync();   // after: its "Launcher … is available" line must not be cleared
         if (updateLauncher && _config.AutoUpdateLauncher && _updater.IsInstalled && LauncherUpdateButton.IsVisible)
@@ -2392,6 +2417,12 @@ public sealed partial class MainWindow : Window
             return;
         }
         if (FindPlayedGame() is not (string exe, string version)) return;
+
+        if (BenchmarkPage.Running)
+        {
+            Status("A benchmark is running: cancel it on the Benchmark page first.");
+            return;
+        }
 
         // A second game would share meitou.user.json and the mod list with the first; whichever closes last overwrites the other's.
         if (_running is { HasExited: false })

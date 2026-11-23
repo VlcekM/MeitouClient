@@ -811,7 +811,7 @@ sealed partial class GameHost(
             bindings.Set(InputAction.ToggleDebugMenu, EngineKey.F10);
         }
 
-        // F9 is the game's quickload now (F5 quicksave); older saved configs took F9 for the fps counter, which is on Ctrl+F9 and unbound here.
+        // F9 is the game's quickload now (F5 quicksave); older saved configs took F9 for the fps counter, which is on Shift+F9 and unbound here.
         if (BoundOnlyTo(InputAction.ToggleFps, Binding.Of(EngineKey.F9))) bindings.Set(InputAction.ToggleFps);
 
         // Tab is the game's change_squad, not the settings (they open from the Esc menu); older saved configs bound Tab to them.

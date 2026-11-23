@@ -18,8 +18,8 @@ namespace Meitou.Simulation.Production;
 /// first job of a player character's list that can run (ListJobs here is the production pick's contributor), so a higher job takes over as soon as it
 /// can run and a blocked one passes to the next. Meitou runs Operating machine (87, the operator below), Operating automatic machine (152: an
 /// operator that only hauls for it), Hauling to (124: a machine's output carried to the job's storage, CharacterTask.Haul; on an automatic machine,
-/// carried inputs into it), Engineer (125: ConstructionSystem builds the site its finder picks) and Turret guard (234: manning the job's turret as an
-/// operator). Blocked uses one test for starting and for going on.
+/// carried inputs into it), Engineer (125: ConstructionSystem builds the site or repairs the door its finder picks) and Turret guard (234: manning
+/// the job's turret as an operator). Blocked uses one test for starting and for going on.
 /// </summary>
 public sealed partial class ProductionSystem
 {
@@ -41,7 +41,9 @@ public sealed partial class ProductionSystem
             return;
         }
 
-        if ((Site(world, add.Site) ?? TownMachineSite(world, add.Site)) is null) return;
+        // A door's repair with Shift gives the engineer job on the door (FUN_1407fc6e0's 95, whose job is 125).
+        bool door = world.Fixtures.Find(add.Site) is { Kind: Locks.FixtureKind.Door };
+        if (!door && (Site(world, add.Site) ?? TownMachineSite(world, add.Site)) is null) return;
         var table = world.Characters;
         foreach (var id in Who(world, add.Characters))
         {
@@ -639,11 +641,11 @@ public sealed partial class ProductionSystem
         if (CharacterFacts.GettingUp(cold, world.Tick)) return false;
         var at = world.Characters.Next[slot].Position;
 
-        // The engineer job ignores its target: its finder picks any site (the original's row 125 finder, docs/game/buildings-production.md "Builders
-        // and dismantle"); a pick out of range fails the job, and so does a character with no working arm (row 2's state 38).
+        // The engineer job ignores its target: its finder picks any site or door (the original's row 125 finder, docs/game/buildings-production.md
+        // "Builders and dismantle"); a pick out of range fails the job, and so does a character with no working arm (row 2's state 38).
         if (job.Type == TaskType.JobBuilder)
         {
-            return ConstructionSystem.HasWorkingArm(cold) && Construction?.EngineerSite(world, slot) is { } pick
+            return ConstructionSystem.HasWorkingArm(cold) && Construction?.EngineerWork(world, slot) is { } pick
                 && Vector3.DistanceSquared(at, pick.Position) < JobRangeSq;
         }
 
@@ -889,7 +891,7 @@ public sealed partial class ProductionSystem
         if (job.Type == TaskType.JobBuilder)
         {
             End(world, slot);
-            Construction!.StartBuilding(world, slot, Construction.EngineerSite(world, slot)!, k);
+            Construction!.StartBuilding(world, slot, Construction.EngineerWork(world, slot)!.Value, k);
             return;
         }
 

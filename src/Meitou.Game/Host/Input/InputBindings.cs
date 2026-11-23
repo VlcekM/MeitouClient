@@ -114,7 +114,7 @@ public enum InputAction
     /// </summary>
     CycleProfiler,
     /// <summary>
-    /// The small frame-rate counter at the top left; unbound by default (Ctrl+F9 in the game, whose plain F9 is the quickload).
+    /// The small frame-rate counter at the top left; unbound by default (Shift+F9 in the game, whose plain F9 is the quickload).
     /// </summary>
     ToggleFps,
     /// <summary>
@@ -509,14 +509,14 @@ public sealed class InputBindings
         !binding.IsMouse && (binding.Key is Key.Insert or Key.Delete or Key.Backspace || (binding.IsChord && HostChord(binding)));
 
     /// <summary>
-    /// Whether a host takes the chord <paramref name="binding"/> before the bindings: Alt+Enter (full screen), Alt+F4, Ctrl+F9 (the fps counter),
+    /// Whether a host takes the chord <paramref name="binding"/> before the bindings: Alt+Enter (full screen), Alt+F4, Shift+F9 and Ctrl+F9 (the fps counter),
     /// Ctrl+C and Ctrl+V (the free camera's code) and Shift with F1, F2, F11 or F12 (the Vulkan host's debug keys).
     /// </summary>
     static bool HostChord(Binding binding) => (binding.Modifiers, binding.Key) switch
     {
         (KeyModifiers.Alt, Key.Enter or Key.F4) => true,
         (KeyModifiers.Ctrl, Key.F9 or Key.C or Key.V) => true,
-        (KeyModifiers.Shift, Key.F1 or Key.F2 or Key.F11 or Key.F12) => true,
+        (KeyModifiers.Shift, Key.F1 or Key.F2 or Key.F9 or Key.F11 or Key.F12) => true,
         _ => false,
     };
 
@@ -700,7 +700,7 @@ public sealed class InputBindings
         Set(InputAction.Speed3, Key.F4);
         Set(InputAction.Screenshot, Key.F8, Key.PrintScreen);   // the game's own screenshot keys (docs/game/ui-input.md)
         Set(InputAction.ToggleSettings);   // Tab is the game's change_squad (docs/game/ui-input.md); the settings open from the Esc menu's Options
-        Set(InputAction.ToggleFps);   // Ctrl+F9 in the game (plain F9 is the game's quickload), so unbound here
+        Set(InputAction.ToggleFps);   // Shift+F9 in the game (plain F9 is the game's quickload), so unbound here
         Set(InputAction.QuickSave, Key.F5);
         Set(InputAction.QuickLoad, Key.F9);
         Set(InputAction.ToggleDebugMenu, Key.F10);

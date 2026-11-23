@@ -309,6 +309,9 @@ static partial class WorldFrame
         }
 
         if (gpu.Gi is { } tracedScene) tracedScene.Traced = gpu.Traced;
+
+        // Without the probes the GI's parameters stay the published zeros (no GI, traced or contact sun); with the shadow pass off its term is 1.
+        LeanLighting.Active = LeanLighting.Enabled && gpu.Probes is null && gpu.Shadow is not { Enabled: true };
     }
 
     #endregion

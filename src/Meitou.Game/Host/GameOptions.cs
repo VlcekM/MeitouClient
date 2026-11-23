@@ -209,6 +209,18 @@ sealed class GameOptions
     /// </summary>
     public string? PlayBench;
     /// <summary>
+    /// <c>--benchmark &lt;tier&gt;</c>: the launcher benchmark at this QualityTiers preset (docs/bench.md "Launcher benchmark"); null: not one.
+    /// </summary>
+    public int? Benchmark;
+    /// <summary>
+    /// <c>--benchmark-out &lt;dir&gt;</c>: where the launcher benchmark writes frames.csv, summary.md and result.json.
+    /// </summary>
+    public string? BenchmarkOut;
+    /// <summary>
+    /// <c>--benchmark-scenario &lt;id&gt;</c>: the launcher benchmark's scenario (BenchmarkSpec.Scenarios; Program exits 7 for an unknown one).
+    /// </summary>
+    public string BenchmarkScenario = DevTools.Benchmark.BenchmarkSpec.DefaultScenario;
+    /// <summary>
     /// <c>--no-precompile</c>: the methods are compiled on their first call only, not ahead on a background thread (JitWarmup).
     /// </summary>
     public bool NoPrecompile;
@@ -233,7 +245,11 @@ sealed class GameOptions
     /// <summary>
     /// The CHARACTER record (name or id) the fight and turret scenes spawn as enemies (<c>--scene-npc</c>).
     /// </summary>
-    public string SceneNpc = "Bandit";
+    public string SceneNpc = DefaultSceneNpc;
+    /// <summary>
+    /// <see cref="SceneNpc"/>'s default (the launcher benchmark keeps it).
+    /// </summary>
+    public const string DefaultSceneNpc = "Bandit";
     /// <summary>
     /// The town (name, part of it) the turret scene moves the squad to first (<c>--scene-town</c>; null: the nearest turret to where the save is).
     /// </summary>
@@ -294,7 +310,15 @@ sealed class GameOptions
                                      works with --renderer metal too (GPU time per frame, no GPU stages)
           --metal-gpu-budget <MB>    Metal: the memory guard's GPU allocation ceiling for this run (over MEITOU_METAL_GPU_BUDGET_MB, the launcher's setting;
                                      default a third of the Mac's memory, 5120 to 10240)
-          --benchmark-baseline       the settings benchmarks for the site use (bench/kit): a 1920x1080 window, the Medium tier, no GI, ground parallax or tessellation, no upscaler, SMAA;
+          --benchmark <tier> --benchmark-out <dir> [--benchmark-scenario <id>] [--load <save>]
+                                     the launcher benchmark (tier low, medium, high, ultra, extreme; scenario bases, the default, on its save with --load, or
+                                     shark-flyby, a new game): its script at that tier from the
+                                     default settings (meitou.user.json neither read nor written, no autosave), a 1920x1080 window, the Meitou look, frame limit
+                                     and vsync off, Vulkan only; writes frames.csv, summary.md and result.json there. Exit 7: unknown scenario; 6: the save is
+                                     not the scenario's; 5: the tier needs ray queries the GPU lacks
+          --benchmark-list <file>    the only arguments: writes the benchmark's version and scenarios as JSON and exits
+          --benchmark-probe <file>   the only arguments: writes the benchmark's hardware record (CPU, memory, GPU, driver, ray queries, OS) as JSON and exits
+          --benchmark-baseline       the benchmarks' fixed graphics: a 1920x1080 window, the Medium tier, no GI, ground parallax or tessellation, no upscaler, SMAA;
                                      like --low-end, the saved graphics are neither applied nor overwritten
           --control-dir <dir>        agent channel (debug): polls <dir>/cmd (lines "<id> <console command>"), appends results to <dir>/out; also MEITOU_CONTROL_DIR
           --exec "<cmd; cmd>"        console commands run once, in order, after the world has loaded and settled (state.screen world, a selected character, the simulation has ticked; same as wait-ready --world); also --setup.
@@ -309,7 +333,7 @@ sealed class GameOptions
         Keys: W/A/S/D or arrows move (or the pointer at a screen edge), Q/E rotate, Comma/Period tilt, wheel or Home/End zoom, PageUp/PageDown floor up/down (lens in the free camera), middle drag or Ctrl orbit, left click or drag selects, right click moves (shift queues), 1..9, 0 / ` select, [ / ] previous / next squad member, R stops,
           numpad 0..8 Block, Hold, Passive, Ranged, Sneak, Taunt, run speed, Medic (also H), Rescue (also J), L rest, K put down, I/C/M/T/Y windows, Tab next squad (all rebindable),
           ; free camera (R/F up/down), Space pause, F2/F3/F4 speed 1x/2x/5x, F8 or PrintScreen screenshot, Ctrl+/ Metal GPU capture (MTL_CAPTURE_ENABLED=1),
-          F5 quicksave, F9 quickload (Meitou's own slot under %LOCALAPPDATA%\Meitou\save), Ctrl+F9 fps counter, F10 debug menu (teleport, spawn, give and drop items, money, heal, edit characters, damage, bounties; the debug tools; Metal: F10 is the settings panel and Ctrl+F10 the debug menu), F11 statistics, F12 profiler (gpu, cpu, off), Shift+F12 level editor, Ctrl+F12 VRAM pie, Esc game menu (save, load, exit). Shift+F1 Meitou on / off, Shift+F2 skin scattering on / off, Alt+Enter full screen,
+          F5 quicksave, F9 quickload (Meitou's own slot under %LOCALAPPDATA%\Meitou\save), Shift+F9 fps counter, F10 debug menu (teleport, spawn, give and drop items, money, heal, edit characters, damage, bounties; the debug tools; Metal: F10 is the settings panel and Ctrl+F10 the debug menu), F11 statistics, F12 profiler (gpu, cpu, off), Shift+F12 level editor, Ctrl+F12 VRAM pie, Esc game menu (save, load, exit). Shift+F1 Meitou on / off, Shift+F2 skin scattering on / off, Alt+Enter full screen,
           F6 cinematic camera editor (numpad keys as in the viewer; game-shots.json; Home the lens also in the free camera), F7 hide the interface,
           Backspace restarts the --duel lap or the --battle, PageUp/PageDown narrow/widen its lens, Home resets it.
         Settings (frame limit, vsync, full screen (--windowed for one run), tick rate (tickRate), simulation threads (simThreads), the settings sliders, key bindings) are kept in meitou.user.json.
@@ -350,7 +374,36 @@ sealed class GameOptions
             g.UiMode = Data.Ui.UiMode.Faithful;
             g.MeitouMainMenu = false;
         }
+        CheckBenchmark(g);
         return (g, rest.ToArray());
+    }
+
+    /// <summary>
+    /// <c>--benchmark</c>'s needs (an output folder, its scenario's save or none, Vulkan, no other bench), then what it fixes for the run whatever
+    /// came after it: the play bench into its folder, frame limit, vsync and HDR off, the default fight NPC; a scenario without a save is a new
+    /// game at the default start and seed. An unknown scenario is left to Program (exit 7).
+    /// </summary>
+    static void CheckBenchmark(GameOptions g)
+    {
+        if (g.Benchmark is null)
+        {
+            if (g.BenchmarkOut is not null) throw new ArgumentException("--benchmark-out needs --benchmark <tier>");
+            return;
+        }
+
+        if (DevTools.Benchmark.BenchmarkSpec.Find(g.BenchmarkScenario) is not { } scenario) return;
+        if (g.BenchmarkOut is null) throw new ArgumentException("--benchmark needs --benchmark-out <dir>");
+        if (scenario.Save is not null && g.Load is null)
+            throw new ArgumentException($"--benchmark-scenario {scenario.Id} needs --load <save folder> ({scenario.Save})");
+        if (scenario.Save is null && (g.Load is not null || g.Continue || g.NewGame))
+            throw new ArgumentException($"--benchmark-scenario {scenario.Id} makes its own new game: drop --load, --continue and --new-game");
+        if (g.Renderer != "vulkan") throw new ArgumentException("--benchmark runs on Vulkan only: drop --renderer metal");
+        if (g.PlayBench is not null || g.BenchmarkBaseline)
+            throw new ArgumentException("--benchmark runs its own play bench: drop --play-bench and --benchmark-baseline");
+
+        (g.PlayBench, g.FpsLimit, g.VSync, g.Hdr) = (g.BenchmarkOut, 0, false, false);
+        g.SceneNpc = DefaultSceneNpc;
+        if (scenario.Save is null) (g.NewGame, g.NewGameName, g.Seed, g.SeedGiven) = (true, null, 0, true);
     }
 
     /// <summary>
@@ -489,6 +542,22 @@ sealed class GameOptions
             case "--play-bench":
                 (g.PlayBench, g.FpsLimit, g.VSync) = (Next(), 0, false);
                 break;
+            case "--benchmark":
+                {
+                    string tier = Next();
+                    g.Benchmark = DevTools.Benchmark.BenchmarkSpec.TierOf(tier)
+                        ?? throw new ArgumentException($"--benchmark {tier}: the tier must be low, medium, high, ultra or extreme");
+                    break;
+                }
+            case "--benchmark-out":
+                g.BenchmarkOut = Next();
+                break;
+            case "--benchmark-scenario":
+                g.BenchmarkScenario = Next();
+                break;
+            case DevTools.Benchmark.BenchmarkSpec.ListFlag:
+            case DevTools.Benchmark.HardwareRecord.ProbeFlag:
+                throw new ArgumentException($"{a} <file> must be the only arguments");
             case "--metal-gpu-budget":
                 g.MetalGpuBudgetMb = ulong.Parse(Next(), CultureInfo.InvariantCulture);
                 if (g.MetalGpuBudgetMb == 0) throw new ArgumentException("--metal-gpu-budget must be a size in MB above 0");

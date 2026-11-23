@@ -41,6 +41,11 @@ public sealed record Release(ReleaseKind Kind, string Tag, string Version, strin
     /// The name of <see cref="Asset"/>.
     /// </summary>
     string AssetName => $"{(Kind == ReleaseKind.Game ? "Meitou" : "MeitouLauncher")}-{Version}-{Releases.Channel}.zip";
+
+    /// <summary>
+    /// A game release's zip for the runtime <paramref name="channel"/> (<c>win-x64</c> for Proton on Linux), null when it has none.
+    /// </summary>
+    public ReleaseAsset? GameAsset(string channel) => Assets.FirstOrDefault(a => a.Name == $"Meitou-{Version}-{channel}.zip");
 }
 
 /// <summary>

@@ -788,7 +788,8 @@ public sealed unsafe class TerrainRenderer : IDisposable
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, WorldLighting light,
         float cullBelow = float.NegativeInfinity, bool secondary = false, bool defer = false, Matrix4x4? relative = null)
     {
-        _programs.UseColour(GroundRelief.ParallaxActive, GroundRelief.Quality, Trails is not null);
+        _programs.UseColour(GroundRelief.ParallaxActive, GroundRelief.Quality, Trails is not null, TerrainSimpleShading.Enabled,
+            Rendering.Frame.LeanLighting.Active);
         _current = secondary ? _spare : _quadtree;
         _current.SetRanges(options.TerrainLod);
         _frame = new Frame(viewProjection, eye, options, light, relative);

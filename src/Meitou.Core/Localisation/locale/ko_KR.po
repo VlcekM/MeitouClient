@@ -4846,3 +4846,391 @@ msgstr "현재 프리셋 저장"
 
 msgid "Sort by"
 msgstr "정렬 기준"
+
+#. machine-translated
+msgid "Simple terrain shading"
+msgstr "간단한 지형 셰이딩"
+
+#. machine-translated
+msgid "Faster ground for weak graphics: one biome and two texture layers a pixel, no bump detail. Blends between biomes show harder edges."
+msgstr "성능이 낮은 그래픽을 위한 더 빠른 지면: 픽셀당 바이옴 하나와 텍스처 레이어 두 개, 요철 디테일 없음. 바이옴 사이 경계가 더 뚜렷해집니다."
+
+#. machine-translated
+msgid "Loading the target builds..."
+msgstr "대상 빌드를 불러오는 중..."
+
+#. machine-translated
+msgid "{1} target builds"
+msgstr "대상 빌드 {1}개"
+
+#. machine-translated
+msgid "Benchmark"
+msgstr "벤치마크"
+
+#. machine-translated
+msgid "Target builds unknown: {1}"
+msgstr "대상 빌드를 알 수 없음: {1}"
+
+#. machine-translated
+msgid "Download the build into the benchmark's own folder and list its benchmarks"
+msgstr "빌드를 벤치마크 전용 폴더에 내려받고 벤치마크 목록을 가져옵니다"
+
+#. machine-translated
+msgid "Target builds (full releases and the daily nightlies) count for comparisons; others can be run but not submitted."
+msgstr "대상 빌드(정식 릴리스와 매일 나오는 나이틀리)만 비교에 쓰입니다. 다른 빌드는 실행할 수 있지만 제출할 수 없습니다."
+
+#. machine-translated
+msgid "Build"
+msgstr "빌드"
+
+#. machine-translated
+msgid "target"
+msgstr "대상"
+
+#. machine-translated
+msgid "not a target"
+msgstr "대상 아님"
+
+#. machine-translated
+msgid "installed"
+msgstr "설치됨"
+
+#. machine-translated
+msgid "Proton runs the Windows build, with its own prefix in the launcher's folder."
+msgstr "Proton은 런처 폴더 안의 전용 접두사로 Windows 빌드를 실행합니다."
+
+#. machine-translated
+msgid "Platform"
+msgstr "플랫폼"
+
+#. machine-translated
+msgid "Install the build to see all the benchmarks it has."
+msgstr "빌드를 설치하면 모든 벤치마크를 볼 수 있습니다."
+
+#. machine-translated
+msgid "Each ticked benchmark is run at each ticked tier."
+msgstr "선택한 각 벤치마크를 선택한 각 등급에서 실행합니다."
+
+#. machine-translated
+msgid "Benchmarks"
+msgstr "벤치마크"
+
+#. machine-translated
+msgid "Needs ray tracing"
+msgstr "레이 트레이싱 필요"
+
+#. machine-translated
+msgid "Medium and {1}, recommended for this computer, are ticked first."
+msgstr "중간과 이 컴퓨터에 권장되는 {1}이(가) 먼저 선택되어 있습니다."
+
+#. machine-translated
+msgid "The game's quality presets."
+msgstr "게임의 품질 프리셋입니다."
+
+#. machine-translated
+msgid "Tiers"
+msgstr "등급"
+
+#. machine-translated
+msgid "Start"
+msgstr "시작"
+
+#. machine-translated
+msgid "Do not use the computer while it runs."
+msgstr "실행 중에는 컴퓨터를 사용하지 마세요."
+
+#. machine-translated
+msgid "Sessions: {1}, two runs each, about {2} minutes."
+msgstr "세션: {1}개, 각 2회 실행, 약 {2}분."
+
+#. machine-translated
+msgid "{1} ({2} elapsed)"
+msgstr "{1} ({2} 경과)"
+
+#. machine-translated
+msgid "Benchmark finished."
+msgstr "벤치마크가 끝났습니다."
+
+#. machine-translated
+msgid "The build is installed."
+msgstr "빌드가 설치되었습니다."
+
+#. machine-translated
+msgid "A benchmark is already running."
+msgstr "벤치마크가 이미 실행 중입니다."
+
+#. machine-translated
+msgid "Meitou is running: close it before benchmarking."
+msgstr "Meitou가 실행 중입니다. 벤치마크 전에 닫으세요."
+
+#. machine-translated
+msgid "Choose a build first."
+msgstr "먼저 빌드를 선택하세요."
+
+#. machine-translated
+msgid "Tick at least one benchmark and one tier."
+msgstr "벤치마크와 등급을 하나 이상 선택하세요."
+
+#. machine-translated
+msgid "Cancelled."
+msgstr "취소되었습니다."
+
+#. machine-translated
+msgid "The benchmark stopped: {1}"
+msgstr "벤치마크가 중단되었습니다: {1}"
+
+#. machine-translated
+msgid "Benchmarking: the game window opens and closes by itself."
+msgstr "벤치마크 중: 게임 창이 저절로 열리고 닫힙니다."
+
+#. machine-translated
+msgid "{1} at {2}: run {3} of {4}, launch {5} of {6}"
+msgstr "{1} ({2}): 실행 {3}/{4}, 시작 {5}/{6}"
+
+#. machine-translated
+msgid "Proton: {1}"
+msgstr "Proton: {1}"
+
+#. machine-translated
+msgid "Native Linux build"
+msgstr "네이티브 Linux 빌드"
+
+#. machine-translated
+msgid "This computer's build"
+msgstr "이 컴퓨터용 빌드"
+
+#. machine-translated
+msgid "Results"
+msgstr "결과"
+
+#. machine-translated
+msgid "No results for this build and platform yet."
+msgstr "이 빌드와 플랫폼의 결과가 아직 없습니다."
+
+#. machine-translated
+msgid "Machine id (letters, digits, dashes)"
+msgstr "기기 ID(문자, 숫자, 대시)"
+
+#. machine-translated
+msgid "Machine name"
+msgstr "기기 이름"
+
+#. machine-translated
+msgid "Notes (cooling, power plan, ...)"
+msgstr "메모(냉각, 전원 관리 옵션, ...)"
+
+#. machine-translated
+msgid "Kept as it was first submitted, so the site keeps your results together."
+msgstr "처음 제출한 그대로 유지되어 사이트가 결과를 함께 묶어 둡니다."
+
+#. machine-translated
+msgid "Can be edited until the first session is submitted; then it is kept, so the site keeps your results together."
+msgstr "첫 세션을 제출하기 전까지 수정할 수 있으며, 그 뒤에는 유지되어 사이트가 결과를 함께 묶어 둡니다."
+
+#. machine-translated
+msgid "Machine"
+msgstr "기기"
+
+#. machine-translated
+msgid "Your name on the benchmarks site (optional)"
+msgstr "벤치마크 사이트에 표시할 이름(선택)"
+
+#. machine-translated
+msgid "Submitted by"
+msgstr "제출자"
+
+#. machine-translated
+msgid "Shown beside your results."
+msgstr "결과 옆에 표시됩니다."
+
+#. machine-translated
+msgid "The hardware is probed when a benchmark starts."
+msgstr "하드웨어는 벤치마크를 시작할 때 확인합니다."
+
+#. machine-translated
+msgid "{1}, {2}, {3} GB, {4}"
+msgstr "{1}, {2}, {3}GB, {4}"
+
+#. machine-translated
+msgid "{1} at {2}"
+msgstr "{1} ({2})"
+
+#. machine-translated
+msgid "Run {1}: FPS"
+msgstr "실행 {1}: FPS"
+
+#. machine-translated
+msgid "Run {1}: 99% ms"
+msgstr "실행 {1}: 99% ms"
+
+#. machine-translated
+msgid "Run {1}: over 33 ms"
+msgstr "실행 {1}: 33ms 초과"
+
+#. machine-translated
+msgid "Submitted (#{1})."
+msgstr "제출됨(#{1})."
+
+#. machine-translated
+msgid "Submitting..."
+msgstr "제출 중..."
+
+#. machine-translated
+msgid "Submit"
+msgstr "제출"
+
+#. machine-translated
+msgid "Submit again"
+msgstr "다시 제출"
+
+#. machine-translated
+msgid "Incomplete: both runs are needed to submit."
+msgstr "불완전함: 제출하려면 두 번의 실행이 모두 필요합니다."
+
+#. machine-translated
+msgid "Not a target build: its results can be seen here but not submitted."
+msgstr "대상 빌드가 아닙니다: 결과는 여기서 볼 수 있지만 제출할 수 없습니다."
+
+#. machine-translated
+msgid "The runs were made by {1}, not {2}: they cannot be submitted."
+msgstr "실행한 빌드가 {2}이(가) 아니라 {1}입니다. 제출할 수 없습니다."
+
+#. machine-translated
+msgid "Fill in the machine's id and name to submit."
+msgstr "제출하려면 기기 ID와 이름을 입력하세요."
+
+#. machine-translated
+msgid "The service refused it: {1}"
+msgstr "서비스가 거부했습니다: {1}"
+
+#. machine-translated
+msgid "Could not reach the reports service: {1}"
+msgstr "보고 서비스에 연결할 수 없습니다: {1}"
+
+#. machine-translated
+msgid "{1} skipped: it needs ray tracing, which this graphics card does not have."
+msgstr "{1} 건너뜀: 이 그래픽 카드에 없는 레이 트레이싱이 필요합니다."
+
+#. machine-translated
+msgid "{1} has no download for {2}."
+msgstr "{1}에는 {2}용 다운로드가 없습니다."
+
+#. machine-translated
+msgid "{1} has no game in its download."
+msgstr "{1} 다운로드에 게임이 없습니다."
+
+#. machine-translated
+msgid "Asking the build for its benchmarks..."
+msgstr "빌드에 벤치마크 목록을 요청하는 중..."
+
+#. machine-translated
+msgid "This build did not list its benchmarks (exit code {1}): it may be older than launcher benchmarks."
+msgstr "이 빌드는 벤치마크 목록을 내놓지 않았습니다(종료 코드 {1}). 런처 벤치마크보다 오래된 빌드일 수 있습니다."
+
+#. machine-translated
+msgid "{1} skipped: this build has no such benchmark."
+msgstr "{1} 건너뜀: 이 빌드에는 그런 벤치마크가 없습니다."
+
+#. machine-translated
+msgid "{1} skipped: it needs the save {2}, which this launcher cannot download."
+msgstr "{1} 건너뜀: 이 런처가 내려받을 수 없는 저장 파일 {2}이(가) 필요합니다."
+
+#. machine-translated
+msgid "Checking the benchmark save..."
+msgstr "벤치마크 저장 파일을 확인하는 중..."
+
+#. machine-translated
+msgid "The benchmark save is damaged: its download does not match the expected hash."
+msgstr "벤치마크 저장 파일이 손상되었습니다: 내려받은 파일이 예상 해시와 일치하지 않습니다."
+
+#. machine-translated
+msgid "Probing the hardware..."
+msgstr "하드웨어를 확인하는 중..."
+
+#. machine-translated
+msgid "This build did not report the hardware (exit code {1}): it may be older than launcher benchmarks."
+msgstr "이 빌드는 하드웨어 정보를 알려 주지 않았습니다(종료 코드 {1}). 런처 벤치마크보다 오래된 빌드일 수 있습니다."
+
+#. machine-translated
+msgid "Copying the save..."
+msgstr "저장 파일을 복사하는 중..."
+
+#. machine-translated
+msgid "{1} skipped: the game says it needs ray tracing, which this graphics card does not have."
+msgstr "{1} 건너뜀: 게임에 따르면 이 그래픽 카드에 없는 레이 트레이싱이 필요합니다."
+
+#. machine-translated
+msgid "{1} skipped: the game does not know this benchmark (exit code 7)."
+msgstr "{1} 건너뜀: 게임이 이 벤치마크를 알지 못합니다(종료 코드 7)."
+
+#. machine-translated
+msgid "The game refused the save: its hash is not the benchmark's (exit code 6)."
+msgstr "게임이 저장 파일을 거부했습니다: 해시가 벤치마크의 것과 다릅니다(종료 코드 6)."
+
+#. machine-translated
+msgid "The game stopped with exit code {1} in {2}, run {3}; its log is {4}"
+msgstr "게임이 {2} 실행 {3}에서 종료 코드 {1}(으)로 멈췄습니다. 로그: {4}"
+
+#. machine-translated
+msgid "The game wrote no result.json into {1}; its log is {2}"
+msgstr "게임이 {1}에 result.json을 쓰지 않았습니다. 로그: {2}"
+
+#. machine-translated
+msgid "The Vulkan loader is not installed: run 'brew install molten-vk vulkan-loader' in a terminal, then try again."
+msgstr "Vulkan 로더가 설치되어 있지 않습니다: 터미널에서 'brew install molten-vk vulkan-loader'를 실행한 뒤 다시 시도하세요."
+
+#. machine-translated
+msgid "The game did not start."
+msgstr "게임이 시작되지 않았습니다."
+
+#. machine-translated
+msgid "The game ran over {1} minutes and was stopped."
+msgstr "게임이 {1}분을 넘겨 중지되었습니다."
+
+#. machine-translated
+msgid "Bases: the play bench on a save"
+msgstr "기지: 저장 파일에서 하는 플레이 벤치"
+
+#. machine-translated
+msgid "Shark fly-by: a new game, flying round Shark"
+msgstr "Shark 비행: 새 게임에서 Shark 주위를 비행"
+
+#. machine-translated
+msgid "Low"
+msgstr "낮음"
+
+#. machine-translated
+msgid "Medium"
+msgstr "중간"
+
+#. machine-translated
+msgid "High"
+msgstr "높음"
+
+#. machine-translated
+msgid "Whole run"
+msgstr "전체 실행"
+
+#. machine-translated
+msgid "Streaming"
+msgstr "스트리밍"
+
+#. machine-translated
+msgid "Views"
+msgstr "전경"
+
+#. machine-translated
+msgid "Flight"
+msgstr "비행"
+
+#. machine-translated
+msgid "BENCHMARK"
+msgstr "벤치마크"
+
+#. machine-translated
+msgid "A benchmark is running: cancel it on the Benchmark page first."
+msgstr "벤치마크가 실행 중입니다. 먼저 벤치마크 페이지에서 취소하세요."
+
+#. machine-translated
+msgid "The benchmark stopped."
+msgstr "벤치마크가 중단되었습니다."

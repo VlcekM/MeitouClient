@@ -11,13 +11,36 @@ has a stable `id` (its link `/roadmap#id`), a name, a status (`done`, `wip`, `pl
 `services/Meitou.Reports` (ASP.NET minimal API, PostgreSQL), image `ghcr.io/vlcekm/meitou-reports` from `reports-image.yml`, runs on
 Cloudovna (stack `meitou-reports`, database `meitou-reports db`; redeployed by the `REPORTS_REDEPLOY_WEBHOOK_URL` secret). Published
 Native AOT on the chiseled `runtime-deps` image: Npgsql (slim builder) is the only package; JSON goes through the `ReportsJson`
-source-generated context (add new wire types there). It serves the game's feedback button (below) and `GET /latest`: `{release, any}`,
-the newest full game release's version and the newest of any kind (nightlies included), no `v`; GitHub's releases are read at most
-every 10 minutes.
+source-generated context (add new wire types there). It serves the game's feedback button (below), the launcher's benchmarks (below) and
+`GET /latest`: `{release, any}`, the newest full game release's version and the newest of any kind (nightlies included), no `v`.
+GitHub's releases (`v*` tags, every page up to 1000, with the GitHub App's or `GITHUB_TOKEN`'s token when set) are read at most every
+10 minutes.
 
 Environment: `DATABASE_URL` (postgresql URL) or `ConnectionStrings__Reports` (ADO.NET), `REPORTS_SALT` (required; reporters are
-stored as HMAC-SHA256 of it and the IP, 24 hex), `REPORTS_ADMIN_TOKEN` (`Authorization: Bearer` for admin `DELETE /feedback/{token}`),
+stored as HMAC-SHA256 of it and the IP, 24 hex), `REPORTS_ADMIN_TOKEN` (`Authorization: Bearer` for the admin endpoints),
 `GITHUB_REPO`, and the feedback variables below. Client IP: `CF-Connecting-IP`, else the last `X-Forwarded-For` entry. Port 8080.
+
+Benchmarks (`Bench.cs`, table `bench_session`: sender, handle, machine jsonb, platform, scenario, target, tier, version, fingerprint,
+legacy, data jsonb, summary). A session is one scenario at one tier benchmarked twice on one machine and build:
+
+- `POST /bench` `{installId, handle, machine: {id, name, cpu, gpu, ramGb, os, osFamily, resolution, notes}, platform, target, runs:
+  [result.json, result.json], summary}` → `201 {id}` or `400 {error}`. Body at most 2 MB; `platform` one of native, proton, windows,
+  macos; each run needs `schema` 1, a `scenario` id (up to 40 of a-z, 0-9, `-`), `benchmarkVersion` ≥ 1, a 64-hex `fingerprint`, a
+  `tier` (low, medium, high, ultra, extreme), `game.version` and a `groups` object, the same scenario, tier, version, fingerprint and
+  game version in both, and `game.version` equal to `target`, which must be a benchmark target. The runs are stored as they came (`data` = `{runs: [...]}`; jsonb reorders keys), the
+  machine with its texts cut. The sender is the salted HMAC of `install:<installId>`, never served; it keeps at most 2 sessions per
+  target, scenario, tier, version and platform (a third deletes its oldest). 20 posts per IP per 10 minutes.
+- `GET /bench/data` → `{sessions: [{id, at, handle, machine, platform, scenario, target, tier, version, fingerprint, legacy, data}]}`, newest
+  first, cached 60 s (a write clears it).
+- `GET /bench/targets` → `{targets: [{tag, version, kind, publishedAt}]}`, newest first: every full release (`release`) and every nightly
+  whose notes start with `Daily build` (`daily`, the 16:00 UTC run of nightly.yml); `503 {error}` while GitHub was never read.
+- Both GETs send `Access-Control-Allow-Origin` for `https://meitou.kenshi.wiki` and `http://localhost:4321` (`Vary: Origin`).
+- Admin `POST /admin/bench/legacy` `{sessions: [...]}` (as `/bench/data` lists them, the id ignored; at most 64 MB) replaces every
+  legacy session in one transaction → `{imported}`. `meitou-tools bench-import [--commit 1e317e343~1] (--url <service> --token <admin>
+  | --dry)`, run in the repo, builds them from the old Python kit's files in git history: one session per machine, 8-digit commit
+  (the target) and scenario (`play` or `bases`, from the rows' segments), tier `baseline`, version 0, fingerprint `""`, `at` the first run's local date and time taken as UTC, the
+  machine file's `github` as the handle, and `data` = `{rows: [...]}`, the CSV rows in run order as objects by column (numbers as
+  numbers, blanks left out) with `scenario` added to each; the kit's first series has one run per session.
 
 ## Feedback
 

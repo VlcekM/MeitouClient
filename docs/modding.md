@@ -1061,8 +1061,8 @@ holds refuses the second mod.
   interface's keys and the game's bindings (Ctrl+Shift+P is not photo mode's P, Ctrl+J not Rescue's J), and while that key stays down no plain
   binding of it fires. A chord is not taken while a text field has the keys, over the title or in photo mode. It is saved as `Ctrl+Shift+P`
   (modifiers in any order when read); the game's own actions take no chord (one in `bindings` is skipped as unknown). The host's own
-  combinations never reach the bindings: Alt+Enter, Alt+F4, Ctrl+F9, Ctrl+C, Ctrl+V and Shift with F1, F2, F11 or F12 are left out as defaults
-  with a log line and refused on the page; on the Metal host a chord of F7, F8, F11, F12 or Print Screen never fires. **Observed** (scratch
+  combinations never reach the bindings: Alt+Enter, Alt+F4, Shift+F9 and its Ctrl+F9 alias, Ctrl+C, Ctrl+V and Shift with F1, F2, F11 or
+  F12 are left out as defaults with a log line and refused on the page; on the Metal host a chord of F7, F8, F11, F12 or Print Screen never fires. **Observed** (scratch
   program on `InputBindings`: laying, taking, resolving against photo mode's P, saving and reading back); the hosts' key path and the Controls
   page not run.
   Once per press, also while paused, `pressed(ModKeyContext)` (the `Snapshot` on screen, `Selected`, `Tick`, `Enqueue`, and `Ctrl`, `Shift`,

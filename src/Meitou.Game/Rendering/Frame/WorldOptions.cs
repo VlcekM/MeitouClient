@@ -626,6 +626,7 @@ sealed class WorldOptions
         GroundRelief.Quality = 0;
         GroundRelief.RefinePixels = 0;
         RockSmoothing.TessellateActive = false;
+        TerrainSimpleShading.Enabled = true;
         Post.LightShafts = false;
         Post.ShaftQuality = 0;
         Post.Fxaa = false;
@@ -652,6 +653,28 @@ sealed class WorldOptions
         (Post.Upscale.Kind, Post.Upscale.Scale, Post.Upscale.Explicit) = (UpscalerKind.Off, 1, true);
         Post.Smaa = true;
         TextureQuality = 1;
+    }
+
+    /// <summary>
+    /// <c>--benchmark &lt;tier&gt;</c>: the parts of the launcher benchmark's tier that must be set before the device and the post chain exist, after
+    /// the whole command line (docs/bench.md "Launcher benchmark"): a 1920x1080 window, the tier's <paramref name="textureQuality"/>, no GI (the
+    /// device is made without ray queries) unless the tier traces (<paramref name="rays"/>), and the anti-aliasing: Low's none at its render scale,
+    /// else TAA at scale 1. The game sets the rest of the tier through the settings (QualityTiers.ApplyBenchmarkTier).
+    /// </summary>
+    internal void ApplyBenchmarkTier(bool low, bool rays, int textureQuality)
+    {
+        (Width, Height) = BenchmarkBaselineSize;
+        SizeGiven = Windowed = true;
+        VSync = false;
+        TextureQuality = textureQuality;
+        if (!rays)
+        {
+            Gi = false;
+            Enhancements.Apply(Switches(this), "gi,interiorgi,gihybrid", meitou: false);
+        }
+
+        var upscale = low ? (UpscalerKind.Off, LowEndRenderScale) : (UpscalerKind.Taa, 1f);
+        (Post.Upscale.Kind, Post.Upscale.Scale, Post.Upscale.Explicit) = (upscale.Item1, upscale.Item2, true);
     }
 
     /// <summary>

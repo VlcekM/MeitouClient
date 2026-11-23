@@ -161,6 +161,10 @@ sealed class BuildMode(PlayerInterface player)
     /// How far round the camera/cursor matching blue snap nodes are drawn while holding a node-snapping building.
     /// </summary>
     const float BlueNodeDrawReach = 800;
+    /// <summary>
+    /// The <c>node type</c> of <c>Node Turret</c>, the snap node a building with a <c>gun turret</c> snaps to (<b>Verified</b>, <c>0x1404dd250</c>).
+    /// </summary>
+    const int TurretNodeType = 3;
 
     #endregion
 
@@ -548,38 +552,25 @@ sealed class BuildMode(PlayerInterface player)
     }
 
     /// <summary>
-    /// A <c>snaps to</c> ghost takes the place and turn of its nearest target (<see cref="GhostSnap"/>): a matching building, or an <c>is node</c>
-    /// snap point (such as <c>Node Light Mount</c>) on an owned building or player site. A node-snapping ghost without a <c>gun turret</c> marks
-    /// <see cref="PlacementQuery.NeedsSnap"/> so unsnapped placement fails with <see cref="PlacementFailure.NeedsSnapNode"/> (<c>0x1404d0ff0</c>).
+    /// A snapping ghost takes the place and turn of its nearest target (<see cref="GhostSnap"/>): a <c>snaps to</c> building, or a snap node of its
+    /// <see cref="SnapNodeType"/> (such as <c>Node Light Mount</c>, or <c>Node Turret</c> for a turret) on an owned building or player site. A
+    /// node-snapping ghost without a <c>gun turret</c> marks <see cref="PlacementQuery.NeedsSnap"/> so unsnapped placement fails with
+    /// <see cref="PlacementFailure.NeedsSnapNode"/> (<c>0x1404d0ff0</c>).
     /// </summary>
     PlacementQuery? SnapToTarget(BuildServices host, PlacementQuery q, Simulation.Navigation.BuildingFootprint? footprint,
         (Vector3 Origin, Vector3 Direction) ray)
     {
         var building = q.Building;
-        if (building.SnapsTo.Count == 0) return null;
+        var nodeType = SnapNodeType(host, building);
+        if (nodeType is null && building.SnapsTo.Count == 0) return null;
 
-        bool snapsToNode = SnapsToNode(host, building);
-        bool needsSnap = snapsToNode && !building.HasGunTurret;
+        bool needsSnap = nodeType is not null && !building.HasGunTurret;
         var (min, max) = footprint?.Bounds ?? (Vector2.Zero, Vector2.Zero);
-        if (GhostSnap.Find(building, (min + max) / 2, q.Position, SnapTargets(host, building, q.Position, snapsToNode), ray) is not { } target)
+        var candidates = nodeType is null ? StandaloneSnapTargets(host, building, q.Position) : _nodeTargets;
+        if (GhostSnap.Find(building, (min + max) / 2, q.Position, candidates, ray) is not { } target)
             return needsSnap ? q with { NeedsSnap = true } : null;
 
-        if (target.Host is { } hostBuilding)
-        {
-            return q with
-            {
-                Position = target.Position,
-                Rotation = target.Rotation,
-                Yaw = PlacementCheck.YawOf(target.Rotation),
-                Floor = 0,
-                On = null,
-                Surface = null,
-                PassThrough = null,
-                Snapped = true,
-                SnappedOn = hostBuilding,
-                NeedsSnap = needsSnap,
-            };
-        }
+        if (target.Host is { } hostBuilding) return SnapToNode(q, target, hostBuilding, needsSnap);
 
         bool onWall = IsWall(target.Record);
         return q with
@@ -597,49 +588,62 @@ sealed class BuildMode(PlayerInterface player)
     }
 
     /// <summary>
-    /// Whether any <c>snaps to</c> target of <paramref name="building"/> is an <c>is node</c> BUILDING record (such as <c>Node Light Mount</c>).
+    /// The ghost on the snap node <paramref name="target"/> of <paramref name="hostBuilding"/>: the node's place and turn, a turret's turned
+    /// 180 degrees about its own up (<b>Verified</b>, <c>0x1404dda21</c>: a <c>gun turret</c> ghost's yaw gains 180 through <c>0x1404d4f80</c>
+    /// after it takes the node's). Walls do not block a turret on a wall's node (engine choice: the node stands on the walkway, so the next wall
+    /// piece's footprint reaches it).
     /// </summary>
-    static bool SnapsToNode(BuildServices host, BuildingBuildData building)
+    PlacementQuery SnapToNode(PlacementQuery q, SnapTarget target, SnapHost hostBuilding, bool needsSnap)
     {
-        foreach (string id in building.SnapsTo)
-            if (host.Placement.IsNodeRecord(id)) return true;
-        return false;
+        bool turret = q.Building.HasGunTurret;
+        var rotation = turret ? target.Rotation * Quaternion.CreateFromAxisAngle(Vector3.UnitY, MathF.PI) : target.Rotation;
+        return q with
+        {
+            Position = target.Position,
+            Rotation = rotation,
+            Yaw = PlacementCheck.YawOf(rotation),
+            Floor = 0,
+            On = null,
+            Surface = null,
+            PassThrough = turret ? IsWall : null,
+            Snapped = true,
+            SnappedOn = hostBuilding,
+            NeedsSnap = needsSnap,
+        };
     }
 
     /// <summary>
-    /// Whether any <c>snaps to</c> target of <paramref name="building"/> is a standalone (non-node) BUILDING record.
+    /// The <c>node type</c> of the snap nodes <paramref name="building"/> snaps to; null when it snaps to buildings (or not at all) (<b>Verified</b>,
+    /// <c>0x1404dd250</c>): 3 (<c>Node Turret</c>) for a building with a <c>gun turret</c>, else the node type of its first <c>snaps to</c> record
+    /// when that is an <c>is node</c> record (<c>Node Light Mount</c> 5).
     /// </summary>
-    static bool SnapsToStandalone(BuildServices host, BuildingBuildData building)
+    static int? SnapNodeType(BuildServices host, BuildingBuildData building)
     {
-        foreach (string id in building.SnapsTo)
-            if (!host.Placement.IsNodeRecord(id)) return true;
-        return false;
+        if (building.HasGunTurret) return TurretNodeType;
+        return building.SnapsTo.Count == 0 ? null : host.Placement.NodeTypeOf(building.SnapsTo[0]);
     }
 
     /// <summary>
-    /// What <paramref name="building"/> may snap to round <paramref name="near"/>: standalone building targets (queued ghosts, player sites, level
-    /// buildings) and, when <paramref name="snapsToNode"/> is set, matching <c>is node</c> instances already collected for this frame.
+    /// The <c>snaps to</c> buildings <paramref name="building"/> may snap to round <paramref name="near"/>: queued ghosts, player sites and level
+    /// buildings of its target records.
     /// </summary>
-    IEnumerable<SnapTarget> SnapTargets(BuildServices host, BuildingBuildData building, Vector3 near, bool snapsToNode)
+    IEnumerable<SnapTarget> StandaloneSnapTargets(BuildServices host, BuildingBuildData building, Vector3 near)
     {
-        if (snapsToNode && !SnapsToStandalone(host, building)) return _nodeTargets;
-
         var sites = player.Session.CurrentSnapshot.Buildings;
         var known = sites.Select(s => s.Id).ToHashSet(StringComparer.Ordinal);
         var level = host.Placement.PlacedAround(new Vector2(near.X, near.Z), GhostSnap.Reach + LevelWallReach, building.SnapsTo.Contains)
             .Where(b => !known.Contains(b.Key));
-        var standalone = BuildQueue.Select(g => new SnapTarget(g.Building.Id, g.Position, g.Rotation))
+        return BuildQueue.Select(g => new SnapTarget(g.Building.Id, g.Position, g.Rotation))
             .Concat(sites.Select(s => new SnapTarget(s.Record, s.Position, s.Rotation)))
             .Concat(level.Select(b => new SnapTarget(b.Record, b.Position, b.Rotation)));
-        return snapsToNode ? _nodeTargets.Concat(standalone) : standalone;
     }
 
     /// <summary>
-    /// Collects matching <c>is node</c> snap points within <paramref name="radius"/> of <paramref name="centre"/> on player sites and owned level
-    /// buildings (all non-destroyed buildings while the level editor builds, matching <c>showBlueNodes</c> <c>0x14038cdf0</c>) into
-    /// <see cref="_nodeTargets"/>.
+    /// Collects the snap nodes of <paramref name="nodeType"/> (any record of that <c>node type</c>, as the original matches them, <c>0x14038aca0</c>)
+    /// within <paramref name="radius"/> of <paramref name="centre"/> on player sites and owned level buildings (all non-destroyed buildings while
+    /// the level editor builds, matching <c>showBlueNodes</c> <c>0x14038cdf0</c>) into <see cref="_nodeTargets"/>.
     /// </summary>
-    void FillNodeSnapTargets(BuildServices host, BuildingBuildData building, Vector2 centre, float radius)
+    void FillNodeSnapTargets(BuildServices host, int nodeType, Vector2 centre, float radius)
     {
         _nodeTargets.Clear();
         _snapHostSeen.Clear();
@@ -660,7 +664,7 @@ sealed class BuildMode(PlayerInterface player)
             AddMatchingNodes(nodes, s.Position, s.Rotation, snapHost);
         }
 
-        foreach (var b in host.Placement.SnapHostsAround(centre, radius, building.SnapsTo.Contains))
+        foreach (var b in host.Placement.SnapHostsAround(centre, radius, OfType))
         {
             if (_snapHostSeen.Contains(b.Key) || b.Host.Destroyed || !levelBuild && !b.Host.Owned) continue;
 
@@ -676,13 +680,15 @@ sealed class BuildMode(PlayerInterface player)
             for (int i = 0; i < nodes.Count; i++)
             {
                 var n = nodes[i];
-                if (!building.SnapsTo.Contains(n.Record)) continue;
+                if (!OfType(n.Record)) continue;
 
                 var worldPos = hostPos + Vector3.Transform(n.Position, rot);
                 var worldRot = NormalizeQuaternion(rot * n.Rotation);
                 _nodeTargets.Add(new SnapTarget(n.Record, worldPos, worldRot, snapHost));
             }
         }
+
+        bool OfType(string record) => host.Placement.NodeTypeOf(record) == nodeType;
     }
 
     /// <summary>
@@ -691,12 +697,13 @@ sealed class BuildMode(PlayerInterface player)
     static Quaternion NormalizeQuaternion(Quaternion q) => q.LengthSquared() > 1e-10f ? Quaternion.Normalize(q) : Quaternion.Identity;
 
     /// <summary>
-    /// Collects matching <c>is node</c> snap targets once per frame and updates the blue snap node spheres in <see cref="PlayerInterface.Markers"/>
-    /// while holding a node-snapping ghost.
+    /// Collects the snap targets of the held ghost's <see cref="SnapNodeType"/> once per frame and updates the blue snap node spheres in
+    /// <see cref="PlayerInterface.Markers"/> (<b>Verified</b>: <c>PreviewBuilding_Snapping</c> slot 7, <c>0x1404deb80</c>, shows the blue nodes of
+    /// its snap node type, a turret's <c>Node Turret</c> ones too).
     /// </summary>
     void UpdateBlueNodes(BuildServices host)
     {
-        if (WallLine is not null || CurrentBuilding() is not { } building || !SnapsToNode(host, building))
+        if (WallLine is not null || CurrentBuilding() is not { } building || SnapNodeType(host, building) is not { } nodeType)
         {
             _nodeTargets.Clear();
             if (_blueNodesDrawn) ClearBlueNodes();
@@ -704,7 +711,7 @@ sealed class BuildMode(PlayerInterface player)
         }
 
         var cam = player.Session.Camera.Current.Target;
-        FillNodeSnapTargets(host, building, new Vector2(cam.X, cam.Z), BlueNodeDrawReach);
+        FillNodeSnapTargets(host, nodeType, new Vector2(cam.X, cam.Z), BlueNodeDrawReach);
         if (player.Markers is not { } markers) return;
 
         _blueNodes.Clear();

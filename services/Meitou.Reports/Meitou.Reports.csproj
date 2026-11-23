@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
-  <!-- The game's feedback button (forms become GitHub issues) and the newest game versions. docs/feedback.md.
+  <!-- The game's feedback button (forms become GitHub issues), the launcher's benchmarks and the newest game versions. docs/feedback.md.
        Published Native AOT (Dockerfile): JSON through the ReportsJson source-generated context, Npgsql through its slim builder,
        so Npgsql is the only package. -->
   <PropertyGroup>

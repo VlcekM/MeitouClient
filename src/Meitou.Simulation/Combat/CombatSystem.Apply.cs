@@ -52,6 +52,7 @@ public sealed partial class CombatSystem
         else if (e.Kind == ReloadEffect) ApplyReload(world, e);
         else if (e.Kind == ZoneBuildingsEffect) ApplyZoneBuildings(world, e);
         else if (e.Kind == MassCombatEffect) ApplyMassCombat(world, e);
+        else if (e.Kind == DodgeXpEffect) ApplyDodgeXp(world, e);
         else if (e.Kind == BlowEffect) ApplyBlow(world, e);
     }
 
@@ -61,6 +62,29 @@ public sealed partial class CombatSystem
     void ApplyMassCombat(World world, in Effect e)
     {
         if (world.Characters.Cold(e.Target) is { Stats: { } asked }) _xp.MassCombat(asked);
+    }
+
+    /// <summary>
+    /// The dodge experience of a defence start or a failed break-out (<see cref="DodgeXpEffect"/>).
+    /// </summary>
+    void ApplyDodgeXp(World world, in Effect e)
+    {
+        if (world.Characters.Cold(e.Target) is { Stats: not null, Race: not null, Fighter: not null, Medical: not null } dc)
+            DodgeXp(dc, e.Position.X, dodged: e.Position.Y > 0);
+    }
+
+    /// <summary>
+    /// Dodge experience (<c>FUN_1408c6360</c>, <b>Verified</b>, docs/game/character-stats.md "Combat XP"): against <paramref name="attackerRating"/>
+    /// with the defender's effective dodge (<c>FUN_140885190</c> with its guard flag) and its encumbrance factor.
+    /// </summary>
+    void DodgeXp(CharacterCold dc, float attackerRating, bool dodged)
+    {
+        var f = dc.Fighter!;
+        float dodge = dc.Stats!.Stored(StatsEnumerated.Dodge);
+        float gear = dodge * f.DodgeMult - dodge;
+        float effective = DefenceFormulas.EffectiveDefence(dodge, f.EncumbranceFactor, Speed.LegFactor(dc.Medical!), gear,
+            Guarding(dc) && f.TechniqueCategory == (int)WeaponCategory.Unarmed);
+        _xp.Dodge(dc.Stats, dc.Race!, effective, attackerRating, f.EncumbranceFactor, dodged);
     }
 
     /// <summary>
@@ -123,10 +147,6 @@ public sealed partial class CombatSystem
                 aSlot.Evaded++;
                 dSlot.Dodges++;
                 GainCombatXp(ac, dc, XpEvent.GlancingHit, null);
-                var dodgeStats = dc.Stats;
-                _xp.PerEvent(dodgeStats, dc.Race, StatsEnumerated.Dodge,
-                    0.25f * _xp.SkillDifferenceFactor(dodgeStats[StatsEnumerated.Dodge], Eff(ac, StatsEnumerated.MeleeAttack)),
-                    ExperienceSource.Combat);
                 Punch(world, a, ac, dc, tech, blow, 0);
                 Record(now, a, d, blow, outcome, -1, default, false, false);
                 ReportDefence(world, a, d, seq, blow, CombatDefenceKind.Dodged, ac, dc, tech);
@@ -242,6 +262,10 @@ public sealed partial class CombatSystem
 
         BlowReaction(world, ref dSlot, d, dc, medical, damage, toughness, now, table.IdOf(a), seq, blow);
         GainCombatXp(ac, dc, XpEvent.HitDealt, XpEvent.HitTaken, packet.Cut + packet.Blunt + packet.Pierce + packet.Stun);
+
+        // An unarmed one (stat-set kind 5) hit trains dodge in place of melee defence (FUN_1408c6980 event 4 -> FUN_1408c6360), against the
+        // attacker's rating.
+        if (target.Unarmed) DodgeXp(dc, aSlot.AttackSkill, dodged: false);
         Punch(world, a, ac, dc, tech, blow, 2);
         Sound(world, SoundKind.Hit, d, a, prev[d].Position, heavy: dSlot.HitHeavy, unarmed: fighter.Unarmed, robot: ac.Race!.IsRobot);
         Splash(world, d, dc, -new Vector2(toAttacker.X, toAttacker.Y), damage.Cut + damage.Blunt + damage.Pierce, fighter.Unarmed ? -1 : a);

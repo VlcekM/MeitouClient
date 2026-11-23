@@ -63,6 +63,10 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// </summary>
     ExtDebugUtils? _debugUtils;
     /// <summary>
+    /// The instance has VK_KHR_get_surface_capabilities2 (Windows with a surface), which VK_EXT_full_screen_exclusive requires.
+    /// </summary>
+    bool _surfaceCapabilities2;
+    /// <summary>
     /// The validation message callback's messenger.
     /// </summary>
     DebugUtilsMessengerEXT _messenger;
@@ -621,6 +625,11 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// </summary>
     public bool HasRayQuery { get; private set; }
     /// <summary>
+    /// The device offers the ray query extensions (<see cref="HasRayQuery"/>'s three), whether or not <see cref="VulkanDeviceOptions.RayTracing"/>
+    /// asked for them: what the hardware can do, for the benchmark's hardware record.
+    /// </summary>
+    public bool OffersRayQuery { get; private set; }
+    /// <summary>
     /// With <see cref="HasRayQuery"/>: the acceleration structure entry points.
     /// </summary>
     public KhrAccelerationStructure? AccelerationStructures { get; private set; }
@@ -697,6 +706,11 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// VK_KHR_swapchain is on (the device was made with a surface).
     /// </summary>
     public bool HasSwapchain { get; private set; }
+    /// <summary>
+    /// VK_EXT_full_screen_exclusive is on (Windows, with VK_KHR_get_surface_capabilities2 on the instance): the swapchain can tell the driver never to
+    /// take the monitor exclusively (<see cref="VulkanPresenter"/>).
+    /// </summary>
+    public bool HasFullScreenExclusive { get; private set; }
     // What the native renderer API needs (docs/renderer-native.md 1, owner decision 1): enabled when present; GpuFeatures refuses to
     // start without the required ones.
     /// <summary>
@@ -832,7 +846,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         sb.AppendLine($"bindless={HasBindless} multiDrawIndirect={MultiDrawIndirect} drawIndirectFirstInstance={DrawIndirectFirstInstance} " +
             $"drawIndirectCount={DrawIndirectCount} shaderDrawParameters={ShaderDrawParameters}");
         sb.AppendLine($"pushDescriptor={HasPushDescriptor} (max {MaxPushDescriptors}) vertexInputDynamicState={HasVertexInputDynamicState} " +
-            $"swapchain={HasSwapchain}");
+            $"swapchain={HasSwapchain} fullScreenExclusive={HasFullScreenExclusive}");
         sb.AppendLine($"rayQuery={HasRayQuery} bufferDeviceAddress={HasBufferDeviceAddress}");
         sb.AppendLine($"memoryBudget={HasMemoryBudget} memoryPriority={HasMemoryPriority} pageableDeviceLocalMemory={HasPageableMemory}");
         sb.AppendLine($"fragmentShadingRate={HasFragmentShadingRate} (attachment texel {ShadingRateTexel}, largest square rate " +
@@ -1051,6 +1065,14 @@ public sealed unsafe class VulkanDevice : IDisposable
         if (_options.CreateSurface != null && !extNames.Contains("VK_KHR_surface"))
         {
             extNames.Add("VK_KHR_surface");
+        }
+
+        // Required by VK_EXT_full_screen_exclusive, which only Windows drivers offer.
+        _surfaceCapabilities2 = _options.CreateSurface != null && OperatingSystem.IsWindows()
+            && InstanceExtensionAvailable("VK_KHR_get_surface_capabilities2");
+        if (_surfaceCapabilities2 && !extNames.Contains("VK_KHR_get_surface_capabilities2"))
+        {
+            extNames.Add("VK_KHR_get_surface_capabilities2");
         }
 
         if (portability && !extNames.Contains("VK_KHR_portability_enumeration"))
@@ -1434,8 +1456,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         bool extVid = have.Contains("VK_EXT_vertex_input_dynamic_state");
         bool extPush = have.Contains("VK_KHR_push_descriptor");
         bool extBary = have.Contains("VK_KHR_fragment_shader_barycentric");
-        bool extRay = _options.RayTracing && have.Contains("VK_KHR_acceleration_structure") && have.Contains("VK_KHR_ray_query")
+        OffersRayQuery = have.Contains("VK_KHR_acceleration_structure") && have.Contains("VK_KHR_ray_query")
             && have.Contains("VK_KHR_deferred_host_operations");
+        bool extRay = _options.RayTracing && OffersRayQuery;
         bool extVrs = have.Contains("VK_KHR_fragment_shading_rate");
 
         // VK_NV_low_latency2 (Reflex, which DLSS frame generation asks for) requires present ids, which Streamline's list leaves out (validation,
@@ -1501,6 +1524,8 @@ public sealed unsafe class VulkanDevice : IDisposable
         if (HasAddressBindingReport) names.Add("VK_EXT_device_address_binding_report");
         if (HasMemoryPriority) names.Add("VK_EXT_memory_priority");
         if (HasPageableMemory) names.Add("VK_EXT_pageable_device_local_memory");
+        HasFullScreenExclusive = HasSwapchain && _surfaceCapabilities2 && have.Contains("VK_EXT_full_screen_exclusive");
+        if (HasFullScreenExclusive) names.Add("VK_EXT_full_screen_exclusive");
         var fams = PickQueueFamilies(pd);
         f2.PNext = chain;
         uint graphicsQueues = CreateDevice(pd, &f2, names, fams);

@@ -865,7 +865,10 @@ public sealed partial class CombatSystem : IProjectileSource
 
         BoltReaction(world, ref d, v, dc, dc.Medical, p, damage, toughness, death, now);
         if (dc.Stats is { } vs && dc.Fighter is { } vf)
+        {
             _xp.Combat(vs, dc.Race, XpEvent.HitTaken, vf.Unarmed, StatsEnumerated.None, p.ShooterSkill, StrengthFactor(dc, vf), p.Damage);
+            if (vf.Unarmed && dc.Race is not null) DodgeXp(dc, p.ShooterSkill, dodged: false);   // stat-set kind 5 (FUN_1408c6980 event 4)
+        }
 
         BoltShooterEffects(world, p, v, dc, dc.Medical, intended, death);
         if (Settings.RecordLog)

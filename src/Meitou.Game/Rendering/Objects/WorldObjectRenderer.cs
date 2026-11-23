@@ -49,6 +49,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     readonly ObjProg _colourProg, _solidProg, _depthProg, _blendedProg;
 
     /// <summary>
+    /// The colour and solid programs lit without the sun shadows and probe GI (<see cref="LeanLighting"/>), made the first frame that has neither.
+    /// </summary>
+    ObjProg? _colourLean, _solidLean;
+
+    /// <summary>
     /// The objects' texture cache (decoded on workers, mip-streamed; <see cref="Textures"/>).
     /// </summary>
     readonly WorldTextureCache _textureCache;
@@ -195,6 +200,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         DisposeSelection();
         _colourProg.Dispose();
         _solidProg.Dispose();
+        _colourLean?.Dispose();
+        _solidLean?.Dispose();
         _depthProg.Dispose();
         _blendedProg.Dispose();
         _glassScene.Dispose();
@@ -1960,7 +1967,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         UploadInstances();
 
         // 3. Draw: Prepare reads the textures (WorldTexture.Key) and makes the draw list, Record puts it into a native segment of VkGl's pass.
-        var prog = _depthPass ? _depthProg : _colourProg;
+        var prog = _depthPass ? _depthProg : ColourProg();
         int wireMode = _debugLevels == 2 ? 2 : options.Wireframe;
         if (_active.Count > 0)
         {
@@ -2743,7 +2750,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         int segment = SegmentId(kind, prog.P, targets, state);
 
         // The fully visible draws of a colour pass use the program without a discard (own segment, own pipelines per part).
-        int solidSegment = !_depthPass && !wire ? SegmentId(4, _solidProg.P, targets, state) : 0;
+        var solidProg = SolidProg();
+        int solidSegment = !_depthPass && !wire ? SegmentId(4, solidProg.P, targets, state) : 0;
         var job = _drawJobs.Rent();
         (job.Owner, job.Targets, job.State, job.Program, job.Count) = (this, targets, state, prog.P, 0);
         job.Frame = _nativeFrame.Prepare(in view);
@@ -2765,7 +2773,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             var part = d.Part;
             bool solid = d.Solid && solidSegment != 0;
             ref var n = ref (_depthPass ? ref part.DepthNative : ref (solid ? ref part.ColourSolidNative : ref part.ColourNative));
-            var drawProg = solid ? _solidProg : prog;
+            var drawProg = solid ? solidProg : prog;
             int drawSegment = solid ? solidSegment : segment;
             Current(ref n, part, drawProg);
             job.Draws[i] = new DrawJob.Draw
@@ -2783,6 +2791,20 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         job.Count = _drawCount;
         Gpu.Record(label, job);
     }
+
+    /// <summary>
+    /// The main colour program for this frame's lighting: the lean one while <see cref="LeanLighting.Active"/>.
+    /// </summary>
+    ObjProg ColourProg() => !LeanLighting.Active ? _colourProg
+        : _colourLean ??= new ObjProg(Gpu, _nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.FragmentNative(lean: true),
+            "objects lean");
+
+    /// <summary>
+    /// The solid colour program for this frame's lighting (<see cref="ColourProg"/>).
+    /// </summary>
+    ObjProg SolidProg() => !LeanLighting.Active ? _solidProg
+        : _solidLean ??= new ObjProg(Gpu, _nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.FragmentNative(solid: true, lean: true),
+            "objects solid lean");
 
     /// <summary>
     /// A stable number for a segment's pipeline state, so a part compares one int per draw.

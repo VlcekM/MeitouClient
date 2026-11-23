@@ -133,7 +133,7 @@ Loading the same autosave and resaving after 300 headless ticks gave matching SH
 - The render-thread stages (`cpu_*`) come from the shared `WorldFrame` laps; `cpu_sim` stays 0 (`update_ms` has the ticks).
 - The summary's run line names the device, scene and window sizes, the upscaler, the pacing, the GPU budget
   (`--metal-gpu-budget`) and the memory guard's state at the end. The saved graphics apply; `--benchmark-baseline` is
-  not applied on Metal, so its numbers do not compare with the benchmarks page.
+  not applied on Metal, so its numbers do not compare with Vulkan benchmark runs.
 - The Metal loop saves vsync, frame limit, full screen, upscaler and graphics at exit whatever the run's options were:
   point a bench run at a copy of `meitou.user.json` (the file is read from the working directory first).
 
@@ -216,6 +216,51 @@ slices, render-thread medians idle / orbit: terrain 0.17-0.18 -> 0.08 ms, foliag
 that differ run to run on master itself (hub: master against master 0.6-1.4, the branch against three master runs 0.2-1.6; forest at
 night: GI noise, 0.15 either way); named views, TAA, DLSS and Faithful within 0.11. Pass `--upscaler` (or `MEITOU_STREAMLINE_PATH`) to
 both sides: a build with the Streamline DLLs beside it takes the configured DLSS, one without falls back to TAA.
+
+## Launcher benchmark
+
+`MeitouClient --benchmark <tier> --benchmark-out <dir> [--benchmark-scenario <id>] [--load <save>]` (`src/Meitou.Game/DevTools/Benchmark/`)
+is the launcher's benchmark: the play bench machinery with a fixed workload, comparable across machines and builds.
+
+- Tiers `low`..`extreme` (`QualityTiers`), applied from a default `UserConfig` with tutorials off: `meitou.user.json` and the look presets
+  are neither read nor written, no autosave. No mods: the base data and core mods only, no code mods, whatever `data/mods.cfg`, `--mods-cfg` or
+  `MEITOU_MODS_CFG` list (`ModList.NoMods`). The install's `settings.cfg` defaults (language, edge scroll, markers, camera) still apply. Before the device: a 1920x1080 window, the tier's texture quality, no GI and no ray queries unless the tier
+  has traced switches (Ultra, Extreme), anti-aliasing Low's own (none at 0.83) or TAA at render scale 1. After the settings panel exists:
+  the Meitou look, the tier, its traced switches, an upscaler (FSR, DLSS) turned TAA and render scale 1 (not Low). Frame limit, vsync and
+  HDR off, Vulkan only, default `--scene-npc`, `MEITOU_BENCH_ONLY` ignored. Later options do not override these.
+- Scenarios (`BenchmarkSpec.Scenarios`; `--benchmark-list <file>` writes them with their groups and measured seconds):
+  - `bases` (default): the whole play bench script on save `bench-bases-2026-10-27` (`--load` required). Groups: camera (idle, orbit,
+    zoom, pan), streaming (travel, return), simulation (speed-x2 to loot), ui (panels, panels-warm), views (horizon, overview, flights: the first 6 player characters, twice each, 72 s).
+  - `shark-flyby`: a new game at the default start and seed 0 (`--load` refused); the settle teleports the squad to Shark, puts the
+    camera over it and lasts 15 s, held (120 s at most) while fewer than 50 residents are within 5000 units or their count rose by 5 in
+    the last 5 s (a cold navmesh cache fills the town a minute or more late); then `circle-high` (30 s, one turn, boom 2000, pitch 0.7 rad), `circle-low` (25 s, boom 900, pitch 0.3), `pass`
+    (20 s, 4000 units along +x through the centre, boom 300, pitch 0.15). Group `flight`.
+  - Every scenario has `all` (every segment but settle); settle is never counted.
+  - **Observed** (2026-11-23, RTX 4070, Linux, `--headless`, Medium and High): `bases` with all 62 player characters' flights measured
+    about 1005 s (flights 744 s), hence the cap; `shark-flyby` measures 75 s, 108 s with loading, 198 s on a cold navmesh cache
+    (the settle held to 63 s; its circles then ran within 3 fps of the warm run's). Runs of one scenario and tier gave the same fingerprint
+    and applied hash; the applied hash differed between tiers.
+- Save hash: SHA-256 of the manifest `<sha256>  ./<relative path>\n` per file, sorted by path (ordinal), as `sha256sum` prints it;
+  `bench-bases-2026-10-27` is `ceb2fb18…dac4ff` (**Observed**: the release zip's 1448 files with `find | sort | sha256sum` and the game's check agree).
+- Exit codes: 0 done, 1 the script did not finish (no result.json), 2 bad options (`--renderer metal`, a missing `--benchmark-out`
+  or `--load`), 5 a tier that needs ray queries on a device without them (checked on the made device, before loading), 6 the save's hash
+  is not the scenario's (checked before the window), 7 an unknown scenario.
+- `--benchmark-probe <file>` writes the hardware record alone (`HardwareRecord`): cpu, threads, ramGb, gpu, driver, vramMb, rayQueries
+  (the device offers the three ray query extensions, whatever the run enabled), os, kernel, osFamily.
+
+`result.json` beside `frames.csv` and `summary.md` (`BenchmarkResult`): `schema` 1, `benchmarkVersion`, `fingerprint`, `applied`,
+`tier`, `scenario`, `game` (`version`: the tag without `v`; `commit`: 8 characters), `save` (null without one), `resolution`, `startedAt`
+(the script's start, UTC), `hardware`, and `groups`: per group `frames`, `seconds`, `avgFps`, `p50Ms`, `p99Ms`, `maxMs`, `over33Pct`,
+`over100`, `slowWorldP99Ms`, `slowWorldMaxMs`, `vramPeakMb`, `sysmemPeakMb` and `stages` (p50 and p99 of every `cpu_*`/`gpu_*` column,
+keys with `_` for `-` and no `_ms`). Read back from frames.csv: percentile = sorted value at index round(p/100·(n-1)), avgFps =
+1000 / mean `frame_ms`, non-finite cells skipped.
+
+Version and fingerprint: `BenchmarkSpec.Version` is bumped by hand when the workload changes (tiers, fixed settings, default settings,
+a scenario's start, segments, groups or save, metrics), never for faster code. The fingerprint is SHA-256 of `BenchmarkSpec.CanonicalText`:
+the version, metric text, the scenario (start, save and hash, segments with seconds,
+groups), fixed settings, the default `UserConfig` as compact JSON and each tier's table values and switches; nothing from the machine.
+So it is per scenario, and a version with two fingerprints is a missed bump. `applied` is SHA-256 of the settings panel's sliders and
+switches after the tier (`key=value\n`, sorted), which differs by device (ray queries, DLSS).
 
 Detailed logs/screenshots belong outside the repository. Evidence for original-game claims
 belongs with the corresponding research and its Verified/Observed/Unknown label.

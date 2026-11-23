@@ -69,7 +69,7 @@ static class FrameGenerationSetup
         generator is { Enabled: true } ? $" rendered, x{FramesShownPerRendered(generator)} shown" : "";
 
     /// <summary>
-    /// The fps counter (Ctrl+F9): the frames shown per second, with frame generation also the rendered ones; and a rendered frame's time.
+    /// The fps counter (Shift+F9): the frames shown per second, with frame generation also the rendered ones; and a rendered frame's time.
     /// </summary>
     internal static string FpsCounterText(int frames, double seconds, IFrameGenerator? generator)
     {

@@ -428,7 +428,7 @@ public sealed partial class CombatSystem
         if (s.Down || CharacterFacts.GettingUp(cold, now)) return;
         ulong key = Rng.Key(world.Characters.IdOf(i));
 
-        if (Helpless(world, i, ref s, cold, key, now, dt)) return;
+        if (Helpless(world, i, ref s, cold, key, now, dt, effects)) return;
         if (SwimStopped(world, i, ref s, cold)) return;
 
         bool fighting = ReviewTarget(world, i, ref s, cold, now);
@@ -439,8 +439,8 @@ public sealed partial class CombatSystem
         if (s.Ranged)
         {
             EndReaction(world, i, ref s, now, dt);
-            if (s.ReactTech < 0 && s.AttackTech < 0) React(world, i, ref s, cold, key, now, dt);
-            else if (s.ReactTech >= 0) Reconsider(world, i, ref s, cold, key, now, dt);
+            if (s.ReactTech < 0 && s.AttackTech < 0) React(world, i, ref s, cold, key, now, dt, effects);
+            else if (s.ReactTech >= 0) Reconsider(world, i, ref s, cold, key, now, dt, effects);
             // its timers are seconds: a far character's step covers several ticks
             TickRanged(world, i, ref s, cold, effects, now, world.StepSeconds(i));
             return;
@@ -462,7 +462,7 @@ public sealed partial class CombatSystem
     /// swing; on success the stumble ends in a stumble-dodge row.
     /// True while it stays helpless (the fighter does nothing else this tick).
     /// </summary>
-    bool Helpless(World world, int i, ref CombatSlot s, CharacterCold cold, ulong key, int now, float dt)
+    bool Helpless(World world, int i, ref CombatSlot s, CharacterCold cold, ulong key, int now, float dt, EffectBuffer effects)
     {
         if (now < s.StunUntil)
         {
@@ -477,14 +477,18 @@ public sealed partial class CombatSystem
                 // (FUN_1406085e0). A won roll ends the stumble and clears the no-defence timer, then starts a defence (FUN_1406085e0 -> state 3
                 // -> FUN_140609290): a stumble-dodge row, or with none no technique and the no-defence time. That start fades the stumble clip
                 // out (FUN_1405b36f0) once it has a swing to answer; without one it plays on.
-                if (BreaksOut(world, i, cold, key, now, out bool rolled))
+                if (BreaksOut(world, i, cold, key, now, out bool rolled, out float against))
                 {
                     s.StunUntil = now;
                     s.DefendReadyTick = Math.Min(s.DefendReadyTick, now);
                     if (MostAdvanced(world, i, now, s.ReactedSlot, landing: false).Attacker >= 0) s.StumbleClip = -1;
-                    React(world, i, ref s, cold, key, now, dt, stumbling: true);
+                    React(world, i, ref s, cold, key, now, dt, effects, stumbling: true);
                 }
-                else if (rolled) s.BreakOutTick = now + every;
+                else if (rolled)
+                {
+                    s.BreakOutTick = now + every;
+                    effects.Emit(i, i, DodgeXpEffect, 0, new Vector3(against, 0, 0));   // a failed break-out trains dodge (FUN_1406085e0)
+                }
             }
             if (now < s.StunUntil) return true;
         }
@@ -752,12 +756,12 @@ public sealed partial class CombatSystem
             // Only a fighter defends: a target whose fight is off is simply hit (the ask answers "attack", docs/game/combat.md "Fight lifecycle
             // and orders").
             if (s.AttackTech < 0 && !paused && now >= s.DefendReadyTick && (fighting || cold.InCombat))
-                React(world, i, ref s, cold, key, now, dt);
+                React(world, i, ref s, cold, key, now, dt, effects);
         }
         else if (s.ReactTech >= 0 && s.AttackTech < 0 && (fighting || cold.InCombat))
             // A defence in progress meets another blow: the defence update (FUN_140609c70, which does not read the +0x14c timer) follows the most
             // advanced incoming swing.
-            Reconsider(world, i, ref s, cold, key, now, dt);
+            Reconsider(world, i, ref s, cold, key, now, dt, effects);
     }
 
     #endregion
@@ -882,6 +886,12 @@ public sealed partial class CombatSystem
     public const int MassCombatEffect = 5;
 
     /// <summary>
+    /// The <see cref="Effect.Kind"/> of the dodge experience of a defence start or a failed stumble break-out (<c>FUN_1408c6360</c>, target = the
+    /// defender; <c>Position.X</c> the attacker's rating, <c>Position.Y</c> 1 when a dodge was picked).
+    /// </summary>
+    public const int DodgeXpEffect = 6;
+
+    /// <summary>
     /// Whether the answer to an ask (<c>FUN_140666a30</c>, <b>Verified</b>) gives the asked character mass combat XP: it is stumbling, or it fights
     /// someone other than the asker with its dead-time flag clear (no block or dodge playing) and is defending (blows coming at it; engine reading of
     /// state 1) or attacking. A target without a target gives none.
@@ -908,11 +918,12 @@ public sealed partial class CombatSystem
     /// <summary>
     /// The stumble break-out roll (<b>Verified</b>, <c>FUN_1406085e0</c> / <c>FUN_140885d80</c>): of the fighters swinging at it with the swing
     /// between 10 and 99 per cent, the one with the highest attack skill; a draw under the defender's unarmed dodge chance against that skill (0 to
-    /// 95) breaks out. False with no such swing.
+    /// 95) breaks out. False with no such swing; <paramref name="against"/> is that attack skill.
     /// </summary>
-    bool BreaksOut(World world, int i, CharacterCold cold, ulong key, int now, out bool rolled)
+    bool BreaksOut(World world, int i, CharacterCold cold, ulong key, int now, out bool rolled, out float against)
     {
         rolled = false;
+        against = 0;
         var prev = world.Characters.Previous;
         var range = world.Grid.Range(prev[i].Position.X, prev[i].Position.Z, CombatTuning.ReactionScanRadius);
         int generation = prev[i].Generation;
@@ -927,6 +938,7 @@ public sealed partial class CombatSystem
         }
         if (float.IsNegativeInfinity(best)) return false;
         rolled = true;
+        against = best;
         var fighter = cold.Fighter!;
         float effective = DefenceFormulas.EffectiveDefence(Eff(cold, StatsEnumerated.MartialArts), fighter.EncumbranceFactor,
             Speed.LegFactor(cold.Medical!), fighter.DefenceBonus, Guarding(cold));
@@ -1434,7 +1446,8 @@ public sealed partial class CombatSystem
     /// </summary>
     /// <param name="stumbling">A break-out from a stumble that won its roll: the reaction is one of the <c>is stumble dodge</c> rows, without a
     /// block or dodge roll.</param>
-    void React(World world, int i, ref CombatSlot s, CharacterCold cold, ulong key, int now, float dt, bool stumbling = false)
+    void React(World world, int i, ref CombatSlot s, CharacterCold cold, ulong key, int now, float dt, EffectBuffer effects,
+        bool stumbling = false)
     {
         var swing = MostAdvanced(world, i, now, s.ReactedSlot, landing: false);
         if (swing.Attacker < 0) return;
@@ -1454,7 +1467,7 @@ public sealed partial class CombatSystem
             s.DefendReadyTick = now + (int)MathF.Ceiling(CombatTuning.AnimalNoDefenceSeconds / dt);
             return;
         }
-        StartDefence(world, i, ref s, cold, key, now, dt, in swing, stumbling, reconsider: false);
+        StartDefence(world, i, ref s, cold, key, now, dt, effects, in swing, stumbling, reconsider: false);
     }
 
     /// <summary>
@@ -1462,7 +1475,7 @@ public sealed partial class CombatSystem
     /// swing or its blow changes, or every 1 s, it starts a new defence if the blow's side (worked out now, so an attacker that walked round counts)
     /// differs from the block's. A block of the same side carries on; a dodge is never re-picked.
     /// </summary>
-    void Reconsider(World world, int i, ref CombatSlot s, CharacterCold cold, ulong key, int now, float dt)
+    void Reconsider(World world, int i, ref CombatSlot s, CharacterCold cold, ulong key, int now, float dt, EffectBuffer effects)
     {
         var swing = MostAdvanced(world, i, now, s.ReactedSlot, landing: false);
         if (swing.Attacker < 0) return;
@@ -1481,7 +1494,7 @@ public sealed partial class CombatSystem
             s.DefendReadyTick = now + (int)MathF.Ceiling(CombatTuning.EarlyDefenceSeconds / dt);
             return;
         }
-        StartDefence(world, i, ref s, cold, key, now, dt, in swing, stumbling: false, reconsider: true);
+        StartDefence(world, i, ref s, cold, key, now, dt, effects, in swing, stumbling: false, reconsider: true);
     }
 
     /// <summary>
@@ -1509,13 +1522,18 @@ public sealed partial class CombatSystem
     /// Starts the defence against <paramref name="swing"/>: the reaction roll, the technique for the blow's side (none tried again for a while after
     /// a failure), its clip at once.
     /// </summary>
-    void StartDefence(World world, int i, ref CombatSlot s, CharacterCold cold, ulong key, int now, float dt, in IncomingBlow swing,
-        bool stumbling, bool reconsider)
+    void StartDefence(World world, int i, ref CombatSlot s, CharacterCold cold, ulong key, int now, float dt, EffectBuffer effects,
+        in IncomingBlow swing, bool stumbling, bool reconsider)
     {
         s.ReactedSlot = swing.Attacker;
         s.ReactedSeq = swing.Seq;
         s.ReactedBlow = swing.Blow;
         int pick = ChooseDefence(world, i, cold, key, now, in swing, stumbling);
+
+        // No technique (a failed roll) or a dodge trains dodge against the attacker's rating (FUN_140609290 -> FUN_1408c6360, Verified).
+        if (pick < 0 || _techniques[pick].IsDodge)
+            effects.Emit(i, i, DodgeXpEffect, 0, new Vector3(_read[swing.Attacker].AttackSkill, pick < 0 ? 0 : 1, 0));
+
         if (pick < 0)
         {
             // No defence (a failed roll or no row for the side, alike: FUN_140887970 returns none for both): none is tried again for a while (the

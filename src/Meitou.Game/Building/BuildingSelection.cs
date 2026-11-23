@@ -760,7 +760,7 @@ sealed class BuildingSelection(PlayerInterface player)
     /// <summary>
     /// The machine the selected building's panels show: its site's (the player's, a mined rock's, a town machine's selected by its Loot order),
     /// else a town's farm or producer that a left click selected (its <c>townwork:</c> machine): the original's farm and production sections
-    /// (slot 40) test no owner. Null for none. The machine's window still opens only by the Loot order.
+    /// (slot 40) test no owner. Null for none. Its window opens on selection only when the player's faction owns it, else by the Loot order.
     /// </summary>
     internal Simulation.Production.MachineSnapshot? PanelMachine(SelectedBuilding focus) =>
         player.Production.Machine(focus.SiteId) ?? TownMachine(focus);

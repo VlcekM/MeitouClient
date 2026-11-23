@@ -333,8 +333,8 @@ sealed class DebugMenu(GameHost host)
     int _debugPart;
 
     /// <summary>
-    /// The overlays the menu's tool rows switch, also on their own keys (F11, Ctrl+F9, F12). The frame statistics (F11) and the fps counter
-    /// (Ctrl+F9).
+    /// The overlays the menu's tool rows switch, also on their own keys (F11, Shift+F9, F12). The frame statistics (F11) and the fps counter
+    /// (Shift+F9).
     /// </summary>
     internal bool StatsVisible, FpsVisible;
 
@@ -400,7 +400,7 @@ sealed class DebugMenu(GameHost host)
             () => host.DebugOverlays.CharacterBoxes = !host.DebugOverlays.CharacterBoxes) { IsSwitch = true },
         new("Overlays", "  Walk paths", "", () => OnOff(host.DebugOverlays.WalkPaths),
         () => host.DebugOverlays.WalkPaths = !host.DebugOverlays.WalkPaths) { IsSwitch = true },
-        new("Overlays", "Fps counter", "Ctrl+F9", () => OnOff(FpsVisible), () => FpsVisible = !FpsVisible) { IsSwitch = true },
+        new("Overlays", "Fps counter", "Shift+F9", () => OnOff(FpsVisible), () => FpsVisible = !FpsVisible) { IsSwitch = true },
         new("Overlays", "VRAM pie", "Ctrl+F12", () => OnOff(Profiler?.ShowVram == true),
             () => { if (Profiler is not null) Profiler.ShowVram = !Profiler.ShowVram; }) { IsSwitch = true },
         new("Overlays", "Profiler", "F12", () => (Profiler?.Showing ?? FrameProfiler.Mode.Off).ToString().ToLowerInvariant(),

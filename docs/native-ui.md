@@ -62,6 +62,7 @@ rows above its tabs:
   | Advanced materials, ground trails, water contact foam, far grass cover | off | on | on | on | on |
   | Reflections, GTAO (quality Medium; High from Ultra) | off | off | on | on | on |
   | Rock smoothing, outline refinement | off | off | start default | on | on |
+  | Simple terrain shading ([render-terrain](render-terrain.md#simple-material)) | on | off | off | off | off |
   | Hybrid GI, traced sun shadows, lamp shadows, GI traced on characters (off without the indirect light's traced scene, `TracedSwitches`) | off | off | off | on | on |
   | Traced grass shadows | off | off | off | off | on |
 

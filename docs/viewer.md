@@ -35,20 +35,20 @@ terrain material distance30000, error16 rendered pixels (Faithful10), haze250000
 Water reflection0..4 determines included classes. Texture quality0..4 skips mips; default0.
 --low-end: objects/landmarks5000, quarter LOD distance, short foliage/10%grass/particles,
 quarter particles, no reflection/shadows/AO/AA, flat water, scale0.83, anisotropy1, textureLow3,
-material distance15000, VSync off. It is a tunable preset, not an automatic hardware guarantee.
+material distance15000, simple terrain shading, VSync off. It is a tunable preset, not an automatic hardware guarantee.
 --benchmark-baseline: a 1920x1080 window, no GI, ground parallax or tessellation, no upscaler, SMAA at scale 1, texture quality 1; the game adds the Medium tier
 (QualityTiers.ApplyBenchmarkBaseline). In the game a --low-end or --benchmark-baseline run neither applies nor overwrites the sliders and switches saved in `meitou.user.json`.
 
 ## Keys
 
-F10 key list is the current authority; F11 stats,F12 profiler,Ctrl+F12 VRAM pie,Tab settings,Alt+Enter fullscreen (a borderless window at the monitor's own corner on Windows, since GLFW's bounds are the work area and a taskbar or panel at the top or left would offset it; off Windows the window manager is asked for full screen, **Verified** on KDE: panel covered; full screen is entered and left through GLFW, on the primary monitor, keeping its own windowed place, and whether it is on is read from GLFW's window monitor: KDE keeps a maximized window maximized in full screen (**Observed** KDE Wayland and XWayland, GLFW 3.4), and Silk.NET's WindowState, which checks Maximized first, then says Maximized (**Verified** against Silk.NET 2.23's GlfwWindow.CoreWindowState)).
+F10 key list is the current authority; F11 stats,F12 profiler,Ctrl+F12 VRAM pie,Tab settings,Alt+Enter fullscreen (a borderless window at the monitor's own corner on Windows, since GLFW's bounds are the work area and a taskbar or panel at the top or left would offset it; off Windows the window manager is asked for full screen, **Verified** on KDE: panel covered; full screen is entered and left through GLFW, on the primary monitor, keeping its own windowed place, and whether it is on is read from GLFW's window monitor: KDE keeps a maximized window maximized in full screen (**Observed** KDE Wayland and XWayland, GLFW 3.4), and Silk.NET's WindowState, which checks Maximized first, then says Maximized (**Verified** against Silk.NET 2.23's GlfwWindow.CoreWindowState)). On Windows the swapchain disallows exclusive full screen (`VK_EXT_full_screen_exclusive`, where the driver offers it), so the desktop compositor keeps the window's picture for screen captures current (without it, Win+Shift+S of the borderless game showed an old frame, **Observed** RTX 4070 Ti SUPER, driver 610.88, IMMEDIATE present).
 `PlayerInterface.OpaqueUiCoverage` (not shown on F11) is the opaque UI coverage: the share of the screen under fully opaque controls (solid
 backgrounds, alpha-255 atlas slices at alpha 1; `UiPainter.OpaqueCoverage`), overlaps counted once.
 Panel skins have ragged translucent borders around a solid middle, so a slice counts as its largest
 all-255 rectangle (inset 1 texel for bilinear), stretched to the control;
 0 with the UI hidden. It bounds what a UI depth stamp could skip.
 Viewer F1 switches all Faithful/Meitou; feature shortcuts use viewer bindings. Game keeps
-Space pause,F2..F4 speeds,F5 save,F9 load,F6 cinema,F7 hideUI, Ctrl+F9 FPS, Shift+F1 all Meitou on/off, Shift+F2 the skin switch alone, Shift+F12 VRAM pie, Ctrl+Shift+F12 VRAM dump (every resource and block to `vram-<time>.txt` beside log.txt; world textures named `owner | file`) and Shift+F11 navmesh view ([pathfinding](game/pathfinding.md#meitou-debug-view)). Do not copy viewer
+Space pause,F2..F4 speeds,F5 save,F9 load,F6 cinema,F7 hideUI, Shift+F9 FPS, Shift+F1 all Meitou on/off, Shift+F2 the skin switch alone, Shift+F12 VRAM pie, Ctrl+Shift+F12 VRAM dump (every resource and block to `vram-<time>.txt` beside log.txt; world textures named `owner | file`) and Shift+F11 navmesh view ([pathfinding](game/pathfinding.md#meitou-debug-view)). Do not copy viewer
 feature F-keys over game actions. F8/PrintScreen game screenshots; offscreen --screenshot is
 headless and settles streaming. User and cinematic bindings are separate.
 

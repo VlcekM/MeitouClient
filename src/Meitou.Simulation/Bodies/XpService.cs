@@ -149,7 +149,8 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
                 strengthScale = 0.4f;
                 break;
             case XpEvent.HitTaken:
-                defenceCoef = 2;
+                // Unarmed (stat-set kind 5) it trains dodge instead (FUN_1408c6360; the caller's Dodge).
+                defenceCoef = unarmed ? 0 : 2;
                 strengthScale = 0.1f;
                 break;
             case XpEvent.Event6:
@@ -195,6 +196,16 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
                 * SkillDifferenceFactor(stats.Stored(StatsEnumerated.Toughness) * stats.Scale, damageTaken) * race.StatMultiplier(StatsEnumerated.Toughness));
         }
     }
+
+    /// <summary>
+    /// Dodge from a defence (<c>FUN_1408c6360</c>, <b>Verified</b>): 0.075 x k x the encumbrance factor x race[dodge] x the skill difference of the
+    /// effective dodge against the attacker's rating, k = 0.4 when a dodge was picked, 0.8 for a failed defence roll, a failed stumble break-out
+    /// or an unarmed hit taken.
+    /// </summary>
+    public float Dodge(CharacterStats stats, RaceData race, float effectiveDodge, float attackerRating, float encumbrance, bool dodged) =>
+        PerEvent(stats, race, StatsEnumerated.Dodge,
+            options.GlobalDamageMultiplier * (dodged ? 0.4f : 0.8f) * encumbrance * SkillDifferenceFactor(effectiveDodge, attackerRating),
+            ExperienceSource.Combat);
 
     /// <summary>
     /// One core gain of a combat event (<see cref="ExperienceSource.Combat"/>).
