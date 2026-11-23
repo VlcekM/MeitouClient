@@ -128,6 +128,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         this._nodes = nodes;
         _craftOptions = new CraftOptionsCache(BuildCraftOptions);
         _smiths = new SmithViewCache(db);
+        _seatBeds = new SeatBeds(db);
         UnloadedProduction = Settings.UnloadedProduction;
     }
 
@@ -354,6 +355,11 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// ground; not saved, not hashed).
     /// </summary>
     readonly Dictionary<string, (Vector3 Spot, float Range)> _turretSpots = [];
+
+    /// <summary>
+    /// The seats that play a bed's clip, lain on at their use nodes with <see cref="World.SeatBedFix"/>.
+    /// </summary>
+    readonly SeatBeds _seatBeds;
 
     /// <summary>
     /// The clip a turret's gunner holds.

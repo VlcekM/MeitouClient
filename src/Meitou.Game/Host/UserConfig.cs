@@ -517,6 +517,11 @@ sealed class UserConfig
     /// </summary>
     public bool FixBenchFacing { get; set; } = true;
     /// <summary>
+    /// A seat playing a bed's clip is lain on at its nearest use node (Fixes settings; off: on its origin, across the bed, as the game does;
+    /// docs/game/ai-tasks.md "Town goals").
+    /// </summary>
+    public bool FixSeatBeds { get; set; } = true;
+    /// <summary>
     /// A prisoner in a cage or on a pole plays only the fixture's pose (Fixes settings; off: it holds its wounds there, as the game does;
     /// docs/animation.md "Injury holds").
     /// </summary>

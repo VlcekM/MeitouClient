@@ -1853,6 +1853,12 @@ passing false: the failed flag's handler `FUN_14050d080`, `underMeleeAttack` `FU
   the sitter's body is put on the seat building's own position (vtable `+0x40`, its node origin, height included) with no offset, then turned to a look
   point. The look point starts as position + orientation × +Z (`UNIT_Z`):
   a seat faces its +Z.
+- Seat beds (**Verified**, data probe of the install's mods): Universal Wasteland Expansion's `Bed (job)` is a BF_CHAIR (`sleeping (job)`, `flags` 0,
+  clip `sleepinbed`) on the base Bed's mesh and two use nodes. Sat as above, its sitter is on the origin facing +Z, and `sleepinbed`'s `Bip01` side offset
+  (-11.8 model X, [locks](locks.md#beds) "Lie spot") lays the body across the foot of the bed (**Observed** in Meitou on a player's save). Meitou's Fixes
+  switch "Beds used as seats" (on by default, `World.SeatBedFix`, `SeatBeds`) lies the sitter of a seat whose clip a BF_BED or BF_SKELETON_BED functionality
+  plays at its use node nearest it, facing the node's yaw - 90° as a bed's sleeper; a seat with no use node, or another clip (the base Bench has three
+  nodes), keeps the origin.
 - Seat facing (same source): a BF_CHAIR's functionality `flags` picks the look point. 0 (`chair-fixed`,
   `throne chair`) the seat's own facing; 1 (`chair`: Stool, Old Stool, Sitting Box; `sit on floor`) the nearest building of function 16 BF_TABLE,
   11 BF_CORPSE_DISPOSAL or 4 BF_REFINERY (the seat's parent building's furniture, else ones near the sitter); 2 (`chair-fixed 180`: Bench) keeps the seat's

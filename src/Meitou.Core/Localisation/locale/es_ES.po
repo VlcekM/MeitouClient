@@ -4848,3 +4848,9 @@ msgstr "Guardar preajuste actual"
 
 msgid "Sort by"
 msgstr "Ordenar por"
+
+msgid "Beds used as seats"
+msgstr "Camas usadas como asientos"
+
+msgid "A character sleeping on furniture that works as a seat, such as Bed (job), lies along the mattress as in a real bed. The game seats it on the furniture's middle, so it lies across the foot of the bed."
+msgstr "Un personaje que duerme en un mueble que funciona como asiento, como Bed (job), se tumba a lo largo del colchón como en una cama de verdad. El juego lo sienta en el centro del mueble, así que queda tumbado de través a los pies de la cama."

@@ -605,12 +605,12 @@ public sealed partial class ProductionSystem
 
     /// <summary>
     /// A sitter or sleeper at its chair or bed: on the seat's origin facing its way, as the original's <c>Task_OperateMachine</c>
-    /// (docs/game/ai-tasks.md "Town goals").
+    /// (docs/game/ai-tasks.md "Town goals"); a seat playing a bed's clip lies it at its nearest use node with <see cref="World.SeatBedFix"/>.
     /// </summary>
     void Settle(World world, ref CharacterHot n, CharacterCold cold, BuildSite site, Machine m)
     {
-        n.Position = site.Position;
-        n.Yaw = SeatFacing(world, site, m);
+        (n.Position, n.Yaw) = world.SeatBedFix && _seatBeds.LieSpot(site, m.Data.Animation, n.Position) is { } lie ? lie
+                : (site.Position, SeatFacing(world, site, m));
         n.Velocity = default;
         m.Operators++;
         cold.Operating = true;

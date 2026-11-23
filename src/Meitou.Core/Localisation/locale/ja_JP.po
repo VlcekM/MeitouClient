@@ -4846,3 +4846,9 @@ msgstr "現在のプリセットを保存"
 
 msgid "Sort by"
 msgstr "並べ替え"
+
+msgid "Beds used as seats"
+msgstr "座席扱いのベッド"
+
+msgid "A character sleeping on furniture that works as a seat, such as Bed (job), lies along the mattress as in a real bed. The game seats it on the furniture's middle, so it lies across the foot of the bed."
+msgstr "Bed (job) のように座席として働く家具で眠るキャラクターは、本物のベッドと同じくマットレスに沿って横になります。ゲームでは家具の中央に座らせるため、ベッドの足元に横向きに寝てしまいます。"

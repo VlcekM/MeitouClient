@@ -461,6 +461,11 @@ public sealed partial class World : IDisposable
     /// </summary>
     public bool BenchFacingFix { get; set; } = true;
     /// <summary>
+    /// A seat playing a bed's clip (UWE's "Bed (job)") lies its sitter at its nearest use node as a bed does (Fixes settings, Meitou); off, on the
+    /// seat's origin as the game does, across the foot of the bed (docs/game/ai-tasks.md "Town goals").
+    /// </summary>
+    public bool SeatBedFix { get; set; } = true;
+    /// <summary>
     /// A prisoner in a cage or on a pole plays only the fixture's pose, no hurt-part hold over it (Fixes settings, Meitou); off, it holds its wounds
     /// there as the game does (docs/animation.md "Injury holds").
     /// </summary>

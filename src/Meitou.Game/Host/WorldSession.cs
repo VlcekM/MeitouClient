@@ -152,6 +152,7 @@ public sealed class WorldSession : IDisposable
         next.Floaters = World.Floaters;   // the host keeps drawing the floaters across the swap
         next.NearRadius = World.NearRadius;   // the host's: the character draw distance and its margin (GameHost.CreateSession)
         next.BenchFacingFix = World.BenchFacingFix;
+        next.SeatBedFix = World.SeatBedFix;
         next.PrisonPoseFix = World.PrisonPoseFix;
         next.CagedAnimalFix = World.CagedAnimalFix;
         next.BagSearchFix = World.BagSearchFix;

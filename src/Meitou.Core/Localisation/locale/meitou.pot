@@ -164,6 +164,10 @@ msgid "A character on a bench with the table behind it sits facing away from the
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
+msgid "A character sleeping on furniture that works as a seat, such as Bed (job), lies along the mattress as in a real bed. The game seats it on the furniture's middle, so it lies across the foot of the bed."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
 msgid "A character that takes a fatal hit explodes, covers everything around in blood and sends bones flying everywhere. Its gear falls to the ground around the spot."
 msgstr ""
 
@@ -595,6 +599,10 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "Balanced: more resident detail than Safe, with some headroom for macOS and other apps."
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Beds used as seats"
 msgstr ""
 
 #: src/Meitou.Game/Building/BuildingSelection.cs
