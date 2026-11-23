@@ -196,6 +196,26 @@ sealed class GroundItemPicks(PlayerInterface player)
     readonly List<(int Id, UiRect Rect)> _itemLabels = [];
 
     /// <summary>
+    /// Each item name's text width as its label draws it, measured once for the text settings in <see cref="_labelWidthsFor"/>.
+    /// </summary>
+    readonly Dictionary<string, float> _labelWidths = [];
+
+    /// <summary>
+    /// The interface mode, minimum text pixels and font size option <see cref="_labelWidths"/> was measured at; a change empties it.
+    /// </summary>
+    (UiMode Mode, float Minimum, float FontSize) _labelWidthsFor;
+
+    /// <summary>
+    /// The font resource a ground item's name is drawn in.
+    /// </summary>
+    const string ItemLabelFont = "Kenshi_StandardFont_Medium";
+
+    /// <summary>
+    /// The name's text scale: fixed, as the font resource sizes it (the window's height does not scale it).
+    /// </summary>
+    const float ItemLabelTextScale = 1;
+
+    /// <summary>
     /// The ground item whose label took the left press, until the release.
     /// </summary>
     internal int? LabelPress;
@@ -247,7 +267,7 @@ sealed class GroundItemPicks(PlayerInterface player)
         var placed = new List<(int Id, UiRect Rect)>();
         foreach (var (g, _, at) in near)
         {
-            float width = painter.MeasureStandard(g.Name, em) + em;
+            float width = MathF.Ceiling(LabelTextWidth(painter, g.Name)) + em;
             var rect = new UiRect(at.X - width / 2, at.Y - 6 * scale - height, width, height);
             for (bool moved = true; moved;)
             {
@@ -267,6 +287,28 @@ sealed class GroundItemPicks(PlayerInterface player)
 
         _itemLabels.AddRange(placed);
         AddLabelControls(controls, near, placed);
+    }
+
+    /// <summary>
+    /// <paramref name="name"/>'s width as its label draws it: <see cref="ItemLabelFont"/> at <see cref="ItemLabelTextScale"/>, which a locale can map
+    /// to a face other than the standard one (Chinese names measured in the standard face were cut to a few characters and "...", #1288).
+    /// </summary>
+    float LabelTextWidth(Rendering.Ui.UiPainter painter, string name)
+    {
+        var settings = (painter.Mode, player.StandardPixels, painter.FontSizeSetting);
+        if (_labelWidthsFor != settings || _labelWidths.Count > 256)
+        {
+            _labelWidths.Clear();
+            _labelWidthsFor = settings;
+        }
+
+        if (!_labelWidths.TryGetValue(name, out float width))
+        {
+            width = painter.MeasureText(ItemLabelFont, name, player.Height, 0, player.StandardPixels, ItemLabelTextScale).Width;
+            _labelWidths[name] = width;
+        }
+
+        return width;
     }
 
     /// <summary>
@@ -310,12 +352,12 @@ sealed class GroundItemPicks(PlayerInterface player)
                 new Dictionary<string, string> { ["Colour"] = back }, Vector4.Zero, Pickable: false));
             var font = new Dictionary<string, string>
             {
-                ["FontName"] = "Kenshi_StandardFont_Medium",
+                ["FontName"] = ItemLabelFont,
                 ["TextAlign"] = "Center",
                 ["TextColour"] = text,
             };
             controls.Add(new($"itemlabel-text-{i}", "TextBox", rect, near[i].Item.Name, "", "", true, font, Vector4.Zero, Pickable: false,
-                TextScale: 1));
+                TextScale: ItemLabelTextScale));
         }
     }
 

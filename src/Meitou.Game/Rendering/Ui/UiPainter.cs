@@ -605,12 +605,6 @@ public sealed partial class UiPainter : IDisposable
     }
 
     /// <summary>
-    /// The width in pixels of <paramref name="text"/> in the standard face at <paramref name="emPixels"/> (to fit a panel to its text before it is
-    /// drawn).
-    /// </summary>
-    public float MeasureStandard(string text, float emPixels) => (_standardFont ?? _overlay).MeasureText(text, emPixels / 16f);
-
-    /// <summary>
     /// Draws <paramref name="controls"/> into a <paramref name="width"/> x <paramref name="height"/> target, with the mouse at <paramref
     /// name="mouse"/> and the button of action <paramref name="active"/> pushed: into <paramref name="pass"/>, else into a pass of the painter's own.
     /// Decoded icons are uploaded first (a few a frame), and the frame's opaque pieces kept for <see cref="OpaqueCoverage"/>.
