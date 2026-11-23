@@ -361,6 +361,17 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     public const string TurretClip = "combatstance";
 
     /// <summary>
+    /// Each building record's use nodes in its own frame (<see cref="Locks.FixtureRegistry.UseNodes"/>), none for a record without them
+    /// (<see cref="UseNodeMarker"/>; read from the game data, not saved, not hashed).
+    /// </summary>
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, Vector3[]> _useNodes = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// How far from a point <see cref="SameRoom"/> looks for the walkable face under it (engine choice: a worker or a node stands on one).
+    /// </summary>
+    const float RoomFaceReach = 10;
+
+    /// <summary>
     /// The characters an order names, else the player's selection.
     /// </summary>
     static IReadOnlyList<CharacterId> Who(World world, IReadOnlyList<CharacterId> ids) => ids.Count > 0 ? ids : world.Player.Selection.ToArray();
@@ -568,8 +579,59 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (_naturalBounds.TryGetValue(site.Id, out var rock)) return RockGoal(world, site, rock.Centre);
 
         float limit = SiteReach.HeightLimit(world.Fixtures.DoorsByBuilding[site.Id].Any(), SiteReach.InBuilding(site));
+        if (UseNodeMarker(world, site, from, limit) is { } node) return node;
         return SiteReach.WorkSpot(world.Walkability, Settings.EdgeGap, site, site.Position.Y, limit, m.Data.UseRange, from);
     }
+
+    /// <summary>
+    /// A machine's position marker (<c>Building::getPositionMarker</c>, docs/game/buildings-production.md "Work distance"): of two or more use nodes,
+    /// the one nearest <paramref name="from"/> that a worker can stand on at the machine's floor (within <paramref name="heightLimit"/> of it); null
+    /// with fewer than two (the original takes the construction position) or when none can be stood on (engine choice, for the original's bad-node
+    /// map, which skips a node a walk to which proved impossible), and the footprint's rule then stands. Asked by <see cref="AtSite"/> for each
+    /// operator every tick and by <see cref="GoalOf"/>: a few node transforms and usually one surface test, nothing allocated.
+    /// </summary>
+    Vector3? UseNodeMarker(World world, BuildSite site, Vector3 from, float heightLimit)
+    {
+        var nodes = _useNodes.GetOrAdd(site.Record, ReadUseNodes, _db);
+        if (nodes.Length < 2) return null;
+
+        Span<bool> refused = stackalloc bool[nodes.Length];
+        for (int tries = 0; tries < nodes.Length; tries++)
+        {
+            int best = -1;
+            float bestD = float.MaxValue;
+            for (int k = 0; k < nodes.Length; k++)
+            {
+                if (refused[k]) continue;
+                float d = Vector3.DistanceSquared(site.Position + Vector3.Transform(nodes[k], site.Rotation), from);
+                if (d < bestD) (best, bestD) = (k, d);
+            }
+
+            // None left (or every distance NaN, a broken position).
+            if (best < 0) return null;
+
+            var at = site.Position + Vector3.Transform(nodes[best], site.Rotation);
+            if (SiteReach.OnFloor(world.Walkability, at.X, at.Z, site.Position.Y, heightLimit, out float y))
+                return new Vector3(at.X, y, at.Z);
+            refused[best] = true;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The use nodes of building record <paramref name="id"/> in its own frame, none for a record without them (<see cref="_useNodes"/>).
+    /// </summary>
+    static Vector3[] ReadUseNodes(string id, GameDatabase db) =>
+        db.Find(id) is { } record && Locks.FixtureRegistry.UseNodes(db, record) is { } nodes ? [.. nodes.Select(u => u.At)] : [];
+
+    /// <summary>
+    /// Whether <paramref name="a"/> and <paramref name="b"/> stand on the same building's interior navmesh, or both outside any
+    /// (<see cref="IWalkability.InteriorNear"/>). Two closest-face queries, asked by <see cref="AtSite"/> only for a machine inside a building once
+    /// the worker is within its reach.
+    /// </summary>
+    static bool SameRoom(IWalkability walk, Vector3 a, Vector3 b) =>
+        string.Equals(walk.InteriorNear(a, RoomFaceReach), walk.InteriorNear(b, RoomFaceReach), StringComparison.Ordinal);
 
     /// <summary>
     /// A rock is walked to at its bounds' middle, which its footprint holds (its origin can lie off its pile): the floor point at or next to it
@@ -709,9 +771,19 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         // rock mined from 100 to 200 off its middle).
         if (_naturalBounds.TryGetValue(site.Id, out var rock)) return SiteReach.Within(n, rock.Gap(n.Position), RockReach);
 
-        // The machine's use range (UseableStuff::getReachRange).
+        // The machine's use range (UseableStuff::getReachRange): from its position marker when it has use nodes (FUN_14059c6d0: the X/Z distance to
+        // getPositionMarker), and for one inside a building from the same building's floor as that node (engine choice: the original's worker
+        // pressed against the outside of a wall walked round through the door to a bench against the wall's inside, though within reach of its
+        // node, #1180); else from its footprint, which stands in for the original's touching the building.
+        bool door = world.Fixtures.DoorsByBuilding[site.Id].Any(), inside = SiteReach.InBuilding(site);
+        if (UseNodeMarker(world, site, n.Position, SiteReach.HeightLimit(door, inside)) is { } marker)
+        {
+            return SiteReach.Within(n, Gap(n.Position, marker), m.Data.UseRange) && SiteReach.AtHeight(n, site, door)
+                && (!inside || SameRoom(world.Walkability, n.Position, marker));
+        }
+
         if (!SiteReach.Within(n, GapTo(site, n.Position), m.Data.UseRange)) return false;
-        return SiteReach.AtHeight(n, site, world.Fixtures.DoorsByBuilding[site.Id].Any()) || OffFloor(world, n, site);
+        return SiteReach.AtHeight(n, site, door) || OffFloor(world, n, site);
     }
 
     /// <summary>
