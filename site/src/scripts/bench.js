@@ -45,7 +45,7 @@
 
   /** Everything drawn comes from these: the loaded data and the current selection. */
   let D = null;
-  const state = { version: null, scenario: "", fingerprint: "", tier: "", group: "", metric: "p99Ms", hidden: {} };
+  const state = { version: null, scenario: "", fingerprint: "", tier: "", group: "", metric: "avgFps", hidden: {}, search: "" };
 
   // #endregion
 
@@ -495,8 +495,9 @@
     const host = document.getElementById("chart");
     host.innerHTML = "";
     if (!D) return;
-    const rows = selected().filter((e) => !state.hidden[e.line]);
+    const rows = selected().filter((e) => !state.hidden[e.line] && matches(e.line));
     const targets = D.targets.filter((t) => rows.some((e) => e.target === t.id));
+    host.appendChild(searchBox());
     host.appendChild(picker());
     if (!rows.some((e) => shownRun(e, state.metric) >= 0)) {
       host.appendChild(el("p", { class: "box muted" }, "No results for this selection."));
@@ -510,7 +511,7 @@
   function picker() {
     const keys = dict(), box = el("div", { class: "mpick", role: "group", "aria-label": "Machines shown" });
     selected().forEach((e) => { keys[e.line] = 1; });
-    D.lines.filter((l) => keys[l.key]).forEach((l) => {
+    D.lines.filter((l) => keys[l.key] && matches(l.key)).forEach((l) => {
       const lab = el("label", { class: "mchip" }), cb = el("input", { type: "checkbox" });
       cb.checked = !state.hidden[l.key];
       cb.addEventListener("change", () => {
@@ -520,6 +521,26 @@
       lab.appendChild(cb);
       lab.insertAdjacentHTML("beforeend", ldot(l.key) + esc(lname(l)));
       box.appendChild(lab);
+    });
+    return box;
+  }
+
+  /** Whether machine+platform line <key> matches the search text (case-insensitive, in its name). */
+  function matches(key) {
+    const q = state.search.trim().toLowerCase();
+    return !q || lname(lineOf(key)).toLowerCase().indexOf(q) >= 0;
+  }
+
+  /** The machine search: narrows the chips and the chart's lines; keeps its focus and caret across the redraw it causes. */
+  function searchBox() {
+    const box = el("input", { type: "search", class: "msearch", placeholder: "Search machines", "aria-label": "Search machines" });
+    box.value = state.search;
+    box.addEventListener("input", () => {
+      state.search = box.value;
+      renderChart();
+      const again = document.querySelector("#chart .msearch");
+      again.focus();
+      again.setSelectionRange(again.value.length, again.value.length);
     });
     return box;
   }
