@@ -306,7 +306,7 @@ NPC answers an event's lines like any other; the rule is also in [Arrival banter
   `DAT_141e3c5d0` = 7.0 read from the exe): X/Z distance < the target's radius (`Character::getRadius`: its movement's footprint
   radius +0x364 x a scale) + 7 x 3 (7 x 2 when the target is a ragdoll), that reach **doubled when the talker is not moving**, and
   |dy| < 10 (< 35 on the same floor); else within 7 x 1.6 = 11.2 on the same floor or |dy| < 35. Meitou (`DialogueSystem.InTalkRange`):
-  the target's scaled radius (`CombatSteering.Radius`: footprint x body scale) + 21, doubled once stopped, |dy| < 35; also for an NPC walking up to talk (task 102, engine choice).
+  the target's scaled radius (`CombatSteering.Radius`: footprint x body scale) + 21, doubled once stopped, |dy| < 35; also for an NPC walking up to talk (task 102, engine choice). The same test is row 26's arrival at a character ([loot order window](carry-loot.md)).
 - **Counter reach** (Meitou only, Gameplay setting "Talk across shop counters", `World.CounterTalk`, on): a target standing (not walking) whose AI
   goal is row 20 (standing at a shopkeeper node) is reached with 31 instead of 21 while walking (stopped reach stays 21 x 2 = 42), so the customer
   talks and trades from the counter's front. **Observed** (measured) from the base game's `interiors.level` layouts (gamedata.base, Newwworld,

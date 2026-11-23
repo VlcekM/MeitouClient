@@ -234,6 +234,25 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             : Settings.Reach;
 
     /// <summary>
+    /// How near a looter must come to the character it loots or opens: <see cref="ReachOf"/> for a down or carried one; for a standing one (the
+    /// player's own, a pickpocket target) at least the original's arrival test on a character, row 26's <c>isAtLocation</c> (<c>FUN_1405a2450</c>
+    /// over <c>FUN_14059c6d0</c>, <b>Observed</b>): the target's radius + <see cref="Dialogue.DialogueSystem.TalkReach"/>, doubled once the
+    /// looter stops. A follower of the looter keeps backing off and body contact holds the looter off a big animal, so the flat reach was
+    /// never reached (#1247).
+    /// </summary>
+    float LootReach(World world, int looter, int target)
+    {
+        var body = world.Characters.Cold(target)!;
+        float reach = ReachOf(world, body);
+        if (CanBeLooted(body)) return reach;
+
+        bool stopped = (world.Characters.Next[looter].Flags & (ushort)MoveFlags.AnyPath) == 0;
+        float stride = stopped ? Dialogue.DialogueSystem.TalkReach * 2 : Dialogue.DialogueSystem.TalkReach;
+
+        return MathF.Max(reach, CombatSteering.Radius(body) + stride);
+    }
+
+    /// <summary>
     /// A character that may be looted: knocked out, dead, playing dead or carried, with an inventory (the bedded and imprisoned that the original's
     /// <c>isItemLootable</c> also takes are opened as a pickpocket, <see cref="CanBePickpocketed"/>).
     /// </summary>
@@ -674,7 +693,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         var table = world.Characters;
         if (table.Next[slot].Task != (byte)CharacterTask.Loot || !table.TryResolveNext(table.Cold(slot)!.CarryTarget, out int t)) return false;
 
-        return !InReach(world, table.Next[slot], table.Next[t], Settings.Reach) && WalkFails(world, slot, Settings.Reach);
+        float reach = LootReach(world, slot, t);
+        return !InReach(world, table.Next[slot], table.Next[t], reach) && WalkFails(world, slot, reach);
     }
 
     /// <summary>
@@ -840,7 +860,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                 continue;
             }
             const ushort path = (ushort)MoveFlags.AnyPath;
-            if (InReach(world, next[i], next[t], lifting ? ReachOf(world, table.Cold(t)!) : Settings.Reach))
+            if (InReach(world, next[i], next[t], lifting ? ReachOf(world, table.Cold(t)!) : LootReach(world, i, t)))
             {
                 if ((n.Flags & path) != 0)
                 {
@@ -1277,8 +1297,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             return;
         }
         // still walking (Schedule ends a loot whose target went)
-        if (!table.TryResolveNext(cold.CarryTarget, out int t)
-            || !InReach(world, table.Next[i], table.Next[t], ReachOf(world, table.Cold(t)!)))
+        if (!table.TryResolveNext(cold.CarryTarget, out int t) || !InReach(world, table.Next[i], table.Next[t], LootReach(world, i, t)))
             return;
         var victim = table.Cold(t)!;
         bool opening = Opening(world, i);
@@ -1343,7 +1362,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         var cold = table.Cold(i)!;
         if (table.Next[i].Task != (byte)CharacterTask.Loot || !Opening(world, i) || cold.Inventory is null) return;
         if (!table.TryResolveNext(cold.CarryTarget, out int t) || !Openable(table, t)) return;
-        if (InReach(world, table.Next[i], table.Next[t], ReachOf(world, table.Cold(t)!))) OpenWindow(world.Player, cold);
+        if (InReach(world, table.Next[i], table.Next[t], LootReach(world, i, t))) OpenWindow(world.Player, cold);
     }
 
     /// <summary>
@@ -1389,7 +1408,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// <summary>
     /// The open loot window (<see cref="PlayerState.OpenLoot"/>, engine choices): a walk to open one is dropped when the walker gets another task; an
     /// open one closes when the body can no longer be opened (it came round, or is gone; a carried body stays lootable) or the looter is down,
-    /// carried, gone or farther than 1.5 x <see cref="CarrySettings.Reach"/>.
+    /// carried, gone or farther than 1.5 x <see cref="LootReach"/>.
     /// </summary>
     void LootWindow(World world)
     {
@@ -1410,10 +1429,10 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     {
         var player = world.Player;
         var table = world.Characters;
-        return table.TryResolveNext(player.OpenLoot, out int t) && table.Cold(t) is { } body && Openable(table, t)
+        return table.TryResolveNext(player.OpenLoot, out int t) && Openable(table, t)
             && table.TryResolveNext(player.LootOpener, out int o)
             && table.Cold(o) is { Medical.Incapacitated: false, Inventory: not null } looter && looter.CarriedBy.IsNone
-            && InReach(world, table.Next[o], table.Next[t], ReachOf(world, body) * 1.5f) ? (o, t) : null;
+            && InReach(world, table.Next[o], table.Next[t], LootReach(world, o, t) * 1.5f) ? (o, t) : null;
     }
 
     /// <summary>
