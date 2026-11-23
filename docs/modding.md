@@ -1001,7 +1001,8 @@ holds refuses the second mod.
 - **Squad AI options per squad** (`Meitou.Simulation.Factions`): `SetSquadOptions(squadId, options, Owner: context.Id)` gives a squad of the
   player's faction its own squad AI options (`Squad.OwnOptions`, the `SquadAi` flags: sit when idle, sleep when injured, ditch items, share
   food, feed animals, heal, help and rescue allies, shoot first, heal neutrals, heal all), which its members follow in place of the player's
-  faction-wide ones; `null` gives it the player's again. Guards that should not sit, sleep in other people's beds or haul goods away, for
+  faction-wide ones (the AI tab still shows and sets the player's, so a led squad given its own no longer follows the tab); `null` gives it the
+  player's again. Guards that should not sit, sleep in other people's beds or haul goods away, for
   example: `SquadAi.Feed | SquadAi.Share`. Every system that reads the options asks `SquadAiRules.For(world, cold)` (the character's squad's,
   else the player's), so a squad with none set behaves as in the original. A command naming another mod than the one that set them is
   ignored. Saved with the squad; a load without the owner mod running gives the squad the player's options again, with a notice. Cost: one
