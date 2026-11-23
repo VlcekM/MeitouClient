@@ -451,6 +451,11 @@ public sealed class InputBindings
     /// The code mods' key actions and their defaults; null without any, so the bindings are the game's alone.
     /// </summary>
     ModKeyBindings? _mod;
+    /// <summary>
+    /// The keys a code mod's chord took as they went down (<see cref="TakeChord"/>), with the modifiers held then, until they are released: only
+    /// that chord sees them, no plain binding of the key.
+    /// </summary>
+    readonly Dictionary<Key, KeyModifiers> _chords = [];
 
     /// <summary>
     /// Starts with the default bindings.
@@ -500,7 +505,42 @@ public sealed class InputBindings
     /// and Backspace unbind a row there (Backspace also restarts a duel or battle). A code mod's action never gets one by default or from a saved
     /// entry. (The numpad divide key, the squad tour's, has no <see cref="Key"/>, so no binding can name it.)
     /// </summary>
-    public static bool HostKey(Binding binding) => !binding.IsMouse && binding.Key is Key.Insert or Key.Delete or Key.Backspace;
+    public static bool HostKey(Binding binding) =>
+        !binding.IsMouse && (binding.Key is Key.Insert or Key.Delete or Key.Backspace || (binding.IsChord && HostChord(binding)));
+
+    /// <summary>
+    /// Whether a host takes the chord <paramref name="binding"/> before the bindings: Alt+Enter (full screen), Alt+F4, Ctrl+F9 (the fps counter),
+    /// Ctrl+C and Ctrl+V (the free camera's code) and Shift with F1, F2, F11 or F12 (the Vulkan host's debug keys).
+    /// </summary>
+    static bool HostChord(Binding binding) => (binding.Modifiers, binding.Key) switch
+    {
+        (KeyModifiers.Alt, Key.Enter or Key.F4) => true,
+        (KeyModifiers.Ctrl, Key.F9 or Key.C or Key.V) => true,
+        (KeyModifiers.Shift, Key.F1 or Key.F2 or Key.F11 or Key.F12) => true,
+        _ => false,
+    };
+
+    /// <summary>
+    /// A key going down with <paramref name="held"/> in the game view (docs/modding.md "Key actions"): when a code mod's action has that chord, the
+    /// key is the chord's until it is released, so neither the game's handlers (the host skips them on true) nor a plain binding of the key see it.
+    /// False for no modifier or no such chord. Host thread.
+    /// </summary>
+    public bool TakeChord(Key key, KeyModifiers held)
+    {
+        if (held == KeyModifiers.None || _mod is null) return false;
+
+        var chord = Binding.Of(key).With(held);
+        if (!_mod.Actions.Any(a => Get(a.Action).Contains(chord))) return false;
+
+        _chords[key] = held;
+        return true;
+    }
+
+    /// <summary>
+    /// The modifiers held: Ctrl, Shift and Alt as either key of each.
+    /// </summary>
+    public static KeyModifiers Modifiers(bool ctrl, bool shift, bool alt) =>
+        (ctrl ? KeyModifiers.Ctrl : 0) | (shift ? KeyModifiers.Shift : 0) | (alt ? KeyModifiers.Alt : 0);
 
     /// <summary>
     /// The action of <paramref name="except"/>'s key map (the build map or the general one, <see cref="IsBuildMap"/>) that holds
@@ -688,7 +728,7 @@ public sealed class InputBindings
             bool ok = true;
             foreach (var token in value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             {
-                if (Binding.TryParse(token, out var b)) list.Add(b);
+                if (Binding.TryParse(token, out var b) && !b.IsChord) list.Add(b);
                 else
                 {
                     problems.Add($"Unknown binding '{token}' for {action}");
@@ -743,7 +783,7 @@ public sealed class InputBindings
     internal static string Text(IEnumerable<Binding> bindings) => string.Join(",", bindings.Select(b => b.ToString()));
 
     /// <summary>
-    /// Resolves one tick's input into actions.
+    /// Resolves one tick's input into actions; a key a chord took (<see cref="TakeChord"/>) counts for that chord only, and is let go once released.
     /// </summary>
     public ActionState Resolve(TickInput input)
     {
@@ -757,6 +797,7 @@ public sealed class InputBindings
         {
             foreach (var action in _mod.Actions) ResolveOne(state, input, action.Action);
         }
+        ReleaseChords(input);
         return state;
     }
 
@@ -768,10 +809,32 @@ public sealed class InputBindings
         bool held = false, pressed = false, released = false;
         foreach (var b in Get(action))
         {
+            if (!Sees(b)) continue;
+
             held |= input.IsDown(b);
             pressed |= input.WasPressed(b);
             released |= input.WasReleased(b);
         }
         state.Set(action, held, pressed, released && !held);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="b"/> sees its key now: a key a chord took only for that chord, any other key only for a plain binding.
+    /// </summary>
+    bool Sees(Binding b)
+    {
+        if (b.IsMouse) return true;
+
+        return _chords.TryGetValue(b.Key, out var held) ? b.Modifiers == held : !b.IsChord;
+    }
+
+    /// <summary>
+    /// Lets go of the chords whose keys are up.
+    /// </summary>
+    void ReleaseChords(TickInput input)
+    {
+        if (_chords.Count == 0) return;
+
+        foreach (var key in _chords.Keys.Where(k => !input.IsDown(k)).ToArray()) _chords.Remove(key);
     }
 }

@@ -348,7 +348,7 @@ sealed partial class PlayerInterface
     /// </summary>
     internal void AddModScreenControls(string screen, List<UiControl> controls)
     {
-        if (!_uiHost.HasScreenControls) return;
+        if (!_uiHost.HasScreenControls && !_uiHost.HasScreenOverrides) return;
 
         _uiHost.ArrangeScreenControls(ScreenViewOf(screen), controls, UiMode, Width, Height);
     }
@@ -372,6 +372,7 @@ sealed partial class PlayerInterface
         {
             PortraitOf = kind == UiScreens.Hud ? PortraitBar.MemberOfCell : null,
             Map = kind == "overview" ? WorldMap.ModView : null,
+            State = kind == "stats" ? StatsWindow.ScreenState() : UiScreenContext.NoState,
         };
     }
 
@@ -1000,6 +1001,7 @@ sealed partial class PlayerInterface
     {
         if (!UiVisible) return false;
         var controls = ArrangeUi();
+        if (ModScreenPointerDown(p, MouseButton.Left)) return true;
         if (InventoryWindows.InventoryPointerDown(p)) return true;
         if (ItemsWindow.PointerDown(p)) return true;
         if (WorldMap.MapPointerDown(p, MouseButton.Left)) return true;
@@ -1037,6 +1039,25 @@ sealed partial class PlayerInterface
         if (FaithfulScreens.PressOverlayEdit(c, p)) return true;
         _uiHost.Press(c, p);
         return true;
+    }
+
+    /// <summary>
+    /// A press on an extension's control in a faithful screen that its node takes itself (<see cref="UiHost.PressScreen"/>: a left press held for
+    /// drags or the release, another button asked for); false for anything else.
+    /// </summary>
+    bool ModScreenPointerDown(Vector2 p, MouseButton button) =>
+        _uiHost.HasScreenControls && FaithfulScreens.HitTest(p) is { } hit && _uiHost.PressScreen(hit.Screen, hit.Control.Name, p, button);
+
+    /// <summary>
+    /// A press of another button than the left on an extension's node asking for it (<see cref="UiPointerEvents.Buttons"/>): in a faithful
+    /// screen, else on the overlay. False when none takes it, so the game handles the press.
+    /// </summary>
+    bool ModButtonDown(MouseButton button, Vector2 p)
+    {
+        if (!UiVisible) return false;
+        if (FaithfulScreens.HitTest(p) is not null) return ModScreenPointerDown(p, button);
+
+        return _uiHost.HasOverlayNodes && MyGuiPresentation.HitTest(ArrangeUi(), p.X, p.Y) is { } c && _uiHost.ButtonPress(c, p, button);
     }
 
     /// <summary>

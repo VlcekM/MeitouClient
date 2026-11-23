@@ -207,6 +207,11 @@ public sealed record UiActionContext(UiFrameContext Frame, string Argument)
     /// For a drag or a release: the id of the topmost overlay node under the pointer (empty: none), the drop target of a drag and drop.
     /// </summary>
     public string Over { get; init; } = "";
+
+    /// <summary>
+    /// The button of a press: the left for every press but those <see cref="UiPointerEvents.Buttons"/> asks for.
+    /// </summary>
+    public Host.Input.MouseButton Button { get; init; }
 }
 
 /// <summary>
@@ -405,6 +410,11 @@ public sealed partial class UiHost
     internal ScreenControls Screens { get; } = new();
 
     /// <summary>
+    /// The extensions' changes to the faithful screens' and the HUD's own widgets (<see cref="UiRegistration.AddScreenOverrides"/>).
+    /// </summary>
+    internal ScreenOverrides ScreenOverrides { get; } = new();
+
+    /// <summary>
     /// The extensions' player replies in conversations (<see cref="UiRegistration.AddDialogueReplies"/>).
     /// </summary>
     internal DialogueReplies Replies { get; } = new();
@@ -588,6 +598,7 @@ public sealed partial class UiHost
         ItemTips.Remove(owner);
         CharacterPanel.Remove(owner);
         Screens.Remove(owner);
+        ScreenOverrides.Remove(owner);
         Replies.Remove(owner);
         TargetVerbs.Remove(owner);
         Map.Remove(owner);
@@ -884,13 +895,19 @@ public sealed partial class UiHost
     public bool HasScreenControls => Screens.Any;
 
     /// <summary>
-    /// Adds the extensions' controls for <paramref name="view"/>'s screen to its arranged <paramref name="controls"/>
-    /// (<see cref="ScreenControls.Arrange"/>); a failing source is reported as a <see cref="Diagnostic"/> and dropped.
+    /// Whether any extension changes a screen's own widgets (<see cref="ArrangeScreenControls"/>).
+    /// </summary>
+    public bool HasScreenOverrides => ScreenOverrides.Any;
+
+    /// <summary>
+    /// Changes <paramref name="view"/>'s screen's own widgets in its arranged <paramref name="controls"/> (<see cref="ScreenOverrides.Apply"/>), then
+    /// adds the extensions' controls (<see cref="ScreenControls.Arrange"/>); a failing source is reported as a <see cref="Diagnostic"/> and dropped.
     /// </summary>
     internal void ArrangeScreenControls(ScreenView view, List<UiControl> controls, UiMode mode, int width, int height)
     {
         var frame = new UiFrameContext(this, mode, width, height, new UiBindings());
         _frame ??= frame;
+        if (ScreenOverrides.Any) ScreenOverrides.Apply(view, controls, frame, Diagnostic);
         Screens.Arrange(this, view, controls, frame, Diagnostic);
     }
 
@@ -1102,8 +1119,16 @@ public sealed partial class UiHost
     /// Lays out <paramref name="node"/> in <paramref name="parent"/>, clipped to <paramref name="clip"/>, into <paramref name="result"/> (a screen
     /// control's tree, by the overlay's rules).
     /// </summary>
-    internal void ArrangeInto(UiNode node, UiRect parent, UiRect clip, List<UiControl> result) =>
-        ArrangeNode(node, parent, new NodeScope(clip, true, 1, -1), new UiArrangement(), result);
+    internal void ArrangeInto(UiNode node, UiRect parent, UiRect clip, List<UiControl> result, List<ScreenNode>? nodes = null, string owner = "")
+    {
+        var into = new UiArrangement { Owner = owner };
+        ArrangeNode(node, parent, new NodeScope(clip, true, 1, -1), into, result);
+        if (nodes is null) return;
+
+        foreach (var e in into.Nodes)
+            nodes.Add(new(owner, e.Node.Id, e.Control.Action, e.Control.Argument, e.Part == ScrollPart.None ? e.Node.Pointer : 0, e.Control.Enabled,
+                e.Parent));
+    }
 
     /// <summary>
     /// Lays out <paramref name="node"/> in <paramref name="parent"/> (or at <paramref name="placed"/>), clipped, and its children by its flow;
@@ -1206,6 +1231,7 @@ public sealed partial class UiHost
     static void AddTextBoxProperties(UiNode node, Dictionary<string, string> properties)
     {
         properties[MyGuiScreenHost.OverlayEditProperty] = "true";
+        if (node.Focus) properties[MyGuiScreenHost.FocusRequestProperty] = "true";
         if (node.MaxLength > 0) properties["MaxTextLength"] = node.MaxLength.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
@@ -1238,9 +1264,15 @@ public sealed partial class UiHost
     {
         if (e.Screen != MyGuiScreenHost.OverlayScreen) return false;
 
-        if (e.Action != "text") return true;
+        var kind = e.Action switch
+        {
+            "text" => UiEventKind.Text,
+            MyGuiScreenHost.SubmitAction => UiEventKind.Submit,
+            _ => (UiEventKind?)null,
+        };
+        if (kind is null) return true;
 
-        if ((_last.TextBoxes.GetValueOrDefault(e.Widget) ?? Screens.TextBox(e.Widget)) is { } box) Dispatch(box, e.Text, UiEventKind.Text);
+        if ((_last.TextBoxes.GetValueOrDefault(e.Widget) ?? Screens.TextBox(e.Widget)) is { } box) Dispatch(box, e.Text, kind.Value);
         return true;
     }
 
@@ -1477,6 +1509,43 @@ public sealed class UiRegistration : IDisposable
         Check();
         ArgumentNullException.ThrowIfNull(build);
         _host.Screens.Add(Id, screen, anchorWidget, placement, build);
+    }
+
+    /// <summary>
+    /// The offset of the extension's overlay scroll view <paramref name="node"/> (its node id), pixels from the top of its content, as last laid
+    /// out or set (docs/modding.md "Interface"); 0 for one never scrolled. Host thread.
+    /// </summary>
+    public float ScrollOffset(string node)
+    {
+        Check();
+        ArgumentNullException.ThrowIfNull(node);
+        return _host.ScrollOffset(Id, node);
+    }
+
+    /// <summary>
+    /// Scrolls the extension's overlay scroll view <paramref name="node"/> to <paramref name="offset"/> pixels from the top of its content (finite;
+    /// below 0 is 0); the next layout clamps it to the content, as the wheel's. Host thread.
+    /// </summary>
+    public void ScrollTo(string node, float offset)
+    {
+        Check();
+        ArgumentNullException.ThrowIfNull(node);
+        if (!float.IsFinite(offset)) throw new ArgumentOutOfRangeException(nameof(offset), "A scroll offset is finite.");
+        _host.ScrollTo(Id, node, offset);
+    }
+
+    /// <summary>
+    /// Changes the own widgets of a faithful screen or the HUD (docs/modding.md "Screen overrides"): <paramref name="over"/> is asked for each
+    /// arranged widget of <paramref name="screen"/> (a screen id or kind, or <see cref="UiScreens.Hud"/>) whose name matches
+    /// <paramref name="widgetPattern"/> (a name, or <c>*</c> and <c>?</c> wildcards), with the widget and the screen's state
+    /// (<see cref="UiScreenContext.Widget"/>, <see cref="UiScreenContext.State"/>), and answers its caption, text colour or visibility (null: keep it).
+    /// It runs on the host's thread each time the screen is arranged, so it must be cheap and must not touch the world.
+    /// </summary>
+    public void AddScreenOverrides(string screen, string widgetPattern, Func<UiScreenContext, UiWidgetOverride?> over)
+    {
+        Check();
+        ArgumentNullException.ThrowIfNull(over);
+        _host.ScreenOverrides.Add(Id, screen, widgetPattern, over);
     }
 
     /// <summary>

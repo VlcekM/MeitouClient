@@ -1038,6 +1038,21 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         && !host.GameOptions.NoPopulation && !_tour.Active && !_tourHolds;
 
     /// <summary>
+    /// A key that goes down with modifiers held as a code mod's chord (<see cref="InputBindings.TakeChord"/>, docs/modding.md "Key actions"): it
+    /// reaches that key action only, before photo mode, the interface and the game's bindings. Not while a text field has the keys, over the
+    /// title, in photo mode, or for the view's own keys (F7, F8, F11, F12, Print Screen).
+    /// </summary>
+    bool ChordKey(SilkKey key, bool ctrl)
+    {
+        if (_hud is null || _hud.UiEditing || _hud.TitleOpen || _photo?.Active == true) return false;
+        if (key is SilkKey.F7 or SilkKey.F8 or SilkKey.F11 or SilkKey.F12 or SilkKey.PrintScreen || KeyMap.Map(key) is not { } mapped) return false;
+        if (!host.Session.Bindings.TakeChord(mapped, InputBindings.Modifiers(ctrl, _shiftDown, Alt()))) return false;
+
+        host.Session.Input.SetKey(mapped, true);
+        return true;
+    }
+
+    /// <summary>
     /// A key while photo mode is on or starts it (see <see cref="PhotoMode.KeyDown"/>); not while a text field has the keyboard, not in the terrain
     /// sandbox (P is its patrol key) or with a window open over the game (true: taken).
     /// </summary>
@@ -1901,7 +1916,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             _gpuCaptureRequested = true;
             return;
         }
-        if (ConsoleKey(keyboard, key, ctrl) || MenuKey(key, ctrl) || PhotoKey(key)) return;
+        if (ConsoleKey(keyboard, key, ctrl) || MenuKey(key, ctrl) || ChordKey(key, ctrl) || PhotoKey(key)) return;
         // With the interface hidden (F7) Esc brings it back with the game menu open, as the Vulkan host does.
         if (key == SilkKey.Escape && _hud is { UiVisible: false })
         {
@@ -1959,7 +1974,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             if (ModalKeyOf(key) is { } settingsKey)
             {
                 if (settingsKey is EngineKey.F8 or EngineKey.PrintScreen) host.ScreenshotRequested = true;
-                else _settings.KeyDown(settingsKey, _shiftDown, ctrl);
+                else _settings.KeyDown(settingsKey, _shiftDown, ctrl, Alt());
             }
             return true;
         }

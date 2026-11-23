@@ -141,6 +141,12 @@ public enum UiPointerEvents
     /// The pointer coming onto the node or a child, and leaving it.
     /// </summary>
     Hover = 8,
+
+    /// <summary>
+    /// A press of another button than the left (right, middle, the extra ones) on the node or a child: <see cref="UiEventKind.Press"/> with
+    /// <see cref="UiActionContext.Button"/>. That press is then the node's, not the game's.
+    /// </summary>
+    Buttons = 16,
 }
 
 /// <summary>
@@ -182,6 +188,11 @@ public enum UiEventKind
     /// The pointer left the node (<see cref="UiPointerEvents.Hover"/>).
     /// </summary>
     Leave,
+
+    /// <summary>
+    /// Enter in a text box that has the keys (<see cref="UiActionContext.Text"/> its text); the box lets go of the keys.
+    /// </summary>
+    Submit,
 }
 
 /// <summary>
@@ -395,6 +406,12 @@ public sealed class UiNode(string id, UiNodeKind kind = UiNodeKind.Panel)
     /// A scroll view's step for a wheel step and an arrow of its bar, pixels (a page is its height); finite and above 0.
     /// </summary>
     public float ScrollStep { get; init; } = 24;
+
+    /// <summary>
+    /// A text box takes the typing focus (the keys) when it shows with this set and did not the frame before, so a node set once, or kept set,
+    /// focuses once; a disabled box does not take it.
+    /// </summary>
+    public bool Focus { get; init; }
 
     /// <summary>
     /// The child nodes.
