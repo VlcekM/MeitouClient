@@ -5363,3 +5363,11 @@ msgstr "使用できないメニュー項目"
 
 msgid "Greyed: a menu row your selection can't do now, such as First Aid without a medkit, is greyed; Shift-click it to set up the job anyway. Faithful: every row as in the game."
 msgstr "グレー表示：選択中のキャラクターが今は実行できない項目（救急キットなしの応急手当など）はグレーで表示されます。Shift+クリックで仕事として設定できます。原作どおり：すべての項目をゲームと同じく表示します。"
+
+#. machine-translated
+msgid "Lockpick chance on the pointer"
+msgstr "ポインターの解錠確率"
+
+#. machine-translated
+msgid "Pointing at a lock too hard to pick shows 0%, as its Pick Lock menu entry does, since the character cannot pick it. The game shows the chance before that limit there, such as 3% for a lock the menu gives 0%."
+msgstr "解錠が難しすぎる錠を指すと、メニューの「解錠」項目と同じく 0% と表示されます。キャラクターはその錠を解錠できないためです。ゲームではそこにその下限を適用する前の確率が表示され、メニューが 0% とする錠でも 3% などと表示されます。"

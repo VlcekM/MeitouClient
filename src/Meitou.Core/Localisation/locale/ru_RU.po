@@ -5367,3 +5367,11 @@ msgstr "Недоступные пункты меню"
 
 msgid "Greyed: a menu row your selection can't do now, such as First Aid without a medkit, is greyed; Shift-click it to set up the job anyway. Faithful: every row as in the game."
 msgstr "Серые: пункт меню, который выбранные персонажи сейчас не могут выполнить (например, первая помощь без аптечки), показан серым; Shift+щелчок всё равно назначит работу. Как в оригинале: все пункты как в игре."
+
+#. machine-translated
+msgid "Lockpick chance on the pointer"
+msgstr "Шанс взлома на указателе"
+
+#. machine-translated
+msgid "Pointing at a lock too hard to pick shows 0%, as its Pick Lock menu entry does, since the character cannot pick it. The game shows the chance before that limit there, such as 3% for a lock the menu gives 0%."
+msgstr "При наведении на замок, который слишком сложно взломать, показывается 0%, как в пункте меню «Взломать замок», ведь персонаж не может его взломать. Игра показывает там шанс без учёта этого предела, например 3% для замка, которому меню даёт 0%."

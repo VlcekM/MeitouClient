@@ -2862,6 +2862,10 @@ msgstr ""
 msgid "Lock Doors"
 msgstr ""
 
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Lockpick chance on the pointer"
+msgstr ""
+
 #: src/Meitou.Game/Host/Photo/PhotoMode.cs src/Meitou.Game/Settings/LauncherSchema.cs src/Meitou.Game/Settings/LookBar.cs
 msgid "Look"
 msgstr ""
@@ -3827,6 +3831,10 @@ msgstr ""
 
 #: src/Meitou.Game/Host/Photo/PhotoMode.cs
 msgid "Playback"
+msgstr ""
+
+#: src/Meitou.Game/Settings/GamePages.cs
+msgid "Pointing at a lock too hard to pick shows 0%, as its Pick Lock menu entry does, since the character cannot pick it. The game shows the chance before that limit there, such as 3% for a lock the menu gives 0%."
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs

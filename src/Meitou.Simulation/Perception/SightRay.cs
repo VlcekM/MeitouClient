@@ -1,4 +1,5 @@
 using System.Numerics;
+using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Player;
 using Meitou.Simulation.Ragdolls;
@@ -28,14 +29,17 @@ static class SightRay
 
     /// <summary>
     /// Whether can-see ends with the ray for this pair (<c>FUN_140857b10</c>, <b>Observed</b>): not when both are the player's; else when the target is
-    /// the player's, the looker is, or the target sneaks. The original also casts it for a target that is down, on screen or in a few other states,
+    /// the player's, the looker is, the target sneaks, or the target at <paramref name="targetAt"/> is on screen (<c>+0x1a9</c>,
+    /// <see cref="MedicalClock.OnScreen"/>; never in a world never told a camera). So an NPC on a roof, which sees into every building, does not see
+    /// one shut inside a house on screen through its walls (#1262). The original also casts it for a target that is down or in a few other states,
     /// and skips it for a looker whose squad has no current town while the target's has one; Meitou leaves those out.
     /// </summary>
-    public static bool Applies(CharacterCold looker, CharacterCold target)
+    public static bool Applies(World world, CharacterCold looker, CharacterCold target, Vector3 targetAt)
     {
         if (looker.IsPlayer && target.IsPlayer) return false;
+        if (target.IsPlayer || looker.IsPlayer || (target.Orders & CharacterOrders.Sneak) != 0) return true;
 
-        return target.IsPlayer || looker.IsPlayer || (target.Orders & CharacterOrders.Sneak) != 0;
+        return world.View is { } view && MedicalClock.OnScreen(view, targetAt);
     }
 
     /// <summary>
@@ -47,7 +51,7 @@ static class SightRay
         if (!(v > 0)) return v;
 
         var table = world.Characters;
-        if (table.Cold(looker) is not { } l || table.Cold(target) is not { } t || !Applies(l, t)) return v;
+        if (table.Cold(looker) is not { } l || table.Cold(target) is not { } t || !Applies(world, l, t, at)) return v;
 
         return Clear(world.Walkability, world.SystemOf<CombatSystem>()?.Buildings, eye, at) ? v : 0;
     }

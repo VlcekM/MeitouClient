@@ -5365,3 +5365,11 @@ msgstr "Righe di menu non disponibili"
 
 msgid "Greyed: a menu row your selection can't do now, such as First Aid without a medkit, is greyed; Shift-click it to set up the job anyway. Faithful: every row as in the game."
 msgstr "Disattivate: una riga del menu che la selezione non può eseguire ora, come Primo soccorso senza kit medico, è in grigio; fai Maiusc+clic per impostare comunque il lavoro. Fedele: ogni riga come nel gioco."
+
+#. machine-translated
+msgid "Lockpick chance on the pointer"
+msgstr "Probabilità di scasso sul puntatore"
+
+#. machine-translated
+msgid "Pointing at a lock too hard to pick shows 0%, as its Pick Lock menu entry does, since the character cannot pick it. The game shows the chance before that limit there, such as 3% for a lock the menu gives 0%."
+msgstr "Puntare una serratura troppo difficile da scassinare mostra 0%, come la sua voce Scassina del menu, perché il personaggio non può scassinarla. Il gioco vi mostra la probabilità prima di quel limite, ad esempio 3% per una serratura a cui il menu dà 0%."

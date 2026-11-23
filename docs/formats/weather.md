@@ -91,7 +91,9 @@ remains unexplained. Gameplay effects: [Effects on characters](#effects-on-chara
 
 **Verified (decompiled)**, the character's weather update `FUN_1405cf790` (CharacterHuman vtable +0x288, called from the
 character update `FUN_1405d00b0` with the character's dt, seconds of character time). Meitou (engine choice, `WeatherSystem.EveryTicks`)
-calls it every 5th tick per character, on its slot's turn, with 5 ticks of time. Each call, in order:
+calls it every 5th tick per character, on its slot's turn, with 5 ticks of time. Animals have none: the CharacterAnimal vtable (installed
+by its constructor `FUN_1405c8150`) puts an empty function (`FUN_1405c7f60`) at +0x288, so weather never harms or slows an ANIMAL_CHARACTER
+(Iron Spider, goat...), whatever its race lists (**Verified (disassembled)**, both vtables' slot). Each call, in order:
 
 1. Clear the character's weather (animation holder `+0x198` kind, `+0x1a0` strength, `+0x190` overlay flag). Skip all while
    `DAT_142134690+0x2f0` is set; stop (also skipping step 5's smoke) when the position has no BIOME_GROUP.

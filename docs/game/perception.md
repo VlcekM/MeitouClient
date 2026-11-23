@@ -31,6 +31,9 @@ relations: [factions](factions-squads-towns.md). Simulation senses/leash remain 
   town (`+0x138`) and the target's has one; else the ray decides when the target is the player's, the looker is with the player
   (`FUN_140856bc0`), or the target is in a state (`FUN_1405c8aa0` != 0), sneaking (`FUN_1406643d0`), on screen (`+0x1a9`) or has `+0x320`, its
   `+0x1a0` object's `+0x100` > 0 or `+0xe8` set; otherwise seen without it. It has no floor test: floors and walls block only through the ray.
+  Meitou (`SightRay.Applies`) casts it for the player's side, a sneaker and a target on screen (`MedicalClock.OnScreen`), not for the other
+  states: without the on-screen case a guard on a roof (on top) saw an escaped prisoner shut in a house on screen and came for it (#1262's
+  save, headless probe with the report's camera: the ray from the roof meets building collision).
 - **Light level** (`+0xd8`, `FUN_140a0af10`, `FUN_140a08da0`, **Verified** literals): set each update to the daylight factor;
   when requested by a sight test (`+0xdc`) and the character is the player's or daylight < 0.75, it is resampled: 1 above
   daylight 0.5, else 2 x daylight + per light within 500 of the zone search: 1.5 x power scale x (1 - d^2 / r^2) (x the spot
@@ -43,12 +46,15 @@ relations: [factions](factions-squads-towns.md). Simulation senses/leash remain 
 The request byte `+0xdc` is raised by the sight test `FUN_140852f70`:104-112 on looker and target (the target's value is read before the flag is set, so the first test after a quiet period sees bare daylight) and by the stat multiplier `FUN_1406457e0`:190 (**Verified**). Meitou (`SightMap.SampleLight`, `Light` / `PeekLight`): the same rule with a per-slot request flag that the workers only ever set (`Range` and the stat multiplier read through `Light`, the HUD and the query bound through `PeekLight`) and the serial update consumes, so the outcome does not depend on the order of the parallel tests.
 
 Meitou (`SightMap`): every sight test (aggro, dialogue sightings, crime witnesses, bounty spotting, slave catching, loot witnesses) uses these
-rules. Rooms are the registered towns' buildings' `interior mask` volumes and lamps their lights, plus the lanterns characters carry
+rules. Rooms are the `interior mask` volumes of the registered towns' buildings and of the player's completed buildings (keyed by the site id
+their doors take; made when the building registry changes, `SightMap.ReadSites`; one under construction, ruined or gone has none, an upgraded one
+gets its new record's), and lamps their lights, plus the lanterns characters carry
 (`CharacterAppearance.Lights` at the owner, its place and floor) and the lamps of completed player buildings (outdoor lights, except that
-one in a town building with the building over it, or hung from its ceiling, lights that building's room on the floor it was placed on, as
+one in a building with a room and the building over it, or hung from its ceiling, lights that room on the floor it was placed on, as
 the original's `FUN_140a0af10` counts a building's lights as indoor while its location is a building and its outside flag (`+0x240`, set at
-placement when nothing is over it) is clear; the `interiorlamps` switch leaves these to their own rule, as drawn; ruins and the player's
-buildings have no room); a lit lamp of another building's interior is not counted indoors (floors are
+placement when nothing is over it) is clear; the `interiorlamps` switch leaves these to their own rule, as drawn; ruins have no room). A
+character inside a player's house is indoors, so the region's weather (acid rain) skips it as in a town's (**Observed**: issue #1264's save,
+`probe premises --nav` puts the leader in the player's Storm House, outdoors before); a lit lamp of another building's interior is not counted indoors (floors are
 compared only within the character's building). With the `interiorlamps` switch on (Meitou, default) interior lamps count at
 any daylight, as the renderer draws them; off, night-only ones count at daylight <= 0.1 as in the game. The ray for a pair where the target or the looker is the player's (not both) or the target sneaks (`SightRay`, aggro's plain test included; the town
 early return and the other target states are left out; headless, one player character among 34 NPCs: no measurable tick cost); no weather, no posture factor; the 0.75 / 0.5 light gate is

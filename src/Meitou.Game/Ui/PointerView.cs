@@ -327,8 +327,9 @@ sealed class PointerView(PlayerInterface player)
         };
 
     /// <summary>
-    /// The pick chance of the lock under the <c>lockpick</c> pointer, for the selected character nearest it, without the minimum the menu applies: a
-    /// caged <paramref name="target"/>'s cage, else the container, else the door under the mouse.
+    /// The pick chance of the lock under the <c>lockpick</c> pointer, for the selected character nearest it: a caged <paramref name="target"/>'s
+    /// cage, else the container, else the door under the mouse. The original leaves out the minimum the menu applies to a building's lock; the
+    /// fix (<see cref="PlayerInterface.FixLockpickLabel"/>) applies it, so the label shows the menu's number.
     /// </summary>
     float? PointedLockChance(CharacterId? target)
     {
@@ -337,13 +338,21 @@ sealed class PointerView(PlayerInterface player)
             return player.ContextMenuWindow.LockChance(caged.Position, prison.LockLevel);
 
         if (player.Furniture.PickContainer(player.Mouse) is { } container)
-            return player.ContextMenuWindow.LockChance(container.Position, container.Level);
+            return BuildingLockChance(container.Position, container.Level);
 
         if (player.Furniture.PickDoor(player.Mouse) is { Door: var door })
-            return player.ContextMenuWindow.LockChance(door.Position, snapshot.Doors.GetValueOrDefault((door.Building, door.Door)).Level);
+            return BuildingLockChance(door.Position, snapshot.Doors.GetValueOrDefault((door.Building, door.Door)).Level);
 
         return null;
     }
+
+    /// <summary>
+    /// The pointer's pick chance of a building's lock of <paramref name="level"/> at <paramref name="at"/>: the menu's (0 below the minimum) with
+    /// the fix on, else the bare chance as the original.
+    /// </summary>
+    float? BuildingLockChance(Vector3 at, int level) => player.FixLockpickLabel
+        ? player.ContextMenuWindow.ShownLockChance(at, level, building: true)
+        : player.ContextMenuWindow.LockChance(at, level);
 
     #endregion
 

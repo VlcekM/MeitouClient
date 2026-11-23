@@ -447,21 +447,24 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     }
 
     /// <summary>
-    /// <see cref="FollowOrder"/>: row 45 Bodyguard or 31 Staying close to each of the characters (the selection when empty) but the target.
+    /// <see cref="FollowOrder"/>: row 45 Bodyguard or 31 Staying close to each of the characters (the selection when empty) but the target. A
+    /// Follow regroups the ordered characters' speed groups as a move does (it goes through the same giver, <c>FUN_1407f9e20</c>); a Bodyguard
+    /// does not (the original always adds it through the job giver <c>FUN_1407f5a90</c>).
     /// </summary>
     void GiveFollow(World world, FollowOrder follow)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(follow.Target, out int led)) return;
 
+        var slots = new List<int>();
         foreach (var id in follow.Characters.Count > 0 ? follow.Characters : world.Player.Selection.ToArray())
-        {
-            if (table.TryResolveNext(id, out int s) && s != led)
-            {
-                var entry = new OrderEntry(follow.Guard ? TaskType.Bodyguard : TaskType.StayCloseToTarget, this) { Target = follow.Target };
-                PlayerOrders.Give(world, s, entry, follow.Queued);
-            }
-        }
+            if (table.TryResolveNext(id, out int s)) slots.Add(s);
+
+        if (!follow.Guard) AssignSpeedGroup(world, slots);
+
+        var row = follow.Guard ? TaskType.Bodyguard : TaskType.StayCloseToTarget;
+        foreach (int s in slots)
+            if (s != led) PlayerOrders.Give(world, s, new OrderEntry(row, this) { Target = follow.Target }, follow.Queued);
     }
 
     /// <summary>
@@ -489,9 +492,10 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     }
 
     /// <summary>
-    /// <c>PlayerInterface::assignSpeedGroup</c>, run by each formation move order (docs/game/pathfinding.md "Speed groups"): when one of the
-    /// player's ordered characters is in Group speed, the ordered keep their group if they already share one and hold all its members, else they
-    /// leave their groups for one new group of their own, so a character moved alone goes at its own pace, not its old group's slowest.
+    /// <c>PlayerInterface::assignSpeedGroup</c>, run by each order the giver <c>FUN_1407f9e20</c> gives (move, follow; docs/game/pathfinding.md
+    /// "Speed groups"): when one of the player's ordered characters is in Group speed or already in a group, the ordered keep their group if they
+    /// already share one and hold all its members, else they leave their groups for one new group of their own, so a character ordered alone goes
+    /// at its own pace, not its old group's slowest.
     /// </summary>
     static void AssignSpeedGroup(World world, List<int> slots)
     {
@@ -502,7 +506,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         {
             if (table.Cold(s) is not { IsPlayer: true } c) continue;
 
-            grouping |= c.RunSpeed == SpeedMode.Group;
+            grouping |= c.RunSpeed == SpeedMode.Group || c.SpeedGroup >= 0;
             shared = shared == int.MinValue || shared == c.SpeedGroup ? c.SpeedGroup : -1;
         }
 

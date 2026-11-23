@@ -315,7 +315,7 @@ DatapanelGUI on the `Popup` layer with one row, empty key and value `{1,num}%` =
 
 Meitou (`PlayerInterface.AddPointerChance`): the `knockout` label, from the pointed character's published `StealthKoChance` (the selection's first sneaking
 member, not the nearest); the `lockpick` label, from `Lockpicking.Chance` of the selected character nearest the lock (a caged character's cage, else the
-container, else the door under the mouse). A floating tooltip 32 px at 1080 above the mouse, recomputed every frame (engine choices); drawn with the Hardware mouse too.
+container, else the door under the mouse); Meitou fix (Fixes page `Lockpick chance on the pointer`, on by default; `UserConfig.FixLockpickLabel`): a door's or container's chance below the minimum shows 0, as the Pick Lock row (#1190). A floating tooltip 32 px at 1080 above the mouse, recomputed every frame (engine choices); drawn with the Hardware mouse too.
 
 ### Character picking
 
@@ -493,7 +493,7 @@ that activation menu-only; once the ruin becomes an unfinished construction site
 | Class | Pointer (slot 130) | Order (slot 131) |
 |---|---|---|
 | Building, GatewayBuilding, WallBuilding | `arrow` | 29 MOVE_CUS_ORDERED |
-| Crafting, Farm, Production, Generator, WindGenerator, RainCollector, Torture | `mine` for function 1 / 27, else `use` | 87 OPERATE_MACHINERY, 152 OPERATE_AUTOMATIC_MACHINERY when +0x3ac is 0 |
+| Crafting, Farm, Production, Generator, WindGenerator, RainCollector, Torture | `mine` for function 1 / 27, else `use` | 87 OPERATE_MACHINERY, 152 OPERATE_AUTOMATIC_MACHINERY when +0x3ac is 0. Meitou: of the generator classes only automatic fuelled generators ([fuel generators](buildings-production.md#hauling)) |
 | FurnaceBuilding | as Farm | 26 LOOT_TARGET |
 | ResearchBuilding | as Storage | 87 |
 | TurretBuilding | as Storage | 146 USE_TURRET |

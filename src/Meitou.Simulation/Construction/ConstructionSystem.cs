@@ -1178,13 +1178,25 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
 
     /// <summary>
     /// Whether the worker is near enough its goal (<see cref="SiteReach.Within"/>): a site by its footprint, a ground item by its position (within
-    /// <see cref="PickUps.PickUpReach"/>, twice that once stopped).
+    /// <see cref="PickUps.PickUpReach"/>, twice that once stopped); for a site also on its floor (<see cref="OnSiteFloor"/>).
     /// </summary>
-    bool Arrived(World world, in CharacterHot n, (Vector3 At, BuildSite? Site, float Reach) goal) =>
+    bool Arrived(World world, int slot, in CharacterHot n, (Vector3 At, BuildSite? Site, float Reach) goal) =>
         SiteReach.Within(n, goal.Site is { } site
             ? SiteReach.Gap(Settings.EdgeGap, site, n.Position)
             : Vector2.Distance(new(n.Position.X, n.Position.Z), new(goal.At.X, goal.At.Z)), goal.Reach)
-        && (goal.Site is not { } high || SiteReach.AtHeight(n, high, FloorHeight(world, high), HasDoor(world, high)));
+        && (goal.Site is not { } high || OnSiteFloor(world, slot, n, high));
+
+    /// <summary>
+    /// The floor half of <c>AI::isWithinChoppingRange</c>: the same floor whatever the height, else within <see cref="SiteReach.HeightLimit"/>
+    /// (<see cref="SiteReach.AtHeight(in CharacterHot, BuildSite, float, bool)"/>). Meitou knows the floor of neither a player building nor one
+    /// standing in it, so only an outdoor worker at an outdoor site counts as the same floor (both floor 0): a site whose origin lies far below the
+    /// ground it stands on is built from that ground (#1255: a sunk Outpost s-V big, 219 under its slab).
+    /// </summary>
+    bool OnSiteFloor(World world, int slot, in CharacterHot n, BuildSite site)
+    {
+        if (site.Parent is null && site.Floor == 0 && world.Sight.Outdoors(slot)) return true;
+        return SiteReach.AtHeight(n, site, FloorHeight(world, site), HasDoor(world, site));
+    }
 
     /// <summary>
     /// Whether the site is a building with a door, for <see cref="SiteReach.HeightLimit"/>.
@@ -1253,7 +1265,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         if (task == CharacterTask.Build && FetchFirst(world, slot, cold, site)) return;
 
         var goal = (site.Position, (BuildSite?)site, ReachOf(site));
-        if (!Arrived(world, n, goal)) WalkTo(world, ref n, cold, goal);
+        if (!Arrived(world, slot, n, goal)) WalkTo(world, ref n, cold, goal);
     }
 
     /// <summary>
@@ -1407,7 +1419,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
         }
 
         const ushort path = (ushort)MoveFlags.AnyPath;
-        if (Arrived(world, n, goal))
+        if (Arrived(world, i, n, goal))
         {
             // There: stand still and let the slow world work.
             if ((n.Flags & path) != 0)
@@ -1548,7 +1560,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             return;
         }
 
-        if (!Arrived(world, n, goal)) return;
+        if (!Arrived(world, i, n, goal)) return;
         if (cold.StaggeredUntil > world.Tick) return;   // a stagger interrupts the work
 
         if (n.Velocity.X == 0 && n.Velocity.Z == 0) n.Yaw = MathF.Atan2(goal.At.X - n.Position.X, goal.At.Z - n.Position.Z);
