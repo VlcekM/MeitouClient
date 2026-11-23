@@ -264,6 +264,9 @@ public sealed partial class World : IDisposable
             HealthObservers.Register(this._systems[k], k);
             RemovalVetoes.Register(this._systems[k], k);
             ItemCreatedObservers.Register(this._systems[k], k);
+            CombatEngageFilters.Register(this._systems[k], k);
+            BlowReactionFilters.Register(this._systems[k], k);
+            CombatDefenceFilters.Register(this._systems[k], k);
         }
         for (int k = 0; k < this._systems.Count; k++) RegisterTasks(this._systems[k], k);
         foreach (var owner in this._systems.OfType<IDecisionOwner>()) Decisions.RegisterFrom(owner);
@@ -599,6 +602,18 @@ public sealed partial class World : IDisposable
     /// </summary>
     internal Items.ItemCreatedObservers ItemCreatedObservers { get; } = new();
     /// <summary>
+    /// The systems asked whether a fighter may take on a target (<see cref="Combat.ICombatEngageFilter"/>).
+    /// </summary>
+    internal Combat.CombatEngageFilters CombatEngageFilters { get; } = new();
+    /// <summary>
+    /// The systems asked about a hit's reaction (<see cref="Combat.IBlowReactionFilter"/>).
+    /// </summary>
+    internal Combat.BlowReactionFilters BlowReactionFilters { get; } = new();
+    /// <summary>
+    /// The systems asked about a defender's choice of defence (<see cref="Combat.ICombatDefenceFilter"/>).
+    /// </summary>
+    internal Combat.CombatDefenceFilters CombatDefenceFilters { get; } = new();
+    /// <summary>
     /// The camera the host last passed (<see cref="CameraViewCommand"/>); null: none, nothing is tested against a screen.
     /// </summary>
     public CameraViewCommand? View { get; internal set; }
@@ -867,6 +882,9 @@ public sealed partial class World : IDisposable
         HealthObservers.Register(system, _systems.Count - 1);
         RemovalVetoes.Register(system, _systems.Count - 1);
         ItemCreatedObservers.Register(system, _systems.Count - 1);
+        CombatEngageFilters.Register(system, _systems.Count - 1);
+        BlowReactionFilters.Register(system, _systems.Count - 1);
+        CombatDefenceFilters.Register(system, _systems.Count - 1);
         RegisterTasks(system, _systems.Count - 1);
         if (system is IDecisionOwner owner) Decisions.RegisterFrom(owner);
         Ai.ChooserRegistry.Collect(this, system, _systems.Count - 1, Extensions(), [], goalsOpen: false);
@@ -1548,6 +1566,9 @@ public sealed partial class World : IDisposable
         HealthObservers.HashFaults(ref h);
         RemovalVetoes.HashFaults(ref h);
         ItemCreatedObservers.HashFaults(ref h);
+        CombatEngageFilters.HashFaults(ref h);
+        BlowReactionFilters.HashFaults(ref h);
+        CombatDefenceFilters.HashFaults(ref h);
         Decisions.HashFaults(ref h);
         ModFaults.HashFaults(ref h);
     }

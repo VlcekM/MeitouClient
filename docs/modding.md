@@ -330,6 +330,16 @@ holds refuses the second mod.
   combat, and must answer from the world and the hit alone. The one-punch debug cheat ignores the packet but keeps a cancel. Hits on doors
   and walls are not filtered. A filter that throws or breaks the packet's rule is undone for that hit, logged and disabled for that world;
   faulted registrations enter the state hash. Without a filter no payload is made.
+- **Hit reactions:** a registered system implementing `IBlowReactionFilter` (`Meitou.Simulation.Combat`) is asked `Reaction(World, in
+  BlowReactionAsk)` for each melee blow and bolt that lands on a victim it leaves on its feet (a downed victim is not asked): the tick, the
+  `CombatHitSource`, attacker and victim, sequence and blow as in `CombatHit`, the `HitDamage` after armour, its stagger damage (cut + blunt +
+  pierce + extra stun), the victim's stumble threshold and `Kind` as the game picked it: `Heavy` past the threshold, else `Light` for a blow and
+  `None` for a bolt (only a heavy bolt staggers). It answers the `BlowReactionKind` to use: `None` (swing, defence and task go on), `Light` (the
+  swing and defence cut off, a small stumble unless one plays) or `Heavy` (the big stumble, which knocks back); more kinds may come. Filters run
+  serially where the hit lands, in system order, each seeing the earlier one's answer, and must answer from the world and the ask alone. A throw
+  or an answer that is no kind keeps the reaction and disables the filter for that world; the fault enters the state hash. Engine API, not in
+  the original. **Observed** by a scratch run (not in the repo): an unchanged answer keeps hash and log, `None` for every hit changes the duel
+  the same on 1 and 4 threads, an invalid answer is asked once and hashed.
 - **Combat speed:** a registered system implementing `ICombatSpeedFilter` (`Meitou.Simulation.Combat`) is asked `Rate(World, in
   CombatSpeedAsk)` for every attack and block play rate the game computes (`CombatSystem` rate: a swing's or a block's start, the chase
   lead, the HUD's figures): the tick, the character, `Kind` (`Attack` or `Block`; dodges play at 1 and are not asked) and the rate after the
@@ -361,10 +371,32 @@ holds refuses the second mod.
   and must not change characters or other world state in the call. One that throws is logged and disabled for that world, and the fault enters
   the state hash. Without an observer no payload is made. Engine API, not in the original. **Verified** by `CombatDefenceObserverTests`
   (a duel: one report per logged block or dodge, the same on 1 and 4 threads, the run unchanged; a throwing observer called once, its fault hashed).
+  A registered system implementing `ICombatDefenceFilter` is asked `Defence(World, in DefenceChoiceAsk)` each time a melee fighter decides how
+  to meet a blow on its way: the tick, defender, attacker, sequence and blow, the blow's side (technique direction), whether the defender is
+  stumbling, the game's block and dodge chances in percent (an armed fighter rolls the block, one that cannot block the dodge) and `Technique`,
+  the game's pick as an index into `CombatSystem.Techniques` (-1 none). It answers the technique to use: -1 (no defence, none tried again for a
+  while, as after a failed roll) or a block or dodge technique, a block that is not a dodge only for a defender that can block. Filters run in
+  system order, each seeing the earlier one's answer, in the combat act phase on any thread and concurrently: quick, thread-safe, a pure read of
+  the ask and of world state the tick has settled; state of its own about a defender only from that defender's asks (each defender chooses on
+  one thread). A throw or an answer against the rule keeps the technique; the filter is still asked for the rest of that tick, not from the
+  next, and the fault (its first tick) enters the state hash. Engine API, not in the original. **Observed** by a scratch run (not in the repo):
+  an unchanged answer keeps hash and log and is asked the same on 1 and 4 threads; -1 stops every block and dodge; always the dodge technique
+  turns every stopped blow into a dodge, the same on 4 threads; an out-of-range answer is asked in one tick and hashed.
 - **Target choice:** `TargetCandidate.ChooserHasTarget` (`Meitou.Simulation.Combat`) tells a postfix on the public `TargetScore.Score` whether
   the chooser already has a target: true in a fighter's own target choice while it fights someone (the original's `AI::chooseBestAttackTarget`
   given a valid old target), false in the other choices (the attacker of a protectee, the aggro look, an assault). No engine score reads it.
   Engine API, not in the original.
+- **Engagements:** a registered system implementing `ICombatEngageFilter` (`Meitou.Simulation.Combat`) is asked `Allows(World, in EngageAsk)`
+  whether a fighter may take on a target: the tick, attacker, target, `Kind`, whether the target is the player's pick (an attack order the
+  player gave, or the current target such an order named) and whether the fight is a defence. `EngageKind.Start` is every fight start
+  (`CombatSystem`'s single start: the player's order, a defence, a goal's or squad's join, an arrest, an NPC order's assault, a loaded attack
+  order), asked serially once the game's own tests pass; refused, the fighter does not fight. `Choice` is every candidate of a target choice (a
+  fighter choosing whom to fight next, `CombatSystem.BestAttackerOf` for a joiner), asked on any thread; refused, it is passed over for the next
+  best. More kinds may come. Filters run in system order until one refuses; quick, thread-safe, a pure read of the ask and of world state the
+  tick has settled. A throw allows that ask; the filter is still asked for the rest of that tick, not from the next, and the fault enters the
+  state hash. Without a filter nothing is asked. Engine API, not in the original. **Observed** by a scratch run (not in the repo): allowing all
+  keeps hash and log on 1 and 4 threads with the same asks; refusing all leaves a duel without a blow; refusing one side's start leaves it
+  without a swing; a throwing filter is asked in one tick, the duel as without it, the fault hashed.
 - **Trade prices:** a registered system implementing `ITradePriceFilter` (`Meitou.Simulation.Trading`) is asked
   `Price(World, in TradeDeal, long price)` for every price the game asks: the trade window's stack and unit prices and the coins it takes,
   and an NPC shopper's purchase from a building's stock. The deal names the tick, the item record, the units, whether the customer sells,
@@ -539,11 +571,25 @@ holds refuses the second mod.
   disables the observer for that world, and the fault enters the state hash. Without an observer nothing is looked at. Engine API, not in the
   original. **Observed** by a scratch run (not in the repo): a duel's changes are the same list on 1 and 4 threads, and its hash and log are
   unchanged by the observer.
+  `CrimeSystem.StealRoll(World, CharacterId thief, CharacterId watcher, float chance, int faction, CharacterId victim)` runs the game's steal
+  roll for a mod's own theft (serial phases): the watcher (none or gone: nobody) misses the thief when a draw falls under `chance` (0 always
+  caught, 1 or more never); caught, the game's outcome follows (a watcher in bed may only speak, else it gets up, says event 8 and remembers the
+  thief, which gets a Theft, timer 30, against `faction` with `victim`), and thievery XP as for the game's own rolls. It sets no pending crime
+  first (`SetPending` does). True when caught. **Observed** by a scratch run (not in the repo): the same result, pending crime and hash as the
+  private roll called as the Disarm port called it, at chances 0, 0.5 and 1.
 - **Removals:** a registered system implementing `IRemovalVeto` (`Meitou.Simulation.Bodies`) is asked `Keep(World, in RemovalAsk)` before the
-  engine takes a character or body out of the world for a `RemovalKind`: `CorpseDecayed` (12 game hours) or `CorpseUnloaded` (in a zone not
-  loaded); more kinds may come. True keeps it this time; it is asked again when the rule would take it next (every tick for a corpse). Vetoes
-  run serially in system order until one keeps it. A throw disables the veto (the removal goes ahead) and enters the state hash. A squad stored
-  off screen takes its dead with it, unasked. Engine API, not in the original.
+  engine takes a character, body or platoon out of the world for a `RemovalKind`: `CorpseDecayed` (12 game hours), `CorpseUnloaded` (in a zone
+  not loaded), `PlatoonDespawned` (a platoon the population does not keep leaves the loaded world: despawned as it unloads, or thinned member by
+  member; kept, it unloads with its characters stored and a knocked-out member in the zones holds it loaded, as for a kept one) and
+  `PlatoonOrphaned` (an off-screen platoon not kept and not wanted counts towards its 60 s despawn; kept, the timer starts again); more kinds
+  may come. `RemovalAsk.Platoon` is the platoon's id (`world.Platoons.Find`) for a platoon kind, -1 otherwise, and `Character` none. True keeps
+  it this time; it is asked again when the rule would take it next. Vetoes run in system order until one keeps it: serially for the corpse kinds
+  and `PlatoonDespawned`, on any thread for `PlatoonOrphaned` (the off-screen step is parallel), so a veto is quick, thread-safe and a pure read
+  of the ask and of world state the tick has settled. A throw lets the removal go ahead; the veto is still asked for the rest of that tick, not
+  from the next, and the fault enters the state hash. A squad stored off screen takes its dead with it, unasked. Engine API, not in the
+  original. **Observed** by a scratch run (not in the repo) of the roaming town without kept roamers: a veto keeping nothing keeps the hashes on
+  1 and 4 threads; keeping `PlatoonDespawned` stores the leaving platoons' characters; keeping both kinds stops the orphan timer, the same
+  hashes and asks on 1 and 4 threads; a throwing veto is asked once and hashed.
 - **Items created:** a registered system implementing `IItemCreatedObserver` (`Meitou.Simulation.Items`) receives `Created(World, in
   ItemCreated)` for each item the world makes of an `ItemCreatedKind`: `Loot` (a camp's ground items, a town's artifacts for its buildings'
   containers), `Crafted` (a bench's finished item, `Character` the crafter), `ShopStock` (each unit and special item of a shop's fill, before

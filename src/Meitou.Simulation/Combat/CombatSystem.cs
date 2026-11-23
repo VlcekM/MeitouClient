@@ -513,6 +513,9 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         // No melee row runs on a target in deep water, nor row 4 for a fighter in it (SwimBarred).
         if (SwimBarred(cold, tc, order.Picked)) return false;
 
+        // A code mod may refuse the fight (docs/modding.md "Engagements").
+        if (!world.CombatEngageFilters.Allows(world, a, t, EngageKind.Start, order.Picked, order.Defensive)) return false;
+
         var (row, source) = ordered is { } own
             ? (own, TaskSource.Order)
             : order.Picked

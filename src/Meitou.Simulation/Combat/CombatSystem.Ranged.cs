@@ -905,10 +905,15 @@ public sealed partial class CombatSystem : IProjectileSource
             d.ReactTech = -1;
             Sound(world, SoundKind.Down, v, p.Shooter, world.Characters.Previous[v].Position, fatal: death);
         }
-        else if (damage.Cut + damage.Blunt + damage.Pierce + damage.ExtraStun > DamageFormulas.StumbleThreshold(toughness, _combat))
+        else
         {
-            // Only a heavy bolt staggers (engine choice: the original's reaction to a bolt was not traced).
-            Stagger(world, ref d, v, dc, true, now, (ulong)(uint)p.Id ^ 0x424F4C54UL, bolt: true);
+            // Only a heavy bolt staggers (engine choice: the original's reaction to a bolt was not traced), unless a reaction filter says otherwise.
+            float stagger = damage.Cut + damage.Blunt + damage.Pierce + damage.ExtraStun;
+            float threshold = DamageFormulas.StumbleThreshold(toughness, _combat);
+            var kind = ReactionOf(world, new BlowReactionAsk(world.Tick, CombatHitSource.Projectile, new CharacterId(p.Shooter, p.ShooterGeneration),
+                world.Characters.IdOf(v), p.Id, -1, damage, stagger, threshold, stagger > threshold ? BlowReactionKind.Heavy : BlowReactionKind.None));
+            if (kind != BlowReactionKind.None)
+                Stagger(world, ref d, v, dc, kind == BlowReactionKind.Heavy, now, (ulong)(uint)p.Id ^ 0x424F4C54UL, bolt: true);
         }
     }
 

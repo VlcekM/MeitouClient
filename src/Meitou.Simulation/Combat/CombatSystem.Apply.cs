@@ -240,7 +240,7 @@ public sealed partial class CombatSystem
         var (knockout, death) = HitEvents(world, d, dc, medical, dc.Race!, events);
         if (ShackledKnockOut(world, a, seq, blow, d, dc, medical, ctx)) knockout = true;
 
-        BlowReaction(world, ref dSlot, d, dc, medical, damage, toughness, now, CombatRolls.BlowCounter(a, seq, blow, 0));
+        BlowReaction(world, ref dSlot, d, dc, medical, damage, toughness, now, table.IdOf(a), seq, blow);
         GainCombatXp(ac, dc, XpEvent.HitDealt, XpEvent.HitTaken, packet.Cut + packet.Blunt + packet.Pierce + packet.Stun);
         Punch(world, a, ac, dc, tech, blow, 2);
         Sound(world, SoundKind.Hit, d, a, prev[d].Position, heavy: dSlot.HitHeavy, unarmed: fighter.Unarmed, robot: ac.Race!.IsRobot);
@@ -334,10 +334,11 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// The defender's reaction to a hit: down (its swing and reaction cut off), else a stagger, heavy past the stumble threshold.
+    /// The defender's reaction to a hit: down (its swing and reaction cut off), else a stagger, heavy past the stumble threshold, as the reaction
+    /// filters leave it (<see cref="ReactionOf"/>).
     /// </summary>
     void BlowReaction(World world, ref CombatSlot dSlot, int d, CharacterCold dc, MedicalState medical, in HitDamage damage, float toughness, int now,
-        ulong counter)
+        CharacterId attacker, int seq, int blow)
     {
         if (medical.Incapacitated)
         {
@@ -346,13 +347,24 @@ public sealed partial class CombatSystem
             dSlot.CancelTick = now;
             dSlot.NextBlow = 0;
             dSlot.ReactTech = -1;
+            return;
         }
-        else
-        {
-            bool heavy = damage.Cut + damage.Blunt + damage.Pierce + damage.ExtraStun > DamageFormulas.StumbleThreshold(toughness, _combat);
-            Stagger(world, ref dSlot, d, dc, heavy, now, counter);
-        }
+
+        float stagger = damage.Cut + damage.Blunt + damage.Pierce + damage.ExtraStun;
+        float threshold = DamageFormulas.StumbleThreshold(toughness, _combat);
+        var kind = stagger > threshold ? BlowReactionKind.Heavy : BlowReactionKind.Light;
+        var victim = world.Characters.IdOf(d);
+        var ask = new BlowReactionAsk(world.Tick, CombatHitSource.Melee, attacker, victim, seq, blow, damage, stagger, threshold, kind);
+        kind = ReactionOf(world, ask);
+        if (kind != BlowReactionKind.None)
+            Stagger(world, ref dSlot, d, dc, kind == BlowReactionKind.Heavy, now, CombatRolls.BlowCounter(attacker.Slot, seq, blow, 0));
     }
+
+    /// <summary>
+    /// A hit's reaction after the reaction filters (<see cref="IBlowReactionFilter"/>); the game's without one.
+    /// </summary>
+    static BlowReactionKind ReactionOf(World world, in BlowReactionAsk ask) =>
+        world.BlowReactionFilters.Active ? world.BlowReactionFilters.Pass(world, ask) : ask.Kind;
 
     /// <summary>
     /// What a hit means beyond the fighters: the police-hit rule first (the game's hit outcome runs before the damage), then the victim's alarm and

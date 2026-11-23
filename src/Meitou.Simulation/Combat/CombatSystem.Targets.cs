@@ -57,6 +57,10 @@ public sealed partial class CombatSystem
         /// </summary>
         public bool Player, Hold, Prone, Animal;
         /// <summary>
+        /// The current target is the player's pick (asked of the engagement filters).
+        /// </summary>
+        public bool Picked;
+        /// <summary>
         /// Where a holding chooser holds.
         /// </summary>
         public Vector3 HoldPoint;
@@ -112,6 +116,7 @@ public sealed partial class CombatSystem
         {
             Self = i,
             Current = s.TargetSlot,
+            Picked = s.Picked,
             Cold = cold,
             Player = cold.IsPlayer,
             Hold = hold,
@@ -320,7 +325,8 @@ public sealed partial class CombatSystem
 
     /// <summary>
     /// Scores candidate <paramref name="c"/> for the chooser (<see cref="TargetScore"/>) and keeps it when it beats the best; one down, caged,
-    /// carried, of the chooser's faction or squad (but the current target), off its hold post or found unreachable lately is left out.
+    /// carried, of the chooser's faction or squad (but the current target), off its hold post, found unreachable lately or refused by an engagement
+    /// filter (<see cref="ICombatEngageFilter"/>) is left out.
     /// </summary>
     void Consider(World world, ref Choice q, int c, bool protect)
     {
@@ -337,6 +343,7 @@ public sealed partial class CombatSystem
         if (c != q.Current && (tc.Faction == q.Cold.Faction || q.Cold.SquadId >= 0 && tc.SquadId == q.Cold.SquadId)) return;
         if (TargetScore.SparesSlave(q.Cold, tc)) return;
         if (LeaveAlone.Spares(world, new LeaveAlone.Kit(Relations, Memory, this), i, q.Cold, c, tc)) return;
+        if (!world.CombatEngageFilters.Allows(world, i, c, EngageKind.Choice, q.Picked && c == q.Current, false)) return;
 
         ref readonly var o = ref _read[c];
         bool downed = tc.Medical is { Crawling: true } || o.AttackTech >= 0;

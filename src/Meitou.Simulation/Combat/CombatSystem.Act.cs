@@ -1546,8 +1546,8 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// The block or dodge roll against the swing's attacker, and the technique it picks for the blow's side (-1: none); each decision draws afresh
-    /// (the tick salts the blow's counter).
+    /// The block or dodge roll against the swing's attacker, and the technique it picks for the blow's side (-1: none), as the defence filters leave
+    /// it (<see cref="ICombatDefenceFilter"/>); each decision draws afresh (the tick salts the blow's counter).
     /// </summary>
     int ChooseDefence(World world, int i, CharacterCold cold, ulong key, int now, in IncomingBlow swing, bool stumbling)
     {
@@ -1578,8 +1578,14 @@ public sealed partial class CombatSystem
 
         // A weapon of a data-named class without a stumble dodge of its own breaks out with its own category's (Meitou; -1: no fallback).
         int stumbleFallback = fighter.Weapon?.Data is { ClassCategory: not null } classed ? classed.SkillCategory : -1;
-        return TechniqueChooser.ChooseReaction(_techniques, MovesCategory(fighter, fighter.TechniqueCategory), cold.Medical!.Prone, fighter.CanBlock, direction,
-            block, dodge, chanceRoll, pickRoll, stumbling, stumbleFallback);
+        int category = MovesCategory(fighter, fighter.TechniqueCategory);
+        int pick = TechniqueChooser.ChooseReaction(_techniques, category, cold.Medical!.Prone, fighter.CanBlock, direction, block, dodge, chanceRoll,
+            pickRoll, stumbling, stumbleFallback);
+        if (!world.CombatDefenceFilters.Active) return pick;
+
+        var ask = new DefenceChoiceAsk(world.Tick, table.IdOf(i), table.IdOf(swing.Attacker), attack.AttackSeq, swing.Blow, direction, stumbling,
+            block, dodge, pick);
+        return world.CombatDefenceFilters.Pass(world, _techniques, fighter.CanBlock, ask);
     }
 
     #endregion
