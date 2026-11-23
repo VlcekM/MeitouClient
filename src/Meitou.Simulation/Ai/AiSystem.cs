@@ -1021,6 +1021,21 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     internal float Desire(World world, AiBehaviour behaviour, TaskType type, TaskProfile profile, Squad squad, Blackboard board, AiMind mind,
         CharacterId self, TaskTargetType targeting)
     {
+        float desire = GameDesire(world, behaviour, type, profile, squad, board, mind, self, targeting, out bool found);
+        var filters = world.Decisions.DesireFilters;
+        if (!found || !filters.Active) return desire;
+
+        return filters.Pass(world, self, type, GoalDesireKind.Goal, desire);
+    }
+
+    /// <summary>
+    /// <see cref="Desire"/> as the game weighs it, before the code mods' desire filters; <paramref name="found"/> false for a bed goal whose bed
+    /// search found no bed (no filter is asked: it has nothing to act on).
+    /// </summary>
+    float GameDesire(World world, AiBehaviour behaviour, TaskType type, TaskProfile profile, Squad squad, Blackboard board, AiMind mind,
+        CharacterId self, TaskTargetType targeting, out bool found)
+    {
+        found = true;
         if (behaviour == AiBehaviour.None)
         {
             return _duties is not null && _duties.Has(type) ? DutyDesire(_duties, world, type, squad, mind, self, targeting) : 0;
@@ -1028,7 +1043,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
         // Going to bed: the bed search is its target finder, whose factor is 0 when it finds no bed (FUN_1408cfe00, Verified), so the goal is not
         // wanted.
-        if (type is TaskType.GoHomeAndGoToBed or TaskType.GoHomeAndGoToBedSecure && !HasBed(world, board, mind, self.Slot)) return 0;
+        if (type is TaskType.GoHomeAndGoToBed or TaskType.GoHomeAndGoToBedSecure && !HasBed(world, board, mind, self.Slot))
+        {
+            found = false;
+            return 0;
+        }
 
         float desire = profile.Desire switch
         {

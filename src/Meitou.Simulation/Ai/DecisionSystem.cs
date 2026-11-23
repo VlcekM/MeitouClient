@@ -181,6 +181,10 @@ public sealed class DecisionSystem
     /// </summary>
     readonly ModDecisionFaults _modFaults = new();
     /// <summary>
+    /// The code mods' filters on the chooser's desires (<see cref="ChooserRegistry.DesireFilter"/>).
+    /// </summary>
+    internal GoalDesireFilters DesireFilters { get; } = new();
+    /// <summary>
     /// The sources' index ranges by step (<see cref="Steps"/>), made again at each registration.
     /// </summary>
     SourceSteps _steps;
@@ -280,7 +284,11 @@ public sealed class DecisionSystem
     /// <summary>
     /// Adds the code mods' dropped contributors to the state hash; nothing while none has dropped.
     /// </summary>
-    internal void HashFaults(ref StateHasher hasher) => _modFaults.Hash(ref hasher);
+    internal void HashFaults(ref StateHasher hasher)
+    {
+        _modFaults.Hash(ref hasher);
+        DesireFilters.Hooks.HashFaults(ref hasher);
+    }
 
     #endregion
 
@@ -921,6 +929,7 @@ public sealed class DecisionSystem
                 else if (!TaskStart.Eligible(world, cold, type)) check = DecisionCheck.No("not in its repertoire");
                 else if (ListTests.JobSkipped(world, slot, cold.Jobs[k], out var why)) check = DecisionCheck.No(why);
                 else check = source.CanRun(world, slot, k);
+                if (check.Can && Vetoed(world, slot, type, k)) check = DecisionCheck.No("a code mod's desire filter passed over it");
                 if (owner.Tracing)
                 {
                     string verdict = check.Can ? check.Running ? "runs" : "starts" : check.Why ?? "cannot run";
@@ -933,6 +942,18 @@ public sealed class DecisionSystem
             }
 
             return DecisionCheck.No(urgent ? "no urgent job" : "no job can run");
+        }
+
+        /// <summary>
+        /// Whether the code mods' desire filters pass over job <paramref name="k"/> that could run (<see cref="GoalDesireKind.Job"/>: an answer of 0
+        /// or below).
+        /// </summary>
+        bool Vetoed(World world, int slot, TaskType type, int k)
+        {
+            var filters = owner.DesireFilters;
+            if (!filters.Active) return false;
+
+            return filters.Pass(world, world.Characters.IdOf(slot), type, GoalDesireKind.Job, 1, k) <= 0;
         }
 
         /// <summary>

@@ -82,3 +82,22 @@ public interface ICharacterDeathObserver : ITickSystem
     /// </summary>
     void Died(World world, in CharacterDeath death);
 }
+
+/// <summary>
+/// A code mod's own report of a death it caused (docs/modding.md "Deaths").
+/// </summary>
+public static class Deaths
+{
+    /// <summary>
+    /// Reports the death of <paramref name="victim"/> to the death observers at once, naming <paramref name="killer"/> (none: nobody) and
+    /// <paramref name="site"/>, when the character is in the world, dead and its death not reported yet; otherwise nothing (a death is told once,
+    /// and the world's sweep tells an unreported one with no killer). Serial phases or between ticks; throws in a parallel phase.
+    /// </summary>
+    public static void Report(World world, CharacterId victim, CharacterId killer, DeathSite site)
+    {
+        if (world.Characters.Phase == TablePhase.Parallel) throw new InvalidOperationException("Deaths are reported in the serial phases only.");
+        if (!world.Characters.TryResolveNext(victim, out int slot)) return;
+
+        DeathObservers.Report(world, slot, killer, site);
+    }
+}

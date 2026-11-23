@@ -634,12 +634,23 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     static float Speed2(Vector3 v) => v.X * v.X + v.Z * v.Z;
 
     /// <summary>
-    /// Serial, in (patient, medic) order: the kit, the bandaging, the drain and the medic's XP. Ends the treatment when nothing is left to bandage or
-    /// no kit fits.
+    /// Serial, in (patient, medic) order: one update of a treatment (<see cref="Treat"/>), its changes to the patient told to the code mods' health
+    /// change observers as first aid.
     /// </summary>
     public void Apply(World world, in Effect effect)
     {
         if (effect.Kind != EffectTreat) return;
+
+        HealthObservers.Before(world, effect.Target);
+        Treat(world, effect);
+        HealthObservers.After(world, effect.Target, HealthChangeKind.FirstAid);
+    }
+
+    /// <summary>
+    /// The kit, the bandaging, the drain and the medic's XP. Ends the treatment when nothing is left to bandage or no kit fits.
+    /// </summary>
+    void Treat(World world, in Effect effect)
+    {
         var table = world.Characters;
         int m = effect.Source, p = effect.Target;
         if (!table.Next[m].Alive || table.Next[m].Task != (byte)CharacterTask.Treat) return;

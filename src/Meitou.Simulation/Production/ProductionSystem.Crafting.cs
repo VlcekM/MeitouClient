@@ -276,6 +276,7 @@ public sealed partial class ProductionSystem
         state.Queue.RemoveAt(0);
         if (made is not null)
         {
+            ItemCreatedObservers.Report(world, ItemCreatedKind.Crafted, made, m.Smith);
             made.Section = "out";
             if (state.Done.FirstOrDefault(d => d.Record == made.Record && d.Quality == made.Quality && d.MaterialId == made.MaterialId
                 && d.Quantity < d.StackLimit) is { } stack)

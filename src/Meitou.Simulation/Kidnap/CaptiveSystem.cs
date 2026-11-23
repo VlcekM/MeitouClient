@@ -1612,7 +1612,9 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         // Each bite also sets playerWantsMeToGetUp (Character +0xec, FUN_140650370, Verified): a victim lying on, playing dead, gets up (staying low
         // when sneaking, docs/game/ragdolls.md "Staying low").
         if (medical.PlayingDead) medical.StandUp(Orders.Has(cc, CharacterOrders.Sneak));
+        HealthObservers.Before(world, c);
         bool eaten = medical.BeingEaten(rate, dt, ctx, data.BodyOptions.Dismemberment != Dismemberment.Never, events, vampiric);
+        HealthObservers.After(world, c, HealthChangeKind.Eaten);
         ApplyBodyEvents(world, j.Captive, c, medical, events, limbDrops: false);
         if (!wasDead) DeathObservers.Report(world, c, j.Worker, DeathSite.Eaten);   // the eater's bite killed it
 

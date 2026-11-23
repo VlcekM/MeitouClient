@@ -260,6 +260,10 @@ public sealed partial class World : IDisposable
             OffscreenFightRules.Register(this._systems[k], k);
             ExperienceFilters.Register(this._systems[k], k);
             CrimeObservers.Register(this._systems[k], k);
+            NeedRateFilters.Register(this._systems[k], k);
+            HealthObservers.Register(this._systems[k], k);
+            RemovalVetoes.Register(this._systems[k], k);
+            ItemCreatedObservers.Register(this._systems[k], k);
         }
         for (int k = 0; k < this._systems.Count; k++) RegisterTasks(this._systems[k], k);
         foreach (var owner in this._systems.OfType<IDecisionOwner>()) Decisions.RegisterFrom(owner);
@@ -563,6 +567,22 @@ public sealed partial class World : IDisposable
     /// </summary>
     internal Crime.CrimeObservers CrimeObservers { get; } = new();
     /// <summary>
+    /// The systems asked about the rates of characters' needs (<see cref="Bodies.INeedRateFilter"/>).
+    /// </summary>
+    internal Bodies.NeedRateFilters NeedRateFilters { get; } = new();
+    /// <summary>
+    /// The systems told of health changes (<see cref="Bodies.IHealthChangeObserver"/>).
+    /// </summary>
+    internal Bodies.HealthObservers HealthObservers { get; } = new();
+    /// <summary>
+    /// The systems asked before a character or body is taken out of the world (<see cref="Bodies.IRemovalVeto"/>).
+    /// </summary>
+    internal Bodies.RemovalVetoes RemovalVetoes { get; } = new();
+    /// <summary>
+    /// The systems told of items the world makes (<see cref="Items.IItemCreatedObserver"/>).
+    /// </summary>
+    internal Items.ItemCreatedObservers ItemCreatedObservers { get; } = new();
+    /// <summary>
     /// The camera the host last passed (<see cref="CameraViewCommand"/>); null: none, nothing is tested against a screen.
     /// </summary>
     public CameraViewCommand? View { get; internal set; }
@@ -827,6 +847,10 @@ public sealed partial class World : IDisposable
         OffscreenFightRules.Register(system, _systems.Count - 1);
         ExperienceFilters.Register(system, _systems.Count - 1);
         CrimeObservers.Register(system, _systems.Count - 1);
+        NeedRateFilters.Register(system, _systems.Count - 1);
+        HealthObservers.Register(system, _systems.Count - 1);
+        RemovalVetoes.Register(system, _systems.Count - 1);
+        ItemCreatedObservers.Register(system, _systems.Count - 1);
         RegisterTasks(system, _systems.Count - 1);
         if (system is IDecisionOwner owner) Decisions.RegisterFrom(owner);
         Ai.ChooserRegistry.Collect(this, system, _systems.Count - 1, Extensions(), [], goalsOpen: false);
@@ -836,8 +860,8 @@ public sealed partial class World : IDisposable
     }
 
     /// <summary>
-    /// Sets the table's watch on characters entering and leaving it (<see cref="CharacterWatch"/>) once a death observer or an experience filter
-    /// needs it, binding the stats of the characters already in it for the filters; none otherwise.
+    /// Sets the table's watch on characters entering and leaving it (<see cref="CharacterWatch"/>) once a death observer, an experience filter
+    /// or a health change observer needs it, binding the stats of the characters already in it for the filters; none otherwise.
     /// </summary>
     void WatchCharacters()
     {
@@ -848,7 +872,7 @@ public sealed partial class World : IDisposable
             Bodies.ExperienceFilters.UnbindAll(this);
         }
 
-        if (!DeathObservers.Active && !ExperienceFilters.Active) return;
+        if (!DeathObservers.Active && !ExperienceFilters.Active && !HealthObservers.Active) return;
 
         Characters.Watch ??= new CharacterWatch(this);
         if (ExperienceFilters.Active) Bodies.ExperienceFilters.BindAll(this);
@@ -959,6 +983,7 @@ public sealed partial class World : IDisposable
         // lose a tick (nothing without registered effects).
         RunSlowWorld(prof);
         DeathObservers.Sweep(this);
+        HealthObservers.Tell(this);
         PlatoonObservers.Tell(this);
         Bodies.StatusEffects.Step(this);
         AfterPhase?.Invoke(this, "slow world");
@@ -1503,6 +1528,10 @@ public sealed partial class World : IDisposable
         OffscreenFightRules.HashFaults(ref h);
         ExperienceFilters.HashFaults(ref h);
         CrimeObservers.HashFaults(ref h);
+        NeedRateFilters.HashFaults(ref h);
+        HealthObservers.HashFaults(ref h);
+        RemovalVetoes.HashFaults(ref h);
+        ItemCreatedObservers.HashFaults(ref h);
         Decisions.HashFaults(ref h);
         ModFaults.HashFaults(ref h);
     }

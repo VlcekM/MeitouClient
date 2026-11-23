@@ -67,12 +67,36 @@ public sealed class ChooserRegistry
     int _goalsBefore;
 
     /// <summary>
+    /// The registering system (named in a desire filter's fault).
+    /// </summary>
+    readonly ITickSystem? _owner;
+
+    /// <summary>
+    /// How many desire filters the world had before this registry's, taken back from there when its registration throws.
+    /// </summary>
+    int _filtersBefore;
+
+    /// <summary>
     /// A registry for one system's registration.
     /// </summary>
     internal ChooserRegistry(SimulationExtensions? extensions, DecisionSystem decisions, List<ModGoalClaim> goals, string? mod, int system,
-        bool goalsOpen)
+        bool goalsOpen, ITickSystem? owner = null)
     {
-        (_extensions, _decisions, _goals, _mod, _system, _goalsOpen) = (extensions, decisions, goals, mod, system, goalsOpen);
+        (_extensions, _decisions, _goals, _mod, _system, _goalsOpen, _owner) = (extensions, decisions, goals, mod, system, goalsOpen, owner);
+    }
+
+    /// <summary>
+    /// Registers <paramref name="filter"/> on the chooser's desires (<see cref="IGoalDesireFilter"/>): every goal, plan step, order and job of any
+    /// task type, the engine's and the mods', for every character. Filters are asked in registration order, each seeing the desire the earlier ones
+    /// left (docs/modding.md "Chooser goals and jobs").
+    /// </summary>
+    public void DesireFilter(IGoalDesireFilter filter)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        CheckOpen();
+        if (_owner is null) throw new InvalidOperationException("Desire filters are registered by a world's system.");
+
+        _decisions.DesireFilters.Hooks.Add(filter, _owner, _system);
     }
 
     /// <summary>
@@ -117,7 +141,7 @@ public sealed class ChooserRegistry
         if (system is not IChooserOwner owner) return;
 
         var factory = SimulationExtensions.FactoryOf(system);
-        var registry = new ChooserRegistry(extensions, world.Decisions, goals, factory?.Owner, index, goalsOpen);
+        var registry = new ChooserRegistry(extensions, world.Decisions, goals, factory?.Owner, index, goalsOpen, system);
         try
         {
             registry.Run(owner);
@@ -136,6 +160,7 @@ public sealed class ChooserRegistry
     void Run(IChooserOwner owner)
     {
         _goalsBefore = _goals.Count;
+        _filtersBefore = _decisions.DesireFilters.Hooks.Count;
         _open = true;
         try
         {
@@ -192,6 +217,7 @@ public sealed class ChooserRegistry
         _goals.RemoveRange(_goalsBefore, _goals.Count - _goalsBefore);
         foreach (var type in _jobsAdded) _decisions.RemoveJob(type);
         _jobsAdded.Clear();
+        _decisions.DesireFilters.Hooks.TruncateTo(_filtersBefore);
     }
 
 }
