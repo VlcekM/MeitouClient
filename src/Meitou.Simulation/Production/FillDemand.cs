@@ -7,8 +7,8 @@ namespace Meitou.Simulation.Production;
 
 /// <summary>
 /// What a fetch takes at its source: <c>Task_EmptyMachine</c> with flag 0 (row 92's factory <c>FUN_14032ebd0</c>, its update
-/// <c>FUN_14033cd10</c>, <b>Verified</b>; docs/game/buildings-production.md "NPC town machines"), for the NPC worker's fetch and the player's haul
-/// alike. The source lists its records (a storage its distinct records in item order, a producer its output); the first that its slot 5
+/// <c>FUN_14033cd10</c>, <b>Verified</b>; docs/game/buildings-production.md "NPC town machines"), for the NPC worker's fetch and an automatic machine's
+/// hauler alike (an operator's Auto haul takes the item it went for, <c>ProductionSystem.FetchAt</c>). The source lists its records (a storage its distinct records in item order, a producer its output); the first that its slot 5
 /// (<c>FUN_140356db0</c>, <see cref="Count"/>) counts above 0 is taken, up to that count, while the character has room. The machine the fetch is
 /// for is not asked. Pure reads but for the take; serial phases only.
 /// </summary>

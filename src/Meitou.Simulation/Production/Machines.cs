@@ -41,6 +41,12 @@ public sealed class InputSlot(RecipeInput recipe)
     /// Whether the section takes units of <paramref name="record"/>: its item, unless it is <see cref="Idle"/>.
     /// </summary>
     public bool Takes(string record) => !Idle && Item == record;
+
+    /// <summary>
+    /// The units an operator puts into the section (the Auto haul fill): its capacity less what it holds, 0 when it draws nothing (rate 0) or its
+    /// capacity is not positive.
+    /// </summary>
+    public int FillRoom => Rate > 0 ? Math.Max(0, Recipe.Capacity - Count) : 0;
 }
 
 /// <summary>
