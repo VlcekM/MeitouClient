@@ -2,9 +2,9 @@ namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// Whether this frame lights its world with no sun shadows (the shadow pass off, its receivers' term 1) and no probe GI (no probes, so no traced sun
-/// or contact sun either): the lighting's lookups for them are dead, and a renderer may draw with its programs built with <c>LIGHTING_LEAN</c>
-/// (<c>AtmosphereShaders.kenshiLight</c>), which leave them out. The picture is the same; the programs are smaller (docs/render-objects.md
-/// "Lean lighting"). Set by the frame before it draws (<c>WorldFrame.PrepareTracedSun</c>).
+/// or contact sun either): the lighting's lookups for them are dead, and the objects, the terrain and the characters draw with programs built with
+/// <c>LIGHTING_LEAN</c> (<c>AtmosphereShaders.kenshiLight</c>), which leave them out. The picture is the same; the programs are smaller
+/// (docs/render-objects.md "Lean lighting"). Set by the frame before it draws (<c>WorldFrame.PrepareTracedSun</c>).
 /// </summary>
 public static class LeanLighting
 {

@@ -2219,9 +2219,9 @@ static partial class TerrainShaders
     /// the uniforms); <paramref name="trails"/> adds the ground trails (<see cref="FragmentTrails"/>).
     /// </summary>
     public static string FragmentNative(bool interiorCut = false, bool march = true, bool? normalMaps = null, int? reliefQuality = null,
-        bool trails = false, bool simple = false)
+        bool trails = false, bool simple = false, bool lean = false)
     {
-        string shaded = Simplified(Marched(Fragment, march), simple);
+        string shaded = Leaned(Simplified(Marched(Fragment, march), simple), lean);
         string marched = interiorCut ? InteriorMaskRenderer.WithCut(shaded) : shaded;
         return Gi.GiResolveShaders.WithAlbedo(Variant(Native(Trailed(Baked(marched), trails)), normalMaps, reliefQuality));
     }
@@ -2229,8 +2229,8 @@ static partial class TerrainShaders
     /// <summary>
     /// The patches' colour program with the ground trails (<see cref="TerrainTrails"/>); without the switch none of their code is in the program.
     /// </summary>
-    public static string FragmentTrails(bool interiorCut, bool march, bool normalMaps, int reliefQuality, bool simple = false) =>
-        FragmentNative(interiorCut, march, normalMaps, reliefQuality, trails: true, simple);
+    public static string FragmentTrails(bool interiorCut, bool march, bool normalMaps, int reliefQuality, bool simple = false, bool lean = false) =>
+        FragmentNative(interiorCut, march, normalMaps, reliefQuality, trails: true, simple, lean);
 
     /// <summary>
     /// <paramref name="fragment"/> with <c>TERRAIN_BAKED</c> defined (the material cache's reads).
@@ -2319,9 +2319,9 @@ static partial class TerrainShaders
     /// points, and every lookup names its level or its gradients.
     /// </summary>
     public static string ResolveFragmentNative(bool march = true, bool? normalMaps = null, int? reliefQuality = null, bool trails = false,
-        ResolvePart part = ResolvePart.Whole, bool simple = false)
+        ResolvePart part = ResolvePart.Whole, bool simple = false, bool lean = false)
     {
-        string f = ResolvedPointPatches(Simplified(Fragment, simple));
+        string f = ResolvedPointPatches(Leaned(Simplified(Fragment, simple), lean));
         f = ResolvedLookupPatches(f);
         bool far = part == ResolvePart.Far;
         if (part != ResolvePart.Whole) f = ResolvePatch(f, "// RESOLVE_PART", ResolvePartTest(far));
@@ -2528,6 +2528,12 @@ static partial class TerrainShaders
     static string Marched(string fragment, bool march) => march ? fragment : fragment.Insert(fragment.IndexOf('\n') + 1, "#define NO_MARCH\n");
 
     /// <summary>
+    /// <paramref name="fragment"/> with <c>LIGHTING_LEAN</c> defined when <paramref name="lean"/> (<see cref="Frame.LeanLighting"/>): lit without
+    /// the sun shadows and probe GI.
+    /// </summary>
+    static string Leaned(string fragment, bool lean) => lean ? Frame.LeanLighting.Define(fragment) : fragment;
+
+    /// <summary>
     /// <paramref name="fragment"/> with <c>TERRAIN_SIMPLE</c> defined when <paramref name="simple"/> (<see cref="TerrainSimpleShading"/>): the
     /// blended patches shade only their dominant biome, two of its ground layers and no normal maps. A program of its own, so the full blend pays
     /// nothing for it.
@@ -2554,14 +2560,17 @@ static partial class TerrainShaders
     /// The TERRAIN-mode meshes' colour program, with the interior cut (on per draw: <see cref="TerrainConstants.InteriorCut"/>; the cross-fade
     /// already discards).
     /// </summary>
-    public static string MeshFragmentNative(bool march = true, bool? normalMaps = null, int? reliefQuality = null) =>
-        Gi.GiResolveShaders.WithAlbedo(Variant(Native(InteriorMaskRenderer.WithCut(Marched(MeshFragment, march))), normalMaps, reliefQuality));
+    public static string MeshFragmentNative(bool march = true, bool? normalMaps = null, int? reliefQuality = null, bool lean = false)
+    {
+        string cut = InteriorMaskRenderer.WithCut(Leaned(Marched(MeshFragment, march), lean));
+        return Gi.GiResolveShaders.WithAlbedo(Variant(Native(cut), normalMaps, reliefQuality));
+    }
 
     /// <summary>
     /// <see cref="MeshFragmentSolid"/>, native: the placements not mid-fade (no <c>discard</c>, no interior cut).
     /// </summary>
-    public static string MeshFragmentSolidNative(bool march = true, bool? normalMaps = null, int? reliefQuality = null) =>
-        Gi.GiResolveShaders.WithAlbedo(Variant(Native(Marched(MeshFragmentSolid, march)), normalMaps, reliefQuality));
+    public static string MeshFragmentSolidNative(bool march = true, bool? normalMaps = null, int? reliefQuality = null, bool lean = false) =>
+        Gi.GiResolveShaders.WithAlbedo(Variant(Native(Leaned(Marched(MeshFragmentSolid, march), lean)), normalMaps, reliefQuality));
 
     /// <summary>
     /// The TERRAIN-mode meshes' instanced caster vertex stage, native.

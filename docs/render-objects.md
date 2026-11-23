@@ -305,11 +305,13 @@ Motion vectors (temporal upscalers): an instance with a door, turret joint or ro
 ## Lean lighting
 
 While a frame has no sun shadows (the shadow pass off: its receivers' term is 1) and no probe GI (no `GiProbes`: `uGiParams` stays the published zeros,
-so no GI, traced sun or contact sun), the objects' colour and solid programs are swapped for ones built with `LIGHTING_LEAN` (`LeanLighting`,
+so no GI, traced sun or contact sun), the objects' colour and solid programs, the terrain's colour sets and resolve (`TerrainPrograms` keys them by it)
+and the characters' world colour program (not a portrait's) are swapped for ones built with `LIGHTING_LEAN` (`LeanLighting`,
 `AtmosphereShaders.kenshiLight`): the shadow lookup, the traced-sun share and the probe reads are compiled out; the lamps, sky, haze and reflections'
 surface target stay. Decided each frame (`WorldFrame.PrepareTracedSun`), made the first frame it applies; A/B `lean-lighting`.
 **Observed** (2026-11-23, Iris Xe, `--low-end` 1920x1080 at scale 0.83, save "fps"'s spot, camera 800 units off, paired A/B): objects 6.79 -> 5.69 ms,
-GPU frame 21.2 -> 19.7; 10 pixels differ, by 1 / 255. Stripping the paths one by one in separate runs: the shadow lookup and the probe and traced paths
+GPU frame 21.2 -> 19.7; 10 pixels differ, by 1 / 255. With the terrain too: terrain 4.97 -> 4.50 ms there, 9.43 -> 7.98 from the viewer's default
+distance (GPU 16.0 -> 14.4; 193 scattered pixels differ, as the dust's from run to run). Play bench idle (one run each): GPU 18.1 -> 17.0 ms, 53 -> 56 fps. Stripping the paths one by one in separate runs: the shadow lookup and the probe and traced paths
 about 1 ms together, the lamps about 0.4 more (kept: the night needs them); the ambient map and cloud shadow nothing. The lookups cost their registers
 whether they ran or not.
 ## Validation

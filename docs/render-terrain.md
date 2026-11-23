@@ -272,7 +272,8 @@ Meitou option for weak GPUs, not in the game (`TerrainSimpleShading`; Graphics >
 `--low-end`, off otherwise; A/B `terrain-simple`). A blended patch pixel shades only its dominant resident biome (its share stands for every resident
 biome's, so loading ones weigh as in the full blend), and in it the base layer, the strongest of grass, slope and dirt at its own weight, the road and
 the cliff's stronger projection; no normal-map samples. Its own compiled colour and resolve programs (`TERRAIN_SIMPLE`, `TerrainPrograms` keys sets by
-it), so the full blend's programs carry none of it. Map features, the material cache's bake and the rock bake keep the full material.
+it), so the full blend's programs carry none of it. Map features, the material cache's bake and the rock bake keep the full material. Without sun shadows and probe GI the colour programs are also
+built lean ([render-objects](render-objects.md#lean-lighting)).
 - **Cost** (**Observed**, 2026-11-23, Iris Xe, 1920x1080 at scale 0.83, `--low-end`, save "fps"): viewer A/B at the save's spot, terrain 6.65 -> 5.23 ms
   with the camera 800 units off, 15.1-15.9 -> 8.9-9.8 from the viewer's default distance (two runs). Play bench against master: terrain 13.4 -> 7.4 ms
   idle, idle 38 -> 53 fps. The same choice as a uniform branch in the full programs saved only 2.0-2.7 ms far: the branch's registers were the program's.

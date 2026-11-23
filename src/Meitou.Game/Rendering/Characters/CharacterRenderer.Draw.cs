@@ -534,7 +534,10 @@ internal sealed unsafe partial class CharacterRenderer
         var active = vb.Active;
         var instances = vb.Instances;
         var targets = Gpu.CurrentTargets();
-        var prog = _motionPass ? _motionProg : _depthPass ? _depthProg : _visibilityPass ? _visibility!.Ids(targets.Formats.ShadingRate) : _colourProg;
+        var prog = _motionPass ? _motionProg
+            : _depthPass ? _depthProg
+            : _visibilityPass ? _visibility!.Ids(targets.Formats.ShadingRate)
+            : ColourProg();
         string label = _motionPass ? "characters motion" : _depthPass ? "characters depth" : _visibilityPass ? "characters ids" : "characters";
         var state = Gpu.CurrentState() with { Cull = CullMode.None };
 
@@ -580,6 +583,21 @@ internal sealed unsafe partial class CharacterRenderer
         if (_portraitLive < 0) timer.Begin();
         Gpu.Record(label, job);
         if (_portraitLive < 0) timer.End();
+    }
+
+    /// <summary>
+    /// The world colour pass's program for this frame's lighting: the lean one while <see cref="LeanLighting.Active"/> (not for a portrait, lit by
+    /// its studio).
+    /// </summary>
+    ReflectedProgram ColourProg()
+    {
+        if (!LeanLighting.Active || _portraitLive >= 0) return _colourProg;
+        if (_colourLean is not null) return _colourLean;
+
+        string lean = LeanLighting.Define(CharacterShaders.Fragment(Gpu.Shaders.DiscardNeedsLateDepth));
+        string fragment = Gi.GiResolveShaders.WithAlbedo(lean, inShader: true);
+        return _colourLean = new ReflectedProgram(Gpu, _nativeFrame, CharacterShaders.Vertex(), fragment, "characters lean",
+            CharacterShaders.InstanceLocation);
     }
 
     /// <summary>
