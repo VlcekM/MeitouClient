@@ -75,13 +75,19 @@ public static class SiteReach
     const int SpotDirections = 16;
 
     /// <summary>
+    /// How far past the reach from the site's position <see cref="WorkSpot"/> searches (engine choice: the reach is measured to the footprint's
+    /// edge, so a spot within the reach of a wide storage chest or bench lies further than the reach from its middle).
+    /// </summary>
+    const float SpotMargin = 40;
+
+    /// <summary>
     /// The point a worker walks to for a site it works from <paramref name="reach"/> (the original walks to the site's position marker,
     /// docs/game/buildings-production.md "Where the walk to a building goes"): the site's own position on its floor (<paramref name="floorY"/>) when a
-    /// worker can stand there within <paramref name="heightLimit"/> of the floor; else, of the points on rings round it out to twice the reach that
-    /// lie on that floor and within the reach (<see cref="Gap"/>), the one nearest <paramref name="from"/>; else the site's position. Engine choice:
-    /// furniture cuts holes in a floor's mesh (<see cref="IWalkability.FloorNear"/>), so a walk to the position itself can end on any surface within
-    /// the path's goal floor slack (<see cref="Navigation.NavQuery.GoalFloorSlack"/>, 40), such as a stair beside it, where the arrival's height limit
-    /// (<see cref="HeightLimit"/>, 15 inside a building) is never met.
+    /// worker can stand there within <paramref name="heightLimit"/> of the floor; else, of the points on rings round it out to the reach plus
+    /// <see cref="SpotMargin"/> that lie on that floor and within the reach (<see cref="Gap"/>), the one nearest <paramref name="from"/>; else the
+    /// site's position. Engine choice: furniture cuts holes in a floor's mesh (<see cref="IWalkability.FloorNear"/>), so a walk to the position
+    /// itself can end on any surface within the path's goal floor slack (<see cref="Navigation.NavQuery.GoalFloorSlack"/>, 40), such as a stair
+    /// beside it, where the arrival's height limit (<see cref="HeightLimit"/>, 15 inside a building) is never met.
     /// </summary>
     public static Vector3 WorkSpot(IWalkability walk, Func<BuildSite, Vector2, float?>? edge, BuildSite site, float floorY, float heightLimit,
         float reach, Vector3 from)
@@ -102,7 +108,7 @@ public static class SiteReach
         var at = site.Position;
         Vector3? best = null;
         float bestDistance = float.MaxValue;
-        for (float r = SpotStep; r <= 2 * reach; r += SpotStep)
+        for (float r = SpotStep; r <= reach + SpotMargin; r += SpotStep)
         {
             for (int k = 0; k < SpotDirections; k++)
             {
