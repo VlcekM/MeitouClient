@@ -4854,3 +4854,9 @@ msgstr "簡易地形シェーディング"
 #. machine-translated
 msgid "Faster ground for weak graphics: one biome and two texture layers a pixel, no bump detail. Blends between biomes show harder edges."
 msgstr "性能の低いグラフィック向けに地面を高速化します。1ピクセルあたり1つのバイオームと2つのテクスチャ層のみで、凹凸の詳細はありません。バイオームの境目がくっきりします。"
+
+msgid "Unavailable menu rows"
+msgstr "使用できないメニュー項目"
+
+msgid "Greyed: a menu row your selection can't do now, such as First Aid without a medkit, is greyed; Shift-click it to set up the job anyway. Faithful: every row as in the game."
+msgstr "グレー表示：選択中のキャラクターが今は実行できない項目（救急キットなしの応急手当など）はグレーで表示されます。Shift+クリックで仕事として設定できます。原作どおり：すべての項目をゲームと同じく表示します。"

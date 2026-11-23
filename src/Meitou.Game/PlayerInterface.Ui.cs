@@ -358,7 +358,7 @@ sealed partial class PlayerInterface
         if (!_uiHost.HasMenuVerbs) return [];
 
         var context = new UiMenuContext(target, SelectedIds(), Mouse, () => SlowModifier, () => Session.World.Tick, Say);
-        return _uiHost.CharacterMenuVerbs(context).Select(v => (v.Caption, v.Choose));
+        return _uiHost.CharacterMenuVerbs(context).Select(v => ContextMenuWindow.Available(v.Caption, v.Choose, !v.Unavailable));
     }
 
     /// <summary>

@@ -261,6 +261,12 @@ sealed class UserConfig
     /// </summary>
     public FloaterMode Floaters { get; set; } = FloaterMode.Simple;
     /// <summary>
+    /// Meitou's greyed context-menu rows (Interface settings, on by default): a row the selection cannot carry out now (First Aid or Repairs with no
+    /// kit at hand, Splint Injuries without a splint kit, a mod row marked unavailable) is greyed and takes only a Shift click, which sets up its
+    /// job. Off is the original's menu.
+    /// </summary>
+    public bool GreyUnavailableVerbs { get; set; } = true;
+    /// <summary>
     /// The original's <c>censorship</c> option (Interface settings, off by default): five words swapped in the displayed dialogue.
     /// </summary>
     public bool Censorship { get; set; }

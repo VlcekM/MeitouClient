@@ -732,6 +732,14 @@ public sealed class CharacterSnapshot
     /// </summary>
     public bool CarriesShackles { get; internal set; }
     /// <summary>
+    /// A selected character for whom First Aid or Repairs would find a kit now (<see cref="FirstAid.FirstAidSystem.MedkitAtHand"/>).
+    /// </summary>
+    public bool HasMedkit { get; internal set; }
+    /// <summary>
+    /// A selected character holding its own splint kit (<see cref="FirstAid.FirstAidSystem.SplintKitAtHand"/>).
+    /// </summary>
+    public bool HasSplintKit { get; internal set; }
+    /// <summary>
     /// The number that turns its portrait camera (<see cref="CharacterCold.PortraitSerial"/>).
     /// </summary>
     public uint PortraitSerial { get; internal set; }

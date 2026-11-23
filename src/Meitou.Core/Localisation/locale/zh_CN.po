@@ -5699,3 +5699,9 @@ msgstr "简易地形着色"
 #. machine-translated
 msgid "Faster ground for weak graphics: one biome and two texture layers a pixel, no bump detail. Blends between biomes show harder edges."
 msgstr "为性能较弱的显卡加快地面渲染：每个像素只用一个生物群系和两层纹理，没有凹凸细节。生物群系之间的过渡边缘会更硬。"
+
+msgid "Unavailable menu rows"
+msgstr "不可用的菜单项"
+
+msgid "Greyed: a menu row your selection can't do now, such as First Aid without a medkit, is greyed; Shift-click it to set up the job anyway. Faithful: every row as in the game."
+msgstr "灰显：所选角色当前无法执行的菜单项（例如没有急救包时的急救）会灰显；按住 Shift 点击仍可设为工作。原版：所有菜单项与游戏一致。"

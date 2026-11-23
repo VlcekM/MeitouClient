@@ -362,6 +362,12 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     public FloaterMode Floaters { get; set; } = FloaterMode.Simple;
 
     /// <summary>
+    /// The "Unavailable menu rows" option (<see cref="UserConfig.GreyUnavailableVerbs"/>): a context-menu row the selection cannot carry out now is
+    /// greyed and takes only a Shift click (<see cref="Ui.ContextMenuWindow.Available"/>); off, every row is drawn and given as in the original.
+    /// </summary>
+    public bool GreyUnavailableVerbs { get; set; } = true;
+
+    /// <summary>
     /// The button during play (<see cref="UserConfig.FeedbackButton"/>); off, it still shows on the title and with the game menu open.
     /// </summary>
     public bool FeedbackButtonInPlay { get; set; } = true;

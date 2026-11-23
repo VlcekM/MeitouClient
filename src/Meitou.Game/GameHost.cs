@@ -848,6 +848,7 @@ sealed partial class GameHost(
         Player.SpeedUnit = Config.SpeedUnit;
         Player.ShowNames = Config.ShowNames;
         Player.Floaters = Config.Floaters;
+        Player.GreyUnavailableVerbs = Config.GreyUnavailableVerbs;
         Player.FeedbackButtonInPlay = Config.FeedbackButton;
         Player.XpLabel = SkillXp.Label(Config);
         Player.Frontend.FixLoadButton = Config.FixLoadButton;

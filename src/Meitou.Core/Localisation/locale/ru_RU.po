@@ -4858,3 +4858,9 @@ msgstr "Упрощённое затенение земли"
 #. machine-translated
 msgid "Faster ground for weak graphics: one biome and two texture layers a pixel, no bump detail. Blends between biomes show harder edges."
 msgstr "Более быстрая земля для слабой графики: один биом и два слоя текстур на пиксель, без рельефных деталей. Переходы между биомами выглядят резче."
+
+msgid "Unavailable menu rows"
+msgstr "Недоступные пункты меню"
+
+msgid "Greyed: a menu row your selection can't do now, such as First Aid without a medkit, is greyed; Shift-click it to set up the job anyway. Faithful: every row as in the game."
+msgstr "Серые: пункт меню, который выбранные персонажи сейчас не могут выполнить (например, первая помощь без аптечки), показан серым; Shift+щелчок всё равно назначит работу. Как в оригинале: все пункты как в игре."

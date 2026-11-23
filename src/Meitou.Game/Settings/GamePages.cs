@@ -390,6 +390,11 @@ sealed class GamePages(SettingsMenu menu)
             + "Simple shows the total, Full one number per damage type and the part hit.",
             Choice: new(() => ["Off", "Simple info", "Full info"], () => (int)menu.Config.Floaters,
                 i => menu.Player.Floaters = menu.Config.Floaters = (FloaterMode)i)));
+        result.Add(new("Unavailable menu rows",
+            "Greyed: a menu row your selection can't do now, such as First Aid without a medkit, is greyed; Shift-click it to "
+            + "set up the job anyway. Faithful: every row as in the game.",
+            Choice: new(() => ["Faithful", "Greyed"], () => menu.Config.GreyUnavailableVerbs ? 1 : 0,
+                i => menu.Player.GreyUnavailableVerbs = menu.Config.GreyUnavailableVerbs = i == 1)));
         result.Add(new("Font size", "Points added to every interface font's default height (the game: 3).",
             Slider: new("Font size", UserConfig.MinFontSize, UserConfig.MaxFontSize, () => menu.Config.FontSize ?? KenshiFontSize.DefaultSetting,
                 v => SetFontSize(v), "0", Faithful: KenshiFontSize.DefaultSetting)));

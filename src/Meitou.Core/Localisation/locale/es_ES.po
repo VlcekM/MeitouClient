@@ -4856,3 +4856,9 @@ msgstr "Sombreado de terreno simple"
 #. machine-translated
 msgid "Faster ground for weak graphics: one biome and two texture layers a pixel, no bump detail. Blends between biomes show harder edges."
 msgstr "Suelo más rápido para gráficos modestos: un bioma y dos capas de textura por píxel, sin detalle de relieve. Las transiciones entre biomas muestran bordes más marcados."
+
+msgid "Unavailable menu rows"
+msgstr "Filas de menú no disponibles"
+
+msgid "Greyed: a menu row your selection can't do now, such as First Aid without a medkit, is greyed; Shift-click it to set up the job anyway. Faithful: every row as in the game."
+msgstr "Atenuadas: una fila del menú que tu selección no puede hacer ahora, como Primeros auxilios sin botiquín, aparece atenuada; haz Mayús+clic para asignar la tarea igualmente. Fiel: cada fila como en el juego."

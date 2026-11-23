@@ -4856,3 +4856,9 @@ msgstr "Rendu du terrain simplifié"
 #. machine-translated
 msgid "Faster ground for weak graphics: one biome and two texture layers a pixel, no bump detail. Blends between biomes show harder edges."
 msgstr "Sol plus rapide pour les cartes graphiques modestes : un biome et deux couches de texture par pixel, sans détail de relief. Les transitions entre biomes ont des bords plus nets."
+
+msgid "Unavailable menu rows"
+msgstr "Lignes de menu indisponibles"
+
+msgid "Greyed: a menu row your selection can't do now, such as First Aid without a medkit, is greyed; Shift-click it to set up the job anyway. Faithful: every row as in the game."
+msgstr "Grisées : une ligne du menu que votre sélection ne peut pas faire maintenant, comme Premiers soins sans trousse, est grisée ; Maj+clic pour créer la tâche quand même. Fidèle : chaque ligne comme dans le jeu."

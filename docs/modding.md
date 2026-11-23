@@ -759,7 +759,10 @@ holds refuses the second mod.
   the cursor (whether it offers a menu decides what a right click there does), so it must be cheap; a tick may be in flight, so it must not
   touch the world. It gets `UiMenuContext`: the target's snapshot, the selection and the cursor as the menu is built, `Shift` and `Tick` read
   when asked (so a chosen row sees them as the player chooses it), and `Enqueue`; a chosen `UiMenuVerb` queues commands. Return no rows to keep
-  a plain right click (a row makes the character offer a menu). Shift does not turn a mod row into a job; the row reads `Shift` itself. Menus
+  a plain right click (a row makes the character offer a menu). Shift does not turn a mod row into a job; the row reads `Shift` itself. A row
+  with `Unavailable = true` (the selection cannot carry it out now, e.g. it lacks the item) is greyed while the Interface setting "Unavailable
+  menu rows" is Greyed (the default): a plain click does nothing, a Shift click chooses it, so the mod can set up a job for later; on Faithful
+  it is drawn and chosen as any row ([unavailable rows](game/ui-input.md#context-menu-verbs)). Menus
   that stay empty or fixed get no mod rows: no selection, a body the first selected carries (Put Down only), a body someone outside the player's
   faction carries; an animals-only selection keeps only the original's animal verbs. A source that throws, or returns a row without a caption
   or action, is logged once and dropped for the session; a row's action that throws is logged.
