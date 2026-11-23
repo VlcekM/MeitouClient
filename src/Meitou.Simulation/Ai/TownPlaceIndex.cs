@@ -130,6 +130,27 @@ sealed class TownPlaceIndex(PopulationData data)
     public IReadOnlyList<TownBuilding> OutpostGates(int number) => _outpostGates.TryGetValue(number, out var gates) ? gates : [];
 
     /// <summary>
+    /// The workplace known by <paramref name="key"/> (<see cref="TownBuilding.Key"/>: a town building's <c>x.y:instance</c>, an outpost stand-in's
+    /// site id) among the towns and outposts the last refresh looked at; null when none is.
+    /// </summary>
+    public TownBuilding? FindWorkplace(string key)
+    {
+        foreach (var places in _places.Values)
+        {
+            foreach (var b in places.Workplaces)
+                if (b.Key == key) return b;
+        }
+
+        foreach (var work in _outposts.Values)
+        {
+            foreach (var b in work.All)
+                if (b.Key == key) return b;
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// The outposts' workplaces as the last refresh found them, by outpost number in order.
     /// </summary>
     public IEnumerable<TownBuilding> OutpostStandIns() => _outposts

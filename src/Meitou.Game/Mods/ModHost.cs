@@ -177,6 +177,33 @@ public sealed class ModHost
     }
 
     /// <summary>
+    /// Attaches a new player interface for the mods' <see cref="ModInterface"/>s; on the host's thread.
+    /// </summary>
+    internal void AttachInterface(IModInterfaceHost host) => _registry.Interface.Attach(host);
+
+    /// <summary>
+    /// Tells every mod's save-written listener, in load order, that the save folder <paramref name="folder"/> was written; on the host's thread. One
+    /// that throws is logged and not called again.
+    /// </summary>
+    public void TellSaveWritten(string folder)
+    {
+        foreach (var listener in _registry.SavesWritten)
+        {
+            if (listener.Faulted) continue;
+            try
+            {
+                listener.Run(folder);
+            }
+            catch (Exception e)
+            {
+                listener.Faulted = true;
+                Console.Error.WriteLine($"mod       {listener.Owner}: save-written listener disabled: {e.GetType().Name}: {e.Message}");
+                CodeModFaults.Tell(listener.Owner, e);
+            }
+        }
+    }
+
+    /// <summary>
     /// The mods' display-only effects (docs/modding.md "Visual effects"), played by the host once a frame.
     /// </summary>
     internal ModEffects Effects => _registry.Effects;

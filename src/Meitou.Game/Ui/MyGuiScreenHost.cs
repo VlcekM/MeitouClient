@@ -315,6 +315,16 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
     public void SetTab(string id, string widget, int index) => _screens[id].Tabs[widget] = Math.Max(0, index);
 
     /// <summary>
+    /// Where open screen <paramref name="id"/> was last placed, in pixels; null while it is closed or before it was first placed.
+    /// </summary>
+    public UiRect? PlacedBounds(string id)
+    {
+        if (!IsOpen(id) || !_screens.TryGetValue(id, out var s) || s.PlacedSize == Vector2.Zero) return null;
+
+        return new UiRect(s.Placed.X, s.Placed.Y, s.PlacedSize.X, s.PlacedSize.Y);
+    }
+
+    /// <summary>
     /// Where a screen has been moved from its layout position (a dragged window keeps its offset; the host may place a window beside another).
     /// </summary>
     public Vector2 GetOffset(string id) => _screens[id].Offset;

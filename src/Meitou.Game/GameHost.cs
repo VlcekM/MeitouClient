@@ -964,7 +964,7 @@ sealed partial class GameHost(
         if (start is not null)
         {
             PlayerSquad = Population.StartPlayer(Session.World, start);
-            Session.World.TellReady(fromSave: false);
+            Session.World.TellReady(new Simulation.WorldStart(Simulation.WorldStartKind.NewGame));
             var lead = Session.World.Characters.Previous[PlayerSquad.Leader.Slot].Position;
             target = lead;
             Console.WriteLine($"player    {PlayerSquad.Members.Count} characters, leader at {lead.X:0}, {lead.Z:0}");

@@ -166,6 +166,7 @@ sealed class GameMods(GameHost host)
         foreach (var notice in _builtInNotices) ui.Notice(notice);
         if (Mods is null) return;
         Mods.RegisterUi((extension, folder) => ui.RegisterUiExtension(extension, folder));
+        Mods.AttachInterface(new Game.Ui.PlayerModInterface(ui));
         if (Mods.ArrangesFactionList) ui.FactionWindow.ArrangeList = Mods.ArrangeFactionList;
         foreach (var notice in Mods.Notices) ui.Notice(notice, true);
     }
@@ -316,6 +317,11 @@ sealed class GameMods(GameHost host)
             host.Player.Notice(line, true);
         }
     }
+
+    /// <summary>
+    /// A save folder was written: its full path to the mods' save-written listeners (docs/modding.md "Persistence"); on the host's thread.
+    /// </summary>
+    internal void TellSaveWritten(string folder) => Mods?.TellSaveWritten(Path.GetFullPath(folder));
 
     /// <summary>
     /// The save's mod data into the systems of the world just loaded from it; between ticks, before the first.

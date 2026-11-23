@@ -316,6 +316,10 @@ holds refuses the second mod.
   and must not change characters or other world state in the call. One that throws is logged and disabled for that world, and the fault enters
   the state hash. Without an observer no payload is made. Engine API, not in the original. **Verified** by `CombatDefenceObserverTests`
   (a duel: one report per logged block or dodge, the same on 1 and 4 threads, the run unchanged; a throwing observer called once, its fault hashed).
+- **Target choice:** `TargetCandidate.ChooserHasTarget` (`Meitou.Simulation.Combat`) tells a postfix on the public `TargetScore.Score` whether
+  the chooser already has a target: true in a fighter's own target choice while it fights someone (the original's `AI::chooseBestAttackTarget`
+  given a valid old target), false in the other choices (the attacker of a protectee, the aggro look, an assault). No engine score reads it.
+  Engine API, not in the original.
 - **Trade prices:** a registered system implementing `ITradePriceFilter` (`Meitou.Simulation.Trading`) is asked
   `Price(World, in TradeDeal, long price)` for every price the game asks: the trade window's stack and unit prices and the coins it takes,
   and an NPC shopper's purchase from a building's stock. The deal names the tick, the item record, the units, whether the customer sells,
@@ -353,7 +357,10 @@ holds refuses the second mod.
   (a build order's materials) asks it between ticks on the host's thread, with the coming tick's number. One that throws is answered as allowing
   for the rest of that tick and is not asked from the next tick on; the fault enters the state hash. Without a filter nothing is asked. Engine
   API, not in the original.
-- **World ready:** a registered system implementing `IWorldReady` receives `Ready(World, bool fromSave)` once, between ticks before the first:
+- **World ready:** a registered system implementing `IWorldReady` receives `Ready(World, bool fromSave)` once, between ticks before the first
+  (`world.Start` then says how: `WorldStartKind.NewGame`, `Load` or `Import`, with `SaveFolder` the full path of the save read, null for a new
+  game; `Unknown` for a world the game host did not start; not saved, hashed or read by the engine, so a mod reads a file of its own or the
+  original mod's beside the save there):
   after a save has loaded (`IModSaveData.Read` done and settings of mods no longer running dropped; an import counts as a save) or a new game has
   placed the player's characters (`fromSave` false), once that world is the running one, so the context's `Enqueue`, `Tick` and `PostSound` reach
   it. Systems are told in system order (mods in load order); one may change the world as a serial phase does, so a mod sets its unsaved runtime
@@ -632,6 +639,11 @@ holds refuses the second mod.
   put back the stock `fcs.def` and so remove the lines (add them again). The editor keeps a field `fcs.def` does not declare through a load and a
   save, so a record keeps its fields when someone without the lines saves it, unless its Cleanup window's "Remove deprecated fields" is run ([FCS
   data](formats/fcs-mod.md#editor-and-undeclared-fields)). Without the editor, write the records with `FcsWriter` (`src/Meitou.Data/Fcs`).
+- **Character refresh:** `CharacterRefresh.Refresh(context.Population, cold, kind)` (`Meitou.Simulation.Bodies`) makes a character's derived
+  state again after a mod changed what it is made from: `CharacterRefreshKind.Equipment` the fighter from the inventory (guard and encumbrance
+  kept), the drawn weapon following the new kit, the worn gear's colours and the look, as every engine path that moves worn items does (a
+  piece broken, taken off or put on by a mod); `Look` the look alone. Serial phases only (a system's `Inputs` or serial step, `IWorldReady`). A
+  character without an inventory is left as it is. Engine API.
 - **Bone anchors:** `CharacterCold.DrawAnchor = new DrawAnchor(carrier, bone, offset, rotation)` draws a character on another's named bone
   as the renderer poses the carrier in the drawn frame (a rider on a mount; the rule and its limits:
   [character-renderer](character-renderer.md#bone-anchors-meitou-engine-choice)); null removes it. Set it in the tick from the mod's own
@@ -706,7 +718,10 @@ holds refuses the second mod.
   **Verified** by `ModHookTests` (synthetic world): the click and its guards (stale tag, locked on), fall-through, tag stacking, hash and save key.
 - **Persistence:** a mod system implementing `IModSaveData` (`Write`/`Read(Stream)`) is saved under its name in the mod's sidecar file
   ([save](formats/save.md#mod-data)), captured between ticks with the save and restored right after `SaveLoader.Load`, before the first
-  tick. `Read` runs only when the save has data for the system. Vanilla save files stay byte-exact. Data kept per character is keyed by the
+  tick. `Read` runs only when the save has data for the system. Vanilla save files stay byte-exact. `AddSaveWritten(folder => ...)` on
+  `ModContext` is told the full path of each save folder once the game has written it (Save window, quicksave, autosave), on the host's thread
+  while a tick may be in flight (it must not touch the world), so a mod writes a file of its own beside the save; a throw is logged and the
+  listener is not called again. The folder a load or import read is `world.Start.SaveFolder` (World ready). Data kept per character is keyed by the
   characters' lasting ids (Character ids, below), not by `CharacterId`, which is new for every world.
 - **Character ids:** `world.LastingIds.GetOrGive(character)` gives a character a `LastingId` (a non-zero 64-bit value) the first time any mod asks
   and returns the same one after: it stays with the character for life, across saves and loads, squad moves, recruiting, being taken captive and
@@ -737,6 +752,16 @@ holds refuses the second mod.
   disappears or is disabled; meanwhile the interface's keys go to it, as for a window's box. Each change of its text runs `Action` with
   the new text in `UiActionContext.Text` (empty for clicks on other nodes). `Text` is the box's text: whenever the node's differs the box
   takes it, so a mod stores the text its action gets and echoes it, or sets another (empty to clear). Engine API, not in the original.
+- **Interface actions:** `context.Interface` (`ModInterface`) acts on the game's screens from the host's thread (a UI action, key action, menu
+  row, hit feed): `OpenScreen(ModScreen kind, ScreenTarget target)` opens `CharacterEditor` (a recruit's edit, free with race and gender kept,
+  of `target.Characters`; false while no listed character is in the snapshot yet, so a mod opening it on a character made this tick tries again
+  on later frames, or while an editor or a modal screen is open), `Overview` (tab `target.Tab`: 0 map, 1 faction, 2 research, 3 crafting, 4
+  squads) or `Build` (build mode, as B); `IsOpen(kind)` and `ScreenBounds(kind)` (the window's last placed rectangle in pixels, null while
+  closed) read them; `BuildEntries()` lists the build window's buildings in its own order (`UiBuildEntry`: BUILDING id, name, category, group,
+  group index; none while it is closed), `BuildChoice` is the building it holds chosen and `ChooseBuild(id)` chooses one as clicks on its
+  category, group and variant (false when the window is closed or does not list it). A call off the host's thread or without an interface
+  answers false, empty or null and is logged once per mod and problem. Display state only: nothing enters the state hash or a save. New
+  `ModScreen` kinds are added at the end. Engine API, not in the original.
 - **Map markers:** `UiRegistration.AddMapMarkers(markers)` puts markers on the world map (Overview's Map tab). `markers` gets `UiMapContext`
   (the snapshot the map is drawn from and its zoom level, 0 for the whole map to 2) on the host's thread each frame the map shows, so it
   must not touch the world, and returns `UiMapMarker`s: a world point (X, Z), an image group of the game's map marker set
@@ -875,7 +900,9 @@ holds refuses the second mod.
   `[Setting(label, Hint, Min, Max, Step, Options, SubGroup, VisibleWhen)]` (`ModSettings.cs`) become one group, in declaration order (a
   sub-group's settings together at its first one's place), under the mod's row on the Settings screen's Mods page
   ([native UI](native-ui.md#settings)): `bool` an Off | On switch, `int`/`float`/`double` a slider (Min and Max required; Step 0 = 1 for `int`, a
-  hundredth of the range otherwise), an enum or a `string` with Options a list. `SubGroup` puts a setting under a sub-group header of that name (its
+  hundredth of the range otherwise), an enum or a `string` with Options a list, a `string` without Options a free text box (one line, at most
+  `MaxLength` characters, 0 meaning 256, up to 4096; a click types in it, Enter, Tab or a click elsewhere keeps the text, Esc drops it; control
+  characters become spaces, a longer text is cut, and a saved value that is too long or holds a control character is ignored). `SubGroup` puts a setting under a sub-group header of that name (its
   own fold, at its first setting's place); `VisibleWhen` names a public `bool` property of the same object and hides the setting while it is false,
   so a switch can hide its dependents (the page reads it every frame; a throw from it is logged and the setting stays shown). Both are optional; a
   `VisibleWhen` that is not such a property refuses the mod; a game older than both fails reading the attribute, so
@@ -974,7 +1001,11 @@ holds refuses the second mod.
   mod handles its own commands in a system of its own.
 - **Player squads on AI packages** (`Meitou.Simulation.Ai`, [rules](simulation.md#autonomous-player-squads)): `SetSquadAutonomy(squadId, on)` lets
   the AI run a player's squad; then `ChangeAi(squadId, packageId)` and `StartContract(squadId, packageId, hours)` give it packages as dialogue's
-  `change AI` / `AI contract` give an NPC squad's (both are ignored for a player squad that is not autonomous), and
+  `change AI` / `AI contract` give an NPC squad's (both are ignored for a player squad that is not autonomous);
+  `SetSquadPackages(squadId, [new SquadPackage(slot, packageId), ...])` sets several by slot (slots 0 to 1000; the board tries the highest slot
+  first, a slot's in the order given, and chooses at once; `ChangeAi` is its one-package case in slot 0; an empty list, a slot out of range or an
+  unknown package refuses the whole command with a log line; saved with the squad as `meitou packages`, [save](formats/save.md#npc-platoons-meitou-mapping),
+  hashed while set; taken by NPC squads too); and
   `SetSquadHome(squadId, building)` its home: a town building's key (`TownBuilding.Key`, `x.y:instance`) or a player-built building's id
   (`BuildSite.Id`); null clears it. A player-built home in one of the faction's outposts makes the outpost the squad's town:
   going home, town work on the outpost's own machines, wandering between its public buildings, the gate guard's gate (guarded from
@@ -1218,6 +1249,12 @@ holds refuses the second mod.
   - Gone with nothing in their place: `PopulationSystem.PendingTalk` and `AnnouncementPatience`, `FirstAidSettings.AutoReach`,
     `Platoon.OrderCooldown`, `AiMind.CaptiveOffers`, `LockSystem.ReleaseTimeout`; the host's `ModHost.TryTakeFactoryNotice` is
     `CodeModFaults.TryTakeNotice`.
+- **Workplace slots** (`Meitou.Simulation.Ai`; the system from `world.Systems` or `Find<AiSystem>()`): `AiSystem.WorkSlots(building)` answers a
+  workplace's operator slots as `WorkplaceSlots(Held, Max)` (`Free`): `building` is its `TownBuilding.Key` (a town building's `x.y:instance`,
+  an outpost machine's site id), `Held` the AI workers holding it and the player's operators on a job at an outpost machine, `Max` its
+  functionality's `max operators`, as of the last package cadence pass; null for a building that is no workplace of a town or outpost the AI
+  looked at then. Read only, in the serial phases. A mod's own worker holds no slot: a mod job checks `Free` before it hires. Engine API.
+ 
 - **Seats** (`Meitou.Simulation.Production`; the system from `SystemBuildContext.Find<ProductionSystem>()` or `world.Systems`):
   `SitOn(world, slot, seat, row, source)` puts a character, the player's or an NPC, on a chair or throne through the player's Use order's
   act-out (the original's sitting is its operate task, [chairs](game/ai-tasks.md#town-goals)): it starts `CharacterTask.Operate` through

@@ -13,6 +13,13 @@ public readonly record struct TargetCandidate
     public bool Current { get; init; }
 
     /// <summary>
+    /// The chooser already has a target, as the fighter's own target choice asks (the original's <c>AI::chooseBestAttackTarget</c> called with a
+    /// valid old target); false for the other choices (the attacker of a protectee, the aggro look, an assault). Read by no engine score: for a
+    /// code mod that weighs a candidate by it (docs/modding.md "Target choice").
+    /// </summary>
+    public bool ChooserHasTarget { get; init; }
+
+    /// <summary>
     /// Playing a stumble clip.
     /// </summary>
     public bool Staggered { get; init; }

@@ -378,6 +378,22 @@ public sealed partial class World : IDisposable
     }
 
     /// <summary>
+    /// How the world came to be and the save folder it came from (<see cref="WorldStart"/>), as the host told it with
+    /// <see cref="TellReady(WorldStart)"/>; <see cref="WorldStartKind.Unknown"/> before. Display and file information only: never read by a system
+    /// of the engine, not saved, not hashed.
+    /// </summary>
+    public WorldStart Start { get; private set; }
+
+    /// <summary>
+    /// Notes how the world came to be (<see cref="Start"/>), then tells the <see cref="IWorldReady"/> systems (<see cref="TellReady(bool)"/>).
+    /// </summary>
+    public void TellReady(WorldStart start)
+    {
+        Start = start;
+        TellReady(start.FromSave);
+    }
+
+    /// <summary>
     /// Tells every <see cref="IWorldReady"/> system, in system order, that the world is ready to run (<paramref name="fromSave"/>: loaded from a
     /// save, else a new game); one that throws is logged and the rest are still told, and a mod's is stopped with the player's notice
     /// (<see cref="ModSystemFaults.Fault"/>). Between ticks, before the first.
