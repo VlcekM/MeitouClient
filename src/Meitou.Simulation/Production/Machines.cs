@@ -356,6 +356,11 @@ public sealed class Machine : IPowerDraw
     /// </summary>
     public bool OnGrid { get; set; }
     /// <summary>
+    /// Its building belongs to no town at all (NO_TOWN, docs/game/buildings-production.md "Town at materialization"), so no power frame runs it and a
+    /// machine that draws power gets none. Derived each tick; not saved, not hashed.
+    /// </summary>
+    public bool NoTown { get; set; }
+    /// <summary>
     /// Whether the battery's town grid charged its batteries overall this tick (see <see cref="OnGrid"/>).
     /// </summary>
     public bool GridCharging { get; set; }

@@ -5693,6 +5693,14 @@ msgid "Sort by"
 msgstr "排序方式"
 
 #. machine-translated
+msgid "Outpost:"
+msgstr "前哨:"
+
+#. machine-translated
+msgid "This building stands outside every outpost's build limit, so no generator can power it. Dismantle it and build it again inside the red ring."
+msgstr "该建筑位于所有前哨的建造范围之外，因此任何发电机都无法为其供电。请拆除它，并在红圈内重新建造。"
+
+#. machine-translated
 msgid "A tall two-story building shell with stairs inside."
 msgstr "一座内有楼梯的高大两层建筑外壳。"
 

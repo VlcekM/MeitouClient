@@ -1553,6 +1553,13 @@ static partial class WorldFrame
                 f.RelativeRotation * SceneProjection().Projection, eye);
         }
 
+        // The outposts' build limit rings while a building is held (Meitou only).
+        if (gpu.TownRangeOverlay is { Visible: true } ringOverlay && post.Target is { } ringPicture)
+        {
+            ringOverlay.Record(ringPicture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight,
+                f.RelativeRotation * SceneProjection().Projection, eye);
+        }
+
         // The pick & collision inspector's hulls over the finished picture (Meitou only).
         if (gpu.InspectorOverlay is { Visible: true } debugOverlay && post.Target is { } debugPicture)
         {

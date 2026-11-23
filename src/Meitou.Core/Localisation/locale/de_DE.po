@@ -4850,6 +4850,14 @@ msgid "Sort by"
 msgstr "Sortieren nach"
 
 #. machine-translated
+msgid "Outpost:"
+msgstr "Außenposten:"
+
+#. machine-translated
+msgid "This building stands outside every outpost's build limit, so no generator can power it. Dismantle it and build it again inside the red ring."
+msgstr "Dieses Gebäude steht außerhalb der Baugrenze jedes Außenpostens, daher kann kein Generator es mit Strom versorgen. Baue es ab und errichte es innerhalb des roten Rings neu."
+
+#. machine-translated
 msgid "A tall two-story building shell with stairs inside."
 msgstr "Eine hohe zweistöckige Gebäudehülle mit Treppe im Inneren."
 

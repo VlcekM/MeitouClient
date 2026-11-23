@@ -128,6 +128,11 @@ internal sealed class WorldGpu : IDisposable
     public NavmeshOverlayRenderer? InspectorOverlay;
 
     /// <summary>
+    /// The player outposts' build limit rings while a building is held in build mode (Meitou only), same kind of renderer as the navmesh view.
+    /// </summary>
+    public NavmeshOverlayRenderer? TownRangeOverlay;
+
+    /// <summary>
     /// The hover outline the game draws round the character under the mouse, and with Alt those near (null in the viewer).
     /// </summary>
     public HoverOutlineRenderer? HoverOutline;
@@ -404,6 +409,7 @@ internal sealed class WorldGpu : IDisposable
         InteriorMask?.Dispose();
         NavmeshOverlay?.Dispose();
         InspectorOverlay?.Dispose();
+        TownRangeOverlay?.Dispose();
         Water?.Dispose();
         Surfaces?.Dispose();
         Reflection?.Dispose();
