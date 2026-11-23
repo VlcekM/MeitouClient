@@ -659,7 +659,7 @@ rock) makes output only while someone operates it.
   works unattended (`ResearchBuilding::vfunc_28` does the same). Meitou: `MachineData.Unattended` (no base-game pair is negative on both, **Verified** over the
   base records, so mods only). Only raw +0x3ac = 0 (not the both-negative case) gives the menu order 152 Auto-Haul instead of 87
   ([ui-input](ui-input.md#context-menu-verbs)). Base game (**Verified** data): Iron Refinery III / IV, Cotton and Hemp Auto-Loom,
-  Automatic Grain Silo, Hybrid Stone Mine II (building 0); Campfire, Camp Fish Pile, Bread Oven, wind generators, Rain Collector,
+  Automatic Grain Silo, Hybrid Stone Mine II (building 0); Campfire, Camp Fish Pile, Bread Oven, Small Generator, Generator II, wind generators, Rain Collector,
   Battery Bank, storages and lights (functionality 0).
 - s = `lerp(stat/100, 0.5, 1.4)` of the effective stat `stat used` (`FUN_1408852a0`; 1 without an operator; the lerp
   helper `FUN_140015b63` is `a + (b - a) t`). **Verified**: no clamp, so a stat above 100 lifts s past 1.4 (`FUN_14035bc90` passes it
@@ -1361,9 +1361,8 @@ inputs in list order as the finder does, takes storages before producers and ski
   on a storage 124 "Hauling to" (several targets allowed); an automatic machine (152) adds 152 plus 124 on it. The first job in a
   character's list that can run wins; operating is skipped while the machine's output is full or its inputs are empty (row 87's !63 and !62 unmet at the job's root,
   [perma-jobs](ai-tasks.md#perma-jobs)), so a character moves down its list and returns when the machine can work again.
-- **Fuel generators** (**Verified**, probe of the merged base data): Small Generator and Generator II have BUILDING `max operators` -1 and
-  functionality 0 (raw 0, automatic) and consume Fuel (10, rate 100), so their order is 152 Auto-Haul (Generator class slot 131,
-  [ui-input](ui-input.md#building-picking-and-selection)) and Shift adds 152 plus 124. Meitou: `MachineData.IsFuelGenerator` makes them `Operable`
+- **Fuel generators**: automatic with `consumes` (Small Generator, Generator II: Fuel 10, rate 100), so 152 Auto-Haul, with Shift 152 plus 124
+  (Generator class slot 131, [ui-input](ui-input.md#building-picking-and-selection)). Meitou: `MachineData.IsFuelGenerator` makes them `Operable`
   and `IsHauledAutomatic`, so the hauler fetches Fuel from a storage into the tank as for an automatic producer; wind generators and batteries
   get no verb.
 - **Storage pick** (**Verified**, `FUN_14059acd0`, also called by the 242 ditch finder `FUN_1405a59a0`): the candidates are the current town's
