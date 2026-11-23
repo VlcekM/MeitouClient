@@ -4848,3 +4848,11 @@ msgstr "Enregistrer le préréglage actuel"
 
 msgid "Sort by"
 msgstr "Trier par"
+
+#. machine-translated
+msgid "Outpost:"
+msgstr "Avant-poste :"
+
+#. machine-translated
+msgid "This building stands outside every outpost's build limit, so no generator can power it. Dismantle it and build it again inside the red ring."
+msgstr "Ce bâtiment se trouve hors de la limite de construction de tout avant-poste : aucun générateur ne peut l'alimenter. Démontez-le et reconstruisez-le à l'intérieur de l'anneau rouge."

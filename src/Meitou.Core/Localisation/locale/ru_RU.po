@@ -4850,3 +4850,11 @@ msgstr "Сохранить текущий набор"
 
 msgid "Sort by"
 msgstr "Сортировать по"
+
+#. machine-translated
+msgid "Outpost:"
+msgstr "Аванпост:"
+
+#. machine-translated
+msgid "This building stands outside every outpost's build limit, so no generator can power it. Dismantle it and build it again inside the red ring."
+msgstr "Это здание стоит за пределами границы строительства всех аванпостов, поэтому ни один генератор не может его питать. Разберите его и постройте заново внутри красного кольца."

@@ -4846,3 +4846,11 @@ msgstr "現在のプリセットを保存"
 
 msgid "Sort by"
 msgstr "並べ替え"
+
+#. machine-translated
+msgid "Outpost:"
+msgstr "拠点:"
+
+#. machine-translated
+msgid "This building stands outside every outpost's build limit, so no generator can power it. Dismantle it and build it again inside the red ring."
+msgstr "この建物はどの拠点の建設範囲にも入っていないため、発電機から電力を受けられません。解体して赤い輪の内側に建て直してください。"

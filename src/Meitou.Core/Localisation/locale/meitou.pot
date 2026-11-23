@@ -3438,6 +3438,10 @@ msgid "Outline and tint the selected building, and the building under the cursor
 msgstr ""
 
 #: src/Meitou.Game/Ui/ProductionWindows.cs
+msgid "Outpost:"
+msgstr ""
+
+#: src/Meitou.Game/Ui/ProductionWindows.cs
 msgid "Output:"
 msgstr ""
 
@@ -4971,6 +4975,10 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "This Meitou version has no Metal renderer and no Vulkan loader; install a newer version or MoltenVK."
+msgstr ""
+
+#: src/Meitou.Game/Ui/ProductionWindows.cs
+msgid "This building stands outside every outpost's build limit, so no generator can power it. Dismantle it and build it again inside the red ring."
 msgstr ""
 
 #: src/Meitou.Game/Ui/ProductionWindows.cs

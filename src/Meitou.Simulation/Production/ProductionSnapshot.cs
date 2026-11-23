@@ -206,6 +206,10 @@ public readonly record struct PowerView(PowerKind Kind, float Demand, float Gran
     /// </summary>
     public bool OnGrid { get; init; }
     /// <summary>
+    /// <see cref="Machine.NoTown"/>: its building belongs to no town, so it is on no power frame.
+    /// </summary>
+    public bool NoTown { get; init; }
+    /// <summary>
     /// Whether the battery's town grid charged its batteries this tick (see <see cref="OnGrid"/>).
     /// </summary>
     public bool GridCharging { get; init; }
@@ -462,7 +466,8 @@ public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<M
         {
             OnGrid = m.OnGrid,
             GridCharging = m.GridCharging,
-            GridDraining = m.GridDraining
+            GridDraining = m.GridDraining,
+            NoTown = m.NoTown
         }
         : null;
 

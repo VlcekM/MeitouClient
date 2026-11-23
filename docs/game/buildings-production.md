@@ -441,6 +441,13 @@ shows the first failing message in this order (**Verified** unless marked):
   a raised walkable surface outside the rooms (a wall top, `InteriorView.SurfaceMoveHit`) stands on it level, with that height as its ground, and
   walls do not block it.
 
+### Town range ring
+
+Meitou only (the original draws no town range): while build mode holds a building, each player outpost's radius
+([centre and radius](#placement), "Centre, radius and placement-time merge") is drawn as a red band 10 units wide inside the
+radius, on the terrain, fainter where the scene hides it (`TownRangeRing`, rebuilt when the outposts change). A building whose
+root stands outside every ring belongs to no town and gets no power ("Town at materialization").
+
 ### Upgrades
 
 A building is upgraded or downgraded in place: same object, its record swapped (**Verified** unless marked: Building slots
@@ -1016,6 +1023,9 @@ and `power capacity` (battery store, "in seconds" per fcs.def), plus research ([
   gets, for a consumer, a "Battery" toggle (`_recievesBatteryPower`, tooltip "This machine will run off of battery power if the main generators should run low or break down."
   / "...will NOT run off..."), then for every such machine a "Power" toggle (`powerOn`; "This machine is switched On" / "This machine is switched {1}Off"). A click
   (vfunc 161 `FUN_140297a60`, shared by every machine class) flips `powerOn`, sets the Wwise switch `Generator` to `On` / `Off` and posts `UI_Generator` on the GUI object. Meitou: `SetMachinePower`; the bar's green/red On/Off look is an engine choice.
+- **No outpost** (Meitou only): a consumer whose building is NO_TOWN (`Machine.NoTown`) shows `Outpost: None` (Bad) among its
+  power lines, with a tooltip telling the player to rebuild it inside the town range ring. On no frame its demand stays 0, so the
+  original draws no Power line and gives no hint.
 - **Kinds** (registration `FUN_14092da80`, from switching on `vfunc_99`): capacity > 0 a battery, else output > 0 a
   generator; output < 0 a consumer. Function 5 without `consumes` is a wind generator, otherwise fuelled; batteries
   (23) share the generator class (factory `FUN_14057cc70`).

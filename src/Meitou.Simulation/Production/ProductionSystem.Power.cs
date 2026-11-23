@@ -274,6 +274,7 @@ public sealed partial class ProductionSystem
             m.ProductionMult = UpgradeOf(world, m).ProductionMult;
             m.Efficiency = built ? Efficiency(world, m) : 0;
             m.HasPower = built && (IsTownWork(m.Site) ? TownHasPower(world, m) : HasPower(world, m, PowerTown(world, site!)));
+            m.NoTown = built && !IsTownWork(m.Site) && PowerTown(world, site!) == NoPowerTown;
             m.Rotation = !built ? 0 : m.Data.IsGenerator ? (m.PowerOn ? Output(world, m) * 0.01f : 0) : m.Efficiency;
             if (m.Data.IsBattery)
             {

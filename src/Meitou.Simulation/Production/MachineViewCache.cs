@@ -131,6 +131,7 @@ sealed class MachineViewCache
         Flag(m.OnGrid);
         Flag(m.GridCharging);
         Flag(m.GridDraining);
+        Flag(m.NoTown);
     }
 
     /// <summary>

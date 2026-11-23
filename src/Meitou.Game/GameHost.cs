@@ -210,6 +210,10 @@ sealed partial class GameHost(
     /// </summary>
     internal DebugOverlays DebugOverlays = null!;
     /// <summary>
+    /// The outposts' build limit rings in build mode.
+    /// </summary>
+    internal Building.TownRangeRing TownRangeRing = null!;
+    /// <summary>
     /// The dev console.
     /// </summary>
     internal DevConsoleHost DevConsoleHost = null!;
@@ -278,6 +282,7 @@ sealed partial class GameHost(
 
         DebugMenu = new(this);
         DebugOverlays = new(this);
+        TownRangeRing = new(this);
         DevConsoleHost = new(this);
         AgentChannel = new(this);
         AgentPlay = new(this);
@@ -866,6 +871,7 @@ sealed partial class GameHost(
         Gpu.NavmeshOverlay ??= new NavmeshOverlayRenderer(context);
         DebugOverlays.NavOverlayRenderer = Gpu.NavmeshOverlay;
         Gpu.InspectorOverlay ??= new NavmeshOverlayRenderer(context);
+        Gpu.TownRangeOverlay ??= new NavmeshOverlayRenderer(context);
     }
 
     /// <summary>

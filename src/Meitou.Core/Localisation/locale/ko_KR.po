@@ -4846,3 +4846,11 @@ msgstr "현재 프리셋 저장"
 
 msgid "Sort by"
 msgstr "정렬 기준"
+
+#. machine-translated
+msgid "Outpost:"
+msgstr "전초기지:"
+
+#. machine-translated
+msgid "This building stands outside every outpost's build limit, so no generator can power it. Dismantle it and build it again inside the red ring."
+msgstr "이 건물은 모든 전초기지의 건설 한계 밖에 있어 어떤 발전기도 전력을 공급할 수 없습니다. 해체한 뒤 빨간 원 안에 다시 지으세요."

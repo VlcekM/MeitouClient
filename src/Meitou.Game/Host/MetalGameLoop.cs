@@ -1217,6 +1217,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         _worldGpu.Markers = _moveMarker;
         _worldGpu.NavmeshOverlay = _navOverlay;
         _worldGpu.InspectorOverlay = new NavmeshOverlayRenderer(_ctx);   // the pick & collision inspector's hulls (F10 > Tools)
+        _worldGpu.TownRangeOverlay = new NavmeshOverlayRenderer(_ctx);   // the outposts' build limit rings in build mode
         _worldGpu.HoverOutline = _hoverOutline;
         Console.WriteLine($"metal     HUD ready ({hud.UiMode})");
     }
@@ -2922,6 +2923,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         host.UpdateNav();
         host.DebugOverlays.UpdateNavOverlay();
         if (_hud is not null) host.DebugOverlays.UpdateInspectorOverlay();
+        if (_hud is not null) host.TownRangeRing.Update();
         // Diagnostic isolation for the far-travel freeze: skip the runtime building/ground-item/lamps diff.
         if (Environment.GetEnvironmentVariable("MEITOU_METAL_NO_BUILDINGS") != "1") host.BuildingSync.UpdateBuildings();
         // The interior view (docs/formats/zones.md): the player's building opens, its upper floors and their characters are hidden.
