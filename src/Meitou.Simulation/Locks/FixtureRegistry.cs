@@ -2187,7 +2187,8 @@ public sealed partial class FixtureRegistry
 
     /// <summary>
     /// Gets a character out of its bed (the original's <c>FUN_140345620</c>): the bed is free and the state cleared; it stands where it lay, or
-    /// beside the bed when the bed cuts the floor away under it (<see cref="StandBeside"/>).
+    /// beside the bed when the bed cuts the floor away under it (<see cref="StandBeside"/>). One knocked out drops the bed's pose
+    /// (<see cref="DropBedPose"/>).
     /// </summary>
     public bool LeaveBed(World world, CharacterId sleeper)
     {
@@ -2198,7 +2199,19 @@ public sealed partial class FixtureRegistry
         if (c.InWhat is { } id && Find(id) is { } bed && bed.Occupant == sleeper) bed.Occupant = CharacterId.None;
         Clear(c);
         StandBeside(world, s);
+        DropBedPose(c);
         return true;
+    }
+
+    /// <summary>
+    /// A body knocked out when it leaves its bed goes limp from the pose it is in, and the bed's clip holds its pelvis inside the bed's collision
+    /// (the Bed's box top is 8.1 over the lie spot, the pose's pelvis 6.7 x scale): the ragdoll fell through to the floor under the mattress, where
+    /// the bed takes every click (#1263). Engine choice: its clips go at once, as a sleeper bound on load takes its bed's (<see cref="Bind"/>), so it
+    /// goes limp from the plain pose at its lie spot, beside the bed.
+    /// </summary>
+    static void DropBedPose(CharacterCold c)
+    {
+        if (c.Medical is { Incapacitated: true } && c.Animation is { } shown) shown.Count = 0;
     }
 
     /// <summary>
