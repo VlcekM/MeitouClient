@@ -271,8 +271,11 @@ interpolated string, which no translation could match.
   Mods in a dependency cycle are kept at the end, where the original drops them. Mods not in `__mods.list` are new and start enabled.
 - Ctrl+click and Shift+click select several mods; dragging a selected row's handle or Alt+Up / Alt+Down moves them all together,
   keeping their gaps, and stops at the list's ends.
-- The search box hides the rows whose name and author lack its text (ignoring case); hidden rows keep their place in the order, and
-  Select all / Select none tick or untick only the shown rows.
+- Search matches names and authors, ignoring case. **Hide incompatible RE_Kenshi plugins** hides DLL plugins without Meitou code or
+  a built-in equivalent. An endorsed port is a separate mod. Hidden rows retain their enabled state and load order. Select all / Select
+  none act on visible rows.
+- The list can show load order, alphabetical order, date added (installed `.mod` file creation time) or last modified (its last write).
+  Date sorts show newest first. Manual reordering is available in **Load order**.
 - Every change to the list (a tick, a drag, a preset, Arrange, From save) and Play write `mods.cfg` (enabled `<name>.mod`, list
   order, CRLF) and `__mods.list` (every listed name, plus old names not on disk). These are the files the original game reads, so the mod list applies to it too.
 - Discovery and the header reads run off the UI thread while the window opens; until they finish (or when they fail) Play and the
@@ -285,7 +288,8 @@ interpolated string, which no translation could match.
   its description and its folder. The description's Steam BBCode is drawn (`BbCodeView`: headings, bold, italic, underline, strike,
   links, lists, quotes, code, rules, tables, spoilers, noparse); unknown or unmatched tags stay literal, only http(s) links open and
   `[img]` is a link, never fetched.
-- The preset row sits above the list: the preset box with Apply and Delete, and the new preset's name with Save as preset.
+- **Save current preset** updates the selected preset. **Save as preset** saves under a typed name. Both capture the full load order
+  and enabled flags, including hidden rows.
 - A preset is a named, ordered list of names with enabled flags. Applying one reorders the list. Mods the preset doesn't name go
   to the end, disabled, and mods it names that aren't on disk are reported. Applying saves.
 - From save lists the save folders (with `quick.save`) of Meitou's save root, the install's `save` and the per-user Kenshi save folder,
@@ -303,6 +307,7 @@ interpolated string, which no translation could match.
 - A mod whose `RE_Kenshi.json` names DLLs (`Plugins`, `PreloadPlugins`) is marked as a plugin mod whose DLLs Meitou ignores
   ([RE_Kenshi](formats/rekenshi.md)), unless it also has `meitou.json`: then only the code-mod note shows. One with `FileRebinds` says
   they are applied to the map files, one with `SoundBanks` that they load before the game's ([data entries](formats/rekenshi.md#data-entries)).
+  The ignored plugin and code mod subtitles use distinct colours.
 - A mod Meitou has built in (`CoveredMods`, Meitou.Core, the table the game uses: [RE_Kenshi](formats/rekenshi.md)) says so and names
   the setting it became and that the mod is not run, instead of the plugin or code-mod note.
 - An RE_Kenshi plugin (no `meitou.json`) with an endorsed port on the Steam workshop ([endorsed ports](formats/rekenshi.md#endorsed-ports),

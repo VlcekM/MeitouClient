@@ -4824,3 +4824,27 @@ msgstr "Gib einen Hungerwert von 1 bis 300 ein."
 #. machine-translated
 msgid "Hunger set to {1}."
 msgstr "Hunger auf {1} gesetzt."
+
+msgid "Date added"
+msgstr "Hinzugefügt am"
+
+msgid "Hide incompatible RE_Kenshi plugins"
+msgstr "Inkompatible RE_Kenshi-Plugins ausblenden"
+
+msgid "Last modified"
+msgstr "Zuletzt geändert"
+
+msgid "Load order"
+msgstr "Ladereihenfolge"
+
+msgid "Name"
+msgstr "Name"
+
+msgid "No mods match the filters."
+msgstr "Keine Mods entsprechen den Filtern."
+
+msgid "Save current preset"
+msgstr "Aktuelle Voreinstellung speichern"
+
+msgid "Sort by"
+msgstr "Sortieren nach"

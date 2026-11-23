@@ -5670,3 +5670,24 @@ msgstr "请输入 1 到 300 之间的饱食度。"
 #. machine-translated
 msgid "Hunger set to {1}."
 msgstr "饱食度已设为 {1}。"
+
+msgid "Date added"
+msgstr "添加日期"
+
+msgid "Hide incompatible RE_Kenshi plugins"
+msgstr "隐藏不兼容的 RE_Kenshi 插件"
+
+msgid "Last modified"
+msgstr "最后修改时间"
+
+msgid "Load order"
+msgstr "加载顺序"
+
+msgid "No mods match the filters."
+msgstr "没有符合筛选条件的模组。"
+
+msgid "Save current preset"
+msgstr "保存当前预设"
+
+msgid "Sort by"
+msgstr "排序方式"

@@ -210,10 +210,10 @@
               <TextBlock Text="Mods" />
             </DockPanel>
           </Border>
-          <!-- Presets: apply or delete a saved one on the left, save the list as a new one on the right -->
-          <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
-              <TextBox x:Name="PresetName" Width="220" PlaceholderText="New preset name" />
+          <!-- Presets: update the selected preset or save the list under a typed name -->
+          <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8" ItemSpacing="8" LineSpacing="6">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBox x:Name="PresetName" Width="165" PlaceholderText="New preset name" />
               <Button Click="SavePreset_Click" ToolTip.Tip="Save the mod list and load order as a preset of this name">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                   <Path Classes="glyph" Data="M6,0 H8 V6 H14 V8 H8 V14 H6 V8 H0 V6 H6 Z" />
@@ -222,13 +222,15 @@
               </Button>
             </StackPanel>
             <StackPanel Orientation="Horizontal" Spacing="6">
-              <ComboBox x:Name="PresetBox" MinWidth="170" PlaceholderText="Presets" />
+              <ComboBox x:Name="PresetBox" MinWidth="150" MaxWidth="190" PlaceholderText="Presets"
+                        SelectionChanged="PresetBox_SelectionChanged" />
               <Button Click="ApplyPreset_Click" ToolTip.Tip="Take the chosen preset's mod list and load order">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                   <Path Classes="glyph" Data="M0,7 L1.5,5.5 L5,9 L12.5,1.5 L14,3 L5,12 Z" />
                   <TextBlock Text="Apply" />
                 </StackPanel>
               </Button>
+              <Button x:Name="SaveCurrentPresetButton" Click="SaveCurrentPreset_Click" Content="Save current preset" IsEnabled="False" />
               <Button Click="DeletePreset_Click" ToolTip.Tip="Delete the chosen preset">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                   <Path Classes="glyph" Data="M4.5,0 H9.5 V1.5 H14 V3.5 H0 V1.5 H4.5 Z M1.5,4.5 H12.5 L11.5,14 H2.5 Z" />
@@ -236,7 +238,7 @@
                 </StackPanel>
               </Button>
             </StackPanel>
-          </DockPanel>
+          </WrapPanel>
           <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
               <Button Click="ModsFromSave_Click" ToolTip.Tip="Take the mod list and load order a save was made with">
@@ -262,9 +264,24 @@
                 </StackPanel>
               </Button>
             </StackPanel>
-            <TextBox x:Name="ModSearch" Margin="6,0" PlaceholderText="Search mods" TextChanged="ModSearch_TextChanged"
-                     ToolTip.Tip="Show only the mods whose name or author holds this text" />
           </DockPanel>
+          <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8" ItemSpacing="8" LineSpacing="6">
+            <TextBox x:Name="ModSearch" Width="175" PlaceholderText="Search mods" TextChanged="ModSearch_TextChanged"
+                     ToolTip.Tip="Show only the mods whose name or author holds this text" />
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock x:Name="ModSortLabel" Text="Sort by" VerticalAlignment="Center" />
+              <ComboBox x:Name="ModSortBox" SelectedIndex="0" SelectionChanged="ModSortBox_SelectionChanged"
+                        AutomationProperties.LabeledBy="{Binding #ModSortLabel}">
+                <ComboBoxItem Content="Load order" />
+                <ComboBoxItem Content="Name" />
+                <ComboBoxItem Content="Date added" />
+                <ComboBoxItem Content="Last modified" />
+              </ComboBox>
+            </StackPanel>
+            <CheckBox x:Name="HideIncompatiblePlugins" Click="ModFilter_Click">
+              <TextBlock Text="Hide incompatible RE_Kenshi plugins" />
+            </CheckBox>
+          </WrapPanel>
           <!-- The list, and beside it the side pane with the selected mod's details while Details is on -->
           <Grid ColumnDefinitions="*,Auto">
           <!-- Slides open (a mod selected, Details on) and shut by its width (ShowModDetails); the content keeps its own width, so it does not
@@ -299,7 +316,7 @@
               <DataTemplate x:DataType="l:ModRow">
                 <DockPanel>
                   <TextBlock DockPanel.Dock="Left" Classes="handle" Text="≡" VerticalAlignment="Center" Margin="0,0,10,0"
-                             PointerPressed="DragHandle_PointerPressed" ToolTip.Tip="Drag to change the load order; Ctrl+click or Shift+click selects several mods to move together" />
+                             IsVisible="{Binding CanReorder}" PointerPressed="DragHandle_PointerPressed" ToolTip.Tip="Drag to change the load order; Ctrl+click or Shift+click selects several mods to move together" />
                   <CheckBox DockPanel.Dock="Left" IsChecked="{Binding Enabled}" VerticalAlignment="Center" />
                   <!-- A workshop mod's link to its Steam page: a box with an arrow leaving it -->
                   <Button DockPanel.Dock="Right" Classes="icon" VerticalAlignment="Center" Margin="10,0,0,0" Click="ModPage_Click"
@@ -321,7 +338,9 @@
                       <TextBlock Classes="desc" Text="{Binding Detail}" Margin="10,0,0,0" VerticalAlignment="Center"
                                  TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
                     </DockPanel>
-                    <TextBlock Classes="warn" Text="{Binding Notes}" IsVisible="{Binding HasNotes}" />
+                    <TextBlock Classes="warn" Foreground="#93c9bf" Text="{Binding CodeNote}" IsVisible="{Binding HasCodeNote}" />
+                    <TextBlock Classes="warn" Foreground="#e59d84" Text="{Binding PluginNote}" IsVisible="{Binding HasIncompatiblePlugin}" />
+                    <TextBlock Classes="warn" Text="{Binding OtherNotes}" IsVisible="{Binding HasOtherNotes}" />
                   </StackPanel>
                 </DockPanel>
               </DataTemplate>

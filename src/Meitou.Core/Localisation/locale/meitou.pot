@@ -1153,6 +1153,10 @@ msgstr ""
 msgid "Data folder"
 msgstr ""
 
+#: launcher/Meitou.Launcher/MainWindow.axaml
+msgid "Date added"
+msgstr ""
+
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "Decapitation"
 msgstr ""
@@ -2001,6 +2005,10 @@ msgstr ""
 msgid "Hide hats"
 msgstr ""
 
+#: launcher/Meitou.Launcher/MainWindow.axaml
+msgid "Hide incompatible RE_Kenshi plugins"
+msgstr ""
+
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Hide or show the whole interface."
 msgstr ""
@@ -2473,6 +2481,10 @@ msgstr ""
 msgid "Large impostor distance (F7 Meitou)"
 msgstr ""
 
+#: launcher/Meitou.Launcher/MainWindow.axaml
+msgid "Last modified"
+msgstr ""
+
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "Late dodges and blocks"
 msgstr ""
@@ -2607,6 +2619,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs
 msgid "Load button"
+msgstr ""
+
+#: launcher/Meitou.Launcher/MainWindow.axaml
+msgid "Load order"
 msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
@@ -3054,6 +3070,10 @@ msgstr ""
 msgid "NONE"
 msgstr ""
 
+#: launcher/Meitou.Launcher/MainWindow.axaml src/Meitou.Game/Host/Photo/PhotoPanel.cs src/Meitou.Game/Settings/PresetNamingDialog.cs src/Meitou.Game/Title/FrontendScreens.cs
+msgid "Name"
+msgstr ""
+
 #: src/Meitou.Game/Rendering/Frame/WorldFrame.cs
 msgid "Near tree fade"
 msgstr ""
@@ -3167,6 +3187,10 @@ msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
 msgid "No mods found in Kenshi's mods folder or among its Steam workshop items."
+msgstr ""
+
+#: launcher/Meitou.Launcher/MainWindow.axaml.cs
+msgid "No mods match the filters."
 msgstr ""
 
 #: launcher/Meitou.Launcher/MainWindow.axaml.cs
@@ -3985,6 +4009,10 @@ msgstr ""
 msgid "Save as preset"
 msgstr ""
 
+#: launcher/Meitou.Launcher/MainWindow.axaml
+msgid "Save current preset"
+msgstr ""
+
 #: src/Meitou.Game/Host/GameSaves.cs
 msgid "Save failed: {1}"
 msgstr ""
@@ -4395,6 +4423,10 @@ msgstr ""
 
 #: src/Meitou.Game/Settings/SettingHints.cs
 msgid "Soften dust and fog where they meet the ground, and light them by the sun and its shadows."
+msgstr ""
+
+#: launcher/Meitou.Launcher/MainWindow.axaml
+msgid "Sort by"
 msgstr ""
 
 #: src/Meitou.Game/Settings/GamePages.cs

@@ -17,7 +17,7 @@ static class LauncherText
     /// <summary>
     /// Combo boxes whose items the layout writes as labels (the Mac renderer and memory choices), not data like the language list.
     /// </summary>
-    static readonly HashSet<string> LabelCombos = ["RendererBox", "MetalBudgetBox"];
+    static readonly HashSet<string> LabelCombos = ["RendererBox", "MetalBudgetBox", "ModSortBox"];
 
     /// <summary>
     /// The active language's catalog; empty for English.

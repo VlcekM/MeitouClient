@@ -45,8 +45,8 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
         {
             if (field.SequenceEqual(value)) return;
             field = value;
-            Changed(nameof(Notes));
-            Changed(nameof(HasNotes));
+            Changed(nameof(OtherNotes));
+            Changed(nameof(HasOtherNotes));
         }
     } = [];
 
@@ -60,8 +60,8 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
         {
             if (field.SequenceEqual(value)) return;
             field = value;
-            Changed(nameof(Notes));
-            Changed(nameof(HasNotes));
+            Changed(nameof(OtherNotes));
+            Changed(nameof(HasOtherNotes));
         }
     } = [];
 
@@ -102,7 +102,7 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
         {
             if (field == value) return;
             field = value;
-            Changed(nameof(Notes));
+            Changed(nameof(OtherNotes));
             Changed(nameof(PortPage));
         }
     }
@@ -129,14 +129,37 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     public string? PageTip => WorkshopPage is null ? null : LauncherText.Translate("Open its Steam workshop page");
 
     /// <summary>
-    /// The row's notes: built into Meitou, a code mod, an ignored RE_Kenshi plugin, its file rebinds and sound banks and its endorsed port, an
-    /// update since the cover was matched, its dependencies, its game version, why it will not load and the mods it blanks.
+    /// Whether Meitou ignores the native plugin and the mod provides neither Meitou code nor a built-in equivalent.
     /// </summary>
-    public string Notes => string.Join(" · ", new[]
+    public bool HasIncompatiblePlugin => Mod.HasNativePlugin && !Mod.HasCode && BuiltIn is null;
+
+    /// <summary>
+    /// Whether the row shows a Meitou code mod subtitle.
+    /// </summary>
+    public bool HasCodeNote => Mod.HasCode && BuiltIn is null;
+
+    /// <summary>
+    /// The Meitou code mod subtitle.
+    /// </summary>
+    public string? CodeNote => HasCodeNote ? LauncherText.Translate("Code mod: runs C# code of its own") : null;
+
+    /// <summary>
+    /// The ignored native plugin subtitle.
+    /// </summary>
+    public string? PluginNote => HasIncompatiblePlugin ? LauncherText.Translate("RE_Kenshi plugin: its DLLs are ignored in Meitou") : null;
+
+    /// <summary>
+    /// The combined notes for the details pane.
+    /// </summary>
+    public string Notes => string.Join(" · ", new[] { CodeNote, PluginNote, OtherNotes }
+        .Where(n => !string.IsNullOrEmpty(n)));
+
+    /// <summary>
+    /// The row's built-in coverage, supported RE_Kenshi data, endorsed port, dependencies and blanked records.
+    /// </summary>
+    public string OtherNotes => string.Join(" · ", new[]
     {
         CoveredNote,
-        Mod.HasCode && BuiltIn is null ? LauncherText.Translate("Code mod: runs C# code of its own") : null,
-        Mod.HasNativePlugin && !Mod.HasCode && BuiltIn is null ? LauncherText.Translate("RE_Kenshi plugin: its DLLs are ignored in Meitou") : null,
         Mod.ReKenshi is { FileRebinds.Count: > 0 } ? LauncherText.Translate("RE_Kenshi file rebinds: applied to the map files") : null,
         Mod.ReKenshi is { SoundBanks.Count: > 0 } ? LauncherText.Translate("RE_Kenshi sound banks: loaded before the game's") : null,
         PortNote,
@@ -187,7 +210,7 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     /// The public wishlist (<see cref="CoveredMods.Wishlist"/>) for an RE_Kenshi plugin Meitou neither builds in nor knows a port of, so the
     /// player can ask for it; null otherwise, and the row shows no Request button.
     /// </summary>
-    public Uri? RequestPage => Mod.HasNativePlugin && !Mod.HasCode && BuiltIn is null && Port is null ? CoveredMods.Wishlist : null;
+    public Uri? RequestPage => HasIncompatiblePlugin && Port is null ? CoveredMods.Wishlist : null;
 
     /// <summary>
     /// The text of the button that opens <see cref="RequestPage"/>.
@@ -217,17 +240,42 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     }
 
     /// <summary>
-    /// Whether the row shows its notes (a code mod, RE_Kenshi entries, a covered mod or a mod that blanks others).
+    /// Whether the details pane has notes to show.
     /// </summary>
-    public bool HasNotes =>
-        Mod.ReKenshi is { HasPlugins: true } or { FileRebinds.Count: > 0 } or { SoundBanks.Count: > 0 }
-        || Mod.HasCode
+    public bool HasNotes => HasCodeNote || HasIncompatiblePlugin || HasOtherNotes;
+
+    /// <summary>
+    /// Whether there are notes besides the mod type subtitle.
+    /// </summary>
+    public bool HasOtherNotes =>
+        Mod.ReKenshi is { FileRebinds.Count: > 0 } or { SoundBanks.Count: > 0 }
         || BuiltIn is not null
         || Port is not null
+        || Manifest is { DependsOn.Count: > 0 } or { LoadAfter.Count: > 0 } or { Incompatible.Count: > 0 } or { GameVersion: not null }
+        || DependencyProblems.Count > 0
         || Blanks.Count > 0;
 
     /// <summary>
-    /// Whether the row matches the Mods page's search (<see cref="Matches"/>); a hidden row keeps its place in the load order.
+    /// The creation and last-write times of the installed mod file in UTC, with unavailable times sorting last.
+    /// </summary>
+    public (DateTime Added, DateTime Modified) Dates { get; init; }
+
+    /// <summary>
+    /// Whether the page is showing the load order and the row can be moved.
+    /// </summary>
+    public bool CanReorder
+    {
+        get;
+        set
+        {
+            if (field == value) return;
+            field = value;
+            Changed();
+        }
+    } = true;
+
+    /// <summary>
+    /// Whether the row passes the Mods page filters. A hidden row keeps its place in the load order.
     /// </summary>
     public bool IsShown
     {
@@ -270,7 +318,9 @@ public sealed class ModRow(ModInfo mod, bool enabled, CodeModEntry? code = null)
     public void LanguageChanged()
     {
         Changed(nameof(Detail));
-        Changed(nameof(Notes));
+        Changed(nameof(CodeNote));
+        Changed(nameof(PluginNote));
+        Changed(nameof(OtherNotes));
         Changed(nameof(PageTip));
         Changed(nameof(PortLabel));
         Changed(nameof(PortTip));

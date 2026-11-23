@@ -4824,3 +4824,27 @@ msgstr "Introduce un valor de hambre entre 1 y 300."
 #. machine-translated
 msgid "Hunger set to {1}."
 msgstr "Hambre ajustada a {1}."
+
+msgid "Date added"
+msgstr "Fecha de incorporación"
+
+msgid "Hide incompatible RE_Kenshi plugins"
+msgstr "Ocultar plugins de RE_Kenshi incompatibles"
+
+msgid "Last modified"
+msgstr "Última modificación"
+
+msgid "Load order"
+msgstr "Orden de carga"
+
+msgid "Name"
+msgstr "Nombre"
+
+msgid "No mods match the filters."
+msgstr "Ningún mod coincide con los filtros."
+
+msgid "Save current preset"
+msgstr "Guardar preajuste actual"
+
+msgid "Sort by"
+msgstr "Ordenar por"

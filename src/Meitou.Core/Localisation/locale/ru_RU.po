@@ -4826,3 +4826,27 @@ msgstr "Введите значение сытости от 1 до 300."
 #. machine-translated
 msgid "Hunger set to {1}."
 msgstr "Сытость установлена на {1}."
+
+msgid "Date added"
+msgstr "Дата добавления"
+
+msgid "Hide incompatible RE_Kenshi plugins"
+msgstr "Скрыть несовместимые плагины RE_Kenshi"
+
+msgid "Last modified"
+msgstr "Последнее изменение"
+
+msgid "Load order"
+msgstr "Порядок загрузки"
+
+msgid "Name"
+msgstr "Название"
+
+msgid "No mods match the filters."
+msgstr "Нет модов, соответствующих фильтрам."
+
+msgid "Save current preset"
+msgstr "Сохранить текущий набор"
+
+msgid "Sort by"
+msgstr "Сортировать по"

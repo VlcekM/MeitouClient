@@ -29,8 +29,8 @@ namespace Meitou.Game.DevTools;
 /// from the selection; Items opens the Items window (<see cref="DebugItemsWindow"/>). Recruit takes the inspected character (a click on another
 /// faction's character shows it in the HUD and keeps the squad's selection), else the first selected: it adds it to the player's faction and
 /// active squad when it has a dialogue line that makes it join and the squad has room, then opens the character editor on it. The Cheats category
-/// holds the one-time actions (Heal, Heal fully, Set hunger, Clear bounties, Give item) and the five debug switches (Gigachad mode, Auto heal, Move instantly,
-/// One-punch man mode, No stumbling; they apply to player characters, the hits they land or take, or player-issued moves) and Guard
+/// holds the one-time actions (Heal, Heal fully, Set hunger, Clear bounties, Give item) and the five debug switches (Gigachad mode, Auto heal,
+/// Move instantly, One-punch man mode, No stumbling; they apply to player characters, the hits they land or take, or player-issued moves) and Guard
 /// (<see cref="DebugGuard"/>: kills hostiles within 30 m of the lead and heals the player's characters; it switches itself off when a game loads).
 /// "Teleport on map" is a switch too: while on, a click on the open map sends the selected characters there. Clear bounties clears the selected
 /// characters' (else every player character's), all or one faction's.
@@ -1203,6 +1203,7 @@ sealed class DebugMenu(GameHost host)
             return DebugFail(Tr("Enter a hunger value from 1 to 300."));
 
         world.Commands.Enqueue(new DebugSetHunger(targets, hunger) { Tick = tick });
+
         return Tr("Hunger set to {1}.", hunger);
     }
 
@@ -1212,6 +1213,7 @@ sealed class DebugMenu(GameHost host)
     static string Tr(string english, params object?[] args)
     {
         string translated = Loc.Tr(english);
+
         return Loc.Format(DebugOverlay.SupportsBakedText(translated) ? translated : english, args);
     }
 

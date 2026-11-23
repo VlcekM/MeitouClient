@@ -4822,3 +4822,27 @@ msgstr "空腹度を1から300の範囲で入力してください。"
 #. machine-translated
 msgid "Hunger set to {1}."
 msgstr "空腹度を{1}に設定しました。"
+
+msgid "Date added"
+msgstr "追加日"
+
+msgid "Hide incompatible RE_Kenshi plugins"
+msgstr "非対応のRE_Kenshiプラグインを非表示"
+
+msgid "Last modified"
+msgstr "最終更新日"
+
+msgid "Load order"
+msgstr "読み込み順"
+
+msgid "Name"
+msgstr "名前"
+
+msgid "No mods match the filters."
+msgstr "フィルターに一致するMODがありません。"
+
+msgid "Save current preset"
+msgstr "現在のプリセットを保存"
+
+msgid "Sort by"
+msgstr "並べ替え"

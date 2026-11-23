@@ -4822,3 +4822,27 @@ msgstr "1에서 300 사이의 허기 수치를 입력하세요."
 #. machine-translated
 msgid "Hunger set to {1}."
 msgstr "허기를 {1}(으)로 설정했습니다."
+
+msgid "Date added"
+msgstr "추가 날짜"
+
+msgid "Hide incompatible RE_Kenshi plugins"
+msgstr "호환되지 않는 RE_Kenshi 플러그인 숨기기"
+
+msgid "Last modified"
+msgstr "마지막 수정 날짜"
+
+msgid "Load order"
+msgstr "로드 순서"
+
+msgid "Name"
+msgstr "이름"
+
+msgid "No mods match the filters."
+msgstr "필터에 맞는 모드가 없습니다."
+
+msgid "Save current preset"
+msgstr "현재 프리셋 저장"
+
+msgid "Sort by"
+msgstr "정렬 기준"
