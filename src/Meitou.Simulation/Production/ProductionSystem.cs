@@ -1343,8 +1343,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     }
 
     /// <summary>
-    /// The hauler of an automatic machine between trips: it puts in what it carries and sets off on the next trip, on its one-shot 152 order with any
-    /// output (<see cref="StartHaul"/>). That order, once the
+    /// The hauler of an automatic machine between trips: it puts in what it carries and sets off on the next trip, on 152 (order or job) with any
+    /// output (<see cref="StartHaul"/>). A one-shot 152 order, once the
     /// order step has dropped it (<see cref="AutoHaulFinder"/>), ends the act-out here instead, after the trip it was on (the original's desire pop
     /// leaves the running plan step to its end).
     /// </summary>
@@ -1357,8 +1357,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             return;
         }
 
-        bool order = cold.Running is { Source: TaskSource.Order };
-        if (!StartHaul(world, cold, site, m, emptyOutput: order) && n.Velocity.X == 0 && n.Velocity.Z == 0) n.Yaw = FacingTo(n, site);
+        bool autoHaul = cold.Running is { Row: TaskType.OperateAutomaticMachinery };
+        if (!StartHaul(world, cold, site, m, autoHaul) && n.Velocity.X == 0 && n.Velocity.Z == 0) n.Yaw = FacingTo(n, site);
     }
 
     /// <summary>

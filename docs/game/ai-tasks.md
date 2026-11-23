@@ -1058,9 +1058,10 @@ some, or the character carries some (Character vfunc `0x300` `FUN_1405a4510`, on
 town that takes one ([storage pick](buildings-production.md#hauling)). So the order leaves once the output holds nothing a storage takes, or nothing
 keeps the desire up; a machine with no output (a fuel generator: no `produces`, so no output object, and type `+0x440` ITEM, **Observed** in [economy](economy.md), so slot
 `0x550` gives no record) never has a finder target, so there the order leaves at its first order step. Its plan, as 114's, is 93 Filling machine at the finder's
-storage. Meitou: `OperateOrder` gives 152 on an automatic machine; `OrderDesire` weighs it by `ProductionSystem.AutoHaulFinder`; the act-out (engine
-reading) carries the output, held or carried, to the storage when there is any, fills the inputs on the way, and ends after the trip it is on once the
-order has left the queue.
+storage. The job pass skips a 152 job by the same score ([perma-jobs](#perma-jobs)), so its inputs are the 124 companion's work. Meitou: `OperateOrder`
+gives 152 on an automatic machine; `OrderDesire` and the job's `ProductionSystem.Blocked` weigh it by `ProductionSystem.AutoHaulScore`; the act-out
+(engine reading) carries the output, held or carried, to the storage when there is any, puts carried input items in, fetches none, and, for the order,
+ends after the trip it is on once the order has left the queue.
 
 ## Planner
 

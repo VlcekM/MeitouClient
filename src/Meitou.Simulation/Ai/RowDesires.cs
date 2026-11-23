@@ -174,9 +174,23 @@ internal sealed class RowDesires(AiSystem ai)
         PlanTarget target = order.Target.IsNone
             ? order.Site is { } site ? PlanTarget.OfFixture(site, at) : PlanTarget.OfPlace(at)
             : PlanTarget.OfCharacter(order.Target, at);
+        return ForTarget(world, slot, order.Row, target);   // the order step filters it
+    }
+
+    /// <summary>
+    /// The desire of row <paramref name="row"/> on site <paramref name="site"/> for the character in slot <paramref name="slot"/> (serial), as the
+    /// job pass weighs a list job (<c>FUN_14050e5b0</c> → <c>FUN_14060fd80</c>).
+    /// </summary>
+    internal float ForSite(World world, int slot, TaskType row, string site) => ForTarget(world, slot, row, PlanTarget.OfFixture(site, default));
+
+    /// <summary>
+    /// The registered desire of row <paramref name="row"/> for <paramref name="target"/>, asked of no planner.
+    /// </summary>
+    float ForTarget(World world, int slot, TaskType row, PlanTarget target)
+    {
         var cold = world.Characters.Cold(slot)!;
         var squad = world.Squads.Find(cold.SquadId);
-        return GameOf(world, null, new RowAsk(slot, cold, cold.Ai, squad, squad?.Ai, order.Row, target));   // the order step filters it
+        return GameOf(world, null, new RowAsk(slot, cold, cold.Ai, squad, squad?.Ai, row, target));
     }
 
     /// <summary>

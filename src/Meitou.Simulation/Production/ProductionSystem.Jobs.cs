@@ -656,7 +656,7 @@ public sealed partial class ProductionSystem
         }
 
         if (job.Site is { } id && Site(world, id) is { } site && Vector3.DistanceSquared(at, site.Position) >= JobRangeSq) return false;
-        return !Blocked(world, cold, job, at);
+        return !Blocked(world, slot, cold, job, at);
     }
 
     /// <summary>
@@ -685,10 +685,10 @@ public sealed partial class ProductionSystem
     /// docs/game/ai-tasks.md "Perma-jobs"). Operating: the building is gone or not an operable machine, its operator places are taken by others, or
     /// it has no work (<see cref="HasWork"/>). Hauling to: the storage is gone, and the character at <paramref name="at"/> carries nothing it takes,
     /// fetches no loose item for it (<see cref="FetchesLoose"/>), no loose item it wants lies near (<see cref="LooseFor"/>) and no machine within
-    /// <see cref="InFinderRange"/> has an output it takes. Automatic
-    /// machines (152, and 124 on one): <see cref="AutoWork"/>.
+    /// <see cref="InFinderRange"/> has an output it takes. At an automatic machine 152 by <see cref="AutoHaulScore"/>, 124 by
+    /// <see cref="AutoWork"/>.
     /// </summary>
-    bool Blocked(World world, CharacterCold cold, PermaJob job, Vector3 at)
+    bool Blocked(World world, int slot, CharacterCold cold, PermaJob job, Vector3 at)
     {
         if (job.Site is not { } id || Site(world, id) is not { Complete: true } site || Ensure(world, site) is not { } m) return true;
         switch (job.Type)
@@ -708,12 +708,13 @@ public sealed partial class ProductionSystem
                 if (!m.Data.IsTraining || OperatorsOf(world, id) - (cold.OperateSite == id ? 1 : 0) >= m.Data.MaxOperators) return true;
                 return !HasWorkingArm(cold);
             case TaskType.OperateAutomaticMachinery:
-                // Done as soon as no input of the machine is empty (the row's done list !62, machineHasEmptyInputs false): the 124 companion goes on
-                // from there.
-                return !m.Data.IsHauledAutomatic || !m.HasEmptyInputs || !AutoWork(world, site, m, cold, fetch: true);
+                // The job pass skips 152 at desire x finder 0 or less (its list A is empty, and it has an effect): the trip under way goes on.
+                if (!m.Data.IsHauledAutomatic) return true;
+                if (cold.HaulSite is not null && cold.OperateSite == id) return false;
+                return AutoHaulScore(world, slot, cold, id) <= 0;
             case TaskType.OperateStorage:
-                // On an automatic machine (152's companion, the original's Task_FillMachine into it): what the character carries for its inputs.
-                if (m.Data.IsHauledAutomatic) return !AutoWork(world, site, m, cold, fetch: false);
+                // On an automatic machine (152's companion, the original's Task_FillMachine into it, which 94 feeds): its inputs.
+                if (m.Data.IsHauledAutomatic) return !AutoWork(world, site, m, cold);
                 if (!m.Data.IsStorage || m.Storage is null) return true;
                 if (cold.Inventory is { } inv && inv.All().Any(i => Takes(world, m, i))) return false;
                 if (FetchesLoose(world, cold, id)) return false;
@@ -783,24 +784,21 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// Haul work at an automatic machine (engine reading of 152, whose goal is "no empty inputs", and of 124 on it): the character is on a trip for
-    /// it, or carries an item an input has room for; with <paramref name="fetch"/> also an empty input a storage holds the item of, a full output a
-    /// storage takes, or the machine's output carried that a storage takes.
+    /// Hauling to (124) at an automatic machine: the character is on a trip for it, carries an item an input has room for, or an empty input has a
+    /// source (<see cref="NearestSource"/>, the trip <see cref="StartHaul"/> makes).
     /// </summary>
-    bool AutoWork(World world, BuildSite site, Machine m, CharacterCold cold, bool fetch)
+    bool AutoWork(World world, BuildSite site, Machine m, CharacterCold cold)
     {
         if (cold.Inventory is not { } inv) return false;
-        if (fetch && cold.HaulSite is not null && cold.OperateSite == site.Id) return true;
+        if (cold.HaulSite is not null && cold.OperateSite == site.Id) return true;
         foreach (var input in m.Inputs)
         {
             if (input.Rate <= 0) continue;
             if (input.Count < input.Recipe.Capacity && Carried(inv, input.Item).Any()) return true;
-            if (fetch && input.Count == 0 && NearestSource(world, site, input.Item, cold, operating: cold) is not null) return true;
+            if (input.Count == 0 && NearestSource(world, site, input.Item, cold, operating: cold) is not null) return true;
         }
 
-        if (!fetch || m.Output is not { } output || _items.Create(output.Recipe.Item, 1) is not { } one) return false;
-        if (!output.Full && !Carried(inv, one.Record).Any()) return false;
-        return NearestStorage(world, site, cold, one.Record, s => s.Data.Accepts(one.Record, one.Type) && Fits(s.Storage!, one)) is not null;
+        return false;
     }
 
     /// <summary>

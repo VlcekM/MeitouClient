@@ -2078,7 +2078,7 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
   drop-off) and it stands `ProductionSystem.StepPauseSeconds` (0.5 s) before the next leg or job; a path left to finish by itself set a wanderer's 5-10 s wait.
 - **Automatic machines** (`MachineData.IsAutomatic`, raw `max operators` 0; [facts](game/buildings-production.md#production)) produce
   every tick with nobody at them at s = 1 (producers only: refineries, mines, auto-looms, campfires), and their power demand is full. A character
-  operating one (job 152, or the quick order) does not work it: it only hauls as above, every round whatever `AutoHaul` says.
+  hauling for one (152, job or order, or the 124 job on it) does not work it: it only hauls as above, every round whatever `AutoHaul` says.
 - **Job lists** (`PermaJobs.cs`, `ProductionSystem.Jobs.cs`, `Saving/PermaJobSave`; facts in [perma-jobs](game/ai-tasks.md#perma-jobs)).
   `CharacterCold.Jobs` is the ordered list; `AddJob` (Shift + right click on a finished machine or storage) adds through the original's rules
   (remap, duplicate refusal, companion, switch on), a code mod's offered job type by its offer ([modding](modding.md#registration-surface), Mod jobs);
@@ -2119,9 +2119,10 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
     lets a hauler in a player town take such an item, which marks it stolen); else the nearest player machine within that 4.246733e7 bound (3D) of the storage whose output
     (a bench's: its finished items) the storage takes is emptied into the hauler's pack and carried there. Blocked with none. The walk stops at
     the pick-up and the drop-off ([leg beat](#production), engine choice).
-  - 152 Operating automatic machine (Shift + Auto-Haul on an automatic machine; its companion 124 lands on the same machine): the operator above at the machine, hauling only. Its done list is `!62` (machineHasEmptyInputs false, **Verified**, TaskData row 152): the job is finished, and the list moves on to the 124 companion, as soon as no input of the machine is empty (`ProductionSystem.Blocked`).
-    Blocked unless it is mid-trip for it, carries an item an input has room for, an empty input's item is in a storage, or a full or carried output has a storage that takes it
-    (engine reading of the row's goal "no empty inputs", `AutoWork`). 124 on an automatic machine runs the same way, blocked unless it carries an item an input has room for.
+  - 152 Operating automatic machine (Shift + Auto-Haul on an automatic machine; its companion 124 lands on the same machine): the hauler at the machine takes
+    its output, held or carried, to a storage. Blocked, unless mid-trip, at desire x finder 0 or less (`ProductionSystem.AutoHaulScore`, as the job pass skips it,
+    [order pops](game/ai-tasks.md#finished-tests)): so never at a fuel generator. 124 on an automatic machine fills the inputs: blocked unless mid-trip, carrying an
+    item an input has room for, or an empty input has a source (`AutoWork`); it fetches that item (`StartHaul`).
   - 125 Engineer (ordered as 2 Build or 95 Repair; Shift + quick right click on an unfinished site): builds the site or repairs the door of
     `ConstructionSystem.EngineerWork`'s pick, whatever the job's target ([buildings](#buildings)); its tasks are *Build*, *DeliverMaterials* and
     *FetchMaterials*. Blocked with nothing to work.

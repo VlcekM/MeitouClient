@@ -1,4 +1,5 @@
 using System.Numerics;
+using Meitou.Data.Gameplay.Ai;
 using Meitou.Simulation.Construction;
 using Meitou.Simulation.Items;
 
@@ -28,17 +29,18 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// What an operator at its machine does before working; true when it set off for a storage. <paramref name="emptyOutput"/> takes an output that
-    /// holds any, not only a full one (the 152 order, whose plan carries the output to a storage, docs/game/ai-tasks.md "Finished tests").
+    /// What an operator at its machine does before working; true when it set off for a storage. <paramref name="autoHaul"/> (row 152, whose plan is 93
+    /// at a storage, docs/game/ai-tasks.md "Finished tests") takes an output that holds any, not only a full one, takes any carried output to the
+    /// storage and fetches no input (its 124 companion's work).
     /// </summary>
-    bool StartHaul(World world, CharacterCold cold, BuildSite site, Machine m, bool emptyOutput = false)
+    bool StartHaul(World world, CharacterCold cold, BuildSite site, Machine m, bool autoHaul = false)
     {
         if (cold.Inventory is not { } inv) return false;
         bool changed = PutCarried(inv, m);
 
         // A full output is taken only when some storage takes it; without one the machine stays full.
         bool took = false;
-        if (m.Output is { Count: > 0 } output && (output.Full || emptyOutput) && _items.Create(output.Recipe.Item, output.Count) is { } made
+        if (m.Output is { Count: > 0 } output && (output.Full || autoHaul) && _items.Create(output.Recipe.Item, output.Count) is { } made
             && StorageFor(world, site, made, cold) is not null)
         {
             int moved = Placed(inv, made);
@@ -54,14 +56,14 @@ public sealed partial class ProductionSystem
         // The carried output goes to the storage once a full output was taken, or while the output stays full (no room to take it): not for a
         // stray unit, which sent a miner on a trip for every piece of ore it carried (#388). The 152 order takes any carried output there.
         bool full = m.Output is { Full: true } || m.Craft is { } c && CraftFull(c);
-        string? into = took || full || emptyOutput
+        string? into = took || full || autoHaul
             ? CarriedMade(inv, m)
                 .Select(i => StorageFor(world, site, i, cold))
                 .FirstOrDefault(s => s is not null)
             : null;
         if (into is not null) return Go(cold, into, null);
 
-        if (m.Craft is { Queue.Count: 0 }) return false;
+        if (autoHaul || m.Craft is { Queue.Count: 0 }) return false;
 
         // The fill finder's walk with an empty input (Machine.FillOrder): the empty inputs in list order, the first with a source decides.
         foreach (var input in m.Inputs)
@@ -96,6 +98,18 @@ public sealed partial class ProductionSystem
         }
 
         return changed;
+    }
+
+    /// <summary>
+    /// Row 152's desire x finder (<c>FUN_14060fd80</c>, <b>Verified</b>): AI slot 21's desire (<see cref="Ai.RowDesires"/>; 1 in a world without the AI
+    /// system), when above 0, times <see cref="AutoHaulFinder"/>. The order step pops a 152 order and the job pass skips a 152 job at 0 or less
+    /// (docs/game/ai-tasks.md "Finished tests", "Perma-jobs").
+    /// </summary>
+    internal float AutoHaulScore(World world, int slot, CharacterCold cold, string site)
+    {
+        float desire = world.SystemOf<Ai.AiSystem>() is { } ai ? ai.Rows.ForSite(world, slot, TaskType.OperateAutomaticMachinery, site) : 1;
+
+        return desire > 0 ? desire * AutoHaulFinder(world, cold, site) : desire;
     }
 
     /// <summary>
