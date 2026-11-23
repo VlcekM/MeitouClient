@@ -268,6 +268,7 @@ public sealed partial class World : IDisposable
             BlowReactionFilters.Register(this._systems[k], k);
             CombatDefenceFilters.Register(this._systems[k], k);
             ArrangeFilters.Register(this._systems[k], k);
+            TargetScoreFilters.Register(this._systems[k], k);
         }
         for (int k = 0; k < this._systems.Count; k++) RegisterTasks(this._systems[k], k);
         foreach (var owner in this._systems.OfType<IDecisionOwner>()) Decisions.RegisterFrom(owner);
@@ -619,6 +620,10 @@ public sealed partial class World : IDisposable
     /// </summary>
     internal Combat.CombatDefenceFilters CombatDefenceFilters { get; } = new();
     /// <summary>
+    /// The systems asked about the scores of target choice candidates (<see cref="Combat.ITargetScoreFilter"/>).
+    /// </summary>
+    internal Combat.TargetScoreFilters TargetScoreFilters { get; } = new();
+    /// <summary>
     /// The camera the host last passed (<see cref="CameraViewCommand"/>); null: none, nothing is tested against a screen.
     /// </summary>
     public CameraViewCommand? View { get; internal set; }
@@ -891,6 +896,7 @@ public sealed partial class World : IDisposable
         BlowReactionFilters.Register(system, _systems.Count - 1);
         CombatDefenceFilters.Register(system, _systems.Count - 1);
         ArrangeFilters.Register(system, _systems.Count - 1);
+        TargetScoreFilters.Register(system, _systems.Count - 1);
         RegisterTasks(system, _systems.Count - 1);
         if (system is IDecisionOwner owner) Decisions.RegisterFrom(owner);
         Ai.ChooserRegistry.Collect(this, system, _systems.Count - 1, Extensions(), [], goalsOpen: false);
@@ -1576,6 +1582,7 @@ public sealed partial class World : IDisposable
         BlowReactionFilters.HashFaults(ref h);
         CombatDefenceFilters.HashFaults(ref h);
         ArrangeFilters.HashFaults(ref h);
+        TargetScoreFilters.HashFaults(ref h);
         Decisions.HashFaults(ref h);
         ModFaults.HashFaults(ref h);
     }

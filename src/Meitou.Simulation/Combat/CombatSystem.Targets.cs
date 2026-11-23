@@ -82,6 +82,11 @@ public sealed partial class CombatSystem
         /// Fights started this tick by target, counted as attackers (the AI's serial step, <see cref="BestAttackerOf"/>; null: none).
         /// </summary>
         public IReadOnlyDictionary<int, int>? Pending;
+
+        /// <summary>
+        /// Which choice this is, as the target score filters are told.
+        /// </summary>
+        public TargetChoiceKind Kind;
     }
 
     #region Target choice
@@ -115,6 +120,7 @@ public sealed partial class CombatSystem
         var q = new Choice
         {
             Self = i,
+            Kind = TargetChoiceKind.Fight,
             Current = s.TargetSlot,
             Picked = s.Picked,
             Cold = cold,
@@ -266,6 +272,7 @@ public sealed partial class CombatSystem
         var q = new Choice
         {
             Self = looker,
+            Kind = TargetChoiceKind.Join,
             Current = -1,
             Cold = cold,
             Player = cold.IsPlayer,
@@ -350,10 +357,27 @@ public sealed partial class CombatSystem
         if (q.Hold && !Orders.HoldPost(prev[i].Position, q.HoldPoint, prev[c].Position, prev[c].Velocity, prev[c].Yaw, downed, o.TargetSlot >= 0))
             return;
 
+        var candidate = CandidateOf(world, in q, c, tc, protect);
+        float? score = TargetScore.Score(candidate, q.Player, q.Hold, q.Prone, q.Animal, q.Cold.Manoeuvre);
+        if (world.TargetScoreFilters.Pass(world, i, c, q.Kind, candidate, score) is { } kept && kept > q.BestScore)
+        {
+            q.Best = c;
+            q.BestScore = kept;
+        }
+    }
+
+    /// <summary>
+    /// The facts the target score weighs of candidate <paramref name="c"/> (<paramref name="tc"/>) for the chooser of <paramref name="q"/>.
+    /// </summary>
+    TargetCandidate CandidateOf(World world, in Choice q, int c, CharacterCold tc, bool protect)
+    {
+        var prev = world.Characters.Previous;
+        int i = q.Self;
+        ref readonly var o = ref _read[c];
         int attackers = AttackerCount(world, c) + (q.Pending is { } pending ? pending.GetValueOrDefault(c) : 0);
         float dx = prev[c].Position.X - prev[i].Position.X;
         float dz = prev[c].Position.Z - prev[i].Position.Z;
-        var candidate = new TargetCandidate
+        return new TargetCandidate
         {
             Current = c == q.Current,
             ChooserHasTarget = q.Current >= 0,
@@ -372,11 +396,6 @@ public sealed partial class CombatSystem
             Peaceful = o.TargetSlot < 0 && Relations is { } relations && !AggroSystem.IsEnemy(relations, tc.Faction, q.Cold.Faction),
             GettingUp = CharacterFacts.GettingUp(tc, world.Tick),
         };
-        if (TargetScore.Score(candidate, q.Player, q.Hold, q.Prone, q.Animal, q.Cold.Manoeuvre) is { } score && score > q.BestScore)
-        {
-            q.Best = c;
-            q.BestScore = score;
-        }
     }
 
     #endregion

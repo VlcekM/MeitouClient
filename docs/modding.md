@@ -382,10 +382,17 @@ holds refuses the second mod.
   next, and the fault (its first tick) enters the state hash. Engine API, not in the original. **Observed** by a scratch run (not in the repo):
   an unchanged answer keeps hash and log and is asked the same on 1 and 4 threads; -1 stops every block and dodge; always the dodge technique
   turns every stopped blow into a dodge, the same on 4 threads; an out-of-range answer is asked in one tick and hashed.
-- **Target choice:** `TargetCandidate.ChooserHasTarget` (`Meitou.Simulation.Combat`) tells a postfix on the public `TargetScore.Score` whether
-  the chooser already has a target: true in a fighter's own target choice while it fights someone (the original's `AI::chooseBestAttackTarget`
-  given a valid old target), false in the other choices (the attacker of a protectee, the aggro look, an assault). No engine score reads it.
-  Engine API, not in the original.
+- **Target choice:** a registered system implementing `ITargetScoreFilter` (`Meitou.Simulation.Combat`) is asked `Score(World, in
+  TargetScoreAsk)` for every candidate the game scores (`TargetScore.Score`; a dropped one is not asked): the tick, chooser, target, `Kind`
+  (`TargetChoiceKind`: `Fight` a fighter's own choice, `Join` the attacker of a protectee or another joiner's pick, `Look` the aggro look,
+  `Assault`; more may come), the `TargetCandidate` facts and the score. It answers the score to use; the best wins. Filters run in system
+  order, each seeing the earlier one's answer, on any thread and concurrently: quick, thread-safe, a pure read of the ask and of world state the
+  tick has settled. A throw or a non-finite answer keeps the score; the filter is still asked for the rest of that tick, not from the next, and
+  the fault enters the state hash. `TargetCandidate.ChooserHasTarget` is true in a fighter's own choice while it fights someone (the original's
+  `AI::chooseBestAttackTarget` given a valid old target), false in the other choices; no engine score reads it. Engine API, not in the original.
+  **Observed** by a scratch run (not in the repo; a 1-against-2 fight, `Fight` asks only): an unchanged answer keeps hash and log and is asked
+  the same on 1 and 4 threads; lowering one candidate's score changes the pick, the same on 4 threads; a throw or a NaN or infinite answer keeps
+  the scores, is asked in one tick and is hashed.
 - **Engagements:** a registered system implementing `ICombatEngageFilter` (`Meitou.Simulation.Combat`) is asked `Allows(World, in EngageAsk)`
   whether a fighter may take on a target: the tick, attacker, target, `Kind`, whether the target is the player's pick (an attack order the
   player gave, or the current target such an order named) and whether the fight is a defence. `EngageKind.Start` is every fight start
