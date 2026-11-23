@@ -28,6 +28,11 @@ internal interface IEffectFrameSource
     /// The building's origin and turn; stretch 1.
     /// </summary>
     EffectFrame? Building(string id);
+
+    /// <summary>
+    /// The bolt as drawn: its nose, +Y along its flight; stretch 1 (none by default: a source without bolts).
+    /// </summary>
+    EffectFrame? Projectile(int id) => null;
 }
 
 /// <summary>
@@ -36,10 +41,10 @@ internal interface IEffectFrameSource
 internal static class EffectFrames
 {
     /// <summary>
-    /// The frame <paramref name="anchor"/> stands for now, its stretch overridden by the anchor's; null when <paramref name="source"/> cannot
-    /// locate it.
+    /// The frame <paramref name="anchor"/> stands for now, its stretch overridden by the anchor's and times its size (pulsing by
+    /// <paramref name="age"/>, the seconds since the effect or trail started); null when <paramref name="source"/> cannot locate it.
     /// </summary>
-    public static EffectFrame? Locate(in EffectAnchor anchor, IEffectFrameSource source)
+    public static EffectFrame? Locate(in EffectAnchor anchor, IEffectFrameSource source, double age = 0)
     {
         var turn = anchor.Turn is { } t ? Quaternion.Normalize(t) : Quaternion.Identity;
         EffectFrame? frame = anchor.Kind switch
@@ -48,9 +53,25 @@ internal static class EffectFrames
             EffectAnchorKind.Bone => source.Bone(anchor.Character, anchor.Name!, anchor.Offset, turn),
             EffectAnchorKind.Weapon => source.Weapon(anchor.Character),
             EffectAnchorKind.Building => Within(source.Building(anchor.Name!), anchor.Offset, turn),
+            EffectAnchorKind.Projectile => Within(source.Projectile(anchor.ProjectileId), anchor.Offset, turn),
             _ => null,
         };
-        return frame is { } f && anchor.Stretch is { } s ? f with { Stretch = s } : frame;
+        if (frame is not { } f) return null;
+
+        return f with { Stretch = (anchor.Stretch ?? f.Stretch) * anchor.SizeAt(age) };
+    }
+
+    /// <summary>
+    /// The turn that takes +Y along <paramref name="direction"/> (a unit vector), the least turn from +Y.
+    /// </summary>
+    public static Quaternion AlongY(Vector3 direction)
+    {
+        float d = Vector3.Dot(Vector3.UnitY, direction);
+        if (d > 0.99999f) return Quaternion.Identity;
+        if (d < -0.99999f) return Quaternion.CreateFromAxisAngle(Vector3.UnitX, MathF.PI);
+
+        var axis = Vector3.Normalize(Vector3.Cross(Vector3.UnitY, direction));
+        return Quaternion.CreateFromAxisAngle(axis, MathF.Acos(d));
     }
 
     /// <summary>

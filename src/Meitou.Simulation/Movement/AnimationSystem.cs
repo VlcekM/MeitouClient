@@ -723,7 +723,18 @@ public sealed class AnimationSystem(
         if (combat.RangedPoseOf(id, tick, tickSeconds) is { } pose) return RangedClip(pose, cold);
         if (!cold.CarriedBy.IsNone || CharacterFacts.GettingUp(cold, tick)) return (-1, 0);
 
-        return combat.ModMove(world, id, tick) is { } move ? (Library.IndexOfTechnique(move.Technique.StringId), move.Progress) : (-1, 0);
+        return combat.ModMove(world, id, tick) is { } move ? (ModMoveClip(move), move.Progress) : (-1, 0);
+    }
+
+    /// <summary>
+    /// A mod's move's clip: its ANIMATION by name, else by string id, else its technique's; -1 when the library has none.
+    /// </summary>
+    int ModMoveClip(in CombatMove move)
+    {
+        if (move.Animation is not { } name) return Library.IndexOfTechnique(move.Technique!.StringId);
+
+        int clip = Library.IndexOf(name);
+        return clip >= 0 ? clip : Library.IndexOfRecord(name);
     }
 
     /// <summary>

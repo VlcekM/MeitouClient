@@ -111,7 +111,18 @@ public enum SoundKind : byte
 /// A named sound event a code mod posts (<see cref="World.PostSound(string, CharacterId, string?, string?)"/>): the event's name in the loaded
 /// banks (the game's, or a bank a mod's <c>RE_Kenshi.json</c> <c>SoundBanks</c> loads), and a switch set on the object first (both null: none).
 /// </summary>
-public sealed record PostedSound(string Event, string? SwitchGroup = null, string? SwitchValue = null);
+public sealed record PostedSound(string Event, string? SwitchGroup = null, string? SwitchValue = null)
+{
+    /// <summary>
+    /// A loose sound file's gain (1 as recorded, up to 4); a bank event plays at its own level.
+    /// </summary>
+    public float Volume { get; init; } = 1;
+
+    /// <summary>
+    /// Whether <see cref="Event"/> is a loose sound file (a full path to a <c>.wav</c>, ModContext's) rather than an event of the banks.
+    /// </summary>
+    public bool Loose => Event.EndsWith(".wav", StringComparison.OrdinalIgnoreCase) && Path.IsPathRooted(Event);
+}
 
 /// <summary>
 /// One sound-worthy happening for the host. Display only like <see cref="Floater"/>: the host decides what it sounds like, nothing in the simulation
@@ -206,6 +217,22 @@ public sealed partial class World
     /// </summary>
     public void PostInterfaceSound(string eventName, string? switchGroup = null, string? switchValue = null) =>
         PostModSound(SoundKind.PostedInterface, eventName, CharacterId.None, Vector3.Zero, switchGroup, switchValue);
+
+    /// <summary>
+    /// A code mod plays <paramref name="sound"/> (a bank event or a loose file, <see cref="PostedSound.Loose"/>) on <paramref name="on"/> when it
+    /// is a character, else at <paramref name="at"/>, or on the interface when <paramref name="onInterface"/>; otherwise as
+    /// <see cref="PostSound(string, CharacterId, string?, string?)"/>.
+    /// </summary>
+    public void PostSound(PostedSound sound, CharacterId on, Vector3 at, bool onInterface = false)
+    {
+        ArgumentNullException.ThrowIfNull(sound);
+        ArgumentException.ThrowIfNullOrEmpty(sound.Event);
+        if (!float.IsFinite(at.X + at.Y + at.Z)) throw new ArgumentOutOfRangeException(nameof(at), at, "A sound's point must be finite.");
+        if (_sounds is not { } queue) return;
+
+        var kind = onInterface ? SoundKind.PostedInterface : SoundKind.Posted;
+        queue.Enqueue(new SoundEvent(kind, onInterface ? CharacterId.None : on, CharacterId.None, at) { Posted = sound });
+    }
 
     /// <summary>
     /// Queues a code mod's event (<see cref="SoundKind.Posted"/> or <see cref="SoundKind.PostedInterface"/>); a switch with only one of its two

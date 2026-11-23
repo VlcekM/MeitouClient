@@ -10,9 +10,14 @@ namespace Meitou.Modding;
 internal readonly record struct ModEffectRequest(string Owner, string Effect, string System, EffectAnchor Anchor, Vector3? Tint, float Seconds)
 {
     /// <summary>
-    /// The anchor is a fixed point: nothing to follow.
+    /// The anchor is a fixed point with no scale of its own (a renewal or pulse may change one): nothing to follow.
     /// </summary>
-    public bool Fixed => Anchor.Kind == EffectAnchorKind.Point;
+    public bool Fixed => Anchor.Kind == EffectAnchorKind.Point && Anchor == Anchor.Key;
+
+    /// <summary>
+    /// The seconds since it first started playing (its anchor's pulse, <see cref="EffectAnchor.Pulsing"/>).
+    /// </summary>
+    public double Age { get; init; }
 }
 
 /// <summary>
@@ -49,7 +54,10 @@ internal sealed class ModEffects
     /// <summary>
     /// Why a request was dropped; each is logged once per mod.
     /// </summary>
-    internal enum Problem { UnknownEffect, BadPoint, BadCharacter, BadBuilding, BadStretch, BadSeconds, BadTint, Full, OffThread }
+    internal enum Problem
+    {
+        UnknownEffect, BadPoint, BadCharacter, BadBuilding, BadStretch, BadSeconds, BadTint, Full, OffThread, BadProjectile, BadPulse,
+    }
 
     /// <summary>
     /// The requests waiting to start, all mods together.
@@ -75,6 +83,10 @@ internal sealed class ModEffects
     /// The largest stretch an anchor may ask for.
     /// </summary>
     public const float MaxStretch = 100;
+    /// <summary>
+    /// The shortest and longest pulse an anchor may ask for, in seconds.
+    /// </summary>
+    public const float MinPulseSeconds = 0.05f, MaxPulseSeconds = 60;
 
     /// <summary>
     /// One effect alive or waiting: its request, what plays it (null while paused) and its seconds left.
@@ -101,12 +113,21 @@ internal sealed class ModEffects
         /// Its lifetime was renewed: the sink is told at the next frame.
         /// </summary>
         public bool Renewed { get; set; }
+        /// <summary>
+        /// The seconds it has been alive.
+        /// </summary>
+        public double Age { get; set; }
 
         /// <summary>
-        /// Whether it is the kept <paramref name="effect"/> of <paramref name="owner"/> on <paramref name="anchor"/>.
+        /// Its request as of now (its age for the pulse).
+        /// </summary>
+        public ModEffectRequest Now => Request with { Age = Age };
+
+        /// <summary>
+        /// Whether it is the kept <paramref name="effect"/> of <paramref name="owner"/> on <paramref name="anchor"/> (its scale aside).
         /// </summary>
         public bool Keeps(string owner, string effect, in EffectAnchor anchor) =>
-            Kept && Request.Owner == owner && Request.Effect == effect && Request.Anchor == anchor;
+            Kept && Request.Owner == owner && Request.Effect == effect && Request.Anchor.Key == anchor.Key;
     }
 
     /// <summary>
@@ -148,6 +169,16 @@ internal sealed class ModEffects
     /// Where a rejection's line goes (the game's log).
     /// </summary>
     public Action<string> Log { get; set; } = Console.Error.WriteLine;
+
+    /// <summary>
+    /// Where an anchor is drawn now (its frame's origin), on the host's thread; null until the host sets it, or when the anchor is not there.
+    /// </summary>
+    public Func<EffectAnchor, Vector3?>? Locate { get; set; }
+
+    /// <summary>
+    /// The caller is on the host's thread (or no frame has run yet).
+    /// </summary>
+    public bool OnHostThread => !OffThread;
 
     /// <summary>
     /// The requests waiting for room.
@@ -296,16 +327,29 @@ internal sealed class ModEffects
 
     /// <summary>
     /// The problem of an anchor: an unknown kind, a point, offset or turn that is not finite (or a zero turn), no character or bone, no building
-    /// id, a stretch out of (0, <see cref="MaxStretch"/>].
+    /// id, a negative bolt id, a stretch or size out of (0, <see cref="MaxStretch"/>], a pulse out of range. Trails share it.
     /// </summary>
-    static Problem? AnchorProblem(in EffectAnchor a)
+    internal static Problem? AnchorProblem(in EffectAnchor a)
     {
-        if (a.Kind is < EffectAnchorKind.Point or > EffectAnchorKind.Building || !Finite(a.Offset) || a.Turn is { } t && !Usable(t))
+        if (a.Kind is < EffectAnchorKind.Point or > EffectAnchorKind.Projectile || !Finite(a.Offset) || a.Turn is { } t && !Usable(t))
             return Problem.BadPoint;
         if (a.Kind is EffectAnchorKind.Bone or EffectAnchorKind.Weapon && a.Character.Slot < 0) return Problem.BadCharacter;
         if (a.Kind == EffectAnchorKind.Bone && string.IsNullOrEmpty(a.Name)) return Problem.BadCharacter;
         if (a.Kind == EffectAnchorKind.Building && string.IsNullOrEmpty(a.Name)) return Problem.BadBuilding;
+        if (a.Kind == EffectAnchorKind.Projectile && a.ProjectileId < 0) return Problem.BadProjectile;
         if (a.Stretch is { } s && !(s > 0 && s <= MaxStretch)) return Problem.BadStretch;
+        if (a.Size is { } z && !(z > 0 && z <= MaxStretch)) return Problem.BadStretch;
+        return PulseProblem(a);
+    }
+
+    /// <summary>
+    /// <see cref="Problem.BadPulse"/> for a pulse amount out of [0, 1) or, with one, seconds out of [<see cref="MinPulseSeconds"/>,
+    /// <see cref="MaxPulseSeconds"/>].
+    /// </summary>
+    static Problem? PulseProblem(in EffectAnchor a)
+    {
+        if (!(a.PulseAmount >= 0 && a.PulseAmount < 1)) return Problem.BadPulse;
+        if (a.PulseAmount > 0 && !(a.PulseSeconds >= MinPulseSeconds && a.PulseSeconds <= MaxPulseSeconds)) return Problem.BadPulse;
         return null;
     }
 
@@ -362,9 +406,16 @@ internal sealed class ModEffects
             case Problem.BadTint: return $"its tint is not finite in [0, {MaxTint}]";
             case Problem.Full: return $"{MaxQueued} effects are already queued";
             case Problem.OffThread: return "queued off the host's thread (from a tick system?)";
+            case Problem.BadProjectile: return "its projectile id is negative";
+            case Problem.BadPulse: return $"its pulse is not an amount in [0, 1) every [{MinPulseSeconds}, {MaxPulseSeconds}] seconds";
             default: throw new ArgumentOutOfRangeException(nameof(problem));
         }
     }
+
+    /// <summary>
+    /// A shared anchor problem in words (<see cref="ModTrails"/>' log too).
+    /// </summary>
+    internal static string AnchorReason(Problem problem) => Reason(problem);
 
     /// <summary>
     /// Once a frame on the host's thread: ages the living effects by <paramref name="seconds"/>, moves the playing ones with their anchors (pausing
@@ -389,7 +440,11 @@ internal sealed class ModEffects
     /// </summary>
     void Age(float seconds)
     {
-        foreach (var a in _alive) a.Left -= seconds;
+        foreach (var a in _alive)
+        {
+            a.Left -= seconds;
+            a.Age += seconds;
+        }
         End(a => a.Left <= 0);
     }
 
@@ -404,7 +459,7 @@ internal sealed class ModEffects
 
             if (a.Renewed) sink.Renew(handle, a.Left);
             a.Renewed = false;
-            if (!a.Request.Fixed && !sink.Follow(handle, a.Request)) Pause(a);
+            if (!a.Request.Fixed && !sink.Follow(handle, a.Now)) Pause(a);
         }
     }
 
@@ -434,7 +489,7 @@ internal sealed class ModEffects
     /// </summary>
     static bool TryStart(Effect effect, IModEffectSink sink)
     {
-        effect.Handle = sink.Start(effect.Request with { Seconds = effect.Left });
+        effect.Handle = sink.Start(effect.Now with { Seconds = effect.Left });
         return effect.Handle is not null;
     }
 

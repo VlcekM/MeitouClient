@@ -241,6 +241,41 @@ public sealed class ModHost
     internal ModGlows Glows => _registry.Glows;
 
     /// <summary>
+    /// The mods' display-only ribbon trails (docs/modding.md "Trails"), sampled and handed to the particles by the host once a frame.
+    /// </summary>
+    internal ModTrails Trails => _registry.Trails;
+
+    /// <summary>
+    /// A mod registered a projectile feed: the host then compares the shown snapshots' bolts every frame.
+    /// </summary>
+    public bool WantsProjectiles => _registry.ProjectileFeeds.Count > 0;
+
+    /// <summary>
+    /// The bolts' changes since the last frame to every mod's projectile feed, in load order, on the host's thread; a feed that throws is logged
+    /// and gets no more.
+    /// </summary>
+    public void DeliverProjectiles(IReadOnlyList<ProjectileEvent> changes)
+    {
+        if (changes.Count == 0) return;
+
+        foreach (var feed in _registry.ProjectileFeeds)
+        {
+            if (feed.Faulted) continue;
+
+            try
+            {
+                feed.Run(changes);
+            }
+            catch (Exception e)
+            {
+                feed.Faulted = true;
+                Console.Error.WriteLine($"mod       {feed.Owner}: projectile feed disabled: {e.GetType().Name}: {e.Message}");
+                CodeModFaults.Tell(feed.Owner, e);
+            }
+        }
+    }
+
+    /// <summary>
     /// Whether a mod arranges the faction tab's list.
     /// </summary>
     public bool ArrangesFactionList => _registry.FactionLists.Count > 0;
@@ -716,6 +751,7 @@ public sealed class ModHost
             if (context.HasHarmony) context.Harmony.UnpatchAll(context.Id);
             _registry.Effects.Drop(context.Id);
             _registry.Glows.Drop(context.Id);
+            _registry.Trails.Drop(context.Id);
             TellDependenciesItFailed(mod);
             throw;
         }

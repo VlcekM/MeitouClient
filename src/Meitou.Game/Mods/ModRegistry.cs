@@ -126,6 +126,10 @@ sealed class ModRegistrations
     /// </summary>
     public List<ModHitFeed> HitFeeds { get; } = [];
     /// <summary>
+    /// The projectile feeds.
+    /// </summary>
+    public List<ModProjectileFeed> ProjectileFeeds { get; } = [];
+    /// <summary>
     /// The faction tab list arrangers.
     /// </summary>
     public List<ModFactionList> FactionLists { get; } = [];
@@ -283,6 +287,10 @@ sealed class ModRegistry
     /// </summary>
     public List<ModHitFeed> HitFeeds { get; } = [];
     /// <summary>
+    /// Every mod's projectile feeds, in load order.
+    /// </summary>
+    public List<ModProjectileFeed> ProjectileFeeds { get; } = [];
+    /// <summary>
     /// Every mod's faction tab list arrangers, in load order.
     /// </summary>
     public List<ModFactionList> FactionLists { get; } = [];
@@ -307,6 +315,10 @@ sealed class ModRegistry
     /// The mods' display-only glows (<see cref="ModContext.Glow"/>).
     /// </summary>
     public ModGlows Glows { get; } = new();
+    /// <summary>
+    /// The mods' display-only ribbon trails (<see cref="ModContext.KeepTrail"/>).
+    /// </summary>
+    public ModTrails Trails { get; } = new();
     /// <summary>
     /// The record types' names by type number.
     /// </summary>
@@ -389,6 +401,7 @@ sealed class ModRegistry
             KeyActions.Add(action);
         }
         HitFeeds.AddRange(r.HitFeeds);
+        ProjectileFeeds.AddRange(r.ProjectileFeeds);
         FactionLists.AddRange(r.FactionLists);
         SavesWritten.AddRange(r.SavesWritten);
         Frames.AddRange(r.Frames);

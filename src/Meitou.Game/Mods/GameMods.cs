@@ -58,6 +58,22 @@ sealed class GameMods(GameHost host)
     /// This frame's glows, kept to avoid allocating.
     /// </summary>
     readonly List<(GlowTarget Target, GlowNow Glow)> _frameGlows = [];
+    /// <summary>
+    /// The bolts the projectile feeds saw last, and the world and snapshot they were seen in; a new world starts them again.
+    /// </summary>
+    readonly ProjectileWatch _bolts = new();
+    /// <summary>
+    /// The world and snapshot tick <see cref="_bolts"/> last looked at.
+    /// </summary>
+    (World? World, long Tick) _boltsAt = (null, long.MinValue);
+    /// <summary>
+    /// This frame's bolt changes, kept to avoid allocating.
+    /// </summary>
+    readonly List<ProjectileEvent> _frameBolts = [];
+    /// <summary>
+    /// The world the mods' trails were kept for; a new world drops them.
+    /// </summary>
+    World? _trailsFor;
 
     /// <summary>
     /// Starts the JIT warm-up now, or (with code mods enabled) once they are initialized.
@@ -192,6 +208,29 @@ sealed class GameMods(GameHost host)
     }
 
     /// <summary>
+    /// Once a frame, after the hits: the bolts' changes between the shown snapshots to the mods' projectile feeds (docs/modding.md "Projectile
+    /// feed"). Nothing without a feed; a new world is taken as it is, telling nothing of its bolts already there.
+    /// </summary>
+    internal void UpdateModProjectiles()
+    {
+        if (Mods is not { WantsProjectiles: true } || host.Session?.CurrentSnapshot is not { } snapshot) return;
+
+        var world = host.Session.World;
+        if (!ReferenceEquals(_boltsAt.World, world))
+        {
+            _bolts.Reset(snapshot.Projectiles);
+            _boltsAt = (world, snapshot.Tick);
+            return;
+        }
+        if (snapshot.Tick == _boltsAt.Tick) return;
+
+        _boltsAt.Tick = snapshot.Tick;
+        _frameBolts.Clear();
+        _bolts.Look(snapshot.Projectiles, _frameBolts);
+        Mods.DeliverProjectiles(_frameBolts);
+    }
+
+    /// <summary>
     /// Once a frame, after the hits: the mods' queued effects start and the playing ones follow their characters (docs/modding.md "Visual
     /// effects"). Nothing without code mods; a new world drops the old world's effects.
     /// </summary>
@@ -203,6 +242,7 @@ sealed class GameMods(GameHost host)
         _effectPlayer ??= new ModEffectPlayer(host);
         effects.Resolve ??= _effectPlayer.Resolve;
         effects.Exists ??= _effectPlayer.Exists;
+        effects.Locate ??= _effectPlayer.Place;
         var world = host.Session?.World;
         if (!ReferenceEquals(_effectsFor, world))
         {
@@ -210,6 +250,27 @@ sealed class GameMods(GameHost host)
             effects.Clear();
         }
         if (!effects.Idle) _effectPlayer.Advance(effects);
+    }
+
+    /// <summary>
+    /// Once a frame, after the effects: the mods' trails sample their anchors by the particles' frame clock and hand their quads to the particles
+    /// (docs/modding.md "Trails"). Nothing without code mods; a new world drops the old world's trails.
+    /// </summary>
+    internal void UpdateModTrails()
+    {
+        if (Mods is null) return;
+
+        var trails = Mods.Trails;
+        var world = host.Session?.World;
+        if (!ReferenceEquals(_trailsFor, world))
+        {
+            _trailsFor = world;
+            trails.Clear();
+        }
+        if (host.Gpu?.Particles is not { } particles) return;
+
+        _effectPlayer ??= new ModEffectPlayer(host);
+        if (trails.Count > 0 || particles.Ribbons.Count > 0) trails.Advance(particles.LastStep, _effectPlayer, particles.Ribbons);
     }
 
     /// <summary>
@@ -241,10 +302,16 @@ sealed class GameMods(GameHost host)
         if (host.Gpu?.Characters is not { } crowd) return;
 
         crowd.Glows.Clear();
+        host.Gpu.ThroughKeys.Clear();
         if (glows.Count == 0) return;
 
         glows.Current(_frameGlows);
-        foreach (var (target, glow) in _frameGlows) crowd.SetGlow(host.DrawKey(target.On), target, glow.Colour, glow.Strength);
+        foreach (var (target, glow) in _frameGlows)
+        {
+            long key = host.DrawKey(target.On);
+            crowd.SetGlow(key, target, glow.Colour, glow.Strength, glow.Mode);
+            if (glow.ThroughWalls) host.Gpu.ThroughKeys.Add((key, new Vector4(glow.Colour, Math.Clamp(glow.Strength, 0, 1))));
+        }
     }
 
     /// <summary>

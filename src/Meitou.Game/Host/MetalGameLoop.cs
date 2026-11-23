@@ -3134,6 +3134,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         host.UpdateTrails();   // no trail renderer here: only the footfalls for the blood prints
         host.Modding.UpdateModHits();
         host.Modding.UpdateModFrames();
+        host.Modding.UpdateModProjectiles();
         host.Modding.UpdateModFaults();
         if (_characters is not null)
         {

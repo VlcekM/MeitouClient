@@ -26,18 +26,23 @@ internal sealed class CharacterGlow
     /// <summary>
     /// Sets <paramref name="target"/>'s glow.
     /// </summary>
-    public void Set(in GlowTarget target, Vector3 colour, float strength)
+    public void Set(in GlowTarget target, Vector3 colour, float strength) => Set(target, colour, strength, GlowMode.Light);
+
+    /// <summary>
+    /// Sets <paramref name="target"/>'s glow or tint (<paramref name="mode"/>).
+    /// </summary>
+    public void Set(in GlowTarget target, Vector3 colour, float strength, GlowMode mode)
     {
         switch (target.Kind)
         {
             case GlowTargetKind.Weapon:
-                Weapon = Pack(colour, strength, bladeMasked: true);
+                Weapon = Pack(colour, strength, bladeMasked: true, mode);
                 break;
             case GlowTargetKind.Worn:
-                (Slots ??= [])[target.Slot] = Pack(colour, strength, bladeMasked: false);
+                (Slots ??= [])[target.Slot] = Pack(colour, strength, bladeMasked: false, mode);
                 break;
             default:
-                Whole = Pack(colour, strength, bladeMasked: false);
+                Whole = Pack(colour, strength, bladeMasked: false, mode);
                 break;
         }
     }
@@ -57,8 +62,10 @@ internal sealed class CharacterGlow
     /// A glow as four bytes from the top: the colour over its brightest channel (r, g, b), then its level (that channel times
     /// <paramref name="strength"/>, in eighths, at most 127) with bit 7 set for the blade mask; 0 for none.
     /// </summary>
-    public static uint Pack(Vector3 colour, float strength, bool bladeMasked)
+    public static uint Pack(Vector3 colour, float strength, bool bladeMasked, GlowMode mode = GlowMode.Light)
     {
+        if (mode == GlowMode.Tint) return PackTint(colour, strength, bladeMasked);
+
         float top = MathF.Max(colour.X, MathF.Max(colour.Y, colour.Z));
         uint level = (uint)Math.Clamp(MathF.Round(top * strength * 8), 0, 127);
         if (level == 0) return 0;
@@ -66,6 +73,19 @@ internal sealed class CharacterGlow
         static uint Byte(float c) => (uint)Math.Clamp(MathF.Round(c * 255), 0, 255);
         var unit = colour / top;
         return Byte(unit.X) << 24 | Byte(unit.Y) << 16 | Byte(unit.Z) << 8 | level | (bladeMasked ? 128u : 0);
+    }
+
+    /// <summary>
+    /// A tint as four bytes from the top: its colour (each channel 0 to 1 as 0 to 254, so no byte is 255 as a glow's brightest is), then its share
+    /// (0 to 1 as 0 to 127) with bit 7 set for the blade mask; 0 for none.
+    /// </summary>
+    public static uint PackTint(Vector3 colour, float amount, bool bladeMasked)
+    {
+        uint share = (uint)Math.Clamp(MathF.Round(amount * 127), 0, 127);
+        if (share == 0) return 0;
+
+        static uint Byte(float c) => (uint)Math.Clamp(MathF.Round(c * 254), 0, 254);
+        return Byte(colour.X) << 24 | Byte(colour.Y) << 16 | Byte(colour.Z) << 8 | share | (bladeMasked ? 128u : 0);
     }
 }
 
@@ -79,10 +99,10 @@ internal sealed partial class CharacterRenderer
     /// <summary>
     /// Sets <paramref name="target"/>'s glow on the character <paramref name="key"/> for this frame.
     /// </summary>
-    public void SetGlow(long key, in GlowTarget target, Vector3 colour, float strength)
+    public void SetGlow(long key, in GlowTarget target, Vector3 colour, float strength, GlowMode mode = GlowMode.Light)
     {
         if (!Glows.TryGetValue(key, out var glow)) Glows[key] = glow = new CharacterGlow();
-        glow.Set(target, colour, strength);
+        glow.Set(target, colour, strength, mode);
     }
 
     /// <summary>
