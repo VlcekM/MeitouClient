@@ -294,7 +294,7 @@ sealed class GameOptions
                                      works with --renderer metal too (GPU time per frame, no GPU stages)
           --metal-gpu-budget <MB>    Metal: the memory guard's GPU allocation ceiling for this run (over MEITOU_METAL_GPU_BUDGET_MB, the launcher's setting;
                                      default a third of the Mac's memory, 5120 to 10240)
-          --benchmark-baseline       the settings benchmarks for the site use (bench/kit): a 1920x1080 window, the Medium tier, no GI, ground parallax or tessellation, no upscaler, SMAA;
+          --benchmark-baseline       the benchmarks' fixed graphics: a 1920x1080 window, the Medium tier, no GI, ground parallax or tessellation, no upscaler, SMAA;
                                      like --low-end, the saved graphics are neither applied nor overwritten
           --control-dir <dir>        agent channel (debug): polls <dir>/cmd (lines "<id> <console command>"), appends results to <dir>/out; also MEITOU_CONTROL_DIR
           --exec "<cmd; cmd>"        console commands run once, in order, after the world has loaded and settled (state.screen world, a selected character, the simulation has ticked; same as wait-ready --world); also --setup.
@@ -309,7 +309,7 @@ sealed class GameOptions
         Keys: W/A/S/D or arrows move (or the pointer at a screen edge), Q/E rotate, Comma/Period tilt, wheel or Home/End zoom, PageUp/PageDown floor up/down (lens in the free camera), middle drag or Ctrl orbit, left click or drag selects, right click moves (shift queues), 1..9, 0 / ` select, [ / ] previous / next squad member, R stops,
           numpad 0..8 Block, Hold, Passive, Ranged, Sneak, Taunt, run speed, Medic (also H), Rescue (also J), L rest, K put down, I/C/M/T/Y windows, Tab next squad (all rebindable),
           ; free camera (R/F up/down), Space pause, F2/F3/F4 speed 1x/2x/5x, F8 or PrintScreen screenshot, Ctrl+/ Metal GPU capture (MTL_CAPTURE_ENABLED=1),
-          F5 quicksave, F9 quickload (Meitou's own slot under %LOCALAPPDATA%\Meitou\save), Ctrl+F9 fps counter, F10 debug menu (teleport, spawn, give and drop items, money, heal, edit characters, damage, bounties; the debug tools; Metal: F10 is the settings panel and Ctrl+F10 the debug menu), F11 statistics, F12 profiler (gpu, cpu, off), Shift+F12 level editor, Ctrl+F12 VRAM pie, Esc game menu (save, load, exit). Shift+F1 Meitou on / off, Shift+F2 skin scattering on / off, Alt+Enter full screen,
+          F5 quicksave, F9 quickload (Meitou's own slot under %LOCALAPPDATA%\Meitou\save), Shift+F9 fps counter, F10 debug menu (teleport, spawn, give and drop items, money, heal, edit characters, damage, bounties; the debug tools; Metal: F10 is the settings panel and Ctrl+F10 the debug menu), F11 statistics, F12 profiler (gpu, cpu, off), Shift+F12 level editor, Ctrl+F12 VRAM pie, Esc game menu (save, load, exit). Shift+F1 Meitou on / off, Shift+F2 skin scattering on / off, Alt+Enter full screen,
           F6 cinematic camera editor (numpad keys as in the viewer; game-shots.json; Home the lens also in the free camera), F7 hide the interface,
           Backspace restarts the --duel lap or the --battle, PageUp/PageDown narrow/widen its lens, Home resets it.
         Settings (frame limit, vsync, full screen (--windowed for one run), tick rate (tickRate), simulation threads (simThreads), the settings sliders, key bindings) are kept in meitou.user.json.

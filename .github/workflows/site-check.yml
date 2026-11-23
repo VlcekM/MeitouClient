@@ -5,7 +5,6 @@ on:
   pull_request:
     paths:
       - "site/**"
-      - "bench/**"
       - ".github/workflows/site-check.yml"
 
 permissions:
@@ -19,11 +18,8 @@ jobs:
         working-directory: site
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-      - run: python3 ../bench/tools/generate.py --out public/bench/bench.json
       - run: npm ci
       - run: npm run build

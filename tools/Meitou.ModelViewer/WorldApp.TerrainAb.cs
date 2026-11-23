@@ -1,4 +1,5 @@
 using Meitou.Game.Rendering.Bench;
+using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Terrain;
 
 
@@ -16,6 +17,11 @@ static partial class WorldApp
     {
         AbToggles.Register("terrain-layer-skip", () => TerrainLayerSkip.Enabled, v => TerrainLayerSkip.Enabled = v,
                 "terrain cliff layer not sampled at small weights, the weight ramped in smoothly (B: every nonzero weight)");
+        AbToggles.Register("lean-lighting", () => LeanLighting.Enabled, v => LeanLighting.Enabled = v,
+                "without sun shadows and probe GI, objects, terrain and characters drawn with programs built without their lookups "
+                + "(B: the full programs)");
+        AbToggles.Register("terrain-simple", () => TerrainSimpleShading.Enabled, v => TerrainSimpleShading.Enabled = v,
+                "the simple material: the dominant biome only, its base and strongest layer, no normal maps (B: the full blend)");
         AbToggles.Register("terrain-refine", () => GroundRelief.RefinePixels > 0, v => GroundRelief.RefinePixels = v ? 0.5f : 0,
                 "every main-view patch tessellated, edges split where the terrain leaves them by over half a pixel (B: the plain patches)");
         AbToggles.Register("rock-smoothing", () => RockSmoothing.TessellateActive, v => RockSmoothing.TessellateActive = v,

@@ -266,6 +266,20 @@ to 14 layer samples each.
 - **Cost** (**Observed** before near footprints shaded the layers, `--play-bench` on save "stutter final boss", RTX 4070, 1080p DLSS 0.83, interleaved with master): terrain 3.94 -> 2.33 ms
   idle, orbit 3.98 -> 2.23, pan 3.77 -> 1.77; GPU frame 7.85 -> 6.20; frame p99 unchanged. Viewer A/B at two views: terrain -0.39 and -0.88 ms.
 
+## Simple material
+
+Meitou option for weak GPUs, not in the game (`TerrainSimpleShading`; Graphics > Terrain "Simple terrain shading", on at the Low preset and with
+`--low-end`, off otherwise; A/B `terrain-simple`). A blended patch pixel shades only its dominant resident biome (its share stands for every resident
+biome's, so loading ones weigh as in the full blend), and in it the base layer, the strongest of grass, slope and dirt at its own weight, the road and
+the cliff's stronger projection; no normal-map samples. Its own compiled colour and resolve programs (`TERRAIN_SIMPLE`, `TerrainPrograms` keys sets by
+it), so the full blend's programs carry none of it. Map features, the material cache's bake and the rock bake keep the full material. Without sun shadows and probe GI the colour programs are also
+built lean ([render-objects](render-objects.md#lean-lighting)).
+- **Cost** (**Observed**, 2026-11-23, Iris Xe, 1920x1080 at scale 0.83, `--low-end`, save "fps"): viewer A/B at the save's spot, terrain 6.65 -> 5.23 ms
+  with the camera 800 units off, 15.1-15.9 -> 8.9-9.8 from the viewer's default distance (two runs). Play bench against master: terrain 13.4 -> 7.4 ms
+  idle, idle 38 -> 53 fps. The same choice as a uniform branch in the full programs saved only 2.0-2.7 ms far: the branch's registers were the program's.
+- **Picture** (same A/B): close mean 0.37 / 255, 1,214 pixels over 12; far mean 2.5 / 255, 68,000 pixels over 12, at the borders between biomes.
+- Tried, not kept: higher thresholds on the biome shares (0.15 / 0.3) and the grass, slope and dirt weights (0.1 / 0.25): 0.2-1.2 ms, the picture
+  changed more for less.
 ## Ground trails
 
 Meitou look, not in the game; the `trails` switch (Tab "Ground trails"), off by default, not yet seen on a GPU. Render side only: no gameplay

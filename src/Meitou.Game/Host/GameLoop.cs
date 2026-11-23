@@ -1092,8 +1092,8 @@ sealed class GameLoop(GameHost host)
         bool hotkey = !host.Duel.IsDuel && !ctrl && !_cinema.EditorVisible && KeyMap.Map(k) is { } gameKey
             && (host.Player.GameHotkeys.IsHotkey(gameKey) || host.Player.Build.OwnsBuildNumpad(gameKey));
         if (!hotkey && Enum.TryParse(k.ToString(), out CinemaKey cinemaKey) && _cinema.OnKey(cinemaKey, ctrl, _shiftDown)) return;
-        // F9 is the game's quickload; the fps counter is on Ctrl+F9 (a modifier, so the key never reaches the input bindings).
-        if (k == SilkKey.F9 && ctrl)
+        // Consume the modified F9 before the quickload binding. Keep Ctrl+F9 where the desktop passes it through.
+        if (k == SilkKey.F9 && (_shiftDown || ctrl))
         {
             host.DebugMenu.FpsVisible = !host.DebugMenu.FpsVisible;
             return;

@@ -2018,7 +2018,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     }
 
     /// <summary>
-    /// The keys that are the host's own and not the session's: Shift+F11 steps the navmesh overlay, Ctrl+F9 the fps counter (F9 is the game's
+    /// The keys that are the host's own and not the session's: Shift+F11 steps the navmesh overlay, Shift+F9 the fps counter (F9 is the game's
     /// quickload), the interface's switch hides the interface (true: taken). The screenshot, statistics, fps and profiler bindings reach
     /// <see cref="OnTicked"/> as actions, so they can be rebound.
     /// </summary>
@@ -2029,7 +2029,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             host.DebugOverlays.ToggleNavOverlay();
             return true;
         }
-        if (key == SilkKey.F9 && Ctrl())
+        if (key == SilkKey.F9 && (_shiftDown || Ctrl()))
         {
             host.DebugMenu.FpsVisible = !host.DebugMenu.FpsVisible;
             return true;

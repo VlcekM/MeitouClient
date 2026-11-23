@@ -1,5 +1,5 @@
 # Website image: builds site/ (Astro, served by nginx), pushes it to GHCR as ghcr.io/vlcekm/meitou-site, then calls the redeploy webhook.
-# Runs on pushes to master that touch site/, bench/ (benchmark data) or this file, and on demand.
+# Runs on pushes to master that touch site/ or this file, and on demand.
 name: Site image
 
 on:
@@ -7,7 +7,6 @@ on:
     branches: [master]
     paths:
       - "site/**"
-      - "bench/**"
       - ".github/workflows/site-image.yml"
   workflow_dispatch:
 
@@ -23,16 +22,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0   # the benchmark commit order is read from git
 
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-
-      # site/public/bench/bench.json: the benchmark page's data, built from bench/data and the commit order on master; fails on invalid data.
-      - name: Benchmark data
-        run: python3 bench/tools/generate.py --out site/public/bench/bench.json
 
       - uses: docker/setup-buildx-action@v3
 

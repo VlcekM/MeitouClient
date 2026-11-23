@@ -692,11 +692,11 @@ sealed class ContextMenuWindow(PlayerInterface player)
         var door = pick.Door;
         bool own = door.Owner == player.Session.World.Player.Faction;
 
-        // A broken door is repaired (95, the building branch of FUN_1407fc6e0); the job of Shift is not built (the Engineer job works sites only).
+        // A broken door is repaired (95, the building branch of FUN_1407fc6e0); with Shift the Engineer job (125) too.
         if (player.Furniture.DoorBroken(door))
         {
             if (own)
-                verbs.Add(("Repair", () => player.Say(new Simulation.Construction.BuildOrder([], door.Id) { Tick = player.Session.World.Tick })));
+                verbs.Add(("Repair", () => player.Furniture.RepairDoor(door)));
 
             return verbs;
         }

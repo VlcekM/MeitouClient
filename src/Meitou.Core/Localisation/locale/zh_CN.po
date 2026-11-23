@@ -5691,3 +5691,11 @@ msgstr "保存当前预设"
 
 msgid "Sort by"
 msgstr "排序方式"
+
+#. machine-translated
+msgid "Simple terrain shading"
+msgstr "简易地形着色"
+
+#. machine-translated
+msgid "Faster ground for weak graphics: one biome and two texture layers a pixel, no bump detail. Blends between biomes show harder edges."
+msgstr "为性能较弱的显卡加快地面渲染：每个像素只用一个生物群系和两层纹理，没有凹凸细节。生物群系之间的过渡边缘会更硬。"

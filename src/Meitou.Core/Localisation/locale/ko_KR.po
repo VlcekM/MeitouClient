@@ -4846,3 +4846,11 @@ msgstr "현재 프리셋 저장"
 
 msgid "Sort by"
 msgstr "정렬 기준"
+
+#. machine-translated
+msgid "Simple terrain shading"
+msgstr "간단한 지형 셰이딩"
+
+#. machine-translated
+msgid "Faster ground for weak graphics: one biome and two texture layers a pixel, no bump detail. Blends between biomes show harder edges."
+msgstr "성능이 낮은 그래픽을 위한 더 빠른 지면: 픽셀당 바이옴 하나와 텍스처 레이어 두 개, 요철 디테일 없음. 바이옴 사이 경계가 더 뚜렷해집니다."

@@ -4846,3 +4846,11 @@ msgstr "現在のプリセットを保存"
 
 msgid "Sort by"
 msgstr "並べ替え"
+
+#. machine-translated
+msgid "Simple terrain shading"
+msgstr "簡易地形シェーディング"
+
+#. machine-translated
+msgid "Faster ground for weak graphics: one biome and two texture layers a pixel, no bump detail. Blends between biomes show harder edges."
+msgstr "性能の低いグラフィック向けに地面を高速化します。1ピクセルあたり1つのバイオームと2つのテクスチャ層のみで、凹凸の詳細はありません。バイオームの境目がくっきりします。"

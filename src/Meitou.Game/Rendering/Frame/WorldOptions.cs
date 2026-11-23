@@ -626,6 +626,7 @@ sealed class WorldOptions
         GroundRelief.Quality = 0;
         GroundRelief.RefinePixels = 0;
         RockSmoothing.TessellateActive = false;
+        TerrainSimpleShading.Enabled = true;
         Post.LightShafts = false;
         Post.ShaftQuality = 0;
         Post.Fxaa = false;

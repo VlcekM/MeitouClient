@@ -549,10 +549,14 @@ static class BuildingLodShaders
 
     /// <summary>
     /// The colour program; the full one (not <paramref name="solid"/>) also has the interior cut (<see cref="InteriorMaskRenderer.WithCut"/>).
+    /// <paramref name="lean"/>: lit without the sun shadows and probe GI (<see cref="LeanLighting"/>).
     /// </summary>
-    public static string FragmentNative(bool solid = false) =>
-        Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(solid ? Fragment(true) : InteriorMaskRenderer.WithCut(Fragment()), NativeShaders.Map(Own),
-                PushMembers));
+    public static string FragmentNative(bool solid = false, bool lean = false)
+    {
+        string f = solid ? Fragment(true) : InteriorMaskRenderer.WithCut(Fragment());
+        if (lean) f = LeanLighting.Define(f);
+        return Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(f, NativeShaders.Map(Own), PushMembers));
+    }
 
     /// <summary>
     /// The see-through items' blended program (<see cref="Fragment"/> <c>blended</c>): drawn after the GI's resolve, so it reads the probes itself.
