@@ -633,17 +633,33 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
         && System.Diagnostics.Stopwatch.GetElapsedTime(last.At, now).TotalSeconds < DoubleClickSeconds;
 
     /// <summary>
-    /// A press on a window's title strip (its top 38 px) starts dragging it, or its leader when it is married to one (<see cref="Follow"/>).
+    /// A press on a window's title strip (<see cref="InDragStrip"/>) starts dragging it, or its leader when it is married to one
+    /// (<see cref="Follow"/>).
     /// </summary>
     void BeginWindowDrag(string id, Screen s, Vector2 p)
     {
-        var root = _frame.First(f => f.Id == id).Controls.FirstOrDefault(n => n.Type == "Window");
-        if (root is null || root.Properties.GetValueOrDefault("Movable") == "false" || !(p.Y < root.Bounds.Y + 38)) return;
+        var controls = _frame.First(f => f.Id == id).Controls;
+        var root = controls.FirstOrDefault(n => n.Type == "Window");
+        if (root is null || root.Properties.GetValueOrDefault("Movable") == "false" || !InDragStrip(controls, root, p)) return;
 
         if (_leaders.TryGetValue(id, out var leader) && _open.Contains(leader))
             _drag = (leader, p, _screens[leader].Offset);
         else
             _drag = (id, p, s.Offset);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="p"/> is on the strip that moves <paramref name="root"/>: its template's <c>Caption</c> part as laid out, at the
+    /// template scale (MyGUI's Window moves only from parts with a move scale, the caption's; Kenshi's window templates have no other); a window
+    /// without one, its top 38 px (<c>Kenshi_WindowCX</c>'s header).
+    /// </summary>
+    static bool InDragStrip(IReadOnlyList<UiControl> controls, UiControl root, Vector2 p)
+    {
+        var caption = controls.FirstOrDefault(c => c.Properties.GetValueOrDefault("TemplateOwner") == root.Name
+            && c.Properties.GetValueOrDefault("TemplatePart") == "Caption");
+        if (caption is null) return p.Y < root.Bounds.Y + 38;
+
+        return caption.Bounds.Contains(p.X, p.Y);
     }
 
     /// <summary>

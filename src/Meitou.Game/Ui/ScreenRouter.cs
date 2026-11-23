@@ -79,8 +79,11 @@ sealed class ScreenRouter(PlayerInterface player)
     /// </summary>
     internal UiBindings BindFaithfulScreen(string id)
     {
+        // Kenshi scales every resource's pixels with the screen (docs/formats/mygui.md, "Kenshi's resource scale"): list lines, text insets and
+        // template parts follow the UI scale, as the text does. A feature may still set its own.
         var b = new UiBindings
         {
+            TemplateScale = player.UiScale,
             TextHeight = c => player.UiPainter?.TextHeight(c, player.Height, player.StandardPixels) ?? 0,
             TextWidths = c => player.UiPainter?.TextWidths(c, player.Height, player.StandardPixels),
         };
